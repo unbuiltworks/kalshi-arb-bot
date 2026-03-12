@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+.env
+private_key.pem
+*.log
+.pytest_cache/
+.git/
+.github/
+CLAUDE.md
+README.md
+tests/
