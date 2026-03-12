@@ -25,10 +25,11 @@ from config.settings import API_KEY_ID, PRIVATE_KEY_PATH, REST_URL
 
 def load_private_key(path: str | None = None):
     """Load RSA private key from PEM string (env var) or file."""
-    pem_env = os.getenv("KALSHI_PRIVATE_KEY_PEM")
+    pem_env = os.getenv("KALSHI_PRIVATE_KEY_PEM", "").strip()
     if pem_env:
-        pem_bytes = pem_env.encode()
-        return serialization.load_pem_private_key(pem_bytes, password=None)
+        # Railway may store the PEM with literal "\n" instead of real newlines
+        pem_env = pem_env.replace("\\n", "\n")
+        return serialization.load_pem_private_key(pem_env.encode(), password=None)
     key_path = Path(path or PRIVATE_KEY_PATH).expanduser()
     pem_bytes = key_path.read_bytes()
     return serialization.load_pem_private_key(pem_bytes, password=None)
