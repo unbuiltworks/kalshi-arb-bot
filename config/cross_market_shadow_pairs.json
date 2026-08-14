@@ -1,0 +1,15 @@
+{
+  "pairs": [
+    {
+      "pair_id": "oscars-2027-best-picture-dune-part-three",
+      "category": "culture",
+      "poly_slug": "tac-oscars-03-14-2027-bestpic-dunthr",
+      "kalshi_ticker": "KXOSCARPIC-27-DUN",
+      "settlement_status": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+      "settlement_basis": "Dune: Part Three wins Best Picture at the 99th Academy Awards",
+      "settlement_source": "Academy of Motion Picture Arts and Sciences",
+      "audit_note": "Both public contract descriptions name the same film, award, ceremony, and official source. Edge-case postponement/cancellation semantics have not been proven identical, so this pair is shadow-only.",
+      "enabled_shadow": true
+    }
+  ]
+}
