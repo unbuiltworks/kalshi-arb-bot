@@ -7,8 +7,8 @@ arbitrage, but it is deliberately impossible to use accidentally:
 * only FULL_RULES_AUDITED_EXECUTABLE pairs are accepted;
 * exposure is hard-capped at $10 in code;
 * both venue orders use fill-or-kill semantics;
-* a one-sided fill is treated as a critical legging incident and MUST invoke a
-  recovery callback supplied by the caller.
+* a one-sided/partial fill permanently halts the executor instance and invokes a
+  mandatory recovery callback supplied by the caller.
 
 There is intentionally no CLI/daemon entrypoint in this file. Importing it or
 deploying the branch cannot place an order by itself.
@@ -123,9 +123,16 @@ class LiveCrossMarketExecutor:
         self.recovery = recovery
         self.gate = gate or LiveGate.from_env()
         self._lock = asyncio.Lock()
+        self._halted = False
+
+    @property
+    def halted(self) -> bool:
+        return self._halted
 
     def _validate(self, pair: ExecutablePair, plan: calc.ShadowPlan) -> None:
         self.gate.assert_armed()
+        if self._halted:
+            raise RuntimeError("Cross-market executor is halted after a prior legging incident")
         if pair.settlement_status != EXECUTABLE_STATUS:
             raise RuntimeError(
                 f"Pair {pair.pair_id} is not settlement-certified executable: "
@@ -147,8 +154,9 @@ class LiveCrossMarketExecutor:
     async def execute(self, pair: ExecutablePair, plan: calc.ShadowPlan) -> ExecutionOutcome:
         """Preview, then concurrently submit both FOK legs.
 
-        A recovery callback is mandatory at construction time. If exactly one leg
-        fills, it is invoked immediately before this method returns.
+        A recovery callback is mandatory at construction time. Any state other than
+        both-full or both-empty is a legging incident: the executor halts *before*
+        recovery is invoked, so a recovery failure cannot allow a subsequent trade.
         """
         async with self._lock:
             self._validate(pair, plan)
@@ -197,9 +205,11 @@ class LiveCrossMarketExecutor:
             if poly_fill.empty and kalshi_fill.empty:
                 return ExecutionOutcome("NEITHER_FILLED", pair.pair_id, poly_fill, kalshi_fill)
 
-            # FOK should prevent partial fills. Treat any non-{0, requested} result as critical too.
+            # FOK should normally prevent partial fills. Treat any non-{0, requested}
+            # result as critical too, halt first, then attempt recovery.
+            self._halted = True
             logger.critical(
-                "CROSS_MARKET_LEGGING pair=%s poly=%d/%d kalshi=%d/%d",
+                "CROSS_MARKET_LEGGING pair=%s poly=%d/%d kalshi=%d/%d executor_halted=true",
                 pair.pair_id,
                 poly_fill.filled,
                 poly_fill.requested,
