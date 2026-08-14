@@ -25,7 +25,11 @@ from typing import Any
 
 from src.cross_market import KalshiNoQuote, optimize_adjacent_total
 from src.kalshi_live_book import LiveKalshiBooks
-from src.opticodds_stream import OpticOddsStream, SportsbookQuoteStore
+from src.opticodds_stream import (
+    OpticOddsStream,
+    SportsbookQuoteStore,
+    seed_current_odds,
+)
 
 logger = logging.getLogger("kalshi_arb.cross_shadow")
 
@@ -112,18 +116,40 @@ async def stream_group(
     stake_cap_cents: int,
 ) -> None:
     fixture_to_event = {p.fixture_id: p.event_key for p in pairs}
+    fixture_ids = tuple(sorted(fixture_to_event))
+    markets = tuple(sorted({p.market for p in pairs}))
     stream = OpticOddsStream(
         api_key,
         sport=pairs[0].sport,
         sportsbooks=sportsbooks,
         leagues=sorted({p.league for p in pairs}),
-        markets=sorted({p.market for p in pairs}),
-        fixture_ids=sorted({p.fixture_id for p in pairs}),
+        markets=markets,
+        fixture_ids=fixture_ids,
         live_only=True,
         include_deep_link=True,
     )
 
     async for event in stream.events():
+        if event.event == "connected":
+            # The SSE endpoint is an update feed. Seed the current snapshot after
+            # the stream connection is established; updates that arrive during
+            # the REST call remain buffered, and timestamp ordering prevents a
+            # stale seed row from overwriting a newer streamed row.
+            try:
+                await seed_current_odds(
+                    api_key,
+                    fixture_ids=fixture_ids,
+                    sportsbooks=sportsbooks,
+                    markets=markets,
+                    fixture_to_event=fixture_to_event,
+                    store=store,
+                    configured_stake_cap_cents=stake_cap_cents,
+                )
+                logger.info("Seeded current OpticOdds state for %d fixture(s)", len(fixture_ids))
+            except Exception:
+                logger.exception("OpticOdds initial snapshot seed failed")
+            continue
+
         if event.event not in {"odds", "locked-odds"}:
             continue
         try:
@@ -218,6 +244,8 @@ async def run(args: argparse.Namespace) -> None:
     )
     if not sportsbooks:
         raise SystemExit("CROSS_MARKET_SPORTSBOOKS is empty")
+    if len(sportsbooks) > 5:
+        raise SystemExit("OpticOdds supports at most 5 sportsbooks per SSE stream")
 
     store = SportsbookQuoteStore()
     tracker = OpportunityTracker()
