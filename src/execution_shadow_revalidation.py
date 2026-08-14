@@ -17,6 +17,7 @@ from decimal import Decimal
 import json
 import logging
 import os
+from pathlib import Path
 import signal
 import time
 from typing import Any
@@ -134,7 +135,7 @@ async def _probe(
 
 
 async def run(args: argparse.Namespace) -> None:
-    pairs = generic.load_pairs(args.config)
+    pairs = generic.load_pairs(Path(args.config))
     key_id = os.getenv("POLYMARKET_KEY_ID", "").strip()
     secret = os.getenv("POLYMARKET_SECRET_KEY", "").strip()
     if not key_id or not secret:
