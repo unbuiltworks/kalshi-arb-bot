@@ -247,6 +247,13 @@ class SportsbookQuoteStore:
         )
         if quote is None or not quote.source_id:
             return None
+
+        # REST seeding and SSE updates can race. Never let an older snapshot
+        # overwrite a newer stream update for the same normalized odd id.
+        previous = self._quotes.get(quote.source_id)
+        if previous is not None and previous.observed_ms > quote.observed_ms:
+            return None
+
         self._quotes[quote.source_id] = quote
         return event_key
 
@@ -315,11 +322,11 @@ async def seed_current_odds(
     store: SportsbookQuoteStore,
     configured_stake_cap_cents: int,
 ) -> None:
-    """Seed current sportsbook state from REST before listening for updates.
+    """Seed current sportsbook state from REST before/while listening for updates.
 
     OpticOdds documents max 5 fixture IDs and max 5 sportsbooks per request, so
-    both dimensions are chunked. The same quote id is simply overwritten when a
-    chunk overlaps.
+    both dimensions are chunked. Timestamp ordering in the store prevents an
+    older REST row from replacing a newer SSE update.
     """
     fixture_ids = tuple(dict.fromkeys(fixture_ids))
     sportsbooks = tuple(dict.fromkeys(sportsbooks))
