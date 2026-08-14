@@ -1,11 +1,13 @@
-"""Live shadow scanner: OpticOdds sportsbook stream + Kalshi orderbook.
+"""Live shadow scanner: OpticOdds sportsbook stream + Kalshi WebSocket orderbook.
 
 This process never places orders. It measures whether cross-market total arbs
 exist, how large they are, and how long they survive.
 
 Pairing is explicit by configuration because a bad event/settlement match can
 turn an apparent arb into an unhedged bet. Automatic fuzzy matching is not used
-as an execution gate.
+as an execution gate. Kalshi fee rate is also explicit per configured pair;
+markets can have different fee schedules, so the scanner refuses to silently
+assume one universal rate.
 """
 
 from __future__ import annotations
@@ -21,8 +23,8 @@ from pathlib import Path
 import time
 from typing import Any
 
-from src.auth import KalshiClient
 from src.cross_market import KalshiNoQuote, optimize_adjacent_total
+from src.kalshi_live_book import LiveKalshiBooks
 from src.opticodds_stream import OpticOddsStream, SportsbookQuoteStore
 
 logger = logging.getLogger("kalshi_arb.cross_shadow")
@@ -34,6 +36,7 @@ class PairConfig:
     fixture_id: str
     kalshi_ticker: str
     kalshi_line: Decimal
+    kalshi_taker_fee_rate: Decimal
     sport: str
     league: str
     market: str
@@ -47,12 +50,22 @@ def load_pairs(path: str) -> tuple[PairConfig, ...]:
     for item in items:
         if not item.get("enabled", True):
             continue
+        if "kalshi_taker_fee_rate" not in item:
+            raise ValueError(
+                f"{item.get('event_key', '<unknown>')}: kalshi_taker_fee_rate is required"
+            )
+        fee_rate = Decimal(str(item["kalshi_taker_fee_rate"]))
+        if fee_rate < 0 or fee_rate > Decimal("0.50"):
+            raise ValueError(
+                f"{item.get('event_key', '<unknown>')}: implausible Kalshi fee rate {fee_rate}"
+            )
         result.append(
             PairConfig(
                 event_key=str(item["event_key"]),
                 fixture_id=str(item["fixture_id"]),
                 kalshi_ticker=str(item["kalshi_ticker"]),
                 kalshi_line=Decimal(str(item["kalshi_line"])),
+                kalshi_taker_fee_rate=fee_rate,
                 sport=str(item["sport"]).lower(),
                 league=str(item["league"]),
                 market=str(item["market"]),
@@ -62,47 +75,31 @@ def load_pairs(path: str) -> tuple[PairConfig, ...]:
     return tuple(result)
 
 
-def _dollars_to_whole_cents(value: Decimal) -> int | None:
-    cents = value * 100
+def live_book_to_quote(pair: PairConfig, price_dollars: Decimal, count: Decimal) -> KalshiNoQuote | None:
+    """Normalize current executable Kalshi NO ask into optimizer units.
+
+    V1 of the optimizer deliberately skips sub-cent Kalshi prices. That is safer
+    than rounding an executable 36.1c ask down to 36c and inventing edge.
+    """
+    cents = price_dollars * 100
     if cents != cents.to_integral_value():
         return None
-    return int(cents)
-
-
-async def fetch_kalshi_no_quote(
-    client: KalshiClient,
-    pair: PairConfig,
-) -> KalshiNoQuote | None:
-    """Read the best executable NO ask and size from Kalshi's bid-only book."""
-    response = await client.get(f"/markets/{pair.kalshi_ticker}/orderbook", params={"depth": 1})
-    if response.status_code == 404:
-        return None
-    response.raise_for_status()
-    book = response.json().get("orderbook_fp", {})
-    yes_levels = book.get("yes_dollars") or []
-    if not yes_levels:
+    price_cents = int(cents)
+    if price_cents <= 0 or price_cents >= 100:
         return None
 
-    best_price_str, count_str = max(
-        yes_levels, key=lambda row: Decimal(str(row[0]))
-    )
-    yes_bid = Decimal(str(best_price_str))
-    no_ask = Decimal("1.00") - yes_bid
-    no_price_cents = _dollars_to_whole_cents(no_ask)
-    if no_price_cents is None:
-        return None
-
-    count = Decimal(str(count_str))
-    depth_hundredths = int(count * 100)
-    if depth_hundredths <= 0:
+    count_hundredths = int(count * 100)
+    if count_hundredths <= 0:
         return None
 
     return KalshiNoQuote(
         ticker=pair.kalshi_ticker,
         event_key=pair.event_key,
         line=pair.kalshi_line,
-        no_price_cents=no_price_cents,
-        no_depth_hundredths=depth_hundredths,
+        no_price_cents=price_cents,
+        no_depth_hundredths=count_hundredths,
+        # The locally maintained book is current as of the live WS stream; use
+        # retrieval time for cross-feed freshness rather than age of last change.
         observed_ms=int(time.time() * 1000),
     )
 
@@ -177,18 +174,19 @@ class OpportunityTracker:
             if current is None:
                 self._open[pair.event_key] = (now, fingerprint)
                 logger.warning(
-                    "OPEN %s guaranteed=$%.2f roi=%.2f%% middle=$%.2f cost=$%.2f plan=%s",
+                    "OPEN %s floor=$%.2f roi=%.2f%% middle=$%.2f cost=$%.2f fee_rate=%s plan=%s",
                     pair.event_key,
                     plan.guaranteed_profit_cents / 100,
                     plan.guaranteed_roi * 100,
                     plan.middle_profit_cents / 100,
                     plan.total_cost_cents / 100,
+                    pair.kalshi_taker_fee_rate,
                     json.dumps(plan.as_dict(), separators=(",", ":")),
                 )
             elif current[1] != fingerprint:
                 self._open[pair.event_key] = (current[0], fingerprint)
                 logger.info(
-                    "MOVE %s guaranteed=$%.2f roi=%.2f%% age_ms=%d",
+                    "MOVE %s floor=$%.2f roi=%.2f%% age_ms=%d",
                     pair.event_key,
                     plan.guaranteed_profit_cents / 100,
                     plan.guaranteed_roi * 100,
@@ -222,14 +220,14 @@ async def run(args: argparse.Namespace) -> None:
         raise SystemExit("CROSS_MARKET_SPORTSBOOKS is empty")
 
     store = SportsbookQuoteStore()
-    client = KalshiClient()
     tracker = OpportunityTracker()
+    kalshi_books = LiveKalshiBooks([p.kalshi_ticker for p in pairs])
 
     by_sport: dict[str, list[PairConfig]] = {}
     for pair in pairs:
         by_sport.setdefault(pair.sport, []).append(pair)
 
-    stream_tasks = [
+    tasks = [
         asyncio.create_task(
             stream_group(
                 api_key,
@@ -241,13 +239,14 @@ async def run(args: argparse.Namespace) -> None:
         )
         for group in by_sport.values()
     ]
+    tasks.append(asyncio.create_task(kalshi_books.run()))
 
     logger.info(
-        "SHADOW ONLY: %d pair(s), books=%s, bankroll=$%.2f, poll=%dms",
+        "SHADOW ONLY: %d pair(s), books=%s, bankroll=$%.2f, scan=%dms",
         len(pairs),
         ",".join(sportsbooks),
         args.bankroll_cents / 100,
-        args.kalshi_poll_ms,
+        args.scan_interval_ms,
     )
 
     try:
@@ -256,7 +255,12 @@ async def run(args: argparse.Namespace) -> None:
             now_ms = int(time.time() * 1000)
             for pair in pairs:
                 try:
-                    kalshi_quote = await fetch_kalshi_no_quote(client, pair)
+                    live = await kalshi_books.best_no_ask(pair.kalshi_ticker)
+                    kalshi_quote = None
+                    if live is not None:
+                        kalshi_quote = live_book_to_quote(
+                            pair, live.price_dollars, live.count
+                        )
                     sportsbook_quotes = store.for_event(pair.event_key)
                     plan = None
                     if kalshi_quote and sportsbook_quotes:
@@ -264,6 +268,7 @@ async def run(args: argparse.Namespace) -> None:
                             sportsbook_quotes,
                             kalshi_quote,
                             args.bankroll_cents,
+                            taker_fee_rate=pair.kalshi_taker_fee_rate,
                             max_quote_age_ms=args.max_quote_age_ms,
                             now_ms=now_ms,
                         )
@@ -277,12 +282,12 @@ async def run(args: argparse.Namespace) -> None:
                     logger.exception("scan failed for %s", pair.event_key)
 
             elapsed = (time.monotonic() - cycle_started) * 1000
-            await asyncio.sleep(max(0.01, (args.kalshi_poll_ms - elapsed) / 1000))
+            await asyncio.sleep(max(0.005, (args.scan_interval_ms - elapsed) / 1000))
     finally:
-        for task in stream_tasks:
+        for task in tasks:
             task.cancel()
-        await client.close()
-        await asyncio.gather(*stream_tasks, return_exceptions=True)
+        await kalshi_books.close()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def parse_args() -> argparse.Namespace:
@@ -290,7 +295,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pairs", default="config/cross_market_pairs.json")
     parser.add_argument("--bankroll-cents", type=int, default=100000)
     parser.add_argument("--sportsbook-stake-cap-cents", type=int, default=30000)
-    parser.add_argument("--kalshi-poll-ms", type=int, default=500)
+    parser.add_argument("--scan-interval-ms", type=int, default=50)
     parser.add_argument("--max-quote-age-ms", type=int, default=1500)
     parser.add_argument("--min-profit-cents", type=int, default=2500)
     parser.add_argument("--min-roi", type=float, default=0.03)
