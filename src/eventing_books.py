@@ -60,15 +60,17 @@ class EventingPolyBookStore(_UpdateMixin, PolyBookStore):
         self.notifications_enabled = True
 
     def ingest(self, payload: Any, *, source: str) -> bool:
-        before = {slug: quote.received_ms for slug, quote in self._quotes.items()}
+        # v2 replaces the immutable PolyQuote object on every accepted update. Track
+        # object identities, not millisecond timestamps: two websocket messages can
+        # legitimately arrive inside the same millisecond and both must wake the
+        # event-driven scanner.
+        before = {slug: id(quote) for slug, quote in self._quotes.items()}
         ok = super().ingest(payload, source=source)
         if not ok or not self.notifications_enabled:
             return ok
-        # Hardened v2 ingest normalizes SDK envelopes before storing the quote. Find
-        # the record whose receive timestamp changed rather than re-parsing payload.
         changed = [
             slug for slug, quote in self._quotes.items()
-            if before.get(slug) != quote.received_ms
+            if before.get(slug) != id(quote)
         ]
         for slug in changed:
             self._notify("polymarket", slug, "ws" if source == "ws" else "rest")
