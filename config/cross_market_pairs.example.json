@@ -1,0 +1,14 @@
+{
+  "pairs": [
+    {
+      "event_key": "example-nba-game",
+      "fixture_id": "REPLACE_WITH_OPTICODDS_FIXTURE_ID",
+      "kalshi_ticker": "REPLACE_WITH_KALSHI_TOTAL_TICKER",
+      "kalshi_line": 184.5,
+      "sport": "basketball",
+      "league": "NBA",
+      "market": "Total Points",
+      "enabled": false
+    }
+  ]
+}
