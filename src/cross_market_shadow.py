@@ -238,7 +238,7 @@ async def run(args: argparse.Namespace) -> None:
         x.strip()
         for x in os.getenv(
             "CROSS_MARKET_SPORTSBOOKS",
-            "Caesars,DraftKings,BetMGM,Fanatics",
+            "FanDuel",
         ).split(",")
         if x.strip()
     )
