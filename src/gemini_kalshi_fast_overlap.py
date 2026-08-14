@@ -30,7 +30,7 @@ GEMINI_REST = "https://api.gemini.com/v1/prediction-markets"
 KALSHI_REST = "https://external-api.kalshi.com/trade-api/v2"
 
 GEMINI_EVENT_RE = re.compile(r"^(BTC|ETH|SOL|XRP)15M(\d{10})$", re.I)
-DURATION_RE = re.compile(r"\b15[ -]?(?:minute|min|m)\b", re.I)
+DURATION_RE = re.compile(r"\b15[ -]?(?:minute(?:s)?|min|m)\b", re.I)
 UPDOWN_RE = re.compile(r"\b(?:up\s*(?:or|/)\s*down|higher|lower)\b", re.I)
 
 ASSET_ALIASES: dict[str, tuple[str, ...]] = {
