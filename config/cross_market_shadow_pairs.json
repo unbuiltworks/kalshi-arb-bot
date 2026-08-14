@@ -10,6 +10,138 @@
       "settlement_source": "Academy of Motion Picture Arts and Sciences",
       "audit_note": "Both public contract descriptions name the same film, award, ceremony, and official source. Edge-case postponement/cancellation semantics have not been proven identical, so this pair is shadow-only.",
       "enabled_shadow": true
+    },
+    {
+      "pair_id": "oscars-2027-best-picture-wild-horse-nine",
+      "category": "culture",
+      "poly_slug": "tac-oscars-03-14-2027-bestpic-wilnin",
+      "kalshi_ticker": "KXOSCARPIC-27-WIL",
+      "settlement_status": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+      "settlement_basis": "Wild Horse Nine wins Best Picture at the 99th Academy Awards",
+      "settlement_source": "Academy of Motion Picture Arts and Sciences",
+      "audit_note": "Strong same-event/entity candidate from the all-category audit. Full edge-case rule parity is not yet certified.",
+      "enabled_shadow": true
+    },
+    {
+      "pair_id": "oscars-2027-best-picture-project-hail-mary",
+      "category": "culture",
+      "poly_slug": "tac-oscars-03-14-2027-bestpic-promar",
+      "kalshi_ticker": "KXOSCARPIC-27-PRO",
+      "settlement_status": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+      "settlement_basis": "Project Hail Mary wins Best Picture at the 99th Academy Awards",
+      "settlement_source": "Academy of Motion Picture Arts and Sciences",
+      "audit_note": "Strong same-event/entity candidate from the all-category audit. Full edge-case rule parity is not yet certified.",
+      "enabled_shadow": true
+    },
+    {
+      "pair_id": "us-unemployment-2026-aug-above-4p0",
+      "category": "macro",
+      "poly_slug": "urc-usunemp-sa-august-2026-09-04-gt4pt0pct",
+      "kalshi_ticker": "KXU3-26AUG-T4.0",
+      "settlement_status": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+      "settlement_basis": "Seasonally adjusted U.S. unemployment rate for August 2026 is above 4.0%",
+      "settlement_source": "U.S. Bureau of Labor Statistics Employment Situation",
+      "audit_note": "Same month, statistic, threshold and BLS release surfaced by discovery. Exact revision/rounding/void clauses still require full rule audit.",
+      "enabled_shadow": true
+    },
+    {
+      "pair_id": "us-unemployment-2026-aug-above-4p2",
+      "category": "macro",
+      "poly_slug": "urc-usunemp-sa-august-2026-09-04-gt4pt2pct",
+      "kalshi_ticker": "KXU3-26AUG-T4.2",
+      "settlement_status": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+      "settlement_basis": "Seasonally adjusted U.S. unemployment rate for August 2026 is above 4.2%",
+      "settlement_source": "U.S. Bureau of Labor Statistics Employment Situation",
+      "audit_note": "Same month, statistic, threshold and BLS release surfaced by discovery. Exact revision/rounding/void clauses still require full rule audit.",
+      "enabled_shadow": true
+    },
+    {
+      "pair_id": "us-unemployment-2026-aug-above-4p4",
+      "category": "macro",
+      "poly_slug": "urc-usunemp-sa-august-2026-09-04-gt4pt4pct",
+      "kalshi_ticker": "KXU3-26AUG-T4.4",
+      "settlement_status": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+      "settlement_basis": "Seasonally adjusted U.S. unemployment rate for August 2026 is above 4.4%",
+      "settlement_source": "U.S. Bureau of Labor Statistics Employment Situation",
+      "audit_note": "Same month, statistic, threshold and BLS release surfaced by discovery. Exact revision/rounding/void clauses still require full rule audit.",
+      "enabled_shadow": true
+    },
+    {
+      "pair_id": "bitcoin-cross-100k-before-october-2026",
+      "category": "crypto",
+      "poly_slug": "cpc-btc-100k-09-30-2026",
+      "kalshi_ticker": "KXBTCMAX100-26-SEP",
+      "settlement_status": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+      "settlement_basis": "Bitcoin crosses $100,000 again before October 2026",
+      "settlement_source": "Price-index rules require full source audit",
+      "audit_note": "Question, threshold and cutoff align in discovery. Index observation and crossing semantics must be proven identical before any execution eligibility.",
+      "enabled_shadow": true
+    },
+    {
+      "pair_id": "bitcoin-cross-100k-before-november-2026",
+      "category": "crypto",
+      "poly_slug": "cpc-btc-100k-10-31-2026",
+      "kalshi_ticker": "KXBTCMAX100-26-OCT",
+      "settlement_status": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+      "settlement_basis": "Bitcoin crosses $100,000 again before November 2026",
+      "settlement_source": "Price-index rules require full source audit",
+      "audit_note": "Question, threshold and cutoff align in discovery. Index observation and crossing semantics must be proven identical before any execution eligibility.",
+      "enabled_shadow": true
+    },
+    {
+      "pair_id": "chicago-high-2026-08-14-84-or-above",
+      "category": "climate",
+      "poly_slug": "tc-temp-mdwhigh-2026-08-14-gte84f",
+      "kalshi_ticker": "KXHIGHCHI-26AUG14-T83",
+      "settlement_status": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+      "settlement_basis": "Chicago daily high temperature on August 14, 2026 is at least 84F",
+      "settlement_source": "Weather-station/source parity requires full audit",
+      "audit_note": "Date, city and 84F-or-above outcome align. Exact station, observation window, rounding and correction rules are not yet certified.",
+      "enabled_shadow": true
+    },
+    {
+      "pair_id": "florida-gop-governor-primary-2026-byron-donalds",
+      "category": "politics",
+      "poly_slug": "enwc-usgubp-fl-2026-08-18-rep-byrdon",
+      "kalshi_ticker": "KXGOVFLNOMR-26-BD",
+      "settlement_status": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+      "settlement_basis": "Byron Donalds wins the 2026 Florida Republican gubernatorial primary/nomination contest",
+      "settlement_source": "Official election outcome; full contingency rules require audit",
+      "audit_note": "Same candidate, party, office and 2026 nomination contest. Withdrawal/replacement/recount contingencies may differ and remain shadow-only.",
+      "enabled_shadow": true
+    },
+    {
+      "pair_id": "florida-gop-governor-primary-2026-james-fishback",
+      "category": "politics",
+      "poly_slug": "enwc-usgubp-fl-2026-08-18-rep-jamfis",
+      "kalshi_ticker": "KXGOVFLNOMR-26-JFIS",
+      "settlement_status": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+      "settlement_basis": "James Fishback wins the 2026 Florida Republican gubernatorial primary/nomination contest",
+      "settlement_source": "Official election outcome; full contingency rules require audit",
+      "audit_note": "Same candidate, party, office and 2026 nomination contest. Withdrawal/replacement/recount contingencies may differ and remain shadow-only.",
+      "enabled_shadow": true
+    },
+    {
+      "pair_id": "top-ai-model-company-2026-xai",
+      "category": "technology",
+      "poly_slug": "aimrc-company1-dur2026-xai",
+      "kalshi_ticker": "KXTOPAI-27-JAN01-XAI",
+      "settlement_status": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+      "settlement_basis": "xAI has a #1/top-ranked AI model during 2026",
+      "settlement_source": "Leaderboard methodology requires full audit",
+      "audit_note": "Company and high-level leaderboard outcome align. Benchmark set, tie handling and observation-window rules must be proven identical.",
+      "enabled_shadow": true
+    },
+    {
+      "pair_id": "top-ai-model-company-2026-meta",
+      "category": "technology",
+      "poly_slug": "aimrc-company1-dur2026-meta",
+      "kalshi_ticker": "KXTOPAI-27-JAN01-META",
+      "settlement_status": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+      "settlement_basis": "Meta has a #1/top-ranked AI model during 2026",
+      "settlement_source": "Leaderboard methodology requires full audit",
+      "audit_note": "Company and high-level leaderboard outcome align. Benchmark set, tie handling and observation-window rules must be proven identical.",
+      "enabled_shadow": true
     }
   ]
 }
