@@ -5,6 +5,7 @@
       "fixture_id": "REPLACE_WITH_OPTICODDS_FIXTURE_ID",
       "kalshi_ticker": "REPLACE_WITH_KALSHI_TOTAL_TICKER",
       "kalshi_line": 184.5,
+      "kalshi_taker_fee_rate": 0.07,
       "sport": "basketball",
       "league": "NBA",
       "market": "Total Points",
