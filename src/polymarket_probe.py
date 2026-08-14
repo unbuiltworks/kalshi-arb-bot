@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from collections import Counter
 
 import httpx
 from polymarket_us import PolymarketUS
@@ -24,48 +25,29 @@ def client_from_env() -> PolymarketUS:
     return PolymarketUS(key_id=key_id, secret_key=secret_key, timeout=10.0)
 
 
-def _compact_event(event: dict) -> dict:
-    totals = []
-    for market in event.get("markets", []) or []:
-        if str(market.get("sportsMarketType", "")).upper() != "TOTAL":
-            continue
-        totals.append({
-            "id": market.get("id"),
-            "slug": market.get("slug"),
-            "question": market.get("question"),
-            "title": market.get("title"),
-            "subtitle": market.get("subtitle"),
-            "line": market.get("line"),
-            "sportsMarketType": market.get("sportsMarketType"),
-            "bestBidQuote": market.get("bestBidQuote"),
-            "bestAskQuote": market.get("bestAskQuote"),
-            "minimumTradeQty": market.get("minimumTradeQty"),
-            "feeCoefficient": market.get("feeCoefficient"),
-            "rulesDisclaimer": market.get("rulesDisclaimer"),
-            "marketSides": [
-                {
-                    "identifier": side.get("identifier"),
-                    "description": side.get("description"),
-                    "long": side.get("long"),
-                    "price": side.get("price"),
-                    "quote": side.get("quote"),
-                    "tradable": side.get("tradable"),
-                }
-                for side in (market.get("marketSides", []) or [])
-            ],
-        })
+def _compact_market(market: dict) -> dict:
     return {
-        "id": event.get("id"),
-        "slug": event.get("slug"),
-        "title": event.get("title"),
-        "startTime": event.get("startTime"),
-        "eventDate": event.get("eventDate"),
-        "live": event.get("live"),
-        "teams": [
-            {"name": t.get("name"), "abbreviation": t.get("abbreviation"), "alias": t.get("alias")}
-            for t in (event.get("teams", []) or [])
+        "id": market.get("id"),
+        "slug": market.get("slug"),
+        "question": market.get("question"),
+        "title": market.get("title"),
+        "subtitle": market.get("subtitle"),
+        "line": market.get("line"),
+        "sportsMarketType": market.get("sportsMarketType"),
+        "marketType": market.get("marketType"),
+        "bestBidQuote": market.get("bestBidQuote"),
+        "bestAskQuote": market.get("bestAskQuote"),
+        "marketSides": [
+            {
+                "identifier": side.get("identifier"),
+                "description": side.get("description"),
+                "long": side.get("long"),
+                "price": side.get("price"),
+                "quote": side.get("quote"),
+                "tradable": side.get("tradable"),
+            }
+            for side in (market.get("marketSides", []) or [])
         ],
-        "totals": totals,
     }
 
 
@@ -88,9 +70,27 @@ def main() -> None:
             response.raise_for_status()
             payload = response.json()
             events = payload.get("events", []) if isinstance(payload, dict) else []
-            compact = [_compact_event(e) for e in events]
-            compact = [e for e in compact if e["totals"]]
-            print(json.dumps({"league": league, "events_with_totals": len(compact), "events": compact[:20]}, default=str))
+            market_types = Counter()
+            samples = []
+            total_like = []
+            for event in events:
+                for market in event.get("markets", []) or []:
+                    typ = str(market.get("sportsMarketType") or "<none>")
+                    market_types[typ] += 1
+                    compact = _compact_market(market)
+                    if len(samples) < 12:
+                        samples.append({"event": event.get("title"), **compact})
+                    joined = " ".join(str(market.get(k) or "") for k in ("sportsMarketType", "marketType", "question", "title", "subtitle")).lower()
+                    if "total" in joined or "over" in joined or "under" in joined:
+                        total_like.append({"event": event.get("title"), **compact})
+            print(json.dumps({
+                "league": league,
+                "event_count": len(events),
+                "market_type_counts": dict(market_types),
+                "sample_markets": samples,
+                "total_like_count": len(total_like),
+                "total_like": total_like[:30],
+            }, default=str))
 
 
 if __name__ == "__main__":
