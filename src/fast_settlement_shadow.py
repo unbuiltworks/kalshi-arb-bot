@@ -8,6 +8,8 @@ Safety properties:
 - no order-entry code is added here;
 - exact participant/line/start-time/result-source validation remains mandatory;
 - stale or empty books still fail closed in the underlying event-driven scanner.
+
+The Railway service for this lane tracks this feature branch directly.
 """
 
 from __future__ import annotations
