@@ -1,8 +1,9 @@
-"""OpticOdds (OddsJam API) real-time sportsbook totals stream.
+"""OpticOdds (OddsJam API) real-time sportsbook totals ingestion.
 
-OddsJam's developer documentation currently redirects to OpticOdds v3. The v3
-stream is Server-Sent Events (SSE), not WebSocket. This client uses httpx,
-already a project dependency, and requests deep links + limits.
+OddsJam's developer documentation currently redirects to OpticOdds v3. We seed
+current state from `/fixtures/odds`, then consume the SSE odds stream. Seeding is
+important because the stream is an update feed; waiting for every line to move
+before the scanner knows current state would miss opportunities after startup.
 
 No wager is ever placed by this module.
 """
@@ -14,6 +15,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 import json
 import logging
+import time
 from typing import AsyncIterator, Iterable
 
 import httpx
@@ -53,6 +55,8 @@ class OpticOddsStream:
         books = tuple(sportsbooks)
         if not books:
             raise ValueError("at least one sportsbook is required")
+        if len(books) > 5:
+            raise ValueError("OpticOdds supports at most 5 sportsbooks per stream")
         self.api_key = api_key
         self.sport = sport
         self.sportsbooks = books
@@ -200,11 +204,12 @@ def normalize_over_quote(
     else:
         deeplink = str(deep_link)
 
-    timestamp = odd.get("timestamp", 0)
+    timestamp = odd.get("timestamp")
     try:
         observed_ms = int(float(timestamp) * 1000)
-    except Exception:
-        observed_ms = 0
+    except (TypeError, ValueError):
+        # Unknown source timestamp should not bypass the staleness gate.
+        observed_ms = int(time.time() * 1000)
 
     return SportsbookOverQuote(
         book=str(sportsbook),
@@ -224,6 +229,27 @@ class SportsbookQuoteStore:
     def __init__(self) -> None:
         self._quotes: dict[str, SportsbookOverQuote] = {}
 
+    def _apply_odd(
+        self,
+        odd: dict,
+        *,
+        fixture_id: str,
+        fixture_to_event: dict[str, str],
+        configured_stake_cap_cents: int,
+    ) -> str | None:
+        event_key = fixture_to_event.get(fixture_id)
+        if not event_key:
+            return None
+        quote = normalize_over_quote(
+            odd,
+            event_key=event_key,
+            configured_stake_cap_cents=configured_stake_cap_cents,
+        )
+        if quote is None or not quote.source_id:
+            return None
+        self._quotes[quote.source_id] = quote
+        return event_key
+
     def apply_odds_payload(
         self,
         payload: dict,
@@ -234,18 +260,36 @@ class SportsbookQuoteStore:
         affected: set[str] = set()
         for odd in payload.get("data", []):
             fixture_id = str(odd.get("fixture_id", ""))
-            event_key = fixture_to_event.get(fixture_id)
-            if not event_key:
-                continue
-            quote = normalize_over_quote(
+            event_key = self._apply_odd(
                 odd,
-                event_key=event_key,
+                fixture_id=fixture_id,
+                fixture_to_event=fixture_to_event,
                 configured_stake_cap_cents=configured_stake_cap_cents,
             )
-            if quote is None or not quote.source_id:
-                continue
-            self._quotes[quote.source_id] = quote
-            affected.add(event_key)
+            if event_key:
+                affected.add(event_key)
+        return affected
+
+    def apply_snapshot_payload(
+        self,
+        payload: dict,
+        *,
+        fixture_to_event: dict[str, str],
+        configured_stake_cap_cents: int,
+    ) -> set[str]:
+        """Apply `/fixtures/odds` response whose odds are nested under fixtures."""
+        affected: set[str] = set()
+        for fixture in payload.get("data", []):
+            fixture_id = str(fixture.get("id", ""))
+            for odd in fixture.get("odds", []):
+                event_key = self._apply_odd(
+                    odd,
+                    fixture_id=fixture_id,
+                    fixture_to_event=fixture_to_event,
+                    configured_stake_cap_cents=configured_stake_cap_cents,
+                )
+                if event_key:
+                    affected.add(event_key)
         return affected
 
     def apply_locked_payload(self, payload: dict) -> set[str]:
@@ -259,3 +303,50 @@ class SportsbookQuoteStore:
 
     def for_event(self, event_key: str) -> tuple[SportsbookOverQuote, ...]:
         return tuple(q for q in self._quotes.values() if q.event_key == event_key)
+
+
+async def seed_current_odds(
+    api_key: str,
+    *,
+    fixture_ids: Iterable[str],
+    sportsbooks: Iterable[str],
+    markets: Iterable[str],
+    fixture_to_event: dict[str, str],
+    store: SportsbookQuoteStore,
+    configured_stake_cap_cents: int,
+) -> None:
+    """Seed current sportsbook state from REST before listening for updates.
+
+    OpticOdds documents max 5 fixture IDs and max 5 sportsbooks per request, so
+    both dimensions are chunked. The same quote id is simply overwritten when a
+    chunk overlaps.
+    """
+    fixture_ids = tuple(dict.fromkeys(fixture_ids))
+    sportsbooks = tuple(dict.fromkeys(sportsbooks))
+    markets = tuple(dict.fromkeys(markets))
+    if not fixture_ids or not sportsbooks:
+        return
+
+    headers = {"X-Api-Key": api_key}
+    timeout = httpx.Timeout(connect=10.0, read=10.0, write=10.0, pool=10.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for fixture_chunk in _chunks(fixture_ids, 5):
+            for book_chunk in _chunks(sportsbooks, 5):
+                params: list[tuple[str, str]] = [("odds_format", "AMERICAN")]
+                params.extend(("fixture_id", x) for x in fixture_chunk)
+                params.extend(("sportsbook", x) for x in book_chunk)
+                params.extend(("market", x) for x in markets)
+                response = await client.get(
+                    f"{BASE_URL}/fixtures/odds", headers=headers, params=params
+                )
+                response.raise_for_status()
+                store.apply_snapshot_payload(
+                    response.json(),
+                    fixture_to_event=fixture_to_event,
+                    configured_stake_cap_cents=configured_stake_cap_cents,
+                )
+
+
+def _chunks(values: tuple[str, ...], size: int) -> Iterable[tuple[str, ...]]:
+    for start in range(0, len(values), size):
+        yield values[start:start + size]
