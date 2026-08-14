@@ -6,6 +6,7 @@ SHADOW_MODULES = [
     Path("src/eventing_books.py"),
     Path("src/universe_overlap_audit.py"),
     Path("src/universe_overlap_audit_v2.py"),
+    Path("src/generic_cross_market_shadow.py"),
 ]
 
 # Exact call-shaped fragments, not generic prose. If an execution path is ever
