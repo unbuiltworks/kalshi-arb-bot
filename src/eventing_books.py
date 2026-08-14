@@ -1,9 +1,7 @@
 """Event notifications for the read-only cross-exchange order-book stores.
 
-These wrappers add bounded, non-blocking queues around the existing Polymarket and
-Kalshi book implementations.  They do not contain any order-entry functionality.
-The event-driven scanner can therefore wake up on a book mutation instead of
-polling every N milliseconds.
+These wrappers add bounded, non-blocking queues around the hardened v2 Polymarket
+and Kalshi book implementations. They contain no order-entry functionality.
 """
 
 from __future__ import annotations
@@ -14,7 +12,7 @@ import time
 from typing import Any
 
 from src.kalshi_cross_book_v2 import KalshiCrossBooks
-from src.polymarket_us_market_ws import PolyBookStore
+from src.polymarket_kalshi_shadow_v2 import PolyBookStore
 
 
 @dataclass(frozen=True)
@@ -42,8 +40,8 @@ class _UpdateMixin:
         try:
             self.updates.put_nowait(event)
         except asyncio.QueueFull:
-            # Never let diagnostics backpressure the market-data websocket. Drop the
-            # oldest wake-up; the book itself still contains the newest state.
+            # Never backpressure either market-data websocket. The book still holds
+            # the newest state even when an old wake-up is discarded.
             try:
                 self.updates.get_nowait()
             except asyncio.QueueEmpty:
@@ -56,20 +54,25 @@ class _UpdateMixin:
 
 
 class EventingPolyBookStore(_UpdateMixin, PolyBookStore):
-    def __init__(self, slugs: list[str] | tuple[str, ...], *, max_queue: int = 20000) -> None:
-        PolyBookStore.__init__(self, slugs)
+    def __init__(self, *, max_queue: int = 20000) -> None:
+        PolyBookStore.__init__(self)
         self._init_updates(max_queue)
         self.notifications_enabled = True
 
-    def replace_from_book(self, slug: str, book: dict[str, Any], *, notify: bool = True) -> None:
-        super().replace_from_book(slug, book)
-        if notify and self.notifications_enabled:
-            self._notify("polymarket", slug, "snapshot")
-
-    def apply_incremental(self, slug: str, changes: dict[str, Any]) -> None:
-        super().apply_incremental(slug, changes)
-        if self.notifications_enabled:
-            self._notify("polymarket", slug, "delta")
+    def ingest(self, payload: Any, *, source: str) -> bool:
+        before = {slug: quote.received_ms for slug, quote in self._quotes.items()}
+        ok = super().ingest(payload, source=source)
+        if not ok or not self.notifications_enabled:
+            return ok
+        # Hardened v2 ingest normalizes SDK envelopes before storing the quote. Find
+        # the record whose receive timestamp changed rather than re-parsing payload.
+        changed = [
+            slug for slug, quote in self._quotes.items()
+            if before.get(slug) != quote.received_ms
+        ]
+        for slug in changed:
+            self._notify("polymarket", slug, "ws" if source == "ws" else "rest")
+        return ok
 
 
 class EventingKalshiCrossBooks(_UpdateMixin, KalshiCrossBooks):
@@ -78,15 +81,16 @@ class EventingKalshiCrossBooks(_UpdateMixin, KalshiCrossBooks):
         self._init_updates(max_queue)
 
     async def apply_snapshot(self, msg: dict[str, Any]) -> None:
-        await super().apply_snapshot(msg)
         body = msg.get("msg", msg)
         ticker = str(body.get("market_ticker", ""))
-        if ticker in self.tickers:
+        await super().apply_snapshot(msg)
+        if ticker in self.tickers and ticker in self._initialized:
             self._notify("kalshi", ticker, "snapshot")
 
     async def apply_delta(self, msg: dict[str, Any]) -> None:
-        await super().apply_delta(msg)
         body = msg.get("msg", msg)
         ticker = str(body.get("market_ticker", ""))
-        if ticker in self.tickers:
+        was_initialized = ticker in self._initialized
+        await super().apply_delta(msg)
+        if ticker in self.tickers and was_initialized and ticker in self._initialized:
             self._notify("kalshi", ticker, "delta")
