@@ -67,8 +67,8 @@ class LiveKalshiBooks:
         }
         self._received_ms: dict[str, int] = {}
         self._exchange_ts_ms: dict[str, int | None] = {}
-        self._seq: dict[str, int | None] = {}
         self._initialized: set[str] = set()
+        self._last_seq: int | None = None
         self._lock = asyncio.Lock()
         self._running = False
         self._ws: ClientConnection | None = None
@@ -121,12 +121,30 @@ class LiveKalshiBooks:
                     break
                 msg = json.loads(raw)
                 msg_type = msg.get("type")
+                if msg_type in {"orderbook_snapshot", "orderbook_delta"}:
+                    self._validate_sequence(msg)
                 if msg_type == "orderbook_snapshot":
                     await self.apply_snapshot(msg)
                 elif msg_type == "orderbook_delta":
                     await self.apply_delta(msg)
                 elif msg_type == "error":
                     raise RuntimeError(f"Kalshi WS error: {msg.get('msg')}")
+
+    def _validate_sequence(self, msg: dict[str, Any]) -> None:
+        """Validate the subscription-wide sequence, not a per-ticker sequence.
+
+        One orderbook subscription can contain many markets, and their messages
+        interleave on the same `sid`. Treating `seq` as per-ticker would falsely
+        report gaps whenever another market updates between two messages.
+        """
+        seq = _int_or_none(msg.get("seq"))
+        if seq is None:
+            return
+        if self._last_seq is not None and seq != self._last_seq + 1:
+            raise RuntimeError(
+                f"orderbook sequence gap: previous={self._last_seq} current={seq}"
+            )
+        self._last_seq = seq
 
     async def close(self) -> None:
         self._running = False
@@ -139,7 +157,7 @@ class LiveKalshiBooks:
             self._initialized.clear()
             self._received_ms.clear()
             self._exchange_ts_ms.clear()
-            self._seq.clear()
+            self._last_seq = None
             for book in self._yes_bids.values():
                 book.clear()
 
@@ -161,13 +179,11 @@ class LiveKalshiBooks:
                 levels[price] = count
 
         received = int(time.time() * 1000)
-        seq = _int_or_none(msg.get("seq"))
         exchange_ts = _int_or_none(body.get("ts_ms"))
         async with self._lock:
             self._yes_bids[ticker] = levels
             self._received_ms[ticker] = received
             self._exchange_ts_ms[ticker] = exchange_ts
-            self._seq[ticker] = seq
             self._initialized.add(ticker)
 
     async def apply_delta(self, msg: dict[str, Any]) -> None:
@@ -177,19 +193,9 @@ class LiveKalshiBooks:
             return
 
         side = str(body.get("side", "")).lower()
-        seq = _int_or_none(msg.get("seq"))
-
         async with self._lock:
             if ticker not in self._initialized:
                 return
-
-            previous_seq = self._seq.get(ticker)
-            if previous_seq is not None and seq is not None and seq != previous_seq + 1:
-                # A missed level could make a stale best bid look executable. Fail closed.
-                raise RuntimeError(
-                    f"sequence gap for {ticker}: previous={previous_seq} current={seq}"
-                )
-            self._seq[ticker] = seq
 
             if side == "yes":
                 price_raw = body.get("price_dollars")
@@ -228,7 +234,7 @@ class LiveKalshiBooks:
                 count=count,
                 exchange_ts_ms=self._exchange_ts_ms.get(ticker),
                 received_ms=received,
-                seq=self._seq.get(ticker),
+                seq=self._last_seq,
             )
 
 
