@@ -81,3 +81,49 @@ Logs go to `arb_bot.log` and stdout. Key things to watch:
 - Fill rate on maker legs
 - Legging incidents (should be near zero)
 - Realized edge vs. theoretical edge
+
+## Sportsbook + Kalshi cross-market shadow scanner
+
+This branch adds a **shadow-only** scanner for the adjacent-total structure:
+
+- sportsbook `OVER` at one or more half-point totals
+- Kalshi `NO` on `total > H`
+- maximize the worst-case dollar profit after configured Kalshi taker fees
+- report the extra payoff when the final score lands in the middle
+
+The sportsbook feed uses the current OpticOdds v3 SSE API (the OddsJam API developer link redirects to OpticOdds). It ingests live odds, alternate totals, limits, and deep links. Kalshi is maintained from the authenticated `orderbook_delta` WebSocket using current fixed-point snapshot/delta shapes, subscription-wide sequence validation, and explicit `use_yes_price=true`. A sequence gap invalidates all local books and forces a reconnect/fresh snapshot. **No sportsbook bet and no Kalshi order is submitted.**
+
+### Configure
+
+```bash
+cp config/cross_market_pairs.example.json config/cross_market_pairs.json
+# Add explicit fixture_id <-> Kalshi ticker pairs and set enabled=true.
+
+export OPTICODDS_API_KEY="..."
+export CROSS_MARKET_SPORTSBOOKS="Caesars,DraftKings,BetMGM,Fanatics"
+```
+
+Every enabled pair must include `kalshi_taker_fee_rate`. Do not blindly copy the example value: Kalshi documents that some series have different fee schedules, including special sports events. Verify the current fee schedule for the exact series before treating the scanner's floor as locked profit. The scanner fails closed when the fee rate is omitted.
+
+Explicit event pairing is also a safety control. We do not fuzzy-match games into a "guaranteed" trade because mismatched games, lines, overtime treatment, or settlement rules destroy the hedge.
+
+### Run
+
+```bash
+python -m src.cross_market_shadow \
+  --bankroll-cents 100000 \
+  --min-profit-cents 2500 \
+  --min-roi 0.03 \
+  --max-quote-age-ms 1500 \
+  --scan-interval-ms 50
+```
+
+The 50 ms scan loop only reads already-maintained local state; it does not poll Kalshi REST every 50 ms.
+
+The log emits:
+
+- `OPEN`: a qualifying worst-case floor exists after the configured Kalshi fee rate
+- `MOVE`: prices/stakes changed while the edge remains open
+- `CLOSE`: edge disappeared, including measured lifetime in milliseconds
+
+That gives us the data needed before considering any execution: opportunities per game/day, floor ROI distribution, capital required, available size, and edge lifetime.
