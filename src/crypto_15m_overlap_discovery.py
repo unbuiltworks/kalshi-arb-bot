@@ -35,7 +35,7 @@ ASSETS: dict[str, tuple[str, ...]] = {
     "BNB": ("bnb", "binance coin"),
 }
 
-FIFTEEN_RE = re.compile(r"\b15[ -]?(?:minute|min|m)\b", re.I)
+FIFTEEN_RE = re.compile(r"\b15[ -]?(?:minutes?|mins?|m)\b", re.I)
 UPDOWN_RE = re.compile(r"\b(?:up\s*(?:or|/)\s*down|higher|lower)\b", re.I)
 
 
