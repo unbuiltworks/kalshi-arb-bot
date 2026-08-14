@@ -1,10 +1,13 @@
-"""Read-only Gemini Predictions <-> Kalshi fast-crypto overlap discovery.
+"""Read-only Gemini Predictions <-> Kalshi 15-minute crypto overlap discovery.
 
-Purpose: find recurring 5-minute and 15-minute same-asset/same-expiry candidates
-for shadow research. This module uses public REST endpoints only and NEVER submits
-orders. Time alignment is not settlement equivalence: Gemini short-duration crypto
-uses its own source/index metadata while Kalshi crypto markets use CF Benchmarks.
-Every overlap therefore remains research-only until historical outcome agreement,
+Purpose: find recurring same-asset, same-expiry 15-minute candidates for shadow
+research. Gemini 5-minute events are intentionally ignored because Kalshi does not
+currently expose a matching 5-minute BTC lane in this project. This module uses
+public REST endpoints only and NEVER submits orders.
+
+Time alignment is not settlement equivalence: Gemini short-duration crypto uses
+its own source/index metadata while Kalshi crypto markets use CF Benchmarks. Every
+overlap therefore remains research-only until historical outcome agreement,
 fee/depth, and settlement rules are quantified.
 """
 
@@ -26,8 +29,8 @@ logger = logging.getLogger("kalshi_arb.gemini_kalshi_fast_overlap")
 GEMINI_REST = "https://api.gemini.com/v1/prediction-markets"
 KALSHI_REST = "https://external-api.kalshi.com/trade-api/v2"
 
-GEMINI_EVENT_RE = re.compile(r"^(BTC|ETH|SOL|XRP)(05M|15M)(\d{10})$", re.I)
-DURATION_RE = re.compile(r"\b(5|15)[ -]?(?:minute|min|m)\b", re.I)
+GEMINI_EVENT_RE = re.compile(r"^(BTC|ETH|SOL|XRP)15M(\d{10})$", re.I)
+DURATION_RE = re.compile(r"\b15[ -]?(?:minute|min|m)\b", re.I)
 UPDOWN_RE = re.compile(r"\b(?:up\s*(?:or|/)\s*down|higher|lower)\b", re.I)
 
 ASSET_ALIASES: dict[str, tuple[str, ...]] = {
@@ -61,19 +64,16 @@ def _asset_from_text(row: dict[str, Any]) -> str | None:
     text = _text(row)
     hits: list[str] = []
     for symbol, aliases in ASSET_ALIASES.items():
-        if any(re.search(rf"(?<![a-z0-9]){re.escape(a)}(?![a-z0-9])", text) for a in aliases):
+        if any(re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", text) for alias in aliases):
             hits.append(symbol)
     return hits[0] if len(hits) == 1 else None
 
 
 def _kalshi_duration(row: dict[str, Any]) -> int | None:
-    match = DURATION_RE.search(_text(row))
-    return int(match.group(1)) if match else None
+    return 15 if DURATION_RE.search(_text(row)) else None
 
 
 def _kalshi_expiry(row: dict[str, Any]) -> datetime | None:
-    # expected_expiration_time is preferred for event resolution windows; close_time
-    # is used as fallback because short-duration contracts can expose either.
     return _dt(
         row.get("expected_expiration_time")
         or row.get("expiration_time")
@@ -86,12 +86,12 @@ def _gemini_meta(event: dict[str, Any]) -> tuple[str, int, datetime] | None:
     match = GEMINI_EVENT_RE.match(ticker)
     if not match:
         return None
-    asset, marker, stamp = match.groups()
+    asset, stamp = match.groups()
     try:
         expiry = datetime.strptime(stamp, "%y%m%d%H%M").replace(tzinfo=timezone.utc)
     except ValueError:
         return None
-    return asset.upper(), 5 if marker.upper() == "05M" else 15, expiry
+    return asset.upper(), 15, expiry
 
 
 def _gemini_source(event: dict[str, Any]) -> tuple[str, str]:
@@ -186,34 +186,33 @@ def discover_overlaps(
     gemini_events: list[dict[str, Any]],
     kalshi_markets: list[dict[str, Any]],
     *,
-    max_expiry_skew_s: float = 90.0,
+    max_expiry_skew_s: float = 30.0,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[Overlap]]:
-    gemini_fast: list[dict[str, Any]] = []
+    gemini_15m: list[dict[str, Any]] = []
     for event in gemini_events:
         meta = _gemini_meta(event)
         if meta is None:
             continue
         asset, duration, _ = meta
-        if asset not in ASSET_ALIASES or duration not in {5, 15}:
-            continue
-        gemini_fast.append(event)
+        if asset in ASSET_ALIASES and duration == 15:
+            gemini_15m.append(event)
 
-    kalshi_fast: list[dict[str, Any]] = []
+    kalshi_15m: list[dict[str, Any]] = []
     for market in kalshi_markets:
         asset = _asset_from_text(market)
         duration = _kalshi_duration(market)
-        if asset and duration in {5, 15} and UPDOWN_RE.search(_text(market)):
-            kalshi_fast.append(market)
+        if asset and duration == 15 and UPDOWN_RE.search(_text(market)):
+            kalshi_15m.append(market)
 
     overlaps: list[Overlap] = []
-    for event in gemini_fast:
+    for event in gemini_15m:
         meta = _gemini_meta(event)
         assert meta is not None
         asset, duration, expiry = meta
         agency, index = _gemini_source(event)
         symbol = _gemini_symbol(event)
-        for market in kalshi_fast:
-            if _asset_from_text(market) != asset or _kalshi_duration(market) != duration:
+        for market in kalshi_15m:
+            if _asset_from_text(market) != asset:
                 continue
             k_expiry = _kalshi_expiry(market)
             if k_expiry is None:
@@ -235,8 +234,8 @@ def discover_overlaps(
                 kalshi_rules_primary=str(market.get("rules_primary") or ""),
             ))
 
-    overlaps.sort(key=lambda x: (x.gemini_expiry, x.duration_minutes, x.asset, x.expiry_skew_s))
-    return gemini_fast, kalshi_fast, overlaps
+    overlaps.sort(key=lambda x: (x.gemini_expiry, x.asset, x.expiry_skew_s))
+    return gemini_15m, kalshi_15m, overlaps
 
 
 async def run_once(max_expiry_skew_s: float) -> None:
@@ -244,44 +243,44 @@ async def run_once(max_expiry_skew_s: float) -> None:
         gemini_events, kalshi_markets = await asyncio.gather(
             _gemini_active_crypto(http), _kalshi_open(http)
         )
-    gemini_fast, kalshi_fast, overlaps = discover_overlaps(
+    gemini_15m, kalshi_15m, overlaps = discover_overlaps(
         gemini_events, kalshi_markets, max_expiry_skew_s=max_expiry_skew_s
     )
 
-    for event in gemini_fast:
+    for event in gemini_15m:
         meta = _gemini_meta(event)
         if meta is None:
             continue
         agency, index = _gemini_source(event)
-        logger.info("GEMINI_FAST %s", json.dumps({
+        logger.info("GEMINI_15M %s", json.dumps({
             "ticker": event.get("ticker"),
             "asset": meta[0],
-            "duration_minutes": meta[1],
+            "duration_minutes": 15,
             "expiry_utc": meta[2].isoformat(),
             "instrument_symbol": _gemini_symbol(event),
             "source_agency": agency,
             "source_index": index,
         }, separators=(",", ":")))
 
-    for market in kalshi_fast:
-        logger.info("KALSHI_FAST %s", json.dumps({
+    for market in kalshi_15m:
+        logger.info("KALSHI_15M %s", json.dumps({
             "ticker": market.get("ticker"),
             "event_ticker": market.get("event_ticker"),
             "asset": _asset_from_text(market),
-            "duration_minutes": _kalshi_duration(market),
+            "duration_minutes": 15,
             "expiry_utc": _kalshi_expiry(market).isoformat() if _kalshi_expiry(market) else None,
             "rules_primary": market.get("rules_primary"),
         }, separators=(",", ":")))
 
     for overlap in overlaps:
-        logger.info("GEMINI_KALSHI_OVERLAP %s", json.dumps(overlap.as_dict(), separators=(",", ":")))
+        logger.info("GEMINI_KALSHI_15M_OVERLAP %s", json.dumps(overlap.as_dict(), separators=(",", ":")))
 
-    logger.info("GEMINI_KALSHI_SUMMARY %s", json.dumps({
+    logger.info("GEMINI_KALSHI_15M_SUMMARY %s", json.dumps({
         "gemini_active_events": len(gemini_events),
-        "gemini_fast_candidates": len(gemini_fast),
+        "gemini_15m_candidates": len(gemini_15m),
         "kalshi_open_markets": len(kalshi_markets),
-        "kalshi_fast_candidates": len(kalshi_fast),
-        "same_asset_duration_expiry_overlaps": len(overlaps),
+        "kalshi_15m_candidates": len(kalshi_15m),
+        "same_asset_expiry_overlaps": len(overlaps),
         "max_expiry_skew_s": max_expiry_skew_s,
         "read_only": True,
         "order_entry": False,
@@ -290,7 +289,7 @@ async def run_once(max_expiry_skew_s: float) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--max-expiry-skew-s", type=float, default=90.0)
+    parser.add_argument("--max-expiry-skew-s", type=float, default=30.0)
     return parser.parse_args()
 
 
