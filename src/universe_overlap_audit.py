@@ -4,9 +4,10 @@ Purpose: discover where both exchanges list potentially equivalent contracts bef
 we build category-specific strict matchers. This process never submits orders and
 never labels a fuzzy text match as an executable arbitrage.
 
-It continuously inventories active markets on both venues, maps broad categories,
-produces conservative candidate pairs, and logs enough metadata to turn repeated
-high-confidence overlaps into explicit settlement-rule matchers later.
+It inventories active markets on both venues, maps broad categories, uses a
+rare-token inverted index to avoid an O(P*K) all-pairs scan, produces conservative
+candidate pairs, and logs enough metadata to turn repeated high-confidence overlaps
+into explicit settlement-rule matchers later.
 """
 
 from __future__ import annotations
@@ -37,7 +38,8 @@ TOKEN_RE = re.compile(r"[a-z0-9]+(?:\.[0-9]+)?", re.I)
 NUM_RE = re.compile(r"(?<![a-z])\d+(?:\.\d+)?%?", re.I)
 DATE_RE = re.compile(r"\b20\d{2}-\d{2}-\d{2}\b")
 
-# Broad discovery mapping only. Exact execution matchers remain category-specific.
+# Discovery mapping only. A candidate is never executable until a category-specific
+# matcher verifies exact outcome semantics and settlement rules.
 CATEGORY_MAP = {
     "sports": {"sports"},
     "politics": {"politics", "elections"},
@@ -50,6 +52,16 @@ CATEGORY_MAP = {
     "technology": {"technology", "tech", "science"},
     "mentions": {"mentions", "politics", "entertainment"},
 }
+
+# Guardrails for public-API inventory work. These are intentionally much larger
+# than the current observed universes but finite so a pagination bug cannot run away.
+POLY_PAGE_SIZE = 500
+POLY_MAX_RECORDS = 50000
+KALSHI_PAGE_SIZE = 200
+KALSHI_MAX_PAGES = 150
+KALSHI_PAGE_PAUSE_S = 0.08
+INDEX_MAX_POSTING = 2500
+MAX_SCORE_POOL = 400
 
 
 @dataclass(frozen=True)
@@ -126,6 +138,10 @@ def _compatible(poly_cat: str, kal_cat: str) -> bool:
     return kal_cat in allowed if allowed else False
 
 
+def _compatible_categories(poly_cat: str) -> set[str]:
+    return {poly_cat, *CATEGORY_MAP.get(poly_cat, set())}
+
+
 def _jaccard(a: frozenset[str], b: frozenset[str]) -> float:
     if not a or not b:
         return 0.0
@@ -142,7 +158,7 @@ def _score(p: PolyRec, k: KalshiRec) -> tuple[float, dict[str, Any]]:
 
     # Numbers are useful discriminators for thresholds/years. If both sides have
     # numbers and share none, sharply reduce confidence rather than rejecting:
-    # descriptive text often contains unrelated dates/IDs.
+    # descriptive text can contain unrelated dates/IDs.
     num_overlap = p.numbers & k.numbers
     num_factor = 1.0
     if p.numbers and k.numbers and not num_overlap:
@@ -153,7 +169,6 @@ def _score(p: PolyRec, k: KalshiRec) -> tuple[float, dict[str, Any]]:
     date_overlap = p.dates & k.dates
     date_factor = 1.08 if date_overlap else 1.0
 
-    # Favor distinctive shared language, not generic stop-word similarity.
     shared_factor = min(1.0, len(shared) / 7.0)
     raw = (0.58 * jac + 0.27 * seq + 0.15 * shared_factor) * num_factor * date_factor
     score = min(1.0, raw)
@@ -166,14 +181,14 @@ def _score(p: PolyRec, k: KalshiRec) -> tuple[float, dict[str, Any]]:
     }
 
 
-async def fetch_poly(http: httpx.AsyncClient) -> list[PolyRec]:
+async def fetch_poly(http: httpx.AsyncClient) -> tuple[list[PolyRec], bool]:
     out: list[PolyRec] = []
-    limit = 500
-    for offset in range(0, 20000, limit):
+    truncated = False
+    for offset in range(0, POLY_MAX_RECORDS, POLY_PAGE_SIZE):
         r = await http.get(
             f"{POLY}/v1/markets",
             params={
-                "limit": limit,
+                "limit": POLY_PAGE_SIZE,
                 "offset": offset,
                 "active": "true",
                 "closed": "false",
@@ -211,18 +226,21 @@ async def fetch_poly(http: httpx.AsyncClient) -> list[PolyRec]:
                 volume=_as_float(m.get("volumeNum", m.get("volume"))),
                 liquidity=_as_float(m.get("liquidityNum", m.get("liquidity"))),
             ))
-        if len(rows) < limit:
-            break
-    return out
+        if len(rows) < POLY_PAGE_SIZE:
+            return out, False
+    truncated = True
+    logger.warning("Polymarket inventory hit safety cap of %d records", POLY_MAX_RECORDS)
+    return out, truncated
 
 
-async def fetch_kalshi(http: httpx.AsyncClient) -> list[KalshiRec]:
+async def fetch_kalshi(http: httpx.AsyncClient) -> tuple[list[KalshiRec], bool]:
     out: list[KalshiRec] = []
     cursor = ""
     pages = 0
-    while pages < 100:
+    truncated = False
+    while pages < KALSHI_MAX_PAGES:
         params: dict[str, Any] = {
-            "limit": 200,
+            "limit": KALSHI_PAGE_SIZE,
             "status": "open",
             "with_nested_markets": "true",
         }
@@ -230,7 +248,13 @@ async def fetch_kalshi(http: httpx.AsyncClient) -> list[KalshiRec]:
             params["cursor"] = cursor
         r = await http.get(f"{KALSHI}/events", params=params)
         if r.status_code == 429:
-            await asyncio.sleep(5)
+            retry_after = r.headers.get("retry-after")
+            try:
+                wait_s = max(1.0, float(retry_after or 0))
+            except ValueError:
+                wait_s = 5.0
+            logger.warning("Kalshi inventory rate-limited; retrying cursor in %.1fs", wait_s)
+            await asyncio.sleep(wait_s)
             continue
         r.raise_for_status()
         body = r.json()
@@ -268,32 +292,90 @@ async def fetch_kalshi(http: httpx.AsyncClient) -> list[KalshiRec]:
         cursor = str(body.get("cursor") or "")
         pages += 1
         if not cursor:
-            break
-    return out
+            return out, False
+        await asyncio.sleep(KALSHI_PAGE_PAUSE_S)
+    truncated = bool(cursor)
+    if truncated:
+        logger.warning("Kalshi inventory hit safety cap of %d pages", KALSHI_MAX_PAGES)
+    return out, truncated
 
 
-def find_candidates(poly: list[PolyRec], kalshi: list[KalshiRec], *, threshold: float) -> list[dict[str, Any]]:
-    by_category: dict[str, list[KalshiRec]] = defaultdict(list)
+def _build_index(kalshi: list[KalshiRec]) -> tuple[
+    dict[str, dict[str, list[KalshiRec]]],
+    dict[str, Counter[str]],
+]:
+    """Build per-category token postings and document frequencies."""
+    postings: dict[str, dict[str, list[KalshiRec]]] = defaultdict(lambda: defaultdict(list))
+    dfs: dict[str, Counter[str]] = defaultdict(Counter)
     for k in kalshi:
-        by_category[k.category].append(k)
+        for token in k.tokens:
+            postings[k.category][token].append(k)
+            dfs[k.category][token] += 1
+    return postings, dfs
 
+
+def _candidate_pool(
+    p: PolyRec,
+    postings: dict[str, dict[str, list[KalshiRec]]],
+    dfs: dict[str, Counter[str]],
+) -> tuple[list[KalshiRec], int]:
+    """Return likely Kalshi records using rare shared tokens, not all-pairs scan."""
+    compatible = _compatible_categories(p.category)
+    # Rank tokens by their total document frequency across compatible categories.
+    ranked: list[tuple[int, str]] = []
+    for token in p.tokens:
+        df = sum(dfs.get(cat, Counter()).get(token, 0) for cat in compatible)
+        if 0 < df <= INDEX_MAX_POSTING:
+            ranked.append((df, token))
+    ranked.sort()
+    # Up to 12 rare tokens usually gives a very small candidate pool while retaining
+    # multiple independent identity signals (entity + threshold/date/etc.).
+    chosen = ranked[:12]
+    if not chosen:
+        return [], 0
+
+    shared_counts: Counter[str] = Counter()
+    by_ticker: dict[str, KalshiRec] = {}
+    for _, token in chosen:
+        for cat in compatible:
+            for k in postings.get(cat, {}).get(token, []):
+                if not _compatible(p.category, k.category):
+                    continue
+                by_ticker[k.ticker] = k
+                shared_counts[k.ticker] += 1
+
+    # _score itself requires >=2 shared tokens. Prioritize records that already
+    # share multiple rare tokens; cap expensive SequenceMatcher calls.
+    ordered = sorted(
+        by_ticker.values(),
+        key=lambda k: (shared_counts[k.ticker], k.volume),
+        reverse=True,
+    )
+    return ordered[:MAX_SCORE_POOL], len(by_ticker)
+
+
+def find_candidates(
+    poly: list[PolyRec],
+    kalshi: list[KalshiRec],
+    *,
+    threshold: float,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    postings, dfs = _build_index(kalshi)
     candidates: list[dict[str, Any]] = []
+    score_calls = 0
+    indexed_pool_total = 0
+    poly_with_pool = 0
+
     for p in poly:
-        pool: list[KalshiRec] = []
-        if p.category in by_category:
-            pool.extend(by_category[p.category])
-        for mapped in CATEGORY_MAP.get(p.category, set()):
-            if mapped != p.category:
-                pool.extend(by_category.get(mapped, []))
+        pool, raw_pool_size = _candidate_pool(p, postings, dfs)
+        indexed_pool_total += raw_pool_size
         if not pool:
             continue
+        poly_with_pool += 1
 
         scored: list[tuple[float, KalshiRec, dict[str, Any]]] = []
-        seen: set[str] = set()
         for k in pool:
-            if k.ticker in seen or not _compatible(p.category, k.category):
-                continue
-            seen.add(k.ticker)
+            score_calls += 1
             score, why = _score(p, k)
             if score >= threshold:
                 scored.append((score, k, why))
@@ -318,25 +400,36 @@ def find_candidates(poly: list[PolyRec], kalshi: list[KalshiRec], *, threshold: 
                 "status": "CANDIDATE_ONLY_NOT_EXECUTABLE",
             })
     candidates.sort(key=lambda x: (x["score"], x["poly_volume"] + x["kalshi_volume"]), reverse=True)
-    return candidates
+    return candidates, {
+        "poly_with_index_pool": poly_with_pool,
+        "raw_index_pool_total": indexed_pool_total,
+        "expensive_score_calls": score_calls,
+    }
 
 
 async def audit_once(http: httpx.AsyncClient, *, threshold: float, top: int) -> None:
     t0 = time.monotonic()
-    poly, kalshi = await asyncio.gather(fetch_poly(http), fetch_kalshi(http))
+    (poly, poly_truncated), (kalshi, kalshi_truncated) = await asyncio.gather(
+        fetch_poly(http), fetch_kalshi(http)
+    )
+    fetch_elapsed = time.monotonic() - t0
     poly_cats = Counter(p.category for p in poly)
     kal_cats = Counter(k.category for k in kalshi)
-    candidates = find_candidates(poly, kalshi, threshold=threshold)
+    candidates, match_stats = find_candidates(poly, kalshi, threshold=threshold)
 
     logger.info("UNIVERSE %s", json.dumps({
         "shadow_only": True,
         "poly_markets": len(poly),
         "kalshi_markets": len(kalshi),
+        "poly_truncated": poly_truncated,
+        "kalshi_truncated": kalshi_truncated,
         "poly_categories": dict(poly_cats.most_common()),
         "kalshi_categories": dict(kal_cats.most_common()),
         "candidate_pairs": len(candidates),
         "threshold": threshold,
+        "fetch_elapsed_s": round(fetch_elapsed, 2),
         "elapsed_s": round(time.monotonic() - t0, 2),
+        **match_stats,
     }, separators=(",", ":")))
 
     category_hits = Counter(c["poly_category"] for c in candidates)
