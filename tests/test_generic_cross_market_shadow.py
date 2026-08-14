@@ -20,8 +20,16 @@ def test_load_pairs_requires_allowed_shadow_status(tmp_path: Path):
         load_pairs(path)
 
 
-def test_registry_pair_is_shadow_enabled():
+def test_registry_pairs_are_shadow_enabled():
     pairs = load_pairs(Path("config/cross_market_shadow_pairs.json"))
-    assert len(pairs) == 1
-    assert pairs[0].pair_id == "oscars-2027-best-picture-dune-part-three"
-    assert pairs[0].settlement_status == "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE"
+    assert pairs
+    by_id = {pair.pair_id: pair for pair in pairs}
+    assert "oscars-2027-best-picture-dune-part-three" in by_id
+    assert "us-unemployment-2026-aug-above-4p2" in by_id
+    assert all(
+        pair.settlement_status in {
+            "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+            "FULL_RULES_AUDITED_SHADOW",
+        }
+        for pair in pairs
+    )
