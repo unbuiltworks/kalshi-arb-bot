@@ -117,6 +117,15 @@ def _drain(queue: asyncio.Queue[BookUpdate]) -> int:
             return n
 
 
+def _task_failure(name: str, task: asyncio.Task[Any]) -> RuntimeError:
+    if task.cancelled():
+        return RuntimeError(f"{name} market-data task cancelled unexpectedly")
+    exc = task.exception()
+    if exc is None:
+        return RuntimeError(f"{name} market-data task exited unexpectedly")
+    return RuntimeError(f"{name} market-data task failed: {type(exc).__name__}: {exc}")
+
+
 async def _scan_pair(
     match: base.Match,
     *,
@@ -265,41 +274,67 @@ async def run(args: argparse.Namespace) -> None:
         raise RuntimeError("POLYMARKET_KEY_ID and POLYMARKET_SECRET_KEY are required for market websocket")
 
     async with httpx.AsyncClient(timeout=15.0) as http:
-        matches = await strict_discover_matches(http)
-        if not matches:
+        discovered = await strict_discover_matches(http)
+        if not discovered:
             raise RuntimeError("No strict Polymarket/Kalshi matches discovered")
+
+        # Seed Polymarket once, then fail closed on any strict pair that currently
+        # has no executable two-sided public book. This avoids one stale/empty market
+        # preventing the entire event-driven feed from becoming ready.
+        poly_store = EventingPolyBookStore()
+        discovered_slugs = [m.poly.slug for m in discovered]
+        seeded = await _seed_poly(http, poly_store, discovered_slugs, args.rest_concurrency)
+        matches = [
+            m for m in discovered
+            if poly_store.quote(m.poly.slug, max_age_ms=60000) is not None
+        ]
+        excluded = [m for m in discovered if m not in matches]
+        if not matches:
+            raise RuntimeError("No strict pairs have a current two-sided Polymarket book")
+        for match in excluded:
+            logger.warning(
+                "PAIR_EXCLUDED_NO_POLY_BOOK %s",
+                json.dumps({
+                    "event": match.poly.event_title,
+                    "line": str(match.poly.line),
+                    "poly_slug": match.poly.slug,
+                    "kalshi_ticker": match.kalshi.ticker,
+                }, separators=(",", ":")),
+            )
 
         slug_to_match = {m.poly.slug: m for m in matches}
         ticker_to_match = {m.kalshi.ticker: m for m in matches}
         slugs = list(slug_to_match)
-        poly_store = EventingPolyBookStore()
         kalshi_store = EventingKalshiCrossBooks(list(ticker_to_match))
-        seeded = await _seed_poly(http, poly_store, slugs, args.rest_concurrency)
 
         poly_client = PolymarketUS(key_id=key_id, secret_key=secret, timeout=10.0)
-        poly_task = asyncio.create_task(run_poly_ws(poly_client, poly_store, slugs))
-        kalshi_task = asyncio.create_task(kalshi_store.run())
+        poly_task = asyncio.create_task(run_poly_ws(poly_client, poly_store, slugs), name="poly_ws")
+        kalshi_task = asyncio.create_task(kalshi_store.run(), name="kalshi_ws")
 
         deadline = time.monotonic() + args.startup_timeout_s
         while time.monotonic() < deadline:
-            if poly_store.connected and kalshi_store.initialized_count == len(matches) and poly_store.quote_count == len(matches):
+            if poly_task.done():
+                raise _task_failure("Polymarket", poly_task)
+            if kalshi_task.done():
+                raise _task_failure("Kalshi", kalshi_task)
+            if poly_store.connected and kalshi_store.initialized_count == len(matches):
                 break
             await asyncio.sleep(0.025)
         else:
-            poly_task.cancel(); kalshi_task.cancel()
-            await kalshi_store.close()
-            try: poly_client.close()
-            except Exception: pass
             raise RuntimeError(
                 f"startup readiness timeout: poly_connected={poly_store.connected} "
                 f"poly_books={poly_store.quote_count}/{len(matches)} "
-                f"kalshi_books={kalshi_store.initialized_count}/{len(matches)} seeded={seeded}"
+                f"kalshi_books={kalshi_store.initialized_count}/{len(matches)} "
+                f"seeded={seeded}/{len(discovered)} excluded={len(excluded)}"
             )
 
         drained_poly = _drain(poly_store.updates)
         drained_kalshi = _drain(kalshi_store.updates)
         logger.info("EVENT_READY %s", json.dumps({
-            "matched": len(matches), "seeded_poly_books": seeded,
+            "strict_discovered": len(discovered),
+            "matched_live_books": len(matches),
+            "excluded_no_poly_book": len(excluded),
+            "seeded_poly_books": seeded,
             "drained_startup_poly_updates": drained_poly,
             "drained_startup_kalshi_updates": drained_kalshi,
             "rest_is_signal_source": False,
@@ -307,22 +342,38 @@ async def run(args: argparse.Namespace) -> None:
 
         stats = EventStats()
         active: dict[str, ActiveSignal] = {}
-        heartbeat = asyncio.create_task(_heartbeat(stats, poly_store, kalshi_store, active))
+        heartbeat = asyncio.create_task(_heartbeat(stats, poly_store, kalshi_store, active), name="heartbeat")
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
-            try: loop.add_signal_handler(sig, stop.set)
-            except NotImplementedError: pass
+            try:
+                loop.add_signal_handler(sig, stop.set)
+            except NotImplementedError:
+                pass
 
         try:
             while not stop.is_set():
-                update_task = asyncio.create_task(_next_update(poly_store, kalshi_store))
-                stop_task = asyncio.create_task(stop.wait())
-                done, pending = await asyncio.wait({update_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
-                for task in pending: task.cancel()
-                await asyncio.gather(*pending, return_exceptions=True)
+                update_task = asyncio.create_task(_next_update(poly_store, kalshi_store), name="next_book_update")
+                stop_task = asyncio.create_task(stop.wait(), name="stop_wait")
+                done, _ = await asyncio.wait(
+                    {update_task, stop_task, poly_task, kalshi_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if poly_task in done:
+                    update_task.cancel(); stop_task.cancel()
+                    await asyncio.gather(update_task, stop_task, return_exceptions=True)
+                    raise _task_failure("Polymarket", poly_task)
+                if kalshi_task in done:
+                    update_task.cancel(); stop_task.cancel()
+                    await asyncio.gather(update_task, stop_task, return_exceptions=True)
+                    raise _task_failure("Kalshi", kalshi_task)
                 if stop_task in done and stop_task.result():
+                    update_task.cancel()
+                    await asyncio.gather(update_task, return_exceptions=True)
                     break
+                stop_task.cancel()
+                await asyncio.gather(stop_task, return_exceptions=True)
+
                 trigger = update_task.result()
                 stats.triggers += 1
                 if trigger.venue == "polymarket":
@@ -340,8 +391,10 @@ async def run(args: argparse.Namespace) -> None:
         finally:
             heartbeat.cancel(); poly_task.cancel(); kalshi_task.cancel()
             await kalshi_store.close()
-            try: poly_client.close()
-            except Exception: pass
+            try:
+                poly_client.close()
+            except Exception:
+                pass
             await asyncio.gather(heartbeat, poly_task, kalshi_task, return_exceptions=True)
 
 
