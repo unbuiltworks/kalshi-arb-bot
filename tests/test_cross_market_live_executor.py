@@ -1,4 +1,3 @@
-import asyncio
 from decimal import Decimal
 
 import pytest
@@ -102,13 +101,14 @@ async def test_both_fok_fills_complete_without_recovery():
     ex = LiveCrossMarketExecutor(poly=poly, kalshi=kalshi, recovery=recovery, gate=armed_gate())
     out = await ex.execute(pair(), plan())
     assert out.status == "BOTH_FILLED"
+    assert ex.halted is False
     assert poly.previews == kalshi.previews == 1
     assert poly.submits == kalshi.submits == 1
     assert not recovered
 
 
 @pytest.mark.asyncio
-async def test_one_sided_fill_triggers_recovery():
+async def test_one_sided_fill_triggers_recovery_and_permanent_halt():
     poly = FakeVenue("polymarket", 3)
     kalshi = FakeVenue("kalshi", 0)
     recovered = []
@@ -120,7 +120,27 @@ async def test_one_sided_fill_triggers_recovery():
     out = await ex.execute(pair(), plan())
     assert out.status == "LEGGING_RECOVERY_TRIGGERED"
     assert out.recovery_attempted is True
+    assert ex.halted is True
     assert len(recovered) == 1
+
+    # A legging incident requires an operator/restart before another trade.
+    with pytest.raises(RuntimeError, match="halted"):
+        await ex.execute(pair(), plan())
+    assert poly.submits == kalshi.submits == 1
+
+
+@pytest.mark.asyncio
+async def test_recovery_failure_still_leaves_executor_halted():
+    poly = FakeVenue("polymarket", 3)
+    kalshi = FakeVenue("kalshi", 0)
+
+    async def recovery(*args):
+        raise RuntimeError("flatten failed")
+
+    ex = LiveCrossMarketExecutor(poly=poly, kalshi=kalshi, recovery=recovery, gate=armed_gate())
+    with pytest.raises(RuntimeError, match="flatten failed"):
+        await ex.execute(pair(), plan())
+    assert ex.halted is True
 
 
 @pytest.mark.asyncio
