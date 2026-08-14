@@ -81,3 +81,44 @@ Logs go to `arb_bot.log` and stdout. Key things to watch:
 - Fill rate on maker legs
 - Legging incidents (should be near zero)
 - Realized edge vs. theoretical edge
+
+## Sportsbook + Kalshi cross-market shadow scanner
+
+This branch adds a **shadow-only** scanner for the adjacent-total structure:
+
+- sportsbook `OVER` at one or more half-point totals
+- Kalshi `NO` on `total > H`
+- maximize the worst-case dollar profit after Kalshi taker fees
+- report the extra payoff when the final score lands in the middle
+
+The sportsbook feed uses the current OpticOdds v3 SSE API (the OddsJam API developer link redirects to OpticOdds). The scanner asks the feed for live odds, alternate totals, limits, and deep links. Kalshi is read from the live orderbook. **No sportsbook bet and no Kalshi order is submitted.**
+
+### Configure
+
+```bash
+cp config/cross_market_pairs.example.json config/cross_market_pairs.json
+# Add explicit fixture_id <-> Kalshi ticker pairs and set enabled=true.
+
+export OPTICODDS_API_KEY="..."
+export CROSS_MARKET_SPORTSBOOKS="Caesars,DraftKings,BetMGM,Fanatics"
+```
+
+Explicit pairing is a safety control. We do not fuzzy-match games into a "guaranteed" trade because mismatched settlement rules or games destroy the hedge.
+
+### Run
+
+```bash
+python -m src.cross_market_shadow \
+  --bankroll-cents 100000 \
+  --min-profit-cents 2500 \
+  --min-roi 0.03 \
+  --max-quote-age-ms 1500
+```
+
+The log emits:
+
+- `OPEN`: a qualifying guaranteed floor exists
+- `MOVE`: prices/stakes changed while the edge remains open
+- `CLOSE`: edge disappeared, including measured lifetime in milliseconds
+
+That gives us the data needed before considering any execution: opportunities per game/day, guaranteed ROI distribution, capital required, available size, and edge lifetime.
