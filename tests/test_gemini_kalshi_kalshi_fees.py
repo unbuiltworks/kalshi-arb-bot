@@ -1,9 +1,16 @@
+from decimal import Decimal
+
 import pytest
 
-from src.gemini_kalshi_kalshi_fees import normalize_series_fee
+from src.gemini_kalshi_kalshi_fees import (
+    kalshi_quadratic_taker_fee,
+    normalize_series_fee,
+)
+
+D = Decimal
 
 
-def test_normalize_series_fee_keeps_current_and_scheduled_metadata_fail_closed():
+def test_normalize_series_fee_maps_current_quadratic_and_keeps_scheduled_metadata():
     row = normalize_series_fee(
         "KXBTC15M",
         {"series": {"ticker": "KXBTC15M", "fee_type": "quadratic", "fee_multiplier": 1.5, "last_updated_ts": "2026-08-15T00:00:00Z"}},
@@ -16,7 +23,35 @@ def test_normalize_series_fee_keeps_current_and_scheduled_metadata_fail_closed()
     assert row.fee_type == "quadratic"
     assert row.fee_multiplier == "1.5"
     assert len(row.scheduled_changes) == 1
+    assert row.formula_status == "MAPPED_QUADRATIC_TAKER"
+
+
+def test_quadratic_taker_fee_uses_live_multiplier_and_order_level_cent_ceiling():
+    assert kalshi_quadratic_taker_fee(D("0.44"), D("1")) == D("0.02")
+    assert kalshi_quadratic_taker_fee(D("0.44"), D("10")) == D("0.18")
+    assert kalshi_quadratic_taker_fee(
+        D("0.50"), D("100"), fee_multiplier=D("1.5")
+    ) == D("2.63")
+
+
+def test_metadata_taker_fee_fn_binds_live_multiplier():
+    row = normalize_series_fee(
+        "KXETH15M",
+        {"series": {"ticker": "KXETH15M", "fee_type": "quadratic", "fee_multiplier": 1}},
+        {"series_fee_change_arr": []},
+    )
+    assert row.taker_fee_fn()(D("0.50"), D("10")) == D("0.18")
+
+
+def test_unknown_fee_type_stays_fail_closed():
+    row = normalize_series_fee(
+        "KXSOL15M",
+        {"series": {"ticker": "KXSOL15M", "fee_type": "flat", "fee_multiplier": 1}},
+        {"series_fee_change_arr": []},
+    )
     assert row.formula_status == "UNMAPPED_DO_NOT_TRADE"
+    with pytest.raises(ValueError, match="unsupported Kalshi fee_type"):
+        row.taker_fee_fn()
 
 
 def test_normalize_series_fee_rejects_missing_metadata():
