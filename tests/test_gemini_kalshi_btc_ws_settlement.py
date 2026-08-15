@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+import json
 
-from src.gemini_kalshi_btc_ws_settlement import settlement_adjusted
+from src.gemini_kalshi_btc_ws_settlement import load_episodes_stream, settlement_adjusted
 from src.gemini_kalshi_settlement_agreement import AgreementRow
 
 
@@ -96,3 +97,14 @@ def test_latency_scenario_uses_same_actual_settlement_accounting():
     assert result["survival"]["100"]["settlement_adjusted_pnl_dollars"] == "0"
     assert result["classification"] == "INDEX_MISMATCH_RESEARCH_ONLY"
     assert result["order_entry"] is False
+
+
+def test_stream_loader_discards_non_positive_capture_rows(tmp_path):
+    path = tmp_path / "capture.jsonl"
+    with path.open("w", encoding="utf-8") as fh:
+        for ts in range(1_000, 11_000):
+            row = _row(ts, positive=(ts in {5_000, 5_006, 5_012}))
+            fh.write(json.dumps(row, separators=(",", ":")) + "\n")
+    eps = load_episodes_stream([path])
+    assert len(eps) == 3  # each positive tick is separated by a non-positive event
+    assert sum(len(ep.observations) for ep in eps) == 3
