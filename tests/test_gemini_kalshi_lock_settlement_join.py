@@ -39,6 +39,10 @@ def test_fee_positive_windows_dedupes_repeated_samples():
 
 def test_summarize_join_marks_both_win_mismatch_to_actual_payout():
     locks = fee_positive_windows([_row(1_000)], fee_multiplier=Decimal("1"))
+    # Force the complementary direction whose two legs both win when
+    # Gemini settles YES while Kalshi settles NO.
+    payload = next(iter(locks.values()))
+    payload["direction"] = "GEMINI_YES_KALSHI_NO"
     expiry = datetime(2026, 8, 15, 5, 0, tzinfo=timezone.utc)
     agreements = [
         AgreementRow(
