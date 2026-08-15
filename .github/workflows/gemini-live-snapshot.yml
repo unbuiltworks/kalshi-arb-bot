@@ -20,15 +20,15 @@ jobs:
           python-version: '3.11'
           cache: pip
       - run: pip install -r requirements.txt
-      - name: Run read-only live overlap snapshot
+      - name: Run corrected same-window price snapshot
         run: |
           set -o pipefail
-          python -m src.gemini_kalshi_rest_snapshot 2>&1 | tee gemini-kalshi-snapshot.log
-      - name: Diagnose expiry alignment
+          python -m src.gemini_kalshi_aligned_snapshot 2>&1 | tee gemini-kalshi-snapshot.log
+      - name: Diagnose window lifecycle and alignment
         run: |
           set -o pipefail
           python -m src.gemini_kalshi_alignment_diagnostic 2>&1 | tee gemini-kalshi-alignment.log
-      - name: Run paced recent settlement agreement probe
+      - name: Run corrected recent settlement agreement probe
         run: |
           set -o pipefail
           python -m src.gemini_kalshi_settlement_probe --hours 24 --gemini-limit 500 2>&1 | tee gemini-kalshi-agreement.log
