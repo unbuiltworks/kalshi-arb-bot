@@ -66,7 +66,12 @@ jobs:
                 tests/test_gemini_kalshi_btc_ws_capital.py \
                 tests/test_gemini_kalshi_btc_ws_bankroll.py \
                 tests/test_gemini_kalshi_settlement_latency.py \
-                tests/test_gemini_kalshi_multi_ws_analyze.py -q >> "$OUT" 2>&1
+                tests/test_gemini_kalshi_multi_ws_analyze.py \
+                tests/test_gemini_prediction_auth.py -q >> "$OUT" 2>&1
+              rc=$?
+              ;;
+            execution-readiness)
+              .venv/bin/python -m src.gemini_kalshi_execution_readiness >> "$OUT" 2>&1
               rc=$?
               ;;
             analyze-btc)
@@ -161,7 +166,7 @@ jobs:
               ;;
             *)
               echo "REJECTED: command is not allowlisted." >> "$OUT"
-              echo "Allowed: status, pull-feature, tests, analyze-btc, settlement-latency-48h, bankroll-btc, shadow-btc-15m, shadow-btc-60m, shadow-crypto-5m, shadow-crypto-15m" >> "$OUT"
+              echo "Allowed: status, pull-feature, tests, execution-readiness, analyze-btc, settlement-latency-48h, bankroll-btc, shadow-btc-15m, shadow-btc-60m, shadow-crypto-5m, shadow-crypto-15m" >> "$OUT"
               rc=64
               ;;
           esac
