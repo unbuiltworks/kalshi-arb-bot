@@ -1,4 +1,9 @@
-"""Paced read-only wrapper for the Gemini/Kalshi settlement-agreement study."""
+"""Paced read-only Gemini/Kalshi settlement-agreement probe.
+
+Matches the actual 15-minute measurement-window endpoint: Gemini ticker timestamp
+against Kalshi ``close_time``. Kalshi ``expected_expiration_time`` is settlement
+latency metadata, not the contract boundary.
+"""
 
 from __future__ import annotations
 
@@ -10,8 +15,9 @@ import logging
 
 import httpx
 
-from src.gemini_kalshi_fast_overlap import KALSHI_REST
-from src.gemini_kalshi_settlement_agreement import _gemini_settled, match_settled
+from src.gemini_kalshi_fast_overlap import ASSET_ALIASES, KALSHI_REST, _gemini_meta
+from src.gemini_kalshi_settlement_agreement import AgreementRow, _gemini_outcome, _gemini_settled, _kalshi_outcome
+from src.gemini_kalshi_window_identity import kalshi_15m_asset, kalshi_window_end
 
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_settlement_probe")
 
@@ -55,6 +61,60 @@ async def _kalshi_settled_paced(http: httpx.AsyncClient, hours: int) -> list[dic
         await asyncio.sleep(0.35)
 
 
+def match_settled_true_windows(gemini: list[dict], kalshi: list[dict], max_skew_s: float) -> list[AgreementRow]:
+    gemini_rows = []
+    for event in gemini:
+        meta = _gemini_meta(event)
+        if meta is None:
+            continue
+        asset, duration, end = meta
+        if duration != 15 or asset not in ASSET_ALIASES:
+            continue
+        outcome, strike, settlement, margin_bps = _gemini_outcome(event)
+        if outcome is not None:
+            gemini_rows.append((event, asset, end, outcome, strike, settlement, margin_bps))
+
+    kalshi_rows = []
+    for market in kalshi:
+        asset = kalshi_15m_asset(market)
+        end = kalshi_window_end(market)
+        outcome = _kalshi_outcome(market)
+        if asset and end and outcome:
+            kalshi_rows.append((market, asset, end, outcome))
+
+    matched: list[AgreementRow] = []
+    used: set[str] = set()
+    for event, asset, g_end, g_out, strike, settlement, margin_bps in gemini_rows:
+        candidates = []
+        for market, k_asset, k_end, k_out in kalshi_rows:
+            ticker = str(market.get("ticker") or "")
+            if ticker in used or asset != k_asset:
+                continue
+            skew = abs((g_end - k_end).total_seconds())
+            if skew <= max_skew_s:
+                candidates.append((skew, market, k_out))
+        if not candidates:
+            continue
+        candidates.sort(key=lambda row: row[0])
+        _, market, k_out = candidates[0]
+        ticker = str(market.get("ticker") or "")
+        used.add(ticker)
+        matched.append(AgreementRow(
+            asset=asset,
+            expiry=g_end,
+            gemini_ticker=str(event.get("ticker") or ""),
+            kalshi_ticker=ticker,
+            gemini_outcome=g_out,
+            kalshi_outcome=k_out,
+            agrees=(g_out == k_out),
+            gemini_strike=strike,
+            gemini_settlement=settlement,
+            gemini_margin_bps=round(margin_bps, 4) if margin_bps is not None else None,
+        ))
+    matched.sort(key=lambda row: (row.expiry, row.asset))
+    return matched
+
+
 async def run(hours: int, gemini_limit: int, max_expiry_skew_s: float) -> None:
     async with httpx.AsyncClient(timeout=30.0) as http:
         gemini, kalshi = await asyncio.gather(
@@ -62,7 +122,7 @@ async def run(hours: int, gemini_limit: int, max_expiry_skew_s: float) -> None:
             _kalshi_settled_paced(http, hours),
         )
 
-    rows = match_settled(gemini, kalshi, max_expiry_skew_s=max_expiry_skew_s)
+    rows = match_settled_true_windows(gemini, kalshi, max_expiry_skew_s)
     disagreements = [row for row in rows if not row.agrees]
     by_asset: dict[str, dict[str, int]] = {}
     for row in rows:
@@ -80,7 +140,8 @@ async def run(hours: int, gemini_limit: int, max_expiry_skew_s: float) -> None:
         "agreement_rate": ((len(rows) - len(disagreements)) / len(rows)) if rows else None,
         "by_asset": by_asset,
         "hours": hours,
-        "max_expiry_skew_s": max_expiry_skew_s,
+        "max_window_end_skew_s": max_expiry_skew_s,
+        "window_identity": "GEMINI_TICKER_TIME_VS_KALSHI_CLOSE_TIME",
         "classification": "INDEX_MISMATCH_RESEARCH_ONLY",
         "read_only": True,
     }, separators=(",", ":")))
