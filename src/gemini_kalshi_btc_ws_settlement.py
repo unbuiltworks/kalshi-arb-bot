@@ -5,6 +5,11 @@ those matched contracts to eventual Gemini/Kalshi outcomes. This converts the
 synthetic complementary-leg "locked" P&L into actual 0x/1x/2x settlement payout
 for entry and 5/10/20/30/40/50/100/250/500ms survival scenarios.
 
+Large WebSocket captures are streamed line-by-line. Only fee-positive episode
+observations are retained in memory; hundreds of thousands of ordinary market-data
+rows are discarded immediately. This keeps the analysis usable on the small AWS
+instance that runs the collector.
+
 This remains retrospective research only. It does not make unmatched or unsettled
 contracts look safe, and it contains no order-entry path.
 """
@@ -24,9 +29,10 @@ from src.gemini_kalshi_btc_ws_analyze import (
     D,
     THRESHOLDS_MS,
     Episode,
+    _candidates,
     _consume,
+    _market_key,
     episodes,
-    load_rows,
 )
 from src.gemini_kalshi_settlement_agreement import AgreementRow, _gemini_settled
 from src.gemini_kalshi_settlement_probe import _kalshi_settled_paced, match_settled_true_windows
@@ -57,6 +63,65 @@ def _payout_multiplier(direction: str, gemini_outcome: str, kalshi_outcome: str)
     if direction == "KALSHI_YES_GEMINI_NO":
         return int(k == "yes") + int(g == "no")
     raise ValueError(f"unsupported direction={direction!r}")
+
+
+def load_episodes_stream(paths: list[Path]) -> list[Episode]:
+    """Build BTC positive episodes without retaining the full JSONL capture.
+
+    Collector JSONL is append-only and timestamp ordered. The common production
+    path passes one capture file; multiple paths are consumed in caller-supplied
+    chronological order. Only candidate observations are retained.
+    """
+    active: dict[tuple[str, str], Episode] = {}
+    done: list[Episode] = []
+    last_ts: int | None = None
+
+    for path in paths:
+        with path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                row = json.loads(line)
+                if row.get("asset") != "BTC" or row.get("read_only") is not True:
+                    continue
+                ts = int(row["receive_ts_ms"])
+                if last_ts is not None and ts < last_ts:
+                    raise ValueError("BTC capture rows must be supplied in chronological order")
+                last_ts = ts
+
+                market = _market_key(row)
+                current = _candidates(row)
+
+                # Contract rollover closes all episodes from the prior market.
+                for key in list(active):
+                    if key[0] != market:
+                        done.append(active.pop(key))
+
+                # A new event with no candidate in an active direction closes it.
+                for key in list(active):
+                    if key[0] == market and key[1] not in current:
+                        done.append(active.pop(key))
+
+                for direction, candidate in current.items():
+                    key = (market, direction)
+                    ep = active.get(key)
+                    if ep is None:
+                        ep = Episode(
+                            market_key=market,
+                            direction=direction,
+                            start_ms=ts,
+                            last_positive_ms=ts,
+                            entry=candidate,
+                            observations=[],
+                        )
+                        active[key] = ep
+                    ep.last_positive_ms = ts
+                    ep.observations.append((ts, candidate))
+
+    done.extend(active.values())
+    done.sort(key=lambda e: (e.start_ms, e.market_key, e.direction))
+    return done
 
 
 def _scenario(eps: list[Episode], by_ticker: dict[str, AgreementRow], threshold_ms: int | None) -> dict[str, Any]:
@@ -107,8 +172,7 @@ def _scenario(eps: list[Episode], by_ticker: dict[str, AgreementRow], threshold_
     }
 
 
-def settlement_adjusted(rows: list[dict[str, Any]], agreements: list[AgreementRow]) -> dict[str, Any]:
-    eps = episodes(rows)
+def settlement_adjusted_episodes(eps: list[Episode], agreements: list[AgreementRow]) -> dict[str, Any]:
     by_ticker = {row.kalshi_ticker: row for row in agreements if row.asset == "BTC"}
     entry = _scenario(eps, by_ticker, None)
     survival = {str(ms): _scenario(eps, by_ticker, ms) for ms in THRESHOLDS_MS}
@@ -118,6 +182,7 @@ def settlement_adjusted(rows: list[dict[str, Any]], agreements: list[AgreementRo
         "entry": entry,
         "survival": survival,
         "accounting_method": "CONSUMABLE_LIQUIDITY_WITH_ACTUAL_0X_1X_2X_SETTLEMENT_PAYOUT",
+        "input_memory_method": "STREAM_JSONL_KEEP_POSITIVE_EPISODES_ONLY",
         "unresolved_policy": "UNMATCHED_OR_UNSETTLED_EPISODES_EXCLUDED_NOT_ASSUMED_SAFE",
         "classification": "INDEX_MISMATCH_RESEARCH_ONLY",
         "read_only": True,
@@ -125,15 +190,20 @@ def settlement_adjusted(rows: list[dict[str, Any]], agreements: list[AgreementRo
     }
 
 
+def settlement_adjusted(rows: list[dict[str, Any]], agreements: list[AgreementRow]) -> dict[str, Any]:
+    """In-memory helper retained for unit tests and small synthetic inputs."""
+    return settlement_adjusted_episodes(episodes(rows), agreements)
+
+
 async def run(paths: list[Path], *, hours: int, gemini_limit: int, max_expiry_skew_s: float) -> dict[str, Any]:
-    rows = load_rows(paths)
+    eps = load_episodes_stream(paths)
     async with httpx.AsyncClient(timeout=30.0) as http:
         gemini, kalshi = await asyncio.gather(
             _gemini_settled(http, gemini_limit),
             _kalshi_settled_paced(http, hours),
         )
     agreements = match_settled_true_windows(gemini, kalshi, max_expiry_skew_s)
-    return settlement_adjusted(rows, agreements)
+    return settlement_adjusted_episodes(eps, agreements)
 
 
 def main() -> None:
