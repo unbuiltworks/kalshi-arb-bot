@@ -1,0 +1,46 @@
+name: BTC Probe Candidate Watch
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[btc-probe-candidate]' }}
+    runs-on: [self-hosted, kalshi-bot]
+    timeout-minutes: 20
+    steps:
+      - name: Watch for one fully-qualified dry-run BTC candidate
+        id: watch
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          OUT="$RUNNER_TEMP/btc-probe-candidate.txt"
+          cd /home/ssm-user/kalshi-arb-bot || exit 66
+          .venv/bin/python -m src.gemini_kalshi_btc_probe_candidate \
+            --seconds 900 \
+            --persistence-ms 10 > "$OUT" 2>&1
+          exit $?
+
+      - name: Comment result
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          OUTCOME: ${{ steps.watch.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `${process.env.RUNNER_TEMP}/btc-probe-candidate.txt`;
+            let text = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : 'No output.';
+            if (text.length > 50000) text = text.slice(-50000);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `BTC dry-run first-probe candidate watch: **${process.env.OUTCOME}**\n\n\`\`\`json\n${text}\n\`\`\``
+            });
