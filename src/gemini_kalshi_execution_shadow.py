@@ -9,7 +9,7 @@ being double-counted as fresh opportunity capacity.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, ROUND_CEILING
 from typing import Callable
 
 D = Decimal
@@ -45,6 +45,31 @@ FeeFn = Callable[[Decimal, Decimal], Decimal]
 
 def zero_fee(price: Decimal, quantity: Decimal) -> Decimal:
     return D("0")
+
+
+def _ceil_cent(value: Decimal) -> Decimal:
+    """Round a non-negative dollar amount up to the next whole cent."""
+    if value < 0:
+        raise ValueError("fee cannot be negative")
+    return (value * D("100")).to_integral_value(rounding=ROUND_CEILING) / D("100")
+
+
+def gemini_predictions_taker_fee(price: Decimal, quantity: Decimal) -> Decimal:
+    """Current Gemini Predictions taker fee for contracts listed >= 2026-03-18.
+
+    Gemini's published schedule is 0.07 * C * P * (1-P), with total fees rounded
+    up to the next cent. This intentionally does not net temporary taker rewards.
+    """
+    if quantity < 0 or price < 0 or price > 1:
+        raise ValueError("invalid Gemini fee inputs")
+    return _ceil_cent(D("0.07") * quantity * price * (D("1") - price))
+
+
+def gemini_predictions_maker_fee(price: Decimal, quantity: Decimal) -> Decimal:
+    """Current Gemini Predictions maker fee before any maker rebate."""
+    if quantity < 0 or price < 0 or price > 1:
+        raise ValueError("invalid Gemini fee inputs")
+    return _ceil_cent(D("0.0175") * quantity * price * (D("1") - price))
 
 
 @dataclass(frozen=True)
