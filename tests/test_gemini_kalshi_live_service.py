@@ -1,11 +1,6 @@
-from decimal import Decimal
 from pathlib import Path
 
-import pytest
-
 import src.gemini_kalshi_live_service as service
-
-D = Decimal
 
 
 def test_live_service_defaults_are_first_probe_bounds(monkeypatch):
@@ -24,12 +19,26 @@ def test_live_service_defaults_are_first_probe_bounds(monkeypatch):
     assert service._env_float("LIVE_PROBE_MIN_EXPIRY_REMAINING_SECONDS", 0.5, minimum=0.0) == 0.5
 
 
-def test_disarmed_requires_both_live_switches(monkeypatch):
+def test_live_requires_cli_env_and_single_use_token(monkeypatch, tmp_path: Path):
+    token = tmp_path / "arm"
     monkeypatch.delenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", raising=False)
-    assert service.live_probe_authorized(True) is False
+    token.write_text("ARM\n")
+    assert service._armed_once(True, token) is False
+
     monkeypatch.setenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", "YES")
-    assert service.live_probe_authorized(False) is False
-    assert service.live_probe_authorized(True) is True
+    assert service._armed_once(False, token) is False
+    assert service._armed_once(True, token) is True
+
+    assert service._consume_arm_token(token) is True
+    assert not token.exists()
+    assert service._armed_once(True, token) is False
+    assert service._consume_arm_token(token) is False
+
+
+def test_arm_token_env_override(monkeypatch, tmp_path: Path):
+    token = tmp_path / "custom-arm"
+    monkeypatch.setenv("LIVE_PROBE_ARM_TOKEN_FILE", str(token))
+    assert service._arm_token_path() == token
 
 
 def test_jsonl_writer_flushes_one_record(tmp_path: Path):
