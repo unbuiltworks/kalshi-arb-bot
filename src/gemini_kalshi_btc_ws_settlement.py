@@ -24,9 +24,10 @@ from src.gemini_kalshi_btc_ws_analyze import (
     D,
     THRESHOLDS_MS,
     Episode,
-    _candidate_at if False else None,
+    _consume,
+    episodes,
+    load_rows,
 )
-from src.gemini_kalshi_btc_ws_analyze import _consume, episodes, load_rows
 from src.gemini_kalshi_settlement_agreement import AgreementRow, _gemini_settled
 from src.gemini_kalshi_settlement_probe import _kalshi_settled_paced, match_settled_true_windows
 
