@@ -1,0 +1,49 @@
+name: Execution Config Check
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[execution-config-check]' }}
+    runs-on: [self-hosted, kalshi-bot]
+    timeout-minutes: 5
+    steps:
+      - name: Check non-secret execution config
+        id: check
+        shell: bash
+        run: |
+          set -e
+          cd /home/ssm-user/kalshi-arb-bot
+          .venv/bin/python - <<'PY' > "$RUNNER_TEMP/execution-config.txt"
+          import json
+          from config.settings import ENV, REST_URL, WS_URL, API_KEY_ID
+          print(json.dumps({
+              "kalshi_env": ENV,
+              "kalshi_rest_url": REST_URL,
+              "kalshi_ws_url": WS_URL,
+              "kalshi_api_key_present": bool(API_KEY_ID),
+              "read_only": True,
+              "order_entry": False,
+          }, separators=(",", ":"), sort_keys=True))
+          PY
+
+      - name: Comment result
+        if: always()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `${process.env.RUNNER_TEMP}/execution-config.txt`;
+            const text = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : 'No output.';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `Execution config check:\n\n\`\`\`json\n${text}\n\`\`\``
+            });
