@@ -2,6 +2,7 @@ from decimal import Decimal
 
 import pytest
 
+import src.gemini_kalshi_probe_transport as transport
 from src.gemini_kalshi_live_probe_guard import (
     build_leg_payloads,
     recompute_payload_locked_profit,
@@ -9,7 +10,6 @@ from src.gemini_kalshi_live_probe_guard import (
 from src.gemini_kalshi_probe_transport import (
     ExecutionResult,
     KALSHI_PROD_REST,
-    KalshiV2Executor,
     submit_dual_probe,
 )
 
@@ -165,10 +165,15 @@ async def test_both_filled_needs_no_flatten(monkeypatch):
     assert kalshi.flattened == 0
 
 
-def test_default_kalshi_executor_is_pinned_to_production():
-    executor = KalshiV2Executor()
-    try:
-        assert executor.client.base_url == KALSHI_PROD_REST
-    finally:
-        # No HTTP client is created until the first request, so no async close needed here.
-        pass
+def test_default_kalshi_executor_is_pinned_to_production(monkeypatch):
+    seen = {}
+
+    class StubClient:
+        def __init__(self, *, base_url=None, **kwargs):
+            seen["base_url"] = base_url
+            self.base_url = base_url
+
+    monkeypatch.setattr(transport, "KalshiClient", StubClient)
+    executor = transport.KalshiV2Executor()
+    assert executor.client.base_url == KALSHI_PROD_REST
+    assert seen["base_url"] == KALSHI_PROD_REST
