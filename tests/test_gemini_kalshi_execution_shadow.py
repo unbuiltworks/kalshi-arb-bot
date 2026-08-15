@@ -4,6 +4,8 @@ from src.gemini_kalshi_execution_shadow import (
     ConsumableLiquidity,
     TopOfBook,
     evaluate_pair,
+    gemini_predictions_maker_fee,
+    gemini_predictions_taker_fee,
     survives,
 )
 
@@ -41,6 +43,31 @@ def test_fee_can_remove_false_positive():
 
     # Gemini YES 0.50 + Kalshi NO 0.49 = 0.99 before fees, 1.01 after fees.
     assert evaluate_pair(gemini, kalshi, gemini_fee=fee, kalshi_fee=fee) == []
+
+
+def test_current_gemini_taker_fee_rounds_total_order_up_to_cent():
+    # 1 contract at $0.55: 0.07*1*.55*.45 = .017325 -> $0.02.
+    assert gemini_predictions_taker_fee(D("0.55"), D("1")) == D("0.02")
+    # 100 at $0.40: $1.68 exactly under Gemini's published example.
+    assert gemini_predictions_taker_fee(D("0.40"), D("100")) == D("1.68")
+
+
+def test_current_gemini_maker_fee_rounds_total_order_up_to_cent():
+    # 100 at $0.50: .0175*100*.5*.5 = .4375 -> $0.44.
+    assert gemini_predictions_maker_fee(D("0.50"), D("100")) == D("0.44")
+
+
+def test_gemini_fee_removes_observed_one_cent_gross_lock_even_before_kalshi_fee():
+    # Economic shape of the first observed BTC lock: Kalshi YES .44 + Gemini NO .55.
+    # Represent Gemini YES bid=.45 so transformed NO ask=.55.
+    gemini = book("gemini", "g", 1000, "0.45", "1", "0.47", "1")
+    kalshi = book("kalshi", "k", 1000, "0.43", "1", "0.44", "1")
+    assert evaluate_pair(
+        gemini,
+        kalshi,
+        gemini_fee=gemini_predictions_taker_fee,
+        kalshi_fee=lambda price, qty: D("0"),
+    ) == []
 
 
 def test_rejects_stale_cross_venue_quotes():
