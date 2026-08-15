@@ -1,0 +1,94 @@
+name: Gemini Funding Check
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[gemini-funding-check]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/gemini-kalshi-fast-overlap
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Check spendable USD without orders
+        id: check
+        continue-on-error: true
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        shell: bash
+        run: |
+          python - <<'PY' > "$RUNNER_TEMP/gemini-funding.txt"
+          import asyncio, json
+          from decimal import Decimal
+          from src.gemini_prediction_auth import private_rest_request
+
+          async def main():
+              out = {
+                  "mode": "NO_ORDER_GEMINI_FUNDING_CHECK",
+                  "http_status": None,
+                  "usd_available_ge_1": False,
+                  "usd_available_ge_10": False,
+                  "positive_available_currencies": [],
+                  "error": None,
+                  "read_only": True,
+                  "order_entry": False,
+              }
+              try:
+                  r = await private_rest_request("POST", "/v1/balances", params={"showPendingBalances": False})
+                  out["http_status"] = r.status_code
+                  if r.status_code == 200:
+                      rows = r.json()
+                      available = {}
+                      for row in rows if isinstance(rows, list) else []:
+                          cur = str(row.get("currency") or "").upper()
+                          try:
+                              amt = Decimal(str(row.get("available") or "0"))
+                          except Exception:
+                              amt = Decimal("0")
+                          if amt > 0:
+                              available[cur] = amt
+                      usd = available.get("USD", Decimal("0"))
+                      out["usd_available_ge_1"] = usd >= Decimal("1")
+                      out["usd_available_ge_10"] = usd >= Decimal("10")
+                      out["positive_available_currencies"] = sorted(available)
+                  else:
+                      try:
+                          body = r.json()
+                          out["error"] = str(body.get("reason") or body.get("message") or f"HTTP_{r.status_code}") if isinstance(body, dict) else f"HTTP_{r.status_code}"
+                      except Exception:
+                          out["error"] = f"HTTP_{r.status_code}"
+              except Exception as e:
+                  out["error"] = type(e).__name__
+              print(json.dumps(out, separators=(",", ":"), sort_keys=True))
+
+          asyncio.run(main())
+          PY
+      - name: Comment result
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          OUTCOME: ${{ steps.check.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `${process.env.RUNNER_TEMP}/gemini-funding.txt`;
+            const text = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : 'No output.';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `Gemini no-order funding check: **${process.env.OUTCOME}**\n\n\`\`\`json\n${text}\n\`\`\``
+            });
