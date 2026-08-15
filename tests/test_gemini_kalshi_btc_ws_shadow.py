@@ -1,6 +1,7 @@
 from decimal import Decimal as D
 
-from src.gemini_kalshi_btc_ws_shadow import KalshiOrderBook, _subscription
+from src.gemini_kalshi_btc_ws_shadow import KalshiOrderBook, _gemini_top, _subscription
+from src.gemini_kalshi_execution_shadow import TopOfBook, evaluate_pair, zero_fee
 
 
 def test_snapshot_and_delta_reconstruct_top_of_book():
@@ -114,3 +115,77 @@ def test_subscription_is_market_data_only():
             "market_ticker": "KXBTC15M-TEST",
         },
     }
+
+
+def test_gemini_bid_only_preserves_executable_no_ask():
+    top = _gemini_top(
+        {"bids": [["0.9700", "515.00"]], "asks": []},
+        "GEMI-BTC15M-TEST-UP",
+        1000,
+    )
+    assert top is not None
+    assert top.yes_bid == D("0.9700")
+    assert top.yes_bid_size == D("515.00")
+    assert top.yes_ask == D("1")
+    assert top.yes_ask_size == D("0")
+    assert top.no_ask == D("0.0300")
+    assert top.no_ask_size == D("515.00")
+
+    kalshi = TopOfBook(
+        venue="kalshi",
+        market_id="KXBTC15M-TEST",
+        ts_ms=1000,
+        yes_bid=D("0.01"),
+        yes_bid_size=D("100"),
+        yes_ask=D("0.02"),
+        yes_ask_size=D("100"),
+    )
+    candidates = evaluate_pair(top, kalshi, gemini_fee=zero_fee, kalshi_fee=zero_fee)
+    assert [c.direction for c in candidates] == ["KALSHI_YES_GEMINI_NO"]
+    assert candidates[0].quantity == D("100")
+    assert candidates[0].locked_profit == D("95.0000")
+
+
+def test_gemini_ask_only_preserves_executable_yes_ask():
+    top = _gemini_top(
+        {"bids": [], "asks": [["0.0300", "25.00"]]},
+        "GEMI-BTC15M-TEST-UP",
+        1000,
+    )
+    assert top is not None
+    assert top.yes_bid == D("0")
+    assert top.yes_bid_size == D("0")
+    assert top.yes_ask == D("0.0300")
+    assert top.yes_ask_size == D("25.00")
+
+
+def test_gemini_empty_book_is_not_a_quote():
+    assert _gemini_top({"bids": [], "asks": []}, "GEMI-BTC15M-TEST-UP", 1000) is None
+
+
+def test_kalshi_yes_bid_only_preserves_executable_no_ask():
+    book = KalshiOrderBook("KXBTC15M-TEST")
+    book.yes = {D("0.9700"): D("12")}
+    top = book.top(1000)
+    assert top is not None
+    assert top.yes_bid == D("0.9700")
+    assert top.yes_bid_size == D("12")
+    assert top.yes_ask == D("1")
+    assert top.yes_ask_size == D("0")
+    assert top.no_ask == D("0.0300")
+    assert top.no_ask_size == D("12")
+
+
+def test_kalshi_no_bid_only_preserves_executable_yes_ask():
+    book = KalshiOrderBook("KXBTC15M-TEST")
+    book.no = {D("0.9600"): D("20")}
+    top = book.top(1000)
+    assert top is not None
+    assert top.yes_bid == D("0")
+    assert top.yes_bid_size == D("0")
+    assert top.yes_ask == D("0.0400")
+    assert top.yes_ask_size == D("20")
+
+
+def test_kalshi_empty_book_is_not_a_quote():
+    assert KalshiOrderBook("KXBTC15M-TEST").top(1000) is None
