@@ -34,8 +34,35 @@ def test_repeated_positive_samples_are_one_episode_not_repeated_pnl():
     assert btc["unique_positive_episodes"] == 1
     assert result["unique_positive_episodes"] == 1
     assert Decimal(btc["shadow_profit_dollars_one_execution_per_episode"]) > 0
-    assert btc["survival_episode_counts"]["500"] == 1
+    assert btc["max_observed_positive_span_ms"] == 1000
+    assert btc["sample_interval_median_ms"] == 1000
+    assert btc["survival_episode_counts"]["500"] is None
+    assert result["survival_status"] == "UNRESOLVED_BELOW_SAMPLE_CADENCE"
+    assert result["unresolved_survival_thresholds_ms"] == [50, 100, 250, 500]
     assert result["repeated_depth_counted_as_pnl"] is False
+
+
+def test_subsecond_sampling_can_credit_observed_survival_thresholds():
+    rows = [
+        _row(1_000),
+        _row(1_050),
+        _row(1_100),
+        _row(1_150),
+        _row(1_200),
+        _row(1_250),
+        _row(1_300),
+        _row(1_350),
+        _row(1_400),
+        _row(1_450),
+        _row(1_500),
+        _row(1_550, g_ask="0.55", k_bid="0.40"),
+    ]
+    result = analyze_rows(rows, fee_multiplier=Decimal("1"))
+    btc = result["by_asset"]["BTC"]
+    assert btc["sample_interval_median_ms"] == 50
+    assert btc["survival_episode_counts"] == {"50": 1, "100": 1, "250": 1, "500": 1}
+    assert result["survival_status"] == "OBSERVED_AT_SAMPLE_CADENCE"
+    assert result["unresolved_survival_thresholds_ms"] == []
 
 
 def test_one_cent_raw_lock_is_killed_by_both_taker_fees():
