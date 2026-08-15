@@ -18,6 +18,7 @@ import asyncio
 from collections import defaultdict
 from decimal import Decimal
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -55,6 +56,25 @@ def _kalshi_fee(multiplier: Decimal):
     def fee(price: Decimal, quantity: Decimal) -> Decimal:
         return kalshi_quadratic_taker_fee(price, quantity, fee_multiplier=multiplier)
     return fee
+
+
+def _wilson_upper_95(disagreements: int, windows: int) -> float | None:
+    """95% Wilson upper bound for a binomial disagreement probability.
+
+    Zero observed disagreements in a small retrospective cohort is not evidence
+    of zero basis risk. Exposing the upper confidence bound keeps margin-filter
+    sensitivity from looking safer than the sample size can support.
+    """
+    if windows <= 0:
+        return None
+    if disagreements < 0 or disagreements > windows:
+        raise ValueError("invalid binomial counts")
+    z = 1.959963984540054
+    p = disagreements / windows
+    z2 = z * z
+    center = p + z2 / (2 * windows)
+    radius = z * math.sqrt((p * (1 - p) + z2 / (4 * windows)) / windows)
+    return (center + radius) / (1 + z2 / windows)
 
 
 def fee_positive_windows(
@@ -129,7 +149,9 @@ def _basis_margin_sensitivity(joined: list[dict[str, Any]]) -> dict[str, dict[st
 
     This is retrospective sensitivity analysis, not a live-trading rule. Rows with
     unknown Gemini margin are excluded from gated cohorts so the analysis fails
-    closed rather than assuming they are safely far from the boundary.
+    closed rather than assuming they are safely far from the boundary. The Wilson
+    upper bound is reported because zero observed mismatches in a small cohort can
+    still be consistent with economically meaningful residual basis risk.
     """
     out: dict[str, dict[str, Any]] = {}
     for threshold in BASIS_MARGIN_THRESHOLDS_BPS:
@@ -147,6 +169,7 @@ def _basis_margin_sensitivity(joined: list[dict[str, Any]]) -> dict[str, dict[st
             "eligible_windows": len(eligible),
             "disagreements": len(disagreements),
             "disagreement_rate": (len(disagreements) / len(eligible)) if eligible else None,
+            "disagreement_rate_wilson_upper_95": _wilson_upper_95(len(disagreements), len(eligible)),
             "apparent_locked_profit_dollars": str(apparent),
             "settlement_adjusted_pnl_dollars": str(settlement),
             "basis_effect_dollars": str(settlement - apparent),
