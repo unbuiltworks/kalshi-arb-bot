@@ -1,7 +1,11 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from src.gemini_kalshi_lock_settlement_join import fee_positive_windows, summarize_join
+from src.gemini_kalshi_lock_settlement_join import (
+    _wilson_upper_95,
+    fee_positive_windows,
+    summarize_join,
+)
 from src.gemini_kalshi_settlement_agreement import AgreementRow
 
 
@@ -35,6 +39,12 @@ def test_fee_positive_windows_dedupes_repeated_samples():
     assert payload["kalshi_ticker"] == "KXBTC15M-TEST"
     assert Decimal(payload["best_locked_profit_dollars"]) > 0
     assert Decimal(payload["best_net_cost_dollars"]) > 0
+
+
+def test_wilson_upper_bound_keeps_zero_mismatches_from_looking_risk_free():
+    assert _wilson_upper_95(0, 0) is None
+    assert 0.03 < _wilson_upper_95(0, 100) < 0.04
+    assert _wilson_upper_95(4, 97) > (4 / 97)
 
 
 def test_summarize_join_marks_both_win_mismatch_to_actual_payout():
@@ -84,7 +94,9 @@ def test_summarize_join_marks_both_win_mismatch_to_actual_payout():
     assert result["favorable_mismatch_windows"] == 1
     assert result["adverse_mismatch_windows"] == 0
     assert result["basis_margin_sensitivity"]["1"]["eligible_windows"] == 1
+    assert result["basis_margin_sensitivity"]["1"]["disagreement_rate_wilson_upper_95"] == 1.0
     assert result["basis_margin_sensitivity"]["2"]["eligible_windows"] == 0
+    assert result["basis_margin_sensitivity"]["2"]["disagreement_rate_wilson_upper_95"] is None
     assert result["classification"] == "INDEX_MISMATCH_RESEARCH_ONLY"
     assert result["order_entry"] is False
 
@@ -115,4 +127,5 @@ def test_summarize_join_marks_both_lose_mismatch_to_negative_cost():
     assert result["adverse_mismatch_windows"] == 1
     assert result["favorable_mismatch_windows"] == 0
     assert result["basis_margin_sensitivity"]["0.5"]["disagreements"] == 1
+    assert result["basis_margin_sensitivity"]["0.5"]["disagreement_rate_wilson_upper_95"] == 1.0
     assert result["basis_margin_sensitivity"]["2"]["disagreements"] == 0
