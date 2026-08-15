@@ -19,15 +19,29 @@ import httpx
 
 from src.gemini_kalshi_execution_shadow import evaluate_pair, gemini_predictions_taker_fee
 from src.gemini_kalshi_kalshi_fees import kalshi_quadratic_taker_fee
-from src.gemini_kalshi_settlement_agreement import (
-    AgreementRow,
-    _gemini_settled,
-    _kalshi_settled,
-    match_settled,
+from src.gemini_kalshi_settlement_agreement import AgreementRow, _gemini_settled
+from src.gemini_kalshi_settlement_probe import (
+    _kalshi_settled_paced,
+    match_settled_true_windows,
 )
 from src.gemini_kalshi_watch_analyze import _book, load_rows
 
 D = Decimal
+
+
+async def _kalshi_settled(http: httpx.AsyncClient, hours: int) -> list[dict]:
+    """Rate-limit-safe settled-market fetch used by the lock/settlement join."""
+    return await _kalshi_settled_paced(http, hours)
+
+
+def match_settled(
+    gemini: list[dict],
+    kalshi: list[dict],
+    *,
+    max_expiry_skew_s: float,
+) -> list[AgreementRow]:
+    """Match Gemini ticker endpoint to Kalshi close_time, not expected resolution."""
+    return match_settled_true_windows(gemini, kalshi, max_expiry_skew_s)
 
 
 def _kalshi_fee(multiplier: Decimal):
