@@ -63,8 +63,8 @@ jobs:
                   resp = getattr(e, "response", None)
                   status = getattr(resp, "status_code", None) if resp is not None else None
                   body = getattr(resp, "body", None) if resp is not None else None
-                  if isinstance(body, bytes):
-                      try: body = body.decode("utf-8", "replace")
+                  if isinstance(body, (bytes, bytearray)):
+                      try: body = bytes(body).decode("utf-8", "replace")
                       except Exception: body = None
                   if isinstance(body, str) and len(body) > 500:
                       body = body[:500]
