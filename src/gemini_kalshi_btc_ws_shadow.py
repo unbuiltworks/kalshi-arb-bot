@@ -1,19 +1,22 @@
 """Read-only sub-second BTC Gemini/Kalshi execution-shadow collector.
 
 Purpose: replace the 1s Kalshi REST polling ambiguity with Kalshi's authenticated
-``orderbook_delta`` market-data stream.  This module has no order-entry imports or
-write endpoints.  Authentication is used only because Kalshi requires it for the
-WebSocket handshake, even for public market-data channels.
+``orderbook_delta`` market-data stream. This module has no order-entry imports or
+write endpoints. Authentication is used only because Kalshi requires it for the
+WebSocket handshake, even for market-data channels.
 
 The collector:
 - discovers the current aligned BTC 15-minute pair,
 - verifies the live KXBTC15M fee metadata is mapped,
 - streams Gemini depth5@100ms snapshots,
 - reconstructs Kalshi's order book from snapshot + deltas,
+- preserves safely executable directions when either venue is one-sided,
 - evaluates both-venue taker-fee-positive complementary locks on every event,
-- records receive timestamps and Kalshi exchange ``ts_ms`` for latency analysis.
+- records receive timestamps and Kalshi exchange ``ts_ms`` for latency analysis,
+- fails loudly if either stream dies,
+- rolls automatically into the next BTC 15-minute window until ``--seconds`` ends.
 
-Settlement remains INDEX_MISMATCH_RESEARCH_ONLY.  No live trading path exists.
+Settlement remains INDEX_MISMATCH_RESEARCH_ONLY. No live trading path exists.
 """
 
 from __future__ import annotations
@@ -33,7 +36,7 @@ import websockets
 
 from config.settings import API_KEY_ID
 from src.auth import auth_headers, load_private_key
-from src.gemini_kalshi_aligned_watch import _discover_pairs
+from src.gemini_kalshi_aligned_watch import Pair, _discover_pairs
 from src.gemini_kalshi_execution_shadow import (
     TopOfBook,
     evaluate_pair,
@@ -113,11 +116,31 @@ class KalshiOrderBook:
         return True
 
     def top(self, receive_ts_ms: int) -> TopOfBook | None:
-        if not self.yes or not self.no:
+        """Return safely executable TOB even if only one binary side is quoted.
+
+        A missing YES bid is represented as price 0 with size 0; a missing NO bid
+        therefore becomes a synthetic YES ask of 1 with size 0. The zero size is
+        the safety property: evaluate_pair can use the opposite quoted direction
+        but can never invent executable liquidity on the missing side.
+        """
+        if not self.yes and not self.no:
             return None
-        yes_bid = max(self.yes)
-        no_bid = max(self.no)
-        yes_ask = D("1") - no_bid
+
+        if self.yes:
+            yes_bid = max(self.yes)
+            yes_bid_size = self.yes[yes_bid]
+        else:
+            yes_bid = D("0")
+            yes_bid_size = D("0")
+
+        if self.no:
+            no_bid = max(self.no)
+            yes_ask = D("1") - no_bid
+            yes_ask_size = self.no[no_bid]
+        else:
+            yes_ask = D("1")
+            yes_ask_size = D("0")
+
         if yes_ask < 0 or yes_ask > 1:
             return None
         return TopOfBook(
@@ -125,10 +148,46 @@ class KalshiOrderBook:
             market_id=self.ticker,
             ts_ms=receive_ts_ms,
             yes_bid=yes_bid,
-            yes_bid_size=self.yes[yes_bid],
+            yes_bid_size=yes_bid_size,
             yes_ask=yes_ask,
-            yes_ask_size=self.no[no_bid],
+            yes_ask_size=yes_ask_size,
         )
+
+
+def _gemini_top(payload: dict[str, Any], symbol: str, receive_ts_ms: int) -> TopOfBook | None:
+    """Normalize a Gemini depth frame without discarding a one-sided book."""
+    bids = payload.get("bids")
+    asks = payload.get("asks")
+    if not isinstance(bids, list) or not isinstance(asks, list):
+        return None
+    if not bids and not asks:
+        return None
+
+    if bids:
+        bid_price, bid_size = max(bids, key=lambda row: D(str(row[0])))
+        yes_bid = D(str(bid_price))
+        yes_bid_size = D(str(bid_size))
+    else:
+        yes_bid = D("0")
+        yes_bid_size = D("0")
+
+    if asks:
+        ask_price, ask_size = min(asks, key=lambda row: D(str(row[0])))
+        yes_ask = D(str(ask_price))
+        yes_ask_size = D(str(ask_size))
+    else:
+        yes_ask = D("1")
+        yes_ask_size = D("0")
+
+    return TopOfBook(
+        venue="gemini",
+        market_id=symbol,
+        ts_ms=receive_ts_ms,
+        yes_bid=yes_bid,
+        yes_bid_size=yes_bid_size,
+        yes_ask=yes_ask,
+        yes_ask_size=yes_ask_size,
+    )
 
 
 def _ws_header_kw(headers: dict[str, str]) -> dict[str, Any]:
@@ -159,22 +218,14 @@ async def _gemini_stream(symbol: str, queue: asyncio.Queue) -> None:
         async for raw in ws:
             receive_ms = int(time.time() * 1000)
             payload = json.loads(raw)
-            bids = payload.get("bids")
-            asks = payload.get("asks")
-            if not isinstance(bids, list) or not isinstance(asks, list) or not bids or not asks:
+            if payload.get("status") is not None:
+                if int(payload.get("status")) >= 400:
+                    raise RuntimeError(f"Gemini WS subscription error: {payload}")
                 continue
-            bid_price, bid_size = max(bids, key=lambda row: D(str(row[0])))
-            ask_price, ask_size = min(asks, key=lambda row: D(str(row[0])))
-            book = TopOfBook(
-                venue="gemini",
-                market_id=symbol,
-                ts_ms=receive_ms,
-                yes_bid=D(str(bid_price)),
-                yes_bid_size=D(str(bid_size)),
-                yes_ask=D(str(ask_price)),
-                yes_ask_size=D(str(ask_size)),
-            )
-            await queue.put(("gemini", receive_ms, None, book))
+            book = _gemini_top(payload, symbol, receive_ms)
+            if book is not None:
+                await queue.put(("gemini", receive_ms, None, book))
+    raise RuntimeError(f"Gemini WS ended for {symbol}")
 
 
 async def _kalshi_stream(ticker: str, queue: asyncio.Queue) -> None:
@@ -197,6 +248,7 @@ async def _kalshi_stream(ticker: str, queue: asyncio.Queue) -> None:
             top = book.top(receive_ms)
             if top is not None:
                 await queue.put(("kalshi", receive_ms, book.exchange_ts_ms, top))
+    raise RuntimeError(f"Kalshi WS ended for {ticker}")
 
 
 def _candidate_rows(candidates) -> list[dict[str, str | int]]:
@@ -214,46 +266,63 @@ def _candidate_rows(candidates) -> list[dict[str, str | int]]:
     ]
 
 
-async def collect(*, seconds: float, output: Path, max_quote_skew_ms: int = 250) -> None:
-    output.parent.mkdir(parents=True, exist_ok=True)
-    async with httpx.AsyncClient(timeout=20.0) as http:
-        pairs = [p for p in await _discover_pairs(http, 30.0) if p.asset == "BTC"]
-        if not pairs:
-            raise RuntimeError("no aligned BTC 15-minute Gemini/Kalshi pair discovered")
-        pair = pairs[0]
-        fee_meta = await fetch_series_fee_metadata(http, "KXBTC15M")
-        kalshi_fee = fee_meta.taker_fee_fn()  # fails closed for unmapped fee types
+def _raise_if_stream_failed(tasks: dict[str, asyncio.Task]) -> None:
+    for name, task in tasks.items():
+        if not task.done():
+            continue
+        if task.cancelled():
+            raise RuntimeError(f"{name} stream cancelled unexpectedly")
+        exc = task.exception()
+        if exc is not None:
+            raise RuntimeError(f"{name} stream failed: {type(exc).__name__}: {exc}") from exc
+        raise RuntimeError(f"{name} stream ended unexpectedly")
 
-    logger.info("BTC_WS_SHADOW_DISCOVERY %s", json.dumps({
-        "gemini_symbol": pair.gemini_symbol,
-        "kalshi_ticker": pair.kalshi_ticker,
-        "window_end_utc": pair.window_end.isoformat(),
-        "fee_type": fee_meta.fee_type,
-        "fee_multiplier": fee_meta.fee_multiplier,
-        "read_only": True,
-        "order_entry": False,
-    }, separators=(",", ":")))
 
+async def _current_btc_pair(http: httpx.AsyncClient) -> Pair | None:
+    now = time.time()
+    pairs = [
+        p for p in await _discover_pairs(http, 30.0)
+        if p.asset == "BTC" and p.window_end.timestamp() > now
+    ]
+    return pairs[0] if pairs else None
+
+
+async def _capture_pair(
+    *,
+    pair: Pair,
+    kalshi_fee,
+    overall_deadline: float,
+    output: Path,
+    max_quote_skew_ms: int,
+) -> tuple[int, int]:
+    """Capture one BTC window, stopping just after its scheduled end."""
     queue: asyncio.Queue = asyncio.Queue(maxsize=10000)
+    tasks = {
+        "gemini": asyncio.create_task(_gemini_stream(pair.gemini_symbol, queue)),
+        "kalshi": asyncio.create_task(_kalshi_stream(pair.kalshi_ticker, queue)),
+    }
     g: TopOfBook | None = None
     k: TopOfBook | None = None
     latest_k_exchange_ts: int | None = None
-    tasks = [
-        asyncio.create_task(_gemini_stream(pair.gemini_symbol, queue)),
-        asyncio.create_task(_kalshi_stream(pair.kalshi_ticker, queue)),
-    ]
-    deadline = time.monotonic() + seconds
     samples = 0
     positive = 0
 
+    remaining_window_s = max(0.0, pair.window_end.timestamp() - time.time() + 0.75)
+    pair_deadline = min(overall_deadline, time.monotonic() + remaining_window_s)
+
     try:
         with output.open("a", encoding="utf-8") as fh:
-            while time.monotonic() < deadline:
-                timeout = max(0.05, min(1.0, deadline - time.monotonic()))
+            while time.monotonic() < pair_deadline:
+                _raise_if_stream_failed(tasks)
+                timeout = max(0.05, min(0.5, pair_deadline - time.monotonic()))
                 try:
-                    venue, receive_ms, exchange_ms, top = await asyncio.wait_for(queue.get(), timeout=timeout)
+                    venue, receive_ms, exchange_ms, top = await asyncio.wait_for(
+                        queue.get(), timeout=timeout
+                    )
                 except asyncio.TimeoutError:
+                    _raise_if_stream_failed(tasks)
                     continue
+
                 if venue == "gemini":
                     g = top
                 else:
@@ -261,6 +330,7 @@ async def collect(*, seconds: float, output: Path, max_quote_skew_ms: int = 250)
                     latest_k_exchange_ts = exchange_ms
                 if g is None or k is None:
                     continue
+
                 samples += 1
                 candidates = evaluate_pair(
                     g,
@@ -271,8 +341,10 @@ async def collect(*, seconds: float, output: Path, max_quote_skew_ms: int = 250)
                 )
                 if candidates:
                     positive += 1
+
                 row = {
                     "asset": "BTC",
+                    "window_end_utc": pair.window_end.isoformat(),
                     "event_venue": venue,
                     "receive_ts_ms": receive_ms,
                     "gemini_receive_ts_ms": g.ts_ms,
@@ -301,13 +373,72 @@ async def collect(*, seconds: float, output: Path, max_quote_skew_ms: int = 250)
                 fh.write(json.dumps(row, separators=(",", ":")) + "\n")
                 fh.flush()
     finally:
-        for task in tasks:
+        for task in tasks.values():
             task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.gather(*tasks.values(), return_exceptions=True)
 
-    logger.info("BTC_WS_SHADOW_SUMMARY %s", json.dumps({
+    logger.info("BTC_WS_SHADOW_WINDOW_SUMMARY %s", json.dumps({
+        "gemini_symbol": pair.gemini_symbol,
+        "kalshi_ticker": pair.kalshi_ticker,
+        "window_end_utc": pair.window_end.isoformat(),
         "samples": samples,
         "both_taker_fee_positive_event_samples": positive,
+        "read_only": True,
+        "order_entry": False,
+    }, separators=(",", ":")))
+    return samples, positive
+
+
+async def collect(*, seconds: float, output: Path, max_quote_skew_ms: int = 250) -> None:
+    if seconds <= 0:
+        raise ValueError("seconds must be positive")
+    if not API_KEY_ID:
+        raise RuntimeError("KALSHI_API_KEY_ID is not configured")
+    # Fail before starting a timed capture if the key is missing or malformed.
+    load_private_key()
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    overall_deadline = time.monotonic() + seconds
+    total_samples = 0
+    total_positive = 0
+    windows = 0
+
+    async with httpx.AsyncClient(timeout=20.0) as http:
+        fee_meta = await fetch_series_fee_metadata(http, "KXBTC15M")
+        kalshi_fee = fee_meta.taker_fee_fn()  # fails closed for unmapped fee types
+
+        while time.monotonic() < overall_deadline:
+            pair = await _current_btc_pair(http)
+            if pair is None:
+                logger.info("BTC_WS_SHADOW_WAITING_FOR_PAIR")
+                await asyncio.sleep(min(2.0, max(0.0, overall_deadline - time.monotonic())))
+                continue
+
+            logger.info("BTC_WS_SHADOW_DISCOVERY %s", json.dumps({
+                "gemini_symbol": pair.gemini_symbol,
+                "kalshi_ticker": pair.kalshi_ticker,
+                "window_end_utc": pair.window_end.isoformat(),
+                "fee_type": fee_meta.fee_type,
+                "fee_multiplier": fee_meta.fee_multiplier,
+                "read_only": True,
+                "order_entry": False,
+            }, separators=(",", ":")))
+
+            samples, positive = await _capture_pair(
+                pair=pair,
+                kalshi_fee=kalshi_fee,
+                overall_deadline=overall_deadline,
+                output=output,
+                max_quote_skew_ms=max_quote_skew_ms,
+            )
+            windows += 1
+            total_samples += samples
+            total_positive += positive
+
+    logger.info("BTC_WS_SHADOW_SUMMARY %s", json.dumps({
+        "windows_captured": windows,
+        "samples": total_samples,
+        "both_taker_fee_positive_event_samples": total_positive,
         "output": str(output),
         "subsecond_status": "EVENT_STREAM_CAPTURED_ANALYZE_ENDPOINT_SURVIVAL_SEPARATELY",
         "settlement_status": "INDEX_MISMATCH_RESEARCH_ONLY",
