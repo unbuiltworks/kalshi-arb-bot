@@ -1,14 +1,10 @@
 """Analyze read-only BTC Gemini/Kalshi WebSocket shadow logs.
 
-Unlike the legacy ~1s REST watcher, this analyzer is intended for the event-driven
-collector in ``gemini_kalshi_btc_ws_shadow``.  It treats each fee-positive
-candidate direction as a separate episode and asks whether a *new positive event*
-is still observed at/after 50/100/250/500ms.  That intentionally fails more
-conservatively than assuming an unchanged quote survived through an event gap.
-
-P&L is never multiplied by every event.  For each episode/threshold we count at
-most one execution: the first still-positive candidate observed at or after the
-threshold.  Settlement remains a separate INDEX_MISMATCH_RESEARCH_ONLY gate.
+Conservative event-driven analysis for fee-positive BTC cross-venue episodes.
+Survival requires a new still-positive event at/after each latency threshold.
+Repeated resting depth at the same executable price pair is consumable only once;
+if displayed quantity later grows, only the increment is newly consumable.
+Settlement remains a separate INDEX_MISMATCH_RESEARCH_ONLY gate.
 """
 
 from __future__ import annotations
@@ -49,6 +45,24 @@ def load_rows(paths: list[Path]) -> list[dict[str, Any]]:
     return rows
 
 
+def _liquidity_key(row: dict[str, Any], direction: str) -> str:
+    if direction == "KALSHI_YES_GEMINI_NO":
+        # Gemini NO ask is 1 - Gemini YES bid; size is YES bid size.
+        return "|".join((
+            direction,
+            str(row.get("kalshi_yes_ask")),
+            str(row.get("gemini_yes_bid")),
+        ))
+    if direction == "GEMINI_YES_KALSHI_NO":
+        # Kalshi NO ask is 1 - Kalshi YES bid; size is YES bid size.
+        return "|".join((
+            direction,
+            str(row.get("gemini_yes_ask")),
+            str(row.get("kalshi_yes_bid")),
+        ))
+    return direction
+
+
 def _candidates(row: dict[str, Any]) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for raw in row.get("both_taker_fee_candidates") or []:
@@ -62,7 +76,9 @@ def _candidates(row: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 continue
         except (KeyError, ValueError):
             continue
-        out[direction] = raw
+        candidate = dict(raw)
+        candidate["liquidity_key"] = _liquidity_key(row, direction)
+        out[direction] = candidate
     return out
 
 
@@ -95,6 +111,53 @@ def _first_at_or_after(ep: Episode, threshold_ms: int) -> dict[str, Any] | None:
     return None
 
 
+def _consume(candidate: dict[str, Any], seen: dict[str, Decimal]) -> tuple[Decimal, Decimal, Decimal]:
+    """Return fresh qty, scaled P&L and capital for this unchanged price pair."""
+    qty = D(str(candidate["quantity"]))
+    key = str(candidate.get("liquidity_key") or candidate.get("direction") or "")
+    prior = seen.get(key, D("0"))
+    fresh = max(D("0"), qty - prior)
+    if qty > prior:
+        seen[key] = qty
+    if fresh <= 0 or qty <= 0:
+        return D("0"), D("0"), D("0")
+    scale = fresh / qty
+    return (
+        fresh,
+        D(str(candidate["locked_profit"])) * scale,
+        D(str(candidate["net_cost"])) * scale,
+    )
+
+
+def _scenario(eps: list[Episode], threshold_ms: int | None) -> dict[str, Any]:
+    seen: dict[str, Decimal] = {}
+    survivors = 0
+    pnl = D("0")
+    capital = D("0")
+    quantity = D("0")
+    consumable_episodes = 0
+    for ep in eps:
+        candidate = ep.entry if threshold_ms is None else _first_at_or_after(ep, threshold_ms)
+        if candidate is None:
+            continue
+        survivors += 1
+        fresh_qty, fresh_pnl, fresh_capital = _consume(candidate, seen)
+        if fresh_qty <= 0:
+            continue
+        consumable_episodes += 1
+        quantity += fresh_qty
+        pnl += fresh_pnl
+        capital += fresh_capital
+    return {
+        "surviving_episodes": survivors,
+        "consumable_episodes": consumable_episodes,
+        "consumable_shadow_pnl_dollars": str(pnl),
+        "consumable_capital_deployed_dollars": str(capital),
+        "consumable_contracts": str(quantity),
+        "consumable_pnl_per_dollar_deployed": str(pnl / capital) if capital > 0 else None,
+    }
+
+
 def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
     eps = episodes(rows)
     timestamps = [int(r["receive_ts_ms"]) for r in rows]
@@ -113,42 +176,26 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
     threshold_results: dict[str, Any] = {}
     for threshold in THRESHOLDS_MS:
-        survivors = []
-        pnl = D("0")
-        capital = D("0")
-        quantity = D("0")
-        for ep in eps:
-            candidate = _first_at_or_after(ep, threshold)
-            if candidate is None:
-                continue
-            survivors.append(ep)
-            pnl += D(str(candidate["locked_profit"]))
-            capital += D(str(candidate["net_cost"]))
-            quantity += D(str(candidate["quantity"]))
-        threshold_results[str(threshold)] = {
-            "surviving_episodes": len(survivors),
-            "survival_rate": (len(survivors) / len(eps)) if eps else None,
-            "one_execution_per_surviving_episode_shadow_pnl_dollars": str(pnl),
-            "capital_deployed_dollars": str(capital),
-            "contracts": str(quantity),
-            "pnl_per_dollar_deployed": str(pnl / capital) if capital > 0 else None,
-        }
+        result = _scenario(eps, threshold)
+        result["survival_rate"] = (result["surviving_episodes"] / len(eps)) if eps else None
+        threshold_results[str(threshold)] = result
 
     by_direction: dict[str, int] = {}
     for ep in eps:
         by_direction[ep.direction] = by_direction.get(ep.direction, 0) + 1
 
-    entry_pnl = sum((D(str(ep.entry["locked_profit"])) for ep in eps), D("0"))
-    entry_capital = sum((D(str(ep.entry["net_cost"])) for ep in eps), D("0"))
+    entry = _scenario(eps, None)
     observation_ms = (timestamps[-1] - timestamps[0]) if len(timestamps) >= 2 else 0
 
     return {
         "rows": len(rows),
         "unique_directional_positive_episodes": len(eps),
         "episodes_by_direction": dict(sorted(by_direction.items())),
-        "entry_one_execution_per_episode_shadow_pnl_dollars": str(entry_pnl),
-        "entry_capital_deployed_dollars": str(entry_capital),
-        "entry_pnl_per_dollar_deployed": str(entry_pnl / entry_capital) if entry_capital > 0 else None,
+        "entry_consumable_episodes": entry["consumable_episodes"],
+        "entry_consumable_shadow_pnl_dollars": entry["consumable_shadow_pnl_dollars"],
+        "entry_consumable_capital_deployed_dollars": entry["consumable_capital_deployed_dollars"],
+        "entry_consumable_contracts": entry["consumable_contracts"],
+        "entry_consumable_pnl_per_dollar_deployed": entry["consumable_pnl_per_dollar_deployed"],
         "survival": threshold_results,
         "observation_ms": observation_ms,
         "event_interval_median_ms": median(deltas) if deltas else None,
@@ -157,7 +204,8 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "kalshi_exchange_to_receive_median_ms": median(k_latencies) if k_latencies else None,
         "kalshi_exchange_to_receive_p95_ms": _percentile(k_latencies, 0.95),
         "survival_method": "REQUIRES_NEW_POSITIVE_EVENT_AT_OR_AFTER_THRESHOLD",
-        "pnl_method": "FIRST_STILL_POSITIVE_EVENT_ONE_EXECUTION_PER_DIRECTIONAL_EPISODE",
+        "liquidity_method": "UNCHANGED_EXECUTABLE_PRICE_PAIR_COUNTS_ONLY_DISPLAYED_SIZE_GROWTH_AS_FRESH",
+        "pnl_method": "CONSUMABLE_SIZE_ONE_EXECUTION_PER_DIRECTIONAL_EPISODE",
         "settlement_status": "INDEX_MISMATCH_RESEARCH_ONLY",
         "read_only": True,
         "order_entry": False,
