@@ -11,6 +11,9 @@ def _row(
     quantity: str = "10",
     kalshi_ask: str = "0.40",
     gemini_bid: str = "0.45",
+    window: str = "2026-08-15T12:00:00+00:00",
+    gemini_symbol: str = "GEMI-BTC15M-W1-UP",
+    kalshi_ticker: str = "KXBTC15M-W1",
 ):
     candidates = []
     if positive:
@@ -25,6 +28,9 @@ def _row(
         }]
     return {
         "asset": "BTC",
+        "window_end_utc": window,
+        "gemini_symbol": gemini_symbol,
+        "kalshi_ticker": kalshi_ticker,
         "receive_ts_ms": ts,
         "gemini_receive_ts_ms": ts - 3,
         "kalshi_receive_ts_ms": ts - 8,
@@ -51,7 +57,7 @@ def test_requires_new_positive_event_at_or_after_threshold():
     assert result["survival"]["100"]["surviving_episodes"] == 1
     assert result["survival"]["250"]["surviving_episodes"] == 0
     assert result["survival"]["500"]["surviving_episodes"] == 0
-    assert result["survival_method"] == "REQUIRES_NEW_POSITIVE_EVENT_AT_OR_AFTER_THRESHOLD"
+    assert result["survival_method"] == "REQUIRES_NEW_POSITIVE_EVENT_AT_OR_AFTER_THRESHOLD_WITHIN_SAME_MATCHED_CONTRACT"
 
 
 def test_does_not_infer_survival_across_silent_gap():
@@ -115,11 +121,52 @@ def test_direction_change_is_separate_episode():
     assert {ep.direction for ep in eps} == {"KALSHI_YES_GEMINI_NO", "GEMINI_YES_KALSHI_NO"}
 
 
+def test_rollover_cannot_count_next_contract_as_survival():
+    rows = [
+        _row(1000),
+        _row(
+            1200,
+            window="2026-08-15T12:15:00+00:00",
+            gemini_symbol="GEMI-BTC15M-W2-UP",
+            kalshi_ticker="KXBTC15M-W2",
+        ),
+    ]
+    result = analyze(rows)
+    assert result["matched_contracts_observed"] == 2
+    assert result["unique_directional_positive_episodes"] == 2
+    for threshold in ("50", "100", "250", "500"):
+        assert result["survival"][threshold]["surviving_episodes"] == 0
+
+
+def test_rollover_resets_consumable_liquidity_even_at_same_prices():
+    rows = [
+        _row(1000), _row(1060),
+        _row(
+            2000,
+            window="2026-08-15T12:15:00+00:00",
+            gemini_symbol="GEMI-BTC15M-W2-UP",
+            kalshi_ticker="KXBTC15M-W2",
+        ),
+        _row(
+            2060,
+            window="2026-08-15T12:15:00+00:00",
+            gemini_symbol="GEMI-BTC15M-W2-UP",
+            kalshi_ticker="KXBTC15M-W2",
+        ),
+    ]
+    result = analyze(rows)
+    assert result["matched_contracts_observed"] == 2
+    assert result["survival"]["50"]["surviving_episodes"] == 2
+    assert result["survival"]["50"]["consumable_episodes"] == 2
+    assert result["survival"]["50"]["consumable_contracts"] == "20"
+    assert result["survival"]["50"]["consumable_shadow_pnl_dollars"] == "1.00"
+
+
 def test_latency_and_skew_metrics_are_reported():
     result = analyze([_row(1000), _row(1060), _row(1120, positive=False)])
     assert result["quote_skew_median_ms"] == 5
     assert result["kalshi_exchange_to_receive_median_ms"] == 7
     assert result["event_interval_median_ms"] == 60
-    assert result["liquidity_method"] == "UNCHANGED_EXECUTABLE_PRICE_PAIR_COUNTS_ONLY_DISPLAYED_SIZE_GROWTH_AS_FRESH"
+    assert result["liquidity_method"] == "SAME_MATCHED_CONTRACT_AND_EXECUTABLE_PRICE_PAIR_COUNTS_ONLY_DISPLAYED_SIZE_GROWTH_AS_FRESH"
     assert result["settlement_status"] == "INDEX_MISMATCH_RESEARCH_ONLY"
     assert result["order_entry"] is False
