@@ -8,6 +8,11 @@ For legacy watcher logs that predate embedded Kalshi fee metadata, callers must
 explicitly provide ``--kalshi-fee-multiplier``. Current KXBTC15M/KXETH15M/
 KXSOL15M/KXXRP15M were independently verified as quadratic multiplier=1, but this
 analyzer fails closed rather than silently assuming that value forever.
+
+Survival claims also fail closed. A watcher sampled every ~1 second cannot prove
+that an opportunity continuously survived 50/100/250/500ms between observations.
+Thresholds below the observed sample cadence are therefore reported as unresolved
+rather than credited as survived.
 """
 
 from __future__ import annotations
@@ -19,6 +24,7 @@ from datetime import datetime
 from decimal import Decimal
 import json
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 from src.gemini_kalshi_execution_shadow import (
@@ -56,6 +62,22 @@ def _kalshi_fee(multiplier: Decimal):
     return fee
 
 
+def _sample_intervals_ms(rows: list[dict[str, Any]], asset: str) -> list[int]:
+    by_window: dict[str, list[int]] = defaultdict(list)
+    for row in rows:
+        if not row.get("fresh", True) or str(row.get("asset")) != asset or "ts_ms" not in row:
+            continue
+        by_window[str(row.get("window_end_utc"))].append(int(row["ts_ms"]))
+    intervals: list[int] = []
+    for timestamps in by_window.values():
+        timestamps.sort()
+        intervals.extend(
+            b - a for a, b in zip(timestamps, timestamps[1:])
+            if b > a
+        )
+    return intervals
+
+
 @dataclass
 class Episode:
     asset: str
@@ -67,7 +89,6 @@ class Episode:
     best_locked_profit: Decimal
     best_net_cost: Decimal
     best_roi: Decimal
-    survival: dict[int, bool]
 
     @property
     def duration_ms(self) -> int:
@@ -92,7 +113,6 @@ def analyze_rows(rows: list[dict[str, Any]], *, fee_multiplier: Decimal, max_quo
         if episode is not None:
             episodes.append(episode)
 
-    grouped_keys: set[tuple[str, str]] = set()
     previous_group: tuple[str, str] | None = None
     for row in rows:
         if not row.get("fresh", True):
@@ -104,7 +124,6 @@ def analyze_rows(rows: list[dict[str, Any]], *, fee_multiplier: Decimal, max_quo
             for key in [k for k in active if k[:2] == previous_group]:
                 close(key)
         previous_group = group
-        grouped_keys.add(group)
         sample_counts[asset]["fresh_samples"] += 1
 
         g = _book(row, "gemini")
@@ -140,7 +159,6 @@ def analyze_rows(rows: list[dict[str, Any]], *, fee_multiplier: Decimal, max_quo
                     best_locked_profit=candidate.locked_profit,
                     best_net_cost=candidate.net_cost,
                     best_roi=candidate.roi_on_cost,
-                    survival={ms: False for ms in SURVIVAL_MS},
                 )
                 active[key] = ep
             else:
@@ -150,20 +168,26 @@ def analyze_rows(rows: list[dict[str, Any]], *, fee_multiplier: Decimal, max_quo
                     ep.best_locked_profit = candidate.locked_profit
                     ep.best_net_cost = candidate.net_cost
                     ep.best_roi = candidate.roi_on_cost
-            elapsed = ts_ms - ep.start_ms
-            for ms in SURVIVAL_MS:
-                if elapsed >= ms:
-                    ep.survival[ms] = True
 
     for key in list(active):
         close(key)
 
     by_asset: dict[str, dict[str, Any]] = {}
     assets = sorted({str(r.get("asset")) for r in rows if r.get("asset")})
+    unresolved_thresholds: set[int] = set()
     for asset in assets:
         eps = [e for e in episodes if e.asset == asset]
         total_profit = sum((e.best_locked_profit for e in eps), D("0"))
         capital_hours = sum((e.capital_hours for e in eps), D("0"))
+        intervals = _sample_intervals_ms(rows, asset)
+        sample_interval_median_ms = int(median(intervals)) if intervals else None
+        survival_counts: dict[str, int | None] = {}
+        for ms in SURVIVAL_MS:
+            if sample_interval_median_ms is None or sample_interval_median_ms > ms:
+                survival_counts[str(ms)] = None
+                unresolved_thresholds.add(ms)
+            else:
+                survival_counts[str(ms)] = sum(1 for e in eps if e.duration_ms >= ms)
         by_asset[asset] = {
             "fresh_samples": sample_counts[asset]["fresh_samples"],
             "both_fee_positive_samples": sample_counts[asset]["both_fee_positive_samples"],
@@ -173,7 +197,9 @@ def analyze_rows(rows: list[dict[str, Any]], *, fee_multiplier: Decimal, max_quo
             "capital_hours": str(capital_hours),
             "profit_per_capital_hour": str(total_profit / capital_hours if capital_hours > 0 else D("0")),
             "max_displayed_quantity": str(max((e.max_quantity for e in eps), default=D("0"))),
-            "survival_episode_counts": {str(ms): sum(1 for e in eps if e.survival[ms]) for ms in SURVIVAL_MS},
+            "max_observed_positive_span_ms": max((e.duration_ms for e in eps), default=0),
+            "sample_interval_median_ms": sample_interval_median_ms,
+            "survival_episode_counts": survival_counts,
         }
 
     observation_ms = 0
@@ -190,6 +216,10 @@ def analyze_rows(rows: list[dict[str, Any]], *, fee_multiplier: Decimal, max_quo
         "observation_ms": observation_ms,
         "naive_projected_shadow_profit_per_day": str(projected_day),
         "projection_warning": "NAIVE_SHORT_SAMPLE_NOT_A_FORECAST",
+        "survival_status": (
+            "UNRESOLVED_BELOW_SAMPLE_CADENCE" if unresolved_thresholds else "OBSERVED_AT_SAMPLE_CADENCE"
+        ),
+        "unresolved_survival_thresholds_ms": sorted(unresolved_thresholds),
         "kalshi_fee_type": "quadratic",
         "kalshi_fee_multiplier": str(fee_multiplier),
         "gemini_fee_type": "predictions_taker",
