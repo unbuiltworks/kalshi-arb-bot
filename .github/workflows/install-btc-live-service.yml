@@ -69,6 +69,7 @@ jobs:
           EnvironmentFile=/home/ssm-user/kalshi-arb-bot/.env
           EnvironmentFile=/home/ssm-user/kalshi-arb-bot/.env.gemini-live
           ExecStart=/home/ssm-user/kalshi-arb-bot/.venv/bin/python -m src.gemini_kalshi_live_service --live --log logs/gemini_kalshi_live_service.jsonl
+          ExecStopPost=/bin/sh -c 'sed -i "s/^ENABLE_GEMINI_KALSHI_LIVE_PROBES=.*/ENABLE_GEMINI_KALSHI_LIVE_PROBES=NO/" /home/ssm-user/kalshi-arb-bot/.env.gemini-live; rm -f /home/ssm-user/kalshi-arb-bot/.live_probe_arm_once'
           Restart=on-failure
           RestartSec=2
           RestartPreventExitStatus=70
