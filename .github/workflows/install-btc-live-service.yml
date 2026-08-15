@@ -1,0 +1,111 @@
+name: Install BTC Live Service
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  install:
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[install-btc-live-service]' }}
+    runs-on: [self-hosted, kalshi-bot]
+    timeout-minutes: 5
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+    steps:
+      - name: Install disarmed service
+        id: install
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          OUT="$RUNNER_TEMP/install-btc-live-service.txt"
+          REPO="/home/ssm-user/kalshi-arb-bot"
+          ENVFILE="$REPO/.env.gemini-live"
+          UNIT="/etc/systemd/system/gemini-kalshi-btc-live.service"
+          : > "$OUT"
+
+          cd "$REPO" || { echo "repo_missing" >> "$OUT"; exit 66; }
+          git fetch origin feature/gemini-kalshi-fast-overlap >> "$OUT" 2>&1 || exit $?
+          git checkout feature/gemini-kalshi-fast-overlap >> "$OUT" 2>&1 || exit $?
+          git reset --hard origin/feature/gemini-kalshi-fast-overlap >> "$OUT" 2>&1 || exit $?
+
+          if [ -z "$GEMINI_API_KEY" ] || [ -z "$GEMINI_API_SECRET" ]; then
+            echo "gemini_secrets_present=false" >> "$OUT"
+            exit 78
+          fi
+
+          umask 077
+          {
+            printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY"
+            printf 'GEMINI_API_SECRET=%s\n' "$GEMINI_API_SECRET"
+            printf 'ENABLE_GEMINI_KALSHI_LIVE_PROBES=NO\n'
+            printf 'LIVE_PROBE_MAX_ATTEMPTS=1\n'
+            printf 'LIVE_PROBE_MIN_PERSISTENCE_MS=10\n'
+            printf 'LIVE_PROBE_WATCH_SECONDS=900\n'
+            printf 'LIVE_PROBE_COOLDOWN_SECONDS=30\n'
+            printf 'LIVE_PROBE_MAX_CANDIDATE_AGE_MS=100\n'
+            printf 'LIVE_PROBE_MIN_EXPIRY_REMAINING_SECONDS=0.5\n'
+          } > "$ENVFILE"
+          chmod 600 "$ENVFILE"
+
+          sudo tee "$UNIT" >/dev/null <<'UNITEOF'
+          [Unit]
+          Description=Gemini Kalshi BTC 15m bounded live probe service
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          User=ssm-user
+          WorkingDirectory=/home/ssm-user/kalshi-arb-bot
+          EnvironmentFile=/home/ssm-user/kalshi-arb-bot/.env
+          EnvironmentFile=/home/ssm-user/kalshi-arb-bot/.env.gemini-live
+          ExecStart=/home/ssm-user/kalshi-arb-bot/.venv/bin/python -m src.gemini_kalshi_live_service --live --log logs/gemini_kalshi_live_service.jsonl
+          Restart=on-failure
+          RestartSec=2
+          RestartPreventExitStatus=70
+          NoNewPrivileges=true
+          PrivateTmp=true
+
+          [Install]
+          WantedBy=multi-user.target
+          UNITEOF
+
+          sudo systemctl daemon-reload >> "$OUT" 2>&1
+          sudo systemctl enable --now gemini-kalshi-btc-live.service >> "$OUT" 2>&1
+          sleep 3
+
+          echo "host=$(hostname)" >> "$OUT"
+          echo "feature_sha=$(git rev-parse HEAD)" >> "$OUT"
+          echo "service_active=$(systemctl is-active gemini-kalshi-btc-live.service 2>/dev/null)" >> "$OUT"
+          echo "live_gate=$(grep '^ENABLE_GEMINI_KALSHI_LIVE_PROBES=' "$ENVFILE" | cut -d= -f2)" >> "$OUT"
+          echo "max_attempts=$(grep '^LIVE_PROBE_MAX_ATTEMPTS=' "$ENVFILE" | cut -d= -f2)" >> "$OUT"
+          echo "envfile_mode=$(stat -c '%a' "$ENVFILE")" >> "$OUT"
+          echo "recent_log_modes:" >> "$OUT"
+          if [ -f logs/gemini_kalshi_live_service.jsonl ]; then
+            tail -n 5 logs/gemini_kalshi_live_service.jsonl | sed -E 's/("gemini_usd_available":"?)[0-9.]+/\1REDACTED/g; s/("kalshi_usd_available":"?)[0-9.]+/\1REDACTED/g' >> "$OUT"
+          fi
+          exit 0
+
+      - name: Comment result
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          OUTCOME: ${{ steps.install.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `${process.env.RUNNER_TEMP}/install-btc-live-service.txt`;
+            let text = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : 'No output.';
+            if (text.length > 12000) text = text.slice(-12000);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `BTC live-service install: **${process.env.OUTCOME}**\n\n\`\`\`text\n${text}\n\`\`\``
+            });
