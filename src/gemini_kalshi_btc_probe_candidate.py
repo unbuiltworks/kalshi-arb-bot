@@ -57,6 +57,7 @@ def qualified_report(
     candidate,
     kalshi_fee_multiplier: Decimal,
     persistence_ms: int,
+    observed_ns: int | None = None,
 ) -> dict[str, Any]:
     """Build and independently validate a dry-run report for one candidate."""
     gemini_payload, kalshi_payload = build_leg_payloads(
@@ -86,6 +87,7 @@ def qualified_report(
         "quantity": "1",
         "quote_skew_ms": candidate.quote_skew_ms,
         "persistence_ms": int(persistence_ms),
+        "candidate_observed_ns": int(observed_ns if observed_ns is not None else time.time_ns()),
         "modeled_locked_profit_dollars": str(candidate.locked_profit),
         "recomputed_locked_profit_dollars": str(recomputed),
         "modeled_total_cost_dollars": str(candidate.net_cost),
@@ -164,6 +166,7 @@ async def _watch_pair(
                     candidate=candidate,
                     kalshi_fee_multiplier=kalshi_fee_multiplier,
                     persistence_ms=age_ms,
+                    observed_ns=time.time_ns(),
                 )
     finally:
         for task in tasks.values():
