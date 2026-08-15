@@ -47,8 +47,10 @@ jobs:
                 echo "collector processes:"
                 pgrep -af 'gemini_kalshi_.*shadow' || true
                 echo
-                echo "latest BTC logs:"
-                ls -lt logs/gemini_kalshi_btc*.jsonl 2>/dev/null | head -10 || true
+                echo "latest crypto logs:"
+                ls -lt logs/gemini_kalshi_*bookticker*.jsonl 2>/dev/null | head -16 || true
+                echo
+                df -h .
               } >> "$OUT" 2>&1
               rc=$?
               ;;
@@ -63,7 +65,8 @@ jobs:
                 tests/test_gemini_kalshi_btc_ws_analyze.py \
                 tests/test_gemini_kalshi_btc_ws_capital.py \
                 tests/test_gemini_kalshi_btc_ws_bankroll.py \
-                tests/test_gemini_kalshi_settlement_latency.py -q >> "$OUT" 2>&1
+                tests/test_gemini_kalshi_settlement_latency.py \
+                tests/test_gemini_kalshi_multi_ws_analyze.py -q >> "$OUT" 2>&1
               rc=$?
               ;;
             analyze-btc)
@@ -134,9 +137,31 @@ jobs:
                 rc=$?
               fi
               ;;
+            shadow-crypto-5m|shadow-crypto-15m)
+              if [ "$CMD" = "shadow-crypto-5m" ]; then seconds=300; else seconds=900; fi
+              tag="remote_$(date -u +%Y%m%dT%H%M%SZ)"
+              echo "tag=$tag seconds=$seconds assets=BTC,ETH,SOL,XRP" >> "$OUT"
+              .venv/bin/python -m src.gemini_kalshi_multi_ws_shadow \
+                --assets BTC ETH SOL XRP \
+                --seconds "$seconds" \
+                --max-quote-skew-ms 100 \
+                --output-dir logs \
+                --tag "$tag" >> "$OUT" 2>&1
+              rc=$?
+              if [ "$rc" -eq 0 ]; then
+                for asset in BTC ETH SOL XRP; do
+                  lower=$(printf '%s' "$asset" | tr '[:upper:]' '[:lower:]')
+                  file="logs/gemini_kalshi_${lower}_bookticker_${tag}.jsonl"
+                  echo >> "$OUT"
+                  echo "ANALYSIS_$asset file=$file" >> "$OUT"
+                  .venv/bin/python -m src.gemini_kalshi_multi_ws_analyze --asset "$asset" "$file" >> "$OUT" 2>&1
+                  if [ "$?" -ne 0 ]; then rc=1; fi
+                done
+              fi
+              ;;
             *)
               echo "REJECTED: command is not allowlisted." >> "$OUT"
-              echo "Allowed: status, pull-feature, tests, analyze-btc, settlement-latency-48h, bankroll-btc, shadow-btc-15m, shadow-btc-60m" >> "$OUT"
+              echo "Allowed: status, pull-feature, tests, analyze-btc, settlement-latency-48h, bankroll-btc, shadow-btc-15m, shadow-btc-60m, shadow-crypto-5m, shadow-crypto-15m" >> "$OUT"
               rc=64
               ;;
           esac
