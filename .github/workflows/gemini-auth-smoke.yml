@@ -1,0 +1,80 @@
+name: Gemini Auth Smoke
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  smoke:
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[gemini-auth-smoke]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/gemini-kalshi-fast-overlap
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Verify Gemini auth without orders
+        id: smoke
+        continue-on-error: true
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+        shell: bash
+        run: |
+          python - <<'PY' > "$RUNNER_TEMP/gemini-auth-smoke.txt"
+          import asyncio, json
+          from src.gemini_prediction_auth import credentials, has_credentials, is_account_scoped_key, private_rest_request, verify_authenticated_ws
+
+          async def main():
+              key, _ = credentials()
+              out = {
+                  "mode": "NO_ORDER_AUTH_SMOKE",
+                  "credentials_present": has_credentials(),
+                  "account_scoped_key": bool(key) and is_account_scoped_key(key),
+                  "terms_http_status": None,
+                  "terms_accepted": False,
+                  "authenticated_ws": False,
+                  "order_entry": False,
+                  "errors": {},
+              }
+              if out["credentials_present"] and out["account_scoped_key"]:
+                  try:
+                      r = await private_rest_request("GET", "/v1/prediction-markets/terms/status")
+                      out["terms_http_status"] = r.status_code
+                      if r.status_code == 200:
+                          out["terms_accepted"] = bool(r.json().get("hasAcceptedLatest"))
+                  except Exception as e:
+                      out["errors"]["terms"] = type(e).__name__
+                  try:
+                      out["authenticated_ws"] = await verify_authenticated_ws(timeout=5.0)
+                  except Exception as e:
+                      out["errors"]["ws"] = type(e).__name__
+              print(json.dumps(out, separators=(",", ":"), sort_keys=True))
+
+          asyncio.run(main())
+          PY
+      - name: Comment result
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          OUTCOME: ${{ steps.smoke.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `${process.env.RUNNER_TEMP}/gemini-auth-smoke.txt`;
+            const text = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : 'No smoke output.';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `Gemini no-order auth smoke: **${process.env.OUTCOME}**\n\n\`\`\`json\n${text}\n\`\`\``
+            });
