@@ -1,0 +1,74 @@
+name: Kalshi Prod Auth Check
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[kalshi-prod-auth-check]' }}
+    runs-on: [self-hosted, kalshi-bot]
+    timeout-minutes: 5
+    steps:
+      - name: Verify production Kalshi auth without orders
+        id: check
+        shell: bash
+        run: |
+          set +e
+          OUT="$RUNNER_TEMP/kalshi-prod-auth.txt"
+          cd /home/ssm-user/kalshi-arb-bot || exit 66
+          .venv/bin/python - <<'PY' > "$OUT"
+          import asyncio, json
+          from src.auth import KalshiClient
+
+          PROD = "https://external-api.kalshi.com/trade-api/v2"
+
+          async def main():
+              out = {
+                  "mode": "NO_ORDER_KALSHI_PROD_AUTH_CHECK",
+                  "production_base_url": PROD,
+                  "authenticated": False,
+                  "http_status": None,
+                  "error": None,
+                  "read_only": True,
+                  "order_entry": False,
+              }
+              client = KalshiClient(base_url=PROD)
+              try:
+                  r = await client.get("/exchange/status")
+                  out["http_status"] = r.status_code
+                  out["authenticated"] = r.status_code == 200
+                  if r.status_code != 200:
+                      out["error"] = f"HTTP_{r.status_code}"
+              except Exception as e:
+                  out["error"] = type(e).__name__
+              finally:
+                  await client.close()
+              print(json.dumps(out, separators=(",", ":"), sort_keys=True))
+
+          asyncio.run(main())
+          PY
+          rc=$?
+          cat "$OUT"
+          exit "$rc"
+
+      - name: Comment result
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          OUTCOME: ${{ steps.check.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `${process.env.RUNNER_TEMP}/kalshi-prod-auth.txt`;
+            const text = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : 'No output.';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `Kalshi production no-order auth check: **${process.env.OUTCOME}**\n\n\`\`\`json\n${text}\n\`\`\``
+            });
