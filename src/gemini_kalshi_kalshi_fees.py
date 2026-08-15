@@ -1,26 +1,60 @@
-"""Read-only Kalshi fee-metadata probe for 15-minute crypto series.
+"""Read-only Kalshi fee handling for 15-minute crypto series.
 
-This module deliberately does not guess fee formulas. Kalshi's public Series API
-exposes the active ``fee_type`` and ``fee_multiplier`` and the public fee-changes
-endpoint exposes scheduled updates. We fetch and normalize that metadata so the
-execution shadow can fail closed until each returned fee type is mapped to a
-published formula.
+Kalshi's public Series API exposes the active ``fee_type`` and
+``fee_multiplier`` and the fee-changes endpoint exposes scheduled updates.
+For the documented ``quadratic`` fee type we map the published taker formula:
+
+    ceil_cent(0.07 * fee_multiplier * contracts * price * (1 - price))
+
+Unknown fee types continue to fail closed. This module contains no order-entry
+path and is intended only for execution-shadow accounting.
 """
 
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from decimal import Decimal, ROUND_CEILING
 import json
 import logging
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 
 from src.gemini_kalshi_fast_overlap import KALSHI_REST
 
+D = Decimal
+FeeFn = Callable[[Decimal, Decimal], Decimal]
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_kalshi_fees")
 SERIES = ("KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M")
+
+
+def _ceil_cent(value: Decimal) -> Decimal:
+    if value < 0:
+        raise ValueError("fee cannot be negative")
+    return (value * D("100")).to_integral_value(rounding=ROUND_CEILING) / D("100")
+
+
+def kalshi_quadratic_taker_fee(
+    price: Decimal,
+    quantity: Decimal,
+    *,
+    fee_multiplier: Decimal = D("1"),
+) -> Decimal:
+    """Published Kalshi quadratic taker fee at total-order level.
+
+    The standard quadratic coefficient is 0.07. ``fee_multiplier`` comes from
+    the live Series API and scales that coefficient. Total-order fee is rounded
+    up to the next cent, matching Kalshi's published schedule for standard
+    cent-priced event contracts. Fractional/subpenny fill-level rounding is a
+    separate execution detail and should be measured from actual fills before
+    any live-trading claim.
+    """
+    if quantity < 0 or price < 0 or price > 1 or fee_multiplier < 0:
+        raise ValueError("invalid Kalshi fee inputs")
+    return _ceil_cent(
+        D("0.07") * fee_multiplier * quantity * price * (D("1") - price)
+    )
 
 
 @dataclass(frozen=True)
@@ -33,9 +67,28 @@ class KalshiSeriesFeeMetadata:
 
     @property
     def formula_status(self) -> str:
-        # Intentionally fail closed. Mapping a fee_type string to arithmetic is a
-        # separate change that must cite Kalshi's published fee schedule.
-        return "UNMAPPED_DO_NOT_TRADE"
+        return (
+            "MAPPED_QUADRATIC_TAKER"
+            if self.fee_type == "quadratic"
+            else "UNMAPPED_DO_NOT_TRADE"
+        )
+
+    def taker_fee_fn(self) -> FeeFn:
+        """Return a fee callable only for a documented mapped fee type."""
+        if self.fee_type != "quadratic":
+            raise ValueError(
+                f"unsupported Kalshi fee_type={self.fee_type!r} for {self.series_ticker}"
+            )
+        multiplier = D(self.fee_multiplier)
+        if multiplier < 0:
+            raise ValueError("Kalshi fee_multiplier cannot be negative")
+
+        def fee(price: Decimal, quantity: Decimal) -> Decimal:
+            return kalshi_quadratic_taker_fee(
+                price, quantity, fee_multiplier=multiplier
+            )
+
+        return fee
 
     def as_dict(self) -> dict[str, Any]:
         return {
