@@ -47,6 +47,29 @@ from src.gemini_kalshi_live_probe_guard import (
 )
 
 D = Decimal
+_BACKGROUND_CLEANUPS: set[asyncio.Task] = set()
+
+
+async def _drain_cancelled_stream_tasks(tasks: tuple[asyncio.Task, ...]) -> None:
+    """Drain canceled stream readers away from the latency-critical return path."""
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
+def _cancel_stream_tasks_nowait(tasks: dict[str, asyncio.Task]) -> None:
+    """Cancel stream readers immediately, but never await slow socket teardown here.
+
+    Some websocket implementations can spend several seconds closing a canceled
+    connection. A qualified candidate must reach the service send gate immediately;
+    waiting for reader teardown would make every otherwise-valid quote stale.
+    """
+    values = tuple(tasks.values())
+    for task in values:
+        task.cancel()
+    if not values:
+        return
+    cleanup = asyncio.create_task(_drain_cancelled_stream_tasks(values))
+    _BACKGROUND_CLEANUPS.add(cleanup)
+    cleanup.add_done_callback(_BACKGROUND_CLEANUPS.discard)
 
 
 def qualified_report(
@@ -169,9 +192,10 @@ async def _watch_pair(
                     observed_ns=time.time_ns(),
                 )
     finally:
-        for task in tasks.values():
-            task.cancel()
-        await asyncio.gather(*tasks.values(), return_exceptions=True)
+        # Do not put websocket close latency between candidate observation and the
+        # service's final stale/economics checks. Readers are canceled immediately
+        # and drained in a tracked background task.
+        _cancel_stream_tasks_nowait(tasks)
     return None
 
 
