@@ -1,18 +1,15 @@
 """Bounded Gemini/Kalshi BTC execution service.
 
-The service is safe-by-default:
-- BTC 15-minute only.
-- Exactly one contract per venue.
-- Requires >= $0.03 exact modeled after-fee edge.
-- Requires <= 50 ms quote skew and >= 10 ms persistence.
-- Persistent authenticated Gemini trading session is opened before candidate watch.
-- Kalshi executor is pinned to production and connection-prewarmed.
-- Live order entry additionally requires ENABLE_GEMINI_KALSHI_LIVE_PROBES=YES.
-- Default live-attempt cap is 1. Increase only after reviewing realized probes.
-- Any confirmed one-leg fill or unresolved submission ambiguity hard-halts the service.
+Live execution requires THREE independent conditions:
+1. the process was launched with --live,
+2. ENABLE_GEMINI_KALSHI_LIVE_PROBES=YES,
+3. a single-use arm-token file exists.
 
-When disarmed, this process remains a read-only candidate watcher and logs what it
-would have attempted. It never silently transitions from disarmed to armed.
+The token is deleted immediately before the first submission attempt. A crash,
+service restart, or host reboot therefore cannot silently authorize a second trade.
+Other first-probe gates remain BTC-only, exactly one contract, >=3c exact after-fee
+edge, <=50ms quote skew, >=10ms persistence, production Kalshi, one-attempt cap,
+and hard halt after a one-leg fill or unresolved submission ambiguity.
 """
 
 from __future__ import annotations
@@ -33,22 +30,39 @@ from src.gemini_kalshi_probe_transport import GeminiTradingSession, KalshiV2Exec
 from src.gemini_prediction_auth import private_rest_request
 
 D = Decimal
+DEFAULT_ARM_TOKEN = Path("/home/ssm-user/kalshi-arb-bot/.live_probe_arm_once")
 
 
 def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
-    raw = os.getenv(name, str(default)).strip()
-    value = int(raw)
+    value = int(os.getenv(name, str(default)).strip())
     if value < minimum:
         raise ValueError(f"{name} must be >= {minimum}")
     return value
 
 
 def _env_float(name: str, default: float, *, minimum: float = 0.0) -> float:
-    raw = os.getenv(name, str(default)).strip()
-    value = float(raw)
+    value = float(os.getenv(name, str(default)).strip())
     if value < minimum:
         raise ValueError(f"{name} must be >= {minimum}")
     return value
+
+
+def _arm_token_path() -> Path:
+    raw = os.getenv("LIVE_PROBE_ARM_TOKEN_FILE", str(DEFAULT_ARM_TOKEN)).strip()
+    return Path(raw)
+
+
+def _armed_once(live_requested: bool, token_path: Path) -> bool:
+    return live_probe_authorized(live_requested) and token_path.is_file()
+
+
+def _consume_arm_token(token_path: Path) -> bool:
+    """Atomically-ish consume the single-process arm token before any order send."""
+    try:
+        token_path.unlink()
+        return True
+    except FileNotFoundError:
+        return False
 
 
 def _write_jsonl(path: Path, row: dict[str, Any]) -> None:
@@ -77,11 +91,15 @@ async def _gemini_available_usd() -> Decimal:
 async def _gemini_terms_ok() -> bool:
     response = await private_rest_request("GET", "/v1/prediction-markets/terms/status", timeout=5.0)
     response.raise_for_status()
-    body = response.json()
-    return bool(body.get("hasAcceptedLatest"))
+    return bool(response.json().get("hasAcceptedLatest"))
 
 
-async def _preflight(kalshi: KalshiV2Executor, *, live_requested: bool) -> dict[str, Any]:
+async def _preflight(
+    kalshi: KalshiV2Executor,
+    *,
+    live_requested: bool,
+    token_path: Path,
+) -> dict[str, Any]:
     status = await kalshi.client.get("/exchange/status")
     status.raise_for_status()
     balance = await kalshi.client.get("/portfolio/balance")
@@ -89,10 +107,13 @@ async def _preflight(kalshi: KalshiV2Executor, *, live_requested: bool) -> dict[
     kalshi_available = D(str(balance.json().get("balance") or "0")) / D("100")
     terms_ok = await _gemini_terms_ok()
     gemini_available = await _gemini_available_usd()
+    armed = _armed_once(live_requested, token_path)
     report = {
         "mode": "LIVE_SERVICE_PREFLIGHT",
         "live_requested": bool(live_requested),
-        "armed": live_probe_authorized(bool(live_requested)),
+        "env_live_gate": live_probe_authorized(bool(live_requested)),
+        "single_use_token_present": token_path.is_file(),
+        "armed": armed,
         "gemini_terms_accepted": terms_ok,
         "gemini_usd_available": str(gemini_available),
         "kalshi_usd_available": str(kalshi_available),
@@ -100,7 +121,7 @@ async def _preflight(kalshi: KalshiV2Executor, *, live_requested: bool) -> dict[
     }
     if not terms_ok:
         raise RuntimeError("Gemini Prediction Markets terms are not accepted")
-    if live_probe_authorized(bool(live_requested)):
+    if armed:
         if gemini_available < D("1"):
             raise RuntimeError("Gemini available USD is below $1")
         if kalshi_available < D("1"):
@@ -115,17 +136,15 @@ async def run(*, live_requested: bool, log_path: Path) -> int:
     cooldown_s = _env_float("LIVE_PROBE_COOLDOWN_SECONDS", 30.0, minimum=0.0)
     min_expiry_remaining_s = _env_float("LIVE_PROBE_MIN_EXPIRY_REMAINING_SECONDS", 0.5, minimum=0.0)
     max_candidate_age_ms = _env_int("LIVE_PROBE_MAX_CANDIDATE_AGE_MS", 100, minimum=1)
+    token_path = _arm_token_path()
 
     gemini = GeminiTradingSession()
     kalshi = KalshiV2Executor()
     attempts = 0
     try:
-        # Establish both private transports before watching so candidate-to-send time
-        # does not include an authentication/TLS connection setup round-trip.
         await gemini.connect()
-        preflight = await _preflight(kalshi, live_requested=live_requested)
+        preflight = await _preflight(kalshi, live_requested=live_requested, token_path=token_path)
         _write_jsonl(log_path, {"ts": time.time(), **preflight})
-        # Prewarm Kalshi's persistent HTTP connection.
         warm = await kalshi.client.get("/exchange/status")
         warm.raise_for_status()
 
@@ -135,16 +154,11 @@ async def run(*, live_requested: bool, log_path: Path) -> int:
             candidate_returned_ns = time.time_ns()
             if not candidate.get("qualified"):
                 _write_jsonl(log_path, {
-                    "ts": time.time(),
-                    "mode": "NO_QUALIFIED_CANDIDATE",
-                    "candidate": candidate,
-                    "attempts": attempts,
+                    "ts": time.time(), "mode": "NO_QUALIFIED_CANDIDATE",
+                    "candidate": candidate, "attempts": attempts,
                 })
                 continue
 
-            # The watcher returns immediately after the qualifying event. This age
-            # ceiling prevents a scheduler/network stall from turning an old quote
-            # into an order.
             observed_ns = int(candidate.get("candidate_observed_ns") or candidate_started_ns)
             candidate_age_ms = (candidate_returned_ns - observed_ns) / 1_000_000
             expiry = _parse_dt(str(candidate["window_end_utc"]))
@@ -157,27 +171,32 @@ async def run(*, live_requested: bool, log_path: Path) -> int:
 
             if stale_reason:
                 _write_jsonl(log_path, {
-                    "ts": time.time(),
-                    "mode": "STALE_CANDIDATE_SKIPPED",
-                    "reason": stale_reason,
-                    "candidate_age_ms": candidate_age_ms,
-                    "seconds_to_expiry": seconds_to_expiry,
-                    "candidate": candidate,
+                    "ts": time.time(), "mode": "STALE_CANDIDATE_SKIPPED",
+                    "reason": stale_reason, "candidate_age_ms": candidate_age_ms,
+                    "seconds_to_expiry": seconds_to_expiry, "candidate": candidate,
                     "attempts": attempts,
                 })
                 continue
 
-            if not live_probe_authorized(live_requested):
+            if not _armed_once(live_requested, token_path):
                 _write_jsonl(log_path, {
-                    "ts": time.time(),
-                    "mode": "DISARMED_QUALIFIED_CANDIDATE",
+                    "ts": time.time(), "mode": "DISARMED_QUALIFIED_CANDIDATE",
                     "candidate_age_ms": candidate_age_ms,
                     "seconds_to_expiry": seconds_to_expiry,
-                    "candidate": candidate,
-                    "attempts": attempts,
+                    "candidate": candidate, "attempts": attempts,
                     "order_entry": False,
+                    "single_use_token_present": token_path.is_file(),
                 })
                 await asyncio.sleep(min(5.0, cooldown_s if cooldown_s > 0 else 5.0))
+                continue
+
+            # Consume authorization BEFORE calling any network mutation. After this
+            # line, any process restart is disarmed even if the env gate remains YES.
+            if not _consume_arm_token(token_path):
+                _write_jsonl(log_path, {
+                    "ts": time.time(), "mode": "ARM_TOKEN_RACE_DISARMED",
+                    "candidate": candidate, "attempts": attempts,
+                })
                 continue
 
             execution = await submit_dual_probe(
@@ -192,21 +211,17 @@ async def run(*, live_requested: bool, log_path: Path) -> int:
             )
             attempts += 1
             _write_jsonl(log_path, {
-                "ts": time.time(),
-                "mode": "LIVE_PROBE_RESULT",
-                "attempt": attempts,
-                "candidate_age_ms": candidate_age_ms,
+                "ts": time.time(), "mode": "LIVE_PROBE_RESULT",
+                "attempt": attempts, "candidate_age_ms": candidate_age_ms,
                 "seconds_to_expiry_at_send": seconds_to_expiry,
-                "candidate": candidate,
-                "execution": execution,
+                "candidate": candidate, "execution": execution,
+                "single_use_token_consumed": True,
             })
 
             if execution.get("hard_halt_required"):
                 _write_jsonl(log_path, {
-                    "ts": time.time(),
-                    "mode": "HARD_HALT",
-                    "reason": execution.get("outcome"),
-                    "attempt": attempts,
+                    "ts": time.time(), "mode": "HARD_HALT",
+                    "reason": execution.get("outcome"), "attempt": attempts,
                 })
                 return 70
 
@@ -214,10 +229,8 @@ async def run(*, live_requested: bool, log_path: Path) -> int:
                 await asyncio.sleep(cooldown_s)
 
         _write_jsonl(log_path, {
-            "ts": time.time(),
-            "mode": "PROBE_CAP_REACHED",
-            "attempts": attempts,
-            "max_attempts": max_attempts,
+            "ts": time.time(), "mode": "PROBE_CAP_REACHED",
+            "attempts": attempts, "max_attempts": max_attempts,
         })
         return 0
     finally:
@@ -227,7 +240,7 @@ async def run(*, live_requested: bool, log_path: Path) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--live", action="store_true", help="request live mode; env gate is still separately required")
+    parser.add_argument("--live", action="store_true", help="request live mode; env gate and one-use token remain separately required")
     parser.add_argument("--log", type=Path, default=Path("logs/gemini_kalshi_live_service.jsonl"))
     args = parser.parse_args()
     raise SystemExit(asyncio.run(run(live_requested=args.live, log_path=args.log)))
