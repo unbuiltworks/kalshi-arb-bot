@@ -2,7 +2,9 @@
 
 This intentionally does not price or trade anything. It answers whether the current
 zero-overlap result is because no matching 15-minute windows exist, or because the
-expiry timestamps are systematically offset.
+expiry timestamps are systematically offset. Kalshi short-duration crypto series
+are identified directly from their KX<ASSET>15M ticker prefix so they are not lost
+when human-readable title text omits the words "15 minutes".
 """
 
 from __future__ import annotations
@@ -10,23 +12,24 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from statistics import median
 from typing import Any
 
 import httpx
 
-from src.gemini_kalshi_fast_overlap import (
-    UPDOWN_RE,
-    _asset_from_text,
-    _gemini_active_crypto,
-    _gemini_meta,
-    _kalshi_duration,
-    _kalshi_expiry,
-    _text,
-)
+from src.gemini_kalshi_fast_overlap import _gemini_active_crypto, _gemini_meta, _kalshi_expiry
 from src.gemini_kalshi_rest_snapshot import _kalshi_open_paced
 
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_alignment_diagnostic")
+KALSHI_15M_RE = re.compile(r"^KX(BTC|ETH|SOL|XRP)15M(?:-|$)", re.I)
+
+
+def kalshi_15m_asset(market: dict[str, Any]) -> str | None:
+    ticker = str(market.get("ticker") or "")
+    event_ticker = str(market.get("event_ticker") or "")
+    match = KALSHI_15M_RE.match(ticker) or KALSHI_15M_RE.match(event_ticker)
+    return match.group(1).upper() if match else None
 
 
 async def run_once() -> None:
@@ -45,9 +48,9 @@ async def run_once() -> None:
 
     kalshi_15m: list[tuple[dict[str, Any], str, Any]] = []
     for market in kalshi_markets:
-        asset = _asset_from_text(market)
+        asset = kalshi_15m_asset(market)
         expiry = _kalshi_expiry(market)
-        if asset and expiry and _kalshi_duration(market) == 15 and UPDOWN_RE.search(_text(market)):
+        if asset and expiry:
             kalshi_15m.append((market, asset, expiry))
 
     nearest_rows: list[dict[str, Any]] = []
