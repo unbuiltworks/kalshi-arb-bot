@@ -189,6 +189,13 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
         for r in rows
         if r.get("gemini_receive_ts_ms") is not None and r.get("kalshi_receive_ts_ms") is not None
     ]
+    positive_quote_skews = [
+        abs(int(r["gemini_receive_ts_ms"]) - int(r["kalshi_receive_ts_ms"]))
+        for r in rows
+        if r.get("gemini_receive_ts_ms") is not None
+        and r.get("kalshi_receive_ts_ms") is not None
+        and bool(_candidates(r))
+    ]
     k_latencies = [
         int(r["kalshi_exchange_to_receive_ms"])
         for r in rows
@@ -229,6 +236,10 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "event_interval_median_ms": median(deltas) if deltas else None,
         "quote_skew_median_ms": median(quote_skews) if quote_skews else None,
         "quote_skew_p95_ms": _percentile(quote_skews, 0.95),
+        "positive_quote_samples": len(positive_quote_skews),
+        "positive_quote_skew_median_ms": median(positive_quote_skews) if positive_quote_skews else None,
+        "positive_quote_skew_p95_ms": _percentile(positive_quote_skews, 0.95),
+        "positive_quote_skew_max_ms": max(positive_quote_skews) if positive_quote_skews else None,
         "kalshi_exchange_to_receive_median_ms": median(k_latencies) if k_latencies else None,
         "kalshi_exchange_to_receive_p95_ms": _percentile(k_latencies, 0.95),
         "survival_method": "REQUIRES_NEW_POSITIVE_EVENT_AT_OR_AFTER_THRESHOLD_WITHIN_SAME_MATCHED_CONTRACT",
