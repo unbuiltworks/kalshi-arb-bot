@@ -39,8 +39,6 @@ def test_fee_positive_windows_dedupes_repeated_samples():
 
 def test_summarize_join_marks_both_win_mismatch_to_actual_payout():
     locks = fee_positive_windows([_row(1_000)], fee_multiplier=Decimal("1"))
-    # Force the complementary direction whose two legs both win when
-    # Gemini settles YES while Kalshi settles NO.
     payload = next(iter(locks.values()))
     payload["direction"] = "GEMINI_YES_KALSHI_NO"
     expiry = datetime(2026, 8, 15, 5, 0, tzinfo=timezone.utc)
@@ -85,6 +83,8 @@ def test_summarize_join_marks_both_win_mismatch_to_actual_payout():
     assert result["by_asset"]["BTC"]["disagreement_rate"] == 1.0
     assert result["favorable_mismatch_windows"] == 1
     assert result["adverse_mismatch_windows"] == 0
+    assert result["basis_margin_sensitivity"]["1"]["eligible_windows"] == 1
+    assert result["basis_margin_sensitivity"]["2"]["eligible_windows"] == 0
     assert result["classification"] == "INDEX_MISMATCH_RESEARCH_ONLY"
     assert result["order_entry"] is False
 
@@ -114,3 +114,5 @@ def test_summarize_join_marks_both_lose_mismatch_to_negative_cost():
     assert Decimal(row["settlement_adjusted_pnl_dollars"]) == -Decimal(row["best_net_cost_dollars"])
     assert result["adverse_mismatch_windows"] == 1
     assert result["favorable_mismatch_windows"] == 0
+    assert result["basis_margin_sensitivity"]["0.5"]["disagreements"] == 1
+    assert result["basis_margin_sensitivity"]["2"]["disagreements"] == 0
