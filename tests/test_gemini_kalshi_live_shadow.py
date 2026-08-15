@@ -24,6 +24,46 @@ def test_parse_gemini_book_ticker():
     assert tob.yes_ask_size == Decimal("32")
 
 
+def test_parse_gemini_book_ticker_non_numeric_bid_is_zero_size():
+    tob = parse_gemini_book_ticker({
+        "s": "GEMI-BTC15M-TEST-UP",
+        "b": "-",
+        "B": "-",
+        "a": "0.04",
+        "A": "25",
+    }, received_ms=1234)
+    assert tob.yes_bid == Decimal("0")
+    assert tob.yes_bid_size == Decimal("0")
+    assert tob.yes_ask == Decimal("0.04")
+    assert tob.yes_ask_size == Decimal("25")
+
+
+def test_parse_gemini_book_ticker_non_numeric_ask_preserves_no_ask():
+    tob = parse_gemini_book_ticker({
+        "s": "GEMI-BTC15M-TEST-UP",
+        "b": "0.97",
+        "B": "515",
+        "a": "N/A",
+        "A": "N/A",
+    }, received_ms=1234)
+    assert tob.yes_bid == Decimal("0.97")
+    assert tob.yes_bid_size == Decimal("515")
+    assert tob.yes_ask == Decimal("1")
+    assert tob.yes_ask_size == Decimal("0")
+    assert tob.no_ask == Decimal("0.03")
+    assert tob.no_ask_size == Decimal("515")
+
+
+def test_parse_gemini_book_ticker_missing_fields_are_zero_size():
+    tob = parse_gemini_book_ticker({
+        "s": "GEMI-BTC15M-TEST-UP",
+    }, received_ms=1234)
+    assert tob.yes_bid == Decimal("0")
+    assert tob.yes_bid_size == Decimal("0")
+    assert tob.yes_ask == Decimal("1")
+    assert tob.yes_ask_size == Decimal("0")
+
+
 def test_parse_kalshi_orderbook_transforms_no_bid_to_yes_ask():
     tob = parse_kalshi_orderbook({
         "orderbook_fp": {
