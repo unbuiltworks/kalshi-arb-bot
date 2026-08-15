@@ -12,7 +12,7 @@ permissions:
 jobs:
   snapshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,11 +24,14 @@ jobs:
         run: |
           set -o pipefail
           python -m src.gemini_kalshi_rest_snapshot 2>&1 | tee gemini-kalshi-snapshot.log
-      - name: Run recent settlement agreement probe
-        continue-on-error: true
+      - name: Diagnose expiry alignment
         run: |
           set -o pipefail
-          python -m src.gemini_kalshi_settlement_agreement --hours 24 --gemini-limit 500 2>&1 | tee gemini-kalshi-agreement.log
+          python -m src.gemini_kalshi_alignment_diagnostic 2>&1 | tee gemini-kalshi-alignment.log
+      - name: Run paced recent settlement agreement probe
+        run: |
+          set -o pipefail
+          python -m src.gemini_kalshi_settlement_probe --hours 24 --gemini-limit 500 2>&1 | tee gemini-kalshi-agreement.log
       - name: Upload research logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -36,6 +39,7 @@ jobs:
           name: gemini-kalshi-research
           path: |
             gemini-kalshi-snapshot.log
+            gemini-kalshi-alignment.log
             gemini-kalshi-agreement.log
           if-no-files-found: warn
           retention-days: 7
