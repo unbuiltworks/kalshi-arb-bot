@@ -82,8 +82,8 @@ def test_empirical_settlement_delay_increases_capital_hours_without_changing_pnl
 
     assert p50["consumable_shadow_pnl_dollars"] == base["consumable_shadow_pnl_dollars"]
     assert p95["consumable_shadow_pnl_dollars"] == base["consumable_shadow_pnl_dollars"]
-    assert Decimal(p50["consumable_capital_hours"]) == Decimal("9.50") * (Decimal("3900") / Decimal("3600"))
-    assert Decimal(p95["consumable_capital_hours"]) == Decimal("9.50") * (Decimal("4200") / Decimal("3600"))
+    assert Decimal(p50["consumable_capital_hours"]) == Decimal("9.50") * Decimal("3900000") / Decimal("3600000")
+    assert Decimal(p95["consumable_capital_hours"]) == Decimal("9.50") * Decimal("4200000") / Decimal("3600000")
     assert Decimal(p95["consumable_profit_per_capital_hour"]) < Decimal(p50["consumable_profit_per_capital_hour"])
     assert p50["post_close_settlement_s_assumed"] == "300"
     assert result["window_end_only_warning"] == "LOWER_BOUND_UNLESS_SETTLEMENT_DELAY_ADJUSTED_IS_SUPPLIED"
