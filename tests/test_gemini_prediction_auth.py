@@ -3,6 +3,9 @@ import hashlib
 import hmac
 import json
 
+import pytest
+
+import src.gemini_prediction_auth as auth
 from src.gemini_prediction_auth import (
     is_account_scoped_key,
     rest_auth_headers,
@@ -14,6 +17,20 @@ def test_account_scoped_key_validation():
     assert is_account_scoped_key("account-abc") is True
     assert is_account_scoped_key("master-abc") is False
     assert is_account_scoped_key("") is False
+
+
+def test_time_based_nonce_uses_epoch_seconds_and_stays_monotonic(monkeypatch):
+    monkeypatch.setattr(auth.time, "time", lambda: 1_786_828_000.9)
+    monkeypatch.setattr(auth, "_last_nonce", 0)
+    assert auth.next_nonce() == 1_786_828_000
+    assert auth.next_nonce() == 1_786_828_001
+
+
+def test_time_based_nonce_fails_closed_before_clock_window_drift(monkeypatch):
+    monkeypatch.setattr(auth.time, "time", lambda: 1_786_828_000.1)
+    monkeypatch.setattr(auth, "_last_nonce", 1_786_828_025)
+    with pytest.raises(RuntimeError, match="nonce rate exceeded"):
+        auth.next_nonce()
 
 
 def test_websocket_auth_headers_are_deterministic():
