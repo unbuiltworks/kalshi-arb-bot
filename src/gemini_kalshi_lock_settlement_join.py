@@ -3,6 +3,12 @@
 Read-only research only. This answers whether apparent post-fee lock windows are
 more likely than baseline matched windows to disagree because Gemini and Kalshi
 settle on different indexes. It never certifies risk-free arbitrage.
+
+For each unique asset/window, the best observed both-fee-positive candidate is
+also marked to the eventual pair of venue outcomes. If the venues agree, one leg
+pays and the original locked-profit math holds. If they disagree, both legs can
+win or both can lose depending on direction, so the settlement-adjusted P&L can
+be dramatically different from the apparent lock profit.
 """
 
 from __future__ import annotations
@@ -56,7 +62,7 @@ def fee_positive_windows(
     fee_multiplier: Decimal,
     max_quote_skew_ms: int = 500,
 ) -> dict[tuple[str, str], dict[str, Any]]:
-    """Return unique asset/window pairs with at least one both-fee-positive sample."""
+    """Return unique asset/window pairs with the best both-fee-positive sample."""
     kalshi_fee = _kalshi_fee(fee_multiplier)
     out: dict[tuple[str, str], dict[str, Any]] = {}
     for row in rows:
@@ -85,12 +91,36 @@ def fee_positive_windows(
             "gemini_symbol": str(row.get("gemini_symbol") or ""),
             "kalshi_ticker": str(row.get("kalshi_ticker") or ""),
             "best_locked_profit_dollars": str(best.locked_profit),
+            "best_net_cost_dollars": str(best.net_cost),
             "best_quantity": str(best.quantity),
+            "best_roi": str(best.roi_on_cost),
             "direction": best.direction,
         }
         if existing is None or D(payload["best_locked_profit_dollars"]) > D(existing["best_locked_profit_dollars"]):
             out[key] = payload
     return out
+
+
+def _settlement_payout(
+    *,
+    direction: str,
+    quantity: Decimal,
+    gemini_outcome: str,
+    kalshi_outcome: str,
+) -> Decimal:
+    """Return total payout across both complementary legs for observed outcomes."""
+    g = gemini_outcome.lower()
+    k = kalshi_outcome.lower()
+    if g not in {"yes", "no"} or k not in {"yes", "no"}:
+        raise ValueError("unsupported settlement outcome")
+
+    if direction == "GEMINI_YES_KALSHI_NO":
+        wins = int(g == "yes") + int(k == "no")
+    elif direction == "KALSHI_YES_GEMINI_NO":
+        wins = int(k == "yes") + int(g == "no")
+    else:
+        raise ValueError(f"unsupported direction={direction!r}")
+    return quantity * D(wins)
 
 
 def summarize_join(
@@ -106,12 +136,26 @@ def summarize_join(
         if agreement is None:
             unresolved.append(payload)
             continue
+        quantity = D(str(payload["best_quantity"]))
+        net_cost = D(str(payload["best_net_cost_dollars"]))
+        payout = _settlement_payout(
+            direction=str(payload["direction"]),
+            quantity=quantity,
+            gemini_outcome=agreement.gemini_outcome,
+            kalshi_outcome=agreement.kalshi_outcome,
+        )
+        settlement_pnl = payout - net_cost
         row = dict(payload)
         row.update({
             "gemini_outcome": agreement.gemini_outcome,
             "kalshi_outcome": agreement.kalshi_outcome,
             "agrees": agreement.agrees,
             "gemini_margin_bps": agreement.gemini_margin_bps,
+            "settlement_payout_dollars": str(payout),
+            "settlement_adjusted_pnl_dollars": str(settlement_pnl),
+            "basis_effect_vs_locked_profit_dollars": str(
+                settlement_pnl - D(str(payload["best_locked_profit_dollars"]))
+            ),
         })
         joined.append(row)
 
@@ -121,17 +165,29 @@ def summarize_join(
         "lock_windows": 0,
         "settled_joined": 0,
         "disagreements": 0,
+        "apparent_locked_profit_dollars": D("0"),
+        "settlement_adjusted_pnl_dollars": D("0"),
     })
     for payload in lock_windows.values():
         by_asset[str(payload["asset"])]["lock_windows"] += 1
     for row in joined:
         bucket = by_asset[str(row["asset"])]
         bucket["settled_joined"] += 1
+        bucket["apparent_locked_profit_dollars"] += D(str(row["best_locked_profit_dollars"]))
+        bucket["settlement_adjusted_pnl_dollars"] += D(str(row["settlement_adjusted_pnl_dollars"]))
         if not row["agrees"]:
             bucket["disagreements"] += 1
     for bucket in by_asset.values():
         n = bucket["settled_joined"]
         bucket["disagreement_rate"] = (bucket["disagreements"] / n) if n else None
+        bucket["apparent_locked_profit_dollars"] = str(bucket["apparent_locked_profit_dollars"])
+        bucket["settlement_adjusted_pnl_dollars"] = str(bucket["settlement_adjusted_pnl_dollars"])
+
+    apparent_total = sum((D(str(row["best_locked_profit_dollars"])) for row in joined), D("0"))
+    settlement_total = sum((D(str(row["settlement_adjusted_pnl_dollars"])) for row in joined), D("0"))
+    disagreement_rows = [row for row in joined if not row["agrees"]]
+    adverse = [row for row in disagreement_rows if D(str(row["settlement_adjusted_pnl_dollars"])) < 0]
+    favorable = [row for row in disagreement_rows if D(str(row["settlement_adjusted_pnl_dollars"])) > D(str(row["best_locked_profit_dollars"]))]
 
     return {
         "fee_positive_lock_windows": len(lock_windows),
@@ -142,9 +198,15 @@ def summarize_join(
         "baseline_matched_windows": len(agreements),
         "baseline_disagreements": baseline_disagreements,
         "baseline_disagreement_rate": (baseline_disagreements / len(agreements)) if agreements else None,
+        "best_sample_one_execution_per_window_apparent_locked_profit_dollars": str(apparent_total),
+        "best_sample_one_execution_per_window_settlement_adjusted_pnl_dollars": str(settlement_total),
+        "basis_effect_total_dollars": str(settlement_total - apparent_total),
+        "adverse_mismatch_windows": len(adverse),
+        "favorable_mismatch_windows": len(favorable),
         "by_asset": dict(sorted(by_asset.items())),
-        "disagreement_rows": [row for row in joined if not row["agrees"]],
+        "disagreement_rows": disagreement_rows,
         "unresolved_rows": unresolved,
+        "accounting_scope": "BEST_SAMPLE_ONE_EXECUTION_PER_ASSET_WINDOW_NOT_EPISODE_SUM",
         "classification": "INDEX_MISMATCH_RESEARCH_ONLY",
         "read_only": True,
         "order_entry": False,
