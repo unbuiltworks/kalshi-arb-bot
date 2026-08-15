@@ -1,8 +1,8 @@
 """Read-only live shadow for truly aligned Gemini/Kalshi 15-minute crypto windows.
 
-Uses Kalshi close_time as the 15-minute measurement-window endpoint, streams one
-Gemini bookTicker snapshot (with size), pulls Kalshi depth-1, and reports both raw
-complementary costs and executable-shadow candidates. No order-entry path exists.
+Uses Kalshi close_time as the 15-minute measurement-window endpoint, streams a
+periodic Gemini depth5 snapshot (with size), pulls Kalshi depth-1, and reports both
+raw complementary costs and executable-shadow candidates. No order-entry path exists.
 
 Settlement remains INDEX_MISMATCH_RESEARCH_ONLY. Kalshi fees are intentionally not
 assumed here; the runner reports a zero-fee view and a Gemini-taker-only view so an
@@ -16,21 +16,25 @@ import asyncio
 from decimal import Decimal
 import json
 import logging
+import time
 
 import httpx
+import websockets
 
 from src.gemini_kalshi_execution_shadow import (
+    TopOfBook,
     evaluate_pair,
     gemini_predictions_taker_fee,
     zero_fee,
 )
 from src.gemini_kalshi_fast_overlap import _gemini_active_crypto, _gemini_meta, _gemini_symbol
-from src.gemini_kalshi_live_shadow import gemini_book_ticker_once, kalshi_book_once
+from src.gemini_kalshi_live_shadow import kalshi_book_once
 from src.gemini_kalshi_rest_snapshot import _kalshi_open_paced
 from src.gemini_kalshi_window_identity import kalshi_15m_asset, kalshi_window_end
 
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_aligned_live_shadow")
+GEMINI_WS = "wss://ws.gemini.com"
 
 
 def _candidate_rows(candidates):
@@ -47,6 +51,45 @@ def _candidate_rows(candidates):
         }
         for c in candidates
     ]
+
+
+async def gemini_depth5_once(symbol: str, *, timeout_s: float = 5.0) -> TopOfBook:
+    """Get a periodic Gemini top-of-book snapshot with displayed quantities.
+
+    bookTicker is update-driven and can stay silent on an unchanged/illiquid book.
+    depth5@100ms is a public periodic snapshot stream, so it is suitable for a
+    one-shot executable-depth probe.
+    """
+    async with websockets.connect(GEMINI_WS, open_timeout=timeout_s) as ws:
+        await ws.send(json.dumps({
+            "id": "1",
+            "method": "SUBSCRIBE",
+            "params": [f"{symbol}@depth5@100ms"],
+        }))
+        deadline = asyncio.get_running_loop().time() + timeout_s
+        while True:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise TimeoutError(f"no Gemini depth5 snapshot for {symbol}")
+            raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
+            payload = json.loads(raw)
+            bids = payload.get("bids")
+            asks = payload.get("asks")
+            if not isinstance(bids, list) or not isinstance(asks, list):
+                continue
+            if not bids or not asks:
+                raise ValueError(f"Gemini depth5 book is not two-sided for {symbol}")
+            bid_price, bid_size = max(bids, key=lambda row: D(str(row[0])))
+            ask_price, ask_size = min(asks, key=lambda row: D(str(row[0])))
+            return TopOfBook(
+                venue="gemini",
+                market_id=symbol,
+                ts_ms=int(time.time() * 1000),
+                yes_bid=D(str(bid_price)),
+                yes_bid_size=D(str(bid_size)),
+                yes_ask=D(str(ask_price)),
+                yes_ask_size=D(str(ask_size)),
+            )
 
 
 async def run_once(*, max_window_skew_s: float = 30.0, max_quote_skew_ms: int = 500) -> None:
@@ -91,7 +134,7 @@ async def run_once(*, max_window_skew_s: float = 30.0, max_quote_skew_ms: int = 
                 continue
             try:
                 g, k = await asyncio.gather(
-                    gemini_book_ticker_once(symbol),
+                    gemini_depth5_once(symbol),
                     kalshi_book_once(http, ticker),
                 )
             except Exception as exc:
@@ -99,7 +142,8 @@ async def run_once(*, max_window_skew_s: float = 30.0, max_quote_skew_ms: int = 
                     "asset": asset,
                     "gemini_symbol": symbol,
                     "kalshi_ticker": ticker,
-                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "error": str(exc) or repr(exc),
                 }, separators=(",", ":")))
                 continue
 
