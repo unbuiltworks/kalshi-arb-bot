@@ -1,0 +1,54 @@
+name: BTC Latest Settlement Analysis
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  analyze:
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[btc-settlement-latest]' }}
+    runs-on: [self-hosted, kalshi-bot]
+    timeout-minutes: 10
+    steps:
+      - name: Run settlement-adjusted BTC analysis
+        id: analyze
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          OUT="$RUNNER_TEMP/btc-settlement-output.txt"
+          REPO="/home/ssm-user/kalshi-arb-bot"
+          : > "$OUT"
+          cd "$REPO" || exit 66
+          latest=$(ls -1t logs/gemini_kalshi_btc_bookticker_remote_*.jsonl 2>/dev/null | head -1)
+          echo "host=$(hostname)" >> "$OUT"
+          echo "utc=$(date -u +%FT%TZ)" >> "$OUT"
+          echo "latest=$latest" >> "$OUT"
+          if [ -z "$latest" ]; then
+            echo "No BTC remote bookTicker log found." >> "$OUT"
+            exit 2
+          fi
+          .venv/bin/python -m src.gemini_kalshi_btc_ws_settlement "$latest" --hours 48 >> "$OUT" 2>&1
+          exit $?
+
+      - name: Comment result
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          OUTCOME: ${{ steps.analyze.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `${process.env.RUNNER_TEMP}/btc-settlement-output.txt`;
+            let text = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : 'No output.';
+            if (text.length > 50000) text = text.slice(-50000);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `BTC settlement analysis: **${process.env.OUTCOME}**\n\n\`\`\`text\n${text}\n\`\`\``
+            });
