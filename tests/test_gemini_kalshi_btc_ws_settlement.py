@@ -41,7 +41,7 @@ def _row(ts: int, *, positive: bool = True, direction: str = "KALSHI_YES_GEMINI_
     }
 
 
-def _agreement(*, gemini: str, kalshi: str) -> AgreementRow:
+def _agreement(*, gemini: str, kalshi: str, margin_bps: float | None = 1.0) -> AgreementRow:
     return AgreementRow(
         asset="BTC",
         expiry=datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc),
@@ -52,7 +52,7 @@ def _agreement(*, gemini: str, kalshi: str) -> AgreementRow:
         agrees=(gemini == kalshi),
         gemini_strike=100.0,
         gemini_settlement=100.01,
-        gemini_margin_bps=1.0,
+        gemini_margin_bps=margin_bps,
     )
 
 
@@ -97,6 +97,33 @@ def test_latency_scenario_uses_same_actual_settlement_accounting():
     assert result["survival"]["100"]["settlement_adjusted_pnl_dollars"] == "0"
     assert result["classification"] == "INDEX_MISMATCH_RESEARCH_ONLY"
     assert result["order_entry"] is False
+
+
+def test_basis_margin_sensitivity_excludes_near_boundary_adverse_mismatch():
+    rows = [_row(1000), _row(1060), _row(1120, positive=False)]
+    result = settlement_adjusted(
+        rows,
+        [_agreement(gemini="yes", kalshi="no", margin_bps=0.2772)],
+    )
+    sensitivity = result["basis_margin_sensitivity"]
+    assert sensitivity["0.25"]["entry"]["settlement_adjusted_pnl_dollars"] == "-9.50"
+    assert sensitivity["0.25"]["entry"]["excluded_inside_margin_candidates"] == 0
+    assert sensitivity["0.5"]["entry"]["settlement_adjusted_pnl_dollars"] == "0"
+    assert sensitivity["0.5"]["entry"]["consumable_contracts"] == "0"
+    assert sensitivity["0.5"]["entry"]["excluded_inside_margin_candidates"] == 1
+    assert result["basis_margin_policy"] == "RETROSPECTIVE_ONLY_UNKNOWN_MARGIN_EXCLUDED_FROM_GATED_COHORTS"
+
+
+def test_basis_margin_sensitivity_fails_closed_on_unknown_margin():
+    rows = [_row(1000), _row(1060), _row(1120, positive=False)]
+    result = settlement_adjusted(
+        rows,
+        [_agreement(gemini="yes", kalshi="yes", margin_bps=None)],
+    )
+    assert result["entry"]["settlement_adjusted_pnl_dollars"] == "0.50"
+    gated = result["basis_margin_sensitivity"]["0"]["entry"]
+    assert gated["settlement_adjusted_pnl_dollars"] == "0"
+    assert gated["excluded_unknown_gemini_margin_candidates"] == 1
 
 
 def test_stream_loader_discards_non_positive_capture_rows(tmp_path):
