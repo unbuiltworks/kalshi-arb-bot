@@ -52,6 +52,20 @@ async def run_once() -> None:
         expiry = _kalshi_expiry(market)
         if asset and expiry:
             kalshi_15m.append((market, asset, expiry))
+            logger.info("KALSHI_15M_LIFECYCLE %s", json.dumps({
+                "asset": asset,
+                "ticker": market.get("ticker"),
+                "event_ticker": market.get("event_ticker"),
+                "title": market.get("title"),
+                "subtitle": market.get("subtitle"),
+                "open_time": market.get("open_time"),
+                "close_time": market.get("close_time"),
+                "expected_expiration_time": market.get("expected_expiration_time"),
+                "latest_expiration_time": market.get("latest_expiration_time"),
+                "expiration_time": market.get("expiration_time"),
+                "occurrence_datetime": market.get("occurrence_datetime"),
+                "rules_primary": market.get("rules_primary"),
+            }, separators=(",", ":")))
 
     nearest_rows: list[dict[str, Any]] = []
     skews_by_asset: dict[str, list[float]] = {}
@@ -73,6 +87,8 @@ async def run_once() -> None:
             "gemini_expiry_utc": g_expiry.isoformat(),
             "kalshi_ticker": market.get("ticker"),
             "kalshi_expiry_utc": k_expiry.isoformat(),
+            "kalshi_close_time": market.get("close_time"),
+            "kalshi_expected_expiration_time": market.get("expected_expiration_time"),
             "nearest_skew_s": round(skew, 3),
         })
 
