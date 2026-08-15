@@ -1,0 +1,61 @@
+name: BTC Live Service Status
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  status:
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[btc-live-service-status]' }}
+    runs-on: [self-hosted, kalshi-bot]
+    timeout-minutes: 2
+    steps:
+      - name: Read safe service status
+        id: status
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          OUT="$RUNNER_TEMP/btc-live-service-status.txt"
+          REPO="/home/ssm-user/kalshi-arb-bot"
+          ENVFILE="$REPO/.env.gemini-live"
+          : > "$OUT"
+          echo "host=$(hostname)" >> "$OUT"
+          echo "utc=$(date -u +%FT%TZ)" >> "$OUT"
+          echo "service_active=$(systemctl is-active gemini-kalshi-btc-live.service 2>/dev/null)" >> "$OUT"
+          echo "service_enabled=$(systemctl is-enabled gemini-kalshi-btc-live.service 2>/dev/null)" >> "$OUT"
+          if [ -f "$ENVFILE" ]; then
+            echo "live_gate=$(grep '^ENABLE_GEMINI_KALSHI_LIVE_PROBES=' "$ENVFILE" | cut -d= -f2)" >> "$OUT"
+            echo "max_attempts=$(grep '^LIVE_PROBE_MAX_ATTEMPTS=' "$ENVFILE" | cut -d= -f2)" >> "$OUT"
+          else
+            echo "live_gate=ENVFILE_MISSING" >> "$OUT"
+          fi
+          echo "recent_log_modes:" >> "$OUT"
+          if [ -f "$REPO/logs/gemini_kalshi_live_service.jsonl" ]; then
+            tail -n 12 "$REPO/logs/gemini_kalshi_live_service.jsonl" | sed -E 's/("gemini_usd_available":"?)[0-9.]+/\1REDACTED/g; s/("kalshi_usd_available":"?)[0-9.]+/\1REDACTED/g' >> "$OUT"
+          else
+            echo "no_live_service_log" >> "$OUT"
+          fi
+          exit 0
+
+      - name: Comment result
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          OUTCOME: ${{ steps.status.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `${process.env.RUNNER_TEMP}/btc-live-service-status.txt`;
+            let text = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : 'No output.';
+            if (text.length > 16000) text = text.slice(-16000);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `BTC live-service status: **${process.env.OUTCOME}**\n\n\`\`\`text\n${text}\n\`\`\``
+            });
