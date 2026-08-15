@@ -19,7 +19,7 @@ from typing import Any
 
 import httpx
 
-from src.gemini_kalshi_fast_overlap import _gemini_active_crypto, _kalshi_open, discover_overlaps
+from src.gemini_kalshi_fast_overlap import _gemini_active_crypto, discover_overlaps
 from src.gemini_kalshi_live_shadow import KALSHI_REST, parse_kalshi_orderbook
 
 D = Decimal
@@ -43,11 +43,49 @@ def gemini_rest_prices(event: dict[str, Any], instrument_symbol: str) -> tuple[D
     raise ValueError(f"Gemini contract not found: {instrument_symbol}")
 
 
+async def _kalshi_open_paced(http: httpx.AsyncClient) -> list[dict[str, Any]]:
+    """Fetch open Kalshi markets without bursting into the public REST rate limit."""
+    rows: list[dict[str, Any]] = []
+    cursor = ""
+    page = 0
+    while True:
+        params: dict[str, Any] = {"status": "open", "limit": 1000, "mve_filter": "exclude"}
+        if cursor:
+            params["cursor"] = cursor
+
+        response: httpx.Response | None = None
+        for attempt in range(6):
+            response = await http.get(f"{KALSHI_REST}/markets", params=params)
+            if response.status_code != 429:
+                break
+            retry_after = response.headers.get("Retry-After")
+            try:
+                delay = float(retry_after) if retry_after else min(8.0, 0.75 * (2 ** attempt))
+            except ValueError:
+                delay = min(8.0, 0.75 * (2 ** attempt))
+            logger.warning("KALSHI_429 page=%s attempt=%s sleep_s=%.2f", page, attempt + 1, delay)
+            await asyncio.sleep(delay)
+
+        assert response is not None
+        response.raise_for_status()
+        payload = response.json()
+        rows.extend(payload.get("markets", []))
+        cursor = str(payload.get("cursor") or "")
+        page += 1
+        if not cursor:
+            return rows
+
+        # The unpaced scanner can cross Kalshi's anonymous REST threshold after
+        # ~15-20 pages. A small inter-page delay is cheap for a 5-minute snapshot
+        # and keeps this lane independent of credentials.
+        await asyncio.sleep(0.35)
+
+
 async def run_once(*, max_expiry_skew_s: float = 30.0) -> None:
     started_ms = int(time.time() * 1000)
-    async with httpx.AsyncClient(timeout=20.0) as http:
+    async with httpx.AsyncClient(timeout=30.0) as http:
         gemini_events, kalshi_markets = await asyncio.gather(
-            _gemini_active_crypto(http), _kalshi_open(http)
+            _gemini_active_crypto(http), _kalshi_open_paced(http)
         )
         _, _, overlaps = discover_overlaps(
             gemini_events, kalshi_markets, max_expiry_skew_s=max_expiry_skew_s
