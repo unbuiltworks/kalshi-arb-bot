@@ -37,6 +37,10 @@ from src.gemini_kalshi_btc_ws_analyze import (
 from src.gemini_kalshi_settlement_agreement import AgreementRow, _gemini_settled
 from src.gemini_kalshi_settlement_probe import _kalshi_settled_paced, match_settled_true_windows
 
+BASIS_MARGIN_THRESHOLDS_BPS = (
+    D("0"), D("0.25"), D("0.5"), D("1"), D("2"), D("5"), D("10")
+)
+
 
 def _pick(ep: Episode, threshold_ms: int | None) -> dict[str, Any] | None:
     if threshold_ms is None:
@@ -124,10 +128,18 @@ def load_episodes_stream(paths: list[Path]) -> list[Episode]:
     return done
 
 
-def _scenario(eps: list[Episode], by_ticker: dict[str, AgreementRow], threshold_ms: int | None) -> dict[str, Any]:
+def _scenario(
+    eps: list[Episode],
+    by_ticker: dict[str, AgreementRow],
+    threshold_ms: int | None,
+    *,
+    min_abs_gemini_margin_bps: Decimal | None = None,
+) -> dict[str, Any]:
     seen: dict[str, Decimal] = {}
     matched = 0
     unresolved = 0
+    excluded_unknown_margin = 0
+    excluded_inside_margin = 0
     consumable = 0
     contracts = D("0")
     apparent = D("0")
@@ -144,6 +156,15 @@ def _scenario(eps: list[Episode], by_ticker: dict[str, AgreementRow], threshold_
             unresolved += 1
             continue
         matched += 1
+
+        if min_abs_gemini_margin_bps is not None:
+            if agreement.gemini_margin_bps is None:
+                excluded_unknown_margin += 1
+                continue
+            if abs(D(str(agreement.gemini_margin_bps))) < min_abs_gemini_margin_bps:
+                excluded_inside_margin += 1
+                continue
+
         fresh_qty, fresh_locked, fresh_cost = _consume(candidate, seen)
         if fresh_qty <= 0:
             continue
@@ -162,6 +183,8 @@ def _scenario(eps: list[Episode], by_ticker: dict[str, AgreementRow], threshold_
     return {
         "settled_episode_candidates_matched": matched,
         "unresolved_episode_candidates": unresolved,
+        "excluded_unknown_gemini_margin_candidates": excluded_unknown_margin,
+        "excluded_inside_margin_candidates": excluded_inside_margin,
         "consumable_episodes": consumable,
         "consumable_contracts": str(contracts),
         "apparent_locked_profit_dollars": str(apparent),
@@ -170,6 +193,38 @@ def _scenario(eps: list[Episode], by_ticker: dict[str, AgreementRow], threshold_
         "adverse_mismatch_consumable_episodes": adverse_mismatches,
         "favorable_mismatch_consumable_episodes": favorable_mismatches,
     }
+
+
+def _basis_margin_sensitivity(
+    eps: list[Episode], by_ticker: dict[str, AgreementRow]
+) -> dict[str, Any]:
+    """Retrospectively gate sub-second economics by Gemini close-boundary margin.
+
+    Unknown margins fail closed in every gated cohort. This is sensitivity
+    analysis only, not a live entry rule.
+    """
+    out: dict[str, Any] = {}
+    for threshold in BASIS_MARGIN_THRESHOLDS_BPS:
+        key = str(threshold.normalize()) if threshold != 0 else "0"
+        out[key] = {
+            "min_abs_gemini_margin_bps": str(threshold),
+            "entry": _scenario(
+                eps,
+                by_ticker,
+                None,
+                min_abs_gemini_margin_bps=threshold,
+            ),
+            "survival": {
+                str(ms): _scenario(
+                    eps,
+                    by_ticker,
+                    ms,
+                    min_abs_gemini_margin_bps=threshold,
+                )
+                for ms in THRESHOLDS_MS
+            },
+        }
+    return out
 
 
 def settlement_adjusted_episodes(eps: list[Episode], agreements: list[AgreementRow]) -> dict[str, Any]:
@@ -181,7 +236,9 @@ def settlement_adjusted_episodes(eps: list[Episode], agreements: list[AgreementR
         "settled_btc_contracts_available": len(by_ticker),
         "entry": entry,
         "survival": survival,
+        "basis_margin_sensitivity": _basis_margin_sensitivity(eps, by_ticker),
         "accounting_method": "CONSUMABLE_LIQUIDITY_WITH_ACTUAL_0X_1X_2X_SETTLEMENT_PAYOUT",
+        "basis_margin_policy": "RETROSPECTIVE_ONLY_UNKNOWN_MARGIN_EXCLUDED_FROM_GATED_COHORTS",
         "input_memory_method": "STREAM_JSONL_KEEP_POSITIVE_EPISODES_ONLY",
         "unresolved_policy": "UNMATCHED_OR_UNSETTLED_EPISODES_EXCLUDED_NOT_ASSUMED_SAFE",
         "classification": "INDEX_MISMATCH_RESEARCH_ONLY",
