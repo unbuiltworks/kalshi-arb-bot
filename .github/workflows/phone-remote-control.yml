@@ -21,6 +21,8 @@ jobs:
         shell: bash
         env:
           CMD_TITLE: ${{ github.event.issue.title }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
         run: |
           set +e
           OUT="$RUNNER_TEMP/kalshi-command-output.txt"
@@ -65,9 +67,12 @@ jobs:
                 tests/test_gemini_kalshi_btc_ws_analyze.py \
                 tests/test_gemini_kalshi_btc_ws_capital.py \
                 tests/test_gemini_kalshi_btc_ws_bankroll.py \
+                tests/test_gemini_kalshi_btc_ws_settlement.py \
                 tests/test_gemini_kalshi_settlement_latency.py \
                 tests/test_gemini_kalshi_multi_ws_analyze.py \
-                tests/test_gemini_prediction_auth.py -q >> "$OUT" 2>&1
+                tests/test_gemini_prediction_auth.py \
+                tests/test_gemini_kalshi_live_probe_guard.py \
+                tests/test_gemini_kalshi_probe_transport.py -q >> "$OUT" 2>&1
               rc=$?
               ;;
             execution-readiness)
