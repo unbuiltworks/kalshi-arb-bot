@@ -26,6 +26,7 @@ jobs:
           OUT="$RUNNER_TEMP/install-btc-live-service.txt"
           REPO="/home/ssm-user/kalshi-arb-bot"
           ENVFILE="$REPO/.env.gemini-live"
+          ARM_TOKEN="$REPO/.live_probe_arm_once"
           UNIT="/etc/systemd/system/gemini-kalshi-btc-live.service"
           : > "$OUT"
 
@@ -39,11 +40,13 @@ jobs:
             exit 78
           fi
 
+          rm -f "$ARM_TOKEN"
           umask 077
           {
             printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY"
             printf 'GEMINI_API_SECRET=%s\n' "$GEMINI_API_SECRET"
             printf 'ENABLE_GEMINI_KALSHI_LIVE_PROBES=NO\n'
+            printf 'LIVE_PROBE_ARM_TOKEN_FILE=%s\n' "$ARM_TOKEN"
             printf 'LIVE_PROBE_MAX_ATTEMPTS=1\n'
             printf 'LIVE_PROBE_MIN_PERSISTENCE_MS=10\n'
             printf 'LIVE_PROBE_WATCH_SECONDS=900\n'
@@ -77,13 +80,18 @@ jobs:
           UNITEOF
 
           sudo systemctl daemon-reload >> "$OUT" 2>&1
-          sudo systemctl enable --now gemini-kalshi-btc-live.service >> "$OUT" 2>&1
+          # Deliberately do NOT start at boot. A future EC2 reboot must never create
+          # a new trading opportunity without a fresh one-use arm token.
+          sudo systemctl disable gemini-kalshi-btc-live.service >> "$OUT" 2>&1
+          sudo systemctl restart gemini-kalshi-btc-live.service >> "$OUT" 2>&1
           sleep 3
 
           echo "host=$(hostname)" >> "$OUT"
           echo "feature_sha=$(git rev-parse HEAD)" >> "$OUT"
           echo "service_active=$(systemctl is-active gemini-kalshi-btc-live.service 2>/dev/null)" >> "$OUT"
+          echo "service_enabled=$(systemctl is-enabled gemini-kalshi-btc-live.service 2>/dev/null)" >> "$OUT"
           echo "live_gate=$(grep '^ENABLE_GEMINI_KALSHI_LIVE_PROBES=' "$ENVFILE" | cut -d= -f2)" >> "$OUT"
+          echo "arm_token_present=$([ -f "$ARM_TOKEN" ] && echo true || echo false)" >> "$OUT"
           echo "max_attempts=$(grep '^LIVE_PROBE_MAX_ATTEMPTS=' "$ENVFILE" | cut -d= -f2)" >> "$OUT"
           echo "envfile_mode=$(stat -c '%a' "$ENVFILE")" >> "$OUT"
           echo "recent_log_modes:" >> "$OUT"
