@@ -91,7 +91,7 @@ def test_only_size_growth_is_new_consumable_depth_at_same_prices():
     assert result["survival"]["50"]["surviving_episodes"] == 2
     assert result["survival"]["50"]["consumable_episodes"] == 2
     assert result["survival"]["50"]["consumable_contracts"] == "15"
-    assert result["survival"]["50"]["consumable_shadow_pnl_dollars"] == "0.75"
+    assert Decimal(result["survival"]["50"]["consumable_shadow_pnl_dollars"]) == Decimal("0.75")
 
 
 def test_price_change_resets_consumable_level():
