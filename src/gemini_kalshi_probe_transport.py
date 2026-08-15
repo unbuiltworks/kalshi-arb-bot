@@ -1,15 +1,10 @@
-"""Disabled transport primitives for a future one-contract Gemini/Kalshi probe.
+"""Transport primitives for a tightly bounded Gemini/Kalshi BTC execution probe.
 
-This module contains the network mechanics required to measure real execution:
-- one persistent authenticated Gemini WebSocket with order events,
-- Kalshi V2 FOK order submission,
-- simultaneous two-venue sends,
-- exact local/exchange timing and fill accounting,
-- one-contract emergency flatten helpers for a one-leg fill.
-
-It is intentionally NOT a runnable trading bot and is not exposed by any remote
-control workflow. The dual-submit entry point itself also enforces the two-factor
-live opt-in plus one-contract/edge/quote-age guardrails.
+Live sending remains impossible unless both the caller opts in and
+ENABLE_GEMINI_KALSHI_LIVE_PROBES=YES. The transport forces Kalshi production,
+recomputes exact payload economics before send, records acknowledgement and
+terminal latency separately, reconciles ambiguous submissions where possible,
+and halts on unresolved ambiguity rather than guessing.
 """
 
 from __future__ import annotations
@@ -22,11 +17,17 @@ import time
 from typing import Any
 import uuid
 
+import httpx
+
 from src.auth import KalshiClient
-from src.gemini_kalshi_live_probe_guard import live_probe_authorized, validate_probe_candidate
-from src.gemini_prediction_auth import authenticated_ws_connect
+from src.gemini_kalshi_live_probe_guard import (
+    live_probe_authorized,
+    validate_exact_probe_payloads,
+)
+from src.gemini_prediction_auth import authenticated_ws_connect, private_rest_request
 
 D = Decimal
+KALSHI_PROD_REST = "https://external-api.kalshi.com/trade-api/v2"
 
 
 @dataclass(frozen=True)
@@ -42,14 +43,16 @@ class ExecutionResult:
     local_done_ns: int
     exchange_ts_ns: int | None
     request_latency_ms: float
+    ack_latency_ms: float | None = None
     raw_request_status: int | None = None
+    reconciled: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
 class GeminiTradingSession:
-    """Persistent authenticated Gemini WS with request/order-event demux."""
+    """Persistent authenticated Gemini WS with order-response/event demux."""
 
     TERMINAL = {"FILLED", "CANCELED", "REJECTED"}
 
@@ -101,8 +104,62 @@ class GeminiTradingSession:
         finally:
             self._responses.pop(request_id, None)
 
+    async def _reconcile_rest(self, params: dict[str, Any]) -> dict[str, Any] | None:
+        """Recover an immediate order by clientOrderId after an ambiguous WS request."""
+        client_id = str(params["clientOrderId"])
+        symbol = str(params["symbol"])
+        now_ms = int(time.time() * 1000)
+        queries = [
+            ("/v1/prediction-markets/orders/active", {"symbol": symbol, "limit": 100, "offset": 0}),
+            ("/v1/prediction-markets/orders/history", {"status": "filled", "symbol": symbol, "limit": 100, "from": now_ms - 120000, "to": now_ms + 1000}),
+            ("/v1/prediction-markets/orders/history", {"status": "cancelled", "symbol": symbol, "limit": 100, "from": now_ms - 120000, "to": now_ms + 1000}),
+        ]
+        for path, body in queries:
+            try:
+                response = await private_rest_request("POST", path, params=body, timeout=3.0)
+                if response.status_code != 200:
+                    continue
+                for row in response.json().get("orders", []):
+                    if str(row.get("clientOrderId") or "") == client_id:
+                        return row
+            except Exception:
+                continue
+        return None
+
+    def _event_result(
+        self,
+        *,
+        client_id: str,
+        event: dict[str, Any],
+        sent_ns: int,
+        ack_ns: int | None,
+        raw_status: int | None,
+        reconciled: bool,
+    ) -> ExecutionResult:
+        done = time.perf_counter_ns()
+        qty = self._fill_qty.get(client_id, D("0"))
+        notional = self._fill_notional.get(client_id, D("0"))
+        fee = self._fees.get(client_id, D("0"))
+        avg = (notional / qty) if qty > 0 else None
+        return ExecutionResult(
+            venue="gemini",
+            client_order_id=client_id,
+            filled_quantity=str(qty),
+            average_fill_price=str(avg) if avg is not None else None,
+            fee_paid=str(fee) if fee > 0 else ("0" if qty > 0 else None),
+            status=str(event.get("X") or "UNKNOWN"),
+            reason=str(event.get("r")) if event.get("r") else None,
+            local_send_ns=sent_ns,
+            local_done_ns=done,
+            exchange_ts_ns=int(event["T"]) if event.get("T") is not None else None,
+            request_latency_ms=(done - sent_ns) / 1_000_000,
+            ack_latency_ms=((ack_ns - sent_ns) / 1_000_000) if ack_ns is not None else None,
+            raw_request_status=raw_status,
+            reconciled=reconciled,
+        )
+
     async def place_fok(self, params: dict[str, Any], *, terminal_timeout: float = 2.0) -> ExecutionResult:
-        """Send one already-validated immediate Gemini order and wait for terminal event."""
+        """Send one immediate Gemini order and resolve fill/cancel state conservatively."""
         if self.ws is None:
             raise RuntimeError("Gemini trading session is not connected")
         client_id = str(params["clientOrderId"])
@@ -112,46 +169,87 @@ class GeminiTradingSession:
         self._fill_notional[client_id] = D("0")
         self._fees[client_id] = D("0")
         sent = time.perf_counter_ns()
+        ack_ns: int | None = None
         try:
-            response = await self.request("order.place", params, timeout=terminal_timeout)
-            status_code = int(response.get("status", 0))
-            if status_code != 200:
-                done = time.perf_counter_ns()
-                error = response.get("error") or {}
-                return ExecutionResult(
-                    venue="gemini",
-                    client_order_id=client_id,
-                    filled_quantity="0",
-                    average_fill_price=None,
-                    fee_paid=None,
-                    status="REJECTED",
-                    reason=str(error.get("msg") or error.get("code") or "request_rejected"),
-                    local_send_ns=sent,
-                    local_done_ns=done,
-                    exchange_ts_ns=None,
-                    request_latency_ms=(done - sent) / 1_000_000,
-                    raw_request_status=status_code,
+            try:
+                response = await self.request("order.place", params, timeout=terminal_timeout)
+                ack_ns = time.perf_counter_ns()
+                status_code = int(response.get("status", 0))
+                if status_code != 200:
+                    done = time.perf_counter_ns()
+                    error = response.get("error") or {}
+                    return ExecutionResult(
+                        venue="gemini",
+                        client_order_id=client_id,
+                        filled_quantity="0",
+                        average_fill_price=None,
+                        fee_paid=None,
+                        status="REJECTED",
+                        reason=str(error.get("msg") or error.get("code") or "request_rejected"),
+                        local_send_ns=sent,
+                        local_done_ns=done,
+                        exchange_ts_ns=None,
+                        request_latency_ms=(done - sent) / 1_000_000,
+                        ack_latency_ms=(ack_ns - sent) / 1_000_000,
+                        raw_request_status=status_code,
+                    )
+                event = await asyncio.wait_for(terminal, timeout=terminal_timeout)
+                return self._event_result(
+                    client_id=client_id,
+                    event=event,
+                    sent_ns=sent,
+                    ack_ns=ack_ns,
+                    raw_status=status_code,
+                    reconciled=False,
                 )
-            event = await asyncio.wait_for(terminal, timeout=terminal_timeout)
-            done = time.perf_counter_ns()
-            qty = self._fill_qty.get(client_id, D("0"))
-            notional = self._fill_notional.get(client_id, D("0"))
-            fee = self._fees.get(client_id, D("0"))
-            avg = (notional / qty) if qty > 0 else None
-            return ExecutionResult(
-                venue="gemini",
-                client_order_id=client_id,
-                filled_quantity=str(qty),
-                average_fill_price=str(avg) if avg is not None else None,
-                fee_paid=str(fee) if fee > 0 else ("0" if qty > 0 else None),
-                status=str(event.get("X") or "UNKNOWN"),
-                reason=str(event.get("r")) if event.get("r") else None,
-                local_send_ns=sent,
-                local_done_ns=done,
-                exchange_ts_ns=int(event["T"]) if event.get("T") is not None else None,
-                request_latency_ms=(done - sent) / 1_000_000,
-                raw_request_status=status_code,
-            )
+            except (asyncio.TimeoutError, TimeoutError):
+                # The order may have reached Gemini even if the request acknowledgement did not.
+                try:
+                    event = await asyncio.wait_for(terminal, timeout=1.0)
+                    return self._event_result(
+                        client_id=client_id,
+                        event=event,
+                        sent_ns=sent,
+                        ack_ns=ack_ns,
+                        raw_status=None,
+                        reconciled=True,
+                    )
+                except (asyncio.TimeoutError, TimeoutError):
+                    row = await self._reconcile_rest(params)
+                    done = time.perf_counter_ns()
+                    if row is None:
+                        return ExecutionResult(
+                            venue="gemini",
+                            client_order_id=client_id,
+                            filled_quantity="0",
+                            average_fill_price=None,
+                            fee_paid=None,
+                            status="UNKNOWN",
+                            reason="AMBIGUOUS_SUBMISSION_UNRESOLVED",
+                            local_send_ns=sent,
+                            local_done_ns=done,
+                            exchange_ts_ns=None,
+                            request_latency_ms=(done - sent) / 1_000_000,
+                            ack_latency_ms=None,
+                            raw_request_status=None,
+                            reconciled=False,
+                        )
+                    return ExecutionResult(
+                        venue="gemini",
+                        client_order_id=client_id,
+                        filled_quantity=str(row.get("filledQuantity") or "0"),
+                        average_fill_price=str(row.get("avgExecutionPrice")) if row.get("avgExecutionPrice") is not None else None,
+                        fee_paid=None,
+                        status=str(row.get("status") or "UNKNOWN").upper(),
+                        reason="RECONCILED_REST",
+                        local_send_ns=sent,
+                        local_done_ns=done,
+                        exchange_ts_ns=None,
+                        request_latency_ms=(done - sent) / 1_000_000,
+                        ack_latency_ms=None,
+                        raw_request_status=None,
+                        reconciled=True,
+                    )
         finally:
             self._terminal.pop(client_id, None)
             self._fill_qty.pop(client_id, None)
@@ -189,6 +287,8 @@ class GeminiTradingSession:
                     continue
                 status = str(msg.get("X") or "")
                 if status in {"FILLED", "PARTIALLY_FILLED"}:
+                    # Gemini documents Z as the quantity filled in the last execution
+                    # for fill events, and as cumulative filled quantity on CANCELED.
                     delta = D(str(msg.get("Z") or "0"))
                     price = D(str(msg.get("L") or msg.get("p") or "0"))
                     self._fill_qty[client_id] = self._fill_qty.get(client_id, D("0")) + delta
@@ -214,18 +314,79 @@ class GeminiTradingSession:
 
 
 class KalshiV2Executor:
+    """V2 order executor pinned to Kalshi's recommended production Trade API host."""
+
     def __init__(self, client: KalshiClient | None = None) -> None:
-        self.client = client or KalshiClient()
+        self.client = client or KalshiClient(base_url=KALSHI_PROD_REST)
         self._owns_client = client is None
 
     async def close(self) -> None:
         if self._owns_client:
             await self.client.close()
 
+    async def _reconcile_by_client_id(self, payload: dict[str, Any]) -> ExecutionResult | None:
+        client_id = str(payload["client_order_id"])
+        try:
+            response = await self.client.get(
+                "/portfolio/orders",
+                params={"ticker": str(payload["ticker"]), "limit": 100},
+            )
+            if response.status_code != 200:
+                return None
+            for row in response.json().get("orders", []):
+                if str(row.get("client_order_id") or "") != client_id:
+                    continue
+                fill_count = D(str(row.get("fill_count_fp") or "0"))
+                fee = D(str(row.get("taker_fees_dollars") or "0")) if fill_count > 0 else D("0")
+                cost = D(str(row.get("taker_fill_cost_dollars") or "0")) if fill_count > 0 else D("0")
+                avg = (cost / fill_count) if fill_count > 0 else None
+                now = time.perf_counter_ns()
+                return ExecutionResult(
+                    venue="kalshi",
+                    client_order_id=client_id,
+                    filled_quantity=str(fill_count),
+                    average_fill_price=str(avg) if avg is not None else None,
+                    fee_paid=str(fee) if fill_count > 0 else None,
+                    status="FILLED" if fill_count == D(str(payload["count"])) else "CANCELED",
+                    reason="RECONCILED_REST",
+                    local_send_ns=now,
+                    local_done_ns=now,
+                    exchange_ts_ns=None,
+                    request_latency_ms=0.0,
+                    ack_latency_ms=None,
+                    raw_request_status=200,
+                    reconciled=True,
+                )
+        except Exception:
+            return None
+        return None
+
     async def place(self, payload: dict[str, Any]) -> ExecutionResult:
         client_id = str(payload["client_order_id"])
         sent = time.perf_counter_ns()
-        response = await self.client.post("/portfolio/events/orders", json=payload)
+        try:
+            response = await self.client.post("/portfolio/events/orders", json=payload)
+        except (httpx.TimeoutException, TimeoutError, asyncio.TimeoutError):
+            recovered = await self._reconcile_by_client_id(payload)
+            if recovered is not None:
+                return recovered
+            done = time.perf_counter_ns()
+            return ExecutionResult(
+                venue="kalshi",
+                client_order_id=client_id,
+                filled_quantity="0",
+                average_fill_price=None,
+                fee_paid=None,
+                status="UNKNOWN",
+                reason="AMBIGUOUS_SUBMISSION_UNRESOLVED",
+                local_send_ns=sent,
+                local_done_ns=done,
+                exchange_ts_ns=None,
+                request_latency_ms=(done - sent) / 1_000_000,
+                ack_latency_ms=None,
+                raw_request_status=None,
+                reconciled=False,
+            )
         done = time.perf_counter_ns()
         status_code = int(response.status_code)
         if status_code != 201:
@@ -249,6 +410,7 @@ class KalshiV2Executor:
                 local_done_ns=done,
                 exchange_ts_ns=None,
                 request_latency_ms=(done - sent) / 1_000_000,
+                ack_latency_ms=(done - sent) / 1_000_000,
                 raw_request_status=status_code,
             )
         body = response.json()
@@ -266,11 +428,12 @@ class KalshiV2Executor:
             local_done_ns=done,
             exchange_ts_ns=int(body["ts_ms"]) * 1_000_000 if body.get("ts_ms") is not None else None,
             request_latency_ms=(done - sent) / 1_000_000,
+            ack_latency_ms=(done - sent) / 1_000_000,
             raw_request_status=status_code,
         )
 
     async def emergency_flatten(self, original_payload: dict[str, Any]) -> ExecutionResult:
-        """Attempt to neutralize exactly one filled Kalshi leg with a marketable IOC."""
+        """Attempt to neutralize exactly one confirmed Kalshi fill with a marketable IOC."""
         original_side = str(original_payload["side"])
         if original_side == "bid":
             side, price = "ask", "0.0100"
@@ -295,13 +458,6 @@ class KalshiV2Executor:
         return await self.place(payload)
 
 
-def _assert_fok_one_contract(gemini_payload: dict[str, Any], kalshi_payload: dict[str, Any]) -> None:
-    if str(gemini_payload.get("quantity")) != "1" or str(gemini_payload.get("timeInForce")) != "FOK":
-        raise ValueError("Gemini first probe must be exactly one-contract FOK")
-    if D(str(kalshi_payload.get("count"))) != D("1") or str(kalshi_payload.get("time_in_force")) != "fill_or_kill":
-        raise ValueError("Kalshi first probe must be exactly one-contract FOK")
-
-
 async def submit_dual_probe(
     gemini: GeminiTradingSession,
     kalshi: KalshiV2Executor,
@@ -309,22 +465,18 @@ async def submit_dual_probe(
     kalshi_payload: dict[str, Any],
     *,
     modeled_locked_profit: Decimal,
+    kalshi_fee_multiplier: Decimal,
     quote_skew_ms: int,
     cli_live: bool = False,
 ) -> dict[str, Any]:
-    """Submit two pre-validated one-contract FOK legs concurrently.
-
-    Sending is impossible unless BOTH the caller supplies cli_live=True and the
-    environment contains ENABLE_GEMINI_KALSHI_LIVE_PROBES=YES. The same function
-    then rechecks the fixed one-contract size, minimum 3-cent modeled after-fee
-    lock, and <=50ms quote skew before any network mutation.
-    """
+    """Submit two exact one-contract FOK legs concurrently after all hard gates."""
     if not live_probe_authorized(cli_live):
         raise PermissionError("live Gemini/Kalshi probes are disabled")
-    _assert_fok_one_contract(gemini_payload, kalshi_payload)
-    validate_probe_candidate(
-        quantity=D("1"),
-        locked_profit=D(modeled_locked_profit),
+    recomputed = validate_exact_probe_payloads(
+        gemini_payload,
+        kalshi_payload,
+        modeled_locked_profit=D(modeled_locked_profit),
+        kalshi_fee_multiplier=D(kalshi_fee_multiplier),
         quote_skew_ms=int(quote_skew_ms),
     )
 
@@ -332,19 +484,29 @@ async def submit_dual_probe(
         gemini.place_fok(gemini_payload),
         kalshi.place(kalshi_payload),
     )
+    if g_result.status == "UNKNOWN" or k_result.status == "UNKNOWN":
+        return {
+            "outcome": "AMBIGUOUS_SUBMISSION",
+            "recomputed_locked_profit_dollars": str(recomputed),
+            "gemini": g_result.as_dict(),
+            "kalshi": k_result.as_dict(),
+            "flatten": None,
+            "hard_halt_required": True,
+        }
+
     g_filled = D(g_result.filled_quantity) == D("1")
     k_filled = D(k_result.filled_quantity) == D("1")
     outcome = "BOTH_FILLED" if g_filled and k_filled else "NEITHER_FILLED" if not g_filled and not k_filled else "ONE_LEG_FILLED"
     report: dict[str, Any] = {
         "outcome": outcome,
+        "recomputed_locked_profit_dollars": str(recomputed),
         "gemini": g_result.as_dict(),
         "kalshi": k_result.as_dict(),
         "flatten": None,
+        "hard_halt_required": outcome == "ONE_LEG_FILLED",
     }
     if g_filled and not k_filled:
-        flatten = await gemini.emergency_flatten_market(gemini_payload)
-        report["flatten"] = flatten.as_dict()
+        report["flatten"] = (await gemini.emergency_flatten_market(gemini_payload)).as_dict()
     elif k_filled and not g_filled:
-        flatten = await kalshi.emergency_flatten(kalshi_payload)
-        report["flatten"] = flatten.as_dict()
+        report["flatten"] = (await kalshi.emergency_flatten(kalshi_payload)).as_dict()
     return report
