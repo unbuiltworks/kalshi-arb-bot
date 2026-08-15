@@ -20,6 +20,10 @@ jobs:
           python-version: '3.11'
           cache: pip
       - run: pip install -r requirements.txt
+      - name: Capture current Kalshi 15m fee metadata
+        run: |
+          set -o pipefail
+          python -m src.gemini_kalshi_kalshi_fees 2>&1 | tee gemini-kalshi-fees.log
       - name: Run corrected same-window price snapshot
         run: |
           set -o pipefail
@@ -38,6 +42,7 @@ jobs:
         with:
           name: gemini-kalshi-research
           path: |
+            gemini-kalshi-fees.log
             gemini-kalshi-snapshot.log
             gemini-kalshi-alignment.log
             gemini-kalshi-agreement.log
