@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import json
 import logging
 import time
@@ -32,20 +32,66 @@ GEMINI_WS = "wss://ws.gemini.com"
 KALSHI_REST = "https://external-api.kalshi.com/trade-api/v2"
 
 
+def _finite_decimal(value: Any) -> Decimal | None:
+    """Best-effort Decimal parse for live market-data fields.
+
+    Gemini prediction books can be one-sided. In production a missing side may be
+    represented by a non-numeric string even though the documented bookTicker
+    schema describes the fields as strings. Treat such values as unavailable
+    liquidity rather than crashing a read-only market-data stream.
+    """
+    try:
+        value_d = D(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+    return value_d if value_d.is_finite() else None
+
+
 def parse_gemini_book_ticker(payload: dict[str, Any], *, received_ms: int | None = None) -> TopOfBook:
-    """Convert a Gemini prediction-market bookTicker message to normalized TOB."""
-    required = ("s", "b", "B", "a", "A")
-    if any(k not in payload for k in required):
+    """Convert a Gemini prediction-market bookTicker message to normalized TOB.
+
+    Missing/non-numeric sides are represented with zero executable size. A
+    missing bid becomes price 0/size 0; a missing ask becomes price 1/size 0.
+    This preserves the executable complementary binary side without inventing
+    liquidity.
+    """
+    if not payload.get("s"):
         raise ValueError("not a Gemini bookTicker payload")
+
+    bid = _finite_decimal(payload.get("b"))
+    bid_size = _finite_decimal(payload.get("B"))
+    ask = _finite_decimal(payload.get("a"))
+    ask_size = _finite_decimal(payload.get("A"))
+
+    if (
+        bid is None
+        or bid_size is None
+        or bid < 0
+        or bid > 1
+        or bid_size <= 0
+    ):
+        bid = D("0")
+        bid_size = D("0")
+
+    if (
+        ask is None
+        or ask_size is None
+        or ask < 0
+        or ask > 1
+        or ask_size <= 0
+    ):
+        ask = D("1")
+        ask_size = D("0")
+
     ts_ms = int(received_ms if received_ms is not None else time.time() * 1000)
     return TopOfBook(
         venue="gemini",
         market_id=str(payload["s"]),
         ts_ms=ts_ms,
-        yes_bid=D(str(payload["b"])),
-        yes_bid_size=D(str(payload["B"])),
-        yes_ask=D(str(payload["a"])),
-        yes_ask_size=D(str(payload["A"])),
+        yes_bid=bid,
+        yes_bid_size=bid_size,
+        yes_ask=ask,
+        yes_ask_size=ask_size,
     )
 
 
@@ -88,7 +134,7 @@ async def gemini_book_ticker_once(symbol: str, *, timeout_s: float = 5.0) -> Top
                 raise TimeoutError(f"no Gemini bookTicker for {symbol}")
             raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
             payload = json.loads(raw)
-            if payload.get("s") == symbol and all(k in payload for k in ("b", "B", "a", "A")):
+            if str(payload.get("s") or "").lower() == symbol.lower():
                 return parse_gemini_book_ticker(payload, received_ms=int(time.time() * 1000))
 
 
