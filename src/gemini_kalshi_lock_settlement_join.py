@@ -33,6 +33,7 @@ from src.gemini_kalshi_settlement_probe import (
 from src.gemini_kalshi_watch_analyze import _book, load_rows
 
 D = Decimal
+BASIS_MARGIN_THRESHOLDS_BPS = (D("0"), D("0.25"), D("0.5"), D("1"), D("2"), D("5"), D("10"))
 
 
 async def _kalshi_settled(http: httpx.AsyncClient, hours: int) -> list[dict]:
@@ -123,6 +124,36 @@ def _settlement_payout(
     return quantity * D(wins)
 
 
+def _basis_margin_sensitivity(joined: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Show how a Gemini close-margin gate changes observed basis risk and P&L.
+
+    This is retrospective sensitivity analysis, not a live-trading rule. Rows with
+    unknown Gemini margin are excluded from gated cohorts so the analysis fails
+    closed rather than assuming they are safely far from the boundary.
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for threshold in BASIS_MARGIN_THRESHOLDS_BPS:
+        eligible = [
+            row for row in joined
+            if row.get("gemini_margin_bps") is not None
+            and abs(D(str(row["gemini_margin_bps"]))) >= threshold
+        ]
+        disagreements = [row for row in eligible if not row["agrees"]]
+        apparent = sum((D(str(row["best_locked_profit_dollars"])) for row in eligible), D("0"))
+        settlement = sum((D(str(row["settlement_adjusted_pnl_dollars"])) for row in eligible), D("0"))
+        key = str(threshold.normalize()) if threshold != 0 else "0"
+        out[key] = {
+            "min_abs_gemini_margin_bps": str(threshold),
+            "eligible_windows": len(eligible),
+            "disagreements": len(disagreements),
+            "disagreement_rate": (len(disagreements) / len(eligible)) if eligible else None,
+            "apparent_locked_profit_dollars": str(apparent),
+            "settlement_adjusted_pnl_dollars": str(settlement),
+            "basis_effect_dollars": str(settlement - apparent),
+        }
+    return out
+
+
 def summarize_join(
     lock_windows: dict[tuple[str, str], dict[str, Any]],
     agreements: list[AgreementRow],
@@ -203,6 +234,7 @@ def summarize_join(
         "basis_effect_total_dollars": str(settlement_total - apparent_total),
         "adverse_mismatch_windows": len(adverse),
         "favorable_mismatch_windows": len(favorable),
+        "basis_margin_sensitivity": _basis_margin_sensitivity(joined),
         "by_asset": dict(sorted(by_asset.items())),
         "disagreement_rows": disagreement_rows,
         "unresolved_rows": unresolved,
