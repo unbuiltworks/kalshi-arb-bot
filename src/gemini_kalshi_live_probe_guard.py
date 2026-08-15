@@ -10,10 +10,14 @@ from decimal import Decimal
 import os
 import uuid
 
+from src.gemini_kalshi_execution_shadow import gemini_predictions_taker_fee
+from src.gemini_kalshi_kalshi_fees import kalshi_quadratic_taker_fee
+
 D = Decimal
 MAX_PROBE_QUANTITY = D("1")
 DEFAULT_MIN_LOCKED_PROFIT = D("0.03")  # dollars per 1-contract pair after modeled fees
 MAX_QUOTE_SKEW_MS = 50
+MODEL_RECOMPUTE_TOLERANCE = D("0.000001")
 
 
 def live_probe_authorized(cli_live: bool) -> bool:
@@ -28,6 +32,83 @@ def validate_probe_candidate(*, quantity: Decimal, locked_profit: Decimal, quote
         raise ValueError("modeled after-fee locked profit is below 3 cents")
     if quote_skew_ms > MAX_QUOTE_SKEW_MS:
         raise ValueError("quote skew exceeds 50ms live-probe ceiling")
+
+
+def recompute_payload_locked_profit(
+    gemini_payload: dict,
+    kalshi_payload: dict,
+    *,
+    kalshi_fee_multiplier: Decimal,
+) -> Decimal:
+    """Recompute one-contract complementary P&L from the exact payload prices.
+
+    Gemini payload price is the price of the selected YES/NO outcome. Kalshi V2
+    always quotes in YES space: bid buys YES at ``price`` while ask sells YES,
+    economically buying NO at ``1-price``. Fees are recomputed independently from
+    the exact outbound prices so a stale caller cannot authorize an uneconomic pair.
+    """
+    if str(gemini_payload.get("side")) != "BUY":
+        raise ValueError("first Gemini probe leg must BUY an outcome")
+    if str(gemini_payload.get("type")) != "LIMIT":
+        raise ValueError("first Gemini probe leg must be LIMIT")
+    if str(gemini_payload.get("timeInForce")) != "FOK":
+        raise ValueError("first Gemini probe leg must be FOK")
+    if D(str(gemini_payload.get("quantity"))) != D("1"):
+        raise ValueError("first Gemini probe leg must be exactly 1 contract")
+    if str(kalshi_payload.get("time_in_force")) != "fill_or_kill":
+        raise ValueError("first Kalshi probe leg must be fill_or_kill")
+    if D(str(kalshi_payload.get("count"))) != D("1"):
+        raise ValueError("first Kalshi probe leg must be exactly 1 contract")
+
+    gemini_price = D(str(gemini_payload.get("price")))
+    kalshi_yes_price = D(str(kalshi_payload.get("price")))
+    if not (D("0.01") <= gemini_price <= D("0.99")):
+        raise ValueError("Gemini payload price outside prediction range")
+    if not (D("0.01") <= kalshi_yes_price <= D("0.99")):
+        raise ValueError("Kalshi payload price outside prediction range")
+
+    outcome = str(gemini_payload.get("eventOutcome") or "")
+    kalshi_side = str(kalshi_payload.get("side") or "")
+    if outcome == "YES" and kalshi_side == "ask":
+        # Gemini YES + Kalshi NO.
+        kalshi_contract_cost = D("1") - kalshi_yes_price
+    elif outcome == "NO" and kalshi_side == "bid":
+        # Gemini NO + Kalshi YES.
+        kalshi_contract_cost = kalshi_yes_price
+    else:
+        raise ValueError("payload legs are not the required complementary outcomes")
+
+    gemini_fee = gemini_predictions_taker_fee(gemini_price, D("1"))
+    kalshi_fee = kalshi_quadratic_taker_fee(
+        kalshi_yes_price,
+        D("1"),
+        fee_multiplier=D(kalshi_fee_multiplier),
+    )
+    return D("1") - gemini_price - kalshi_contract_cost - gemini_fee - kalshi_fee
+
+
+def validate_exact_probe_payloads(
+    gemini_payload: dict,
+    kalshi_payload: dict,
+    *,
+    modeled_locked_profit: Decimal,
+    kalshi_fee_multiplier: Decimal,
+    quote_skew_ms: int,
+) -> Decimal:
+    """Fail closed unless outbound payload economics equal the shadow candidate."""
+    recomputed = recompute_payload_locked_profit(
+        gemini_payload,
+        kalshi_payload,
+        kalshi_fee_multiplier=D(kalshi_fee_multiplier),
+    )
+    if abs(recomputed - D(modeled_locked_profit)) > MODEL_RECOMPUTE_TOLERANCE:
+        raise ValueError("outbound payload economics do not match modeled locked profit")
+    validate_probe_candidate(
+        quantity=D("1"),
+        locked_profit=recomputed,
+        quote_skew_ms=int(quote_skew_ms),
+    )
+    return recomputed
 
 
 def build_leg_payloads(
