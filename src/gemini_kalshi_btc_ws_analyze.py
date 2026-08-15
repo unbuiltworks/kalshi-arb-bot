@@ -2,8 +2,10 @@
 
 Conservative event-driven analysis for fee-positive BTC cross-venue episodes.
 Survival requires a new still-positive event at/after each latency threshold.
-Repeated resting depth at the same executable price pair is consumable only once;
-if displayed quantity later grows, only the increment is newly consumable.
+Repeated resting depth at the same executable price pair is consumable only once
+within the same matched 15-minute contract; if displayed quantity later grows,
+only the increment is newly consumable. Contract rollover always resets episode
+and consumable-liquidity identity.
 Settlement remains a separate INDEX_MISMATCH_RESEARCH_ONLY gate.
 """
 
@@ -23,6 +25,7 @@ THRESHOLDS_MS = (50, 100, 250, 500)
 
 @dataclass
 class Episode:
+    market_key: str
     direction: str
     start_ms: int
     last_positive_ms: int
@@ -45,10 +48,24 @@ def load_rows(paths: list[Path]) -> list[dict[str, Any]]:
     return rows
 
 
+def _market_key(row: dict[str, Any]) -> str:
+    """Stable identity for one matched Gemini/Kalshi 15-minute contract."""
+    gemini = str(row.get("gemini_symbol") or "")
+    kalshi = str(row.get("kalshi_ticker") or "")
+    window = str(row.get("window_end_utc") or "")
+    if gemini or kalshi:
+        return "|".join((gemini, kalshi, window))
+    # Older/synthetic logs may not carry market IDs. Keep them analyzable while
+    # making the missing identity explicit instead of silently sharing a real key.
+    return f"UNKNOWN_MARKET|{window}"
+
+
 def _liquidity_key(row: dict[str, Any], direction: str) -> str:
+    market = _market_key(row)
     if direction == "KALSHI_YES_GEMINI_NO":
         # Gemini NO ask is 1 - Gemini YES bid; size is YES bid size.
         return "|".join((
+            market,
             direction,
             str(row.get("kalshi_yes_ask")),
             str(row.get("gemini_yes_bid")),
@@ -56,11 +73,12 @@ def _liquidity_key(row: dict[str, Any], direction: str) -> str:
     if direction == "GEMINI_YES_KALSHI_NO":
         # Kalshi NO ask is 1 - Kalshi YES bid; size is YES bid size.
         return "|".join((
+            market,
             direction,
             str(row.get("gemini_yes_ask")),
             str(row.get("kalshi_yes_bid")),
         ))
-    return direction
+    return "|".join((market, direction))
 
 
 def _candidates(row: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -83,23 +101,35 @@ def _candidates(row: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def episodes(rows: list[dict[str, Any]]) -> list[Episode]:
-    active: dict[str, Episode] = {}
+    active: dict[tuple[str, str], Episode] = {}
     done: list[Episode] = []
     for row in rows:
         ts = int(row["receive_ts_ms"])
+        market = _market_key(row)
         current = _candidates(row)
-        for direction in list(active):
-            if direction not in current:
-                done.append(active.pop(direction))
+
+        # A new contract can arrive without an explicit negative event for the old
+        # one. Close old-market episodes immediately so a rollover can never be
+        # interpreted as 50/100/250/500ms survival of the previous contract.
+        for key in list(active):
+            if key[0] != market:
+                done.append(active.pop(key))
+
+        for key in list(active):
+            if key[0] == market and key[1] not in current:
+                done.append(active.pop(key))
+
         for direction, candidate in current.items():
-            ep = active.get(direction)
+            key = (market, direction)
+            ep = active.get(key)
             if ep is None:
-                ep = Episode(direction, ts, ts, candidate, [])
-                active[direction] = ep
+                ep = Episode(market, direction, ts, ts, candidate, [])
+                active[key] = ep
             ep.last_positive_ms = ts
             ep.observations.append((ts, candidate))
+
     done.extend(active.values())
-    done.sort(key=lambda e: (e.start_ms, e.direction))
+    done.sort(key=lambda e: (e.start_ms, e.market_key, e.direction))
     return done
 
 
@@ -112,7 +142,7 @@ def _first_at_or_after(ep: Episode, threshold_ms: int) -> dict[str, Any] | None:
 
 
 def _consume(candidate: dict[str, Any], seen: dict[str, Decimal]) -> tuple[Decimal, Decimal, Decimal]:
-    """Return fresh qty, scaled P&L and capital for this unchanged price pair."""
+    """Return fresh qty, scaled P&L and capital for this contract+price pair."""
     qty = D(str(candidate["quantity"]))
     key = str(candidate.get("liquidity_key") or candidate.get("direction") or "")
     prior = seen.get(key, D("0"))
@@ -186,9 +216,11 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
     entry = _scenario(eps, None)
     observation_ms = (timestamps[-1] - timestamps[0]) if len(timestamps) >= 2 else 0
+    markets = sorted({_market_key(row) for row in rows})
 
     return {
         "rows": len(rows),
+        "matched_contracts_observed": len(markets),
         "unique_directional_positive_episodes": len(eps),
         "episodes_by_direction": dict(sorted(by_direction.items())),
         "entry_consumable_episodes": entry["consumable_episodes"],
@@ -203,8 +235,8 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "quote_skew_p95_ms": _percentile(quote_skews, 0.95),
         "kalshi_exchange_to_receive_median_ms": median(k_latencies) if k_latencies else None,
         "kalshi_exchange_to_receive_p95_ms": _percentile(k_latencies, 0.95),
-        "survival_method": "REQUIRES_NEW_POSITIVE_EVENT_AT_OR_AFTER_THRESHOLD",
-        "liquidity_method": "UNCHANGED_EXECUTABLE_PRICE_PAIR_COUNTS_ONLY_DISPLAYED_SIZE_GROWTH_AS_FRESH",
+        "survival_method": "REQUIRES_NEW_POSITIVE_EVENT_AT_OR_AFTER_THRESHOLD_WITHIN_SAME_MATCHED_CONTRACT",
+        "liquidity_method": "SAME_MATCHED_CONTRACT_AND_EXECUTABLE_PRICE_PAIR_COUNTS_ONLY_DISPLAYED_SIZE_GROWTH_AS_FRESH",
         "pnl_method": "CONSUMABLE_SIZE_ONE_EXECUTION_PER_DIRECTIONAL_EPISODE",
         "settlement_status": "INDEX_MISMATCH_RESEARCH_ONLY",
         "read_only": True,
