@@ -1,0 +1,40 @@
+name: BTC Probe Guard Tests
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  test:
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[probe-guard-tests]' }}
+    runs-on: [self-hosted, kalshi-bot]
+    timeout-minutes: 5
+    steps:
+      - name: Run scoped tests
+        id: tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          OUT="$RUNNER_TEMP/probe-guard-tests.txt"
+          cd /home/ssm-user/kalshi-arb-bot || exit 66
+          .venv/bin/python -m pytest \
+            tests/test_gemini_prediction_auth.py \
+            tests/test_gemini_kalshi_live_probe_guard.py \
+            tests/test_gemini_kalshi_btc_ws_settlement.py -q > "$OUT" 2>&1
+          exit $?
+      - name: Comment result
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          OUTCOME: ${{ steps.tests.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `${process.env.RUNNER_TEMP}/probe-guard-tests.txt`;
+            const text = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : 'No output.';
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body: `Probe guard tests: **${process.env.OUTCOME}**\n\n\`\`\`text\n\`\`\``});
