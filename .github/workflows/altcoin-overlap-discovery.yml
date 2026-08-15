@@ -1,0 +1,112 @@
+name: Altcoin Overlap Discovery
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  discover:
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[altcoin-discovery]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Discover current Gemini/Kalshi 15m altcoin overlaps
+        id: discover
+        shell: bash
+        run: |
+          python3 - <<'PY' > /tmp/altcoin-overlap.txt
+          import json, re, urllib.parse, urllib.request
+          from datetime import datetime, timezone
+
+          assets = {
+              'HYPE': 'KXHYPE15M',
+              'DOGE': 'KXDOGE15M',
+              'BNB': 'KXBNB15M',
+              'SHIB': 'KXSHIB15M',
+          }
+
+          def get(url, params=None):
+              if params:
+                  url += '?' + urllib.parse.urlencode(params)
+              req = urllib.request.Request(url, headers={'User-Agent': 'kalshi-arb-research/1.0'})
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  return json.load(r)
+
+          gem = get('https://api.gemini.com/v1/prediction-markets/events', {
+              'status': 'active', 'category': 'crypto', 'limit': 500, 'offset': 0
+          }).get('data', [])
+
+          gem_rows = {}
+          pat = re.compile(r'^([A-Z0-9]+)15M(\d{10})$', re.I)
+          for e in gem:
+              t = str(e.get('ticker') or '')
+              m = pat.match(t)
+              if not m:
+                  continue
+              asset, stamp = m.groups()
+              asset = asset.upper()
+              if asset not in assets:
+                  continue
+              try:
+                  end = datetime.strptime(stamp, '%y%m%d%H%M').replace(tzinfo=timezone.utc)
+              except ValueError:
+                  continue
+              contracts = e.get('contracts') or []
+              symbol = ''
+              for c in contracts:
+                  if isinstance(c, dict) and c.get('instrumentSymbol'):
+                      symbol = c['instrumentSymbol']; break
+              gem_rows.setdefault(asset, []).append({'ticker': t, 'end': end, 'symbol': symbol})
+
+          out = {'assets': {}, 'read_only': True, 'order_entry': False}
+          now = datetime.now(timezone.utc)
+          for asset, series in assets.items():
+              try:
+                  k = get('https://api.elections.kalshi.com/trade-api/v2/markets', {
+                      'series_ticker': series, 'status': 'open', 'limit': 100, 'mve_filter': 'exclude'
+                  })
+              except Exception:
+                  k = get('https://external-api.kalshi.com/trade-api/v2/markets', {
+                      'series_ticker': series, 'status': 'open', 'limit': 100, 'mve_filter': 'exclude'
+                  })
+              markets = k.get('markets', [])
+              matches = []
+              for g in gem_rows.get(asset, []):
+                  for km in markets:
+                      raw = km.get('close_time')
+                      if not raw:
+                          continue
+                      try:
+                          kend = datetime.fromisoformat(str(raw).replace('Z', '+00:00')).astimezone(timezone.utc)
+                      except ValueError:
+                          continue
+                      skew = abs((g['end'] - kend).total_seconds())
+                      if skew <= 30:
+                          matches.append({
+                              'gemini_ticker': g['ticker'],
+                              'gemini_symbol': g['symbol'],
+                              'kalshi_ticker': km.get('ticker'),
+                              'window_end_utc': g['end'].isoformat(),
+                              'skew_s': skew,
+                          })
+              out['assets'][asset] = {
+                  'gemini_active_15m_events': len(gem_rows.get(asset, [])),
+                  'kalshi_open_15m_markets': len(markets),
+                  'same_window_matches': matches,
+              }
+
+          print(json.dumps(out, indent=2))
+          PY
+
+      - name: Comment result
+        if: always()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            let text = fs.existsSync('/tmp/altcoin-overlap.txt') ? fs.readFileSync('/tmp/altcoin-overlap.txt','utf8') : 'No output';
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body: `Current public-data overlap check:\n\n\`\`\`json\n${text}\n\`\`\``});
