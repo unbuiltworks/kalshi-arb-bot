@@ -32,32 +32,73 @@ jobs:
         run: |
           python - <<'PY' > "$RUNNER_TEMP/gemini-auth-smoke.txt"
           import asyncio, json
-          from src.gemini_prediction_auth import credentials, has_credentials, is_account_scoped_key, private_rest_request, verify_authenticated_ws
+          import httpx, websockets
+          from src.gemini_prediction_auth import (
+              credentials, has_credentials, is_account_scoped_key,
+              private_rest_request, websocket_auth_headers,
+          )
+
+          def safe_json(resp):
+              try:
+                  data = resp.json()
+                  if isinstance(data, dict):
+                      return {k: data.get(k) for k in ("result","reason","message","error","code","hasAcceptedLatest","acceptedVersion","latestVersion") if k in data}
+              except Exception:
+                  pass
+              return None
+
+          async def ws_try(nonce):
+              key, secret = credentials()
+              headers = websocket_auth_headers(key, secret, nonce=nonce)
+              try:
+                  ws = await websockets.connect("wss://ws.gemini.com", open_timeout=5.0, additional_headers=headers)
+                  try:
+                      await ws.send(json.dumps({"id":"diag","method":"SUBSCRIBE","params":["positions@account"]}))
+                      raw = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                      msg = json.loads(raw)
+                      return {"connected": True, "ack_status": msg.get("status"), "error": msg.get("error")}
+                  finally:
+                      await ws.close()
+              except Exception as e:
+                  resp = getattr(e, "response", None)
+                  status = getattr(resp, "status_code", None) if resp is not None else None
+                  body = getattr(resp, "body", None) if resp is not None else None
+                  if isinstance(body, bytes):
+                      try: body = body.decode("utf-8", "replace")
+                      except Exception: body = None
+                  if isinstance(body, str) and len(body) > 500:
+                      body = body[:500]
+                  return {"connected": False, "exception": type(e).__name__, "http_status": status, "body": body}
 
           async def main():
+              import time
               key, _ = credentials()
               out = {
-                  "mode": "NO_ORDER_AUTH_SMOKE",
+                  "mode": "NO_ORDER_AUTH_DIAGNOSTIC",
                   "credentials_present": has_credentials(),
                   "account_scoped_key": bool(key) and is_account_scoped_key(key),
-                  "terms_http_status": None,
-                  "terms_accepted": False,
-                  "authenticated_ws": False,
+                  "public_terms_status": None,
+                  "roles_status": None,
+                  "roles_body": None,
+                  "terms_status": None,
+                  "terms_body": None,
+                  "ws_ms": None,
+                  "ws_seconds": None,
                   "order_entry": False,
-                  "errors": {},
               }
+              async with httpx.AsyncClient(timeout=10.0) as c:
+                  r = await c.get("https://api.gemini.com/v1/prediction-markets/terms")
+                  out["public_terms_status"] = r.status_code
               if out["credentials_present"] and out["account_scoped_key"]:
-                  try:
-                      r = await private_rest_request("GET", "/v1/prediction-markets/terms/status")
-                      out["terms_http_status"] = r.status_code
-                      if r.status_code == 200:
-                          out["terms_accepted"] = bool(r.json().get("hasAcceptedLatest"))
-                  except Exception as e:
-                      out["errors"]["terms"] = type(e).__name__
-                  try:
-                      out["authenticated_ws"] = await verify_authenticated_ws(timeout=5.0)
-                  except Exception as e:
-                      out["errors"]["ws"] = type(e).__name__
+                  r = await private_rest_request("POST", "/v1/roles")
+                  out["roles_status"] = r.status_code
+                  out["roles_body"] = safe_json(r)
+                  r = await private_rest_request("GET", "/v1/prediction-markets/terms/status")
+                  out["terms_status"] = r.status_code
+                  out["terms_body"] = safe_json(r)
+                  out["ws_ms"] = await ws_try(int(time.time() * 1000))
+                  await asyncio.sleep(0.05)
+                  out["ws_seconds"] = await ws_try(int(time.time()))
               print(json.dumps(out, separators=(",", ":"), sort_keys=True))
 
           asyncio.run(main())
@@ -76,5 +117,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `Gemini no-order auth smoke: **${process.env.OUTCOME}**\n\n\`\`\`json\n${text}\n\`\`\``
+              body: `Gemini no-order auth diagnostic: **${process.env.OUTCOME}**\n\n\`\`\`json\n${text}\n\`\`\``
             });
