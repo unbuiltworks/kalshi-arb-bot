@@ -8,8 +8,8 @@ This module contains the network mechanics required to measure real execution:
 - one-contract emergency flatten helpers for a one-leg fill.
 
 It is intentionally NOT a runnable trading bot and is not exposed by any remote
-control workflow. A caller must separately pass the live-probe authorization and
-readiness gates before using these methods.
+control workflow. The dual-submit entry point itself also enforces the two-factor
+live opt-in plus one-contract/edge/quote-age guardrails.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from typing import Any
 import uuid
 
 from src.auth import KalshiClient
+from src.gemini_kalshi_live_probe_guard import live_probe_authorized, validate_probe_candidate
 from src.gemini_prediction_auth import authenticated_ws_connect
 
 D = Decimal
@@ -101,7 +102,7 @@ class GeminiTradingSession:
             self._responses.pop(request_id, None)
 
     async def place_fok(self, params: dict[str, Any], *, terminal_timeout: float = 2.0) -> ExecutionResult:
-        """Send one already-validated Gemini FOK payload and wait for terminal event."""
+        """Send one already-validated immediate Gemini order and wait for terminal event."""
         if self.ws is None:
             raise RuntimeError("Gemini trading session is not connected")
         client_id = str(params["clientOrderId"])
@@ -187,7 +188,6 @@ class GeminiTradingSession:
                 if not client_id:
                     continue
                 status = str(msg.get("X") or "")
-                # Filled/partially-filled events carry execution delta in Z.
                 if status in {"FILLED", "PARTIALLY_FILLED"}:
                     delta = D(str(msg.get("Z") or "0"))
                     price = D(str(msg.get("L") or msg.get("p") or "0"))
@@ -196,8 +196,6 @@ class GeminiTradingSession:
                     if msg.get("n") is not None:
                         self._fees[client_id] = self._fees.get(client_id, D("0")) + D(str(msg["n"]))
                 elif status == "CANCELED" and msg.get("Z") is not None:
-                    # On terminal CANCELED, Z is cumulative; retain the larger value
-                    # without double-counting execution deltas already observed.
                     cumulative = D(str(msg.get("Z") or "0"))
                     if cumulative > self._fill_qty.get(client_id, D("0")):
                         self._fill_qty[client_id] = cumulative
@@ -297,17 +295,39 @@ class KalshiV2Executor:
         return await self.place(payload)
 
 
+def _assert_fok_one_contract(gemini_payload: dict[str, Any], kalshi_payload: dict[str, Any]) -> None:
+    if str(gemini_payload.get("quantity")) != "1" or str(gemini_payload.get("timeInForce")) != "FOK":
+        raise ValueError("Gemini first probe must be exactly one-contract FOK")
+    if D(str(kalshi_payload.get("count"))) != D("1") or str(kalshi_payload.get("time_in_force")) != "fill_or_kill":
+        raise ValueError("Kalshi first probe must be exactly one-contract FOK")
+
+
 async def submit_dual_probe(
     gemini: GeminiTradingSession,
     kalshi: KalshiV2Executor,
     gemini_payload: dict[str, Any],
     kalshi_payload: dict[str, Any],
+    *,
+    modeled_locked_profit: Decimal,
+    quote_skew_ms: int,
+    cli_live: bool = False,
 ) -> dict[str, Any]:
     """Submit two pre-validated one-contract FOK legs concurrently.
 
-    This function does not decide whether trading is authorized. The caller must
-    pass all readiness and dual-opt-in live gates before calling it.
+    Sending is impossible unless BOTH the caller supplies cli_live=True and the
+    environment contains ENABLE_GEMINI_KALSHI_LIVE_PROBES=YES. The same function
+    then rechecks the fixed one-contract size, minimum 3-cent modeled after-fee
+    lock, and <=50ms quote skew before any network mutation.
     """
+    if not live_probe_authorized(cli_live):
+        raise PermissionError("live Gemini/Kalshi probes are disabled")
+    _assert_fok_one_contract(gemini_payload, kalshi_payload)
+    validate_probe_candidate(
+        quantity=D("1"),
+        locked_profit=D(modeled_locked_profit),
+        quote_skew_ms=int(quote_skew_ms),
+    )
+
     g_result, k_result = await asyncio.gather(
         gemini.place_fok(gemini_payload),
         kalshi.place(kalshi_payload),
