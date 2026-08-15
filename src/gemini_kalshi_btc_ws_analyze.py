@@ -20,7 +20,7 @@ from statistics import median
 from typing import Any
 
 D = Decimal
-THRESHOLDS_MS = (50, 100, 250, 500)
+THRESHOLDS_MS = (5, 10, 20, 30, 40, 50, 100, 250, 500)
 
 
 @dataclass
@@ -55,15 +55,12 @@ def _market_key(row: dict[str, Any]) -> str:
     window = str(row.get("window_end_utc") or "")
     if gemini or kalshi:
         return "|".join((gemini, kalshi, window))
-    # Older/synthetic logs may not carry market IDs. Keep them analyzable while
-    # making the missing identity explicit instead of silently sharing a real key.
     return f"UNKNOWN_MARKET|{window}"
 
 
 def _liquidity_key(row: dict[str, Any], direction: str) -> str:
     market = _market_key(row)
     if direction == "KALSHI_YES_GEMINI_NO":
-        # Gemini NO ask is 1 - Gemini YES bid; size is YES bid size.
         return "|".join((
             market,
             direction,
@@ -71,7 +68,6 @@ def _liquidity_key(row: dict[str, Any], direction: str) -> str:
             str(row.get("gemini_yes_bid")),
         ))
     if direction == "GEMINI_YES_KALSHI_NO":
-        # Kalshi NO ask is 1 - Kalshi YES bid; size is YES bid size.
         return "|".join((
             market,
             direction,
@@ -108,9 +104,6 @@ def episodes(rows: list[dict[str, Any]]) -> list[Episode]:
         market = _market_key(row)
         current = _candidates(row)
 
-        # A new contract can arrive without an explicit negative event for the old
-        # one. Close old-market episodes immediately so a rollover can never be
-        # interpreted as 50/100/250/500ms survival of the previous contract.
         for key in list(active):
             if key[0] != market:
                 done.append(active.pop(key))
@@ -142,7 +135,6 @@ def _first_at_or_after(ep: Episode, threshold_ms: int) -> dict[str, Any] | None:
 
 
 def _consume(candidate: dict[str, Any], seen: dict[str, Decimal]) -> tuple[Decimal, Decimal, Decimal]:
-    """Return fresh qty, scaled P&L and capital for this contract+price pair."""
     qty = D(str(candidate["quantity"]))
     key = str(candidate.get("liquidity_key") or candidate.get("direction") or "")
     prior = seen.get(key, D("0"))
@@ -203,6 +195,7 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
         if r.get("kalshi_exchange_to_receive_ms") is not None
         and int(r["kalshi_exchange_to_receive_ms"]) >= 0
     ]
+    durations = [max(0, ep.last_positive_ms - ep.start_ms) for ep in eps]
 
     threshold_results: dict[str, Any] = {}
     for threshold in THRESHOLDS_MS:
@@ -229,6 +222,9 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "entry_consumable_contracts": entry["consumable_contracts"],
         "entry_consumable_pnl_per_dollar_deployed": entry["consumable_pnl_per_dollar_deployed"],
         "survival": threshold_results,
+        "episode_duration_median_ms": median(durations) if durations else None,
+        "episode_duration_p95_ms": _percentile(durations, 0.95),
+        "episode_duration_max_ms": max(durations) if durations else None,
         "observation_ms": observation_ms,
         "event_interval_median_ms": median(deltas) if deltas else None,
         "quote_skew_median_ms": median(quote_skews) if quote_skews else None,
