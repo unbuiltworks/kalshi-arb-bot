@@ -60,7 +60,10 @@ jobs:
               .venv/bin/python -m pytest \
                 tests/test_gemini_kalshi_live_shadow.py \
                 tests/test_gemini_kalshi_btc_ws_shadow.py \
-                tests/test_gemini_kalshi_btc_ws_analyze.py -q >> "$OUT" 2>&1
+                tests/test_gemini_kalshi_btc_ws_analyze.py \
+                tests/test_gemini_kalshi_btc_ws_capital.py \
+                tests/test_gemini_kalshi_btc_ws_bankroll.py \
+                tests/test_gemini_kalshi_settlement_latency.py -q >> "$OUT" 2>&1
               rc=$?
               ;;
             analyze-btc)
@@ -72,6 +75,37 @@ jobs:
                 echo "analyzing=$latest" >> "$OUT"
                 .venv/bin/python -m src.gemini_kalshi_btc_ws_analyze "$latest" >> "$OUT" 2>&1
                 rc=$?
+              fi
+              ;;
+            settlement-latency-48h)
+              summary="logs/gemini_kalshi_settlement_latency_48h.json"
+              echo "output=$summary" >> "$OUT"
+              .venv/bin/python -m src.gemini_kalshi_settlement_latency --hours 48 > "$summary" 2>> "$OUT"
+              rc=$?
+              if [ "$rc" -eq 0 ]; then
+                cat "$summary" >> "$OUT"
+              fi
+              ;;
+            bankroll-btc)
+              latest=$(ls -1t logs/gemini_kalshi_btc_bookticker*.jsonl 2>/dev/null | head -1)
+              summary="logs/gemini_kalshi_settlement_latency_48h.json"
+              if [ -z "$latest" ]; then
+                echo "No BTC bookTicker log found." >> "$OUT"
+                rc=2
+              else
+                echo "analyzing=$latest" >> "$OUT"
+                echo "Refreshing 48h settlement latency..." >> "$OUT"
+                .venv/bin/python -m src.gemini_kalshi_settlement_latency --hours 48 > "$summary" 2>> "$OUT"
+                rc=$?
+                if [ "$rc" -eq 0 ]; then
+                  .venv/bin/python -m src.gemini_kalshi_btc_ws_bankroll "$latest" \
+                    --threshold-ms 10 \
+                    --kalshi-bankroll 4000 \
+                    --trade-caps 100 250 500 \
+                    --kalshi-fee-multiplier 1 \
+                    --settlement-latency-summary "$summary" >> "$OUT" 2>&1
+                  rc=$?
+                fi
               fi
               ;;
             shadow-btc-15m)
@@ -102,7 +136,7 @@ jobs:
               ;;
             *)
               echo "REJECTED: command is not allowlisted." >> "$OUT"
-              echo "Allowed: status, pull-feature, tests, analyze-btc, shadow-btc-15m, shadow-btc-60m" >> "$OUT"
+              echo "Allowed: status, pull-feature, tests, analyze-btc, settlement-latency-48h, bankroll-btc, shadow-btc-15m, shadow-btc-60m" >> "$OUT"
               rc=64
               ;;
           esac
