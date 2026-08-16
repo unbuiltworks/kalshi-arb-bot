@@ -10,12 +10,11 @@ COPY config/ config/
 COPY tests/ tests/
 COPY main.py .
 
-# Fail closed on deterministic identity, activation/event-order safety, no-lookahead
-# basis math, and whole-episode basis-survival regressions.
-RUN PYTHONPATH=/app python -m pytest -q tests/test_gemini_kalshi_predictive_hot.py tests/test_gemini_kalshi_predictive_prewarmed.py tests/test_gemini_kalshi_prewarmed_basis_shadow.py
+# Fail closed on identity, activation/event-order safety, basis/no-lookahead logic,
+# whole-episode gates, and exact original-limit/depth revalidation math.
+RUN PYTHONPATH=/app python -m pytest -q tests/test_gemini_kalshi_predictive_hot.py tests/test_gemini_kalshi_predictive_prewarmed.py tests/test_gemini_kalshi_prewarmed_basis_shadow.py tests/test_gemini_kalshi_basis_execution_revalidation.py
 
-# Continuous read-only scanner. 2bp/5bp fields are research cohorts only; there is
-# no order authorization path and Gemini spot is explicitly not the Kaiko index.
+# Read-only execution research. No preview/order/cancel path exists.
 ENV BOT_MODE=paper
 
-CMD ["python", "-m", "src.gemini_kalshi_prewarmed_basis_shadow", "--assets", "BTC", "ETH", "SOL", "XRP", "--seconds", "0", "--max-quote-skew-ms", "100", "--capital-limit", "5", "--min-profit", "0.03", "--prewarm-lead-s", "1.0", "--output-dir", "/tmp/crypto-hot-prewarmed-basis"]
+CMD ["python", "-m", "src.gemini_kalshi_basis_execution_revalidation", "--assets", "BTC", "ETH", "SOL", "XRP", "--seconds", "0", "--max-quote-skew-ms", "100", "--capital-limit", "5", "--min-profit", "0.03", "--prewarm-lead-s", "1.0", "--output-dir", "/tmp/crypto-hot-exact-revalidation"]
