@@ -9,7 +9,8 @@ COPY src/ src/
 COPY config/ config/
 COPY tests/ tests/
 
-# One-shot public metadata diagnostic only; no credentials or order-entry path.
+# One-shot public Gemini metadata diagnostic only; no Kalshi requests, credentials,
+# or order-entry path.
 ENV BOT_MODE=paper
 
-CMD ["sh", "-c", "python -m src.gemini_kalshi_fast_overlap --max-expiry-skew-s 30; sleep 3600"]
+CMD ["sh", "-c", "python -m src.gemini_active_metadata; sleep 3600"]
