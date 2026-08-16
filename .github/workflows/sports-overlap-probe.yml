@@ -1,0 +1,76 @@
+name: Sports overlap probe
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probe:
+    if: github.event.issue.title == '[sports-overlap-probe]' && github.event.issue.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/universal-prediction-quant
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install -r requirements.txt
+
+      - name: Safety assertion
+        shell: bash
+        run: |
+          test "${ENABLE_GEMINI_KALSHI_LIVE_PROBES:-NO}" != "YES"
+          test ! -e .live_probe_arm_once
+
+      - id: probe
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m src.sports_overlap_probe > /tmp/sports_overlap.json
+          python - <<'PY' > /tmp/sports_overlap_compact.json
+          import json
+          with open('/tmp/sports_overlap.json') as f:
+              data=json.load(f)
+          compact={
+              'candidate_pairs': data.get('candidate_pairs',0),
+              'families_with_candidates': data.get('families_with_candidates',0),
+              'execution_eligible_pairs': data.get('execution_eligible_pairs',0),
+              'families': data.get('families',{}),
+              'read_only': data.get('read_only',True),
+              'order_entry': data.get('order_entry',False),
+          }
+          print(json.dumps(compact, separators=(',',':')))
+          PY
+          echo 'result<<EOF' >> "$GITHUB_OUTPUT"
+          head -c 58000 /tmp/sports_overlap_compact.json >> "$GITHUB_OUTPUT"
+          echo >> "$GITHUB_OUTPUT"
+          echo 'EOF' >> "$GITHUB_OUTPUT"
+
+      - uses: actions/github-script@v8
+        env:
+          PROBE_RESULT: ${{ steps.probe.outputs.result }}
+        with:
+          script: |
+            const body = [
+              'Sports overlap probe: success',
+              '',
+              '```json',
+              process.env.PROBE_RESULT || '{}',
+              '```',
+              '',
+              'Candidate discovery only. Read-only public APIs; no credentials or order entry. Exact rule adapters are still required before any pair can become execution-eligible.'
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
