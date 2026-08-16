@@ -11,6 +11,12 @@ Favorable 2x settlement mismatches receive no credit. This produces a stressed
 profit-per-capital-hour on the same margin + latency-survival cohort rather than
 mixing filtered P&L with an unfiltered denominator.
 
+The same cohort reports the mathematically implied break-even adverse mismatch
+probability: apparent locked profit / consumable contracts. Comparing the Wilson-95
+upper mismatch probability against that break-even rate gives a non-arbitrary
+confidence gate: if the upper bound is at or above break-even, the observed edge is
+not yet robust to basis uncertainty at the stated confidence level.
+
 Research only. No authentication or order-entry path.
 """
 
@@ -54,6 +60,14 @@ def _join_scenario(pnl_row: dict[str, Any], capital_row: dict[str, Any]) -> dict
     stressed_loss = None
     stressed_pnl = None
     stressed_efficiency = None
+    break_even_rate = None
+    confidence_gap = None
+    confidence_status = "UNRESOLVED_NO_CONSUMABLE_CONTRACTS"
+
+    if contracts > 0:
+        break_even_rate = apparent / contracts
+        confidence_status = "UNRESOLVED_WILSON95_UNAVAILABLE"
+
     if upper_raw is not None:
         upper = D(str(upper_raw))
         if upper < 0 or upper > 1:
@@ -65,6 +79,13 @@ def _join_scenario(pnl_row: dict[str, Any], capital_row: dict[str, Any]) -> dict
         hours = D(capital_hours)
         if hours > 0:
             stressed_efficiency = stressed_pnl / hours
+        if break_even_rate is not None:
+            confidence_gap = upper - break_even_rate
+            confidence_status = (
+                "PASSES_WILSON95_BREAK_EVEN"
+                if confidence_gap < 0
+                else "INSUFFICIENT_WILSON95_BASIS_MARGIN"
+            )
 
     return {
         "consumable_episodes": pnl_row["consumable_episodes"],
@@ -78,6 +99,13 @@ def _join_scenario(pnl_row: dict[str, Any], capital_row: dict[str, Any]) -> dict
         "consumable_mismatch_episodes": pnl_row["consumable_mismatch_episodes"],
         "consumable_mismatch_rate": pnl_row["consumable_mismatch_rate"],
         "consumable_mismatch_rate_wilson_upper_95": upper_raw,
+        "basis_break_even_adverse_mismatch_rate": (
+            str(break_even_rate) if break_even_rate is not None else None
+        ),
+        "wilson95_minus_break_even_mismatch_rate": (
+            str(confidence_gap) if confidence_gap is not None else None
+        ),
+        "basis_confidence_status": confidence_status,
         "wilson95_adverse_basis_stress_loss_dollars": (
             str(stressed_loss) if stressed_loss is not None else None
         ),
@@ -139,6 +167,8 @@ def efficiency_summary(
         "basis_stress_efficiency_metric": "WILSON95_ONE_SIDED_ADVERSE_BASIS_STRESS_PNL_DOLLARS_PER_EXACT_SAME_FRESH_CONSUMABLE_CAPITAL_HOUR",
         "basis_stress_method": "WILSON95_UPPER_MISMATCH_PROBABILITY_X_$1_PER_CONSUMABLE_CONTRACT_SUBTRACTED_FROM_APPARENT_LOCKED_PNL",
         "basis_stress_interpretation": "ONE_SIDED_ADVERSE_STRESS_NOT_EXPECTED_VALUE_OR_FORECAST_FAVORABLE_2X_MISMATCHES_GET_NO_CREDIT",
+        "basis_break_even_method": "APPARENT_LOCKED_PROFIT_DOLLARS_DIVIDED_BY_CONSUMABLE_CONTRACTS_EQUALS_MAX_ADVERSE_MISMATCH_PROBABILITY_BEFORE_EDGE_BREAKS_EVEN",
+        "basis_confidence_gate": "PASS_ONLY_WHEN_WILSON95_UPPER_MISMATCH_PROBABILITY_IS_STRICTLY_BELOW_COHORT_BREAK_EVEN_ADVERSE_MISMATCH_RATE",
         "denominator_policy": "EXACT_SAME_MARGIN_AND_LATENCY_SURVIVAL_COHORT_AS_PNL_NUMERATOR",
         "settlement_delay_policy": "OPTIONAL_EMPIRICAL_POST_CLOSE_DELAY_INCREASES_DENOMINATOR_ONLY",
         "basis_uncertainty_policy": settlement["basis_uncertainty_policy"],
