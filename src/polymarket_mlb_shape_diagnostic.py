@@ -14,7 +14,7 @@ from src.strict_mlb_prop_snapshot import POLY, _fetch_json
 async def _fetch_all_props(http: httpx.AsyncClient) -> list[dict]:
     """Read the documented direct market surface, paging defensively."""
     rows: list[dict] = []
-    limit = 500
+    limit = 50
     for offset in range(0, 5000, limit):
         body = await _fetch_json(
             http,
@@ -25,7 +25,7 @@ async def _fetch_all_props(http: httpx.AsyncClient) -> list[dict]:
                 "active": "true",
                 "closed": "false",
                 "categories": "sports",
-                "sportsMarketTypes": "PROP",
+                "sportsMarketTypes": "SPORTS_MARKET_TYPE_PROP",
             },
         )
         page = list(body.get("markets") or [])
