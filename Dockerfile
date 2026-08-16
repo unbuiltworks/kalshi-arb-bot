@@ -9,10 +9,11 @@ COPY src/ src/
 COPY config/ config/
 COPY tests/ tests/
 
-# Fail closed if proxy averaging math regresses before the research container starts.
-RUN PYTHONPATH=/app python -m pytest -q tests/test_gemini_kaiko_proxy_calibration.py
+# Fail closed if historical proxy selection/statistics regress.
+RUN PYTHONPATH=/app python -m pytest -q tests/test_gemini_kaiko_historical_proxy.py
 
-# Continuous Gemini-only calibration research. No Kalshi calls or order-entry path.
+# One-shot historical prospective-proxy analysis. Read-only; four paced Kalshi
+# settlement-series queries plus public Gemini settlement/trade data only.
 ENV BOT_MODE=paper
 
-CMD ["python", "-m", "src.gemini_kaiko_proxy_calibration"]
+CMD ["sh", "-c", "python -m src.gemini_kaiko_historical_proxy --hours 48 --gemini-limit 5000 --pace-s 0.12; sleep 3600"]
