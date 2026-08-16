@@ -17,4 +17,4 @@ RUN PYTHONPATH=/app python -m pytest -q tests/test_kalshi_nested_strike_shadow.p
 # or order-entry path. Container stays observable after the scan completes.
 ENV BOT_MODE=paper
 
-CMD ["sh", "-c", "python -m src.kalshi_nested_strike_shadow --series KXBTCD --q-max 5; sleep 3600"]
+CMD ["sh", "-c", "python -m src.kalshi_nested_strike_shadow --series KXBTCD KXETHD KXSOLD KXDOGED KXSHIBAD --q-max 5; sleep 3600"]
