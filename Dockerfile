@@ -9,9 +9,10 @@ COPY src/ src/
 COPY config/ config/
 COPY tests/ tests/
 
-# Fail the image build if predictive identity or discovery backoff regressions break.
-# Explicit PYTHONPATH is required because this image is not installed as a package.
-RUN PYTHONPATH=/app python -m pytest -q tests/test_gemini_kalshi_predictive_hot.py tests/test_crypto_hot_catalog_backoff.py
+# Fail the image build if deterministic rollover identity regressions break.
+# The legacy REST-catalog backoff suite is exercised on the catalog branch; importing
+# predictive mode intentionally replaces that catalog and would invalidate the test.
+RUN PYTHONPATH=/app python -m pytest -q tests/test_gemini_kalshi_predictive_hot.py
 
 # This branch is intentionally read-only. It cannot start the live/paper trading bot.
 ENV BOT_MODE=paper
