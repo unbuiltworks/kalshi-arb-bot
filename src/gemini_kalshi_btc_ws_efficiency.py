@@ -17,6 +17,11 @@ upper mismatch probability against that break-even rate gives a non-arbitrary
 confidence gate: if the upper bound is at or above break-even, the observed edge is
 not yet robust to basis uncertainty at the stated confidence level.
 
+For cohorts that do not pass, we also report the minimum additional independent
+settled consumable episodes needed for the Wilson-95 upper bound to fall strictly
+below break-even if every additional episode has no mismatch. This is a best-case
+data-sufficiency target, not a forecast that future episodes will be clean.
+
 Research only. No authentication or order-entry path.
 """
 
@@ -39,6 +44,7 @@ from src.gemini_kalshi_btc_ws_settlement import (
     load_episodes_stream,
     settlement_adjusted_episodes,
 )
+from src.gemini_kalshi_lock_settlement_join import _wilson_upper_95
 from src.gemini_kalshi_settlement_agreement import AgreementRow, _gemini_settled
 from src.gemini_kalshi_settlement_probe import _kalshi_settled_paced, match_settled_true_windows
 
@@ -50,10 +56,57 @@ def _ratio(pnl: str, capital_hours: str) -> str | None:
     return str(D(pnl) / denominator)
 
 
+def _minimum_total_episodes_to_pass_wilson95(
+    mismatches: int,
+    current_episodes: int,
+    break_even_rate: Decimal,
+) -> int | None:
+    """Best-case total episode count needed to pass if all future episodes are clean.
+
+    The mismatch numerator is held fixed while the denominator grows. Because the
+    Wilson upper bound monotonically falls in this clean-future scenario, binary
+    search finds the first total n whose upper bound is strictly below the cohort's
+    adverse basis break-even rate.
+    """
+    if current_episodes < 0 or mismatches < 0 or mismatches > current_episodes:
+        raise ValueError("invalid episode/mismatch counts")
+    if break_even_rate <= 0:
+        return None
+    if break_even_rate > 1:
+        break_even_rate = D("1")
+
+    def passes(n: int) -> bool:
+        upper = _wilson_upper_95(mismatches, n)
+        return upper is not None and D(str(upper)) < break_even_rate
+
+    start = max(current_episodes, 1)
+    if passes(start):
+        return start
+
+    hi = start
+    # Cap only prevents pathological infinite search for vanishingly small edges.
+    # 1e9 independent episodes is already operationally equivalent to "not viable".
+    while hi < 1_000_000_000 and not passes(hi):
+        hi = min(1_000_000_000, hi * 2)
+    if not passes(hi):
+        return None
+
+    lo = start + 1
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if passes(mid):
+            hi = mid
+        else:
+            lo = mid + 1
+    return lo
+
+
 def _join_scenario(pnl_row: dict[str, Any], capital_row: dict[str, Any]) -> dict[str, Any]:
     pnl = str(pnl_row["settlement_adjusted_pnl_dollars"])
     apparent = D(str(pnl_row["apparent_locked_profit_dollars"]))
     contracts = D(str(pnl_row["consumable_contracts"]))
+    episodes = int(pnl_row["consumable_episodes"])
+    mismatches = int(pnl_row["consumable_mismatch_episodes"])
     capital_hours = str(capital_row["consumable_capital_hours"])
     upper_raw = pnl_row.get("consumable_mismatch_rate_wilson_upper_95")
 
@@ -63,10 +116,19 @@ def _join_scenario(pnl_row: dict[str, Any], capital_row: dict[str, Any]) -> dict
     break_even_rate = None
     confidence_gap = None
     confidence_status = "UNRESOLVED_NO_CONSUMABLE_CONTRACTS"
+    min_total_episodes = None
+    additional_clean_episodes = None
 
     if contracts > 0:
         break_even_rate = apparent / contracts
         confidence_status = "UNRESOLVED_WILSON95_UNAVAILABLE"
+        min_total_episodes = _minimum_total_episodes_to_pass_wilson95(
+            mismatches,
+            episodes,
+            break_even_rate,
+        )
+        if min_total_episodes is not None:
+            additional_clean_episodes = max(0, min_total_episodes - episodes)
 
     if upper_raw is not None:
         upper = D(str(upper_raw))
@@ -106,6 +168,8 @@ def _join_scenario(pnl_row: dict[str, Any], capital_row: dict[str, Any]) -> dict
             str(confidence_gap) if confidence_gap is not None else None
         ),
         "basis_confidence_status": confidence_status,
+        "best_case_total_independent_episodes_needed_to_pass_wilson95": min_total_episodes,
+        "best_case_additional_clean_episodes_needed_to_pass_wilson95": additional_clean_episodes,
         "wilson95_adverse_basis_stress_loss_dollars": (
             str(stressed_loss) if stressed_loss is not None else None
         ),
@@ -169,6 +233,8 @@ def efficiency_summary(
         "basis_stress_interpretation": "ONE_SIDED_ADVERSE_STRESS_NOT_EXPECTED_VALUE_OR_FORECAST_FAVORABLE_2X_MISMATCHES_GET_NO_CREDIT",
         "basis_break_even_method": "APPARENT_LOCKED_PROFIT_DOLLARS_DIVIDED_BY_CONSUMABLE_CONTRACTS_EQUALS_MAX_ADVERSE_MISMATCH_PROBABILITY_BEFORE_EDGE_BREAKS_EVEN",
         "basis_confidence_gate": "PASS_ONLY_WHEN_WILSON95_UPPER_MISMATCH_PROBABILITY_IS_STRICTLY_BELOW_COHORT_BREAK_EVEN_ADVERSE_MISMATCH_RATE",
+        "basis_sample_sufficiency_method": "MINIMUM_TOTAL_INDEPENDENT_SETTLED_CONSUMABLE_EPISODES_NEEDED_FOR_WILSON95_UPPER_TO_FALL_STRICTLY_BELOW_BREAK_EVEN_HOLDING_OBSERVED_MISMATCH_COUNT_FIXED_AND_ASSUMING_ALL_ADDITIONAL_EPISODES_ARE_CLEAN",
+        "basis_sample_sufficiency_interpretation": "BEST_CASE_DATA_REQUIREMENT_NOT_A_FORECAST_OR_SAFETY_CERTIFICATION",
         "denominator_policy": "EXACT_SAME_MARGIN_AND_LATENCY_SURVIVAL_COHORT_AS_PNL_NUMERATOR",
         "settlement_delay_policy": "OPTIONAL_EMPIRICAL_POST_CLOSE_DELAY_INCREASES_DENOMINATOR_ONLY",
         "basis_uncertainty_policy": settlement["basis_uncertainty_policy"],
