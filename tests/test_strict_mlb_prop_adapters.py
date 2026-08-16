@@ -31,6 +31,20 @@ def poly(family: str, stat_code: str, stat_text: str, line: str = "2") -> dict:
     }
 
 
+def poly_current_shape(
+    family: str,
+    slug_stat: str,
+    stat_text: str,
+    line: str = "2",
+) -> dict:
+    return {
+        "sportsMarketTypeV2": "SPORTS_MARKET_TYPE_PROP",
+        "slug": f"player-prop-mlb-wsh-nym-2026-08-16-{slug_stat}-francisco-lindor-gte{line}",
+        "title": f"Francisco Lindor: {line}+ {stat_text}?",
+        "line": line,
+    }
+
+
 def kalshi(series: str, title_stat: str, market_stat: str, line: str = "2") -> tuple[dict, dict]:
     event = {
         "series_ticker": series,
@@ -93,6 +107,65 @@ def test_strict_family_match(
     assert result.read_only is True
     assert result.order_entry is False
     assert result.settlement_key.startswith("mlb:2026-08-16:nym-wsh:")
+
+
+@pytest.mark.parametrize(
+    "family,slug_stat,poly_stat,series,title_stat,market_stat",
+    [
+        ("baseball_player_hits", "hits", "hits", "KXMLBHIT", "Hits", "hits"),
+        (
+            "baseball_player_hits_runs_rbis",
+            "hrr",
+            "hits + runs + RBIs",
+            "KXMLBHRR",
+            "Hits + Runs + RBIs",
+            "hits + runs + RBIs",
+        ),
+        (
+            "baseball_player_total_bases",
+            "tb",
+            "total bases",
+            "KXMLBTB",
+            "Total Bases",
+            "total bases",
+        ),
+        (
+            "baseball_player_strikeouts",
+            "strikeouts",
+            "strikeouts",
+            "KXMLBKS",
+            "Strikeouts",
+            "strikeouts",
+        ),
+    ],
+)
+def test_current_poly_prop_shape_matches_strictly(
+    family: str,
+    slug_stat: str,
+    poly_stat: str,
+    series: str,
+    title_stat: str,
+    market_stat: str,
+) -> None:
+    p = poly_current_shape(family, slug_stat, poly_stat)
+    event, market = kalshi(series, title_stat, market_stat)
+    result = strict_match(p, event, market, audit(series))
+    assert result is not None
+    assert result.family == family
+    assert result.threshold == Decimal("2")
+
+
+def test_current_shape_rejects_prop_family_disagreement() -> None:
+    p = poly_current_shape("baseball_player_hits", "hits", "total bases", "2")
+    event, market = kalshi("KXMLBHIT", "Hits", "hits", "2")
+    assert strict_match(p, event, market, audit("KXMLBHIT")) is None
+
+
+def test_current_shape_rejects_threshold_disagreement() -> None:
+    p = poly_current_shape("baseball_player_total_bases", "tb", "total bases", "2")
+    p["line"] = "3"
+    event, market = kalshi("KXMLBTB", "Total Bases", "total bases", "2")
+    assert strict_match(p, event, market, audit("KXMLBTB")) is None
 
 
 def test_rejects_hits_to_hrr_false_positive() -> None:
