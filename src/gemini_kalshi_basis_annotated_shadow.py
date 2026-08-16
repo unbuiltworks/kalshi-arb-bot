@@ -1,40 +1,61 @@
 """Prospective basis annotation for the read-only Gemini/Kalshi HOT scanner.
 
-This shadow layer answers a narrow question: when an executable complementary quote
-appears, how far is *observable Gemini spot* from Gemini Prediction's published Kaiko
-strike at that exact moment?
+When an executable complementary quote appears, this layer records how far the
+observable Gemini spot midpoint was from Gemini Prediction's published Kaiko strike
+at that exact timestamp. Gemini spot is only a proxy; Kaiko remains the official
+Gemini prediction-market source, so this module never authorizes an order.
 
-It does not treat Gemini spot as the settlement index. Kaiko remains the official
-Gemini prediction-market source, so every annotation is explicitly a proxy and no
-order-entry authorization is added. The layer uses only Gemini public spot WebSocket
-quotes plus Gemini prediction metadata; it adds no Kalshi REST discovery load.
+The layer uses Gemini public spot WebSocket data and Gemini prediction metadata only.
+It adds no Kalshi REST market-discovery load and retains the HOT scanner's existing
+INDEX_MISMATCH_RESEARCH_ONLY settlement guard.
 """
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from collections.abc import Iterable
-from datetime import datetime
-from decimal import Decimal
+from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 import json
 import logging
 import time
 from typing import Any
 
 import httpx
+import websockets
 
 from src import gemini_kalshi_predictive_hot as predictive
-from src.gemini_kaiko_proxy_calibration import (
-    ASSET_SYMBOL,
-    SpotState,
-    _event_strike,
-    fetch_window_events,
-    spot_stream,
-)
+from src.gemini_kalshi_fast_overlap import _gemini_active_crypto, _gemini_meta
+from src.gemini_kalshi_live_shadow import GEMINI_WS
 from src.gemini_kalshi_predictive_hot import _next_window_end
+from src.gemini_kalshi_settlement_agreement import _gemini_up_contract
 
 D = Decimal
 hot = predictive.hot
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_annotated_shadow")
+ASSET_SYMBOL = {"BTC": "btcusd", "ETH": "ethusd", "SOL": "solusd", "XRP": "xrpusd"}
+SYMBOL_ASSET = {symbol: asset for asset, symbol in ASSET_SYMBOL.items()}
+
+
+def _dec(value: Any) -> Decimal | None:
+    try:
+        out = D(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    return out if out.is_finite() else None
+
+
+@dataclass
+class SpotState:
+    asset: str
+    history: deque[tuple[int, Decimal]] = field(default_factory=deque)
+
+    def update(self, *, bid: Decimal, ask: Decimal, receive_ms: int) -> None:
+        self.history.append((int(receive_ms), (bid + ask) / D("2")))
+        cutoff = int(receive_ms) - 125_000
+        while len(self.history) > 2 and self.history[1][0] < cutoff:
+            self.history.popleft()
+
 
 _STATES: dict[str, SpotState] = {asset: SpotState(asset) for asset in ASSET_SYMBOL}
 # asset -> (window_end_iso, strike, source_details)
@@ -47,10 +68,10 @@ _ORIGINAL_UPDATE_EPISODES = hot._update_episodes
 def latest_at_or_before(
     history: Iterable[tuple[int, Decimal]], target_ms: int
 ) -> tuple[int, Decimal] | None:
-    """Return the newest observed spot midpoint that was knowable by target_ms."""
+    """Return the newest observed midpoint that was knowable by target_ms."""
     best: tuple[int, Decimal] | None = None
     for ts, price in history:
-        if ts <= target_ms:
+        if int(ts) <= int(target_ms):
             best = (int(ts), D(price))
         else:
             break
@@ -60,15 +81,11 @@ def latest_at_or_before(
 def twap_at_or_before(
     history: Iterable[tuple[int, Decimal]], target_ms: int, window_ms: int = 60_000
 ) -> tuple[Decimal | None, int | None]:
-    """Piecewise-constant TWAP using only observations at/before target_ms.
-
-    If history starts inside the requested interval, returns a shorter observed span
-    rather than fabricating an earlier price.
-    """
-    rows = [(int(ts), D(price)) for ts, price in history if int(ts) <= target_ms]
+    """Piecewise-constant TWAP using only observations at/before target_ms."""
+    rows = [(int(ts), D(price)) for ts, price in history if int(ts) <= int(target_ms)]
     if not rows:
         return None, None
-    start = target_ms - int(window_ms)
+    start = int(target_ms) - int(window_ms)
 
     anchor_idx = 0
     for i, (ts, _price) in enumerate(rows):
@@ -97,8 +114,81 @@ def twap_at_or_before(
         cursor = ts
     if target_ms > cursor:
         area += current * D(target_ms - cursor)
-    span = target_ms - calc_start
+    span = int(target_ms) - calc_start
     return ((area / D(span)) if span > 0 else current), span
+
+
+def _event_strike(event: dict[str, Any]) -> Decimal | None:
+    contract = _gemini_up_contract(event)
+    if contract is None:
+        return None
+    strike_obj = contract.get("strike") or {}
+    if not isinstance(strike_obj, dict):
+        return None
+    return _dec(strike_obj.get("value"))
+
+
+async def _fetch_window_events(
+    http: httpx.AsyncClient, window_end, *, timeout_s: float = 30.0
+) -> dict[str, dict[str, Any]]:
+    """Pace Gemini-only metadata polling until current-window strikes exist."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        events = await _gemini_active_crypto(http)
+        out: dict[str, dict[str, Any]] = {}
+        for event in events:
+            meta = _gemini_meta(event)
+            if meta is None:
+                continue
+            asset, duration, end = meta
+            if (
+                duration == 15
+                and asset in ASSET_SYMBOL
+                and abs((end - window_end).total_seconds()) < 1
+                and _event_strike(event) is not None
+            ):
+                out[asset] = event
+        if len(out) == len(ASSET_SYMBOL) or time.monotonic() >= deadline:
+            return out
+        await asyncio.sleep(0.5)
+
+
+async def _spot_stream() -> None:
+    """Maintain public Gemini spot midpoints for all four assets on one WS."""
+    streams = [f"{symbol}@bookTicker" for symbol in ASSET_SYMBOL.values()]
+    backoff = 0.25
+    while True:
+        try:
+            async with websockets.connect(GEMINI_WS, open_timeout=5.0) as ws:
+                await ws.send(json.dumps({
+                    "id": "hot-basis-proxy",
+                    "method": "subscribe",
+                    "params": streams,
+                }))
+                backoff = 0.25
+                async for raw in ws:
+                    receive_ms = int(time.time() * 1000)
+                    payload = json.loads(raw)
+                    if payload.get("status") is not None:
+                        if int(payload.get("status")) >= 400:
+                            raise RuntimeError(f"Gemini spot WS subscription error: {payload}")
+                        continue
+                    asset = SYMBOL_ASSET.get(str(payload.get("s") or "").lower())
+                    if asset is None:
+                        continue
+                    bid, ask = _dec(payload.get("b")), _dec(payload.get("a"))
+                    if bid is None or ask is None or bid <= 0 or ask <= 0 or ask < bid:
+                        continue
+                    _STATES[asset].update(bid=bid, ask=ask, receive_ms=receive_ms)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "CRYPTO_HOT_BASIS_SPOT_RECONNECT type=%s error=%s",
+                type(exc).__name__, str(exc)[:220],
+            )
+            await asyncio.sleep(backoff)
+            backoff = min(5.0, backoff * 2)
 
 
 def basis_snapshot(asset: str, candidate_ms: int) -> dict[str, Any] | None:
@@ -115,15 +205,13 @@ def basis_snapshot(asset: str, candidate_ms: int) -> dict[str, Any] | None:
     if latest is None:
         return None
     quote_ms, spot_mid = latest
-    quote_age_ms = candidate_ms - quote_ms
+    quote_age_ms = int(candidate_ms) - quote_ms
     if quote_age_ms < 0:
         return None
-    twap60, twap_span_ms = twap_at_or_before(state.history, candidate_ms, 60_000)
+    twap60, twap_span_ms = twap_at_or_before(state.history, int(candidate_ms), 60_000)
     mid_margin_bps = (spot_mid - strike) / strike * D("10000")
     twap_margin_bps = (
-        (twap60 - strike) / strike * D("10000")
-        if twap60 is not None
-        else None
+        (twap60 - strike) / strike * D("10000") if twap60 is not None else None
     )
     return {
         "basis_proxy": "GEMINI_PUBLIC_SPOT_BOOK_MID",
@@ -147,17 +235,11 @@ def basis_snapshot(asset: str, candidate_ms: int) -> dict[str, Any] | None:
 
 
 async def _basis_metadata_loop() -> None:
-    """Keep the current window's published Kaiko strikes in memory.
-
-    Gemini may publish the strike a few seconds after the quarter-hour. Polling is
-    Gemini-only and paced; missing metadata simply leaves candidate annotations
-    unavailable rather than guessing.
-    """
     async with httpx.AsyncClient(timeout=20.0) as http:
         while True:
             window_end = _next_window_end()
             try:
-                events = await fetch_window_events(http, window_end, timeout_s=30.0)
+                events = await _fetch_window_events(http, window_end, timeout_s=30.0)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -168,6 +250,8 @@ async def _basis_metadata_loop() -> None:
                 await asyncio.sleep(2.0)
                 continue
 
+            # Remove stale prior-window strikes before installing the current set.
+            _STRIKES.clear()
             for asset, event in events.items():
                 strike = _event_strike(event)
                 if strike is None:
@@ -192,7 +276,7 @@ async def _basis_metadata_loop() -> None:
 
 
 async def _basis_collect_all(**kwargs):
-    spot_task = asyncio.create_task(spot_stream(_STATES), name="hot-basis-gemini-spot")
+    spot_task = asyncio.create_task(_spot_stream(), name="hot-basis-gemini-spot")
     metadata_task = asyncio.create_task(_basis_metadata_loop(), name="hot-basis-strikes")
     try:
         return await _ORIGINAL_COLLECT_ALL(**kwargs)
@@ -202,10 +286,8 @@ async def _basis_collect_all(**kwargs):
         await asyncio.gather(spot_task, metadata_task, return_exceptions=True)
 
 
-def _basis_update_episodes(
-    *, active, qualifying, now_ms, asset, pair, trigger_venue
-) -> None:
-    # Emit once, at episode entry, before the underlying function mutates ``active``.
+def _basis_update_episodes(*, active, qualifying, now_ms, asset, pair, trigger_venue) -> None:
+    # Emit once at episode entry, before the underlying function mutates ``active``.
     for direction, (q, candidate) in qualifying.items():
         if direction in active:
             continue
