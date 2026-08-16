@@ -91,17 +91,26 @@ async def probe_asset(asset: str, boundary_ts: float, lead_s: float, timeout_aft
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
-async def run(assets: list[str], lead_s: float, timeout_after_s: float) -> None:
-    boundary = _next_window_end()
-    boundary_ts = boundary.timestamp()
-    logger.info("CRYPTO_HOT_PREWARM_PLAN %s", json.dumps({
-        "boundary_utc": boundary.isoformat(),
-        "lead_s": lead_s,
-        "assets": assets,
-        "read_only": True,
-        "order_entry": False,
-    }, separators=(",", ":")))
-    await asyncio.gather(*(probe_asset(a, boundary_ts, lead_s, timeout_after_s) for a in assets))
+async def run(assets: list[str], lead_s: float, timeout_after_s: float, rollovers: int = 0) -> None:
+    """Benchmark consecutive rollovers; ``rollovers=0`` means run continuously."""
+    completed = 0
+    while rollovers <= 0 or completed < rollovers:
+        boundary = _next_window_end()
+        boundary_ts = boundary.timestamp()
+        logger.info("CRYPTO_HOT_PREWARM_PLAN %s", json.dumps({
+            "boundary_utc": boundary.isoformat(),
+            "lead_s": lead_s,
+            "assets": assets,
+            "rollover_index": completed + 1,
+            "rollovers_requested": rollovers,
+            "read_only": True,
+            "order_entry": False,
+        }, separators=(",", ":")))
+        await asyncio.gather(*(probe_asset(a, boundary_ts, lead_s, timeout_after_s) for a in assets))
+        completed += 1
+        # probe_asset normally returns shortly after the boundary. This tiny guard
+        # prevents a same-boundary repeat if all subscriptions fail unusually early.
+        await asyncio.sleep(max(0.05, boundary_ts + 0.05 - time.time()))
 
 
 def main() -> None:
@@ -109,9 +118,15 @@ def main() -> None:
     parser.add_argument("--assets", nargs="+", default=["BTC", "ETH", "SOL", "XRP"])
     parser.add_argument("--lead-s", type=float, default=1.0)
     parser.add_argument("--timeout-after-s", type=float, default=8.0)
+    parser.add_argument(
+        "--rollovers",
+        type=int,
+        default=0,
+        help="Number of quarter-hour rollovers to benchmark; 0 runs continuously",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
-    asyncio.run(run([a.upper() for a in args.assets], args.lead_s, args.timeout_after_s))
+    asyncio.run(run([a.upper() for a in args.assets], args.lead_s, args.timeout_after_s, args.rollovers))
 
 
 if __name__ == "__main__":
