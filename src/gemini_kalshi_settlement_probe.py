@@ -12,6 +12,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 import json
 import logging
+import time
 
 import httpx
 
@@ -152,9 +153,21 @@ def main() -> None:
     parser.add_argument("--hours", type=int, default=24)
     parser.add_argument("--gemini-limit", type=int, default=500)
     parser.add_argument("--max-expiry-skew-s", type=float, default=30.0)
+    parser.add_argument(
+        "--hold-seconds",
+        type=float,
+        default=300.0,
+        help="Keep the credential-free research container observable after logging the summary.",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
     asyncio.run(run(args.hours, args.gemini_limit, args.max_expiry_skew_s))
+    # Railway can discard stdout from a very short-lived successful one-shot before
+    # its log API exposes the runtime stream. Flush, then keep this research-only
+    # process alive briefly; no credentials or order path exist in this service.
+    logging.shutdown()
+    if args.hold_seconds > 0:
+        time.sleep(args.hold_seconds)
 
 
 if __name__ == "__main__":
