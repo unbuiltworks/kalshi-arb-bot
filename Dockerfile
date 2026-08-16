@@ -9,7 +9,7 @@ COPY src/ src/
 COPY config/ config/
 COPY tests/ tests/
 
-# This branch is intentionally read-only. It cannot start the live/paper trading bot.
+# One-shot public metadata diagnostic only; no credentials or order-entry path.
 ENV BOT_MODE=paper
 
-CMD ["python", "-m", "src.gemini_kalshi_multi_ws_hot_catalog", "--assets", "BTC", "ETH", "SOL", "XRP", "--seconds", "0", "--max-quote-skew-ms", "100", "--capital-limit", "5", "--min-profit", "0.03", "--output-dir", "/tmp/crypto-hot"]
+CMD ["sh", "-c", "python -m src.gemini_kalshi_fast_overlap --max-expiry-skew-s 30; sleep 3600"]
