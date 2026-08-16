@@ -31,11 +31,16 @@ class BackgroundPairCatalog:
         # ``ttl_s`` is accepted for drop-in compatibility with PairDiscoveryCache.
         self.refresh_s = max(1.0, float(refresh_s))
         self._lock = asyncio.Lock()
+        # Network discovery is separately single-flighted. Holding _lock across REST
+        # would block readers; _refresh_lock prevents four asset workers from issuing
+        # the same discovery burst at rollover.
+        self._refresh_lock = asyncio.Lock()
         self._pairs: list[Pair] = []
         self._fetched_monotonic = 0.0
         self._task: asyncio.Task[Any] | None = None
         self._refreshes = 0
         self._errors = 0
+        self._coalesced_refresh_waiters = 0
 
     @staticmethod
     def _future_pairs(pairs: list[Pair], asset: str, now: float) -> list[Pair]:
@@ -65,18 +70,28 @@ class BackgroundPairCatalog:
                 "pair_count": len(self._pairs),
                 "future_by_asset": by_asset,
                 "refresh_s": self.refresh_s,
+                "coalesced_refresh_waiters": self._coalesced_refresh_waiters,
                 "read_only": True,
                 "order_entry": False,
             }, separators=(",", ":")),
         )
 
-    async def _refresh(self, http: httpx.AsyncClient) -> None:
-        pairs = await _discover_pairs(http, 30.0)
-        async with self._lock:
-            self._pairs = pairs
-            self._fetched_monotonic = time.monotonic()
-            self._refreshes += 1
-            self._log_catalog()
+    async def _refresh(self, http: httpx.AsyncClient, *, min_spacing_s: float = 0.0) -> None:
+        """Refresh once, coalescing concurrent callers and optionally pacing retries."""
+        if self._refresh_lock.locked():
+            self._coalesced_refresh_waiters += 1
+        async with self._refresh_lock:
+            if min_spacing_s > 0:
+                async with self._lock:
+                    age = time.monotonic() - self._fetched_monotonic
+                if age < min_spacing_s:
+                    return
+            pairs = await _discover_pairs(http, 30.0)
+            async with self._lock:
+                self._pairs = pairs
+                self._fetched_monotonic = time.monotonic()
+                self._refreshes += 1
+                self._log_catalog()
 
     async def _refresh_loop(self, http: httpx.AsyncClient) -> None:
         while True:
@@ -96,27 +111,27 @@ class BackgroundPairCatalog:
                     }, separators=(",", ":")),
                 )
 
-    async def current_pair(self, http: httpx.AsyncClient, asset: str) -> Pair | None:
-        # Serialize first population so four asset workers still produce one REST
-        # discovery, then keep that discovery warm independently of their WS loops.
-        async with self._lock:
-            needs_initial = not self._pairs
-        if needs_initial:
-            async with self._lock:
-                if not self._pairs:
-                    pairs = await _discover_pairs(http, 30.0)
-                    self._pairs = pairs
-                    self._fetched_monotonic = time.monotonic()
-                    self._refreshes += 1
-                    self._log_catalog()
-                if self._task is None or self._task.done():
-                    self._task = asyncio.create_task(
-                        self._refresh_loop(http), name="crypto_pair_catalog"
-                    )
-        elif self._task is None or self._task.done():
+    async def _ensure_background(self, http: httpx.AsyncClient) -> None:
+        if self._task is None or self._task.done():
             self._task = asyncio.create_task(
                 self._refresh_loop(http), name="crypto_pair_catalog"
             )
+
+    async def current_pair(self, http: httpx.AsyncClient, asset: str) -> Pair | None:
+        # Populate once. All four asset workers share this catalog and _refresh() is
+        # single-flight, so startup and rollover never fan out duplicate REST scans.
+        async with self._lock:
+            needs_initial = not self._pairs
+        if needs_initial:
+            try:
+                await self._refresh(http)
+            except Exception as exc:
+                self._errors += 1
+                logger.warning(
+                    "CRYPTO_HOT_PAIR_INITIAL_REFRESH_ERROR asset=%s error=%s",
+                    asset, str(exc)[:240],
+                )
+        await self._ensure_background(http)
 
         now = time.time()
         async with self._lock:
@@ -125,11 +140,12 @@ class BackgroundPairCatalog:
                 return future[0]
             age = time.monotonic() - self._fetched_monotonic
 
-        # Fail-soft fallback: if a venue does not publish the next window until the
-        # boundary, force one immediate discovery rather than waiting up to refresh_s.
-        if age >= 0.5:
+        # Some 15-minute contracts are published only at the exact boundary and the
+        # four assets do not always appear atomically. Pace missing-asset retries and
+        # coalesce them through one network refresh instead of a four-worker burst.
+        if age >= 0.35:
             try:
-                await self._refresh(http)
+                await self._refresh(http, min_spacing_s=0.35)
             except Exception as exc:
                 self._errors += 1
                 logger.warning(
