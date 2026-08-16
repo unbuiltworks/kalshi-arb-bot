@@ -45,7 +45,7 @@ def kalshi(*, ticker_time: str = "26AUG161340", occurrence: str | None = None) -
     return event, market
 
 
-def test_same_scheduled_game_passes_with_ticker_fallback() -> None:
+def test_same_scheduled_game_passes_with_ticker_schedule() -> None:
     event, market = kalshi()
     result = strict_scheduled_match(poly(), event, market, audit("KXMLBHIT"))
     assert result is not None
@@ -82,27 +82,35 @@ def test_missing_poly_start_fails_closed() -> None:
     assert strict_scheduled_match(p, event, market, audit("KXMLBHIT")) is None
 
 
-def test_explicit_occurrence_timestamp_wins_over_conflicting_ticker_clock() -> None:
-    # Mirrors the live 2026-08-16 shape: ticker clock 12:15 while explicit market
-    # occurrence is 19:15Z. The structured occurrence is authoritative.
+def test_occurrence_datetime_does_not_override_scheduled_ticker_clock() -> None:
+    # Kalshi documents occurrence_datetime as when the underlying event occurred,
+    # not its scheduled start. A live 12:15 ET MLB ticker carried 19:15Z there.
     event, market = kalshi(
         ticker_time="26AUG161215",
         occurrence="2026-08-16T19:15:00Z",
     )
-    assert kalshi_event_start_utc(event, market).isoformat() == "2026-08-16T19:15:00+00:00"
+    assert kalshi_event_start_utc(event, market).isoformat() == "2026-08-16T16:15:00+00:00"
 
 
-def test_explicit_occurrence_still_enforces_cross_venue_schedule_identity() -> None:
+def test_occurrence_datetime_cannot_rescue_wrong_scheduled_game() -> None:
     event, market = kalshi(
         ticker_time="26AUG161215",
         occurrence="2026-08-16T19:15:00Z",
     )
     assert strict_scheduled_match(
-        poly(start="2026-08-16T19:15:00Z"), event, market, audit("KXMLBHIT")
+        poly(start="2026-08-16T16:15:00Z"), event, market, audit("KXMLBHIT")
     ) is not None
     assert strict_scheduled_match(
-        poly(start="2026-08-16T17:40:00Z"), event, market, audit("KXMLBHIT")
+        poly(start="2026-08-16T19:15:00Z"), event, market, audit("KXMLBHIT")
     ) is None
+
+
+def test_unparseable_kalshi_schedule_fails_closed_even_with_occurrence() -> None:
+    event, market = kalshi(occurrence="2026-08-16T17:40:00Z")
+    event["event_ticker"] = "KXMLBHIT-NOT-A-SCHEDULE"
+    market["event_ticker"] = event["event_ticker"]
+    assert kalshi_event_start_utc(event, market) is None
+    assert strict_scheduled_match(poly(), event, market, audit("KXMLBHIT")) is None
 
 
 def test_timestamp_parsers_are_explicit() -> None:
