@@ -12,8 +12,8 @@ COPY main.py .
 
 # Fail closed on nested payoff math, aggressive quote validity, trade-through
 # direction, nearest-expiry selection, dynamic cancel/reprice economics, the
-# one-lot live-probe envelope, V2 transport parsing, candidate orientation, and
-# bounded-risk seed-first execution.
+# one-lot live-probe envelope, V2 transport parsing, candidate orientation,
+# bounded-risk seed-first execution, and ambiguous/rejected submission handling.
 RUN PYTHONPATH=/app python -m pytest -q \
     tests/test_kalshi_nested_strike_shadow.py \
     tests/test_kalshi_nested_less_shadow.py \
@@ -24,7 +24,8 @@ RUN PYTHONPATH=/app python -m pytest -q \
     tests/test_kalshi_nested_live_probe_guard.py \
     tests/test_kalshi_nested_probe_transport.py \
     tests/test_kalshi_nested_live_candidate.py \
-    tests/test_kalshi_nested_seed_first_probe.py
+    tests/test_kalshi_nested_seed_first_probe.py \
+    tests/test_kalshi_nested_seed_first_failures.py
 
 ENV BOT_MODE=paper
 
