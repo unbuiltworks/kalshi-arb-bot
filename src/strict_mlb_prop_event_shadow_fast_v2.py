@@ -7,6 +7,8 @@ from fresh cached books and never authorize order entry.
 
 This wrapper also keeps a quiet five-second market-data interval from tearing down the
 whole session and reports book-update -> evaluation latency in heartbeat summaries.
+Shard 0 canaries the persistent all-counterpart subscription layer while shards 1-3
+remain on this proven v2 path.
 """
 from __future__ import annotations
 
@@ -264,17 +266,30 @@ async def run_session(args) -> None:
             )
 
 
-# Reuse the original signal/retry supervisor, but route sessions through this wrapper.
-hot.run_session = run_session
-
-
 def main() -> None:
-    logging.basicConfig(
-        level=os.getenv("LOG_LEVEL", "INFO"),
-        format="%(asctime)s %(levelname)-8s %(message)s",
-        stream=sys.stdout,
-    )
-    asyncio.run(hot.run(hot.parse_args()))
+    args = hot.parse_args()
+    if args.shard_index == 0:
+        # Canary the persistent architecture on exactly one read-only shard. The
+        # other three keep the already-validated v2 path until the canary proves
+        # subscription capacity, gate refresh, and latency under the larger set.
+        from src import strict_mlb_prop_event_shadow_persistent as persistent
+
+        logging.basicConfig(
+            level=os.getenv("LOG_LEVEL", "INFO"),
+            format="%(asctime)s %(levelname)-8s %(message)s",
+            stream=sys.stdout,
+            force=True,
+        )
+        hot.run_session = persistent.run_session
+    else:
+        logging.basicConfig(
+            level=os.getenv("LOG_LEVEL", "INFO"),
+            format="%(asctime)s %(levelname)-8s %(message)s",
+            stream=sys.stdout,
+            force=True,
+        )
+        hot.run_session = run_session
+    asyncio.run(hot.run(args))
 
 
 if __name__ == "__main__":
