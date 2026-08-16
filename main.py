@@ -1,5 +1,5 @@
-"""Railpack-safe entrypoint for REST-free predictive read-only crypto HOT."""
-from src.gemini_kalshi_predictive_hot import main
+"""Railpack-safe entrypoint for scoped historical proxy research."""
+from src.gemini_kaiko_historical_proxy_scoped import main
 
 
 if __name__ == "__main__":
