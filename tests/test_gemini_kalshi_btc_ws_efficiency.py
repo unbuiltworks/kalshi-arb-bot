@@ -74,6 +74,30 @@ def test_wilson_basis_stress_uses_same_filtered_capital_denominator():
     assert expected_stressed_pnl < 0
 
 
+def test_basis_break_even_gate_compares_wilson_upper_to_edge_per_contract():
+    eps = episodes([_row(1_000), _row(1_060), _row(1_120, positive=False)])
+    result = efficiency_summary(eps, [_agreement()])
+    entry = result["basis_margin_efficiency"]["1"]["entry"]
+    break_even = Decimal(entry["basis_break_even_adverse_mismatch_rate"])
+    upper = Decimal(str(entry["consumable_mismatch_rate_wilson_upper_95"]))
+    gap = Decimal(entry["wilson95_minus_break_even_mismatch_rate"])
+    assert break_even == Decimal("0.50") / Decimal("10")
+    assert gap == upper - break_even
+    assert gap > 0
+    assert entry["basis_confidence_status"] == "INSUFFICIENT_WILSON95_BASIS_MARGIN"
+    assert result["basis_confidence_gate"].startswith("PASS_ONLY_WHEN_WILSON95_UPPER")
+
+
+def test_zero_contract_cohort_has_no_break_even_rate():
+    eps = episodes([_row(1_000), _row(1_060), _row(1_120, positive=False)])
+    result = efficiency_summary(eps, [_agreement(margin_bps=0.2772)])
+    excluded = result["basis_margin_efficiency"]["0.5"]["entry"]
+    assert excluded["consumable_contracts"] == "0"
+    assert excluded["basis_break_even_adverse_mismatch_rate"] is None
+    assert excluded["wilson95_minus_break_even_mismatch_rate"] is None
+    assert excluded["basis_confidence_status"] == "UNRESOLVED_NO_CONSUMABLE_CONTRACTS"
+
+
 def test_adverse_mismatch_flows_through_efficiency_numerator():
     eps = episodes([_row(1_000), _row(1_060), _row(1_120, positive=False)])
     result = efficiency_summary(eps, [_agreement(agrees=False)])
@@ -111,6 +135,8 @@ def test_settlement_delay_only_reduces_efficiency_via_longer_capital_lock():
     assert Decimal(base["settlement_adjusted_profit_per_capital_hour"]) > Decimal(p50["settlement_adjusted_profit_per_capital_hour"]) > Decimal(p95["settlement_adjusted_profit_per_capital_hour"])
     stressed_pnl = Decimal(base["wilson95_adverse_basis_stress_pnl_dollars"])
     assert stressed_pnl == Decimal(p50["wilson95_adverse_basis_stress_pnl_dollars"]) == Decimal(p95["wilson95_adverse_basis_stress_pnl_dollars"])
+    assert base["basis_break_even_adverse_mismatch_rate"] == p50["basis_break_even_adverse_mismatch_rate"] == p95["basis_break_even_adverse_mismatch_rate"]
+    assert base["basis_confidence_status"] == p50["basis_confidence_status"] == p95["basis_confidence_status"]
     assert Decimal(base["wilson95_adverse_basis_stress_profit_per_capital_hour"]) < 0
     assert Decimal(p50["wilson95_adverse_basis_stress_profit_per_capital_hour"]) < 0
     assert Decimal(p95["wilson95_adverse_basis_stress_profit_per_capital_hour"]) < 0
