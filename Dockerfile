@@ -8,11 +8,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ src/
 COPY config/ config/
 COPY tests/ tests/
+COPY main.py .
 
-# Settlement agreement research is public/read-only and cannot enter orders.
+# One-shot settlement reconciliation only. Waits for Gemini target settlement, then
+# queries exactly the four Kalshi 15m crypto series. No order-entry path.
 ENV BOT_MODE=paper
 
-# Use the corrected close_time matcher and only the four 15-minute crypto series.
-# Analyze whether disagreement disappears once final settlement is sufficiently far
-# from strike; 15-minute cadence avoids needless control-plane load.
-CMD ["sh", "-c", "while true; do python -m src.gemini_kalshi_settlement_margin_analysis --hours 48 --gemini-limit 2000 --max-expiry-skew-s 30; sleep 900; done"]
+CMD ["python", "-m", "src.gemini_kalshi_target_reconcile", "--target", "2026-08-16T21:00:00Z", "--timeout-s", "900", "--poll-s", "10"]
