@@ -62,6 +62,9 @@ def test_agreement_preserves_apparent_locked_profit():
     assert result["entry"]["apparent_locked_profit_dollars"] == "0.50"
     assert result["entry"]["settlement_adjusted_pnl_dollars"] == "0.50"
     assert result["entry"]["basis_effect_dollars"] == "0.00"
+    assert result["entry"]["consumable_mismatch_episodes"] == 0
+    assert result["entry"]["consumable_mismatch_rate"] == 0.0
+    assert result["entry"]["consumable_mismatch_rate_wilson_upper_95"] > 0
 
 
 def test_adverse_mismatch_can_turn_lock_into_full_cost_loss():
@@ -72,6 +75,9 @@ def test_adverse_mismatch_can_turn_lock_into_full_cost_loss():
     assert entry["settlement_adjusted_pnl_dollars"] == "-9.50"
     assert entry["basis_effect_dollars"] == "-10.00"
     assert entry["adverse_mismatch_consumable_episodes"] == 1
+    assert entry["consumable_mismatch_episodes"] == 1
+    assert entry["consumable_mismatch_rate"] == 1.0
+    assert entry["consumable_mismatch_rate_wilson_upper_95"] == 1.0
 
 
 def test_favorable_mismatch_can_pay_both_legs():
@@ -88,6 +94,7 @@ def test_unsettled_episode_is_excluded_not_assumed_safe():
     assert result["entry"]["unresolved_episode_candidates"] == 1
     assert result["entry"]["consumable_contracts"] == "0"
     assert result["entry"]["settlement_adjusted_pnl_dollars"] == "0"
+    assert result["entry"]["consumable_mismatch_rate_wilson_upper_95"] is None
 
 
 def test_latency_scenario_uses_same_actual_settlement_accounting():
@@ -108,10 +115,13 @@ def test_basis_margin_sensitivity_excludes_near_boundary_adverse_mismatch():
     sensitivity = result["basis_margin_sensitivity"]
     assert sensitivity["0.25"]["entry"]["settlement_adjusted_pnl_dollars"] == "-9.50"
     assert sensitivity["0.25"]["entry"]["excluded_inside_margin_candidates"] == 0
+    assert sensitivity["0.25"]["entry"]["consumable_mismatch_rate"] == 1.0
     assert sensitivity["0.5"]["entry"]["settlement_adjusted_pnl_dollars"] == "0"
     assert sensitivity["0.5"]["entry"]["consumable_contracts"] == "0"
     assert sensitivity["0.5"]["entry"]["excluded_inside_margin_candidates"] == 1
+    assert sensitivity["0.5"]["entry"]["consumable_mismatch_rate_wilson_upper_95"] is None
     assert result["basis_margin_policy"] == "RETROSPECTIVE_ONLY_UNKNOWN_MARGIN_EXCLUDED_FROM_GATED_COHORTS"
+    assert result["basis_uncertainty_policy"] == "WILSON_UPPER_95_ON_CONSUMABLE_SETTLED_EPISODES"
 
 
 def test_basis_margin_sensitivity_fails_closed_on_unknown_margin():
@@ -124,6 +134,7 @@ def test_basis_margin_sensitivity_fails_closed_on_unknown_margin():
     gated = result["basis_margin_sensitivity"]["0"]["entry"]
     assert gated["settlement_adjusted_pnl_dollars"] == "0"
     assert gated["excluded_unknown_gemini_margin_candidates"] == 1
+    assert gated["consumable_mismatch_rate_wilson_upper_95"] is None
 
 
 def test_stream_loader_discards_non_positive_capture_rows(tmp_path):
