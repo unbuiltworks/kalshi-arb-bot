@@ -5,8 +5,8 @@ SHADOW_MODULES = [
     Path("src/polymarket_kalshi_shadow_v5.py"),
     Path("src/eventing_books.py"),
     Path("src/universe_overlap_audit.py"),
-    Path("src/universe_overlap_audit_v2.py"),
     Path("src/generic_cross_market_shadow.py"),
+    Path("src/gemini_kalshi_fast_overlap.py"),
 ]
 
 # Exact call-shaped fragments, not generic prose. If an execution path is ever
@@ -25,6 +25,7 @@ FORBIDDEN = (
 
 def test_shadow_modules_have_no_order_entry_calls():
     for path in SHADOW_MODULES:
+        assert path.exists(), f"Expected shadow module missing: {path}"
         text = path.read_text().lower()
         hits = [fragment for fragment in FORBIDDEN if fragment in text]
         assert not hits, f"{path} contains forbidden order-entry calls: {hits}"

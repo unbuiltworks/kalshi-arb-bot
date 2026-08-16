@@ -1,0 +1,50 @@
+name: Gemini Kalshi Live Snapshot
+
+on:
+  push:
+    branches:
+      - feature/gemini-kalshi-fast-overlap
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Capture current Kalshi 15m fee metadata
+        run: |
+          set -o pipefail
+          python -m src.gemini_kalshi_kalshi_fees 2>&1 | tee gemini-kalshi-fees.log
+      - name: Run corrected same-window price snapshot
+        run: |
+          set -o pipefail
+          python -m src.gemini_kalshi_aligned_snapshot 2>&1 | tee gemini-kalshi-snapshot.log
+      - name: Diagnose window lifecycle and alignment
+        run: |
+          set -o pipefail
+          python -m src.gemini_kalshi_alignment_diagnostic 2>&1 | tee gemini-kalshi-alignment.log
+      - name: Run corrected recent settlement agreement probe
+        run: |
+          set -o pipefail
+          python -m src.gemini_kalshi_settlement_probe --hours 24 --gemini-limit 500 2>&1 | tee gemini-kalshi-agreement.log
+      - name: Upload research logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-kalshi-research
+          path: |
+            gemini-kalshi-fees.log
+            gemini-kalshi-snapshot.log
+            gemini-kalshi-alignment.log
+            gemini-kalshi-agreement.log
+          if-no-files-found: warn
+          retention-days: 7
