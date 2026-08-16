@@ -9,7 +9,7 @@ COPY src/ src/
 COPY config/ config/
 COPY tests/ tests/
 
-# Fail closed if historical proxy selection/statistics regress.
+# Fail closed if historical proxy selection/statistics regress before launch.
 RUN PYTHONPATH=/app python -m pytest -q tests/test_gemini_kaiko_historical_proxy.py
 
 # One-shot historical prospective-proxy analysis. Read-only; four paced Kalshi
