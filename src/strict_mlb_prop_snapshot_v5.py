@@ -170,6 +170,13 @@ async def run_once() -> dict[str, Any]:
     live_positive = [r for r in priced if r.get("positive_live_probe")]
     ready = [r for r in priced if r.get("preferred_live_probe")]
     failures = [r for r in priced if r.get("fetch_error")]
+    paper_candidates = [
+        r for r in priced
+        if r.get("settlement_equivalent_now")
+        and r.get("book_comparable")
+        and not r.get("fetch_error")
+        and (r.get("probe_1usd") or r.get("probe_5usd"))
+    ]
 
     def top(rows: list[dict[str, Any]], field: str) -> list[dict[str, Any]]:
         return sorted(
@@ -194,6 +201,7 @@ async def run_once() -> dict[str, Any]:
         "probe_5usd_positive_pairs": len(probe5),
         "positive_live_probe_pairs": len(live_positive),
         "preferred_live_probe_pairs": len(ready),
+        "paper_probe_candidates": paper_candidates,
         "top_live_probes": top(live_positive, "probe_5usd") if live_positive else [],
         "ready_probe_packets": top(ready, "probe_5usd") if ready else [],
         "preferred_probe_threshold": str(MIN_PREFERRED_NET),
