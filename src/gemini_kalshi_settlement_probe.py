@@ -22,44 +22,74 @@ from src.gemini_kalshi_window_identity import kalshi_15m_asset, kalshi_window_en
 
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_settlement_probe")
 
+SERIES = ("KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M")
+
 
 async def _kalshi_settled_paced(http: httpx.AsyncClient, hours: int) -> list[dict]:
+    """Fetch only the four settled 15-minute crypto series.
+
+    The previous probe paged the entire Kalshi settled universe and filtered afterward.
+    That is unnecessary control-plane load: seven days is only ~672 windows per asset,
+    so each target series normally fits in a single 1000-row page.
+    """
     rows: list[dict] = []
-    cursor = ""
-    page = 0
     min_settled_ts = int((datetime.now(timezone.utc) - timedelta(hours=hours)).timestamp())
-    while True:
-        params = {
-            "status": "settled",
-            "limit": 1000,
-            "mve_filter": "exclude",
-            "min_settled_ts": min_settled_ts,
-        }
-        if cursor:
-            params["cursor"] = cursor
 
-        response = None
-        for attempt in range(6):
-            response = await http.get(f"{KALSHI_REST}/markets", params=params)
-            if response.status_code != 429:
+    for series_index, series_ticker in enumerate(SERIES):
+        cursor = ""
+        page = 0
+        while True:
+            params = {
+                "series_ticker": series_ticker,
+                "status": "settled",
+                "limit": 1000,
+                "mve_filter": "exclude",
+                "min_settled_ts": min_settled_ts,
+            }
+            if cursor:
+                params["cursor"] = cursor
+
+            response = None
+            for attempt in range(6):
+                response = await http.get(f"{KALSHI_REST}/markets", params=params)
+                if response.status_code != 429:
+                    break
+                retry_after = response.headers.get("Retry-After")
+                try:
+                    delay = float(retry_after) if retry_after else min(8.0, 0.75 * (2 ** attempt))
+                except (TypeError, ValueError):
+                    delay = min(8.0, 0.75 * (2 ** attempt))
+                logger.warning(
+                    "KALSHI_SETTLED_429 series=%s page=%s attempt=%s sleep_s=%.2f",
+                    series_ticker,
+                    page,
+                    attempt + 1,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+
+            assert response is not None
+            response.raise_for_status()
+            payload = response.json()
+            page_rows = list(payload.get("markets", []))
+            rows.extend(page_rows)
+            cursor = str(payload.get("cursor") or "")
+            logger.info(
+                "KALSHI_SETTLED_SERIES_PAGE series=%s page=%d rows=%d total=%d",
+                series_ticker,
+                page,
+                len(page_rows),
+                len(rows),
+            )
+            page += 1
+            if not cursor:
                 break
-            retry_after = response.headers.get("Retry-After")
-            try:
-                delay = float(retry_after) if retry_after else min(8.0, 0.75 * (2 ** attempt))
-            except ValueError:
-                delay = min(8.0, 0.75 * (2 ** attempt))
-            logger.warning("KALSHI_SETTLED_429 page=%s attempt=%s sleep_s=%.2f", page, attempt + 1, delay)
-            await asyncio.sleep(delay)
+            await asyncio.sleep(0.25)
 
-        assert response is not None
-        response.raise_for_status()
-        payload = response.json()
-        rows.extend(payload.get("markets", []))
-        cursor = str(payload.get("cursor") or "")
-        page += 1
-        if not cursor:
-            return rows
-        await asyncio.sleep(0.35)
+        if series_index + 1 < len(SERIES):
+            await asyncio.sleep(0.15)
+
+    return rows
 
 
 def match_settled_true_windows(gemini: list[dict], kalshi: list[dict], max_skew_s: float) -> list[AgreementRow]:
@@ -162,9 +192,6 @@ def main() -> None:
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
     asyncio.run(run(args.hours, args.gemini_limit, args.max_expiry_skew_s))
-    # Railway can discard stdout from a very short-lived successful one-shot before
-    # its log API exposes the runtime stream. Flush, then keep this research-only
-    # process alive briefly; no credentials or order path exist in this service.
     logging.shutdown()
     if args.hold_seconds > 0:
         time.sleep(args.hold_seconds)
