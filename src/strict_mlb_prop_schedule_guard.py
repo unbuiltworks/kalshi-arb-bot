@@ -2,8 +2,9 @@
 
 The base strict prop adapter validates family/player/threshold/team identity and rule
 review evidence. This guard adds the missing game-instance check: Polymarket's
-structured game start must agree with the date/time encoded in the Kalshi event
-ticker. That prevents consecutive-series and same-day doubleheader false matches.
+structured game start must agree with Kalshi's explicit occurrence timestamp when
+available, with the event-ticker clock used only as a defensive fallback/cross-check.
+That prevents consecutive-series and same-day doubleheader false matches.
 
 No order-entry code exists here. A successful match remains shadow-only.
 """
@@ -23,7 +24,7 @@ from src.strict_mlb_prop_adapters import (
 ET = ZoneInfo("America/New_York")
 MAX_START_SKEW_SECONDS = 5 * 60
 
-# Example: KXMLBHIT-26AUG161340WSHNYM
+# Defensive fallback/cross-check only. Example: KXMLBHIT-26AUG161340WSHNYM
 KALSHI_EVENT_TIME_RE = re.compile(
     r"-(?P<yy>\d{2})(?P<mon>[A-Z]{3})(?P<dd>\d{2})"
     r"(?P<hh>\d{2})(?P<mm>\d{2})(?P<teams>[A-Z]+)$",
@@ -58,11 +59,7 @@ def _iso_utc(value: Any) -> datetime | None:
 
 
 def polymarket_start_utc(poly: Mapping[str, Any]) -> datetime | None:
-    """Extract an explicit scheduled start from the market payload.
-
-    We intentionally do not infer a clock time from the slug because a date-only
-    identity is not sufficient for doubleheaders.
-    """
+    """Extract an explicit scheduled start from the Polymarket market payload."""
     for key in ("gameStartTime", "startTime", "eventStartTime"):
         parsed = _iso_utc(poly.get(key))
         if parsed is not None:
@@ -70,8 +67,7 @@ def polymarket_start_utc(poly: Mapping[str, Any]) -> datetime | None:
     return None
 
 
-def kalshi_event_start_utc(event: Mapping[str, Any], market: Mapping[str, Any]) -> datetime | None:
-    """Parse the local scheduled MLB start encoded in Kalshi's event ticker."""
+def _kalshi_ticker_start_utc(event: Mapping[str, Any], market: Mapping[str, Any]) -> datetime | None:
     ticker = str(event.get("event_ticker") or market.get("event_ticker") or "").upper()
     match = KALSHI_EVENT_TIME_RE.search(ticker)
     if match is None:
@@ -91,6 +87,24 @@ def kalshi_event_start_utc(event: Mapping[str, Any], market: Mapping[str, Any]) 
     except ValueError:
         return None
     return local.astimezone(timezone.utc)
+
+
+def kalshi_event_start_utc(event: Mapping[str, Any], market: Mapping[str, Any]) -> datetime | None:
+    """Use explicit occurrence_datetime when present; fail on metadata conflict.
+
+    Kalshi exposes occurrence_datetime on market/event responses. Ticker parsing is
+    retained only because some open sports payloads may omit that field. If both are
+    present they must agree within the same five-minute identity tolerance.
+    """
+    explicit = _iso_utc(market.get("occurrence_datetime")) or _iso_utc(
+        event.get("occurrence_datetime")
+    )
+    fallback = _kalshi_ticker_start_utc(event, market)
+    if explicit is not None and fallback is not None:
+        if abs((explicit - fallback).total_seconds()) > MAX_START_SKEW_SECONDS:
+            return None
+        return explicit
+    return explicit or fallback
 
 
 def strict_scheduled_match(
@@ -117,8 +131,6 @@ def strict_scheduled_match(
     if pair is None:
         return None
 
-    # Redundant date assertion makes the fail-closed intent explicit even if a
-    # future timezone/ticker parser changes independently.
     if pair.game_date != kalshi_start.astimezone(ET).date().isoformat():
         return None
     return pair
