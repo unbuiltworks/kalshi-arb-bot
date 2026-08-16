@@ -1,14 +1,12 @@
-"""Sequential-evaluation safety wrapper for the double-buffered HOT scanner.
+"""Safety wrapper for the double-buffered HOT scanner.
 
-The prewarm pump is allowed to drain socket messages ahead of economics evaluation so
-inactive next-window queues never back up. Evaluation, however, must reconstruct its
-own Gemini/Kalshi book state in exact event order; otherwise a queued older trigger
-could be evaluated against a newer book observed later by the pump.
-
-A second invariant is enforced here: even after the feed's ``active`` flag flips at
-rollover, only messages whose receive timestamp is at/after the new window boundary
-may enter the economics queue. This closes the tiny race where a pre-boundary message
-could still be waiting in ``raw_queue`` when activation occurs.
+Three invariants are enforced:
+1. evaluation reconstructs its own Gemini/Kalshi state in exact event order;
+2. pre-boundary messages can never enter next-window economics, even if queued at the
+   instant the feed's ``active`` flag flips; and
+3. rollover activation never waits for old WebSocket shutdown. Old streams are marked
+   inactive and cancelled immediately, while their potentially slow cleanup is awaited
+   asynchronously after the already-ready warm feed can become active.
 """
 from __future__ import annotations
 
@@ -19,6 +17,44 @@ import time
 from src import gemini_kalshi_predictive_prewarmed as base
 
 hot = base.hot
+_ORIGINAL_STOP_FEED = base._stop_feed
+_RETIRE_TASKS: set[asyncio.Task] = set()
+
+
+async def _stop_feed_nonblocking(feed) -> None:
+    """Cancel an old feed immediately but never block warm-feed activation on cleanup."""
+    feed.active = False
+    for task in feed.stream_tasks:
+        task.cancel()
+    if feed.pump_task is not None:
+        feed.pump_task.cancel()
+
+    async def retire() -> None:
+        await _ORIGINAL_STOP_FEED(feed)
+
+    task = asyncio.create_task(
+        retire(),
+        name=f"hot-retire-{feed.asset}-{int(feed.pair.window_end.timestamp())}",
+    )
+    _RETIRE_TASKS.add(task)
+
+    def done(t: asyncio.Task) -> None:
+        _RETIRE_TASKS.discard(t)
+        if t.cancelled():
+            return
+        try:
+            exc = t.exception()
+        except asyncio.CancelledError:
+            return
+        if exc is not None:
+            base.logger.warning(
+                "CRYPTO_HOT_RETIRE_ERROR asset=%s type=%s error=%s",
+                feed.asset,
+                type(exc).__name__,
+                str(exc)[:220],
+            )
+
+    task.add_done_callback(done)
 
 
 async def _pump_feed_activation_safe(feed) -> None:
@@ -56,13 +92,12 @@ async def _pump_feed_activation_safe(feed) -> None:
                     "ready_relative_boundary_ms": ready_ms - feed.boundary_ms,
                     "was_active_when_ready": feed.active,
                     "activation_timestamp_gate": True,
+                    "nonblocking_old_feed_retirement": True,
                     "read_only": True,
                     "order_entry": False,
                 }, separators=(",", ":")),
             )
 
-        # Hard fail-closed gate. ``active`` alone is insufficient because a message
-        # received before the boundary might still be queued when activation flips.
         if not feed.active or int(receive_ms) < int(feed.boundary_ms):
             continue
         try:
@@ -83,14 +118,9 @@ def _evaluate_event_sequential(
     fh,
 ) -> None:
     venue, receive_ms, exchange_ms, top, trigger_mono_ns = event
-
-    # Defense in depth: the pump is timestamp-gated, but economics rejects a stale
-    # event again if one is ever injected directly or a future refactor bypasses it.
     if int(receive_ms) < int(feed.boundary_ms):
         return
 
-    # Maintain an evaluator-owned state machine independent of the warm pump's latest
-    # snapshots. This restores the proven scanner's event-order semantics.
     if venue == "gemini":
         feed.eval_gemini = top
     else:
@@ -163,7 +193,7 @@ def _evaluate_event_sequential(
         "kalshi_ticker": feed.pair.kalshi_ticker,
         "small_q_candidates": [hot._candidate_payload(q, c) for q, c in all_small],
         "trigger_to_eval_ms": round((eval_done_ns - trigger_mono_ns) / 1_000_000, 3),
-        "rollover_mode": "PREDICTIVE_DOUBLE_BUFFER_SEQUENTIAL_EVAL_ACTIVATION_GATED",
+        "rollover_mode": "PREDICTIVE_DOUBLE_BUFFER_SEQUENTIAL_EVAL_ACTIVATION_GATED_NONBLOCKING_RETIRE",
         "settlement_status": hot.SETTLEMENT_STATUS,
         "read_only": True,
         "order_entry": False,
@@ -171,9 +201,9 @@ def _evaluate_event_sequential(
     fh.write(json.dumps(row, separators=(",", ":")) + "\n")
 
 
-# Patch both the warm pump and evaluator before base.main() starts any feeds.
 base._pump_feed = _pump_feed_activation_safe
 base._evaluate_event = _evaluate_event_sequential
+base._stop_feed = _stop_feed_nonblocking
 
 
 def main() -> None:
