@@ -44,8 +44,12 @@ def test_kalshi_book_uses_highest_bid_as_reciprocal_ask() -> None:
 
 def test_fee_models_are_conservative() -> None:
     assert polymarket_fee(100, Decimal("0.50")) == Decimal("1.25")
-    # 0.07 * 1 * .5 * .5 = .0175, deliberately ceiled to a whole cent.
-    assert conservative_kalshi_fee(1, Decimal("0.50"), Decimal("0.07")) == Decimal("0.02")
+    # Standard quadratic: 0.07 * fee_multiplier(1) * 1 * .5 * .5 = .0175,
+    # deliberately ceiled to a whole cent for the snapshot.
+    assert conservative_kalshi_fee(1, Decimal("0.50"), Decimal("1")) == Decimal("0.02")
+    # Series fee_multiplier scales the standard 0.07 coefficient rather than replacing it.
+    assert conservative_kalshi_fee(100, Decimal("0.50"), Decimal("1")) == Decimal("1.75")
+    assert conservative_kalshi_fee(100, Decimal("0.50"), Decimal("2")) == Decimal("3.50")
 
 
 def test_positive_plan_requires_after_fee_lock() -> None:
@@ -63,7 +67,7 @@ def test_positive_plan_requires_after_fee_lock() -> None:
         no_depth=Decimal("5"),
     )
     plan = best_conservative_plan(
-        poly, kalshi, kalshi_fee_multiplier=Decimal("0.07")
+        poly, kalshi, kalshi_fee_multiplier=Decimal("1")
     )
     assert plan is not None
     assert plan["direction"] == "POLY_YES_KALSHI_NO"
@@ -85,7 +89,7 @@ def test_raw_gap_that_fails_fees_is_rejected() -> None:
         no_depth=Decimal("2"),
     )
     assert best_conservative_plan(
-        poly, kalshi, kalshi_fee_multiplier=Decimal("0.07")
+        poly, kalshi, kalshi_fee_multiplier=Decimal("1")
     ) is None
 
 
@@ -103,7 +107,7 @@ def test_depth_caps_quantity() -> None:
         no_depth=Decimal("20"),
     )
     plan = best_conservative_plan(
-        poly, kalshi, kalshi_fee_multiplier=Decimal("0.07")
+        poly, kalshi, kalshi_fee_multiplier=Decimal("1")
     )
     assert plan is not None
     assert plan["quantity"] <= 3
