@@ -36,6 +36,7 @@ logger = logging.getLogger("kalshi_arb.strict_mlb_prop_snapshot")
 POLY = "https://gateway.polymarket.us"
 KALSHI = "https://external-api.kalshi.com/trade-api/v2"
 POLY_TAKER_THETA = Decimal("0.05")
+KALSHI_QUADRATIC_THETA = Decimal("0.07")
 MAX_Q = 100
 
 
@@ -127,13 +128,15 @@ def polymarket_fee(quantity: int, price: Decimal) -> Decimal:
 
 
 def conservative_kalshi_fee(quantity: int, price: Decimal, multiplier: Decimal) -> Decimal:
-    """Conservative whole-cent upper bound for a quadratic taker fee.
+    """Conservative whole-cent upper bound for a standard quadratic Kalshi taker fee.
 
-    Current Kalshi execution can involve sub-cent fee/balance rounding. Rounding the
-    quadratic fee up to the next full cent intentionally overstates cost for this
-    snapshot, preventing a rounding detail from manufacturing a positive arb.
+    Kalshi's standard quadratic taker model is 0.07 * fee_multiplier * C * p * (1-p).
+    ``fee_multiplier`` is the dimensionless value returned by the current Series API;
+    it is not itself the 0.07 coefficient. Current execution can involve sub-cent
+    fee/balance rounding, so this snapshot rounds the modeled total up to the next
+    whole cent to avoid manufacturing a positive research signal.
     """
-    raw = multiplier * Decimal(quantity) * price * (Decimal("1") - price)
+    raw = KALSHI_QUADRATIC_THETA * multiplier * Decimal(quantity) * price * (Decimal("1") - price)
     return (raw * Decimal("100")).to_integral_value(rounding=ROUND_CEILING) / Decimal("100")
 
 
@@ -314,7 +317,7 @@ async def run_once() -> dict[str, Any]:
                 and kbook is not None
                 and fee_type in {"quadratic", "quadratic_with_maker_fees"}
                 and multiplier is not None
-                and Decimal("0") <= multiplier <= Decimal("1")
+                and Decimal("0") <= multiplier <= Decimal("100")
             ):
                 plan = best_conservative_plan(
                     pbook, kbook, kalshi_fee_multiplier=multiplier
@@ -367,8 +370,9 @@ async def run_once() -> dict[str, Any]:
             "until the required first-PA/first-pitch gate is independently observed."
         ),
         "fee_warning": (
-            "Kalshi fee is deliberately rounded up to a whole-cent upper bound per modeled order; this is "
-            "more conservative than current sub-cent execution rounding and is not a fill simulation."
+            "Kalshi standard quadratic fee uses 0.07 * Series fee_multiplier * C * p * (1-p), then this "
+            "snapshot rounds the modeled total up to a whole cent; this remains a conservative research bound, "
+            "not a fill simulation."
         ),
         "read_only": True,
         "order_entry": False,
