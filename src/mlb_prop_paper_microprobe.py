@@ -1,11 +1,12 @@
-"""Convert strict MLB v4 snapshots into simultaneous synthetic paper fills.
+"""Convert strict MLB v5 snapshots into simultaneous synthetic paper fills.
 
 Research-only sidecar. It has no venue clients, credentials, order-entry, cancel,
 or live-arm path. Qualifying quote plans are written to the shared accounting
 ledger with one trade_group_id and one timestamp for both synthetic legs.
 
-A paper probe is deliberately *not* a live-readiness decision. Participation and
-independent settlement-rule equivalence remain hard blockers.
+A paper probe is deliberately *not* a live-readiness decision. The v5 snapshot
+must first prove the family-specific participation gate; independent settlement-
+rule equivalence remains a hard blocker for any real-money probe.
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ from time import time_ns
 from typing import Any
 
 from src.cross_venue_ledger import LedgerSidecar, make_event
-from src.strict_mlb_prop_snapshot_v4 import run_once
+from src.strict_mlb_prop_snapshot_v5 import run_once
 
 D = Decimal
 PROBE_FIELDS = (("probe_1usd", D("1")), ("probe_5usd", D("5")))
@@ -46,13 +47,7 @@ def _settlement_key(row: dict[str, Any]) -> str:
 
 
 def _group_id(row: dict[str, Any], probe_field: str, ts_ms: int) -> str:
-    raw = "|".join(
-        (
-            _settlement_key(row),
-            probe_field,
-            str(ts_ms),
-        )
-    )
+    raw = "|".join((_settlement_key(row), probe_field, str(ts_ms)))
     return "paper-mlb-" + hashlib.sha256(raw.encode()).hexdigest()[:20]
 
 
@@ -75,6 +70,11 @@ def paper_probe_events(
     if row.get("fetch_error"):
         return None
     if not row.get("poly_slug") or not row.get("kalshi_ticker"):
+        return None
+    # Paper economics should reflect the same participation-cleared universe as
+    # the live-readiness scanner. Pending player participation is not sampled as
+    # if it were executable.
+    if not bool(row.get("settlement_equivalent_now")):
         return None
 
     quantity = D(str(plan["quantity"]))
@@ -116,10 +116,11 @@ def paper_probe_events(
         "kalshi_ticker": str(row["kalshi_ticker"]),
         "simultaneous_synthetic_fill_ts_ms": now_ms,
         "required_participation_gate": row.get("required_participation_gate"),
+        "participation_proof": row.get("participation_proof"),
         "rule_status": row.get("rule_status"),
-        "settlement_equivalent_now": bool(row.get("settlement_equivalent_now")),
+        "settlement_equivalent_now": True,
         "live_probe_ready": False,
-        "live_blockers": ["PARTICIPATION_GATE_REQUIRED", "INDEPENDENT_SETTLEMENT_AUDIT_REQUIRED"],
+        "live_blockers": ["INDEPENDENT_SETTLEMENT_AUDIT_REQUIRED", "FRESH_EXPLICIT_APPROVAL_REQUIRED"],
         "read_only": True,
         "order_entry": False,
     }
@@ -136,8 +137,8 @@ def build_paper_probes(
     events = []
     audits: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
+    source = snapshot.get("paper_probe_candidates") or []
     for probe_field, _cap in PROBE_FIELDS:
-        source = snapshot.get("top_probe_1usd" if probe_field == "probe_1usd" else "top_probe_5usd") or []
         for row in source:
             identity = (_settlement_key(row), probe_field)
             if identity in seen:
@@ -168,6 +169,7 @@ async def run(ledger_path: Path, audit_path: Path, min_profit: Decimal) -> dict[
         "paper_probe_groups": len(audits),
         "ledger_events": len(events),
         "minimum_modeled_profit_dollars": str(min_profit),
+        "participation_cleared_only": True,
         "live_probe_ready_groups": 0,
         "read_only": True,
         "order_entry": False,
