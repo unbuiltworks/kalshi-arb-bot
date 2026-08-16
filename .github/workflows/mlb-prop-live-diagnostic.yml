@@ -6,6 +6,8 @@ on:
       - feature/universal-prediction-quant
     paths:
       - 'src/strict_mlb_prop_live_diagnostic.py'
+      - 'src/polymarket_mlb_shape_diagnostic.py'
+      - 'src/strict_mlb_prop_schedule_guard.py'
       - '.github/workflows/mlb-prop-live-diagnostic.yml'
   workflow_dispatch:
 
@@ -22,5 +24,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
-      - name: Run public read-only diagnostic
+      - name: Run public read-only strict diagnostic
         run: python -m src.strict_mlb_prop_live_diagnostic
+      - name: Inspect current Polymarket MLB payload shape
+        run: python -m src.polymarket_mlb_shape_diagnostic
