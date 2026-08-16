@@ -3,7 +3,12 @@
 The hot market-data loop must not stop at a 15-minute boundary and then discover
 what to subscribe to next. This compatibility wrapper replaces the on-demand pair
 cache with a background catalog that refreshes while current venue WebSockets are
-running. At rollover, the next aligned pair is normally already in memory.
+running.
+
+Discovery is deliberately fail-soft. Kalshi REST is cold-path metadata, not market
+data: a rate limit must never turn into a retry storm that competes with the live
+WebSocket layer. Concurrent callers are single-flighted and failed discovery enters
+an exponential shared cooldown before another network attempt is allowed.
 
 This changes discovery timing only. The underlying hot scanner remains read-only and
 continues to classify every Gemini/Kalshi quote edge as INDEX_MISMATCH_RESEARCH_ONLY.
@@ -25,15 +30,14 @@ logger = logging.getLogger("kalshi_arb.gemini_kalshi_multi_ws_hot_catalog")
 
 
 class BackgroundPairCatalog:
-    """Continuously refresh aligned pair identities outside the hot rollover path."""
+    """Continuously refresh aligned pair identities outside the hot market-data path."""
 
-    def __init__(self, ttl_s: float = 1.0, *, refresh_s: float = 5.0) -> None:
+    def __init__(self, ttl_s: float = 1.0, *, refresh_s: float = 30.0) -> None:
         # ``ttl_s`` is accepted for drop-in compatibility with PairDiscoveryCache.
-        self.refresh_s = max(1.0, float(refresh_s))
+        # The venues did not publish the next 15-minute contracts early in the live
+        # rollover test, so a 5-second full REST crawl only creates avoidable load.
+        self.refresh_s = max(5.0, float(refresh_s))
         self._lock = asyncio.Lock()
-        # Network discovery is separately single-flighted. Holding _lock across REST
-        # would block readers; _refresh_lock prevents four asset workers from issuing
-        # the same discovery burst at rollover.
         self._refresh_lock = asyncio.Lock()
         self._pairs: list[Pair] = []
         self._fetched_monotonic = 0.0
@@ -41,6 +45,9 @@ class BackgroundPairCatalog:
         self._refreshes = 0
         self._errors = 0
         self._coalesced_refresh_waiters = 0
+        self._failure_backoff_s = 0.5
+        self._max_failure_backoff_s = 10.0
+        self._next_refresh_not_before = 0.0
 
     @staticmethod
     def _future_pairs(pairs: list[Pair], asset: str, now: float) -> list[Pair]:
@@ -50,16 +57,17 @@ class BackgroundPairCatalog:
         ]
 
     def _log_catalog(self) -> None:
-        now = time.time()
+        now_wall = time.time()
+        now_mono = time.monotonic()
         by_asset: dict[str, list[dict[str, Any]]] = {}
         for asset in hot.ASSET_SERIES:
-            future = self._future_pairs(self._pairs, asset, now)
+            future = self._future_pairs(self._pairs, asset, now_wall)
             by_asset[asset] = [
                 {
                     "window_end_utc": p.window_end.isoformat(),
                     "gemini_symbol": p.gemini_symbol,
                     "kalshi_ticker": p.kalshi_ticker,
-                    "seconds_ahead": round(p.window_end.timestamp() - now, 3),
+                    "seconds_ahead": round(p.window_end.timestamp() - now_wall, 3),
                 }
                 for p in future[:3]
             ]
@@ -67,31 +75,69 @@ class BackgroundPairCatalog:
             "CRYPTO_HOT_PAIR_CATALOG %s",
             json.dumps({
                 "refreshes": self._refreshes,
+                "errors": self._errors,
                 "pair_count": len(self._pairs),
                 "future_by_asset": by_asset,
                 "refresh_s": self.refresh_s,
                 "coalesced_refresh_waiters": self._coalesced_refresh_waiters,
+                "failure_backoff_s": self._failure_backoff_s,
+                "cooldown_remaining_s": round(
+                    max(0.0, self._next_refresh_not_before - now_mono), 3
+                ),
                 "read_only": True,
                 "order_entry": False,
             }, separators=(",", ":")),
         )
 
-    async def _refresh(self, http: httpx.AsyncClient, *, min_spacing_s: float = 0.0) -> None:
-        """Refresh once, coalescing concurrent callers and optionally pacing retries."""
+    async def _refresh(
+        self,
+        http: httpx.AsyncClient,
+        *,
+        min_spacing_s: float = 0.0,
+    ) -> bool:
+        """Refresh once, coalescing callers and backing off globally after failure.
+
+        Returns True only when a network refresh completed successfully. Cooldown and
+        minimum-spacing skips return False without touching either REST venue.
+        """
         if self._refresh_lock.locked():
             self._coalesced_refresh_waiters += 1
+
         async with self._refresh_lock:
-            if min_spacing_s > 0:
+            now_mono = time.monotonic()
+            async with self._lock:
+                if now_mono < self._next_refresh_not_before:
+                    return False
+                age = now_mono - self._fetched_monotonic
+                if min_spacing_s > 0 and age < min_spacing_s:
+                    return False
+
+            try:
+                pairs = await _discover_pairs(http, 30.0)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # One failure arms a shared circuit breaker. Waiting asset workers
+                # see this timestamp after acquiring _refresh_lock and return without
+                # generating duplicate traffic. Successful discovery resets it.
                 async with self._lock:
-                    age = time.monotonic() - self._fetched_monotonic
-                if age < min_spacing_s:
-                    return
-            pairs = await _discover_pairs(http, 30.0)
+                    self._errors += 1
+                    delay = self._failure_backoff_s
+                    self._next_refresh_not_before = time.monotonic() + delay
+                    self._failure_backoff_s = min(
+                        self._failure_backoff_s * 2.0,
+                        self._max_failure_backoff_s,
+                    )
+                raise
+
             async with self._lock:
                 self._pairs = pairs
                 self._fetched_monotonic = time.monotonic()
                 self._refreshes += 1
+                self._failure_backoff_s = 0.5
+                self._next_refresh_not_before = 0.0
                 self._log_catalog()
+            return True
 
     async def _refresh_loop(self, http: httpx.AsyncClient) -> None:
         while True:
@@ -101,11 +147,11 @@ class BackgroundPairCatalog:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                self._errors += 1
                 logger.warning(
                     "CRYPTO_HOT_PAIR_CATALOG_ERROR %s",
                     json.dumps({
                         "errors": self._errors,
+                        "retry_backoff_s": self._failure_backoff_s,
                         "error_type": type(exc).__name__,
                         "error": str(exc)[:240],
                     }, separators=(",", ":")),
@@ -119,20 +165,29 @@ class BackgroundPairCatalog:
 
     async def current_pair(self, http: httpx.AsyncClient, asset: str) -> Pair | None:
         # Populate once. All four asset workers share this catalog and _refresh() is
-        # single-flight, so startup and rollover never fan out duplicate REST scans.
+        # single-flight. A failed population enters the shared cooldown; critically,
+        # this call then returns instead of immediately falling through to a second
+        # boundary refresh.
         async with self._lock:
             needs_initial = not self._pairs
         if needs_initial:
             try:
                 await self._refresh(http)
             except Exception as exc:
-                self._errors += 1
                 logger.warning(
-                    "CRYPTO_HOT_PAIR_INITIAL_REFRESH_ERROR asset=%s error=%s",
-                    asset, str(exc)[:240],
+                    "CRYPTO_HOT_PAIR_INITIAL_REFRESH_ERROR asset=%s errors=%d backoff_s=%.1f error=%s",
+                    asset,
+                    self._errors,
+                    self._failure_backoff_s,
+                    str(exc)[:240],
                 )
-        await self._ensure_background(http)
+            await self._ensure_background(http)
+            now = time.time()
+            async with self._lock:
+                future = self._future_pairs(self._pairs, asset, now)
+                return future[0] if future else None
 
+        await self._ensure_background(http)
         now = time.time()
         async with self._lock:
             future = self._future_pairs(self._pairs, asset, now)
@@ -141,16 +196,19 @@ class BackgroundPairCatalog:
             age = time.monotonic() - self._fetched_monotonic
 
         # Some 15-minute contracts are published only at the exact boundary and the
-        # four assets do not always appear atomically. Pace missing-asset retries and
-        # coalesce them through one network refresh instead of a four-worker burst.
-        if age >= 0.35:
+        # assets do not always appear atomically. One missing asset can request a
+        # paced refresh; concurrent workers coalesce, and a 429 opens the shared
+        # exponential cooldown instead of causing a tight loop.
+        if age >= 0.5:
             try:
-                await self._refresh(http, min_spacing_s=0.35)
+                await self._refresh(http, min_spacing_s=0.5)
             except Exception as exc:
-                self._errors += 1
                 logger.warning(
-                    "CRYPTO_HOT_PAIR_BOUNDARY_REFRESH_ERROR asset=%s error=%s",
-                    asset, str(exc)[:240],
+                    "CRYPTO_HOT_PAIR_BOUNDARY_REFRESH_ERROR asset=%s errors=%d backoff_s=%.1f error=%s",
+                    asset,
+                    self._errors,
+                    self._failure_backoff_s,
+                    str(exc)[:240],
                 )
             now = time.time()
             async with self._lock:
