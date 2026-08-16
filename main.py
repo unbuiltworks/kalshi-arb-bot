@@ -1,5 +1,5 @@
-"""Railpack-safe entrypoint for continuous double-buffered read-only crypto HOT."""
-from src.gemini_kalshi_predictive_prewarmed_safe import main
+"""Railpack-safe entrypoint for activation-safe prewarmed basis research."""
+from src.gemini_kalshi_prewarmed_basis_shadow import main
 
 
 if __name__ == "__main__":
