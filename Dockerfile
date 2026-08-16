@@ -9,6 +9,9 @@ COPY src/ src/
 COPY config/ config/
 COPY tests/ tests/
 
+# Fail the image build if predictive identity or discovery backoff regressions break.
+RUN pytest -q tests/test_gemini_kalshi_predictive_hot.py tests/test_crypto_hot_catalog_backoff.py
+
 # This branch is intentionally read-only. It cannot start the live/paper trading bot.
 ENV BOT_MODE=paper
 
