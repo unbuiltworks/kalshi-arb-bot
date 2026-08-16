@@ -44,17 +44,14 @@ async def test_preboundary_backlog_cannot_leak_when_active_flag_flips():
     )
     stats = SimpleNamespace(dropped_events=0)
     feed = prewarm.WarmFeed(asset="BTC", pair=pair, stats=stats, boundary_ms=1000, active=False)
-
-    # Queue the old event first, then flip active *before* starting the pump. This is
-    # the exact rollover race: an old message remains in raw_queue at activation.
     stale = SimpleNamespace(ts_ms=999)
     await feed.raw_queue.put(("gemini", 999, None, stale, 1))
     feed.active = True
     pump = asyncio.create_task(safe._pump_feed_activation_safe(feed))
     try:
         await asyncio.sleep(0)
-        assert feed.gemini is stale  # market-data cache may observe it
-        assert feed.eval_queue.empty()  # economics must never receive it
+        assert feed.gemini is stale
+        assert feed.eval_queue.empty()
 
         fresh = SimpleNamespace(ts_ms=1000)
         await feed.raw_queue.put(("gemini", 1000, None, fresh, 2))
@@ -64,6 +61,23 @@ async def test_preboundary_backlog_cannot_leak_when_active_flag_flips():
     finally:
         pump.cancel()
         await asyncio.gather(pump, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_slow_old_feed_retirement_returns_without_waiting(monkeypatch):
+    blocker = asyncio.Event()
+
+    async def slow_stop(feed):
+        await blocker.wait()
+
+    monkeypatch.setattr(safe, "_ORIGINAL_STOP_FEED", slow_stop)
+    pair = SimpleNamespace(window_end=SimpleNamespace(timestamp=lambda: 1234.0))
+    feed = SimpleNamespace(asset="BTC", pair=pair, active=True, stream_tasks=[], pump_task=None)
+    await asyncio.wait_for(safe._stop_feed_nonblocking(feed), timeout=0.05)
+    assert feed.active is False
+    assert len(safe._RETIRE_TASKS) == 1
+    blocker.set()
+    await asyncio.gather(*list(safe._RETIRE_TASKS), return_exceptions=True)
 
 
 def test_safe_evaluator_rejects_direct_preboundary_injection(monkeypatch):
@@ -111,7 +125,6 @@ def test_safe_evaluator_uses_event_order_not_pump_latest(monkeypatch):
             self.latency = value
 
     feed = SimpleNamespace(asset="BTC", pair=pair, stats=Stats(), boundary_ms=0)
-    # Simulate the warm pump already having seen a newer Gemini quote.
     feed.gemini = SimpleNamespace(ts_ms=999)
     captured = []
 
