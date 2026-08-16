@@ -17,14 +17,9 @@ def test_segment_seconds_rejects_nonpositive_rediscovery():
         segment_seconds(remaining_s=1.0, rediscover_s=0.0)
 
 
-def test_run_rollover_reinvokes_watcher_with_same_read_only_parameters(monkeypatch):
+def test_run_rollover_reinvokes_watcher_with_same_read_only_parameters():
     calls = []
     ticks = iter([0.0, 0.0, 1.0, 2.0, 3.1])
-
-    monkeypatch.setattr(
-        "src.gemini_kalshi_aligned_watch_rollover.time.monotonic",
-        lambda: next(ticks),
-    )
 
     async def fake_watch(**kwargs):
         calls.append(kwargs)
@@ -38,6 +33,7 @@ def test_run_rollover_reinvokes_watcher_with_same_read_only_parameters(monkeypat
             max_quote_skew_ms=500,
             output=Path("logs/test.jsonl"),
             watch_fn=fake_watch,
+            clock_fn=lambda: next(ticks),
         )
     )
 
@@ -49,15 +45,10 @@ def test_run_rollover_reinvokes_watcher_with_same_read_only_parameters(monkeypat
     assert all(call["output"] == Path("logs/test.jsonl") for call in calls)
 
 
-def test_run_rollover_recovers_after_transient_segment_error(monkeypatch):
+def test_run_rollover_recovers_after_transient_segment_error():
     calls = []
     sleeps = []
-    ticks = iter([0.0, 0.0, 0.1, 0.2, 1.0, 2.1])
-
-    monkeypatch.setattr(
-        "src.gemini_kalshi_aligned_watch_rollover.time.monotonic",
-        lambda: next(ticks),
-    )
+    ticks = iter([0.0, 0.0, 0.1, 1.0, 2.1])
 
     async def flaky_watch(**kwargs):
         calls.append(kwargs)
@@ -78,6 +69,7 @@ def test_run_rollover_recovers_after_transient_segment_error(monkeypatch):
             error_backoff_s=0.5,
             watch_fn=flaky_watch,
             sleep_fn=fake_sleep,
+            clock_fn=lambda: next(ticks),
         )
     )
 
@@ -86,12 +78,8 @@ def test_run_rollover_recovers_after_transient_segment_error(monkeypatch):
     assert all(call["output"] == Path("logs/test.jsonl") for call in calls)
 
 
-def test_run_rollover_propagates_cancellation(monkeypatch):
+def test_run_rollover_propagates_cancellation():
     ticks = iter([0.0, 0.0])
-    monkeypatch.setattr(
-        "src.gemini_kalshi_aligned_watch_rollover.time.monotonic",
-        lambda: next(ticks),
-    )
 
     async def cancelled_watch(**kwargs):
         raise asyncio.CancelledError
@@ -106,6 +94,7 @@ def test_run_rollover_propagates_cancellation(monkeypatch):
                 max_quote_skew_ms=500,
                 output=Path("logs/test.jsonl"),
                 watch_fn=cancelled_watch,
+                clock_fn=lambda: next(ticks),
             )
         )
 
