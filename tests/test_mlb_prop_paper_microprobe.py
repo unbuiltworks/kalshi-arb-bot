@@ -3,7 +3,7 @@ from decimal import Decimal
 from src.mlb_prop_paper_microprobe import build_paper_probes, paper_probe_events
 
 
-def _row(profit="0.04", *, direction="POLY_YES_KALSHI_NO", poly_slug="poly-example", kalshi_ticker="KXMLBHIT-EXAMPLE"):
+def _row(profit="0.04", *, direction="POLY_YES_KALSHI_NO", poly_slug="poly-example", kalshi_ticker="KXMLBHIT-EXAMPLE", settlement_equivalent_now=True):
     plan = {
         "direction": direction,
         "quantity": 2,
@@ -25,8 +25,9 @@ def _row(profit="0.04", *, direction="POLY_YES_KALSHI_NO", poly_slug="poly-examp
         "book_comparable": True,
         "fetch_error": None,
         "required_participation_gate": "CONFIRMED_START_AND_FIRST_PLATE_APPEARANCE",
-        "rule_status": "EQUIVALENT_AFTER_PARTICIPATION",
-        "settlement_equivalent_now": False,
+        "participation_proof": {"satisfied": settlement_equivalent_now},
+        "rule_status": "EQUIVALENT_AFTER_PARTICIPATION" if settlement_equivalent_now else "CONDITIONAL_PARTICIPATION",
+        "settlement_equivalent_now": settlement_equivalent_now,
         "probe_1usd": None,
         "probe_5usd": plan,
     }
@@ -44,14 +45,21 @@ def test_paper_probe_uses_one_timestamp_and_trade_group_for_both_fills():
     assert audit["trade_group_id"] == fills[0].trade_group_id
     assert audit["poly_slug"] == "poly-example"
     assert audit["kalshi_ticker"] == "KXMLBHIT-EXAMPLE"
+    assert audit["settlement_equivalent_now"] is True
     assert audit["live_probe_ready"] is False
-    assert "PARTICIPATION_GATE_REQUIRED" in audit["live_blockers"]
     assert "INDEPENDENT_SETTLEMENT_AUDIT_REQUIRED" in audit["live_blockers"]
+    assert "FRESH_EXPLICIT_APPROVAL_REQUIRED" in audit["live_blockers"]
 
 
 def test_paper_probe_requires_three_cent_minimum_by_default():
     assert paper_probe_events(_row("0.029"), probe_field="probe_5usd", ts_ms=1) is None
     assert paper_probe_events(_row("0.03"), probe_field="probe_5usd", ts_ms=1) is not None
+
+
+def test_paper_probe_requires_participation_cleared_universe():
+    assert paper_probe_events(
+        _row(settlement_equivalent_now=False), probe_field="probe_5usd", ts_ms=1
+    ) is None
 
 
 def test_direction_maps_complementary_sides_correctly():
@@ -67,10 +75,7 @@ def test_direction_maps_complementary_sides_correctly():
 
 def test_builder_dedupes_same_exact_identity_per_cap():
     row = _row()
-    snapshot = {
-        "top_probe_1usd": [],
-        "top_probe_5usd": [row, dict(row)],
-    }
+    snapshot = {"paper_probe_candidates": [row, dict(row)]}
     events, audits = build_paper_probes(snapshot, ts_ms=9)
     assert len(audits) == 1
     assert len([event for event in events if event.event_type == "fill"]) == 2
@@ -80,10 +85,7 @@ def test_builder_dedupes_same_exact_identity_per_cap():
 def test_builder_keeps_same_player_same_day_doubleheader_markets_distinct():
     first = _row(poly_slug="poly-game-1", kalshi_ticker="KXMLBHIT-GAME1")
     second = _row(poly_slug="poly-game-2", kalshi_ticker="KXMLBHIT-GAME2")
-    snapshot = {
-        "top_probe_1usd": [],
-        "top_probe_5usd": [first, second],
-    }
+    snapshot = {"paper_probe_candidates": [first, second]}
     events, audits = build_paper_probes(snapshot, ts_ms=10)
     assert len(audits) == 2
     assert len({row["settlement_key"] for row in audits}) == 2
