@@ -14,7 +14,8 @@ COPY main.py .
 # direction, nearest-expiry selection, dynamic cancel/reprice economics, the
 # one-lot live-probe envelope, V2 transport parsing, candidate orientation,
 # strict <=2c maker improvement, <=1c seed GO quality, bounded-risk seed-first
-# execution, and ambiguous/rejected submission handling.
+# execution, ambiguous/rejected submissions, and the separate NO-TRANSPORT
+# long-horizon 1c-floor manual execution-test ticket.
 RUN PYTHONPATH=/app python -m pytest -q \
     tests/test_kalshi_nested_strike_shadow.py \
     tests/test_kalshi_nested_less_shadow.py \
@@ -28,10 +29,11 @@ RUN PYTHONPATH=/app python -m pytest -q \
     tests/test_kalshi_nested_live_candidate_gate.py \
     tests/test_kalshi_nested_probe_quality_watch.py \
     tests/test_kalshi_nested_seed_first_probe.py \
-    tests/test_kalshi_nested_seed_first_failures.py
+    tests/test_kalshi_nested_seed_first_failures.py \
+    tests/test_kalshi_nested_manual_test_ticket.py
 
 ENV BOT_MODE=paper
 
-# Default image behavior remains read-only. Railway live-probe service overrides
-# this command with a one-shot command and never passes --live by default.
+# Default image behavior remains read-only. Railway services override this command
+# with watcher/dry-run modules. No live-enable variable or arm token is configured.
 CMD ["sh", "-c", "python -m src.kalshi_nested_rolling_shadow --seconds 7200 --refresh-seconds 300 --series KXETHD KXSOLD --target-profit 0.03 --max-candidates 40; sleep 3600"]
