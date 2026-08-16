@@ -19,7 +19,7 @@ def test_segment_seconds_rejects_nonpositive_rediscovery():
 
 def test_run_rollover_reinvokes_watcher_with_same_read_only_parameters(monkeypatch):
     calls = []
-    ticks = iter([0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.1])
+    ticks = iter([0.0, 0.0, 1.0, 2.0, 3.1])
 
     monkeypatch.setattr(
         "src.gemini_kalshi_aligned_watch_rollover.time.monotonic",
