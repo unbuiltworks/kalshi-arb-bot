@@ -1,5 +1,5 @@
-"""Railpack entrypoint for the read-only Gemini/Kalshi settlement watcher."""
-from src.gemini_kalshi_settlement_probe import main
+"""Railpack-safe entrypoint for the read-only 21:00 settlement reconciler."""
+from src.gemini_kalshi_target_reconcile import main
 
 if __name__ == "__main__":
     main()
