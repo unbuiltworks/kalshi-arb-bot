@@ -28,7 +28,7 @@ def poly(*, start: str = "2026-08-16T17:40:00Z", date: str = "2026-08-16") -> di
     }
 
 
-def kalshi(*, ticker_time: str = "26AUG161340") -> tuple[dict, dict]:
+def kalshi(*, ticker_time: str = "26AUG161340", occurrence: str | None = None) -> tuple[dict, dict]:
     event_ticker = f"KXMLBHIT-{ticker_time}WSHNYM"
     event = {
         "series_ticker": "KXMLBHIT",
@@ -40,10 +40,12 @@ def kalshi(*, ticker_time: str = "26AUG161340") -> tuple[dict, dict]:
         "event_ticker": event_ticker,
         "yes_sub_title": "Francisco Lindor: 2+ hits?",
     }
+    if occurrence is not None:
+        market["occurrence_datetime"] = occurrence
     return event, market
 
 
-def test_same_scheduled_game_passes() -> None:
+def test_same_scheduled_game_passes_with_ticker_fallback() -> None:
     event, market = kalshi()
     result = strict_scheduled_match(poly(), event, market, audit("KXMLBHIT"))
     assert result is not None
@@ -78,6 +80,29 @@ def test_missing_poly_start_fails_closed() -> None:
     p.pop("gameStartTime")
     event, market = kalshi()
     assert strict_scheduled_match(p, event, market, audit("KXMLBHIT")) is None
+
+
+def test_explicit_occurrence_timestamp_wins_over_conflicting_ticker_clock() -> None:
+    # Mirrors the live 2026-08-16 shape: ticker clock 12:15 while explicit market
+    # occurrence is 19:15Z. The structured occurrence is authoritative.
+    event, market = kalshi(
+        ticker_time="26AUG161215",
+        occurrence="2026-08-16T19:15:00Z",
+    )
+    assert kalshi_event_start_utc(event, market).isoformat() == "2026-08-16T19:15:00+00:00"
+
+
+def test_explicit_occurrence_still_enforces_cross_venue_schedule_identity() -> None:
+    event, market = kalshi(
+        ticker_time="26AUG161215",
+        occurrence="2026-08-16T19:15:00Z",
+    )
+    assert strict_scheduled_match(
+        poly(start="2026-08-16T19:15:00Z"), event, market, audit("KXMLBHIT")
+    ) is not None
+    assert strict_scheduled_match(
+        poly(start="2026-08-16T17:40:00Z"), event, market, audit("KXMLBHIT")
+    ) is None
 
 
 def test_timestamp_parsers_are_explicit() -> None:
