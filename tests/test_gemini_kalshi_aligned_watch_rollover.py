@@ -49,6 +49,67 @@ def test_run_rollover_reinvokes_watcher_with_same_read_only_parameters(monkeypat
     assert all(call["output"] == Path("logs/test.jsonl") for call in calls)
 
 
+def test_run_rollover_recovers_after_transient_segment_error(monkeypatch):
+    calls = []
+    sleeps = []
+    ticks = iter([0.0, 0.0, 0.1, 0.2, 1.0, 2.1])
+
+    monkeypatch.setattr(
+        "src.gemini_kalshi_aligned_watch_rollover.time.monotonic",
+        lambda: next(ticks),
+    )
+
+    async def flaky_watch(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise RuntimeError("temporary public API failure")
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    asyncio.run(
+        run_rollover(
+            seconds=2.0,
+            rediscover_s=1.0,
+            poll_s=0.25,
+            max_window_skew_s=30.0,
+            max_quote_skew_ms=500,
+            output=Path("logs/test.jsonl"),
+            error_backoff_s=0.5,
+            watch_fn=flaky_watch,
+            sleep_fn=fake_sleep,
+        )
+    )
+
+    assert len(calls) == 2
+    assert sleeps == [0.5]
+    assert all(call["output"] == Path("logs/test.jsonl") for call in calls)
+
+
+def test_run_rollover_propagates_cancellation(monkeypatch):
+    ticks = iter([0.0, 0.0])
+    monkeypatch.setattr(
+        "src.gemini_kalshi_aligned_watch_rollover.time.monotonic",
+        lambda: next(ticks),
+    )
+
+    async def cancelled_watch(**kwargs):
+        raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            run_rollover(
+                seconds=10.0,
+                rediscover_s=1.0,
+                poll_s=0.25,
+                max_window_skew_s=30.0,
+                max_quote_skew_ms=500,
+                output=Path("logs/test.jsonl"),
+                watch_fn=cancelled_watch,
+            )
+        )
+
+
 def test_run_rollover_rejects_invalid_runtime_values():
     async def fake_watch(**kwargs):
         raise AssertionError("watcher should not be called")
@@ -62,6 +123,20 @@ def test_run_rollover_rejects_invalid_runtime_values():
                 max_window_skew_s=30.0,
                 max_quote_skew_ms=500,
                 output=Path("logs/test.jsonl"),
+                watch_fn=fake_watch,
+            )
+        )
+
+    with pytest.raises(ValueError):
+        asyncio.run(
+            run_rollover(
+                seconds=60.0,
+                rediscover_s=60.0,
+                poll_s=1.0,
+                max_window_skew_s=30.0,
+                max_quote_skew_ms=500,
+                output=Path("logs/test.jsonl"),
+                error_backoff_s=-1.0,
                 watch_fn=fake_watch,
             )
         )
