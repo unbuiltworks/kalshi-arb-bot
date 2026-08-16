@@ -2,7 +2,6 @@ from collections import deque
 from decimal import Decimal as D
 
 from src import gemini_kalshi_basis_annotated_shadow as basis
-from src.gemini_kaiko_proxy_calibration import SpotState
 
 
 def test_latest_at_or_before_never_uses_future_quote():
@@ -23,7 +22,7 @@ def test_twap_at_or_before_ignores_future_observations():
 
 
 def test_basis_snapshot_is_prospective_and_marks_research_gates(monkeypatch):
-    state = SpotState("BTC")
+    state = basis.SpotState("BTC")
     state.history = deque([
         (1_000, D("100")),
         (1_500, D("100.10")),
