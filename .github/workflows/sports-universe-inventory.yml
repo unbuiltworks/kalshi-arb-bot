@@ -1,0 +1,56 @@
+name: Sports universe inventory
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  inventory:
+    if: github.event.issue.title == '[sports-universe-inventory]' && github.event.issue.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/universal-prediction-quant
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install -r requirements.txt
+
+      - id: inventory
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m src.sports_universe_inventory > /tmp/sports_inventory.json
+          echo 'result<<EOF' >> "$GITHUB_OUTPUT"
+          tail -c 55000 /tmp/sports_inventory.json >> "$GITHUB_OUTPUT"
+          echo >> "$GITHUB_OUTPUT"
+          echo 'EOF' >> "$GITHUB_OUTPUT"
+
+      - uses: actions/github-script@v8
+        env:
+          INVENTORY_RESULT: ${{ steps.inventory.outputs.result }}
+        with:
+          script: |
+            const body = [
+              'Sports universe inventory: success',
+              '',
+              '```json',
+              process.env.INVENTORY_RESULT || '{}',
+              '```',
+              '',
+              'Read-only public APIs only. No credentials or order entry.'
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
