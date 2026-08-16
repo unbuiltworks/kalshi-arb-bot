@@ -1,6 +1,10 @@
 from decimal import Decimal
 
-from src.gemini_kalshi_basis_stress import stress_scenario, stress_summary
+from src.gemini_kalshi_basis_stress import (
+    add_capital_efficiency,
+    stress_scenario,
+    stress_summary,
+)
 
 
 def _scenario(*, contracts="10", apparent="0.50", upper=0.2):
@@ -42,6 +46,43 @@ def test_stress_summary_applies_to_latency_and_margin_cohorts():
     assert result["favorable_basis_mismatch_credit"] is False
     assert result["read_only"] is True
     assert result["order_entry"] is False
+
+
+def test_add_capital_efficiency_uses_same_contract_cohort_and_settlement_delay():
+    stressed = stress_summary({
+        "entry": _scenario(contracts="10", apparent="2.50", upper=0.1),
+        "survival": {"50": _scenario(contracts="5", apparent="1.25", upper=0.1)},
+    })
+    capital = {
+        "entry": {"consumable_contracts": "10", "consumable_capital_hours": "5"},
+        "survival": {"50": {"consumable_contracts": "5", "consumable_capital_hours": "2"}},
+        "settlement_delay_adjusted": {
+            "p95": {
+                "entry": {"consumable_contracts": "10", "consumable_capital_hours": "10"},
+                "survival": {"50": {"consumable_contracts": "5", "consumable_capital_hours": "4"}},
+            }
+        },
+    }
+    result = add_capital_efficiency(stressed, capital)
+    window = result["basis_stressed_capital_efficiency"]["window_end_only"]
+    adjusted = result["basis_stressed_capital_efficiency"]["settlement_delay_adjusted"]["p95"]
+    # Stress P&L: $2.50 - 10*$0.10 = $1.50.
+    assert Decimal(window["entry"]["wilson95_adverse_basis_stress_profit_per_capital_hour"]) == Decimal("0.3")
+    assert Decimal(adjusted["entry"]["wilson95_adverse_basis_stress_profit_per_capital_hour"]) == Decimal("0.15")
+    # 50ms: $1.25 - 5*$0.10 = $0.75.
+    assert Decimal(window["survival"]["50"]["wilson95_adverse_basis_stress_profit_per_capital_hour"]) == Decimal("0.375")
+    assert Decimal(adjusted["survival"]["50"]["wilson95_adverse_basis_stress_profit_per_capital_hour"]) == Decimal("0.1875")
+
+
+def test_add_capital_efficiency_contract_mismatch_fails_closed():
+    stressed = stress_summary({"entry": _scenario(contracts="10", apparent="1", upper=0.1)})
+    capital = {"entry": {"consumable_contracts": "9", "consumable_capital_hours": "1"}}
+    try:
+        add_capital_efficiency(stressed, capital)
+    except ValueError as exc:
+        assert "consumable_contracts mismatch" in str(exc)
+    else:
+        raise AssertionError("expected mismatched evidence cohorts to fail closed")
 
 
 def test_invalid_probability_fails_closed():
