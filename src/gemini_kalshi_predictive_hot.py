@@ -4,7 +4,7 @@ This module removes REST pair discovery from the rollover path. The next contrac
 identities are deterministic from the next quarter-hour boundary:
 
 - Gemini: GEMI-{ASSET}15M%y%m%d%H%M-UP in UTC
-- Kalshi: KX{ASSET}15M-%y%b%d%H%M-15 in America/New_York
+- Kalshi: KX{ASSET}15M-%y%b%d%H%M-{minute} in America/New_York
 
 The prediction is not treated as authoritative market metadata. It becomes useful only
 when the existing authenticated venue WebSockets accept the identifiers and deliver
@@ -41,7 +41,10 @@ def predicted_pair(asset: str, now_ts: float | None = None) -> Pair:
     end = _next_window_end(now_ts)
     local_end = end.astimezone(ET)
     gemini_symbol = f"GEMI-{asset}15M{end.strftime('%y%m%d%H%M')}-UP"
-    kalshi_ticker = f"KX{asset}15M-{local_end.strftime('%y%b%d%H%M').upper()}-15"
+    close_minute = local_end.strftime("%M")
+    kalshi_ticker = (
+        f"KX{asset}15M-{local_end.strftime('%y%b%d%H%M').upper()}-{close_minute}"
+    )
     return Pair(
         asset=asset,
         window_end=end,
