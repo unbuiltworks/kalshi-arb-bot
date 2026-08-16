@@ -13,6 +13,6 @@ COPY tests/ tests/
 ENV BOT_MODE=paper
 
 # Use the corrected close_time matcher and only the four 15-minute crypto series.
-# A 15-minute cadence is enough for settlement-basis monitoring and avoids needless
-# control-plane load while the HOT scanner owns the latency-sensitive path.
-CMD ["sh", "-c", "while true; do python -m src.gemini_kalshi_settlement_probe --hours 48 --gemini-limit 2000 --max-expiry-skew-s 30 --hold-seconds 0; sleep 900; done"]
+# Analyze whether disagreement disappears once final settlement is sufficiently far
+# from strike; 15-minute cadence avoids needless control-plane load.
+CMD ["sh", "-c", "while true; do python -m src.gemini_kalshi_settlement_margin_analysis --hours 48 --gemini-limit 2000 --max-expiry-skew-s 30; sleep 900; done"]
