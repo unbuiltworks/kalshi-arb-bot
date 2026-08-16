@@ -1,8 +1,8 @@
 """Rate-safe read-only MLB prop pricing scan.
 
-Discovery and strict identity come from v2/base.  This wrapper exists because a full
+Discovery and strict identity come from v2/base. This wrapper exists because a full
 slate can contain >1k exact counterparts and pricing every book at once trips public
-API rate limits.  It rotates deterministic 60-pair batches across the exact universe,
+API rate limits. It rotates deterministic 60-pair batches across the exact universe,
 uses low concurrency, retries 429s with backoff, and never lets one failed book abort
 the scan.
 
@@ -101,6 +101,50 @@ async def _fetch_optional(
     return None, "retry_exhausted"
 
 
+def one_contract_micro_plan(
+    poly: base.TopBook,
+    kalshi: base.TopBook,
+    *,
+    kalshi_fee_multiplier: Decimal,
+) -> dict[str, Any] | None:
+    """Return the best positive one-contract paired plan after modeled taker fees.
+
+    This is specifically for plumbing-validation probes with <=$1 combined capital.
+    It is intentionally separate from the depth-maximizing plan used for capacity
+    research. A row is returned only when the modeled all-in cost is below $1.
+    """
+    directions = (
+        ("POLY_YES_KALSHI_NO", poly.yes_ask, kalshi.no_ask),
+        ("KALSHI_YES_POLY_NO", kalshi.yes_ask, poly.no_ask),
+    )
+    best: dict[str, Any] | None = None
+    for direction, first_px, second_px in directions:
+        if direction == "POLY_YES_KALSHI_NO":
+            poly_px, kalshi_px = first_px, second_px
+        else:
+            kalshi_px, poly_px = first_px, second_px
+        poly_fee = base.polymarket_fee(1, poly_px)
+        kalshi_fee = base.conservative_kalshi_fee(1, kalshi_px, kalshi_fee_multiplier)
+        cost = poly_px + kalshi_px + poly_fee + kalshi_fee
+        profit = Decimal("1") - cost
+        if cost > Decimal("1") or profit <= 0:
+            continue
+        row = {
+            "direction": direction,
+            "quantity": 1,
+            "poly_price": str(poly_px),
+            "kalshi_price": str(kalshi_px),
+            "poly_fee": str(poly_fee),
+            "kalshi_fee_upper_bound": str(kalshi_fee),
+            "total_cost_upper_bound": str(cost),
+            "conservative_locked_profit": str(profit),
+            "conservative_locked_profit_cents": str(profit * Decimal("100")),
+        }
+        if best is None or profit > Decimal(best["conservative_locked_profit"]):
+            best = row
+    return best
+
+
 def _empty_row(candidate: base.StrictCandidate, *, error: str | None) -> dict[str, Any]:
     assessment = base.assess_rule_equivalence(candidate.family)
     return {
@@ -118,6 +162,7 @@ def _empty_row(candidate: base.StrictCandidate, *, error: str | None) -> dict[st
         "kalshi_fee_multiplier": None,
         "book_comparable": False,
         "positive_conservative_plan": None,
+        "micro_probe_plan": None,
         "fetch_error": error,
         "execution_eligible": False,
         "read_only": True,
@@ -164,6 +209,7 @@ async def run_once() -> dict[str, Any]:
             fee_type = str(meta.get("fee_type") or "")
             multiplier = base._d(meta.get("fee_multiplier"))
             plan = None
+            micro_plan = None
             if (
                 pbook is not None
                 and kbook is not None
@@ -172,6 +218,11 @@ async def run_once() -> dict[str, Any]:
                 and Decimal("0") <= multiplier <= Decimal("100")
             ):
                 plan = base.best_conservative_plan(
+                    pbook,
+                    kbook,
+                    kalshi_fee_multiplier=multiplier,
+                )
+                micro_plan = one_contract_micro_plan(
                     pbook,
                     kbook,
                     kalshi_fee_multiplier=multiplier,
@@ -193,6 +244,7 @@ async def run_once() -> dict[str, Any]:
                 "kalshi_fee_multiplier": str(multiplier) if multiplier is not None else None,
                 "book_comparable": pbook is not None and kbook is not None,
                 "positive_conservative_plan": plan,
+                "micro_probe_plan": micro_plan,
                 "fetch_error": None,
                 "execution_eligible": False,
                 "read_only": True,
@@ -202,6 +254,7 @@ async def run_once() -> dict[str, Any]:
         priced = await asyncio.gather(*(price(candidate) for candidate in selected)) if selected else []
 
     positive = [row for row in priced if row.get("positive_conservative_plan")]
+    micro_positive = [row for row in priced if row.get("micro_probe_plan")]
     failures = [row for row in priced if row.get("fetch_error")]
     by_family: dict[str, dict[str, int]] = {}
     for family in base.FAMILY_SERIES:
@@ -210,6 +263,7 @@ async def run_once() -> dict[str, Any]:
             "priced_in_batch": len(family_rows),
             "book_comparable": sum(bool(row["book_comparable"]) for row in family_rows),
             "conservative_positive": sum(bool(row["positive_conservative_plan"]) for row in family_rows),
+            "micro_probe_positive": sum(bool(row["micro_probe_plan"]) for row in family_rows),
         }
 
     result = {
@@ -224,10 +278,16 @@ async def run_once() -> dict[str, Any]:
             for row in failures[:5]
         ],
         "conservative_positive_pairs": len(positive),
+        "micro_probe_positive_pairs": len(micro_positive),
         "families": by_family,
         "top_positive": sorted(
             positive,
             key=lambda row: Decimal(row["positive_conservative_plan"]["conservative_locked_profit"]),
+            reverse=True,
+        )[:20],
+        "top_micro_probes": sorted(
+            micro_positive,
+            key=lambda row: Decimal(row["micro_probe_plan"]["conservative_locked_profit"]),
             reverse=True,
         )[:20],
         "rule_warning": (
@@ -237,6 +297,10 @@ async def run_once() -> dict[str, Any]:
         "batch_warning": (
             "This pass prices a rotating rate-safe subset of the exact identity universe; zero positives in one "
             "batch does not imply zero positives across the full slate."
+        ),
+        "micro_probe_warning": (
+            "micro_probe_plan is one-contract after modeled fees and <=$1 combined capital, but remains read-only "
+            "and is not execution-eligible until the participation/rule gate is independently satisfied."
         ),
         "read_only": True,
         "order_entry": False,
