@@ -2,7 +2,11 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from src.gemini_kalshi_btc_ws_analyze import episodes
-from src.gemini_kalshi_btc_ws_efficiency import efficiency_summary
+from src.gemini_kalshi_btc_ws_efficiency import (
+    _minimum_total_episodes_to_pass_wilson95,
+    efficiency_summary,
+)
+from src.gemini_kalshi_lock_settlement_join import _wilson_upper_95
 from src.gemini_kalshi_settlement_agreement import AgreementRow
 
 
@@ -70,7 +74,6 @@ def test_wilson_basis_stress_uses_same_filtered_capital_denominator():
     assert Decimal(entry["wilson95_adverse_basis_stress_loss_dollars"]) == expected_loss
     assert Decimal(entry["wilson95_adverse_basis_stress_pnl_dollars"]) == expected_stressed_pnl
     assert Decimal(entry["wilson95_adverse_basis_stress_profit_per_capital_hour"]) == expected_stressed_pnl / hours
-    # A clean one-episode sample must not be mistaken for zero basis risk.
     assert expected_stressed_pnl < 0
 
 
@@ -88,13 +91,36 @@ def test_basis_break_even_gate_compares_wilson_upper_to_edge_per_contract():
     assert result["basis_confidence_gate"].startswith("PASS_ONLY_WHEN_WILSON95_UPPER")
 
 
-def test_zero_contract_cohort_has_no_break_even_rate():
+def test_sample_sufficiency_reports_best_case_clean_episode_requirement():
+    eps = episodes([_row(1_000), _row(1_060), _row(1_120, positive=False)])
+    result = efficiency_summary(eps, [_agreement()])
+    entry = result["basis_margin_efficiency"]["1"]["entry"]
+    total = entry["best_case_total_independent_episodes_needed_to_pass_wilson95"]
+    additional = entry["best_case_additional_clean_episodes_needed_to_pass_wilson95"]
+    assert total is not None
+    assert additional == total - 1
+    break_even = Decimal(entry["basis_break_even_adverse_mismatch_rate"])
+    assert Decimal(str(_wilson_upper_95(0, total))) < break_even
+    assert Decimal(str(_wilson_upper_95(0, total - 1))) >= break_even
+    assert result["basis_sample_sufficiency_method"].startswith("MINIMUM_TOTAL_INDEPENDENT")
+
+
+def test_sample_sufficiency_holds_existing_mismatch_count_fixed():
+    total = _minimum_total_episodes_to_pass_wilson95(1, 1, Decimal("0.05"))
+    assert total is not None and total > 1
+    assert Decimal(str(_wilson_upper_95(1, total))) < Decimal("0.05")
+    assert Decimal(str(_wilson_upper_95(1, total - 1))) >= Decimal("0.05")
+
+
+def test_zero_contract_cohort_has_no_break_even_or_sample_target():
     eps = episodes([_row(1_000), _row(1_060), _row(1_120, positive=False)])
     result = efficiency_summary(eps, [_agreement(margin_bps=0.2772)])
     excluded = result["basis_margin_efficiency"]["0.5"]["entry"]
     assert excluded["consumable_contracts"] == "0"
     assert excluded["basis_break_even_adverse_mismatch_rate"] is None
     assert excluded["wilson95_minus_break_even_mismatch_rate"] is None
+    assert excluded["best_case_total_independent_episodes_needed_to_pass_wilson95"] is None
+    assert excluded["best_case_additional_clean_episodes_needed_to_pass_wilson95"] is None
     assert excluded["basis_confidence_status"] == "UNRESOLVED_NO_CONSUMABLE_CONTRACTS"
 
 
@@ -137,6 +163,7 @@ def test_settlement_delay_only_reduces_efficiency_via_longer_capital_lock():
     assert stressed_pnl == Decimal(p50["wilson95_adverse_basis_stress_pnl_dollars"]) == Decimal(p95["wilson95_adverse_basis_stress_pnl_dollars"])
     assert base["basis_break_even_adverse_mismatch_rate"] == p50["basis_break_even_adverse_mismatch_rate"] == p95["basis_break_even_adverse_mismatch_rate"]
     assert base["basis_confidence_status"] == p50["basis_confidence_status"] == p95["basis_confidence_status"]
+    assert base["best_case_total_independent_episodes_needed_to_pass_wilson95"] == p50["best_case_total_independent_episodes_needed_to_pass_wilson95"] == p95["best_case_total_independent_episodes_needed_to_pass_wilson95"]
     assert Decimal(base["wilson95_adverse_basis_stress_profit_per_capital_hour"]) < 0
     assert Decimal(p50["wilson95_adverse_basis_stress_profit_per_capital_hour"]) < 0
     assert Decimal(p95["wilson95_adverse_basis_stress_profit_per_capital_hour"]) < 0
