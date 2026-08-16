@@ -57,12 +57,30 @@ def test_efficiency_uses_settlement_adjusted_pnl_over_same_capital_hours():
     assert entry["consumable_contracts"] == "10"
 
 
+def test_wilson_basis_stress_uses_same_filtered_capital_denominator():
+    eps = episodes([_row(1_000), _row(1_060), _row(1_120, positive=False)])
+    result = efficiency_summary(eps, [_agreement()])
+    entry = result["basis_margin_efficiency"]["1"]["entry"]
+    upper = Decimal(str(entry["consumable_mismatch_rate_wilson_upper_95"]))
+    contracts = Decimal(entry["consumable_contracts"])
+    apparent = Decimal(entry["apparent_locked_profit_dollars"])
+    hours = Decimal(entry["consumable_capital_hours"])
+    expected_loss = upper * contracts
+    expected_stressed_pnl = apparent - expected_loss
+    assert Decimal(entry["wilson95_adverse_basis_stress_loss_dollars"]) == expected_loss
+    assert Decimal(entry["wilson95_adverse_basis_stress_pnl_dollars"]) == expected_stressed_pnl
+    assert Decimal(entry["wilson95_adverse_basis_stress_profit_per_capital_hour"]) == expected_stressed_pnl / hours
+    # A clean one-episode sample must not be mistaken for zero basis risk.
+    assert expected_stressed_pnl < 0
+
+
 def test_adverse_mismatch_flows_through_efficiency_numerator():
     eps = episodes([_row(1_000), _row(1_060), _row(1_120, positive=False)])
     result = efficiency_summary(eps, [_agreement(agrees=False)])
     entry = result["basis_margin_efficiency"]["1"]["entry"]
     assert Decimal(entry["settlement_adjusted_pnl_dollars"]) == Decimal("-9.50")
     assert Decimal(entry["settlement_adjusted_profit_per_capital_hour"]) < 0
+    assert Decimal(entry["wilson95_adverse_basis_stress_profit_per_capital_hour"]) < 0
     assert entry["consumable_mismatch_episodes"] == 1
 
 
@@ -75,6 +93,7 @@ def test_margin_filter_excludes_near_boundary_episode_from_both_numerator_and_de
     assert excluded["consumable_contracts"] == "0"
     assert Decimal(excluded["consumable_capital_hours"]) == 0
     assert excluded["settlement_adjusted_profit_per_capital_hour"] is None
+    assert excluded["wilson95_adverse_basis_stress_profit_per_capital_hour"] is None
 
 
 def test_settlement_delay_only_reduces_efficiency_via_longer_capital_lock():
@@ -90,5 +109,11 @@ def test_settlement_delay_only_reduces_efficiency_via_longer_capital_lock():
     assert base["settlement_adjusted_pnl_dollars"] == p50["settlement_adjusted_pnl_dollars"] == p95["settlement_adjusted_pnl_dollars"]
     assert Decimal(base["consumable_capital_hours"]) < Decimal(p50["consumable_capital_hours"]) < Decimal(p95["consumable_capital_hours"])
     assert Decimal(base["settlement_adjusted_profit_per_capital_hour"]) > Decimal(p50["settlement_adjusted_profit_per_capital_hour"]) > Decimal(p95["settlement_adjusted_profit_per_capital_hour"])
+    stressed_pnl = Decimal(base["wilson95_adverse_basis_stress_pnl_dollars"])
+    assert stressed_pnl == Decimal(p50["wilson95_adverse_basis_stress_pnl_dollars"]) == Decimal(p95["wilson95_adverse_basis_stress_pnl_dollars"])
+    assert Decimal(base["wilson95_adverse_basis_stress_profit_per_capital_hour"]) < 0
+    assert Decimal(p50["wilson95_adverse_basis_stress_profit_per_capital_hour"]) < 0
+    assert Decimal(p95["wilson95_adverse_basis_stress_profit_per_capital_hour"]) < 0
+    assert abs(Decimal(base["wilson95_adverse_basis_stress_profit_per_capital_hour"])) > abs(Decimal(p50["wilson95_adverse_basis_stress_profit_per_capital_hour"])) > abs(Decimal(p95["wilson95_adverse_basis_stress_profit_per_capital_hour"]))
     assert result["read_only"] is True
     assert result["order_entry"] is False
