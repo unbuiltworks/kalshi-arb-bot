@@ -1,0 +1,126 @@
+name: BTC Research Queue
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  research:
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[btc-research-queue]' }}
+    runs-on: [self-hosted, kalshi-bot]
+    timeout-minutes: 90
+
+    steps:
+      - name: Run serialized read-only research queue
+        id: research
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          OUT="$RUNNER_TEMP/btc-research-queue.txt"
+          REPO="/home/ssm-user/kalshi-arb-bot"
+          ENVFILE="$REPO/.env.gemini-live"
+          ARM_TOKEN="$REPO/.live_probe_arm_once"
+          : > "$OUT"
+
+          cd "$REPO" || { echo "ERROR: repo missing" >> "$OUT"; exit 66; }
+
+          echo "mode=READ_ONLY_SERIAL_RESEARCH_QUEUE" >> "$OUT"
+          echo "host=$(hostname)" >> "$OUT"
+          echo "utc=$(date -u +%FT%TZ)" >> "$OUT"
+
+          # Fail closed if any live-trading authorization is present.
+          if [ -f "$ARM_TOKEN" ]; then
+            echo "ERROR: live arm token present; refusing research queue" >> "$OUT"
+            exit 70
+          fi
+          if [ -f "$ENVFILE" ] && grep -q '^ENABLE_GEMINI_KALSHI_LIVE_PROBES=YES$' "$ENVFILE"; then
+            echo "ERROR: live gate is YES; refusing research queue" >> "$OUT"
+            exit 70
+          fi
+          echo "live_trading_gate=DISARMED" >> "$OUT"
+          echo >> "$OUT"
+
+          echo "=== 1. SYNC FEATURE ===" >> "$OUT"
+          git fetch origin feature/gemini-kalshi-fast-overlap >> "$OUT" 2>&1 || exit $?
+          git checkout feature/gemini-kalshi-fast-overlap >> "$OUT" 2>&1 || exit $?
+          git reset --hard origin/feature/gemini-kalshi-fast-overlap >> "$OUT" 2>&1 || exit $?
+
+          latest=$(ls -1t logs/gemini_kalshi_btc_bookticker*.jsonl 2>/dev/null | head -1)
+          if [ -z "$latest" ]; then
+            echo "ERROR: no BTC bookTicker log found" >> "$OUT"
+            exit 2
+          fi
+
+          echo >> "$OUT"
+          echo "=== 2. FRESH BTC ANALYSIS ===" >> "$OUT"
+          echo "analyzing=$latest" >> "$OUT"
+          .venv/bin/python -m src.gemini_kalshi_btc_ws_analyze "$latest" >> "$OUT" 2>&1 || exit $?
+
+          echo >> "$OUT"
+          echo "=== 3. SETTLEMENT LATENCY ===" >> "$OUT"
+          summary="logs/gemini_kalshi_settlement_latency_queue_48h.json"
+          .venv/bin/python -m src.gemini_kalshi_settlement_latency --hours 48 > "$summary" 2>> "$OUT" || exit $?
+          cat "$summary" >> "$OUT"
+
+          echo >> "$OUT"
+          echo "=== 4. CAPITAL / SIZE CURVE ===" >> "$OUT"
+          .venv/bin/python -m src.gemini_kalshi_btc_ws_bankroll "$latest" \
+            --threshold-ms 10 \
+            --kalshi-bankroll 4000 \
+            --trade-caps 1 5 10 25 50 100 250 500 \
+            --kalshi-fee-multiplier 1 \
+            --settlement-latency-summary "$summary" >> "$OUT" 2>&1 || exit $?
+
+          echo >> "$OUT"
+          echo "=== 5. MULTI-ASSET 15M SHADOW ===" >> "$OUT"
+          tag="queue_$(date -u +%Y%m%dT%H%M%SZ)"
+          .venv/bin/python -m src.gemini_kalshi_multi_ws_shadow \
+            --assets BTC ETH SOL XRP \
+            --seconds 900 \
+            --max-quote-skew-ms 100 \
+            --output-dir logs \
+            --tag "$tag" >> "$OUT" 2>&1 || exit $?
+
+          echo >> "$OUT"
+          echo "=== 6. PER-ASSET ANALYSIS ===" >> "$OUT"
+          for asset in BTC ETH SOL XRP; do
+            lower=$(printf '%s' "$asset" | tr '[:upper:]' '[:lower:]')
+            file="logs/gemini_kalshi_${lower}_bookticker_${tag}.jsonl"
+            echo "--- $asset: $file ---" >> "$OUT"
+            .venv/bin/python -m src.gemini_kalshi_multi_ws_analyze --asset "$asset" "$file" >> "$OUT" 2>&1 || exit $?
+          done
+
+          echo >> "$OUT"
+          echo "=== 7. SECOND BTC 15M SAMPLE ===" >> "$OUT"
+          file2="logs/gemini_kalshi_btc_bookticker_queue_$(date -u +%Y%m%dT%H%M%SZ).jsonl"
+          .venv/bin/python -m src.gemini_kalshi_btc_ws_shadow \
+            --seconds 900 --max-quote-skew-ms 100 --output "$file2" >> "$OUT" 2>&1 || exit $?
+          .venv/bin/python -m src.gemini_kalshi_btc_ws_analyze "$file2" >> "$OUT" 2>&1 || exit $?
+
+          echo >> "$OUT"
+          echo "queue_complete=true" >> "$OUT"
+          echo "order_entry=false" >> "$OUT"
+          exit 0
+
+      - name: Comment result
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          OUTCOME: ${{ steps.research.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `${process.env.RUNNER_TEMP}/btc-research-queue.txt`;
+            let text = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : 'No output.';
+            if (text.length > 50000) text = text.slice(-50000);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `BTC research queue: **${process.env.OUTCOME}**\n\n\`\`\`text\n${text}\n\`\`\``
+            });
