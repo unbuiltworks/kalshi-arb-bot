@@ -165,14 +165,14 @@ class BackgroundPairCatalog:
 
     async def current_pair(self, http: httpx.AsyncClient, asset: str) -> Pair | None:
         # Populate once. All four asset workers share this catalog and _refresh() is
-        # single-flight. A failed population enters the shared cooldown; critically,
-        # this call then returns instead of immediately falling through to a second
-        # boundary refresh.
+        # single-flight. The minimum-spacing check is also applied to initial waiters:
+        # after the first caller succeeds, the other three return the same catalog
+        # rather than serially repeating the full discovery crawl.
         async with self._lock:
             needs_initial = not self._pairs
         if needs_initial:
             try:
-                await self._refresh(http)
+                await self._refresh(http, min_spacing_s=0.5)
             except Exception as exc:
                 logger.warning(
                     "CRYPTO_HOT_PAIR_INITIAL_REFRESH_ERROR asset=%s errors=%d backoff_s=%.1f error=%s",
