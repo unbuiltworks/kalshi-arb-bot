@@ -1,8 +1,9 @@
 """Discover and normalize the best current nested candidate for a one-shot probe.
 
-Read-only discovery only.  This module converts the aggressive maker scanner's row
+Read-only discovery only. This module converts the aggressive maker scanner's row
 into the explicit proven lower/higher strike specification required by the live
-probe guard.  It intentionally rejects boundary prices and long-dated events.
+probe guard. The FIRST live probe intentionally rejects boundary prices, long-dated
+events, empty maker bids, and large jumps away from the displayed maker bid.
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ from src.kalshi_nested_maker_aggressive_shadow import scan_aggressive_series
 from src.kalshi_nested_rolling_shadow import parse_event_close
 
 NY = ZoneInfo("America/New_York")
+MAX_FIRST_PROBE_MAKER_IMPROVEMENT = D("0.02")
 
 
 def row_to_spec(
@@ -62,7 +64,7 @@ def row_to_spec(
     else:
         raise ValueError("unsupported strike type")
 
-    spec = NestedLiveProbeSpec(
+    return NestedLiveProbeSpec(
         event_ticker=event_ticker,
         event_close=close,
         strike_type=strike_type,
@@ -82,15 +84,31 @@ def row_to_spec(
         target_profit=D(target_profit),
         maker_rest_seconds=int(maker_rest_seconds),
     )
-    return spec
+
+
+def first_probe_row_is_fillable_enough(row: dict[str, Any]) -> bool:
+    """Hard first-probe liquidity gate; do not manufacture a fill with a huge jump."""
+    bid = D(str(row.get("current_best_bid") or "0"))
+    quote = D(str(row.get("shadow_quote") or "-1"))
+    improvement = D(str(row.get("quote_improvement") or "1"))
+    if bid <= D("0"):
+        return False
+    if quote <= bid:
+        return False
+    if improvement <= D("0") or improvement > MAX_FIRST_PROBE_MAKER_IMPROVEMENT:
+        return False
+    # Recompute rather than trusting telemetry alone.
+    if quote - bid != improvement:
+        return False
+    return True
 
 
 def candidate_rank(row: dict[str, Any]) -> tuple[Decimal, Decimal, Decimal]:
-    """Prefer fillability: near ask, small jump over current bid, then cheap hedge."""
-    distance = D(str(row.get("distance_below_ask") or "1"))
+    """Prefer fillability: smallest bid improvement, near ask, then cheap hedge."""
     improvement = D(str(row.get("quote_improvement") or "1"))
+    distance = D(str(row.get("distance_below_ask") or "1"))
     hedge = D(str(row.get("hedge_top_ask") or "1"))
-    return distance, improvement, hedge
+    return improvement, distance, hedge
 
 
 async def discover_best_spec(
@@ -115,6 +133,8 @@ async def discover_best_spec(
         for row in summary.get("top_quotes") or []:
             maker_cost = D(str(row.get("shadow_quote") or "-1"))
             hedge_cost = D(str(row.get("hedge_top_ask") or "-1"))
+            if not first_probe_row_is_fillable_enough(row):
+                continue
             if not (MIN_OUTCOME_COST <= maker_cost <= MAX_OUTCOME_COST):
                 continue
             if not (MIN_OUTCOME_COST <= hedge_cost <= MAX_OUTCOME_COST):
