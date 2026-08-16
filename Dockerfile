@@ -12,8 +12,8 @@ COPY main.py .
 
 # Fail closed on nested payoff math, aggressive quote validity, trade-through
 # direction, nearest-expiry selection, dynamic cancel/reprice economics, the
-# disarmed one-lot live-probe payload/risk envelope, V2 transport parsing, and
-# current candidate orientation/ranking.
+# one-lot live-probe envelope, V2 transport parsing, candidate orientation, and
+# bounded-risk seed-first execution.
 RUN PYTHONPATH=/app python -m pytest -q \
     tests/test_kalshi_nested_strike_shadow.py \
     tests/test_kalshi_nested_less_shadow.py \
@@ -23,10 +23,11 @@ RUN PYTHONPATH=/app python -m pytest -q \
     tests/test_kalshi_nested_rolling_shadow.py \
     tests/test_kalshi_nested_live_probe_guard.py \
     tests/test_kalshi_nested_probe_transport.py \
-    tests/test_kalshi_nested_live_candidate.py
+    tests/test_kalshi_nested_live_candidate.py \
+    tests/test_kalshi_nested_seed_first_probe.py
 
 ENV BOT_MODE=paper
 
 # Default image behavior remains read-only. Railway live-probe service overrides
-# this command with the one-shot dry-run module.
+# this command with the one-shot dry-run module and does NOT pass --live.
 CMD ["sh", "-c", "python -m src.kalshi_nested_rolling_shadow --seconds 7200 --refresh-seconds 300 --series KXETHD KXSOLD --target-profit 0.03 --max-candidates 40; sleep 3600"]
