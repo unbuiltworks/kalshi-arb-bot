@@ -1,5 +1,5 @@
-"""Railpack-safe entrypoint for activation-safe prewarmed basis research."""
-from src.gemini_kalshi_prewarmed_basis_shadow import main
+"""Railpack-safe entrypoint for exact same-limit crypto fillability research."""
+from src.gemini_kalshi_basis_execution_revalidation import main
 
 
 if __name__ == "__main__":
