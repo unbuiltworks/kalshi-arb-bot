@@ -1,7 +1,7 @@
 """Public, read-only Gemini prediction-market sports inventory.
 
 Uses Gemini's documented prediction-markets events endpoint and deterministic
-sports ticker taxonomy.  This module is discovery only: it does not authenticate,
+sports ticker taxonomy. This module is discovery only: it does not authenticate,
 subscribe to private streams, or expose any order-entry path.
 """
 from __future__ import annotations
@@ -78,11 +78,34 @@ async def fetch_active_sports_events(http: httpx.AsyncClient) -> list[dict[str, 
     return out
 
 
+def _event_example(event: dict[str, Any], *, market_type: str, known_family: str | None) -> dict[str, Any]:
+    return {
+        "event_ticker": str(event.get("ticker") or ""),
+        "title": str(event.get("title") or ""),
+        "market_type": market_type,
+        "known_family": known_family,
+        "effectiveDate": event.get("effectiveDate"),
+        "expiryDate": event.get("expiryDate"),
+        "contracts": [
+            {
+                "label": contract.get("label"),
+                "ticker": contract.get("ticker"),
+                "instrumentSymbol": contract.get("instrumentSymbol"),
+                "marketState": contract.get("marketState"),
+            }
+            for contract in (event.get("contracts") or [])[:10]
+        ],
+    }
+
+
 def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
     league_counts: Counter[str] = Counter()
     market_type_counts: Counter[str] = Counter()
     family_counts: Counter[str] = Counter()
     family_examples: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    live_pp_type_counts: Counter[str] = Counter()
+    live_pp_type_examples: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    unknown_pp_type_counts: Counter[str] = Counter()
     mlb_events = 0
     mlb_contracts = 0
 
@@ -97,32 +120,35 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         market_type_counts[f"{league}:{market_type}"] += 1
 
         family = None
+        known_mapping: dict[str, str] = {}
         if league == "MLB":
             mlb_events += 1
-            family = MLB_PROP_TYPES.get(market_type)
+            known_mapping = MLB_PROP_TYPES
+            family = known_mapping.get(market_type)
             mlb_contracts += len(event.get("contracts") or [])
         elif league == "NFL":
-            family = NFL_PROP_TYPES.get(market_type)
+            known_mapping = NFL_PROP_TYPES
+            family = known_mapping.get(market_type)
+
+        # PP* is Gemini's deterministic player-prop namespace. Preserve every
+        # live code, including undocumented/app-only codes, until title/contract
+        # evidence proves an explicit semantic mapping. Unknown codes must never
+        # be silently discarded or inferred from ticker identity alone.
+        if league in {"MLB", "NFL"} and market_type.startswith("PP"):
+            key = f"{league}:{market_type}"
+            live_pp_type_counts[key] += 1
+            if family is None:
+                unknown_pp_type_counts[key] += 1
+            if len(live_pp_type_examples[key]) < 5:
+                live_pp_type_examples[key].append(
+                    _event_example(event, market_type=market_type, known_family=family)
+                )
 
         if family:
             family_counts[family] += 1
             if len(family_examples[family]) < 5:
                 family_examples[family].append(
-                    {
-                        "event_ticker": ticker,
-                        "title": str(event.get("title") or ""),
-                        "effectiveDate": event.get("effectiveDate"),
-                        "expiryDate": event.get("expiryDate"),
-                        "contracts": [
-                            {
-                                "label": contract.get("label"),
-                                "ticker": contract.get("ticker"),
-                                "instrumentSymbol": contract.get("instrumentSymbol"),
-                                "marketState": contract.get("marketState"),
-                            }
-                            for contract in (event.get("contracts") or [])[:6]
-                        ],
-                    }
+                    _event_example(event, market_type=market_type, known_family=family)
                 )
 
     return {
@@ -131,8 +157,13 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         "market_type_counts": dict(market_type_counts.most_common()),
         "supported_prop_family_counts": dict(family_counts.most_common()),
         "supported_prop_family_examples": dict(sorted(family_examples.items())),
+        "live_pp_market_type_counts": dict(live_pp_type_counts.most_common()),
+        "live_pp_market_type_examples": dict(sorted(live_pp_type_examples.items())),
+        "unknown_pp_market_type_counts": dict(unknown_pp_type_counts.most_common()),
+        "unknown_pp_codes_require_identity_audit": sorted(unknown_pp_type_counts),
         "mlb_events": mlb_events,
         "mlb_contracts": mlb_contracts,
+        "classification": "INVENTORY_ONLY_UNKNOWN_CODES_PRESERVED",
         "read_only": True,
         "order_entry": False,
     }
