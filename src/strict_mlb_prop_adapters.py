@@ -3,12 +3,17 @@
 These adapters intentionally reject fuzzy cross-family candidates. A pair is only
 normalized when all of the following agree:
 
-* explicit Polymarket sportsMarketType -> Kalshi series allowlist
-* MLB event identity from structured slugs/tickers
+* explicit/derived Polymarket prop family -> exact Kalshi series allowlist
+* MLB event identity from structured slug/event metadata
 * player identity
 * exact stat family
 * exact threshold
 * explicit rule-audit evidence for both venues
+
+Polymarket's sports UI/API shape has changed over time.  The adapter therefore does
+not require one historical English sentence or one historical slug prefix.  Instead
+it requires independent structured/semantic fields to corroborate each other and
+fails closed on disagreement.
 
 The module has no order-entry code and never returns executable confidence. Even a
 fully audited pair is emitted as FULL_RULES_AUDITED_SHADOW for research only.
@@ -36,6 +41,7 @@ FAMILY_LABELS: Mapping[str, tuple[str, ...]] = {
     "baseball_player_strikeouts": ("strikeouts", "pitching strikeouts"),
 }
 
+# Historical exact shape retained for backward compatibility/tests.
 POLY_SLUG_RE = re.compile(
     r"^astatc-mlb-(?P<a>[a-z0-9]+)-(?P<b>[a-z0-9]+)-"
     r"(?P<date>\d{4}-\d{2}-\d{2})-(?P<stat>hits|hrr|tb|k)-"
@@ -48,6 +54,51 @@ POLY_QUESTION_RE = re.compile(
     r"(?P<a>[A-Z0-9]+) vs (?P<b>[A-Z0-9]+)\?$",
     re.I,
 )
+
+# Current production props still carry an MLB game identity in the slug, but the
+# prefix and wording are not part of the contract semantics.  Parse only the stable
+# game tuple and corroborate the stat/threshold independently below.
+POLY_GAME_SLUG_RE = re.compile(
+    r"(?:^|-)mlb-(?P<a>[a-z0-9]+)-(?P<b>[a-z0-9]+)-"
+    r"(?P<date>\d{4}-\d{2}-\d{2})(?:-|$)",
+    re.I,
+)
+POLY_SLUG_THRESHOLD_RE = re.compile(
+    r"(?:gte|ge|atleast|at-least)(?P<threshold>\d+(?:pt\d+)?)",
+    re.I,
+)
+POLY_SLUG_FAMILY_PATTERNS: Mapping[str, tuple[re.Pattern[str], ...]] = {
+    "baseball_player_hits_runs_rbis": (
+        re.compile(r"(?:^|-)hrr(?:-|$)", re.I),
+        re.compile(r"(?:^|-)hits-runs-rbis(?:-|$)", re.I),
+    ),
+    "baseball_player_total_bases": (
+        re.compile(r"(?:^|-)tb(?:-|$)", re.I),
+        re.compile(r"(?:^|-)total-bases(?:-|$)", re.I),
+    ),
+    "baseball_player_strikeouts": (
+        re.compile(r"(?:^|-)(?:k|so|strikeouts)(?:-|$)", re.I),
+    ),
+    "baseball_player_hits": (
+        re.compile(r"(?:^|-)hits(?:-|$)", re.I),
+    ),
+}
+
+POLY_TEXT_PATTERNS = (
+    re.compile(
+        r"^Will\s+(?P<player>.+?)\s+(?:record|have|get)\s+"
+        r"(?:at\s+least\s+)?(?P<threshold>\d+(?:\.\d+)?)\+?\s+"
+        r"(?P<stat>hits\s*\+\s*runs\s*\+\s*RBIs|total\s+bases|pitching\s+strikeouts|strikeouts|hits)"
+        r"(?:\s+in\s+(?P<a>[A-Z0-9]+)\s+vs\.?\s+(?P<b>[A-Z0-9]+))?\??$",
+        re.I,
+    ),
+    re.compile(
+        r"^(?P<player>.+?):\s*(?P<threshold>\d+(?:\.\d+)?)\+\s*"
+        r"(?P<stat>hits\s*\+\s*runs\s*\+\s*RBIs|total\s+bases|pitching\s+strikeouts|strikeouts|hits)\??$",
+        re.I,
+    ),
+)
+
 KALSHI_PLAYER_LINE_RE = re.compile(
     r"^(?P<player>.+?):\s*(?P<threshold>\d+(?:\.\d+)?)\+\s*"
     r"(?P<stat>hits|hits \+ runs \+ RBIs|total bases|strikeouts)\?",
@@ -64,8 +115,10 @@ STAT_CODE_TO_FAMILY = {
 QUESTION_STAT_TO_FAMILY = {
     "hits": "baseball_player_hits",
     "hits + runs + rbis": "baseball_player_hits_runs_rbis",
+    "hits+runs+rbis": "baseball_player_hits_runs_rbis",
     "total bases": "baseball_player_total_bases",
     "pitching strikeouts": "baseball_player_strikeouts",
+    "strikeouts": "baseball_player_strikeouts",
 }
 KALSHI_STAT_TO_FAMILY = {
     "hits": "baseball_player_hits",
@@ -100,14 +153,69 @@ def _market_text(market: Mapping[str, Any]) -> str:
     )
 
 
+def _family_from_stat_text(value: Any) -> str | None:
+    text = _norm(value).replace(" + ", "+")
+    if text == "hits+runs+rbis":
+        return "baseball_player_hits_runs_rbis"
+    if text == "total bases":
+        return "baseball_player_total_bases"
+    if text in {"pitching strikeouts", "strikeouts"}:
+        return "baseball_player_strikeouts"
+    if text == "hits":
+        return "baseball_player_hits"
+    return None
+
+
+def _family_from_slug(slug: str) -> str | None:
+    # Longest/most-specific family first so HRR never degrades into plain hits.
+    matches = [
+        family
+        for family, patterns in POLY_SLUG_FAMILY_PATTERNS.items()
+        if any(pattern.search(slug) for pattern in patterns)
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _parse_poly_text(value: Any) -> tuple[str, Decimal, str, tuple[str, str] | None] | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    for pattern in POLY_TEXT_PATTERNS:
+        match = pattern.fullmatch(text)
+        if match is None:
+            continue
+        threshold = _decimal(match.group("threshold"))
+        family = _family_from_stat_text(match.group("stat"))
+        player = match.group("player").strip()
+        if threshold is None or family is None or not player:
+            return None
+        a = match.groupdict().get("a")
+        b = match.groupdict().get("b")
+        teams = (a.lower(), b.lower()) if a and b else None
+        return player, threshold, family, teams
+    return None
+
+
+def _poly_game_tuple(poly: Mapping[str, Any]) -> tuple[tuple[str, str], str] | None:
+    slug = str(poly.get("slug") or "")
+    historical = POLY_SLUG_RE.fullmatch(slug)
+    if historical is not None:
+        return (
+            (historical.group("a").lower(), historical.group("b").lower()),
+            historical.group("date"),
+        )
+    current = POLY_GAME_SLUG_RE.search(slug)
+    if current is None:
+        return None
+    return (
+        (current.group("a").lower(), current.group("b").lower()),
+        current.group("date"),
+    )
+
+
 @dataclass(frozen=True)
 class RuleAuditEvidence:
-    """Minimum evidence needed before a strict pair may be called rule-audited.
-
-    The calling audit collector is responsible for fetching these from the public
-    venue metadata/rules surfaces. URLs alone are not enough: both rule summaries
-    must have been reviewed and positively marked equivalent for the exact family.
-    """
+    """Minimum evidence needed before a strict pair may be called rule-audited."""
 
     kalshi_series: str
     kalshi_settlement_sources: tuple[str, ...]
@@ -160,38 +268,69 @@ class StrictMLBPropPair:
 
 
 def _poly_identity(poly: Mapping[str, Any]) -> tuple[str, str, tuple[str, str], str, Decimal] | None:
-    family = str(poly.get("sportsMarketType") or "")
-    if family not in FAMILY_SERIES:
-        return None
+    """Return a strict semantic identity across historical and current Poly shapes.
+
+    Required corroboration:
+    - MLB game tuple/date from slug;
+    - player/stat/threshold from question/title;
+    - line equals the text threshold;
+    - detailed sportsMarketType must agree when present;
+    - otherwise sportsMarketTypeV2 must explicitly say PROP and the slug stat must
+      independently agree with the text family;
+    - any stat/threshold/team information present in the slug/question must agree.
+    """
 
     slug = str(poly.get("slug") or "")
-    sm = POLY_SLUG_RE.fullmatch(slug)
-    if sm is None or STAT_CODE_TO_FAMILY.get(sm.group("stat").lower()) != family:
+    game = _poly_game_tuple(poly)
+    if game is None:
+        return None
+    slug_teams, game_date = game
+
+    parsed_text = _parse_poly_text(poly.get("question") or poly.get("title"))
+    if parsed_text is None:
+        return None
+    player, text_threshold, text_family, text_teams = parsed_text
+
+    detailed_family = str(poly.get("sportsMarketType") or "")
+    if detailed_family in FAMILY_SERIES:
+        family = detailed_family
+        if family != text_family:
+            return None
+    else:
+        prop_type = str(poly.get("sportsMarketTypeV2") or "").upper()
+        if prop_type not in {"PROP", "SPORTS_MARKET_TYPE_PROP"}:
+            return None
+        slug_family = _family_from_slug(slug)
+        if slug_family is None or slug_family != text_family:
+            return None
+        family = text_family
+
+    slug_family = _family_from_slug(slug)
+    if slug_family is not None and slug_family != family:
         return None
 
-    question = str(poly.get("question") or poly.get("title") or "")
-    qm = POLY_QUESTION_RE.fullmatch(question)
-    if qm is None or QUESTION_STAT_TO_FAMILY.get(_norm(qm.group("stat"))) != family:
+    if text_teams is not None and set(text_teams) != set(slug_teams):
         return None
 
-    slug_teams = (sm.group("a").lower(), sm.group("b").lower())
-    question_teams = (qm.group("a").lower(), qm.group("b").lower())
-    if set(slug_teams) != set(question_teams):
-        return None
-
-    slug_threshold = _decimal(sm.group("threshold"))
-    question_threshold = _decimal(qm.group("threshold"))
     line = _decimal(poly.get("line"))
-    if None in (slug_threshold, question_threshold, line):
-        return None
-    assert slug_threshold is not None and question_threshold is not None and line is not None
-    if not (slug_threshold == question_threshold == line):
+    if line is None or line != text_threshold:
         return None
 
-    player = qm.group("player").strip()
-    if not player:
-        return None
-    return family, player, slug_teams, sm.group("date"), line
+    historical = POLY_SLUG_RE.fullmatch(slug)
+    if historical is not None:
+        if STAT_CODE_TO_FAMILY.get(historical.group("stat").lower()) != family:
+            return None
+        historical_threshold = _decimal(historical.group("threshold"))
+        if historical_threshold != line:
+            return None
+    else:
+        threshold_match = POLY_SLUG_THRESHOLD_RE.search(slug)
+        if threshold_match is not None:
+            slug_threshold = _decimal(threshold_match.group("threshold"))
+            if slug_threshold != line:
+                return None
+
+    return family, player, slug_teams, game_date, line
 
 
 def _kalshi_identity(
@@ -210,8 +349,6 @@ def _kalshi_identity(
     if not event_ticker.startswith(expected_series + "-"):
         return None
 
-    # Require the exact stat phrase in the event title; this prevents Hits from
-    # matching Hits+Runs+RBIs and vice versa even when player/threshold align.
     event_title = _norm(event.get("title") or event.get("sub_title"))
     if not any(label in event_title for label in FAMILY_LABELS[expected_family]):
         return None
@@ -234,10 +371,7 @@ def strict_match(
     kalshi_market: Mapping[str, Any],
     audit: RuleAuditEvidence | None,
 ) -> StrictMLBPropPair | None:
-    """Return one strict shadow pair or None.
-
-    Fail closed on any identity, family, threshold, or rule-audit mismatch.
-    """
+    """Return one strict shadow pair or None; fail closed on any disagreement."""
 
     p = _poly_identity(poly)
     if p is None:
@@ -255,7 +389,6 @@ def strict_match(
     if _name(poly_player) != _name(kalshi_player) or threshold != kalshi_threshold:
         return None
 
-    # Event ticker must contain the exact ordered or reversed team-code pair.
     event_ticker = str(kalshi_event.get("event_ticker") or kalshi_market.get("event_ticker") or "").upper()
     a, b = (x.upper() for x in teams)
     if not (event_ticker.endswith(a + b) or event_ticker.endswith(b + a)):
