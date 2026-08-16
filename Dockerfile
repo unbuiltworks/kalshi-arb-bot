@@ -11,8 +11,8 @@ COPY tests/ tests/
 
 RUN PYTHONPATH=/app python -m pytest -q tests/test_gemini_kalshi_predictive_hot.py
 
-# One-shot read-only rollover prewarm probe. It subscribes to the next deterministic
-# contract identities before the boundary and never imports any order-entry path.
+# Continuous read-only rollover prewarm benchmark. It subscribes to deterministic
+# next-window identities before each boundary and never imports an order-entry path.
 ENV BOT_MODE=paper
 
-CMD ["sh", "-c", "python -m src.gemini_kalshi_prewarm_probe --assets BTC ETH SOL XRP --lead-s 1.0 --timeout-after-s 8.0; sleep 3600"]
+CMD ["python", "-m", "src.gemini_kalshi_prewarm_probe", "--assets", "BTC", "ETH", "SOL", "XRP", "--lead-s", "1.0", "--timeout-after-s", "8.0", "--rollovers", "0"]
