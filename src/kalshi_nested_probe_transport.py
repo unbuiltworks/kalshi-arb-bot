@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from decimal import Decimal
 import asyncio
-import time
 from typing import Any
 
 import httpx
@@ -48,10 +47,32 @@ class OrderState:
     ticker: str
     fill_count: Decimal
     remaining_count: Decimal
+    taker_fill_cost: Decimal = D("0")
+    maker_fill_cost: Decimal = D("0")
+    taker_fees: Decimal = D("0")
+    maker_fees: Decimal = D("0")
 
     @property
     def fully_filled(self) -> bool:
         return self.fill_count >= D("1") and self.remaining_count <= D("0")
+
+    @property
+    def total_cash_cost(self) -> Decimal:
+        return self.taker_fill_cost + self.maker_fill_cost + self.taker_fees + self.maker_fees
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "order_id": self.order_id,
+            "client_order_id": self.client_order_id,
+            "ticker": self.ticker,
+            "fill_count": str(self.fill_count),
+            "remaining_count": str(self.remaining_count),
+            "taker_fill_cost": str(self.taker_fill_cost),
+            "maker_fill_cost": str(self.maker_fill_cost),
+            "taker_fees": str(self.taker_fees),
+            "maker_fees": str(self.maker_fees),
+            "total_cash_cost": str(self.total_cash_cost),
+        }
 
 
 def parse_create_order_response(body: dict[str, Any], *, reconciled: bool = False) -> OrderAck:
@@ -81,6 +102,10 @@ def parse_order_state(row: dict[str, Any]) -> OrderState:
         ticker=ticker,
         fill_count=D(str(row.get("fill_count_fp") or row.get("fill_count") or "0")),
         remaining_count=D(str(row.get("remaining_count_fp") or row.get("remaining_count") or "0")),
+        taker_fill_cost=D(str(row.get("taker_fill_cost_dollars") or "0")),
+        maker_fill_cost=D(str(row.get("maker_fill_cost_dollars") or "0")),
+        taker_fees=D(str(row.get("taker_fees_dollars") or "0")),
+        maker_fees=D(str(row.get("maker_fees_dollars") or "0")),
     )
 
 
@@ -170,7 +195,7 @@ class KalshiV2RestTransport:
             try:
                 state = await self.get(order_id)
                 if state.fully_filled or state.remaining_count <= 0:
-                    return {"order_id": order_id, "race_resolved": True, "state": asdict(state)}
+                    return {"order_id": order_id, "race_resolved": True, "state": state.as_dict()}
             except Exception:
                 pass
             raise RuntimeError(f"Kalshi cancel order HTTP {response.status_code}: {response.text[:300]}")
