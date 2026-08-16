@@ -61,26 +61,58 @@ class Pair:
 
 
 async def _kalshi_open_15m(http: httpx.AsyncClient) -> list[dict[str, Any]]:
-    """Fetch only the currently open short-duration crypto series."""
+    """Fetch the four open crypto series without a concurrent rate-limit burst.
+
+    This function sits on the discovery/control plane, not the hot book path. A few
+    hundred milliseconds of pacing is preferable to four simultaneous requests that
+    can all receive 429 at the exact 15-minute boundary.
+    """
 
     async def fetch_series(series_ticker: str) -> list[dict[str, Any]]:
-        response = await http.get(
-            f"{KALSHI_REST}/markets",
-            params={
-                "series_ticker": series_ticker,
-                "status": "open",
-                "limit": 100,
-                "mve_filter": "exclude",
-            },
-        )
-        response.raise_for_status()
-        return list(response.json().get("markets", []))
+        response: httpx.Response | None = None
+        for attempt in range(6):
+            response = await http.get(
+                f"{KALSHI_REST}/markets",
+                params={
+                    "series_ticker": series_ticker,
+                    "status": "open",
+                    "limit": 100,
+                    "mve_filter": "exclude",
+                },
+            )
+            if response.status_code != 429:
+                response.raise_for_status()
+                return list(response.json().get("markets", []))
 
-    pages = await asyncio.gather(*(fetch_series(series) for series in SERIES.values()))
-    return [market for page in pages for market in page]
+            retry_after = response.headers.get("Retry-After")
+            try:
+                delay = float(retry_after) if retry_after else min(2.0, 0.20 * (2 ** attempt))
+            except (TypeError, ValueError):
+                delay = min(2.0, 0.20 * (2 ** attempt))
+            logger.warning(
+                "CRYPTO_DISCOVERY_KALSHI_429 series=%s attempt=%d sleep_s=%.3f",
+                series_ticker,
+                attempt + 1,
+                delay,
+            )
+            await asyncio.sleep(max(0.05, delay))
+
+        assert response is not None
+        response.raise_for_status()
+        return []
+
+    rows: list[dict[str, Any]] = []
+    series_values = list(SERIES.values())
+    for index, series in enumerate(series_values):
+        rows.extend(await fetch_series(series))
+        if index + 1 < len(series_values):
+            await asyncio.sleep(0.10)
+    return rows
 
 
 async def _discover_pairs(http: httpx.AsyncClient, max_window_skew_s: float) -> list[Pair]:
+    # Gemini and the paced Kalshi discovery can run side-by-side; Kalshi itself is
+    # serialized by series inside _kalshi_open_15m.
     gemini_events, kalshi_markets = await asyncio.gather(
         _gemini_active_crypto(http),
         _kalshi_open_15m(http),
@@ -300,124 +332,109 @@ async def watch(
                         if gemini_taker_only:
                             bucket["gemini_taker_only_candidate_samples"] += 1
 
-                        positive = bool(pre_fee)
-                        if positive and not bucket["in_episode"]:
+                        in_episode = bucket["in_episode"]
+                        if pre_fee and not in_episode:
+                            bucket["episodes"] += 1
                             bucket["in_episode"] = True
                             bucket["episode_start_ms"] = now_ms
                             bucket["episode_best_edge"] = raw_edge
                             bucket["episode_max_qty"] = max_qty
-                            bucket["episodes"] += 1
-                        elif positive:
+                            logger.info("ALIGNED_WATCH_EPISODE_START %s", json.dumps({
+                                "asset": pair.asset,
+                                "gemini_symbol": pair.gemini_symbol,
+                                "kalshi_ticker": pair.kalshi_ticker,
+                                "start_ms": now_ms,
+                                "raw_edge_per_contract": str(raw_edge),
+                                "max_quantity": str(max_qty),
+                                "candidates": _candidate_rows(pre_fee),
+                                "settlement_status": "INDEX_MISMATCH_RESEARCH_ONLY",
+                            }, separators=(",", ":")))
+                        elif pre_fee and in_episode:
                             bucket["episode_best_edge"] = max(bucket["episode_best_edge"], raw_edge)
                             bucket["episode_max_qty"] = max(bucket["episode_max_qty"], max_qty)
-                        elif bucket["in_episode"]:
-                            logger.info("ALIGNED_WATCH_EPISODE %s", json.dumps({
+                        elif not pre_fee and in_episode:
+                            start_ms = bucket["episode_start_ms"]
+                            logger.info("ALIGNED_WATCH_EPISODE_END %s", json.dumps({
                                 "asset": pair.asset,
-                                "start_ms": bucket["episode_start_ms"],
+                                "gemini_symbol": pair.gemini_symbol,
+                                "kalshi_ticker": pair.kalshi_ticker,
+                                "start_ms": start_ms,
                                 "end_ms": now_ms,
-                                "duration_ms": now_ms - int(bucket["episode_start_ms"]),
+                                "duration_ms": (now_ms - start_ms) if start_ms is not None else None,
                                 "best_raw_edge_per_contract": str(bucket["episode_best_edge"]),
-                                "max_displayed_pre_fee_quantity": str(bucket["episode_max_qty"]),
-                                "classification": "INDEX_MISMATCH_RESEARCH_ONLY",
+                                "max_quantity": str(bucket["episode_max_qty"]),
+                                "settlement_status": "INDEX_MISMATCH_RESEARCH_ONLY",
                             }, separators=(",", ":")))
                             bucket["in_episode"] = False
                             bucket["episode_start_ms"] = None
                             bucket["episode_best_edge"] = D("0")
                             bucket["episode_max_qty"] = D("0")
 
-                        row = {
-                            "ts_ms": now_ms,
+                        fh.write(json.dumps({
+                            "observed_at_ms": now_ms,
                             "asset": pair.asset,
                             "window_end_utc": pair.window_end.isoformat(),
                             "gemini_symbol": pair.gemini_symbol,
                             "kalshi_ticker": pair.kalshi_ticker,
-                            "gemini_yes_bid": str(g.yes_bid),
-                            "gemini_yes_bid_size": str(g.yes_bid_size),
-                            "gemini_yes_ask": str(g.yes_ask),
-                            "gemini_yes_ask_size": str(g.yes_ask_size),
-                            "kalshi_yes_bid": str(k.yes_bid),
-                            "kalshi_yes_bid_size": str(k.yes_bid_size),
-                            "kalshi_yes_ask": str(k.yes_ask),
-                            "kalshi_yes_ask_size": str(k.yes_ask_size),
                             "quote_skew_ms": quote_skew_ms,
                             "fresh": fresh,
-                            "gemini_yes_plus_kalshi_no_cost_pre_fee": str(c_g_yes),
-                            "kalshi_yes_plus_gemini_no_cost_pre_fee": str(c_k_yes),
-                            "best_cost_pre_fee": str(best_cost),
+                            "gemini_top": {
+                                "yes_bid": str(g.yes_bid),
+                                "yes_ask": str(g.yes_ask),
+                                "yes_bid_size": str(g.yes_bid_size),
+                                "yes_ask_size": str(g.yes_ask_size),
+                            },
+                            "kalshi_top": {
+                                "yes_bid": str(k.yes_bid),
+                                "yes_ask": str(k.yes_ask),
+                                "yes_bid_size": str(k.yes_bid_size),
+                                "yes_ask_size": str(k.yes_ask_size),
+                            },
                             "raw_edge_per_contract": str(raw_edge),
                             "pre_fee_candidates": _candidate_rows(pre_fee),
-                            "gemini_taker_fee_only_candidates": _candidate_rows(gemini_taker_only),
-                            "kalshi_fee_status": "UNMODELED_DO_NOT_TRADE",
+                            "gemini_taker_only_candidates": _candidate_rows(gemini_taker_only),
                             "settlement_status": "INDEX_MISMATCH_RESEARCH_ONLY",
                             "read_only": True,
                             "order_entry": False,
-                        }
-                        fh.write(json.dumps(row, separators=(",", ":")) + "\n")
+                        }, separators=(",", ":")) + "\n")
+                        fh.flush()
 
-                        if pre_fee:
-                            logger.info("ALIGNED_WATCH_LOCK %s", json.dumps(row, separators=(",", ":")))
-
-                    fh.flush()
-                    sleep_for = poll_s - (time.monotonic() - loop_started)
-                    if sleep_for > 0:
-                        await asyncio.sleep(sleep_for)
+                    elapsed = time.monotonic() - loop_started
+                    await asyncio.sleep(max(0.0, poll_s - elapsed))
             finally:
                 stop.set()
                 for task in stream_tasks:
                     task.cancel()
                 await asyncio.gather(*stream_tasks, return_exceptions=True)
 
-        end_ms = int(time.time() * 1000)
-        for asset, bucket in stats.items():
-            if bucket["in_episode"]:
-                logger.info("ALIGNED_WATCH_EPISODE %s", json.dumps({
-                    "asset": asset,
-                    "start_ms": bucket["episode_start_ms"],
-                    "end_ms": end_ms,
-                    "duration_ms": end_ms - int(bucket["episode_start_ms"]),
-                    "best_raw_edge_per_contract": str(bucket["episode_best_edge"]),
-                    "max_displayed_pre_fee_quantity": str(bucket["episode_max_qty"]),
-                    "classification": "INDEX_MISMATCH_RESEARCH_ONLY",
-                }, separators=(",", ":")))
-
         summary = {
-            asset: {
-                "samples": bucket["samples"],
-                "fresh_samples": bucket["fresh_samples"],
-                "raw_positive_samples": bucket["raw_positive_samples"],
-                "pre_fee_candidate_samples": bucket["pre_fee_candidate_samples"],
-                "gemini_taker_only_candidate_samples": bucket["gemini_taker_only_candidate_samples"],
-                "best_raw_edge_per_contract": str(bucket["best_raw_edge_per_contract"]),
-                "max_displayed_pre_fee_quantity": str(bucket["max_pre_fee_quantity"]),
-                "episodes": bucket["episodes"],
-            }
-            for asset, bucket in stats.items()
-        }
-        logger.info("ALIGNED_WATCH_SUMMARY %s", json.dumps({
-            "by_asset": summary,
-            "output": str(output),
-            "kalshi_fee_status": "UNMODELED_DO_NOT_TRADE",
+            "pairs": len(pairs),
+            "seconds": seconds,
+            "poll_s": poll_s,
+            "max_quote_skew_ms": max_quote_skew_ms,
+            "stats": {
+                asset: {
+                    key: (str(value) if isinstance(value, Decimal) else value)
+                    for key, value in bucket.items()
+                    if key not in {"in_episode", "episode_start_ms", "episode_best_edge", "episode_max_qty"}
+                }
+                for asset, bucket in stats.items()
+            },
             "settlement_status": "INDEX_MISMATCH_RESEARCH_ONLY",
-            "repeated_depth_counted_as_pnl": False,
             "read_only": True,
             "order_entry": False,
-        }, separators=(",", ":")))
+        }
+        logger.info("ALIGNED_WATCH_SUMMARY %s", json.dumps(summary, separators=(",", ":")))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--seconds", type=float, default=900.0)
+    parser.add_argument("--seconds", type=float, default=300.0)
     parser.add_argument("--poll-s", type=float, default=1.0)
     parser.add_argument("--max-window-skew-s", type=float, default=30.0)
-    parser.add_argument("--max-quote-skew-ms", type=int, default=500)
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path("logs/gemini_kalshi_aligned_watch.jsonl"),
-    )
+    parser.add_argument("--max-quote-skew-ms", type=int, default=1000)
+    parser.add_argument("--output", type=Path, default=Path("data/gemini_kalshi_aligned_watch.jsonl"))
     args = parser.parse_args()
-    if args.seconds <= 0 or args.poll_s <= 0:
-        raise SystemExit("--seconds and --poll-s must be positive")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
     asyncio.run(watch(
         seconds=args.seconds,
