@@ -34,6 +34,7 @@ from src.gemini_kalshi_btc_ws_analyze import (
     _market_key,
     episodes,
 )
+from src.gemini_kalshi_lock_settlement_join import _wilson_upper_95
 from src.gemini_kalshi_settlement_agreement import AgreementRow, _gemini_settled
 from src.gemini_kalshi_settlement_probe import _kalshi_settled_paced, match_settled_true_windows
 
@@ -141,6 +142,7 @@ def _scenario(
     excluded_unknown_margin = 0
     excluded_inside_margin = 0
     consumable = 0
+    consumable_mismatches = 0
     contracts = D("0")
     apparent = D("0")
     actual = D("0")
@@ -175,6 +177,7 @@ def _scenario(
         realized = fresh_qty * D(mult) - fresh_cost
         actual += realized
         if not agreement.agrees:
+            consumable_mismatches += 1
             if realized < 0:
                 adverse_mismatches += 1
             elif realized > fresh_locked:
@@ -186,6 +189,9 @@ def _scenario(
         "excluded_unknown_gemini_margin_candidates": excluded_unknown_margin,
         "excluded_inside_margin_candidates": excluded_inside_margin,
         "consumable_episodes": consumable,
+        "consumable_mismatch_episodes": consumable_mismatches,
+        "consumable_mismatch_rate": (consumable_mismatches / consumable) if consumable else None,
+        "consumable_mismatch_rate_wilson_upper_95": _wilson_upper_95(consumable_mismatches, consumable),
         "consumable_contracts": str(contracts),
         "apparent_locked_profit_dollars": str(apparent),
         "settlement_adjusted_pnl_dollars": str(actual),
@@ -201,7 +207,9 @@ def _basis_margin_sensitivity(
     """Retrospectively gate sub-second economics by Gemini close-boundary margin.
 
     Unknown margins fail closed in every gated cohort. This is sensitivity
-    analysis only, not a live entry rule.
+    analysis only, not a live entry rule. Each consumable cohort also reports a
+    95% Wilson upper bound so a small zero-mismatch sample cannot masquerade as
+    evidence of zero residual basis risk.
     """
     out: dict[str, Any] = {}
     for threshold in BASIS_MARGIN_THRESHOLDS_BPS:
@@ -239,6 +247,7 @@ def settlement_adjusted_episodes(eps: list[Episode], agreements: list[AgreementR
         "basis_margin_sensitivity": _basis_margin_sensitivity(eps, by_ticker),
         "accounting_method": "CONSUMABLE_LIQUIDITY_WITH_ACTUAL_0X_1X_2X_SETTLEMENT_PAYOUT",
         "basis_margin_policy": "RETROSPECTIVE_ONLY_UNKNOWN_MARGIN_EXCLUDED_FROM_GATED_COHORTS",
+        "basis_uncertainty_policy": "WILSON_UPPER_95_ON_CONSUMABLE_SETTLED_EPISODES",
         "input_memory_method": "STREAM_JSONL_KEEP_POSITIVE_EPISODES_ONLY",
         "unresolved_policy": "UNMATCHED_OR_UNSETTLED_EPISODES_EXCLUDED_NOT_ASSUMED_SAFE",
         "classification": "INDEX_MISMATCH_RESEARCH_ONLY",
