@@ -31,6 +31,20 @@ BINS = (
 )
 
 
+def _disagreement_detail(row):
+    return {
+        "asset": row.asset,
+        "expiry_utc": row.expiry.isoformat(),
+        "gemini_ticker": row.gemini_ticker,
+        "kalshi_ticker": row.kalshi_ticker,
+        "gemini_outcome": row.gemini_outcome,
+        "kalshi_outcome": row.kalshi_outcome,
+        "gemini_strike": row.gemini_strike,
+        "gemini_settlement": row.gemini_settlement,
+        "gemini_margin_bps": row.gemini_margin_bps,
+    }
+
+
 def _summary(rows):
     usable = [r for r in rows if r.gemini_margin_bps is not None]
     disagreements = [r for r in usable if not r.agrees]
@@ -70,12 +84,14 @@ def _summary(rows):
         })
 
     bad_abs = sorted(abs(float(r.gemini_margin_bps)) for r in disagreements)
+    recent_bad = sorted(disagreements, key=lambda r: r.expiry, reverse=True)[:20]
     return {
         "matched_with_margin": len(usable),
         "agreements": len(usable) - len(disagreements),
         "disagreements": len(disagreements),
         "max_abs_margin_bps_among_disagreements": max(bad_abs) if bad_abs else None,
         "disagreement_abs_margin_bps": bad_abs,
+        "recent_disagreements": [_disagreement_detail(r) for r in recent_bad],
         "threshold_cohorts": threshold_rows,
         "margin_bins": bins,
         "window_identity": "GEMINI_TICKER_TIME_VS_KALSHI_CLOSE_TIME",
