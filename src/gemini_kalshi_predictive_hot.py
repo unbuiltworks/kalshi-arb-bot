@@ -22,6 +22,7 @@ import httpx
 
 from src.gemini_kalshi_aligned_watch import Pair
 from src import gemini_kalshi_hot_verified_entry as verified
+from src import gemini_kalshi_multi_ws_hot_catalog as catalog
 
 hot = verified.hot
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_predictive_hot")
@@ -49,40 +50,59 @@ def predicted_pair(asset: str, now_ts: float | None = None) -> Pair:
     )
 
 
+def _log_pair(owner, pair: Pair) -> None:
+    end_key = pair.window_end.isoformat()
+    last = getattr(owner, "_predictive_last_logged", {})
+    if last.get(pair.asset) == end_key:
+        return
+    last[pair.asset] = end_key
+    setattr(owner, "_predictive_last_logged", last)
+    logger.info(
+        "CRYPTO_HOT_PREDICTED_PAIR %s",
+        json.dumps({
+            "asset": pair.asset,
+            "window_end_utc": end_key,
+            "gemini_symbol": pair.gemini_symbol,
+            "kalshi_ticker": pair.kalshi_ticker,
+            "identity_source": "DETERMINISTIC_QUARTER_HOUR_CLOCK",
+            "validated_only_by_live_ws_data": True,
+            "read_only": True,
+            "order_entry": False,
+        }, separators=(",", ":")),
+    )
+
+
 class PredictivePairDiscovery:
     """Drop-in PairDiscoveryCache with no REST pair-discovery calls."""
 
     def __init__(self, ttl_s: float = 1.0) -> None:
-        self._last_logged: dict[str, str] = {}
+        del ttl_s
+        self._predictive_last_logged: dict[str, str] = {}
 
     async def current_pair(self, http: httpx.AsyncClient, asset: str) -> Pair:
         del http
         pair = predicted_pair(asset)
-        end_key = pair.window_end.isoformat()
-        if self._last_logged.get(pair.asset) != end_key:
-            self._last_logged[pair.asset] = end_key
-            logger.info(
-                "CRYPTO_HOT_PREDICTED_PAIR %s",
-                json.dumps({
-                    "asset": pair.asset,
-                    "window_end_utc": end_key,
-                    "gemini_symbol": pair.gemini_symbol,
-                    "kalshi_ticker": pair.kalshi_ticker,
-                    "identity_source": "DETERMINISTIC_QUARTER_HOUR_CLOCK",
-                    "validated_only_by_live_ws_data": True,
-                    "read_only": True,
-                    "order_entry": False,
-                }, separators=(",", ":")),
-            )
+        _log_pair(self, pair)
         return pair
 
 
-# Override the catalog installed by verified_entry. Fee metadata remains a cold-path
-# startup check, but pair identity at every 15-minute rollover is now REST-free.
+async def _predictive_catalog_current_pair(self, http: httpx.AsyncClient, asset: str) -> Pair:
+    """Hard override in case the catalog class was already captured by the scanner."""
+    del http
+    pair = predicted_pair(asset)
+    _log_pair(self, pair)
+    return pair
+
+
+# Apply both override forms. Python normally resolves PairDiscoveryCache dynamically
+# from the HOT module, but patching the catalog method too makes the no-REST guarantee
+# robust even if an imported wrapper retained BackgroundPairCatalog itself.
 hot.PairDiscoveryCache = PredictivePairDiscovery
+catalog.BackgroundPairCatalog.current_pair = _predictive_catalog_current_pair
 
 
 def main() -> None:
+    logger.info("CRYPTO_HOT_PREDICTIVE_MODE_ENABLED read_only=true order_entry=false")
     verified.main()
 
 
