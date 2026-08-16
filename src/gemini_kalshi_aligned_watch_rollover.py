@@ -28,6 +28,7 @@ logger = logging.getLogger("kalshi_arb.gemini_kalshi_aligned_watch_rollover")
 
 WatchFn = Callable[..., Awaitable[None]]
 SleepFn = Callable[[float], Awaitable[None]]
+ClockFn = Callable[[], float]
 
 
 def segment_seconds(*, remaining_s: float, rediscover_s: float) -> float:
@@ -53,6 +54,7 @@ async def run_rollover(
     error_backoff_s: float = 2.0,
     watch_fn: WatchFn = watch,
     sleep_fn: SleepFn = asyncio.sleep,
+    clock_fn: ClockFn = time.monotonic,
 ) -> None:
     """Run repeated read-only watcher segments with fresh pair discovery each time.
 
@@ -61,17 +63,20 @@ async def run_rollover(
     would bias the evidence toward unusually clean network periods. The wrapper
     logs the failed segment, sleeps for a bounded backoff, then rediscoveries the
     active 15-minute pair set on the next attempt.
+
+    ``clock_fn`` is injected for deterministic unit tests. Tests must not monkeypatch
+    ``time.monotonic`` globally because asyncio's event loop uses the same clock.
     """
     if seconds <= 0 or rediscover_s <= 0 or poll_s <= 0 or error_backoff_s < 0:
         raise ValueError(
             "seconds, rediscover_s, and poll_s must be positive; error_backoff_s must be non-negative"
         )
 
-    deadline = time.monotonic() + seconds
+    deadline = clock_fn() + seconds
     segment_index = 0
     consecutive_errors = 0
     while True:
-        remaining = deadline - time.monotonic()
+        remaining = deadline - clock_fn()
         this_segment = segment_seconds(remaining_s=remaining, rediscover_s=rediscover_s)
         if this_segment <= 0:
             break
@@ -102,7 +107,7 @@ async def run_rollover(
                 type(exc).__name__,
                 str(exc) or repr(exc),
             )
-            remaining_after_error = deadline - time.monotonic()
+            remaining_after_error = deadline - clock_fn()
             if remaining_after_error <= 0:
                 break
             backoff = min(error_backoff_s, remaining_after_error)
