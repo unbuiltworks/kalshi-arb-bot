@@ -13,7 +13,6 @@ from src.strict_mlb_prop_snapshot import POLY, _fetch_json
 
 
 async def _fetch_all_props(http: httpx.AsyncClient) -> list[dict]:
-    """Read the documented direct market surface, paging defensively."""
     rows: list[dict] = []
     limit = 50
     for offset in range(0, 5000, limit):
@@ -37,25 +36,18 @@ async def _fetch_all_props(http: httpx.AsyncClient) -> list[dict]:
 
 
 async def _fetch_search_events(http: httpx.AsyncClient) -> list[dict[str, Any]]:
-    """Use Polymarket US's official Search resource (/v1/search).
-
-    The app currently exposes MLB player props that are absent from both the league
-    nested-market response and the filtered /v1/markets response.  Search is an
-    official SDK surface returning events with nested markets, so inspect it directly.
-    """
+    """Use official /v1/search and include player-name probes from the live app."""
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for query in ("MLB", "baseball"):
+    # MLB/baseball find the general slate. The named-player queries are deliberate
+    # diagnostics based on currently visible app props and help expose the player-
+    # prop event shape even when broad search ranking omits those events.
+    for query in ("MLB", "baseball", "Roman Anthony", "Rafael Devers", "Seth Lugo"):
         for page in range(1, 6):
             body = await _fetch_json(
                 http,
                 f"{POLY}/v1/search",
-                params={
-                    "query": query,
-                    "limit": 100,
-                    "status": "active",
-                    "page": page,
-                },
+                params={"query": query, "limit": 100, "status": "active", "page": page},
             )
             events = list(body.get("events") or [])
             for event in events:
@@ -89,18 +81,24 @@ def _sample(market: dict) -> dict:
     }
 
 
-def _looks_like_mlb_prop(market: dict) -> bool:
+def _looks_like_player_prop(market: dict) -> bool:
     legacy = str(market.get("sportsMarketType") or "")
-    v2 = str(market.get("sportsMarketTypeV2") or "").upper()
-    if legacy in FAMILY_SERIES:
+    slug = str(market.get("slug") or "").lower()
+    if legacy in FAMILY_SERIES or legacy.startswith("baseball_player_"):
         return True
-    if v2 in {"PROP", "SPORTS_MARKET_TYPE_PROP"}:
+    # Historical player props use astatc; retain this as a strong structural signal.
+    if slug.startswith("astatc-mlb-"):
         return True
-    text = " ".join(
-        str(market.get(k) or "")
-        for k in ("slug", "title", "question")
-    ).lower()
-    return any(token in text for token in (" total bases", " strikeout", " hits", " runs + rbis", "home run"))
+    # Current app player prop slugs may change prefix, but still usually encode MLB
+    # plus a player/stat threshold. Avoid treating generic game/inning PROP markets
+    # as player props solely because sportsMarketTypeV2 says PROP.
+    text = " ".join(str(market.get(k) or "") for k in ("slug", "title", "question")).lower()
+    has_player_stat = any(token in text for token in (
+        " total bases", " strikeout", " pitching strikeout", " hits + runs + rbi",
+        " hits+runs+rbis", " home run", " hits",
+    ))
+    has_threshold = market.get("line") not in (None, "") or any(t in slug for t in ("gte", "pt", "plus"))
+    return "mlb" in slug and has_player_stat and has_threshold
 
 
 async def run_once() -> dict:
@@ -130,43 +128,35 @@ async def run_once() -> dict:
                 nested_examples.append(row)
 
     direct_type_counts = Counter(str(m.get("sportsMarketType") or "<missing>") for m in direct_props)
-    mlb_direct = [
-        m for m in direct_props
-        if str(m.get("slug") or "").lower().startswith("astatc-mlb-")
-        or " mlb " in (" " + str(m.get("question") or m.get("title") or "").lower() + " ")
-    ]
+    mlb_direct = [m for m in direct_props if _looks_like_player_prop(m)]
     supported_direct = [m for m in mlb_direct if str(m.get("sportsMarketType") or "") in FAMILY_SERIES]
 
-    search_markets: list[dict[str, Any]] = []
-    search_examples: list[dict[str, Any]] = []
+    player_search_markets: list[dict[str, Any]] = []
+    player_search_examples: list[dict[str, Any]] = []
     search_types = Counter()
     search_v2_types = Counter()
     for event in search_events:
         event_slug = str(event.get("slug") or "")
         event_title = str(event.get("title") or "")
         event_start = event.get("startTime")
-        # Keep only plausible baseball/MLB events before inspecting nested props.
-        event_text = f"{event_slug} {event_title}".lower()
-        if "mlb" not in event_text and "baseball" not in event_text:
-            continue
         for raw in event.get("markets") or []:
             market = dict(raw)
             search_types[str(market.get("sportsMarketType") or "<missing>")] += 1
             search_v2_types[str(market.get("sportsMarketTypeV2") or "<missing>")] += 1
-            if not _looks_like_mlb_prop(market):
+            if not _looks_like_player_prop(market):
                 continue
             if not market.get("gameStartTime") and event_start:
                 market["eventStartTime"] = event_start
             market["_event_slug"] = event_slug
             market["_event_title"] = event_title
             market["_event_startTime"] = event_start
-            search_markets.append(market)
-            if len(search_examples) < 20:
+            player_search_markets.append(market)
+            if len(player_search_examples) < 30:
                 row = _sample(market)
                 row["event_slug"] = event_slug
                 row["event_title"] = event_title
                 row["event_startTime"] = event_start
-                search_examples.append(row)
+                player_search_examples.append(row)
 
     result = {
         "league_events": len(events),
@@ -174,24 +164,19 @@ async def run_once() -> dict:
         "league_sports_market_types": dict(nested_types.most_common()),
         "direct_open_sports_props": len(direct_props),
         "direct_prop_legacy_types": dict(direct_type_counts.most_common()),
-        "direct_mlb_props": len(mlb_direct),
-        "direct_supported_mlb_props": len(supported_direct),
-        "direct_supported_by_family": dict(Counter(str(m.get("sportsMarketType")) for m in supported_direct)),
-        "direct_mlb_examples": [_sample(m) for m in mlb_direct[:20]],
+        "direct_mlb_player_props": len(mlb_direct),
+        "direct_supported_mlb_player_props": len(supported_direct),
+        "direct_mlb_player_examples": [_sample(m) for m in mlb_direct[:20]],
         "search_events": len(search_events),
-        "search_mlb_prop_markets": len(search_markets),
+        "search_player_prop_markets": len(player_search_markets),
         "search_legacy_types": dict(search_types.most_common()),
         "search_v2_types": dict(search_v2_types.most_common()),
-        "search_mlb_prop_examples": search_examples,
+        "search_player_prop_examples": player_search_examples,
         "league_examples": nested_examples,
         "diagnosis": (
-            "SEARCH_MLB_PROPS_AVAILABLE"
-            if search_markets
-            else "DIRECT_MLB_PROPS_AVAILABLE_NOT_NESTED"
-            if supported_direct and not any(t in FAMILY_SERIES for t in nested_types)
-            else "DIRECT_AND_NESTED_SUPPORTED_PROPS_AVAILABLE"
-            if supported_direct
-            else "NO_SUPPORTED_MLB_PROPS_FOUND"
+            "SEARCH_PLAYER_PROPS_AVAILABLE" if player_search_markets
+            else "DIRECT_PLAYER_PROPS_AVAILABLE" if mlb_direct
+            else "NO_PLAYER_PROPS_FOUND_ON_TESTED_API_SURFACES"
         ),
         "read_only": True,
         "order_entry": False,
