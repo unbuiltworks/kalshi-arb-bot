@@ -26,9 +26,22 @@ PROBE_FIELDS = (("probe_1usd", D("1")), ("probe_5usd", D("5")))
 
 
 def _settlement_key(row: dict[str, Any]) -> str:
+    """Exact venue identity for one matched proposition.
+
+    Date/player/stat/threshold alone is not enough for MLB doubleheaders: the same
+    player can appear twice on one date with an identical prop. Include both venue
+    market identifiers so paper fills can never collapse distinct scheduled games.
+    """
     return "|".join(
         str(row.get(k) or "")
-        for k in ("family", "game_date", "player", "threshold")
+        for k in (
+            "family",
+            "game_date",
+            "player",
+            "threshold",
+            "poly_slug",
+            "kalshi_ticker",
+        )
     )
 
 
@@ -36,8 +49,6 @@ def _group_id(row: dict[str, Any], probe_field: str, ts_ms: int) -> str:
     raw = "|".join(
         (
             _settlement_key(row),
-            str(row.get("poly_slug") or ""),
-            str(row.get("kalshi_ticker") or ""),
             probe_field,
             str(ts_ms),
         )
@@ -62,6 +73,8 @@ def paper_probe_events(
     if not bool(row.get("book_comparable")):
         return None
     if row.get("fetch_error"):
+        return None
+    if not row.get("poly_slug") or not row.get("kalshi_ticker"):
         return None
 
     quantity = D(str(plan["quantity"]))
@@ -99,6 +112,8 @@ def paper_probe_events(
         "modeled_profit": str(profit),
         "direction": direction,
         "quantity": str(quantity),
+        "poly_slug": str(row["poly_slug"]),
+        "kalshi_ticker": str(row["kalshi_ticker"]),
         "simultaneous_synthetic_fill_ts_ms": now_ms,
         "required_participation_gate": row.get("required_participation_gate"),
         "rule_status": row.get("rule_status"),
@@ -117,7 +132,7 @@ def build_paper_probes(
     min_profit: Decimal = D("0.03"),
     ts_ms: int | None = None,
 ) -> tuple[list, list[dict[str, Any]]]:
-    """Build at most one $1 and one $5 paper probe per strict identity."""
+    """Build at most one $1 and one $5 paper probe per exact venue identity."""
     events = []
     audits: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
