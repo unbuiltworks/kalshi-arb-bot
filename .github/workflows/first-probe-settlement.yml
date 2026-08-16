@@ -1,0 +1,125 @@
+name: First Probe Settlement Audit
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[first-probe-settlement]' }}
+    runs-on: [self-hosted, kalshi-bot]
+    timeout-minutes: 5
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+    steps:
+      - name: Read exact settled outcomes
+        id: audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          OUT="$RUNNER_TEMP/first-probe-settlement.json"
+          REPO="/home/ssm-user/kalshi-arb-bot"
+          cd "$REPO" || exit 66
+          git fetch origin feature/gemini-kalshi-fast-overlap >/dev/null 2>&1
+          git checkout feature/gemini-kalshi-fast-overlap >/dev/null 2>&1
+          git reset --hard origin/feature/gemini-kalshi-fast-overlap >/dev/null 2>&1
+
+          .venv/bin/python - <<'PY' > "$OUT" 2>&1
+          import asyncio, json
+          from decimal import Decimal
+          import httpx
+          from src.gemini_prediction_auth import private_rest_request
+
+          GEMINI_SYMBOL = "GEMI-BTC15M2608152330-UP"
+          KALSHI_TICKER = "KXBTC15M-26AUG151930-30"
+          G_PRICE = Decimal("0.5600")
+          G_FEE = Decimal("0.0200")
+          K_PRICE = Decimal("0.3700")
+          K_FEE = Decimal("0.016400")
+
+          async def main():
+              out = {
+                  "mode": "READ_ONLY_FIRST_PROBE_SETTLEMENT_AUDIT",
+                  "order_entry": False,
+                  "gemini_symbol": GEMINI_SYMBOL,
+                  "kalshi_ticker": KALSHI_TICKER,
+              }
+
+              gr = await private_rest_request("POST", "/v1/prediction-markets/positions/settled", timeout=10.0)
+              out["gemini_http_status"] = gr.status_code
+              gp = None
+              if gr.status_code == 200:
+                  body = gr.json()
+                  for p in body.get("positions", []):
+                      if p.get("instrumentSymbol") == GEMINI_SYMBOL:
+                          gp = p
+                          break
+              if gp:
+                  out["gemini"] = {
+                      "found": True,
+                      "outcome": gp.get("outcome"),
+                      "positionQuantity": gp.get("positionQuantity"),
+                      "payout": gp.get("payout"),
+                      "resolutionSide": gp.get("resolutionSide"),
+                      "settledAt": gp.get("settledAt"),
+                      "costBasis": gp.get("costBasis"),
+                      "netProfit": gp.get("netProfit"),
+                  }
+              else:
+                  out["gemini"] = {"found": False}
+
+              async with httpx.AsyncClient(timeout=10.0) as client:
+                  kr = await client.get(f"https://external-api.kalshi.com/trade-api/v2/markets/{KALSHI_TICKER}")
+              out["kalshi_http_status"] = kr.status_code
+              km = kr.json().get("market", {}) if kr.status_code == 200 else {}
+              out["kalshi"] = {
+                  "status": km.get("status"),
+                  "result": km.get("result"),
+                  "settlement_value_dollars": km.get("settlement_value_dollars"),
+                  "settlement_ts": km.get("settlement_ts"),
+                  "expiration_value": km.get("expiration_value"),
+              }
+
+              gres = str((gp or {}).get("resolutionSide") or "").lower()
+              kres = str(km.get("result") or "").lower()
+              if gres in {"yes", "no"} and kres in {"yes", "no"}:
+                  gemini_payout = Decimal("1") if gres == "no" else Decimal("0")
+                  kalshi_payout = Decimal("1") if kres == "yes" else Decimal("0")
+                  total_cost = G_PRICE + G_FEE + K_PRICE + K_FEE
+                  payout = gemini_payout + kalshi_payout
+                  out["calculation"] = {
+                      "gemini_no_payout": str(gemini_payout),
+                      "kalshi_yes_payout": str(kalshi_payout),
+                      "gross_payout": str(payout),
+                      "all_in_cost": str(total_cost),
+                      "realized_probe_pnl": str(payout - total_cost),
+                      "complementary_settlement": gres == "no" and kres == "yes" or gres == "yes" and kres == "no",
+                  }
+              print(json.dumps(out, separators=(",", ":"), sort_keys=True))
+
+          asyncio.run(main())
+          PY
+
+      - name: Comment result
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          OUTCOME: ${{ steps.audit.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `${process.env.RUNNER_TEMP}/first-probe-settlement.json`;
+            let text = fs.existsSync(path) ? fs.readFileSync(path, 'utf8') : 'No output.';
+            if (text.length > 12000) text = text.slice(-12000);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `First probe settlement audit: **${process.env.OUTCOME}**\n\n\`\`\`json\n${text}\n\`\`\``
+            });
