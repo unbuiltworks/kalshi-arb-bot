@@ -1,8 +1,9 @@
 """Compatibility entrypoint for the isolated MLB prop hot scanner.
 
-The Railway shard services already point at this module. Keep that stable command and
-route it through the corrected v2 wrapper. Install the lossless two-venue fan-in first
-so simultaneous Polymarket/Kalshi wakeups cannot discard a market trigger.
+The Railway shard services already point at this module. Keep that stable command,
+install the lossless two-venue event fan-in, and route every shard through the
+persistent hot layer: subscribe exact counterparts once, refresh participation in the
+background, and evaluate fresh cached books only on relevant events.
 
 Read-only: no order manager or order transport is imported here.
 """
@@ -13,7 +14,7 @@ from src.lossless_event_fanin import install
 
 install(hot)
 
-from src.strict_mlb_prop_event_shadow_fast_v2 import main
+from src.strict_mlb_prop_event_shadow_persistent import main
 
 
 if __name__ == "__main__":
