@@ -9,7 +9,7 @@ COPY src/ src/
 COPY config/ config/
 COPY tests/ tests/
 
-# Fail closed if proxy averaging math regresses.
+# Fail closed if proxy averaging math regresses before the research container starts.
 RUN PYTHONPATH=/app python -m pytest -q tests/test_gemini_kaiko_proxy_calibration.py
 
 # Continuous Gemini-only calibration research. No Kalshi calls or order-entry path.
