@@ -1,9 +1,13 @@
 """Paced launcher for live Gemini->Kaiko proxy calibration.
 
 Gemini can publish the next 15-minute contract before its Kaiko strike value is
-populated. The base collector originally gave up after 8 seconds and then skipped the
-whole window. This wrapper keeps polling slowly until the strike appears, while
-remaining Gemini-only and read-only.
+populated, and settled prediction metadata can lag the measurement endpoint by more
+than 90 seconds. This wrapper therefore:
+
+- polls active metadata slowly until all four Kaiko strikes appear;
+- keeps the post-close settlement join alive for up to 10 minutes.
+
+It remains Gemini-only and read-only.
 """
 from __future__ import annotations
 
@@ -53,12 +57,24 @@ async def fetch_window_events_paced(
                 window_end.isoformat(), attempt, sorted(out),
             )
             return out
-        # Metadata is cold-path control data. Two seconds is fast enough to capture
-        # a strike long before the earliest T-300 snapshot without hammering Gemini.
+        # Cold-path control data: two seconds is fast enough without hammering Gemini.
         await asyncio.sleep(2.0)
 
 
+_original_settle_and_calibrate = base.settle_and_calibrate
+
+
+async def settle_and_calibrate_long(http, *, window_end, snapshots, timeout_s: float = 600.0):
+    return await _original_settle_and_calibrate(
+        http,
+        window_end=window_end,
+        snapshots=snapshots,
+        timeout_s=max(600.0, timeout_s),
+    )
+
+
 base.fetch_window_events = fetch_window_events_paced
+base.settle_and_calibrate = settle_and_calibrate_long
 
 
 def main() -> None:
