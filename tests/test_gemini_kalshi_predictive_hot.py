@@ -18,6 +18,24 @@ def test_predicts_observed_august_16_2015_contract_ids():
     assert pair.kalshi_ticker == "KXBTC15M-26AUG161615-15"
 
 
+def test_predicts_observed_august_16_2030_contract_ids():
+    pair = predicted_pair("BTC", ts("2026-08-16T20:15:01"))
+    assert pair.window_end.isoformat() == "2026-08-16T20:30:00+00:00"
+    assert pair.gemini_symbol == "GEMI-BTC15M2608162030-UP"
+    assert pair.kalshi_ticker == "KXBTC15M-26AUG161630-30"
+
+
+def test_close_minute_suffix_tracks_quarter_hour():
+    cases = [
+        ("2026-08-16T20:00:00", "15"),
+        ("2026-08-16T20:15:00", "30"),
+        ("2026-08-16T20:30:00", "45"),
+        ("2026-08-16T20:45:00", "00"),
+    ]
+    for instant, suffix in cases:
+        assert predicted_pair("ETH", ts(instant)).kalshi_ticker.endswith(f"-{suffix}")
+
+
 def test_predicts_all_supported_asset_prefixes():
     expected = {
         "BTC": "KXBTC15M-26AUG161615-15",
@@ -32,10 +50,8 @@ def test_predicts_all_supported_asset_prefixes():
 
 
 def test_dst_conversion_uses_new_york_clock_not_fixed_offset():
-    # 20:15 UTC is 16:15 EDT in August.
     summer = predicted_pair("BTC", ts("2026-08-16T20:00:00"))
     assert "161615" in summer.kalshi_ticker
 
-    # 20:15 UTC is 15:15 EST in January.
     winter = predicted_pair("BTC", ts("2026-01-16T20:00:00"))
     assert winter.kalshi_ticker == "KXBTC15M-26JAN161515-15"
