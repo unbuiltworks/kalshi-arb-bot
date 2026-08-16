@@ -7,6 +7,11 @@ complementary payout by at most $1 versus the synthetic 1x lock assumption. The
 stress P&L therefore subtracts ``upper_mismatch_probability * contracts`` from
 apparent locked P&L. Favorable 2x mismatches are intentionally ignored.
 
+Optionally joins the output from ``gemini_kalshi_btc_ws_capital`` so the same
+one-sided stressed P&L can be expressed per capital-hour, including empirical
+p50/p95 post-close settlement-delay scenarios. Contract counts must match between
+summaries or the join fails closed.
+
 This is read-only research accounting, not a live entry rule or forecast.
 """
 
@@ -87,12 +92,94 @@ def stress_summary(summary: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _join_capital_scenario(
+    stressed: dict[str, Any],
+    capital: dict[str, Any],
+) -> dict[str, Any]:
+    """Join one stressed cohort to its matching capital-hours cohort."""
+    stress_contracts = D(str(stressed.get("consumable_contracts", "0")))
+    capital_contracts = D(str(capital.get("consumable_contracts", "0")))
+    if stress_contracts != capital_contracts:
+        raise ValueError(
+            f"capital/stress consumable_contracts mismatch: {capital_contracts} != {stress_contracts}"
+        )
+
+    hours = D(str(capital.get("consumable_capital_hours", "0")))
+    if hours < 0:
+        raise ValueError("consumable_capital_hours cannot be negative")
+    pnl_raw = stressed.get("wilson95_adverse_basis_stress_pnl_dollars")
+    pnl = None if pnl_raw is None else D(str(pnl_raw))
+
+    out = dict(stressed)
+    out["consumable_capital_hours"] = str(hours)
+    out["wilson95_adverse_basis_stress_profit_per_capital_hour"] = (
+        str(pnl / hours) if pnl is not None and hours > 0 else None
+    )
+    return out
+
+
+def add_capital_efficiency(
+    stressed_summary: dict[str, Any],
+    capital_summary: dict[str, Any],
+) -> dict[str, Any]:
+    """Attach basis-stressed $/capital-hour using matching BTC capital cohorts.
+
+    Window-end-only and any empirical settlement-delay scenarios are reported
+    separately. Basis-margin sensitivity is intentionally not joined here because
+    the current capital analyzer does not yet emit margin-filtered capital-hours.
+    """
+    out = dict(stressed_summary)
+    efficiency: dict[str, Any] = {}
+
+    if isinstance(out.get("entry"), dict) and isinstance(capital_summary.get("entry"), dict):
+        efficiency["window_end_only"] = {
+            "entry": _join_capital_scenario(out["entry"], capital_summary["entry"]),
+            "survival": {
+                str(k): _join_capital_scenario(out["survival"][str(k)], v)
+                for k, v in (capital_summary.get("survival") or {}).items()
+                if str(k) in (out.get("survival") or {})
+            },
+        }
+
+    adjusted: dict[str, Any] = {}
+    for label, scenarios in (capital_summary.get("settlement_delay_adjusted") or {}).items():
+        if not isinstance(scenarios, dict):
+            continue
+        if not isinstance(scenarios.get("entry"), dict) or not isinstance(out.get("entry"), dict):
+            continue
+        adjusted[str(label)] = {
+            "entry": _join_capital_scenario(out["entry"], scenarios["entry"]),
+            "survival": {
+                str(k): _join_capital_scenario(out["survival"][str(k)], v)
+                for k, v in (scenarios.get("survival") or {}).items()
+                if str(k) in (out.get("survival") or {})
+            },
+        }
+    if adjusted:
+        efficiency["settlement_delay_adjusted"] = adjusted
+
+    out["basis_stressed_capital_efficiency"] = efficiency
+    out["capital_efficiency_interpretation"] = (
+        "ONE_SIDED_WILSON95_BASIS_STRESS_PNL_PER_CAPITAL_HOUR_NOT_EXPECTED_VALUE_OR_FORECAST"
+    )
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("summary", type=Path, help="JSON output from gemini_kalshi_btc_ws_settlement")
+    parser.add_argument(
+        "--capital-summary",
+        type=Path,
+        help="Optional JSON output from gemini_kalshi_btc_ws_capital; adds stressed profit per capital-hour",
+    )
     args = parser.parse_args()
     payload = json.loads(args.summary.read_text(encoding="utf-8"))
-    print(json.dumps(stress_summary(payload), separators=(",", ":")))
+    result = stress_summary(payload)
+    if args.capital_summary is not None:
+        capital = json.loads(args.capital_summary.read_text(encoding="utf-8"))
+        result = add_capital_efficiency(result, capital)
+    print(json.dumps(result, separators=(",", ":")))
 
 
 if __name__ == "__main__":
