@@ -14,7 +14,7 @@ COPY main.py .
 # direction, nearest-expiry selection, dynamic cancel/reprice economics, the
 # one-lot live-probe envelope, V2 transport parsing, candidate orientation,
 # strict <=2c maker improvement, <=1c seed GO quality, bounded-risk seed-first
-# execution, and ambiguous/rejected submission handling.
+# execution, ambiguous/rejected submission handling, and the one-shot auto latch.
 RUN PYTHONPATH=/app python -m pytest -q \
     tests/test_kalshi_nested_strike_shadow.py \
     tests/test_kalshi_nested_less_shadow.py \
@@ -28,7 +28,8 @@ RUN PYTHONPATH=/app python -m pytest -q \
     tests/test_kalshi_nested_live_candidate_gate.py \
     tests/test_kalshi_nested_probe_quality_watch.py \
     tests/test_kalshi_nested_seed_first_probe.py \
-    tests/test_kalshi_nested_seed_first_failures.py
+    tests/test_kalshi_nested_seed_first_failures.py \
+    tests/test_kalshi_nested_auto_once.py
 
 ENV BOT_MODE=paper
 
