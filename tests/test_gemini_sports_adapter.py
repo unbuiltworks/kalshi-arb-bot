@@ -114,6 +114,25 @@ def test_player_prop_maps_metric_and_player_but_remains_rule_unverified():
     assert not row.identity.fully_rule_audited
 
 
+def test_live_plus_label_strips_display_prop_from_player_identity():
+    rows = normalize_event({
+        "ticker": "MLB-2608172205-BAL-TB-PPHITS",
+        "contracts": [{
+            "instrumentSymbol": "GEMI-MLB-2608172205-BAL-TB-PPHITS-JCAMINEROO0",
+            "label": "Junior Caminero 1+ Hits",
+            "strike": {"type": "over", "value": "0.5"},
+            "prices": {"buy": {"yes": "0.61", "no": "0.49"}},
+        }],
+    })
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.identity.market_family == "player_prop"
+    assert row.identity.subject == "junior caminero"
+    assert row.identity.stat == "hits"
+    assert row.identity.comparator == "GT"
+    assert row.identity.line == Decimal("0.5")
+
+
 def test_missing_required_contract_strike_fails_closed_for_total():
     rows = normalize_event(_event("total", "contest", "runs", "T", [
         {"instrumentSymbol": "GEMI-X", "label": "Over 8.5"}
