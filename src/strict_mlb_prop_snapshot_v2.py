@@ -21,7 +21,12 @@ from src import strict_mlb_prop_snapshot as base
 
 
 PAST_GRACE = timedelta(hours=2)
-FUTURE_HORIZON = timedelta(hours=18)
+# Player-prop boards can be posted the evening before games that are 20-24 hours
+# away.  The previous 18h window silently dropped those already-live boards (for
+# example, Sunday night discovery of Monday evening games).  Discovery is read-only;
+# downstream scheduled-time/participation/rule gates still decide whether a pair is
+# actionable, so it is safe to keep a wider catalog here.
+FUTURE_HORIZON = timedelta(hours=36)
 SEARCH_CONCURRENCY = 6
 
 
