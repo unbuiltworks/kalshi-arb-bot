@@ -20,13 +20,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          PYTHONPATH=. pytest -q \
-            tests/test_universal_sports_identity.py \
-            tests/test_gemini_sports_adapter.py \
-            tests/test_universal_three_venue_sports.py \
-            tests/test_three_venue_pricing_core.py \
-            tests/test_polymarket_scope_guard.py \
-            tests/test_kalshi_mlb_time_guard.py 2>&1 | tee three-venue-pytest.txt
+          PYTHONPATH=. pytest -q tests/test_universal_sports_identity.py tests/test_gemini_sports_adapter.py tests/test_universal_three_venue_sports.py tests/test_three_venue_pricing_core.py tests/test_polymarket_scope_guard.py tests/test_kalshi_mlb_time_guard.py 2>&1 | tee three-venue-pytest.txt
           code=${PIPESTATUS[0]}
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
@@ -37,30 +31,28 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           text='\n'.join(Path('three-venue-pytest.txt').read_text(errors='replace').splitlines()[-120:])
-          safe=text.replace('%','%25').replace('\r','%0D').replace('\n','%0A')
-          print(f'::error title=three-venue pytest failures::{safe}')
+          print('::error title=three-venue pytest failures::'+text.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
           PY
       - name: Run scope-safe live public scan
         if: steps.pytest.outputs.exit_code == '0'
         shell: bash
         run: |
-          set +e
-          PYTHONPATH=. python -m src.three_venue_mlb_safe_scan > three-venue-safe.json 2> three-venue-safe.err
+          PYTHONPATH=. python -m src.three_venue_mlb_safe_scan > three-venue-safe.json 2> three-venue-safe.err || true
           python - <<'PY'
           from pathlib import Path
           import json
-          out=Path('three-venue-safe.json').read_text(errors='replace').strip()
-          err=Path('three-venue-safe.err').read_text(errors='replace').strip()
+          out=Path('three-venue-safe.json').read_text(errors='replace').strip(); err=Path('three-venue-safe.err').read_text(errors='replace').strip()
           try:
               body=json.loads(out.splitlines()[-1])
               keys=('status','raw_events','normalized_sides','counterpart_clusters','three_venue_clusters','clusters_by_family','clusters_by_venue_set','normal_event_counterpart_keys','priced_quotes','priced_quotes_by_venue','one_contract_positive_locks','top_one_contract_locks','fetch_error_count','scope_gate','time_gate','rule_gate')
-              text=json.dumps({k:body.get(k) for k in keys},separators=(',',':'))
+              summary=json.dumps({k:body.get(k) for k in keys},separators=(',',':'))
+              audit=json.dumps({'positive_quote_audit':body.get('positive_quote_audit'),'positive_identity_audit':body.get('positive_identity_audit'),'fetch_errors':body.get('fetch_errors')},separators=(',',':'))
           except Exception:
-              text=(out or ('NO_STDOUT '+err))[-12000:]
-          safe=text.replace('%','%25').replace('\r','%0D').replace('\n','%0A')
-          print(f'::notice title=scope-safe live three-venue MLB scan::{safe}')
+              summary=(out or ('NO_STDOUT '+err))[-12000:]; audit='NO_AUDIT'
+          for title,text in (('scope-safe live three-venue MLB scan',summary),('positive sports signal raw audit',audit[-14000:])):
+              safe=text.replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+              print(f'::notice title={title}::{safe}')
           PY
-          exit 0
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
