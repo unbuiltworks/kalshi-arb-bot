@@ -51,7 +51,7 @@ class FakeClient:
     async def get(self, path, **kwargs):
         self.calls.append(("GET", path, kwargs))
         if path == "/portfolio/orders":
-            return FakeResponse(200, {"orders": [self.order_row]})
+            return FakeResponse(200, {"orders": [self.order_row], "cursor": ""})
         return FakeResponse(200, {"order": self.order_row})
 
     async def delete(self, path, **kwargs):
@@ -62,7 +62,6 @@ class FakeClient:
             "reduced_by": "1.00",
             "ts_ms": 456,
         })
-
 
 
 def test_create_response_parser_uses_v2_fixed_point_fields():
@@ -145,3 +144,26 @@ async def test_reconcile_scans_ticker_orders_for_exact_client_id():
     assert method == "GET"
     assert path == "/portfolio/orders"
     assert kwargs["params"]["ticker"] == "MKT"
+
+
+@pytest.mark.asyncio
+async def test_recent_session_lookup_matches_client_prefix_and_is_bounded():
+    client = FakeClient()
+    client.order_row = {
+        **client.order_row,
+        "client_order_id": "nested-auto-deadbeef-seed",
+    }
+    transport = KalshiV2RestTransport(client=client)
+    rows = await transport.recent_orders_with_client_prefix("nested-auto-deadbeef")
+    assert len(rows) == 1
+    method, path, kwargs = client.calls[-1]
+    assert method == "GET" and path == "/portfolio/orders"
+    assert kwargs["params"]["limit"] == 1000
+    assert kwargs["params"]["min_ts"] > 0
+
+
+@pytest.mark.asyncio
+async def test_recent_session_lookup_returns_empty_for_other_ids():
+    client = FakeClient()
+    transport = KalshiV2RestTransport(client=client)
+    assert await transport.recent_orders_with_client_prefix("nested-auto-unused") == []
