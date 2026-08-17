@@ -199,6 +199,12 @@ async def run_once() -> dict[str, Any]:
         "conservative_positive_pairs": len(positive),
         "probe_1usd_positive_pairs": len(probe1),
         "probe_5usd_positive_pairs": len(probe5),
+        # Preserve the best pre-participation price discrepancies in the persistent
+        # paper journal. These are research observations only; they remain ineligible
+        # until the participation/rule gate clears.
+        "top_research_positive_pairs": top(positive, "positive_conservative_plan") if positive else [],
+        "top_research_probe_1usd": top(probe1, "probe_1usd") if probe1 else [],
+        "top_research_probe_5usd": top(probe5, "probe_5usd") if probe5 else [],
         "positive_live_probe_pairs": len(live_positive),
         "preferred_live_probe_pairs": len(ready),
         "paper_probe_candidates": paper_candidates,
