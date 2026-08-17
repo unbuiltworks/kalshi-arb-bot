@@ -32,7 +32,6 @@ SPORT_MAP = {
     "golf": "golf",
 }
 
-# Normalize common cross-provider abbreviation differences. Keep this explicit.
 TEAM_ALIASES = {
     "ARI": "AZ", "OAK": "ATH", "CHW": "CWS", "KCR": "KC", "SDP": "SD",
     "SFG": "SF", "TBR": "TB", "WSH": "WSH", "WAS": "WSH",
@@ -75,12 +74,7 @@ def parse_team_event_ticker(ticker: str) -> dict[str, Any] | None:
         start = datetime.strptime(row["date"] + row["time"], "%y%m%d%H%M").replace(tzinfo=timezone.utc)
     except ValueError:
         return None
-    return {
-        **row,
-        "away": canonical_team(row["away"]),
-        "home": canonical_team(row["home"]),
-        "start": start,
-    }
+    return {**row, "away": canonical_team(row["away"]), "home": canonical_team(row["home"]), "start": start}
 
 
 def _scope_key(scope: Mapping[str, Any]) -> str | None:
@@ -100,19 +94,13 @@ def _scope_key(scope: Mapping[str, Any]) -> str | None:
 
 
 def _market_family(market_type: str, subject: str) -> str | None:
-    if market_type == "moneyline":
-        return "moneyline"
-    if market_type == "spread":
-        return "spread"
-    if market_type == "total":
-        return "team_total" if subject == "team" else "game_total"
+    if market_type == "moneyline": return "moneyline"
+    if market_type == "spread": return "spread"
+    if market_type == "total": return "team_total" if subject == "team" else "game_total"
     if market_type == "prop":
-        if subject == "player":
-            return "player_prop"
-        if subject == "team":
-            return "team_prop"
-        if subject == "contest":
-            return "game_prop"
+        if subject == "player": return "player_prop"
+        if subject == "team": return "team_prop"
+        if subject == "contest": return "game_prop"
     return None
 
 
@@ -122,9 +110,7 @@ def _metric(value: Any) -> str:
 
 
 def _contract_text(contract: Mapping[str, Any]) -> str:
-    return " | ".join(str(contract.get(k) or "") for k in (
-        "ticker", "contractTicker", "instrumentSymbol", "label", "title", "name"
-    ))
+    return " | ".join(str(contract.get(k) or "") for k in ("ticker", "contractTicker", "instrumentSymbol", "label", "title", "name"))
 
 
 def _contract_team(contract: Mapping[str, Any], teams: tuple[str, str]) -> str | None:
@@ -132,7 +118,6 @@ def _contract_team(contract: Mapping[str, Any], teams: tuple[str, str]) -> str |
     hits = [team for team in teams if re.search(rf"(?<![A-Z]){re.escape(team)}(?![A-Z])", text)]
     if len(hits) == 1:
         return hits[0]
-    # Full sports contract tickers end in the contract code. Check that tail too.
     tail = re.split(r"[-| ]", text)[-1]
     for team in teams:
         if tail == team or tail.startswith(team):
@@ -141,14 +126,12 @@ def _contract_team(contract: Mapping[str, Any], teams: tuple[str, str]) -> str |
 
 
 def _player_subject(contract: Mapping[str, Any]) -> str | None:
-    # Prefer explicit subject-like fields if Gemini adds/exposes them.
     for key in ("subject", "participant", "player", "playerName", "participantName"):
         value = contract.get(key)
         if isinstance(value, Mapping):
             value = value.get("name") or value.get("label")
         if str(value or "").strip():
             return _norm(value)
-    # For current player-prop labels, remove an O/U suffix and numeric line.
     label = str(contract.get("label") or contract.get("title") or "").strip()
     if not label:
         return None
@@ -166,12 +149,7 @@ def _strike(contract: Mapping[str, Any]) -> tuple[str, Decimal | None] | None:
 
 
 def _comparator(strike_type: str) -> str | None:
-    return {
-        "over": "GT",
-        "over_or_equal": "GE",
-        "under": "LT",
-        "under_or_equal": "LE",
-    }.get(strike_type)
+    return {"over": "GT", "over_or_equal": "GE", "under": "LT", "under_or_equal": "LE"}.get(strike_type)
 
 
 @dataclass(frozen=True)
@@ -213,11 +191,7 @@ def normalize_event(event: Mapping[str, Any]) -> list[GeminiNormalizedContract]:
     metric = _metric(sports.get("metric"))
     rule_audit = RuleAudit(
         official_source="gemini_contract_rules_unverified",
-        overtime="unverified",
-        postponement="unverified",
-        stat_corrections="unverified",
-        push_tie="unverified",
-        complete=False,
+        overtime="unverified", postponement="unverified", stat_corrections="unverified", push_tie="unverified", complete=False,
     )
 
     out: list[GeminiNormalizedContract] = []
@@ -240,69 +214,50 @@ def normalize_event(event: Mapping[str, Any]) -> list[GeminiNormalizedContract]:
             team = _contract_team(contract, teams)
             if team is None:
                 continue
-            subject_type = "team"
-            subject = team
-            stat = ""
-            comparator = "YES"
+            subject_type, subject, stat, comparator = "team", team, "", "YES"
             yes_semantics = f"{team}_WIN"
         elif family == "spread":
             team = _contract_team(contract, teams)
             if team is None or strike_type != "spread" or strike_value is None:
                 continue
-            subject_type = "team"
-            subject = team
-            stat = metric
-            comparator = "GT"
-            line = strike_value
-            yes_semantics = f"{team}_SPREAD_{format(line, 'f')}"
+            # Canonical spread identity is team scoring margin > threshold. A
+            # displayed handicap h (e.g. PHI -1.5) means margin > -h (+1.5).
+            subject_type, subject, stat, comparator = "team", team, metric, "GT"
+            line = -strike_value
+            yes_semantics = f"{team}_MARGIN_GT_{format(line, 'f')}"
         elif family in {"game_total", "team_total", "player_prop", "team_prop", "game_prop"}:
             comp = _comparator(strike_type or "")
             if comp is None or strike_value is None:
                 continue
-            comparator = comp
-            line = strike_value
-            if family == "game_total" or family == "game_prop":
-                subject_type = "contest"
-                subject = "contest"
+            comparator, line = comp, strike_value
+            if family in {"game_total", "game_prop"}:
+                subject_type, subject = "contest", "contest"
             elif family in {"team_total", "team_prop"}:
                 team = _contract_team(contract, teams)
                 if team is None:
                     continue
-                subject_type = "team"
-                subject = team
+                subject_type, subject = "team", team
             else:
                 player = _player_subject(contract)
                 if not player or not stat:
                     continue
-                subject_type = "player"
-                subject = player
+                subject_type, subject = "player", player
             yes_semantics = f"{subject}:{stat}:{comparator}:{format(line, 'f')}"
         else:
             continue
 
         try:
             identity = SportsContractIdentity(
-                venue="gemini",
-                market_id=symbol,
-                event=event_id,
-                market_family=family,
-                scope=scope_key,
-                subject_type=subject_type,
-                subject=subject,
-                stat=stat,
-                comparator=comparator,
-                line=line,
-                rule_audit=rule_audit,
+                venue="gemini", market_id=symbol, event=event_id, market_family=family,
+                scope=scope_key, subject_type=subject_type, subject=subject, stat=stat,
+                comparator=comparator, line=line, rule_audit=rule_audit,
             )
         except ValueError:
             continue
         out.append(GeminiNormalizedContract(
-            identity=identity,
-            instrument_symbol=symbol,
+            identity=identity, instrument_symbol=symbol,
             contract_label=str(contract.get("label") or contract.get("title") or ""),
-            yes_semantics=yes_semantics,
-            strike_type=strike_type,
-            strike_value=strike_value,
+            yes_semantics=yes_semantics, strike_type=strike_type, strike_value=strike_value,
         ))
     return out
 
