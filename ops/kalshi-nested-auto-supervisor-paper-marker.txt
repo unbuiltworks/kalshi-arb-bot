@@ -1,5 +1,6 @@
 kalshi-nested-auto-supervisor-paper
 branch=feature/kalshi-nested-auto-supervisor
-purpose=force Railway to snapshot V2 persistent supervisor config after /data volume mount
+purpose=force Railway to snapshot V2 persistent supervisor config plus runtime volume sentinel probe
 runtime=kalshi_nested_auto_supervisor_v2
 state=/data/kalshi-nested-auto-state.json
+volume_probe=persist-sentinel
