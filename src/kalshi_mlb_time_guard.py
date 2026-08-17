@@ -1,11 +1,16 @@
-"""Correct Kalshi MLB scheduled starts using the Eastern-time event ticker clock."""
+"""Correct Kalshi MLB schedule time and moneyline side semantics.
+
+Kalshi MLB event tickers encode the scheduled clock in America/New_York time. Live
+KXMLBGAME markets also expose the contract team in ``yes_sub_title``; the broader
+event title contains both teams and must never be used to choose the YES team.
+"""
 from __future__ import annotations
 from datetime import datetime, timezone
 import re
 from typing import Any, Iterable, Mapping
 from zoneinfo import ZoneInfo
 
-from src.mlb_game_side_normalization import NormalizedSide, normalize_kalshi_mlb
+from src.mlb_game_side_normalization import NormalizedSide, canonical_team, normalize_kalshi_mlb
 from src.universal_sports_identity import SportsContractIdentity, SportsEventIdentity
 
 _MONTHS={name:i for i,name in enumerate(("JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"),1)}
@@ -33,7 +38,7 @@ def _parse(value: Any) -> datetime | None:
 
 def normalize_kalshi_mlb_eastern(events: Iterable[Mapping[str, Any]]) -> list[NormalizedSide]:
     events=list(events)
-    market_meta: dict[str, tuple[datetime, datetime | None]]={}
+    market_meta: dict[str, tuple[datetime, datetime | None, str]]={}
     for event in events:
         start=ticker_start_utc(str(event.get("event_ticker") or ""))
         if start is None:
@@ -41,29 +46,42 @@ def normalize_kalshi_mlb_eastern(events: Iterable[Mapping[str, Any]]) -> list[No
         for market in event.get("markets") or []:
             if not isinstance(market,Mapping) or not market.get("ticker"):
                 continue
-            market_meta[str(market["ticker"])]=(start,_parse(market.get("expected_expiration_time")))
+            market_meta[str(market["ticker"])]=(start,_parse(market.get("expected_expiration_time")),str(market.get("yes_sub_title") or ""))
 
     out=[]
     for row in normalize_kalshi_mlb(events):
         meta=market_meta.get(row.venue_market_id)
         if meta is None:
             continue
-        start, expected=meta
-        # Current MLB contracts expect expiration about three hours after first
-        # pitch. Keep a broad 2-6h corroboration window and fail closed outside it.
+        start, expected, yes_sub_title=meta
         if expected is not None:
             hours=(expected-start).total_seconds()/3600
             if not 2 <= hours <= 6:
                 continue
         old=row.identity
+        participants=old.event.participants
+        subject=old.subject
+        if old.market_family=="moneyline":
+            explicit=canonical_team(yes_sub_title)
+            if explicit not in participants:
+                explicit=canonical_team(row.venue_market_id.rsplit("-",1)[-1])
+            if explicit not in participants or len(participants)!=2:
+                continue
+            opponent=participants[1] if participants[0]==explicit else participants[0]
+            if row.side=="YES":
+                subject=explicit
+            elif row.side=="NO":
+                subject=opponent
+            else:
+                continue
         event_id=SportsEventIdentity(
-            sport=old.event.sport,league=old.event.league,participants=old.event.participants,
+            sport=old.event.sport,league=old.event.league,participants=participants,
             scheduled_start_ms=int(start.timestamp()*1000),
         )
         identity=SportsContractIdentity(
             venue=old.venue,market_id=old.market_id,event=event_id,
             market_family=old.market_family,scope=old.scope,subject_type=old.subject_type,
-            subject=old.subject,stat=old.stat,comparator=old.comparator,line=old.line,
+            subject=subject,stat=old.stat,comparator=old.comparator,line=old.line,
             rule_audit=old.rule_audit,
         )
         out.append(NormalizedSide(identity,row.venue_market_id,row.side,row.source_label))
