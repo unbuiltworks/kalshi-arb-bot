@@ -5,10 +5,12 @@ Safety model:
 - at most one execution attempt per process;
 - production live guard remains authoritative (>=3c floor, <=6h close, one lot);
 - requires the existing CLI + env + one-use arm-token authorization chain;
-- only the currently proven greater-strike orientation is accepted here:
-  YES(lower strike) + NO(higher strike);
+- accepts either maker orientation of the proven greater-strike pair, but only
+  when the two legs are exactly YES(lower strike) + NO(higher strike);
 - seed IOC is sent first by execute_seed_first; maker is never sent unless the
   seed fills exactly 1.00 contract;
+- fee metadata is refreshed and live books are re-evaluated after that refresh
+  before the one-shot attempt latch can be claimed;
 - the process exits after its first paper GO or live execution attempt.
 
 This module does not remove or weaken any existing live guard.
@@ -33,9 +35,14 @@ from config.settings import API_KEY_ID
 from src.auth import auth_headers, load_private_key
 from src.gemini_kalshi_btc_ws_shadow import KalshiOrderBook
 from src.gemini_kalshi_kalshi_fees import fetch_series_fee_metadata
-from src.kalshi_nested_live_probe_guard import D, NestedLiveProbeSpec, validate_spec
+from src.kalshi_nested_live_probe_guard import (
+    D,
+    NestedLiveProbeSpec,
+    live_probe_authorized,
+    validate_spec,
+)
 from src.kalshi_nested_probe_quality_watch import probe_quality_gate
-from src.kalshi_nested_rolling_shadow import Candidate, NY, build_candidates, desired_shadow_quote
+from src.kalshi_nested_rolling_shadow import Candidate, build_candidates, desired_shadow_quote
 from src.kalshi_nested_seed_first_probe import execute_seed_first
 from src.kalshi_nested_trade_through_shadow import KALSHI_WS, KALSHI_WS_SIGN_PATH, _ws_header_kw
 
@@ -84,18 +91,30 @@ def candidate_to_spec(
 ) -> NestedLiveProbeSpec:
     """Freeze one WS GO into the exact guarded live spec.
 
-    First automatic version deliberately supports only YES(lower)+NO(higher).
-    That is the proven ``greater`` nested relationship currently observed on the
-    BTC/ETH/SOL daily ladders. Other orientations fail closed until separately
-    proven and tested.
+    For a ``greater`` ladder the proven minimum-$1 payout set is always
+    YES(lower strike) + NO(higher strike). Either leg may be the resting maker;
+    the complementary cheap leg remains the seed sent first by execute_seed_first.
+    Any other side/strike combination fails closed.
     """
-    if candidate.maker_side != "yes" or candidate.hedge_side != "no":
-        raise ValueError("auto-once supports only YES(lower)+NO(higher)")
+    maker_strike = strike_from_ticker(candidate.maker_ticker)
+    hedge_strike = strike_from_ticker(candidate.hedge_ticker)
+    if maker_strike == hedge_strike:
+        raise ValueError("nested strikes must differ")
 
-    lower = strike_from_ticker(candidate.maker_ticker)
-    higher = strike_from_ticker(candidate.hedge_ticker)
-    if not lower < higher:
-        raise ValueError("auto-once requires maker strike lower than hedge strike")
+    if maker_strike < hedge_strike:
+        lower_ticker, lower_strike = candidate.maker_ticker, maker_strike
+        higher_ticker, higher_strike = candidate.hedge_ticker, hedge_strike
+    else:
+        lower_ticker, lower_strike = candidate.hedge_ticker, hedge_strike
+        higher_ticker, higher_strike = candidate.maker_ticker, maker_strike
+
+    actual_legs = {
+        (candidate.maker_ticker, str(candidate.maker_side).lower()),
+        (candidate.hedge_ticker, str(candidate.hedge_side).lower()),
+    }
+    expected_legs = {(lower_ticker, "yes"), (higher_ticker, "no")}
+    if actual_legs != expected_legs:
+        raise ValueError("auto-once legs must be exactly YES(lower)+NO(higher)")
 
     if str(economics.get("reason") or "") != "READY":
         raise ValueError("economics are not READY")
@@ -105,15 +124,15 @@ def candidate_to_spec(
         event_ticker=candidate.event_ticker,
         event_close=candidate.event_close,
         strike_type="greater",
-        lower_ticker=candidate.maker_ticker,
-        lower_strike=lower,
-        higher_ticker=candidate.hedge_ticker,
-        higher_strike=higher,
+        lower_ticker=lower_ticker,
+        lower_strike=lower_strike,
+        higher_ticker=higher_ticker,
+        higher_strike=higher_strike,
         maker_ticker=candidate.maker_ticker,
-        maker_side="yes",
+        maker_side=str(candidate.maker_side).lower(),
         maker_cost=D(quote),
         hedge_ticker=candidate.hedge_ticker,
-        hedge_side="no",
+        hedge_side=str(candidate.hedge_side).lower(),
         hedge_cost=hedge_price,
         fee_type=str(fee_type),
         fee_multiplier=D(fee_multiplier),
@@ -141,6 +160,8 @@ async def auto_once(
         raise ValueError("auto runner target cannot be below 3c")
     if seconds <= 0:
         raise ValueError("seconds must be positive")
+    if live and not live_probe_authorized(True, consume_token=False):
+        raise RuntimeError("live auto-once requested but nested live probe is not armed")
 
     candidates = await build_candidates(
         series=series,
@@ -177,19 +198,23 @@ async def auto_once(
         "target_profit": str(target_profit),
         "max_maker_improvement": str(MAX_AUTO_MAKER_IMPROVEMENT),
         "max_seed_cost": str(MAX_AUTO_SEED_COST),
+        "max_time_to_close_seconds": MAX_AUTO_TIME_TO_CLOSE_SECONDS,
         "max_attempts": 1,
         "max_quantity": "1",
     }, separators=(",", ":")))
 
     async def evaluate(candidate: Candidate) -> dict[str, Any] | None:
+        if latch.claimed:
+            return None
         if candidate.maker_ticker not in snapshots or candidate.hedge_ticker not in snapshots:
             return None
+
         quote, economics = desired_shadow_quote(
             candidate=candidate,
             maker_book=books[candidate.maker_ticker],
             hedge_book=books[candidate.hedge_ticker],
         )
-        ok, reason, detail = probe_quality_gate(
+        ok, _, _ = probe_quality_gate(
             quote=quote,
             economics=economics,
             target_profit=D(target_profit),
@@ -198,6 +223,56 @@ async def auto_once(
         )
         if not ok or quote is None:
             return None
+
+        # Refresh fee metadata at the apparent GO. This await may take long enough
+        # for either book to move, so the quote MUST be recomputed afterward.
+        meta = await fresh_fee_metadata(candidate.series)
+
+        quote, economics = desired_shadow_quote(
+            candidate=candidate,
+            maker_book=books[candidate.maker_ticker],
+            hedge_book=books[candidate.hedge_ticker],
+        )
+        ok, _, detail = probe_quality_gate(
+            quote=quote,
+            economics=economics,
+            target_profit=D(target_profit),
+            max_maker_improvement=MAX_AUTO_MAKER_IMPROVEMENT,
+            max_seed_cost=MAX_AUTO_SEED_COST,
+        )
+        if not ok or quote is None:
+            logger.info("NESTED_AUTO_ONCE_GO_MOVED_DURING_REVALIDATION %s", json.dumps({
+                "event_ticker": candidate.event_ticker,
+                "maker_ticker": candidate.maker_ticker,
+                "hedge_ticker": candidate.hedge_ticker,
+                "actual_order_placed": False,
+            }, separators=(",", ":")))
+            return None
+
+        try:
+            spec = candidate_to_spec(
+                candidate=candidate,
+                quote=D(quote),
+                economics=economics,
+                fee_type=str(meta.fee_type),
+                fee_multiplier=D(meta.fee_multiplier),
+                scheduled_fee_changes=tuple(meta.scheduled_changes or []),
+                maker_rest_seconds=maker_rest_seconds,
+            )
+        except ValueError as exc:
+            logger.info("NESTED_AUTO_ONCE_CANDIDATE_REJECTED %s", json.dumps({
+                "event_ticker": candidate.event_ticker,
+                "maker_ticker": candidate.maker_ticker,
+                "maker_side": candidate.maker_side,
+                "hedge_ticker": candidate.hedge_ticker,
+                "hedge_side": candidate.hedge_side,
+                "reason": str(exc)[:240],
+                "actual_order_placed": False,
+            }, separators=(",", ":")))
+            return None
+
+        # The one-attempt latch is intentionally LAST: invalid/stale candidates
+        # cannot consume the process's only execution opportunity.
         if not latch.claim():
             return None
 
@@ -213,18 +288,6 @@ async def auto_once(
             "live_requested": bool(live),
         }
 
-        # Fee metadata is refreshed at the actual GO, not trusted from startup.
-        meta = await fresh_fee_metadata(candidate.series)
-        spec = candidate_to_spec(
-            candidate=candidate,
-            quote=D(quote),
-            economics=economics,
-            fee_type=str(meta.fee_type),
-            fee_multiplier=D(meta.fee_multiplier),
-            scheduled_fee_changes=tuple(meta.scheduled_changes or []),
-            maker_rest_seconds=maker_rest_seconds,
-        )
-
         if not live:
             row = {
                 **base,
@@ -236,8 +299,9 @@ async def auto_once(
             logger.info("NESTED_AUTO_ONCE_PAPER_GO %s", json.dumps(row, separators=(",", ":"), default=str))
             return row
 
-        # execute_seed_first still requires --live + ENABLE...=YES + a one-use
-        # arm-token file. It consumes the token immediately before the seed IOC.
+        # execute_seed_first re-checks the live arm chain and consumes its one-use
+        # token immediately before the seed IOC. The maker cannot be submitted
+        # unless that IOC fills exactly 1.00 contract.
         result = await execute_seed_first(spec, cli_live=True)
         row = {
             **base,
