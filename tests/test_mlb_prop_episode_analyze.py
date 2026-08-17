@@ -96,6 +96,9 @@ def test_daily_capacity_projection_is_withheld_without_full_observation_window()
     ]
     result = analyze_events(events)
     assert result["observation_window_provided"] is False
+    assert result["observation_window_bounds_valid"] is False
+    assert result["observation_window_covers_positive_episodes"] is False
+    assert result["observation_window_invalid_reason"] == "missing_or_invalid_bounds"
     assert result["observation_span_hours"] is None
     assert result["capacity_projection_usd_per_day"] is None
     assert Decimal(result["positive_episode_span_hours"]) == Decimal("0.5") / Decimal(3600)
@@ -112,8 +115,36 @@ def test_daily_capacity_projection_uses_full_scanner_window_including_quiet_time
         observation_end_ms=6 * 3_600_000,
     )
     assert result["observation_window_provided"] is True
+    assert result["observation_window_bounds_valid"] is True
+    assert result["observation_window_covers_positive_episodes"] is True
+    assert result["observation_window_invalid_reason"] is None
     assert Decimal(result["observation_span_hours"]) == Decimal("6")
     assert Decimal(result["capacity_projection_usd_per_day"]) == Decimal("0.40")
+
+
+def test_daily_capacity_projection_rejects_window_that_truncates_positive_episode():
+    events = [
+        _event("OPEN", 3_600_000, profit="0.10"),
+        _event("CLOSE", 3_602_000, last_seen_ms=3_601_500),
+    ]
+    result = analyze_events(
+        events,
+        observation_start_ms=3_600_500,
+        observation_end_ms=3_601_000,
+    )
+    assert result["observation_window_provided"] is False
+    assert result["observation_window_bounds_valid"] is True
+    assert result["observation_window_covers_positive_episodes"] is False
+    assert result["observation_window_invalid_reason"] == "window_does_not_cover_all_positive_episodes"
+    assert result["observation_span_hours"] is None
+    assert result["capacity_projection_usd_per_day"] is None
+
+
+def test_empty_positive_set_can_normalize_to_zero_over_explicit_valid_window():
+    result = analyze_events([], observation_start_ms=0, observation_end_ms=3_600_000)
+    assert result["observation_window_provided"] is True
+    assert result["observation_window_covers_positive_episodes"] is True
+    assert Decimal(result["capacity_projection_usd_per_day"]) == Decimal("0")
 
 
 def test_invalid_or_non_read_only_events_fail_closed():
