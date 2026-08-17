@@ -33,6 +33,16 @@ jobs:
           text='\n'.join(Path('three-venue-pytest.txt').read_text(errors='replace').splitlines()[-120:])
           print('::error title=three-venue pytest failures::'+text.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
           PY
+      - name: Inspect Kalshi moneyline sides
+        if: steps.pytest.outputs.exit_code == '0'
+        shell: bash
+        run: |
+          PYTHONPATH=. python -m src.kalshi_moneyline_shape_probe > kalshi-moneyline.json 2> kalshi-moneyline.err || true
+          python - <<'PY'
+          from pathlib import Path
+          text=Path('kalshi-moneyline.json').read_text(errors='replace').strip() or Path('kalshi-moneyline.err').read_text(errors='replace').strip()
+          print('::notice title=Kalshi BAL-TB moneyline shape::'+text[-10000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
+          PY
       - name: Run scope-safe live public scan
         if: steps.pytest.outputs.exit_code == '0'
         shell: bash
@@ -50,8 +60,7 @@ jobs:
           except Exception:
               summary=(out or ('NO_STDOUT '+err))[-12000:]; audit='NO_AUDIT'
           for title,text in (('scope-safe live three-venue MLB scan',summary),('positive sports signal raw audit',audit[-14000:])):
-              safe=text.replace('%','%25').replace('\r','%0D').replace('\n','%0A')
-              print(f'::notice title={title}::{safe}')
+              print(f'::notice title={title}::'+text.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
           PY
       - name: Upload diagnostics
         if: always()
@@ -60,6 +69,8 @@ jobs:
           name: three-venue-router-diagnostics
           path: |
             three-venue-pytest.txt
+            kalshi-moneyline.json
+            kalshi-moneyline.err
             three-venue-safe.json
             three-venue-safe.err
           if-no-files-found: warn
