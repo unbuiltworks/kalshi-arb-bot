@@ -38,7 +38,7 @@ def test_moneyline_contracts_normalize_to_team_predicates():
     assert all(not row.identity.fully_rule_audited for row in rows)
 
 
-def test_run_line_requires_structured_spread_strike():
+def test_run_line_normalizes_display_handicap_to_margin_predicate():
     rows = normalize_event(_event("spread", "team", "runs", "S", [
         {
             "instrumentSymbol": "GEMI-MLB-2608171840-MIA-PHI-S-PHI1",
@@ -51,7 +51,8 @@ def test_run_line_requires_structured_spread_strike():
     assert row.identity.market_family == "spread"
     assert row.identity.subject == "phi"
     assert row.identity.stat == "runs"
-    assert row.identity.line == Decimal("-1.5")
+    assert row.identity.comparator == "GT"
+    assert row.identity.line == Decimal("1.5")
 
 
 def test_game_total_uses_structured_direction_and_line():
