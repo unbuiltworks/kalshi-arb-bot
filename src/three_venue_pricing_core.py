@@ -105,6 +105,7 @@ def make_priced_quote(
     received_ms: int,
     kalshi_fee_multiplier: Decimal | None = None,
     depth_source: str,
+    category: str = "sports_mlb_game",
 ) -> PricedQuote | None:
     oriented = orient_book(book, side.side)
     venue = side.identity.venue
@@ -131,7 +132,7 @@ def make_priced_quote(
         venue=venue,
         market_id=f"{side.venue_market_id}#{side.side}",
         settlement_key=side.contract_key,
-        category="sports_mlb_game",
+        category=category,
         yes_cost=yes_cost,
         no_cost=no_cost,
         yes_depth=yes_depth,
