@@ -1,0 +1,4 @@
+crypto-basis-autonomous-paper
+paper-only=true
+read-only=true
+order-entry=false
