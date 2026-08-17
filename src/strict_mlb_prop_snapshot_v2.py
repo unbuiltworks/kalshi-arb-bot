@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+import json
+import logging
 from typing import Any
 
 import httpx
@@ -27,10 +29,12 @@ from src import strict_mlb_prop_adapters as adapters
 from src import strict_mlb_prop_snapshot as base
 
 
+logger = logging.getLogger("kalshi_arb.strict_mlb_prop_snapshot_v2")
 PAST_GRACE = timedelta(hours=2)
 FUTURE_HORIZON = timedelta(hours=18)
 SEARCH_CONCURRENCY = 6
 PROP_TYPES = {"PROP", "SPORTS_MARKET_TYPE_PROP"}
+DIAGNOSTIC_SAMPLE_LIMIT = 8
 
 
 def _parse_utc(value: Any) -> datetime | None:
@@ -50,15 +54,45 @@ def _nearby_event(event: dict[str, Any], now: datetime) -> bool:
     return now - PAST_GRACE <= start <= now + FUTURE_HORIZON
 
 
-def _normalize_search_prop_row(market: dict[str, Any], event_start: Any) -> dict[str, Any] | None:
-    """Return one strictly validated search-market row or None.
+def _market_diag(market: dict[str, Any], reason: str) -> dict[str, Any]:
+    """Return only non-secret market identity fields for diagnostic logging."""
+    return {
+        "reason": reason,
+        "slug": str(market.get("slug") or "")[:220],
+        "title": str(market.get("title") or "")[:220],
+        "question": str(market.get("question") or "")[:220],
+        "line": market.get("line"),
+        "sportsMarketType": market.get("sportsMarketType"),
+        "sportsMarketTypeV2": market.get("sportsMarketTypeV2"),
+        "gameStartTime": market.get("gameStartTime"),
+        "eventStartTime": market.get("eventStartTime"),
+    }
 
-    Polymarket Search sometimes drops both classification fields. We do not infer
-    PROP merely from one signal. Missing metadata is repaired only when the MLB slug
-    family and the independently parsed title/question family agree. The existing
-    strict adapter then validates the complete identity, including line, teams and
-    any encoded slug threshold. Explicit conflicting metadata is never overwritten.
-    """
+
+def _candidate_looking(market: dict[str, Any]) -> bool:
+    text = " ".join(
+        str(market.get(key) or "").lower()
+        for key in ("slug", "title", "question", "sportsMarketType", "sportsMarketTypeV2")
+    )
+    return "mlb" in text and any(
+        token in text
+        for token in (
+            "hit",
+            "hrr",
+            "rbi",
+            "total base",
+            "-tb-",
+            "strikeout",
+            "-so-",
+            "-k-",
+            "prop",
+        )
+    )
+
+
+def _normalize_search_prop_row_with_reason(
+    market: dict[str, Any], event_start: Any
+) -> tuple[dict[str, Any] | None, str]:
     row = dict(market)
     if not row.get("gameStartTime") and event_start:
         row["eventStartTime"] = event_start
@@ -68,37 +102,72 @@ def _normalize_search_prop_row(market: dict[str, Any], event_start: Any) -> dict
 
     if detailed_family:
         if detailed_family not in base.FAMILY_SERIES:
-            return None
+            return None, "EXPLICIT_DETAILED_TYPE_UNSUPPORTED"
     elif prop_type:
         if prop_type not in PROP_TYPES:
-            return None
+            return None, "EXPLICIT_V2_TYPE_NOT_PROP"
     else:
         slug = str(row.get("slug") or "")
         slug_family = adapters._family_from_slug(slug)
         parsed = adapters._parse_poly_text(row.get("question") or row.get("title"))
-        if slug_family is None or parsed is None:
-            return None
+        if slug_family is None:
+            return None, "MISSING_TYPES_SLUG_FAMILY_UNPARSED"
+        if parsed is None:
+            return None, "MISSING_TYPES_TEXT_UNPARSED"
         _player, _threshold, text_family, _teams = parsed
         if slug_family != text_family:
-            return None
+            return None, "MISSING_TYPES_SLUG_TEXT_FAMILY_DISAGREE"
         # This is a local normalization marker, not venue-supplied evidence. The
         # strict identity function below still re-checks every semantic component.
         row["sportsMarketTypeV2"] = "SPORTS_MARKET_TYPE_PROP"
 
     if adapters._poly_identity(row) is None:
-        return None
+        return None, "STRICT_POLY_IDENTITY_REJECTED"
+    return row, "ACCEPTED"
+
+
+def _normalize_search_prop_row(market: dict[str, Any], event_start: Any) -> dict[str, Any] | None:
+    """Return one strictly validated search-market row or None."""
+    row, _reason = _normalize_search_prop_row_with_reason(market, event_start)
     return row
 
 
 def _player_prop_rows(event: dict[str, Any]) -> list[dict[str, Any]]:
     event_start = event.get("startTime")
     rows: list[dict[str, Any]] = []
-    for market in event.get("markets") or []:
+    reject_counts: dict[str, int] = {}
+    samples: list[dict[str, Any]] = []
+    raw_markets = event.get("markets") or []
+    for market in raw_markets:
         if not isinstance(market, dict):
+            reject_counts["NON_MAPPING_MARKET"] = reject_counts.get("NON_MAPPING_MARKET", 0) + 1
             continue
-        row = _normalize_search_prop_row(market, event_start)
+        row, reason = _normalize_search_prop_row_with_reason(market, event_start)
         if row is not None:
             rows.append(row)
+            continue
+        reject_counts[reason] = reject_counts.get(reason, 0) + 1
+        if len(samples) < DIAGNOSTIC_SAMPLE_LIMIT and _candidate_looking(market):
+            samples.append(_market_diag(market, reason))
+
+    logger.info(
+        "MLB_PROP_SEARCH_MARKET_DIAG %s",
+        json.dumps(
+            {
+                "event_slug": event.get("slug"),
+                "event_title": event.get("title"),
+                "event_start": event_start,
+                "raw_market_count": len(raw_markets),
+                "accepted_count": len(rows),
+                "reject_counts": reject_counts,
+                "candidate_looking_reject_samples": samples,
+                "read_only": True,
+                "order_entry": False,
+            },
+            separators=(",", ":"),
+            default=str,
+        ),
+    )
     return rows
 
 
@@ -122,10 +191,28 @@ async def _search_one_game(
             },
         )
 
-    candidates = list(body.get("events") or [])
+    candidates = [event for event in body.get("events") or [] if isinstance(event, dict)]
     exact = next(
         (event for event in candidates if str(event.get("slug") or "") == event_slug),
         None,
+    )
+    logger.info(
+        "MLB_PROP_SEARCH_EVENT_DIAG %s",
+        json.dumps(
+            {
+                "league_event_slug": event_slug,
+                "league_event_title": event_title,
+                "league_event_start": event_start,
+                "search_event_count": len(candidates),
+                "search_event_slugs": [str(event.get("slug") or "")[:180] for event in candidates[:12]],
+                "search_event_titles": [str(event.get("title") or "")[:180] for event in candidates[:12]],
+                "exact_slug_match": exact is not None,
+                "read_only": True,
+                "order_entry": False,
+            },
+            separators=(",", ":"),
+            default=str,
+        ),
     )
     if exact is None:
         # Fail closed: never grab a similarly named game just because search ranked it.
@@ -144,7 +231,28 @@ async def _fetch_poly_mlb_search(http: httpx.AsyncClient) -> list[dict[str, Any]
         params={"limit": 1000, "active": "true", "closed": "false"},
     )
     now = datetime.now(timezone.utc)
-    nearby = [dict(event) for event in league.get("events") or [] if _nearby_event(dict(event), now)]
+    nearby = [dict(event) for event in league.get("events") or [] if isinstance(event, dict) and _nearby_event(dict(event), now)]
+    logger.info(
+        "MLB_PROP_NEARBY_EVENTS %s",
+        json.dumps(
+            {
+                "now": now.isoformat(),
+                "nearby_count": len(nearby),
+                "nearby": [
+                    {
+                        "slug": event.get("slug"),
+                        "title": event.get("title"),
+                        "startTime": event.get("startTime"),
+                    }
+                    for event in nearby[:40]
+                ],
+                "read_only": True,
+                "order_entry": False,
+            },
+            separators=(",", ":"),
+            default=str,
+        ),
+    )
 
     semaphore = asyncio.Semaphore(SEARCH_CONCURRENCY)
     groups = await asyncio.gather(
@@ -170,6 +278,18 @@ async def _fetch_poly_mlb_search(http: httpx.AsyncClient) -> list[dict[str, Any]
                 continue
             seen.add(slug)
             out.append(row)
+    logger.info(
+        "MLB_PROP_SEARCH_DISCOVERY_SUMMARY %s",
+        json.dumps(
+            {
+                "nearby_event_count": len(nearby),
+                "strict_poly_rows": len(out),
+                "read_only": True,
+                "order_entry": False,
+            },
+            separators=(",", ":"),
+        ),
+    )
     return out
 
 
