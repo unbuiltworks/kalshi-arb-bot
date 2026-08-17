@@ -58,7 +58,10 @@ def sign_request(
         message,
         padding.PSS(
             mgf=padding.MGF1(hashes.SHA256()),
-            salt_length=padding.PSS.MAX_LENGTH,
+            # Kalshi requires an RSA-PSS salt equal to the SHA-256 digest size.
+            # MAX_LENGTH signatures can be locally valid RSA-PSS yet rejected
+            # by Kalshi's authenticated REST/WS gateway with HTTP 401.
+            salt_length=padding.PSS.DIGEST_LENGTH,
         ),
         hashes.SHA256(),
     )
@@ -71,29 +74,17 @@ def auth_headers(
     path: str,
     api_key_id: str | None = None,
 ) -> dict[str, str]:
-    """
-    Build the three auth headers required by every Kalshi API call.
-
-    Args:
-        private_key: loaded RSA private key
-        method: HTTP method
-        path: request path (e.g. /trade-api/v2/exchange/status)
-        api_key_id: override for API key (defaults to settings)
-
-    Returns:
-        dict with KALSHI-ACCESS-KEY, KALSHI-ACCESS-SIGNATURE, KALSHI-ACCESS-TIMESTAMP
-    """
-    ts = int(time.time() * 1000)
-    sig = sign_request(private_key, ts, method, path)
+    """Build the three auth headers required by every request."""
+    timestamp_ms = int(time.time() * 1000)
     return {
         "KALSHI-ACCESS-KEY": api_key_id or API_KEY_ID,
-        "KALSHI-ACCESS-SIGNATURE": sig,
-        "KALSHI-ACCESS-TIMESTAMP": str(ts),
+        "KALSHI-ACCESS-TIMESTAMP": str(timestamp_ms),
+        "KALSHI-ACCESS-SIGNATURE": sign_request(private_key, timestamp_ms, method, path),
     }
 
 
 class KalshiClient:
-    """Async REST client for the Kalshi API with automatic auth signing."""
+    """Small authenticated async REST client."""
 
     def __init__(
         self,
@@ -103,52 +94,19 @@ class KalshiClient:
     ):
         self.base_url = (base_url or REST_URL).rstrip("/")
         self.api_key_id = api_key_id or API_KEY_ID
-        self._private_key = load_private_key(private_key_path)
-        self._http: httpx.AsyncClient | None = None
-
-    async def _client(self) -> httpx.AsyncClient:
-        if self._http is None or self._http.is_closed:
-            self._http = httpx.AsyncClient(timeout=10.0)
-        return self._http
-
-    def _signed_headers(self, method: str, path: str) -> dict[str, str]:
-        return auth_headers(self._private_key, method, path, self.api_key_id)
+        self.private_key = load_private_key(private_key_path)
+        self._client = httpx.AsyncClient(timeout=10.0)
 
     async def request(
         self,
         method: str,
         path: str,
-        *,
-        json: dict | None = None,
-        params: dict | None = None,
+        **kwargs,
     ) -> httpx.Response:
-        """
-        Send an authenticated request to the Kalshi API.
-
-        Args:
-            method: HTTP method
-            path: path relative to base URL (e.g. "/exchange/status")
-            json: optional JSON body (for POST/PUT)
-            params: optional query parameters
-
-        Returns:
-            httpx.Response
-        """
-        # path can be short (e.g. "/exchange/status") or full ("/trade-api/v2/...")
-        if path.startswith("/trade-api"):
-            full_path = path
-        else:
-            full_path = f"/trade-api/v2{path}"
         url = f"{self.base_url}{path}"
-        headers = self._signed_headers(method.upper(), full_path)
-        client = await self._client()
-        return await client.request(
-            method.upper(),
-            url,
-            headers=headers,
-            json=json,
-            params=params,
-        )
+        headers = kwargs.pop("headers", {})
+        headers.update(auth_headers(self.private_key, method, f"/trade-api/v2{path}", self.api_key_id))
+        return await self._client.request(method, url, headers=headers, **kwargs)
 
     async def get(self, path: str, **kwargs) -> httpx.Response:
         return await self.request("GET", path, **kwargs)
@@ -166,5 +124,5 @@ class KalshiClient:
         return resp.json()
 
     async def close(self):
-        if self._http and not self._http.is_closed:
-            await self._http.aclose()
+        if not self._client.is_closed:
+            await self._client.aclose()
