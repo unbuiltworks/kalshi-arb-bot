@@ -1,9 +1,9 @@
 """Strict read-only Gemini sports normalization for the universal arb router.
 
-Uses Gemini's structured ``sportsMarket`` event metadata and contract ``strike``
-fields as the primary semantic source. Deterministic sports tickers are used only
-for event participants/start time and contract-side corroboration. Missing or
-ambiguous fields fail closed. No authentication or order-entry code lives here.
+Gemini live sports events currently expose deterministic tickers, contract strikes,
+labels, and prices even when the optional ``sportsMarket`` object is absent. This
+adapter accepts both documented structured metadata and that live shape, failing
+closed whenever the ticker/contract semantics are ambiguous. No auth or order entry.
 """
 from __future__ import annotations
 
@@ -16,10 +16,9 @@ from typing import Any, Iterable, Mapping
 from src.universal_sports_identity import RuleAudit, SportsContractIdentity, SportsEventIdentity
 
 TEAM_EVENT_RE = re.compile(
-    r"^GEMI-(?P<league>[A-Z]{2,14})-(?P<date>\d{6})(?P<time>\d{4})-"
+    r"^(?:GEMI-)?(?P<league>[A-Z]{2,14})-(?P<date>\d{6})(?P<time>\d{4})-"
     r"(?P<away>[A-Z]{2,4})-(?P<home>[A-Z]{2,4})-(?P<code>[A-Z0-9]{1,8})$"
 )
-
 SPORT_MAP = {
     "baseball": "baseball", "american_football": "football", "basketball": "basketball",
     "hockey": "hockey", "ice_hockey": "hockey", "soccer": "soccer",
@@ -34,6 +33,18 @@ METRIC_ALIASES = {
     "pass_completions": "completions", "passing_touchdowns": "passing_tds",
     "interceptions_thrown": "interceptions", "three_pointers_made": "three_pointers",
     "saves": "goalie_saves",
+}
+MLB_CODE_META = {
+    "M": ("moneyline", "contest", ""),
+    "S": ("spread", "team", "runs"),
+    "T": ("total", "contest", "runs"),
+    "TT": ("total", "team", "runs"),
+    "PPSO": ("prop", "player", "strikeouts"),
+    "PPHITS": ("prop", "player", "hits"),
+    "PPHR": ("prop", "player", "home_runs"),
+    "PPRBI": ("prop", "player", "rbis"),
+    "PPTB": ("prop", "player", "total_bases"),
+    "PPRUNS": ("prop", "player", "runs"),
 }
 
 
@@ -94,13 +105,12 @@ def _metric(value: Any) -> str:
 
 
 def _contract_text(contract: Mapping[str, Any]) -> str:
-    return " | ".join(str(contract.get(k) or "") for k in ("ticker", "contractTicker", "instrumentSymbol", "label", "title", "name"))
+    return " | ".join(str(contract.get(k) or "") for k in ("ticker", "contractTicker", "instrumentSymbol", "label", "abbreviatedName", "title", "name"))
 
 
 def _contract_team(contract: Mapping[str, Any], teams: tuple[str, str]) -> str | None:
-    # The event portion of every Gemini instrument contains both teams. Resolve
-    # the deterministic contract suffix before scanning any combined text.
-    for key in ("instrumentSymbol", "contractTicker", "ticker"):
+    # Event portion contains both teams; contract suffix/ticker identifies the side.
+    for key in ("ticker", "contractTicker", "instrumentSymbol"):
         raw = str(contract.get(key) or "").upper().strip()
         if not raw:
             continue
@@ -134,6 +144,24 @@ def _comparator(strike_type: str) -> str | None:
     return {"over": "GT", "over_or_equal": "GE", "under": "LT", "under_or_equal": "LE"}.get(strike_type)
 
 
+def _metadata(event: Mapping[str, Any], parsed: Mapping[str, Any]) -> tuple[str, str, str, str] | None:
+    sports = event.get("sportsMarket") if isinstance(event.get("sportsMarket"), Mapping) else None
+    if sports:
+        sport = SPORT_MAP.get(_norm(sports.get("sport")))
+        market_type, subject = _norm(sports.get("type")), _norm(sports.get("subject"))
+        scope = sports.get("scope") if isinstance(sports.get("scope"), Mapping) else {}
+        scope_key = _scope_key(scope)
+        metric = _metric(sports.get("metric"))
+        if sport and market_type and subject and scope_key:
+            return sport, market_type, subject, metric
+    if str(parsed.get("league") or "").upper() == "MLB":
+        meta = MLB_CODE_META.get(str(parsed.get("code") or "").upper())
+        if meta:
+            market_type, subject, metric = meta
+            return "baseball", market_type, subject, metric
+    return None
+
+
 @dataclass(frozen=True)
 class GeminiNormalizedContract:
     identity: SportsContractIdentity
@@ -145,20 +173,28 @@ class GeminiNormalizedContract:
 
 
 def normalize_event(event: Mapping[str, Any]) -> list[GeminiNormalizedContract]:
-    sports = event.get("sportsMarket") if isinstance(event.get("sportsMarket"), Mapping) else None
-    if not sports: return []
-    sport = SPORT_MAP.get(_norm(sports.get("sport")))
-    market_type, subject_kind = _norm(sports.get("type")), _norm(sports.get("subject"))
-    scope = sports.get("scope") if isinstance(sports.get("scope"), Mapping) else {}
-    scope_key, family = _scope_key(scope), _market_family(market_type, subject_kind)
-    if not sport or not market_type or not subject_kind or not scope_key or not family: return []
     parsed = parse_team_event_ticker(str(event.get("ticker") or event.get("eventTicker") or ""))
     if parsed is None: return []
+    meta = _metadata(event, parsed)
+    if meta is None: return []
+    sport, market_type, subject_kind, metric = meta
+    family = _market_family(market_type, subject_kind)
+    if family is None: return []
+    scope_key = "full_contest"
+    sports = event.get("sportsMarket") if isinstance(event.get("sportsMarket"), Mapping) else None
+    if sports:
+        scope = sports.get("scope") if isinstance(sports.get("scope"), Mapping) else {}
+        scope_key = _scope_key(scope) or "full_contest"
     teams = tuple(sorted((parsed["away"], parsed["home"])))
     if len(set(teams)) != 2: return []
-    event_id = SportsEventIdentity(sport=sport, league=str(parsed["league"]).lower(), participants=teams, scheduled_start_ms=int(parsed["start"].timestamp() * 1000))
-    metric = _metric(sports.get("metric"))
-    audit = RuleAudit(official_source="gemini_contract_rules_unverified", overtime="unverified", postponement="unverified", stat_corrections="unverified", push_tie="unverified", complete=False)
+    event_id = SportsEventIdentity(
+        sport=sport, league=str(parsed["league"]).lower(), participants=teams,
+        scheduled_start_ms=int(parsed["start"].timestamp() * 1000),
+    )
+    audit = RuleAudit(
+        official_source="gemini_contract_rules_unverified", overtime="unverified",
+        postponement="unverified", stat_corrections="unverified", push_tie="unverified", complete=False,
+    )
     out: list[GeminiNormalizedContract] = []
     for contract in event.get("contracts") or []:
         if not isinstance(contract, Mapping): continue
@@ -167,6 +203,7 @@ def normalize_event(event: Mapping[str, Any]) -> list[GeminiNormalizedContract]:
         st = _strike(contract); strike_type, strike_value = st if st else (None, None)
         subject_type, subject, stat, comparator = subject_kind, "", metric, "YES"
         line: Decimal | None = None
+        label = str(contract.get("label") or contract.get("abbreviatedName") or "")
         yes_semantics = ""
         if family == "moneyline":
             team = _contract_team(contract, teams)
@@ -176,8 +213,14 @@ def normalize_event(event: Mapping[str, Any]) -> list[GeminiNormalizedContract]:
         elif family == "spread":
             team = _contract_team(contract, teams)
             if team is None or strike_type != "spread" or strike_value is None: continue
-            subject_type, subject, stat, comparator = "team", team, metric, "GT"
-            line = -strike_value
+            subject_type, subject, stat, comparator = "team", team, metric or "runs", "GT"
+            # Current live Gemini labels express the strike directly as a margin
+            # threshold ("wins by more than 1.5"). Older/documented handicap-like
+            # fixtures may encode -1.5, so only invert when label is not explicit.
+            if re.search(r"wins?\s+by\s+(?:more|over)", label, re.I):
+                line = abs(strike_value)
+            else:
+                line = -strike_value
             yes_semantics = f"{team}_MARGIN_GT_{format(line, 'f')}"
         elif family in {"game_total", "team_total", "player_prop", "team_prop", "game_prop"}:
             comp = _comparator(strike_type or "")
@@ -193,12 +236,20 @@ def normalize_event(event: Mapping[str, Any]) -> list[GeminiNormalizedContract]:
                 if not player or not stat: continue
                 subject_type, subject = "player", player
             yes_semantics = f"{subject}:{stat}:{comparator}:{format(line, 'f')}"
-        else: continue
+        else:
+            continue
         try:
-            identity = SportsContractIdentity(venue="gemini", market_id=symbol, event=event_id, market_family=family, scope=scope_key, subject_type=subject_type, subject=subject, stat=stat, comparator=comparator, line=line, rule_audit=audit)
+            identity = SportsContractIdentity(
+                venue="gemini", market_id=symbol, event=event_id, market_family=family,
+                scope=scope_key, subject_type=subject_type, subject=subject, stat=stat,
+                comparator=comparator, line=line, rule_audit=audit,
+            )
         except ValueError:
             continue
-        out.append(GeminiNormalizedContract(identity=identity, instrument_symbol=symbol, contract_label=str(contract.get("label") or contract.get("title") or ""), yes_semantics=yes_semantics, strike_type=strike_type, strike_value=strike_value))
+        out.append(GeminiNormalizedContract(
+            identity=identity, instrument_symbol=symbol, contract_label=label,
+            yes_semantics=yes_semantics, strike_type=strike_type, strike_value=strike_value,
+        ))
     return out
 
 
