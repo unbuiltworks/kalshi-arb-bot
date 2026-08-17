@@ -60,7 +60,7 @@ def test_partial_outcomes_fail_closed():
     assert audits == []
 
 
-def test_existing_venue_settlement_is_idempotent():
+def test_existing_exact_leg_settlement_is_idempotent():
     fills = _fills()
     existing = make_event(
         trade_group_id="g1",
@@ -81,3 +81,31 @@ def test_existing_venue_settlement_is_idempotent():
     assert len(settlements) == 1
     assert settlements[0].venue == "kalshi"
     assert audits[0]["settlement_events_created"] == 1
+
+
+def test_wrong_market_same_venue_settlement_does_not_suppress_filled_leg():
+    fills = _fills()
+    wrong_market = make_event(
+        trade_group_id="g1",
+        settlement_key=fills[0].settlement_key,
+        category="mlb_prop_paper",
+        venue="polymarket_us",
+        market_id="poly-other",
+        event_type="settlement",
+        payout=Decimal("0"),
+        ts_ms=150,
+    )
+    settlements, audits = settlement_events(fills + [wrong_market], [{
+        "trade_group_id": "g1",
+        "polymarket_us_outcome": "YES",
+        "kalshi_outcome": "YES",
+        "settled_ts_ms": 200,
+    }])
+    assert len(settlements) == 2
+    by_venue = {event.venue: event for event in settlements}
+    assert by_venue["polymarket_us"].market_id == "poly-1"
+    assert by_venue["kalshi"].market_id == "kalshi-1"
+    assert audits[0]["settlement_events_created"] == 2
+    summary = summarize_ledger(fills + [wrong_market] + settlements)
+    assert summary["pending_settlement_groups"] == 0
+    assert Decimal(summary["realized_pnl"]) == Decimal("0.05")
