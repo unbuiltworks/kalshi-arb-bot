@@ -1,4 +1,4 @@
-import json
+from decimal import Decimal
 
 from src.gemini_kalshi_basis_settlement_map import (
     append_new_rows,
@@ -34,7 +34,7 @@ def _kalshi(asset="BTC", close="2026-08-17T06:45:00Z", value="100.05", outcome="
 
 def test_extracts_canonical_expiration_value():
     value, field = kalshi_expiration_value({"expiration_value": "123.45"})
-    assert str(value) == "123.45"
+    assert value == Decimal("123.45")
     assert field == "expiration_value"
 
 
@@ -44,8 +44,8 @@ def test_matches_true_window_and_computes_signed_basis_bps():
     row = rows[0]
     assert row.asset == "BTC"
     assert row.outcomes_agree is True
-    assert row.signed_basis == "0.05"
-    assert row.signed_basis_bps == "5.0000"
+    assert Decimal(row.signed_basis) == Decimal("0.05")
+    assert Decimal(row.signed_basis_bps) == Decimal("5")
     assert row.classification == "BASIS_RESEARCH_ONLY"
     assert row.trade_authorized is False
 
@@ -56,8 +56,8 @@ def test_negative_basis_and_outcome_disagreement_are_preserved():
         [_kalshi(asset="ETH", value="1998", outcome="no")],
     )
     assert len(rows) == 1
-    assert rows[0].signed_basis == "-2"
-    assert rows[0].signed_basis_bps == "-10.000"
+    assert Decimal(rows[0].signed_basis) == Decimal("-2")
+    assert Decimal(rows[0].signed_basis_bps) == Decimal("-10")
     assert rows[0].outcomes_agree is False
 
 
@@ -88,6 +88,6 @@ def test_summary_reports_asset_basis_distribution_and_disagreements(tmp_path):
     summary = build_summary(load_rows(path))
     assert summary["overall"]["windows"] == 2
     assert summary["overall"]["outcome_disagreements"] == 1
-    assert summary["by_asset"]["BTC"]["max_positive_basis_bps"] == "5.0000"
-    assert summary["by_asset"]["ETH"]["max_negative_basis_bps"] == "-10.000"
+    assert Decimal(summary["by_asset"]["BTC"]["max_positive_basis_bps"]) == Decimal("5")
+    assert Decimal(summary["by_asset"]["ETH"]["max_negative_basis_bps"]) == Decimal("-10")
     assert summary["trade_authorized"] is False
