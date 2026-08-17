@@ -10,14 +10,16 @@ COPY config/ config/
 COPY tests/ tests/
 COPY main.py .
 
-# Fail closed on nested payoff math, aggressive quote validity, trade-through
-# direction, nearest-expiry selection, dynamic cancel/reprice economics, the
-# one-lot live-probe envelope, V2 transport parsing, candidate orientation,
-# strict <=2c maker improvement, <=1c seed GO quality, bounded-risk seed-first
-# execution, ambiguous/rejected submission handling, one-shot auto latch,
-# continuous paper supervision, restart-persistent local risk state, and
-# exchange-backed recovery/audit of daily attempts/open-order state.
+# Fail closed on Kalshi authentication signing, nested payoff math, aggressive
+# quote validity, trade-through direction, nearest-expiry selection, dynamic
+# cancel/reprice economics, the one-lot live-probe envelope, V2 transport
+# parsing, candidate orientation, strict <=2c maker improvement, <=1c seed GO
+# quality, bounded-risk seed-first execution, ambiguous/rejected submission
+# handling, one-shot auto latch, continuous paper supervision,
+# restart-persistent local risk state, and exchange-backed recovery/audit of
+# daily attempts/open-order state.
 RUN PYTHONPATH=/app python -m pytest -q \
+    tests/test_kalshi_auth.py \
     tests/test_kalshi_nested_strike_shadow.py \
     tests/test_kalshi_nested_less_shadow.py \
     tests/test_kalshi_nested_maker_shadow.py \
