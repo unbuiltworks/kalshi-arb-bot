@@ -27,13 +27,21 @@ def fill(group: str, venue: str, side: str, qty: str, price: str, *, external_id
     )
 
 
-def settle(group: str, venue: str, payout: str, external_id: str, ts_ms: int = 3) -> object:
+def settle(
+    group: str,
+    venue: str,
+    payout: str,
+    external_id: str,
+    ts_ms: int = 3,
+    *,
+    market_id: str | None = None,
+) -> object:
     return make_event(
         trade_group_id=group,
         settlement_key="mlb:2026-08-16:wsh:nym:lindor:hits:2",
         category="baseball_player_hits",
         venue=venue,
-        market_id=f"{venue}-market",
+        market_id=market_id or f"{venue}-market",
         event_type="settlement",
         payout=D(payout),
         external_id=external_id,
@@ -99,6 +107,25 @@ def test_partial_cross_venue_settlement_stays_pending_and_not_realized() -> None
     assert result["realized_pnl"] == "0"
     assert result["trade_groups"]["g1"]["partial_settlement"] is True
     assert result["trade_groups"]["g1"]["settled_venues"] == ["polymarket_us"]
+
+
+def test_wrong_market_on_same_venue_cannot_satisfy_settlement_gate() -> None:
+    events = [
+        fill("g1", "polymarket_us", "YES", "1", "0.45", external_id="p1"),
+        fill("g1", "kalshi", "NO", "1", "0.50", external_id="k1"),
+        settle("g1", "polymarket_us", "1", "p-settle-wrong", market_id="polymarket_us-other-market"),
+        settle("g1", "kalshi", "0", "k-settle-1", ts_ms=4),
+    ]
+    result = summarize_ledger(events)
+    assert result["pending_settlement_groups"] == 1
+    assert result["partial_settlement_groups"] == 1
+    assert result["realized_pnl"] == "0"
+    assert result["trade_groups"]["g1"]["pending_settlement"] is True
+    assert result["trade_groups"]["g1"]["fill_legs"] == [
+        "kalshi:kalshi-market",
+        "polymarket_us:polymarket_us-market",
+    ]
+    assert "polymarket_us:polymarket_us-other-market" in result["trade_groups"]["g1"]["settled_legs"]
 
 
 def test_both_venue_settlements_replace_locked_with_realized_pnl() -> None:
