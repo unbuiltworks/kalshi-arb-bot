@@ -33,6 +33,22 @@ def _market_summary(m: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _event_summary(e: dict[str, Any]) -> dict[str, Any]:
+    markets = [dict(m) for m in e.get("markets") or []]
+    strict = [m for m in markets if _poly_identity(m) is not None]
+    return {
+        "slug": e.get("slug"),
+        "title": e.get("title"),
+        "startTime": e.get("startTime"),
+        "market_count": len(markets),
+        "sportsMarketType_counts": dict(Counter(str(m.get("sportsMarketType") or "<missing>") for m in markets)),
+        "sportsMarketTypeV2_counts": dict(Counter(str(m.get("sportsMarketTypeV2") or "<missing>") for m in markets)),
+        "strict_identity_count": len(strict),
+        "strict_identity_samples": [_market_summary(m) for m in strict[:25]],
+        "market_samples": [_market_summary(m) for m in markets[:15]],
+    }
+
+
 async def run() -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=20.0) as http:
         league = await base._fetch_json(
@@ -57,8 +73,6 @@ async def run() -> dict[str, Any]:
             results = [dict(x) for x in body.get("events") or []]
             exact = next((x for x in results if str(x.get("slug") or "") == slug), None)
             markets = [dict(m) for m in (exact or {}).get("markets") or []]
-            type_counts = Counter(str(m.get("sportsMarketType") or "<missing>") for m in markets)
-            type_v2_counts = Counter(str(m.get("sportsMarketTypeV2") or "<missing>") for m in markets)
             propish = [m for m in markets if "PROP" in str(m.get("sportsMarketTypeV2") or "").upper() or "player" in str(m.get("sportsMarketType") or "").lower()]
             strict = [m for m in markets if _poly_identity(m) is not None]
             event_rows.append({
@@ -66,10 +80,11 @@ async def run() -> dict[str, Any]:
                 "league_title": title,
                 "league_start": event.get("startTime"),
                 "search_events": len(results),
+                "search_result_events": [_event_summary(x) for x in results[:20]],
                 "exact_slug_found": exact is not None,
                 "search_market_count": len(markets),
-                "sportsMarketType_counts": dict(type_counts),
-                "sportsMarketTypeV2_counts": dict(type_v2_counts),
+                "sportsMarketType_counts": dict(Counter(str(m.get("sportsMarketType") or "<missing>") for m in markets)),
+                "sportsMarketTypeV2_counts": dict(Counter(str(m.get("sportsMarketTypeV2") or "<missing>") for m in markets)),
                 "propish_market_count": len(propish),
                 "strict_identity_count": len(strict),
                 "market_samples": [_market_summary(m) for m in markets[:25]],
