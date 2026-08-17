@@ -1,15 +1,16 @@
 """Kalshi-only V2 transport primitives for the disarmed nested live probe.
 
-The module does not select trades and does not auto-run.  Callers must pass the
-live-probe guard before using these methods.  The implementation is intentionally
-small: create, get/reconcile, cancel, and pure parsers for private fill/user-order
-WebSocket messages.
+The module does not select trades and does not auto-run. Callers must pass the
+live-probe guard before using write methods. The implementation is intentionally
+small: create, get/reconcile, cancel, recent client-id lookup, and pure parsers
+for private fill/user-order WebSocket messages.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 from decimal import Decimal
 import asyncio
+import time
 from typing import Any
 
 import httpx
@@ -146,6 +147,48 @@ class KalshiV2RestTransport:
         if self._owns:
             await self.client.close()
 
+    async def recent_orders_with_client_prefix(
+        self,
+        prefix: str,
+        *,
+        lookback_seconds: int = 24 * 3600,
+        max_pages: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Find recent account orders whose client_order_id starts with prefix.
+
+        This is the exchange-backed restart latch for auto-once sessions. Kalshi's
+        live orders endpoint contains recent executed/canceled orders as well as
+        resting orders, so a completed seed or maker remains discoverable across
+        a Railway container replacement. Fail closed on any HTTP or pagination
+        anomaly rather than assuming the session is unused.
+        """
+        clean = str(prefix).strip()
+        if not clean:
+            raise ValueError("client-order prefix is required")
+        if lookback_seconds <= 0 or max_pages <= 0:
+            raise ValueError("invalid recent-order lookup bounds")
+
+        min_ts = int(time.time()) - int(lookback_seconds)
+        cursor = ""
+        matches: list[dict[str, Any]] = []
+        for _ in range(int(max_pages)):
+            params: dict[str, Any] = {"min_ts": min_ts, "limit": 1000}
+            if cursor:
+                params["cursor"] = cursor
+            response = await self.client.get("/portfolio/orders", params=params)
+            response.raise_for_status()
+            body = response.json()
+            rows = list(body.get("orders") or [])
+            for row in rows:
+                if str(row.get("client_order_id") or "").startswith(clean):
+                    matches.append(row)
+            cursor = str(body.get("cursor") or "")
+            if not cursor:
+                return matches
+        if cursor:
+            raise RuntimeError("recent-order dedup lookup exceeded pagination bound")
+        return matches
+
     async def reconcile_by_client_id(self, *, ticker: str, client_order_id: str) -> OrderState | None:
         response = await self.client.get("/portfolio/orders", params={"ticker": ticker, "limit": 100})
         if response.status_code != 200:
@@ -190,8 +233,6 @@ class KalshiV2RestTransport:
     async def cancel(self, order_id: str) -> dict[str, Any]:
         response = await self.client.delete(f"/portfolio/events/orders/{order_id}")
         if response.status_code not in {200, 204}:
-            # A fill/cancel can race the cancel request; inspect exact state before
-            # deciding it is an error.
             try:
                 state = await self.get(order_id)
                 if state.fully_filled or state.remaining_count <= 0:
