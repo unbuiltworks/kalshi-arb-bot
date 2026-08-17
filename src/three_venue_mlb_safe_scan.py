@@ -25,6 +25,7 @@ async def run_once():
     positive_keys={row.settlement_key for row in locks}
     positive_quotes=[row.as_dict() for row in priced if row.quote.settlement_key in positive_keys]
     positive_clusters=[row for row in clusters if row["contract_key"] in positive_keys]
+    gemini_props=[row for row in g if row.identity.market_family == "player_prop"]
     return {
         "status":"THREE_VENUE_MLB_SCOPE_SAFE_SCAN",
         "raw_events":{"gemini":len(gemini),"polymarket":len(poly_raw),"kalshi":len(kalshi)},
@@ -34,6 +35,16 @@ async def run_once():
             "polymarket":dict(Counter(row.identity.market_family for row in p)),
             "kalshi":dict(Counter(row.identity.market_family for row in k)),
         },
+        "gemini_player_prop_sample":[{
+            "market_id":row.venue_market_id,
+            "subject":row.identity.subject,
+            "stat":row.identity.stat,
+            "comparator":row.identity.comparator,
+            "line":str(row.identity.line) if row.identity.line is not None else None,
+            "participants":list(row.identity.event.participants),
+            "scheduled_start_ms":row.identity.event.scheduled_start_ms,
+            "source_label":row.source_label,
+        } for row in gemini_props[:10]],
         "counterpart_clusters":len(clusters),
         "three_venue_clusters":sum(row["venue_count"]==3 for row in clusters),
         "clusters_by_family":dict(by_family),
