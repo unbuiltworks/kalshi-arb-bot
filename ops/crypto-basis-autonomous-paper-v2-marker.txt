@@ -1,0 +1,4 @@
+service=crypto-basis-autonomous-paper-v2
+paper-only=true
+read-only=true
+entrypoint=main.py->src.gemini_kalshi_basis_autonomous
