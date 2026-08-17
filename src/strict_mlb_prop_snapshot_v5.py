@@ -201,11 +201,18 @@ async def run_once() -> dict[str, Any]:
         "probe_5usd_positive_pairs": len(probe5),
         "positive_live_probe_pairs": len(live_positive),
         "preferred_live_probe_pairs": len(ready),
+        # Expose pre-participation economics for research so an edge discovered the
+        # night before can be tracked. These rows remain explicitly non-executable
+        # until the participation/rule gate clears.
+        "top_research_positive_pairs": top(positive, "positive_conservative_plan") if positive else [],
+        "top_research_probe_1usd": top(probe1, "probe_1usd") if probe1 else [],
+        "top_research_probe_5usd": top(probe5, "probe_5usd") if probe5 else [],
         "paper_probe_candidates": paper_candidates,
         "top_live_probes": top(live_positive, "probe_5usd") if live_positive else [],
         "ready_probe_packets": top(ready, "probe_5usd") if ready else [],
         "preferred_probe_threshold": str(MIN_PREFERRED_NET),
         "rule_note": (
+            "Research-positive rows may appear before participation is proven; they are not executable. "
             "A live probe is promoted only after MLB game-state evidence satisfies the family-specific participation gate. "
             "The scanner remains read-only; any real-money probe still requires a separate explicit approval/executor path."
         ),
