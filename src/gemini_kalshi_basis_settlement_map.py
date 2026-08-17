@@ -1,11 +1,11 @@
 """Persistent read-only settlement-basis map for Gemini <-> Kalshi 15m crypto.
 
-Gemini and Kalshi use different official settlement indexes.  This module measures
+Gemini and Kalshi use different official settlement indexes. This module measures
 that difference *after settlement* using the venues' published settlement values and
-stores one durable row per matched 15-minute window.  It is research infrastructure,
+stores one durable row per matched 15-minute window. It is research infrastructure,
 not an order authorization layer.
 
-Ground-truth rows are append-only.  A compact JSON summary is atomically replaced on
+Ground-truth rows are append-only. A compact JSON summary is atomically replaced on
 each refresh so a restart can resume from the existing /data journal without losing
 history.
 """
@@ -14,9 +14,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import json
+import logging
 from pathlib import Path
 import statistics
 import tempfile
@@ -24,17 +25,18 @@ from typing import Any
 
 import httpx
 
-from src.gemini_kalshi_fast_overlap import ASSET_ALIASES, _gemini_meta
+from src.gemini_kalshi_fast_overlap import ASSET_ALIASES, KALSHI_REST, _gemini_meta
 from src.gemini_kalshi_settlement_agreement import (
     _gemini_outcome,
     _gemini_settled,
     _kalshi_outcome,
 )
-from src.gemini_kalshi_settlement_probe import _kalshi_settled_paced
 from src.gemini_kalshi_window_identity import kalshi_15m_asset, kalshi_window_end
 
 D = Decimal
 CLASSIFICATION = "BASIS_RESEARCH_ONLY"
+KALSHI_15M_SERIES = ("KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M")
+logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_settlement_map")
 
 
 def _dec(value: Any) -> Decimal | None:
@@ -48,12 +50,7 @@ def _dec(value: Any) -> Decimal | None:
 
 
 def kalshi_expiration_value(market: dict[str, Any]) -> tuple[Decimal | None, str | None]:
-    """Return Kalshi's published settlement-index value and the field used.
-
-    ``expiration_value`` is the canonical field for current Kalshi market payloads.
-    The aliases are accepted only to keep historical captures readable; unknown or
-    malformed values fail closed as ``None``.
-    """
+    """Return Kalshi's published settlement-index value and the field used."""
     for field in (
         "expiration_value",
         "expiration_value_dollars",
@@ -74,6 +71,73 @@ def _basis_bps(kalshi_value: Decimal, gemini_value: Decimal) -> Decimal | None:
 
 def _window_key(asset: str, expiry: datetime, gemini_ticker: str, kalshi_ticker: str) -> str:
     return "|".join((asset, expiry.isoformat(), gemini_ticker, kalshi_ticker))
+
+
+async def _kalshi_15m_settled_series(
+    http: httpx.AsyncClient,
+    hours: int,
+) -> list[dict[str, Any]]:
+    """Fetch only the four 15m crypto series instead of paging all settled Kalshi markets.
+
+    Kalshi's GET /markets supports ``series_ticker`` together with ``status=settled``
+    and ``min_settled_ts``. Scoping at the API avoids a very large unrelated-market
+    crawl and makes the five-minute refresh cadence practical.
+    """
+    min_settled_ts = int((datetime.now(timezone.utc) - timedelta(hours=hours)).timestamp())
+
+    async def fetch_series(series_ticker: str) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        cursor = ""
+        page = 0
+        while True:
+            params: dict[str, Any] = {
+                "series_ticker": series_ticker,
+                "status": "settled",
+                "limit": 1000,
+                "mve_filter": "exclude",
+                "min_settled_ts": min_settled_ts,
+            }
+            if cursor:
+                params["cursor"] = cursor
+
+            response = None
+            for attempt in range(6):
+                response = await http.get(f"{KALSHI_REST}/markets", params=params)
+                if response.status_code != 429:
+                    break
+                retry_after = response.headers.get("Retry-After")
+                try:
+                    delay = float(retry_after) if retry_after else min(8.0, 0.5 * (2 ** attempt))
+                except ValueError:
+                    delay = min(8.0, 0.5 * (2 ** attempt))
+                logger.warning(
+                    "CRYPTO_BASIS_KALSHI_429 series=%s page=%s attempt=%s sleep_s=%.2f",
+                    series_ticker,
+                    page,
+                    attempt + 1,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+
+            assert response is not None
+            response.raise_for_status()
+            payload = response.json()
+            rows.extend(payload.get("markets", []))
+            cursor = str(payload.get("cursor") or "")
+            page += 1
+            if not cursor:
+                logger.info(
+                    "CRYPTO_BASIS_KALSHI_SERIES_FETCH series=%s pages=%s markets=%s hours=%s",
+                    series_ticker,
+                    page,
+                    len(rows),
+                    hours,
+                )
+                return rows
+            await asyncio.sleep(0.10)
+
+    buckets = await asyncio.gather(*(fetch_series(series) for series in KALSHI_15M_SERIES))
+    return [market for bucket in buckets for market in bucket]
 
 
 @dataclass(frozen=True)
@@ -272,7 +336,7 @@ async def refresh(
     async with httpx.AsyncClient(timeout=30.0) as http:
         gemini, kalshi = await asyncio.gather(
             _gemini_settled(http, gemini_limit),
-            _kalshi_settled_paced(http, hours),
+            _kalshi_15m_settled_series(http, hours),
         )
     matched = match_settlement_values(gemini, kalshi, max_window_skew_s=max_window_skew_s)
     appended = append_new_rows(journal_path, matched)
@@ -283,6 +347,7 @@ async def refresh(
         "refresh_new_windows": appended,
         "history_hours_requested": hours,
         "gemini_limit": gemini_limit,
+        "kalshi_series": list(KALSHI_15M_SERIES),
     })
     atomic_write_json(summary_path, summary)
     return summary
@@ -335,6 +400,7 @@ def main() -> None:
     parser.add_argument("--refresh-hours", type=int, default=48)
     parser.add_argument("--gemini-limit", type=int, default=5000)
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
     asyncio.run(run_forever(
         journal_path=args.journal_path,
         summary_path=args.summary_path,
