@@ -9,6 +9,8 @@ COPY src/ src/
 COPY config/ config/
 COPY tests/ tests/
 
+ENV PYTHONPATH=/app
+
 # Focused regression gate for the MLB prop identity, schedule, economics,
 # participation, and paper-only path used by this isolated service.
 RUN pytest -q \
