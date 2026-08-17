@@ -8,6 +8,7 @@ from src.kalshi_nested_live_probe_guard import NestedLiveProbeSpec
 from src.kalshi_nested_probe_transport import OrderAck, OrderState
 from src.kalshi_nested_seed_first_probe import (
     actual_nested_worst_case_pnl,
+    apply_client_order_root,
     execute_seed_first,
     modeled_seed_cash_risk,
     validate_seed_first,
@@ -103,7 +104,6 @@ def test_current_one_cent_seed_has_two_cent_modeled_cash_risk(freeze_now):
 
 
 def test_seed_above_two_cent_cash_risk_is_rejected(freeze_now):
-    # 2c hedge + 1c taker fee = 3c seed exposure.
     with pytest.raises(ValueError, match="exceeds"):
         validate_seed_first(
             _spec(hedge_cost=D("0.02"), maker_cost=D("0.94")),
@@ -124,6 +124,21 @@ def test_partial_maker_floor_stays_near_seed_risk():
     assert actual_nested_worst_case_pnl(seed, None) == D("-0.02")
 
 
+def test_client_order_root_makes_seed_and_maker_deterministic():
+    maker, seed = apply_client_order_root(
+        {"client_order_id": "random-m"},
+        {"client_order_id": "random-s"},
+        "nested-auto-deadbeef",
+    )
+    assert maker["client_order_id"] == "nested-auto-deadbeef-maker"
+    assert seed["client_order_id"] == "nested-auto-deadbeef-seed"
+
+
+def test_client_order_root_rejects_unsafe_value():
+    with pytest.raises(ValueError, match="8..48"):
+        apply_client_order_root({}, {}, "bad root")
+
+
 @pytest.mark.asyncio
 async def test_seed_not_full_never_submits_maker(monkeypatch, freeze_now, no_sleep):
     monkeypatch.setattr("src.kalshi_nested_seed_first_probe.live_probe_authorized", lambda *a, **k: True)
@@ -140,9 +155,16 @@ async def test_full_seed_then_full_maker_completes_pair(monkeypatch, freeze_now,
     seed = _state("seed", "seed-c", "LOW", "1", "0", taker_cost="0.01", taker_fee="0.01")
     maker = _state("maker", "maker-c", "HIGH", "1", "0", maker_cost="0.95")
     tx = FakeTransport(seed, maker)
-    result = await execute_seed_first(_spec(), cli_live=True, transport=tx)
+    result = await execute_seed_first(
+        _spec(),
+        cli_live=True,
+        transport=tx,
+        client_order_root="nested-auto-deadbeef",
+    )
     assert result.status == "NESTED_PAIR_FULL"
     assert result.actual_worst_case_pnl == D("0.03")
     assert len(tx.created) == 2
     assert tx.created[0]["time_in_force"] == "immediate_or_cancel"
+    assert tx.created[0]["client_order_id"] == "nested-auto-deadbeef-seed"
     assert tx.created[1]["post_only"] is True
+    assert tx.created[1]["client_order_id"] == "nested-auto-deadbeef-maker"
