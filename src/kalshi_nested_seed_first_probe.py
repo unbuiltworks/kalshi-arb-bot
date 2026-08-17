@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from decimal import Decimal
+import re
 import time
 from typing import Any
 
@@ -35,6 +36,7 @@ from src.kalshi_nested_probe_transport import (
 )
 
 MAX_SEED_CASH_RISK = D("0.02")
+CLIENT_ROOT_RE = re.compile(r"^[A-Za-z0-9_-]{8,48}$")
 
 
 @dataclass(frozen=True)
@@ -77,15 +79,29 @@ def validate_seed_first(spec: NestedLiveProbeSpec, *, now=None) -> Decimal:
 
 
 def actual_nested_worst_case_pnl(seed: OrderState, maker: OrderState | None) -> Decimal:
-    """Conservative settlement floor using actual filled quantities/cash costs.
-
-    For the proven nested pair, the minimum payout across settlement regions is
-    min(filled quantity on each leg). With no maker fill that minimum is zero.
-    """
+    """Conservative settlement floor using actual filled quantities/cash costs."""
     maker_fill = maker.fill_count if maker is not None else D("0")
     maker_cost = maker.total_cash_cost if maker is not None else D("0")
     minimum_payout = min(seed.fill_count, maker_fill)
     return minimum_payout - seed.total_cash_cost - maker_cost
+
+
+def apply_client_order_root(
+    maker_payload: dict[str, Any],
+    seed_payload: dict[str, Any],
+    client_order_root: str | None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Optionally replace random IDs with deterministic one-shot session IDs."""
+    if client_order_root is None:
+        return maker_payload, seed_payload
+    root = str(client_order_root).strip()
+    if not CLIENT_ROOT_RE.fullmatch(root):
+        raise ValueError("client_order_root must be 8..48 safe characters")
+    maker_payload = dict(maker_payload)
+    seed_payload = dict(seed_payload)
+    maker_payload["client_order_id"] = root + "-maker"
+    seed_payload["client_order_id"] = root + "-seed"
+    return maker_payload, seed_payload
 
 
 async def _final_state(transport: KalshiV2RestTransport, order_id: str, *, delay: float = 0.05) -> OrderState:
@@ -100,7 +116,6 @@ async def _reconcile_late(
     payload: dict[str, Any],
     delay: float = 0.25,
 ) -> OrderState | None:
-    """One bounded second reconciliation after an ambiguous POST timeout."""
     if delay > 0:
         await asyncio.sleep(delay)
     return await transport.reconcile_by_client_id(
@@ -114,6 +129,7 @@ async def execute_seed_first(
     *,
     cli_live: bool,
     transport: KalshiV2RestTransport | None = None,
+    client_order_root: str | None = None,
 ) -> SeedFirstResult:
     """Execute at most one seed IOC and one short-lived post-only maker order."""
     risk = validate_seed_first(spec)
@@ -121,14 +137,15 @@ async def execute_seed_first(
         raise RuntimeError("nested live probe is not armed")
 
     maker_payload, seed_payload = build_v2_payloads(spec)
+    maker_payload, seed_payload = apply_client_order_root(
+        maker_payload, seed_payload, client_order_root
+    )
     own_transport = transport is None
     tx = transport or KalshiV2RestTransport()
     try:
-        # Consume the single-use arm immediately before the first live request.
         if not live_probe_authorized(cli_live, consume_token=True):
             raise RuntimeError("nested live arm token disappeared before send")
 
-        # --- Cheap seed IOC.  Any unresolved ambiguity stops the experiment. ---
         try:
             seed_ack = await tx.create(seed_payload)
             seed_state = await _final_state(tx, seed_ack.order_id)
@@ -154,8 +171,6 @@ async def execute_seed_first(
             )
 
         if seed_state.fill_count != D("1"):
-            # IOC should have no resting remainder, but cancel defensively if API
-            # state says otherwise. Never place the maker unless seed is whole.
             if seed_state.remaining_count > 0:
                 await tx.cancel(seed_state.order_id)
                 seed_state = await _final_state(tx, seed_state.order_id)
@@ -168,12 +183,8 @@ async def execute_seed_first(
                 detail="maker was not submitted because seed IOC did not fill exactly 1.00",
             )
 
-        # Refresh maker expiry AFTER seed confirmation so network/discovery time
-        # does not shorten its intended resting window.
         maker_payload["expiration_time"] = int(time.time()) + int(spec.maker_rest_seconds)
 
-        # --- Expensive maker.  Seed is already owned, so ambiguity cannot create
-        # an unhedged expensive leg; it can only leave seed-only or nested exposure. ---
         try:
             maker_ack = await tx.create(maker_payload)
             maker_state = await _final_state(tx, maker_ack.order_id)
@@ -201,8 +212,6 @@ async def execute_seed_first(
                 detail=str(exc)[:300],
             )
 
-        # Whether newly acknowledged or late-reconciled, let only the originally
-        # intended short maker window exist, then defensively cancel remainder.
         await asyncio.sleep(int(spec.maker_rest_seconds) + 0.25)
         maker_state = await tx.get(maker_state.order_id)
         if maker_state.remaining_count > 0:
