@@ -1,0 +1,4 @@
+{
+  "approvals": [],
+  "note": "Fail closed. Add a contract only after exact cross-venue settlement rules, event scope, side orientation, void/postponement/tie semantics, and official settlement source have been audited. Each executable row must include a SHA-256 rule fingerprint and approved_for_execution=true."
+}
