@@ -80,7 +80,12 @@ def _dedupe_probe_views(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return selected
 
 
-def analyze_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
+def analyze_events(
+    events: Iterable[dict[str, Any]],
+    *,
+    observation_start_ms: int | None = None,
+    observation_end_ms: int | None = None,
+) -> dict[str, Any]:
     """Return de-duplicated theoretical vs first-seen executable-shadow economics.
 
     ``first_seen_profit`` counts each unique underlying OPEN once in portfolio totals:
@@ -90,6 +95,10 @@ def analyze_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
     through the last positive observation. No repeated unchanged resting quote, and no
     alternate $1/$5 sizing view of the same quote, can add another unit of portfolio
     profit or capacity.
+
+    A normalized USD/day capacity figure is emitted only when callers provide the
+    complete scanner observation window. Inferring the denominator from positive
+    OPEN/CLOSE events would omit quiet runtime and systematically inflate $/day.
     """
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     invalid = 0
@@ -100,8 +109,8 @@ def analyze_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
         grouped[_episode_id(event)].append(dict(event))
 
     episode_rows: list[dict[str, Any]] = []
-    global_start: int | None = None
-    global_end: int | None = None
+    positive_start: int | None = None
+    positive_end: int | None = None
 
     for episode_id, rows in grouped.items():
         rows.sort(key=lambda r: (int(r["observed_ms"]), {"OPEN": 0, "MOVE": 1, "CLOSE": 2}[r["event"]]))
@@ -116,8 +125,8 @@ def analyze_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
         close = closes[-1] if closes else None
         end_ms = int(close.get("last_seen_ms", close["observed_ms"])) if close else int(rows[-1]["observed_ms"])
         end_ms = max(start_ms, end_ms)
-        global_start = start_ms if global_start is None else min(global_start, start_ms)
-        global_end = end_ms if global_end is None else max(global_end, end_ms)
+        positive_start = start_ms if positive_start is None else min(positive_start, start_ms)
+        positive_end = end_ms if positive_end is None else max(positive_end, end_ms)
 
         priced = [r for r in rows if r["event"] in {"OPEN", "MOVE"}]
         first_profit = _d(opened.get("modeled_profit")) or D("0")
@@ -182,11 +191,26 @@ def analyze_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
         by_family[family] = aggregate([r for r in portfolio_rows if str(r.get("family") or "unknown") == family])
 
     overall = aggregate(portfolio_rows)
-    span_hours = D("0")
-    if global_start is not None and global_end is not None and global_end > global_start:
-        span_hours = D(global_end - global_start) / D("3600000")
+
+    positive_span_hours = D("0")
+    if positive_start is not None and positive_end is not None and positive_end > positive_start:
+        positive_span_hours = D(positive_end - positive_start) / D("3600000")
+
+    observation_window_valid = bool(
+        isinstance(observation_start_ms, int)
+        and isinstance(observation_end_ms, int)
+        and observation_end_ms > observation_start_ms
+    )
+    observation_span_hours: Decimal | None = None
+    if observation_window_valid:
+        observation_span_hours = D(observation_end_ms - observation_start_ms) / D("3600000")
+
     first_total = D(overall["first_seen_executable_shadow_profit"])
-    projected = first_total * D("24") / span_hours if span_hours > 0 else None
+    projected = (
+        first_total * D("24") / observation_span_hours
+        if observation_span_hours is not None and observation_span_hours > 0
+        else None
+    )
 
     return {
         "overall": overall,
@@ -198,11 +222,17 @@ def analyze_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "<= $1 and <= $5 plans are alternative sizing views of the same resting liquidity; "
             "portfolio totals keep only the higher first-seen-profit plan per settlement_key/direction/opened_ms."
         ),
-        "observation_span_hours": str(span_hours),
+        "positive_episode_span_hours": str(positive_span_hours),
+        "observation_window_provided": observation_window_valid,
+        "observation_start_ms": observation_start_ms if observation_window_valid else None,
+        "observation_end_ms": observation_end_ms if observation_window_valid else None,
+        "observation_span_hours": str(observation_span_hours) if observation_span_hours is not None else None,
         "capacity_projection_usd_per_day": str(projected) if projected is not None else None,
         "projection_warning": (
-            "Capacity normalization only: de-duplicated first-seen simultaneous synthetic fills divided by observed "
-            "wall-clock span. It is not a forecast and excludes settlement-rule, fill, latency, and basis-risk uncertainty."
+            "Capacity normalization only: de-duplicated first-seen simultaneous synthetic fills divided by the explicit "
+            "full scanner observation window. It is not a forecast and excludes settlement-rule, fill, latency, and "
+            "basis-risk uncertainty. Projection is withheld when the complete observation window is not supplied so "
+            "quiet runtime cannot be omitted from the denominator."
         ),
         "invalid_events": invalid,
         "read_only": True,
@@ -226,8 +256,19 @@ def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("jsonl", help="OPEN/MOVE/CLOSE JSONL from mlb_prop_episode_tracker")
+    parser.add_argument("--observation-start-ms", type=int, default=None, help="scanner observation window start (epoch ms)")
+    parser.add_argument("--observation-end-ms", type=int, default=None, help="scanner observation window end (epoch ms)")
     args = parser.parse_args()
-    print(json.dumps(analyze_events(load_jsonl(args.jsonl)), sort_keys=True))
+    print(
+        json.dumps(
+            analyze_events(
+                load_jsonl(args.jsonl),
+                observation_start_ms=args.observation_start_ms,
+                observation_end_ms=args.observation_end_ms,
+            ),
+            sort_keys=True,
+        )
+    )
 
 
 if __name__ == "__main__":
