@@ -77,6 +77,28 @@ def test_live_shape_without_sports_market_uses_ticker_and_explicit_margin_label(
     assert row.identity.line == Decimal("1.5")
 
 
+def test_alias_suffix_beats_opposite_team_in_event_prefix():
+    rows = normalize_event({
+        "ticker": "MLB-2608172310-ARI-BOS-S",
+        "contracts": [
+            {
+                "instrumentSymbol": "GEMI-MLB-2608172310-ARI-BOS-S-ARI3",
+                "label": "Arizona wins by more than 3.5 runs",
+                "strike": {"type": "spread", "value": "3.5"},
+            },
+            {
+                "instrumentSymbol": "GEMI-MLB-2608172310-ARI-BOS-S-BOS3",
+                "label": "Boston wins by more than 3.5 runs",
+                "strike": {"type": "spread", "value": "3.5"},
+            },
+        ],
+    })
+    assert len(rows) == 2
+    by_symbol = {row.instrument_symbol: row.identity.subject for row in rows}
+    assert by_symbol["GEMI-MLB-2608172310-ARI-BOS-S-ARI3"] == "az"
+    assert by_symbol["GEMI-MLB-2608172310-ARI-BOS-S-BOS3"] == "bos"
+
+
 def test_game_total_uses_structured_direction_and_line():
     rows = normalize_event(_event("total", "contest", "runs", "T", [
         {
