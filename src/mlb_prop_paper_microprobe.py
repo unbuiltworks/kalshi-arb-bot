@@ -125,9 +125,15 @@ def paper_probe_events(
         return None
     if not row.get("poly_slug") or not row.get("kalshi_ticker"):
         return None
-    # Paper economics should reflect the same participation-cleared universe as
-    # the live-readiness scanner. Independent rule audit is still a live blocker.
-    if not bool(row.get("settlement_equivalent_now")):
+    # Paper economics require the explicit participation gate from v5. The legacy
+    # `settlement_equivalent_now` field historically meant only participation and
+    # must never be used as a settlement-rules signal by downstream consumers.
+    if not bool(row.get("participation_gate_satisfied")):
+        return None
+    # Fail closed if a future caller strips the read-only safety fields.
+    if row.get("read_only") is not True or row.get("order_entry") is not False:
+        return None
+    if row.get("execution_eligible") is not False or row.get("live_probe_ready") is not False:
         return None
 
     quantity = D(str(plan["quantity"]))
@@ -170,8 +176,12 @@ def paper_probe_events(
         "simultaneous_synthetic_fill_ts_ms": now_ms,
         "required_participation_gate": row.get("required_participation_gate"),
         "participation_proof": row.get("participation_proof"),
+        "participation_gate_satisfied": True,
         "rule_status": row.get("rule_status"),
-        "settlement_equivalent_now": True,
+        "rules_status": row.get("rules_status", "RULES_PENDING"),
+        "full_rules_audited": bool(row.get("full_rules_audited", False)),
+        "fully_audited_shadow_ready": bool(row.get("fully_audited_shadow_ready", False)),
+        "paper_probe_only": True,
         "live_probe_ready": False,
         "live_blockers": ["INDEPENDENT_SETTLEMENT_AUDIT_REQUIRED", "FRESH_EXPLICIT_APPROVAL_REQUIRED"],
         "read_only": True,
@@ -262,6 +272,9 @@ async def run(ledger_path: Path, audit_path: Path, state_path: Path, min_profit:
         "active_paper_opportunities": len(current_state),
         "suppressed_resting_duplicates": suppressed,
         "episode_semantics": "OPEN_MOVE_REOPEN_NO_RESTING_DEPTH_DOUBLE_COUNT",
+        "rules_status": "RULES_PENDING",
+        "full_rules_audited": False,
+        "fully_audited_shadow_ready_groups": 0,
         "live_probe_ready_groups": 0,
         "read_only": True,
         "order_entry": False,
