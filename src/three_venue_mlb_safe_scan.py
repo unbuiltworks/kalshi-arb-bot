@@ -29,6 +29,11 @@ async def run_once():
         "status":"THREE_VENUE_MLB_SCOPE_SAFE_SCAN",
         "raw_events":{"gemini":len(gemini),"polymarket":len(poly_raw),"kalshi":len(kalshi)},
         "normalized_sides":{"gemini":len(g),"polymarket":len(p),"kalshi":len(k)},
+        "normalized_sides_by_family":{
+            "gemini":dict(Counter(row.identity.market_family for row in g)),
+            "polymarket":dict(Counter(row.identity.market_family for row in p)),
+            "kalshi":dict(Counter(row.identity.market_family for row in k)),
+        },
         "counterpart_clusters":len(clusters),
         "three_venue_clusters":sum(row["venue_count"]==3 for row in clusters),
         "clusters_by_family":dict(by_family),
