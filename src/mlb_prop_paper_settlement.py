@@ -62,16 +62,18 @@ def settlement_events(
 
     Outcome rows must identify an existing ``trade_group_id`` and include BOTH
     ``polymarket_us_outcome`` and ``kalshi_outcome`` as YES/NO. Partial or malformed
-    rows fail closed. Existing settlement events are never recreated.
+    rows fail closed. Existing settlement events are never recreated for the exact
+    filled market leg; a settlement for some other market on the same venue cannot
+    suppress reconciliation of the intended fill.
     """
     events = list(ledger_events)
     fills_by_group: dict[str, dict[str, LedgerEvent]] = {}
-    existing: set[tuple[str, str]] = set()
+    existing: set[tuple[str, str, str]] = set()
     for event in events:
         if event.event_type == "fill" and event.venue in VENUES:
             fills_by_group.setdefault(event.trade_group_id, {})[event.venue] = event
         elif event.event_type == "settlement":
-            existing.add((event.trade_group_id, event.venue))
+            existing.add((event.trade_group_id, event.venue, event.market_id))
 
     created: list[LedgerEvent] = []
     audits: list[dict[str, Any]] = []
@@ -91,9 +93,10 @@ def settlement_events(
 
         group_created: list[LedgerEvent] = []
         for venue, outcome in (("polymarket_us", poly_outcome), ("kalshi", kalshi_outcome)):
-            if (group_id, venue) in existing:
-                continue
             fill = fills[venue]
+            exact_leg = (group_id, venue, fill.market_id)
+            if exact_leg in existing:
+                continue
             payout = fill.quantity if fill.side == outcome else D("0")
             settled_ts_ms = int(row.get(f"{venue}_settled_ts_ms") or row.get("settled_ts_ms") or fill.ts_ms)
             event = make_event(
@@ -108,7 +111,7 @@ def settlement_events(
                 ts_ms=settled_ts_ms,
             )
             group_created.append(event)
-            existing.add((group_id, venue))
+            existing.add(exact_leg)
         if group_created:
             created.extend(group_created)
             audits.append({
