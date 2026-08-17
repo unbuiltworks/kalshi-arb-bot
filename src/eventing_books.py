@@ -8,11 +8,15 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import json
+import logging
 import time
 from typing import Any
 
 from src.kalshi_cross_book_v2 import KalshiCrossBooks
 from src.polymarket_kalshi_shadow_v2 import PolyBookStore
+
+logger = logging.getLogger("kalshi_arb.eventing_books")
 
 
 @dataclass(frozen=True)
@@ -40,8 +44,6 @@ class _UpdateMixin:
         try:
             self.updates.put_nowait(event)
         except asyncio.QueueFull:
-            # Never backpressure either market-data websocket. The book still holds
-            # the newest state even when an old wake-up is discarded.
             try:
                 self.updates.get_nowait()
             except asyncio.QueueEmpty:
@@ -58,21 +60,69 @@ class EventingPolyBookStore(_UpdateMixin, PolyBookStore):
         PolyBookStore.__init__(self)
         self._init_updates(max_queue)
         self.notifications_enabled = True
+        self.raw_ws_messages = 0
+        self.raw_ws_rejected_messages = 0
+        self.raw_ws_seen_slugs: set[str] = set()
+        self.raw_ws_rejected_slugs: set[str] = set()
+        self.last_raw_ws_message_ms = 0
+        self._last_raw_diag_ms = 0
+
+    @staticmethod
+    def _payload_slug(payload: Any) -> str:
+        if not isinstance(payload, dict):
+            return ""
+        data = payload.get("marketData")
+        if isinstance(data, dict):
+            payload = data
+        elif isinstance(payload.get("market_data"), dict):
+            payload = payload["market_data"]
+        return str(payload.get("marketSlug") or payload.get("market_slug") or "")
+
+    def _maybe_log_raw_diag(self, now_ms: int) -> None:
+        if now_ms - self._last_raw_diag_ms < 10_000:
+            return
+        self._last_raw_diag_ms = now_ms
+        logger.info(
+            "POLY_HOT_RAW %s",
+            json.dumps(
+                {
+                    "raw_messages": self.raw_ws_messages,
+                    "raw_seen_markets": len(self.raw_ws_seen_slugs),
+                    "raw_rejected_messages": self.raw_ws_rejected_messages,
+                    "raw_ever_rejected_markets": len(self.raw_ws_rejected_slugs),
+                    "two_sided_stored_markets": self.quote_count,
+                    "accepted_ws_updates": self.ws_updates,
+                    "raw_ws_age_ms": max(0, now_ms - self.last_raw_ws_message_ms),
+                },
+                separators=(",", ":"),
+            ),
+        )
 
     def ingest(self, payload: Any, *, source: str) -> bool:
-        # v2 replaces the immutable PolyQuote object on every accepted update. Track
-        # object identities, not millisecond timestamps: two websocket messages can
-        # legitimately arrive inside the same millisecond and both must wake the
-        # event-driven scanner.
-        before = {slug: id(quote) for slug, quote in self._quotes.items()}
+        slug = self._payload_slug(payload)
+        before = id(self._quotes[slug]) if slug in self._quotes else None
+
+        now_ms = int(time.time() * 1000)
+        if source == "ws":
+            self.raw_ws_messages += 1
+            self.last_raw_ws_message_ms = now_ms
+            if slug:
+                self.raw_ws_seen_slugs.add(slug)
+
         ok = super().ingest(payload, source=source)
-        if not ok or not self.notifications_enabled:
+
+        if source == "ws" and not ok:
+            self.raw_ws_rejected_messages += 1
+            if slug:
+                self.raw_ws_rejected_slugs.add(slug)
+        if source == "ws":
+            self._maybe_log_raw_diag(now_ms)
+
+        if not ok or not self.notifications_enabled or not slug:
             return ok
-        changed = [
-            slug for slug, quote in self._quotes.items()
-            if before.get(slug) != id(quote)
-        ]
-        for slug in changed:
+
+        quote = self._quotes.get(slug)
+        if quote is not None and before != id(quote):
             self._notify("polymarket", slug, "ws" if source == "ws" else "rest")
         return ok
 
