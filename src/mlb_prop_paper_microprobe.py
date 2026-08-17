@@ -7,6 +7,11 @@ ledger with one trade_group_id and one timestamp for both synthetic legs.
 A paper probe is deliberately *not* a live-readiness decision. The v5 snapshot
 must first prove the family-specific participation gate; independent settlement-
 rule equivalence remains a hard blocker for any real-money probe.
+
+Persistent active-opportunity state prevents a polling loop from treating the
+same unchanged resting depth as fresh executable capacity on every run. A new
+synthetic fill group is emitted only on OPEN, MOVE, or a later re-OPEN after the
+opportunity disappeared from an intervening snapshot.
 """
 from __future__ import annotations
 
@@ -51,6 +56,55 @@ def _group_id(row: dict[str, Any], probe_field: str, ts_ms: int) -> str:
     return "paper-mlb-" + hashlib.sha256(raw.encode()).hexdigest()[:20]
 
 
+def _state_key(row: dict[str, Any], probe_field: str) -> str:
+    return f"{_settlement_key(row)}|{probe_field}"
+
+
+def _opportunity_fingerprint(row: dict[str, Any], probe_field: str) -> str:
+    """Fingerprint the consumable plan, not the polling timestamp.
+
+    Changes in direction, quantity, executable prices, modeled fees, or conservative
+    profit create a MOVE. An identical plan on the next poll is resting depth and is
+    deliberately not counted again.
+    """
+    plan = row.get(probe_field) or {}
+    payload = {
+        "settlement_key": _settlement_key(row),
+        "probe_field": probe_field,
+        "direction": plan.get("direction"),
+        "quantity": str(plan.get("quantity")),
+        "poly_price": str(plan.get("poly_price")),
+        "kalshi_price": str(plan.get("kalshi_price")),
+        "poly_fee": str(plan.get("poly_fee")),
+        "kalshi_fee_upper_bound": str(plan.get("kalshi_fee_upper_bound")),
+        "total_cost_upper_bound": str(plan.get("total_cost_upper_bound")),
+        "conservative_locked_profit": str(plan.get("conservative_locked_profit")),
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _load_active_state(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        # Fail closed rather than resetting state and potentially double-counting
+        # unchanged resting liquidity as a fresh paper opportunity.
+        raise RuntimeError(f"invalid paper-probe state: {path}") from exc
+    if not isinstance(raw, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in raw.items()):
+        raise RuntimeError(f"invalid paper-probe state shape: {path}")
+    return raw
+
+
+def _write_active_state(path: Path, state: dict[str, str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(state, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
 def paper_probe_events(
     row: dict[str, Any],
     *,
@@ -72,8 +126,7 @@ def paper_probe_events(
     if not row.get("poly_slug") or not row.get("kalshi_ticker"):
         return None
     # Paper economics should reflect the same participation-cleared universe as
-    # the live-readiness scanner. Pending player participation is not sampled as
-    # if it were executable.
+    # the live-readiness scanner. Independent rule audit is still a live blocker.
     if not bool(row.get("settlement_equivalent_now")):
         return None
 
@@ -134,8 +187,29 @@ def build_paper_probes(
     ts_ms: int | None = None,
 ) -> tuple[list, list[dict[str, Any]]]:
     """Build at most one $1 and one $5 paper probe per exact venue identity."""
+    events, audits, _state, _suppressed = build_paper_probes_with_state(
+        snapshot, prior_state={}, min_profit=min_profit, ts_ms=ts_ms
+    )
+    return events, audits
+
+
+def build_paper_probes_with_state(
+    snapshot: dict[str, Any],
+    *,
+    prior_state: dict[str, str],
+    min_profit: Decimal = D("0.03"),
+    ts_ms: int | None = None,
+) -> tuple[list, list[dict[str, Any]], dict[str, str], int]:
+    """Build only OPEN/MOVE/re-OPEN probes and return current active state.
+
+    `current_state` contains only qualifying opportunities present in this snapshot.
+    Thus disappearance creates an implicit CLOSE by removing the state key; if the
+    same quote later reappears it is correctly counted as a new OPEN episode.
+    """
     events = []
     audits: list[dict[str, Any]] = []
+    current_state: dict[str, str] = {}
+    suppressed_resting_duplicates = 0
     seen: set[tuple[str, str]] = set()
     source = snapshot.get("paper_probe_candidates") or []
     for probe_field, _cap in PROBE_FIELDS:
@@ -143,19 +217,31 @@ def build_paper_probes(
             identity = (_settlement_key(row), probe_field)
             if identity in seen:
                 continue
+            seen.add(identity)
             built = paper_probe_events(row, probe_field=probe_field, min_profit=min_profit, ts_ms=ts_ms)
             if built is None:
                 continue
+            state_key = _state_key(row, probe_field)
+            fingerprint = _opportunity_fingerprint(row, probe_field)
+            current_state[state_key] = fingerprint
+            prior_fingerprint = prior_state.get(state_key)
+            if prior_fingerprint == fingerprint:
+                suppressed_resting_duplicates += 1
+                continue
             new_events, audit = built
+            audit["opportunity_fingerprint"] = fingerprint
+            audit["episode_event"] = "OPEN" if prior_fingerprint is None else "MOVE"
             events.extend(new_events)
             audits.append(audit)
-            seen.add(identity)
-    return events, audits
+    return events, audits, current_state, suppressed_resting_duplicates
 
 
-async def run(ledger_path: Path, audit_path: Path, min_profit: Decimal) -> dict[str, Any]:
+async def run(ledger_path: Path, audit_path: Path, state_path: Path, min_profit: Decimal) -> dict[str, Any]:
+    prior_state = _load_active_state(state_path)
     snapshot = await run_once()
-    events, audits = build_paper_probes(snapshot, min_profit=min_profit)
+    events, audits, current_state, suppressed = build_paper_probes_with_state(
+        snapshot, prior_state=prior_state, min_profit=min_profit
+    )
     ledger = LedgerSidecar(ledger_path)
     for event in events:
         ledger.emit(event)
@@ -165,11 +251,17 @@ async def run(ledger_path: Path, audit_path: Path, min_profit: Decimal) -> dict[
         with audit_path.open("a", encoding="utf-8") as fh:
             for row in audits:
                 fh.write(json.dumps(row, separators=(",", ":"), sort_keys=True) + "\n")
+    # Write only after ledger/audit output succeeds. An unchanged next run then
+    # suppresses the same resting plan; absent plans are cleared as implicit CLOSEs.
+    _write_active_state(state_path, current_state)
     result = {
         "paper_probe_groups": len(audits),
         "ledger_events": len(events),
         "minimum_modeled_profit_dollars": str(min_profit),
         "participation_cleared_only": True,
+        "active_paper_opportunities": len(current_state),
+        "suppressed_resting_duplicates": suppressed,
+        "episode_semantics": "OPEN_MOVE_REOPEN_NO_RESTING_DEPTH_DOUBLE_COUNT",
         "live_probe_ready_groups": 0,
         "read_only": True,
         "order_entry": False,
@@ -182,9 +274,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ledger", type=Path, default=Path("logs/mlb_prop_paper_ledger.jsonl"))
     parser.add_argument("--audit", type=Path, default=Path("logs/mlb_prop_paper_probes.jsonl"))
+    parser.add_argument("--state", type=Path, default=Path("logs/mlb_prop_paper_probe_state.json"))
     parser.add_argument("--min-profit", type=Decimal, default=D("0.03"))
     args = parser.parse_args()
-    asyncio.run(run(args.ledger, args.audit, args.min_profit))
+    asyncio.run(run(args.ledger, args.audit, args.state, args.min_profit))
 
 
 if __name__ == "__main__":
