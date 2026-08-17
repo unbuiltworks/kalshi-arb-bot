@@ -89,6 +89,33 @@ def test_cross_budget_dedup_prefers_higher_profit_not_larger_capital():
     assert Decimal(result["overall"]["first_seen_executable_shadow_profit"]) == Decimal("0.05")
 
 
+def test_daily_capacity_projection_is_withheld_without_full_observation_window():
+    events = [
+        _event("OPEN", 3_600_000, profit="0.10"),
+        _event("CLOSE", 3_601_000, last_seen_ms=3_600_500),
+    ]
+    result = analyze_events(events)
+    assert result["observation_window_provided"] is False
+    assert result["observation_span_hours"] is None
+    assert result["capacity_projection_usd_per_day"] is None
+    assert Decimal(result["positive_episode_span_hours"]) == Decimal("0.5") / Decimal(3600)
+
+
+def test_daily_capacity_projection_uses_full_scanner_window_including_quiet_time():
+    events = [
+        _event("OPEN", 3_600_000, profit="0.10"),
+        _event("CLOSE", 3_601_000, last_seen_ms=3_600_500),
+    ]
+    result = analyze_events(
+        events,
+        observation_start_ms=0,
+        observation_end_ms=6 * 3_600_000,
+    )
+    assert result["observation_window_provided"] is True
+    assert Decimal(result["observation_span_hours"]) == Decimal("6")
+    assert Decimal(result["capacity_projection_usd_per_day"]) == Decimal("0.40")
+
+
 def test_invalid_or_non_read_only_events_fail_closed():
     bad = _event("OPEN", 0)
     bad["read_only"] = False
