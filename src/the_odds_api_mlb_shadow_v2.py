@@ -3,12 +3,16 @@
 This wrapper intentionally reuses the original sportsbook adapter, but filters
 Polymarket to full-game events before pricing so first-five-inning markets can
 never match full-game sportsbook lines. No order entry.
+
+It also keeps an in-process cumulative sportsbook opportunity tally. The tally
+counts observed candidate locks; it is research telemetry, not realized P/L.
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
 from collections import Counter
+from decimal import Decimal
 import json
 import logging
 import os
@@ -25,6 +29,14 @@ from src.universal_three_venue_sports import fetch_gemini_mlb, fetch_kalshi_mlb,
 
 logger = logging.getLogger("kalshi_arb.the_odds_api_mlb_shadow_v2")
 
+_TALLY_STARTED_MS = int(time.time() * 1000)
+_TALLY_SCANS = 0
+_TALLY_POSITIVE_SCANS = 0
+_TALLY_OBSERVATIONS: Counter[str] = Counter()
+_TALLY_POSITIVE_SCANS_BY_BOOK: Counter[str] = Counter()
+_TALLY_MAX_PROFIT_BY_BOOK: dict[str, Decimal] = {}
+_TALLY_UNIQUE_KEYS_BY_BOOK: dict[str, set[str]] = {}
+
 
 def _is_retail(venue: str) -> bool:
     return str(venue).startswith("sportsbook:")
@@ -33,6 +45,70 @@ def _is_retail(venue: str) -> bool:
 def _is_full_game_direct_market(market_id: str) -> bool:
     text = str(market_id).lower()
     return not any(token in text for token in ("-f5-", ":f5:", "first-5", "first5", "first five"))
+
+
+def _retail_book(lock: Any) -> str | None:
+    if _is_retail(lock.yes_venue) and not _is_retail(lock.no_venue):
+        return str(lock.yes_venue)
+    if _is_retail(lock.no_venue) and not _is_retail(lock.yes_venue):
+        return str(lock.no_venue)
+    return None
+
+
+def _opportunity_key(lock: Any) -> str:
+    """Stable-ish identity for one observed retail/direct executable direction."""
+    return "|".join((
+        str(lock.settlement_key),
+        str(lock.yes_venue),
+        str(lock.yes_market_id),
+        str(lock.no_venue),
+        str(lock.no_market_id),
+    ))
+
+
+def _update_tally(locks: list[Any]) -> dict[str, Any]:
+    global _TALLY_SCANS, _TALLY_POSITIVE_SCANS
+    _TALLY_SCANS += 1
+
+    books_this_scan: set[str] = set()
+    current_by_book: Counter[str] = Counter()
+    if locks:
+        _TALLY_POSITIVE_SCANS += 1
+
+    for lock in locks:
+        book = _retail_book(lock)
+        if book is None:
+            continue
+        books_this_scan.add(book)
+        current_by_book[book] += 1
+        _TALLY_OBSERVATIONS[book] += 1
+        _TALLY_UNIQUE_KEYS_BY_BOOK.setdefault(book, set()).add(_opportunity_key(lock))
+        profit = Decimal(str(lock.unit_profit))
+        previous = _TALLY_MAX_PROFIT_BY_BOOK.get(book)
+        if previous is None or profit > previous:
+            _TALLY_MAX_PROFIT_BY_BOOK[book] = profit
+
+    for book in books_this_scan:
+        _TALLY_POSITIVE_SCANS_BY_BOOK[book] += 1
+
+    all_books = sorted(set(_TALLY_OBSERVATIONS) | set(current_by_book))
+    by_book = {
+        book: {
+            "current_positive_locks": current_by_book.get(book, 0),
+            "positive_scans": _TALLY_POSITIVE_SCANS_BY_BOOK.get(book, 0),
+            "opportunity_observations": _TALLY_OBSERVATIONS.get(book, 0),
+            "unique_opportunity_keys": len(_TALLY_UNIQUE_KEYS_BY_BOOK.get(book, set())),
+            "max_unit_profit_observed": str(_TALLY_MAX_PROFIT_BY_BOOK.get(book, Decimal("0"))),
+        }
+        for book in all_books
+    }
+    return {
+        "started_ms": _TALLY_STARTED_MS,
+        "scans": _TALLY_SCANS,
+        "positive_scans": _TALLY_POSITIVE_SCANS,
+        "by_book": by_book,
+        "note": "OBSERVED_CANDIDATES_NOT_REALIZED_PNL_RESETS_ON_PROCESS_RESTART",
+    }
 
 
 async def run_once(api_key: str) -> dict[str, Any]:
@@ -62,6 +138,7 @@ async def run_once(api_key: str) -> dict[str, Any]:
         x for x in locks
         if _is_retail(x.yes_venue) != _is_retail(x.no_venue)
     ]
+    tally = _update_tally(retail_vs_prediction)
 
     result = {
         "status": "THE_ODDS_API_MLB_SHADOW_V2_FULL_GAME_ONLY",
@@ -73,6 +150,7 @@ async def run_once(api_key: str) -> dict[str, Any]:
         "direct_priced_quotes": len(direct_quotes),
         "retail_vs_prediction_positive_locks": len(retail_vs_prediction),
         "top_retail_vs_prediction_locks": [x.as_dict() for x in retail_vs_prediction[:30]],
+        "sportsbook_opportunity_tally": tally,
         "quota": quota,
         "fetch_error_count": len(errors),
         "scope_gate": "FULL_GAME_ONLY_HARD_FILTER",
@@ -81,6 +159,7 @@ async def run_once(api_key: str) -> dict[str, Any]:
         "order_entry": False,
     }
     logger.info("THE_ODDS_API_MLB_SHADOW_V2 %s", json.dumps(result, separators=(",", ":"), default=str))
+    logger.info("SPORTSBOOK_OPPORTUNITY_TALLY %s", json.dumps(tally, separators=(",", ":"), default=str))
     return result
 
 
