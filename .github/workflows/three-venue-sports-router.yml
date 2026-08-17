@@ -34,10 +34,9 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          text = Path('three-venue-pytest.txt').read_text(errors='replace')
-          for line in text.splitlines()[-80:]:
-              safe = line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-              print(f'::error::{safe}')
+          text = '\n'.join(Path('three-venue-pytest.txt').read_text(errors='replace').splitlines()[-120:])
+          safe = text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print(f'::error title=three-venue pytest failures::{safe}')
           PY
       - name: Upload diagnostics
         if: always()
