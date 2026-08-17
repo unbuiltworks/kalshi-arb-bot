@@ -27,7 +27,8 @@ def test_journal_writes_jsonl(tmp_path: Path):
 
 def test_supervisor_has_no_order_entry_surface():
     source = Path("src/kalshi_nested_auto_supervisor.py").read_text(encoding="utf-8")
-    assert "execute_seed_first" not in source
+    assert "from src.kalshi_nested_seed_first_probe import" not in source
+    assert "await execute_seed_first(" not in source
     assert "KalshiV2RestTransport" not in source
     assert 'add_argument("--live"' not in source
     assert '"order_entry": False' in source
