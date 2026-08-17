@@ -61,3 +61,54 @@ def test_reports_quote_age_skew_and_family_rollup():
     assert Decimal(fam["consumable_profit_dollars"]) == Decimal("0.2")
     assert result["read_only"] is True
     assert result["order_entry"] is False
+
+
+def test_sparse_samples_cannot_claim_subsecond_survival():
+    result = analyze([
+        row(1000, qty=10, profit=1, capital=9),
+        row(2000, qty=10, profit=1, capital=9),
+        row(3000, qty=0, profit=0, capital=0, positive=False),
+    ])
+    ep = result["episodes"][0]
+    assert ep["survival"]["50ms"] == "UNRESOLVED"
+    assert ep["survival"]["100ms"] == "UNRESOLVED"
+    assert ep["survival"]["250ms"] == "UNRESOLVED"
+    assert ep["survival"]["500ms"] == "UNRESOLVED"
+    assert ep["max_positive_sample_gap_ms"] == 1000
+
+
+def test_dense_samples_can_support_survival_thresholds():
+    result = analyze([
+        row(1000, qty=10, profit=1, capital=9),
+        row(1050, qty=10, profit=1, capital=9),
+        row(1100, qty=10, profit=1, capital=9),
+        row(1150, qty=10, profit=1, capital=9),
+        row(1200, qty=10, profit=1, capital=9),
+        row(1250, qty=10, profit=1, capital=9),
+        row(1300, qty=10, profit=1, capital=9),
+        row(1350, qty=10, profit=1, capital=9),
+        row(1400, qty=10, profit=1, capital=9),
+        row(1450, qty=10, profit=1, capital=9),
+        row(1500, qty=10, profit=1, capital=9),
+        row(1550, qty=0, profit=0, capital=0, positive=False),
+    ])
+    ep = result["episodes"][0]
+    assert ep["survival"]["50ms"] == "PASSED"
+    assert ep["survival"]["100ms"] == "PASSED"
+    assert ep["survival"]["250ms"] == "PASSED"
+    assert ep["survival"]["500ms"] == "PASSED"
+
+
+def test_early_close_fails_longer_survival_and_reports_capital_hours():
+    result = analyze([
+        row(1000, qty=10, profit=1, capital=9),
+        row(1050, qty=10, profit=1, capital=9),
+        row(1080, qty=0, profit=0, capital=0, positive=False),
+    ])
+    ep = result["episodes"][0]
+    assert ep["survival"]["50ms"] == "PASSED"
+    assert ep["survival"]["100ms"] == "FAILED"
+    assert ep["survival"]["250ms"] == "FAILED"
+    assert ep["survival"]["500ms"] == "FAILED"
+    assert Decimal(ep["capital_hours"]) == Decimal("9") * Decimal("50") / Decimal("3600000")
+    assert Decimal(result["capital_hours"]) == Decimal(ep["capital_hours"])
