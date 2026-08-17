@@ -21,6 +21,9 @@ async def run_once():
     locks = _dedupe(find_cross_venue_locks([row.quote for row in priced], max_quote_skew_ms=5000, min_confidence="NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE"))
     by_family=Counter(row["market_family"] for row in clusters)
     by_venues=Counter("+".join(row["venues"]) for row in clusters)
+    positive_keys={row.settlement_key for row in locks}
+    positive_quotes=[row.as_dict() for row in priced if row.quote.settlement_key in positive_keys]
+    positive_clusters=[row for row in clusters if row["contract_key"] in positive_keys]
     return {
         "status":"THREE_VENUE_MLB_SCOPE_SAFE_SCAN",
         "raw_events":{"gemini":len(gemini),"polymarket":len(poly_raw),"kalshi":len(kalshi)},
@@ -34,7 +37,10 @@ async def run_once():
         "priced_quotes_by_venue":dict(Counter(row.quote.venue for row in priced)),
         "one_contract_positive_locks":len(locks),
         "top_one_contract_locks":[row.as_dict() for row in locks[:50]],
+        "positive_quote_audit":positive_quotes,
+        "positive_identity_audit":positive_clusters,
         "fetch_error_count":len(errors),
+        "fetch_errors":errors[:20],
         "scope_gate":"POLYMARKET_MAIN_FULL_GAME_ONLY",
         "time_gate":"KALSHI_TICKER_AMERICA_NEW_YORK_CORROBORATED_BY_EXPECTED_EXPIRY",
         "rule_gate":"FULL_RULE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION",
