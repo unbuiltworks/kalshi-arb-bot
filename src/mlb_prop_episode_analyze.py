@@ -99,6 +99,8 @@ def analyze_events(
     A normalized USD/day capacity figure is emitted only when callers provide the
     complete scanner observation window. Inferring the denominator from positive
     OPEN/CLOSE events would omit quiet runtime and systematically inflate $/day.
+    The supplied observation window must also cover every retained positive episode;
+    otherwise the projection is withheld rather than trusting a truncated denominator.
     """
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     invalid = 0
@@ -196,11 +198,30 @@ def analyze_events(
     if positive_start is not None and positive_end is not None and positive_end > positive_start:
         positive_span_hours = D(positive_end - positive_start) / D("3600000")
 
-    observation_window_valid = bool(
+    observation_bounds_valid = bool(
         isinstance(observation_start_ms, int)
         and isinstance(observation_end_ms, int)
         and observation_end_ms > observation_start_ms
     )
+    observation_covers_positive_episodes = bool(
+        observation_bounds_valid
+        and (
+            positive_start is None
+            or (
+                observation_start_ms <= positive_start
+                and positive_end is not None
+                and observation_end_ms >= positive_end
+            )
+        )
+    )
+    observation_window_valid = observation_bounds_valid and observation_covers_positive_episodes
+
+    observation_window_invalid_reason: str | None = None
+    if not observation_bounds_valid:
+        observation_window_invalid_reason = "missing_or_invalid_bounds"
+    elif not observation_covers_positive_episodes:
+        observation_window_invalid_reason = "window_does_not_cover_all_positive_episodes"
+
     observation_span_hours: Decimal | None = None
     if observation_window_valid:
         observation_span_hours = D(observation_end_ms - observation_start_ms) / D("3600000")
@@ -224,15 +245,19 @@ def analyze_events(
         ),
         "positive_episode_span_hours": str(positive_span_hours),
         "observation_window_provided": observation_window_valid,
-        "observation_start_ms": observation_start_ms if observation_window_valid else None,
-        "observation_end_ms": observation_end_ms if observation_window_valid else None,
+        "observation_window_bounds_valid": observation_bounds_valid,
+        "observation_window_covers_positive_episodes": observation_covers_positive_episodes,
+        "observation_window_invalid_reason": observation_window_invalid_reason,
+        "observation_start_ms": observation_start_ms if observation_bounds_valid else None,
+        "observation_end_ms": observation_end_ms if observation_bounds_valid else None,
         "observation_span_hours": str(observation_span_hours) if observation_span_hours is not None else None,
         "capacity_projection_usd_per_day": str(projected) if projected is not None else None,
         "projection_warning": (
             "Capacity normalization only: de-duplicated first-seen simultaneous synthetic fills divided by the explicit "
             "full scanner observation window. It is not a forecast and excludes settlement-rule, fill, latency, and "
-            "basis-risk uncertainty. Projection is withheld when the complete observation window is not supplied so "
-            "quiet runtime cannot be omitted from the denominator."
+            "basis-risk uncertainty. Projection is withheld when the complete observation window is not supplied or "
+            "does not cover every retained positive episode, so quiet runtime or positive runtime cannot be omitted "
+            "from the denominator."
         ),
         "invalid_events": invalid,
         "read_only": True,
