@@ -105,19 +105,29 @@ def _metric(value: Any) -> str:
 
 
 def _contract_text(contract: Mapping[str, Any]) -> str:
-    return " | ".join(str(contract.get(k) or "") for k in ("ticker", "contractTicker", "instrumentSymbol", "label", "abbreviatedName", "title", "name"))
+    return " | ".join(str(contract.get(k) or "") for k in ("label", "abbreviatedName", "title", "name"))
 
 
 def _contract_team(contract: Mapping[str, Any], teams: tuple[str, str]) -> str | None:
-    # Event portion contains both teams; contract suffix/ticker identifies the side.
+    """Resolve the contract-specific team without being contaminated by event teams.
+
+    Gemini instrument symbols contain both teams in the event prefix. The final
+    contract token is authoritative for team markets (e.g. ``ARI3`` or ``BOS3``).
+    Canonicalize that raw token before comparing so aliases such as ARI->AZ do not
+    accidentally cause the opposite team from the event prefix to be selected.
+    """
     for key in ("ticker", "contractTicker", "instrumentSymbol"):
         raw = str(contract.get(key) or "").upper().strip()
         if not raw:
             continue
         tail = raw.rsplit("-", 1)[-1]
-        for team in teams:
-            if tail == team or tail.startswith(team):
+        m = re.match(r"^(?P<team>[A-Z]{2,4})(?=[0-9]|$)", tail)
+        if m:
+            team = canonical_team(m.group("team"))
+            if team in teams:
                 return team
+    # Fail closed on the label-only fallback. Do not inspect instrument/event text,
+    # because it contains both teams and can manufacture the opposite-side match.
     text = _contract_text(contract).upper()
     hits = [team for team in teams if re.search(rf"(?<![A-Z]){re.escape(team)}(?![A-Z])", text)]
     return hits[0] if len(hits) == 1 else None
@@ -130,11 +140,7 @@ def _player_subject(contract: Mapping[str, Any]) -> str | None:
         if str(value or "").strip(): return _norm(value)
     label = str(contract.get("label") or contract.get("title") or "").strip()
     if not label: return None
-    # Documented/fixture shape: "Bryce Harper Over 1.5".
     cleaned = re.sub(r"\s+(?:over|under)\s+[-+]?\d+(?:\.\d+)?(?:\s+.*)?$", "", label, flags=re.I).strip()
-    # Current live shape: "Junior Caminero 1+ Hits", "X 2+ Strikeouts",
-    # etc.  The strike carries the threshold independently, so the trailing display
-    # proposition must not become part of the player identity.
     cleaned = re.sub(
         r"\s+\d+(?:\.\d+)?\+\s+(?:hits?|home\s+runs?|strikeouts?|pitching\s+strikeouts?|"
         r"total\s+bases|rbis?|runs?)\s*$",
@@ -225,9 +231,6 @@ def normalize_event(event: Mapping[str, Any]) -> list[GeminiNormalizedContract]:
             team = _contract_team(contract, teams)
             if team is None or strike_type != "spread" or strike_value is None: continue
             subject_type, subject, stat, comparator = "team", team, metric or "runs", "GT"
-            # Current live Gemini labels express the strike directly as a margin
-            # threshold ("wins by more than 1.5"). Older/documented handicap-like
-            # fixtures may encode -1.5, so only invert when label is not explicit.
             if re.search(r"wins?\s+by\s+(?:more|over)", label, re.I):
                 line = abs(strike_value)
             else:
