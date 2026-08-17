@@ -55,6 +55,24 @@ def _top_book(quote: Any) -> base.TopBook:
     )
 
 
+def _readiness_fields(*, preferred: bool) -> dict[str, Any]:
+    """Fail-closed readiness labels for hot-shadow packets.
+
+    The hot universe is participation-cleared only. Participation resolution is not
+    evidence that Polymarket US and Kalshi settlement terms have been independently
+    audited as equivalent, so even a >=3c preferred packet remains RULES_PENDING.
+    """
+    return {
+        "label": "PREFERRED_RULES_PENDING_SHADOW" if preferred else "POSITIVE_RULES_PENDING_SHADOW",
+        "participation_cleared": True,
+        "participation_gate_equivalent_now": True,
+        "full_rules_audited": False,
+        "rules_status": "RULES_PENDING",
+        "fully_audited_shadow_ready": False,
+        "live_probe_ready": False,
+    }
+
+
 async def _discover_cleared(http: httpx.AsyncClient) -> tuple[list[base.StrictCandidate], dict[str, Any], dict[str, dict[str, Any]]]:
     poly_markets, kalshi_events = await asyncio.gather(
         base._fetch_poly_mlb(http), base._fetch_kalshi_events(http)
@@ -124,6 +142,8 @@ async def run(args: argparse.Namespace) -> None:
         "poly_seeded": seeded,
         "preferred_net": str(PREFERRED_NET),
         "max_book_age_ms": MAX_BOOK_AGE_MS,
+        "rule_status": "RULES_PENDING",
+        "live_probe_ready": False,
     }, separators=(",", ":")))
 
     poly_task = asyncio.create_task(run_poly_ws(poly_client, poly_store, slugs))
@@ -172,7 +192,7 @@ async def run(args: argparse.Namespace) -> None:
         last_packet_by_key[candidate.key] = fingerprint
 
         packet = {
-            "label": "MANUAL_PROBE_READY" if is_preferred else "POSITIVE_SHADOW",
+            **_readiness_fields(preferred=is_preferred),
             "trigger": trigger,
             "observed_at_ms": int(time.time() * 1000),
             "family": candidate.family,
@@ -181,7 +201,6 @@ async def run(args: argparse.Namespace) -> None:
             "poly_slug": candidate.poly_slug,
             "kalshi_ticker": candidate.kalshi_ticker,
             "participation_proof": proof_dict(proofs[candidate.key]),
-            "settlement_equivalent_now": True,
             "probe_1usd": probe1,
             "probe_5usd": probe5,
             "preferred": is_preferred,
@@ -229,6 +248,8 @@ async def run(args: argparse.Namespace) -> None:
                     "preferred_evaluations": preferred,
                     "dropped_poly_events": poly_store.dropped_updates,
                     "dropped_kalshi_events": kalshi_store.dropped_updates,
+                    "rule_status": "RULES_PENDING",
+                    "live_probe_ready": False,
                     "read_only": True,
                     "order_entry": False,
                 }, separators=(",", ":")))
