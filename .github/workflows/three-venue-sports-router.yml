@@ -39,6 +39,17 @@ jobs:
           safe=text.replace('%','%25').replace('\r','%0D').replace('\n','%0A')
           print(f'::error title=three-venue pytest failures::{safe}')
           PY
+      - name: Inspect Kalshi MLB schedule timestamps
+        if: steps.pytest.outputs.exit_code == '0'
+        shell: bash
+        run: |
+          PYTHONPATH=. python -m src.kalshi_mlb_time_probe > kalshi-time.json 2> kalshi-time.err || true
+          python - <<'PY'
+          from pathlib import Path
+          text=Path('kalshi-time.json').read_text(errors='replace').strip() or Path('kalshi-time.err').read_text(errors='replace').strip()
+          safe=text[-14000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+          print(f'::notice title=Kalshi MLB timestamp shape::{safe}')
+          PY
       - name: Run scope-safe live public scan
         if: steps.pytest.outputs.exit_code == '0'
         shell: bash
@@ -67,6 +78,8 @@ jobs:
           name: three-venue-router-diagnostics
           path: |
             three-venue-pytest.txt
+            kalshi-time.json
+            kalshi-time.err
             three-venue-safe.json
             three-venue-safe.err
           if-no-files-found: warn
