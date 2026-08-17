@@ -1,6 +1,10 @@
 from decimal import Decimal
 
-from src.mlb_prop_paper_microprobe import build_paper_probes, paper_probe_events
+from src.mlb_prop_paper_microprobe import (
+    build_paper_probes,
+    build_paper_probes_with_state,
+    paper_probe_events,
+)
 
 
 def _row(profit="0.04", *, direction="POLY_YES_KALSHI_NO", poly_slug="poly-example", kalshi_ticker="KXMLBHIT-EXAMPLE", settlement_equivalent_now=True):
@@ -97,3 +101,61 @@ def test_paper_probe_rejects_missing_venue_identity():
     row = _row()
     row["poly_slug"] = ""
     assert paper_probe_events(row, probe_field="probe_5usd", ts_ms=1) is None
+
+
+def test_stateful_builder_suppresses_unchanged_resting_depth():
+    snapshot = {"paper_probe_candidates": [_row()]}
+    first_events, first_audits, state, suppressed = build_paper_probes_with_state(
+        snapshot, prior_state={}, ts_ms=100
+    )
+    assert len(first_audits) == 1
+    assert first_audits[0]["episode_event"] == "OPEN"
+    assert len(first_events) >= 2
+    assert suppressed == 0
+
+    second_events, second_audits, second_state, suppressed = build_paper_probes_with_state(
+        snapshot, prior_state=state, ts_ms=200
+    )
+    assert second_events == []
+    assert second_audits == []
+    assert second_state == state
+    assert suppressed == 1
+
+
+def test_stateful_builder_emits_move_when_consumable_plan_changes():
+    first = _row()
+    snapshot = {"paper_probe_candidates": [first]}
+    _events, _audits, state, _suppressed = build_paper_probes_with_state(
+        snapshot, prior_state={}, ts_ms=100
+    )
+
+    moved = _row(profit="0.05")
+    moved["probe_5usd"] = dict(moved["probe_5usd"])
+    moved["probe_5usd"]["poly_price"] = "0.44"
+    events, audits, new_state, suppressed = build_paper_probes_with_state(
+        {"paper_probe_candidates": [moved]}, prior_state=state, ts_ms=200
+    )
+    assert len(events) >= 2
+    assert len(audits) == 1
+    assert audits[0]["episode_event"] == "MOVE"
+    assert new_state != state
+    assert suppressed == 0
+
+
+def test_stateful_builder_clears_absent_opportunity_so_same_quote_can_reopen():
+    snapshot = {"paper_probe_candidates": [_row()]}
+    _events, _audits, state, _suppressed = build_paper_probes_with_state(
+        snapshot, prior_state={}, ts_ms=100
+    )
+    _events, _audits, closed_state, _suppressed = build_paper_probes_with_state(
+        {"paper_probe_candidates": []}, prior_state=state, ts_ms=200
+    )
+    assert closed_state == {}
+
+    events, audits, _reopened_state, suppressed = build_paper_probes_with_state(
+        snapshot, prior_state=closed_state, ts_ms=300
+    )
+    assert len(events) >= 2
+    assert len(audits) == 1
+    assert audits[0]["episode_event"] == "OPEN"
+    assert suppressed == 0
