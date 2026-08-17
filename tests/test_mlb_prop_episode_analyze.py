@@ -3,13 +3,13 @@ from decimal import Decimal
 from src.mlb_prop_episode_analyze import analyze_events
 
 
-def _event(kind, observed_ms, *, opened_ms=0, profit="0.04", capital="1.00", last_seen_ms=None):
+def _event(kind, observed_ms, *, opened_ms=0, profit="0.04", capital="1.00", last_seen_ms=None, probe_field="probe_1usd"):
     row = {
         "event": kind,
         "observed_ms": observed_ms,
         "opened_ms": opened_ms,
         "settlement_key": "hits|2026-08-17|Player|1|poly|kalshi",
-        "probe_field": "probe_1usd",
+        "probe_field": probe_field,
         "family": "hits",
         "direction": "POLY_YES_KALSHI_NO",
         "modeled_profit": profit,
@@ -60,6 +60,33 @@ def test_second_reopen_is_fresh_capacity_episode():
     result = analyze_events(first + second)
     assert result["overall"]["unique_episodes"] == 2
     assert Decimal(result["overall"]["first_seen_executable_shadow_profit"]) == Decimal("0.07")
+
+
+def test_one_and_five_dollar_views_do_not_double_count_same_liquidity():
+    events = [
+        _event("OPEN", 0, profit="0.04", capital="0.90", probe_field="probe_1usd"),
+        _event("CLOSE", 2000, profit="0.04", capital="0.90", last_seen_ms=1500, probe_field="probe_1usd"),
+        _event("OPEN", 0, profit="0.16", capital="4.50", probe_field="probe_5usd"),
+        _event("CLOSE", 2000, profit="0.16", capital="4.50", last_seen_ms=1500, probe_field="probe_5usd"),
+    ]
+    result = analyze_events(events)
+    assert result["probe_view_episodes"] == 2
+    assert result["unique_liquidity_episodes"] == 1
+    assert result["by_probe"]["probe_1usd"]["unique_episodes"] == 1
+    assert result["by_probe"]["probe_5usd"]["unique_episodes"] == 1
+    assert result["overall"]["unique_episodes"] == 1
+    assert Decimal(result["overall"]["first_seen_executable_shadow_profit"]) == Decimal("0.16")
+    assert Decimal(result["by_family"]["hits"]["first_seen_executable_shadow_profit"]) == Decimal("0.16")
+
+
+def test_cross_budget_dedup_prefers_higher_profit_not_larger_capital():
+    events = [
+        _event("OPEN", 0, profit="0.05", capital="0.95", probe_field="probe_1usd"),
+        _event("OPEN", 0, profit="0.04", capital="4.80", probe_field="probe_5usd"),
+    ]
+    result = analyze_events(events)
+    assert result["overall"]["unique_episodes"] == 1
+    assert Decimal(result["overall"]["first_seen_executable_shadow_profit"]) == Decimal("0.05")
 
 
 def test_invalid_or_non_read_only_events_fail_closed():
