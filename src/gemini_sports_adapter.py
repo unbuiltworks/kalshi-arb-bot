@@ -130,7 +130,18 @@ def _player_subject(contract: Mapping[str, Any]) -> str | None:
         if str(value or "").strip(): return _norm(value)
     label = str(contract.get("label") or contract.get("title") or "").strip()
     if not label: return None
+    # Documented/fixture shape: "Bryce Harper Over 1.5".
     cleaned = re.sub(r"\s+(?:over|under)\s+[-+]?\d+(?:\.\d+)?(?:\s+.*)?$", "", label, flags=re.I).strip()
+    # Current live shape: "Junior Caminero 1+ Hits", "X 2+ Strikeouts",
+    # etc.  The strike carries the threshold independently, so the trailing display
+    # proposition must not become part of the player identity.
+    cleaned = re.sub(
+        r"\s+\d+(?:\.\d+)?\+\s+(?:hits?|home\s+runs?|strikeouts?|pitching\s+strikeouts?|"
+        r"total\s+bases|rbis?|runs?)\s*$",
+        "",
+        cleaned,
+        flags=re.I,
+    ).strip()
     return _norm(cleaned) or None
 
 
