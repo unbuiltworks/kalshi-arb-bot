@@ -226,11 +226,28 @@ async def run_once(api_key: str) -> dict[str, Any]:
     return result
 
 
-async def supervise(api_key: str, interval_s: float) -> None:
+def _quota_remaining(result: Mapping[str, Any]) -> int | None:
+    raw = (result.get("quota") or {}).get("remaining") if isinstance(result.get("quota"), Mapping) else None
+    try:
+        return int(str(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+async def supervise(api_key: str, interval_s: float, quota_floor: int) -> None:
     while True:
         started = time.monotonic()
         try:
-            await run_once(api_key)
+            result = await run_once(api_key)
+            remaining = _quota_remaining(result)
+            if remaining is not None and remaining <= quota_floor:
+                logger.warning(
+                    "THE_ODDS_API_QUOTA_GUARD remaining=%s floor=%s polling_paused=true",
+                    remaining,
+                    quota_floor,
+                )
+                while True:
+                    await asyncio.sleep(3600.0)
         except Exception:
             logger.exception("THE_ODDS_API_MLB_SHADOW_ERROR")
         await asyncio.sleep(max(5.0, interval_s - (time.monotonic() - started)))
@@ -240,6 +257,7 @@ def main() -> None:
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)-8s %(message)s")
     parser = argparse.ArgumentParser()
     parser.add_argument("--interval-seconds", type=float, default=60.0)
+    parser.add_argument("--quota-floor", type=int, default=50)
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
     api_key = os.getenv("THE_ODDS_API_KEY", "").strip()
@@ -248,7 +266,7 @@ def main() -> None:
     if args.once:
         print(json.dumps(asyncio.run(run_once(api_key)), sort_keys=True, default=str))
     else:
-        asyncio.run(supervise(api_key, args.interval_seconds))
+        asyncio.run(supervise(api_key, args.interval_seconds, max(0, args.quota_floor)))
 
 
 if __name__ == "__main__":
