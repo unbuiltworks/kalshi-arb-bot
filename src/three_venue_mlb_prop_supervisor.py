@@ -11,7 +11,13 @@ from pathlib import Path
 import time
 from typing import Any
 
-from src.three_venue_mlb_prop_safe_scan import run_once
+from src.current_polymarket_mlb_props import cache_status, fetch_current_poly_mlb_props
+from src import three_venue_mlb_prop_safe_scan as scan
+
+# The league endpoint currently omits player props. Keep the strict scanner itself
+# unchanged and inject the cached, current Polymarket discovery surface here so the
+# persistent worker separates slow discovery from fast pricing.
+scan._fetch_poly_mlb = fetch_current_poly_mlb_props
 
 logger = logging.getLogger("kalshi_arb.three_venue_mlb_prop_supervisor")
 
@@ -30,7 +36,8 @@ async def supervise(interval_seconds: float, journal_path: str | None, once: boo
     while True:
         cycle += 1; started = time.monotonic()
         try:
-            result = await run_once()
+            result = await scan.run_once()
+            result["polymarket_discovery_cache"] = cache_status()
             envelope = {"ts_utc":datetime.now(timezone.utc).isoformat(),"cycle":cycle,"ok":True,"result":result}
         except Exception as exc:
             envelope = {"ts_utc":datetime.now(timezone.utc).isoformat(),"cycle":cycle,"ok":False,
