@@ -1,7 +1,11 @@
 """Explicit lifecycle accounting for read-only MLB prop paper opportunities.
 
 Turns snapshot rows into OPEN/MOVE/CLOSE episode events without treating repeated
-resting depth as fresh capacity.  No venue clients, credentials, or order entry.
+resting depth as fresh capacity. No venue clients, credentials, or order entry.
+
+Participation clearance is deliberately distinct from a full cross-venue settlement
+rules audit. This tracker records paper-shadow economics only and never promotes live
+readiness.
 """
 from __future__ import annotations
 
@@ -48,6 +52,13 @@ def fingerprint(row: dict[str, Any], probe_field: str) -> str:
 
 
 def _qualifying(row: dict[str, Any], probe_field: str, min_profit: Decimal) -> bool:
+    """Return True only for participation-cleared, explicitly read-only paper plans.
+
+    ``settlement_equivalent_now`` is a legacy field whose old name can be mistaken for
+    a complete venue-rule audit. Do not use it as the qualification source of truth.
+    The explicit participation gate is sufficient for paper-shadow measurement, while
+    full rules audit/live readiness remain independent downstream concepts.
+    """
     plan = row.get(probe_field)
     if not isinstance(plan, dict):
         return False
@@ -59,7 +70,11 @@ def _qualifying(row: dict[str, Any], probe_field: str, min_profit: Decimal) -> b
         and not row.get("fetch_error")
         and row.get("poly_slug")
         and row.get("kalshi_ticker")
-        and row.get("settlement_equivalent_now")
+        and row.get("participation_gate_satisfied") is True
+        and row.get("read_only") is True
+        and row.get("order_entry") is False
+        and row.get("execution_eligible") is False
+        and row.get("live_probe_ready") is False
     )
 
 
@@ -106,6 +121,12 @@ def advance_episodes(
                 "modeled_profit": str(plan.get("conservative_locked_profit")),
                 "quote_age_ms": row.get("quote_age_ms"),
                 "quote_skew_ms": row.get("quote_skew_ms"),
+                "participation_gate_satisfied": True,
+                "full_rules_audited": bool(row.get("full_rules_audited")),
+                "rules_status": row.get("rules_status") or "RULES_PENDING",
+                "fully_audited_shadow_ready": bool(row.get("fully_audited_shadow_ready")),
+                "live_probe_ready": False,
+                "paper_probe_only": True,
             }
             current[key] = state
             if old is None:
@@ -136,6 +157,8 @@ def advance_episodes(
             "duration_ms": max(0, last_seen_ms - opened_ms),
             "read_only": True,
             "order_entry": False,
+            "live_probe_ready": False,
+            "paper_probe_only": True,
         })
 
     return events, current
@@ -150,6 +173,8 @@ def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         "close": len(closed),
         "closed_duration_ms_total": sum(durations),
         "closed_duration_ms_max": max(durations, default=0),
+        "paper_probe_only": True,
+        "live_probe_ready": False,
         "read_only": True,
         "order_entry": False,
     }
