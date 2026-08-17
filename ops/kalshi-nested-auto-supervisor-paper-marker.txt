@@ -1,0 +1,3 @@
+kalshi-nested-auto-supervisor-paper
+branch=feature/kalshi-nested-auto-supervisor
+purpose=force Railway to build the pinned branch after initial stale-main snapshot
