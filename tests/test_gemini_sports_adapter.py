@@ -17,13 +17,14 @@ def _event(market_type, subject, metric, code, contracts):
     }
 
 
-def test_parse_team_event_ticker():
-    row = parse_team_event_ticker("GEMI-MLB-2608171840-MIA-PHI-M")
-    assert row is not None
-    assert row["league"] == "MLB"
-    assert row["away"] == "MIA"
-    assert row["home"] == "PHI"
-    assert row["start"].isoformat() == "2026-08-17T18:40:00+00:00"
+def test_parse_team_event_ticker_with_or_without_gemi_prefix():
+    for ticker in ("GEMI-MLB-2608171840-MIA-PHI-M", "MLB-2608171840-MIA-PHI-M"):
+        row = parse_team_event_ticker(ticker)
+        assert row is not None
+        assert row["league"] == "MLB"
+        assert row["away"] == "MIA"
+        assert row["home"] == "PHI"
+        assert row["start"].isoformat() == "2026-08-17T18:40:00+00:00"
 
 
 def test_moneyline_contracts_normalize_to_team_predicates():
@@ -51,6 +52,27 @@ def test_run_line_normalizes_display_handicap_to_margin_predicate():
     assert row.identity.market_family == "spread"
     assert row.identity.subject == "phi"
     assert row.identity.stat == "runs"
+    assert row.identity.comparator == "GT"
+    assert row.identity.line == Decimal("1.5")
+
+
+def test_live_shape_without_sports_market_uses_ticker_and_explicit_margin_label():
+    rows = normalize_event({
+        "ticker": "MLB-2605241740-STL-CIN-S",
+        "category": "Sports",
+        "contracts": [{
+            "ticker": "STL1",
+            "instrumentSymbol": "GEMI-MLB-2605241740-STL-CIN-S-STL1",
+            "label": "St. Louis wins by more than 1.5 runs",
+            "strike": {"type": "spread", "value": "1.5"},
+            "prices": {"buy": {"yes": "0.47", "no": "0.64"}},
+        }],
+    })
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.identity.event.league == "mlb"
+    assert row.identity.subject == "stl"
+    assert row.identity.market_family == "spread"
     assert row.identity.comparator == "GT"
     assert row.identity.line == Decimal("1.5")
 
@@ -92,8 +114,7 @@ def test_player_prop_maps_metric_and_player_but_remains_rule_unverified():
     assert not row.identity.fully_rule_audited
 
 
-def test_missing_sports_market_or_strike_fails_closed():
-    assert normalize_event({"ticker": "GEMI-MLB-2608171840-MIA-PHI-T", "contracts": []}) == []
+def test_missing_required_contract_strike_fails_closed_for_total():
     rows = normalize_event(_event("total", "contest", "runs", "T", [
         {"instrumentSymbol": "GEMI-X", "label": "Over 8.5"}
     ]))
