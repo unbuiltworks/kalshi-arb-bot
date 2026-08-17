@@ -4,7 +4,14 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from src.kalshi_nested_auto_once import AttemptLatch, candidate_to_spec, strike_from_ticker
+from src.kalshi_nested_auto_once import (
+    AttemptLatch,
+    candidate_to_spec,
+    live_session_settings,
+    prepare_live_arm_file,
+    session_client_root,
+    strike_from_ticker,
+)
 from src.kalshi_nested_rolling_shadow import Candidate
 
 D = Decimal
@@ -67,6 +74,43 @@ def test_attempt_latch_claims_exactly_once():
 
 def test_strike_parser():
     assert strike_from_ticker("KXSOLD-26AUG1620-T62.9999") == D("62.9999")
+
+
+def test_session_client_root_is_stable_but_does_not_expose_raw_session():
+    a = session_client_root("session-2026-08-16-alpha")
+    b = session_client_root("session-2026-08-16-alpha")
+    c = session_client_root("session-2026-08-16-beta")
+    assert a == b
+    assert a != c
+    assert a.startswith("nested-auto-")
+    assert "session-2026" not in a
+
+
+def test_live_session_settings_fail_closed_without_all_env(monkeypatch):
+    monkeypatch.delenv("ENABLE_KALSHI_NESTED_LIVE_PROBES", raising=False)
+    monkeypatch.delenv("KALSHI_NESTED_AUTO_SESSION_ID", raising=False)
+    monkeypatch.delenv("KALSHI_NESTED_AUTO_ARM_TOKEN", raising=False)
+    with pytest.raises(RuntimeError, match="environment gate"):
+        live_session_settings()
+
+
+def test_live_session_settings_require_long_arm(monkeypatch):
+    monkeypatch.setenv("ENABLE_KALSHI_NESTED_LIVE_PROBES", "YES")
+    monkeypatch.setenv("KALSHI_NESTED_AUTO_SESSION_ID", "session-123")
+    monkeypatch.setenv("KALSHI_NESTED_AUTO_ARM_TOKEN", "short")
+    with pytest.raises(RuntimeError, match="arm token"):
+        live_session_settings()
+
+
+def test_prepare_live_arm_file_sets_generic_one_use_path(monkeypatch):
+    root = session_client_root("session-file-test")
+    path = prepare_live_arm_file(root, "0123456789abcdef0123456789abcdef")
+    try:
+        assert path.is_file()
+        assert monkeypatch is not None
+        assert path.read_text(encoding="utf-8").startswith("0123456789abcdef")
+    finally:
+        path.unlink(missing_ok=True)
 
 
 def test_candidate_to_spec_accepts_yes_lower_maker_no_higher_seed():
