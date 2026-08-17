@@ -25,7 +25,8 @@ jobs:
             tests/test_gemini_sports_adapter.py \
             tests/test_universal_three_venue_sports.py \
             tests/test_three_venue_pricing_core.py \
-            tests/test_polymarket_scope_guard.py 2>&1 | tee three-venue-pytest.txt
+            tests/test_polymarket_scope_guard.py \
+            tests/test_kalshi_mlb_time_guard.py 2>&1 | tee three-venue-pytest.txt
           code=${PIPESTATUS[0]}
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
@@ -38,17 +39,6 @@ jobs:
           text='\n'.join(Path('three-venue-pytest.txt').read_text(errors='replace').splitlines()[-120:])
           safe=text.replace('%','%25').replace('\r','%0D').replace('\n','%0A')
           print(f'::error title=three-venue pytest failures::{safe}')
-          PY
-      - name: Inspect Kalshi MLB schedule timestamps
-        if: steps.pytest.outputs.exit_code == '0'
-        shell: bash
-        run: |
-          PYTHONPATH=. python -m src.kalshi_mlb_time_probe > kalshi-time.json 2> kalshi-time.err || true
-          python - <<'PY'
-          from pathlib import Path
-          text=Path('kalshi-time.json').read_text(errors='replace').strip() or Path('kalshi-time.err').read_text(errors='replace').strip()
-          safe=text[-14000:].replace('%','%25').replace('\r','%0D').replace('\n','%0A')
-          print(f'::notice title=Kalshi MLB timestamp shape::{safe}')
           PY
       - name: Run scope-safe live public scan
         if: steps.pytest.outputs.exit_code == '0'
@@ -63,10 +53,10 @@ jobs:
           err=Path('three-venue-safe.err').read_text(errors='replace').strip()
           try:
               body=json.loads(out.splitlines()[-1])
-              keys=('status','raw_events','normalized_sides','counterpart_clusters','three_venue_clusters','clusters_by_family','clusters_by_venue_set','normal_event_counterpart_keys','priced_quotes','priced_quotes_by_venue','one_contract_positive_locks','top_one_contract_locks','fetch_error_count','scope_gate','rule_gate')
+              keys=('status','raw_events','normalized_sides','counterpart_clusters','three_venue_clusters','clusters_by_family','clusters_by_venue_set','normal_event_counterpart_keys','priced_quotes','priced_quotes_by_venue','one_contract_positive_locks','top_one_contract_locks','fetch_error_count','scope_gate','time_gate','rule_gate')
               text=json.dumps({k:body.get(k) for k in keys},separators=(',',':'))
           except Exception:
-              text=(out or ('NO_STDOUT '+err))[-10000:]
+              text=(out or ('NO_STDOUT '+err))[-12000:]
           safe=text.replace('%','%25').replace('\r','%0D').replace('\n','%0A')
           print(f'::notice title=scope-safe live three-venue MLB scan::{safe}')
           PY
@@ -78,8 +68,6 @@ jobs:
           name: three-venue-router-diagnostics
           path: |
             three-venue-pytest.txt
-            kalshi-time.json
-            kalshi-time.err
             three-venue-safe.json
             three-venue-safe.err
           if-no-files-found: warn
