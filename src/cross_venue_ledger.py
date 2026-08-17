@@ -175,9 +175,10 @@ def reconcile_events(*event_sets: Iterable[LedgerEvent]) -> list[LedgerEvent]:
 def summarize_ledger(events: Iterable[LedgerEvent]) -> dict[str, object]:
     """Report realized/unrealized/locked accounting and unmatched-leg exposure.
 
-    A multi-venue trade group is realized only after every venue that has a fill in
-    that group has a settlement event. Partial venue settlement remains pending so a
-    single early venue payout can never make a cross-venue paper probe look realized.
+    A multi-venue trade group is realized only after every exact filled market leg
+    (venue + market_id) has a matching settlement event. Partial settlement remains
+    pending so a settlement for another market on the same venue cannot accidentally
+    realize a cross-venue paper probe.
     """
     rows = list(events)
     groups: dict[str, dict[str, object]] = {}
@@ -196,10 +197,13 @@ def summarize_ledger(events: Iterable[LedgerEvent]) -> dict[str, object]:
             "venues": set(),
             "fill_venues": set(),
             "settled_venues": set(),
+            "fill_legs": set(),
+            "settled_legs": set(),
         })
         group["venues"].add(event.venue)
         if event.event_type == "fill":
             group["fill_venues"].add(event.venue)
+            group["fill_legs"].add((event.venue, event.market_id))
             cost = event.quantity * event.price
             group["cost"] += cost
             if event.side == "YES":
@@ -214,6 +218,7 @@ def summarize_ledger(events: Iterable[LedgerEvent]) -> dict[str, object]:
             by_category[event.category] = by_category.get(event.category, D("0")) - event.fee
         elif event.event_type == "settlement":
             group["settled_venues"].add(event.venue)
+            group["settled_legs"].add((event.venue, event.market_id))
             group["payout"] += event.payout
             by_venue[event.venue] = by_venue.get(event.venue, D("0")) + event.payout
             by_category[event.category] = by_category.get(event.category, D("0")) + event.payout
@@ -232,8 +237,11 @@ def summarize_ledger(events: Iterable[LedgerEvent]) -> dict[str, object]:
         no_qty = D(str(group["no_qty"]))
         fill_venues = set(group["fill_venues"])
         settled_venues = set(group["settled_venues"])
-        fully_settled = bool(fill_venues) and fill_venues.issubset(settled_venues)
-        partially_settled = bool(settled_venues) and not fully_settled
+        fill_legs = set(group["fill_legs"])
+        settled_legs = set(group["settled_legs"])
+        fully_settled = bool(fill_legs) and fill_legs.issubset(settled_legs)
+        matched_settled_legs = fill_legs.intersection(settled_legs)
+        partially_settled = bool(matched_settled_legs) and not fully_settled
         pnl = payout - cost - fees if fully_settled else D("0")
         if fully_settled:
             realized += pnl
@@ -253,6 +261,8 @@ def summarize_ledger(events: Iterable[LedgerEvent]) -> dict[str, object]:
             "venues": sorted(group["venues"]),
             "fill_venues": sorted(fill_venues),
             "settled_venues": sorted(settled_venues),
+            "fill_legs": [f"{venue}:{market_id}" for venue, market_id in sorted(fill_legs)],
+            "settled_legs": [f"{venue}:{market_id}" for venue, market_id in sorted(settled_legs)],
             "cost": str(cost),
             "fees": str(fees),
             "payout": str(payout),
