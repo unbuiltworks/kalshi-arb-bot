@@ -2,7 +2,10 @@
 
 Consumes OPEN/MOVE/CLOSE events from ``mlb_prop_episode_tracker``. Repeated resting
 quotes are not events, so they cannot be double-counted as fresh liquidity here.
-This module is research-only and contains no venue clients or order-entry path.
+The $1 and $5 probe views are alternative sizing views of the same underlying
+liquidity, not independent opportunities; portfolio totals therefore count at most
+one probe plan per underlying OPEN episode. This module is research-only and
+contains no venue clients or order-entry path.
 """
 from __future__ import annotations
 
@@ -30,6 +33,14 @@ def _episode_id(event: dict[str, Any]) -> str:
     )
 
 
+def _liquidity_episode_id(row: dict[str, Any]) -> str:
+    """Identity shared by alternative $1/$5 sizing views of one OPEN episode."""
+    return "|".join(
+        str(row.get(k) or "")
+        for k in ("settlement_key", "direction", "opened_ms")
+    )
+
+
 def _valid_event(event: dict[str, Any]) -> bool:
     return bool(
         event.get("event") in {"OPEN", "MOVE", "CLOSE"}
@@ -42,14 +53,43 @@ def _valid_event(event: dict[str, Any]) -> bool:
     )
 
 
+def _dedupe_probe_views(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Choose one sizing view per underlying liquidity episode.
+
+    A <=$1 plan and <=$5 plan generated from the same books consume the same resting
+    opportunity. Summing them would count the smaller plan twice. For portfolio/capacity
+    totals, retain the view with the greater first-seen modeled profit; ties prefer the
+    lower-capital view. Per-probe summaries remain available separately.
+    """
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[_liquidity_episode_id(row)].append(row)
+
+    selected: list[dict[str, Any]] = []
+    for candidates in grouped.values():
+        selected.append(
+            max(
+                candidates,
+                key=lambda r: (
+                    r["first_seen_profit"],
+                    -r["first_seen_capital"],
+                    1 if r["probe_field"] == "probe_5usd" else 0,
+                ),
+            )
+        )
+    return selected
+
+
 def analyze_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
     """Return de-duplicated theoretical vs first-seen executable-shadow economics.
 
-    ``first_seen_profit`` counts each unique OPEN once: what a simultaneous synthetic
-    paper fill would have locked at the first observed qualifying quote. ``peak_profit``
-    is an optimistic within-episode ceiling and is reported separately. Capital-hours
-    integrate the active plan across MOVE segments through the last positive observation.
-    No repeated unchanged resting quote can add another unit of profit or capacity.
+    ``first_seen_profit`` counts each unique underlying OPEN once in portfolio totals:
+    what a simultaneous synthetic paper fill would have locked at the first observed
+    qualifying quote. ``peak_profit`` is an optimistic within-episode ceiling and is
+    reported separately. Capital-hours integrate the active plan across MOVE segments
+    through the last positive observation. No repeated unchanged resting quote, and no
+    alternate $1/$5 sizing view of the same quote, can add another unit of portfolio
+    profit or capacity.
     """
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     invalid = 0
@@ -104,6 +144,7 @@ def analyze_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
                 "probe_field": opened.get("probe_field"),
                 "family": opened.get("family"),
                 "direction": opened.get("direction"),
+                "opened_ms": int(opened["opened_ms"]),
                 "closed": close is not None,
                 "duration_ms": end_ms - start_ms,
                 "first_seen_profit": first_profit,
@@ -134,11 +175,13 @@ def analyze_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
     for probe_field in ("probe_1usd", "probe_5usd"):
         by_probe[probe_field] = aggregate([r for r in episode_rows if r["probe_field"] == probe_field])
 
-    by_family: dict[str, dict[str, Any]] = {}
-    for family in sorted({str(r.get("family") or "unknown") for r in episode_rows}):
-        by_family[family] = aggregate([r for r in episode_rows if str(r.get("family") or "unknown") == family])
+    portfolio_rows = _dedupe_probe_views(episode_rows)
 
-    overall = aggregate(episode_rows)
+    by_family: dict[str, dict[str, Any]] = {}
+    for family in sorted({str(r.get("family") or "unknown") for r in portfolio_rows}):
+        by_family[family] = aggregate([r for r in portfolio_rows if str(r.get("family") or "unknown") == family])
+
+    overall = aggregate(portfolio_rows)
     span_hours = D("0")
     if global_start is not None and global_end is not None and global_end > global_start:
         span_hours = D(global_end - global_start) / D("3600000")
@@ -149,11 +192,17 @@ def analyze_events(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "overall": overall,
         "by_probe": by_probe,
         "by_family": by_family,
+        "probe_view_episodes": len(episode_rows),
+        "unique_liquidity_episodes": len(portfolio_rows),
+        "portfolio_dedup_rule": (
+            "<= $1 and <= $5 plans are alternative sizing views of the same resting liquidity; "
+            "portfolio totals keep only the higher first-seen-profit plan per settlement_key/direction/opened_ms."
+        ),
         "observation_span_hours": str(span_hours),
         "capacity_projection_usd_per_day": str(projected) if projected is not None else None,
         "projection_warning": (
-            "Capacity normalization only: first-seen simultaneous synthetic fills divided by observed wall-clock span. "
-            "It is not a forecast and excludes settlement-rule, fill, latency, and basis-risk uncertainty."
+            "Capacity normalization only: de-duplicated first-seen simultaneous synthetic fills divided by observed "
+            "wall-clock span. It is not a forecast and excludes settlement-rule, fill, latency, and basis-risk uncertainty."
         ),
         "invalid_events": invalid,
         "read_only": True,
