@@ -60,6 +60,25 @@ def test_partial_outcomes_fail_closed():
     assert audits == []
 
 
+def test_partial_outcome_row_does_not_suppress_later_complete_row():
+    settlements, audits = settlement_events(_fills(), [
+        {
+            "trade_group_id": "g1",
+            "polymarket_us_outcome": "YES",
+        },
+        {
+            "trade_group_id": "g1",
+            "polymarket_us_outcome": "YES",
+            "kalshi_outcome": "YES",
+            "settled_ts_ms": 200,
+        },
+    ])
+    assert len(settlements) == 2
+    assert len(audits) == 1
+    assert audits[0]["trade_group_id"] == "g1"
+    assert audits[0]["outcomes_agree"] is True
+
+
 def test_existing_exact_leg_settlement_is_idempotent():
     fills = _fills()
     existing = make_event(
