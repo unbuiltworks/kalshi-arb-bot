@@ -13,6 +13,18 @@ on:
       - 'Dockerfile'
       - 'requirements.txt'
       - '.github/workflows/sports-kgp-micro-ci.yml'
+  pull_request:
+    branches:
+      - feature/three-venue-sports-router
+    paths:
+      - 'src/sports_kgp_*.py'
+      - 'src/gemini_prediction_depth.py'
+      - 'config/sports_kgp_execution_approvals.json'
+      - 'tests/test_sports_kgp_*.py'
+      - 'tests/test_gemini_prediction_depth.py'
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - '.github/workflows/sports-kgp-micro-ci.yml'
 
 jobs:
   test:
