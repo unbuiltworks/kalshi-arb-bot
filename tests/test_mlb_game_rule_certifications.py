@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from src.mlb_game_rule_certifications import (
+    AUDIT_DATE,
     CertificationStatus,
     PROFILES,
     SUPPORTED_FAMILIES,
@@ -45,6 +46,7 @@ def _lock(
 
 def test_full_matrix_covers_three_families_and_direct_pairs():
     matrix = audit_matrix()
+    assert matrix["audit_date"] == AUDIT_DATE
     assert tuple(matrix["families"]) == SUPPORTED_FAMILIES
     assert matrix["total_pairs"] == 27
     assert matrix["certified_pairs"] == 0
