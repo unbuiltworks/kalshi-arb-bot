@@ -13,7 +13,8 @@ COPY tests/ tests/
 # Branch gate: canonical identity, structured Gemini normalization, exact three-venue
 # matching, hard Polymarket scope guards, Kalshi nested-book pricing, discrete
 # player-prop normalization, sportsbook identity alignment, the event-driven
-# game-line hot layer, and read-only Pushover sports-alert qualification/dedupe.
+# game-line hot layer, read-only Pushover qualification/dedupe, and fail-closed
+# MLB settlement-rule certification.
 RUN pytest -q \
     tests/test_universal_sports_identity.py \
     tests/test_gemini_sports_adapter.py \
@@ -24,6 +25,7 @@ RUN pytest -q \
     tests/test_three_venue_mlb_hot.py \
     tests/test_the_odds_api_mlb_shadow_identity.py \
     tests/test_sports_pushover_alerts.py \
+    tests/test_mlb_game_rule_certifications.py \
  && python -m py_compile \
     src/eventing_books.py \
     src/three_venue_mlb_snapshot_pricing.py \
@@ -33,6 +35,7 @@ RUN pytest -q \
     src/three_venue_mlb_prop_supervisor.py \
     src/three_venue_mlb_hot.py \
     src/the_odds_api_mlb_shadow.py \
+    src/mlb_game_rule_certifications.py \
     src/sports_pushover_alerts.py \
     src/sports_pushover_odds_api_mlb.py
 
