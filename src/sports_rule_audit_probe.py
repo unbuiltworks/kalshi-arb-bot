@@ -1,7 +1,8 @@
-"""Read-only targeted rule audit for one Gemini/Polymarket/Kalshi sports counterpart.
+"""Read-only targeted rule audit for exact prediction-market sports counterparts.
 
-Fetches public venue metadata and prints only the exact matching event/market
-objects needed for settlement-rule review. No authentication or order-entry code.
+Fetches public venue metadata and prints the matching event/market objects needed
+for settlement-rule review. Gemini is optional so a genuine Kalshi/Polymarket
+pair can be audited without inventing a third leg. No auth or order entry.
 """
 from __future__ import annotations
 
@@ -28,7 +29,6 @@ def _contains(obj: Any, needle: str) -> bool:
 
 
 def _find_exact_node(obj: Any, needle: str) -> Any | None:
-    """Return the smallest mapping that contains an exact string field match."""
     if isinstance(obj, Mapping):
         for value in obj.values():
             if isinstance(value, str) and value == needle:
@@ -59,25 +59,30 @@ def _clip(obj: Any, limit: int = 60000) -> str:
 
 async def run(gemini_symbol: str, poly_slug: str, kalshi_ticker: str) -> None:
     async with httpx.AsyncClient(timeout=30.0) as http:
-        gemini_events, poly_events, k_response = await asyncio.gather(
-            fetch_gemini_mlb(http),
-            fetch_polymarket_mlb(http),
-            http.get(f"{KALSHI}/markets/{kalshi_ticker}"),
-        )
+        poly_task = fetch_polymarket_mlb(http)
+        kalshi_task = http.get(f"{KALSHI}/markets/{kalshi_ticker}")
+        if gemini_symbol:
+            gemini_events, poly_events, k_response = await asyncio.gather(
+                fetch_gemini_mlb(http), poly_task, kalshi_task,
+            )
+        else:
+            poly_events, k_response = await asyncio.gather(poly_task, kalshi_task)
+            gemini_events = []
         k_response.raise_for_status()
         kalshi_body = k_response.json()
 
-    g_parent = _find_parent(gemini_events, gemini_symbol)
+    g_parent = _find_parent(gemini_events, gemini_symbol) if gemini_symbol else None
     p_parent = _find_parent(poly_events, poly_slug)
-    g_node = _find_exact_node(g_parent, gemini_symbol) if g_parent else None
+    g_node = _find_exact_node(g_parent, gemini_symbol) if g_parent and gemini_symbol else None
     p_node = _find_exact_node(p_parent, poly_slug) if p_parent else None
     k_market = kalshi_body.get("market") if isinstance(kalshi_body, Mapping) else kalshi_body
 
-    logger.info("SPORTS_RULE_AUDIT_GEMINI_NODE %s", _clip(g_node))
+    if gemini_symbol:
+        logger.info("SPORTS_RULE_AUDIT_GEMINI_NODE %s", _clip(g_node))
     logger.info("SPORTS_RULE_AUDIT_POLY_NODE %s", _clip(p_node))
     logger.info("SPORTS_RULE_AUDIT_KALSHI_MARKET %s", _clip(k_market))
     logger.info("SPORTS_RULE_AUDIT_PARENT_SUMMARY %s", json.dumps({
-        "gemini_symbol": gemini_symbol,
+        "gemini_symbol": gemini_symbol or None,
         "gemini_event_found": g_parent is not None,
         "gemini_node_found": g_node is not None,
         "gemini_parent": g_parent,
@@ -94,7 +99,7 @@ async def run(gemini_symbol: str, poly_slug: str, kalshi_ticker: str) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--gemini-symbol", required=True)
+    p.add_argument("--gemini-symbol", default="")
     p.add_argument("--poly-slug", required=True)
     p.add_argument("--kalshi-ticker", required=True)
     args = p.parse_args()
