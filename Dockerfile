@@ -50,7 +50,6 @@ RUN pytest -q \
     src/sports_pushover_alerts.py \
     src/sports_pushover_odds_api_mlb.py
 
-# Default remains the public/read-only REST scanner. Railway overrides this per
-# isolated service for prop and WebSocket hot shards.
 ENV BOT_MODE=paper
-CMD ["python", "-m", "src.three_venue_mlb_supervisor", "--interval-seconds", "5", "--journal-path", "/data/three-venue-mlb.jsonl"]
+# Validation-only branch default: one credential-free prop cycle, then exit.
+CMD ["python", "-m", "src.three_venue_mlb_prop_supervisor", "--interval-seconds", "10", "--once"]
