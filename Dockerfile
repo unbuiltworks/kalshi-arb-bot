@@ -14,8 +14,8 @@ COPY tests/ tests/
 # matching, hard Polymarket scope guards, Kalshi nested-book pricing, discrete
 # player-prop normalization, sportsbook identity alignment, the event-driven
 # game-line hot layer, read-only Pushover qualification/dedupe, live MLB
-# participation proof, fail-closed game/prop/team-total rule certification, and
-# the fully-certified-only K/G/P micro execution planning + immediate transport.
+# participation proof, fail-closed rule certification, and the fully-certified-only
+# K/G/P q=1 micro execution guard/transport/service.
 RUN pytest -q \
     tests/test_universal_sports_identity.py \
     tests/test_gemini_sports_adapter.py \
@@ -34,6 +34,7 @@ RUN pytest -q \
     tests/test_mlb_team_total_rule_certifications.py \
     tests/test_mlb_live_participation.py \
     tests/test_sports_kgp_micro_guard.py \
+    tests/test_sports_kgp_gemini_depth_gate.py \
     tests/test_sports_kgp_micro_transport.py \
  && python -m py_compile \
     src/eventing_books.py \
@@ -52,7 +53,8 @@ RUN pytest -q \
     src/sports_pushover_alerts.py \
     src/sports_pushover_odds_api_mlb.py \
     src/sports_kgp_micro_guard.py \
-    src/sports_kgp_micro_transport.py
+    src/sports_kgp_micro_transport.py \
+    src/sports_kgp_micro_service.py
 
 # Default remains the public/read-only REST scanner. Railway overrides this per
 # isolated service for prop and WebSocket hot shards.
