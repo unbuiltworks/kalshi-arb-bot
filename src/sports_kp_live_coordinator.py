@@ -1,9 +1,10 @@
 """Final live coordinator for one bounded Kalshi/Polymarket sports attempt.
 
-The transport performs account/market preflight first.  Only after that work is
+The transport performs account/market preflight first. Only after that work is
 complete does the coordinator ask the caller for a newly rebuilt plan from the
-current hot books.  The single-use ARM token is consumed only if that fresh plan
-still passes all immutable gates.
+current hot books. The single-use ARM token is consumed only if that fresh plan
+still passes all immutable gates. Default venue clients are the hardened
+preflight/recovery implementations; tests may inject compatible fakes.
 """
 from __future__ import annotations
 
@@ -22,6 +23,10 @@ from src.sports_kp_execution import (
     KalshiExecutor,
     PolymarketExecutor,
     VenueResult,
+)
+from src.sports_kp_venue_hardening import (
+    HardenedKalshiExecutor,
+    HardenedPolymarketExecutor,
 )
 
 FreshPlanProvider = Callable[[], Awaitable[KPExecutionPlan]]
@@ -52,8 +57,8 @@ async def execute_after_fresh_revalidation(
     if not arm_token.is_file():
         raise PermissionError("single-use sports ARM token is absent")
 
-    poly = poly or PolymarketExecutor()
-    kalshi = kalshi or KalshiExecutor()
+    poly = poly or HardenedPolymarketExecutor()
+    kalshi = kalshi or HardenedKalshiExecutor()
     try:
         # Slow validation happens before the final market snapshot.
         await asyncio.gather(poly.preflight(initial_plan.poly), kalshi.preflight(initial_plan.kalshi))
