@@ -12,6 +12,12 @@ Persistent active-opportunity state prevents a polling loop from treating the
 same unchanged resting depth as fresh executable capacity on every run. A new
 synthetic fill group is emitted only on OPEN, MOVE, or a later re-OPEN after the
 opportunity disappeared from an intervening snapshot.
+
+The <=$1 and <=$5 plans are alternative sizing views of the same displayed book,
+not independent liquidity. The runner therefore emits at most one synthetic fill
+group per strict settlement identity per snapshot, choosing the qualifying plan
+with the highest conservative modeled profit. Both budgets remain available in
+the snapshot for scoring/reporting.
 """
 from __future__ import annotations
 
@@ -44,7 +50,9 @@ def _group_id(row: dict[str, Any], probe_field: str, ts_ms: int) -> str:
 
 
 def _state_key(row: dict[str, Any], probe_field: str) -> str:
-    return f"{_settlement_key(row)}|{probe_field}"
+    # Budget tiers are alternative views of one book. Keep one active episode
+    # identity so switching between <=$1 and <=$5 is a MOVE, not a second OPEN.
+    return _settlement_key(row)
 
 
 def _opportunity_fingerprint(row: dict[str, Any], probe_field: str) -> str:
@@ -82,6 +90,26 @@ def _write_active_state(path: Path, state: dict[str, str]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(state, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
     tmp.replace(path)
+
+
+def _best_probe_field(row: dict[str, Any], min_profit: Decimal) -> str | None:
+    """Pick one qualifying budget tier for one displayed book snapshot.
+
+    A larger cap does not represent additional liquidity. Prefer the plan with
+    greater conservative profit; on an exact tie prefer the smaller capital cap.
+    """
+    choices: list[tuple[Decimal, Decimal, str]] = []
+    for probe_field, cap in PROBE_FIELDS:
+        plan = row.get(probe_field)
+        if not isinstance(plan, dict):
+            continue
+        profit = D(str(plan.get("conservative_locked_profit") or "0"))
+        if profit < min_profit:
+            continue
+        choices.append((profit, -cap, probe_field))
+    if not choices:
+        return None
+    return max(choices)[2]
 
 
 def paper_probe_events(
@@ -191,29 +219,35 @@ def build_paper_probes_with_state(
     audits: list[dict[str, Any]] = []
     current_state: dict[str, str] = {}
     suppressed_resting_duplicates = 0
-    seen: set[tuple[str, str]] = set()
+    seen_settlements: set[str] = set()
     source = snapshot.get("paper_probe_candidates") or []
-    for probe_field, _cap in PROBE_FIELDS:
-        for row in source:
-            identity = (_settlement_key(row), probe_field)
-            if identity in seen:
-                continue
-            seen.add(identity)
-            built = paper_probe_events(row, probe_field=probe_field, min_profit=min_profit, ts_ms=ts_ms)
-            if built is None:
-                continue
-            state_key = _state_key(row, probe_field)
-            fingerprint = _opportunity_fingerprint(row, probe_field)
-            current_state[state_key] = fingerprint
-            prior_fingerprint = prior_state.get(state_key)
-            if prior_fingerprint == fingerprint:
-                suppressed_resting_duplicates += 1
-                continue
-            new_events, audit = built
-            audit["opportunity_fingerprint"] = fingerprint
-            audit["episode_event"] = "OPEN" if prior_fingerprint is None else "MOVE"
-            events.extend(new_events)
-            audits.append(audit)
+    for row in source:
+        settlement_key = _settlement_key(row)
+        if settlement_key in seen_settlements:
+            continue
+        seen_settlements.add(settlement_key)
+
+        probe_field = _best_probe_field(row, min_profit)
+        if probe_field is None:
+            continue
+        built = paper_probe_events(row, probe_field=probe_field, min_profit=min_profit, ts_ms=ts_ms)
+        if built is None:
+            continue
+        state_key = _state_key(row, probe_field)
+        fingerprint = _opportunity_fingerprint(row, probe_field)
+        current_state[state_key] = fingerprint
+        prior_fingerprint = prior_state.get(state_key)
+        if prior_fingerprint == fingerprint:
+            suppressed_resting_duplicates += 1
+            continue
+        new_events, audit = built
+        audit["opportunity_fingerprint"] = fingerprint
+        audit["episode_event"] = "OPEN" if prior_fingerprint is None else "MOVE"
+        audit["alternative_budget_tiers_not_filled"] = [
+            field for field, _cap in PROBE_FIELDS if field != probe_field and isinstance(row.get(field), dict)
+        ]
+        events.extend(new_events)
+        audits.append(audit)
     return events, audits, current_state, suppressed_resting_duplicates
 
 
@@ -241,6 +275,7 @@ async def run(ledger_path: Path, audit_path: Path, state_path: Path, min_profit:
         "synchronized_books_only": True,
         "active_paper_opportunities": len(current_state),
         "suppressed_resting_duplicates": suppressed,
+        "budget_semantics": "ALTERNATIVE_SIZING_TIERS_ONE_SYNTHETIC_FILL_PER_SETTLEMENT_IDENTITY",
         "episode_semantics": "OPEN_MOVE_REOPEN_NO_RESTING_DEPTH_DOUBLE_COUNT",
         "rules_status": "RULES_PENDING",
         "full_rules_audited": False,
