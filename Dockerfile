@@ -15,7 +15,7 @@ COPY tests/ tests/
 # player-prop normalization, sportsbook identity alignment, the event-driven
 # game-line hot layer, read-only Pushover qualification/dedupe, live MLB
 # participation proof, and fail-closed game/prop/team-total rule certification.
-# This gate validates certified prop alerts and the isolated NOT-GUARANTEED rule-risk tier.
+# This gate validates certified prop alerts and the NOT-GUARANTEED rule-risk tier.
 RUN pytest -q \
     tests/test_universal_sports_identity.py \
     tests/test_gemini_sports_adapter.py \
@@ -50,6 +50,7 @@ RUN pytest -q \
     src/sports_pushover_alerts.py \
     src/sports_pushover_odds_api_mlb.py
 
+# Default remains the public/read-only REST scanner. Railway overrides this per
+# isolated service for prop and WebSocket hot shards.
 ENV BOT_MODE=paper
-# Validation-only branch default: run exactly one credential-free prop cycle and exit.
-CMD ["python", "-m", "src.three_venue_mlb_prop_supervisor", "--interval-seconds", "10", "--once"]
+CMD ["python", "-m", "src.three_venue_mlb_supervisor", "--interval-seconds", "5", "--journal-path", "/data/three-venue-mlb.jsonl"]
