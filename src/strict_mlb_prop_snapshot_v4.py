@@ -21,6 +21,11 @@ from src import strict_mlb_prop_snapshot_v3 as v3
 logger = logging.getLogger("kalshi_arb.strict_mlb_prop_snapshot_v4")
 base._fetch_poly_mlb = _fetch_poly_mlb_search
 
+# Receive-time skew is not exchange quote age, but it is the strongest timing guard
+# available from these public REST book endpoints.  A wider gap can manufacture a
+# transient cross-venue lock when one venue moves between requests, so fail closed.
+MAX_BOOK_RECEIVE_SKEW_MS = 500
+
 
 def best_capped_plan(
     poly: base.TopBook,
@@ -68,6 +73,19 @@ def best_capped_plan(
     return best
 
 
+async def _fetch_optional_timed(
+    http: httpx.AsyncClient,
+    url: str,
+    **kwargs: Any,
+) -> tuple[dict[str, Any] | None, str | None, int, int]:
+    """Fetch through v3's rate-safe helper and record local receive timing."""
+    started_ns = time.monotonic_ns()
+    body, error = await v3._fetch_optional(http, url, **kwargs)
+    received_ms = time.time_ns() // 1_000_000
+    latency_ms = max(0, (time.monotonic_ns() - started_ns) // 1_000_000)
+    return body, error, received_ms, latency_ms
+
+
 def _empty(candidate: base.StrictCandidate, error: str | None) -> dict[str, Any]:
     assessment = base.assess_rule_equivalence(candidate.family)
     return {
@@ -82,6 +100,8 @@ def _empty(candidate: base.StrictCandidate, error: str | None) -> dict[str, Any]
         "required_participation_gate": assessment.required_gate,
         "settlement_equivalent_now": False,
         "book_comparable": False,
+        "synchronized_book_pair": False,
+        "quote_receive_skew_ms": None,
         "positive_conservative_plan": None,
         "probe_1usd": None,
         "probe_5usd": None,
@@ -110,18 +130,37 @@ async def run_once() -> dict[str, Any]:
         semaphore = asyncio.Semaphore(v3.PRICE_CONCURRENCY)
 
         async def price(candidate: base.StrictCandidate) -> dict[str, Any]:
+            # Fetch both venue books concurrently. Sequential REST reads can create a
+            # false cross-venue lock when one book moves between requests.
             async with semaphore:
-                poly_body, poly_error = await v3._fetch_optional(
-                    http, f"{base.POLY}/v1/markets/{candidate.poly_slug}/book"
+                poly_result, kalshi_result = await asyncio.gather(
+                    _fetch_optional_timed(
+                        http, f"{base.POLY}/v1/markets/{candidate.poly_slug}/book"
+                    ),
+                    _fetch_optional_timed(
+                        http,
+                        f"{base.KALSHI}/markets/{candidate.kalshi_ticker}/orderbook",
+                        params={"depth": 1},
+                    ),
                 )
-                kalshi_body, kalshi_error = await v3._fetch_optional(
-                    http,
-                    f"{base.KALSHI}/markets/{candidate.kalshi_ticker}/orderbook",
-                    params={"depth": 1},
-                )
+            poly_body, poly_error, poly_received_ms, poly_latency_ms = poly_result
+            kalshi_body, kalshi_error, kalshi_received_ms, kalshi_latency_ms = kalshi_result
+            receive_skew_ms = abs(poly_received_ms - kalshi_received_ms)
+            synchronized = receive_skew_ms <= MAX_BOOK_RECEIVE_SKEW_MS
+
             if poly_body is None or kalshi_body is None:
                 error = ";".join(x for x in (poly_error, kalshi_error) if x) or "book_missing"
-                return _empty(candidate, error)
+                row = _empty(candidate, error)
+                row.update(
+                    {
+                        "poly_received_ms": poly_received_ms,
+                        "kalshi_received_ms": kalshi_received_ms,
+                        "poly_fetch_latency_ms": poly_latency_ms,
+                        "kalshi_fetch_latency_ms": kalshi_latency_ms,
+                        "quote_receive_skew_ms": receive_skew_ms,
+                    }
+                )
+                return row
 
             pbook = base.poly_top_book(poly_body)
             kbook = base.kalshi_top_book(kalshi_body)
@@ -131,7 +170,8 @@ async def run_once() -> dict[str, Any]:
             multiplier = base._d(meta.get("fee_multiplier"))
             plan = probe1 = probe5 = None
             if (
-                pbook is not None
+                synchronized
+                and pbook is not None
                 and kbook is not None
                 and fee_type in {"quadratic", "quadratic_with_maker_fees"}
                 and multiplier is not None
@@ -160,6 +200,13 @@ async def run_once() -> dict[str, Any]:
                 "kalshi_fee_type": fee_type,
                 "kalshi_fee_multiplier": str(multiplier) if multiplier is not None else None,
                 "book_comparable": pbook is not None and kbook is not None,
+                "synchronized_book_pair": synchronized,
+                "poly_received_ms": poly_received_ms,
+                "kalshi_received_ms": kalshi_received_ms,
+                "poly_fetch_latency_ms": poly_latency_ms,
+                "kalshi_fetch_latency_ms": kalshi_latency_ms,
+                "quote_receive_skew_ms": receive_skew_ms,
+                "max_quote_receive_skew_ms": MAX_BOOK_RECEIVE_SKEW_MS,
                 "positive_conservative_plan": plan,
                 "probe_1usd": probe1,
                 "probe_5usd": probe5,
@@ -189,6 +236,11 @@ async def run_once() -> dict[str, Any]:
         "batch_start": batch_start,
         "rotation_slot": slot,
         "book_comparable": sum(bool(r["book_comparable"]) for r in priced),
+        "synchronized_book_pairs": sum(bool(r.get("synchronized_book_pair")) for r in priced),
+        "receive_skew_rejected_pairs": sum(
+            bool(r.get("book_comparable")) and not bool(r.get("synchronized_book_pair")) for r in priced
+        ),
+        "max_quote_receive_skew_ms": MAX_BOOK_RECEIVE_SKEW_MS,
         "fetch_failures": len(failures),
         "conservative_positive_pairs": len(positive),
         "probe_1usd_positive_pairs": len(probe1),
@@ -200,7 +252,8 @@ async def run_once() -> dict[str, Any]:
             "and independently audited settlement equivalence are satisfied."
         ),
         "probe_warning": (
-            "$1/$5 plans are capped paper-probe economics after modeled fees; no authentication/order-entry path exists."
+            "$1/$5 plans are capped paper-probe economics after modeled fees; receive-time skew >500ms is rejected; "
+            "no authentication/order-entry path exists."
         ),
         "read_only": True,
         "order_entry": False,
