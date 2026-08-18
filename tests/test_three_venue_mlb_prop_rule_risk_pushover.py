@@ -59,6 +59,8 @@ def _result(*, participation=True, executable=False, yes_venue="polymarket", no_
                 "status": "CERTIFIED" if executable else "UNAUDITED",
                 "execution_eligible": executable,
                 "participation_proven": participation,
+                "player": "Rafael Devers",
+                "family": "baseball_player_hits",
                 "remaining_blockers": [] if executable else [
                     "cancellation",
                     "interruption",
@@ -125,7 +127,7 @@ class _FakeSink:
         return "fake-request"
 
 
-def test_rule_risk_delivery_is_explicitly_not_guaranteed_and_never_order_capable():
+def test_rule_risk_delivery_is_readable_explicitly_not_guaranteed_and_never_order_capable():
     sink = _FakeSink()
     status = asyncio.run(_deliver_rule_risk_alerts(
         _result(),
@@ -139,7 +141,15 @@ def test_rule_risk_delivery_is_explicitly_not_guaranteed_and_never_order_capable
     assert status["order_entry"] is False
     assert len(sink.messages) == 1
     title, message = sink.messages[0]
+    assert "Rafael Devers" in title
+    assert "3+ Hits" in title
+    assert "+5¢" in title
     assert "RULE RISK" in title
     assert "NOT GUARANTEED" in message
-    assert "MLB participation: PROVEN" in message
+    assert "YES — Polymarket: 45¢" in message
+    assert "NO — Kalshi: 50¢" in message
+    assert "After-fee gap: +5¢ per contract" in message
+    assert "Participation: PROVEN" in message
+    assert "\n\n" in message
+    assert KEY not in message
     assert "no order entry" in message
