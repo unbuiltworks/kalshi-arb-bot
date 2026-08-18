@@ -20,13 +20,17 @@ ONE = D("1")
 EXECUTABLE_CONFIDENCE = "FULL_RULES_AUDITED_EXECUTABLE"
 ALLOWED_VENUES = frozenset({"kalshi", "gemini", "polymarket"})
 ALLOWED_SOURCE_SIDES = frozenset({"YES", "NO", "CONTRACT"})
+EXECUTABLE_DEPTH_SOURCE_BY_VENUE = {
+    "gemini": frozenset({"gemini_depth10_100ms_final"}),
+    "kalshi": frozenset({"kalshi_public_orderbook_depth1_final"}),
+    "polymarket": frozenset({"polymarket_public_book_final"}),
+}
 DEFAULT_MIN_UNIT_PROFIT = D("0.03")
 DEFAULT_MAX_QUOTE_SKEW_MS = 50
 DEFAULT_MAX_BOOK_AGE_MS = 100
 DEFAULT_MAX_CAPITAL = D("10.00")
 INITIAL_QUANTITY = ONE
 ECON_TOLERANCE = D("0.000001")
-NON_EXECUTABLE_DEPTH_SOURCES = frozenset({"event_prices_q1_probe_only"})
 
 
 def _base_market_id(market_id: str) -> str:
@@ -205,8 +209,9 @@ def build_micro_plan(
     for venue, row in current.items():
         if str(row.quote.settlement_confidence) != EXECUTABLE_CONFIDENCE:
             raise PermissionError(f"{venue} current quote is not execution-audited")
-        if str(row.depth_source) in NON_EXECUTABLE_DEPTH_SOURCES:
-            raise PermissionError(f"{venue} quote is discovery-only and lacks executable depth")
+        allowed_sources = EXECUTABLE_DEPTH_SOURCE_BY_VENUE.get(venue, frozenset())
+        if str(row.depth_source) not in allowed_sources:
+            raise PermissionError(f"{venue} quote is not from an approved final execution book")
         age = now_ms - int(row.quote.received_ms)
         if age < 0 or age > int(max_book_age_ms):
             raise ValueError(f"{venue} book is stale at execution gate")
