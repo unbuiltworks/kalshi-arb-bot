@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ src/
 COPY config/ config/
+COPY tests/ tests/
 
 # BOT_MODE controls paper vs live: set in Railway env vars
 # Default to paper for safety
