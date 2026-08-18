@@ -15,7 +15,8 @@ COPY tests/ tests/
 # player-prop normalization, sportsbook identity alignment, the event-driven
 # game-line hot layer, read-only Pushover qualification/dedupe, live MLB
 # participation proof, fail-closed rule certification, and the fully-certified-only
-# K/G/P q=1 micro execution guard/transport/service with Gemini depth10 revalidation.
+# K/G/P q=1 micro execution guard/transport/service with Gemini depth10 revalidation
+# and final-book economics recomputation.
 RUN pytest -q \
     tests/test_universal_sports_identity.py \
     tests/test_gemini_sports_adapter.py \
@@ -38,6 +39,7 @@ RUN pytest -q \
     tests/test_sports_kgp_micro_transport.py \
     tests/test_gemini_prediction_depth.py \
     tests/test_sports_kgp_micro_live_v2.py \
+    tests/test_sports_kgp_micro_service.py \
  && python -m py_compile \
     src/eventing_books.py \
     src/three_venue_mlb_snapshot_pricing.py \
