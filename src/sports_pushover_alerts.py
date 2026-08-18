@@ -1,8 +1,8 @@
 """Read-only qualification, dedupe, and Pushover delivery for sports signals.
 
 This module has no order-entry code. It accepts already-computed cross-venue locks,
-rejects stale/immaterial candidates, suppresses noisy repeats, and sends a compact
-human-action alert. Credentials come only from environment variables.
+rejects stale/immaterial/non-actionable candidates, suppresses noisy repeats, and
+sends a compact human-action alert. Credentials come only from environment vars.
 """
 from __future__ import annotations
 
@@ -13,13 +13,14 @@ from decimal import Decimal
 import logging
 import os
 import time
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable
 
 import httpx
 
 D = Decimal
 logger = logging.getLogger("kalshi_arb.sports_pushover_alerts")
 PUSHOVER_URL = "https://api.pushover.net/1/messages.json"
+ACTIONABLE_CONFIDENCE = "FULL_RULES_AUDITED_EXECUTABLE"
 
 
 def _d(value: Any, default: str = "0") -> Decimal:
@@ -85,11 +86,15 @@ class SportsPushoverAlerts:
             str(lock.no_venue), str(lock.no_market_id),
         ))
 
-    def qualifies(self, lock: Any, *, max_age_ms: int) -> tuple[bool, str]:
+    def qualifies(self, lock: Any, *, max_age_ms: int, actionable: bool) -> tuple[bool, str]:
         p = self.policy
         unit_profit = _d(lock.unit_profit)
         total_profit = _d(lock.max_locked_profit)
         qty = _d(lock.max_quantity)
+        if not actionable:
+            return False, "not_actionable"
+        if str(getattr(lock, "settlement_confidence", "")) != ACTIONABLE_CONFIDENCE:
+            return False, "settlement_not_execution_audited"
         if unit_profit < p.min_unit_profit:
             return False, "unit_profit_below_floor"
         if total_profit < p.min_total_profit:
@@ -182,11 +187,11 @@ class SportsPushoverAlerts:
             raise RuntimeError(f"Pushover rejected notification status={body.get('status')}")
         return str(body.get("request") or "")
 
-    async def maybe_send(self, lock: Any, rows: Iterable[Any], *, rule_status: str, source: str) -> bool:
+    async def maybe_send(self, lock: Any, rows: Iterable[Any], *, rule_status: str, source: str, actionable: bool) -> bool:
         if not self.configured:
             return False
         title, message, max_age = self.build_message(lock, rows, rule_status=rule_status, source=source)
-        ok, _reason = self.qualifies(lock, max_age_ms=max_age)
+        ok, _reason = self.qualifies(lock, max_age_ms=max_age, actionable=actionable)
         if not ok or not self.should_realert(lock):
             return False
         request_id = await self.send(title=title, message=message)
