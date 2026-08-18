@@ -67,14 +67,22 @@ def paper_probe_events(
         return None
     if not bool(row.get("book_comparable")):
         return None
+    # Downstream fail-closed timing gate: even if a producer accidentally preserves
+    # a plan on a skewed snapshot, synthetic fills require the two public REST books
+    # to have passed the explicit receive-time synchronization check.
+    if row.get("synchronized_book_pair") is not True:
+        return None
     if row.get("fetch_error"):
         return None
     if not row.get("poly_slug") or not row.get("kalshi_ticker"):
         return None
-    # Paper economics should reflect the same participation-cleared universe as
-    # the live-readiness scanner. Pending player participation is not sampled as
-    # if it were executable.
-    if not bool(row.get("settlement_equivalent_now")):
+    # Use the explicit participation gate, never the legacy equivalence name.
+    if not bool(row.get("participation_gate_satisfied")):
+        return None
+    # Fail closed if a future caller strips or mutates read-only safety fields.
+    if row.get("read_only") is not True or row.get("order_entry") is not False:
+        return None
+    if row.get("execution_eligible") is not False or row.get("live_probe_ready") is not False:
         return None
 
     quantity = D(str(plan["quantity"]))
@@ -117,8 +125,14 @@ def paper_probe_events(
         "simultaneous_synthetic_fill_ts_ms": now_ms,
         "required_participation_gate": row.get("required_participation_gate"),
         "participation_proof": row.get("participation_proof"),
+        "participation_gate_satisfied": True,
+        "synchronized_book_pair": True,
+        "quote_receive_skew_ms": row.get("quote_receive_skew_ms"),
         "rule_status": row.get("rule_status"),
-        "settlement_equivalent_now": True,
+        "rules_status": row.get("rules_status", "RULES_PENDING"),
+        "full_rules_audited": bool(row.get("full_rules_audited", False)),
+        "fully_audited_shadow_ready": bool(row.get("fully_audited_shadow_ready", False)),
+        "paper_probe_only": True,
         "live_probe_ready": False,
         "live_blockers": ["INDEPENDENT_SETTLEMENT_AUDIT_REQUIRED", "FRESH_EXPLICIT_APPROVAL_REQUIRED"],
         "read_only": True,
@@ -170,6 +184,9 @@ async def run(ledger_path: Path, audit_path: Path, min_profit: Decimal) -> dict[
         "ledger_events": len(events),
         "minimum_modeled_profit_dollars": str(min_profit),
         "participation_cleared_only": True,
+        "synchronized_books_only": True,
+        "rules_status": "RULES_PENDING",
+        "full_rules_audited": False,
         "live_probe_ready_groups": 0,
         "read_only": True,
         "order_entry": False,
