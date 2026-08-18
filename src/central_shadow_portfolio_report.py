@@ -9,6 +9,10 @@ Settlement confidence and basis risk are reported separately and never silently
 converted into execution eligibility. Any sleeve with a hard blocker receives a zero
 promotable score even when its research-capacity score is large.
 
+The report keeps theoretical shadow economics and later-settled paper realized P/L
+strictly separate. Synthetic simultaneous fills are useful capacity evidence, but are
+not realized economics until both venue outcomes have been observed and reconciled.
+
 No venue clients, credentials, or order-entry paths exist in this module.
 """
 from __future__ import annotations
@@ -42,6 +46,9 @@ class Sleeve:
     observed_hours: Decimal = D("0")
     shadow_profit_dollars: Decimal = D("0")
     observation_window_verified: bool = False
+    settled_paper_trade_groups: int = 0
+    realized_paper_profit_dollars: Decimal = D("0")
+    settlement_window_verified: bool = False
 
     @property
     def capacity_score(self) -> Decimal:
@@ -66,12 +73,27 @@ class Sleeve:
 
     @property
     def observed_shadow_dollars_per_day(self) -> Decimal | None:
-        # Fail closed: a sleeve may not annualize (or daily-ize) only the span between
-        # positive opportunities. The caller must explicitly attest that observed_hours
-        # covers the complete scanner observation window, including quiet periods.
+        # Fail closed: a sleeve may not daily-ize only the span between positive
+        # opportunities. observed_hours must cover the full scanner window, including
+        # quiet periods. This remains THEORETICAL synthetic-fill economics.
         if not self.observation_window_verified or self.observed_hours <= 0:
             return None
         return self.shadow_profit_dollars * D("24") / self.observed_hours
+
+    @property
+    def realized_paper_dollars_per_day(self) -> Decimal | None:
+        # Realized paper P/L is only meaningful after venue-specific settlement
+        # reconciliation, and only daily-ized when that settled sample belongs to the
+        # same verified full observation window. Zero settled groups must not produce
+        # a misleading $0/day claim.
+        if (
+            not self.observation_window_verified
+            or not self.settlement_window_verified
+            or self.observed_hours <= 0
+            or self.settled_paper_trade_groups <= 0
+        ):
+            return None
+        return self.realized_paper_profit_dollars * D("24") / self.observed_hours
 
 
 def sleeve_from_mapping(row: dict[str, Any]) -> Sleeve:
@@ -90,11 +112,15 @@ def sleeve_from_mapping(row: dict[str, Any]) -> Sleeve:
         observed_hours=_d(row.get("observed_hours")),
         shadow_profit_dollars=_d(row.get("shadow_profit_dollars")),
         observation_window_verified=bool(row.get("observation_window_verified", False)),
+        settled_paper_trade_groups=int(row.get("settled_paper_trade_groups") or 0),
+        realized_paper_profit_dollars=_d(row.get("realized_paper_profit_dollars")),
+        settlement_window_verified=bool(row.get("settlement_window_verified", False)),
     )
 
 
 def _serialize(sleeve: Sleeve, rank: int) -> dict[str, Any]:
-    run_rate = sleeve.observed_shadow_dollars_per_day
+    shadow_run_rate = sleeve.observed_shadow_dollars_per_day
+    realized_run_rate = sleeve.realized_paper_dollars_per_day
     return {
         "rank": rank,
         "name": sleeve.name,
@@ -114,11 +140,20 @@ def _serialize(sleeve: Sleeve, rank: int) -> dict[str, Any]:
         "observed_hours": str(sleeve.observed_hours),
         "shadow_profit_dollars": str(sleeve.shadow_profit_dollars),
         "observation_window_verified": sleeve.observation_window_verified,
-        "observed_shadow_dollars_per_day": str(run_rate) if run_rate is not None else None,
+        "observed_shadow_dollars_per_day": str(shadow_run_rate) if shadow_run_rate is not None else None,
         "run_rate_status": (
-            "FULL_OBSERVATION_WINDOW_VERIFIED"
-            if run_rate is not None
+            "FULL_OBSERVATION_WINDOW_VERIFIED_THEORETICAL_SHADOW"
+            if shadow_run_rate is not None
             else "WITHHELD_UNVERIFIED_OR_ZERO_OBSERVATION_WINDOW"
+        ),
+        "settled_paper_trade_groups": sleeve.settled_paper_trade_groups,
+        "realized_paper_profit_dollars": str(sleeve.realized_paper_profit_dollars),
+        "settlement_window_verified": sleeve.settlement_window_verified,
+        "realized_paper_dollars_per_day": str(realized_run_rate) if realized_run_rate is not None else None,
+        "realized_run_rate_status": (
+            "FULL_OBSERVATION_AND_SETTLEMENT_WINDOW_VERIFIED"
+            if realized_run_rate is not None
+            else "WITHHELD_UNSETTLED_OR_UNVERIFIED_SETTLEMENT_WINDOW"
         ),
         "promotion_status": "RESEARCH_ONLY_BLOCKED" if sleeve.hard_blockers else "NO_HARD_BLOCKER_RESEARCH_ONLY",
     }
@@ -143,6 +178,7 @@ def rank_sleeves(rows: Iterable[dict[str, Any] | Sleeve]) -> dict[str, Any]:
         "ranking_note": (
             "Capacity score = net edge per dollar × executable probability × displayed/consumable depth dollars ÷ capital lock hours. "
             "Settlement confidence and basis risk are applied separately; hard blockers force promotable_score to zero. "
-            "Observed $/day is withheld unless observed_hours is explicitly verified to cover the full scanner window, including quiet periods."
+            "Theoretical shadow $/day is withheld unless observed_hours covers the full scanner window. "
+            "Realized paper $/day is reported separately and only after venue-specific settlements are reconciled for that verified window."
         ),
     }
