@@ -79,6 +79,30 @@ def test_partial_outcome_row_does_not_suppress_later_complete_row():
     assert audits[0]["outcomes_agree"] is True
 
 
+def test_identical_complete_duplicate_rows_are_idempotent():
+    rows = [
+        {"trade_group_id": "g1", "polymarket_us_outcome": "YES", "kalshi_outcome": "YES", "settled_ts_ms": 200},
+        {"trade_group_id": "g1", "polymarket_us_outcome": "YES", "kalshi_outcome": "YES", "settled_ts_ms": 201},
+    ]
+    settlements, audits = settlement_events(_fills(), rows)
+    assert len(settlements) == 2
+    assert len(audits) == 1
+    assert audits[0]["status"] == "SETTLED_FROM_OBSERVED_OUTCOMES"
+
+
+def test_conflicting_complete_rows_fail_closed_instead_of_using_file_order():
+    rows = [
+        {"trade_group_id": "g1", "polymarket_us_outcome": "YES", "kalshi_outcome": "YES", "settled_ts_ms": 200},
+        {"trade_group_id": "g1", "polymarket_us_outcome": "NO", "kalshi_outcome": "YES", "settled_ts_ms": 201},
+    ]
+    settlements, audits = settlement_events(_fills(), rows)
+    assert settlements == []
+    assert len(audits) == 1
+    assert audits[0]["trade_group_id"] == "g1"
+    assert audits[0]["status"] == "OUTCOME_CONFLICT_FAIL_CLOSED"
+    assert audits[0]["settlement_events_created"] == 0
+
+
 def test_existing_exact_leg_settlement_is_idempotent():
     fills = _fills()
     existing = make_event(
