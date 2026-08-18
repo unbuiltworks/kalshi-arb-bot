@@ -49,12 +49,12 @@ def _participation_ok(row: dict[str, Any]) -> bool:
 
 
 def _rules_audited_ok(row: dict[str, Any]) -> bool:
-    """Require the exact-contract audit guard's evidence contract; fail closed.
+    """Require the exact-contract audit guard's v2 evidence contract; fail closed.
 
     Generic booleans/status strings such as ``full_rules_audited=true`` or
     ``settlement_confidence=FULL_RULES_AUDITED_SHADOW`` are deliberately ignored.
-    They can be hand-authored and do not prove that exact Polymarket instrument rules
-    and exact Kalshi market rules/source hierarchy were independently checked.
+    A global ``equivalent=true`` is also insufficient: every required semantic
+    dimension needs an explicit equivalent decision and independent audit provenance.
     """
     audit = row.get("exact_rule_audit")
     if not isinstance(audit, dict):
@@ -64,6 +64,12 @@ def _rules_audited_ok(row: dict[str, Any]) -> bool:
     if audit.get("full_rules_audited_shadow") is not True:
         return False
     if audit.get("equivalent") is not True:
+        return False
+    if audit.get("decision_provenance_complete") is not True:
+        return False
+    if not str(audit.get("independent_reviewer") or "").strip():
+        return False
+    if not str(audit.get("audit_decision_id") or "").strip():
         return False
     if str(audit.get("family") or "") != str(row.get("family") or ""):
         return False
@@ -78,6 +84,10 @@ def _rules_audited_ok(row: dict[str, Any]) -> bool:
             "stat_definition_checked",
             "cancellation_postponement_checked",
             "source_hierarchy_checked",
+            "participation_branch_equivalent",
+            "stat_definition_equivalent",
+            "cancellation_postponement_equivalent",
+            "source_hierarchy_equivalent",
         )
     )
 
@@ -156,8 +166,8 @@ def summarize_probe_rows(
         "note": (
             "A >=3c conservative modeled net is only an economics gate. Exact identity, current books, "
             "and the participation gate may qualify an automatic synthetic paper micro-probe; independently "
-            "audited exact-contract venue settlement equivalence is additionally required before "
-            "FULL_RULES_AUDITED_SHADOW. Generic audit booleans/status strings do not clear that gate. "
-            "This layer never grants live execution readiness."
+            "audited exact-contract venue settlement equivalence with explicit per-dimension decisions and "
+            "review provenance is additionally required before FULL_RULES_AUDITED_SHADOW. Generic audit "
+            "booleans/status strings do not clear that gate. This layer never grants live execution readiness."
         ),
     }
