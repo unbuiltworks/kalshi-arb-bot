@@ -77,10 +77,11 @@ def test_observed_daily_run_rate_requires_verified_full_observation_window():
     sleeve = report["sleeves"][0]
     assert sleeve["observed_shadow_dollars_per_day"] is None
     assert sleeve["run_rate_status"] == "WITHHELD_UNVERIFIED_OR_ZERO_OBSERVATION_WINDOW"
+    assert sleeve["realized_paper_dollars_per_day"] is None
     assert "never a forecast" in report["target_note"]
 
 
-def test_verified_full_observation_window_allows_mechanical_daily_run_rate():
+def test_verified_full_observation_window_allows_theoretical_daily_run_rate_only():
     report = rank_sleeves(
         [
             {
@@ -101,4 +102,58 @@ def test_verified_full_observation_window_allows_mechanical_daily_run_rate():
     )
     sleeve = report["sleeves"][0]
     assert sleeve["observed_shadow_dollars_per_day"] == "48"
-    assert sleeve["run_rate_status"] == "FULL_OBSERVATION_WINDOW_VERIFIED"
+    assert sleeve["run_rate_status"] == "FULL_OBSERVATION_WINDOW_VERIFIED_THEORETICAL_SHADOW"
+    assert sleeve["realized_paper_dollars_per_day"] is None
+    assert sleeve["realized_run_rate_status"] == "WITHHELD_UNSETTLED_OR_UNVERIFIED_SETTLEMENT_WINDOW"
+
+
+def test_realized_daily_run_rate_requires_settled_groups_and_verified_settlement_window():
+    base = {
+        "name": "sample",
+        "category": "mlb",
+        "venues": ["polymarket_us", "kalshi"],
+        "net_edge_per_dollar": "0.03",
+        "executable_probability": "0.1",
+        "depth_dollars": "5",
+        "capital_lock_hours": "1",
+        "settlement_confidence": "1",
+        "basis_risk": "0",
+        "observed_hours": "12",
+        "shadow_profit_dollars": "10",
+        "observation_window_verified": True,
+        "settled_paper_trade_groups": 4,
+        "realized_paper_profit_dollars": "3",
+    }
+    report = rank_sleeves([base])
+    assert report["sleeves"][0]["realized_paper_dollars_per_day"] is None
+
+    base["settlement_window_verified"] = True
+    report = rank_sleeves([base])
+    sleeve = report["sleeves"][0]
+    assert sleeve["observed_shadow_dollars_per_day"] == "20"
+    assert sleeve["realized_paper_dollars_per_day"] == "6"
+    assert sleeve["realized_run_rate_status"] == "FULL_OBSERVATION_AND_SETTLEMENT_WINDOW_VERIFIED"
+
+
+def test_zero_settled_groups_never_claims_zero_realized_per_day():
+    report = rank_sleeves(
+        [{
+            "name": "no-settlements-yet",
+            "category": "mlb",
+            "venues": ["polymarket_us", "kalshi"],
+            "net_edge_per_dollar": "0.01",
+            "executable_probability": "0.1",
+            "depth_dollars": "1",
+            "capital_lock_hours": "1",
+            "settlement_confidence": "0",
+            "basis_risk": "0",
+            "observed_hours": "24",
+            "observation_window_verified": True,
+            "settlement_window_verified": True,
+            "settled_paper_trade_groups": 0,
+            "realized_paper_profit_dollars": "0",
+        }]
+    )
+    sleeve = report["sleeves"][0]
+    assert sleeve["realized_paper_dollars_per_day"] is None
+    assert sleeve["realized_run_rate_status"] == "WITHHELD_UNSETTLED_OR_UNVERIFIED_SETTLEMENT_WINDOW"
