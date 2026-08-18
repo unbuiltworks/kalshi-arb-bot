@@ -62,9 +62,10 @@ def settlement_events(
 
     Outcome rows must identify an existing ``trade_group_id`` and include BOTH
     ``polymarket_us_outcome`` and ``kalshi_outcome`` as YES/NO. Partial or malformed
-    rows fail closed. Existing settlement events are never recreated for the exact
-    filled market leg; a settlement for some other market on the same venue cannot
-    suppress reconciliation of the intended fill.
+    rows fail closed without consuming the group id, so a later complete collector
+    row for the same paper probe can still reconcile it. Existing settlement events
+    are never recreated for the exact filled market leg; a settlement for some other
+    market on the same venue cannot suppress reconciliation of the intended fill.
     """
     events = list(ledger_events)
     fills_by_group: dict[str, dict[str, LedgerEvent]] = {}
@@ -82,7 +83,6 @@ def settlement_events(
         group_id = str(row.get("trade_group_id") or "")
         if not group_id or group_id in seen_rows:
             continue
-        seen_rows.add(group_id)
         poly_outcome = str(row.get("polymarket_us_outcome") or "").upper()
         kalshi_outcome = str(row.get("kalshi_outcome") or "").upper()
         if poly_outcome not in VALID_OUTCOMES or kalshi_outcome not in VALID_OUTCOMES:
@@ -90,6 +90,11 @@ def settlement_events(
         fills = fills_by_group.get(group_id) or {}
         if set(fills) != set(VENUES):
             continue
+
+        # Only a complete, valid, ledger-backed row consumes this trade group. This
+        # prevents an earlier partial collector row from suppressing a later valid
+        # row in the same append-only outcomes file.
+        seen_rows.add(group_id)
 
         group_created: list[LedgerEvent] = []
         for venue, outcome in (("polymarket_us", poly_outcome), ("kalshi", kalshi_outcome)):
