@@ -36,6 +36,23 @@ scan._fetch_poly_mlb = fetch_current_poly_mlb_props
 
 D = Decimal
 PREDICTION_VENUES = frozenset({"kalshi", "polymarket", "gemini"})
+STAT_LABELS = {
+    "hits": "Hits",
+    "total_bases": "Total Bases",
+    "home_runs": "Home Runs",
+    "home_run": "Home Runs",
+    "strikeouts": "Strikeouts",
+    "pitcher_strikeouts": "Strikeouts",
+    "runs_batted_in": "RBI",
+    "rbis": "RBI",
+    "rbi": "RBI",
+    "runs": "Runs",
+    "walks": "Walks",
+    "stolen_bases": "Stolen Bases",
+    "singles": "Singles",
+    "doubles": "Doubles",
+    "triples": "Triples",
+}
 logger = logging.getLogger("kalshi_arb.three_venue_mlb_prop_supervisor")
 _alerts = SportsPushoverAlerts()
 _candidate_seen: dict[str, tuple[Decimal, Decimal]] = {}
@@ -261,6 +278,53 @@ def _mark_candidate_sent(lock: Any) -> None:
     )
 
 
+def _fmt_cents(value: Any, *, signed: bool = False) -> str:
+    cents = _d(value) * D("100")
+    sign = "+" if signed and cents >= 0 else ""
+    if cents == cents.to_integral_value():
+        return f"{sign}{int(cents)}¢"
+    text = f"{cents:.1f}".rstrip("0").rstrip(".")
+    return f"{sign}{text}¢"
+
+
+def _pretty_venue(value: Any) -> str:
+    raw = str(value or "").strip()
+    aliases = {"polymarket": "Polymarket", "kalshi": "Kalshi", "gemini": "Gemini"}
+    return aliases.get(raw.lower(), raw.replace("_", " ").title() or "Unknown")
+
+
+def _prop_identity(lock: Any, assessment: dict[str, Any]) -> tuple[str, str]:
+    player = str(assessment.get("player") or "MLB Player").strip()
+    parts = [part for part in str(getattr(lock, "settlement_key", "")).split("|") if part]
+    stat = "prop"
+    comparator = ""
+    threshold = ""
+    try:
+        player_idx = parts.index("player")
+        stat = parts[player_idx + 2]
+        comparator = parts[player_idx + 3]
+        threshold = parts[player_idx + 4]
+    except (ValueError, IndexError):
+        family = str(assessment.get("family") or "")
+        stat = family.removeprefix("baseball_player_") or "prop"
+
+    stat_label = STAT_LABELS.get(stat.lower(), stat.replace("_", " ").title())
+    threshold_text = threshold
+    if comparator == "GE" and threshold:
+        threshold_text = f"{threshold}+"
+    elif comparator == "LE" and threshold:
+        threshold_text = f"{threshold} or fewer"
+    elif comparator == "GT" and threshold:
+        threshold_text = f"Over {threshold}"
+    elif comparator == "LT" and threshold:
+        threshold_text = f"Under {threshold}"
+    elif comparator == "EQ" and threshold:
+        threshold_text = threshold
+
+    market_label = f"{threshold_text} {stat_label}".strip()
+    return player, market_label
+
+
 def _candidate_message(
     lock: Any,
     assessment: dict[str, Any],
@@ -272,18 +336,27 @@ def _candidate_message(
     qty = _d(getattr(lock, "max_quantity", "0"))
     cost = _d(getattr(lock, "max_capital", "0"))
     blockers = [str(x) for x in assessment.get("remaining_blockers", []) if str(x)]
-    risk_text = ", ".join(blockers[:4]) or "incomplete settlement fingerprint"
-    title = f"MLB candidate +${profit:.2f} • RULE RISK"
+    risk_text = ", ".join(x.replace("_", " ") for x in blockers[:4]) or "incomplete settlement fingerprint"
+    player, market_label = _prop_identity(lock, assessment)
+
+    title = f"{player} • {market_label} • {_fmt_cents(unit_profit, signed=True)} • RULE RISK"
     message = "\n".join((
-        "NOT GUARANTEED — settlement/lifecycle rules are not fully equivalent.",
-        str(lock.settlement_key),
-        f"YES {yes['venue']} @ {yes['price']:.4f} | NO {no['venue']} @ {no['price']:.4f}",
-        f"Qty {qty} | Cost ${cost:.2f} | after-fee gap +${profit:.2f} ({unit_profit:.4f}/unit)",
-        "MLB participation: PROVEN",
-        f"Remaining rule risk: {risk_text}",
-        "Informational only • read-only • no order entry",
+        f"{player} — {market_label}",
+        "",
+        f"YES — {_pretty_venue(yes['venue'])}: {_fmt_cents(yes['price'])}",
+        f"NO — {_pretty_venue(no['venue'])}: {_fmt_cents(no['price'])}",
+        "",
+        f"After-fee gap: {_fmt_cents(unit_profit, signed=True)} per contract",
+        f"Max size: {qty} • Cost: ${cost:.2f}",
+        f"Max locked profit: ${profit:.2f}",
+        "",
+        "Participation: PROVEN",
+        "",
+        f"Rule differences: {risk_text}",
+        "",
+        "NOT GUARANTEED • Read-only • no order entry",
     ))
-    return title, message[:1024]
+    return title[:250], message[:1024]
 
 
 async def _deliver_rule_risk_alerts(
