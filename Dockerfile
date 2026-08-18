@@ -51,5 +51,5 @@ RUN pytest -q \
     src/sports_pushover_odds_api_mlb.py
 
 ENV BOT_MODE=paper
-# Validation-only branch default: one credential-free prop cycle, then exit.
+# Validation-only branch default: run exactly one credential-free prop cycle and exit.
 CMD ["python", "-m", "src.three_venue_mlb_prop_supervisor", "--interval-seconds", "10", "--once"]
