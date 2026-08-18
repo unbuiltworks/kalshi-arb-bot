@@ -1,18 +1,20 @@
 """Fail-closed rule-evidence guard for Polymarket US <-> Kalshi MLB props.
 
 A generic sports FAQ or a hand-written equivalence summary is not sufficient evidence
-for an exact player-prop settlement audit.  Polymarket US exposes instrument-specific
+for an exact player-prop settlement audit. Polymarket US exposes instrument-specific
 ``instrument_rules`` metadata, while Kalshi exposes market-specific rule text and
-settlement-source metadata.  This module requires both exact-contract rule payloads
+settlement-source metadata. This module requires both exact-contract rule payloads
 before a pair can be classified as fully rule-audited shadow evidence.
 
-Read-only research only.  No venue clients, credentials, or order-entry paths exist
+Read-only research only. No venue clients, credentials, or order-entry paths exist
 here.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Mapping
+
+AUDIT_CONTRACT = "EXACT_CONTRACT_RULE_AUDIT_V1"
 
 
 @dataclass(frozen=True)
@@ -47,7 +49,16 @@ class ExactRuleAudit:
         )
 
     def as_dict(self) -> dict[str, Any]:
+        """Emit a small, explicit evidence contract for downstream readiness code.
+
+        We intentionally do not expose the full rule text in the operational row.
+        ``full_rules_audited_shadow`` can only be true after ``complete`` has verified
+        the exact-contract rule payloads and all required audit branches. Downstream
+        consumers should require ``audit_contract`` plus the exact identity fields,
+        not a generic hand-authored ``full_rules_audited=true`` boolean.
+        """
         return {
+            "audit_contract": AUDIT_CONTRACT,
             "family": self.family,
             "polymarket_instrument_id": self.polymarket_instrument_id,
             "kalshi_ticker": self.kalshi_ticker,
@@ -76,7 +87,7 @@ def exact_rule_audit_from_payloads(
 ) -> ExactRuleAudit:
     """Build exact-contract audit evidence from already-fetched public payloads.
 
-    The field extraction is deliberately conservative.  If an endpoint/schema does
+    The field extraction is deliberately conservative. If an endpoint/schema does
     not expose contract-specific rule text, ``complete`` remains false rather than
     substituting a generic FAQ, UI label, or analyst summary.
     """
