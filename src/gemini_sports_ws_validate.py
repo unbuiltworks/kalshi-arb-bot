@@ -24,6 +24,7 @@ from src.universal_three_venue_sports import fetch_gemini_mlb
 
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_sports_ws_validate")
+MAX_WS_MESSAGE_BYTES = 8 * 1024 * 1024
 
 
 def _snapshot_prices(contract: dict[str, Any]) -> tuple[Decimal, Decimal] | None:
@@ -39,7 +40,11 @@ def _snapshot_prices(contract: dict[str, Any]) -> tuple[Decimal, Decimal] | None
 
 
 async def _subscribe(symbols: list[str], queue: asyncio.Queue) -> None:
-    async with websockets.connect(GEMINI_WS, open_timeout=5.0) as ws:
+    async with websockets.connect(
+        GEMINI_WS,
+        open_timeout=5.0,
+        max_size=MAX_WS_MESSAGE_BYTES,
+    ) as ws:
         request = {
             "id": "sports-ws-validate",
             "method": "SUBSCRIBE",
