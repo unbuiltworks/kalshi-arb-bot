@@ -36,6 +36,7 @@ def _lock(yes_venue="sportsbook:draftkings", no_venue="kalshi") -> LockOpportuni
 def test_current_real_moneyline_matrix_has_zero_certified_pairs():
     matrix = audit_matrix()
     assert matrix["family"] == "moneyline"
+    assert len(matrix["pairs"]) == 6
     assert matrix["certified_pairs"] == 0
     assert matrix["read_only"] is True
     assert matrix["order_entry"] is False
