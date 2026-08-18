@@ -1,0 +1,2 @@
+Force Railway to materialize feature/odds-api-io-ws-shadow after the MLB Gemini/Kalshi execution-shadow module was added.
+No runtime behavior is controlled by this file.
