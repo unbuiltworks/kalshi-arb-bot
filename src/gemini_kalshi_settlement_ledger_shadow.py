@@ -13,6 +13,7 @@ import argparse
 import asyncio
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 import json
 import logging
 import time
@@ -32,6 +33,26 @@ KALSHI_15M_SERIES = {
     "SOL": "KXSOL15M",
     "XRP": "KXXRP15M",
 }
+MARGIN_BUCKETS = ("lt_1bp", "1_to_lt_2bp", "2_to_lt_5bp", "5_to_lt_10bp", "ge_10bp", "unknown")
+
+
+def _margin_bucket(value: Any) -> str:
+    """Bucket absolute *final Gemini settlement* margin, not entry margin."""
+    if value is None:
+        return "unknown"
+    try:
+        margin = abs(Decimal(str(value)))
+    except (InvalidOperation, TypeError, ValueError):
+        return "unknown"
+    if margin < Decimal("1"):
+        return "lt_1bp"
+    if margin < Decimal("2"):
+        return "1_to_lt_2bp"
+    if margin < Decimal("5"):
+        return "2_to_lt_5bp"
+    if margin < Decimal("10"):
+        return "5_to_lt_10bp"
+    return "ge_10bp"
 
 
 def summarize(rows: list[Any]) -> dict[str, Any]:
@@ -40,6 +61,12 @@ def summarize(rows: list[Any]) -> dict[str, Any]:
         "agreed": 0,
         "disagreed": 0,
     })
+    by_final_gemini_margin: dict[str, dict[str, int]] = {
+        bucket: {"matched": 0, "agreed": 0, "disagreed": 0}
+        for bucket in MARGIN_BUCKETS
+    }
+    disagreement_abs_margins: list[Decimal] = []
+
     for row in rows:
         asset = str(row.asset).upper()
         if asset not in ASSETS:
@@ -47,6 +74,17 @@ def summarize(rows: list[Any]) -> dict[str, Any]:
         bucket = by_asset[asset]
         bucket["matched"] += 1
         bucket["agreed" if row.agrees else "disagreed"] += 1
+
+        margin_bucket = _margin_bucket(getattr(row, "gemini_margin_bps", None))
+        margin_counts = by_final_gemini_margin[margin_bucket]
+        margin_counts["matched"] += 1
+        margin_counts["agreed" if row.agrees else "disagreed"] += 1
+        if not row.agrees:
+            try:
+                disagreement_abs_margins.append(abs(Decimal(str(row.gemini_margin_bps))))
+            except (AttributeError, InvalidOperation, TypeError, ValueError):
+                pass
+
     total = sum(bucket["matched"] for bucket in by_asset.values())
     disagreements = sum(bucket["disagreed"] for bucket in by_asset.values())
     return {
@@ -55,6 +93,22 @@ def summarize(rows: list[Any]) -> dict[str, Any]:
         "disagreements": disagreements,
         "agreement_rate": ((total - disagreements) / total) if total else None,
         "by_asset": {asset: by_asset.get(asset, {"matched": 0, "agreed": 0, "disagreed": 0}) for asset in ASSETS},
+        "by_final_gemini_abs_margin_bps": by_final_gemini_margin,
+        "max_disagreement_final_gemini_abs_margin_bps": (
+            str(max(disagreement_abs_margins)) if disagreement_abs_margins else None
+        ),
+        "margin_cohort_semantics": {
+            "metric": "ABS_GEMINI_FINAL_SETTLEMENT_MINUS_GEMINI_STRIKE_BPS",
+            "not_entry_margin": True,
+            "buckets": {
+                "lt_1bp": "[0,1)",
+                "1_to_lt_2bp": "[1,2)",
+                "2_to_lt_5bp": "[2,5)",
+                "5_to_lt_10bp": "[5,10)",
+                "ge_10bp": "[10,+inf)",
+                "unknown": "missing_or_unparseable",
+            },
+        },
         "window_identity": "GEMINI_TICKER_TIME_VS_KALSHI_CLOSE_TIME",
         "classification": "INDEX_MISMATCH_RESEARCH_ONLY",
         "trade_authorized": False,
@@ -201,6 +255,7 @@ async def run(
                     payload = row.as_dict()
                     payload.update({
                         "join_key": key,
+                        "final_gemini_abs_margin_bucket": _margin_bucket(row.gemini_margin_bps),
                         "window_identity": "GEMINI_TICKER_TIME_VS_KALSHI_CLOSE_TIME",
                         "classification": "INDEX_MISMATCH_RESEARCH_ONLY",
                         "trade_authorized": False,
@@ -263,6 +318,7 @@ def main() -> None:
     logger.info(
         "CRYPTO_SETTLEMENT_LEDGER_ENABLED assets=BTC,ETH,SOL,XRP interval_s=%s hours=%s "
         "kalshi_scope=exact_15m_series window_identity=GEMINI_TICKER_TIME_VS_KALSHI_CLOSE_TIME "
+        "margin_cohorts=final_gemini_settlement_not_entry_margin "
         "trade_authorized=false read_only=true order_entry=false",
         args.interval_s,
         args.hours,
