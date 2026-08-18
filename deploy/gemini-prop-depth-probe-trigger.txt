@@ -1,0 +1,1 @@
+Force the disposable one-shot probe to materialize its current Gemini bookTicker command.
