@@ -1,11 +1,11 @@
 """Fail-closed MLB full-game settlement-rule certification.
 
-This module performs no network I/O and contains no order-entry code.  It records
+This module performs no network I/O and contains no order-entry code. It records
 human-audited venue semantics separately from normal-event identity, then decides
 whether a venue pair is safe to label execution-equivalent.
 
 A pair is FULL_RULES_AUDITED_EXECUTABLE only when every settlement dimension is
-identical.  Normal-game similarity with different postponement/cancellation tails
+identical. Normal-game similarity with different postponement/cancellation tails
 is CONDITIONAL and must remain alert-blocked.
 """
 from __future__ import annotations
@@ -19,6 +19,8 @@ from src.sports_pushover_alerts import ACTIONABLE_CONFIDENCE
 AUDIT_DATE = "2026-08-18"
 SHADOW_CONFIDENCE = "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE"
 SUPPORTED_FAMILY = "moneyline"
+NORMAL_WINNER = "named team wins official game"
+EXTRA_INNINGS = "included"
 
 
 class CertificationStatus(str, Enum):
@@ -90,15 +92,14 @@ class PairAssessment:
         }
 
 
-def _p(venue: str, *, official_source: str, normal_winner: str, extra_innings: str,
-       not_started: str, interrupted: str, cancellation: str, tie_push: str,
-       source_ref: str) -> VenueRuleProfile:
+def _p(venue: str, *, official_source: str, not_started: str, interrupted: str,
+       cancellation: str, tie_push: str, source_ref: str) -> VenueRuleProfile:
     return VenueRuleProfile(
         venue=venue,
         family=SUPPORTED_FAMILY,
         official_source=official_source,
-        normal_winner=normal_winner,
-        extra_innings=extra_innings,
+        normal_winner=NORMAL_WINNER,
+        extra_innings=EXTRA_INNINGS,
         not_started=not_started,
         interrupted=interrupted,
         cancellation=cancellation,
@@ -107,14 +108,13 @@ def _p(venue: str, *, official_source: str, normal_winner: str, extra_innings: s
     )
 
 
-# Profiles are intentionally semantic rather than copied rulebook prose.  Source
-# references identify the official pages reviewed on AUDIT_DATE.
+# Profiles are semantic summaries, not copied rulebook prose. Source references
+# identify the official pages reviewed on AUDIT_DATE. Ordinary completed-game
+# semantics are intentionally normalized; exceptional lifecycle differences remain.
 PROFILES: dict[tuple[str, str], VenueRuleProfile] = {
     ("draftkings", SUPPORTED_FAMILY): _p(
         "draftkings",
         official_source="official governing body",
-        normal_winner="official governing body declared winner",
-        extra_innings="included",
         not_started="void if game does not start on scheduled local date",
         interrupted="regular-season moneyline requires official and concluded within two calendar days or void",
         cancellation="void",
@@ -124,8 +124,6 @@ PROFILES: dict[tuple[str, str], VenueRuleProfile] = {
     ("fanduel", SUPPORTED_FAMILY): _p(
         "fanduel",
         official_source="official governing body",
-        normal_winner="official winner under sportsbook baseball moneyline rules",
-        extra_innings="included",
         not_started="void when scheduled-game start requirement is not met",
         interrupted="sportsbook suspension/official-game rules can settle or void before full completion",
         cancellation="void under sportsbook cancellation branch",
@@ -135,35 +133,29 @@ PROFILES: dict[tuple[str, str], VenueRuleProfile] = {
     ("kalshi", SUPPORTED_FAMILY): _p(
         "kalshi",
         official_source="espn fox sports and governing league",
-        normal_winner="yes if named team wins",
-        extra_innings="winner of completed game",
         not_started="postponed or delayed market remains open for rescheduled game within two days",
         interrupted="market remains open for qualifying rescheduled completion within two days",
         cancellation="fair-price resolution if cancelled or rescheduled over two days away",
-        tie_push="no sportsbook push; exceptional no-winner branch handled by market rules",
+        tie_push="exceptional no-winner branch handled by market rules; no sportsbook push",
         source_ref="https://kalshi.com/markets/kxmlbgame/professional-baseball-game",
     ),
     ("polymarket", SUPPORTED_FAMILY): _p(
         "polymarket",
         official_source="official final statistics from governing body or event organizer",
-        normal_winner="resolves to team that wins",
-        extra_innings="included",
         not_started="postponed market remains open until game is completed",
         interrupted="remains open until completed",
         cancellation="50-50 if cancelled entirely with no makeup game",
-        tie_push="50-50 on tie/no winning side under listed MLB rules",
+        tie_push="50-50 on tie or no winning side under listed mlb rules",
         source_ref="https://polymarket.com/sports/mlb",
     ),
     ("gemini", SUPPORTED_FAMILY): _p(
         "gemini",
         official_source="mlb espn fox sports or broadcast partner",
-        normal_winner="yes if named team wins; otherwise no",
-        extra_innings="official game result",
         not_started="unresolved expiration value can enter market outcome review",
         interrupted="official result or market outcome review when expiration value cannot be determined",
         cancellation="market outcome review process rather than sportsbook void",
         tie_push="market outcome review/no sportsbook push contract",
-        source_ref="gemini prediction market MLB contract rules",
+        source_ref="gemini prediction market mlb contract rules",
     ),
 }
 
