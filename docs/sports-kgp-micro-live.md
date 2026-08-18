@@ -11,5 +11,7 @@ The first automated prediction-market sports lane is intentionally tiny and fail
 - Settlement confidence must be `FULL_RULES_AUDITED_EXECUTABLE` on the opportunity and both current quotes.
 - Every executable pair requires an exact market-ID/native-orientation rule approval with a SHA-256 rule fingerprint.
 - `NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE` / NOT-GUARANTEED rule-risk alerts can never enter this path.
+- Final execution pricing must come from explicit live books: Gemini depth10@100ms, Kalshi depth-1 orderbook, or Polymarket market book.
 - The approvals set remains empty until a real venue/contract pair clears the full lifecycle audit.
 - Order transports must use immediate execution semantics and hard-halt on unresolved ambiguity or one-sided fill.
+- The first live authorization is a one-use canary token; the service cannot mint its own authorization.
