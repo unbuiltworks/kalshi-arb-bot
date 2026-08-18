@@ -85,6 +85,74 @@ def _complete_outcome_rows(outcome_rows: Iterable[dict[str, Any]]) -> tuple[dict
     return chosen, conflicts
 
 
+def _validated_group_fills(
+    group_id: str,
+    candidates_by_venue: dict[str, list[LedgerEvent]],
+) -> tuple[dict[str, LedgerEvent] | None, dict[str, Any] | None]:
+    """Return the one exact complementary synthetic fill per venue or fail closed.
+
+    Paper micro-probes are emitted as exactly two simultaneous synthetic fills. A
+    malformed/replayed ledger must never let settlement code silently choose the last
+    fill seen for a venue: doing that could attach an observed outcome to the wrong
+    market/side/quantity and manufacture realized paper P/L.
+    """
+    if set(candidates_by_venue) != set(VENUES):
+        return None, None
+
+    fills: dict[str, LedgerEvent] = {}
+    variant_counts: dict[str, int] = {}
+    for venue in VENUES:
+        unique: dict[tuple[object, ...], LedgerEvent] = {}
+        for event in candidates_by_venue[venue]:
+            signature = (
+                event.market_id,
+                event.settlement_key,
+                event.category,
+                event.side,
+                event.quantity,
+                event.price,
+            )
+            unique[signature] = event
+        variant_counts[venue] = len(unique)
+        if len(unique) != 1:
+            return None, {
+                "trade_group_id": group_id,
+                "status": "AMBIGUOUS_FILL_LEGS_FAIL_CLOSED",
+                "fill_variants_by_venue": variant_counts,
+                "settlement_events_created": 0,
+                "read_only": True,
+                "order_entry": False,
+            }
+        fills[venue] = next(iter(unique.values()))
+
+    poly = fills["polymarket_us"]
+    kalshi = fills["kalshi"]
+    structurally_valid = (
+        poly.settlement_key == kalshi.settlement_key
+        and poly.category == kalshi.category
+        and poly.quantity > 0
+        and poly.quantity == kalshi.quantity
+        and poly.side in VALID_OUTCOMES
+        and kalshi.side in VALID_OUTCOMES
+        and poly.side != kalshi.side
+    )
+    if not structurally_valid:
+        return None, {
+            "trade_group_id": group_id,
+            "status": "MALFORMED_COMPLEMENTARY_FILL_GROUP_FAIL_CLOSED",
+            "polymarket_us_market_id": poly.market_id,
+            "kalshi_market_id": kalshi.market_id,
+            "same_settlement_key": poly.settlement_key == kalshi.settlement_key,
+            "same_category": poly.category == kalshi.category,
+            "same_positive_quantity": poly.quantity > 0 and poly.quantity == kalshi.quantity,
+            "complementary_sides": poly.side in VALID_OUTCOMES and kalshi.side in VALID_OUTCOMES and poly.side != kalshi.side,
+            "settlement_events_created": 0,
+            "read_only": True,
+            "order_entry": False,
+        }
+    return fills, None
+
+
 def settlement_events(
     ledger_events: Iterable[LedgerEvent],
     outcome_rows: Iterable[dict[str, Any]],
@@ -99,11 +167,11 @@ def settlement_events(
     market on the same venue cannot suppress reconciliation of the intended fill.
     """
     events = list(ledger_events)
-    fills_by_group: dict[str, dict[str, LedgerEvent]] = {}
+    fills_by_group: dict[str, dict[str, list[LedgerEvent]]] = {}
     existing: set[tuple[str, str, str]] = set()
     for event in events:
         if event.event_type == "fill" and event.venue in VENUES:
-            fills_by_group.setdefault(event.trade_group_id, {})[event.venue] = event
+            fills_by_group.setdefault(event.trade_group_id, {}).setdefault(event.venue, []).append(event)
         elif event.event_type == "settlement":
             existing.add((event.trade_group_id, event.venue, event.market_id))
 
@@ -123,8 +191,11 @@ def settlement_events(
     for group_id, row in complete_rows.items():
         poly_outcome = str(row.get("polymarket_us_outcome") or "").upper()
         kalshi_outcome = str(row.get("kalshi_outcome") or "").upper()
-        fills = fills_by_group.get(group_id) or {}
-        if set(fills) != set(VENUES):
+        fills, fill_audit = _validated_group_fills(group_id, fills_by_group.get(group_id) or {})
+        if fill_audit is not None:
+            audits.append(fill_audit)
+            continue
+        if fills is None:
             continue
 
         group_created: list[LedgerEvent] = []
@@ -174,15 +245,16 @@ def reconcile_paper_ledger(ledger_path: Path, outcomes_path: Path) -> dict[str, 
     merged = reconcile_events(before, created)
     summary = summarize_ledger(merged)
     settled_audits = [row for row in audits if row.get("status") == "SETTLED_FROM_OBSERVED_OUTCOMES"]
-    conflict_audits = [row for row in audits if row.get("status") == "OUTCOME_CONFLICT_FAIL_CLOSED"]
+    conflict_audits = [row for row in audits if str(row.get("status", "")).endswith("FAIL_CLOSED")]
     summary.update({
         "new_settlement_events": len(created),
         "new_settled_trade_groups": len(settled_audits),
         "new_outcome_disagreement_groups": sum(not row["outcomes_agree"] for row in settled_audits),
-        "outcome_conflict_groups": len(conflict_audits),
+        "outcome_conflict_groups": sum(row.get("status") == "OUTCOME_CONFLICT_FAIL_CLOSED" for row in conflict_audits),
+        "fill_structure_conflict_groups": sum(row.get("status") in {"AMBIGUOUS_FILL_LEGS_FAIL_CLOSED", "MALFORMED_COMPLEMENTARY_FILL_GROUP_FAIL_CLOSED"} for row in conflict_audits),
         "settlement_audits": audits,
         "settlement_semantics": "VENUE_SPECIFIC_OBSERVED_OUTCOMES_NOT_ASSUMED_EQUIVALENT",
-        "conflict_policy": "CONFLICTING_COMPLETE_OUTCOMES_FAIL_CLOSED_NO_REALIZED_PNL",
+        "conflict_policy": "CONFLICTING_OUTCOMES_OR_AMBIGUOUS_FILL_STRUCTURE_FAIL_CLOSED_NO_REALIZED_PNL",
         "live_probe_ready": False,
         "read_only": True,
         "order_entry": False,
