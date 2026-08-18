@@ -1,8 +1,8 @@
 """Read-only Crypto.com DCM order-book probe for prediction contracts.
 
 This worker cross-checks contract symbols discovered through Crypto.com's public
-Predictions catalog against the production DCM public order-book endpoint. It exists
-because catalog/price fields are not sufficient evidence of executable bid/ask
+Predictions catalog against the production DCM public instrument/book endpoints. It
+exists because catalog/price fields are not sufficient evidence of executable bid/ask
 semantics. No authentication, account endpoint, or order endpoint is used.
 """
 from __future__ import annotations
@@ -35,11 +35,7 @@ def _decimal(value: Any) -> Decimal | None:
 
 
 def choose_contract(contracts: list[dict[str, Any]], asset: str) -> dict[str, Any] | None:
-    """Choose the active matching contract closest to 50% catalog chance.
-
-    A near-50% contract is more likely to have a useful two-sided book than a deep
-    tail strike. When chance is unavailable, retain the contract as a fallback.
-    """
+    """Choose the active matching contract closest to 50% catalog chance."""
     matching = [
         row for row in contracts
         if isinstance(row, dict)
@@ -80,13 +76,23 @@ def top_of_book(result: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def _response_payload(response: httpx.Response) -> Any:
+    try:
+        return response.json()
+    except Exception:
+        return response.text[:1000]
+
+
 def _unwrap_dcm(response: httpx.Response) -> dict[str, Any]:
-    response.raise_for_status()
-    payload = response.json()
+    payload = _response_payload(response)
+    if response.status_code >= 400:
+        raise ValueError(f"DCM HTTP {response.status_code} body={payload}")
     if not isinstance(payload, dict):
-        raise ValueError("DCM response was not an object")
+        raise ValueError(f"DCM response was not an object: {payload}")
     if int(payload.get("code", -1)) != 0:
-        raise ValueError(f"DCM code={payload.get('code')} message={payload.get('message')}")
+        raise ValueError(
+            f"DCM code={payload.get('code')} message={payload.get('message')} original={payload.get('original')}"
+        )
     result = payload.get("result")
     return result if isinstance(result, dict) else {}
 
@@ -148,6 +154,34 @@ async def discover_representatives(
     return selected
 
 
+async def fetch_dcm_instrument_index(dcm_http: httpx.AsyncClient) -> tuple[set[str], dict[str, Any]]:
+    response = await dcm_http.get("/public/get-instruments", params={"limit": "1000"})
+    result = _unwrap_dcm(response)
+    rows = result.get("data") or []
+    symbols = {
+        str(row.get("symbol"))
+        for row in rows
+        if isinstance(row, dict) and row.get("symbol")
+    }
+    prediction_like = [
+        row for row in rows
+        if isinstance(row, dict)
+        and (
+            str(row.get("product_type") or "").upper() == "EVENTS"
+            or isinstance(row.get("event_details"), dict)
+            or str(row.get("symbol") or "").endswith(".NXO")
+        )
+    ]
+    meta = {
+        "http_status": response.status_code,
+        "instruments_returned": len(rows),
+        "prediction_like_instruments": len(prediction_like),
+        "sample_prediction_symbols": [str(row.get("symbol")) for row in prediction_like[:12]],
+        "next_cursor_present": bool(result.get("next_cursor")),
+    }
+    return symbols, meta
+
+
 async def probe_cycle(
     catalog_http: httpx.AsyncClient,
     dcm_http: httpx.AsyncClient,
@@ -164,6 +198,26 @@ async def probe_cycle(
         )
     except Exception as exc:
         errors.append(f"catalog:{type(exc).__name__}:{exc}")
+
+    dcm_symbols: set[str] = set()
+    dcm_catalog_meta: dict[str, Any] = {}
+    try:
+        dcm_symbols, dcm_catalog_meta = await fetch_dcm_instrument_index(dcm_http)
+        selected_symbols = [str(row.get("symbol") or "") for row in representatives]
+        dcm_catalog_meta["selected_present_count"] = sum(symbol in dcm_symbols for symbol in selected_symbols)
+        dcm_catalog_meta["selected_missing"] = [symbol for symbol in selected_symbols if symbol not in dcm_symbols]
+        logger.info(
+            "CRYPTOCOM_DCM_INSTRUMENT_SUMMARY %s",
+            json.dumps({
+                **dcm_catalog_meta,
+                "authentication_used": False,
+                "trade_authorized": False,
+                "read_only": True,
+                "order_entry": False,
+            }, separators=(",", ":"), default=str),
+        )
+    except Exception as exc:
+        errors.append(f"instruments:{type(exc).__name__}:{exc}")
 
     books = 0
     healthy_two_sided = 0
@@ -184,6 +238,7 @@ async def probe_cycle(
             payload = {
                 **row,
                 **top,
+                "present_in_dcm_instrument_page": symbol in dcm_symbols if dcm_symbols else None,
                 "dcm_http_status": response.status_code,
                 "observed_at_ms": int(time.time() * 1000),
                 "venue": "CRYPTO_COM_DCM_PUBLIC_BOOK",
@@ -202,6 +257,7 @@ async def probe_cycle(
         "healthy_two_sided_books": healthy_two_sided,
         "assets_selected": sorted({str(row.get("asset")) for row in representatives}),
         "symbols_selected": [str(row.get("symbol")) for row in representatives],
+        "dcm_catalog": dcm_catalog_meta,
         "errors": errors[:20],
         "catalog_base": CATALOG_BASE,
         "dcm_base": DCM_BASE,
