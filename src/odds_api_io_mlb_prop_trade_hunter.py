@@ -1,35 +1,37 @@
-"""Read-only MLB sportsbook/Gemini prop trade hunter using executable depth sweeps.
+"""Read-only MLB sportsbook/Gemini prop hunter with guaranteed depth-safe sizing.
 
-A sportsbook quote is only promoted after a fresh Gemini L2 partial-depth snapshot.
-Gemini prediction-market public depth is normalized in YES price space, so a BUY
-NO sweep consumes YES bids from highest to lowest and transforms each price P to
-(1-P), preserving the displayed contract quantity at each level.
+Every candidate is revalidated against a fresh Gemini L2 snapshot. Gemini public
+prediction depth is normalized in YES space, so BUY NO liquidity is derived from
+YES bids. The actual trade plan is selected by the pure hedge optimizer, which:
+- works backward from executable Gemini depth;
+- rounds sportsbook stake down to cents;
+- rounds Gemini quantity down to 0.01 contracts;
+- prices the entire Gemini FOK quantity at the worst submitted limit for the
+  guaranteed P/L gate (price improvement is optional upside only);
+- proves P/L independently for prop-hit and prop-miss outcomes.
 
-The hunter computes matched sportsbook/Gemini payout quantity, full depth-weighted
-Gemini raw cost, conservative per-fill taker fees, explicit sportsbook stake/profit/
-total return, and worst-case P/L. It has no order transport and remains rule-blocked.
+No order transport is imported. Results remain settlement-rule blocked and are
+never marked manually actionable or execution eligible.
 """
 from __future__ import annotations
 
 import asyncio
 from collections import Counter
-from dataclasses import dataclass
 from decimal import Decimal
 import json
 import logging
 import time
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
 import websockets
 
 from src import odds_api_io_mlb_prop_exact_shadow as exact
 from src import odds_api_io_mlb_hot_shadow as base
-from src.gemini_kalshi_execution_shadow import gemini_predictions_taker_fee
 from src.gemini_kalshi_live_shadow import GEMINI_WS
+from src.gemini_prop_hedge_optimizer import best_guaranteed_buy_no_hedge
 
 logger = logging.getLogger("kalshi_arb.odds_api_io_mlb_prop_trade_hunter")
 D = Decimal
-ONE = D("1")
 MIN_SNAPSHOT_EDGE = D("0.002")
 MAX_VALIDATE_CONCURRENCY = 8
 VALIDATE_COOLDOWN_MS = 1000
@@ -46,29 +48,6 @@ _stats: Counter[str] = Counter()
 _best_profit = D("0")
 
 
-@dataclass(frozen=True)
-class NoFill:
-    no_price: Decimal
-    quantity: Decimal
-
-
-@dataclass(frozen=True)
-class NoSweep:
-    quantity: Decimal
-    raw_cost: Decimal
-    fee: Decimal
-    worst_limit_price: Decimal
-    fills: tuple[NoFill, ...]
-
-    @property
-    def total_cost(self) -> Decimal:
-        return self.raw_cost + self.fee
-
-    @property
-    def average_raw_price(self) -> Decimal:
-        return self.raw_cost / self.quantity
-
-
 def _levels(raw: Any) -> list[tuple[Decimal, Decimal]]:
     if not isinstance(raw, list):
         return []
@@ -80,92 +59,9 @@ def _levels(raw: Any) -> list[tuple[Decimal, Decimal]]:
             price, qty = D(str(row[0])), D(str(row[1]))
         except Exception:
             continue
-        if price.is_finite() and qty.is_finite() and D("0") <= price <= ONE and qty > 0:
+        if price.is_finite() and qty.is_finite() and D("0") <= price <= D("1") and qty > 0:
             out.append((price, qty))
     return out
-
-
-def buy_no_sweep_from_yes_bids(
-    yes_bids: Sequence[tuple[Decimal, Decimal]], quantity: Decimal,
-) -> NoSweep | None:
-    """Sweep BUY NO quantity against a Gemini YES-space depth snapshot.
-
-    Highest YES bid maps to the cheapest executable NO ask (1-YES bid). Fees are
-    conservatively rounded per consumed price level rather than once across fills.
-    """
-    if quantity <= 0:
-        return None
-    remaining = quantity
-    raw_cost = D("0")
-    fee = D("0")
-    fills: list[NoFill] = []
-    for yes_price, level_qty in sorted(yes_bids, key=lambda x: x[0], reverse=True):
-        if remaining <= 0:
-            break
-        take = min(remaining, level_qty)
-        if take <= 0:
-            continue
-        no_price = ONE - yes_price
-        if not (D("0") < no_price < ONE):
-            continue
-        fills.append(NoFill(no_price=no_price, quantity=take))
-        raw_cost += no_price * take
-        fee += gemini_predictions_taker_fee(no_price, take)
-        remaining -= take
-    if remaining > 0 or not fills:
-        return None
-    return NoSweep(
-        quantity=quantity,
-        raw_cost=raw_cost,
-        fee=fee,
-        worst_limit_price=max(fill.no_price for fill in fills),
-        fills=tuple(fills),
-    )
-
-
-def _candidate_quantities(yes_bids: Sequence[tuple[Decimal, Decimal]]) -> list[Decimal]:
-    total = D("0")
-    out: set[Decimal] = set()
-    for _, qty in sorted(yes_bids, key=lambda x: x[0], reverse=True):
-        if total >= MAX_MATCHED_PAYOUT:
-            break
-        total = min(MAX_MATCHED_PAYOUT, total + qty)
-        if total > 0:
-            out.add(total)
-    if total >= ONE:
-        out.add(ONE)
-    return sorted(out)
-
-
-def _hedge_payload(retail: exact.RetailProp, sweep: NoSweep) -> dict[str, Decimal] | None:
-    qty = sweep.quantity
-    sportsbook_stake = qty / retail.decimal_odds
-    sportsbook_profit = qty - sportsbook_stake
-    sportsbook_total_return = qty
-    gemini_total_cost = sweep.total_cost
-    total_capital = sportsbook_stake + gemini_total_cost
-    pnl_if_prop_hits = sportsbook_total_return - total_capital
-    pnl_if_prop_misses = qty - total_capital
-    worst_case = min(pnl_if_prop_hits, pnl_if_prop_misses)
-    if worst_case <= 0 or total_capital <= 0:
-        return None
-    remaining_for_sportsbook = qty - gemini_total_cost
-    min_decimal = qty / remaining_for_sportsbook if remaining_for_sportsbook > 0 else D("Infinity")
-    return {
-        "quantity": qty,
-        "sportsbook_stake": sportsbook_stake,
-        "sportsbook_profit": sportsbook_profit,
-        "sportsbook_total_return": sportsbook_total_return,
-        "gemini_raw_cost": sweep.raw_cost,
-        "gemini_fee": sweep.fee,
-        "gemini_total_cost": gemini_total_cost,
-        "total_capital": total_capital,
-        "pnl_if_prop_hits": pnl_if_prop_hits,
-        "pnl_if_prop_misses": pnl_if_prop_misses,
-        "worst_case_locked_profit": worst_case,
-        "roi_on_total_capital": worst_case / total_capital,
-        "minimum_sportsbook_decimal": min_decimal,
-    }
 
 
 async def gemini_depth_once(
@@ -217,34 +113,29 @@ async def _validate(symbol: str, retail: exact.RetailProp, snapshot_profit: Deci
             return
 
         now_ms = int(time.time() * 1000)
-        retail_age_ms = now_ms - retail.received_ms
-        gemini_age_ms = now_ms - depth_received_ms
         _stats["gemini_depth_validations"] += 1
         if not yes_bids:
             _stats["no_executable_gemini_depth"] += 1
             return
 
-        best: tuple[NoSweep, dict[str, Decimal]] | None = None
-        for qty in _candidate_quantities(yes_bids):
-            sweep = buy_no_sweep_from_yes_bids(yes_bids, qty)
-            if sweep is None:
-                continue
-            hedge = _hedge_payload(retail, sweep)
-            if hedge is None:
-                continue
-            if best is None or hedge["worst_case_locked_profit"] > best[1]["worst_case_locked_profit"]:
-                best = (sweep, hedge)
-
-        if best is None:
-            _stats["depth_revalidated_nonpositive"] += 1
+        plan = best_guaranteed_buy_no_hedge(
+            yes_bids=yes_bids,
+            sportsbook_decimal_odds=retail.decimal_odds,
+            max_matched_payout=MAX_MATCHED_PAYOUT,
+            sportsbook_stake_increment=D("0.01"),
+            gemini_quantity_increment=D("0.01"),
+        )
+        if plan is None:
+            _stats["guaranteed_nonpositive"] += 1
             return
 
-        sweep, hedge = best
-        locked_profit = hedge["worst_case_locked_profit"]
-        _stats["positive_depth_validations"] += 1
-        if locked_profit > _best_profit:
-            _best_profit = locked_profit
+        _stats["guaranteed_positive_depth_validations"] += 1
+        if plan.worst_case_locked_profit > _best_profit:
+            _best_profit = plan.worst_case_locked_profit
 
+        expected_improvement = (
+            plan.gemini_guaranteed_max_total_debit - plan.expected_depth_total_cost
+        )
         payload = {
             "ts_ms": now_ms,
             "book": retail.book,
@@ -253,42 +144,49 @@ async def _validate(symbol: str, retail: exact.RetailProp, snapshot_profit: Deci
             "stat": retail.stat,
             "line": str(retail.line),
             "sportsbook_over_decimal": str(retail.decimal_odds),
-            "sportsbook_stake": str(hedge["sportsbook_stake"]),
-            "sportsbook_profit_if_hits": str(hedge["sportsbook_profit"]),
-            "sportsbook_total_return_if_hits": str(hedge["sportsbook_total_return"]),
+            "sportsbook_stake": str(plan.sportsbook_stake),
+            "sportsbook_profit_if_hits": str(plan.sportsbook_total_return - plan.sportsbook_stake),
+            "sportsbook_total_return_if_hits": str(plan.sportsbook_total_return),
+            "sportsbook_stake_increment": "0.01",
             "gemini_symbol": symbol,
+            "gemini_side": "BUY",
             "gemini_outcome": "NO",
-            "gemini_depth_basis": "PUBLIC_L2_YES_SPACE_DEPTH10_100MS",
+            "gemini_quantity": str(plan.gemini_quantity),
+            "gemini_quantity_increment_assumed": "0.01",
+            "gemini_fok_limit_price": str(plan.gemini_no_limit_price),
+            "gemini_available_depth_through_limit": str(plan.available_depth_through_limit),
+            "gemini_guaranteed_max_raw_debit": str(plan.gemini_guaranteed_max_raw_debit),
+            "gemini_guaranteed_max_fee": str(plan.gemini_guaranteed_max_fee),
+            "gemini_guaranteed_max_total_debit": str(plan.gemini_guaranteed_max_total_debit),
+            "gemini_expected_depth_raw_cost": str(plan.expected_depth_raw_cost),
+            "gemini_expected_depth_fee": str(plan.expected_depth_fee),
+            "gemini_expected_depth_total_cost": str(plan.expected_depth_total_cost),
+            "gemini_expected_price_improvement_vs_limit_max": str(expected_improvement),
+            "gemini_expected_fill_levels": [
+                {"no_price": str(fill.no_price), "quantity": str(fill.quantity)}
+                for fill in plan.expected_fills
+            ],
             "gemini_best_yes_bid": str(max(p for p, _ in yes_bids)),
             "gemini_best_yes_ask": None if not yes_asks else str(min(p for p, _ in yes_asks)),
-            "gemini_no_best_ask": str(ONE - max(p for p, _ in yes_bids)),
-            "gemini_worst_no_limit_price": str(sweep.worst_limit_price),
-            "gemini_fill_levels": [
-                {"no_price": str(fill.no_price), "quantity": str(fill.quantity)}
-                for fill in sweep.fills
-            ],
-            "gemini_raw_cost": str(hedge["gemini_raw_cost"]),
-            "gemini_conservative_fee": str(hedge["gemini_fee"]),
-            "gemini_total_cost": str(hedge["gemini_total_cost"]),
-            "matched_contracts_and_payout": str(hedge["quantity"]),
-            "total_capital": str(hedge["total_capital"]),
-            "pnl_if_prop_hits": str(hedge["pnl_if_prop_hits"]),
-            "pnl_if_prop_misses": str(hedge["pnl_if_prop_misses"]),
-            "worst_case_locked_profit": str(locked_profit),
-            "roi_on_total_capital": str(hedge["roi_on_total_capital"]),
-            "minimum_sportsbook_decimal_for_positive_lock": str(hedge["minimum_sportsbook_decimal"]),
+            "pnl_if_prop_hits_guaranteed": str(plan.pnl_if_prop_hits_guaranteed),
+            "pnl_if_prop_misses_guaranteed": str(plan.pnl_if_prop_misses_guaranteed),
+            "worst_case_locked_profit": str(plan.worst_case_locked_profit),
+            "guaranteed_roi_on_capital": str(plan.guaranteed_roi_on_capital),
             "snapshot_candidate_profit_per_1": str(snapshot_profit),
-            "retail_age_ms_at_validation": retail_age_ms,
-            "gemini_depth_age_ms": gemini_age_ms,
-            "gemini_snapshot_roundtrip_ms": now_ms - started_ms,
-            "price_semantics_gate": "L2_DEPTH_SWEEP_REQUIRED",
+            "retail_age_ms_at_validation": now_ms - retail.received_ms,
+            "gemini_depth_age_ms": now_ms - depth_received_ms,
+            "gemini_depth_roundtrip_ms": now_ms - started_ms,
+            "pricing_gate": "FRESH_L2_DEPTH_PLUS_WORST_FOK_LIMIT",
             "settlement_blocker": "FANDUEL_VS_GEMINI_SUSPENSION_RESCHEDULE_RULES_NOT_IDENTICAL",
             "execution_eligible": False,
             "manual_actionable": False,
             "read_only": True,
             "order_entry": False,
         }
-        logger.info("PROP_TRADE_HUNTER_DEPTH_POSITIVE %s", json.dumps(payload, separators=(",", ":"), default=str))
+        logger.info(
+            "PROP_TRADE_HUNTER_GUARANTEED_POSITIVE %s",
+            json.dumps(payload, separators=(",", ":"), default=str),
+        )
 
 
 def _schedule_validation(symbol: str, retail: exact.RetailProp, snapshot_profit: Decimal) -> None:
@@ -298,7 +196,10 @@ def _schedule_validation(symbol: str, retail: exact.RetailProp, snapshot_profit:
         _stats["cooldown_skips"] += 1
         return
     _last_validation_ms[key] = now_ms
-    task = asyncio.create_task(_validate(symbol, retail, snapshot_profit), name=f"prop_depth_validate_{len(_validation_tasks)}")
+    task = asyncio.create_task(
+        _validate(symbol, retail, snapshot_profit),
+        name=f"prop_guaranteed_validate_{len(_validation_tasks)}",
+    )
     _validation_tasks.add(task)
     task.add_done_callback(_validation_tasks.discard)
 
@@ -322,7 +223,7 @@ def _hunter_ingest(self: base.OddsIoStore, message: Mapping[str, Any], *, freshn
 async def _hunter_heartbeat() -> None:
     while True:
         await asyncio.sleep(10.0)
-        logger.info("PROP_TRADE_HUNTER_DEPTH_SUMMARY %s", json.dumps({
+        logger.info("PROP_TRADE_HUNTER_GUARANTEED_SUMMARY %s", json.dumps({
             "stats": dict(_stats),
             "validation_tasks_inflight": len(_validation_tasks),
             "best_worst_case_locked_profit": str(_best_profit),
@@ -336,7 +237,7 @@ async def _hunter_heartbeat() -> None:
 
 
 async def _run_hunter(args: Any) -> None:
-    hb = asyncio.create_task(_hunter_heartbeat(), name="trade_hunter_depth_heartbeat")
+    hb = asyncio.create_task(_hunter_heartbeat(), name="trade_hunter_guaranteed_heartbeat")
     try:
         await _orig_run_session(args)
     finally:
