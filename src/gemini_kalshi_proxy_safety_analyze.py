@@ -1,7 +1,7 @@
 """Analyze read-only BTC proxy-calibration settlement logs.
 
 Input may be raw JSONL payloads or Railway-style lines containing
-``PROXY_SETTLEMENT {json}``.  Cohorts answer a narrow empirical question: when a
+``PROXY_SETTLEMENT {json}``. Cohorts answer a narrow empirical question: when a
 free public-price composite was already on the same side of both venue thresholds
 at a given seconds-to-expiry checkpoint, how often did the eventual Gemini and
 Kalshi outcomes still disagree or the proxy predict either venue incorrectly?
@@ -45,6 +45,14 @@ def _d(value: Any) -> Decimal | None:
         return D(str(value))
     except Exception:
         return None
+
+
+def _label(value: Decimal) -> str:
+    """Human/stable JSON key: Decimal('20') -> '20', never scientific '2E+1'."""
+    text = format(value, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
 
 
 def parse_settlement_lines(lines: Iterable[str]) -> list[dict[str, Any]]:
@@ -129,7 +137,7 @@ def summarize(payloads: list[dict[str, Any]]) -> dict[str, Any]:
                 and upper is not None
                 and upper <= MAX_WILSON95_OUTCOME_DISAGREEMENT
             )
-            cohorts[str(margin.normalize()) if margin else "0"] = {
+            cohorts[_label(margin)] = {
                 "min_abs_margin_bps_from_both_boundaries": str(margin),
                 "eligible_windows": n,
                 "venue_outcome_disagreements": disagreements,
