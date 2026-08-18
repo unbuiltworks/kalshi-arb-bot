@@ -4,7 +4,8 @@ A generic sports FAQ or a hand-written equivalence summary is not sufficient evi
 for an exact player-prop settlement audit. Polymarket US exposes instrument-specific
 ``instrument_rules`` metadata, while Kalshi exposes market-specific rule text and
 settlement-source metadata. This module requires both exact-contract rule payloads
-before a pair can be classified as fully rule-audited shadow evidence.
+plus explicit independent per-dimension audit decisions before a pair can be
+classified as fully rule-audited shadow evidence.
 
 Read-only research only. No venue clients, credentials, or order-entry paths exist
 here.
@@ -14,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-AUDIT_CONTRACT = "EXACT_CONTRACT_RULE_AUDIT_V1"
+AUDIT_CONTRACT = "EXACT_CONTRACT_RULE_AUDIT_V2"
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,17 @@ class ExactRuleAudit:
     stat_definition_checked: bool
     cancellation_postponement_checked: bool
     source_hierarchy_checked: bool
+    participation_branch_equivalent: bool
+    stat_definition_equivalent: bool
+    cancellation_postponement_equivalent: bool
+    source_hierarchy_equivalent: bool
+    independent_reviewer: str
+    audit_decision_id: str
     equivalent: bool
+
+    @property
+    def decision_provenance_complete(self) -> bool:
+        return bool(self.independent_reviewer.strip() and self.audit_decision_id.strip())
 
     @property
     def complete(self) -> bool:
@@ -45,17 +56,21 @@ class ExactRuleAudit:
             and self.stat_definition_checked
             and self.cancellation_postponement_checked
             and self.source_hierarchy_checked
+            and self.participation_branch_equivalent
+            and self.stat_definition_equivalent
+            and self.cancellation_postponement_equivalent
+            and self.source_hierarchy_equivalent
+            and self.decision_provenance_complete
             and self.equivalent
         )
 
     def as_dict(self) -> dict[str, Any]:
-        """Emit a small, explicit evidence contract for downstream readiness code.
+        """Emit explicit exact-contract audit evidence for downstream readiness code.
 
-        We intentionally do not expose the full rule text in the operational row.
-        ``full_rules_audited_shadow`` can only be true after ``complete`` has verified
-        the exact-contract rule payloads and all required audit branches. Downstream
-        consumers should require ``audit_contract`` plus the exact identity fields,
-        not a generic hand-authored ``full_rules_audited=true`` boolean.
+        ``full_rules_audited_shadow`` is deliberately stronger than a caller-supplied
+        global ``equivalent`` boolean: every required semantic dimension must have an
+        explicit equivalent decision and the independent review must have stable
+        provenance. This module still never grants live-probe readiness.
         """
         return {
             "audit_contract": AUDIT_CONTRACT,
@@ -66,6 +81,13 @@ class ExactRuleAudit:
             "stat_definition_checked": self.stat_definition_checked,
             "cancellation_postponement_checked": self.cancellation_postponement_checked,
             "source_hierarchy_checked": self.source_hierarchy_checked,
+            "participation_branch_equivalent": self.participation_branch_equivalent,
+            "stat_definition_equivalent": self.stat_definition_equivalent,
+            "cancellation_postponement_equivalent": self.cancellation_postponement_equivalent,
+            "source_hierarchy_equivalent": self.source_hierarchy_equivalent,
+            "independent_reviewer": self.independent_reviewer,
+            "audit_decision_id": self.audit_decision_id,
+            "decision_provenance_complete": self.decision_provenance_complete,
             "equivalent": self.equivalent,
             "full_rules_audited_shadow": self.complete,
             "live_probe_ready": False,
@@ -84,12 +106,20 @@ def exact_rule_audit_from_payloads(
     cancellation_postponement_checked: bool,
     source_hierarchy_checked: bool,
     equivalent: bool,
+    participation_branch_equivalent: bool = False,
+    stat_definition_equivalent: bool = False,
+    cancellation_postponement_equivalent: bool = False,
+    source_hierarchy_equivalent: bool = False,
+    independent_reviewer: str = "",
+    audit_decision_id: str = "",
 ) -> ExactRuleAudit:
     """Build exact-contract audit evidence from already-fetched public payloads.
 
-    The field extraction is deliberately conservative. If an endpoint/schema does
-    not expose contract-specific rule text, ``complete`` remains false rather than
-    substituting a generic FAQ, UI label, or analyst summary.
+    Field extraction is deliberately conservative. If an endpoint/schema does not
+    expose contract-specific rule text, or if the independent audit has not recorded
+    explicit equivalence for every required semantic dimension, ``complete`` remains
+    false rather than substituting a generic FAQ, UI label, global boolean, or analyst
+    summary.
     """
     poly_id = str(
         polymarket.get("instrument_id")
@@ -131,5 +161,11 @@ def exact_rule_audit_from_payloads(
         stat_definition_checked=bool(stat_definition_checked),
         cancellation_postponement_checked=bool(cancellation_postponement_checked),
         source_hierarchy_checked=bool(source_hierarchy_checked),
+        participation_branch_equivalent=bool(participation_branch_equivalent),
+        stat_definition_equivalent=bool(stat_definition_equivalent),
+        cancellation_postponement_equivalent=bool(cancellation_postponement_equivalent),
+        source_hierarchy_equivalent=bool(source_hierarchy_equivalent),
+        independent_reviewer=str(independent_reviewer or ""),
+        audit_decision_id=str(audit_decision_id or ""),
         equivalent=bool(equivalent),
     )
