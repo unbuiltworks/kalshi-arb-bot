@@ -15,6 +15,7 @@ COPY tests/ tests/
 # player-prop normalization, sportsbook identity alignment, the event-driven
 # game-line hot layer, read-only Pushover qualification/dedupe, live MLB
 # participation proof, and fail-closed game/prop/team-total rule certification.
+# This gate is also the isolated Railway certification validation trigger.
 RUN pytest -q \
     tests/test_universal_sports_identity.py \
     tests/test_gemini_sports_adapter.py \
