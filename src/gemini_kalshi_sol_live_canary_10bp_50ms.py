@@ -38,7 +38,7 @@ CANARY_EXECUTION_DELAY_MS = 50
 CANARY_HARD_BUDGET_USD = D("5")
 CANARY_PLANNED_CAPITAL_LIMIT_USD = D("1")
 # Absolute one-time authorization window for this exact first canary build.
-CANARY_ARM_NOT_AFTER_UTC = datetime(2026, 8, 18, 23, 20, 0, tzinfo=timezone.utc)
+CANARY_ARM_NOT_AFTER_UTC = datetime(2026, 8, 18, 23, 35, 0, tzinfo=timezone.utc)
 
 
 def strict_execution_gate_10bp_50ms(
