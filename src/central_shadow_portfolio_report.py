@@ -41,6 +41,7 @@ class Sleeve:
     observed_episodes: int = 0
     observed_hours: Decimal = D("0")
     shadow_profit_dollars: Decimal = D("0")
+    observation_window_verified: bool = False
 
     @property
     def capacity_score(self) -> Decimal:
@@ -65,7 +66,10 @@ class Sleeve:
 
     @property
     def observed_shadow_dollars_per_day(self) -> Decimal | None:
-        if self.observed_hours <= 0:
+        # Fail closed: a sleeve may not annualize (or daily-ize) only the span between
+        # positive opportunities. The caller must explicitly attest that observed_hours
+        # covers the complete scanner observation window, including quiet periods.
+        if not self.observation_window_verified or self.observed_hours <= 0:
             return None
         return self.shadow_profit_dollars * D("24") / self.observed_hours
 
@@ -85,6 +89,7 @@ def sleeve_from_mapping(row: dict[str, Any]) -> Sleeve:
         observed_episodes=int(row.get("observed_episodes") or 0),
         observed_hours=_d(row.get("observed_hours")),
         shadow_profit_dollars=_d(row.get("shadow_profit_dollars")),
+        observation_window_verified=bool(row.get("observation_window_verified", False)),
     )
 
 
@@ -108,7 +113,13 @@ def _serialize(sleeve: Sleeve, rank: int) -> dict[str, Any]:
         "observed_episodes": sleeve.observed_episodes,
         "observed_hours": str(sleeve.observed_hours),
         "shadow_profit_dollars": str(sleeve.shadow_profit_dollars),
+        "observation_window_verified": sleeve.observation_window_verified,
         "observed_shadow_dollars_per_day": str(run_rate) if run_rate is not None else None,
+        "run_rate_status": (
+            "FULL_OBSERVATION_WINDOW_VERIFIED"
+            if run_rate is not None
+            else "WITHHELD_UNVERIFIED_OR_ZERO_OBSERVATION_WINDOW"
+        ),
         "promotion_status": "RESEARCH_ONLY_BLOCKED" if sleeve.hard_blockers else "NO_HARD_BLOCKER_RESEARCH_ONLY",
     }
 
@@ -131,6 +142,7 @@ def rank_sleeves(rows: Iterable[dict[str, Any] | Sleeve]) -> dict[str, Any]:
         "target_note": "$480/day is a research capacity target only, never a forecast.",
         "ranking_note": (
             "Capacity score = net edge per dollar × executable probability × displayed/consumable depth dollars ÷ capital lock hours. "
-            "Settlement confidence and basis risk are applied separately; hard blockers force promotable_score to zero."
+            "Settlement confidence and basis risk are applied separately; hard blockers force promotable_score to zero. "
+            "Observed $/day is withheld unless observed_hours is explicitly verified to cover the full scanner window, including quiet periods."
         ),
     }
