@@ -3,7 +3,7 @@ from decimal import Decimal
 from src.mlb_prop_paper_microprobe import build_paper_probes, paper_probe_events
 
 
-def _row(profit="0.04", *, direction="POLY_YES_KALSHI_NO", poly_slug="poly-example", kalshi_ticker="KXMLBHIT-EXAMPLE", settlement_equivalent_now=True):
+def _row(profit="0.04", *, direction="POLY_YES_KALSHI_NO", poly_slug="poly-example", kalshi_ticker="KXMLBHIT-EXAMPLE", participation_gate_satisfied=True):
     plan = {
         "direction": direction,
         "quantity": 2,
@@ -23,11 +23,20 @@ def _row(profit="0.04", *, direction="POLY_YES_KALSHI_NO", poly_slug="poly-examp
         "poly_slug": poly_slug,
         "kalshi_ticker": kalshi_ticker,
         "book_comparable": True,
+        "synchronized_book_pair": True,
+        "quote_receive_skew_ms": 10,
         "fetch_error": None,
         "required_participation_gate": "CONFIRMED_START_AND_FIRST_PLATE_APPEARANCE",
-        "participation_proof": {"satisfied": settlement_equivalent_now},
-        "rule_status": "EQUIVALENT_AFTER_PARTICIPATION" if settlement_equivalent_now else "CONDITIONAL_PARTICIPATION",
-        "settlement_equivalent_now": settlement_equivalent_now,
+        "participation_proof": {"satisfied": participation_gate_satisfied},
+        "participation_gate_satisfied": participation_gate_satisfied,
+        "rule_status": "EQUIVALENT_AFTER_PARTICIPATION" if participation_gate_satisfied else "CONDITIONAL_PARTICIPATION",
+        "rules_status": "RULES_PENDING",
+        "full_rules_audited": False,
+        "fully_audited_shadow_ready": False,
+        "read_only": True,
+        "order_entry": False,
+        "execution_eligible": False,
+        "live_probe_ready": False,
         "probe_1usd": None,
         "probe_5usd": plan,
     }
@@ -45,7 +54,8 @@ def test_paper_probe_uses_one_timestamp_and_trade_group_for_both_fills():
     assert audit["trade_group_id"] == fills[0].trade_group_id
     assert audit["poly_slug"] == "poly-example"
     assert audit["kalshi_ticker"] == "KXMLBHIT-EXAMPLE"
-    assert audit["settlement_equivalent_now"] is True
+    assert audit["participation_gate_satisfied"] is True
+    assert audit["synchronized_book_pair"] is True
     assert audit["live_probe_ready"] is False
     assert "INDEPENDENT_SETTLEMENT_AUDIT_REQUIRED" in audit["live_blockers"]
     assert "FRESH_EXPLICIT_APPROVAL_REQUIRED" in audit["live_blockers"]
@@ -58,8 +68,14 @@ def test_paper_probe_requires_three_cent_minimum_by_default():
 
 def test_paper_probe_requires_participation_cleared_universe():
     assert paper_probe_events(
-        _row(settlement_equivalent_now=False), probe_field="probe_5usd", ts_ms=1
+        _row(participation_gate_satisfied=False), probe_field="probe_5usd", ts_ms=1
     ) is None
+
+
+def test_paper_probe_rejects_unsynchronized_books():
+    row = _row()
+    row["synchronized_book_pair"] = False
+    assert paper_probe_events(row, probe_field="probe_5usd", ts_ms=1) is None
 
 
 def test_direction_maps_complementary_sides_correctly():
