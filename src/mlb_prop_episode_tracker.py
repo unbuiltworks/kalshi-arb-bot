@@ -105,14 +105,29 @@ def _best_valid_choice(
 
 
 def _close_event(old: dict[str, Any], observed_ms: int) -> dict[str, Any]:
+    """Close an episode with interval-censored duration telemetry.
+
+    With a polled scanner, the opportunity is known to have survived through
+    last_seen_ms and known to be absent by observed_ms. The true disappearance time
+    lies inside that interval. Keep the legacy duration_ms as the conservative lower
+    bound and expose the upper bound explicitly so survival/capacity analysis cannot
+    pretend the exact close timestamp was observed.
+    """
     opened_ms = int(old.get("opened_ms", observed_ms))
     last_seen_ms = int(old.get("last_seen_ms", opened_ms))
+    duration_lower_bound_ms = max(0, last_seen_ms - opened_ms)
+    duration_upper_bound_ms = max(duration_lower_bound_ms, observed_ms - opened_ms)
+    censoring_gap_ms = max(0, observed_ms - last_seen_ms)
     return {
         **old,
         "event": "CLOSE",
         "observed_ms": observed_ms,
         "last_seen_ms": last_seen_ms,
-        "duration_ms": max(0, last_seen_ms - opened_ms),
+        "duration_ms": duration_lower_bound_ms,
+        "duration_lower_bound_ms": duration_lower_bound_ms,
+        "duration_upper_bound_ms": duration_upper_bound_ms,
+        "close_censoring_gap_ms": censoring_gap_ms,
+        "duration_censoring": "INTERVAL_CENSORED_POLLING",
         "read_only": True,
         "order_entry": False,
         "live_probe_ready": False,
@@ -133,8 +148,10 @@ def advance_episodes(
     same direction emits MOVE while preserving the original opened_ms. A flip to the
     opposite complementary direction closes the old episode and opens a new one at
     the current observation, preventing unique-opportunity/capital accounting from
-    blending economically distinct trades. Missing opportunities emit CLOSE with
-    measured duration. State is JSON-serializable for a non-blocking sidecar.
+    blending economically distinct trades. Missing opportunities emit CLOSE with an
+    interval-censored duration: last_seen-open is the guaranteed lower bound and the
+    current observation-open is the upper bound. State is JSON-serializable for a
+    non-blocking sidecar.
     """
     rows = [row for row in (snapshot.get("paper_probe_candidates") or []) if isinstance(row, dict)]
     grouped: dict[str, list[dict[str, Any]]] = {}
@@ -225,13 +242,19 @@ def advance_episodes(
 
 def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     closed = [e for e in events if e.get("event") == "CLOSE"]
-    durations = [int(e.get("duration_ms") or 0) for e in closed]
+    lower_bounds = [int(e.get("duration_lower_bound_ms", e.get("duration_ms") or 0)) for e in closed]
+    upper_bounds = [int(e.get("duration_upper_bound_ms", e.get("duration_ms") or 0)) for e in closed]
+    censoring_gaps = [int(e.get("close_censoring_gap_ms") or 0) for e in closed]
     return {
         "open": sum(e.get("event") == "OPEN" for e in events),
         "move": sum(e.get("event") == "MOVE" for e in events),
         "close": len(closed),
-        "closed_duration_ms_total": sum(durations),
-        "closed_duration_ms_max": max(durations, default=0),
+        "closed_duration_ms_total": sum(lower_bounds),
+        "closed_duration_ms_max": max(lower_bounds, default=0),
+        "closed_duration_lower_bound_ms_total": sum(lower_bounds),
+        "closed_duration_upper_bound_ms_total": sum(upper_bounds),
+        "closed_duration_censoring_gap_ms_total": sum(censoring_gaps),
+        "duration_semantics": "INTERVAL_CENSORED_CLOSE_LOWER_BOUND_IS_LAST_SEEN",
         "budget_semantics": "ALTERNATIVE_SIZING_TIERS_ONE_ACTIVE_EPISODE_PER_SETTLEMENT_IDENTITY",
         "direction_flip_semantics": "CLOSE_OLD_OPEN_NEW_EPISODE",
         "duplicate_identity_semantics": "BEST_VALID_ROW_ORDER_INDEPENDENT",
