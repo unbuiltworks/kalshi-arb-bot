@@ -3,8 +3,9 @@
 Measures the steady-state network floor from the current host without submitting,
 previewing, canceling, or modifying orders:
 
-* Gemini: ping/pong RTT on the already-authenticated trading WebSocket used by the
-  execution transport.
+* Gemini: ping/pong RTT on the authenticated trading WebSocket when private Gemini
+  credentials are configured; otherwise ping/pong RTT on the same public Gemini
+  WebSocket host, clearly labeled as a network proxy rather than order-path proof.
 * Kalshi: authenticated GET /exchange/status RTT through the same persistent httpx
   client class used by the order executor.
 
@@ -23,7 +24,10 @@ import statistics
 import time
 from typing import Any
 
+import websockets
+
 from src.gemini_kalshi_probe_transport import GeminiTradingSession, KalshiV2Executor
+from src.gemini_prediction_auth import GEMINI_WS, has_credentials
 
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_transport_latency_shadow")
 SAMPLES: dict[str, deque[float]] = {
@@ -59,11 +63,16 @@ def _summary(values: deque[float]) -> dict[str, float | int | None]:
     }
 
 
-async def gemini_ping_rtt_ms(session: GeminiTradingSession, *, timeout_s: float = 2.0) -> float:
-    if session.ws is None:
-        raise RuntimeError("Gemini trading WebSocket is not connected")
+def _ws_from_connection(connection: Any):
+    return getattr(connection, "ws", connection)
+
+
+async def gemini_ping_rtt_ms(connection: Any, *, timeout_s: float = 2.0) -> float:
+    ws = _ws_from_connection(connection)
+    if ws is None:
+        raise RuntimeError("Gemini WebSocket is not connected")
     started = time.perf_counter_ns()
-    pong = session.ws.ping()
+    pong = ws.ping()
     # websockets versions differ: ping() can return an awaitable that resolves to a
     # pong waiter, or directly return the pong waiter.
     if inspect.isawaitable(pong):
@@ -80,27 +89,49 @@ async def kalshi_get_rtt_ms(executor: KalshiV2Executor) -> float:
     return (time.perf_counter_ns() - started) / 1_000_000
 
 
-async def _connect_gemini() -> GeminiTradingSession:
-    session = GeminiTradingSession()
+async def _connect_gemini() -> tuple[Any, str]:
     started = time.perf_counter_ns()
-    await session.connect()
+    if has_credentials():
+        connection: Any = GeminiTradingSession()
+        await connection.connect()
+        mode = "AUTHENTICATED_TRADING_WS"
+    else:
+        connection = await websockets.connect(GEMINI_WS, open_timeout=5.0)
+        mode = "PUBLIC_SAME_HOST_WS_PROXY"
     connect_ms = (time.perf_counter_ns() - started) / 1_000_000
     logger.info(
         "CRYPTO_TRANSPORT_GEMINI_CONNECTED %s",
         json.dumps({
-            "authenticated_trading_ws_connect_ms": round(connect_ms, 3),
-            "orders_subscription_read_only": True,
+            "mode": mode,
+            "connect_ms": round(connect_ms, 3),
+            "gemini_private_credentials_present": has_credentials(),
+            "orders_subscription_read_only": mode == "AUTHENTICATED_TRADING_WS",
+            "proxy_caveat": (
+                None if mode == "AUTHENTICATED_TRADING_WS"
+                else "SAME_HOST_NETWORK_PROXY_NOT_PRIVATE_ORDER_PATH_PROOF"
+            ),
             "trade_authorized": False,
             "read_only": True,
             "order_entry": False,
         }, separators=(",", ":")),
     )
-    return session
+    return connection, mode
+
+
+async def _close_gemini(connection: Any) -> None:
+    if connection is None:
+        return
+    close = getattr(connection, "close", None)
+    if close is None:
+        return
+    result = close()
+    if inspect.isawaitable(result):
+        await result
 
 
 async def run(*, seconds: float, interval_s: float) -> None:
     deadline = None if seconds <= 0 else time.monotonic() + seconds
-    gemini = await _connect_gemini()
+    gemini, gemini_mode = await _connect_gemini()
     kalshi = KalshiV2Executor()
     try:
         # First Kalshi request intentionally records cold-ish setup, then the recurring
@@ -130,9 +161,9 @@ async def run(*, seconds: float, interval_s: float) -> None:
             except Exception as exc:
                 errors.append(f"gemini:{type(exc).__name__}:{str(exc)[:120]}")
                 try:
-                    await gemini.close()
+                    await _close_gemini(gemini)
                 finally:
-                    gemini = await _connect_gemini()
+                    gemini, gemini_mode = await _connect_gemini()
 
             try:
                 kalshi_ms = await kalshi_get_rtt_ms(kalshi)
@@ -148,6 +179,7 @@ async def run(*, seconds: float, interval_s: float) -> None:
                 combined_lower_bound_ms = max(gemini_ms, kalshi_ms)
 
             payload: dict[str, Any] = {
+                "gemini_mode": gemini_mode,
                 "gemini_ws_ping_ms": round(gemini_ms, 3) if gemini_ms is not None else None,
                 "kalshi_auth_get_ms": round(kalshi_ms, 3) if kalshi_ms is not None else None,
                 "concurrent_transport_floor_proxy_ms": (
@@ -156,6 +188,7 @@ async def run(*, seconds: float, interval_s: float) -> None:
                 "gemini_summary": _summary(SAMPLES["gemini_ws_ping_ms"]),
                 "kalshi_summary": _summary(SAMPLES["kalshi_auth_get_ms"]),
                 "errors": errors,
+                "gemini_private_order_path_proven": gemini_mode == "AUTHENTICATED_TRADING_WS",
                 "interpretation": "NETWORK_FLOOR_PROXY_NOT_ORDER_ACK_LATENCY",
                 "trade_authorized": False,
                 "read_only": True,
@@ -169,7 +202,7 @@ async def run(*, seconds: float, interval_s: float) -> None:
             if sleep_s:
                 await asyncio.sleep(sleep_s)
     finally:
-        await gemini.close()
+        await _close_gemini(gemini)
         await kalshi.close()
 
 
@@ -182,7 +215,7 @@ def main() -> None:
         raise SystemExit("--interval-s must be >=1")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
     logger.info(
-        "CRYPTO_TRANSPORT_LATENCY_SHADOW_ENABLED gemini=authenticated_ws_ping "
+        "CRYPTO_TRANSPORT_LATENCY_SHADOW_ENABLED gemini=authenticated_or_public_same_host_ws_ping "
         "kalshi=authenticated_persistent_get interval_s=%s "
         "mutation_methods_disabled=true trade_authorized=false read_only=true order_entry=false",
         args.interval_s,
