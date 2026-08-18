@@ -10,6 +10,11 @@ from src.universal_prediction_quant import LockOpportunity, MarketQuote
 NOW = 1_800_000_000_000
 FP = "a" * 64
 KEY = "baseball|mlb|player_prop|game|hits|player-1|ge|1"
+FINAL_SOURCE = {
+    "kalshi": "kalshi_public_orderbook_depth1_final",
+    "gemini": "gemini_depth10_100ms_final",
+    "polymarket": "polymarket_public_book_final",
+}
 
 
 def approval(a="kalshi", b="gemini", *, approved=True):
@@ -27,7 +32,7 @@ def approval(a="kalshi", b="gemini", *, approved=True):
     )
 
 
-def priced(venue, *, yes="0.40", no="0.60", received=NOW - 20, confidence="FULL_RULES_AUDITED_EXECUTABLE"):
+def priced(venue, *, yes="0.40", no="0.60", received=NOW - 20, confidence="FULL_RULES_AUDITED_EXECUTABLE", depth_source=None):
     markets = {"kalshi": "KX-PROP", "gemini": "GEMI-PROP", "polymarket": "poly-prop", "sportsbook:fanduel": "fd"}
     q = MarketQuote(
         venue=venue,
@@ -48,7 +53,7 @@ def priced(venue, *, yes="0.40", no="0.60", received=NOW - 20, confidence="FULL_
         raw_no_ask=D(no),
         yes_fee=D("0"),
         no_fee=D("0"),
-        depth_source="test",
+        depth_source=depth_source or FINAL_SOURCE.get(venue, "sportsbook_test"),
         source_side="YES",
     )
 
@@ -75,7 +80,6 @@ def opp(*, yes_venue="kalshi", no_venue="gemini", profit="0.05", confidence="FUL
 
 
 def test_certified_kalshi_gemini_q1_plan_passes():
-    # Exact current all-in costs reproduce a 5c lock: 0.40 + 0.55 = 0.95.
     rows = [priced("kalshi", yes="0.40", no="0.60"), priced("gemini", yes="0.45", no="0.55")]
     plan = build_micro_plan(opp(profit="0.05"), rows, approval(), now_ms=NOW)
     assert plan.quantity == D("1")
@@ -101,6 +105,12 @@ def test_unapproved_rule_record_is_rejected():
     rows = [priced("kalshi", yes="0.40", no="0.60"), priced("gemini", yes="0.45", no="0.55")]
     with pytest.raises(PermissionError, match="not execution-approved"):
         build_micro_plan(opp(profit="0.05"), rows, approval(approved=False), now_ms=NOW)
+
+
+def test_non_final_execution_source_is_rejected():
+    rows = [priced("kalshi", yes="0.40", no="0.60"), priced("gemini", yes="0.45", no="0.55", depth_source="event_prices_q1_probe_only")]
+    with pytest.raises(PermissionError, match="approved final execution book"):
+        build_micro_plan(opp(profit="0.05"), rows, approval(), now_ms=NOW)
 
 
 def test_stale_book_is_rejected():
