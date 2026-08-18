@@ -14,7 +14,6 @@ def _row(profit="0.04", qty=4, px="0.45", *, synchronized_book_pair=True):
         "book_comparable": True,
         "synchronized_book_pair": synchronized_book_pair,
         "quote_receive_skew_ms": 25 if synchronized_book_pair else 750,
-        # Legacy compatibility field is deliberately not the paper qualification source.
         "settlement_equivalent_now": True,
         "participation_gate_satisfied": True,
         "full_rules_audited": False,
@@ -63,8 +62,15 @@ def test_open_resting_move_close_lifecycle_without_double_count():
     assert state4 == {}
     assert [e["event"] for e in events4] == ["CLOSE"]
     assert events4[0]["duration_ms"] == 400
+    assert events4[0]["duration_lower_bound_ms"] == 400
+    assert events4[0]["duration_upper_bound_ms"] == 800
+    assert events4[0]["close_censoring_gap_ms"] == 400
+    assert events4[0]["duration_censoring"] == "INTERVAL_CENSORED_POLLING"
     summary = summarize_events(events4)
     assert summary["close"] == 1
+    assert summary["closed_duration_lower_bound_ms_total"] == 400
+    assert summary["closed_duration_upper_bound_ms_total"] == 800
+    assert summary["closed_duration_censoring_gap_ms_total"] == 400
     assert summary["paper_probe_only"] is True
     assert summary["live_probe_ready"] is False
     assert summary["synchronized_books_only"] is True
@@ -168,7 +174,8 @@ def test_direction_flip_closes_old_episode_and_opens_new_one():
 
     assert [e["event"] for e in events2] == ["CLOSE", "OPEN"]
     assert events2[0]["direction"] == "POLY_YES_KALSHI_NO"
-    assert events2[0]["duration_ms"] == 0
+    assert events2[0]["duration_lower_bound_ms"] == 0
+    assert events2[0]["duration_upper_bound_ms"] == 300
     assert events2[1]["direction"] == "KALSHI_YES_POLY_NO"
     assert events2[1]["duration_ms"] == 0
     assert state2[next(iter(state2))]["opened_ms"] == 1300
