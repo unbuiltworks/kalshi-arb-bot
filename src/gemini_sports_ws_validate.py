@@ -1,9 +1,8 @@
-"""Read-only Gemini sports bookTicker validator.
+"""Read-only Gemini sports live-book validator.
 
-The existing MLB hot scanner uses Gemini's active-events response as a q=1 price
-source. This validator subscribes to the actual Gemini prediction-market
-``bookTicker`` stream for those same symbols and compares executable live bid/ask
-to the active-events values. It has no private auth and no order-entry imports.
+Compares Gemini prediction-market active-events q=1 prices with the actual current
+order book and then watches bookTicker updates for the same symbols. No private
+authentication or order-entry code is used.
 """
 from __future__ import annotations
 
@@ -25,6 +24,7 @@ from src.universal_three_venue_sports import fetch_gemini_mlb
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_sports_ws_validate")
 MAX_WS_MESSAGE_BYTES = 8 * 1024 * 1024
+GEMINI_REST = "https://api.gemini.com"
 
 
 def _snapshot_prices(contract: dict[str, Any]) -> tuple[Decimal, Decimal] | None:
@@ -45,6 +45,39 @@ def _select_symbols(contracts: dict[str, Any], *, max_symbols: int, symbol_conta
     if needle:
         symbols = [symbol for symbol in symbols if needle in symbol.lower()]
     return symbols[:max_symbols]
+
+
+def _rest_top(body: dict[str, Any]) -> tuple[Decimal, Decimal, Decimal, Decimal] | None:
+    bids = body.get("bids") if isinstance(body.get("bids"), list) else []
+    asks = body.get("asks") if isinstance(body.get("asks"), list) else []
+    if not bids or not asks:
+        return None
+    try:
+        best_bid = max(bids, key=lambda row: D(str(row["price"])))
+        best_ask = min(asks, key=lambda row: D(str(row["price"])))
+        return (
+            D(str(best_bid["price"])),
+            D(str(best_bid.get("amount") or "0")),
+            D(str(best_ask["price"])),
+            D(str(best_ask.get("amount") or "0")),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+async def _fetch_rest_book(http: httpx.AsyncClient, symbol: str) -> tuple[str, int, dict[str, Any] | None, str | None]:
+    started_ms = int(time.time() * 1000)
+    try:
+        response = await http.get(
+            f"{GEMINI_REST}/v1/book/{symbol}",
+            params={"limit_bids": 5, "limit_asks": 5},
+        )
+        received_ms = int(time.time() * 1000)
+        response.raise_for_status()
+        body = response.json()
+        return symbol, received_ms, body if isinstance(body, dict) else None, None
+    except Exception as exc:
+        return symbol, started_ms, None, f"{type(exc).__name__}:{str(exc)[:240]}"
 
 
 async def _subscribe(symbols: list[str], queue: asyncio.Queue) -> None:
@@ -83,19 +116,56 @@ async def _subscribe(symbols: list[str], queue: asyncio.Queue) -> None:
 async def run(seconds: float, max_symbols: int, symbol_contains: str = "") -> None:
     async with httpx.AsyncClient(timeout=10.0) as http:
         events = await fetch_gemini_mlb(http)
-    contracts = _gemini_contracts(events)
-    symbols = _select_symbols(contracts, max_symbols=max_symbols, symbol_contains=symbol_contains)
-    if not symbols:
-        raise RuntimeError(f"No active Gemini MLB prediction symbols matched filter={symbol_contains!r}")
+        contracts = _gemini_contracts(events)
+        symbols = _select_symbols(contracts, max_symbols=max_symbols, symbol_contains=symbol_contains)
+        if not symbols:
+            raise RuntimeError(f"No active Gemini MLB prediction symbols matched filter={symbol_contains!r}")
 
-    logger.info("GEMINI_SPORTS_WS_VALIDATE_START %s", json.dumps({
-        "symbols": symbols,
-        "symbol_count": len(symbols),
-        "symbol_filter": symbol_contains,
-        "read_only": True,
-        "order_entry": False,
-    }, separators=(",", ":")))
-    snapshot = {symbol: _snapshot_prices(contracts[symbol]) for symbol in symbols}
+        logger.info("GEMINI_SPORTS_WS_VALIDATE_START %s", json.dumps({
+            "symbols": symbols,
+            "symbol_count": len(symbols),
+            "symbol_filter": symbol_contains,
+            "read_only": True,
+            "order_entry": False,
+        }, separators=(",", ":")))
+        snapshot = {symbol: _snapshot_prices(contracts[symbol]) for symbol in symbols}
+        rest_rows = await asyncio.gather(*(_fetch_rest_book(http, symbol) for symbol in symbols))
+
+    rest_compared = 0
+    for symbol, received_ms, body, error in rest_rows:
+        baseline = snapshot.get(symbol)
+        top = _rest_top(body or {}) if body is not None else None
+        if baseline is None or top is None:
+            logger.info("GEMINI_SPORTS_REST_COMPARE %s", json.dumps({
+                "symbol": symbol,
+                "snapshot": None if baseline is None else [str(x) for x in baseline],
+                "book_available": top is not None,
+                "error": error,
+                "received_ms": received_ms,
+                "read_only": True,
+                "order_entry": False,
+            }, separators=(",", ":")))
+            continue
+        snap_yes, snap_no = baseline
+        yes_bid, bid_size, yes_ask, ask_size = top
+        live_no_ask = D("1") - yes_bid
+        rest_compared += 1
+        logger.info("GEMINI_SPORTS_REST_COMPARE %s", json.dumps({
+            "symbol": symbol,
+            "snapshot_yes_buy": str(snap_yes),
+            "snapshot_no_buy": str(snap_no),
+            "live_yes_bid": str(yes_bid),
+            "live_yes_bid_size": str(bid_size),
+            "live_yes_ask": str(yes_ask),
+            "live_yes_ask_size": str(ask_size),
+            "live_no_ask": str(live_no_ask),
+            "yes_abs_gap": str(abs(snap_yes - yes_ask)),
+            "no_abs_gap": str(abs(snap_no - live_no_ask)),
+            "received_ms": received_ms,
+            "read_only": True,
+            "order_entry": False,
+        }, separators=(",", ":")))
+
     queue: asyncio.Queue = asyncio.Queue(maxsize=100000)
     task = asyncio.create_task(_subscribe(symbols, queue))
     deadline = time.monotonic() + seconds
@@ -144,8 +214,9 @@ async def run(seconds: float, max_symbols: int, symbol_contains: str = "") -> No
 
     logger.info("GEMINI_SPORTS_WS_VALIDATE_SUMMARY %s", json.dumps({
         "selected_symbols": len(symbols),
+        "rest_books_compared": rest_compared,
         "symbols_with_book_updates": len(seen),
-        "comparisons": comparisons,
+        "ws_comparisons": comparisons,
         "max_yes_abs_gap": str(max_yes_gap),
         "max_no_abs_gap": str(max_no_gap),
         "read_only": True,
@@ -160,6 +231,7 @@ def main() -> None:
     p.add_argument("--symbol-contains", default="")
     args = p.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     asyncio.run(run(args.seconds, max(1, args.max_symbols), args.symbol_contains))
 
 
