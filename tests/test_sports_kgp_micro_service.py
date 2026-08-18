@@ -47,8 +47,6 @@ def result(gemini_no="0.57", *, assessment_exec=True, lock_conf="FULL_RULES_AUDI
             "yes_market_id": "KX#YES",
             "no_venue": "gemini",
             "no_market_id": "GEMI#YES",
-            # Deliberately stale discovery economics: 5c. candidate_plans must not
-            # trust these values after the final Gemini depth overlay.
             "unit_cost": "0.95",
             "unit_profit": "0.05",
             "max_quantity": "1",
@@ -60,8 +58,8 @@ def result(gemini_no="0.57", *, assessment_exec=True, lock_conf="FULL_RULES_AUDI
             "capital_velocity_score": "1",
         }],
         "positive_quote_audit": [
-            quote("kalshi", "KX", "0.40", "0.60", NOW - 20, "kalshi_hot_book"),
-            quote("gemini", "GEMI", "0.43", gemini_no, NOW - 10, "gemini_depth10_100ms"),
+            quote("kalshi", "KX", "0.40", "0.60", NOW - 20, "kalshi_public_orderbook_depth1_final"),
+            quote("gemini", "GEMI", "0.43", gemini_no, NOW - 10, "gemini_depth10_100ms_final"),
         ],
         "rule_audit": {"top_assessments": [{
             "settlement_key": KEY,
@@ -71,7 +69,6 @@ def result(gemini_no="0.57", *, assessment_exec=True, lock_conf="FULL_RULES_AUDI
 
 
 def test_final_book_recomputes_profit_instead_of_reusing_discovery_lock():
-    # Current final books: Kalshi YES .40 + Gemini NO .57 => 3c, not stale 5c.
     plans, rejected = candidate_plans(result("0.57"), {KEY: [approval()]}, now_ms=NOW)
     assert rejected == []
     assert len(plans) == 1
@@ -107,4 +104,4 @@ def test_discovery_only_gemini_row_remains_blocked_even_after_rule_approval():
     body["positive_quote_audit"][1]["depth_source"] = "event_prices_q1_probe_only"
     plans, rejected = candidate_plans(body, {KEY: [approval()]}, now_ms=NOW)
     assert plans == []
-    assert any("discovery-only" in row["reason"] for row in rejected)
+    assert any("approved final execution book" in row["reason"] for row in rejected)
