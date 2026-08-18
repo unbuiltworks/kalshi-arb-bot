@@ -26,6 +26,7 @@ RUN pytest -q \
     tests/test_three_venue_mlb_hot.py \
     tests/test_the_odds_api_mlb_shadow_identity.py \
     tests/test_sports_pushover_alerts.py \
+    tests/test_three_venue_mlb_prop_pushover.py \
     tests/test_mlb_game_rule_certifications.py \
     tests/test_mlb_prop_rule_equivalence.py \
     tests/test_mlb_prop_rule_certifications.py \
