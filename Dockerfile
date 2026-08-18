@@ -12,11 +12,13 @@ COPY tests/ tests/
 ENV PYTHONPATH=/app
 
 # Focused regression gate for the MLB prop identity, schedule, economics,
-# participation, and paper-only path used by this isolated service.
+# participation, fail-closed readiness semantics, and paper-only path used by
+# this isolated service.
 RUN pytest -q \
     tests/test_strict_mlb_prop_adapters.py \
     tests/test_strict_mlb_prop_snapshot.py \
     tests/test_strict_mlb_prop_snapshot_v2.py \
+    tests/test_strict_mlb_prop_snapshot_v5_failclosed.py \
     tests/test_strict_mlb_prop_schedule_guard.py \
     tests/test_mlb_prop_rule_equivalence.py \
     tests/test_mlb_prop_paper_microprobe.py \
