@@ -208,6 +208,42 @@ def build_paper_probes(
     return events, audits
 
 
+def _best_valid_row_for_settlement(
+    rows: list[dict[str, Any]],
+    *,
+    min_profit: Decimal,
+    ts_ms: int | None,
+) -> tuple[dict[str, Any], str, list, dict[str, Any]] | None:
+    """Choose the best valid synthetic plan across duplicate rows for one identity.
+
+    Snapshot construction can occasionally surface duplicate representations of an
+    exact pair. Selection must not depend on source order: an invalid/weak first row
+    must never suppress a later valid/stronger row for the same settlement key.
+    """
+    choices: list[tuple[Decimal, Decimal, str, str, dict[str, Any], str, list, dict[str, Any]]] = []
+    cap_by_field = {field: cap for field, cap in PROBE_FIELDS}
+    for row in rows:
+        probe_field = _best_probe_field(row, min_profit)
+        if probe_field is None:
+            continue
+        built = paper_probe_events(row, probe_field=probe_field, min_profit=min_profit, ts_ms=ts_ms)
+        if built is None:
+            continue
+        new_events, audit = built
+        plan = row.get(probe_field) or {}
+        profit = D(str(plan.get("conservative_locked_profit") or "0"))
+        cap = cap_by_field[probe_field]
+        # Stable tie-breakers keep output deterministic if duplicate rows are
+        # economically identical but arrive in a different source order.
+        direction = str(plan.get("direction") or "")
+        fingerprint = _opportunity_fingerprint(row, probe_field)
+        choices.append((profit, -cap, direction, fingerprint, row, probe_field, new_events, audit))
+    if not choices:
+        return None
+    _profit, _neg_cap, _direction, _fingerprint, row, probe_field, new_events, audit = max(choices)
+    return row, probe_field, new_events, audit
+
+
 def build_paper_probes_with_state(
     snapshot: dict[str, Any],
     *,
@@ -219,20 +255,21 @@ def build_paper_probes_with_state(
     audits: list[dict[str, Any]] = []
     current_state: dict[str, str] = {}
     suppressed_resting_duplicates = 0
-    seen_settlements: set[str] = set()
     source = snapshot.get("paper_probe_candidates") or []
-    for row in source:
-        settlement_key = _settlement_key(row)
-        if settlement_key in seen_settlements:
-            continue
-        seen_settlements.add(settlement_key)
 
-        probe_field = _best_probe_field(row, min_profit)
-        if probe_field is None:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in source:
+        if not isinstance(row, dict):
             continue
-        built = paper_probe_events(row, probe_field=probe_field, min_profit=min_profit, ts_ms=ts_ms)
-        if built is None:
+        grouped.setdefault(_settlement_key(row), []).append(row)
+
+    for settlement_key in sorted(grouped):
+        selected = _best_valid_row_for_settlement(
+            grouped[settlement_key], min_profit=min_profit, ts_ms=ts_ms
+        )
+        if selected is None:
             continue
+        row, probe_field, new_events, audit = selected
         state_key = _state_key(row, probe_field)
         fingerprint = _opportunity_fingerprint(row, probe_field)
         current_state[state_key] = fingerprint
@@ -240,9 +277,9 @@ def build_paper_probes_with_state(
         if prior_fingerprint == fingerprint:
             suppressed_resting_duplicates += 1
             continue
-        new_events, audit = built
         audit["opportunity_fingerprint"] = fingerprint
         audit["episode_event"] = "OPEN" if prior_fingerprint is None else "MOVE"
+        audit["duplicate_identity_rows_considered"] = len(grouped[settlement_key])
         audit["alternative_budget_tiers_not_filled"] = [
             field for field, _cap in PROBE_FIELDS if field != probe_field and isinstance(row.get(field), dict)
         ]
@@ -277,6 +314,7 @@ async def run(ledger_path: Path, audit_path: Path, state_path: Path, min_profit:
         "suppressed_resting_duplicates": suppressed,
         "budget_semantics": "ALTERNATIVE_SIZING_TIERS_ONE_SYNTHETIC_FILL_PER_SETTLEMENT_IDENTITY",
         "episode_semantics": "OPEN_MOVE_REOPEN_NO_RESTING_DEPTH_DOUBLE_COUNT",
+        "duplicate_identity_semantics": "BEST_VALID_ROW_ORDER_INDEPENDENT",
         "rules_status": "RULES_PENDING",
         "full_rules_audited": False,
         "fully_audited_shadow_ready_groups": 0,
