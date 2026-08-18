@@ -27,12 +27,16 @@ gate passes. That keeps the first authorized experiment well below a $5 total bu
 from __future__ import annotations
 
 import argparse
+import asyncio
 from decimal import Decimal
+import json
 import logging
+from pathlib import Path
 import sys
 
 from src import gemini_kalshi_micro_live_executor_20bp_safe as safe
 from src.gemini_kalshi_live_probe_guard import DEFAULT_MIN_LOCKED_PROFIT, MAX_QUOTE_SKEW_MS
+from src.gemini_prediction_auth import verify_authenticated_ws
 
 D = Decimal
 executor = safe.executor
@@ -72,6 +76,37 @@ def strict_execution_gate_10bp_50ms(
     )
 
 
+async def _readonly_authenticated_preflight() -> None:
+    """Verify both private venue credentials without enabling or placing orders."""
+    kalshi = executor.KalshiV2Executor()
+    try:
+        # live_requested=False makes the existing production preflight strictly read-only:
+        # authenticated status/balance/terms reads only, with no order path authorized.
+        report = await executor._preflight(
+            kalshi,
+            live_requested=False,
+            token_path=Path("/tmp/sol-canary-preflight-no-arm-token"),
+        )
+        gemini_ws_ok = await verify_authenticated_ws(timeout=5.0)
+        if not gemini_ws_ok:
+            raise RuntimeError("Gemini authenticated WebSocket preflight failed")
+        logger.info(
+            "SOL_LIVE_CANARY_AUTH_PREFLIGHT %s",
+            json.dumps({
+                "gemini_private_rest_authenticated": True,
+                "gemini_authenticated_ws": True,
+                "gemini_terms_accepted": bool(report.get("gemini_terms_accepted")),
+                "kalshi_production_authenticated": bool(report.get("kalshi_production_authenticated")),
+                "live_requested": False,
+                "live_env_gate_effective": False,
+                "arm_token_used": False,
+                "order_entry": False,
+            }, separators=(",", ":")),
+        )
+    finally:
+        await kalshi.close()
+
+
 def install_canary() -> None:
     # The readiness module computes its boundary gate from this constant at runtime.
     # Field names retain the historical "20bp" suffix, but their semantics in this
@@ -89,6 +124,9 @@ def main() -> None:
     live_args, remaining = parser.parse_known_args()
     executor._LIVE_REQUESTED = bool(live_args.live)
     sys.argv = [sys.argv[0], *remaining]
+
+    # Credential verification remains read-only regardless of future live CLI use.
+    asyncio.run(_readonly_authenticated_preflight())
 
     install_canary()
     logger.info(
