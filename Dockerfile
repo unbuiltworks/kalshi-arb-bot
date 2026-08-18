@@ -13,8 +13,8 @@ COPY tests/ tests/
 # Branch gate: canonical identity, structured Gemini normalization, exact three-venue
 # matching, hard Polymarket scope guards, Kalshi nested-book pricing, discrete
 # player-prop normalization, sportsbook identity alignment, the event-driven
-# game-line hot layer, read-only Pushover qualification/dedupe, and fail-closed
-# MLB settlement-rule certification.
+# game-line hot layer, read-only Pushover qualification/dedupe, live MLB
+# participation proof, and fail-closed game/prop/team-total rule certification.
 RUN pytest -q \
     tests/test_universal_sports_identity.py \
     tests/test_gemini_sports_adapter.py \
@@ -26,6 +26,10 @@ RUN pytest -q \
     tests/test_the_odds_api_mlb_shadow_identity.py \
     tests/test_sports_pushover_alerts.py \
     tests/test_mlb_game_rule_certifications.py \
+    tests/test_mlb_prop_rule_equivalence.py \
+    tests/test_mlb_prop_rule_certifications.py \
+    tests/test_mlb_team_total_rule_certifications.py \
+    tests/test_mlb_live_participation.py \
  && python -m py_compile \
     src/eventing_books.py \
     src/three_venue_mlb_snapshot_pricing.py \
@@ -36,6 +40,10 @@ RUN pytest -q \
     src/three_venue_mlb_hot.py \
     src/the_odds_api_mlb_shadow.py \
     src/mlb_game_rule_certifications.py \
+    src/mlb_prop_rule_equivalence.py \
+    src/mlb_prop_rule_certifications.py \
+    src/mlb_team_total_rule_certifications.py \
+    src/mlb_live_participation.py \
     src/sports_pushover_alerts.py \
     src/sports_pushover_odds_api_mlb.py
 
