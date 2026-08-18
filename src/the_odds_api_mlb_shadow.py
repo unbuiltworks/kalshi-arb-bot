@@ -67,7 +67,7 @@ def _key(*, book: str, event: SportsEventIdentity, family: str, subject: str,
         event=event,
         market_family=family,
         scope="full_contest",
-        subject_type="team" if family != "game_total" else "game",
+        subject_type="team" if family != "game_total" else "contest",
         subject=subject,
         stat=stat,
         comparator=comparator,
@@ -163,7 +163,7 @@ def sportsbook_quotes(events: list[Mapping[str, Any]], *, received_ms: int) -> l
                     by_point.setdefault(point, {})[side] = cost
                 for point, sides in by_point.items():
                     if set(sides) != {"over","under"}: continue
-                    key = _key(book=book, event=event, family="game_total", subject="game", stat="runs", comparator="GT", line=point)
+                    key = _key(book=book, event=event, family="game_total", subject="contest", stat="runs", comparator="GT", line=point)
                     out.append(_mk_quote(book=book, event_id=f"{event_id}:total:{point}", settlement_key=key, yes_cost=sides["over"], no_cost=sides["under"], received_ms=received_ms))
     return out
 
