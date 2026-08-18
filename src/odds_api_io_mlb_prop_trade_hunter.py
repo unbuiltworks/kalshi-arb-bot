@@ -10,15 +10,17 @@ YES bids. The actual trade plan is selected by the pure hedge optimizer, which:
   guaranteed P/L gate (price improvement is optional upside only);
 - proves P/L independently for prop-hit and prop-miss outcomes.
 
-The legacy exact/candidate modules are imported only for pure identity helpers and
-Gemini REST discovery. Their monkeypatched run loops are deliberately bypassed so
-legacy top-book positive logs cannot masquerade as qualified signals.
+The legacy exact/candidate modules are imported only for identity helpers and
+Gemini REST discovery. Their standalone monkeypatched loops are bypassed. This
+module owns its supervisor explicitly so its safety layer cannot be skipped by an
+entrypoint binding quirk.
 
 No order transport is imported. Results remain settlement-rule blocked and are
 never marked manually actionable or execution eligible.
 """
 from __future__ import annotations
 
+import argparse
 import asyncio
 from collections import Counter
 from decimal import Decimal
@@ -246,8 +248,6 @@ async def _hunter_heartbeat() -> None:
 
 
 async def _run_hunter(args: Any) -> None:
-    # Start only the Gemini REST discovery map needed by exact._candidate_rows.
-    # Do not enter cand/exact standalone shadow loops or their legacy positive logs.
     refresh = asyncio.create_task(cand._refresh_gemini_props(), name="gemini_prop_identity_refresh")
     hb = asyncio.create_task(_hunter_heartbeat(), name="trade_hunter_guaranteed_heartbeat")
     try:
@@ -260,10 +260,51 @@ async def _run_hunter(args: Any) -> None:
         await asyncio.gather(refresh, hb, *_validation_tasks, return_exceptions=True)
 
 
-# Undo helper-module import side effects, then install only this hunter's scoped hooks.
+async def _supervise_hunter(args: Any) -> None:
+    backoff = 1.0
+    while True:
+        try:
+            await _run_hunter(args)
+            backoff = 1.0
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.exception("PROP_TRADE_HUNTER_SESSION_ERROR %s", exc)
+            await asyncio.sleep(backoff)
+            backoff = min(30.0, backoff * 2.0)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--league-slug", default="usa-mlb")
+    parser.add_argument("--markets", default="ML,Spread,Totals,Player Props")
+    parser.add_argument("--discovery-refresh-seconds", type=float, default=600.0)
+    parser.add_argument("--gemini-poll-seconds", type=float, default=1.0)
+    parser.add_argument("--startup-timeout-seconds", type=float, default=20.0)
+    parser.add_argument("--direct-ws-book-max-age-ms", type=int, default=60000)
+    parser.add_argument("--gemini-max-age-ms", type=int, default=2500)
+    parser.add_argument("--retail-market-freshness-ms", type=int, default=3000)
+    parser.add_argument("--retail-quote-max-age-ms", type=int, default=3000)
+    args = parser.parse_args()
+    if args.discovery_refresh_seconds < 600:
+        raise SystemExit("discovery refresh must be >= 600 seconds to protect free REST quota")
+    if args.gemini_poll_seconds < 0.25:
+        raise SystemExit("gemini poll must be >= 0.25 seconds")
+    if args.retail_market_freshness_ms < 500 or args.retail_quote_max_age_ms < 500:
+        raise SystemExit("retail freshness windows must be >= 500ms")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("websockets").setLevel(logging.WARNING)
+    logger.info("PROP_TRADE_HUNTER_ENTRYPOINT guaranteed_depth=true read_only=true order_entry=false")
+    asyncio.run(_supervise_hunter(args))
+
+
+# Undo helper-module import side effects, install only the scoped ingest hook, and
+# restore the base run_session because this module owns its supervisor explicitly.
 base.OddsIoStore.__init__ = _BASE_INIT
 base.OddsIoStore.ingest = _hunter_ingest
-base.run_session = _run_hunter
+base.run_session = _BASE_RUN_SESSION
 
 if __name__ == "__main__":
-    base.main()
+    main()
