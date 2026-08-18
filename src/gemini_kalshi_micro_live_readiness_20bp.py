@@ -112,13 +112,46 @@ def augment_double_boundary(snapshot: dict[str, Any] | None, *, kalshi_threshold
     return out
 
 
-async def _kalshi_target_loop() -> None:
-    """Fetch exact Kalshi thresholds once per predicted window, never on the hot path."""
+def update_target_cache(
+    *, window_end_iso: str, found: dict[str, tuple[str, Decimal]]
+) -> list[str]:
+    """Keep only current-window thresholds and merge newly discovered targets."""
+    for asset, (cached_window, _target) in list(_KALSHI_TARGETS.items()):
+        if cached_window != window_end_iso:
+            _KALSHI_TARGETS.pop(asset, None)
+    _KALSHI_TARGETS.update(found)
+    return sorted(
+        asset
+        for asset, (cached_window, _target) in _KALSHI_TARGETS.items()
+        if cached_window == window_end_iso
+    )
+
+
+async def _kalshi_target_loop(assets: tuple[str, ...]) -> None:
+    """Fetch exact thresholds off-hot-path and retry when rollover metadata lags.
+
+    Kalshi can publish the new 15-minute market/book before the exact floor-strike
+    endpoint is usable. Missing metadata must fail closed, but a one-shot lookup
+    would unnecessarily blind the whole 15-minute window. Retry every 500 ms until
+    every requested asset has an exact target, then sleep until the next rollover.
+    """
+    requested = tuple(dict.fromkeys(str(asset).upper() for asset in assets if str(asset).upper() in basis.ASSET_SYMBOL))
+    if not requested:
+        requested = ("BTC",)
+    last_logged_state: tuple[str, tuple[str, ...], tuple[str, ...]] | None = None
+
     async with httpx.AsyncClient(timeout=10.0) as http:
         while True:
             window_end = basis._next_window_end()
+            window_iso = window_end.isoformat()
             found: dict[str, tuple[str, Decimal]] = {}
-            for asset in basis.ASSET_SYMBOL:
+
+            for asset in requested:
+                cached = _KALSHI_TARGETS.get(asset)
+                if cached is not None and cached[0] == window_iso:
+                    found[asset] = cached
+                    continue
+
                 pair = predicted_pair(asset)
                 if abs((pair.window_end - window_end).total_seconds()) >= 1:
                     continue
@@ -129,7 +162,7 @@ async def _kalshi_target_loop() -> None:
                     market = response.json().get("market") or {}
                     target = kalshi_target(market)
                     if target is not None:
-                        found[asset] = (window_end.isoformat(), target)
+                        found[asset] = (window_iso, target)
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
@@ -139,17 +172,27 @@ async def _kalshi_target_loop() -> None:
                         type(exc).__name__,
                         str(exc)[:160],
                     )
-            _KALSHI_TARGETS.clear()
-            _KALSHI_TARGETS.update(found)
-            logger.info("CRYPTO_MICRO_READY_TARGET_CONTEXT %s", json.dumps({
-                "window_end_utc": window_end.isoformat(),
-                "assets_with_kalshi_target": sorted(found),
-                "minimum_double_boundary_bps": str(MIN_DOUBLE_BOUNDARY_BPS),
-                "trade_authorized": False,
-                "read_only": True,
-                "order_entry": False,
-            }, separators=(",", ":")))
-            await asyncio.sleep(max(0.05, window_end.timestamp() + 0.25 - time.time()))
+
+            available = update_target_cache(window_end_iso=window_iso, found=found)
+            missing = sorted(set(requested) - set(available))
+            state = (window_iso, tuple(available), tuple(missing))
+            if state != last_logged_state:
+                logger.info("CRYPTO_MICRO_READY_TARGET_CONTEXT %s", json.dumps({
+                    "window_end_utc": window_iso,
+                    "assets_with_kalshi_target": available,
+                    "missing_assets": missing,
+                    "retrying_missing_targets": bool(missing),
+                    "minimum_double_boundary_bps": str(MIN_DOUBLE_BOUNDARY_BPS),
+                    "trade_authorized": False,
+                    "read_only": True,
+                    "order_entry": False,
+                }, separators=(",", ":")))
+                last_logged_state = state
+
+            if missing:
+                await asyncio.sleep(0.5)
+            else:
+                await asyncio.sleep(max(0.05, window_end.timestamp() + 0.25 - time.time()))
 
 
 def _basis_snapshot_20bp(asset: str, candidate_ms: int) -> dict[str, Any] | None:
@@ -188,7 +231,10 @@ def _plan_from_books_20bp(**kwargs):
 
 
 async def _collect_all_with_20bp(**kwargs):
-    target_task = asyncio.create_task(_kalshi_target_loop(), name="micro-live-kalshi-targets")
+    requested_assets = tuple(str(asset).upper() for asset in kwargs.get("assets", ("BTC",)))
+    target_task = asyncio.create_task(
+        _kalshi_target_loop(requested_assets), name="micro-live-kalshi-targets"
+    )
     try:
         return await _ORIGINAL_COLLECT_WITH_BASIS(**kwargs)
     finally:
