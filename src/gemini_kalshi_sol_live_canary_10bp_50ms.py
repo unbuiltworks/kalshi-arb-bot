@@ -90,6 +90,8 @@ async def _readonly_authenticated_preflight() -> None:
         gemini_ws_ok = await verify_authenticated_ws(timeout=5.0)
         if not gemini_ws_ok:
             raise RuntimeError("Gemini authenticated WebSocket preflight failed")
+        gemini_funded = D(str(report.get("gemini_usd_available") or "0")) >= D("1")
+        kalshi_funded = D(str(report.get("kalshi_usd_available") or "0")) >= D("1")
         logger.info(
             "SOL_LIVE_CANARY_AUTH_PREFLIGHT %s",
             json.dumps({
@@ -97,12 +99,16 @@ async def _readonly_authenticated_preflight() -> None:
                 "gemini_authenticated_ws": True,
                 "gemini_terms_accepted": bool(report.get("gemini_terms_accepted")),
                 "kalshi_production_authenticated": bool(report.get("kalshi_production_authenticated")),
+                "gemini_funded_ge_1usd": gemini_funded,
+                "kalshi_funded_ge_1usd": kalshi_funded,
                 "live_requested": False,
                 "live_env_gate_effective": False,
                 "arm_token_used": False,
                 "order_entry": False,
             }, separators=(",", ":")),
         )
+        if not gemini_funded or not kalshi_funded:
+            raise RuntimeError("SOL canary preflight requires at least $1 available on each venue")
     finally:
         await kalshi.close()
 
@@ -119,6 +125,8 @@ def install_canary() -> None:
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
+
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--live", action="store_true")
     live_args, remaining = parser.parse_known_args()
