@@ -1,21 +1,9 @@
 """Fail-closed planning guard for tiny automated sports prediction-market arbs.
 
-This module contains no network clients and cannot submit orders.  It converts an
+This module contains no network clients and cannot submit orders. It converts an
 already-priced cross-venue lock into an exact one-contract execution plan only when
-all dangerous invariants are revalidated:
-
-* venues are exactly two of Kalshi, Gemini, and Polymarket US (never sportsbook),
-* the exact settlement key/market IDs/native orientation have an explicit SHA-256
-  rule approval,
-* the opportunity itself carries FULL_RULES_AUDITED_EXECUTABLE confidence,
-* both current books carry that same execution confidence,
-* one contract of depth exists on both complementary outcomes,
-* after-fee locked profit is at least 3c,
-* quote skew is at most 50ms and both books are at most 100ms old,
-* exact outbound one-contract capital is capped at $10 (initial policy is q=1),
-* the current quote economics exactly reproduce the selected opportunity.
-
-The approval file is intentionally empty until a real pair is fully certified.
+all dangerous invariants are revalidated. The approval file is intentionally empty
+until a real pair is fully certified.
 """
 from __future__ import annotations
 
@@ -38,6 +26,7 @@ DEFAULT_MAX_BOOK_AGE_MS = 100
 DEFAULT_MAX_CAPITAL = D("10.00")
 INITIAL_QUANTITY = ONE
 ECON_TOLERANCE = D("0.000001")
+NON_EXECUTABLE_DEPTH_SOURCES = frozenset({"event_prices_q1_probe_only"})
 
 
 def _base_market_id(market_id: str) -> str:
@@ -216,6 +205,8 @@ def build_micro_plan(
     for venue, row in current.items():
         if str(row.quote.settlement_confidence) != EXECUTABLE_CONFIDENCE:
             raise PermissionError(f"{venue} current quote is not execution-audited")
+        if str(row.depth_source) in NON_EXECUTABLE_DEPTH_SOURCES:
+            raise PermissionError(f"{venue} quote is discovery-only and lacks executable depth")
         age = now_ms - int(row.quote.received_ms)
         if age < 0 or age > int(max_book_age_ms):
             raise ValueError(f"{venue} book is stale at execution gate")
@@ -229,7 +220,6 @@ def build_micro_plan(
     yes_leg = _leg(yes_row, "YES")
     no_leg = _leg(no_row, "NO")
 
-    # Recompute from the exact current fee-inclusive quote selected for each leg.
     yes_all_in = D(yes_row.quote.yes_cost)
     no_all_in = D(no_row.quote.no_cost)
     unit_cost = yes_all_in + no_all_in
