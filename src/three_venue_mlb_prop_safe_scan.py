@@ -3,14 +3,13 @@
 Reuses the existing strict Polymarket<->Kalshi prop matcher, then safely joins any
 Gemini discrete-count prop that represents the same >=N proposition. Kalshi prices
 come from nested event snapshots, avoiding one REST order-book request per market.
-All output is research-only: DNP/participation and venue rule equivalence remain
-hard execution gates.
+All output is research-only: live MLB participation can remove the participation
+blocker, but complete venue lifecycle certification remains a separate hard gate.
 """
 from __future__ import annotations
 
 import asyncio
 from collections import Counter, defaultdict
-from datetime import timezone
 from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 import json
 import time
@@ -19,7 +18,9 @@ from typing import Any, Mapping
 import httpx
 
 from src.mlb_game_side_normalization import NormalizedSide, _identity, canonical_team, normalize_gemini_mlb
-from src.strict_mlb_prop_adapters import FAMILY_SERIES, _name, _poly_identity
+from src.mlb_live_participation import candidate_game, fetch_game_boxscores, participation_proof, proof_dict
+from src.mlb_prop_rule_certifications import apply_prop_certification
+from src.strict_mlb_prop_adapters import _name, _poly_identity
 from src.strict_mlb_prop_schedule_guard import kalshi_event_start_utc, polymarket_start_utc
 from src.strict_mlb_prop_snapshot import (
     POLY,
@@ -99,7 +100,12 @@ def _candidate_sides(
     poly_markets: list[dict[str, Any]],
     kalshi_events: list[dict[str, Any]],
     gemini_events: list[dict[str, Any]],
-) -> tuple[list[NormalizedSide], dict[str, list[str]], list[dict[str, Any]]]:
+) -> tuple[
+    list[NormalizedSide],
+    dict[str, list[str]],
+    list[dict[str, Any]],
+    dict[str, dict[str, str]],
+]:
     poly_by_slug = {str(row.get("slug") or ""): row for row in poly_markets if row.get("slug")}
     k_event_by_ticker, _ = _kalshi_event_map(kalshi_events)
     gemini_props = [
@@ -110,6 +116,7 @@ def _candidate_sides(
     sides: list[NormalizedSide] = []
     venues_by_key: dict[str, set[str]] = defaultdict(set)
     join_audit: list[dict[str, Any]] = []
+    rule_context: dict[str, dict[str, str]] = {}
     seen_side: set[tuple[str, str, str]] = set()
 
     for candidate in candidates:
@@ -158,10 +165,17 @@ def _candidate_sides(
                       stat=canonical_stat, comparator="GE", line=threshold),
             candidate.kalshi_ticker, "YES", str((k_market or {}).get("title") or (k_market or {}).get("yes_sub_title") or candidate.kalshi_ticker),
         )
+        rule_context[p_side.contract_key] = {
+            "family": family,
+            "player": str(player),
+            "poly_slug": candidate.poly_slug,
+        }
         for side in (p_side, k_side):
             marker = (side.identity.venue, side.venue_market_id, side.contract_key)
             if marker not in seen_side:
-                seen_side.add(marker); sides.append(side); venues_by_key[side.contract_key].add(side.identity.venue)
+                seen_side.add(marker)
+                sides.append(side)
+                venues_by_key[side.contract_key].add(side.identity.venue)
 
         if stat is None:
             continue
@@ -188,7 +202,9 @@ def _candidate_sides(
             marker = (g_side.identity.venue, g_side.venue_market_id, g_side.contract_key)
             if marker in seen_side:
                 continue
-            seen_side.add(marker); sides.append(g_side); venues_by_key[g_side.contract_key].add("gemini")
+            seen_side.add(marker)
+            sides.append(g_side)
+            venues_by_key[g_side.contract_key].add("gemini")
             join_audit.append({
                 "settlement_key": g_side.contract_key,
                 "gemini_market_id": grow.venue_market_id,
@@ -203,7 +219,7 @@ def _candidate_sides(
                 "start_skew_ms": abs(gid.event.scheduled_start_ms - p_event.scheduled_start_ms),
             })
 
-    return sides, {key: sorted(value) for key, value in venues_by_key.items()}, join_audit
+    return sides, {key: sorted(value) for key, value in venues_by_key.items()}, join_audit, rule_context
 
 
 async def _price_sides(
@@ -220,7 +236,7 @@ async def _price_sides(
     for slug, (body, received, error) in zip(pids, p_results):
         book = poly_top_book(body or {}) if body is not None else None
         if book is None:
-            errors.append({"venue":"polymarket","market_id":slug,"error":error or "book_unparseable"})
+            errors.append({"venue": "polymarket", "market_id": slug, "error": error or "book_unparseable"})
         else:
             pbooks[slug] = (book, received)
 
@@ -237,12 +253,14 @@ async def _price_sides(
         venue = side.identity.venue
         if venue == "polymarket" and side.venue_market_id in pbooks:
             book, received = pbooks[side.venue_market_id]
-            row = make_priced_quote(side, book, received_ms=received,
-                                    depth_source="public_book_top_level", category="sports_mlb_prop")
+            row = make_priced_quote(
+                side, book, received_ms=received,
+                depth_source="public_book_top_level", category="sports_mlb_prop",
+            )
         elif venue == "kalshi":
             book = kalshi_nested_top_book(kmarkets.get(side.venue_market_id, {}))
             if book is None:
-                errors.append({"venue":"kalshi","market_id":side.venue_market_id,"error":"nested_top_book_unparseable"})
+                errors.append({"venue": "kalshi", "market_id": side.venue_market_id, "error": "nested_top_book_unparseable"})
             else:
                 row = make_priced_quote(
                     side, book, received_ms=snapshot_ms,
@@ -252,10 +270,12 @@ async def _price_sides(
         elif venue == "gemini":
             book = gemini_contract_book(gcontracts.get(side.venue_market_id, {}))
             if book is None:
-                errors.append({"venue":"gemini","market_id":side.venue_market_id,"error":"buy_yes_no_unparseable"})
+                errors.append({"venue": "gemini", "market_id": side.venue_market_id, "error": "buy_yes_no_unparseable"})
             else:
-                row = make_priced_quote(side, book, received_ms=snapshot_ms,
-                                        depth_source="event_prices_q1_probe_only", category="sports_mlb_prop")
+                row = make_priced_quote(
+                    side, book, received_ms=snapshot_ms,
+                    depth_source="event_prices_q1_probe_only", category="sports_mlb_prop",
+                )
         if row is not None:
             priced.append(row)
     return priced, errors
@@ -268,7 +288,12 @@ async def run_once() -> dict[str, Any]:
             fetch_gemini_mlb(http), _fetch_poly_mlb(http), _fetch_kalshi_events(http)
         )
         candidates = discover_strict_candidates(poly_markets, kalshi_events)
-        sides, venues_by_key, join_audit = _candidate_sides(candidates, poly_markets, kalshi_events, gemini_events)
+        sides, venues_by_key, join_audit, rule_context = _candidate_sides(
+            candidates, poly_markets, kalshi_events, gemini_events
+        )
+        game_refs = [candidate_game(row["poly_slug"]) for row in rule_context.values()]
+        dates = sorted({row[0] for row in game_refs if row is not None})
+        games = await fetch_game_boxscores(http, dates) if dates else {}
         priced, errors = await _price_sides(http, sides, gemini_events, kalshi_events)
 
     locks = _dedupe(find_cross_venue_locks(
@@ -277,28 +302,84 @@ async def run_once() -> dict[str, Any]:
     ))
     three_venue_keys = [key for key, venues in venues_by_key.items() if len(venues) == 3]
     positive_keys = {row.settlement_key for row in locks}
+
+    audited_locks: list[Any] = []
+    rule_assessments: list[dict[str, Any]] = []
+    rule_status_counts: Counter[str] = Counter()
+    blocker_counts: Counter[str] = Counter()
+    participation_proven_keys: set[str] = set()
+    certified_locks = 0
+    for lock in locks:
+        context = rule_context.get(lock.settlement_key)
+        if context is None:
+            audited_locks.append(lock)
+            rule_status_counts["MISSING_RULE_CONTEXT"] += 1
+            blocker_counts["missing_rule_context"] += 1
+            continue
+        proof = participation_proof(
+            family=context["family"],
+            player_name=context["player"],
+            poly_slug=context["poly_slug"],
+            games=games,
+        )
+        upgraded, assessment = apply_prop_certification(
+            lock, family=context["family"], proof=proof
+        )
+        audited_locks.append(upgraded)
+        row = assessment.as_dict()
+        row.update({
+            "settlement_key": lock.settlement_key,
+            "player": context["player"],
+            "poly_slug": context["poly_slug"],
+            "participation_proof": proof_dict(proof),
+        })
+        rule_assessments.append(row)
+        rule_status_counts[assessment.status.value] += 1
+        blocker_counts.update(assessment.remaining_blockers)
+        if assessment.participation_proven:
+            participation_proven_keys.add(lock.settlement_key)
+        if assessment.execution_eligible:
+            certified_locks += 1
+
     return {
-        "status":"THREE_VENUE_MLB_PROP_SCOPE_SAFE_SCAN",
-        "cycle_duration_ms":round((time.monotonic()-started)*1000, 3),
-        "raw":{"gemini_events":len(gemini_events),"polymarket_prop_markets":len(poly_markets),"kalshi_prop_events":len(kalshi_events)},
-        "strict_poly_kalshi_candidates":len(candidates),
-        "canonical_sides":len(sides),
-        "canonical_keys":len(venues_by_key),
-        "keys_by_venue_set":dict(Counter("+".join(venues) for venues in venues_by_key.values())),
-        "gemini_strict_prop_joins":len(join_audit),
-        "three_venue_prop_keys":len(three_venue_keys),
-        "gemini_join_audit":join_audit[:30],
-        "priced_quotes":len(priced),
-        "priced_quotes_by_venue":dict(Counter(row.quote.venue for row in priced)),
-        "one_contract_positive_locks":len(locks),
-        "top_one_contract_locks":[row.as_dict() for row in locks[:50]],
-        "positive_quote_audit":[row.as_dict() for row in priced if row.quote.settlement_key in positive_keys],
-        "fetch_error_count":len(errors),
-        "fetch_errors":errors[:30],
-        "participation_gate":"PLAYER_PROP_REQUIRES_FAMILY_SPECIFIC_CONFIRMED_PARTICIPATION_BEFORE_EXECUTION",
-        "rule_gate":"FULL_RULE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION",
-        "kalshi_price_source":"NESTED_EVENT_MARKET_TOP_OF_BOOK",
-        "read_only":True,"order_entry":False,"execution_eligible":False,
+        "status": "THREE_VENUE_MLB_PROP_SCOPE_SAFE_SCAN",
+        "cycle_duration_ms": round((time.monotonic() - started) * 1000, 3),
+        "raw": {
+            "gemini_events": len(gemini_events),
+            "polymarket_prop_markets": len(poly_markets),
+            "kalshi_prop_events": len(kalshi_events),
+            "mlb_live_or_final_games": len(games),
+        },
+        "strict_poly_kalshi_candidates": len(candidates),
+        "canonical_sides": len(sides),
+        "canonical_keys": len(venues_by_key),
+        "keys_by_venue_set": dict(Counter("+".join(venues) for venues in venues_by_key.values())),
+        "gemini_strict_prop_joins": len(join_audit),
+        "three_venue_prop_keys": len(three_venue_keys),
+        "gemini_join_audit": join_audit[:30],
+        "priced_quotes": len(priced),
+        "priced_quotes_by_venue": dict(Counter(row.quote.venue for row in priced)),
+        "one_contract_positive_locks": len(locks),
+        "certified_actionable_locks": certified_locks,
+        "participation_proven_positive_keys": len(participation_proven_keys),
+        "top_one_contract_locks": [row.as_dict() for row in audited_locks[:50]],
+        "positive_quote_audit": [row.as_dict() for row in priced if row.quote.settlement_key in positive_keys],
+        "rule_audit": {
+            "status_counts": dict(rule_status_counts),
+            "blocker_counts": dict(blocker_counts),
+            "top_assessments": rule_assessments[:30],
+            "participation_source": "MLB_STATS_API",
+            "participation_is_necessary_not_sufficient": True,
+            "full_certification_required": True,
+        },
+        "fetch_error_count": len(errors),
+        "fetch_errors": errors[:30],
+        "participation_gate": "CONFIRMED_MLB_STATS_API_PARTICIPATION_REQUIRED",
+        "rule_gate": "FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_ACTIONABLE",
+        "kalshi_price_source": "NESTED_EVENT_MARKET_TOP_OF_BOOK",
+        "read_only": True,
+        "order_entry": False,
+        "execution_eligible": certified_locks > 0,
     }
 
 
