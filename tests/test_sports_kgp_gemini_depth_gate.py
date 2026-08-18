@@ -12,7 +12,7 @@ def test_gemini_discovery_only_depth_is_never_executable():
     key = "baseball|mlb|player_prop|game|player|john-doe|hits|GE|1"
     rows = []
     for venue, market, yes, no, source in (
-        ("kalshi", "KX", "0.40", "0.60", "nested_event_market_top_of_book"),
+        ("kalshi", "KX", "0.40", "0.60", "kalshi_public_orderbook_depth1_final"),
         ("gemini", "GEMI", "0.45", "0.55", "event_prices_q1_probe_only"),
     ):
         quote = MarketQuote(
@@ -37,5 +37,5 @@ def test_gemini_discovery_only_depth_is_never_executable():
     approval = RuleApproval(
         key, "kalshi", "KX", "YES", "gemini", "GEMI", "YES", "a" * 64, True
     )
-    with pytest.raises(PermissionError, match="discovery-only"):
+    with pytest.raises(PermissionError, match="gemini quote is not from an approved final execution book"):
         build_micro_plan(lock, rows, approval, now_ms=now)
