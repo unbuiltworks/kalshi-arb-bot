@@ -18,11 +18,12 @@ from typing import Any, Mapping
 import httpx
 
 import src.the_odds_api_mlb_shadow_v2 as base
+from src.mlb_game_rule_certifications import CertificationStatus, apply_certification
 from src.sports_pushover_alerts import ACTIONABLE_CONFIDENCE, SportsPushoverAlerts
 
 logger = logging.getLogger("kalshi_arb.sports_pushover_odds_api_mlb")
 _ALERTS = SportsPushoverAlerts()
-RULE_STATUS = "FULL_GAME_ONLY; SPORTSBOOK_RULE_AUDIT_REQUIRED_BEFORE_EXECUTION"
+RULE_STATUS = "FULL_GAME_ONLY; MACHINE_RULE_CERTIFICATION_REQUIRED"
 
 
 async def run_once(api_key: str) -> dict[str, Any]:
@@ -52,22 +53,36 @@ async def run_once(api_key: str) -> dict[str, Any]:
         row for row in locks
         if base._is_retail(row.yes_venue) != base._is_retail(row.no_venue)
     ]
+
+    certified_rows: list[Any] = []
+    assessments: list[Any] = []
+    audit_counts: Counter[str] = Counter()
+    blocker_counts: Counter[str] = Counter()
+    for row in retail_vs_prediction:
+        upgraded, assessment = apply_certification(row)
+        certified_rows.append(upgraded)
+        assessments.append(assessment)
+        audit_counts[assessment.status.value] += 1
+        blocker_counts.update(assessment.blockers)
+
     actionable_locks = [
-        row for row in retail_vs_prediction
-        if row.settlement_confidence == ACTIONABLE_CONFIDENCE
+        row for row, assessment in zip(certified_rows, assessments)
+        if assessment.execution_eligible and row.settlement_confidence == ACTIONABLE_CONFIDENCE
     ]
     tally = base._update_tally(retail_vs_prediction)
 
     alert_rows: list[Any] = [*direct, *matched_retail]
     alerts_sent = 0
     alert_errors = 0
-    for lock in retail_vs_prediction:
-        actionable = lock.settlement_confidence == ACTIONABLE_CONFIDENCE
+    for lock, assessment in zip(certified_rows, assessments):
+        actionable = assessment.execution_eligible and lock.settlement_confidence == ACTIONABLE_CONFIDENCE
+        blockers = ",".join(assessment.blockers) if assessment.blockers else "none"
+        rule_status = f"{assessment.status.value}; blockers={blockers}"
         try:
             if await _ALERTS.maybe_send(
                 lock,
                 alert_rows,
-                rule_status=RULE_STATUS,
+                rule_status=rule_status,
                 source="odds-api-mlb",
                 actionable=actionable,
             ):
@@ -86,19 +101,25 @@ async def run_once(api_key: str) -> dict[str, Any]:
         "direct_priced_quotes": len(direct_quotes),
         "retail_vs_prediction_positive_locks": len(retail_vs_prediction),
         "retail_vs_prediction_actionable_locks": len(actionable_locks),
-        "top_retail_vs_prediction_locks": [x.as_dict() for x in retail_vs_prediction[:30]],
+        "top_retail_vs_prediction_locks": [x.as_dict() for x in certified_rows[:30]],
         "sportsbook_opportunity_tally": tally,
+        "rule_audit": {
+            "status_counts": dict(audit_counts),
+            "blocker_counts": dict(blocker_counts),
+            "certification_required": CertificationStatus.CERTIFIED.value,
+            "second_gate": True,
+        },
         "pushover": {
             "configured": _ALERTS.configured,
             "alerts_sent_this_scan": alerts_sent,
             "alert_errors_this_scan": alert_errors,
             "blocked_by_rule_or_settlement_gate": len(retail_vs_prediction) - len(actionable_locks),
-            "qualification": "FULL_RULES_AUDITED_EXECUTABLE + positive_after_fee + freshness/skew + material_realert_only",
+            "qualification": "FULL_RULES_AUDITED_EXECUTABLE + CERTIFIED_RULE_REGISTRY + positive_after_fee + freshness/skew + material_realert_only",
         },
         "quota": quota,
         "fetch_error_count": len(errors),
         "scope_gate": "FULL_GAME_ONLY_HARD_FILTER",
-        "rule_gate": "SPORTSBOOK_RULE_AUDIT_REQUIRED_BEFORE_EXECUTION",
+        "rule_gate": RULE_STATUS,
         "read_only": True,
         "order_entry": False,
     }
