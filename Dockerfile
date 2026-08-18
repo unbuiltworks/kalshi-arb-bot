@@ -15,7 +15,7 @@ COPY tests/ tests/
 # player-prop normalization, sportsbook identity alignment, the event-driven
 # game-line hot layer, read-only Pushover qualification/dedupe, live MLB
 # participation proof, fail-closed rule certification, and the fully-certified-only
-# K/G/P q=1 micro execution guard/transport/service.
+# K/G/P q=1 micro execution guard/transport/service with Gemini depth10 revalidation.
 RUN pytest -q \
     tests/test_universal_sports_identity.py \
     tests/test_gemini_sports_adapter.py \
@@ -36,6 +36,8 @@ RUN pytest -q \
     tests/test_sports_kgp_micro_guard.py \
     tests/test_sports_kgp_gemini_depth_gate.py \
     tests/test_sports_kgp_micro_transport.py \
+    tests/test_gemini_prediction_depth.py \
+    tests/test_sports_kgp_micro_live_v2.py \
  && python -m py_compile \
     src/eventing_books.py \
     src/three_venue_mlb_snapshot_pricing.py \
@@ -54,7 +56,9 @@ RUN pytest -q \
     src/sports_pushover_odds_api_mlb.py \
     src/sports_kgp_micro_guard.py \
     src/sports_kgp_micro_transport.py \
-    src/sports_kgp_micro_service.py
+    src/sports_kgp_micro_service.py \
+    src/gemini_prediction_depth.py \
+    src/sports_kgp_micro_live_v2.py
 
 # Default remains the public/read-only REST scanner. Railway overrides this per
 # isolated service for prop and WebSocket hot shards.
