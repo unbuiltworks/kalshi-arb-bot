@@ -38,6 +38,11 @@ def _paper_probe_flags(assessment, probe5: dict[str, Any] | None) -> tuple[bool,
     return positive, preferred
 
 
+def _book_pair_is_synchronized(poly_received_ms: int, kalshi_received_ms: int) -> bool:
+    """Fail closed unless local receive timestamps are within v4's REST skew bound."""
+    return abs(poly_received_ms - kalshi_received_ms) <= v4.MAX_BOOK_RECEIVE_SKEW_MS
+
+
 def _empty(candidate: base.StrictCandidate, assessment, proof, error: str | None) -> dict[str, Any]:
     return {
         "family": candidate.family,
@@ -56,6 +61,13 @@ def _empty(candidate: base.StrictCandidate, assessment, proof, error: str | None
         "rules_status": "RULES_PENDING",
         "fully_audited_shadow_ready": False,
         "book_comparable": False,
+        "synchronized_book_pair": False,
+        "poly_received_ms": None,
+        "kalshi_received_ms": None,
+        "poly_fetch_latency_ms": None,
+        "kalshi_fetch_latency_ms": None,
+        "quote_receive_skew_ms": None,
+        "max_quote_receive_skew_ms": v4.MAX_BOOK_RECEIVE_SKEW_MS,
         "positive_conservative_plan": None,
         "probe_1usd": None,
         "probe_5usd": None,
@@ -115,18 +127,38 @@ async def run_once() -> dict[str, Any]:
         async def price(candidate: base.StrictCandidate) -> dict[str, Any]:
             proof = proofs[candidate.key]
             assessment = assessments[candidate.key]
+            # V5 used to regress to sequential venue reads even after v4 was hardened.
+            # Fetch concurrently and apply the same receive-skew fail-closed gate so
+            # participation-aware paper economics cannot be built from non-coexisting books.
             async with semaphore:
-                poly_body, poly_error = await v3._fetch_optional(
-                    http, f"{base.POLY}/v1/markets/{candidate.poly_slug}/book"
+                poly_result, kalshi_result = await asyncio.gather(
+                    v4._fetch_optional_timed(
+                        http, f"{base.POLY}/v1/markets/{candidate.poly_slug}/book"
+                    ),
+                    v4._fetch_optional_timed(
+                        http,
+                        f"{base.KALSHI}/markets/{candidate.kalshi_ticker}/orderbook",
+                        params={"depth": 1},
+                    ),
                 )
-                kalshi_body, kalshi_error = await v3._fetch_optional(
-                    http,
-                    f"{base.KALSHI}/markets/{candidate.kalshi_ticker}/orderbook",
-                    params={"depth": 1},
-                )
+            poly_body, poly_error, poly_received_ms, poly_latency_ms = poly_result
+            kalshi_body, kalshi_error, kalshi_received_ms, kalshi_latency_ms = kalshi_result
+            receive_skew_ms = abs(poly_received_ms - kalshi_received_ms)
+            synchronized = _book_pair_is_synchronized(poly_received_ms, kalshi_received_ms)
+
             if poly_body is None or kalshi_body is None:
                 error = ";".join(x for x in (poly_error, kalshi_error) if x) or "book_missing"
-                return _empty(candidate, assessment, proof, error)
+                row = _empty(candidate, assessment, proof, error)
+                row.update(
+                    {
+                        "poly_received_ms": poly_received_ms,
+                        "kalshi_received_ms": kalshi_received_ms,
+                        "poly_fetch_latency_ms": poly_latency_ms,
+                        "kalshi_fetch_latency_ms": kalshi_latency_ms,
+                        "quote_receive_skew_ms": receive_skew_ms,
+                    }
+                )
+                return row
 
             pbook = base.poly_top_book(poly_body)
             kbook = base.kalshi_top_book(kalshi_body)
@@ -136,7 +168,8 @@ async def run_once() -> dict[str, Any]:
             multiplier = base._d(meta.get("fee_multiplier"))
             plan = probe1 = probe5 = None
             if (
-                pbook is not None
+                synchronized
+                and pbook is not None
                 and kbook is not None
                 and fee_type in {"quadratic", "quadratic_with_maker_fees"}
                 and multiplier is not None
@@ -170,6 +203,13 @@ async def run_once() -> dict[str, Any]:
                 "kalshi_fee_type": fee_type,
                 "kalshi_fee_multiplier": str(multiplier) if multiplier is not None else None,
                 "book_comparable": pbook is not None and kbook is not None,
+                "synchronized_book_pair": synchronized,
+                "poly_received_ms": poly_received_ms,
+                "kalshi_received_ms": kalshi_received_ms,
+                "poly_fetch_latency_ms": poly_latency_ms,
+                "kalshi_fetch_latency_ms": kalshi_latency_ms,
+                "quote_receive_skew_ms": receive_skew_ms,
+                "max_quote_receive_skew_ms": v4.MAX_BOOK_RECEIVE_SKEW_MS,
                 "positive_conservative_plan": plan,
                 "probe_1usd": probe1,
                 "probe_5usd": probe5,
@@ -195,8 +235,9 @@ async def run_once() -> dict[str, Any]:
     failures = [r for r in priced if r.get("fetch_error")]
     paper_candidates = [
         r for r in priced
-        if r.get("settlement_equivalent_now")
+        if r.get("participation_gate_satisfied")
         and r.get("book_comparable")
+        and r.get("synchronized_book_pair")
         and not r.get("fetch_error")
         and (r.get("probe_1usd") or r.get("probe_5usd"))
     ]
@@ -218,6 +259,11 @@ async def run_once() -> dict[str, Any]:
         "batch_start": batch_start,
         "rotation_slot": slot,
         "book_comparable": sum(bool(r["book_comparable"]) for r in priced),
+        "synchronized_book_pairs": sum(bool(r.get("synchronized_book_pair")) for r in priced),
+        "receive_skew_rejected_pairs": sum(
+            bool(r.get("book_comparable")) and not bool(r.get("synchronized_book_pair")) for r in priced
+        ),
+        "max_quote_receive_skew_ms": v4.MAX_BOOK_RECEIVE_SKEW_MS,
         "fetch_failures": len(failures),
         "conservative_positive_pairs": len(positive),
         "probe_1usd_positive_pairs": len(probe1),
@@ -241,6 +287,10 @@ async def run_once() -> dict[str, Any]:
             "MLB game-state evidence can clear the family-specific participation branch, but that is not a full "
             "Polymarket US↔Kalshi settlement-rule audit. <=$1/<= $5 results are paper-shadow economics only until "
             "independent rules evidence promotes the exact family to FULL_RULES_AUDITED_SHADOW."
+        ),
+        "timing_note": (
+            "Venue books are fetched concurrently; receive-time skew >500ms remains telemetry but is excluded from "
+            "conservative and <=$1/<= $5 paper-probe economics. Receive time is not exchange-side quote age."
         ),
         "read_only": True,
         "order_entry": False,
