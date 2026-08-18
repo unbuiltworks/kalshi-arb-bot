@@ -55,12 +55,14 @@ async def run_once() -> dict[str, Any]:
             poly = dict(p_index.get(candidate.poly_slug) or {})
             kalshi = dict(k_index.get(candidate.kalshi_ticker) or {})
 
-            # Enrich from exact-market endpoints where public metadata is available.
-            # Endpoint/schema failures are non-fatal: missing fields remain explicit
-            # and the packet stays fail-closed.
+            # Enrich from the exact public market endpoints. Polymarket US uses
+            # /v1/market/slug/{slug} for market metadata; /v1/markets/{slug}
+            # is not the documented metadata route (book/bbo/settlement are
+            # nested under /v1/markets/{slug}/...). Endpoint/schema failures
+            # remain non-fatal so missing evidence stays explicit and fail-closed.
             async with semaphore:
                 poly_exact, kalshi_exact = await asyncio.gather(
-                    v3._fetch_optional(http, f"{base.POLY}/v1/markets/{candidate.poly_slug}"),
+                    v3._fetch_optional(http, f"{base.POLY}/v1/market/slug/{candidate.poly_slug}"),
                     v3._fetch_optional(http, f"{base.KALSHI}/markets/{candidate.kalshi_ticker}"),
                 )
             poly_body, poly_error = poly_exact
