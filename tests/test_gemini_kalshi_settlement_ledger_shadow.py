@@ -25,3 +25,13 @@ def test_summarize_counts_by_asset_and_disagreements():
     assert result["trade_authorized"] is False
     assert result["read_only"] is True
     assert result["order_entry"] is False
+
+
+def test_ledger_scopes_kalshi_to_exact_supported_15m_series():
+    assert ledger.KALSHI_15M_SERIES == {
+        "BTC": "KXBTC15M",
+        "ETH": "KXETH15M",
+        "SOL": "KXSOL15M",
+        "XRP": "KXXRP15M",
+    }
+    assert tuple(ledger.KALSHI_15M_SERIES) == ledger.ASSETS
