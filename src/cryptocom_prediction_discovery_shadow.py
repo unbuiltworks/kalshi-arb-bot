@@ -34,6 +34,15 @@ ASSET_QUERIES: dict[str, tuple[str, ...]] = {
     "SOL": ("Solana", "SOL"),
     "XRP": ("XRP", "Ripple"),
 }
+# Crypto.com contract symbols observed in the public Predictions catalog use these
+# underlying prefixes. Symbol-family matching is intentionally stricter than free-text
+# matching so a search for Bitcoin cannot accidentally classify Bitcoin Cash as BTC.
+ASSET_SYMBOL_PREFIX: dict[str, str] = {
+    "BTC": "BTCUSD_",
+    "ETH": "ETHUSD_",
+    "SOL": "SOLUSD_",
+    "XRP": "XRPUSD_",
+}
 ASSET_ALIASES: dict[str, tuple[str, ...]] = {
     "BTC": ("bitcoin", "btc"),
     "ETH": ("ethereum", "ether", "eth"),
@@ -53,6 +62,20 @@ def _json_data(response: httpx.Response) -> Any:
 def _text_matches_asset(asset: str, *values: Any) -> bool:
     text = " ".join(str(value or "") for value in values).lower()
     return any(alias in text for alias in ASSET_ALIASES[asset])
+
+
+def _symbol_matches_asset(asset: str, symbol: Any) -> bool:
+    return str(symbol or "").upper().startswith(ASSET_SYMBOL_PREFIX[asset])
+
+
+def _price_budgets(max_prices_per_cycle: int) -> dict[str, int]:
+    """Split the global price budget fairly so BTC cannot starve later assets."""
+    assets = tuple(ASSET_QUERIES)
+    base, remainder = divmod(max_prices_per_cycle, len(assets))
+    return {
+        asset: base + (1 if index < remainder else 0)
+        for index, asset in enumerate(assets)
+    }
 
 
 def _rate_snapshot(headers: httpx.Headers) -> dict[str, int | None]:
@@ -136,8 +159,10 @@ async def discover_cycle(
     rate_samples: list[dict[str, int | None]] = []
     discovered: list[dict[str, Any]] = []
     changed: list[dict[str, Any]] = []
+    price_budgets = _price_budgets(max_prices_per_cycle)
 
     for asset, queries in ASSET_QUERIES.items():
+        asset_price_calls = 0
         events_by_id: dict[str, dict[str, Any]] = {}
         for query in queries:
             try:
@@ -160,8 +185,11 @@ async def discover_cycle(
 
         ranked = list(events_by_id.values())[:max_events_per_asset]
         counters[f"{asset.lower()}_search_events"] = len(ranked)
+        counters[f"{asset.lower()}_price_budget"] = price_budgets[asset]
 
         for summary in ranked:
+            if asset_price_calls >= price_budgets[asset]:
+                break
             event_id = str(summary.get("id") or "")
             if not event_id:
                 continue
@@ -175,24 +203,21 @@ async def discover_cycle(
                 continue
             if not isinstance(detail, dict):
                 continue
-            if not _text_matches_asset(asset, detail.get("title"), summary.get("title")):
-                continue
 
             contracts = detail.get("contracts") or []
-            for contract in contracts:
-                if counters["price_calls"] >= max_prices_per_cycle:
+            matching_contracts = [
+                contract for contract in contracts
+                if isinstance(contract, dict)
+                and str(contract.get("status") or "").lower() in {"active", "live", "open"}
+                and _symbol_matches_asset(asset, contract.get("symbol"))
+            ]
+            if not matching_contracts:
+                continue
+
+            counters[f"{asset.lower()}_matching_events"] += 1
+            for contract in matching_contracts:
+                if asset_price_calls >= price_budgets[asset]:
                     break
-                if not isinstance(contract, dict):
-                    continue
-                if str(contract.get("status") or "").lower() not in {"active", "live", "open"}:
-                    continue
-                if not _text_matches_asset(
-                    asset,
-                    detail.get("title"),
-                    contract.get("title"),
-                    contract.get("symbol"),
-                ):
-                    continue
                 symbol = str(contract.get("symbol") or "")
                 if not symbol:
                     continue
@@ -203,6 +228,8 @@ async def discover_cycle(
                     )
                     rate_samples.append(rate)
                     counters["price_calls"] += 1
+                    counters[f"{asset.lower()}_price_calls"] += 1
+                    asset_price_calls += 1
                 except Exception as exc:
                     counters["errors"] += 1
                     errors.append(f"price:{asset}:{symbol}:{type(exc).__name__}:{exc}")
@@ -230,11 +257,6 @@ async def discover_cycle(
                     previous_prices[symbol] = signature
                     changed.append(record)
 
-            if counters["price_calls"] >= max_prices_per_cycle:
-                break
-        if counters["price_calls"] >= max_prices_per_cycle:
-            break
-
     minute_remaining = [
         sample["minute_remaining"] for sample in rate_samples
         if sample.get("minute_remaining") is not None
@@ -254,6 +276,7 @@ async def discover_cycle(
 
     summary = {
         "counters": dict(counters),
+        "price_budgets": price_budgets,
         "symbols": sorted({str(row.get("symbol")) for row in discovered if row.get("symbol")}),
         "assets_seen": sorted({str(row.get("asset")) for row in discovered if row.get("asset")}),
         "min_rate_remaining_this_minute": min(minute_remaining) if minute_remaining else None,
@@ -314,8 +337,8 @@ def main() -> None:
         raise SystemExit("--interval-s must be >=10s for public-data rate-limit safety")
     if not 1 <= args.max_events_per_asset <= 20:
         raise SystemExit("--max-events-per-asset must be between 1 and 20")
-    if not 1 <= args.max_prices_per_cycle <= 60:
-        raise SystemExit("--max-prices-per-cycle must be between 1 and 60")
+    if not 4 <= args.max_prices_per_cycle <= 60:
+        raise SystemExit("--max-prices-per-cycle must be between 4 and 60")
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
     logger.info(
