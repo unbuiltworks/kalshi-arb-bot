@@ -1,6 +1,6 @@
 """One-attempt K/G/P sports micro-live canary service.
 
-The service may be deployed continuously in a harmless state.  It cannot submit an
+The service may be deployed continuously in a harmless state. It cannot submit an
 order unless ALL of the following are true at the same time:
 
 1. an exact pair is present in config/sports_kgp_execution_approvals.json,
@@ -11,7 +11,7 @@ order unless ALL of the following are true at the same time:
 5. --live was supplied, ENABLE_SPORTS_KGP_MICRO_LIVE=YES is set, and
 6. a one-use arm-token file exists.
 
-The arm token is consumed immediately before the first paired submission.  This
+The arm token is consumed immediately before the first paired submission. This
 service never creates the token and exits after one live attempt.
 """
 from __future__ import annotations
@@ -29,7 +29,13 @@ from typing import Any
 from src.current_polymarket_mlb_props import fetch_current_poly_mlb_props
 from src.gemini_kalshi_probe_transport import GeminiTradingSession, KalshiV2Executor
 from src.gemini_prediction_auth import private_rest_request
-from src.sports_kgp_micro_guard import EXECUTABLE_CONFIDENCE, RuleApproval, build_micro_plan
+from src.sports_kgp_micro_guard import (
+    DEFAULT_MAX_QUOTE_SKEW_MS,
+    DEFAULT_MIN_UNIT_PROFIT,
+    EXECUTABLE_CONFIDENCE,
+    RuleApproval,
+    build_micro_plan,
+)
 from src.sports_kgp_micro_transport import (
     DEFAULT_ARM_TOKEN,
     PolymarketMicroExecutor,
@@ -38,7 +44,7 @@ from src.sports_kgp_micro_transport import (
     submit_micro_pair,
 )
 from src.three_venue_pricing_core import PricedQuote
-from src.universal_prediction_quant import LockOpportunity, MarketQuote
+from src.universal_prediction_quant import MarketQuote, find_cross_venue_locks
 from src import three_venue_mlb_prop_safe_scan as scan
 
 scan._fetch_poly_mlb = fetch_current_poly_mlb_props
@@ -67,24 +73,8 @@ def load_approvals(path: Path) -> dict[str, list[RuleApproval]]:
     return out
 
 
-def _lock(raw: dict[str, Any]) -> LockOpportunity:
-    return LockOpportunity(
-        settlement_key=str(raw["settlement_key"]),
-        category=str(raw["category"]),
-        yes_venue=str(raw["yes_venue"]),
-        yes_market_id=str(raw["yes_market_id"]),
-        no_venue=str(raw["no_venue"]),
-        no_market_id=str(raw["no_market_id"]),
-        unit_cost=D(str(raw["unit_cost"])),
-        unit_profit=D(str(raw["unit_profit"])),
-        max_quantity=D(str(raw["max_quantity"])),
-        max_capital=D(str(raw["max_capital"])),
-        max_locked_profit=D(str(raw["max_locked_profit"])),
-        quote_skew_ms=int(raw["quote_skew_ms"]),
-        settlement_confidence=str(raw["settlement_confidence"]),
-        expected_settlement_minutes=int(raw["expected_settlement_minutes"]) if raw.get("expected_settlement_minutes") is not None else None,
-        capital_velocity_score=D(str(raw["capital_velocity_score"])),
-    )
+def _base_market_id(value: Any) -> str:
+    return str(value or "").split("#", 1)[0]
 
 
 def _priced(raw: dict[str, Any], *, certified: bool) -> PricedQuote:
@@ -113,13 +103,51 @@ def _priced(raw: dict[str, Any], *, certified: bool) -> PricedQuote:
     )
 
 
-def candidate_plans(result: dict[str, Any], approvals: dict[str, list[RuleApproval]], *, now_ms: int | None = None) -> tuple[list[tuple[Any, RuleApproval]], list[dict[str, str]]]:
-    """Build zero or more fully approved q=1 plans from one scanner cycle."""
+def _approved_pair_rows(
+    raw_rows: list[dict[str, Any]],
+    approval: RuleApproval,
+) -> list[PricedQuote]:
+    """Return only the exact market IDs/orientations frozen by one rule approval."""
+    rows: list[PricedQuote] = []
+    for raw in raw_rows:
+        if not isinstance(raw, dict):
+            continue
+        venue = str(raw.get("venue") or "")
+        if venue not in approval.venues:
+            continue
+        if _base_market_id(raw.get("market_id")) != approval.market_for(venue):
+            continue
+        if str(raw.get("source_side") or "") != approval.source_side_for(venue):
+            continue
+        rows.append(_priced(raw, certified=True))
+    return rows
+
+
+def candidate_plans(
+    result: dict[str, Any],
+    approvals: dict[str, list[RuleApproval]],
+    *,
+    now_ms: int | None = None,
+) -> tuple[list[tuple[Any, RuleApproval]], list[dict[str, str]]]:
+    """Recompute approved q=1 locks from final books, never discovery economics.
+
+    ``top_one_contract_locks`` is used only as an independent scanner-certification
+    gate. The prices/profit sent to the execution guard are rebuilt from the latest
+    ``positive_quote_audit`` rows (including the Gemini depth10 overlay when used).
+    This prevents an earlier discovery spread from authorizing a worse final book.
+    """
     now_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
     assessments = {
         str(row.get("settlement_key") or ""): row
         for row in result.get("rule_audit", {}).get("top_assessments", [])
         if isinstance(row, dict) and row.get("settlement_key")
+    }
+    certified_scanner_keys = {
+        str(raw.get("settlement_key") or "")
+        for raw in result.get("top_one_contract_locks", [])
+        if isinstance(raw, dict)
+        and raw.get("settlement_key")
+        and str(raw.get("settlement_confidence") or "") == EXECUTABLE_CONFIDENCE
     }
     quotes_by_key: dict[str, list[dict[str, Any]]] = {}
     for row in result.get("positive_quote_audit", []):
@@ -128,32 +156,37 @@ def candidate_plans(result: dict[str, Any], approvals: dict[str, list[RuleApprov
 
     plans: list[tuple[Any, RuleApproval]] = []
     rejected: list[dict[str, str]] = []
-    for raw in result.get("top_one_contract_locks", []):
-        if not isinstance(raw, dict) or not raw.get("settlement_key"):
-            continue
-        key = str(raw["settlement_key"])
-        available_approvals = approvals.get(key, [])
-        if not available_approvals:
-            continue
+    for key, available_approvals in approvals.items():
         assessment = assessments.get(key, {})
         if not bool(assessment.get("execution_eligible")):
             rejected.append({"settlement_key": key, "reason": "rule_assessment_not_execution_eligible"})
             continue
-        if str(raw.get("settlement_confidence") or "") != EXECUTABLE_CONFIDENCE:
-            rejected.append({"settlement_key": key, "reason": "lock_not_execution_audited"})
+        if key not in certified_scanner_keys:
+            rejected.append({"settlement_key": key, "reason": "scanner_lock_not_execution_audited"})
             continue
 
-        lock = _lock(raw)
+        raw_rows = quotes_by_key.get(key, [])
         for approval in available_approvals:
-            # Quote-confidence promotion is deliberately local to this function and
-            # only occurs after the independent rule assessment + exact approval.
-            rows = [_priced(row, certified=True) for row in quotes_by_key.get(key, [])]
             try:
-                plan = build_micro_plan(lock, rows, approval, now_ms=now_ms)
+                rows = _approved_pair_rows(raw_rows, approval)
+                if {row.quote.venue for row in rows} != set(approval.venues):
+                    raise ValueError("exact current approved quote pair is incomplete")
+                fresh_locks = find_cross_venue_locks(
+                    [row.quote for row in rows],
+                    min_unit_profit=DEFAULT_MIN_UNIT_PROFIT,
+                    max_quote_skew_ms=DEFAULT_MAX_QUOTE_SKEW_MS,
+                    min_confidence=EXECUTABLE_CONFIDENCE,
+                )
+                # find_cross_venue_locks returns both directions when profitable;
+                # every row is already exact-ID/orientation scoped to the approval.
+                if not fresh_locks:
+                    raise ValueError("final execution books no longer contain a >=3c lock")
+                for lock in fresh_locks:
+                    plan = build_micro_plan(lock, rows, approval, now_ms=now_ms)
+                    plans.append((plan, approval))
             except Exception as exc:
                 rejected.append({"settlement_key": key, "reason": f"{type(exc).__name__}:{str(exc)[:180]}"})
                 continue
-            plans.append((plan, approval))
     plans.sort(key=lambda item: (item[0].locked_profit, -item[0].quote_skew_ms), reverse=True)
     return plans, rejected
 
@@ -178,7 +211,6 @@ async def _venue_cash(plan: Any, *, poly: PolymarketMicroExecutor | None, kalshi
     if "polymarket" in venues:
         assert poly is not None
         body = await asyncio.to_thread(poly.client.account.balances)
-        # SDK shapes have varied; conservatively collect explicit USD available fields.
         candidates = []
         if isinstance(body, dict):
             candidates.extend([body.get("available"), body.get("availableBalance"), body.get("buyingPower")])
@@ -256,8 +288,6 @@ async def run(*, live_requested: bool, once: bool, interval_seconds: float, appr
             if gemini is not None:
                 await gemini.connect()
             balances = await _venue_cash(plan, poly=poly, kalshi=kalshi)
-            # Consume the one-use authorization only after auth/balance preflight and
-            # after a fully approved plan already exists.
             if not consume_arm_token(token_path):
                 _write(log_path, {"ts": time.time(), "mode": "ARM_TOKEN_RACE_DISARMED", "order_entry": False})
                 continue
