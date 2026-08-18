@@ -32,22 +32,9 @@ PROBE_FIELDS = (("probe_1usd", D("1")), ("probe_5usd", D("5")))
 
 
 def _settlement_key(row: dict[str, Any]) -> str:
-    """Exact venue identity for one matched proposition.
-
-    Date/player/stat/threshold alone is not enough for MLB doubleheaders: the same
-    player can appear twice on one date with an identical prop. Include both venue
-    market identifiers so paper fills can never collapse distinct scheduled games.
-    """
     return "|".join(
         str(row.get(k) or "")
-        for k in (
-            "family",
-            "game_date",
-            "player",
-            "threshold",
-            "poly_slug",
-            "kalshi_ticker",
-        )
+        for k in ("family", "game_date", "player", "threshold", "poly_slug", "kalshi_ticker")
     )
 
 
@@ -61,12 +48,6 @@ def _state_key(row: dict[str, Any], probe_field: str) -> str:
 
 
 def _opportunity_fingerprint(row: dict[str, Any], probe_field: str) -> str:
-    """Fingerprint the consumable plan, not the polling timestamp.
-
-    Changes in direction, quantity, executable prices, modeled fees, or conservative
-    profit create a MOVE. An identical plan on the next poll is resting depth and is
-    deliberately not counted again.
-    """
     plan = row.get(probe_field) or {}
     payload = {
         "settlement_key": _settlement_key(row),
@@ -90,8 +71,6 @@ def _load_active_state(path: Path) -> dict[str, str]:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        # Fail closed rather than resetting state and potentially double-counting
-        # unchanged resting liquidity as a fresh paper opportunity.
         raise RuntimeError(f"invalid paper-probe state: {path}") from exc
     if not isinstance(raw, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in raw.items()):
         raise RuntimeError(f"invalid paper-probe state shape: {path}")
@@ -112,7 +91,6 @@ def paper_probe_events(
     min_profit: Decimal = D("0.03"),
     ts_ms: int | None = None,
 ) -> tuple[list, dict[str, Any]] | None:
-    """Return simultaneous ledger events plus audit metadata for one capped plan."""
     plan = row.get(probe_field)
     if not isinstance(plan, dict):
         return None
@@ -121,16 +99,14 @@ def paper_probe_events(
         return None
     if not bool(row.get("book_comparable")):
         return None
+    if row.get("synchronized_book_pair") is not True:
+        return None
     if row.get("fetch_error"):
         return None
     if not row.get("poly_slug") or not row.get("kalshi_ticker"):
         return None
-    # Paper economics require the explicit participation gate from v5. The legacy
-    # `settlement_equivalent_now` field historically meant only participation and
-    # must never be used as a settlement-rules signal by downstream consumers.
     if not bool(row.get("participation_gate_satisfied")):
         return None
-    # Fail closed if a future caller strips the read-only safety fields.
     if row.get("read_only") is not True or row.get("order_entry") is not False:
         return None
     if row.get("execution_eligible") is not False or row.get("live_probe_ready") is not False:
@@ -174,6 +150,8 @@ def paper_probe_events(
         "poly_slug": str(row["poly_slug"]),
         "kalshi_ticker": str(row["kalshi_ticker"]),
         "simultaneous_synthetic_fill_ts_ms": now_ms,
+        "synchronized_book_pair": True,
+        "quote_receive_skew_ms": row.get("quote_receive_skew_ms"),
         "required_participation_gate": row.get("required_participation_gate"),
         "participation_proof": row.get("participation_proof"),
         "participation_gate_satisfied": True,
@@ -196,7 +174,6 @@ def build_paper_probes(
     min_profit: Decimal = D("0.03"),
     ts_ms: int | None = None,
 ) -> tuple[list, list[dict[str, Any]]]:
-    """Build at most one $1 and one $5 paper probe per exact venue identity."""
     events, audits, _state, _suppressed = build_paper_probes_with_state(
         snapshot, prior_state={}, min_profit=min_profit, ts_ms=ts_ms
     )
@@ -210,12 +187,6 @@ def build_paper_probes_with_state(
     min_profit: Decimal = D("0.03"),
     ts_ms: int | None = None,
 ) -> tuple[list, list[dict[str, Any]], dict[str, str], int]:
-    """Build only OPEN/MOVE/re-OPEN probes and return current active state.
-
-    `current_state` contains only qualifying opportunities present in this snapshot.
-    Thus disappearance creates an implicit CLOSE by removing the state key; if the
-    same quote later reappears it is correctly counted as a new OPEN episode.
-    """
     events = []
     audits: list[dict[str, Any]] = []
     current_state: dict[str, str] = {}
@@ -261,14 +232,13 @@ async def run(ledger_path: Path, audit_path: Path, state_path: Path, min_profit:
         with audit_path.open("a", encoding="utf-8") as fh:
             for row in audits:
                 fh.write(json.dumps(row, separators=(",", ":"), sort_keys=True) + "\n")
-    # Write only after ledger/audit output succeeds. An unchanged next run then
-    # suppresses the same resting plan; absent plans are cleared as implicit CLOSEs.
     _write_active_state(state_path, current_state)
     result = {
         "paper_probe_groups": len(audits),
         "ledger_events": len(events),
         "minimum_modeled_profit_dollars": str(min_profit),
         "participation_cleared_only": True,
+        "synchronized_books_only": True,
         "active_paper_opportunities": len(current_state),
         "suppressed_resting_duplicates": suppressed,
         "episode_semantics": "OPEN_MOVE_REOPEN_NO_RESTING_DEPTH_DOUBLE_COUNT",
