@@ -2,14 +2,14 @@
 
 Consumes rows emitted by ``strict_mlb_prop_snapshot_v4``/later participation-aware
 wrappers. A merely positive price discrepancy is not sufficient for promotion:
-we keep economics, participation, and *independent* settlement-rule equivalence as
-separate gates and prefer at least three cents of conservative modeled net profit.
+we keep economics, participation, and *independent exact-contract* settlement-rule
+equivalence as separate gates and prefer at least three cents of conservative modeled
+net profit.
 
 Important v5 compatibility note: ``strict_mlb_prop_snapshot_v5`` currently uses
 ``settlement_equivalent_now`` for the narrower *participation branch resolved*
 concept. That must never be interpreted here as proof that the two venues' full
-contract terms were independently audited. Full-rule audit therefore requires an
-explicit audit field/status produced by the strict rule adapter.
+contract terms were independently audited.
 
 This module is read-only. It has no venue clients, credentials, or order-entry path.
 """
@@ -18,9 +18,10 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
 
+from src.mlb_prop_rule_audit_guard import AUDIT_CONTRACT
+
 D = Decimal
 DEFAULT_PREFERRED_NET = D("0.03")
-FULL_AUDIT_STATUSES = frozenset({"FULL_RULES_AUDITED_SHADOW", "FULL_RULES_AUDITED"})
 PARTICIPATION_STATUSES = frozenset({"EQUIVALENT_AFTER_PARTICIPATION"})
 
 
@@ -39,13 +40,7 @@ def _plan_profit(row: dict[str, Any], cap: str) -> Decimal | None:
 
 
 def _participation_ok(row: dict[str, Any]) -> bool:
-    """Resolve the family-specific in-game participation gate only.
-
-    Newer callers should emit ``participation_gate_satisfied`` explicitly. For v5
-    compatibility we may infer it from the participation rule-engine status or its
-    historical ``settlement_equivalent_now`` field, but this inference is *only*
-    participation evidence and is never reused as the independent rules audit.
-    """
+    """Resolve the family-specific in-game participation gate only."""
     if "participation_gate_satisfied" in row:
         return bool(row.get("participation_gate_satisfied"))
     if str(row.get("rule_status") or "") in PARTICIPATION_STATUSES:
@@ -54,17 +49,37 @@ def _participation_ok(row: dict[str, Any]) -> bool:
 
 
 def _rules_audited_ok(row: dict[str, Any]) -> bool:
-    """Require explicit independent venue-rule audit evidence; fail closed.
+    """Require the exact-contract audit guard's evidence contract; fail closed.
 
-    Accepted shapes intentionally do not include ``settlement_equivalent_now``
-    because v5 uses that name for participation resolution. A strict adapter may
-    provide either a boolean ``full_rules_audited`` or a settlement-confidence
-    status proving the pair passed the independent terms/source audit.
+    Generic booleans/status strings such as ``full_rules_audited=true`` or
+    ``settlement_confidence=FULL_RULES_AUDITED_SHADOW`` are deliberately ignored.
+    They can be hand-authored and do not prove that exact Polymarket instrument rules
+    and exact Kalshi market rules/source hierarchy were independently checked.
     """
-    if row.get("full_rules_audited") is True:
-        return True
-    status = str(row.get("settlement_confidence") or row.get("rule_audit_status") or "")
-    return status in FULL_AUDIT_STATUSES
+    audit = row.get("exact_rule_audit")
+    if not isinstance(audit, dict):
+        return False
+    if audit.get("audit_contract") != AUDIT_CONTRACT:
+        return False
+    if audit.get("full_rules_audited_shadow") is not True:
+        return False
+    if audit.get("equivalent") is not True:
+        return False
+    if str(audit.get("family") or "") != str(row.get("family") or ""):
+        return False
+    if str(audit.get("kalshi_ticker") or "") != str(row.get("kalshi_ticker") or ""):
+        return False
+    if not str(audit.get("polymarket_instrument_id") or "").strip():
+        return False
+    return all(
+        audit.get(field) is True
+        for field in (
+            "participation_branch_checked",
+            "stat_definition_checked",
+            "cancellation_postponement_checked",
+            "source_hierarchy_checked",
+        )
+    )
 
 
 def classify_probe_row(
@@ -141,7 +156,8 @@ def summarize_probe_rows(
         "note": (
             "A >=3c conservative modeled net is only an economics gate. Exact identity, current books, "
             "and the participation gate may qualify an automatic synthetic paper micro-probe; independently "
-            "audited venue settlement equivalence is additionally required before FULL_RULES_AUDITED_SHADOW. "
+            "audited exact-contract venue settlement equivalence is additionally required before "
+            "FULL_RULES_AUDITED_SHADOW. Generic audit booleans/status strings do not clear that gate. "
             "This layer never grants live execution readiness."
         ),
     }
