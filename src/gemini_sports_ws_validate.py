@@ -39,6 +39,14 @@ def _snapshot_prices(contract: dict[str, Any]) -> tuple[Decimal, Decimal] | None
     return yes, no
 
 
+def _select_symbols(contracts: dict[str, Any], *, max_symbols: int, symbol_contains: str) -> list[str]:
+    symbols = sorted(contracts)
+    needle = symbol_contains.strip().lower()
+    if needle:
+        symbols = [symbol for symbol in symbols if needle in symbol.lower()]
+    return symbols[:max_symbols]
+
+
 async def _subscribe(symbols: list[str], queue: asyncio.Queue) -> None:
     async with websockets.connect(
         GEMINI_WS,
@@ -72,14 +80,21 @@ async def _subscribe(symbols: list[str], queue: asyncio.Queue) -> None:
     raise RuntimeError("Gemini sports bookTicker stream ended")
 
 
-async def run(seconds: float, max_symbols: int) -> None:
+async def run(seconds: float, max_symbols: int, symbol_contains: str = "") -> None:
     async with httpx.AsyncClient(timeout=10.0) as http:
         events = await fetch_gemini_mlb(http)
     contracts = _gemini_contracts(events)
-    symbols = sorted(contracts)[:max_symbols]
+    symbols = _select_symbols(contracts, max_symbols=max_symbols, symbol_contains=symbol_contains)
     if not symbols:
-        raise RuntimeError("No active Gemini MLB prediction symbols discovered")
+        raise RuntimeError(f"No active Gemini MLB prediction symbols matched filter={symbol_contains!r}")
 
+    logger.info("GEMINI_SPORTS_WS_VALIDATE_START %s", json.dumps({
+        "symbols": symbols,
+        "symbol_count": len(symbols),
+        "symbol_filter": symbol_contains,
+        "read_only": True,
+        "order_entry": False,
+    }, separators=(",", ":")))
     snapshot = {symbol: _snapshot_prices(contracts[symbol]) for symbol in symbols}
     queue: asyncio.Queue = asyncio.Queue(maxsize=100000)
     task = asyncio.create_task(_subscribe(symbols, queue))
@@ -101,8 +116,6 @@ async def run(seconds: float, max_symbols: int) -> None:
             if baseline is None:
                 continue
             snap_yes, snap_no = baseline
-            # bookTicker is a YES-space order book. Executable YES buy = ask;
-            # executable NO buy = 1 - YES bid.
             live_yes = D(top.yes_ask)
             live_no = D("1") - D(top.yes_bid)
             yes_gap = abs(snap_yes - live_yes)
@@ -130,7 +143,7 @@ async def run(seconds: float, max_symbols: int) -> None:
         await asyncio.gather(task, return_exceptions=True)
 
     logger.info("GEMINI_SPORTS_WS_VALIDATE_SUMMARY %s", json.dumps({
-        "discovered_symbols": len(symbols),
+        "selected_symbols": len(symbols),
         "symbols_with_book_updates": len(seen),
         "comparisons": comparisons,
         "max_yes_abs_gap": str(max_yes_gap),
@@ -144,9 +157,10 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--seconds", type=float, default=120.0)
     p.add_argument("--max-symbols", type=int, default=150)
+    p.add_argument("--symbol-contains", default="")
     args = p.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
-    asyncio.run(run(args.seconds, max(1, args.max_symbols)))
+    asyncio.run(run(args.seconds, max(1, args.max_symbols), args.symbol_contains))
 
 
 if __name__ == "__main__":
