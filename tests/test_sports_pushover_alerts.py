@@ -19,7 +19,7 @@ def lock(**overrides):
         max_capital=D("0.93"),
         max_locked_profit=D("0.07"),
         quote_skew_ms=1000,
-        settlement_confidence="NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+        settlement_confidence="FULL_RULES_AUDITED_EXECUTABLE",
     )
     data.update(overrides)
     return SimpleNamespace(**data)
@@ -39,12 +39,24 @@ def sink():
     ))
 
 
+def test_qualification_requires_actionable_fully_audited_settlement():
+    s = sink()
+    assert s.qualifies(lock(), max_age_ms=1000, actionable=True)[0]
+    ok, reason = s.qualifies(lock(), max_age_ms=1000, actionable=False)
+    assert not ok and reason == "not_actionable"
+    ok, reason = s.qualifies(
+        lock(settlement_confidence="NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE"),
+        max_age_ms=1000,
+        actionable=True,
+    )
+    assert not ok and reason == "settlement_not_execution_audited"
+
+
 def test_qualification_rejects_stale_and_small_profit():
     s = sink()
-    assert s.qualifies(lock(), max_age_ms=1000)[0]
-    assert not s.qualifies(lock(unit_profit=D("0.01")), max_age_ms=1000)[0]
-    assert not s.qualifies(lock(), max_age_ms=6000)[0]
-    assert not s.qualifies(lock(quote_skew_ms=6000), max_age_ms=1000)[0]
+    assert not s.qualifies(lock(unit_profit=D("0.01")), max_age_ms=1000, actionable=True)[0]
+    assert not s.qualifies(lock(), max_age_ms=6000, actionable=True)[0]
+    assert not s.qualifies(lock(quote_skew_ms=6000), max_age_ms=1000, actionable=True)[0]
 
 
 def test_realert_only_on_material_profit_or_size_gain():
@@ -62,7 +74,7 @@ def test_message_contains_required_operational_fields():
         row("sportsbook:fanduel", "fd:1", "0.45", "0.60"),
         row("kalshi", "kx:1", "0.55", "0.48"),
     ]
-    title, message, age = s.build_message(l, rows, rule_status="RULE_AUDIT_REQUIRED", source="test", now_ms=100_000)
+    title, message, age = s.build_message(l, rows, rule_status="FULL_RULES_AUDITED", source="test", now_ms=100_000)
     assert "+$0.07" in title
     for token in ("YES sportsbook:fanduel", "NO kalshi", "Qty", "Cost $", "Payout $", "Fees $", "After-fee P/L", "Freshness", "skew", "Settlement", "Rules", "Manual sportsbook action: YES"):
         assert token in message
