@@ -18,8 +18,8 @@ from typing import Any
 
 import httpx
 
-from src.gemini_kalshi_settlement_agreement import _gemini_settled, match_settled
-from src.gemini_kalshi_settlement_probe import _kalshi_settled_paced
+from src.gemini_kalshi_settlement_agreement import _gemini_settled
+from src.gemini_kalshi_settlement_probe import _kalshi_settled_paced, match_settled_true_windows
 
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_settlement_ledger_shadow")
 ASSETS = ("BTC", "ETH", "SOL", "XRP")
@@ -46,6 +46,7 @@ def summarize(rows: list[Any]) -> dict[str, Any]:
         "disagreements": disagreements,
         "agreement_rate": ((total - disagreements) / total) if total else None,
         "by_asset": {asset: by_asset.get(asset, {"matched": 0, "agreed": 0, "disagreed": 0}) for asset in ASSETS},
+        "window_identity": "GEMINI_TICKER_TIME_VS_KALSHI_CLOSE_TIME",
         "classification": "INDEX_MISMATCH_RESEARCH_ONLY",
         "trade_authorized": False,
         "read_only": True,
@@ -59,12 +60,25 @@ async def collect_once(
     hours: int,
     gemini_limit: int,
     max_expiry_skew_s: float,
-) -> list[Any]:
+) -> tuple[list[Any], dict[str, Any]]:
     gemini_task = asyncio.create_task(_gemini_settled(http, gemini_limit))
     kalshi_task = asyncio.create_task(_kalshi_settled_paced(http, hours))
     gemini, kalshi = await asyncio.gather(gemini_task, kalshi_task)
-    rows = match_settled(gemini, kalshi, max_expiry_skew_s=max_expiry_skew_s)
-    return [row for row in rows if str(row.asset).upper() in ASSETS]
+    rows = match_settled_true_windows(gemini, kalshi, max_expiry_skew_s)
+    rows = [row for row in rows if str(row.asset).upper() in ASSETS]
+    diagnostics = {
+        "gemini_settled_events_scanned": len(gemini),
+        "kalshi_settled_markets_scanned": len(kalshi),
+        "matched_true_15m_windows": len(rows),
+        "gemini_sample_tickers": [str(row.get("ticker") or "") for row in gemini[:5]],
+        "kalshi_sample_tickers": [str(row.get("ticker") or "") for row in kalshi[:5]],
+        "window_identity": "GEMINI_TICKER_TIME_VS_KALSHI_CLOSE_TIME",
+        "classification": "INDEX_MISMATCH_RESEARCH_ONLY",
+        "trade_authorized": False,
+        "read_only": True,
+        "order_entry": False,
+    }
+    return rows, diagnostics
 
 
 async def run(
@@ -82,11 +96,15 @@ async def run(
         while deadline is None or time.monotonic() < deadline:
             started = time.monotonic()
             try:
-                rows = await collect_once(
+                rows, diagnostics = await collect_once(
                     http,
                     hours=hours,
                     gemini_limit=gemini_limit,
                     max_expiry_skew_s=max_expiry_skew_s,
+                )
+                logger.info(
+                    "CRYPTO_SETTLEMENT_LEDGER_SOURCE_COUNTS %s",
+                    json.dumps(diagnostics, separators=(",", ":"), default=str),
                 )
                 for row in rows:
                     key = str(row.kalshi_ticker)
@@ -96,6 +114,7 @@ async def run(
                     payload = row.as_dict()
                     payload.update({
                         "join_key": key,
+                        "window_identity": "GEMINI_TICKER_TIME_VS_KALSHI_CLOSE_TIME",
                         "classification": "INDEX_MISMATCH_RESEARCH_ONLY",
                         "trade_authorized": False,
                         "read_only": True,
@@ -112,10 +131,12 @@ async def run(
                         )
                 summary = summarize(rows)
                 summary.update({
-                    "new_rows_emitted_this_process": len(seen),
+                    "unique_rows_emitted_this_process": len(seen),
                     "hours": hours,
                     "gemini_limit": gemini_limit,
-                    "max_expiry_skew_s": max_expiry_skew_s,
+                    "max_window_end_skew_s": max_expiry_skew_s,
+                    "gemini_settled_events_scanned": diagnostics["gemini_settled_events_scanned"],
+                    "kalshi_settled_markets_scanned": diagnostics["kalshi_settled_markets_scanned"],
                 })
                 logger.info(
                     "CRYPTO_SETTLEMENT_LEDGER_SUMMARY %s",
@@ -153,6 +174,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
     logger.info(
         "CRYPTO_SETTLEMENT_LEDGER_ENABLED assets=BTC,ETH,SOL,XRP interval_s=%s hours=%s "
+        "window_identity=GEMINI_TICKER_TIME_VS_KALSHI_CLOSE_TIME "
         "trade_authorized=false read_only=true order_entry=false",
         args.interval_s,
         args.hours,
