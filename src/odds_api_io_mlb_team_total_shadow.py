@@ -1,18 +1,19 @@
 """Read-only Odds-API.io + Gemini MLB team-total hot shadow.
 
 Odds-API.io exposes ``Team Total Home`` and ``Team Total Away`` over the same
-WebSocket used by the existing MLB hot scanner.  Gemini already normalizes its
-``TT`` contracts into the universal ``team_total`` identity.  This module only
-bridges those two existing pieces:
+WebSocket used by the existing MLB hot scanner. Gemini already normalizes its
+``TT`` contracts into the universal ``team_total`` identity. This module bridges
+only those two feeds:
 
-* adds Gemini-only team-total keys to cold discovery so a sportsbook quote may be
-  the second venue;
-* normalizes Odds-API.io team-total WebSocket updates into those canonical keys;
+* discovers unambiguous Gemini team-total contracts;
+* normalizes Odds-API.io team-total WebSocket updates into the same canonical keys;
 * reuses the existing event-driven pricing/evaluation loop;
+* rejects integer sportsbook lines because they can push;
 * performs no order entry and never upgrades settlement confidence.
 
+No Kalshi or Polymarket discovery/subscription is used by this entrypoint.
 Settlement equivalence remains blocked by the separate audited team-total rule
-registry on the sports-router branch.  This lane is price discovery only.
+registry. This lane is price discovery only.
 """
 from __future__ import annotations
 
@@ -23,9 +24,9 @@ import sys
 import src.odds_api_io_mlb_hot_shadow as base
 from src.mlb_game_side_normalization import normalize_gemini_mlb
 from src.three_venue_mlb_hot import HotContract, HotUniverse
+from src.universal_three_venue_sports import fetch_gemini_mlb
 
 _BASE_QUOTES_FROM_MARKET = base._quotes_from_market
-_BASE_DISCOVER_HOT_UNIVERSE = base.discover_hot_universe
 
 TEAM_TOTAL_MARKETS = "Team Total Home,Team Total Away"
 RULE_GATE = "FULL_TEAM_TOTAL_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_ACTIONABLE"
@@ -40,7 +41,7 @@ def _quotes_from_market(
     received_ms: int,
     freshness_ms: int,
 ):
-    """Extend the base parser with team totals while preserving all base markets."""
+    """Extend the base quote parser with half-run MLB team totals."""
     out = list(_BASE_QUOTES_FROM_MARKET(
         event_id=event_id,
         event=event,
@@ -102,20 +103,10 @@ def _quotes_from_market(
 
 
 async def _discover_hot_universe(http) -> HotUniverse:
-    """Add unambiguous Gemini team-total contracts to the base hot universe.
-
-    The base universe requires two prediction venues before a key becomes hot.
-    That is appropriate for its three-venue router but would discard Gemini TT
-    keys before the sportsbook WebSocket has a chance to become venue two.
-    """
-    universe = await _BASE_DISCOVER_HOT_UNIVERSE(http)
-    contracts = dict(universe.contracts)
-    market_to_keys_raw: dict[tuple[str, str], set[str]] = defaultdict(set)
-    for marker, keys in universe.market_to_keys.items():
-        market_to_keys_raw[marker].update(keys)
-
+    """Build a Gemini-only TT universe; the sportsbook WS becomes venue two."""
+    gemini_events = await fetch_gemini_mlb(http)
     team_rows = [
-        row for row in normalize_gemini_mlb(universe.initial_gemini_events)
+        row for row in normalize_gemini_mlb(gemini_events)
         if row.identity.market_family == "team_total"
         and row.identity.scope == "full_contest"
     ]
@@ -123,53 +114,59 @@ async def _discover_hot_universe(http) -> HotUniverse:
     for row in team_rows:
         grouped[row.contract_key].append(row)
 
-    added = 0
+    contracts: dict[str, HotContract] = {}
+    market_to_keys_raw: dict[tuple[str, str], set[str]] = defaultdict(set)
     ambiguous = 0
     for key, candidates in grouped.items():
-        unique = {
-            (row.venue_market_id, row.side): row
-            for row in candidates
-        }
+        unique = {(row.venue_market_id, row.side): row for row in candidates}
         if len(unique) != 1:
             ambiguous += 1
             continue
         side = next(iter(unique.values()))
-        if key in contracts:
-            continue
         contracts[key] = HotContract(
             key=key,
             sides={"gemini": side},
             kalshi_fee_multiplier=None,
         )
         market_to_keys_raw[("gemini", side.venue_market_id)].add(key)
-        added += 1
 
-    diagnostics = dict(universe.diagnostics)
     families = Counter(
         next(iter(contract.sides.values())).identity.market_family
         for contract in contracts.values()
         if contract.sides
     )
-    diagnostics.update({
-        "team_total_gemini_rows": len(team_rows),
-        "team_total_gemini_only_keys_added": added,
-        "team_total_ambiguous_keys_rejected": ambiguous,
+    diagnostics = {
+        "raw_events": {"gemini": len(gemini_events), "polymarket": 0, "kalshi": 0},
+        "eligible_identity_keys": len(contracts),
+        "hot_contracts": len(contracts),
+        "ambiguous_keys_rejected": ambiguous,
+        "kalshi_fee_blocked_keys": 0,
+        "hot_by_venue_set": {"gemini": len(contracts)} if contracts else {},
         "hot_by_family": dict(families),
+        "polymarket_subscriptions": 0,
+        "kalshi_subscriptions": 0,
+        "gemini_instruments": len(contracts),
+        "fee_metadata_errors": [],
+        "team_total_gemini_rows": len(team_rows),
+        "team_total_gemini_only_keys_added": len(contracts),
+        "team_total_ambiguous_keys_rejected": ambiguous,
         "team_total_price_discovery_only": True,
         "team_total_rule_gate": RULE_GATE,
+        "direct_venues": ["gemini"],
+        "retail_feed": "ODDS_API_IO_WEBSOCKET",
         "read_only": True,
         "order_entry": False,
-    })
+    }
     return HotUniverse(
         contracts=contracts,
         market_to_keys={k: tuple(sorted(v)) for k, v in market_to_keys_raw.items()},
-        initial_gemini_events=universe.initial_gemini_events,
+        initial_gemini_events=gemini_events,
         diagnostics=diagnostics,
     )
 
 
-# Scoped monkeypatches: only the standalone team-total entrypoint imports this
-# module, so existing Odds-API.io services keep their current behavior.
+# Scoped monkeypatches: only this standalone entrypoint imports the extension, so
+# the existing game-line and player-prop websocket services keep their behavior.
 base._quotes_from_market = _quotes_from_market
 base.discover_hot_universe = _discover_hot_universe
 
