@@ -9,6 +9,20 @@ def test_asset_alias_matching_is_case_insensitive():
     assert not cdc._text_matches_asset("BTC", "Philadelphia vs New York")
 
 
+def test_symbol_family_matching_rejects_bitcoin_cash_for_btc():
+    assert cdc._symbol_matches_asset("BTC", "BTCUSD_260818-1900_6503000_B.NXO")
+    assert not cdc._symbol_matches_asset("BTC", "BCHUSD_260818-1900_20665_B.NXO")
+    assert cdc._symbol_matches_asset("ETH", "ETHUSD_260818-1900_123_B.NXO")
+    assert cdc._symbol_matches_asset("SOL", "SOLUSD_260818-1900_123_B.NXO")
+    assert cdc._symbol_matches_asset("XRP", "XRPUSD_260818-1900_123_B.NXO")
+
+
+def test_price_budget_is_balanced_across_assets():
+    assert cdc._price_budgets(32) == {"BTC": 8, "ETH": 8, "SOL": 8, "XRP": 8}
+    assert sum(cdc._price_budgets(33).values()) == 33
+    assert max(cdc._price_budgets(33).values()) - min(cdc._price_budgets(33).values()) <= 1
+
+
 def test_build_record_is_explicitly_read_only():
     record = cdc._build_record(
         asset="SOL",
@@ -22,7 +36,7 @@ def test_build_record_is_explicitly_read_only():
         },
         contract={
             "id": "contract-1",
-            "symbol": "SOL-TEST",
+            "symbol": "SOLUSD_TEST",
             "title": "SOL up",
             "status": "active",
             "yes": "0.48",
@@ -41,7 +55,7 @@ def test_build_record_is_explicitly_read_only():
         observed_at_ms=123,
     )
     assert record["asset"] == "SOL"
-    assert record["symbol"] == "SOL-TEST"
+    assert record["symbol"] == "SOLUSD_TEST"
     assert record["bid"] == "0.47"
     assert record["ask"] == "0.49"
     assert record["trade_authorized"] is False
