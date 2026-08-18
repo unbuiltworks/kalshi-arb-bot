@@ -124,19 +124,71 @@ def normalize_series_fee(series_ticker: str, series_payload: dict[str, Any], cha
     )
 
 
+async def _get_with_rate_limit_retry(
+    http: httpx.AsyncClient,
+    url: str,
+    *,
+    params: dict[str, str] | None = None,
+    max_attempts: int = 8,
+) -> httpx.Response:
+    """GET a Kalshi metadata endpoint without turning a 429 into a restart loop.
+
+    Fee metadata is control-plane data, not latency-sensitive market data. Waiting
+    a few seconds is strictly preferable to crashing and immediately retrying the
+    entire process. Non-429 errors still fail closed.
+    """
+    delay_s = 0.75
+    for attempt in range(1, max_attempts + 1):
+        response = await http.get(url, params=params)
+        if response.status_code != 429:
+            response.raise_for_status()
+            return response
+
+        retry_after = response.headers.get("retry-after")
+        try:
+            server_delay = float(retry_after) if retry_after else 0.0
+        except ValueError:
+            server_delay = 0.0
+        wait_s = min(12.0, max(delay_s, server_delay))
+        logger.warning(
+            "KALSHI_FEE_METADATA_RATE_LIMIT attempt=%s/%s wait_s=%.2f url=%s",
+            attempt,
+            max_attempts,
+            wait_s,
+            url,
+        )
+        if attempt >= max_attempts:
+            response.raise_for_status()
+        await asyncio.sleep(wait_s)
+        delay_s = min(12.0, delay_s * 2.0)
+
+    raise RuntimeError("unreachable Kalshi fee metadata retry state")
+
+
 async def fetch_series_fee_metadata(http: httpx.AsyncClient, series_ticker: str) -> KalshiSeriesFeeMetadata:
-    series_resp, changes_resp = await asyncio.gather(
-        http.get(f"{KALSHI_REST}/series/{series_ticker}"),
-        http.get(f"{KALSHI_REST}/series/fee_changes", params={"series_ticker": series_ticker}),
+    # Deliberately sequential: startup fee metadata is not latency-sensitive, and
+    # two simultaneous requests per asset unnecessarily consume Kalshi REST burst
+    # capacity while other live services share the same account limits.
+    series_resp = await _get_with_rate_limit_retry(
+        http, f"{KALSHI_REST}/series/{series_ticker}"
     )
-    series_resp.raise_for_status()
-    changes_resp.raise_for_status()
+    await asyncio.sleep(0.20)
+    changes_resp = await _get_with_rate_limit_retry(
+        http,
+        f"{KALSHI_REST}/series/fee_changes",
+        params={"series_ticker": series_ticker},
+    )
     return normalize_series_fee(series_ticker, series_resp.json(), changes_resp.json())
 
 
 async def run_once() -> None:
     async with httpx.AsyncClient(timeout=20.0) as http:
-        rows = await asyncio.gather(*(fetch_series_fee_metadata(http, ticker) for ticker in SERIES))
+        # Keep this inspection command paced too. Production workers already fetch
+        # these sequentially; doing the same here avoids self-inflicted 429 bursts.
+        rows: list[KalshiSeriesFeeMetadata] = []
+        for ticker in SERIES:
+            rows.append(await fetch_series_fee_metadata(http, ticker))
+            await asyncio.sleep(0.50)
     for row in rows:
         logger.info("KALSHI_15M_FEE_METADATA %s", json.dumps(row.as_dict(), separators=(",", ":")))
     logger.info("KALSHI_15M_FEE_METADATA_SUMMARY %s", json.dumps({
