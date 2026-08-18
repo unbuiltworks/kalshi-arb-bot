@@ -6,6 +6,11 @@ resting depth as fresh capacity. No venue clients, credentials, or order entry.
 Participation clearance is deliberately distinct from a full cross-venue settlement
 rules audit. This tracker records paper-shadow economics only and never promotes live
 readiness.
+
+The <=$1 and <=$5 plans are alternative sizing views of one displayed book, not
+independent liquidity. Episode selection therefore emits at most one active episode
+per strict settlement identity and chooses the best valid synchronized plan across
+budget tiers and duplicate rows.
 """
 from __future__ import annotations
 
@@ -15,7 +20,7 @@ import json
 from typing import Any
 
 D = Decimal
-PROBE_FIELDS = ("probe_1usd", "probe_5usd")
+PROBE_FIELDS = (("probe_1usd", D("1")), ("probe_5usd", D("5")))
 
 
 def _d(value: Any) -> Decimal | None:
@@ -31,13 +36,16 @@ def settlement_key(row: dict[str, Any]) -> str:
     ))
 
 
-def opportunity_key(row: dict[str, Any], probe_field: str) -> str:
-    return f"{settlement_key(row)}|{probe_field}"
+def opportunity_key(row: dict[str, Any], probe_field: str | None = None) -> str:
+    # Budget tiers are alternative views of the same strict counterpart pair.
+    # Keep one episode identity so a <=$1 <-> <=$5 switch is MOVE, not a second OPEN.
+    return settlement_key(row)
 
 
 def fingerprint(row: dict[str, Any], probe_field: str) -> str:
     plan = row.get(probe_field) or {}
     payload = {
+        "probe_field": probe_field,
         "direction": plan.get("direction"),
         "quantity": str(plan.get("quantity")),
         "poly_price": str(plan.get("poly_price")),
@@ -52,13 +60,7 @@ def fingerprint(row: dict[str, Any], probe_field: str) -> str:
 
 
 def _qualifying(row: dict[str, Any], probe_field: str, min_profit: Decimal) -> bool:
-    """Return True only for participation-cleared, explicitly read-only paper plans.
-
-    ``settlement_equivalent_now`` is a legacy field whose old name can be mistaken for
-    a complete venue-rule audit. Do not use it as the qualification source of truth.
-    The explicit participation gate is sufficient for paper-shadow measurement, while
-    full rules audit/live readiness remain independent downstream concepts.
-    """
+    """Return True only for synchronized, participation-cleared read-only paper plans."""
     plan = row.get(probe_field)
     if not isinstance(plan, dict):
         return False
@@ -67,6 +69,7 @@ def _qualifying(row: dict[str, Any], probe_field: str, min_profit: Decimal) -> b
         profit is not None
         and profit >= min_profit
         and row.get("book_comparable")
+        and row.get("synchronized_book_pair") is True
         and not row.get("fetch_error")
         and row.get("poly_slug")
         and row.get("kalshi_ticker")
@@ -76,6 +79,28 @@ def _qualifying(row: dict[str, Any], probe_field: str, min_profit: Decimal) -> b
         and row.get("execution_eligible") is False
         and row.get("live_probe_ready") is False
     )
+
+
+def _best_valid_choice(
+    rows: list[dict[str, Any]], min_profit: Decimal
+) -> tuple[dict[str, Any], str] | None:
+    """Choose one deterministic best plan across duplicate rows and budget tiers."""
+    choices: list[tuple[Decimal, Decimal, str, str, dict[str, Any], str]] = []
+    for row in rows:
+        for probe_field, cap in PROBE_FIELDS:
+            if not _qualifying(row, probe_field, min_profit):
+                continue
+            plan = row[probe_field]
+            profit = _d(plan.get("conservative_locked_profit")) or D("0")
+            fp = fingerprint(row, probe_field)
+            direction = str(plan.get("direction") or "")
+            # Highest conservative profit wins. On ties, prefer the smaller cap;
+            # deterministic strings remove any dependence on source row ordering.
+            choices.append((profit, -cap, direction, fp, row, probe_field))
+    if not choices:
+        return None
+    _profit, _neg_cap, _direction, _fp, row, probe_field = max(choices)
+    return row, probe_field
 
 
 def advance_episodes(
@@ -91,58 +116,63 @@ def advance_episodes(
     MOVE while preserving the original opened_ms. Missing opportunities emit CLOSE
     with measured duration. State is JSON-serializable for a non-blocking sidecar.
     """
-    rows = snapshot.get("paper_probe_candidates") or []
+    rows = [row for row in (snapshot.get("paper_probe_candidates") or []) if isinstance(row, dict)]
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(settlement_key(row), []).append(row)
+
     current: dict[str, dict[str, Any]] = {}
     events: list[dict[str, Any]] = []
 
-    for probe_field in PROBE_FIELDS:
-        for row in rows:
-            if not _qualifying(row, probe_field, min_profit):
-                continue
-            key = opportunity_key(row, probe_field)
-            if key in current:
-                continue
-            plan = row[probe_field]
-            fp = fingerprint(row, probe_field)
-            old = prior_state.get(key)
-            opened_ms = int(old.get("opened_ms", observed_ms)) if old else observed_ms
-            state = {
-                "fingerprint": fp,
-                "opened_ms": opened_ms,
-                "last_seen_ms": observed_ms,
-                "settlement_key": settlement_key(row),
-                "probe_field": probe_field,
-                "family": row.get("family"),
-                "poly_slug": row.get("poly_slug"),
-                "kalshi_ticker": row.get("kalshi_ticker"),
-                "direction": plan.get("direction"),
-                "quantity": str(plan.get("quantity")),
-                "capital": str(plan.get("total_cost_upper_bound")),
-                "modeled_profit": str(plan.get("conservative_locked_profit")),
-                "quote_age_ms": row.get("quote_age_ms"),
-                "quote_skew_ms": row.get("quote_skew_ms"),
-                "participation_gate_satisfied": True,
-                "full_rules_audited": bool(row.get("full_rules_audited")),
-                "rules_status": row.get("rules_status") or "RULES_PENDING",
-                "fully_audited_shadow_ready": bool(row.get("fully_audited_shadow_ready")),
-                "live_probe_ready": False,
-                "paper_probe_only": True,
-            }
-            current[key] = state
-            if old is None:
-                kind = "OPEN"
-            elif old.get("fingerprint") != fp:
-                kind = "MOVE"
-            else:
-                continue
-            events.append({
-                **state,
-                "event": kind,
-                "observed_ms": observed_ms,
-                "duration_ms": observed_ms - opened_ms,
-                "read_only": True,
-                "order_entry": False,
-            })
+    for key in sorted(grouped):
+        selected = _best_valid_choice(grouped[key], min_profit)
+        if selected is None:
+            continue
+        row, probe_field = selected
+        plan = row[probe_field]
+        fp = fingerprint(row, probe_field)
+        old = prior_state.get(key)
+        opened_ms = int(old.get("opened_ms", observed_ms)) if old else observed_ms
+        state = {
+            "fingerprint": fp,
+            "opened_ms": opened_ms,
+            "last_seen_ms": observed_ms,
+            "settlement_key": settlement_key(row),
+            "probe_field": probe_field,
+            "family": row.get("family"),
+            "poly_slug": row.get("poly_slug"),
+            "kalshi_ticker": row.get("kalshi_ticker"),
+            "direction": plan.get("direction"),
+            "quantity": str(plan.get("quantity")),
+            "capital": str(plan.get("total_cost_upper_bound")),
+            "modeled_profit": str(plan.get("conservative_locked_profit")),
+            "quote_age_ms": row.get("quote_age_ms"),
+            "quote_skew_ms": row.get("quote_skew_ms"),
+            "quote_receive_skew_ms": row.get("quote_receive_skew_ms"),
+            "synchronized_book_pair": True,
+            "duplicate_identity_rows_considered": len(grouped[key]),
+            "participation_gate_satisfied": True,
+            "full_rules_audited": bool(row.get("full_rules_audited")),
+            "rules_status": row.get("rules_status") or "RULES_PENDING",
+            "fully_audited_shadow_ready": bool(row.get("fully_audited_shadow_ready")),
+            "live_probe_ready": False,
+            "paper_probe_only": True,
+        }
+        current[key] = state
+        if old is None:
+            kind = "OPEN"
+        elif old.get("fingerprint") != fp:
+            kind = "MOVE"
+        else:
+            continue
+        events.append({
+            **state,
+            "event": kind,
+            "observed_ms": observed_ms,
+            "duration_ms": observed_ms - opened_ms,
+            "read_only": True,
+            "order_entry": False,
+        })
 
     for key, old in prior_state.items():
         if key in current:
@@ -173,6 +203,9 @@ def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         "close": len(closed),
         "closed_duration_ms_total": sum(durations),
         "closed_duration_ms_max": max(durations, default=0),
+        "budget_semantics": "ALTERNATIVE_SIZING_TIERS_ONE_EPISODE_PER_SETTLEMENT_IDENTITY",
+        "duplicate_identity_semantics": "BEST_VALID_ROW_ORDER_INDEPENDENT",
+        "synchronized_books_only": True,
         "paper_probe_only": True,
         "live_probe_ready": False,
         "read_only": True,
