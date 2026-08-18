@@ -10,7 +10,8 @@ readiness.
 The <=$1 and <=$5 plans are alternative sizing views of one displayed book, not
 independent liquidity. Episode selection therefore emits at most one active episode
 per strict settlement identity and chooses the best valid synchronized plan across
-budget tiers and duplicate rows.
+budget tiers and duplicate rows. A flip to the opposite complementary direction is a
+new opportunity episode, not a MOVE of the prior one.
 """
 from __future__ import annotations
 
@@ -38,7 +39,7 @@ def settlement_key(row: dict[str, Any]) -> str:
 
 def opportunity_key(row: dict[str, Any], probe_field: str | None = None) -> str:
     # Budget tiers are alternative views of the same strict counterpart pair.
-    # Keep one episode identity so a <=$1 <-> <=$5 switch is MOVE, not a second OPEN.
+    # Keep one active identity; a direction flip is handled as CLOSE + OPEN below.
     return settlement_key(row)
 
 
@@ -103,6 +104,22 @@ def _best_valid_choice(
     return row, probe_field
 
 
+def _close_event(old: dict[str, Any], observed_ms: int) -> dict[str, Any]:
+    opened_ms = int(old.get("opened_ms", observed_ms))
+    last_seen_ms = int(old.get("last_seen_ms", opened_ms))
+    return {
+        **old,
+        "event": "CLOSE",
+        "observed_ms": observed_ms,
+        "last_seen_ms": last_seen_ms,
+        "duration_ms": max(0, last_seen_ms - opened_ms),
+        "read_only": True,
+        "order_entry": False,
+        "live_probe_ready": False,
+        "paper_probe_only": True,
+    }
+
+
 def advance_episodes(
     snapshot: dict[str, Any],
     *,
@@ -112,9 +129,12 @@ def advance_episodes(
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
     """Return explicit lifecycle events and current active state.
 
-    Repeated identical resting plans emit no event. A changed consumable plan emits
-    MOVE while preserving the original opened_ms. Missing opportunities emit CLOSE
-    with measured duration. State is JSON-serializable for a non-blocking sidecar.
+    Repeated identical resting plans emit no event. A changed consumable plan in the
+    same direction emits MOVE while preserving the original opened_ms. A flip to the
+    opposite complementary direction closes the old episode and opens a new one at
+    the current observation, preventing unique-opportunity/capital accounting from
+    blending economically distinct trades. Missing opportunities emit CLOSE with
+    measured duration. State is JSON-serializable for a non-blocking sidecar.
     """
     rows = [row for row in (snapshot.get("paper_probe_candidates") or []) if isinstance(row, dict)]
     grouped: dict[str, list[dict[str, Any]]] = {}
@@ -131,8 +151,10 @@ def advance_episodes(
         row, probe_field = selected
         plan = row[probe_field]
         fp = fingerprint(row, probe_field)
+        direction = plan.get("direction")
         old = prior_state.get(key)
-        opened_ms = int(old.get("opened_ms", observed_ms)) if old else observed_ms
+        direction_flip = bool(old is not None and old.get("direction") != direction)
+        opened_ms = observed_ms if direction_flip else int(old.get("opened_ms", observed_ms)) if old else observed_ms
         state = {
             "fingerprint": fp,
             "opened_ms": opened_ms,
@@ -142,7 +164,7 @@ def advance_episodes(
             "family": row.get("family"),
             "poly_slug": row.get("poly_slug"),
             "kalshi_ticker": row.get("kalshi_ticker"),
-            "direction": plan.get("direction"),
+            "direction": direction,
             "quantity": str(plan.get("quantity")),
             "capital": str(plan.get("total_cost_upper_bound")),
             "modeled_profit": str(plan.get("conservative_locked_profit")),
@@ -159,37 +181,44 @@ def advance_episodes(
             "paper_probe_only": True,
         }
         current[key] = state
+
         if old is None:
-            kind = "OPEN"
-        elif old.get("fingerprint") != fp:
-            kind = "MOVE"
-        else:
+            events.append({
+                **state,
+                "event": "OPEN",
+                "observed_ms": observed_ms,
+                "duration_ms": 0,
+                "read_only": True,
+                "order_entry": False,
+            })
             continue
-        events.append({
-            **state,
-            "event": kind,
-            "observed_ms": observed_ms,
-            "duration_ms": observed_ms - opened_ms,
-            "read_only": True,
-            "order_entry": False,
-        })
+
+        if direction_flip:
+            events.append(_close_event(old, observed_ms))
+            events.append({
+                **state,
+                "event": "OPEN",
+                "observed_ms": observed_ms,
+                "duration_ms": 0,
+                "read_only": True,
+                "order_entry": False,
+            })
+            continue
+
+        if old.get("fingerprint") != fp:
+            events.append({
+                **state,
+                "event": "MOVE",
+                "observed_ms": observed_ms,
+                "duration_ms": observed_ms - opened_ms,
+                "read_only": True,
+                "order_entry": False,
+            })
 
     for key, old in prior_state.items():
         if key in current:
             continue
-        opened_ms = int(old.get("opened_ms", observed_ms))
-        last_seen_ms = int(old.get("last_seen_ms", opened_ms))
-        events.append({
-            **old,
-            "event": "CLOSE",
-            "observed_ms": observed_ms,
-            "last_seen_ms": last_seen_ms,
-            "duration_ms": max(0, last_seen_ms - opened_ms),
-            "read_only": True,
-            "order_entry": False,
-            "live_probe_ready": False,
-            "paper_probe_only": True,
-        })
+        events.append(_close_event(old, observed_ms))
 
     return events, current
 
@@ -203,7 +232,8 @@ def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         "close": len(closed),
         "closed_duration_ms_total": sum(durations),
         "closed_duration_ms_max": max(durations, default=0),
-        "budget_semantics": "ALTERNATIVE_SIZING_TIERS_ONE_EPISODE_PER_SETTLEMENT_IDENTITY",
+        "budget_semantics": "ALTERNATIVE_SIZING_TIERS_ONE_ACTIVE_EPISODE_PER_SETTLEMENT_IDENTITY",
+        "direction_flip_semantics": "CLOSE_OLD_OPEN_NEW_EPISODE",
         "duplicate_identity_semantics": "BEST_VALID_ROW_ORDER_INDEPENDENT",
         "synchronized_books_only": True,
         "paper_probe_only": True,
