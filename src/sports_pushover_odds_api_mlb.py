@@ -1,8 +1,8 @@
 """The Odds API MLB shadow + read-only qualified Pushover alerts.
 
 This replaces no pricing logic and performs no order entry. It reuses the exact
-full-game-only v2 scanner primitives, then routes qualified retail-vs-prediction
-locks through sports_pushover_alerts.
+full-game-only v2 scanner primitives, then routes only fully rule-audited,
+actionable retail-vs-prediction locks through sports_pushover_alerts.
 """
 from __future__ import annotations
 
@@ -18,10 +18,11 @@ from typing import Any, Mapping
 import httpx
 
 import src.the_odds_api_mlb_shadow_v2 as base
-from src.sports_pushover_alerts import SportsPushoverAlerts
+from src.sports_pushover_alerts import ACTIONABLE_CONFIDENCE, SportsPushoverAlerts
 
 logger = logging.getLogger("kalshi_arb.sports_pushover_odds_api_mlb")
 _ALERTS = SportsPushoverAlerts()
+RULE_STATUS = "FULL_GAME_ONLY; SPORTSBOOK_RULE_AUDIT_REQUIRED_BEFORE_EXECUTION"
 
 
 async def run_once(api_key: str) -> dict[str, Any]:
@@ -51,18 +52,24 @@ async def run_once(api_key: str) -> dict[str, Any]:
         row for row in locks
         if base._is_retail(row.yes_venue) != base._is_retail(row.no_venue)
     ]
+    actionable_locks = [
+        row for row in retail_vs_prediction
+        if row.settlement_confidence == ACTIONABLE_CONFIDENCE
+    ]
     tally = base._update_tally(retail_vs_prediction)
 
     alert_rows: list[Any] = [*direct, *matched_retail]
     alerts_sent = 0
     alert_errors = 0
     for lock in retail_vs_prediction:
+        actionable = lock.settlement_confidence == ACTIONABLE_CONFIDENCE
         try:
             if await _ALERTS.maybe_send(
                 lock,
                 alert_rows,
-                rule_status="FULL_GAME_ONLY; SPORTSBOOK_RULE_AUDIT_REQUIRED_BEFORE_EXECUTION",
+                rule_status=RULE_STATUS,
                 source="odds-api-mlb",
+                actionable=actionable,
             ):
                 alerts_sent += 1
         except Exception as exc:
@@ -78,13 +85,15 @@ async def run_once(api_key: str) -> dict[str, Any]:
         "direct_counterpart_keys": direct_keys,
         "direct_priced_quotes": len(direct_quotes),
         "retail_vs_prediction_positive_locks": len(retail_vs_prediction),
+        "retail_vs_prediction_actionable_locks": len(actionable_locks),
         "top_retail_vs_prediction_locks": [x.as_dict() for x in retail_vs_prediction[:30]],
         "sportsbook_opportunity_tally": tally,
         "pushover": {
             "configured": _ALERTS.configured,
             "alerts_sent_this_scan": alerts_sent,
             "alert_errors_this_scan": alert_errors,
-            "qualification": "positive_after_fee + freshness/skew + material_realert_only",
+            "blocked_by_rule_or_settlement_gate": len(retail_vs_prediction) - len(actionable_locks),
+            "qualification": "FULL_RULES_AUDITED_EXECUTABLE + positive_after_fee + freshness/skew + material_realert_only",
         },
         "quota": quota,
         "fetch_error_count": len(errors),
