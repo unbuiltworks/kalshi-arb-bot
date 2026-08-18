@@ -1,9 +1,9 @@
-"""Live-participation-aware, rate-safe MLB prop probe scanner.
+"""Live-participation-aware, rate-safe MLB prop paper-probe scanner.
 
-Read-only research. Compared with v4 this scanner supplies the audited rule engine
-with observable MLB game-state proof and prioritizes already-cleared props for book
-pricing. It can label a candidate LIVE_PROBE_READY, but contains no authentication or
-order-entry path.
+Read-only research. Compared with v4 this scanner supplies the participation rule
+engine with observable MLB game-state proof and prioritizes already-cleared props for
+book pricing. Participation clearance is NOT an independent cross-venue settlement
+rules audit, so this module never labels a quote live-probe-ready.
 """
 from __future__ import annotations
 
@@ -27,6 +27,17 @@ base._fetch_poly_mlb = _fetch_poly_mlb_search
 MIN_PREFERRED_NET = Decimal("0.03")
 
 
+def _paper_probe_flags(assessment, probe5: dict[str, Any] | None) -> tuple[bool, bool]:
+    """Return participation-cleared paper-economics flags, never live readiness."""
+    positive = bool(assessment.settlement_equivalent_now and probe5)
+    preferred = bool(
+        positive
+        and probe5 is not None
+        and Decimal(probe5["conservative_locked_profit"]) >= MIN_PREFERRED_NET
+    )
+    return positive, preferred
+
+
 def _empty(candidate: base.StrictCandidate, assessment, proof, error: str | None) -> dict[str, Any]:
     return {
         "family": candidate.family,
@@ -40,12 +51,20 @@ def _empty(candidate: base.StrictCandidate, assessment, proof, error: str | None
         "required_participation_gate": assessment.required_gate,
         "participation_proof": proof_dict(proof),
         "settlement_equivalent_now": assessment.settlement_equivalent_now,
+        "participation_gate_satisfied": assessment.settlement_equivalent_now,
+        "full_rules_audited": False,
+        "rules_status": "RULES_PENDING",
+        "fully_audited_shadow_ready": False,
         "book_comparable": False,
         "positive_conservative_plan": None,
         "probe_1usd": None,
         "probe_5usd": None,
+        "positive_paper_probe": False,
+        "preferred_paper_probe": False,
+        # Legacy keys remain explicitly false so older consumers fail closed.
         "positive_live_probe": False,
         "preferred_live_probe": False,
+        "live_probe_ready": False,
         "fetch_error": error,
         "execution_eligible": False,
         "read_only": True,
@@ -85,8 +104,8 @@ async def run_once() -> dict[str, Any]:
             if body is not None and error is None:
                 series_meta[series] = dict(body.get("series") or {})
 
-        # Trade-finding fast lane: spend the 60-pair pricing budget on candidates
-        # whose participation branch has already been resolved. If no candidate has
+        # Research fast lane: spend the 60-pair pricing budget on candidates whose
+        # participation branch has already been resolved. If no candidate has
         # cleared yet, retain v4's rotating shadow behavior for research.
         slot = int(time.time() // v3.ROTATION_SECONDS)
         priority_pool = cleared if cleared else candidates
@@ -131,11 +150,7 @@ async def run_once() -> dict[str, Any]:
                     pbook, kbook, kalshi_fee_multiplier=multiplier, capital_cap=Decimal("5")
                 )
 
-            positive_live_probe = bool(assessment.settlement_equivalent_now and probe5)
-            preferred_live_probe = bool(
-                positive_live_probe
-                and Decimal(probe5["conservative_locked_profit"]) >= MIN_PREFERRED_NET
-            )
+            positive_paper_probe, preferred_paper_probe = _paper_probe_flags(assessment, probe5)
             return {
                 "family": candidate.family,
                 "poly_slug": candidate.poly_slug,
@@ -148,14 +163,22 @@ async def run_once() -> dict[str, Any]:
                 "required_participation_gate": assessment.required_gate,
                 "participation_proof": proof_dict(proof),
                 "settlement_equivalent_now": assessment.settlement_equivalent_now,
+                "participation_gate_satisfied": assessment.settlement_equivalent_now,
+                "full_rules_audited": False,
+                "rules_status": "RULES_PENDING",
+                "fully_audited_shadow_ready": False,
                 "kalshi_fee_type": fee_type,
                 "kalshi_fee_multiplier": str(multiplier) if multiplier is not None else None,
                 "book_comparable": pbook is not None and kbook is not None,
                 "positive_conservative_plan": plan,
                 "probe_1usd": probe1,
                 "probe_5usd": probe5,
-                "positive_live_probe": positive_live_probe,
-                "preferred_live_probe": preferred_live_probe,
+                "positive_paper_probe": positive_paper_probe,
+                "preferred_paper_probe": preferred_paper_probe,
+                # Participation alone can never promote a live probe.
+                "positive_live_probe": False,
+                "preferred_live_probe": False,
+                "live_probe_ready": False,
                 "fetch_error": None,
                 "execution_eligible": False,
                 "read_only": True,
@@ -167,8 +190,8 @@ async def run_once() -> dict[str, Any]:
     positive = [r for r in priced if r.get("positive_conservative_plan")]
     probe1 = [r for r in priced if r.get("probe_1usd")]
     probe5 = [r for r in priced if r.get("probe_5usd")]
-    live_positive = [r for r in priced if r.get("positive_live_probe")]
-    ready = [r for r in priced if r.get("preferred_live_probe")]
+    paper_positive = [r for r in priced if r.get("positive_paper_probe")]
+    preferred_paper = [r for r in priced if r.get("preferred_paper_probe")]
     failures = [r for r in priced if r.get("fetch_error")]
     paper_candidates = [
         r for r in priced
@@ -199,21 +222,29 @@ async def run_once() -> dict[str, Any]:
         "conservative_positive_pairs": len(positive),
         "probe_1usd_positive_pairs": len(probe1),
         "probe_5usd_positive_pairs": len(probe5),
-        # Preserve the best pre-participation price discrepancies in the persistent
-        # paper journal. These are research observations only; they remain ineligible
-        # until the participation/rule gate clears.
+        # Retain pre-participation economics as research-only observations.
         "top_research_positive_pairs": top(positive, "positive_conservative_plan") if positive else [],
         "top_research_probe_1usd": top(probe1, "probe_1usd") if probe1 else [],
         "top_research_probe_5usd": top(probe5, "probe_5usd") if probe5 else [],
-        "positive_live_probe_pairs": len(live_positive),
-        "preferred_live_probe_pairs": len(ready),
+        "positive_paper_probe_pairs": len(paper_positive),
+        "preferred_paper_probe_pairs": len(preferred_paper),
         "paper_probe_candidates": paper_candidates,
-        "top_live_probes": top(live_positive, "probe_5usd") if live_positive else [],
-        "ready_probe_packets": top(ready, "probe_5usd") if ready else [],
+        "top_paper_probes": top(paper_positive, "probe_5usd") if paper_positive else [],
+        "preferred_paper_probe_packets": top(preferred_paper, "probe_5usd") if preferred_paper else [],
+        # Legacy aggregate keys remain fail-closed for older consumers.
+        "positive_live_probe_pairs": 0,
+        "preferred_live_probe_pairs": 0,
+        "top_live_probes": [],
+        "ready_probe_packets": [],
+        "live_probe_ready_pairs": 0,
         "preferred_probe_threshold": str(MIN_PREFERRED_NET),
+        "rules_status": "RULES_PENDING",
+        "full_rules_audited": False,
+        "fully_audited_shadow_ready_pairs": 0,
         "rule_note": (
-            "A live probe is promoted only after MLB game-state evidence satisfies the family-specific participation gate. "
-            "The scanner remains read-only; any real-money probe still requires a separate explicit approval/executor path."
+            "MLB game-state evidence can clear the family-specific participation branch, but that is not a full "
+            "Polymarket US↔Kalshi settlement-rule audit. <=$1/<= $5 results are paper-shadow economics only until "
+            "independent rules evidence promotes the exact family to FULL_RULES_AUDITED_SHADOW."
         ),
         "read_only": True,
         "order_entry": False,
