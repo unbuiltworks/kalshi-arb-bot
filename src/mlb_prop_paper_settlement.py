@@ -54,6 +54,37 @@ def load_outcomes(path: Path) -> list[dict[str, Any]]:
     return out
 
 
+def _complete_outcome_rows(outcome_rows: Iterable[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], set[str]]:
+    """Return one unambiguous complete outcome row per group plus conflicted groups.
+
+    Append-only collectors may emit duplicate complete rows. Identical duplicates are
+    harmless. If two complete rows disagree on either venue outcome, however, neither
+    observation is trusted: accepting the first row would make realized paper P/L
+    depend on file order rather than on a stable observed settlement.
+    """
+    chosen: dict[str, dict[str, Any]] = {}
+    outcome_pairs: dict[str, tuple[str, str]] = {}
+    conflicts: set[str] = set()
+    for row in outcome_rows:
+        group_id = str(row.get("trade_group_id") or "")
+        if not group_id:
+            continue
+        poly_outcome = str(row.get("polymarket_us_outcome") or "").upper()
+        kalshi_outcome = str(row.get("kalshi_outcome") or "").upper()
+        if poly_outcome not in VALID_OUTCOMES or kalshi_outcome not in VALID_OUTCOMES:
+            continue
+        pair = (poly_outcome, kalshi_outcome)
+        previous = outcome_pairs.get(group_id)
+        if previous is None:
+            outcome_pairs[group_id] = pair
+            chosen[group_id] = row
+        elif previous != pair:
+            conflicts.add(group_id)
+    for group_id in conflicts:
+        chosen.pop(group_id, None)
+    return chosen, conflicts
+
+
 def settlement_events(
     ledger_events: Iterable[LedgerEvent],
     outcome_rows: Iterable[dict[str, Any]],
@@ -62,8 +93,8 @@ def settlement_events(
 
     Outcome rows must identify an existing ``trade_group_id`` and include BOTH
     ``polymarket_us_outcome`` and ``kalshi_outcome`` as YES/NO. Partial or malformed
-    rows fail closed without consuming the group id, so a later complete collector
-    row for the same paper probe can still reconcile it. Existing settlement events
+    rows fail closed. Conflicting complete rows for the same group also fail closed,
+    so append order cannot silently choose realized P/L. Existing settlement events
     are never recreated for the exact filled market leg; a settlement for some other
     market on the same venue cannot suppress reconciliation of the intended fill.
     """
@@ -76,25 +107,25 @@ def settlement_events(
         elif event.event_type == "settlement":
             existing.add((event.trade_group_id, event.venue, event.market_id))
 
+    complete_rows, conflicts = _complete_outcome_rows(outcome_rows)
     created: list[LedgerEvent] = []
     audits: list[dict[str, Any]] = []
-    seen_rows: set[str] = set()
-    for row in outcome_rows:
-        group_id = str(row.get("trade_group_id") or "")
-        if not group_id or group_id in seen_rows:
-            continue
+
+    for group_id in sorted(conflicts):
+        audits.append({
+            "trade_group_id": group_id,
+            "status": "OUTCOME_CONFLICT_FAIL_CLOSED",
+            "settlement_events_created": 0,
+            "read_only": True,
+            "order_entry": False,
+        })
+
+    for group_id, row in complete_rows.items():
         poly_outcome = str(row.get("polymarket_us_outcome") or "").upper()
         kalshi_outcome = str(row.get("kalshi_outcome") or "").upper()
-        if poly_outcome not in VALID_OUTCOMES or kalshi_outcome not in VALID_OUTCOMES:
-            continue
         fills = fills_by_group.get(group_id) or {}
         if set(fills) != set(VENUES):
             continue
-
-        # Only a complete, valid, ledger-backed row consumes this trade group. This
-        # prevents an earlier partial collector row from suppressing a later valid
-        # row in the same append-only outcomes file.
-        seen_rows.add(group_id)
 
         group_created: list[LedgerEvent] = []
         for venue, outcome in (("polymarket_us", poly_outcome), ("kalshi", kalshi_outcome)):
@@ -121,6 +152,7 @@ def settlement_events(
             created.extend(group_created)
             audits.append({
                 "trade_group_id": group_id,
+                "status": "SETTLED_FROM_OBSERVED_OUTCOMES",
                 "polymarket_us_outcome": poly_outcome,
                 "kalshi_outcome": kalshi_outcome,
                 "outcomes_agree": poly_outcome == kalshi_outcome,
@@ -141,12 +173,16 @@ def reconcile_paper_ledger(ledger_path: Path, outcomes_path: Path) -> dict[str, 
         sidecar.drain_once(max_events=len(created))
     merged = reconcile_events(before, created)
     summary = summarize_ledger(merged)
+    settled_audits = [row for row in audits if row.get("status") == "SETTLED_FROM_OBSERVED_OUTCOMES"]
+    conflict_audits = [row for row in audits if row.get("status") == "OUTCOME_CONFLICT_FAIL_CLOSED"]
     summary.update({
         "new_settlement_events": len(created),
-        "new_settled_trade_groups": len(audits),
-        "new_outcome_disagreement_groups": sum(not row["outcomes_agree"] for row in audits),
+        "new_settled_trade_groups": len(settled_audits),
+        "new_outcome_disagreement_groups": sum(not row["outcomes_agree"] for row in settled_audits),
+        "outcome_conflict_groups": len(conflict_audits),
         "settlement_audits": audits,
         "settlement_semantics": "VENUE_SPECIFIC_OBSERVED_OUTCOMES_NOT_ASSUMED_EQUIVALENT",
+        "conflict_policy": "CONFLICTING_COMPLETE_OUTCOMES_FAIL_CLOSED_NO_REALIZED_PNL",
         "live_probe_ready": False,
         "read_only": True,
         "order_entry": False,
