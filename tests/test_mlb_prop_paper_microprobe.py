@@ -15,6 +15,7 @@ def _row(
     kalshi_ticker="KXMLBHIT-EXAMPLE",
     participation_gate_satisfied=True,
     settlement_equivalent_now=True,
+    synchronized_book_pair=True,
 ):
     plan = {
         "direction": direction,
@@ -35,6 +36,8 @@ def _row(
         "poly_slug": poly_slug,
         "kalshi_ticker": kalshi_ticker,
         "book_comparable": True,
+        "synchronized_book_pair": synchronized_book_pair,
+        "quote_receive_skew_ms": 25 if synchronized_book_pair else 750,
         "fetch_error": None,
         "required_participation_gate": "CONFIRMED_START_AND_FIRST_PLATE_APPEARANCE",
         "participation_proof": {"satisfied": participation_gate_satisfied},
@@ -67,6 +70,7 @@ def test_paper_probe_uses_one_timestamp_and_trade_group_for_both_fills():
     assert audit["poly_slug"] == "poly-example"
     assert audit["kalshi_ticker"] == "KXMLBHIT-EXAMPLE"
     assert audit["participation_gate_satisfied"] is True
+    assert audit["synchronized_book_pair"] is True
     assert audit["rules_status"] == "RULES_PENDING"
     assert audit["full_rules_audited"] is False
     assert audit["fully_audited_shadow_ready"] is False
@@ -88,13 +92,17 @@ def test_paper_probe_requires_explicit_participation_gate_not_legacy_equivalence
         probe_field="probe_5usd",
         ts_ms=1,
     ) is None
-    # Conversely, paper qualification follows the explicit participation field;
-    # the historical compatibility field no longer controls this paper-only path.
     assert paper_probe_events(
         _row(participation_gate_satisfied=True, settlement_equivalent_now=False),
         probe_field="probe_5usd",
         ts_ms=1,
     ) is not None
+
+
+def test_paper_probe_requires_synchronized_book_pair():
+    assert paper_probe_events(
+        _row(synchronized_book_pair=False), probe_field="probe_5usd", ts_ms=1
+    ) is None
 
 
 def test_paper_probe_fails_closed_if_read_only_safety_fields_are_missing_or_unsafe():
