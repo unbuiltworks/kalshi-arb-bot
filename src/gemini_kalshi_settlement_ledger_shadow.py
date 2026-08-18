@@ -1,8 +1,9 @@
 """Continuous read-only Gemini/Kalshi 15-minute settlement ledger.
 
 Polls public settled-market endpoints, matches exact 15-minute windows, and emits each
-newly observed agreement row once per process. This creates durable Railway log evidence
-that later opportunity-matrix candidates can be joined against by Kalshi ticker.
+newly observed agreement row once per process. Kalshi collection is intentionally scoped
+to the four exact 15-minute crypto series so settlement evidence arrives quickly instead
+of paging every settled market on the exchange.
 
 No order transport, account reads, or trading credentials are used.
 """
@@ -11,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import time
@@ -18,11 +20,18 @@ from typing import Any
 
 import httpx
 
+from src.gemini_kalshi_fast_overlap import KALSHI_REST
 from src.gemini_kalshi_settlement_agreement import _gemini_settled
-from src.gemini_kalshi_settlement_probe import _kalshi_settled_paced, match_settled_true_windows
+from src.gemini_kalshi_settlement_probe import match_settled_true_windows
 
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_settlement_ledger_shadow")
 ASSETS = ("BTC", "ETH", "SOL", "XRP")
+KALSHI_15M_SERIES = {
+    "BTC": "KXBTC15M",
+    "ETH": "KXETH15M",
+    "SOL": "KXSOL15M",
+    "XRP": "KXXRP15M",
+}
 
 
 def summarize(rows: list[Any]) -> dict[str, Any]:
@@ -54,6 +63,59 @@ def summarize(rows: list[Any]) -> dict[str, Any]:
     }
 
 
+async def _kalshi_settled_series_paced(
+    http: httpx.AsyncClient,
+    *,
+    hours: int,
+    series_ticker: str,
+) -> list[dict[str, Any]]:
+    """Fetch only one exact Kalshi 15m series with gentle pagination/backoff."""
+    rows: list[dict[str, Any]] = []
+    cursor = ""
+    page = 0
+    min_settled_ts = int((datetime.now(timezone.utc) - timedelta(hours=hours)).timestamp())
+    while True:
+        params: dict[str, Any] = {
+            "status": "settled",
+            "limit": 1000,
+            "mve_filter": "exclude",
+            "min_settled_ts": min_settled_ts,
+            "series_ticker": series_ticker,
+        }
+        if cursor:
+            params["cursor"] = cursor
+
+        response: httpx.Response | None = None
+        for attempt in range(6):
+            response = await http.get(f"{KALSHI_REST}/markets", params=params)
+            if response.status_code != 429:
+                break
+            retry_after = response.headers.get("Retry-After")
+            try:
+                delay = float(retry_after) if retry_after else min(8.0, 0.75 * (2 ** attempt))
+            except ValueError:
+                delay = min(8.0, 0.75 * (2 ** attempt))
+            logger.warning(
+                "KALSHI_SETTLED_SERIES_429 series=%s page=%s attempt=%s sleep_s=%.2f",
+                series_ticker,
+                page,
+                attempt + 1,
+                delay,
+            )
+            await asyncio.sleep(delay)
+
+        assert response is not None
+        response.raise_for_status()
+        payload = response.json()
+        batch = payload.get("markets", [])
+        rows.extend(row for row in batch if isinstance(row, dict))
+        cursor = str(payload.get("cursor") or "")
+        page += 1
+        if not cursor:
+            return rows
+        await asyncio.sleep(0.35)
+
+
 async def collect_once(
     http: httpx.AsyncClient,
     *,
@@ -62,16 +124,41 @@ async def collect_once(
     max_expiry_skew_s: float,
 ) -> tuple[list[Any], dict[str, Any]]:
     gemini_task = asyncio.create_task(_gemini_settled(http, gemini_limit))
-    kalshi_task = asyncio.create_task(_kalshi_settled_paced(http, hours))
-    gemini, kalshi = await asyncio.gather(gemini_task, kalshi_task)
+    kalshi_tasks = {
+        asset: asyncio.create_task(
+            _kalshi_settled_series_paced(
+                http,
+                hours=hours,
+                series_ticker=series_ticker,
+            )
+        )
+        for asset, series_ticker in KALSHI_15M_SERIES.items()
+    }
+
+    gemini = await gemini_task
+    kalshi_by_asset = {
+        asset: await task
+        for asset, task in kalshi_tasks.items()
+    }
+    kalshi = [
+        market
+        for asset in ASSETS
+        for market in kalshi_by_asset.get(asset, [])
+    ]
+
     rows = match_settled_true_windows(gemini, kalshi, max_expiry_skew_s)
     rows = [row for row in rows if str(row.asset).upper() in ASSETS]
     diagnostics = {
         "gemini_settled_events_scanned": len(gemini),
         "kalshi_settled_markets_scanned": len(kalshi),
+        "kalshi_series_counts": {
+            asset: len(kalshi_by_asset.get(asset, []))
+            for asset in ASSETS
+        },
+        "kalshi_series": KALSHI_15M_SERIES,
         "matched_true_15m_windows": len(rows),
         "gemini_sample_tickers": [str(row.get("ticker") or "") for row in gemini[:5]],
-        "kalshi_sample_tickers": [str(row.get("ticker") or "") for row in kalshi[:5]],
+        "kalshi_sample_tickers": [str(row.get("ticker") or "") for row in kalshi[:8]],
         "window_identity": "GEMINI_TICKER_TIME_VS_KALSHI_CLOSE_TIME",
         "classification": "INDEX_MISMATCH_RESEARCH_ONLY",
         "trade_authorized": False,
@@ -137,6 +224,7 @@ async def run(
                     "max_window_end_skew_s": max_expiry_skew_s,
                     "gemini_settled_events_scanned": diagnostics["gemini_settled_events_scanned"],
                     "kalshi_settled_markets_scanned": diagnostics["kalshi_settled_markets_scanned"],
+                    "kalshi_series_counts": diagnostics["kalshi_series_counts"],
                 })
                 logger.info(
                     "CRYPTO_SETTLEMENT_LEDGER_SUMMARY %s",
@@ -174,7 +262,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
     logger.info(
         "CRYPTO_SETTLEMENT_LEDGER_ENABLED assets=BTC,ETH,SOL,XRP interval_s=%s hours=%s "
-        "window_identity=GEMINI_TICKER_TIME_VS_KALSHI_CLOSE_TIME "
+        "kalshi_scope=exact_15m_series window_identity=GEMINI_TICKER_TIME_VS_KALSHI_CLOSE_TIME "
         "trade_authorized=false read_only=true order_entry=false",
         args.interval_s,
         args.hours,
