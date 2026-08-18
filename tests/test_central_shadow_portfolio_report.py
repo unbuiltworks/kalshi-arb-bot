@@ -56,7 +56,7 @@ def test_unblocked_sleeve_ranks_above_blocked_larger_raw_capacity():
     assert report["sleeves"][1]["promotable_score"] == "0"
 
 
-def test_observed_daily_run_rate_is_mechanical_and_target_is_not_forecast():
+def test_observed_daily_run_rate_requires_verified_full_observation_window():
     report = rank_sleeves(
         [
             {
@@ -74,5 +74,31 @@ def test_observed_daily_run_rate_is_mechanical_and_target_is_not_forecast():
             }
         ]
     )
-    assert report["sleeves"][0]["observed_shadow_dollars_per_day"] == "48"
+    sleeve = report["sleeves"][0]
+    assert sleeve["observed_shadow_dollars_per_day"] is None
+    assert sleeve["run_rate_status"] == "WITHHELD_UNVERIFIED_OR_ZERO_OBSERVATION_WINDOW"
     assert "never a forecast" in report["target_note"]
+
+
+def test_verified_full_observation_window_allows_mechanical_daily_run_rate():
+    report = rank_sleeves(
+        [
+            {
+                "name": "sample",
+                "category": "mlb",
+                "venues": ["polymarket_us", "kalshi"],
+                "net_edge_per_dollar": "0.03",
+                "executable_probability": "0.1",
+                "depth_dollars": "5",
+                "capital_lock_hours": "1",
+                "settlement_confidence": "1",
+                "basis_risk": "0",
+                "observed_hours": "6",
+                "shadow_profit_dollars": "12",
+                "observation_window_verified": True,
+            }
+        ]
+    )
+    sleeve = report["sleeves"][0]
+    assert sleeve["observed_shadow_dollars_per_day"] == "48"
+    assert sleeve["run_rate_status"] == "FULL_OBSERVATION_WINDOW_VERIFIED"
