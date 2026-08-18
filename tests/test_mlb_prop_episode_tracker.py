@@ -157,6 +157,24 @@ def test_switching_best_budget_tier_is_move_not_second_open():
     assert len(state2) == 1
 
 
+def test_direction_flip_closes_old_episode_and_opens_new_one():
+    first = _row(profit="0.05")
+    events1, state1 = advance_episodes({"paper_probe_candidates": [first]}, prior_state={}, observed_ms=1000)
+    assert [e["event"] for e in events1] == ["OPEN"]
+
+    flipped = _row(profit="0.06", px="0.40")
+    flipped["probe_5usd"]["direction"] = "KALSHI_YES_POLY_NO"
+    events2, state2 = advance_episodes({"paper_probe_candidates": [flipped]}, prior_state=state1, observed_ms=1300)
+
+    assert [e["event"] for e in events2] == ["CLOSE", "OPEN"]
+    assert events2[0]["direction"] == "POLY_YES_KALSHI_NO"
+    assert events2[0]["duration_ms"] == 0
+    assert events2[1]["direction"] == "KALSHI_YES_POLY_NO"
+    assert events2[1]["duration_ms"] == 0
+    assert state2[next(iter(state2))]["opened_ms"] == 1300
+    assert summarize_events(events2)["direction_flip_semantics"] == "CLOSE_OLD_OPEN_NEW_EPISODE"
+
+
 def test_duplicate_rows_choose_best_valid_plan_independent_of_source_order():
     weak = _row(profit="0.04")
     strong = _row(profit="0.09", qty=5, px="0.42")
