@@ -216,3 +216,51 @@ def test_stateful_builder_clears_absent_opportunity_so_same_quote_can_reopen():
     assert len(audits) == 1
     assert audits[0]["episode_event"] == "OPEN"
     assert suppressed == 0
+
+
+def test_builder_treats_1usd_and_5usd_as_alternative_sizes_not_two_fills():
+    row = _row(profit="0.07")
+    row["probe_1usd"] = {
+        **row["probe_5usd"],
+        "quantity": 1,
+        "capital_cap": "1",
+        "conservative_locked_profit": "0.04",
+    }
+    events, audits = build_paper_probes({"paper_probe_candidates": [row]}, ts_ms=400)
+    assert len(audits) == 1
+    assert audits[0]["probe_field"] == "probe_5usd"
+    assert audits[0]["alternative_budget_tiers_not_filled"] == ["probe_1usd"]
+    assert len([event for event in events if event.event_type == "fill"]) == 2
+
+
+def test_switching_budget_tier_is_move_on_same_episode_not_second_open():
+    first = _row(profit="0.04")
+    first["probe_1usd"] = {
+        **first["probe_5usd"],
+        "quantity": 1,
+        "capital_cap": "1",
+        "conservative_locked_profit": "0.05",
+    }
+    first["probe_5usd"] = {**first["probe_5usd"], "conservative_locked_profit": "0.04"}
+    _events, first_audits, state, _suppressed = build_paper_probes_with_state(
+        {"paper_probe_candidates": [first]}, prior_state={}, ts_ms=500
+    )
+    assert first_audits[0]["probe_field"] == "probe_1usd"
+    assert first_audits[0]["episode_event"] == "OPEN"
+
+    moved = _row(profit="0.08")
+    moved["probe_1usd"] = {
+        **moved["probe_5usd"],
+        "quantity": 1,
+        "capital_cap": "1",
+        "conservative_locked_profit": "0.04",
+    }
+    events, audits, new_state, suppressed = build_paper_probes_with_state(
+        {"paper_probe_candidates": [moved]}, prior_state=state, ts_ms=600
+    )
+    assert len(audits) == 1
+    assert audits[0]["probe_field"] == "probe_5usd"
+    assert audits[0]["episode_event"] == "MOVE"
+    assert len(new_state) == 1
+    assert len(events) >= 2
+    assert suppressed == 0
