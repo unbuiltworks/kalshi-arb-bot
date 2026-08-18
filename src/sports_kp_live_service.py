@@ -1,7 +1,7 @@
 """Event-driven, single-attempt Kalshi/Polymarket sports live service.
 
 Discovery and books reuse the production shadow scanner's normalized identities,
-but execution is restricted to an explicit rule-approval file.  The service is
+but execution is restricted to an explicit rule-approval file. The service is
 safe to deploy disarmed: without ENABLE_SPORTS_KP_LIVE=YES and a one-use ARM
 file it can only log qualified opportunities.
 """
@@ -15,7 +15,6 @@ import json
 import logging
 import os
 from pathlib import Path
-import signal
 import time
 from typing import Any
 
@@ -111,7 +110,24 @@ def _best_lock(rows: list[PricedQuote]) -> LockOpportunity | None:
 
 
 def _fingerprint(lock: LockOpportunity) -> str:
-    return json.dumps(lock.as_dict(), sort_keys=True, separators=(",", ":"))
+    """Fingerprint the executable economics, not timestamp/skew telemetry.
+
+    Persistence should survive a second market-data update when the same exact
+    legs and all-in prices remain available. Quote skew is still enforced by the
+    lock finder and final execution gate, but changing receive timestamps must
+    not reset the 10 ms persistence timer by itself.
+    """
+    stable = {
+        "settlement_key": lock.settlement_key,
+        "yes_venue": lock.yes_venue,
+        "yes_market_id": lock.yes_market_id,
+        "no_venue": lock.no_venue,
+        "no_market_id": lock.no_market_id,
+        "unit_cost": str(lock.unit_cost),
+        "unit_profit": str(lock.unit_profit),
+        "max_quantity": str(lock.max_quantity),
+    }
+    return json.dumps(stable, sort_keys=True, separators=(",", ":"))
 
 
 async def _fresh_plan(
@@ -169,8 +185,6 @@ async def run(args: argparse.Namespace) -> int:
     }, separators=(",", ":")))
 
     if not executable_keys:
-        # Stay alive so deployment status is explicit and harmless. A new approval
-        # requires a deliberate redeploy; it cannot appear dynamically mid-process.
         while True:
             await asyncio.sleep(3600)
 
@@ -275,8 +289,6 @@ async def run(args: argparse.Namespace) -> int:
                     live_requested=True,
                 )
                 logger.info("SPORTS_KP_LIVE_RESULT %s", json.dumps(result, separators=(",", ":"), default=str))
-                # First sports rollout is deliberately one-use. Any result, including
-                # neither-filled, requires inspection before another ARM.
                 return 70 if result.get("hard_halt_required") else 0
     finally:
         for task in tasks:
