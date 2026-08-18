@@ -1,8 +1,10 @@
 """Conservative q=1 pricing primitives for the three-venue sports router.
 
 No network I/O, authentication, or order entry. Prices are taker costs including
-current fee formulas. Gemini depth is intentionally limited to one contract until
-WebSocket book depth is revalidated immediately before a live probe.
+current fee formulas. Gemini contributes a q=1 discovery quote only when its
+active-events payload exposes real best bid/ask fields. Reference ``prices.buy``
+values without best quotes are never treated as executable liquidity. Final live
+execution still requires a fresh order-book/depth revalidation.
 """
 from __future__ import annotations
 
@@ -70,14 +72,25 @@ def gemini_one_contract_fee(price: Decimal) -> Decimal:
 
 
 def gemini_contract_book(contract: Mapping[str, Any]) -> TopBook | None:
+    """Build a conservative Gemini YES-space q=1 book from actual best quotes.
+
+    Gemini's prediction active-events response can expose ``prices.buy`` even when
+    the contract has no executable two-sided order book.  Only ``bestAsk`` and
+    ``bestBid`` indicate a current marketable quote.  The NO ask is the complement
+    of the YES bid.  Depth remains conservatively capped at one contract for
+    discovery and must be revalidated from the true order book before live entry.
+    """
     prices = contract.get("prices") if isinstance(contract.get("prices"), Mapping) else {}
-    buy = prices.get("buy") if isinstance(prices.get("buy"), Mapping) else {}
-    yes, no = _d(buy.get("yes")), _d(buy.get("no"))
-    if yes is None or no is None:
+    best_ask = _d(prices.get("bestAsk"))
+    best_bid = _d(prices.get("bestBid"))
+    if best_ask is None or best_bid is None:
         return None
-    if not (D("0") < yes <= ONE and D("0") < no <= ONE):
+    if not (D("0") <= best_bid < best_ask <= ONE):
         return None
-    return TopBook(yes_ask=yes, yes_depth=ONE, no_ask=no, no_depth=ONE)
+    no_ask = ONE - best_bid
+    if not (D("0") < best_ask <= ONE and D("0") < no_ask <= ONE):
+        return None
+    return TopBook(yes_ask=best_ask, yes_depth=ONE, no_ask=no_ask, no_depth=ONE)
 
 
 def orient_book(book: TopBook, source_side: str) -> TopBook:
