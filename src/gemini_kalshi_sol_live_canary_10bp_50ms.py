@@ -14,15 +14,15 @@ Everything else stays conservative:
 * books post-activation and <= 250 ms old;
 * same original positive episode throughout;
 * exact outbound payload economics are recomputed immediately before send;
-* process must include --live;
-* ENABLE_GEMINI_KALSHI_LIVE_PROBES must equal YES;
+* live-ready intent requires either --live or SOL_CANARY_LIVE_READY=YES;
+* ENABLE_GEMINI_KALSHI_LIVE_PROBES must independently equal YES;
 * a single-use arm-token file must exist and is consumed before submission;
 * at most one submission attempt per process;
 * one-leg fill or unresolved ambiguity triggers the existing hard-halt/flatten path.
 
-The Railway service for this module is intended to be SOL-only with --capital-limit 1,
-so the planned fee-inclusive pair outlay is below $1 whenever the >=3c locked-profit
-gate passes. That keeps the first authorized experiment well below a $5 total budget.
+The Railway service for this module is SOL-only with --capital-limit 1, so the planned
+fee-inclusive pair outlay is below $1 whenever the >=3c locked-profit gate passes.
+That keeps the first authorized experiment well below a $5 total budget.
 """
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ import asyncio
 from decimal import Decimal
 import json
 import logging
+import os
 from pathlib import Path
 import sys
 
@@ -80,8 +81,6 @@ async def _readonly_authenticated_preflight() -> None:
     """Verify both private venue credentials without enabling or placing orders."""
     kalshi = executor.KalshiV2Executor()
     try:
-        # live_requested=False makes the existing production preflight strictly read-only:
-        # authenticated status/balance/terms reads only, with no order path authorized.
         report = await executor._preflight(
             kalshi,
             live_requested=False,
@@ -101,9 +100,6 @@ async def _readonly_authenticated_preflight() -> None:
                 "kalshi_production_authenticated": bool(report.get("kalshi_production_authenticated")),
                 "gemini_funded_ge_1usd": gemini_funded,
                 "kalshi_funded_ge_1usd": kalshi_funded,
-                "live_requested": False,
-                "live_env_gate_effective": False,
-                "arm_token_used": False,
                 "order_entry": False,
             }, separators=(",", ":")),
         )
@@ -114,14 +110,13 @@ async def _readonly_authenticated_preflight() -> None:
 
 
 def install_canary() -> None:
-    # The readiness module computes its boundary gate from this constant at runtime.
-    # Field names retain the historical "20bp" suffix, but their semantics in this
-    # isolated process are explicitly 10 bp and are logged below.
     readiness.MIN_DOUBLE_BOUNDARY_BPS = CANARY_MIN_DOUBLE_BOUNDARY_BPS
-
-    # Keep the hardened executor unchanged except for the exact delay gate.
     executor.strict_execution_gate = strict_execution_gate_10bp_50ms
     safe.install_safe_executor()
+
+
+def _live_ready_requested(cli_live: bool) -> bool:
+    return bool(cli_live) or os.getenv("SOL_CANARY_LIVE_READY", "NO").strip().upper() == "YES"
 
 
 def main() -> None:
@@ -130,24 +125,27 @@ def main() -> None:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--live", action="store_true")
     live_args, remaining = parser.parse_known_args()
-    executor._LIVE_REQUESTED = bool(live_args.live)
+    executor._LIVE_REQUESTED = _live_ready_requested(bool(live_args.live))
     sys.argv = [sys.argv[0], *remaining]
 
-    # Credential verification remains read-only regardless of future live CLI use.
+    # This preflight never authorizes orders, even when the later runtime is live-ready.
     asyncio.run(_readonly_authenticated_preflight())
 
     install_canary()
     logger.info(
         "SOL_LIVE_CANARY_10BP_50MS_ENABLED asset=%s min_double_boundary_bps=%s "
         "execution_delay_ms=%s quantity=1 min_profit=%s hard_budget_usd=%s "
-        "live_requested=%s env_gate=%s single_attempt_per_process=true",
+        "live_requested=%s live_ready_env=%s env_gate=%s token_present=%s "
+        "single_attempt_per_process=true",
         CANARY_ASSET,
         CANARY_MIN_DOUBLE_BOUNDARY_BPS,
         CANARY_EXECUTION_DELAY_MS,
         DEFAULT_MIN_LOCKED_PROFIT,
         CANARY_HARD_BUDGET_USD,
         executor._LIVE_REQUESTED,
+        os.getenv("SOL_CANARY_LIVE_READY", "NO"),
         executor.live_probe_authorized(executor._LIVE_REQUESTED),
+        executor._arm_token_path().is_file(),
     )
     readiness.guarded.main()
 
