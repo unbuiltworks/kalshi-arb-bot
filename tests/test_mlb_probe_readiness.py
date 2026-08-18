@@ -12,6 +12,13 @@ def _exact_audit(**overrides):
         "stat_definition_checked": True,
         "cancellation_postponement_checked": True,
         "source_hierarchy_checked": True,
+        "participation_branch_equivalent": True,
+        "stat_definition_equivalent": True,
+        "cancellation_postponement_equivalent": True,
+        "source_hierarchy_equivalent": True,
+        "independent_reviewer": "independent-rule-review",
+        "audit_decision_id": "mlb-hit-v1",
+        "decision_provenance_complete": True,
         "equivalent": True,
         "full_rules_audited_shadow": True,
         "live_probe_ready": False,
@@ -48,10 +55,7 @@ def test_prefers_best_capped_plan_and_requires_three_cents():
 
 
 def test_below_three_cents_remains_blocked():
-    row = _row(
-        probe_1usd={"conservative_locked_profit": "0.01"},
-        probe_5usd={"conservative_locked_profit": "0.029"},
-    )
+    row = _row(probe_1usd={"conservative_locked_profit": "0.01"}, probe_5usd={"conservative_locked_profit": "0.029"})
     out = classify_probe_row(row)
     assert out["preferred_economics"] is False
     assert "BELOW_PREFERRED_3C_NET" in out["blockers"]
@@ -88,23 +92,28 @@ def test_generic_full_rules_boolean_cannot_clear_rule_gate():
     assert "RULES_PENDING" in out["blockers"]
 
 
-def test_generic_full_rules_status_cannot_clear_rule_gate():
-    row = _row(exact_rule_audit=None, settlement_confidence="FULL_RULES_AUDITED_SHADOW")
-    out = classify_probe_row(row)
+def test_exact_audit_identity_mismatch_fails_closed():
+    out = classify_probe_row(_row(exact_rule_audit=_exact_audit(kalshi_ticker="KXMLBHIT-WRONG")))
     assert out["rules_ok"] is False
     assert out["fully_audited_shadow_ready"] is False
 
 
-def test_exact_audit_identity_mismatch_fails_closed():
-    row = _row(exact_rule_audit=_exact_audit(kalshi_ticker="KXMLBHIT-WRONG"))
-    out = classify_probe_row(row)
+def test_global_equivalent_without_dimension_equivalence_cannot_clear_gate():
+    audit = _exact_audit(cancellation_postponement_equivalent=False)
+    out = classify_probe_row(_row(exact_rule_audit=audit))
+    assert out["rules_ok"] is False
+    assert out["fully_audited_shadow_ready"] is False
+
+
+def test_missing_independent_review_provenance_cannot_clear_gate():
+    audit = _exact_audit(independent_reviewer="", audit_decision_id="", decision_provenance_complete=False)
+    out = classify_probe_row(_row(exact_rule_audit=audit))
     assert out["rules_ok"] is False
     assert out["fully_audited_shadow_ready"] is False
 
 
 def test_incomplete_exact_audit_branch_fails_closed():
-    row = _row(exact_rule_audit=_exact_audit(cancellation_postponement_checked=False))
-    out = classify_probe_row(row)
+    out = classify_probe_row(_row(exact_rule_audit=_exact_audit(cancellation_postponement_checked=False)))
     assert out["rules_ok"] is False
     assert out["fully_audited_shadow_ready"] is False
 
