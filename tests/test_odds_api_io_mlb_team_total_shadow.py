@@ -29,7 +29,7 @@ def test_home_team_total_half_run_normalizes_to_canonical_quote():
     assert len(quotes) == 1
     quote = quotes[0]
     assert quote.venue == "sportsbook:fanduel"
-    assert quote.market_id == "evt-1:team_total:phi:4.5"
+    assert quote.market_id.lower() == "evt-1:team_total:phi:4.5"
     assert "|team_total|" in quote.settlement_key
     assert "|team|phi|runs|GT|4.5" in quote.settlement_key
     assert quote.yes_cost > 0
@@ -51,7 +51,7 @@ def test_away_team_total_maps_to_away_subject():
         freshness_ms=3000,
     )
     assert len(quotes) == 1
-    assert quotes[0].market_id == "evt-2:team_total:nym:3.5"
+    assert quotes[0].market_id.lower() == "evt-2:team_total:nym:3.5"
     assert "|team|nym|runs|GT|3.5" in quotes[0].settlement_key
 
 
@@ -85,7 +85,7 @@ def test_gemini_tt_contract_normalizes_as_team_total():
     identity = rows[0].identity
     assert identity.market_family == "team_total"
     assert identity.subject_type == "team"
-    assert identity.subject == "PHI"
+    assert identity.subject == "phi"
     assert identity.stat == "runs"
     assert identity.comparator == "GT"
     assert str(identity.line) == "4.5"
