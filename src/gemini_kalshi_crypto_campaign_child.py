@@ -2,10 +2,8 @@
 
 This launcher preserves the proven v2 execution gates and persists exact order payloads
 for official settlement/dashboard reconciliation. It also installs the validated
-latency-only rollover optimizer: one authenticated Kalshi WebSocket, one multiplexed
-orderbook SID for current/next BTC/ETH/SOL/XRP markets, and concurrent next-target
-prefetch. Quantity, profit, boundary, freshness, skew, depth and execution gates are
-unchanged.
+latency-only rollover optimizer plus a cache-first Kalshi settlement-target path.
+Quantity, profit, boundary, freshness, skew, depth and execution gates are unchanged.
 """
 from __future__ import annotations
 
@@ -16,6 +14,7 @@ from typing import Any
 
 from src import gemini_kalshi_sol_live_canary_v2 as v2
 from src import gemini_kalshi_rollover_optimizer as rollover_optimizer
+from src import gemini_kalshi_target_lifecycle_cache as target_lifecycle_cache
 
 DEADLINE_ENV = "SOL_CANARY_V2_ARM_NOT_AFTER_UTC"
 
@@ -54,9 +53,11 @@ def main() -> None:
     # executor transport, so replace it before entering v2.main().
     v2._submit_and_persist_result = _submit_and_persist_context
 
-    # Live-read-only validation: one socket/SID, 8 books, dynamic add/delete,
-    # 0 sequence gaps; invariant suite 6/6. Risk/execution thresholds are untouched.
+    # Market-data latency optimization only. Risk/execution thresholds are untouched.
     rollover_optimizer.install()
+    # Override only the target-fetch loop after the rollover optimizer installs its
+    # version: lifecycle WS is primary; exact REST market metadata is a bounded fallback.
+    target_lifecycle_cache.install()
 
     sys.argv = [
         sys.argv[0],
