@@ -16,6 +16,8 @@ def candidate(**overrides):
         persistence_ms=10,
         approved_for_execution=True,
         rule_fingerprint_sha256=FP,
+        rule_status="CERTIFIED",
+        settlement_confidence="FULL_RULES_AUDITED_EXECUTABLE",
     )
     values.update(overrides)
     return MicroCandidate(**values)
@@ -37,9 +39,11 @@ def test_exact_approved_micro_candidate_qualifies():
     assert validate_micro_candidate(candidate()) == (True, "qualified")
 
 
-def test_rule_approval_and_fingerprint_are_mandatory():
+def test_rule_approval_fingerprint_and_certification_are_mandatory():
     assert validate_micro_candidate(candidate(approved_for_execution=False))[1] == "contract_not_execution_approved"
     assert validate_micro_candidate(candidate(rule_fingerprint_sha256=""))[1] == "invalid_rule_fingerprint"
+    assert validate_micro_candidate(candidate(rule_status="CONDITIONAL"))[1] == "rule_registry_not_certified"
+    assert validate_micro_candidate(candidate(settlement_confidence="NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE"))[1] == "settlement_not_execution_audited"
 
 
 def test_quantity_and_capital_fail_closed():
@@ -50,7 +54,9 @@ def test_quantity_and_capital_fail_closed():
 def test_profit_freshness_and_persistence_fail_closed():
     assert validate_micro_candidate(candidate(after_fee_profit_per_contract=D("0.0299")))[1] == "after_fee_profit_below_floor"
     assert validate_micro_candidate(candidate(quote_skew_ms=51))[1] == "quote_skew_too_large"
+    assert validate_micro_candidate(candidate(quote_skew_ms=-1))[1] == "quote_skew_too_large"
     assert validate_micro_candidate(candidate(max_book_age_ms=101))[1] == "book_too_old"
+    assert validate_micro_candidate(candidate(max_book_age_ms=-1))[1] == "book_too_old"
     assert validate_micro_candidate(candidate(persistence_ms=9))[1] == "opportunity_not_persistent"
 
 
