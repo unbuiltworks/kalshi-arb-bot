@@ -13,6 +13,7 @@ import logging
 import os
 
 from src import mlb_gk_prop_live_rule_risk_canary as canary
+from src.sports_trade_reporting import install as install_reporting
 
 logger = logging.getLogger("kalshi_arb.mlb_gk_prop_live_rule_risk_canary_deadline")
 
@@ -41,6 +42,13 @@ def main() -> None:
         raise SystemExit("MLB live rule-risk arm deadline has expired")
     if not args.live:
         raise SystemExit("MLB live rule-risk canary requires --live")
+
+    install_reporting(
+        canary,
+        strategy="sports_gk_hits_rule_risk",
+        run_id_env="MLB_GK_PROP_RUN_ID",
+        default_family="baseball_player_hits",
+    )
 
     watch_seconds = min(max(1.0, args.watch_seconds), remaining)
     logger.warning(
