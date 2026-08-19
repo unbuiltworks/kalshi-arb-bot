@@ -1,8 +1,8 @@
-"""Read-only probe for live Polymarket US MLB player-prop rule metadata.
+"""Read-only probe for live MLB player-prop rule metadata.
 
-This diagnostic performs public GET requests only. It emits the exact public fields
-that may carry settlement/rule provenance so the rule-certification layer can be
-backed by current instrument metadata rather than assumptions.
+This diagnostic performs public GET requests only. It emits exact public Polymarket
+market descriptions plus Kalshi series rule fields so rule certification can be
+backed by current contract metadata rather than assumptions.
 """
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ import httpx
 
 from src.current_polymarket_mlb_props import fetch_current_poly_mlb_props
 
+KALSHI = "https://external-api.kalshi.com/trade-api/v2"
+KALSHI_SERIES = ("KXMLBHIT", "KXMLBHRR", "KXMLBTB", "KXMLBKS")
 INTERESTING_TOKENS = (
     "rule",
     "resolution",
@@ -27,6 +29,8 @@ INTERESTING_TOKENS = (
     "expiration",
     "cancel",
     "postpone",
+    "suspend",
+    "shorten",
     "correction",
 )
 
@@ -44,12 +48,18 @@ def _interesting(value: Any) -> Any:
                 if nested:
                     out[key_s] = nested
         return out
+    if isinstance(value, list):
+        rows = [_interesting(child) for child in value]
+        return [row for row in rows if row]
     return None
 
 
 async def main() -> None:
     async with httpx.AsyncClient(timeout=30.0) as http:
         markets = await fetch_current_poly_mlb_props(http, ttl_seconds=0.0)
+        kalshi_responses = await asyncio.gather(
+            *(http.get(f"{KALSHI}/series/{series}") for series in KALSHI_SERIES)
+        )
 
     emitted = 0
     families: dict[str, int] = {}
@@ -71,13 +81,32 @@ async def main() -> None:
         if emitted >= 30:
             break
 
+    for series, response in zip(KALSHI_SERIES, kalshi_responses):
+        response.raise_for_status()
+        body = response.json()
+        print(
+            json.dumps(
+                {
+                    "status": "KALSHI_MLB_PROP_SERIES_RULE_FINGERPRINT",
+                    "series": series,
+                    "top_level_keys": sorted(str(key) for key in body.keys()),
+                    "rule_fields": _interesting(body),
+                    "body": body,
+                },
+                sort_keys=True,
+                default=str,
+            ),
+            flush=True,
+        )
+
     print(
         json.dumps(
             {
-                "status": "POLYMARKET_MLB_PROP_RULE_PROBE_SUMMARY",
-                "current_props": len(markets),
-                "emitted": emitted,
-                "families_seen": families,
+                "status": "MLB_PROP_RULE_PROBE_SUMMARY",
+                "current_polymarket_props": len(markets),
+                "polymarket_emitted": emitted,
+                "polymarket_families_seen": families,
+                "kalshi_series_emitted": len(KALSHI_SERIES),
                 "read_only": True,
                 "order_entry": False,
             },
