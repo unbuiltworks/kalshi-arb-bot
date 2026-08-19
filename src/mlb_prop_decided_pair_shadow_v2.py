@@ -76,6 +76,30 @@ def _pair_fingerprint(row: dict[str, Any]) -> str:
     return json.dumps(material, sort_keys=True, separators=(",", ":"), default=str)
 
 
+def episode_observation_ms(priced_rows: list[dict[str, Any]], *, wall_clock_ms: int | None = None) -> int:
+    """Return a conservative episode observation clock that cannot predate book evidence.
+
+    OPEN/MOVE/RESTING timestamps must be at or after the latest venue receive timestamp
+    used by the cycle.  Using the cycle-start clock can otherwise make an episode appear
+    to exist before either quoted book was actually observed.  For CLOSE censoring, the
+    same post-pricing clock is conservative because disappearance is only known after the
+    current cycle's book checks finish.
+    """
+    observed_ms = int(time.time() * 1000) if wall_clock_ms is None else int(wall_clock_ms)
+    for row in priced_rows:
+        for field in ("poly_book_received_ms", "kalshi_book_received_ms"):
+            value = row.get(field)
+            if isinstance(value, bool):
+                continue
+            try:
+                received_ms = int(value)
+            except (TypeError, ValueError):
+                continue
+            if received_ms > observed_ms:
+                observed_ms = received_ms
+    return observed_ms
+
+
 class PairEpisodeTracker:
     """Emit deterministic OPEN/MOVE/CLOSE transitions for synchronized pair locks."""
 
@@ -243,7 +267,8 @@ async def run_forever() -> None:
             ) if stable_rows else []
 
             pair_rows = [row for row in priced if row.get("cross_venue_q1_pair_lock")]
-            annotated, closes = episodes.transition(pair_rows, now_ms)
+            episode_now_ms = episode_observation_ms(priced)
+            annotated, closes = episodes.transition(pair_rows, episode_now_ms)
             for row in annotated:
                 logger.info("DECIDED_MLB_PROP_SYNC_PAIR %s", json.dumps(row, separators=(",", ":")))
             for row in closes:
@@ -259,6 +284,8 @@ async def run_forever() -> None:
                         "synchronized_pair_locks": len(pair_rows),
                         "episode_rows": len(annotated),
                         "episode_closes": len(closes),
+                        "episode_observed_ms": episode_now_ms,
+                        "episode_clock_basis": "POST_PRICING_MAX_BOOK_RECEIVE",
                         "max_receive_skew_ms": MAX_PAIR_RECEIVE_SKEW_MS,
                         "errors": errors,
                         "cycle_ms": round((time.monotonic() - cycle_start) * 1000, 1),
