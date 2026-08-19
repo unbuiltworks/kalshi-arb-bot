@@ -1,4 +1,8 @@
-from src.mlb_prop_decided_pair_shadow_v2 import PairEpisodeTracker, strict_pair_identity
+from src.mlb_prop_decided_pair_shadow_v2 import (
+    PairEpisodeTracker,
+    episode_observation_ms,
+    strict_pair_identity,
+)
 
 
 def _row(*, direction="POLY_YES_KALSHI_NO", profit="0.05", synchronized=True):
@@ -29,6 +33,15 @@ def test_strict_pair_identity_requires_exact_market_and_direction():
     )
     row["poly_slug"] = ""
     assert strict_pair_identity(row) is None
+
+
+def test_episode_observation_clock_cannot_predate_book_receive_evidence():
+    rows = [
+        {"poly_book_received_ms": 1_150, "kalshi_book_received_ms": 1_175},
+        {"poly_book_received_ms": 1_190, "kalshi_book_received_ms": 1_180},
+    ]
+    assert episode_observation_ms(rows, wall_clock_ms=1_100) == 1_190
+    assert episode_observation_ms(rows, wall_clock_ms=1_250) == 1_250
 
 
 def test_episode_tracker_resting_depth_does_not_reopen():
