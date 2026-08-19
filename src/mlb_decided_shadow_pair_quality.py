@@ -5,18 +5,13 @@ The post-decision/terminal prop lane can expose two different research signals:
 * single-venue known-winner discounts; and
 * cross-venue complementary q=1 locks.
 
-A concurrent fetch alone is not proof the two books were received closely enough in
-time to represent a simultaneous lock. This analyzer therefore counts cross-venue
-pair locks only when the producer records explicit receive timestamps and a bounded
-receive skew. Older rows without synchronization telemetry remain useful for the
-single-venue known-winner study, but their pair locks are rejected fail-closed.
-
-Repeated polling of the same resting q=1 pair is not additional consumable liquidity.
-Raw synchronized samples are retained as timing evidence, while capacity/P&L is
-collapsed to one best observed sample per exact pair identity + direction. This is
-intentionally conservative: without explicit OPEN/CLOSE episode telemetry the analyzer
-will under-count a later genuinely renewed opportunity rather than double-count the
-same resting depth.
+Cross-venue capacity is counted only with explicit receive timestamps and bounded
+receive skew. Newer producer rows may also include explicit OPEN/MOVE/RESTING/CLOSE
+episode telemetry. When that evidence exists, consumable capacity is counted once per
+OPEN episode, allowing genuinely renewed liquidity after a CLOSE to count again while
+never summing repeated resting samples. Older synchronized rows remain supported, but
+are conservatively collapsed to one best sample per strict pair identity + direction
+for the entire log.
 
 No execution clients, credentials, or approval state exist here.
 """
@@ -30,7 +25,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 MAX_PAIR_RECEIVE_SKEW_MS = Decimal("500")
-SIGNAL_MARKER = "DECIDED_MLB_PROP_SIGNAL "
+LEGACY_SIGNAL_MARKER = "DECIDED_MLB_PROP_SIGNAL "
+SYNC_SIGNAL_MARKER = "DECIDED_MLB_PROP_SYNC_PAIR "
 
 
 def _d(value: Any) -> Decimal | None:
@@ -53,8 +49,6 @@ def pair_synchronization_status(
         return False, "MISSING_SYNCHRONIZATION_EVIDENCE"
 
     calculated = abs(poly_received_ms - kalshi_received_ms)
-    # Fail closed if producer telemetry is internally inconsistent. One millisecond
-    # tolerance only accommodates integer/rounded timestamp serialization.
     if abs(calculated - recorded_skew_ms) > Decimal("1"):
         return False, "INCONSISTENT_SYNCHRONIZATION_EVIDENCE"
     if recorded_skew_ms < 0 or recorded_skew_ms > max_skew_ms:
@@ -63,7 +57,6 @@ def pair_synchronization_status(
 
 
 def _pair_identity(row: dict[str, Any], pair: dict[str, Any]) -> tuple[str, str, str, str] | None:
-    """Return strict pair identity used for consumable-liquidity de-duplication."""
     family = str(row.get("family") or "").strip()
     poly_slug = str(row.get("poly_slug") or "").strip()
     kalshi_ticker = str(row.get("kalshi_ticker") or "").strip()
@@ -73,13 +66,39 @@ def _pair_identity(row: dict[str, Any], pair: dict[str, Any]) -> tuple[str, str,
     return family, poly_slug, kalshi_ticker, direction
 
 
+def _episode_identity(
+    row: dict[str, Any], pair_identity: tuple[str, str, str, str]
+) -> tuple[tuple[str, str, str, str], int] | None:
+    episode = row.get("pair_episode")
+    if not isinstance(episode, dict):
+        return None
+    event = str(episode.get("event") or "").upper()
+    opened_raw = episode.get("opened_ms")
+    if event not in {"OPEN", "MOVE", "RESTING"} or opened_raw is None:
+        return None
+    try:
+        opened_ms = int(opened_raw)
+    except (TypeError, ValueError):
+        return None
+    if opened_ms <= 0:
+        return None
+    return pair_identity, opened_ms
+
+
 def parse_signal_lines(lines: Iterable[str]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for line in lines:
-        marker_at = line.find(SIGNAL_MARKER)
-        if marker_at < 0:
+        marker = None
+        marker_at = -1
+        for candidate in (SYNC_SIGNAL_MARKER, LEGACY_SIGNAL_MARKER):
+            at = line.find(candidate)
+            if at >= 0:
+                marker = candidate
+                marker_at = at
+                break
+        if marker is None:
             continue
-        payload = line[marker_at + len(SIGNAL_MARKER) :].strip()
+        payload = line[marker_at + len(marker) :].strip()
         try:
             row = json.loads(payload)
         except json.JSONDecodeError:
@@ -95,14 +114,28 @@ def analyze(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
     known_winner_edges = 0
     pair_locks_seen = 0
     synchronized_pair_lock_samples = 0
-    unique_best_profit: dict[tuple[str, str, str, str], Decimal] = {}
     synchronized_without_identity = 0
+
+    # Legacy rows have no episode lifecycle, so conservatively count one best sample
+    # per strict identity over the whole log.
+    legacy_best_profit: dict[tuple[str, str, str, str], Decimal] = {}
+
+    # Episode-aware rows can safely count renewed liquidity once per OPEN episode.
+    episode_best_profit: dict[tuple[tuple[str, str, str, str], int], Decimal] = {}
+    episode_events: Counter[str] = Counter()
+    malformed_episode_rows = 0
 
     for row in rows:
         signal_rows += 1
         edges = row.get("known_winner_edges") or []
         if isinstance(edges, list):
             known_winner_edges += len(edges)
+
+        episode = row.get("pair_episode")
+        if isinstance(episode, dict):
+            event = str(episode.get("event") or "").upper()
+            if event:
+                episode_events[event] += 1
 
         pair = row.get("cross_venue_q1_pair_lock")
         if not isinstance(pair, dict) or not pair:
@@ -120,39 +153,65 @@ def analyze(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
             reasons["MISSING_STRICT_PAIR_IDENTITY"] += 1
             continue
 
-        profit = _d(
-            pair.get("profit")
-            if pair.get("profit") is not None
-            else pair.get("locked_profit")
-        )
+        profit = _d(pair.get("profit") if pair.get("profit") is not None else pair.get("locked_profit"))
         if profit is None or profit <= 0:
             continue
-        previous = unique_best_profit.get(identity)
-        if previous is None or profit > previous:
-            unique_best_profit[identity] = profit
 
-    unique_profit = sum(unique_best_profit.values(), Decimal("0"))
-    duplicate_samples = max(0, synchronized_pair_lock_samples - len(unique_best_profit) - synchronized_without_identity)
+        if isinstance(episode, dict):
+            event = str(episode.get("event") or "").upper()
+            episode_key = _episode_identity(row, identity)
+            if event in {"OPEN", "MOVE", "RESTING"} and episode_key is None:
+                malformed_episode_rows += 1
+                reasons["MALFORMED_EPISODE_EVIDENCE"] += 1
+                continue
+            if episode_key is not None:
+                previous = episode_best_profit.get(episode_key)
+                if previous is None or profit > previous:
+                    episode_best_profit[episode_key] = profit
+                continue
+
+        previous = legacy_best_profit.get(identity)
+        if previous is None or profit > previous:
+            legacy_best_profit[identity] = profit
+
+    legacy_profit = sum(legacy_best_profit.values(), Decimal("0"))
+    episode_profit = sum(episode_best_profit.values(), Decimal("0"))
+    total_profit = legacy_profit + episode_profit
+    consumable_units = len(legacy_best_profit) + len(episode_best_profit)
+    duplicate_samples = max(
+        0,
+        synchronized_pair_lock_samples
+        - consumable_units
+        - synchronized_without_identity
+        - malformed_episode_rows,
+    )
 
     return {
         "signal_rows": signal_rows,
         "single_venue_known_winner_edges": known_winner_edges,
         "cross_venue_pair_locks_seen": pair_locks_seen,
         "synchronized_cross_venue_pair_lock_samples": synchronized_pair_lock_samples,
-        # Backward-compatible name now reflects unique consumable identities, not raw samples.
-        "synchronized_cross_venue_pair_locks": len(unique_best_profit),
-        "unique_synchronized_pair_identities": len(unique_best_profit),
+        "synchronized_cross_venue_pair_locks": consumable_units,
+        "unique_synchronized_pair_identities": len(set(legacy_best_profit) | {key[0] for key in episode_best_profit}),
+        "consumable_episode_units": consumable_units,
+        "episode_aware_consumable_units": len(episode_best_profit),
+        "legacy_identity_collapsed_units": len(legacy_best_profit),
         "duplicate_synchronized_pair_samples_excluded": duplicate_samples,
         "synchronized_pair_samples_missing_strict_identity": synchronized_without_identity,
-        "synchronized_pair_profit_dollars": str(unique_profit),
+        "malformed_episode_rows_excluded": malformed_episode_rows,
+        "pair_episode_events": dict(sorted(episode_events.items())),
+        "synchronized_pair_profit_dollars": str(total_profit),
+        "episode_aware_profit_dollars": str(episode_profit),
+        "legacy_collapsed_profit_dollars": str(legacy_profit),
         "pair_lock_reasons": dict(sorted(reasons.items())),
         "pair_lock_accounting_rule": (
             "REQUIRE_EXPLICIT_RECEIVE_TIMESTAMPS_AND_LE_500MS_SKEW; "
-            "CAPACITY_COLLAPSE_TO_BEST_Q1_SAMPLE_PER_STRICT_PAIR_IDENTITY_AND_DIRECTION"
+            "EPISODE_ROWS_COUNT_ONCE_PER_STRICT_IDENTITY_PLUS_OPENED_MS; "
+            "LEGACY_ROWS_COLLAPSE_TO_BEST_Q1_SAMPLE_PER_STRICT_IDENTITY_AND_DIRECTION"
         ),
-        "repeated_resting_depth": "RAW_SAMPLE_TIMING_EVIDENCE_ONLY_NOT_ADDITIVE_CAPACITY",
+        "repeated_resting_depth": "MOVE_AND_RESTING_SAMPLES_WITHIN_ONE_OPEN_EPISODE_NOT_ADDITIVE_CAPACITY",
         "episode_limitation": (
-            "WITHOUT_EXPLICIT_OPEN_CLOSE_EPISODES_LATER_RENEWED_LIQUIDITY_IS_INTENTIONALLY_UNDERCOUNTED"
+            "RENEWED_LIQUIDITY_COUNTS_AGAIN_ONLY_WHEN_PRODUCER_EMITS_A_NEW_OPENED_MS_AFTER_CLOSE"
         ),
         "legacy_pair_locks_without_timing": "RESEARCH_ONLY_EXCLUDED_FROM_CAPACITY",
         "execution_eligible": False,
@@ -164,7 +223,7 @@ def analyze(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("path", type=Path, help="log file containing DECIDED_MLB_PROP_SIGNAL rows")
+    parser.add_argument("path", type=Path, help="log file containing decided-prop signal rows")
     args = parser.parse_args()
     rows = parse_signal_lines(args.path.read_text(encoding="utf-8").splitlines())
     print(json.dumps(analyze(rows), sort_keys=True))
