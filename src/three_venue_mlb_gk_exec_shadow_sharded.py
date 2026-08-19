@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import time
 from typing import Any
 
@@ -174,7 +175,11 @@ def _is_hot_payload(payload: dict[str, Any] | None) -> bool:
         skew = int(payload.get("quote_skew_ms", 10**9))
         gemini_age = int(payload.get("gemini_age_ms", 10**9))
         kalshi_age = int(payload.get("kalshi_age_ms", 10**9))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        return False
+    if not math.isfinite(profit):
+        return False
+    if skew < 0 or gemini_age < 0 or kalshi_age < 0:
         return False
     return profit >= 0.03 and skew <= 50 and gemini_age <= 100 and kalshi_age <= 100
 
