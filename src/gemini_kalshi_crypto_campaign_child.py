@@ -1,9 +1,10 @@
 """One-attempt crypto canary child with settlement-reconciliation context.
 
-This launcher preserves the proven v2 execution gates and transport.  Its only change
-is to persist the exact order payloads alongside the execution result so a separate
-supervisor can reconcile official settlements and dashboard P&L before another child
-is allowed to arm.
+This launcher preserves the proven v2 execution gates and transport.  Its only changes
+are to persist the exact order payloads alongside the execution result and to install
+the latency-only rollover optimizer before scanning.  The optimizer reuses one Kalshi
+WebSocket for current/next markets and prefetches next-window target metadata; it does
+not change quantity, profit, boundary, freshness, skew, depth, or execution gates.
 """
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ import sys
 from typing import Any
 
 from src import gemini_kalshi_sol_live_canary_v2 as v2
+from src import gemini_kalshi_rollover_optimizer as rollover_optimizer
 
 DEADLINE_ENV = "SOL_CANARY_V2_ARM_NOT_AFTER_UTC"
 
@@ -50,6 +52,11 @@ def main() -> None:
     # v2.install_canary_v2() resolves this module-global hook when it installs the
     # executor transport, so replace it before entering v2.main().
     v2._submit_and_persist_result = _submit_and_persist_context
+
+    # Market-data latency optimization only.  Existing fail-closed live gates remain
+    # owned by v2/safe executor modules and are not modified here.
+    rollover_optimizer.install()
+
     sys.argv = [
         sys.argv[0],
         "--arm-deadline-utc", deadline,
