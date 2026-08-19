@@ -30,6 +30,7 @@ from src.current_polymarket_mlb_props import fetch_current_poly_mlb_props
 from src.gemini_kalshi_probe_transport import GeminiTradingSession, KalshiV2Executor
 from src.gemini_prediction_auth import private_rest_request
 from src.sports_kgp_micro_guard import (
+    DEFAULT_MAX_CAPITAL,
     DEFAULT_MAX_QUOTE_SKEW_MS,
     DEFAULT_MIN_UNIT_PROFIT,
     EXECUTABLE_CONFIDENCE,
@@ -239,7 +240,7 @@ async def run(*, live_requested: bool, once: bool, interval_seconds: float, appr
         "arm_token_present": token_path.is_file(),
         "armed": live_authorized(live_requested=live_requested, token_path=token_path),
         "quantity_cap": "1",
-        "capital_ceiling": "10.00",
+        "capital_ceiling": str(DEFAULT_MAX_CAPITAL),
         "order_entry": False,
     })
 
