@@ -1,0 +1,5 @@
+Execution reliability promotion marker.
+Policy: GEMINI_FIRST_TERMINAL_THEN_KALSHI
+Risk gates unchanged: q=1, min profit $0.03, min double-boundary 10bp, 50ms survival, 50ms max quote skew.
+Benign Gemini primary FOK no-fill retries without submitting Kalshi.
+One-leg or ambiguous outcomes remain fail-closed hard halts.
