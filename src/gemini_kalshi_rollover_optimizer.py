@@ -1,19 +1,17 @@
 """Latency-only rollover optimizer for the bounded Gemini/Kalshi live canary.
 
-This module changes market-data transport only.  It does not change quantity, profit,
+This module changes market-data transport only. It does not change quantity, profit,
 settlement, boundary, freshness, skew, depth, or execution gates.
 
-Two live bottlenecks are addressed:
-1. Kalshi rollover previously opened one additional authenticated WebSocket per asset,
-   causing HTTP 429s when BTC/ETH/SOL/XRP prewarmed together.  Kalshi supports many
-   orderbook subscriptions on one authenticated WebSocket, so current and next-window
-   tickers now share one connection and are routed to the existing per-feed queues.
-2. Exact Kalshi settlement thresholds were fetched serially after rollover.  The next
-   window's metadata is now prefetched concurrently and atomically promoted when the
-   quarter-hour changes.
+Kalshi's orderbook channel supports multiple ``market_tickers`` on one subscription
+SID. Sequence numbers belong to that multiplexed subscription stream, not to each
+individual market book. The hub therefore validates one contiguous SID sequence while
+routing snapshots/deltas into independent market books. Any real sequence gap tears
+down the whole socket and rebuilds every book from fresh snapshots (fail closed).
 
-All next-window events remain subject to the existing activation timestamp gate in
-``gemini_kalshi_predictive_prewarmed_safe`` and cannot enter economics early.
+The optimizer also fetches current Kalshi settlement targets concurrently and prefetches
+the next window's targets before rollover. Existing activation/event-order safety still
+prevents next-window quotes from entering economics before their boundary.
 """
 from __future__ import annotations
 
@@ -24,7 +22,7 @@ from decimal import Decimal
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, Iterable
 
 import httpx
 import websockets
@@ -39,66 +37,145 @@ basis = readiness.basis
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_rollover_optimizer")
 
-# Give the shared socket enough time to receive the next-market snapshot before the
-# boundary.  No extra Kalshi connection is created, so this no longer increases the
-# WebSocket handshake rate.
 PREWARM_LEAD_S = 5.0
 TARGET_PREFETCH_LEAD_S = 60.0
 TARGET_RETRY_S = 0.25
 
 
-def _subscribe_payload(command_id: int, ticker: str) -> dict[str, Any]:
+class SharedSequenceGap(RuntimeError):
+    """A missing message on the single multiplexed orderbook subscription."""
+
+
+def _tickers(values: Iterable[str]) -> list[str]:
+    return sorted({str(value) for value in values if str(value)})
+
+
+def _subscribe_payload(command_id: int, tickers: Iterable[str]) -> dict[str, Any]:
+    markets = _tickers(tickers)
+    if not markets:
+        raise ValueError("shared Kalshi subscription requires at least one market")
     return {
         "id": int(command_id),
         "cmd": "subscribe",
         "params": {
             "channels": ["orderbook_delta"],
-            "market_ticker": str(ticker),
-            # Preserve the executor's validated legacy two-scale orderbook math.
+            "market_tickers": markets,
+            # Preserve the executor's already-validated legacy two-scale book math.
             "use_yes_price": False,
         },
     }
 
 
-def _unsubscribe_payload(command_id: int, sid: int) -> dict[str, Any]:
-    return {
-        "id": int(command_id),
-        "cmd": "unsubscribe",
-        "params": {"sids": [int(sid)]},
-    }
-
-
-def _snapshot_payload(command_id: int, sid: int, ticker: str) -> dict[str, Any]:
+def _update_payload(
+    command_id: int,
+    sid: int,
+    tickers: Iterable[str],
+    action: str,
+) -> dict[str, Any]:
+    markets = _tickers(tickers)
+    if not markets:
+        raise ValueError("subscription update requires at least one market")
+    if action not in {"add_markets", "delete_markets", "get_snapshot"}:
+        raise ValueError(f"unsupported subscription action: {action}")
     return {
         "id": int(command_id),
         "cmd": "update_subscription",
         "params": {
             "sids": [int(sid)],
-            "market_tickers": [str(ticker)],
-            "action": "get_snapshot",
+            "market_tickers": markets,
+            "action": action,
         },
     }
 
 
+def _snapshot_payload(command_id: int, sid: int, tickers: Iterable[str]) -> dict[str, Any]:
+    return _update_payload(command_id, sid, tickers, "get_snapshot")
+
+
 class SharedKalshiOrderbookHub:
-    """One authenticated Kalshi socket routing many market books to existing feeds."""
+    """One authenticated socket + one SID for all current/next Kalshi books."""
 
     def __init__(self) -> None:
         self._targets: dict[str, list[tuple[asyncio.Queue, Any]]] = defaultdict(list)
         self._books: dict[str, Any] = {}
-        self._sid_by_ticker: dict[str, int] = {}
-        self._ticker_by_command: dict[int, str] = {}
-        self._pending_tickers: set[str] = set()
+        self._snapshot_ready: set[str] = set()
+        self._subscribed_markets: set[str] = set()
+        self._initial_markets: set[str] = set()
+        self._pending_ops: dict[int, tuple[str, set[str]]] = {}
         self._ws: Any | None = None
+        self._sid: int | None = None
+        self._last_seq: int | None = None
         self._task: asyncio.Task[Any] | None = None
         self._send_lock = asyncio.Lock()
         self._registry_lock = asyncio.Lock()
         self._next_command_id = 1000
         self._connected = asyncio.Event()
+        self.connection_count = 0
+        self.sequence_gaps = 0
+
+    @property
+    def sid(self) -> int | None:
+        return self._sid
+
+    @property
+    def last_seq(self) -> int | None:
+        return self._last_seq
+
+    def health(self) -> dict[str, Any]:
+        return {
+            "connected": self._connected.is_set(),
+            "sid": self._sid,
+            "last_seq": self._last_seq,
+            "connection_count": self.connection_count,
+            "sequence_gaps": self.sequence_gaps,
+            "desired_markets": sorted(self._targets),
+            "subscribed_markets": sorted(self._subscribed_markets),
+            "snapshot_ready_markets": sorted(self._snapshot_ready),
+        }
 
     def _command_id(self) -> int:
         self._next_command_id += 1
         return self._next_command_id
+
+    def _bump_gap_stats(self) -> None:
+        seen: set[int] = set()
+        for targets in self._targets.values():
+            for _queue, stats in targets:
+                marker = id(stats)
+                if marker in seen:
+                    continue
+                seen.add(marker)
+                stats.kalshi_sequence_gaps += 1
+
+    def _observe_sequence(self, payload: dict[str, Any]) -> bool:
+        """Validate every sequenced message for our SID, including command OKs."""
+        if self._sid is None:
+            return True
+        sid_raw = payload.get("sid")
+        seq_raw = payload.get("seq")
+        if sid_raw is None or seq_raw is None:
+            return True
+        sid = int(sid_raw)
+        if sid != self._sid:
+            # No other subscription SID should exist on this dedicated connection.
+            raise RuntimeError(f"unexpected Kalshi sid expected={self._sid} got={sid}")
+        seq = int(seq_raw)
+        if self._last_seq is None:
+            self._last_seq = seq
+            return True
+        if seq <= self._last_seq:
+            # Duplicate/replayed message: never apply it twice.
+            return False
+        expected = self._last_seq + 1
+        if seq != expected:
+            self.sequence_gaps += 1
+            self._bump_gap_stats()
+            raise SharedSequenceGap(
+                f"shared Kalshi sequence gap sid={self._sid} "
+                f"previous={self._last_seq} current={seq} expected={expected}"
+            )
+        self._last_seq = seq
+        return True
 
     async def register(self, ticker: str, queue: asyncio.Queue, stats: Any) -> None:
         ticker = str(ticker)
@@ -107,13 +184,14 @@ class SharedKalshiOrderbookHub:
             if target not in self._targets[ticker]:
                 self._targets[ticker].append(target)
             if self._task is None or self._task.done():
-                self._task = asyncio.create_task(self._run(), name="kalshi-shared-orderbook-hub")
-        if self._connected.is_set():
-            await self._ensure_subscribed(ticker)
+                self._task = asyncio.create_task(
+                    self._run(), name="kalshi-shared-orderbook-hub"
+                )
+        if self._connected.is_set() and self._sid is not None:
+            await self._sync_markets()
 
     async def unregister(self, ticker: str, queue: asyncio.Queue, stats: Any) -> None:
         ticker = str(ticker)
-        should_unsubscribe = False
         async with self._registry_lock:
             targets = self._targets.get(ticker, [])
             target = (queue, stats)
@@ -121,124 +199,142 @@ class SharedKalshiOrderbookHub:
                 targets.remove(target)
             if not targets:
                 self._targets.pop(ticker, None)
-                should_unsubscribe = True
-        if should_unsubscribe:
-            await self._unsubscribe(ticker)
+                self._books.pop(ticker, None)
+                self._snapshot_ready.discard(ticker)
+        if self._connected.is_set() and self._sid is not None:
+            await self._sync_markets()
 
     async def _send(self, payload: dict[str, Any]) -> None:
         ws = self._ws
         if ws is None:
-            return
+            raise RuntimeError("shared Kalshi websocket is not connected")
         async with self._send_lock:
             await ws.send(json.dumps(payload, separators=(",", ":")))
 
-    async def _ensure_subscribed(self, ticker: str) -> None:
-        if ticker not in self._targets:
+    def _pending(self, action: str) -> set[str]:
+        out: set[str] = set()
+        for pending_action, markets in self._pending_ops.values():
+            if pending_action == action:
+                out.update(markets)
+        return out
+
+    async def _send_update(self, action: str, markets: set[str]) -> None:
+        if not markets or self._sid is None:
             return
-        if ticker in self._sid_by_ticker or ticker in self._pending_tickers:
-            return
-        command_id = self._command_id()
-        self._ticker_by_command[command_id] = ticker
-        self._pending_tickers.add(ticker)
-        self._books[ticker] = hot.GuardedKalshiOrderBook(ticker)
+        cid = self._command_id()
+        self._pending_ops[cid] = (action, set(markets))
         try:
-            await self._send(_subscribe_payload(command_id, ticker))
+            await self._send(_update_payload(cid, self._sid, markets, action))
         except Exception:
-            self._ticker_by_command.pop(command_id, None)
-            self._pending_tickers.discard(ticker)
+            self._pending_ops.pop(cid, None)
             raise
 
-    async def _unsubscribe(self, ticker: str) -> None:
-        self._pending_tickers.discard(ticker)
-        sid = self._sid_by_ticker.pop(ticker, None)
-        self._books.pop(ticker, None)
-        if sid is None or self._ws is None:
+    async def _sync_markets(self) -> None:
+        if self._sid is None or self._ws is None:
             return
-        try:
-            await self._send(_unsubscribe_payload(self._command_id(), sid))
-        except Exception as exc:
-            logger.warning(
-                "CRYPTO_ROLLOVER_SHARED_KALSHI_UNSUBSCRIBE_ERROR ticker=%s type=%s error=%s",
-                ticker,
-                type(exc).__name__,
-                str(exc)[:180],
-            )
-
-    async def _repair_snapshot(self, ticker: str) -> None:
-        sid = self._sid_by_ticker.get(ticker)
-        self._books[ticker] = hot.GuardedKalshiOrderBook(ticker)
-        if sid is None:
-            self._pending_tickers.discard(ticker)
-            await self._ensure_subscribed(ticker)
-            return
-        await self._send(_snapshot_payload(self._command_id(), sid, ticker))
+        desired = set(self._targets)
+        pending_add = self._pending("add_markets")
+        pending_delete = self._pending("delete_markets")
+        to_add = desired - self._subscribed_markets - pending_add
+        to_delete = self._subscribed_markets - desired - pending_delete
+        if to_add:
+            await self._send_update("add_markets", to_add)
+        if to_delete:
+            await self._send_update("delete_markets", to_delete)
 
     async def _handle(self, payload: dict[str, Any]) -> None:
         typ = str(payload.get("type") or "")
         msg = payload.get("msg") or {}
-        command_id = payload.get("id")
 
         if typ == "subscribed":
-            try:
-                cid = int(command_id)
-            except (TypeError, ValueError):
-                cid = -1
-            ticker = self._ticker_by_command.pop(cid, None)
-            if ticker is not None:
-                self._pending_tickers.discard(ticker)
-                sid_raw = payload.get("sid", msg.get("sid"))
-                if sid_raw is not None:
-                    self._sid_by_ticker[ticker] = int(sid_raw)
-                logger.info(
-                    "CRYPTO_ROLLOVER_SHARED_KALSHI_SUBSCRIBED %s",
-                    json.dumps({
-                        "ticker": ticker,
-                        "sid": self._sid_by_ticker.get(ticker),
-                        "active_market_subscriptions": len(self._targets),
-                        "shared_websocket": True,
-                        "order_entry": False,
-                    }, separators=(",", ":")),
-                )
+            sid_raw = msg.get("sid", payload.get("sid"))
+            if sid_raw is None:
+                raise RuntimeError("Kalshi subscribed response missing sid")
+            self._sid = int(sid_raw)
+            self._subscribed_markets = set(self._initial_markets)
+            logger.info(
+                "CRYPTO_ROLLOVER_SHARED_KALSHI_SUBSCRIBED %s",
+                json.dumps({
+                    "sid": self._sid,
+                    "markets": sorted(self._subscribed_markets),
+                    "single_subscription_sid": True,
+                    "shared_websocket": True,
+                    "order_entry": False,
+                }, separators=(",", ":")),
+            )
+            await self._sync_markets()
+            return
+
+        if not self._observe_sequence(payload):
             return
 
         if typ == "error":
+            cid_raw = payload.get("id")
             try:
-                cid = int(command_id)
+                cid = int(cid_raw)
             except (TypeError, ValueError):
                 cid = -1
-            ticker = self._ticker_by_command.pop(cid, None)
-            if ticker is not None:
-                self._pending_tickers.discard(ticker)
-            logger.warning(
-                "CRYPTO_ROLLOVER_SHARED_KALSHI_COMMAND_ERROR ticker=%s error=%s",
-                ticker,
-                str(msg)[:220],
+            pending = self._pending_ops.pop(cid, None)
+            raise RuntimeError(
+                f"Kalshi shared subscription command failed pending={pending} msg={str(msg)[:220]}"
             )
+
+        if typ == "ok":
+            cid_raw = payload.get("id")
+            try:
+                cid = int(cid_raw)
+            except (TypeError, ValueError):
+                cid = -1
+            pending = self._pending_ops.pop(cid, None)
+            if pending is not None:
+                action, markets = pending
+                if action == "add_markets":
+                    self._subscribed_markets.update(markets)
+                elif action == "delete_markets":
+                    self._subscribed_markets.difference_update(markets)
+                    for ticker in markets:
+                        if ticker not in self._targets:
+                            self._books.pop(ticker, None)
+                            self._snapshot_ready.discard(ticker)
+                logger.info(
+                    "CRYPTO_ROLLOVER_SHARED_KALSHI_UPDATED %s",
+                    json.dumps({
+                        "sid": self._sid,
+                        "action": action,
+                        "markets": sorted(markets),
+                        "subscribed_markets": sorted(self._subscribed_markets),
+                        "seq": self._last_seq,
+                        "order_entry": False,
+                    }, separators=(",", ":")),
+                )
+            await self._sync_markets()
             return
 
         if typ not in {"orderbook_snapshot", "orderbook_delta"}:
             return
+
         ticker = str(msg.get("market_ticker") or "")
+        if not ticker:
+            raise RuntimeError("Kalshi orderbook message missing market_ticker")
         targets = list(self._targets.get(ticker, ()))
-        if not ticker or not targets:
+        if not targets:
             return
-        book = self._books.get(ticker)
-        if book is None:
-            book = hot.GuardedKalshiOrderBook(ticker)
+
+        if typ == "orderbook_snapshot":
+            book = hot.KalshiOrderBook(ticker)
+            if not book.apply(payload):
+                raise RuntimeError(f"failed to apply Kalshi snapshot ticker={ticker}")
             self._books[ticker] = book
-        try:
-            changed = book.apply(payload)
-        except hot.SequenceGap:
-            for _queue, stats in targets:
-                stats.kalshi_sequence_gaps += 1
-            logger.warning(
-                "CRYPTO_ROLLOVER_SHARED_KALSHI_SEQUENCE_GAP ticker=%s action=get_snapshot",
-                ticker,
-            )
-            await self._repair_snapshot(ticker)
-            return
-        if not changed:
-            return
+            self._snapshot_ready.add(ticker)
+        else:
+            if ticker not in self._snapshot_ready:
+                raise RuntimeError(
+                    f"Kalshi delta arrived before snapshot ticker={ticker} sid={self._sid}"
+                )
+            book = self._books[ticker]
+            if not book.apply(payload):
+                return
+
         receive_ms = int(time.time() * 1000)
         mono_ns = time.perf_counter_ns()
         top = book.top(receive_ms)
@@ -258,28 +354,38 @@ class SharedKalshiOrderbookHub:
         backoff = 0.25
         while True:
             try:
-                headers = hot.auth_headers(private_key, "GET", hot.KALSHI_WS_SIGN_PATH, hot.API_KEY_ID)
+                headers = hot.auth_headers(
+                    private_key, "GET", hot.KALSHI_WS_SIGN_PATH, hot.API_KEY_ID
+                )
                 async with websockets.connect(
                     hot.KALSHI_WS,
                     open_timeout=5.0,
                     **hot._ws_header_kw(headers),
                 ) as ws:
                     self._ws = ws
-                    self._sid_by_ticker.clear()
-                    self._ticker_by_command.clear()
-                    self._pending_tickers.clear()
+                    self._sid = None
+                    self._last_seq = None
+                    self._pending_ops.clear()
                     self._books.clear()
+                    self._snapshot_ready.clear()
+                    self._subscribed_markets.clear()
+                    self._initial_markets = set(self._targets)
+                    if not self._initial_markets:
+                        raise RuntimeError("shared Kalshi hub connected with no markets")
+                    self.connection_count += 1
                     self._connected.set()
+                    cid = self._command_id()
+                    await self._send(_subscribe_payload(cid, self._initial_markets))
                     logger.info(
                         "CRYPTO_ROLLOVER_SHARED_KALSHI_CONNECTED %s",
                         json.dumps({
-                            "registered_markets": len(self._targets),
+                            "connection_count": self.connection_count,
+                            "initial_markets": sorted(self._initial_markets),
+                            "single_subscription_sid": True,
                             "shared_websocket": True,
                             "order_entry": False,
                         }, separators=(",", ":")),
                     )
-                    for ticker in list(self._targets):
-                        await self._ensure_subscribed(ticker)
                     backoff = 0.25
                     async for raw in ws:
                         await self._handle(json.loads(raw))
@@ -289,15 +395,18 @@ class SharedKalshiOrderbookHub:
             except Exception as exc:
                 self._connected.clear()
                 self._ws = None
-                self._sid_by_ticker.clear()
-                self._ticker_by_command.clear()
-                self._pending_tickers.clear()
+                self._sid = None
+                self._last_seq = None
+                self._pending_ops.clear()
                 self._books.clear()
+                self._snapshot_ready.clear()
+                self._subscribed_markets.clear()
                 logger.warning(
-                    "CRYPTO_ROLLOVER_SHARED_KALSHI_RECONNECT type=%s error=%s registered=%s",
+                    "CRYPTO_ROLLOVER_SHARED_KALSHI_RECONNECT type=%s error=%s registered=%s gaps=%s",
                     type(exc).__name__,
-                    str(exc)[:220],
+                    str(exc)[:260],
                     len(self._targets),
+                    self.sequence_gaps,
                 )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 5.0)
@@ -337,7 +446,7 @@ async def _start_feed_shared_kalshi(*, asset: str, pair: Any, stats: Any, active
             "window_end_utc": pair.window_end.isoformat(),
             "active": active,
             "start_relative_window_start_ms": int(time.time() * 1000) - boundary_ms,
-            "kalshi_transport": "SHARED_MULTI_MARKET_WEBSOCKET",
+            "kalshi_transport": "ONE_WS_ONE_SID_MULTI_MARKET",
             "read_only": True,
             "order_entry": False,
         }, separators=(",", ":")),
@@ -364,7 +473,7 @@ async def _start_next_early(*, asset: str, stats: Any, boundary_ts: float, prewa
             "next_window_end_utc": next_pair.window_end.isoformat(),
             "gemini_symbol": next_pair.gemini_symbol,
             "kalshi_ticker": next_pair.kalshi_ticker,
-            "kalshi_transport": "SHARED_MULTI_MARKET_WEBSOCKET",
+            "kalshi_transport": "ONE_WS_ONE_SID_MULTI_MARKET",
             "read_only": True,
             "order_entry": False,
         }, separators=(",", ":")),
@@ -424,7 +533,11 @@ async def _kalshi_target_loop_prefetched(assets: tuple[str, ...]) -> None:
                         json.dumps({
                             "window_end_utc": window_iso,
                             "assets": sorted(promoted),
-                            "promotion_lag_ms": max(0, int(time.time() * 1000) - int((window_end - timedelta(minutes=15)).timestamp() * 1000)),
+                            "promotion_lag_ms": max(
+                                0,
+                                int(time.time() * 1000)
+                                - int((window_end - timedelta(minutes=15)).timestamp() * 1000),
+                            ),
                             "order_entry": False,
                         }, separators=(",", ":")),
                     )
@@ -478,7 +591,9 @@ async def _kalshi_target_loop_prefetched(assets: tuple[str, ...]) -> None:
                 ]
                 if missing_next:
                     pairs = {
-                        asset: predicted_pair(asset, now_ts=window_end.timestamp() + 0.001)
+                        asset: predicted_pair(
+                            asset, now_ts=window_end.timestamp() + 0.001
+                        )
                         for asset in missing_next
                     }
                     rows = await asyncio.gather(*(
@@ -498,7 +613,9 @@ async def _kalshi_target_loop_prefetched(assets: tuple[str, ...]) -> None:
                         json.dumps({
                             "window_end_utc": next_iso,
                             "assets": list(ready_next),
-                            "seconds_before_boundary": round(max(0.0, seconds_to_boundary), 3),
+                            "seconds_before_boundary": round(
+                                max(0.0, seconds_to_boundary), 3
+                            ),
                             "order_entry": False,
                         }, separators=(",", ":")),
                     )
@@ -507,7 +624,10 @@ async def _kalshi_target_loop_prefetched(assets: tuple[str, ...]) -> None:
             if missing:
                 sleep_s = TARGET_RETRY_S
             elif seconds_to_boundary > TARGET_PREFETCH_LEAD_S:
-                sleep_s = max(0.05, min(5.0, seconds_to_boundary - TARGET_PREFETCH_LEAD_S))
+                sleep_s = max(
+                    0.05,
+                    min(5.0, seconds_to_boundary - TARGET_PREFETCH_LEAD_S),
+                )
             elif seconds_to_boundary > 2.0:
                 sleep_s = TARGET_RETRY_S
             else:
@@ -522,15 +642,15 @@ def install() -> None:
     global _INSTALLED
     if _INSTALLED:
         return
-    # ``prewarmed_safe`` has already installed activation/event-order safety by the
-    # time v2 imports this module.  Replace only transport/start-stop functions.
+    # ``prewarmed_safe`` already owns activation/event-order safety. Replace only
+    # market-data transport and target-fetch timing.
     base._start_feed = _start_feed_shared_kalshi
     base._stop_feed = _stop_feed_shared_kalshi
     base._start_next_at = _start_next_early
     readiness._kalshi_target_loop = _kalshi_target_loop_prefetched
     _INSTALLED = True
     logger.warning(
-        "CRYPTO_ROLLOVER_OPTIMIZER_INSTALLED kalshi_ws=shared_multi_market prewarm_lead_s=%s target_prefetch_lead_s=%s risk_gates_changed=false",
+        "CRYPTO_ROLLOVER_OPTIMIZER_INSTALLED kalshi_ws=one_ws_one_sid_multi_market prewarm_lead_s=%s target_prefetch_lead_s=%s risk_gates_changed=false",
         PREWARM_LEAD_S,
         TARGET_PREFETCH_LEAD_S,
     )
