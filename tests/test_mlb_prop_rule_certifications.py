@@ -75,6 +75,25 @@ def test_live_plate_appearance_removes_only_participation_blocker():
     assert result.execution_eligible is False
 
 
+def test_current_polymarket_us_rule_evidence_is_recorded_but_not_overcertified():
+    profile = PROFILES[("polymarket", "baseball_player_hits")]
+    assert profile.participation_rule == "lfmp_only_if_player_does_not_participate_at_all"
+    assert profile.official_source.startswith("governing_body_primary")
+    assert "completion_before_expiration_or_lfmp" in profile.interruption
+    assert "lfmp_at_official_cancellation" in profile.cancellation
+    assert profile.source_ref == "https://docs.polymarket.us/faqs/sports-faqs"
+    assert profile.complete is False
+
+
+def test_current_gemini_player_rule_evidence_is_recorded_but_not_overcertified():
+    profile = PROFILES[("gemini", "baseball_player_total_bases")]
+    assert profile.participation_rule.startswith("last_fair_price_if_active_player_does_not_appear")
+    assert profile.official_source == "league_governing_event_for_player_stat"
+    assert "remains_open_until_played_or_season_ends" in profile.interruption
+    assert "market_outcome_review" in profile.cancellation
+    assert profile.complete is False
+
+
 def test_gemini_pair_remains_fail_closed_after_participation():
     result = assess_prop_pair(
         "kalshi", "gemini", "baseball_player_total_bases", _batter_proof()
