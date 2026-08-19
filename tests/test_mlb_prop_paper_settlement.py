@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from src.cross_venue_ledger import make_event, summarize_ledger
-from src.mlb_prop_paper_settlement import settlement_events
+from src.mlb_prop_paper_settlement import reconcile_paper_ledger, settlement_events
 
 
 def _fills(group="g1"):
@@ -152,3 +152,29 @@ def test_wrong_market_same_venue_settlement_does_not_suppress_filled_leg():
     summary = summarize_ledger(fills + [wrong_market] + settlements)
     assert summary["pending_settlement_groups"] == 0
     assert Decimal(summary["realized_pnl"]) == Decimal("0.05")
+
+
+def test_later_conflicting_outcome_quarantines_previously_written_settlements(tmp_path):
+    ledger_path = tmp_path / "ledger.jsonl"
+    outcomes_path = tmp_path / "outcomes.jsonl"
+    fills = _fills()
+    prior_settlements, _ = settlement_events(fills, [{
+        "trade_group_id": "g1",
+        "polymarket_us_outcome": "YES",
+        "kalshi_outcome": "YES",
+        "settled_ts_ms": 200,
+    }])
+    with ledger_path.open("w", encoding="utf-8") as fh:
+        for event in fills + prior_settlements:
+            fh.write(event.as_json() + "\n")
+    with outcomes_path.open("w", encoding="utf-8") as fh:
+        fh.write('{"trade_group_id":"g1","polymarket_us_outcome":"YES","kalshi_outcome":"YES","settled_ts_ms":200}\n')
+        fh.write('{"trade_group_id":"g1","polymarket_us_outcome":"NO","kalshi_outcome":"YES","settled_ts_ms":201}\n')
+
+    summary = reconcile_paper_ledger(ledger_path, outcomes_path)
+    assert Decimal(summary["realized_pnl"]) == Decimal("0")
+    assert summary["pending_settlement_groups"] == 1
+    assert summary["outcome_conflict_groups"] == 1
+    assert summary["quarantined_conflicted_trade_groups"] == 1
+    assert summary["quarantined_stale_settlement_events"] == 2
+    assert summary["new_settlement_events"] == 0
