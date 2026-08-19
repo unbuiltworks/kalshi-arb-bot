@@ -20,18 +20,37 @@ def test_extracts_documented_top_level_floor_strike():
     )
 
 
-def test_extracts_nested_lifecycle_envelope():
+def test_extracts_nested_metadata_updated_envelope():
     payload = {
         "type": "market_lifecycle_v2",
         "msg": {
             "event_type": "metadata_updated",
-            "ticker": "KXBTC15M-26AUG191500-00",
+            "market_ticker": "KXBTC15M-26AUG191500-00",
             "floor_strike": 117234.5,
         },
     }
     assert cache.extract_lifecycle_target(payload) == (
         "KXBTC15M-26AUG191500-00",
         Decimal("117234.5"),
+    )
+
+
+def test_extracts_created_additional_metadata_floor_strike():
+    payload = {
+        "type": "market_lifecycle_v2",
+        "sid": 13,
+        "msg": {
+            "market_ticker": "KXETH15M-26AUG191515-15",
+            "event_type": "created",
+            "additional_metadata": {
+                "strike_type": "greater",
+                "floor_strike": "2090.69",
+            },
+        },
+    }
+    assert cache.extract_lifecycle_target(payload) == (
+        "KXETH15M-26AUG191515-15",
+        Decimal("2090.69"),
     )
 
 
