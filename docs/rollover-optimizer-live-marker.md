@@ -1,0 +1,1 @@
+Fresh branch-head deployment marker after restoring the bounded campaign start command. The campaign child now installs the tested shared-Kalshi-WebSocket rollover optimizer; execution gates remain unchanged.
