@@ -2,12 +2,12 @@
 
 The existing :mod:`mlb_prop_rule_equivalence` module answers one narrow question:
 has the live participation branch that can differ between venues been resolved?
-This module answers the larger execution question.  Participation alignment is
+This module answers the larger execution question. Participation alignment is
 necessary but not sufficient; a pair also needs an audited match for lifecycle,
 official-stat authority, corrections, threshold/push treatment, and cancellation.
 
-No real pair is upgraded merely because a player has participated.  Unknown or
-incompletely sourced lifecycle rules remain closed.  This module performs no
+No real pair is upgraded merely because a player has participated. Unknown or
+incompletely sourced lifecycle rules remain closed. This module performs no
 network I/O and contains no order-entry path.
 """
 from __future__ import annotations
@@ -141,60 +141,58 @@ def _profile(
     )
 
 
-# These are semantic summaries, not copied rulebook prose.  ``complete=False`` is
-# deliberate whenever the currently reviewed public source does not establish the
-# entire exceptional-event lifecycle.  An incomplete profile can never certify.
+# Semantic summaries of the venue rules reviewed on AUDIT_DATE. The important
+# distinction is between evidence we have actually established and fields that are
+# still missing a complete per-family legal fingerprint. ``complete=False`` is
+# deliberate for every live venue until all exceptional-event and correction tails
+# have been frozen from the exact current rule source. An incomplete profile can
+# never certify a real-money pair.
 _PROFILE_ROWS: list[PropVenueProfile] = []
 for family in SUPPORTED_FAMILIES:
-    role_rule = (
-        "must_start_and_record_plate_appearance"
-        if family in BATTER_FAMILIES
-        else "must_be_starting_pitcher_and_record_pitch"
-    )
     _PROFILE_ROWS.append(_profile(
         "kalshi",
         family,
         participation_rule=(
-            "fair_market_price_unless_qualifying_start_and_participation"
+            "batter_must_start_and_record_plate_appearance_else_fair_market_price"
+            if family in BATTER_FAMILIES
+            else "named_pitcher_must_start_and_record_pitch_else_fair_market_price"
         ),
         official_source="espn_fox_sports_and_governing_league",
-        interruption="family_contract_exceptional_lifecycle_not_fully_fingerprinted",
-        cancellation="family_contract_exceptional_lifecycle_not_fully_fingerprinted",
-        stat_corrections="source_agency_correction_window_not_fully_fingerprinted",
+        interruption="exact_family_full_terms_interruption_rule_not_fully_fingerprinted",
+        cancellation="exact_family_full_terms_cancellation_rule_not_fully_fingerprinted",
+        stat_corrections="exact_family_full_terms_stat_correction_rule_not_fully_fingerprinted",
         threshold_push="binary_integer_threshold_contract",
-        source_ref="kalshi MLB player-prop contract rules",
+        source_ref="current Kalshi MLB player-prop market rules; exact family full rules still required",
         complete=False,
     ))
     _PROFILE_ROWS.append(_profile(
         "polymarket",
         family,
-        participation_rule="participation_branch_requires_current_official_rule_fingerprint",
-        official_source="current_official_player_prop_source_rule_not_fully_fingerprinted",
-        interruption="current_official_player_prop_lifecycle_not_fully_fingerprinted",
-        cancellation="current_official_player_prop_lifecycle_not_fully_fingerprinted",
-        stat_corrections="current_official_player_prop_correction_rule_not_fully_fingerprinted",
-        threshold_push="binary_integer_threshold_expected_but_not_full_rule_fingerprint",
-        source_ref="polymarket MLB player-prop rules require current official audit",
+        participation_rule="lfmp_only_if_player_does_not_participate_at_all",
+        official_source="governing_body_primary_then_official_secondary_then_major_tertiary_sources",
+        interruption="official_result_if_threshold_reached_else_completion_before_expiration_or_lfmp",
+        cancellation="lfmp_at_official_cancellation_if_not_rescheduled_before_expiration",
+        stat_corrections="settlement_delayed_while_official_result_under_review; post_settlement_correction_rule_not_fully_fingerprinted",
+        threshold_push="binary_player_prop_threshold; exact_market_line_terms_required",
+        source_ref="https://docs.polymarket.us/faqs/sports-faqs",
         complete=False,
     ))
     _PROFILE_ROWS.append(_profile(
         "gemini",
         family,
-        participation_rule="ticker_taxonomy_only_participation_rule_not_established",
-        official_source="prediction_market_contract_source_rule_not_fully_fingerprinted",
-        interruption="market_outcome_lifecycle_not_fully_fingerprinted",
-        cancellation="market_outcome_lifecycle_not_fully_fingerprinted",
-        stat_corrections="stat_correction_rule_not_fully_fingerprinted",
-        threshold_push="ticker_support_established_settlement_rule_not_fully_fingerprinted",
-        source_ref="https://developer.gemini.com/prediction-markets/tickers-sports",
+        participation_rule="last_fair_price_if_active_player_does_not_appear; official_stat_after_appearance",
+        official_source="league_governing_event_for_player_stat",
+        interruption="postponed_or_rescheduled_remains_open_until_played_or_season_ends; expiration_may_adjust",
+        cancellation="market_outcome_review_if_expiration_value_cannot_be_determined",
+        stat_corrections="family_terms_stat_correction_rule_not_fully_fingerprinted",
+        threshold_push="binary_player_prop_threshold; exact_family_terms_required",
+        source_ref="current Gemini MLB player-prop contract description and family terms PDF",
         complete=False,
     ))
     _PROFILE_ROWS.append(_profile(
         "draftkings",
         family,
-        participation_rule=(
-            "pregame_prop_selection_must_start_and_participate_substitute_only_void"
-        ),
+        participation_rule="pregame_prop_selection_must_start_and_participate_substitute_only_void",
         official_source="game_official_governing_body",
         interruption="single_game_player_prop_interruption_lifecycle_not_fully_matched_to_prediction_contracts",
         cancellation="game_not_started_scheduled_date_void",
@@ -275,7 +273,7 @@ def assess_prop_pair(
         status = PropCertificationStatus.CONDITIONAL
     else:
         # We know enough to keep it closed, but not enough to call it an exact
-        # lifecycle comparison.  This is intentionally stricter than CONDITIONAL.
+        # lifecycle comparison. This is intentionally stricter than CONDITIONAL.
         status = PropCertificationStatus.UNAUDITED
 
     return PropPairAssessment(
