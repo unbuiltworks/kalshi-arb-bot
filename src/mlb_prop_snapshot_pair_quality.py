@@ -30,6 +30,11 @@ def _d(value: Any) -> Decimal | None:
         return None
 
 
+def _strict_bool(value: Any) -> bool:
+    """Only a real boolean true is accepted as positive safety evidence."""
+    return value is True
+
+
 def _probe_rows(snapshot: dict[str, Any]) -> Iterable[dict[str, Any]]:
     """Yield one best budget view per exact pair/direction from a v4 snapshot."""
     if snapshot.get("read_only") is not True or snapshot.get("order_entry") is not False:
@@ -76,8 +81,8 @@ def _probe_rows(snapshot: dict[str, Any]) -> Iterable[dict[str, Any]]:
                 "quantity": qty,
                 "budget": budget,
                 "rules_status": row.get("rules_status") or row.get("rule_status"),
-                "full_rules_audited": bool(row.get("full_rules_audited", False)),
-                "live_probe_ready": bool(row.get("live_probe_ready", False)),
+                "full_rules_audited": _strict_bool(row.get("full_rules_audited", False)),
+                "live_probe_ready": _strict_bool(row.get("live_probe_ready", False)),
             }
             prior = best.get(key)
             if prior is None or candidate["profit"] > prior["profit"]:
