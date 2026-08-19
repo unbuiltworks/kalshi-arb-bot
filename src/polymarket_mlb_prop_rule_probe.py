@@ -76,10 +76,12 @@ async def main() -> None:
                 "family": family,
                 "slug": market.get("slug"),
                 "question": market.get("question") or market.get("title"),
+                "description": market.get("description"),
                 "gameStartTime": market.get("gameStartTime") or event.get("startTime"),
                 "market_keys": sorted(str(key) for key in market.keys()),
                 "event_keys": sorted(str(key) for key in event.keys()),
                 "rule_fields": _interesting(market),
+                "event_rule_fields": _interesting(event),
             }
             print(json.dumps(payload, sort_keys=True, default=str), flush=True)
             emitted += 1
