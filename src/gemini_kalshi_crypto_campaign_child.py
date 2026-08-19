@@ -15,6 +15,7 @@ from typing import Any
 from src import gemini_kalshi_sol_live_canary_v2 as v2
 from src import gemini_kalshi_rollover_optimizer as rollover_optimizer
 from src import gemini_kalshi_target_lifecycle_cache as target_lifecycle_cache
+from src import gemini_kalshi_target_freshness_guard as target_freshness_guard
 
 DEADLINE_ENV = "SOL_CANARY_V2_ARM_NOT_AFTER_UTC"
 
@@ -55,9 +56,12 @@ def main() -> None:
 
     # Market-data latency optimization only. Risk/execution thresholds are untouched.
     rollover_optimizer.install()
-    # Override only the target-fetch loop after the rollover optimizer installs its
-    # version: lifecycle WS is primary; exact REST market metadata is a bounded fallback.
+    # Override only target acquisition after the rollover optimizer installs its loop:
+    # lifecycle WS is primary; exact REST market metadata is a bounded fallback.
     target_lifecycle_cache.install()
+    # A pre-boundary target is provisional. Never carry it into a new 15m window;
+    # authorization requires a target observed at/after the current boundary.
+    target_freshness_guard.install()
 
     sys.argv = [
         sys.argv[0],
