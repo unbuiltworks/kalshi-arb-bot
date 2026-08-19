@@ -37,6 +37,17 @@ def _d(value: Any, default: str = "0") -> Decimal:
     return D(str(value))
 
 
+def _strict_bool(value: Any) -> bool:
+    """Only accept an actual JSON/Python boolean as verification evidence.
+
+    ``bool("false")`` is True in Python. Treating stringly-typed telemetry as proof
+    would let a producer accidentally turn an explicitly false verification marker
+    into a verified observation/settlement window and manufacture a $/day run rate.
+    Fail closed instead.
+    """
+    return value is True
+
+
 @dataclass(frozen=True)
 class Sleeve:
     name: str
@@ -64,9 +75,6 @@ class Sleeve:
         upper = self.capital_lock_hours_upper_bound
         if upper is not None and upper > 0:
             return upper
-        # Important distinction: missing legacy field means the caller only has a
-        # point estimate; an explicitly supplied-but-null upper bound means a
-        # censor-aware analyzer has told us no finite conservative denominator exists.
         if self.capital_lock_upper_bound_supplied:
             return D("0")
         return self.capital_lock_hours
@@ -104,19 +112,12 @@ class Sleeve:
 
     @property
     def observed_shadow_dollars_per_day(self) -> Decimal | None:
-        # Fail closed: a sleeve may not daily-ize only the span between positive
-        # opportunities. observed_hours must cover the full scanner window, including
-        # quiet periods. This remains THEORETICAL synthetic-fill economics.
         if not self.observation_window_verified or self.observed_hours <= 0:
             return None
         return self.shadow_profit_dollars * D("24") / self.observed_hours
 
     @property
     def realized_paper_dollars_per_day(self) -> Decimal | None:
-        # Realized paper P/L is only meaningful after venue-specific settlement
-        # reconciliation, and only daily-ized when that settled sample belongs to the
-        # same verified full observation window. Zero settled groups must not produce
-        # a misleading $0/day claim.
         if (
             not self.observation_window_verified
             or not self.settlement_window_verified
@@ -144,10 +145,10 @@ def sleeve_from_mapping(row: dict[str, Any]) -> Sleeve:
         observed_episodes=int(row.get("observed_episodes") or 0),
         observed_hours=_d(row.get("observed_hours")),
         shadow_profit_dollars=_d(row.get("shadow_profit_dollars")),
-        observation_window_verified=bool(row.get("observation_window_verified", False)),
+        observation_window_verified=_strict_bool(row.get("observation_window_verified", False)),
         settled_paper_trade_groups=int(row.get("settled_paper_trade_groups") or 0),
         realized_paper_profit_dollars=_d(row.get("realized_paper_profit_dollars")),
-        settlement_window_verified=bool(row.get("settlement_window_verified", False)),
+        settlement_window_verified=_strict_bool(row.get("settlement_window_verified", False)),
         capital_lock_hours_upper_bound=(None if upper_raw in (None, "") else _d(upper_raw)),
         capital_lock_upper_bound_supplied=upper_bound_supplied,
     )
@@ -223,7 +224,7 @@ def rank_sleeves(rows: Iterable[dict[str, Any] | Sleeve]) -> dict[str, Any]:
             "When polling supplies interval-censored lock duration, the upper-bound capital lock is used for ranking rather than the optimistic last-seen lower bound. "
             "If a censor-aware caller explicitly supplies no finite upper bound (for example a right-censored active episode), capacity ranking is withheld instead of falling back to the point estimate. "
             "Settlement confidence and basis risk are applied separately; hard blockers force promotable_score to zero. "
-            "Theoretical shadow $/day is withheld unless observed_hours covers the full scanner window. "
+            "Theoretical shadow $/day is withheld unless observed_hours covers the full scanner window and its verification marker is a real boolean true. "
             "Realized paper $/day is reported separately and only after venue-specific settlements are reconciled for that verified window."
         ),
     }
