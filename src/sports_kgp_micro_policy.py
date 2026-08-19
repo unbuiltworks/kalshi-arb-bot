@@ -17,6 +17,8 @@ SUPPORTED_PAIRS = frozenset({
     frozenset({"kalshi", "polymarket"}),
     frozenset({"gemini", "polymarket"}),
 })
+CERTIFIED_RULE_STATUS = "CERTIFIED"
+EXECUTABLE_CONFIDENCE = "FULL_RULES_AUDITED_EXECUTABLE"
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,8 @@ class MicroCandidate:
     persistence_ms: int
     approved_for_execution: bool
     rule_fingerprint_sha256: str
+    rule_status: str
+    settlement_confidence: str
 
 
 def _valid_sha256(value: str) -> bool:
@@ -60,15 +64,19 @@ def validate_micro_candidate(candidate: MicroCandidate, policy: MicroLivePolicy 
         return False, "contract_not_execution_approved"
     if not _valid_sha256(candidate.rule_fingerprint_sha256):
         return False, "invalid_rule_fingerprint"
+    if str(candidate.rule_status) != CERTIFIED_RULE_STATUS:
+        return False, "rule_registry_not_certified"
+    if str(candidate.settlement_confidence) != EXECUTABLE_CONFIDENCE:
+        return False, "settlement_not_execution_audited"
     if candidate.quantity <= 0 or candidate.quantity > D(p.max_contracts_per_leg):
         return False, "quantity_exceeds_micro_cap"
     if candidate.combined_capital_usd <= 0 or candidate.combined_capital_usd > p.max_combined_capital_usd:
         return False, "capital_exceeds_micro_cap"
     if candidate.after_fee_profit_per_contract < p.min_after_fee_profit_per_contract:
         return False, "after_fee_profit_below_floor"
-    if int(candidate.quote_skew_ms) > p.max_quote_skew_ms:
+    if int(candidate.quote_skew_ms) < 0 or int(candidate.quote_skew_ms) > p.max_quote_skew_ms:
         return False, "quote_skew_too_large"
-    if int(candidate.max_book_age_ms) > p.max_book_age_ms:
+    if int(candidate.max_book_age_ms) < 0 or int(candidate.max_book_age_ms) > p.max_book_age_ms:
         return False, "book_too_old"
     if int(candidate.persistence_ms) < p.min_persistence_ms:
         return False, "opportunity_not_persistent"
