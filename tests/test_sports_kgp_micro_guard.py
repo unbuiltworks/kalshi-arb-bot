@@ -2,7 +2,7 @@ from decimal import Decimal as D
 
 import pytest
 
-from src.sports_kgp_micro_guard import RuleApproval, build_micro_plan
+from src.sports_kgp_micro_guard import DEFAULT_MAX_CAPITAL, RuleApproval, build_micro_plan
 from src.three_venue_pricing_core import PricedQuote
 from src.universal_prediction_quant import LockOpportunity, MarketQuote
 
@@ -79,6 +79,10 @@ def opp(*, yes_venue="kalshi", no_venue="gemini", profit="0.05", confidence="FUL
     )
 
 
+def test_first_canary_has_explicit_one_dollar_cap():
+    assert DEFAULT_MAX_CAPITAL == D("1.00")
+
+
 def test_certified_kalshi_gemini_q1_plan_passes():
     rows = [priced("kalshi", yes="0.40", no="0.60"), priced("gemini", yes="0.45", no="0.55")]
     plan = build_micro_plan(opp(profit="0.05"), rows, approval(), now_ms=NOW)
@@ -123,6 +127,12 @@ def test_quote_skew_over_50ms_is_rejected():
     rows = [priced("kalshi", yes="0.40", no="0.60"), priced("gemini", yes="0.45", no="0.55")]
     with pytest.raises(ValueError, match="quote skew"):
         build_micro_plan(opp(profit="0.05", skew=51), rows, approval(), now_ms=NOW)
+
+
+def test_negative_quote_skew_is_rejected():
+    rows = [priced("kalshi", yes="0.40", no="0.60"), priced("gemini", yes="0.45", no="0.55")]
+    with pytest.raises(ValueError, match="quote skew"):
+        build_micro_plan(opp(profit="0.05", skew=-1), rows, approval(), now_ms=NOW)
 
 
 def test_edge_below_3c_is_rejected():
