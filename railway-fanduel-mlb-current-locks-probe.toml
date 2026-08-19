@@ -1,0 +1,3 @@
+[deploy]
+startCommand = "python -m src.fanduel_mlb_current_locks_probe"
+restartPolicyType = "NEVER"
