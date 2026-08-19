@@ -1,0 +1,25 @@
+name: Sports Kalshi Complement Probe
+
+on:
+  pull_request:
+    paths:
+      - 'src/kalshi_mlb_same_market_complement_probe.py'
+      - '.github/workflows/sports-kalshi-complement-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Scan public Kalshi MLB same-market complements
+        run: python -m src.kalshi_mlb_same_market_complement_probe
