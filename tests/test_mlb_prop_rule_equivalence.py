@@ -33,21 +33,33 @@ def test_batter_becomes_rule_equivalent_after_first_pa() -> None:
     )
     assert result.status == RuleEquivalence.EQUIVALENT_AFTER_PARTICIPATION
     assert result.settlement_equivalent_now is True
-    # Research policy remains non-executable even after the rule branch aligns.
     assert result.execution_eligible is False
 
 
-def test_pitcher_must_be_starter_and_throw_pitch() -> None:
+def test_pitcher_requires_starter_and_batter_faced() -> None:
     not_enough = assess_rule_equivalence(
         "baseball_player_strikeouts",
         ParticipationProof(starting_pitcher=True, source="official MLB game state"),
     )
     assert not_enough.settlement_equivalent_now is False
+    assert not_enough.required_gate == "CONFIRMED_STARTING_PITCHER_AND_FIRST_BATTER_FACED"
+
+    # A legacy first-pitch flag must not unlock the audited >=1 batter-faced rule.
+    one_pitch_only = assess_rule_equivalence(
+        "baseball_player_strikeouts",
+        ParticipationProof(
+            starting_pitcher=True,
+            pitch_recorded=True,
+            source="official MLB game state",
+        ),
+    )
+    assert one_pitch_only.settlement_equivalent_now is False
 
     aligned = assess_rule_equivalence(
         "baseball_player_strikeouts",
         ParticipationProof(
             starting_pitcher=True,
+            batter_faced_recorded=True,
             pitch_recorded=True,
             source="official MLB game state",
         ),
