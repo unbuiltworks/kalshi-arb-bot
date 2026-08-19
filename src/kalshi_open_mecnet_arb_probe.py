@@ -33,10 +33,24 @@ def _d(value: Any) -> Decimal | None:
 
 
 async def _get_json(http: httpx.AsyncClient, url: str, **kwargs: Any) -> dict[str, Any]:
-    response = await http.get(url, **kwargs)
-    response.raise_for_status()
-    body = response.json()
-    return body if isinstance(body, dict) else {}
+    last_response: httpx.Response | None = None
+    for attempt in range(7):
+        response = await http.get(url, **kwargs)
+        last_response = response
+        if response.status_code == 429:
+            header = _d(response.headers.get("retry-after"))
+            delay = float(header) if header is not None and header > 0 else min(8.0, 0.5 * (2 ** attempt))
+            await asyncio.sleep(max(0.25, delay))
+            continue
+        if 500 <= response.status_code < 600 and attempt < 6:
+            await asyncio.sleep(min(4.0, 0.25 * (2 ** attempt)))
+            continue
+        response.raise_for_status()
+        body = response.json()
+        return body if isinstance(body, dict) else {}
+    assert last_response is not None
+    last_response.raise_for_status()
+    return {}
 
 
 async def _open_events(http: httpx.AsyncClient) -> list[dict[str, Any]]:
@@ -58,11 +72,13 @@ async def _open_events(http: httpx.AsyncClient) -> list[dict[str, Any]]:
         cursor = str(body.get("cursor") or "")
         if not cursor:
             break
+        # Public scans are opportunistic; pace them well below burst limits.
+        await asyncio.sleep(0.25)
     return out
 
 
 async def _series_fee_metadata(http: httpx.AsyncClient, series: list[str]) -> tuple[dict[str, tuple[str, Decimal]], list[dict[str, str]]]:
-    sem = asyncio.Semaphore(12)
+    sem = asyncio.Semaphore(4)
     errors: list[dict[str, str]] = []
 
     async def one(ticker: str) -> tuple[str, tuple[str, Decimal] | None]:
