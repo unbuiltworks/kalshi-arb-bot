@@ -124,10 +124,7 @@ def test_gemini_pair_remains_fail_closed_after_participation():
     assert result.execution_eligible is False
 
 
-def test_pitcher_requires_start_and_pitch_before_legacy_participation_gate_is_proven():
-    # The venue fingerprint now records Kalshi's exact >=1 batter-faced rule.  The
-    # legacy proof field is still named pitch_recorded until MLB boxscore plumbing
-    # is migrated in a separate fail-closed change.
+def test_pitcher_requires_start_and_batter_faced_before_participation_is_proven():
     partial = ParticipationProof(
         starting_pitcher=True,
         source="MLB_STATS_API_GAME_123",
@@ -136,7 +133,11 @@ def test_pitcher_requires_start_and_pitch_before_legacy_participation_gate_is_pr
     assert result.participation_proven is False
     assert "participation" in result.remaining_blockers
 
-    full = replace(partial, pitch_recorded=True)
+    pitch_only = replace(partial, pitch_recorded=True)
+    result = assess_prop_pair("kalshi", "polymarket", "baseball_player_strikeouts", pitch_only)
+    assert result.participation_proven is False
+
+    full = replace(partial, batter_faced_recorded=True, pitch_recorded=True)
     result = assess_prop_pair("kalshi", "polymarket", "baseball_player_strikeouts", full)
     assert result.participation_proven is True
     assert "participation" not in result.remaining_blockers
