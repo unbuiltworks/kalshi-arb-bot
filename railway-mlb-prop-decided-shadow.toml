@@ -1,0 +1,3 @@
+[deploy]
+startCommand = "python -m src.mlb_prop_decided_shadow"
+restartPolicyType = "ALWAYS"
