@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 from src import gemini_kalshi_opportunity_settlement_audit_shadow as audit
+from src.gemini_kalshi_opportunity_settlement_recent_patch import install as install_recent_settlements
 
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_opportunity_settlement_risk_shadow")
 
@@ -85,9 +86,11 @@ def _emit_with_risk(rows: list[Any]) -> None:
 
 
 def main() -> None:
+    install_recent_settlements()
     audit._emit_settled_audits = _emit_with_risk
     logger.info(
         "CRYPTO_SETTLEMENT_RISK_STRATA_ENABLED dimensions=asset,asset_direction,asset_cell "
+        "settlement_source=gemini_recently_settled expiry_compat_fixed=true "
         "counterfactual_only=true trade_authorized=false read_only=true order_entry=false"
     )
     audit.main()
