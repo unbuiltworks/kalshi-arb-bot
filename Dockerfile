@@ -12,10 +12,10 @@ COPY tests/ tests/
 
 # Branch gate: canonical identity, structured Gemini normalization, exact three-venue
 # matching, hard Polymarket scope guards, Kalshi nested-book pricing, discrete
-# player-prop normalization, sportsbook identity alignment, the event-driven
-# game-line hot layer, read-only Pushover qualification/dedupe, live MLB
-# participation proof, fail-closed game/prop/team-total rule certification,
-# and resilient prediction-source discovery for retail/manual alerts.
+# player-prop normalization, direct Gemini<->Kalshi prop discovery, event-driven
+# prop/game hot layers, sportsbook identity alignment, read-only Pushover
+# qualification/dedupe, live MLB participation proof, fail-closed game/prop/team-total
+# rule certification, and resilient prediction-source discovery for retail/manual alerts.
 RUN pytest -q \
     tests/test_universal_sports_identity.py \
     tests/test_gemini_sports_adapter.py \
@@ -24,6 +24,8 @@ RUN pytest -q \
     tests/test_three_venue_mlb_snapshot_pricing.py \
     tests/test_three_venue_mlb_prop_safe_scan.py \
     tests/test_three_venue_mlb_hot.py \
+    tests/test_gemini_kalshi_mlb_prop_shadow.py \
+    tests/test_gemini_kalshi_mlb_prop_hot_shadow.py \
     tests/test_the_odds_api_mlb_shadow_identity.py \
     tests/test_sports_pushover_alerts.py \
     tests/test_sports_pushover_odds_api_mlb_reliability.py \
@@ -42,6 +44,9 @@ RUN pytest -q \
     src/three_venue_mlb_prop_safe_scan.py \
     src/three_venue_mlb_prop_supervisor.py \
     src/three_venue_mlb_hot.py \
+    src/gemini_kalshi_mlb_prop_shadow.py \
+    src/gemini_kalshi_mlb_prop_hot_shadow.py \
+    src/gemini_mlb_prop_ws_probe.py \
     src/the_odds_api_mlb_shadow.py \
     src/mlb_game_rule_certifications.py \
     src/mlb_prop_rule_equivalence.py \
