@@ -43,13 +43,14 @@ def _batter_proof() -> ParticipationProof:
     )
 
 
-def test_static_prop_matrix_covers_four_families_and_nine_pairs_each():
+def test_static_prop_matrix_covers_five_families_and_nine_pairs_each():
     matrix = prop_audit_matrix()
-    assert len(matrix["families"]) == 4
-    assert matrix["total_pairs"] == 36
+    assert len(matrix["families"]) == 5
+    assert matrix["total_pairs"] == 45
     assert matrix["certified_pairs"] == 0
     assert matrix["read_only"] is True
     assert matrix["order_entry"] is False
+    assert "baseball_player_home_runs" in matrix["families"]
     for row in matrix["families"].values():
         assert len(row["sportsbook_vs_prediction"]) == 6
         assert len(row["prediction_vs_prediction"]) == 3
@@ -75,7 +76,7 @@ def test_live_plate_appearance_removes_only_participation_blocker():
     assert result.execution_eligible is False
 
 
-def test_gemini_pair_remains_fail_closed_after_participation():
+def test_gemini_total_bases_remains_fail_closed_after_participation():
     result = assess_prop_pair(
         "kalshi", "gemini", "baseball_player_total_bases", _batter_proof()
     )
@@ -83,6 +84,18 @@ def test_gemini_pair_remains_fail_closed_after_participation():
     assert result.status is PropCertificationStatus.UNAUDITED
     assert result.remaining_blockers
     assert result.execution_eligible is False
+
+
+def test_home_runs_is_audited_but_not_executable_after_participation():
+    result = assess_prop_pair(
+        "kalshi", "gemini", "baseball_player_home_runs", _batter_proof()
+    )
+    assert result.participation_proven is True
+    assert result.status is PropCertificationStatus.UNAUDITED
+    assert "complete_lifecycle_fingerprint_required" in result.remaining_blockers
+    assert result.execution_eligible is False
+    assert PROFILES[("kalshi", "baseball_player_home_runs")].stat_definition == "official_home_runs_compared_with_threshold"
+    assert PROFILES[("gemini", "baseball_player_home_runs")].stat_definition == "official_home_runs_compared_with_threshold"
 
 
 def test_pitcher_requires_start_and_pitch_before_participation_is_proven():
@@ -111,7 +124,7 @@ def test_apply_never_upgrades_current_real_prop_pair():
 
 
 def test_unknown_family_fails_closed():
-    result = assess_prop_pair("kalshi", "polymarket", "baseball_player_home_runs")
+    result = assess_prop_pair("kalshi", "polymarket", "baseball_player_runs")
     assert result.status is PropCertificationStatus.UNAUDITED
     assert result.execution_eligible is False
 

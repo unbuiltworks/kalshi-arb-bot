@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 
 from src.gemini_kalshi_kalshi_fees import (
+    kalshi_quadratic_maker_fee,
     kalshi_quadratic_taker_fee,
     normalize_series_fee,
 )
@@ -26,12 +27,19 @@ def test_normalize_series_fee_maps_current_quadratic_and_keeps_scheduled_metadat
     assert row.formula_status == "MAPPED_QUADRATIC_TAKER"
 
 
-def test_quadratic_taker_fee_uses_live_multiplier_and_order_level_cent_ceiling():
-    assert kalshi_quadratic_taker_fee(D("0.44"), D("1")) == D("0.02")
-    assert kalshi_quadratic_taker_fee(D("0.44"), D("10")) == D("0.18")
+def test_quadratic_taker_fee_uses_current_centicent_rounding():
+    assert kalshi_quadratic_taker_fee(D("0.44"), D("1")) == D("0.0173")
+    assert kalshi_quadratic_taker_fee(D("0.44"), D("10")) == D("0.1725")
     assert kalshi_quadratic_taker_fee(
         D("0.50"), D("100"), fee_multiplier=D("1.5")
-    ) == D("2.63")
+    ) == D("2.6250")
+
+
+def test_quadratic_maker_fee_uses_published_curve_and_explicit_multiplier():
+    assert kalshi_quadratic_maker_fee(D("0.44"), D("1")) == D("0.0000")
+    assert kalshi_quadratic_maker_fee(
+        D("0.44"), D("1"), maker_fee_multiplier=D("1")
+    ) == D("0.0044")
 
 
 def test_metadata_taker_fee_fn_binds_live_multiplier():
@@ -40,7 +48,7 @@ def test_metadata_taker_fee_fn_binds_live_multiplier():
         {"series": {"ticker": "KXETH15M", "fee_type": "quadratic", "fee_multiplier": 1}},
         {"series_fee_change_arr": []},
     )
-    assert row.taker_fee_fn()(D("0.50"), D("10")) == D("0.18")
+    assert row.taker_fee_fn()(D("0.50"), D("10")) == D("0.1750")
 
 
 def test_unknown_fee_type_stays_fail_closed():

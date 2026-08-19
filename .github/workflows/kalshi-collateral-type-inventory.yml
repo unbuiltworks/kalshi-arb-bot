@@ -1,0 +1,25 @@
+name: Kalshi Collateral Type Inventory
+
+on:
+  pull_request:
+    paths:
+      - 'src/kalshi_collateral_type_inventory.py'
+      - '.github/workflows/kalshi-collateral-type-inventory.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Inventory open Kalshi collateral-return types
+        run: python -m src.kalshi_collateral_type_inventory

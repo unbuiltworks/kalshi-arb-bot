@@ -2,12 +2,12 @@
 
 The existing :mod:`mlb_prop_rule_equivalence` module answers one narrow question:
 has the live participation branch that can differ between venues been resolved?
-This module answers the larger execution question.  Participation alignment is
+This module answers the larger execution question. Participation alignment is
 necessary but not sufficient; a pair also needs an audited match for lifecycle,
 official-stat authority, corrections, threshold/push treatment, and cancellation.
 
-No real pair is upgraded merely because a player has participated.  Unknown or
-incompletely sourced lifecycle rules remain closed.  This module performs no
+No real pair is upgraded merely because a player has participated. Unknown or
+incompletely sourced lifecycle rules remain closed. This module performs no
 network I/O and contains no order-entry path.
 """
 from __future__ import annotations
@@ -108,6 +108,7 @@ def _family_normal_outcome(family: str) -> str:
     return {
         "baseball_player_hits": "official_hits_compared_with_threshold",
         "baseball_player_hits_runs_rbis": "official_hits_plus_runs_plus_rbis_compared_with_threshold",
+        "baseball_player_home_runs": "official_home_runs_compared_with_threshold",
         "baseball_player_total_bases": "official_total_bases_compared_with_threshold",
         "baseball_player_strikeouts": "official_pitcher_strikeouts_compared_with_threshold",
     }.get(family, "unknown")
@@ -141,22 +142,15 @@ def _profile(
     )
 
 
-# These are semantic summaries, not copied rulebook prose.  ``complete=False`` is
-# deliberate whenever the currently reviewed public source does not establish the
-# entire exceptional-event lifecycle.  An incomplete profile can never certify.
+# These are semantic summaries, not copied rulebook prose. ``complete=False`` is
+# deliberate whenever the currently reviewed public/source feed does not establish
+# the entire exceptional-event lifecycle. An incomplete profile can never certify.
 _PROFILE_ROWS: list[PropVenueProfile] = []
 for family in SUPPORTED_FAMILIES:
-    role_rule = (
-        "must_start_and_record_plate_appearance"
-        if family in BATTER_FAMILIES
-        else "must_be_starting_pitcher_and_record_pitch"
-    )
     _PROFILE_ROWS.append(_profile(
         "kalshi",
         family,
-        participation_rule=(
-            "fair_market_price_unless_qualifying_start_and_participation"
-        ),
+        participation_rule="fair_market_price_unless_qualifying_start_and_participation",
         official_source="espn_fox_sports_and_governing_league",
         interruption="family_contract_exceptional_lifecycle_not_fully_fingerprinted",
         cancellation="family_contract_exceptional_lifecycle_not_fully_fingerprinted",
@@ -168,39 +162,37 @@ for family in SUPPORTED_FAMILIES:
     _PROFILE_ROWS.append(_profile(
         "polymarket",
         family,
-        participation_rule="participation_branch_requires_current_official_rule_fingerprint",
-        official_source="current_official_player_prop_source_rule_not_fully_fingerprinted",
-        interruption="current_official_player_prop_lifecycle_not_fully_fingerprinted",
-        cancellation="current_official_player_prop_lifecycle_not_fully_fingerprinted",
-        stat_corrections="current_official_player_prop_correction_rule_not_fully_fingerprinted",
+        participation_rule="participation_branch_requires_current_us_contract_fingerprint",
+        official_source="current_us_player_prop_source_rule_not_fully_fingerprinted",
+        interruption="current_us_player_prop_lifecycle_not_fully_fingerprinted",
+        cancellation="current_us_player_prop_lifecycle_not_fully_fingerprinted",
+        stat_corrections="current_us_player_prop_correction_rule_not_fully_fingerprinted",
         threshold_push="binary_integer_threshold_expected_but_not_full_rule_fingerprint",
-        source_ref="polymarket MLB player-prop rules require current official audit",
+        source_ref="polymarket US MLB player-prop contract requires current gateway audit",
         complete=False,
     ))
     _PROFILE_ROWS.append(_profile(
         "gemini",
         family,
-        participation_rule="ticker_taxonomy_only_participation_rule_not_established",
+        participation_rule="appearance_branch_observed_but_family_lifecycle_requires_exact_fingerprint",
         official_source="prediction_market_contract_source_rule_not_fully_fingerprinted",
         interruption="market_outcome_lifecycle_not_fully_fingerprinted",
         cancellation="market_outcome_lifecycle_not_fully_fingerprinted",
         stat_corrections="stat_correction_rule_not_fully_fingerprinted",
         threshold_push="ticker_support_established_settlement_rule_not_fully_fingerprinted",
-        source_ref="https://developer.gemini.com/prediction-markets/tickers-sports",
+        source_ref="gemini prediction-market player-prop contract/source feed audit",
         complete=False,
     ))
     _PROFILE_ROWS.append(_profile(
         "draftkings",
         family,
-        participation_rule=(
-            "pregame_prop_selection_must_start_and_participate_substitute_only_void"
-        ),
+        participation_rule="pregame_prop_selection_must_start_and_participate_substitute_only_void",
         official_source="game_official_governing_body",
         interruption="single_game_player_prop_interruption_lifecycle_not_fully_matched_to_prediction_contracts",
         cancellation="game_not_started_scheduled_date_void",
         stat_corrections="governing_body_stat_determination",
         threshold_push="sportsbook_over_under_push_semantics_can_differ_from_binary_contract",
-        source_ref="https://sportsbook.draftkings.com/help/sport-rules/baseball",
+        source_ref="DraftKings baseball rules",
         complete=False,
     ))
     _PROFILE_ROWS.append(_profile(
@@ -275,7 +267,7 @@ def assess_prop_pair(
         status = PropCertificationStatus.CONDITIONAL
     else:
         # We know enough to keep it closed, but not enough to call it an exact
-        # lifecycle comparison.  This is intentionally stricter than CONDITIONAL.
+        # lifecycle comparison. This is intentionally stricter than CONDITIONAL.
         status = PropCertificationStatus.UNAUDITED
 
     return PropPairAssessment(
