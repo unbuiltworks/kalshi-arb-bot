@@ -79,3 +79,26 @@ def test_message_contains_required_operational_fields():
     for token in ("YES sportsbook:fanduel", "NO kalshi", "Qty", "Cost $", "Payout $", "Fees $", "After-fee P/L", "Freshness", "skew", "Settlement", "Rules", "Manual sportsbook action: YES"):
         assert token in message
     assert age == 1000
+
+
+def test_readable_message_puts_player_prop_and_prices_first():
+    s = sink(); l = lock()
+    rows = [
+        row("sportsbook:fanduel", "fd:1", "0.45", "0.60"),
+        row("kalshi", "kx:1", "0.55", "0.48"),
+    ]
+    title, message, age = s.build_message(
+        l,
+        rows,
+        rule_status="CERTIFIED",
+        source="MLB_PLAYER_PROP",
+        now_ms=100_000,
+        display_title="Rhys Hoskins • 2+ Total Bases • CERTIFIED ARB",
+        display_market="Rhys Hoskins — 2+ Total Bases",
+    )
+    assert title.startswith("Rhys Hoskins • 2+ Total Bases")
+    assert message.splitlines()[0] == "Rhys Hoskins — 2+ Total Bases"
+    assert "YES — FanDuel: 45¢" in message
+    assert "NO — Kalshi: 48¢" in message
+    assert "Locked: +$0.07 total • +7¢/contract" in message
+    assert age == 1000
