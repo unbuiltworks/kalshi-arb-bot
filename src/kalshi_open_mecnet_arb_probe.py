@@ -42,9 +42,11 @@ async def _get_json(http: httpx.AsyncClient, url: str, **kwargs: Any) -> dict[st
 async def _open_events(http: httpx.AsyncClient) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     cursor = ""
-    for _ in range(20):
+    # The live Events endpoint currently accepts 200 with nested markets; 1000
+    # returns HTTP 400 even though other list endpoints support larger pages.
+    for _ in range(50):
         params: dict[str, Any] = {
-            "limit": 1000,
+            "limit": 200,
             "status": "open",
             "with_nested_markets": "true",
         }
