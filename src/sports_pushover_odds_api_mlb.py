@@ -26,15 +26,42 @@ _ALERTS = SportsPushoverAlerts()
 RULE_STATUS = "FULL_GAME_ONLY; MACHINE_RULE_CERTIFICATION_REQUIRED"
 
 
+async def _soft_prediction_fetch(name: str, awaitable: Any) -> tuple[list[dict[str, Any]], str | None]:
+    """Fail one prediction venue closed without discarding healthy venue data."""
+    try:
+        rows = await awaitable
+        return list(rows), None
+    except Exception as exc:
+        detail = f"{type(exc).__name__}:{str(exc)[:240]}"
+        logger.warning(
+            "SPORTS_PREDICTION_SOURCE_FETCH_ERROR venue=%s detail=%s scan_continues=true stale_fallback=false",
+            name,
+            detail,
+        )
+        return [], detail
+
+
 async def run_once(api_key: str) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=30.0) as http:
-        sportsbook_result, gemini, poly_raw, kalshi = await asyncio.gather(
+        sportsbook_result, gemini_result, poly_result, kalshi_result = await asyncio.gather(
             base.fetch_sportsbooks(http, api_key),
-            base.fetch_gemini_mlb(http),
-            base.fetch_polymarket_mlb(http),
-            base.fetch_kalshi_mlb(http),
+            _soft_prediction_fetch("gemini", base.fetch_gemini_mlb(http)),
+            _soft_prediction_fetch("polymarket", base.fetch_polymarket_mlb(http)),
+            _soft_prediction_fetch("kalshi", base.fetch_kalshi_mlb(http)),
         )
         events, quota = sportsbook_result
+        gemini, gemini_error = gemini_result
+        poly_raw, poly_error = poly_result
+        kalshi, kalshi_error = kalshi_result
+        source_errors = {
+            name: error
+            for name, error in (
+                ("gemini", gemini_error),
+                ("polymarket", poly_error),
+                ("kalshi", kalshi_error),
+            )
+            if error is not None
+        }
         poly = base.full_game_only_events(poly_raw)
         direct, errors, direct_keys = await base.price_counterparts(http, gemini, poly, kalshi)
 
@@ -97,6 +124,12 @@ async def run_once(api_key: str) -> dict[str, Any]:
         "sportsbook_quotes": len(retail),
         "sportsbook_quotes_matching_direct_keys": len(matched_retail),
         "books": dict(Counter(q.venue for q in retail)),
+        "prediction_sources_available": {
+            "gemini": gemini_error is None,
+            "polymarket": poly_error is None,
+            "kalshi": kalshi_error is None,
+        },
+        "prediction_source_errors": source_errors,
         "direct_counterpart_keys": direct_keys,
         "direct_priced_quotes": len(direct_quotes),
         "retail_vs_prediction_positive_locks": len(retail_vs_prediction),
@@ -117,7 +150,7 @@ async def run_once(api_key: str) -> dict[str, Any]:
             "qualification": "FULL_RULES_AUDITED_EXECUTABLE + CERTIFIED_RULE_REGISTRY + positive_after_fee + freshness/skew + material_realert_only",
         },
         "quota": quota,
-        "fetch_error_count": len(errors),
+        "fetch_error_count": len(errors) + len(source_errors),
         "scope_gate": "FULL_GAME_ONLY_HARD_FILTER",
         "rule_gate": RULE_STATUS,
         "read_only": True,
