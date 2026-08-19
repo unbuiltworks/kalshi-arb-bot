@@ -21,6 +21,53 @@ def test_hard_blocker_forces_zero_promotable_score_without_erasing_research_capa
     assert row.promotable_score == Decimal("0")
 
 
+def test_interval_censored_upper_capital_bound_is_used_for_capacity_score():
+    report = rank_sleeves(
+        [
+            {
+                "name": "polled-mlb",
+                "category": "mlb",
+                "venues": ["polymarket_us", "kalshi"],
+                "net_edge_per_dollar": "0.04",
+                "executable_probability": "0.5",
+                "depth_dollars": "10",
+                "capital_lock_hours": "0.25",
+                "capital_lock_hours_upper_bound": "0.5",
+                "settlement_confidence": "1",
+                "basis_risk": "0",
+            }
+        ]
+    )
+    sleeve = report["sleeves"][0]
+    assert sleeve["capacity_score"] == "0.4"
+    assert sleeve["capital_lock_hours"] == "0.25"
+    assert sleeve["capital_lock_hours_upper_bound"] == "0.5"
+    assert sleeve["conservative_capital_lock_hours"] == "0.5"
+    assert sleeve["capital_lock_basis"] == "INTERVAL_CENSORED_UPPER_BOUND"
+
+
+def test_point_estimate_remains_backward_compatible_when_no_upper_bound_exists():
+    report = rank_sleeves(
+        [
+            {
+                "name": "legacy-sleeve",
+                "category": "mlb",
+                "venues": ["polymarket_us", "kalshi"],
+                "net_edge_per_dollar": "0.04",
+                "executable_probability": "0.5",
+                "depth_dollars": "10",
+                "capital_lock_hours": "0.25",
+                "settlement_confidence": "1",
+                "basis_risk": "0",
+            }
+        ]
+    )
+    sleeve = report["sleeves"][0]
+    assert sleeve["capacity_score"] == "0.8"
+    assert sleeve["conservative_capital_lock_hours"] == "0.25"
+    assert sleeve["capital_lock_basis"] == "SUPPLIED_POINT_ESTIMATE"
+
+
 def test_unblocked_sleeve_ranks_above_blocked_larger_raw_capacity():
     report = rank_sleeves(
         [
