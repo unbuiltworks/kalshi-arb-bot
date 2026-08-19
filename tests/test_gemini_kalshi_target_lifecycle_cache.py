@@ -74,3 +74,20 @@ def test_cache_is_exact_ticker_keyed():
     assert row[0] == Decimal("84.125")
     assert row[1] == "TEST"
     assert cache._target_for_ticker("KXSOL15M-26AUG191515-15") is None
+
+
+def test_relevant_filter_accepts_only_supported_crypto_15m_tickers():
+    for ticker in (
+        "KXBTC15M-26AUG191515-15",
+        "KXETH15M-26AUG191515-15",
+        "KXSOL15M-26AUG191515-15",
+        "KXXRP15M-26AUG191515-15",
+    ):
+        assert cache._relevant_crypto_ticker(ticker)
+    assert not cache._relevant_crypto_ticker("KXDOGE15M-26AUG191515-15")
+    assert not cache._relevant_crypto_ticker("KXBTC1H-26AUG191500")
+
+
+def test_remember_rejects_unrelated_lifecycle_market():
+    cache._remember("KXDOGE15M-26AUG191515-15", Decimal("0.22"), "TEST")
+    assert cache._TARGET_BY_TICKER == {}
