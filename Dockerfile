@@ -14,8 +14,8 @@ COPY tests/ tests/
 # matching, hard Polymarket scope guards, Kalshi nested-book pricing, discrete
 # player-prop normalization, sportsbook identity alignment, the event-driven
 # game-line hot layer, read-only Pushover qualification/dedupe, live MLB
-# participation proof, and fail-closed game/prop/team-total rule certification.
-# This gate validates certified prop alerts and the NOT-GUARANTEED rule-risk tier.
+# participation proof, fail-closed game/prop/team-total rule certification,
+# and resilient prediction-source discovery for retail/manual alerts.
 RUN pytest -q \
     tests/test_universal_sports_identity.py \
     tests/test_gemini_sports_adapter.py \
@@ -26,6 +26,7 @@ RUN pytest -q \
     tests/test_three_venue_mlb_hot.py \
     tests/test_the_odds_api_mlb_shadow_identity.py \
     tests/test_sports_pushover_alerts.py \
+    tests/test_sports_pushover_odds_api_mlb_reliability.py \
     tests/test_three_venue_mlb_prop_pushover.py \
     tests/test_three_venue_mlb_prop_rule_risk_pushover.py \
     tests/test_mlb_game_rule_certifications.py \
