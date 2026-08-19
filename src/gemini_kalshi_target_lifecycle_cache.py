@@ -3,8 +3,8 @@
 Primary source: Kalshi ``market_lifecycle_v2`` WebSocket lifecycle pushes. A ``created``
 message can contain the market's numeric strike in ``additional_metadata`` and a later
 ``metadata_updated`` message carries strike changes. We keep one stable authenticated
-lifecycle socket, watch exact current/next BTC/ETH/SOL/XRP tickers, and cache only an
-authoritative numeric floor strike for an exact ticker.
+lifecycle socket and cache only authoritative numeric floor strikes for exact
+BTC/ETH/SOL/XRP 15-minute tickers.
 
 Fallback source: ``GET /markets/{ticker}``, rate-limited with per-ticker exponential
 backoff. The fallback exists for process starts after a lifecycle event was already
@@ -26,8 +26,15 @@ from typing import Any
 import httpx
 import websockets
 
+from config.settings import API_KEY_ID
+from src.auth import auth_headers, load_private_key
 from src import gemini_kalshi_micro_live_readiness_20bp as readiness
-from src import gemini_kalshi_predictive_hot as hot
+from src import gemini_kalshi_predictive_hot as predictive
+from src.gemini_kalshi_btc_ws_shadow import (
+    KALSHI_WS,
+    KALSHI_WS_SIGN_PATH,
+    _ws_header_kw,
+)
 from src.gemini_kalshi_predictive_hot import predicted_pair
 
 basis = readiness.basis
@@ -39,6 +46,9 @@ REST_MAX_BACKOFF_S = 8.0
 REST_PREFETCH_LEAD_S = 20.0
 LIFECYCLE_RECONNECT_INITIAL_S = 0.5
 LIFECYCLE_RECONNECT_MAX_S = 8.0
+CACHE_MAX_ENTRIES = 128
+CACHE_MAX_AGE_MS = 2 * 60 * 60 * 1000
+RELEVANT_ASSETS = ("BTC", "ETH", "SOL", "XRP")
 
 # Exact ticker -> (target, source, receive_ms)
 _TARGET_BY_TICKER: dict[str, tuple[Decimal, str, int]] = {}
@@ -54,6 +64,26 @@ def _dec(value: Any) -> Decimal | None:
     except (InvalidOperation, TypeError, ValueError):
         return None
     return out if out.is_finite() and out > 0 else None
+
+
+def _relevant_crypto_ticker(ticker: str) -> bool:
+    ticker = str(ticker).upper().strip()
+    return any(ticker.startswith(f"KX{asset}15M-") for asset in RELEVANT_ASSETS)
+
+
+def _prune_cache(now_ms: int | None = None) -> None:
+    now = int(time.time() * 1000) if now_ms is None else int(now_ms)
+    stale = [
+        ticker for ticker, (_target, _source, received_ms) in _TARGET_BY_TICKER.items()
+        if now - int(received_ms) > CACHE_MAX_AGE_MS
+    ]
+    for ticker in stale:
+        _TARGET_BY_TICKER.pop(ticker, None)
+    if len(_TARGET_BY_TICKER) <= CACHE_MAX_ENTRIES:
+        return
+    ordered = sorted(_TARGET_BY_TICKER.items(), key=lambda item: item[1][2])
+    for ticker, _row in ordered[: len(_TARGET_BY_TICKER) - CACHE_MAX_ENTRIES]:
+        _TARGET_BY_TICKER.pop(ticker, None)
 
 
 def extract_lifecycle_target(payload: dict[str, Any]) -> tuple[str, Decimal] | None:
@@ -92,11 +122,12 @@ def extract_lifecycle_target(payload: dict[str, Any]) -> tuple[str, Decimal] | N
 
 def _remember(ticker: str, target: Decimal, source: str) -> None:
     ticker = str(ticker).upper().strip()
-    if not ticker or target <= 0:
+    if not ticker or target <= 0 or not _relevant_crypto_ticker(ticker):
         return
     prior = _TARGET_BY_TICKER.get(ticker)
     row = (D(target), str(source), int(time.time() * 1000))
     _TARGET_BY_TICKER[ticker] = row
+    _prune_cache(row[2])
     if prior is None or prior[0] != row[0] or prior[1] != row[1]:
         logger.info(
             "CRYPTO_TARGET_CACHE_UPDATE %s",
@@ -119,14 +150,12 @@ async def _lifecycle_stream() -> None:
     backoff = LIFECYCLE_RECONNECT_INITIAL_S
     while True:
         try:
-            private_key = hot.load_private_key()
-            headers = hot.auth_headers(
-                private_key, "GET", hot.KALSHI_WS_SIGN_PATH, hot.API_KEY_ID
-            )
+            private_key = load_private_key()
+            headers = auth_headers(private_key, "GET", KALSHI_WS_SIGN_PATH, API_KEY_ID)
             async with websockets.connect(
-                hot.KALSHI_WS,
+                KALSHI_WS,
                 open_timeout=5.0,
-                **hot._ws_header_kw(headers),
+                **_ws_header_kw(headers),
             ) as ws:
                 logger.info(
                     "CRYPTO_TARGET_LIFECYCLE_CONNECTED channel=market_lifecycle_v2 order_entry=false"
@@ -159,7 +188,9 @@ async def _lifecycle_stream() -> None:
                     if parsed is None:
                         continue
                     ticker, target = parsed
-                    if ticker in _WATCHED_TICKERS:
+                    # Lifecycle is unfiltered. Keep only exact 15m tickers for the four
+                    # supported assets, even if their creation event arrives >30m early.
+                    if _relevant_crypto_ticker(ticker):
                         event_type = None
                         if isinstance(payload.get("msg"), dict):
                             event_type = payload["msg"].get("event_type")
