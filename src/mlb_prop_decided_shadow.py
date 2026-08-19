@@ -354,7 +354,7 @@ async def _price_candidate(
 async def run_forever() -> None:
     retained = RetainedCandidates()
     tracker = StablePropTracker()
-    last_discovery = 0.0
+    last_discovery: float | None = None
     multipliers: dict[str, Decimal] = {}
 
     async with httpx.AsyncClient(timeout=20.0) as http:
@@ -362,7 +362,9 @@ async def run_forever() -> None:
             cycle_start = time.monotonic()
             now_ms = int(time.time() * 1000)
             discovery_errors: list[str] = []
-            if not retained.values() or cycle_start - last_discovery >= DEFAULT_DISCOVERY_SECONDS:
+            # An empty overlap is a valid discovery result. Do not hammer venue
+            # discovery APIs every two seconds just because the retained set is empty.
+            if last_discovery is None or cycle_start - last_discovery >= DEFAULT_DISCOVERY_SECONDS:
                 try:
                     fresh = await _discover(http)
                     retained.refresh(fresh, cycle_start)
@@ -375,6 +377,7 @@ async def run_forever() -> None:
                                 "fresh_candidates": len(fresh),
                                 "retained_candidates": len(retained.values()),
                                 "retention_seconds": DEFAULT_RETENTION_SECONDS,
+                                "discovery_seconds": DEFAULT_DISCOVERY_SECONDS,
                                 "stable_ms": DEFAULT_STABLE_MS,
                                 "stable_observations": DEFAULT_STABLE_OBSERVATIONS,
                                 "read_only": True,
@@ -384,6 +387,9 @@ async def run_forever() -> None:
                         ),
                     )
                 except Exception as exc:  # keep prior retained universe fail-safe
+                    # Back off after a failed discovery too; stale retained candidates
+                    # remain available and the next discovery happens on schedule.
+                    last_discovery = cycle_start
                     discovery_errors.append(f"{type(exc).__name__}:{exc}")
 
             candidates = retained.values()
