@@ -13,6 +13,11 @@ The report keeps theoretical shadow economics and later-settled paper realized P
 strictly separate. Synthetic simultaneous fills are useful capacity evidence, but are
 not realized economics until both venue outcomes have been observed and reconciled.
 
+When polling-based episode analysis supplies an interval-censored upper bound for
+capital lock time, portfolio ranking uses that upper bound rather than the optimistic
+last-seen lower bound. This prevents scanner cadence from mechanically inflating the
+capacity score.
+
 No venue clients, credentials, or order-entry paths exist in this module.
 """
 from __future__ import annotations
@@ -49,16 +54,32 @@ class Sleeve:
     settled_paper_trade_groups: int = 0
     realized_paper_profit_dollars: Decimal = D("0")
     settlement_window_verified: bool = False
+    capital_lock_hours_upper_bound: Decimal | None = None
+
+    @property
+    def conservative_capital_lock_hours(self) -> Decimal:
+        upper = self.capital_lock_hours_upper_bound
+        if upper is not None and upper > 0:
+            return upper
+        return self.capital_lock_hours
+
+    @property
+    def capital_lock_basis(self) -> str:
+        upper = self.capital_lock_hours_upper_bound
+        if upper is not None and upper > 0:
+            return "INTERVAL_CENSORED_UPPER_BOUND"
+        return "SUPPLIED_POINT_ESTIMATE"
 
     @property
     def capacity_score(self) -> Decimal:
-        if self.capital_lock_hours <= 0:
+        lock_hours = self.conservative_capital_lock_hours
+        if lock_hours <= 0:
             return D("0")
         return (
             max(D("0"), self.net_edge_per_dollar)
             * min(D("1"), max(D("0"), self.executable_probability))
             * max(D("0"), self.depth_dollars)
-            / self.capital_lock_hours
+            / lock_hours
         )
 
     @property
@@ -97,6 +118,7 @@ class Sleeve:
 
 
 def sleeve_from_mapping(row: dict[str, Any]) -> Sleeve:
+    upper_raw = row.get("capital_lock_hours_upper_bound")
     return Sleeve(
         name=str(row["name"]),
         category=str(row.get("category") or "unknown"),
@@ -115,6 +137,7 @@ def sleeve_from_mapping(row: dict[str, Any]) -> Sleeve:
         settled_paper_trade_groups=int(row.get("settled_paper_trade_groups") or 0),
         realized_paper_profit_dollars=_d(row.get("realized_paper_profit_dollars")),
         settlement_window_verified=bool(row.get("settlement_window_verified", False)),
+        capital_lock_hours_upper_bound=(None if upper_raw in (None, "") else _d(upper_raw)),
     )
 
 
@@ -133,6 +156,13 @@ def _serialize(sleeve: Sleeve, rank: int) -> dict[str, Any]:
         "executable_probability": str(sleeve.executable_probability),
         "depth_dollars": str(sleeve.depth_dollars),
         "capital_lock_hours": str(sleeve.capital_lock_hours),
+        "capital_lock_hours_upper_bound": (
+            str(sleeve.capital_lock_hours_upper_bound)
+            if sleeve.capital_lock_hours_upper_bound is not None
+            else None
+        ),
+        "conservative_capital_lock_hours": str(sleeve.conservative_capital_lock_hours),
+        "capital_lock_basis": sleeve.capital_lock_basis,
         "settlement_confidence": str(sleeve.settlement_confidence),
         "basis_risk": str(sleeve.basis_risk),
         "hard_blockers": list(sleeve.hard_blockers),
@@ -176,7 +206,8 @@ def rank_sleeves(rows: Iterable[dict[str, Any] | Sleeve]) -> dict[str, Any]:
         "order_entry": False,
         "target_note": "$480/day is a research capacity target only, never a forecast.",
         "ranking_note": (
-            "Capacity score = net edge per dollar × executable probability × displayed/consumable depth dollars ÷ capital lock hours. "
+            "Capacity score = net edge per dollar × executable probability × displayed/consumable depth dollars ÷ conservative capital lock hours. "
+            "When polling supplies interval-censored lock duration, the upper-bound capital lock is used for ranking rather than the optimistic last-seen lower bound. "
             "Settlement confidence and basis risk are applied separately; hard blockers force promotable_score to zero. "
             "Theoretical shadow $/day is withheld unless observed_hours covers the full scanner window. "
             "Realized paper $/day is reported separately and only after venue-specific settlements are reconciled for that verified window."
