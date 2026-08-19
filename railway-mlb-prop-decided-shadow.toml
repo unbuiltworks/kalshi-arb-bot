@@ -1,3 +1,4 @@
+# Dedicated read-only MLB decided-prop research service.
 [deploy]
 startCommand = "python -m src.mlb_prop_decided_shadow"
 restartPolicyType = "ALWAYS"
