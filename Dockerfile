@@ -12,7 +12,8 @@ COPY tests/ tests/
 
 # Branch gate: canonical identity, structured Gemini normalization, exact three-venue
 # matching, hard Polymarket scope guards, Kalshi nested-book pricing, discrete
-# player-prop normalization, and the event-driven game-line hot layer.
+# player-prop normalization, event-driven game-line hot layer, and the fail-closed
+# K/G/P one-contract micro-live policy.
 RUN pytest -q \
     tests/test_universal_sports_identity.py \
     tests/test_gemini_sports_adapter.py \
@@ -21,6 +22,7 @@ RUN pytest -q \
     tests/test_three_venue_mlb_snapshot_pricing.py \
     tests/test_three_venue_mlb_prop_safe_scan.py \
     tests/test_three_venue_mlb_hot.py \
+    tests/test_sports_kgp_micro_policy.py \
  && python -m py_compile \
     src/eventing_books.py \
     src/three_venue_mlb_snapshot_pricing.py \
@@ -28,7 +30,8 @@ RUN pytest -q \
     src/three_venue_mlb_supervisor.py \
     src/three_venue_mlb_prop_safe_scan.py \
     src/three_venue_mlb_prop_supervisor.py \
-    src/three_venue_mlb_hot.py
+    src/three_venue_mlb_hot.py \
+    src/sports_kgp_micro_policy.py
 
 # Default remains the public/read-only REST scanner. Railway overrides this per
 # isolated service for prop and WebSocket hot shards.
