@@ -36,3 +36,15 @@ def test_hot_payload_fails_closed_on_stale_or_low_profit_quotes():
     assert sharded._is_hot_payload(_payload(quote_skew_ms=51)) is False
     assert sharded._is_hot_payload(_payload(gemini_age_ms=101)) is False
     assert sharded._is_hot_payload(_payload(kalshi_age_ms=101)) is False
+
+
+def test_hot_payload_rejects_negative_timing_telemetry():
+    assert sharded._is_hot_payload(_payload(quote_skew_ms=-1)) is False
+    assert sharded._is_hot_payload(_payload(gemini_age_ms=-1)) is False
+    assert sharded._is_hot_payload(_payload(kalshi_age_ms=-1)) is False
+
+
+def test_hot_payload_rejects_nonfinite_profit():
+    assert sharded._is_hot_payload(_payload(recomputed_payload_locked_profit="inf")) is False
+    assert sharded._is_hot_payload(_payload(recomputed_payload_locked_profit="-inf")) is False
+    assert sharded._is_hot_payload(_payload(recomputed_payload_locked_profit="nan")) is False
