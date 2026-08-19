@@ -15,8 +15,10 @@ not realized economics until both venue outcomes have been observed and reconcil
 
 When polling-based episode analysis supplies an interval-censored upper bound for
 capital lock time, portfolio ranking uses that upper bound rather than the optimistic
-last-seen lower bound. This prevents scanner cadence from mechanically inflating the
-capacity score.
+last-seen lower bound. If an upstream censor-aware analyzer explicitly supplies the
+upper-bound field but cannot provide a finite bound (for example because an episode is
+still right-censored at log end), ranking is withheld rather than silently falling back
+to the optimistic point estimate.
 
 No venue clients, credentials, or order-entry paths exist in this module.
 """
@@ -55,12 +57,18 @@ class Sleeve:
     realized_paper_profit_dollars: Decimal = D("0")
     settlement_window_verified: bool = False
     capital_lock_hours_upper_bound: Decimal | None = None
+    capital_lock_upper_bound_supplied: bool = False
 
     @property
     def conservative_capital_lock_hours(self) -> Decimal:
         upper = self.capital_lock_hours_upper_bound
         if upper is not None and upper > 0:
             return upper
+        # Important distinction: missing legacy field means the caller only has a
+        # point estimate; an explicitly supplied-but-null upper bound means a
+        # censor-aware analyzer has told us no finite conservative denominator exists.
+        if self.capital_lock_upper_bound_supplied:
+            return D("0")
         return self.capital_lock_hours
 
     @property
@@ -68,6 +76,8 @@ class Sleeve:
         upper = self.capital_lock_hours_upper_bound
         if upper is not None and upper > 0:
             return "INTERVAL_CENSORED_UPPER_BOUND"
+        if self.capital_lock_upper_bound_supplied:
+            return "RIGHT_CENSORED_OR_INVALID_UPPER_BOUND_WITHHELD"
         return "SUPPLIED_POINT_ESTIMATE"
 
     @property
@@ -118,6 +128,7 @@ class Sleeve:
 
 
 def sleeve_from_mapping(row: dict[str, Any]) -> Sleeve:
+    upper_bound_supplied = "capital_lock_hours_upper_bound" in row
     upper_raw = row.get("capital_lock_hours_upper_bound")
     return Sleeve(
         name=str(row["name"]),
@@ -138,6 +149,7 @@ def sleeve_from_mapping(row: dict[str, Any]) -> Sleeve:
         realized_paper_profit_dollars=_d(row.get("realized_paper_profit_dollars")),
         settlement_window_verified=bool(row.get("settlement_window_verified", False)),
         capital_lock_hours_upper_bound=(None if upper_raw in (None, "") else _d(upper_raw)),
+        capital_lock_upper_bound_supplied=upper_bound_supplied,
     )
 
 
@@ -161,6 +173,7 @@ def _serialize(sleeve: Sleeve, rank: int) -> dict[str, Any]:
             if sleeve.capital_lock_hours_upper_bound is not None
             else None
         ),
+        "capital_lock_upper_bound_supplied": sleeve.capital_lock_upper_bound_supplied,
         "conservative_capital_lock_hours": str(sleeve.conservative_capital_lock_hours),
         "capital_lock_basis": sleeve.capital_lock_basis,
         "settlement_confidence": str(sleeve.settlement_confidence),
@@ -208,6 +221,7 @@ def rank_sleeves(rows: Iterable[dict[str, Any] | Sleeve]) -> dict[str, Any]:
         "ranking_note": (
             "Capacity score = net edge per dollar × executable probability × displayed/consumable depth dollars ÷ conservative capital lock hours. "
             "When polling supplies interval-censored lock duration, the upper-bound capital lock is used for ranking rather than the optimistic last-seen lower bound. "
+            "If a censor-aware caller explicitly supplies no finite upper bound (for example a right-censored active episode), capacity ranking is withheld instead of falling back to the point estimate. "
             "Settlement confidence and basis risk are applied separately; hard blockers force promotable_score to zero. "
             "Theoretical shadow $/day is withheld unless observed_hours covers the full scanner window. "
             "Realized paper $/day is reported separately and only after venue-specific settlements are reconciled for that verified window."
