@@ -2,6 +2,7 @@ from dataclasses import replace
 from decimal import Decimal
 
 from src.mlb_prop_rule_certifications import (
+    AUDIT_DATE,
     PROFILES,
     PropCertificationStatus,
     PropVenueProfile,
@@ -45,6 +46,7 @@ def _batter_proof() -> ParticipationProof:
 
 def test_static_prop_matrix_covers_four_families_and_nine_pairs_each():
     matrix = prop_audit_matrix()
+    assert AUDIT_DATE == "2026-08-19"
     assert len(matrix["families"]) == 4
     assert matrix["total_pairs"] == 36
     assert matrix["certified_pairs"] == 0
@@ -56,6 +58,37 @@ def test_static_prop_matrix_covers_four_families_and_nine_pairs_each():
         assert row["certified_pairs"] == 0
 
 
+def test_kalshi_profiles_are_now_fully_fingerprinted_but_not_pair_certification():
+    for family in (
+        "baseball_player_hits",
+        "baseball_player_hits_runs_rbis",
+        "baseball_player_total_bases",
+        "baseball_player_strikeouts",
+    ):
+        profile = PROFILES[("kalshi", family)]
+        assert profile.complete is True
+        assert "48h" in profile.interruption
+        assert "post_conclusion_corrections_do_not_change_contract" in profile.stat_corrections
+        assert profile.source_ref.startswith("https://assets.kalshi.com/contract_terms/")
+
+
+def test_kalshi_pitcher_fingerprint_uses_batter_faced_not_one_pitch():
+    profile = PROFILES[("kalshi", "baseball_player_strikeouts")]
+    assert profile.participation_rule == "lfmp_unless_starting_pitcher_and_batter_faced"
+    assert "pitch_recorded" not in profile.participation_rule
+
+
+def test_polymarket_profiles_capture_live_rules_but_remain_incomplete():
+    hits = PROFILES[("polymarket", "baseball_player_hits")]
+    total_bases = PROFILES[("polymarket", "baseball_player_total_bases")]
+    assert hits.complete is False
+    assert hits.participation_rule == "lfmp_unless_starting_lineup_and_plate_appearance"
+    assert "two_calendar_day" in hits.interruption
+    assert "post_game_stat_correction_window_not_explicit" in hits.stat_corrections
+    assert total_bases.complete is False
+    assert "shortened_official_result_rule_not_explicit" in total_bases.interruption
+
+
 def test_kalshi_polymarket_batter_pair_waits_for_live_participation():
     result = assess_prop_pair("kalshi", "polymarket", "baseball_player_hits")
     assert result.status is PropCertificationStatus.PARTICIPATION_PENDING
@@ -64,13 +97,19 @@ def test_kalshi_polymarket_batter_pair_waits_for_live_participation():
     assert result.execution_eligible is False
 
 
-def test_live_plate_appearance_removes_only_participation_blocker():
+def test_live_plate_appearance_exposes_specific_remaining_kp_blockers():
     result = assess_prop_pair(
         "kalshi", "polymarket", "baseball_player_hits", _batter_proof()
     )
     assert result.participation_proven is True
     assert "participation" not in result.remaining_blockers
-    assert "complete_lifecycle_fingerprint_required" in result.remaining_blockers
+    assert set(result.remaining_blockers) == {
+        "official_source",
+        "interruption",
+        "cancellation",
+        "stat_corrections",
+        "complete_lifecycle_fingerprint_required",
+    }
     assert result.status is PropCertificationStatus.UNAUDITED
     assert result.execution_eligible is False
 
@@ -85,7 +124,10 @@ def test_gemini_pair_remains_fail_closed_after_participation():
     assert result.execution_eligible is False
 
 
-def test_pitcher_requires_start_and_pitch_before_participation_is_proven():
+def test_pitcher_requires_start_and_pitch_before_legacy_participation_gate_is_proven():
+    # The venue fingerprint now records Kalshi's exact >=1 batter-faced rule.  The
+    # legacy proof field is still named pitch_recorded until MLB boxscore plumbing
+    # is migrated in a separate fail-closed change.
     partial = ParticipationProof(
         starting_pitcher=True,
         source="MLB_STATS_API_GAME_123",
