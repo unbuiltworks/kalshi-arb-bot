@@ -2,8 +2,8 @@
 
 Prefer exact Gemini<->Kalshi matched contracts, but fall back to current Gemini-only
 contracts for a stat family when the paired venue does not list one at this instant.
-For public PDF terms, extract a compact keyword-focused text fingerprint so lifecycle
-semantics can be audited without treating the event-card summary as exhaustive.
+For public PDF terms, extract text plus a keyword-focused fingerprint so lifecycle
+semantics can be audited against the paired Kalshi series.
 
 No authentication and no order entry.
 """
@@ -31,7 +31,7 @@ STAT_TO_FAMILY = {
     "total_bases": "baseball_player_total_bases",
     "strikeouts": "baseball_player_strikeouts",
 }
-MAX_PER_STAT = 3
+MAX_PER_STAT = 1
 MAX_TERMS_CHARS = 18000
 RULE_KEYWORDS = (
     "source agency", "official", "appear", "active", "start", "plate appearance",
@@ -84,6 +84,7 @@ def _pdf_fingerprint(content: bytes) -> dict[str, Any]:
         "pdf_sha256": sha256(content).hexdigest(),
         "pdf_extracted_chars": len(full),
         "pdf_rule_excerpt": _compact_text("\n".join(chosen)),
+        "pdf_full_text": _compact_text(full),
     }
 
 
@@ -177,6 +178,8 @@ async def main() -> None:
         join = join_by_symbol.get(symbol, {})
         fallback = normalized_meta.get(symbol, {})
         url = _terms_url(contract)
+        terms = dict(terms_by_url.get(url, {"status": "NO_TERMS_URL"}))
+        full_text = terms.pop("pdf_full_text", None)
         print(json.dumps({
             "status": "GEMINI_MLB_PROP_TERMS_FINGERPRINT",
             "selection_source": selection_source.get(symbol),
@@ -195,11 +198,20 @@ async def main() -> None:
             "contract_description": contract.get("description"),
             "strike": contract.get("strike"),
             "terms_url": url,
-            "terms_fetch": terms_by_url.get(url, {"status": "NO_TERMS_URL"}),
+            "terms_fetch": terms,
             "contract_keys": sorted(str(key) for key in contract.keys()),
             "read_only": True,
             "order_entry": False,
         }, separators=(",", ":"), default=str), flush=True)
+        if full_text:
+            print(json.dumps({
+                "status": "GEMINI_MLB_PROP_TERMS_PDF_TEXT",
+                "symbol": symbol,
+                "terms_url": url,
+                "pdf_full_text": full_text,
+                "read_only": True,
+                "order_entry": False,
+            }, separators=(",", ":"), default=str), flush=True)
 
     print(json.dumps({
         "status": "GEMINI_MLB_PROP_TERMS_PROBE_SUMMARY",
