@@ -1,18 +1,19 @@
 """Read-only post-Final Gemini <-> Kalshi MLB hits settlement-lag monitor.
 
-This lane is intentionally *not* called arbitrage.  The audited venue rules differ
+This lane is intentionally *not* called arbitrage. The audited venue rules differ
 before/during the game and retain one post-game difference: Kalshi treats player
 statistics as final at game conclusion, while Gemini's MLB Hits series uses the
 Source Agency value at its Expiration Time (one hour after official final stats) and
 can therefore reflect a pre-expiration scoring revision.
 
-The monitor asks a narrower empirical question: after MLB reports Final, the player
-was a Kalshi-qualifying starter with >=1 PA, and the same official hit total is stable
-for >=60 seconds / >=3 observations, do either venue's still-open executable quotes
-offer the currently-known winning side at a positive after-fee discount to $1?
+After MLB reports Final, a Kalshi-qualifying starter has >=1 PA, and the same official
+hit total is stable for >=60 seconds / >=3 observations, this monitor asks whether a
+still-open executable quote offers the currently-known winning side at a positive
+after-fee discount to $1. Identities refresh every 30 seconds; executable Gemini and
+KXMLBHIT books refresh every cycle and are never replaced with stale price snapshots.
 
-Those observations are labelled FINAL_STAT_CORRECTION_RISK_RESEARCH_ONLY.  No order
-transport is imported and no signal is execution eligible.
+Signals are FINAL_STAT_CORRECTION_RISK_RESEARCH_ONLY. No order transport is imported
+and no signal is execution eligible.
 """
 from __future__ import annotations
 
@@ -30,7 +31,7 @@ import httpx
 from src.gemini_kalshi_mlb_prop_shadow import _candidate_sides
 from src.mlb_live_participation import fetch_game_boxscores, participation_proof, _norm_name
 from src.sports_pushover_alerts import SportsPushoverAlerts
-from src.strict_mlb_prop_snapshot import _fetch_kalshi_events
+from src.strict_mlb_prop_snapshot import KALSHI
 from src.three_venue_mlb_prop_safe_scan import _price_sides
 from src.universal_three_venue_sports import fetch_gemini_mlb
 
@@ -74,7 +75,6 @@ def _game_date(game_slug: str) -> str:
 
 
 def _game_teams(game_slug: str) -> tuple[str, str] | None:
-    # Synthetic direct-GK slugs are always: mlb-AAA-BBB-YYYY-MM-DD.
     parts = game_slug.split("-")
     if len(parts) < 6 or parts[0] != "mlb":
         return None
@@ -104,18 +104,27 @@ def _hits_for_player(game: dict[str, Any], player_name: str) -> int | None:
     return None
 
 
+async def _fetch_kalshi_hits(http: httpx.AsyncClient) -> list[dict[str, Any]]:
+    response = await http.get(
+        f"{KALSHI}/events",
+        params={
+            "limit": 200,
+            "status": "open",
+            "series_ticker": "KXMLBHIT",
+            "with_nested_markets": "true",
+        },
+    )
+    response.raise_for_status()
+    body = response.json()
+    return [row for row in body.get("events") or [] if isinstance(row, dict)]
+
+
 def _winner_edge(priced: Any, outcome: str) -> dict[str, Any] | None:
     quote = priced.quote
     if outcome == "YES":
-        cost = quote.yes_cost
-        depth = quote.yes_depth
-        raw_ask = priced.raw_yes_ask
-        fee = priced.yes_fee
+        cost, depth, raw_ask, fee = quote.yes_cost, quote.yes_depth, priced.raw_yes_ask, priced.yes_fee
     else:
-        cost = quote.no_cost
-        depth = quote.no_depth
-        raw_ask = priced.raw_no_ask
-        fee = priced.no_fee
+        cost, depth, raw_ask, fee = quote.no_cost, quote.no_depth, priced.raw_no_ask, priced.no_fee
     if depth < 1:
         return None
     profit = D("1") - cost
@@ -174,7 +183,7 @@ async def run_forever() -> None:
     alerts = SportsPushoverAlerts()
     sent: set[str] = set()
     last_discovery = 0.0
-    cached: tuple[list[Any], dict[str, dict[str, str]], list[dict[str, Any]], list[dict[str, Any]]] | None = None
+    cached: tuple[list[Any], dict[str, dict[str, str]]] | None = None
     cycle = 0
 
     async with httpx.AsyncClient(timeout=20.0) as http:
@@ -184,20 +193,25 @@ async def run_forever() -> None:
             now_ms = int(time.time() * 1000)
             errors: list[str] = []
 
-            if cached is None or started - last_discovery >= DISCOVERY_SECONDS:
+            # Prices must be fresh even when identity discovery is cached. Fail closed
+            # for this cycle if either live venue snapshot cannot be refreshed.
+            try:
+                gemini_events, kalshi_hit_events = await asyncio.gather(
+                    fetch_gemini_mlb(http), _fetch_kalshi_hits(http)
+                )
+                price_snapshot_fresh = True
+            except Exception as exc:
+                gemini_events, kalshi_hit_events = [], []
+                price_snapshot_fresh = False
+                errors.append(f"LIVE_PRICE_SNAPSHOT:{type(exc).__name__}")
+
+            if price_snapshot_fresh and (cached is None or started - last_discovery >= DISCOVERY_SECONDS):
                 try:
-                    gemini_events, kalshi_events = await asyncio.gather(
-                        fetch_gemini_mlb(http), _fetch_kalshi_events(http)
-                    )
-                    sides, _venues, joins, context = _candidate_sides(kalshi_events, gemini_events)
-                    # Current direct overlap is Hits only; keep this lane explicitly narrow.
-                    hit_keys = {
-                        key for key, row in context.items()
-                        if row.get("family") == "baseball_player_hits"
-                    }
+                    sides, _venues, _joins, context = _candidate_sides(kalshi_hit_events, gemini_events)
+                    hit_keys = {key for key, row in context.items() if row.get("family") == "baseball_player_hits"}
                     sides = [side for side in sides if side.contract_key in hit_keys]
                     context = {key: row for key, row in context.items() if key in hit_keys}
-                    cached = (sides, context, gemini_events, kalshi_events)
+                    cached = (sides, context)
                     last_discovery = started
                     logger.info("MLB_GK_FINAL_LAG_READY %s", json.dumps({
                         "exact_hit_keys": len(context),
@@ -213,8 +227,9 @@ async def run_forever() -> None:
             signals: list[dict[str, Any]] = []
             final_keys = 0
             stable_final_keys = 0
+            priced_quotes = 0
             if cached is not None:
-                sides, context, gemini_events, kalshi_events = cached
+                sides, context = cached
                 dates = {_game_date(row["game_slug"]) for row in context.values()}
                 try:
                     games = await fetch_game_boxscores(http, dates)
@@ -222,22 +237,22 @@ async def run_forever() -> None:
                     games = {}
                     errors.append(f"MLB:{type(exc).__name__}")
 
-                # Refresh current executable top books every cycle.  The helper uses
-                # current Gemini event best quotes and Kalshi nested top-of-book, caps
-                # discovery depth at q=1, and includes conservative fees.
-                try:
-                    priced, price_errors = await _price_sides(http, sides, gemini_events, kalshi_events)
-                    if price_errors:
-                        errors.extend(f"PRICE:{row.get('venue')}:{row.get('error')}" for row in price_errors[:5])
-                except Exception as exc:
+                if price_snapshot_fresh:
+                    try:
+                        priced, price_errors = await _price_sides(http, sides, gemini_events, kalshi_hit_events)
+                        priced_quotes = len(priced)
+                        if price_errors:
+                            errors.extend(f"PRICE:{row.get('venue')}:{row.get('error')}" for row in price_errors[:5])
+                    except Exception as exc:
+                        priced = []
+                        errors.append(f"PRICE:{type(exc).__name__}")
+                else:
                     priced = []
-                    errors.append(f"PRICE:{type(exc).__name__}")
                 priced_by_key: dict[str, list[Any]] = defaultdict(list)
                 for row in priced:
                     priced_by_key[row.quote.settlement_key].append(row)
 
-                # One representative normalized side per key supplies exact threshold.
-                representative = {}
+                representative: dict[str, Any] = {}
                 for side in sides:
                     representative.setdefault(side.contract_key, side)
 
@@ -255,7 +270,6 @@ async def run_forever() -> None:
                         poly_slug=row["game_slug"],
                         games=games,
                     )
-                    # Kalshi only has a determined stat branch after starter + PA.
                     if not (proof.started and proof.plate_appearance_recorded and proof.source):
                         continue
                     hits = _hits_for_player(game, row["player"])
@@ -272,9 +286,8 @@ async def run_forever() -> None:
                         continue
                     stable_final_keys += 1
                     edges = [
-                        edge for edge in (
-                            _winner_edge(p, outcome) for p in priced_by_key.get(key, [])
-                        ) if edge is not None
+                        edge for edge in (_winner_edge(p, outcome) for p in priced_by_key.get(key, []))
+                        if edge is not None
                     ]
                     edges.sort(key=lambda edge: D(edge["modeled_known_winner_profit"]), reverse=True)
                     if not edges:
@@ -305,15 +318,18 @@ async def run_forever() -> None:
                     logger.info("MLB_GK_FINAL_LAG_SIGNAL %s", json.dumps(payload, separators=(",", ":"), default=str))
                     await _maybe_alert(alerts, payload, sent)
 
+            best_profit = None
+            if signals:
+                best_profit = max(D(signal["best_edge"]["modeled_known_winner_profit"]) for signal in signals)
             logger.info("MLB_GK_FINAL_LAG_HEARTBEAT %s", json.dumps({
                 "cycle": cycle,
                 "exact_hit_keys": 0 if cached is None else len(cached[1]),
+                "fresh_price_snapshot": price_snapshot_fresh,
+                "priced_quotes": priced_quotes,
                 "final_keys": final_keys,
                 "stable_final_keys": stable_final_keys,
                 "positive_known_winner_signals": len(signals),
-                "best_modeled_profit": None if not signals else max(
-                    signal["best_edge"]["modeled_known_winner_profit"] for signal in signals
-                ),
+                "best_modeled_profit": None if best_profit is None else str(best_profit),
                 "pushover_configured": alerts.configured,
                 "errors": errors[:10],
                 "cycle_ms": round((time.monotonic() - started) * 1000, 3),
