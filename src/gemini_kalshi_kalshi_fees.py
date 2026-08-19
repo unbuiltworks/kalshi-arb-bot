@@ -1,13 +1,19 @@
-"""Read-only Kalshi fee handling for 15-minute crypto series.
+"""Read-only Kalshi event-contract fee handling.
 
 Kalshi's public Series API exposes the active ``fee_type`` and
 ``fee_multiplier`` and the fee-changes endpoint exposes scheduled updates.
-For the documented ``quadratic`` fee type we map the published taker formula:
+The current July 7, 2026 exchange fee schedule publishes the standard taker
+formula as::
 
-    ceil_cent(0.07 * fee_multiplier * contracts * price * (1 - price))
+    round_up(M * 0.07 * C * P * (1-P))
 
-Unknown fee types continue to fail closed. This module contains no order-entry
-path and is intended only for execution-shadow accounting.
+where the resulting fee/position total is rounded to a *centicent* ($0.0001),
+not to a full cent.  Older research code rounded each fee to $0.01 and therefore
+overstated q=1 trading costs.  This module now uses the current centicent
+precision for fee-sensitive shadow accounting.
+
+Unknown fee structures remain fail-closed. This module contains no order-entry
+path.
 """
 
 from __future__ import annotations
@@ -27,12 +33,14 @@ D = Decimal
 FeeFn = Callable[[Decimal, Decimal], Decimal]
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_kalshi_fees")
 SERIES = ("KXBTC15M", "KXETH15M", "KXSOL15M", "KXXRP15M")
+CENTICENT = D("0.0001")
 
 
-def _ceil_cent(value: Decimal) -> Decimal:
+def _ceil_centicent(value: Decimal) -> Decimal:
+    """Round a non-negative dollar amount upward to $0.0001."""
     if value < 0:
         raise ValueError("fee cannot be negative")
-    return (value * D("100")).to_integral_value(rounding=ROUND_CEILING) / D("100")
+    return (value / CENTICENT).to_integral_value(rounding=ROUND_CEILING) * CENTICENT
 
 
 def kalshi_quadratic_taker_fee(
@@ -43,17 +51,34 @@ def kalshi_quadratic_taker_fee(
 ) -> Decimal:
     """Published Kalshi quadratic taker fee at total-order level.
 
-    The standard quadratic coefficient is 0.07. ``fee_multiplier`` comes from
-    the live Series API and scales that coefficient. Total-order fee is rounded
-    up to the next cent, matching Kalshi's published schedule for standard
-    cent-priced event contracts. Fractional/subpenny fill-level rounding is a
-    separate execution detail and should be measured from actual fills before
-    any live-trading claim.
+    ``fee_multiplier`` is resolved from the live Series/Event metadata. For the
+    cent/sub-cent event-contract prices used by the scanners, rounding the raw fee
+    upward to a centicent matches the current exchange schedule's fee precision.
     """
     if quantity < 0 or price < 0 or price > 1 or fee_multiplier < 0:
         raise ValueError("invalid Kalshi fee inputs")
-    return _ceil_cent(
+    return _ceil_centicent(
         D("0.07") * fee_multiplier * quantity * price * (D("1") - price)
+    )
+
+
+def kalshi_quadratic_maker_fee(
+    price: Decimal,
+    quantity: Decimal,
+    *,
+    maker_fee_multiplier: Decimal = D("0"),
+) -> Decimal:
+    """Published Kalshi maker-fee curve, fail-safe defaulting to no maker fee.
+
+    The current exchange schedule uses coefficient 0.0175 and a maker multiplier
+    that defaults to zero unless the relevant series is explicitly included in
+    the Maker Fees section. Callers must resolve that maker multiplier from an
+    authoritative exact-series fee source before using a non-zero value.
+    """
+    if quantity < 0 or price < 0 or price > 1 or maker_fee_multiplier < 0:
+        raise ValueError("invalid Kalshi maker-fee inputs")
+    return _ceil_centicent(
+        D("0.0175") * maker_fee_multiplier * quantity * price * (D("1") - price)
     )
 
 
