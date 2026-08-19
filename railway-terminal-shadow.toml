@@ -1,0 +1,3 @@
+[deploy]
+startCommand = "python -m src.mlb_terminal_total_shadow_v2"
+restartPolicyType = "ALWAYS"
