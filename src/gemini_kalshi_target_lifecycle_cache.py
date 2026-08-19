@@ -1,9 +1,10 @@
 """Fail-closed Kalshi 15m strike cache for the live crypto campaign.
 
-Primary source: Kalshi ``market_lifecycle_v2`` WebSocket metadata updates. Kalshi's
-current API emits ``metadata_updated`` when ``floor_strike`` changes. We keep one
-stable authenticated lifecycle socket, watch the exact current/next BTC/ETH/SOL/XRP
-tickers, and cache only an authoritative numeric floor strike for an exact ticker.
+Primary source: Kalshi ``market_lifecycle_v2`` WebSocket lifecycle pushes. A ``created``
+message can contain the market's numeric strike in ``additional_metadata`` and a later
+``metadata_updated`` message carries strike changes. We keep one stable authenticated
+lifecycle socket, watch exact current/next BTC/ETH/SOL/XRP tickers, and cache only an
+authoritative numeric floor strike for an exact ticker.
 
 Fallback source: ``GET /markets/{ticker}``, rate-limited with per-ticker exponential
 backoff. The fallback exists for process starts after a lifecycle event was already
@@ -56,15 +57,21 @@ def _dec(value: Any) -> Decimal | None:
 
 
 def extract_lifecycle_target(payload: dict[str, Any]) -> tuple[str, Decimal] | None:
-    """Extract only an exact market ticker + authoritative numeric floor strike.
+    """Extract only an exact ticker + authoritative numeric floor strike.
 
-    Kalshi's lifecycle schema has evolved, so accept the documented top-level
-    ``floor_strike`` shape as well as the common nested ``msg`` envelope. Never parse
-    titles/subtitles or derive a value from text.
+    ``created`` lifecycle messages place initial strike metadata under
+    ``msg.additional_metadata``. ``metadata_updated`` messages place the changed strike
+    directly in ``msg``. We accept both documented shapes and never parse titles,
+    subtitles, or other human-readable text.
     """
     if not isinstance(payload, dict):
         return None
     msg = payload.get("msg") if isinstance(payload.get("msg"), dict) else {}
+    additional = (
+        msg.get("additional_metadata")
+        if isinstance(msg.get("additional_metadata"), dict)
+        else {}
+    )
     ticker = str(
         msg.get("market_ticker")
         or msg.get("ticker")
@@ -72,11 +79,12 @@ def extract_lifecycle_target(payload: dict[str, Any]) -> tuple[str, Decimal] | N
         or payload.get("ticker")
         or ""
     ).upper().strip()
-    target = _dec(
-        msg.get("floor_strike")
-        if msg.get("floor_strike") is not None
-        else payload.get("floor_strike")
-    )
+    raw_target = msg.get("floor_strike")
+    if raw_target is None:
+        raw_target = additional.get("floor_strike")
+    if raw_target is None:
+        raw_target = payload.get("floor_strike")
+    target = _dec(raw_target)
     if not ticker or target is None:
         return None
     return ticker, target
@@ -108,10 +116,10 @@ def _target_for_ticker(ticker: str) -> tuple[Decimal, str, int] | None:
 
 async def _lifecycle_stream() -> None:
     """One stable lifecycle socket; reconnect with backoff and never place orders."""
-    private_key = hot.load_private_key()
     backoff = LIFECYCLE_RECONNECT_INITIAL_S
     while True:
         try:
+            private_key = hot.load_private_key()
             headers = hot.auth_headers(
                 private_key, "GET", hot.KALSHI_WS_SIGN_PATH, hot.API_KEY_ID
             )
@@ -120,23 +128,46 @@ async def _lifecycle_stream() -> None:
                 open_timeout=5.0,
                 **hot._ws_header_kw(headers),
             ) as ws:
+                logger.info(
+                    "CRYPTO_TARGET_LIFECYCLE_CONNECTED channel=market_lifecycle_v2 order_entry=false"
+                )
                 await ws.send(json.dumps({
                     "id": 9101,
                     "cmd": "subscribe",
                     "params": {"channels": ["market_lifecycle_v2"]},
                 }, separators=(",", ":")))
-                logger.info(
-                    "CRYPTO_TARGET_LIFECYCLE_CONNECTED channel=market_lifecycle_v2 order_entry=false"
-                )
                 backoff = LIFECYCLE_RECONNECT_INITIAL_S
+                control_logged = 0
                 async for raw in ws:
                     payload = json.loads(raw)
+                    typ = str(payload.get("type") or "")
+                    if typ == "error":
+                        msg = payload.get("msg") if isinstance(payload.get("msg"), dict) else {}
+                        raise RuntimeError(
+                            f"market_lifecycle_v2 subscription error code={msg.get('code')} msg={str(msg.get('msg'))[:120]}"
+                        )
+                    if typ != "market_lifecycle_v2" and control_logged < 3:
+                        msg = payload.get("msg") if isinstance(payload.get("msg"), dict) else {}
+                        logger.info(
+                            "CRYPTO_TARGET_LIFECYCLE_CONTROL type=%s sid=%s msg_keys=%s",
+                            typ or "UNKNOWN",
+                            payload.get("sid"),
+                            sorted(str(k) for k in msg.keys())[:12],
+                        )
+                        control_logged += 1
                     parsed = extract_lifecycle_target(payload)
                     if parsed is None:
                         continue
                     ticker, target = parsed
                     if ticker in _WATCHED_TICKERS:
-                        _remember(ticker, target, "KALSHI_MARKET_LIFECYCLE_V2")
+                        event_type = None
+                        if isinstance(payload.get("msg"), dict):
+                            event_type = payload["msg"].get("event_type")
+                        _remember(
+                            ticker,
+                            target,
+                            f"KALSHI_MARKET_LIFECYCLE_V2:{event_type or 'STRIKE_PUSH'}",
+                        )
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -197,7 +228,7 @@ async def _kalshi_target_loop_lifecycle(assets: tuple[str, ...]) -> None:
     last_window_iso: str | None = None
     last_logged_state: tuple[str, tuple[str, ...], tuple[str, ...]] | None = None
 
-    limits = httpx.Limits(max_connections=6, max_keepalive_connections=4)
+    limits = httpx.Limits(max_connections=4, max_keepalive_connections=4)
     try:
         async with httpx.AsyncClient(timeout=5.0, limits=limits) as http:
             while True:
@@ -219,8 +250,6 @@ async def _kalshi_target_loop_lifecycle(assets: tuple[str, ...]) -> None:
                 )
 
                 if window_iso != last_window_iso:
-                    # Drop stale readiness rows, then atomically promote any exact
-                    # current-ticker values already learned from lifecycle/REST.
                     readiness._KALSHI_TARGETS.clear()
                     for asset, pair in current_pairs.items():
                         cached = _target_for_ticker(pair.kalshi_ticker)
@@ -244,8 +273,7 @@ async def _kalshi_target_loop_lifecycle(assets: tuple[str, ...]) -> None:
                     last_window_iso = window_iso
                     last_logged_state = None
 
-                # Memory-first current target fill. This is the critical path and has
-                # no network call when lifecycle already delivered the strike.
+                # Critical path is memory only if lifecycle already delivered a strike.
                 for asset, pair in current_pairs.items():
                     if readiness._KALSHI_TARGETS.get(asset, (None,))[0] == window_iso:
                         continue
@@ -259,8 +287,8 @@ async def _kalshi_target_loop_lifecycle(assets: tuple[str, ...]) -> None:
                 )
                 missing = sorted(set(requested) - set(available))
 
-                # REST is fallback only. At most one request per ticker per backoff
-                # interval; 429s double the interval instead of creating a request storm.
+                # REST is fallback only. At most one request per exact ticker per
+                # backoff interval; 429s double the interval instead of request storms.
                 due: list[tuple[str, Any, str]] = []
                 for asset in missing:
                     pair = current_pairs[asset]
@@ -333,7 +361,6 @@ async def _kalshi_target_loop_lifecycle(assets: tuple[str, ...]) -> None:
                     )
                     last_logged_state = state
 
-                # Tight memory-only boundary promotion loop, without tight REST polling.
                 distance = abs(window_end.timestamp() - time.time())
                 await asyncio.sleep(0.01 if distance <= 1.5 else 0.05)
     finally:
