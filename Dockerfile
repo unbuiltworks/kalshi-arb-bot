@@ -15,7 +15,7 @@ COPY tests/ tests/
 # player-prop normalization, direct Gemini<->Kalshi prop discovery, event-driven
 # prop/game hot layers, sportsbook identity alignment, read-only Pushover
 # qualification/dedupe, live MLB participation proof, fail-closed game/prop/team-total
-# rule certification, and resilient prediction-source discovery for retail/manual alerts.
+# rule certification, and public Gemini rule/terms auditing for matched MLB props.
 RUN pytest -q \
     tests/test_universal_sports_identity.py \
     tests/test_gemini_sports_adapter.py \
@@ -47,6 +47,7 @@ RUN pytest -q \
     src/gemini_kalshi_mlb_prop_shadow.py \
     src/gemini_kalshi_mlb_prop_hot_shadow.py \
     src/gemini_mlb_prop_ws_probe.py \
+    src/gemini_mlb_prop_terms_probe.py \
     src/the_odds_api_mlb_shadow.py \
     src/mlb_game_rule_certifications.py \
     src/mlb_prop_rule_equivalence.py \
