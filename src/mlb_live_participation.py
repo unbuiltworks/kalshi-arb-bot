@@ -1,11 +1,11 @@
 """Public MLB game-state participation proofs for strict player-prop research.
 
-This module is deliberately read-only. It uses MLB's public Stats API game schedule
-and boxscore data to answer only the participation question required by the audited
-Polymarket US <-> Kalshi player-prop rule guard:
+This module is deliberately read-only. It uses MLB's public Stats API schedule and
+boxscore data to prove only the participation conditions required by the audited
+MLB player-prop rule guard:
 
-* batter families: player was a starter and has recorded >= 1 plate appearance
-* pitcher strikeouts: player was the starting pitcher and has recorded >= 1 pitch
+* batter families: player was a starter and recorded >=1 plate appearance;
+* pitcher strikeouts: player was the starting pitcher and recorded >=1 batter faced.
 
 It does not price markets, authenticate to a venue, or submit orders.
 """
@@ -22,7 +22,6 @@ from src.mlb_prop_rule_equivalence import ParticipationProof
 
 MLB_STATS = "https://statsapi.mlb.com/api"
 
-# Canonical market-team codes used by current Polymarket/Kalshi MLB slugs/tickers.
 TEAM_NAME_TO_CODE = {
     "Arizona Diamondbacks": "az",
     "Atlanta Braves": "atl",
@@ -131,7 +130,6 @@ async def fetch_game_boxscores(
 
     async def one(row: tuple[str, int, tuple[str, str], str]):
         game_date, game_pk, teams, status = row
-        # Pregame boxscores do not prove either required participation gate.
         if status.lower() not in {"live", "final"}:
             return None
         async with semaphore:
@@ -176,19 +174,27 @@ def participation_proof(
 
             if family == "baseball_player_strikeouts":
                 player_id = person.get("id")
-                starting_pitcher = bool(pitchers and player_id is not None and int(player_id) == pitchers[0])
+                starting_pitcher = bool(
+                    pitchers and player_id is not None and int(player_id) == pitchers[0]
+                )
                 pitching = stats.get("pitching") or {}
+                batters_faced = pitching.get("battersFaced")
                 pitches = pitching.get("pitchesThrown")
                 if pitches is None:
                     pitches = pitching.get("numberOfPitches")
+                try:
+                    batter_faced_recorded = int(batters_faced or 0) >= 1
+                except (TypeError, ValueError):
+                    batter_faced_recorded = False
                 try:
                     pitch_recorded = int(pitches or 0) >= 1
                 except (TypeError, ValueError):
                     pitch_recorded = False
                 return ParticipationProof(
                     starting_pitcher=starting_pitcher,
+                    batter_faced_recorded=batter_faced_recorded,
                     pitch_recorded=pitch_recorded,
-                    source=source if (starting_pitcher or pitch_recorded) else "",
+                    source=source if (starting_pitcher or batter_faced_recorded) else "",
                 )
 
             batting = stats.get("batting") or {}
@@ -197,8 +203,6 @@ def participation_proof(
             except (TypeError, ValueError):
                 plate_appearances = 0
             batting_order = str(row.get("battingOrder") or "").strip()
-            # MLB boxscore explicitly flags substitutes. A batting-order assignment
-            # plus isSubstitute=False is the fail-closed starter proof we need.
             started = bool(batting_order) and not bool(game_status.get("isSubstitute", False))
             return ParticipationProof(
                 started=started,
