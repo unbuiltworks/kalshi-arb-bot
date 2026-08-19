@@ -23,6 +23,45 @@ PUSHOVER_URL = "https://api.pushover.net/1/messages.json"
 ACTIONABLE_CONFIDENCE = "FULL_RULES_AUDITED_EXECUTABLE"
 
 
+STAT_LABELS = {
+    "hits": "Hits",
+    "home_runs": "Home Runs",
+    "total_bases": "Total Bases",
+    "rbis": "RBI",
+    "runs": "Runs",
+    "strikeouts": "Strikeouts",
+    "walks": "Walks",
+    "outs_recorded": "Outs Recorded",
+}
+
+FAMILY_LABELS = {
+    "moneyline": "Moneyline",
+    "spread": "Spread",
+    "game_total": "Game Total",
+    "team_total": "Team Total",
+    "player_prop": "Player Prop",
+    "team_prop": "Team Prop",
+    "game_prop": "Game Prop",
+}
+
+VENUE_LABELS = {
+    "kalshi": "Kalshi",
+    "gemini": "Gemini",
+    "polymarket": "Polymarket",
+    "fanduel": "FanDuel",
+    "draftkings": "DraftKings",
+}
+
+
+@dataclass(frozen=True)
+class SportsDisplayIdentity:
+    league: str
+    matchup: str
+    market_family: str
+    headline: str
+    detail: str
+
+
 def _d(value: Any, default: str = "0") -> Decimal:
     try:
         out = D(str(value))
@@ -40,6 +79,138 @@ def _env_i(name: str, default: int) -> int:
         return int(os.getenv(name, str(default)))
     except (TypeError, ValueError):
         return default
+
+
+def _words(value: str) -> str:
+    return " ".join(part for part in str(value).replace("_", " ").replace("-", " ").split() if part)
+
+
+def _title_words(value: str) -> str:
+    return _words(value).title()
+
+
+def _fmt_line(value: Decimal | None) -> str:
+    if value is None:
+        return ""
+    return format(value.normalize(), "f")
+
+
+def _stat_label(stat: str, *, singular: bool = False) -> str:
+    normalized = str(stat).strip().lower()
+    if singular:
+        singulars = {
+            "hits": "Hit",
+            "home_runs": "Home Run",
+            "rbis": "RBI",
+            "runs": "Run",
+            "strikeouts": "Strikeout",
+            "walks": "Walk",
+        }
+        if normalized in singulars:
+            return singulars[normalized]
+    return STAT_LABELS.get(normalized, _title_words(normalized))
+
+
+def _display_venue(value: str) -> str:
+    normalized = str(value).strip().lower()
+    if normalized.startswith("sportsbook:"):
+        normalized = normalized.split(":", 1)[1]
+    return VENUE_LABELS.get(normalized, _title_words(normalized))
+
+
+def _format_price_cents(value: Decimal) -> str:
+    cents = value * D("100")
+    if cents == cents.to_integral_value():
+        return f"{int(cents)}¢"
+    return f"{cents:.1f}¢"
+
+
+def _prop_detail(stat: str, comparator: str, line: Decimal | None) -> str:
+    stat = str(stat).strip().lower()
+    comparator = str(comparator).strip().upper()
+    line_text = _fmt_line(line)
+
+    # The most common binary MLB props are clearer to a bettor in their familiar
+    # sportsbook wording than as raw GT/GE predicates.
+    if stat == "home_runs" and (
+        comparator == "YES"
+        or (comparator == "GE" and line == D("1"))
+        or (comparator == "GT" and line == D("0.5"))
+    ):
+        return "Home Run YES"
+    if stat == "hits" and (
+        (comparator == "GE" and line == D("1"))
+        or (comparator == "GT" and line == D("0.5"))
+    ):
+        return "1+ Hit"
+    if comparator == "GE" and line is not None and line == line.to_integral_value() and line > 0:
+        n = int(line)
+        return f"{n}+ {_stat_label(stat, singular=n == 1)}"
+    if comparator == "GT":
+        return f"Over {line_text} {_stat_label(stat)}".strip()
+    if comparator == "LT":
+        return f"Under {line_text} {_stat_label(stat)}".strip()
+    if comparator == "LE":
+        return f"At Most {line_text} {_stat_label(stat)}".strip()
+    if comparator == "EQ":
+        return f"Exactly {line_text} {_stat_label(stat)}".strip()
+    if comparator == "YES":
+        return f"{_stat_label(stat, singular=True)} YES".strip()
+    return " ".join(part for part in (_stat_label(stat), comparator, line_text) if part)
+
+
+def parse_sports_display_identity(settlement_key: str) -> SportsDisplayIdentity | None:
+    """Turn the canonical sports contract key into a bettor-readable identity.
+
+    Canonical keys are:
+    sport|league|participants|family|scope|subject_type|subject|stat|comparator|line
+    The parser is deliberately exact and only affects display. A malformed key
+    falls back to the raw settlement key and never changes qualification/safety.
+    """
+    parts = str(settlement_key).split("|")
+    if len(parts) < 10:
+        return None
+    _sport, league, participants, family, _scope, subject_type, subject, stat, comparator, raw_line = parts[:10]
+    family = family.strip().lower()
+    subject_type = subject_type.strip().lower()
+    try:
+        line = D(raw_line) if raw_line.strip() else None
+        if line is not None and not line.is_finite():
+            line = None
+    except Exception:
+        line = None
+
+    league_label = league.strip().upper() or "SPORTS"
+    teams = [p.strip().upper() for p in participants.split(",") if p.strip()]
+    matchup = " vs. ".join(teams) if teams else "Matchup unavailable"
+    family_label = FAMILY_LABELS.get(family, _title_words(family)) or "Market"
+    detail = _prop_detail(stat, comparator, line)
+
+    if family == "player_prop":
+        player = _title_words(subject) or "Player"
+        headline = f"{player} — {detail}"
+    elif family == "team_total":
+        team = subject.strip().upper() if subject_type == "team" else _title_words(subject)
+        headline = f"{team} Team Total — {detail}" if team else f"Team Total — {detail}"
+    elif family == "game_total":
+        headline = f"Game Total — {detail}"
+    elif family == "spread":
+        team = subject.strip().upper() if subject_type == "team" else _title_words(subject)
+        headline = f"{team} Spread — {detail}" if team else f"Spread — {detail}"
+    elif family == "moneyline":
+        team = subject.strip().upper() if subject_type == "team" else _title_words(subject)
+        headline = f"{team} Moneyline" if team else "Moneyline"
+    else:
+        subject_label = subject.strip().upper() if subject_type == "team" else _title_words(subject)
+        headline = " — ".join(part for part in (subject_label or family_label, detail) if part)
+
+    return SportsDisplayIdentity(
+        league=league_label,
+        matchup=matchup,
+        market_family=family_label,
+        headline=headline,
+        detail=detail,
+    )
 
 
 @dataclass(frozen=True)
@@ -141,6 +312,11 @@ class SportsPushoverAlerts:
         price = _d(getattr(q, "yes_cost" if yes else "no_cost", "0")) if q is not None else D("0")
         fee = _d(getattr(match, "yes_fee" if yes else "no_fee", "0")) if match is not None else D("0")
         received_ms = int(getattr(q, "received_ms", now_ms)) if q is not None else now_ms
+        expected_settlement_minutes = getattr(q, "expected_settlement_minutes", None) if q is not None else None
+        try:
+            expected_settlement_minutes = int(expected_settlement_minutes) if expected_settlement_minutes is not None else None
+        except (TypeError, ValueError):
+            expected_settlement_minutes = None
         return {
             "venue": venue,
             "market_id": market_id,
@@ -148,6 +324,7 @@ class SportsPushoverAlerts:
             "price": price,
             "fee": fee,
             "age_ms": max(0, now_ms - received_ms),
+            "expected_settlement_minutes": expected_settlement_minutes,
         }
 
     def build_message(self, lock: Any, rows: Iterable[Any], *, rule_status: str, source: str, now_ms: int | None = None) -> tuple[str, str, int]:
@@ -157,22 +334,42 @@ class SportsPushoverAlerts:
         no = self._leg(lock, rows, yes=False, now_ms=now_ms)
         qty = _d(lock.max_quantity)
         cost = _d(lock.max_capital)
-        payout = qty
         profit = _d(lock.max_locked_profit)
         total_fees = yes["fee"] + no["fee"]
+        roi = (profit / cost * D("100")) if cost > 0 else D("0")
         manual = yes["venue"].startswith("sportsbook:") or no["venue"].startswith("sportsbook:")
         max_age = max(int(yes["age_ms"]), int(no["age_ms"]))
-        title = f"Sports arb +${profit:.2f}"
-        message = "\n".join((
-            f"{source} | {lock.settlement_key}",
-            f"YES {yes['venue']} @ {yes['price']:.4f} | NO {no['venue']} @ {no['price']:.4f}",
-            f"Qty {qty} | Cost ${cost:.2f} | Payout ${payout:.2f}",
-            f"Fees ${total_fees:.2f} | After-fee P/L +${profit:.2f} ({_d(lock.unit_profit):.4f}/unit)",
-            f"Freshness max {max_age}ms | skew {int(lock.quote_skew_ms)}ms",
-            f"Settlement {lock.settlement_confidence} | Rules {rule_status}",
-            f"Manual sportsbook action: {'YES' if manual else 'NO'}",
-        ))
-        return title, message, max_age
+        identity = parse_sports_display_identity(str(lock.settlement_key))
+
+        if identity is not None:
+            title = f"{identity.league} ARB — {identity.headline}"
+            first_line = identity.matchup
+            family_line = f"Market family: {identity.market_family}"
+        else:
+            title = f"Sports arb +${profit:.2f}"
+            first_line = f"{source} | {lock.settlement_key}"
+            family_line = "Market family: unavailable"
+
+        lines = [
+            first_line,
+            f"YES {_display_venue(yes['venue'])} {_format_price_cents(yes['price'])}",
+            f"NO {_display_venue(no['venue'])} {_format_price_cents(no['price'])}",
+            f"Buy {qty:g} each — Cost ${cost:.2f}",
+            f"Locked profit: +${profit:.2f} / +{roi:.1f}%",
+            f"Fees included: ${total_fees:.2f}",
+            family_line,
+            f"Freshness: {max_age}ms max | {int(lock.quote_skew_ms)}ms skew",
+            f"Settlement: {lock.settlement_confidence} | Rules: {rule_status}",
+            f"Manual sportsbook leg: {'YES' if manual else 'NO'}",
+        ]
+        settlement_estimates = [
+            leg["expected_settlement_minutes"]
+            for leg in (yes, no)
+            if leg["expected_settlement_minutes"] is not None and leg["expected_settlement_minutes"] >= 0
+        ]
+        if settlement_estimates:
+            lines.insert(7, f"Expected settlement: ~{max(settlement_estimates)} min")
+        return title, "\n".join(lines), max_age
 
     async def send(self, *, title: str, message: str) -> str:
         user = os.getenv("PUSHOVER_USER_KEY", "").strip()

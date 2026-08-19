@@ -1,14 +1,18 @@
 from types import SimpleNamespace
 from decimal import Decimal
 
-from src.sports_pushover_alerts import AlertPolicy, SportsPushoverAlerts
+from src.sports_pushover_alerts import (
+    AlertPolicy,
+    SportsPushoverAlerts,
+    parse_sports_display_identity,
+)
 
 D = Decimal
 
 
 def lock(**overrides):
     data = dict(
-        settlement_key="baseball|mlb|test",
+        settlement_key="baseball|mlb|phi,sea|player_prop|full_contest|player|trea_turner|hits|GT|0.5",
         yes_venue="sportsbook:fanduel",
         yes_market_id="fd:1",
         no_venue="kalshi",
@@ -68,14 +72,73 @@ def test_realert_only_on_material_profit_or_size_gain():
     assert s.should_realert(lock(max_quantity=D("1.5"), max_locked_profit=D("0.07")))
 
 
-def test_message_contains_required_operational_fields():
+def test_display_identity_uses_bettor_friendly_mlb_prop_names():
+    hits = parse_sports_display_identity(
+        "baseball|mlb|phi,sea|player_prop|full_contest|player|trea_turner|hits|GT|0.5"
+    )
+    assert hits is not None
+    assert hits.league == "MLB"
+    assert hits.matchup == "PHI vs. SEA"
+    assert hits.market_family == "Player Prop"
+    assert hits.headline == "Trea Turner — 1+ Hit"
+
+    total_bases = parse_sports_display_identity(
+        "baseball|mlb|phi,sea|player_prop|full_contest|player|bryce_harper|total_bases|GT|1.5"
+    )
+    assert total_bases is not None
+    assert total_bases.headline == "Bryce Harper — Over 1.5 Total Bases"
+
+    home_run = parse_sports_display_identity(
+        "baseball|mlb|phi,sea|player_prop|full_contest|player|kyle_schwarber|home_runs|GT|0.5"
+    )
+    assert home_run is not None
+    assert home_run.headline == "Kyle Schwarber — Home Run YES"
+
+
+def test_display_identity_handles_game_total():
+    identity = parse_sports_display_identity(
+        "baseball|mlb|cle,sf|game_total|full_contest|contest|contest|runs|GT|9.5"
+    )
+    assert identity is not None
+    assert identity.matchup == "CLE vs. SF"
+    assert identity.market_family == "Game Total"
+    assert identity.headline == "Game Total — Over 9.5 Runs"
+
+
+def test_message_contains_human_market_identity_and_operational_fields():
     s = sink(); l = lock()
     rows = [
         row("sportsbook:fanduel", "fd:1", "0.45", "0.60"),
         row("kalshi", "kx:1", "0.55", "0.48"),
     ]
     title, message, age = s.build_message(l, rows, rule_status="FULL_RULES_AUDITED", source="test", now_ms=100_000)
-    assert "+$0.07" in title
-    for token in ("YES sportsbook:fanduel", "NO kalshi", "Qty", "Cost $", "Payout $", "Fees $", "After-fee P/L", "Freshness", "skew", "Settlement", "Rules", "Manual sportsbook action: YES"):
+    assert title == "MLB ARB — Trea Turner — 1+ Hit"
+    for token in (
+        "PHI vs. SEA",
+        "YES FanDuel 45¢",
+        "NO Kalshi 48¢",
+        "Buy 1 each — Cost $0.93",
+        "Locked profit: +$0.07 / +7.5%",
+        "Fees included: $0.02",
+        "Market family: Player Prop",
+        "Freshness: 1000ms max",
+        "1000ms skew",
+        "Settlement: FULL_RULES_AUDITED_EXECUTABLE",
+        "Rules: FULL_RULES_AUDITED",
+        "Manual sportsbook leg: YES",
+    ):
         assert token in message
+    assert "baseball|mlb|" not in message
     assert age == 1000
+
+
+def test_malformed_key_falls_back_without_changing_safety_fields():
+    s = sink(); l = lock(settlement_key="baseball|mlb|test")
+    rows = [
+        row("sportsbook:fanduel", "fd:1", "0.45", "0.60"),
+        row("kalshi", "kx:1", "0.55", "0.48"),
+    ]
+    title, message, _ = s.build_message(l, rows, rule_status="FULL_RULES_AUDITED", source="test", now_ms=100_000)
+    assert title == "Sports arb +$0.07"
+    assert "test | baseball|mlb|test" in message
+    assert "Manual sportsbook leg: YES" in message
