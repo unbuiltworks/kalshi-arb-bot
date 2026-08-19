@@ -39,6 +39,26 @@ def test_open_move_close_counts_one_episode_and_integrates_capital_hours():
     assert overall["max_episode_duration_ms"] == 2000
 
 
+def test_budget_tier_switch_move_stays_in_same_economic_episode():
+    events = [
+        _event("OPEN", 0, profit="0.04", capital="0.90", probe_field="probe_1usd"),
+        _event("MOVE", 1000, profit="0.14", capital="4.50", probe_field="probe_5usd"),
+        _event("CLOSE", 2500, profit="0.14", capital="4.50", last_seen_ms=2000, probe_field="probe_5usd"),
+    ]
+    result = analyze_events(events)
+    overall = result["overall"]
+    assert overall["unique_episodes"] == 1
+    assert overall["closed_episodes"] == 1
+    assert result["invalid_events"] == 0
+    assert result["budget_tier_switch_episodes"] == 1
+    assert overall["budget_tier_switch_episodes"] == 1
+    assert Decimal(overall["first_seen_executable_shadow_profit"]) == Decimal("0.04")
+    assert Decimal(overall["theoretical_peak_profit"]) == Decimal("0.14")
+    expected = (Decimal("0.90") * Decimal(1000) + Decimal("4.50") * Decimal(1000)) / Decimal(3600000)
+    assert Decimal(overall["capital_hours"]) == expected
+    assert overall["max_episode_duration_ms"] == 2000
+
+
 def test_repeated_resting_depth_cannot_be_double_counted_without_new_open():
     result = analyze_events([
         _event("OPEN", 0, profit="0.05"),
