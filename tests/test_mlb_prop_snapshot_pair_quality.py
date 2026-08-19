@@ -79,3 +79,13 @@ def test_unsafe_snapshot_or_unsynchronized_row_is_ignored():
     assert result["unique_exact_pairs"] == 0
     assert result["unique_positive_episodes"] == 0
     assert result["live_probe_ready"] is False
+
+
+def test_stringly_readiness_flags_fail_closed():
+    row = _row(observed_ms=1_000)
+    row["full_rules_audited"] = "false"
+    row["live_probe_ready"] = "true"
+    result = analyze_snapshots([_snapshot(row5=row)])
+    episode = result["episodes"][0]
+    assert episode["full_rules_audited"] is False
+    assert episode["live_probe_ready"] is False
