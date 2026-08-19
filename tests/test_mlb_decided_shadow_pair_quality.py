@@ -77,6 +77,7 @@ def test_analyze_counts_only_synchronized_pair_profit():
     assert result["synchronized_cross_venue_pair_lock_samples"] == 1
     assert result["synchronized_cross_venue_pair_locks"] == 1
     assert Decimal(result["synchronized_pair_profit_dollars"]) == Decimal("0.04")
+    assert Decimal(result["executable_shadow_pair_profit_dollars"]) == Decimal("0")
 
 
 def test_repeated_resting_legacy_pair_samples_are_not_additive_capacity():
@@ -94,6 +95,7 @@ def test_repeated_resting_legacy_pair_samples_are_not_additive_capacity():
     assert result["legacy_identity_collapsed_units"] == 1
     assert result["duplicate_synchronized_pair_samples_excluded"] == 2
     assert Decimal(result["synchronized_pair_profit_dollars"]) == Decimal("0.05")
+    assert Decimal(result["executable_shadow_pair_profit_dollars"]) == Decimal("0")
 
 
 def test_episode_open_move_resting_counts_one_consumable_unit():
@@ -104,8 +106,11 @@ def test_episode_open_move_resting_counts_one_consumable_unit():
     ]
     result = analyze(rows)
     assert result["episode_aware_consumable_units"] == 1
+    assert result["episode_open_executable_shadow_units"] == 1
     assert result["duplicate_synchronized_pair_samples_excluded"] == 2
     assert Decimal(result["episode_aware_profit_dollars"]) == Decimal("0.06")
+    assert Decimal(result["episode_first_seen_executable_shadow_profit_dollars"]) == Decimal("0.04")
+    assert Decimal(result["executable_shadow_pair_profit_dollars"]) == Decimal("0.04")
     assert result["pair_episode_events"] == {"MOVE": 1, "OPEN": 1, "RESTING": 1}
 
 
@@ -113,7 +118,6 @@ def test_new_open_after_close_counts_renewed_liquidity_once():
     rows = [
         _sync_pair_row(observed_ms=1000, event="OPEN", opened_ms=1000, profit="0.04"),
         _sync_pair_row(observed_ms=2000, event="RESTING", opened_ms=1000, profit="0.04"),
-        # CLOSE rows have no pair lock and therefore do not add capacity.
         {"pair_episode": {"identity": "example", "event": "CLOSE", "opened_ms": 1000,
                           "last_seen_ms": 2000, "closed_observed_ms": 3000}, "read_only": True},
         _sync_pair_row(observed_ms=5000, event="OPEN", opened_ms=5000, profit="0.03"),
@@ -122,9 +126,24 @@ def test_new_open_after_close_counts_renewed_liquidity_once():
     result = analyze(rows)
     assert result["unique_synchronized_pair_identities"] == 1
     assert result["episode_aware_consumable_units"] == 2
+    assert result["episode_open_executable_shadow_units"] == 2
     assert result["consumable_episode_units"] == 2
     assert Decimal(result["synchronized_pair_profit_dollars"]) == Decimal("0.09")
+    assert Decimal(result["executable_shadow_pair_profit_dollars"]) == Decimal("0.07")
     assert result["pair_episode_events"] == {"CLOSE": 1, "MOVE": 1, "OPEN": 2, "RESTING": 1}
+
+
+def test_midstream_episode_without_open_is_not_backfilled_as_executable_shadow():
+    rows = [
+        _sync_pair_row(observed_ms=2000, event="MOVE", opened_ms=1000, profit="0.06"),
+        _sync_pair_row(observed_ms=3000, event="RESTING", opened_ms=1000, profit="0.08"),
+    ]
+    result = analyze(rows)
+    assert result["episode_aware_consumable_units"] == 1
+    assert result["episode_open_executable_shadow_units"] == 0
+    assert result["episode_units_without_observed_open"] == 1
+    assert Decimal(result["episode_peak_theoretical_profit_dollars"]) == Decimal("0.08")
+    assert Decimal(result["executable_shadow_pair_profit_dollars"]) == Decimal("0")
 
 
 def test_malformed_episode_evidence_fails_closed_instead_of_falling_back_to_legacy():
@@ -146,6 +165,7 @@ def test_opposite_directions_remain_distinct_consumable_identities():
     result = analyze(rows)
     assert result["unique_synchronized_pair_identities"] == 2
     assert Decimal(result["synchronized_pair_profit_dollars"]) == Decimal("0.07")
+    assert Decimal(result["executable_shadow_pair_profit_dollars"]) == Decimal("0")
 
 
 def test_synchronized_pair_without_strict_identity_is_excluded_from_capacity():
