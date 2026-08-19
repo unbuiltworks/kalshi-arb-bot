@@ -1,14 +1,14 @@
 """Fail-closed MLB player-prop settlement certification.
 
-The existing :mod:`mlb_prop_rule_equivalence` module answers one narrow question:
-has the live participation branch that can differ between venues been resolved?
-This module answers the larger execution question.  Participation alignment is
-necessary but not sufficient; a pair also needs an audited match for lifecycle,
-official-stat authority, corrections, threshold/push treatment, and cancellation.
+Identity equivalence is not enough.  This registry stores semantic fingerprints of
+venue rules that have actually been reviewed.  A pair can only graduate when every
+settlement dimension is complete and identical *and* the live participation gate
+has been proven from official game state.
 
-No real pair is upgraded merely because a player has participated.  Unknown or
-incompletely sourced lifecycle rules remain closed.  This module performs no
-network I/O and contains no order-entry path.
+The 2026-08-19 audit materially improves the Kalshi/Polymarket US fingerprints but
+deliberately does not certify the pair pregame: their exceptional-event clocks and
+post-game correction semantics are not established as identical.  This module
+performs no network I/O and contains no order-entry path.
 """
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from typing import Any
 
 from src.mlb_prop_rule_equivalence import (
     BATTER_FAMILIES,
-    PITCHER_FAMILIES,
     ParticipationProof,
     RuleEquivalence,
     SUPPORTED_FAMILIES,
@@ -27,10 +26,17 @@ from src.mlb_prop_rule_equivalence import (
 )
 from src.sports_pushover_alerts import ACTIONABLE_CONFIDENCE
 
-AUDIT_DATE = "2026-08-18"
+AUDIT_DATE = "2026-08-19"
 SHADOW_CONFIDENCE = "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE"
 PREDICTION_VENUES = ("kalshi", "polymarket", "gemini")
 SPORTSBOOK_VENUES = ("fanduel", "draftkings")
+
+KALSHI_SOURCE_REFS = {
+    "baseball_player_hits": "https://assets.kalshi.com/contract_terms/MLBHITS.pdf",
+    "baseball_player_hits_runs_rbis": "https://assets.kalshi.com/contract_terms/MLBHITSRUNSRBIS.pdf",
+    "baseball_player_total_bases": "https://assets.kalshi.com/contract_terms/MLBTOTALBASES.pdf",
+    "baseball_player_strikeouts": "https://assets.kalshi.com/contract_terms/MLBSTRIKEOUT.pdf",
+}
 
 
 class PropCertificationStatus(str, Enum):
@@ -141,42 +147,77 @@ def _profile(
     )
 
 
-# These are semantic summaries, not copied rulebook prose.  ``complete=False`` is
-# deliberate whenever the currently reviewed public source does not establish the
-# entire exceptional-event lifecycle.  An incomplete profile can never certify.
-_PROFILE_ROWS: list[PropVenueProfile] = []
-for family in SUPPORTED_FAMILIES:
-    role_rule = (
-        "must_start_and_record_plate_appearance"
-        if family in BATTER_FAMILIES
-        else "must_be_starting_pitcher_and_record_pitch"
-    )
-    _PROFILE_ROWS.append(_profile(
+def _kalshi_profile(family: str) -> PropVenueProfile:
+    batter = family in BATTER_FAMILIES
+    return _profile(
         "kalshi",
         family,
         participation_rule=(
-            "fair_market_price_unless_qualifying_start_and_participation"
+            "lfmp_unless_starting_lineup_and_plate_appearance"
+            if batter
+            else "lfmp_unless_starting_pitcher_and_batter_faced"
         ),
-        official_source="espn_fox_sports_and_governing_league",
-        interruption="family_contract_exceptional_lifecycle_not_fully_fingerprinted",
-        cancellation="family_contract_exceptional_lifecycle_not_fully_fingerprinted",
-        stat_corrections="source_agency_correction_window_not_fully_fingerprinted",
-        threshold_push="binary_integer_threshold_contract",
-        source_ref="kalshi MLB player-prop contract rules",
-        complete=False,
-    ))
-    _PROFILE_ROWS.append(_profile(
+        official_source=(
+            "hierarchy_governing_league_official_scorer_mlbcom_espn_fox_official_broadcaster"
+        ),
+        interruption=(
+            "extra_innings_count;preofficial_no_resume_within_48h_from_scheduled_start_lfmp;"
+            "official_shortened_full_game_uses_official_result;resume_within_48h_uses_final_stats"
+        ),
+        cancellation=(
+            "cancelled_postponed_suspended_preofficial_no_resume_within_48h_from_scheduled_start_lfmp"
+        ),
+        stat_corrections=(
+            "official_stats_final_at_game_conclusion;post_conclusion_corrections_do_not_change_contract"
+        ),
+        threshold_push="binary_gte_integer_threshold",
+        source_ref=KALSHI_SOURCE_REFS[family],
+        complete=True,
+    )
+
+
+def _polymarket_profile(family: str) -> PropVenueProfile:
+    batter = family in BATTER_FAMILIES
+    if family == "baseball_player_total_bases":
+        interruption = (
+            "extra_innings_count;two_calendar_day_reschedule_window_else_lfmp;"
+            "shortened_official_result_rule_not_explicit_in_sampled_live_instrument"
+        )
+    else:
+        interruption = (
+            "extra_innings_count;official_shortened_result_governs;"
+            "two_calendar_day_reschedule_window_else_lfmp"
+        )
+    return _profile(
         "polymarket",
         family,
-        participation_rule="participation_branch_requires_current_official_rule_fingerprint",
-        official_source="current_official_player_prop_source_rule_not_fully_fingerprinted",
-        interruption="current_official_player_prop_lifecycle_not_fully_fingerprinted",
-        cancellation="current_official_player_prop_lifecycle_not_fully_fingerprinted",
-        stat_corrections="current_official_player_prop_correction_rule_not_fully_fingerprinted",
-        threshold_push="binary_integer_threshold_expected_but_not_full_rule_fingerprint",
-        source_ref="polymarket MLB player-prop rules require current official audit",
+        participation_rule=(
+            "lfmp_unless_starting_lineup_and_plate_appearance"
+            if batter
+            else "lfmp_unless_starting_pitcher"
+        ),
+        official_source=(
+            "live_instrument_mlb;platform_hierarchy_governing_body_official_data_tertiary_sources"
+        ),
+        interruption=interruption,
+        cancellation=(
+            "delayed_postponed_suspended_not_rescheduled_to_date_within_two_calendar_days_lfmp"
+        ),
+        stat_corrections=(
+            "post_game_stat_correction_window_not_explicit_in_live_instrument_or_sports_faq"
+        ),
+        threshold_push="binary_gte_integer_threshold",
+        source_ref="live Polymarket US MLB prop instrument description + Polymarket Sports FAQ",
+        # Fail closed: the correction tail is not completely fingerprinted and the
+        # live two-calendar-day lifecycle is not proven identical to Kalshi's 48h clock.
         complete=False,
-    ))
+    )
+
+
+_PROFILE_ROWS: list[PropVenueProfile] = []
+for family in SUPPORTED_FAMILIES:
+    _PROFILE_ROWS.append(_kalshi_profile(family))
+    _PROFILE_ROWS.append(_polymarket_profile(family))
     _PROFILE_ROWS.append(_profile(
         "gemini",
         family,
@@ -192,9 +233,7 @@ for family in SUPPORTED_FAMILIES:
     _PROFILE_ROWS.append(_profile(
         "draftkings",
         family,
-        participation_rule=(
-            "pregame_prop_selection_must_start_and_participate_substitute_only_void"
-        ),
+        participation_rule="pregame_prop_selection_must_start_and_participate_substitute_only_void",
         official_source="game_official_governing_body",
         interruption="single_game_player_prop_interruption_lifecycle_not_fully_matched_to_prediction_contracts",
         cancellation="game_not_started_scheduled_date_void",
@@ -232,7 +271,7 @@ def assess_prop_pair(
     family: str,
     proof: ParticipationProof | None = None,
 ) -> PropPairAssessment:
-    """Assess one venue pair, dynamically removing only the participation blocker."""
+    """Assess one pair while removing only blockers proven resolved by game state."""
     left_name = canonical_venue(left_venue)
     right_name = canonical_venue(right_venue)
     family = str(family or "").strip().lower()
@@ -242,15 +281,16 @@ def assess_prop_pair(
     right = PROFILES.get((right_name, family))
     if left is None or right is None:
         return PropPairAssessment(
-            left_name, right_name, family,
+            left_name,
+            right_name,
+            family,
             PropCertificationStatus.UNAUDITED,
-            gate, participation_proven,
+            gate,
+            participation_proven,
             ("missing_venue_family_rule_profile",),
             False,
         )
 
-    # Participation proof only resolves the family-level start/appearance branch.
-    # It does not rewrite the venue profiles or erase other lifecycle differences.
     dimensions = (
         ("stat_definition", left.stat_definition, right.stat_definition),
         ("official_source", left.official_source, right.official_source),
@@ -274,13 +314,17 @@ def assess_prop_pair(
     elif left.complete and right.complete:
         status = PropCertificationStatus.CONDITIONAL
     else:
-        # We know enough to keep it closed, but not enough to call it an exact
-        # lifecycle comparison.  This is intentionally stricter than CONDITIONAL.
         status = PropCertificationStatus.UNAUDITED
 
     return PropPairAssessment(
-        left_name, right_name, family, status, gate, participation_proven,
-        tuple(blockers), exact,
+        left_name,
+        right_name,
+        family,
+        status,
+        gate,
+        participation_proven,
+        tuple(blockers),
+        exact,
     )
 
 
@@ -302,7 +346,6 @@ def apply_prop_certification(
 
 
 def prop_audit_matrix() -> dict[str, Any]:
-    """Static pre-participation matrix for all currently supported prop families."""
     sportsbook_pairs = tuple((book, venue) for book in SPORTSBOOK_VENUES for venue in PREDICTION_VENUES)
     direct_pairs = tuple(combinations(PREDICTION_VENUES, 2))
     families: dict[str, Any] = {}
