@@ -1,0 +1,3 @@
+[deploy]
+startCommand = "python -m src.the_odds_api_mlb_shadow_v2 --once"
+restartPolicyType = "NEVER"
