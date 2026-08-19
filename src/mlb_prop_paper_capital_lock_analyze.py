@@ -9,6 +9,12 @@ events.
 Any missing/ambiguous/nonpositive settlement timestamp fails closed. Incomplete
 trade groups are right-censored and prevent an aggregate conservative
 profit-per-dollar-hour figure from being reported.
+
+Paper micro-probes record modeled fees as separate ``fee`` ledger events. Legacy
+fixtures/producers may embed a fee on the fill itself. Fee accounting therefore
+prefers exact market-matched fee events and falls back to embedded fill fees only
+when no fee events exist; having both representations nonzero is treated as
+ambiguous and fails closed rather than risking double counting or omission.
 """
 from __future__ import annotations
 
@@ -25,6 +31,7 @@ VALID_SIDES = {"YES", "NO"}
 
 def analyze_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[str, Any]:
     fills: dict[str, dict[str, list[LedgerEvent]]] = defaultdict(lambda: defaultdict(list))
+    fees: dict[str, dict[str, list[LedgerEvent]]] = defaultdict(lambda: defaultdict(list))
     settlements: dict[str, dict[str, list[LedgerEvent]]] = defaultdict(lambda: defaultdict(list))
 
     for event in events:
@@ -32,6 +39,8 @@ def analyze_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[str, Any]:
             continue
         if event.event_type == "fill":
             fills[event.trade_group_id][event.venue].append(event)
+        elif event.event_type == "fee":
+            fees[event.trade_group_id][event.venue].append(event)
         elif event.event_type == "settlement":
             settlements[event.trade_group_id][event.venue].append(event)
 
@@ -66,6 +75,28 @@ def analyze_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[str, Any]:
             rows.append({"trade_group_id": group_id, "status": "MALFORMED_SYNTHETIC_FILL_GROUP_FAIL_CLOSED"})
             continue
 
+        group_fees = fees.get(group_id, {})
+        fee_by_venue: dict[str, Decimal] = {}
+        fee_invalid = False
+        for venue, fill in (("polymarket_us", poly), ("kalshi", kalshi)):
+            fee_events = group_fees.get(venue, [])
+            if any(event.market_id != fill.market_id for event in fee_events):
+                fee_invalid = True
+                break
+            explicit_fee = sum((event.fee for event in fee_events), D("0"))
+            if explicit_fee > 0 and fill.fee > 0:
+                fee_invalid = True
+                break
+            fee_by_venue[venue] = explicit_fee if fee_events else fill.fee
+
+        if fee_invalid:
+            invalid_groups += 1
+            rows.append({
+                "trade_group_id": group_id,
+                "status": "AMBIGUOUS_OR_MISMATCHED_FEE_ACCOUNTING_FAIL_CLOSED",
+            })
+            continue
+
         fill_ts = poly.ts_ms
         group_settlements = settlements.get(group_id, {})
         if any(len(group_settlements.get(v, [])) != 1 for v in VENUES):
@@ -92,9 +123,13 @@ def analyze_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[str, Any]:
             rows.append({"trade_group_id": group_id, "status": "INVALID_SETTLEMENT_TIMING_OR_MARKET_FAIL_CLOSED"})
             continue
 
+        poly_fee = fee_by_venue["polymarket_us"]
+        kalshi_fee = fee_by_venue["kalshi"]
+        total_fee = poly_fee + kalshi_fee
         capital = (
-            poly.quantity * poly.price + poly.fee
-            + kalshi.quantity * kalshi.price + kalshi.fee
+            poly.quantity * poly.price
+            + kalshi.quantity * kalshi.price
+            + total_fee
         )
         if capital <= 0:
             invalid_groups += 1
@@ -117,6 +152,10 @@ def analyze_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[str, Any]:
             "kalshi_settled_ts_ms": kalshi_settle.ts_ms,
             "capital_lock_end_ms": lock_end_ms,
             "capital_lock_ms": lock_ms,
+            "poly_fee": str(poly_fee),
+            "kalshi_fee": str(kalshi_fee),
+            "total_fee": str(total_fee),
+            "fee_accounting": "EXACT_FEE_EVENTS_OR_LEGACY_EMBEDDED_FILL_FALLBACK",
             "capital": str(capital),
             "capital_lock_hours": str(capital_hours),
             "realized_profit": str(realized_profit),
@@ -143,6 +182,7 @@ def analyze_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[str, Any]:
             str(aggregate_efficiency) if aggregate_efficiency is not None else None
         ),
         "capital_lock_semantics": "FILL_TO_LATER_OF_TWO_OBSERVED_VENUE_SETTLEMENTS",
+        "fee_semantics": "EXACT_FEE_EVENTS_PREFERRED_LEGACY_FILL_FEE_FALLBACK_FAIL_CLOSED_ON_AMBIGUITY",
         "opportunity_duration_is_capital_lock": False,
         "warning": (
             "Do not substitute OPEN/MOVE/CLOSE quote lifetime for post-fill capital lock. "
