@@ -2,20 +2,23 @@
 
 Prefer exact Gemini<->Kalshi matched contracts, but fall back to current Gemini-only
 contracts for a stat family when the paired venue does not list one at this instant.
-This lets the rule audit cover family semantics without pretending an unmatched
-contract is an executable counterpart.
+For public PDF terms, extract a compact keyword-focused text fingerprint so lifecycle
+semantics can be audited without treating the event-card summary as exhaustive.
 
 No authentication and no order entry.
 """
 from __future__ import annotations
 
 import asyncio
+from hashlib import sha256
+from io import BytesIO
 import json
 from collections import defaultdict
 from typing import Any, Mapping
 from urllib.parse import urlparse
 
 import httpx
+from pypdf import PdfReader
 
 from src.gemini_kalshi_mlb_prop_shadow import _candidate_sides
 from src.mlb_game_side_normalization import normalize_gemini_mlb
@@ -29,7 +32,13 @@ STAT_TO_FAMILY = {
     "strikeouts": "baseball_player_strikeouts",
 }
 MAX_PER_STAT = 3
-MAX_TERMS_CHARS = 12000
+MAX_TERMS_CHARS = 18000
+RULE_KEYWORDS = (
+    "source agency", "official", "appear", "active", "start", "plate appearance",
+    "batter faced", "postpon", "reschedul", "suspend", "cancel", "expiration",
+    "correction", "revised", "final", "market outcome review", "fair price",
+    "discretion", "forfeit", "withdraw", "disqualif", "settle", "resolve",
+)
 
 
 def _terms_url(contract: Mapping[str, Any]) -> str:
@@ -52,6 +61,32 @@ def _compact_text(text: str, limit: int = MAX_TERMS_CHARS) -> str:
     return " ".join(text.split())[:limit]
 
 
+def _pdf_fingerprint(content: bytes) -> dict[str, Any]:
+    try:
+        reader = PdfReader(BytesIO(content))
+        pages = [str(page.extract_text() or "") for page in reader.pages]
+    except Exception as exc:
+        return {"pdf_parse_status": "ERROR", "pdf_parse_error_type": type(exc).__name__}
+    full = "\n".join(pages)
+    lines = [" ".join(line.split()) for line in full.splitlines() if line.strip()]
+    chosen: list[str] = []
+    for index, line in enumerate(lines):
+        lowered = line.lower()
+        if not any(keyword in lowered for keyword in RULE_KEYWORDS):
+            continue
+        for near in range(max(0, index - 1), min(len(lines), index + 2)):
+            candidate = lines[near]
+            if candidate not in chosen:
+                chosen.append(candidate)
+    return {
+        "pdf_parse_status": "OK",
+        "pdf_pages": len(pages),
+        "pdf_sha256": sha256(content).hexdigest(),
+        "pdf_extracted_chars": len(full),
+        "pdf_rule_excerpt": _compact_text("\n".join(chosen)),
+    }
+
+
 async def _fetch_terms(http: httpx.AsyncClient, url: str) -> dict[str, Any]:
     if not _safe_public_url(url):
         return {"status": "NO_PUBLIC_URL"}
@@ -67,7 +102,9 @@ async def _fetch_terms(http: httpx.AsyncClient, url: str) -> dict[str, Any]:
         "final_url": str(response.url),
         "content_length": len(response.content),
     }
-    if response.is_success and any(token in content_type for token in ("text/", "json", "html", "xml")):
+    if response.is_success and "pdf" in content_type:
+        row.update(_pdf_fingerprint(response.content))
+    elif response.is_success and any(token in content_type for token in ("text/", "json", "html", "xml")):
         row["text_excerpt"] = _compact_text(response.text)
     else:
         row["binary_or_unparsed"] = True
@@ -173,6 +210,7 @@ async def main() -> None:
         "exact_match_inventory": {stat: len(matched_by_stat.get(stat, [])) for stat in TARGET_STATS},
         "unique_terms_urls": len(urls),
         "terms_fetch_statuses": {status: sum(1 for row in terms_rows if row.get("status") == status) for status in sorted({str(row.get("status")) for row in terms_rows})},
+        "pdf_parse_statuses": sorted({str(row.get("pdf_parse_status")) for row in terms_rows if row.get("pdf_parse_status")}),
         "read_only": True,
         "order_entry": False,
     }, separators=(",", ":")), flush=True)
