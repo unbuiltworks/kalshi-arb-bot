@@ -33,8 +33,26 @@ def test_batter_becomes_rule_equivalent_after_first_pa() -> None:
     )
     assert result.status == RuleEquivalence.EQUIVALENT_AFTER_PARTICIPATION
     assert result.settlement_equivalent_now is True
-    # Research policy remains non-executable even after the rule branch aligns.
+    # Research policy remains non-executable even after the participation branch aligns.
     assert result.execution_eligible is False
+
+
+def test_home_runs_uses_same_batter_participation_gate() -> None:
+    pre = assess_rule_equivalence("baseball_player_home_runs")
+    assert pre.status == RuleEquivalence.CONDITIONAL_PARTICIPATION
+    assert pre.settlement_equivalent_now is False
+
+    post = assess_rule_equivalence(
+        "baseball_player_home_runs",
+        ParticipationProof(
+            started=True,
+            plate_appearance_recorded=True,
+            source="official MLB game state",
+        ),
+    )
+    assert post.status == RuleEquivalence.EQUIVALENT_AFTER_PARTICIPATION
+    assert post.settlement_equivalent_now is True
+    assert post.execution_eligible is False
 
 
 def test_pitcher_must_be_starter_and_throw_pitch() -> None:
@@ -66,7 +84,7 @@ def test_untrusted_boolean_without_source_does_not_unlock_gate() -> None:
 
 
 def test_unsupported_family_fails_closed() -> None:
-    result = assess_rule_equivalence("baseball_player_home_runs")
+    result = assess_rule_equivalence("baseball_player_runs")
     assert result.status == RuleEquivalence.NON_EQUIVALENT
     assert result.settlement_equivalent_now is False
     assert result.execution_eligible is False
