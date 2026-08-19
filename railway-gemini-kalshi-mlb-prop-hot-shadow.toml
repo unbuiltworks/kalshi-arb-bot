@@ -1,0 +1,4 @@
+# Dedicated event-driven read-only Gemini <-> Kalshi MLB player-prop hot shadow.
+[deploy]
+startCommand = "python -m src.gemini_kalshi_mlb_prop_hot_shadow --max-book-age-ms 1000 --max-quote-skew-ms 50 --hot-book-age-ms 100 --hot-profit 0.03 --participation-refresh-seconds 5 --heartbeat-seconds 10"
+restartPolicyType = "ALWAYS"
