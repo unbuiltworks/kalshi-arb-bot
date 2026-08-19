@@ -1,8 +1,9 @@
-"""One-shot exact current FanDuel-vs-prediction MLB full-game raw-lock dump.
+"""One-shot exact current FanDuel-vs-Polymarket/Gemini MLB full-game raw locks.
 
-This uses the same v2 scope gates as production: Polymarket first-five events are
-removed before pricing and direct market IDs receive a second full-game guard.
-Output remains normal-event economics only; no rule promotion and no order entry.
+This uses the same v2 full-game scope gates as production, but intentionally omits
+Kalshi from this diagnostic so it cannot add pressure to the already rate-limited
+Kalshi REST discovery path. Output remains normal-event economics only; no rule
+promotion and no order entry.
 """
 from __future__ import annotations
 
@@ -22,15 +23,15 @@ async def main() -> None:
         raise SystemExit("THE_ODDS_API_KEY is required")
 
     async with httpx.AsyncClient(timeout=30.0) as http:
-        sportsbook_result, gemini, poly_raw, kalshi = await asyncio.gather(
+        sportsbook_result, gemini, poly_raw = await asyncio.gather(
             base.fetch_sportsbooks(http, api_key),
             base.fetch_gemini_mlb(http),
             base.fetch_polymarket_mlb(http),
-            base.fetch_kalshi_mlb(http),
         )
         events, quota = sportsbook_result
         poly = base.full_game_only_events(poly_raw)
-        direct, errors, direct_keys = await base.price_counterparts(http, gemini, poly, kalshi)
+        # Empty Kalshi input is deliberate for this venue-isolation diagnostic.
+        direct, errors, direct_keys = await base.price_counterparts(http, gemini, poly, [])
 
     received_ms = int(time.time() * 1000)
     retail = base.sportsbook_quotes(events, received_ms=received_ms)
@@ -54,7 +55,7 @@ async def main() -> None:
         and (row.yes_venue == "sportsbook:fanduel" or row.no_venue == "sportsbook:fanduel")
     ]
     print(json.dumps({
-        "status": "FANDUEL_MLB_CURRENT_LOCKS_PROBE_V2_FULL_GAME_ONLY",
+        "status": "FANDUEL_MLB_CURRENT_LOCKS_PROBE_V2_FULL_GAME_ONLY_NO_KALSHI",
         "sportsbook_events": len(events),
         "direct_counterpart_keys": direct_keys,
         "direct_priced_quotes": len(direct_quotes),
@@ -64,6 +65,7 @@ async def main() -> None:
         "quota": quota,
         "fetch_error_count": len(errors),
         "scope_gate": "FULL_GAME_ONLY_HARD_FILTER",
+        "kalshi_rest_used": False,
         "classification": "NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
         "read_only": True,
         "order_entry": False,
