@@ -1,0 +1,2 @@
+Read-only Railway trigger for the MLB Kalshi/Gemini game-total rule fingerprint probe.
+No credentials, approvals, order entry, or live arming.
