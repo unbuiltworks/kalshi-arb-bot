@@ -22,6 +22,19 @@ def _fill(venue: str, side: str, *, ts_ms: int = 1000, price: str = "0.45", fee:
     )
 
 
+def _fee(venue: str, *, fee: str, market_id: str | None = None, ts_ms: int = 1000):
+    return make_event(
+        trade_group_id="g1",
+        settlement_key="hits|game|player|1",
+        category="mlb_hits",
+        venue=venue,
+        market_id=market_id or f"{venue}-m1",
+        event_type="fee",
+        fee=D(fee),
+        ts_ms=ts_ms,
+    )
+
+
 def _settlement(venue: str, *, ts_ms: int, payout: str):
     return make_event(
         trade_group_id="g1",
@@ -52,6 +65,57 @@ def test_uses_later_venue_settlement_for_true_capital_lock():
     assert Decimal(group["capital_lock_hours"]) == Decimal("1.92")
     assert Decimal(group["realized_profit"]) == Decimal("0.04")
     assert Decimal(result["conservative_realized_profit_per_capital_hour"]) == Decimal("0.04") / Decimal("1.92")
+
+
+def test_actual_microprobe_separate_fee_events_are_included_in_capital_and_profit():
+    result = analyze_paper_capital_lock([
+        _fill("polymarket_us", "YES", price="0.44", fee="0"),
+        _fill("kalshi", "NO", price="0.50", fee="0"),
+        _fee("polymarket_us", fee="0.01"),
+        _fee("kalshi", fee="0.02"),
+        _settlement("polymarket_us", ts_ms=3_601_000, payout="1"),
+        _settlement("kalshi", ts_ms=7_201_000, payout="0"),
+    ])
+
+    assert result["verified_settlement_lock_groups"] == 1
+    group = result["groups"][0]
+    assert Decimal(group["poly_fee"]) == Decimal("0.01")
+    assert Decimal(group["kalshi_fee"]) == Decimal("0.02")
+    assert Decimal(group["total_fee"]) == Decimal("0.03")
+    assert Decimal(group["capital"]) == Decimal("0.97")
+    assert Decimal(group["capital_lock_hours"]) == Decimal("1.94")
+    assert Decimal(group["realized_profit"]) == Decimal("0.03")
+
+
+def test_embedded_and_separate_nonzero_fee_representations_fail_closed():
+    result = analyze_paper_capital_lock([
+        _fill("polymarket_us", "YES", price="0.44", fee="0.01"),
+        _fill("kalshi", "NO", price="0.50", fee="0"),
+        _fee("polymarket_us", fee="0.01"),
+        _fee("kalshi", fee="0.01"),
+        _settlement("polymarket_us", ts_ms=3_601_000, payout="1"),
+        _settlement("kalshi", ts_ms=7_201_000, payout="0"),
+    ])
+
+    assert result["invalid_groups"] == 1
+    assert result["verified_settlement_lock_groups"] == 0
+    assert result["conservative_realized_profit_per_capital_hour"] is None
+    assert result["groups"][0]["status"] == "AMBIGUOUS_OR_MISMATCHED_FEE_ACCOUNTING_FAIL_CLOSED"
+
+
+def test_fee_event_for_wrong_market_leg_fails_closed():
+    result = analyze_paper_capital_lock([
+        _fill("polymarket_us", "YES", price="0.44", fee="0"),
+        _fill("kalshi", "NO", price="0.50", fee="0"),
+        _fee("polymarket_us", fee="0.01", market_id="polymarket_us-wrong-market"),
+        _fee("kalshi", fee="0.01"),
+        _settlement("polymarket_us", ts_ms=3_601_000, payout="1"),
+        _settlement("kalshi", ts_ms=7_201_000, payout="0"),
+    ])
+
+    assert result["invalid_groups"] == 1
+    assert result["verified_settlement_lock_groups"] == 0
+    assert result["groups"][0]["status"] == "AMBIGUOUS_OR_MISMATCHED_FEE_ACCOUNTING_FAIL_CLOSED"
 
 
 def test_missing_second_settlement_is_right_censored_and_withholds_efficiency():
