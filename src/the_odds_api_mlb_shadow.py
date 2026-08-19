@@ -3,6 +3,11 @@
 Uses The Odds API as a cheap broad sportsbook discovery layer and compares its
 moneyline/spread/total prices with the existing Gemini/Polymarket/Kalshi q=1
 snapshot pricing. It never places orders.
+
+Sportsbook prices from this feed are treated as pregame-only. An event whose
+``commence_time`` has passed (or is within the safety buffer) contributes no quotes.
+This prevents a freshly fetched but stale/pregame bookmaker line from being compared
+with an in-play prediction-market quote and manufacturing a false arbitrage signal.
 """
 from __future__ import annotations
 
@@ -30,6 +35,7 @@ logger = logging.getLogger("kalshi_arb.the_odds_api_mlb_shadow")
 D = Decimal
 ONE = D("1")
 API = "https://api.the-odds-api.com/v4/sports/baseball_mlb/odds"
+PREGAME_SAFETY_BUFFER_MS = 30_000
 
 
 def _d(value: Any) -> Decimal | None:
@@ -46,6 +52,40 @@ def _start_ms(value: Any) -> int | None:
     except Exception:
         return None
     return int(dt.timestamp() * 1000)
+
+
+def pregame_sportsbook_events(
+    events: list[Mapping[str, Any]],
+    *,
+    asof_ms: int,
+    safety_buffer_ms: int = PREGAME_SAFETY_BUFFER_MS,
+) -> tuple[list[Mapping[str, Any]], dict[str, int]]:
+    """Fail closed on started/near-start/malformed sportsbook events.
+
+    ``asof_ms`` is the local receipt time of the Odds API response, not a bookmaker
+    quote timestamp. Because this feed is not being treated as an authenticated
+    in-play feed, anything at/after the event start (plus a small safety buffer) is
+    excluded before normalization or opportunity math.
+    """
+    safe: list[Mapping[str, Any]] = []
+    started_or_near = 0
+    invalid_start = 0
+    for raw in events:
+        start = _start_ms(raw.get("commence_time"))
+        if start is None:
+            invalid_start += 1
+            continue
+        if start <= asof_ms + max(0, int(safety_buffer_ms)):
+            started_or_near += 1
+            continue
+        safe.append(raw)
+    return safe, {
+        "input_events": len(events),
+        "pregame_events": len(safe),
+        "started_or_near_start_filtered": started_or_near,
+        "invalid_start_filtered": invalid_start,
+        "safety_buffer_ms": max(0, int(safety_buffer_ms)),
+    }
 
 
 def _rule(book: str) -> RuleAudit:
@@ -108,6 +148,9 @@ def _mk_quote(*, book: str, event_id: str, settlement_key: str,
 
 
 def sportsbook_quotes(events: list[Mapping[str, Any]], *, received_ms: int) -> list[MarketQuote]:
+    # Defense in depth: callers may pass the raw Odds API event list. Never emit
+    # sportsbook quotes for a started/near-start event from this pregame-only feed.
+    events, _ = pregame_sportsbook_events(events, asof_ms=received_ms)
     out: list[MarketQuote] = []
     for raw in events:
         home = canonical_team(raw.get("home_team")); away = canonical_team(raw.get("away_team"))
@@ -196,7 +239,8 @@ async def run_once(api_key: str) -> dict[str, Any]:
         poly = [dict(x) for x in poly_raw]
         direct, errors, direct_keys = await price_counterparts(http, gemini, poly, kalshi)
     received_ms = int(time.time() * 1000)
-    retail = sportsbook_quotes(events, received_ms=received_ms)
+    pregame_events, timing = pregame_sportsbook_events(events, asof_ms=received_ms)
+    retail = sportsbook_quotes(pregame_events, received_ms=received_ms)
     direct_quotes = [row.quote for row in direct]
     direct_key_set = {q.settlement_key for q in direct_quotes}
     matched_retail = [q for q in retail if q.settlement_key in direct_key_set]
@@ -207,8 +251,12 @@ async def run_once(api_key: str) -> dict[str, Any]:
     ))
     retail_locks = [x for x in locks if str(x.yes_venue).startswith("sportsbook:") or str(x.no_venue).startswith("sportsbook:")]
     result = {
-        "status": "THE_ODDS_API_MLB_SHADOW",
+        "status": "THE_ODDS_API_MLB_SHADOW_PREGAME_ONLY",
         "sportsbook_events": len(events),
+        "sportsbook_events_pregame": len(pregame_events),
+        "sportsbook_events_started_or_near_start_filtered": timing["started_or_near_start_filtered"],
+        "sportsbook_events_invalid_start_filtered": timing["invalid_start_filtered"],
+        "sportsbook_pregame_safety_buffer_ms": timing["safety_buffer_ms"],
         "sportsbook_quotes": len(retail),
         "sportsbook_quotes_matching_direct_keys": len(matched_retail),
         "books": dict(Counter(q.venue for q in retail)),
@@ -218,6 +266,7 @@ async def run_once(api_key: str) -> dict[str, Any]:
         "top_retail_locks": [x.as_dict() for x in retail_locks[:30]],
         "quota": quota,
         "fetch_error_count": len(errors),
+        "time_gate": "SPORTSBOOK_PREGAME_ONLY",
         "rule_gate": "SPORTSBOOK_RULE_AUDIT_REQUIRED_BEFORE_EXECUTION",
         "read_only": True,
         "order_entry": False,
@@ -243,8 +292,7 @@ async def supervise(api_key: str, interval_s: float, quota_floor: int) -> None:
             if remaining is not None and remaining <= quota_floor:
                 logger.warning(
                     "THE_ODDS_API_QUOTA_GUARD remaining=%s floor=%s polling_paused=true",
-                    remaining,
-                    quota_floor,
+                    remaining, quota_floor,
                 )
                 while True:
                     await asyncio.sleep(3600.0)
