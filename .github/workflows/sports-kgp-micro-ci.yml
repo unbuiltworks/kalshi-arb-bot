@@ -54,3 +54,24 @@ jobs:
             src/sports_kgp_micro_service.py \
             src/gemini_prediction_depth.py \
             src/sports_kgp_micro_live_v2.py
+      - name: Exercise disarmed empty-approval runtime
+        run: |
+          rm -f /tmp/sports-kgp-micro-ci.jsonl /tmp/.sports_kgp_micro_arm_once
+          ENABLE_SPORTS_KGP_MICRO_LIVE=NO \
+            python -m src.sports_kgp_micro_live_v2 \
+              --once \
+              --approvals config/sports_kgp_execution_approvals.json \
+              --arm-token /tmp/.sports_kgp_micro_arm_once \
+              --log /tmp/sports-kgp-micro-ci.jsonl
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows = [json.loads(line) for line in Path('/tmp/sports-kgp-micro-ci.jsonl').read_text().splitlines()]
+          assert rows[0]['mode'] == 'SPORTS_KGP_MICRO_START'
+          assert rows[0]['approved_pair_records'] == 0
+          assert rows[0]['armed'] is False
+          assert rows[0]['order_entry'] is False
+          assert rows[-1]['mode'] == 'WAITING_FOR_CERTIFIED_APPROVAL'
+          assert rows[-1]['order_entry'] is False
+          print(json.dumps({'runtime_gate':'PASS','rows':rows}, sort_keys=True))
+          PY
