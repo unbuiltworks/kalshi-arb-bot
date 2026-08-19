@@ -39,7 +39,7 @@ def test_interval_censored_upper_capital_bound_is_used_for_capacity_score():
         ]
     )
     sleeve = report["sleeves"][0]
-    assert sleeve["capacity_score"] == "0.4"
+    assert Decimal(sleeve["capacity_score"]) == Decimal("0.4")
     assert sleeve["capital_lock_hours"] == "0.25"
     assert sleeve["capital_lock_hours_upper_bound"] == "0.5"
     assert sleeve["conservative_capital_lock_hours"] == "0.5"
