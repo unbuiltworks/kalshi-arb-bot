@@ -1,0 +1,25 @@
+name: Kalshi Open MECNET Arb Probe
+
+on:
+  pull_request:
+    paths:
+      - 'src/kalshi_open_mecnet_arb_probe.py'
+      - '.github/workflows/kalshi-open-mecnet-arb-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Scan all open Kalshi MECNET events
+        run: python -m src.kalshi_open_mecnet_arb_probe
