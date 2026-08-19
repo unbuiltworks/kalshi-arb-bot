@@ -236,14 +236,30 @@ def settlement_events(
 
 def reconcile_paper_ledger(ledger_path: Path, outcomes_path: Path) -> dict[str, Any]:
     before = load_ledger(ledger_path)
-    created, audits = settlement_events(before, load_outcomes(outcomes_path))
+    outcomes = load_outcomes(outcomes_path)
+    _, conflicted_groups = _complete_outcome_rows(outcomes)
+    created, audits = settlement_events(before, outcomes)
     if created:
         sidecar = LedgerSidecar(ledger_path)
         for event in created:
             sidecar.emit(event)
         sidecar.drain_once(max_events=len(created))
     merged = reconcile_events(before, created)
-    summary = summarize_ledger(merged)
+
+    # Append-only outcome collectors can discover a correction after a prior run has
+    # already written settlement events. Never let those stale prior settlements keep
+    # realized paper P/L alive once the current evidence is conflicted. The ledger is
+    # preserved for auditability; only the accounting view quarantines settlement
+    # events for conflicted trade groups until the outcome evidence becomes unambiguous.
+    stale_conflicted_settlements = [
+        event for event in merged
+        if event.event_type == "settlement" and event.trade_group_id in conflicted_groups
+    ]
+    accounting_events = [
+        event for event in merged
+        if not (event.event_type == "settlement" and event.trade_group_id in conflicted_groups)
+    ]
+    summary = summarize_ledger(accounting_events)
     settled_audits = [row for row in audits if row.get("status") == "SETTLED_FROM_OBSERVED_OUTCOMES"]
     conflict_audits = [row for row in audits if str(row.get("status", "")).endswith("FAIL_CLOSED")]
     summary.update({
@@ -252,9 +268,11 @@ def reconcile_paper_ledger(ledger_path: Path, outcomes_path: Path) -> dict[str, 
         "new_outcome_disagreement_groups": sum(not row["outcomes_agree"] for row in settled_audits),
         "outcome_conflict_groups": sum(row.get("status") == "OUTCOME_CONFLICT_FAIL_CLOSED" for row in conflict_audits),
         "fill_structure_conflict_groups": sum(row.get("status") in {"AMBIGUOUS_FILL_LEGS_FAIL_CLOSED", "MALFORMED_COMPLEMENTARY_FILL_GROUP_FAIL_CLOSED"} for row in conflict_audits),
+        "quarantined_conflicted_trade_groups": len(conflicted_groups),
+        "quarantined_stale_settlement_events": len(stale_conflicted_settlements),
         "settlement_audits": audits,
         "settlement_semantics": "VENUE_SPECIFIC_OBSERVED_OUTCOMES_NOT_ASSUMED_EQUIVALENT",
-        "conflict_policy": "CONFLICTING_OUTCOMES_OR_AMBIGUOUS_FILL_STRUCTURE_FAIL_CLOSED_NO_REALIZED_PNL",
+        "conflict_policy": "CONFLICTING_OUTCOMES_OR_AMBIGUOUS_FILL_STRUCTURE_FAIL_CLOSED_NO_REALIZED_PNL_STALE_SETTLEMENTS_QUARANTINED",
         "live_probe_ready": False,
         "read_only": True,
         "order_entry": False,
