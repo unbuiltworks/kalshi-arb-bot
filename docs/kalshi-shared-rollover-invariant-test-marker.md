@@ -1,0 +1,1 @@
+Fresh branch-head marker after configuring the isolated rollover test service to run the one-SID optimizer invariant suite. Live campaign child remains on the proven transport until this suite passes.
