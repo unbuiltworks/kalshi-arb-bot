@@ -19,6 +19,7 @@ from src.sports_kgp_micro_transport import PolymarketMicroExecutor
 
 D = Decimal
 MIN_READY_CASH = D("2.00")
+PREFLIGHT_VERSION = 1
 
 
 def _d(value: Any) -> Decimal:
@@ -92,6 +93,7 @@ async def run_preflight() -> dict[str, Any]:
     checks = {"gemini": _gemini, "kalshi": _kalshi, "polymarket": _polymarket}
     result: dict[str, Any] = {
         "status": "SPORTS_KGP_ACCOUNT_PREFLIGHT",
+        "version": PREFLIGHT_VERSION,
         "read_only": True,
         "order_entry": False,
         "arm_token_created": False,
