@@ -1,0 +1,2 @@
+Read-only Railway trigger for exact Kalshi / Polymarket US MLB total rule audit.
+No credentials, order entry, approval-registry writes, or live arming.
