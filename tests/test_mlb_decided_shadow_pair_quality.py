@@ -9,8 +9,11 @@ from src.mlb_decided_shadow_pair_quality import (
 
 def _pair_row(**extra):
     row = {
+        "family": "baseball_player_hits",
+        "poly_slug": "astatc-mlb-phi-nyy-2026-08-19-hits-example-gte1",
+        "kalshi_ticker": "KXMLBHIT-26AUG19PHINYY-EXAMPLE-1",
         "known_winner_edges": [{"venue": "kalshi"}],
-        "cross_venue_q1_pair_lock": {"profit": "0.04"},
+        "cross_venue_q1_pair_lock": {"profit": "0.04", "direction": "POLY_YES_KALSHI_NO"},
         "read_only": True,
         "order_entry": False,
     }
@@ -70,8 +73,72 @@ def test_analyze_counts_only_synchronized_pair_profit():
         _pair_row(),
     ]
     result = analyze(rows)
+    assert result["synchronized_cross_venue_pair_lock_samples"] == 1
     assert result["synchronized_cross_venue_pair_locks"] == 1
     assert Decimal(result["synchronized_pair_profit_dollars"]) == Decimal("0.04")
+
+
+def test_repeated_resting_pair_samples_are_not_additive_capacity():
+    rows = [
+        _pair_row(
+            poly_book_received_ms=1000,
+            kalshi_book_received_ms=1050,
+            quote_receive_skew_ms=50,
+            cross_venue_q1_pair_lock={"profit": "0.04", "direction": "POLY_YES_KALSHI_NO"},
+        ),
+        _pair_row(
+            poly_book_received_ms=3000,
+            kalshi_book_received_ms=3040,
+            quote_receive_skew_ms=40,
+            cross_venue_q1_pair_lock={"profit": "0.05", "direction": "POLY_YES_KALSHI_NO"},
+        ),
+        _pair_row(
+            poly_book_received_ms=5000,
+            kalshi_book_received_ms=5030,
+            quote_receive_skew_ms=30,
+            cross_venue_q1_pair_lock={"profit": "0.03", "direction": "POLY_YES_KALSHI_NO"},
+        ),
+    ]
+    result = analyze(rows)
+    assert result["synchronized_cross_venue_pair_lock_samples"] == 3
+    assert result["unique_synchronized_pair_identities"] == 1
+    assert result["duplicate_synchronized_pair_samples_excluded"] == 2
+    assert Decimal(result["synchronized_pair_profit_dollars"]) == Decimal("0.05")
+
+
+def test_opposite_directions_remain_distinct_consumable_identities():
+    rows = [
+        _pair_row(
+            poly_book_received_ms=1000,
+            kalshi_book_received_ms=1050,
+            quote_receive_skew_ms=50,
+            cross_venue_q1_pair_lock={"profit": "0.04", "direction": "POLY_YES_KALSHI_NO"},
+        ),
+        _pair_row(
+            poly_book_received_ms=3000,
+            kalshi_book_received_ms=3040,
+            quote_receive_skew_ms=40,
+            cross_venue_q1_pair_lock={"profit": "0.03", "direction": "KALSHI_YES_POLY_NO"},
+        ),
+    ]
+    result = analyze(rows)
+    assert result["unique_synchronized_pair_identities"] == 2
+    assert Decimal(result["synchronized_pair_profit_dollars"]) == Decimal("0.07")
+
+
+def test_synchronized_pair_without_strict_identity_is_excluded_from_capacity():
+    row = _pair_row(
+        poly_book_received_ms=1000,
+        kalshi_book_received_ms=1050,
+        quote_receive_skew_ms=50,
+    )
+    row.pop("poly_slug")
+    result = analyze([row])
+    assert result["synchronized_cross_venue_pair_lock_samples"] == 1
+    assert result["unique_synchronized_pair_identities"] == 0
+    assert result["synchronized_pair_samples_missing_strict_identity"] == 1
+    assert result["pair_lock_reasons"]["MISSING_STRICT_PAIR_IDENTITY"] == 1
+    assert result["synchronized_pair_profit_dollars"] == "0"
 
 
 def test_parse_signal_lines_ignores_other_log_lines_and_bad_json():
