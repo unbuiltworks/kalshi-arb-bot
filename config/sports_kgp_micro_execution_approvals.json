@@ -1,0 +1,4 @@
+{
+  "approvals": [],
+  "note": "Fail closed. Add a pair only after exact cross-venue settlement rules, event scope, side orientation, cancellation/postponement/tie semantics, and official settlement source are audited. Every executable row requires exact market IDs, canonical sides, a SHA-256 rule fingerprint, and approved_for_execution=true."
+}
