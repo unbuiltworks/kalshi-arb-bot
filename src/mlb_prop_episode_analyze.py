@@ -1,7 +1,7 @@
 """Analyze read-only MLB prop opportunity lifecycle JSONL into capacity economics.
 
 Consumes OPEN/MOVE/CLOSE events from ``mlb_prop_episode_tracker``. Repeated resting
-quotes are not events, so they cannot be double-counted as fresh liquidity here.
+quotes are not events, so they cannot be double-counted as fresh capacity here.
 The $1 and $5 probe views are alternative sizing views of the same underlying
 liquidity, not independent opportunities; portfolio totals therefore count at most
 one probe plan per underlying OPEN episode. This module is research-only and
@@ -27,9 +27,16 @@ def _d(value: Any) -> Decimal | None:
 
 
 def _episode_id(event: dict[str, Any]) -> str:
+    """Economic episode identity independent of alternative paper sizing tier.
+
+    The tracker deliberately permits a <=$1 <-> <=$5 tier switch to be a MOVE while
+    preserving ``opened_ms``. Keying by probe_field would split that MOVE away from
+    its OPEN and corrupt duration/capital accounting. A direction flip is already a
+    CLOSE+OPEN with a fresh opened_ms and therefore remains a separate episode.
+    """
     return "|".join(
         str(event.get(k) or "")
-        for k in ("settlement_key", "probe_field", "opened_ms")
+        for k in ("settlement_key", "direction", "opened_ms")
     )
 
 
@@ -46,11 +53,49 @@ def _valid_event(event: dict[str, Any]) -> bool:
         event.get("event") in {"OPEN", "MOVE", "CLOSE"}
         and event.get("settlement_key")
         and event.get("probe_field") in {"probe_1usd", "probe_5usd"}
+        and event.get("direction")
         and isinstance(event.get("opened_ms"), int)
         and isinstance(event.get("observed_ms"), int)
         and event.get("read_only") is True
         and event.get("order_entry") is False
     )
+
+
+def _normalize_groups(
+    grouped: dict[str, list[dict[str, Any]]],
+) -> tuple[dict[str, list[dict[str, Any]]], int]:
+    """Keep current tier-switch episodes whole while tolerating legacy dual-view logs.
+
+    Current tracker output has one OPEN per economic identity and may later MOVE to a
+    different probe_field. Older logs could contain simultaneous <=$1 and <=$5 OPENs
+    for the same economic identity. Those legacy rows must remain separate views so
+    downstream portfolio de-duplication can select one without blending overlapping
+    capital. Ambiguous groups with multiple OPENs in the same probe tier fail closed.
+    """
+    normalized: dict[str, list[dict[str, Any]]] = {}
+    invalid = 0
+    for episode_id, rows in grouped.items():
+        opens = [r for r in rows if r.get("event") == "OPEN"]
+        if len(opens) <= 1:
+            normalized[episode_id] = rows
+            continue
+
+        by_probe: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            by_probe[str(row.get("probe_field") or "")].append(row)
+
+        legacy_ok = True
+        for probe_rows in by_probe.values():
+            if sum(r.get("event") == "OPEN" for r in probe_rows) != 1:
+                legacy_ok = False
+                break
+        if not legacy_ok:
+            invalid += 1
+            continue
+
+        for probe_field, probe_rows in by_probe.items():
+            normalized[f"{episode_id}|legacy_view|{probe_field}"] = probe_rows
+    return normalized, invalid
 
 
 def _dedupe_probe_views(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -102,17 +147,21 @@ def analyze_events(
     The supplied observation window must also cover every retained positive episode;
     otherwise the projection is withheld rather than trusting a truncated denominator.
     """
-    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    raw_grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     invalid = 0
     for event in events:
         if not _valid_event(event):
             invalid += 1
             continue
-        grouped[_episode_id(event)].append(dict(event))
+        raw_grouped[_episode_id(event)].append(dict(event))
+
+    grouped, grouping_invalid = _normalize_groups(raw_grouped)
+    invalid += grouping_invalid
 
     episode_rows: list[dict[str, Any]] = []
     positive_start: int | None = None
     positive_end: int | None = None
+    budget_tier_switch_episodes = 0
 
     for episode_id, rows in grouped.items():
         rows.sort(key=lambda r: (int(r["observed_ms"]), {"OPEN": 0, "MOVE": 1, "CLOSE": 2}[r["event"]]))
@@ -131,6 +180,14 @@ def analyze_events(
         positive_end = end_ms if positive_end is None else max(positive_end, end_ms)
 
         priced = [r for r in rows if r["event"] in {"OPEN", "MOVE"}]
+        probe_fields_seen = tuple(sorted({str(r.get("probe_field")) for r in priced if r.get("probe_field")}))
+        tier_switches = sum(
+            priced[i].get("probe_field") != priced[i - 1].get("probe_field")
+            for i in range(1, len(priced))
+        )
+        if tier_switches:
+            budget_tier_switch_episodes += 1
+
         first_profit = _d(opened.get("modeled_profit")) or D("0")
         first_capital = _d(opened.get("capital")) or D("0")
         peak_profit = max((_d(r.get("modeled_profit")) or D("0") for r in priced), default=D("0"))
@@ -153,6 +210,8 @@ def analyze_events(
                 "episode_id": episode_id,
                 "settlement_key": opened.get("settlement_key"),
                 "probe_field": opened.get("probe_field"),
+                "probe_fields_seen": probe_fields_seen,
+                "budget_tier_switches": tier_switches,
                 "family": opened.get("family"),
                 "direction": opened.get("direction"),
                 "opened_ms": int(opened["opened_ms"]),
@@ -180,6 +239,7 @@ def analyze_events(
             "capital_hours": str(capital_hours),
             "profit_per_capital_hour": str(first_profit / capital_hours) if capital_hours > 0 else None,
             "max_episode_duration_ms": max((r["duration_ms"] for r in rows), default=0),
+            "budget_tier_switch_episodes": sum(bool(r.get("budget_tier_switches")) for r in rows),
         }
 
     by_probe: dict[str, dict[str, Any]] = {}
@@ -239,9 +299,11 @@ def analyze_events(
         "by_family": by_family,
         "probe_view_episodes": len(episode_rows),
         "unique_liquidity_episodes": len(portfolio_rows),
+        "budget_tier_switch_episodes": budget_tier_switch_episodes,
+        "episode_identity_rule": "settlement_key + direction + opened_ms; probe_field changes remain MOVE within one episode",
         "portfolio_dedup_rule": (
             "<= $1 and <= $5 plans are alternative sizing views of the same resting liquidity; "
-            "portfolio totals keep only the higher first-seen-profit plan per settlement_key/direction/opened_ms."
+            "legacy dual-view logs are kept separate before portfolio totals select one view."
         ),
         "positive_episode_span_hours": str(positive_span_hours),
         "observation_window_provided": observation_window_valid,
