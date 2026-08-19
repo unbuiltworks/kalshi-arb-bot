@@ -42,6 +42,28 @@ def _env_i(name: str, default: int) -> int:
         return default
 
 
+def _fmt_cents(value: Any) -> str:
+    cents = _d(value) * D("100")
+    if cents == cents.to_integral_value():
+        return f"{int(cents)}¢"
+    return f"{cents:.1f}".rstrip("0").rstrip(".") + "¢"
+
+
+def _pretty_venue(value: Any) -> str:
+    raw = str(value or "").strip()
+    aliases = {
+        "kalshi": "Kalshi",
+        "gemini": "Gemini",
+        "polymarket": "Polymarket",
+        "sportsbook:fanduel": "FanDuel",
+        "sportsbook:draftkings": "DraftKings",
+        "sportsbook:betmgm": "BetMGM",
+        "sportsbook:betrivers": "BetRivers",
+        "sportsbook:fanatics": "Fanatics",
+    }
+    return aliases.get(raw.lower(), raw.removeprefix("sportsbook:").replace("_", " ").title() or "Unknown")
+
+
 @dataclass(frozen=True)
 class AlertPolicy:
     min_unit_profit: Decimal = D("0.02")
@@ -150,7 +172,17 @@ class SportsPushoverAlerts:
             "age_ms": max(0, now_ms - received_ms),
         }
 
-    def build_message(self, lock: Any, rows: Iterable[Any], *, rule_status: str, source: str, now_ms: int | None = None) -> tuple[str, str, int]:
+    def build_message(
+        self,
+        lock: Any,
+        rows: Iterable[Any],
+        *,
+        rule_status: str,
+        source: str,
+        now_ms: int | None = None,
+        display_title: str | None = None,
+        display_market: str | None = None,
+    ) -> tuple[str, str, int]:
         now_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
         rows = list(rows)
         yes = self._leg(lock, rows, yes=True, now_ms=now_ms)
@@ -159,15 +191,34 @@ class SportsPushoverAlerts:
         cost = _d(lock.max_capital)
         payout = qty
         profit = _d(lock.max_locked_profit)
+        unit_profit = _d(lock.unit_profit)
         total_fees = yes["fee"] + no["fee"]
         manual = yes["venue"].startswith("sportsbook:") or no["venue"].startswith("sportsbook:")
         max_age = max(int(yes["age_ms"]), int(no["age_ms"]))
+
+        if display_market:
+            title = (display_title or f"{display_market} • ARB +${profit:.2f}")[:250]
+            message = "\n".join((
+                display_market,
+                "",
+                f"YES — {_pretty_venue(yes['venue'])}: {_fmt_cents(yes['price'])}",
+                f"NO — {_pretty_venue(no['venue'])}: {_fmt_cents(no['price'])}",
+                "",
+                f"Locked: +${profit:.2f} total • +{_fmt_cents(unit_profit)}/contract",
+                f"Size: {qty} • Cost: ${cost:.2f} • Payout: ${payout:.2f}",
+                f"Fees: ${total_fees:.2f}",
+                f"Freshness: {max_age}ms max • skew {int(lock.quote_skew_ms)}ms",
+                f"Rules: {rule_status} • Settlement: {lock.settlement_confidence}",
+                f"Manual sportsbook action: {'YES' if manual else 'NO'}",
+            ))
+            return title, message[:1024], max_age
+
         title = f"Sports arb +${profit:.2f}"
         message = "\n".join((
             f"{source} | {lock.settlement_key}",
             f"YES {yes['venue']} @ {yes['price']:.4f} | NO {no['venue']} @ {no['price']:.4f}",
             f"Qty {qty} | Cost ${cost:.2f} | Payout ${payout:.2f}",
-            f"Fees ${total_fees:.2f} | After-fee P/L +${profit:.2f} ({_d(lock.unit_profit):.4f}/unit)",
+            f"Fees ${total_fees:.2f} | After-fee P/L +${profit:.2f} ({unit_profit:.4f}/unit)",
             f"Freshness max {max_age}ms | skew {int(lock.quote_skew_ms)}ms",
             f"Settlement {lock.settlement_confidence} | Rules {rule_status}",
             f"Manual sportsbook action: {'YES' if manual else 'NO'}",
@@ -187,10 +238,27 @@ class SportsPushoverAlerts:
             raise RuntimeError(f"Pushover rejected notification status={body.get('status')}")
         return str(body.get("request") or "")
 
-    async def maybe_send(self, lock: Any, rows: Iterable[Any], *, rule_status: str, source: str, actionable: bool) -> bool:
+    async def maybe_send(
+        self,
+        lock: Any,
+        rows: Iterable[Any],
+        *,
+        rule_status: str,
+        source: str,
+        actionable: bool,
+        display_title: str | None = None,
+        display_market: str | None = None,
+    ) -> bool:
         if not self.configured:
             return False
-        title, message, max_age = self.build_message(lock, rows, rule_status=rule_status, source=source)
+        title, message, max_age = self.build_message(
+            lock,
+            rows,
+            rule_status=rule_status,
+            source=source,
+            display_title=display_title,
+            display_market=display_market,
+        )
         ok, _reason = self.qualifies(lock, max_age_ms=max_age, actionable=actionable)
         if not ok or not self.should_realert(lock):
             return False
