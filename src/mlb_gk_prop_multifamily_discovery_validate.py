@@ -7,12 +7,13 @@ import json
 
 import httpx
 
+from src import mlb_gk_multifamily_discovery_patch as discovery_patch
 from src import mlb_gk_prop_live_multifamily_rule_risk_canary as canary
 from src.gemini_kalshi_mlb_prop_hot_shadow import discover_hot
 
 
 async def main() -> None:
-    canary._install_home_run_discovery()
+    discovery_patch.install()
     async with httpx.AsyncClient(timeout=30.0) as http:
         hot, _market_to_keys, diagnostics = await discover_hot(http)
     selected = {
