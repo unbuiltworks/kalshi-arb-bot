@@ -158,8 +158,55 @@ def _notification_candidates(result: dict[str, Any]) -> list[tuple[SimpleNamespa
     return out
 
 
+def _fmt_cents(value: Any, *, signed: bool = False) -> str:
+    cents = _d(value) * D("100")
+    sign = "+" if signed and cents >= 0 else ""
+    if cents == cents.to_integral_value():
+        return f"{sign}{int(cents)}¢"
+    text = f"{cents:.1f}".rstrip("0").rstrip(".")
+    return f"{sign}{text}¢"
+
+
+def _pretty_venue(value: Any) -> str:
+    raw = str(value or "").strip()
+    aliases = {"polymarket": "Polymarket", "kalshi": "Kalshi", "gemini": "Gemini"}
+    return aliases.get(raw.lower(), raw.replace("_", " ").title() or "Unknown")
+
+
+def _prop_identity(lock: Any, assessment: dict[str, Any]) -> tuple[str, str]:
+    player = str(assessment.get("player") or "MLB Player").strip()
+    parts = [part for part in str(getattr(lock, "settlement_key", "")).split("|") if part]
+    stat = "prop"
+    comparator = ""
+    threshold = ""
+    try:
+        player_idx = parts.index("player")
+        stat = parts[player_idx + 2]
+        comparator = parts[player_idx + 3]
+        threshold = parts[player_idx + 4]
+    except (ValueError, IndexError):
+        family = str(assessment.get("family") or "")
+        stat = family.removeprefix("baseball_player_") or "prop"
+
+    stat_label = STAT_LABELS.get(stat.lower(), stat.replace("_", " ").title())
+    threshold_text = threshold
+    if comparator == "GE" and threshold:
+        threshold_text = f"{threshold}+"
+    elif comparator == "LE" and threshold:
+        threshold_text = f"{threshold} or fewer"
+    elif comparator == "GT" and threshold:
+        threshold_text = f"Over {threshold}"
+    elif comparator == "LT" and threshold:
+        threshold_text = f"Under {threshold}"
+    elif comparator == "EQ" and threshold:
+        threshold_text = threshold
+
+    market_label = f"{threshold_text} {stat_label}".strip()
+    return player, market_label
+
+
 async def _deliver_prop_alerts(result: dict[str, Any], sink: SportsPushoverAlerts | None = None) -> dict[str, Any]:
-    """Certified-arb notification path. Deliberately unchanged by candidate alerts."""
+    """Certified-arb notification path with explicit player/stat/threshold identity."""
     sink = sink or _alerts
     candidates = _notification_candidates(result)
     sent = 0
@@ -171,6 +218,7 @@ async def _deliver_prop_alerts(result: dict[str, Any], sink: SportsPushoverAlert
             blocked += 1
             continue
         eligible += 1
+        player, market_label = _prop_identity(lock, assessment)
         try:
             if await sink.maybe_send(
                 lock,
@@ -178,6 +226,8 @@ async def _deliver_prop_alerts(result: dict[str, Any], sink: SportsPushoverAlert
                 rule_status=str(assessment.get("status") or "CERTIFIED"),
                 source="MLB_PLAYER_PROP",
                 actionable=True,
+                display_title=f"{player} • {market_label} • CERTIFIED ARB",
+                display_market=f"{player} — {market_label}",
             ):
                 sent += 1
         except Exception as exc:
@@ -276,53 +326,6 @@ def _mark_candidate_sent(lock: Any) -> None:
         _d(getattr(lock, "max_locked_profit", "0")),
         _d(getattr(lock, "max_quantity", "0")),
     )
-
-
-def _fmt_cents(value: Any, *, signed: bool = False) -> str:
-    cents = _d(value) * D("100")
-    sign = "+" if signed and cents >= 0 else ""
-    if cents == cents.to_integral_value():
-        return f"{sign}{int(cents)}¢"
-    text = f"{cents:.1f}".rstrip("0").rstrip(".")
-    return f"{sign}{text}¢"
-
-
-def _pretty_venue(value: Any) -> str:
-    raw = str(value or "").strip()
-    aliases = {"polymarket": "Polymarket", "kalshi": "Kalshi", "gemini": "Gemini"}
-    return aliases.get(raw.lower(), raw.replace("_", " ").title() or "Unknown")
-
-
-def _prop_identity(lock: Any, assessment: dict[str, Any]) -> tuple[str, str]:
-    player = str(assessment.get("player") or "MLB Player").strip()
-    parts = [part for part in str(getattr(lock, "settlement_key", "")).split("|") if part]
-    stat = "prop"
-    comparator = ""
-    threshold = ""
-    try:
-        player_idx = parts.index("player")
-        stat = parts[player_idx + 2]
-        comparator = parts[player_idx + 3]
-        threshold = parts[player_idx + 4]
-    except (ValueError, IndexError):
-        family = str(assessment.get("family") or "")
-        stat = family.removeprefix("baseball_player_") or "prop"
-
-    stat_label = STAT_LABELS.get(stat.lower(), stat.replace("_", " ").title())
-    threshold_text = threshold
-    if comparator == "GE" and threshold:
-        threshold_text = f"{threshold}+"
-    elif comparator == "LE" and threshold:
-        threshold_text = f"{threshold} or fewer"
-    elif comparator == "GT" and threshold:
-        threshold_text = f"Over {threshold}"
-    elif comparator == "LT" and threshold:
-        threshold_text = f"Under {threshold}"
-    elif comparator == "EQ" and threshold:
-        threshold_text = threshold
-
-    market_label = f"{threshold_text} {stat_label}".strip()
-    return player, market_label
 
 
 def _candidate_message(
