@@ -42,8 +42,36 @@ def test_interval_censored_upper_capital_bound_is_used_for_capacity_score():
     assert Decimal(sleeve["capacity_score"]) == Decimal("0.4")
     assert sleeve["capital_lock_hours"] == "0.25"
     assert sleeve["capital_lock_hours_upper_bound"] == "0.5"
+    assert sleeve["capital_lock_upper_bound_supplied"] is True
     assert sleeve["conservative_capital_lock_hours"] == "0.5"
     assert sleeve["capital_lock_basis"] == "INTERVAL_CENSORED_UPPER_BOUND"
+
+
+def test_explicit_missing_upper_bound_withholds_capacity_for_right_censored_episode():
+    report = rank_sleeves(
+        [
+            {
+                "name": "active-polled-mlb",
+                "category": "mlb",
+                "venues": ["polymarket_us", "kalshi"],
+                "net_edge_per_dollar": "0.04",
+                "executable_probability": "0.5",
+                "depth_dollars": "10",
+                "capital_lock_hours": "0.25",
+                "capital_lock_hours_upper_bound": None,
+                "settlement_confidence": "1",
+                "basis_risk": "0",
+            }
+        ]
+    )
+    sleeve = report["sleeves"][0]
+    assert sleeve["capital_lock_upper_bound_supplied"] is True
+    assert sleeve["capital_lock_hours_upper_bound"] is None
+    assert sleeve["conservative_capital_lock_hours"] == "0"
+    assert sleeve["capital_lock_basis"] == "RIGHT_CENSORED_OR_INVALID_UPPER_BOUND_WITHHELD"
+    assert sleeve["capacity_score"] == "0"
+    assert sleeve["confidence_adjusted_score"] == "0"
+    assert sleeve["promotable_score"] == "0"
 
 
 def test_point_estimate_remains_backward_compatible_when_no_upper_bound_exists():
@@ -64,6 +92,7 @@ def test_point_estimate_remains_backward_compatible_when_no_upper_bound_exists()
     )
     sleeve = report["sleeves"][0]
     assert sleeve["capacity_score"] == "0.8"
+    assert sleeve["capital_lock_upper_bound_supplied"] is False
     assert sleeve["conservative_capital_lock_hours"] == "0.25"
     assert sleeve["capital_lock_basis"] == "SUPPLIED_POINT_ESTIMATE"
 
