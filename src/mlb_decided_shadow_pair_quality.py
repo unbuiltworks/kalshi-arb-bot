@@ -7,11 +7,14 @@ The post-decision/terminal prop lane can expose two different research signals:
 
 Cross-venue capacity is counted only with explicit receive timestamps and bounded
 receive skew. Newer producer rows may also include explicit OPEN/MOVE/RESTING/CLOSE
-episode telemetry. When that evidence exists, consumable capacity is counted once per
-OPEN episode, allowing genuinely renewed liquidity after a CLOSE to count again while
-never summing repeated resting samples. Older synchronized rows remain supported, but
-are conservatively collapsed to one best sample per strict pair identity + direction
-for the entire log.
+episode telemetry. When that evidence exists, renewed liquidity is counted once per
+OPEN episode. Importantly, executable-shadow P&L uses the profit visible on the OPEN
+observation, not the best later MOVE/RESTING price discovered with hindsight. Peak
+within-episode profit is retained separately as theoretical research evidence.
+
+Older synchronized rows remain supported, but because they have no lifecycle OPEN
+evidence they are conservatively collapsed to one best sample per strict pair identity
++ direction and excluded from executable-shadow P&L.
 
 No execution clients, credentials, or approval state exist here.
 """
@@ -116,12 +119,16 @@ def analyze(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
     synchronized_pair_lock_samples = 0
     synchronized_without_identity = 0
 
-    # Legacy rows have no episode lifecycle, so conservatively count one best sample
-    # per strict identity over the whole log.
+    # Legacy rows have no episode lifecycle, so they can provide only theoretical
+    # synchronized evidence. Collapse to one best sample per strict identity over the
+    # whole log, but never call that executable-shadow P&L.
     legacy_best_profit: dict[tuple[str, str, str, str], Decimal] = {}
 
-    # Episode-aware rows can safely count renewed liquidity once per OPEN episode.
-    episode_best_profit: dict[tuple[tuple[str, str, str, str], int], Decimal] = {}
+    # Episode-aware rows keep two deliberately different economics views:
+    #   * first OPEN observation = executable-shadow candidate without hindsight
+    #   * best OPEN/MOVE/RESTING observation = theoretical peak research evidence
+    episode_peak_profit: dict[tuple[tuple[str, str, str, str], int], Decimal] = {}
+    episode_open_profit: dict[tuple[tuple[str, str, str, str], int], Decimal] = {}
     episode_events: Counter[str] = Counter()
     malformed_episode_rows = 0
 
@@ -165,9 +172,11 @@ def analyze(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
                 reasons["MALFORMED_EPISODE_EVIDENCE"] += 1
                 continue
             if episode_key is not None:
-                previous = episode_best_profit.get(episode_key)
+                previous = episode_peak_profit.get(episode_key)
                 if previous is None or profit > previous:
-                    episode_best_profit[episode_key] = profit
+                    episode_peak_profit[episode_key] = profit
+                if event == "OPEN" and episode_key not in episode_open_profit:
+                    episode_open_profit[episode_key] = profit
                 continue
 
         previous = legacy_best_profit.get(identity)
@@ -175,13 +184,22 @@ def analyze(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
             legacy_best_profit[identity] = profit
 
     legacy_profit = sum(legacy_best_profit.values(), Decimal("0"))
-    episode_profit = sum(episode_best_profit.values(), Decimal("0"))
-    total_profit = legacy_profit + episode_profit
-    consumable_units = len(legacy_best_profit) + len(episode_best_profit)
+    episode_peak_total = sum(episode_peak_profit.values(), Decimal("0"))
+    episode_open_total = sum(episode_open_profit.values(), Decimal("0"))
+    theoretical_total_profit = legacy_profit + episode_peak_total
+
+    # A synchronized episode that appears only as MOVE/RESTING in the supplied log is
+    # valid timing evidence but not a first-seen executable-shadow opportunity. This
+    # commonly happens when analysis starts mid-stream. Do not backfill the missing OPEN
+    # using the later/better sample.
+    episodes_without_open = len(set(episode_peak_profit) - set(episode_open_profit))
+
+    theoretical_units = len(legacy_best_profit) + len(episode_peak_profit)
+    executable_shadow_units = len(episode_open_profit)
     duplicate_samples = max(
         0,
         synchronized_pair_lock_samples
-        - consumable_units
+        - theoretical_units
         - synchronized_without_identity
         - malformed_episode_rows,
     )
@@ -191,25 +209,34 @@ def analyze(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "single_venue_known_winner_edges": known_winner_edges,
         "cross_venue_pair_locks_seen": pair_locks_seen,
         "synchronized_cross_venue_pair_lock_samples": synchronized_pair_lock_samples,
-        "synchronized_cross_venue_pair_locks": consumable_units,
-        "unique_synchronized_pair_identities": len(set(legacy_best_profit) | {key[0] for key in episode_best_profit}),
-        "consumable_episode_units": consumable_units,
-        "episode_aware_consumable_units": len(episode_best_profit),
+        "synchronized_cross_venue_pair_locks": theoretical_units,
+        "unique_synchronized_pair_identities": len(set(legacy_best_profit) | {key[0] for key in episode_peak_profit}),
+        "consumable_episode_units": theoretical_units,
+        "episode_aware_consumable_units": len(episode_peak_profit),
+        "episode_open_executable_shadow_units": executable_shadow_units,
+        "episode_units_without_observed_open": episodes_without_open,
         "legacy_identity_collapsed_units": len(legacy_best_profit),
         "duplicate_synchronized_pair_samples_excluded": duplicate_samples,
         "synchronized_pair_samples_missing_strict_identity": synchronized_without_identity,
         "malformed_episode_rows_excluded": malformed_episode_rows,
         "pair_episode_events": dict(sorted(episode_events.items())),
-        "synchronized_pair_profit_dollars": str(total_profit),
-        "episode_aware_profit_dollars": str(episode_profit),
+        # Backward-compatible field: remains the theoretical peak/collapsed view.
+        "synchronized_pair_profit_dollars": str(theoretical_total_profit),
+        "theoretical_synchronized_pair_profit_dollars": str(theoretical_total_profit),
+        "episode_aware_profit_dollars": str(episode_peak_total),
+        "episode_peak_theoretical_profit_dollars": str(episode_peak_total),
+        "episode_first_seen_executable_shadow_profit_dollars": str(episode_open_total),
+        "executable_shadow_pair_profit_dollars": str(episode_open_total),
         "legacy_collapsed_profit_dollars": str(legacy_profit),
         "pair_lock_reasons": dict(sorted(reasons.items())),
         "pair_lock_accounting_rule": (
             "REQUIRE_EXPLICIT_RECEIVE_TIMESTAMPS_AND_LE_500MS_SKEW; "
-            "EPISODE_ROWS_COUNT_ONCE_PER_STRICT_IDENTITY_PLUS_OPENED_MS; "
-            "LEGACY_ROWS_COLLAPSE_TO_BEST_Q1_SAMPLE_PER_STRICT_IDENTITY_AND_DIRECTION"
+            "THEORETICAL_EPISODE_ROWS_COLLAPSE_TO_PEAK_PER_STRICT_IDENTITY_PLUS_OPENED_MS; "
+            "EXECUTABLE_SHADOW_COUNTS_ONLY_FIRST_SYNCHRONIZED_OPEN_PROFIT; "
+            "LEGACY_ROWS_COLLAPSE_TO_BEST_Q1_SAMPLE_BUT_ARE_EXCLUDED_FROM_EXECUTABLE_SHADOW"
         ),
         "repeated_resting_depth": "MOVE_AND_RESTING_SAMPLES_WITHIN_ONE_OPEN_EPISODE_NOT_ADDITIVE_CAPACITY",
+        "hindsight_timing_policy": "PEAK_MOVE_OR_RESTING_PROFIT_IS_THEORETICAL_ONLY_NOT_EXECUTABLE_SHADOW",
         "episode_limitation": (
             "RENEWED_LIQUIDITY_COUNTS_AGAIN_ONLY_WHEN_PRODUCER_EMITS_A_NEW_OPENED_MS_AFTER_CLOSE"
         ),
