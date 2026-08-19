@@ -80,7 +80,12 @@ def analyze_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[str, Any]:
         fee_invalid = False
         for venue, fill in (("polymarket_us", poly), ("kalshi", kalshi)):
             fee_events = group_fees.get(venue, [])
-            if any(event.market_id != fill.market_id for event in fee_events):
+            if any(
+                event.market_id != fill.market_id
+                or event.settlement_key != fill.settlement_key
+                or event.category != fill.category
+                for event in fee_events
+            ):
                 fee_invalid = True
                 break
             explicit_fee = sum((event.fee for event in fee_events), D("0"))
@@ -112,15 +117,28 @@ def analyze_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[str, Any]:
 
         poly_settle = group_settlements["polymarket_us"][0]
         kalshi_settle = group_settlements["kalshi"][0]
+
+        def settlement_matches_fill(settlement: LedgerEvent, fill: LedgerEvent) -> bool:
+            return (
+                settlement.market_id == fill.market_id
+                and settlement.settlement_key == fill.settlement_key
+                and settlement.category == fill.category
+                and settlement.ts_ms > fill_ts
+                and (settlement.side is None or settlement.side == fill.side)
+                and settlement.payout >= 0
+                and settlement.payout <= fill.quantity
+            )
+
         exact_leg_match = (
-            poly_settle.market_id == poly.market_id
-            and kalshi_settle.market_id == kalshi.market_id
-            and poly_settle.ts_ms > fill_ts
-            and kalshi_settle.ts_ms > fill_ts
+            settlement_matches_fill(poly_settle, poly)
+            and settlement_matches_fill(kalshi_settle, kalshi)
         )
         if not exact_leg_match:
             invalid_groups += 1
-            rows.append({"trade_group_id": group_id, "status": "INVALID_SETTLEMENT_TIMING_OR_MARKET_FAIL_CLOSED"})
+            rows.append({
+                "trade_group_id": group_id,
+                "status": "INVALID_SETTLEMENT_IDENTITY_TIMING_OR_PAYOUT_FAIL_CLOSED",
+            })
             continue
 
         poly_fee = fee_by_venue["polymarket_us"]
@@ -183,6 +201,7 @@ def analyze_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[str, Any]:
         ),
         "capital_lock_semantics": "FILL_TO_LATER_OF_TWO_OBSERVED_VENUE_SETTLEMENTS",
         "fee_semantics": "EXACT_FEE_EVENTS_PREFERRED_LEGACY_FILL_FEE_FALLBACK_FAIL_CLOSED_ON_AMBIGUITY",
+        "settlement_validation": "EXACT_KEY_CATEGORY_MARKET_OPTIONAL_SIDE_AND_PAYOUT_BOUNDED_BY_FILLED_QUANTITY",
         "opportunity_duration_is_capital_lock": False,
         "warning": (
             "Do not substitute OPEN/MOVE/CLOSE quote lifetime for post-fill capital lock. "
