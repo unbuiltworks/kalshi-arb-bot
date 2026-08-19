@@ -164,6 +164,11 @@ async def sharded_run(store: base.GeminiBookTickerStore) -> None:
 def _is_hot_payload(payload: dict[str, Any] | None) -> bool:
     if not payload:
         return False
+    blockers = payload.get("blockers")
+    if not isinstance(blockers, list):
+        return False
+    if "PAYLOAD_ECONOMICS_MISMATCH" in blockers:
+        return False
     try:
         profit = float(payload.get("recomputed_payload_locked_profit", "0"))
         skew = int(payload.get("quote_skew_ms", 10**9))
@@ -192,7 +197,7 @@ async def hot_funnel_evaluate_key(*args: Any, **kwargs: Any) -> None:
     if is_hot and not before_hot:
         remaining = [
             blocker for blocker in payload.get("blockers", [])
-            if blocker not in {"QUOTE_SKEW_GT_50MS", "AFTER_FEE_PROFIT_LT_3C", "PAYLOAD_ECONOMICS_MISMATCH"}
+            if blocker not in {"QUOTE_SKEW_GT_50MS", "AFTER_FEE_PROFIT_LT_3C"}
         ]
         logger.info("MLB_GK_HOT_CANDIDATE %s", json.dumps({
             "settlement_key": payload.get("settlement_key"),
