@@ -28,7 +28,10 @@ EXECUTABLE_DEPTH_SOURCE_BY_VENUE = {
 DEFAULT_MIN_UNIT_PROFIT = D("0.03")
 DEFAULT_MAX_QUOTE_SKEW_MS = 50
 DEFAULT_MAX_BOOK_AGE_MS = 100
-DEFAULT_MAX_CAPITAL = D("10.00")
+# First automatic sports canary is deliberately below $1 of paired capital.
+# With q=1 and >=3c locked profit the mathematical maximum is already 97c;
+# keeping the explicit ceiling at $1 makes that safety invariant self-documenting.
+DEFAULT_MAX_CAPITAL = D("1.00")
 INITIAL_QUANTITY = ONE
 ECON_TOLERANCE = D("0.000001")
 
@@ -195,8 +198,8 @@ def build_micro_plan(
         raise ValueError("less than one contract of displayed depth")
     if D(str(opportunity.unit_profit)) < D(min_unit_profit):
         raise ValueError("after-fee edge below micro-live threshold")
-    if int(opportunity.quote_skew_ms) > int(max_quote_skew_ms):
-        raise ValueError("cross-venue quote skew above micro-live threshold")
+    if int(opportunity.quote_skew_ms) < 0 or int(opportunity.quote_skew_ms) > int(max_quote_skew_ms):
+        raise ValueError("cross-venue quote skew above live threshold")
 
     current = {
         row.quote.venue: row
