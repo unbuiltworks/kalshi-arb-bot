@@ -28,6 +28,9 @@ logger = logging.getLogger("kalshi_arb.universal_three_venue_sports")
 GEMINI = "https://api.gemini.com"
 POLY = "https://gateway.polymarket.us"
 KALSHI = "https://external-api.kalshi.com/trade-api/v2"
+KALSHI_429_MAX_ATTEMPTS = 4
+KALSHI_429_BASE_DELAY_S = 0.25
+KALSHI_SERIES_SPACING_S = 0.05
 
 
 async def _json(http: httpx.AsyncClient, url: str, **kwargs: Any) -> dict[str, Any]:
@@ -35,6 +38,36 @@ async def _json(http: httpx.AsyncClient, url: str, **kwargs: Any) -> dict[str, A
     response.raise_for_status()
     body = response.json()
     return body if isinstance(body, dict) else {}
+
+
+async def _kalshi_json(http: httpx.AsyncClient, url: str, **kwargs: Any) -> dict[str, Any]:
+    """Fetch Kalshi public JSON with bounded 429 retry; never substitute stale data."""
+    for attempt in range(KALSHI_429_MAX_ATTEMPTS):
+        response = await http.get(url, **kwargs)
+        if response.status_code != 429:
+            response.raise_for_status()
+            body = response.json()
+            return body if isinstance(body, dict) else {}
+
+        if attempt + 1 >= KALSHI_429_MAX_ATTEMPTS:
+            response.raise_for_status()
+
+        retry_after = response.headers.get("Retry-After", "").strip()
+        try:
+            server_delay = float(retry_after)
+        except (TypeError, ValueError):
+            server_delay = 0.0
+        delay_s = max(server_delay, KALSHI_429_BASE_DELAY_S * (2 ** attempt))
+        delay_s = min(delay_s, 4.0)
+        logger.warning(
+            "KALSHI_MLB_DISCOVERY_429 attempt=%s/%s retry_after_s=%.3f stale_fallback=false",
+            attempt + 1,
+            KALSHI_429_MAX_ATTEMPTS,
+            delay_s,
+        )
+        await asyncio.sleep(delay_s)
+
+    raise RuntimeError("unreachable Kalshi 429 retry state")
 
 
 async def fetch_gemini_mlb(http: httpx.AsyncClient) -> list[dict[str, Any]]:
@@ -90,7 +123,7 @@ async def fetch_kalshi_mlb(http: httpx.AsyncClient) -> list[dict[str, Any]]:
             }
             if cursor:
                 params["cursor"] = cursor
-            body = await _json(http, f"{KALSHI}/events", params=params)
+            body = await _kalshi_json(http, f"{KALSHI}/events", params=params)
             rows = [dict(row) for row in body.get("events") or [] if isinstance(row, Mapping)]
             out.extend(rows)
             cursor = str(body.get("cursor") or "")
@@ -98,7 +131,13 @@ async def fetch_kalshi_mlb(http: httpx.AsyncClient) -> list[dict[str, Any]]:
                 break
         return out
 
-    groups = await asyncio.gather(*(one(series) for series in KALSHI_SERIES))
+    # Avoid bursting all MLB series at Kalshi simultaneously. This path is discovery,
+    # not price-trigger execution, so a few milliseconds of spacing is a safe tradeoff.
+    groups: list[list[dict[str, Any]]] = []
+    for index, series in enumerate(KALSHI_SERIES):
+        groups.append(await one(series))
+        if index + 1 < len(KALSHI_SERIES):
+            await asyncio.sleep(KALSHI_SERIES_SPACING_S)
     return [row for group in groups for row in group]
 
 
