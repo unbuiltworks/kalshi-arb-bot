@@ -1,0 +1,6 @@
+{
+  "service": "mlb-terminal-total-shadow",
+  "read_only": true,
+  "order_entry": false,
+  "branch": "feature/mlb-terminal-safe-state-shadow"
+}
