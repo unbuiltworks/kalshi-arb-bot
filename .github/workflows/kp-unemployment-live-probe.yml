@@ -1,0 +1,21 @@
+name: kp-unemployment-live-probe
+
+on:
+  push:
+    branches: [feature/kp-unemployment-live-probe]
+  workflow_dispatch:
+
+jobs:
+  safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install --disable-pip-version-check -r requirements.txt
+      - name: Compile live probe modules
+        run: python -m py_compile src/kp_unemployment_certification.py src/kp_unemployment_live_probe.py src/sports_kp_execution.py src/sports_kp_live_coordinator.py src/sports_kp_venue_hardening.py
+      - name: Run bounded execution safety tests
+        run: PYTHONPATH=. pytest -q tests/test_sports_kp_execution.py tests/test_sports_kp_live_coordinator.py tests/test_sports_kp_venue_hardening.py tests/test_kp_unemployment_live_probe.py
