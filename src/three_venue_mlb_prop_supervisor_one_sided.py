@@ -5,6 +5,11 @@ The legacy strict parser rejects those markets entirely. This wrapper preserves 
 existing scanner and settlement gates while representing only the actually
 executable side; the absent side has zero depth and therefore cannot be selected by
 the optimizer.
+
+The wrapper also installs the current official Kalshi/Polymarket US MLB prop rule
+fingerprints.  Those fingerprints are complete, but the venues remain non-identical
+on correction windows and exceptional-event handling, so the base certification
+engine continues to fail closed for live execution.
 """
 from __future__ import annotations
 
@@ -12,6 +17,7 @@ from decimal import Decimal
 from typing import Any
 
 from src import three_venue_mlb_prop_safe_scan as scan
+from src.mlb_prop_rule_certifications_official_v2 import install as install_official_rule_fingerprints
 from src.strict_mlb_prop_snapshot import TopBook
 
 D = Decimal
@@ -78,8 +84,9 @@ def poly_top_book_one_sided(payload: dict[str, Any]) -> TopBook | None:
     )
 
 
-# Patch the scanner's imported binding before the persistent supervisor starts.
+# Patch only the scanner's public-book parser, then install sourced rule profiles.
 scan.poly_top_book = poly_top_book_one_sided
+install_official_rule_fingerprints()
 
 from src import three_venue_mlb_prop_supervisor as supervisor  # noqa: E402
 
