@@ -9,6 +9,7 @@ from pathlib import Path
 
 from src.gemini_kalshi_maker_shadow import collect_all
 from src.gemini_kalshi_maker_shadow_ledger import JsonlLedgerForwarder
+from src.gemini_kalshi_maker_shadow_resting import install as install_resting_liveness
 from src.gemini_kalshi_maker_shadow_stress import install as install_stress
 
 D = Decimal
@@ -21,8 +22,10 @@ async def run_service(
     targets: list[Decimal],
     max_book_skew_ms: int,
     max_hedge_age_ms: int,
+    max_resting_feed_age_ms: int,
     output_dir: Path,
 ) -> None:
+    install_resting_liveness(max_resting_feed_age_ms)
     install_stress(output_dir)
     maker = asyncio.create_task(
         collect_all(
@@ -62,6 +65,7 @@ def main() -> None:
     )
     parser.add_argument("--max-book-skew-ms", type=int, default=50)
     parser.add_argument("--max-hedge-age-ms", type=int, default=100)
+    parser.add_argument("--max-resting-feed-age-ms", type=int, default=500)
     parser.add_argument("--output-dir", type=Path, default=Path("/tmp/maker-shadow"))
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
@@ -71,6 +75,7 @@ def main() -> None:
             targets=list(args.targets),
             max_book_skew_ms=max(0, args.max_book_skew_ms),
             max_hedge_age_ms=max(0, args.max_hedge_age_ms),
+            max_resting_feed_age_ms=max(0, args.max_resting_feed_age_ms),
             output_dir=args.output_dir,
         )
     )
