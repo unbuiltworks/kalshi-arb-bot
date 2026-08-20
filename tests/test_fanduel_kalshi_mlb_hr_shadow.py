@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-import src.fanduel_kalshi_mlb_hr_shadow as hr
+import src.fanduel_kalshi_mlb_hr_shadow_v2 as hr
 
 D = Decimal
 
