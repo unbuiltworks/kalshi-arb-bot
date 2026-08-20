@@ -9,6 +9,7 @@ D = Decimal
 def test_stress_economics_marks_target_survival():
     pending = PendingStress(
         asset="SOL",
+        kalshi_ticker="KXSOL15M-TEST",
         key="x",
         direction="KALSHI_YES_GEMINI_NO",
         policy="JOIN",
@@ -26,8 +27,6 @@ def test_stress_economics_marks_target_survival():
     )
     result = stress_economics(pending, gemini)
     assert result["hedge_depth_ok"] is True
-    # KALSHI YES means Gemini NO hedge at 1 - Gemini YES bid = 0.60.
-    # At 0.50 + 0.60 this must fail even before fee.
     assert result["survives_positive"] is False
     assert result["survives_target"] is False
 
@@ -35,6 +34,7 @@ def test_stress_economics_marks_target_survival():
 def test_stress_economics_requires_q1_depth():
     pending = PendingStress(
         asset="BTC",
+        kalshi_ticker="KXBTC15M-TEST",
         key="x",
         direction="GEMINI_YES_KALSHI_NO",
         policy="MAX_SAFE",
