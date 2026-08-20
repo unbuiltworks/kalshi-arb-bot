@@ -74,7 +74,9 @@ async def _probe(*,feed,plan,active_episodes,delays_ms=(50,100)):
         _COUNTERS["production_gate_actionable"]+=1; _COUNTERS["cushion_available"]+=int(cushion.has_cushion); _COUNTERS[f"asset_{plan.asset}_actionable"]+=1
         logger.info("CRYPTO_HEDGE_CUSHION_ACTIONABLE %s",json.dumps({"asset":plan.asset,"direction":plan.direction,"opened_ms":int(plan.opened_ms),"gemini_symbol":plan.gemini_symbol,"kalshi_ticker":plan.kalshi_ticker,"quantity":"1","entry_locked_quote_profit":str(plan.entry_locked_profit),"original_recomputed_locked_profit":str(cushion.original_locked_profit),"minimum_locked_profit":str(DEFAULT_MIN_LOCKED_PROFIT),"cushioned_locked_profit":str(cushion.cushioned_locked_profit),"edge_spent":str(cushion.edge_spent),"kalshi_side":cushion.side,"original_kalshi_yes_limit":str(cushion.original_yes_price),"cushioned_kalshi_yes_limit":str(cushion.cushioned_yes_price),"cushion_cents":cushion.cushion_cents,**gate,"risk_gates_changed":False,"trade_authorized":False,"read_only":True,"order_entry":False},separators=(",",":"),default=str))
         await _sample(plan,cushion,now_ms)
-    finally: _ENTRY_SKEW.pop(key,None)
+    finally:
+        _ENTRY_SKEW.pop(key,None)
+        readiness._PLAN_ENTRY_20BP.pop(key,None)
 
 def install_shadow():
     global _INSTALLED
