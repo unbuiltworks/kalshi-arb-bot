@@ -7,6 +7,7 @@ they are never treated as settlement sources.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal, ROUND_CEILING
 from typing import Any, Iterable
 from urllib.parse import urlparse
@@ -85,27 +86,58 @@ def _valid_level(price: Any, qty: Any) -> bool:
     )
 
 
-def _forecast_probability(forecast: dict[str, Any] | None) -> tuple[Decimal | None, list[str]]:
-    """Return bracket probability only with explicit forecast provenance.
+def _aware_iso(value: Any) -> datetime | None:
+    """Parse only timezone-aware ISO-8601 timestamps.
 
-    A naked probability is not enough for executable-shadow EV. The producer must
-    explicitly prove that the model-to-station mapping and forecast freshness were
-    checked and must retain model run/valid timestamps so stale or wrong-station
-    probabilities cannot silently become ranked weather edges.
+    Non-empty timestamp strings are not provenance. Requiring an actual offset keeps
+    local/UTC ambiguity from silently entering weather EV calculations.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed
+
+
+def _forecast_probability(
+    forecast: dict[str, Any] | None,
+    *,
+    expected_cli_product: str,
+) -> tuple[Decimal | None, list[str]]:
+    """Return bracket probability only with independently checkable provenance.
+
+    A producer boolean is not enough to prove station mapping or timestamp validity.
+    The forecast must name the exact CLI product used by the settlement-certified
+    station, and model-run/valid timestamps must be parseable, timezone-aware, and
+    temporally coherent.
     """
     if forecast is None:
         return None, ["FORECAST_UNVERIFIED"]
 
     blockers: list[str] = []
     model = str(forecast.get("model") or "").strip()
-    run_time = str(forecast.get("model_run_time") or "").strip()
-    valid_time = str(forecast.get("forecast_valid_time") or "").strip()
-    if not model or not run_time or not valid_time:
+    forecast_cli = str(forecast.get("cli_product") or "").strip().upper()
+    expected_cli = str(expected_cli_product or "").strip().upper()
+    run_time = _aware_iso(forecast.get("model_run_time"))
+    valid_time = _aware_iso(forecast.get("forecast_valid_time"))
+
+    if not model:
         blockers.append("FORECAST_UNVERIFIED")
     if forecast.get("station_mapping_verified") is not True:
         blockers.append("FORECAST_STATION_MAPPING_UNVERIFIED")
+    if not expected_cli or forecast_cli != expected_cli:
+        blockers.append("FORECAST_STATION_ID_MISMATCH")
     if forecast.get("freshness_verified") is not True:
         blockers.append("FORECAST_STALE_OR_UNVERIFIED")
+    if run_time is None or valid_time is None or run_time > valid_time:
+        blockers.append("FORECAST_TIME_UNVERIFIED")
 
     try:
         probability = Decimal(str(forecast.get("bracket_probability")))
@@ -154,8 +186,8 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
 
     Settlement certification and forecast-EV certification are intentionally
     separate. A market may have fully audited settlement/book metadata while its
-    forecast input is absent, stale, or mapped to the wrong station; in that case
-    quote/fee diagnostics remain visible but ranked EV is withheld.
+    forecast input is absent, stale, malformed, or mapped to the wrong station; in
+    that case quote/fee diagnostics remain visible but ranked EV is withheld.
     """
     blockers: list[str] = []
     _, series_blockers = certify_series(series)
@@ -164,7 +196,8 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
     station_verified = station.get("identity_verified") is True
     local_day_verified = market.get("local_day_verified") is True
     bracket_verified = market.get("bracket_semantics_verified") is True
-    if not station_verified or not str(station.get("cli_product", "")).startswith("CLI"):
+    cli_product = str(station.get("cli_product", "")).strip().upper()
+    if not station_verified or not cli_product.startswith("CLI"):
         blockers.append("STATION_IDENTITY_UNVERIFIED")
     if not local_day_verified:
         blockers.append("LOCAL_DAY_UNVERIFIED")
@@ -190,7 +223,10 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
         elif age_ms > max_quote_age_ms:
             blockers.append("QUOTE_STALE")
 
-    model_probability, forecast_blockers = _forecast_probability(forecast)
+    model_probability, forecast_blockers = _forecast_probability(
+        forecast,
+        expected_cli_product=cli_product,
+    )
 
     side_economics: list[dict[str, Any]] = []
     if "FEE_UNVERIFIED" not in blockers:
@@ -230,7 +266,7 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
         "market_ticker": market.get("ticker"),
         "market_date": market.get("market_date"),
         "station_name": station.get("name"),
-        "cli_product": station.get("cli_product"),
+        "cli_product": cli_product or None,
         "settlement_sources": series.get("settlement_sources") or [],
         "contract_terms_url": series.get("contract_terms_url"),
         "strike_type": market.get("strike_type"),
@@ -240,7 +276,6 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
         "yes_available_contracts": yes_qty if yes_valid else None,
         "no_ask_cents": no_ask if no_valid else None,
         "no_available_contracts": no_qty if no_valid else None,
-        # Backward-compatible YES aliases for existing ledger consumers.
         "ask_cents": yes_ask if yes_valid else None,
         "available_contracts": yes_qty if yes_valid else None,
         "quote_age_ms": age_ms,
@@ -248,13 +283,13 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
         "fee_type": series.get("fee_type"),
         "fee_multiplier": series.get("fee_multiplier"),
         "forecast_model": forecast.get("model") if forecast else None,
+        "forecast_cli_product": forecast.get("cli_product") if forecast else None,
         "forecast_model_run_time": forecast.get("model_run_time") if forecast else None,
         "forecast_valid_time": forecast.get("forecast_valid_time") if forecast else None,
         "forecast_bracket_probability": str(model_probability) if model_probability is not None else None,
         "forecast_blockers": forecast_blockers,
         "side_economics": side_economics,
         "best_shadow_side": best_side,
-        # Backward-compatible YES-only fields; never substitute NO economics here.
         "modeled_taker_fee_cents": next((x["modeled_taker_fee_cents"] for x in side_economics if x["side"] == "YES"), None),
         "modeled_after_fee_ev_cents": next((x["modeled_after_fee_ev_cents"] for x in side_economics if x["side"] == "YES"), None),
         "blockers": blockers,
