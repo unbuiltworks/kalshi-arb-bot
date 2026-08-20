@@ -2,6 +2,8 @@ from decimal import Decimal
 
 from src.sports_trade_settlement_reconciler import (
     bought_outcomes,
+    gemini_resolution_map,
+    kalshi_resolution_from_payload,
     normalize_result,
     realized_pnl,
     settlement_compatible,
@@ -90,3 +92,24 @@ def test_divergent_loss_is_recorded_as_real_loss_not_modeled_edge():
     )
     assert gross == D("-0.94")
     assert net == D("-0.95")
+
+
+def test_gemini_resolution_map_only_maps_exact_target_symbols_case_insensitively():
+    events = [{
+        "contracts": [
+            {"instrumentSymbol": "GEMINI-A", "resolutionSide": "YES"},
+            {"instrumentSymbol": "GEMINI-B", "resolutionSide": "NO"},
+            {"instrumentSymbol": "GEMINI-C", "resolutionSide": "LFMP"},
+        ]
+    }]
+    assert gemini_resolution_map(events, {"gemini-a", "GEMINI-C", "MISSING"}) == {
+        "gemini-a": "yes",
+        "GEMINI-C": None,
+        "MISSING": None,
+    }
+
+
+def test_kalshi_resolution_parser_accepts_wrapped_or_flat_market_shape():
+    assert kalshi_resolution_from_payload({"market": {"result": "yes"}}) == "yes"
+    assert kalshi_resolution_from_payload({"result": "NO"}) == "no"
+    assert kalshi_resolution_from_payload({"market": {"result": ""}}) is None
