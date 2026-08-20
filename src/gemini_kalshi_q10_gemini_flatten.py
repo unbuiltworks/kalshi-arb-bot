@@ -18,6 +18,13 @@ MAX_Q10_FLATTEN = D("10")
 EMERGENCY_MIN_PRICE = "0.01"
 
 
+def _plain_quantity(q: Decimal) -> str:
+    value = D(q)
+    if value == value.to_integral_value():
+        return format(value.quantize(D("1")), "f")
+    return format(value.normalize(), "f")
+
+
 def build_q10_emergency_flatten_payload(
     original_params: dict[str, Any],
     *,
@@ -39,7 +46,7 @@ def build_q10_emergency_flatten_payload(
         "type": "LIMIT",
         "timeInForce": "IOC",
         "price": EMERGENCY_MIN_PRICE,
-        "quantity": str(q.normalize()),
+        "quantity": _plain_quantity(q),
         "eventOutcome": outcome,
         "clientOrderId": client_order_id or f"flatten-q10-g-{uuid.uuid4().hex[:16]}",
     }
