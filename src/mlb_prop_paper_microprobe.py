@@ -125,7 +125,9 @@ def paper_probe_events(
     profit = D(str(plan.get("conservative_locked_profit") or "0"))
     if profit < min_profit:
         return None
-    if not bool(row.get("book_comparable")):
+    # Safety/research gates require literal booleans. String telemetry such as
+    # "false" is truthy in Python and must never qualify a synthetic paper fill.
+    if row.get("book_comparable") is not True:
         return None
     if row.get("synchronized_book_pair") is not True:
         return None
@@ -133,7 +135,7 @@ def paper_probe_events(
         return None
     if not row.get("poly_slug") or not row.get("kalshi_ticker"):
         return None
-    if not bool(row.get("participation_gate_satisfied")):
+    if row.get("participation_gate_satisfied") is not True:
         return None
     if row.get("read_only") is not True or row.get("order_entry") is not False:
         return None
@@ -185,8 +187,8 @@ def paper_probe_events(
         "participation_gate_satisfied": True,
         "rule_status": row.get("rule_status"),
         "rules_status": row.get("rules_status", "RULES_PENDING"),
-        "full_rules_audited": bool(row.get("full_rules_audited", False)),
-        "fully_audited_shadow_ready": bool(row.get("fully_audited_shadow_ready", False)),
+        "full_rules_audited": row.get("full_rules_audited") is True,
+        "fully_audited_shadow_ready": row.get("fully_audited_shadow_ready") is True,
         "paper_probe_only": True,
         "live_probe_ready": False,
         "live_blockers": ["INDEPENDENT_SETTLEMENT_AUDIT_REQUIRED", "FRESH_EXPLICIT_APPROVAL_REQUIRED"],
