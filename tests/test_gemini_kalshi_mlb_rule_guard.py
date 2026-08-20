@@ -20,6 +20,8 @@ _REQUIRED = (
 
 _GEMINI_FP = "a" * 64
 _KALSHI_FP = "b" * 64
+_GEMINI_SCOPE = "GEMI-MLB-2608192205-MIA-PHI-T-O9"
+_KALSHI_SCOPE = "KXMLBTOTAL-26AUG191805MIAPHI-10"
 
 
 def _complete_evidence():
@@ -34,6 +36,8 @@ def _complete_evidence():
         "expiration_close_equivalent": True,
         "gemini_market_outcome_review_fallback": True,
         "kalshi_market_outcome_review_equivalent": True,
+        "gemini_rule_scope_id": _GEMINI_SCOPE,
+        "kalshi_rule_scope_id": _KALSHI_SCOPE,
     }
     evidence["evidence_sources"] = {
         field: {
@@ -59,6 +63,17 @@ def _complete_evidence():
     evidence["evidence_fingerprints"]["kalshi_market_outcome_review_equivalent"] = {
         "gemini": _GEMINI_FP,
         "kalshi": _KALSHI_FP,
+    }
+    evidence["evidence_scopes"] = {
+        field: {"gemini": _GEMINI_SCOPE, "kalshi": _KALSHI_SCOPE}
+        for field in _REQUIRED
+    }
+    evidence["evidence_scopes"]["gemini_market_outcome_review_fallback"] = {
+        "gemini": _GEMINI_SCOPE,
+    }
+    evidence["evidence_scopes"]["kalshi_market_outcome_review_equivalent"] = {
+        "gemini": _GEMINI_SCOPE,
+        "kalshi": _KALSHI_SCOPE,
     }
     return evidence
 
@@ -181,3 +196,46 @@ def test_malformed_fingerprint_fails_closed():
     result = classify_mlb_rule_audit(evidence)
     assert result.status == RULES_PENDING
     assert "RULE_AUDIT_MISSING_FINGERPRINT:expiration_close_equivalent" in result.hard_blockers
+
+
+def test_missing_exact_scope_ids_fail_closed():
+    evidence = _complete_evidence()
+    evidence.pop("gemini_rule_scope_id")
+    evidence.pop("kalshi_rule_scope_id")
+    result = classify_mlb_rule_audit(evidence)
+    assert result.status == RULES_PENDING
+    assert "RULE_AUDIT_MISSING_SCOPE_ID:gemini" in result.hard_blockers
+    assert "RULE_AUDIT_MISSING_SCOPE_ID:kalshi" in result.hard_blockers
+
+
+def test_generic_or_wrong_family_scope_ids_fail_closed():
+    evidence = _complete_evidence()
+    evidence["gemini_rule_scope_id"] = "MLB-GENERIC"
+    evidence["kalshi_rule_scope_id"] = "KXMLBHIT"
+    result = classify_mlb_rule_audit(evidence)
+    assert result.status == RULES_PENDING
+    assert "RULE_AUDIT_MISSING_SCOPE_ID:gemini" in result.hard_blockers
+    assert "RULE_AUDIT_MISSING_SCOPE_ID:kalshi" in result.hard_blockers
+
+
+def test_mismatched_field_scope_cannot_certify_unrelated_contract():
+    evidence = _complete_evidence()
+    evidence["evidence_scopes"]["corrections_review_equivalent"]["kalshi"] = (
+        "KXMLBSPREAD-26AUG191840SFCLE-CLE4"
+    )
+    result = classify_mlb_rule_audit(evidence)
+    assert result.status == RULES_PENDING
+    assert "RULE_AUDIT_SCOPE_MISMATCH:corrections_review_equivalent" in result.hard_blockers
+
+
+def test_exception_fallback_must_be_bound_to_exact_gemini_scope():
+    evidence = _complete_evidence()
+    evidence["evidence_scopes"]["gemini_market_outcome_review_fallback"]["gemini"] = (
+        "GEMI-MLB-2608192240-SF-CLE-S-CLE3"
+    )
+    result = classify_mlb_rule_audit(evidence)
+    assert result.status == RULES_PENDING
+    assert (
+        "RULE_AUDIT_SCOPE_MISMATCH:gemini_market_outcome_review_fallback"
+        in result.hard_blockers
+    )
