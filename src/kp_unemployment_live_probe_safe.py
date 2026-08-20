@@ -46,7 +46,10 @@ def _first_present(row: dict[str, Any], keys: tuple[str, ...]) -> Any:
 
 def _poly_available(body: Any) -> D:
     candidates: list[Any] = []
-    preferred = ("assetAvailable", "available", "availableBalance", "buyingPower")
+    # Polymarket US documents buyingPower as the unencumbered capital available
+    # for trading. assetAvailable is collateral value and can legitimately be 0
+    # even when the account has ample fiat buying power.
+    preferred = ("buyingPower", "available", "availableBalance", "assetAvailable")
     fallback = ("balance", "currentBalance")
     if isinstance(body, dict):
         top = _first_present(body, preferred)
