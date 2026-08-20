@@ -13,6 +13,7 @@ Fail closed:
 - stale/missing balance snapshots block submission;
 - exact payload contract cost plus conservative modeled taker fee is reserved;
 - a configurable free-cash buffer remains unused at each venue;
+- every authorized route is copied into the durable trade context before reservation;
 - no order-entry methods live in this module.
 """
 from __future__ import annotations
@@ -36,6 +37,7 @@ KALSHI_PROD_REST = "https://external-api.kalshi.com/trade-api/v2"
 
 DEFAULT_MAX_SNAPSHOT_AGE_MS = int(os.getenv("SPORTS_CAPITAL_MAX_SNAPSHOT_AGE_MS", "5000"))
 DEFAULT_FREE_BUFFER = D(os.getenv("SPORTS_VENUE_FREE_BUFFER_USD", "5"))
+DEFAULT_LOG_INTERVAL_SECONDS = float(os.getenv("SPORTS_CAPITAL_LOG_INTERVAL_SECONDS", "60"))
 
 
 class VenueCapitalUnavailable(RuntimeError):
@@ -74,12 +76,12 @@ class VenueCapitalSnapshot:
         now_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
         return max(0, now_ms - int(self.observed_ms))
 
-    def as_dict(self) -> dict[str, str | int]:
+    def as_dict(self, *, now_ms: int | None = None) -> dict[str, str | int]:
         return {
             "gemini_available": str(self.gemini_available),
             "kalshi_available": str(self.kalshi_available),
             "observed_ms": self.observed_ms,
-            "age_ms": self.age_ms(),
+            "age_ms": self.age_ms(now_ms),
         }
 
 
@@ -159,6 +161,27 @@ def assert_route_capacity(
         )
 
 
+def route_audit_metadata(
+    snapshot: VenueCapitalSnapshot,
+    requirement: RouteCapitalRequirement,
+    *,
+    free_buffer: Decimal,
+    max_snapshot_age_ms: int,
+    now_ms: int | None = None,
+) -> dict[str, Any]:
+    buffer = max(D("0"), D(free_buffer))
+    return {
+        "venue_capital_requirement": requirement.as_dict(),
+        "venue_capital_snapshot": snapshot.as_dict(now_ms=now_ms),
+        "venue_capital_policy": {
+            "free_buffer_usd_per_venue": str(buffer),
+            "max_snapshot_age_ms": int(max_snapshot_age_ms),
+            "gemini_usable_after_buffer": str(max(D("0"), snapshot.gemini_available - buffer)),
+            "kalshi_usable_after_buffer": str(max(D("0"), snapshot.kalshi_available - buffer)),
+        },
+    }
+
+
 async def _gemini_available_usd() -> Decimal:
     response = await private_rest_request("POST", "/v1/balances", timeout=5.0)
     response.raise_for_status()
@@ -180,15 +203,19 @@ class CachedVenueCapitalAllocator:
         refresh_seconds: float = 2.0,
         max_snapshot_age_ms: int = DEFAULT_MAX_SNAPSHOT_AGE_MS,
         free_buffer: Decimal = DEFAULT_FREE_BUFFER,
+        log_interval_seconds: float = DEFAULT_LOG_INTERVAL_SECONDS,
         kalshi_client: KalshiClient | None = None,
     ) -> None:
         self.refresh_seconds = max(0.5, float(refresh_seconds))
         self.max_snapshot_age_ms = max(500, int(max_snapshot_age_ms))
         self.free_buffer = max(D("0"), D(free_buffer))
+        self.log_interval_seconds = max(5.0, float(log_interval_seconds))
         self.kalshi = kalshi_client or KalshiClient(base_url=KALSHI_PROD_REST)
         self._owns_kalshi = kalshi_client is None
         self.snapshot: VenueCapitalSnapshot | None = None
         self.last_error: str | None = None
+        self._last_logged_balances: tuple[Decimal, Decimal] | None = None
+        self._last_log_monotonic = 0.0
 
     async def close(self) -> None:
         if self._owns_kalshi:
@@ -212,16 +239,29 @@ class CachedVenueCapitalAllocator:
         self.last_error = None
         return snapshot
 
+    def _should_log_snapshot(self, snapshot: VenueCapitalSnapshot) -> bool:
+        balances = (snapshot.gemini_available, snapshot.kalshi_available)
+        now = time.monotonic()
+        changed = balances != self._last_logged_balances
+        periodic = now - self._last_log_monotonic >= self.log_interval_seconds
+        if changed or periodic:
+            self._last_logged_balances = balances
+            self._last_log_monotonic = now
+            return True
+        return False
+
     async def run(self) -> None:
         while True:
             try:
                 snapshot = await self.refresh_once()
-                logger.info(
-                    "SPORTS_VENUE_CAPITAL_SNAPSHOT gemini=%s kalshi=%s free_buffer=%s",
-                    snapshot.gemini_available,
-                    snapshot.kalshi_available,
-                    self.free_buffer,
-                )
+                if self._should_log_snapshot(snapshot):
+                    logger.info(
+                        "SPORTS_VENUE_CAPITAL_SNAPSHOT gemini=%s kalshi=%s free_buffer=%s refresh_seconds=%s",
+                        snapshot.gemini_available,
+                        snapshot.kalshi_available,
+                        self.free_buffer,
+                        self.refresh_seconds,
+                    )
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -254,6 +294,8 @@ class CachedVenueCapitalAllocator:
 def install(
     canary_module: Any,
     allocator: CachedVenueCapitalAllocator,
+    *,
+    run_id_env: str | None = None,
 ) -> None:
     """Wrap an already-guarded submit function without adding network I/O to it."""
     inner = canary_module.submit_dual_probe
@@ -271,12 +313,28 @@ def install(
             kalshi_payload,
             kalshi_fee_multiplier=multiplier,
         )
+        snapshot = allocator.snapshot
+        assert snapshot is not None  # authorize() already fails closed if missing
+        audit = route_audit_metadata(
+            snapshot,
+            requirement,
+            free_buffer=allocator.free_buffer,
+            max_snapshot_age_ms=allocator.max_snapshot_age_ms,
+        )
+        if run_id_env:
+            # The canary's SUBMITTING log has already populated this context. Add
+            # exact venue-capital proof before the inner durable reservation runs.
+            from src import sports_trade_reporting as reporting
+            run_id = os.getenv(run_id_env, "").strip()
+            if not run_id:
+                raise VenueCapitalUnavailable(f"{run_id_env} missing for capital audit context")
+            reporting._CONTEXT.setdefault(run_id, {}).update(audit)
         logger.warning(
             "SPORTS_VENUE_CAPITAL_AUTHORIZED gemini_required=%s kalshi_required=%s total=%s snapshot_age_ms=%s",
             requirement.gemini_required,
             requirement.kalshi_required,
             requirement.total_required,
-            allocator.snapshot.age_ms() if allocator.snapshot else None,
+            snapshot.age_ms(),
         )
         return await inner(
             gemini,
