@@ -1,9 +1,9 @@
 """Parallel-per-asset live campaign supervisor with capital reservations.
 
 This module is intentionally not enabled by default. It runs up to one unresolved
-trade per asset (BTC/ETH/SOL/XRP), while enforcing a shared hard capital budget and
-explicit per-attempt reservations before a child can submit. Settlement and dashboard
-realization remain mandatory before an asset lane can re-arm.
+trade per asset (BTC/ETH/SOL/XRP), while enforcing a shared hard capital-at-risk
+budget and explicit per-attempt reservations before a child can submit. Settlement
+and dashboard realization remain mandatory before an asset lane can re-arm.
 """
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import sys
 from typing import Any
 
 import httpx
@@ -45,8 +46,10 @@ class Lane:
 
 @dataclass
 class CapitalBook:
+    """Shared capital-at-risk ledger across all asset lanes."""
+
     hard_budget: D
-    realized_deployed: D = D("0")
+    unsettled_deployed: D = D("0")
     reservations: dict[str, D] = field(default_factory=dict)
 
     @property
@@ -55,7 +58,7 @@ class CapitalBook:
 
     @property
     def available(self) -> D:
-        return self.hard_budget - self.realized_deployed - self.reserved
+        return self.hard_budget - self.unsettled_deployed - self.reserved
 
     def reserve(self, key: str, amount: D) -> None:
         if key in self.reservations:
@@ -77,7 +80,14 @@ class CapitalBook:
             raise RuntimeError(
                 f"actual capital exceeds reservation key={key} actual={actual_capital} reserved={reserved}"
             )
-        self.realized_deployed += actual_capital
+        self.unsettled_deployed += actual_capital
+
+    def settle(self, actual_capital: D) -> None:
+        if actual_capital < 0 or actual_capital > self.unsettled_deployed:
+            raise RuntimeError(
+                f"invalid settlement release actual={actual_capital} unsettled={self.unsettled_deployed}"
+            )
+        self.unsettled_deployed -= actual_capital
 
 
 class ParallelState:
@@ -97,7 +107,7 @@ class ParallelState:
             "completed_total": self.completed_total,
             "execution_attempts_total": self.execution_attempts_total,
             "hard_budget_usd": str(self.capital.hard_budget),
-            "deployed_capital_usd": str(self.capital.realized_deployed),
+            "unsettled_deployed_usd": str(self.capital.unsettled_deployed),
             "reserved_capital_usd": str(self.capital.reserved),
             "available_capital_usd": str(self.capital.available),
             "reservations": {k: str(v) for k, v in self.capital.reservations.items()},
@@ -129,6 +139,9 @@ def _run_id(campaign_id: str, asset: str, n: int) -> str:
 
 
 def _asset_child_env(run_id: str, asset: str) -> dict[str, str]:
+    asset = asset.strip().upper()
+    if asset not in ASSETS:
+        raise ValueError(f"unsupported asset lane {asset}")
     env = os.environ.copy()
     env[v2.RUN_ID_ENV] = run_id
     env[v2.ARM_ENV] = "YES"
@@ -137,7 +150,7 @@ def _asset_child_env(run_id: str, asset: str) -> dict[str, str]:
 
 
 async def _obtain_asset_execution(run_id: str, asset: str, arm_deadline: datetime) -> dict[str, Any]:
-    """Launch one child constrained to one asset and wait for a persistent result."""
+    """Launch one child constrained to exactly one asset and wait for its result."""
     arm, claim, result_path = v2._paths(run_id)
     if result_path.is_file():
         return json.loads(result_path.read_text(encoding="utf-8"))
@@ -145,7 +158,7 @@ async def _obtain_asset_execution(run_id: str, asset: str, arm_deadline: datetim
         raise RuntimeError(f"attempt claim exists without result for {run_id}")
 
     process = await asyncio.create_subprocess_exec(
-        os.environ.get("PYTHON", "python"),
+        sys.executable,
         "-m", "src.gemini_kalshi_crypto_campaign_child_reliable",
         env=_asset_child_env(run_id, asset),
     )
@@ -170,7 +183,13 @@ async def _obtain_asset_execution(run_id: str, asset: str, arm_deadline: datetim
                 pass
 
 
-async def _lane_loop(state: ParallelState, asset: str, arm_deadline: datetime, http: httpx.AsyncClient, lock: asyncio.Lock) -> None:
+async def _lane_loop(
+    state: ParallelState,
+    asset: str,
+    arm_deadline: datetime,
+    http: httpx.AsyncClient,
+    lock: asyncio.Lock,
+) -> None:
     lane = state.lanes[asset]
     while base._utcnow() <= arm_deadline:
         async with lock:
@@ -238,12 +257,11 @@ async def _lane_loop(state: ParallelState, asset: str, arm_deadline: datetime, h
             )
 
             async with lock:
+                state.capital.settle(actual_capital)
                 lane.completed_trades += 1
                 state.completed_total += 1
                 lane.active_run_id = None
                 lane.status = "IDLE"
-                # The hard budget is a live-capital-at-risk ceiling, not lifetime turnover.
-                state.capital.realized_deployed = max(D("0"), state.capital.realized_deployed - actual_capital)
                 _write_state(state)
             logger.warning(
                 "CRYPTO_PARALLEL_REALIZED asset=%s run_id=%s net_pnl=%s capital=%s completed_total=%s",
@@ -280,6 +298,10 @@ async def run() -> None:
         raise ValueError("hard budget must be >0 and <=5")
     if not D("0") < RESERVE_PER_ATTEMPT <= D("1"):
         raise ValueError("reserve per attempt must be >0 and <=1")
+    if not 1 <= MAX_COMPLETED_TRADES <= 20:
+        raise ValueError("max completed trades must be 1..20")
+    if not MAX_COMPLETED_TRADES <= MAX_EXECUTION_ATTEMPTS <= 100:
+        raise ValueError("max execution attempts out of range")
 
     state = ParallelState(campaign_id, MAX_TOTAL_RESERVED)
     lock = asyncio.Lock()
