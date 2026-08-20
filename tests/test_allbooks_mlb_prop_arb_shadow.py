@@ -43,3 +43,5 @@ def test_player_threshold_family_mismatch_fail_closed():
 
 def test_no_arbitrage_when_inverse_odds_sum_not_below_one():
     assert arb.best_two_book_plan(_row("draftkings", "YES", "1.90"), _row("betrivers", "NO", "1.90")) is None
+
+# Deployment trigger only; no behavioral change.
