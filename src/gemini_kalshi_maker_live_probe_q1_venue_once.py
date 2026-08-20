@@ -1,15 +1,10 @@
-"""Venue-idempotent one-shot helpers for the q=1 maker LIVE_PROBE.
-
-Railway deployments do not need a persistent volume for the first live mechanics
-probe. We use an ephemeral per-process arm/claim plus Kalshi's documented
-client_order_id deduplication. The live deployment is immediately disarmed after
-it starts, restartPolicy is NEVER, and the maker order receives a short exchange-
-side expiration so an orphaned resting order cannot persist indefinitely.
-"""
+"""Venue-idempotent one-shot helpers for the q=1 maker LIVE_PROBE."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 import json
+import logging
 import os
 from pathlib import Path
 import time
@@ -19,6 +14,7 @@ from src import gemini_kalshi_maker_live_probe_q1_safe as safe
 
 STATE_ROOT = Path("/tmp/maker-live-probe-venue-once")
 ORDER_TTL_S = 20
+logger = logging.getLogger("kalshi_arb.gemini_kalshi_maker_live_probe_q1_venue_once")
 
 
 def _paths(run_id: str) -> tuple[Path, Path, Path]:
@@ -86,14 +82,80 @@ def maker_payload_with_expiry(*, ticker, direction, maker_price, client_order_id
         maker_price=maker_price,
         client_order_id=client_order_id,
     )
-    # Exchange-side kill switch. The local rest loop is only 10s; 20s leaves
-    # enough room for cancel/reconcile while bounding any orphan after a crash.
     payload["expiration_time"] = int(time.time()) + ORDER_TTL_S
     return payload
 
 
+async def wait_candidate_safe(*, pair, fee_meta, timeout_s: float = 120.0):
+    """Same live candidate gate as base, but timeout is a clean result and diagnostic."""
+    queue: asyncio.Queue = asyncio.Queue(maxsize=50_000)
+    stats = base.MakerStats(asset=base.ASSET)
+    tasks = [
+        asyncio.create_task(base._gemini_stream(pair.gemini_symbol, queue, stats)),
+        asyncio.create_task(base._kalshi_stream(pair.kalshi_ticker, queue, stats)),
+    ]
+    g = None
+    k = None
+    counters = {"events": 0, "missing_pair": 0, "skew_rejects": 0, "stale_rejects": 0, "economic_rejects": 0}
+    deadline = time.monotonic() + timeout_s
+    try:
+        while time.monotonic() < deadline:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                kind, receive_ms, payload = await asyncio.wait_for(
+                    queue.get(), timeout=min(1.0, max(0.01, remaining))
+                )
+            except asyncio.TimeoutError:
+                if time.monotonic() >= deadline:
+                    break
+                continue
+            counters["events"] += 1
+            if kind == "gemini":
+                g = payload
+            elif kind == "kalshi":
+                k = payload
+            if g is None or k is None:
+                counters["missing_pair"] += 1
+                continue
+            now_ms = int(time.time() * 1000)
+            if abs(g.ts_ms - k.ts_ms) > base.MAX_OPEN_SNAPSHOT_SKEW_MS:
+                counters["skew_rejects"] += 1
+                continue
+            if max(now_ms - g.ts_ms, now_ms - k.ts_ms) > base.MAX_OPEN_BOOK_AGE_MS:
+                counters["stale_rejects"] += 1
+                continue
+            candidate = base.candidate_from_books(gemini=g, kalshi=k, fee_meta=fee_meta, now_ms=now_ms)
+            if candidate is None:
+                counters["economic_rejects"] += 1
+                continue
+            logger.warning("MAKER_LIVE_PROBE_CANDIDATE_WAIT_SUMMARY %s", json.dumps({
+                **counters,
+                "found": True,
+                "open_snapshot_skew_ms": abs(g.ts_ms - k.ts_ms),
+                "max_open_snapshot_skew_ms": base.MAX_OPEN_SNAPSHOT_SKEW_MS,
+                "target_profit": str(base.TARGET_PROFIT),
+                "policy": base.POLICY,
+            }, separators=(",", ":")))
+            return candidate, g, k, queue, tasks
+        logger.warning("MAKER_LIVE_PROBE_CANDIDATE_WAIT_SUMMARY %s", json.dumps({
+            **counters,
+            "found": False,
+            "max_open_snapshot_skew_ms": base.MAX_OPEN_SNAPSHOT_SKEW_MS,
+            "target_profit": str(base.TARGET_PROFIT),
+            "policy": base.POLICY,
+        }, separators=(",", ":")))
+        return None, g, k, queue, tasks
+    except Exception:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
+
+
 def install() -> None:
-    # safe.run_once resolves these globals at runtime.
     safe._maybe_create_arm = maybe_create_arm
     safe._claim_before_order = claim_before_order
     safe.kalshi_maker_payload = maker_payload_with_expiry
+    base._wait_candidate = wait_candidate_safe
