@@ -8,8 +8,9 @@ market-specific threshold semantics must all be explicitly audited.
 
 A boolean assertion is not sufficient audit evidence. Every lifecycle-equivalence
 claim that is used to reach FULL_RULES_AUDITED_SHADOW must carry non-empty,
-venue-specific source references for both Gemini and Kalshi. This prevents an
-upstream producer from accidentally promoting unsourced analyst assertions.
+venue-specific source references for both Gemini and Kalshi. Source references
+must also resolve to the venue's official HTTPS domains; arbitrary analyst text,
+third-party summaries, and placeholder/example URLs fail closed.
 
 It never authorizes live execution.
 """
@@ -17,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Mapping, Any
+from urllib.parse import urlparse
 
 
 FULL_RULES_AUDITED_SHADOW = "FULL_RULES_AUDITED_SHADOW"
@@ -36,6 +38,21 @@ _REQUIRED_BOOL_FIELDS = (
     "expiration_close_equivalent",
 )
 
+_OFFICIAL_SOURCE_HOSTS = {
+    "gemini": (
+        "gemini.com",
+        "www.gemini.com",
+        "developer.gemini.com",
+        "docs.gemini.com",
+    ),
+    "kalshi": (
+        "kalshi.com",
+        "www.kalshi.com",
+        "docs.kalshi.com",
+        "help.kalshi.com",
+    ),
+}
+
 
 def _literal_true(value: Any) -> bool:
     """Require an actual boolean True; strings/numbers fail closed."""
@@ -46,16 +63,31 @@ def _nonempty_text(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def _official_https_source(value: Any, venue: str) -> bool:
+    """Require a non-placeholder HTTPS URL hosted on an official venue domain."""
+    if not _nonempty_text(value):
+        return False
+    try:
+        parsed = urlparse(value.strip())
+    except (TypeError, ValueError):
+        return False
+    if parsed.scheme.lower() != "https":
+        return False
+    host = (parsed.hostname or "").lower().rstrip(".")
+    allowed = _OFFICIAL_SOURCE_HOSTS.get(venue, ())
+    return host in allowed
+
+
 def _has_bilateral_source(evidence: Mapping[str, Any], field: str) -> bool:
-    """Require explicit source references from both venues for one audit claim."""
+    """Require explicit official source references from both venues for one claim."""
     sources = evidence.get("evidence_sources")
     if not isinstance(sources, Mapping):
         return False
     field_sources = sources.get(field)
     if not isinstance(field_sources, Mapping):
         return False
-    return _nonempty_text(field_sources.get("gemini")) and _nonempty_text(
-        field_sources.get("kalshi")
+    return _official_https_source(field_sources.get("gemini"), "gemini") and _official_https_source(
+        field_sources.get("kalshi"), "kalshi"
     )
 
 
@@ -77,7 +109,8 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
     basis even when ordinary winner/total/spread semantics match.
 
     Every affirmative field used for a full rule audit must also have bilateral
-    source provenance under ``evidence_sources[field] = {gemini, kalshi}``.
+    source provenance under ``evidence_sources[field] = {gemini, kalshi}``, and
+    both references must be official HTTPS venue URLs.
     """
     missing = [
         field
