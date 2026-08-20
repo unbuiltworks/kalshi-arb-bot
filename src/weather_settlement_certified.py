@@ -18,6 +18,7 @@ HARD_BLOCKERS = {
     "LOCAL_DAY_UNVERIFIED",
     "BRACKET_SEMANTICS_UNVERIFIED",
     "FEE_UNVERIFIED",
+    "FEE_SCHEDULE_UNVERIFIED",
     "SETTLEMENT_SOURCE_UNVERIFIED",
     "BOOK_UNVERIFIED",
     "QUOTE_STALE",
@@ -117,6 +118,67 @@ def _aware_iso(value: Any) -> datetime | None:
     return parsed
 
 
+def _resolve_fee_metadata(
+    series: dict[str, Any],
+    *,
+    fee_changes: list[dict[str, Any]] | None,
+    observed_at: Any,
+) -> tuple[str | None, Any, str, list[str]]:
+    """Resolve fee metadata at the quote time using Series + scheduled changes.
+
+    Kalshi exposes scheduled fee changes separately from Series metadata. A weather
+    row is not fee-certified unless the caller supplies the fee-change response
+    (``show_historical=true`` is preferred) and a timezone-aware quote timestamp.
+    We trust current Series metadata as the baseline, but if a scheduled change
+    occurred after ``last_updated_ts`` and at/before the quote, the newest such
+    change becomes authoritative for that observation.
+    """
+    blockers: list[str] = []
+    series_ticker = str(series.get("ticker") or "").strip()
+    fee_type = series.get("fee_type")
+    fee_multiplier = series.get("fee_multiplier")
+    source = "series_current"
+
+    quote_time = _aware_iso(observed_at)
+    series_updated = _aware_iso(series.get("last_updated_ts"))
+    if quote_time is None or series_updated is None or fee_changes is None or not isinstance(fee_changes, list):
+        return fee_type, fee_multiplier, source, ["FEE_SCHEDULE_UNVERIFIED"]
+
+    applicable: list[tuple[datetime, dict[str, Any]]] = []
+    for change in fee_changes:
+        if not isinstance(change, dict):
+            blockers.append("FEE_SCHEDULE_UNVERIFIED")
+            continue
+        if str(change.get("series_ticker") or "").strip() != series_ticker:
+            continue
+        scheduled = _aware_iso(change.get("scheduled_ts"))
+        if scheduled is None:
+            blockers.append("FEE_SCHEDULE_UNVERIFIED")
+            continue
+        if scheduled <= quote_time and scheduled > series_updated:
+            applicable.append((scheduled, change))
+
+    if blockers:
+        return fee_type, fee_multiplier, source, sorted(set(blockers))
+
+    if applicable:
+        _, latest = max(applicable, key=lambda item: item[0])
+        fee_type = latest.get("fee_type")
+        fee_multiplier = latest.get("fee_multiplier")
+        source = "scheduled_fee_change"
+
+    try:
+        if fee_type != "quadratic":
+            raise ValueError
+        m = Decimal(str(fee_multiplier))
+        if not m.is_finite() or m < 0:
+            raise ValueError
+    except Exception:
+        blockers.append("FEE_UNVERIFIED")
+
+    return fee_type, fee_multiplier, source, sorted(set(blockers))
+
+
 def _forecast_probability(
     forecast: dict[str, Any] | None,
     *,
@@ -179,6 +241,7 @@ def _side_economics(*, side: str, price_cents: int, qty: int, yes_probability: D
 
 def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: dict[str, Any],
                      station: dict[str, Any], forecast: dict[str, Any] | None = None,
+                     fee_changes: list[dict[str, Any]] | None = None,
                      max_quote_age_ms: int = DEFAULT_MAX_QUOTE_AGE_MS) -> dict[str, Any]:
     """Build one read-only weather SHADOW row; never emits live readiness."""
     blockers: list[str] = []
@@ -201,6 +264,7 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
     no_ask = quote.get("no_ask_cents")
     no_qty = quote.get("no_ask_qty")
     age_ms = quote.get("quote_age_ms")
+    observed_at = quote.get("observed_at")
     yes_valid = _valid_level(yes_ask, yes_qty)
     no_valid = _valid_level(no_ask, no_qty)
     if not yes_valid and not no_valid:
@@ -215,23 +279,30 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
         elif age_ms > max_quote_age_ms:
             blockers.append("QUOTE_STALE")
 
+    resolved_fee_type, resolved_fee_multiplier, fee_metadata_source, fee_schedule_blockers = _resolve_fee_metadata(
+        series,
+        fee_changes=fee_changes,
+        observed_at=observed_at,
+    )
+    blockers.extend(fee_schedule_blockers)
+
     model_probability, forecast_blockers = _forecast_probability(
         forecast,
         expected_cli_product=cli_product,
     )
 
     side_economics: list[dict[str, Any]] = []
-    if "FEE_UNVERIFIED" not in blockers:
+    if "FEE_UNVERIFIED" not in blockers and "FEE_SCHEDULE_UNVERIFIED" not in blockers:
         try:
             if yes_valid:
                 side_economics.append(_side_economics(
                     side="YES", price_cents=yes_ask, qty=yes_qty, yes_probability=model_probability,
-                    fee_type=str(series.get("fee_type")), fee_multiplier=series.get("fee_multiplier"),
+                    fee_type=str(resolved_fee_type), fee_multiplier=resolved_fee_multiplier,
                 ))
             if no_valid:
                 side_economics.append(_side_economics(
                     side="NO", price_cents=no_ask, qty=no_qty, yes_probability=model_probability,
-                    fee_type=str(series.get("fee_type")), fee_multiplier=series.get("fee_multiplier"),
+                    fee_type=str(resolved_fee_type), fee_multiplier=resolved_fee_multiplier,
                 ))
         except Exception:
             blockers.append("FEE_UNVERIFIED")
@@ -273,9 +344,12 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
         "ask_cents": yes_ask if yes_valid else None,
         "available_contracts": yes_qty if yes_valid else None,
         "quote_age_ms": age_ms,
+        "quote_observed_at": observed_at,
         "max_quote_age_ms": max_quote_age_ms,
-        "fee_type": series.get("fee_type"),
-        "fee_multiplier": series.get("fee_multiplier"),
+        "fee_type": resolved_fee_type,
+        "fee_multiplier": resolved_fee_multiplier,
+        "fee_metadata_source": fee_metadata_source,
+        "fee_schedule_checked": "FEE_SCHEDULE_UNVERIFIED" not in blockers,
         "forecast_model": forecast.get("model") if forecast else None,
         "forecast_cli_product": forecast.get("cli_product") if forecast else None,
         "forecast_model_run_time": forecast.get("model_run_time") if forecast else None,
