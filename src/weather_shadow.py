@@ -40,10 +40,18 @@ def _first(market: dict[str,Any], *keys: str) -> Any:
     return None
 
 
+def _text(market: dict[str,Any], *keys:str) -> str | None:
+    raw=_first(market,*keys)
+    if raw is None:return None
+    text=str(raw).strip()
+    return text[:2000] if text else None
+
+
 @dataclass(frozen=True)
 class WeatherShadowRow:
     observed_at: str; category: str; classification: str; settlement_status: str; model_status: str; model_eligibility: str; data_quality_status: str
     series_ticker: str; city: str; station_hint: str | None; event_ticker: str | None; market_ticker: str; title: str | None; subtitle: str | None; close_time: str | None
+    rules_primary: str | None; rules_secondary: str | None
     yes_bid_cents: int | None; yes_ask_cents: int | None; no_bid_cents: int | None; no_ask_cents: int | None
     volume: float | None; open_interest: float | None; yes_depth_hint: float | None; no_depth_hint: float | None
     q1_yes_taker_fee_cents: int | None; q1_no_taker_fee_cents: int | None
@@ -76,14 +84,13 @@ def build_shadow_row(series_ticker: str, market: dict[str,Any], observed_at: str
         if mean_f is not None and std_f is not None and bracket is not None:
             model_prob=bracket_probability(float(mean_f),float(std_f),bracket,float(running_high) if running_high is not None else None)
     eligibility=base_elig
-    if base_elig=="INTRADAY_OBSERVATION_CONDITIONED" and running_high is None:
-        eligibility="INTRADAY_OBSERVATIONS_REQUIRED"
+    if base_elig=="INTRADAY_OBSERVATION_CONDITIONED" and running_high is None: eligibility="INTRADAY_OBSERVATIONS_REQUIRED"
     fair_cents=int(round(model_prob*100)) if model_prob is not None else None; yes_ev=no_ev=None
     if eligibility in {"FORECAST_ONLY_RESEARCH","INTRADAY_OBSERVATION_CONDITIONED"}:
         if model_prob is not None and yes_ask is not None and yes_fee is not None: yes_ev=round(model_prob*100.0-yes_ask-yes_fee,2)
         if model_prob is not None and no_ask is not None and no_fee is not None: no_ev=round((1.0-model_prob)*100.0-no_ask-no_fee,2)
     cfg=CITY_CONFIG.get(series_ticker,{})
-    return WeatherShadowRow(observed_dt.isoformat(),CATEGORY,TRADE_CLASSIFICATION,SETTLEMENT_STATUS,MODEL_STATUS,eligibility,quality,series_ticker,WEATHER_SERIES.get(series_ticker,series_ticker),cfg.get("station"),market.get("event_ticker"),ticker,market.get("title"),market.get("subtitle"),market.get("close_time"),yes_bid,yes_ask,no_bid,no_ask,num("volume_fp","volume"),num("open_interest_fp","open_interest"),num("yes_ask_size_fp","yes_ask_size"),num("no_ask_size_fp","no_ask_size"),yes_fee,no_fee,target.isoformat() if target else None,model_highs,round(float(mean_f),2) if mean_f is not None else None,round(float(std_f),2) if std_f is not None else None,round(float(running_high),2) if running_high is not None else None,round(float(model_prob),6) if model_prob is not None else None,fair_cents,yes_ev,no_ev)
+    return WeatherShadowRow(observed_dt.isoformat(),CATEGORY,TRADE_CLASSIFICATION,SETTLEMENT_STATUS,MODEL_STATUS,eligibility,quality,series_ticker,WEATHER_SERIES.get(series_ticker,series_ticker),cfg.get("station"),market.get("event_ticker"),ticker,market.get("title"),market.get("subtitle"),market.get("close_time"),_text(market,"rules_primary"),_text(market,"rules_secondary"),yes_bid,yes_ask,no_bid,no_ask,num("volume_fp","volume"),num("open_interest_fp","open_interest"),num("yes_ask_size_fp","yes_ask_size"),num("no_ask_size_fp","no_ask_size"),yes_fee,no_fee,target.isoformat() if target else None,model_highs,round(float(mean_f),2) if mean_f is not None else None,round(float(std_f),2) if std_f is not None else None,round(float(running_high),2) if running_high is not None else None,round(float(model_prob),6) if model_prob is not None else None,fair_cents,yes_ev,no_ev)
 
 
 def fetch_series_markets(series_ticker:str,status:str="open",limit:int=100)->list[dict[str,Any]]:
@@ -95,8 +102,7 @@ def fetch_series_markets(series_ticker:str,status:str="open",limit:int=100)->lis
 
 def _context_for(series_ticker:str,target,observed_dt:datetime)->dict[str,Any]:
     key=(series_ticker,target.isoformat()); prior=_LAST_GOOD_CONTEXT.get(key)
-    models=fetch_model_highs(series_ticker,target); dist=forecast_distribution(models)
-    fresh_models=bool(models and dist)
+    models=fetch_model_highs(series_ticker,target); dist=forecast_distribution(models); fresh_models=bool(models and dist)
     if not fresh_models and prior:
         models=prior.get("models") or {}; dist=(prior.get("mean_f"),prior.get("std_f")) if prior.get("mean_f") is not None and prior.get("std_f") is not None else None
     elig=model_eligibility(series_ticker,target,observed_dt); running=None; fresh_obs=False
