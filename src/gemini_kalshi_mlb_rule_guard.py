@@ -12,6 +12,8 @@ venue-specific source references plus SHA-256 content fingerprints for the exact
 rule evidence that was reviewed. Evidence must also be explicitly bound to the
 exact Gemini MLB contract scope and exact Kalshi MLB total/spread series under
 audit; generic venue documentation cannot silently certify an unrelated family.
+The two exact venue scopes must also represent the same market family (total with
+total, spread with spread); individually valid scope IDs are not sufficient.
 
 The known Gemini Market Outcome Review fallback is an explicit part of the audit:
 a full shadow audit must prove that fact from an official Gemini source and exact
@@ -99,6 +101,24 @@ def _valid_scope_id(value: Any, venue: str) -> bool:
     return False
 
 
+def _scope_family(value: Any, venue: str) -> str | None:
+    """Return the audited MLB market family encoded by an exact venue scope."""
+    if not _valid_scope_id(value, venue):
+        return None
+    text = value.strip().upper()
+    if venue == "gemini":
+        if "-T-" in text:
+            return "TOTAL"
+        if "-S-" in text:
+            return "SPREAD"
+    elif venue == "kalshi":
+        if text.startswith("KXMLBTOTAL"):
+            return "TOTAL"
+        if text.startswith("KXMLBSPREAD"):
+            return "SPREAD"
+    return None
+
+
 def _field_mapping(evidence: Mapping[str, Any], container: str, field: str) -> Mapping[str, Any] | None:
     values = evidence.get(container)
     if not isinstance(values, Mapping):
@@ -164,9 +184,10 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
     """Classify exact Gemini/Kalshi MLB total/spread rule evidence.
 
     A complete shadow audit requires literal-true semantic checks, official HTTPS
-    provenance, immutable SHA-256 fingerprints, and exact venue-scope binding for
-    the source material reviewed. These are evidence-bookkeeping requirements only;
-    they never promote a market to live execution.
+    provenance, immutable SHA-256 fingerprints, exact venue-scope binding, and
+    cross-venue market-family coherence for the source material reviewed. These
+    are evidence-bookkeeping requirements only; they never promote a market to
+    live execution.
     """
     missing = [field for field in _REQUIRED_BOOL_FIELDS if not _literal_true(evidence.get(field))]
     unsourced = [
@@ -194,10 +215,17 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
     kalshi_review_equivalent = _literal_true(evidence.get("kalshi_market_outcome_review_equivalent"))
 
     blockers: list[str] = []
-    if _scope_id(evidence, "gemini") is None:
+    gemini_scope = _scope_id(evidence, "gemini")
+    kalshi_scope = _scope_id(evidence, "kalshi")
+    if gemini_scope is None:
         blockers.append("RULE_AUDIT_MISSING_SCOPE_ID:gemini")
-    if _scope_id(evidence, "kalshi") is None:
+    if kalshi_scope is None:
         blockers.append("RULE_AUDIT_MISSING_SCOPE_ID:kalshi")
+    if gemini_scope is not None and kalshi_scope is not None:
+        gemini_family = _scope_family(gemini_scope, "gemini")
+        kalshi_family = _scope_family(kalshi_scope, "kalshi")
+        if gemini_family is None or kalshi_family is None or gemini_family != kalshi_family:
+            blockers.append("RULE_AUDIT_CROSS_VENUE_FAMILY_MISMATCH")
     blockers.extend(f"RULE_AUDIT_MISSING:{field}" for field in missing)
     blockers.extend(f"RULE_AUDIT_MISSING_SOURCE:{field}" for field in unsourced)
     blockers.extend(f"RULE_AUDIT_MISSING_FINGERPRINT:{field}" for field in unfingerprinted)
