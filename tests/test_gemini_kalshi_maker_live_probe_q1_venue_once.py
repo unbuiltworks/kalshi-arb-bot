@@ -30,54 +30,80 @@ def test_venue_once_arm_does_not_require_persistent_volume(monkeypatch, tmp_path
         venue.claim_before_order("venue-test")
 
 
-def test_improve_trigger_submits_one_tick_safer(monkeypatch):
-    old_policy = base.POLICY
-    try:
-        base.POLICY = "IMPROVE_1T"
-        assert venue.outbound_maker_price(D("0.61")) == D("0.60")
-    finally:
-        base.POLICY = old_policy
+def _trigger_candidate(price="0.85"):
+    return base.Candidate(
+        direction="GEMINI_YES_KALSHI_NO",
+        maker_outcome="NO",
+        hedge_outcome="YES",
+        maker_price=D(price),
+        hedge_price=D("0.13"),
+        locked_profit=D("0.01"),
+        best_bid=D("0.84"),
+        best_ask=D("0.86"),
+        queue_ahead=D("0"),
+        observed_ms=123,
+    )
 
 
-def test_join_trigger_keeps_same_price(monkeypatch):
-    old_policy = base.POLICY
-    try:
-        base.POLICY = "JOIN"
-        assert venue.outbound_maker_price(D("0.61")) == D("0.61")
-    finally:
-        base.POLICY = old_policy
+def test_improve_trigger_becomes_join_priced_state_machine_candidate(monkeypatch):
+    monkeypatch.setattr(venue, "_trigger_candidate_fn", lambda **kwargs: _trigger_candidate())
+    monkeypatch.setattr(base, "POLICY", "IMPROVE_1T")
+    monkeypatch.setattr(base, "TARGET_PROFIT", D("0.01"))
+    monkeypatch.setattr(
+        base,
+        "quote_economics",
+        lambda **kwargs: SimpleNamespace(hedge_price=D("0.13"), locked_profit=D("0.02")),
+    )
+    monkeypatch.setattr(base, "maker_side_book", lambda *args, **kwargs: (D("0.84"), D("16"), D("0.86")))
+
+    candidate = venue.candidate_for_submission(
+        gemini=object(), kalshi=object(), fee_meta=object(), now_ms=456
+    )
+    assert candidate is not None
+    assert candidate.maker_price == D("0.84")
+    assert candidate.locked_profit == D("0.02")
+    assert candidate.queue_ahead == D("16")
 
 
-def test_maker_payload_has_short_exchange_side_expiration(monkeypatch):
-    old_policy = base.POLICY
-    try:
-        base.POLICY = "JOIN"
-        before = int(time.time())
-        payload = venue.maker_payload_with_expiry(
-            ticker="KXXRP15M-TEST",
-            direction="KALSHI_YES_GEMINI_NO",
-            maker_price=D("0.61"),
-            client_order_id="makerprobe-venue-test-k",
-        )
-        assert payload["post_only"] is True
-        assert payload["time_in_force"] == "good_till_canceled"
-        assert before + venue.ORDER_TTL_S <= payload["expiration_time"] <= int(time.time()) + venue.ORDER_TTL_S
-    finally:
-        base.POLICY = old_policy
+def test_join_trigger_keeps_candidate_unchanged(monkeypatch):
+    trigger = _trigger_candidate("0.84")
+    monkeypatch.setattr(venue, "_trigger_candidate_fn", lambda **kwargs: trigger)
+    monkeypatch.setattr(base, "POLICY", "JOIN")
+    assert venue.candidate_for_submission(
+        gemini=object(), kalshi=object(), fee_meta=object(), now_ms=456
+    ) is trigger
 
 
-def test_install_replaces_only_runtime_hooks(monkeypatch):
+def test_maker_payload_uses_exact_state_machine_price_and_short_expiration(monkeypatch):
+    before = int(time.time())
+    payload = venue.maker_payload_with_expiry(
+        ticker="KXXRP15M-TEST",
+        direction="KALSHI_YES_GEMINI_NO",
+        maker_price=D("0.84"),
+        client_order_id="makerprobe-venue-test-k",
+    )
+    assert payload["post_only"] is True
+    assert payload["price"] == "0.8400"
+    assert payload["time_in_force"] == "good_till_canceled"
+    assert before + venue.ORDER_TTL_S <= payload["expiration_time"] <= int(time.time()) + venue.ORDER_TTL_S
+
+
+def test_install_replaces_runtime_hooks(monkeypatch):
+    old_candidate = safe.candidate_from_books
     old_arm = safe._maybe_create_arm
     old_claim = safe._claim_before_order
     old_payload = safe.kalshi_maker_payload
     old_wait = base._wait_candidate
     try:
         venue.install()
+        assert venue._trigger_candidate_fn is old_candidate
+        assert safe.candidate_from_books is venue.candidate_for_submission
         assert safe._maybe_create_arm is venue.maybe_create_arm
         assert safe._claim_before_order is venue.claim_before_order
         assert safe.kalshi_maker_payload is venue.maker_payload_with_expiry
         assert base._wait_candidate is venue.wait_candidate_safe
     finally:
+        safe.candidate_from_books = old_candidate
         safe._maybe_create_arm = old_arm
         safe._claim_before_order = old_claim
         safe.kalshi_maker_payload = old_payload
