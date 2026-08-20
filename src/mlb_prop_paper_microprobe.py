@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import hashlib
 import json
 from pathlib import Path
@@ -35,6 +35,7 @@ from src.strict_mlb_prop_snapshot_v5 import run_once
 
 D = Decimal
 PROBE_FIELDS = (("probe_1usd", D("1")), ("probe_5usd", D("5")))
+PROBE_CAPS = dict(PROBE_FIELDS)
 
 
 def _settlement_key(row: dict[str, Any]) -> str:
@@ -50,8 +51,6 @@ def _group_id(row: dict[str, Any], probe_field: str, ts_ms: int) -> str:
 
 
 def _state_key(row: dict[str, Any], probe_field: str) -> str:
-    # Budget tiers are alternative views of one book. Keep one active episode
-    # identity so switching between <=$1 and <=$5 is a MOVE, not a second OPEN.
     return _settlement_key(row)
 
 
@@ -92,18 +91,59 @@ def _write_active_state(path: Path, state: dict[str, str]) -> None:
     tmp.replace(path)
 
 
-def _best_probe_field(row: dict[str, Any], min_profit: Decimal) -> str | None:
-    """Pick one qualifying budget tier for one displayed book snapshot.
+def _validated_plan_economics(plan: dict[str, Any], probe_field: str) -> dict[str, Decimal] | None:
+    """Recompute primitive paper economics and reject inconsistent producer telemetry."""
+    cap = PROBE_CAPS.get(probe_field)
+    if cap is None:
+        return None
+    try:
+        quantity = D(str(plan["quantity"]))
+        poly_px = D(str(plan["poly_price"]))
+        kalshi_px = D(str(plan["kalshi_price"]))
+        poly_fee = D(str(plan["poly_fee"]))
+        kalshi_fee = D(str(plan["kalshi_fee_upper_bound"]))
+        total_cost = D(str(plan["total_cost_upper_bound"]))
+        profit = D(str(plan["conservative_locked_profit"]))
+    except (KeyError, InvalidOperation, ValueError, TypeError):
+        return None
+    values = (quantity, poly_px, kalshi_px, poly_fee, kalshi_fee, total_cost, profit)
+    if any(not value.is_finite() for value in values):
+        return None
+    if quantity <= 0 or quantity != quantity.to_integral_value():
+        return None
+    if not (D("0") <= poly_px <= D("1") and D("0") <= kalshi_px <= D("1")):
+        return None
+    if poly_fee < 0 or kalshi_fee < 0 or total_cost < 0:
+        return None
+    recomputed_cost = quantity * (poly_px + kalshi_px) + poly_fee + kalshi_fee
+    if total_cost < recomputed_cost or total_cost > cap:
+        return None
+    implied_profit_ceiling = quantity - total_cost
+    if profit > implied_profit_ceiling:
+        return None
+    return {
+        "quantity": quantity,
+        "poly_price": poly_px,
+        "kalshi_price": kalshi_px,
+        "poly_fee": poly_fee,
+        "kalshi_fee": kalshi_fee,
+        "total_cost_upper_bound": total_cost,
+        "reported_profit": profit,
+        "recomputed_primitive_cost": recomputed_cost,
+        "implied_profit_ceiling": implied_profit_ceiling,
+    }
 
-    A larger cap does not represent additional liquidity. Prefer the plan with
-    greater conservative profit; on an exact tie prefer the smaller capital cap.
-    """
+
+def _best_probe_field(row: dict[str, Any], min_profit: Decimal) -> str | None:
     choices: list[tuple[Decimal, Decimal, str]] = []
     for probe_field, cap in PROBE_FIELDS:
         plan = row.get(probe_field)
         if not isinstance(plan, dict):
             continue
-        profit = D(str(plan.get("conservative_locked_profit") or "0"))
+        economics = _validated_plan_economics(plan, probe_field)
+        if economics is None:
+            continue
+        profit = economics["reported_profit"]
         if profit < min_profit:
             continue
         choices.append((profit, -cap, probe_field))
@@ -112,28 +152,19 @@ def _best_probe_field(row: dict[str, Any], min_profit: Decimal) -> str | None:
     return max(choices)[2]
 
 
-def paper_probe_events(
-    row: dict[str, Any],
-    *,
-    probe_field: str,
-    min_profit: Decimal = D("0.03"),
-    ts_ms: int | None = None,
-) -> tuple[list, dict[str, Any]] | None:
+def paper_probe_events(row: dict[str, Any], *, probe_field: str, min_profit: Decimal = D("0.03"), ts_ms: int | None = None) -> tuple[list, dict[str, Any]] | None:
     plan = row.get(probe_field)
     if not isinstance(plan, dict):
         return None
-    profit = D(str(plan.get("conservative_locked_profit") or "0"))
+    economics = _validated_plan_economics(plan, probe_field)
+    if economics is None:
+        return None
+    profit = economics["reported_profit"]
     if profit < min_profit:
         return None
-    # Safety/research gates require literal booleans. String telemetry such as
-    # "false" is truthy in Python and must never qualify a synthetic paper fill.
-    if row.get("book_comparable") is not True:
+    if row.get("book_comparable") is not True or row.get("synchronized_book_pair") is not True:
         return None
-    if row.get("synchronized_book_pair") is not True:
-        return None
-    if row.get("fetch_error"):
-        return None
-    if not row.get("poly_slug") or not row.get("kalshi_ticker"):
+    if row.get("fetch_error") or not row.get("poly_slug") or not row.get("kalshi_ticker"):
         return None
     if row.get("participation_gate_satisfied") is not True:
         return None
@@ -142,11 +173,11 @@ def paper_probe_events(
     if row.get("execution_eligible") is not False or row.get("live_probe_ready") is not False:
         return None
 
-    quantity = D(str(plan["quantity"]))
-    poly_px = D(str(plan["poly_price"]))
-    kalshi_px = D(str(plan["kalshi_price"]))
-    poly_fee = D(str(plan["poly_fee"]))
-    kalshi_fee = D(str(plan["kalshi_fee_upper_bound"]))
+    quantity = economics["quantity"]
+    poly_px = economics["poly_price"]
+    kalshi_px = economics["kalshi_price"]
+    poly_fee = economics["poly_fee"]
+    kalshi_fee = economics["kalshi_fee"]
     direction = str(plan["direction"])
     if direction == "POLY_YES_KALSHI_NO":
         poly_side, kalshi_side = "YES", "NO"
@@ -158,8 +189,7 @@ def paper_probe_events(
     now_ms = time_ns() // 1_000_000 if ts_ms is None else ts_ms
     key = _settlement_key(row)
     group = _group_id(row, probe_field, now_ms)
-    category = "mlb_prop_paper"
-    common = dict(trade_group_id=group, settlement_key=key, category=category, ts_ms=now_ms)
+    common = dict(trade_group_id=group, settlement_key=key, category="mlb_prop_paper", ts_ms=now_ms)
     events = [
         make_event(**common, venue="polymarket_us", market_id=str(row["poly_slug"]), event_type="fill", side=poly_side, quantity=quantity, price=poly_px),
         make_event(**common, venue="kalshi", market_id=str(row["kalshi_ticker"]), event_type="fill", side=kalshi_side, quantity=quantity, price=kalshi_px),
@@ -168,7 +198,6 @@ def paper_probe_events(
         events.append(make_event(**common, venue="polymarket_us", market_id=str(row["poly_slug"]), event_type="fee", fee=poly_fee))
     if kalshi_fee > 0:
         events.append(make_event(**common, venue="kalshi", market_id=str(row["kalshi_ticker"]), event_type="fee", fee=kalshi_fee))
-
     audit = {
         "trade_group_id": group,
         "settlement_key": key,
@@ -182,6 +211,10 @@ def paper_probe_events(
         "simultaneous_synthetic_fill_ts_ms": now_ms,
         "synchronized_book_pair": True,
         "quote_receive_skew_ms": row.get("quote_receive_skew_ms"),
+        "paper_plan_economics_validation": "RECOMPUTED_PRIMITIVE_COST_AND_CONSERVATIVE_PROFIT_CEILING",
+        "recomputed_primitive_cost": str(economics["recomputed_primitive_cost"]),
+        "reported_total_cost_upper_bound": str(economics["total_cost_upper_bound"]),
+        "implied_profit_ceiling": str(economics["implied_profit_ceiling"]),
         "required_participation_gate": row.get("required_participation_gate"),
         "participation_proof": row.get("participation_proof"),
         "participation_gate_satisfied": True,
@@ -198,30 +231,12 @@ def paper_probe_events(
     return events, audit
 
 
-def build_paper_probes(
-    snapshot: dict[str, Any],
-    *,
-    min_profit: Decimal = D("0.03"),
-    ts_ms: int | None = None,
-) -> tuple[list, list[dict[str, Any]]]:
-    events, audits, _state, _suppressed = build_paper_probes_with_state(
-        snapshot, prior_state={}, min_profit=min_profit, ts_ms=ts_ms
-    )
+def build_paper_probes(snapshot: dict[str, Any], *, min_profit: Decimal = D("0.03"), ts_ms: int | None = None) -> tuple[list, list[dict[str, Any]]]:
+    events, audits, _state, _suppressed = build_paper_probes_with_state(snapshot, prior_state={}, min_profit=min_profit, ts_ms=ts_ms)
     return events, audits
 
 
-def _best_valid_row_for_settlement(
-    rows: list[dict[str, Any]],
-    *,
-    min_profit: Decimal,
-    ts_ms: int | None,
-) -> tuple[dict[str, Any], str, list, dict[str, Any]] | None:
-    """Choose the best valid synthetic plan across duplicate rows for one identity.
-
-    Snapshot construction can occasionally surface duplicate representations of an
-    exact pair. Selection must not depend on source order: an invalid/weak first row
-    must never suppress a later valid/stronger row for the same settlement key.
-    """
+def _best_valid_row_for_settlement(rows: list[dict[str, Any]], *, min_profit: Decimal, ts_ms: int | None) -> tuple[dict[str, Any], str, list, dict[str, Any]] | None:
     choices: list[tuple[Decimal, Decimal, str, str, dict[str, Any], str, list, dict[str, Any]]] = []
     cap_by_field = {field: cap for field, cap in PROBE_FIELDS}
     for row in rows:
@@ -233,10 +248,11 @@ def _best_valid_row_for_settlement(
             continue
         new_events, audit = built
         plan = row.get(probe_field) or {}
-        profit = D(str(plan.get("conservative_locked_profit") or "0"))
+        economics = _validated_plan_economics(plan, probe_field)
+        if economics is None:
+            continue
+        profit = economics["reported_profit"]
         cap = cap_by_field[probe_field]
-        # Stable tie-breakers keep output deterministic if duplicate rows are
-        # economically identical but arrive in a different source order.
         direction = str(plan.get("direction") or "")
         fingerprint = _opportunity_fingerprint(row, probe_field)
         choices.append((profit, -cap, direction, fingerprint, row, probe_field, new_events, audit))
@@ -246,29 +262,18 @@ def _best_valid_row_for_settlement(
     return row, probe_field, new_events, audit
 
 
-def build_paper_probes_with_state(
-    snapshot: dict[str, Any],
-    *,
-    prior_state: dict[str, str],
-    min_profit: Decimal = D("0.03"),
-    ts_ms: int | None = None,
-) -> tuple[list, list[dict[str, Any]], dict[str, str], int]:
+def build_paper_probes_with_state(snapshot: dict[str, Any], *, prior_state: dict[str, str], min_profit: Decimal = D("0.03"), ts_ms: int | None = None) -> tuple[list, list[dict[str, Any]], dict[str, str], int]:
     events = []
     audits: list[dict[str, Any]] = []
     current_state: dict[str, str] = {}
     suppressed_resting_duplicates = 0
     source = snapshot.get("paper_probe_candidates") or []
-
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in source:
-        if not isinstance(row, dict):
-            continue
-        grouped.setdefault(_settlement_key(row), []).append(row)
-
+        if isinstance(row, dict):
+            grouped.setdefault(_settlement_key(row), []).append(row)
     for settlement_key in sorted(grouped):
-        selected = _best_valid_row_for_settlement(
-            grouped[settlement_key], min_profit=min_profit, ts_ms=ts_ms
-        )
+        selected = _best_valid_row_for_settlement(grouped[settlement_key], min_profit=min_profit, ts_ms=ts_ms)
         if selected is None:
             continue
         row, probe_field, new_events, audit = selected
@@ -282,9 +287,7 @@ def build_paper_probes_with_state(
         audit["opportunity_fingerprint"] = fingerprint
         audit["episode_event"] = "OPEN" if prior_fingerprint is None else "MOVE"
         audit["duplicate_identity_rows_considered"] = len(grouped[settlement_key])
-        audit["alternative_budget_tiers_not_filled"] = [
-            field for field, _cap in PROBE_FIELDS if field != probe_field and isinstance(row.get(field), dict)
-        ]
+        audit["alternative_budget_tiers_not_filled"] = [field for field, _cap in PROBE_FIELDS if field != probe_field and isinstance(row.get(field), dict)]
         events.extend(new_events)
         audits.append(audit)
     return events, audits, current_state, suppressed_resting_duplicates
@@ -293,9 +296,7 @@ def build_paper_probes_with_state(
 async def run(ledger_path: Path, audit_path: Path, state_path: Path, min_profit: Decimal) -> dict[str, Any]:
     prior_state = _load_active_state(state_path)
     snapshot = await run_once()
-    events, audits, current_state, suppressed = build_paper_probes_with_state(
-        snapshot, prior_state=prior_state, min_profit=min_profit
-    )
+    events, audits, current_state, suppressed = build_paper_probes_with_state(snapshot, prior_state=prior_state, min_profit=min_profit)
     ledger = LedgerSidecar(ledger_path)
     for event in events:
         ledger.emit(event)
@@ -317,6 +318,7 @@ async def run(ledger_path: Path, audit_path: Path, state_path: Path, min_profit:
         "budget_semantics": "ALTERNATIVE_SIZING_TIERS_ONE_SYNTHETIC_FILL_PER_SETTLEMENT_IDENTITY",
         "episode_semantics": "OPEN_MOVE_REOPEN_NO_RESTING_DEPTH_DOUBLE_COUNT",
         "duplicate_identity_semantics": "BEST_VALID_ROW_ORDER_INDEPENDENT",
+        "paper_plan_economics_semantics": "RECOMPUTE_PRIMITIVE_COST_REQUIRE_CONSERVATIVE_UPPER_BOUND_AND_PROFIT_CEILING",
         "rules_status": "RULES_PENDING",
         "full_rules_audited": False,
         "fully_audited_shadow_ready_groups": 0,
