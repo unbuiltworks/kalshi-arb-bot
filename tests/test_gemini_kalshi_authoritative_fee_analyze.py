@@ -14,12 +14,12 @@ def _meta(asset: str, *, fee_type: str = "quadratic", multiplier: str = "1"):
     )
 
 
-def _eth_row():
+def _eth_row(ts_ms: int = 1_786_924_384_253):
     # Runtime-shaped example: Kalshi YES .65 + Gemini NO .28 = .93 raw cost.
     # For 416 contracts, Gemini fee is $5.88 and Kalshi fee is $6.63,
-    # leaving $16.61 after both modeled taker fees.
+    # leaving $16.61 after both modeled taker fees before settlement-basis risk.
     return {
-        "ts_ms": 1_786_924_384_253,
+        "ts_ms": ts_ms,
         "asset": "ETH",
         "window_end_utc": "2026-08-17T00:00:00+00:00",
         "gemini_symbol": "GEMI-ETH15M2608170000-UP",
@@ -43,8 +43,21 @@ def test_authoritative_replay_prices_observed_eth_example_after_both_fees():
     assert eth["unique_positive_episodes"] == 1
     assert Decimal(eth["best_episode_profit_dollars"]) == Decimal("16.610000")
     assert Decimal(result["shadow_profit_dollars_one_execution_per_episode"]) == Decimal("16.610000")
+    assert Decimal(result["basis_unadjusted_shadow_profit_dollars_one_execution_per_episode"]) == Decimal("16.610000")
     assert result["settlement_status"] == "INDEX_MISMATCH_RESEARCH_ONLY"
+    assert result["basis_adjusted"] is False
+    assert result["settlement_equivalent"] is False
     assert result["order_entry"] is False
+
+
+def test_authoritative_replay_withholds_daily_projection_under_index_mismatch():
+    rows = [_eth_row(1_786_924_384_253), _eth_row(1_786_924_444_253)]
+    result = analyze_with_authoritative_metadata(rows, {"ETH": _meta("ETH")})
+    assert result["observation_ms"] == 60_000
+    assert result["projected_shadow_profit_per_day"] is None
+    assert result["naive_projected_shadow_profit_per_day"] is None
+    assert result["projection_status"] == "WITHHELD_SETTLEMENT_INDEX_MISMATCH_RESEARCH_ONLY"
+    assert result["projection_warning"] == "BASIS_UNADJUSTED_SHADOW_PNL_NOT_A_FORECAST"
 
 
 def test_authoritative_replay_fails_closed_for_unmapped_fee_type():
