@@ -1,0 +1,22 @@
+name: Maker Shadow Dashboard
+
+on:
+  pull_request:
+    paths:
+      - 'dashboard/maker_public_app.py'
+      - '.github/workflows/maker-shadow-dashboard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m py_compile dashboard/maker_public_app.py
