@@ -7,7 +7,8 @@ inventory by launching bounded one-shot epochs with unique run IDs.
 Risk remains deliberately tiny:
 - cumulative sports live-probe capital ceiling is $5 until explicitly changed;
 - durable Command Center reservation is required before every order attempt;
-- any ledger outage fails closed;
+- fresh cached Gemini AND Kalshi balance capacity is required before the hot path;
+- any ledger outage or stale venue-capital snapshot fails closed;
 - any previous ambiguous/one-leg outcome halts future submissions;
 - one contract per leg, >=3c after-fee edge, <=50ms skew, <=100ms books and 50ms
   exact-price survival are inherited from the proven canary;
@@ -18,7 +19,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 from datetime import datetime, timedelta, timezone
-import json
 import logging
 import os
 from pathlib import Path
@@ -32,6 +32,11 @@ from src import sports_trade_reporting as reporting
 from src.mlb_live_participation import candidate_game, participation_proof
 from src.sports_live_budget_guard import BudgetExhausted, CUMULATIVE_BUDGET, current_used, install as install_budget
 from src.sports_trade_reporting import install as install_reporting
+from src.sports_venue_capital_allocator import (
+    CachedVenueCapitalAllocator,
+    VenueCapitalUnavailable,
+    install as install_venue_capital,
+)
 
 logger = logging.getLogger("kalshi_arb.sports_gk_autonomous_supervisor")
 
@@ -127,6 +132,9 @@ async def _wait_until_activation() -> None:
 
 async def run_forever(*, epoch_seconds: float, cooldown_seconds: float) -> None:
     _install_unified_families()
+    allocator = CachedVenueCapitalAllocator(
+        refresh_seconds=float(os.getenv("SPORTS_CAPITAL_REFRESH_SECONDS", "2")),
+    )
     install_reporting(
         canary,
         strategy="sports_gk_autonomous_rule_risk",
@@ -137,6 +145,9 @@ async def run_forever(*, epoch_seconds: float, cooldown_seconds: float) -> None:
         strategy="sports_gk_autonomous_rule_risk",
         run_id_env="MLB_GK_MULTI_RUN_ID",
     )
+    # Capital is outermost: the hot path must prove both venue legs fit the latest
+    # cached balance envelope before it writes a durable trade reservation or sends.
+    install_venue_capital(canary, allocator)
 
     if os.getenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", "").strip().upper() != "YES":
         raise RuntimeError("global live probe gate is not enabled")
@@ -144,77 +155,99 @@ async def run_forever(*, epoch_seconds: float, cooldown_seconds: float) -> None:
         raise RuntimeError("sports supervisor live rule-risk gate is not enabled")
 
     await _wait_until_activation()
+    initial_capital = await allocator.refresh_once()
     logger.warning(
-        "SPORTS_SUPERVISOR_ACTIVE families=%s cumulative_budget_usd=%s epoch_seconds=%s",
-        sorted(ALL_FAMILIES), CUMULATIVE_BUDGET, epoch_seconds,
+        "SPORTS_SUPERVISOR_ACTIVE families=%s cumulative_budget_usd=%s epoch_seconds=%s "
+        "gemini_available=%s kalshi_available=%s venue_free_buffer=%s capital_snapshot_max_age_ms=%s",
+        sorted(ALL_FAMILIES),
+        CUMULATIVE_BUDGET,
+        epoch_seconds,
+        initial_capital.gemini_available,
+        initial_capital.kalshi_available,
+        allocator.free_buffer,
+        allocator.max_snapshot_age_ms,
     )
+    capital_task = asyncio.create_task(allocator.run())
 
     epoch = 0
     budget_notice_sent = False
     halt_notice_sent = False
-    while True:
-        epoch += 1
-        try:
-            rows = await _trades()
-            halt = _hard_halt_reason(rows)
-            if halt:
-                if not halt_notice_sent:
-                    await reporting._push(
-                        "SPORTS AUTO-TRADING HALTED",
-                        f"A prior live probe requires manual review.\n{halt}\nNo new sports orders will be submitted.",
-                    )
-                    halt_notice_sent = True
-                logger.error("SPORTS_SUPERVISOR_HARD_HALT %s", halt)
-                await asyncio.sleep(300.0)
-                continue
-
-            used = await current_used()
-            if used >= CUMULATIVE_BUDGET:
-                if not budget_notice_sent:
-                    await reporting._push(
-                        "Sports $5 probe budget reached",
-                        f"Cumulative deployed/reserved sports live-probe capital: ${used}.\nCeiling: ${CUMULATIVE_BUDGET}.\nScanning may continue, but no more live submissions are authorized.",
-                    )
-                    budget_notice_sent = True
-                logger.info("SPORTS_SUPERVISOR_BUDGET_EXHAUSTED used=%s ceiling=%s", used, CUMULATIVE_BUDGET)
-                await asyncio.sleep(300.0)
-                continue
-
-            run_id = _run_id(epoch)
-            arm_path = Path(f"/tmp/{run_id}.arm")
+    try:
+        while True:
+            epoch += 1
             try:
-                arm_path.unlink()
-            except FileNotFoundError:
-                pass
-            os.environ["MLB_GK_MULTI_RUN_ID"] = run_id
-            os.environ["LIVE_PROBE_ARM_TOKEN_FILE"] = str(arm_path)
-            os.environ["MLB_GK_MULTI_FAMILIES"] = ",".join(sorted(ALL_FAMILIES))
-            os.environ["MLB_GK_MULTI_ARM_NOT_AFTER_UTC"] = (
-                datetime.now(timezone.utc) + timedelta(seconds=max(60.0, epoch_seconds + 30.0))
-            ).isoformat()
+                rows = await _trades()
+                halt = _hard_halt_reason(rows)
+                if halt:
+                    if not halt_notice_sent:
+                        await reporting._push(
+                            "SPORTS AUTO-TRADING HALTED",
+                            f"A prior live probe requires manual review.\n{halt}\nNo new sports orders will be submitted.",
+                        )
+                        halt_notice_sent = True
+                    logger.error("SPORTS_SUPERVISOR_HARD_HALT %s", halt)
+                    await asyncio.sleep(300.0)
+                    continue
 
-            logger.info(
-                "SPORTS_SUPERVISOR_EPOCH_START epoch=%s run_id=%s used=%s remaining=%s",
-                epoch, run_id, used, CUMULATIVE_BUDGET - used,
-            )
-            rc = await canary.run(live_requested=True, watch_seconds=epoch_seconds)
-            logger.info("SPORTS_SUPERVISOR_EPOCH_END epoch=%s run_id=%s rc=%s", epoch, run_id, rc)
-            if rc == 70:
-                logger.error("SPORTS_SUPERVISOR_CHILD_HARD_HALT run_id=%s", run_id)
-                halt_notice_sent = False
-                await asyncio.sleep(1.0)
+                used = await current_used()
+                if used >= CUMULATIVE_BUDGET:
+                    if not budget_notice_sent:
+                        await reporting._push(
+                            "Sports $5 probe budget reached",
+                            f"Cumulative deployed/reserved sports live-probe capital: ${used}.\nCeiling: ${CUMULATIVE_BUDGET}.\nScanning may continue, but no more live submissions are authorized.",
+                        )
+                        budget_notice_sent = True
+                    logger.info("SPORTS_SUPERVISOR_BUDGET_EXHAUSTED used=%s ceiling=%s", used, CUMULATIVE_BUDGET)
+                    await asyncio.sleep(300.0)
+                    continue
+
+                run_id = _run_id(epoch)
+                arm_path = Path(f"/tmp/{run_id}.arm")
+                try:
+                    arm_path.unlink()
+                except FileNotFoundError:
+                    pass
+                os.environ["MLB_GK_MULTI_RUN_ID"] = run_id
+                os.environ["LIVE_PROBE_ARM_TOKEN_FILE"] = str(arm_path)
+                os.environ["MLB_GK_MULTI_FAMILIES"] = ",".join(sorted(ALL_FAMILIES))
+                os.environ["MLB_GK_MULTI_ARM_NOT_AFTER_UTC"] = (
+                    datetime.now(timezone.utc) + timedelta(seconds=max(60.0, epoch_seconds + 30.0))
+                ).isoformat()
+
+                logger.info(
+                    "SPORTS_SUPERVISOR_EPOCH_START epoch=%s run_id=%s used=%s remaining=%s capital_snapshot_age_ms=%s",
+                    epoch,
+                    run_id,
+                    used,
+                    CUMULATIVE_BUDGET - used,
+                    allocator.snapshot.age_ms() if allocator.snapshot else None,
+                )
+                rc = await canary.run(live_requested=True, watch_seconds=epoch_seconds)
+                logger.info("SPORTS_SUPERVISOR_EPOCH_END epoch=%s run_id=%s rc=%s", epoch, run_id, rc)
+                if rc == 70:
+                    logger.error("SPORTS_SUPERVISOR_CHILD_HARD_HALT run_id=%s", run_id)
+                    halt_notice_sent = False
+                    await asyncio.sleep(1.0)
+                    continue
+            except BudgetExhausted as exc:
+                logger.warning("SPORTS_SUPERVISOR_BUDGET_BLOCK %s", exc)
+                budget_notice_sent = False
+                await asyncio.sleep(60.0)
                 continue
-        except BudgetExhausted as exc:
-            logger.warning("SPORTS_SUPERVISOR_BUDGET_BLOCK %s", exc)
-            budget_notice_sent = False
-            await asyncio.sleep(60.0)
-            continue
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            # Fail closed on discovery, ledger, auth, or venue errors; retry without order entry.
-            logger.exception("SPORTS_SUPERVISOR_EPOCH_ERROR type=%s", type(exc).__name__)
-        await asyncio.sleep(max(5.0, cooldown_seconds))
+            except VenueCapitalUnavailable as exc:
+                logger.warning("SPORTS_SUPERVISOR_VENUE_CAPITAL_BLOCK %s", exc)
+                await asyncio.sleep(30.0)
+                continue
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                # Fail closed on discovery, ledger, auth, or venue errors; retry without order entry.
+                logger.exception("SPORTS_SUPERVISOR_EPOCH_ERROR type=%s", type(exc).__name__)
+            await asyncio.sleep(max(5.0, cooldown_seconds))
+    finally:
+        capital_task.cancel()
+        await asyncio.gather(capital_task, return_exceptions=True)
+        await allocator.close()
 
 
 def main() -> None:
