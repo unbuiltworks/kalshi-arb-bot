@@ -7,9 +7,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ src/
 COPY config/ config/
+COPY tests/ tests/
+COPY pyproject.toml .
 
-# BOT_MODE controls paper vs live: set in Railway env vars
-# Default to paper for safety
+# This feature branch is intentionally weather-shadow-only. The image build
+# fails if the read-only safety/normalization tests fail.
+RUN pytest -q tests/test_weather_shadow.py
+
 ENV BOT_MODE=paper
+ENV WEATHER_SHADOW_INTERVAL_S=60
 
-CMD ["sh", "-c", "if [ \"$BOT_MODE\" = \"live\" ]; then python -m src; else python -m src --paper; fi"]
+CMD ["python", "-u", "-m", "src.weather_shadow_daemon"]
