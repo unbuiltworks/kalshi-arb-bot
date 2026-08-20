@@ -14,6 +14,7 @@ from src.gemini_kalshi_maker_shadow_stress import install as install_stress
 
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_maker_shadow_service")
+RUNTIME_VERSION = "resting-liveness-v2"
 
 
 async def run_service(
@@ -27,6 +28,13 @@ async def run_service(
 ) -> None:
     install_resting_liveness(max_resting_feed_age_ms)
     install_stress(output_dir)
+    logger.info(
+        "MAKER_SHADOW_SERVICE_VERSION version=%s max_book_skew_ms=%d max_hedge_age_ms=%d max_resting_feed_age_ms=%d read_only=true order_entry=false",
+        RUNTIME_VERSION,
+        max_book_skew_ms,
+        max_hedge_age_ms,
+        max_resting_feed_age_ms,
+    )
     maker = asyncio.create_task(
         collect_all(
             assets=assets,
