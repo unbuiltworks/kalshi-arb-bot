@@ -7,15 +7,15 @@ suspended-game handling, corrections/review, expiration/fallback behavior, and
 market-specific threshold semantics must all be explicitly audited.
 
 A boolean assertion is not sufficient audit evidence. Every lifecycle-equivalence
-claim that is used to reach FULL_RULES_AUDITED_SHADOW must carry non-empty,
-venue-specific source references for both Gemini and Kalshi. Source references
-must also resolve to the venue's official HTTPS domains; arbitrary analyst text,
-third-party summaries, and placeholder/example URLs fail closed.
+claim that is used to reach FULL_RULES_AUDITED_SHADOW must carry official HTTPS
+venue-specific source references plus SHA-256 content fingerprints for the exact
+rule evidence that was reviewed. This prevents a mutable generic URL plus a bare
+boolean from being treated as a durable rule audit.
 
 The known Gemini Market Outcome Review fallback is an explicit part of the audit:
-a full shadow audit must prove that fact from an official Gemini source and must
-separately prove the claimed Kalshi-equivalent exception handling with bilateral
-official provenance. Omitting those exception fields cannot silently pass.
+a full shadow audit must prove that fact from an official Gemini source and exact
+fingerprint and must separately prove the claimed Kalshi-equivalent exception
+handling with bilateral official provenance and fingerprints.
 
 It never authorizes live execution.
 """
@@ -60,7 +60,6 @@ _OFFICIAL_SOURCE_HOSTS = {
 
 
 def _literal_true(value: Any) -> bool:
-    """Require an actual boolean True; strings/numbers fail closed."""
     return value is True
 
 
@@ -68,8 +67,14 @@ def _nonempty_text(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def _sha256_hex(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    text = value.strip().lower()
+    return len(text) == 64 and all(ch in "0123456789abcdef" for ch in text)
+
+
 def _official_https_source(value: Any, venue: str) -> bool:
-    """Require a non-placeholder HTTPS URL hosted on an official venue domain."""
     if not _nonempty_text(value):
         return False
     try:
@@ -79,33 +84,36 @@ def _official_https_source(value: Any, venue: str) -> bool:
     if parsed.scheme.lower() != "https":
         return False
     host = (parsed.hostname or "").lower().rstrip(".")
-    allowed = _OFFICIAL_SOURCE_HOSTS.get(venue, ())
-    return host in allowed
+    return host in _OFFICIAL_SOURCE_HOSTS.get(venue, ())
 
 
-def _field_sources(evidence: Mapping[str, Any], field: str) -> Mapping[str, Any] | None:
-    sources = evidence.get("evidence_sources")
-    if not isinstance(sources, Mapping):
+def _field_mapping(evidence: Mapping[str, Any], container: str, field: str) -> Mapping[str, Any] | None:
+    values = evidence.get(container)
+    if not isinstance(values, Mapping):
         return None
-    field_sources = sources.get(field)
-    return field_sources if isinstance(field_sources, Mapping) else None
+    field_values = values.get(field)
+    return field_values if isinstance(field_values, Mapping) else None
 
 
 def _has_venue_source(evidence: Mapping[str, Any], field: str, venue: str) -> bool:
-    """Require one exact venue fact to have an official source from that venue."""
-    field_sources = _field_sources(evidence, field)
-    if field_sources is None:
-        return False
-    return _official_https_source(field_sources.get(venue), venue)
+    field_sources = _field_mapping(evidence, "evidence_sources", field)
+    return field_sources is not None and _official_https_source(field_sources.get(venue), venue)
 
 
 def _has_bilateral_source(evidence: Mapping[str, Any], field: str) -> bool:
-    """Require explicit official source references from both venues for one claim."""
-    field_sources = _field_sources(evidence, field)
-    if field_sources is None:
-        return False
-    return _official_https_source(field_sources.get("gemini"), "gemini") and _official_https_source(
-        field_sources.get("kalshi"), "kalshi"
+    return _has_venue_source(evidence, field, "gemini") and _has_venue_source(
+        evidence, field, "kalshi"
+    )
+
+
+def _has_venue_fingerprint(evidence: Mapping[str, Any], field: str, venue: str) -> bool:
+    field_fingerprints = _field_mapping(evidence, "evidence_fingerprints", field)
+    return field_fingerprints is not None and _sha256_hex(field_fingerprints.get(venue))
+
+
+def _has_bilateral_fingerprint(evidence: Mapping[str, Any], field: str) -> bool:
+    return _has_venue_fingerprint(evidence, field, "gemini") and _has_venue_fingerprint(
+        evidence, field, "kalshi"
     )
 
 
@@ -121,45 +129,41 @@ class RuleAuditResult:
 def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
     """Classify exact Gemini/Kalshi MLB total/spread rule evidence.
 
-    `gemini_market_outcome_review_fallback` and
-    `kalshi_market_outcome_review_equivalent` are treated explicitly because an
-    exceptional-result fallback on only one venue creates unresolved lifecycle
-    basis even when ordinary winner/total/spread semantics match.
-
-    Every affirmative equivalence field used for a full rule audit must have
-    bilateral official provenance. The known Gemini fallback itself must have an
-    official Gemini source, and any assertion that Kalshi's handling is equivalent
-    must have bilateral official provenance. Missing exception evidence fails
-    closed; it cannot be bypassed by satisfying only the generic lifecycle fields.
+    A complete shadow audit requires literal-true semantic checks, official HTTPS
+    provenance, and immutable SHA-256 fingerprints for the exact source material
+    reviewed. The fingerprint is evidence bookkeeping only; it never promotes a
+    market to live execution.
     """
-    missing = [
-        field
-        for field in _REQUIRED_BOOL_FIELDS
-        if not _literal_true(evidence.get(field))
-    ]
+    missing = [field for field in _REQUIRED_BOOL_FIELDS if not _literal_true(evidence.get(field))]
     unsourced = [
         field
         for field in _REQUIRED_BOOL_FIELDS
         if _literal_true(evidence.get(field)) and not _has_bilateral_source(evidence, field)
+    ]
+    unfingerprinted = [
+        field
+        for field in _REQUIRED_BOOL_FIELDS
+        if _literal_true(evidence.get(field))
+        and _has_bilateral_source(evidence, field)
+        and not _has_bilateral_fingerprint(evidence, field)
     ]
 
     gemini_review = _literal_true(evidence.get("gemini_market_outcome_review_fallback"))
     kalshi_review_equivalent = _literal_true(evidence.get("kalshi_market_outcome_review_equivalent"))
 
     blockers: list[str] = []
-    if missing:
-        blockers.extend(f"RULE_AUDIT_MISSING:{field}" for field in missing)
-    if unsourced:
-        blockers.extend(f"RULE_AUDIT_MISSING_SOURCE:{field}" for field in unsourced)
+    blockers.extend(f"RULE_AUDIT_MISSING:{field}" for field in missing)
+    blockers.extend(f"RULE_AUDIT_MISSING_SOURCE:{field}" for field in unsourced)
+    blockers.extend(f"RULE_AUDIT_MISSING_FINGERPRINT:{field}" for field in unfingerprinted)
 
     if not gemini_review:
         blockers.append("RULE_AUDIT_MISSING:gemini_market_outcome_review_fallback")
-    elif not _has_venue_source(
+    elif not _has_venue_source(evidence, "gemini_market_outcome_review_fallback", "gemini"):
+        blockers.append("RULE_AUDIT_MISSING_SOURCE:gemini_market_outcome_review_fallback")
+    elif not _has_venue_fingerprint(
         evidence, "gemini_market_outcome_review_fallback", "gemini"
     ):
-        blockers.append(
-            "RULE_AUDIT_MISSING_SOURCE:gemini_market_outcome_review_fallback"
-        )
+        blockers.append("RULE_AUDIT_MISSING_FINGERPRINT:gemini_market_outcome_review_fallback")
 
     if not kalshi_review_equivalent:
         blockers.append("ASYMMETRIC_EXCEPTION_REVIEW_FALLBACK")
@@ -171,12 +175,10 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
             hard_blockers=tuple(blockers),
         )
 
-    if not _has_bilateral_source(
-        evidence, "kalshi_market_outcome_review_equivalent"
-    ):
-        blockers.append(
-            "RULE_AUDIT_MISSING_SOURCE:kalshi_market_outcome_review_equivalent"
-        )
+    if not _has_bilateral_source(evidence, "kalshi_market_outcome_review_equivalent"):
+        blockers.append("RULE_AUDIT_MISSING_SOURCE:kalshi_market_outcome_review_equivalent")
+    elif not _has_bilateral_fingerprint(evidence, "kalshi_market_outcome_review_equivalent"):
+        blockers.append("RULE_AUDIT_MISSING_FINGERPRINT:kalshi_market_outcome_review_equivalent")
 
     if blockers:
         return RuleAuditResult(
@@ -197,14 +199,7 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
 
 
 def current_public_mlb_total_spread_evidence() -> dict[str, Any]:
-    """Conservative machine-readable snapshot of currently established facts.
-
-    Ordinary identity/threshold semantics are established for the exact matched
-    MLB total/spread families, but exceptional lifecycle equivalence is not.
-    Gemini explicitly exposes a Market Outcome Review fallback when an expiration
-    value cannot be determined; no independently proven Kalshi-equivalent fallback
-    is asserted here.
-    """
+    """Conservative snapshot: ordinary semantics known, lifecycle equivalence unresolved."""
     return {
         "exact_event_identity": True,
         "threshold_orientation_equivalent": True,
@@ -229,6 +224,8 @@ def current_public_mlb_total_spread_evidence() -> dict[str, Any]:
                 "gemini": "https://www.gemini.com/legal/prediction-market-rules",
             },
         },
+        # Deliberately no evidence_fingerprints: current public facts have not yet
+        # been captured as an immutable complete bilateral lifecycle audit.
         "read_only": True,
         "order_entry": False,
     }
