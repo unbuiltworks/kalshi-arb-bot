@@ -1,7 +1,7 @@
 """Bounded live supervisor for the experimental 5-<10 bp q=1 cohort.
 
 This intentionally reuses the proven reliable live-campaign settlement/accounting
-loop while swapping only the order-capable child entrypoint.  The cohort is kept
+loop while swapping only the order-capable child entrypoint. The cohort is kept
 separate from the >=10 bp core campaign by its own campaign id and explicit arm.
 
 Hard limits:
@@ -10,8 +10,8 @@ Hard limits:
 * at most $5 cumulative deployed capital
 * one unresolved trade at a time
 * settlement disagreement or any unsafe execution halts fail-closed
-* experimental trades are kept in a separate campaign namespace and therefore are
-  not q5-graduation evidence for the core campaign
+* experimental trades use a distinct ledger strategy/mode and are not q5-graduation
+  evidence for the core campaign
 """
 from __future__ import annotations
 
@@ -34,6 +34,24 @@ MAX_TRADES_ENV = "CRYPTO_BOUNDARY_PROBE_MAX_TRADES"
 MAX_EXECUTION_ATTEMPTS_ENV = "CRYPTO_BOUNDARY_PROBE_MAX_EXECUTION_ATTEMPTS"
 HARD_BUDGET_ENV = "CRYPTO_BOUNDARY_PROBE_HARD_BUDGET_USD"
 DEADLINE_ENV = "SOL_CANARY_V2_ARM_NOT_AFTER_UTC"
+BOUNDARY_STRATEGY = "gemini_kalshi_15m_crypto_boundary_probe"
+BOUNDARY_MODE = "LIVE_BOUNDARY_PROBE_5_TO_LT_10BP"
+_ORIGINAL_POST_EVENT = base._post_event
+
+
+async def _post_boundary_event(http, event: dict) -> None:
+    """Preserve ledger math while making the experimental cohort unmistakable."""
+    payload = dict(event)
+    payload["strategy"] = BOUNDARY_STRATEGY
+    payload["mode"] = BOUNDARY_MODE
+    metadata = dict(payload.get("metadata") or {})
+    metadata.update({
+        "boundary_probe_band": "5_to_lt_10_bp",
+        "core_campaign": False,
+        "q5_graduation_evidence": False,
+    })
+    payload["metadata"] = metadata
+    await _ORIGINAL_POST_EVENT(http, payload)
 
 
 def _configure_campaign_env() -> dict[str, str | int]:
@@ -66,7 +84,7 @@ def _configure_campaign_env() -> dict[str, str | int]:
         raise RuntimeError("boundary probe arm deadline already expired")
 
     # Reuse the proven reliable supervisor with a unique state namespace and strict
-    # bounds.  These assignments affect only this process and its children.
+    # bounds. These assignments affect only this process and its children.
     os.environ[base.CAMPAIGN_ID_ENV] = campaign_id
     os.environ[base.MAX_TRADES_ENV] = str(max_trades)
     os.environ[base.HARD_BUDGET_ENV] = hard_budget
@@ -128,11 +146,14 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
     cfg = _configure_campaign_env()
     reliable._obtain_execution = _obtain_boundary_execution
+    base._post_event = _post_boundary_event
     logger.warning(
         "CRYPTO_BOUNDARY_PROBE_CAMPAIGN_ENABLED campaign_id=%s band=5_to_lt_10_bp "
         "max_trades=%s max_execution_attempts=%s hard_budget_usd=%s quantity=1 "
-        "min_profit=0.03 execution_delay_ms=50 separate_from_core=true q5_graduation_evidence=false",
+        "min_profit=0.03 execution_delay_ms=50 ledger_strategy=%s ledger_mode=%s "
+        "separate_from_core=true q5_graduation_evidence=false",
         cfg["campaign_id"], cfg["max_trades"], cfg["max_execution_attempts"], cfg["hard_budget_usd"],
+        BOUNDARY_STRATEGY, BOUNDARY_MODE,
     )
     reliable.main()
 
