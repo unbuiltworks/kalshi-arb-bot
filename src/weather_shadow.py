@@ -1,10 +1,11 @@
 """Read-only Kalshi weather market scanner.
 
-No authentication/order entry. Public Kalshi + forecast/NWS data are normalized into
-shadow rows. Settlement remains unapproved until listing-specific station/source audit.
+No authentication/order entry. Public Kalshi + forecast/NWS-proxy data are normalized
+into shadow rows. Live eligibility is blocked unless the listing's actual settlement
+source is supported and certified.
 """
 from __future__ import annotations
-import argparse, json, urllib.parse, urllib.request
+import argparse, json, re, urllib.parse, urllib.request
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -16,11 +17,11 @@ from src.weather_forecast import (
 
 KALSHI_PUBLIC_BASE = "https://api.elections.kalshi.com/trade-api/v2"
 WEATHER_SERIES = {"KXHIGHNY":"New York City","KXHIGHCHI":"Chicago","KXHIGHMIA":"Miami","KXHIGHAUS":"Austin","KXHIGHLA":"Los Angeles"}
-SETTLEMENT_STATUS = "SETTLEMENT_AUDIT_REQUIRED"
 TRADE_CLASSIFICATION = "SHADOW"
 CATEGORY = "weather"
 MODEL_STATUS = "MODEL_RESEARCH_ONLY"
 _LAST_GOOD_CONTEXT: dict[tuple[str,str], dict[str,Any]] = {}
+CLI_KEY_RE = re.compile(r"\((CLI[A-Z0-9]+)\)")
 
 
 def _to_cents(value: Any) -> int | None:
@@ -47,9 +48,22 @@ def _text(market: dict[str,Any], *keys:str) -> str | None:
     return text[:2000] if text else None
 
 
+def settlement_identity(market: dict[str,Any]) -> tuple[str,str|None,str]:
+    """Derive the live listing source/key and conservative settlement gate."""
+    primary=_text(market,"rules_primary") or ""
+    secondary=_text(market,"rules_secondary") or ""
+    combined=f"{primary} {secondary}"
+    key_match=CLI_KEY_RE.search(combined)
+    key=key_match.group(1) if key_match else None
+    if "Weather Company" in combined:
+        return "THE_WEATHER_COMPANY", key, "TWC_SOURCE_ACCESS_REQUIRED"
+    return "UNVERIFIED", key, "SETTLEMENT_AUDIT_REQUIRED"
+
+
 @dataclass(frozen=True)
 class WeatherShadowRow:
-    observed_at: str; category: str; classification: str; settlement_status: str; model_status: str; model_eligibility: str; data_quality_status: str
+    observed_at: str; category: str; classification: str; settlement_status: str; settlement_source: str; settlement_location_key: str | None
+    model_status: str; model_eligibility: str; data_quality_status: str
     series_ticker: str; city: str; station_hint: str | None; event_ticker: str | None; market_ticker: str; title: str | None; subtitle: str | None; close_time: str | None
     rules_primary: str | None; rules_secondary: str | None
     yes_bid_cents: int | None; yes_ask_cents: int | None; no_bid_cents: int | None; no_ask_cents: int | None
@@ -58,7 +72,7 @@ class WeatherShadowRow:
     forecast_target_date: str | None; forecast_models: dict[str,float] | None; forecast_mean_f: float | None; forecast_std_f: float | None
     observed_running_high_f: float | None; model_yes_probability: float | None; model_fair_yes_cents: int | None
     q1_yes_model_ev_cents: float | None; q1_no_model_ev_cents: float | None
-    source: str = "kalshi_public_api"; forecast_source: str = "open_meteo_public"; observation_source: str = "nws_public_api"
+    source: str = "kalshi_public_api"; forecast_source: str = "open_meteo_public"; observation_source: str = "nws_proxy_not_settlement_source"
 
 
 def _parse_observed_at(value: str | None) -> datetime:
@@ -69,6 +83,7 @@ def _parse_observed_at(value: str | None) -> datetime:
 
 def build_shadow_row(series_ticker: str, market: dict[str,Any], observed_at: str | None=None, forecast_context: dict[str,Any] | None=None) -> WeatherShadowRow:
     ticker = str(market.get("ticker") or "")
+    settlement_source, settlement_key, settlement_status = settlement_identity(market)
     yes_bid=_to_cents(_first(market,"yes_bid_dollars","yes_bid")); yes_ask=_to_cents(_first(market,"yes_ask_dollars","yes_ask"))
     no_bid=_to_cents(_first(market,"no_bid_dollars","no_bid")); no_ask=_to_cents(_first(market,"no_ask_dollars","no_ask"))
     yes_fee=taker_fee_cents(1,yes_ask,ticker) if yes_ask is not None else None; no_fee=taker_fee_cents(1,no_ask,ticker) if no_ask is not None else None
@@ -81,16 +96,26 @@ def build_shadow_row(series_ticker: str, market: dict[str,Any], observed_at: str
     bracket=parse_bracket(market.get("title")); model_highs=None; mean_f=std_f=model_prob=running_high=None; quality="NO_MODEL_DATA"
     if forecast_context:
         model_highs=forecast_context.get("models") or None; mean_f=forecast_context.get("mean_f"); std_f=forecast_context.get("std_f"); running_high=forecast_context.get("observed_running_high_f"); quality=forecast_context.get("data_quality_status","FRESH")
-        if mean_f is not None and std_f is not None and bracket is not None:
-            model_prob=bracket_probability(float(mean_f),float(std_f),bracket,float(running_high) if running_high is not None else None)
     eligibility=base_elig
-    if base_elig=="INTRADAY_OBSERVATION_CONDITIONED" and running_high is None: eligibility="INTRADAY_OBSERVATIONS_REQUIRED"
+    # Current listings settle to The Weather Company. NWS observations are useful as
+    # a proxy signal only and MUST NOT condition same-day settlement probabilities.
+    probability_running_high=running_high
+    if settlement_source=="THE_WEATHER_COMPANY" and base_elig=="INTRADAY_OBSERVATION_CONDITIONED":
+        eligibility="INTRADAY_TWC_OBSERVATIONS_REQUIRED"
+        probability_running_high=None
+    elif base_elig=="INTRADAY_OBSERVATION_CONDITIONED" and running_high is None:
+        eligibility="INTRADAY_OBSERVATIONS_REQUIRED"
+    if mean_f is not None and std_f is not None and bracket is not None:
+        model_prob=bracket_probability(float(mean_f),float(std_f),bracket,float(probability_running_high) if probability_running_high is not None else None)
     fair_cents=int(round(model_prob*100)) if model_prob is not None else None; yes_ev=no_ev=None
-    if eligibility in {"FORECAST_ONLY_RESEARCH","INTRADAY_OBSERVATION_CONDITIONED"}:
+    # EV is research-only. Intraday EV requires the ACTUAL listing source observation,
+    # never the NWS proxy. Future forecast EV remains visible but cannot graduate live
+    # while settlement_status is TWC_SOURCE_ACCESS_REQUIRED.
+    if eligibility=="FORECAST_ONLY_RESEARCH":
         if model_prob is not None and yes_ask is not None and yes_fee is not None: yes_ev=round(model_prob*100.0-yes_ask-yes_fee,2)
         if model_prob is not None and no_ask is not None and no_fee is not None: no_ev=round((1.0-model_prob)*100.0-no_ask-no_fee,2)
     cfg=CITY_CONFIG.get(series_ticker,{})
-    return WeatherShadowRow(observed_dt.isoformat(),CATEGORY,TRADE_CLASSIFICATION,SETTLEMENT_STATUS,MODEL_STATUS,eligibility,quality,series_ticker,WEATHER_SERIES.get(series_ticker,series_ticker),cfg.get("station"),market.get("event_ticker"),ticker,market.get("title"),market.get("subtitle"),market.get("close_time"),_text(market,"rules_primary"),_text(market,"rules_secondary"),yes_bid,yes_ask,no_bid,no_ask,num("volume_fp","volume"),num("open_interest_fp","open_interest"),num("yes_ask_size_fp","yes_ask_size"),num("no_ask_size_fp","no_ask_size"),yes_fee,no_fee,target.isoformat() if target else None,model_highs,round(float(mean_f),2) if mean_f is not None else None,round(float(std_f),2) if std_f is not None else None,round(float(running_high),2) if running_high is not None else None,round(float(model_prob),6) if model_prob is not None else None,fair_cents,yes_ev,no_ev)
+    return WeatherShadowRow(observed_dt.isoformat(),CATEGORY,TRADE_CLASSIFICATION,settlement_status,settlement_source,settlement_key,MODEL_STATUS,eligibility,quality,series_ticker,WEATHER_SERIES.get(series_ticker,series_ticker),cfg.get("station"),market.get("event_ticker"),ticker,market.get("title"),market.get("subtitle"),market.get("close_time"),_text(market,"rules_primary"),_text(market,"rules_secondary"),yes_bid,yes_ask,no_bid,no_ask,num("volume_fp","volume"),num("open_interest_fp","open_interest"),num("yes_ask_size_fp","yes_ask_size"),num("no_ask_size_fp","no_ask_size"),yes_fee,no_fee,target.isoformat() if target else None,model_highs,round(float(mean_f),2) if mean_f is not None else None,round(float(std_f),2) if std_f is not None else None,round(float(running_high),2) if running_high is not None else None,round(float(model_prob),6) if model_prob is not None else None,fair_cents,yes_ev,no_ev)
 
 
 def fetch_series_markets(series_ticker:str,status:str="open",limit:int=100)->list[dict[str,Any]]:
