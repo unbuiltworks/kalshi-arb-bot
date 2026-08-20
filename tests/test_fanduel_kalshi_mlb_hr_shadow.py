@@ -47,7 +47,7 @@ def test_kalshi_hr_identity_parses_exact_game_player_threshold():
     event, market = _kalshi_event()
     row = hr._kalshi_market_identity(event, market)
     assert row is not None
-    assert row["teams"] == ("cin", "stl")
+    assert row["teams"] == ("CIN", "STL")
     assert row["player_key"] == "ellydelacruz"
     assert row["threshold"] == D("1")
     assert row["start_ms"] == 1787244000000
@@ -57,7 +57,7 @@ def test_fanduel_half_point_hr_normalizes_to_integer_yes_threshold():
     rows = hr._fanduel_legs(_fanduel_body())
     assert len(rows) == 1
     row = rows[0]
-    assert row["teams"] == ("cin", "stl")
+    assert row["teams"] == ("CIN", "STL")
     assert row["player_key"] == "ellydelacruz"
     assert row["threshold"] == D("1")
     assert row["side"] == "YES"
