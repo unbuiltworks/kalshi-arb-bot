@@ -10,6 +10,7 @@ def _current_series():
         "contract_terms_url": "https://assets.kalshi.com/contract_terms/GLOBALTEMPERATURE.pdf",
         "fee_type": "quadratic",
         "fee_multiplier": 1,
+        "last_updated_ts": "2026-08-18T19:15:56.220522Z",
     }
 
 
@@ -42,12 +43,19 @@ def test_current_provider_is_exposed_without_enabling_live_readiness():
             "floor_strike": 80,
             "cap_strike": 81,
         },
-        quote={"yes_ask_cents": 40, "yes_ask_qty": 5, "quote_age_ms": 100},
+        quote={
+            "yes_ask_cents": 40,
+            "yes_ask_qty": 5,
+            "quote_age_ms": 100,
+            "observed_at": "2026-08-20T16:00:00Z",
+        },
         station={"name": "Central Park", "cli_product": "CLINY", "identity_verified": True},
         forecast=None,
+        fee_changes=[],
     )
     assert row["settlement_certified_shadow"] is True
     assert row["settlement_source_providers"] == ["THE_WEATHER_COMPANY"]
+    assert row["fee_schedule_checked"] is True
     assert row["ev_certified_shadow"] is False
     assert row["live_probe_ready"] is False
 
