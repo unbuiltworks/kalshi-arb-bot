@@ -14,7 +14,7 @@ import json
 import os
 import re
 import uuid
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
@@ -65,8 +65,6 @@ def validate_config(cfg: ProbeConfig) -> None:
         raise ValueError("max_price_must_be_1_to_99")
     if not cfg.expected_settlement_key.startswith("CLI"):
         raise ValueError("expected_settlement_key_required")
-    # Hard risk invariant: this module only ever trades exactly one contract,
-    # therefore gross entry cost can never exceed $0.99 before fees.
 
 
 def settlement_identity(market: dict[str, Any]) -> tuple[str | None, bool]:
@@ -75,39 +73,56 @@ def settlement_identity(market: dict[str, Any]) -> tuple[str | None, bool]:
     return (match.group(1).upper() if match else None, bool(TWC_RE.search(text)))
 
 
-def _levels(book: dict[str, Any], side: str) -> list[tuple[int, float]]:
+def _levels(book: dict[str, Any], side: str) -> list[tuple[float, float]]:
     """Return executable asks as (price_cents, qty), best first.
 
-    Kalshi public orderbooks expose bids. Buying YES crosses NO bids at
-    YES ask = 100 - NO bid. Buying NO crosses YES bids at NO ask = 100 - YES bid.
+    Current Kalshi orderbooks are normally returned under ``orderbook_fp`` with
+    ``yes_dollars``/``no_dollars`` fixed-point dollar prices. Legacy cents arrays
+    are accepted only for replay/tests. Buying one outcome crosses the opposite
+    outcome's bids at the complementary price.
     """
-    ob = book.get("orderbook") or book
-    source = ob.get("no") if side == "YES" else ob.get("yes")
-    out: list[tuple[int, float]] = []
-    for raw in source or []:
+    ob = book.get("orderbook_fp") or book.get("orderbook") or book
+    opposing = "no" if side == "YES" else "yes"
+
+    # Current fixed-point format: e.g. no_dollars=[["0.43","5.00"]].
+    fp_source = ob.get(f"{opposing}_dollars") or []
+    out: list[tuple[float, float]] = []
+    for raw in fp_source:
         try:
-            price = int(round(100 - float(raw[0])))
+            bid_dollars = float(raw[0])
             qty = float(raw[1])
         except (TypeError, ValueError, IndexError):
             continue
-        if qty > 0 and 1 <= price <= 99:
-            out.append((price, qty))
+        ask_cents = (1.0 - bid_dollars) * 100.0
+        if qty > 0 and 0 < ask_cents < 100:
+            out.append((ask_cents, qty))
+
+    # Legacy replay format: yes/no arrays priced in integer cents.
+    if not out:
+        legacy_source = ob.get(opposing) or []
+        for raw in legacy_source:
+            try:
+                bid_cents = float(raw[0])
+                qty = float(raw[1])
+            except (TypeError, ValueError, IndexError):
+                continue
+            ask_cents = 100.0 - bid_cents
+            if qty > 0 and 0 < ask_cents < 100:
+                out.append((ask_cents, qty))
+
     return sorted(out, key=lambda x: x[0])
 
 
 def q1_executable_price(book: dict[str, Any], side: str) -> int | None:
     for price, qty in _levels(book, side):
         if qty >= 1:
-            return price
+            # Never understate the price cap due to fractional-cent representation.
+            return int(Decimal(str(price)).to_integral_value(rounding="ROUND_CEILING"))
     return None
 
 
 def v2_order_body(cfg: ProbeConfig, executable_price_cents: int) -> dict[str, Any]:
-    """Build a one-contract Fill-Or-Kill order using current Kalshi V2 shape.
-
-    V2 quotes everything from the YES side: bid=buy YES; ask=sell YES, which
-    is economically equivalent to buying NO at 1-price.
-    """
+    """Build a one-contract Fill-Or-Kill order using current Kalshi V2 shape."""
     if cfg.outcome_side == "YES":
         book_side = "bid"
         yes_price_cents = executable_price_cents
@@ -165,7 +180,6 @@ async def preflight(cfg: ProbeConfig, auth_client: KalshiClient | None = None) -
         response.raise_for_status()
         balance = response.json()
         balance_cents = int(balance.get("balance", 0))
-        # Keep a fee cushion; one contract itself costs < $1.
         if balance_cents < px + 10:
             raise RuntimeError("insufficient_balance_for_probe_and_fee_cushion")
 
@@ -185,15 +199,11 @@ async def preflight(cfg: ProbeConfig, auth_client: KalshiClient | None = None) -
 async def run() -> dict[str, Any]:
     cfg = load_config()
     validate_config(cfg)
-
-    # Dry-run can operate without credentials. Live mode requires explicit arm.
     if not cfg.dry_run and cfg.arm != ARM_VALUE:
         raise RuntimeError("live_probe_not_armed")
 
     client: KalshiClient | None = None
     try:
-        # If credentials are present, authenticate even in dry-run so we can
-        # prove balance/signature readiness without submitting an order.
         if os.getenv("KALSHI_API_KEY_ID") and os.getenv("KALSHI_PRIVATE_KEY_PEM"):
             client = KalshiClient(base_url="https://external-api.kalshi.com/trade-api/v2")
         checks = await preflight(cfg, client)
@@ -216,9 +226,8 @@ async def run() -> dict[str, Any]:
         body = v2_order_body(cfg, px)
         # Exactly one POST. No retries. FOK prevents a stale resting order.
         response = await client.post("/portfolio/events/orders", json=body)
-        payload: dict[str, Any]
         try:
-            payload = response.json()
+            payload: dict[str, Any] = response.json()
         except Exception:
             payload = {"raw_status": response.status_code}
         if response.status_code not in {200, 201}:
