@@ -1,15 +1,18 @@
-"""Durable cumulative capital guard for autonomous sports live probes.
+"""Durable cumulative capital and duplicate-exposure guard for sports probes.
 
-The guard uses ARB Command Center as the persistent reservation ledger.  A live
+The guard uses ARB Command Center as the persistent reservation ledger. A live
 order cannot pass this wrapper unless its capital is first reserved through the
-protected ingest endpoint.  This makes Railway restarts fail closed instead of
+protected ingest endpoint. Railway restarts therefore fail closed instead of
 forgetting prior exposure.
+
+Canary risk policy additionally allows at most one actually-filled live probe per
+exact settlement key. A persistent quote edge cannot silently stack the same
+player/event/stat/line again in a later supervisor epoch.
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
-import json
 import logging
 import os
 from typing import Any, Awaitable, Callable
@@ -33,6 +36,10 @@ class BudgetExhausted(RuntimeError):
     pass
 
 
+class DuplicateSettlementKey(BudgetExhausted):
+    """Risk block: this exact market already has live filled/reserved exposure."""
+
+
 def _d(value: Any, default: str = "0") -> D:
     try:
         return D(str(value))
@@ -48,14 +55,18 @@ def _safe_id(value: str) -> str:
     return "".join(ch if ch.isalnum() or ch in "-_.:" else "-" for ch in value)[:190]
 
 
+def _sports_live_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        row for row in rows
+        if str(row.get("mode") or "") in {"LIVE", "LIVE_PROBE"}
+        and str(row.get("strategy") or "").startswith("sports_gk_")
+    ]
+
+
 def budget_used_from_trades(rows: list[dict[str, Any]]) -> D:
     """Conservative cumulative capital: max(actual fills, active reservation) per trade."""
     total = D("0")
-    for row in rows:
-        if str(row.get("mode") or "") not in {"LIVE", "LIVE_PROBE"}:
-            continue
-        if not str(row.get("strategy") or "").startswith("sports_gk_"):
-            continue
+    for row in _sports_live_rows(rows):
         actual = _d(row.get("capital_filled"))
         metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
         reserved = _d(metadata.get("reserved_usd"))
@@ -65,7 +76,32 @@ def budget_used_from_trades(rows: list[dict[str, Any]]) -> D:
     return total
 
 
-async def current_used(http: httpx.AsyncClient | None = None) -> D:
+def duplicate_settlement_exposure(rows: list[dict[str, Any]], settlement_key: str) -> dict[str, Any] | None:
+    """Return the prior row that blocks another canary on this exact market.
+
+    A purely reserved attempt that was explicitly released with zero fill does not
+    block a later retry. Any actual fill blocks the key permanently for the current
+    canary regime, including after settlement. This is deliberately stricter than
+    a production position limit; scaling can relax it only after live validation.
+    """
+    key = str(settlement_key or "").strip()
+    if not key:
+        raise ValueError("settlement_key is required for live sports reservation")
+    for row in _sports_live_rows(rows):
+        if str(row.get("market") or "") != key:
+            continue
+        actual = _d(row.get("capital_filled"))
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        reserved = _d(metadata.get("reserved_usd"))
+        status = str(row.get("status") or "")
+        if actual > 0:
+            return row
+        if reserved > 0 and status != "CAPITAL_RELEASED":
+            return row
+    return None
+
+
+async def _fetch_trades(http: httpx.AsyncClient | None = None) -> list[dict[str, Any]]:
     owned = http is None
     client = http or httpx.AsyncClient(timeout=4.0)
     try:
@@ -74,10 +110,14 @@ async def current_used(http: httpx.AsyncClient | None = None) -> D:
         body = response.json()
         if not isinstance(body, list):
             raise RuntimeError("command center trades response is not a list")
-        return budget_used_from_trades([x for x in body if isinstance(x, dict)])
+        return [x for x in body if isinstance(x, dict)]
     finally:
         if owned:
             await client.aclose()
+
+
+async def current_used(http: httpx.AsyncClient | None = None) -> D:
+    return budget_used_from_trades(await _fetch_trades(http))
 
 
 async def _post_required(event: dict[str, Any]) -> None:
@@ -95,7 +135,16 @@ async def _post_required(event: dict[str, Any]) -> None:
 async def reserve(*, trade_id: str, strategy: str, context: dict[str, Any], amount: D) -> D:
     if amount <= 0 or amount > CUMULATIVE_BUDGET:
         raise BudgetExhausted(f"invalid reservation amount {amount}")
-    used = await current_used()
+    settlement_key = str(context.get("settlement_key") or "").strip()
+    rows = await _fetch_trades()
+    duplicate = duplicate_settlement_exposure(rows, settlement_key)
+    if duplicate is not None:
+        raise DuplicateSettlementKey(
+            "duplicate settlement key blocked: "
+            f"market={settlement_key} prior_trade_id={duplicate.get('trade_id')} "
+            f"prior_status={duplicate.get('status')} prior_capital={duplicate.get('capital_filled')}"
+        )
+    used = budget_used_from_trades(rows)
     remaining = CUMULATIVE_BUDGET - used
     if amount > remaining:
         raise BudgetExhausted(f"sports live cumulative budget exhausted: used={used} remaining={remaining} requested={amount}")
@@ -106,7 +155,7 @@ async def reserve(*, trade_id: str, strategy: str, context: dict[str, Any], amou
         "event_ts": _now(),
         "strategy": strategy,
         "mode": "LIVE_PROBE",
-        "market": context.get("settlement_key"),
+        "market": settlement_key,
         "asset": context.get("player"),
         "venues": ["gemini", "kalshi"],
         "side": context.get("direction"),
