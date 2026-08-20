@@ -4,18 +4,23 @@ No sports discovery is used. Only the three exact approvals in
 config/kp_unemployment_execution_approvals.json can enter the state machine.
 Deployment is safe while disarmed. A live attempt additionally requires:
   * ENABLE_SPORTS_KP_LIVE=YES on this service only,
-  * unique KP_UNEMPLOYMENT_RUN_ID,
-  * KP_UNEMPLOYMENT_ARM_UNTIL epoch no more than five minutes ahead,
   * exact live rule text/market identity validation,
   * fresh two-venue books (<=100 ms, <=50 ms receive skew),
   * q=1 after-fee profit >= $0.03 observed persistently,
   * hardened zero-position/market-state preflight immediately before mutation.
-The service performs at most one submission attempt and Railway must run it with
-restartPolicy=NEVER.
+
+Manual mode also requires a unique run id plus an arm deadline no more than five
+minutes ahead. Auto-live mode (KP_UNEMPLOYMENT_AUTO_LIVE=YES) watches continuously
+but does not keep an ARM token open: it creates a process-local, single-use token
+only after a qualifying persistent lock is observed. The hardened coordinator
+then performs venue preflight and fresh-plan revalidation before consuming that
+token immediately before order mutation. At most one submission attempt occurs
+per process; Railway must run it with restartPolicy=NEVER.
 """
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 from dataclasses import dataclass
 from decimal import Decimal
 import json
@@ -45,6 +50,7 @@ MAX_SKEW_MS = 50
 MIN_PROFIT = D("0.03")
 PERSIST_MS = 10
 MAX_ARM_SECONDS = 300
+HEARTBEAT_SECONDS = 30
 
 
 @dataclass
@@ -112,26 +118,47 @@ def _leg(venue: str, market_id: str, side: str, price: D) -> ExecutionLeg:
     )
 
 
-async def _plan(
+async def _evaluate_plan(
     approval: U3Approval,
     poly: EventingPolyBookStore,
     kalshi: EventingKalshiCrossBooks,
-) -> KPExecutionPlan | None:
-    pq = poly.quote(approval.polymarket_slug, max_age_ms=MAX_BOOK_AGE_MS)
-    kq = await kalshi.quote(approval.kalshi_ticker, max_age_ms=MAX_BOOK_AGE_MS)
-    if pq is None or kq is None or not poly.connected:
-        return None
-    skew = abs(int(pq.received_ms) - int(kq.received_ms))
-    if skew > MAX_SKEW_MS:
-        return None
-    poly_fee, kalshi_fee = _fee_rates()
-    # $1 bankroll is an intentional q=1 hard cap. A complementary profitable pair
-    # costs < $1 for one contract and > $1 for two contracts.
-    shadow = best_plan(pq, kq, bankroll=D("1"), poly_fee_rate=poly_fee, kalshi_fee_rate=kalshi_fee)
-    if shadow is None or shadow.quantity != 1 or shadow.profit < MIN_PROFIT:
-        return None
+) -> tuple[KPExecutionPlan | None, str, dict[str, Any]]:
     now_ms = int(time.time() * 1000)
-    return KPExecutionPlan(
+    pq = poly.quote(approval.polymarket_slug, max_age_ms=60_000)
+    kq = await kalshi.quote(approval.kalshi_ticker, max_age_ms=60_000)
+    if pq is None or kq is None or not poly.connected:
+        return None, "missing_book", {}
+    poly_age = max(0, now_ms - int(pq.received_ms))
+    kalshi_age = max(0, now_ms - int(kq.received_ms))
+    metrics: dict[str, Any] = {
+        "poly_age_ms": poly_age,
+        "kalshi_age_ms": kalshi_age,
+    }
+    if poly_age > MAX_BOOK_AGE_MS:
+        return None, "poly_stale", metrics
+    if kalshi_age > MAX_BOOK_AGE_MS:
+        return None, "kalshi_stale", metrics
+    skew = abs(int(pq.received_ms) - int(kq.received_ms))
+    metrics["quote_skew_ms"] = skew
+    if skew > MAX_SKEW_MS:
+        return None, "quote_skew", metrics
+    poly_fee, kalshi_fee = _fee_rates()
+    shadow = best_plan(pq, kq, bankroll=D("1"), poly_fee_rate=poly_fee, kalshi_fee_rate=kalshi_fee)
+    if shadow is None:
+        return None, "no_complementary_plan", metrics
+    metrics.update({
+        "quantity": shadow.quantity,
+        "after_fee_profit": str(shadow.profit),
+        "poly_side": shadow.poly_side,
+        "poly_price": str(shadow.poly_price),
+        "kalshi_side": shadow.kalshi_side,
+        "kalshi_price": str(shadow.kalshi_price),
+    })
+    if shadow.quantity != 1:
+        return None, "not_q1", metrics
+    if shadow.profit < MIN_PROFIT:
+        return None, "profit_below_threshold", metrics
+    plan = KPExecutionPlan(
         settlement_key=approval.settlement_key,
         unit_profit=shadow.profit,
         quote_skew_ms=skew,
@@ -140,6 +167,16 @@ async def _plan(
         kalshi=_leg("kalshi", approval.kalshi_ticker, shadow.kalshi_side, shadow.kalshi_price),
         rule_fingerprint_sha256=approval.fingerprint,
     )
+    return plan, "qualified", metrics
+
+
+async def _plan(
+    approval: U3Approval,
+    poly: EventingPolyBookStore,
+    kalshi: EventingKalshiCrossBooks,
+) -> KPExecutionPlan | None:
+    plan, _, _ = await _evaluate_plan(approval, poly, kalshi)
+    return plan
 
 
 def _fp(plan: KPExecutionPlan) -> tuple[str, ...]:
@@ -153,10 +190,19 @@ def _fp(plan: KPExecutionPlan) -> tuple[str, ...]:
     )
 
 
+def _auto_live_requested() -> bool:
+    return os.getenv("KP_UNEMPLOYMENT_AUTO_LIVE", "NO").strip().upper() == "YES"
+
+
 def _arm_state() -> tuple[bool, str, int | None]:
+    live = os.getenv("ENABLE_SPORTS_KP_LIVE", "NO").strip().upper() == "YES"
+    auto_live = _auto_live_requested()
+    if auto_live:
+        if not live:
+            return False, "", None
+        return True, f"u3-auto-{int(time.time())}-{os.getpid()}", None
     run_id = os.getenv("KP_UNEMPLOYMENT_RUN_ID", "").strip()
     raw = os.getenv("KP_UNEMPLOYMENT_ARM_UNTIL", "").strip()
-    live = os.getenv("ENABLE_SPORTS_KP_LIVE", "NO").strip().upper() == "YES"
     if not live or not run_id or not raw:
         return False, run_id, None
     try:
@@ -179,14 +225,15 @@ async def _next_update(poly: EventingPolyBookStore, kalshi: EventingKalshiCrossB
 
 async def run() -> int:
     _load_config()
+    auto_live = _auto_live_requested()
     armed, run_id, arm_deadline = _arm_state()
     preflight_only = os.getenv("KP_UNEMPLOYMENT_PREFLIGHT", "YES").strip().upper() == "YES"
     logger.info("KP_U3_START %s", json.dumps({
         "mode": "LIVE_PROBE", "pairs": len(APPROVALS), "q_max": 1,
-        "armed": armed, "run_id": run_id or None, "arm_deadline": arm_deadline,
-        "preflight_only": preflight_only, "max_book_age_ms": MAX_BOOK_AGE_MS,
-        "max_skew_ms": MAX_SKEW_MS, "min_profit": str(MIN_PROFIT),
-        "order_entry": bool(armed and not preflight_only),
+        "armed": armed, "auto_live": auto_live, "run_id": run_id or None,
+        "arm_deadline": arm_deadline, "preflight_only": preflight_only,
+        "max_book_age_ms": MAX_BOOK_AGE_MS, "max_skew_ms": MAX_SKEW_MS,
+        "min_profit": str(MIN_PROFIT), "order_entry": bool(armed and not preflight_only),
     }, separators=(",", ":")))
 
     async with httpx.AsyncClient(timeout=15.0) as http:
@@ -214,7 +261,6 @@ async def run() -> int:
         else:
             raise RuntimeError("U3 K/P market-data startup timeout")
 
-        # Authenticated, zero-position hardened preflight on all exact contracts.
         pexec = HardenedPolymarketExecutor(); kexec = HardenedKalshiExecutor()
         try:
             for approval in APPROVALS:
@@ -234,47 +280,89 @@ async def run() -> int:
 
         logger.info("KP_U3_PREFLIGHT_OK %s", json.dumps({
             "live_rules_verified": 3, "authenticated_venue_preflights": 3,
-            "zero_position_required": True, "q_max": 1,
-            "armed": armed, "order_entry": bool(armed and not preflight_only),
+            "zero_position_required": True, "q_max": 1, "armed": armed,
+            "auto_live": auto_live, "order_entry": bool(armed and not preflight_only),
         }, separators=(",", ":")))
         if preflight_only or not armed:
             return 0
 
-        assert arm_deadline is not None and run_id
+        assert run_id
         arm_token = Path(f"/tmp/.kp-u3-arm-{run_id}")
-        arm_token.write_text(str(arm_deadline), encoding="utf-8")
+        if not auto_live:
+            assert arm_deadline is not None
+            arm_token.write_text(str(arm_deadline), encoding="utf-8")
+
         seen: dict[str, Seen] = {}
+        rejects: Counter[str] = Counter()
+        best_profit: D | None = None
+        best_snapshot: dict[str, Any] | None = None
+        last_heartbeat = time.monotonic()
         by_poly = {a.polymarket_slug: a for a in APPROVALS}
         by_kalshi = {a.kalshi_ticker: a for a in APPROVALS}
-        while int(time.time()) < arm_deadline:
-            trigger = await asyncio.wait_for(_next_update(poly, kalshi), timeout=max(0.25, arm_deadline - time.time()))
+
+        while auto_live or (arm_deadline is not None and int(time.time()) < arm_deadline):
+            if auto_live:
+                trigger = await _next_update(poly, kalshi)
+            else:
+                assert arm_deadline is not None
+                trigger = await asyncio.wait_for(
+                    _next_update(poly, kalshi), timeout=max(0.25, arm_deadline - time.time())
+                )
             approval = by_poly.get(trigger.market_id) if trigger.venue == "polymarket" else by_kalshi.get(trigger.market_id)
-            if approval is None: continue
-            plan = await _plan(approval, poly, kalshi)
+            if approval is None:
+                continue
+            plan, reason, metrics = await _evaluate_plan(approval, poly, kalshi)
+            rejects[reason] += 1
+            if "after_fee_profit" in metrics:
+                observed_profit = D(metrics["after_fee_profit"])
+                if best_profit is None or observed_profit > best_profit:
+                    best_profit = observed_profit
+                    best_snapshot = {
+                        "settlement_key": approval.settlement_key,
+                        "reason": reason,
+                        **metrics,
+                    }
             if plan is None:
-                seen.pop(approval.settlement_key, None); continue
-            now_ms = int(time.time() * 1000); fp = _fp(plan); prior = seen.get(approval.settlement_key)
-            if prior is None or prior.fingerprint != fp:
-                seen[approval.settlement_key] = Seen(now_ms, fp); continue
-            if now_ms - prior.first_ms < PERSIST_MS: continue
-            logger.info("KP_U3_QUALIFIED %s", json.dumps({
-                "mode": "LIVE_PROBE", "run_id": run_id,
-                "persistence_ms": now_ms-prior.first_ms, "plan": plan.as_dict(),
-            }, separators=(",", ":"), default=str))
+                seen.pop(approval.settlement_key, None)
+            else:
+                now_ms = int(time.time() * 1000); fp = _fp(plan); prior = seen.get(approval.settlement_key)
+                if prior is None or prior.fingerprint != fp:
+                    seen[approval.settlement_key] = Seen(now_ms, fp)
+                elif now_ms - prior.first_ms >= PERSIST_MS:
+                    persistence_ms = now_ms - prior.first_ms
+                    logger.info("KP_U3_QUALIFIED %s", json.dumps({
+                        "mode": "LIVE_PROBE", "auto_live": auto_live, "run_id": run_id,
+                        "persistence_ms": persistence_ms, "plan": plan.as_dict(),
+                    }, separators=(",", ":"), default=str))
 
-            async def fresh() -> KPExecutionPlan:
-                async with httpx.AsyncClient(timeout=8.0) as http:
-                    await _validate_live_rules(http, approval)
-                latest = await _plan(approval, poly, kalshi)
-                if latest is None: raise PermissionError("fresh U3 lock disappeared")
-                return latest
+                    async def fresh() -> KPExecutionPlan:
+                        async with httpx.AsyncClient(timeout=8.0) as http:
+                            await _validate_live_rules(http, approval)
+                        latest = await _plan(approval, poly, kalshi)
+                        if latest is None:
+                            raise PermissionError("fresh U3 lock disappeared")
+                        return latest
 
-            result = await execute_after_fresh_revalidation(
-                plan, fresh, arm_token=arm_token, live_requested=True,
-            )
-            result["mode"] = "LIVE_PROBE"; result["run_id"] = run_id
-            logger.info("KP_U3_LIVE_RESULT %s", json.dumps(result, separators=(",", ":"), default=str))
-            return 70 if result.get("hard_halt_required") else 0
+                    if auto_live:
+                        arm_token.write_text(str(int(time.time()) + 30), encoding="utf-8")
+                        logger.info("KP_U3_AUTO_ARM_MINTED run_id=%s ttl_seconds=30 order_entry=true", run_id)
+                    result = await execute_after_fresh_revalidation(
+                        plan, fresh, arm_token=arm_token, live_requested=True,
+                    )
+                    result["mode"] = "LIVE_PROBE"; result["run_id"] = run_id; result["auto_live"] = auto_live
+                    logger.info("KP_U3_LIVE_RESULT %s", json.dumps(result, separators=(",", ":"), default=str))
+                    return 70 if result.get("hard_halt_required") else 0
+
+            if time.monotonic() - last_heartbeat >= HEARTBEAT_SECONDS:
+                logger.info("KP_U3_WATCH_HEARTBEAT %s", json.dumps({
+                    "auto_live": auto_live,
+                    "evaluations": sum(rejects.values()),
+                    "reasons": dict(rejects),
+                    "best_after_fee_profit": None if best_profit is None else str(best_profit),
+                    "best_snapshot": best_snapshot,
+                    "order_entry": bool(armed and not preflight_only),
+                }, separators=(",", ":"), default=str))
+                last_heartbeat = time.monotonic()
 
         try: arm_token.unlink()
         except FileNotFoundError: pass
