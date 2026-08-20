@@ -5,7 +5,7 @@ import pytest
 
 from src.kalshi_cross_book import TwoSidedQuote
 from src.kp_unemployment_certification import APPROVALS, validate_poly_market
-from src.kp_unemployment_live_probe import _arm_state, _leg
+from src.kp_unemployment_live_probe import _arm_state, _auto_live_requested, _leg
 from src.kp_unemployment_live_probe_safe import _poly_available
 from src.polymarket_kalshi_shadow import PolyQuote, best_plan
 
@@ -67,6 +67,7 @@ def test_poly_available_prefers_buying_power_on_usd_row():
 
 
 def test_arm_requires_live_gate_unique_run_and_short_future_deadline(monkeypatch):
+    monkeypatch.delenv("KP_UNEMPLOYMENT_AUTO_LIVE", raising=False)
     monkeypatch.setenv("ENABLE_SPORTS_KP_LIVE", "YES")
     monkeypatch.setenv("KP_UNEMPLOYMENT_RUN_ID", "u3-test-1")
     monkeypatch.setenv("KP_UNEMPLOYMENT_ARM_UNTIL", str(int(time.time()) + 120))
@@ -75,8 +76,22 @@ def test_arm_requires_live_gate_unique_run_and_short_future_deadline(monkeypatch
 
 
 def test_arm_rejects_long_lived_authorization(monkeypatch):
+    monkeypatch.delenv("KP_UNEMPLOYMENT_AUTO_LIVE", raising=False)
     monkeypatch.setenv("ENABLE_SPORTS_KP_LIVE", "YES")
     monkeypatch.setenv("KP_UNEMPLOYMENT_RUN_ID", "u3-test-2")
     monkeypatch.setenv("KP_UNEMPLOYMENT_ARM_UNTIL", str(int(time.time()) + 900))
     with pytest.raises(PermissionError):
         _arm_state()
+
+
+def test_auto_live_requires_global_live_gate_but_not_deadline(monkeypatch):
+    monkeypatch.setenv("KP_UNEMPLOYMENT_AUTO_LIVE", "YES")
+    monkeypatch.setenv("ENABLE_SPORTS_KP_LIVE", "NO")
+    assert _auto_live_requested() is True
+    assert _arm_state() == (False, "", None)
+
+    monkeypatch.setenv("ENABLE_SPORTS_KP_LIVE", "YES")
+    armed, run_id, deadline = _arm_state()
+    assert armed is True
+    assert run_id.startswith("u3-auto-")
+    assert deadline is None
