@@ -6,6 +6,11 @@ is not enough: event identity, source hierarchy, postponement/cancellation,
 suspended-game handling, corrections/review, expiration/fallback behavior, and
 market-specific threshold semantics must all be explicitly audited.
 
+A boolean assertion is not sufficient audit evidence. Every lifecycle-equivalence
+claim that is used to reach FULL_RULES_AUDITED_SHADOW must carry non-empty,
+venue-specific source references for both Gemini and Kalshi. This prevents an
+upstream producer from accidentally promoting unsourced analyst assertions.
+
 It never authorizes live execution.
 """
 from __future__ import annotations
@@ -37,6 +42,23 @@ def _literal_true(value: Any) -> bool:
     return value is True
 
 
+def _nonempty_text(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _has_bilateral_source(evidence: Mapping[str, Any], field: str) -> bool:
+    """Require explicit source references from both venues for one audit claim."""
+    sources = evidence.get("evidence_sources")
+    if not isinstance(sources, Mapping):
+        return False
+    field_sources = sources.get(field)
+    if not isinstance(field_sources, Mapping):
+        return False
+    return _nonempty_text(field_sources.get("gemini")) and _nonempty_text(
+        field_sources.get("kalshi")
+    )
+
+
 @dataclass(frozen=True)
 class RuleAuditResult:
     status: str
@@ -53,8 +75,20 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
     `kalshi_market_outcome_review_equivalent` are treated explicitly because an
     exceptional-result fallback on only one venue creates unresolved lifecycle
     basis even when ordinary winner/total/spread semantics match.
+
+    Every affirmative field used for a full rule audit must also have bilateral
+    source provenance under ``evidence_sources[field] = {gemini, kalshi}``.
     """
-    missing = [field for field in _REQUIRED_BOOL_FIELDS if not _literal_true(evidence.get(field))]
+    missing = [
+        field
+        for field in _REQUIRED_BOOL_FIELDS
+        if not _literal_true(evidence.get(field))
+    ]
+    unsourced = [
+        field
+        for field in _REQUIRED_BOOL_FIELDS
+        if _literal_true(evidence.get(field)) and not _has_bilateral_source(evidence, field)
+    ]
 
     gemini_review = _literal_true(evidence.get("gemini_market_outcome_review_fallback"))
     kalshi_review_equivalent = _literal_true(evidence.get("kalshi_market_outcome_review_equivalent"))
@@ -62,6 +96,8 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
     blockers: list[str] = []
     if missing:
         blockers.extend(f"RULE_AUDIT_MISSING:{field}" for field in missing)
+    if unsourced:
+        blockers.extend(f"RULE_AUDIT_MISSING_SOURCE:{field}" for field in unsourced)
 
     if gemini_review and not kalshi_review_equivalent:
         blockers.append("ASYMMETRIC_EXCEPTION_REVIEW_FALLBACK")
@@ -111,6 +147,16 @@ def current_public_mlb_total_spread_evidence() -> dict[str, Any]:
         "expiration_close_equivalent": False,
         "gemini_market_outcome_review_fallback": True,
         "kalshi_market_outcome_review_equivalent": False,
+        "evidence_sources": {
+            "exact_event_identity": {
+                "gemini": "https://developer.gemini.com/prediction-markets/tickers-sports",
+                "kalshi": "https://kalshi.com/markets/kxmlbtotal",
+            },
+            "threshold_orientation_equivalent": {
+                "gemini": "https://developer.gemini.com/prediction-markets/tickers-sports",
+                "kalshi": "https://kalshi.com/markets/kxmlbspread",
+            },
+        },
         "read_only": True,
         "order_entry": False,
     }
