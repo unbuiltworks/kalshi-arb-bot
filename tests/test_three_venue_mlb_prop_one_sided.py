@@ -29,7 +29,9 @@ def test_offers_only_exposes_only_executable_yes_side():
 def test_missing_side_cannot_be_used_by_optimizer():
     poly = poly_top_book_one_sided({"bids": [{"px": "0.30", "qty": "4"}], "offers": []})
     assert poly is not None
-    kalshi = TopBook(yes_ask=D("0.30"), yes_depth=D("4"), no_ask=D("0.80"), no_depth=D("4"))
+    # Only KALSHI_YES + POLY_NO is executable. Choose prices that remain positive
+    # after conservative venue fees so the optimizer must select that direction.
+    kalshi = TopBook(yes_ask=D("0.20"), yes_depth=D("4"), no_ask=D("0.90"), no_depth=D("4"))
     plan = best_conservative_plan(poly, kalshi, kalshi_fee_multiplier=D("1"), max_quantity=4)
     assert plan is not None
     assert plan["direction"] == "KALSHI_YES_POLY_NO"
