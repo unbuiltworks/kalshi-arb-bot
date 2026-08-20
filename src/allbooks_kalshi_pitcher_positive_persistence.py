@@ -114,3 +114,5 @@ async def run_once(samples: int = 3, spacing_seconds: float = 5.0) -> dict[str, 
 
 if __name__ == "__main__":
     print(json.dumps(asyncio.run(run_once()), separators=(",", ":"), default=str), flush=True)
+
+# Deployment trigger only; no behavioral change.
