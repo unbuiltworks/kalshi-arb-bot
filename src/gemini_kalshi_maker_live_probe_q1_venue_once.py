@@ -15,6 +15,7 @@ from src import gemini_kalshi_maker_live_probe_q1_safe as safe
 STATE_ROOT = Path("/tmp/maker-live-probe-venue-once")
 ORDER_TTL_S = 20
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_maker_live_probe_q1_venue_once")
+_trigger_candidate_fn = None
 
 
 def _paths(run_id: str) -> tuple[Path, Path, Path]:
@@ -75,19 +76,53 @@ def claim_before_order(run_id: str) -> Path:
     return result
 
 
-def outbound_maker_price(maker_price):
-    price = base.D(maker_price)
-    # IMPROVE_1T is a useful trigger but twice crossed by the time the live POST
-    # reached Kalshi. For the one-contract mechanics probe, spend that one tick of
-    # queue priority and submit at the JOIN-equivalent price instead. A lower cost
-    # for the maker outcome can only improve the modeled complementary economics.
-    if base.POLICY == "IMPROVE_1T":
-        price = max(base.D("0.01"), price - base.D("0.01"))
-    return price
+def candidate_for_submission(*, gemini, kalshi, fee_meta, now_ms: int):
+    """Turn an IMPROVE trigger into a JOIN-priced candidate before state-machine use."""
+    if _trigger_candidate_fn is None:
+        raise RuntimeError("maker live probe candidate trigger is not installed")
+    candidate = _trigger_candidate_fn(
+        gemini=gemini, kalshi=kalshi, fee_meta=fee_meta, now_ms=now_ms
+    )
+    if candidate is None or base.POLICY != "IMPROVE_1T":
+        return candidate
+
+    submitted_price = max(base.D("0.01"), candidate.maker_price - base.D("0.01"))
+    econ = base.quote_economics(
+        direction=candidate.direction,
+        maker_price=submitted_price,
+        gemini=gemini,
+        fee_meta=fee_meta,
+    )
+    if econ is None or econ.locked_profit < base.TARGET_PROFIT:
+        return None
+    best_bid, bid_size, best_ask = base.maker_side_book(kalshi, candidate.maker_outcome)
+    queue_ahead = bid_size if submitted_price == best_bid else base.D("0")
+    adjusted = base.Candidate(
+        direction=candidate.direction,
+        maker_outcome=candidate.maker_outcome,
+        hedge_outcome=candidate.hedge_outcome,
+        maker_price=submitted_price,
+        hedge_price=econ.hedge_price,
+        locked_profit=econ.locked_profit,
+        best_bid=best_bid,
+        best_ask=best_ask,
+        queue_ahead=queue_ahead,
+        observed_ms=now_ms,
+    )
+    logger.warning("MAKER_LIVE_PROBE_TRIGGER_REPRICE %s", json.dumps({
+        "trigger_policy": base.POLICY,
+        "trigger_maker_price": str(candidate.maker_price),
+        "state_machine_maker_price": str(adjusted.maker_price),
+        "locked_profit_at_state_machine_price": str(adjusted.locked_profit),
+        "queue_ahead": str(adjusted.queue_ahead),
+    }, separators=(",", ":")))
+    return adjusted
 
 
 def maker_payload_with_expiry(*, ticker, direction, maker_price, client_order_id):
-    submitted_maker_price = outbound_maker_price(maker_price)
+    # maker_price is already the exact state-machine price. Keeping it unchanged
+    # ensures resting economics, cancel gates, and hedge accounting are identical.
+    submitted_maker_price = base.D(maker_price)
     payload = base.kalshi_maker_payload(
         ticker=ticker,
         direction=direction,
@@ -97,9 +132,8 @@ def maker_payload_with_expiry(*, ticker, direction, maker_price, client_order_id
     payload["expiration_time"] = int(time.time()) + ORDER_TTL_S
     logger.warning("MAKER_LIVE_PROBE_OUTBOUND_PRICE %s", json.dumps({
         "trigger_policy": base.POLICY,
-        "trigger_maker_price": str(maker_price),
         "submitted_maker_price": str(submitted_maker_price),
-        "safety_ticks_back": 1 if base.POLICY == "IMPROVE_1T" else 0,
+        "state_machine_price_matches_payload": True,
         "post_only": True,
     }, separators=(",", ":")))
     return payload
@@ -156,6 +190,8 @@ async def wait_candidate_safe(*, pair, fee_meta, timeout_s: float = 120.0):
                 "max_open_snapshot_skew_ms": base.MAX_OPEN_SNAPSHOT_SKEW_MS,
                 "target_profit": str(base.TARGET_PROFIT),
                 "policy": base.POLICY,
+                "candidate_maker_price": str(candidate.maker_price),
+                "candidate_locked_profit": str(candidate.locked_profit),
             }, separators=(",", ":")))
             return candidate, g, k, queue, tasks
         logger.warning("MAKER_LIVE_PROBE_CANDIDATE_WAIT_SUMMARY %s", json.dumps({
@@ -174,6 +210,9 @@ async def wait_candidate_safe(*, pair, fee_meta, timeout_s: float = 120.0):
 
 
 def install() -> None:
+    global _trigger_candidate_fn
+    _trigger_candidate_fn = safe.candidate_from_books
+    safe.candidate_from_books = candidate_for_submission
     safe._maybe_create_arm = maybe_create_arm
     safe._claim_before_order = claim_before_order
     safe.kalshi_maker_payload = maker_payload_with_expiry
