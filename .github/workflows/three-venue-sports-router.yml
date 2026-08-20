@@ -20,7 +20,17 @@ jobs:
         shell: bash
         run: |
           set +e
-          PYTHONPATH=. pytest -q tests/test_universal_sports_identity.py tests/test_gemini_sports_adapter.py tests/test_universal_three_venue_sports.py tests/test_three_venue_pricing_core.py tests/test_polymarket_scope_guard.py tests/test_kalshi_mlb_time_guard.py 2>&1 | tee three-venue-pytest.txt
+          PYTHONPATH=. pytest -q \
+            tests/test_universal_sports_identity.py \
+            tests/test_gemini_sports_adapter.py \
+            tests/test_universal_three_venue_sports.py \
+            tests/test_three_venue_pricing_core.py \
+            tests/test_polymarket_scope_guard.py \
+            tests/test_kalshi_mlb_time_guard.py \
+            tests/test_mlb_prop_rule_equivalence.py \
+            tests/test_mlb_prop_rule_certifications.py \
+            tests/test_three_venue_mlb_prop_one_sided.py \
+            2>&1 | tee three-venue-pytest.txt
           code=${PIPESTATUS[0]}
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit 0
