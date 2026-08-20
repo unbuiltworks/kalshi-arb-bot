@@ -3,7 +3,12 @@ from decimal import Decimal
 import pytest
 
 from src import gemini_kalshi_crypto_campaign_child_reliable as child
-from src.gemini_kalshi_crypto_parallel_campaign import CapitalBook, _asset_child_env
+from src.gemini_kalshi_crypto_parallel_campaign import (
+    CapitalBook,
+    VenueCapitalBook,
+    _asset_child_env,
+    _venue_costs,
+)
 from src.gemini_kalshi_gate_attribution import classify_gate
 
 D = Decimal
@@ -36,6 +41,37 @@ def test_actual_capital_cannot_exceed_reserved_amount():
     book.reserve("btc", D("1"))
     with pytest.raises(RuntimeError):
         book.convert_to_deployed("btc", D("1.01"))
+
+
+def test_venue_book_blocks_reuse_of_same_gemini_or_kalshi_cash():
+    venues = VenueCapitalBook({"gemini": D("2"), "kalshi": D("10")})
+    venues.reserve_pair("btc", D("1"))
+    venues.reserve_pair("eth", D("1"))
+    assert venues.free_for("gemini") == D("0")
+    assert venues.free_for("kalshi") == D("8")
+    assert not venues.can_reserve_pair(D("1"))
+    with pytest.raises(RuntimeError):
+        venues.reserve_pair("sol", D("1"))
+
+
+def test_venue_book_tracks_unsettled_by_venue_and_releases_after_settlement():
+    venues = VenueCapitalBook({"gemini": D("5"), "kalshi": D("5")})
+    venues.reserve_pair("btc", D("1"))
+    actual = {"gemini": D("0.42"), "kalshi": D("0.33")}
+    venues.convert_to_deployed("btc", actual)
+    assert venues.unsettled == actual
+    assert venues.free_for("gemini") == D("4.58")
+    assert venues.free_for("kalshi") == D("4.67")
+    venues.settle(actual)
+    assert venues.unsettled == {"gemini": D("0"), "kalshi": D("0")}
+
+
+def test_venue_costs_include_fees():
+    result = {
+        "gemini": {"filled_quantity": "1", "average_fill_price": "0.4000", "fee_paid": "0.0200"},
+        "kalshi": {"filled_quantity": "1", "average_fill_price": "0.3200", "fee_paid": "0.0153"},
+    }
+    assert _venue_costs(result) == {"gemini": D("0.4200"), "kalshi": D("0.3353")}
 
 
 def test_asset_child_env_pins_one_lane(monkeypatch):
