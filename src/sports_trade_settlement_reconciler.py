@@ -10,7 +10,9 @@ Fail-closed invariants:
 - requires exact Gemini instrumentSymbol and Kalshi ticker from execution metadata;
 - requires both venue results to be definitive YES or NO;
 - unknown/LFMP/ambiguous results remain open;
-- realized net P&L = actual settlement payout - actual fill capital - recorded fees.
+- realized net P&L = actual settlement payout - actual fill capital - recorded fees;
+- venue reads are batched and rate-limit paced so N open trades do not create N
+  full Gemini settled-event scans every cycle.
 
 This service is read-only to Gemini/Kalshi and has no order-entry path.
 """
@@ -20,10 +22,9 @@ import argparse
 import asyncio
 from datetime import datetime, timezone
 from decimal import Decimal
-import json
 import logging
 import os
-from typing import Any
+from typing import Any, Iterable, Mapping
 from urllib.parse import quote
 
 import httpx
@@ -40,6 +41,7 @@ PUSHOVER_USER = os.getenv("PUSHOVER_USER_KEY", "").strip()
 PUSHOVER_TOKEN = os.getenv("PUSHOVER_APP_TOKEN", "").strip()
 GEMINI_EVENTS = "https://api.gemini.com/v1/prediction-markets/events"
 KALSHI_REST = "https://external-api.kalshi.com/trade-api/v2"
+RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
 def _d(value: Any, default: str = "0") -> D:
@@ -101,6 +103,30 @@ def settlement_compatible(gemini_result: str, kalshi_result: str) -> bool:
     return gemini_result == kalshi_result
 
 
+def gemini_resolution_map(events: Iterable[Mapping[str, Any]], targets: Iterable[str]) -> dict[str, str | None]:
+    wanted = {str(value).upper(): str(value) for value in targets if str(value)}
+    out: dict[str, str | None] = {original: None for original in wanted.values()}
+    for event in events:
+        for contract in event.get("contracts") or []:
+            if not isinstance(contract, Mapping):
+                continue
+            symbol = str(contract.get("instrumentSymbol") or "")
+            original = wanted.get(symbol.upper())
+            if original is None:
+                continue
+            out[original] = normalize_result(contract.get("resolutionSide"))
+    return out
+
+
+def kalshi_resolution_from_payload(payload: Any) -> str | None:
+    if not isinstance(payload, Mapping):
+        return None
+    market = payload.get("market")
+    if not isinstance(market, Mapping):
+        market = payload
+    return normalize_result(market.get("result"))
+
+
 async def _push(title: str, message: str) -> None:
     if not PUSHOVER_USER or not PUSHOVER_TOKEN:
         return
@@ -139,6 +165,44 @@ async def _post_event(event: dict[str, Any]) -> bool:
         return False
 
 
+async def _get_with_retry(
+    http: httpx.AsyncClient,
+    url: str,
+    *,
+    venue: str,
+    params: Mapping[str, Any] | None = None,
+    allow_status: frozenset[int] = frozenset(),
+    attempts: int = 6,
+) -> httpx.Response:
+    response: httpx.Response | None = None
+    for attempt in range(attempts):
+        response = await http.get(url, params=params)
+        if response.status_code in allow_status:
+            return response
+        if response.status_code not in RETRYABLE_STATUS:
+            if response.status_code >= 400:
+                logger.warning(
+                    "SPORTS_SETTLEMENT_HTTP_ERROR venue=%s status=%s path=%s body=%s",
+                    venue,
+                    response.status_code,
+                    response.request.url.path,
+                    response.text[:180].replace("\n", " "),
+                )
+            return response
+        retry_after = response.headers.get("Retry-After")
+        try:
+            delay = float(retry_after) if retry_after else min(8.0, 0.5 * (2 ** attempt))
+        except (TypeError, ValueError):
+            delay = min(8.0, 0.5 * (2 ** attempt))
+        logger.warning(
+            "SPORTS_SETTLEMENT_HTTP_RETRY venue=%s status=%s attempt=%s sleep_s=%.2f",
+            venue, response.status_code, attempt + 1, delay,
+        )
+        await asyncio.sleep(delay)
+    assert response is not None
+    return response
+
+
 async def fetch_open_trades(http: httpx.AsyncClient) -> list[dict[str, Any]]:
     response = await http.get(f"{COMMAND_CENTER}/api/trades", params={"limit": 1000})
     response.raise_for_status()
@@ -154,67 +218,107 @@ async def fetch_open_trades(http: httpx.AsyncClient) -> list[dict[str, Any]]:
     ]
 
 
-async def find_gemini_resolution(
+def exact_market_ids(trade: Mapping[str, Any]) -> tuple[str, str]:
+    metadata = trade.get("metadata") if isinstance(trade.get("metadata"), Mapping) else {}
+    gp = metadata.get("gemini_payload") if isinstance(metadata.get("gemini_payload"), Mapping) else {}
+    kp = metadata.get("kalshi_payload") if isinstance(metadata.get("kalshi_payload"), Mapping) else {}
+    return str(gp.get("symbol") or ""), str(kp.get("ticker") or "")
+
+
+async def fetch_gemini_resolutions(
     http: httpx.AsyncClient,
-    instrument_symbol: str,
+    symbols: Iterable[str],
     *,
-    max_events: int = 3000,
-) -> str | None:
-    """Find the exact settled baseball contract and return resolutionSide."""
-    offset = 0
-    while offset < max_events:
-        limit = min(500, max_events - offset)
-        response = await http.get(
-            GEMINI_EVENTS,
-            params={"status": "settled", "sport": "baseball", "limit": limit, "offset": offset},
+    max_events: int = 5000,
+) -> dict[str, str | None]:
+    targets = {str(symbol) for symbol in symbols if str(symbol)}
+    results = {symbol: None for symbol in targets}
+    unresolved = {symbol.upper() for symbol in targets}
+    if not targets:
+        return results
+
+    # ``sport=baseball`` is accepted by the live sports endpoint. Some Gemini
+    # deployments have rejected that filter on settled-history queries, so fall
+    # back to an unfiltered settled scan only for 400/422 filter errors.
+    variants: tuple[dict[str, Any], ...] = (
+        {"status": "settled", "sport": "baseball"},
+        {"status": "settled"},
+    )
+    for variant_index, base_params in enumerate(variants):
+        offset = 0
+        filter_rejected = False
+        while offset < max_events and unresolved:
+            limit = min(500, max_events - offset)
+            params = {**base_params, "limit": limit, "offset": offset}
+            response = await _get_with_retry(http, GEMINI_EVENTS, venue="gemini", params=params)
+            if response.status_code in {400, 422} and variant_index == 0:
+                logger.warning(
+                    "SPORTS_SETTLEMENT_GEMINI_FILTER_FALLBACK status=%s from=sport_baseball to=unfiltered_settled",
+                    response.status_code,
+                )
+                filter_rejected = True
+                break
+            response.raise_for_status()
+            payload = response.json()
+            events = payload.get("data") or payload.get("events") or []
+            page_map = gemini_resolution_map(events, targets)
+            for symbol, outcome in page_map.items():
+                if outcome is not None:
+                    results[symbol] = outcome
+                    unresolved.discard(symbol.upper())
+            if len(events) < limit:
+                break
+            offset += limit
+            await asyncio.sleep(0.15)
+        if not filter_rejected:
+            break
+    logger.info(
+        "SPORTS_SETTLEMENT_GEMINI_BATCH targets=%s resolved=%s unresolved=%s",
+        len(targets), sum(v is not None for v in results.values()), sum(v is None for v in results.values()),
+    )
+    return results
+
+
+async def fetch_kalshi_resolutions(http: httpx.AsyncClient, tickers: Iterable[str]) -> dict[str, str | None]:
+    targets = sorted({str(ticker) for ticker in tickers if str(ticker)})
+    results: dict[str, str | None] = {}
+    for index, ticker in enumerate(targets):
+        response = await _get_with_retry(
+            http,
+            f"{KALSHI_REST}/markets/{quote(ticker, safe='')}",
+            venue="kalshi",
+            allow_status=frozenset({404}),
         )
-        response.raise_for_status()
-        payload = response.json()
-        events = payload.get("data") or payload.get("events") or []
-        for event in events:
-            for contract in (event.get("contracts") or []):
-                if str(contract.get("instrumentSymbol") or "") != instrument_symbol:
-                    continue
-                return normalize_result(contract.get("resolutionSide"))
-        if len(events) < limit:
-            return None
-        offset += limit
-    return None
+        if response.status_code == 404:
+            results[ticker] = None
+        else:
+            response.raise_for_status()
+            results[ticker] = kalshi_resolution_from_payload(response.json())
+        if index + 1 < len(targets):
+            await asyncio.sleep(0.12)
+    logger.info(
+        "SPORTS_SETTLEMENT_KALSHI_BATCH targets=%s resolved=%s unresolved=%s",
+        len(targets), sum(v is not None for v in results.values()), sum(v is None for v in results.values()),
+    )
+    return results
 
 
-async def find_kalshi_resolution(http: httpx.AsyncClient, ticker: str) -> str | None:
-    response = await http.get(f"{KALSHI_REST}/markets/{quote(ticker, safe='')}")
-    if response.status_code == 404:
-        return None
-    response.raise_for_status()
-    payload = response.json()
-    market = payload.get("market") if isinstance(payload, dict) else None
-    if not isinstance(market, dict):
-        market = payload if isinstance(payload, dict) else {}
-    return normalize_result(market.get("result"))
-
-
-async def reconcile_trade(http: httpx.AsyncClient, trade: dict[str, Any]) -> bool:
+async def reconcile_trade(
+    trade: dict[str, Any],
+    *,
+    gemini_results: Mapping[str, str | None],
+    kalshi_results: Mapping[str, str | None],
+) -> bool:
     metadata = trade.get("metadata") or {}
     if not isinstance(metadata, dict):
         return False
-    gp = metadata.get("gemini_payload") or {}
-    kp = metadata.get("kalshi_payload") or {}
-    symbol = str(gp.get("symbol") or "")
-    ticker = str(kp.get("ticker") or "")
+    symbol, ticker = exact_market_ids(trade)
     if not symbol or not ticker:
         logger.warning("SPORTS_SETTLEMENT_BLOCKED trade_id=%s reason=missing_exact_market_ids", trade.get("trade_id"))
         return False
 
-    try:
-        gemini_result, kalshi_result = await asyncio.gather(
-            find_gemini_resolution(http, symbol),
-            find_kalshi_resolution(http, ticker),
-        )
-    except Exception as exc:
-        logger.warning("SPORTS_SETTLEMENT_QUERY_FAILED trade_id=%s error=%s", trade.get("trade_id"), type(exc).__name__)
-        return False
-
+    gemini_result = gemini_results.get(symbol)
+    kalshi_result = kalshi_results.get(ticker)
     gemini_bought, kalshi_bought = bought_outcomes(metadata)
     payouts = settlement_payouts(
         gemini_bought=gemini_bought,
@@ -299,16 +403,30 @@ async def reconcile_trade(http: httpx.AsyncClient, trade: dict[str, Any]) -> boo
 
 async def run_forever(interval_seconds: float = 20.0) -> None:
     logger.info(
-        "SPORTS_SETTLEMENT_RECONCILER_READY interval_seconds=%s read_only_venues=true order_entry=false",
+        "SPORTS_SETTLEMENT_RECONCILER_READY interval_seconds=%s read_only_venues=true order_entry=false batch_reads=true",
         interval_seconds,
     )
-    async with httpx.AsyncClient(timeout=15.0) as http:
+    async with httpx.AsyncClient(timeout=20.0) as http:
         while True:
             try:
                 trades = await fetch_open_trades(http)
+                market_ids = [exact_market_ids(trade) for trade in trades]
+                symbols = {symbol for symbol, _ in market_ids if symbol}
+                tickers = {ticker for _, ticker in market_ids if ticker}
+                if trades:
+                    gemini_results, kalshi_results = await asyncio.gather(
+                        fetch_gemini_resolutions(http, symbols),
+                        fetch_kalshi_resolutions(http, tickers),
+                    )
+                else:
+                    gemini_results, kalshi_results = {}, {}
                 realized = 0
                 for trade in trades:
-                    realized += int(await reconcile_trade(http, trade))
+                    realized += int(await reconcile_trade(
+                        trade,
+                        gemini_results=gemini_results,
+                        kalshi_results=kalshi_results,
+                    ))
                 logger.info(
                     "SPORTS_SETTLEMENT_HEARTBEAT open_awaiting=%s realized_this_cycle=%s",
                     len(trades), realized,
