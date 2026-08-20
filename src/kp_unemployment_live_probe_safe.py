@@ -50,6 +50,17 @@ def _poly_available(body: Any) -> D:
     return max((_d(x) for x in candidates if x is not None), default=D("0"))
 
 
+def _poly_shape(body: Any) -> dict[str, Any]:
+    if not isinstance(body, dict):
+        return {"body_type": type(body).__name__, "top_level_keys": []}
+    rows = body.get("balances")
+    return {
+        "body_type": "dict",
+        "top_level_keys": sorted(str(k) for k in body.keys()),
+        "balance_rows": len(rows) if isinstance(rows, list) else None,
+    }
+
+
 async def _fee_preflight() -> tuple[D, D]:
     poly_rates: list[D] = []
     kalshi_rates: list[D] = []
@@ -79,8 +90,6 @@ async def _fee_preflight() -> tuple[D, D]:
                 raise PermissionError("invalid Kalshi fee multiplier")
             kalshi_rates.append(D("0.07") * multiplier)
 
-    # Use the highest current coefficient across the three contracts. This is
-    # conservative if a venue differentiates fees by threshold.
     return max(poly_rates), max(kalshi_rates)
 
 
@@ -99,13 +108,19 @@ async def _cash_preflight() -> dict[str, Any]:
         k_resp.raise_for_status()
         p_available = _poly_available(p_body)
         k_available = _d(k_resp.json().get("balance")) / D("100")
-        if p_available < MIN_READY_CASH or k_available < MIN_READY_CASH:
-            raise PermissionError("insufficient available cash for bounded q=1 recovery reserve")
-        return {
-            "polymarket_minimum_cash_ready": True,
-            "kalshi_minimum_cash_ready": True,
+        p_ready = p_available >= MIN_READY_CASH
+        k_ready = k_available >= MIN_READY_CASH
+        diagnostic = {
+            "polymarket_minimum_cash_ready": p_ready,
+            "kalshi_minimum_cash_ready": k_ready,
             "minimum_ready_cash": str(MIN_READY_CASH),
+            "polymarket_balance_shape": _poly_shape(p_body),
         }
+        logger.info("KP_U3_CASH_GATE %s", json.dumps({**diagnostic, "order_entry": False}, separators=(",", ":")))
+        if not p_ready or not k_ready:
+            failed = [name for name, ready in (("polymarket", p_ready), ("kalshi", k_ready)) if not ready]
+            raise PermissionError("insufficient available cash for bounded q=1 recovery reserve: " + ",".join(failed))
+        return diagnostic
     finally:
         try: pclient.close()
         except Exception: pass
@@ -127,8 +142,6 @@ async def run() -> int:
     try:
         return await run_probe()
     except asyncio.TimeoutError:
-        # No market update arrived before the short-lived arm expired. The base
-        # service uses /tmp arm state and Railway restartPolicy=NEVER, so exit cleanly.
         logger.info("KP_U3_ARM_EXPIRED_NO_TRADE timeout=true order_entry=false")
         return 0
 
