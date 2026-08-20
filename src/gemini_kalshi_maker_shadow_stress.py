@@ -20,6 +20,7 @@ DEFAULT_DELAYS_MS = (25, 50, 100, 250)
 @dataclass
 class PendingStress:
     asset: str
+    kalshi_ticker: str
     key: str
     direction: str
     policy: str
@@ -65,13 +66,20 @@ class HedgeLatencyStress:
         self.delays_ms = tuple(sorted({int(x) for x in delays_ms if int(x) >= 0}))
         self.pending: dict[str, list[PendingStress]] = {}
 
-    def schedule_from_events(self, asset: str, receive_ms: int, events: list[dict[str, Any]]) -> None:
+    def schedule_from_events(
+        self,
+        asset: str,
+        kalshi_ticker: str,
+        receive_ms: int,
+        events: list[dict[str, Any]],
+    ) -> None:
         bucket = self.pending.setdefault(asset, [])
         for row in events:
             if str(row.get("event") or "") != "SIMULATED_FILL":
                 continue
             bucket.append(PendingStress(
                 asset=asset,
+                kalshi_ticker=kalshi_ticker,
                 key=str(row.get("key") or ""),
                 direction=str(row.get("direction") or ""),
                 policy=str(row.get("policy") or ""),
@@ -91,14 +99,13 @@ class HedgeLatencyStress:
             elapsed = int(receive_ms) - pending.fill_receive_ms
             due = [d for d in pending.remaining_delays if elapsed >= d]
             for delay in sorted(due):
-                # Require a Gemini book received at/after the intended delay, never
-                # reuse the pre-fill book merely because wall time advanced.
                 if int(gemini.ts_ms) < pending.fill_receive_ms + delay:
                     continue
                 econ = stress_economics(pending, gemini)
                 row = {
                     "event": "HEDGE_LATENCY_STRESS",
                     "asset": asset,
+                    "kalshi_ticker": pending.kalshi_ticker,
                     "receive_ts_ms": int(receive_ms),
                     "fill_receive_ts_ms": pending.fill_receive_ms,
                     "key": pending.key,
@@ -135,7 +142,6 @@ class HedgeLatencyStress:
 
 
 def install(output_dir: Path, delays_ms: tuple[int, ...] = DEFAULT_DELAYS_MS) -> HedgeLatencyStress:
-    """Instrument the existing maker module without changing its order-free core."""
     stress = HedgeLatencyStress(output_dir, delays_ms)
     original_process_trade = maker._process_trade
     original_enqueue = maker._enqueue
@@ -150,7 +156,7 @@ def install(output_dir: Path, delays_ms: tuple[int, ...] = DEFAULT_DELAYS_MS) ->
             max_hedge_age_ms=max_hedge_age_ms,
             stats=stats,
         )
-        stress.schedule_from_events(stats.asset, receive_ms, events)
+        stress.schedule_from_events(stats.asset, trade.ticker, receive_ms, events)
         return events
 
     def enqueue_with_stress(queue, item, stats):
