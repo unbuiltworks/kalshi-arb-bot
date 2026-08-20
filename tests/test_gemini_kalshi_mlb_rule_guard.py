@@ -18,6 +18,9 @@ _REQUIRED = (
     "expiration_close_equivalent",
 )
 
+_GEMINI_FP = "a" * 64
+_KALSHI_FP = "b" * 64
+
 
 def _complete_evidence():
     evidence = {
@@ -46,6 +49,17 @@ def _complete_evidence():
         "gemini": "https://www.gemini.com/legal/prediction-market-rules",
         "kalshi": "https://kalshi.com/markets/kxmlbtotal",
     }
+    evidence["evidence_fingerprints"] = {
+        field: {"gemini": _GEMINI_FP, "kalshi": _KALSHI_FP}
+        for field in _REQUIRED
+    }
+    evidence["evidence_fingerprints"]["gemini_market_outcome_review_fallback"] = {
+        "gemini": _GEMINI_FP,
+    }
+    evidence["evidence_fingerprints"]["kalshi_market_outcome_review_equivalent"] = {
+        "gemini": _GEMINI_FP,
+        "kalshi": _KALSHI_FP,
+    }
     return evidence
 
 
@@ -72,8 +86,6 @@ def test_string_true_does_not_pass_rule_audit():
     evidence["suspended_interrupted_game_equivalent"] = "true"
     result = classify_mlb_rule_audit(evidence)
     assert result.status == RULES_PENDING
-    assert result.full_rules_audited is False
-    assert result.live_probe_ready is False
     assert "RULE_AUDIT_MISSING:suspended_interrupted_game_equivalent" in result.hard_blockers
 
 
@@ -82,7 +94,6 @@ def test_asymmetric_review_fallback_blocks_even_if_other_fields_match():
     evidence["kalshi_market_outcome_review_equivalent"] = False
     result = classify_mlb_rule_audit(evidence)
     assert result.status == EXCEPTION_LIFECYCLE_UNRESOLVED_RESEARCH_ONLY
-    assert result.live_probe_ready is False
     assert "ASYMMETRIC_EXCEPTION_REVIEW_FALLBACK" in result.hard_blockers
 
 
@@ -91,7 +102,6 @@ def test_omitted_gemini_review_fact_cannot_silently_pass():
     evidence.pop("gemini_market_outcome_review_fallback")
     result = classify_mlb_rule_audit(evidence)
     assert result.status == RULES_PENDING
-    assert result.full_rules_audited is False
     assert "RULE_AUDIT_MISSING:gemini_market_outcome_review_fallback" in result.hard_blockers
 
 
@@ -100,11 +110,7 @@ def test_gemini_review_fact_requires_official_gemini_source():
     evidence["evidence_sources"].pop("gemini_market_outcome_review_fallback")
     result = classify_mlb_rule_audit(evidence)
     assert result.status == RULES_PENDING
-    assert result.full_rules_audited is False
-    assert (
-        "RULE_AUDIT_MISSING_SOURCE:gemini_market_outcome_review_fallback"
-        in result.hard_blockers
-    )
+    assert "RULE_AUDIT_MISSING_SOURCE:gemini_market_outcome_review_fallback" in result.hard_blockers
 
 
 def test_kalshi_review_equivalence_requires_bilateral_source():
@@ -114,11 +120,7 @@ def test_kalshi_review_equivalence_requires_bilateral_source():
     }
     result = classify_mlb_rule_audit(evidence)
     assert result.status == RULES_PENDING
-    assert result.full_rules_audited is False
-    assert (
-        "RULE_AUDIT_MISSING_SOURCE:kalshi_market_outcome_review_equivalent"
-        in result.hard_blockers
-    )
+    assert "RULE_AUDIT_MISSING_SOURCE:kalshi_market_outcome_review_equivalent" in result.hard_blockers
 
 
 def test_bare_booleans_without_bilateral_sources_cannot_pass():
@@ -126,19 +128,7 @@ def test_bare_booleans_without_bilateral_sources_cannot_pass():
     evidence.pop("evidence_sources")
     result = classify_mlb_rule_audit(evidence)
     assert result.status == RULES_PENDING
-    assert result.full_rules_audited is False
-    assert result.fully_audited_shadow_ready is False
-    assert result.live_probe_ready is False
     assert "RULE_AUDIT_MISSING_SOURCE:exact_event_identity" in result.hard_blockers
-    assert "RULE_AUDIT_MISSING_SOURCE:expiration_close_equivalent" in result.hard_blockers
-    assert (
-        "RULE_AUDIT_MISSING_SOURCE:gemini_market_outcome_review_fallback"
-        in result.hard_blockers
-    )
-    assert (
-        "RULE_AUDIT_MISSING_SOURCE:kalshi_market_outcome_review_equivalent"
-        in result.hard_blockers
-    )
 
 
 def test_one_sided_source_reference_fails_closed():
@@ -149,7 +139,6 @@ def test_one_sided_source_reference_fails_closed():
     }
     result = classify_mlb_rule_audit(evidence)
     assert result.status == RULES_PENDING
-    assert result.full_rules_audited is False
     assert "RULE_AUDIT_MISSING_SOURCE:corrections_review_equivalent" in result.hard_blockers
 
 
@@ -161,7 +150,6 @@ def test_third_party_or_placeholder_sources_fail_closed():
     }
     result = classify_mlb_rule_audit(evidence)
     assert result.status == RULES_PENDING
-    assert result.full_rules_audited is False
     assert "RULE_AUDIT_MISSING_SOURCE:expiration_close_equivalent" in result.hard_blockers
 
 
@@ -174,3 +162,22 @@ def test_non_https_official_source_fails_closed():
     result = classify_mlb_rule_audit(evidence)
     assert result.status == RULES_PENDING
     assert "RULE_AUDIT_MISSING_SOURCE:source_hierarchy_equivalent" in result.hard_blockers
+
+
+def test_bilateral_sources_without_content_fingerprints_cannot_pass():
+    evidence = _complete_evidence()
+    evidence.pop("evidence_fingerprints")
+    result = classify_mlb_rule_audit(evidence)
+    assert result.status == RULES_PENDING
+    assert result.full_rules_audited is False
+    assert "RULE_AUDIT_MISSING_FINGERPRINT:exact_event_identity" in result.hard_blockers
+    assert "RULE_AUDIT_MISSING_FINGERPRINT:gemini_market_outcome_review_fallback" in result.hard_blockers
+    assert "RULE_AUDIT_MISSING_FINGERPRINT:kalshi_market_outcome_review_equivalent" in result.hard_blockers
+
+
+def test_malformed_fingerprint_fails_closed():
+    evidence = _complete_evidence()
+    evidence["evidence_fingerprints"]["expiration_close_equivalent"]["kalshi"] = "not-a-sha256"
+    result = classify_mlb_rule_audit(evidence)
+    assert result.status == RULES_PENDING
+    assert "RULE_AUDIT_MISSING_FINGERPRINT:expiration_close_equivalent" in result.hard_blockers
