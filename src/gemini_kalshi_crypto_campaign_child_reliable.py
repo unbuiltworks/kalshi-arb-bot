@@ -6,6 +6,11 @@ Kalshi receives the hedge order. The authenticated Gemini trading socket is heal
 checked immediately before submission; an unhealthy pre-send socket becomes a safe
 zero-fill retry, while any post-send ambiguity remains fail-closed.
 
+An optional fee-aware Kalshi hedge cushion is wired behind
+``CRYPTO_KALSHI_HEDGE_CUSHION=YES``. It defaults OFF. When enabled, the transport
+precomputes and validates the deeper Kalshi FOK before Gemini is submitted and never
+spends below the existing 3-cent after-fee modeled floor.
+
 For the parallel supervisor only, CRYPTO_CANARY_ASSET may pin the child to exactly one
 of BTC/ETH/SOL/XRP. When unset, legacy behavior remains all four assets.
 """
@@ -27,6 +32,7 @@ from src import gemini_kalshi_micro_live_executor_20bp as micro_executor
 from src.gemini_kalshi_staged_probe_transport import submit_gemini_first_probe
 
 DEADLINE_ENV = "SOL_CANARY_V2_ARM_NOT_AFTER_UTC"
+HEDGE_CUSHION_ENV = "CRYPTO_KALSHI_HEDGE_CUSHION"
 _ALLOWED_ASSETS = ("BTC", "ETH", "SOL", "XRP")
 
 
@@ -39,12 +45,18 @@ def _selected_assets() -> tuple[str, ...]:
     return (requested,)
 
 
+def _hedge_cushion_enabled() -> bool:
+    return os.getenv(HEDGE_CUSHION_ENV, "NO").strip().upper() == "YES"
+
+
 async def _submit_and_persist_context(*args: Any, **kwargs: Any) -> dict[str, Any]:
     run_id = v2._clean_run_id(os.environ[v2.RUN_ID_ENV])
     _, claim, result_path = v2._paths(run_id)
     if not claim.is_file():
         raise PermissionError("persistent crypto canary attempt was not claimed")
 
+    cushion_enabled = _hedge_cushion_enabled()
+    kwargs["kalshi_hedge_cushion_enabled"] = cushion_enabled
     result = await submit_gemini_first_probe(*args, **kwargs)
     gemini_payload = dict(args[2]) if len(args) > 2 and isinstance(args[2], dict) else {}
     kalshi_payload = dict(args[3]) if len(args) > 3 and isinstance(args[3], dict) else {}
@@ -54,11 +66,14 @@ async def _submit_and_persist_context(*args: Any, **kwargs: Any) -> dict[str, An
             "run_id": run_id,
             "completed_at_utc": datetime.now(timezone.utc).isoformat(),
             "gemini_payload": gemini_payload,
-            "kalshi_payload": kalshi_payload,
+            "kalshi_payload_original": kalshi_payload,
             "modeled_locked_profit": str(kwargs.get("modeled_locked_profit", "")),
             "kalshi_fee_multiplier": str(kwargs.get("kalshi_fee_multiplier", "")),
             "quote_skew_ms": kwargs.get("quote_skew_ms"),
-            "execution_policy": "GEMINI_FIRST_TERMINAL_THEN_KALSHI",
+            "kalshi_hedge_cushion_enabled": cushion_enabled,
+            "execution_policy": result.get(
+                "execution_policy", "GEMINI_FIRST_TERMINAL_THEN_KALSHI"
+            ),
             "result": result,
         },
     )
@@ -79,6 +94,12 @@ def main() -> None:
     rollover_optimizer.install()
     target_lifecycle_cache.install()
     target_freshness_guard.install()
+
+    micro_executor.logger.warning(
+        "CRYPTO_RELIABLE_CHILD_EXECUTION_POLICY staged=true kalshi_hedge_cushion_enabled=%s "
+        "min_profit=0.03 quantity=1",
+        _hedge_cushion_enabled(),
+    )
 
     sys.argv = [
         sys.argv[0],
