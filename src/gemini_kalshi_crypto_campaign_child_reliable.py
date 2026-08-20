@@ -2,7 +2,9 @@
 
 Market discovery/readiness/risk gates are identical to the proven campaign child.
 Only the final two-leg submission policy changes: Gemini must terminally fill before
-Kalshi receives the hedge order.
+Kalshi receives the hedge order. The authenticated Gemini trading socket is health-
+checked immediately before submission; an unhealthy pre-send socket becomes a safe
+zero-fill retry, while any post-send ambiguity remains fail-closed.
 """
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ from src import gemini_kalshi_sol_live_canary_v2 as v2
 from src import gemini_kalshi_rollover_optimizer as rollover_optimizer
 from src import gemini_kalshi_target_lifecycle_cache as target_lifecycle_cache
 from src import gemini_kalshi_target_freshness_guard as target_freshness_guard
+from src import gemini_kalshi_gemini_ws_recovery as gemini_ws_recovery
 from src.gemini_kalshi_staged_probe_transport import submit_gemini_first_probe
 
 DEADLINE_ENV = "SOL_CANARY_V2_ARM_NOT_AFTER_UTC"
@@ -51,8 +54,7 @@ def main() -> None:
     if not deadline:
         raise RuntimeError(f"{DEADLINE_ENV} is required for live canary child")
 
-    # v2.install_canary_v2() resolves this module-global hook when it installs the
-    # executor transport. Replace it before entering v2.main().
+    gemini_ws_recovery.install()
     v2._submit_and_persist_result = _submit_and_persist_context
 
     rollover_optimizer.install()
