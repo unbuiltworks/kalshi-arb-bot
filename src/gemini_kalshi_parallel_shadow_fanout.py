@@ -1,12 +1,11 @@
 """Short read-only fanout test for four pinned crypto scanner children.
 
-The live-order environment gate is forcibly disabled in every child. This validates
-transport load, asset pinning, rollover readiness and gate telemetry only.
+Each child runs the live canary market-data/readiness stack but cannot install the
+persistent live arm and has the live-order environment gate forced off.
 """
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
 import json
 import os
 import sys
@@ -17,20 +16,16 @@ RUN_SECONDS = float(os.getenv("CRYPTO_PARALLEL_SHADOW_SECONDS", "20"))
 
 
 async def run() -> None:
-    deadline = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat().replace("+00:00", "Z")
     stamp = int(time.time())
     processes = {}
     for asset in ASSETS:
         env = os.environ.copy()
         env["CRYPTO_CANARY_ASSET"] = asset
-        env["SOL_CANARY_V2_RUN_ID"] = f"shadowfan-{stamp}-{asset.lower()}"
-        env["SOL_CANARY_V2_ARM"] = "YES"
-        env["SOL_CANARY_V2_ARM_NOT_AFTER_UTC"] = deadline
+        env["CRYPTO_PARALLEL_SHADOW_CHILD_SECONDS"] = str(max(RUN_SECONDS + 10, 30))
         env["ENABLE_GEMINI_KALSHI_LIVE_PROBES"] = "NO"
-        env["LIVE_PROBE_ARM_TOKEN_FILE"] = f"/tmp/shadowfan-{stamp}-{asset.lower()}.arm"
         p = await asyncio.create_subprocess_exec(
             sys.executable,
-            "-m", "src.gemini_kalshi_crypto_campaign_child_reliable",
+            "-m", "src.gemini_kalshi_parallel_shadow_child",
             env=env,
         )
         processes[asset] = p
@@ -51,6 +46,7 @@ async def run() -> None:
         "CRYPTO_PARALLEL_SHADOW_FANOUT_RESULT " + json.dumps(
             {
                 "mode": "READ_ONLY_FANOUT",
+                "stamp": stamp,
                 "run_seconds": RUN_SECONDS,
                 "alive_through_observation": alive,
                 "exit_codes_after_forced_stop": results,
