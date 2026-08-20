@@ -23,6 +23,7 @@ async def call(path: str, params: dict) -> tuple[int, dict]:
 
 async def main() -> None:
     pos_status, pos = await call("/v1/prediction-markets/positions", {"eventTicker": EVENT, "limit": 100, "offset": 0})
+    settled_status, settled = await call("/v1/prediction-markets/positions/settled", {"eventTicker": EVENT, "limit": 100, "offset": 0})
     filled_status, filled = await call("/v1/prediction-markets/orders/history", {"status": "filled", "symbol": SYMBOL, "limit": 100})
     cancelled_status, cancelled = await call("/v1/prediction-markets/orders/history", {"status": "cancelled", "symbol": SYMBOL, "limit": 100})
     matches = []
@@ -35,12 +36,18 @@ async def main() -> None:
         row for row in (pos.get("positions", []) if isinstance(pos, dict) else [])
         if str(row.get("symbol") or row.get("instrumentSymbol") or "") == SYMBOL
     ]
+    settled_positions = [
+        row for row in (settled.get("positions", []) if isinstance(settled, dict) else [])
+        if str(row.get("symbol") or row.get("instrumentSymbol") or "") == SYMBOL
+    ]
     print("GEMINI_NAKED_POSITION_RECONCILE " + json.dumps({
         "mode": "READ_ONLY_RECONCILIATION",
         "symbol": SYMBOL,
         "event": EVENT,
         "positions_http": pos_status,
         "matching_positions": positions,
+        "settled_http": settled_status,
+        "matching_settled_positions": settled_positions,
         "filled_history_http": filled_status,
         "cancelled_history_http": cancelled_status,
         "matching_orders": matches,
