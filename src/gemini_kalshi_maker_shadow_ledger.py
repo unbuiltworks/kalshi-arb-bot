@@ -17,7 +17,7 @@ from typing import Any
 import httpx
 
 logger = logging.getLogger("kalshi_arb.maker_shadow_ledger")
-FORWARD_EVENTS = {"SIMULATED_FILL", "FILL_HEDGE_UNAVAILABLE"}
+FORWARD_EVENTS = {"SIMULATED_FILL", "FILL_HEDGE_UNAVAILABLE", "HEDGE_LATENCY_STRESS"}
 
 
 def resolve_ledger_url() -> str | None:
@@ -51,25 +51,41 @@ def row_to_trade_event(row: dict[str, Any]) -> dict[str, Any] | None:
     asset = str(row.get("asset") or "").upper() or None
     ticker = str(row.get("kalshi_ticker") or "") or None
     key = str(row.get("key") or "unknown")
-    opened = str(row.get("quote_opened_ms") or row.get("trade_ts_ms") or row.get("receive_ts_ms") or "0")
+    opened = str(
+        row.get("quote_opened_ms")
+        or row.get("fill_receive_ts_ms")
+        or row.get("trade_ts_ms")
+        or row.get("receive_ts_ms")
+        or "0"
+    )
     trade_id = f"maker-shadow:{asset or 'NA'}:{ticker or 'NA'}:{key}:{opened}"
+
+    quantity = row.get("fill_qty")
+    maker_price = row.get("maker_price")
+    maker_fee = float(row.get("maker_fee") or 0)
+    hedge_fee = 0.0
+    opportunity = None
+    legs_filled = 1
 
     if event == "SIMULATED_FILL":
         status = "SHADOW_FILLED_HEDGEABLE"
-        quantity = row.get("fill_qty")
-        maker_price = row.get("maker_price")
-        maker_fee = float(row.get("maker_fee") or 0)
         hedge_fee = float(row.get("hedge_fee") or 0)
         opportunity = row.get("simulated_fill_profit")
         event_type = "SHADOW_MAKER_FILL"
-    else:
+        legs_filled = 2
+    elif event == "FILL_HEDGE_UNAVAILABLE":
         status = "SHADOW_FILLED_HEDGE_UNAVAILABLE"
-        quantity = row.get("fill_qty")
-        maker_price = row.get("maker_price")
-        maker_fee = 0.0
-        hedge_fee = 0.0
-        opportunity = None
         event_type = "SHADOW_MAKER_HEDGE_UNAVAILABLE"
+    else:
+        hedge_fee = float(row.get("hedge_fee") or 0)
+        opportunity = row.get("stressed_fill_profit")
+        event_type = "SHADOW_MAKER_HEDGE_STRESS"
+        status = (
+            "SHADOW_HEDGE_STRESS_TARGET_SURVIVED"
+            if bool(row.get("survives_target"))
+            else "SHADOW_HEDGE_STRESS_TARGET_FAILED"
+        )
+        legs_filled = 2 if bool(row.get("hedge_depth_ok")) else 1
 
     amount = None
     try:
@@ -105,7 +121,7 @@ def row_to_trade_event(row: dict[str, Any]) -> dict[str, Any] | None:
         "gross_pnl": None,
         "net_pnl": None,
         "legs_required": 2,
-        "legs_filled": 2 if event == "SIMULATED_FILL" else 1,
+        "legs_filled": legs_filled,
         "opportunity_net_profit": opportunity,
         "metadata": metadata,
     }
@@ -122,7 +138,7 @@ class JsonlLedgerForwarder:
     def _new_rows(self) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         self.directory.mkdir(parents=True, exist_ok=True)
-        for path in sorted(self.directory.glob("maker_shadow_*.jsonl")):
+        for path in sorted(self.directory.glob("maker_*.jsonl")):
             offset = self.offsets.get(path, 0)
             try:
                 size = path.stat().st_size
