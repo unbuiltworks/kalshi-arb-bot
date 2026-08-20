@@ -1,11 +1,12 @@
 """Post-incident boot for the q=1 parallel Gemini/Kalshi campaign.
 
-Adds three reliability layers before launching the existing safe parallel supervisor:
+Adds four reliability layers before launching the existing safe parallel supervisor:
 1. confirmed emergency-flatten ledger accounting;
 2. a required, explicitly enabled fee-aware Kalshi hedge cushion that preserves the
-   existing >=3c after-fee floor; and
+   existing >=3c after-fee floor;
 3. bounded retry for child startup exits that provably occurred before the persistent
-   attempt claim (and therefore before any venue submission).
+   attempt claim (and therefore before any venue submission); and
+4. global pacing/backoff for authenticated Gemini trading-WebSocket child starts.
 
 All existing q=1, boundary, freshness, skew, capital, reservation and hard-halt rules
 remain unchanged. A claim without a result remains fail-closed.
@@ -18,6 +19,7 @@ from src import gemini_kalshi_crypto_campaign_child_reliable as child
 from src import gemini_kalshi_crypto_parallel_safe_boot as safe_boot
 from src import gemini_kalshi_incident_accounting as incident_accounting
 from src import gemini_kalshi_preclaim_child_exit_retry as preclaim_retry
+from src import gemini_kalshi_ws_rate_limit_guard as ws_rate_limit_guard
 
 
 def main() -> None:
@@ -26,7 +28,10 @@ def main() -> None:
             "post-incident live campaign requires CRYPTO_KALSHI_HEDGE_CUSHION=YES"
         )
     incident_accounting.install()
+    # Install the preclaim classifier first so the outer WS pacing wrapper can see
+    # safe startup-retry records and impose a global cooldown across all asset lanes.
     preclaim_retry.install()
+    ws_rate_limit_guard.install_parent_spawn_pacing()
     safe_boot.main()
 
 

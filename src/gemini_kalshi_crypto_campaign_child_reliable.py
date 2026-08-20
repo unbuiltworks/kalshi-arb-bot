@@ -29,6 +29,7 @@ from src import gemini_kalshi_gemini_ws_recovery as gemini_ws_recovery
 from src import gemini_kalshi_gemini_flatten_fix as gemini_flatten_fix
 from src import gemini_kalshi_gate_attribution as gate_attribution
 from src import gemini_kalshi_micro_live_executor_20bp as micro_executor
+from src import gemini_kalshi_ws_rate_limit_guard as ws_rate_limit_guard
 from src.gemini_kalshi_staged_probe_transport import submit_gemini_first_probe
 
 DEADLINE_ENV = "SOL_CANARY_V2_ARM_NOT_AFTER_UTC"
@@ -93,6 +94,10 @@ def main() -> None:
     gate_attribution.install(micro_executor.logger)
     gemini_ws_recovery.install()
     gemini_flatten_fix.install()
+    # Avoid a second throwaway authenticated Gemini WS handshake during v2 preflight.
+    # The real long-lived GeminiTradingSession.connect() remains mandatory before the
+    # live scanner can submit any order.
+    ws_rate_limit_guard.install_child_preflight()
     v2._submit_and_persist_result = _submit_and_persist_context
 
     rollover_optimizer.install()
