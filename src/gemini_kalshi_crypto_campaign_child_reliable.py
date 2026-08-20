@@ -5,6 +5,9 @@ Only the final two-leg submission policy changes: Gemini must terminally fill be
 Kalshi receives the hedge order. The authenticated Gemini trading socket is health-
 checked immediately before submission; an unhealthy pre-send socket becomes a safe
 zero-fill retry, while any post-send ambiguity remains fail-closed.
+
+For the parallel supervisor only, CRYPTO_CANARY_ASSET may pin the child to exactly one
+of BTC/ETH/SOL/XRP. When unset, legacy behavior remains all four assets.
 """
 from __future__ import annotations
 
@@ -18,9 +21,22 @@ from src import gemini_kalshi_rollover_optimizer as rollover_optimizer
 from src import gemini_kalshi_target_lifecycle_cache as target_lifecycle_cache
 from src import gemini_kalshi_target_freshness_guard as target_freshness_guard
 from src import gemini_kalshi_gemini_ws_recovery as gemini_ws_recovery
+from src import gemini_kalshi_gemini_flatten_fix as gemini_flatten_fix
+from src import gemini_kalshi_gate_attribution as gate_attribution
+from src import gemini_kalshi_micro_live_executor_20bp as micro_executor
 from src.gemini_kalshi_staged_probe_transport import submit_gemini_first_probe
 
 DEADLINE_ENV = "SOL_CANARY_V2_ARM_NOT_AFTER_UTC"
+_ALLOWED_ASSETS = ("BTC", "ETH", "SOL", "XRP")
+
+
+def _selected_assets() -> tuple[str, ...]:
+    requested = os.getenv("CRYPTO_CANARY_ASSET", "").strip().upper()
+    if not requested:
+        return _ALLOWED_ASSETS
+    if requested not in _ALLOWED_ASSETS:
+        raise ValueError(f"unsupported CRYPTO_CANARY_ASSET={requested}")
+    return (requested,)
 
 
 async def _submit_and_persist_context(*args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -54,8 +70,10 @@ def main() -> None:
     if not deadline:
         raise RuntimeError(f"{DEADLINE_ENV} is required for live canary child")
 
-    # Install before v2 creates the persistent authenticated trading session.
+    assets = _selected_assets()
+    gate_attribution.install(micro_executor.logger)
     gemini_ws_recovery.install()
+    gemini_flatten_fix.install()
     v2._submit_and_persist_result = _submit_and_persist_context
 
     rollover_optimizer.install()
@@ -65,7 +83,7 @@ def main() -> None:
     sys.argv = [
         sys.argv[0],
         "--arm-deadline-utc", deadline,
-        "--assets", "BTC", "ETH", "SOL", "XRP",
+        "--assets", *assets,
         "--seconds", "0",
         "--max-quote-skew-ms", "50",
         "--capital-limit", "1",
