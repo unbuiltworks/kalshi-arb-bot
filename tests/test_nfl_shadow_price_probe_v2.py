@@ -19,10 +19,10 @@ def test_unknown_kalshi_fee_can_report_gross_headroom_but_never_net_profit():
     rows=[row("gemini","g"),row("kalshi","k")]
     quotes={
         ("gemini","g"):Quote("gemini","g",D("0.40"),D("0.60")),
-        ("kalshi","k"):Quote("kalshi","k",D("0.55"),D("0.45"),"KXNFLGAME"),
+        ("kalshi","k"):Quote("kalshi","k",D("0.55"),D("0.45"),"KXOTHERSPORT"),
     }
-    meta={"KXNFLGAME":KalshiSeriesFeeMetadata(
-        series_ticker="KXNFLGAME",fee_type="quadratic_with_maker_fees",fee_multiplier="1",
+    meta={"KXOTHERSPORT":KalshiSeriesFeeMetadata(
+        series_ticker="KXOTHERSPORT",fee_type="quadratic_with_maker_fees",fee_multiplier="1",
         last_updated_ts="test",scheduled_changes=(),
     )}
     result=scan_v2(rows,quotes,meta)
@@ -39,13 +39,30 @@ def test_no_raw_gap_means_no_gross_candidate_even_with_unknown_fee():
     rows=[row("gemini","g"),row("kalshi","k")]
     quotes={
         ("gemini","g"):Quote("gemini","g",D("0.60"),D("0.40")),
-        ("kalshi","k"):Quote("kalshi","k",D("0.65"),D("0.45"),"KXNFLGAME"),
+        ("kalshi","k"):Quote("kalshi","k",D("0.65"),D("0.45"),"KXOTHERSPORT"),
     }
-    meta={"KXNFLGAME":KalshiSeriesFeeMetadata("KXNFLGAME","quadratic_with_maker_fees","1","test",())}
+    meta={"KXOTHERSPORT":KalshiSeriesFeeMetadata("KXOTHERSPORT","quadratic_with_maker_fees","1","test",())}
     result=scan_v2(rows,quotes,meta)
-    # At least one direction has raw cost >=1; neither may be falsely called a
-    # positive if its complementary cost is not below $1.
     assert all(D(x["raw_cost"])<D("1") for x in result["top_fee_unmapped_gross"])
+
+
+def test_mapped_nfl_kalshi_fee_converts_gross_gap_to_fully_priced_shadow_only():
+    rows=[row("gemini","g"),row("kalshi","k")]
+    quotes={
+        ("gemini","g"):Quote("gemini","g",D("0.40"),D("0.60")),
+        ("kalshi","k"):Quote("kalshi","k",D("0.55"),D("0.45"),"KXNFLGAME"),
+    }
+    meta={"KXNFLGAME":KalshiSeriesFeeMetadata(
+        "KXNFLGAME","quadratic_with_maker_fees","1","test",()
+    )}
+    result=scan_v2(rows,quotes,meta)
+    assert result["fee_unmapped_gross_positive_observations"]==0
+    assert result["fully_fee_priced_positive_observations"]>=1
+    candidate=result["top_fully_priced"][0]
+    assert D(candidate["shadow_profit"])>D("0")
+    assert candidate["rule_executable"] is False
+    assert candidate["rule_status"]=="CONDITIONAL"
+    assert "SHADOW_ONLY" in candidate["execution_status"]
 
 
 def test_fully_priced_gemini_sportsbook_candidate_stays_rule_blocked():
