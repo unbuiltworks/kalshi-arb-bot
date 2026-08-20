@@ -36,29 +36,38 @@ def _d(value: Any) -> D:
         return D("0")
 
 
+def _first_present(row: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        value = row.get(key)
+        if value is not None:
+            return value
+    return None
+
+
 def _poly_available(body: Any) -> D:
     candidates: list[Any] = []
+    preferred = ("assetAvailable", "available", "availableBalance", "buyingPower")
+    fallback = ("balance", "currentBalance")
     if isinstance(body, dict):
-        candidates.extend((
-            body.get("assetAvailable"),
-            body.get("available"),
-            body.get("availableBalance"),
-            body.get("buyingPower"),
-        ))
+        top = _first_present(body, preferred)
+        if top is None:
+            top = _first_present(body, fallback)
+        if top is not None:
+            candidates.append(top)
         rows = body.get("balances") or []
         if isinstance(rows, list):
             for row in rows:
                 if not isinstance(row, dict):
                     continue
                 currency = str(row.get("currency") or row.get("asset") or row.get("symbol") or "USD").upper()
-                if currency in {"USD", "USDC"}:
-                    candidates.extend((
-                        row.get("assetAvailable"),
-                        row.get("available"),
-                        row.get("availableBalance"),
-                        row.get("balance"),
-                    ))
-    return max((_d(x) for x in candidates if x is not None), default=D("0"))
+                if currency not in {"USD", "USDC"}:
+                    continue
+                value = _first_present(row, preferred)
+                if value is None:
+                    value = _first_present(row, fallback)
+                if value is not None:
+                    candidates.append(value)
+    return max((_d(x) for x in candidates), default=D("0"))
 
 
 def _poly_shape(body: Any) -> dict[str, Any]:
