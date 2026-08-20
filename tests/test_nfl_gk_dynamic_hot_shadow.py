@@ -50,11 +50,12 @@ def test_ambiguous_multiple_markets_for_same_venue_are_rejected():
 
 def test_past_game_is_rejected_and_nearest_future_pairs_win_limit():
     now=1_000_000
-    past_g=row("gemini","gp",now-1)
-    past_k=row("kalshi","kp",now-1)
+    # Deliberately distinct from every future proposition, so the past-game gate is
+    # tested rather than the ambiguity gate.
+    past_g=row("gemini","gp",now-1,"contest","game_total",D("47.5"))
+    past_k=row("kalshi","kp",now-1,"contest","game_total",D("47.5"))
     future=[]
     for i,start in enumerate((now+300_000,now+100_000,now+200_000)):
-        # Different subject ensures distinct proposition keys.
         subject=("PHI","DAL","PHI")[i]
         family="moneyline" if i<2 else "spread"
         line=None if family=="moneyline" else D("3.5")
