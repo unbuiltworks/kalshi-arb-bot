@@ -73,6 +73,34 @@ def test_missing_station_and_semantics_fail_closed():
     assert "BRACKET_SEMANTICS_UNVERIFIED" in row["blockers"]
 
 
+def test_verification_flags_require_literal_true():
+    market = _market()
+    market["local_day_verified"] = "false"
+    market["bracket_semantics_verified"] = "true"
+    row = build_shadow_row(
+        series=_series(), market=market,
+        quote={"ask_cents": 40, "ask_qty": 5, "quote_age_ms": 120},
+        station={"name": "Washington National", "cli_product": "CLIDCA", "identity_verified": "true"},
+    )
+    assert row["settlement_certified_shadow"] is False
+    assert "STATION_IDENTITY_UNVERIFIED" in row["blockers"]
+    assert "LOCAL_DAY_UNVERIFIED" in row["blockers"]
+    assert "BRACKET_SEMANTICS_UNVERIFIED" in row["blockers"]
+
+
+def test_stale_quote_is_not_settlement_certified_shadow_economics():
+    row = build_shadow_row(
+        series=_series(), market=_market(),
+        quote={"ask_cents": 40, "ask_qty": 5, "quote_age_ms": 2501},
+        station={"name": "Washington National", "cli_product": "CLIDCA", "identity_verified": True},
+        forecast={"bracket_probability": "0.55"},
+        max_quote_age_ms=2000,
+    )
+    assert row["settlement_certified_shadow"] is False
+    assert "QUOTE_STALE" in row["blockers"]
+    assert row["live_probe_ready"] is False
+
+
 def test_unknown_fee_type_fails_closed():
     series = _series()
     series["fee_type"] = "unknown"
