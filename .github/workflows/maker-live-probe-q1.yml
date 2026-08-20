@@ -1,0 +1,29 @@
+name: Maker Live Probe Q1
+
+on:
+  pull_request:
+    paths:
+      - 'src/gemini_kalshi_maker_live_probe_q1.py'
+      - 'tests/test_gemini_kalshi_maker_live_probe_q1.py'
+      - 'railway-crypto-maker-live-probe-q1.toml'
+      - '.github/workflows/maker-live-probe-q1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run maker live-probe tests
+        run: pytest -q tests/test_gemini_kalshi_maker_live_probe_q1.py
+      - name: Compile maker live-probe module
+        run: python -m py_compile src/gemini_kalshi_maker_live_probe_q1.py
