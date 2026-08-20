@@ -130,7 +130,7 @@ def test_q10_flatten_builder_accepts_exact_partial_or_full_but_not_over_ten():
     p3 = build_q10_emergency_flatten_payload(G10, quantity=D("3"))
     p10 = build_q10_emergency_flatten_payload(G10, quantity=D("10"))
     assert p3["quantity"] == "3"
-    assert p10["quantity"] == "1E+1"
+    assert p10["quantity"] == "10"
     assert p10["side"] == "SELL" and p10["timeInForce"] == "IOC" and p10["price"] == "0.01"
     with pytest.raises(ValueError, match="<= 10"):
         build_q10_emergency_flatten_payload(G10, quantity=D("11"))
