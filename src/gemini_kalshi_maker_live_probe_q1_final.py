@@ -17,6 +17,7 @@ import httpx
 from src import gemini_kalshi_maker_live_probe_q1 as base
 from src import gemini_kalshi_maker_live_probe_q1_safe as safe
 from src import gemini_kalshi_maker_live_probe_q1_safe_v2 as hardened
+from src import gemini_kalshi_maker_live_probe_q1_venue_once as venue_once
 
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_maker_live_probe_q1_final")
@@ -73,9 +74,19 @@ async def run() -> dict:
             "settlement_status": base.SETTLEMENT_STATUS,
             "order_entry": False,
         }
-    # safe.run_once uses safe.candidate_from_books at runtime. Pin it to the final
-    # non-recursive selector before crossing into any mutating code.
+    # safe.run_once resolves these globals at runtime. Pin the final selector and
+    # install the venue-idempotent one-shot arm/claim + exchange-side expiry.
     safe.candidate_from_books = hardened.candidate_from_books
+    venue_once.install()
+    logger.warning("MAKER_LIVE_PROBE_ONE_SHOT_MODE %s", json.dumps({
+        "mode": "LIVE_PROBE",
+        "idempotency": "KALSHI_CLIENT_ORDER_ID",
+        "process_claim": "EPHEMERAL",
+        "restart_policy": "NEVER",
+        "maker_order_ttl_s": venue_once.ORDER_TTL_S,
+        "quantity_max": "1",
+        "settlement_status": base.SETTLEMENT_STATUS,
+    }, separators=(",", ":")))
     return await safe.run_once()
 
 
