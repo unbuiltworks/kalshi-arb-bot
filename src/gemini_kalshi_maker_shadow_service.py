@@ -1,4 +1,4 @@
-"""Railway entrypoint for the read-only maker shadow plus ledger forwarding."""
+"""Railway entrypoint for the read-only maker shadow plus research sidecars."""
 from __future__ import annotations
 
 import argparse
@@ -9,6 +9,7 @@ from pathlib import Path
 
 from src.gemini_kalshi_maker_shadow import collect_all
 from src.gemini_kalshi_maker_shadow_ledger import JsonlLedgerForwarder
+from src.gemini_kalshi_maker_shadow_stress import install as install_stress
 
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_maker_shadow_service")
@@ -22,6 +23,7 @@ async def run_service(
     max_hedge_age_ms: int,
     output_dir: Path,
 ) -> None:
+    install_stress(output_dir)
     maker = asyncio.create_task(
         collect_all(
             assets=assets,
