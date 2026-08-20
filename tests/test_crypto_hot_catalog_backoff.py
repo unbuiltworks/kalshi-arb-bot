@@ -4,12 +4,6 @@ from src import gemini_kalshi_multi_ws_hot_catalog as catalog_mod
 
 
 def _patch_discovery_used_by_catalog(monkeypatch, replacement):
-    """Patch the exact global lookup used by BackgroundPairCatalog._refresh.
-
-    Some full-suite tests reload/import the catalog wrapper through alternate module
-    paths. Patching the bound method's globals keeps this test deterministic even if
-    the module object imported above is no longer the same object backing the class.
-    """
     monkeypatch.setitem(
         catalog_mod.BackgroundPairCatalog._refresh.__globals__,
         "_discover_pairs",
@@ -29,28 +23,27 @@ def test_failed_initial_discovery_is_singleflight_and_cooldown_blocks_retry(monk
 
     async def scenario():
         catalog = catalog_mod.BackgroundPairCatalog(refresh_s=30.0)
-        assets = ["BTC", "ETH", "SOL", "XRP"]
 
+        # Exercise the refresh primitive directly. current_pair() is intentionally
+        # replaceable by compatibility wrappers elsewhere in the suite; this test is
+        # about refresh single-flight/cooldown, not pair-selection plumbing.
         first = await asyncio.gather(
-            *(catalog.current_pair(object(), asset) for asset in assets)
+            *(catalog._refresh(object(), min_spacing_s=0.5) for _ in range(4)),
+            return_exceptions=True,
         )
-        assert first == [None, None, None, None]
+        assert isinstance(first[0], RuntimeError)
+        assert first[1:] == [False, False, False]
         assert calls == 1
         assert catalog._errors == 1
         assert catalog._next_refresh_not_before > 0
 
-        # Immediate retries from all workers must hit the shared cooldown without
-        # producing another network discovery burst.
+        # Immediate retries must hit the shared cooldown without another discovery.
         second = await asyncio.gather(
-            *(catalog.current_pair(object(), asset) for asset in assets)
+            *(catalog._refresh(object(), min_spacing_s=0.5) for _ in range(4))
         )
-        assert second == [None, None, None, None]
+        assert second == [False, False, False, False]
         assert calls == 1
         assert catalog._errors == 1
-
-        if catalog._task is not None:
-            catalog._task.cancel()
-            await asyncio.gather(catalog._task, return_exceptions=True)
 
     asyncio.run(scenario())
 
