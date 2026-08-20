@@ -61,6 +61,21 @@ def test_falls_back_when_kalshi_cannot_fund_largest_pair():
     assert result.quantity == D("5")
 
 
+def test_falls_back_when_total_capital_cap_blocks_largest_pair():
+    result = choose_dynamic_scale(
+        [
+            row(5, "2.00", "2.20", "0.20"),
+            row(10, "4.00", "4.20", "0.35"),
+            row(25, "10.00", "10.20", "0.90"),
+        ],
+        gemini_available=D("50"),
+        kalshi_available=D("50"),
+        max_total_capital=D("9"),
+    )
+    assert result is not None
+    assert result.quantity == D("10")
+
+
 def test_reserve_buffer_is_enforced_per_venue():
     result = choose_dynamic_scale(
         [row(5, "2", "2", "0.20"), row(10, "4", "4", "0.35")],
@@ -71,6 +86,18 @@ def test_reserve_buffer_is_enforced_per_venue():
     )
     assert result is not None
     assert result.quantity == D("5")
+
+
+def test_reports_post_reservation_free_balances():
+    result = choose_dynamic_scale(
+        [row(10, "4.25", "4.00", "0.35")],
+        gemini_available=D("10"),
+        kalshi_available=D("9"),
+        max_total_capital=D("20"),
+    )
+    assert result is not None
+    assert result.gemini_free_after == D("5.75")
+    assert result.kalshi_free_after == D("5.00")
 
 
 def test_unsupported_depth_row_is_never_selected():
