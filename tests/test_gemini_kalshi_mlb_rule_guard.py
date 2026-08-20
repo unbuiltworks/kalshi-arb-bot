@@ -39,6 +39,13 @@ def _complete_evidence():
         }
         for field in _REQUIRED
     }
+    evidence["evidence_sources"]["gemini_market_outcome_review_fallback"] = {
+        "gemini": "https://www.gemini.com/legal/prediction-market-rules",
+    }
+    evidence["evidence_sources"]["kalshi_market_outcome_review_equivalent"] = {
+        "gemini": "https://www.gemini.com/legal/prediction-market-rules",
+        "kalshi": "https://kalshi.com/markets/kxmlbtotal",
+    }
     return evidence
 
 
@@ -79,6 +86,41 @@ def test_asymmetric_review_fallback_blocks_even_if_other_fields_match():
     assert "ASYMMETRIC_EXCEPTION_REVIEW_FALLBACK" in result.hard_blockers
 
 
+def test_omitted_gemini_review_fact_cannot_silently_pass():
+    evidence = _complete_evidence()
+    evidence.pop("gemini_market_outcome_review_fallback")
+    result = classify_mlb_rule_audit(evidence)
+    assert result.status == RULES_PENDING
+    assert result.full_rules_audited is False
+    assert "RULE_AUDIT_MISSING:gemini_market_outcome_review_fallback" in result.hard_blockers
+
+
+def test_gemini_review_fact_requires_official_gemini_source():
+    evidence = _complete_evidence()
+    evidence["evidence_sources"].pop("gemini_market_outcome_review_fallback")
+    result = classify_mlb_rule_audit(evidence)
+    assert result.status == RULES_PENDING
+    assert result.full_rules_audited is False
+    assert (
+        "RULE_AUDIT_MISSING_SOURCE:gemini_market_outcome_review_fallback"
+        in result.hard_blockers
+    )
+
+
+def test_kalshi_review_equivalence_requires_bilateral_source():
+    evidence = _complete_evidence()
+    evidence["evidence_sources"]["kalshi_market_outcome_review_equivalent"] = {
+        "kalshi": "https://kalshi.com/markets/kxmlbtotal",
+    }
+    result = classify_mlb_rule_audit(evidence)
+    assert result.status == RULES_PENDING
+    assert result.full_rules_audited is False
+    assert (
+        "RULE_AUDIT_MISSING_SOURCE:kalshi_market_outcome_review_equivalent"
+        in result.hard_blockers
+    )
+
+
 def test_bare_booleans_without_bilateral_sources_cannot_pass():
     evidence = _complete_evidence()
     evidence.pop("evidence_sources")
@@ -89,6 +131,14 @@ def test_bare_booleans_without_bilateral_sources_cannot_pass():
     assert result.live_probe_ready is False
     assert "RULE_AUDIT_MISSING_SOURCE:exact_event_identity" in result.hard_blockers
     assert "RULE_AUDIT_MISSING_SOURCE:expiration_close_equivalent" in result.hard_blockers
+    assert (
+        "RULE_AUDIT_MISSING_SOURCE:gemini_market_outcome_review_fallback"
+        in result.hard_blockers
+    )
+    assert (
+        "RULE_AUDIT_MISSING_SOURCE:kalshi_market_outcome_review_equivalent"
+        in result.hard_blockers
+    )
 
 
 def test_one_sided_source_reference_fails_closed():
