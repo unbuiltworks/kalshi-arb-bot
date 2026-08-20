@@ -48,6 +48,33 @@ def test_unhedgeable_fill_records_one_sided_shadow_only():
     assert event["opportunity_net_profit"] is None
 
 
+def test_latency_stress_is_shadow_and_never_realized():
+    row = {
+        "event": "HEDGE_LATENCY_STRESS",
+        "asset": "BTC",
+        "receive_ts_ms": 1_800_000_000_100,
+        "fill_receive_ts_ms": 1_800_000_000_000,
+        "kalshi_ticker": "KXBTC15M-TEST",
+        "key": "GEMINI_YES_KALSHI_NO|JOIN|0.03",
+        "direction": "GEMINI_YES_KALSHI_NO",
+        "fill_qty": "1",
+        "maker_price": "0.40",
+        "maker_fee": "0",
+        "hedge_fee": "0.01",
+        "stressed_fill_profit": "0.02",
+        "survives_target": False,
+        "hedge_depth_ok": True,
+        "delay_ms": 100,
+    }
+    event = row_to_trade_event(row)
+    assert event is not None
+    assert event["mode"] == "SHADOW"
+    assert event["event_type"] == "SHADOW_MAKER_HEDGE_STRESS"
+    assert event["status"] == "SHADOW_HEDGE_STRESS_TARGET_FAILED"
+    assert event["net_pnl"] is None
+    assert event["opportunity_net_profit"] == "0.02"
+
+
 def test_non_fill_noise_is_not_forwarded():
     assert row_to_trade_event({"event": "OPEN"}) is None
     assert row_to_trade_event({"event": "REPRICE"}) is None
