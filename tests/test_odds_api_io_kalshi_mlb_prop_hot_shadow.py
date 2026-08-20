@@ -96,4 +96,4 @@ def test_no_positive_math_is_not_manufactured():
     assert plan is not None
     assert D(plan["conservative_locked_profit"]) < 0
 
-# Deployment trigger only; no behavioral change.
+# Runtime deployment trigger only; no behavioral change.
