@@ -8,6 +8,11 @@ fail closed. Settlement remains INDEX_MISMATCH_RESEARCH_ONLY.
 Because Series fee metadata is current-state metadata, this command labels its fee
 scope explicitly. Do not use it to silently reprice logs spanning a historical fee
 change without separately reconstructing the fee schedule at each observation time.
+
+Important: fee-adjusted complementary-price P&L is *basis-unadjusted shadow P&L*.
+Gemini and Kalshi do not currently have proven settlement-index equivalence, so this
+module deliberately withholds a projected $/day figure rather than annualizing an
+apparent lock that can lose when the venue settlement outcomes disagree.
 """
 
 from __future__ import annotations
@@ -89,21 +94,26 @@ def analyze_with_authoritative_metadata(
 
     timestamps = [int(row["ts_ms"]) for row in rows if "ts_ms" in row]
     observation_ms = max(timestamps) - min(timestamps) if timestamps else 0
-    projected_day = (
-        total_profit * D("86400000") / D(observation_ms)
-        if observation_ms > 0 else D("0")
-    )
     return {
         "by_asset": by_asset,
         "mapped_assets": mapped_assets,
         "blocked_assets": blocked_assets,
         "unique_positive_episodes": total_episodes,
+        # Preserve the measured economics, but name the quantity honestly: it is
+        # not a guaranteed lock because venue settlement indexes can disagree.
+        "basis_unadjusted_shadow_profit_dollars_one_execution_per_episode": str(total_profit),
+        # Legacy field retained for downstream compatibility. Consumers must honor
+        # settlement_status/projection_status and must not treat this as realized P&L.
         "shadow_profit_dollars_one_execution_per_episode": str(total_profit),
         "observation_ms": observation_ms,
-        "naive_projected_shadow_profit_per_day": str(projected_day),
-        "projection_warning": "NAIVE_SHORT_SAMPLE_NOT_A_FORECAST",
+        "projected_shadow_profit_per_day": None,
+        "naive_projected_shadow_profit_per_day": None,
+        "projection_status": "WITHHELD_SETTLEMENT_INDEX_MISMATCH_RESEARCH_ONLY",
+        "projection_warning": "BASIS_UNADJUSTED_SHADOW_PNL_NOT_A_FORECAST",
         "fee_metadata_scope": "CURRENT_SERIES_METADATA_NOT_HISTORICAL_SNAPSHOT",
         "settlement_status": "INDEX_MISMATCH_RESEARCH_ONLY",
+        "basis_adjusted": False,
+        "settlement_equivalent": False,
         "repeated_depth_counted_as_pnl": False,
         "read_only": True,
         "order_entry": False,
