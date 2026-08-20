@@ -1,8 +1,14 @@
+from decimal import Decimal
+
 from src.nfl_gk_dynamic_hot_shadow import discover_pairs
 from src.nfl_identity_probe import NflIdentity
 
+D=Decimal
+
 
 def row(venue,market,start,key_subject="PHI",family="moneyline",line=None):
+    if line is not None and not isinstance(line,Decimal):
+        line=D(str(line))
     return NflIdentity(
         venue=venue,market_id=market,family=family,teams=("DAL","PHI"),
         subject=key_subject,comparator="YES" if family=="moneyline" else "GT",
@@ -51,7 +57,7 @@ def test_past_game_is_rejected_and_nearest_future_pairs_win_limit():
         # Different subject ensures distinct proposition keys.
         subject=("PHI","DAL","PHI")[i]
         family="moneyline" if i<2 else "spread"
-        line=None if family=="moneyline" else 3.5
+        line=None if family=="moneyline" else D("3.5")
         future.append((row("gemini",f"g{i}",start,subject,family,line),row("kalshi",f"k{i}",start,subject,family,line)))
     gs=[past_g]+[x[0] for x in future]
     ks=[past_k]+[x[1] for x in future]
