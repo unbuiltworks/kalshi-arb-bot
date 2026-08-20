@@ -51,6 +51,7 @@ COMMAND_CENTER = os.getenv(
     "https://arb-command-center-production.up.railway.app",
 ).rstrip("/")
 NOT_BEFORE_ENV = "SPORTS_SUPERVISOR_NOT_BEFORE_UTC"
+EMPTY_INVENTORY_ERROR = "no eligible HR/TB/K direct-orientation Gemini/Kalshi props"
 
 
 def _parse_time(value: str) -> datetime:
@@ -63,6 +64,11 @@ def _parse_time(value: str) -> datetime:
 def _not_before() -> datetime:
     raw = os.getenv(NOT_BEFORE_ENV, "").strip()
     return _parse_time(raw) if raw else datetime.now(timezone.utc)
+
+
+def _is_empty_inventory_error(exc: BaseException) -> bool:
+    """Only the known no-current-market condition gets the slow idle retry."""
+    return isinstance(exc, RuntimeError) and str(exc).strip() == EMPTY_INVENTORY_ERROR
 
 
 def _install_unified_families() -> None:
@@ -145,8 +151,6 @@ async def run_forever(*, epoch_seconds: float, cooldown_seconds: float) -> None:
         strategy="sports_gk_autonomous_rule_risk",
         run_id_env="MLB_GK_MULTI_RUN_ID",
     )
-    # Capital is outermost: the hot path must prove both venue legs fit the latest
-    # cached balance envelope before it writes a durable trade reservation or sends.
     install_venue_capital(
         canary,
         allocator,
@@ -176,6 +180,7 @@ async def run_forever(*, epoch_seconds: float, cooldown_seconds: float) -> None:
     epoch = 0
     budget_notice_sent = False
     halt_notice_sent = False
+    empty_retry_seconds = max(30.0, float(os.getenv("SPORTS_EMPTY_INVENTORY_RETRY_SECONDS", "120")))
     try:
         while True:
             epoch += 1
@@ -245,7 +250,15 @@ async def run_forever(*, epoch_seconds: float, cooldown_seconds: float) -> None:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                # Fail closed on discovery, ledger, auth, or venue errors; retry without order entry.
+                if _is_empty_inventory_error(exc):
+                    logger.info(
+                        "SPORTS_SUPERVISOR_IDLE_NO_INVENTORY retry_s=%.1f used=%s remaining=%s",
+                        empty_retry_seconds,
+                        used if "used" in locals() else None,
+                        CUMULATIVE_BUDGET - used if "used" in locals() else None,
+                    )
+                    await asyncio.sleep(empty_retry_seconds)
+                    continue
                 logger.exception("SPORTS_SUPERVISOR_EPOCH_ERROR type=%s", type(exc).__name__)
             await asyncio.sleep(max(5.0, cooldown_seconds))
     finally:
