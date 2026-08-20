@@ -22,13 +22,27 @@ from src import gemini_kalshi_maker_live_probe_q1_venue_once as venue_once
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_maker_live_probe_q1_final")
 PREFLIGHT_ENV = "MAKER_LIVE_PROBE_PREFLIGHT"
+TARGET_ENV = "MAKER_LIVE_PROBE_TARGET_PROFIT"
 
 
 def preflight_requested() -> bool:
     return os.getenv(PREFLIGHT_ENV, "YES").strip().upper() == "YES"
 
 
+def configure_target_profit() -> Decimal:
+    target = D(os.getenv(TARGET_ENV, "0.03").strip())
+    if target < D("0.01") or target > D("0.03"):
+        raise ValueError(f"{TARGET_ENV} must be between 0.01 and 0.03")
+    # Candidate construction reads base.TARGET_PROFIT dynamically; the hardened
+    # state machine compares against safe.TARGET_PROFIT. Keep both identical.
+    base.TARGET_PROFIT = target
+    safe.TARGET_PROFIT = target
+    hardened.TARGET_PROFIT = target
+    return target
+
+
 async def readonly_preflight() -> dict:
+    target = configure_target_profit()
     gemini = base.GeminiTradingSession()
     kalshi = base.KalshiV2Executor()
     try:
@@ -50,7 +64,7 @@ async def readonly_preflight() -> dict:
             "mode": "LIVE_PROBE_PREFLIGHT_ONLY",
             "asset": base.ASSET,
             "quantity_max": "1",
-            "target_profit": str(base.TARGET_PROFIT),
+            "target_profit": str(target),
             "fee_type": fee_meta.fee_type,
             "fee_multiplier": fee_meta.fee_multiplier,
             "settlement_status": base.SETTLEMENT_STATUS,
@@ -63,6 +77,7 @@ async def readonly_preflight() -> dict:
 
 
 async def run() -> dict:
+    target = configure_target_profit()
     if not base._live_software_authorized():
         if preflight_requested():
             report = await readonly_preflight()
@@ -85,6 +100,7 @@ async def run() -> dict:
         "restart_policy": "NEVER",
         "maker_order_ttl_s": venue_once.ORDER_TTL_S,
         "quantity_max": "1",
+        "target_profit": str(target),
         "settlement_status": base.SETTLEMENT_STATUS,
     }, separators=(",", ":")))
     return await safe.run_once()
