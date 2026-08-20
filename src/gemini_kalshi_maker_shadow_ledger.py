@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+from decimal import Decimal
 import hashlib
 import json
 import logging
@@ -18,6 +19,7 @@ import httpx
 
 logger = logging.getLogger("kalshi_arb.maker_shadow_ledger")
 FORWARD_EVENTS = {"SIMULATED_FILL", "FILL_HEDGE_UNAVAILABLE", "HEDGE_LATENCY_STRESS"}
+D = Decimal
 
 
 def resolve_ledger_url() -> str | None:
@@ -132,8 +134,49 @@ class JsonlLedgerForwarder:
         self.directory = directory
         self.poll_s = max(0.05, poll_s)
         self.offsets: dict[Path, int] = {}
+        self.latest_quotes: dict[tuple[str, str], dict[str, Any]] = {}
         self.forwarded = 0
         self.failures = 0
+
+    @staticmethod
+    def _quote_identity(row: dict[str, Any]) -> tuple[str, str]:
+        return (
+            str(row.get("asset") or "").upper(),
+            str(row.get("key") or ""),
+        )
+
+    def _with_quote_context(self, row: dict[str, Any]) -> dict[str, Any]:
+        event = str(row.get("event") or "")
+        ident = self._quote_identity(row)
+        if event == "OPEN":
+            self.latest_quotes[ident] = dict(row)
+            return row
+        if event in {"REPRICE", "CANCEL"}:
+            self.latest_quotes.pop(ident, None)
+            return row
+        if event not in {"SIMULATED_FILL", "FILL_HEDGE_UNAVAILABLE"}:
+            return row
+
+        opened = self.latest_quotes.pop(ident, None)
+        if not opened:
+            return row
+        enriched = dict(row)
+        enriched["quote_open_best_bid"] = opened.get("best_bid")
+        enriched["quote_open_best_ask"] = opened.get("best_ask")
+        enriched["quote_open_economic_max"] = opened.get("economic_max")
+        enriched["quote_open_queue_ahead"] = opened.get("queue_ahead")
+        try:
+            open_ask = D(str(opened["best_ask"]))
+            economic_max = D(str(opened["economic_max"]))
+            maker_price = D(str(row["maker_price"]))
+            enriched["maker_price_advantage_vs_open_ask"] = str(open_ask - maker_price)
+            # Conservative attribution: if the displayed taker ask was already above
+            # the maximum maker price that met the target, the target was unavailable
+            # by price alone before even charging the higher taker fee.
+            enriched["maker_created_target_by_price_alone"] = open_ask > economic_max
+        except (KeyError, TypeError, ValueError):
+            pass
+        return enriched
 
     def _new_rows(self) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
@@ -152,7 +195,7 @@ class JsonlLedgerForwarder:
                         except json.JSONDecodeError:
                             continue
                         if isinstance(row, dict):
-                            rows.append(row)
+                            rows.append(self._with_quote_context(row))
                     self.offsets[path] = fh.tell()
             except FileNotFoundError:
                 self.offsets.pop(path, None)
