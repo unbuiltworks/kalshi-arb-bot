@@ -3,6 +3,6 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python -m src.gemini_kalshi_maker_live_probe_q1"
-preDeployCommand = ["pytest -q tests/test_gemini_kalshi_maker_live_probe_q1.py"]
+startCommand = "python -m src.gemini_kalshi_maker_live_probe_q1_safe"
+preDeployCommand = ["pytest -q tests/test_gemini_kalshi_maker_live_probe_q1.py tests/test_gemini_kalshi_maker_live_probe_q1_safe.py"]
 restartPolicyType = "NEVER"
