@@ -26,6 +26,7 @@ def _row(*, synchronized: bool) -> dict:
             "kalshi_price": "0.50",
             "poly_fee": "0.01",
             "kalshi_fee_upper_bound": "0.01",
+            "total_cost_upper_bound": "0.92",
             "capital_cap": "1",
             "conservative_locked_profit": "0.08",
         },
