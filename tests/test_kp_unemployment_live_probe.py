@@ -1,5 +1,4 @@
 from decimal import Decimal as D
-import json
 import time
 
 import pytest
@@ -43,7 +42,8 @@ def test_poly_rule_drift_fails_closed():
 
 def test_one_dollar_bankroll_hard_caps_profitable_plan_to_q1():
     now = int(time.time() * 1000)
-    poly = PolyQuote("x", D("0.40"), D("100"), D("0.61"), D("100"), "OPEN", now)
+    # q=1 costs comfortably less than $1 after fees; q=2 cannot fit the $1 cap.
+    poly = PolyQuote("x", D("0.25"), D("100"), D("0.76"), D("100"), "OPEN", now)
     kalshi = TwoSidedQuote("y", D("0.37"), D("100"), D("0.60"), D("100"), now, None, 1)
     plan = best_plan(poly, kalshi, bankroll=D("1"), poly_fee_rate=D("0.05"), kalshi_fee_rate=D("0.07"))
     assert plan is not None
