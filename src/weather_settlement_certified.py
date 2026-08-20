@@ -85,6 +85,40 @@ def _valid_level(price: Any, qty: Any) -> bool:
     )
 
 
+def _forecast_probability(forecast: dict[str, Any] | None) -> tuple[Decimal | None, list[str]]:
+    """Return bracket probability only with explicit forecast provenance.
+
+    A naked probability is not enough for executable-shadow EV. The producer must
+    explicitly prove that the model-to-station mapping and forecast freshness were
+    checked and must retain model run/valid timestamps so stale or wrong-station
+    probabilities cannot silently become ranked weather edges.
+    """
+    if forecast is None:
+        return None, ["FORECAST_UNVERIFIED"]
+
+    blockers: list[str] = []
+    model = str(forecast.get("model") or "").strip()
+    run_time = str(forecast.get("model_run_time") or "").strip()
+    valid_time = str(forecast.get("forecast_valid_time") or "").strip()
+    if not model or not run_time or not valid_time:
+        blockers.append("FORECAST_UNVERIFIED")
+    if forecast.get("station_mapping_verified") is not True:
+        blockers.append("FORECAST_STATION_MAPPING_UNVERIFIED")
+    if forecast.get("freshness_verified") is not True:
+        blockers.append("FORECAST_STALE_OR_UNVERIFIED")
+
+    try:
+        probability = Decimal(str(forecast.get("bracket_probability")))
+        if not probability.is_finite() or probability < 0 or probability > 1:
+            raise ValueError
+    except Exception:
+        probability = None
+        blockers.append("FORECAST_UNVERIFIED")
+
+    blockers = sorted(set(blockers))
+    return (probability if not blockers else None), blockers
+
+
 def _side_economics(*, side: str, price_cents: int, qty: int, yes_probability: Decimal | None,
                     fee_type: str, fee_multiplier: Any) -> dict[str, Any]:
     fee = _fee_cents(qty, price_cents, fee_type, fee_multiplier)
@@ -117,6 +151,11 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
     executable asks are modeled independently; legacy ``ask_cents``/``ask_qty``
     aliases are interpreted as YES only. We never infer an executable NO price
     from a YES mid/chance or from non-executable display fields.
+
+    Settlement certification and forecast-EV certification are intentionally
+    separate. A market may have fully audited settlement/book metadata while its
+    forecast input is absent, stale, or mapped to the wrong station; in that case
+    quote/fee diagnostics remain visible but ranked EV is withheld.
     """
     blockers: list[str] = []
     _, series_blockers = certify_series(series)
@@ -151,14 +190,7 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
         elif age_ms > max_quote_age_ms:
             blockers.append("QUOTE_STALE")
 
-    model_probability = None
-    if forecast is not None:
-        try:
-            model_probability = Decimal(str(forecast.get("bracket_probability")))
-            if not model_probability.is_finite() or model_probability < 0 or model_probability > 1:
-                raise ValueError
-        except Exception:
-            model_probability = None
+    model_probability, forecast_blockers = _forecast_probability(forecast)
 
     side_economics: list[dict[str, Any]] = []
     if "FEE_UNVERIFIED" not in blockers:
@@ -178,12 +210,14 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
             side_economics = []
 
     best_side = None
-    if side_economics:
+    if side_economics and not forecast_blockers:
         ranked = [x for x in side_economics if x["modeled_after_fee_ev_cents"] is not None]
         if ranked:
             best_side = max(ranked, key=lambda x: Decimal(x["modeled_after_fee_ev_cents"]))
 
     blockers = sorted(set(blockers))
+    settlement_certified = len(blockers) == 0
+    ev_certified = settlement_certified and not forecast_blockers and best_side is not None
     return {
         "category": "weather",
         "classification": "SHADOW",
@@ -213,12 +247,17 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
         "max_quote_age_ms": max_quote_age_ms,
         "fee_type": series.get("fee_type"),
         "fee_multiplier": series.get("fee_multiplier"),
+        "forecast_model": forecast.get("model") if forecast else None,
+        "forecast_model_run_time": forecast.get("model_run_time") if forecast else None,
+        "forecast_valid_time": forecast.get("forecast_valid_time") if forecast else None,
         "forecast_bracket_probability": str(model_probability) if model_probability is not None else None,
+        "forecast_blockers": forecast_blockers,
         "side_economics": side_economics,
         "best_shadow_side": best_side,
         # Backward-compatible YES-only fields; never substitute NO economics here.
         "modeled_taker_fee_cents": next((x["modeled_taker_fee_cents"] for x in side_economics if x["side"] == "YES"), None),
         "modeled_after_fee_ev_cents": next((x["modeled_after_fee_ev_cents"] for x in side_economics if x["side"] == "YES"), None),
         "blockers": blockers,
-        "settlement_certified_shadow": len(blockers) == 0,
+        "settlement_certified_shadow": settlement_certified,
+        "ev_certified_shadow": ev_certified,
     }
