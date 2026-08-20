@@ -45,3 +45,19 @@ def test_probe_target_refuses_above_three_cents(monkeypatch):
     monkeypatch.setenv(final.TARGET_ENV, "0.031")
     with pytest.raises(ValueError):
         final.configure_target_profit()
+
+
+def test_probe_policy_can_use_join(monkeypatch):
+    old = base.POLICY
+    try:
+        monkeypatch.setenv(final.POLICY_ENV, "JOIN")
+        assert final.configure_policy() == "JOIN"
+        assert base.POLICY == "JOIN"
+    finally:
+        base.POLICY = old
+
+
+def test_probe_policy_refuses_unknown(monkeypatch):
+    monkeypatch.setenv(final.POLICY_ENV, "CROSS_THE_SPREAD")
+    with pytest.raises(ValueError):
+        final.configure_policy()
