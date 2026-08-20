@@ -2,6 +2,7 @@ from decimal import Decimal
 
 import pytest
 
+import src.gemini_kalshi_staged_probe_transport as staged
 from src.gemini_kalshi_live_probe_guard import (
     build_leg_payloads,
     recompute_payload_locked_profit,
@@ -37,9 +38,11 @@ class FakeGemini:
         self.placed = 0
         self.flattened = 0
         self.order = order
+        self.last_payload = None
 
     async def place_fok(self, payload):
         self.placed += 1
+        self.last_payload = dict(payload)
         if self.order is not None:
             self.order.append("gemini")
         return _result("gemini", self.filled, status=self.status, reason=self.reason)
@@ -57,9 +60,11 @@ class FakeKalshi:
         self.status = status
         self.placed = 0
         self.order = order
+        self.last_payload = None
 
     async def place(self, payload):
         self.placed += 1
+        self.last_payload = dict(payload)
         if self.order is not None:
             self.order.append("kalshi")
         return _result("kalshi", self.filled, status=self.status)
@@ -75,6 +80,29 @@ G, K = build_leg_payloads(
     kalshi_yes_ask=D("0.52"),
 )
 EDGE = recompute_payload_locked_profit(G, K, kalshi_fee_multiplier=D("1"))
+
+# Exact economics shaped like the 10:54 BTC failure: Gemini YES 32c and Kalshi NO
+# 59c (Kalshi YES-space ask 41c) leaves 5c after modeled fees. A fee-aware cushion
+# can lower the YES ask to 39c, spending 2c and retaining the 3c floor.
+G_5C = {
+    "symbol": "GEMI-BTC15M2608201500-UP",
+    "side": "BUY",
+    "type": "LIMIT",
+    "timeInForce": "FOK",
+    "price": "0.32",
+    "quantity": "1",
+    "eventOutcome": "YES",
+    "clientOrderId": "g-five-cent",
+}
+K_5C = {
+    "ticker": "KXBTC15M-26AUG201100-00",
+    "client_order_id": "k-five-cent",
+    "side": "ask",
+    "count": "1.00",
+    "price": "0.41",
+    "time_in_force": "fill_or_kill",
+}
+EDGE_5C = recompute_payload_locked_profit(G_5C, K_5C, kalshi_fee_multiplier=D("1"))
 
 
 @pytest.mark.asyncio
@@ -130,6 +158,8 @@ async def test_both_filled_is_strictly_gemini_then_kalshi(monkeypatch):
     )
     assert result["outcome"] == "BOTH_FILLED"
     assert result["hard_halt_required"] is False
+    assert result["hedge_cushion"]["enabled"] is False
+    assert kalshi.last_payload == K
     assert order == ["gemini", "kalshi"]
 
 
@@ -202,3 +232,98 @@ async def test_payload_economics_still_fail_before_any_send(monkeypatch):
         )
     assert gemini.placed == 0
     assert kalshi.placed == 0
+
+
+@pytest.mark.asyncio
+async def test_fee_aware_cushion_spends_two_cents_but_keeps_three_cent_floor(monkeypatch):
+    monkeypatch.setenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", "YES")
+    assert EDGE_5C == D("0.05")
+    order = []
+    gemini = FakeGemini("1", order=order)
+    kalshi = FakeKalshi("1", order=order)
+    result = await submit_gemini_first_probe(
+        gemini, kalshi, G_5C, K_5C,
+        modeled_locked_profit=EDGE_5C,
+        kalshi_fee_multiplier=D("1"),
+        quote_skew_ms=10,
+        cli_live=True,
+        kalshi_hedge_cushion_enabled=True,
+    )
+    assert order == ["gemini", "kalshi"]
+    assert kalshi.last_payload["price"] == "0.39"
+    assert result["execution_policy"] == "GEMINI_FIRST_TERMINAL_THEN_KALSHI_FEE_AWARE_CUSHION"
+    assert result["recomputed_locked_profit_dollars"] == "0.03"
+    assert result["original_recomputed_locked_profit_dollars"] == "0.05"
+    assert result["hedge_cushion"]["enabled"] is True
+    assert result["hedge_cushion"]["applied"] is True
+    assert result["hedge_cushion"]["cushion_cents"] == 2
+    assert result["hedge_cushion"]["original_kalshi_yes_limit"] == "0.41"
+    assert result["hedge_cushion"]["cushioned_kalshi_yes_limit"] == "0.39"
+
+
+@pytest.mark.asyncio
+async def test_cushion_enabled_primary_miss_still_never_submits_kalshi(monkeypatch):
+    monkeypatch.setenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", "YES")
+    order = []
+    gemini = FakeGemini("0", status="CANCELED", reason="FillOrKillWouldNotFill", order=order)
+    kalshi = FakeKalshi("1", order=order)
+    result = await submit_gemini_first_probe(
+        gemini, kalshi, G_5C, K_5C,
+        modeled_locked_profit=EDGE_5C,
+        kalshi_fee_multiplier=D("1"),
+        quote_skew_ms=10,
+        cli_live=True,
+        kalshi_hedge_cushion_enabled=True,
+    )
+    assert result["outcome"] == "PRIMARY_NOT_FILLED"
+    assert result["hard_halt_required"] is False
+    assert result["hedge_cushion"]["cushion_cents"] == 2
+    assert gemini.placed == 1
+    assert kalshi.placed == 0
+    assert order == ["gemini"]
+
+
+@pytest.mark.asyncio
+async def test_cushion_preparation_failure_occurs_before_first_send(monkeypatch):
+    monkeypatch.setenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", "YES")
+    gemini = FakeGemini("1")
+    kalshi = FakeKalshi("1")
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("synthetic cushion failure")
+
+    monkeypatch.setattr(staged, "best_fee_aware_kalshi_hedge", boom)
+    with pytest.raises(RuntimeError, match="synthetic cushion failure"):
+        await submit_gemini_first_probe(
+            gemini, kalshi, G_5C, K_5C,
+            modeled_locked_profit=EDGE_5C,
+            kalshi_fee_multiplier=D("1"),
+            quote_skew_ms=10,
+            cli_live=True,
+            kalshi_hedge_cushion_enabled=True,
+        )
+    assert gemini.placed == 0
+    assert kalshi.placed == 0
+
+
+@pytest.mark.asyncio
+async def test_exact_three_cent_trade_does_not_widen_even_when_enabled(monkeypatch):
+    monkeypatch.setenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", "YES")
+    k_three = dict(K_5C)
+    k_three["price"] = "0.39"
+    edge_three = recompute_payload_locked_profit(G_5C, k_three, kalshi_fee_multiplier=D("1"))
+    assert edge_three == D("0.03")
+    gemini = FakeGemini("1")
+    kalshi = FakeKalshi("1")
+    result = await submit_gemini_first_probe(
+        gemini, kalshi, G_5C, k_three,
+        modeled_locked_profit=edge_three,
+        kalshi_fee_multiplier=D("1"),
+        quote_skew_ms=10,
+        cli_live=True,
+        kalshi_hedge_cushion_enabled=True,
+    )
+    assert kalshi.last_payload["price"] == "0.39"
+    assert result["hedge_cushion"]["applied"] is False
+    assert result["hedge_cushion"]["cushion_cents"] == 0
+    assert result["recomputed_locked_profit_dollars"] == "0.03"
