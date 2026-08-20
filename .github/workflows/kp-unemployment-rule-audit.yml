@@ -1,0 +1,30 @@
+name: kp-unemployment-rule-audit
+
+on:
+  push:
+    branches: [feature/three-venue-sports-router]
+    paths:
+      - 'src/kp_unemployment_rule_probe.py'
+      - '.github/workflows/kp-unemployment-rule-audit.yml'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install --disable-pip-version-check -r requirements.txt
+      - name: Compile probe
+        run: PYTHONPATH=. python -m py_compile src/kp_unemployment_rule_probe.py
+      - name: Probe exact Polymarket US URC markets
+        run: PYTHONPATH=. python -m src.kp_unemployment_rule_probe | tee kp-unemployment-rule-probe.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kp-unemployment-rule-probe
+          path: kp-unemployment-rule-probe.txt
+          if-no-files-found: warn
