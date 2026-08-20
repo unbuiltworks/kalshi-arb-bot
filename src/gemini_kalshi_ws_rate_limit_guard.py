@@ -1,16 +1,17 @@
 """Rate-limit-safe Gemini authenticated WebSocket startup for live crypto children.
 
 This module changes no market, settlement, quantity, price, fee, capital, freshness,
-skew, or execution-policy gate.  It addresses only connection lifecycle after Gemini
+skew, or execution-policy gate. It addresses only connection lifecycle after Gemini
 returned HTTP 429 during authenticated WebSocket handshakes.
 
 Two protections are installed explicitly:
 1. Child startup uses the existing authenticated REST/funding preflight but defers
    authenticated WebSocket verification to the *actual* long-lived
-   ``GeminiTradingSession.connect()``.  This removes a redundant throwaway handshake.
+   ``GeminiTradingSession.connect()``. This removes a redundant throwaway handshake.
 2. The parallel parent globally paces child starts and applies a longer cooldown after
-   a provably pre-claim startup failure or a pre-send unhealthy trading socket.  No
-   order can be submitted during either condition.
+   a provably pre-claim startup failure or a pre-send unhealthy trading socket. Waiting
+   child starts re-check the shared deadline, so a newly observed 429-safe failure can
+   immediately push every queued lane behind the cooldown.
 """
 from __future__ import annotations
 
@@ -26,21 +27,16 @@ from src import gemini_kalshi_sol_live_canary_v2 as v2
 
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_ws_rate_limit_guard")
 
-BASE_START_SPACING_S = 2.0
-UNHEALTHY_COOLDOWN_S = 8.0
+BASE_START_SPACING_S = 3.0
+UNHEALTHY_COOLDOWN_S = 30.0
+PACING_RECHECK_MAX_S = 0.25
 
 _CHILD_INSTALLED = False
 _PARENT_INSTALLED = False
 
 
 async def _rest_only_authenticated_preflight() -> None:
-    """Run the proven private REST/funding preflight without a throwaway WS connect.
-
-    The actual authenticated trading WebSocket remains mandatory: the live executor
-    creates ``GeminiTradingSession`` and awaits ``connect()`` before scanning can place
-    any order.  A failed session connect exits before the persistent attempt claim, so
-    no order is possible.
-    """
+    """Run private REST/funding preflight without a throwaway authenticated WS."""
     kalshi = v2.executor.KalshiV2Executor()
     try:
         report = await v2.executor._preflight(
@@ -92,13 +88,21 @@ class GlobalChildStartPacer:
         self._next_start = 0.0
 
     async def wait_turn(self) -> None:
-        async with self._lock:
-            now = time.monotonic()
-            delay = max(0.0, self._next_start - now)
-            if delay:
-                await asyncio.sleep(delay)
-            started = time.monotonic()
-            self._next_start = max(self._next_start, started) + self.spacing_s
+        """Claim one globally spaced start slot without blocking cooldown updates.
+
+        Never sleep while holding ``_lock``. This is critical: if another child fails
+        its authenticated handshake while lanes are queued, ``penalize`` must be able
+        to move the shared deadline immediately. Every waiter therefore wakes in small
+        increments and re-evaluates the latest global deadline.
+        """
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                delay = self._next_start - now
+                if delay <= 0:
+                    self._next_start = now + self.spacing_s
+                    return
+            await asyncio.sleep(min(max(delay, 0.0), PACING_RECHECK_MAX_S))
 
     async def penalize(self) -> None:
         async with self._lock:
@@ -128,7 +132,7 @@ def _wrap_parent_obtain(original: Callable[..., Awaitable[dict[str, Any]]]):
             await _PACER.penalize()
             logger.warning(
                 "CRYPTO_GEMINI_WS_GLOBAL_COOLDOWN reason=%s cooldown_s=%s "
-                "orders_possible=false risk_gates_changed=false",
+                "orders_possible=false queued_starts_preempted=true risk_gates_changed=false",
                 reason, _PACER.cooldown_s,
             )
         return record
@@ -143,7 +147,7 @@ def install_parent_spawn_pacing() -> None:
     _PARENT_INSTALLED = True
     logger.warning(
         "CRYPTO_GEMINI_WS_PARENT_PACING_INSTALLED global_start_spacing_s=%s "
-        "unhealthy_cooldown_s=%s parallel_handshake_storm_prevented=true "
-        "risk_gates_changed=false",
+        "unhealthy_cooldown_s=%s queued_start_preemption=true "
+        "parallel_handshake_storm_prevented=true risk_gates_changed=false",
         _PACER.spacing_s, _PACER.cooldown_s,
     )
