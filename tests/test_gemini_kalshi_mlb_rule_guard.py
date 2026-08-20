@@ -143,6 +143,7 @@ def test_bare_booleans_without_bilateral_sources_cannot_pass():
     evidence.pop("evidence_sources")
     result = classify_mlb_rule_audit(evidence)
     assert result.status == RULES_PENDING
+    assert result.full_rules_audited is False
     assert "RULE_AUDIT_MISSING_SOURCE:exact_event_identity" in result.hard_blockers
 
 
@@ -215,6 +216,34 @@ def test_generic_or_wrong_family_scope_ids_fail_closed():
     result = classify_mlb_rule_audit(evidence)
     assert result.status == RULES_PENDING
     assert "RULE_AUDIT_MISSING_SCOPE_ID:gemini" in result.hard_blockers
+    assert "RULE_AUDIT_MISSING_SCOPE_ID:kalshi" in result.hard_blockers
+
+
+def test_family_prefix_junk_scope_ids_fail_closed():
+    evidence = _complete_evidence()
+    bad_gemini = "GEMI-MLB-FAKE-T-ANYTHING"
+    bad_kalshi = "KXMLBTOTALFAKE"
+    evidence["gemini_rule_scope_id"] = bad_gemini
+    evidence["kalshi_rule_scope_id"] = bad_kalshi
+    for scopes in evidence["evidence_scopes"].values():
+        if "gemini" in scopes:
+            scopes["gemini"] = bad_gemini
+        if "kalshi" in scopes:
+            scopes["kalshi"] = bad_kalshi
+    result = classify_mlb_rule_audit(evidence)
+    assert result.status == RULES_PENDING
+    assert "RULE_AUDIT_MISSING_SCOPE_ID:gemini" in result.hard_blockers
+    assert "RULE_AUDIT_MISSING_SCOPE_ID:kalshi" in result.hard_blockers
+
+
+def test_malformed_scope_missing_exact_market_suffix_fails_closed():
+    evidence = _complete_evidence()
+    evidence["kalshi_rule_scope_id"] = "KXMLBTOTAL"
+    for scopes in evidence["evidence_scopes"].values():
+        if "kalshi" in scopes:
+            scopes["kalshi"] = "KXMLBTOTAL"
+    result = classify_mlb_rule_audit(evidence)
+    assert result.status == RULES_PENDING
     assert "RULE_AUDIT_MISSING_SCOPE_ID:kalshi" in result.hard_blockers
 
 
