@@ -12,6 +12,8 @@ from decimal import Decimal, ROUND_CEILING
 from typing import Any, Iterable
 from urllib.parse import urlparse
 
+from src.weather_fee_history_guard import resolve_fee_at_quote
+
 HARD_BLOCKERS = {
     "RULES_PENDING",
     "STATION_IDENTITY_UNVERIFIED",
@@ -19,6 +21,7 @@ HARD_BLOCKERS = {
     "BRACKET_SEMANTICS_UNVERIFIED",
     "FEE_UNVERIFIED",
     "FEE_SCHEDULE_UNVERIFIED",
+    "FEE_HISTORY_UNVERIFIED",
     "SETTLEMENT_SOURCE_UNVERIFIED",
     "BOOK_UNVERIFIED",
     "QUOTE_STALE",
@@ -123,60 +126,21 @@ def _resolve_fee_metadata(
     *,
     fee_changes: list[dict[str, Any]] | None,
     observed_at: Any,
-) -> tuple[str | None, Any, str, list[str]]:
-    """Resolve fee metadata at the quote time using Series + scheduled changes.
-
-    Kalshi exposes scheduled fee changes separately from Series metadata. A weather
-    row is not fee-certified unless the caller supplies the fee-change response
-    (``show_historical=true`` is preferred) and a timezone-aware quote timestamp.
-    We trust current Series metadata as the baseline, but if a scheduled change
-    occurred after ``last_updated_ts`` and at/before the quote, the newest such
-    change becomes authoritative for that observation.
-    """
-    blockers: list[str] = []
-    series_ticker = str(series.get("ticker") or "").strip()
-    fee_type = series.get("fee_type")
-    fee_multiplier = series.get("fee_multiplier")
-    source = "series_current"
-
-    quote_time = _aware_iso(observed_at)
-    series_updated = _aware_iso(series.get("last_updated_ts"))
-    if quote_time is None or series_updated is None or fee_changes is None or not isinstance(fee_changes, list):
-        return fee_type, fee_multiplier, source, ["FEE_SCHEDULE_UNVERIFIED"]
-
-    applicable: list[tuple[datetime, dict[str, Any]]] = []
-    for change in fee_changes:
-        if not isinstance(change, dict):
-            blockers.append("FEE_SCHEDULE_UNVERIFIED")
-            continue
-        if str(change.get("series_ticker") or "").strip() != series_ticker:
-            continue
-        scheduled = _aware_iso(change.get("scheduled_ts"))
-        if scheduled is None:
-            blockers.append("FEE_SCHEDULE_UNVERIFIED")
-            continue
-        if scheduled <= quote_time and scheduled > series_updated:
-            applicable.append((scheduled, change))
-
-    if blockers:
-        return fee_type, fee_multiplier, source, sorted(set(blockers))
-
-    if applicable:
-        _, latest = max(applicable, key=lambda item: item[0])
-        fee_type = latest.get("fee_type")
-        fee_multiplier = latest.get("fee_multiplier")
-        source = "scheduled_fee_change"
-
-    try:
-        if fee_type != "quadratic":
-            raise ValueError
-        m = Decimal(str(fee_multiplier))
-        if not m.is_finite() or m < 0:
-            raise ValueError
-    except Exception:
-        blockers.append("FEE_UNVERIFIED")
-
-    return fee_type, fee_multiplier, source, sorted(set(blockers))
+    historical_complete: bool = False,
+) -> tuple[str | None, Any, str | None, list[str]]:
+    """Resolve exact fee metadata at quote time without leaking current fees into history."""
+    resolved = resolve_fee_at_quote(
+        series,
+        fee_changes=fee_changes,
+        observed_at=observed_at,
+        historical_complete=historical_complete,
+    )
+    return (
+        resolved.get("fee_type"),
+        resolved.get("fee_multiplier"),
+        resolved.get("source"),
+        list(resolved.get("blockers") or []),
+    )
 
 
 def _forecast_probability(
@@ -242,6 +206,7 @@ def _side_economics(*, side: str, price_cents: int, qty: int, yes_probability: D
 def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: dict[str, Any],
                      station: dict[str, Any], forecast: dict[str, Any] | None = None,
                      fee_changes: list[dict[str, Any]] | None = None,
+                     fee_history_complete: bool = False,
                      max_quote_age_ms: int = DEFAULT_MAX_QUOTE_AGE_MS) -> dict[str, Any]:
     """Build one read-only weather SHADOW row; never emits live readiness."""
     blockers: list[str] = []
@@ -283,6 +248,7 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
         series,
         fee_changes=fee_changes,
         observed_at=observed_at,
+        historical_complete=fee_history_complete,
     )
     blockers.extend(fee_schedule_blockers)
 
@@ -292,7 +258,8 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
     )
 
     side_economics: list[dict[str, Any]] = []
-    if "FEE_UNVERIFIED" not in blockers and "FEE_SCHEDULE_UNVERIFIED" not in blockers:
+    fee_blocked = any(x in blockers for x in ("FEE_UNVERIFIED", "FEE_SCHEDULE_UNVERIFIED", "FEE_HISTORY_UNVERIFIED"))
+    if not fee_blocked:
         try:
             if yes_valid:
                 side_economics.append(_side_economics(
@@ -349,7 +316,8 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
         "fee_type": resolved_fee_type,
         "fee_multiplier": resolved_fee_multiplier,
         "fee_metadata_source": fee_metadata_source,
-        "fee_schedule_checked": "FEE_SCHEDULE_UNVERIFIED" not in blockers,
+        "fee_schedule_checked": not any(x in blockers for x in ("FEE_SCHEDULE_UNVERIFIED", "FEE_HISTORY_UNVERIFIED")),
+        "fee_history_complete": fee_history_complete is True,
         "forecast_model": forecast.get("model") if forecast else None,
         "forecast_cli_product": forecast.get("cli_product") if forecast else None,
         "forecast_model_run_time": forecast.get("model_run_time") if forecast else None,
