@@ -8,7 +8,7 @@ from src.sports_gk_autonomous_supervisor import (
     TOTAL_BASES,
     _hard_halt_reason,
 )
-from src.sports_live_budget_guard import budget_used_from_trades
+from src.sports_live_budget_guard import budget_used_from_trades, duplicate_settlement_exposure
 
 D = Decimal
 
@@ -67,6 +67,56 @@ def test_shadow_and_non_sports_trades_do_not_consume_live_sports_budget():
         {"strategy": "crypto_gk_live", "mode": "LIVE_PROBE", "capital_filled": "10", "metadata": {}},
     ]
     assert budget_used_from_trades(rows) == D("0")
+
+
+def test_duplicate_settlement_key_blocks_any_prior_actual_fill_even_after_settlement():
+    market = "baseball|mlb|mil,sea|player_prop|full_contest|player|taylorward|home_runs|GE|1"
+    row = {
+        "trade_id": "filled-once",
+        "strategy": "sports_gk_autonomous_rule_risk",
+        "mode": "LIVE_PROBE",
+        "market": market,
+        "status": "SETTLED_COMPATIBLE",
+        "capital_filled": "0.95",
+        "metadata": {"reserved_usd": "0.97"},
+    }
+    assert duplicate_settlement_exposure([row], market) is row
+
+
+def test_duplicate_settlement_key_blocks_active_reservation_before_fill():
+    market = "market-key"
+    row = {
+        "trade_id": "reserved",
+        "strategy": "sports_gk_autonomous_rule_risk",
+        "mode": "LIVE_PROBE",
+        "market": market,
+        "status": "CAPITAL_RESERVED",
+        "capital_filled": "0",
+        "metadata": {"reserved_usd": "0.96"},
+    }
+    assert duplicate_settlement_exposure([row], market) is row
+
+
+def test_released_zero_fill_reservation_does_not_poison_settlement_key():
+    market = "market-key"
+    row = {
+        "trade_id": "released",
+        "strategy": "sports_gk_autonomous_rule_risk",
+        "mode": "LIVE_PROBE",
+        "market": market,
+        "status": "CAPITAL_RELEASED",
+        "capital_filled": "0",
+        "metadata": {"reserved_usd": "0.96"},
+    }
+    assert duplicate_settlement_exposure([row], market) is None
+
+
+def test_other_market_or_shadow_trade_does_not_block_key():
+    rows = [
+        {"strategy": "sports_gk_x", "mode": "SHADOW", "market": "market-key", "capital_filled": "1", "metadata": {}},
+        {"strategy": "sports_gk_x", "mode": "LIVE_PROBE", "market": "different", "capital_filled": "1", "metadata": {}},
+    ]
+    assert duplicate_settlement_exposure(rows, "market-key") is None
 
 
 def test_ambiguous_or_one_leg_execution_halts_future_submissions():
