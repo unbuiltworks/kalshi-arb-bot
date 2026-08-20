@@ -1,9 +1,13 @@
 """Parallel-per-asset live campaign supervisor with capital reservations.
 
 This module is intentionally not enabled by default. It runs up to one unresolved
-trade per asset (BTC/ETH/SOL/XRP), while enforcing a shared hard capital-at-risk
-budget and explicit per-attempt reservations before a child can submit. Settlement
-and dashboard realization remain mandatory before an asset lane can re-arm.
+trade per asset (BTC/ETH/SOL/XRP), while enforcing BOTH:
+
+* a shared hard capital-at-risk budget across all unresolved pairs; and
+* per-venue USD reservations so concurrent lanes cannot spend the same Gemini or
+  Kalshi balance twice.
+
+Settlement and dashboard realization remain mandatory before an asset lane can re-arm.
 """
 from __future__ import annotations
 
@@ -23,12 +27,15 @@ import httpx
 from src import gemini_kalshi_crypto_live_campaign as base
 from src import gemini_kalshi_crypto_live_campaign_reliable as reliable
 from src import gemini_kalshi_sol_live_canary_v2 as v2
+from src.gemini_kalshi_live_service import _gemini_available_usd
+from src.gemini_kalshi_probe_transport import KalshiV2Executor
 
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_crypto_parallel_campaign")
 ASSETS = ("BTC", "ETH", "SOL", "XRP")
 STATE_DIR = Path(os.getenv("CRYPTO_PARALLEL_STATE_DIR", "/data/crypto-parallel"))
 RESERVE_PER_ATTEMPT = D(os.getenv("CRYPTO_PARALLEL_RESERVE_PER_ATTEMPT", "1"))
+VENUE_RESERVE_PER_ATTEMPT = D(os.getenv("CRYPTO_PARALLEL_VENUE_RESERVE_PER_ATTEMPT", "1"))
 MAX_TOTAL_RESERVED = D(os.getenv("CRYPTO_CANARY_HARD_BUDGET", "5"))
 MAX_COMPLETED_TRADES = int(os.getenv("CRYPTO_CANARY_MAX_TRADES", "5"))
 MAX_EXECUTION_ATTEMPTS = int(os.getenv("CRYPTO_CANARY_MAX_EXECUTION_ATTEMPTS", "25"))
@@ -82,10 +89,59 @@ class CapitalBook:
         self.unsettled_deployed -= actual_capital
 
 
+@dataclass
+class VenueCapitalBook:
+    available_balances: dict[str, D]
+    reservations: dict[str, dict[str, D]] = field(default_factory=dict)
+    unsettled: dict[str, D] = field(default_factory=lambda: {"gemini": D("0"), "kalshi": D("0")})
+
+    def reserved_for(self, venue: str) -> D:
+        return sum((r.get(venue, D("0")) for r in self.reservations.values()), D("0"))
+
+    def free_for(self, venue: str) -> D:
+        return self.available_balances[venue] - self.unsettled.get(venue, D("0")) - self.reserved_for(venue)
+
+    def can_reserve_pair(self, amount_each: D) -> bool:
+        return all(self.free_for(v) >= amount_each for v in ("gemini", "kalshi"))
+
+    def reserve_pair(self, key: str, amount_each: D) -> None:
+        if key in self.reservations:
+            raise RuntimeError(f"duplicate venue reservation {key}")
+        if amount_each <= 0 or not self.can_reserve_pair(amount_each):
+            raise RuntimeError(
+                f"venue reservation denied key={key} amount_each={amount_each} "
+                f"gemini_free={self.free_for('gemini')} kalshi_free={self.free_for('kalshi')}"
+            )
+        self.reservations[key] = {"gemini": amount_each, "kalshi": amount_each}
+
+    def release(self, key: str) -> None:
+        self.reservations.pop(key, None)
+
+    def convert_to_deployed(self, key: str, actual: dict[str, D]) -> None:
+        reserved = self.reservations.pop(key, None)
+        if reserved is None:
+            raise RuntimeError(f"missing venue reservation {key}")
+        for venue in ("gemini", "kalshi"):
+            value = actual[venue]
+            if value < 0 or value > reserved[venue]:
+                raise RuntimeError(
+                    f"actual {venue} capital exceeds reservation key={key} actual={value} reserved={reserved[venue]}"
+                )
+            self.unsettled[venue] = self.unsettled.get(venue, D("0")) + value
+
+    def settle(self, actual: dict[str, D]) -> None:
+        for venue in ("gemini", "kalshi"):
+            value = actual[venue]
+            if value < 0 or value > self.unsettled.get(venue, D("0")):
+                raise RuntimeError(f"invalid {venue} settlement release actual={value} unsettled={self.unsettled.get(venue)}")
+            self.unsettled[venue] -= value
+
+
 class ParallelState:
-    def __init__(self, campaign_id: str, hard_budget: D) -> None:
+    def __init__(self, campaign_id: str, hard_budget: D, venue_balances: dict[str, D]) -> None:
         self.campaign_id = campaign_id
         self.capital = CapitalBook(hard_budget)
+        self.venues = VenueCapitalBook(venue_balances)
         self.lanes = {asset: Lane(asset) for asset in ASSETS}
         self.completed_total = 0
         self.execution_attempts_total = 0
@@ -102,6 +158,10 @@ class ParallelState:
             "unsettled_deployed_usd": str(self.capital.unsettled_deployed),
             "reserved_capital_usd": str(self.capital.reserved),
             "available_capital_usd": str(self.capital.available),
+            "venue_balances_usd": {v: str(x) for v, x in self.venues.available_balances.items()},
+            "venue_reserved_usd": {v: str(self.venues.reserved_for(v)) for v in ("gemini", "kalshi")},
+            "venue_unsettled_usd": {v: str(self.venues.unsettled[v]) for v in ("gemini", "kalshi")},
+            "venue_free_usd": {v: str(self.venues.free_for(v)) for v in ("gemini", "kalshi")},
             "reservations": {k: str(v) for k, v in self.capital.reservations.items()},
             "halted": self.halted,
             "halt_reason": self.halt_reason,
@@ -130,6 +190,31 @@ def _asset_child_env(run_id: str, asset: str) -> dict[str, str]:
     env[v2.ARM_ENV] = "YES"
     env["CRYPTO_CANARY_ASSET"] = asset
     return env
+
+
+def _venue_costs(result: dict[str, Any]) -> dict[str, D]:
+    out: dict[str, D] = {}
+    for venue in ("gemini", "kalshi"):
+        row = result.get(venue) or {}
+        qty = D(str(row.get("filled_quantity") or "0"))
+        avg = D(str(row.get("average_fill_price") or "0"))
+        fee = D(str(row.get("fee_paid") or "0"))
+        if qty <= 0:
+            raise RuntimeError(f"missing filled quantity for {venue}")
+        out[venue] = qty * avg + fee
+    return out
+
+
+async def _live_venue_balances() -> dict[str, D]:
+    gemini_available = await _gemini_available_usd()
+    kalshi = KalshiV2Executor()
+    try:
+        response = await kalshi.client.get("/portfolio/balance")
+        response.raise_for_status()
+        kalshi_available = D(str(response.json().get("balance") or "0")) / D("100")
+    finally:
+        await kalshi.close()
+    return {"gemini": gemini_available, "kalshi": kalshi_available}
 
 
 async def _obtain_asset_execution(run_id: str, asset: str, arm_deadline: datetime) -> dict[str, Any]:
@@ -166,7 +251,9 @@ async def _lane_loop(state: ParallelState, asset: str, arm_deadline: datetime, h
         async with lock:
             if state.halted or state.completed_total >= MAX_COMPLETED_TRADES or state.execution_attempts_total >= MAX_EXECUTION_ATTEMPTS:
                 return
-            if state.capital.available < RESERVE_PER_ATTEMPT:
+            enough_global = state.capital.available >= RESERVE_PER_ATTEMPT
+            enough_venues = state.venues.can_reserve_pair(VENUE_RESERVE_PER_ATTEMPT)
+            if not enough_global or not enough_venues:
                 lane.status = "WAITING_CAPITAL"
                 _write_state(state)
                 should_wait = True
@@ -177,20 +264,32 @@ async def _lane_loop(state: ParallelState, asset: str, arm_deadline: datetime, h
                 run_id = _run_id(state.campaign_id, asset, lane.execution_attempts)
                 reservation_key = run_id
                 state.capital.reserve(reservation_key, RESERVE_PER_ATTEMPT)
+                try:
+                    state.venues.reserve_pair(reservation_key, VENUE_RESERVE_PER_ATTEMPT)
+                except Exception:
+                    state.capital.release(reservation_key)
+                    raise
                 lane.reserved_usd = RESERVE_PER_ATTEMPT
                 lane.active_run_id = run_id
                 lane.status = "WAITING_EXECUTION"
                 _write_state(state)
-                logger.warning("CRYPTO_PARALLEL_LANE_ARMED asset=%s run_id=%s reserved_usd=%s total_reserved=%s available=%s", asset, run_id, RESERVE_PER_ATTEMPT, state.capital.reserved, state.capital.available)
+                logger.warning(
+                    "CRYPTO_PARALLEL_LANE_ARMED asset=%s run_id=%s pair_reserved=%s venue_reserved_each=%s "
+                    "global_available=%s gemini_free=%s kalshi_free=%s",
+                    asset, run_id, RESERVE_PER_ATTEMPT, VENUE_RESERVE_PER_ATTEMPT,
+                    state.capital.available, state.venues.free_for("gemini"), state.venues.free_for("kalshi"),
+                )
         if should_wait:
             await asyncio.sleep(0.25)
             continue
+        actual_venue: dict[str, D] | None = None
         try:
             record = await _obtain_asset_execution(run_id, asset, arm_deadline)
             result = record.get("result") or {}
             if reliable._benign_primary_miss(result):
                 async with lock:
                     state.capital.release(reservation_key)
+                    state.venues.release(reservation_key)
                     lane.reserved_usd = D("0")
                     lane.active_run_id = None
                     lane.status = "IDLE"
@@ -202,8 +301,10 @@ async def _lane_loop(state: ParallelState, asset: str, arm_deadline: datetime, h
                 raise RuntimeError(f"unsafe live execution asset={asset} outcome={result.get('outcome')}")
             costs = await base._emit_execution_events(http, run_id, record)
             actual_capital = D(str(costs["capital"]))
+            actual_venue = _venue_costs(result)
             async with lock:
                 state.capital.convert_to_deployed(reservation_key, actual_capital)
+                state.venues.convert_to_deployed(reservation_key, actual_venue)
                 lane.reserved_usd = D("0")
                 lane.status = "WAITING_SETTLEMENT"
                 _write_state(state)
@@ -213,6 +314,7 @@ async def _lane_loop(state: ParallelState, asset: str, arm_deadline: datetime, h
             net_pnl = await base._emit_realized_event(http, run_id=run_id, record=record, costs=costs, settlement=settlement)
             async with lock:
                 state.capital.settle(actual_capital)
+                state.venues.settle(actual_venue)
                 lane.completed_trades += 1
                 state.completed_total += 1
                 lane.active_run_id = None
@@ -225,6 +327,8 @@ async def _lane_loop(state: ParallelState, asset: str, arm_deadline: datetime, h
             async with lock:
                 if reservation_key in state.capital.reservations:
                     state.capital.release(reservation_key)
+                if reservation_key in state.venues.reservations:
+                    state.venues.release(reservation_key)
                 lane.reserved_usd = D("0")
                 lane.status = "HALTED"
                 state.halted = True
@@ -245,13 +349,25 @@ async def run() -> None:
     if os.getenv(v2.ARM_ENV, "NO").strip().upper() != "YES" or os.getenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", "NO").strip().upper() != "YES":
         raise PermissionError("parallel campaign requires both explicit live gates")
     if not D("0") < MAX_TOTAL_RESERVED <= D("5") or not D("0") < RESERVE_PER_ATTEMPT <= D("1"):
-        raise ValueError("invalid capital reservation configuration")
+        raise ValueError("invalid global capital reservation configuration")
+    if not D("0") < VENUE_RESERVE_PER_ATTEMPT <= D("1"):
+        raise ValueError("invalid per-venue reservation configuration")
     if not 1 <= MAX_COMPLETED_TRADES <= 20 or not MAX_COMPLETED_TRADES <= MAX_EXECUTION_ATTEMPTS <= 100:
         raise ValueError("invalid campaign attempt limits")
-    state = ParallelState(campaign_id, MAX_TOTAL_RESERVED)
+    venue_balances = await _live_venue_balances()
+    if venue_balances["gemini"] < VENUE_RESERVE_PER_ATTEMPT or venue_balances["kalshi"] < VENUE_RESERVE_PER_ATTEMPT:
+        raise RuntimeError(f"insufficient venue balances for one reserved pair: {venue_balances}")
+    state = ParallelState(campaign_id, MAX_TOTAL_RESERVED, venue_balances)
     lock = asyncio.Lock()
     _write_state(state)
-    logger.warning("CRYPTO_PARALLEL_CAMPAIGN_ENABLED campaign_id=%s assets=%s one_unresolved_per_asset=true shared_capital_reservations=true hard_budget=%s reserve_per_attempt=%s min_profit=0.03 min_double_boundary_bps=10 execution_delay_ms=50 risk_gates_changed=false", campaign_id, ",".join(ASSETS), MAX_TOTAL_RESERVED, RESERVE_PER_ATTEMPT)
+    logger.warning(
+        "CRYPTO_PARALLEL_CAMPAIGN_ENABLED campaign_id=%s assets=%s one_unresolved_per_asset=true "
+        "shared_capital_reservations=true per_venue_reservations=true hard_budget=%s reserve_per_attempt=%s "
+        "venue_reserve_each=%s gemini_available=%s kalshi_available=%s min_profit=0.03 "
+        "min_double_boundary_bps=10 execution_delay_ms=50 risk_gates_changed=false",
+        campaign_id, ",".join(ASSETS), MAX_TOTAL_RESERVED, RESERVE_PER_ATTEMPT,
+        VENUE_RESERVE_PER_ATTEMPT, venue_balances["gemini"], venue_balances["kalshi"],
+    )
     async with httpx.AsyncClient(timeout=20.0) as http:
         await asyncio.gather(*[_lane_loop(state, asset, arm_deadline, http, lock) for asset in ASSETS])
 
