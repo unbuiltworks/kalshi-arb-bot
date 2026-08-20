@@ -26,6 +26,17 @@ def _market():
     }
 
 
+def _forecast(probability="0.55"):
+    return {
+        "model": "GFS",
+        "model_run_time": "2026-08-20T12:00:00Z",
+        "forecast_valid_time": "2026-08-20T23:59:59-04:00",
+        "station_mapping_verified": True,
+        "freshness_verified": True,
+        "bracket_probability": probability,
+    }
+
+
 def test_series_requires_official_nws_source_and_current_fee_metadata():
     ok, blockers = certify_series(_series())
     assert ok is True
@@ -47,13 +58,14 @@ def test_shadow_row_is_read_only_and_computes_after_fee_ev():
         series=_series(), market=_market(),
         quote={"ask_cents": 40, "ask_qty": 5, "quote_age_ms": 120},
         station={"name": "Washington National", "cli_product": "CLIDCA", "identity_verified": True},
-        forecast={"bracket_probability": "0.55"},
+        forecast=_forecast(),
     )
     assert row["category"] == "weather"
     assert row["classification"] == "SHADOW"
     assert row["order_entry"] is False
     assert row["live_probe_ready"] is False
     assert row["settlement_certified_shadow"] is True
+    assert row["ev_certified_shadow"] is True
     assert row["modeled_taker_fee_cents"] == 9
     assert Decimal(row["modeled_after_fee_ev_cents"]) == Decimal("66.00")
     assert row["best_shadow_side"]["side"] == "YES"
@@ -68,9 +80,10 @@ def test_models_yes_and_no_executable_asks_independently():
             "quote_age_ms": 100,
         },
         station={"name": "Washington National", "cli_product": "CLIDCA", "identity_verified": True},
-        forecast={"bracket_probability": "0.40"},
+        forecast=_forecast("0.40"),
     )
     assert row["settlement_certified_shadow"] is True
+    assert row["ev_certified_shadow"] is True
     assert [x["side"] for x in row["side_economics"]] == ["YES", "NO"]
     yes = row["side_economics"][0]
     no = row["side_economics"][1]
@@ -85,9 +98,10 @@ def test_no_only_book_is_valid_and_does_not_fabricate_yes_aliases():
         series=_series(), market=_market(),
         quote={"no_ask_cents": 42, "no_ask_qty": 3, "quote_age_ms": 80},
         station={"name": "Washington National", "cli_product": "CLIDCA", "identity_verified": True},
-        forecast={"bracket_probability": "0.30"},
+        forecast=_forecast("0.30"),
     )
     assert row["settlement_certified_shadow"] is True
+    assert row["ev_certified_shadow"] is True
     assert row["ask_cents"] is None
     assert row["available_contracts"] is None
     assert row["modeled_taker_fee_cents"] is None
@@ -130,10 +144,11 @@ def test_stale_quote_is_not_settlement_certified_shadow_economics():
         series=_series(), market=_market(),
         quote={"ask_cents": 40, "ask_qty": 5, "quote_age_ms": 2501},
         station={"name": "Washington National", "cli_product": "CLIDCA", "identity_verified": True},
-        forecast={"bracket_probability": "0.55"},
+        forecast=_forecast(),
         max_quote_age_ms=2000,
     )
     assert row["settlement_certified_shadow"] is False
+    assert row["ev_certified_shadow"] is False
     assert "QUOTE_STALE" in row["blockers"]
     assert row["live_probe_ready"] is False
 
@@ -148,3 +163,37 @@ def test_unknown_fee_type_fails_closed():
     )
     assert "FEE_UNVERIFIED" in row["blockers"]
     assert row["live_probe_ready"] is False
+
+
+def test_naked_forecast_probability_cannot_be_ranked_as_ev():
+    row = build_shadow_row(
+        series=_series(), market=_market(),
+        quote={"yes_ask_cents": 35, "yes_ask_qty": 10, "quote_age_ms": 75},
+        station={"name": "Washington National", "cli_product": "CLIDCA", "identity_verified": True},
+        forecast={"bracket_probability": "0.80"},
+    )
+    assert row["settlement_certified_shadow"] is True
+    assert row["ev_certified_shadow"] is False
+    assert row["forecast_bracket_probability"] is None
+    assert row["best_shadow_side"] is None
+    assert row["modeled_after_fee_ev_cents"] is None
+    assert "FORECAST_UNVERIFIED" in row["forecast_blockers"]
+    assert "FORECAST_STATION_MAPPING_UNVERIFIED" in row["forecast_blockers"]
+    assert "FORECAST_STALE_OR_UNVERIFIED" in row["forecast_blockers"]
+
+
+def test_string_forecast_verification_flags_fail_closed():
+    forecast = _forecast()
+    forecast["station_mapping_verified"] = "true"
+    forecast["freshness_verified"] = "true"
+    row = build_shadow_row(
+        series=_series(), market=_market(),
+        quote={"yes_ask_cents": 35, "yes_ask_qty": 10, "quote_age_ms": 75},
+        station={"name": "Washington National", "cli_product": "CLIDCA", "identity_verified": True},
+        forecast=forecast,
+    )
+    assert row["settlement_certified_shadow"] is True
+    assert row["ev_certified_shadow"] is False
+    assert row["best_shadow_side"] is None
+    assert "FORECAST_STATION_MAPPING_UNVERIFIED" in row["forecast_blockers"]
+    assert "FORECAST_STALE_OR_UNVERIFIED" in row["forecast_blockers"]
