@@ -1,6 +1,6 @@
 """Read-only live rule/metadata probe for KXU3 <-> Polymarket US URC audit.
 
-No authentication and no order-entry code.  Fetches the exact Polymarket US market
+No authentication and no order-entry code. Fetches the exact Polymarket US market
 records for the August 2026 URC slugs already in our shadow counterpart inventory
 and prints settlement-relevant metadata so the execution certification can be based
 on the venue actually traded (gateway.polymarket.us), not global polymarket.com.
@@ -14,14 +14,13 @@ from typing import Any
 import httpx
 
 BASE = "https://gateway.polymarket.us"
+PROBE_VERSION = "2026-08-20-v2"
 SLUGS = (
     "urc-usunemp-sa-august-2026-09-04-gt4pt0pct",
     "urc-usunemp-sa-august-2026-09-04-gt4pt2pct",
     "urc-usunemp-sa-august-2026-09-04-gt4pt4pct",
 )
 
-# Fields likely to carry contract semantics.  Unknown/new fields are also surfaced
-# by top-level_keys so schema changes are visible without dumping order/account data.
 SEMANTIC_KEYS = (
     "id", "ticker", "slug", "question", "title", "subtitle", "description",
     "resolutionSource", "resolution_source", "rules", "rule", "marketType",
@@ -63,6 +62,7 @@ async def run_once() -> dict[str, Any]:
                 rows.append({"slug": slug, "error": f"{type(exc).__name__}:{str(exc)[:300]}"})
     result = {
         "status": "KP_UNEMPLOYMENT_RULE_PROBE",
+        "probe_version": PROBE_VERSION,
         "venue": "POLYMARKET_US",
         "base": BASE,
         "rows": rows,
