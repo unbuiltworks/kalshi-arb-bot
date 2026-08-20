@@ -233,3 +233,79 @@ def test_zero_settled_groups_never_claims_zero_realized_per_day():
     sleeve = report["sleeves"][0]
     assert sleeve["realized_paper_dollars_per_day"] is None
     assert sleeve["realized_run_rate_status"] == "WITHHELD_UNSETTLED_OR_UNVERIFIED_SETTLEMENT_WINDOW"
+
+
+def test_index_mismatch_auto_blocks_projection_and_promotion_even_if_caller_omits_blocker():
+    report = rank_sleeves(
+        [{
+            "name": "gemini-kalshi-eth-15m",
+            "category": "crypto",
+            "venues": ["gemini", "kalshi"],
+            "net_edge_per_dollar": "0.07",
+            "executable_probability": "0.8",
+            "depth_dollars": "400",
+            "capital_lock_hours": "0.25",
+            "settlement_confidence": "0.9",
+            "basis_risk": "0.1",
+            "observed_hours": "6",
+            "shadow_profit_dollars": "16.61",
+            "observation_window_verified": True,
+            "settlement_status": "INDEX_MISMATCH_RESEARCH_ONLY",
+        }]
+    )
+    sleeve = report["sleeves"][0]
+    assert sleeve["capacity_score"] != "0"
+    assert sleeve["promotable_score"] == "0"
+    assert sleeve["observed_shadow_dollars_per_day"] is None
+    assert sleeve["run_rate_status"] == "WITHHELD_SETTLEMENT_INDEX_MISMATCH_RESEARCH_ONLY"
+    assert sleeve["shadow_projection_allowed"] is False
+    assert "INDEX_MISMATCH_RESEARCH_ONLY" in sleeve["hard_blockers"]
+
+
+def test_explicit_basis_unadjusted_false_fails_closed_even_without_status_string():
+    report = rank_sleeves(
+        [{
+            "name": "basis-unadjusted-crypto",
+            "category": "crypto",
+            "venues": ["gemini", "kalshi"],
+            "net_edge_per_dollar": "0.05",
+            "executable_probability": "0.5",
+            "depth_dollars": "100",
+            "capital_lock_hours": "0.25",
+            "settlement_confidence": "0.8",
+            "basis_risk": "0.2",
+            "observed_hours": "12",
+            "shadow_profit_dollars": "10",
+            "observation_window_verified": True,
+            "basis_adjusted": False,
+        }]
+    )
+    sleeve = report["sleeves"][0]
+    assert sleeve["promotable_score"] == "0"
+    assert sleeve["observed_shadow_dollars_per_day"] is None
+    assert sleeve["run_rate_status"] == "WITHHELD_BASIS_UNADJUSTED_RESEARCH_ONLY"
+    assert "BASIS_UNADJUSTED_RESEARCH_ONLY" in sleeve["hard_blockers"]
+
+
+def test_basis_adjusted_true_preserves_verified_shadow_projection_path():
+    report = rank_sleeves(
+        [{
+            "name": "basis-adjusted-research",
+            "category": "crypto",
+            "venues": ["gemini", "kalshi"],
+            "net_edge_per_dollar": "0.02",
+            "executable_probability": "0.2",
+            "depth_dollars": "10",
+            "capital_lock_hours": "1",
+            "settlement_confidence": "0.9",
+            "basis_risk": "0.1",
+            "observed_hours": "12",
+            "shadow_profit_dollars": "4",
+            "observation_window_verified": True,
+            "basis_adjusted": True,
+        }]
+    )
+    sleeve = report["sleeves"][0]
+    assert sleeve["shadow_projection_allowed"] is True
+    assert sleeve["observed_shadow_dollars_per_day"] == "8"
+    assert sleeve["run_rate_status"] == "FULL_OBSERVATION_WINDOW_VERIFIED_THEORETICAL_SHADOW"
