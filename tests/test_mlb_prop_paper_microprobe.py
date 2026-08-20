@@ -17,14 +17,18 @@ def _row(
     settlement_equivalent_now=True,
     synchronized_book_pair=True,
 ):
+    # Keep arbitrary test profit variants economically coherent: with q=2 and
+    # $0.03 total fees, choose the Poly price so total cost = 2 - profit.
+    profit_d = Decimal(profit)
+    poly_price = (Decimal("2") - profit_d - Decimal("0.03")) / Decimal("2") - Decimal("0.51")
     plan = {
         "direction": direction,
         "quantity": 2,
-        "poly_price": "0.45",
+        "poly_price": str(poly_price),
         "kalshi_price": "0.51",
         "poly_fee": "0.01",
         "kalshi_fee_upper_bound": "0.02",
-        "total_cost_upper_bound": "1.95",
+        "total_cost_upper_bound": str(Decimal("2") - profit_d),
         "capital_cap": "5",
         "conservative_locked_profit": profit,
     }
@@ -44,7 +48,6 @@ def _row(
         "rule_status": "EQUIVALENT_AFTER_PARTICIPATION" if participation_gate_satisfied else "CONDITIONAL_PARTICIPATION",
         "rules_status": "RULES_PENDING",
         "participation_gate_satisfied": participation_gate_satisfied,
-        # Historical compatibility field must not control paper qualification.
         "settlement_equivalent_now": settlement_equivalent_now,
         "full_rules_audited": False,
         "fully_audited_shadow_ready": False,
@@ -54,6 +57,23 @@ def _row(
         "order_entry": False,
         "probe_1usd": None,
         "probe_5usd": plan,
+    }
+
+
+def _one_dollar_plan(*, profit: str) -> dict:
+    profit_d = Decimal(profit)
+    # q=1, $0.02 fees, Kalshi 0.47; choose Poly to make exact cost 1-profit.
+    poly_price = Decimal("1") - profit_d - Decimal("0.02") - Decimal("0.47")
+    return {
+        "direction": "POLY_YES_KALSHI_NO",
+        "quantity": 1,
+        "poly_price": str(poly_price),
+        "kalshi_price": "0.47",
+        "poly_fee": "0.01",
+        "kalshi_fee_upper_bound": "0.01",
+        "total_cost_upper_bound": str(Decimal("1") - profit_d),
+        "capital_cap": "1",
+        "conservative_locked_profit": profit,
     }
 
 
@@ -87,46 +107,27 @@ def test_paper_probe_requires_three_cent_minimum_by_default():
 
 
 def test_paper_probe_requires_explicit_participation_gate_not_legacy_equivalence_field():
-    assert paper_probe_events(
-        _row(participation_gate_satisfied=False, settlement_equivalent_now=True),
-        probe_field="probe_5usd",
-        ts_ms=1,
-    ) is None
-    assert paper_probe_events(
-        _row(participation_gate_satisfied=True, settlement_equivalent_now=False),
-        probe_field="probe_5usd",
-        ts_ms=1,
-    ) is not None
+    assert paper_probe_events(_row(participation_gate_satisfied=False, settlement_equivalent_now=True), probe_field="probe_5usd", ts_ms=1) is None
+    assert paper_probe_events(_row(participation_gate_satisfied=True, settlement_equivalent_now=False), probe_field="probe_5usd", ts_ms=1) is not None
 
 
 def test_paper_probe_requires_synchronized_book_pair():
-    assert paper_probe_events(
-        _row(synchronized_book_pair=False), probe_field="probe_5usd", ts_ms=1
-    ) is None
+    assert paper_probe_events(_row(synchronized_book_pair=False), probe_field="probe_5usd", ts_ms=1) is None
 
 
 def test_paper_probe_fails_closed_if_read_only_safety_fields_are_missing_or_unsafe():
-    row = _row()
-    row.pop("read_only")
+    row = _row(); row.pop("read_only")
     assert paper_probe_events(row, probe_field="probe_5usd", ts_ms=1) is None
-
-    row = _row()
-    row["order_entry"] = True
+    row = _row(); row["order_entry"] = True
     assert paper_probe_events(row, probe_field="probe_5usd", ts_ms=1) is None
-
-    row = _row()
-    row["execution_eligible"] = True
+    row = _row(); row["execution_eligible"] = True
     assert paper_probe_events(row, probe_field="probe_5usd", ts_ms=1) is None
-
-    row = _row()
-    row["live_probe_ready"] = True
+    row = _row(); row["live_probe_ready"] = True
     assert paper_probe_events(row, probe_field="probe_5usd", ts_ms=1) is None
 
 
 def test_direction_maps_complementary_sides_correctly():
-    built = paper_probe_events(
-        _row(direction="KALSHI_YES_POLY_NO"), probe_field="probe_5usd", ts_ms=7
-    )
+    built = paper_probe_events(_row(direction="KALSHI_YES_POLY_NO"), probe_field="probe_5usd", ts_ms=7)
     assert built is not None
     events, _ = built
     fills = {event.venue: event for event in events if event.event_type == "fill"}
@@ -136,8 +137,7 @@ def test_direction_maps_complementary_sides_correctly():
 
 def test_builder_dedupes_same_exact_identity_per_cap():
     row = _row()
-    snapshot = {"paper_probe_candidates": [row, dict(row)]}
-    events, audits = build_paper_probes(snapshot, ts_ms=9)
+    events, audits = build_paper_probes({"paper_probe_candidates": [row, dict(row)]}, ts_ms=9)
     assert len(audits) == 1
     assert len([event for event in events if event.event_type == "fill"]) == 2
     assert Decimal(audits[0]["modeled_profit"]) >= Decimal("0.03")
@@ -146,8 +146,7 @@ def test_builder_dedupes_same_exact_identity_per_cap():
 def test_builder_keeps_same_player_same_day_doubleheader_markets_distinct():
     first = _row(poly_slug="poly-game-1", kalshi_ticker="KXMLBHIT-GAME1")
     second = _row(poly_slug="poly-game-2", kalshi_ticker="KXMLBHIT-GAME2")
-    snapshot = {"paper_probe_candidates": [first, second]}
-    events, audits = build_paper_probes(snapshot, ts_ms=10)
+    events, audits = build_paper_probes({"paper_probe_candidates": [first, second]}, ts_ms=10)
     assert len(audits) == 2
     assert len({row["settlement_key"] for row in audits}) == 2
     assert len({row["trade_group_id"] for row in audits}) == 2
@@ -155,77 +154,42 @@ def test_builder_keeps_same_player_same_day_doubleheader_markets_distinct():
 
 
 def test_paper_probe_rejects_missing_venue_identity():
-    row = _row()
-    row["poly_slug"] = ""
+    row = _row(); row["poly_slug"] = ""
     assert paper_probe_events(row, probe_field="probe_5usd", ts_ms=1) is None
 
 
 def test_stateful_builder_suppresses_unchanged_resting_depth():
     snapshot = {"paper_probe_candidates": [_row()]}
-    first_events, first_audits, state, suppressed = build_paper_probes_with_state(
-        snapshot, prior_state={}, ts_ms=100
-    )
-    assert len(first_audits) == 1
-    assert first_audits[0]["episode_event"] == "OPEN"
-    assert len(first_events) >= 2
-    assert suppressed == 0
-
-    second_events, second_audits, second_state, suppressed = build_paper_probes_with_state(
-        snapshot, prior_state=state, ts_ms=200
-    )
-    assert second_events == []
-    assert second_audits == []
-    assert second_state == state
-    assert suppressed == 1
+    first_events, first_audits, state, suppressed = build_paper_probes_with_state(snapshot, prior_state={}, ts_ms=100)
+    assert len(first_audits) == 1 and first_audits[0]["episode_event"] == "OPEN"
+    assert len(first_events) >= 2 and suppressed == 0
+    second_events, second_audits, second_state, suppressed = build_paper_probes_with_state(snapshot, prior_state=state, ts_ms=200)
+    assert second_events == [] and second_audits == [] and second_state == state and suppressed == 1
 
 
 def test_stateful_builder_emits_move_when_consumable_plan_changes():
-    first = _row()
-    snapshot = {"paper_probe_candidates": [first]}
-    _events, _audits, state, _suppressed = build_paper_probes_with_state(
-        snapshot, prior_state={}, ts_ms=100
-    )
-
+    snapshot = {"paper_probe_candidates": [_row()]}
+    _events, _audits, state, _suppressed = build_paper_probes_with_state(snapshot, prior_state={}, ts_ms=100)
     moved = _row(profit="0.05")
     moved["probe_5usd"] = dict(moved["probe_5usd"])
-    moved["probe_5usd"]["poly_price"] = "0.44"
-    events, audits, new_state, suppressed = build_paper_probes_with_state(
-        {"paper_probe_candidates": [moved]}, prior_state=state, ts_ms=200
-    )
-    assert len(events) >= 2
-    assert len(audits) == 1
-    assert audits[0]["episode_event"] == "MOVE"
-    assert new_state != state
-    assert suppressed == 0
+    moved["probe_5usd"]["poly_price"] = str(Decimal(moved["probe_5usd"]["poly_price"]) - Decimal("0.01"))
+    events, audits, new_state, suppressed = build_paper_probes_with_state({"paper_probe_candidates": [moved]}, prior_state=state, ts_ms=200)
+    assert len(events) >= 2 and len(audits) == 1
+    assert audits[0]["episode_event"] == "MOVE" and new_state != state and suppressed == 0
 
 
 def test_stateful_builder_clears_absent_opportunity_so_same_quote_can_reopen():
     snapshot = {"paper_probe_candidates": [_row()]}
-    _events, _audits, state, _suppressed = build_paper_probes_with_state(
-        snapshot, prior_state={}, ts_ms=100
-    )
-    _events, _audits, closed_state, _suppressed = build_paper_probes_with_state(
-        {"paper_probe_candidates": []}, prior_state=state, ts_ms=200
-    )
+    _events, _audits, state, _suppressed = build_paper_probes_with_state(snapshot, prior_state={}, ts_ms=100)
+    _events, _audits, closed_state, _suppressed = build_paper_probes_with_state({"paper_probe_candidates": []}, prior_state=state, ts_ms=200)
     assert closed_state == {}
-
-    events, audits, _reopened_state, suppressed = build_paper_probes_with_state(
-        snapshot, prior_state=closed_state, ts_ms=300
-    )
-    assert len(events) >= 2
-    assert len(audits) == 1
-    assert audits[0]["episode_event"] == "OPEN"
-    assert suppressed == 0
+    events, audits, _reopened_state, suppressed = build_paper_probes_with_state(snapshot, prior_state=closed_state, ts_ms=300)
+    assert len(events) >= 2 and len(audits) == 1 and audits[0]["episode_event"] == "OPEN" and suppressed == 0
 
 
 def test_builder_treats_1usd_and_5usd_as_alternative_sizes_not_two_fills():
     row = _row(profit="0.07")
-    row["probe_1usd"] = {
-        **row["probe_5usd"],
-        "quantity": 1,
-        "capital_cap": "1",
-        "conservative_locked_profit": "0.04",
-    }
+    row["probe_1usd"] = _one_dollar_plan(profit="0.04")
     events, audits = build_paper_probes({"paper_probe_candidates": [row]}, ts_ms=400)
     assert len(audits) == 1
     assert audits[0]["probe_field"] == "probe_5usd"
@@ -235,32 +199,15 @@ def test_builder_treats_1usd_and_5usd_as_alternative_sizes_not_two_fills():
 
 def test_switching_budget_tier_is_move_on_same_episode_not_second_open():
     first = _row(profit="0.04")
-    first["probe_1usd"] = {
-        **first["probe_5usd"],
-        "quantity": 1,
-        "capital_cap": "1",
-        "conservative_locked_profit": "0.05",
-    }
-    first["probe_5usd"] = {**first["probe_5usd"], "conservative_locked_profit": "0.04"}
-    _events, first_audits, state, _suppressed = build_paper_probes_with_state(
-        {"paper_probe_candidates": [first]}, prior_state={}, ts_ms=500
-    )
+    first["probe_1usd"] = _one_dollar_plan(profit="0.05")
+    _events, first_audits, state, _suppressed = build_paper_probes_with_state({"paper_probe_candidates": [first]}, prior_state={}, ts_ms=500)
     assert first_audits[0]["probe_field"] == "probe_1usd"
     assert first_audits[0]["episode_event"] == "OPEN"
 
     moved = _row(profit="0.08")
-    moved["probe_1usd"] = {
-        **moved["probe_5usd"],
-        "quantity": 1,
-        "capital_cap": "1",
-        "conservative_locked_profit": "0.04",
-    }
-    events, audits, new_state, suppressed = build_paper_probes_with_state(
-        {"paper_probe_candidates": [moved]}, prior_state=state, ts_ms=600
-    )
+    moved["probe_1usd"] = _one_dollar_plan(profit="0.04")
+    events, audits, new_state, suppressed = build_paper_probes_with_state({"paper_probe_candidates": [moved]}, prior_state=state, ts_ms=600)
     assert len(audits) == 1
     assert audits[0]["probe_field"] == "probe_5usd"
     assert audits[0]["episode_event"] == "MOVE"
-    assert len(new_state) == 1
-    assert len(events) >= 2
-    assert suppressed == 0
+    assert len(new_state) == 1 and len(events) >= 2 and suppressed == 0
