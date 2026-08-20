@@ -147,7 +147,11 @@ async def run_forever(*, epoch_seconds: float, cooldown_seconds: float) -> None:
     )
     # Capital is outermost: the hot path must prove both venue legs fit the latest
     # cached balance envelope before it writes a durable trade reservation or sends.
-    install_venue_capital(canary, allocator)
+    install_venue_capital(
+        canary,
+        allocator,
+        run_id_env="MLB_GK_MULTI_RUN_ID",
+    )
 
     if os.getenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", "").strip().upper() != "YES":
         raise RuntimeError("global live probe gate is not enabled")
