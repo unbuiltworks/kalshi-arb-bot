@@ -54,10 +54,21 @@ def _poly_shape(body: Any) -> dict[str, Any]:
     if not isinstance(body, dict):
         return {"body_type": type(body).__name__, "top_level_keys": []}
     rows = body.get("balances")
+    row_shapes: list[dict[str, Any]] = []
+    if isinstance(rows, list):
+        for row in rows[:3]:
+            if isinstance(row, dict):
+                row_shapes.append({
+                    "keys": sorted(str(k) for k in row.keys()),
+                    "currency": str(row.get("currency") or row.get("asset") or row.get("symbol") or "<missing>"),
+                })
+            else:
+                row_shapes.append({"type": type(row).__name__})
     return {
         "body_type": "dict",
         "top_level_keys": sorted(str(k) for k in body.keys()),
         "balance_rows": len(rows) if isinstance(rows, list) else None,
+        "row_shapes": row_shapes,
     }
 
 
