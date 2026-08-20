@@ -4,14 +4,16 @@ from src.mlb_prop_paper_microprobe import build_paper_probes
 
 
 def _row(*, profit="0.04", valid=True):
+    profit_d = Decimal(profit)
+    poly_price = (Decimal("2") - profit_d - Decimal("0.03")) / Decimal("2") - Decimal("0.51")
     plan = {
         "direction": "POLY_YES_KALSHI_NO",
         "quantity": 2,
-        "poly_price": "0.45",
+        "poly_price": str(poly_price),
         "kalshi_price": "0.51",
         "poly_fee": "0.01",
         "kalshi_fee_upper_bound": "0.02",
-        "total_cost_upper_bound": "1.95",
+        "total_cost_upper_bound": str(Decimal("2") - profit_d),
         "capital_cap": "5",
         "conservative_locked_profit": profit,
     }
@@ -44,9 +46,7 @@ def _row(*, profit="0.04", valid=True):
 def test_invalid_first_duplicate_does_not_suppress_later_valid_row():
     invalid = _row(profit="0.50", valid=False)
     valid = _row(profit="0.04", valid=True)
-    events, audits = build_paper_probes(
-        {"paper_probe_candidates": [invalid, valid]}, ts_ms=123
-    )
+    events, audits = build_paper_probes({"paper_probe_candidates": [invalid, valid]}, ts_ms=123)
     assert len(audits) == 1
     assert Decimal(audits[0]["modeled_profit"]) == Decimal("0.04")
     assert audits[0]["duplicate_identity_rows_considered"] == 2
@@ -56,14 +56,8 @@ def test_invalid_first_duplicate_does_not_suppress_later_valid_row():
 def test_duplicate_selection_is_order_independent_and_keeps_best_valid_economics():
     weak = _row(profit="0.04", valid=True)
     strong = _row(profit="0.09", valid=True)
-
-    first_events, first_audits = build_paper_probes(
-        {"paper_probe_candidates": [weak, strong]}, ts_ms=456
-    )
-    second_events, second_audits = build_paper_probes(
-        {"paper_probe_candidates": [strong, weak]}, ts_ms=456
-    )
-
+    first_events, first_audits = build_paper_probes({"paper_probe_candidates": [weak, strong]}, ts_ms=456)
+    second_events, second_audits = build_paper_probes({"paper_probe_candidates": [strong, weak]}, ts_ms=456)
     assert len(first_audits) == len(second_audits) == 1
     assert first_audits[0]["modeled_profit"] == second_audits[0]["modeled_profit"] == "0.09"
     assert first_audits[0]["opportunity_fingerprint"] == second_audits[0]["opportunity_fingerprint"]
