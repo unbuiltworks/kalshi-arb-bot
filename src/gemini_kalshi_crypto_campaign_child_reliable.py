@@ -21,6 +21,8 @@ from src import gemini_kalshi_rollover_optimizer as rollover_optimizer
 from src import gemini_kalshi_target_lifecycle_cache as target_lifecycle_cache
 from src import gemini_kalshi_target_freshness_guard as target_freshness_guard
 from src import gemini_kalshi_gemini_ws_recovery as gemini_ws_recovery
+from src import gemini_kalshi_gate_attribution as gate_attribution
+from src import gemini_kalshi_micro_live_executor_20bp as micro_executor
 from src.gemini_kalshi_staged_probe_transport import submit_gemini_first_probe
 
 DEADLINE_ENV = "SOL_CANARY_V2_ARM_NOT_AFTER_UTC"
@@ -68,6 +70,9 @@ def main() -> None:
         raise RuntimeError(f"{DEADLINE_ENV} is required for live canary child")
 
     assets = _selected_assets()
+
+    # Read-only telemetry observer; it cannot mutate any execution gate.
+    gate_attribution.install(micro_executor.logger)
 
     # Install before v2 creates the persistent authenticated trading session.
     gemini_ws_recovery.install()
