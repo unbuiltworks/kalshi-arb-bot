@@ -1,0 +1,33 @@
+{
+  "mode": "LIVE_PROBE",
+  "max_quantity": 1,
+  "approvals": [
+    {
+      "settlement_key": "macro|us|unemployment_u3|2026-08|GT|4.0",
+      "polymarket_slug": "urc-usunemp-sa-august-2026-09-04-gt4pt0pct",
+      "kalshi_ticker": "KXU3-26AUG-T4.0",
+      "polymarket_source_side": "CONTRACT",
+      "kalshi_source_side": "CONTRACT",
+      "rule_fingerprint_sha256": "1ed70da925d93f3b40ca7727ebb4937e91dcdda38d7f40d6b179b65302c2e08a",
+      "approved_for_execution": true
+    },
+    {
+      "settlement_key": "macro|us|unemployment_u3|2026-08|GT|4.2",
+      "polymarket_slug": "urc-usunemp-sa-august-2026-09-04-gt4pt2pct",
+      "kalshi_ticker": "KXU3-26AUG-T4.2",
+      "polymarket_source_side": "CONTRACT",
+      "kalshi_source_side": "CONTRACT",
+      "rule_fingerprint_sha256": "01e417e188028bf010d60b41fa3bf271bbbc8d87110200b2470abe334664ab5c",
+      "approved_for_execution": true
+    },
+    {
+      "settlement_key": "macro|us|unemployment_u3|2026-08|GT|4.4",
+      "polymarket_slug": "urc-usunemp-sa-august-2026-09-04-gt4pt4pct",
+      "kalshi_ticker": "KXU3-26AUG-T4.4",
+      "polymarket_source_side": "CONTRACT",
+      "kalshi_source_side": "CONTRACT",
+      "rule_fingerprint_sha256": "370f4cc3cb5bd07847c59962691270e7b503b03d637ae7e71c1eb1d4521f2f78",
+      "approved_for_execution": true
+    }
+  ]
+}
