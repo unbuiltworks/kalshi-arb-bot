@@ -95,3 +95,5 @@ def test_no_positive_math_is_not_manufactured():
     plan = hot.best_plan(rq, kq, kalshi_fee_multiplier=D("0.5"), max_quantity=5, max_capital=D("5"))
     assert plan is not None
     assert D(plan["conservative_locked_profit"]) < 0
+
+# Deployment trigger only; no behavioral change.
