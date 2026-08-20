@@ -25,6 +25,7 @@ It never authorizes live execution.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Mapping, Any
 from urllib.parse import urlparse
 
@@ -61,6 +62,18 @@ _OFFICIAL_SOURCE_HOSTS = {
     ),
 }
 
+# Scope IDs are evidence keys, not free-form analyst labels. Keep their grammar
+# deliberately narrow so malformed strings that merely contain a family token cannot
+# certify an unrelated contract. The exact line/side suffix is allowed to evolve, but
+# the venue, MLB event clock, participants, and explicit total/spread family must be
+# structurally present.
+_GEMINI_SCOPE_RE = re.compile(
+    r"^GEMI-MLB-\d{10,12}-[A-Z0-9]{2,5}-[A-Z0-9]{2,5}-(?:T|S)-[A-Z0-9.]+$"
+)
+_KALSHI_SCOPE_RE = re.compile(
+    r"^KXMLB(?:TOTAL|SPREAD)-[A-Z0-9]+(?:-[A-Z0-9.]+)+$"
+)
+
 
 def _literal_true(value: Any) -> bool:
     return value is True
@@ -95,9 +108,9 @@ def _valid_scope_id(value: Any, venue: str) -> bool:
         return False
     text = value.strip().upper()
     if venue == "gemini":
-        return text.startswith(("GEMI-MLB-", "MLB-")) and ("-T-" in text or "-S-" in text)
+        return _GEMINI_SCOPE_RE.fullmatch(text) is not None
     if venue == "kalshi":
-        return text.startswith(("KXMLBTOTAL", "KXMLBSPREAD"))
+        return _KALSHI_SCOPE_RE.fullmatch(text) is not None
     return False
 
 
@@ -112,9 +125,9 @@ def _scope_family(value: Any, venue: str) -> str | None:
         if "-S-" in text:
             return "SPREAD"
     elif venue == "kalshi":
-        if text.startswith("KXMLBTOTAL"):
+        if text.startswith("KXMLBTOTAL-"):
             return "TOTAL"
-        if text.startswith("KXMLBSPREAD"):
+        if text.startswith("KXMLBSPREAD-"):
             return "SPREAD"
     return None
 
