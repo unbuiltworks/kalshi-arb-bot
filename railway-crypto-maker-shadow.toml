@@ -1,4 +1,5 @@
 # Isolated read-only maker-fill simulation. No order transport or live arming.
+# maker-shadow runtime generation: resting-liveness-v2
 [deploy]
-startCommand = "python -m src.gemini_kalshi_maker_shadow_service --assets BTC ETH SOL XRP --targets 0.01 0.02 0.03 0.05 --max-book-skew-ms 50 --max-hedge-age-ms 100"
+startCommand = "python -m src.gemini_kalshi_maker_shadow_service --assets BTC ETH SOL XRP --targets 0.01 0.02 0.03 0.05 --max-book-skew-ms 50 --max-hedge-age-ms 100 --max-resting-feed-age-ms 500"
 restartPolicyType = "ALWAYS"
