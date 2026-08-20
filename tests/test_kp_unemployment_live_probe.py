@@ -6,6 +6,7 @@ import pytest
 from src.kalshi_cross_book import TwoSidedQuote
 from src.kp_unemployment_certification import APPROVALS, validate_poly_market
 from src.kp_unemployment_live_probe import _arm_state, _leg
+from src.kp_unemployment_live_probe_safe import _poly_available
 from src.polymarket_kalshi_shadow import PolyQuote, best_plan
 
 
@@ -55,6 +56,16 @@ def test_no_side_converts_to_yes_book_limit_without_changing_quantity():
     leg = _leg("polymarket", "slug", "UNDER", D("0.63"))
     assert leg.native_outcome == "NO"
     assert leg.yes_book_limit == D("0.37")
+
+
+def test_poly_available_accepts_asset_available_on_usd_row():
+    body = {
+        "balances": [
+            {"asset": "USD", "assetAvailable": "17.42", "balance": "19.00"},
+            {"asset": "BTC", "assetAvailable": "999.00"},
+        ]
+    }
+    assert _poly_available(body) == D("17.42")
 
 
 def test_arm_requires_live_gate_unique_run_and_short_future_deadline(monkeypatch):
