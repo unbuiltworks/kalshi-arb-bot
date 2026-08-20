@@ -1,0 +1,56 @@
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+import time
+
+import pytest
+
+from src import gemini_kalshi_maker_live_probe_q1 as base
+from src import gemini_kalshi_maker_live_probe_q1_safe as safe
+from src import gemini_kalshi_maker_live_probe_q1_venue_once as venue
+
+D = Decimal
+
+
+def test_venue_once_arm_does_not_require_persistent_volume(monkeypatch, tmp_path):
+    monkeypatch.setattr(venue, "STATE_ROOT", tmp_path)
+    monkeypatch.delenv(base.VOLUME_ENV, raising=False)
+    monkeypatch.setenv(base.LIVE_ENV, "YES")
+    monkeypatch.setenv(base.ARM_ENV, "YES")
+    monkeypatch.setenv(base.DEADLINE_ENV, (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat())
+    monkeypatch.setattr(base, "live_probe_authorized", lambda requested: bool(requested))
+
+    arm = venue.maybe_create_arm("venue-test")
+    assert arm is not None and arm.exists()
+    result = venue.claim_before_order("venue-test")
+    assert result.name.endswith(".result.json")
+    assert not arm.exists()
+    with pytest.raises(PermissionError):
+        venue.claim_before_order("venue-test")
+
+
+def test_maker_payload_has_short_exchange_side_expiration(monkeypatch):
+    before = int(time.time())
+    payload = venue.maker_payload_with_expiry(
+        ticker="KXXRP15M-TEST",
+        direction="KALSHI_YES_GEMINI_NO",
+        maker_price=D("0.61"),
+        client_order_id="makerprobe-venue-test-k",
+    )
+    assert payload["post_only"] is True
+    assert payload["time_in_force"] == "good_till_canceled"
+    assert before + venue.ORDER_TTL_S <= payload["expiration_time"] <= int(time.time()) + venue.ORDER_TTL_S
+
+
+def test_install_replaces_only_runtime_hooks(monkeypatch):
+    old_arm = safe._maybe_create_arm
+    old_claim = safe._claim_before_order
+    old_payload = safe.kalshi_maker_payload
+    try:
+        venue.install()
+        assert safe._maybe_create_arm is venue.maybe_create_arm
+        assert safe._claim_before_order is venue.claim_before_order
+        assert safe.kalshi_maker_payload is venue.maker_payload_with_expiry
+    finally:
+        safe._maybe_create_arm = old_arm
+        safe._claim_before_order = old_claim
+        safe.kalshi_maker_payload = old_payload
