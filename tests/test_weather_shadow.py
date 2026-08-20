@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
 
 from src.weather_forecast import bracket_probability, climate_window_utc, event_date, model_eligibility, parse_bracket
+from src.weather_orderbook import executable_buy, executable_grid
 from src.weather_shadow import CATEGORY, MODEL_STATUS, TRADE_CLASSIFICATION, build_shadow_row, settlement_identity
 
 
@@ -25,9 +26,7 @@ def test_current_dollar_fields_and_twc_rules_are_normalized():
 
 
 def test_unverified_rules_never_gain_twc_status():
-    market={"rules_primary":"Primary source unknown"}
-    source,key,status=settlement_identity(market)
-    assert (source,key,status)==("UNVERIFIED",None,"SETTLEMENT_AUDIT_REQUIRED")
+    assert settlement_identity({"rules_primary":"Primary source unknown"})==("UNVERIFIED",None,"SETTLEMENT_AUDIT_REQUIRED")
 
 
 def test_legacy_integer_cent_fields_remain_supported_for_read_only_replay():
@@ -65,8 +64,7 @@ def test_future_twc_listing_keeps_forecast_ev_visible_but_not_live_eligible():
 
 
 def test_running_high_math_still_eliminates_impossible_lower_bracket_for_generic_source():
-    p=bracket_probability(82.0,2.5,(79.5,81.5),observed_high_f=82.2)
-    assert p==0.0
+    assert bracket_probability(82.0,2.5,(79.5,81.5),observed_high_f=82.2)==0.0
 
 
 def test_twc_intraday_listing_does_not_use_nws_proxy_or_emit_ev():
@@ -74,11 +72,27 @@ def test_twc_intraday_listing_does_not_use_nws_proxy_or_emit_ev():
     context={"models":{"gfs":79.6,"ecmwf":75.1,"icon":80.1},"mean_f":78.27,"std_f":3.09,"observed_running_high_f":82.2,"data_quality_status":"FRESH"}
     row=build_shadow_row("KXHIGHCHI",market,observed_at="2026-08-20T18:00:00+00:00",forecast_context=context)
     assert row.model_eligibility=="INTRADAY_TWC_OBSERVATIONS_REQUIRED"
-    assert row.observed_running_high_f==82.2  # retained as a research proxy only
+    assert row.observed_running_high_f==82.2
     assert row.q1_yes_model_ev_cents is None and row.q1_no_model_ev_cents is None
 
 
+def test_orderbook_derives_yes_asks_from_no_bids_and_walks_depth():
+    book={"no_dollars":[["0.80","2.00"],["0.75","10.00"]],"yes_dollars":[["0.60","3.00"],["0.55","10.00"]]}
+    q1=executable_buy(book,"yes",1)
+    q5=executable_buy(book,"yes",5)
+    assert q1.fully_fillable and q1.average_price_cents==20.0 and q1.levels_used==1
+    assert q5.fully_fillable and q5.total_cost_cents==115.0 and q5.average_price_cents==23.0 and q5.worst_price_cents==25.0
+    no3=executable_buy(book,"no",3)
+    assert no3.fully_fillable and no3.average_price_cents==40.0
+
+
+def test_orderbook_marks_insufficient_depth_instead_of_inventing_fill():
+    book={"no_dollars":[["0.80","2.00"]],"yes_dollars":[]}
+    fill=executable_grid(book,5)["yes"][5]
+    assert not fill.fully_fillable and fill.filled_contracts==2.0 and fill.total_cost_cents==40.0
+
+
 def test_module_has_no_live_trading_surface():
-    import src.weather_forecast as wf, src.weather_shadow as ws
+    import src.weather_forecast as wf, src.weather_orderbook as wo, src.weather_shadow as ws
     forbidden={"place_order","cancel_order","buy_yes","buy_no","submit_order","execute_trade"}
-    assert forbidden.isdisjoint(set(dir(ws))) and forbidden.isdisjoint(set(dir(wf)))
+    assert forbidden.isdisjoint(set(dir(ws))) and forbidden.isdisjoint(set(dir(wf))) and forbidden.isdisjoint(set(dir(wo)))
