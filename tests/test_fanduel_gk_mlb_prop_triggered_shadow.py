@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import src.fanduel_gk_mlb_prop_triggered_shadow as watch
 
 
-def _side(teams=("CIN", "STL"), start_ms=1787244060000):
+def _side(teams=("cin", "stl"), start_ms=1787244060000):
     event = SimpleNamespace(participants=teams, scheduled_start_ms=start_ms)
     identity = SimpleNamespace(event=event)
     return SimpleNamespace(identity=identity)
