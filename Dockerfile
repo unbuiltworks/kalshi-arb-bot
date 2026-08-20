@@ -11,8 +11,8 @@ COPY tests/ tests/
 COPY pyproject.toml .
 
 # This feature branch is intentionally weather-shadow-only. The image build
-# fails if the read-only safety/normalization tests fail.
-RUN pytest -q tests/test_weather_shadow.py
+# fails if the read-only safety/normalization/backtest tests fail.
+RUN pytest -q tests/test_weather_shadow.py tests/test_weather_backtest.py
 
 ENV BOT_MODE=paper
 ENV WEATHER_SHADOW_INTERVAL_S=60
