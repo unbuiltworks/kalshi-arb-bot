@@ -75,14 +75,33 @@ def claim_before_order(run_id: str) -> Path:
     return result
 
 
+def outbound_maker_price(maker_price):
+    price = base.D(maker_price)
+    # IMPROVE_1T is a useful trigger but twice crossed by the time the live POST
+    # reached Kalshi. For the one-contract mechanics probe, spend that one tick of
+    # queue priority and submit at the JOIN-equivalent price instead. A lower cost
+    # for the maker outcome can only improve the modeled complementary economics.
+    if base.POLICY == "IMPROVE_1T":
+        price = max(base.D("0.01"), price - base.D("0.01"))
+    return price
+
+
 def maker_payload_with_expiry(*, ticker, direction, maker_price, client_order_id):
+    submitted_maker_price = outbound_maker_price(maker_price)
     payload = base.kalshi_maker_payload(
         ticker=ticker,
         direction=direction,
-        maker_price=maker_price,
+        maker_price=submitted_maker_price,
         client_order_id=client_order_id,
     )
     payload["expiration_time"] = int(time.time()) + ORDER_TTL_S
+    logger.warning("MAKER_LIVE_PROBE_OUTBOUND_PRICE %s", json.dumps({
+        "trigger_policy": base.POLICY,
+        "trigger_maker_price": str(maker_price),
+        "submitted_maker_price": str(submitted_maker_price),
+        "safety_ticks_back": 1 if base.POLICY == "IMPROVE_1T" else 0,
+        "post_only": True,
+    }, separators=(",", ":")))
     return payload
 
 
