@@ -29,6 +29,7 @@ def _market():
 def _forecast(probability="0.55"):
     return {
         "model": "GFS",
+        "cli_product": "CLIDCA",
         "model_run_time": "2026-08-20T12:00:00Z",
         "forecast_valid_time": "2026-08-20T23:59:59-04:00",
         "station_mapping_verified": True,
@@ -49,7 +50,6 @@ def test_series_requires_official_nws_source_and_current_fee_metadata():
 
 
 def test_fee_multiplier_is_multiplier_not_rate():
-    # q=10 @ 50c: 0.07*1*10*.5*.5 = $0.175 => 18 cents after ceil-to-cent.
     assert _fee_cents(10, 50, "quadratic", 1) == 18
 
 
@@ -66,6 +66,7 @@ def test_shadow_row_is_read_only_and_computes_after_fee_ev():
     assert row["live_probe_ready"] is False
     assert row["settlement_certified_shadow"] is True
     assert row["ev_certified_shadow"] is True
+    assert row["forecast_cli_product"] == "CLIDCA"
     assert row["modeled_taker_fee_cents"] == 9
     assert Decimal(row["modeled_after_fee_ev_cents"]) == Decimal("66.00")
     assert row["best_shadow_side"]["side"] == "YES"
@@ -180,6 +181,8 @@ def test_naked_forecast_probability_cannot_be_ranked_as_ev():
     assert "FORECAST_UNVERIFIED" in row["forecast_blockers"]
     assert "FORECAST_STATION_MAPPING_UNVERIFIED" in row["forecast_blockers"]
     assert "FORECAST_STALE_OR_UNVERIFIED" in row["forecast_blockers"]
+    assert "FORECAST_STATION_ID_MISMATCH" in row["forecast_blockers"]
+    assert "FORECAST_TIME_UNVERIFIED" in row["forecast_blockers"]
 
 
 def test_string_forecast_verification_flags_fail_closed():
@@ -197,3 +200,40 @@ def test_string_forecast_verification_flags_fail_closed():
     assert row["best_shadow_side"] is None
     assert "FORECAST_STATION_MAPPING_UNVERIFIED" in row["forecast_blockers"]
     assert "FORECAST_STALE_OR_UNVERIFIED" in row["forecast_blockers"]
+
+
+def test_wrong_forecast_station_fails_even_when_mapping_boolean_is_true():
+    forecast = _forecast("0.90")
+    forecast["cli_product"] = "CLIATL"
+    row = build_shadow_row(
+        series=_series(), market=_market(),
+        quote={"yes_ask_cents": 20, "yes_ask_qty": 10, "quote_age_ms": 75},
+        station={"name": "Washington National", "cli_product": "CLIDCA", "identity_verified": True},
+        forecast=forecast,
+    )
+    assert row["settlement_certified_shadow"] is True
+    assert row["ev_certified_shadow"] is False
+    assert row["forecast_bracket_probability"] is None
+    assert row["best_shadow_side"] is None
+    assert "FORECAST_STATION_ID_MISMATCH" in row["forecast_blockers"]
+
+
+def test_malformed_or_naive_forecast_timestamps_fail_closed():
+    for run_time, valid_time in [
+        ("not-a-time", "2026-08-20T23:59:59-04:00"),
+        ("2026-08-20T12:00:00", "2026-08-20T23:59:59-04:00"),
+        ("2026-08-21T12:00:00Z", "2026-08-20T23:59:59-04:00"),
+    ]:
+        forecast = _forecast("0.75")
+        forecast["model_run_time"] = run_time
+        forecast["forecast_valid_time"] = valid_time
+        row = build_shadow_row(
+            series=_series(), market=_market(),
+            quote={"yes_ask_cents": 25, "yes_ask_qty": 8, "quote_age_ms": 50},
+            station={"name": "Washington National", "cli_product": "CLIDCA", "identity_verified": True},
+            forecast=forecast,
+        )
+        assert row["settlement_certified_shadow"] is True
+        assert row["ev_certified_shadow"] is False
+        assert row["best_shadow_side"] is None
+        assert "FORECAST_TIME_UNVERIFIED" in row["forecast_blockers"]
