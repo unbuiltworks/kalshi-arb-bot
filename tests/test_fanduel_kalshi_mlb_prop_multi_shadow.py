@@ -76,10 +76,12 @@ def test_fanduel_parser_keeps_real_sides_and_dedupes_duplicate_strikeout_line():
     assert ks[0]["threshold"] == D("5")
 
 
-def test_q5_can_turn_q1_fee_rounding_loss_into_positive_plan():
+def test_q3_can_beat_q1_after_total_order_fee_rounding():
     # Prefee unit cost is 0.995. At q=1 the conservative Kalshi fee rounds to $0.01,
-    # so the pair loses half a cent. At q=5 the total fee rounds to $0.02 and the
-    # total capital becomes $4.995, producing a real shadow +$0.005 plan.
+    # so the pair loses half a cent. At q=3 the total fee is still only $0.01,
+    # making total capital $2.995 and locked shadow profit +$0.005. q=5 ties the
+    # absolute profit but uses more capital, while the implementation keeps the first
+    # best plan encountered (q=3).
     fd = {
         "teams": ("CIN", "STL"), "start_ms": 1787244060000,
         "family": "baseball_player_hits", "stat": "hits",
@@ -98,8 +100,8 @@ def test_q5_can_turn_q1_fee_rounding_loss_into_positive_plan():
     }
     row = scan.best_plan(fd, k, multiplier=D("0.5"), snapshot_ms=1000)
     assert row is not None
-    assert row["quantity"] == 5
-    assert D(row["total_capital"]) == D("4.995")
+    assert row["quantity"] == 3
+    assert D(row["total_capital"]) == D("2.995")
     assert D(row["shadow_locked_profit"]) == D("0.005")
 
 
