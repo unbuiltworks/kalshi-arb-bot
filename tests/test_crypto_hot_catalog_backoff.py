@@ -3,6 +3,20 @@ import asyncio
 from src import gemini_kalshi_multi_ws_hot_catalog as catalog_mod
 
 
+def _patch_discovery_used_by_catalog(monkeypatch, replacement):
+    """Patch the exact global lookup used by BackgroundPairCatalog._refresh.
+
+    Some full-suite tests reload/import the catalog wrapper through alternate module
+    paths. Patching the bound method's globals keeps this test deterministic even if
+    the module object imported above is no longer the same object backing the class.
+    """
+    monkeypatch.setitem(
+        catalog_mod.BackgroundPairCatalog._refresh.__globals__,
+        "_discover_pairs",
+        replacement,
+    )
+
+
 def test_failed_initial_discovery_is_singleflight_and_cooldown_blocks_retry(monkeypatch):
     calls = 0
 
@@ -11,7 +25,7 @@ def test_failed_initial_discovery_is_singleflight_and_cooldown_blocks_retry(monk
         calls += 1
         raise RuntimeError("rate limited")
 
-    monkeypatch.setattr(catalog_mod, "_discover_pairs", fail_discovery)
+    _patch_discovery_used_by_catalog(monkeypatch, fail_discovery)
 
     async def scenario():
         catalog = catalog_mod.BackgroundPairCatalog(refresh_s=30.0)
@@ -51,7 +65,7 @@ def test_success_resets_failure_backoff(monkeypatch):
             raise RuntimeError("rate limited")
         return []
 
-    monkeypatch.setattr(catalog_mod, "_discover_pairs", fail_then_succeed)
+    _patch_discovery_used_by_catalog(monkeypatch, fail_then_succeed)
 
     async def scenario():
         catalog = catalog_mod.BackgroundPairCatalog(refresh_s=30.0)
