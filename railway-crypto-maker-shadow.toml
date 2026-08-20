@@ -1,4 +1,4 @@
 # Isolated read-only maker-fill simulation. No order transport or live arming.
 [deploy]
-startCommand = "python -m src.gemini_kalshi_maker_shadow --assets BTC ETH SOL XRP --targets 0.01 0.02 0.03 0.05 --max-book-skew-ms 50 --max-hedge-age-ms 100"
+startCommand = "python -m src.gemini_kalshi_maker_shadow_service --assets BTC ETH SOL XRP --targets 0.01 0.02 0.03 0.05 --max-book-skew-ms 50 --max-hedge-age-ms 100"
 restartPolicyType = "ALWAYS"
