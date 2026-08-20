@@ -1,0 +1,7 @@
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "python -m src.kp_unemployment_live_probe"
+preDeployCommand = ["python -m pytest -q tests/test_sports_kp_execution.py tests/test_sports_kp_live_coordinator.py tests/test_sports_kp_venue_hardening.py tests/test_kp_unemployment_live_probe.py"]
+restartPolicyType = "NEVER"
