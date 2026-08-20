@@ -29,6 +29,7 @@ BATTER_FAMILIES = frozenset(
         "baseball_player_hits",
         "baseball_player_hits_runs_rbis",
         "baseball_player_total_bases",
+        "baseball_player_home_runs",
     }
 )
 PITCHER_FAMILIES = frozenset({"baseball_player_strikeouts"})
