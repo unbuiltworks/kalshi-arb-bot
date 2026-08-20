@@ -9,13 +9,14 @@ market-specific threshold semantics must all be explicitly audited.
 A boolean assertion is not sufficient audit evidence. Every lifecycle-equivalence
 claim that is used to reach FULL_RULES_AUDITED_SHADOW must carry official HTTPS
 venue-specific source references plus SHA-256 content fingerprints for the exact
-rule evidence that was reviewed. This prevents a mutable generic URL plus a bare
-boolean from being treated as a durable rule audit.
+rule evidence that was reviewed. Evidence must also be explicitly bound to the
+exact Gemini MLB contract scope and exact Kalshi MLB total/spread series under
+audit; generic venue documentation cannot silently certify an unrelated family.
 
 The known Gemini Market Outcome Review fallback is an explicit part of the audit:
 a full shadow audit must prove that fact from an official Gemini source and exact
 fingerprint and must separately prove the claimed Kalshi-equivalent exception
-handling with bilateral official provenance and fingerprints.
+handling with bilateral official provenance, fingerprints, and scope binding.
 
 It never authorizes live execution.
 """
@@ -87,6 +88,17 @@ def _official_https_source(value: Any, venue: str) -> bool:
     return host in _OFFICIAL_SOURCE_HOSTS.get(venue, ())
 
 
+def _valid_scope_id(value: Any, venue: str) -> bool:
+    if not _nonempty_text(value):
+        return False
+    text = value.strip().upper()
+    if venue == "gemini":
+        return text.startswith(("GEMI-MLB-", "MLB-")) and ("-T-" in text or "-S-" in text)
+    if venue == "kalshi":
+        return text.startswith(("KXMLBTOTAL", "KXMLBSPREAD"))
+    return False
+
+
 def _field_mapping(evidence: Mapping[str, Any], container: str, field: str) -> Mapping[str, Any] | None:
     values = evidence.get(container)
     if not isinstance(values, Mapping):
@@ -117,6 +129,28 @@ def _has_bilateral_fingerprint(evidence: Mapping[str, Any], field: str) -> bool:
     )
 
 
+def _scope_id(evidence: Mapping[str, Any], venue: str) -> str | None:
+    value = evidence.get(f"{venue}_rule_scope_id")
+    return value.strip() if _valid_scope_id(value, venue) else None
+
+
+def _has_venue_scope_binding(evidence: Mapping[str, Any], field: str, venue: str) -> bool:
+    expected = _scope_id(evidence, venue)
+    if expected is None:
+        return False
+    field_scopes = _field_mapping(evidence, "evidence_scopes", field)
+    if field_scopes is None:
+        return False
+    actual = field_scopes.get(venue)
+    return _nonempty_text(actual) and actual.strip().upper() == expected.upper()
+
+
+def _has_bilateral_scope_binding(evidence: Mapping[str, Any], field: str) -> bool:
+    return _has_venue_scope_binding(evidence, field, "gemini") and _has_venue_scope_binding(
+        evidence, field, "kalshi"
+    )
+
+
 @dataclass(frozen=True)
 class RuleAuditResult:
     status: str
@@ -130,9 +164,9 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
     """Classify exact Gemini/Kalshi MLB total/spread rule evidence.
 
     A complete shadow audit requires literal-true semantic checks, official HTTPS
-    provenance, and immutable SHA-256 fingerprints for the exact source material
-    reviewed. The fingerprint is evidence bookkeeping only; it never promotes a
-    market to live execution.
+    provenance, immutable SHA-256 fingerprints, and exact venue-scope binding for
+    the source material reviewed. These are evidence-bookkeeping requirements only;
+    they never promote a market to live execution.
     """
     missing = [field for field in _REQUIRED_BOOL_FIELDS if not _literal_true(evidence.get(field))]
     unsourced = [
@@ -147,14 +181,27 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
         and _has_bilateral_source(evidence, field)
         and not _has_bilateral_fingerprint(evidence, field)
     ]
+    unscoped = [
+        field
+        for field in _REQUIRED_BOOL_FIELDS
+        if _literal_true(evidence.get(field))
+        and _has_bilateral_source(evidence, field)
+        and _has_bilateral_fingerprint(evidence, field)
+        and not _has_bilateral_scope_binding(evidence, field)
+    ]
 
     gemini_review = _literal_true(evidence.get("gemini_market_outcome_review_fallback"))
     kalshi_review_equivalent = _literal_true(evidence.get("kalshi_market_outcome_review_equivalent"))
 
     blockers: list[str] = []
+    if _scope_id(evidence, "gemini") is None:
+        blockers.append("RULE_AUDIT_MISSING_SCOPE_ID:gemini")
+    if _scope_id(evidence, "kalshi") is None:
+        blockers.append("RULE_AUDIT_MISSING_SCOPE_ID:kalshi")
     blockers.extend(f"RULE_AUDIT_MISSING:{field}" for field in missing)
     blockers.extend(f"RULE_AUDIT_MISSING_SOURCE:{field}" for field in unsourced)
     blockers.extend(f"RULE_AUDIT_MISSING_FINGERPRINT:{field}" for field in unfingerprinted)
+    blockers.extend(f"RULE_AUDIT_SCOPE_MISMATCH:{field}" for field in unscoped)
 
     if not gemini_review:
         blockers.append("RULE_AUDIT_MISSING:gemini_market_outcome_review_fallback")
@@ -164,6 +211,10 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
         evidence, "gemini_market_outcome_review_fallback", "gemini"
     ):
         blockers.append("RULE_AUDIT_MISSING_FINGERPRINT:gemini_market_outcome_review_fallback")
+    elif not _has_venue_scope_binding(
+        evidence, "gemini_market_outcome_review_fallback", "gemini"
+    ):
+        blockers.append("RULE_AUDIT_SCOPE_MISMATCH:gemini_market_outcome_review_fallback")
 
     if not kalshi_review_equivalent:
         blockers.append("ASYMMETRIC_EXCEPTION_REVIEW_FALLBACK")
@@ -179,6 +230,8 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
         blockers.append("RULE_AUDIT_MISSING_SOURCE:kalshi_market_outcome_review_equivalent")
     elif not _has_bilateral_fingerprint(evidence, "kalshi_market_outcome_review_equivalent"):
         blockers.append("RULE_AUDIT_MISSING_FINGERPRINT:kalshi_market_outcome_review_equivalent")
+    elif not _has_bilateral_scope_binding(evidence, "kalshi_market_outcome_review_equivalent"):
+        blockers.append("RULE_AUDIT_SCOPE_MISMATCH:kalshi_market_outcome_review_equivalent")
 
     if blockers:
         return RuleAuditResult(
@@ -224,8 +277,8 @@ def current_public_mlb_total_spread_evidence() -> dict[str, Any]:
                 "gemini": "https://www.gemini.com/legal/prediction-market-rules",
             },
         },
-        # Deliberately no evidence_fingerprints: current public facts have not yet
-        # been captured as an immutable complete bilateral lifecycle audit.
+        # Deliberately no exact scope IDs, scope bindings, or fingerprints: the
+        # current public facts are not a complete exact-family lifecycle audit.
         "read_only": True,
         "order_entry": False,
     }
