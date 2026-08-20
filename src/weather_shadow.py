@@ -16,6 +16,14 @@ from datetime import datetime, timezone
 from typing import Any, Iterable
 
 from src.fee_calc import taker_fee_cents
+from src.weather_forecast import (
+    CITY_CONFIG,
+    bracket_probability,
+    event_date,
+    fetch_model_highs,
+    forecast_distribution,
+    parse_bracket,
+)
 
 KALSHI_PUBLIC_BASE = "https://api.elections.kalshi.com/trade-api/v2"
 
@@ -32,6 +40,7 @@ WEATHER_SERIES = {
 SETTLEMENT_STATUS = "SETTLEMENT_AUDIT_REQUIRED"
 TRADE_CLASSIFICATION = "SHADOW"
 CATEGORY = "weather"
+MODEL_STATUS = "MODEL_RESEARCH_ONLY"
 
 
 def _to_cents(value: Any) -> int | None:
@@ -44,8 +53,6 @@ def _to_cents(value: Any) -> int | None:
         except ValueError:
             return None
     if isinstance(value, (int, float)):
-        # Legacy yes_ask/no_ask values are cents. Decimal numeric values <=1 are
-        # treated as dollars only when non-integral.
         if isinstance(value, float) and 0 <= value <= 1 and not value.is_integer():
             return int(round(value * 100))
         return int(round(value))
@@ -65,8 +72,10 @@ class WeatherShadowRow:
     category: str
     classification: str
     settlement_status: str
+    model_status: str
     series_ticker: str
     city: str
+    station_hint: str | None
     event_ticker: str | None
     market_ticker: str
     title: str | None
@@ -82,15 +91,31 @@ class WeatherShadowRow:
     no_depth_hint: float | None
     q1_yes_taker_fee_cents: int | None
     q1_no_taker_fee_cents: int | None
+    forecast_target_date: str | None
+    forecast_models: dict[str, float] | None
+    forecast_mean_f: float | None
+    forecast_std_f: float | None
+    model_yes_probability: float | None
+    model_fair_yes_cents: int | None
+    q1_yes_model_ev_cents: float | None
+    q1_no_model_ev_cents: float | None
     source: str = "kalshi_public_api"
+    forecast_source: str = "open_meteo_public"
 
 
-def build_shadow_row(series_ticker: str, market: dict[str, Any], observed_at: str | None = None) -> WeatherShadowRow:
+def build_shadow_row(
+    series_ticker: str,
+    market: dict[str, Any],
+    observed_at: str | None = None,
+    forecast_context: dict[str, Any] | None = None,
+) -> WeatherShadowRow:
     ticker = str(market.get("ticker") or "")
     yes_bid = _to_cents(_first(market, "yes_bid_dollars", "yes_bid"))
     yes_ask = _to_cents(_first(market, "yes_ask_dollars", "yes_ask"))
     no_bid = _to_cents(_first(market, "no_bid_dollars", "no_bid"))
     no_ask = _to_cents(_first(market, "no_ask_dollars", "no_ask"))
+    yes_fee = taker_fee_cents(1, yes_ask, ticker) if yes_ask is not None else None
+    no_fee = taker_fee_cents(1, no_ask, ticker) if no_ask is not None else None
 
     def num(*keys: str) -> float | None:
         raw = _first(market, *keys)
@@ -101,13 +126,35 @@ def build_shadow_row(series_ticker: str, market: dict[str, Any], observed_at: st
         except (TypeError, ValueError):
             return None
 
+    target = event_date(market.get("event_ticker"))
+    bracket = parse_bracket(market.get("title"))
+    model_highs = None
+    mean_f = std_f = model_prob = None
+    if forecast_context:
+        model_highs = forecast_context.get("models") or None
+        mean_f = forecast_context.get("mean_f")
+        std_f = forecast_context.get("std_f")
+        if mean_f is not None and std_f is not None and bracket is not None:
+            model_prob = bracket_probability(float(mean_f), float(std_f), bracket)
+
+    fair_cents = int(round(model_prob * 100)) if model_prob is not None else None
+    yes_ev = None
+    no_ev = None
+    if model_prob is not None and yes_ask is not None and yes_fee is not None:
+        yes_ev = round(model_prob * 100.0 - yes_ask - yes_fee, 2)
+    if model_prob is not None and no_ask is not None and no_fee is not None:
+        no_ev = round((1.0 - model_prob) * 100.0 - no_ask - no_fee, 2)
+
+    cfg = CITY_CONFIG.get(series_ticker, {})
     return WeatherShadowRow(
         observed_at=observed_at or datetime.now(timezone.utc).isoformat(),
         category=CATEGORY,
         classification=TRADE_CLASSIFICATION,
         settlement_status=SETTLEMENT_STATUS,
+        model_status=MODEL_STATUS,
         series_ticker=series_ticker,
         city=WEATHER_SERIES.get(series_ticker, series_ticker),
+        station_hint=cfg.get("station"),
         event_ticker=market.get("event_ticker"),
         market_ticker=ticker,
         title=market.get("title"),
@@ -119,12 +166,18 @@ def build_shadow_row(series_ticker: str, market: dict[str, Any], observed_at: st
         no_ask_cents=no_ask,
         volume=num("volume_fp", "volume"),
         open_interest=num("open_interest_fp", "open_interest"),
-        # Public market payloads do not expose full book depth. These are kept
-        # as nullable hints until a dedicated read-only orderbook fetch is added.
         yes_depth_hint=num("yes_ask_size_fp", "yes_ask_size"),
         no_depth_hint=num("no_ask_size_fp", "no_ask_size"),
-        q1_yes_taker_fee_cents=taker_fee_cents(1, yes_ask, ticker) if yes_ask is not None else None,
-        q1_no_taker_fee_cents=taker_fee_cents(1, no_ask, ticker) if no_ask is not None else None,
+        q1_yes_taker_fee_cents=yes_fee,
+        q1_no_taker_fee_cents=no_fee,
+        forecast_target_date=target.isoformat() if target else None,
+        forecast_models=model_highs,
+        forecast_mean_f=round(float(mean_f), 2) if mean_f is not None else None,
+        forecast_std_f=round(float(std_f), 2) if std_f is not None else None,
+        model_yes_probability=round(float(model_prob), 6) if model_prob is not None else None,
+        model_fair_yes_cents=fair_cents,
+        q1_yes_model_ev_cents=yes_ev,
+        q1_no_model_ev_cents=no_ev,
     )
 
 
@@ -132,7 +185,7 @@ def fetch_series_markets(series_ticker: str, status: str = "open", limit: int = 
     params = urllib.parse.urlencode({"series_ticker": series_ticker, "status": status, "limit": limit})
     url = f"{KALSHI_PUBLIC_BASE}/markets?{params}"
     req = urllib.request.Request(url, headers={"User-Agent": "kalshi-arb-weather-shadow/1.0"})
-    with urllib.request.urlopen(req, timeout=10) as response:  # no auth, read-only GET
+    with urllib.request.urlopen(req, timeout=10) as response:
         payload = json.load(response)
     markets = payload.get("markets", [])
     return markets if isinstance(markets, list) else []
@@ -141,9 +194,24 @@ def fetch_series_markets(series_ticker: str, status: str = "open", limit: int = 
 def scan_weather(series: Iterable[str] = WEATHER_SERIES) -> list[WeatherShadowRow]:
     observed_at = datetime.now(timezone.utc).isoformat()
     rows: list[WeatherShadowRow] = []
+    forecast_cache: dict[tuple[str, str], dict[str, Any]] = {}
     for series_ticker in series:
-        for market in fetch_series_markets(series_ticker):
-            rows.append(build_shadow_row(series_ticker, market, observed_at=observed_at))
+        markets = fetch_series_markets(series_ticker)
+        for market in markets:
+            target = event_date(market.get("event_ticker"))
+            context = None
+            if target is not None and series_ticker in CITY_CONFIG:
+                cache_key = (series_ticker, target.isoformat())
+                if cache_key not in forecast_cache:
+                    models = fetch_model_highs(series_ticker, target)
+                    dist = forecast_distribution(models)
+                    forecast_cache[cache_key] = {
+                        "models": models,
+                        "mean_f": dist[0] if dist else None,
+                        "std_f": dist[1] if dist else None,
+                    }
+                context = forecast_cache[cache_key]
+            rows.append(build_shadow_row(series_ticker, market, observed_at=observed_at, forecast_context=context))
     return rows
 
 
