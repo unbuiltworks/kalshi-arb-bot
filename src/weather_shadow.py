@@ -22,13 +22,12 @@ from src.weather_forecast import (
     event_date,
     fetch_model_highs,
     forecast_distribution,
+    model_eligibility,
     parse_bracket,
 )
 
 KALSHI_PUBLIC_BASE = "https://api.elections.kalshi.com/trade-api/v2"
 
-# Legacy weather-bot knowledge, treated only as discovery hints. Each series still
-# requires independent settlement certification before any live trade may occur.
 WEATHER_SERIES = {
     "KXHIGHNY": "New York City",
     "KXHIGHCHI": "Chicago",
@@ -44,7 +43,6 @@ MODEL_STATUS = "MODEL_RESEARCH_ONLY"
 
 
 def _to_cents(value: Any) -> int | None:
-    """Normalize current dollar-string or legacy integer cent fields."""
     if value is None or value == "":
         return None
     if isinstance(value, str):
@@ -73,6 +71,7 @@ class WeatherShadowRow:
     classification: str
     settlement_status: str
     model_status: str
+    model_eligibility: str
     series_ticker: str
     city: str
     station_hint: str | None
@@ -103,6 +102,13 @@ class WeatherShadowRow:
     forecast_source: str = "open_meteo_public"
 
 
+def _parse_observed_at(value: str | None) -> datetime:
+    if not value:
+        return datetime.now(timezone.utc)
+    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+
+
 def build_shadow_row(
     series_ticker: str,
     market: dict[str, Any],
@@ -126,7 +132,9 @@ def build_shadow_row(
         except (TypeError, ValueError):
             return None
 
+    observed_dt = _parse_observed_at(observed_at)
     target = event_date(market.get("event_ticker"))
+    eligibility = model_eligibility(series_ticker, target, observed_dt) if series_ticker in CITY_CONFIG else "NO_CITY_CONFIG"
     bracket = parse_bracket(market.get("title"))
     model_highs = None
     mean_f = std_f = model_prob = None
@@ -138,20 +146,23 @@ def build_shadow_row(
             model_prob = bracket_probability(float(mean_f), float(std_f), bracket)
 
     fair_cents = int(round(model_prob * 100)) if model_prob is not None else None
-    yes_ev = None
-    no_ev = None
-    if model_prob is not None and yes_ask is not None and yes_fee is not None:
-        yes_ev = round(model_prob * 100.0 - yes_ask - yes_fee, 2)
-    if model_prob is not None and no_ask is not None and no_fee is not None:
-        no_ev = round((1.0 - model_prob) * 100.0 - no_ask - no_fee, 2)
+    yes_ev = no_ev = None
+    # Forecast-only EV is deliberately suppressed once the local event day begins.
+    # Intraday pricing must condition on the observed running high first.
+    if eligibility == "FORECAST_ONLY_RESEARCH":
+        if model_prob is not None and yes_ask is not None and yes_fee is not None:
+            yes_ev = round(model_prob * 100.0 - yes_ask - yes_fee, 2)
+        if model_prob is not None and no_ask is not None and no_fee is not None:
+            no_ev = round((1.0 - model_prob) * 100.0 - no_ask - no_fee, 2)
 
     cfg = CITY_CONFIG.get(series_ticker, {})
     return WeatherShadowRow(
-        observed_at=observed_at or datetime.now(timezone.utc).isoformat(),
+        observed_at=observed_dt.isoformat(),
         category=CATEGORY,
         classification=TRADE_CLASSIFICATION,
         settlement_status=SETTLEMENT_STATUS,
         model_status=MODEL_STATUS,
+        model_eligibility=eligibility,
         series_ticker=series_ticker,
         city=WEATHER_SERIES.get(series_ticker, series_ticker),
         station_hint=cfg.get("station"),
