@@ -30,17 +30,40 @@ def test_venue_once_arm_does_not_require_persistent_volume(monkeypatch, tmp_path
         venue.claim_before_order("venue-test")
 
 
+def test_improve_trigger_submits_one_tick_safer(monkeypatch):
+    old_policy = base.POLICY
+    try:
+        base.POLICY = "IMPROVE_1T"
+        assert venue.outbound_maker_price(D("0.61")) == D("0.60")
+    finally:
+        base.POLICY = old_policy
+
+
+def test_join_trigger_keeps_same_price(monkeypatch):
+    old_policy = base.POLICY
+    try:
+        base.POLICY = "JOIN"
+        assert venue.outbound_maker_price(D("0.61")) == D("0.61")
+    finally:
+        base.POLICY = old_policy
+
+
 def test_maker_payload_has_short_exchange_side_expiration(monkeypatch):
-    before = int(time.time())
-    payload = venue.maker_payload_with_expiry(
-        ticker="KXXRP15M-TEST",
-        direction="KALSHI_YES_GEMINI_NO",
-        maker_price=D("0.61"),
-        client_order_id="makerprobe-venue-test-k",
-    )
-    assert payload["post_only"] is True
-    assert payload["time_in_force"] == "good_till_canceled"
-    assert before + venue.ORDER_TTL_S <= payload["expiration_time"] <= int(time.time()) + venue.ORDER_TTL_S
+    old_policy = base.POLICY
+    try:
+        base.POLICY = "JOIN"
+        before = int(time.time())
+        payload = venue.maker_payload_with_expiry(
+            ticker="KXXRP15M-TEST",
+            direction="KALSHI_YES_GEMINI_NO",
+            maker_price=D("0.61"),
+            client_order_id="makerprobe-venue-test-k",
+        )
+        assert payload["post_only"] is True
+        assert payload["time_in_force"] == "good_till_canceled"
+        assert before + venue.ORDER_TTL_S <= payload["expiration_time"] <= int(time.time()) + venue.ORDER_TTL_S
+    finally:
+        base.POLICY = old_policy
 
 
 def test_install_replaces_only_runtime_hooks(monkeypatch):
