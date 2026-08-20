@@ -31,7 +31,7 @@ async def gemini_catalog(http: httpx.AsyncClient) -> dict[str, Any]:
     body, _ = await _get_json(
         http,
         GEMINI,
-        params={"status": "active", "sport": "football", "limit": 500, "offset": 0},
+        params={"status": "active", "sport": "american_football", "limit": 500, "offset": 0},
     )
     events = body.get("data") or body.get("events") or [] if isinstance(body, Mapping) else []
     rows = [x for x in events if isinstance(x, Mapping)]
@@ -42,11 +42,12 @@ async def gemini_catalog(http: httpx.AsyncClient) -> dict[str, Any]:
     for event in rows:
         ticker = str(event.get("ticker") or event.get("eventTicker") or event.get("event_ticker") or "")
         sports = event.get("sportsMarket") if isinstance(event.get("sportsMarket"), Mapping) else {}
-        league = str(sports.get("league") or sports.get("leagueCode") or "")
-        if "NFL" not in ticker.upper() and league.upper() != "NFL":
+        subcategory = event.get("subcategory") if isinstance(event.get("subcategory"), Mapping) else {}
+        sub_slug = str(subcategory.get("slug") or "")
+        if "NFL" not in ticker.upper() and "nfl" not in sub_slug.lower():
             continue
         nfl.append(event)
-        market_type = str(sports.get("marketType") or sports.get("type") or event.get("marketType") or "UNKNOWN")
+        market_type = str(sports.get("type") or event.get("marketType") or "UNKNOWN")
         market_types[market_type] += 1
         contracts = [x for x in event.get("contracts") or [] if isinstance(x, Mapping)]
         contract_count += len(contracts)
@@ -54,18 +55,19 @@ async def gemini_catalog(http: httpx.AsyncClient) -> dict[str, Any]:
             samples.append({
                 "event_ticker": ticker,
                 "title": str(event.get("title") or event.get("name") or "")[:120],
+                "subcategory_slug": sub_slug,
                 "sports_market": dict(sports),
                 "contracts": [
                     {
                         "instrumentSymbol": str(c.get("instrumentSymbol") or ""),
-                        "eventOutcome": str(c.get("eventOutcome") or c.get("outcome") or ""),
-                        "label": str(c.get("label") or c.get("name") or c.get("title") or "")[:80],
+                        "ticker": str(c.get("ticker") or ""),
+                        "label": str(c.get("label") or c.get("abbreviatedName") or c.get("name") or c.get("title") or "")[:80],
                     }
                     for c in contracts[:6]
                 ],
             })
     return {
-        "raw_football_events": len(rows),
+        "raw_american_football_events": len(rows),
         "nfl_events": len(nfl),
         "nfl_contracts": contract_count,
         "market_types": dict(market_types),
