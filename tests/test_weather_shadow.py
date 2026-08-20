@@ -5,14 +5,16 @@ from src.weather_shadow import CATEGORY, MODEL_STATUS, SETTLEMENT_STATUS, TRADE_
 
 
 def test_current_dollar_fields_are_normalized_to_cents():
-    market={"ticker":"KXHIGHNY-26AUG20-B84.5","event_ticker":"KXHIGHNY-26AUG20","title":"Will the maximum temperature be 84-85° on Aug 20, 2026?","yes_bid_dollars":"0.41","yes_ask_dollars":"0.44","no_bid_dollars":"0.55","no_ask_dollars":"0.58","volume_fp":"123.0","open_interest_fp":"45.0"}
+    market={"ticker":"KXHIGHNY-26AUG20-B84.5","event_ticker":"KXHIGHNY-26AUG20","title":"Will the maximum temperature be 84-85° on Aug 20, 2026?","yes_bid_dollars":"0.41","yes_ask_dollars":"0.44","no_bid_dollars":"0.55","no_ask_dollars":"0.58","volume_fp":"123.0","open_interest_fp":"45.0","rules_primary":"Primary source: NWS climate report at KNYC","rules_secondary":"Corrections before expiration apply."}
     row=build_shadow_row("KXHIGHNY",market,observed_at="2026-08-20T14:00:00+00:00")
     assert (row.yes_bid_cents,row.yes_ask_cents,row.no_bid_cents,row.no_ask_cents)==(41,44,55,58)
     assert row.volume==123.0 and row.open_interest==45.0
     assert row.category==CATEGORY=="weather" and row.classification==TRADE_CLASSIFICATION=="SHADOW"
     assert row.settlement_status==SETTLEMENT_STATUS=="SETTLEMENT_AUDIT_REQUIRED" and row.model_status==MODEL_STATUS=="MODEL_RESEARCH_ONLY"
     assert row.station_hint=="KNYC" and row.forecast_target_date=="2026-08-20"
-    assert row.model_eligibility=="INTRADAY_OBSERVATION_CONDITIONED"
+    assert row.model_eligibility=="INTRADAY_OBSERVATIONS_REQUIRED"
+    assert row.rules_primary=="Primary source: NWS climate report at KNYC"
+    assert row.rules_secondary=="Corrections before expiration apply."
 
 
 def test_legacy_integer_cent_fields_remain_supported_for_read_only_replay():
@@ -48,9 +50,10 @@ def test_model_eligibility_marks_same_day_as_observation_conditioned():
 
 def test_future_forecast_context_produces_after_fee_shadow_ev():
     market={"ticker":"KXHIGHCHI-26AUG21-B80.5","event_ticker":"KXHIGHCHI-26AUG21","title":"Will the maximum temperature be 80-81° on Aug 21, 2026?","yes_ask":30,"no_ask":72}
-    context={"models":{"gfs":80.4,"ecmwf":80.8,"icon":80.6},"mean_f":80.6,"std_f":2.2}
+    context={"models":{"gfs":80.4,"ecmwf":80.8,"icon":80.6},"mean_f":80.6,"std_f":2.2,"data_quality_status":"FRESH"}
     row=build_shadow_row("KXHIGHCHI",market,observed_at="2026-08-20T18:00:00+00:00",forecast_context=context)
     assert row.model_eligibility=="FORECAST_ONLY_RESEARCH" and row.q1_yes_model_ev_cents is not None and row.q1_no_model_ev_cents is not None
+    assert row.data_quality_status=="FRESH"
 
 
 def test_running_high_eliminates_impossible_lower_bracket():
@@ -60,10 +63,18 @@ def test_running_high_eliminates_impossible_lower_bracket():
 
 def test_intraday_context_conditions_probability_and_emits_shadow_ev():
     market={"ticker":"KXHIGHCHI-26AUG20-B79.5","event_ticker":"KXHIGHCHI-26AUG20","title":"Will the maximum temperature be 79-80° on Aug 20, 2026?","yes_ask":80,"no_ask":25}
-    context={"models":{"gfs":79.6,"ecmwf":75.1,"icon":80.1},"mean_f":78.27,"std_f":3.09,"observed_running_high_f":82.2}
+    context={"models":{"gfs":79.6,"ecmwf":75.1,"icon":80.1},"mean_f":78.27,"std_f":3.09,"observed_running_high_f":82.2,"data_quality_status":"FRESH"}
     row=build_shadow_row("KXHIGHCHI",market,observed_at="2026-08-20T18:00:00+00:00",forecast_context=context)
     assert row.model_eligibility=="INTRADAY_OBSERVATION_CONDITIONED" and row.observed_running_high_f==82.2
     assert row.model_yes_probability==0.0 and row.q1_yes_model_ev_cents is not None and row.q1_no_model_ev_cents is not None
+
+
+def test_intraday_without_observation_never_emits_ev():
+    market={"ticker":"KXHIGHCHI-26AUG20-B79.5","event_ticker":"KXHIGHCHI-26AUG20","title":"Will the maximum temperature be 79-80° on Aug 20, 2026?","yes_ask":80,"no_ask":25}
+    context={"models":{"gfs":79.6,"ecmwf":75.1},"mean_f":77.35,"std_f":3.0,"observed_running_high_f":None,"data_quality_status":"UPSTREAM_MISSING"}
+    row=build_shadow_row("KXHIGHCHI",market,observed_at="2026-08-20T18:00:00+00:00",forecast_context=context)
+    assert row.model_eligibility=="INTRADAY_OBSERVATIONS_REQUIRED"
+    assert row.q1_yes_model_ev_cents is None and row.q1_no_model_ev_cents is None
 
 
 def test_module_has_no_live_trading_surface():
