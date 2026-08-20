@@ -38,6 +38,7 @@ def recompute_scaled_payload_locked_profit(
     *,
     kalshi_fee_multiplier: Decimal,
 ) -> D:
+    """Recompute total complementary P&L for the exact q1-q5 outbound payloads."""
     if str(gemini_payload.get("side")) != "BUY":
         raise ValueError("Gemini scale leg must BUY an outcome")
     if str(gemini_payload.get("type")) != "LIMIT":
@@ -46,6 +47,7 @@ def recompute_scaled_payload_locked_profit(
         raise ValueError("Gemini scale leg must be FOK")
     if str(kalshi_payload.get("time_in_force")) != "fill_or_kill":
         raise ValueError("Kalshi scale leg must be fill_or_kill")
+
     q = _quantity_from_payloads(gemini_payload, kalshi_payload)
     gemini_price = D(str(gemini_payload.get("price")))
     kalshi_yes_price = D(str(kalshi_payload.get("price")))
@@ -53,6 +55,7 @@ def recompute_scaled_payload_locked_profit(
         raise ValueError("Gemini payload price outside prediction range")
     if not (MIN_PRICE <= kalshi_yes_price <= MAX_PRICE):
         raise ValueError("Kalshi payload price outside prediction range")
+
     outcome = str(gemini_payload.get("eventOutcome") or "")
     kalshi_side = str(kalshi_payload.get("side") or "")
     if outcome == "YES" and kalshi_side == "ask":
@@ -61,38 +64,64 @@ def recompute_scaled_payload_locked_profit(
         kalshi_contract_cost = kalshi_yes_price
     else:
         raise ValueError("scaled payload legs are not complementary outcomes")
+
     gemini_fee = gemini_predictions_taker_fee(gemini_price, q)
-    kalshi_fee = kalshi_quadratic_taker_fee(kalshi_yes_price, q, fee_multiplier=D(kalshi_fee_multiplier))
+    kalshi_fee = kalshi_quadratic_taker_fee(
+        kalshi_yes_price,
+        q,
+        fee_multiplier=D(kalshi_fee_multiplier),
+    )
     return q - q * gemini_price - q * kalshi_contract_cost - gemini_fee - kalshi_fee
 
 
 def validate_scaled_probe_payloads(
     gemini_payload: dict[str, Any],
     kalshi_payload: dict[str, Any],
-    *, modeled_locked_profit: Decimal, kalshi_fee_multiplier: Decimal,
-    quote_skew_ms: int, required_quantity: Decimal | None = None,
+    *,
+    modeled_locked_profit: Decimal,
+    kalshi_fee_multiplier: Decimal,
+    quote_skew_ms: int,
+    required_quantity: Decimal | None = None,
     min_profit_per_contract: Decimal = DEFAULT_MIN_PROFIT_PER_CONTRACT,
 ) -> D:
+    """Fail closed unless exact scaled payloads preserve the per-contract floor."""
     q = _quantity_from_payloads(gemini_payload, kalshi_payload)
     if required_quantity is not None and q != D(required_quantity):
         raise ValueError(f"scaled canary requires quantity={D(required_quantity)} got={q}")
     if int(quote_skew_ms) > MAX_QUOTE_SKEW_MS:
         raise ValueError("quote skew exceeds 50ms scale-canary ceiling")
-    recomputed = recompute_scaled_payload_locked_profit(gemini_payload, kalshi_payload, kalshi_fee_multiplier=D(kalshi_fee_multiplier))
+
+    recomputed = recompute_scaled_payload_locked_profit(
+        gemini_payload,
+        kalshi_payload,
+        kalshi_fee_multiplier=D(kalshi_fee_multiplier),
+    )
     if abs(recomputed - D(modeled_locked_profit)) > MODEL_RECOMPUTE_TOLERANCE:
-        raise ValueError(f"scaled outbound economics do not match modeled profit modeled={modeled_locked_profit} recomputed={recomputed}")
+        raise ValueError(
+            f"scaled outbound economics do not match modeled profit modeled={modeled_locked_profit} recomputed={recomputed}"
+        )
     floor = D(min_profit_per_contract)
     if floor <= 0:
         raise ValueError("minimum profit per contract must be positive")
     if recomputed / q < floor:
-        raise ValueError(f"scaled after-fee profit per contract below floor q={q} total={recomputed} floor_per_contract={floor}")
+        raise ValueError(
+            f"scaled after-fee profit per contract below floor q={q} total={recomputed} floor_per_contract={floor}"
+        )
     return recomputed
 
 
-def scale_payload_quantities(gemini_payload: dict[str, Any], kalshi_payload: dict[str, Any], *, quantity: Decimal) -> tuple[dict[str, Any], dict[str, Any]]:
+def scale_payload_quantities(
+    gemini_payload: dict[str, Any],
+    kalshi_payload: dict[str, Any],
+    *,
+    quantity: Decimal,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Clone an already-priced complementary pair and change only q1-q5 quantity."""
     q = D(quantity)
     if q != q.to_integral_value() or not (D("1") <= q <= MAX_SCALE_QUANTITY):
         raise ValueError(f"quantity must be an integer from 1 to {MAX_SCALE_QUANTITY}")
-    g = deepcopy(gemini_payload); k = deepcopy(kalshi_payload)
-    g["quantity"] = str(q.to_integral_value()); k["count"] = str(q.quantize(D("0.00")))
+    g = deepcopy(gemini_payload)
+    k = deepcopy(kalshi_payload)
+    g["quantity"] = str(q.to_integral_value())
+    k["count"] = str(q.quantize(D("0.00")))
     return g, k
