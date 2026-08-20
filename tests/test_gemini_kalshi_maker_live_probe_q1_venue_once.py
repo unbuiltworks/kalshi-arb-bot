@@ -1,5 +1,7 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 import time
 
 import pytest
@@ -45,12 +47,39 @@ def test_install_replaces_only_runtime_hooks(monkeypatch):
     old_arm = safe._maybe_create_arm
     old_claim = safe._claim_before_order
     old_payload = safe.kalshi_maker_payload
+    old_wait = base._wait_candidate
     try:
         venue.install()
         assert safe._maybe_create_arm is venue.maybe_create_arm
         assert safe._claim_before_order is venue.claim_before_order
         assert safe.kalshi_maker_payload is venue.maker_payload_with_expiry
+        assert base._wait_candidate is venue.wait_candidate_safe
     finally:
         safe._maybe_create_arm = old_arm
         safe._claim_before_order = old_claim
         safe.kalshi_maker_payload = old_payload
+        base._wait_candidate = old_wait
+
+
+def test_candidate_wait_timeout_returns_cleanly(monkeypatch):
+    async def quiet_stream(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(base, "_gemini_stream", quiet_stream)
+    monkeypatch.setattr(base, "_kalshi_stream", quiet_stream)
+    pair = SimpleNamespace(gemini_symbol="g", kalshi_ticker="k")
+
+    async def run_test():
+        candidate, g, k, queue, tasks = await venue.wait_candidate_safe(
+            pair=pair, fee_meta=object(), timeout_s=0.02
+        )
+        try:
+            assert candidate is None
+            assert g is None
+            assert k is None
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    asyncio.run(run_test())
