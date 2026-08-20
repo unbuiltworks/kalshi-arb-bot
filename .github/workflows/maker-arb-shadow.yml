@@ -4,7 +4,10 @@ on:
   pull_request:
     paths:
       - 'src/gemini_kalshi_maker_shadow.py'
-      - 'tests/test_gemini_kalshi_maker_shadow.py'
+      - 'src/gemini_kalshi_maker_shadow_ledger.py'
+      - 'src/gemini_kalshi_maker_shadow_service.py'
+      - 'src/gemini_kalshi_maker_shadow_report.py'
+      - 'tests/test_gemini_kalshi_maker_shadow*.py'
       - 'railway-crypto-maker-shadow.toml'
       - '.github/workflows/maker-arb-shadow.yml'
   workflow_dispatch:
@@ -24,6 +27,6 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - name: Run maker-shadow unit tests
-        run: pytest -q tests/test_gemini_kalshi_maker_shadow.py
-      - name: Compile maker-shadow module
-        run: python -m py_compile src/gemini_kalshi_maker_shadow.py
+        run: pytest -q tests/test_gemini_kalshi_maker_shadow.py tests/test_gemini_kalshi_maker_shadow_ledger.py tests/test_gemini_kalshi_maker_shadow_report.py
+      - name: Compile maker-shadow modules
+        run: python -m py_compile src/gemini_kalshi_maker_shadow.py src/gemini_kalshi_maker_shadow_ledger.py src/gemini_kalshi_maker_shadow_service.py src/gemini_kalshi_maker_shadow_report.py
