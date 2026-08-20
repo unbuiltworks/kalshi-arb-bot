@@ -78,3 +78,30 @@ def test_campaign_rejects_expired_arm_deadline(monkeypatch):
     monkeypatch.setenv(campaign.DEADLINE_ENV, "2020-01-01T00:00:00Z")
     with pytest.raises(RuntimeError, match="already expired"):
         campaign._configure_campaign_env()
+
+
+@pytest.mark.asyncio
+async def test_boundary_ledger_wrapper_preserves_event_but_sets_distinct_cohort(monkeypatch):
+    posted = []
+
+    async def fake_post(_http, event):
+        posted.append(event)
+
+    monkeypatch.setattr(campaign, "_ORIGINAL_POST_EVENT", fake_post)
+    original = {
+        "event_id": "x",
+        "strategy": "gemini_kalshi_15m_crypto",
+        "mode": "LIVE_PROBE",
+        "status": "FILLED",
+        "metadata": {"run_id": "bp-260820-01"},
+    }
+    await campaign._post_boundary_event(object(), original)
+
+    assert original["strategy"] == "gemini_kalshi_15m_crypto"
+    assert original["mode"] == "LIVE_PROBE"
+    assert posted[0]["strategy"] == campaign.BOUNDARY_STRATEGY
+    assert posted[0]["mode"] == campaign.BOUNDARY_MODE
+    assert posted[0]["status"] == "FILLED"
+    assert posted[0]["metadata"]["run_id"] == "bp-260820-01"
+    assert posted[0]["metadata"]["boundary_probe_band"] == "5_to_lt_10_bp"
+    assert posted[0]["metadata"]["q5_graduation_evidence"] is False
