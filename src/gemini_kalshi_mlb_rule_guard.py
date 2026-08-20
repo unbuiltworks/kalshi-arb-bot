@@ -12,6 +12,11 @@ venue-specific source references for both Gemini and Kalshi. Source references
 must also resolve to the venue's official HTTPS domains; arbitrary analyst text,
 third-party summaries, and placeholder/example URLs fail closed.
 
+The known Gemini Market Outcome Review fallback is an explicit part of the audit:
+a full shadow audit must prove that fact from an official Gemini source and must
+separately prove the claimed Kalshi-equivalent exception handling with bilateral
+official provenance. Omitting those exception fields cannot silently pass.
+
 It never authorizes live execution.
 """
 from __future__ import annotations
@@ -78,13 +83,26 @@ def _official_https_source(value: Any, venue: str) -> bool:
     return host in allowed
 
 
-def _has_bilateral_source(evidence: Mapping[str, Any], field: str) -> bool:
-    """Require explicit official source references from both venues for one claim."""
+def _field_sources(evidence: Mapping[str, Any], field: str) -> Mapping[str, Any] | None:
     sources = evidence.get("evidence_sources")
     if not isinstance(sources, Mapping):
-        return False
+        return None
     field_sources = sources.get(field)
-    if not isinstance(field_sources, Mapping):
+    return field_sources if isinstance(field_sources, Mapping) else None
+
+
+def _has_venue_source(evidence: Mapping[str, Any], field: str, venue: str) -> bool:
+    """Require one exact venue fact to have an official source from that venue."""
+    field_sources = _field_sources(evidence, field)
+    if field_sources is None:
+        return False
+    return _official_https_source(field_sources.get(venue), venue)
+
+
+def _has_bilateral_source(evidence: Mapping[str, Any], field: str) -> bool:
+    """Require explicit official source references from both venues for one claim."""
+    field_sources = _field_sources(evidence, field)
+    if field_sources is None:
         return False
     return _official_https_source(field_sources.get("gemini"), "gemini") and _official_https_source(
         field_sources.get("kalshi"), "kalshi"
@@ -108,9 +126,11 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
     exceptional-result fallback on only one venue creates unresolved lifecycle
     basis even when ordinary winner/total/spread semantics match.
 
-    Every affirmative field used for a full rule audit must also have bilateral
-    source provenance under ``evidence_sources[field] = {gemini, kalshi}``, and
-    both references must be official HTTPS venue URLs.
+    Every affirmative equivalence field used for a full rule audit must have
+    bilateral official provenance. The known Gemini fallback itself must have an
+    official Gemini source, and any assertion that Kalshi's handling is equivalent
+    must have bilateral official provenance. Missing exception evidence fails
+    closed; it cannot be bypassed by satisfying only the generic lifecycle fields.
     """
     missing = [
         field
@@ -132,7 +152,16 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
     if unsourced:
         blockers.extend(f"RULE_AUDIT_MISSING_SOURCE:{field}" for field in unsourced)
 
-    if gemini_review and not kalshi_review_equivalent:
+    if not gemini_review:
+        blockers.append("RULE_AUDIT_MISSING:gemini_market_outcome_review_fallback")
+    elif not _has_venue_source(
+        evidence, "gemini_market_outcome_review_fallback", "gemini"
+    ):
+        blockers.append(
+            "RULE_AUDIT_MISSING_SOURCE:gemini_market_outcome_review_fallback"
+        )
+
+    if not kalshi_review_equivalent:
         blockers.append("ASYMMETRIC_EXCEPTION_REVIEW_FALLBACK")
         return RuleAuditResult(
             status=EXCEPTION_LIFECYCLE_UNRESOLVED_RESEARCH_ONLY,
@@ -140,6 +169,13 @@ def classify_mlb_rule_audit(evidence: Mapping[str, Any]) -> RuleAuditResult:
             fully_audited_shadow_ready=False,
             live_probe_ready=False,
             hard_blockers=tuple(blockers),
+        )
+
+    if not _has_bilateral_source(
+        evidence, "kalshi_market_outcome_review_equivalent"
+    ):
+        blockers.append(
+            "RULE_AUDIT_MISSING_SOURCE:kalshi_market_outcome_review_equivalent"
         )
 
     if blockers:
@@ -188,6 +224,9 @@ def current_public_mlb_total_spread_evidence() -> dict[str, Any]:
             "threshold_orientation_equivalent": {
                 "gemini": "https://developer.gemini.com/prediction-markets/tickers-sports",
                 "kalshi": "https://kalshi.com/markets/kxmlbspread",
+            },
+            "gemini_market_outcome_review_fallback": {
+                "gemini": "https://www.gemini.com/legal/prediction-market-rules",
             },
         },
         "read_only": True,
