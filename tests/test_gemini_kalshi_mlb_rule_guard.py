@@ -34,8 +34,8 @@ def _complete_evidence():
     }
     evidence["evidence_sources"] = {
         field: {
-            "gemini": f"https://example.test/gemini/{field}",
-            "kalshi": f"https://example.test/kalshi/{field}",
+            "gemini": f"https://developer.gemini.com/prediction-markets/{field}",
+            "kalshi": f"https://kalshi.com/markets/{field}",
         }
         for field in _REQUIRED
     }
@@ -94,10 +94,33 @@ def test_bare_booleans_without_bilateral_sources_cannot_pass():
 def test_one_sided_source_reference_fails_closed():
     evidence = _complete_evidence()
     evidence["evidence_sources"]["corrections_review_equivalent"] = {
-        "gemini": "https://example.test/gemini/corrections",
+        "gemini": "https://developer.gemini.com/prediction-markets/corrections",
         "kalshi": "",
     }
     result = classify_mlb_rule_audit(evidence)
     assert result.status == RULES_PENDING
     assert result.full_rules_audited is False
     assert "RULE_AUDIT_MISSING_SOURCE:corrections_review_equivalent" in result.hard_blockers
+
+
+def test_third_party_or_placeholder_sources_fail_closed():
+    evidence = _complete_evidence()
+    evidence["evidence_sources"]["expiration_close_equivalent"] = {
+        "gemini": "https://example.test/gemini/expiration",
+        "kalshi": "https://kalshi.com/markets/expiration",
+    }
+    result = classify_mlb_rule_audit(evidence)
+    assert result.status == RULES_PENDING
+    assert result.full_rules_audited is False
+    assert "RULE_AUDIT_MISSING_SOURCE:expiration_close_equivalent" in result.hard_blockers
+
+
+def test_non_https_official_source_fails_closed():
+    evidence = _complete_evidence()
+    evidence["evidence_sources"]["source_hierarchy_equivalent"] = {
+        "gemini": "http://developer.gemini.com/prediction-markets/source-hierarchy",
+        "kalshi": "https://kalshi.com/markets/source-hierarchy",
+    }
+    result = classify_mlb_rule_audit(evidence)
+    assert result.status == RULES_PENDING
+    assert "RULE_AUDIT_MISSING_SOURCE:source_hierarchy_equivalent" in result.hard_blockers
