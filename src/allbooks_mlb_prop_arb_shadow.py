@@ -50,7 +50,6 @@ def best_two_book_plan(a: Mapping[str, Any], b: Mapping[str, Any]) -> dict[str, 
     if inv >= D("1"):
         return None
 
-    # Equal-payout ideal allocation, then search nearby cent-rounded stakes.
     ideal_a = MAX_CAPITAL * D(b["decimal_odds"]) / (D(a["decimal_odds"]) + D(b["decimal_odds"]))
     ideal_b = MAX_CAPITAL - ideal_a
     a0, b0 = _cents(ideal_a), _cents(ideal_b)
@@ -148,3 +147,5 @@ async def run_once() -> dict[str, Any]:
 
 if __name__ == "__main__":
     print(json.dumps(asyncio.run(run_once()), separators=(",", ":"), default=str), flush=True)
+
+# Full-slate deployment trigger only; no behavioral change.
