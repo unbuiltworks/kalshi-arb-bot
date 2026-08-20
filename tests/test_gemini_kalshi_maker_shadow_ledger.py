@@ -1,4 +1,10 @@
-from src.gemini_kalshi_maker_shadow_ledger import row_to_trade_event, stable_event_id
+from pathlib import Path
+
+from src.gemini_kalshi_maker_shadow_ledger import (
+    JsonlLedgerForwarder,
+    row_to_trade_event,
+    stable_event_id,
+)
 
 
 def test_simulated_fill_never_becomes_realized_trade():
@@ -73,6 +79,52 @@ def test_latency_stress_is_shadow_and_never_realized():
     assert event["status"] == "SHADOW_HEDGE_STRESS_TARGET_FAILED"
     assert event["net_pnl"] is None
     assert event["opportunity_net_profit"] == "0.02"
+
+
+def test_quote_context_flags_target_created_by_maker_price(tmp_path: Path):
+    fwd = JsonlLedgerForwarder(tmp_path)
+    opened = {
+        "event": "OPEN",
+        "asset": "ETH",
+        "key": "KALSHI_YES_GEMINI_NO|JOIN|0.03",
+        "best_bid": "0.50",
+        "best_ask": "0.58",
+        "economic_max": "0.55",
+        "queue_ahead": "4",
+    }
+    assert fwd._with_quote_context(opened) == opened
+    fill = {
+        "event": "SIMULATED_FILL",
+        "asset": "ETH",
+        "key": opened["key"],
+        "maker_price": "0.51",
+    }
+    enriched = fwd._with_quote_context(fill)
+    assert enriched["quote_open_best_ask"] == "0.58"
+    assert enriched["quote_open_economic_max"] == "0.55"
+    assert enriched["maker_price_advantage_vs_open_ask"] == "0.07"
+    assert enriched["maker_created_target_by_price_alone"] is True
+
+
+def test_quote_context_is_conservative_when_taker_ask_already_within_max(tmp_path: Path):
+    fwd = JsonlLedgerForwarder(tmp_path)
+    opened = {
+        "event": "OPEN",
+        "asset": "BTC",
+        "key": "GEMINI_YES_KALSHI_NO|MAX_SAFE|0.02",
+        "best_bid": "0.40",
+        "best_ask": "0.44",
+        "economic_max": "0.45",
+        "queue_ahead": "0",
+    }
+    fwd._with_quote_context(opened)
+    enriched = fwd._with_quote_context({
+        "event": "SIMULATED_FILL",
+        "asset": "BTC",
+        "key": opened["key"],
+        "maker_price": "0.43",
+    })
+    assert enriched["maker_created_target_by_price_alone"] is False
 
 
 def test_non_fill_noise_is_not_forwarded():
