@@ -9,6 +9,7 @@ from src.mlb_prop_rule_certifications import (
     assess_prop_pair,
     prop_audit_matrix,
 )
+from src.mlb_prop_rule_certifications_official_v2 import install as install_official_profiles
 from src.mlb_prop_rule_equivalence import ParticipationProof
 from src.universal_prediction_quant import LockOpportunity
 
@@ -73,6 +74,29 @@ def test_live_plate_appearance_removes_only_participation_blocker():
     assert "complete_lifecycle_fingerprint_required" in result.remaining_blockers
     assert result.status is PropCertificationStatus.UNAUDITED
     assert result.execution_eligible is False
+
+
+def test_official_kalshi_polymarket_profiles_are_complete_but_still_non_equivalent(monkeypatch):
+    import src.mlb_prop_rule_certifications as cert
+
+    profiles = dict(cert.PROFILES)
+    install_official_profiles(profiles)
+    monkeypatch.setattr(cert, "PROFILES", profiles)
+
+    result = cert.assess_prop_pair(
+        "kalshi", "polymarket", "baseball_player_hits", _batter_proof()
+    )
+    assert result.participation_proven is True
+    assert result.status is PropCertificationStatus.CONDITIONAL
+    assert result.exact_settlement_equivalent is False
+    assert result.execution_eligible is False
+    assert "complete_lifecycle_fingerprint_required" not in result.remaining_blockers
+    assert {
+        "official_source",
+        "interruption",
+        "cancellation",
+        "stat_corrections",
+    }.issubset(set(result.remaining_blockers))
 
 
 def test_gemini_pair_remains_fail_closed_after_participation():
