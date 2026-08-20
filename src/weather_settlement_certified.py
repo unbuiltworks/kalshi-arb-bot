@@ -35,12 +35,32 @@ def _official_https(url: str, hosts: Iterable[str]) -> bool:
     return p.scheme == "https" and any(host == h or host.endswith("." + h) for h in hosts)
 
 
-def _fee_cents(count: int, price_cents: int, fee_type: str, fee_multiplier: Any) -> int:
-    """Current Series-metadata fee model; fail closed on unknown fee types.
+def _settlement_source_provider(source: Any) -> str | None:
+    """Recognize only currently audited official weather settlement endpoints.
 
-    Kalshi standard quadratic taker fee is 0.07 * multiplier * C * p * (1-p),
-    rounded up to the next cent. fee_multiplier is a multiplier, not the 0.07 rate.
+    Daily temperature Series historically named NWS/weather.gov directly. Current
+    Series metadata (effective 2026-08-14) names The Weather Company and links
+    ``https://weather.com/kalshi``. We trust the Series metadata for settlement
+    provenance; we do not infer a provider from legacy strategy configuration.
     """
+    if not isinstance(source, dict):
+        return None
+    url = str(source.get("url") or "").strip()
+    name = str(source.get("name") or "").strip().lower()
+    if _official_https(url, ("weather.gov",)):
+        return "NWS"
+    if _official_https(url, ("weather.com",)):
+        try:
+            path = (urlparse(url).path or "").rstrip("/").lower()
+        except Exception:
+            return None
+        if path == "/kalshi" and ("weather company" in name or not name):
+            return "THE_WEATHER_COMPANY"
+    return None
+
+
+def _fee_cents(count: int, price_cents: int, fee_type: str, fee_multiplier: Any) -> int:
+    """Current Series-metadata fee model; fail closed on unknown fee types."""
     if fee_type != "quadratic":
         raise ValueError("unsupported fee_type")
     m = Decimal(str(fee_multiplier))
@@ -58,14 +78,10 @@ def _fee_cents(count: int, price_cents: int, fee_type: str, fee_multiplier: Any)
 def certify_series(series: dict[str, Any]) -> tuple[bool, list[str]]:
     blockers: list[str] = []
     sources = series.get("settlement_sources") or []
-    if not sources or not any(
-        "weather.gov" in str(s.get("url", "")).lower()
-        and _official_https(str(s.get("url", "")), ("weather.gov",))
-        for s in sources if isinstance(s, dict)
-    ):
+    if not sources or not any(_settlement_source_provider(s) for s in sources):
         blockers.append("SETTLEMENT_SOURCE_UNVERIFIED")
     terms = str(series.get("contract_terms_url") or "")
-    if not _official_https(terms, ("kalshi.com", "kalshi-public-docs.s3.amazonaws.com")):
+    if not _official_https(terms, ("kalshi.com", "assets.kalshi.com", "kalshi-public-docs.s3.amazonaws.com")):
         blockers.append("RULES_PENDING")
     if series.get("fee_type") != "quadratic" or series.get("fee_multiplier") is None:
         blockers.append("FEE_UNVERIFIED")
@@ -87,11 +103,6 @@ def _valid_level(price: Any, qty: Any) -> bool:
 
 
 def _aware_iso(value: Any) -> datetime | None:
-    """Parse only timezone-aware ISO-8601 timestamps.
-
-    Non-empty timestamp strings are not provenance. Requiring an actual offset keeps
-    local/UTC ambiguity from silently entering weather EV calculations.
-    """
     if not isinstance(value, str) or not value.strip():
         return None
     text = value.strip()
@@ -111,13 +122,6 @@ def _forecast_probability(
     *,
     expected_cli_product: str,
 ) -> tuple[Decimal | None, list[str]]:
-    """Return bracket probability only with independently checkable provenance.
-
-    A producer boolean is not enough to prove station mapping or timestamp validity.
-    The forecast must name the exact CLI product used by the settlement-certified
-    station, and model-run/valid timestamps must be parseable, timezone-aware, and
-    temporally coherent.
-    """
     if forecast is None:
         return None, ["FORECAST_UNVERIFIED"]
 
@@ -176,19 +180,7 @@ def _side_economics(*, side: str, price_cents: int, qty: int, yes_probability: D
 def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: dict[str, Any],
                      station: dict[str, Any], forecast: dict[str, Any] | None = None,
                      max_quote_age_ms: int = DEFAULT_MAX_QUOTE_AGE_MS) -> dict[str, Any]:
-    """Build one read-only weather SHADOW row; never emits live readiness.
-
-    Verification flags must be literal booleans. Executable quotes must also be
-    fresh enough for the configured read-only shadow threshold. Both YES and NO
-    executable asks are modeled independently; legacy ``ask_cents``/``ask_qty``
-    aliases are interpreted as YES only. We never infer an executable NO price
-    from a YES mid/chance or from non-executable display fields.
-
-    Settlement certification and forecast-EV certification are intentionally
-    separate. A market may have fully audited settlement/book metadata while its
-    forecast input is absent, stale, malformed, or mapped to the wrong station; in
-    that case quote/fee diagnostics remain visible but ranked EV is withheld.
-    """
+    """Build one read-only weather SHADOW row; never emits live readiness."""
     blockers: list[str] = []
     _, series_blockers = certify_series(series)
     blockers.extend(series_blockers)
@@ -254,6 +246,7 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
     blockers = sorted(set(blockers))
     settlement_certified = len(blockers) == 0
     ev_certified = settlement_certified and not forecast_blockers and best_side is not None
+    providers = sorted({p for p in (_settlement_source_provider(s) for s in (series.get("settlement_sources") or [])) if p})
     return {
         "category": "weather",
         "classification": "SHADOW",
@@ -268,6 +261,7 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
         "station_name": station.get("name"),
         "cli_product": cli_product or None,
         "settlement_sources": series.get("settlement_sources") or [],
+        "settlement_source_providers": providers,
         "contract_terms_url": series.get("contract_terms_url"),
         "strike_type": market.get("strike_type"),
         "floor_strike": market.get("floor_strike"),
