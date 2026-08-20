@@ -35,7 +35,7 @@ NFL_CODES = {
     "HOU","IND","JAX","KC","LV","LAC","LAR","MIA","MIN","NE","NO","NYG","NYJ",
     "PHI","PIT","SEA","SF","TB","TEN","WAS",
 }
-NFL_ALIASES = {"JAC":"JAX","WSH":"WAS","LA":"LAR"}
+NFL_ALIASES = {"JAC":"JAX","WSH":"WAS"}
 NFL_NAMES = {
     "arizona cardinals":"ARI","atlanta falcons":"ATL","baltimore ravens":"BAL","buffalo bills":"BUF",
     "carolina panthers":"CAR","chicago bears":"CHI","cincinnati bengals":"CIN","cleveland browns":"CLE",
@@ -47,9 +47,17 @@ NFL_NAMES = {
     "philadelphia eagles":"PHI","pittsburgh steelers":"PIT","seattle seahawks":"SEA","san francisco 49ers":"SF",
     "tampa bay buccaneers":"TB","tennessee titans":"TEN","washington commanders":"WAS",
 }
+# Only locations that identify exactly one current NFL club. Bare New York and Los
+# Angeles are intentionally absent because they are ambiguous.
+NFL_UNAMBIGUOUS_LOCATIONS = {
+    "arizona":"ARI","atlanta":"ATL","baltimore":"BAL","buffalo":"BUF","carolina":"CAR","chicago":"CHI",
+    "cincinnati":"CIN","cleveland":"CLE","dallas":"DAL","denver":"DEN","detroit":"DET","green bay":"GB",
+    "houston":"HOU","indianapolis":"IND","jacksonville":"JAX","kansas city":"KC","las vegas":"LV",
+    "miami":"MIA","minnesota":"MIN","new england":"NE","new orleans":"NO","philadelphia":"PHI",
+    "pittsburgh":"PIT","seattle":"SEA","san francisco":"SF","tampa bay":"TB","tennessee":"TEN","washington":"WAS",
+}
 TEAM_EVENT_RE = re.compile(r"^(?:GEMI-)?NFL-(?P<date>\d{6})(?P<time>\d{4})-(?P<away>[A-Z]{2,4})-(?P<home>[A-Z]{2,4})-(?P<kind>[MST])$")
 KALSHI_EVENT_RE = re.compile(r"^KXNFL(?P<kind>GAME|SPREAD|TOTAL)-(?P<date>\d{2}[A-Z]{3}\d{2})(?P<pair>[A-Z]{4,7})$")
-MONTHS = {m:i for i,m in enumerate(("JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"),1)}
 
 
 @dataclass(frozen=True)
@@ -86,12 +94,22 @@ def canonical_team(value: Any) -> str | None:
     text = _norm(value).strip(" .?-_")
     if not text:
         return None
-    raw = re.sub(r"[^A-Za-z0-9]", "", str(value or "")).upper()
-    raw = NFL_ALIASES.get(raw, raw)
-    if raw in NFL_CODES:
-        return raw
+    # Exact abbreviation only.
+    compact = re.sub(r"[^A-Za-z0-9]", "", str(value or "")).upper()
+    compact = NFL_ALIASES.get(compact, compact)
+    if compact in NFL_CODES:
+        return compact
+    # Structured Kalshi labels often start with the official abbreviation, e.g.
+    # PIT Steelers or JAC Jaguars. Trust only a first token that canonicalizes to a
+    # known NFL code; never fuzzy-match arbitrary uppercase fragments.
+    first = re.sub(r"[^A-Za-z0-9]", "", str(value or "").strip().split()[0]).upper()
+    first = NFL_ALIASES.get(first, first)
+    if first in NFL_CODES:
+        return first
     if text in NFL_NAMES:
         return NFL_NAMES[text]
+    if text in NFL_UNAMBIGUOUS_LOCATIONS:
+        return NFL_UNAMBIGUOUS_LOCATIONS[text]
     for name, code in sorted(NFL_NAMES.items(), key=lambda item: -len(item[0])):
         if re.search(rf"(?<![a-z]){re.escape(name)}(?![a-z])", text):
             return code
@@ -273,7 +291,6 @@ def normalize_sportsbooks(events: Iterable[Mapping[str, Any]]) -> list[NflIdenti
                     elif typ == "spreads":
                         team = canonical_team(row.get("name")); point = _d(row.get("point"))
                         if team in teams and point is not None:
-                            # Team +P means team margin > -P on half-point lines.
                             out.append(NflIdentity(f"sportsbook:{b}",f"{event_id}:spread:{idx}","spread",teams,team,"GT",-point,start_ms,"odds_api_commence_time"))
                     elif typ == "totals" and str(row.get("name") or "").lower() == "over":
                         point = _d(row.get("point"))
@@ -292,6 +309,7 @@ async def fetch_gemini(http: httpx.AsyncClient) -> list[dict[str, Any]]:
 async def fetch_kalshi(http: httpx.AsyncClient) -> list[dict[str, Any]]:
     all_rows: list[dict[str, Any]] = []
     for series in KALSHI_SERIES:
+        response: httpx.Response | None = None
         for attempt in range(5):
             response = await http.get(KALSHI, params={"limit":200,"status":"open","series_ticker":series,"with_nested_markets":"true"})
             if response.status_code != 429:
@@ -300,6 +318,7 @@ async def fetch_kalshi(http: httpx.AsyncClient) -> list[dict[str, Any]]:
                 break
             await asyncio.sleep(min(4.0,0.5*(2**attempt)))
         else:
+            assert response is not None
             response.raise_for_status()
         await asyncio.sleep(0.12)
     return all_rows
