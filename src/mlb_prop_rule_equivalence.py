@@ -1,18 +1,22 @@
-"""Settlement-equivalence policy for Polymarket US <-> Kalshi MLB player props.
+"""Participation-branch policy for Polymarket US <-> Kalshi MLB player props.
 
-Identity equivalence is not enough. Current venue participation rules differ before
-a player has actually participated in the role Kalshi requires:
+Identity equivalence is not enough. Venue participation rules differ before a
+player has actually participated in the role Kalshi requires:
 
-* Polymarket US: an MLB player prop settles at LFMP if the player does not
-  participate at all.
+* Polymarket US: an MLB player prop can use an LFMP branch if the player does not
+  participate.
 * Kalshi batter props (Hits, H+R+RBI, Total Bases): a scratched/non-starting
-  player settles at fair market price even if he later enters; a starter must also
-  record at least one plate appearance before the statistic governs settlement.
+  player uses a fair-market-price branch even if he later enters; a starter must
+  also record at least one plate appearance before the statistic governs settlement.
 * Kalshi strikeout props: the named pitcher must start and record at least one
-  pitch; relief appearances do not count and otherwise settle at fair market price.
+  pitch; relief appearances do not satisfy the Kalshi participation branch.
 
-Therefore these families are only settlement-equivalent after an observable
-participation gate has occurred. This module deliberately exposes no order entry.
+IMPORTANT: resolving that participation branch does *not* prove full settlement
+rule equivalence. Official-source hierarchy, suspension/cancellation treatment and
+statistical-correction windows are audited separately by
+:mod:`mlb_prop_rule_certifications`. This module therefore never grants execution
+eligibility and its legacy ``settlement_equivalent_now`` flag is intentionally
+fail-closed even after participation.
 """
 from __future__ import annotations
 
@@ -21,6 +25,8 @@ from enum import Enum
 
 
 class RuleEquivalence(str, Enum):
+    # Enum names are retained for compatibility. EQUIVALENT_AFTER_PARTICIPATION
+    # means only that the participation-specific divergence has been resolved.
     NON_EQUIVALENT = "NON_EQUIVALENT"
     CONDITIONAL_PARTICIPATION = "CONDITIONAL_PARTICIPATION"
     EQUIVALENT_AFTER_PARTICIPATION = "EQUIVALENT_AFTER_PARTICIPATION"
@@ -39,7 +45,7 @@ SUPPORTED_FAMILIES = BATTER_FAMILIES | PITCHER_FAMILIES
 
 @dataclass(frozen=True)
 class ParticipationProof:
-    """Observable game-state proof required before settlement rules align."""
+    """Observable game-state proof required to resolve participation divergence."""
 
     started: bool = False
     plate_appearance_recorded: bool = False
@@ -53,7 +59,11 @@ class RuleAssessment:
     family: str
     status: RuleEquivalence
     required_gate: str
-    settlement_equivalent_now: bool
+    participation_branch_resolved: bool
+    # Legacy field retained to fail closed for any older consumer that interprets
+    # it as complete settlement equivalence. Full equivalence lives in the separate
+    # lifecycle certification engine.
+    settlement_equivalent_now: bool = False
     execution_eligible: bool = False
     read_only: bool = True
     order_entry: bool = False
@@ -64,6 +74,7 @@ class RuleAssessment:
             "family": self.family,
             "status": self.status.value,
             "required_gate": self.required_gate,
+            "participation_branch_resolved": self.participation_branch_resolved,
             "settlement_equivalent_now": self.settlement_equivalent_now,
             "execution_eligible": self.execution_eligible,
             "read_only": self.read_only,
@@ -75,26 +86,25 @@ class RuleAssessment:
 def assess_rule_equivalence(
     family: str, proof: ParticipationProof | None = None
 ) -> RuleAssessment:
-    """Classify current rule equivalence without ever granting execution eligibility.
+    """Resolve only the participation branch; never certify full settlement.
 
-    The guard is intentionally stronger than simply checking a published lineup.
-    For batter props we require a confirmed start *and* at least one plate
-    appearance. For strikeouts we require the named pitcher to be the starter and
-    to have recorded at least one pitch. At that point the participation-specific
-    LFMP/fair-market-price branches can no longer diverge for the player.
+    For batter props require a confirmed start and at least one plate appearance.
+    For strikeouts require the named pitcher to be the starter and to have recorded
+    at least one pitch. Passing this gate is necessary but not sufficient for a
+    guaranteed cross-venue lock.
     """
     proof = proof or ParticipationProof()
 
     if family in BATTER_FAMILIES:
         gate = "CONFIRMED_START_AND_FIRST_PLATE_APPEARANCE"
-        equivalent = bool(
+        resolved = bool(
             proof.started
             and proof.plate_appearance_recorded
             and proof.source.strip()
         )
     elif family in PITCHER_FAMILIES:
         gate = "CONFIRMED_STARTING_PITCHER_AND_FIRST_PITCH"
-        equivalent = bool(
+        resolved = bool(
             proof.starting_pitcher
             and proof.pitch_recorded
             and proof.source.strip()
@@ -104,19 +114,21 @@ def assess_rule_equivalence(
             family=family,
             status=RuleEquivalence.NON_EQUIVALENT,
             required_gate="UNSUPPORTED_FAMILY_RULE_AUDIT_REQUIRED",
+            participation_branch_resolved=False,
             settlement_equivalent_now=False,
             note="Family is not covered by the audited MLB participation policy.",
         )
 
-    if equivalent:
+    if resolved:
         return RuleAssessment(
             family=family,
             status=RuleEquivalence.EQUIVALENT_AFTER_PARTICIPATION,
             required_gate=gate,
-            settlement_equivalent_now=True,
+            participation_branch_resolved=True,
+            settlement_equivalent_now=False,
             note=(
-                "Participation branch is resolved; continue to require exact event, "
-                "player, statistic, threshold, timing, and source-rule identity."
+                "Participation-specific divergence is resolved only. Full lifecycle "
+                "settlement certification is still required before execution."
             ),
         )
 
@@ -124,6 +136,7 @@ def assess_rule_equivalence(
         family=family,
         status=RuleEquivalence.CONDITIONAL_PARTICIPATION,
         required_gate=gate,
+        participation_branch_resolved=False,
         settlement_equivalent_now=False,
         note=(
             "Do not count this pair as a guaranteed complementary settlement before "
