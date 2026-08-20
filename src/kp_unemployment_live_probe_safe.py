@@ -39,14 +39,25 @@ def _d(value: Any) -> D:
 def _poly_available(body: Any) -> D:
     candidates: list[Any] = []
     if isinstance(body, dict):
-        candidates.extend((body.get("available"), body.get("availableBalance"), body.get("buyingPower")))
+        candidates.extend((
+            body.get("assetAvailable"),
+            body.get("available"),
+            body.get("availableBalance"),
+            body.get("buyingPower"),
+        ))
         rows = body.get("balances") or []
         if isinstance(rows, list):
             for row in rows:
                 if not isinstance(row, dict):
                     continue
-                if str(row.get("currency") or "USD").upper() in {"USD", "USDC"}:
-                    candidates.extend((row.get("available"), row.get("availableBalance"), row.get("balance")))
+                currency = str(row.get("currency") or row.get("asset") or row.get("symbol") or "USD").upper()
+                if currency in {"USD", "USDC"}:
+                    candidates.extend((
+                        row.get("assetAvailable"),
+                        row.get("available"),
+                        row.get("availableBalance"),
+                        row.get("balance"),
+                    ))
     return max((_d(x) for x in candidates if x is not None), default=D("0"))
 
 
