@@ -91,7 +91,11 @@ def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[st
             for fee in group_fees
         )
         explicit_fee = sum((fee.fee for fee in group_fees), D("0"))
-        if explicit_fee > 0 and fill.fee > 0:
+        # Explicit fee events and an embedded fill fee are alternative ledger
+        # representations. Their simultaneous presence is ambiguous even when the
+        # explicit event is zero-valued: choosing the explicit representation would
+        # silently discard a positive embedded fee and understate deployed capital.
+        if group_fees and fill.fee != 0:
             fee_invalid = True
         if fee_invalid:
             invalid_groups += 1
