@@ -26,6 +26,12 @@ def _decimal(value: Any) -> Decimal | None:
     return out if out.is_finite() else None
 
 
+def _normalized_url(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip().rstrip("/").lower()
+
+
 def reconcile_weather_paper_fill(
     *,
     shadow_row: dict[str, Any],
@@ -38,7 +44,7 @@ def reconcile_weather_paper_fill(
     - the originating row is weather PAPER/SHADOW and never live-ready;
     - exact market ticker/date match across row, synthetic fill and settlement;
     - exact-market source provenance was independently verified at quote time;
-    - the settlement provider equals that exact-market audited provider;
+    - the settlement provider and terminal source URL equal that exact-market audit;
     - terminal finality/correction review is explicitly complete;
     - synthetic fill side, quantity, price and modeled fee are numerically coherent.
 
@@ -70,16 +76,22 @@ def reconcile_weather_paper_fill(
     if not isinstance(exact_audit, dict) or exact_audit.get("verified") is not True or not exact_verified:
         blockers.append("QUOTE_TIME_EXACT_MARKET_SOURCE_UNVERIFIED")
         certified_provider = ""
+        certified_source_url = ""
     else:
         audit_ticker = str(exact_audit.get("market_ticker") or "").strip().upper()
         audit_date = str(exact_audit.get("market_date") or "").strip()
         if audit_ticker != market_ticker or audit_date != market_date:
             blockers.append("QUOTE_TIME_EXACT_MARKET_AUDIT_MISMATCH")
         certified_provider = str(exact_audit.get("settlement_source_provider") or "").strip().upper()
+        certified_source_url = _normalized_url(exact_audit.get("settlement_source_url"))
 
     settlement_provider = str(settlement.get("settlement_source_provider") or "").strip().upper()
     if certified_provider not in _ALLOWED_PROVIDERS or settlement_provider != certified_provider:
         blockers.append("SETTLEMENT_SOURCE_MISMATCH")
+
+    settlement_source_url = _normalized_url(settlement.get("settlement_source_url"))
+    if not certified_source_url or not settlement_source_url or settlement_source_url != certified_source_url:
+        blockers.append("SETTLEMENT_SOURCE_URL_MISMATCH")
 
     if not _strict_true(settlement.get("official_source_verified")):
         blockers.append("OFFICIAL_SETTLEMENT_SOURCE_UNVERIFIED")
@@ -138,6 +150,7 @@ def reconcile_weather_paper_fill(
         "paper_realized_pnl_cents": str(pnl_cents),
         "settlement_outcome": outcome,
         "settlement_source_provider": settlement_provider,
+        "settlement_source_url": settlement.get("settlement_source_url"),
         "read_only": True,
         "order_entry": False,
         "live_probe_ready": False,
