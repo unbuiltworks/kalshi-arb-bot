@@ -29,6 +29,11 @@ POLL_SLEEP_S = 0.08
 MAX_BACKOFF_S = 2.0
 DEPTH = 10
 
+# Preserve the pre-patch lifecycle function. install() replaces base._stop_feed with
+# our wrapper; calling base._stop_feed from inside that wrapper would recurse forever
+# during rollover/cleanup and crash the live campaign.
+_ORIGINAL_STOP_FEED = base._stop_feed
+
 
 def _levels(rows: Any) -> dict[Decimal, Decimal]:
     out: dict[Decimal, Decimal] = {}
@@ -153,7 +158,7 @@ async def _start_feed_rest_kalshi(*, asset: str, pair: Any, stats: Any, active: 
 
 
 async def _stop_feed_rest_kalshi(feed) -> None:
-    await base._stop_feed(feed)
+    await _ORIGINAL_STOP_FEED(feed)
 
 
 def install() -> None:
