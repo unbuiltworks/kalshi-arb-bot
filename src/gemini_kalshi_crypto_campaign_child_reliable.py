@@ -16,6 +16,7 @@ of BTC/ETH/SOL/XRP. When unset, legacy behavior remains all four assets.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 import os
 import sys
@@ -34,6 +35,7 @@ from src.gemini_kalshi_staged_probe_transport import submit_gemini_first_probe
 
 DEADLINE_ENV = "SOL_CANARY_V2_ARM_NOT_AFTER_UTC"
 HEDGE_CUSHION_ENV = "CRYPTO_KALSHI_HEDGE_CUSHION"
+REST_ONLY_TARGET_ENV = "CRYPTO_KALSHI_TARGET_REST_ONLY"
 _ALLOWED_ASSETS = ("BTC", "ETH", "SOL", "XRP")
 
 
@@ -48,6 +50,11 @@ def _selected_assets() -> tuple[str, ...]:
 
 def _hedge_cushion_enabled() -> bool:
     return os.getenv(HEDGE_CUSHION_ENV, "NO").strip().upper() == "YES"
+
+
+async def _disabled_lifecycle_stream() -> None:
+    """Keep REST strike fallback active without opening a second Kalshi WS."""
+    await asyncio.Event().wait()
 
 
 async def _submit_and_persist_context(*args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -67,9 +74,6 @@ async def _submit_and_persist_context(*args: Any, **kwargs: Any) -> dict[str, An
             "run_id": run_id,
             "completed_at_utc": datetime.now(timezone.utc).isoformat(),
             "gemini_payload": gemini_payload,
-            # Keep the legacy key because the proven q=1 accounting/settlement path
-            # reads record["kalshi_payload"].  The explicit original alias is retained
-            # for hedge-cushion auditability; actual fill price/fees come from result.
             "kalshi_payload": kalshi_payload,
             "kalshi_payload_original": kalshi_payload,
             "modeled_locked_profit": str(kwargs.get("modeled_locked_profit", "")),
@@ -94,13 +98,16 @@ def main() -> None:
     gate_attribution.install(micro_executor.logger)
     gemini_ws_recovery.install()
     gemini_flatten_fix.install()
-    # Avoid a second throwaway authenticated Gemini WS handshake during v2 preflight.
-    # The real long-lived GeminiTradingSession.connect() remains mandatory before the
-    # live scanner can submit any order.
     ws_rate_limit_guard.install_child_preflight()
     v2._submit_and_persist_result = _submit_and_persist_context
 
     rollover_optimizer.install()
+    if os.getenv(REST_ONLY_TARGET_ENV, "NO").strip().upper() == "YES":
+        target_lifecycle_cache._lifecycle_stream = _disabled_lifecycle_stream
+        micro_executor.logger.warning(
+            "CRYPTO_KALSHI_TARGET_REST_ONLY enabled=true lifecycle_ws=false "
+            "orderbook_ws=true risk_gates_changed=false"
+        )
     target_lifecycle_cache.install()
     target_freshness_guard.install()
 
