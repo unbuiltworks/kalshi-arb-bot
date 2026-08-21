@@ -1,18 +1,21 @@
 """Read-only pregame Polymarket replacement-cost shadow for generated NFL MVEs.
 
 Fetches active/open Polymarket US sports events through the MVE horizon, strictly
-matches NFL moneyline and spread propositions to Kalshi component identities,
-and reads actual top-of-book q=1 depth.  Matching is normal-event economics only:
-settlement-rule equivalence is intentionally not asserted and no order entry is
-exposed.
+matches NFL moneyline/spread/full-game-total propositions to Kalshi component
+identities, and reads actual top-of-book q=1 depth.
+
+Important: Polymarket alternate-spread slugs expose the public book from the
+LONG (+X) side while the canonical proposition used here (``Team wins by >X``)
+is the SHORT (-X) side.  We therefore carry proposition/book polarity explicitly
+and flip YES/NO when pricing those spread propositions. Matching is normal-event
+economics only: settlement-rule equivalence is intentionally not asserted and no
+order entry is exposed.
 """
 from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-import json
-import re
 from typing import Any, Mapping
 
 import httpx
@@ -20,12 +23,12 @@ import httpx
 from src.gemini_sports_adapter import canonical_team
 from src.polymarket_kalshi_shadow import polymarket_taker_fee
 from src.polymarket_kalshi_shadow_v2 import PolyBookStore, _fetch_poly_book
-from src.sports_kp_mve_cross_venue_shadow import _d, _event_bits, _kalshi_component, _kalshi_identity_key
+from src.sports_kp_mve_cross_venue_shadow import _d, _kalshi_component, _kalshi_identity_key
 
 D = Decimal
 ONE = D("1")
 POLY_GATEWAY = "https://gateway.polymarket.us"
-POLY_FEE_RATE = D("0.05")  # existing repo-wide K<->P shadow convention
+POLY_FEE_RATE = D("0.05")
 PAGE = 100
 MAX_PAGES = 12
 NFL_TEAMS = {
@@ -76,7 +79,7 @@ def _event_teams(event: Mapping[str, Any]) -> tuple[str, str] | None:
             if not isinstance(side, Mapping):
                 continue
             team = side.get("team") if isinstance(side.get("team"), Mapping) else {}
-            for value in (team.get("abbreviation"), team.get("displayAbbreviation"), team.get("name"), side.get("description"), side.get("identifier")):
+            for value in (team.get("abbreviation"), team.get("displayAbbreviation"), team.get("name")):
                 code = _team_code(value)
                 if code and code not in found:
                     found.append(code); break
@@ -92,7 +95,7 @@ def _long_team(market: Mapping[str, Any], teams: tuple[str, str]) -> str | None:
         if not isinstance(side, Mapping) or not bool(side.get("long")):
             continue
         team = side.get("team") if isinstance(side.get("team"), Mapping) else {}
-        for value in (team.get("abbreviation"), team.get("displayAbbreviation"), team.get("name"), side.get("description"), side.get("identifier")):
+        for value in (team.get("abbreviation"), team.get("displayAbbreviation"), team.get("name")):
             code = _team_code(value)
             if code in teams:
                 hits.append(code); break
@@ -128,9 +131,6 @@ def _poly_identity(event: Mapping[str, Any], market: Mapping[str, Any]) -> tuple
     line = _d(market.get("line"))
     if line is None:
         return None
-    # Polymarket's team spread line is the displayed handicap.  The canonical
-    # proposition is team margin > -handicap; only positive half-point margin
-    # thresholds are comparable to the Kalshi KXNFLSPREAD family used here.
     threshold = -line
     if threshold <= 0 or threshold * 2 != (threshold * 2).to_integral_value() or int(threshold * 2) % 2 != 1:
         return None
@@ -138,9 +138,6 @@ def _poly_identity(event: Mapping[str, Any], market: Mapping[str, Any]) -> tuple
 
 
 def _key_compatible(kkey: tuple[Any, ...], pkey: tuple[Any, ...]) -> bool:
-    # Exact proposition dimensions except allow a one-day UTC/local date skew;
-    # team pair + family + subject + line remain exact and each Kalshi component
-    # must resolve to a unique Polymarket slug below.
     if kkey[1:] != pkey[1:]:
         return False
     try:
@@ -149,6 +146,20 @@ def _key_compatible(kkey: tuple[Any, ...], pkey: tuple[Any, ...]) -> bool:
     except Exception:
         return False
     return abs((kd - pd).days) <= 1
+
+
+def _proposition_direct_to_book(key: tuple[Any, ...]) -> bool:
+    """Whether canonical proposition YES equals the public book's long/YES side.
+
+    v14's strict alternate-spread semantics deliberately canonicalize the SHORT
+    team (`Team wins by >X`), so those propositions are inverse to the slug book.
+    Full-game moneyline and total identities are canonicalized to the long side.
+    """
+    return str(key[2]).lower() != "spread"
+
+
+def _flip_side(side: str) -> str:
+    return "no" if side == "yes" else "yes"
 
 
 async def _pregame_events(horizon_hours: int) -> list[dict[str, Any]]:
@@ -178,8 +189,6 @@ async def _pregame_events(horizon_hours: int) -> list[dict[str, Any]]:
                 start = _event_start(row, {})
                 if not key or key in seen or start is None:
                     continue
-                # Keep events from shortly before now too; delayed starts can
-                # remain pregame/open while nominal startTime has passed.
                 if start < now - timedelta(hours=3) or start > horizon:
                     continue
                 seen.add(key); out.append(row)
@@ -212,23 +221,25 @@ async def annotate_poly_pregame(
         return result
 
     events = await _pregame_events(horizon_hours)
-    poly_rows: list[tuple[tuple[Any, ...], str]] = []
+    poly_rows: list[tuple[tuple[Any, ...], str, bool]] = []
     for event in events:
         for market in event.get("markets") or []:
             if not isinstance(market, Mapping):
                 continue
             parsed = _poly_identity(event, market)
             if parsed is not None:
-                poly_rows.append(parsed)
+                key, slug = parsed
+                poly_rows.append((key, slug, _proposition_direct_to_book(key)))
 
-    matches: dict[str, str] = {}
+    # ticker -> (slug, proposition_yes_is_book_yes)
+    matches: dict[str, tuple[str, bool]] = {}
     for mt, kkey in kalshi_keys.items():
-        slugs = sorted({slug for pkey, slug in poly_rows if _key_compatible(kkey, pkey)})
-        if len(slugs) == 1:
-            matches[mt] = slugs[0]
+        found = sorted({(slug, direct) for pkey, slug, direct in poly_rows if _key_compatible(kkey, pkey)})
+        if len(found) == 1:
+            matches[mt] = found[0]
 
     store = PolyBookStore()
-    slugs = sorted(set(matches.values()))
+    slugs = sorted({slug for slug, _direct in matches.values()})
     if slugs:
         sem = asyncio.Semaphore(8)
         async with httpx.AsyncClient(timeout=8.0) as http:
@@ -240,9 +251,6 @@ async def annotate_poly_pregame(
         base_all_in = _d(row.get("all_in_cost_conservative"))
         if base_all_in is None:
             continue
-        # Start from any Gemini savings v10 already measured, then allow Poly to
-        # beat the remaining Kalshi/Gemini component cost.  Each leg independently
-        # chooses the cheapest observed shadow venue without changing live gates.
         gem = row.get("cross_venue_shadow") if isinstance(row.get("cross_venue_shadow"), dict) else {}
         gem_by_mt = {str(x.get("kalshi_market_ticker")): x for x in gem.get("replacements") or [] if isinstance(x, dict)}
         total_savings = D("0")
@@ -269,11 +277,16 @@ async def annotate_poly_pregame(
                     chosen_venue = "gemini"; chosen_cost = gcost; chosen_depth = gdepth
                     chosen_market = str(grow.get("gemini_symbol") or "")
 
-            slug = matches.get(mt)
+            matched = matches.get(mt)
+            slug = matched[0] if matched else None
+            direct = matched[1] if matched else True
             pq = store.quote(slug, max_age_ms=15000) if slug else None
+            poly_book_side = side if direct else _flip_side(side)
             if pq is not None:
-                if side == "yes": pprice, pdepth = pq.yes_ask, pq.yes_depth
-                else: pprice, pdepth = pq.no_ask, pq.no_depth
+                if poly_book_side == "yes":
+                    pprice, pdepth = pq.yes_ask, pq.yes_depth
+                else:
+                    pprice, pdepth = pq.no_ask, pq.no_depth
                 if pdepth >= ONE and D("0") < pprice < ONE:
                     pcost = pprice + polymarket_taker_fee(1, pprice, POLY_FEE_RATE)
                     if pcost < chosen_cost:
@@ -291,6 +304,8 @@ async def annotate_poly_pregame(
                 "savings_q1": str(savings),
                 "cheapest_depth_q1": str(chosen_depth),
                 "polymarket_slug": slug,
+                "polymarket_proposition_direct_to_book": direct if slug else None,
+                "polymarket_book_side_for_hedge": poly_book_side if slug else None,
                 "rules_certified": chosen_venue == "kalshi",
                 "execution_eligible": chosen_venue == "kalshi",
             })
