@@ -69,6 +69,98 @@ def _close(old: dict[str, Any], observed_ms: int) -> dict[str, Any]:
     }
 
 
+def _state_for_plan(
+    plan: dict[str, Any],
+    old: dict[str, Any] | None,
+    observed_ms: int,
+) -> dict[str, Any]:
+    key = identity(plan)
+    opened_ms = int(old["opened_ms"]) if old else observed_ms
+    episode_id = str(old.get("episode_id")) if old else _episode_id(key, opened_ms)
+    return {
+        "identity": key,
+        "episode_id": episode_id,
+        "trade_group_id": _episode_trade_group_id(episode_id),
+        "opened_ms": opened_ms,
+        "last_seen_ms": observed_ms,
+        "fingerprint": fingerprint(plan),
+        "market_ticker": plan.get("market_ticker"),
+        "market_date": plan.get("market_date"),
+        "side": plan.get("side"),
+        "quantity": plan.get("quantity"),
+        "ask_cents": plan.get("ask_cents"),
+        "modeled_fee_cents": plan.get("modeled_fee_cents"),
+        "paper_cost_cents": plan.get("paper_cost_cents"),
+        "modeled_after_fee_ev_cents": plan.get("modeled_after_fee_ev_cents"),
+        "modeled_after_fee_edge_cents_per_contract": plan.get("modeled_after_fee_edge_cents_per_contract"),
+        "available_contracts_at_quote": plan.get("available_contracts_at_quote"),
+        "settlement_key": plan.get("settlement_key"),
+        "classification": "PAPER",
+        "category": "weather",
+        "read_only": True,
+        "order_entry": False,
+        "live_probe_ready": False,
+    }
+
+
+def _plan_rank(plan: dict[str, Any]) -> tuple[Decimal, Decimal, int, int]:
+    """Deterministically choose the strongest duplicate representation."""
+    ev = _d(plan.get("modeled_after_fee_ev_cents")) or D("-Infinity")
+    edge = _d(plan.get("modeled_after_fee_edge_cents_per_contract")) or D("-Infinity")
+    qty = plan.get("quantity")
+    depth = plan.get("available_contracts_at_quote")
+    return (
+        ev,
+        edge,
+        qty if isinstance(qty, int) and not isinstance(qty, bool) else -1,
+        depth if isinstance(depth, int) and not isinstance(depth, bool) else -1,
+    )
+
+
+def advance_weather_snapshot(
+    rows: list[dict[str, Any]],
+    *,
+    prior_state: dict[str, dict[str, Any]],
+    observed_ms: int,
+    min_edge_cents: Decimal = D("3"),
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Advance one complete weather snapshot atomically.
+
+    The full-snapshot boundary is critical. A row-by-row loop must not infer that
+    every other active market disappeared just because it was absent from one row.
+    This function closes a prior episode only after all rows in the same observation
+    cycle have been evaluated.
+    """
+    selected: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        plan = select_paper_probe(row or {}, min_edge_cents=min_edge_cents)
+        if plan is None:
+            continue
+        key = identity(plan)
+        previous = selected.get(key)
+        if previous is None or _plan_rank(plan) > _plan_rank(previous):
+            selected[key] = plan
+
+    events: list[dict[str, Any]] = []
+    current: dict[str, dict[str, Any]] = {}
+
+    for key in sorted(selected):
+        plan = selected[key]
+        old = prior_state.get(key)
+        state = _state_for_plan(plan, old, observed_ms)
+        current[key] = state
+        if old is None:
+            events.append({**state, "event": "OPEN", "observed_ms": observed_ms})
+        elif old.get("fingerprint") != state["fingerprint"]:
+            events.append({**state, "event": "MOVE", "observed_ms": observed_ms})
+
+    for key in sorted(prior_state):
+        if key not in current:
+            events.append(_close(prior_state[key], observed_ms))
+
+    return events, current
+
+
 def advance_weather_episode(
     row: dict[str, Any] | None,
     *,
@@ -76,51 +168,28 @@ def advance_weather_episode(
     observed_ms: int,
     min_edge_cents: Decimal = D("3"),
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
-    """Advance one weather observation without double-counting resting liquidity."""
-    plan = select_paper_probe(row or {}, min_edge_cents=min_edge_cents) if row else None
-    events: list[dict[str, Any]] = []
-    current: dict[str, dict[str, Any]] = {}
+    """Advance a single-market weather stream.
 
-    if plan is not None:
-        key = identity(plan)
-        old = prior_state.get(key)
-        opened_ms = int(old["opened_ms"]) if old else observed_ms
-        episode_id = str(old.get("episode_id")) if old else _episode_id(key, opened_ms)
-        state = {
-            "identity": key,
-            "episode_id": episode_id,
-            "trade_group_id": _episode_trade_group_id(episode_id),
-            "opened_ms": opened_ms,
-            "last_seen_ms": observed_ms,
-            "fingerprint": fingerprint(plan),
-            "market_ticker": plan.get("market_ticker"),
-            "market_date": plan.get("market_date"),
-            "side": plan.get("side"),
-            "quantity": plan.get("quantity"),
-            "ask_cents": plan.get("ask_cents"),
-            "modeled_fee_cents": plan.get("modeled_fee_cents"),
-            "paper_cost_cents": plan.get("paper_cost_cents"),
-            "modeled_after_fee_ev_cents": plan.get("modeled_after_fee_ev_cents"),
-            "modeled_after_fee_edge_cents_per_contract": plan.get("modeled_after_fee_edge_cents_per_contract"),
-            "available_contracts_at_quote": plan.get("available_contracts_at_quote"),
-            "settlement_key": plan.get("settlement_key"),
-            "classification": "PAPER",
-            "category": "weather",
-            "read_only": True,
-            "order_entry": False,
-            "live_probe_ready": False,
-        }
-        current[key] = state
-        if old is None:
-            events.append({**state, "event": "OPEN", "observed_ms": observed_ms})
-        elif old.get("fingerprint") != state["fingerprint"]:
-            events.append({**state, "event": "MOVE", "observed_ms": observed_ms})
+    This compatibility helper is intentionally fail-closed for multi-market state.
+    Use :func:`advance_weather_snapshot` when one polling cycle contains more than one
+    weather contract; otherwise a one-row call could falsely close unrelated markets.
+    """
+    prior_market_scopes = {
+        (
+            str(state.get("market_ticker") or "").strip().upper(),
+            str(state.get("market_date") or "").strip(),
+        )
+        for state in prior_state.values()
+    }
+    if len(prior_market_scopes) > 1:
+        raise ValueError("MULTI_MARKET_STATE_REQUIRES_ADVANCE_WEATHER_SNAPSHOT")
 
-    for key, old in prior_state.items():
-        if key not in current:
-            events.append(_close(old, observed_ms))
-
-    return events, current
+    return advance_weather_snapshot(
+        [row] if row is not None else [],
+        prior_state=prior_state,
+        observed_ms=observed_ms,
+        min_edge_cents=min_edge_cents,
+    )
 
 
 def ledger_events_for_episode_open(event: dict[str, Any]) -> list[LedgerEvent]:
@@ -191,7 +260,7 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         "close": len(closed),
         "closed_duration_lower_bound_ms": sum(int(e.get("duration_lower_bound_ms") or 0) for e in closed),
         "closed_duration_upper_bound_ms": sum(int(e.get("duration_upper_bound_ms") or 0) for e in closed),
-        "episode_semantics": "RESTING_DEPTH_DEDUPED_TRUE_CLOSE_REOPEN_IS_NEW_EPISODE",
+        "episode_semantics": "FULL_SNAPSHOT_RESTING_DEPTH_DEDUPED_TRUE_CLOSE_REOPEN_IS_NEW_EPISODE",
         "paper_fill_semantics": "ONE_SYNTHETIC_FILL_PER_OBSERVED_OPEN",
         "paper_only": True,
         "live_probe_ready": False,
