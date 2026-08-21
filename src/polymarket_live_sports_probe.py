@@ -21,7 +21,7 @@ import websockets
 
 SPORTS_WS = "wss://sports-api.polymarket.com/ws"
 GAMMA_BASE = "https://gamma-api.polymarket.com"
-DEFAULT_COLLECT_SECONDS = 8.0
+DEFAULT_COLLECT_SECONDS = 12.0
 MAX_COLLECT_SECONDS = 30.0
 MAX_ENRICH_CONCURRENCY = 12
 
@@ -51,6 +51,19 @@ def _flatten_messages(value: Any) -> list[dict[str, Any]]:
     return [value]
 
 
+def _diagnostic_sample(row: dict[str, Any]) -> dict[str, Any]:
+    """Public-feed shape only; intentionally excludes arbitrary values."""
+    useful = (
+        "type", "event_type", "slug", "live", "ended", "status", "sport",
+        "league", "gameId", "game_id", "eventId", "event_id", "period",
+        "elapsed", "score", "last_update", "lastUpdate",
+    )
+    return {
+        "keys": sorted(str(k) for k in row.keys())[:80],
+        **{k: row.get(k) for k in useful if k in row},
+    }
+
+
 def _live_row(row: dict[str, Any]) -> dict[str, Any] | None:
     slug = str(row.get("slug") or "").strip()
     if not slug:
@@ -76,6 +89,7 @@ async def _collect_live_rows(seconds: float) -> tuple[dict[str, dict[str, Any]],
     parsed = 0
     pings = 0
     errors: list[str] = []
+    samples: list[dict[str, Any]] = []
     started = time.monotonic()
     deadline = started + seconds
 
@@ -110,8 +124,17 @@ async def _collect_live_rows(seconds: float) -> tuple[dict[str, dict[str, Any]],
                 except json.JSONDecodeError:
                     continue
 
+                if isinstance(message, dict) and str(message.get("type") or "").lower() == "ping":
+                    pings += 1
+                    await ws.send("pong")
+                    if len(samples) < 12:
+                        samples.append(_diagnostic_sample(message))
+                    continue
+
                 for row in _flatten_messages(message):
                     parsed += 1
+                    if len(samples) < 12:
+                        samples.append(_diagnostic_sample(row))
                     item = _live_row(row)
                     if item:
                         live[item["slug"]] = item
@@ -124,6 +147,7 @@ async def _collect_live_rows(seconds: float) -> tuple[dict[str, dict[str, Any]],
         "objects_parsed": parsed,
         "pings_answered": pings,
         "errors": errors,
+        "diagnostic_samples": samples,
     }
 
 
