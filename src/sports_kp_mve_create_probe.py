@@ -2,7 +2,7 @@
 
 This creates a market definition only. It does NOT place an order or spend funds.
 This production probe is intentionally pinned to the user-authorized live
-49ers + Braves candidate.
+49ers + Braves candidate. Fresh Railway trigger for the exact pair.
 """
 from __future__ import annotations
 
