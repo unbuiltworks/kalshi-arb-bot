@@ -8,6 +8,8 @@ from src.weather_paper_microprobe import (
 
 
 def _row(**overrides):
+    ticker = "KXHIGHMIA-26AUG21-B92.5"
+    market_date = "2026-08-21"
     row = {
         "category": "weather",
         "classification": "SHADOW",
@@ -17,9 +19,16 @@ def _row(**overrides):
         "settlement_certified_shadow": True,
         "ev_certified_shadow": True,
         "exact_market_source_verified": True,
+        "exact_market_source_audit": {
+            "verified": True,
+            "market_ticker": ticker,
+            "market_date": market_date,
+            "settlement_source_provider": "THE_WEATHER_COMPANY",
+            "settlement_source_url": "https://weather.com/kalshi",
+        },
         "blockers": [],
-        "market_ticker": "KXHIGHMIA-26AUG21-B92.5",
-        "market_date": "2026-08-21",
+        "market_ticker": ticker,
+        "market_date": market_date,
         "quote_observed_at": "2026-08-21T11:55:00+00:00",
         "fee_type": "quadratic",
         "fee_multiplier": "1",
@@ -66,13 +75,24 @@ def test_uncertified_or_stringly_certified_rows_never_create_probe():
     assert select_paper_probe(_row(blockers=["TWC_SOURCE_ACCESS_REQUIRED"])) is None
 
 
+def test_boolean_exact_source_flag_without_matching_exact_audit_cannot_create_probe():
+    assert select_paper_probe(_row(exact_market_source_audit=None)) is None
+    assert select_paper_probe(_row(exact_market_source_audit={
+        "verified": True,
+        "market_ticker": "KXHIGHMIA-26AUG20-B92.5",
+        "market_date": "2026-08-20",
+        "settlement_source_provider": "THE_WEATHER_COMPANY",
+        "settlement_source_url": "https://weather.com/kalshi",
+    })) is None
+
+
 def test_minimum_three_cent_edge_is_enforced_after_q_specific_fee():
     weak = _row(best_shadow_side={
         "side": "YES",
         "ask_cents": 50,
         "available_contracts": 10,
         "forecast_side_probability": "0.53",
-        "modeled_after_fee_ev_cents": "999",  # upstream value is not trusted for sizing
+        "modeled_after_fee_ev_cents": "999",
         "modeled_after_fee_edge_cents_per_contract": "999",
     })
     assert score_paper_probe_plans(weak) == []
