@@ -90,12 +90,20 @@ class KalshiCrossBooks:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                logger.warning("Kalshi cross-book stream reset: %s", exc)
+                rate_limited = "429" in str(exc)
+                if rate_limited:
+                    backoff = max(backoff, 15.0)
+                logger.warning(
+                    "Kalshi cross-book stream reset: %s retry_in_s=%.2f rate_limited=%s",
+                    exc,
+                    backoff,
+                    rate_limited,
+                )
             if not self._running:
                 return
             await self._invalidate_all()
             await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, 5.0)
+            backoff = min(backoff * 2, 30.0)
 
     async def _run_once(self) -> None:
         async with websockets.connect(
