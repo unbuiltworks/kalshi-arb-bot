@@ -4,6 +4,11 @@ Discovery and books reuse the production shadow scanner's normalized identities,
 but execution is restricted to an explicit rule-approval file. The service is
 safe to deploy disarmed: without ENABLE_SPORTS_KP_LIVE=YES and a one-use ARM
 file it can only log qualified opportunities.
+
+When the approval registry is empty, the service remains useful: it observes all
+exact K/P identity joins read-only and emits economically qualified q=1 rows as
+certification candidates. Those rows are never executable until a matching rule
+approval with a validated fingerprint is present.
 """
 from __future__ import annotations
 
@@ -155,6 +160,39 @@ async def _next_update(poly: EventingPolyBookStore, kalshi: EventingKalshiCrossB
     return next(iter(done)).result()
 
 
+def _observation_keys(universe: HotUniverse, executable_keys: set[str]) -> set[str]:
+    """Return approved execution keys or all exact K/P joins for read-only triage."""
+    if executable_keys:
+        return set(executable_keys)
+    return {
+        key
+        for key, hot in universe.contracts.items()
+        if {"kalshi", "polymarket"}.issubset(hot.sides)
+        and hot.kalshi_fee_multiplier is not None
+    }
+
+
+def _candidate_payload(key: str, universe: HotUniverse, lock: LockOpportunity, persistence_ms: int) -> dict[str, object]:
+    hot = universe.contracts[key]
+    return {
+        "settlement_key": key,
+        "polymarket_slug": hot.sides["polymarket"].venue_market_id,
+        "kalshi_ticker": hot.sides["kalshi"].venue_market_id,
+        "yes_venue": lock.yes_venue,
+        "yes_market_id": lock.yes_market_id,
+        "no_venue": lock.no_venue,
+        "no_market_id": lock.no_market_id,
+        "unit_cost": str(lock.unit_cost),
+        "unit_profit": str(lock.unit_profit),
+        "max_quantity": str(lock.max_quantity),
+        "persistence_ms": persistence_ms,
+        "classification": "CERTIFICATION_CANDIDATE_NOT_EXECUTABLE",
+        "rule_gate": "FULL_RULE_FINGERPRINT_REQUIRED",
+        "approved_for_execution": False,
+        "order_entry": False,
+    }
+
+
 async def run(args: argparse.Namespace) -> int:
     approvals = _load_approvals(Path(args.approvals))
     logger.info("SPORTS_KP_LIVE_START %s", json.dumps({
@@ -177,19 +215,22 @@ async def run(args: argparse.Namespace) -> int:
         and universe.contracts[key].sides["polymarket"].venue_market_id == approval.polymarket_slug
         and universe.contracts[key].sides["kalshi"].venue_market_id == approval.kalshi_ticker
     }
+    observation_keys = _observation_keys(universe, executable_keys)
     logger.info("SPORTS_KP_APPROVAL_JOIN %s", json.dumps({
         "hot_contracts": len(universe.contracts),
         "approved_contracts": len(approvals),
         "joined_execution_contracts": len(executable_keys),
         "joined_keys": sorted(executable_keys),
-    }, separators=(",", ":")))
+        "read_only_observation_contracts": len(observation_keys - executable_keys),
+    }, separators=(",", ",")))
 
-    if not executable_keys:
+    if not observation_keys:
+        logger.info("SPORTS_KP_NO_OBSERVATION_KEYS order_entry=false")
         while True:
             await asyncio.sleep(3600)
 
-    poly_slugs = sorted({universe.contracts[k].sides["polymarket"].venue_market_id for k in executable_keys})
-    kalshi_tickers = sorted({universe.contracts[k].sides["kalshi"].venue_market_id for k in executable_keys})
+    poly_slugs = sorted({universe.contracts[k].sides["polymarket"].venue_market_id for k in observation_keys})
+    kalshi_tickers = sorted({universe.contracts[k].sides["kalshi"].venue_market_id for k in observation_keys})
     poly = EventingPolyBookStore()
     kalshi = EventingKalshiCrossBooks(kalshi_tickers)
 
@@ -221,14 +262,16 @@ async def run(args: argparse.Namespace) -> int:
 
         logger.info("SPORTS_KP_LIVE_READY %s", json.dumps({
             "joined_execution_contracts": len(executable_keys),
+            "read_only_observation_contracts": len(observation_keys - executable_keys),
             "poly_books": poly.quote_count,
             "kalshi_books": kalshi.initialized_count,
             "live_env_gate": os.getenv("ENABLE_SPORTS_KP_LIVE", "NO").strip().upper() == "YES",
             "arm_token_present": Path(args.arm_token).is_file(),
+            "order_entry": bool(executable_keys) and os.getenv("ENABLE_SPORTS_KP_LIVE", "NO").strip().upper() == "YES" and Path(args.arm_token).is_file(),
         }, separators=(",", ":")))
 
         by_market: dict[tuple[str, str], set[str]] = {}
-        for key in executable_keys:
+        for key in observation_keys:
             hot = universe.contracts[key]
             for venue in ("polymarket", "kalshi"):
                 side = hot.sides[venue]
@@ -245,14 +288,6 @@ async def run(args: argparse.Namespace) -> int:
                 if lock is None:
                     states.pop(key, None)
                     continue
-                try:
-                    plan = build_kp_plan(lock, rows, approvals[key])
-                except Exception as exc:
-                    states.pop(key, None)
-                    logger.warning("SPORTS_KP_PLAN_REJECTED %s", json.dumps({
-                        "settlement_key": key, "reason": f"{type(exc).__name__}:{str(exc)[:200]}"
-                    }, separators=(",", ":")))
-                    continue
 
                 fp = _fingerprint(lock)
                 now_ms = int(time.time() * 1000)
@@ -262,6 +297,23 @@ async def run(args: argparse.Namespace) -> int:
                     continue
                 persistence_ms = now_ms - state.first_seen_ms
                 if persistence_ms < args.min_persistence_ms:
+                    continue
+
+                if key not in approvals:
+                    logger.info(
+                        "SPORTS_KP_CERTIFICATION_CANDIDATE %s",
+                        json.dumps(_candidate_payload(key, universe, lock, persistence_ms), separators=(",", ":")),
+                    )
+                    states[key] = CandidateState(now_ms, fp)
+                    continue
+
+                try:
+                    plan = build_kp_plan(lock, rows, approvals[key])
+                except Exception as exc:
+                    states.pop(key, None)
+                    logger.warning("SPORTS_KP_PLAN_REJECTED %s", json.dumps({
+                        "settlement_key": key, "reason": f"{type(exc).__name__}:{str(exc)[:200]}"
+                    }, separators=(",", ":")))
                     continue
 
                 armed = (
