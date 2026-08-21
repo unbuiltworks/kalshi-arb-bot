@@ -36,6 +36,25 @@ def _official_kalshi_evidence(url: Any) -> bool:
     return parsed is not None and parsed[0] in _ALLOWED_KALSHI_HOSTS
 
 
+def _official_exact_market_evidence(url: Any, event_ticker: str) -> bool:
+    """Require market-page evidence to be bound to the exact event, not merely Kalshi-owned.
+
+    A generic Kalshi homepage, Series page, or terms document is useful rules evidence but
+    cannot prove which settlement-source regime applied to one historical exact market.
+    Current public exact-market pages include the event ticker in their `/markets/...`
+    path, so require that binding here. If Kalshi changes the URL shape, fail closed until
+    the extractor is independently updated rather than silently accepting generic proof.
+    """
+    parsed = _https_host(url)
+    if parsed is None or not event_ticker:
+        return False
+    host, path = parsed
+    if host not in {"kalshi.com", "www.kalshi.com"}:
+        return False
+    normalized_path = path.rstrip("/").lower()
+    return normalized_path.startswith("/markets/") and event_ticker.lower() in normalized_path
+
+
 def _recognized_source(provider: Any, source_url: Any) -> str | None:
     p = str(provider or "").strip().upper()
     parsed = _https_host(source_url)
@@ -91,12 +110,15 @@ def audit_exact_market_source(
         blockers.append("EXACT_MARKET_EVIDENCE_MISMATCH")
     if not _official_kalshi_evidence(evidence_url):
         blockers.append("EXACT_MARKET_EVIDENCE_UNOFFICIAL")
+    elif not _official_exact_market_evidence(evidence_url, e):
+        blockers.append("EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT")
 
     recognized = _recognized_source(provider, source_url)
     if recognized is None:
         blockers.append("EXACT_MARKET_SETTLEMENT_SOURCE_UNVERIFIED")
 
     blockers = sorted(set(blockers))
+    exact_evidence_ok = _official_exact_market_evidence(evidence_url, e)
     return {
         "verified": not blockers,
         "blockers": blockers,
@@ -106,7 +128,7 @@ def audit_exact_market_source(
         "market_date": md or None,
         "settlement_source_provider": recognized,
         "settlement_source_url": str(source_url).strip() if recognized else None,
-        "evidence_url": str(evidence_url).strip() if _official_kalshi_evidence(evidence_url) else None,
+        "evidence_url": str(evidence_url).strip() if exact_evidence_ok else None,
         "read_only": True,
         "order_entry": False,
         "live_probe_ready": False,
