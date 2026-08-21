@@ -1,6 +1,6 @@
 """Fail-closed settlement reconciliation for read-only weather PAPER/SHADOW evidence.
 
-This module never submits orders.  It joins one synthetic paper fill to one later
+This module never submits orders. It joins one synthetic paper fill to one later
 *official* weather settlement only when exact market/date/source provenance agrees.
 The goal is to measure realized paper P/L without letting forecast-model EV or a
 changed recurring Series template stand in for terminal settlement truth.
@@ -37,9 +37,15 @@ def reconcile_weather_paper_fill(
     Required invariants:
     - the originating row is weather PAPER/SHADOW and never live-ready;
     - exact market ticker/date match across row, synthetic fill and settlement;
-    - the settlement provider equals the exact-market provider certified at quote time;
+    - exact-market source provenance was independently verified at quote time;
+    - the settlement provider equals that exact-market audited provider;
     - terminal finality/correction review is explicitly complete;
     - synthetic fill side, quantity, price and modeled fee are numerically coherent.
+
+    Important: do not use the older Series-regime verification bit here. Around a
+    source transition, the current recurring Series can legitimately disagree with an
+    older exact contract. The hardened exact-market audit is the authority for later
+    paper settlement reconciliation.
     """
     blockers: list[str] = []
 
@@ -59,13 +65,22 @@ def reconcile_weather_paper_fill(
     if not market_date or fill_date != market_date or settle_date != market_date:
         blockers.append("EXACT_MARKET_DATE_MISMATCH")
 
-    certified_provider = str(shadow_row.get("market_settlement_source_provider") or "").strip().upper()
+    exact_audit = shadow_row.get("exact_market_source_audit")
+    exact_verified = shadow_row.get("exact_market_source_verified") is True
+    if not isinstance(exact_audit, dict) or exact_audit.get("verified") is not True or not exact_verified:
+        blockers.append("QUOTE_TIME_EXACT_MARKET_SOURCE_UNVERIFIED")
+        certified_provider = ""
+    else:
+        audit_ticker = str(exact_audit.get("market_ticker") or "").strip().upper()
+        audit_date = str(exact_audit.get("market_date") or "").strip()
+        if audit_ticker != market_ticker or audit_date != market_date:
+            blockers.append("QUOTE_TIME_EXACT_MARKET_AUDIT_MISMATCH")
+        certified_provider = str(exact_audit.get("settlement_source_provider") or "").strip().upper()
+
     settlement_provider = str(settlement.get("settlement_source_provider") or "").strip().upper()
     if certified_provider not in _ALLOWED_PROVIDERS or settlement_provider != certified_provider:
         blockers.append("SETTLEMENT_SOURCE_MISMATCH")
 
-    if not _strict_true(shadow_row.get("settlement_source_regime_verified")):
-        blockers.append("QUOTE_TIME_SETTLEMENT_REGIME_UNVERIFIED")
     if not _strict_true(settlement.get("official_source_verified")):
         blockers.append("OFFICIAL_SETTLEMENT_SOURCE_UNVERIFIED")
     if not _strict_true(settlement.get("finality_verified")):
