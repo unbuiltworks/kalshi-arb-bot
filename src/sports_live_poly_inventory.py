@@ -3,6 +3,7 @@
 This probe is intentionally order-free. It queries documented public league-event
 endpoints, keeps events explicitly marked live and not ended/closed, and ranks
 short-duration inventory first so the combo engine can focus on capital turnover.
+The probe is one-shot so every deployment produces a fresh actionable snapshot.
 """
 from __future__ import annotations
 
