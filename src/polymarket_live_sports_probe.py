@@ -3,7 +3,7 @@
 Source of truth for *live match state* is Polymarket's public Sports WebSocket.
 The probe then enriches each live slug from Gamma so downstream combo discovery
 gets event/market identifiers and market metadata without relying on a narrow
-hard-coded league list.
+hard-coded league list. This module is safe as a Railway one-shot start command.
 
 No authentication, order placement, market creation, or capital usage occurs.
 """
@@ -42,7 +42,6 @@ def _flatten_messages(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, dict):
         return []
 
-    # Current docs show a direct sports-result object. Be tolerant of wrappers.
     for key in ("data", "payload", "results", "events"):
         nested = value.get(key)
         if isinstance(nested, (dict, list)):
@@ -116,7 +115,7 @@ async def _collect_live_rows(seconds: float) -> tuple[dict[str, dict[str, Any]],
                     item = _live_row(row)
                     if item:
                         live[item["slug"]] = item
-    except Exception as exc:  # probe should report transport failure, not hide it
+    except Exception as exc:
         errors.append(f"{type(exc).__name__}: {exc}")
 
     return live, {
@@ -201,7 +200,7 @@ async def main_async() -> dict[str, Any]:
             *[_enrich_one(http, semaphore, row) for row in live_rows.values()]
         )
 
-    enriched.sort(key=lambda x: (str((x.get("event") or {}).get("title") or x.get("slug"))))
+    enriched.sort(key=lambda x: str((x.get("event") or {}).get("title") or x.get("slug")))
     gamma_matched = sum(x.get("event") is not None for x in enriched)
     accepting = sum(
         any(m.get("accepting_orders") is not False for m in ((x.get("event") or {}).get("open_markets") or []))
