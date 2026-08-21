@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from src.cross_venue_ledger import reconcile_events
 from src.weather_paper_microprobe import (
     ledger_events_for_paper_probe,
     score_paper_probe_plans,
@@ -113,6 +114,22 @@ def test_shared_ledger_events_are_fill_plus_separate_fee_and_remain_paper_only()
     assert fill.quantity == Decimal(plan["quantity"])
     assert fill.price == Decimal("0.36")
     assert fee.fee == Decimal(plan["modeled_fee_cents"]) / Decimal(100)
+    assert fill.external_id == f"{plan['trade_group_id']}:fill"
+    assert fee.external_id == f"{plan['trade_group_id']}:fee"
+
+
+def test_repeated_poll_emission_reconciles_to_one_fill_and_one_fee():
+    plan = select_paper_probe(_row())
+    assert plan is not None
+    first = ledger_events_for_paper_probe(plan, ts_ms=1000)
+    second = ledger_events_for_paper_probe(plan, ts_ms=2000)
+    merged = reconcile_events(first, second)
+    assert len(merged) == 2
+    assert [event.event_type for event in merged] == ["fee", "fill"] or [event.event_type for event in merged] == ["fill", "fee"]
+    assert {event.external_id for event in merged} == {
+        f"{plan['trade_group_id']}:fill",
+        f"{plan['trade_group_id']}:fee",
+    }
 
 
 def test_ledger_emission_fails_closed_if_plan_is_marked_live_ready():
