@@ -2,9 +2,8 @@
 
 Market discovery/readiness/risk gates are identical to the proven campaign child.
 Only the final two-leg submission policy changes: Gemini must terminally fill before
-Kalshi receives the hedge order. The authenticated Gemini trading socket is health-
-checked immediately before submission; an unhealthy pre-send socket becomes a safe
-zero-fill retry, while any post-send ambiguity remains fail-closed.
+Kalshi receives the hedge order. The authenticated Gemini trading socket is deferred
+until an actionable trade has passed all market-data and safety gates.
 
 An optional fee-aware Kalshi hedge cushion is wired behind
 ``CRYPTO_KALSHI_HEDGE_CUSHION=YES``. It defaults OFF. When enabled, the transport
@@ -31,11 +30,11 @@ from src import gemini_kalshi_gemini_flatten_fix as gemini_flatten_fix
 from src import gemini_kalshi_gate_attribution as gate_attribution
 from src import gemini_kalshi_micro_live_executor_20bp as micro_executor
 from src import gemini_kalshi_ws_rate_limit_guard as ws_rate_limit_guard
+from src import gemini_kalshi_deferred_gemini_session as deferred_gemini_session
 from src.gemini_kalshi_staged_probe_transport import submit_gemini_first_probe
 
 DEADLINE_ENV = "SOL_CANARY_V2_ARM_NOT_AFTER_UTC"
 HEDGE_CUSHION_ENV = "CRYPTO_KALSHI_HEDGE_CUSHION"
-REST_ONLY_TARGET_ENV = "CRYPTO_KALSHI_TARGET_REST_ONLY"
 _ALLOWED_ASSETS = ("BTC", "ETH", "SOL", "XRP")
 
 
@@ -53,7 +52,7 @@ def _hedge_cushion_enabled() -> bool:
 
 
 async def _disabled_lifecycle_stream() -> None:
-    """Keep REST strike fallback active without opening a second Kalshi WS."""
+    """Keep authoritative REST strike fallback active without a second Kalshi WS."""
     await asyncio.Event().wait()
 
 
@@ -99,15 +98,15 @@ def main() -> None:
     gemini_ws_recovery.install()
     gemini_flatten_fix.install()
     ws_rate_limit_guard.install_child_preflight()
+    deferred_gemini_session.install()
     v2._submit_and_persist_result = _submit_and_persist_context
 
     rollover_optimizer.install()
-    if os.getenv(REST_ONLY_TARGET_ENV, "NO").strip().upper() == "YES":
-        target_lifecycle_cache._lifecycle_stream = _disabled_lifecycle_stream
-        micro_executor.logger.warning(
-            "CRYPTO_KALSHI_TARGET_REST_ONLY enabled=true lifecycle_ws=false "
-            "orderbook_ws=true risk_gates_changed=false"
-        )
+    target_lifecycle_cache._lifecycle_stream = _disabled_lifecycle_stream
+    micro_executor.logger.warning(
+        "CRYPTO_KALSHI_TARGET_REST_ONLY enabled=true lifecycle_ws=false "
+        "orderbook_ws=true risk_gates_changed=false"
+    )
     target_lifecycle_cache.install()
     target_freshness_guard.install()
 
