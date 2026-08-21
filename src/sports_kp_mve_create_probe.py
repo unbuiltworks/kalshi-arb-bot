@@ -1,13 +1,14 @@
 """Create exactly one bounded Kalshi sports MVE market, then print returned metadata.
 
 This creates a market definition only. It does NOT place an order or spend funds.
-This production probe is intentionally pinned to the user-authorized live
-49ers + Braves candidate. Fresh Railway trigger for the exact pair.
+The POST is fail-closed: merely starting or restarting this module is harmless
+unless both explicit creation arms match the pinned candidate.
 """
 from __future__ import annotations
 
 import asyncio
 import json
+import os
 
 from src.auth import KalshiClient
 
@@ -25,9 +26,27 @@ SELECTED = [
         "side": "yes",
     },
 ]
+ARM_TOKEN = ":".join(sorted(x["market_ticker"] for x in SELECTED))
+
+
+def _armed() -> bool:
+    enabled = os.getenv("ENABLE_KALSHI_MVE_MARKET_CREATE", "").strip().upper() == "YES"
+    token = os.getenv("KALSHI_MVE_CREATE_ARM_TOKEN", "").strip()
+    return enabled and token == ARM_TOKEN
 
 
 async def main_async() -> dict:
+    if not _armed():
+        return {
+            "status": "SPORTS_KP_MVE_CREATE_DISARMED",
+            "collection_ticker": COLLECTION,
+            "selected_markets": SELECTED,
+            "required_arm_token": ARM_TOKEN,
+            "market_create_enabled": False,
+            "order_entry": False,
+            "funds_at_risk": False,
+        }
+
     client = KalshiClient(base_url=BASE)
     try:
         response = await client.post(
@@ -54,6 +73,7 @@ async def main_async() -> dict:
             "market": market,
             "exact_legs_match": exact,
             "error": body if response.status_code >= 400 else None,
+            "market_create_enabled": True,
             "order_entry": False,
             "funds_at_risk": False,
         }
