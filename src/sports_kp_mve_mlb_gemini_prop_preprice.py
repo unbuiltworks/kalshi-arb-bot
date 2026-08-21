@@ -169,7 +169,7 @@ def _candidate_sides(
                     grow.venue_market_id, source_side, grow.source_label,
                 ))
             # Ambiguous multiple Gemini representations fail closed for ranking too.
-            unique = {(g.venue_market_id, g.source_side, g.contract_key): g for g in matching}
+            unique = {(g.venue_market_id, g.side, g.contract_key): g for g in matching}
             if len(unique) != 1:
                 continue
             grow = next(iter(unique.values()))
