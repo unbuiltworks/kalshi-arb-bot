@@ -12,6 +12,8 @@ Risk remains deliberately tiny:
 - any previous ambiguous/one-leg outcome halts future submissions;
 - one contract per leg, >=3c after-fee edge, <=50ms skew, <=100ms books and 50ms
   exact-price survival are inherited from the proven canary;
+- Kalshi prop discovery uses bounded REST series snapshots when the account WS slot
+  is unavailable, with an exact depth=1 REST refresh for the second live revalidation;
 - no auto-reset of the $5 ceiling by day/date/restart.
 """
 from __future__ import annotations
@@ -29,6 +31,7 @@ import httpx
 from src import mlb_gk_multifamily_discovery_patch as discovery_patch
 from src import mlb_gk_prop_live_multifamily_rule_risk_canary as canary
 from src import sports_trade_reporting as reporting
+from src.kalshi_prop_rest_books import KalshiPropRestBooks
 from src.mlb_live_participation import candidate_game, participation_proof
 from src.sports_live_budget_guard import BudgetExhausted, CUMULATIVE_BUDGET, current_used, install as install_budget
 from src.sports_trade_reporting import install as install_reporting
@@ -75,6 +78,11 @@ def _install_unified_families() -> None:
     discovery_patch.SELECTED_SERIES = SELECTED_SERIES
     discovery_patch.install()
     canary.SUPPORTED_FAMILIES = ALL_FAMILIES
+    # The account's authenticated Kalshi websocket slot can be occupied by another
+    # strategy. Keep this sports lane independent: the replacement is read-only,
+    # event-driven from bounded REST snapshots, and forces an exact depth=1 refresh
+    # for the canary's second <=100 ms revalidation before any FOK submission.
+    canary.EventingKalshiCrossBooks = KalshiPropRestBooks
 
     def participation_ok(row: Any, games: dict[Any, Any]):
         game_key = candidate_game(row.game_slug)
