@@ -21,6 +21,9 @@ def _market():
         "market_date": "2026-08-20",
         "local_day_verified": True,
         "bracket_semantics_verified": True,
+        "settlement_source_regime_verified": True,
+        "settlement_source_provider": "NWS",
+        "settlement_source_evidence_url": "https://kalshi.com/markets/kxhightdc/kxhightdc-26aug20",
         "strike_type": "between",
         "floor_strike": 90,
         "cap_strike": 91,
@@ -309,3 +312,17 @@ def test_malformed_or_naive_forecast_timestamps_fail_closed():
         assert row["ev_certified_shadow"] is False
         assert row["best_shadow_side"] is None
         assert "FORECAST_TIME_UNVERIFIED" in row["forecast_blockers"]
+
+
+def test_exact_market_identity_and_regime_fail_closed():
+    market = _market()
+    market["ticker"] = "KXHIGHMIA-26AUG20-B91.5"
+    market["settlement_source_regime_verified"] = "true"
+    row = _build(
+        series=_series(), market=market, quote=_quote(),
+        station={"name": "Washington National", "cli_product": "CLIDCA", "identity_verified": True},
+        forecast=_forecast(),
+    )
+    assert row["settlement_certified_shadow"] is False
+    assert "EXACT_MARKET_IDENTITY_UNVERIFIED" in row["blockers"]
+    assert "EXACT_MARKET_SETTLEMENT_REGIME_UNVERIFIED" in row["blockers"]
