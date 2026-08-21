@@ -2,10 +2,8 @@
 
 Purpose: keep the authoritative Gemini/Kalshi MLB prop canary operational when the
 account's authenticated Kalshi websocket slot is occupied by another strategy.
-Discovery polls nested event top-of-book snapshots by series.  A quote request with
-an ultra-fresh max age (<=100 ms) forces an exact depth=1 orderbook fetch once the
-cached snapshot is older than 40 ms, so the existing 50 ms second revalidation uses
-fresh exact Kalshi liquidity before either FOK order is submitted.
+Discovery polls nested event top-of-book snapshots by series. Exact depth=1 reads are
+exposed separately and are reserved for candidate-only second revalidation.
 
 This module is read-only. It contains no order transport.
 """
@@ -144,7 +142,8 @@ class KalshiPropRestBooks:
                 self._notify(q.ticker, "rest_series_snapshot", received_ms)
             return
 
-    async def _exact_quote(self, ticker: str) -> TwoSidedQuote | None:
+    async def exact_quote(self, ticker: str) -> TwoSidedQuote | None:
+        """Fetch one exact depth=1 book for candidate-only final revalidation."""
         response = await self._get(f"/markets/{ticker}/orderbook", params={"depth": 1})
         self.exact_book_requests += 1
         if response.status_code != 200:
@@ -169,19 +168,11 @@ class KalshiPropRestBooks:
         return q
 
     async def quote(self, ticker: str, *, max_age_ms: int = 30000) -> TwoSidedQuote | None:
+        """Return only the cached series snapshot; never trigger per-market REST."""
         now = int(time.time() * 1000)
         async with self._lock:
             cached = self._quotes.get(ticker)
-        age = now - cached.received_ms if cached is not None else 10**9
-        # For the live canary's <=100 ms gate, cached series snapshots are good for
-        # trigger/evaluation, but the second check after its 50 ms sleep must become
-        # an exact depth=1 fetch once the snapshot is older than 40 ms.
-        if max_age_ms <= 100 and age > 40:
-            cached = await self._exact_quote(ticker)
-            if cached is None:
-                return None
-            age = int(time.time() * 1000) - cached.received_ms
-        if cached is None or age > max_age_ms:
+        if cached is None or now - cached.received_ms > max_age_ms:
             return None
         return cached
 
@@ -189,11 +180,10 @@ class KalshiPropRestBooks:
         self._running = True
         self._http = httpx.AsyncClient(timeout=5.0)
         logger.warning("KALSHI_PROP_BOOK_TRANSPORT %s", json.dumps({
-            "mode": "REST_SERIES_SNAPSHOT_PLUS_EXACT_REVALIDATION",
+            "mode": "REST_SERIES_SNAPSHOT_PLUS_CANDIDATE_ONLY_EXACT_REVALIDATION",
             "tickers": len(self.tickers),
             "series": list(SERIES),
             "poll_spacing_seconds": 0.25,
-            "exact_revalidation_after_cached_age_ms": 40,
             "read_only": True,
             "order_entry": False,
         }, separators=(",", ":")))
