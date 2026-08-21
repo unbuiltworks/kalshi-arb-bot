@@ -2,6 +2,7 @@
 
 This is pre-trade only: it creates a q=1 RFQ, observes quotes briefly, and does
 NOT accept any quote or place any order. No funds are spent by this probe.
+Fresh Railway trigger after setting the RFQ entrypoint.
 """
 from __future__ import annotations
 
