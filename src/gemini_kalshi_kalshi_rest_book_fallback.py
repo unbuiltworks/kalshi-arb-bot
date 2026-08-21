@@ -1,18 +1,15 @@
 """Fail-closed market-data fallback for the live Gemini/Kalshi 15m scanner.
 
 Kalshi uses the public exact REST orderbook when authenticated Kalshi WebSocket
-handshakes are rate-limited. Gemini prediction-market depth streams are multiplexed
-onto one WebSocket connection so BTC/ETH/SOL/XRP do not create a multi-connection
-reconnect storm. The Gemini connection requests an initial top-5 snapshot and then
-uses symbol-bearing 100ms differential depth updates to maintain an exact local book.
-When configured Gemini credentials are present, that market-data-only socket uses
-Gemini's authenticated handshake; otherwise it falls back to the public handshake.
-No order method is exposed from this module.
+handshakes are rate-limited. Gemini prediction-market books use one persistent
+WebSocket connection and the documented read-only ``depth`` request method, with
+request IDs mapped to BTC/ETH/SOL/XRP. This avoids both per-asset connection storms
+and relying on silent update-only streams. No order method is exposed here.
 
-The Kalshi quote timestamp is conservatively stamped at request start (not response
-receipt), so network latency makes freshness/skew checks harder rather than easier.
-Existing q=1, profit, boundary, 50ms survival, <=50ms quote-skew and exact-payload
-gates remain in control of execution.
+Both REST/WS snapshot timestamps are conservatively stamped at request start, so
+network latency makes freshness/skew checks harder rather than easier. Existing q=1,
+profit, boundary, 50ms survival, <=50ms quote-skew and exact-payload gates remain in
+control of execution.
 """
 from __future__ import annotations
 
@@ -29,12 +26,7 @@ import websockets
 from src import gemini_kalshi_predictive_prewarmed as base
 from src import gemini_kalshi_rollover_optimizer as rollover
 from src import gemini_kalshi_micro_live_readiness_20bp as readiness
-from src.gemini_prediction_auth import (
-    credentials,
-    has_credentials,
-    websocket_auth_headers,
-    _websocket_header_kwarg,
-)
+from src.gemini_prediction_auth import authenticated_ws_connect, has_credentials
 
 hot = base.hot
 D = Decimal
@@ -42,16 +34,13 @@ logger = logging.getLogger("kalshi_arb.gemini_kalshi_kalshi_rest_book_fallback")
 POLL_SLEEP_S = 0.08
 MAX_BACKOFF_S = 2.0
 DEPTH = 10
-GEMINI_SNAPSHOT_DEPTH = 5
+GEMINI_DEPTH = 5
+GEMINI_REQUEST_SPACING_S = 0.05
 
 # Preserve the pre-patch lifecycle function. install() replaces base._stop_feed with
-# our wrapper; calling base._stop_feed from inside that wrapper would recurse forever
-# during rollover/cleanup and crash the live campaign.
+# our wrapper; calling base._stop_feed from inside that wrapper would recurse forever.
 _ORIGINAL_STOP_FEED = base._stop_feed
 
-# Keep one process-wide Gemini connection and fan each symbol update into the feed(s)
-# that requested it. The local books are rebuilt from a fresh snapshot on every WS
-# reconnect and sequence gaps fail closed into another reconnect/resnapshot.
 _GEMINI_SUBSCRIBERS: dict[str, dict[int, tuple[asyncio.Queue, Any]]] = {}
 _GEMINI_MANAGER_TASK: asyncio.Task | None = None
 _GEMINI_CHANGE_EVENT: asyncio.Event | None = None
@@ -62,10 +51,6 @@ def _gemini_change_event() -> asyncio.Event:
     if _GEMINI_CHANGE_EVENT is None:
         _GEMINI_CHANGE_EVENT = asyncio.Event()
     return _GEMINI_CHANGE_EVENT
-
-
-def _gemini_stream_names(symbols: set[str]) -> list[str]:
-    return [f"{symbol}@depth@100ms" for symbol in sorted(symbols)]
 
 
 def _gemini_snapshot() -> set[str]:
@@ -82,190 +67,136 @@ def _gemini_increment_reconnects() -> None:
                 seen.add(ident)
 
 
-def _gemini_apply_levels(book: dict[Decimal, Decimal], rows: Any) -> None:
+def _best_level(rows: Any, *, highest: bool) -> tuple[D, D] | None:
+    levels: list[tuple[D, D]] = []
     if not isinstance(rows, list):
-        return
+        return None
     for row in rows:
-        if not isinstance(row, list) or len(row) < 2:
-            continue
         try:
-            price = D(str(row[0]))
-            qty = D(str(row[1]))
+            if isinstance(row, dict):
+                price = D(str(row.get("price")))
+                qty = D(str(row.get("amount") or row.get("quantity") or row.get("qty")))
+            else:
+                price = D(str(row[0]))
+                qty = D(str(row[1]))
         except Exception:
             continue
-        if qty <= 0:
-            book.pop(price, None)
-        elif D("0") <= price <= D("1"):
-            book[price] = qty
-
-
-def _gemini_top_from_book(
-    symbol: str,
-    book: dict[str, Any],
-    received_ms: int,
-):
-    bids: dict[Decimal, Decimal] = book["bids"]
-    asks: dict[Decimal, Decimal] = book["asks"]
-    if not bids or not asks:
+        if D("0") <= price <= D("1") and qty > 0:
+            levels.append((price, qty))
+    if not levels:
         return None
-    bid = max(bids)
-    ask = min(asks)
-    payload = {
-        "s": symbol,
-        "b": str(bid),
-        "B": str(bids[bid]),
-        "a": str(ask),
-        "A": str(asks[ask]),
-    }
-    return hot.parse_gemini_book_ticker(payload, received_ms=received_ms)
+    return (max if highest else min)(levels, key=lambda level: level[0])
+
+
+def _gemini_top_from_depth(symbol: str, payload: dict[str, Any], quote_ts_ms: int):
+    # Gemini WS RPC responses may wrap method data under result/data. Accept only a
+    # payload that contains explicit bid/ask arrays; never infer a missing side.
+    candidates = [payload.get("result"), payload.get("data"), payload]
+    data = next(
+        (candidate for candidate in candidates if isinstance(candidate, dict) and "bids" in candidate and "asks" in candidate),
+        None,
+    )
+    if data is None:
+        return None
+    bid = _best_level(data.get("bids"), highest=True)
+    ask = _best_level(data.get("asks"), highest=False)
+    if bid is None or ask is None:
+        return None
+    return hot.parse_gemini_book_ticker(
+        {
+            "s": symbol,
+            "b": str(bid[0]),
+            "B": str(bid[1]),
+            "a": str(ask[0]),
+            "A": str(ask[1]),
+        },
+        received_ms=quote_ts_ms,
+    )
 
 
 async def _gemini_connect_market_data():
-    url = f"{hot.GEMINI_WS}?snapshot={GEMINI_SNAPSHOT_DEPTH}"
-    if not has_credentials():
-        return await websockets.connect(url, open_timeout=5.0), "PUBLIC_SHARED_WS_DEPTH100_SNAPSHOT5"
-    key, secret = credentials()
-    headers = websocket_auth_headers(key, secret)
-    kwargs: dict[str, Any] = {
-        "open_timeout": 5.0,
-        _websocket_header_kwarg(): headers,
-    }
-    return await websockets.connect(url, **kwargs), "AUTHENTICATED_SHARED_WS_DEPTH100_SNAPSHOT5"
+    if has_credentials():
+        return await authenticated_ws_connect(timeout=5.0), "AUTHENTICATED_SHARED_WS_DEPTH_RPC"
+    return await websockets.connect(hot.GEMINI_WS, open_timeout=5.0), "PUBLIC_SHARED_WS_DEPTH_RPC"
 
 
 async def _gemini_shared_manager() -> None:
-    backoff = 0.25
-    first = True
-    change = _gemini_change_event()
+    backoff = 1.0
+    request_seq = 0
+    schema_warned = False
     while True:
-        symbols = _gemini_snapshot()
+        symbols = sorted(_gemini_snapshot())
         if not symbols:
+            change = _gemini_change_event()
             change.clear()
             await change.wait()
             continue
 
         ws = None
         transport = "UNKNOWN"
-        books: dict[str, dict[str, Any]] = {}
         try:
             ws, transport = await _gemini_connect_market_data()
-            await ws.send(json.dumps({
-                "id": "hot-shared",
-                "method": "SUBSCRIBE",
-                "params": _gemini_stream_names(symbols),
-            }))
-            subscribed = set(symbols)
-            backoff = 0.25
+            backoff = 1.0
             logger.info(
                 "CRYPTO_GEMINI_SHARED_CONNECTED %s",
                 json.dumps({
-                    "symbols": sorted(subscribed),
-                    "stream_count": len(subscribed),
+                    "symbols": symbols,
                     "connections": 1,
                     "transport": transport,
-                    "snapshot_depth": GEMINI_SNAPSHOT_DEPTH,
+                    "depth": GEMINI_DEPTH,
+                    "request_spacing_s": GEMINI_REQUEST_SPACING_S,
                     "market_data_only": True,
                     "risk_gates_changed": False,
                 }, separators=(",", ":")),
             )
 
-            while True:
-                recv_task = asyncio.create_task(ws.recv())
-                change_task = asyncio.create_task(change.wait())
-                done, pending = await asyncio.wait(
-                    {recv_task, change_task},
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                for task in pending:
-                    task.cancel()
-                if pending:
-                    await asyncio.gather(*pending, return_exceptions=True)
-
-                if change_task in done:
-                    change.clear()
-                    desired = _gemini_snapshot()
-                    additions = desired - subscribed
-                    removals = subscribed - desired
-                    if additions:
-                        await ws.send(json.dumps({
-                            "id": "hot-shared-add",
-                            "method": "SUBSCRIBE",
-                            "params": _gemini_stream_names(additions),
-                        }))
-                    if removals:
-                        await ws.send(json.dumps({
-                            "id": "hot-shared-remove",
-                            "method": "UNSUBSCRIBE",
-                            "params": _gemini_stream_names(removals),
-                        }))
-                        for symbol in removals:
-                            books.pop(symbol, None)
-                    subscribed = desired
-                    if not subscribed:
-                        break
-                    continue
-
-                raw = recv_task.result()
-                receive_ms = int(time.time() * 1000)
-                mono_ns = time.perf_counter_ns()
-                payload = json.loads(raw)
-                if payload.get("status") is not None:
-                    if int(payload.get("status")) >= 400:
-                        raise RuntimeError(f"Gemini WS subscription error: {payload}")
-                    continue
-                if payload.get("e") != "depthUpdate":
-                    continue
-                symbol = str(payload.get("s") or "")
-                subscribers = list(_GEMINI_SUBSCRIBERS.get(symbol, {}).values())
-                if not subscribers:
-                    continue
-
-                try:
-                    first_update = int(payload["U"])
-                    last_update = int(payload["u"])
-                except (KeyError, TypeError, ValueError):
-                    continue
-
-                state = books.get(symbol)
-                if state is None:
-                    # With ?snapshot=5 Gemini documents the first differential frame
-                    # as a complete snapshot with U == u. Anything else is unsafe to
-                    # seed because it could omit untouched levels.
-                    if first_update != last_update:
-                        raise RuntimeError(f"Gemini initial depth frame was not snapshot for {symbol}")
-                    state = {"bids": {}, "asks": {}, "last": last_update}
-                    books[symbol] = state
-                else:
-                    previous = int(state["last"])
-                    if last_update <= previous:
+            while _gemini_snapshot():
+                for symbol in sorted(_gemini_snapshot()):
+                    subscribers = list(_GEMINI_SUBSCRIBERS.get(symbol, {}).values())
+                    if not subscribers:
                         continue
-                    if first_update > previous + 1:
-                        raise RuntimeError(
-                            f"Gemini depth sequence gap symbol={symbol} previous={previous} U={first_update}"
+                    request_seq += 1
+                    request_id = f"depth-{request_seq}-{symbol}"
+                    request_start_ms = int(time.time() * 1000)
+                    mono_ns = time.perf_counter_ns()
+                    await ws.send(json.dumps({
+                        "id": request_id,
+                        "method": "depth",
+                        "params": {"symbol": symbol, "limit": GEMINI_DEPTH},
+                    }, separators=(",", ":")))
+                    raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                    payload = json.loads(raw)
+                    if str(payload.get("id") or "") != request_id:
+                        raise RuntimeError("Gemini depth RPC response id mismatch")
+                    status = int(payload.get("status", 200))
+                    if status >= 400:
+                        raise RuntimeError(f"Gemini depth RPC status={status}")
+                    top = _gemini_top_from_depth(symbol, payload, request_start_ms)
+                    if top is None:
+                        if not schema_warned:
+                            nested = payload.get("result") or payload.get("data") or {}
+                            logger.warning(
+                                "CRYPTO_GEMINI_DEPTH_SCHEMA_UNSUPPORTED top_keys=%s nested_keys=%s",
+                                sorted(str(key) for key in payload.keys()),
+                                sorted(str(key) for key in nested.keys()) if isinstance(nested, dict) else [],
+                            )
+                            schema_warned = True
+                        raise RuntimeError("Gemini depth RPC returned no explicit two-sided book")
+                    receive_ms = int(time.time() * 1000)
+                    for queue, stats in subscribers:
+                        stats.events += 1
+                        stats.gemini_events += 1
+                        hot._enqueue(
+                            queue,
+                            ("gemini", receive_ms, None, top, mono_ns),
+                            stats,
                         )
-                    state["last"] = last_update
+                    await asyncio.sleep(GEMINI_REQUEST_SPACING_S)
 
-                _gemini_apply_levels(state["bids"], payload.get("b"))
-                _gemini_apply_levels(state["asks"], payload.get("a"))
-                top = _gemini_top_from_book(symbol, state, receive_ms)
-                if top is None:
-                    continue
-                for queue, stats in subscribers:
-                    stats.events += 1
-                    stats.gemini_events += 1
-                    hot._enqueue(
-                        queue,
-                        ("gemini", receive_ms, None, top, mono_ns),
-                        stats,
-                    )
-
-            first = True
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            if not first:
-                _gemini_increment_reconnects()
-            first = False
+            _gemini_increment_reconnects()
             logger.warning(
                 "CRYPTO_GEMINI_SHARED_RECONNECT %s",
                 json.dumps({
@@ -275,7 +206,6 @@ async def _gemini_shared_manager() -> None:
                     "backoff_s": backoff,
                     "connections": 1,
                     "transport": transport,
-                    "resnapshot_required": True,
                 }, separators=(",", ":")),
             )
             await asyncio.sleep(backoff)
@@ -292,8 +222,7 @@ async def _gemini_shared_stream(symbol: str, queue: asyncio.Queue, stats: Any) -
     global _GEMINI_MANAGER_TASK
     token = id(asyncio.current_task())
     _GEMINI_SUBSCRIBERS.setdefault(symbol, {})[token] = (queue, stats)
-    change = _gemini_change_event()
-    change.set()
+    _gemini_change_event().set()
     if _GEMINI_MANAGER_TASK is None or _GEMINI_MANAGER_TASK.done():
         _GEMINI_MANAGER_TASK = asyncio.create_task(
             _gemini_shared_manager(),
@@ -307,7 +236,7 @@ async def _gemini_shared_stream(symbol: str, queue: asyncio.Queue, stats: Any) -
             subscribers.pop(token, None)
             if not subscribers:
                 _GEMINI_SUBSCRIBERS.pop(symbol, None)
-        change.set()
+        _gemini_change_event().set()
 
 
 def _levels(rows: Any) -> dict[Decimal, Decimal]:
@@ -396,13 +325,7 @@ async def _rest_book_stream(ticker: str, queue: asyncio.Queue, stats: Any) -> No
 
 async def _start_feed_rest_kalshi(*, asset: str, pair: Any, stats: Any, active: bool):
     boundary_ms = int((pair.window_end.timestamp() - 900.0) * 1000)
-    feed = base.WarmFeed(
-        asset=asset,
-        pair=pair,
-        stats=stats,
-        boundary_ms=boundary_ms,
-        active=active,
-    )
+    feed = base.WarmFeed(asset=asset, pair=pair, stats=stats, boundary_ms=boundary_ms, active=active)
     feed.stream_tasks = [
         asyncio.create_task(
             _gemini_shared_stream(pair.gemini_symbol, feed.raw_queue, stats),
@@ -413,10 +336,7 @@ async def _start_feed_rest_kalshi(*, asset: str, pair: Any, stats: Any, active: 
             name=f"hot-kalshi-rest-{asset}-{int(pair.window_end.timestamp())}",
         ),
     ]
-    feed.pump_task = asyncio.create_task(
-        base._pump_feed(feed),
-        name=f"hot-pump-{asset}-{int(pair.window_end.timestamp())}",
-    )
+    feed.pump_task = asyncio.create_task(base._pump_feed(feed), name=f"hot-pump-{asset}-{int(pair.window_end.timestamp())}")
     logger.info(
         "CRYPTO_HOT_DOUBLE_BUFFER_FEED_START %s",
         json.dumps({
@@ -425,10 +345,9 @@ async def _start_feed_rest_kalshi(*, asset: str, pair: Any, stats: Any, active: 
             "kalshi_ticker": pair.kalshi_ticker,
             "window_end_utc": pair.window_end.isoformat(),
             "active": active,
-            "start_relative_window_start_ms": int(time.time() * 1000) - boundary_ms,
-            "gemini_transport": "ONE_SHARED_DEPTH100_WS_SNAPSHOT5_AUTH_WHEN_AVAILABLE",
+            "gemini_transport": "ONE_SHARED_WS_DEPTH_RPC_AUTH_WHEN_AVAILABLE",
             "kalshi_transport": "REST_EXACT_ORDERBOOK_FAIL_CLOSED",
-            "kalshi_quote_timestamp": "REQUEST_START_CONSERVATIVE",
+            "quote_timestamps": "REQUEST_START_CONSERVATIVE",
             "risk_gates_changed": False,
             "order_entry": False,
         }, separators=(",", ":")),
@@ -445,7 +364,6 @@ def install() -> None:
     base._stop_feed = _stop_feed_rest_kalshi
     logger.warning(
         "CRYPTO_MARKET_DATA_FALLBACK_INSTALLED kalshi_endpoint=exact_orderbook depth=10 "
-        "kalshi_quote_timestamp=request_start kalshi_poll_sleep_s=0.08 "
-        "gemini_transport=one_shared_depth100_ws_snapshot5_auth_when_available "
-        "risk_gates_changed=false"
+        "gemini_transport=one_shared_ws_depth_rpc_auth_when_available "
+        "quote_timestamp=request_start risk_gates_changed=false"
     )
