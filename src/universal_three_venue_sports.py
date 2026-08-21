@@ -31,7 +31,25 @@ KALSHI = "https://external-api.kalshi.com/trade-api/v2"
 
 
 async def _json(http: httpx.AsyncClient, url: str, **kwargs: Any) -> dict[str, Any]:
-    response = await http.get(url, **kwargs)
+    response: httpx.Response | None = None
+    for attempt in range(5):
+        response = await http.get(url, **kwargs)
+        if response.status_code != 429:
+            break
+        retry_after_raw = response.headers.get("retry-after", "").strip()
+        try:
+            retry_after = float(retry_after_raw) if retry_after_raw else 0.0
+        except ValueError:
+            retry_after = 0.0
+        delay = max(retry_after, min(1.0 * (2 ** attempt), 8.0))
+        logger.warning(
+            "Sports discovery HTTP 429 host=%s attempt=%d retry_in_s=%.2f",
+            response.request.url.host,
+            attempt + 1,
+            delay,
+        )
+        await asyncio.sleep(delay)
+    assert response is not None
     response.raise_for_status()
     body = response.json()
     return body if isinstance(body, dict) else {}
@@ -98,7 +116,13 @@ async def fetch_kalshi_mlb(http: httpx.AsyncClient) -> list[dict[str, Any]]:
                 break
         return out
 
-    groups = await asyncio.gather(*(one(series) for series in KALSHI_SERIES))
+    # Kalshi applies account/IP request limits across services. Do not burst the
+    # three MLB series requests concurrently: serialize them so a single scanner
+    # cannot create a synchronized 429 storm for the rest of production.
+    groups: list[list[dict[str, Any]]] = []
+    for series in KALSHI_SERIES:
+        groups.append(await one(series))
+        await asyncio.sleep(0.15)
     return [row for group in groups for row in group]
 
 
