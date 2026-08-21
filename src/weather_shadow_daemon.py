@@ -3,6 +3,10 @@
 No authentication or order-entry imports are allowed here. The daemon polls public
 Kalshi weather markets, emits normalized shadow rows, and depth-checks only the
 strongest positive research candidates using Kalshi's public order-book endpoint.
+
+Depth-backed research is deliberately kept separate from executable-shadow
+readiness. A real order book can be measured while settlement/model certification
+is still unresolved; that evidence must never be labeled execution-eligible.
 """
 
 from __future__ import annotations
@@ -33,6 +37,17 @@ def _candidate_sides(row: WeatherShadowRow, min_ev_cents: float) -> list[tuple[s
     if row.q1_no_model_ev_cents is not None and row.q1_no_model_ev_cents >= min_ev_cents:
         out.append(("no", float(row.q1_no_model_ev_cents)))
     return out
+
+
+def _research_blockers(row: WeatherShadowRow) -> list[str]:
+    blockers: list[str] = []
+    if row.settlement_status != "SETTLEMENT_CERTIFIED":
+        blockers.append(row.settlement_status or "SETTLEMENT_UNVERIFIED")
+    if row.model_status != "MODEL_CERTIFIED":
+        blockers.append(row.model_status or "MODEL_UNVERIFIED")
+    if row.data_quality_status != "FRESH":
+        blockers.append(f"DATA_QUALITY_{row.data_quality_status or 'UNKNOWN'}")
+    return blockers
 
 
 def _fill_payload(fill) -> dict[str, object]:
@@ -77,7 +92,8 @@ def run_forever() -> None:
             candidates.sort(key=_candidate_score, reverse=True)
             candidates = candidates[:depth_candidates]
             depth_checked = 0
-            executable_events = 0
+            depth_research_events = 0
+            execution_eligible_events = 0
 
             for row in candidates:
                 sides = _candidate_sides(row, min_ev_cents)
@@ -87,15 +103,22 @@ def run_forever() -> None:
                     book = fetch_orderbook(row.market_ticker, depth=100)
                     grid = executable_grid(book, max_q=5)
                     depth_checked += 1
+                    blockers = _research_blockers(row)
+                    execution_eligible = not blockers
                     for side, research_ev in sides:
                         fills = {str(q): _fill_payload(grid[side][q]) for q in range(1, 6)}
                         print(json.dumps({
-                            "event": "WEATHER_EXECUTABLE_SHADOW",
+                            "event": "WEATHER_DEPTH_RESEARCH_SHADOW",
                             "classification": "SHADOW",
                             "order_entry": False,
+                            "execution_eligible": execution_eligible,
+                            "readiness_blockers": blockers,
                             "settlement_status": row.settlement_status,
                             "settlement_source": row.settlement_source,
                             "settlement_location_key": row.settlement_location_key,
+                            "model_status": row.model_status,
+                            "model_eligibility": row.model_eligibility,
+                            "data_quality_status": row.data_quality_status,
                             "market_ticker": row.market_ticker,
                             "event_ticker": row.event_ticker,
                             "city": row.city,
@@ -108,7 +131,9 @@ def run_forever() -> None:
                             "fills_q1_to_q5": fills,
                             "ts": datetime.now(timezone.utc).isoformat(),
                         }, sort_keys=True), flush=True)
-                        executable_events += 1
+                        depth_research_events += 1
+                        if execution_eligible:
+                            execution_eligible_events += 1
                 except Exception as exc:
                     print(json.dumps({
                         "event": "WEATHER_ORDERBOOK_ERROR",
@@ -125,7 +150,8 @@ def run_forever() -> None:
                 "rows": len(rows),
                 "positive_research_candidates": len(candidates),
                 "depth_checked": depth_checked,
-                "executable_shadow_events": executable_events,
+                "depth_research_events": depth_research_events,
+                "execution_eligible_events": execution_eligible_events,
                 "settlement_statuses": settlement_states,
                 "classification": "SHADOW",
                 "order_entry": False,
