@@ -1,8 +1,8 @@
 """Fail-closed planning primitives for supervised crypto campaign rollover.
 
-This module does not arm trading, mutate Railway, or submit venue orders.  It only
+This module does not arm trading, mutate Railway, or submit venue orders. It only
 proves that a bounded parallel campaign is locally clean enough to *plan* a fresh
-campaign namespace.  A caller must still perform live account/order reconciliation
+campaign namespace. A caller must still perform live account/order reconciliation
 before applying the returned environment values.
 
 The safety model is deliberately strict:
@@ -112,6 +112,79 @@ def assert_locally_reconciled(state: dict[str, Any]) -> None:
             raise RuntimeError(f"campaign {campaign_id} lane {asset} unresolved status={status or 'MISSING'}")
 
 
+def diagnose_campaign(
+    *,
+    state: dict[str, Any],
+    prior_arm_deadline_utc: str,
+    now: datetime | None = None,
+    max_completed_trades: int,
+    max_execution_attempts: int,
+) -> dict[str, Any]:
+    """Return a read-only diagnosis of the bounded campaign state.
+
+    This is intended for supervisors/runtime probes. It never plans or applies a
+    new arm. `rollover_eligible` means only that persistent local state is clean and
+    the bounded campaign has ended; live venue reconciliation is still required.
+    """
+    now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    deadline = _parse_deadline(prior_arm_deadline_utc)
+    completed = int(state.get("completed_total") or 0)
+    attempts = int(state.get("execution_attempts_total") or 0)
+    deadline_expired = now > deadline
+    completed_cap = completed >= max_completed_trades
+    attempts_cap = attempts >= max_execution_attempts
+
+    local_error: str | None = None
+    try:
+        assert_locally_reconciled(state)
+        locally_reconciled = True
+    except Exception as exc:
+        locally_reconciled = False
+        local_error = f"{type(exc).__name__}:{str(exc)}"
+
+    if bool(state.get("halted")):
+        bounded_state = "HALTED"
+    elif completed_cap:
+        bounded_state = "COMPLETE_MAX_TRADES"
+    elif attempts_cap:
+        bounded_state = "COMPLETE_MAX_EXECUTION_ATTEMPTS"
+    elif deadline_expired:
+        bounded_state = "COMPLETE_ARM_DEADLINE_EXPIRED"
+    else:
+        bounded_state = "ACTIVE_WITHIN_ARM_WINDOW"
+
+    lanes = state.get("lanes") or {}
+    lane_statuses = {
+        asset: {
+            "status": str((lane or {}).get("status") or "MISSING"),
+            "active_run_id": (lane or {}).get("active_run_id"),
+            "reserved_usd": str((lane or {}).get("reserved_usd") or "0"),
+        }
+        for asset, lane in lanes.items()
+        if isinstance(lane, dict)
+    }
+
+    ended = deadline_expired or completed_cap or attempts_cap
+    return {
+        "campaign_id": str(state.get("campaign_id") or ""),
+        "observed_at_utc": now.isoformat().replace("+00:00", "Z"),
+        "arm_not_after_utc": deadline.isoformat().replace("+00:00", "Z"),
+        "arm_deadline_expired": deadline_expired,
+        "completed_total": completed,
+        "max_completed_trades": int(max_completed_trades),
+        "execution_attempts_total": attempts,
+        "max_execution_attempts": int(max_execution_attempts),
+        "halted": bool(state.get("halted")),
+        "halt_reason": state.get("halt_reason"),
+        "bounded_state": bounded_state,
+        "locally_reconciled": locally_reconciled,
+        "local_reconciliation_error": local_error,
+        "rollover_eligible": bool(ended and locally_reconciled and not state.get("halted")),
+        "live_venue_reconciliation_required": True,
+        "lanes": lane_statuses,
+    }
+
+
 def plan_rollover(
     *,
     state: dict[str, Any],
@@ -124,7 +197,7 @@ def plan_rollover(
 ) -> RolloverPlan:
     """Return a fresh bounded campaign plan after local fail-closed checks.
 
-    Live venue reconciliation is intentionally outside this function.  The caller
+    Live venue reconciliation is intentionally outside this function. The caller
     must verify open orders/fills/balances before applying the returned environment.
     """
     assert_locally_reconciled(state)
