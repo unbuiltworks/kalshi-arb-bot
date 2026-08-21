@@ -4,12 +4,11 @@ from __future__ import annotations
 import asyncio
 import json
 
+from src import sports_kp_live_combo_supervisor_v11 as v11
 from src import sports_kp_live_combo_supervisor_v12 as v12
 from src.sports_poly_pregame_nfl_diagnostic import run_diagnostic
 
-logger = v12.sports_kp_mve_poly_nfl_aliases.poly.__dict__.get("logger")
-# Use the established combo logger regardless of the helper module internals.
-logger = v12.sports_kp_live_combo_supervisor_v11.logger
+logger = v11.logger
 
 
 async def run() -> None:
@@ -22,7 +21,6 @@ async def run() -> None:
 
 
 def main() -> None:
-    # v12 ultimately uses the same logging setup in the stable supervisor.
     import logging, os
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)-8s %(message)s")
     asyncio.run(run())
