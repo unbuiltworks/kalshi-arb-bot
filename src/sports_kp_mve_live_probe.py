@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 import httpx
@@ -27,6 +27,17 @@ def _sportsish(row: dict[str, Any]) -> bool:
     text = " ".join(str(row.get(k) or "") for k in ("title", "description", "series_ticker", "functional_description")).lower()
     tickers = " ".join(str(x) for x in (row.get("associated_event_tickers") or []))
     return any(w in text for w in SPORT_WORDS) or any(h in tickers.upper() for h in SPORT_TICKER_HINTS)
+
+
+def _within_24h(value: Any) -> bool:
+    if not value:
+        return False
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    now = datetime.now(timezone.utc)
+    return now <= dt <= now + timedelta(hours=24)
 
 
 async def _get(http: httpx.AsyncClient, path: str, **params: Any) -> dict[str, Any]:
@@ -52,8 +63,9 @@ async def main_async() -> dict[str, Any]:
                 break
 
         sports = [x for x in collections if _sportsish(x)]
+        same_day_collections = [x for x in sports if _within_24h(x.get("close_date"))]
         combo_markets: list[dict[str, Any]] = []
-        for coll in sports[:50]:
+        for coll in sports[:75]:
             ticker = str(coll.get("collection_ticker") or "")
             if not ticker:
                 continue
@@ -92,11 +104,13 @@ async def main_async() -> dict[str, Any]:
                 if not cursor:
                     break
 
+    same_day_markets = [x for x in combo_markets if _within_24h(x.get("close_time"))]
     return {
         "observed_at": datetime.now(timezone.utc).isoformat(),
         "open_collections": len(collections),
         "sports_collections": len(sports),
-        "sports_collection_sample": [
+        "same_day_sports_collections": len(same_day_collections),
+        "same_day_sports_collection_sample": [
             {
                 "collection_ticker": x.get("collection_ticker"),
                 "series_ticker": x.get("series_ticker"),
@@ -107,10 +121,11 @@ async def main_async() -> dict[str, Any]:
                 "size_min": x.get("size_min"),
                 "size_max": x.get("size_max"),
             }
-            for x in sports[:50]
+            for x in same_day_collections[:50]
         ],
         "two_leg_markets": sum(len(x["legs"]) == 2 for x in combo_markets),
         "three_leg_markets": sum(len(x["legs"]) == 3 for x in combo_markets),
+        "same_day_combo_markets": same_day_markets[:200],
         "combo_markets": combo_markets[:200],
         "read_only": True,
         "order_entry": False,
