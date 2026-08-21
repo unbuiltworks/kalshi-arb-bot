@@ -1,14 +1,14 @@
 """MLB cross-venue prepricing for MVE candidate ranking.
 
-Extends the v16 NFL ranking cache with:
-- MLB full-game moneyline/spread/total using the existing three-venue normalizer
-  and conservative q=1 snapshot pricer;
-- MLB player props using the existing strict Polymarket/Kalshi player+line+game
-  matcher and public q=1 Polymarket books.
+The generator has already fetched every Kalshi component market needed for the
+current MVE pass.  This module therefore reuses that in-memory market cache and
+never refetches Kalshi MLB inventory during prepricing.  Only external Gemini and
+Polymarket data/books are read here.
 
-This is selection/ranking only. It never mutates a Kalshi Leg, never grants rule
-certification, and never exposes order entry. MLB prop rule differences remain
-explicitly non-executable for K<->P guaranteed-arb purposes.
+MLB full-game moneyline/spread/total use the existing strict normal-event
+normalizers.  Polymarket player-prop prepricing is intentionally omitted from the
+hot path; direct Gemini/Kalshi prop ranking is handled by the dedicated v19 helper.
+All external replacements remain ranking-only and never grant execution authority.
 """
 from __future__ import annotations
 
@@ -16,35 +16,38 @@ import asyncio
 from decimal import Decimal
 import json
 import logging
-import os
-from typing import Any
+import time
+from typing import Any, Mapping
 
 import httpx
 
+from src import sports_kp_live_combo_supervisor_v8 as v8
 from src import sports_kp_mve_poly_preprice as nfl
+from src.mlb_game_side_normalization import (
+    NormalizedSide,
+    normalize_gemini_mlb,
+    normalize_kalshi_mlb,
+    normalize_polymarket_mlb,
+)
 from src.polymarket_scope_guard import full_game_only_events
-from src.strict_mlb_prop_snapshot import (
-    POLY,
-    _fetch_kalshi_events,
-    _fetch_poly_mlb,
-    discover_strict_candidates,
-    poly_top_book,
-    polymarket_fee,
-)
-from src.three_venue_mlb_snapshot_pricing import price_counterparts_snapshot
-from src.universal_three_venue_sports import (
-    fetch_gemini_mlb,
-    fetch_kalshi_mlb,
-    fetch_polymarket_mlb,
-)
+from src.strict_mlb_prop_snapshot import POLY, poly_top_book
+from src.three_venue_mlb_price_scan import _gemini_contracts, _get
+from src.three_venue_pricing_core import gemini_contract_book, make_priced_quote
+from src.universal_three_venue_sports import fetch_gemini_mlb, fetch_polymarket_mlb
 
 D = Decimal
 ONE = D("1")
 ZERO = D("0")
+MAX_START_SKEW_MS = 5 * 60 * 1000
 logger = logging.getLogger("kalshi_arb.sports_kp_mve_mlb_preprice")
 
 MLB_GAME_PREFIXES = ("KXMLBGAME-", "KXMLBSPREAD-", "KXMLBTOTAL-")
 MLB_PROP_PREFIXES = ("KXMLBHIT-", "KXMLBHR-", "KXMLBTB-", "KXMLBKS-", "KXMLBRBI-", "KXMLBHRR-")
+_GAME_SERIES = {
+    "KXMLBGAME-": "KXMLBGAME",
+    "KXMLBSPREAD-": "KXMLBSPREAD",
+    "KXMLBTOTAL-": "KXMLBTOTAL",
+}
 
 
 def _is_game(ticker: str) -> bool:
@@ -78,43 +81,123 @@ def _install_if_cheaper(leg: Any, cost: Decimal, source: dict[str, Any]) -> bool
     return True
 
 
+def _series_for_event(event_ticker: str) -> str | None:
+    upper = str(event_ticker or "").upper()
+    for prefix, series in _GAME_SERIES.items():
+        if upper.startswith(prefix):
+            return series
+    return None
+
+
+def _cached_kalshi_sides(legs: list[Any]) -> tuple[dict[tuple[str, str], NormalizedSide], int]:
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    missing = 0
+    for leg in legs:
+        event_ticker = str(leg.event_ticker)
+        series = _series_for_event(event_ticker)
+        market = v8._MARKETS.get(str(leg.market_ticker))
+        if series is None or not isinstance(market, Mapping):
+            missing += 1
+            continue
+        grouped.setdefault((event_ticker, series), []).append(dict(market))
+
+    synthetic = [
+        {"event_ticker": event_ticker, "series_ticker": series, "markets": markets}
+        for (event_ticker, series), markets in grouped.items()
+    ]
+    out: dict[tuple[str, str], NormalizedSide] = {}
+    for side in normalize_kalshi_mlb(synthetic):
+        out[(side.venue_market_id, side.side.upper())] = side
+    return out, missing
+
+
+async def _price_external_game_sides(
+    target_by_key: dict[str, NormalizedSide],
+) -> tuple[list[Any], list[dict[str, str]], int, int]:
+    if not target_by_key:
+        return [], [], 0, 0
+    async with httpx.AsyncClient(timeout=20.0) as http:
+        gemini, poly_raw = await asyncio.gather(fetch_gemini_mlb(http), fetch_polymarket_mlb(http))
+        poly = full_game_only_events(poly_raw)
+        external = normalize_gemini_mlb(gemini) + normalize_polymarket_mlb(poly)
+        wanted: list[NormalizedSide] = []
+        for side in external:
+            target = target_by_key.get(side.contract_key)
+            if target is None:
+                continue
+            if abs(side.identity.event.scheduled_start_ms - target.identity.event.scheduled_start_ms) > MAX_START_SKEW_MS:
+                continue
+            wanted.append(side)
+
+        gcontracts = _gemini_contracts(gemini)
+        pids = sorted({side.venue_market_id for side in wanted if side.identity.venue == "polymarket"})
+        sem = asyncio.Semaphore(8)
+        p_results = await asyncio.gather(*(_get(http, sem, f"{POLY}/v1/markets/{slug}/book") for slug in pids)) if pids else []
+
+    errors: list[dict[str, str]] = []
+    pbooks: dict[str, tuple[Any, int]] = {}
+    for slug, (body, received, error) in zip(pids, p_results):
+        book = poly_top_book(body or {}) if body is not None else None
+        if book is None:
+            errors.append({"venue": "polymarket", "market_id": slug, "error": error or "book_unparseable"})
+        else:
+            pbooks[slug] = (book, received)
+
+    priced: list[Any] = []
+    now_ms = int(time.time() * 1000)
+    for side in wanted:
+        row = None
+        if side.identity.venue == "gemini":
+            book = gemini_contract_book(gcontracts.get(side.venue_market_id, {}))
+            if book is not None:
+                row = make_priced_quote(side, book, received_ms=now_ms, depth_source="event_prices_q1_probe_only")
+        elif side.identity.venue == "polymarket" and side.venue_market_id in pbooks:
+            book, received = pbooks[side.venue_market_id]
+            row = make_priced_quote(side, book, received_ms=received, depth_source="public_book_top_level")
+        if row is not None:
+            priced.append(row)
+    return priced, errors, len(gemini), len(poly)
+
+
 async def _game_preprice(legs: list[Any]) -> dict[str, Any]:
     wanted = [leg for leg in legs if _is_game(str(leg.market_ticker))]
     if not wanted:
         return {"legs": 0, "counterpart_keys": 0, "improved": 0, "best_saving": "0"}
 
-    async with httpx.AsyncClient(timeout=20.0) as http:
-        gemini, poly_raw, kalshi = await asyncio.gather(
-            fetch_gemini_mlb(http), fetch_polymarket_mlb(http), fetch_kalshi_mlb(http)
-        )
-        poly = full_game_only_events(poly_raw)
-        priced, errors, key_count = await price_counterparts_snapshot(http, gemini, poly, kalshi)
+    cached_sides, missing_cache = _cached_kalshi_sides(wanted)
+    target_for_leg: dict[tuple[str, str], NormalizedSide] = {}
+    target_by_key: dict[str, NormalizedSide] = {}
+    for leg in wanted:
+        side = cached_sides.get((str(leg.market_ticker), str(leg.hedge_side).upper()))
+        if side is None:
+            continue
+        target_for_leg[(str(leg.market_ticker), str(leg.hedge_side).upper())] = side
+        target_by_key[side.contract_key] = side
 
-    kalshi_by_market_side: dict[tuple[str, str], Any] = {}
+    try:
+        priced, errors, gemini_events, poly_events = await _price_external_game_sides(target_by_key)
+    except Exception as exc:
+        return {
+            "legs": len(wanted), "counterpart_keys": len(target_by_key), "improved": 0,
+            "best_saving": "0", "external_error": type(exc).__name__,
+            "missing_cached_markets": missing_cache,
+        }
+
     external_by_key: dict[str, list[Any]] = {}
     for row in priced:
-        q = row.quote
-        if q.venue == "kalshi":
-            ticker = q.market_id.split("#", 1)[0]
-            kalshi_by_market_side[(ticker, row.source_side.upper())] = row
-        elif q.venue in {"polymarket", "gemini"}:
-            external_by_key.setdefault(q.settlement_key, []).append(row)
+        external_by_key.setdefault(row.quote.settlement_key, []).append(row)
 
     improved = 0
     best_saving = ZERO
     by_venue = {"polymarket": 0, "gemini": 0}
     for leg in wanted:
-        hedge_side = str(leg.hedge_side).upper()
-        krow = kalshi_by_market_side.get((str(leg.market_ticker), hedge_side))
-        if krow is None:
+        target = target_for_leg.get((str(leg.market_ticker), str(leg.hedge_side).upper()))
+        if target is None:
             continue
-        candidates = external_by_key.get(krow.quote.settlement_key) or []
+        candidates = external_by_key.get(target.contract_key) or []
         best = None
         for row in candidates:
             q = row.quote
-            # YES cost is the cost of the canonical proposition represented by
-            # this normalized side, which is exactly the Kalshi physical hedge
-            # side selected above.
             if q.yes_depth < ONE or not (ZERO < q.yes_cost < ONE):
                 continue
             if best is None or q.yes_cost < best.quote.yes_cost:
@@ -138,80 +221,11 @@ async def _game_preprice(legs: list[Any]) -> dict[str, Any]:
             best_saving = max(best_saving, leg.hedge_all_in - cost)
 
     return {
-        "legs": len(wanted), "counterpart_keys": key_count, "priced_quotes": len(priced),
+        "legs": len(wanted), "counterpart_keys": len(target_by_key), "priced_quotes": len(priced),
         "pricing_errors": len(errors), "improved": improved, "improved_by_venue": by_venue,
-        "best_saving": str(best_saving),
-    }
-
-
-async def _prop_preprice(legs: list[Any]) -> dict[str, Any]:
-    wanted = [leg for leg in legs if _is_prop(str(leg.market_ticker))]
-    if not wanted:
-        return {"legs": 0, "strict_matches": 0, "books": 0, "improved": 0, "best_saving": "0"}
-
-    wanted_tickers = {str(leg.market_ticker) for leg in wanted}
-    async with httpx.AsyncClient(timeout=20.0) as http:
-        poly_markets, kalshi_events = await asyncio.gather(_fetch_poly_mlb(http), _fetch_kalshi_events(http))
-        strict = [c for c in discover_strict_candidates(poly_markets, kalshi_events) if c.kalshi_ticker in wanted_tickers]
-        # Ambiguous external matches fail closed.
-        by_ticker: dict[str, list[Any]] = {}
-        for candidate in strict:
-            by_ticker.setdefault(candidate.kalshi_ticker, []).append(candidate)
-        unique = {ticker: rows[0] for ticker, rows in by_ticker.items() if len(rows) == 1}
-        try:
-            max_books = max(8, min(int(os.getenv("MVE_PREPRICE_MAX_MLB_PROP_BOOKS", "32")), 64))
-        except Exception:
-            max_books = 32
-        slugs = [row.poly_slug for row in unique.values()][:max_books]
-        sem = asyncio.Semaphore(8)
-
-        async def book(slug: str):
-            async with sem:
-                r = await http.get(f"{POLY}/v1/markets/{slug}/book")
-                if r.status_code != 200:
-                    return slug, None
-                return slug, poly_top_book(r.json() if r.content else {})
-
-        books = dict(await asyncio.gather(*(book(slug) for slug in slugs))) if slugs else {}
-
-    improved = 0
-    best_saving = ZERO
-    for leg in wanted:
-        candidate = unique.get(str(leg.market_ticker))
-        if candidate is None:
-            continue
-        book = books.get(candidate.poly_slug)
-        if book is None:
-            continue
-        hedge_side = str(leg.hedge_side).lower()
-        if hedge_side == "yes":
-            price, depth = book.yes_ask, book.yes_depth
-        elif hedge_side == "no":
-            price, depth = book.no_ask, book.no_depth
-        else:
-            continue
-        if depth < ONE or not (ZERO < price < ONE):
-            continue
-        cost = price + polymarket_fee(1, price)
-        source = {
-            "venue": "polymarket",
-            "market_id": candidate.poly_slug,
-            "depth_q1": str(depth),
-            "player": candidate.player,
-            "threshold": str(candidate.threshold),
-            "family": candidate.family,
-            "start_skew_seconds": candidate.start_skew_seconds,
-            "scope": "MLB_PROP_STRICT_PLAYER_LINE_GAME_MATCH",
-            "rule_gate": "KNOWN_KALSHI_POLY_RULE_DIFFERENCES_RANKING_ONLY",
-        }
-        if _install_if_cheaper(leg, cost, source):
-            improved += 1
-            best_saving = max(best_saving, leg.hedge_all_in - cost)
-
-    return {
-        "legs": len(wanted), "strict_matches": len(strict), "unique_matches": len(unique),
-        "books": sum(book is not None for book in books.values()), "improved": improved,
-        "best_saving": str(best_saving),
+        "best_saving": str(best_saving), "missing_cached_markets": missing_cache,
+        "external_inventory": {"gemini": gemini_events, "polymarket": poly_events},
+        "kalshi_refetches": 0,
     }
 
 
@@ -219,7 +233,14 @@ async def preprice_hook(collection: dict[str, Any], event_legs: dict[str, list[A
     # NFL hook owns cache clearing and exact NFL orientation semantics.
     event_legs = await nfl.preprice_hook(collection, event_legs)
     legs = [leg for rows in event_legs.values() for leg in rows]
-    game, prop = await asyncio.gather(_game_preprice(legs), _prop_preprice(legs))
+    game = await _game_preprice(legs)
+    prop = {
+        "legs": sum(1 for leg in legs if _is_prop(str(leg.market_ticker))),
+        "status": "DIRECT_GEMINI_PREPRICE_HANDLED_BY_V19",
+        "kalshi_refetches": 0,
+        "improved": 0,
+        "best_saving": "0",
+    }
     logger.warning("SPORTS_MVE_MLB_PREPRICE %s", json.dumps({
         "collection": collection.get("collection_ticker"),
         "mlb_game": game,
