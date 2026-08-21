@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from typing import Any
 
+from src.cross_venue_ledger import LedgerEvent, make_event
 from src.weather_paper_microprobe import select_paper_probe
 
 D = Decimal
@@ -43,6 +44,10 @@ def fingerprint(plan: dict[str, Any]) -> str:
 
 def _episode_id(key: str, opened_ms: int) -> str:
     return "weather-episode-" + sha256(f"{key}|{opened_ms}".encode("utf-8")).hexdigest()[:24]
+
+
+def _episode_trade_group_id(episode_id: str) -> str:
+    return "paper-" + episode_id
 
 
 def _close(old: dict[str, Any], observed_ms: int) -> dict[str, Any]:
@@ -80,9 +85,11 @@ def advance_weather_episode(
         key = identity(plan)
         old = prior_state.get(key)
         opened_ms = int(old["opened_ms"]) if old else observed_ms
+        episode_id = str(old.get("episode_id")) if old else _episode_id(key, opened_ms)
         state = {
             "identity": key,
-            "episode_id": old.get("episode_id") if old else _episode_id(key, opened_ms),
+            "episode_id": episode_id,
+            "trade_group_id": _episode_trade_group_id(episode_id),
             "opened_ms": opened_ms,
             "last_seen_ms": observed_ms,
             "fingerprint": fingerprint(plan),
@@ -91,8 +98,12 @@ def advance_weather_episode(
             "side": plan.get("side"),
             "quantity": plan.get("quantity"),
             "ask_cents": plan.get("ask_cents"),
+            "modeled_fee_cents": plan.get("modeled_fee_cents"),
             "paper_cost_cents": plan.get("paper_cost_cents"),
             "modeled_after_fee_ev_cents": plan.get("modeled_after_fee_ev_cents"),
+            "modeled_after_fee_edge_cents_per_contract": plan.get("modeled_after_fee_edge_cents_per_contract"),
+            "available_contracts_at_quote": plan.get("available_contracts_at_quote"),
+            "settlement_key": plan.get("settlement_key"),
             "classification": "PAPER",
             "category": "weather",
             "read_only": True,
@@ -112,6 +123,66 @@ def advance_weather_episode(
     return events, current
 
 
+def ledger_events_for_episode_open(event: dict[str, Any]) -> list[LedgerEvent]:
+    """Emit one idempotent synthetic fill+fee for a true weather episode OPEN.
+
+    MOVE/resting observations emit nothing. A genuine close/re-open gets a new
+    episode_id/trade_group_id and can therefore become a new independent paper fill.
+    """
+    if event.get("event") != "OPEN":
+        return []
+    if event.get("classification") != "PAPER" or event.get("read_only") is not True:
+        return []
+    if event.get("order_entry") is not False or event.get("live_probe_ready") is not False:
+        return []
+
+    trade_group_id = str(event.get("trade_group_id") or "")
+    settlement_key = str(event.get("settlement_key") or "")
+    ticker = str(event.get("market_ticker") or "").strip().upper()
+    side = str(event.get("side") or "").strip().upper()
+    qty = event.get("quantity")
+    ask = event.get("ask_cents")
+    fee = _d(event.get("modeled_fee_cents"))
+    ts_ms = event.get("observed_ms")
+    if not trade_group_id or not settlement_key or not ticker or side not in {"YES", "NO"}:
+        return []
+    if not isinstance(qty, int) or isinstance(qty, bool) or qty <= 0:
+        return []
+    if not isinstance(ask, int) or isinstance(ask, bool) or not 1 <= ask <= 99:
+        return []
+    if fee is None or fee < 0:
+        return []
+    if not isinstance(ts_ms, int) or isinstance(ts_ms, bool) or ts_ms < 0:
+        return []
+
+    fill = make_event(
+        trade_group_id=trade_group_id,
+        settlement_key=settlement_key,
+        category="weather",
+        venue="kalshi",
+        market_id=ticker,
+        event_type="fill",
+        side=side,
+        quantity=D(qty),
+        price=D(ask) / D(100),
+        ts_ms=ts_ms,
+        external_id=f"{trade_group_id}:fill",
+    )
+    fee_event = make_event(
+        trade_group_id=trade_group_id,
+        settlement_key=settlement_key,
+        category="weather",
+        venue="kalshi",
+        market_id=ticker,
+        event_type="fee",
+        side=side,
+        fee=fee / D(100),
+        ts_ms=ts_ms,
+        external_id=f"{trade_group_id}:fee",
+    )
+    return [fill, fee_event]
+
+
 def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
     closed = [e for e in events if e.get("event") == "CLOSE"]
     return {
@@ -121,6 +192,7 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         "closed_duration_lower_bound_ms": sum(int(e.get("duration_lower_bound_ms") or 0) for e in closed),
         "closed_duration_upper_bound_ms": sum(int(e.get("duration_upper_bound_ms") or 0) for e in closed),
         "episode_semantics": "RESTING_DEPTH_DEDUPED_TRUE_CLOSE_REOPEN_IS_NEW_EPISODE",
+        "paper_fill_semantics": "ONE_SYNTHETIC_FILL_PER_OBSERVED_OPEN",
         "paper_only": True,
         "live_probe_ready": False,
         "read_only": True,
