@@ -1,5 +1,6 @@
 from src.weather_paper_episode_tracker import (
     advance_weather_episode,
+    advance_weather_snapshot,
     ledger_events_for_episode_open,
     summarize,
 )
@@ -41,6 +42,30 @@ def _row(**overrides):
     return row
 
 
+def _second_row(**overrides):
+    ticker = "KXHIGHCHI-26AUG21-B80.5"
+    market_date = "2026-08-21"
+    row = _row(
+        market_ticker=ticker,
+        market_date=market_date,
+        exact_market_source_audit={
+            "verified": True,
+            "market_ticker": ticker,
+            "market_date": market_date,
+            "settlement_source_provider": "THE_WEATHER_COMPANY",
+            "settlement_source_url": "https://weather.com/kalshi",
+        },
+        best_shadow_side={
+            "side": "YES",
+            "ask_cents": 41,
+            "available_contracts": 7,
+            "forecast_side_probability": "0.72",
+        },
+    )
+    row.update(overrides)
+    return row
+
+
 def test_repeated_resting_quote_opens_once_and_price_move_is_move():
     events, state = advance_weather_episode(_row(), prior_state={}, observed_ms=1000)
     assert [e["event"] for e in events] == ["OPEN"]
@@ -75,6 +100,61 @@ def test_uncertified_row_closes_prior_episode_instead_of_counting_capacity():
     events, new_state = advance_weather_episode(blocked, prior_state=state, observed_ms=2000)
     assert [e["event"] for e in events] == ["CLOSE"]
     assert new_state == {}
+
+
+def test_full_snapshot_does_not_close_other_active_market_when_rows_are_processed_together():
+    events, state = advance_weather_snapshot(
+        [_row(), _second_row()],
+        prior_state={},
+        observed_ms=1000,
+    )
+    assert [e["event"] for e in events] == ["OPEN", "OPEN"]
+    assert len(state) == 2
+
+    events, state2 = advance_weather_snapshot(
+        [
+            _row(quote_observed_at="2026-08-21T15:00:01+00:00"),
+            _second_row(quote_observed_at="2026-08-21T15:00:01+00:00"),
+        ],
+        prior_state=state,
+        observed_ms=2000,
+    )
+    assert events == []
+    assert len(state2) == 2
+    assert {s["market_ticker"] for s in state2.values()} == {
+        "KXHIGHMIA-26AUG21-B92.5",
+        "KXHIGHCHI-26AUG21-B80.5",
+    }
+
+
+def test_full_snapshot_closes_only_market_missing_from_complete_poll_cycle():
+    _, state = advance_weather_snapshot(
+        [_row(), _second_row()],
+        prior_state={},
+        observed_ms=1000,
+    )
+    events, new_state = advance_weather_snapshot(
+        [_row(quote_observed_at="2026-08-21T15:00:02+00:00")],
+        prior_state=state,
+        observed_ms=3000,
+    )
+    assert [e["event"] for e in events] == ["CLOSE"]
+    assert events[0]["market_ticker"] == "KXHIGHCHI-26AUG21-B80.5"
+    assert {s["market_ticker"] for s in new_state.values()} == {"KXHIGHMIA-26AUG21-B92.5"}
+
+
+def test_single_row_helper_fails_closed_on_multi_market_state():
+    _, state = advance_weather_snapshot(
+        [_row(), _second_row()],
+        prior_state={},
+        observed_ms=1000,
+    )
+    try:
+        advance_weather_episode(_row(), prior_state=state, observed_ms=2000)
+    except ValueError as exc:
+        assert str(exc) == "MULTI_MARKET_STATE_REQUIRES_ADVANCE_WEATHER_SNAPSHOT"
+    else:
+        raise AssertionError("multi-market row-by-row use must fail closed")
 
 
 def test_only_open_emits_episode_scoped_idempotent_paper_fill_and_fee():
