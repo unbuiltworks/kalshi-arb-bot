@@ -1,9 +1,8 @@
 """One-shot read-only snapshot of Polymarket's live sports board.
 
-Source of truth for *live match state* is Polymarket's public Sports WebSocket.
-The probe then enriches each live slug from Gamma so downstream combo discovery
-gets event/market identifiers and market metadata without relying on a narrow
-hard-coded league list. This module is safe as a Railway one-shot start command.
+Live state comes from Polymarket's public Sports WebSocket. Current sports-feed
+messages identify games primarily by gameId (not always by slug), so each live
+game ID is enriched through Gamma's documented keyset events endpoint.
 
 No authentication, order placement, market creation, or capital usage occurs.
 """
@@ -21,8 +20,8 @@ import websockets
 
 SPORTS_WS = "wss://sports-api.polymarket.com/ws"
 GAMMA_BASE = "https://gamma-api.polymarket.com"
-DEFAULT_COLLECT_SECONDS = 12.0
-MAX_COLLECT_SECONDS = 30.0
+DEFAULT_COLLECT_SECONDS = 30.0
+MAX_COLLECT_SECONDS = 45.0
 MAX_ENRICH_CONCURRENCY = 12
 
 
@@ -33,7 +32,6 @@ def _truthy(value: Any) -> bool:
 
 
 def _flatten_messages(value: Any) -> list[dict[str, Any]]:
-    """Normalize direct objects, arrays, and common envelope shapes."""
     if isinstance(value, list):
         out: list[dict[str, Any]] = []
         for item in value:
@@ -41,7 +39,6 @@ def _flatten_messages(value: Any) -> list[dict[str, Any]]:
         return out
     if not isinstance(value, dict):
         return []
-
     for key in ("data", "payload", "results", "events"):
         nested = value.get(key)
         if isinstance(nested, (dict, list)):
@@ -51,36 +48,33 @@ def _flatten_messages(value: Any) -> list[dict[str, Any]]:
     return [value]
 
 
-def _diagnostic_sample(row: dict[str, Any]) -> dict[str, Any]:
-    """Public-feed shape only; intentionally excludes arbitrary values."""
-    useful = (
-        "type", "event_type", "slug", "live", "ended", "status", "sport",
-        "league", "gameId", "game_id", "eventId", "event_id", "period",
-        "elapsed", "score", "last_update", "lastUpdate",
-    )
-    return {
-        "keys": sorted(str(k) for k in row.keys())[:80],
-        **{k: row.get(k) for k in useful if k in row},
-    }
-
-
 def _live_row(row: dict[str, Any]) -> dict[str, Any] | None:
-    slug = str(row.get("slug") or "").strip()
-    if not slug:
-        return None
     if not _truthy(row.get("live")) or _truthy(row.get("ended")):
         return None
+    game_id = row.get("gameId") if row.get("gameId") is not None else row.get("game_id")
+    slug = str(row.get("slug") or "").strip() or None
+    if game_id is None and not slug:
+        return None
     return {
+        "game_id": game_id,
         "slug": slug,
+        "league": row.get("leagueAbbreviation") or row.get("league") or row.get("sport"),
+        "home_team": row.get("homeTeam") or row.get("home_team"),
+        "away_team": row.get("awayTeam") or row.get("away_team"),
         "live": True,
         "ended": False,
         "score": row.get("score"),
         "period": row.get("period"),
         "elapsed": row.get("elapsed"),
         "status": row.get("status"),
-        "league": row.get("league") or row.get("sport"),
-        "last_update": row.get("last_update") or row.get("lastUpdate"),
+        "last_update": row.get("last_update") or row.get("lastUpdate") or row.get("updatedAt"),
     }
+
+
+def _row_key(row: dict[str, Any]) -> str:
+    if row.get("game_id") is not None:
+        return f"game:{row['game_id']}"
+    return f"slug:{row.get('slug')}"
 
 
 async def _collect_live_rows(seconds: float) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
@@ -89,7 +83,7 @@ async def _collect_live_rows(seconds: float) -> tuple[dict[str, dict[str, Any]],
     parsed = 0
     pings = 0
     errors: list[str] = []
-    samples: list[dict[str, Any]] = []
+    league_counts: dict[str, int] = {}
     started = time.monotonic()
     deadline = started + seconds
 
@@ -127,27 +121,50 @@ async def _collect_live_rows(seconds: float) -> tuple[dict[str, dict[str, Any]],
                 if isinstance(message, dict) and str(message.get("type") or "").lower() == "ping":
                     pings += 1
                     await ws.send("pong")
-                    if len(samples) < 12:
-                        samples.append(_diagnostic_sample(message))
                     continue
 
-                for row in _flatten_messages(message):
+                for raw_row in _flatten_messages(message):
                     parsed += 1
-                    if len(samples) < 12:
-                        samples.append(_diagnostic_sample(row))
-                    item = _live_row(row)
+                    item = _live_row(raw_row)
                     if item:
-                        live[item["slug"]] = item
+                        live[_row_key(item)] = item
     except Exception as exc:
         errors.append(f"{type(exc).__name__}: {exc}")
+
+    for item in live.values():
+        league = str(item.get("league") or "unknown").lower()
+        league_counts[league] = league_counts.get(league, 0) + 1
 
     return live, {
         "collect_seconds": round(time.monotonic() - started, 3),
         "messages_received": received,
         "objects_parsed": parsed,
         "pings_answered": pings,
+        "unique_live_games_seen": len(live),
+        "league_counts": dict(sorted(league_counts.items())),
         "errors": errors,
-        "diagnostic_samples": samples,
+    }
+
+
+def _market_row(market: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": market.get("id"),
+        "condition_id": market.get("conditionId") or market.get("condition_id"),
+        "game_id": market.get("gameId") or market.get("game_id"),
+        "slug": market.get("slug"),
+        "question": market.get("question"),
+        "market_type": market.get("sportsMarketType") or market.get("marketType"),
+        "line": market.get("line"),
+        "outcomes": market.get("outcomes"),
+        "outcome_prices": market.get("outcomePrices"),
+        "clob_token_ids": market.get("clobTokenIds"),
+        "accepting_orders": market.get("acceptingOrders"),
+        "best_bid": market.get("bestBid"),
+        "best_ask": market.get("bestAsk"),
+        "spread": market.get("spread"),
+        "liquidity": market.get("liquidityNum") or market.get("liquidity"),
+        "volume": market.get("volumeNum") or market.get("volume"),
+        "end_date": market.get("endDate"),
     }
 
 
@@ -156,41 +173,35 @@ async def _enrich_one(
     semaphore: asyncio.Semaphore,
     row: dict[str, Any],
 ) -> dict[str, Any]:
-    slug = row["slug"]
     async with semaphore:
         try:
-            response = await http.get(f"{GAMMA_BASE}/events", params={"slug": slug})
-            response.raise_for_status()
-            body = response.json()
+            if row.get("game_id") is not None:
+                response = await http.get(
+                    f"{GAMMA_BASE}/events/keyset",
+                    params={"game_id": int(row["game_id"]), "active": "true", "closed": "false", "limit": 20},
+                )
+                response.raise_for_status()
+                body = response.json()
+                candidates = body.get("events") or [] if isinstance(body, dict) else []
+            else:
+                response = await http.get(f"{GAMMA_BASE}/events", params={"slug": row["slug"]})
+                response.raise_for_status()
+                body = response.json()
+                candidates = body if isinstance(body, list) else body.get("events") or [] if isinstance(body, dict) else []
         except Exception as exc:
             return {**row, "gamma_error": f"{type(exc).__name__}: {exc}", "event": None}
 
-    candidates = body if isinstance(body, list) else body.get("events") if isinstance(body, dict) else []
-    event = next((x for x in (candidates or []) if isinstance(x, dict)), None)
+    event = next((x for x in candidates if isinstance(x, dict)), None)
     if not event:
         return {**row, "gamma_error": "event_not_found", "event": None}
 
-    open_markets: list[dict[str, Any]] = []
-    for market in event.get("markets") or []:
-        if not isinstance(market, dict):
-            continue
-        if market.get("closed") is True or market.get("active") is False:
-            continue
-        open_markets.append({
-            "id": market.get("id"),
-            "condition_id": market.get("conditionId") or market.get("condition_id"),
-            "slug": market.get("slug"),
-            "question": market.get("question"),
-            "market_type": market.get("sportsMarketType") or market.get("marketType"),
-            "outcomes": market.get("outcomes"),
-            "outcome_prices": market.get("outcomePrices"),
-            "clob_token_ids": market.get("clobTokenIds"),
-            "accepting_orders": market.get("acceptingOrders"),
-            "liquidity": market.get("liquidityNum") or market.get("liquidity"),
-            "volume": market.get("volumeNum") or market.get("volume"),
-            "end_date": market.get("endDate"),
-        })
-
+    open_markets = [
+        _market_row(market)
+        for market in (event.get("markets") or [])
+        if isinstance(market, dict)
+        and market.get("closed") is not True
+        and market.get("active") is not False
+    ]
     return {
         **row,
         "event": {
@@ -215,7 +226,7 @@ async def _enrich_one(
 
 async def main_async() -> dict[str, Any]:
     requested = float(os.getenv("POLY_LIVE_SPORTS_COLLECT_SECONDS", str(DEFAULT_COLLECT_SECONDS)))
-    seconds = min(MAX_COLLECT_SECONDS, max(3.0, requested))
+    seconds = min(MAX_COLLECT_SECONDS, max(5.0, requested))
     live_rows, transport = await _collect_live_rows(seconds)
 
     semaphore = asyncio.Semaphore(MAX_ENRICH_CONCURRENCY)
@@ -224,10 +235,13 @@ async def main_async() -> dict[str, Any]:
             *[_enrich_one(http, semaphore, row) for row in live_rows.values()]
         )
 
-    enriched.sort(key=lambda x: str((x.get("event") or {}).get("title") or x.get("slug")))
+    enriched.sort(key=lambda x: (
+        str(x.get("league") or ""),
+        str((x.get("event") or {}).get("title") or x.get("game_id") or x.get("slug")),
+    ))
     gamma_matched = sum(x.get("event") is not None for x in enriched)
     accepting = sum(
-        any(m.get("accepting_orders") is not False for m in ((x.get("event") or {}).get("open_markets") or []))
+        any(m.get("accepting_orders") is True for m in ((x.get("event") or {}).get("open_markets") or []))
         for x in enriched
     )
 
