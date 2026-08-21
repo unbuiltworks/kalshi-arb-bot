@@ -1,32 +1,36 @@
 """Direct Gemini <-> Kalshi MLB prop prepricing for MVE manufacture ranking.
 
-Uses the same normal-event identity model as the live Gemini/Kalshi MLB prop lane:
-exact teams, scheduled start, player, stat family and discrete >=N threshold.  Books
-are snapshot-priced through the existing three-venue pricing helpers, so this adds
-no persistent websocket consumer.  Prices affect ranking only; Gemini prop lifecycle
-rules remain a hard execution blocker for guaranteed-arb classification.
+The current MVE pass has already fetched the relevant Kalshi prop markets.  Reuse
+that in-memory cache and fetch only Gemini MLB inventory here, eliminating duplicate
+Kalshi series reads from the hot path.  Matching remains exact on game teams/start,
+player, stat family and discrete >=N threshold.  Pricing uses Gemini executable
+best bid/ask fields with conservative q=1 fees.
+
+This is ranking-only. Gemini prop lifecycle rules remain explicitly uncertified for
+guaranteed-arbitrage execution.
 """
 from __future__ import annotations
 
-import asyncio
-from datetime import timezone
 from decimal import Decimal
 import re
+import time
 from typing import Any, Mapping
 
 import httpx
 
+from src import sports_kp_live_combo_supervisor_v8 as v8
 from src import sports_kp_mve_poly_preprice as ranking
 from src.mlb_game_side_normalization import MLB_ALIASES, NormalizedSide, _identity, canonical_team, normalize_gemini_mlb
-from src.strict_mlb_prop_adapters import _kalshi_identity, _name
+from src.strict_mlb_prop_adapters import FAMILY_LABELS, _kalshi_identity, _name
 from src.strict_mlb_prop_schedule_guard import KALSHI_EVENT_TIME_RE, kalshi_event_start_utc
-from src.three_venue_mlb_prop_safe_scan import _discrete_threshold_and_side, _price_sides
+from src.three_venue_mlb_price_scan import _gemini_contracts
+from src.three_venue_mlb_prop_safe_scan import _discrete_threshold_and_side
+from src.three_venue_pricing_core import gemini_contract_book, make_priced_quote
 from src.universal_sports_identity import SportsEventIdentity
 from src.universal_three_venue_sports import fetch_gemini_mlb
 
 D = Decimal
 ONE = D("1")
-KALSHI = "https://external-api.kalshi.com/trade-api/v2"
 MAX_START_SKEW_MS = 5 * 60 * 1000
 
 SERIES_TO_FAMILY = {
@@ -42,6 +46,14 @@ FAMILY_TO_GEMINI_STAT = {
     "baseball_player_strikeouts": "strikeouts",
 }
 HR_RE = re.compile(r"^(?P<player>.+?):\s*(?P<threshold>\d+(?:\.\d+)?)\+\s*home runs?\?", re.I)
+
+
+def _series_from_ticker(ticker: str) -> str | None:
+    upper = str(ticker or "").upper()
+    for series in SERIES_TO_FAMILY:
+        if upper.startswith(series + "-"):
+            return series
+    return None
 
 
 def _kalshi_teams(event: Mapping[str, Any]) -> tuple[str, str] | None:
@@ -76,55 +88,39 @@ def _hr_identity(market: Mapping[str, Any]) -> tuple[str, Decimal] | None:
     return m.group("player").strip(), threshold
 
 
-async def _fetch_series(http: httpx.AsyncClient, series: str) -> list[dict[str, Any]]:
-    for attempt in range(4):
-        r = await http.get(f"{KALSHI}/events", params={
-            "limit": 200, "status": "open", "series_ticker": series,
-            "with_nested_markets": "true",
-        })
-        if r.status_code != 429:
-            r.raise_for_status()
-            body = r.json() if r.content else {}
-            return [dict(x) for x in (body.get("events") or []) if isinstance(x, Mapping)]
-        await asyncio.sleep(0.75 * (2 ** attempt))
-    return []
-
-
-async def _inventory() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    async with httpx.AsyncClient(timeout=25.0) as http:
-        gemini_task = asyncio.create_task(fetch_gemini_mlb(http))
-        kalshi: list[dict[str, Any]] = []
-        for i, series in enumerate(SERIES_TO_FAMILY):
-            kalshi.extend(await _fetch_series(http, series))
-            if i + 1 < len(SERIES_TO_FAMILY):
-                await asyncio.sleep(0.25)
-        gemini = await gemini_task
-    return gemini, kalshi
-
-
-def _candidate_sides(
-    kalshi_events: list[dict[str, Any]],
+def _cached_candidate_sides(
+    event_legs: dict[str, list[Any]],
     gemini_events: list[dict[str, Any]],
-    wanted_tickers: set[str],
-) -> tuple[list[NormalizedSide], dict[str, str], int]:
+) -> tuple[list[NormalizedSide], dict[str, NormalizedSide], int, int]:
     gemini_props = [row for row in normalize_gemini_mlb(gemini_events) if row.identity.market_family == "player_prop"]
-    sides: list[NormalizedSide] = []
-    key_by_ticker: dict[str, str] = {}
+    matched_by_ticker: dict[str, NormalizedSide] = {}
     exact_joins = 0
+    missing_cached = 0
+    sides: list[NormalizedSide] = []
     seen: set[tuple[str, str, str]] = set()
 
-    for event in kalshi_events:
-        series = str(event.get("series_ticker") or "")
-        family = SERIES_TO_FAMILY.get(series)
-        stat = FAMILY_TO_GEMINI_STAT.get(family or "")
-        teams = _kalshi_teams(event)
-        if family is None or stat is None or teams is None:
-            continue
-        for market in event.get("markets") or []:
-            if not isinstance(market, Mapping):
+    for rows in event_legs.values():
+        for leg in rows:
+            ticker = str(leg.market_ticker)
+            series = _series_from_ticker(ticker)
+            family = SERIES_TO_FAMILY.get(series or "")
+            stat = FAMILY_TO_GEMINI_STAT.get(family or "")
+            if series is None or family is None or stat is None:
                 continue
-            ticker = str(market.get("ticker") or "")
-            if not ticker or ticker not in wanted_tickers:
+            market = v8._MARKETS.get(ticker)
+            if not isinstance(market, Mapping):
+                missing_cached += 1
+                continue
+            event_ticker = str(leg.event_ticker)
+            # Series and market text provide the two independent family signals
+            # the strict parser expects; the scheduled game comes from the ticker.
+            event = {
+                "series_ticker": series,
+                "event_ticker": event_ticker,
+                "title": (FAMILY_LABELS.get(family) or (family,))[0],
+            }
+            teams = _kalshi_teams(event)
+            if teams is None:
                 continue
             if family == "baseball_player_home_runs":
                 parsed = _hr_identity(market)
@@ -168,48 +164,56 @@ def _candidate_sides(
                               stat=stat, comparator="GE", line=threshold),
                     grow.venue_market_id, source_side, grow.source_label,
                 ))
-            # Ambiguous multiple Gemini representations fail closed for ranking too.
             unique = {(g.venue_market_id, g.side, g.contract_key): g for g in matching}
             if len(unique) != 1:
                 continue
             grow = next(iter(unique.values()))
-            key_by_ticker[ticker] = kside.contract_key
+            matched_by_ticker[ticker] = grow
             exact_joins += 1
             for side in (kside, grow):
                 marker = (side.identity.venue, side.venue_market_id, side.contract_key)
                 if marker not in seen:
                     seen.add(marker); sides.append(side)
-    return sides, key_by_ticker, exact_joins
+    return sides, matched_by_ticker, exact_joins, missing_cached
 
 
 async def preprice(event_legs: dict[str, list[Any]]) -> dict[str, Any]:
     legs = [leg for rows in event_legs.values() for leg in rows]
-    wanted = {str(leg.market_ticker) for leg in legs if str(leg.market_ticker).upper().startswith(tuple(SERIES_TO_FAMILY))}
+    wanted = [leg for leg in legs if _series_from_ticker(str(leg.market_ticker)) is not None]
     if not wanted:
-        return {"wanted": 0, "exact_gk_joins": 0, "priced": 0, "improved": 0, "best_saving": "0"}
+        return {"wanted": 0, "exact_gk_joins": 0, "priced": 0, "improved": 0, "best_saving": "0", "kalshi_refetches": 0}
 
-    gemini_events, kalshi_events = await _inventory()
-    sides, key_by_ticker, exact_joins = _candidate_sides(kalshi_events, gemini_events, wanted)
-    async with httpx.AsyncClient(timeout=25.0) as http:
-        priced, errors = await _price_sides(http, sides, gemini_events, kalshi_events)
+    async with httpx.AsyncClient(timeout=20.0) as http:
+        gemini_events = await fetch_gemini_mlb(http)
+    _sides, matched_by_ticker, exact_joins, missing_cached = _cached_candidate_sides(event_legs, gemini_events)
+    contracts = _gemini_contracts(gemini_events)
 
-    gemini_by_key: dict[str, list[Any]] = {}
-    for row in priced:
-        if row.quote.venue == "gemini":
-            gemini_by_key.setdefault(row.quote.settlement_key, []).append(row)
+    priced_by_ticker: dict[str, Any] = {}
+    pricing_errors = 0
+    now_ms = int(time.time() * 1000)
+    for ticker, grow in matched_by_ticker.items():
+        book = gemini_contract_book(contracts.get(grow.venue_market_id, {}))
+        if book is None:
+            pricing_errors += 1
+            continue
+        row = make_priced_quote(
+            grow, book, received_ms=now_ms,
+            depth_source="event_prices_q1_probe_only", category="sports_mlb_prop",
+        )
+        if row is None:
+            pricing_errors += 1
+            continue
+        priced_by_ticker[ticker] = row
 
     improved = 0
     best_saving = D("0")
     priced_matches = 0
-    for leg in legs:
+    for leg in wanted:
         ticker = str(leg.market_ticker)
-        key = key_by_ticker.get(ticker)
-        if key is None:
+        row = priced_by_ticker.get(ticker)
+        if row is None:
             continue
-        candidates = gemini_by_key.get(key) or []
-        if len(candidates) != 1:
-            continue
-        row = candidates[0]; q = row.quote
+        q = row.quote
         if str(leg.hedge_side).lower() == "yes":
             cost, depth = q.yes_cost, q.yes_depth
         elif str(leg.hedge_side).lower() == "no":
@@ -241,8 +245,9 @@ async def preprice(event_legs: dict[str, list[Any]]) -> dict[str, Any]:
         best_saving = max(best_saving, leg.hedge_all_in - cost)
 
     return {
-        "wanted": len(wanted), "kalshi_events": len(kalshi_events), "gemini_events": len(gemini_events),
-        "exact_gk_joins": exact_joins, "canonical_sides": len(sides), "priced": priced_matches,
-        "pricing_errors": len(errors), "improved": improved, "best_saving": str(best_saving),
+        "wanted": len(wanted), "gemini_events": len(gemini_events),
+        "exact_gk_joins": exact_joins, "priced": priced_matches,
+        "pricing_errors": pricing_errors, "improved": improved, "best_saving": str(best_saving),
+        "missing_cached_markets": missing_cached, "kalshi_refetches": 0,
         "ranking_only": True, "execution_eligible": False,
     }
