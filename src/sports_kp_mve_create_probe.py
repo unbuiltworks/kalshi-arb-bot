@@ -3,6 +3,9 @@
 This creates a market definition only. It does NOT place an order or spend funds.
 The leg set is hard-coded for a single controlled production probe and must be
 replaced by the optimizer before autonomous use.
+
+Deployment note: this source marker forces Railway to build a fresh snapshot
+using the service-level start command after staged config changes are applied.
 """
 from __future__ import annotations
 
