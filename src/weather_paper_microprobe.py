@@ -179,6 +179,13 @@ def ledger_events_for_paper_probe(plan: dict[str, Any], *, ts_ms: int) -> list[L
         return []
     if fee_d is None or fee_d < 0:
         return []
+
+    # Synthetic paper probes can be re-emitted by a polling loop before persistence
+    # catches up. Stable external ids make ledger reconciliation idempotent across
+    # those repeats even when the local observation timestamp differs. This prevents
+    # one resting weather quote from being counted as multiple paper fills/fees.
+    fill_external_id = f"{trade_group_id}:fill"
+    fee_external_id = f"{trade_group_id}:fee"
     fill = make_event(
         trade_group_id=trade_group_id,
         settlement_key=settlement_key,
@@ -190,6 +197,7 @@ def ledger_events_for_paper_probe(plan: dict[str, Any], *, ts_ms: int) -> list[L
         quantity=D(qty),
         price=D(ask) / D(100),
         ts_ms=ts_ms,
+        external_id=fill_external_id,
     )
     fee_event = make_event(
         trade_group_id=trade_group_id,
@@ -201,5 +209,6 @@ def ledger_events_for_paper_probe(plan: dict[str, Any], *, ts_ms: int) -> list[L
         side=side,
         fee=fee_d / D(100),
         ts_ms=ts_ms,
+        external_id=fee_external_id,
     )
     return [fill, fee_event]
