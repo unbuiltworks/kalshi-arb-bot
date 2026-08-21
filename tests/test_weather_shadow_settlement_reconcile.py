@@ -1,6 +1,15 @@
 from src.weather_shadow_settlement_reconcile import reconcile_weather_paper_fill
 
 
+def _exact_audit(*, provider="THE_WEATHER_COMPANY", ticker="KXHIGHAUS-26AUG21-B102.5", market_date="2026-08-21", verified=True):
+    return {
+        "verified": verified,
+        "market_ticker": ticker,
+        "market_date": market_date,
+        "settlement_source_provider": provider,
+    }
+
+
 def _shadow(**overrides):
     row = {
         "category": "weather",
@@ -10,7 +19,10 @@ def _shadow(**overrides):
         "market_ticker": "KXHIGHAUS-26AUG21-B102.5",
         "market_date": "2026-08-21",
         "market_settlement_source_provider": "THE_WEATHER_COMPANY",
-        "settlement_source_regime_verified": True,
+        # Legacy Series-regime bit is deliberately not authoritative for reconciliation.
+        "settlement_source_regime_verified": False,
+        "exact_market_source_verified": True,
+        "exact_market_source_audit": _exact_audit(),
     }
     row.update(overrides)
     return row
@@ -55,6 +67,28 @@ def test_reconciles_exact_official_weather_paper_win():
     assert result["live_probe_ready"] is False
 
 
+def test_historical_exact_audit_can_override_legacy_series_regime_for_reconciliation():
+    shadow = _shadow(
+        market_ticker="KXHIGHAUS-26AUG12-B102.5",
+        market_date="2026-08-12",
+        market_settlement_source_provider="NWS",
+        settlement_source_regime_verified=False,
+        exact_market_source_verified=True,
+        exact_market_source_audit=_exact_audit(
+            provider="NWS", ticker="KXHIGHAUS-26AUG12-B102.5", market_date="2026-08-12"
+        ),
+    )
+    fill = _fill(market_ticker="KXHIGHAUS-26AUG12-B102.5", market_date="2026-08-12")
+    settlement = _settlement(
+        market_ticker="KXHIGHAUS-26AUG12-B102.5",
+        market_date="2026-08-12",
+        settlement_source_provider="NWS",
+    )
+    result = reconcile_weather_paper_fill(shadow_row=shadow, paper_fill=fill, settlement=settlement)
+    assert result["reconciled"] is True
+    assert result["settlement_source_provider"] == "NWS"
+
+
 def test_exact_market_or_date_mismatch_fails_closed():
     result = reconcile_weather_paper_fill(
         shadow_row=_shadow(),
@@ -83,9 +117,33 @@ def test_provider_mismatch_or_unverified_finality_fails_closed():
     assert "CORRECTION_WINDOW_UNVERIFIED" in result["blockers"]
 
 
-def test_string_true_flags_do_not_certify_settlement():
+def test_missing_or_string_exact_market_verification_fails_closed():
     result = reconcile_weather_paper_fill(
-        shadow_row=_shadow(settlement_source_regime_verified="true"),
+        shadow_row=_shadow(exact_market_source_verified="true"),
+        paper_fill=_fill(),
+        settlement=_settlement(),
+    )
+    assert result["reconciled"] is False
+    assert "QUOTE_TIME_EXACT_MARKET_SOURCE_UNVERIFIED" in result["blockers"]
+
+
+def test_audit_ticker_or_date_mismatch_fails_closed():
+    result = reconcile_weather_paper_fill(
+        shadow_row=_shadow(
+            exact_market_source_audit=_exact_audit(
+                ticker="KXHIGHAUS-26AUG20-B102.5", market_date="2026-08-20"
+            )
+        ),
+        paper_fill=_fill(),
+        settlement=_settlement(),
+    )
+    assert result["reconciled"] is False
+    assert "QUOTE_TIME_EXACT_MARKET_AUDIT_MISMATCH" in result["blockers"]
+
+
+def test_string_true_settlement_flags_do_not_certify_settlement():
+    result = reconcile_weather_paper_fill(
+        shadow_row=_shadow(),
         paper_fill=_fill(),
         settlement=_settlement(
             official_source_verified="true",
@@ -94,7 +152,6 @@ def test_string_true_flags_do_not_certify_settlement():
         ),
     )
     assert result["reconciled"] is False
-    assert "QUOTE_TIME_SETTLEMENT_REGIME_UNVERIFIED" in result["blockers"]
     assert "OFFICIAL_SETTLEMENT_SOURCE_UNVERIFIED" in result["blockers"]
     assert "SETTLEMENT_FINALITY_UNVERIFIED" in result["blockers"]
     assert "CORRECTION_WINDOW_UNVERIFIED" in result["blockers"]
