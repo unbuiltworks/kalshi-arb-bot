@@ -62,6 +62,23 @@ def test_unofficial_or_wrong_source_endpoint_fails_closed():
     assert "EXACT_MARKET_EVIDENCE_UNOFFICIAL" in row["blockers"]
 
 
+def test_generic_official_kalshi_url_cannot_certify_exact_market_regime():
+    row = audit_exact_market_source(**_base(
+        evidence_url="https://kalshi.com/markets/kxhighaus",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT" in row["blockers"]
+    assert row["evidence_url"] is None
+
+
+def test_other_event_page_cannot_certify_target_market_even_with_asserted_metadata():
+    row = audit_exact_market_source(**_base(
+        evidence_url="https://kalshi.com/markets/kxhighaus/highest-temperature-in-austin/kxhighaus-26aug21",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT" in row["blockers"]
+
+
 def test_stringly_or_missing_dates_do_not_pass():
     row = audit_exact_market_source(**_base(
         market_date="2026-8-12",
