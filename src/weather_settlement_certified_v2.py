@@ -1,10 +1,11 @@
 """Fail-closed weather SHADOW certification with exact-market settlement provenance.
 
 This wrapper composes the existing read-only weather certification pipeline with the
-hardened exact-market source auditor.  It intentionally requires explicit source
-provenance extracted for the exact contract/date and never falls back to the current
-Series settlement source.  This prevents historical contracts around settlement-source
-transitions from inheriting a later recurring-Series regime.
+hardened exact-market source auditor. It intentionally requires explicit source
+provenance extracted for the exact contract/date and never treats the current Series
+settlement source as higher authority than verified exact-market evidence. This prevents
+historical contracts around settlement-source transitions from inheriting a later
+recurring-Series regime.
 
 No order-entry clients, credentials, live-arm state, or execution paths exist here.
 """
@@ -15,6 +16,12 @@ from typing import Any
 
 from src.weather_exact_market_source_audit import audit_exact_market_source
 from src.weather_settlement_certified import build_shadow_row
+
+
+_LEGACY_SERIES_REGIME_BLOCKERS = {
+    "EXACT_MARKET_IDENTITY_UNVERIFIED",
+    "EXACT_MARKET_SETTLEMENT_REGIME_UNVERIFIED",
+}
 
 
 def build_exact_market_certified_shadow_row(
@@ -39,6 +46,12 @@ def build_exact_market_certified_shadow_row(
 
     Missing or mismatched provenance quarantines all EV/capacity economics while
     retaining diagnostic quote/fee metadata from the underlying read-only adapter.
+
+    If the hardened exact-market audit verifies, its contract/date evidence is allowed
+    to supersede only the older Series-regime/identity blockers emitted by the base
+    adapter. This is necessary for historical contracts whose exact settlement source
+    differs from the *current* recurring Series template. Every other base gate remains
+    fail-closed and can never be upgraded here.
     """
     base = build_shadow_row(
         series=series,
@@ -85,12 +98,30 @@ def build_exact_market_certified_shadow_row(
         row["economics_status"] = "WITHHELD_EXACT_MARKET_SOURCE_UNVERIFIED"
         return row
 
-    # Exact-market audit is an additional gate, never an upgrade by itself.  The
-    # underlying adapter must still independently pass station/day/bracket, fee,
-    # quote-freshness and forecast provenance checks.
+    # The hardened audit is stronger than the base adapter's older Series-regime
+    # assertion, so exact contract/date evidence may supersede only those two legacy
+    # blockers. Never remove station/day/bracket, fee/history, book/freshness, rules,
+    # or forecast blockers here.
+    blockers = {
+        blocker
+        for blocker in (row.get("blockers") or [])
+        if blocker not in _LEGACY_SERIES_REGIME_BLOCKERS
+    }
+    row["blockers"] = sorted(blockers)
+
+    settlement_certified = len(blockers) == 0
+    forecast_blockers = list(row.get("forecast_blockers") or [])
+    best_side = row.get("best_shadow_side")
+    ev_certified = settlement_certified and not forecast_blockers and best_side is not None
+    row["settlement_certified_shadow"] = settlement_certified
+    row["ev_certified_shadow"] = ev_certified
+
+    # Exact-market audit is an additional/higher-authority provenance gate, never an
+    # upgrade of any unrelated safety condition. The underlying adapter must still
+    # independently pass station/day/bracket, fee, quote-freshness and forecast checks.
     row["economics_status"] = (
         "EXACT_MARKET_AND_EV_CERTIFIED_SHADOW"
-        if row.get("ev_certified_shadow") is True
+        if ev_certified
         else "EXACT_MARKET_CERTIFIED_EV_NOT_CERTIFIED"
     )
     return row
