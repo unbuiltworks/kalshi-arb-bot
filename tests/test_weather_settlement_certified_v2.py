@@ -33,14 +33,14 @@ def _market(**overrides):
     return row
 
 
-def _quote():
+def _quote(observed_at="2026-08-21T07:30:00Z"):
     return {
         "yes_ask_cents": 40,
         "yes_ask_qty": 5,
         "no_ask_cents": 62,
         "no_ask_qty": 5,
         "quote_age_ms": 50,
-        "observed_at": "2026-08-21T07:30:00Z",
+        "observed_at": observed_at,
     }
 
 
@@ -48,12 +48,12 @@ def _station():
     return {"name": "Central Park", "cli_product": "CLINY", "identity_verified": True}
 
 
-def _forecast():
+def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-04:00"):
     return {
         "model": "GFS",
         "cli_product": "CLINY",
-        "model_run_time": "2026-08-21T06:00:00Z",
-        "forecast_valid_time": "2026-08-21T23:59:59-04:00",
+        "model_run_time": run_time,
+        "forecast_valid_time": valid_time,
         "station_mapping_verified": True,
         "freshness_verified": True,
         "bracket_probability": "0.65",
@@ -78,6 +78,47 @@ def test_exact_market_provenance_is_additional_fail_closed_gate():
     assert row["ev_certified_shadow"] is True
     assert row["best_shadow_side"] is not None
     assert row["order_entry"] is False
+    assert row["live_probe_ready"] is False
+
+
+def test_verified_historical_nws_exact_market_can_override_current_twc_series_regime_only():
+    market = {
+        "event_ticker": "KXHIGHNY-26AUG12",
+        "ticker": "KXHIGHNY-26AUG12-B80.5",
+        "market_date": "2026-08-12",
+        "local_day_verified": True,
+        "bracket_semantics_verified": True,
+        "settlement_source_regime_verified": True,
+        "settlement_source_provider": "NWS",
+        "settlement_source_url": "https://www.weather.gov/wrh/Climate?wfo=okx",
+        "settlement_source_evidence_url": "https://kalshi.com/markets/kxhighny/highest-temperature-in-nyc/kxhighny-26aug12",
+        "settlement_source_evidence_market_ticker": "KXHIGHNY-26AUG12-B80.5",
+        "settlement_source_evidence_market_date": "2026-08-12",
+        "strike_type": "between",
+        "floor_strike": 80,
+        "cap_strike": 81,
+    }
+    row = build_exact_market_certified_shadow_row(
+        series=_series(),
+        market=market,
+        quote=_quote(observed_at="2026-08-12T12:00:00Z"),
+        station=_station(),
+        forecast=_forecast(
+            run_time="2026-08-12T06:00:00Z",
+            valid_time="2026-08-12T23:59:59-04:00",
+        ),
+        fee_changes=[{
+            "series_ticker": "KXHIGHNY",
+            "fee_type": "quadratic",
+            "fee_multiplier": 1,
+            "scheduled_ts": "2026-01-01T00:00:00Z",
+        }],
+        fee_history_complete=True,
+    )
+    assert row["exact_market_source_verified"] is True
+    assert "EXACT_MARKET_SETTLEMENT_REGIME_UNVERIFIED" not in row["blockers"]
+    assert row["settlement_certified_shadow"] is True
+    assert row["ev_certified_shadow"] is True
     assert row["live_probe_ready"] is False
 
 
