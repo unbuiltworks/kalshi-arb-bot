@@ -5,13 +5,10 @@ Only the final two-leg submission policy changes: Gemini must terminally fill be
 Kalshi receives the hedge order. The authenticated Gemini trading socket is deferred
 until an actionable trade has passed all market-data and safety gates.
 
-An optional fee-aware Kalshi hedge cushion is wired behind
-``CRYPTO_KALSHI_HEDGE_CUSHION=YES``. It defaults OFF. When enabled, the transport
-precomputes and validates the deeper Kalshi FOK before Gemini is submitted and never
-spends below the existing 3-cent after-fee modeled floor.
-
-For the parallel supervisor only, CRYPTO_CANARY_ASSET may pin the child to exactly one
-of BTC/ETH/SOL/XRP. When unset, legacy behavior remains all four assets.
+Kalshi strike metadata and order-book market data use authoritative REST fallbacks in
+this campaign because authenticated market-data WebSocket handshakes are rate-limited.
+REST books carry exact price/depth and are timestamped conservatively at request start;
+all existing freshness, skew, survival and execution gates remain unchanged.
 """
 from __future__ import annotations
 
@@ -31,6 +28,7 @@ from src import gemini_kalshi_gate_attribution as gate_attribution
 from src import gemini_kalshi_micro_live_executor_20bp as micro_executor
 from src import gemini_kalshi_ws_rate_limit_guard as ws_rate_limit_guard
 from src import gemini_kalshi_deferred_gemini_session as deferred_gemini_session
+from src import gemini_kalshi_kalshi_rest_book_fallback as kalshi_rest_book_fallback
 from src.gemini_kalshi_staged_probe_transport import submit_gemini_first_probe
 
 DEADLINE_ENV = "SOL_CANARY_V2_ARM_NOT_AFTER_UTC"
@@ -102,10 +100,11 @@ def main() -> None:
     v2._submit_and_persist_result = _submit_and_persist_context
 
     rollover_optimizer.install()
+    kalshi_rest_book_fallback.install()
     target_lifecycle_cache._lifecycle_stream = _disabled_lifecycle_stream
     micro_executor.logger.warning(
         "CRYPTO_KALSHI_TARGET_REST_ONLY enabled=true lifecycle_ws=false "
-        "orderbook_ws=true risk_gates_changed=false"
+        "orderbook_transport=REST_EXACT_ORDERBOOK_FAIL_CLOSED risk_gates_changed=false"
     )
     target_lifecycle_cache.install()
     target_freshness_guard.install()
