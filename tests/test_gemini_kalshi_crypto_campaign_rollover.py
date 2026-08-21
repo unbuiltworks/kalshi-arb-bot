@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.gemini_kalshi_crypto_campaign_rollover import plan_rollover
+from src.gemini_kalshi_crypto_campaign_rollover import diagnose_campaign, plan_rollover
 
 
 def _clean_state() -> dict:
@@ -43,6 +43,52 @@ def test_expired_clean_campaign_plans_fresh_short_lived_namespace():
     assert plan.reason == "deadline_expired"
     assert plan.arm_not_after_utc == "2026-08-21T20:30:00Z"
     assert plan.env()["CRYPTO_CANARY_CAMPAIGN_ID"] == plan.new_campaign_id
+
+
+def test_diagnoses_clean_expired_campaign_as_rollover_eligible_without_arming():
+    report = diagnose_campaign(
+        state=_clean_state(),
+        prior_arm_deadline_utc="2026-08-21T19:00:00Z",
+        now=datetime(2026, 8, 21, 20, 0, tzinfo=timezone.utc),
+        max_completed_trades=5,
+        max_execution_attempts=25,
+    )
+    assert report["campaign_id"] == "gk15m-old"
+    assert report["arm_deadline_expired"] is True
+    assert report["bounded_state"] == "COMPLETE_ARM_DEADLINE_EXPIRED"
+    assert report["completed_total"] == 4
+    assert report["execution_attempts_total"] == 12
+    assert report["locally_reconciled"] is True
+    assert report["rollover_eligible"] is True
+    assert report["live_venue_reconciliation_required"] is True
+    assert set(report["lanes"]) == {"BTC", "ETH", "SOL", "XRP"}
+
+
+def test_diagnoses_active_campaign_without_misclassifying_as_rollover_eligible():
+    report = diagnose_campaign(
+        state=_clean_state(),
+        prior_arm_deadline_utc="2026-08-21T20:30:00Z",
+        now=datetime(2026, 8, 21, 20, 0, tzinfo=timezone.utc),
+        max_completed_trades=5,
+        max_execution_attempts=25,
+    )
+    assert report["bounded_state"] == "ACTIVE_WITHIN_ARM_WINDOW"
+    assert report["rollover_eligible"] is False
+
+
+def test_diagnoses_unresolved_lane_fail_closed():
+    state = _clean_state()
+    state["lanes"]["BTC"]["status"] = "WAITING_SETTLEMENT"
+    report = diagnose_campaign(
+        state=state,
+        prior_arm_deadline_utc="2026-08-21T19:00:00Z",
+        now=datetime(2026, 8, 21, 20, 0, tzinfo=timezone.utc),
+        max_completed_trades=5,
+        max_execution_attempts=25,
+    )
+    assert report["locally_reconciled"] is False
+    assert report["rollover_eligible"] is False
+    assert "WAITING_SETTLEMENT" in report["local_reconciliation_error"]
 
 
 def test_refuses_rollover_while_prior_campaign_is_still_active_window():
