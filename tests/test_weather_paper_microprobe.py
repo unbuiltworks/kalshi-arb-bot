@@ -64,8 +64,54 @@ def test_selects_only_one_budget_tier_and_creates_stable_trade_group():
     assert first["budget_cents"] == 500
     assert first["trade_group_id"].startswith("paper-weather-")
     assert first["settlement_key"] == "weather:KXHIGHMIA-26AUG21-B92.5"
+    assert first["paper_dedup_scope"] == "ONE_FILL_PER_EXACT_MARKET_SIDE"
     assert first["simultaneous_synthetic_fill"] is True
     assert first["live_probe_ready"] is False
+
+
+def test_fresh_poll_timestamp_does_not_create_a_new_synthetic_trade_group():
+    first = select_paper_probe(_row(quote_observed_at="2026-08-21T11:55:00+00:00"))
+    later = select_paper_probe(_row(quote_observed_at="2026-08-21T11:55:01+00:00"))
+    assert first is not None and later is not None
+    assert first["quote_observed_at"] != later["quote_observed_at"]
+    assert first["trade_group_id"] == later["trade_group_id"]
+
+
+def test_same_market_side_remains_deduped_when_price_size_or_model_moves():
+    first = select_paper_probe(_row())
+    moved = select_paper_probe(_row(
+        quote_observed_at="2026-08-21T12:00:00+00:00",
+        best_shadow_side={
+            "side": "NO",
+            "ask_cents": 35,
+            "available_contracts": 8,
+            "forecast_side_probability": "0.90",
+            "modeled_after_fee_ev_cents": "0",
+            "modeled_after_fee_edge_cents_per_contract": "0",
+        },
+    ))
+    assert first is not None and moved is not None
+    assert first["ask_cents"] != moved["ask_cents"]
+    assert first["trade_group_id"] == moved["trade_group_id"]
+
+
+def test_opposite_side_is_a_distinct_conservative_paper_identity():
+    no_plan = select_paper_probe(_row())
+    yes_plan = select_paper_probe(_row(
+        quote_observed_at="2026-08-21T12:05:00+00:00",
+        best_shadow_side={
+            "side": "YES",
+            "ask_cents": 20,
+            "available_contracts": 10,
+            "forecast_side_probability": "0.90",
+            "modeled_after_fee_ev_cents": "0",
+            "modeled_after_fee_edge_cents_per_contract": "0",
+        },
+    ))
+    assert no_plan is not None and yes_plan is not None
+    assert no_plan["side"] == "NO"
+    assert yes_plan["side"] == "YES"
+    assert no_plan["trade_group_id"] != yes_plan["trade_group_id"]
 
 
 def test_uncertified_or_stringly_certified_rows_never_create_probe():
@@ -118,17 +164,19 @@ def test_shared_ledger_events_are_fill_plus_separate_fee_and_remain_paper_only()
     assert fee.external_id == f"{plan['trade_group_id']}:fee"
 
 
-def test_repeated_poll_emission_reconciles_to_one_fill_and_one_fee():
-    plan = select_paper_probe(_row())
-    assert plan is not None
-    first = ledger_events_for_paper_probe(plan, ts_ms=1000)
-    second = ledger_events_for_paper_probe(plan, ts_ms=2000)
+def test_repeated_poll_selection_and_emission_reconcile_to_one_fill_and_one_fee():
+    first_plan = select_paper_probe(_row(quote_observed_at="2026-08-21T11:55:00+00:00"))
+    later_plan = select_paper_probe(_row(quote_observed_at="2026-08-21T11:55:01+00:00"))
+    assert first_plan is not None and later_plan is not None
+    assert first_plan["trade_group_id"] == later_plan["trade_group_id"]
+    first = ledger_events_for_paper_probe(first_plan, ts_ms=1000)
+    second = ledger_events_for_paper_probe(later_plan, ts_ms=2000)
     merged = reconcile_events(first, second)
     assert len(merged) == 2
     assert [event.event_type for event in merged] == ["fee", "fill"] or [event.event_type for event in merged] == ["fill", "fee"]
     assert {event.external_id for event in merged} == {
-        f"{plan['trade_group_id']}:fill",
-        f"{plan['trade_group_id']}:fee",
+        f"{first_plan['trade_group_id']}:fill",
+        f"{first_plan['trade_group_id']}:fee",
     }
 
 
