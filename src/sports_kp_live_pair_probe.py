@@ -1,7 +1,8 @@
 """One-shot read-only probe for the live 49ers + Braves combo candidate.
 
 Discovers the exact Polymarket US and Kalshi component markets and prints only
-safe market identity / top-of-book metadata.  It never creates markets or orders.
+safe market identity / top-of-book metadata. It never creates markets or orders.
+Railway one-shot entrypoint: sports_kp_live_pair_probe.
 """
 from __future__ import annotations
 
@@ -82,7 +83,6 @@ def _poly_search(query: str) -> dict[str, Any]:
                 if safe and sig not in seen:
                     seen.add(sig)
                     rows.append(safe)
-        # Query-specific BBOs for every discovered market slug.  Public endpoint.
         bbo = []
         slugs = []
         for row in rows:
@@ -118,7 +118,6 @@ async def _kalshi_series(client: KalshiClient, series: str) -> list[dict[str, An
 
 
 async def main_async() -> None:
-    # Polymarket public search in a thread because the official sync SDK is used by production code.
     poly_results = await asyncio.gather(
         asyncio.to_thread(_poly_search, "San Francisco 49ers Los Angeles Chargers"),
         asyncio.to_thread(_poly_search, "Atlanta Braves Milwaukee Brewers"),
