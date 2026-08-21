@@ -9,6 +9,12 @@ When the approval registry is empty, the service remains useful: it observes all
 exact K/P identity joins read-only and emits economically qualified q=1 rows as
 certification candidates. Those rows are never executable until a matching rule
 approval with a validated fingerprint is present.
+
+The account may have only one usable authenticated Kalshi websocket slot at a
+time. This service therefore uses bounded Kalshi REST series snapshots for
+candidate observation and forces an exact depth=1 Kalshi order-book fetch during
+final post-preflight revalidation. The <=100 ms age, <=50 ms quote-skew and rule
+approval gates remain unchanged.
 """
 from __future__ import annotations
 
@@ -26,7 +32,8 @@ from typing import Any
 import httpx
 from polymarket_us import PolymarketUS
 
-from src.eventing_books import BookUpdate, EventingKalshiCrossBooks, EventingPolyBookStore
+from src.eventing_books import BookUpdate, EventingPolyBookStore
+from src.kalshi_game_rest_books import KalshiGameRestBooks
 from src.polymarket_kalshi_shadow_v2 import _fetch_poly_book, run_poly_ws
 from src.sports_kp_execution import (
     DEFAULT_ARM_TOKEN,
@@ -81,7 +88,7 @@ async def _kp_rows(
     key: str,
     universe: HotUniverse,
     poly: EventingPolyBookStore,
-    kalshi: EventingKalshiCrossBooks,
+    kalshi: Any,
 ) -> list[PricedQuote]:
     hot = universe.contracts[key]
     pside = hot.sides.get("polymarket")
@@ -99,7 +106,7 @@ async def _kp_rows(
     krow = make_priced_quote(
         kside, _book_kalshi(kq), received_ms=kq.received_ms,
         kalshi_fee_multiplier=hot.kalshi_fee_multiplier,
-        depth_source="kalshi_websocket_top_book", category="sports_mlb_game",
+        depth_source="kalshi_rest_series_top_book", category="sports_mlb_game",
     )
     return [row for row in (prow, krow) if row is not None]
 
@@ -139,9 +146,18 @@ async def _fresh_plan(
     key: str,
     universe: HotUniverse,
     poly: EventingPolyBookStore,
-    kalshi: EventingKalshiCrossBooks,
+    kalshi: Any,
     approval: RuleApproval,
 ) -> KPExecutionPlan:
+    # Candidate observation may use bounded series snapshots, but execution may
+    # not. Force one exact depth=1 Kalshi book after slow venue preflight.
+    kside = universe.contracts[key].sides.get("kalshi")
+    exact_quote = getattr(kalshi, "exact_quote", None)
+    if kside is None or exact_quote is None:
+        raise PermissionError("exact Kalshi final revalidation is unavailable")
+    exact = await exact_quote(kside.venue_market_id)
+    if exact is None:
+        raise PermissionError("exact Kalshi final book unavailable")
     rows = await _kp_rows(key, universe, poly, kalshi)
     if len(rows) != 2:
         raise PermissionError("fresh K/P books unavailable")
@@ -151,7 +167,7 @@ async def _fresh_plan(
     return build_kp_plan(lock, rows, approval)
 
 
-async def _next_update(poly: EventingPolyBookStore, kalshi: EventingKalshiCrossBooks) -> BookUpdate:
+async def _next_update(poly: EventingPolyBookStore, kalshi: Any) -> BookUpdate:
     tasks = [asyncio.create_task(poly.updates.get()), asyncio.create_task(kalshi.updates.get())]
     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
     for task in pending:
@@ -203,6 +219,7 @@ async def run(args: argparse.Namespace) -> int:
         "min_unit_profit": str(DEFAULT_MIN_PROFIT),
         "max_quote_skew_ms": DEFAULT_MAX_QUOTE_SKEW_MS,
         "max_final_book_age_ms": DEFAULT_MAX_BOOK_AGE_MS,
+        "kalshi_book_transport": "REST_SERIES_PLUS_EXACT_FINAL",
         "order_entry": False if not approvals else "GATED",
     }, separators=(",", ":")))
 
@@ -222,7 +239,7 @@ async def run(args: argparse.Namespace) -> int:
         "joined_execution_contracts": len(executable_keys),
         "joined_keys": sorted(executable_keys),
         "read_only_observation_contracts": len(observation_keys - executable_keys),
-    }, separators=(",", ",")))
+    }, separators=(",", ":")))
 
     if not observation_keys:
         logger.info("SPORTS_KP_NO_OBSERVATION_KEYS order_entry=false")
@@ -232,7 +249,7 @@ async def run(args: argparse.Namespace) -> int:
     poly_slugs = sorted({universe.contracts[k].sides["polymarket"].venue_market_id for k in observation_keys})
     kalshi_tickers = sorted({universe.contracts[k].sides["kalshi"].venue_market_id for k in observation_keys})
     poly = EventingPolyBookStore()
-    kalshi = EventingKalshiCrossBooks(kalshi_tickers)
+    kalshi = KalshiGameRestBooks(kalshi_tickers)
 
     async with httpx.AsyncClient(timeout=8.0) as seed_http:
         sem = asyncio.Semaphore(20)
@@ -247,7 +264,7 @@ async def run(args: argparse.Namespace) -> int:
         secret_key=os.environ["POLYMARKET_SECRET_KEY"], timeout=10.0,
     )
     poly_task = asyncio.create_task(run_poly_ws(client, poly, poly_slugs), name="sports_kp_poly_ws")
-    kalshi_task = asyncio.create_task(kalshi.run(), name="sports_kp_kalshi_ws")
+    kalshi_task = asyncio.create_task(kalshi.run(), name="sports_kp_kalshi_rest")
     tasks = [poly_task, kalshi_task]
     try:
         deadline = time.monotonic() + args.startup_timeout_seconds
@@ -265,6 +282,7 @@ async def run(args: argparse.Namespace) -> int:
             "read_only_observation_contracts": len(observation_keys - executable_keys),
             "poly_books": poly.quote_count,
             "kalshi_books": kalshi.initialized_count,
+            "kalshi_book_transport": "REST_SERIES_PLUS_EXACT_FINAL",
             "live_env_gate": os.getenv("ENABLE_SPORTS_KP_LIVE", "NO").strip().upper() == "YES",
             "arm_token_present": Path(args.arm_token).is_file(),
             "order_entry": bool(executable_keys) and os.getenv("ENABLE_SPORTS_KP_LIVE", "NO").strip().upper() == "YES" and Path(args.arm_token).is_file(),
@@ -280,7 +298,7 @@ async def run(args: argparse.Namespace) -> int:
         states: dict[str, CandidateState] = {}
         while True:
             if poly_task.done() or kalshi_task.done():
-                raise RuntimeError("live market-data task exited")
+                raise RuntimeError("market-data task exited")
             trigger = await _next_update(poly, kalshi)
             for key in by_market.get((trigger.venue, trigger.market_id), set()):
                 rows = await _kp_rows(key, universe, poly, kalshi)
