@@ -16,6 +16,8 @@ from src.weather_fee_history_guard import resolve_fee_at_quote
 
 HARD_BLOCKERS = {
     "RULES_PENDING",
+    "EXACT_MARKET_IDENTITY_UNVERIFIED",
+    "EXACT_MARKET_SETTLEMENT_REGIME_UNVERIFIED",
     "STATION_IDENTITY_UNVERIFIED",
     "LOCAL_DAY_UNVERIFIED",
     "BRACKET_SEMANTICS_UNVERIFIED",
@@ -44,8 +46,10 @@ def _settlement_source_provider(source: Any) -> str | None:
 
     Daily temperature Series historically named NWS/weather.gov directly. Current
     Series metadata (effective 2026-08-14) names The Weather Company and links
-    ``https://weather.com/kalshi``. We trust the Series metadata for settlement
-    provenance; we do not infer a provider from legacy strategy configuration.
+    ``https://weather.com/kalshi``. Series metadata is necessary but no longer
+    sufficient for an exact market: a separate exact-market regime assertion is
+    required below so historical/pre-transition contracts cannot silently inherit a
+    later Series-level settlement source.
     """
     if not isinstance(source, dict):
         return None
@@ -61,6 +65,49 @@ def _settlement_source_provider(source: Any) -> str | None:
         if path == "/kalshi" and ("weather company" in name or not name):
             return "THE_WEATHER_COMPANY"
     return None
+
+
+def _exact_market_settlement_regime(series: dict[str, Any], market: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Require exact-market/date proof of the settlement-source regime.
+
+    A current Series template can change after older markets were created. Around a
+    source transition, applying today's Series source to a historical market is a
+    data-integrity error. The producer must therefore bind each market/date to the
+    source regime actually audited for that exact contract and preserve an official
+    Kalshi evidence URL for the assertion.
+    """
+    blockers: list[str] = []
+    series_ticker = str(series.get("ticker") or "").strip().upper()
+    market_ticker = str(market.get("ticker") or "").strip().upper()
+    event_ticker = str(market.get("event_ticker") or "").strip().upper()
+    market_date = str(market.get("market_date") or "").strip()
+
+    if (
+        not series_ticker
+        or not market_ticker.startswith(series_ticker + "-")
+        or not event_ticker.startswith(series_ticker + "-")
+        or not market_date
+    ):
+        blockers.append("EXACT_MARKET_IDENTITY_UNVERIFIED")
+
+    series_providers = {
+        provider
+        for provider in (_settlement_source_provider(s) for s in (series.get("settlement_sources") or []))
+        if provider
+    }
+    market_provider = str(market.get("settlement_source_provider") or "").strip().upper()
+    evidence_url = str(market.get("settlement_source_evidence_url") or "").strip()
+    regime_verified = market.get("settlement_source_regime_verified") is True
+
+    if (
+        not regime_verified
+        or not market_provider
+        or market_provider not in series_providers
+        or not _official_https(evidence_url, ("kalshi.com", "assets.kalshi.com", "kalshi-public-docs.s3.amazonaws.com"))
+    ):
+        blockers.append("EXACT_MARKET_SETTLEMENT_REGIME_UNVERIFIED")
+
+    return not blockers, sorted(set(blockers))
 
 
 def _fee_cents(count: int, price_cents: int, fee_type: str, fee_multiplier: Any) -> int:
@@ -212,6 +259,8 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
     blockers: list[str] = []
     _, series_blockers = certify_series(series)
     blockers.extend(series_blockers)
+    _, market_regime_blockers = _exact_market_settlement_regime(series, market)
+    blockers.extend(market_regime_blockers)
 
     station_verified = station.get("identity_verified") is True
     local_day_verified = market.get("local_day_verified") is True
@@ -300,6 +349,9 @@ def build_shadow_row(*, series: dict[str, Any], market: dict[str, Any], quote: d
         "cli_product": cli_product or None,
         "settlement_sources": series.get("settlement_sources") or [],
         "settlement_source_providers": providers,
+        "market_settlement_source_provider": market.get("settlement_source_provider"),
+        "market_settlement_source_evidence_url": market.get("settlement_source_evidence_url"),
+        "settlement_source_regime_verified": market.get("settlement_source_regime_verified") is True,
         "contract_terms_url": series.get("contract_terms_url"),
         "strike_type": market.get("strike_type"),
         "floor_strike": market.get("floor_strike"),
