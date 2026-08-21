@@ -140,7 +140,16 @@ def select_paper_probe(
     observed_at = str(row.get("quote_observed_at") or "").strip()
     if not ticker or not market_date or not observed_at:
         return None
-    seed = f"weather|{ticker}|{market_date}|{selected['side']}|{observed_at}"
+
+    # Deliberately do NOT include quote_observed_at, ask, quantity, budget tier or
+    # model probability in the synthetic identity. A polling loop can observe the
+    # same resting opportunity many times, and those fields may move while the same
+    # capital is still notionally deployed. Until a stateful OPEN/CLOSE episode
+    # tracker exists for weather, the conservative fail-closed policy is at most one
+    # synthetic paper fill per exact market + side for the life of that contract.
+    # This may under-count a true close/re-open, but it cannot inflate P/L by repeatedly
+    # consuming the same displayed liquidity.
+    seed = f"weather|{ticker}|{market_date}|{selected['side']}"
     out = dict(selected)
     out.update({
         "trade_group_id": "paper-weather-" + sha256(seed.encode("utf-8")).hexdigest()[:24],
@@ -150,6 +159,7 @@ def select_paper_probe(
         "market_ticker": ticker,
         "market_date": market_date,
         "quote_observed_at": observed_at,
+        "paper_dedup_scope": "ONE_FILL_PER_EXACT_MARKET_SIDE",
         "exact_market_source_verified": True,
         "simultaneous_synthetic_fill": True,
         "read_only": True,
@@ -180,10 +190,10 @@ def ledger_events_for_paper_probe(plan: dict[str, Any], *, ts_ms: int) -> list[L
     if fee_d is None or fee_d < 0:
         return []
 
-    # Synthetic paper probes can be re-emitted by a polling loop before persistence
-    # catches up. Stable external ids make ledger reconciliation idempotent across
-    # those repeats even when the local observation timestamp differs. This prevents
-    # one resting weather quote from being counted as multiple paper fills/fees.
+    # Stable IDs make reconciliation idempotent across repeated observations of the
+    # same exact-market-side paper probe. Because select_paper_probe() also keeps the
+    # trade_group_id stable across quote timestamps, this de-duplicates real polling
+    # repeats rather than only re-emission of one already-selected plan object.
     fill_external_id = f"{trade_group_id}:fill"
     fee_external_id = f"{trade_group_id}:fee"
     fill = make_event(
