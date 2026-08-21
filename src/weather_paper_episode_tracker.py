@@ -24,6 +24,44 @@ def _d(value: Any) -> Decimal | None:
     return out if out.is_finite() else None
 
 
+def _strict_observed_ms(value: Any) -> int:
+    """Require an actual nonnegative millisecond timestamp.
+
+    Episode persistence and capital-time bounds are only conservative when the
+    observation clock moves forward. Stringly typed, negative, or boolean values
+    must not enter duration accounting.
+    """
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError("OBSERVED_MS_MUST_BE_NONNEGATIVE_INTEGER")
+    return value
+
+
+def _assert_monotonic_observation(
+    prior_state: dict[str, dict[str, Any]], observed_ms: int
+) -> None:
+    """Fail closed if a polling sample arrives before prior evidence.
+
+    Allowing last_seen_ms to move backward can shrink lower/upper duration bounds,
+    understate capital lock time, and manufacture optimistic survival/efficiency.
+    Out-of-order samples are therefore rejected rather than reordered or guessed.
+    """
+    for state in prior_state.values():
+        last_seen = state.get("last_seen_ms")
+        opened = state.get("opened_ms")
+        if (
+            isinstance(last_seen, bool)
+            or not isinstance(last_seen, int)
+            or last_seen < 0
+            or isinstance(opened, bool)
+            or not isinstance(opened, int)
+            or opened < 0
+            or last_seen < opened
+        ):
+            raise ValueError("PRIOR_WEATHER_EPISODE_TIME_INVALID")
+        if observed_ms < last_seen:
+            raise ValueError("NON_MONOTONIC_WEATHER_OBSERVATION_TIME")
+
+
 def identity(plan: dict[str, Any]) -> str:
     ticker = str(plan.get("market_ticker") or "").strip().upper()
     market_date = str(plan.get("market_date") or "").strip()
@@ -132,7 +170,14 @@ def advance_weather_snapshot(
     multi-market response must not manufacture CLOSE -> REOPEN cycles and fresh
     synthetic paper fills. Incomplete snapshots may still update markets that were
     actually observed, while unobserved prior markets are carried forward unchanged.
+
+    ``observed_ms`` must also be monotonic relative to every prior active episode.
+    Out-of-order samples are rejected because reordering them silently could shrink
+    survival/capital-time bounds and overstate capacity efficiency.
     """
+    observed_ms = _strict_observed_ms(observed_ms)
+    _assert_monotonic_observation(prior_state, observed_ms)
+
     selected: dict[str, dict[str, Any]] = {}
     for row in rows:
         plan = select_paper_probe(row or {}, min_edge_cents=min_edge_cents)
@@ -274,7 +319,7 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         "close": len(closed),
         "closed_duration_lower_bound_ms": sum(int(e.get("duration_lower_bound_ms") or 0) for e in closed),
         "closed_duration_upper_bound_ms": sum(int(e.get("duration_upper_bound_ms") or 0) for e in closed),
-        "episode_semantics": "COMPLETE_SNAPSHOT_RESTING_DEPTH_DEDUPED_DATA_GAPS_DO_NOT_CLOSE_TRUE_CLOSE_REOPEN_IS_NEW_EPISODE",
+        "episode_semantics": "COMPLETE_SNAPSHOT_RESTING_DEPTH_DEDUPED_DATA_GAPS_DO_NOT_CLOSE_MONOTONIC_TIME_TRUE_CLOSE_REOPEN_IS_NEW_EPISODE",
         "paper_fill_semantics": "ONE_SYNTHETIC_FILL_PER_OBSERVED_OPEN",
         "paper_only": True,
         "live_probe_ready": False,
