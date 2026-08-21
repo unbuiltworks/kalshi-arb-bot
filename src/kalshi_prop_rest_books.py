@@ -2,8 +2,10 @@
 
 Purpose: keep the authoritative Gemini/Kalshi MLB prop canary operational when the
 account's authenticated Kalshi websocket slot is occupied by another strategy.
-Discovery polls nested event top-of-book snapshots by series. Exact depth=1 reads are
-exposed separately and are reserved for candidate-only second revalidation.
+Discovery polls nested event top-of-book snapshots by series. The canary is
+single-threaded and deliberately re-reads the same candidate after a 50 ms sleep;
+this adapter recognizes only that same-generation 35-150 ms second access and
+performs one exact depth=1 refresh. Ordinary discovery reads remain cache-only.
 
 This module is read-only. It contains no order transport.
 """
@@ -26,6 +28,8 @@ logger = logging.getLogger("kalshi_arb.kalshi_prop_rest_books")
 D = Decimal
 ONE = D("1")
 SERIES = ("KXMLBHIT", "KXMLBHR", "KXMLBTB", "KXMLBKS")
+REVALIDATE_MIN_MS = 35
+REVALIDATE_MAX_MS = 150
 
 
 def _d(value: Any) -> Decimal | None:
@@ -77,6 +81,8 @@ class KalshiPropRestBooks:
         self._running = False
         self._http: httpx.AsyncClient | None = None
         self.updates: asyncio.Queue[BookUpdate] = asyncio.Queue(maxsize=max_queue)
+        # ticker -> (series snapshot received_ms, monotonic access time)
+        self._first_access: dict[str, tuple[int, float]] = {}
         self.dropped_updates = 0
         self.rest_series_requests = 0
         self.exact_book_requests = 0
@@ -138,6 +144,10 @@ class KalshiPropRestBooks:
             async with self._lock:
                 for q in fresh:
                     self._quotes[q.ticker] = q
+                    # New series generation invalidates any prior access marker.
+                    prior = self._first_access.get(q.ticker)
+                    if prior is not None and prior[0] != q.received_ms:
+                        self._first_access.pop(q.ticker, None)
             for q in fresh:
                 self._notify(q.ticker, "rest_series_snapshot", received_ms)
             return
@@ -165,25 +175,45 @@ class KalshiPropRestBooks:
         )
         async with self._lock:
             self._quotes[ticker] = q
+            self._first_access.pop(ticker, None)
+        logger.info("KALSHI_PROP_EXACT_REVALIDATION ticker=%s", ticker)
         return q
 
     async def quote(self, ticker: str, *, max_age_ms: int = 30000) -> TwoSidedQuote | None:
-        """Return only the cached series snapshot; never trigger per-market REST."""
-        now = int(time.time() * 1000)
+        """Cache-only discovery; exact REST only for the deliberate 50ms second look."""
+        now_ms = int(time.time() * 1000)
+        now_mono = time.monotonic()
         async with self._lock:
             cached = self._quotes.get(ticker)
-        if cached is None or now - cached.received_ms > max_age_ms:
+            marker = self._first_access.get(ticker)
+        if cached is None or now_ms - cached.received_ms > max_age_ms:
             return None
+
+        if marker is not None and marker[0] == cached.received_ms:
+            elapsed_ms = (now_mono - marker[1]) * 1000.0
+            if REVALIDATE_MIN_MS <= elapsed_ms <= REVALIDATE_MAX_MS:
+                # The live canary sleeps 50ms only after a candidate passes its
+                # first >=3c economics gate. This is therefore candidate-only.
+                return await self.exact_quote(ticker)
+            if elapsed_ms > REVALIDATE_MAX_MS:
+                async with self._lock:
+                    self._first_access.pop(ticker, None)
+
+        async with self._lock:
+            current = self._first_access.get(ticker)
+            if current is None or current[0] != cached.received_ms:
+                self._first_access[ticker] = (cached.received_ms, now_mono)
         return cached
 
     async def run(self) -> None:
         self._running = True
         self._http = httpx.AsyncClient(timeout=5.0)
         logger.warning("KALSHI_PROP_BOOK_TRANSPORT %s", json.dumps({
-            "mode": "REST_SERIES_SNAPSHOT_PLUS_CANDIDATE_ONLY_EXACT_REVALIDATION",
+            "mode": "REST_SERIES_SNAPSHOT_PLUS_50MS_CANDIDATE_EXACT_REVALIDATION",
             "tickers": len(self.tickers),
             "series": list(SERIES),
             "poll_spacing_seconds": 0.25,
+            "exact_revalidation_window_ms": [REVALIDATE_MIN_MS, REVALIDATE_MAX_MS],
             "read_only": True,
             "order_entry": False,
         }, separators=(",", ":")))
