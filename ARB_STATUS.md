@@ -76,6 +76,73 @@ Repository: `unbuiltworks/kalshi-arb-bot`
 - **MLB props have a narrower path:** participation-specific differences can disappear after official MLB game-state proof, but source/timing/exceptional-event semantics must still be exact before the pair can be called certified/executable.
 - **No new sports trade was executed or realized by this checkpoint.** Shadow candidates, certification candidates, live-rule-risk probes, and generated MVE quotes are not realized arbitrage profit.
 
+## Railway cleanup checkpoint — 2026-08-21 23:34 UTC
+
+Production inventory contained **88 services**. Classification is deliberately conservative; no service was deleted unless dependency absence could be proven.
+
+### CORE — preserve
+
+- `crypto-15m-sol-live-canary-10bp-50ms`
+- `sports-kp-live-executor`
+- `sports-gk-autonomous-supervisor`
+- `weather-live-probe`
+- `arb-command-center`
+- `Postgres`
+- `sports-trade-settlement-reconciler`
+- `crypto-live-balance-reconcile-readonly`
+
+### ACTIVE SHADOW — preserve while current workstream is active
+
+- `sports-kp-combo-shadow`
+- `mlb-gk-exec-shadow`
+- `weather-shadow-arb`
+- `three-venue-router-paper-v2`
+- `three-venue-mlb-hot-paper-v1`
+- `gemini-kalshi-mlb-prop-hot-shadow`
+- `sports-alert-reliability-shadow`
+- `crypto-maker-arb-shadow-v1`
+
+### ONE-OFF candidates — finished-looking probes/tests, but dependency verification still required
+
+- `sports-rule-audit-probe`
+- `odds-io-prop-snapshot-probe`
+- `gemini-tucker-depth-probe`
+- `gemini-prop-depth-math-test`
+- `odds-io-prop-guarantee-test`
+- `sports-pushover-smoke-test`
+- `mlb-prop-rule-risk-runtime-check`
+- `fanduel-mlb-current-locks-probe`
+- `odds-api-pregame-gate-validate`
+- `sports-gk-account-preflight-now`
+- `sports-gk-live-preflight`
+- `sports-ledger-reporting-smoke`
+- `sports-alert-reliability-validate`
+- `xrp-15m-market-diagnostic`
+- `crypto-rollover-optimizer-test`
+- `crypto-target-lifecycle-cache-test`
+- `crypto-execution-reliability-test`
+- `kp-unemployment-live-probe-q1` — live-capable naming means explicit workstream confirmation is required before removal.
+- `crypto-maker-live-probe-q1` — live-capable naming means explicit workstream confirmation is required before removal.
+
+### SUPERSEDED candidates — likely replacements exist, but dependency verification still required
+
+- `crypto-transport-latency-shadow` → `crypto-transport-latency-east-shadow` / `crypto-transport-latency-east-v2-shadow`
+- `crypto-transport-latency-east-shadow` → `crypto-transport-latency-east-v2-shadow`
+- `crypto-15m-settlement-ledger-shadow` → `crypto-15m-settlement-ledger-v2-shadow`
+- `xrp-settlement-reconcile-temp` → `xrp-settlement-reconcile-alpine`
+- `three-venue-sports-router-paper` → `three-venue-router-paper-v2`; old service failed at 20:11 UTC and v2 succeeded later at 21:56 UTC on Aug 21.
+
+### UNKNOWN — preserve pending ownership/dependency check
+
+All remaining services are UNKNOWN for cleanup purposes, including older MLB game/prop shadows and supervisors, KGP micro variants, Crypto.com discovery shadows, rule-fingerprint/certification shadows, settlement-risk/opportunity-audit shadows, feed validators, and older three-venue paper services. Names/status alone are insufficient evidence for deletion.
+
+Two especially strong dead-placeholder candidates were investigated further:
+
+- `mlb-game-paper-v2` — Railway shows **no deployment ever**; GitHub repo search found no reference by service name.
+- `sports-kgp-real-branch-shadow` — Railway shows **no deployment ever**; GitHub repo search found no reference by service name.
+
+The Railway dependency-check/delete agent timed out on the broad audit and again on narrow per-service checks. Because current environment/service references could not be conclusively inspected, these two remain **UNKNOWN rather than deleted**. No services were removed in this checkpoint. This preserves the fail-safe cleanup rule and avoids disrupting active chats/workstreams.
+
 ## Realized P&L truth
 
 This snapshot does **not** establish a new reconciled realized trade or realized P&L figure. Before reporting realized dollars/day, query the authoritative ledger/reconciliation output and distinguish:
