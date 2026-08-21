@@ -91,9 +91,20 @@ async def _live_reconcile() -> dict[str, Any]:
 
 
 def prepare_if_expired() -> dict[str, Any] | None:
-    """Prepare a fresh in-process campaign iff the configured one cleanly expired."""
-    campaign_id = base._clean_campaign_id(os.getenv(base.CAMPAIGN_ID_ENV, ""))
+    """Prepare a fresh in-process campaign iff the configured one cleanly expired.
+
+    If neither campaign variable is configured, recovery is inert so unit/preflight
+    callers that do not launch a live campaign keep their existing behavior. If only
+    one is present, fail closed because the live configuration is malformed.
+    """
+    campaign_raw = os.getenv(base.CAMPAIGN_ID_ENV, "").strip()
     deadline_raw = os.getenv(DEADLINE_ENV, "").strip()
+    if not campaign_raw and not deadline_raw:
+        return None
+    if not campaign_raw or not deadline_raw:
+        raise RuntimeError("campaign id and arm deadline must be configured together")
+
+    campaign_id = base._clean_campaign_id(campaign_raw)
     deadline = _parse_deadline(deadline_raw)
     now = datetime.now(timezone.utc)
     if now <= deadline:
