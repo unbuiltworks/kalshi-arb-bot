@@ -1,6 +1,6 @@
 """Bounded read-only scanner for same-Kalshi MVE synthetic arbitrage.
 
-For current active 2-3 leg MVE markets, this scanner uses authoritative
+For current active 2-5 leg MVE markets, this scanner uses authoritative
 ``mve_selected_legs`` and prices the complement of every selected single leg.
 It requests q=1 RFQs only for a bounded shortlist, observes maker quotes, then
 deletes the RFQs. It NEVER accepts a quote and NEVER submits an order.
@@ -8,7 +8,9 @@ deletes the RFQs. It NEVER accepts a quote and NEVER submits an order.
 Coverage identity for selected-leg settlement values x_i in [0,1]:
     product(x_i) + sum(1 - x_i) >= 1.
 Thus long MVE + long complement of each selected single has a $1 minimum
-settlement floor even if a component settles scalar.
+settlement floor even if a component settles scalar. The identity holds for
+all n >= 2; this production scanner intentionally caps n at 5 to bound hedge
+count, fees, latency, and temporary execution exposure.
 """
 from __future__ import annotations
 
@@ -25,6 +27,7 @@ BASE = "https://external-api.kalshi.com/trade-api/v2"
 D = Decimal
 ONE = D("1")
 CENT = D("0.01")
+SUPPORTED_LEG_COUNTS = {2, 3, 4, 5}
 SPORT_HINTS = (
     "NFL", "MLB", "NBA", "WNBA", "NHL", "NCAAF", "NCAAB", "ATP", "WTA",
     "PGA", "UFC", "SOCCER", "GAME", "FOOTBALL", "BASEBALL", "TENNIS",
@@ -137,7 +140,7 @@ async def main_async() -> dict[str, Any]:
                     if not isinstance(m, dict):
                         continue
                     legs = [dict(x) for x in (m.get("mve_selected_legs") or []) if isinstance(x, dict)]
-                    if len(legs) not in {2, 3} or not _sportsish(legs):
+                    if len(legs) not in SUPPORTED_LEG_COUNTS or not _sportsish(legs):
                         continue
                     close = _parse_dt(m.get("close_time") or m.get("expected_expiration_time"))
                     status = str(m.get("status") or "").lower()
@@ -153,11 +156,10 @@ async def main_async() -> dict[str, Any]:
             if not cursor:
                 break
 
-        # Dedupe and prioritize shortest capital lock-up, then fewer legs.
         by_ticker = {x["ticker"]: x for x in raw if x["ticker"]}
         candidates = sorted(by_ticker.values(), key=lambda x: (x["close_time"], len(x["legs"])))
         prequalified: list[dict[str, Any]] = []
-        for c in candidates[:250]:
+        for c in candidates[:500]:
             hedge_rows: list[dict[str, Any]] = []
             ok = True
             for leg in c["legs"]:
@@ -181,7 +183,6 @@ async def main_async() -> dict[str, Any]:
                 continue
             hedge_raw = sum((D(x["hedge_ask_dollars"]) for x in hedge_rows), D("0"))
             hedge_fees = sum((D(x["conservative_taker_fee"]) for x in hedge_rows), D("0"))
-            # Even a free combo cannot produce >=2c if hedges+fees already exceed 98c.
             if hedge_raw + hedge_fees >= D("0.98"):
                 continue
             prequalified.append({**c, "single_hedges": hedge_rows, "single_cost_with_fees": str(hedge_raw + hedge_fees)})
@@ -232,19 +233,20 @@ async def main_async() -> dict[str, Any]:
             "status": "KALSHI_MVE_SAME_VENUE_SCAN",
             "observed_at": now.isoformat(),
             "horizon_hours": horizon_h,
+            "supported_leg_counts": sorted(SUPPORTED_LEG_COUNTS),
             "active_short_duration_mves": len(candidates),
+            "active_by_leg_count": {str(n): sum(len(x["legs"]) == n for x in candidates) for n in sorted(SUPPORTED_LEG_COUNTS)},
             "prequalified_for_rfq": len(prequalified),
             "rfqs_requested": len([x for x in scored if x.get("rfq_id")]),
             "executable_candidates": sum(x.get("classification") == "EXECUTABLE_CANDIDATE" for x in scored),
             "ranked": scored[:max_rfqs],
             "threshold": "0.02",
-            "coverage_identity": "product(x_i)+sum(1-x_i)>=1 for x_i in [0,1]",
+            "coverage_identity": "product(x_i)+sum(1-x_i)>=1 for x_i in [0,1], n>=2",
             "quote_acceptance": False,
             "order_entry": False,
             "funds_at_risk": False,
         }
     finally:
-        # Keep the scan from consuming the account's open-RFQ quota.
         for rid in open_rfqs:
             try:
                 await client.delete(f"/communications/rfqs/{rid}")
