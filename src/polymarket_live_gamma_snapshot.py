@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -20,6 +20,7 @@ GAMMA = "https://gamma-api.polymarket.com"
 SPORTS_TAG_ID = 100639
 PAGE = 100
 MAX_PAGES = 15
+LOOKBACK_HOURS = 24
 
 
 def _truthy(v: Any) -> bool:
@@ -57,10 +58,12 @@ def _sport_label(e: dict[str, Any]) -> str:
     return str(e.get("subcategory") or e.get("seriesSlug") or e.get("category") or "sports")
 
 
-async def _fetch_page(http: httpx.AsyncClient, offset: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+async def _fetch_page(http: httpx.AsyncClient, offset: int, now: datetime) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    start_min = (now - timedelta(hours=LOOKBACK_HOURS)).isoformat().replace("+00:00", "Z")
+    start_max = now.isoformat().replace("+00:00", "Z")
     params = {
         "active": "true", "closed": "false", "tag_id": SPORTS_TAG_ID, "related_tags": "true",
-        "order": "start_date", "ascending": "false", "limit": PAGE, "offset": offset,
+        "start_date_min": start_min, "start_date_max": start_max, "limit": PAGE, "offset": offset,
     }
     try:
         r = await http.get(f"{GAMMA}/events", params=params)
@@ -71,8 +74,7 @@ async def _fetch_page(http: httpx.AsyncClient, offset: int) -> tuple[list[dict[s
     except Exception as exc:
         return [], {"offset": offset, "status": None, "rows": 0, "error": f"{type(exc).__name__}:{str(exc)[:180]}"}
     if isinstance(body, list):
-        rows = [x for x in body if isinstance(x, dict)]
-        shape = "list"; keys: list[str] = []
+        rows = [x for x in body if isinstance(x, dict)]; shape = "list"; keys: list[str] = []
     elif isinstance(body, dict):
         raw = body.get("events") or body.get("data") or body.get("results") or []
         rows = [x for x in raw if isinstance(x, dict)] if isinstance(raw, list) else []
@@ -83,12 +85,13 @@ async def _fetch_page(http: httpx.AsyncClient, offset: int) -> tuple[list[dict[s
 
 
 async def main_async() -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
     diagnostics: list[dict[str, Any]] = []
     events: list[dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=20.0) as http:
         offset = 0
         for _ in range(MAX_PAGES):
-            rows, diag = await _fetch_page(http, offset)
+            rows, diag = await _fetch_page(http, offset, now)
             diagnostics.append(diag)
             if not rows:
                 break
@@ -117,10 +120,11 @@ async def main_async() -> dict[str, Any]:
         "id": e.get("id"), "game_id": e.get("gameId"), "title": e.get("title"), "live": e.get("live"),
         "ended": e.get("ended"), "game_status": e.get("gameStatus"), "period": e.get("period"),
         "start_time": e.get("startTime") or e.get("startDate"),
-    } for e in events[:12]]
+    } for e in events[:20]]
     return {
-        "status": "POLYMARKET_LIVE_GAMMA_SNAPSHOT", "observed_at": datetime.now(timezone.utc).isoformat(),
-        "sports_tag_id": SPORTS_TAG_ID, "active_sports_events_scanned": len(events), "live_event_count": len(out_events),
+        "status": "POLYMARKET_LIVE_GAMMA_SNAPSHOT", "observed_at": now.isoformat(),
+        "sports_tag_id": SPORTS_TAG_ID, "lookback_hours": LOOKBACK_HOURS,
+        "active_sports_events_scanned": len(events), "live_event_count": len(out_events),
         "category_counts": dict(counts.most_common()),
         "events_with_open_markets": sum(e["open_market_count"] > 0 for e in out_events),
         "events_with_accepting_markets": sum(e["accepting_market_count"] > 0 for e in out_events),
