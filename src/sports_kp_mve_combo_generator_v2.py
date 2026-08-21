@@ -5,6 +5,12 @@ rotates collections, and enforces a daily creation ceiling comfortably below
 Kalshi's documented 5000/week market-creation allowance.  It creates/resolves
 combo markets and requests RFQs only; it never accepts a quote or submits an
 order.
+
+An async preprice hook runs after event-leg discovery but before candidate
+pruning.  The default hook is a no-op.  Production wrappers may use it to cache
+external-venue replacement economics for ranking while leaving the original
+Kalshi Leg objects unchanged, so same-Kalshi execution semantics cannot be
+accidentally upgraded by a shadow price.
 """
 from __future__ import annotations
 
@@ -30,6 +36,18 @@ def _reset_day() -> None:
         _DAY = today
         _CREATED_TODAY = 0
         _SEEN = set()
+
+
+async def _candidate_preprice_hook(
+    collection: dict[str, Any], event_legs: dict[str, list[g.Leg]]
+) -> dict[str, list[g.Leg]]:
+    """Extension point for read-only external candidate ranking.
+
+    Must return the original semantic Leg objects (or equivalent objects with
+    identical Kalshi execution fields).  Live scoring and order entry never use
+    a preprice cache directly.
+    """
+    return event_legs
 
 
 async def generate_and_score() -> dict[str, Any]:
@@ -100,6 +118,11 @@ async def generate_and_score() -> dict[str, Any]:
                     event_legs[event] = rows
             if len(event_legs) < 2:
                 continue
+
+            # External-venue wrappers may populate a shadow ranking cache here.
+            # The Leg objects themselves remain the original Kalshi execution
+            # facts, so this hook cannot make a cross-venue price executable.
+            event_legs = await _candidate_preprice_hook(c, event_legs)
 
             candidates = g._candidate_combos(c, event_legs, max_candidates=max_candidates, min_locked=min_locked)
             candidates_considered += len(candidates)
