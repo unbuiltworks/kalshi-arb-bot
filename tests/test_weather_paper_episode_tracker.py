@@ -1,4 +1,8 @@
-from src.weather_paper_episode_tracker import advance_weather_episode, summarize
+from src.weather_paper_episode_tracker import (
+    advance_weather_episode,
+    ledger_events_for_episode_open,
+    summarize,
+)
 
 
 def _row(**overrides):
@@ -54,6 +58,7 @@ def test_repeated_resting_quote_opens_once_and_price_move_is_move():
 def test_close_then_same_side_reopen_gets_new_episode_id():
     events, state = advance_weather_episode(_row(), prior_state={}, observed_ms=1000)
     first_id = events[0]["episode_id"]
+    first_group = events[0]["trade_group_id"]
     events, state = advance_weather_episode(None, prior_state=state, observed_ms=3000)
     assert [e["event"] for e in events] == ["CLOSE"]
     assert events[0]["duration_lower_bound_ms"] == 0
@@ -61,6 +66,7 @@ def test_close_then_same_side_reopen_gets_new_episode_id():
     events, state = advance_weather_episode(_row(quote_observed_at="2026-08-21T15:00:04+00:00"), prior_state=state, observed_ms=4000)
     assert [e["event"] for e in events] == ["OPEN"]
     assert events[0]["episode_id"] != first_id
+    assert events[0]["trade_group_id"] != first_group
 
 
 def test_uncertified_row_closes_prior_episode_instead_of_counting_capacity():
@@ -71,6 +77,31 @@ def test_uncertified_row_closes_prior_episode_instead_of_counting_capacity():
     assert new_state == {}
 
 
+def test_only_open_emits_episode_scoped_idempotent_paper_fill_and_fee():
+    opened, state = advance_weather_episode(_row(), prior_state={}, observed_ms=1000)
+    ledger = ledger_events_for_episode_open(opened[0])
+    assert len(ledger) == 2
+    assert {e.event_type for e in ledger} == {"fill", "fee"}
+    assert len({e.trade_group_id for e in ledger}) == 1
+    group = ledger[0].trade_group_id
+    assert group == opened[0]["trade_group_id"]
+    assert {e.external_id for e in ledger} == {f"{group}:fill", f"{group}:fee"}
+
+    moved = _row(
+        quote_observed_at="2026-08-21T15:00:02+00:00",
+        best_shadow_side={"side": "NO", "ask_cents": 35, "available_contracts": 8, "forecast_side_probability": "0.90"},
+    )
+    move_events, state = advance_weather_episode(moved, prior_state=state, observed_ms=2000)
+    assert [e["event"] for e in move_events] == ["MOVE"]
+    assert ledger_events_for_episode_open(move_events[0]) == []
+
+    _, state = advance_weather_episode(None, prior_state=state, observed_ms=3000)
+    reopened, _ = advance_weather_episode(_row(quote_observed_at="2026-08-21T15:00:04+00:00"), prior_state=state, observed_ms=4000)
+    reopened_ledger = ledger_events_for_episode_open(reopened[0])
+    assert len(reopened_ledger) == 2
+    assert reopened_ledger[0].trade_group_id != group
+
+
 def test_summary_is_explicitly_paper_only():
     events, state = advance_weather_episode(_row(), prior_state={}, observed_ms=1000)
     closed, _ = advance_weather_episode(None, prior_state=state, observed_ms=2000)
@@ -78,5 +109,6 @@ def test_summary_is_explicitly_paper_only():
     assert summary["open"] == 1
     assert summary["close"] == 1
     assert summary["paper_only"] is True
+    assert summary["paper_fill_semantics"] == "ONE_SYNTHETIC_FILL_PER_OBSERVED_OPEN"
     assert summary["live_probe_ready"] is False
     assert summary["order_entry"] is False
