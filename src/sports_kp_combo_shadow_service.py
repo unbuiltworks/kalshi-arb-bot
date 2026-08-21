@@ -8,6 +8,9 @@ V1 responsibilities:
 * never place orders.
 
 The live q=1 executor is intentionally not imported here.
+
+Deployment note: the production combo service now starts the separate
+sports_kp_live_combo_supervisor; this module remains the read-only fallback.
 """
 from __future__ import annotations
 
