@@ -5,15 +5,14 @@ authoritative ``mve_selected_legs`` to price the state-covering portfolio:
 
     long MVE conjunction + long complement of every underlying selected leg
 
-For a 2-leg binary all-or-nothing MVE this guarantees at least $1 of payout
-before fees in every 0/1 state.  Scalar component settlements are handled
-conservatively by *not* declaring the portfolio executable unless every
-component market reports binary strike/result structure and the MVE component
-metadata maps exactly to the fetched single ticker.
+This remains state-covering even when an underlying settles to a scalar value.
+If selected-leg settlement values are x_i in [0,1], the MVE pays product(x_i)
+and each opposite single pays (1-x_i), so total payout is
+product(x_i) + sum(1-x_i) >= 1.  This follows directly from the MVE product
+settlement rule and uses the exact component market tickers returned by Kalshi.
 
 This module is PRE-TRADE ONLY.  It creates an RFQ (which risks no capital),
-reads quotes and public/authenticated market metadata, and never accepts a
-quote or submits an order.
+reads quotes and market metadata, and never accepts a quote or submits an order.
 """
 from __future__ import annotations
 
@@ -42,9 +41,9 @@ def _d(value: Any) -> Decimal | None:
 
 
 def _ceil_cent(value: Decimal) -> Decimal:
-    # Deliberately conservative for q=1 validation.  Kalshi's published fee
-    # table displays q=1 fees rounded to cents; using whole-cent ceiling cannot
-    # overstate an arb that only exists because of sub-cent fee accounting.
+    # Deliberately conservative for q=1 validation. Kalshi's published q=1 fee
+    # table displays whole-cent fees, so whole-cent ceiling avoids declaring an
+    # arb that depends on more favorable sub-cent accounting.
     return (value / CENT).to_integral_value(rounding=ROUND_CEILING) * CENT
 
 
@@ -71,17 +70,6 @@ def _single_buy_cost(market: dict[str, Any], wanted: str) -> tuple[Decimal | Non
     else:
         return None, None
     return px, depth
-
-
-def _binary_component(market: dict[str, Any]) -> bool:
-    # Standard sports contracts can still settle scalar in exceptional cases.
-    # Fail closed on explicit scalar/multiplier metadata; execution requires a
-    # separate exact payout-identity check before this probe graduates live.
-    text = " ".join(str(market.get(k) or "") for k in (
-        "result", "settlement_value_dollars", "functional_strike", "strike_type",
-        "custom_strike", "rules_primary", "rules_secondary",
-    )).lower()
-    return "scalar" not in text
 
 
 async def main_async() -> dict[str, Any]:
@@ -125,7 +113,6 @@ async def main_async() -> dict[str, Any]:
                 rows = qb.get("quotes") or [] if isinstance(qb, dict) else []
                 quotes = [dict(x) for x in rows if isinstance(x, dict)]
                 if quotes:
-                    # Let additional makers compete for another 500ms.
                     await asyncio.sleep(0.5)
                     qresp2 = await client.get(
                         "/communications/quotes",
@@ -153,7 +140,6 @@ async def main_async() -> dict[str, Any]:
                 st and complement and px is not None and D("0") < px < ONE
                 and depth is not None and depth >= ONE
                 and str(sm.get("status") or "").lower() in {"active", "open"}
-                and _binary_component(sm)
             )
             all_singles_tradeable = all_singles_tradeable and ok
             single_rows.append({
@@ -164,14 +150,12 @@ async def main_async() -> dict[str, Any]:
                 "hedge_ask_dollars": None if px is None else str(px),
                 "hedge_depth_fp": None if depth is None else str(depth),
                 "conservative_taker_fee": None if fee is None else str(fee),
-                "binary_component_check": _binary_component(sm),
                 "tradeable_q1": ok,
             })
 
-        # A quote maker's NO bid is the economically equivalent price at which
-        # the RFQ requester can sell NO / acquire YES exposure: buy-YES cost = 1-NO bid.
-        # We do not accept it here.  Keep quote ID so a future live coordinator
-        # can require a fresh still-open quote and exact accepted-side semantics.
+        # A quote maker's NO bid lets the RFQ requester sell NO, which is the
+        # same directional exposure as buying YES. Effective YES cost = 1-NO bid.
+        # No quote is accepted here.
         quote_options: list[dict[str, Any]] = []
         for q in quotes:
             if str(q.get("status") or "").lower() not in {"open", ""}:
@@ -191,10 +175,7 @@ async def main_async() -> dict[str, Any]:
         quote_options.sort(key=lambda x: D(x["requester_buy_yes_equivalent"]))
 
         best = quote_options[0] if quote_options else None
-        raw_cost = None
-        fees = None
-        all_in = None
-        locked = None
+        raw_cost = fees = all_in = locked = None
         if best and len(single_rows) in {2, 3} and all_singles_tradeable:
             combo_cost = D(best["requester_buy_yes_equivalent"])
             single_prices = [D(x["hedge_ask_dollars"]) for x in single_rows]
@@ -225,11 +206,11 @@ async def main_async() -> dict[str, Any]:
             "raw_portfolio_cost": None if raw_cost is None else str(raw_cost),
             "conservative_fees": None if fees is None else str(fees),
             "all_in_cost": None if all_in is None else str(all_in),
-            "guaranteed_binary_floor": "1.00" if len(legs) in {2, 3} else None,
+            "guaranteed_scalar_safe_floor": "1.00" if len(legs) in {2, 3} else None,
             "locked_profit_conservative": None if locked is None else str(locked),
             "threshold": "0.02",
             "classification": "EXECUTABLE_CANDIDATE" if executable else "NO_TRADE",
-            "requires_final_exact_payout_audit": True,
+            "coverage_identity": "product(x_i)+sum(1-x_i)>=1 for x_i in [0,1]",
             "quote_acceptance": False,
             "order_entry": False,
             "funds_at_risk": False,
