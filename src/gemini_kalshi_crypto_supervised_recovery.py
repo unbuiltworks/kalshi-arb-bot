@@ -1,4 +1,4 @@
-"""Fail-closed startup recovery for an expired bounded crypto campaign.
+"""Fail-closed supervised rollover for bounded crypto campaigns.
 
 This module never weakens live gates. It may replace only the campaign id and arm
 expiry in the current process after proving the prior persistent campaign is clean,
@@ -90,12 +90,13 @@ async def _live_reconcile() -> dict[str, Any]:
     }
 
 
-def prepare_if_expired() -> dict[str, Any] | None:
-    """Prepare a fresh in-process campaign iff the configured one cleanly expired.
+def prepare_if_ended() -> dict[str, Any] | None:
+    """Prepare a fresh campaign iff the configured campaign is safely terminal.
 
-    If neither campaign variable is configured, recovery is inert so unit/preflight
-    callers that do not launch a live campaign keep their existing behavior. If only
-    one is present, fail closed because the live configuration is malformed.
+    A brand-new configured campaign with no state file is allowed to proceed. A
+    persisted campaign that is still active is never silently reused after a process
+    return/restart; that condition fails closed. Terminal means deadline expired or a
+    configured trade/attempt cap was actually reached.
     """
     campaign_raw = os.getenv(base.CAMPAIGN_ID_ENV, "").strip()
     deadline_raw = os.getenv(DEADLINE_ENV, "").strip()
@@ -107,12 +108,13 @@ def prepare_if_expired() -> dict[str, Any] | None:
     campaign_id = base._clean_campaign_id(campaign_raw)
     deadline = _parse_deadline(deadline_raw)
     now = datetime.now(timezone.utc)
-    if now <= deadline:
+    state_path = p.STATE_DIR / f"{campaign_id}.json"
+
+    if not state_path.is_file():
+        if now > deadline:
+            raise RuntimeError(f"expired campaign state missing: {state_path}")
         return None
 
-    state_path = p.STATE_DIR / f"{campaign_id}.json"
-    if not state_path.is_file():
-        raise RuntimeError(f"expired campaign state missing: {state_path}")
     state = rollover.load_campaign_state(state_path)
     diagnosis = rollover.diagnose_campaign(
         state=state,
@@ -121,9 +123,14 @@ def prepare_if_expired() -> dict[str, Any] | None:
         max_completed_trades=p.MAX_COMPLETED_TRADES,
         max_execution_attempts=p.MAX_EXECUTION_ATTEMPTS,
     )
+    if diagnosis["bounded_state"] == "ACTIVE_WITHIN_ARM_WINDOW":
+        raise RuntimeError(
+            "persisted campaign is still active; refusing implicit resume: "
+            + json.dumps(diagnosis, separators=(",", ":"), default=str)
+        )
     if not diagnosis["rollover_eligible"]:
         raise RuntimeError(
-            "expired campaign is not locally rollover-eligible: "
+            "terminal campaign is not locally rollover-eligible: "
             + json.dumps(diagnosis, separators=(",", ":"), default=str)
         )
 
@@ -153,3 +160,8 @@ def prepare_if_expired() -> dict[str, Any] | None:
         "order_entry": False,
         "next_step": "existing postincident boot retains all live gates",
     }
+
+
+def prepare_if_expired() -> dict[str, Any] | None:
+    """Backward-compatible alias retained for existing callers/tests."""
+    return prepare_if_ended()
