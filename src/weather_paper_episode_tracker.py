@@ -123,13 +123,15 @@ def advance_weather_snapshot(
     prior_state: dict[str, dict[str, Any]],
     observed_ms: int,
     min_edge_cents: Decimal = D("3"),
+    snapshot_complete: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
-    """Advance one complete weather snapshot atomically.
+    """Advance one weather polling snapshot atomically.
 
-    The full-snapshot boundary is critical. A row-by-row loop must not infer that
-    every other active market disappeared just because it was absent from one row.
-    This function closes a prior episode only after all rows in the same observation
-    cycle have been evaluated.
+    ``snapshot_complete`` must be literal ``True`` before absence is allowed to
+    close a prior episode. This is critical: a transient API failure or partial
+    multi-market response must not manufacture CLOSE -> REOPEN cycles and fresh
+    synthetic paper fills. Incomplete snapshots may still update markets that were
+    actually observed, while unobserved prior markets are carried forward unchanged.
     """
     selected: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -154,9 +156,17 @@ def advance_weather_snapshot(
         elif old.get("fingerprint") != state["fingerprint"]:
             events.append({**state, "event": "MOVE", "observed_ms": observed_ms})
 
-    for key in sorted(prior_state):
-        if key not in current:
-            events.append(_close(prior_state[key], observed_ms))
+    if snapshot_complete is True:
+        for key in sorted(prior_state):
+            if key not in current:
+                events.append(_close(prior_state[key], observed_ms))
+    else:
+        # Preserve unseen prior opportunities across an incomplete/data-gap poll.
+        # Their last_seen_ms is intentionally not advanced: a later complete poll
+        # will correctly interval-censor any real disappearance across the gap.
+        for key in sorted(prior_state):
+            if key not in current:
+                current[key] = dict(prior_state[key])
 
     return events, current
 
@@ -167,12 +177,15 @@ def advance_weather_episode(
     prior_state: dict[str, dict[str, Any]],
     observed_ms: int,
     min_edge_cents: Decimal = D("3"),
+    observation_complete: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
     """Advance a single-market weather stream.
 
     This compatibility helper is intentionally fail-closed for multi-market state.
     Use :func:`advance_weather_snapshot` when one polling cycle contains more than one
     weather contract; otherwise a one-row call could falsely close unrelated markets.
+    A missing row closes the single-market episode only when ``observation_complete``
+    is literal ``True``.
     """
     prior_market_scopes = {
         (
@@ -189,6 +202,7 @@ def advance_weather_episode(
         prior_state=prior_state,
         observed_ms=observed_ms,
         min_edge_cents=min_edge_cents,
+        snapshot_complete=observation_complete,
     )
 
 
@@ -260,7 +274,7 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         "close": len(closed),
         "closed_duration_lower_bound_ms": sum(int(e.get("duration_lower_bound_ms") or 0) for e in closed),
         "closed_duration_upper_bound_ms": sum(int(e.get("duration_upper_bound_ms") or 0) for e in closed),
-        "episode_semantics": "FULL_SNAPSHOT_RESTING_DEPTH_DEDUPED_TRUE_CLOSE_REOPEN_IS_NEW_EPISODE",
+        "episode_semantics": "COMPLETE_SNAPSHOT_RESTING_DEPTH_DEDUPED_DATA_GAPS_DO_NOT_CLOSE_TRUE_CLOSE_REOPEN_IS_NEW_EPISODE",
         "paper_fill_semantics": "ONE_SYNTHETIC_FILL_PER_OBSERVED_OPEN",
         "paper_only": True,
         "live_probe_ready": False,
