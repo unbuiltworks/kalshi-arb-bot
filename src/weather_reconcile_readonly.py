@@ -13,6 +13,7 @@ from src.auth import KalshiClient
 
 
 TICKER = os.getenv("WEATHER_RECONCILE_TICKER", "KXHIGHCHI-26AUG21-B80.5").strip()
+KALSHI_PROD_REST = "https://external-api.kalshi.com/trade-api/v2"
 
 
 def _pick(row: dict, keys: tuple[str, ...]) -> dict:
@@ -20,7 +21,10 @@ def _pick(row: dict, keys: tuple[str, ...]) -> dict:
 
 
 async def run() -> None:
-    client = KalshiClient()
+    # Pin to the current production Trade API host used by the working live
+    # crypto balance reconciler and weather live probe. The legacy settings
+    # module still contains an older production hostname.
+    client = KalshiClient(base_url=KALSHI_PROD_REST)
     result: dict = {"ticker": TICKER}
     try:
         requests = {
@@ -77,7 +81,7 @@ async def run() -> None:
         except Exception as exc:
             result["balance"] = {"error": f"{type(exc).__name__}: {exc}"}
 
-        print(json.dumps({"event": "WEATHER_RECONCILE_READONLY", "result": result}, sort_keys=True, default=str))
+        print(json.dumps({"event": "WEATHER_RECONCILE_READONLY", "result": result}, sort_keys=True, default=str), flush=True)
     finally:
         await client.close()
 
