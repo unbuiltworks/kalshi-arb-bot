@@ -17,8 +17,9 @@ from typing import Any
 import httpx
 
 GAMMA = "https://gamma-api.polymarket.com"
-PAGE = 500
-MAX_PAGES = 6
+SPORTS_TAG_ID = 100639
+PAGE = 100
+MAX_PAGES = 30
 
 
 def _truthy(v: Any) -> bool:
@@ -60,7 +61,7 @@ def _sport_label(e: dict[str, Any]) -> str:
     labels = [str(t.get("label") or t.get("slug") or "") for t in tags if isinstance(t, dict)]
     for label in labels:
         low = label.lower()
-        if any(x in low for x in ("tennis", "table tennis", "golf", "esports", "football", "baseball", "basketball", "soccer", "hockey", "mma", "ufc", "darts")):
+        if any(x in low for x in ("table tennis", "tennis", "golf", "esports", "football", "baseball", "basketball", "soccer", "hockey", "mma", "ufc", "darts", "cricket")):
             return label
     return str(e.get("subcategory") or e.get("seriesSlug") or e.get("category") or "sports")
 
@@ -69,7 +70,7 @@ async def _fetch_page(http: httpx.AsyncClient, offset: int) -> tuple[list[dict[s
     params = {
         "active": "true",
         "closed": "false",
-        "tag_slug": "sports",
+        "tag_id": SPORTS_TAG_ID,
         "related_tags": "true",
         "limit": PAGE,
         "offset": offset,
@@ -96,14 +97,17 @@ async def main_async() -> dict[str, Any]:
     diagnostics: list[dict[str, Any]] = []
     events: list[dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=20.0) as http:
-        for page in range(MAX_PAGES):
-            rows, diag = await _fetch_page(http, page * PAGE)
+        offset = 0
+        for _ in range(MAX_PAGES):
+            rows, diag = await _fetch_page(http, offset)
             diagnostics.append(diag)
+            if not rows:
+                break
             events.extend(rows)
+            offset += len(rows)
             if len(rows) < PAGE:
                 break
 
-    # Gamma event live/ended is the same state metadata shown in sports event payloads.
     live = [e for e in events if _truthy(e.get("live")) and not _truthy(e.get("ended")) and e.get("closed") is not True]
     live.sort(key=lambda e: (-float(e.get("volume24hr") or 0), str(e.get("title") or "")))
 
@@ -118,6 +122,7 @@ async def main_async() -> dict[str, Any]:
         ]
         out_events.append({
             "id": e.get("id"),
+            "game_id": e.get("gameId"),
             "slug": e.get("slug"),
             "title": e.get("title"),
             "sport": sport,
@@ -136,15 +141,25 @@ async def main_async() -> dict[str, Any]:
             "markets": markets,
         })
 
+    sample_state = [
+        {
+            "id": e.get("id"), "game_id": e.get("gameId"), "title": e.get("title"),
+            "live": e.get("live"), "ended": e.get("ended"), "game_status": e.get("gameStatus"),
+            "period": e.get("period"), "start_time": e.get("startTime") or e.get("startDate"),
+        }
+        for e in events[:12]
+    ]
     return {
         "status": "POLYMARKET_LIVE_GAMMA_SNAPSHOT",
         "observed_at": datetime.now(timezone.utc).isoformat(),
+        "sports_tag_id": SPORTS_TAG_ID,
         "active_sports_events_scanned": len(events),
         "live_event_count": len(out_events),
         "category_counts": dict(counts.most_common()),
         "events_with_open_markets": sum(e["open_market_count"] > 0 for e in out_events),
         "events_with_accepting_markets": sum(e["accepting_market_count"] > 0 for e in out_events),
         "diagnostics": diagnostics,
+        "sample_state": sample_state,
         "events": out_events[:150],
         "read_only": True,
         "order_entry": False,
