@@ -121,3 +121,14 @@ def test_explicit_and_embedded_fee_double_representation_fails_closed():
     assert result["invalid_groups"] == 1
     assert result["groups"][0]["status"] == "AMBIGUOUS_OR_MISMATCHED_FEE_ACCOUNTING_FAIL_CLOSED"
     assert result["conservative_realized_profit_per_capital_hour"] is None
+
+
+def test_zero_explicit_fee_cannot_override_positive_embedded_fill_fee():
+    result = analyze_weather_paper_capital_lock([
+        _fill(fee="0.02"),
+        _fee(fee="0"),
+        _settlement(),
+    ])
+    assert result["invalid_groups"] == 1
+    assert result["groups"][0]["status"] == "AMBIGUOUS_OR_MISMATCHED_FEE_ACCOUNTING_FAIL_CLOSED"
+    assert result["conservative_realized_profit_per_capital_hour"] is None
