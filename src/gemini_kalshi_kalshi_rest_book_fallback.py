@@ -2,8 +2,11 @@
 
 Kalshi uses the public exact REST orderbook when authenticated Kalshi WebSocket
 handshakes are rate-limited. Gemini prediction-market bookTicker streams are
-multiplexed onto one public WebSocket connection so BTC/ETH/SOL/XRP do not create a
-four-connection reconnect storm when the venue throttles handshakes.
+multiplexed onto one WebSocket connection so BTC/ETH/SOL/XRP do not create a
+multi-connection reconnect storm when the venue throttles handshakes. When configured
+Gemini credentials are present, that market-data-only socket uses Gemini's authenticated
+handshake; otherwise it falls back to the public handshake. No order method is exposed
+from this module.
 
 The Kalshi quote timestamp is conservatively stamped at request start (not response
 receipt), so network latency makes freshness/skew checks harder rather than easier.
@@ -25,6 +28,7 @@ import websockets
 from src import gemini_kalshi_predictive_prewarmed as base
 from src import gemini_kalshi_rollover_optimizer as rollover
 from src import gemini_kalshi_micro_live_readiness_20bp as readiness
+from src.gemini_prediction_auth import authenticated_ws_connect, has_credentials
 
 hot = base.hot
 D = Decimal
@@ -38,7 +42,7 @@ DEPTH = 10
 # during rollover/cleanup and crash the live campaign.
 _ORIGINAL_STOP_FEED = base._stop_feed
 
-# Gemini supports multiple public stream names on one SUBSCRIBE request. Keep one
+# Gemini supports multiple stream names on one SUBSCRIBE request. Keep one
 # process-wide connection and fan each symbol update into the feed(s) that requested
 # it. This reduces connection handshakes without changing any execution/economics gate.
 _GEMINI_SUBSCRIBERS: dict[str, dict[int, tuple[asyncio.Queue, Any]]] = {}
@@ -82,83 +86,91 @@ async def _gemini_shared_manager() -> None:
             await change.wait()
             continue
 
+        ws = None
+        transport = "AUTHENTICATED_SHARED_WS_MULTI_STREAM" if has_credentials() else "PUBLIC_SHARED_WS_MULTI_STREAM"
         try:
-            async with websockets.connect(hot.GEMINI_WS, open_timeout=5.0) as ws:
-                await ws.send(json.dumps({
-                    "id": "hot-shared",
-                    "method": "SUBSCRIBE",
-                    "params": _gemini_stream_names(symbols),
-                }))
-                subscribed = set(symbols)
-                backoff = 0.25
-                logger.info(
-                    "CRYPTO_GEMINI_SHARED_CONNECTED %s",
-                    json.dumps({
-                        "symbols": sorted(subscribed),
-                        "stream_count": len(subscribed),
-                        "connections": 1,
-                        "risk_gates_changed": False,
-                    }, separators=(",", ":")),
+            if has_credentials():
+                ws = await authenticated_ws_connect(timeout=5.0)
+            else:
+                ws = await websockets.connect(hot.GEMINI_WS, open_timeout=5.0)
+
+            await ws.send(json.dumps({
+                "id": "hot-shared",
+                "method": "SUBSCRIBE",
+                "params": _gemini_stream_names(symbols),
+            }))
+            subscribed = set(symbols)
+            backoff = 0.25
+            logger.info(
+                "CRYPTO_GEMINI_SHARED_CONNECTED %s",
+                json.dumps({
+                    "symbols": sorted(subscribed),
+                    "stream_count": len(subscribed),
+                    "connections": 1,
+                    "transport": transport,
+                    "market_data_only": True,
+                    "risk_gates_changed": False,
+                }, separators=(",", ":")),
+            )
+
+            while True:
+                recv_task = asyncio.create_task(ws.recv())
+                change_task = asyncio.create_task(change.wait())
+                done, pending = await asyncio.wait(
+                    {recv_task, change_task},
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
 
-                while True:
-                    recv_task = asyncio.create_task(ws.recv())
-                    change_task = asyncio.create_task(change.wait())
-                    done, pending = await asyncio.wait(
-                        {recv_task, change_task},
-                        return_when=asyncio.FIRST_COMPLETED,
+                if change_task in done:
+                    change.clear()
+                    desired = _gemini_snapshot()
+                    additions = desired - subscribed
+                    removals = subscribed - desired
+                    if additions:
+                        await ws.send(json.dumps({
+                            "id": "hot-shared-add",
+                            "method": "SUBSCRIBE",
+                            "params": _gemini_stream_names(additions),
+                        }))
+                    if removals:
+                        await ws.send(json.dumps({
+                            "id": "hot-shared-remove",
+                            "method": "UNSUBSCRIBE",
+                            "params": _gemini_stream_names(removals),
+                        }))
+                    subscribed = desired
+                    if not subscribed:
+                        break
+                    continue
+
+                raw = recv_task.result()
+                receive_ms = int(time.time() * 1000)
+                mono_ns = time.perf_counter_ns()
+                payload = json.loads(raw)
+                if payload.get("status") is not None:
+                    if int(payload.get("status")) >= 400:
+                        raise RuntimeError(f"Gemini WS subscription error: {payload}")
+                    continue
+                symbol = str(payload.get("s") or "")
+                subscribers = list(_GEMINI_SUBSCRIBERS.get(symbol, {}).values())
+                if not subscribers:
+                    continue
+                try:
+                    top = hot.parse_gemini_book_ticker(payload, received_ms=receive_ms)
+                except (KeyError, ValueError, TypeError):
+                    continue
+                for queue, stats in subscribers:
+                    stats.events += 1
+                    stats.gemini_events += 1
+                    hot._enqueue(
+                        queue,
+                        ("gemini", receive_ms, None, top, mono_ns),
+                        stats,
                     )
-                    for task in pending:
-                        task.cancel()
-                    if pending:
-                        await asyncio.gather(*pending, return_exceptions=True)
-
-                    if change_task in done:
-                        change.clear()
-                        desired = _gemini_snapshot()
-                        additions = desired - subscribed
-                        removals = subscribed - desired
-                        if additions:
-                            await ws.send(json.dumps({
-                                "id": "hot-shared-add",
-                                "method": "SUBSCRIBE",
-                                "params": _gemini_stream_names(additions),
-                            }))
-                        if removals:
-                            await ws.send(json.dumps({
-                                "id": "hot-shared-remove",
-                                "method": "UNSUBSCRIBE",
-                                "params": _gemini_stream_names(removals),
-                            }))
-                        subscribed = desired
-                        if not subscribed:
-                            break
-                        continue
-
-                    raw = recv_task.result()
-                    receive_ms = int(time.time() * 1000)
-                    mono_ns = time.perf_counter_ns()
-                    payload = json.loads(raw)
-                    if payload.get("status") is not None:
-                        if int(payload.get("status")) >= 400:
-                            raise RuntimeError(f"Gemini WS subscription error: {payload}")
-                        continue
-                    symbol = str(payload.get("s") or "")
-                    subscribers = list(_GEMINI_SUBSCRIBERS.get(symbol, {}).values())
-                    if not subscribers:
-                        continue
-                    try:
-                        top = hot.parse_gemini_book_ticker(payload, received_ms=receive_ms)
-                    except (KeyError, ValueError, TypeError):
-                        continue
-                    for queue, stats in subscribers:
-                        stats.events += 1
-                        stats.gemini_events += 1
-                        hot._enqueue(
-                            queue,
-                            ("gemini", receive_ms, None, top, mono_ns),
-                            stats,
-                        )
 
             first = True
         except asyncio.CancelledError:
@@ -175,10 +187,17 @@ async def _gemini_shared_manager() -> None:
                     "error": str(exc)[:240],
                     "backoff_s": backoff,
                     "connections": 1,
+                    "transport": transport,
                 }, separators=(",", ":")),
             )
             await asyncio.sleep(backoff)
-            backoff = min(backoff * 2.0, 5.0)
+            backoff = min(backoff * 2.0, 30.0)
+        finally:
+            if ws is not None:
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
 
 
 async def _gemini_shared_stream(symbol: str, queue: asyncio.Queue, stats: Any) -> None:
@@ -316,7 +335,7 @@ async def _start_feed_rest_kalshi(*, asset: str, pair: Any, stats: Any, active: 
             "window_end_utc": pair.window_end.isoformat(),
             "active": active,
             "start_relative_window_start_ms": int(time.time() * 1000) - boundary_ms,
-            "gemini_transport": "ONE_SHARED_WS_MULTI_STREAM",
+            "gemini_transport": "ONE_SHARED_WS_MULTI_STREAM_AUTH_WHEN_AVAILABLE",
             "kalshi_transport": "REST_EXACT_ORDERBOOK_FAIL_CLOSED",
             "kalshi_quote_timestamp": "REQUEST_START_CONSERVATIVE",
             "risk_gates_changed": False,
@@ -338,5 +357,6 @@ def install() -> None:
     logger.warning(
         "CRYPTO_MARKET_DATA_FALLBACK_INSTALLED kalshi_endpoint=exact_orderbook depth=10 "
         "kalshi_quote_timestamp=request_start kalshi_poll_sleep_s=0.08 "
-        "gemini_transport=one_shared_ws_multi_stream risk_gates_changed=false"
+        "gemini_transport=one_shared_ws_multi_stream_auth_when_available "
+        "risk_gates_changed=false"
     )
