@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections import Counter
 from dataclasses import dataclass
 from decimal import Decimal
 import json
@@ -119,6 +120,36 @@ def _best_lock(rows: list[PricedQuote]) -> LockOpportunity | None:
         min_confidence="NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
     )
     return locks[0] if locks else None
+
+
+def _near_miss(rows: list[PricedQuote]) -> dict[str, object]:
+    """Diagnose strict-lock rejection without changing any execution threshold."""
+    if len(rows) != 2:
+        return {"reason": "fresh_pair_unavailable", "best_unit_profit": None, "quote_skew_ms": None}
+    a, b = rows[0].quote, rows[1].quote
+    skew_ms = abs(a.received_ms - b.received_ms)
+    directions = (
+        D("1") - (a.yes_cost + b.no_cost),
+        D("1") - (b.yes_cost + a.no_cost),
+    )
+    best_profit = max(directions)
+    edge_ok = best_profit >= DEFAULT_MIN_PROFIT
+    skew_ok = skew_ms <= DEFAULT_MAX_QUOTE_SKEW_MS
+    if not edge_ok and not skew_ok:
+        reason = "edge_and_skew"
+    elif not edge_ok:
+        reason = "edge_below_threshold"
+    elif not skew_ok:
+        reason = "quote_skew"
+    else:
+        # A strict lock can still be absent because executable depth/confidence
+        # validation rejected the pair. Keep that distinct from price/skew.
+        reason = "depth_or_confidence"
+    return {
+        "reason": reason,
+        "best_unit_profit": str(best_profit),
+        "quote_skew_ms": skew_ms,
+    }
 
 
 def _fingerprint(lock: LockOpportunity) -> str:
@@ -296,6 +327,9 @@ async def run(args: argparse.Namespace) -> int:
                 by_market.setdefault((venue, side.venue_market_id), set()).add(key)
 
         states: dict[str, CandidateState] = {}
+        near_miss_counts: Counter[str] = Counter()
+        near_miss_best_profit: D | None = None
+        near_miss_last_log = time.monotonic()
         while True:
             if poly_task.done() or kalshi_task.done():
                 raise RuntimeError("market-data task exited")
@@ -304,6 +338,12 @@ async def run(args: argparse.Namespace) -> int:
                 rows = await _kp_rows(key, universe, poly, kalshi)
                 lock = _best_lock(rows) if len(rows) == 2 else None
                 if lock is None:
+                    diag = _near_miss(rows)
+                    near_miss_counts[str(diag["reason"])] += 1
+                    if diag["best_unit_profit"] is not None:
+                        profit = D(str(diag["best_unit_profit"]))
+                        if near_miss_best_profit is None or profit > near_miss_best_profit:
+                            near_miss_best_profit = profit
                     states.pop(key, None)
                     continue
 
@@ -315,6 +355,7 @@ async def run(args: argparse.Namespace) -> int:
                     continue
                 persistence_ms = now_ms - state.first_seen_ms
                 if persistence_ms < args.min_persistence_ms:
+                    near_miss_counts["persistence"] += 1
                     continue
 
                 if key not in approvals:
@@ -360,6 +401,22 @@ async def run(args: argparse.Namespace) -> int:
                 )
                 logger.info("SPORTS_KP_LIVE_RESULT %s", json.dumps(result, separators=(",", ":"), default=str))
                 return 70 if result.get("hard_halt_required") else 0
+
+            now = time.monotonic()
+            if now - near_miss_last_log >= 30.0:
+                logger.info("SPORTS_KP_NEAR_MISS_SUMMARY %s", json.dumps({
+                    "window_seconds": round(now - near_miss_last_log, 1),
+                    "counts": dict(near_miss_counts),
+                    "best_unit_profit_seen": str(near_miss_best_profit) if near_miss_best_profit is not None else None,
+                    "min_unit_profit_required": str(DEFAULT_MIN_PROFIT),
+                    "max_quote_skew_ms": DEFAULT_MAX_QUOTE_SKEW_MS,
+                    "max_book_age_ms": DEFAULT_MAX_BOOK_AGE_MS,
+                    "diagnostic_only": True,
+                    "order_entry": False if not executable_keys else "UNCHANGED_GATED",
+                }, separators=(",", ":")))
+                near_miss_counts.clear()
+                near_miss_best_profit = None
+                near_miss_last_log = now
     finally:
         for task in tasks:
             task.cancel()
