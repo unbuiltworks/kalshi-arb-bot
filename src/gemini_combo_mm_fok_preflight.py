@@ -5,16 +5,16 @@ quantityIncrement is 0.01. A q=1 resting combo order can receive sub-contract
 partials and Gemini's cent-rounded fee makes the 0.01 fill case incompatible with
 our >=3c/contract guaranteed floor.
 
-This scanner therefore searches the production active-combo catalog for *existing*
-book liquidity and evaluates all canonical conjunction legs.  If C is the Gemini
-combo conjunction of required outcomes A_1..A_n, the two conservative payout covers
-are:
+For a conjunction combo C=AND(A_i), the minimal conservative payout covers are:
 
   C(YES) + sum(1-A_i) >= 1
-  C(NO)  + sum(A_i)   >= 1
+  C(NO)  + A_i        >= 1   for every individual required leg i
 
-A required leg already resolved PASS is removed from the conjunction.  Any resolved
-FAIL (or ambiguous closed leg) makes the combo unsuitable for this live-arb scan.
+The NO identity needs only one canonical required leg, reducing fee/capital and
+sequential-hedge risk versus buying every selected leg. A required leg already
+resolved PASS is removed from the active conjunction. Any resolved FAIL (or
+ambiguous closed leg) blocks the combo.
+
 All prices are q=1 taker/FOK economics with conservative cent-rounded Gemini fees.
 No authenticated endpoint is imported or called; this module never places orders.
 """
@@ -39,6 +39,27 @@ CATALOG_LIMIT = 500
 
 def _opposite(outcome: str) -> str:
     return "NO" if outcome.upper() == "YES" else "YES"
+
+
+def _cover_directions(active_required: list[tuple[str, str]]) -> list[dict[str, Any]]:
+    """Return the exact minimal guaranteed covers for an unresolved conjunction."""
+    required = [(str(symbol), str(outcome).upper()) for symbol, outcome in active_required]
+    covers: list[dict[str, Any]] = [
+        {
+            "name": "COMBO_YES_PLUS_ALL_COMPLEMENTS",
+            "combo_outcome": "YES",
+            "component_specs": [(symbol, _opposite(outcome)) for symbol, outcome in required],
+        }
+    ]
+    for idx, (symbol, outcome) in enumerate(required):
+        covers.append(
+            {
+                "name": f"COMBO_NO_PLUS_REQUIRED_LEG_{idx}",
+                "combo_outcome": "NO",
+                "component_specs": [(symbol, outcome)],
+            }
+        )
+    return covers
 
 
 async def _json_get(h: httpx.AsyncClient, url: str, *, params: Mapping[str, Any] | None = None) -> tuple[int, dict[str, Any]]:
@@ -251,23 +272,16 @@ async def run_once() -> dict[str, Any]:
             fetched = await asyncio.gather(*(_book(h, s) for s in symbols))
             results_by_symbol = {symbol: result for symbol, result in zip(symbols, fetched)}
 
-            complements = [(symbol, _opposite(required)) for symbol, required in active_required]
-            yes_plus_complements = _evaluate_direction(
-                name="COMBO_YES_PLUS_COMPLEMENTS",
-                combo=combo,
-                combo_outcome="YES",
-                component_specs=complements,
-                results_by_symbol=results_by_symbol,
-            )
-            no_plus_selected = _evaluate_direction(
-                name="COMBO_NO_PLUS_SELECTED",
-                combo=combo,
-                combo_outcome="NO",
-                component_specs=active_required,
-                results_by_symbol=results_by_symbol,
-            )
-            directions = [yes_plus_complements, no_plus_selected]
-            for direction in directions:
+            directions: list[dict[str, Any]] = []
+            for cover in _cover_directions(active_required):
+                direction = _evaluate_direction(
+                    name=str(cover["name"]),
+                    combo=combo,
+                    combo_outcome=str(cover["combo_outcome"]),
+                    component_specs=list(cover["component_specs"]),
+                    results_by_symbol=results_by_symbol,
+                )
+                directions.append(direction)
                 if direction["economic_executable"]:
                     executable_directions.append(
                         {
@@ -290,7 +304,7 @@ async def run_once() -> dict[str, Any]:
         any(d.get("combo_ask") is not None for d in row.get("directions") or []) for row in rows
     )
     out = {
-        "status": "GEMINI_COMBO_MM_FOK_PREFLIGHT_V3",
+        "status": "GEMINI_COMBO_MM_FOK_PREFLIGHT_V4",
         "target_locked": str(TARGET),
         "catalog": catalog_meta,
         "candidate_count": len(rows),
@@ -302,13 +316,13 @@ async def run_once() -> dict[str, Any]:
         "rows": rows,
         "resting_maker_live_blocked": True,
         "resting_block_reason": "OBSERVED_COMBO_QUANTITY_INCREMENT_0.01_PLUS_CENT_ROUNDED_FEES_MAKES_SUB_Q1_PARTIAL_FILL_UNSAFE",
-        "safe_candidate_mode": "Q1_COMBO_FOK_THEN_Q1_COMPONENT_FOK",
+        "safe_candidate_mode": "Q1_COMBO_FOK_THEN_MINIMAL_Q1_COMPONENT_COVER_FOK",
         "execution_atomicity": "NOT_ATOMIC_ACROSS_ORDERS;_LIVE_PROMOTION_REQUIRES_FRESH_DEPTH_AND_BOUNDED_RECOVERY",
-        "settlement_identities": ["C_YES+SUM(COMPLEMENTS)>=1", "C_NO+SUM(SELECTED)>=1"],
+        "settlement_identities": ["C_YES+SUM(ALL_COMPLEMENTS)>=1", "C_NO+ANY_SINGLE_REQUIRED_LEG>=1"],
         "order_entry": False,
         "realized": False,
     }
-    print("GEMINI_COMBO_MM_FOK_PREFLIGHT_V3 " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
+    print("GEMINI_COMBO_MM_FOK_PREFLIGHT_V4 " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
     return out
 
 
