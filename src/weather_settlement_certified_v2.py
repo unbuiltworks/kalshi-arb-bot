@@ -1,11 +1,16 @@
 """Fail-closed weather SHADOW certification with exact-market settlement provenance.
 
 This wrapper composes the existing read-only weather certification pipeline with the
-hardened exact-market source auditor. It intentionally requires explicit source
-provenance extracted for the exact contract/date and never treats the current Series
-settlement source as higher authority than verified exact-market evidence. This prevents
-historical contracts around settlement-source transitions from inheriting a later
-recurring-Series regime.
+hardened exact-market source auditor and the independent model-sanity audit. It
+intentionally requires explicit source provenance extracted for the exact contract/date
+and never treats the current Series settlement source as higher authority than verified
+exact-market evidence. This prevents historical contracts around settlement-source
+transitions from inheriting a later recurring-Series regime.
+
+Settlement certification and EV/model certification remain deliberately separate. A
+contract can have fully audited settlement provenance while forecast-model economics are
+withheld because the model is not calibrated, not independently anchored to the same
+station/local day, or disagrees with that anchor beyond an audited tolerance.
 
 No order-entry clients, credentials, live-arm state, or execution paths exist here.
 """
@@ -15,6 +20,7 @@ from copy import deepcopy
 from typing import Any
 
 from src.weather_exact_market_source_audit import audit_exact_market_source
+from src.weather_model_sanity_guard import audit_weather_model_sanity
 from src.weather_settlement_certified import build_shadow_row
 
 
@@ -22,6 +28,41 @@ _LEGACY_SERIES_REGIME_BLOCKERS = {
     "EXACT_MARKET_IDENTITY_UNVERIFIED",
     "EXACT_MARKET_SETTLEMENT_REGIME_UNVERIFIED",
 }
+
+
+def _withhold_model_economics(row: dict[str, Any]) -> None:
+    """Retain book/depth/fee diagnostics while removing uncertified model EV."""
+    row["best_shadow_side"] = None
+    row["forecast_bracket_probability"] = None
+    row["modeled_after_fee_ev_cents"] = None
+    for side in row.get("side_economics") or []:
+        side["forecast_side_probability"] = None
+        side["modeled_after_fee_ev_cents"] = None
+        side["modeled_after_fee_edge_cents_per_contract"] = None
+
+
+def _model_sanity_audit(
+    *,
+    forecast: dict[str, Any] | None,
+    station: dict[str, Any],
+) -> dict[str, Any]:
+    forecast = forecast or {}
+    station_id = (
+        forecast.get("model_station_id")
+        or station.get("station_id")
+        or station.get("cli_product")
+    )
+    return audit_weather_model_sanity(
+        model_mean_f=forecast.get("model_mean_f"),
+        model_station_id=station_id,
+        independent_anchor_high_f=forecast.get("independent_anchor_high_f"),
+        independent_anchor_station_id=forecast.get("independent_anchor_station_id"),
+        independent_anchor_verified=forecast.get("independent_anchor_verified"),
+        same_local_day_verified=forecast.get("same_local_day_verified"),
+        disagreement_tolerance_f=forecast.get("disagreement_tolerance_f"),
+        disagreement_tolerance_audited=forecast.get("disagreement_tolerance_audited"),
+        model_calibration_verified=forecast.get("model_calibration_verified"),
+    )
 
 
 def build_exact_market_certified_shadow_row(
@@ -44,8 +85,16 @@ def build_exact_market_certified_shadow_row(
       - settlement_source_evidence_market_ticker
       - settlement_source_evidence_market_date
 
-    Missing or mismatched provenance quarantines all EV/capacity economics while
-    retaining diagnostic quote/fee metadata from the underlying read-only adapter.
+    Model EV additionally requires explicit model-sanity evidence on ``forecast``:
+      - model_mean_f / model_station_id
+      - independent_anchor_high_f / independent_anchor_station_id
+      - independent_anchor_verified / same_local_day_verified
+      - disagreement_tolerance_f / disagreement_tolerance_audited
+      - model_calibration_verified
+
+    Missing or mismatched settlement provenance quarantines all EV/capacity economics.
+    Missing or failed model-sanity evidence preserves settlement/book/fee diagnostics but
+    removes model probabilities and modeled EV from certified economics.
 
     If the hardened exact-market audit verifies, its contract/date evidence is allowed
     to supersede only the older Series-regime/identity blockers emitted by the base
@@ -75,10 +124,13 @@ def build_exact_market_certified_shadow_row(
         evidence_market_ticker=market.get("settlement_source_evidence_market_ticker"),
         evidence_market_date=market.get("settlement_source_evidence_market_date"),
     )
+    model_sanity = _model_sanity_audit(forecast=forecast, station=station)
 
     row = deepcopy(base)
     row["exact_market_source_audit"] = audit
     row["exact_market_source_verified"] = audit["verified"] is True
+    row["model_sanity_audit"] = model_sanity
+    row["model_sanity_verified"] = model_sanity["model_sanity_verified"] is True
     row["read_only"] = True
     row["order_entry"] = False
     row["live_probe_ready"] = False
@@ -90,11 +142,9 @@ def build_exact_market_certified_shadow_row(
         row["blockers"] = sorted(blockers)
         row["settlement_certified_shadow"] = False
         row["ev_certified_shadow"] = False
-        row["best_shadow_side"] = None
-        row["forecast_bracket_probability"] = None
         row["side_economics"] = []
         row["modeled_taker_fee_cents"] = None
-        row["modeled_after_fee_ev_cents"] = None
+        _withhold_model_economics(row)
         row["economics_status"] = "WITHHELD_EXACT_MARKET_SOURCE_UNVERIFIED"
         return row
 
@@ -111,17 +161,27 @@ def build_exact_market_certified_shadow_row(
 
     settlement_certified = len(blockers) == 0
     forecast_blockers = list(row.get("forecast_blockers") or [])
+    model_sanity_verified = model_sanity["model_sanity_verified"] is True
+    if not model_sanity_verified:
+        _withhold_model_economics(row)
+
     best_side = row.get("best_shadow_side")
-    ev_certified = settlement_certified and not forecast_blockers and best_side is not None
+    ev_certified = (
+        settlement_certified
+        and not forecast_blockers
+        and model_sanity_verified
+        and best_side is not None
+    )
     row["settlement_certified_shadow"] = settlement_certified
     row["ev_certified_shadow"] = ev_certified
 
     # Exact-market audit is an additional/higher-authority provenance gate, never an
     # upgrade of any unrelated safety condition. The underlying adapter must still
     # independently pass station/day/bracket, fee, quote-freshness and forecast checks.
-    row["economics_status"] = (
-        "EXACT_MARKET_AND_EV_CERTIFIED_SHADOW"
-        if ev_certified
-        else "EXACT_MARKET_CERTIFIED_EV_NOT_CERTIFIED"
-    )
+    if ev_certified:
+        row["economics_status"] = "EXACT_MARKET_MODEL_SANITY_AND_EV_CERTIFIED_SHADOW"
+    elif settlement_certified and not model_sanity_verified:
+        row["economics_status"] = "MODEL_SANITY_UNVERIFIED_RESEARCH_ONLY"
+    else:
+        row["economics_status"] = "EXACT_MARKET_CERTIFIED_EV_NOT_CERTIFIED"
     return row
