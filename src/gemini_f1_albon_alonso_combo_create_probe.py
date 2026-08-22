@@ -61,4 +61,5 @@ async def run_once() -> dict[str, Any]:
 
 
 if __name__ == "__main__":
+    print("GEMINI_F1_ALBON_ALONSO_CREATE_BOOT", flush=True)
     asyncio.run(run_once())
