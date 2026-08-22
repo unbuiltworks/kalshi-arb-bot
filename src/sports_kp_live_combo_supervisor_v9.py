@@ -41,16 +41,18 @@ def _daily_cap() -> int:
 
 class _BudgetedKalshiClient(_BaseKalshiClient):
     async def post(self, path: str, **kwargs: Any):
-        if path.startswith("/multivariate_event_collections/"):
+        is_create = path.startswith("/multivariate_event_collections/")
+        reserved_count: int | None = None
+        if is_create:
             try:
-                new_count = await reserve_today(_daily_cap())
+                reserved_count = await reserve_today(_daily_cap())
             except Exception as exc:
                 logger.error(
                     "SPORTS_MVE_PERSISTENT_BUDGET_BLOCK %s",
                     json.dumps({"reason": type(exc).__name__, "detail": str(exc)[:180], "market_creation": False}),
                 )
                 return httpx.Response(503, request=httpx.Request("POST", "https://budget.invalid/"))
-            if new_count is None:
+            if reserved_count is None:
                 logger.warning(
                     "SPORTS_MVE_PERSISTENT_BUDGET_CAP %s",
                     json.dumps({"daily_cap": _daily_cap(), "market_creation": False}),
@@ -58,9 +60,29 @@ class _BudgetedKalshiClient(_BaseKalshiClient):
                 return httpx.Response(429, request=httpx.Request("POST", "https://budget.invalid/"))
             logger.info(
                 "SPORTS_MVE_PERSISTENT_BUDGET_RESERVED %s",
-                json.dumps({"created_or_attempted_today": new_count, "daily_cap": _daily_cap()}),
+                json.dumps({"created_or_attempted_today": reserved_count, "daily_cap": _daily_cap()}),
             )
-        return await super().post(path, **kwargs)
+
+        response = await super().post(path, **kwargs)
+        if is_create and response.status_code != 200:
+            try:
+                detail = response.text[:400]
+            except Exception:
+                detail = ""
+            logger.warning(
+                "SPORTS_MVE_CREATE_REJECT %s",
+                json.dumps(
+                    {
+                        "http_status": response.status_code,
+                        "created_or_attempted_today": reserved_count,
+                        "detail": detail,
+                        "budget_refund": False,
+                        "order_entry": False,
+                    },
+                    separators=(",", ":"),
+                ),
+            )
+        return response
 
 
 async def _persistent_generate() -> dict[str, Any]:
@@ -91,7 +113,19 @@ async def _persistent_generate() -> dict[str, Any]:
         "SPORTS_MVE_PERSISTENT_BUDGET_SYNC %s",
         json.dumps({"created_or_attempted_today": durable_count, "daily_cap": _daily_cap(), "restart_safe": True}),
     )
-    return await _ORIGINAL_V8_GENERATE()
+    result = await _ORIGINAL_V8_GENERATE()
+    try:
+        durable_after = await get_or_seed_today()
+    except Exception:
+        durable_after = None
+    if isinstance(result, dict):
+        # Keep the legacy successful-create count separate from the authoritative
+        # durable allowance, which intentionally counts every attempted create.
+        result["successful_creates_this_process_counting_base"] = result.get("created_today")
+        result["created_or_attempted_today"] = durable_after
+        result["created_today"] = durable_after
+        result["daily_cap"] = _daily_cap()
+    return result
 
 
 # generate_and_score resolves this module global at runtime when constructing its client.
