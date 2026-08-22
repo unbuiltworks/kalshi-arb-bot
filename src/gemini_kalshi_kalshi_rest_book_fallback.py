@@ -31,11 +31,21 @@ from src.gemini_prediction_auth import authenticated_ws_connect, has_credentials
 hot = base.hot
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_kalshi_rest_book_fallback")
-POLL_SLEEP_S = 0.08
+# Four independent 80ms loops were repeatedly driving Kalshi into HTTP 429 and then
+# long exponential gaps.  A ~180ms per-asset cadence is close to the observed Gemini
+# per-symbol depth-RPC cadence and stays below the aggregate throttle wall much more
+# often while still fitting inside the existing <=250ms freshness requirement.
+POLL_SLEEP_S = 0.18
 MAX_BACKOFF_S = 2.0
 DEPTH = 10
 GEMINI_DEPTH = 5
 GEMINI_REQUEST_SPACING_S = 0.05
+_KALSHI_INITIAL_STAGGER_S = {
+    "BTC": 0.00,
+    "ETH": 0.05,
+    "SOL": 0.10,
+    "XRP": 0.15,
+}
 
 # Preserve the pre-patch lifecycle function. install() replaces base._stop_feed with
 # our wrapper; calling base._stop_feed from inside that wrapper would recurse forever.
@@ -89,8 +99,6 @@ def _best_level(rows: Any, *, highest: bool) -> tuple[D, D] | None:
 
 
 def _gemini_top_from_depth(symbol: str, payload: dict[str, Any], quote_ts_ms: int):
-    # Gemini WS RPC responses may wrap method data under result/data. Accept only a
-    # payload that contains explicit bid/ask arrays; never infer a missing side.
     candidates = [payload.get("result"), payload.get("data"), payload]
     data = next(
         (candidate for candidate in candidates if isinstance(candidate, dict) and "bids" in candidate and "asks" in candidate),
@@ -270,6 +278,12 @@ def _top_from_rest(ticker: str, payload: dict[str, Any], quote_ts_ms: int):
 
 async def _rest_book_stream(ticker: str, queue: asyncio.Queue, stats: Any) -> None:
     backoff = POLL_SLEEP_S
+    # Match the shared Gemini round-robin ordering instead of launching four Kalshi
+    # requests at the same instant.  This lowers burst pressure and gives the strict
+    # <=50ms cross-venue skew gate more chances to see aligned request-start stamps.
+    initial_stagger = _KALSHI_INITIAL_STAGGER_S.get(str(stats.asset).upper(), 0.0)
+    if initial_stagger > 0:
+        await asyncio.sleep(initial_stagger)
     limits = httpx.Limits(max_connections=2, max_keepalive_connections=2)
     async with httpx.AsyncClient(timeout=2.0, limits=limits) as http:
         while True:
@@ -346,7 +360,9 @@ async def _start_feed_rest_kalshi(*, asset: str, pair: Any, stats: Any, active: 
             "window_end_utc": pair.window_end.isoformat(),
             "active": active,
             "gemini_transport": "ONE_SHARED_WS_DEPTH_RPC_AUTH_WHEN_AVAILABLE",
-            "kalshi_transport": "REST_EXACT_ORDERBOOK_FAIL_CLOSED",
+            "kalshi_transport": "REST_EXACT_ORDERBOOK_FAIL_CLOSED_PACED",
+            "kalshi_poll_sleep_s": POLL_SLEEP_S,
+            "kalshi_initial_stagger_s": _KALSHI_INITIAL_STAGGER_S.get(asset, 0.0),
             "quote_timestamps": "REQUEST_START_CONSERVATIVE",
             "risk_gates_changed": False,
             "order_entry": False,
@@ -364,6 +380,7 @@ def install() -> None:
     base._stop_feed = _stop_feed_rest_kalshi
     logger.warning(
         "CRYPTO_MARKET_DATA_FALLBACK_INSTALLED kalshi_endpoint=exact_orderbook depth=10 "
+        "kalshi_poll_sleep_s=0.18 staggered=true "
         "gemini_transport=one_shared_ws_depth_rpc_auth_when_available "
         "quote_timestamp=request_start risk_gates_changed=false"
     )
