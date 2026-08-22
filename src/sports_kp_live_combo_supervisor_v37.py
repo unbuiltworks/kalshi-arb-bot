@@ -9,6 +9,8 @@ For q=1, a candidate is shadow-executable only when current YES ask + NO ask +
 conservative taker fees on both sides leaves >= $0.03 locked profit. Because both
 legs are the exact same Kalshi market, there is no cross-venue rule-equivalence
 problem. This layer is read-only: no order entry, no market creation, no RFQ.
+Diagnostic cycle telemetry is best-effort and is explicitly non-P&L; telemetry
+failure never changes trading state or promotes a shadow candidate.
 
 Kalshi market-list responses may omit explicit ask fields. In that case the
 executable ask is derived from the opposite best bid using binary complement
