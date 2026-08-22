@@ -17,7 +17,7 @@ import httpx
 from src.mlb_game_side_normalization import normalize_gemini_mlb, normalize_polymarket_mlb
 from src.kalshi_mlb_time_guard import normalize_kalshi_mlb_eastern
 from src.strict_mlb_prop_snapshot import KALSHI, POLY, TopBook, poly_top_book
-from src.three_venue_mlb_price_scan import _eligible_keys, _gemini_contracts, _get, _kalshi_series
+from src.three_venue_mlb_price_scan import _eligible_rows, _gemini_contracts, _get, _kalshi_series
 from src.three_venue_pricing_core import PricedQuote, gemini_contract_book, make_priced_quote
 
 D = Decimal
@@ -129,8 +129,7 @@ async def price_counterparts_snapshot(
     kalshi_events: list[dict[str, Any]],
 ) -> tuple[list[PricedQuote], list[dict[str, str]], int]:
     rows = normalize_gemini_mlb(gemini_events) + normalize_polymarket_mlb(poly_events) + normalize_kalshi_mlb_eastern(kalshi_events)
-    keys = _eligible_keys(rows)
-    wanted = [row for row in rows if row.contract_key in keys]
+    wanted, cluster_count = _eligible_rows(rows)
 
     gcontracts = _gemini_contracts(gemini_events)
     kmarkets = _kalshi_markets(kalshi_events)
@@ -180,4 +179,4 @@ async def price_counterparts_snapshot(
         if row is not None:
             priced.append(row)
 
-    return priced, errors, len(keys)
+    return priced, errors, cluster_count
