@@ -6,10 +6,10 @@ venue and has no order-entry path.
 
 A successful reconciliation is necessary but not sufficient: the caller must also
 supply the exact synthetic trade-group/settlement identity and a later official
-settlement timestamp. The emitted external id is deterministic and bound to the
-trade group, exact market, settlement key, terminal provider, and terminal source URL
-through a SHA-256 digest. This avoids treating a free-form
-``weather-certified-settlement:...`` prefix as adequate provenance.
+settlement timestamp. The emitted external id is deterministic and self-verifiable:
+it binds the trade group, exact market, settlement key, terminal provider, and a
+SHA-256 fingerprint of the terminal source URL. This prevents a merely well-shaped
+free-form certified prefix/digest from being accepted as provenance later.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from typing import Any
 from src.cross_venue_ledger import LedgerEvent, make_event
 
 D = Decimal
-PREFIX = "weather-certified-settlement:v2:"
+PREFIX = "weather-certified-settlement:v3:"
 
 
 def _finite_decimal(value: Any) -> Decimal | None:
@@ -43,6 +43,20 @@ def _norm_url(value: Any) -> str:
     return _norm(value).rstrip("/").lower()
 
 
+def _provider_token(provider: str) -> str:
+    token = _norm_upper(provider)
+    if not token or any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_" for ch in token):
+        raise ValueError("settlement provider must be a non-empty token")
+    return token
+
+
+def _source_url_hash(source_url: str) -> str:
+    normalized = _norm_url(source_url)
+    if not normalized:
+        raise ValueError("terminal settlement source URL is required")
+    return sha256(normalized.encode("utf-8")).hexdigest()
+
+
 def certified_weather_settlement_external_id(
     *,
     trade_group_id: str,
@@ -51,17 +65,17 @@ def certified_weather_settlement_external_id(
     provider: str,
     source_url: str,
 ) -> str:
-    parts = (
-        _norm(trade_group_id),
-        _norm_upper(market_id),
-        _norm(settlement_key),
-        _norm_upper(provider),
-        _norm_url(source_url),
-    )
-    if any(not part for part in parts):
+    group = _norm(trade_group_id)
+    market = _norm_upper(market_id)
+    key = _norm(settlement_key)
+    provider_token = _provider_token(provider)
+    source_hash = _source_url_hash(source_url)
+    if not group or not market or not key:
         raise ValueError("all certified settlement identity fields are required")
-    digest = sha256("\x1f".join(parts).encode("utf-8")).hexdigest()
-    return f"{PREFIX}{digest}"
+    digest = sha256(
+        "\x1f".join((group, market, key, provider_token, source_hash)).encode("utf-8")
+    ).hexdigest()
+    return f"{PREFIX}{provider_token}:{source_hash}:{digest}"
 
 
 def ledger_event_from_weather_reconciliation(
@@ -105,7 +119,7 @@ def ledger_event_from_weather_reconciliation(
     if payout_cents is None or payout_cents != expected_payout_cents:
         raise ValueError("reconciled payout is not the exact binary terminal payout")
 
-    provider = _norm_upper(reconciliation.get("settlement_source_provider"))
+    provider = _provider_token(reconciliation.get("settlement_source_provider"))
     source_url = _norm_url(reconciliation.get("settlement_source_url"))
     external_id = certified_weather_settlement_external_id(
         trade_group_id=trade_group_id,
