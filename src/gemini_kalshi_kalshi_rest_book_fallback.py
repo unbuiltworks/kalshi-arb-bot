@@ -2,11 +2,13 @@
 
 Kalshi uses the public exact REST orderbook when authenticated Kalshi WebSocket
 handshakes are rate-limited. Gemini prediction books and the Gemini public-spot basis
-proxy now share ONE persistent authenticated WebSocket: prediction books use the
+proxy share ONE persistent authenticated WebSocket: prediction books use the
 read-only ``depth`` request method while BTC/ETH/SOL/XRP spot mids arrive through
-bookTicker subscriptions on that same connection. This removes an entire Gemini
-handshake from the live child and gives market data first claim on the connection
-budget before the private execution socket prewarms.
+bookTicker subscriptions on that same connection.
+
+A temporarily one-sided/empty Gemini prediction book is not a connection failure. That
+symbol's snapshot is skipped fail-closed until an explicit two-sided book returns, while
+the shared socket stays alive for other assets. No synthetic liquidity is inferred.
 
 Both venue-book snapshot timestamps are conservatively stamped at request start, so
 network latency makes freshness/skew checks harder rather than easier. Existing q=1,
@@ -38,8 +40,6 @@ hot = base.hot
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_kalshi_rest_book_fallback")
 
-# Four independent 80ms Kalshi loops repeatedly hit HTTP 429. The paced/staggered
-# cadence preserves frequent usable snapshots while staying below the observed wall.
 POLL_SLEEP_S = 0.18
 MAX_BACKOFF_S = 2.0
 DEPTH = 10
@@ -55,8 +55,6 @@ _SPOT_STREAMS = [
     f"{symbol}@bookTicker" for symbol in readiness.basis.ASSET_SYMBOL.values()
 ]
 
-# Preserve the pre-patch lifecycle function. install() replaces base._stop_feed with
-# our wrapper; calling base._stop_feed from inside that wrapper would recurse forever.
 _ORIGINAL_STOP_FEED = base._stop_feed
 
 _GEMINI_SUBSCRIBERS: dict[str, dict[int, tuple[asyncio.Queue, Any]]] = {}
@@ -131,7 +129,6 @@ def _gemini_top_from_depth(symbol: str, payload: dict[str, Any], quote_ts_ms: in
 
 
 def _handle_shared_spot(payload: dict[str, Any], receive_ms: int) -> bool:
-    """Route Gemini spot bookTicker frames into the existing basis state."""
     symbol = str(payload.get("s") or "").lower()
     asset = readiness.basis.SYMBOL_ASSET.get(symbol)
     if asset is None:
@@ -152,7 +149,6 @@ def _handle_shared_spot(payload: dict[str, Any], receive_ms: int) -> bool:
 
 
 async def _recv_for_id(ws, request_id: str, *, timeout: float) -> dict[str, Any]:
-    """Read until one RPC response arrives, consuming spot stream frames en route."""
     deadline = time.monotonic() + timeout
     while True:
         remaining = deadline - time.monotonic()
@@ -166,8 +162,6 @@ async def _recv_for_id(ws, request_id: str, *, timeout: float) -> dict[str, Any]
         message_id = str(payload.get("id") or "")
         if message_id == request_id:
             return payload
-        # Ignore forward-compatible unsolicited stream/event frames. A response carrying
-        # a different request id would violate our single-request-at-a-time discipline.
         if message_id:
             raise RuntimeError(
                 f"Gemini shared WS response id mismatch expected={request_id} got={message_id}"
@@ -195,7 +189,7 @@ async def _subscribe_shared_spot(ws) -> None:
 async def _gemini_shared_manager() -> None:
     backoff = 1.0
     request_seq = 0
-    schema_warned = False
+    one_sided_warned: set[str] = set()
     while True:
         symbols = sorted(_gemini_snapshot())
         if not symbols:
@@ -223,6 +217,7 @@ async def _gemini_shared_manager() -> None:
                     "depth": GEMINI_DEPTH,
                     "request_spacing_s": GEMINI_REQUEST_SPACING_S,
                     "basis_spot_on_same_socket": True,
+                    "one_sided_book_policy": "SKIP_SYMBOL_KEEP_SOCKET",
                     "market_data_only": True,
                     "risk_gates_changed": False,
                 }, separators=(",", ":")),
@@ -248,15 +243,19 @@ async def _gemini_shared_manager() -> None:
                         raise RuntimeError(f"Gemini depth RPC status={status}")
                     top = _gemini_top_from_depth(symbol, payload, request_start_ms)
                     if top is None:
-                        if not schema_warned:
+                        if symbol not in one_sided_warned:
                             nested = payload.get("result") or payload.get("data") or {}
                             logger.warning(
-                                "CRYPTO_GEMINI_DEPTH_SCHEMA_UNSUPPORTED top_keys=%s nested_keys=%s",
+                                "CRYPTO_GEMINI_DEPTH_ONE_SIDED_SKIP symbol=%s top_keys=%s nested_keys=%s "
+                                "keep_shared_socket=true execution_eligible=false risk_gates_changed=false",
+                                symbol,
                                 sorted(str(key) for key in payload.keys()),
                                 sorted(str(key) for key in nested.keys()) if isinstance(nested, dict) else [],
                             )
-                            schema_warned = True
-                        raise RuntimeError("Gemini depth RPC returned no explicit two-sided book")
+                            one_sided_warned.add(symbol)
+                        await asyncio.sleep(GEMINI_REQUEST_SPACING_S)
+                        continue
+                    one_sided_warned.discard(symbol)
                     receive_ms = int(time.time() * 1000)
                     for queue, stats in subscribers:
                         stats.events += 1
@@ -316,7 +315,6 @@ async def _gemini_shared_stream(symbol: str, queue: asyncio.Queue, stats: Any) -
 
 
 async def _basis_spot_on_shared_socket() -> None:
-    """Placeholder replacing the old extra basis WS; shared manager updates _STATES."""
     await asyncio.Future()
 
 
@@ -434,6 +432,7 @@ async def _start_feed_rest_kalshi(*, asset: str, pair: Any, stats: Any, active: 
             "kalshi_poll_sleep_s": POLL_SLEEP_S,
             "kalshi_initial_stagger_s": _KALSHI_INITIAL_STAGGER_S.get(asset, 0.0),
             "quote_timestamps": "REQUEST_START_CONSERVATIVE",
+            "one_sided_gemini_book_policy": "SKIP_SYMBOL_KEEP_SOCKET",
             "risk_gates_changed": False,
             "order_entry": False,
         }, separators=(",", ":")),
@@ -448,13 +447,12 @@ async def _stop_feed_rest_kalshi(feed) -> None:
 def install() -> None:
     base._start_feed = _start_feed_rest_kalshi
     base._stop_feed = _stop_feed_rest_kalshi
-    # The existing 20bp boundary gate still consumes Gemini spot, but those spot ticks
-    # now arrive on the shared prediction-market socket instead of a third WS handshake.
     readiness.basis._spot_stream = _basis_spot_on_shared_socket
     logger.warning(
         "CRYPTO_MARKET_DATA_FALLBACK_INSTALLED kalshi_endpoint=exact_orderbook depth=10 "
         "kalshi_poll_sleep_s=0.18 staggered=true "
         "gemini_transport=one_shared_ws_depth_rpc_plus_basis_spot "
+        "one_sided_gemini_book=skip_symbol_keep_socket "
         "private_ws_priority=after_market_data quote_timestamp=request_start "
         "risk_gates_changed=false"
     )
