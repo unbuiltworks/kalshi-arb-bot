@@ -1,11 +1,10 @@
 """Stable Railway entrypoint for the production sports combo engine.
 
-v39 preserves v38-v31 and adds a read-only Polymarket combo/RFQ authentication
-and MLB outcome-symbol preflight. It requests no private values beyond internal
-shape validation, logs no identifiers/balances, and performs no combo/RFQ writes
-or order entry. New partition lanes remain shadow-only.
+v40 preserves v39-v31 and adds a read-only signed-auth probe against the
+Polymarket exchange combo/RFQ host. It logs only status/schema and performs no
+writes or order entry. New partition lanes remain shadow-only.
 """
-from src.sports_kp_live_combo_supervisor_v39 import main, run  # noqa: F401
+from src.sports_kp_live_combo_supervisor_v40 import main, run  # noqa: F401
 
 if __name__ == "__main__":
     main()
