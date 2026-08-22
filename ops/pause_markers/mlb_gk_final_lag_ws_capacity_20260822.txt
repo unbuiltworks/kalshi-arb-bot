@@ -1,0 +1,1 @@
+Temporarily paused on 2026-08-22 so authenticated Kalshi WebSocket capacity can be reserved for the bounded q=1 basis-risk canary. No trading logic changed.
