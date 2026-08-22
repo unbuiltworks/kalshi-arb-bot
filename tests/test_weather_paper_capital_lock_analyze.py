@@ -36,7 +36,12 @@ def _fee(group="g1", *, ts_ms=1_000, fee="0.02", side="NO"):
     )
 
 
-def _settlement(group="g1", *, ts_ms=3_601_000, payout="1", side="NO"):
+def _settlement(group="g1", *, ts_ms=3_601_000, payout="1", side="NO", certified=True):
+    external_id = (
+        f"weather-certified-settlement:{group}:settlement"
+        if certified
+        else f"{group}:settlement"
+    )
     return make_event(
         trade_group_id=group,
         settlement_key="weather:KXHIGHMIA-26AUG21-B92.5",
@@ -47,7 +52,7 @@ def _settlement(group="g1", *, ts_ms=3_601_000, payout="1", side="NO"):
         side=side,
         payout=Decimal(payout),
         ts_ms=ts_ms,
-        external_id=f"{group}:settlement",
+        external_id=external_id,
     )
 
 
@@ -73,6 +78,16 @@ def test_missing_settlement_is_right_censored_and_withholds_aggregate_efficiency
     assert result["all_filled_groups_resolved"] is False
     assert result["conservative_realized_profit_per_capital_hour"] is None
     assert result["groups"][0]["status"] == "RIGHT_CENSORED_AWAITING_OFFICIAL_SETTLEMENT"
+
+
+def test_unaudited_settlement_event_is_right_censored_not_realized():
+    result = analyze_weather_paper_capital_lock([_fill(), _fee(), _settlement(certified=False)])
+    assert result["verified_settlement_lock_groups"] == 0
+    assert result["right_censored_groups"] == 1
+    assert result["invalid_groups"] == 0
+    assert result["all_filled_groups_resolved"] is False
+    assert result["conservative_realized_profit_per_capital_hour"] is None
+    assert result["groups"][0]["status"] == "RIGHT_CENSORED_UNAUDITED_SETTLEMENT_EVENT"
 
 
 def test_losing_weather_fill_records_full_cost_loss():
@@ -105,7 +120,7 @@ def test_wrong_market_or_nonlater_settlement_fails_closed():
         side="NO",
         payout=Decimal("1"),
         ts_ms=3_601_000,
-        external_id="g1:settlement:bad",
+        external_id="weather-certified-settlement:g1:settlement:bad",
     )
     result = analyze_weather_paper_capital_lock([_fill(), _fee(), bad_market])
     assert result["invalid_groups"] == 1
