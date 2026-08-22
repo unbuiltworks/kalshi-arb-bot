@@ -1,15 +1,18 @@
-"""Read-only target attribution and REST Kalshi feed for the maker shadow.
+"""Read-only target attribution with connection-conserving maker-shadow feeds.
 
 The base maker shadow intentionally mixes several required-profit cohorts in its
 aggregate fill counters. This wrapper adds per-target fill/profit/stale-hedge counters
-and replaces its rate-limited Kalshi WebSocket market-data connection with public exact
-REST orderbooks plus one shared public REST trade-print poller.
+and replaces its rate-limited per-asset market-data sockets with:
 
-The REST fallback is diagnostic-only. Trade prints still come from Kalshi's actual
-completed-trade feed; polling latency is conservative because it can only make the
-observed Gemini hedge older. No order transport is added. Quote generation, queue
-consumption, fee math, settlement classification, and execution eligibility remain
-unchanged. All outputs remain INDEX_MISMATCH_RESEARCH_ONLY.
+* one shared public Gemini Prediction WebSocket using the read-only ``depth`` RPC;
+* public exact Kalshi REST orderbooks; and
+* one shared public Kalshi REST completed-trade poller.
+
+Trade prints still come from Kalshi's actual completed-trade feed. REST polling latency
+is conservative because it can only make the observed hedge older. No order transport
+is added. Quote generation, queue consumption, fee math, settlement classification,
+and execution eligibility remain unchanged. All outputs remain
+INDEX_MISMATCH_RESEARCH_ONLY.
 """
 from __future__ import annotations
 
@@ -22,6 +25,7 @@ import time
 from typing import Any
 
 import httpx
+import websockets
 
 from src import gemini_kalshi_maker_shadow as base
 
@@ -31,7 +35,14 @@ _TARGET_STATS: dict[int, dict[str, dict[str, Decimal | int]]] = {}
 KALSHI_REST = "https://external-api.kalshi.com/trade-api/v2"
 BOOK_POLL_S = 0.20
 TRADE_POLL_S = 0.20
+GEMINI_DEPTH = 5
+GEMINI_REQUEST_SPACING_S = 0.05
 MAX_BACKOFF_S = 2.0
+
+_GEMINI_SUBSCRIBERS: dict[str, dict[int, tuple[asyncio.Queue, Any]]] = {}
+_GEMINI_MANAGER: asyncio.Task | None = None
+_GEMINI_CHANGE: asyncio.Event | None = None
+
 _TRADE_SUBSCRIBERS: dict[str, dict[int, tuple[asyncio.Queue, Any]]] = {}
 _TRADE_MANAGER: asyncio.Task | None = None
 _TRADE_CHANGE: asyncio.Event | None = None
@@ -54,6 +65,167 @@ def _bucket(stats: Any, target: str) -> dict[str, Decimal | int]:
         target,
         {"fills": 0, "profit": D("0"), "stale_hedges": 0},
     )
+
+
+def _gemini_change_event() -> asyncio.Event:
+    global _GEMINI_CHANGE
+    if _GEMINI_CHANGE is None:
+        _GEMINI_CHANGE = asyncio.Event()
+    return _GEMINI_CHANGE
+
+
+def _gemini_symbols() -> set[str]:
+    return {symbol for symbol, subscribers in _GEMINI_SUBSCRIBERS.items() if subscribers}
+
+
+def _best_level(rows: Any, *, highest: bool) -> tuple[D, D] | None:
+    levels: list[tuple[D, D]] = []
+    if not isinstance(rows, list):
+        return None
+    for row in rows:
+        try:
+            if isinstance(row, dict):
+                price = D(str(row.get("price")))
+                qty = D(str(row.get("quantity") or row.get("amount") or row.get("qty")))
+            else:
+                price = D(str(row[0]))
+                qty = D(str(row[1]))
+        except Exception:
+            continue
+        if D("0") <= price <= D("1") and qty > 0:
+            levels.append((price, qty))
+    if not levels:
+        return None
+    return (max if highest else min)(levels, key=lambda level: level[0])
+
+
+def _gemini_top_from_depth(symbol: str, payload: dict[str, Any], quote_ts_ms: int):
+    candidates = [payload.get("result"), payload.get("data"), payload]
+    data = next(
+        (
+            candidate
+            for candidate in candidates
+            if isinstance(candidate, dict) and "bids" in candidate and "asks" in candidate
+        ),
+        None,
+    )
+    if data is None:
+        return None
+    bid = _best_level(data.get("bids"), highest=True)
+    ask = _best_level(data.get("asks"), highest=False)
+    if bid is None or ask is None:
+        return None
+    try:
+        return base.parse_gemini_book_ticker(
+            {
+                "s": symbol,
+                "b": str(bid[0]),
+                "B": str(bid[1]),
+                "a": str(ask[0]),
+                "A": str(ask[1]),
+            },
+            received_ms=int(quote_ts_ms),
+        )
+    except Exception:
+        return None
+
+
+async def _shared_gemini_manager() -> None:
+    backoff = 1.0
+    seq = 0
+    while True:
+        symbols = sorted(_gemini_symbols())
+        if not symbols:
+            change = _gemini_change_event()
+            change.clear()
+            await change.wait()
+            continue
+        ws = None
+        try:
+            ws = await websockets.connect(base.GEMINI_WS, open_timeout=5.0)
+            backoff = 1.0
+            base.logger.info(
+                "MAKER_SHADOW_GEMINI_SHARED_CONNECTED %s",
+                json.dumps(
+                    {
+                        "symbols": symbols,
+                        "connections": 1,
+                        "transport": "PUBLIC_SHARED_WS_DEPTH_RPC",
+                        "depth": GEMINI_DEPTH,
+                        "request_spacing_s": GEMINI_REQUEST_SPACING_S,
+                        "diagnostic_only": True,
+                        "read_only": True,
+                        "order_entry": False,
+                    },
+                    separators=(",", ":"),
+                ),
+            )
+            while _gemini_symbols():
+                for symbol in sorted(_gemini_symbols()):
+                    subscribers = list(_GEMINI_SUBSCRIBERS.get(symbol, {}).values())
+                    if not subscribers:
+                        continue
+                    seq += 1
+                    request_id = f"maker-depth-{seq}-{symbol}"
+                    request_start_ms = int(time.time() * 1000)
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "id": request_id,
+                                "method": "depth",
+                                "params": {"symbol": symbol, "limit": GEMINI_DEPTH},
+                            },
+                            separators=(",", ":"),
+                        )
+                    )
+                    raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                    payload = json.loads(raw)
+                    if str(payload.get("id") or "") != request_id:
+                        raise RuntimeError("Gemini maker depth RPC response id mismatch")
+                    if int(payload.get("status", 200)) >= 400:
+                        raise RuntimeError(f"Gemini maker depth RPC status={payload.get('status')}")
+                    top = _gemini_top_from_depth(symbol, payload, request_start_ms)
+                    if top is None:
+                        raise RuntimeError("Gemini maker depth RPC returned no two-sided book")
+                    receive_ms = int(time.time() * 1000)
+                    for queue, stats in subscribers:
+                        base._enqueue(queue, ("gemini", receive_ms, top), stats)
+                    await asyncio.sleep(GEMINI_REQUEST_SPACING_S)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            base.logger.warning(
+                "MAKER_SHADOW_GEMINI_SHARED_RECONNECT type=%s error=%s backoff_s=%.1f",
+                type(exc).__name__, str(exc)[:180], backoff,
+            )
+            await asyncio.sleep(backoff)
+            backoff = min(30.0, backoff * 2.0)
+        finally:
+            if ws is not None:
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
+
+
+async def _gemini_shared_stream(symbol: str, queue: asyncio.Queue, stats: Any) -> None:
+    global _GEMINI_MANAGER
+    token = id(asyncio.current_task())
+    _GEMINI_SUBSCRIBERS.setdefault(symbol, {})[token] = (queue, stats)
+    _gemini_change_event().set()
+    if _GEMINI_MANAGER is None or _GEMINI_MANAGER.done():
+        _GEMINI_MANAGER = asyncio.create_task(
+            _shared_gemini_manager(), name="maker-shadow-gemini-shared-depth"
+        )
+    try:
+        await asyncio.Future()
+    finally:
+        subscribers = _GEMINI_SUBSCRIBERS.get(symbol)
+        if subscribers is not None:
+            subscribers.pop(token, None)
+            if not subscribers:
+                _GEMINI_SUBSCRIBERS.pop(symbol, None)
+        _gemini_change_event().set()
 
 
 def _trade_change_event() -> asyncio.Event:
@@ -179,7 +351,6 @@ async def _shared_trade_manager() -> None:
                     continue
                 backoff = TRADE_POLL_S
                 rows = response.json().get("trades") or []
-                # Oldest first preserves exchange ordering when one poll returns several prints.
                 for row in reversed(rows):
                     ticker = str(row.get("ticker") or "")
                     if ticker not in tickers:
@@ -309,13 +480,17 @@ def install() -> None:
         payload["stale_hedges_at_or_above_3c_target"] = sum(
             int(row["stale_hedges"]) for target, row in rows.items() if D(target) >= live_floor
         )
-        payload["profit_at_or_above_3c_target"] = str(sum(
-            (D(str(row["profit"])) for target, row in rows.items() if D(target) >= live_floor),
-            D("0"),
-        ))
+        payload["profit_at_or_above_3c_target"] = str(
+            sum(
+                (D(str(row["profit"])) for target, row in rows.items() if D(target) >= live_floor),
+                D("0"),
+            )
+        )
         payload["target_attribution"] = "DIAGNOSTIC_ONLY"
         payload["live_floor_reference"] = "0.03"
+        payload["gemini_transport"] = "ONE_PUBLIC_SHARED_WS_DEPTH_RPC"
         payload["kalshi_transport"] = "REST_EXACT_BOOK_PLUS_SHARED_REST_TRADES"
+        payload["gemini_request_spacing_s"] = GEMINI_REQUEST_SPACING_S
         payload["rest_trade_poll_s"] = TRADE_POLL_S
         payload["rest_book_poll_s"] = BOOK_POLL_S
         payload["risk_gates_changed"] = False
@@ -326,13 +501,15 @@ def install() -> None:
 
     base._process_trade = process_trade_with_target_attribution
     base.MakerStats.payload = payload_with_target_attribution
+    base._gemini_stream = _gemini_shared_stream
     base._kalshi_stream = _kalshi_rest_stream
     _INSTALLED = True
     base.logger.warning(
-        "MAKER_SHADOW_REST_FALLBACK_INSTALLED book_poll_s=%.2f trade_poll_s=%.2f "
-        "shared_trade_poller=true target_attribution=true diagnostic_only=true "
-        "read_only=true order_entry=false",
-        BOOK_POLL_S, TRADE_POLL_S,
+        "MAKER_SHADOW_CONNECTION_CONSOLIDATION_INSTALLED gemini=one_public_shared_depth_rpc "
+        "kalshi=rest_exact_book_plus_shared_rest_trades book_poll_s=%.2f trade_poll_s=%.2f "
+        "target_attribution=true diagnostic_only=true read_only=true order_entry=false",
+        BOOK_POLL_S,
+        TRADE_POLL_S,
     )
 
 
