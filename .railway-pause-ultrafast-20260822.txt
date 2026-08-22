@@ -1,0 +1,3 @@
+Temporary reversible production pause marker for crypto-15m-sol-ultrafast-survival-shadow.
+Reason: free authenticated Kalshi WebSocket capacity for isolated q=1 basis-risk live probe.
+No trading/risk logic changed.
