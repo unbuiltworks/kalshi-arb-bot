@@ -31,19 +31,57 @@ KALSHI = "https://external-api.kalshi.com/trade-api/v2"
 KALSHI_429_MAX_ATTEMPTS = 4
 KALSHI_429_BASE_DELAY_S = 0.25
 KALSHI_SERIES_SPACING_S = 0.05
+GENERIC_FETCH_MAX_ATTEMPTS = 3
+GENERIC_FETCH_BASE_DELAY_S = 0.20
 
 
 async def _json(http: httpx.AsyncClient, url: str, **kwargs: Any) -> dict[str, Any]:
-    response = await http.get(url, **kwargs)
-    response.raise_for_status()
-    body = response.json()
-    return body if isinstance(body, dict) else {}
+    """Fetch public JSON with bounded retry for transient transport failures.
+
+    This is discovery-only. We never substitute stale data: after the bounded retry
+    budget is exhausted the caller fails closed and the epoch is abandoned.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(GENERIC_FETCH_MAX_ATTEMPTS):
+        try:
+            response = await http.get(url, **kwargs)
+            response.raise_for_status()
+            body = response.json()
+            return body if isinstance(body, dict) else {}
+        except (httpx.RemoteProtocolError, httpx.ReadError, httpx.ConnectError, httpx.ReadTimeout) as exc:
+            last_exc = exc
+            if attempt + 1 >= GENERIC_FETCH_MAX_ATTEMPTS:
+                raise
+            delay_s = min(GENERIC_FETCH_BASE_DELAY_S * (2 ** attempt), 1.0)
+            logger.warning(
+                "SPORTS_DISCOVERY_TRANSIENT_RETRY host=%s type=%s attempt=%s/%s retry_in_s=%.2f stale_fallback=false",
+                httpx.URL(url).host,
+                type(exc).__name__,
+                attempt + 1,
+                GENERIC_FETCH_MAX_ATTEMPTS,
+                delay_s,
+            )
+            await asyncio.sleep(delay_s)
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("unreachable generic fetch retry state")
 
 
 async def _kalshi_json(http: httpx.AsyncClient, url: str, **kwargs: Any) -> dict[str, Any]:
     """Fetch Kalshi public JSON with bounded 429 retry; never substitute stale data."""
     for attempt in range(KALSHI_429_MAX_ATTEMPTS):
-        response = await http.get(url, **kwargs)
+        try:
+            response = await http.get(url, **kwargs)
+        except (httpx.RemoteProtocolError, httpx.ReadError, httpx.ConnectError, httpx.ReadTimeout) as exc:
+            if attempt + 1 >= KALSHI_429_MAX_ATTEMPTS:
+                raise
+            delay_s = min(KALSHI_429_BASE_DELAY_S * (2 ** attempt), 4.0)
+            logger.warning(
+                "KALSHI_MLB_DISCOVERY_TRANSPORT_RETRY type=%s attempt=%s/%s retry_in_s=%.3f stale_fallback=false",
+                type(exc).__name__, attempt + 1, KALSHI_429_MAX_ATTEMPTS, delay_s,
+            )
+            await asyncio.sleep(delay_s)
+            continue
         if response.status_code != 429:
             response.raise_for_status()
             body = response.json()
@@ -131,8 +169,6 @@ async def fetch_kalshi_mlb(http: httpx.AsyncClient) -> list[dict[str, Any]]:
                 break
         return out
 
-    # Avoid bursting all MLB series at Kalshi simultaneously. This path is discovery,
-    # not price-trigger execution, so a few milliseconds of spacing is a safe tradeoff.
     groups: list[list[dict[str, Any]]] = []
     for index, series in enumerate(KALSHI_SERIES):
         groups.append(await one(series))
@@ -151,8 +187,6 @@ def counterpart_clusters(rows: list[NormalizedSide]) -> list[dict[str, Any]]:
         venues = sorted({row.identity.venue for row in matches})
         if len(venues) < 2:
             continue
-        # The contract key intentionally excludes scheduled start; enforce a strict
-        # five-minute cross-venue start envelope before reporting a counterpart.
         starts = [row.identity.event.scheduled_start_ms for row in matches]
         start_skew_ms = max(starts) - min(starts)
         if start_skew_ms > 5 * 60 * 1000:
