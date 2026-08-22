@@ -1,15 +1,17 @@
 """Continuous read-only WebSocket watch for q=1 same-Gemini combo FOK locks.
 
-This is the production-observation companion to gemini_combo_mm_fok_preflight.
-It does not create combos and never imports authenticated order entry.  Every five
-minutes it refreshes the active registered combo catalog/canonical legs, subscribes
-to Gemini bookTicker for each combo and component, and recomputes the two exact
-conjunction payout covers on every book update.
+Every five minutes this watcher refreshes the active registered combo catalog and
+canonical required legs, subscribes to Gemini bookTicker for every combo/component,
+and recomputes the minimal guaranteed conjunction covers:
 
-A signal means current public q=1 top-of-book economics clear >=3c after conservative
-cent-rounded taker fees.  It is NOT a fill and NOT realized P&L.  Live execution
-still requires fresh depth revalidation plus the bounded sequential-FOK recovery
-policy because separate orders are not atomic.
+  C(YES) + SUM(all required-leg complements) >= 1
+  C(NO)  + any single required leg           >= 1
+
+The NO cover therefore uses one component hedge rather than every required leg.
+A signal means public q=1 top-of-book economics clear >=3c after conservative
+cent-rounded taker fees. It is NOT a fill and NOT realized P&L. Live execution still
+requires final rule/grid/depth/account/capital checks and bounded recovery because
+separate FOK orders are not atomic.
 """
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ import httpx
 import websockets
 
 import src.gemini_extreme_combo_live_canary as c
-from src.gemini_combo_mm_fok_preflight import _catalog_specs, _opposite
+from src.gemini_combo_mm_fok_preflight import _catalog_specs, _cover_directions
 from src.gemini_kalshi_live_shadow import GEMINI_WS, parse_gemini_book_ticker
 from src.sports_pushover_alerts import SportsPushoverAlerts
 
@@ -48,15 +50,10 @@ def _outcome_ask(top: Any, outcome: str) -> tuple[D, D] | None:
     return p, q
 
 
-def _evaluate(spec: Mapping[str, Any], tops: Mapping[str, Any], *, direction: str) -> dict[str, Any] | None:
+def _evaluate_cover(spec: Mapping[str, Any], tops: Mapping[str, Any], cover: Mapping[str, Any]) -> dict[str, Any] | None:
     combo = str(spec["combo"])
-    required = list(spec["active_required_legs"])
-    combo_outcome = "YES" if direction == "COMBO_YES_PLUS_COMPLEMENTS" else "NO"
-    component_specs = (
-        [(symbol, _opposite(outcome)) for symbol, outcome in required]
-        if combo_outcome == "YES"
-        else required
-    )
+    combo_outcome = str(cover["combo_outcome"])
+    component_specs = [(str(s), str(o)) for s, o in cover["component_specs"]]
     combo_top = tops.get(combo)
     if combo_top is None:
         return None
@@ -83,7 +80,7 @@ def _evaluate(spec: Mapping[str, Any], tops: Mapping[str, Any], *, direction: st
     return {
         "combo": combo,
         "name": str(spec.get("name") or ""),
-        "direction": direction,
+        "direction": str(cover["name"]),
         "combo_outcome": combo_outcome,
         "combo_ask": str(cp),
         "combo_depth": str(cd),
@@ -100,13 +97,13 @@ async def _notify(sink: SportsPushoverAlerts, signal: Mapping[str, Any]) -> None
     if not sink.configured:
         return
     try:
-        legs = ", ".join(f"{x['outcome']} {x['ask']}" for x in signal.get("components") or [])
+        legs = ", ".join(f"{x['symbol']} {x['outcome']} @ {x['ask']}" for x in signal.get("components") or [])
         await sink.send(
             title=f"Gemini combo FOK edge +${D(str(signal['locked'])):.2f}",
             message=(
                 f"READ-ONLY executable candidate\n{signal['name']}\n"
                 f"{signal['direction']}\nCombo {signal['combo_outcome']} @ {signal['combo_ask']}\n"
-                f"Hedges: {legs}\nAll-in ${D(str(signal['all_in'])):.2f} -> $1.00\n"
+                f"Hedge(s): {legs}\nAll-in ${D(str(signal['all_in'])):.2f} -> $1.00\n"
                 f"Quote skew {signal['quote_skew_ms']}ms. No order was placed."
             )[:1024],
         )
@@ -116,7 +113,7 @@ async def _notify(sink: SportsPushoverAlerts, signal: Mapping[str, Any]) -> None
 
 async def _watch_session(http: httpx.AsyncClient) -> None:
     catalog, raw_specs = await _catalog_specs(http)
-    specs = [x for x in raw_specs if not x.get("blocker")]
+    specs = [x for x in raw_specs if not x.get("blocker") and x.get("active_required_legs")]
     by_symbol: dict[str, list[dict[str, Any]]] = {}
     all_symbols: set[str] = set()
     for spec in specs:
@@ -133,8 +130,10 @@ async def _watch_session(http: httpx.AsyncClient) -> None:
     print("GEMINI_COMBO_FOK_WATCH_CATALOG " + json.dumps({
         "catalog": catalog,
         "valid_combo_count": len(specs),
+        "cover_count": sum(len(_cover_directions(list(x["active_required_legs"]))) for x in specs),
         "symbol_count": len(all_symbols),
         "refresh_seconds": REFRESH_SECONDS,
+        "pushover_configured": sink.configured,
         "order_entry": False,
     }, separators=(",", ":"), default=str), flush=True)
     if not all_symbols:
@@ -164,9 +163,9 @@ async def _watch_session(http: httpx.AsyncClient) -> None:
                         symbol = str(top.market_id)
                         tops[symbol] = top
                         for spec in by_symbol.get(symbol, []):
-                            for direction in ("COMBO_YES_PLUS_COMPLEMENTS", "COMBO_NO_PLUS_SELECTED"):
-                                signal = _evaluate(spec, tops, direction=direction)
-                                key = (str(spec["combo"]), direction)
+                            for cover in _cover_directions(list(spec["active_required_legs"])):
+                                signal = _evaluate_cover(spec, tops, cover)
+                                key = (str(spec["combo"]), str(cover["name"]))
                                 if signal is None or not signal["economic_executable"]:
                                     active_signals.pop(key, None)
                                     continue
@@ -177,6 +176,11 @@ async def _watch_session(http: httpx.AsyncClient) -> None:
                                 print("GEMINI_COMBO_FOK_WATCH_EXECUTABLE " + json.dumps({
                                     **signal,
                                     "target_locked": str(TARGET),
+                                    "settlement_identity": (
+                                        "C_YES+SUM(ALL_COMPLEMENTS)>=1"
+                                        if signal["combo_outcome"] == "YES"
+                                        else "C_NO+ONE_CANONICAL_REQUIRED_LEG>=1"
+                                    ),
                                     "execution_atomicity": "SEPARATE_FOK_ORDERS_NOT_ATOMIC",
                                     "order_entry": False,
                                     "realized": False,
@@ -190,6 +194,7 @@ async def _watch_session(http: httpx.AsyncClient) -> None:
                 last_heartbeat = now
                 print("GEMINI_COMBO_FOK_WATCH_HEARTBEAT " + json.dumps({
                     "valid_combo_count": len(specs),
+                    "cover_count": sum(len(_cover_directions(list(x["active_required_legs"]))) for x in specs),
                     "subscribed_symbols": len(all_symbols),
                     "symbols_with_snapshot": len(tops),
                     "active_executable_signals": len(active_signals),
