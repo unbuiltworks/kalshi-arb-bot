@@ -57,19 +57,22 @@ def _reconciled():
     }
 
 
-def test_v2_identity_bound_settlement_can_realize_paper_capital_lock():
-    settlement = ledger_event_from_weather_reconciliation(
+def _certified_settlement():
+    return ledger_event_from_weather_reconciliation(
         reconciliation=_reconciled(),
         trade_group_id="g1",
         settlement_key="weather:KXHIGHMIA-26AUG21-B92.5",
         market_id="KXHIGHMIA-26AUG21-B92.5",
         settlement_ts_ms=3_601_000,
     )
-    result = analyze_weather_paper_capital_lock_v2([_fill(), _fee(), settlement])
+
+
+def test_self_verifying_identity_bound_settlement_can_realize_paper_capital_lock():
+    result = analyze_weather_paper_capital_lock_v2([_fill(), _fee(), _certified_settlement()])
     assert result["verified_settlement_lock_groups"] == 1
     assert result["right_censored_groups"] == 0
     assert result["legacy_or_unbound_settlement_events_quarantined"] == 0
-    assert result["settlement_provenance_version"] == "IDENTITY_BOUND_V2"
+    assert result["settlement_provenance_version"] == "SELF_VERIFYING_V3"
 
 
 def test_legacy_free_form_prefix_is_quarantined_not_realized():
@@ -94,7 +97,53 @@ def test_legacy_free_form_prefix_is_quarantined_not_realized():
     assert result["groups"][0]["status"] == "RIGHT_CENSORED_UNAUDITED_SETTLEMENT_EVENT"
 
 
-def test_malformed_v2_digest_is_quarantined():
+def test_merely_well_shaped_random_v3_digest_is_quarantined():
+    fake = make_event(
+        trade_group_id="g1",
+        settlement_key="weather:KXHIGHMIA-26AUG21-B92.5",
+        category="weather",
+        venue="kalshi",
+        market_id="KXHIGHMIA-26AUG21-B92.5",
+        event_type="settlement",
+        side="NO",
+        payout=Decimal("1"),
+        ts_ms=3_601_000,
+        external_id=(
+            "weather-certified-settlement:v3:THE_WEATHER_COMPANY:"
+            + "a" * 64
+            + ":"
+            + "b" * 64
+        ),
+    )
+    result = analyze_weather_paper_capital_lock_v2([_fill(), _fee(), fake])
+    assert result["verified_settlement_lock_groups"] == 0
+    assert result["right_censored_groups"] == 1
+    assert result["legacy_or_unbound_settlement_events_quarantined"] == 1
+
+
+def test_valid_v3_id_cannot_be_reused_for_different_trade_identity():
+    certified = _certified_settlement()
+    copied_to_other_identity = make_event(
+        trade_group_id="g1-tampered",
+        settlement_key=certified.settlement_key,
+        category="weather",
+        venue="kalshi",
+        market_id=certified.market_id,
+        event_type="settlement",
+        side=certified.side,
+        quantity=certified.quantity,
+        payout=certified.payout,
+        ts_ms=certified.ts_ms,
+        external_id=certified.external_id,
+    )
+    result = analyze_weather_paper_capital_lock_v2(
+        [_fill(), _fee(), copied_to_other_identity]
+    )
+    assert result["verified_settlement_lock_groups"] == 0
+    assert result["legacy_or_unbound_settlement_events_quarantined"] == 1
+
+
+def test_malformed_old_v2_digest_is_quarantined():
     malformed = make_event(
         trade_group_id="g1",
         settlement_key="weather:KXHIGHMIA-26AUG21-B92.5",
