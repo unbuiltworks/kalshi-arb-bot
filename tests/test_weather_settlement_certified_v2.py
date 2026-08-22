@@ -90,7 +90,7 @@ def test_verified_historical_nws_exact_market_can_override_current_twc_series_re
         "bracket_semantics_verified": True,
         "settlement_source_regime_verified": True,
         "settlement_source_provider": "NWS",
-        "settlement_source_url": "https://www.weather.gov/wrh/Climate?wfo=okx",
+        "settlement_source_url": "https://forecast.weather.gov/product.php?site=NWS&product=CLI&issuedby=NYC",
         "settlement_source_evidence_url": "https://kalshi.com/markets/kxhighny/highest-temperature-in-nyc/kxhighny-26aug12",
         "settlement_source_evidence_market_ticker": "KXHIGHNY-26AUG12-B80.5",
         "settlement_source_evidence_market_date": "2026-08-12",
