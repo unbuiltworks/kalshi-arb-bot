@@ -1,7 +1,7 @@
 """Basis-risk-only Kalshi exact REST market-data transport.
 
 Kalshi currently rejects additional authenticated WebSocket handshakes with HTTP 429
-while the account's Advanced REST tier remains healthy.  The bounded settlement-basis
+while the account's Advanced REST tier remains healthy. The bounded settlement-basis
 canary therefore avoids a second independent Kalshi WebSocket and uses exact depth=1
 REST order books only inside this dedicated child process.
 
@@ -13,6 +13,8 @@ Safety properties:
 * every Kalshi quote is timestamped at HTTP request *start*, not response arrival, so
   network RTT makes it older and can only hurt the downstream freshness/skew gates;
 * only exact GET /markets/{ticker}/orderbook?depth=1 responses enter the feed;
+* one-sided binary books preserve the quoted side while assigning zero depth to the
+  missing side, exactly like the proven WebSocket book logic; no liquidity is invented;
 * HTTP 429s back off and emit no quote; stale/missing data therefore fails closed.
 
 All downstream <=100ms quote age, <=50ms cross-venue skew, 50ms persistence, q=1 exact
@@ -56,10 +58,8 @@ def _poll_interval_s() -> float:
 
 
 async def _rest_only_lifecycle_placeholder() -> None:
-    """Keep target-loop task semantics without opening a second Kalshi WebSocket."""
     logger.warning(
-        "CRYPTO_BASIS_RISK_TARGET_TRANSPORT lifecycle_ws=false rest_fallback=true "
-        "risk_gates_changed=false"
+        "CRYPTO_BASIS_RISK_TARGET_TRANSPORT lifecycle_ws=false rest_fallback=true risk_gates_changed=false"
     )
     await asyncio.Event().wait()
 
@@ -89,16 +89,22 @@ def _best_bid(rows: Any) -> tuple[Decimal, Decimal] | None:
 
 
 def exact_rest_top(payload: dict[str, Any], ticker: str, quote_ts_ms: int) -> TopOfBook | None:
-    """Parse Kalshi's exact depth=1 REST book into the existing hot-feed shape."""
+    """Parse exact depth=1 REST book with proven one-sided binary-book semantics."""
     book = payload.get("orderbook_fp") or payload.get("orderbook") or {}
     yes = _best_bid(book.get("yes_dollars") or [])
     no = _best_bid(book.get("no_dollars") or [])
-    if yes is None or no is None:
+    if yes is None and no is None:
         return None
-    yes_bid, yes_bid_size = yes
-    no_bid, no_bid_size = no
-    yes_ask = ONE - no_bid
-    if not (D("0") <= yes_bid < ONE and D("0") < yes_ask <= ONE):
+    if yes is None:
+        yes_bid, yes_bid_size = D("0"), D("0")
+    else:
+        yes_bid, yes_bid_size = yes
+    if no is None:
+        yes_ask, yes_ask_size = D("1"), D("0")
+    else:
+        no_bid, no_bid_size = no
+        yes_ask, yes_ask_size = ONE - no_bid, no_bid_size
+    if not (D("0") <= yes_bid <= ONE and D("0") <= yes_ask <= ONE):
         return None
     if yes_bid > yes_ask:
         return None
@@ -109,13 +115,11 @@ def exact_rest_top(payload: dict[str, Any], ticker: str, quote_ts_ms: int) -> To
         yes_bid=yes_bid,
         yes_bid_size=yes_bid_size,
         yes_ask=yes_ask,
-        yes_ask_size=no_bid_size,
+        yes_ask_size=yes_ask_size,
     )
 
 
 class BasisKalshiExactRestHub:
-    """Drop-in register/unregister hub backed by exact depth=1 REST polling."""
-
     def __init__(self) -> None:
         self._targets: dict[str, list[tuple[asyncio.Queue, Any]]] = defaultdict(list)
         self._registry_lock = asyncio.Lock()
@@ -169,9 +173,7 @@ class BasisKalshiExactRestHub:
     async def _fetch_one(self, ticker: str, targets_for_ticker: list[tuple[asyncio.Queue, Any]]) -> None:
         assert self._http is not None and self._private_key is not None
         sign_path = f"/trade-api/v2/markets/{ticker}/orderbook"
-        headers = rollover.hot.auth_headers(
-            self._private_key, "GET", sign_path, rollover.hot.API_KEY_ID
-        )
+        headers = rollover.hot.auth_headers(self._private_key, "GET", sign_path, rollover.hot.API_KEY_ID)
         request_start_ms = int(time.time() * 1000)
         try:
             response = await self._http.get(
@@ -182,11 +184,7 @@ class BasisKalshiExactRestHub:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.warning(
-                "CRYPTO_BASIS_KALSHI_REST_ERROR ticker=%s type=%s",
-                ticker,
-                type(exc).__name__,
-            )
+            logger.warning("CRYPTO_BASIS_KALSHI_REST_ERROR ticker=%s type=%s", ticker, type(exc).__name__)
             return
         self.requests += 1
         if response.status_code == 429:
@@ -209,17 +207,12 @@ class BasisKalshiExactRestHub:
         if top is None:
             self.parse_misses += 1
             return
-
         response_receive_ms = int(time.time() * 1000)
         mono_ns = time.perf_counter_ns()
         for queue, stats in list(targets_for_ticker):
             stats.events += 1
             stats.kalshi_events += 1
-            rollover.hot._enqueue(
-                queue,
-                ("kalshi", response_receive_ms, None, top, mono_ns),
-                stats,
-            )
+            rollover.hot._enqueue(queue, ("kalshi", response_receive_ms, None, top, mono_ns), stats)
             self.emitted += 1
 
     async def _run(self) -> None:
@@ -234,6 +227,7 @@ class BasisKalshiExactRestHub:
                 "max_tickers": MAX_TICKERS,
                 "max_reads_per_second": int(MAX_TICKERS / _poll_interval_s()),
                 "quote_timestamp": "HTTP_REQUEST_START",
+                "one_sided_book_semantics": "MISSING_SIDE_ZERO_DEPTH",
                 "stale_or_429_behavior": "NO_QUOTE_FAIL_CLOSED",
                 "read_only": True,
                 "order_entry": False,
@@ -247,16 +241,9 @@ class BasisKalshiExactRestHub:
                     continue
                 cycle_start = time.monotonic()
                 async with self._registry_lock:
-                    snapshot = {
-                        ticker: list(rows)
-                        for ticker, rows in self._targets.items()
-                        if rows
-                    }
+                    snapshot = {ticker: list(rows) for ticker, rows in self._targets.items() if rows}
                 if snapshot:
-                    await asyncio.gather(*(
-                        self._fetch_one(ticker, rows)
-                        for ticker, rows in snapshot.items()
-                    ))
+                    await asyncio.gather(*(self._fetch_one(ticker, rows) for ticker, rows in snapshot.items()))
                     self.cycles += 1
                 elapsed = time.monotonic() - cycle_start
                 await asyncio.sleep(max(0.0, _poll_interval_s() - elapsed))
@@ -270,7 +257,6 @@ _HUB: BasisKalshiExactRestHub | None = None
 
 
 def install() -> None:
-    """Patch market-data objects only inside the dedicated basis child process."""
     global _INSTALLED, _HUB
     if _INSTALLED:
         return
@@ -279,8 +265,7 @@ def install() -> None:
     rollover._HUB = _HUB
     _INSTALLED = True
     logger.warning(
-        "CRYPTO_BASIS_RISK_MARKETDATA_GUARD_INSTALLED lifecycle_ws=false "
-        "shared_orderbook_ws=false kalshi_exact_rest_depth1=true poll_interval_ms=%s "
-        "risk_gates_changed=false",
+        "CRYPTO_BASIS_RISK_MARKETDATA_GUARD_INSTALLED lifecycle_ws=false shared_orderbook_ws=false "
+        "kalshi_exact_rest_depth1=true poll_interval_ms=%s risk_gates_changed=false",
         int(_poll_interval_s() * 1000),
     )
