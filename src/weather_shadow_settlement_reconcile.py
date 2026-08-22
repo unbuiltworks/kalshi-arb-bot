@@ -32,6 +32,42 @@ def _normalized_url(value: Any) -> str:
     return value.strip().rstrip("/").lower()
 
 
+def _derive_terminal_outcome(
+    *, shadow_row: dict[str, Any], settlement: dict[str, Any]
+) -> tuple[str | None, list[str]]:
+    """Recompute YES/NO from the terminal value and audited contract bracket.
+
+    A free-form ``outcome=YES|NO`` plus verification booleans is not enough evidence
+    for realized PAPER P/L. The terminal source value must reproduce the contract
+    outcome from the same strike semantics that were settlement-certified at quote
+    time. For now only the audited bounded ``between`` temperature brackets are
+    accepted here. Tail contracts deliberately fail closed until their exact operator
+    semantics are independently encoded and tested.
+    """
+    blockers: list[str] = []
+    if shadow_row.get("settlement_certified_shadow") is not True:
+        blockers.append("QUOTE_TIME_SETTLEMENT_CERTIFICATION_UNVERIFIED")
+
+    strike_type = str(shadow_row.get("strike_type") or "").strip().lower()
+    floor = _decimal(shadow_row.get("floor_strike"))
+    cap = _decimal(shadow_row.get("cap_strike"))
+    terminal_value = _decimal(settlement.get("settlement_value"))
+
+    if strike_type != "between":
+        blockers.append("TERMINAL_STRIKE_SEMANTICS_UNSUPPORTED")
+    if floor is None or cap is None or floor > cap:
+        blockers.append("TERMINAL_BRACKET_BOUNDS_INVALID")
+    if terminal_value is None:
+        blockers.append("TERMINAL_SETTLEMENT_VALUE_UNVERIFIED")
+
+    if blockers:
+        return None, sorted(set(blockers))
+
+    # ``between`` semantics were already independently audited upstream. Do not infer
+    # them here from a ticker suffix. The reconciler only replays the audited bounds.
+    return ("YES" if floor <= terminal_value <= cap else "NO"), []
+
+
 def reconcile_weather_paper_fill(
     *,
     shadow_row: dict[str, Any],
@@ -46,6 +82,8 @@ def reconcile_weather_paper_fill(
     - exact-market source provenance was independently verified at quote time;
     - the settlement provider and terminal source URL equal that exact-market audit;
     - terminal finality/correction review is explicitly complete;
+    - terminal settlement value reproduces the supplied outcome under the audited
+      bounded bracket semantics;
     - synthetic fill side, quantity, price and modeled fee are numerically coherent.
 
     Important: do not use the older Series-regime verification bit here. Around a
@@ -104,6 +142,13 @@ def reconcile_weather_paper_fill(
     if outcome not in {"YES", "NO"}:
         blockers.append("SETTLEMENT_OUTCOME_UNVERIFIED")
 
+    derived_outcome, outcome_blockers = _derive_terminal_outcome(
+        shadow_row=shadow_row, settlement=settlement
+    )
+    blockers.extend(outcome_blockers)
+    if derived_outcome is not None and outcome != derived_outcome:
+        blockers.append("SETTLEMENT_OUTCOME_VALUE_MISMATCH")
+
     side = str(paper_fill.get("side") or "").strip().upper()
     qty = paper_fill.get("quantity")
     price_cents = paper_fill.get("price_cents")
@@ -134,7 +179,7 @@ def reconcile_weather_paper_fill(
         }
 
     cost_cents = Decimal(price_cents * qty) + fee
-    payout_cents = Decimal(100 * qty) if side == outcome else Decimal(0)
+    payout_cents = Decimal(100 * qty) if side == derived_outcome else Decimal(0)
     pnl_cents = payout_cents - cost_cents
     return {
         "reconciled": True,
@@ -148,7 +193,8 @@ def reconcile_weather_paper_fill(
         "paper_cost_cents": str(cost_cents),
         "paper_payout_cents": str(payout_cents),
         "paper_realized_pnl_cents": str(pnl_cents),
-        "settlement_outcome": outcome,
+        "settlement_outcome": derived_outcome,
+        "settlement_value": str(_decimal(settlement.get("settlement_value"))),
         "settlement_source_provider": settlement_provider,
         "settlement_source_url": settlement.get("settlement_source_url"),
         "read_only": True,
