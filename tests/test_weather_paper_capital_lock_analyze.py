@@ -145,3 +145,29 @@ def test_zero_explicit_fee_cannot_override_positive_embedded_fill_fee():
     assert result["invalid_groups"] == 1
     assert result["groups"][0]["status"] == "AMBIGUOUS_OR_MISMATCHED_FEE_ACCOUNTING_FAIL_CLOSED"
     assert result["conservative_realized_profit_per_capital_hour"] is None
+
+
+def test_nonfinite_fill_values_fail_closed_without_crashing():
+    for field, value in (("price", "NaN"), ("qty", "Infinity"), ("fee", "NaN")):
+        kwargs = {field: value}
+        result = analyze_weather_paper_capital_lock([_fill(**kwargs), _settlement()])
+        assert result["verified_settlement_lock_groups"] == 0
+        assert result["invalid_groups"] == 1
+        assert result["conservative_realized_profit_per_capital_hour"] is None
+        assert result["groups"][0]["status"] == "MALFORMED_SYNTHETIC_FILL_FAIL_CLOSED"
+
+
+def test_nonfinite_explicit_fee_fails_closed_without_crashing():
+    result = analyze_weather_paper_capital_lock([_fill(), _fee(fee="NaN"), _settlement()])
+    assert result["verified_settlement_lock_groups"] == 0
+    assert result["invalid_groups"] == 1
+    assert result["conservative_realized_profit_per_capital_hour"] is None
+    assert result["groups"][0]["status"] == "AMBIGUOUS_OR_MISMATCHED_FEE_ACCOUNTING_FAIL_CLOSED"
+
+
+def test_nonfinite_settlement_payout_fails_closed_without_crashing():
+    result = analyze_weather_paper_capital_lock([_fill(), _fee(), _settlement(payout="NaN")])
+    assert result["verified_settlement_lock_groups"] == 0
+    assert result["invalid_groups"] == 1
+    assert result["conservative_realized_profit_per_capital_hour"] is None
+    assert result["groups"][0]["status"] == "INVALID_SETTLEMENT_IDENTITY_TIMING_OR_PAYOUT_FAIL_CLOSED"
