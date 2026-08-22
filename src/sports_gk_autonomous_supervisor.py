@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 import logging
 import os
 from pathlib import Path
@@ -33,7 +34,12 @@ from src import mlb_gk_prop_live_multifamily_rule_risk_canary as canary
 from src import sports_trade_reporting as reporting
 from src.kalshi_prop_rest_books import KalshiPropRestBooks
 from src.mlb_live_participation import candidate_game, participation_proof
-from src.sports_live_budget_guard import BudgetExhausted, CUMULATIVE_BUDGET, current_used, install as install_budget
+from src.sports_live_budget_guard import (
+    BudgetExhausted,
+    CUMULATIVE_BUDGET,
+    budget_used_from_trades,
+    install as install_budget,
+)
 from src.sports_trade_reporting import install as install_reporting
 from src.sports_venue_capital_allocator import (
     CachedVenueCapitalAllocator,
@@ -42,6 +48,7 @@ from src.sports_venue_capital_allocator import (
 )
 
 logger = logging.getLogger("kalshi_arb.sports_gk_autonomous_supervisor")
+D = Decimal
 
 HITS = "baseball_player_hits"
 HOME_RUNS = "baseball_player_home_runs"
@@ -74,14 +81,44 @@ def _is_empty_inventory_error(exc: BaseException) -> bool:
     return isinstance(exc, RuntimeError) and str(exc).strip() == EMPTY_INVENTORY_ERROR
 
 
+def _d(value: Any) -> D:
+    try:
+        return D(str(value))
+    except Exception:
+        return D("0")
+
+
+def _budget_breakdown(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return non-sensitive rows contributing to the cumulative sports budget."""
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if str(row.get("mode") or "") not in {"LIVE", "LIVE_PROBE"}:
+            continue
+        if not str(row.get("strategy") or "").startswith("sports_gk_"):
+            continue
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        actual = _d(row.get("capital_filled"))
+        reserved = _d(metadata.get("reserved_usd"))
+        status = str(row.get("status") or "")
+        effective_reserved = D("0") if status == "CAPITAL_RELEASED" else reserved
+        contributing = max(actual, effective_reserved)
+        if contributing <= 0:
+            continue
+        out.append({
+            "trade_id": str(row.get("trade_id") or ""),
+            "status": status,
+            "market": str(row.get("market") or ""),
+            "capital_filled": str(actual),
+            "reserved_usd": str(reserved),
+            "budget_contribution_usd": str(contributing),
+        })
+    return out
+
+
 def _install_unified_families() -> None:
     discovery_patch.SELECTED_SERIES = SELECTED_SERIES
     discovery_patch.install()
     canary.SUPPORTED_FAMILIES = ALL_FAMILIES
-    # The account's authenticated Kalshi websocket slot can be occupied by another
-    # strategy. Keep this sports lane independent: the replacement is read-only,
-    # event-driven from bounded REST snapshots, and forces an exact depth=1 refresh
-    # for the canary's second <=100 ms revalidation before any FOK submission.
     canary.EventingKalshiCrossBooks = KalshiPropRestBooks
 
     def participation_ok(row: Any, games: dict[Any, Any]):
@@ -206,7 +243,15 @@ async def run_forever(*, epoch_seconds: float, cooldown_seconds: float) -> None:
                     await asyncio.sleep(300.0)
                     continue
 
-                used = await current_used()
+                used = budget_used_from_trades(rows)
+                breakdown = _budget_breakdown(rows)
+                if breakdown:
+                    logger.warning(
+                        "SPORTS_SUPERVISOR_BUDGET_BREAKDOWN used=%s ceiling=%s contributors=%s",
+                        used,
+                        CUMULATIVE_BUDGET,
+                        breakdown,
+                    )
                 if used >= CUMULATIVE_BUDGET:
                     if not budget_notice_sent:
                         await reporting._push(
