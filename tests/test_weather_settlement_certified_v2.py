@@ -71,6 +71,11 @@ def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-0
         "disagreement_tolerance_f": "2.0",
         "disagreement_tolerance_audited": True,
         "model_calibration_verified": True,
+        "calibration_evidence_verified": True,
+        "calibration_evidence_id": "weather-calibration:CLINY:2026-08-01",
+        "calibration_sample_count": 60,
+        "calibration_station_id": "CLINY",
+        "calibration_window_end": "2026-08-01T23:59:59Z",
     }
     row.update(overrides)
     return row
@@ -225,3 +230,27 @@ def test_missing_model_sanity_evidence_cannot_certify_ev():
     assert row["best_shadow_side"] is None
     assert row["forecast_bracket_probability"] is None
     assert row["live_probe_ready"] is False
+
+
+def test_bare_model_flags_without_calibration_provenance_cannot_certify_ev():
+    row = _build(forecast=_forecast(
+        calibration_evidence_verified=None,
+        calibration_evidence_id=None,
+        calibration_sample_count=None,
+        calibration_station_id=None,
+        calibration_window_end=None,
+    ))
+    assert row["settlement_certified_shadow"] is True
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert "MODEL_CALIBRATION_EVIDENCE_UNVERIFIED" in row["model_sanity_audit"]["blockers"]
+
+
+def test_future_calibration_window_cannot_certify_current_forecast():
+    row = _build(forecast=_forecast(
+        calibration_window_end="2026-08-22T00:00:00Z",
+        run_time="2026-08-21T06:00:00Z",
+    ))
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert "MODEL_CALIBRATION_LOOKAHEAD_DETECTED" in row["model_sanity_audit"]["blockers"]
