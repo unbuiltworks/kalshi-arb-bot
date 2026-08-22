@@ -25,6 +25,11 @@ VENUE = "kalshi"
 VALID_SIDES = {"YES", "NO"}
 
 
+def _finite_decimal(value: Any) -> bool:
+    """Return True only for finite Decimal telemetry; never raise on malformed input."""
+    return isinstance(value, Decimal) and value.is_finite()
+
+
 def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[str, Any]:
     fills: dict[str, list[LedgerEvent]] = defaultdict(list)
     fees: dict[str, list[LedgerEvent]] = defaultdict(list)
@@ -60,12 +65,17 @@ def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[st
             continue
 
         fill = group_fills[0]
+        fill_decimals_valid = all(
+            _finite_decimal(value) for value in (fill.quantity, fill.price, fill.fee)
+        )
         structurally_valid = (
-            fill.market_id
+            fill_decimals_valid
+            and fill.market_id
             and fill.settlement_key
             and fill.quantity > 0
             and fill.price > 0
             and fill.price < 1
+            and fill.fee >= 0
             and fill.side in VALID_SIDES
             and isinstance(fill.ts_ms, int)
             and not isinstance(fill.ts_ms, bool)
@@ -87,10 +97,11 @@ def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[st
             or fee.settlement_key != fill.settlement_key
             or fee.category != fill.category
             or fee.side not in {None, fill.side}
+            or not _finite_decimal(fee.fee)
             or fee.fee < 0
             for fee in group_fees
         )
-        explicit_fee = sum((fee.fee for fee in group_fees), D("0"))
+        explicit_fee = sum((fee.fee for fee in group_fees), D("0")) if not fee_invalid else D("0")
         # Explicit fee events and an embedded fill fee are alternative ledger
         # representations. Their simultaneous presence is ambiguous even when the
         # explicit event is zero-valued: choosing the explicit representation would
@@ -135,7 +146,8 @@ def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[st
         # quantity. Accepting an arbitrary fractional payout would let malformed or
         # non-terminal telemetry contaminate realized PAPER P/L and capital-efficiency
         # metrics.
-        binary_terminal_payout = settlement.payout in {D("0"), fill.quantity}
+        payout_valid = _finite_decimal(settlement.payout)
+        binary_terminal_payout = payout_valid and settlement.payout in {D("0"), fill.quantity}
         settlement_valid = (
             settlement.market_id == fill.market_id
             and settlement.settlement_key == fill.settlement_key
@@ -157,11 +169,11 @@ def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[st
             continue
 
         capital = fill.quantity * fill.price + fee
-        if capital <= 0:
+        if not _finite_decimal(capital) or capital <= 0:
             invalid_groups += 1
             rows.append({
                 "trade_group_id": group_id,
-                "status": "NONPOSITIVE_CAPITAL_FAIL_CLOSED",
+                "status": "NONPOSITIVE_OR_NONFINITE_CAPITAL_FAIL_CLOSED",
                 "capital_lock_hours": None,
                 "realized_profit": None,
             })
@@ -170,6 +182,15 @@ def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[st
         lock_ms = settlement.ts_ms - fill.ts_ms
         capital_hours = capital * D(lock_ms) / D("3600000")
         realized_profit = settlement.payout - capital
+        if not _finite_decimal(capital_hours) or not _finite_decimal(realized_profit):
+            invalid_groups += 1
+            rows.append({
+                "trade_group_id": group_id,
+                "status": "NONFINITE_REALIZED_ACCOUNTING_FAIL_CLOSED",
+                "capital_lock_hours": None,
+                "realized_profit": None,
+            })
+            continue
         efficiency = realized_profit / capital_hours if capital_hours > 0 else None
 
         verified_groups += 1
@@ -209,7 +230,7 @@ def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[st
         ),
         "capital_lock_semantics": "SYNTHETIC_FILL_TO_EXACT_OFFICIAL_KALSHI_SETTLEMENT",
         "fee_semantics": "EXACT_FEE_EVENTS_PREFERRED_LEGACY_FILL_FEE_FALLBACK_FAIL_CLOSED_ON_AMBIGUITY",
-        "settlement_validation": "EXACT_KEY_CATEGORY_MARKET_OPTIONAL_SIDE_AND_BINARY_TERMINAL_PAYOUT",
+        "settlement_validation": "EXACT_KEY_CATEGORY_MARKET_OPTIONAL_SIDE_BINARY_TERMINAL_PAYOUT_AND_FINITE_DECIMALS",
         "opportunity_duration_is_capital_lock": False,
         "warning": (
             "Do not substitute weather OPEN/MOVE/CLOSE quote lifetime for post-fill capital lock. "
