@@ -7,12 +7,13 @@ after market data is healthy and continuously watched off the execution critical
 If that private socket is unavailable, a bounded q=1 Gemini REST fill-or-kill transport
 may be used; any ambiguous REST state hard-halts before Kalshi rather than guessing.
 
-Kalshi strike metadata and order-book market data use authoritative REST fallbacks in
-this campaign because authenticated market-data WebSocket handshakes are rate-limited.
-REST books carry exact price/depth and are timestamped conservatively at request start;
-passive next-window double-buffer feeds are paced more slowly until activation to avoid
-brief rollover rate-limit bursts. All existing freshness, skew, survival and execution
-gates remain unchanged.
+Gemini prediction depth and spot-basis market data use one public shared WebSocket so
+the venue's authenticated handshake budget is reserved for execution. Kalshi strike
+metadata and order-book market data use authoritative REST fallbacks. REST books carry
+exact price/depth and are timestamped conservatively at request start; passive
+next-window double-buffer feeds are paced more slowly until activation to avoid brief
+rollover rate-limit bursts. All existing freshness, skew, survival and execution gates
+remain unchanged.
 """
 from __future__ import annotations
 
@@ -34,6 +35,7 @@ from src import gemini_kalshi_ws_rate_limit_guard as ws_rate_limit_guard
 from src import gemini_kalshi_deferred_gemini_session as deferred_gemini_session
 from src import gemini_kalshi_gemini_rest_execution_bridge as gemini_rest_execution_bridge
 from src import gemini_kalshi_kalshi_rest_book_fallback as kalshi_rest_book_fallback
+from src import gemini_kalshi_public_market_data_transport as public_market_data_transport
 from src import gemini_kalshi_kalshi_passive_prewarm_pacing as passive_prewarm_pacing
 from src.gemini_kalshi_staged_probe_transport import submit_gemini_first_probe
 
@@ -108,6 +110,7 @@ def main() -> None:
 
     rollover_optimizer.install()
     kalshi_rest_book_fallback.install()
+    public_market_data_transport.install()
     passive_prewarm_pacing.install()
     target_lifecycle_cache._lifecycle_stream = _disabled_lifecycle_stream
     micro_executor.logger.warning(
@@ -120,7 +123,8 @@ def main() -> None:
 
     micro_executor.logger.warning(
         "CRYPTO_RELIABLE_CHILD_EXECUTION_POLICY staged=true kalshi_hedge_cushion_enabled=%s "
-        "gemini_ws_preferred=true gemini_rest_fok_fallback=true min_profit=0.03 quantity=1",
+        "gemini_market_data_public=true gemini_ws_preferred=true "
+        "gemini_rest_fok_fallback=true min_profit=0.03 quantity=1",
         _hedge_cushion_enabled(),
     )
 
