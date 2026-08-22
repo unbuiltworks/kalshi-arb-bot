@@ -116,6 +116,19 @@ def test_wrong_market_or_nonlater_settlement_fails_closed():
     assert result["groups"][0]["status"] == "INVALID_SETTLEMENT_IDENTITY_TIMING_OR_PAYOUT_FAIL_CLOSED"
 
 
+def test_fractional_binary_settlement_payout_fails_closed():
+    result = analyze_weather_paper_capital_lock([
+        _fill(qty="2"),
+        _fee(fee="0.03"),
+        _settlement(payout="1"),
+    ])
+    assert result["verified_settlement_lock_groups"] == 0
+    assert result["invalid_groups"] == 1
+    assert result["all_filled_groups_resolved"] is False
+    assert result["conservative_realized_profit_per_capital_hour"] is None
+    assert result["groups"][0]["status"] == "INVALID_SETTLEMENT_IDENTITY_TIMING_OR_PAYOUT_FAIL_CLOSED"
+
+
 def test_explicit_and_embedded_fee_double_representation_fails_closed():
     result = analyze_weather_paper_capital_lock([_fill(fee="0.02"), _fee(), _settlement()])
     assert result["invalid_groups"] == 1
