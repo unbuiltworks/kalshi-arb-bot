@@ -1,8 +1,8 @@
 """Read-only q=1 Gemini MLB combo scalar Dutch-book probe.
 
 Prices four already-created ATL/MIL x WSH/MIA combo contracts plus their exact
-single-game components from Gemini's public order books.  Computes both scalar-
-safe directions with conservative q=1 taker fees.  No orders or RFQs.
+single-game components from Gemini's public order books. Computes both scalar-
+safe directions with conservative q=1 taker fees. No orders or RFQs.
 """
 from __future__ import annotations
 
@@ -83,12 +83,17 @@ async def run_once() -> dict[str, Any]:
     symbols = list(SINGLES.values()) + list(COMBOS.values())
     books: dict[str, dict[str, str] | None] = {}
     statuses: dict[str, int] = {}
+    raw_counts: dict[str, dict[str, int]] = {}
     async with httpx.AsyncClient(timeout=15.0) as h:
         async def one(s: str):
             r = await h.get(f"{BASE}/v1/book/{s}", params={"limit_bids":20,"limit_asks":20})
             statuses[s] = r.status_code
             try: body = r.json()
             except Exception: body = {}
+            raw_counts[s] = {
+                "bids": len(body.get("bids") or []) if isinstance(body, Mapping) else 0,
+                "asks": len(body.get("asks") or []) if isinstance(body, Mapping) else 0,
+            }
             books[s] = _top(body) if r.status_code == 200 else None
         await asyncio.gather(*(one(s) for s in symbols))
 
@@ -97,13 +102,11 @@ async def run_once() -> dict[str, Any]:
         cb = books.get(csym)
         sx, sy = books.get(SINGLES[x]), books.get(SINGLES[y])
         ox, oy = books.get(SINGLES[OPPOSITE[x]]), books.get(SINGLES[OPPOSITE[y]])
-        # Normal scalar: combo YES(x&y) + opposite(x) + opposite(y)
         if cb and ox and oy:
             costs=[D(cb["yes_all_in"]), D(ox["yes_all_in"]), D(oy["yes_all_in"])]
             depths=[D(cb["yes_depth"]), D(ox["yes_depth"]), D(oy["yes_depth"])]
             total=sum(costs,D("0")); locked=ONE-total
             rows.append({"corner":f"{x}+{y}","direction":"COMBO_YES_PLUS_OPPOSITES","all_in_cost":str(total),"locked_profit":str(locked),"depth_ok_q1":all(z>=ONE for z in depths),"legs":[{"symbol":csym,"outcome":"YES","cost":str(costs[0]),"depth":str(depths[0])},{"symbol":SINGLES[OPPOSITE[x]],"outcome":"YES","cost":str(costs[1]),"depth":str(depths[1])},{"symbol":SINGLES[OPPOSITE[y]],"outcome":"YES","cost":str(costs[2]),"depth":str(depths[2])}]})
-        # Inverse scalar: combo NO(x&y) + x + y
         if cb and sx and sy:
             costs=[D(cb["no_all_in"]), D(sx["yes_all_in"]), D(sy["yes_all_in"])]
             depths=[D(cb["no_depth"]), D(sx["yes_depth"]), D(sy["yes_depth"])]
@@ -111,8 +114,13 @@ async def run_once() -> dict[str, Any]:
             rows.append({"corner":f"{x}+{y}","direction":"COMBO_NO_PLUS_SELECTED","all_in_cost":str(total),"locked_profit":str(locked),"depth_ok_q1":all(z>=ONE for z in depths),"legs":[{"symbol":csym,"outcome":"NO","cost":str(costs[0]),"depth":str(depths[0])},{"symbol":SINGLES[x],"outcome":"YES","cost":str(costs[1]),"depth":str(depths[1])},{"symbol":SINGLES[y],"outcome":"YES","cost":str(costs[2]),"depth":str(depths[2])}]})
     rows.sort(key=lambda r:D(r["locked_profit"]), reverse=True)
     out={
-        "status":"GEMINI_MLB_COMBO_SCALAR_Q1_PROBE",
+        "status":"GEMINI_MLB_COMBO_SCALAR_Q1_PROBE_V2",
         "http_statuses":statuses,
+        "raw_level_counts":raw_counts,
+        "liquid_symbols":[s for s in symbols if books.get(s) is not None],
+        "empty_or_one_sided_symbols":[s for s in symbols if books.get(s) is None],
+        "liquid_singles":sum(books.get(s) is not None for s in SINGLES.values()),
+        "liquid_combos":sum(books.get(s) is not None for s in COMBOS.values()),
         "books_available":sum(v is not None for v in books.values()),
         "symbols_requested":len(symbols),
         "candidates":rows,
@@ -124,7 +132,7 @@ async def run_once() -> dict[str, Any]:
         "read_only":True,
         "order_entry":False,
     }
-    print("GEMINI_MLB_COMBO_SCALAR_Q1_PROBE "+json.dumps(out,separators=(",",":"),default=str),flush=True)
+    print("GEMINI_MLB_COMBO_SCALAR_Q1_PROBE_V2 "+json.dumps(out,separators=(",",":"),default=str),flush=True)
     return out
 
 
