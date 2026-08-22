@@ -4,6 +4,8 @@ Market discovery/readiness/risk gates are identical to the proven campaign child
 Only the final two-leg submission policy changes: Gemini must terminally fill before
 Kalshi receives the hedge order. The authenticated Gemini trading socket is prewarmed
 after market data is healthy and continuously watched off the execution critical path.
+If that private socket is unavailable, a bounded q=1 Gemini REST fill-or-kill transport
+may be used; any ambiguous REST state hard-halts before Kalshi rather than guessing.
 
 Kalshi strike metadata and order-book market data use authoritative REST fallbacks in
 this campaign because authenticated market-data WebSocket handshakes are rate-limited.
@@ -30,6 +32,7 @@ from src import gemini_kalshi_gate_attribution as gate_attribution
 from src import gemini_kalshi_micro_live_executor_20bp as micro_executor
 from src import gemini_kalshi_ws_rate_limit_guard as ws_rate_limit_guard
 from src import gemini_kalshi_deferred_gemini_session as deferred_gemini_session
+from src import gemini_kalshi_gemini_rest_execution_bridge as gemini_rest_execution_bridge
 from src import gemini_kalshi_kalshi_rest_book_fallback as kalshi_rest_book_fallback
 from src import gemini_kalshi_kalshi_passive_prewarm_pacing as passive_prewarm_pacing
 from src.gemini_kalshi_staged_probe_transport import submit_gemini_first_probe
@@ -100,6 +103,7 @@ def main() -> None:
     gemini_flatten_fix.install()
     ws_rate_limit_guard.install_child_preflight()
     deferred_gemini_session.install()
+    gemini_rest_execution_bridge.install()
     v2._submit_and_persist_result = _submit_and_persist_context
 
     rollover_optimizer.install()
@@ -116,7 +120,7 @@ def main() -> None:
 
     micro_executor.logger.warning(
         "CRYPTO_RELIABLE_CHILD_EXECUTION_POLICY staged=true kalshi_hedge_cushion_enabled=%s "
-        "min_profit=0.03 quantity=1",
+        "gemini_ws_preferred=true gemini_rest_fok_fallback=true min_profit=0.03 quantity=1",
         _hedge_cushion_enabled(),
     )
 
