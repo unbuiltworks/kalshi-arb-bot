@@ -44,6 +44,57 @@ async def book(sym:str)->dict[str,Any]:
 def outcome_ask(b:Mapping[str,Any], outcome:str)->tuple[D,D]|None:
     return c._outcome_ask(b,outcome)
 
+async def fresh_q3_preflight(ids:dict[str,str])->dict[str,Any]:
+    out:dict[str,Any]={"pass":False,"order_entry":False,"quantity":"3"}
+    terms=await private_rest_request("GET","/v1/prediction-markets/terms/status",timeout=5.0)
+    out["terms_http"]=terms.status_code
+    try:tb=terms.json()
+    except Exception:tb={}
+    out["terms_accepted"]=bool(tb.get("hasAcceptedLatest")) if isinstance(tb,Mapping) else False
+
+    balances=await private_rest_request("POST","/v1/balances",timeout=5.0)
+    out["balance_http"]=balances.status_code
+    usd=D("0")
+    try:rows=balances.json()
+    except Exception:rows=[]
+    if isinstance(rows,list):
+        for row in rows:
+            if isinstance(row,Mapping) and str(row.get("currency") or "").upper()=="USD":
+                usd=c._d(row.get("available")) or D("0");break
+    out["usd_available"]=str(usd)
+
+    prior={}
+    for cid,sym in ((ids["h1"],HEDGES[0]["symbol"]),(ids["h2"],HEDGES[1]["symbol"]),(ids["combo"],COMBO)):
+        found=await c._find_campaign_order(cid,sym)
+        if found:
+            prior[cid]={"source":found[0],"status":str(found[1].get("status") or ""),"filled_quantity":str(c._row_filled_qty(found[1])),"order_id":c._order_id(found[1])}
+    out["prior_campaign_orders"]=prior
+
+    bcombo,b1,b2=await asyncio.gather(book(COMBO),book(HEDGES[0]["symbol"]),book(HEDGES[1]["symbol"]))
+    hedge_rows=[];hedge_total=D("0");hedge_ok=True
+    for spec,b in zip(HEDGES,(b1,b2)):
+        top=outcome_ask(b,spec["outcome"])
+        row={"symbol":spec["symbol"],"outcome":spec["outcome"]}
+        if top is None:
+            row["available"]=False;hedge_ok=False
+        else:
+            p,depth=top;fee=c._fee(D("0.07"),p,QTY);raw=p*QTY;all_in=raw+fee
+            row.update({"available":True,"ask":str(p),"depth":str(depth),"raw_total":str(raw),"fee_total":str(fee),"all_in_total":str(all_in),"target":str(spec["target"])})
+            hedge_total+=all_in
+            if p>spec["target"] or depth<QTY:hedge_ok=False
+        hedge_rows.append(row)
+
+    combo_asks=[z for z in (c._level(x) for x in (bcombo.get("asks") or [])) if z]
+    best_combo_ask=min((p for p,_ in combo_asks),default=None)
+    maker_fee=c._fee(D("0.0175"),COMBO_PRICE,QTY)
+    combo_total=COMBO_PRICE*QTY+maker_fee
+    total=combo_total+hedge_total
+    locked_total=QTY-total
+    locked_pc=locked_total/QTY
+    out.update({"hedges":hedge_rows,"hedge_total":str(hedge_total),"combo_best_ask":str(best_combo_ask) if best_combo_ask is not None else None,"combo_maker_price":str(COMBO_PRICE),"combo_raw_total":str(COMBO_PRICE*QTY),"combo_maker_fee_total":str(maker_fee),"combo_all_in_total":str(combo_total),"all_in_if_filled_now":str(total),"locked_total_if_filled_now":str(locked_total),"locked_per_contract_if_filled_now":str(locked_pc),"rule_certification":"COMBO_RULE_13_165_PRODUCT_PLUS_EXACT_COMPONENT_COMPLEMENTS"})
+    out["pass"]=bool(out["terms_accepted"] and not prior and hedge_ok and usd>=total and locked_pc>=TARGET_LOCK)
+    return out
+
 async def buy_fok(session:c.GeminiTradingSession,spec:dict[str,Any],cid:str)->dict[str,Any]:
     b=await book(spec["symbol"]); top=outcome_ask(b,spec["outcome"])
     if top is None:return {"status":"NO_Q3_ASK"}
@@ -78,8 +129,8 @@ async def run_once()->dict[str,Any]:
     if before:out["classification"]="LIVE_GATE_BLOCKED_EXISTING_POSITION";emit(out);return out
 
     ids={"combo":f"{campaign}-c"[:36],"h1":f"{campaign}-h1"[:36],"h2":f"{campaign}-h2"[:36]}
-    c.COMBO=COMBO;c.HEDGES=[{"symbol":HEDGES[0]["symbol"],"outcome":HEDGES[0]["outcome"],"max_price":HEDGES[0]["target"]},{"symbol":HEDGES[1]["symbol"],"outcome":HEDGES[1]["outcome"],"max_price":HEDGES[1]["target"]}];c.COMBO_MAKER_PRICE=COMBO_PRICE;c.TARGET_LOCK=TARGET_LOCK;c.QTY=QTY
-    pre=await c._fresh_preflight(ids);out["preflight"]=pre
+    c.QTY=QTY
+    pre=await fresh_q3_preflight(ids);out["preflight"]=pre
     if not pre.get("pass"):out["classification"]="LIVE_GATE_BLOCKED";emit(out);return out
 
     session=c.GeminiTradingSession();out["order_entry"]=True
