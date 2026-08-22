@@ -1,0 +1,3 @@
+Temporary reversible pause trigger for crypto-maker-arb-shadow-v1.
+Reason: the read-only shadow was generating repeated Kalshi REST 429s at high poll frequency and competing with the isolated q=1 basis-risk capacity probe.
+No live execution or risk logic changed.
