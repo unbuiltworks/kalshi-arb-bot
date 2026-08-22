@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 _ALLOWED_KALSHI_HOSTS = {
     "kalshi.com",
@@ -55,6 +55,27 @@ def _official_exact_market_evidence(url: Any, event_ticker: str) -> bool:
     return normalized_path.startswith("/markets/") and event_ticker.lower() in normalized_path
 
 
+def _official_nws_cli_source(source_url: Any) -> bool:
+    """Require the station-specific NWS Daily Climate Report product, not any weather.gov page."""
+    if not isinstance(source_url, str) or not source_url.strip():
+        return False
+    try:
+        parsed = urlparse(source_url.strip())
+    except Exception:
+        return False
+    if parsed.scheme.lower() != "https":
+        return False
+    host = (parsed.hostname or "").lower()
+    if not (host == "weather.gov" or host == "www.weather.gov" or host.endswith(".weather.gov")):
+        return False
+    if (parsed.path or "").rstrip("/").lower() != "/product.php":
+        return False
+    query = {k.lower(): [v.upper() for v in values] for k, values in parse_qs(parsed.query).items()}
+    product = query.get("product", [])
+    issuedby = query.get("issuedby", [])
+    return "CLI" in product and any(token.strip() for token in issuedby)
+
+
 def _recognized_source(provider: Any, source_url: Any) -> str | None:
     p = str(provider or "").strip().upper()
     parsed = _https_host(source_url)
@@ -63,7 +84,7 @@ def _recognized_source(provider: Any, source_url: Any) -> str | None:
     host, path = parsed
     if p == "THE_WEATHER_COMPANY" and host in {"weather.com", "www.weather.com"} and path.rstrip("/").lower() == "/kalshi":
         return p
-    if p == "NWS" and (host == "weather.gov" or host.endswith(".weather.gov")):
+    if p == "NWS" and _official_nws_cli_source(source_url):
         return p
     return None
 
