@@ -43,9 +43,9 @@ def _research_blockers(row: WeatherShadowRow) -> list[str]:
     """Return fail-closed blockers for anything stronger than depth research.
 
     The active weather integration branch does not yet carry the universal lane's
-    exact-market source audit or authoritative Series/exact-fee certification on
-    every normalized row.  Do not let future settlement/model recovery silently
-    turn that incomplete telemetry into execution-eligible economics.
+    full exact-market source/fee/model certification payload on every normalized
+    row. Do not let future settlement/model recovery silently turn incomplete
+    telemetry into execution-eligible economics.
     """
     blockers: list[str] = []
     if row.settlement_status != "SETTLEMENT_CERTIFIED":
@@ -58,6 +58,12 @@ def _research_blockers(row: WeatherShadowRow) -> list[str]:
         blockers.append("EXACT_MARKET_SOURCE_AUDIT_REQUIRED")
     if getattr(row, "authoritative_fee_audited", False) is not True:
         blockers.append("AUTHORITATIVE_FEE_AUDIT_REQUIRED")
+    # Model certification is not sufficient by itself. A large apparent bracket EV
+    # must also have independently passed the same-station/local-day/calibration
+    # sanity audit used by the universal read-only lane. Missing telemetry fails
+    # closed; strings such as "true" are deliberately rejected.
+    if getattr(row, "model_sanity_verified", False) is not True:
+        blockers.append("MODEL_SANITY_AUDIT_REQUIRED")
     return blockers
 
 
@@ -139,6 +145,7 @@ def run_forever() -> None:
                             "settlement_location_key": row.settlement_location_key,
                             "model_status": row.model_status,
                             "model_eligibility": row.model_eligibility,
+                            "model_sanity_verified": getattr(row, "model_sanity_verified", False) is True,
                             "data_quality_status": row.data_quality_status,
                             "market_ticker": row.market_ticker,
                             "event_ticker": row.event_ticker,
