@@ -5,6 +5,12 @@ campaign env is configured, continuously chains bounded campaigns. Each successo
 created only after the prior campaign is safely terminal and passes strict local plus
 live venue reconciliation. Any halt, unresolved claim, resting order, malformed state,
 or ambiguous venue read fails closed and stops the process.
+
+A separate settlement-equivalence arm is required because price/boundary agreement is
+not proof that Gemini Prediction and Kalshi settle from the same authoritative index.
+After a production BTC trade on 2026-08-22 filled both legs but settled to opposite
+venue outcomes, live order entry must remain fail-closed until exact settlement-source
+and rule equivalence is independently certified.
 """
 from __future__ import annotations
 
@@ -22,6 +28,7 @@ from src import gemini_kalshi_preclaim_child_exit_retry as preclaim_retry
 from src import gemini_kalshi_ws_rate_limit_guard as ws_rate_limit_guard
 
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_crypto_postincident_boot")
+SETTLEMENT_EQUIVALENCE_ENV = "CRYPTO_GK_SETTLEMENT_EQUIVALENCE_CERTIFIED"
 
 
 def _continuous_mode() -> bool:
@@ -30,11 +37,20 @@ def _continuous_mode() -> bool:
     return bool(campaign and deadline)
 
 
+def _require_settlement_equivalence() -> None:
+    if os.getenv(SETTLEMENT_EQUIVALENCE_ENV, "NO").strip().upper() != "YES":
+        raise PermissionError(
+            "Gemini/Kalshi live crypto disabled: exact settlement-source equivalence "
+            f"must be certified before setting {SETTLEMENT_EQUIVALENCE_ENV}=YES"
+        )
+
+
 def main() -> None:
     if os.getenv(child.HEDGE_CUSHION_ENV, "NO").strip().upper() != "YES":
         raise PermissionError(
             "post-incident live campaign requires CRYPTO_KALSHI_HEDGE_CUSHION=YES"
         )
+    _require_settlement_equivalence()
 
     incident_accounting.install()
     preclaim_retry.install()
