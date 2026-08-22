@@ -29,6 +29,18 @@ PATH = "/v1/prediction-markets/combos"
 BASE = "https://api.gemini.com"
 
 
+def _numeric_contract_id(c: dict[str, Any]) -> str | None:
+    """Combo API requires the numeric internal ID, not composite sports contractId."""
+    for key in ("id", "internalId", "contractNumericId", "contract_id"):
+        value = c.get(key)
+        if value not in (None, "") and str(value).isdigit():
+            return str(value)
+    value = c.get("contractId")
+    if value not in (None, "") and str(value).isdigit():
+        return str(value)
+    return None
+
+
 def _find_contracts(events: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
     found: dict[str, dict[str, str]] = {}
     for event in events:
@@ -44,14 +56,13 @@ def _find_contracts(events: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
                     continue
                 label = str(c.get("label") or c.get("contractName") or "").lower()
                 symbol = str(c.get("instrumentSymbol") or c.get("ticker") or "")
-                cid = c.get("contractId") or c.get("id")
-                if wanted_label in label and symbol and cid not in (None, ""):
-                    found[code] = {"contractId": str(cid), "symbol": symbol, "label": str(c.get("label") or "")}
+                cid = _numeric_contract_id(c)
+                if wanted_label in label and symbol and cid:
+                    found[code] = {"contractId": cid, "symbol": symbol, "label": str(c.get("label") or "")}
     return found
 
 
 async def _create_combo_json(http: httpx.AsyncClient, body: dict[str, Any]) -> httpx.Response:
-    """Gemini signs endpoint params but this newer endpoint also requires JSON body."""
     key, secret = credentials()
     headers = rest_auth_headers(key, secret, PATH, params=body)
     headers["Content-Type"] = "application/json"
@@ -60,7 +71,7 @@ async def _create_combo_json(http: httpx.AsyncClient, body: dict[str, Any]) -> h
 
 async def run_once() -> dict[str, Any]:
     out: dict[str, Any] = {
-        "status": "GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V2",
+        "status": "GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V3",
         "target": "ATL/MIL x WSH/MIA Aug-22",
         "requested_corners": ["+".join(x) for x in CORNERS],
         "order_entry": False,
@@ -71,7 +82,7 @@ async def run_once() -> dict[str, Any]:
     }
     if not has_credentials():
         out["status"] = "NO_CREDENTIALS"
-        print("GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V2 " + json.dumps(out, separators=(",", ":")), flush=True)
+        print("GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V3 " + json.dumps(out, separators=(",", ":")), flush=True)
         return out
 
     async with httpx.AsyncClient(timeout=20.0) as http:
@@ -80,8 +91,16 @@ async def run_once() -> dict[str, Any]:
         out["contracts_found"] = sorted(contracts)
         out["contract_symbols"] = {k: v["symbol"] for k, v in contracts.items()}
         if set(contracts) != set(TARGETS):
-            out["status"] = "TARGET_CONTRACTS_INCOMPLETE"
-            print("GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V2 " + json.dumps(out, separators=(",", ":")), flush=True)
+            out["status"] = "TARGET_NUMERIC_CONTRACT_IDS_INCOMPLETE"
+            # Log only public field names for target contract objects, never credentials.
+            target_key_sets=[]
+            for event in events:
+                if str(event.get("ticker") or "") in {"MLB-2608221810-ATL-MIL-M", "MLB-2608222010-WSH-MIA-M"}:
+                    for c in event.get("contracts") or []:
+                        if isinstance(c,dict):
+                            target_key_sets.append(sorted(str(k) for k in c.keys()))
+            out["target_contract_public_key_sets"] = target_key_sets[:4]
+            print("GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V3 " + json.dumps(out, separators=(",", ":")), flush=True)
             return out
 
         results: list[dict[str, Any]] = []
@@ -116,7 +135,7 @@ async def run_once() -> dict[str, Any]:
     out["results"] = results
     out["successful_combo_definitions"] = sum(bool(x.get("ok")) for x in results)
     out["all_four_available"] = out["successful_combo_definitions"] == 4
-    print("GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V2 " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
+    print("GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V3 " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
     return out
 
 
