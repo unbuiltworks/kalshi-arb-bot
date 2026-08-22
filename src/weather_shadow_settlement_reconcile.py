@@ -41,12 +41,23 @@ def _derive_terminal_outcome(
     contracts deliberately do *not* infer inclusivity from Kalshi ``strike_type`` or a
     ticker suffix. They are accepted only when the exact-market rule audit preserved a
     literal comparator and threshold and explicitly marked that comparator audited.
-    This lets lower/upper tails enter later PAPER reconciliation without guessing whether
-    an API field means <, <=, >, or >=.
+
+    The terminal value itself also needs an explicit exact-market audit. Weather rules
+    can differ on whether the source value is used as published, rounded, or otherwise
+    transformed before applying a bracket. Until a specific transform is implemented
+    and tested here, only an explicitly audited ``AS_PUBLISHED`` value is accepted.
+    This prevents an apparently exact boundary/tie result from being manufactured by an
+    implicit rounding assumption.
     """
     blockers: list[str] = []
     if shadow_row.get("settlement_certified_shadow") is not True:
         blockers.append("QUOTE_TIME_SETTLEMENT_CERTIFICATION_UNVERIFIED")
+
+    if shadow_row.get("terminal_value_semantics_audited") is not True:
+        blockers.append("TERMINAL_VALUE_SEMANTICS_UNAUDITED")
+    value_transform = str(shadow_row.get("terminal_value_transform") or "").strip().upper()
+    if value_transform != "AS_PUBLISHED":
+        blockers.append("TERMINAL_VALUE_TRANSFORM_UNSUPPORTED")
 
     strike_type = str(shadow_row.get("strike_type") or "").strip().lower()
     floor = _decimal(shadow_row.get("floor_strike"))
