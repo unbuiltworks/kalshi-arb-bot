@@ -3,7 +3,7 @@ from src.weather_shadow_settlement_reconcile import reconcile_weather_paper_fill
 
 def _exact_audit(*, provider="THE_WEATHER_COMPANY", ticker="KXHIGHAUS-26AUG21-B102.5", market_date="2026-08-21", verified=True, source_url=None):
     if source_url is None:
-        source_url = "https://weather.com/kalshi" if provider == "THE_WEATHER_COMPANY" else "https://www.weather.gov/wrh/Climate?wfo=ewx"
+        source_url = "https://weather.com/kalshi" if provider == "THE_WEATHER_COMPANY" else "https://www.weather.gov/product.php?site=NWS&product=CLI&issuedby=AUS"
     return {
         "verified": verified,
         "market_ticker": ticker,
@@ -22,10 +22,13 @@ def _shadow(**overrides):
         "market_ticker": "KXHIGHAUS-26AUG21-B102.5",
         "market_date": "2026-08-21",
         "market_settlement_source_provider": "THE_WEATHER_COMPANY",
-        # Legacy Series-regime bit is deliberately not authoritative for reconciliation.
         "settlement_source_regime_verified": False,
         "exact_market_source_verified": True,
         "exact_market_source_audit": _exact_audit(),
+        "settlement_certified_shadow": True,
+        "strike_type": "between",
+        "floor_strike": 102,
+        "cap_strike": 103,
     }
     row.update(overrides)
     return row
@@ -53,6 +56,7 @@ def _settlement(**overrides):
         "official_source_verified": True,
         "finality_verified": True,
         "correction_window_checked": True,
+        "settlement_value": 104,
         "outcome": "NO",
     }
     row.update(overrides)
@@ -67,13 +71,15 @@ def test_reconciles_exact_official_weather_paper_win():
     assert result["paper_cost_cents"] == "38"
     assert result["paper_payout_cents"] == "100"
     assert result["paper_realized_pnl_cents"] == "62"
+    assert result["settlement_outcome"] == "NO"
+    assert result["settlement_value"] == "104"
     assert result["settlement_source_url"] == "https://weather.com/kalshi"
     assert result["order_entry"] is False
     assert result["live_probe_ready"] is False
 
 
 def test_historical_exact_audit_can_override_legacy_series_regime_for_reconciliation():
-    nws_source = "https://www.weather.gov/wrh/Climate?wfo=ewx"
+    nws_source = "https://www.weather.gov/product.php?site=NWS&product=CLI&issuedby=AUS"
     shadow = _shadow(
         market_ticker="KXHIGHAUS-26AUG12-B102.5",
         market_date="2026-08-12",
@@ -184,9 +190,47 @@ def test_losing_paper_fill_records_full_cost_loss():
     result = reconcile_weather_paper_fill(
         shadow_row=_shadow(),
         paper_fill=_fill(side="YES", quantity=2, price_cents=41, modeled_fee_cents=3),
-        settlement=_settlement(outcome="NO"),
+        settlement=_settlement(outcome="NO", settlement_value=104),
     )
     assert result["reconciled"] is True
     assert result["paper_cost_cents"] == "85"
     assert result["paper_payout_cents"] == "0"
     assert result["paper_realized_pnl_cents"] == "-85"
+
+
+def test_free_form_outcome_cannot_disagree_with_terminal_value():
+    result = reconcile_weather_paper_fill(
+        shadow_row=_shadow(),
+        paper_fill=_fill(),
+        settlement=_settlement(outcome="YES", settlement_value=104),
+    )
+    assert result["reconciled"] is False
+    assert "SETTLEMENT_OUTCOME_VALUE_MISMATCH" in result["blockers"]
+
+
+def test_missing_terminal_value_fails_closed():
+    result = reconcile_weather_paper_fill(
+        shadow_row=_shadow(), paper_fill=_fill(), settlement=_settlement(settlement_value=None)
+    )
+    assert result["reconciled"] is False
+    assert "TERMINAL_SETTLEMENT_VALUE_UNVERIFIED" in result["blockers"]
+
+
+def test_unsettlement_certified_quote_cannot_realize_paper_pnl():
+    result = reconcile_weather_paper_fill(
+        shadow_row=_shadow(settlement_certified_shadow=False),
+        paper_fill=_fill(),
+        settlement=_settlement(),
+    )
+    assert result["reconciled"] is False
+    assert "QUOTE_TIME_SETTLEMENT_CERTIFICATION_UNVERIFIED" in result["blockers"]
+
+
+def test_tail_strike_fails_closed_until_exact_operator_semantics_are_encoded():
+    result = reconcile_weather_paper_fill(
+        shadow_row=_shadow(strike_type="greater", floor_strike=103, cap_strike=None),
+        paper_fill=_fill(),
+        settlement=_settlement(settlement_value=105, outcome="YES"),
+    )
+    assert result["reconciled"] is False
+    assert "TERMINAL_STRIKE_SEMANTICS_UNSUPPORTED" in result["blockers"]
