@@ -3,13 +3,26 @@ from decimal import Decimal
 import pytest
 
 from src.gemini_kalshi_live_probe_guard import (
+    SETTLEMENT_EQUIVALENCE_PROVEN,
     build_leg_payloads,
+    live_probe_authorized,
     recompute_payload_locked_profit,
     validate_exact_probe_payloads,
     validate_probe_candidate,
 )
 
 D = Decimal
+
+
+def test_incident_lock_blocks_live_even_with_environment_opt_in(monkeypatch):
+    monkeypatch.setenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", "YES")
+    assert SETTLEMENT_EQUIVALENCE_PROVEN is False
+    assert live_probe_authorized(True) is False
+
+
+def test_incident_lock_blocks_live_without_cli_opt_in(monkeypatch):
+    monkeypatch.setenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", "YES")
+    assert live_probe_authorized(False) is False
 
 
 def test_kalshi_yes_gemini_no_payloads_are_fok_one_contract():
@@ -68,8 +81,6 @@ def test_exact_payload_guard_recomputes_one_contract_edge_after_fees():
         kalshi_yes_bid=D("0.45"),
         kalshi_yes_ask=D("0.46"),
     )
-    # Raw complementary cost = .35 + (1-.45) = .90.
-    # Gemini and Kalshi each round the one-contract taker fee to .02 => .06 net lock.
     assert recompute_payload_locked_profit(
         gemini, kalshi, kalshi_fee_multiplier=D("1")
     ) == D("0.06")

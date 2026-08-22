@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import src.gemini_kalshi_live_probe_guard as guard
 import src.gemini_kalshi_live_service as service
 
 
@@ -20,6 +21,9 @@ def test_live_service_defaults_are_first_probe_bounds(monkeypatch):
 
 
 def test_live_requires_cli_env_and_single_use_token(monkeypatch, tmp_path: Path):
+    # Mechanics-only test: explicitly simulate a future reviewed settlement
+    # certification. Production constant remains False.
+    monkeypatch.setattr(guard, "SETTLEMENT_EQUIVALENCE_PROVEN", True)
     token = tmp_path / "arm"
     monkeypatch.delenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", raising=False)
     token.write_text("ARM\n")
