@@ -13,7 +13,7 @@ from base64 import urlsafe_b64decode, urlsafe_b64encode
 from decimal import Decimal
 from hashlib import sha256
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from src.cross_venue_ledger import LedgerEvent, make_event
 
@@ -50,6 +50,23 @@ def _unb64(value: str) -> str:
     return urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
 
 
+def _official_nws_cli_source(source_url: str) -> bool:
+    """Require the station-specific NWS Daily Climate Report (CLI) endpoint."""
+    try:
+        parsed = urlparse(source_url)
+    except Exception:
+        return False
+    if parsed.scheme.lower() != "https":
+        return False
+    host = (parsed.hostname or "").lower()
+    if not (host == "weather.gov" or host == "www.weather.gov" or host.endswith(".weather.gov")):
+        return False
+    if (parsed.path or "").rstrip("/").lower() != "/product.php":
+        return False
+    query = {k.lower(): [v.upper() for v in values] for k, values in parse_qs(parsed.query).items()}
+    return "CLI" in query.get("product", []) and any(token.strip() for token in query.get("issuedby", []))
+
+
 def _official_provider_source(provider: str, source_url: str) -> bool:
     try:
         parsed = urlparse(source_url)
@@ -63,7 +80,7 @@ def _official_provider_source(provider: str, source_url: str) -> bool:
     if provider == "THE_WEATHER_COMPANY":
         return host in {"weather.com", "www.weather.com"} and path == "/kalshi"
     if provider == "NWS":
-        return host == "weather.gov" or host.endswith(".weather.gov") or host == "www.weather.gov"
+        return _official_nws_cli_source(source_url)
     return False
 
 
