@@ -9,6 +9,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ src/
 COPY config/ config/
 
-# Isolated zero-capital Gemini combo definition validation. No order entry.
-RUN python -m py_compile src/gemini_extreme_combo_create_validation.py src/gemini_prediction_auth.py
-CMD ["python", "-m", "src.gemini_extreme_combo_create_validation"]
+# Isolated read-only Gemini extreme-combo q=1 live preflight. No order entry.
+RUN python -m py_compile src/gemini_extreme_combo_live_preflight.py src/gemini_prediction_auth.py
+CMD ["python", "-m", "src.gemini_extreme_combo_live_preflight"]
