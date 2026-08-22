@@ -30,4 +30,5 @@ canary.QTY = Decimal("1")
 
 
 if __name__ == "__main__":
+    print("GEMINI_CRY_ALBON_LIVE_WRAPPER_BOOT", flush=True)
     asyncio.run(canary.run_once())
