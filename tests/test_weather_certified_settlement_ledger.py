@@ -51,22 +51,40 @@ def test_certified_weather_settlement_event_is_identity_bound_and_deterministic(
     assert first.category == "weather"
 
 
+def _external_id(**overrides):
+    kwargs = {
+        "trade_group_id": "g1",
+        "market_id": "KXHIGHMIA-26AUG21-B92.5",
+        "settlement_key": "weather:KXHIGHMIA-26AUG21-B92.5",
+        "provider": "THE_WEATHER_COMPANY",
+        "source_url": "https://weather.com/kalshi",
+        "side": "NO",
+        "quantity": Decimal("1"),
+        "payout": Decimal("1"),
+        "settlement_ts_ms": 2_000,
+    }
+    kwargs.update(overrides)
+    return certified_weather_settlement_external_id(**kwargs)
+
+
 def test_external_id_changes_when_exact_provenance_changes():
-    base = certified_weather_settlement_external_id(
-        trade_group_id="g1",
-        market_id="KXHIGHMIA-26AUG21-B92.5",
-        settlement_key="weather:KXHIGHMIA-26AUG21-B92.5",
-        provider="THE_WEATHER_COMPANY",
-        source_url="https://weather.com/kalshi",
-    )
-    changed = certified_weather_settlement_external_id(
-        trade_group_id="g1",
-        market_id="KXHIGHMIA-26AUG21-B92.5",
-        settlement_key="weather:KXHIGHMIA-26AUG21-B92.5",
+    assert _external_id() != _external_id(
         provider="NWS",
         source_url="https://www.weather.gov/wrh/Climate?wfo=mfl",
     )
-    assert base != changed
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("side", "YES"),
+        ("quantity", Decimal("2")),
+        ("payout", Decimal("0")),
+        ("settlement_ts_ms", 2_001),
+    ],
+)
+def test_external_id_binds_terminal_payload(field, value):
+    assert _external_id() != _external_id(**{field: value})
 
 
 @pytest.mark.parametrize(
