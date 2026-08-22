@@ -40,6 +40,13 @@ def _candidate_sides(row: WeatherShadowRow, min_ev_cents: float) -> list[tuple[s
 
 
 def _research_blockers(row: WeatherShadowRow) -> list[str]:
+    """Return fail-closed blockers for anything stronger than depth research.
+
+    The active weather integration branch does not yet carry the universal lane's
+    exact-market source audit or authoritative Series/exact-fee certification on
+    every normalized row.  Do not let future settlement/model recovery silently
+    turn that incomplete telemetry into execution-eligible economics.
+    """
     blockers: list[str] = []
     if row.settlement_status != "SETTLEMENT_CERTIFIED":
         blockers.append(row.settlement_status or "SETTLEMENT_UNVERIFIED")
@@ -47,6 +54,10 @@ def _research_blockers(row: WeatherShadowRow) -> list[str]:
         blockers.append(row.model_status or "MODEL_UNVERIFIED")
     if row.data_quality_status != "FRESH":
         blockers.append(f"DATA_QUALITY_{row.data_quality_status or 'UNKNOWN'}")
+    if getattr(row, "exact_market_source_audited", False) is not True:
+        blockers.append("EXACT_MARKET_SOURCE_AUDIT_REQUIRED")
+    if getattr(row, "authoritative_fee_audited", False) is not True:
+        blockers.append("AUTHORITATIVE_FEE_AUDIT_REQUIRED")
     return blockers
 
 
@@ -60,6 +71,15 @@ def _fill_payload(fill) -> dict[str, object]:
         "worst_price_cents": fill.worst_price_cents,
         "levels_used": fill.levels_used,
     }
+
+
+def _side_readiness_blockers(row: WeatherShadowRow, q1_fill) -> list[str]:
+    blockers = list(_research_blockers(row))
+    if q1_fill is None or q1_fill.fully_fillable is not True:
+        blockers.append("Q1_DEPTH_NOT_FULLY_FILLABLE")
+    elif q1_fill.filled_contracts < 1.0:
+        blockers.append("Q1_DEPTH_UNDER_ONE_CONTRACT")
+    return blockers
 
 
 def run_forever() -> None:
@@ -103,10 +123,11 @@ def run_forever() -> None:
                     book = fetch_orderbook(row.market_ticker, depth=100)
                     grid = executable_grid(book, max_q=5)
                     depth_checked += 1
-                    blockers = _research_blockers(row)
-                    execution_eligible = not blockers
                     for side, research_ev in sides:
-                        fills = {str(q): _fill_payload(grid[side][q]) for q in range(1, 6)}
+                        side_grid = grid[side]
+                        fills = {str(q): _fill_payload(side_grid[q]) for q in range(1, 6)}
+                        blockers = _side_readiness_blockers(row, side_grid.get(1))
+                        execution_eligible = not blockers
                         print(json.dumps({
                             "event": "WEATHER_DEPTH_RESEARCH_SHADOW",
                             "classification": "SHADOW",
