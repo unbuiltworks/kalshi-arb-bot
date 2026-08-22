@@ -45,11 +45,16 @@ def _quote(observed_at="2026-08-21T07:30:00Z"):
 
 
 def _station():
-    return {"name": "Central Park", "cli_product": "CLINY", "identity_verified": True}
-
-
-def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-04:00"):
     return {
+        "name": "Central Park",
+        "station_id": "CLINY",
+        "cli_product": "CLINY",
+        "identity_verified": True,
+    }
+
+
+def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-04:00", **overrides):
+    row = {
         "model": "GFS",
         "cli_product": "CLINY",
         "model_run_time": run_time,
@@ -57,23 +62,35 @@ def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-0
         "station_mapping_verified": True,
         "freshness_verified": True,
         "bracket_probability": "0.65",
+        "model_mean_f": "81.2",
+        "model_station_id": "CLINY",
+        "independent_anchor_high_f": "81.0",
+        "independent_anchor_station_id": "CLINY",
+        "independent_anchor_verified": True,
+        "same_local_day_verified": True,
+        "disagreement_tolerance_f": "2.0",
+        "disagreement_tolerance_audited": True,
+        "model_calibration_verified": True,
     }
+    row.update(overrides)
+    return row
 
 
-def _build(market=None):
+def _build(market=None, forecast=None):
     return build_exact_market_certified_shadow_row(
         series=_series(),
         market=market or _market(),
         quote=_quote(),
         station=_station(),
-        forecast=_forecast(),
+        forecast=forecast or _forecast(),
         fee_changes=[],
     )
 
 
-def test_exact_market_provenance_is_additional_fail_closed_gate():
+def test_exact_market_provenance_and_model_sanity_are_additional_fail_closed_gates():
     row = _build()
     assert row["exact_market_source_verified"] is True
+    assert row["model_sanity_verified"] is True
     assert row["settlement_certified_shadow"] is True
     assert row["ev_certified_shadow"] is True
     assert row["best_shadow_side"] is not None
@@ -116,6 +133,7 @@ def test_verified_historical_nws_exact_market_can_override_current_twc_series_re
         fee_history_complete=True,
     )
     assert row["exact_market_source_verified"] is True
+    assert row["model_sanity_verified"] is True
     assert "EXACT_MARKET_SETTLEMENT_REGIME_UNVERIFIED" not in row["blockers"]
     assert row["settlement_certified_shadow"] is True
     assert row["ev_certified_shadow"] is True
@@ -170,4 +188,40 @@ def test_exact_audit_never_upgrades_underlying_failed_quote_gate():
     assert row["settlement_certified_shadow"] is False
     assert row["ev_certified_shadow"] is False
     assert "QUOTE_STALE" in row["blockers"]
+    assert row["live_probe_ready"] is False
+
+
+def test_large_model_anchor_disagreement_keeps_settlement_certified_but_withholds_ev():
+    row = _build(forecast=_forecast(
+        model_mean_f="88.8",
+        independent_anchor_high_f="92.0",
+        disagreement_tolerance_f="2.0",
+    ))
+    assert row["exact_market_source_verified"] is True
+    assert row["settlement_certified_shadow"] is True
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert row["best_shadow_side"] is None
+    assert row["forecast_bracket_probability"] is None
+    assert row["economics_status"] == "MODEL_SANITY_UNVERIFIED_RESEARCH_ONLY"
+    assert "MODEL_ANCHOR_DISAGREEMENT_EXCEEDS_AUDITED_TOLERANCE" in row["model_sanity_audit"]["blockers"]
+    assert all(side["modeled_after_fee_ev_cents"] is None for side in row["side_economics"])
+    assert row["live_probe_ready"] is False
+
+
+def test_missing_model_sanity_evidence_cannot_certify_ev():
+    row = _build(forecast={
+        "model": "GFS",
+        "cli_product": "CLINY",
+        "model_run_time": "2026-08-21T06:00:00Z",
+        "forecast_valid_time": "2026-08-21T23:59:59-04:00",
+        "station_mapping_verified": True,
+        "freshness_verified": True,
+        "bracket_probability": "0.65",
+    })
+    assert row["settlement_certified_shadow"] is True
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert row["best_shadow_side"] is None
+    assert row["forecast_bracket_probability"] is None
     assert row["live_probe_ready"] is False
