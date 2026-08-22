@@ -1,17 +1,22 @@
-"""Production combo supervisor v29: diversify manufacturing toward 3-leg prop baskets.
+"""Production combo supervisor v29: prioritize prop baskets with durable RFQ learning.
 
-Recent live RFQs proved the throughput path is healthy (12 creations/pass, zero
-Kalshi 429s) but repeatedly sampled simple two-leg NFL structures remained
-negative after conservative fees.  This layer changes *manufacturing order only*:
+Recent live RFQs proved the throughput path is healthy but repeatedly sampled simple
+two-leg structures remained negative after conservative fees. This layer changes
+manufacturing order only: prioritize three-leg prop/derivative baskets, suppress
+repeatedly negative family+selected-side signatures from priority, and retain
+bounded broad exploration.
 
-* prioritize three-leg baskets containing player/derivative prop families;
-* prefer same-underlying-game three-leg prop baskets when available;
-* suppress repeatedly observed negative side-aware signatures from priority;
-* retain bounded two-leg and broad exploration so the selector can adapt.
+v23's signature already includes selected-side orientation, but its feedback was
+process-local. This version hydrates that manufacturing-only feedback from Postgres
+before each MVE cycle and atomically persists only new observation deltas afterward,
+so Railway redeploys do not erase which exact patterns quoted closest to the bound.
+Persistence failure falls back to process-local learning and cannot authorize a
+trade.
 
-No execution invariant changes: q=1, >=3c after conservative fees, exact RFQ and
-component depth, capital/position checks, final quote refresh, flatten/hard-halt,
-one live attempt per process, and settlement accounting remain unchanged.
+No execution invariant changes: q=1, >=3c after conservative fees, exact rule/RFQ
+and component depth, capital/position checks, final quote refresh, freshness/skew,
+flatten/hard-halt, one live attempt per process, and settlement accounting remain
+unchanged.
 """
 from __future__ import annotations
 
@@ -22,8 +27,11 @@ from src import sports_kp_live_combo_supervisor_v28 as v28
 from src import sports_kp_live_combo_supervisor_v8 as v8
 from src import sports_kp_live_combo_supervisor_v23 as v23
 from src import sports_kp_mve_combo_generator as g
+from src import sports_mve_rfq_feedback_store as feedback_store
 
 logger = v28.logger
+base = v28.base
+_ORIGINAL_GENERATE = base.generate_mves
 
 _CORE_FAMILIES = ("GAME", "SPREAD", "TOTAL")
 
@@ -63,8 +71,6 @@ def _proven_negative(legs: tuple[Any, ...]) -> bool:
         return False
     observations = int(row.get("observations") or 0)
     best = v23.D(str(row.get("best_lock") or "-9"))
-    # Four observations is enough to stop spending priority budget on a pattern
-    # that has never reached break-even.  It remains in the exploration bucket.
     return observations >= 4 and best < v23.ZERO
 
 
@@ -88,8 +94,6 @@ def _tier(legs: tuple[Any, ...]) -> int:
 
 
 def _v29_candidates(collection, event_legs, *, max_candidates, min_locked):
-    # Start from the pure same-Kalshi dual-direction universe so uncertified
-    # external prices cannot steer live-capable manufacturing.
     expanded = min(max(max_candidates * 18, max_candidates), 3000)
     raw = v8._dual_candidates(
         collection,
@@ -126,8 +130,6 @@ def _v29_candidates(collection, event_legs, *, max_candidates, min_locked):
             max(leg.close_time for leg in row[1]),
         ))
 
-    # For a 12-RFQ pass this targets 8 prop-heavy 3-leg rows, 1 other 3-leg,
-    # 2 correlated/broad two-leg rows, and only 1 proven-negative exploration.
     pattern = (0, 1, 0, 2, 0, 1, 3, 0, 2, 4, 5, 6)
     out: list[Any] = []
     cursors = {i: 0 for i in range(7)}
@@ -155,6 +157,7 @@ def _v29_candidates(collection, event_legs, *, max_candidates, min_locked):
         "broad_exploration": len(buckets[5]),
         "proven_negative_deprioritized": len(buckets[6]),
         "returned_candidates": len(out),
+        "durable_side_aware_feedback": True,
         "manufacturing_order_only": True,
         "execution_semantics_changed": False,
         "order_entry": False,
@@ -162,7 +165,59 @@ def _v29_candidates(collection, event_legs, *, max_candidates, min_locked):
     return out
 
 
+def _replace_feedback(snapshot: dict[str, dict[str, Any]]) -> None:
+    v23._FEEDBACK.clear()
+    for signature, row in snapshot.items():
+        v23._FEEDBACK[signature].update(row)
+
+
+async def _durable_feedback_generate():
+    hydrated = False
+    durable_rows = 0
+    try:
+        durable = await feedback_store.load_feedback()
+        if durable:
+            _replace_feedback(durable)
+        hydrated = True
+        durable_rows = len(durable)
+    except Exception as exc:
+        logger.warning("SPORTS_MVE_RFQ_FEEDBACK_LOAD_FALLBACK %s", json.dumps({
+            "reason": type(exc).__name__, "detail": str(exc)[:180],
+            "process_local_feedback_retained": True,
+            "execution_gate_changed": False, "order_entry": False,
+        }, separators=(",", ":")))
+
+    before = feedback_store.snapshot(v23._FEEDBACK)
+    result = await _ORIGINAL_GENERATE()
+    after = feedback_store.snapshot(v23._FEEDBACK)
+
+    persisted = 0
+    try:
+        persisted = await feedback_store.merge_feedback_delta(before, after)
+    except Exception as exc:
+        logger.warning("SPORTS_MVE_RFQ_FEEDBACK_PERSIST_FALLBACK %s", json.dumps({
+            "reason": type(exc).__name__, "detail": str(exc)[:180],
+            "process_local_feedback_retained": True,
+            "execution_gate_changed": False, "order_entry": False,
+        }, separators=(",", ":")))
+
+    logger.warning("SPORTS_MVE_RFQ_FEEDBACK_DURABLE %s", json.dumps({
+        "hydrated": hydrated,
+        "durable_signatures_loaded": durable_rows,
+        "signatures_updated_this_cycle": persisted,
+        "in_memory_signatures": len(v23._FEEDBACK),
+        "signature_includes_selected_side": True,
+        "restart_safe_learning": hydrated,
+        "manufacturing_order_only": True,
+        "live_threshold_changed": False,
+        "execution_semantics_changed": False,
+        "order_entry": False,
+    }, separators=(",", ":"), default=str))
+    return result
+
+
 g._candidate_combos = _v29_candidates
+base.generate_mves = _durable_feedback_generate
 
 run = v28.run
 main = v28.main
