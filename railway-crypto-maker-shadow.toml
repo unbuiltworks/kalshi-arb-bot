@@ -1,0 +1,6 @@
+# TEMPORARY reversible production pause for isolated read-only maker-fill simulation.
+# Reason: release Kalshi API capacity for the isolated q=1 basis-risk WS probe.
+# No live order transport or risk logic is changed.
+[deploy]
+startCommand = "python -c \"print('PAUSED: crypto-maker-arb-shadow-v1 to release Kalshi API capacity')\""
+restartPolicyType = "NEVER"
