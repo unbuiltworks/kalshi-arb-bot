@@ -2,21 +2,25 @@
 
 Fetches public venue metadata and prints the matching event/market objects needed
 for settlement-rule review. Gemini is optional so a genuine Kalshi/Polymarket
-pair can be audited without inventing a third leg. No auth or order entry.
+pair can be audited without inventing a third leg. Polymarket discovery is sport-
+generic so NFL/WNBA/etc. can use the same fail-closed audit path as MLB.
+No auth or order entry.
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 from typing import Any, Mapping
 
 import httpx
 
-from src.universal_three_venue_sports import fetch_gemini_mlb, fetch_polymarket_mlb
+from src.universal_three_venue_sports import fetch_gemini_mlb
 
 KALSHI = "https://external-api.kalshi.com/trade-api/v2"
+POLY = "https://gateway.polymarket.us"
 logger = logging.getLogger("kalshi_arb.sports_rule_audit_probe")
 
 
@@ -57,9 +61,37 @@ def _clip(obj: Any, limit: int = 60000) -> str:
     return text if len(text) <= limit else text[:limit] + "...<TRUNCATED>"
 
 
+async def _fetch_polymarket_sports(http: httpx.AsyncClient) -> list[dict[str, Any]]:
+    """Bounded current sports inventory for exact-slug metadata lookup."""
+    now = datetime.now(timezone.utc)
+    horizon = now + timedelta(hours=48)
+    out: list[dict[str, Any]] = []
+    for page in range(12):
+        response = await http.get(
+            f"{POLY}/v1/events",
+            params={
+                "limit": 100,
+                "offset": page * 100,
+                "active": "true",
+                "closed": "false",
+                "categories": "sports",
+                "startTimeMax": horizon.isoformat().replace("+00:00", "Z"),
+                "orderBy": "startTime",
+                "orderDirection": "desc",
+            },
+        )
+        response.raise_for_status()
+        body = response.json() if response.content else {}
+        rows = body.get("events") or [] if isinstance(body, Mapping) else []
+        out.extend(dict(x) for x in rows if isinstance(x, Mapping))
+        if len(rows) < 100:
+            break
+    return out
+
+
 async def run(gemini_symbol: str, poly_slug: str, kalshi_ticker: str) -> None:
     async with httpx.AsyncClient(timeout=30.0) as http:
-        poly_task = fetch_polymarket_mlb(http)
+        poly_task = _fetch_polymarket_sports(http)
         kalshi_task = http.get(f"{KALSHI}/markets/{kalshi_ticker}")
         if gemini_symbol:
             gemini_events, poly_events, k_response = await asyncio.gather(
