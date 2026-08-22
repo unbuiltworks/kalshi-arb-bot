@@ -25,6 +25,7 @@ from typing import Any
 import psycopg
 from psycopg.types.json import Jsonb
 
+from src import gemini_kalshi_basis_risk_marketdata as marketdata
 from src import gemini_kalshi_basis_risk_q1_child as child
 from src import gemini_kalshi_live_service as live_service
 from src import gemini_kalshi_probe_transport as transport
@@ -249,6 +250,7 @@ def install() -> None:
     child.v2.executor.live_probe_authorized = basis_transport_authorized
     transport.live_probe_authorized = basis_transport_authorized
     live_service.live_probe_authorized = basis_transport_authorized
+    marketdata.install()
     logger.warning(
         "CRYPTO_BASIS_RISK_TRANSPORT_AUTH_INSTALLED scope=PROCESS_LOCAL shared_arb_lock_changed=false"
     )
