@@ -36,6 +36,13 @@ def test_no_combo_uses_one_canonical_required_leg_only():
     assert hedges == [{"symbol": "B", "outcome": "NO"}]
 
 
+def test_every_minimal_no_direction_has_exactly_one_hedge():
+    for idx, expected in enumerate(_spec()["active_required_legs"]):
+        outcome, hedges = _direction_hedges(_spec(), f"COMBO_NO_PLUS_REQUIRED_LEG_{idx}")
+        assert outcome == "NO"
+        assert hedges == [{"symbol": expected[0], "outcome": expected[1]}]
+
+
 def test_cover_directions_emit_one_no_cover_per_required_leg():
     covers = _cover_directions(_spec()["active_required_legs"])
     assert [x["name"] for x in covers] == [
