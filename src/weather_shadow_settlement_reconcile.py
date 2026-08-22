@@ -35,14 +35,14 @@ def _normalized_url(value: Any) -> str:
 def _derive_terminal_outcome(
     *, shadow_row: dict[str, Any], settlement: dict[str, Any]
 ) -> tuple[str | None, list[str]]:
-    """Recompute YES/NO from the terminal value and audited contract bracket.
+    """Recompute YES/NO from terminal value and independently audited strike semantics.
 
-    A free-form ``outcome=YES|NO`` plus verification booleans is not enough evidence
-    for realized PAPER P/L. The terminal source value must reproduce the contract
-    outcome from the same strike semantics that were settlement-certified at quote
-    time. For now only the audited bounded ``between`` temperature brackets are
-    accepted here. Tail contracts deliberately fail closed until their exact operator
-    semantics are independently encoded and tested.
+    Bounded ``between`` contracts replay the already-audited floor/cap bounds. Tail
+    contracts deliberately do *not* infer inclusivity from Kalshi ``strike_type`` or a
+    ticker suffix. They are accepted only when the exact-market rule audit preserved a
+    literal comparator and threshold and explicitly marked that comparator audited.
+    This lets lower/upper tails enter later PAPER reconciliation without guessing whether
+    an API field means <, <=, >, or >=.
     """
     blockers: list[str] = []
     if shadow_row.get("settlement_certified_shadow") is not True:
@@ -53,19 +53,38 @@ def _derive_terminal_outcome(
     cap = _decimal(shadow_row.get("cap_strike"))
     terminal_value = _decimal(settlement.get("settlement_value"))
 
-    if strike_type != "between":
-        blockers.append("TERMINAL_STRIKE_SEMANTICS_UNSUPPORTED")
-    if floor is None or cap is None or floor > cap:
-        blockers.append("TERMINAL_BRACKET_BOUNDS_INVALID")
     if terminal_value is None:
         blockers.append("TERMINAL_SETTLEMENT_VALUE_UNVERIFIED")
 
-    if blockers:
-        return None, sorted(set(blockers))
+    if strike_type == "between":
+        if floor is None or cap is None or floor > cap:
+            blockers.append("TERMINAL_BRACKET_BOUNDS_INVALID")
+        if blockers:
+            return None, sorted(set(blockers))
+        return ("YES" if floor <= terminal_value <= cap else "NO"), []
 
-    # ``between`` semantics were already independently audited upstream. Do not infer
-    # them here from a ticker suffix. The reconciler only replays the audited bounds.
-    return ("YES" if floor <= terminal_value <= cap else "NO"), []
+    if strike_type in {"less", "greater"}:
+        if shadow_row.get("terminal_comparator_audited") is not True:
+            blockers.append("TERMINAL_TAIL_COMPARATOR_UNAUDITED")
+        operator = str(shadow_row.get("terminal_operator") or "").strip()
+        threshold = _decimal(shadow_row.get("terminal_threshold"))
+        allowed = {"<", "<="} if strike_type == "less" else {">", ">="}
+        if operator not in allowed:
+            blockers.append("TERMINAL_TAIL_OPERATOR_INVALID")
+        if threshold is None:
+            blockers.append("TERMINAL_TAIL_THRESHOLD_INVALID")
+        if blockers:
+            return None, sorted(set(blockers))
+        comparisons = {
+            "<": terminal_value < threshold,
+            "<=": terminal_value <= threshold,
+            ">": terminal_value > threshold,
+            ">=": terminal_value >= threshold,
+        }
+        return ("YES" if comparisons[operator] else "NO"), []
+
+    blockers.append("TERMINAL_STRIKE_SEMANTICS_UNSUPPORTED")
+    return None, sorted(set(blockers))
 
 
 def reconcile_weather_paper_fill(
@@ -74,23 +93,7 @@ def reconcile_weather_paper_fill(
     paper_fill: dict[str, Any],
     settlement: dict[str, Any],
 ) -> dict[str, Any]:
-    """Return settlement-adjusted paper P/L or fail closed with explicit blockers.
-
-    Required invariants:
-    - the originating row is weather PAPER/SHADOW and never live-ready;
-    - exact market ticker/date match across row, synthetic fill and settlement;
-    - exact-market source provenance was independently verified at quote time;
-    - the settlement provider and terminal source URL equal that exact-market audit;
-    - terminal finality/correction review is explicitly complete;
-    - terminal settlement value reproduces the supplied outcome under the audited
-      bounded bracket semantics;
-    - synthetic fill side, quantity, price and modeled fee are numerically coherent.
-
-    Important: do not use the older Series-regime verification bit here. Around a
-    source transition, the current recurring Series can legitimately disagree with an
-    older exact contract. The hardened exact-market audit is the authority for later
-    paper settlement reconciliation.
-    """
+    """Return settlement-adjusted paper P/L or fail closed with explicit blockers."""
     blockers: list[str] = []
 
     if shadow_row.get("category") != "weather" or shadow_row.get("classification") not in {"PAPER", "SHADOW"}:
