@@ -1,19 +1,30 @@
-"""Bounded q=1 same-Gemini sports combo FOK watcher.
+"""Bounded q=1 same-Gemini sports combo FOK executor, dynamic catalog v2.
 
-Live safety model:
-- NO resting combo orders. Gemini combo quantity increments can be 0.01, so resting
-  q=1 maker orders can partially fill and fail the >=3c guarantee after cent-rounded fees.
-- Watch only already-canonicalized Active combo instruments.
-- A candidate is actionable only after a final concurrent refresh of combo + both exact
-  complement books with <=50ms receive skew and >=3c conservative after-fee lock.
-- First leg is BUY combo YES q=1 LIMIT+FOK at the observed executable ask. FOK must
-  return either 0 or exactly 1 contract; anything else is a hard halt.
-- Only after the combo fully fills do we BUY both exact complements q=1 LIMIT+FOK at
-  their just-observed asks. If either hedge fails, flatten any confirmed positions with
-  supported marketable LIMIT+FOK orders and hard-halt for reconciliation.
-- A completed three-leg fill is FILLED_NOT_SETTLED, never REALIZED here.
+Why FOK only:
+Gemini combo instruments can have quantityMinimum=1 and quantityIncrement=0.01.
+A resting q=1 combo order can therefore partially fill below one contract.  Because
+prediction fees round up to a cent, the 0.01-fill branch cannot preserve our
+>=3c/contract guaranteed floor.  This executor never rests a combo order.
 
-DISARMED unless campaign, arm token, enable flag, and boot deadline all pass.
+Safety model:
+- Discover only Gemini's currently registered Active combo products and canonical
+  required outcomes.  Settled PASS legs are removed; FAIL/ambiguous closed combos
+  are excluded.
+- Evaluate both exact conjunction payout covers for C=AND(A_i):
+    C(YES) + SUM(1-A_i) >= 1
+    C(NO)  + SUM(A_i)   >= 1
+- q=1 only.  Final combo + component books are fetched concurrently and must have
+  q1 depth, <=50ms receive skew, and >=3c conservative after-fee lock.
+- First live send is BUY combo q=1 LIMIT+FOK.  Zero fill costs no hedge capital.
+- Only after an exactly q=1 combo fill are all required component hedges sent as
+  q=1 LIMIT+FOK at the just-certified limit prices.
+- Known hedge failures trigger bounded marketable LIMIT+FOK recovery and immediate
+  reconciliation.  Ambiguous order status hard-halts rather than guessing.
+- A completed cover is FILLED_NOT_SETTLED, never REALIZED here.
+
+The module is DISARMED unless campaign, matching arm token, enable flag and boot
+expiry all pass.  Production service restart policy must remain NEVER when armed,
+and the arm variables should be cleared after the authorized process boots.
 """
 from __future__ import annotations
 
@@ -23,11 +34,16 @@ from decimal import Decimal
 import json
 import os
 import time
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import httpx
 
 import src.gemini_extreme_combo_live_canary as c
+from src.gemini_combo_mm_fok_preflight import (
+    _catalog_specs,
+    _canonical_active_legs,
+    _opposite,
+)
 from src.gemini_kalshi_probe_transport import GeminiTradingSession
 from src.gemini_prediction_auth import private_rest_request
 
@@ -42,46 +58,10 @@ POLL_SECONDS = max(0.25, min(5.0, float(os.getenv("GEMINI_COMBO_FOK_POLL_SECONDS
 WATCH_SECONDS = max(60, min(21600, int(os.getenv("GEMINI_COMBO_FOK_WATCH_SECONDS", "21600"))))
 MAX_ATTEMPTS = max(1, min(20, int(os.getenv("GEMINI_COMBO_FOK_MAX_ATTEMPTS", "5"))))
 MAX_EXECUTED = max(1, min(3, int(os.getenv("GEMINI_COMBO_FOK_MAX_EXECUTED_TRADES", "1"))))
+MAX_ACTIVE_LEGS = max(1, min(6, int(os.getenv("GEMINI_COMBO_FOK_MAX_ACTIVE_LEGS", "6"))))
 MIN_AVAILABLE_USD = D(os.getenv("GEMINI_COMBO_FOK_MIN_AVAILABLE_USD", "1.05"))
-
-CANDIDATES = [
-    {
-        "name": "tottenham_draw_no__nym_chw_over25_yes",
-        "combo": "GEMI-CMB-260823-605EB3AACEDE12F2-CMB",
-        "legs": [("431650", "No"), ("498224", "Yes")],
-        "hedges": [
-            {"symbol": "GEMI-EPL-2608221630-TOT-BRE-M-D", "outcome": "YES"},
-            {"symbol": "GEMI-MLB-2608222310-NYM-CHW-T-O2", "outcome": "NO"},
-        ],
-    },
-    {
-        "name": "tor_mia_over05_yes__chc_sea_over15_yes",
-        "combo": "GEMI-CMB-260823-0C93A84ACACD7C1D-CMB",
-        "legs": [("494125", "Yes"), ("498299", "Yes")],
-        "hedges": [
-            {"symbol": "GEMI-MLS-2608222330-TOR-MIA-REGT-O0", "outcome": "NO"},
-            {"symbol": "GEMI-MLB-2608222315-CHC-SEA-T-O1", "outcome": "NO"},
-        ],
-    },
-    {
-        "name": "clb_by25_no__sea_cin_over05_yes",
-        "combo": "GEMI-CMB-260823-130D47B64F4671DC-CMB",
-        "legs": [("494155", "No"), ("494116", "Yes")],
-        "hedges": [
-            {"symbol": "GEMI-MLS-2608230030-CLB-NSH-REGS-CLB2", "outcome": "YES"},
-            {"symbol": "GEMI-MLS-2608222330-SEA-CIN-REGT-O0", "outcome": "NO"},
-        ],
-    },
-    {
-        "name": "dal_by25_no__chi_nyrb_over05_yes",
-        "combo": "GEMI-CMB-260823-790AAEFA6CECBA1E-CMB",
-        "legs": [("494222", "No"), ("494143", "Yes")],
-        "hedges": [
-            {"symbol": "GEMI-MLS-2608230130-DAL-VAN-REGS-DAL2", "outcome": "YES"},
-            {"symbol": "GEMI-MLS-2608222330-CHI-NYRB-REGT-O0", "outcome": "NO"},
-        ],
-    },
-]
+FINAL_BALANCE_BUFFER = D(os.getenv("GEMINI_COMBO_FOK_FINAL_BALANCE_BUFFER", "0.02"))
+CATALOG_REFRESH_SECONDS = max(60, min(900, int(os.getenv("GEMINI_COMBO_FOK_CATALOG_REFRESH_SECONDS", "300"))))
 
 
 def emit(kind: str, payload: Mapping[str, Any]) -> None:
@@ -100,7 +80,17 @@ def _parse_deadline(raw: str) -> datetime | None:
         return None
 
 
+def _direction_hedges(spec: Mapping[str, Any], direction: str) -> tuple[str, list[dict[str, str]]]:
+    required = [(str(s), str(o).upper()) for s, o in spec.get("active_required_legs") or []]
+    if direction == "COMBO_YES_PLUS_COMPLEMENTS":
+        return "YES", [{"symbol": s, "outcome": _opposite(o)} for s, o in required]
+    if direction == "COMBO_NO_PLUS_SELECTED":
+        return "NO", [{"symbol": s, "outcome": o} for s, o in required]
+    raise ValueError(f"unsupported direction {direction}")
+
+
 def _outcome_bid(book: Mapping[str, Any], outcome: str) -> tuple[D, D] | None:
+    outcome = outcome.upper()
     if outcome == "YES":
         bids = [z for z in (c._level(x) for x in (book.get("bids") or [])) if z]
         return max(bids, key=lambda z: z[0]) if bids else None
@@ -113,14 +103,21 @@ def _outcome_bid(book: Mapping[str, Any], outcome: str) -> tuple[D, D] | None:
     return None
 
 
-async def _book(http: httpx.AsyncClient, symbol: str) -> tuple[int, dict[str, Any], int]:
-    r = await http.get(f"{BASE}/v1/book/{symbol}", params={"limit_bids": 50, "limit_asks": 50})
-    received = time.perf_counter_ns()
+async def _json_get(http: httpx.AsyncClient, url: str, *, params: Mapping[str, Any] | None = None) -> tuple[int, dict[str, Any]]:
     try:
-        body = r.json()
+        r = await http.get(url, params=params)
+        try:
+            body = r.json()
+        except Exception:
+            body = {}
+        return r.status_code, body if isinstance(body, Mapping) else {}
     except Exception:
-        body = {}
-    return r.status_code, body if isinstance(body, Mapping) else {}, received
+        return 0, {}
+
+
+async def _book(http: httpx.AsyncClient, symbol: str) -> tuple[int, dict[str, Any], int]:
+    status, body = await _json_get(http, f"{BASE}/v1/book/{symbol}", params={"limit_bids": 50, "limit_asks": 50})
+    return status, body, time.perf_counter_ns()
 
 
 async def _available_usd() -> tuple[int, D]:
@@ -145,7 +142,7 @@ async def _relevant_positions(symbols: set[str]) -> tuple[int, list[dict[str, An
     except Exception:
         body = {}
     rows = body.get("positions", []) if isinstance(body, Mapping) else []
-    out = []
+    out: list[dict[str, Any]] = []
     for row in rows or []:
         if not isinstance(row, Mapping):
             continue
@@ -160,7 +157,10 @@ async def _active_orders_for_symbols(symbols: set[str]) -> tuple[bool, list[dict
     out: list[dict[str, Any]] = []
     ok = True
     for sym in sorted(symbols):
-        r = await private_rest_request("POST", "/v1/prediction-markets/orders/active", params={"symbol": sym, "limit": 100, "offset": 0}, timeout=5.0)
+        r = await private_rest_request(
+            "POST", "/v1/prediction-markets/orders/active",
+            params={"symbol": sym, "limit": 100, "offset": 0}, timeout=5.0,
+        )
         if r.status_code != 200:
             ok = False
             continue
@@ -184,16 +184,16 @@ def _grid_legal_for_q1(contract: Mapping[str, Any]) -> bool:
     if qmin > QTY:
         return False
     units = QTY / qinc
-    return units == units.to_integral_value() and str(contract.get("marketState") or "").lower() == "open" and str(contract.get("status") or "").lower() == "active"
+    return (
+        units == units.to_integral_value()
+        and str(contract.get("marketState") or "").lower() == "open"
+        and str(contract.get("status") or "").lower() == "active"
+    )
 
 
 async def _event_contract(http: httpx.AsyncClient, event_ticker: str, symbol: str) -> dict[str, Any] | None:
-    r = await http.get(f"{BASE}/v1/prediction-markets/events/{event_ticker}")
-    if r.status_code != 200:
-        return None
-    try:
-        body = r.json()
-    except Exception:
+    status, body = await _json_get(http, f"{BASE}/v1/prediction-markets/events/{event_ticker}")
+    if status != 200:
         return None
     for row in body.get("contracts", []) if isinstance(body, Mapping) else []:
         if isinstance(row, Mapping) and str(row.get("instrumentSymbol") or "") == symbol:
@@ -201,66 +201,83 @@ async def _event_contract(http: httpx.AsyncClient, event_ticker: str, symbol: st
     return None
 
 
-async def _certify_candidate(http: httpx.AsyncClient, spec: Mapping[str, Any]) -> dict[str, Any]:
-    r = await http.get(f"{BASE}/v1/prediction-markets/combos/{spec['combo']}")
-    try:
-        body = r.json()
-    except Exception:
-        body = {}
-    result: dict[str, Any] = {"combo": spec["combo"], "http": r.status_code, "pass": False}
-    if r.status_code != 200 or not isinstance(body, Mapping):
-        result["reason"] = "COMBO_METADATA_UNAVAILABLE"
-        return result
-    contract = body.get("contract", {}) if isinstance(body.get("contract"), Mapping) else {}
-    if str(contract.get("contractStatus") or "").lower() != "active":
-        result["reason"] = "COMBO_NOT_ACTIVE"
-        return result
-    actual: set[tuple[str, str]] = set()
-    for leg in body.get("legs", []) if isinstance(body.get("legs"), list) else []:
-        if not isinstance(leg, Mapping):
+async def _load_candidates(http: httpx.AsyncClient) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    meta, raw = await _catalog_specs(http)
+    candidates: list[dict[str, Any]] = []
+    for spec in raw:
+        active = list(spec.get("active_required_legs") or [])
+        if spec.get("blocker") or not active or len(active) > MAX_ACTIVE_LEGS:
             continue
-        cid = str(leg.get("contractId") or (leg.get("contract", {}) if isinstance(leg.get("contract"), Mapping) else {}).get("contractId") or "")
-        required = str(leg.get("requiredOutcome") or leg.get("outcome") or "").strip().title()
-        actual.add((cid, required))
-    expected = {(str(cid), str(outcome).title()) for cid, outcome in spec["legs"]}
-    result["actual_legs"] = sorted(actual)
-    result["expected_legs"] = sorted(expected)
+        candidates.append(spec)
+    return meta, candidates
+
+
+async def _certify_dynamic_candidate(http: httpx.AsyncClient, spec: Mapping[str, Any]) -> dict[str, Any]:
+    combo = str(spec["combo"])
+    status, body = await _json_get(http, f"{BASE}/v1/prediction-markets/combos/{combo}")
+    out: dict[str, Any] = {"combo": combo, "http": status, "pass": False}
+    if status != 200:
+        out["reason"] = "COMBO_METADATA_UNAVAILABLE"
+        return out
+    contract = body.get("contract") if isinstance(body.get("contract"), Mapping) else {}
+    if str(contract.get("contractStatus") or "").lower() != "active":
+        out["reason"] = "COMBO_NOT_ACTIVE"
+        return out
+
+    active, blocker, audit = _canonical_active_legs(body)
+    out["canonical_legs"] = audit
+    if blocker:
+        out["reason"] = blocker
+        return out
+    expected = [(str(s), str(o).upper()) for s, o in spec.get("active_required_legs") or []]
+    actual = [(str(s), str(o).upper()) for s, o in active]
     if actual != expected:
-        result["reason"] = "CANONICAL_LEG_DIRECTION_MISMATCH"
-        return result
-    event_ticker = str(contract.get("eventTicker") or "")
-    combo_grid = await _event_contract(http, event_ticker, str(spec["combo"])) if event_ticker else None
+        out["reason"] = "ACTIVE_CANONICAL_LEGS_CHANGED"
+        out["expected_active"] = expected
+        out["actual_active"] = actual
+        return out
+    if not actual or len(actual) > MAX_ACTIVE_LEGS:
+        out["reason"] = "ACTIVE_LEG_COUNT_OUT_OF_BOUNDS"
+        return out
+
+    event_ticker = str(contract.get("eventTicker") or contract.get("parentEventTicker") or "")
+    combo_grid = await _event_contract(http, event_ticker, combo) if event_ticker else None
     if combo_grid is None or not _grid_legal_for_q1(combo_grid):
-        result["reason"] = "COMBO_Q1_GRID_NOT_LIVE"
-        return result
-    hedge_grid = []
-    legs_by_symbol = {}
+        out["reason"] = "COMBO_Q1_GRID_NOT_LIVE"
+        return out
+
+    contract_by_symbol: dict[str, Mapping[str, Any]] = {}
     for leg in body.get("legs", []) if isinstance(body.get("legs"), list) else []:
-        if isinstance(leg, Mapping) and isinstance(leg.get("contract"), Mapping):
-            lc = leg["contract"]
-            legs_by_symbol[str(lc.get("instrumentSymbol") or "")] = lc
-    for hedge in spec["hedges"]:
-        sym = str(hedge["symbol"])
-        lc = legs_by_symbol.get(sym)
+        lc = leg.get("contract") if isinstance(leg, Mapping) and isinstance(leg.get("contract"), Mapping) else None
+        if lc is not None:
+            contract_by_symbol[str(lc.get("instrumentSymbol") or "")] = lc
+
+    grids = []
+    for symbol, _outcome in actual:
+        lc = contract_by_symbol.get(symbol)
         if lc is None:
-            result["reason"] = "HEDGE_SYMBOL_NOT_CANONICAL_COMPONENT"
-            return result
-        event = str(lc.get("eventTicker") or "")
-        grid = await _event_contract(http, event, sym) if event else None
-        hedge_grid.append({"symbol": sym, "grid_ok": bool(grid and _grid_legal_for_q1(grid))})
-        if grid is None or not _grid_legal_for_q1(grid):
-            result["reason"] = "HEDGE_Q1_GRID_NOT_LIVE"
-            result["hedge_grid"] = hedge_grid
-            return result
-    result.update({"pass": True, "reason": "SAME_GEMINI_CANONICAL_PRODUCT_PLUS_EXACT_COMPONENT_COMPLEMENTS", "hedge_grid": hedge_grid})
-    return result
+            out["reason"] = "ACTIVE_COMPONENT_NOT_IN_CANONICAL_COMBO"
+            return out
+        ticker = str(lc.get("eventTicker") or lc.get("parentEventTicker") or "")
+        grid = await _event_contract(http, ticker, symbol) if ticker else None
+        ok = bool(grid and _grid_legal_for_q1(grid))
+        grids.append({"symbol": symbol, "grid_ok": ok})
+        if not ok:
+            out["reason"] = "ACTIVE_COMPONENT_Q1_GRID_NOT_LIVE"
+            out["component_grids"] = grids
+            return out
+
+    out.update({
+        "pass": True,
+        "reason": "SAME_GEMINI_CANONICAL_CONJUNCTION_PLUS_EXACT_COMPONENTS",
+        "active_required_legs": actual,
+        "component_grids": grids,
+    })
+    return out
 
 
-async def _boot_preflight(campaign: str) -> dict[str, Any]:
-    symbols = {str(x["combo"]) for x in CANDIDATES}
-    for spec in CANDIDATES:
-        symbols.update(str(x["symbol"]) for x in spec["hedges"])
-    out: dict[str, Any] = {"pass": False, "campaign": campaign}
+async def _boot_preflight(campaign: str, candidates: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    out: dict[str, Any] = {"pass": False, "campaign": campaign, "candidate_count": len(candidates)}
     terms = await private_rest_request("GET", "/v1/prediction-markets/terms/status", timeout=5.0)
     try:
         tb = terms.json()
@@ -271,36 +288,39 @@ async def _boot_preflight(campaign: str) -> dict[str, Any]:
     balance_http, usd = await _available_usd()
     out["balance_http"] = balance_http
     out["usd_available"] = str(usd)
-    positions_http, positions = await _relevant_positions(symbols)
+
+    symbols = {str(x["combo"]) for x in candidates}
+    for spec in candidates:
+        symbols.update(str(x[0]) for x in spec.get("active_required_legs") or [])
+    positions_http, positions = await _relevant_positions(symbols) if symbols else (200, [])
     out["positions_http"] = positions_http
     out["relevant_position_count"] = len(positions)
-    active_ok, active = await _active_orders_for_symbols(symbols)
+    active_ok, active_orders = await _active_orders_for_symbols(symbols) if symbols else (True, [])
     out["active_order_scan_ok"] = active_ok
-    out["relevant_active_order_count"] = len(active)
-    async with httpx.AsyncClient(timeout=8.0) as http:
-        certs = [await _certify_candidate(http, spec) for spec in CANDIDATES]
-    out["certifications"] = certs
-    out["certified_count"] = sum(1 for x in certs if x.get("pass"))
+    out["relevant_active_order_count"] = len(active_orders)
     out["pass"] = bool(
-        out["terms_accepted"] and balance_http == 200 and usd >= MIN_AVAILABLE_USD
-        and positions_http == 200 and not positions and active_ok and not active
-        and out["certified_count"] == len(CANDIDATES)
+        candidates
+        and out["terms_accepted"]
+        and balance_http == 200 and usd >= MIN_AVAILABLE_USD
+        and positions_http == 200 and not positions
+        and active_ok and not active_orders
     )
     return out
 
 
-async def _fresh_economics(http: httpx.AsyncClient, spec: Mapping[str, Any]) -> dict[str, Any]:
-    symbols = [str(spec["combo"]), *(str(x["symbol"]) for x in spec["hedges"])]
+async def _fresh_economics(http: httpx.AsyncClient, spec: Mapping[str, Any], direction: str) -> dict[str, Any]:
+    combo_outcome, hedge_specs = _direction_hedges(spec, direction)
+    symbols = [str(spec["combo"]), *(x["symbol"] for x in hedge_specs)]
     rows = await asyncio.gather(*(_book(http, sym) for sym in symbols))
     received = [x[2] for x in rows]
     skew_ms = D(max(received) - min(received)) / D("1000000") if received else D("999999")
     combo_http, combo_book, _ = rows[0]
-    combo_top = c._outcome_ask(combo_book, "YES")
-    hedge_rows = []
+    combo_top = c._outcome_ask(combo_book, combo_outcome)
+    hedge_rows: list[dict[str, Any]] = []
     hedge_all_in = D("0")
     hedge_ok = True
-    for hedge, (status, book, _) in zip(spec["hedges"], rows[1:]):
-        top = c._outcome_ask(book, str(hedge["outcome"]))
+    for hedge, (status, book, _) in zip(hedge_specs, rows[1:]):
+        top = c._outcome_ask(book, hedge["outcome"])
         row: dict[str, Any] = {"symbol": hedge["symbol"], "outcome": hedge["outcome"], "http": status}
         if status != 200 or top is None:
             row["available"] = False
@@ -313,13 +333,15 @@ async def _fresh_economics(http: httpx.AsyncClient, spec: Mapping[str, Any]) -> 
             if depth < QTY:
                 hedge_ok = False
         hedge_rows.append(row)
+
     out: dict[str, Any] = {
-        "candidate": spec["name"], "combo": spec["combo"], "combo_http": combo_http,
+        "candidate": str(spec.get("name") or ""), "combo": str(spec["combo"]),
+        "direction": direction, "combo_outcome": combo_outcome, "combo_http": combo_http,
         "quote_skew_ms": str(skew_ms), "hedges": hedge_rows, "hedge_all_in": str(hedge_all_in),
         "pass": False,
     }
     if combo_http != 200 or combo_top is None or not hedge_ok or skew_ms > MAX_FINAL_SKEW_MS:
-        out["reason"] = "NO_FRESH_EXECUTABLE_THREE_LEG_BOOK"
+        out["reason"] = "NO_FRESH_EXECUTABLE_COVER_BOOK"
         return out
     cp, cd = combo_top
     combo_fee = c._fee(TAKER, cp, QTY)
@@ -341,32 +363,58 @@ async def _send_pushover(title: str, message: str, priority: int = 0) -> bool:
         return False
     try:
         async with httpx.AsyncClient(timeout=5.0) as h:
-            r = await h.post("https://api.pushover.net/1/messages.json", data={"user": user, "token": token, "title": title[:250], "message": message[:1024], "priority": str(priority)})
+            r = await h.post(
+                "https://api.pushover.net/1/messages.json",
+                data={"user": user, "token": token, "title": title[:250], "message": message[:1024], "priority": str(priority)},
+            )
         return r.status_code == 200
     except Exception:
         return False
 
 
-async def _sell_outcome_fok(session: GeminiTradingSession, http: httpx.AsyncClient, *, symbol: str, outcome: str, client_id: str) -> dict[str, Any]:
+async def _sell_outcome_fok(
+    session: GeminiTradingSession,
+    http: httpx.AsyncClient,
+    *, symbol: str, outcome: str, quantity: D, client_id: str,
+) -> dict[str, Any]:
+    if quantity <= 0:
+        return {"status": "FLATTEN_NOT_NEEDED", "symbol": symbol, "outcome": outcome, "quantity": str(quantity)}
     status, book, _ = await _book(http, symbol)
     bid = _outcome_bid(book, outcome) if status == 200 else None
-    if bid is None or bid[1] < QTY:
-        return {"status": "FLATTEN_NO_Q1_BID", "symbol": symbol, "outcome": outcome}
+    if bid is None or bid[1] < quantity:
+        return {"status": "FLATTEN_NO_DEPTH", "symbol": symbol, "outcome": outcome, "quantity": str(quantity)}
     p, depth = bid
-    params = {"symbol": symbol, "side": "SELL", "type": "LIMIT", "timeInForce": "FOK", "price": str(p), "quantity": "1", "eventOutcome": outcome, "clientOrderId": client_id[:36]}
+    params = {
+        "symbol": symbol, "side": "SELL", "type": "LIMIT", "timeInForce": "FOK",
+        "price": str(p), "quantity": str(quantity), "eventOutcome": outcome,
+        "clientOrderId": client_id[:36],
+    }
     result = await session.place_fok(params, terminal_timeout=3.0)
-    return {"status": "FLATTEN_ATTEMPT", "symbol": symbol, "outcome": outcome, "bid": str(p), "depth": str(depth), "result": result.as_dict()}
+    return {
+        "status": "FLATTEN_ATTEMPT", "symbol": symbol, "outcome": outcome,
+        "quantity": str(quantity), "bid": str(p), "depth": str(depth), "result": result.as_dict(),
+    }
 
 
-async def _execute_candidate(session: GeminiTradingSession, http: httpx.AsyncClient, spec: Mapping[str, Any], econ: Mapping[str, Any], *, campaign: str, attempt: int) -> dict[str, Any]:
+async def _execute_candidate(
+    session: GeminiTradingSession,
+    http: httpx.AsyncClient,
+    spec: Mapping[str, Any],
+    econ: Mapping[str, Any],
+    *, campaign: str, attempt: int,
+) -> dict[str, Any]:
     cid_base = f"{campaign}-{attempt}"
+    combo_outcome = str(econ["combo_outcome"])
     combo_params = {
         "symbol": spec["combo"], "side": "BUY", "type": "LIMIT", "timeInForce": "FOK",
-        "price": str(econ["combo_ask"]), "quantity": "1", "eventOutcome": "YES",
+        "price": str(econ["combo_ask"]), "quantity": "1", "eventOutcome": combo_outcome,
         "clientOrderId": f"{cid_base}-c"[:36],
     }
     combo = await session.place_fok(combo_params, terminal_timeout=3.0)
-    out: dict[str, Any] = {"candidate": spec["name"], "economics": dict(econ), "combo": combo.as_dict(), "classification": "ATTEMPTED"}
+    out: dict[str, Any] = {
+        "candidate": str(spec.get("name") or ""), "direction": econ["direction"],
+        "economics": dict(econ), "combo": combo.as_dict(), "classification": "ATTEMPTED",
+    }
     cq = c._d(combo.filled_quantity) or D("0")
     if combo.status == "UNKNOWN":
         out["classification"] = "LIVE_HARD_HALT_AMBIGUOUS_COMBO"
@@ -375,35 +423,73 @@ async def _execute_candidate(session: GeminiTradingSession, http: httpx.AsyncCli
         out["classification"] = "COMBO_FOK_NO_FILL_ZERO_HEDGE_COST"
         return out
     if combo.status != "FILLED" or cq != QTY:
-        out["classification"] = "LIVE_HARD_HALT_UNEXPECTED_PARTIAL_FOK"
+        out["recovery"] = [await _sell_outcome_fok(
+            session, http, symbol=str(spec["combo"]), outcome=combo_outcome,
+            quantity=cq, client_id=f"{cid_base}-fc",
+        )]
+        out["classification"] = "LIVE_HARD_HALT_UNEXPECTED_PARTIAL_FOK_RECOVERY_ATTEMPTED"
         return out
 
-    # The final refresh price is the maximum allowed hedge price. If either hedge moved
-    # worse, FOK cancels instead of silently spending the guaranteed edge.
     hedge_params = []
-    for idx, (hedge, hrow) in enumerate(zip(spec["hedges"], econ["hedges"]), start=1):
+    for idx, hrow in enumerate(econ.get("hedges") or [], start=1):
         hedge_params.append({
-            "symbol": hedge["symbol"], "side": "BUY", "type": "LIMIT", "timeInForce": "FOK",
-            "price": str(hrow["ask"]), "quantity": "1", "eventOutcome": hedge["outcome"],
+            "symbol": hrow["symbol"], "side": "BUY", "type": "LIMIT", "timeInForce": "FOK",
+            "price": str(hrow["ask"]), "quantity": "1", "eventOutcome": hrow["outcome"],
             "clientOrderId": f"{cid_base}-h{idx}"[:36],
         })
-    h1, h2 = await asyncio.gather(session.place_fok(hedge_params[0], terminal_timeout=3.0), session.place_fok(hedge_params[1], terminal_timeout=3.0))
-    out["hedges"] = [h1.as_dict(), h2.as_dict()]
-    ok = [x.status == "FILLED" and (c._d(x.filled_quantity) or D("0")) == QTY for x in (h1, h2)]
-    if all(ok):
-        out["classification"] = "FILLED_NOT_SETTLED"
-        await _send_pushover("Sports arb filled — awaiting settlement", f"{spec['name']}\nGemini same-venue q1 combo + exact complements filled.\nModeled lock before execution: ${econ['locked']}\nClassification: FILLED_NOT_SETTLED", 0)
+    hedge_results = await asyncio.gather(*(session.place_fok(x, terminal_timeout=3.0) for x in hedge_params))
+    out["hedges"] = [x.as_dict() for x in hedge_results]
+
+    unknown = any(x.status == "UNKNOWN" for x in hedge_results)
+    if unknown:
+        out["classification"] = "LIVE_HARD_HALT_AMBIGUOUS_HEDGE_MANUAL_RECONCILE"
+        await _send_pushover(
+            "Sports arb hard halt",
+            f"{spec.get('name') or spec['combo']} combo filled but a hedge is ambiguous. Manual reconciliation required.", 1,
+        )
         return out
 
-    # Recovery after any hedge failure. Flatten confirmed hedge fills first, then combo.
+    filled_qty = [(c._d(x.filled_quantity) or D("0")) for x in hedge_results]
+    fully_filled = [x.status == "FILLED" and q == QTY for x, q in zip(hedge_results, filled_qty)]
+    if all(fully_filled):
+        out["classification"] = "FILLED_NOT_SETTLED"
+        await _send_pushover(
+            "Sports arb filled — awaiting settlement",
+            f"{spec.get('name') or spec['combo']}\nGemini q1 combo + exact component cover filled.\nModeled lock before execution: ${econ['locked']}\nClassification: FILLED_NOT_SETTLED",
+            0,
+        )
+        return out
+
     recovery = []
-    for idx, (filled, hedge) in enumerate(zip(ok, spec["hedges"]), start=1):
-        if filled:
-            recovery.append(await _sell_outcome_fok(session, http, symbol=str(hedge["symbol"]), outcome=str(hedge["outcome"]), client_id=f"{cid_base}-fh{idx}"))
-    recovery.append(await _sell_outcome_fok(session, http, symbol=str(spec["combo"]), outcome="YES", client_id=f"{cid_base}-fc"))
+    for idx, (q, hrow) in enumerate(zip(filled_qty, econ.get("hedges") or []), start=1):
+        if q > 0:
+            recovery.append(await _sell_outcome_fok(
+                session, http, symbol=str(hrow["symbol"]), outcome=str(hrow["outcome"]),
+                quantity=q, client_id=f"{cid_base}-fh{idx}",
+            ))
+    recovery.append(await _sell_outcome_fok(
+        session, http, symbol=str(spec["combo"]), outcome=combo_outcome,
+        quantity=QTY, client_id=f"{cid_base}-fc",
+    ))
     out["recovery"] = recovery
-    out["classification"] = "LIVE_HARD_HALT_HEDGE_FAILURE_RECOVERY_ATTEMPTED"
-    await _send_pushover("Sports arb hard halt", f"{spec['name']} combo filled but a hedge failed. Recovery attempted; manual reconciliation required.", 1)
+
+    symbols = {str(spec["combo"]), *(str(x["symbol"]) for x in econ.get("hedges") or [])}
+    ph, positions = await _relevant_positions(symbols)
+    active_ok, active = await _active_orders_for_symbols(symbols)
+    out["post_recovery_positions_http"] = ph
+    out["post_recovery_position_count"] = len(positions)
+    out["post_recovery_active_scan_ok"] = active_ok
+    out["post_recovery_active_order_count"] = len(active)
+    out["classification"] = (
+        "LIVE_HARD_HALT_HEDGE_FAILURE_RECOVERED_FLAT"
+        if ph == 200 and not positions and active_ok and not active
+        else "LIVE_HARD_HALT_HEDGE_FAILURE_RECOVERY_UNRESOLVED"
+    )
+    await _send_pushover(
+        "Sports arb hard halt",
+        f"{spec.get('name') or spec['combo']} combo filled but a hedge failed. Recovery attempted; classification {out['classification']}.",
+        1,
+    )
     return out
 
 
@@ -414,20 +500,25 @@ async def run() -> dict[str, Any]:
     deadline = _parse_deadline(os.getenv("GEMINI_COMBO_FOK_ARM_NOT_AFTER_UTC", ""))
     deadline_ok = bool(deadline and datetime.now(timezone.utc) <= deadline)
     armed = bool(enabled and campaign and arm == campaign and deadline_ok)
-    preflight = await _boot_preflight(campaign)
+
+    async with httpx.AsyncClient(timeout=12.0) as public_http:
+        catalog, candidates = await _load_candidates(public_http)
+    preflight = await _boot_preflight(campaign, candidates)
     out: dict[str, Any] = {
-        "status": "GEMINI_COMBO_MM_FOK_LIVE_V1", "campaign": campaign, "armed": armed,
-        "deadline_ok": deadline_ok, "preflight": preflight, "target_locked": str(TARGET),
-        "max_final_skew_ms": str(MAX_FINAL_SKEW_MS), "max_attempts": MAX_ATTEMPTS,
-        "max_executed_trades": MAX_EXECUTED, "order_entry": False, "realized": False,
+        "status": "GEMINI_COMBO_MM_FOK_LIVE_V2", "campaign": campaign, "armed": armed,
+        "deadline_ok": deadline_ok, "catalog": catalog, "preflight": preflight,
+        "target_locked": str(TARGET), "max_final_skew_ms": str(MAX_FINAL_SKEW_MS),
+        "max_attempts": MAX_ATTEMPTS, "max_executed_trades": MAX_EXECUTED,
+        "candidate_count": len(candidates), "order_entry": False, "realized": False,
+        "resting_combo_orders": False,
     }
     if not armed:
         out["classification"] = "DISARMED_PREFLIGHT_PASS" if preflight.get("pass") else "DISARMED_PREFLIGHT_BLOCKED"
-        emit("GEMINI_COMBO_MM_FOK_LIVE_V1", out)
+        emit("GEMINI_COMBO_MM_FOK_LIVE_V2", out)
         return out
     if not preflight.get("pass"):
         out["classification"] = "LIVE_GATE_BLOCKED"
-        emit("GEMINI_COMBO_MM_FOK_LIVE_V1", out)
+        emit("GEMINI_COMBO_MM_FOK_LIVE_V2", out)
         return out
 
     session = GeminiTradingSession()
@@ -435,35 +526,62 @@ async def run() -> dict[str, Any]:
     attempts = executed = 0
     started = time.monotonic()
     last_heartbeat = 0.0
+    last_catalog_refresh = time.monotonic()
     try:
         await session.connect()
-        async with httpx.AsyncClient(timeout=5.0) as http:
+        async with httpx.AsyncClient(timeout=6.0) as http:
             while time.monotonic() - started < WATCH_SECONDS and attempts < MAX_ATTEMPTS and executed < MAX_EXECUTED:
-                # Cheap discovery: poll only four combo books. Hedge books are fetched only
-                # after a real q1 combo YES ask exists.
-                combo_rows = await asyncio.gather(*(_book(http, str(spec["combo"])) for spec in CANDIDATES))
-                potential = []
-                for spec, (status, book, _) in zip(CANDIDATES, combo_rows):
-                    top = c._outcome_ask(book, "YES") if status == 200 else None
-                    if top is not None and top[1] >= QTY:
-                        potential.append((spec, top[0]))
-                potential.sort(key=lambda x: x[1])
-                for spec, _ in potential:
-                    econ = await _fresh_economics(http, spec)
+                if time.monotonic() - last_catalog_refresh >= CATALOG_REFRESH_SECONDS:
+                    catalog, candidates = await _load_candidates(http)
+                    last_catalog_refresh = time.monotonic()
+
+                potential: list[tuple[D, Mapping[str, Any], str]] = []
+                combo_rows = await asyncio.gather(*(_book(http, str(spec["combo"])) for spec in candidates))
+                for spec, (status, book, _) in zip(candidates, combo_rows):
+                    if status != 200:
+                        continue
+                    for direction, outcome in (("COMBO_YES_PLUS_COMPLEMENTS", "YES"), ("COMBO_NO_PLUS_SELECTED", "NO")):
+                        top = c._outcome_ask(book, outcome)
+                        if top is not None and top[1] >= QTY:
+                            potential.append((top[0], spec, direction))
+                potential.sort(key=lambda x: x[0])
+
+                for _combo_price, spec, direction in potential:
+                    econ = await _fresh_economics(http, spec, direction)
                     if not econ.get("pass"):
                         continue
-                    # Final account guard immediately before the first live send.
-                    symbols = {str(spec["combo"]), *(str(x["symbol"]) for x in spec["hedges"])}
+                    cert = await _certify_dynamic_candidate(http, spec)
+                    if not cert.get("pass"):
+                        emit("GEMINI_COMBO_MM_FOK_CERT_CHANGED", {"candidate": spec.get("name"), "direction": direction, "certification": cert, "order_entry": False})
+                        continue
+
+                    symbols = {str(spec["combo"]), *(str(x["symbol"]) for x in econ.get("hedges") or [])}
                     ph, pos = await _relevant_positions(symbols)
                     active_ok, active = await _active_orders_for_symbols(symbols)
-                    if ph != 200 or pos or not active_ok or active:
-                        out["classification"] = "LIVE_HARD_HALT_ACCOUNT_STATE_CHANGED"
+                    bh, usd = await _available_usd()
+                    required_cash = D(str(econ["all_in"])) + FINAL_BALANCE_BUFFER
+                    if ph != 200 or pos or not active_ok or active or bh != 200 or usd < required_cash:
+                        out["classification"] = "LIVE_HARD_HALT_ACCOUNT_OR_CAPITAL_STATE_CHANGED"
                         out["final_positions_count"] = len(pos)
                         out["final_active_orders_count"] = len(active)
-                        emit("GEMINI_COMBO_MM_FOK_LIVE_V1", out)
+                        out["final_balance_http"] = bh
+                        out["final_available_usd"] = str(usd)
+                        out["required_cash_with_buffer"] = str(required_cash)
+                        emit("GEMINI_COMBO_MM_FOK_LIVE_V2", out)
                         return out
+
+                    # Re-run the <=50ms economics check after metadata/account calls so the
+                    # order prices are the final observations immediately before send.
+                    econ = await _fresh_economics(http, spec, direction)
+                    if not econ.get("pass"):
+                        continue
+
                     attempts += 1
-                    emit("GEMINI_COMBO_MM_FOK_EXECUTABLE", {"campaign": campaign, "attempt": attempts, "candidate": spec["name"], "economics": econ, "classification": "EXECUTABLE", "realized": False})
+                    emit("GEMINI_COMBO_MM_FOK_EXECUTABLE", {
+                        "campaign": campaign, "attempt": attempts, "candidate": spec.get("name"),
+                        "direction": direction, "economics": econ, "classification": "EXECUTABLE",
+                        "realized": False,
+                    })
                     result = await _execute_candidate(session, http, spec, econ, campaign=campaign, attempt=attempts)
                     emit("GEMINI_COMBO_MM_FOK_ATTEMPT", {"campaign": campaign, "attempt": attempts, **result, "realized": False})
                     if result.get("classification") == "FILLED_NOT_SETTLED":
@@ -472,10 +590,16 @@ async def run() -> dict[str, Any]:
                     if str(result.get("classification") or "").startswith("LIVE_HARD_HALT"):
                         out["classification"] = result["classification"]
                         out["last_attempt"] = result
+                        emit("GEMINI_COMBO_MM_FOK_LIVE_V2", out)
                         return out
+
                 now = time.monotonic()
                 if now - last_heartbeat >= 60:
-                    emit("GEMINI_COMBO_MM_FOK_HEARTBEAT", {"campaign": campaign, "seconds_alive": round(now - started, 1), "potential_combo_asks": len(potential), "attempts": attempts, "executed": executed, "order_entry": True, "realized": False})
+                    emit("GEMINI_COMBO_MM_FOK_HEARTBEAT", {
+                        "campaign": campaign, "seconds_alive": round(now - started, 1),
+                        "candidate_count": len(candidates), "potential_combo_sides": len(potential),
+                        "attempts": attempts, "executed": executed, "order_entry": True, "realized": False,
+                    })
                     last_heartbeat = now
                 if executed >= MAX_EXECUTED or attempts >= MAX_ATTEMPTS:
                     break
@@ -485,8 +609,11 @@ async def run() -> dict[str, Any]:
 
     out["attempts"] = attempts
     out["executed"] = executed
-    out["classification"] = "FILLED_NOT_SETTLED" if executed else ("WATCH_ATTEMPT_CAP_REACHED_NO_EXECUTION" if attempts >= MAX_ATTEMPTS else "WATCH_WINDOW_ENDED_NO_EXECUTION")
-    emit("GEMINI_COMBO_MM_FOK_LIVE_V1", out)
+    out["classification"] = (
+        "FILLED_NOT_SETTLED" if executed
+        else ("WATCH_ATTEMPT_CAP_REACHED_NO_EXECUTION" if attempts >= MAX_ATTEMPTS else "WATCH_WINDOW_ENDED_NO_EXECUTION")
+    )
+    emit("GEMINI_COMBO_MM_FOK_LIVE_V2", out)
     return out
 
 
