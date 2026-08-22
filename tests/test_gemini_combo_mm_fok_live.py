@@ -1,4 +1,4 @@
-from decimal import Decimal as D
+import pytest
 
 from src.gemini_combo_mm_fok_live_v1 import _direction_hedges, _grid_legal_for_q1
 
@@ -32,6 +32,11 @@ def test_no_combo_uses_selected_required_outcomes():
         {"symbol": "B", "outcome": "NO"},
         {"symbol": "C", "outcome": "YES"},
     ]
+
+
+def test_unknown_direction_fails_closed():
+    with pytest.raises(ValueError):
+        _direction_hedges(_spec(), "NOT_A_REAL_DIRECTION")
 
 
 def test_q1_is_legal_on_fractional_increment_for_fok():
