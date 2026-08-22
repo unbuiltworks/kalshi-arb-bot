@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+import pytest
+
 from src.cross_venue_ledger import LedgerEvent, make_event
 from src.weather_certified_settlement_ledger_v3 import (
     ledger_event_from_weather_reconciliation_v3,
@@ -131,8 +133,6 @@ def test_v2_digest_shape_is_not_accepted_by_v3():
 
 
 def test_unofficial_source_cannot_generate_v3_certified_event():
-    import pytest
-
     with pytest.raises(ValueError):
         ledger_event_from_weather_reconciliation_v3(
             reconciliation=_reconciled(settlement_source_url="https://example.com/kalshi"),
@@ -143,11 +143,11 @@ def test_unofficial_source_cannot_generate_v3_certified_event():
         )
 
 
-def test_nws_source_is_supported_for_historical_regime():
+def test_nws_cli_source_is_supported_for_historical_regime():
     event = ledger_event_from_weather_reconciliation_v3(
         reconciliation=_reconciled(
             settlement_source_provider="NWS",
-            settlement_source_url="https://www.weather.gov/wrh/Climate?wfo=mfl",
+            settlement_source_url="https://forecast.weather.gov/product.php?site=NWS&product=CLI&issuedby=MIA",
         ),
         trade_group_id="g1",
         settlement_key="weather:KXHIGHMIA-26AUG21-B92.5",
@@ -155,3 +155,17 @@ def test_nws_source_is_supported_for_historical_regime():
         settlement_ts_ms=3_601_000,
     )
     assert parse_and_verify_weather_settlement_external_id_v3(event)["provider"] == "NWS"
+
+
+def test_generic_nws_page_is_not_supported_for_historical_regime():
+    with pytest.raises(ValueError):
+        ledger_event_from_weather_reconciliation_v3(
+            reconciliation=_reconciled(
+                settlement_source_provider="NWS",
+                settlement_source_url="https://www.weather.gov/wrh/Climate?wfo=mfl",
+            ),
+            trade_group_id="g1",
+            settlement_key="weather:KXHIGHMIA-26AUG21-B92.5",
+            market_id="KXHIGHMIA-26AUG21-B92.5",
+            settlement_ts_ms=3_601_000,
+        )
