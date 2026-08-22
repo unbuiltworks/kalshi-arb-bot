@@ -38,6 +38,26 @@ def _reset_day() -> None:
         _SEEN = set()
 
 
+def _quote_diagnostic(quotes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return non-sensitive quote-shape facts for NO_QUOTE diagnosis.
+
+    IDs and any account-specific fields are intentionally excluded.  This is
+    diagnostic-only and never changes quote selection or execution semantics.
+    """
+    out: list[dict[str, Any]] = []
+    for q in quotes[:3]:
+        out.append({
+            "status": q.get("status"),
+            "yes_bid_dollars": q.get("yes_bid_dollars"),
+            "yes_ask_dollars": q.get("yes_ask_dollars"),
+            "no_bid_dollars": q.get("no_bid_dollars"),
+            "no_ask_dollars": q.get("no_ask_dollars"),
+            "contracts": q.get("contracts"),
+            "updated_ts": q.get("updated_ts"),
+        })
+    return out
+
+
 async def _candidate_preprice_hook(
     collection: dict[str, Any], event_legs: dict[str, list[g.Leg]]
 ) -> dict[str, list[g.Leg]]:
@@ -176,6 +196,8 @@ async def generate_and_score() -> dict[str, Any]:
                         "locked_profit_conservative": str(locked),
                         "classification": "EXECUTABLE_CANDIDATE" if locked >= min_locked else "NO_TRADE",
                     })
+                elif quotes:
+                    row["quote_diagnostic"] = _quote_diagnostic(quotes)
                 scored.append(row)
 
         scored.sort(key=lambda x: Decimal(x.get("locked_profit_conservative") or "-9"), reverse=True)
