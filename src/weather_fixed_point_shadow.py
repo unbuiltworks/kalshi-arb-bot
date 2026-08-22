@@ -4,10 +4,11 @@ Kalshi's current API represents executable prices as fixed-point dollar strings 
 contract quantities as fixed-point strings. This module deliberately keeps those
 values as Decimal rather than coercing them back to integer cents/contracts.
 
-The exchange's *base* quadratic trade fee can be computed from public Series metadata,
-but exact net per-fill fees can also depend on fee-rounding/account context. Therefore
-this module exposes conservative research economics while failing closed on any claim
-that the fee is exact unless an independently verified exact net fee is supplied.
+The exchange's *base* quadratic trade fee can be computed from public Series metadata.
+Exact net per-fill fees can also depend on fee-rounding, fill fragmentation, and the
+per-order rounding accumulator. When exact fill context is unavailable, this module
+therefore reports a deliberately conservative public-data fee upper bound rather than
+pretending the base formula is the exact debit.
 
 No order-entry clients, credentials, live-arm state, or execution paths exist here.
 """
@@ -18,6 +19,9 @@ from typing import Any
 
 
 FIXED_POINT_FEE_BLOCKER = "EXACT_NET_FEE_ROUNDING_UNVERIFIED"
+MIN_CONTRACT_INCREMENT = Decimal("0.01")
+TRADE_FEE_INCREMENT = Decimal("0.0001")
+ROUNDING_ACCUMULATOR_RESIDUAL_UPPER = Decimal("0.01")
 
 
 def _decimal(value: Any) -> Decimal | None:
@@ -50,10 +54,36 @@ def _quantity_fp(value: Any) -> Decimal | None:
     return q
 
 
+def _quadratic_raw_fee_dollars(*, quantity: Decimal, price: Decimal, multiplier: Decimal) -> Decimal:
+    return Decimal("0.07") * multiplier * quantity * price * (Decimal(1) - price)
+
+
 def _quadratic_base_fee_dollars(*, quantity: Decimal, price: Decimal, multiplier: Decimal) -> Decimal:
-    raw = Decimal("0.07") * multiplier * quantity * price * (Decimal(1) - price)
-    # Public Kalshi fee-rounding docs define the base trade-fee precision at $0.0001.
-    return raw.quantize(Decimal("0.0001"), rounding=ROUND_CEILING)
+    raw = _quadratic_raw_fee_dollars(quantity=quantity, price=price, multiplier=multiplier)
+    # Public Kalshi fee-rounding docs define trade-fee precision at $0.0001.
+    return raw.quantize(TRADE_FEE_INCREMENT, rounding=ROUND_CEILING)
+
+
+def _conservative_net_fee_upper_bound_dollars(
+    *, quantity: Decimal, price: Decimal, multiplier: Decimal
+) -> Decimal:
+    """Upper-bound Kalshi taker net fee when exact fill partition is unknown.
+
+    Public Kalshi documentation states that fixed-point quantities have 0.01-contract
+    minimum granularity; each fill's trade fee is rounded up to $0.0001; and the
+    per-order rounding accumulator rebates whole cents so residual accumulated rounding
+    remains below one cent. We do not know how displayed depth is partitioned across
+    resting orders, so assume the worst case: the incoming quantity is fragmented into
+    as many 0.01-contract fills as possible.
+
+    The resulting bound is intentionally loose but safe for read-only opportunity
+    screening. It is *not* labeled an exact fee and cannot unlock live readiness.
+    """
+    raw = _quadratic_raw_fee_dollars(quantity=quantity, price=price, multiplier=multiplier)
+    max_fills = (quantity / MIN_CONTRACT_INCREMENT).to_integral_value(rounding=ROUND_CEILING)
+    per_fill_rounding_overhead = Decimal(max_fills) * TRADE_FEE_INCREMENT
+    upper = raw + per_fill_rounding_overhead + ROUNDING_ACCUMULATOR_RESIDUAL_UPPER
+    return upper.quantize(TRADE_FEE_INCREMENT, rounding=ROUND_CEILING)
 
 
 def normalize_fixed_point_book(quote: dict[str, Any]) -> dict[str, Any]:
@@ -112,12 +142,13 @@ def build_fixed_point_research_economics(
     exact_net_fee_dollars: dict[str, Any] | None = None,
     exact_fee_context_verified: bool = False,
 ) -> dict[str, Any]:
-    """Compute current fixed-point depth and conservative read-only economics.
+    """Compute fixed-point depth and conservative read-only after-fee economics.
 
-    Without verified exact net fee context, the public base quadratic fee is still
-    useful as research telemetry, but exact after-fee execution economics are withheld.
-    A caller may supply an independently reconciled exact net fee per side; only a
-    literal ``exact_fee_context_verified=True`` permits exact fee-adjusted EV output.
+    Without verified exact net fee context, the public fee mechanics still support a
+    worst-case fill-fragmentation upper bound. That bound may be used to report a
+    conservative after-fee model-EV *lower bound* while exact after-fee economics stay
+    blocked. A caller may separately supply an independently reconciled exact net fee;
+    only literal ``exact_fee_context_verified=True`` permits exact fee-adjusted EV.
     """
     book = normalize_fixed_point_book(quote)
     blockers = list(book["blockers"])
@@ -149,6 +180,9 @@ def build_fixed_point_research_economics(
             continue
 
         base_fee = _quadratic_base_fee_dollars(quantity=qty, price=price, multiplier=multiplier)
+        fee_upper = _conservative_net_fee_upper_bound_dollars(
+            quantity=qty, price=price, multiplier=multiplier
+        )
         exact_fee = _decimal(exact_fees.get(side)) if exact_verified else None
         if exact_verified and (exact_fee is None or exact_fee < 0):
             blockers.append("EXACT_NET_FEE_INVALID")
@@ -156,10 +190,12 @@ def build_fixed_point_research_economics(
 
         probability = None
         theoretical_ev = None
+        conservative_after_fee_ev = None
         exact_after_fee_ev = None
         if p_yes is not None:
             probability = p_yes if side == "YES" else Decimal(1) - p_yes
             theoretical_ev = probability * qty - price * qty
+            conservative_after_fee_ev = theoretical_ev - fee_upper
             if exact_fee is not None:
                 exact_after_fee_ev = theoretical_ev - exact_fee
 
@@ -170,9 +206,17 @@ def build_fixed_point_research_economics(
             "book_representation": level["book_representation"],
             "base_quadratic_fee_dollars": format(base_fee, "f"),
             "base_fee_is_exact_net_fee": False,
+            "conservative_net_fee_upper_bound_dollars": format(fee_upper, "f"),
+            "fee_upper_bound_basis": "MAX_0.01_CONTRACT_FRAGMENTATION_PLUS_CENTICENT_FEE_ROUNDING_PLUS_LT_1C_ACCUMULATOR_RESIDUAL",
             "exact_net_fee_dollars": format(exact_fee, "f") if exact_fee is not None else None,
             "forecast_side_probability": format(probability, "f") if probability is not None else None,
             "pre_fee_model_ev_dollars": format(theoretical_ev, "f") if theoretical_ev is not None else None,
+            "conservative_after_fee_model_ev_lower_bound_dollars": (
+                format(conservative_after_fee_ev, "f") if conservative_after_fee_ev is not None else None
+            ),
+            "conservative_after_fee_positive": (
+                conservative_after_fee_ev > 0 if conservative_after_fee_ev is not None else None
+            ),
             "exact_after_fee_model_ev_dollars": format(exact_after_fee_ev, "f") if exact_after_fee_ev is not None else None,
         })
 
@@ -183,6 +227,11 @@ def build_fixed_point_research_economics(
         and "EXACT_NET_FEE_INVALID" not in blockers
         and bool(rows)
         and all(row["exact_net_fee_dollars"] is not None for row in rows)
+    )
+    conservative_bounded_economics = (
+        "FEE_UNVERIFIED" not in blockers
+        and bool(rows)
+        and any(row["conservative_after_fee_model_ev_lower_bound_dollars"] is not None for row in rows)
     )
 
     return {
@@ -196,9 +245,12 @@ def build_fixed_point_research_economics(
         "fixed_point_book_verified": not book["blockers"],
         "exact_fee_context_verified": exact_verified,
         "exact_after_fee_economics_verified": exact_economics_verified,
+        "conservative_fee_bounded_economics_available": conservative_bounded_economics,
         "economics_status": (
             "EXACT_AFTER_FEE_SHADOW_ECONOMICS"
             if exact_economics_verified
-            else "RESEARCH_ONLY_EXACT_NET_FEE_WITHHELD"
+            else "CONSERVATIVE_FEE_BOUNDED_SHADOW_ECONOMICS"
+            if conservative_bounded_economics
+            else "RESEARCH_ONLY_FEE_ECONOMICS_WITHHELD"
         ),
     }
