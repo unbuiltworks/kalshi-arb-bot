@@ -70,7 +70,7 @@ def _external_id(**overrides):
 def test_external_id_changes_when_exact_provenance_changes():
     assert _external_id() != _external_id(
         provider="NWS",
-        source_url="https://www.weather.gov/wrh/Climate?wfo=mfl",
+        source_url="https://forecast.weather.gov/product.php?site=NWS&product=CLI&issuedby=MIA",
     )
 
 
@@ -94,6 +94,8 @@ def test_external_id_binds_terminal_payload(field, value):
         ("THE_WEATHER_COMPANY", "http://weather.com/kalshi"),
         ("THE_WEATHER_COMPANY", "https://weather.example.com/kalshi"),
         ("NWS", "https://example.com/nws"),
+        ("NWS", "https://www.weather.gov/wrh/Climate?wfo=mfl"),
+        ("NWS", "https://forecast.weather.gov/product.php?site=NWS&product=CLI"),
         ("UNAUDITED_PROVIDER", "https://weather.com/kalshi"),
     ],
 )
@@ -117,6 +119,7 @@ def test_external_id_rejects_unofficial_or_mismatched_terminal_sources(provider,
         _reconciled(settlement_source_provider="UNAUDITED_PROVIDER", settlement_source_url="https://weather.com/kalshi"),
         _reconciled(settlement_source_provider="THE_WEATHER_COMPANY", settlement_source_url="https://example.com/kalshi"),
         _reconciled(settlement_source_provider="THE_WEATHER_COMPANY", settlement_source_url="https://weather.com/weather/today"),
+        _reconciled(settlement_source_provider="NWS", settlement_source_url="https://www.weather.gov/wrh/Climate?wfo=mfl"),
     ],
 )
 def test_bad_or_incomplete_reconciliation_fails_closed(reconciliation):
