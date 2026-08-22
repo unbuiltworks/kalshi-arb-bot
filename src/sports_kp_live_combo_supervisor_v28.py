@@ -28,11 +28,11 @@ import json
 from typing import Any
 
 from src import sports_kp_live_combo_supervisor_v27 as v27
+from src import sports_kp_live_combo_supervisor_v9 as v9
 
 logger = v27.logger
-base = v27.v26.v25.v24.v23.base
 v23 = v27.v26.v25.v24.v23
-v9 = v23.v22.v21.v20.v19.v18.v17.v16.v15.v14.v13.v12.v11.v10.v9
+base = v23.base
 D = Decimal
 
 
