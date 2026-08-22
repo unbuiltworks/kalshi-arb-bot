@@ -1,9 +1,12 @@
 import asyncio
+from itertools import product
 
 import pytest
 
 import src.gemini_combo_mm_fok_entry as entry
-from src.gemini_combo_mm_fok_live_v1 import _direction_hedges, _grid_legal_for_q1
+from src.gemini_combo_mm_fok_live_v1 import _grid_legal_for_q1
+from src.gemini_combo_mm_fok_live_v2 import _direction_hedges
+from src.gemini_combo_mm_fok_preflight import _cover_directions
 
 
 def _spec():
@@ -17,8 +20,8 @@ def _spec():
     }
 
 
-def test_yes_combo_uses_exact_complements():
-    outcome, hedges = _direction_hedges(_spec(), "COMBO_YES_PLUS_COMPLEMENTS")
+def test_yes_combo_uses_all_exact_complements():
+    outcome, hedges = _direction_hedges(_spec(), "COMBO_YES_PLUS_ALL_COMPLEMENTS")
     assert outcome == "YES"
     assert hedges == [
         {"symbol": "A", "outcome": "NO"},
@@ -27,14 +30,33 @@ def test_yes_combo_uses_exact_complements():
     ]
 
 
-def test_no_combo_uses_selected_required_outcomes():
-    outcome, hedges = _direction_hedges(_spec(), "COMBO_NO_PLUS_SELECTED")
+def test_no_combo_uses_one_canonical_required_leg_only():
+    outcome, hedges = _direction_hedges(_spec(), "COMBO_NO_PLUS_REQUIRED_LEG_1")
     assert outcome == "NO"
-    assert hedges == [
-        {"symbol": "A", "outcome": "YES"},
-        {"symbol": "B", "outcome": "NO"},
-        {"symbol": "C", "outcome": "YES"},
+    assert hedges == [{"symbol": "B", "outcome": "NO"}]
+
+
+def test_cover_directions_emit_one_no_cover_per_required_leg():
+    covers = _cover_directions(_spec()["active_required_legs"])
+    assert [x["name"] for x in covers] == [
+        "COMBO_YES_PLUS_ALL_COMPLEMENTS",
+        "COMBO_NO_PLUS_REQUIRED_LEG_0",
+        "COMBO_NO_PLUS_REQUIRED_LEG_1",
+        "COMBO_NO_PLUS_REQUIRED_LEG_2",
     ]
+    assert covers[2]["component_specs"] == [("B", "NO")]
+
+
+def test_minimal_conjunction_cover_truth_table_exhaustive():
+    # Each bit means the corresponding required outcome A_i occurred. The Gemini
+    # conjunction settles YES iff all required outcomes occur.
+    for n in range(1, 6):
+        for bits in product((0, 1), repeat=n):
+            combo_yes = int(all(bits))
+            combo_no = 1 - combo_yes
+            assert combo_yes + sum(1 - bit for bit in bits) >= 1
+            for idx in range(n):
+                assert combo_no + bits[idx] >= 1
 
 
 def test_unknown_direction_fails_closed():
