@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: 2026-08-22 14:45 UTC
+Last verified: 2026-08-22 15:24 UTC
 
 This is the durable ARB handoff. Production state wins over chat history. Before changing a workstream, verify current Railway deployment/runtime + GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the $480/day objective.
 
@@ -101,6 +101,34 @@ Feature branch `feature/sports-same-market-ledger-telemetry` now adds best-effor
 
 GitHub PR creation for this branch was blocked by the action safety layer in the 14:45 UTC supervisor run. Do not bypass that protection by force-moving the production branch. Resume promotion only through a normal reviewed/green path.
 
+## Same-Gemini extreme combo live canary — 2026-08-22 15:24 UTC
+
+Direct Railway runtime access is restored for this sports workstream.
+
+A dedicated isolated one-shot service is now deployed and armed:
+- service `gemini-extreme-combo-live-q1`, service id `4399e98f-ce33-4a74-99f2-900f7615beab`;
+- branch `feature/three-venue-sports-router`;
+- code commit `3d8f242f5572df8970fbed892e8a5989d94fd362` (`Add bounded q1 Gemini extreme combo live canary`);
+- armed deployment `cbf23911-4a34-42bd-b704-3d9648d4dc3a` **SUCCESS**;
+- campaign `gcombo-2608221121-a1`;
+- q=1 only, combo `GEMI-CMB-260823-8EC8FBCF7988E34C-CMB`, maker BUY YES price `$0.90`, conservative target lock `>= $0.03`, maker TTL 120s;
+- restart policy `NEVER`; credentials are referenced through Railway and are not stored here.
+
+Rule/economics basis:
+- this is a same-Gemini cover, not a Gemini/Kalshi settlement-equivalence trade;
+- certified combo rule uses the product of component settlement values;
+- exact complement hedges preserve `AB + (1-A) + (1-B) >= 1`, including scalar component settlements;
+- the canary pre-hedges both components q=1 FOK at max `$0.02` each before placing the maker combo; failure/ambiguity paths flatten or hard-halt.
+
+Fresh execution evidence:
+- read-only preflight deployment `2f1c2436-2bf6-47d0-9a01-9fa41aff01cf` at ~15:22 UTC: terms accepted, no active combo order, but **both exact hedge books had no executable offer**, so `preflight_pass=false`;
+- armed deployment at 15:24 UTC re-ran the live preflight with `armed=true` and again found both hedge outcomes unavailable;
+- final classification **`LIVE_GATE_BLOCKED`**;
+- `order_entry=false`;
+- **0 orders submitted, 0 fills, 0 executed trades, $0 realized P&L** from this campaign.
+
+Do not describe this as an executed trade. `armed=true` only means live mutation was authorized; the fresh economics/depth gate correctly prevented capital deployment. The immediate blocker is fresh q=1 liquidity on both exact hedge outcomes or a newly accepted rule-certified same-Gemini combo whose live books preserve the >=3c floor.
+
 ## Direct sports K↔P
 
 Service `sports-kp-live-executor` remains read-only certification scan / not executable unless an exact counterpart has certified settlement rules and >=3c after-fee economics. NFL full-game totals previously failed exceptional-event lifecycle equivalence; do not promote line/identity matches alone.
@@ -119,18 +147,21 @@ Preserve CORE: `crypto-15m-sol-live-canary-10bp-50ms` (currently fail-closed), `
 
 Preserve active shadows while their workstreams are active, including `crypto-maker-arb-shadow-v1`, `sports-kp-combo-shadow`, `mlb-gk-exec-shadow`, `weather-shadow-arb`, `three-venue-router-paper-v2`, `three-venue-mlb-hot-paper-v1`, `gemini-kalshi-mlb-prop-hot-shadow`, and `sports-alert-reliability-shadow`.
 
+Preserve `gemini-extreme-combo-live-q1` while the same-Gemini live-canary workstream is active. It is a one-shot bounded live probe, not a recurring strategy service.
+
 Remove only verified dead/test/superseded services after dependency checks. Never infer deadness from names alone.
 
 ## New-chat / next-run protocol
 
 1. Read `ARB_STATUS.md`.
-2. Retry direct Railway runtime access. If restored, inspect crypto failure state but **do not re-arm** around the settlement/threshold transport kill.
+2. Direct Railway runtime access is restored as of 15:24 UTC. Inspect crypto failure state if working that lane, but **do not re-arm** around the settlement/threshold transport kill.
 3. Reconcile unresolved ETH `gk15m-gk15m-08220615-c225-02` before counting any result.
 4. Verify no new Gemini/Kalshi crypto order/fill appeared after 06:40:03 UTC.
 5. Keep Gemini/Kalshi q1/q5/maker order entry blocked unless exact settlement + threshold equivalence is certified.
-6. Highest-value safe path: prove the current sports v40 cycle is running and surface the v37 same-market YES+NO best locked profit. If the telemetry feature can be promoted normally, use it; do not bypass GitHub safety controls.
-7. If an actual same-market candidate shows >=3c locked after conservative fees with exact q=1 depth and fresh state, then build/validate a bounded same-Kalshi q=1 execution canary with settlement reconciliation before any live arm.
-8. Continue same-day/<=24h sports MVE/RFQ breadth and weather exact-rule opportunities without weakening certification.
-9. Work one blocker through **inspect -> fix -> deploy -> verify -> reconcile -> checkpoint** before widening scope.
+6. For the same-Gemini combo lane, first check campaign `gcombo-2608221121-a1` for any prior order state, then obtain fresh books. The 15:24 armed attempt was `LIVE_GATE_BLOCKED` with zero order entry because both hedge outcomes were unavailable.
+7. Do not weaken the >=3c floor. If both exact q1 hedges return at <=2c with depth and no prior campaign order exists, use a fresh unique campaign for the next one-shot canary rather than reusing an ambiguous/used campaign.
+8. Continue proving current sports MVE/same-market scans and same-day/<=24h sports breadth; promote only exact rule-certified, fresh after-fee candidates.
+9. Continue weather exact-rule opportunities without weakening certification.
+10. Work one blocker through **inspect -> fix -> deploy -> verify -> reconcile -> checkpoint** before widening scope.
 
 After meaningful changes, update this file with UTC verification time, deployment/commit, armed/disarmed state, execution/fill/settlement evidence, and next blocker. Never store credentials, signing material, API keys, or sensitive balances here.
