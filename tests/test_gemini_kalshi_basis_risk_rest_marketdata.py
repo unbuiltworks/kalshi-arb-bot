@@ -20,9 +20,35 @@ def test_exact_rest_top_uses_best_bids_and_request_start_timestamp():
     assert top.yes_ask_size == Decimal("5")
 
 
-def test_exact_rest_top_fails_closed_on_one_sided_book():
-    assert m.exact_rest_top(
+def test_exact_rest_top_preserves_yes_only_book_without_inventing_ask_depth():
+    top = m.exact_rest_top(
         {"orderbook_fp": {"yes_dollars": [["0.45", "3"]], "no_dollars": []}},
+        "KXBTC15M-TEST",
+        123456,
+    )
+    assert top is not None
+    assert top.yes_bid == Decimal("0.45")
+    assert top.yes_bid_size == Decimal("3")
+    assert top.yes_ask == Decimal("1")
+    assert top.yes_ask_size == Decimal("0")
+
+
+def test_exact_rest_top_preserves_no_only_book_without_inventing_bid_depth():
+    top = m.exact_rest_top(
+        {"orderbook_fp": {"yes_dollars": [], "no_dollars": [["0.52", "5"]]}},
+        "KXBTC15M-TEST",
+        123456,
+    )
+    assert top is not None
+    assert top.yes_bid == Decimal("0")
+    assert top.yes_bid_size == Decimal("0")
+    assert top.yes_ask == Decimal("0.48")
+    assert top.yes_ask_size == Decimal("5")
+
+
+def test_exact_rest_top_fails_closed_when_both_sides_missing():
+    assert m.exact_rest_top(
+        {"orderbook_fp": {"yes_dollars": [], "no_dollars": []}},
         "KXBTC15M-TEST",
         123456,
     ) is None
