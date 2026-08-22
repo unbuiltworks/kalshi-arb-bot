@@ -1,4 +1,5 @@
-# Isolated read-only post-Final Gemini <-> Kalshi MLB hits settlement-lag monitor.
+# Temporarily paused read-only post-Final Gemini <-> Kalshi MLB hits settlement-lag monitor.
+# Authenticated Kalshi WebSocket capacity is reserved for the bounded q=1 basis-risk canary.
 [deploy]
-startCommand = "python -m src.gemini_kalshi_mlb_hits_final_lag_shadow"
-restartPolicyType = "ALWAYS"
+startCommand = "python -c \"print('PAUSED: read-only MLB GK final-lag shadow; Kalshi WS capacity reserved for bounded basis canary')\""
+restartPolicyType = "NEVER"
