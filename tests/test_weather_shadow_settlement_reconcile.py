@@ -26,6 +26,8 @@ def _shadow(**overrides):
         "exact_market_source_verified": True,
         "exact_market_source_audit": _exact_audit(),
         "settlement_certified_shadow": True,
+        "terminal_value_semantics_audited": True,
+        "terminal_value_transform": "AS_PUBLISHED",
         "strike_type": "between",
         "floor_strike": 102,
         "cap_strike": 103,
@@ -133,6 +135,20 @@ def test_missing_terminal_value_fails_closed():
 def test_unsettlement_certified_quote_cannot_realize_paper_pnl():
     result = reconcile_weather_paper_fill(shadow_row=_shadow(settlement_certified_shadow=False), paper_fill=_fill(), settlement=_settlement())
     assert result["reconciled"] is False
+
+
+def test_terminal_value_rounding_or_tie_semantics_must_be_explicitly_audited():
+    missing = reconcile_weather_paper_fill(shadow_row=_shadow(terminal_value_semantics_audited=False), paper_fill=_fill(), settlement=_settlement())
+    assert missing["reconciled"] is False
+    assert "TERMINAL_VALUE_SEMANTICS_UNAUDITED" in missing["blockers"]
+
+    string_flag = reconcile_weather_paper_fill(shadow_row=_shadow(terminal_value_semantics_audited="true"), paper_fill=_fill(), settlement=_settlement())
+    assert string_flag["reconciled"] is False
+    assert "TERMINAL_VALUE_SEMANTICS_UNAUDITED" in string_flag["blockers"]
+
+    guessed_rounding = reconcile_weather_paper_fill(shadow_row=_shadow(terminal_value_transform="ROUND_NEAREST_INTEGER"), paper_fill=_fill(), settlement=_settlement())
+    assert guessed_rounding["reconciled"] is False
+    assert "TERMINAL_VALUE_TRANSFORM_UNSUPPORTED" in guessed_rounding["blockers"]
 
 
 def test_tail_strike_still_fails_closed_without_exact_comparator_audit():
