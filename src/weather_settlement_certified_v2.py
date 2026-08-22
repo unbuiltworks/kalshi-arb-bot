@@ -62,6 +62,12 @@ def _model_sanity_audit(
         disagreement_tolerance_f=forecast.get("disagreement_tolerance_f"),
         disagreement_tolerance_audited=forecast.get("disagreement_tolerance_audited"),
         model_calibration_verified=forecast.get("model_calibration_verified"),
+        calibration_evidence_verified=forecast.get("calibration_evidence_verified"),
+        calibration_evidence_id=forecast.get("calibration_evidence_id"),
+        calibration_sample_count=forecast.get("calibration_sample_count"),
+        calibration_station_id=forecast.get("calibration_station_id"),
+        calibration_window_end=forecast.get("calibration_window_end"),
+        model_run_time=forecast.get("model_run_time"),
     )
 
 
@@ -91,16 +97,15 @@ def build_exact_market_certified_shadow_row(
       - independent_anchor_verified / same_local_day_verified
       - disagreement_tolerance_f / disagreement_tolerance_audited
       - model_calibration_verified
+      - calibration_evidence_verified / calibration_evidence_id
+      - calibration_sample_count / calibration_station_id / calibration_window_end
+
+    Calibration evidence must predate the model run being scored. This prevents a
+    caller from turning bare booleans or future information into certified EV.
 
     Missing or mismatched settlement provenance quarantines all EV/capacity economics.
     Missing or failed model-sanity evidence preserves settlement/book/fee diagnostics but
     removes model probabilities and modeled EV from certified economics.
-
-    If the hardened exact-market audit verifies, its contract/date evidence is allowed
-    to supersede only the older Series-regime/identity blockers emitted by the base
-    adapter. This is necessary for historical contracts whose exact settlement source
-    differs from the *current* recurring Series template. Every other base gate remains
-    fail-closed and can never be upgraded here.
     """
     base = build_shadow_row(
         series=series,
@@ -148,10 +153,6 @@ def build_exact_market_certified_shadow_row(
         row["economics_status"] = "WITHHELD_EXACT_MARKET_SOURCE_UNVERIFIED"
         return row
 
-    # The hardened audit is stronger than the base adapter's older Series-regime
-    # assertion, so exact contract/date evidence may supersede only those two legacy
-    # blockers. Never remove station/day/bracket, fee/history, book/freshness, rules,
-    # or forecast blockers here.
     blockers = {
         blocker
         for blocker in (row.get("blockers") or [])
@@ -175,9 +176,6 @@ def build_exact_market_certified_shadow_row(
     row["settlement_certified_shadow"] = settlement_certified
     row["ev_certified_shadow"] = ev_certified
 
-    # Exact-market audit is an additional/higher-authority provenance gate, never an
-    # upgrade of any unrelated safety condition. The underlying adapter must still
-    # independently pass station/day/bracket, fee, quote-freshness and forecast checks.
     if ev_certified:
         row["economics_status"] = "EXACT_MARKET_MODEL_SANITY_AND_EV_CERTIFIED_SHADOW"
     elif settlement_certified and not model_sanity_verified:
