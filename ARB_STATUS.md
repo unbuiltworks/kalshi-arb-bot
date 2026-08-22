@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: 2026-08-22 01:26 UTC
+Last verified: 2026-08-22 01:29 UTC
 
 This is the durable ARB handoff. Production state wins over chat history. Before changing a workstream, verify current Railway deployment/runtime + GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the $480/day objective.
 
@@ -12,7 +12,7 @@ This is the durable ARB handoff. Production state wins over chat history. Before
 - **EXECUTED**: all required legs confirmed filled.
 - **REALIZED**: executed trade settled/reconciled and net P&L confirmed.
 
-Never count stale quotes, mismatched settlement rules, shadow P&L, armed state, attempted orders, or unconfirmed fills as realized arbitrage profit.
+Never count stale quotes, mismatched settlement rules, shadow P&L, armed state, attempted orders, MVE creation/RFQs, or unconfirmed fills as realized arbitrage profit.
 
 ## Current production snapshot
 
@@ -78,19 +78,54 @@ Do not arm maker until >=3c fill evidence is material and continuous settlement/
 
 Gemini currently exposes BTC 5-minute Prediction contracts. Kalshi's current crypto UI exposes a 5M lane, but exact API series/ticker + settlement equivalence have not yet been certified. Do not infer equivalence from ticker/UI naming. Audit exact expiry, source/index, averaging window, exceptional-event behavior, and outcome agreement before execution. If certified, 5M can materially multiply short-window opportunities without lowering the 3c floor.
 
-### Sports manufactured MVE combo
+### Sports manufactured MVE combo — LIVE-PROBE CAPABLE / NO EXECUTABLE FILL YET
 
-Service `sports-kp-combo-shadow`: generator active / live-probe capable, but no new verified executable/filled combo at this checkpoint. Preserve >=3c after-fee + final component/RFQ/depth/rule gates. Do not count MVE creation or RFQs as trades.
+Railway service: `sports-kp-combo-shadow`.
 
-### Direct sports K↔P
+Latest verified deployment: `11fea35c-872e-4e58-95b4-5ac1f22b4be9` **SUCCESS**.
 
-Service `sports-kp-live-executor`: live read-only certification scan; latest known approved execution contracts = 0. Preserve >=3c after-fee, <=50ms skew, <=100ms freshness, persistence, explicit rule fingerprint, and final exact depth. Expand certified breadth instead of weakening gates.
+GitHub branch/head: `feature/kp-combo-synthetic-shadow` @ `07cdc51422899bd35b2885e5982c5006a228342e` (production entrypoint v27).
+
+Current state:
+- automatic Kalshi MVE generation is active;
+- auto-q1 is requested and the live software gate is on, but there is still a one-attempt-per-process cap and the live executor independently revalidates every input;
+- q=1 live threshold is **>=3c after conservative fees**;
+- current generation budget is **8 creations/RFQs per generation pass**, durable restart-safe daily cap **600**; latest verified count after the first v27 pass was **158/600**;
+- first v27 pass saw 33 live Polymarket sports events, 40 bounded Kalshi event-market calls, 1,570 eligible Kalshi component legs, **0 Kalshi 429s**, 8 markets created/resolved, and **0 executable candidates**;
+- best first-pass same-Kalshi basket remained **-$0.049** locked profit, so no q=1 order was justified;
+- MVE creation, RFQs, and shadow replacements are not trades and are not realized P&L.
+
+Manufacturing changes now live:
+- v21 prefilters exact-event nested/duplicate legs before creation;
+- v22/v23 added same-game correlation priority plus process-local RFQ feedback while retaining exploration;
+- v24 stopped uncertified Polymarket/Gemini replacement prices from steering scarce live-capable MVE creation slots; actual creation rank is based on executable same-Kalshi component economics;
+- v25 tested implication-rich GAME+SPREAD baskets, and production proved Kalshi rejects those as `duplicated_legs` when the moneyline/spread outcome logically includes the other;
+- v26 therefore rejects same-game GAME+SPREAD baskets before creation and prioritizes valid SPREAD+TOTAL, GAME+TOTAL, other same-game families, plus baseline exploration; latest verified candidate pool rejected 10 redundant GAME+SPREAD rows pre-create;
+- v27 removes uncertified external prepricing from the **pre-creation critical path** because it cannot affect current live-capable execution. Production verified `SPORTS_MVE_PREPRICE_BYPASS`; the observed pass reached candidate ranking roughly **18 seconds faster** than the immediately prior path. Post-generation external analysis remains shadow-only.
+
+Best recent improvement: before executable-only ranking, the best manufactured scalar-safe gap sampled around **-$1.019**. v24+ moved the best observed gap to **-$0.049** without weakening the 3c live threshold. This is meaningful search-quality improvement but still not an executable arb.
+
+Next sports-combo priority: use real RFQ outcomes to identify negative-correlation/valid family structures that can move the same-Kalshi lock from -4.9c through +3c; do not raise the creation cap blindly. Keep external replacement research off the live critical path unless rules are certified.
+
+### Direct sports K↔P — LIVE READ-ONLY CERTIFICATION SCAN / NOT EXECUTABLE
+
+Service `sports-kp-live-executor`; deployment `ad6d8c60-5806-46be-b8c3-cad809d6b35e` on `feature/sports-kp-live-executor-impl` @ `f9dfd28669e989760070a44d70feeab031f7efe5` remains SUCCESS.
+
+Preserve >=3c after-fee, <=50ms skew, <=100ms freshness, persistence, explicit rule fingerprint, and final exact depth. Latest known approved execution contracts = **0**.
+
+Polymarket-triggered exact Kalshi synchronization is active, but later sampled economics through ~01:17 UTC remained negative: best fresh after-fee readings ranged roughly **-3.5c to -0.5c**, never +3c. No direct order should be forced.
+
+NFL rule audit hard-negative result:
+- read-only rule-audit probe was generalized to current sports and run against exact NYJ-PIT 40.5 full-game total counterparts;
+- Polymarket explicitly states that if a delayed/postponed/suspended game is not resumed/rescheduled within two weeks, the market settles to **last fair market price**;
+- the visible Kalshi market rule does not promise the same exceptional-event fallback;
+- therefore this K↔P NFL full-game-total family is **NOT settlement-rule certified** and must remain execution-ineligible. Do not promote apparent Polymarket NFL savings merely from line/identity matches.
 
 ### Sports G↔K props
 
 Service `sports-gk-autonomous-supervisor`: **LIVE RULE-RISK PROBE / REALIZED P&L EXISTS / NOT CERTIFIED GUARANTEED ARB**.
 
-Five historical settled probes total **+$0.1871 net REALIZED**. Authoritative cumulative experimental rule-risk budget remains **$4.84/$5.00**. Do not reset/increase the $5 ceiling without explicit user authorization. Existing families have not proven complete exceptional-event lifecycle equivalence.
+Five historical settled probes total **+$0.1871 net REALIZED**. Authoritative cumulative experimental rule-risk budget remains **$4.84/$5.00**. No hard-halt/unresolved-trade condition was found in the latest verification. Do not reset/increase the $5 ceiling without explicit user authorization. Existing families have not proven complete exceptional-event lifecycle equivalence.
 
 ### Weather
 
