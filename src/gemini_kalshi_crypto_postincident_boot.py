@@ -12,6 +12,7 @@ import json
 import logging
 import os
 
+from src import gemini_kalshi_crypto_benign_deadline as benign_deadline
 from src import gemini_kalshi_crypto_campaign_child_reliable as child
 from src import gemini_kalshi_crypto_live_campaign as base
 from src import gemini_kalshi_crypto_parallel_safe_boot as safe_boot
@@ -38,6 +39,7 @@ def main() -> None:
     incident_accounting.install()
     preclaim_retry.install()
     ws_rate_limit_guard.install_parent_spawn_pacing()
+    benign_deadline.install()
 
     continuous = _continuous_mode()
     while True:
