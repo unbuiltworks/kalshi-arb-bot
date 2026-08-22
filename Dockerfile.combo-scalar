@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ src/
 COPY config/ config/
 
-# Isolated read-only Gemini combo pricing probe. No order entry.
-RUN python -m py_compile src/gemini_mlb_combo_scalar_probe.py src/three_venue_pricing_core.py
-CMD ["python", "-m", "src.gemini_mlb_combo_scalar_probe"]
+# Isolated Gemini combo definition/rule audit. Creates or retrieves one combo
+# definition only; no order entry or capital action.
+RUN python -m py_compile src/gemini_tor_mia_combo_create_audit.py src/gemini_prediction_auth.py src/gemini_sports_inventory.py
+CMD ["python", "-m", "src.gemini_tor_mia_combo_create_audit"]
