@@ -48,6 +48,8 @@ class LedgerEvent:
         if self.side is not None and self.side not in SIDES:
             raise ValueError(f"unsupported side={self.side!r}")
         for name, value in (("quantity", self.quantity), ("price", self.price), ("fee", self.fee), ("payout", self.payout)):
+            if not isinstance(value, Decimal) or not value.is_finite():
+                raise ValueError(f"{name} must be a finite Decimal")
             if value < 0:
                 raise ValueError(f"{name} must be non-negative")
 
