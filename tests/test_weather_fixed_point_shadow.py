@@ -50,12 +50,49 @@ def test_public_base_fee_is_not_promoted_to_exact_net_fee():
     assert result["fixed_point_book_verified"] is True
     assert result["exact_fee_context_verified"] is False
     assert result["exact_after_fee_economics_verified"] is False
+    assert result["conservative_fee_bounded_economics_available"] is True
     assert FIXED_POINT_FEE_BLOCKER in result["blockers"]
     yes = result["book_sides"][0]
     assert Decimal(yes["base_quadratic_fee_dollars"]) == Decimal("0.1750")
     assert yes["base_fee_is_exact_net_fee"] is False
+    assert Decimal(yes["conservative_net_fee_upper_bound_dollars"]) > Decimal(yes["base_quadratic_fee_dollars"])
     assert yes["exact_after_fee_model_ev_dollars"] is None
+    assert result["economics_status"] == "CONSERVATIVE_FEE_BOUNDED_SHADOW_ECONOMICS"
     assert result["live_probe_ready"] is False
+
+
+def test_q1_weather_shadow_emits_conservative_after_fee_lower_bound_without_claiming_exact_fee():
+    result = build_fixed_point_research_economics(
+        quote={"no_ask_dollars": "0.3600", "no_ask_qty_fp": "1.00"},
+        fee_type="quadratic",
+        fee_multiplier=1,
+        yes_probability="0.109",
+    )
+    row = result["book_sides"][0]
+    assert row["side"] == "NO"
+    # Raw q1 quadratic fee is 0.016128. Worst-case 0.01-contract fragmentation
+    # adds at most 100 centicent round-ups plus <1c residual accumulator rounding.
+    assert Decimal(row["conservative_net_fee_upper_bound_dollars"]) == Decimal("0.0362")
+    assert Decimal(row["conservative_after_fee_model_ev_lower_bound_dollars"]) == Decimal("0.4948")
+    assert row["conservative_after_fee_positive"] is True
+    assert row["exact_after_fee_model_ev_dollars"] is None
+    assert FIXED_POINT_FEE_BLOCKER in result["blockers"]
+    assert result["live_probe_ready"] is False
+
+
+def test_conservative_fee_bound_scales_with_fractional_fill_granularity():
+    result = build_fixed_point_research_economics(
+        quote={"yes_ask_dollars": "0.3301", "yes_ask_qty_fp": "0.09"},
+        fee_type="quadratic",
+        fee_multiplier=1,
+        yes_probability="0.50",
+    )
+    row = result["book_sides"][0]
+    # At most nine 0.01-contract fills plus <1c residual accumulator rounding.
+    raw = Decimal("0.07") * Decimal("0.09") * Decimal("0.3301") * Decimal("0.6699")
+    expected_upper = (raw + Decimal("0.0009") + Decimal("0.01")).quantize(Decimal("0.0001"), rounding="ROUND_CEILING")
+    assert Decimal(row["conservative_net_fee_upper_bound_dollars"]) == expected_upper
+    assert row["exact_after_fee_model_ev_dollars"] is None
 
 
 def test_verified_exact_fee_context_can_emit_exact_shadow_ev_only():
