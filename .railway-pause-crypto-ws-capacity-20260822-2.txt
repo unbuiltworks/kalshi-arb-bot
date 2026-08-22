@@ -1,0 +1,3 @@
+Fresh source trigger after configuring the read-only opportunity-matrix, SOL east latency, and SOL validation services to exit cleanly.
+Purpose: release Kalshi authenticated WebSocket capacity for the isolated q=1 basis-risk live probe.
+No risk or trading thresholds changed.
