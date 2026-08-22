@@ -45,6 +45,26 @@ def test_cross_index_divergence_can_defeat_shared_value_safe_direction():
     assert out["blocker"] == "CROSS_INDEX_DOMINANCE_BREACH_OBSERVED"
 
 
+def test_equal_adverse_basis_to_threshold_gap_is_still_sufficient():
+    # Both venues resolve YES at-or-above. With G strike=100 and K target=101,
+    # exactly 1 point of adverse K-G basis cannot create G-NO + K-YES: at the
+    # equality boundary one venue is necessarily on its YES side. A both-lose
+    # dominance breach requires strictly more than the threshold gap.
+    row = {
+        "asset": "ETH",
+        "gemini_strike": "100",
+        "kalshi_target": "101",
+        "gemini_settlement": "100",
+        "kalshi_expiration_value": "101",
+        "dominance_safe_direction_shared_value": DIR_GYES_KNO,
+    }
+    out = analyze_row(row)
+    assert out["adverse_basis_to_threshold_gap_ratio"] == "1"
+    assert out["terminal_cushion_sufficient"] is True
+    assert out["cross_index_dominance_breached"] is False
+    assert out["blocker"] == "INDEX_MISMATCH_RESEARCH_ONLY"
+
+
 def test_reverse_safe_direction_can_also_be_defeated():
     row = {
         "asset": "ETH",
