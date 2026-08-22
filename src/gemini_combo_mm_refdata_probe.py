@@ -1,4 +1,4 @@
-"""Read-only quantity/price grid audit for accepted combo instruments."""
+"""Read-only quantity/price grid and canonical-leg audit for accepted combo instruments."""
 from __future__ import annotations
 
 import asyncio
@@ -15,33 +15,17 @@ SYMBOLS = [
     "GEMI-CMB-260823-790AAEFA6CECBA1E-CMB",
 ]
 GRID_KEYS = {
-    "quantityMinimum",
-    "quantityIncrement",
-    "priceMinimum",
-    "priceIncrement",
-    "quoteAssetPrecision",
-    "marketState",
-    "status",
-    "contractStatus",
-    "expiryDate",
-    "instrumentSymbol",
-    "ticker",
-    "eventTicker",
-    "parentEventTicker",
-    "contractTicker",
-    "contractId",
-    "id",
+    "quantityMinimum", "quantityIncrement", "priceMinimum", "priceIncrement",
+    "quoteAssetPrecision", "marketState", "status", "contractStatus", "expiryDate",
+    "instrumentSymbol", "ticker", "eventTicker", "parentEventTicker", "contractTicker",
+    "contractId", "id", "requiredOutcome", "outcome",
 }
 
 
 def _safe_scalars(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
-    out: dict[str, Any] = {}
-    for key, child in value.items():
-        if isinstance(child, (str, int, float, bool)) or child is None:
-            out[str(key)] = child
-    return out
+    return {str(k): v for k, v in value.items() if isinstance(v, (str, int, float, bool)) or v is None}
 
 
 def _interesting_paths(value: Any, prefix: str = "") -> dict[str, Any]:
@@ -92,32 +76,22 @@ async def run_once() -> dict[str, Any]:
             for leg in body.get("legs", []) if isinstance(body, dict) else []:
                 lc = leg.get("contract", {}) if isinstance(leg, dict) else {}
                 lticker = lc.get("eventTicker") or lc.get("parentEventTicker")
-                leg_rows.append(
-                    {
-                        "contract_scalars": _safe_scalars(lc),
-                        "event_grid": await _event_grid(h, str(lticker) if lticker else None, str(lc.get("instrumentSymbol") or "")),
-                    }
-                )
+                leg_rows.append({
+                    "leg_scalars": _safe_scalars(leg),
+                    "contract_scalars": _safe_scalars(lc),
+                    "event_grid": await _event_grid(h, str(lticker) if lticker else None, str(lc.get("instrumentSymbol") or "")),
+                })
             event_ticker = contract.get("eventTicker") or contract.get("parentEventTicker")
-            rows.append(
-                {
-                    "symbol": sym,
-                    "http": r.status_code,
-                    "top_level_keys": sorted(body.keys()) if isinstance(body, dict) else [],
-                    "contract_keys": sorted(contract.keys()) if isinstance(contract, dict) else [],
-                    "contract_scalars": _safe_scalars(contract),
-                    "interesting_paths": _interesting_paths(body),
-                    "combo_event_grid": await _event_grid(h, str(event_ticker) if event_ticker else None, sym),
-                    "legs": leg_rows,
-                }
-            )
-    out = {
-        "status": "GEMINI_COMBO_MM_REFDATA_PROBE_V3",
-        "rows": rows,
-        "read_only": True,
-        "order_entry": False,
-    }
-    print("GEMINI_COMBO_MM_REFDATA_PROBE_V3 " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
+            rows.append({
+                "symbol": sym,
+                "http": r.status_code,
+                "contract_scalars": _safe_scalars(contract),
+                "interesting_paths": _interesting_paths(body),
+                "combo_event_grid": await _event_grid(h, str(event_ticker) if event_ticker else None, sym),
+                "legs": leg_rows,
+            })
+    out = {"status": "GEMINI_COMBO_MM_REFDATA_PROBE_V4", "rows": rows, "read_only": True, "order_entry": False}
+    print("GEMINI_COMBO_MM_REFDATA_PROBE_V4 " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
     return out
 
 
