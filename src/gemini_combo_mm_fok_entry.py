@@ -1,18 +1,16 @@
 """Fail-closed entrypoint for the bounded Gemini combo q=1 FOK executor.
 
-Two production problems are handled here without weakening trade gates:
+A DISARMED deployment never spends private Gemini nonces merely to prove it is
+disarmed: it loads only the public active-combo catalog and exits. When genuinely
+armed, the entrypoint installs one unfiltered active-order account audit (filtered
+locally) to avoid one time-based nonce per candidate/component. A full 100-order page
+fails closed as ambiguous.
 
-1. A DISARMED deployment must not spend private Gemini nonces merely to prove that
-   it is disarmed.  We load only the public active-combo catalog and exit cleanly.
-2. Gemini's active-orders endpoint accepts an omitted symbol filter.  Querying it
-   once and filtering locally avoids one private nonce per candidate/component.
-   If the response is full at the 100-order cap, the scan fails closed rather than
-   assuming there are no additional relevant orders.
-
-When the exact campaign/arm/deadline gate is valid, this module delegates to
-``gemini_combo_mm_fok_live_v1`` after installing the single-call active-order audit.
-All execution, freshness, >=3c floor, q=1 FOK, recovery, and reconciliation gates
-remain in the live module.
+Armed execution delegates to ``gemini_combo_mm_fok_live_v2``. That executor uses the
+minimal exact conjunction covers C(YES)+all complements and C(NO)+one canonical
+required leg while preserving q1 FOK, >=3c after-fee, <=50ms final skew, exact depth,
+capital/account, recovery, reconciliation, fresh campaign/token/deadline, and
+FILLED_NOT_SETTLED classification gates. Resting combo orders remain forbidden.
 """
 from __future__ import annotations
 
@@ -24,7 +22,7 @@ from typing import Any, Mapping
 
 import httpx
 
-import src.gemini_combo_mm_fok_live_v1 as live
+import src.gemini_combo_mm_fok_live_v2 as live
 from src.gemini_prediction_auth import private_rest_request
 
 ACTIVE_ORDER_LIMIT = 100
@@ -68,9 +66,6 @@ async def _active_orders_for_symbols_single_call(symbols: set[str]) -> tuple[boo
     raw_orders = body.get("orders") or []
     if not isinstance(raw_orders, list):
         return False, []
-    # The endpoint caps a page at 100.  A full page is ambiguous because there may
-    # be more account orders beyond the first page; fail closed instead of burning
-    # more time-based nonces or silently missing a relevant order.
     if len(raw_orders) >= ACTIVE_ORDER_LIMIT:
         return False, []
     relevant: list[dict[str, Any]] = []
@@ -85,8 +80,6 @@ async def _active_orders_for_symbols_single_call(symbols: set[str]) -> tuple[boo
 
 async def run() -> dict[str, Any]:
     state = _arm_state()
-    # Install the nonce-safe audit for both boot preflight and all final/recovery
-    # reconciliations before delegating to the live module.
     live._active_orders_for_symbols = _active_orders_for_symbols_single_call
 
     if not state["armed"]:
@@ -99,17 +92,18 @@ async def run() -> dict[str, Any]:
             candidates = []
             public_ok = False
         out = {
-            "status": "GEMINI_COMBO_MM_FOK_ENTRY_V1",
+            "status": "GEMINI_COMBO_MM_FOK_ENTRY_V2_MINIMAL_COVER",
             **state,
             "catalog": catalog,
             "candidate_count": len(candidates),
             "private_preflight": "SKIPPED_DISARMED",
             "classification": "DISARMED_PUBLIC_CATALOG_READY" if public_ok else "DISARMED_PUBLIC_CATALOG_BLOCKED",
+            "settlement_identities": ["C_YES+SUM(ALL_COMPLEMENTS)>=1", "C_NO+ANY_SINGLE_REQUIRED_LEG>=1"],
             "order_entry": False,
             "realized": False,
             "resting_combo_orders": False,
         }
-        print("GEMINI_COMBO_MM_FOK_ENTRY_V1 " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
+        print("GEMINI_COMBO_MM_FOK_ENTRY_V2_MINIMAL_COVER " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
         return out
 
     return await live.run()
