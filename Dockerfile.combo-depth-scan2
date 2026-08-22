@@ -1,0 +1,10 @@
+FROM python:3.11-slim
+WORKDIR /app
+ENV PYTHONPATH=/app
+ENV BOT_MODE=paper
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY src/ src/
+COPY config/ config/
+RUN python -m py_compile src/gemini_extreme_combo_depth_quant.py src/gemini_sports_inventory.py
+CMD ["python", "-m", "src.gemini_extreme_combo_depth_quant"]
