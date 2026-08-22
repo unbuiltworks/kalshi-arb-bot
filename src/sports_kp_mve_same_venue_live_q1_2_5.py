@@ -19,6 +19,7 @@ from src.auth import KalshiClient
 from src.sports_kp_execution import KalshiExecutor
 
 SUPPORTED_LIVE_LEGS = {2, 3, 4, 5}
+LIVE_MIN_LOCKED = max(base.MIN_LOCKED, base.D(os.getenv("MVE_LIVE_MIN_LOCKED", "0.03")))
 
 
 def valid_live_leg_count(n: int) -> bool:
@@ -71,10 +72,11 @@ async def main_async() -> dict[str, Any]:
         fees = best["fee"] + sum((p.fee for p in plans), base.ZERO)
         all_in = raw + fees
         locked = base.ONE - all_in
-        if locked < base.MIN_LOCKED:
+        if locked < LIVE_MIN_LOCKED:
             return {
-                "status": "NO_TRADE", "reason": "AFTER_FEE_LOCK_BELOW_2C", "rfq_id": rfq_id,
-                "all_in_cost_conservative": str(all_in), "locked_profit_conservative": str(locked), "order_entry": False,
+                "status": "NO_TRADE", "reason": "AFTER_FEE_LOCK_BELOW_3C", "rfq_id": rfq_id,
+                "all_in_cost_conservative": str(all_in), "locked_profit_conservative": str(locked),
+                "min_locked_required": str(LIVE_MIN_LOCKED), "order_entry": False,
             }
 
         positions = await asyncio.gather(*[base._position(client, x) for x in [ticker] + [p.ticker for p in plans]])
@@ -118,6 +120,7 @@ async def main_async() -> dict[str, Any]:
                     "mve_position": str(pos), "hedges": [x.as_dict() for x in hedge_results],
                     "leg_count": len(legs),
                     "all_in_cost_conservative_at_send": str(all_in), "locked_profit_conservative_at_send": str(locked),
+                    "min_locked_required": str(LIVE_MIN_LOCKED),
                     "guaranteed_scalar_safe_floor": "1.00", "combo_quote_accepted": True,
                     "classification": "FILLED_NOT_SETTLED", "realized_profit": None, "hard_halt_required": False,
                 }
