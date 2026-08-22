@@ -1,19 +1,16 @@
-"""Create identity-bound weather settlement ledger events from audited reconciliation.
+"""Create identity-bound weather PAPER settlement events from audited reconciliation.
 
-Research/PAPER accounting only. This module is the narrow handoff between
-``reconcile_weather_paper_fill`` and the shared cross-venue ledger. It never calls a
-venue and has no order-entry path.
+The v5 external ID is self-verifying downstream: it embeds the normalized audited
+terminal source URL (URL-safe base64) and binds it, together with trade identity,
+provider, side, quantity, payout and settlement timestamp, into a SHA-256 digest.
+A downstream analyzer can therefore re-check both provider/source allowlisting and
+terminal payload integrity without trusting free-form reconciliation metadata.
 
-A successful reconciliation is necessary but not sufficient: the caller must also
-supply the exact synthetic trade-group/settlement identity and a later official
-settlement timestamp. The emitted external id is deterministic and self-verifiable:
-it binds the trade group, exact market, settlement key, terminal provider, terminal
-source URL fingerprint, side, quantity, payout, and settlement timestamp. This
-prevents a valid provenance token from being replayed onto a different terminal
-settlement payload for the same trade identity.
+Research/PAPER accounting only; no venue write path exists here.
 """
 from __future__ import annotations
 
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from decimal import Decimal
 from hashlib import sha256
 from typing import Any
@@ -22,7 +19,7 @@ from urllib.parse import urlparse
 from src.cross_venue_ledger import LedgerEvent, make_event
 
 D = Decimal
-PREFIX = "weather-certified-settlement:v4:"
+PREFIX = "weather-certified-settlement:v5:"
 
 
 def _finite_decimal(value: Any) -> Decimal | None:
@@ -69,17 +66,19 @@ def _official_provider_source(provider: str, source_url: str) -> bool:
     return False
 
 
-def _source_url_hash(source_url: str) -> str:
-    normalized = _norm_url(source_url)
-    if not normalized:
-        raise ValueError("terminal settlement source URL is required")
-    return sha256(normalized.encode("utf-8")).hexdigest()
-
-
 def _decimal_token(value: Decimal) -> str:
     if not isinstance(value, Decimal) or not value.is_finite():
         raise ValueError("finite Decimal required for certified settlement payload")
     return format(value.normalize(), "f")
+
+
+def _b64(value: str) -> str:
+    return urlsafe_b64encode(value.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def _unb64(value: str) -> str:
+    padded = value + ("=" * ((4 - len(value) % 4) % 4))
+    return urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
 
 
 def certified_weather_settlement_external_id(
@@ -94,7 +93,6 @@ def certified_weather_settlement_external_id(
     source_normalized = _norm_url(source_url)
     if not _official_provider_source(provider_token, source_normalized):
         raise ValueError("unsupported or unofficial terminal weather settlement source")
-    source_hash = _source_url_hash(source_normalized)
     side_token = _norm_upper(side)
     if not group or not market or not key:
         raise ValueError("all certified settlement identity fields are required")
@@ -104,34 +102,29 @@ def certified_weather_settlement_external_id(
         raise ValueError("settlement_ts_ms must be a nonnegative integer")
     quantity_token = _decimal_token(quantity)
     payout_token = _decimal_token(payout)
-    digest = sha256("\x1f".join((group, market, key, provider_token, source_hash,
+    digest = sha256("\x1f".join((group, market, key, provider_token, source_normalized,
         side_token, quantity_token, payout_token, str(settlement_ts_ms))).encode("utf-8")).hexdigest()
-    return f"{PREFIX}{provider_token}:{source_hash}:{digest}"
+    return f"{PREFIX}{provider_token}:{_b64(source_normalized)}:{digest}"
 
 
 def parse_and_verify_weather_settlement_external_id(event: LedgerEvent) -> dict[str, str] | None:
-    """Recompute v4 provenance from the actual settlement event payload.
-
-    The URL itself is not embedded in v4; only its fingerprint is. Therefore this
-    verifier proves terminal payload/identity integrity plus an allowlisted provider
-    token, while quote-time reconciliation remains responsible for retaining the
-    audited terminal URL. A copied digest cannot validate on a changed trade, market,
-    key, side, quantity, payout, or timestamp.
-    """
+    """Independently verify v5 source authority and terminal-payload binding."""
     external_id = event.external_id
     if not isinstance(external_id, str) or not external_id.startswith(PREFIX):
         return None
     pieces = external_id[len(PREFIX):].split(":")
     if len(pieces) != 3:
         return None
-    provider, source_hash, digest = pieces
-    if _provider_token(provider) != provider:
+    provider, source_token, digest = pieces
+    try:
+        if _provider_token(provider) != provider:
+            return None
+        source_url = _norm_url(_unb64(source_token))
+    except Exception:
         return None
-    if len(source_hash) != 64 or any(ch not in "0123456789abcdef" for ch in source_hash):
+    if not _official_provider_source(provider, source_url):
         return None
     if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
-        return None
-    if provider not in {"THE_WEATHER_COMPANY", "NWS"}:
         return None
     if event.side not in {"YES", "NO"}:
         return None
@@ -146,12 +139,20 @@ def parse_and_verify_weather_settlement_external_id(event: LedgerEvent) -> dict[
     key = _norm(event.settlement_key)
     if not group or not market or not key:
         return None
-    expected_digest = sha256("\x1f".join((group, market, key, provider, source_hash,
-        event.side, _decimal_token(event.quantity), _decimal_token(event.payout),
-        str(event.ts_ms))).encode("utf-8")).hexdigest()
-    if expected_digest != digest:
+    expected = certified_weather_settlement_external_id(
+        trade_group_id=group,
+        market_id=market,
+        settlement_key=key,
+        provider=provider,
+        source_url=source_url,
+        side=event.side,
+        quantity=event.quantity,
+        payout=event.payout,
+        settlement_ts_ms=event.ts_ms,
+    )
+    if expected != external_id:
         return None
-    return {"provider": provider, "source_url_hash": source_hash}
+    return {"provider": provider, "source_url": source_url}
 
 
 def ledger_event_from_weather_reconciliation(
