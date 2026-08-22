@@ -12,19 +12,21 @@ from __future__ import annotations
 import argparse
 import asyncio
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 import json
 import logging
 from typing import Any
 
 import httpx
 
-from src.gemini_kalshi_basis_cushion_analyze import summarize as summarize_cushion
-from src.gemini_kalshi_fast_overlap import KALSHI_REST
+from src.gemini_kalshi_basis_cushion_analyze import analyze_row, summarize as summarize_cushion
+from src.gemini_kalshi_fast_overlap import KALSHI_REST, _gemini_meta
 from src.gemini_kalshi_settlement_agreement import _gemini_settled
 from src.gemini_kalshi_settlement_probe import match_settled_true_windows
 from src.gemini_kalshi_threshold_dominance_study import classify, summarize as summarize_threshold
 
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_threshold_dominance_7d")
+D = Decimal
 ASSETS = ("BTC", "ETH", "SOL", "XRP")
 KALSHI_15M_SERIES = {
     "BTC": "KXBTC15M",
@@ -80,6 +82,13 @@ async def _kalshi_series(
         await asyncio.sleep(0.30)
 
 
+def _decimal(value: Any) -> Decimal:
+    try:
+        return D(str(value))
+    except Exception:
+        return D("-1")
+
+
 async def run(hours: int, gemini_limit: int, max_window_end_skew_s: float) -> None:
     timeout = httpx.Timeout(30.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout) as http:
@@ -92,6 +101,12 @@ async def run(hours: int, gemini_limit: int, max_window_end_skew_s: float) -> No
         }
         gemini = await gemini_task
         kalshi_by_asset = {asset: await task for asset, task in kalshi_tasks.items()}
+
+    gemini_15m: list[tuple[dict[str, Any], tuple[str, int, datetime]]] = []
+    for event in gemini:
+        meta = _gemini_meta(event)
+        if meta is not None and meta[1] == 15 and meta[0] in ASSETS:
+            gemini_15m.append((event, meta))
 
     kalshi = [
         market
@@ -110,11 +125,62 @@ async def run(hours: int, gemini_limit: int, max_window_end_skew_s: float) -> No
             continue
         enriched.append(classify(row, event, market))
 
+    analyzed = [analyze_row(row) for row in enriched]
+    basis_outliers = sorted(
+        [row for row in analyzed if row.get("evidence_complete")],
+        key=lambda row: _decimal(row.get("terminal_basis_abs_bps")),
+        reverse=True,
+    )[:12]
+    enriched_by_g = {str(row.get("gemini_ticker") or ""): row for row in enriched}
+    for out in basis_outliers:
+        raw = enriched_by_g.get(str(out.get("gemini_ticker") or ""), {})
+        logger.warning(
+            "CRYPTO_THRESHOLD_7D_BASIS_OUTLIER %s",
+            json.dumps({
+                "asset": out.get("asset"),
+                "gemini_ticker": out.get("gemini_ticker"),
+                "kalshi_ticker": out.get("kalshi_ticker"),
+                "gemini_strike": raw.get("gemini_strike"),
+                "kalshi_target": raw.get("kalshi_target"),
+                "gemini_final": raw.get("gemini_settlement"),
+                "kalshi_final": raw.get("kalshi_expiration_value"),
+                "gemini_outcome": raw.get("gemini_outcome"),
+                "kalshi_outcome": raw.get("kalshi_outcome"),
+                "safe_direction": out.get("shared_value_safe_direction"),
+                "terminal_basis_signed_bps": out.get("terminal_basis_signed_bps"),
+                "terminal_basis_abs_bps": out.get("terminal_basis_abs_bps"),
+                "adverse_terminal_basis_bps": out.get("adverse_terminal_basis_bps"),
+                "threshold_gap_abs_bps": out.get("threshold_gap_abs_bps"),
+                "adverse_basis_to_gap_ratio": out.get("adverse_basis_to_threshold_gap_ratio"),
+                "terminal_cushion_sufficient": out.get("terminal_cushion_sufficient"),
+                "cross_index_dominance_breached": out.get("cross_index_dominance_breached"),
+                "trade_authorized": False,
+                "read_only": True,
+                "order_entry": False,
+            }, separators=(",", ":"), default=str),
+        )
+
     threshold_summary = summarize_threshold(enriched)
     cushion_summary = summarize_cushion(enriched)
+    coverage_start = min((meta[2] for _, meta in gemini_15m), default=None)
+    coverage_end = max((meta[2] for _, meta in gemini_15m), default=None)
+    samples = [
+        {
+            "ticker": str(event.get("ticker") or ""),
+            "title": str(event.get("title") or ""),
+            "series": event.get("series"),
+            "asset": meta[0],
+            "expiry_utc": meta[2].isoformat(),
+        }
+        for event, meta in gemini_15m[:8]
+    ]
     payload = {
-        "hours": hours,
+        "requested_hours": hours,
         "gemini_settled_events_scanned": len(gemini),
+        "gemini_15m_candidates_in_returned_page": len(gemini_15m),
+        "gemini_15m_coverage_start_utc": coverage_start.isoformat() if coverage_start else None,
+        "gemini_15m_coverage_end_utc": coverage_end.isoformat() if coverage_end else None,
+        "gemini_15m_event_samples": samples,
         "kalshi_exact_series_counts": {
             asset: len(kalshi_by_asset.get(asset, [])) for asset in ASSETS
         },
