@@ -11,7 +11,8 @@ and, importantly, for *each individual required leg*:
 The second identity needs only one component hedge, not every selected leg.  This
 scanner evaluates all such two-leg NO covers at q=1 with conservative cent-rounded
 Gemini taker fees and exact top-of-book depth.  It never authenticates or places an
-order.
+order. The production test service may run this module directly as a one-shot
+read-only diagnostic.
 """
 from __future__ import annotations
 
