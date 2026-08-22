@@ -1,0 +1,1 @@
+Restore the hardened q=1 basis-risk campaign supervisor with CRYPTO_BASIS_RISK_CANARY_ARM=NO after exact Kalshi REST transport validation. No live order is authorized by this deployment.
