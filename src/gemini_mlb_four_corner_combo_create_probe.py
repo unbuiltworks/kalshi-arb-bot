@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from typing import Any
 
 import httpx
@@ -30,15 +31,25 @@ BASE = "https://api.gemini.com"
 
 
 def _numeric_contract_id(c: dict[str, Any]) -> str | None:
-    """Combo API requires the numeric internal ID, not composite sports contractId."""
-    for key in ("id", "internalId", "contractNumericId", "contract_id"):
+    """Return Gemini's numeric underlying contract ID for canonical combo legs.
+
+    Sports event discovery exposes ``id`` as ``<event-id>-<contract-id>`` (for
+    example ``202769-486009``), while the combo API requires the decimal
+    underlying contract ID only. Prefer a directly numeric stable field when one
+    is present; otherwise use the numeric suffix of the documented composite id.
+    """
+    for key in ("internalId", "contractNumericId", "contract_id", "contractId"):
         value = c.get(key)
         if value not in (None, "") and str(value).isdigit():
             return str(value)
-    value = c.get("contractId")
-    if value not in (None, "") and str(value).isdigit():
-        return str(value)
-    return None
+    value = c.get("id")
+    if value in (None, ""):
+        return None
+    text = str(value)
+    if text.isdigit():
+        return text
+    match = re.fullmatch(r"\d+-(\d+)", text)
+    return match.group(1) if match else None
 
 
 def _find_contracts(events: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
@@ -71,7 +82,7 @@ async def _create_combo_json(http: httpx.AsyncClient, body: dict[str, Any]) -> h
 
 async def run_once() -> dict[str, Any]:
     out: dict[str, Any] = {
-        "status": "GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V3",
+        "status": "GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V4",
         "target": "ATL/MIL x WSH/MIA Aug-22",
         "requested_corners": ["+".join(x) for x in CORNERS],
         "order_entry": False,
@@ -82,7 +93,7 @@ async def run_once() -> dict[str, Any]:
     }
     if not has_credentials():
         out["status"] = "NO_CREDENTIALS"
-        print("GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V3 " + json.dumps(out, separators=(",", ":")), flush=True)
+        print("GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V4 " + json.dumps(out, separators=(",", ":")), flush=True)
         return out
 
     async with httpx.AsyncClient(timeout=20.0) as http:
@@ -92,15 +103,7 @@ async def run_once() -> dict[str, Any]:
         out["contract_symbols"] = {k: v["symbol"] for k, v in contracts.items()}
         if set(contracts) != set(TARGETS):
             out["status"] = "TARGET_NUMERIC_CONTRACT_IDS_INCOMPLETE"
-            # Log only public field names for target contract objects, never credentials.
-            target_key_sets=[]
-            for event in events:
-                if str(event.get("ticker") or "") in {"MLB-2608221810-ATL-MIL-M", "MLB-2608222010-WSH-MIA-M"}:
-                    for c in event.get("contracts") or []:
-                        if isinstance(c,dict):
-                            target_key_sets.append(sorted(str(k) for k in c.keys()))
-            out["target_contract_public_key_sets"] = target_key_sets[:4]
-            print("GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V3 " + json.dumps(out, separators=(",", ":")), flush=True)
+            print("GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V4 " + json.dumps(out, separators=(",", ":")), flush=True)
             return out
 
         results: list[dict[str, Any]] = []
@@ -135,7 +138,7 @@ async def run_once() -> dict[str, Any]:
     out["results"] = results
     out["successful_combo_definitions"] = sum(bool(x.get("ok")) for x in results)
     out["all_four_available"] = out["successful_combo_definitions"] == 4
-    print("GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V3 " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
+    print("GEMINI_MLB_FOUR_CORNER_COMBO_CREATE_PROBE_V4 " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
     return out
 
 
