@@ -4,6 +4,8 @@ This module has no order path. It first reads the account's current documented A
 usage tier/budgets, then opens exactly one authenticated Kalshi WebSocket, subscribes
 to the current BTC 15-minute orderbook, requires an actual snapshot, logs success, and
 exits. It is used only to prove API capacity before any new basis-risk live arm.
+
+The probe is intentionally rerunnable after account-tier or socket-capacity changes.
 """
 from __future__ import annotations
 
