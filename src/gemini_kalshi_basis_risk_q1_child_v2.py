@@ -1,12 +1,14 @@
 """Hardened child entrypoint for the first q=1 settlement-basis live probe.
 
 This wrapper does not change the proven dual-FOK transport or any quote/depth/freshness
-threshold. It strengthens the isolated basis-risk child with three durable controls:
+threshold. It strengthens the isolated basis-risk child with durable controls:
 
 * authoritative Postgres must show no submitted crypto trade lacking TRADE_REALIZED;
 * the first live research tranche is globally limited to one CAPITAL_RESERVED event;
-* all ledger writes use the schema-valid LIVE_PROBE mode while metadata/strategy keep
-  the activity explicitly classified as settlement-basis research, not guaranteed arb.
+* all ledger writes use schema-valid LIVE_PROBE while metadata/strategy explicitly mark
+  settlement-basis research rather than guaranteed arbitrage; and
+* only this dedicated child process receives a basis-risk authorization function. The
+  shared guaranteed-arbitrage settlement-equivalence code lock remains untouched.
 
 The one-probe ceiling is intentionally stricter than the separately approved $5 maximum-
 loss research budget. Promotion beyond the first <=$1 q=1 probe requires a deliberate
@@ -15,7 +17,7 @@ code/config change after its settlement is reviewed.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import logging
 import os
 from typing import Any
@@ -24,6 +26,8 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from src import gemini_kalshi_basis_risk_q1_child as child
+from src import gemini_kalshi_live_service as live_service
+from src import gemini_kalshi_probe_transport as transport
 
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_risk_q1_child_v2")
@@ -36,6 +40,8 @@ PRIOR_CRYPTO_STRATEGIES = (
     "gemini_kalshi_15m_crypto_scale",
     child.STRATEGY,
 )
+
+_LEDGER_RECONCILED = False
 
 
 def _connect():
@@ -69,6 +75,8 @@ def unresolved_prior_trade_ids(conn) -> list[str]:
 
 def assert_prior_ledger_reconciled() -> None:
     """Fail closed unless every prior submitted crypto trade is realized."""
+    global _LEDGER_RECONCILED
+    _LEDGER_RECONCILED = False
     with _connect() as conn:
         unresolved = unresolved_prior_trade_ids(conn)
     if unresolved:
@@ -76,7 +84,55 @@ def assert_prior_ledger_reconciled() -> None:
             "basis-risk v2 blocked by unresolved prior crypto ledger trades: "
             + ",".join(unresolved[:8])
         )
+    _LEDGER_RECONCILED = True
     logger.warning("CRYPTO_BASIS_RISK_LEDGER_RECONCILED unresolved_prior_trades=0")
+
+
+def _env_decimal(name: str) -> Decimal | None:
+    try:
+        value = Decimal(os.getenv(name, "").strip())
+    except (InvalidOperation, ValueError):
+        return None
+    return value if value.is_finite() else None
+
+
+def _basis_deadline_valid() -> bool:
+    raw = os.getenv(child.BASIS_DEADLINE_ENV, "").strip()
+    if not raw:
+        return False
+    try:
+        deadline = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) <= deadline.astimezone(timezone.utc)
+
+
+def basis_transport_authorized(cli_live: bool) -> bool:
+    """Authorize transport only inside the explicitly approved basis-risk process.
+
+    This is deliberately NOT installed in ``gemini_kalshi_live_probe_guard``. The
+    shared arb lock therefore remains false for q1/q5/maker and every other process.
+    The basis child must have independently reconciled Postgres in this process, carry
+    the exact approved $5 budget and >=10bp minimum, remain inside its short deadline,
+    and retain both the basis-specific and legacy software opt-ins used by the proven
+    transport. Durable one-probe ownership is still acquired immediately before send.
+    """
+    budget = _env_decimal(child.BASIS_BUDGET_ENV)
+    min_gap = _env_decimal(child.BASIS_MIN_GAP_ENV)
+    return bool(
+        _LEDGER_RECONCILED
+        and bool(cli_live)
+        and os.getenv(child.BASIS_ARM_ENV, "NO").strip().upper() == "YES"
+        and os.getenv(child.BASIS_RECONCILED_ENV, "NO").strip().upper() == "YES"
+        and budget == child.APPROVED_BUDGET
+        and min_gap is not None
+        and min_gap >= child.DEFAULT_MIN_GAP_BPS
+        and _basis_deadline_valid()
+        and os.getenv(child.v2.ARM_ENV, "NO").strip().upper() == "YES"
+        and os.getenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", "NO").strip().upper() == "YES"
+    )
 
 
 def acquire_atomic_capital_reservation(
@@ -186,10 +242,16 @@ def acquire_atomic_capital_reservation(
 
 
 def install() -> None:
-    # Patch only the research-only accounting/claim surface. Execution transport and
-    # all market microstructure gates remain the original tested child implementation.
+    # Patch only this dedicated basis-risk process. Shared source-level authorization
+    # remains SETTLEMENT_EQUIVALENCE_PROVEN=False for every guaranteed-arb path.
     child.MODE = LEDGER_MODE
     child.acquire_atomic_capital_reservation = acquire_atomic_capital_reservation
+    child.v2.executor.live_probe_authorized = basis_transport_authorized
+    transport.live_probe_authorized = basis_transport_authorized
+    live_service.live_probe_authorized = basis_transport_authorized
+    logger.warning(
+        "CRYPTO_BASIS_RISK_TRANSPORT_AUTH_INSTALLED scope=PROCESS_LOCAL shared_arb_lock_changed=false"
+    )
 
 
 def main() -> None:
