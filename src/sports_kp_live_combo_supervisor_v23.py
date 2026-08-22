@@ -1,14 +1,14 @@
 """Production combo supervisor v23: learn correlated-family priority from RFQs.
 
 v22 proved that valid same-game/different-family baskets can be identified before
-MVE creation.  Because Kalshi market creation/RFQ capacity is finite, this layer
+MVE creation. Because Kalshi market creation/RFQ capacity is finite, this layer
 uses the *observed* conservative scalar-safe gap of prior manufactured baskets to
-rank future correlated family pairs.  Family pairs that receive two-sided/useful
+rank future correlated family+selected-side patterns. Patterns that receive useful
 quotes and come closer to a positive lock earn more future manufacturing slots;
-unseen pairs retain exploration capacity.
+unseen patterns retain exploration capacity.
 
 The feedback is process-local, diagnostic/manufacturing-order-only and resets on
-restart.  It never changes settlement semantics, fee math, the >=3c live floor,
+restart. It never changes settlement semantics, fee math, the >=3c live floor,
 q=1, final revalidation, depth/capital checks, or order-entry authorization.
 """
 from __future__ import annotations
@@ -26,14 +26,15 @@ logger = v22.logger
 D = Decimal
 ZERO = D("0")
 
-# Preserve the daily 600 hard cap while spending it more selectively.
-os.environ["MVE_GENERATOR_MAX_CREATIONS_PER_RUN"] = "8"
+# Keep 8 as a safe default, but do not overwrite an explicit Railway throughput
+# setting. The durable daily 600 cap remains enforced separately.
+os.environ.setdefault("MVE_GENERATOR_MAX_CREATIONS_PER_RUN", "8")
 
 base = v22.v21.v20.v19.v18.v17.v16.base
 _ORIGINAL_CANDIDATE_COMBOS = g._candidate_combos
 _ORIGINAL_GENERATE = base.generate_mves
 
-# signature -> observations.  best_lock is the best conservative lock seen in
+# signature -> observations. best_lock is the best conservative lock seen in
 # either scalar-safe direction (can be negative).
 _FEEDBACK: dict[str, dict[str, Any]] = defaultdict(
     lambda: {"observations": 0, "quoted": 0, "best_lock": D("-9"), "last_lock": D("-9")}
@@ -47,13 +48,21 @@ def _event_parts(ticker: str) -> tuple[str, str]:
     return tuple(text.split("-", 1))  # type: ignore[return-value]
 
 
+def _leg_side(leg: Any) -> str:
+    if isinstance(leg, dict):
+        raw = leg.get("side") or leg.get("selected_side") or leg.get("selection") or "unknown"
+    else:
+        raw = getattr(leg, "side", None) or getattr(leg, "selected_side", None) or "unknown"
+    return str(raw or "unknown").lower()
+
+
 def _family_signature_from_legs(legs: Any) -> str:
-    families = []
+    oriented = []
     for leg in legs or []:
         ticker = leg.get("event_ticker") if isinstance(leg, dict) else getattr(leg, "event_ticker", "")
         family, _game = _event_parts(str(ticker or ""))
-        families.append(family)
-    return "+".join(sorted(families))
+        oriented.append(f"{family}:{_leg_side(leg)}")
+    return "+".join(sorted(oriented))
 
 
 def _same_game_distinct_family(legs: tuple[Any, ...]) -> bool:
@@ -66,8 +75,8 @@ def _same_game_distinct_family(legs: tuple[Any, ...]) -> bool:
 def _feedback_rank(signature: str) -> tuple[int, Decimal, int]:
     row = _FEEDBACK.get(signature)
     if not row or int(row["observations"]) == 0:
-        # Unseen pairs get exploration priority after pairs already showing a
-        # near-bound quote, but ahead of repeatedly poor pairs.
+        # Unseen patterns get exploration priority after patterns already showing
+        # a near-bound quote, but ahead of repeatedly poor patterns.
         return (1, D("-2"), 0)
     best = D(row["best_lock"])
     quoted = int(row["quoted"])
@@ -115,6 +124,7 @@ def _candidate_combos_feedback_first(collection, event_legs, *, max_candidates, 
         "baseline_candidates": len(baseline),
         "returned_candidates": len(out),
         "learned_signatures": len(_FEEDBACK),
+        "signature_includes_selected_side": True,
         "manufacturing_order_only": True,
         "execution_semantics_changed": False,
         "order_entry": False,
@@ -166,7 +176,7 @@ async def _generate_with_feedback() -> dict[str, Any]:
     )[:12]
     logger.warning("SPORTS_MVE_RFQ_FEEDBACK_SUMMARY %s", json.dumps({
         "markets_scored": len(rows),
-        "top_family_signatures": ranked_feedback,
+        "top_family_side_signatures": ranked_feedback,
         "created_today": result.get("created_today") if isinstance(result, dict) else None,
         "daily_cap": result.get("daily_cap") if isinstance(result, dict) else None,
         "feedback_is_execution_gate": False,
