@@ -130,6 +130,12 @@ def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[st
             continue
 
         settlement = group_settlements[0]
+        # Weather bracket markets are binary contracts. A terminal settlement for a
+        # filled position can therefore pay exactly zero or exactly the filled
+        # quantity. Accepting an arbitrary fractional payout would let malformed or
+        # non-terminal telemetry contaminate realized PAPER P/L and capital-efficiency
+        # metrics.
+        binary_terminal_payout = settlement.payout in {D("0"), fill.quantity}
         settlement_valid = (
             settlement.market_id == fill.market_id
             and settlement.settlement_key == fill.settlement_key
@@ -138,8 +144,7 @@ def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[st
             and isinstance(settlement.ts_ms, int)
             and not isinstance(settlement.ts_ms, bool)
             and settlement.ts_ms > fill.ts_ms
-            and settlement.payout >= 0
-            and settlement.payout <= fill.quantity
+            and binary_terminal_payout
         )
         if not settlement_valid:
             invalid_groups += 1
@@ -204,7 +209,7 @@ def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[st
         ),
         "capital_lock_semantics": "SYNTHETIC_FILL_TO_EXACT_OFFICIAL_KALSHI_SETTLEMENT",
         "fee_semantics": "EXACT_FEE_EVENTS_PREFERRED_LEGACY_FILL_FEE_FALLBACK_FAIL_CLOSED_ON_AMBIGUITY",
-        "settlement_validation": "EXACT_KEY_CATEGORY_MARKET_OPTIONAL_SIDE_AND_PAYOUT_BOUNDED_BY_FILLED_QUANTITY",
+        "settlement_validation": "EXACT_KEY_CATEGORY_MARKET_OPTIONAL_SIDE_AND_BINARY_TERMINAL_PAYOUT",
         "opportunity_duration_is_capital_lock": False,
         "warning": (
             "Do not substitute weather OPEN/MOVE/CLOSE quote lifetime for post-fill capital lock. "
