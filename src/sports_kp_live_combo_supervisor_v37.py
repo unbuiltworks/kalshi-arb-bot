@@ -9,6 +9,11 @@ For q=1, a candidate is shadow-executable only when current YES ask + NO ask +
 conservative taker fees on both sides leaves >= $0.03 locked profit. Because both
 legs are the exact same Kalshi market, there is no cross-venue rule-equivalence
 problem. This layer is read-only: no order entry, no market creation, no RFQ.
+
+Kalshi market-list responses may omit explicit ask fields. In that case the
+executable ask is derived from the opposite best bid using binary complement
+book semantics: YES ask = 1 - NO bid, NO ask = 1 - YES bid; corresponding ask
+depth is the opposite bid depth.
 """
 from __future__ import annotations
 
@@ -32,6 +37,29 @@ def _d(v: Any) -> Decimal | None:
         return D(str(v))
     except Exception:
         return None
+
+
+def _ask_and_depth(m: dict[str, Any], side: str) -> tuple[Decimal | None, Decimal | None, str]:
+    side = side.lower()
+    if side == "yes":
+        ask = _d(m.get("yes_ask_dollars"))
+        depth = _d(m.get("yes_ask_size_fp") or m.get("yes_ask_size"))
+        if ask is not None and depth is not None:
+            return ask, depth, "explicit_ask"
+        opp_bid = _d(m.get("no_bid_dollars"))
+        opp_depth = _d(m.get("no_bid_size_fp") or m.get("no_bid_size"))
+        if opp_bid is not None and opp_depth is not None:
+            return ONE - opp_bid, opp_depth, "derived_from_no_bid"
+    else:
+        ask = _d(m.get("no_ask_dollars"))
+        depth = _d(m.get("no_ask_size_fp") or m.get("no_ask_size"))
+        if ask is not None and depth is not None:
+            return ask, depth, "explicit_ask"
+        opp_bid = _d(m.get("yes_bid_dollars"))
+        opp_depth = _d(m.get("yes_bid_size_fp") or m.get("yes_bid_size"))
+        if opp_bid is not None and opp_depth is not None:
+            return ONE - opp_bid, opp_depth, "derived_from_yes_bid"
+    return None, None, "missing"
 
 
 async def _same_market_probe() -> None:
@@ -64,10 +92,8 @@ async def _same_market_probe() -> None:
                     if str(m.get("status") or "").lower() not in {"active", "open"}:
                         continue
                     ticker = str(m.get("ticker") or "")
-                    ya = _d(m.get("yes_ask_dollars"))
-                    na = _d(m.get("no_ask_dollars"))
-                    yd = _d(m.get("yes_ask_size_fp") or m.get("yes_ask_size"))
-                    nd = _d(m.get("no_ask_size_fp") or m.get("no_ask_size"))
+                    ya, yd, ysrc = _ask_and_depth(m, "yes")
+                    na, nd, nsrc = _ask_and_depth(m, "no")
                     if not ticker or ya is None or na is None or yd is None or nd is None:
                         continue
                     if not (D("0") < ya < ONE and D("0") < na < ONE) or yd < ONE or nd < ONE:
@@ -84,6 +110,8 @@ async def _same_market_probe() -> None:
                         "no_ask": str(na),
                         "yes_depth_fp": str(yd),
                         "no_depth_fp": str(nd),
+                        "yes_price_source": ysrc,
+                        "no_price_source": nsrc,
                         "yes_fee": str(yf),
                         "no_fee": str(nf),
                         "all_in_cost": str(all_in),
