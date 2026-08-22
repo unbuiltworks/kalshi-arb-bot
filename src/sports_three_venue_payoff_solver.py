@@ -33,11 +33,11 @@ from src.universal_three_venue_sports import fetch_gemini_mlb, fetch_kalshi_mlb,
 D = Decimal
 ONE = D("1")
 logger = logging.getLogger("kalshi_arb.sports_three_venue_payoff_solver")
+EventKey = tuple[tuple[str, ...], int]
 
 
-def _event_key(side: NormalizedSide) -> tuple[tuple[str, ...], int]:
+def _event_key(side: NormalizedSide) -> EventKey:
     event = side.identity.event
-    # Five-minute bucket only groups venue representations of the same scheduled game.
     return tuple(event.participants), int(event.scheduled_start_ms // 300000)
 
 
@@ -49,13 +49,21 @@ def _moneyline_sides(rows: list[NormalizedSide]) -> list[NormalizedSide]:
     return [r for r in rows if r.identity.market_family == "moneyline" and r.identity.subject_type == "team"]
 
 
-def _instrument_vector(team: str, game_a: tuple[str, str], game_b: tuple[str, str]) -> tuple[int, int, int, int] | None:
+def _instrument_vector(
+    team: str,
+    source_event: EventKey,
+    event_a: EventKey,
+    event_b: EventKey,
+    game_a: tuple[str, str],
+    game_b: tuple[str, str],
+) -> tuple[int, int, int, int] | None:
+    """Payoff vector bound to the exact physical game, not merely team name."""
     a0, a1 = game_a
     b0, b1 = game_b
     states = ((a0, b0), (a0, b1), (a1, b0), (a1, b1))
-    if team in game_a:
+    if source_event == event_a and team in game_a:
         return tuple(1 if s[0] == team else 0 for s in states)  # type: ignore[return-value]
-    if team in game_b:
+    if source_event == event_b and team in game_b:
         return tuple(1 if s[1] == team else 0 for s in states)  # type: ignore[return-value]
     return None
 
@@ -69,7 +77,7 @@ async def run_once() -> dict[str, Any]:
         gemini, poly, kalshi = await asyncio.gather(
             fetch_gemini_mlb(http), fetch_polymarket_mlb(http), fetch_kalshi_mlb(http)
         )
-        priced, errors, counterpart_keys = await price_counterparts_snapshot(http, gemini, poly, kalshi)
+        priced, errors, counterpart_clusters = await price_counterparts_snapshot(http, gemini, poly, kalshi)
 
     normalized = _moneyline_sides(
         normalize_gemini_mlb(gemini) + normalize_polymarket_mlb(poly) + normalize_kalshi_mlb_eastern(kalshi)
@@ -86,6 +94,7 @@ async def run_once() -> dict[str, Any]:
             "market_id": q.market_id,
             "team": side.identity.subject,
             "event_key": _event_key(side),
+            "scheduled_start_ms": side.identity.event.scheduled_start_ms,
             "cost": q.yes_cost,
             "raw_ask": p.raw_yes_ask,
             "fee": p.yes_fee,
@@ -93,7 +102,7 @@ async def run_once() -> dict[str, Any]:
             "source": p.depth_source,
         })
 
-    events: dict[tuple[tuple[str, ...], int], set[str]] = defaultdict(set)
+    events: dict[EventKey, set[str]] = defaultdict(set)
     for row in quote_rows:
         events[row["event_key"]].add(row["team"])
     valid_events = [k for k, teams in events.items() if len(teams) == 2]
@@ -102,31 +111,25 @@ async def run_once() -> dict[str, Any]:
     for event_a, event_b in combinations(valid_events, 2):
         game_a = tuple(sorted(events[event_a]))
         game_b = tuple(sorted(events[event_b]))
-        if len(game_a) != 2 or len(game_b) != 2:
-            continue
-        # Keep each physical game distinct and avoid accidental duplicate representations.
-        if event_a == event_b:
+        if len(game_a) != 2 or len(game_b) != 2 or event_a == event_b:
             continue
         candidates = []
         for row in quote_rows:
             if row["event_key"] not in {event_a, event_b}:
                 continue
-            vec = _instrument_vector(row["team"], game_a, game_b)
+            vec = _instrument_vector(row["team"], row["event_key"], event_a, event_b, game_a, game_b)
             if vec is not None:
                 candidates.append((row, vec))
         if len(candidates) < 2:
             continue
 
         best = None
-        # q=1 contracts; searching 2..4 instruments is sufficient for single-game
-        # binary payoff vectors and leaves room for mixed redundant covers.
         for n in range(2, min(4, len(candidates)) + 1):
             for chosen in combinations(candidates, n):
                 rows = [x[0] for x in chosen]
                 vectors = [x[1] for x in chosen]
                 if not _covers(vectors):
                     continue
-                # Never buy the exact same venue market-side twice.
                 keys = {(r["venue"], r["market_id"]) for r in rows}
                 if len(keys) != len(rows):
                     continue
@@ -141,12 +144,17 @@ async def run_once() -> dict[str, Any]:
         states = [f"{game_a[0]}+{game_b[0]}", f"{game_a[0]}+{game_b[1]}", f"{game_a[1]}+{game_b[0]}", f"{game_a[1]}+{game_b[1]}"]
         results.append({
             "games": [list(game_a), list(game_b)],
+            "event_keys": [
+                {"participants": list(event_a[0]), "start_bucket": event_a[1]},
+                {"participants": list(event_b[0]), "start_bucket": event_b[1]},
+            ],
             "states": states,
             "all_in_cost": str(total),
             "normal_event_locked_profit": str(locked),
             "legs": [
                 {
                     "venue": r["venue"], "market_id": r["market_id"], "team": r["team"],
+                    "scheduled_start_ms": r["scheduled_start_ms"],
                     "all_in_cost": str(r["cost"]), "raw_ask": str(r["raw_ask"]),
                     "fee": str(r["fee"]), "payoff_vector": list(v), "depth": str(r["depth"]),
                 }
@@ -158,11 +166,12 @@ async def run_once() -> dict[str, Any]:
         })
 
     results.sort(key=lambda r: D(r["normal_event_locked_profit"]), reverse=True)
-    target = [r for r in results if {tuple(r["games"][0]), tuple(r["games"][1])} == {("ATL", "MIL"), ("MIA", "WSH")}]
+    target_games = {("atl", "mil"), ("mia", "wsh")}
+    target = [r for r in results if {tuple(r["games"][0]), tuple(r["games"][1])} == target_games]
     output = {
-        "status": "THREE_VENUE_SPORTS_PAYOFF_SOLVER_V1",
+        "status": "THREE_VENUE_SPORTS_PAYOFF_SOLVER_V2",
         "raw_events": {"gemini": len(gemini), "polymarket": len(poly), "kalshi": len(kalshi)},
-        "normal_event_counterpart_keys": counterpart_keys,
+        "normal_event_counterpart_start_clusters": counterpart_clusters,
         "priced_moneyline_instruments": len(quote_rows),
         "two_game_grids_scored": len(results),
         "shadow_positive_ge_3c": sum(D(r["normal_event_locked_profit"]) >= D("0.03") for r in results),
@@ -175,8 +184,8 @@ async def run_once() -> dict[str, Any]:
         "read_only": True,
         "order_entry": False,
     }
-    logger.warning("THREE_VENUE_SPORTS_PAYOFF_SOLVER_V1 %s", json.dumps(output, separators=(",", ":"), default=str))
-    print("THREE_VENUE_SPORTS_PAYOFF_SOLVER_V1 " + json.dumps(output, separators=(",", ":"), default=str), flush=True)
+    logger.warning("THREE_VENUE_SPORTS_PAYOFF_SOLVER_V2 %s", json.dumps(output, separators=(",", ":"), default=str))
+    print("THREE_VENUE_SPORTS_PAYOFF_SOLVER_V2 " + json.dumps(output, separators=(",", ":"), default=str), flush=True)
     return output
 
 
