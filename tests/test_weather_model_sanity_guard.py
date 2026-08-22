@@ -12,6 +12,12 @@ def base(**overrides):
         disagreement_tolerance_f="2.0",
         disagreement_tolerance_audited=True,
         model_calibration_verified=True,
+        calibration_evidence_verified=True,
+        calibration_evidence_id="weather-calibration:KMIA:2026-08-01",
+        calibration_sample_count=60,
+        calibration_station_id="KMIA",
+        calibration_window_end="2026-08-01T23:59:59Z",
+        model_run_time="2026-08-21T06:00:00Z",
     )
     row.update(overrides)
     return audit_weather_model_sanity(**row)
@@ -50,6 +56,43 @@ def test_unaudited_tolerance_cannot_certify():
     out = base(model_mean_f="91.8", disagreement_tolerance_audited=False)
     assert out["model_sanity_verified"] is False
     assert "MODEL_DISAGREEMENT_TOLERANCE_UNAUDITED" in out["blockers"]
+
+
+def test_bare_calibration_booleans_without_provenance_fail_closed():
+    out = base(
+        model_mean_f="91.8",
+        calibration_evidence_id=None,
+        calibration_sample_count=None,
+        calibration_station_id=None,
+        calibration_window_end=None,
+    )
+    assert out["model_sanity_verified"] is False
+    assert "MODEL_CALIBRATION_EVIDENCE_ID_MISSING" in out["blockers"]
+    assert "MODEL_CALIBRATION_SAMPLE_COUNT_INVALID" in out["blockers"]
+    assert "MODEL_CALIBRATION_STATION_MISMATCH" in out["blockers"]
+    assert "MODEL_CALIBRATION_TIME_PROVENANCE_INVALID" in out["blockers"]
+
+
+def test_future_calibration_evidence_is_rejected_as_lookahead():
+    out = base(
+        model_mean_f="91.8",
+        calibration_window_end="2026-08-22T00:00:00Z",
+        model_run_time="2026-08-21T06:00:00Z",
+    )
+    assert out["model_sanity_verified"] is False
+    assert "MODEL_CALIBRATION_LOOKAHEAD_DETECTED" in out["blockers"]
+
+
+def test_calibration_station_must_match_model_station():
+    out = base(model_mean_f="91.8", calibration_station_id="KFLL")
+    assert out["model_sanity_verified"] is False
+    assert "MODEL_CALIBRATION_STATION_MISMATCH" in out["blockers"]
+
+
+def test_stringly_calibration_verification_fails_closed():
+    out = base(model_mean_f="91.8", calibration_evidence_verified="true")
+    assert out["model_sanity_verified"] is False
+    assert "MODEL_CALIBRATION_EVIDENCE_UNVERIFIED" in out["blockers"]
 
 
 def test_nonfinite_values_fail_closed():
