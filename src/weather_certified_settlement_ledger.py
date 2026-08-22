@@ -7,9 +7,10 @@ venue and has no order-entry path.
 A successful reconciliation is necessary but not sufficient: the caller must also
 supply the exact synthetic trade-group/settlement identity and a later official
 settlement timestamp. The emitted external id is deterministic and self-verifiable:
-it binds the trade group, exact market, settlement key, terminal provider, and a
-SHA-256 fingerprint of the terminal source URL. This prevents a merely well-shaped
-free-form certified prefix/digest from being accepted as provenance later.
+it binds the trade group, exact market, settlement key, terminal provider, terminal
+source URL fingerprint, side, quantity, payout, and settlement timestamp. This
+prevents a valid provenance token from being replayed onto a different terminal
+settlement payload for the same trade identity.
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from typing import Any
 from src.cross_venue_ledger import LedgerEvent, make_event
 
 D = Decimal
-PREFIX = "weather-certified-settlement:v3:"
+PREFIX = "weather-certified-settlement:v4:"
 
 
 def _finite_decimal(value: Any) -> Decimal | None:
@@ -57,6 +58,12 @@ def _source_url_hash(source_url: str) -> str:
     return sha256(normalized.encode("utf-8")).hexdigest()
 
 
+def _decimal_token(value: Decimal) -> str:
+    if not isinstance(value, Decimal) or not value.is_finite():
+        raise ValueError("finite Decimal required for certified settlement payload")
+    return format(value.normalize(), "f")
+
+
 def certified_weather_settlement_external_id(
     *,
     trade_group_id: str,
@@ -64,16 +71,39 @@ def certified_weather_settlement_external_id(
     settlement_key: str,
     provider: str,
     source_url: str,
+    side: str,
+    quantity: Decimal,
+    payout: Decimal,
+    settlement_ts_ms: int,
 ) -> str:
     group = _norm(trade_group_id)
     market = _norm_upper(market_id)
     key = _norm(settlement_key)
     provider_token = _provider_token(provider)
     source_hash = _source_url_hash(source_url)
+    side_token = _norm_upper(side)
     if not group or not market or not key:
         raise ValueError("all certified settlement identity fields are required")
+    if side_token not in {"YES", "NO"}:
+        raise ValueError("certified settlement side must be YES or NO")
+    if not isinstance(settlement_ts_ms, int) or isinstance(settlement_ts_ms, bool) or settlement_ts_ms < 0:
+        raise ValueError("settlement_ts_ms must be a nonnegative integer")
+    quantity_token = _decimal_token(quantity)
+    payout_token = _decimal_token(payout)
     digest = sha256(
-        "\x1f".join((group, market, key, provider_token, source_hash)).encode("utf-8")
+        "\x1f".join(
+            (
+                group,
+                market,
+                key,
+                provider_token,
+                source_hash,
+                side_token,
+                quantity_token,
+                payout_token,
+                str(settlement_ts_ms),
+            )
+        ).encode("utf-8")
     ).hexdigest()
     return f"{PREFIX}{provider_token}:{source_hash}:{digest}"
 
@@ -118,6 +148,7 @@ def ledger_event_from_weather_reconciliation(
     expected_payout_cents = D("100") * quantity if side == outcome else D("0")
     if payout_cents is None or payout_cents != expected_payout_cents:
         raise ValueError("reconciled payout is not the exact binary terminal payout")
+    payout = payout_cents / D("100")
 
     provider = _provider_token(reconciliation.get("settlement_source_provider"))
     source_url = _norm_url(reconciliation.get("settlement_source_url"))
@@ -127,6 +158,10 @@ def ledger_event_from_weather_reconciliation(
         settlement_key=settlement_key,
         provider=provider,
         source_url=source_url,
+        side=side,
+        quantity=quantity,
+        payout=payout,
+        settlement_ts_ms=settlement_ts_ms,
     )
 
     return make_event(
@@ -138,7 +173,7 @@ def ledger_event_from_weather_reconciliation(
         event_type="settlement",
         side=side,
         quantity=quantity,
-        payout=payout_cents / D("100"),
+        payout=payout,
         external_id=external_id,
         ts_ms=settlement_ts_ms,
     )
