@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: 2026-08-22 00:52 UTC
+Last verified: 2026-08-22 00:58 UTC
 
 This file is the durable handoff point for the ARB project. Production state wins over old chat history. New work must establish current Railway + GitHub state first, then update this file after meaningful changes.
 
@@ -9,100 +9,92 @@ This file is the durable handoff point for the ARB project. Production state win
 - **PAPER/SHADOW**: observes or simulates only; no order entry.
 - **LIVE PROBE**: bounded real-order capability with explicit safety gates.
 - **EXECUTABLE**: exact counterpart/rule match plus fresh after-fee prices and sufficient depth/capital.
-- **EXECUTED**: both required legs have confirmed fills.
+- **EXECUTED**: all required legs have confirmed fills.
 - **REALIZED**: executed trade has been reconciled/settled and P&L is confirmed.
 
-Only REALIZED P&L counts toward the $480/day objective. Never count stale quotes, mismatched settlement rules, shadow P&L, armed state, attempted orders, or unconfirmed fills as realized arbitrage profit.
+Only REALIZED P&L counts toward the $480/day objective. Never count stale quotes, settlement-rule mismatches, shadow P&L, armed state, attempted orders, manufactured markets, RFQs, or unconfirmed fills as realized arbitrage profit.
 
 ## Current production snapshot
 
 | Workstream | Railway service | Current state | Last verified evidence | Immediate blocker / next action |
 | --- | --- | --- | --- | --- |
-| Crypto 15m BTC/ETH/SOL/XRP | `crypto-15m-sol-live-canary-10bp-50ms` | **LIVE PROBE / REALIZED P&L EXISTS** | Current production deployment `ffed4362-01e4-4d1f-9db7-0cc64a3cdb3f` is `SUCCESS` on branch `feature/sol-15m-live-canary-10bp-50ms`, commit `75553b9aaa4d35ea461b39734765fec0035634ed`. It inherited the verified one-shared-Gemini prediction+spot market-data socket, private Gemini trading WS prewarm-after-market-data, staggered/paced Kalshi REST books, and diagnostic-only near-miss attribution. Startup reached `CRYPTO_HOT_READY_BOTH_BOOKS` for BTC/ETH/SOL/XRP; private Gemini execution WS prewarmed on attempt 1; first ~10s produced ~94-95 evaluations/asset with zero Gemini/Kalshi reconnects and p95 trigger-to-eval ~19-23ms. Prior verified XRP q=1 trade remains **+$0.088800 net REALIZED**. | Scanner/execution transport is no longer the primary limiter. First current sample had 0 positive/threshold evaluations, so no new order was justified. `CRYPTO_NEAR_MISS_SUMMARY` instrumentation is deployed diagnostic-only, but a summary had not yet been observed when checked. Keep q=1, >=3¢ modeled after-fee profit, double-boundary, 50ms survival, <=250ms freshness, <=50ms skew, exact-payload, Gemini-first, settlement, and fail-closed gates unchanged. For materially higher trade count, broaden safe opportunity surface rather than forcing taker trades. |
-| Crypto maker BTC/ETH/SOL/XRP | `crypto-maker-arb-shadow-v1` + `crypto-maker-live-probe-q1` | **SHADOW / LIVE PROBE DISARMED — NOT REALIZED** | Maker shadow is active and shows much higher potential fill frequency, especially BTC: sampled BTC summary had 61 simulated fills and $1.44 simulated net, but also 24 stale-hedge cases; ETH had 12 simulated fills and $0.21 simulated net with 0 stale hedges in that sample. These are **simulation only** and the shadow explicitly reports `INDEX_MISMATCH_RESEARCH_ONLY` / `execution_eligible=false`. The separate live maker service runs `gemini_kalshi_maker_live_probe_q1_final`, is restart-policy NEVER, and its last verified run was disarmed/preflight-only; do not arm it merely to increase trade count. | Highest-potential volume path is a new maker-to-safe-hedge lane that continuously cancels/reprices resting quotes whenever the currently executable hedge, freshness, settlement/boundary margin, or >=3¢ target no longer holds. Existing live-maker code already handles partial fills, stale-book flattening, post-only invariant breaches, and cancel/fill reconciliation, but it does not yet carry the live taker lane's whole-episode double-boundary protection while the order rests. Prove that in shadow before any real maker order. |
-| Sports K↔P combo | `sports-kp-combo-shadow` | SHADOW | Last verified successful combo service saw live Polymarket inventory and retained generated Kalshi MVE markets, but no positive executable combo. | Continue pricing/certification; do not arm on identity matches alone. |
-| Direct sports K↔P | `sports-kp-live-executor` | **LIVE READ-ONLY CERTIFICATION SCAN / NOT EXECUTABLE** | Deployment `ad6d8c60-5806-46be-b8c3-cad809d6b35e` is `SUCCESS` on branch `feature/sports-kp-live-executor-impl`, commit `f9dfd28669e989760070a44d70feeab031f7efe5`. Prior diagnostic commit `d818ba3...` showed `fresh_pair_unavailable` dominating 30-second windows (hundreds per window), while best observed after-fee unit profit briefly reached **+0.0250**, just below the unchanged +0.03 gate. `f9dfd286...` now rate-bounds Polymarket-triggered exact Kalshi depth=1 synchronization at 250ms globally; production logs show repeated exact Kalshi revalidations with HTTP 200 and no observed 429 in the sampled startup window. | Verify the first post-change 30-second near-miss summaries and any `SPORTS_KP_CERTIFICATION_CANDIDATE`. Do not loosen 3¢ after-fee, 50ms skew, 100ms freshness, persistence, rule-fingerprint, or final-depth gates. There are still 0 execution approvals, so even a qualified economic row remains certification-only until exact settlement rules are audited and approved. |
-| MLB prop G↔K | `sports-gk-autonomous-supervisor` | **LIVE RULE-RISK PROBE / REALIZED P&L EXISTS / NOT CERTIFIED GUARANTEED ARB** | Production deployment `38ae97c8-742a-4d49-8b70-cff80b6ad87f` is `SUCCESS` on commit `9d389843...`. Five settled both-filled historical probes total **+$0.1871 net realized P&L**; authoritative sports probe budget usage remains **$4.84/$5.00**, leaving $0.16. | Do not silently increase/reset risk budget; a normal q=1 candidate should fail closed on remaining budget. Full settlement-rule certification still required. |
-| Weather | `weather-live-probe` | Needs fresh reconciliation | Service exists. | Reconcile prior order state before any new live order. |
-| Command/observability | `arb-command-center` | Present | Service exists. | Consolidate operational heartbeat/status here where practical. |
-| Railway hygiene | project `sports-arb-autonomous` | Cleanup in progress | Prior inventory contained 88 services. | Remove only verified dead/test/superseded services; preserve active/core workstreams. |
+| Crypto 15m BTC/ETH/SOL/XRP | `crypto-15m-sol-live-canary-10bp-50ms` | **LIVE PROBE / REALIZED P&L EXISTS** | Deployment `ffed4362-01e4-4d1f-9db7-0cc64a3cdb3f` was verified `SUCCESS` on `feature/sol-15m-live-canary-10bp-50ms` commit `75553b9...`. Prior XRP q=1 trade remains **+$0.0888 net REALIZED**. Shared Gemini market-data socket, private execution-WS prewarm, staggered Kalshi REST and near-miss telemetry are deployed. | Current taker transport is substantially healthy; do not force trades when economics are absent. Preserve q=1, >=3¢ modeled after-fee profit, double-boundary, 50ms survival, freshness/skew, exact-payload, Gemini-first and settlement gates. Maker flow remains the leading frequency research path once resting-order race protection is proven. |
+| Crypto maker | `crypto-maker-arb-shadow-v1` + `crypto-maker-live-probe-q1` | **SHADOW / LIVE PROBE DISARMED** | Shadow has simulated materially more fills, especially BTC, but reports `INDEX_MISMATCH_RESEARCH_ONLY` / `execution_eligible=false`. Live maker probe remains disarmed. | Add/verify continuous settlement/boundary, freshness and hedge-marketability protection while a maker order rests before any live arm. |
+| Sports manufactured MVE combo | `sports-kp-combo-shadow` | **LIVE PROBE CAPABLE / GENERATOR ACTIVE / NO EXECUTED TRADE THIS CHECKPOINT** | Deployment `cae53261-6060-4d9c-b980-254d4016a3c0` is `SUCCESS` on branch `feature/kp-combo-synthetic-shadow`, stable entrypoint now imports v21. Startup reports `automatic_combo_generation=true`, `auto_q1_requested=true`, `live_gate=true`, `max_live_attempts_per_process=1`. Latest verified cycle saw 31 live Polymarket sports events, 40 Kalshi event-market calls, 1,629 eligible Kalshi component legs, 0 Kalshi 429s, 80 candidate baskets, and 12 successfully created/resolved MVE markets. `SPORTS_MVE_DUPLICATE_EVENT_PREFILTER` rejected 11 invalid nested same-event baskets before creation. No >=3¢ executable manufactured combo and no q=1 order/fill was observed. | Continue manufacturing valid short-horizon baskets and diagnose RFQ quoteability/economics. Do not count MVE creation or RFQs as trades. Same-Kalshi q=1 execution may fire only after fresh conservative >=3¢ after-fee lock and all existing final checks. Cross-venue Poly/Gemini replacements remain ranking-only until exact settlement rules are certified. |
+| Direct sports K↔P | `sports-kp-live-executor` | **LIVE READ-ONLY CERTIFICATION SCAN / NOT EXECUTABLE** | Deployment `ad6d8c60-5806-46be-b8c3-cad809d6b35e` is `SUCCESS` on `feature/sports-kp-live-executor-impl` commit `f9dfd286...`. Poly-triggered exact Kalshi depth=1 sync is active. First verified post-fix 30-second summaries showed ~57 exact syncs/window but best after-fee unit profit only **-1.5¢ then -1.0¢**; no certification candidate. There are still 0 execution approvals. | Expand certified market breadth instead of weakening gates. Preserve >=3¢ after-fee, <=50ms skew, <=100ms freshness, persistence, explicit rule fingerprint and final exact depth. |
+| MLB prop G↔K | `sports-gk-autonomous-supervisor` | **LIVE RULE-RISK PROBE / REALIZED P&L EXISTS / NOT CERTIFIED GUARANTEED ARB** | Deployment `38ae97c8-742a-4d49-8b70-cff80b6ad87f` is `SUCCESS`. Five historical both-filled settled probes total **+$0.1871 net REALIZED**. Authoritative cumulative rule-risk budget remains **$4.84/$5.00**, only $0.16 remaining. No new G↔K order was authorized this checkpoint. | Do not reset/increase the $5 rule-risk budget without explicit user authorization. Existing hits/HR/TB/K families still lack complete exceptional-event lifecycle equivalence, so they cannot yet graduate to certified guaranteed arb. |
+| Weather | `weather-live-probe` | Needs current workstream reconciliation | Service exists and is being handled separately. | Reconcile any prior order before new weather execution. |
+| Command/observability | `arb-command-center` | Present | Service exists. | Keep ledger/fill truth authoritative and consolidate operational heartbeat where practical. |
+| Railway hygiene | project `sports-arb-autonomous` | Cleanup in progress | Large service inventory remains. | Remove only verified dead/test/superseded services after dependency checks; preserve active/core workstreams. |
 
-## Sports K↔P — 2026-08-22 00:38 UTC
+## Sports manufactured-combo checkpoint — 2026-08-22 00:58 UTC
 
-- `d818ba3a4f9df09de133d82e39ab9f910c8ceb75` was verified deployed successfully before modification. Its new `SPORTS_KP_NEAR_MISS_SUMMARY` telemetry established that the dominant rejection reason was **fresh_pair_unavailable**, commonly 300-800+ rejections per 30-second window.
-- Economics were not entirely absent: the best sampled after-fee unit profit improved from negative values to **+0.0250**, which is only 0.5¢ below the unchanged +0.03 execution/certification threshold.
-- Root cause of the freshness suppression: candidate scanning used low-rate Kalshi REST series snapshots while Polymarket arrived event-driven over WebSocket. With a strict <=100ms book-age gate, most Polymarket events did not have a simultaneously fresh Kalshi snapshot.
-- `f9dfd28669e989760070a44d70feeab031f7efe5` changes timing, not safety: when a Polymarket event arrives and the strict pair is unavailable, the service may request one exact Kalshi depth=1 book, with a **global 250ms floor (max ~4 exact sync requests/sec)**. The recomputed pair must still pass the same <=100ms freshness and <=50ms inter-venue skew gates, then the same >=3¢ after-fee edge, persistence, confidence/rule, and final exact-depth revalidation gates.
-- Railway deployment `ad6d8c60-5806-46be-b8c3-cad809d6b35e` successfully picked up `f9dfd286...`. One transient Gemini discovery incomplete-chunk error caused an immediate restart; the restart recovered without stale fallback and reached `SPORTS_KP_LIVE_READY` with 8 read-only observation contracts / 4 distinct Polymarket books / 4 Kalshi books.
-- Production then emitted repeated `KALSHI_GAME_EXACT_REVALIDATION` HTTP-200 rows on Polymarket-triggered synchronization. No Kalshi 429 was observed in the sampled post-change startup window.
-- There are still **0 approved K↔P execution contracts**, so direct K↔P remains read-only even if a >=3¢ economic row appears. Exact settlement-rule fingerprint certification is still required before any live order.
+Production had a material configuration contradiction: the combo supervisor was already requesting auto-q1 with the live gate enabled, but `ENABLE_KALSHI_MVE_GENERATOR` was false. It could therefore watch live Polymarket events without manufacturing fresh Kalshi MVE markets. The generator is now enabled.
+
+Changes deployed on `feature/kp-combo-synthetic-shadow`:
+
+- `cf3d0ed6...` — live same-Kalshi q=1 2-5 leg runner now enforces `MVE_LIVE_MIN_LOCKED`, default **$0.03**, using `max(base.MIN_LOCKED, configured_floor)`. It still requires current open MVE, fresh RFQ, q=1 executable component depth, zero pre-existing positions, balance buffer, component FOK fills first, immediate quote refresh before combo acceptance, flatten on incomplete/definitive failure, and hard halt on ambiguous combo acceptance. A fill is `FILLED_NOT_SETTLED`, not REALIZED.
+- Production variables now include `ENABLE_KALSHI_MVE_GENERATOR=YES`, `MVE_GENERATOR_EVERY_CYCLES=10`, `MVE_GENERATOR_MAX_CREATIONS_PER_RUN=12`, `MVE_GENERATOR_MAX_EVENT_MARKET_REQUESTS_PER_RUN=48`, `MVE_GENERATOR_MIN_LOCKED=0.03`, and `MVE_LIVE_MIN_LOCKED=0.03`.
+- `47b0610b...` — persistent MVE creation-attempt budget telemetry now reports non-200 creation rejects and authoritative durable attempted count. Rejects are not silently refunded; the ledger remains restart-safe/fail-closed.
+- `025e53ba...` — diagnostic-only RFQ quote-shape telemetry was added when quotes exist but no usable buy-YES-equivalent quote is selected. It does not alter quote interpretation or execution.
+- An existing concurrent v20 change added the America/New_York scheduled-start guard to MLB game prepricing. v21 preserves it.
+- `c4588ced...` / `53ce13d7...` — v21 prefilters baskets containing more than one selection from the exact same `event_ticker`. This was driven by verified Kalshi `400 duplicated_legs` responses such as multiple nested NFL-total thresholds where one result logically guarantees another. Different same-game families such as spread + total remain eligible because they use distinct event tickers.
+
+Latest v21 production evidence on deployment `cae53261-6060-4d9c-b980-254d4016a3c0`:
+
+- `SPORTS_MVE_DUPLICATE_EVENT_PREFILTER`: 320 ranked legacy rows examined, **11 invalid duplicate-event baskets rejected before market creation**, 80 valid candidates returned.
+- Subsequent sampled MVE creates returned HTTP 200, confirming the known nested-total waste path was removed for those rows.
+- `SPORTS_MVE_REQUEST_BUDGET`: 31 live Poly events, 40 Kalshi event-market requests, **0 Kalshi 429s**, 0 request-budget skips.
+- `SPORTS_MVE_LEG_DIAGNOSTIC`: 1,662 markets examined, 1,629 eligible legs, 80 candidate baskets, 12 MVE markets created/resolved.
+- Poly ranking-only preprice found 69 exact identities and 65 Kalshi components with a cheaper Poly complement in that sample, but these remain `execution_eligible=false` because settlement rules are not certified.
+- MLB game ranking-only preprice found 100 priced exact counterpart quotes and 41 lower-cost Poly alternatives, best shadow saving 1.5¢ on one component. This is not executable arb by itself.
+- G↔K prop ranking-only pass found 254 exact joins / 92 priced rows, but no improvement and remains `guaranteed_arb=false`.
+- Cross-venue combo shadow best sampled all-in was still negative; no positive economic candidate was promoted.
+- No new sports q=1 order, both-filled trade, settlement or realized P&L occurred in this checkpoint.
+
+## Direct sports K↔P checkpoint
+
+`f9dfd28669e989760070a44d70feeab031f7efe5` changes quote synchronization only. On a Polymarket-triggered update, if the strict fresh pair is unavailable, the scanner may request one exact Kalshi depth=1 book subject to a global 250ms floor. Recomputed pairs still require <=100ms book age, <=50ms cross-venue skew, >=3¢ after-fee edge, persistence, rule confidence and final exact-depth revalidation.
+
+The first verified post-change summaries showed the exact sync firing about 57 times/30 seconds, while current market economics were negative: best after-fee unit profit -0.0150 and then -0.0100. Therefore no order/certification candidate was justified. Earlier telemetry had briefly reached +0.0250, still below the unchanged +0.03 floor.
+
+Direct K↔P still has **0 approved execution contracts**. Known MLB total rule audits have shown semantic identity without exact settlement equivalence due exceptional-event/source/completion differences, so do not blanket-approve totals or props.
+
+## G↔K rule-risk / ledger truth
+
+The current supervisor supports hits, home runs, total bases and pitcher strikeouts with MLB participation proof plus the existing q=1 >=3¢, <=50ms skew, <=100ms freshness, exact-price survival, dual-FOK, capital reservation and hard-halt transport.
+
+It is intentionally **not certified guaranteed arbitrage** because complete Gemini vs Kalshi exceptional-event lifecycle equivalence has not been proven. The $5 cumulative experimental rule-risk ceiling must not reset by restart/date.
+
+Verified settled G↔K probes:
+
+- `sports-gk:sup-0820-013627-27`: +$0.0379 net
+- `sports-gk:sup-0820-014520-28`: +$0.0379 net
+- `sports-gk:sup-0820-015029-29`: +$0.0379 net
+- `sports-gk:sup-0820-015052-30`: +$0.0379 net
+- `sports-gk:sup-0819-233943-15`: +$0.0355 net
+
+Total sports G↔K verified REALIZED net P&L: **+$0.1871**. Budget used remains **$4.84/$5.00**.
 
 ## Path to meaningful contribution toward $480/day
 
-The q=1 canary rung is necessary for proof, but q=1 at a 3¢ floor cannot itself produce meaningful daily dollars. The production path is therefore:
+q=1 is a proof rung, not the economic destination. The path is:
 
-1. **Increase executable opportunity count without weakening gates:** remove transport/freshness suppression, broaden certified MLB/NFL game/prop/combo overlap, and keep exact live-event discovery.
-2. **Convert exact identity joins into rule-certified counterparts:** prioritize market families with the cleanest settlement semantics; do not blanket-certify totals/props with cancellation, official-source, participation, or timing mismatches.
-3. **Prove repeated q=1 execution + settlement:** both legs filled and reconciled, not shadow or attempted P&L.
-4. **Scale quantity only where final displayed depth and cross-venue capital support it:** q=5, then q=10/q=25+ using exact depth/capital reservations. A 3-5¢ edge becomes economically meaningful only when multiplied by depth and repeated opportunity count.
-5. **Run multiple independent certified lanes:** direct K↔P, manufactured K↔P combos, certified G↔K, safe crypto taker, safe crypto maker, and eventually sportsbook/other prediction-market counterparts. The target must be measured as aggregate realized net dollars/day, not theoretical edge count.
+1. Increase **valid executable opportunity breadth**: manufactured same-Kalshi MVE baskets, direct K↔P game/spread/total, props, live events, NFL/other sports, and later certified sportsbook counterparts.
+2. Convert identity joins into **settlement-rule-certified** counterparts. Never promote a ranking-only cheaper leg into execution merely because its price is better.
+3. Prove repeated q=1 fills and settlement/reconciliation per lane.
+4. Scale quantity only after final displayed depth and cross-venue capital reservation support it: q=5 -> q=10/q=25+ rather than blind size increases.
+5. Aggregate multiple independent certified lanes. The target is measured in realized net dollars/day, not theoretical opportunity count.
 
-Current evidence says the taker crypto transport is largely healthy; the limiting factor there is executable economics. Maker flow shows materially more candidate/fill activity in shadow and is the leading crypto frequency expansion path, but only after its resting-order settlement/boundary race is controlled.
-
-## Crypto 15m — verified trade and frequency work
-
-### Verified REALIZED trade
-
-- Asset: **XRP**, q=1.
-- First certified opportunity around 23:49:44 UTC was **not executed** because Gemini's private trading WebSocket handshake returned HTTP 429. Kalshi was correctly not sent because execution is Gemini-first.
-- A second certified XRP opportunity around 23:50:05 UTC passed the existing execution gates and returned `BOTH_FILLED`.
-- Gemini filled q=1 at approximately `$0.09`; Kalshi filled the counterpart at approximately `$0.20` YES-space equivalent. Existing hedge-cushion logic preserved the configured modeled profit floor.
-- Settlement/reconciliation at 00:00:18 UTC recorded **net_pnl=0.088800**, venue outcomes agreed, and the supervisor created a fresh unique campaign afterward.
-- This +$0.0888 is **REALIZED**. Do not infer additional fills from actionable/armed logs.
-
-### Trade-frequency fixes on production branch `feature/sol-15m-live-canary-10bp-50ms`
-
-- `b621709...` — fixed REST-fallback feed-stop recursion.
-- `275a889...` — restored active four-asset evaluation using one authenticated Gemini `depth` RPC market-data socket.
-- `22afeae7f4ef61a33bdf244cbc37c690bdd3eb8c` — moved one private Gemini trading WebSocket handshake off the actionable critical path by prewarming/reusing one session per bounded child. Verified on Railway deployment `4dc6424f-4f31-4912-8896-a9a019dc333c`; 48 tests passed and prewarm succeeded on attempt 1.
-- `627a9a99daf026eff76705fc621408b0c6155cdf` — changed Kalshi exact REST books from four synchronized ~80ms loops to ~180ms per-asset polling with BTC/ETH/SOL/XRP staggering. Verified deployment `884cb8d6-bdd0-4423-9b48-bf2d65b8715f` showed hundreds of usable Kalshi book events with 0 reconnect/429 counts in the sampled summaries, versus roughly 2–3 429s/sec/asset before pacing.
-- `4439638680019a9361b3066d182c8e96bd361904` — added process-local Gemini market-data readiness coordination.
-- `cbaa6b3a7056f14a335e410c90633fe8c57a9b63` — private trading prewarm now waits for market-data readiness plus a short settle interval, so the execution socket does not race the scanner into Gemini's handshake throttle.
-- `4024f8f0d56d7a3483a8ad40c9e9ce52c1e94d4c` — prediction-market `depth` RPC and the Gemini public-spot basis feed share one authenticated Gemini WS; the old third basis-spot connection is suppressed. Verified in Railway deployment `4a981702-6470-4938-aedd-314d3ba0b18f`: shared socket connected with all four prediction symbols + four spot streams, and private trading WS prewarmed first attempt after market data.
-- `75553b9aaa4d35ea461b39734765fec0035634ed` — adds diagnostic-only live crypto near-miss edge attribution (best modeled after-fee profit and counts at >=1¢/>=2¢/>=3¢) without changing qualification or order flow. Railway deployment `ffed4362-01e4-4d1f-9db7-0cc64a3cdb3f` is `SUCCESS`; startup retained all four live books and first-attempt private execution prewarm. A `CRYPTO_NEAR_MISS_SUMMARY` row had not yet been observed at the checkpoint, so telemetry output is not yet claimed as verified.
-
-### Maker frequency findings — research only
-
-- `crypto-maker-arb-shadow-v1` is active research/shadow only. Do **not** count simulated fills or P&L as realized.
-- A recent BTC maker-shadow summary showed **61 simulated fills**, **24 stale-hedge cases**, and **$1.44 simulated net**; ETH showed **12 simulated fills**, 0 stale hedges, and $0.21 simulated net in the sampled summary. SOL showed no fills in the sample; XRP remained transport-limited in the older shadow.
-- The shadow explicitly reports `INDEX_MISMATCH_RESEARCH_ONLY`, `execution_eligible=false`, `read_only=true`, `order_entry=false`.
-- `crypto-maker-live-probe-q1` exists but is intentionally disarmed/preflight-only. Its current Railway start command is `python -m src.gemini_kalshi_maker_live_probe_q1_final`; restart policy is NEVER.
-- Existing live-maker safety code already rechecks exact current hedge economics before posting, watches market/account streams, cancels if Gemini/Kalshi books go stale or target profit disappears, reconciles cancel/fill races, flattens partial fills, and hard-halts on stale-book/post-only invariant failures.
-- Missing piece for a safe high-frequency promotion: apply the live taker lane's settlement/boundary protection continuously while the maker quote rests. A resting order must be canceled/repriced if same-side/double-boundary protection, freshness, hedge marketability, or >=3¢ modeled after-fee profit stops holding; fill-vs-cancel races must reconcile/flatten fail-closed.
-- Do not arm the existing maker live probe merely because shadow fill count is high.
-
-### Current crypto safety configuration — do not weaken merely to create trade count
-
-- quantity q=1
-- bounded campaign max trades 5
-- max execution attempts 25
-- hard experiment budget <=$5
-- modeled after-fee locked profit floor >=$0.03
-- double-boundary gate retained
-- 50ms survival/execution-delay canary path retained
-- quote freshness <=250ms and cross-venue skew <=50ms retained
-- exact displayed price/depth and exact-payload recomputation retained
-- Gemini-first terminal execution; Kalshi sent only after Gemini terminal fill
-- one unresolved trade at a time; ambiguity hard-halts/reconciles fail-closed
-- settlement/reconciliation required before REALIZED classification
+Current sports evidence says the biggest immediate limiter is not the ability to submit larger orders. It is the number of **valid, quoteable, rule-safe profitable baskets/counterparts**. Manufacturing is now active and wasting fewer create slots, so the next sports work should focus on RFQ quoteability/ranking and family-level settlement certification while leaving all current execution gates intact.
 
 ## Realized P&L truth
 
-- Crypto 15m verified realized net P&L: **+$0.0888**.
-- Sports G↔K verified settled live net P&L: **+$0.1871**, but still classified as rule-risk rather than certified guaranteed arbitrage.
-- Total verified realized live P&L currently tracked across those two workstreams: **+$0.2759**.
+- Crypto 15m verified REALIZED net P&L: **+$0.0888**.
+- Sports G↔K verified settled REALIZED net P&L: **+$0.1871**, but classified as rule-risk rather than certified guaranteed arbitrage.
+- Total verified realized live P&L tracked across those two workstreams: **+$0.2759**.
 
-Do not describe the full $0.2759 as certified guaranteed-arbitrage P&L; the sports portion remains rule-risk. Continue to distinguish candidate/shadow, attempt, single-leg/ambiguous, both-filled, and settled/realized.
+Do not describe the full $0.2759 as certified guaranteed-arbitrage P&L; the sports portion remains rule-risk.
 
 ## Railway cleanup checkpoint
 
@@ -110,7 +102,7 @@ Preserve as CORE: `crypto-15m-sol-live-canary-10bp-50ms`, `sports-kp-live-execut
 
 Preserve active shadows while their workstreams remain active, including `sports-kp-combo-shadow`, `mlb-gk-exec-shadow`, `weather-shadow-arb`, `three-venue-router-paper-v2`, `three-venue-mlb-hot-paper-v1`, `gemini-kalshi-mlb-prop-hot-shadow`, `sports-alert-reliability-shadow`, and `crypto-maker-arb-shadow-v1`.
 
-One-off/superseded-looking services remain deletion candidates only after dependency checks. No live/core deletion should be inferred from naming alone. `mlb-game-paper-v2` and `sports-kgp-real-branch-shadow` previously had no deployment history/repo-name reference but were left UNKNOWN because dependency verification did not complete.
+Remove only verified dead/test/superseded services after dependency checks. Do not infer deadness from names alone.
 
 ## New-chat startup protocol
 
@@ -118,7 +110,7 @@ One-off/superseded-looking services remain deletion candidates only after depend
 2. Query current Railway deployment + runtime logs for the specific service.
 3. Query the relevant GitHub branch/commit and compare it with Railway's deployed commit.
 4. State the exact rung: PAPER/SHADOW, LIVE PROBE, EXECUTABLE, EXECUTED, or REALIZED.
-5. Work one blocker through **inspect → fix → deploy → verify → reconcile → checkpoint** before expanding scope.
+5. Work one blocker through **inspect -> fix -> deploy -> verify -> reconcile -> checkpoint** before expanding scope.
 
 If production disagrees with this file, production wins and this file must be updated.
 
