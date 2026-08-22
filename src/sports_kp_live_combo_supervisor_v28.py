@@ -17,6 +17,13 @@ Research-only external replacement annotations are deliberately removed from thi
 service's synchronous generation path. Direct K/P and rule-audit services continue
 to research those venues independently.
 
+To improve manufacturing breadth without weakening execution gates, candidate
+creation now reserves up to half of each bounded candidate list for leg-count
+diversity across 2/3/4/5-leg baskets, then fills the remainder in the existing
+best-first order. This prevents a cheap 2-leg cluster from consuming every scarce
+creation/RFQ slot while preserving the original ranking for at least half the
+budget. The live executor still independently revalidates every created market.
+
 No live invariant changes: q=1, >=3c after conservative fees, final component/RFQ
 depth, capital/position checks, fresh quote refresh, flatten/hard-halt behavior,
 one live attempt per process, and settlement accounting remain unchanged.
@@ -29,11 +36,98 @@ from typing import Any
 
 from src import sports_kp_live_combo_supervisor_v27 as v27
 from src import sports_kp_live_combo_supervisor_v9 as v9
+from src import sports_kp_mve_combo_generator as generator
 
 logger = v27.logger
 v23 = v27.v26.v25.v24.v23
 base = v23.base
 D = Decimal
+
+# Capture the fully-patched v24+ candidate rank after importing v27. That rank
+# already contains duplicate/redundancy rejection, same-game family priority,
+# feedback, and pure same-Kalshi executable economics.
+_ORIGINAL_CANDIDATES = generator._candidate_combos
+
+
+def _leg_count_diverse_candidates(collection, event_legs, *, max_candidates, min_locked):
+    """Keep best-first economics while reserving bounded exploration by leg count."""
+    if max_candidates <= 0:
+        return []
+    expanded_cap = min(max(max_candidates * 4, max_candidates), 1400)
+    raw = _ORIGINAL_CANDIDATES(
+        collection,
+        event_legs,
+        max_candidates=expanded_cap,
+        min_locked=min_locked,
+    )
+    if len(raw) <= max_candidates:
+        return raw
+
+    by_count: dict[int, list[Any]] = {n: [] for n in generator.SUPPORTED_LEGS}
+    for row in raw:
+        legs = row[1]
+        n = len(legs)
+        if n in by_count:
+            by_count[n].append(row)
+
+    # At most half the list is diversity-reserved. Round-robin keeps this bounded
+    # and cannot crowd out the original best-first rank.
+    diversity_cap = max(1, max_candidates // 2)
+    diverse: list[Any] = []
+    seen: set[tuple[str, ...]] = set()
+    cursors = {n: 0 for n in by_count}
+    while len(diverse) < diversity_cap:
+        progressed = False
+        for n in generator.SUPPORTED_LEGS:
+            i = cursors[n]
+            rows = by_count[n]
+            if i >= len(rows):
+                continue
+            row = rows[i]
+            cursors[n] = i + 1
+            key = tuple(sorted(
+                f"{leg.event_ticker}:{leg.market_ticker}:{leg.side}" for leg in row[1]
+            ))
+            if key in seen:
+                continue
+            seen.add(key)
+            diverse.append(row)
+            progressed = True
+            if len(diverse) >= diversity_cap:
+                break
+        if not progressed:
+            break
+
+    out = list(diverse)
+    for row in raw:
+        if len(out) >= max_candidates:
+            break
+        key = tuple(sorted(
+            f"{leg.event_ticker}:{leg.market_ticker}:{leg.side}" for leg in row[1]
+        ))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(row)
+
+    logger.warning("SPORTS_MVE_LEG_DIVERSITY %s", json.dumps({
+        "raw_candidates": len(raw),
+        "returned_candidates": len(out),
+        "diversity_reserved": len(diverse),
+        "available_by_leg_count": {str(n): len(rows) for n, rows in by_count.items()},
+        "returned_by_leg_count": {
+            str(n): sum(1 for row in out if len(row[1]) == n)
+            for n in generator.SUPPORTED_LEGS
+        },
+        "original_best_first_slots_preserved_min": max_candidates - diversity_cap,
+        "live_threshold_changed": False,
+        "execution_semantics_changed": False,
+        "order_entry": False,
+    }, separators=(",", ":"), default=str))
+    return out
+
+
+generator._candidate_combos = _leg_count_diverse_candidates
 
 
 async def _fast_executable_generate() -> dict[str, Any]:
