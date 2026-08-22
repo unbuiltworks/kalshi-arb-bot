@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: 2026-08-22 15:24 UTC
+Last verified: 2026-08-22 15:51 UTC
 
 This is the durable ARB handoff. Production state wins over chat history. Before changing a workstream, verify current Railway deployment/runtime + GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the $480/day objective.
 
@@ -40,13 +40,11 @@ Immediate safety response:
 - q5 promotion remains blocked.
 - Existing q=1 >=3c after-fee, >=10bp boundary, 50ms survival/skew, freshness, capital reservation, Gemini-first execution, reconciliation, rollover, and hard-halt gates remain unchanged.
 
-Fresh 14:45 UTC evidence:
-- direct Railway MCP runtime access is still unavailable in the supervisor session;
-- GitHub Railway status on current crypto branch base `a4d458a744baa4c8488ef9ae3b079fdec50d6683` shows `crypto-15m-sol-live-canary-10bp-50ms` **failure**;
-- `crypto-live-balance-reconcile-readonly` and `crypto-rollover-optimizer-test` both report **success** on that same commit;
-- authoritative ledger has **no new crypto submission after 2026-08-22 06:40:03 UTC**.
-
-The crypto service failure is not a reason to bypass the transport kill. Treat it as contained until runtime access returns and the exact failure can be inspected safely.
+Fresh 15:51 UTC evidence:
+- Railway runtime access became unavailable again during this supervisor run, so no direct live crypto process/config inspection was possible;
+- authoritative ledger still has **no new crypto submission after 2026-08-22 06:40:03 UTC**;
+- unresolved ETH `gk15m-gk15m-08220615-c225-02` still has two fills + `ORDER_SUBMITTED/BOTH_FILLED` and no settlement/`TRADE_REALIZED` row;
+- do not use the crypto service failure or the prior bounded-campaign diagnosis as a reason to bypass the settlement-equivalence transport kill.
 
 ## Crypto bounded-campaign diagnosis / rollover
 
@@ -62,7 +60,7 @@ This rollover work is no longer the highest-priority crypto blocker. Settlement/
 
 ## Current realized P&L truth
 
-Authoritative `arb-trade-ledger` as of 14:45 UTC:
+Authoritative `arb-trade-ledger` as of 15:51 UTC:
 - 2026-08-22 ET day (from 04:00 UTC): `gemini_kalshi_15m_crypto` has **6 realized events, net -$0.618600**.
 - These include small BTC/XRP/SOL wins offset by the -$0.885300 BTC index-mismatch loss.
 - Trade `gk15m-gk15m-08220615-c225-02` (ETH) remains **UNRESOLVED**: two FILL rows + `ORDER_SUBMITTED/BOTH_FILLED` at 06:40:03 UTC, but no settlement/`TRADE_REALIZED` row. Exclude it from P&L.
@@ -80,32 +78,32 @@ Do not describe prior Gemini/Kalshi crypto wins as guaranteed-arbitrage evidence
 
 Service `sports-kp-combo-shadow` remains the highest-value safe sports manufacturing path.
 
-Fresh 14:45 UTC evidence:
-- active branch `feature/kp-combo-synthetic-shadow` is at PR #104 head `9a1169cba7360b22e6b835e575d18f4b8bbc1254`;
-- GitHub Railway status for `sports-kp-combo-shadow` is **success**;
-- the stable Railway entrypoint is now supervisor **v40**;
+Fresh 15:51 UTC evidence:
+- active branch `feature/kp-combo-synthetic-shadow` advanced via merged PR #117 to commit `5f6f64a65ff5dada9a4ea29696c969111b432a5d`;
+- GitHub Railway status for `sports-kp-combo-shadow` on that merge is **success**;
+- the stable Railway entrypoint remains supervisor **v40**;
 - v40 is read-only and adds signed-auth probing against the Polymarket exchange/RFQ host, then runs v39-v31;
-- v37 already scans exact same-Kalshi-market `YES + NO = $1` partitions and labels a shadow candidate executable only when q=1 YES ask + NO ask + conservative taker fees leaves **>= $0.03 locked profit** with depth on both sides;
+- v37 scans exact same-Kalshi-market `YES + NO = $1` partitions and labels a shadow candidate executable only when q=1 YES ask + NO ask + conservative taker fees leaves **>= $0.03 locked profit** with depth on both sides;
 - because both legs are the exact same Kalshi binary market, this path has no cross-venue settlement-equivalence problem;
-- authoritative Neon currently contains only the `trade_events` table and there are still **0 sports supervisor telemetry rows after 11:30 UTC**, so a post-deploy manufacturing/same-market cycle is not independently proven from the ledger.
+- authoritative Neon had **no post-deploy telemetry row yet at 15:51 UTC**, so the first cycle after PR #117 is not independently proven even though deployment succeeded.
 
 Preserve the >=3c after-fee lock, exact same-market/rule identity, exact final depth, freshness/skew where applicable, persistence, capital reservation, one-attempt, flatten/hard-halt, and settlement accounting. Shadow scan output is not a trade.
 
-### Same-market observability milestone (not yet promoted)
+### Same-market observability milestone — promoted 2026-08-22 15:51 UTC
 
-Feature branch `feature/sports-same-market-ledger-telemetry` now adds best-effort non-P&L ledger telemetry to the existing v37 same-market scan:
-- commit `a6bd1ba7de18467ab85892c0c3606ceb638bdd30`: telemetry implementation;
-- commit `20637a61f1b4df907951c8919c540a51fbb81c4c`: isolation tests;
-- telemetry records scan counts plus best locked profit/ticker/all-in cost/depth and cannot authorize orders or count as realized P&L;
-- telemetry failures are swallowed and cannot change scanning/execution behavior.
+PR #117 `Add same-Kalshi-market scan ledger telemetry` is **merged** after full CI passed and Railway reports the `sports-kp-combo-shadow` deployment **success**.
 
-GitHub PR creation for this branch was blocked by the action safety layer in the 14:45 UTC supervisor run. Do not bypass that protection by force-moving the production branch. Resume promotion only through a normal reviewed/green path.
+The promoted telemetry:
+- records same-market scan count, >=3c candidate count, best locked profit, ticker, all-in cost, and exact side depth into the existing non-P&L sports telemetry stream;
+- cannot authorize orders or count as realized P&L;
+- swallows telemetry failures so observation cannot change scan/execution behavior;
+- changes no live order path or execution gate.
+
+The next proof point is the first post-deploy cycle. Until an authoritative telemetry row appears, do not claim the production scanner has completed a same-market cycle or found an executable candidate.
 
 ## Same-Gemini extreme combo live canary — 2026-08-22 15:24 UTC
 
-Direct Railway runtime access is restored for this sports workstream.
-
-A dedicated isolated one-shot service is now deployed and armed:
+A dedicated isolated one-shot service is deployed and armed:
 - service `gemini-extreme-combo-live-q1`, service id `4399e98f-ce33-4a74-99f2-900f7615beab`;
 - branch `feature/three-venue-sports-router`;
 - code commit `3d8f242f5572df8970fbed892e8a5989d94fd362` (`Add bounded q1 Gemini extreme combo live canary`);
@@ -154,14 +152,14 @@ Remove only verified dead/test/superseded services after dependency checks. Neve
 ## New-chat / next-run protocol
 
 1. Read `ARB_STATUS.md`.
-2. Direct Railway runtime access is restored as of 15:24 UTC. Inspect crypto failure state if working that lane, but **do not re-arm** around the settlement/threshold transport kill.
+2. Attempt Railway runtime inspection first, but if unavailable do not bypass controls; use GitHub deployment status + authoritative ledger and keep crypto fail-closed.
 3. Reconcile unresolved ETH `gk15m-gk15m-08220615-c225-02` before counting any result.
 4. Verify no new Gemini/Kalshi crypto order/fill appeared after 06:40:03 UTC.
 5. Keep Gemini/Kalshi q1/q5/maker order entry blocked unless exact settlement + threshold equivalence is certified.
 6. For the same-Gemini combo lane, first check campaign `gcombo-2608221121-a1` for any prior order state, then obtain fresh books. The 15:24 armed attempt was `LIVE_GATE_BLOCKED` with zero order entry because both hedge outcomes were unavailable.
 7. Do not weaken the >=3c floor. If both exact q1 hedges return at <=2c with depth and no prior campaign order exists, use a fresh unique campaign for the next one-shot canary rather than reusing an ambiguous/used campaign.
-8. Continue proving current sports MVE/same-market scans and same-day/<=24h sports breadth; promote only exact rule-certified, fresh after-fee candidates.
-9. Continue weather exact-rule opportunities without weakening certification.
+8. Check for the first PR #117 post-deploy `SPORTS_SUPERVISOR_TELEMETRY` row; if present, use its same-market best locked profit/candidate count to decide whether a bounded same-Kalshi q1 canary is justified.
+9. Continue same-day/<=24h sports breadth and weather exact-rule opportunities without weakening certification.
 10. Work one blocker through **inspect -> fix -> deploy -> verify -> reconcile -> checkpoint** before widening scope.
 
 After meaningful changes, update this file with UTC verification time, deployment/commit, armed/disarmed state, execution/fill/settlement evidence, and next blocker. Never store credentials, signing material, API keys, or sensitive balances here.
