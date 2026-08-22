@@ -6,9 +6,12 @@ lifetime is execution evidence, not capital lock time.
 
 This analyzer consumes the shared cross-venue ledger. It requires exactly one Kalshi
 fill for a weather trade group, exact market-matched fee accounting, and exactly one
-later settlement event for the same market/settlement key. Missing settlement is
-right-censored. Ambiguous fills/fees/settlements fail closed. Aggregate realized
-profit-per-capital-hour is withheld while any filled group is unresolved or invalid.
+later settlement event for the same market/settlement key. A settlement event is only
+eligible when its external_id proves that it came through the weather exact-source /
+finality / correction-window reconciliation path. Missing or unaudited settlement is
+right-censored rather than treated as realized. Ambiguous fills/fees/settlements fail
+closed. Aggregate realized profit-per-capital-hour is withheld while any filled group
+is unresolved or invalid.
 
 No venue client or order-entry path exists here.
 """
@@ -23,11 +26,29 @@ from src.cross_venue_ledger import LedgerEvent
 D = Decimal
 VENUE = "kalshi"
 VALID_SIDES = {"YES", "NO"}
+CERTIFIED_SETTLEMENT_EXTERNAL_ID_PREFIX = "weather-certified-settlement:"
 
 
 def _finite_decimal(value: Any) -> bool:
     """Return True only for finite Decimal telemetry; never raise on malformed input."""
     return isinstance(value, Decimal) and value.is_finite()
+
+
+def _certified_settlement_event(event: LedgerEvent) -> bool:
+    """Require provenance from the exact-market weather settlement reconciler.
+
+    LedgerEvent deliberately has a compact schema and cannot itself carry the full
+    settlement-source/finality/correction evidence bundle. Until that richer evidence
+    is embedded in the shared ledger, only settlement events emitted by the audited
+    weather reconciliation path are accepted. Its stable external-id namespace is the
+    proof-of-path marker. Arbitrary/manual settlement rows therefore cannot create
+    realized PAPER P/L or capital-efficiency metrics.
+    """
+    return (
+        isinstance(event.external_id, str)
+        and event.external_id.startswith(CERTIFIED_SETTLEMENT_EXTERNAL_ID_PREFIX)
+        and len(event.external_id) > len(CERTIFIED_SETTLEMENT_EXTERNAL_ID_PREFIX)
+    )
 
 
 def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[str, Any]:
@@ -102,10 +123,6 @@ def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[st
             for fee in group_fees
         )
         explicit_fee = sum((fee.fee for fee in group_fees), D("0")) if not fee_invalid else D("0")
-        # Explicit fee events and an embedded fill fee are alternative ledger
-        # representations. Their simultaneous presence is ambiguous even when the
-        # explicit event is zero-valued: choosing the explicit representation would
-        # silently discard a positive embedded fee and understate deployed capital.
         if group_fees and fill.fee != 0:
             fee_invalid = True
         if fee_invalid:
@@ -141,11 +158,17 @@ def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[st
             continue
 
         settlement = group_settlements[0]
-        # Weather bracket markets are binary contracts. A terminal settlement for a
-        # filled position can therefore pay exactly zero or exactly the filled
-        # quantity. Accepting an arbitrary fractional payout would let malformed or
-        # non-terminal telemetry contaminate realized PAPER P/L and capital-efficiency
-        # metrics.
+        if not _certified_settlement_event(settlement):
+            right_censored_groups += 1
+            rows.append({
+                "trade_group_id": group_id,
+                "fill_ts_ms": fill.ts_ms,
+                "status": "RIGHT_CENSORED_UNAUDITED_SETTLEMENT_EVENT",
+                "capital_lock_hours": None,
+                "realized_profit": None,
+            })
+            continue
+
         payout_valid = _finite_decimal(settlement.payout)
         binary_terminal_payout = payout_valid and settlement.payout in {D("0"), fill.quantity}
         settlement_valid = (
@@ -230,11 +253,11 @@ def analyze_weather_paper_capital_lock(events: Iterable[LedgerEvent]) -> dict[st
         ),
         "capital_lock_semantics": "SYNTHETIC_FILL_TO_EXACT_OFFICIAL_KALSHI_SETTLEMENT",
         "fee_semantics": "EXACT_FEE_EVENTS_PREFERRED_LEGACY_FILL_FEE_FALLBACK_FAIL_CLOSED_ON_AMBIGUITY",
-        "settlement_validation": "EXACT_KEY_CATEGORY_MARKET_OPTIONAL_SIDE_BINARY_TERMINAL_PAYOUT_AND_FINITE_DECIMALS",
+        "settlement_validation": "CERTIFIED_RECONCILER_EXTERNAL_ID_PLUS_EXACT_KEY_CATEGORY_MARKET_OPTIONAL_SIDE_BINARY_TERMINAL_PAYOUT_AND_FINITE_DECIMALS",
         "opportunity_duration_is_capital_lock": False,
         "warning": (
             "Do not substitute weather OPEN/MOVE/CLOSE quote lifetime for post-fill capital lock. "
-            "Aggregate efficiency is withheld while any filled group is unresolved or invalid."
+            "Aggregate efficiency is withheld while any filled group is unresolved, unaudited, or invalid."
         ),
         "groups": rows,
         "paper_only": True,
