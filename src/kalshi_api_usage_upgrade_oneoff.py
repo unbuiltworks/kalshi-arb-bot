@@ -22,7 +22,13 @@ async def main_async() -> None:
     upgrade_path = "/trade-api/v2/account/api_usage_level/upgrade"
     upgrade_headers = hot.auth_headers(private_key, "POST", upgrade_path, hot.API_KEY_ID)
     async with httpx.AsyncClient(timeout=8.0) as http:
-        response = await http.post(f"{BASE}/account/api_usage_level/upgrade", headers=upgrade_headers)
+        # Kalshi currently requires an application/json content type on this POST even
+        # though the endpoint has no request fields. An empty JSON object supplies it.
+        response = await http.post(
+            f"{BASE}/account/api_usage_level/upgrade",
+            headers=upgrade_headers,
+            json={},
+        )
         logger.warning(
             "KALSHI_API_USAGE_UPGRADE status=%s success=%s order_entry=false",
             response.status_code,
