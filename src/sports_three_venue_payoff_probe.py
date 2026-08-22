@@ -14,36 +14,40 @@ import httpx
 
 from src.gemini_sports_inventory import fetch_active_sports_events, parse_team_sport_event_ticker
 
-GEMINI = "https://api.gemini.com"
 POLY = "https://gateway.polymarket.us"
-TARGETS = {frozenset(("ATL", "MIL")), frozenset(("WSH", "MIA"))}
+TARGET_NAME_PAIRS = (
+    ("atlanta", "milwaukee"),
+    ("washington", "miami"),
+)
 
 
 def _compact_contract(c: dict[str, Any]) -> dict[str, Any]:
     keep = (
         "label", "ticker", "instrumentSymbol", "marketState", "price", "bestBid",
         "bestAsk", "bid", "ask", "yesBid", "yesAsk", "noBid", "noAsk",
+        "markPrice", "lastPrice",
     )
     return {k: c.get(k) for k in keep if c.get(k) is not None}
+
+
+def _is_target_title(title: str) -> bool:
+    text = title.lower()
+    return any(a in text and b in text for a, b in TARGET_NAME_PAIRS)
 
 
 def _compact_gemini(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for e in events:
+        title = str(e.get("title") or "")
+        if not _is_target_title(title):
+            continue
         parsed = parse_team_sport_event_ticker(str(e.get("ticker") or ""))
-        if not parsed or parsed.get("league") != "MLB":
-            continue
-        pair = frozenset((parsed.get("away", ""), parsed.get("home", "")))
-        if pair not in TARGETS:
-            continue
         out.append({
             "ticker": e.get("ticker"),
-            "title": e.get("title"),
-            "away": parsed.get("away"),
-            "home": parsed.get("home"),
-            "market_type": parsed.get("market_type"),
+            "title": title,
+            "parsed": parsed,
             "event_public_price_fields": {
-                k: e.get(k) for k in ("price", "bestBid", "bestAsk", "bid", "ask") if e.get(k) is not None
+                k: e.get(k) for k in ("price", "bestBid", "bestAsk", "bid", "ask", "markPrice", "lastPrice") if e.get(k) is not None
             },
             "contracts": [_compact_contract(dict(c)) for c in (e.get("contracts") or []) if isinstance(c, dict)],
         })
@@ -82,7 +86,7 @@ async def run_once() -> dict[str, Any]:
             _poly_game(http, "mlb-wsh-mia-2026-08-22"),
         )
     result = {
-        "status": "THREE_VENUE_PAYOFF_SCHEMA_PROBE",
+        "status": "THREE_VENUE_PAYOFF_SCHEMA_PROBE_V2",
         "gemini_targets": _compact_gemini(gemini),
         "polymarket_targets": [x for x in poly if x],
         "payoff_states": ["ATL+WSH", "ATL+MIA", "MIL+WSH", "MIL+MIA"],
@@ -91,7 +95,7 @@ async def run_once() -> dict[str, Any]:
         "rfq": False,
         "market_creation": False,
     }
-    print("THREE_VENUE_PAYOFF_SCHEMA_PROBE " + json.dumps(result, separators=(",", ":"), default=str), flush=True)
+    print("THREE_VENUE_PAYOFF_SCHEMA_PROBE_V2 " + json.dumps(result, separators=(",", ":"), default=str), flush=True)
     return result
 
 
