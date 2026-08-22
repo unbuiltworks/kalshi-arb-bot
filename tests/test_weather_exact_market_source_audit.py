@@ -8,7 +8,7 @@ def _base(**overrides):
         "market_ticker": "KXHIGHAUS-26AUG12-B102.5",
         "market_date": "2026-08-12",
         "provider": "NWS",
-        "source_url": "https://www.weather.gov/wrh/Climate?wfo=ewx",
+        "source_url": "https://forecast.weather.gov/product.php?site=NWS&product=CLI&issuedby=AUS",
         "evidence_url": "https://kalshi.com/markets/kxhighaus/highest-temperature-in-austin/kxhighaus-26aug12",
         "evidence_market_ticker": "KXHIGHAUS-26AUG12-B102.5",
         "evidence_market_date": "2026-08-12",
@@ -60,6 +60,23 @@ def test_unofficial_or_wrong_source_endpoint_fails_closed():
     assert row["verified"] is False
     assert "EXACT_MARKET_SETTLEMENT_SOURCE_UNVERIFIED" in row["blockers"]
     assert "EXACT_MARKET_EVIDENCE_UNOFFICIAL" in row["blockers"]
+
+
+def test_generic_nws_page_cannot_certify_daily_climate_settlement_source():
+    row = audit_exact_market_source(**_base(
+        source_url="https://www.weather.gov/wrh/Climate?wfo=ewx",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_SETTLEMENT_SOURCE_UNVERIFIED" in row["blockers"]
+    assert row["settlement_source_provider"] is None
+
+
+def test_nws_cli_source_requires_issuedby_station_product():
+    row = audit_exact_market_source(**_base(
+        source_url="https://forecast.weather.gov/product.php?site=NWS&product=CLI",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_SETTLEMENT_SOURCE_UNVERIFIED" in row["blockers"]
 
 
 def test_generic_official_kalshi_url_cannot_certify_exact_market_regime():
