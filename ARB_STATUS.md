@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: 2026-08-22 17:29 UTC
+Last verified: 2026-08-22 17:33 UTC
 
 This is the durable ARB handoff. Production state wins over chat history. Before changing a workstream, verify current Railway deployment/runtime + GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the $480/day objective.
 
@@ -26,10 +26,11 @@ Safety response already merged:
 - q5 promotion remains blocked.
 - Existing >=3c after-fee, >=10bp boundary, 50ms survival/skew, freshness, capital reservation, Gemini-first execution, reconciliation, rollover, and hard-halt gates remain unchanged.
 
-Fresh 16:44 UTC evidence:
+Fresh 17:33 UTC evidence:
 - direct Railway runtime access is unavailable in this supervisor session;
 - authoritative ledger still shows **no new Gemini/Kalshi crypto submission after 2026-08-22 06:40:03 UTC**;
-- previously unresolved ETH trade `gk15m-gk15m-08220615-c225-02` is now fully reconciled: both venue outcomes YES, settlement source `EXACT_PUBLIC_VENUE_ENDPOINTS`, venue outcomes agree, and `TRADE_REALIZED` at 16:08:09 UTC for **+$0.049600**;
+- ETH trade `gk15m-gk15m-08220615-c225-02` is fully reconciled +$0.049600;
+- historical BTC trade `gk15m-gkr-260819-1705-04` was newly backfilled/reconciled at 16:46:35 UTC for **+$0.032800 REALIZED**, both venues settling NO and agreeing;
 - do not use the old bounded-campaign diagnosis or any service failure as a reason to bypass the settlement-equivalence transport kill.
 
 ## Crypto bounded-campaign diagnosis / rollover
@@ -46,10 +47,10 @@ This is no longer the governing crypto blocker. Settlement/threshold equivalence
 
 ## Current realized P&L truth
 
-Authoritative `arb-trade-ledger` as of 16:44 UTC:
-- 2026-08-22 ET day (from 04:00 UTC): `gemini_kalshi_15m_crypto` has **7 realized events, net -$0.569000**.
-- The former unresolved ETH trade is included only now because exact public venue settlement reconciled both legs and produced +$0.049600.
-- No sports or weather realized event has appeared in the ledger during this ET-day window.
+Authoritative `arb-trade-ledger` as of 17:33 UTC:
+- 2026-08-22 ET day (from 04:00 UTC): `gemini_kalshi_15m_crypto` has **8 realized events, net -$0.536200**.
+- The historical BTC backfill `gk15m-gkr-260819-1705-04` contributes +$0.032800 only because exact public venue settlement now reconciles both legs.
+- No sports or weather `TRADE_REALIZED` event has appeared in the ledger during this ET-day window.
 
 Do not describe prior Gemini/Kalshi crypto wins as guaranteed-arbitrage evidence; proven settlement/index basis risk can dominate the apparent execution lock.
 
@@ -69,12 +70,10 @@ v37 scans exact same Kalshi binary markets for `YES + NO = $1`, requires q=1 dep
 
 PR #117 added diagnostic-only `SPORTS_SUPERVISOR_TELEMETRY` carrying scan counts, >=3c candidate count, best locked profit/ticker/all-in/depth. It cannot authorize orders or count as realized P&L.
 
-Fresh 16:44 UTC evidence:
-- Railway-linked deployment remains **SUCCESS**;
-- authoritative Neon still contains only `trade_events`; `sports_mve_rfq_feedback` has not been created;
-- there are still **0 `SPORTS_SUPERVISOR_TELEMETRY` rows** after PR #117 deployment;
-- code inspection confirms v40 should reach v37 and v37 should call telemetry after each same-market probe;
-- telemetry writer returns False silently if `DATABASE_URL` is absent and swallows database exceptions. With direct Railway variables/logs unavailable, missing/misconfigured ledger connectivity is now a leading observability hypothesis, not a proven root cause.
+Fresh 17:33 UTC evidence:
+- authoritative Neon still contains only `trade_events` and still has **0 sports telemetry rows in the last 12 hours**;
+- no sports `TRADE_REALIZED` event has appeared in that window;
+- telemetry writer returns False silently if `DATABASE_URL` is absent and swallows database exceptions. With direct Railway variables/logs unavailable, missing/misconfigured ledger connectivity remains a leading observability hypothesis, not a proven root cause.
 
 Do not infer an executable candidate until an authoritative telemetry row or direct runtime evidence proves a cycle and shows >=3c locked after conservative fees with exact q=1 depth.
 
@@ -108,7 +107,7 @@ The executor was redesigned to place the combo maker order **before** buying any
 
 Verified live evidence:
 - single q=1 combo-first attempt: no combo fill, canceled, **0 hedge orders / $0 new loss**;
-- bounded five-candidate q=1 rotation: exactly five maker orders, all canceled after their windows, **0 fills and 0 hedge orders**; the user-visible repeated place/cancel notifications came from this intentional rotation, not from filled trades;
+- bounded five-candidate q=1 rotation: exactly five maker orders, all canceled after their windows, **0 fills and 0 hedge orders**;
 - q=3 quantity-aware research showed fee amortization can support higher maker prices, but partial-fill economics make long-lived q>1 less suitable for the guaranteed >=3c lane;
 - a q=3 Toronto/Columbus live probe at `$0.92` passed fresh quantity-aware preflight (`$2.91` all-in / `$0.09` locked total) but did not fill during 120 seconds and canceled with **0 hedge orders / $0 new loss**;
 - Gemini production rejected same-event multi-driver F1 combos (`at most one contract per event`) and rejected a same-match Toronto total+spread construction as `too closely correlated`; these structures must be excluded from future candidate ranking.
@@ -117,7 +116,7 @@ Gemini's documented combo RFQ WebSocket/quote methods are **not currently enable
 
 ### Current live state — monitored resting q=1 order
 
-Current implementation commit `15d83d6235dbcc32f3c33aeba6498e21e32229e8` adds a long-lived, monitored **single q=1 maker order** instead of cancel/repost rotation. Fresh deployment trigger commit `e26a732fd6a1b60d50829662bdc23c01bb699aaf`; armed Railway deployment `dd0482fe-6733-41ec-8367-a57e36ce38a7` is running campaign `gcombo-2608221328-torclb-rest1`.
+Current implementation commit `15d83d6235dbcc32f3c33aeba6498e21e32229e8` adds a long-lived, monitored **single q=1 maker order** instead of cancel/repost rotation. Fresh deployment trigger commit `e26a732fd6a1b60d50829662bdc23c01bb699aaf`; armed Railway deployment `dd0482fe-6733-41ec-8367-a57e36ce38a7` is campaign `gcombo-2608221328-torclb-rest1`.
 
 Candidate:
 - combo `GEMI-CMB-260823-8EC8FBCF7988E34C-CMB`;
@@ -129,7 +128,7 @@ Candidate:
 - if either exact hedge loses q=1 depth, exceeds the 2c target, or the conservative lock drops below 3c, the maker combo is canceled immediately;
 - environment arm variables were cleared immediately after the armed process booted, preventing replay on any future deploy while the current process keeps its in-memory one-shot authorization.
 
-Authoritative live runtime heartbeat at `2026-08-22 17:29:34 UTC`, after ~60.8 seconds open:
+Last authoritative runtime heartbeat at `2026-08-22 17:29:34 UTC`, after ~60.8 seconds open:
 - `order_entry=true`;
 - both exact hedge asks still `$0.02`, depth `100` each;
 - conservative q=1 taker fee `$0.01` per hedge;
@@ -138,7 +137,9 @@ Authoritative live runtime heartbeat at `2026-08-22 17:29:34 UTC`, after ~60.8 s
 - locked floor `$0.03`;
 - `hedge_state.ok=true`.
 
-This is currently a **LIVE PROBE with one resting maker order**, not an executed trade and not realized P&L. It remains live until the combo fills, hedge economics deteriorate and trigger cancellation, or the 1800-second safety TTL expires.
+Fresh control-plane check at 17:33 UTC: GitHub's Railway status for deployment `dd0482fe-6733-41ec-8367-a57e36ce38a7` remains **SUCCESS**. Direct runtime/log access is unavailable, so active/filled/canceled state after the 17:29 heartbeat is not yet independently proven. Do not redeploy, re-arm, or create another maker order until this campaign is reconciled.
+
+This is a **LIVE PROBE**, not an executed trade and not realized P&L unless all three legs fill and subsequently settle/reconcile.
 
 ## Direct sports K↔P
 
@@ -164,9 +165,9 @@ Remove only verified dead/test/superseded services after dependency checks.
 
 1. Read `ARB_STATUS.md` and inspect current Railway runtime before mutating any lane.
 2. Keep Gemini/Kalshi crypto q1/q5/maker blocked unless exact settlement + threshold equivalence is independently certified.
-3. Verify no new crypto submission occurred after 06:40:03 UTC; ETH `gk15m-gk15m-08220615-c225-02` is reconciled +$0.049600 and should no longer be treated as unresolved.
-4. For the current same-Gemini sports lane, inspect campaign `gcombo-2608221328-torclb-rest1` first. Do not redeploy/re-arm or create another maker order until its active/filled/canceled state and any resulting positions are reconciled.
-5. If the current combo fills, verify both exact q=1 hedges filled and classify only `FILLED_NOT_SETTLED` until every component settles. If it canceled for stale hedge economics or TTL, verify zero positions and choose a fresh structurally valid candidate rather than reusing the campaign.
+3. Verify no new crypto submission occurred after 06:40:03 UTC; today's authoritative crypto realized subtotal is currently 8 events / -$0.536200 after the +$0.032800 historical BTC backfill.
+4. For current same-Gemini sports campaign `gcombo-2608221328-torclb-rest1`, reconcile active/filled/canceled state first. Do not redeploy/re-arm or create another maker order until resolved.
+5. If the combo filled, verify both exact q=1 hedges filled and classify only `FILLED_NOT_SETTLED` until every component settles. If it canceled for stale hedge economics or TTL, verify zero positions and choose a fresh structurally valid candidate rather than reusing the campaign.
 6. Do not return to short cancel/repost carousels unless there is a specific fill-probability reason; prefer one monitored resting q=1 order to reduce notification noise and hedge churn.
 7. Improve candidate filtering by excluding Gemini same-event and known `too closely correlated` pair classes before creation/ranking.
 8. Highest-value same-Kalshi blocker remains proving `sports-kp-combo-shadow` runtime telemetry / `DATABASE_URL`, then using authoritative same-market >=3c evidence for any bounded live promotion.
