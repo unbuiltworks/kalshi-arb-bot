@@ -47,8 +47,10 @@ def analyze_row(row: dict[str, Any]) -> dict[str, Any]:
     Missing or malformed threshold/final-value evidence never becomes a pass.
     For a shared-value-safe orientation, only basis moving in the direction that can
     defeat the threshold ordering is treated as adverse. The raw-value ratio is exact:
-    adverse_terminal_basis / absolute_threshold_gap. A ratio <1 is a sufficient
-    terminal-value cushion against a both-lose dominance breach for that window.
+    adverse_terminal_basis / absolute_threshold_gap. Because both current lanes resolve
+    YES at-or-above their threshold, a ratio <=1 is sufficient to rule out a both-lose
+    dominance breach for that settled window; the breach requires adverse basis strictly
+    greater than the threshold gap. This is historical evidence only, never authorization.
     """
     g_strike = _d(row.get("gemini_strike"))
     k_target = _d(row.get("kalshi_target"))
@@ -117,7 +119,7 @@ def analyze_row(row: dict[str, Any]) -> dict[str, Any]:
         adverse_bps = adverse_value / g_final * D("10000")
         if gap_abs_value > 0:
             ratio = adverse_value / gap_abs_value
-            sufficient = ratio < D("1")
+            sufficient = ratio <= D("1")
         else:
             sufficient = False
 
@@ -174,7 +176,7 @@ def _asset_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "adverse_basis_to_gap_ratio_max": str(max(ratios)) if ratios else None,
         "ratio_le_0_25": sum(1 for x in ratios if x <= D("0.25")),
         "ratio_le_0_50": sum(1 for x in ratios if x <= D("0.50")),
-        "ratio_lt_1": sum(1 for x in ratios if x < D("1")),
+        "ratio_le_1": sum(1 for x in ratios if x <= D("1")),
     }
 
 
@@ -199,8 +201,9 @@ def summarize(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
         },
         "interpretation": (
             "terminal_cushion_sufficient means the observed adverse signed index basis was "
-            "strictly smaller than the protective threshold gap; this is historical evidence, "
-            "not a future guarantee or live authorization"
+            "less than or equal to the protective threshold gap; because both current lanes "
+            "resolve YES at-or-above, a both-lose dominance breach requires strictly greater "
+            "adverse basis. This is historical evidence, not a future guarantee or live authorization"
         ),
         "classification": "THRESHOLD_AND_INDEX_BASIS_RESEARCH_ONLY",
         "hard_blocker": "INDEX_MISMATCH_RESEARCH_ONLY",
