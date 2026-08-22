@@ -17,6 +17,7 @@ from __future__ import annotations
 from decimal import Decimal
 from hashlib import sha256
 from typing import Any
+from urllib.parse import urlparse
 
 from src.cross_venue_ledger import LedgerEvent, make_event
 
@@ -51,6 +52,29 @@ def _provider_token(provider: str) -> str:
     return token
 
 
+def _official_provider_source(provider: str, source_url: str) -> bool:
+    """Require the terminal source itself to be an audited provider-owned endpoint.
+
+    Do not allow a hand-crafted ``reconciled=True`` mapping to mint certified ledger
+    provenance for an arbitrary provider or URL. Exact-market evidence is checked
+    upstream; this is the independent ledger-boundary allowlist.
+    """
+    try:
+        parsed = urlparse(source_url)
+    except Exception:
+        return False
+    if parsed.scheme.lower() != "https":
+        return False
+    host = (parsed.hostname or "").lower()
+    path = (parsed.path or "").rstrip("/").lower()
+    provider_token = _norm_upper(provider)
+    if provider_token == "THE_WEATHER_COMPANY":
+        return host in {"weather.com", "www.weather.com"} and path == "/kalshi"
+    if provider_token == "NWS":
+        return host == "weather.gov" or host == "www.weather.gov" or host.endswith(".weather.gov")
+    return False
+
+
 def _source_url_hash(source_url: str) -> str:
     normalized = _norm_url(source_url)
     if not normalized:
@@ -80,7 +104,10 @@ def certified_weather_settlement_external_id(
     market = _norm_upper(market_id)
     key = _norm(settlement_key)
     provider_token = _provider_token(provider)
-    source_hash = _source_url_hash(source_url)
+    source_normalized = _norm_url(source_url)
+    if not _official_provider_source(provider_token, source_normalized):
+        raise ValueError("unsupported or unofficial terminal weather settlement source")
+    source_hash = _source_url_hash(source_normalized)
     side_token = _norm_upper(side)
     if not group or not market or not key:
         raise ValueError("all certified settlement identity fields are required")
@@ -152,6 +179,8 @@ def ledger_event_from_weather_reconciliation(
 
     provider = _provider_token(reconciliation.get("settlement_source_provider"))
     source_url = _norm_url(reconciliation.get("settlement_source_url"))
+    if not _official_provider_source(provider, source_url):
+        raise ValueError("unsupported or unofficial terminal weather settlement source")
     external_id = certified_weather_settlement_external_id(
         trade_group_id=trade_group_id,
         market_id=exact_market,
