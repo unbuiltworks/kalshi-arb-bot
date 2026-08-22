@@ -111,6 +111,11 @@ def _budget_breakdown(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "capital_filled": str(actual),
             "reserved_usd": str(reserved),
             "budget_contribution_usd": str(contributing),
+            "realized": bool(row.get("realized")),
+            "legs_filled": int(row.get("legs_filled") or 0),
+            "fees": str(_d(row.get("fees"))),
+            "gross_pnl": str(_d(row.get("gross_pnl"))),
+            "net_pnl": str(_d(row.get("net_pnl"))),
         })
     return out
 
