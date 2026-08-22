@@ -20,6 +20,7 @@ from src.universal_three_venue_sports import fetch_gemini_mlb, fetch_kalshi_mlb,
 
 D = Decimal
 logger = logging.getLogger("kalshi_arb.three_venue_mlb_price_scan")
+START_TOLERANCE_MS = 5 * 60 * 1000
 
 
 def _d(value: Any) -> Decimal | None:
@@ -30,18 +31,39 @@ def _d(value: Any) -> Decimal | None:
     return out if out.is_finite() else None
 
 
-def _eligible_keys(rows: list[NormalizedSide]) -> set[str]:
+def _eligible_rows(rows: list[NormalizedSide]) -> tuple[list[NormalizedSide], int]:
+    """Return counterpart rows grouped by contract semantics AND physical start.
+
+    ``contract_key`` intentionally excludes scheduled start. MLB teams frequently
+    play on consecutive days, so grouping an entire matchup by contract_key and
+    rejecting it when max(start)-min(start)>5m incorrectly drops every moneyline
+    for repeated series. Cluster each semantic key into physical-game start windows
+    first, then require >=2 venues inside that window.
+    """
     groups: dict[str, list[NormalizedSide]] = defaultdict(list)
     for row in rows:
         groups[row.contract_key].append(row)
-    out: set[str] = set()
-    for key, matches in groups.items():
-        if len({row.identity.venue for row in matches}) < 2:
-            continue
-        starts = [row.identity.event.scheduled_start_ms for row in matches]
-        if max(starts) - min(starts) <= 5 * 60 * 1000:
-            out.add(key)
-    return out
+
+    eligible_ids: set[int] = set()
+    eligible_clusters = 0
+    for matches in groups.values():
+        pending = sorted(matches, key=lambda r: r.identity.event.scheduled_start_ms)
+        while pending:
+            anchor = pending[0].identity.event.scheduled_start_ms
+            cluster = [r for r in pending if r.identity.event.scheduled_start_ms - anchor <= START_TOLERANCE_MS]
+            cluster_ids = {id(r) for r in cluster}
+            pending = [r for r in pending if id(r) not in cluster_ids]
+            if len({r.identity.venue for r in cluster}) < 2:
+                continue
+            eligible_clusters += 1
+            eligible_ids.update(cluster_ids)
+    return [row for row in rows if id(row) in eligible_ids], eligible_clusters
+
+
+def _eligible_keys(rows: list[NormalizedSide]) -> set[str]:
+    """Compatibility helper: semantic keys that have at least one valid start cluster."""
+    eligible, _ = _eligible_rows(rows)
+    return {row.contract_key for row in eligible}
 
 
 def _gemini_contracts(events: Iterable[Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
@@ -80,8 +102,7 @@ async def _get(http: httpx.AsyncClient, semaphore: asyncio.Semaphore, url: str, 
 
 async def price_counterparts(http: httpx.AsyncClient, gemini_events: list[dict[str, Any]], poly_events: list[dict[str, Any]], kalshi_events: list[dict[str, Any]]) -> tuple[list[PricedQuote], list[dict[str, str]], int]:
     rows = normalize_gemini_mlb(gemini_events) + normalize_polymarket_mlb(poly_events) + normalize_kalshi_mlb_eastern(kalshi_events)
-    keys = _eligible_keys(rows)
-    wanted = [row for row in rows if row.contract_key in keys]
+    wanted, cluster_count = _eligible_rows(rows)
     gcontracts = _gemini_contracts(gemini_events)
     ktoseries = _kalshi_series(kalshi_events)
     pids = sorted({row.venue_market_id for row in wanted if row.identity.venue == "polymarket"})
@@ -128,7 +149,7 @@ async def price_counterparts(http: httpx.AsyncClient, gemini_events: list[dict[s
             book, received = kbooks[side.venue_market_id]
             row = make_priced_quote(side, book, received_ms=received, kalshi_fee_multiplier=multipliers.get(ktoseries.get(side.venue_market_id, "")), depth_source="public_book_top_level")
         if row is not None: priced.append(row)
-    return priced, errors, len(keys)
+    return priced, errors, cluster_count
 
 
 def _dedupe(opportunities: list[Any]) -> list[Any]:
@@ -147,7 +168,7 @@ async def run_once() -> dict[str, Any]:
     locks = _dedupe(find_cross_venue_locks([row.quote for row in priced], max_quote_skew_ms=5000, min_confidence="NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE"))
     result={
         "status":"THREE_VENUE_MLB_Q1_PRICE_SCAN","raw_events":{"gemini":len(gemini),"polymarket":len(poly),"kalshi":len(kalshi)},
-        "normal_event_counterpart_keys":key_count,"priced_quotes":len(priced),"priced_quotes_by_venue":dict(Counter(row.quote.venue for row in priced)),
+        "normal_event_counterpart_start_clusters":key_count,"priced_quotes":len(priced),"priced_quotes_by_venue":dict(Counter(row.quote.venue for row in priced)),
         "one_contract_positive_locks":len(locks),"top_one_contract_locks":[row.as_dict() for row in locks[:50]],
         "fetch_error_count":len(errors),"fetch_errors":errors[:50],"pricing_scope":"Q1_TAKER_FEES_INCLUDED",
         "gemini_depth_scope":"Q1_ONLY_UNTIL_WEBSOCKET_REVALIDATION","rule_gate":"FULL_RULE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION",
