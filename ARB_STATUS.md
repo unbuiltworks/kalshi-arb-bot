@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: 2026-08-22 01:29 UTC
+Last verified: 2026-08-22 01:38 UTC
 
 This is the durable ARB handoff. Production state wins over chat history. Before changing a workstream, verify current Railway deployment/runtime + GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the $480/day objective.
 
@@ -82,16 +82,16 @@ Gemini currently exposes BTC 5-minute Prediction contracts. Kalshi's current cry
 
 Railway service: `sports-kp-combo-shadow`.
 
-Latest verified deployment: `11fea35c-872e-4e58-95b4-5ac1f22b4be9` **SUCCESS**.
+Latest verified deployment: `eaa43c0f-ce21-4fe8-804a-e6da7c5edc13` **SUCCESS**.
 
-GitHub branch/head: `feature/kp-combo-synthetic-shadow` @ `07cdc51422899bd35b2885e5982c5006a228342e` (production entrypoint v27).
+GitHub branch/head: `feature/kp-combo-synthetic-shadow` @ `de28fdbc08d9c2b5a1a0558b3d2c70c2ff0b41b3` (production entrypoint v28; v28 implementation fix commit `c126d82aac41a85a0f85f3b5fb75c41d19ed10a6`).
 
 Current state:
 - automatic Kalshi MVE generation is active;
 - auto-q1 is requested and the live software gate is on, but there is still a one-attempt-per-process cap and the live executor independently revalidates every input;
 - q=1 live threshold is **>=3c after conservative fees**;
-- current generation budget is **8 creations/RFQs per generation pass**, durable restart-safe daily cap **600**; latest verified count after the first v27 pass was **158/600**;
-- first v27 pass saw 33 live Polymarket sports events, 40 bounded Kalshi event-market calls, 1,570 eligible Kalshi component legs, **0 Kalshi 429s**, 8 markets created/resolved, and **0 executable candidates**;
+- current generation budget is **8 creations/RFQs per generation pass**, durable restart-safe daily cap **600**; latest verified first v28 pass ended at **174/600**;
+- first corrected-v28 pass saw 31 live Polymarket sports events, 40 bounded Kalshi event-market calls, 1,553 eligible Kalshi component legs, **0 Kalshi 429s**, 8 markets created/resolved, and **0 executable candidates**;
 - best first-pass same-Kalshi basket remained **-$0.049** locked profit, so no q=1 order was justified;
 - MVE creation, RFQs, and shadow replacements are not trades and are not realized P&L.
 
@@ -100,12 +100,18 @@ Manufacturing changes now live:
 - v22/v23 added same-game correlation priority plus process-local RFQ feedback while retaining exploration;
 - v24 stopped uncertified Polymarket/Gemini replacement prices from steering scarce live-capable MVE creation slots; actual creation rank is based on executable same-Kalshi component economics;
 - v25 tested implication-rich GAME+SPREAD baskets, and production proved Kalshi rejects those as `duplicated_legs` when the moneyline/spread outcome logically includes the other;
-- v26 therefore rejects same-game GAME+SPREAD baskets before creation and prioritizes valid SPREAD+TOTAL, GAME+TOTAL, other same-game families, plus baseline exploration; latest verified candidate pool rejected 10 redundant GAME+SPREAD rows pre-create;
-- v27 removes uncertified external prepricing from the **pre-creation critical path** because it cannot affect current live-capable execution. Production verified `SPORTS_MVE_PREPRICE_BYPASS`; the observed pass reached candidate ranking roughly **18 seconds faster** than the immediately prior path. Post-generation external analysis remains shadow-only.
+- v26 therefore rejects same-game GAME+SPREAD baskets before creation and prioritizes valid SPREAD+TOTAL, GAME+TOTAL, other same-game families, plus baseline exploration;
+- v27 removes uncertified external prepricing from the **pre-creation critical path** because it cannot affect current live-capable execution. Production verified `SPORTS_MVE_PREPRICE_BYPASS`; the observed pass reached candidate ranking roughly **18 seconds faster** than the prior path;
+- v28 removes v10/v11's uncertified Gemini/Polymarket **post-RFQ** research from the candidate-to-q1 critical path. In the verified corrected-v28 run, final RFQ cleanup completed at ~01:38:36.943 UTC, `SPORTS_MVE_FAST_HANDOFF` fired at ~01:38:36.974, and `SPORTS_MVE_GENERATOR_HEARTBEAT` followed at the same timestamp: roughly **31 ms** from RFQ completion to live-capable candidate evaluation rather than another ~15-20 seconds of shadow network work. External replacements remain execution-disabled and are researched by separate services.
+
+Regression/recovery record:
+- first v28 rollout deployment `3a5195ac-b393-4073-9a49-0e867d5c8d4c` crashed on import with `AttributeError: ... v15 has no attribute v14` from an invalid wrapper-chain traversal;
+- production was immediately restored to known-good v27 with deployment `5c852ca8-7e4a-4cf4-9aa2-7a183cf0d42d` SUCCESS;
+- v28 was corrected to import `sports_kp_live_combo_supervisor_v9` directly and final deployment `eaa43c0f-ce21-4fe8-804a-e6da7c5edc13` is SUCCESS with runtime `SPORTS_MVE_FAST_HANDOFF` verified.
 
 Best recent improvement: before executable-only ranking, the best manufactured scalar-safe gap sampled around **-$1.019**. v24+ moved the best observed gap to **-$0.049** without weakening the 3c live threshold. This is meaningful search-quality improvement but still not an executable arb.
 
-Next sports-combo priority: use real RFQ outcomes to identify negative-correlation/valid family structures that can move the same-Kalshi lock from -4.9c through +3c; do not raise the creation cap blindly. Keep external replacement research off the live critical path unless rules are certified.
+Next sports-combo priority: improve RFQ learning from family-only to **family + selected-side pattern** so SPREAD+TOTAL/GAME+TOTAL orientations that market makers quote closest to the scalar-safe bound receive more creation slots. Continue searching valid negative-correlation structures; do not raise the creation cap blindly.
 
 ### Direct sports K↔P — LIVE READ-ONLY CERTIFICATION SCAN / NOT EXECUTABLE
 
