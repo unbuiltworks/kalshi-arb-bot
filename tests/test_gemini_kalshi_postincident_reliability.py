@@ -57,9 +57,17 @@ def test_postincident_boot_refuses_to_run_without_explicit_cushion_arm(monkeypat
         boot.main()
 
 
+def test_postincident_boot_refuses_uncertified_settlement_equivalence(monkeypatch):
+    monkeypatch.setenv(child.HEDGE_CUSHION_ENV, "YES")
+    monkeypatch.delenv(boot.SETTLEMENT_EQUIVALENCE_ENV, raising=False)
+    with pytest.raises(PermissionError, match=boot.SETTLEMENT_EQUIVALENCE_ENV):
+        boot.main()
+
+
 def test_postincident_boot_installs_accounting_then_calls_safe_boot(monkeypatch):
     calls = []
     monkeypatch.setenv(child.HEDGE_CUSHION_ENV, "YES")
+    monkeypatch.setenv(boot.SETTLEMENT_EQUIVALENCE_ENV, "YES")
     monkeypatch.setattr(boot.incident_accounting, "install", lambda: calls.append("accounting"))
     monkeypatch.setattr(boot.safe_boot, "main", lambda: calls.append("safe_boot"))
     boot.main()
