@@ -1,12 +1,14 @@
 """Isolated one-trade supervisor for the approved crypto settlement-basis canary.
 
 This supervisor deliberately runs a single q=1 attempt with <=$1 deployed capital,
-although the user approved a separate $5 maximum-loss research budget.  It reuses the
+although the user approved a separate $5 maximum-loss research budget. It reuses the
 proven campaign settlement/accounting machinery but relabels every authoritative
 ledger event as basis-risk research and spawns only the dominance-gated child.
 
-It does not set or consume CRYPTO_GK_SETTLEMENT_EQUIVALENCE_CERTIFIED and therefore
-does not weaken the guaranteed-arbitrage lane's post-incident hard stop.
+A deterministic CAPITAL_RESERVED row in the authoritative Postgres ledger is the
+cross-restart single-use claim. Local /tmp files coordinate only the parent/child
+processes inside one Railway container. The production settlement-equivalence hard
+stop is not modified or bypassed by the guaranteed-arbitrage service.
 """
 from __future__ import annotations
 
@@ -29,6 +31,7 @@ from src.gemini_kalshi_basis_risk_q1_child import (
     BASIS_MIN_GAP_ENV,
     BASIS_RECONCILED_ENV,
     DEFAULT_MIN_GAP_BPS,
+    _local_state_dir,
 )
 
 D = Decimal
@@ -135,7 +138,7 @@ async def _obtain_basis_execution(run_id: str, arm_deadline: datetime) -> dict[s
         with result_path.open("r", encoding="utf-8") as fh:
             return json.load(fh)
     if claim.is_file():
-        raise RuntimeError(f"basis-risk attempt claim exists without result for {run_id}")
+        raise RuntimeError(f"basis-risk local claim exists without result for {run_id}")
 
     child_env = os.environ.copy()
     child_env[v2.RUN_ID_ENV] = run_id
@@ -180,8 +183,10 @@ def main() -> None:
     campaign_id, deadline, min_gap = _validate_basis_campaign_env()
     _install_isolated_campaign_hooks()
 
-    # Translate the separate research authorization into the proven campaign API
-    # only inside this isolated process.  One q=1 attempt is the entire initial tranche.
+    # Local file state is not relied on for cross-restart uniqueness. The child must
+    # atomically insert gkbasis-<run>-capital-reserved before any venue submission.
+    v2._state_dir = _local_state_dir
+
     os.environ[base.CAMPAIGN_ID_ENV] = campaign_id
     os.environ[base.MAX_TRADES_ENV] = str(MAX_TRADES)
     os.environ[base.HARD_BUDGET_ENV] = str(INITIAL_TRANCHE_USD)
@@ -192,7 +197,7 @@ def main() -> None:
     logger.warning(
         "CRYPTO_BASIS_RISK_CAMPAIGN_ENABLED campaign_id=%s max_trades=1 quantity=1 "
         "initial_tranche_usd=%s approved_max_loss_budget_usd=%s min_gap_bps=%s "
-        "guaranteed_arb=false one_unresolved_trade=true",
+        "durable_claim=postgres_capital_reserved guaranteed_arb=false one_unresolved_trade=true",
         campaign_id, INITIAL_TRANCHE_USD, APPROVED_BUDGET, min_gap,
     )
     asyncio.run(base.run())
