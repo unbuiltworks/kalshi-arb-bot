@@ -1,12 +1,12 @@
 """Read-only target attribution for the existing crypto maker shadow.
 
 The base maker shadow intentionally mixes several required-profit cohorts in its
-aggregate fill counters.  That is useful for research, but it can make a high fill
-count look more relevant to the live >=3c lane than it really is.  This wrapper adds
+aggregate fill counters. That is useful for research, but it can make a high fill
+count look more relevant to the live >=3c lane than it really is. This wrapper adds
 per-target fill/profit/stale-hedge counters without changing quote generation, queue
 consumption, fill inference, fee math, settlement classification, or order capability.
 
-No order transport is added.  All outputs remain INDEX_MISMATCH_RESEARCH_ONLY.
+No order transport is added. All outputs remain INDEX_MISMATCH_RESEARCH_ONLY.
 """
 from __future__ import annotations
 
@@ -102,8 +102,12 @@ def install() -> None:
 
 
 def main() -> None:
+    # Install before importing the Railway service module so its imported collect_all
+    # executes against the patched base module. The service still owns its resting-
+    # liveness/stress sidecars and CLI, including max-resting-feed-age-ms.
     install()
-    base.main()
+    from src import gemini_kalshi_maker_shadow_service as service
+    service.main()
 
 
 if __name__ == "__main__":
