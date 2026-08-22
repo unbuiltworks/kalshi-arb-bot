@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: 2026-08-22 17:33 UTC
+Last verified: 2026-08-22 21:00 UTC
 
 This is the durable ARB handoff. Production state wins over chat history. Before changing a workstream, verify current Railway deployment/runtime + GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the $480/day objective.
 
@@ -14,6 +14,15 @@ This is the durable ARB handoff. Production state wins over chat history. Before
 
 Never count stale quotes, mismatched settlement rules, shadow P&L, armed state, attempted orders, MVE creation/RFQs, or unconfirmed fills as realized arbitrage profit.
 
+## Current realized P&L truth
+
+Authoritative ledger evidence last reconciled earlier on 2026-08-22:
+- 2026-08-22 ET day `gemini_kalshi_15m_crypto`: 8 realized events, net **-$0.536200**.
+- Historical BTC backfill `gk15m-gkr-260819-1705-04`: **+$0.032800 REALIZED** only after exact public venue settlement reconciliation.
+- No sports or weather `TRADE_REALIZED` event was present in the ledger at the last authoritative snapshot.
+
+No same-Gemini sports combo order was submitted, filled, executed, or realized during the 20:58-21:00 UTC work below.
+
 ## Critical crypto incident / containment
 
 Gemini/Kalshi 15-minute crypto is **NOT settlement-equivalent and must remain fail-closed**.
@@ -26,120 +35,80 @@ Safety response already merged:
 - q5 promotion remains blocked.
 - Existing >=3c after-fee, >=10bp boundary, 50ms survival/skew, freshness, capital reservation, Gemini-first execution, reconciliation, rollover, and hard-halt gates remain unchanged.
 
-Fresh 17:33 UTC evidence:
-- direct Railway runtime access is unavailable in this supervisor session;
-- authoritative ledger still shows **no new Gemini/Kalshi crypto submission after 2026-08-22 06:40:03 UTC**;
-- ETH trade `gk15m-gk15m-08220615-c225-02` is fully reconciled +$0.049600;
-- historical BTC trade `gk15m-gkr-260819-1705-04` was newly backfilled/reconciled at 16:46:35 UTC for **+$0.032800 REALIZED**, both venues settling NO and agreeing;
-- do not use the old bounded-campaign diagnosis or any service failure as a reason to bypass the settlement-equivalence transport kill.
+The old bounded-campaign dormancy diagnosis was real but is no longer the governing crypto blocker. Settlement/threshold equivalence is.
 
-## Crypto bounded-campaign diagnosis / rollover
+## Same-Kalshi / sports manufacturing
 
-The prior dormancy root cause was real and has been addressed separately:
-- live executor is a bounded campaign;
-- campaign end conditions include `SOL_CANARY_V2_ARM_NOT_AFTER_UTC`, `CRYPTO_CANARY_MAX_TRADES` default 5, and `CRYPTO_CANARY_MAX_EXECUTION_ATTEMPTS` default 25;
-- PRs #105-#107 added fail-closed diagnosis and supervised continuous rollover;
-- PR #109 fixed benign no-claim deadline expiry so a lane merely waiting for an opportunity does not globally halt the campaign;
-- never reuse expired arm tokens or campaign IDs;
-- rollover requires terminal clean local state, no unresolved attempt claim, no reservations/unsettled capital, successful venue reconciliation, and zero resting orders.
+Service `sports-kp-combo-shadow` remains a high-value safe manufacturing path.
 
-This is no longer the governing crypto blocker. Settlement/threshold equivalence is.
+Production branch `feature/kp-combo-synthetic-shadow` includes merged PR #117 at `5f6f64a65ff5dada9a4ea29696c969111b432a5d`. v37 scans exact same Kalshi binary markets for `YES + NO = $1`, requires q=1 depth on both sides, applies conservative taker fees, and labels a shadow candidate executable only at **>= $0.03 locked profit**. Same-market identity avoids cross-venue settlement-equivalence risk.
 
-## Current realized P&L truth
+PR #117 added diagnostic-only `SPORTS_SUPERVISOR_TELEMETRY`. At the last authoritative database check there were still no fresh sports telemetry rows, so telemetry/database connectivity remains an observability blocker until direct runtime evidence proves otherwise.
 
-Authoritative `arb-trade-ledger` as of 17:33 UTC:
-- 2026-08-22 ET day (from 04:00 UTC): `gemini_kalshi_15m_crypto` has **8 realized events, net -$0.536200**.
-- The historical BTC backfill `gk15m-gkr-260819-1705-04` contributes +$0.032800 only because exact public venue settlement now reconciles both legs.
-- No sports or weather `TRADE_REALIZED` event has appeared in the ledger during this ET-day window.
+Do not infer an executable candidate until authoritative telemetry or direct runtime evidence shows >=3c locked after conservative fees with exact q=1 depth.
 
-Do not describe prior Gemini/Kalshi crypto wins as guaranteed-arbitrage evidence; proven settlement/index basis risk can dominate the apparent execution lock.
+## Same-Gemini sports combo lane — CURRENT
 
-## Crypto research / maker / q5
+### Historical live-probe incident
 
-- `crypto-maker-arb-shadow-v1`: SHADOW / `INDEX_MISMATCH_RESEARCH_ONLY`; live maker disarmed.
-- q5: **BLOCKED / DO NOT ARM**.
-- PR #116 `Add read-only crypto threshold dominance study` remains research-only; it cannot authorize trading.
+A 16:10 UTC q=1 pre-hedge-first probe exposed an execution-recovery bug: two hedges filled before the combo, the combo did not fill, and the old emergency flattener used unsupported `MARKET+IOC`. Recovery was completed with supported SELL `LIMIT+FOK` exits. Final reconciliation showed zero remaining positions/orders and approximately **-$0.06 realized live-probe loss**. This was not arbitrage profit.
 
-## Sports manufactured MVE / same-Kalshi partition
+The lane was redesigned combo-first so no hedge is bought until the combo fills. Subsequent combo-first q=1/q=3 probes produced no combo fills and no new hedge churn. Gemini also rejected same-event multi-driver F1 combos and a known `too closely correlated` same-match construction; these classes remain excluded.
 
-Service `sports-kp-combo-shadow` remains the highest-value safe manufacturing path.
+### Fractional-fill finding — resting maker is now BLOCKED
 
-Production branch `feature/kp-combo-synthetic-shadow` includes merged PR #117 at `5f6f64a65ff5dada9a4ea29696c969111b432a5d`. GitHub's Railway deployment check for `sports-kp-combo-shadow` is **SUCCESS**. Stable entrypoint remains supervisor v40; v40 -> v39 -> v38 -> v37, and v37 calls the exact same-market probe before continuing.
+The prior monitored resting-q1 design is **superseded and must not be re-armed**.
 
-v37 scans exact same Kalshi binary markets for `YES + NO = $1`, requires q=1 depth on both sides, applies conservative taker fees, and labels a shadow candidate executable only at **>= $0.03 locked profit**. Same-market identity avoids the cross-venue settlement-equivalence issue.
+Live Gemini refdata proves combo instruments can have:
+- `quantityMinimum = 1`
+- `quantityIncrement = 0.01`
 
-PR #117 added diagnostic-only `SPORTS_SUPERVISOR_TELEMETRY` carrying scan counts, >=3c candidate count, best locked profit/ticker/all-in/depth. It cannot authorize orders or count as realized P&L.
+Therefore a submitted q=1 resting combo order is not indivisible and can receive sub-contract fills. With Gemini prediction fees conservatively rounded up to a cent, the 0.01-fill branch cannot preserve the required **>=3c/contract guaranteed floor**. Exact fractional hedge increments do not repair the fee-floor problem.
 
-Fresh 17:33 UTC evidence:
-- authoritative Neon still contains only `trade_events` and still has **0 sports telemetry rows in the last 12 hours**;
-- no sports `TRADE_REALIZED` event has appeared in that window;
-- telemetry writer returns False silently if `DATABASE_URL` is absent and swallows database exceptions. With direct Railway variables/logs unavailable, missing/misconfigured ledger connectivity remains a leading observability hypothesis, not a proven root cause.
+Fresh catalog/liquidity audit:
+- active registered combos: 17;
+- dynamically valid unresolved combos: 15;
+- current watcher symbol set: 31 combo/component instruments;
+- most recent refdata liquidity scan found no liquid whole-increment combo instrument;
+- resting combo-maker live mode is therefore **BLOCKED** for this guaranteed-floor lane.
 
-Do not infer an executable candidate until an authoritative telemetry row or direct runtime evidence proves a cycle and shows >=3c locked after conservative fees with exact q=1 depth.
+Do not revive campaign `gcombo-2608221328-torclb-rest1` or any other resting combo quote merely because q=1 was requested. q=1 does not imply all-or-none on these combo grids.
 
-## Same-Gemini sports combo live lane
+### Safe candidate architecture — q=1 FOK only
 
-Dedicated isolated service `gemini-extreme-combo-live-q1` (service id `4399e98f-ce33-4a74-99f2-900f7615beab`) runs on `feature/three-venue-sports-router`, restart policy `NEVER`. This lane uses same-Gemini combo settlement plus exact component complements, so the conservative payoff identity is `AB + (1-A) + (1-B) >= 1`, including scalar component settlements. It is separate from the uncertified Gemini/Kalshi crypto settlement-basis lane.
+Branch `feature/gemini-combo-mm-v1` now contains a dynamic same-Gemini FOK path:
+- `src/gemini_combo_mm_fok_preflight.py`: read-only active-catalog economics for both exact conjunction covers:
+  - `C(YES) + SUM(complements) >= 1`
+  - `C(NO) + SUM(selected required outcomes) >= 1`
+- `src/gemini_combo_mm_fok_watch.py`: continuous read-only WebSocket watcher; no authenticated order entry.
+- `src/gemini_combo_mm_fok_live_v1.py`: bounded q=1 combo-first LIMIT+FOK executor with dynamic canonical-leg certification, settled-PASS removal, variable leg counts, exact q1 depth, <=50ms final receive skew, >=3c conservative after-fee floor, balance/account guards, unexpected-partial hard halt, bounded `LIMIT+FOK` recovery, and post-recovery reconciliation.
+- `src/gemini_combo_mm_fok_entry.py`: fail-closed production entrypoint. DISARMED boots are public-only; when genuinely armed it replaces per-symbol active-order REST scans with one unfiltered `/v1/prediction-markets/orders/active` call filtered locally. A full 100-order page fails closed.
 
-### Earlier blocked campaign
+Why the entrypoint was added: an earlier disarmed deployment crashed with `Gemini time-based nonce rate exceeded` because it queried active orders separately for every combo/component symbol. This was an observability/preflight bug, not a trading loss. It is now fixed without weakening active-order checks.
 
-Campaign `gcombo-2608221121-a1` targeted combo `GEMI-CMB-260823-8EC8FBCF7988E34C-CMB`, q=1, maker BUY YES $0.90, target lock >=$0.03. The 15:24 UTC attempt was correctly `LIVE_GATE_BLOCKED`: both exact hedge outcomes had no executable offer, therefore **0 orders, 0 fills, $0 realized**. Do not reuse that campaign.
+Validation at ~20:59 UTC:
+- Railway test service `gemini-combo-mm-test-v1`: **15 passed**.
+- Disarmed executor service `gemini-combo-mm-canonicalize-v1` (service `efe9ef29-18b2-4908-9953-11d7b8ca3a67`) booted successfully on commit `79ff8f5823354bf8a803b7ff4be9d73e41b8d902` with:
+  - `armed=false`
+  - active catalog HTTP 200 / 17 registered combos
+  - 15 valid dynamic candidates
+  - `private_preflight=SKIPPED_DISARMED`
+  - `order_entry=false`
+  - `realized=false`
+  - restart policy `NEVER`
+- Read-only watcher service `gemini-combo-mm-fok-preflight-v1` (service `71b403d8-77dc-49ab-837a-ea628026f084`) refreshed the same 17-combo catalog, 15 valid combos / 31 symbols, and reported **0 active executable signals** on its fresh heartbeat. `order_entry=false`.
 
-### 16:10 UTC live-probe incident and recovery
+Current classification:
+- resting combo maker: **BLOCKED**;
+- WebSocket FOK watcher: **SHADOW / READ-ONLY ACTIVE**;
+- q=1 FOK executor: **LIVE-CAPABLE CODE, DISARMED**;
+- current executable signal count: **0**;
+- new orders: **0**;
+- new fills: **0**;
+- new executed trades: **0**;
+- new realized sports arb P&L: **$0**.
 
-A later q=1 pre-hedge-first probe on the Albon + Morikawa candidate exposed an execution-recovery bug:
-- YES Albon hedge filled q=1 at `$0.02` plus `$0.01` fee;
-- YES Morikawa hedge filled q=1 at `$0.03` plus `$0.01` fee;
-- the combo maker order at `$0.89` did not fill and was canceled;
-- the old emergency flattener submitted `MARKET+IOC`, which Gemini prediction markets rejected as `InvalidOrderType`.
-
-The lane was immediately disarmed and reconciled. Bounded incident recovery then used supported SELL `LIMIT+FOK` exits:
-- Albon sold q=1 at `$0.01` plus `$0.01` fee;
-- Morikawa sold q=1 at `$0.02` plus `$0.01` fee.
-
-Independent final reconciliation showed **0 remaining positions and 0 active orders** on both hedges and the combo. Gemini available USD moved from `$62.5655` before the incident to `$62.5055` after recovery, implying approximately **-$0.06 realized live-probe loss**. This is a probe/recovery loss, not arbitrage profit, and was not yet represented as a sports `TRADE_REALIZED` event in the authoritative ARB ledger at the last ledger snapshot.
-
-The recovery bug is fixed for this lane: prediction-market exits use marketable `LIMIT+FOK`, not `MARKET+IOC`.
-
-### Combo-first redesign / no-fill proof
-
-The executor was redesigned to place the combo maker order **before** buying any hedge. If the combo does not fill, it cancels with zero hedge churn. If it fills, exact complement hedges are purchased immediately with bounded FOK orders.
-
-Verified live evidence:
-- single q=1 combo-first attempt: no combo fill, canceled, **0 hedge orders / $0 new loss**;
-- bounded five-candidate q=1 rotation: exactly five maker orders, all canceled after their windows, **0 fills and 0 hedge orders**;
-- q=3 quantity-aware research showed fee amortization can support higher maker prices, but partial-fill economics make long-lived q>1 less suitable for the guaranteed >=3c lane;
-- a q=3 Toronto/Columbus live probe at `$0.92` passed fresh quantity-aware preflight (`$2.91` all-in / `$0.09` locked total) but did not fill during 120 seconds and canceled with **0 hedge orders / $0 new loss**;
-- Gemini production rejected same-event multi-driver F1 combos (`at most one contract per event`) and rejected a same-match Toronto total+spread construction as `too closely correlated`; these structures must be excluded from future candidate ranking.
-
-Gemini's documented combo RFQ WebSocket/quote methods are **not currently enabled in production**, so production execution currently must use normal combo order books rather than solicited RFQs.
-
-### Current live state — monitored resting q=1 order
-
-Current implementation commit `15d83d6235dbcc32f3c33aeba6498e21e32229e8` adds a long-lived, monitored **single q=1 maker order** instead of cancel/repost rotation. Fresh deployment trigger commit `e26a732fd6a1b60d50829662bdc23c01bb699aaf`; armed Railway deployment `dd0482fe-6733-41ec-8367-a57e36ce38a7` is campaign `gcombo-2608221328-torclb-rest1`.
-
-Candidate:
-- combo `GEMI-CMB-260823-8EC8FBCF7988E34C-CMB`;
-- q=1 maker BUY YES at `$0.90`;
-- exact complements are Toronto/Miami total `GEMI-MLS-2608222330-TOR-MIA-REGT-O0` BUY NO and Columbus/Nashville spread `GEMI-MLS-2608230030-CLB-NSH-REGS-CLB2` BUY YES;
-- target floor remains **>= $0.03 after fees**;
-- one resting order only, maximum lifetime 1800 seconds, hedge books revalidated every 1 second;
-- no hedge is bought unless the combo fills;
-- if either exact hedge loses q=1 depth, exceeds the 2c target, or the conservative lock drops below 3c, the maker combo is canceled immediately;
-- environment arm variables were cleared immediately after the armed process booted, preventing replay on any future deploy while the current process keeps its in-memory one-shot authorization.
-
-Last authoritative runtime heartbeat at `2026-08-22 17:29:34 UTC`, after ~60.8 seconds open:
-- `order_entry=true`;
-- both exact hedge asks still `$0.02`, depth `100` each;
-- conservative q=1 taker fee `$0.01` per hedge;
-- combo conservative maker fee `$0.01`;
-- total all-in `$0.97`;
-- locked floor `$0.03`;
-- `hedge_state.ok=true`.
-
-Fresh control-plane check at 17:33 UTC: GitHub's Railway status for deployment `dd0482fe-6733-41ec-8367-a57e36ce38a7` remains **SUCCESS**. Direct runtime/log access is unavailable, so active/filled/canceled state after the 17:29 heartbeat is not yet independently proven. Do not redeploy, re-arm, or create another maker order until this campaign is reconciled.
-
-This is a **LIVE PROBE**, not an executed trade and not realized P&L unless all three legs fill and subsequently settle/reconcile.
+Do not arm the FOK executor just to test it when there is no executable signal. A future live promotion still requires a fresh >=3c q1 signal, exact canonical certification, final <=50ms book skew/depth, clean account state, sufficient capital for all legs, and the existing bounded recovery path. Separate FOK orders are not atomic across legs; that residual execution risk must remain explicit.
 
 ## Direct sports K↔P
 
@@ -147,7 +116,7 @@ This is a **LIVE PROBE**, not an executed trade and not realized P&L unless all 
 
 ## Sports G↔K props
 
-`sports-gk-autonomous-supervisor` remains LIVE RULE-RISK PROBE / not certified guaranteed arb. Historical realized total +$0.1871. Authoritative rule-risk budget remains $4.84/$5.00. Do not reset/increase without explicit user authorization.
+`sports-gk-autonomous-supervisor` remains LIVE RULE-RISK PROBE / not certified guaranteed arb. Historical realized total +$0.1871. Authoritative rule-risk budget remains **$4.84/$5.00**. Do not reset/increase without explicit user authorization.
 
 ## Weather
 
@@ -157,21 +126,21 @@ Reconcile any unresolved historical weather order before new live execution. Pre
 
 Preserve CORE: `crypto-15m-sol-live-canary-10bp-50ms` (fail-closed), `sports-kp-live-executor`, `sports-gk-autonomous-supervisor`, `weather-live-probe`, `arb-command-center`, `Postgres`, `sports-trade-settlement-reconciler`, `crypto-live-balance-reconcile-readonly`.
 
-Preserve active shadows while their workstreams are active, including `crypto-maker-arb-shadow-v1`, `sports-kp-combo-shadow`, `mlb-gk-exec-shadow`, `weather-shadow-arb`, `three-venue-router-paper-v2`, `three-venue-mlb-hot-paper-v1`, `gemini-kalshi-mlb-prop-hot-shadow`, `sports-alert-reliability-shadow`, and `gemini-extreme-combo-live-q1`.
+Preserve active shadows/workstream services while their lanes are active, including `crypto-maker-arb-shadow-v1`, `sports-kp-combo-shadow`, `mlb-gk-exec-shadow`, `weather-shadow-arb`, `three-venue-router-paper-v2`, `three-venue-mlb-hot-paper-v1`, `gemini-kalshi-mlb-prop-hot-shadow`, `sports-alert-reliability-shadow`, `gemini-extreme-combo-live-q1`, `gemini-combo-mm-fok-preflight-v1`, `gemini-combo-mm-test-v1`, and the disarmed FOK executor service currently named `gemini-combo-mm-canonicalize-v1`.
 
 Remove only verified dead/test/superseded services after dependency checks.
 
 ## Next-run protocol
 
-1. Read `ARB_STATUS.md` and inspect current Railway runtime before mutating any lane.
+1. Read `ARB_STATUS.md`, then inspect current Railway/GitHub production state before mutation.
 2. Keep Gemini/Kalshi crypto q1/q5/maker blocked unless exact settlement + threshold equivalence is independently certified.
-3. Verify no new crypto submission occurred after 06:40:03 UTC; today's authoritative crypto realized subtotal is currently 8 events / -$0.536200 after the +$0.032800 historical BTC backfill.
-4. For current same-Gemini sports campaign `gcombo-2608221328-torclb-rest1`, reconcile active/filled/canceled state first. Do not redeploy/re-arm or create another maker order until resolved.
-5. If the combo filled, verify both exact q=1 hedges filled and classify only `FILLED_NOT_SETTLED` until every component settles. If it canceled for stale hedge economics or TTL, verify zero positions and choose a fresh structurally valid candidate rather than reusing the campaign.
-6. Do not return to short cancel/repost carousels unless there is a specific fill-probability reason; prefer one monitored resting q=1 order to reduce notification noise and hedge churn.
-7. Improve candidate filtering by excluding Gemini same-event and known `too closely correlated` pair classes before creation/ranking.
-8. Highest-value same-Kalshi blocker remains proving `sports-kp-combo-shadow` runtime telemetry / `DATABASE_URL`, then using authoritative same-market >=3c evidence for any bounded live promotion.
-9. Continue <=24h sports breadth and exact-rule weather opportunities without weakening certification.
-10. Work one blocker through inspect -> fix -> deploy -> verify -> reconcile -> checkpoint before widening scope.
+3. For same-Gemini sports combos, keep **resting maker mode blocked**. Never infer indivisibility from q=1.
+4. Verify the read-only FOK watcher is receiving all current symbol snapshots and whether `active_executable_signals` is still 0.
+5. If a >=3c q1 FOK signal appears, re-run exact canonical metadata, final <=50ms q1 depth/economics, positions, active orders, and capital reservation immediately before any bounded live promotion.
+6. Any future live FOK campaign must use a fresh unique campaign + matching arm token + short boot expiry, restart `NEVER`, and cleared arm variables after boot. Never reuse an expired campaign.
+7. Classify a fully filled cover as **FILLED_NOT_SETTLED** until every component settles and the authoritative ledger reconciles net P&L.
+8. Keep candidate filtering for same-event and known highly-correlated Gemini combinations fail-closed.
+9. Highest-value same-Kalshi blocker remains proving `sports-kp-combo-shadow` runtime telemetry/database connectivity, then using authoritative same-market >=3c evidence for bounded live promotion.
+10. Continue sports breadth and exact-rule weather opportunities without weakening certification. Work one blocker through inspect -> fix -> deploy -> verify -> reconcile -> checkpoint before widening scope.
 
 Never store credentials, signing material, API keys, or sensitive balances here.
