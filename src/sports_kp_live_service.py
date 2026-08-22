@@ -12,9 +12,9 @@ approval with a validated fingerprint is present.
 
 The account may have only one usable authenticated Kalshi websocket slot at a
 time. This service therefore uses bounded Kalshi REST series snapshots for
-candidate observation and forces an exact depth=1 Kalshi order-book fetch during
-final post-preflight revalidation. The <=100 ms age, <=50 ms quote-skew and rule
-approval gates remain unchanged.
+candidate observation and forces exact depth=1 Kalshi order-book fetches for
+rate-bounded synchronization/final revalidation. The <=100 ms age, <=50 ms
+quote-skew and rule-approval gates remain unchanged.
 """
 from __future__ import annotations
 
@@ -53,6 +53,7 @@ from src.universal_prediction_quant import LockOpportunity, find_cross_venue_loc
 
 logger = logging.getLogger("kalshi_arb.sports_kp_live_service")
 D = Decimal
+EXACT_SYNC_MIN_INTERVAL_SECONDS = 0.25
 
 
 @dataclass
@@ -107,7 +108,7 @@ async def _kp_rows(
     krow = make_priced_quote(
         kside, _book_kalshi(kq), received_ms=kq.received_ms,
         kalshi_fee_multiplier=hot.kalshi_fee_multiplier,
-        depth_source="kalshi_rest_series_top_book", category="sports_mlb_game",
+        depth_source="kalshi_rest_or_exact_top_book", category="sports_mlb_game",
     )
     return [row for row in (prow, krow) if row is not None]
 
@@ -142,8 +143,6 @@ def _near_miss(rows: list[PricedQuote]) -> dict[str, object]:
     elif not skew_ok:
         reason = "quote_skew"
     else:
-        # A strict lock can still be absent because executable depth/confidence
-        # validation rejected the pair. Keep that distinct from price/skew.
         reason = "depth_or_confidence"
     return {
         "reason": reason,
@@ -153,13 +152,7 @@ def _near_miss(rows: list[PricedQuote]) -> dict[str, object]:
 
 
 def _fingerprint(lock: LockOpportunity) -> str:
-    """Fingerprint the executable economics, not timestamp/skew telemetry.
-
-    Persistence should survive a second market-data update when the same exact
-    legs and all-in prices remain available. Quote skew is still enforced by the
-    lock finder and final execution gate, but changing receive timestamps must
-    not reset the 10 ms persistence timer by itself.
-    """
+    """Fingerprint executable economics, not timestamp/skew telemetry."""
     stable = {
         "settlement_key": lock.settlement_key,
         "yes_venue": lock.yes_venue,
@@ -180,8 +173,6 @@ async def _fresh_plan(
     kalshi: Any,
     approval: RuleApproval,
 ) -> KPExecutionPlan:
-    # Candidate observation may use bounded series snapshots, but execution may
-    # not. Force one exact depth=1 Kalshi book after slow venue preflight.
     kside = universe.contracts[key].sides.get("kalshi")
     exact_quote = getattr(kalshi, "exact_quote", None)
     if kside is None or exact_quote is None:
@@ -208,7 +199,6 @@ async def _next_update(poly: EventingPolyBookStore, kalshi: Any) -> BookUpdate:
 
 
 def _observation_keys(universe: HotUniverse, executable_keys: set[str]) -> set[str]:
-    """Return approved execution keys or all exact K/P joins for read-only triage."""
     if executable_keys:
         return set(executable_keys)
     return {
@@ -250,7 +240,8 @@ async def run(args: argparse.Namespace) -> int:
         "min_unit_profit": str(DEFAULT_MIN_PROFIT),
         "max_quote_skew_ms": DEFAULT_MAX_QUOTE_SKEW_MS,
         "max_final_book_age_ms": DEFAULT_MAX_BOOK_AGE_MS,
-        "kalshi_book_transport": "REST_SERIES_PLUS_EXACT_FINAL",
+        "kalshi_book_transport": "REST_SERIES_PLUS_POLY_TRIGGERED_EXACT_PLUS_EXACT_FINAL",
+        "exact_sync_min_interval_ms": int(EXACT_SYNC_MIN_INTERVAL_SECONDS * 1000),
         "order_entry": False if not approvals else "GATED",
     }, separators=(",", ":")))
 
@@ -313,7 +304,7 @@ async def run(args: argparse.Namespace) -> int:
             "read_only_observation_contracts": len(observation_keys - executable_keys),
             "poly_books": poly.quote_count,
             "kalshi_books": kalshi.initialized_count,
-            "kalshi_book_transport": "REST_SERIES_PLUS_EXACT_FINAL",
+            "kalshi_book_transport": "REST_SERIES_PLUS_POLY_TRIGGERED_EXACT_PLUS_EXACT_FINAL",
             "live_env_gate": os.getenv("ENABLE_SPORTS_KP_LIVE", "NO").strip().upper() == "YES",
             "arm_token_present": Path(args.arm_token).is_file(),
             "order_entry": bool(executable_keys) and os.getenv("ENABLE_SPORTS_KP_LIVE", "NO").strip().upper() == "YES" and Path(args.arm_token).is_file(),
@@ -330,12 +321,36 @@ async def run(args: argparse.Namespace) -> int:
         near_miss_counts: Counter[str] = Counter()
         near_miss_best_profit: D | None = None
         near_miss_last_log = time.monotonic()
+        last_exact_sync = 0.0
         while True:
             if poly_task.done() or kalshi_task.done():
                 raise RuntimeError("market-data task exited")
             trigger = await _next_update(poly, kalshi)
             for key in by_market.get((trigger.venue, trigger.market_id), set()):
                 rows = await _kp_rows(key, universe, poly, kalshi)
+
+                # Series snapshots are intentionally low-rate discovery data and
+                # are often older than the strict 100 ms execution freshness
+                # limit when a Polymarket tick arrives. If that is the only
+                # blocker, synchronize one exact Kalshi depth=1 request to the
+                # Polymarket event. The global 250 ms floor caps this at 4 rps.
+                # The exact quote must STILL pass the unchanged 100 ms age and
+                # 50 ms inter-venue skew gates below; this is not stale fallback.
+                if len(rows) != 2 and trigger.venue == "polymarket":
+                    now_mono = time.monotonic()
+                    if now_mono - last_exact_sync >= EXACT_SYNC_MIN_INTERVAL_SECONDS:
+                        kside = universe.contracts[key].sides.get("kalshi")
+                        last_exact_sync = now_mono
+                        if kside is not None:
+                            exact = await kalshi.exact_quote(kside.venue_market_id)
+                            if exact is not None:
+                                near_miss_counts["poly_triggered_exact_sync"] += 1
+                                rows = await _kp_rows(key, universe, poly, kalshi)
+                            else:
+                                near_miss_counts["exact_sync_unavailable"] += 1
+                    else:
+                        near_miss_counts["exact_sync_rate_limited"] += 1
+
                 lock = _best_lock(rows) if len(rows) == 2 else None
                 if lock is None:
                     diag = _near_miss(rows)
@@ -411,6 +426,7 @@ async def run(args: argparse.Namespace) -> int:
                     "min_unit_profit_required": str(DEFAULT_MIN_PROFIT),
                     "max_quote_skew_ms": DEFAULT_MAX_QUOTE_SKEW_MS,
                     "max_book_age_ms": DEFAULT_MAX_BOOK_AGE_MS,
+                    "exact_sync_min_interval_ms": int(EXACT_SYNC_MIN_INTERVAL_SECONDS * 1000),
                     "diagnostic_only": True,
                     "order_entry": False if not executable_keys else "UNCHANGED_GATED",
                 }, separators=(",", ":")))
