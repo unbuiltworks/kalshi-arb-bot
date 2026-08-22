@@ -1,14 +1,18 @@
-"""Prewarm one Gemini authenticated trading WebSocket off the execution path.
+"""Prewarm and continuously heal one Gemini authenticated trading WebSocket.
 
 Market data must exist before any opportunity can be actionable, so the shared Gemini
 market-data connection gets first claim on the venue's handshake budget. Once that
 connection is healthy, this module waits a short settle interval and warms exactly one
 private trading session per bounded child.
 
-Warmup remains fail-closed: connection failures retry in the background, and an
-opportunity that arrives before the socket is ready receives a confirmed zero-fill
-rejection. No Kalshi hedge is sent unless Gemini terminally fills. Price, depth,
-profit, freshness, skew, survival, arm-token, and staged execution gates are unchanged.
+The private socket is also watched continuously between opportunities. If its reader
+ends or the socket closes, the watchdog closes the dead session and rewarms it in the
+background with bounded exponential backoff. An opportunity is never delayed waiting
+for recovery: if the socket is not already healthy at send time, execution still
+returns a confirmed zero-fill rejection and Kalshi is not sent.
+
+Price, depth, profit, freshness, skew, survival, arm-token, staged execution, and
+settlement gates are unchanged.
 
 This module also installs read-only near-miss attribution around the existing HOT
 evaluator. It recomputes the same small-q candidate set only for diagnostics and emits
@@ -29,31 +33,50 @@ from src.gemini_ws_connection_coordination import market_data_ready_event
 D = Decimal
 _INSTALLED = False
 PRIVATE_WS_SETTLE_AFTER_MARKET_DATA_S = 1.5
+PRIVATE_WS_WATCH_INTERVAL_S = 0.25
+PRIVATE_WS_REPAIR_BACKOFF_MAX_S = 10.0
 _NEAR_MISS = {}
 _NEAR_MISS_LOG_S = 30.0
 
 
 class DeferredGeminiTradingSession(GeminiTradingSession):
-    """One private session per child, prewarmed only after market data is healthy."""
+    """One private session per child, kept warm and self-healing off critical path."""
 
     def __init__(self) -> None:
         super().__init__()
         self._warm_task: asyncio.Task | None = None
+        self._watch_task: asyncio.Task | None = None
         self._connect_lock = asyncio.Lock()
         self._closing = False
 
+    def _socket_healthy_local(self) -> bool:
+        reader = getattr(self, "_reader", None)
+        return bool(self.ws is not None and reader is not None and not reader.done())
+
+    async def _reset_socket_locked(self) -> None:
+        try:
+            await super().close()
+        except Exception:
+            # The session is already considered unusable. Recovery remains fail-closed.
+            self.ws = None
+            self._reader = None
+
     async def _connect_once(self) -> None:
-        if self.ws is not None:
+        if self._socket_healthy_local():
             return
         async with self._connect_lock:
-            if self.ws is None and not self._closing:
+            if self._closing:
+                return
+            if self.ws is not None and not self._socket_healthy_local():
+                await self._reset_socket_locked()
+            if self.ws is None:
                 await super().connect()
 
     async def _warm_loop(self) -> None:
         backoff = 1.0
         attempt = 0
         ready = market_data_ready_event()
-        while not self._closing and self.ws is None:
+        while not self._closing and not self._socket_healthy_local():
             await ready.wait()
             await asyncio.sleep(PRIVATE_WS_SETTLE_AFTER_MARKET_DATA_S)
             if self._closing:
@@ -63,11 +86,11 @@ class DeferredGeminiTradingSession(GeminiTradingSession):
             attempt += 1
             try:
                 await self._connect_once()
-                if self.ws is not None:
+                if self._socket_healthy_local():
                     micro.logger.warning(
                         "CRYPTO_GEMINI_TRADING_WS_PREWARM_READY attempts=%s "
                         "after_market_data=true settle_s=%.1f critical_path_handshake=false "
-                        "risk_gates_changed=false",
+                        "continuous_watchdog=true risk_gates_changed=false",
                         attempt,
                         PRIVATE_WS_SETTLE_AFTER_MARKET_DATA_S,
                     )
@@ -83,33 +106,51 @@ class DeferredGeminiTradingSession(GeminiTradingSession):
                     str(exc)[:160],
                     backoff,
                 )
-                try:
-                    await super().close()
-                except Exception:
-                    pass
+                async with self._connect_lock:
+                    await self._reset_socket_locked()
                 if not self._closing:
                     await asyncio.sleep(backoff)
-                    backoff = min(backoff * 2.0, 10.0)
+                    backoff = min(backoff * 2.0, PRIVATE_WS_REPAIR_BACKOFF_MAX_S)
 
-    async def connect(self) -> None:
-        if self.ws is not None:
+    def _ensure_warm_task(self) -> None:
+        if self._closing or self._socket_healthy_local():
             return
         if self._warm_task is None or self._warm_task.done():
             self._warm_task = asyncio.create_task(
                 self._warm_loop(), name="crypto-gemini-trading-warmup"
             )
 
+    async def _watch_loop(self) -> None:
+        was_healthy = False
+        while not self._closing:
+            healthy = self._socket_healthy_local()
+            if was_healthy and not healthy:
+                micro.logger.warning(
+                    "CRYPTO_GEMINI_TRADING_WS_WATCHDOG_REPAIR reader_alive=false "
+                    "off_critical_path=true order_entry=false risk_gates_changed=false"
+                )
+            if not healthy:
+                self._ensure_warm_task()
+            was_healthy = healthy
+            await asyncio.sleep(PRIVATE_WS_WATCH_INTERVAL_S)
+
+    async def connect(self) -> None:
+        self._ensure_warm_task()
+        if self._watch_task is None or self._watch_task.done():
+            self._watch_task = asyncio.create_task(
+                self._watch_loop(), name="crypto-gemini-trading-watchdog"
+            )
+
     async def _connect_for_order(self) -> None:
-        if self.ws is not None:
+        # Execution never waits for background repair. The market opportunity must
+        # encounter an already healthy socket or fail closed with confirmed zero fill.
+        if self._socket_healthy_local():
             return
-        if not market_data_ready_event().is_set():
-            raise RuntimeError("Gemini market data is not connected")
-        if self._connect_lock.locked():
-            raise RuntimeError("Gemini trading WS warmup still in progress")
-        await self._connect_once()
+        self._ensure_warm_task()
+        raise RuntimeError("Gemini trading WS is not prewarmed and healthy")
 
     async def place_fok(self, params: dict, *, terminal_timeout: float = 2.0) -> ExecutionResult:
-        if self.ws is None:
+        if not self._socket_healthy_local():
             started = time.perf_counter_ns()
             try:
                 await self._connect_for_order()
@@ -122,7 +163,7 @@ class DeferredGeminiTradingSession(GeminiTradingSession):
                     average_fill_price=None,
                     fee_paid=None,
                     status="REJECTED",
-                    reason=f"AUTH_WS_CONNECT_FAILED:{type(exc).__name__}:{str(exc)[:160]}",
+                    reason=f"AUTH_WS_NOT_READY:{type(exc).__name__}:{str(exc)[:160]}",
                     local_send_ns=started,
                     local_done_ns=done,
                     exchange_ts_ns=None,
@@ -135,10 +176,16 @@ class DeferredGeminiTradingSession(GeminiTradingSession):
 
     async def close(self) -> None:
         self._closing = True
-        if self._warm_task is not None and self._warm_task is not asyncio.current_task():
-            self._warm_task.cancel()
-            await asyncio.gather(self._warm_task, return_exceptions=True)
-            self._warm_task = None
+        current = asyncio.current_task()
+        tasks = []
+        for task in (self._warm_task, self._watch_task):
+            if task is not None and task is not current:
+                task.cancel()
+                tasks.append(task)
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._warm_task = None
+        self._watch_task = None
         await super().close()
 
 
@@ -227,7 +274,7 @@ def install() -> None:
     _INSTALLED = True
     micro.logger.warning(
         "CRYPTO_DEFERRED_GEMINI_TRADING_WS_INSTALLED startup_private_ws=after_market_data "
-        "single_private_socket_per_child=true connect_failure_zero_fill=true "
-        "kalshi_order_after_gemini_fill_only=true near_miss_attribution=true "
-        "risk_gates_changed=false"
+        "single_private_socket_per_child=true continuous_watchdog=true "
+        "connect_failure_zero_fill=true kalshi_order_after_gemini_fill_only=true "
+        "near_miss_attribution=true risk_gates_changed=false"
     )
