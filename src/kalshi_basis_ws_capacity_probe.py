@@ -5,7 +5,8 @@ usage tier/budgets, then opens exactly one authenticated Kalshi WebSocket, subsc
 to the current BTC 15-minute orderbook, requires an actual snapshot, logs success, and
 exits. It is used only to prove API capacity before any new basis-risk live arm.
 
-The probe is intentionally rerunnable after account-tier or socket-capacity changes.
+The probe is intentionally rerunnable after account-tier or socket-capacity changes,
+including after pausing non-core read-only Kalshi WebSocket consumers.
 """
 from __future__ import annotations
 
