@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: 2026-08-22 05:36 UTC
+Last verified: 2026-08-22 14:45 UTC
 
 This is the durable ARB handoff. Production state wins over chat history. Before changing a workstream, verify current Railway deployment/runtime + GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the $480/day objective.
 
@@ -34,12 +34,19 @@ External rule/source confirmation:
 - Therefore Gemini/Kalshi price agreement, matching duration, matching strike direction, and the existing boundary gates do **not** prove identical settlement outcomes.
 
 Immediate safety response:
-- PR #111 `Fail closed crypto until settlement equivalence is certified` passed CI and was merged into `feature/sol-15m-live-canary-10bp-50ms` at merge commit `be86387b6159a93d06aa3383a784826b2fdadd58`.
-- q=1 postincident boot now requires explicit `CRYPTO_GK_SETTLEMENT_EQUIVALENCE_CERTIFIED=YES`; default is fail-closed.
-- Do **not** set that variable until exact Gemini and Kalshi source/index/averaging/rounding/exception rules are independently proven equivalent for the exact traded family.
-- q5 promotion is blocked. Do not arm q5 while q1 settlement equivalence is unproven.
+- PR #111 added a boot-level settlement-equivalence arm.
+- PR #112 moved the incident lock into the shared `live_probe_authorized()` transport guard with code-level settlement equivalence hard-false; environment flags alone cannot re-enable q1/q5.
+- Do **not** re-enable until exact source/index/threshold/averaging/rounding/exception rules are independently certified for the exact traded family.
+- q5 promotion remains blocked.
 - Existing q=1 >=3c after-fee, >=10bp boundary, 50ms survival/skew, freshness, capital reservation, Gemini-first execution, reconciliation, rollover, and hard-halt gates remain unchanged.
-- Direct Railway MCP runtime access is currently unavailable in this supervisor session. GitHub received Railway deployment checks for the merged fail-closed commit; latest observed state at this checkpoint was `pending` for `crypto-15m-sol-live-canary-10bp-50ms`. Re-check deployment status first on the next run.
+
+Fresh 14:45 UTC evidence:
+- direct Railway MCP runtime access is still unavailable in the supervisor session;
+- GitHub Railway status on current crypto branch base `a4d458a744baa4c8488ef9ae3b079fdec50d6683` shows `crypto-15m-sol-live-canary-10bp-50ms` **failure**;
+- `crypto-live-balance-reconcile-readonly` and `crypto-rollover-optimizer-test` both report **success** on that same commit;
+- authoritative ledger has **no new crypto submission after 2026-08-22 06:40:03 UTC**.
+
+The crypto service failure is not a reason to bypass the transport kill. Treat it as contained until runtime access returns and the exact failure can be inspected safely.
 
 ## Crypto bounded-campaign diagnosis / rollover
 
@@ -51,33 +58,48 @@ The prior dormancy root cause was real and has been addressed separately:
 - do not reuse expired arm tokens or campaign IDs;
 - continuous rollover still requires terminal clean local state, no unresolved attempt claim, no reservations/unsettled capital, successful venue reconciliation, and zero resting orders.
 
-This rollover work is no longer the highest-priority crypto blocker. Settlement equivalence is.
+This rollover work is no longer the highest-priority crypto blocker. Settlement/threshold equivalence is.
 
 ## Current realized P&L truth
 
-Authoritative `arb-trade-ledger` as of this checkpoint:
-- 2026-08-22 ET day (from 04:00 UTC): crypto 4 realized events, net **-$0.697500**.
-- The ET-day crypto events include +$0.0450 BTC, +$0.0445 BTC, +$0.0983 XRP, then the -$0.8853 BTC index-mismatch loss.
-- All-time `gemini_kalshi_15m_crypto`: **-$0.637700** across 17 realized events.
-- Separate `crypto-15m-gemini-kalshi-canary`: **+$0.044500** across 1 realized event.
-- Sports G↔K rule-risk realized: **+$0.187100** across 5 events.
-- Total authoritative realized net across all tracked strategies: **-$0.406100**.
+Authoritative `arb-trade-ledger` as of 14:45 UTC:
+- 2026-08-22 ET day (from 04:00 UTC): `gemini_kalshi_15m_crypto` has **6 realized events, net -$0.618600**.
+- These include small BTC/XRP/SOL wins offset by the -$0.885300 BTC index-mismatch loss.
+- Trade `gk15m-gk15m-08220615-c225-02` (ETH) remains **UNRESOLVED**: two FILL rows + `ORDER_SUBMITTED/BOTH_FILLED` at 06:40:03 UTC, but no settlement/`TRADE_REALIZED` row. Exclude it from P&L.
+- No sports or weather realized event has appeared in the ledger during this ET-day window.
 
-Do not describe prior Gemini/Kalshi crypto wins as guaranteed-arbitrage evidence; the 05:30 UTC mismatch proves the settlement basis can diverge.
+Do not describe prior Gemini/Kalshi crypto wins as guaranteed-arbitrage evidence; the settlement and threshold mismatch proves basis risk can dominate the apparent execution lock.
 
-## Crypto maker
+## Crypto research / maker / q5
 
-`crypto-maker-arb-shadow-v1` remains SHADOW / `INDEX_MISMATCH_RESEARCH_ONLY`, live maker disarmed. This classification was directionally correct and must remain. Do not promote maker Gemini↔Kalshi crypto until settlement-source equivalence is proven or the strategy is explicitly reclassified as non-arbitrage basis risk with a separate approved risk budget.
-
-## Crypto q5 scaling
-
-PR #110 refreshed the q5 package onto the repaired q1 head and was merged before the index-mismatch incident. The package was additive and retained the >=3c/contract, >=10bp boundary, 50ms survival/skew, exact quantity/depth, <=$5 first-canary capital, Gemini-first, flatten, and settlement controls.
-
-**Current status: BLOCKED / DO NOT ARM.** The q1 settlement equivalence failure invalidates promotion to q5 until exact settlement rules are certified or the pair is removed from guaranteed-arb execution.
+- `crypto-maker-arb-shadow-v1` remains SHADOW / `INDEX_MISMATCH_RESEARCH_ONLY`; live maker disarmed.
+- q5 remains **BLOCKED / DO NOT ARM**.
+- PR #116 `Add read-only crypto threshold dominance study` is open and mergeable on `feature/crypto-settlement-basis-v2`; it is public-data-only and does not authorize trading. It specifically studies threshold gaps and orientation safety in addition to settlement-index basis.
 
 ## Sports manufactured MVE combo
 
-Service `sports-kp-combo-shadow` remains the highest-value live-capable sports manufacturing path. Preserve the >=3c after-fee lock, rule certification, exact final depth, freshness/skew, persistence, and one-attempt limits. MVE creation/RFQ is not a trade. Continue valid same-day/<=24h breadth and faster executable candidate handoff without weakening settlement certification.
+Service `sports-kp-combo-shadow` remains the highest-value safe sports manufacturing path.
+
+Fresh 14:45 UTC evidence:
+- active branch `feature/kp-combo-synthetic-shadow` is at PR #104 head `9a1169cba7360b22e6b835e575d18f4b8bbc1254`;
+- GitHub Railway status for `sports-kp-combo-shadow` is **success**;
+- the stable Railway entrypoint is now supervisor **v40**;
+- v40 is read-only and adds signed-auth probing against the Polymarket exchange/RFQ host, then runs v39-v31;
+- v37 already scans exact same-Kalshi-market `YES + NO = $1` partitions and labels a shadow candidate executable only when q=1 YES ask + NO ask + conservative taker fees leaves **>= $0.03 locked profit** with depth on both sides;
+- because both legs are the exact same Kalshi binary market, this path has no cross-venue settlement-equivalence problem;
+- authoritative Neon currently contains only the `trade_events` table and there are still **0 sports supervisor telemetry rows after 11:30 UTC**, so a post-deploy manufacturing/same-market cycle is not independently proven from the ledger.
+
+Preserve the >=3c after-fee lock, exact same-market/rule identity, exact final depth, freshness/skew where applicable, persistence, capital reservation, one-attempt, flatten/hard-halt, and settlement accounting. Shadow scan output is not a trade.
+
+### Same-market observability milestone (not yet promoted)
+
+Feature branch `feature/sports-same-market-ledger-telemetry` now adds best-effort non-P&L ledger telemetry to the existing v37 same-market scan:
+- commit `a6bd1ba7de18467ab85892c0c3606ceb638bdd30`: telemetry implementation;
+- commit `20637a61f1b4df907951c8919c540a51fbb81c4c`: isolation tests;
+- telemetry records scan counts plus best locked profit/ticker/all-in cost/depth and cannot authorize orders or count as realized P&L;
+- telemetry failures are swallowed and cannot change scanning/execution behavior.
+
+GitHub PR creation for this branch was blocked by the action safety layer in the 14:45 UTC supervisor run. Do not bypass that protection by force-moving the production branch. Resume promotion only through a normal reviewed/green path.
 
 ## Direct sports K↔P
 
@@ -93,7 +115,7 @@ Reconcile any unresolved historical weather order before new live execution. Pre
 
 ## Railway preservation / cleanup
 
-Preserve CORE: `crypto-15m-sol-live-canary-10bp-50ms` (currently fail-closed pending settlement certification), `sports-kp-live-executor`, `sports-gk-autonomous-supervisor`, `weather-live-probe`, `arb-command-center`, `Postgres`, `sports-trade-settlement-reconciler`, `crypto-live-balance-reconcile-readonly`.
+Preserve CORE: `crypto-15m-sol-live-canary-10bp-50ms` (currently fail-closed), `sports-kp-live-executor`, `sports-gk-autonomous-supervisor`, `weather-live-probe`, `arb-command-center`, `Postgres`, `sports-trade-settlement-reconciler`, `crypto-live-balance-reconcile-readonly`.
 
 Preserve active shadows while their workstreams are active, including `crypto-maker-arb-shadow-v1`, `sports-kp-combo-shadow`, `mlb-gk-exec-shadow`, `weather-shadow-arb`, `three-venue-router-paper-v2`, `three-venue-mlb-hot-paper-v1`, `gemini-kalshi-mlb-prop-hot-shadow`, and `sports-alert-reliability-shadow`.
 
@@ -102,11 +124,13 @@ Remove only verified dead/test/superseded services after dependency checks. Neve
 ## New-chat / next-run protocol
 
 1. Read `ARB_STATUS.md`.
-2. Re-check GitHub Railway deployment status for merge commit `be86387b6159a93d06aa3383a784826b2fdadd58`; if direct Railway runtime access is restored, inspect logs/config/state as well.
-3. Verify no additional Gemini/Kalshi crypto order/fill occurred after the 05:30 UTC mismatch. If one did, reconcile it before any other action.
-4. Keep Gemini/Kalshi q1 and q5 order entry blocked unless exact settlement equivalence is certified.
-5. Audit exact Gemini `sourceDetails` for BTC/ETH/SOL/XRP and exact Kalshi series rules; expect non-equivalence unless proven otherwise.
-6. Shift highest-value guaranteed-arb work toward same-source/same-rule counterparts, sports certified synthetics, and weather exact-rule opportunities rather than treating cross-index crypto as riskless.
-7. Work one blocker through **inspect -> fix -> deploy -> verify -> reconcile -> checkpoint** before widening scope.
+2. Retry direct Railway runtime access. If restored, inspect crypto failure state but **do not re-arm** around the settlement/threshold transport kill.
+3. Reconcile unresolved ETH `gk15m-gk15m-08220615-c225-02` before counting any result.
+4. Verify no new Gemini/Kalshi crypto order/fill appeared after 06:40:03 UTC.
+5. Keep Gemini/Kalshi q1/q5/maker order entry blocked unless exact settlement + threshold equivalence is certified.
+6. Highest-value safe path: prove the current sports v40 cycle is running and surface the v37 same-market YES+NO best locked profit. If the telemetry feature can be promoted normally, use it; do not bypass GitHub safety controls.
+7. If an actual same-market candidate shows >=3c locked after conservative fees with exact q=1 depth and fresh state, then build/validate a bounded same-Kalshi q=1 execution canary with settlement reconciliation before any live arm.
+8. Continue same-day/<=24h sports MVE/RFQ breadth and weather exact-rule opportunities without weakening certification.
+9. Work one blocker through **inspect -> fix -> deploy -> verify -> reconcile -> checkpoint** before widening scope.
 
 After meaningful changes, update this file with UTC verification time, deployment/commit, armed/disarmed state, execution/fill/settlement evidence, and next blocker. Never store credentials, signing material, API keys, or sensitive balances here.
