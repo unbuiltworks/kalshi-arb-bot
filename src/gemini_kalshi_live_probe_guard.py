@@ -1,7 +1,13 @@
-"""Hard guardrails and payload builders for a future BTC live probe.
+"""Hard guardrails and payload builders for Gemini/Kalshi crypto probes.
 
 No network calls exist in this module. It cannot place an order. The purpose is to
-freeze the dangerous parts of the first live experiment before wiring transport.
+freeze the dangerous parts of live experiments before wiring transport.
+
+INCIDENT LOCK: a production BTC trade on 2026-08-22 filled both legs but Gemini and
+Kalshi settled opposite outcomes. Until exact settlement-source/index/averaging/
+rounding/exception equivalence is proven, every Gemini/Kalshi crypto live transport
+must remain disabled at this shared authorization layer. This is intentionally a
+code-level lock, not an environment toggle, so alternate boot paths cannot bypass it.
 """
 
 from __future__ import annotations
@@ -15,14 +21,22 @@ from src.gemini_kalshi_kalshi_fees import kalshi_quadratic_taker_fee
 
 D = Decimal
 MAX_PROBE_QUANTITY = D("1")
-DEFAULT_MIN_LOCKED_PROFIT = D("0.03")  # dollars per 1-contract pair after modeled fees
+DEFAULT_MIN_LOCKED_PROFIT = D("0.03")
 MAX_QUOTE_SKEW_MS = 50
 MODEL_RECOMPUTE_TOLERANCE = D("0.000001")
 
+# Hard production incident lock. Re-enable only by reviewed code change after exact
+# settlement equivalence is independently certified for the traded contract family.
+SETTLEMENT_EQUIVALENCE_PROVEN = False
+
 
 def live_probe_authorized(cli_live: bool) -> bool:
-    """Require two independent opt-ins; default is always disabled."""
-    return bool(cli_live) and os.getenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", "NO") == "YES"
+    """Require opt-ins plus the code-level settlement-equivalence certification."""
+    return (
+        SETTLEMENT_EQUIVALENCE_PROVEN
+        and bool(cli_live)
+        and os.getenv("ENABLE_GEMINI_KALSHI_LIVE_PROBES", "NO") == "YES"
+    )
 
 
 def validate_probe_candidate(*, quantity: Decimal, locked_profit: Decimal, quote_skew_ms: int) -> None:
@@ -40,13 +54,7 @@ def recompute_payload_locked_profit(
     *,
     kalshi_fee_multiplier: Decimal,
 ) -> Decimal:
-    """Recompute one-contract complementary P&L from the exact payload prices.
-
-    Gemini payload price is the price of the selected YES/NO outcome. Kalshi V2
-    always quotes in YES space: bid buys YES at ``price`` while ask sells YES,
-    economically buying NO at ``1-price``. Fees are recomputed independently from
-    the exact outbound prices so a stale caller cannot authorize an uneconomic pair.
-    """
+    """Recompute one-contract complementary P&L from the exact payload prices."""
     if str(gemini_payload.get("side")) != "BUY":
         raise ValueError("first Gemini probe leg must BUY an outcome")
     if str(gemini_payload.get("type")) != "LIMIT":
@@ -70,10 +78,8 @@ def recompute_payload_locked_profit(
     outcome = str(gemini_payload.get("eventOutcome") or "")
     kalshi_side = str(kalshi_payload.get("side") or "")
     if outcome == "YES" and kalshi_side == "ask":
-        # Gemini YES + Kalshi NO.
         kalshi_contract_cost = D("1") - kalshi_yes_price
     elif outcome == "NO" and kalshi_side == "bid":
-        # Gemini NO + Kalshi YES.
         kalshi_contract_cost = kalshi_yes_price
     else:
         raise ValueError("payload legs are not the required complementary outcomes")
@@ -121,11 +127,7 @@ def build_leg_payloads(
     kalshi_yes_bid: Decimal,
     kalshi_yes_ask: Decimal,
 ) -> tuple[dict, dict]:
-    """Build one-contract FOK payloads at the observed executable top-of-book.
-
-    Returns (gemini_ws_order_place_params, kalshi_v2_order_body). These are payloads
-    only; callers must pass all readiness and live authorization gates before send.
-    """
+    """Build one-contract FOK payloads at the observed executable top-of-book."""
     client_id = f"gk-probe-{uuid.uuid4().hex[:20]}"
     if direction == "KALSHI_YES_GEMINI_NO":
         gemini_price = D("1") - gemini_yes_bid
@@ -134,7 +136,6 @@ def build_leg_payloads(
         kalshi_side = "bid"
     elif direction == "GEMINI_YES_KALSHI_NO":
         gemini_price = gemini_yes_ask
-        # Buying Kalshi NO at 1-YES bid is economically a YES ask in V2.
         kalshi_price = kalshi_yes_bid
         gemini_outcome = "YES"
         kalshi_side = "ask"
