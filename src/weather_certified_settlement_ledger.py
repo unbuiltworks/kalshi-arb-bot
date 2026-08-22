@@ -53,12 +53,6 @@ def _provider_token(provider: str) -> str:
 
 
 def _official_provider_source(provider: str, source_url: str) -> bool:
-    """Require the terminal source itself to be an audited provider-owned endpoint.
-
-    Do not allow a hand-crafted ``reconciled=True`` mapping to mint certified ledger
-    provenance for an arbitrary provider or URL. Exact-market evidence is checked
-    upstream; this is the independent ledger-boundary allowlist.
-    """
     try:
         parsed = urlparse(source_url)
     except Exception:
@@ -89,15 +83,8 @@ def _decimal_token(value: Decimal) -> str:
 
 
 def certified_weather_settlement_external_id(
-    *,
-    trade_group_id: str,
-    market_id: str,
-    settlement_key: str,
-    provider: str,
-    source_url: str,
-    side: str,
-    quantity: Decimal,
-    payout: Decimal,
+    *, trade_group_id: str, market_id: str, settlement_key: str, provider: str,
+    source_url: str, side: str, quantity: Decimal, payout: Decimal,
     settlement_ts_ms: int,
 ) -> str:
     group = _norm(trade_group_id)
@@ -117,38 +104,60 @@ def certified_weather_settlement_external_id(
         raise ValueError("settlement_ts_ms must be a nonnegative integer")
     quantity_token = _decimal_token(quantity)
     payout_token = _decimal_token(payout)
-    digest = sha256(
-        "\x1f".join(
-            (
-                group,
-                market,
-                key,
-                provider_token,
-                source_hash,
-                side_token,
-                quantity_token,
-                payout_token,
-                str(settlement_ts_ms),
-            )
-        ).encode("utf-8")
-    ).hexdigest()
+    digest = sha256("\x1f".join((group, market, key, provider_token, source_hash,
+        side_token, quantity_token, payout_token, str(settlement_ts_ms))).encode("utf-8")).hexdigest()
     return f"{PREFIX}{provider_token}:{source_hash}:{digest}"
 
 
-def ledger_event_from_weather_reconciliation(
-    *,
-    reconciliation: dict[str, Any],
-    trade_group_id: str,
-    settlement_key: str,
-    market_id: str,
-    settlement_ts_ms: int,
-) -> LedgerEvent:
-    """Emit one exact, audited settlement event or fail closed.
+def parse_and_verify_weather_settlement_external_id(event: LedgerEvent) -> dict[str, str] | None:
+    """Recompute v4 provenance from the actual settlement event payload.
 
-    ``reconciliation`` must be the successful result of
-    ``reconcile_weather_paper_fill``. No attempt is made to infer or repair missing
-    provenance here.
+    The URL itself is not embedded in v4; only its fingerprint is. Therefore this
+    verifier proves terminal payload/identity integrity plus an allowlisted provider
+    token, while quote-time reconciliation remains responsible for retaining the
+    audited terminal URL. A copied digest cannot validate on a changed trade, market,
+    key, side, quantity, payout, or timestamp.
     """
+    external_id = event.external_id
+    if not isinstance(external_id, str) or not external_id.startswith(PREFIX):
+        return None
+    pieces = external_id[len(PREFIX):].split(":")
+    if len(pieces) != 3:
+        return None
+    provider, source_hash, digest = pieces
+    if _provider_token(provider) != provider:
+        return None
+    if len(source_hash) != 64 or any(ch not in "0123456789abcdef" for ch in source_hash):
+        return None
+    if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+        return None
+    if provider not in {"THE_WEATHER_COMPANY", "NWS"}:
+        return None
+    if event.side not in {"YES", "NO"}:
+        return None
+    if not isinstance(event.quantity, Decimal) or not event.quantity.is_finite() or event.quantity <= 0:
+        return None
+    if not isinstance(event.payout, Decimal) or not event.payout.is_finite():
+        return None
+    if not isinstance(event.ts_ms, int) or isinstance(event.ts_ms, bool) or event.ts_ms < 0:
+        return None
+    group = _norm(event.trade_group_id)
+    market = _norm_upper(event.market_id)
+    key = _norm(event.settlement_key)
+    if not group or not market or not key:
+        return None
+    expected_digest = sha256("\x1f".join((group, market, key, provider, source_hash,
+        event.side, _decimal_token(event.quantity), _decimal_token(event.payout),
+        str(event.ts_ms))).encode("utf-8")).hexdigest()
+    if expected_digest != digest:
+        return None
+    return {"provider": provider, "source_url_hash": source_hash}
+
+
+def ledger_event_from_weather_reconciliation(
+    *, reconciliation: dict[str, Any], trade_group_id: str, settlement_key: str,
+    market_id: str, settlement_ts_ms: int,
+) -> LedgerEvent:
     if not isinstance(reconciliation, dict) or reconciliation.get("reconciled") is not True:
         raise ValueError("weather settlement reconciliation must be explicitly successful")
     if reconciliation.get("category") != "weather" or reconciliation.get("classification") != "PAPER":
@@ -157,12 +166,9 @@ def ledger_event_from_weather_reconciliation(
         raise ValueError("reconciliation must remain read-only and not live-ready")
     if not isinstance(settlement_ts_ms, int) or isinstance(settlement_ts_ms, bool) or settlement_ts_ms < 0:
         raise ValueError("settlement_ts_ms must be a nonnegative integer")
-
     exact_market = _norm_upper(market_id)
-    reconciled_market = _norm_upper(reconciliation.get("market_ticker"))
-    if not exact_market or reconciled_market != exact_market:
+    if not exact_market or _norm_upper(reconciliation.get("market_ticker")) != exact_market:
         raise ValueError("reconciled exact market does not match ledger market_id")
-
     side = _norm_upper(reconciliation.get("side"))
     outcome = _norm_upper(reconciliation.get("settlement_outcome"))
     quantity = _finite_decimal(reconciliation.get("quantity"))
@@ -170,39 +176,21 @@ def ledger_event_from_weather_reconciliation(
         raise ValueError("terminal side/outcome must be binary")
     if quantity is None or quantity <= 0 or quantity != quantity.to_integral_value():
         raise ValueError("settled paper quantity must be a positive whole contract count")
-
     payout_cents = _finite_decimal(reconciliation.get("paper_payout_cents"))
     expected_payout_cents = D("100") * quantity if side == outcome else D("0")
     if payout_cents is None or payout_cents != expected_payout_cents:
         raise ValueError("reconciled payout is not the exact binary terminal payout")
     payout = payout_cents / D("100")
-
     provider = _provider_token(reconciliation.get("settlement_source_provider"))
     source_url = _norm_url(reconciliation.get("settlement_source_url"))
     if not _official_provider_source(provider, source_url):
         raise ValueError("unsupported or unofficial terminal weather settlement source")
     external_id = certified_weather_settlement_external_id(
-        trade_group_id=trade_group_id,
-        market_id=exact_market,
-        settlement_key=settlement_key,
-        provider=provider,
-        source_url=source_url,
-        side=side,
-        quantity=quantity,
-        payout=payout,
-        settlement_ts_ms=settlement_ts_ms,
+        trade_group_id=trade_group_id, market_id=exact_market, settlement_key=settlement_key,
+        provider=provider, source_url=source_url, side=side, quantity=quantity,
+        payout=payout, settlement_ts_ms=settlement_ts_ms,
     )
-
-    return make_event(
-        trade_group_id=trade_group_id,
-        settlement_key=settlement_key,
-        category="weather",
-        venue="kalshi",
-        market_id=exact_market,
-        event_type="settlement",
-        side=side,
-        quantity=quantity,
-        payout=payout,
-        external_id=external_id,
-        ts_ms=settlement_ts_ms,
-    )
+    return make_event(trade_group_id=trade_group_id, settlement_key=settlement_key,
+        category="weather", venue="kalshi", market_id=exact_market,
+        event_type="settlement", side=side, quantity=quantity, payout=payout,
+        external_id=external_id, ts_ms=settlement_ts_ms)
