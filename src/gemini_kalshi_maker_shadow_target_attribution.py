@@ -42,6 +42,7 @@ MAX_BACKOFF_S = 2.0
 _GEMINI_SUBSCRIBERS: dict[str, dict[int, tuple[asyncio.Queue, Any]]] = {}
 _GEMINI_MANAGER: asyncio.Task | None = None
 _GEMINI_CHANGE: asyncio.Event | None = None
+_GEMINI_EMPTY_BOOK_LOG_AT: dict[str, float] = {}
 
 _TRADE_SUBSCRIBERS: dict[str, dict[int, tuple[asyncio.Queue, Any]]] = {}
 _TRADE_MANAGER: asyncio.Task | None = None
@@ -186,7 +187,21 @@ async def _shared_gemini_manager() -> None:
                         raise RuntimeError(f"Gemini maker depth RPC status={payload.get('status')}")
                     top = _gemini_top_from_depth(symbol, payload, request_start_ms)
                     if top is None:
-                        raise RuntimeError("Gemini maker depth RPC returned no two-sided book")
+                        # A prediction market can briefly expose a one-sided/empty book.
+                        # That symbol is unusable for safe quote generation, but it is
+                        # not evidence that the shared transport failed. Keep the socket
+                        # alive and fail closed for this symbol until a two-sided depth
+                        # response appears.
+                        now = time.monotonic()
+                        if now - _GEMINI_EMPTY_BOOK_LOG_AT.get(symbol, 0.0) >= 30.0:
+                            base.logger.info(
+                                "MAKER_SHADOW_GEMINI_BOOK_UNUSABLE symbol=%s action=skip_snapshot "
+                                "socket_reconnect=false inferred_book=false read_only=true",
+                                symbol,
+                            )
+                            _GEMINI_EMPTY_BOOK_LOG_AT[symbol] = now
+                        await asyncio.sleep(GEMINI_REQUEST_SPACING_S)
+                        continue
                     receive_ms = int(time.time() * 1000)
                     for queue, stats in subscribers:
                         base._enqueue(queue, ("gemini", receive_ms, top), stats)
@@ -507,7 +522,8 @@ def install() -> None:
     base.logger.warning(
         "MAKER_SHADOW_CONNECTION_CONSOLIDATION_INSTALLED gemini=one_public_shared_depth_rpc "
         "kalshi=rest_exact_book_plus_shared_rest_trades book_poll_s=%.2f trade_poll_s=%.2f "
-        "target_attribution=true diagnostic_only=true read_only=true order_entry=false",
+        "one_sided_gemini_book=skip_without_reconnect target_attribution=true "
+        "diagnostic_only=true read_only=true order_entry=false",
         BOOK_POLL_S,
         TRADE_POLL_S,
     )
