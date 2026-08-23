@@ -32,11 +32,16 @@ def test_rejects_integer_thresholds_to_avoid_push_state():
     assert score_pair(D("7"), low, D("8"), high) is None
 
 
-def test_only_accepts_explicit_full_game_total_family():
+def test_only_accepts_event_full_game_total_family_and_rejects_team_total():
     assert _is_full_game_total({
         "sportsMarketType": "full_game_total",
-        "title": "Over 7.5 total runs",
-        "slug": "tsc-mlb-a-b-7pt5",
+        "title": "Over 37.5 total points",
+        "slug": "tsc-nfl-sea-ten-2026-08-23-total-37pt5",
+    })
+    assert not _is_full_game_total({
+        "sportsMarketType": "full_game_total",
+        "title": "Seattle Seahawks over 23.5 total points",
+        "slug": "tsc-nfl-sea-ten-2026-08-23-tt-sea-23pt5",
     })
     assert not _is_full_game_total({
         "sportsMarketType": "athlete_stat_total",
