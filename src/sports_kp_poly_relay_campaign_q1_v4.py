@@ -10,6 +10,8 @@ Changes from v3:
 - detects known partial fills after cancellation and immediately flattens them;
 - paces authenticated Polymarket reads and backs off boundedly on rate limits;
 - never blindly retries an order create after a rate-limit response;
+- uses the order id returned by create directly and only performs a paced list
+  fallback when the create response contains no order id;
 - remains one maker at a time with a bounded six attempts per startup.
 
 Live mutation still requires SPORTS_POLY_RELAY_LIVE_Q1=1.
@@ -28,7 +30,7 @@ from src.sports_kp_poly_relay_live_q1 import (
     D, ONE, TARGET, TAKER_FEE_FLOOR, _amount, _ask, _bid, _books,
     _locked, _payload, _tradeable_exact, _unwrap_order,
 )
-from src.sports_kp_poly_relay_live_q1_v2 import _actual_order_id, _created_order, _resolve_open_order_id
+from src.sports_kp_poly_relay_live_q1_v2 import _actual_order_id, _created_order
 from src.sports_poly_dynamic_monotone import discover_current_pairs, score_pairs
 
 MAX_ATTEMPTS = 6
@@ -70,11 +72,29 @@ async def _read_call(stage: str, fn: Callable[..., Any], *args: Any) -> Any:
     raise RuntimeError(f"read call failed at {stage}")
 
 
+async def _resolve_maker_order_id(client: PolymarketUS, slug: str, created: Mapping[str, Any]) -> str:
+    """Resolve maker identity without an unnecessary authenticated read.
+
+    The create response normally contains the real nested execution order id. Use
+    that id directly. Only if it is absent do a small, paced read-only list fallback.
+    A failed fallback never causes another create; the caller scoped-cancels instead.
+    """
+    preferred = _actual_order_id(created)
+    if preferred:
+        return preferred
+    for _ in range(4):
+        response = await _read_call("maker_identity_list", client.orders.list, {"slugs": [slug]})
+        for raw in response.get("orders") or []:
+            if isinstance(raw, Mapping) and str(raw.get("marketSlug") or "") == slug and raw.get("id"):
+                return str(raw["id"])
+        await asyncio.sleep(0.25)
+    return ""
+
+
 def _maker_quote(book: Any, side: str, hedge_ask: D) -> D | None:
     bid = _bid(book, side)
     ask, _ = _ask(book, side)
     max_for_floor = ONE - hedge_ask - TAKER_FEE_FLOOR - TARGET
-    # Stay one tick below the contra ask so participateDontInitiate remains maker.
     improved = min(ask - TICK, max_for_floor)
     px = max(bid, improved)
     if px <= 0 or px >= ask or _locked(px, hedge_ask) < TARGET:
@@ -136,8 +156,6 @@ async def _attempt(client: PolymarketUS, row: Mapping[str, Any], feed: Mapping[s
     if maker_px is None:
         return {"status": "SKIP_FLOOR", "attempt": attempt_no}
 
-    # Serialize authenticated reads. They are cheap compared with accidentally
-    # exhausting the account/order API immediately before a mutation.
     low_resp = await _read_call("market_retrieve_low", client.markets.retrieve_by_slug, row["low_slug"])
     high_resp = await _read_call("market_retrieve_high", client.markets.retrieve_by_slug, row["high_slug"])
     _tradeable_exact(feed[row["low_slug"]], feed[row["high_slug"]], low_resp, high_resp)
@@ -146,8 +164,6 @@ async def _attempt(client: PolymarketUS, row: Mapping[str, Any], feed: Mapping[s
     await _read_call("maker_preview", client.orders.preview, {"request": maker_payload})
     await _read_call("hedge_preview", client.orders.preview, {"request": hedge_payload})
 
-    # Never blindly retry a create: a rate-limit response could be ambiguous about
-    # whether the venue accepted the order. Clear the selected slug and stop.
     try:
         created = await asyncio.to_thread(client.orders.create, maker_payload)
     except Exception as exc:
@@ -163,7 +179,7 @@ async def _attempt(client: PolymarketUS, row: Mapping[str, Any], feed: Mapping[s
             }
         raise
 
-    oid = await _resolve_open_order_id(client, maker_slug, _actual_order_id(created))
+    oid = await _resolve_maker_order_id(client, maker_slug, created)
     maker_order: Mapping[str, Any] = _created_order(created)
     if not oid:
         await _clear_slug(client, maker_slug)
@@ -242,7 +258,6 @@ async def _attempt(client: PolymarketUS, row: Mapping[str, Any], feed: Mapping[s
     mavg_yes = _amount(maker_order.get("avgPx"))
     maker_native = (mavg_yes if str(row["maker_side"]) == "YES" else ONE - mavg_yes) if mavg_yes is not None else maker_px
 
-    # Filled maker: exact hedge revalidation, then immediate FOK or flatten.
     hedge_book = (await _books({hedge_slug})).get(hedge_slug)
     if hedge_book is None:
         flattened = await _flatten_maker(client, maker_slug)
@@ -262,8 +277,6 @@ async def _attempt(client: PolymarketUS, row: Mapping[str, Any], feed: Mapping[s
         return {"status": "HEDGE_PREVIEW_RATE_LIMIT_MAKER_FLATTENED", "attempt": attempt_no, "maker_order_id": oid,
                 "close_response_present": flattened, "order_entry": True, "realized": False}
 
-    # A hedge create is also never blindly retried. If its response is rate-limited,
-    # fail closed by flattening the maker leg immediately.
     try:
         hcreated = await asyncio.to_thread(client.orders.create, hedge_payload)
     except Exception as exc:
@@ -319,8 +332,6 @@ async def run_once() -> dict[str, Any]:
         print("SPORTS_POLY_RELAY_CAMPAIGN_Q1_V4 " + json.dumps(out, separators=(",", ":")), flush=True)
         return out
 
-    # The public discovery/book scan is intentionally broad. Give the shared venue
-    # gateway a cooldown before touching authenticated account/order endpoints.
     await asyncio.sleep(POST_PUBLIC_SCAN_COOLDOWN_SECONDS)
     client = PolymarketUS(key_id=os.environ["POLYMARKET_KEY_ID"], secret_key=os.environ["POLYMARKET_SECRET_KEY"], timeout=6.0)
     try:
