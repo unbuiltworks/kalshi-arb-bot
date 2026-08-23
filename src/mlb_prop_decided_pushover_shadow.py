@@ -1,12 +1,10 @@
 """Pushover wrapper for the read-only MLB decided-prop shadow.
 
-The underlying scanner remains unchanged and has no order-entry path. This wrapper
-listens only for FINAL_STAT_STABLE_RESEARCH_ONLY signals and sends an explicit
-manual-trade notification when a venue still offers the already-known winning side
-below its $1 settlement value after the scanner's conservative fee bound.
-
-These are single-venue settlement-lag signals, not cross-venue arbitrage.
-Threshold-reached in-game research signals are deliberately never alerted here.
+The underlying scanner remains unchanged and has no order-entry path. Automatic
+prediction venues (Kalshi and Polymarket) must never emit manual-buy instructions
+from this wrapper; those signals belong to the bounded automatic K/P execution
+route. This wrapper is therefore fail-closed for those venues. Threshold-reached
+in-game research signals are deliberately never alerted here.
 """
 from __future__ import annotations
 
@@ -19,6 +17,8 @@ from src import mlb_prop_decided_shadow as decided
 from src.sports_pushover_alerts import SportsPushoverAlerts
 
 logger = logging.getLogger("kalshi_arb.mlb_prop_decided_pushover_shadow")
+
+AUTO_VENUES = {"Kalshi", "Polymarket"}
 
 FAMILY_LABELS = {
     "baseball_player_hits": "hits",
@@ -36,6 +36,14 @@ class _FinalSignalHandler(logging.Handler):
 
     async def _send_edge(self, row: dict[str, Any], edge: dict[str, Any]) -> None:
         venue = str(edge.get("venue") or "").title()
+        # Kalshi and Polymarket are automatic venues. Never leak a manual action
+        # instruction for them, even if this legacy wrapper is accidentally run.
+        if venue in AUTO_VENUES:
+            logger.info(
+                "DECIDED_MLB_PROP_PUSHOVER_SUPPRESSED_AUTO_VENUE %s",
+                json.dumps({"venue": venue, "player": row.get("player"), "threshold": row.get("threshold")}, separators=(",", ":")),
+            )
+            return
         outcome = str(edge.get("outcome") or "")
         player = str(row.get("player") or "Unknown player")
         threshold = str(row.get("threshold") or "?")
@@ -98,7 +106,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
     decided.logger.addHandler(_FinalSignalHandler())
     logger.info(
-        "DECIDED_MLB_PROP_PUSHOVER_READY configured=%s read_only=true order_entry=false final_only=true",
+        "DECIDED_MLB_PROP_PUSHOVER_READY configured=%s read_only=true order_entry=false final_only=true auto_venues_suppressed=kalshi,polymarket",
         SportsPushoverAlerts().configured,
     )
     asyncio.run(decided.run_forever())
