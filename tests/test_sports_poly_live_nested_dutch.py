@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from src.sports_poly_live_nested_dutch import score_pair
+from src.sports_poly_live_nested_dutch import _is_full_game_total, score_pair
 from src.strict_mlb_prop_snapshot import TopBook
 
 D = Decimal
@@ -24,3 +24,29 @@ def test_requires_q1_depth_on_both_legs():
     low = TopBook(yes_ask=D("0.4"), yes_depth=D("0.5"), no_ask=D("0.6"), no_depth=D("5"))
     high = TopBook(yes_ask=D("0.3"), yes_depth=D("5"), no_ask=D("0.7"), no_depth=D("5"))
     assert score_pair(D("7.5"), low, D("8.5"), high) is None
+
+
+def test_rejects_integer_thresholds_to_avoid_push_state():
+    low = TopBook(yes_ask=D("0.4"), yes_depth=D("5"), no_ask=D("0.6"), no_depth=D("5"))
+    high = TopBook(yes_ask=D("0.3"), yes_depth=D("5"), no_ask=D("0.7"), no_depth=D("5"))
+    assert score_pair(D("7"), low, D("8"), high) is None
+
+
+def test_only_accepts_explicit_full_game_total_family():
+    assert _is_full_game_total({
+        "sportsMarketType": "full_game_total",
+        "title": "Over 7.5 total runs",
+        "slug": "tsc-mlb-a-b-7pt5",
+    })
+    assert not _is_full_game_total({
+        "sportsMarketType": "athlete_stat_total",
+        "sportsMarketTypeV2": "TOTAL",
+        "title": "Alejandro Kirk 4+ total bases",
+        "slug": "astatc-mlb-a-b-tb-player-gte4",
+    })
+    assert not _is_full_game_total({
+        "sportsMarketType": "corner_total",
+        "sportsMarketTypeV2": "TOTAL",
+        "title": "Over 6.5 total corners",
+        "slug": "astatc-lal-a-b-cor-all-gt6pt5",
+    })
