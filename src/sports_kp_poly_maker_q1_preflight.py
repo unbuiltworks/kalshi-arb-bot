@@ -1,10 +1,10 @@
 """Targeted mutation-free Polymarket MLB maker->hedge q1 preflight.
 
 Runs inside the low-request K/P executor service so authenticated Polymarket calls
-are not made after the broad 3k-book census. It scans only strict canonical MLB
-player-prop ladders from the already-fetched sports event inventory, stops at a
-bounded public-book request count, verifies the richest >=3c monotone pair, then
-uses authenticated account + order preview endpoints. It NEVER creates orders.
+are not made after the broad 3k-book census. It fetches the canonical MLB league
+feed directly, scans strict canonical MLB player-prop ladders, stops at a bounded
+public-book request count, verifies the richest >=3c monotone pair, then uses
+authenticated account + order preview endpoints. It NEVER creates orders.
 """
 from __future__ import annotations
 
@@ -24,8 +24,6 @@ from src.strict_mlb_prop_snapshot import TopBook, poly_top_book
 D = Decimal
 ONE = D("1")
 TARGET = D("0.03")
-# Conservative q1 allowance observed on current Polymarket US sports taker previews.
-# Maker rebate is deliberately ignored. Exact order preview still has to succeed.
 TAKER_FEE_FLOOR = D("0.01")
 BASE = "https://gateway.polymarket.us"
 MAX_BOOKS = 120
@@ -107,29 +105,50 @@ def _certify(low: Mapping[str, Any], high: Mapping[str, Any]) -> tuple[str, dict
     return fp, evidence
 
 
-async def run_once(events: list[Mapping[str, Any]]) -> dict[str, Any]:
+async def _fetch_mlb_events() -> list[dict[str, Any]]:
+    async with httpx.AsyncClient(timeout=12.0) as http:
+        r = await http.get(
+            f"{BASE}/v2/leagues/mlb/events",
+            params={"limit": 500, "offset": 0, "type": "sport", "section": "general"},
+        )
+        r.raise_for_status()
+        body = r.json() if r.content else {}
+        return [dict(e) for e in (body.get("events") or []) if isinstance(e, Mapping)]
+
+
+async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, Any]:
+    # The broad /v1/events inventory intentionally has a generic market shape. The
+    # MLB league endpoint carries the structured fields required by _poly_identity.
+    mlb_events = await _fetch_mlb_events()
     ladders: dict[tuple[str, str, str, tuple[str, str], str], list[dict[str, Any]]] = {}
-    for event in events:
+    for event in mlb_events:
         event_slug = str(event.get("slug") or event.get("id") or "")
-        series = str(event.get("seriesSlug") or event.get("series_slug") or event.get("subcategory") or "").lower()
-        if "mlb" not in series and "mlb" not in event_slug.lower():
-            continue
         for market in event.get("markets") or []:
             if not isinstance(market, Mapping):
                 continue
-            ident = _poly_identity(market)
+            row = dict(market)
+            # Preserve the canonical parent event identity/start fields for later
+            # authenticated re-certification if the market row does not repeat them.
+            if not row.get("eventSlug") and event_slug:
+                row["eventSlug"] = event_slug
+            if not row.get("eventStartTime") and event.get("startTime"):
+                row["eventStartTime"] = event.get("startTime")
+            ident = _poly_identity(row)
             if ident is None:
                 continue
             family, player, teams, game_date, threshold = ident
             if threshold < ONE or threshold != threshold.to_integral_value():
                 continue
+            slug = str(row.get("slug") or "")
+            if not slug:
+                continue
             key = (game_date, family, "".join(ch for ch in player.lower() if ch.isalnum()), tuple(sorted(teams)), event_slug)
-            ladders.setdefault(key, []).append({"market": dict(market), "slug": str(market.get("slug") or ""), "threshold": threshold})
+            ladders.setdefault(key, []).append({"market": row, "slug": slug, "threshold": threshold})
 
     slugs: list[str] = []
     for ladder in ladders.values():
         for row in sorted(ladder, key=lambda x: x["threshold"]):
-            if row["slug"] and row["slug"] not in slugs:
+            if row["slug"] not in slugs:
                 slugs.append(row["slug"])
             if len(slugs) >= MAX_BOOKS:
                 break
@@ -171,7 +190,14 @@ async def run_once(events: list[Mapping[str, Any]]) -> dict[str, Any]:
                     })
     scored.sort(key=lambda r: r["locked_profit"], reverse=True)
     if not scored:
-        out = {"status": "NO_TARGETED_MLB_MAKER_Q1", "books_fetched": len(books), "order_entry": False}
+        out = {
+            "status": "NO_TARGETED_MLB_MAKER_Q1",
+            "mlb_events": len(mlb_events),
+            "ladders": len(ladders),
+            "candidate_slugs": len(slugs),
+            "books_fetched": len(books),
+            "order_entry": False,
+        }
         print("SPORTS_KP_POLY_MAKER_Q1_PREFLIGHT " + json.dumps(out, separators=(",", ":")), flush=True)
         return out
 
@@ -194,6 +220,8 @@ async def run_once(events: list[Mapping[str, Any]]) -> dict[str, Any]:
         )
         out = {
             "status": "READY_TARGETED_MLB_MAKER_Q1",
+            "mlb_events": len(mlb_events),
+            "ladders": len(ladders),
             "books_fetched": len(books),
             "locked_profit_after_hypothetical_fill": str(row["locked_profit"]),
             "maker_slug": maker_slug,
