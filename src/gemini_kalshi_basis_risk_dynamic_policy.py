@@ -2,9 +2,10 @@
 
 This does not alter the shared guaranteed-arbitrage settlement-equivalence lock.
 It lowers the threshold-gap floor only inside the dedicated basis-risk child and uses
-the existing 3-cent after-fee floor for the single bounded q=1 research probe. All
-existing exact-depth, freshness, persistence, q=1, capital reservation and $5 hard-
-budget controls remain.
+the existing 3-cent after-fee floor for the single bounded q=1 research probe. BTC is
+quarantined from this probe because the authoritative ledger contains the only observed
+index-mismatch loss on BTC; ETH/SOL/XRP remain eligible. All existing exact-depth,
+freshness, persistence, q=1, capital reservation and $5 hard-budget controls remain.
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_risk_dynamic_policy")
 
 DYNAMIC_MIN_GAP_BPS = D("0.5")
 DYNAMIC_MIN_LOCKED_PROFIT = D("0.03")
+ELIGIBLE_ASSETS = ("ETH", "SOL", "XRP")
 
 
 def dynamic_dominance_authorization(*, direction, gemini_strike, kalshi_target, min_gap_bps=DYNAMIC_MIN_GAP_BPS):
@@ -92,7 +94,7 @@ def dynamic_main() -> None:
     sys.argv = [
         sys.argv[0],
         "--arm-deadline-utc", deadline.isoformat(),
-        "--assets", "BTC", "ETH", "SOL", "XRP",
+        "--assets", *ELIGIBLE_ASSETS,
         "--seconds", "0",
         "--max-quote-skew-ms", "50",
         "--capital-limit", "1",
@@ -102,8 +104,9 @@ def dynamic_main() -> None:
     ]
     logger.warning(
         "CRYPTO_BASIS_DYNAMIC_POLICY_ENABLED min_gap_bps=%s min_locked_profit=%s "
-        "quantity=1 capital_limit_usd=1 approved_budget_usd=%s guaranteed_arb=false",
-        min_gap_bps, DYNAMIC_MIN_LOCKED_PROFIT, child.APPROVED_BUDGET,
+        "eligible_assets=%s btc_quarantined=true quantity=1 capital_limit_usd=1 "
+        "approved_budget_usd=%s guaranteed_arb=false",
+        min_gap_bps, DYNAMIC_MIN_LOCKED_PROFIT, ",".join(ELIGIBLE_ASSETS), child.APPROVED_BUDGET,
     )
     v2.main()
 
@@ -114,6 +117,7 @@ def install() -> None:
     child.main = dynamic_main
     logger.warning(
         "CRYPTO_BASIS_DYNAMIC_POLICY_INSTALLED scope=DEDICATED_BASIS_CHILD "
-        "shared_guaranteed_arb_lock_changed=false min_gap_bps=%s min_locked_profit=%s",
-        DYNAMIC_MIN_GAP_BPS, DYNAMIC_MIN_LOCKED_PROFIT,
+        "shared_guaranteed_arb_lock_changed=false min_gap_bps=%s min_locked_profit=%s "
+        "eligible_assets=%s btc_quarantined=true",
+        DYNAMIC_MIN_GAP_BPS, DYNAMIC_MIN_LOCKED_PROFIT, ",".join(ELIGIBLE_ASSETS),
     )
