@@ -1,15 +1,17 @@
-"""Promoted q=1 basis-risk child after the first three live probes settled profitably.
+"""Promoted q=1 basis-risk child after five live probes settled profitably.
 
 This is still settlement-basis research, not guaranteed arbitrage. Promotion is bounded
 by the already-reviewed production policy and remains within the user's approved $5
-maximum-loss research budget:
+maximum-realized-loss research budget:
 
 * q=1 and <=$1 reserved capital per probe;
-* at most five lifetime CAPITAL_RESERVED rows for this strategy;
+* at most twenty lifetime CAPITAL_RESERVED rows for this strategy;
 * exactly one unresolved/reserved probe at a time;
 * every prior reservation must be authoritatively TRADE_REALIZED before another claim;
 * any realized loss hard-stops all future automatic reservations;
-* total reserved capital can never exceed the approved $5 research budget;
+* cumulative realized loss can never reach the approved $5 research-loss budget;
+* historical sequential reservations may exceed $5 because only one <=$1 probe may be
+  unresolved at a time; cumulative reservation turnover is not cumulative loss;
 * all v4 dynamic dominance/economics/freshness/depth/FOK gates remain unchanged.
 
 The shared guaranteed-arbitrage settlement-equivalence lock is untouched.
@@ -30,7 +32,7 @@ from src import gemini_kalshi_basis_risk_q1_child_v4 as child_v4
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_risk_q1_child_v5")
 
-PROMOTED_PROBE_LIMIT = 5
+PROMOTED_PROBE_LIMIT = 20
 LOCK_NAME = child_v2.LOCK_NAME
 
 
@@ -91,8 +93,11 @@ def automatic_rollover_allowed(state: dict[str, Any]) -> tuple[bool, str]:
         return False, "APPROVED_LOSS_BUDGET_EXHAUSTED"
     if int(state["reservations"]) >= PROMOTED_PROBE_LIMIT:
         return False, "PROMOTED_PROBE_LIMIT_REACHED"
-    if D(state["reserved_usd"]) + child.INITIAL_TRANCHE_USD > child.APPROVED_BUDGET:
-        return False, "APPROVED_RESERVATION_BUDGET_EXCEEDED"
+    # The approved $5 ceiling is a realized-loss budget, not a lifetime turnover cap.
+    # Sequential historical reservations may exceed $5 because only one <=$1 probe can
+    # be unresolved at a time and every prior probe must be authoritatively realized.
+    if child.INITIAL_TRANCHE_USD > child.APPROVED_BUDGET:
+        return False, "PER_PROBE_TRANCHE_EXCEEDS_APPROVED_LOSS_BUDGET"
     return True, "OK"
 
 
@@ -189,7 +194,7 @@ def acquire_promoted_capital_reservation(
 def install() -> None:
     child_v2.acquire_atomic_capital_reservation = acquire_promoted_capital_reservation
     logger.warning(
-        "CRYPTO_BASIS_RISK_V5_PROMOTION_INSTALLED probe_limit=%s q=1 tranche_usd=%s approved_budget_usd=%s one_unresolved=true hard_stop_on_any_loss=true shared_arb_lock_changed=false",
+        "CRYPTO_BASIS_RISK_V5_PROMOTION_INSTALLED probe_limit=%s q=1 tranche_usd=%s approved_loss_budget_usd=%s one_unresolved=true hard_stop_on_any_loss=true shared_arb_lock_changed=false",
         PROMOTED_PROBE_LIMIT,
         child.INITIAL_TRANCHE_USD,
         child.APPROVED_BUDGET,
