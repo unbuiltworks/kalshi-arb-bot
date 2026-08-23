@@ -6,6 +6,8 @@ Keeps the implementation small while enforcing two fail-closed corrections:
 2. Any nonzero fill other than exactly q=1 is reclassified UNKNOWN so the parent
    path hard-halts and preserves the reservation instead of treating exposure as an
    unfilled FOK.
+
+FanDuel/sportsbook transport remains unreachable from this entrypoint.
 """
 from __future__ import annotations
 
