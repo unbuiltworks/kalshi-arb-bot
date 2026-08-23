@@ -1,14 +1,14 @@
 """Targeted mutation-free Polymarket MLB maker->hedge q1 preflight.
 
-Runs inside the low-request K/P executor service so authenticated Polymarket calls
-are not made after the broad 3k-book census. It fetches the canonical MLB league
-feed directly, scans strict canonical MLB player-prop ladders, stops at a bounded
-public-book request count, verifies the richest >=3c monotone pair, then uses
-authenticated account + order preview endpoints. It NEVER creates orders.
+Runs inside the low-request K/P executor service. It fetches the current near-term
+sports event feed in the same ordering used by the proven maker census, isolates
+MLB events, scans strict canonical player-prop ladders, and authenticates only the
+richest >=3c q1 path. It NEVER creates orders.
 """
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import hashlib
 import json
@@ -70,8 +70,7 @@ def _strict_pair(a: Mapping[str, Any], b: Mapping[str, Any]) -> tuple[tuple[Any,
     if (af, ap.lower(), set(at), ad) != (bf, bp.lower(), set(bt), bd) or ax == bx:
         return None
     lo, hi = (ax, bx) if ax < bx else (bx, ax)
-    key = (ad, af, ap.lower(), tuple(sorted(at)))
-    return key, lo, hi
+    return (ad, af, ap.lower(), tuple(sorted(at))), lo, hi
 
 
 def _certify(low: Mapping[str, Any], high: Mapping[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -106,36 +105,56 @@ def _certify(low: Mapping[str, Any], high: Mapping[str, Any]) -> tuple[str, dict
 
 
 async def _fetch_mlb_events() -> list[dict[str, Any]]:
+    horizon = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat().replace("+00:00", "Z")
+    found: list[dict[str, Any]] = []
+    seen: set[str] = set()
     async with httpx.AsyncClient(timeout=12.0) as http:
-        r = await http.get(
-            f"{BASE}/v2/leagues/mlb/events",
-            params={"limit": 500, "offset": 0, "type": "sport", "section": "general"},
-        )
-        r.raise_for_status()
-        body = r.json() if r.content else {}
-        return [dict(e) for e in (body.get("events") or []) if isinstance(e, Mapping)]
+        for page in range(12):
+            r = await http.get(
+                f"{BASE}/v1/events",
+                params={
+                    "limit": 100,
+                    "offset": page * 100,
+                    "active": "true",
+                    "closed": "false",
+                    "ended": "false",
+                    "categories": "sports",
+                    "startTimeMax": horizon,
+                    "orderBy": "startTime",
+                    "orderDirection": "desc",
+                },
+            )
+            r.raise_for_status()
+            body = r.json() if r.content else {}
+            rows = [dict(e) for e in (body.get("events") or []) if isinstance(e, Mapping)]
+            for event in rows:
+                slug = str(event.get("slug") or event.get("id") or "")
+                series = str(event.get("seriesSlug") or event.get("subcategory") or "").lower()
+                if "mlb" not in series and "mlb" not in slug.lower():
+                    continue
+                key = str(event.get("id") or slug)
+                if key and key not in seen:
+                    seen.add(key)
+                    found.append(event)
+            if len(rows) < 100:
+                break
+    return found
 
 
 async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, Any]:
-    # The broad /v1/events inventory intentionally has a generic market shape. The
-    # MLB league endpoint carries the structured fields required by _poly_identity.
     mlb_events = await _fetch_mlb_events()
     ladders: dict[tuple[str, str, str, tuple[str, str], str], list[dict[str, Any]]] = {}
+    parseable = 0
     for event in mlb_events:
         event_slug = str(event.get("slug") or event.get("id") or "")
         for market in event.get("markets") or []:
             if not isinstance(market, Mapping):
                 continue
             row = dict(market)
-            # Preserve the canonical parent event identity/start fields for later
-            # authenticated re-certification if the market row does not repeat them.
-            if not row.get("eventSlug") and event_slug:
-                row["eventSlug"] = event_slug
-            if not row.get("eventStartTime") and event.get("startTime"):
-                row["eventStartTime"] = event.get("startTime")
             ident = _poly_identity(row)
             if ident is None:
                 continue
+            parseable += 1
             family, player, teams, game_date, threshold = ident
             if threshold < ONE or threshold != threshold.to_integral_value():
                 continue
@@ -145,8 +164,10 @@ async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, A
             key = (game_date, family, "".join(ch for ch in player.lower() if ch.isalnum()), tuple(sorted(teams)), event_slug)
             ladders.setdefault(key, []).append({"market": row, "slug": slug, "threshold": threshold})
 
+    # Only ladders with at least two thresholds can form the monotone maker hedge.
+    eligible_ladders = [ladder for ladder in ladders.values() if len({r["threshold"] for r in ladder}) >= 2]
     slugs: list[str] = []
-    for ladder in ladders.values():
+    for ladder in eligible_ladders:
         for row in sorted(ladder, key=lambda x: x["threshold"]):
             if row["slug"] not in slugs:
                 slugs.append(row["slug"])
@@ -156,22 +177,30 @@ async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, A
             break
 
     books: dict[str, TopBook] = {}
+    sem = asyncio.Semaphore(12)
     async with httpx.AsyncClient(timeout=5.0) as http:
-        for slug in slugs:
-            try:
-                r = await http.get(f"{BASE}/v1/markets/{slug}/book")
-                if r.status_code == 200:
-                    b = poly_top_book(r.json())
-                    if b is not None:
-                        books[slug] = b
-            except Exception:
-                continue
+        async def fetch_book(slug: str) -> None:
+            async with sem:
+                try:
+                    r = await http.get(f"{BASE}/v1/markets/{slug}/book")
+                    if r.status_code == 200:
+                        book = poly_top_book(r.json())
+                        if book is not None:
+                            books[slug] = book
+                except Exception:
+                    return
+        await asyncio.gather(*(fetch_book(slug) for slug in slugs))
 
     scored: list[dict[str, Any]] = []
     for key, ladder in ladders.items():
         ordered = sorted([x for x in ladder if x["slug"] in books], key=lambda x: x["threshold"])
+        unique = {r["threshold"] for r in ordered}
+        if len(unique) < 2:
+            continue
         for i, low in enumerate(ordered):
             for high in ordered[i + 1:]:
+                if low["threshold"] >= high["threshold"]:
+                    continue
                 lb, hb = books[low["slug"]], books[high["slug"]]
                 options = (
                     ("MAKER_LOW_HEDGE_HIGH", "YES", _bid(lb, True), "NO", *_ask(hb, False)),
@@ -193,7 +222,9 @@ async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, A
         out = {
             "status": "NO_TARGETED_MLB_MAKER_Q1",
             "mlb_events": len(mlb_events),
+            "parseable_prop_markets": parseable,
             "ladders": len(ladders),
+            "eligible_ladders": len(eligible_ladders),
             "candidate_slugs": len(slugs),
             "books_fetched": len(books),
             "order_entry": False,
@@ -221,6 +252,7 @@ async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, A
         out = {
             "status": "READY_TARGETED_MLB_MAKER_Q1",
             "mlb_events": len(mlb_events),
+            "parseable_prop_markets": parseable,
             "ladders": len(ladders),
             "books_fetched": len(books),
             "locked_profit_after_hypothetical_fill": str(row["locked_profit"]),
