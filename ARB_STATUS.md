@@ -1,8 +1,64 @@
 # ARB Control Plane
 
-Last verified: 2026-08-23 03:16 UTC
+Last verified: 2026-08-23 03:24 UTC
 
 This is the durable ARB handoff. Production state wins over chat history. Before changing a workstream, verify current Railway deployment/runtime + GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the $480/day objective.
+
+## LATEST PRODUCTION CHECKPOINT — 2026-08-23 03:24 UTC
+
+This section supersedes older sports settlement-lag notification/execution details below where they conflict. Historical sections are preserved for audit context.
+
+### Prediction-market-only automatic settlement-lag routing — LIVE
+
+User routing policy is now explicit:
+- **Kalshi / Gemini / Polymarket:** safely certified opportunities may execute automatically.
+- **FanDuel / sportsbooks:** manual only. No automatic sportsbook transport should be added to these lanes.
+- Post-final known-winner trades remain **SETTLEMENT-LAG / RULE-RISK**, not guaranteed arbitrage. A fill remains `FILLED_NOT_SETTLED` until the venue settles and authoritative reconciliation confirms P&L.
+
+The earlier Pushover messages that said `MLB FINAL EDGE` were single-venue settlement-lag signals. The old manual-instruction wrapper is no longer the production action path: Railway service `mlb-prop-decided-shadow` now runs the underlying read-only scanner directly via `python -m src.mlb_prop_decided_shadow`, preventing duplicate manual-buy alerts while automatic K/P routing is active.
+
+#### Kalshi / Polymarket strict MLB prop final-lag q1 — ARMED
+
+Railway service `mlb-final-lag-live-q1` (`d773c4bd-4ee2-415a-8556-b4f2a387536c`) is live on branch `feature/mlb-final-lag-live-q1` via `python -m src.mlb_prop_final_lag_live_q1_entry`.
+
+Verified production READY log:
+- `armed=True`
+- q=1
+- automatic venues `kalshi,polymarket`
+- `manual_only=fanduel`
+- conservative modeled after-fee profit floor **$0.10**
+- direct final revalidation <= **100ms**
+- shared sports cumulative live ceiling **$5**, not reset/increased
+- classification `LIVE_SETTLEMENT_LAG_RULE_RISK_NOT_ARBITRAGE`
+
+Execution path requires official MLB Final evidence stable >=60s / >=3 observations, exact q1 displayed depth, fresh direct book revalidation, q1 FOK, durable Command Center reservation before mutation, one unresolved final-lag exposure maximum, and hard halt on ambiguous submission. It only covers strict MLB prop markets where the existing exact K/P overlap/certification pipeline finds a valid candidate; do not infer universal standalone K-only/P-only coverage.
+
+At the 03:24 UTC verification there was **no `FINAL_LAG_EXECUTION_RESULT`** in this service: no new final-lag order/fill/realized P&L from this lane yet.
+
+#### Gemini / Kalshi MLB Hits final-lag q1 — ARMED
+
+New branch `feature/mlb-gk-final-lag-auto-q1-v2` adds:
+- `src/mlb_gk_hits_final_lag_live_q1.py`
+- `src/mlb_gk_hits_final_lag_live_q1_entry.py`
+- source commit **`219f69f1e0bd3c01626c319394d5e28bcd5be089`**.
+
+Railway service `mlb-gk-final-lag-live-q1` (`3063a322-0c0d-4d08-b9c3-1d5ffafe5732`) runs `python -m src.mlb_gk_hits_final_lag_live_q1_entry`.
+
+Disarmed validation deployment `26db4867-1f29-409b-8988-b404d6f1908e` succeeded on the exact branch/commit. Fresh Docker build ran the existing sports suite: **115 passed**. Runtime then showed repeated healthy heartbeats with `gemini_connected=50`, `gemini_updates=50`, `hard_halt=False`, and no mutation while `armed=False`.
+
+After clean validation, the service was armed. Production deployment **`25a76f55-ceb0-4de2-93e1-2c669c322fe7`** succeeded and the first verified runtime heartbeat showed:
+- `armed=True`
+- `hard_halt=False`
+- `gemini_connected=50`
+- `gemini_updates=50`
+- `stable=0`
+- `positive=0`
+
+This lane is intentionally **MLB Hits only** for now. It requires exact direct-orientation Gemini/Kalshi Hits identity, MLB Final + starter/plate-appearance proof + 60s/3-observation stability, >=$0.10 conservative after-fee edge, <=100ms book freshness, 50ms exact persistence/revalidation, q=1 FOK, <=$1 capital, durable reservation, the existing shared `sports_gk_*` $5 cumulative ceiling, and hard halt on ambiguous/unexpected partial submission. Kalshi market data uses direct exact REST rather than opening another authenticated Kalshi WebSocket. FanDuel/sportsbooks are unreachable from this transport.
+
+At the 03:24 UTC verification there was **no `MLB_GK_FINAL_LAG_EXECUTION_RESULT`**: no new G/K final-lag order/fill/realized P&L yet.
+
+Do not broaden the Gemini final-lag lane to HR/total bases/strikeouts merely because those families exist elsewhere; settlement-lag rule/correction semantics need separate certification first. Do not count an armed scanner, candidate, submitted order, or fill as realized profit.
 
 ## LATEST PRODUCTION CHECKPOINT — 2026-08-23 03:16 UTC
 
