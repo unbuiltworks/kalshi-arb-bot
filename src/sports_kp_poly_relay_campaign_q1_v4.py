@@ -8,6 +8,8 @@ Changes from v3:
 - rechecks the exact hedge book while the maker rests and cancels early if the
   3c floor or q1 hedge depth disappears;
 - detects known partial fills after cancellation and immediately flattens them;
+- paces authenticated Polymarket reads and backs off boundedly on rate limits;
+- never blindly retries an order create after a rate-limit response;
 - remains one maker at a time with a bounded six attempts per startup.
 
 Live mutation still requires SPORTS_POLY_RELAY_LIVE_Q1=1.
@@ -15,10 +17,9 @@ Live mutation still requires SPORTS_POLY_RELAY_LIVE_Q1=1.
 from __future__ import annotations
 
 import asyncio
-from decimal import Decimal
 import json
 import os
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from polymarket_us import PolymarketUS
 from polymarket_us.errors import NotFoundError
@@ -35,6 +36,38 @@ TICK = D("0.01")
 POLL_SECONDS = 12.0
 POLL_INTERVAL_SECONDS = 0.25
 EDGE_RECHECK_SECONDS = 1.0
+AUTH_READ_GAP_SECONDS = 0.30
+POST_PUBLIC_SCAN_COOLDOWN_SECONDS = 2.0
+READ_RATE_LIMIT_DELAYS = (0.75, 1.5, 3.0, 5.0)
+
+
+class ReadRateLimitExhausted(RuntimeError):
+    def __init__(self, stage: str) -> None:
+        super().__init__(f"rate limit exhausted at {stage}")
+        self.stage = stage
+
+
+def _is_rate_limit(exc: BaseException) -> bool:
+    return type(exc).__name__ == "RateLimitError"
+
+
+async def _read_call(stage: str, fn: Callable[..., Any], *args: Any) -> Any:
+    """Pace and boundedly retry only read/preview calls on SDK rate limits."""
+    last_rate_limit = False
+    for attempt in range(len(READ_RATE_LIMIT_DELAYS) + 1):
+        if attempt:
+            await asyncio.sleep(READ_RATE_LIMIT_DELAYS[attempt - 1])
+        try:
+            out = await asyncio.to_thread(fn, *args)
+            await asyncio.sleep(AUTH_READ_GAP_SECONDS)
+            return out
+        except Exception as exc:
+            if not _is_rate_limit(exc):
+                raise
+            last_rate_limit = True
+    if last_rate_limit:
+        raise ReadRateLimitExhausted(stage)
+    raise RuntimeError(f"read call failed at {stage}")
 
 
 def _maker_quote(book: Any, side: str, hedge_ask: D) -> D | None:
@@ -53,14 +86,26 @@ async def _cancel_scoped(client: PolymarketUS, oid: str, slug: str) -> None:
     try:
         await asyncio.to_thread(client.orders.cancel, oid, {"marketSlug": slug})
     except Exception:
+        try:
+            await asyncio.to_thread(client.orders.cancel_all, {"slugs": [slug]})
+        except Exception:
+            pass
+
+
+async def _clear_slug(client: PolymarketUS, slug: str) -> None:
+    """Safety cleanup after an uncertain mutation response; no create retry."""
+    await asyncio.sleep(0.75)
+    try:
         await asyncio.to_thread(client.orders.cancel_all, {"slugs": [slug]})
+    except Exception:
+        pass
 
 
 async def _refresh_order(client: PolymarketUS, oid: str, slug: str, fallback: Mapping[str, Any]) -> Mapping[str, Any]:
     try:
-        return _unwrap_order(await asyncio.to_thread(client.orders.retrieve, oid))
+        return _unwrap_order(await _read_call("order_retrieve", client.orders.retrieve, oid))
     except NotFoundError:
-        response = await asyncio.to_thread(client.orders.list, {"slugs": [slug]})
+        response = await _read_call("order_list_after_not_found", client.orders.list, {"slugs": [slug]})
         matching = [o for o in response.get("orders") or [] if isinstance(o, Mapping) and str(o.get("id") or "") == oid]
         return matching[0] if matching else fallback
 
@@ -91,24 +136,38 @@ async def _attempt(client: PolymarketUS, row: Mapping[str, Any], feed: Mapping[s
     if maker_px is None:
         return {"status": "SKIP_FLOOR", "attempt": attempt_no}
 
-    low_resp, high_resp = await asyncio.gather(
-        asyncio.to_thread(client.markets.retrieve_by_slug, row["low_slug"]),
-        asyncio.to_thread(client.markets.retrieve_by_slug, row["high_slug"]),
-    )
+    # Serialize authenticated reads. They are cheap compared with accidentally
+    # exhausting the account/order API immediately before a mutation.
+    low_resp = await _read_call("market_retrieve_low", client.markets.retrieve_by_slug, row["low_slug"])
+    high_resp = await _read_call("market_retrieve_high", client.markets.retrieve_by_slug, row["high_slug"])
     _tradeable_exact(feed[row["low_slug"]], feed[row["high_slug"]], low_resp, high_resp)
     maker_payload = _payload(maker_slug, str(row["maker_side"]), maker_px, maker=True)
     hedge_payload = _payload(hedge_slug, str(row["hedge_side"]), hedge_ask, maker=False)
-    await asyncio.gather(
-        asyncio.to_thread(client.orders.preview, {"request": maker_payload}),
-        asyncio.to_thread(client.orders.preview, {"request": hedge_payload}),
-    )
+    await _read_call("maker_preview", client.orders.preview, {"request": maker_payload})
+    await _read_call("hedge_preview", client.orders.preview, {"request": hedge_payload})
 
-    created = await asyncio.to_thread(client.orders.create, maker_payload)
+    # Never blindly retry a create: a rate-limit response could be ambiguous about
+    # whether the venue accepted the order. Clear the selected slug and stop.
+    try:
+        created = await asyncio.to_thread(client.orders.create, maker_payload)
+    except Exception as exc:
+        if _is_rate_limit(exc):
+            await _clear_slug(client, maker_slug)
+            return {
+                "status": "MAKER_CREATE_RATE_LIMIT_SCOPED_CANCEL",
+                "attempt": attempt_no,
+                "stage": "maker_create",
+                "maker_slug": maker_slug,
+                "order_entry": True,
+                "realized": False,
+            }
+        raise
+
     oid = await _resolve_open_order_id(client, maker_slug, _actual_order_id(created))
     maker_order: Mapping[str, Any] = _created_order(created)
     if not oid:
-        await asyncio.to_thread(client.orders.cancel_all, {"slugs": [maker_slug]})
-        return {"status": "UNKNOWN_MAKER_ID_SCOPED_CANCEL", "attempt": attempt_no, "order_entry": True, "realized": False}
+        await _clear_slug(client, maker_slug)
+        return {"status": "UNKNOWN_MAKER_ID_SCOPED_CANCEL", "attempt": attempt_no, "stage": "maker_identity", "order_entry": True, "realized": False}
 
     loops = max(1, int(POLL_SECONDS / POLL_INTERVAL_SECONDS))
     recheck_every = max(1, int(EDGE_RECHECK_SECONDS / POLL_INTERVAL_SECONDS))
@@ -157,10 +216,13 @@ async def _attempt(client: PolymarketUS, row: Mapping[str, Any], feed: Mapping[s
                 "realized": False,
             }
         if maker_cum < ONE:
-            open_resp = await asyncio.to_thread(client.orders.list, {"slugs": [maker_slug]})
-            still_open = [o for o in open_resp.get("orders") or [] if isinstance(o, Mapping)]
-            if still_open:
-                await asyncio.to_thread(client.orders.cancel_all, {"slugs": [maker_slug]})
+            try:
+                open_resp = await _read_call("post_cancel_order_list", client.orders.list, {"slugs": [maker_slug]})
+                still_open = [o for o in open_resp.get("orders") or [] if isinstance(o, Mapping)]
+                if still_open:
+                    await _clear_slug(client, maker_slug)
+            except ReadRateLimitExhausted:
+                await _clear_slug(client, maker_slug)
             return {
                 "status": "MAKER_NOT_FILLED_CANCELED" if cancel_reason == "TTL" else "MAKER_CANCELED_EDGE_GONE",
                 "attempt": attempt_no,
@@ -193,14 +255,30 @@ async def _attempt(client: PolymarketUS, row: Mapping[str, Any], feed: Mapping[s
                 "close_response_present": flattened, "order_entry": True, "realized": False}
 
     hedge_payload = _payload(hedge_slug, str(row["hedge_side"]), hpx, maker=False)
-    await asyncio.to_thread(client.orders.preview, {"request": hedge_payload})
-    hcreated = await asyncio.to_thread(client.orders.create, hedge_payload)
+    try:
+        await _read_call("filled_maker_hedge_preview", client.orders.preview, {"request": hedge_payload})
+    except ReadRateLimitExhausted:
+        flattened = await _flatten_maker(client, maker_slug)
+        return {"status": "HEDGE_PREVIEW_RATE_LIMIT_MAKER_FLATTENED", "attempt": attempt_no, "maker_order_id": oid,
+                "close_response_present": flattened, "order_entry": True, "realized": False}
+
+    # A hedge create is also never blindly retried. If its response is rate-limited,
+    # fail closed by flattening the maker leg immediately.
+    try:
+        hcreated = await asyncio.to_thread(client.orders.create, hedge_payload)
+    except Exception as exc:
+        if _is_rate_limit(exc):
+            flattened = await _flatten_maker(client, maker_slug)
+            return {"status": "HEDGE_CREATE_RATE_LIMIT_MAKER_FLATTENED", "attempt": attempt_no, "maker_order_id": oid,
+                    "stage": "hedge_create", "close_response_present": flattened, "order_entry": True, "realized": False}
+        raise
+
     hid = _actual_order_id(hcreated)
     horder = _created_order(hcreated)
     hcum = D(str(horder.get("cumQuantity") or 0))
     if hid and hcum < ONE:
         try:
-            horder = _unwrap_order(await asyncio.to_thread(client.orders.retrieve, hid))
+            horder = _unwrap_order(await _read_call("hedge_order_retrieve", client.orders.retrieve, hid))
             hcum = D(str(horder.get("cumQuantity") or 0))
         except NotFoundError:
             pass
@@ -210,12 +288,12 @@ async def _attempt(client: PolymarketUS, row: Mapping[str, Any], feed: Mapping[s
                 "close_response_present": flattened, "order_entry": True, "realized": False}
 
     try:
-        maker_order = _unwrap_order(await asyncio.to_thread(client.orders.retrieve, oid))
+        maker_order = _unwrap_order(await _read_call("final_maker_retrieve", client.orders.retrieve, oid))
     except NotFoundError:
         pass
     if hid:
         try:
-            horder = _unwrap_order(await asyncio.to_thread(client.orders.retrieve, hid))
+            horder = _unwrap_order(await _read_call("final_hedge_retrieve", client.orders.retrieve, hid))
         except NotFoundError:
             pass
     mavg_yes, havg_yes = _amount(maker_order.get("avgPx")), _amount(horder.get("avgPx"))
@@ -241,9 +319,12 @@ async def run_once() -> dict[str, Any]:
         print("SPORTS_POLY_RELAY_CAMPAIGN_Q1_V4 " + json.dumps(out, separators=(",", ":")), flush=True)
         return out
 
+    # The public discovery/book scan is intentionally broad. Give the shared venue
+    # gateway a cooldown before touching authenticated account/order endpoints.
+    await asyncio.sleep(POST_PUBLIC_SCAN_COOLDOWN_SECONDS)
     client = PolymarketUS(key_id=os.environ["POLYMARKET_KEY_ID"], secret_key=os.environ["POLYMARKET_SECRET_KEY"], timeout=6.0)
     try:
-        balances = await asyncio.to_thread(client.account.balances)
+        balances = await _read_call("account_balances", client.account.balances)
         first = scored[0]
         if os.getenv("SPORTS_POLY_RELAY_LIVE_Q1", "0") != "1":
             out = {
@@ -266,18 +347,22 @@ async def run_once() -> dict[str, Any]:
         for idx, row in enumerate(scored[:MAX_ATTEMPTS], start=1):
             try:
                 result = await _attempt(client, row, feed, idx)
+            except ReadRateLimitExhausted as exc:
+                await _clear_slug(client, str(row["maker_slug"]))
+                result = {"status": "READ_RATE_LIMIT_EXHAUSTED_SCOPED_CANCEL", "attempt": idx, "stage": exc.stage,
+                          "order_entry": False, "realized": False}
             except Exception as exc:
-                try:
-                    await asyncio.to_thread(client.orders.cancel_all, {"slugs": [row["maker_slug"]]})
-                except Exception:
-                    pass
-                result = {"status": "ATTEMPT_ERROR_SCOPED_CANCEL", "attempt": idx, "error_type": type(exc).__name__, "order_entry": True, "realized": False}
+                await _clear_slug(client, str(row["maker_slug"]))
+                result = {"status": "ATTEMPT_ERROR_SCOPED_CANCEL", "attempt": idx,
+                          "stage": getattr(exc, "stage", "unknown"), "error_type": type(exc).__name__,
+                          "order_entry": True, "realized": False}
             attempts.append(result)
             if result.get("status") not in {
                 "MAKER_NOT_FILLED_CANCELED", "MAKER_CANCELED_EDGE_GONE",
                 "SKIP_BOOK_MISSING", "SKIP_HEDGE_DEPTH", "SKIP_FLOOR",
             }:
                 break
+            await asyncio.sleep(0.75)
         out = {
             "status": "CAMPAIGN_COMPLETE",
             "strict_markets": len(feed),
