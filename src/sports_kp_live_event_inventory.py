@@ -122,10 +122,10 @@ async def run_once(http: httpx.AsyncClient | None = None) -> dict[str, Any]:
         logger.exception("SPORTS_POLY_RELAY_ORPHAN_CLEANUP_ERROR")
 
     try:
-        from src.sports_kp_poly_relay_live_q1 import run_once as revenue_probe
+        from src.sports_kp_poly_relay_live_q1_v2 import run_once as revenue_probe
         await revenue_probe()
     except Exception:
-        logger.exception("SPORTS_POLY_RELAY_Q1_ERROR")
+        logger.exception("SPORTS_POLY_RELAY_Q1_V2_ERROR")
 
     owns = http is None
     client = http or httpx.AsyncClient(timeout=30.0)
