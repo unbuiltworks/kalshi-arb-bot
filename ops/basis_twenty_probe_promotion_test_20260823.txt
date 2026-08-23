@@ -1,0 +1,1 @@
+Targeted production-branch validation checkpoint for promoting the bounded q=1 basis-risk lane from five to twenty total probes while preserving the $5 maximum realized-loss budget, one unresolved probe maximum, and hard stop on any realized loss.
