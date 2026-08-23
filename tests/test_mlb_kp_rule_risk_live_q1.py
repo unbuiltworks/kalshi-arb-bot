@@ -1,3 +1,4 @@
+# Production deployment gate for the automatic K/P q=1 rule-risk lane.
 from decimal import Decimal
 
 from src.mlb_kp_rule_risk_live_q1 import (
