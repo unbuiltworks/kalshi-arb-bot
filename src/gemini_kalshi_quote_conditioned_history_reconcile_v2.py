@@ -31,7 +31,7 @@ def _symbol_to_event_ticker(events: list[dict]) -> dict[str, str]:
         for contract in event.get("contracts") or []:
             if not isinstance(contract, dict):
                 continue
-            symbol = str(contract.get("instrumentSymbol") or "")
+            symbol = str(contract.get("instrumentSymbol") or contract.get("instrument_symbol") or "")
             if symbol:
                 out[symbol] = event_ticker
     return out
