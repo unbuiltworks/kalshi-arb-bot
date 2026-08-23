@@ -1,9 +1,9 @@
 """Event-driven hot lane for participation-cleared MLB prop counterparts.
 
-READ-ONLY. This process performs one broad discovery / MLB participation pass at
-startup, keeps only already-cleared strict Polymarket US <-> Kalshi counterparts,
-subscribes to both venues' order-book WebSockets, and recalculates capped $1/$5
-conservative arb plans only when one of the two books changes.
+READ-ONLY. This process performs broad discovery / MLB participation passes until a
+participation-cleared shard exists, then subscribes to both venues' order-book
+WebSockets and recalculates capped $1/$5 conservative arb plans only when one of the
+two books changes.
 
 It contains no order-entry code and intentionally stays separate from the existing
 rotating REST scanner. Use --shard-count/--shard-index to split the hot universe
@@ -39,6 +39,7 @@ base._fetch_poly_mlb = _fetch_poly_mlb_search
 PREFERRED_NET = Decimal(os.getenv("MLB_HOT_PREFERRED_NET", "0.03"))
 MAX_BOOK_AGE_MS = int(os.getenv("MLB_HOT_MAX_BOOK_AGE_MS", "3000"))
 SUMMARY_SECONDS = float(os.getenv("MLB_HOT_SUMMARY_SECONDS", "10"))
+DISCOVERY_RETRY_SECONDS = float(os.getenv("MLB_HOT_DISCOVERY_RETRY_SECONDS", "30"))
 
 
 def _stable_shard(key: str, count: int) -> int:
@@ -100,6 +101,41 @@ async def _discover_cleared(http: httpx.AsyncClient) -> tuple[list[base.StrictCa
     return cleared, proofs, series_meta
 
 
+async def _discover_shard_until_ready(
+    *,
+    shard_index: int,
+    shard_count: int,
+    retry_seconds: float,
+) -> tuple[list[base.StrictCandidate], dict[str, Any], dict[str, dict[str, Any]]]:
+    """Keep a pregame hot worker alive until its shard has participation-cleared work.
+
+    Empty participation is a normal time-of-day state, not an infrastructure failure.
+    Retrying discovery lets an already-deployed read-only worker pick up players as
+    games begin instead of crashing and depending on an operator/redeploy to revive it.
+    """
+    delay = max(1.0, retry_seconds)
+    attempt = 0
+    while True:
+        attempt += 1
+        async with httpx.AsyncClient(timeout=20.0) as http:
+            cleared, proofs, series_meta = await _discover_cleared(http)
+        shard = [c for c in cleared if _stable_shard(c.key, shard_count) == shard_index]
+        if shard:
+            return shard, proofs, series_meta
+        logger.info("MLB_HOT_WAIT %s", json.dumps({
+            "read_only": True,
+            "order_entry": False,
+            "live_probe_ready": False,
+            "reason": "NO_PARTICIPATION_CLEARED_CANDIDATES_YET",
+            "shard_index": shard_index,
+            "shard_count": shard_count,
+            "cleared_total": len(cleared),
+            "discovery_attempt": attempt,
+            "retry_seconds": delay,
+        }, separators=(",", ":")))
+        await asyncio.sleep(delay)
+
+
 async def _seed_poly(slugs: list[str], store: EventingPolyBookStore) -> int:
     sem = asyncio.Semaphore(6)
     async with httpx.AsyncClient(timeout=8.0) as http:
@@ -111,12 +147,11 @@ async def run(args: argparse.Namespace) -> None:
     if args.shard_count < 1 or not (0 <= args.shard_index < args.shard_count):
         raise SystemExit("invalid shard index/count")
 
-    async with httpx.AsyncClient(timeout=20.0) as http:
-        cleared, proofs, series_meta = await _discover_cleared(http)
-
-    shard = [c for c in cleared if _stable_shard(c.key, args.shard_count) == args.shard_index]
-    if not shard:
-        raise SystemExit("no participation-cleared candidates in this shard")
+    shard, proofs, series_meta = await _discover_shard_until_ready(
+        shard_index=args.shard_index,
+        shard_count=args.shard_count,
+        retry_seconds=args.discovery_retry_seconds,
+    )
 
     key_id = os.getenv("POLYMARKET_KEY_ID", "").strip()
     secret = os.getenv("POLYMARKET_SECRET_KEY", "").strip()
@@ -137,7 +172,6 @@ async def run(args: argparse.Namespace) -> None:
         "order_entry": False,
         "shard_index": args.shard_index,
         "shard_count": args.shard_count,
-        "cleared_total": len(cleared),
         "hot_candidates": len(shard),
         "poly_seeded": seeded,
         "preferred_net": str(PREFERRED_NET),
@@ -281,6 +315,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Read-only event-driven MLB prop hot scanner")
     parser.add_argument("--shard-index", type=int, default=0)
     parser.add_argument("--shard-count", type=int, default=1)
+    parser.add_argument("--discovery-retry-seconds", type=float, default=DISCOVERY_RETRY_SECONDS)
     return parser.parse_args()
 
 
