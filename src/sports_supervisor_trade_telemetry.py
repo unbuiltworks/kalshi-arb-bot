@@ -1,8 +1,12 @@
-"""Best-effort sports supervisor telemetry into the shared trade_events ledger.
+"""Best-effort sports supervisor telemetry into the authoritative ARB ledger.
 
 Diagnostic-only. Failure to write must never alter scanning, candidate ranking, or
-live execution semantics. These rows are deliberately not TRADE_REALIZED events and
-carry no P&L.
+live execution semantics. These rows are SHADOW telemetry, never TRADE_REALIZED,
+and carry no P&L.
+
+Telemetry uses the command-center /api/events ingest contract rather than a local
+DATABASE_URL. This prevents a Railway service-local Postgres connection from
+silently creating a second, non-authoritative ledger.
 """
 from __future__ import annotations
 
@@ -12,18 +16,22 @@ import os
 from typing import Any, Mapping
 from uuid import uuid4
 
-import psycopg
+import httpx
 
 EVENT_TYPE = "SPORTS_SUPERVISOR_TELEMETRY"
 STRATEGY = "sports_kp_combo_supervisor"
 
 
-def _database_url() -> str:
-    return os.getenv("DATABASE_URL", "").strip()
+def _ingest_url() -> str:
+    return os.getenv("ARB_LEDGER_INGEST_URL", "").strip()
+
+
+def _ingest_token() -> str:
+    return os.getenv("LEDGER_INGEST_TOKEN", "").strip()
 
 
 def _diag(payload: Mapping[str, Any]) -> None:
-    """Emit non-secret telemetry health only; never log the connection string."""
+    """Emit non-secret telemetry health only; never log tokens or connection data."""
     print(
         "SPORTS_SUPERVISOR_TELEMETRY_WRITE "
         + json.dumps(dict(payload), separators=(",", ":"), default=str),
@@ -33,56 +41,75 @@ def _diag(payload: Mapping[str, Any]) -> None:
 
 async def emit_cycle(metadata: Mapping[str, Any]) -> bool:
     """Write one non-P&L manufacturing-cycle heartbeat, returning False on failure."""
-    url = _database_url()
-    if not url:
-        _diag({"configured": False, "ok": False, "reason": "DATABASE_URL_MISSING"})
+    url = _ingest_url()
+    token = _ingest_token()
+    if not url or not token:
+        _diag({
+            "configured": False,
+            "ok": False,
+            "reason": "LEDGER_INGEST_CONFIG_MISSING",
+            "url_configured": bool(url),
+            "token_configured": bool(token),
+        })
         return False
+
     now = datetime.now(timezone.utc)
     event_id = f"sports-telemetry-{uuid4().hex}"
     trade_id = f"sports-supervisor-{now.strftime('%Y%m%dT%H%M%SZ')}"
-    payload = {
+    diagnostic_metadata = {
         "diagnostic_only": True,
         "count_as_realized": False,
         "order_entry": False,
         **dict(metadata),
     }
+    event = {
+        "event_id": event_id,
+        "trade_id": trade_id,
+        "event_type": EVENT_TYPE,
+        "event_ts": now.isoformat(),
+        "strategy": STRATEGY,
+        "mode": "SHADOW",
+        "market": "SPORTS_MVE_RFQ",
+        "asset": "SPORTS",
+        "venues": ["kalshi", "polymarket"],
+        "status": "HEARTBEAT",
+        "fee": 0,
+        "metadata": diagnostic_metadata,
+    }
     try:
-        async with await psycopg.AsyncConnection.connect(url, autocommit=True) as conn:
-            await conn.execute(
-                """
-                INSERT INTO trade_events (
-                    event_id, trade_id, event_type, event_ts, strategy, mode,
-                    market, asset, venues, status, fee, metadata
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s::jsonb
-                )
-                """,
-                (
-                    event_id,
-                    trade_id,
-                    EVENT_TYPE,
-                    now,
-                    STRATEGY,
-                    "DIAGNOSTIC",
-                    "SPORTS_MVE_RFQ",
-                    "SPORTS",
-                    ["kalshi", "polymarket"],
-                    "HEARTBEAT",
-                    0,
-                    json.dumps(payload, separators=(",", ":"), default=str),
-                ),
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(
+                url,
+                headers={"Authorization": f"Bearer {token}"},
+                json=event,
             )
-        _diag({"configured": True, "ok": True, "event_type": EVENT_TYPE})
-        return True
-    except Exception as exc:
-        # Deliberately omit str(exc): connection errors can contain endpoint details.
-        _diag(
-            {
+        if response.status_code != 200:
+            _diag({
                 "configured": True,
                 "ok": False,
-                "error_type": type(exc).__name__,
-                "sqlstate": getattr(exc, "sqlstate", None),
-            }
-        )
+                "transport": "COMMAND_CENTER_INGEST",
+                "http_status": response.status_code,
+            })
+            return False
+        try:
+            body = response.json()
+        except Exception:
+            body = {}
+        ok = bool(isinstance(body, Mapping) and body.get("ok"))
+        _diag({
+            "configured": True,
+            "ok": ok,
+            "transport": "COMMAND_CENTER_INGEST",
+            "http_status": response.status_code,
+            "duplicate": bool(body.get("duplicate")) if isinstance(body, Mapping) else False,
+            "event_type": EVENT_TYPE,
+        })
+        return ok
+    except Exception as exc:
+        _diag({
+            "configured": True,
+            "ok": False,
+            "transport": "COMMAND_CENTER_INGEST",
+            "error_type": type(exc).__name__,
+        })
         return False
