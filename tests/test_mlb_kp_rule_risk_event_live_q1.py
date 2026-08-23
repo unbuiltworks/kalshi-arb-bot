@@ -2,7 +2,7 @@
 import asyncio
 from decimal import Decimal
 
-from src.mlb_kp_rule_risk_event_live_q1 import ExactKalshiLimiter, MAX_TRIGGER_AGE_MS, _top_book
+from src.mlb_kp_rule_risk_event_live_q1 import ExactKalshiLimiter, MAX_TRIGGER_AGE_MS, _chunks, _top_book
 
 
 class Quote:
@@ -32,3 +32,11 @@ def test_exact_kalshi_limiter_suppresses_immediate_repeat():
         assert limiter.allowed == 1
         assert limiter.global_suppressed + limiter.ticker_suppressed == 1
     asyncio.run(check())
+
+
+def test_polymarket_universe_is_sharded_below_connection_cap():
+    slugs = [f"m-{i}" for i in range(1034)]
+    shards = _chunks(slugs, 900)
+    assert len(shards) == 2
+    assert sum(len(shard) for shard in shards) == 1034
+    assert max(map(len, shards)) <= 900
