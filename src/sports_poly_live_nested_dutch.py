@@ -1,13 +1,17 @@
 """Read-only live Polymarket US nested-total Dutch-book scanner.
 
-For two full-game total thresholds L < H on the same sporting event:
+For two explicit full-game total thresholds L < H on the same sporting event:
 
     YES(total > L) + NO(total > H) >= 1
 
-for every final score when the half-point lines resolve normally. The position can
-pay 2 in the overlap region, but never less than 1. This scanner uses the broad
-live-event inventory, fetches actual public order books, requires q=1 depth, and
-scores conservative Polymarket taker fees. No authentication or order entry.
+for every final score when the two markets resolve on the same full-game scoring
+metric. To keep the rule identity fail-closed, this scanner accepts only markets
+whose Polymarket metadata explicitly identifies them as ``full_game_total`` and
+only half-point thresholds (no push state). Player props, corners, team totals,
+period/inning totals, and title/slug-only fallbacks are excluded.
+
+The scanner uses public order books, requires q=1 depth, and scores conservative
+Polymarket taker fees. No authentication or order entry.
 """
 from __future__ import annotations
 
@@ -24,6 +28,7 @@ from src.strict_mlb_prop_snapshot import TopBook, poly_top_book, polymarket_fee
 
 D = Decimal
 ONE = D("1")
+HALF = D("0.5")
 TARGET = D("0.03")
 BASE = "https://gateway.polymarket.us"
 OVER_RE = re.compile(r"\bover\s+(-?\d+(?:\.\d+)?)\b", re.I)
@@ -44,26 +49,32 @@ def _threshold(market: Mapping[str, Any]) -> Decimal | None:
         return None
 
 
+def _is_half_point(value: Decimal) -> bool:
+    return abs(value) % ONE == HALF
+
+
 def _is_full_game_total(market: Mapping[str, Any]) -> bool:
-    st = str(market.get("sportsMarketType") or "").lower()
-    v2 = str(market.get("sportsMarketTypeV2") or "").upper()
+    """Fail closed on the canonical Polymarket full-game-total family only."""
+    st = str(market.get("sportsMarketType") or "").strip().lower()
+    if "full_game_total" not in st:
+        return False
     title = str(market.get("title") or market.get("question") or "").lower()
     slug = str(market.get("slug") or "").lower()
-    if "TOTAL" not in v2 and "total" not in st:
+    # Defense in depth against malformed metadata or future taxonomy changes.
+    if any(x in title for x in (
+        "first 5", "1st half", "first half", "2nd half", "second half",
+        "quarter", "period", "inning", "corner", "total bases",
+    )):
         return False
-    if "full_game_total" in st:
-        return True
-    # Conservative fallback: reject every explicitly segmented market.
-    segmented = ("first 5", "1st half", "first half", "2nd half", "second half", "quarter", "period", "inning")
-    if any(x in title for x in segmented):
+    if any(x in slug for x in ("-f5-", "-1h-", "-2h-", "-1q-", "-2q-", "-3q-", "-4q-", "astatc-")):
         return False
-    if any(x in slug for x in ("-f5-", "-1h-", "-2h-", "-1q-", "-2q-", "-3q-", "-4q-")):
-        return False
-    return "total" in title or "tsc-" in slug
+    return True
 
 
 def score_pair(low_threshold: Decimal, low: TopBook, high_threshold: Decimal, high: TopBook) -> dict[str, Any] | None:
     if not low_threshold < high_threshold:
+        return None
+    if not _is_half_point(low_threshold) or not _is_half_point(high_threshold):
         return None
     if low.yes_depth < ONE or high.no_depth < ONE:
         return None
@@ -95,7 +106,7 @@ async def run_once() -> dict[str, Any]:
                 continue
             threshold = _threshold(market)
             slug = str(market.get("slug") or "")
-            if threshold is None or not slug:
+            if threshold is None or not _is_half_point(threshold) or not slug:
                 continue
             candidates.append({
                 "event_slug": str(event.get("slug") or event.get("id") or ""),
@@ -155,15 +166,16 @@ async def run_once() -> dict[str, Any]:
                     **scored,
                     "identity": "YES_OVER_LOW + NO_OVER_HIGH >= 1",
                     "same_event_full_game_total": True,
+                    "half_point_only": True,
                     "classification": "POLY_NESTED_SHADOW_EXECUTABLE" if locked >= TARGET else "POLY_NESTED_SHADOW_NO_TRADE",
-                    "rule_gate": "SAME_EVENT_FULL_GAME_HALF_POINT_NORMAL_RESOLUTION_REQUIRED_BEFORE_LIVE",
+                    "rule_gate": "EXPLICIT_FULL_GAME_TOTAL + SAME_EVENT + HALF_POINT_THRESHOLDS; LIVE_RULE_AUDIT_STILL_REQUIRED",
                     "order_entry": False,
                     "realized": False,
                 })
 
     rows.sort(key=lambda r: D(r["locked_profit"]), reverse=True)
     out = {
-        "status": "SPORTS_POLY_LIVE_NESTED_DUTCH_V1",
+        "status": "SPORTS_POLY_LIVE_NESTED_DUTCH_V2_STRICT",
         "live_event_count": inventory.get("live_event_count"),
         "live_total_markets_found": len(candidates),
         "books_fetched": len(books),
