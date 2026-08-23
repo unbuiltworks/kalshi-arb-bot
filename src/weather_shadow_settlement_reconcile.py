@@ -152,6 +152,19 @@ def reconcile_weather_paper_fill(
     if not _strict_true(settlement.get("correction_window_checked")):
         blockers.append("CORRECTION_WINDOW_UNVERIFIED")
 
+    # Current Weather Company temperature markets can expose preliminary readings that
+    # differ from the final reported value. Generic source/finality flags are therefore
+    # not sufficient evidence for TWC settlements: the attached record itself must be
+    # explicitly identified and independently verified as the terminal FINAL record.
+    # Historical NWS/CLI contracts remain on their separate exact-source/finality path.
+    terminal_record_stage = str(settlement.get("terminal_record_stage") or "").strip().upper()
+    terminal_record_stage_verified = _strict_true(settlement.get("terminal_record_stage_verified"))
+    if settlement_provider == "THE_WEATHER_COMPANY":
+        if not terminal_record_stage_verified:
+            blockers.append("TWC_TERMINAL_RECORD_STAGE_UNVERIFIED")
+        if terminal_record_stage != "FINAL":
+            blockers.append("TWC_TERMINAL_RECORD_NOT_FINAL")
+
     outcome = str(settlement.get("outcome") or "").strip().upper()
     if outcome not in {"YES", "NO"}:
         blockers.append("SETTLEMENT_OUTCOME_UNVERIFIED")
@@ -211,6 +224,8 @@ def reconcile_weather_paper_fill(
         "settlement_value": str(_decimal(settlement.get("settlement_value"))),
         "settlement_source_provider": settlement_provider,
         "settlement_source_url": settlement.get("settlement_source_url"),
+        "terminal_record_stage": terminal_record_stage or None,
+        "terminal_record_stage_verified": terminal_record_stage_verified,
         "read_only": True,
         "order_entry": False,
         "live_probe_ready": False,
