@@ -1,13 +1,13 @@
 """Current Polymarket US trading-fee helpers for sports execution research.
 
-Official exchange-wide schedule effective 2026-07-01:
-- taker theta: 0.06
+Official Polymarket US fee schedule currently published for 2026:
+- taker theta: 0.05
 - maker rebate theta: 0.0125
 - both rounded to nearest cent using banker's rounding (half-even)
 
-Maker rebate is returned as a positive credit amount.  These helpers deliberately
-ignore volume-tier taker rebates and incentive programs so locked-profit estimates
-do not depend on discretionary/retrospective rewards.
+Maker rebate is returned as a positive credit amount. These helpers deliberately
+ignore temporary/retrospective incentive rebates so locked-profit estimates do
+not depend on discretionary rewards.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from decimal import Decimal, ROUND_HALF_EVEN
 D = Decimal
 ONE = D("1")
 CENT = D("0.01")
-TAKER_THETA = D("0.06")
+TAKER_THETA = D("0.05")
 MAKER_REBATE_THETA = D("0.0125")
 
 
