@@ -26,19 +26,25 @@ def test_maker_then_taker_locked_profit_includes_rebate_credit():
     assert row["locked_profit"] == D("0.06")
 
 
-def test_maker_trigger_scores_both_nested_directions():
+def test_maker_trigger_scores_both_nested_directions_and_sorts_best_first():
     # Desired low=YES: yes bid is 1-no_ask = .20, ask .22.
     # Desired high=NO: no ask .73, no bid is 1-yes_ask = .70.
     low = _book("0.22", "10", "0.80", "20")
     high = _book("0.30", "20", "0.73", "10")
     rows = _score_maker_pair(low_book=low, low_buy_yes=True, high_book=high, high_buy_yes=False)
     assert len(rows) == 2
+    by_direction = {row["direction"]: row for row in rows}
+    low_maker = by_direction["MAKER_LOW_HEDGE_HIGH"]
+    assert low_maker["maker_price_current_best_bid"] == "0.20"
+    assert low_maker["hedge_ask"] == "0.73"
+    assert D(low_maker["locked_profit_after_hypothetical_maker_fill"]) == D("0.06")
+    assert low_maker["classification"] == "MAKER_TRIGGER_CANDIDATE"
+
     best = rows[0]
-    assert best["direction"] == "MAKER_LOW_HEDGE_HIGH"
-    assert best["maker_price_current_best_bid"] == "0.20"
-    assert best["hedge_ask"] == "0.73"
-    assert D(best["locked_profit_after_hypothetical_maker_fill"]) == D("0.06")
-    assert best["classification"] == "MAKER_TRIGGER_CANDIDATE"
+    assert best["direction"] == "MAKER_HIGH_HEDGE_LOW"
+    assert best["maker_price_current_best_bid"] == "0.70"
+    assert best["hedge_ask"] == "0.22"
+    assert D(best["locked_profit_after_hypothetical_maker_fill"]) == D("0.07")
 
 
 def test_maker_trigger_requires_q1_hedge_depth():
