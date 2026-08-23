@@ -9,6 +9,14 @@ on:
       - 'src/mlb_gk_final_lag_family_audit.py'
       - 'src/gemini_kalshi_mlb_prop_hot_shadow.py'
       - 'src/mlb_prop_rule_certifications.py'
+  pull_request:
+    branches:
+      - feature/mlb-gk-final-lag-auto-q1-v2
+    paths:
+      - '.github/workflows/mlb-gk-family-audit.yml'
+      - 'src/mlb_gk_final_lag_family_audit.py'
+      - 'src/gemini_kalshi_mlb_prop_hot_shadow.py'
+      - 'src/mlb_prop_rule_certifications.py'
   workflow_dispatch:
 
 permissions:
