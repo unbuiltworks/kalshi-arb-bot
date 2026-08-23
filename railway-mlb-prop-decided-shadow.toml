@@ -1,0 +1,4 @@
+# Dedicated read-only MLB decided-prop research service with final-edge Pushover alerts.
+[deploy]
+startCommand = "python -m src.mlb_prop_decided_pushover_shadow"
+restartPolicyType = "ALWAYS"
