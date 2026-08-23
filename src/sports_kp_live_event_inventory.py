@@ -1,9 +1,9 @@
 """Read-only current Polymarket US sports-event inventory for the K/P lane.
 
 This module deliberately performs no cross-venue counterpart certification or order
-entry. It also runs the bounded, mutation-free same-venue Polymarket MLB maker q1
-preflight so authenticated validation happens on the low-request K/P service rather
-than the broad census worker.
+entry. It runs the bounded, mutation-free same-venue Polymarket MLB maker q1
+preflight first so a flaky broad inventory page cannot block authenticated revenue
+validation on startup.
 """
 from __future__ import annotations
 
@@ -73,20 +73,24 @@ async def fetch_current_sports_events(
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
     for page in range(max_pages):
-        response = await http.get(
-            f"{POLY}/v1/events",
-            params={
-                "limit": 100,
-                "offset": page * 100,
-                "active": "true",
-                "closed": "false",
-                "categories": "sports",
-                "startTimeMax": horizon.isoformat().replace("+00:00", "Z"),
-                "orderBy": "startTime",
-                "orderDirection": "asc",
-            },
-        )
-        response.raise_for_status()
+        try:
+            response = await http.get(
+                f"{POLY}/v1/events",
+                params={
+                    "limit": 100,
+                    "offset": page * 100,
+                    "active": "true",
+                    "closed": "false",
+                    "categories": "sports",
+                    "startTimeMax": horizon.isoformat().replace("+00:00", "Z"),
+                    "orderBy": "startTime",
+                    "orderDirection": "asc",
+                },
+            )
+            response.raise_for_status()
+        except Exception as exc:
+            logger.warning("SPORTS_POLY_INVENTORY_PAGE_ERROR page=%s error=%s", page, type(exc).__name__)
+            break
         body = response.json() if response.content else {}
         rows = body.get("events") or [] if isinstance(body, Mapping) else []
         for raw in rows:
@@ -112,7 +116,6 @@ def summarize(events: list[Mapping[str, Any]]) -> dict[str, Any]:
     upcoming = 0
     total_markets = 0
     samples: list[dict[str, Any]] = []
-
     for event in events:
         league = _league(event)
         leagues[league] += 1
@@ -134,7 +137,6 @@ def summarize(events: list[Mapping[str, Any]]) -> dict[str, Any]:
                 "market_count": len(markets),
                 "market_types": sorted({_market_type(m) for m in markets}),
             })
-
     return {
         "events": len(events),
         "started_or_live_by_start_time": started,
@@ -149,6 +151,13 @@ def summarize(events: list[Mapping[str, Any]]) -> dict[str, Any]:
 
 
 async def run_once(http: httpx.AsyncClient | None = None) -> dict[str, Any]:
+    # Revenue preflight first; it fetches its own tightly scoped near-term feed.
+    try:
+        from src.sports_kp_poly_maker_q1_preflight import run_once as maker_preflight
+        await maker_preflight(None)
+    except Exception:
+        logger.exception("SPORTS_KP_POLY_MAKER_Q1_PREFLIGHT_ERROR")
+
     owns = http is None
     client = http or httpx.AsyncClient(timeout=30.0)
     try:
@@ -157,11 +166,6 @@ async def run_once(http: httpx.AsyncClient | None = None) -> dict[str, Any]:
         encoded = json.dumps(payload, separators=(",", ":"), default=str)
         logger.info("SPORTS_POLY_LIVE_EVENT_INVENTORY %s", encoded)
         print("SPORTS_POLY_LIVE_EVENT_INVENTORY " + encoded, flush=True)
-        try:
-            from src.sports_kp_poly_maker_q1_preflight import run_once as maker_preflight
-            await maker_preflight(events)
-        except Exception:
-            logger.exception("SPORTS_KP_POLY_MAKER_Q1_PREFLIGHT_ERROR")
         return payload
     finally:
         if owns:
