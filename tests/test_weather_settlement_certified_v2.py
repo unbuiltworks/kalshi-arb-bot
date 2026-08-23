@@ -55,7 +55,8 @@ def _station():
 
 def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-04:00", **overrides):
     row = {
-        "model": "GFS",
+        "model": "GFS:v1",
+        "model_id": "GFS:v1",
         "cli_product": "CLINY",
         "model_run_time": run_time,
         "forecast_valid_time": valid_time,
@@ -67,10 +68,14 @@ def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-0
         "independent_anchor_high_f": "81.0",
         "independent_anchor_station_id": "CLINY",
         "independent_anchor_verified": True,
+        "independent_anchor_source_id": "NWS:CLINY",
+        "independent_anchor_observed_at": "2026-08-21T05:30:00Z",
         "same_local_day_verified": True,
         "disagreement_tolerance_f": "2.0",
         "disagreement_tolerance_audited": True,
         "model_calibration_verified": True,
+        "calibration_model_id": "GFS:v1",
+        "calibration_target": "DAILY_MAX_TEMPERATURE_F",
         "calibration_evidence_verified": True,
         "calibration_evidence_id": "weather-calibration:CLINY:2026-08-01",
         "calibration_sample_count": 60,
@@ -128,6 +133,8 @@ def test_verified_historical_nws_exact_market_can_override_current_twc_series_re
         forecast=_forecast(
             run_time="2026-08-12T06:00:00Z",
             valid_time="2026-08-12T23:59:59-04:00",
+            independent_anchor_observed_at="2026-08-12T05:30:00Z",
+            calibration_window_end="2026-08-01T23:59:59Z",
         ),
         fee_changes=[{
             "series_ticker": "KXHIGHNY",
@@ -216,7 +223,7 @@ def test_large_model_anchor_disagreement_keeps_settlement_certified_but_withhold
 
 def test_missing_model_sanity_evidence_cannot_certify_ev():
     row = _build(forecast={
-        "model": "GFS",
+        "model": "GFS:v1",
         "cli_product": "CLINY",
         "model_run_time": "2026-08-21T06:00:00Z",
         "forecast_valid_time": "2026-08-21T23:59:59-04:00",
@@ -254,3 +261,17 @@ def test_future_calibration_window_cannot_certify_current_forecast():
     assert row["model_sanity_verified"] is False
     assert row["ev_certified_shadow"] is False
     assert "MODEL_CALIBRATION_LOOKAHEAD_DETECTED" in row["model_sanity_audit"]["blockers"]
+
+
+def test_other_models_calibration_cannot_certify_gfs_ev():
+    row = _build(forecast=_forecast(calibration_model_id="ECMWF:v1"))
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert "MODEL_CALIBRATION_MODEL_ID_MISMATCH" in row["model_sanity_audit"]["blockers"]
+
+
+def test_anchor_update_observed_after_quote_cannot_certify_prior_edge():
+    row = _build(forecast=_forecast(independent_anchor_observed_at="2026-08-21T08:00:00Z"))
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert "INDEPENDENT_FORECAST_ANCHOR_LOOKAHEAD_DETECTED" in row["model_sanity_audit"]["blockers"]
