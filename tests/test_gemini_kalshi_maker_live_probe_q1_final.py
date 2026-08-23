@@ -62,6 +62,29 @@ def test_probe_target_refuses_above_configured_cap(monkeypatch):
         final.configure_target_profit()
 
 
+@pytest.mark.parametrize("asset", ["ETH", "SOL", "XRP"])
+def test_safe_assets_are_configurable(monkeypatch, asset):
+    old = base.ASSET
+    try:
+        monkeypatch.setenv(final.ASSET_ENV, asset.lower())
+        assert final.configure_asset() == asset
+        assert base.ASSET == asset
+    finally:
+        base.ASSET = old
+
+
+def test_btc_remains_quarantined(monkeypatch):
+    monkeypatch.setenv(final.ASSET_ENV, "BTC")
+    with pytest.raises(ValueError, match="quarantined"):
+        final.configure_asset()
+
+
+def test_unknown_asset_is_rejected(monkeypatch):
+    monkeypatch.setenv(final.ASSET_ENV, "DOGE")
+    with pytest.raises(ValueError):
+        final.configure_asset()
+
+
 def test_probe_policy_can_use_join(monkeypatch):
     old = base.POLICY
     try:
