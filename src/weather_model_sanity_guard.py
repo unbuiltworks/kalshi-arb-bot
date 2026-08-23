@@ -47,12 +47,18 @@ def audit_weather_model_sanity(
     disagreement_tolerance_f: Any,
     disagreement_tolerance_audited: Any,
     model_calibration_verified: Any,
+    model_id: Any = None,
+    calibration_model_id: Any = None,
+    calibration_target: Any = None,
     calibration_evidence_verified: Any = None,
     calibration_evidence_id: Any = None,
     calibration_sample_count: Any = None,
     calibration_station_id: Any = None,
     calibration_window_end: Any = None,
     model_run_time: Any = None,
+    quote_observed_at: Any = None,
+    independent_anchor_source_id: Any = None,
+    independent_anchor_observed_at: Any = None,
 ) -> dict[str, Any]:
     """Return a read-only, fail-closed model sanity decision.
 
@@ -60,6 +66,11 @@ def audit_weather_model_sanity(
     itself be explicitly audited and tied to historical calibration evidence. The
     calibration window must end no later than the model run being scored, preventing
     future settlement/forecast information from leaking into the certification.
+
+    Calibration evidence is also bound to the exact model identity and target metric.
+    Independent anchor evidence must carry source provenance and must have been observed
+    no later than the quote being scored. This prevents a later forecast update from
+    retrospectively certifying an earlier apparent edge.
     """
     blockers: list[str] = []
     model = _finite_decimal(model_mean_f)
@@ -70,6 +81,10 @@ def audit_weather_model_sanity(
     anchor_station = str(independent_anchor_station_id or "").strip().upper()
     calibration_station = str(calibration_station_id or "").strip().upper()
     evidence_id = str(calibration_evidence_id or "").strip()
+    model_identity = str(model_id or "").strip()
+    calibration_model_identity = str(calibration_model_id or "").strip()
+    calibration_target_text = str(calibration_target or "").strip().upper()
+    anchor_source_id = str(independent_anchor_source_id or "").strip()
 
     try:
         sample_count = int(calibration_sample_count)
@@ -78,6 +93,8 @@ def audit_weather_model_sanity(
 
     calibration_end = _parse_aware_iso(calibration_window_end)
     run_time = _parse_aware_iso(model_run_time)
+    quote_time = _parse_aware_iso(quote_observed_at)
+    anchor_observed = _parse_aware_iso(independent_anchor_observed_at)
 
     if model is None or anchor is None:
         blockers.append("MODEL_OR_ANCHOR_VALUE_INVALID")
@@ -87,6 +104,12 @@ def audit_weather_model_sanity(
         blockers.append("INDEPENDENT_FORECAST_ANCHOR_UNVERIFIED")
     if same_local_day_verified is not True:
         blockers.append("FORECAST_LOCAL_DAY_UNVERIFIED")
+    if not anchor_source_id:
+        blockers.append("INDEPENDENT_FORECAST_ANCHOR_SOURCE_MISSING")
+    if anchor_observed is None or quote_time is None:
+        blockers.append("INDEPENDENT_FORECAST_ANCHOR_TIME_PROVENANCE_INVALID")
+    elif anchor_observed > quote_time:
+        blockers.append("INDEPENDENT_FORECAST_ANCHOR_LOOKAHEAD_DETECTED")
     if tolerance is None or tolerance < 0:
         blockers.append("MODEL_DISAGREEMENT_TOLERANCE_INVALID")
     if disagreement_tolerance_audited is not True:
@@ -94,6 +117,12 @@ def audit_weather_model_sanity(
     if model_calibration_verified is not True:
         blockers.append("MODEL_CALIBRATION_UNVERIFIED")
 
+    if not model_identity or not calibration_model_identity:
+        blockers.append("MODEL_CALIBRATION_MODEL_ID_MISSING")
+    elif model_identity != calibration_model_identity:
+        blockers.append("MODEL_CALIBRATION_MODEL_ID_MISMATCH")
+    if calibration_target_text != "DAILY_MAX_TEMPERATURE_F":
+        blockers.append("MODEL_CALIBRATION_TARGET_MISMATCH")
     if calibration_evidence_verified is not True:
         blockers.append("MODEL_CALIBRATION_EVIDENCE_UNVERIFIED")
     if not evidence_id:
@@ -118,10 +147,15 @@ def audit_weather_model_sanity(
         "model_sanity_verified": sane,
         "model_anchor_discrepancy_f": str(discrepancy) if discrepancy is not None else None,
         "disagreement_tolerance_f": str(tolerance) if tolerance is not None else None,
+        "model_id": model_identity or None,
+        "calibration_model_id": calibration_model_identity or None,
+        "calibration_target": calibration_target_text or None,
         "calibration_evidence_id": evidence_id or None,
         "calibration_sample_count": sample_count if sample_count > 0 else None,
         "calibration_station_id": calibration_station or None,
         "calibration_window_end": calibration_end.isoformat() if calibration_end is not None else None,
+        "independent_anchor_source_id": anchor_source_id or None,
+        "independent_anchor_observed_at": anchor_observed.isoformat() if anchor_observed is not None else None,
         "blockers": sorted(set(blockers)),
         "classification": "MODEL_SANITY_VERIFIED_SHADOW" if sane else "MODEL_DISAGREEMENT_RESEARCH_ONLY",
         "read_only": True,
