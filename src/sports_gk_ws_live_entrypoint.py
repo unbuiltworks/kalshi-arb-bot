@@ -1,10 +1,10 @@
 """Authoritative G/K live supervisor production policy entrypoint.
 
 The wrapper keeps the explicitly authorized cumulative sports ceiling at $20 and
-selects the fastest safe Kalshi market-data transport available. WS-first mode is
-opt-in because Kalshi currently rejects a second authenticated book connection
-with HTTP 429; REST remains the fail-safe production default until that slot is
-consolidated.
+selects the fastest safe Kalshi market-data transport available. Candidate-synced
+REST is the production default because Kalshi currently rejects a second
+authenticated book connection with HTTP 429. WS-first mode remains opt-in for the
+shared-slot/consolidation workstream.
 
 The underlying supervisor still owns duplicate protection, durable capital
 reservation, participation proof, freshness/skew checks, FOK transport, bounded
@@ -18,7 +18,7 @@ import os
 
 import src.sports_live_budget_guard as budget_guard
 import src.sports_gk_autonomous_supervisor as supervisor
-from src.kalshi_prop_rest_books import KalshiPropRestBooks
+from src.kalshi_prop_rest_sync_books import KalshiPropRestSyncBooks
 from src.kalshi_prop_ws_exact_books import KalshiPropWsExactBooks
 
 D = Decimal
@@ -33,11 +33,11 @@ def install() -> str:
     supervisor.CUMULATIVE_BUDGET = AUTHORIZED_CUMULATIVE_SPORTS_BUDGET
 
     ws_enabled = os.getenv(WS_ENV, "NO").strip().upper() == "YES"
-    supervisor.KalshiPropRestBooks = KalshiPropWsExactBooks if ws_enabled else KalshiPropRestBooks
+    supervisor.KalshiPropRestBooks = KalshiPropWsExactBooks if ws_enabled else KalshiPropRestSyncBooks
     return (
         "AUTHENTICATED_WS_DELTA_PLUS_CANDIDATE_EXACT_REST"
         if ws_enabled
-        else "REST_SERIES_SNAPSHOT_PLUS_50MS_CANDIDATE_EXACT_REVALIDATION"
+        else "REST_SERIES_PLUS_BOUNDED_GEMINI_TRIGGERED_EXACT_PLUS_FINAL_EXACT"
     )
 
 
