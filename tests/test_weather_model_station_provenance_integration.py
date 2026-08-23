@@ -115,6 +115,25 @@ def test_missing_forecast_model_station_cannot_inherit_settlement_station_for_ev
     assert row["live_probe_ready"] is False
 
 
+def test_explicit_wrong_forecast_station_cannot_certify_different_settlement_station():
+    forecast = _forecast(include_model_station=True)
+    forecast["model_station_id"] = "CLIMIA"
+    forecast["independent_anchor_station_id"] = "CLIMIA"
+    forecast["calibration_station_id"] = "CLIMIA"
+
+    row = _build(forecast)
+
+    assert row["exact_market_source_verified"] is True
+    assert row["settlement_certified_shadow"] is True
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert row["best_shadow_side"] is None
+    assert row["forecast_bracket_probability"] is None
+    assert "FORECAST_SETTLEMENT_STATION_MISMATCH" in row["model_sanity_audit"]["blockers"]
+    assert row["order_entry"] is False
+    assert row["live_probe_ready"] is False
+
+
 def test_explicit_matching_forecast_model_station_preserves_valid_shadow_path():
     row = _build(_forecast(include_model_station=True))
 
