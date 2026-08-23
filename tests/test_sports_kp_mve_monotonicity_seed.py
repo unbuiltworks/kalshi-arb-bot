@@ -45,13 +45,13 @@ def test_best_rfq_sides_uses_highest_bid_on_each_side():
 
 
 def test_minimal_no_score_is_shadow_only_math():
-    # Anchor all-in = .61; combo NO from .97 YES bid = .03 + .01 fee.
-    # Total .65 => 35c locked in this synthetic unit fixture.
+    # Conservative cent rounding makes the .60 anchor fee .02.  Combo NO from a
+    # .97 YES bid is .03 + .01 fee, so total all-in is .66 and lock is .34.
     anchor = _sel("E1", "A", "yes", "0.60")
     out = s._score_minimal_no(anchor, D("0.97"))
     assert out is not None
     assert out["combo_no_equivalent"] == "0.03"
-    assert D(out["locked_profit_conservative"]) == D("0.35")
+    assert D(out["locked_profit_conservative"]) == D("0.34")
     assert out["classification"] == "SHADOW_EXECUTABLE_MONOTONICITY"
 
 
