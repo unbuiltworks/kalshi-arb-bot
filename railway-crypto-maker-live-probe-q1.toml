@@ -1,8 +1,8 @@
-# Temporary read-only throughput census for the maker lane. No order entry.
+# One-shot maker-triggered hedge LIVE_PROBE. Default deployment remains disarmed/read-only preflight.
 [build]
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python -m src.gemini_kalshi_maker_rest_census --seconds 180"
+startCommand = "python -m src.gemini_kalshi_maker_live_probe_q1_final"
 preDeployCommand = ["python -m pytest -q tests/test_gemini_kalshi_maker_live_probe_q1.py tests/test_gemini_kalshi_maker_live_probe_q1_safe.py tests/test_gemini_kalshi_maker_live_probe_q1_final.py tests/test_gemini_kalshi_maker_live_probe_q1_venue_once.py tests/test_gemini_kalshi_maker_rest_guard.py tests/test_gemini_kalshi_maker_dominance_guard.py"]
 restartPolicyType = "NEVER"
