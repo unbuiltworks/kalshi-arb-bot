@@ -1,8 +1,84 @@
 # ARB Control Plane
 
-Last verified: 2026-08-23 12:35 UTC
+Last verified: 2026-08-23 13:50 UTC
 
 This is the durable ARB handoff. Production state wins over chat history. Before changing a workstream, verify current Railway deployment/runtime + GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the $480/day objective.
+
+## LATEST PRODUCTION CHECKPOINT — 2026-08-23 13:50 UTC
+
+This section supersedes older Gemini/Kalshi basis-risk execution/promotion details below where they conflict. Historical sections are preserved for audit context.
+
+### Basis-risk v6: SOL one-leg execution incident reconciled; Kalshi-first rollover LIVE
+
+The sixth promoted q=1 basis-risk reservation exposed a real execution-order failure in the generic concurrent dual-FOK transport. This lane remains **LIVE SETTLEMENT-BASIS RESEARCH, not guaranteed arbitrage**.
+
+Incident trade `gkbasis-br0823131801-01` at 13:18:39 UTC:
+- asset SOL; q=1; direction `KALSHI_YES_GEMINI_NO`;
+- Gemini `GEMI-SOL15M2608231330-UP`; Kalshi `KXSOL15M-26AUG230930-30`;
+- modeled locked quote profit **+$0.0300**; threshold gap abs **~2.22765bp**; protective direction correctly authorized;
+- Gemini NO filled q=1 at **$0.08**, fee **$0.01**;
+- paired Kalshi YES FOK filled **0** and rejected `fill_or_kill_insufficient_resting_volume`;
+- generic concurrent transport therefore produced `ONE_LEG_FILLED` and hard-halted;
+- original generic Gemini emergency flatten used unsupported `MARKET+IOC` and failed; subsequent bounded supported recovery attempts (Gemini SELL NO LIMIT+FOK, complementary Gemini BUY YES LIMIT+FOK, aggressive Kalshi YES FOK) also could not fill before settlement because resting liquidity was unavailable.
+
+Official direct settlement reconciliation completed after the 13:30 UTC expiry:
+- Gemini outcome **YES**;
+- Kalshi outcome **YES**;
+- venue outcomes agreed; this was **not** a settlement-index disagreement;
+- only the Gemini NO leg existed, so payout $0 on $0.08 raw cost + $0.01 fee;
+- authoritative `TRADE_REALIZED` status `REALIZED_ONE_LEG_SETTLEMENT`;
+- gross P&L **-$0.0800**; net P&L **-$0.0900**.
+
+Authoritative basis-risk ledger after repair:
+- `CAPITAL_RESERVED`: **6**;
+- `TRADE_REALIZED`: **6**;
+- profitable realized probes: **5**;
+- realized losses: **1**;
+- realized net P&L: **+$0.251900**;
+- realized loss budget consumed: **$0.0900**;
+- existing approved maximum-realized-loss research budget: **$5.00**, not reset/increased;
+- remaining loss budget: **$4.9100**;
+- unresolved reservations: **0**;
+- unresolved submissions: **0**.
+
+Root cause and v6 fix:
+- the basis lane no longer uses concurrent Gemini/Kalshi order submission;
+- new basis-only transport `src/gemini_kalshi_basis_risk_thin_first_transport.py` executes **KALSHI_THEN_GEMINI**;
+- exact economics/skew/payload validation still occurs before mutation;
+- Kalshi q=1 FOK is submitted first because it is the observed thinner/less reliable leg;
+- if Kalshi does not confirm a q=1 fill, **Gemini is never submitted**;
+- only after a confirmed Kalshi q=1 fill may the original Gemini FOK be submitted;
+- if Gemini explicitly does not fill after Kalshi filled, the process attempts the existing reverse Kalshi emergency flatten and hard-halts;
+- an ambiguous venue result remains fail-closed; no guessing/automatic rollover through ambiguity;
+- a safe Kalshi-first rejection produces a zero-P&L `NO_FILL_RELEASED` realization so the durable reservation is explicitly closed before another lease;
+- no shared guaranteed-arbitrage transport/authorization was relaxed.
+
+Reviewed-loss continuation semantics are implemented in v6, not by erasing the loss:
+- the exact historical row `gkbasis-br0823131801-01` / `REALIZED_ONE_LEG_SETTLEMENT` / `-$0.0900` is the only reviewed exception;
+- that $0.09 remains permanently charged to the $5 loss budget;
+- **any new or unreviewed realized loss hard-stops future automatic rollover**;
+- unresolved reservation/submission still hard-stops;
+- q=1, <=$1 per probe, 20 lifetime reservation ceiling, ETH/SOL/XRP only, BTC quarantine, >=0.5bp protective threshold separation, >=3c modeled after-fee edge, protective orientation, freshness/skew/persistence/exact-depth/double-boundary controls remain in force;
+- shared `SETTLEMENT_EQUIVALENCE_PROVEN=False` remains unchanged and shared guaranteed-arb `live_probe_authorized(True)` remains false;
+- q5 guaranteed-arbitrage promotion remains blocked.
+
+Validation/deployment:
+- targeted Kalshi-first transport tests: **4/4 passed**;
+- combined v6 transport + reviewed-loss policy suite: **8/8 passed** in Railway deployment `64e9af4e-8102-400b-8660-d1c7cd847374`;
+- read-only production preflight deployment `c3052cd0-ed7e-4874-a4a3-598abfca89c6` verified reservations=6, settled/released=6, one exact reviewed loss, realized loss $0.09, realized net +$0.2519, remaining loss budget $4.91, zero unresolved exposure, and shared arb lock unchanged;
+- live service `crypto-basis-risk-q1-canary` (`9f6e8d88-868a-4a38-9758-e74fceb71ed6`) now runs `python -m src.gemini_kalshi_basis_risk_rollover_supervisor_v6`;
+- restart policy `ON_FAILURE`, max retries 3;
+- live deployment `8a855c5f-1327-4269-9c3f-f11f64a408f9` on source checkpoint commit `a2529cf8bce36a560918799f9174e8556f30c59c` is SUCCESS;
+- boot logs explicitly show `execution_sequence=KALSHI_THEN_GEMINI`, loss budget consumed 0.09 / remaining 4.91, one-unresolved=true, `new_loss_hard_stop=true`, `guaranteed_arb=false`;
+- fresh lease `b60823134601` started with deadline ~15:46:52 UTC;
+- ETH/SOL/XRP exact books are scanning normally.
+
+Latest live evidence at ~13:49 UTC:
+- no new v6 capital reservation/order/fill after rearm;
+- an XRP gate observation with ~2.057bp separation was rejected as `DANGEROUS_THRESHOLD_ORIENTATION`, proving the protective-direction gate remains active;
+- do not count diagnostic observations, reservations, no-fill releases, submitted orders, or fills as realized profit.
+
+Do not reintroduce concurrent dual-FOK execution into this basis lane. Do not reset the known $0.09 loss, raise q, raise the 20-reservation ceiling, increase the $5 loss budget, re-enable BTC, or weaken settlement/freshness/depth/dominance controls without a new explicit review.
 
 ## LATEST PRODUCTION CHECKPOINT — 2026-08-23 12:35 UTC
 
@@ -421,14 +497,16 @@ Remove only verified dead/test/superseded services after dependency checks.
 
 1. Read `ARB_STATUS.md`, then inspect current Railway/GitHub production state before mutation.
 2. Keep guaranteed-arb Gemini/Kalshi crypto q1/q5/maker blocked unless exact settlement + threshold equivalence is independently certified. Treat `crypto-basis-risk-q1-canary` separately as bounded basis-risk research only.
-3. **LATEST OVERRIDE:** inspect the automatic rollover supervisor and authoritative basis-risk ledger first. Do not use stale historical campaign deadlines below as current production state.
-4. Automatic basis-risk rollover may create fresh 120-minute leases only while: total reservations <20, there is no unresolved reservation/submission, no realized basis loss has occurred, the $5 maximum-realized-loss budget is unchanged/not exhausted, and all live execution gates pass. Sequential resolved reservation turnover is not the $5 loss budget.
-5. Any basis probe submission/fill remains LIVE BASIS-RISK PROBE / FILLED_NOT_SETTLED until official Gemini + Kalshi settlements reconcile. Only then write authoritative REALIZED P&L.
-6. If REST 429 bursts materially suppress qualifying evaluations, stagger/smooth exact-book requests rather than weakening freshness or reintroducing an unauthorized WebSocket path.
-7. For same-Gemini sports combos, keep **resting maker mode blocked**. Never infer indivisibility from q=1.
-8. Verify the read-only FOK watcher is receiving all current symbol snapshots and whether `active_executable_signals` is still 0.
-9. If a >=3c q1 FOK signal appears, re-run exact canonical metadata, final <=50ms q1 depth/economics, positions, active orders, and capital reservation immediately before any bounded live promotion.
-10. Any future live FOK campaign must use a fresh unique campaign + matching arm token + short boot expiry, restart `NEVER`, and cleared arm variables after boot. Never reuse an expired campaign.
-11. Continue sports breadth and exact-rule weather opportunities without weakening certification. Work one blocker through inspect -> fix -> deploy -> verify -> reconcile -> checkpoint before widening scope.
+3. **LATEST OVERRIDE:** inspect v6 automatic rollover and the authoritative basis-risk ledger first. Do not use stale historical campaign deadlines or v5 concurrent-execution details as current production state.
+4. v6 automatic basis-risk rollover may create fresh 120-minute leases only while: total reservations <20; no unresolved reservation/submission exists; the only realized negative row remains the exact reviewed `gkbasis-br0823131801-01` -$0.09 one-leg execution incident; cumulative realized loss remains below the unchanged $5 maximum-realized-loss budget; and all live execution gates pass. Any new/unreviewed loss hard-stops.
+5. **Execution order override:** basis v6 must execute `KALSHI_THEN_GEMINI`. If Kalshi does not confirm q=1 first, Gemini must never submit. Never restore concurrent dual-FOK for this lane.
+6. A Kalshi-first safe rejection may close its durable reservation only via an authoritative zero-P&L `NO_FILL_RELEASED`; this is not profit and not a filled trade.
+7. Any actual basis submission/fill remains LIVE BASIS-RISK PROBE / FILLED_NOT_SETTLED until official venue settlement/reconciliation. Only then count REALIZED P&L.
+8. If REST 429 bursts materially suppress qualifying evaluations, stagger/smooth exact-book requests rather than weakening freshness or reintroducing an unauthorized WebSocket path.
+9. For same-Gemini sports combos, keep **resting maker mode blocked**. Never infer indivisibility from q=1.
+10. Verify the read-only FOK watcher is receiving all current symbol snapshots and whether `active_executable_signals` is still 0.
+11. If a >=3c q1 FOK signal appears, re-run exact canonical metadata, final <=50ms q1 depth/economics, positions, active orders, and capital reservation immediately before any bounded live promotion.
+12. Any future live FOK campaign must use a fresh unique campaign + matching arm token + short boot expiry, restart `NEVER`, and cleared arm variables after boot. Never reuse an expired campaign.
+13. Continue sports breadth and exact-rule weather opportunities without weakening certification. Work one blocker through inspect -> fix -> deploy -> verify -> reconcile -> checkpoint before widening scope.
 
 Never store credentials, signing material, API keys, or sensitive balances here.
