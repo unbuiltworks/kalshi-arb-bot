@@ -5,19 +5,25 @@ def base(**overrides):
     row = dict(
         model_mean_f="88.8",
         model_station_id="KMIA",
+        model_id="GFS:v1",
         independent_anchor_high_f="92.0",
         independent_anchor_station_id="KMIA",
         independent_anchor_verified=True,
+        independent_anchor_source_id="NWS:KMIA",
+        independent_anchor_observed_at="2026-08-21T05:30:00Z",
         same_local_day_verified=True,
         disagreement_tolerance_f="2.0",
         disagreement_tolerance_audited=True,
         model_calibration_verified=True,
+        calibration_model_id="GFS:v1",
+        calibration_target="DAILY_MAX_TEMPERATURE_F",
         calibration_evidence_verified=True,
         calibration_evidence_id="weather-calibration:KMIA:2026-08-01",
         calibration_sample_count=60,
         calibration_station_id="KMIA",
         calibration_window_end="2026-08-01T23:59:59Z",
         model_run_time="2026-08-21T06:00:00Z",
+        quote_observed_at="2026-08-21T07:30:00Z",
     )
     row.update(overrides)
     return audit_weather_model_sanity(**row)
@@ -93,6 +99,30 @@ def test_stringly_calibration_verification_fails_closed():
     out = base(model_mean_f="91.8", calibration_evidence_verified="true")
     assert out["model_sanity_verified"] is False
     assert "MODEL_CALIBRATION_EVIDENCE_UNVERIFIED" in out["blockers"]
+
+
+def test_calibration_must_match_exact_model_identity():
+    out = base(model_mean_f="91.8", calibration_model_id="ECMWF:v1")
+    assert out["model_sanity_verified"] is False
+    assert "MODEL_CALIBRATION_MODEL_ID_MISMATCH" in out["blockers"]
+
+
+def test_calibration_target_must_be_daily_max_temperature():
+    out = base(model_mean_f="91.8", calibration_target="DAILY_MEAN_TEMPERATURE_F")
+    assert out["model_sanity_verified"] is False
+    assert "MODEL_CALIBRATION_TARGET_MISMATCH" in out["blockers"]
+
+
+def test_anchor_observed_after_quote_is_lookahead():
+    out = base(model_mean_f="91.8", independent_anchor_observed_at="2026-08-21T08:00:00Z")
+    assert out["model_sanity_verified"] is False
+    assert "INDEPENDENT_FORECAST_ANCHOR_LOOKAHEAD_DETECTED" in out["blockers"]
+
+
+def test_anchor_requires_source_provenance():
+    out = base(model_mean_f="91.8", independent_anchor_source_id=None)
+    assert out["model_sanity_verified"] is False
+    assert "INDEPENDENT_FORECAST_ANCHOR_SOURCE_MISSING" in out["blockers"]
 
 
 def test_nonfinite_values_fail_closed():
