@@ -56,7 +56,7 @@ def _model_sanity_audit(
     # the model itself was actually mapped to the exact settlement station.
     station_id = forecast.get("model_station_id")
     model_id = forecast.get("model_id") or forecast.get("model")
-    return audit_weather_model_sanity(
+    audit = audit_weather_model_sanity(
         model_mean_f=forecast.get("model_mean_f"),
         model_station_id=station_id,
         independent_anchor_high_f=forecast.get("independent_anchor_high_f"),
@@ -84,6 +84,27 @@ def _model_sanity_audit(
         independent_anchor_provenance_url=forecast.get("independent_anchor_provenance_url"),
         independent_anchor_observed_at=forecast.get("independent_anchor_observed_at"),
     )
+
+    # The model/anchor/calibration can all agree with each other and still be mapped to
+    # the wrong city/station for the exact Kalshi contract. Bind the forecast station
+    # explicitly to the settlement-certified station instead of trusting self-consistent
+    # forecast-side metadata alone.
+    settlement_station = str(
+        station.get("station_id") or station.get("cli_product") or ""
+    ).strip().upper()
+    model_station = str(station_id or "").strip().upper()
+    if not settlement_station or not model_station or model_station != settlement_station:
+        audit = deepcopy(audit)
+        blockers = set(audit.get("blockers") or [])
+        blockers.add("FORECAST_SETTLEMENT_STATION_MISMATCH")
+        audit["blockers"] = sorted(blockers)
+        audit["model_sanity_verified"] = False
+        audit["classification"] = "MODEL_DISAGREEMENT_RESEARCH_ONLY"
+        audit["settlement_station_id"] = settlement_station or None
+    else:
+        audit = deepcopy(audit)
+        audit["settlement_station_id"] = settlement_station
+    return audit
 
 
 def _model_provider_audit(forecast: dict[str, Any] | None) -> dict[str, Any]:
@@ -129,8 +150,8 @@ def build_exact_market_certified_shadow_row(
       - calibration_evidence_verified / calibration_evidence_id
       - calibration_sample_count / calibration_station_id / calibration_window_end
 
-    ``model_station_id`` is mandatory forecast-side provenance and is never inferred
-    from settlement-station metadata.
+    ``model_station_id`` is mandatory forecast-side provenance, is never inferred from
+    settlement metadata, and must explicitly match the exact contract's settlement station.
 
     Calibration evidence must predate the model run being scored and must refer to the
     same model and daily-maximum-temperature target. Independent anchor evidence must be
