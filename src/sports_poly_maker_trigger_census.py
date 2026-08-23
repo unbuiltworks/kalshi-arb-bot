@@ -1,13 +1,11 @@
 """Read-only Polymarket maker-first nested-Dutch trigger census.
 
-This is the throughput bridge between strict same-venue Dutch discovery and a
-future bounded maker live probe.  It asks one concrete question across live
-full-game totals, same-team alternate spreads, and strict MLB same-player/stat
-threshold ladders:
-
-    If a q=1 maker BUY filled at the current best bid, could the other nested
-    proposition be bought immediately at its current ask and still lock >=3c
-    after the current Polymarket US taker fee and maker rebate?
+Scores strict same-venue sports ladders across live full-game totals, same-team
+alternate spreads, and canonical MLB player/stat threshold ladders.  Totals and
+spreads are league-agnostic: NFL/NBA/NHL/soccer/tennis/etc. are included whenever
+Polymarket exposes the required full-game metadata.  MLB player props remain a
+separate strict canonical parser until equivalent parsers are certified for more
+sports.
 
 A census row is NOT an executable trade because the maker order has not filled.
 It is a MAKER_TRIGGER_CANDIDATE: a resting order could be posted and, after a
@@ -27,11 +25,7 @@ import httpx
 from src.sports_live_poly_inventory import run_once as live_inventory
 from src.sports_poly_current_fees import maker_then_taker_locked_profit
 from src.sports_poly_live_nested_dutch import _is_full_game_total, _threshold
-from src.sports_poly_live_nested_spread import (
-    _is_full_game_spread,
-    _signed_description,
-    _team_abbr,
-)
+from src.sports_poly_live_nested_spread import _is_full_game_spread, _signed_description, _team_abbr
 from src.strict_mlb_prop_adapters import _poly_identity
 from src.strict_mlb_prop_snapshot import TopBook, poly_top_book
 
@@ -58,25 +52,15 @@ def _ask(book: TopBook, buy_yes: bool) -> tuple[Decimal, Decimal]:
 
 
 def _bid(book: TopBook, buy_yes: bool) -> Decimal:
-    # TopBook stores opposite-outcome ask from the native best bid:
-    # YES bid = 1 - NO ask; NO bid = 1 - YES ask.
     return ONE - (book.no_ask if buy_yes else book.yes_ask)
 
 
-def _score_maker_pair(
-    *,
-    low_book: TopBook,
-    low_buy_yes: bool,
-    high_book: TopBook,
-    high_buy_yes: bool,
-) -> list[dict[str, Any]]:
-    """Score maker-low/hedge-high and maker-high/hedge-low at q=1."""
+def _score_maker_pair(*, low_book: TopBook, low_buy_yes: bool, high_book: TopBook, high_buy_yes: bool) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     low_ask, low_depth = _ask(low_book, low_buy_yes)
     high_ask, high_depth = _ask(high_book, high_buy_yes)
     low_bid = _bid(low_book, low_buy_yes)
     high_bid = _bid(high_book, high_buy_yes)
-
     options = (
         ("MAKER_LOW_HEDGE_HIGH", low_bid, high_ask, high_depth, low_buy_yes, high_buy_yes),
         ("MAKER_HIGH_HEDGE_LOW", high_bid, low_ask, low_depth, high_buy_yes, low_buy_yes),
@@ -105,7 +89,6 @@ def _score_maker_pair(
 async def run_once() -> dict[str, Any]:
     inventory = await live_inventory()
     events = [e for e in (inventory.get("events") or []) if isinstance(e, Mapping)]
-
     totals: dict[str, list[dict[str, Any]]] = {}
     spreads: dict[tuple[str, str], list[dict[str, Any]]] = {}
     props: dict[tuple[str, str, str, tuple[str, str], str], list[dict[str, Any]]] = {}
@@ -113,21 +96,18 @@ async def run_once() -> dict[str, Any]:
 
     for event in events:
         event_slug = str(event.get("slug") or event.get("id") or "")
-        series = str(event.get("series_slug") or event.get("subcategory") or "").lower()
+        series = str(event.get("series_slug") or event.get("subcategory") or "unknown").lower()
         for market in event.get("markets") or []:
             if not isinstance(market, Mapping):
                 continue
             slug = str(market.get("slug") or "")
             if not slug:
                 continue
-
             if _is_full_game_total(market):
                 threshold = _threshold(market)
                 if threshold is not None and _is_half_point(threshold):
-                    row = {"slug": slug, "threshold": threshold, "title": market.get("title") or market.get("question")}
-                    totals.setdefault(event_slug, []).append(row)
+                    totals.setdefault(event_slug, []).append({"slug": slug, "threshold": threshold, "title": market.get("title") or market.get("question"), "series": series})
                     market_slugs.add(slug)
-
             if _is_full_game_spread(market):
                 for side in market.get("marketSides") or []:
                     if not isinstance(side, Mapping):
@@ -139,30 +119,15 @@ async def run_once() -> dict[str, Any]:
                     threshold = -description
                     if not _is_half_point(threshold):
                         continue
-                    row = {
-                        "slug": slug,
-                        "threshold": threshold,
-                        "title": market.get("title") or market.get("question"),
-                        "buy_yes": bool(side.get("long")),
-                        "team": team,
-                    }
-                    spreads.setdefault((event_slug, team), []).append(row)
+                    spreads.setdefault((event_slug, team), []).append({"slug": slug, "threshold": threshold, "title": market.get("title") or market.get("question"), "buy_yes": bool(side.get("long")), "team": team, "series": series, "side_description": str(description)})
                     market_slugs.add(slug)
-
             if "mlb" in series or "mlb" in event_slug.lower():
                 ident = _poly_identity(market)
                 if ident is not None:
                     family, player, teams, game_date, threshold = ident
                     if _is_integer(threshold):
                         key = (game_date, family, _norm_player(player), tuple(sorted(teams)), event_slug)
-                        row = {
-                            "slug": slug,
-                            "threshold": threshold,
-                            "title": market.get("title") or market.get("question"),
-                            "player": player,
-                            "family": family,
-                        }
-                        props.setdefault(key, []).append(row)
+                        props.setdefault(key, []).append({"slug": slug, "threshold": threshold, "title": market.get("title") or market.get("question"), "player": player, "family": family, "series": series})
                         market_slugs.add(slug)
 
     books: dict[str, TopBook] = {}
@@ -196,66 +161,56 @@ async def run_once() -> dict[str, Any]:
             for high in ordered[i + 1:]:
                 if not D(str(low["threshold"])) < D(str(high["threshold"])):
                     continue
-                # Nested construction is low proposition + NOT high proposition.
                 low_buy_yes = bool(low.get("buy_yes", True))
                 high_selected_yes = bool(high.get("buy_yes", True))
                 high_buy_yes = not high_selected_yes if spread else False
-                # Totals and props are explicitly YES at low and NO at high.
                 if not spread:
                     low_buy_yes, high_buy_yes = True, False
-                options = _score_maker_pair(
-                    low_book=books[low["slug"]], low_buy_yes=low_buy_yes,
-                    high_book=books[high["slug"]], high_buy_yes=high_buy_yes,
-                )
-                for option in options:
+                for option in _score_maker_pair(low_book=books[low["slug"]], low_buy_yes=low_buy_yes, high_book=books[high["slug"]], high_buy_yes=high_buy_yes):
                     rows.append({
                         "kind": kind,
+                        "series": str(low.get("series") or "unknown"),
                         "ladder_key": str(key),
-                        "low_slug": low["slug"],
-                        "low_title": low.get("title"),
-                        "low_threshold": str(low["threshold"]),
-                        "high_slug": high["slug"],
-                        "high_title": high.get("title"),
-                        "high_threshold": str(high["threshold"]),
+                        "low_slug": low["slug"], "low_title": low.get("title"), "low_threshold": str(low["threshold"]),
+                        "high_slug": high["slug"], "high_title": high.get("title"), "high_threshold": str(high["threshold"]),
                         **({"player": low.get("player"), "family": low.get("family")} if kind == "MLB_PLAYER_PROP" else {}),
-                        **({"team": low.get("team")} if kind == "FULL_GAME_SPREAD" else {}),
+                        **({"team": low.get("team"), "low_side_description": low.get("side_description"), "high_side_description": high.get("side_description")} if kind == "FULL_GAME_SPREAD" else {}),
                         **option,
-                        "quantity": 1,
-                        "maker_fill_required": True,
-                        "hedge_final_revalidation_required": True,
-                        "order_entry": False,
-                        "realized": False,
+                        "quantity": 1, "maker_fill_required": True, "hedge_final_revalidation_required": True, "order_entry": False, "realized": False,
                     })
 
-    for key, ladder in totals.items():
-        score_ladder("FULL_GAME_TOTAL", key, ladder)
-    for key, ladder in spreads.items():
-        score_ladder("FULL_GAME_SPREAD", key, ladder, spread=True)
-    for key, ladder in props.items():
-        score_ladder("MLB_PLAYER_PROP", key, ladder)
+    for key, ladder in totals.items(): score_ladder("FULL_GAME_TOTAL", key, ladder)
+    for key, ladder in spreads.items(): score_ladder("FULL_GAME_SPREAD", key, ladder, spread=True)
+    for key, ladder in props.items(): score_ladder("MLB_PLAYER_PROP", key, ladder)
 
     rows.sort(key=lambda r: D(r["locked_profit_after_hypothetical_maker_fill"]), reverse=True)
     positive = [r for r in rows if r["classification"] == "MAKER_TRIGGER_CANDIDATE"]
     by_kind: dict[str, dict[str, int]] = {}
+    by_series_kind: dict[str, dict[str, int]] = {}
     for row in rows:
-        k = row["kind"]
+        k, s = row["kind"], row.get("series") or "unknown"
         bucket = by_kind.setdefault(k, {"scored": 0, "maker_trigger_candidates": 0})
         bucket["scored"] += 1
+        sb = by_series_kind.setdefault(f"{s}|{k}", {"scored": 0, "maker_trigger_candidates": 0})
+        sb["scored"] += 1
         if row["classification"] == "MAKER_TRIGGER_CANDIDATE":
             bucket["maker_trigger_candidates"] += 1
+            sb["maker_trigger_candidates"] += 1
 
     out = {
-        "status": "SPORTS_POLY_MAKER_TRIGGER_CENSUS_V1",
+        "status": "SPORTS_POLY_MAKER_TRIGGER_CENSUS_V2_MULTI_SPORT",
         "live_event_count": inventory.get("live_event_count"),
+        "inventory_series_counts": inventory.get("series_counts"),
         "unique_markets_requested": len(market_slugs),
         "books_fetched": len(books),
         "maker_scenarios_scored": len(rows),
         "maker_trigger_candidates": len(positive),
         "by_kind": by_kind,
+        "by_series_kind": by_series_kind,
         "best": rows[0] if rows else None,
-        "top_candidates": positive[:50],
+        "top_candidates": positive[:75],
         "target_locked_after_fill": str(TARGET),
-        "classification_note": "CANDIDATE_ONLY: maker has not filled; hedge must be revalidated after fill",
+        "classification_note": "CANDIDATE_ONLY: maker has not filled; hedge must be revalidated after fill; non-MLB spread orientation still requires live semantic audit before promotion",
         "order_entry": False,
         "realized": False,
     }
@@ -263,5 +218,4 @@ async def run_once() -> dict[str, Any]:
     return out
 
 
-if __name__ == "__main__":
-    asyncio.run(run_once())
+if __name__ == "__main__": asyncio.run(run_once())
