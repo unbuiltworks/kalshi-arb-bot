@@ -1,8 +1,8 @@
 """Read-only semantic audit for top non-MLB Polymarket spread maker candidates.
 
-Prints the exact provider market metadata/marketSides for the top candidate rows so
+Prints exact provider market metadata/marketSides for the top candidate rows so
 we can prove which outcome token corresponds to which participant/line before any
-non-MLB spread order is permitted. No auth or mutation.
+non-MLB spread order is permitted. No auth, no order entry, no capital mutation.
 """
 from __future__ import annotations
 
@@ -38,10 +38,7 @@ def _safe_market(m: Mapping[str, Any]) -> dict[str, Any]:
 
 async def run_once() -> dict[str, Any]:
     c = await census()
-    rows = [
-        r for r in (c.get("top_candidates") or [])
-        if isinstance(r, Mapping) and r.get("kind") == "FULL_GAME_SPREAD"
-    ][:12]
+    rows = [r for r in (c.get("top_candidates") or []) if isinstance(r, Mapping) and r.get("kind") == "FULL_GAME_SPREAD"][:12]
     slugs = sorted({str(r[s]) for r in rows for s in ("low_slug", "high_slug") if r.get(s)})
     markets: dict[str, Any] = {}
     async with httpx.AsyncClient(timeout=8.0) as http:
@@ -53,12 +50,13 @@ async def run_once() -> dict[str, Any]:
             except Exception:
                 continue
     out = {
-        "status": "SPORTS_POLY_SPREAD_SEMANTIC_PROBE_V1",
+        "status": "SPORTS_POLY_SPREAD_SEMANTIC_PROBE_V2",
         "candidate_count": len(rows),
         "series": sorted({str(r.get("series") or "unknown") for r in rows}),
         "rows": rows,
         "markets": markets,
         "order_entry": False,
+        "funds_at_risk": False,
     }
     print("SPORTS_POLY_SPREAD_SEMANTIC_PROBE " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
     return out
