@@ -63,7 +63,6 @@ def _certify(low: Mapping[str, Any], high: Mapping[str, Any]) -> tuple[str, dict
         raise PermissionError("same-game/player/stat identity mismatch")
     if not lx < hx:
         raise PermissionError("thresholds are not strictly monotone")
-    # Require matching structured event parent when the API provides one.
     le = str(low.get("eventId") or low.get("event_id") or low.get("eventSlug") or "")
     he = str(high.get("eventId") or high.get("event_id") or high.get("eventSlug") or "")
     if le and he and le != he:
@@ -86,8 +85,8 @@ def _certify(low: Mapping[str, Any], high: Mapping[str, Any]) -> tuple[str, dict
     return fp, evidence
 
 
-async def run_once() -> dict[str, Any]:
-    snap = await census()
+async def run_once(snapshot: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    snap = dict(snapshot) if snapshot is not None else await census()
     candidates = [r for r in (snap.get("top_candidates") or []) if r.get("kind") == "MLB_PLAYER_PROP"]
     if not candidates:
         out = {"status": "NO_STRICT_MLB_MAKER_CANDIDATE", "order_entry": False}
