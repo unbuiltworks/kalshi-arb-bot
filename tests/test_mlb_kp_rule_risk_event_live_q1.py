@@ -3,6 +3,7 @@ import asyncio
 from decimal import Decimal
 
 from src.mlb_kp_rule_risk_event_live_q1 import ExactKalshiLimiter, MAX_TRIGGER_AGE_MS, _chunks, _top_book
+from src.mlb_kp_rule_risk_event_rollover import HARD_HALT_RC, safe_pre_mutation_block
 
 
 class Quote:
@@ -40,3 +41,15 @@ def test_polymarket_universe_is_sharded_below_connection_cap():
     assert len(shards) == 2
     assert sum(len(shard) for shard in shards) == 1034
     assert max(map(len, shards)) <= 900
+
+
+def test_rollover_only_retries_known_pre_mutation_ledger_blocks():
+    assert safe_pre_mutation_block(RuntimeError("unresolved sports live trade blocks execution: sports-gk:test"))
+    assert safe_pre_mutation_block(RuntimeError("shared sports budget exhausted: used=20 requested=1 ceiling=20"))
+    assert not safe_pre_mutation_block(RuntimeError("insufficient venue cash polymarket=0 kalshi=10"))
+    assert not safe_pre_mutation_block(RuntimeError("unexpected execution transport failure"))
+    assert not safe_pre_mutation_block(ValueError("bad state"))
+
+
+def test_rollover_preserves_hard_halt_code():
+    assert HARD_HALT_RC == 70
