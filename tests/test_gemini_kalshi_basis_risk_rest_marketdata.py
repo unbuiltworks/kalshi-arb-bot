@@ -62,3 +62,19 @@ def test_poll_interval_cannot_exceed_20hz_per_ticker(monkeypatch):
 def test_poll_interval_has_conservative_upper_bound(monkeypatch):
     monkeypatch.setenv("CRYPTO_BASIS_KALSHI_REST_POLL_INTERVAL_S", "9")
     assert m._poll_interval_s() == m.MAX_POLL_INTERVAL_S == 0.25
+
+
+def test_steady_state_three_tickers_keeps_configured_120ms(monkeypatch):
+    monkeypatch.setenv("CRYPTO_BASIS_KALSHI_REST_POLL_INTERVAL_S", "0.12")
+    assert m._cycle_poll_interval_s(3) == 0.12
+
+
+def test_rollover_overlap_slows_120ms_to_180ms(monkeypatch):
+    monkeypatch.setenv("CRYPTO_BASIS_KALSHI_REST_POLL_INTERVAL_S", "0.12")
+    assert m._cycle_poll_interval_s(4) == m.ROLLOVER_OVERLAP_MIN_POLL_INTERVAL_S == 0.18
+    assert m._cycle_poll_interval_s(6) == 0.18
+
+
+def test_rollover_overlap_never_speeds_up_slower_configuration(monkeypatch):
+    monkeypatch.setenv("CRYPTO_BASIS_KALSHI_REST_POLL_INTERVAL_S", "0.20")
+    assert m._cycle_poll_interval_s(6) == 0.20
