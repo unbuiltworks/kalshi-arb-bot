@@ -1,0 +1,38 @@
+name: MLB GK Family Audit
+
+on:
+  push:
+    branches:
+      - feature/mlb-gk-family-audit-actions
+      - feature/mlb-gk-final-lag-auto-q1-v2
+    paths:
+      - '.github/workflows/mlb-gk-family-audit.yml'
+      - 'src/mlb_gk_final_lag_family_audit.py'
+      - 'src/gemini_kalshi_mlb_prop_hot_shadow.py'
+      - 'src/mlb_prop_rule_certifications.py'
+  pull_request:
+    branches:
+      - feature/mlb-gk-final-lag-auto-q1-v2
+    paths:
+      - '.github/workflows/mlb-gk-family-audit.yml'
+      - 'src/mlb_gk_final_lag_family_audit.py'
+      - 'src/gemini_kalshi_mlb_prop_hot_shadow.py'
+      - 'src/mlb_prop_rule_certifications.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run read-only MLB Gemini/Kalshi family audit
+        run: python -m src.mlb_gk_final_lag_family_audit
