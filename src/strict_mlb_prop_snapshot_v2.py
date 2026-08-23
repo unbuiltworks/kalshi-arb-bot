@@ -20,7 +20,12 @@ import httpx
 from src import strict_mlb_prop_snapshot as base
 
 
-PAST_GRACE = timedelta(hours=2)
+# MLB props can remain tradable well beyond two hours after first pitch. A two-hour
+# discovery grace caused clean live-service restarts to forget still-tradable games
+# and permanently lose their late-game arb opportunities. Six hours safely covers a
+# normal/extra-inning MLB game while the exact Polymarket active-status lookup and
+# all downstream identity/book/participation gates still fail closed.
+PAST_GRACE = timedelta(hours=6)
 FUTURE_HORIZON = timedelta(hours=18)
 SEARCH_CONCURRENCY = 6
 
