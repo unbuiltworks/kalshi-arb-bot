@@ -53,15 +53,49 @@ async def _gemini_filled_orders() -> list[dict]:
     return list(response.json().get("orders", []))
 
 
+def _row_client_id(row: dict) -> str:
+    return str(row.get("clientOrderId") or row.get("client_order_id") or row.get("client_orderid") or "")
+
+
+def _row_symbol(row: dict) -> str:
+    return str(row.get("symbol") or row.get("marketSymbol") or row.get("market_symbol") or "").upper()
+
+
+def _row_outcome(row: dict) -> str:
+    return str(
+        row.get("eventOutcome")
+        or row.get("event_outcome")
+        or row.get("outcome")
+        or row.get("contractOutcome")
+        or row.get("contract_outcome")
+        or ""
+    ).upper()
+
+
+def _row_side(row: dict) -> str:
+    return str(row.get("side") or row.get("orderSide") or row.get("order_side") or "").upper()
+
+
+def _row_qty(row: dict) -> Decimal:
+    return _d(
+        row.get("filledQuantity")
+        or row.get("filled_quantity")
+        or row.get("executedQuantity")
+        or row.get("executed_quantity")
+        or row.get("quantity")
+    )
+
+
 def _gemini_net_no(rows: list[dict]) -> Decimal:
     net = D("0")
     for row in rows:
-        if str(row.get("symbol") or "").upper() != SYMBOL:
+        if _row_symbol(row) != SYMBOL:
             continue
-        if str(row.get("eventOutcome") or row.get("event_outcome") or "").upper() != OUTCOME:
+        outcome = _row_outcome(row)
+        if outcome and outcome != OUTCOME:
             continue
-        qty = _d(row.get("filledQuantity") or row.get("executedQuantity") or row.get("quantity"))
-        side = str(row.get("side") or "").upper()
+        qty = _row_qty(row)
+        side = _row_side(row)
         if side == "BUY":
             net += qty
         elif side == "SELL":
@@ -82,13 +116,25 @@ async def _kalshi_original_fill(executor: KalshiV2Executor) -> Decimal:
     return D("0")
 
 
+def _safe_order_view(row: dict) -> dict:
+    return {
+        "client_id": _row_client_id(row),
+        "symbol": _row_symbol(row),
+        "outcome": _row_outcome(row),
+        "side": _row_side(row),
+        "filled_quantity": str(_row_qty(row)),
+        "status": str(row.get("status") or ""),
+        "avg_execution_price": str(row.get("avgExecutionPrice") or row.get("averageFillPrice") or row.get("price") or ""),
+    }
+
+
 async def main_async() -> None:
     kalshi = KalshiV2Executor()
     gemini = GeminiTradingSession()
     try:
         kalshi_fill = await _kalshi_original_fill(kalshi)
         rows = await _gemini_filled_orders()
-        original = [r for r in rows if str(r.get("clientOrderId") or "") == ORIGINAL_GEMINI_CLIENT_ID]
+        original = [r for r in rows if _row_client_id(r) == ORIGINAL_GEMINI_CLIENT_ID]
         net_no = _gemini_net_no(rows)
         logger.critical(
             "CRYPTO_BASIS_ORPHAN_RECONCILE %s",
@@ -97,7 +143,8 @@ async def main_async() -> None:
                 "symbol": SYMBOL,
                 "ticker": TICKER,
                 "kalshi_original_fill": str(kalshi_fill),
-                "gemini_original_filled_rows": len(original),
+                "gemini_original": [_safe_order_view(r) for r in original],
+                "gemini_exact_symbol_filled_orders": [_safe_order_view(r) for r in rows],
                 "gemini_net_no": str(net_no),
                 "new_pair_trade_authorized": False,
             }, separators=(",", ":")),
@@ -106,6 +153,11 @@ async def main_async() -> None:
         if kalshi_fill > 0:
             logger.critical("CRYPTO_BASIS_ORPHAN_RECOVERY_ABORT reason=KALSHI_ALREADY_FILLED")
             return
+        if not original:
+            raise RuntimeError("original Gemini fill missing from authoritative filled-order history")
+        original_qty = sum((_row_qty(r) for r in original), D("0"))
+        if original_qty != D("1"):
+            raise RuntimeError(f"unexpected original Gemini filled quantity {original_qty}")
         if net_no <= 0:
             logger.critical("CRYPTO_BASIS_ORPHAN_RECOVERY_DONE reason=NO_OPEN_GEMINI_NO_EXPOSURE")
             return
