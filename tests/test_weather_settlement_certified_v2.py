@@ -57,6 +57,8 @@ def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-0
     row = {
         "model": "GFS:v1",
         "model_id": "GFS:v1",
+        "model_provider": "NOAA",
+        "model_component_providers": ["NOAA"],
         "cli_product": "CLINY",
         "model_run_time": run_time,
         "forecast_valid_time": valid_time,
@@ -68,7 +70,10 @@ def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-0
         "independent_anchor_high_f": "81.0",
         "independent_anchor_station_id": "CLINY",
         "independent_anchor_verified": True,
-        "independent_anchor_source_id": "NWS:CLINY",
+        "independent_anchor_source_id": "TWC:CLINY:daily-high",
+        "independent_anchor_provider": "TWC",
+        "independent_anchor_model_id": "TWC_DAILY_HIGH:v1",
+        "independent_anchor_provenance_url": "https://weather.com/weather/today/l/new-york-ny",
         "independent_anchor_observed_at": "2026-08-21T05:30:00Z",
         "same_local_day_verified": True,
         "disagreement_tolerance_f": "2.0",
@@ -275,3 +280,26 @@ def test_anchor_update_observed_after_quote_cannot_certify_prior_edge():
     assert row["model_sanity_verified"] is False
     assert row["ev_certified_shadow"] is False
     assert "INDEPENDENT_FORECAST_ANCHOR_LOOKAHEAD_DETECTED" in row["model_sanity_audit"]["blockers"]
+
+
+def test_arbitrary_anchor_source_string_cannot_certify_ev():
+    row = _build(forecast=_forecast(
+        independent_anchor_source_id="independent-trust-me",
+        independent_anchor_provenance_url=None,
+    ))
+    assert row["settlement_certified_shadow"] is True
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert "INDEPENDENT_FORECAST_ANCHOR_PROVENANCE_INVALID" in row["model_sanity_audit"]["blockers"]
+
+
+def test_same_provider_derivative_anchor_cannot_certify_ev():
+    row = _build(forecast=_forecast(
+        independent_anchor_provider="NWS",
+        independent_anchor_model_id="NWS_GRIDPOINT:v1",
+        independent_anchor_provenance_url="https://forecast.weather.gov/MapClick.php?lat=40.7&lon=-74.0",
+    ))
+    assert row["settlement_certified_shadow"] is True
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert "INDEPENDENT_FORECAST_ANCHOR_PROVIDER_NOT_INDEPENDENT" in row["model_sanity_audit"]["blockers"]
