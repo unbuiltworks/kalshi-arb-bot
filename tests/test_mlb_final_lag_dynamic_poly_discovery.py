@@ -1,4 +1,5 @@
 from src import current_polymarket_mlb_props as discovery
+from src import mlb_prop_final_lag_live_q1_entry as entry
 
 
 def _event(series="KXMLBHIT", player="John Doe", threshold="2"):
@@ -35,3 +36,8 @@ def test_dynamic_player_queries_are_deduplicated_and_cleaned():
         "x",
         "",
     ]) == ["Jane Roe", "John Doe"]
+
+
+def test_live_entry_installs_seeded_discovery_without_changing_strategy_namespace():
+    assert entry.impl.decided._discover is entry._discover_seeded
+    assert entry.impl.STRATEGY == "sports_gk_final_lag_kp_q1"
