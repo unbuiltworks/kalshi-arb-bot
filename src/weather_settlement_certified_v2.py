@@ -1,18 +1,17 @@
 """Fail-closed weather SHADOW certification with exact-market settlement provenance.
 
 This wrapper composes the existing read-only weather certification pipeline with the
-hardened exact-market source auditor, independent model-sanity audit, and scored-model
-provider-provenance audit. It intentionally requires explicit source provenance extracted
-for the exact contract/date and never treats the current Series settlement source as higher
-authority than verified exact-market evidence. This prevents historical contracts around
-settlement-source transitions from inheriting a later recurring-Series regime.
+hardened exact-market source auditor, independent model-sanity audit, scored-model
+provider-provenance audit, and exact local-day binding audit. It intentionally requires
+explicit source provenance extracted for the exact contract/date and never treats the
+current Series settlement source as higher authority than verified exact-market evidence.
 
 Settlement certification and EV/model certification remain deliberately separate. A
 contract can have fully audited settlement provenance while forecast-model economics are
 withheld because the model is not calibrated, not independently anchored to the same
-station/local day, disagrees with that anchor beyond an audited tolerance, or does not
-declare enough provider/component provenance to prove that the anchor is actually
-independent.
+station and exact contract local day, disagrees with that anchor beyond an audited
+tolerance, or does not declare enough provider/component provenance to prove that the
+anchor is actually independent.
 
 No order-entry clients, credentials, live-arm state, or execution paths exist here.
 """
@@ -22,6 +21,7 @@ from copy import deepcopy
 from typing import Any
 
 from src.weather_exact_market_source_audit import audit_exact_market_source
+from src.weather_local_day_binding_guard import audit_weather_local_day_binding
 from src.weather_model_provider_provenance_guard import audit_model_provider_provenance
 from src.weather_model_sanity_guard import audit_weather_model_sanity
 from src.weather_settlement_certified import build_shadow_row
@@ -51,9 +51,6 @@ def _model_sanity_audit(
     quote: dict[str, Any],
 ) -> dict[str, Any]:
     forecast = forecast or {}
-    # Forecast-side station provenance must be explicit. Never inherit the contract's
-    # settlement station/CLI identity here: doing so would manufacture evidence that
-    # the model itself was actually mapped to the exact settlement station.
     station_id = forecast.get("model_station_id")
     model_id = forecast.get("model_id") or forecast.get("model")
     audit = audit_weather_model_sanity(
@@ -85,16 +82,12 @@ def _model_sanity_audit(
         independent_anchor_observed_at=forecast.get("independent_anchor_observed_at"),
     )
 
-    # The model/anchor/calibration can all agree with each other and still be mapped to
-    # the wrong city/station for the exact Kalshi contract. Bind the forecast station
-    # explicitly to the settlement-certified station instead of trusting self-consistent
-    # forecast-side metadata alone.
     settlement_station = str(
         station.get("station_id") or station.get("cli_product") or ""
     ).strip().upper()
     model_station = str(station_id or "").strip().upper()
+    audit = deepcopy(audit)
     if not settlement_station or not model_station or model_station != settlement_station:
-        audit = deepcopy(audit)
         blockers = set(audit.get("blockers") or [])
         blockers.add("FORECAST_SETTLEMENT_STATION_MISMATCH")
         audit["blockers"] = sorted(blockers)
@@ -102,7 +95,6 @@ def _model_sanity_audit(
         audit["classification"] = "MODEL_DISAGREEMENT_RESEARCH_ONLY"
         audit["settlement_station_id"] = settlement_station or None
     else:
-        audit = deepcopy(audit)
         audit["settlement_station_id"] = settlement_station
     return audit
 
@@ -113,6 +105,20 @@ def _model_provider_audit(forecast: dict[str, Any] | None) -> dict[str, Any]:
         model_provider=forecast.get("model_provider"),
         model_component_providers=forecast.get("model_component_providers"),
         independent_anchor_provider=forecast.get("independent_anchor_provider"),
+    )
+
+
+def _local_day_audit(
+    *,
+    market: dict[str, Any],
+    forecast: dict[str, Any] | None,
+) -> dict[str, Any]:
+    forecast = forecast or {}
+    return audit_weather_local_day_binding(
+        market_date=market.get("market_date"),
+        model_local_date=forecast.get("model_local_date"),
+        independent_anchor_local_date=forecast.get("independent_anchor_local_date"),
+        same_local_day_verified=forecast.get("same_local_day_verified"),
     )
 
 
@@ -129,42 +135,10 @@ def build_exact_market_certified_shadow_row(
 ) -> dict[str, Any]:
     """Build a weather row only after exact-contract settlement provenance verifies.
 
-    Required exact-market provenance fields on ``market``:
-      - settlement_source_provider
-      - settlement_source_url
-      - settlement_source_evidence_url
-      - settlement_source_evidence_market_ticker
-      - settlement_source_evidence_market_date
-
-    Model EV additionally requires explicit model-sanity evidence on ``forecast``:
-      - model_mean_f / model_station_id / model_id
-      - model_provider and, for ensembles/derived models, model_component_providers
-      - independent_anchor_high_f / independent_anchor_station_id
-      - independent_anchor_verified / same_local_day_verified
-      - independent_anchor_source_id / independent_anchor_provider
-      - independent_anchor_model_id / independent_anchor_provenance_url
-      - independent_anchor_observed_at
-      - disagreement_tolerance_f / disagreement_tolerance_audited
-      - model_calibration_verified
-      - calibration_model_id / calibration_target
-      - calibration_evidence_verified / calibration_evidence_id
-      - calibration_sample_count / calibration_station_id / calibration_window_end
-
-    ``model_station_id`` is mandatory forecast-side provenance, is never inferred from
-    settlement metadata, and must explicitly match the exact contract's settlement station.
-
-    Calibration evidence must predate the model run being scored and must refer to the
-    same model and daily-maximum-temperature target. Independent anchor evidence must be
-    structurally bound to an official provider URL, must come from a provider/model
-    outside the scored model or ensemble components, and must have been observed no later
-    than the quote being scored. The separate provider-provenance guard is mandatory so a
-    producer cannot make an anchor look independent merely by omitting the scored model's
-    provider or hidden ensemble inputs.
-
-    Missing or mismatched settlement provenance quarantines all EV/capacity economics.
-    Missing or failed model-sanity/provider-provenance evidence preserves
-    settlement/book/fee diagnostics but removes model probabilities and modeled EV from
-    certified economics.
+    Model EV additionally requires explicit forecast-side station and local-day evidence.
+    ``model_local_date`` and ``independent_anchor_local_date`` must be canonical ISO dates
+    and both must equal the exact market ``market_date``. A producer-supplied
+    ``same_local_day_verified=true`` flag by itself is never sufficient.
     """
     base = build_shadow_row(
         series=series,
@@ -190,6 +164,7 @@ def build_exact_market_certified_shadow_row(
     )
     model_sanity = _model_sanity_audit(forecast=forecast, station=station, quote=quote)
     provider_provenance = _model_provider_audit(forecast)
+    local_day_binding = _local_day_audit(market=market, forecast=forecast)
 
     row = deepcopy(base)
     row["exact_market_source_audit"] = audit
@@ -199,9 +174,14 @@ def build_exact_market_certified_shadow_row(
     row["model_provider_provenance_verified"] = (
         provider_provenance["provider_provenance_verified"] is True
     )
+    row["local_day_binding_audit"] = local_day_binding
+    row["local_day_binding_verified"] = (
+        local_day_binding["local_day_binding_verified"] is True
+    )
     row["model_sanity_verified"] = (
         model_sanity["model_sanity_verified"] is True
         and row["model_provider_provenance_verified"] is True
+        and row["local_day_binding_verified"] is True
     )
     row["read_only"] = True
     row["order_entry"] = False
@@ -245,6 +225,8 @@ def build_exact_market_certified_shadow_row(
 
     if ev_certified:
         row["economics_status"] = "EXACT_MARKET_MODEL_SANITY_AND_EV_CERTIFIED_SHADOW"
+    elif settlement_certified and not row["local_day_binding_verified"]:
+        row["economics_status"] = "LOCAL_DAY_UNVERIFIED_RESEARCH_ONLY"
     elif settlement_certified and not row["model_provider_provenance_verified"]:
         row["economics_status"] = "MODEL_PROVIDER_PROVENANCE_UNVERIFIED_RESEARCH_ONLY"
     elif settlement_certified and not model_sanity_verified:
