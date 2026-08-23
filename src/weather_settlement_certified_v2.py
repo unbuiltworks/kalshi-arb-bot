@@ -2,16 +2,18 @@
 
 This wrapper composes the existing read-only weather certification pipeline with the
 hardened exact-market source auditor, independent model-sanity audit, scored-model
-provider-provenance audit, and exact local-day binding audit. It intentionally requires
-explicit source provenance extracted for the exact contract/date and never treats the
-current Series settlement source as higher authority than verified exact-market evidence.
+provider-provenance audit, explicit local-day binding audit, and independent forecast
+valid-time -> station-local-day audit. It intentionally requires explicit source
+provenance extracted for the exact contract/date and never treats the current Series
+settlement source as higher authority than verified exact-market evidence.
 
 Settlement certification and EV/model certification remain deliberately separate. A
 contract can have fully audited settlement provenance while forecast-model economics are
 withheld because the model is not calibrated, not independently anchored to the same
 station and exact contract local day, disagrees with that anchor beyond an audited
-tolerance, or does not declare enough provider/component provenance to prove that the
-anchor is actually independent.
+tolerance, does not declare enough provider/component provenance to prove that the
+anchor is actually independent, or its actual valid timestamp does not map to the exact
+contract day in the settlement station's audited timezone.
 
 No order-entry clients, credentials, live-arm state, or execution paths exist here.
 """
@@ -21,6 +23,7 @@ from copy import deepcopy
 from typing import Any
 
 from src.weather_exact_market_source_audit import audit_exact_market_source
+from src.weather_forecast_valid_local_day_guard import audit_forecast_valid_local_day
 from src.weather_local_day_binding_guard import audit_weather_local_day_binding
 from src.weather_model_provider_provenance_guard import audit_model_provider_provenance
 from src.weather_model_sanity_guard import audit_weather_model_sanity
@@ -122,6 +125,22 @@ def _local_day_audit(
     )
 
 
+def _forecast_valid_local_day_audit(
+    *,
+    market: dict[str, Any],
+    forecast: dict[str, Any] | None,
+    station: dict[str, Any],
+) -> dict[str, Any]:
+    forecast = forecast or {}
+    return audit_forecast_valid_local_day(
+        market_date=market.get("market_date"),
+        model_local_date=forecast.get("model_local_date"),
+        forecast_valid_time=forecast.get("forecast_valid_time"),
+        station_timezone=station.get("timezone"),
+        timezone_mapping_verified=station.get("timezone_mapping_verified"),
+    )
+
+
 def build_exact_market_certified_shadow_row(
     *,
     series: dict[str, Any],
@@ -137,8 +156,10 @@ def build_exact_market_certified_shadow_row(
 
     Model EV additionally requires explicit forecast-side station and local-day evidence.
     ``model_local_date`` and ``independent_anchor_local_date`` must be canonical ISO dates
-    and both must equal the exact market ``market_date``. A producer-supplied
-    ``same_local_day_verified=true`` flag by itself is never sufficient.
+    and both must equal the exact market ``market_date``. In addition, the timezone-aware
+    ``forecast_valid_time`` must independently resolve to that same market day using the
+    settlement station's explicitly audited IANA timezone. Producer-supplied date flags
+    are never sufficient by themselves.
     """
     base = build_shadow_row(
         series=series,
@@ -165,6 +186,11 @@ def build_exact_market_certified_shadow_row(
     model_sanity = _model_sanity_audit(forecast=forecast, station=station, quote=quote)
     provider_provenance = _model_provider_audit(forecast)
     local_day_binding = _local_day_audit(market=market, forecast=forecast)
+    valid_time_local_day = _forecast_valid_local_day_audit(
+        market=market,
+        forecast=forecast,
+        station=station,
+    )
 
     row = deepcopy(base)
     row["exact_market_source_audit"] = audit
@@ -178,10 +204,15 @@ def build_exact_market_certified_shadow_row(
     row["local_day_binding_verified"] = (
         local_day_binding["local_day_binding_verified"] is True
     )
+    row["forecast_valid_local_day_audit"] = valid_time_local_day
+    row["forecast_valid_local_day_verified"] = (
+        valid_time_local_day["forecast_valid_local_day_verified"] is True
+    )
     row["model_sanity_verified"] = (
         model_sanity["model_sanity_verified"] is True
         and row["model_provider_provenance_verified"] is True
         and row["local_day_binding_verified"] is True
+        and row["forecast_valid_local_day_verified"] is True
     )
     row["read_only"] = True
     row["order_entry"] = False
@@ -227,6 +258,8 @@ def build_exact_market_certified_shadow_row(
         row["economics_status"] = "EXACT_MARKET_MODEL_SANITY_AND_EV_CERTIFIED_SHADOW"
     elif settlement_certified and not row["local_day_binding_verified"]:
         row["economics_status"] = "LOCAL_DAY_UNVERIFIED_RESEARCH_ONLY"
+    elif settlement_certified and not row["forecast_valid_local_day_verified"]:
+        row["economics_status"] = "FORECAST_VALID_TIME_LOCAL_DAY_UNVERIFIED_RESEARCH_ONLY"
     elif settlement_certified and not row["model_provider_provenance_verified"]:
         row["economics_status"] = "MODEL_PROVIDER_PROVENANCE_UNVERIFIED_RESEARCH_ONLY"
     elif settlement_certified and not model_sanity_verified:
