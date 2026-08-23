@@ -1,3 +1,4 @@
+# Fresh Railway source/config marker for the v2 production gate.
 from decimal import Decimal
 
 from src import mlb_prop_final_lag_live_q1_entry_v2 as v2
