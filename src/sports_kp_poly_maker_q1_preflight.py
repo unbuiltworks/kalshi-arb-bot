@@ -1,10 +1,10 @@
 """Targeted mutation-free Polymarket MLB maker->hedge q1 preflight.
 
 Runs inside the low-request K/P executor service so authenticated Polymarket calls
-are not made after the broad 3k-book census.  It scans only strict canonical MLB
+are not made after the broad 3k-book census. It scans only strict canonical MLB
 player-prop ladders from the already-fetched sports event inventory, stops at a
 bounded public-book request count, verifies the richest >=3c monotone pair, then
-uses authenticated account + order preview endpoints.  It NEVER creates orders.
+uses authenticated account + order preview endpoints. It NEVER creates orders.
 """
 from __future__ import annotations
 
@@ -18,15 +18,21 @@ from typing import Any, Mapping
 import httpx
 from polymarket_us import PolymarketUS
 
-from src.sports_poly_current_fees import maker_then_taker_locked_profit
 from src.strict_mlb_prop_adapters import _poly_identity
 from src.strict_mlb_prop_snapshot import TopBook, poly_top_book
 
 D = Decimal
 ONE = D("1")
 TARGET = D("0.03")
+# Conservative q1 allowance observed on current Polymarket US sports taker previews.
+# Maker rebate is deliberately ignored. Exact order preview still has to succeed.
+TAKER_FEE_FLOOR = D("0.01")
 BASE = "https://gateway.polymarket.us"
 MAX_BOOKS = 120
+
+
+def _locked_profit(maker_price: D, taker_price: D) -> D:
+    return ONE - maker_price - taker_price - TAKER_FEE_FLOOR
 
 
 def _ask(book: TopBook, buy_yes: bool) -> tuple[D, D]:
@@ -155,13 +161,13 @@ async def run_once(events: list[Mapping[str, Any]]) -> dict[str, Any]:
                 for direction, ms, mp, hs, hp, hd in options:
                     if mp <= 0 or mp >= ONE or hd < ONE:
                         continue
-                    econ = maker_then_taker_locked_profit(maker_price=mp, taker_price=hp, quantity=1)
-                    if D(str(econ["locked_profit"])) < TARGET:
+                    locked = _locked_profit(mp, hp)
+                    if locked < TARGET:
                         continue
                     scored.append({
                         "key": key, "low": low, "high": high, "direction": direction,
                         "maker_side": ms, "maker_price": mp, "hedge_side": hs, "hedge_ask": hp,
-                        "hedge_depth": hd, "locked_profit": D(str(econ["locked_profit"])),
+                        "hedge_depth": hd, "locked_profit": locked,
                     })
     scored.sort(key=lambda r: r["locked_profit"], reverse=True)
     if not scored:
@@ -197,6 +203,7 @@ async def run_once(events: list[Mapping[str, Any]]) -> dict[str, Any]:
             "hedge_side": row["hedge_side"],
             "hedge_ask": str(row["hedge_ask"]),
             "hedge_depth": str(row["hedge_depth"]),
+            "conservative_q1_taker_fee_allowance": str(TAKER_FEE_FLOOR),
             "rule_fingerprint_sha256": fp,
             "rule_evidence": evidence,
             "balance_response_present": bool(balances),
