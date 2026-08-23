@@ -15,6 +15,7 @@ from src import gemini_kalshi_maker_live_probe_q1_safe as safe
 from src import gemini_kalshi_maker_live_probe_q1_safe_v2 as hardened
 from src import gemini_kalshi_maker_live_probe_q1_venue_once as venue_once
 from src import gemini_kalshi_maker_rest_guard as rest_guard
+from src import gemini_kalshi_maker_dominance_guard as dominance_guard
 
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_maker_live_probe_q1_final")
@@ -93,6 +94,8 @@ async def readonly_preflight() -> dict:
             "fee_type":fee_meta.fee_type,
             "fee_multiplier":fee_meta.fee_multiplier,
             "settlement_status":base.SETTLEMENT_STATUS,
+            "threshold_dominance_min_gap_bps":str(dominance_guard.MIN_GAP_BPS),
+            "threshold_dominance_required_before_post":True,
             "kalshi_book_transport":"EXACT_REST_DEPTH1",
             "kalshi_account_transport":"REST_ORDER_POLL_PLUS_FINAL_FILL_RECONCILIATION",
             "order_entry":False,
@@ -115,8 +118,11 @@ async def run() -> dict:
         return {"mode":"LIVE_PROBE","outcome":"DISARMED_NO_PREFLIGHT","settlement_status":base.SETTLEMENT_STATUS,"order_entry":False}
     safe.candidate_from_books = hardened.candidate_from_books
     # Process-local only: preserve Gemini streaming and all existing execution/risk
-    # gates, while replacing the two Kalshi websocket readers with authenticated REST.
+    # gates, replace both Kalshi websocket readers with REST, and require the same
+    # threshold-dominance-safe orientation as the bounded basis-risk lane before
+    # candidate discovery can ever reach the post-only order mutation.
     rest_guard.install()
+    dominance_guard.install_wait_guard()
     venue_once.install()
     logger.warning("MAKER_LIVE_PROBE_ONE_SHOT_MODE %s", json.dumps({
         "mode":"LIVE_PROBE",
@@ -132,6 +138,7 @@ async def run() -> dict:
         "min_target_profit":str(MIN_TARGET_PROFIT),
         "policy":policy,
         "settlement_status":base.SETTLEMENT_STATUS,
+        "threshold_dominance_min_gap_bps":str(dominance_guard.MIN_GAP_BPS),
         "kalshi_book_transport":"EXACT_REST_DEPTH1",
         "kalshi_account_transport":"REST_ORDER_POLL_PLUS_FINAL_FILL_RECONCILIATION",
     }, separators=(",", ":")))
