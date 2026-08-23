@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 import logging
 import os
 import sys
@@ -52,11 +53,15 @@ def _validate_outer_authorization() -> None:
         raise PermissionError(f"rollover supervisor requires {child.BASIS_ARM_ENV}=YES")
     if os.getenv(child.BASIS_RECONCILED_ENV, "NO").strip().upper() != "YES":
         raise PermissionError("rollover supervisor requires prior-ledger reconciled opt-in")
-    if os.getenv(child.BASIS_BUDGET_ENV, "").strip() != str(child.APPROVED_BUDGET):
+    try:
+        budget = Decimal(os.getenv(child.BASIS_BUDGET_ENV, "").strip())
+    except (InvalidOperation, ValueError) as exc:
+        raise PermissionError("rollover supervisor requires a valid approved budget") from exc
+    if budget != child.APPROVED_BUDGET:
         raise PermissionError(f"rollover supervisor requires approved budget exactly {child.APPROVED_BUDGET}")
     try:
-        min_gap = child.D(os.getenv(child.BASIS_MIN_GAP_ENV, ""))
-    except Exception as exc:
+        min_gap = Decimal(os.getenv(child.BASIS_MIN_GAP_ENV, "").strip())
+    except (InvalidOperation, ValueError) as exc:
         raise PermissionError("rollover supervisor requires valid basis min-gap") from exc
     if min_gap < dynamic_policy.DYNAMIC_MIN_GAP_BPS:
         raise PermissionError("rollover supervisor min-gap below dynamic policy floor")
@@ -147,7 +152,6 @@ async def main_async() -> None:
         allowed_after, reason_after = child_v5.automatic_rollover_allowed(state_after)
         _log_state("CRYPTO_BASIS_RISK_ROLLOVER_POST_LEASE", state_after, reason_after)
 
-        # Any unresolved reservation/submission or any realized loss must stop here.
         if not allowed_after:
             logger.warning(
                 "CRYPTO_BASIS_RISK_ROLLOVER_HALTED campaign_id=%s reason=%s",
@@ -159,16 +163,12 @@ async def main_async() -> None:
         made_reservation = int(state_after["reservations"]) > reservations_before
         made_realization = int(state_after["realized"]) > realized_before
         if made_reservation and not made_realization:
-            # This should already be caught as UNRESOLVED_RESERVATION, but retain an
-            # explicit belt-and-suspenders guard.
             logger.critical(
                 "CRYPTO_BASIS_RISK_ROLLOVER_HALTED campaign_id=%s reason=RESERVATION_WITHOUT_REALIZATION",
                 campaign_id,
             )
             return
 
-        # Successful settled probe: immediately roll to a fresh lease while the
-        # promoted limits still allow it. No stale campaign token is reused.
         if made_realization:
             fast_failures = 0
             logger.warning(
@@ -180,9 +180,6 @@ async def main_async() -> None:
             await asyncio.sleep(2)
             continue
 
-        # A lease that lasted most of its authorized window and found no trade is a
-        # normal expiration; roll immediately with a new id/deadline. Fast nonzero
-        # exits are treated as infrastructure faults to avoid a hot crash loop.
         expected_lease_seconds = lease_minutes * 60
         if code == 0 or elapsed >= expected_lease_seconds * 0.8:
             fast_failures = 0
