@@ -1,10 +1,10 @@
-"""Authoritative G/K live supervisor entrypoint with WS-first Kalshi books.
+"""Authoritative G/K live supervisor production policy entrypoint.
 
-This wrapper makes two production policy choices explicit without weakening the
-existing q=1 execution gates:
-- cap cumulative sports G/K live-probe capital at the user-authorized $20;
-- use authenticated Kalshi orderbook_delta WebSockets for hot discovery while
-  retaining candidate-only exact depth=1 REST revalidation.
+The wrapper keeps the explicitly authorized cumulative sports ceiling at $20 and
+selects the fastest safe Kalshi market-data transport available. WS-first mode is
+opt-in because Kalshi currently rejects a second authenticated book connection
+with HTTP 429; REST remains the fail-safe production default until that slot is
+consolidated.
 
 The underlying supervisor still owns duplicate protection, durable capital
 reservation, participation proof, freshness/skew checks, FOK transport, bounded
@@ -14,34 +14,41 @@ from __future__ import annotations
 
 from decimal import Decimal
 import logging
+import os
 
 import src.sports_live_budget_guard as budget_guard
 import src.sports_gk_autonomous_supervisor as supervisor
+from src.kalshi_prop_rest_books import KalshiPropRestBooks
 from src.kalshi_prop_ws_exact_books import KalshiPropWsExactBooks
 
 D = Decimal
 AUTHORIZED_CUMULATIVE_SPORTS_BUDGET = D("20")
+WS_ENV = "SPORTS_KALSHI_WS_FIRST"
 
 
-def install() -> None:
-    # The deployed branch currently contains an obsolete source-level $50 value.
-    # Fail safe to the explicitly authorized $20 ceiling in both modules that hold
-    # a reference to the runtime constant.
+def install() -> str:
+    # The deployed branch contains an obsolete source-level $50 value. Fail safe
+    # to the explicitly authorized $20 ceiling in both runtime references.
     budget_guard.CUMULATIVE_BUDGET = AUTHORIZED_CUMULATIVE_SPORTS_BUDGET
     supervisor.CUMULATIVE_BUDGET = AUTHORIZED_CUMULATIVE_SPORTS_BUDGET
 
-    # The duplicate shadow consumer is paused; the authoritative live supervisor
-    # gets the authenticated Kalshi WS and keeps exact REST for candidate rechecks.
-    supervisor.KalshiPropRestBooks = KalshiPropWsExactBooks
+    ws_enabled = os.getenv(WS_ENV, "NO").strip().upper() == "YES"
+    supervisor.KalshiPropRestBooks = KalshiPropWsExactBooks if ws_enabled else KalshiPropRestBooks
+    return (
+        "AUTHENTICATED_WS_DELTA_PLUS_CANDIDATE_EXACT_REST"
+        if ws_enabled
+        else "REST_SERIES_SNAPSHOT_PLUS_50MS_CANDIDATE_EXACT_REVALIDATION"
+    )
 
 
 def main() -> None:
+    transport = install()
     logging.getLogger("kalshi_arb.sports_gk_ws_live_entrypoint").warning(
-        "SPORTS_GK_WS_LIVE_POLICY cumulative_budget_usd=%s kalshi_transport=%s",
+        "SPORTS_GK_LIVE_POLICY cumulative_budget_usd=%s kalshi_transport=%s ws_opt_in=%s",
         AUTHORIZED_CUMULATIVE_SPORTS_BUDGET,
-        "AUTHENTICATED_WS_DELTA_PLUS_CANDIDATE_EXACT_REST",
+        transport,
+        os.getenv(WS_ENV, "NO").strip().upper() == "YES",
     )
-    install()
     supervisor.main()
 
 
