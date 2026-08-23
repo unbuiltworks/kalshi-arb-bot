@@ -46,13 +46,13 @@ def test_unresolved_reservation_blocks_overlap():
     assert reason == "UNRESOLVED_RESERVATION"
 
 
-def test_five_probe_limit_is_absolute():
+def test_three_probe_limit_is_absolute():
     allowed, reason = v5.automatic_rollover_allowed(
         _state(
-            reservations=5,
-            reserved_usd=Decimal("5"),
-            realized=5,
-            realized_net_pnl=Decimal("0.15"),
+            reservations=3,
+            reserved_usd=Decimal("3"),
+            realized=3,
+            realized_net_pnl=Decimal("0.09"),
         )
     )
     assert not allowed
