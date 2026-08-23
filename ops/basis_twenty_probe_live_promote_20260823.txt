@@ -1,0 +1,1 @@
+Production promotion checkpoint: twenty total q=1 basis-risk probes, existing $5 maximum realized-loss research budget unchanged, one unresolved probe maximum, automatic hard stop on any realized loss, ETH/SOL/XRP scope unchanged, shared guaranteed-arbitrage lock unchanged.
