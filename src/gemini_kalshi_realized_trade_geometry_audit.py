@@ -1,7 +1,7 @@
 """Read-only threshold/direction audit of the nine Aug-22 realized q=1 live probes.
 
-Uses public settled Gemini/Kalshi endpoints only.  It cannot submit, preview, cancel,
-or modify orders.  The purpose is to test whether a deterministic threshold-direction
+Uses public settled Gemini/Kalshi endpoints only. It cannot submit, preview, cancel,
+or modify orders. The purpose is to test whether a deterministic threshold-direction
 rule would have rejected the observed index-mismatch loss while retaining profitable
 fills.
 """
@@ -57,11 +57,23 @@ async def main_async() -> None:
         if meta is None or g_out is None or k_out is None:
             raise RuntimeError(f"unresolved public settlement for {t['trade_id']}")
         asset, _, expiry = meta
+        base_dict = {
+            "asset": asset,
+            "expiry_utc": expiry.isoformat(),
+            "gemini_ticker": event_ticker(t["gemini_symbol"]),
+            "kalshi_ticker": t["kalshi_ticker"],
+            "gemini_outcome": g_out,
+            "kalshi_outcome": k_out,
+            "agrees": g_out == k_out,
+            "gemini_strike": g_strike,
+            "gemini_settlement": g_settlement,
+            "gemini_margin_bps": g_margin,
+        }
         base = SimpleNamespace(
-            asset=asset, expiry=expiry, gemini_ticker=event_ticker(t["gemini_symbol"]),
+            asset=asset, expiry=expiry, gemini_ticker=base_dict["gemini_ticker"],
             kalshi_ticker=t["kalshi_ticker"], gemini_outcome=g_out, kalshi_outcome=k_out,
             agrees=(g_out == k_out), gemini_strike=g_strike, gemini_settlement=g_settlement,
-            gemini_margin_bps=g_margin,
+            gemini_margin_bps=g_margin, as_dict=lambda d=base_dict: dict(d),
         )
         e = classify(base, event, market)
         safe = str(e.get("dominance_safe_direction_shared_value") or "")
