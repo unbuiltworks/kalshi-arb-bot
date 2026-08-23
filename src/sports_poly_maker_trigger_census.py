@@ -1,11 +1,11 @@
 """Read-only Polymarket maker-first nested-Dutch trigger census.
 
-Scores strict same-venue sports ladders across live full-game totals, same-team
-alternate spreads, and canonical MLB player/stat threshold ladders.  Totals and
-spreads are league-agnostic: NFL/NBA/NHL/soccer/tennis/etc. are included whenever
-Polymarket exposes the required full-game metadata.  MLB player props remain a
-separate strict canonical parser until equivalent parsers are certified for more
-sports.
+Scores strict same-venue sports ladders across LIVE and next-24h PREGAME events:
+full-game totals, same-team alternate spreads, and canonical MLB player/stat
+threshold ladders. Totals and spreads are league-agnostic: NFL/NBA/NHL/soccer/
+tennis/etc. are included whenever Polymarket exposes the required full-game
+metadata. MLB player props remain a separate strict canonical parser until
+equivalent parsers are certified for more sports.
 
 A census row is NOT an executable trade because the maker order has not filled.
 It is a MAKER_TRIGGER_CANDIDATE: a resting order could be posted and, after a
@@ -22,7 +22,7 @@ from typing import Any, Mapping
 
 import httpx
 
-from src.sports_live_poly_inventory import run_once as live_inventory
+from src.sports_poly_near_term_inventory import run_once as near_term_inventory
 from src.sports_poly_current_fees import maker_then_taker_locked_profit
 from src.sports_poly_live_nested_dutch import _is_full_game_total, _threshold
 from src.sports_poly_live_nested_spread import _is_full_game_spread, _signed_description, _team_abbr
@@ -87,7 +87,7 @@ def _score_maker_pair(*, low_book: TopBook, low_buy_yes: bool, high_book: TopBoo
 
 
 async def run_once() -> dict[str, Any]:
-    inventory = await live_inventory()
+    inventory = await near_term_inventory()
     events = [e for e in (inventory.get("events") or []) if isinstance(e, Mapping)]
     totals: dict[str, list[dict[str, Any]]] = {}
     spreads: dict[tuple[str, str], list[dict[str, Any]]] = {}
@@ -97,16 +97,19 @@ async def run_once() -> dict[str, Any]:
     for event in events:
         event_slug = str(event.get("slug") or event.get("id") or "")
         series = str(event.get("series_slug") or event.get("subcategory") or "unknown").lower()
+        phase = str(event.get("phase") or "UNKNOWN")
+        start_time = event.get("start_time")
         for market in event.get("markets") or []:
             if not isinstance(market, Mapping):
                 continue
             slug = str(market.get("slug") or "")
             if not slug:
                 continue
+            common = {"series": series, "phase": phase, "event_start_time": start_time}
             if _is_full_game_total(market):
                 threshold = _threshold(market)
                 if threshold is not None and _is_half_point(threshold):
-                    totals.setdefault(event_slug, []).append({"slug": slug, "threshold": threshold, "title": market.get("title") or market.get("question"), "series": series})
+                    totals.setdefault(event_slug, []).append({"slug": slug, "threshold": threshold, "title": market.get("title") or market.get("question"), **common})
                     market_slugs.add(slug)
             if _is_full_game_spread(market):
                 for side in market.get("marketSides") or []:
@@ -119,7 +122,7 @@ async def run_once() -> dict[str, Any]:
                     threshold = -description
                     if not _is_half_point(threshold):
                         continue
-                    spreads.setdefault((event_slug, team), []).append({"slug": slug, "threshold": threshold, "title": market.get("title") or market.get("question"), "buy_yes": bool(side.get("long")), "team": team, "series": series, "side_description": str(description)})
+                    spreads.setdefault((event_slug, team), []).append({"slug": slug, "threshold": threshold, "title": market.get("title") or market.get("question"), "buy_yes": bool(side.get("long")), "team": team, "side_description": str(description), **common})
                     market_slugs.add(slug)
             if "mlb" in series or "mlb" in event_slug.lower():
                 ident = _poly_identity(market)
@@ -127,7 +130,7 @@ async def run_once() -> dict[str, Any]:
                     family, player, teams, game_date, threshold = ident
                     if _is_integer(threshold):
                         key = (game_date, family, _norm_player(player), tuple(sorted(teams)), event_slug)
-                        props.setdefault(key, []).append({"slug": slug, "threshold": threshold, "title": market.get("title") or market.get("question"), "player": player, "family": family, "series": series})
+                        props.setdefault(key, []).append({"slug": slug, "threshold": threshold, "title": market.get("title") or market.get("question"), "player": player, "family": family, **common})
                         market_slugs.add(slug)
 
     books: dict[str, TopBook] = {}
@@ -170,6 +173,8 @@ async def run_once() -> dict[str, Any]:
                     rows.append({
                         "kind": kind,
                         "series": str(low.get("series") or "unknown"),
+                        "phase": str(low.get("phase") or "UNKNOWN"),
+                        "event_start_time": low.get("event_start_time"),
                         "ladder_key": str(key),
                         "low_slug": low["slug"], "low_title": low.get("title"), "low_threshold": str(low["threshold"]),
                         "high_slug": high["slug"], "high_title": high.get("title"), "high_threshold": str(high["threshold"]),
@@ -187,30 +192,39 @@ async def run_once() -> dict[str, Any]:
     positive = [r for r in rows if r["classification"] == "MAKER_TRIGGER_CANDIDATE"]
     by_kind: dict[str, dict[str, int]] = {}
     by_series_kind: dict[str, dict[str, int]] = {}
+    by_phase_series_kind: dict[str, dict[str, int]] = {}
     for row in rows:
-        k, s = row["kind"], row.get("series") or "unknown"
+        k, s, p = row["kind"], row.get("series") or "unknown", row.get("phase") or "UNKNOWN"
         bucket = by_kind.setdefault(k, {"scored": 0, "maker_trigger_candidates": 0})
         bucket["scored"] += 1
         sb = by_series_kind.setdefault(f"{s}|{k}", {"scored": 0, "maker_trigger_candidates": 0})
         sb["scored"] += 1
+        psb = by_phase_series_kind.setdefault(f"{p}|{s}|{k}", {"scored": 0, "maker_trigger_candidates": 0})
+        psb["scored"] += 1
         if row["classification"] == "MAKER_TRIGGER_CANDIDATE":
             bucket["maker_trigger_candidates"] += 1
             sb["maker_trigger_candidates"] += 1
+            psb["maker_trigger_candidates"] += 1
 
     out = {
-        "status": "SPORTS_POLY_MAKER_TRIGGER_CENSUS_V2_MULTI_SPORT",
+        "status": "SPORTS_POLY_MAKER_TRIGGER_CENSUS_V3_NEAR_TERM_MULTI_SPORT",
+        "inventory_event_count": inventory.get("event_count"),
         "live_event_count": inventory.get("live_event_count"),
+        "pregame_event_count": inventory.get("pregame_event_count"),
+        "inventory_horizon_hours": inventory.get("horizon_hours"),
         "inventory_series_counts": inventory.get("series_counts"),
+        "inventory_phase_series_counts": inventory.get("phase_series_counts"),
         "unique_markets_requested": len(market_slugs),
         "books_fetched": len(books),
         "maker_scenarios_scored": len(rows),
         "maker_trigger_candidates": len(positive),
         "by_kind": by_kind,
         "by_series_kind": by_series_kind,
+        "by_phase_series_kind": by_phase_series_kind,
         "best": rows[0] if rows else None,
-        "top_candidates": positive[:75],
+        "top_candidates": positive[:100],
         "target_locked_after_fill": str(TARGET),
-        "classification_note": "CANDIDATE_ONLY: maker has not filled; hedge must be revalidated after fill; non-MLB spread orientation still requires live semantic audit before promotion",
+        "classification_note": "CANDIDATE_ONLY: maker has not filled; hedge must be revalidated after fill; non-MLB spread orientation still requires exact provider-side semantic audit before promotion",
         "order_entry": False,
         "realized": False,
     }
@@ -218,4 +232,5 @@ async def run_once() -> dict[str, Any]:
     return out
 
 
-if __name__ == "__main__": asyncio.run(run_once())
+if __name__ == "__main__":
+    asyncio.run(run_once())
