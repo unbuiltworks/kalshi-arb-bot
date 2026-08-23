@@ -63,3 +63,21 @@ def test_exact_pair_duplicate_guard_uses_venue_ids_not_player_text():
         poly_slug="astatc-mlb-x-player-gte3",
         kalshi_ticker="KXMLBTB-X-3",
     ) is None
+
+
+def test_filled_pair_set_is_restart_persistent_from_ledger_metadata():
+    rows = [_row(
+        status="SETTLED",
+        legs_filled=2,
+        metadata={
+            "execution": {
+                "plan": {
+                    "candidate": {
+                        "poly_slug": "astatc-mlb-y-player-gte1",
+                        "kalshi_ticker": "KXMLBHR-Y-1",
+                    }
+                }
+            }
+        },
+    )]
+    assert policy._filled_pairs(rows) == {("astatc-mlb-y-player-gte1", "KXMLBHR-Y-1")}
