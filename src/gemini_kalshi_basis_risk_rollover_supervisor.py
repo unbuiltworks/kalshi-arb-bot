@@ -3,8 +3,9 @@
 This makes the canary operationally continuous without creating an indefinite stale
 execution token. Each child campaign gets a fresh short campaign id and arm deadline.
 Before every lease the supervisor re-reads the authoritative Postgres ledger and fails
-closed if there is unresolved exposure, any realized loss, or the approved five-probe /
-$5 research ceiling has been reached.
+closed if there is unresolved exposure, any realized loss, or the promoted three-probe
+ceiling has been reached. Each probe remains q=1 / <=$1, and the existing approved $5
+research-loss ceiling is unchanged.
 
 This supervisor never changes the guaranteed-arbitrage settlement-equivalence lock.
 """
