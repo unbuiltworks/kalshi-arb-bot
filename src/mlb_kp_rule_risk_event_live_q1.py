@@ -4,7 +4,8 @@ Uses the strict candidate/rule/participation and execution primitives from
 `mlb_kp_rule_risk_live_q1`, but removes broad Kalshi polling from the hot path.
 Polymarket market-data updates trigger at most one exact Kalshi depth-1 read;
 only a provisional >=3c pair enters the two-snapshot final revalidation and live
-q=1 executor.
+q=1 executor. Polymarket subscriptions are sharded across connections so the
+full strict slate is covered without exceeding the per-connection subscription cap.
 """
 from __future__ import annotations
 
@@ -44,7 +45,7 @@ KALSHI_MIN_INTERVAL_MS = int(os.getenv("MLB_KP_RULE_RISK_KALSHI_MIN_INTERVAL_MS"
 TICKER_MIN_INTERVAL_MS = int(os.getenv("MLB_KP_RULE_RISK_TICKER_MIN_INTERVAL_MS", "250"))
 PARTICIPATION_REFRESH_S = float(os.getenv("MLB_KP_RULE_RISK_PARTICIPATION_REFRESH_S", "10"))
 SUMMARY_S = float(os.getenv("MLB_KP_RULE_RISK_SUMMARY_S", "10"))
-POLY_GATEWAY = "https://gateway.polymarket.us"
+POLY_WS_SHARD_SIZE = int(os.getenv("MLB_KP_RULE_RISK_POLY_WS_SHARD_SIZE", "900"))
 
 
 def _top_book(quote: Any) -> base.TopBook:
@@ -52,6 +53,11 @@ def _top_book(quote: Any) -> base.TopBook:
         yes_ask=D(str(quote.yes_ask)), yes_depth=D(str(quote.yes_depth)),
         no_ask=D(str(quote.no_ask)), no_depth=D(str(quote.no_depth)),
     )
+
+
+def _chunks(items: list[str], size: int) -> list[list[str]]:
+    n = max(1, min(int(size), 900))
+    return [items[i:i + n] for i in range(0, len(items), n)]
 
 
 class ExactKalshiLimiter:
@@ -129,8 +135,12 @@ async def run() -> int:
 
     store = EventingPolyBookStore(max_queue=50000)
     seeded = await _seed_poly(slugs, store)
-    poly_client = PolymarketUS(key_id=key_id, secret_key=secret, timeout=10.0)
-    poly_task = asyncio.create_task(run_poly_ws(poly_client, store, slugs))
+    shards = _chunks(slugs, POLY_WS_SHARD_SIZE)
+    poly_clients = [PolymarketUS(key_id=key_id, secret_key=secret, timeout=10.0) for _ in shards]
+    poly_tasks = [
+        asyncio.create_task(run_poly_ws(client, store, shard))
+        for client, shard in zip(poly_clients, shards)
+    ]
     limiter = ExactKalshiLimiter()
 
     cleared: dict[str, dict[str, Any]] = {}
@@ -145,6 +155,7 @@ async def run() -> int:
     logger.info("MLB_KP_RULE_RISK_EVENT_START %s", json.dumps({
         "live": live_enabled(), "q": 1, "min_profit": str(MIN_PROFIT),
         "strict_candidates": len(candidates), "poly_slugs": len(slugs), "poly_seeded": seeded,
+        "poly_ws_shards": len(shards), "poly_ws_shard_size": POLY_WS_SHARD_SIZE,
         "trigger_max_age_ms": MAX_TRIGGER_AGE_MS,
         "kalshi_min_interval_ms": KALSHI_MIN_INTERVAL_MS,
         "ticker_min_interval_ms": TICKER_MIN_INTERVAL_MS,
@@ -205,7 +216,7 @@ async def run() -> int:
                             logger.warning("MLB_KP_RULE_RISK_PROVISIONAL %s", json.dumps(provisional.as_dict(), separators=(",", ":"), default=str))
 
                             # Final gate intentionally ignores the trigger quote and does two fresh
-                            # direct P+K reads with the original <=100ms/<=50ms/persistence rules.
+                            # direct P+K reads with <=100ms/<=50ms/persistence rules.
                             final_plan = await persistent_plan(http, candidate, multiplier, proof)
                             if final_plan is None:
                                 continue
@@ -222,10 +233,12 @@ async def run() -> int:
 
                 now = time.monotonic()
                 if now - last_summary >= SUMMARY_S:
+                    alive = sum(0 if task.done() else 1 for task in poly_tasks)
                     logger.info("MLB_KP_RULE_RISK_EVENT_SUMMARY %s", json.dumps({
                         **stats,
                         "live": live_enabled(), "strict_candidates": len(candidates),
                         "participation_proven": len(cleared), "poly_connected": store.connected,
+                        "poly_ws_shards": len(poly_tasks), "poly_ws_shards_alive": alive,
                         "poly_ws_updates": store.ws_updates, "poly_books": store.quote_count,
                         "limiter_allowed": limiter.allowed,
                         "limiter_global_suppressed": limiter.global_suppressed,
@@ -233,12 +246,14 @@ async def run() -> int:
                     }, separators=(",", ":")))
                     last_summary = now
         finally:
-            poly_task.cancel()
-            await asyncio.gather(poly_task, return_exceptions=True)
-            try:
-                poly_client.close()
-            except Exception:
-                pass
+            for task in poly_tasks:
+                task.cancel()
+            await asyncio.gather(*poly_tasks, return_exceptions=True)
+            for client in poly_clients:
+                try:
+                    client.close()
+                except Exception:
+                    pass
 
 
 def main() -> None:
