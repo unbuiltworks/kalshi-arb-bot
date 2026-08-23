@@ -1,4 +1,7 @@
-"""Read-only direct inspection of one recently manufactured Kalshi sports MVE."""
+"""Read-only direct inspection of one recently manufactured Kalshi sports MVE.
+
+This module is intentionally isolated from every order-entry path.
+"""
 from __future__ import annotations
 
 import asyncio
