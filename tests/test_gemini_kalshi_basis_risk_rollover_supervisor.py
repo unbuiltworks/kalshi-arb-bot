@@ -1,9 +1,4 @@
-"""Safety tests for bounded automatic q=1 basis-risk rollover.
-
-This file is also a watched-path deployment marker: the 2026-08-23 update forces
-Railway to build a fresh source snapshot after switching the service to test-only mode,
-avoiding Railway redeploy reuse of an older live start command.
-"""
+"""Safety tests for bounded automatic q=1 basis-risk rollover."""
 from decimal import Decimal
 from datetime import datetime, timezone
 
@@ -13,12 +8,12 @@ from src import gemini_kalshi_basis_risk_rollover_supervisor as rollover
 
 def _state(**overrides):
     base = {
-        "reservations": 1,
-        "reserved_usd": Decimal("1"),
-        "realized": 1,
+        "reservations": 5,
+        "reserved_usd": Decimal("5"),
+        "realized": 5,
         "realized_losses": 0,
         "realized_loss_usd": Decimal("0"),
-        "realized_net_pnl": Decimal("0.0337"),
+        "realized_net_pnl": Decimal("0.3419"),
         "unresolved_reservations": [],
         "unresolved_submissions": [],
     }
@@ -26,13 +21,13 @@ def _state(**overrides):
     return base
 
 
-def test_profitable_settled_first_probe_allows_next_rollover():
+def test_five_clean_probes_allow_next_rollover():
     assert v5.automatic_rollover_allowed(_state()) == (True, "OK")
 
 
 def test_any_realized_loss_hard_stops_rollover():
     allowed, reason = v5.automatic_rollover_allowed(
-        _state(realized_losses=1, realized_loss_usd=Decimal("0.10"), realized_net_pnl=Decimal("-0.10"))
+        _state(realized_losses=1, realized_loss_usd=Decimal("0.10"), realized_net_pnl=Decimal("0.20"))
     )
     assert not allowed
     assert reason == "REALIZED_LOSS_HARD_STOP"
@@ -46,30 +41,12 @@ def test_unresolved_reservation_blocks_overlap():
     assert reason == "UNRESOLVED_RESERVATION"
 
 
-def test_five_probe_limit_is_absolute_after_three_clean_probes():
+def test_twenty_probe_limit_is_absolute_but_turnover_is_not_loss_budget():
     assert v5.automatic_rollover_allowed(
-        _state(
-            reservations=3,
-            reserved_usd=Decimal("3"),
-            realized=3,
-            realized_net_pnl=Decimal("0.1862"),
-        )
-    ) == (True, "OK")
-    assert v5.automatic_rollover_allowed(
-        _state(
-            reservations=4,
-            reserved_usd=Decimal("4"),
-            realized=4,
-            realized_net_pnl=Decimal("0.20"),
-        )
+        _state(reservations=19, reserved_usd=Decimal("19"), realized=19)
     ) == (True, "OK")
     allowed, reason = v5.automatic_rollover_allowed(
-        _state(
-            reservations=5,
-            reserved_usd=Decimal("5"),
-            realized=5,
-            realized_net_pnl=Decimal("0.25"),
-        )
+        _state(reservations=20, reserved_usd=Decimal("20"), realized=20)
     )
     assert not allowed
     assert reason == "PROMOTED_PROBE_LIMIT_REACHED"
