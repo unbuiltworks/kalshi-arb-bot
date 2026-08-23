@@ -5,6 +5,8 @@ Kalshi websocket slot is already occupied by another strategy. Series snapshots
 are used only to discover/observe candidates. Final execution revalidation must
 call :meth:`exact_quote`, which fetches the exact market depth=1 order book.
 
+Broad series discovery is deliberately slow after the initial seed so it cannot
+compete with candidate-triggered exact depth requests on the Kalshi REST budget.
 No order-entry functionality lives in this module.
 """
 from __future__ import annotations
@@ -26,6 +28,8 @@ logger = logging.getLogger("kalshi_arb.kalshi_game_rest_books")
 D = Decimal
 ONE = D("1")
 SERIES = ("KXMLBGAME", "KXMLBSPREAD", "KXMLBTOTAL")
+DEFAULT_SERIES_REQUEST_SPACING_SECONDS = 0.25
+DEFAULT_SERIES_CYCLE_INTERVAL_SECONDS = 15.0
 
 
 def _d(value: Any) -> Decimal | None:
@@ -67,10 +71,24 @@ def _nested_quote(market: Mapping[str, Any], received_ms: int) -> TwoSidedQuote 
 class KalshiGameRestBooks:
     """Read-only K/P game book source with candidate-only exact revalidation."""
 
-    def __init__(self, tickers: list[str] | tuple[str, ...], *, max_queue: int = 20000, **_: Any) -> None:
+    def __init__(
+        self,
+        tickers: list[str] | tuple[str, ...],
+        *,
+        max_queue: int = 20000,
+        series_request_spacing_seconds: float = DEFAULT_SERIES_REQUEST_SPACING_SECONDS,
+        series_cycle_interval_seconds: float = DEFAULT_SERIES_CYCLE_INTERVAL_SECONDS,
+        **_: Any,
+    ) -> None:
         self.tickers = tuple(dict.fromkeys(str(x) for x in tickers if x))
         if not self.tickers:
             raise ValueError("at least one Kalshi ticker is required")
+        if series_request_spacing_seconds < 0:
+            raise ValueError("series_request_spacing_seconds must be >= 0")
+        if series_cycle_interval_seconds < 1:
+            raise ValueError("series_cycle_interval_seconds must be >= 1")
+        self.series_request_spacing_seconds = float(series_request_spacing_seconds)
+        self.series_cycle_interval_seconds = float(series_cycle_interval_seconds)
         self._wanted = set(self.tickers)
         self._quotes: dict[str, TwoSidedQuote] = {}
         self._lock = asyncio.Lock()
@@ -151,7 +169,7 @@ class KalshiGameRestBooks:
             self._notify(q.ticker, "rest_series_snapshot", received_ms)
 
     async def exact_quote(self, ticker: str) -> TwoSidedQuote | None:
-        """Fetch one exact depth=1 book for post-preflight/final revalidation."""
+        """Fetch one exact depth=1 book for candidate synchronization/final revalidation."""
         response = await self._request_with_429_backoff(
             f"/markets/{ticker}/orderbook", params={"depth": 1}
         )
@@ -190,15 +208,17 @@ class KalshiGameRestBooks:
         self._running = True
         self._http = httpx.AsyncClient(timeout=5.0)
         logger.warning("KALSHI_GAME_BOOK_TRANSPORT %s", json.dumps({
-            "mode": "REST_SERIES_SNAPSHOT_PLUS_CANDIDATE_EXACT_REVALIDATION",
+            "mode": "SLOW_REST_SERIES_DISCOVERY_PLUS_CANDIDATE_EXACT_REVALIDATION",
             "tickers": len(self.tickers),
             "series": list(SERIES),
-            "poll_spacing_seconds": 0.25,
+            "series_request_spacing_seconds": self.series_request_spacing_seconds,
+            "series_cycle_interval_seconds": self.series_cycle_interval_seconds,
             "read_only": True,
             "order_entry": False,
         }, separators=(",", ":")))
         try:
             while self._running:
+                cycle_started = time.monotonic()
                 for series in SERIES:
                     if not self._running:
                         break
@@ -208,7 +228,12 @@ class KalshiGameRestBooks:
                         raise
                     except Exception as exc:
                         logger.warning("KALSHI_GAME_REST_REFRESH_ERROR series=%s type=%s", series, type(exc).__name__)
-                    await asyncio.sleep(0.25)
+                    if self.series_request_spacing_seconds:
+                        await asyncio.sleep(self.series_request_spacing_seconds)
+                cycle_elapsed = time.monotonic() - cycle_started
+                remaining = self.series_cycle_interval_seconds - cycle_elapsed
+                if self._running and remaining > 0:
+                    await asyncio.sleep(remaining)
         finally:
             if self._http is not None:
                 await self._http.aclose()
