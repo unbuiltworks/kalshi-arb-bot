@@ -1,15 +1,16 @@
 """Targeted mutation-free Polymarket MLB maker->hedge q1 preflight.
 
-Uses the current near-term sports event feed to shortlist strict same-game/player/stat
-MLB threshold pairs from feed BBOs, then fetches exact books only for the richest
-shortlist. The selected q1 path must still pass exact tradeability, account balance,
-and both maker/hedge previews. This module NEVER creates orders.
+Uses the current near-term sports feed for strict same-game/player/stat semantics,
+then exact books for a small relay shortlist sourced from the latest broad census.
+Every relayed candidate is recomputed from current exact books; stale census prices
+are never trusted. The richest >=3c q1 path must also pass authenticated exact-market
+tradeability, balance presence, and both order previews. This module NEVER creates orders.
 """
 from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 import hashlib
 import json
 import os
@@ -26,16 +27,24 @@ ONE = D("1")
 TARGET = D("0.03")
 TAKER_FEE_FLOOR = D("0.01")
 BASE = "https://gateway.polymarket.us"
-SHORTLIST_PAIRS = 40
 
-
-def _dec(value: Any) -> D | None:
-    if value in (None, ""):
-        return None
-    try:
-        return D(str(value))
-    except (InvalidOperation, ValueError):
-        return None
+# Fresh 20:25 UTC broad-census relay. Only slugs are relayed; all prices/depth are
+# discarded and fetched again here before any READY classification.
+RELAY_PAIRS = (
+    ("astatc-mlb-min-sd-2026-08-23-k-walbue-gte2", "astatc-mlb-min-sd-2026-08-23-k-walbue-gte3"),
+    ("astatc-mlb-chc-sea-2026-08-23-hrr-colyou-gte1", "astatc-mlb-chc-sea-2026-08-23-hrr-colyou-gte2"),
+    ("astatc-mlb-cin-az-2026-08-23-hrr-jorlaw-gte1", "astatc-mlb-cin-az-2026-08-23-hrr-jorlaw-gte2"),
+    ("astatc-mlb-cle-col-2026-08-23-hrr-natlow-gte2", "astatc-mlb-cle-col-2026-08-23-hrr-natlow-gte3"),
+    ("astatc-mlb-cin-az-2026-08-23-hrr-corcar-gte1", "astatc-mlb-cin-az-2026-08-23-hrr-corcar-gte2"),
+    ("astatc-mlb-cin-az-2026-08-23-hrr-jjble-gte1", "astatc-mlb-cin-az-2026-08-23-hrr-jjble-gte2"),
+    ("astatc-mlb-laa-tex-2026-08-23-tb-jakbur-gte2", "astatc-mlb-laa-tex-2026-08-23-tb-jakbur-gte3"),
+    ("astatc-mlb-cle-col-2026-08-23-hrr-wilcas-gte1", "astatc-mlb-cle-col-2026-08-23-hrr-wilcas-gte2"),
+    ("astatc-mlb-cle-col-2026-08-23-hrr-micmon-gte1", "astatc-mlb-cle-col-2026-08-23-hrr-micmon-gte2"),
+    ("astatc-mlb-cle-col-2026-08-23-hrr-jakmcc-gte1", "astatc-mlb-cle-col-2026-08-23-hrr-jakmcc-gte2"),
+    ("astatc-mlb-pit-lad-2026-08-23-hrr-kyltuc-gte1", "astatc-mlb-pit-lad-2026-08-23-hrr-kyltuc-gte2"),
+    ("astatc-mlb-pit-lad-2026-08-23-hrr-teoher-gte1", "astatc-mlb-pit-lad-2026-08-23-hrr-teoher-gte2"),
+    ("astatc-mlb-atl-mil-2026-08-23-tb-matols-gte3", "astatc-mlb-atl-mil-2026-08-23-tb-matols-gte4"),
+)
 
 
 def _locked_profit(maker_price: D, taker_price: D) -> D:
@@ -120,12 +129,15 @@ async def _fetch_mlb_events() -> list[dict[str, Any]]:
     seen: set[str] = set()
     async with httpx.AsyncClient(timeout=12.0) as http:
         for page in range(12):
-            r = await http.get(f"{BASE}/v1/events", params={
-                "limit": 100, "offset": page * 100, "active": "true", "closed": "false",
-                "ended": "false", "categories": "sports", "startTimeMax": horizon,
-                "orderBy": "startTime", "orderDirection": "desc",
-            })
-            r.raise_for_status()
+            try:
+                r = await http.get(f"{BASE}/v1/events", params={
+                    "limit": 100, "offset": page * 100, "active": "true", "closed": "false",
+                    "ended": "false", "categories": "sports", "startTimeMax": horizon,
+                    "orderBy": "startTime", "orderDirection": "desc",
+                })
+                r.raise_for_status()
+            except Exception:
+                break
             body = r.json() if r.content else {}
             rows = [dict(e) for e in (body.get("events") or []) if isinstance(e, Mapping)]
             for event in rows:
@@ -141,86 +153,77 @@ async def _fetch_mlb_events() -> list[dict[str, Any]]:
     return found
 
 
-def _feed_shortlist(ladders: Mapping[Any, list[dict[str, Any]]]) -> list[dict[str, Any]]:
-    rough: list[dict[str, Any]] = []
-    for key, ladder in ladders.items():
-        ordered = sorted(ladder, key=lambda r: r["threshold"])
-        for i, low in enumerate(ordered):
-            for high in ordered[i + 1:]:
-                if low["threshold"] >= high["threshold"]:
-                    continue
-                lbid, lask = _dec(low["market"].get("bestBid")), _dec(low["market"].get("bestAsk"))
-                hbid, hask = _dec(high["market"].get("bestBid")), _dec(high["market"].get("bestAsk"))
-                # bestBid/bestAsk are YES BBOs. NO ask = 1-YES bid; NO bid = 1-YES ask.
-                if lbid is not None and hbid is not None:
-                    rough.append({"key": key, "low": low, "high": high, "direction": "MAKER_LOW_HEDGE_HIGH", "rough_locked": _locked_profit(lbid, ONE - hbid)})
-                if lask is not None and hask is not None:
-                    rough.append({"key": key, "low": low, "high": high, "direction": "MAKER_HIGH_HEDGE_LOW", "rough_locked": _locked_profit(ONE - hask, lask)})
-    rough = [r for r in rough if r["rough_locked"] >= TARGET]
-    rough.sort(key=lambda r: r["rough_locked"], reverse=True)
-    return rough[:SHORTLIST_PAIRS]
-
-
 async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, Any]:
     mlb_events = await _fetch_mlb_events()
-    ladders: dict[tuple[str, str, str, tuple[str, str], str], list[dict[str, Any]]] = {}
+    market_by_slug: dict[str, dict[str, Any]] = {}
     parseable = 0
     for event in mlb_events:
-        event_slug = str(event.get("slug") or event.get("id") or "")
         for market in event.get("markets") or []:
             if not isinstance(market, Mapping):
                 continue
             row = dict(market)
-            ident = _poly_identity(row)
-            if ident is None:
-                continue
-            parseable += 1
-            family, player, teams, game_date, threshold = ident
-            if threshold < ONE or threshold != threshold.to_integral_value():
-                continue
             slug = str(row.get("slug") or "")
             if not slug:
                 continue
-            key = (game_date, family, "".join(ch for ch in player.lower() if ch.isalnum()), tuple(sorted(teams)), event_slug)
-            ladders.setdefault(key, []).append({"market": row, "slug": slug, "threshold": threshold})
+            market_by_slug[slug] = row
+            if _poly_identity(row) is not None:
+                parseable += 1
 
-    eligible = {k: v for k, v in ladders.items() if len({r["threshold"] for r in v}) >= 2}
-    shortlist = _feed_shortlist(eligible)
-    slugs = sorted({r[x]["slug"] for r in shortlist for x in ("low", "high")})
+    relayed: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for low_slug, high_slug in RELAY_PAIRS:
+        low, high = market_by_slug.get(low_slug), market_by_slug.get(high_slug)
+        if low is None or high is None:
+            continue
+        pair = _strict_pair(low, high)
+        if pair is None:
+            continue
+        # Relay names encode low/high; still prove it from the semantic parser.
+        li, hi = _poly_identity(low), _poly_identity(high)
+        if li is None or hi is None or not li[4] < hi[4]:
+            continue
+        relayed.append((low, high))
+
+    slugs = sorted({str(m.get("slug")) for pair in relayed for m in pair})
     books: dict[str, TopBook] = {}
-    sem = asyncio.Semaphore(10)
     async with httpx.AsyncClient(timeout=5.0) as http:
+        sem = asyncio.Semaphore(8)
         async def fetch_book(slug: str) -> None:
             async with sem:
                 try:
                     res = await http.get(f"{BASE}/v1/markets/{slug}/book")
                     if res.status_code == 200:
                         b = poly_top_book(res.json())
-                        if b is not None: books[slug] = b
+                        if b is not None:
+                            books[slug] = b
                 except Exception:
                     return
         await asyncio.gather(*(fetch_book(s) for s in slugs))
 
     scored: list[dict[str, Any]] = []
-    for r in shortlist:
-        low, high = r["low"], r["high"]
-        if low["slug"] not in books or high["slug"] not in books:
+    for low, high in relayed:
+        low_slug, high_slug = str(low["slug"]), str(high["slug"])
+        if low_slug not in books or high_slug not in books:
             continue
-        lb, hb = books[low["slug"]], books[high["slug"]]
-        if r["direction"] == "MAKER_LOW_HEDGE_HIGH":
-            ms, mp, hs, (hp, hd) = "YES", _bid(lb, True), "NO", _ask(hb, False)
-        else:
-            ms, mp, hs, (hp, hd) = "NO", _bid(hb, False), "YES", _ask(lb, True)
-        locked = _locked_profit(mp, hp)
-        if mp <= 0 or mp >= ONE or hd < ONE or locked < TARGET:
-            continue
-        scored.append({**r, "maker_side": ms, "maker_price": mp, "hedge_side": hs, "hedge_ask": hp, "hedge_depth": hd, "locked_profit": locked})
-    scored.sort(key=lambda r: r["locked_profit"], reverse=True)
+        lb, hb = books[low_slug], books[high_slug]
+        options = (
+            ("MAKER_LOW_HEDGE_HIGH", "YES", _bid(lb, True), "NO", *_ask(hb, False)),
+            ("MAKER_HIGH_HEDGE_LOW", "NO", _bid(hb, False), "YES", *_ask(lb, True)),
+        )
+        for direction, maker_side, maker_px, hedge_side, hedge_px, hedge_depth in options:
+            locked = _locked_profit(maker_px, hedge_px)
+            if maker_px <= 0 or maker_px >= ONE or hedge_depth < ONE or locked < TARGET:
+                continue
+            scored.append({"low": low, "high": high, "direction": direction,
+                           "maker_side": maker_side, "maker_price": maker_px,
+                           "hedge_side": hedge_side, "hedge_ask": hedge_px,
+                           "hedge_depth": hedge_depth, "locked_profit": locked})
+    # Favor profit first, then deeper hedge for ties.
+    scored.sort(key=lambda r: (r["locked_profit"], r["hedge_depth"]), reverse=True)
 
     if not scored:
-        out = {"status": "NO_TARGETED_MLB_MAKER_Q1", "mlb_events": len(mlb_events), "parseable_prop_markets": parseable,
-               "ladders": len(ladders), "eligible_ladders": len(eligible), "feed_shortlist": len(shortlist),
-               "candidate_slugs": len(slugs), "books_fetched": len(books), "order_entry": False}
+        out = {"status": "NO_RELAYED_MLB_MAKER_Q1", "mlb_events": len(mlb_events),
+               "parseable_prop_markets": parseable, "relay_pairs_present": len(relayed),
+               "books_fetched": len(books), "order_entry": False}
         print("SPORTS_KP_POLY_MAKER_Q1_PREFLIGHT " + json.dumps(out, separators=(",", ":")), flush=True)
         return out
 
@@ -231,25 +234,25 @@ async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, A
             asyncio.to_thread(client.markets.retrieve_by_slug, row["low"]["slug"]),
             asyncio.to_thread(client.markets.retrieve_by_slug, row["high"]["slug"]),
         )
-        fp, evidence = _certify(row["low"]["market"], row["high"]["market"], exact_low, exact_high)
-        maker_slug = row["low"]["slug"] if row["direction"] == "MAKER_LOW_HEDGE_HIGH" else row["high"]["slug"]
-        hedge_slug = row["high"]["slug"] if row["direction"] == "MAKER_LOW_HEDGE_HIGH" else row["low"]["slug"]
+        fp, evidence = _certify(row["low"], row["high"], exact_low, exact_high)
+        maker_slug = str(row["low"]["slug"] if row["direction"] == "MAKER_LOW_HEDGE_HIGH" else row["high"]["slug"])
+        hedge_slug = str(row["high"]["slug"] if row["direction"] == "MAKER_LOW_HEDGE_HIGH" else row["low"]["slug"])
         maker_payload = _payload(maker_slug, row["maker_side"], row["maker_price"], maker=True)
         hedge_payload = _payload(hedge_slug, row["hedge_side"], row["hedge_ask"], maker=False)
-        # Python SDK preview expects {request: CreateOrderParams}.
         balances, mpv, hpv = await asyncio.gather(
             asyncio.to_thread(client.account.balances),
             asyncio.to_thread(client.orders.preview, {"request": maker_payload}),
             asyncio.to_thread(client.orders.preview, {"request": hedge_payload}),
         )
-        out = {"status": "READY_TARGETED_MLB_MAKER_Q1", "mlb_events": len(mlb_events), "parseable_prop_markets": parseable,
-               "ladders": len(ladders), "feed_shortlist": len(shortlist), "books_fetched": len(books),
+        out = {"status": "READY_RELAYED_MLB_MAKER_Q1", "mlb_events": len(mlb_events),
+               "parseable_prop_markets": parseable, "relay_pairs_present": len(relayed), "books_fetched": len(books),
                "locked_profit_after_hypothetical_fill": str(row["locked_profit"]),
                "maker_slug": maker_slug, "maker_side": row["maker_side"], "maker_price": str(row["maker_price"]),
                "hedge_slug": hedge_slug, "hedge_side": row["hedge_side"], "hedge_ask": str(row["hedge_ask"]),
                "hedge_depth": str(row["hedge_depth"]), "conservative_q1_taker_fee_allowance": str(TAKER_FEE_FLOOR),
-               "rule_fingerprint_sha256": fp, "rule_evidence": evidence, "balance_response_present": bool(balances),
-               "maker_preview_ok": bool(mpv), "hedge_preview_ok": bool(hpv), "order_entry": False, "realized": False}
+               "rule_fingerprint_sha256": fp, "rule_evidence": evidence,
+               "balance_response_present": bool(balances), "maker_preview_ok": bool(mpv), "hedge_preview_ok": bool(hpv),
+               "order_entry": False, "realized": False}
         print("SPORTS_KP_POLY_MAKER_Q1_PREFLIGHT " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
         return out
     finally:
