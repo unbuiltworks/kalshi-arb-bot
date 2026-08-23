@@ -1,3 +1,4 @@
+# Production deployment gate for Polymarket-triggered exact-Kalshi routing.
 import asyncio
 from decimal import Decimal
 
