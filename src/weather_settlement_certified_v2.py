@@ -51,11 +51,10 @@ def _model_sanity_audit(
     quote: dict[str, Any],
 ) -> dict[str, Any]:
     forecast = forecast or {}
-    station_id = (
-        forecast.get("model_station_id")
-        or station.get("station_id")
-        or station.get("cli_product")
-    )
+    # Forecast-side station provenance must be explicit. Never inherit the contract's
+    # settlement station/CLI identity here: doing so would manufacture evidence that
+    # the model itself was actually mapped to the exact settlement station.
+    station_id = forecast.get("model_station_id")
     model_id = forecast.get("model_id") or forecast.get("model")
     return audit_weather_model_sanity(
         model_mean_f=forecast.get("model_mean_f"),
@@ -129,6 +128,9 @@ def build_exact_market_certified_shadow_row(
       - calibration_model_id / calibration_target
       - calibration_evidence_verified / calibration_evidence_id
       - calibration_sample_count / calibration_station_id / calibration_window_end
+
+    ``model_station_id`` is mandatory forecast-side provenance and is never inferred
+    from settlement-station metadata.
 
     Calibration evidence must predate the model run being scored and must refer to the
     same model and daily-maximum-temperature target. Independent anchor evidence must be
