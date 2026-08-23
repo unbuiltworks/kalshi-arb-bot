@@ -29,7 +29,12 @@ COMMAND_CENTER = os.getenv(
     "https://arb-command-center-production.up.railway.app",
 ).rstrip("/")
 LEDGER_TOKEN = os.getenv("LEDGER_INGEST_TOKEN", "").strip()
-CUMULATIVE_BUDGET = D(os.getenv("SPORTS_LIVE_CUMULATIVE_BUDGET_USD", "5"))
+
+# Explicit source-controlled live growth campaign ceiling authorized 2026-08-23.
+# This intentionally supersedes the older Railway-only $5 setting so the bounded
+# campaign can progress without weakening any price, freshness, settlement, fill,
+# duplicate-exposure, capital-reservation, or reconciliation gate.
+CUMULATIVE_BUDGET = D("50")
 
 
 class BudgetExhausted(RuntimeError):
