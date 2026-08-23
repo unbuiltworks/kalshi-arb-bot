@@ -45,6 +45,7 @@ def _model_sanity_audit(
     *,
     forecast: dict[str, Any] | None,
     station: dict[str, Any],
+    quote: dict[str, Any],
 ) -> dict[str, Any]:
     forecast = forecast or {}
     station_id = (
@@ -52,6 +53,7 @@ def _model_sanity_audit(
         or station.get("station_id")
         or station.get("cli_product")
     )
+    model_id = forecast.get("model_id") or forecast.get("model")
     return audit_weather_model_sanity(
         model_mean_f=forecast.get("model_mean_f"),
         model_station_id=station_id,
@@ -62,12 +64,18 @@ def _model_sanity_audit(
         disagreement_tolerance_f=forecast.get("disagreement_tolerance_f"),
         disagreement_tolerance_audited=forecast.get("disagreement_tolerance_audited"),
         model_calibration_verified=forecast.get("model_calibration_verified"),
+        model_id=model_id,
+        calibration_model_id=forecast.get("calibration_model_id"),
+        calibration_target=forecast.get("calibration_target"),
         calibration_evidence_verified=forecast.get("calibration_evidence_verified"),
         calibration_evidence_id=forecast.get("calibration_evidence_id"),
         calibration_sample_count=forecast.get("calibration_sample_count"),
         calibration_station_id=forecast.get("calibration_station_id"),
         calibration_window_end=forecast.get("calibration_window_end"),
         model_run_time=forecast.get("model_run_time"),
+        quote_observed_at=quote.get("observed_at"),
+        independent_anchor_source_id=forecast.get("independent_anchor_source_id"),
+        independent_anchor_observed_at=forecast.get("independent_anchor_observed_at"),
     )
 
 
@@ -92,16 +100,21 @@ def build_exact_market_certified_shadow_row(
       - settlement_source_evidence_market_date
 
     Model EV additionally requires explicit model-sanity evidence on ``forecast``:
-      - model_mean_f / model_station_id
+      - model_mean_f / model_station_id / model_id
       - independent_anchor_high_f / independent_anchor_station_id
       - independent_anchor_verified / same_local_day_verified
+      - independent_anchor_source_id / independent_anchor_observed_at
       - disagreement_tolerance_f / disagreement_tolerance_audited
       - model_calibration_verified
+      - calibration_model_id / calibration_target
       - calibration_evidence_verified / calibration_evidence_id
       - calibration_sample_count / calibration_station_id / calibration_window_end
 
-    Calibration evidence must predate the model run being scored. This prevents a
-    caller from turning bare booleans or future information into certified EV.
+    Calibration evidence must predate the model run being scored and must refer to the
+    same model and daily-maximum-temperature target. Independent anchor evidence must
+    have been observed no later than the quote being scored. This prevents a caller from
+    turning bare booleans, another model's calibration, or later forecast updates into
+    certified EV.
 
     Missing or mismatched settlement provenance quarantines all EV/capacity economics.
     Missing or failed model-sanity evidence preserves settlement/book/fee diagnostics but
@@ -129,7 +142,7 @@ def build_exact_market_certified_shadow_row(
         evidence_market_ticker=market.get("settlement_source_evidence_market_ticker"),
         evidence_market_date=market.get("settlement_source_evidence_market_date"),
     )
-    model_sanity = _model_sanity_audit(forecast=forecast, station=station)
+    model_sanity = _model_sanity_audit(forecast=forecast, station=station, quote=quote)
 
     row = deepcopy(base)
     row["exact_market_source_audit"] = audit
