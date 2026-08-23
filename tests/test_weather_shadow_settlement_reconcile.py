@@ -58,6 +58,8 @@ def _settlement(**overrides):
         "official_source_verified": True,
         "finality_verified": True,
         "correction_window_checked": True,
+        "terminal_record_stage": "FINAL",
+        "terminal_record_stage_verified": True,
         "settlement_value": 104,
         "outcome": "NO",
     }
@@ -69,15 +71,46 @@ def test_reconciles_exact_official_weather_paper_win():
     result = reconcile_weather_paper_fill(shadow_row=_shadow(), paper_fill=_fill(), settlement=_settlement())
     assert result["reconciled"] is True
     assert result["paper_realized_pnl_cents"] == "62"
+    assert result["terminal_record_stage"] == "FINAL"
+    assert result["terminal_record_stage_verified"] is True
 
 
 def test_historical_exact_audit_can_override_legacy_series_regime_for_reconciliation():
     nws_source = "https://www.weather.gov/product.php?site=NWS&product=CLI&issuedby=AUS"
     shadow = _shadow(market_ticker="KXHIGHAUS-26AUG12-B102.5", market_date="2026-08-12", market_settlement_source_provider="NWS", settlement_source_regime_verified=False, exact_market_source_verified=True, exact_market_source_audit=_exact_audit(provider="NWS", ticker="KXHIGHAUS-26AUG12-B102.5", market_date="2026-08-12", source_url=nws_source))
     fill = _fill(market_ticker="KXHIGHAUS-26AUG12-B102.5", market_date="2026-08-12")
-    settlement = _settlement(market_ticker="KXHIGHAUS-26AUG12-B102.5", market_date="2026-08-12", settlement_source_provider="NWS", settlement_source_url=nws_source)
+    settlement = _settlement(market_ticker="KXHIGHAUS-26AUG12-B102.5", market_date="2026-08-12", settlement_source_provider="NWS", settlement_source_url=nws_source, terminal_record_stage=None, terminal_record_stage_verified=False)
     result = reconcile_weather_paper_fill(shadow_row=shadow, paper_fill=fill, settlement=settlement)
     assert result["reconciled"] is True
+
+
+def test_twc_preliminary_or_unverified_record_cannot_realize_paper_pnl():
+    preliminary = reconcile_weather_paper_fill(
+        shadow_row=_shadow(),
+        paper_fill=_fill(),
+        settlement=_settlement(terminal_record_stage="PRELIMINARY", terminal_record_stage_verified=True),
+    )
+    assert preliminary["reconciled"] is False
+    assert "TWC_TERMINAL_RECORD_NOT_FINAL" in preliminary["blockers"]
+    assert preliminary["paper_realized_pnl_cents"] is None
+
+    unverified = reconcile_weather_paper_fill(
+        shadow_row=_shadow(),
+        paper_fill=_fill(),
+        settlement=_settlement(terminal_record_stage="FINAL", terminal_record_stage_verified=False),
+    )
+    assert unverified["reconciled"] is False
+    assert "TWC_TERMINAL_RECORD_STAGE_UNVERIFIED" in unverified["blockers"]
+
+
+def test_twc_string_true_terminal_record_verification_fails_closed():
+    result = reconcile_weather_paper_fill(
+        shadow_row=_shadow(),
+        paper_fill=_fill(),
+        settlement=_settlement(terminal_record_stage="FINAL", terminal_record_stage_verified="true"),
+    )
+    assert result["reconciled"] is False
+    assert "TWC_TERMINAL_RECORD_STAGE_UNVERIFIED" in result["blockers"]
 
 
 def test_exact_market_or_date_mismatch_fails_closed():
