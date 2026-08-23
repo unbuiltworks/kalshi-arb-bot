@@ -14,16 +14,31 @@ from src import gemini_kalshi_maker_live_probe_q1 as base
 from src import gemini_kalshi_maker_live_probe_q1_safe as safe
 from src import gemini_kalshi_maker_live_probe_q1_safe_v2 as hardened
 from src import gemini_kalshi_maker_live_probe_q1_venue_once as venue_once
+from src import gemini_kalshi_maker_rest_guard as rest_guard
 
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_maker_live_probe_q1_final")
 PREFLIGHT_ENV = "MAKER_LIVE_PROBE_PREFLIGHT"
 TARGET_ENV = "MAKER_LIVE_PROBE_TARGET_PROFIT"
 POLICY_ENV = "MAKER_LIVE_PROBE_POLICY"
+ASSET_ENV = "MAKER_LIVE_PROBE_ASSET"
+ELIGIBLE_ASSETS = ("ETH", "SOL", "XRP")
 
 
 def preflight_requested() -> bool:
     return os.getenv(PREFLIGHT_ENV, "YES").strip().upper() == "YES"
+
+
+def configure_asset() -> str:
+    asset = os.getenv(ASSET_ENV, "XRP").strip().upper()
+    if asset == "BTC":
+        raise ValueError("BTC remains quarantined for settlement-basis maker research")
+    if asset not in ELIGIBLE_ASSETS:
+        raise ValueError(f"{ASSET_ENV} must be one of {','.join(ELIGIBLE_ASSETS)}")
+    if asset not in base.ASSET_SERIES:
+        raise ValueError(f"maker series mapping missing for asset={asset}")
+    base.ASSET = asset
+    return asset
 
 
 def configure_target_profit() -> Decimal:
@@ -45,6 +60,7 @@ def configure_policy() -> str:
 
 
 async def readonly_preflight() -> dict:
+    asset = configure_asset()
     target = configure_target_profit()
     policy = configure_policy()
     gemini = base.GeminiTradingSession()
@@ -57,15 +73,32 @@ async def readonly_preflight() -> dict:
         if gemini_usd < D("1") or kalshi_usd < D("1"):
             raise RuntimeError("maker live probe preflight requires at least $1 available on both venues")
         async with httpx.AsyncClient(timeout=20.0) as http:
-            fee_meta = await base.fetch_series_fee_metadata(http, base.ASSET_SERIES[base.ASSET])
+            fee_meta = await base.fetch_series_fee_metadata(http, base.ASSET_SERIES[asset])
             safe._fee_mapping_gate(fee_meta)
-        return {**report,"mode":"LIVE_PROBE_PREFLIGHT_ONLY","asset":base.ASSET,"quantity_max":"1","target_profit":str(target),"policy":policy,"fee_type":fee_meta.fee_type,"fee_multiplier":fee_meta.fee_multiplier,"settlement_status":base.SETTLEMENT_STATUS,"order_entry":False,"preflight_passed":True}
+        return {
+            **report,
+            "mode":"LIVE_PROBE_PREFLIGHT_ONLY",
+            "asset":asset,
+            "eligible_assets":list(ELIGIBLE_ASSETS),
+            "btc_quarantined":True,
+            "quantity_max":"1",
+            "target_profit":str(target),
+            "policy":policy,
+            "fee_type":fee_meta.fee_type,
+            "fee_multiplier":fee_meta.fee_multiplier,
+            "settlement_status":base.SETTLEMENT_STATUS,
+            "kalshi_book_transport":"EXACT_REST_DEPTH1",
+            "kalshi_account_transport":"REST_ORDER_POLL_PLUS_FINAL_FILL_RECONCILIATION",
+            "order_entry":False,
+            "preflight_passed":True,
+        }
     finally:
         await gemini.close()
         await kalshi.close()
 
 
 async def run() -> dict:
+    asset = configure_asset()
     target = configure_target_profit()
     policy = configure_policy()
     if not base._live_software_authorized():
@@ -75,8 +108,26 @@ async def run() -> dict:
             return report
         return {"mode":"LIVE_PROBE","outcome":"DISARMED_NO_PREFLIGHT","settlement_status":base.SETTLEMENT_STATUS,"order_entry":False}
     safe.candidate_from_books = hardened.candidate_from_books
+    # Process-local only: preserve Gemini streaming and all existing execution/risk
+    # gates, while replacing the two Kalshi websocket readers with authenticated REST.
+    rest_guard.install()
     venue_once.install()
-    logger.warning("MAKER_LIVE_PROBE_ONE_SHOT_MODE %s", json.dumps({"mode":"LIVE_PROBE","idempotency":"KALSHI_CLIENT_ORDER_ID","process_claim":"EPHEMERAL","restart_policy":"NEVER","maker_order_ttl_s":venue_once.ORDER_TTL_S,"quantity_max":"1","target_profit":str(target),"policy":policy,"settlement_status":base.SETTLEMENT_STATUS}, separators=(",", ":")))
+    logger.warning("MAKER_LIVE_PROBE_ONE_SHOT_MODE %s", json.dumps({
+        "mode":"LIVE_PROBE",
+        "asset":asset,
+        "eligible_assets":list(ELIGIBLE_ASSETS),
+        "btc_quarantined":True,
+        "idempotency":"KALSHI_CLIENT_ORDER_ID",
+        "process_claim":"EPHEMERAL",
+        "restart_policy":"NEVER",
+        "maker_order_ttl_s":venue_once.ORDER_TTL_S,
+        "quantity_max":"1",
+        "target_profit":str(target),
+        "policy":policy,
+        "settlement_status":base.SETTLEMENT_STATUS,
+        "kalshi_book_transport":"EXACT_REST_DEPTH1",
+        "kalshi_account_transport":"REST_ORDER_POLL_PLUS_FINAL_FILL_RECONCILIATION",
+    }, separators=(",", ":")))
     return await safe.run_once()
 
 
