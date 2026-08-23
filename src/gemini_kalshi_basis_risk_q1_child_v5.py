@@ -1,11 +1,11 @@
-"""Promoted q=1 basis-risk child after the first live probe settled profitably.
+"""Promoted q=1 basis-risk child after the first three live probes settled profitably.
 
 This is still settlement-basis research, not guaranteed arbitrage. Promotion is bounded
-by the already-reviewed production policy and remains stricter than the user's approved
-$5 maximum-loss research budget:
+by the already-reviewed production policy and remains within the user's approved $5
+maximum-loss research budget:
 
 * q=1 and <=$1 reserved capital per probe;
-* at most three lifetime CAPITAL_RESERVED rows for this strategy, including the first;
+* at most five lifetime CAPITAL_RESERVED rows for this strategy;
 * exactly one unresolved/reserved probe at a time;
 * every prior reservation must be authoritatively TRADE_REALIZED before another claim;
 * any realized loss hard-stops all future automatic reservations;
@@ -30,7 +30,7 @@ from src import gemini_kalshi_basis_risk_q1_child_v4 as child_v4
 D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_risk_q1_child_v5")
 
-PROMOTED_PROBE_LIMIT = 3
+PROMOTED_PROBE_LIMIT = 5
 LOCK_NAME = child_v2.LOCK_NAME
 
 
