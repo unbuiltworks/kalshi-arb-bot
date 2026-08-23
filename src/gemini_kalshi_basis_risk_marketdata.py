@@ -8,8 +8,10 @@ REST order books only inside this dedicated child process.
 Safety properties:
 * the optional market_lifecycle_v2 socket stays disabled; exact strikes continue via
   the existing authoritative GET /markets/{ticker} fallback;
-* current and prewarmed 15-minute tickers are polled concurrently at no more than 20Hz
-  per ticker (default 50ms cycle, up to eight tickers => <=160 reads/s);
+* current tickers use the configured exact-book cadence, clamped to no more than 20Hz
+  per ticker; when current+next windows overlap (>3 tickers), the cycle automatically
+  slows to at least 180ms so exact-book traffic does not starve authoritative target
+  discovery at rollover;
 * every Kalshi quote is timestamped at HTTP request *start*, not response arrival, so
   network RTT makes it older and can only hurt the downstream freshness/skew gates;
 * only exact GET /markets/{ticker}/orderbook?depth=1 responses enter the feed;
@@ -18,8 +20,8 @@ Safety properties:
 * HTTP 429s back off and emit no quote; stale/missing data therefore fails closed.
 
 All downstream <=100ms quote age, <=50ms cross-venue skew, 50ms persistence, q=1 exact
-depth, >=3c after-fee economics, >=10bp dominance, dual-FOK transport, durable Postgres
-reservation and settlement controls remain unchanged.
+depth, >=3c after-fee economics, protective threshold-dominance rules, dual-FOK
+transport, durable Postgres reservation and settlement controls remain unchanged.
 """
 from __future__ import annotations
 
@@ -44,6 +46,8 @@ logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_risk_marketdata")
 DEFAULT_POLL_INTERVAL_S = 0.05
 MIN_POLL_INTERVAL_S = 0.05
 MAX_POLL_INTERVAL_S = 0.25
+ROLLOVER_OVERLAP_TICKER_THRESHOLD = 3
+ROLLOVER_OVERLAP_MIN_POLL_INTERVAL_S = 0.18
 MAX_TICKERS = 8
 _INSTALLED = False
 
@@ -55,6 +59,21 @@ def _poll_interval_s() -> float:
     except ValueError:
         value = DEFAULT_POLL_INTERVAL_S
     return max(MIN_POLL_INTERVAL_S, min(value, MAX_POLL_INTERVAL_S))
+
+
+def _cycle_poll_interval_s(ticker_count: int) -> float:
+    """Return the safe cycle cadence for the current registered ticker set.
+
+    Steady state is three eligible current-window tickers (ETH/SOL/XRP). During the
+    rollover prewarm there can be current+next tickers simultaneously. Slowing only
+    that overlap preserves faster steady-state sampling while leaving REST capacity for
+    authoritative GET /markets/{ticker} target discovery. This never makes polling
+    faster than the configured base interval.
+    """
+    base = _poll_interval_s()
+    if int(ticker_count) > ROLLOVER_OVERLAP_TICKER_THRESHOLD:
+        return max(base, ROLLOVER_OVERLAP_MIN_POLL_INTERVAL_S)
+    return base
 
 
 async def _rest_only_lifecycle_placeholder() -> None:
@@ -134,11 +153,14 @@ class BasisKalshiExactRestHub:
         self._backoff_until = 0.0
 
     def health(self) -> dict[str, Any]:
+        ticker_count = len(self._targets)
         return {
             "connected": self._task is not None and not self._task.done(),
             "transport": "KALSHI_EXACT_REST_DEPTH1",
             "desired_markets": sorted(self._targets),
             "poll_interval_ms": int(_poll_interval_s() * 1000),
+            "effective_poll_interval_ms": int(_cycle_poll_interval_s(ticker_count) * 1000),
+            "rollover_overlap": ticker_count > ROLLOVER_OVERLAP_TICKER_THRESHOLD,
             "requests": self.requests,
             "rate_limits": self.rate_limits,
             "parse_misses": self.parse_misses,
@@ -224,6 +246,8 @@ class BasisKalshiExactRestHub:
             json.dumps({
                 "transport": "EXACT_REST_DEPTH1",
                 "poll_interval_ms": int(_poll_interval_s() * 1000),
+                "rollover_overlap_min_poll_interval_ms": int(ROLLOVER_OVERLAP_MIN_POLL_INTERVAL_S * 1000),
+                "rollover_overlap_ticker_threshold": ROLLOVER_OVERLAP_TICKER_THRESHOLD,
                 "max_tickers": MAX_TICKERS,
                 "max_reads_per_second": int(MAX_TICKERS / _poll_interval_s()),
                 "quote_timestamp": "HTTP_REQUEST_START",
@@ -242,11 +266,12 @@ class BasisKalshiExactRestHub:
                 cycle_start = time.monotonic()
                 async with self._registry_lock:
                     snapshot = {ticker: list(rows) for ticker, rows in self._targets.items() if rows}
+                effective_interval_s = _cycle_poll_interval_s(len(snapshot))
                 if snapshot:
                     await asyncio.gather(*(self._fetch_one(ticker, rows) for ticker, rows in snapshot.items()))
                     self.cycles += 1
                 elapsed = time.monotonic() - cycle_start
-                await asyncio.sleep(max(0.0, _poll_interval_s() - elapsed))
+                await asyncio.sleep(max(0.0, effective_interval_s - elapsed))
         finally:
             if self._http is not None:
                 await self._http.aclose()
@@ -266,6 +291,8 @@ def install() -> None:
     _INSTALLED = True
     logger.warning(
         "CRYPTO_BASIS_RISK_MARKETDATA_GUARD_INSTALLED lifecycle_ws=false shared_orderbook_ws=false "
-        "kalshi_exact_rest_depth1=true poll_interval_ms=%s risk_gates_changed=false",
+        "kalshi_exact_rest_depth1=true poll_interval_ms=%s rollover_overlap_min_poll_interval_ms=%s "
+        "risk_gates_changed=false",
         int(_poll_interval_s() * 1000),
+        int(ROLLOVER_OVERLAP_MIN_POLL_INTERVAL_S * 1000),
     )
