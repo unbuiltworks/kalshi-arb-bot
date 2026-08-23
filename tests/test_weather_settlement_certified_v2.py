@@ -44,13 +44,17 @@ def _quote(observed_at="2026-08-21T07:30:00Z"):
     }
 
 
-def _station():
-    return {
+def _station(**overrides):
+    row = {
         "name": "Central Park",
         "station_id": "CLINY",
         "cli_product": "CLINY",
         "identity_verified": True,
+        "timezone": "America/New_York",
+        "timezone_mapping_verified": True,
     }
+    row.update(overrides)
+    return row
 
 
 def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-04:00", **overrides):
@@ -94,12 +98,12 @@ def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-0
     return row
 
 
-def _build(market=None, forecast=None):
+def _build(market=None, forecast=None, station=None):
     return build_exact_market_certified_shadow_row(
         series=_series(),
         market=market or _market(),
         quote=_quote(),
-        station=_station(),
+        station=station or _station(),
         forecast=forecast or _forecast(),
         fee_changes=[],
     )
@@ -109,6 +113,7 @@ def test_exact_market_provenance_model_sanity_and_local_day_are_fail_closed_gate
     row = _build()
     assert row["exact_market_source_verified"] is True
     assert row["local_day_binding_verified"] is True
+    assert row["forecast_valid_local_day_verified"] is True
     assert row["model_sanity_verified"] is True
     assert row["settlement_certified_shadow"] is True
     assert row["ev_certified_shadow"] is True
@@ -148,6 +153,31 @@ def test_stringly_same_local_day_flag_cannot_certify_ev():
     assert row["local_day_binding_verified"] is False
     assert row["ev_certified_shadow"] is False
     assert "LOCAL_DAY_EQUIVALENCE_UNVERIFIED" in row["local_day_binding_audit"]["blockers"]
+
+
+def test_forecast_valid_time_must_resolve_to_contract_day_in_station_timezone():
+    row = _build(forecast=_forecast(valid_time="2026-08-22T04:00:00Z"))
+    assert row["settlement_certified_shadow"] is True
+    assert row["local_day_binding_verified"] is True
+    assert row["forecast_valid_local_day_verified"] is False
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert row["best_shadow_side"] is None
+    assert row["economics_status"] == "FORECAST_VALID_TIME_LOCAL_DAY_UNVERIFIED_RESEARCH_ONLY"
+    assert "FORECAST_VALID_TIME_MARKET_DAY_MISMATCH" in row["forecast_valid_local_day_audit"]["blockers"]
+
+
+def test_missing_or_stringly_station_timezone_audit_cannot_certify_ev():
+    missing = _build(station=_station(timezone=None))
+    assert missing["settlement_certified_shadow"] is True
+    assert missing["forecast_valid_local_day_verified"] is False
+    assert missing["ev_certified_shadow"] is False
+    assert "STATION_TIMEZONE_UNVERIFIED" in missing["forecast_valid_local_day_audit"]["blockers"]
+
+    stringly = _build(station=_station(timezone_mapping_verified="true"))
+    assert stringly["forecast_valid_local_day_verified"] is False
+    assert stringly["ev_certified_shadow"] is False
+    assert "STATION_TIMEZONE_MAPPING_UNVERIFIED" in stringly["forecast_valid_local_day_audit"]["blockers"]
 
 
 def test_verified_historical_nws_exact_market_can_override_current_twc_series_regime_only():
@@ -190,6 +220,7 @@ def test_verified_historical_nws_exact_market_can_override_current_twc_series_re
     )
     assert row["exact_market_source_verified"] is True
     assert row["local_day_binding_verified"] is True
+    assert row["forecast_valid_local_day_verified"] is True
     assert row["model_sanity_verified"] is True
     assert "EXACT_MARKET_SETTLEMENT_REGIME_UNVERIFIED" not in row["blockers"]
     assert row["settlement_certified_shadow"] is True
