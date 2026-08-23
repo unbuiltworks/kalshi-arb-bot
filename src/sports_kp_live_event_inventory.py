@@ -1,8 +1,8 @@
 """Read-only current Polymarket US sports-event inventory for the K/P lane.
 
-The bounded relay orphan cleanup and same-venue MLB q1 revenue campaign run before
-broad inventory paging. Cleanup only cancels open orders on the relay allowlist.
-The campaign remains mutation-free unless its separate live gate is armed.
+The bounded relay orphan cleanup and dynamic same-venue MLB q1 revenue campaign
+run before broad inventory paging. Cleanup only cancels open orders on the relay
+allowlist. The campaign remains mutation-free unless its separate live gate is armed.
 """
 from __future__ import annotations
 
@@ -122,10 +122,10 @@ async def run_once(http: httpx.AsyncClient | None = None) -> dict[str, Any]:
         logger.exception("SPORTS_POLY_RELAY_ORPHAN_CLEANUP_ERROR")
 
     try:
-        from src.sports_kp_poly_relay_campaign_q1_v3 import run_once as revenue_campaign
+        from src.sports_kp_poly_relay_campaign_q1_v4 import run_once as revenue_campaign
         await revenue_campaign()
     except Exception:
-        logger.exception("SPORTS_POLY_RELAY_CAMPAIGN_Q1_V3_ERROR")
+        logger.exception("SPORTS_POLY_RELAY_CAMPAIGN_Q1_V4_ERROR")
 
     owns = http is None
     client = http or httpx.AsyncClient(timeout=30.0)
