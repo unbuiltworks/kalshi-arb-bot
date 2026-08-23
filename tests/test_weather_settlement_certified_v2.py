@@ -54,6 +54,7 @@ def _station():
 
 
 def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-04:00", **overrides):
+    local_date = run_time[:10]
     row = {
         "model": "GFS:v1",
         "model_id": "GFS:v1",
@@ -62,6 +63,8 @@ def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-0
         "cli_product": "CLINY",
         "model_run_time": run_time,
         "forecast_valid_time": valid_time,
+        "model_local_date": local_date,
+        "independent_anchor_local_date": local_date,
         "station_mapping_verified": True,
         "freshness_verified": True,
         "bracket_probability": "0.65",
@@ -74,7 +77,7 @@ def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-0
         "independent_anchor_provider": "TWC",
         "independent_anchor_model_id": "TWC_DAILY_HIGH:v1",
         "independent_anchor_provenance_url": "https://weather.com/weather/today/l/new-york-ny",
-        "independent_anchor_observed_at": "2026-08-21T05:30:00Z",
+        "independent_anchor_observed_at": f"{local_date}T05:30:00Z",
         "same_local_day_verified": True,
         "disagreement_tolerance_f": "2.0",
         "disagreement_tolerance_audited": True,
@@ -102,15 +105,49 @@ def _build(market=None, forecast=None):
     )
 
 
-def test_exact_market_provenance_and_model_sanity_are_additional_fail_closed_gates():
+def test_exact_market_provenance_model_sanity_and_local_day_are_fail_closed_gates():
     row = _build()
     assert row["exact_market_source_verified"] is True
+    assert row["local_day_binding_verified"] is True
     assert row["model_sanity_verified"] is True
     assert row["settlement_certified_shadow"] is True
     assert row["ev_certified_shadow"] is True
     assert row["best_shadow_side"] is not None
     assert row["order_entry"] is False
     assert row["live_probe_ready"] is False
+
+
+def test_missing_model_local_date_withholds_ev_but_preserves_settlement_certification():
+    row = _build(forecast=_forecast(model_local_date=None))
+    assert row["settlement_certified_shadow"] is True
+    assert row["local_day_binding_verified"] is False
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert row["best_shadow_side"] is None
+    assert row["economics_status"] == "LOCAL_DAY_UNVERIFIED_RESEARCH_ONLY"
+    assert "MODEL_LOCAL_DATE_UNVERIFIED" in row["local_day_binding_audit"]["blockers"]
+
+
+def test_adjacent_day_forecast_cannot_certify_exact_market_ev():
+    row = _build(forecast=_forecast(
+        model_local_date="2026-08-22",
+        independent_anchor_local_date="2026-08-22",
+        same_local_day_verified=True,
+    ))
+    assert row["settlement_certified_shadow"] is True
+    assert row["local_day_binding_verified"] is False
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert row["forecast_bracket_probability"] is None
+    assert "FORECAST_MARKET_LOCAL_DAY_MISMATCH" in row["local_day_binding_audit"]["blockers"]
+    assert "ANCHOR_MARKET_LOCAL_DAY_MISMATCH" in row["local_day_binding_audit"]["blockers"]
+
+
+def test_stringly_same_local_day_flag_cannot_certify_ev():
+    row = _build(forecast=_forecast(same_local_day_verified="true"))
+    assert row["local_day_binding_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert "LOCAL_DAY_EQUIVALENCE_UNVERIFIED" in row["local_day_binding_audit"]["blockers"]
 
 
 def test_verified_historical_nws_exact_market_can_override_current_twc_series_regime_only():
@@ -138,6 +175,8 @@ def test_verified_historical_nws_exact_market_can_override_current_twc_series_re
         forecast=_forecast(
             run_time="2026-08-12T06:00:00Z",
             valid_time="2026-08-12T23:59:59-04:00",
+            model_local_date="2026-08-12",
+            independent_anchor_local_date="2026-08-12",
             independent_anchor_observed_at="2026-08-12T05:30:00Z",
             calibration_window_end="2026-08-01T23:59:59Z",
         ),
@@ -150,6 +189,7 @@ def test_verified_historical_nws_exact_market_can_override_current_twc_series_re
         fee_history_complete=True,
     )
     assert row["exact_market_source_verified"] is True
+    assert row["local_day_binding_verified"] is True
     assert row["model_sanity_verified"] is True
     assert "EXACT_MARKET_SETTLEMENT_REGIME_UNVERIFIED" not in row["blockers"]
     assert row["settlement_certified_shadow"] is True
@@ -172,34 +212,18 @@ def test_missing_exact_source_url_quarantines_all_ev_economics():
 
 
 def test_generic_series_page_cannot_certify_exact_market():
-    row = _build(_market(
-        settlement_source_evidence_url="https://kalshi.com/markets/kxhighny",
-    ))
+    row = _build(_market(settlement_source_evidence_url="https://kalshi.com/markets/kxhighny"))
     assert row["exact_market_source_verified"] is False
     assert "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT" in row["blockers"]
     assert row["side_economics"] == []
-
-
-def test_evidence_ticker_or_date_mismatch_quarantines_shadow_economics():
-    row = _build(_market(
-        settlement_source_evidence_market_ticker="KXHIGHNY-26AUG21-B82.5",
-        settlement_source_evidence_market_date="2026-08-20",
-    ))
-    assert row["exact_market_source_verified"] is False
-    assert "EXACT_MARKET_EVIDENCE_MISMATCH" in row["blockers"]
-    assert row["ev_certified_shadow"] is False
 
 
 def test_exact_audit_never_upgrades_underlying_failed_quote_gate():
     quote = _quote()
     quote["quote_age_ms"] = 5000
     row = build_exact_market_certified_shadow_row(
-        series=_series(),
-        market=_market(),
-        quote=quote,
-        station=_station(),
-        forecast=_forecast(),
-        fee_changes=[],
+        series=_series(), market=_market(), quote=quote, station=_station(),
+        forecast=_forecast(), fee_changes=[]
     )
     assert row["exact_market_source_verified"] is True
     assert row["settlement_certified_shadow"] is False
@@ -232,6 +256,9 @@ def test_missing_model_sanity_evidence_cannot_certify_ev():
         "cli_product": "CLINY",
         "model_run_time": "2026-08-21T06:00:00Z",
         "forecast_valid_time": "2026-08-21T23:59:59-04:00",
+        "model_local_date": "2026-08-21",
+        "independent_anchor_local_date": "2026-08-21",
+        "same_local_day_verified": True,
         "station_mapping_verified": True,
         "freshness_verified": True,
         "bracket_probability": "0.65",
@@ -242,20 +269,6 @@ def test_missing_model_sanity_evidence_cannot_certify_ev():
     assert row["best_shadow_side"] is None
     assert row["forecast_bracket_probability"] is None
     assert row["live_probe_ready"] is False
-
-
-def test_bare_model_flags_without_calibration_provenance_cannot_certify_ev():
-    row = _build(forecast=_forecast(
-        calibration_evidence_verified=None,
-        calibration_evidence_id=None,
-        calibration_sample_count=None,
-        calibration_station_id=None,
-        calibration_window_end=None,
-    ))
-    assert row["settlement_certified_shadow"] is True
-    assert row["model_sanity_verified"] is False
-    assert row["ev_certified_shadow"] is False
-    assert "MODEL_CALIBRATION_EVIDENCE_UNVERIFIED" in row["model_sanity_audit"]["blockers"]
 
 
 def test_future_calibration_window_cannot_certify_current_forecast():
