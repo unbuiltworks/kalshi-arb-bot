@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/mlb-gk-family-audit-actions
+      - feature/mlb-gk-final-lag-auto-q1-v2
     paths:
       - '.github/workflows/mlb-gk-family-audit.yml'
       - 'src/mlb_gk_final_lag_family_audit.py'
