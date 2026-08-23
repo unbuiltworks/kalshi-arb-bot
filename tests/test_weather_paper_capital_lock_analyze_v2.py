@@ -25,8 +25,9 @@ def _reconciled():
         "side": "NO", "quantity": 1, "paper_cost_cents": "38",
         "paper_payout_cents": "100", "paper_realized_pnl_cents": "62",
         "settlement_outcome": "NO", "settlement_source_provider": "THE_WEATHER_COMPANY",
-        "settlement_source_url": "https://weather.com/kalshi", "read_only": True,
-        "order_entry": False, "live_probe_ready": False}
+        "settlement_source_url": "https://weather.com/kalshi",
+        "terminal_record_stage_verified": True, "terminal_record_stage": "FINAL",
+        "read_only": True, "order_entry": False, "live_probe_ready": False}
 
 
 def _certified_settlement():
@@ -40,7 +41,8 @@ def test_current_source_verifying_settlement_can_realize_paper_capital_lock():
     assert result["verified_settlement_lock_groups"] == 1
     assert result["right_censored_groups"] == 0
     assert result["legacy_or_unbound_settlement_events_quarantined"] == 0
-    assert result["settlement_provenance_version"] == "SOURCE_AND_TERMINAL_PAYLOAD_BOUND_V5"
+    assert result["settlement_provenance_version"] == "SOURCE_FINAL_STAGE_AND_TERMINAL_PAYLOAD_BOUND_V6"
+    assert result["verified_terminal_record_stages"] == {"FINAL": 1}
 
 
 def test_legacy_free_form_prefix_is_quarantined_not_realized():
@@ -56,12 +58,12 @@ def test_legacy_free_form_prefix_is_quarantined_not_realized():
     assert result["conservative_realized_profit_per_capital_hour"] is None
 
 
-def test_random_or_legacy_v4_digest_is_quarantined():
+def test_random_or_legacy_v5_digest_is_quarantined():
     fake = make_event(trade_group_id="g1", settlement_key="weather:KXHIGHMIA-26AUG21-B92.5",
         category="weather", venue="kalshi", market_id="KXHIGHMIA-26AUG21-B92.5",
         event_type="settlement", side="NO", quantity=Decimal("1"), payout=Decimal("1"),
         ts_ms=3_601_000,
-        external_id="weather-certified-settlement:v4:THE_WEATHER_COMPANY:" + "a" * 64 + ":" + "b" * 64)
+        external_id="weather-certified-settlement:v5:THE_WEATHER_COMPANY:" + "a" * 64 + ":" + "b" * 64)
     result = analyze_weather_paper_capital_lock_v2([_fill(), _fee(), fake])
     assert result["verified_settlement_lock_groups"] == 0
     assert result["right_censored_groups"] == 1
