@@ -1,8 +1,8 @@
 """Read-only current Polymarket US sports-event inventory for the K/P lane.
 
-The bounded same-venue Polymarket MLB q1 revenue probe runs first so flaky broad
-inventory paging cannot block exact authenticated validation. The probe remains
-mutation-free unless its separate live gate is explicitly armed.
+The bounded relay orphan cleanup and same-venue MLB q1 revenue probe run before
+broad inventory paging. Cleanup only cancels open orders on the relay allowlist.
+The revenue probe remains mutation-free unless its separate live gate is armed.
 """
 from __future__ import annotations
 
@@ -53,39 +53,20 @@ def _league(event: Mapping[str, Any]) -> str:
 
 
 def _market_type(market: Mapping[str, Any]) -> str:
-    return _text(
-        market.get("sportsMarketTypeV2")
-        or market.get("sportsMarketType")
-        or market.get("marketType")
-        or "UNKNOWN"
-    ).upper().removeprefix("SPORTS_MARKET_TYPE_")
+    return _text(market.get("sportsMarketTypeV2") or market.get("sportsMarketType") or market.get("marketType") or "UNKNOWN").upper().removeprefix("SPORTS_MARKET_TYPE_")
 
 
-async def fetch_current_sports_events(
-    http: httpx.AsyncClient,
-    *,
-    horizon_hours: int = 48,
-    max_pages: int = 12,
-) -> list[dict[str, Any]]:
-    now = datetime.now(timezone.utc)
-    horizon = now + timedelta(hours=horizon_hours)
+async def fetch_current_sports_events(http: httpx.AsyncClient, *, horizon_hours: int = 48, max_pages: int = 12) -> list[dict[str, Any]]:
+    horizon = datetime.now(timezone.utc) + timedelta(hours=horizon_hours)
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
     for page in range(max_pages):
         try:
-            response = await http.get(
-                f"{POLY}/v1/events",
-                params={
-                    "limit": 100,
-                    "offset": page * 100,
-                    "active": "true",
-                    "closed": "false",
-                    "categories": "sports",
-                    "startTimeMax": horizon.isoformat().replace("+00:00", "Z"),
-                    "orderBy": "startTime",
-                    "orderDirection": "asc",
-                },
-            )
+            response = await http.get(f"{POLY}/v1/events", params={
+                "limit": 100, "offset": page * 100, "active": "true", "closed": "false",
+                "categories": "sports", "startTimeMax": horizon.isoformat().replace("+00:00", "Z"),
+                "orderBy": "startTime", "orderDirection": "asc",
+            })
             response.raise_for_status()
         except Exception as exc:
             logger.warning("SPORTS_POLY_INVENTORY_PAGE_ERROR page=%s error=%s", page, type(exc).__name__)
@@ -111,9 +92,7 @@ def summarize(events: list[Mapping[str, Any]]) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     leagues: Counter[str] = Counter()
     market_types: Counter[str] = Counter()
-    started = 0
-    upcoming = 0
-    total_markets = 0
+    started = upcoming = total_markets = 0
     samples: list[dict[str, Any]] = []
     for event in events:
         league = _league(event)
@@ -128,28 +107,20 @@ def summarize(events: list[Mapping[str, Any]]) -> dict[str, Any]:
         for market in markets:
             market_types[_market_type(market)] += 1
         if len(samples) < 30:
-            samples.append({
-                "title": _text(event.get("title") or event.get("name")),
-                "slug": _text(event.get("slug") or event.get("id")),
-                "league": league,
-                "start_time": start.isoformat() if start else None,
-                "market_count": len(markets),
-                "market_types": sorted({_market_type(m) for m in markets}),
-            })
-    return {
-        "events": len(events),
-        "started_or_live_by_start_time": started,
-        "upcoming_or_missing_start": upcoming,
-        "markets": total_markets,
-        "leagues": dict(leagues.most_common()),
-        "market_types": dict(market_types.most_common()),
-        "sample_events": samples,
-        "read_only": True,
-        "order_entry": False,
-    }
+            samples.append({"title": _text(event.get("title") or event.get("name")), "slug": _text(event.get("slug") or event.get("id")), "league": league,
+                            "start_time": start.isoformat() if start else None, "market_count": len(markets), "market_types": sorted({_market_type(m) for m in markets})})
+    return {"events": len(events), "started_or_live_by_start_time": started, "upcoming_or_missing_start": upcoming,
+            "markets": total_markets, "leagues": dict(leagues.most_common()), "market_types": dict(market_types.most_common()),
+            "sample_events": samples, "read_only": True, "order_entry": False}
 
 
 async def run_once(http: httpx.AsyncClient | None = None) -> dict[str, Any]:
+    try:
+        from src.sports_poly_relay_orphan_cleanup import run_once as cleanup
+        await cleanup()
+    except Exception:
+        logger.exception("SPORTS_POLY_RELAY_ORPHAN_CLEANUP_ERROR")
+
     try:
         from src.sports_kp_poly_relay_live_q1 import run_once as revenue_probe
         await revenue_probe()
