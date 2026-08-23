@@ -1,9 +1,8 @@
 """Read-only current Polymarket US sports-event inventory for the K/P lane.
 
-This module deliberately performs no cross-venue counterpart certification or order
-entry. It runs the bounded, mutation-free same-venue Polymarket MLB maker q1
-preflight first so a flaky broad inventory page cannot block authenticated revenue
-validation on startup.
+The bounded same-venue Polymarket MLB q1 revenue probe runs first so flaky broad
+inventory paging cannot block exact authenticated validation. The probe remains
+mutation-free unless its separate live gate is explicitly armed.
 """
 from __future__ import annotations
 
@@ -151,12 +150,11 @@ def summarize(events: list[Mapping[str, Any]]) -> dict[str, Any]:
 
 
 async def run_once(http: httpx.AsyncClient | None = None) -> dict[str, Any]:
-    # Revenue preflight first; it fetches its own tightly scoped near-term feed.
     try:
-        from src.sports_kp_poly_maker_q1_preflight import run_once as maker_preflight
-        await maker_preflight(None)
+        from src.sports_kp_poly_relay_live_q1 import run_once as revenue_probe
+        await revenue_probe()
     except Exception:
-        logger.exception("SPORTS_KP_POLY_MAKER_Q1_PREFLIGHT_ERROR")
+        logger.exception("SPORTS_POLY_RELAY_Q1_ERROR")
 
     owns = http is None
     client = http or httpx.AsyncClient(timeout=30.0)
