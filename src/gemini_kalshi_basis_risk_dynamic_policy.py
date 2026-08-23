@@ -6,11 +6,17 @@ the existing 3-cent after-fee floor for the single bounded q=1 research probe. B
 quarantined from this probe because the authoritative ledger contains the only observed
 index-mismatch loss on BTC; ETH/SOL/XRP remain eligible. All existing exact-depth,
 freshness, persistence, q=1, capital reservation and $5 hard-budget controls remain.
+
+The hardened v2 child historically replaced the shared Kalshi order-book websocket with
+50ms REST polling. That made the <=50ms cross-venue skew gate effectively impossible for
+most Gemini websocket updates and generated avoidable 429s. This policy restores the
+already-built one-socket/one-SID multi-market Kalshi websocket hub for discovery. The
+strict 100ms persistence/current-marketability check and dual-FOK original-limit
+execution boundary are unchanged; missing/stale websocket state still fails closed.
 """
 from __future__ import annotations
 
 from decimal import Decimal
-import json
 import logging
 import os
 import sys
@@ -76,6 +82,21 @@ def dynamic_dominance_authorization(*, direction, gemini_strike, kalshi_target, 
     return result
 
 
+def _restore_shared_kalshi_discovery() -> None:
+    # child_v2.marketdata.install() runs before this dynamic entrypoint and swaps the
+    # rollover hub to REST. Replace that process-local hub before any feed registers.
+    # ``rollover_optimizer.install`` then wires the same one-WS/multi-market hub into
+    # current and prewarmed feeds. No shared/global service is changed.
+    previous = rollover_optimizer._HUB
+    rollover_optimizer._HUB = rollover_optimizer.SharedKalshiOrderbookHub()
+    logger.warning(
+        "CRYPTO_BASIS_KALSHI_DISCOVERY_RESTORED transport=ONE_WS_ONE_SID_MULTI_MARKET "
+        "previous_transport=%s rest_polling_active=false quote_skew_gate_ms=50 "
+        "persistence_ms=100 risk_gates_changed=false",
+        type(previous).__name__,
+    )
+
+
 def dynamic_main() -> None:
     min_gap_bps, deadline = child._validate_process_authorization()
     v2._state_dir = child._local_state_dir
@@ -88,6 +109,7 @@ def dynamic_main() -> None:
 
     v2.install_canary_v2 = install_basis_canary
     near_miss.install()
+    _restore_shared_kalshi_discovery()
     rollover_optimizer.install()
     target_lifecycle_cache.install()
     target_freshness_guard.install()
@@ -107,7 +129,8 @@ def dynamic_main() -> None:
     logger.warning(
         "CRYPTO_BASIS_DYNAMIC_POLICY_ENABLED min_gap_bps=%s min_locked_profit=%s "
         "eligible_assets=%s btc_quarantined=true quantity=1 capital_limit_usd=1 "
-        "approved_budget_usd=%s guaranteed_arb=false near_miss_telemetry=true",
+        "approved_budget_usd=%s guaranteed_arb=false near_miss_telemetry=true "
+        "kalshi_discovery=ONE_WS_ONE_SID_MULTI_MARKET",
         min_gap_bps, DYNAMIC_MIN_LOCKED_PROFIT, ",".join(ELIGIBLE_ASSETS), child.APPROVED_BUDGET,
     )
     v2.main()
