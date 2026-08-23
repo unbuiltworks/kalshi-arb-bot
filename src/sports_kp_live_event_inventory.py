@@ -1,7 +1,7 @@
 """Read-only current Polymarket US sports-event inventory for the K/P lane.
 
 This module deliberately performs no normalization, counterpart certification, or
-order entry.  It exists to make the live discovery surface observable so the K/P
+order entry. It exists to make the live discovery surface observable so the K/P
 executor cannot silently remain MLB-only while other sports are active.
 """
 from __future__ import annotations
@@ -153,7 +153,9 @@ async def run_once(http: httpx.AsyncClient | None = None) -> dict[str, Any]:
     try:
         events = await fetch_current_sports_events(client)
         payload = summarize(events)
-        logger.info("SPORTS_POLY_LIVE_EVENT_INVENTORY %s", json.dumps(payload, separators=(",", ":"), default=str))
+        encoded = json.dumps(payload, separators=(",", ":"), default=str)
+        logger.info("SPORTS_POLY_LIVE_EVENT_INVENTORY %s", encoded)
+        print("SPORTS_POLY_LIVE_EVENT_INVENTORY " + encoded, flush=True)
         return payload
     finally:
         if owns:
