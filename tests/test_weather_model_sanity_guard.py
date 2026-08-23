@@ -6,10 +6,15 @@ def base(**overrides):
         model_mean_f="88.8",
         model_station_id="KMIA",
         model_id="GFS:v1",
+        model_provider="NOAA",
+        model_component_providers=["NOAA"],
         independent_anchor_high_f="92.0",
         independent_anchor_station_id="KMIA",
         independent_anchor_verified=True,
-        independent_anchor_source_id="NWS:KMIA",
+        independent_anchor_source_id="TWC:KMIA:daily-high",
+        independent_anchor_provider="TWC",
+        independent_anchor_model_id="TWC_DAILY_HIGH:v1",
+        independent_anchor_provenance_url="https://weather.com/weather/today/l/miami-fl",
         independent_anchor_observed_at="2026-08-21T05:30:00Z",
         same_local_day_verified=True,
         disagreement_tolerance_f="2.0",
@@ -123,6 +128,58 @@ def test_anchor_requires_source_provenance():
     out = base(model_mean_f="91.8", independent_anchor_source_id=None)
     assert out["model_sanity_verified"] is False
     assert "INDEPENDENT_FORECAST_ANCHOR_SOURCE_MISSING" in out["blockers"]
+
+
+def test_arbitrary_source_string_without_structural_provenance_fails_closed():
+    out = base(
+        model_mean_f="91.8",
+        independent_anchor_source_id="looks-independent",
+        independent_anchor_provenance_url=None,
+    )
+    assert out["model_sanity_verified"] is False
+    assert "INDEPENDENT_FORECAST_ANCHOR_PROVENANCE_INVALID" in out["blockers"]
+
+
+def test_anchor_provenance_must_match_declared_provider():
+    out = base(
+        model_mean_f="91.8",
+        independent_anchor_provider="TWC",
+        independent_anchor_provenance_url="https://forecast.weather.gov/MapClick.php?lat=25.76&lon=-80.19",
+    )
+    assert out["model_sanity_verified"] is False
+    assert "INDEPENDENT_FORECAST_ANCHOR_PROVENANCE_INVALID" in out["blockers"]
+
+
+def test_same_model_anchor_is_not_independent():
+    out = base(model_mean_f="91.8", independent_anchor_model_id="GFS:v1")
+    assert out["model_sanity_verified"] is False
+    assert "INDEPENDENT_FORECAST_ANCHOR_SAME_MODEL" in out["blockers"]
+
+
+def test_same_provider_derivative_anchor_is_not_independent():
+    out = base(
+        model_mean_f="91.8",
+        independent_anchor_provider="NWS",
+        independent_anchor_model_id="NWS_GRIDPOINT:v1",
+        independent_anchor_provenance_url="https://forecast.weather.gov/MapClick.php?lat=25.76&lon=-80.19",
+    )
+    assert out["model_sanity_verified"] is False
+    assert "INDEPENDENT_FORECAST_ANCHOR_PROVIDER_NOT_INDEPENDENT" in out["blockers"]
+
+
+def test_ensemble_component_provider_anchor_is_not_independent():
+    out = base(
+        model_mean_f="91.8",
+        model_id="ENSEMBLE:v1",
+        calibration_model_id="ENSEMBLE:v1",
+        model_provider="ENSEMBLE",
+        model_component_providers=["NOAA", "ECMWF", "DWD"],
+        independent_anchor_provider="ECMWF",
+        independent_anchor_model_id="ECMWF_HRES:v1",
+        independent_anchor_provenance_url="https://www.ecmwf.int/en/forecasts",
+    )
+    assert out["model_sanity_verified"] is False
+    assert "INDEPENDENT_FORECAST_ANCHOR_PROVIDER_NOT_INDEPENDENT" in out["blockers"]
 
 
 def test_nonfinite_values_fail_closed():
