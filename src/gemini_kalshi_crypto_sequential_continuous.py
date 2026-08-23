@@ -6,6 +6,12 @@ fresh and bounded. Rollover is fail-closed: the prior campaign must be terminal 
 active run or pending capital, no unresolved persistent attempt claims, and live venue
 reconciliation must show sufficient balances and zero resting orders on both venues.
 
+A narrowly-defined exception handles a child that was marked HALTED_FAIL_CLOSED only
+because its arm deadline expired before any persistent attempt claim/result existed.
+That state proves there was no venue submission from the active run, so the stale
+active_run_id may be treated as a clean deadline terminal for rollover purposes. Any
+claim, result, pending capital, different halt reason, or other ambiguity still blocks.
+
 No execution gate is changed here.
 """
 from __future__ import annotations
@@ -50,11 +56,30 @@ def _load_prior_state(campaign_id: str) -> tuple[Path, dict]:
     return path, state
 
 
+def _benign_deadline_halt_without_submission(state: dict) -> bool:
+    """True only for the observed deadline halt with provably zero submission state."""
+    if str(state.get("status") or "") != "HALTED_FAIL_CLOSED":
+        return False
+    reason = str(state.get("halt_reason") or "")
+    if not reason.startswith("TimeoutError: campaign arm deadline reached before execution"):
+        return False
+    if state.get("pending_capital_usd") not in (None, "", "0", 0, 0.0):
+        return False
+    run_id = str(state.get("active_run_id") or "").strip()
+    if not run_id:
+        return False
+    _arm, claim, result = v2._paths(run_id)
+    # A claim means a child crossed the persistent submission boundary. A result may
+    # encode a completed/ambiguous execution. Either requires normal reconciliation.
+    return not claim.exists() and not result.exists()
+
+
 def _assert_local_terminal(campaign_id: str, state: dict) -> None:
     status = str(state.get("status") or "")
-    if status not in TERMINAL_STATUSES:
+    benign_deadline_halt = _benign_deadline_halt_without_submission(state)
+    if status not in TERMINAL_STATUSES and not benign_deadline_halt:
         raise RuntimeError(f"sequential campaign not safely terminal status={status or 'MISSING'}")
-    if state.get("active_run_id"):
+    if state.get("active_run_id") and not benign_deadline_halt:
         raise RuntimeError("sequential campaign still has active_run_id")
     if state.get("pending_capital_usd") not in (None, "", "0", 0, 0.0):
         raise RuntimeError("sequential campaign still has pending capital")
@@ -88,6 +113,7 @@ async def _rollover(prior_campaign_id: str) -> dict:
         "prior_status": state.get("status"),
         "prior_trades": len(state.get("attempts") or []),
         "prior_execution_attempts": int(state.get("execution_attempt_count") or 0),
+        "prior_deadline_no_submission": _benign_deadline_halt_without_submission(state),
         "new_campaign_id": next_id,
         "arm_not_after_utc": os.environ[DEADLINE_ENV],
         "venue_reconciliation": venue,
