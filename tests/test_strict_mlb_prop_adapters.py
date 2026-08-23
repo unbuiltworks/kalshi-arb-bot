@@ -238,4 +238,5 @@ def test_supported_families_are_explicit() -> None:
         "baseball_player_hits_runs_rbis": "KXMLBHRR",
         "baseball_player_total_bases": "KXMLBTB",
         "baseball_player_strikeouts": "KXMLBKS",
+        "baseball_player_home_runs": "KXMLBHR",
     }
