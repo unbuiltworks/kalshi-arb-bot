@@ -1,16 +1,15 @@
 """Read-only Polymarket maker-first nested-Dutch trigger census.
 
 Scores strict same-venue sports ladders across LIVE and next-24h PREGAME events:
-full-game totals, same-team alternate spreads, and canonical MLB player/stat
-threshold ladders. Totals and spreads are league-agnostic: NFL/NBA/NHL/soccer/
-tennis/etc. are included whenever Polymarket exposes the required full-game
-metadata. MLB player props remain a separate strict canonical parser until
-equivalent parsers are certified for more sports.
+EVENT totals, SAME-TEAM totals, same-team alternate spreads, and canonical MLB
+player/stat threshold ladders. Ladders are never mixed across metric/scope.
 
-A census row is NOT an executable trade because the maker order has not filled.
-It is a MAKER_TRIGGER_CANDIDATE: a resting order could be posted and, after a
-confirmed fill, the hedge book would still need final revalidation before FOK.
-No authentication or order entry is imported here.
+Totals and spreads are league-agnostic: NFL/WNBA/soccer/tennis/etc. are included
+whenever Polymarket exposes the required metadata. MLB player props remain a
+separate strict canonical parser until equivalent parsers are certified elsewhere.
+
+A MAKER_TRIGGER_CANDIDATE is hypothetical until the maker order actually fills;
+the hedge must then be final-revalidated. No authentication or order entry here.
 """
 from __future__ import annotations
 
@@ -33,6 +32,7 @@ D = Decimal
 ONE = D("1")
 TARGET = D("0.03")
 BASE = "https://gateway.polymarket.us"
+TEAM_TOTAL_RE = re.compile(r"-tt-([a-z0-9]+)-", re.I)
 
 
 def _norm_player(value: str) -> str:
@@ -45,6 +45,23 @@ def _is_half_point(value: Decimal) -> bool:
 
 def _is_integer(value: Decimal) -> bool:
     return value >= ONE and value == value.to_integral_value()
+
+
+def _total_scope(market: Mapping[str, Any]) -> tuple[str, str] | None:
+    """Return (kind, scope). Never mix an event total with a team total."""
+    if _is_full_game_total(market):
+        return ("FULL_GAME_TOTAL", "EVENT")
+    st = str(market.get("sportsMarketType") or "").strip().lower()
+    slug = str(market.get("slug") or "").strip().lower()
+    if "full_game_total" not in st:
+        return None
+    m = TEAM_TOTAL_RE.search(slug)
+    if not m:
+        return None
+    # Team totals are full-contest team scoring totals. Period/quarter variants are rejected.
+    if any(x in slug for x in ("-1h-", "-2h-", "-1q-", "-2q-", "-3q-", "-4q-", "-f5-")):
+        return None
+    return ("TEAM_TOTAL", m.group(1).lower())
 
 
 def _ask(book: TopBook, buy_yes: bool) -> tuple[Decimal, Decimal]:
@@ -89,7 +106,7 @@ def _score_maker_pair(*, low_book: TopBook, low_buy_yes: bool, high_book: TopBoo
 async def run_once() -> dict[str, Any]:
     inventory = await near_term_inventory()
     events = [e for e in (inventory.get("events") or []) if isinstance(e, Mapping)]
-    totals: dict[str, list[dict[str, Any]]] = {}
+    totals: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     spreads: dict[tuple[str, str], list[dict[str, Any]]] = {}
     props: dict[tuple[str, str, str, tuple[str, str], str], list[dict[str, Any]]] = {}
     market_slugs: set[str] = set()
@@ -106,11 +123,15 @@ async def run_once() -> dict[str, Any]:
             if not slug:
                 continue
             common = {"series": series, "phase": phase, "event_start_time": start_time}
-            if _is_full_game_total(market):
+
+            total_scope = _total_scope(market)
+            if total_scope is not None:
+                kind, scope = total_scope
                 threshold = _threshold(market)
                 if threshold is not None and _is_half_point(threshold):
-                    totals.setdefault(event_slug, []).append({"slug": slug, "threshold": threshold, "title": market.get("title") or market.get("question"), **common})
+                    totals.setdefault((event_slug, kind, scope), []).append({"slug": slug, "threshold": threshold, "title": market.get("title") or market.get("question"), "total_scope": scope, "kind": kind, **common})
                     market_slugs.add(slug)
+
             if _is_full_game_spread(market):
                 for side in market.get("marketSides") or []:
                     if not isinstance(side, Mapping):
@@ -124,6 +145,7 @@ async def run_once() -> dict[str, Any]:
                         continue
                     spreads.setdefault((event_slug, team), []).append({"slug": slug, "threshold": threshold, "title": market.get("title") or market.get("question"), "buy_yes": bool(side.get("long")), "team": team, "side_description": str(description), **common})
                     market_slugs.add(slug)
+
             if "mlb" in series or "mlb" in event_slug.lower():
                 ident = _poly_identity(market)
                 if ident is not None:
@@ -178,13 +200,14 @@ async def run_once() -> dict[str, Any]:
                         "ladder_key": str(key),
                         "low_slug": low["slug"], "low_title": low.get("title"), "low_threshold": str(low["threshold"]),
                         "high_slug": high["slug"], "high_title": high.get("title"), "high_threshold": str(high["threshold"]),
+                        **({"total_scope": low.get("total_scope")} if kind in {"FULL_GAME_TOTAL", "TEAM_TOTAL"} else {}),
                         **({"player": low.get("player"), "family": low.get("family")} if kind == "MLB_PLAYER_PROP" else {}),
                         **({"team": low.get("team"), "low_side_description": low.get("side_description"), "high_side_description": high.get("side_description")} if kind == "FULL_GAME_SPREAD" else {}),
                         **option,
                         "quantity": 1, "maker_fill_required": True, "hedge_final_revalidation_required": True, "order_entry": False, "realized": False,
                     })
 
-    for key, ladder in totals.items(): score_ladder("FULL_GAME_TOTAL", key, ladder)
+    for key, ladder in totals.items(): score_ladder(key[1], key, ladder)
     for key, ladder in spreads.items(): score_ladder("FULL_GAME_SPREAD", key, ladder, spread=True)
     for key, ladder in props.items(): score_ladder("MLB_PLAYER_PROP", key, ladder)
 
@@ -207,7 +230,7 @@ async def run_once() -> dict[str, Any]:
             psb["maker_trigger_candidates"] += 1
 
     out = {
-        "status": "SPORTS_POLY_MAKER_TRIGGER_CENSUS_V3_NEAR_TERM_MULTI_SPORT",
+        "status": "SPORTS_POLY_MAKER_TRIGGER_CENSUS_V4_SCOPED_TOTALS_MULTI_SPORT",
         "inventory_event_count": inventory.get("event_count"),
         "live_event_count": inventory.get("live_event_count"),
         "pregame_event_count": inventory.get("pregame_event_count"),
@@ -224,7 +247,7 @@ async def run_once() -> dict[str, Any]:
         "best": rows[0] if rows else None,
         "top_candidates": positive[:100],
         "target_locked_after_fill": str(TARGET),
-        "classification_note": "CANDIDATE_ONLY: maker has not filled; hedge must be revalidated after fill; non-MLB spread orientation still requires exact provider-side semantic audit before promotion",
+        "classification_note": "CANDIDATE_ONLY: maker not filled; event totals and team totals are separate scopes; hedge requires final revalidation; spread side semantics require provider-side audit before promotion",
         "order_entry": False,
         "realized": False,
     }
