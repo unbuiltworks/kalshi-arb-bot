@@ -1,9 +1,8 @@
-"""Hardened supervisor for the first approved q=1 settlement-basis live probe.
+"""Hardened supervisor for the approved q=1 settlement-basis live probe.
 
-The underlying campaign remains one trade / <=$1 capital and retains the proven q=1
-execution, settlement and authoritative P&L machinery. This entrypoint adds database-
-verified reconciliation, uses the hardened v2 child, and writes schema-valid LIVE_PROBE
-ledger mode while keeping basis-risk classification explicit in strategy/metadata.
+The campaign remains one trade / <=$1 capital and retains the proven q=1 execution,
+settlement and authoritative P&L machinery. The child is now the isolated v4 wrapper:
+v2 durable controls + v3 telemetry + conservative dynamic first-probe policy.
 """
 from __future__ import annotations
 
@@ -25,7 +24,6 @@ logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_risk_q1_campaign_v2")
 
 
 async def _obtain_hardened_execution(run_id: str, arm_deadline: datetime) -> dict[str, Any]:
-    """Launch only the DB-hardened basis-risk child and wait for its persisted result."""
     arm, claim, result_path = v2._paths(run_id)
     if result_path.is_file():
         with result_path.open("r", encoding="utf-8") as fh:
@@ -38,7 +36,7 @@ async def _obtain_hardened_execution(run_id: str, arm_deadline: datetime) -> dic
     process = await asyncio.create_subprocess_exec(
         sys.executable,
         "-m",
-        "src.gemini_kalshi_basis_risk_q1_child_v2",
+        "src.gemini_kalshi_basis_risk_q1_child_v4",
         env=child_env,
     )
     wait_task = asyncio.create_task(process.wait())
@@ -65,8 +63,6 @@ async def _obtain_hardened_execution(run_id: str, arm_deadline: datetime) -> dic
 
 
 def install() -> None:
-    # The ledger schema accepts LIVE_PROBE. Risk identity stays explicit in the unique
-    # strategy plus metadata, so this is not mislabeled as guaranteed arbitrage.
     child.MODE = child_v2.LEDGER_MODE
     campaign.MODE = child_v2.LEDGER_MODE
     campaign._obtain_basis_execution = _obtain_hardened_execution
@@ -79,7 +75,7 @@ def main() -> None:
     install()
     logger.warning(
         "CRYPTO_BASIS_RISK_V2_ENABLED ledger_mode=%s initial_probe_limit=%s "
-        "initial_tranche_usd=%s approved_max_loss_budget_usd=%s guaranteed_arb=false",
+        "initial_tranche_usd=%s approved_max_loss_budget_usd=%s guaranteed_arb=false child=v4_dynamic",
         child_v2.LEDGER_MODE,
         child_v2.INITIAL_PROBE_LIMIT,
         child.INITIAL_TRANCHE_USD,
