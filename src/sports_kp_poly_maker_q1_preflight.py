@@ -73,32 +73,50 @@ def _strict_pair(a: Mapping[str, Any], b: Mapping[str, Any]) -> tuple[tuple[Any,
     return (ad, af, ap.lower(), tuple(sorted(at))), lo, hi
 
 
-def _certify(low: Mapping[str, Any], high: Mapping[str, Any]) -> tuple[str, dict[str, Any]]:
-    pair = _strict_pair(low, high)
+def _certify(
+    feed_low: Mapping[str, Any], feed_high: Mapping[str, Any],
+    exact_low: Mapping[str, Any], exact_high: Mapping[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    """Certify semantics from rich canonical feed and tradeability from exact GETs.
+
+    The authenticated retrieve endpoint currently omits some sports semantic fields
+    present on /v1/events. We therefore never infer identity from the sparse object:
+    the rich feed must strict-parse, while exact GETs must match its slugs and prove
+    the selected contracts are still tradeable at q1.
+    """
+    pair = _strict_pair(feed_low, feed_high)
     if pair is None:
         raise PermissionError("strict same-game/player/stat identity mismatch")
     key, lo, hi = pair
-    li, hi_id = _poly_identity(low), _poly_identity(high)
+    li, hi_id = _poly_identity(feed_low), _poly_identity(feed_high)
     assert li is not None and hi_id is not None
     if li[4] != lo or hi_id[4] != hi:
         raise PermissionError("low/high threshold orientation mismatch")
-    for m in (low, high):
+    feed_low_slug = str(feed_low.get("slug") or "")
+    feed_high_slug = str(feed_high.get("slug") or "")
+    if str(exact_low.get("slug") or "") != feed_low_slug or str(exact_high.get("slug") or "") != feed_high_slug:
+        raise PermissionError("exact market slug mismatch")
+    for m in (exact_low, exact_high):
         if m.get("active") is False or m.get("closed") is True or m.get("archived") is True or m.get("orderBookEnabled") is False:
-            raise PermissionError("market not currently tradeable")
+            raise PermissionError("exact market not currently tradeable")
         if D(str(m.get("minimumTradeQty") or "1")) > ONE:
-            raise PermissionError("market minimum quantity exceeds q1")
-    le = str(low.get("eventId") or low.get("event_id") or low.get("eventSlug") or "")
-    he = str(high.get("eventId") or high.get("event_id") or high.get("eventSlug") or "")
+            raise PermissionError("exact market minimum quantity exceeds q1")
+    le = str(exact_low.get("eventId") or exact_low.get("event_id") or exact_low.get("eventSlug") or "")
+    he = str(exact_high.get("eventId") or exact_high.get("event_id") or exact_high.get("eventSlug") or "")
     if le and he and le != he:
-        raise PermissionError("parent event mismatch")
+        raise PermissionError("exact parent event mismatch")
     evidence = {
         "identity_key": list(key),
         "low_threshold": str(lo),
         "high_threshold": str(hi),
-        "low_slug": str(low.get("slug") or ""),
-        "high_slug": str(high.get("slug") or ""),
+        "low_slug": feed_low_slug,
+        "high_slug": feed_high_slug,
+        "exact_low_slug_match": True,
+        "exact_high_slug_match": True,
         "parent_event": le or he or None,
         "monotone_identity": "YES(lower threshold)+NO(higher threshold)>=1",
+        "semantic_source": "canonical_/v1/events_market_fields",
+        "tradeability_source": "authenticated_exact_market_retrieval",
     }
     fp = hashlib.sha256(json.dumps(evidence, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
     return fp, evidence
@@ -113,15 +131,9 @@ async def _fetch_mlb_events() -> list[dict[str, Any]]:
             r = await http.get(
                 f"{BASE}/v1/events",
                 params={
-                    "limit": 100,
-                    "offset": page * 100,
-                    "active": "true",
-                    "closed": "false",
-                    "ended": "false",
-                    "categories": "sports",
-                    "startTimeMax": horizon,
-                    "orderBy": "startTime",
-                    "orderDirection": "desc",
+                    "limit": 100, "offset": page * 100, "active": "true",
+                    "closed": "false", "ended": "false", "categories": "sports",
+                    "startTimeMax": horizon, "orderBy": "startTime", "orderDirection": "desc",
                 },
             )
             r.raise_for_status()
@@ -164,7 +176,6 @@ async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, A
             key = (game_date, family, "".join(ch for ch in player.lower() if ch.isalnum()), tuple(sorted(teams)), event_slug)
             ladders.setdefault(key, []).append({"market": row, "slug": slug, "threshold": threshold})
 
-    # Only ladders with at least two thresholds can form the monotone maker hedge.
     eligible_ladders = [ladder for ladder in ladders.values() if len({r["threshold"] for r in ladder}) >= 2]
     slugs: list[str] = []
     for ladder in eligible_ladders:
@@ -194,8 +205,7 @@ async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, A
     scored: list[dict[str, Any]] = []
     for key, ladder in ladders.items():
         ordered = sorted([x for x in ladder if x["slug"] in books], key=lambda x: x["threshold"])
-        unique = {r["threshold"] for r in ordered}
-        if len(unique) < 2:
+        if len({r["threshold"] for r in ordered}) < 2:
             continue
         for i, low in enumerate(ordered):
             for high in ordered[i + 1:]:
@@ -220,14 +230,10 @@ async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, A
     scored.sort(key=lambda r: r["locked_profit"], reverse=True)
     if not scored:
         out = {
-            "status": "NO_TARGETED_MLB_MAKER_Q1",
-            "mlb_events": len(mlb_events),
-            "parseable_prop_markets": parseable,
-            "ladders": len(ladders),
-            "eligible_ladders": len(eligible_ladders),
-            "candidate_slugs": len(slugs),
-            "books_fetched": len(books),
-            "order_entry": False,
+            "status": "NO_TARGETED_MLB_MAKER_Q1", "mlb_events": len(mlb_events),
+            "parseable_prop_markets": parseable, "ladders": len(ladders),
+            "eligible_ladders": len(eligible_ladders), "candidate_slugs": len(slugs),
+            "books_fetched": len(books), "order_entry": False,
         }
         print("SPORTS_KP_POLY_MAKER_Q1_PREFLIGHT " + json.dumps(out, separators=(",", ":")), flush=True)
         return out
@@ -235,11 +241,11 @@ async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, A
     row = scored[0]
     client = PolymarketUS(key_id=os.environ["POLYMARKET_KEY_ID"], secret_key=os.environ["POLYMARKET_SECRET_KEY"], timeout=6.0)
     try:
-        low, high = await asyncio.gather(
+        exact_low, exact_high = await asyncio.gather(
             asyncio.to_thread(client.markets.retrieve_by_slug, row["low"]["slug"]),
             asyncio.to_thread(client.markets.retrieve_by_slug, row["high"]["slug"]),
         )
-        fp, evidence = _certify(low, high)
+        fp, evidence = _certify(row["low"]["market"], row["high"]["market"], exact_low, exact_high)
         maker_slug = row["low"]["slug"] if row["direction"] == "MAKER_LOW_HEDGE_HIGH" else row["high"]["slug"]
         hedge_slug = row["high"]["slug"] if row["direction"] == "MAKER_LOW_HEDGE_HIGH" else row["low"]["slug"]
         maker_payload = _payload(maker_slug, row["maker_side"], row["maker_price"], maker=True)
@@ -250,27 +256,15 @@ async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, A
             asyncio.to_thread(client.orders.preview, hedge_payload),
         )
         out = {
-            "status": "READY_TARGETED_MLB_MAKER_Q1",
-            "mlb_events": len(mlb_events),
-            "parseable_prop_markets": parseable,
-            "ladders": len(ladders),
-            "books_fetched": len(books),
+            "status": "READY_TARGETED_MLB_MAKER_Q1", "mlb_events": len(mlb_events),
+            "parseable_prop_markets": parseable, "ladders": len(ladders), "books_fetched": len(books),
             "locked_profit_after_hypothetical_fill": str(row["locked_profit"]),
-            "maker_slug": maker_slug,
-            "maker_side": row["maker_side"],
-            "maker_price": str(row["maker_price"]),
-            "hedge_slug": hedge_slug,
-            "hedge_side": row["hedge_side"],
-            "hedge_ask": str(row["hedge_ask"]),
-            "hedge_depth": str(row["hedge_depth"]),
-            "conservative_q1_taker_fee_allowance": str(TAKER_FEE_FLOOR),
-            "rule_fingerprint_sha256": fp,
-            "rule_evidence": evidence,
-            "balance_response_present": bool(balances),
-            "maker_preview_ok": bool(mpv),
-            "hedge_preview_ok": bool(hpv),
-            "order_entry": False,
-            "realized": False,
+            "maker_slug": maker_slug, "maker_side": row["maker_side"], "maker_price": str(row["maker_price"]),
+            "hedge_slug": hedge_slug, "hedge_side": row["hedge_side"], "hedge_ask": str(row["hedge_ask"]),
+            "hedge_depth": str(row["hedge_depth"]), "conservative_q1_taker_fee_allowance": str(TAKER_FEE_FLOOR),
+            "rule_fingerprint_sha256": fp, "rule_evidence": evidence,
+            "balance_response_present": bool(balances), "maker_preview_ok": bool(mpv), "hedge_preview_ok": bool(hpv),
+            "order_entry": False, "realized": False,
         }
         print("SPORTS_KP_POLY_MAKER_Q1_PREFLIGHT " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
         return out
