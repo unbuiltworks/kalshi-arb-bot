@@ -1,8 +1,8 @@
-# One-shot maker-triggered hedge LIVE_PROBE. First deploy is read-only preflight.
+# One-shot maker-triggered hedge LIVE_PROBE. First deployments remain read-only preflight.
 [build]
 builder = "NIXPACKS"
 
 [deploy]
 startCommand = "python -m src.gemini_kalshi_maker_live_probe_q1_final"
-preDeployCommand = ["python -m pytest -q tests/test_gemini_kalshi_maker_live_probe_q1.py tests/test_gemini_kalshi_maker_live_probe_q1_safe.py tests/test_gemini_kalshi_maker_live_probe_q1_final.py tests/test_gemini_kalshi_maker_live_probe_q1_venue_once.py"]
+preDeployCommand = ["python -m pytest -q tests/test_gemini_kalshi_maker_live_probe_q1.py tests/test_gemini_kalshi_maker_live_probe_q1_safe.py tests/test_gemini_kalshi_maker_live_probe_q1_final.py tests/test_gemini_kalshi_maker_live_probe_q1_venue_once.py tests/test_gemini_kalshi_maker_rest_guard.py tests/test_gemini_kalshi_maker_dominance_guard.py"]
 restartPolicyType = "NEVER"
