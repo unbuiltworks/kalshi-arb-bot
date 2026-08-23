@@ -7,6 +7,9 @@ Keeps the implementation small while enforcing two fail-closed corrections:
    path hard-halts and preserves the reservation instead of treating exposure as an
    unfilled FOK.
 
+The cumulative sports live-probe ceiling is externally configured through
+``SPORTS_LIVE_CUMULATIVE_BUDGET_USD``; changing that ceiling does not change q=1,
+profit, freshness, settlement, or revalidation gates.
 FanDuel/sportsbook transport remains unreachable from this entrypoint.
 """
 from __future__ import annotations
