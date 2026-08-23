@@ -3,16 +3,16 @@
 This does not alter the shared guaranteed-arbitrage settlement-equivalence lock.
 It lowers the threshold-gap floor only inside the dedicated basis-risk child and uses
 the existing 3-cent after-fee floor for the single bounded q=1 research probe. BTC is
-quarantined from this probe because the authoritative ledger contains the only observed
-index-mismatch loss on BTC; ETH/SOL/XRP remain eligible. All existing exact-depth,
-freshness, persistence, q=1, capital reservation and $5 hard-budget controls remain.
+quarantined because the authoritative ledger contains the only observed index-mismatch
+loss on BTC; ETH/SOL/XRP remain eligible. Exact depth, <=50ms quote skew, persistence,
+q=1, capital reservation and the $5 hard research budget remain unchanged.
 
-The hardened v2 child historically replaced the shared Kalshi order-book websocket with
-50ms REST polling. That made the <=50ms cross-venue skew gate effectively impossible for
-most Gemini websocket updates and generated avoidable 429s. This policy restores the
-already-built one-socket/one-SID multi-market Kalshi websocket hub for discovery. The
-strict 100ms persistence/current-marketability check and dual-FOK original-limit
-execution boundary are unchanged; missing/stale websocket state still fails closed.
+Kalshi currently rejects additional authenticated WebSocket handshakes with HTTP 429.
+The earlier live engine that actually produced fills used exact REST books paced around
+180ms. This policy therefore keeps the hardened exact REST transport installed by the
+basis-risk child and paces it at 180ms instead of the experimental 50ms hammering loop.
+Quotes retain conservative HTTP-request-start timestamps, so the existing <=50ms skew
+gate remains fail-closed rather than being weakened to accommodate transport latency.
 """
 from __future__ import annotations
 
@@ -35,6 +35,7 @@ logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_risk_dynamic_policy")
 DYNAMIC_MIN_GAP_BPS = D("0.5")
 DYNAMIC_MIN_LOCKED_PROFIT = D("0.03")
 ELIGIBLE_ASSETS = ("ETH", "SOL", "XRP")
+KALSHI_REST_POLL_INTERVAL_S = "0.18"
 
 
 def dynamic_dominance_authorization(*, direction, gemini_strike, kalshi_target, min_gap_bps=DYNAMIC_MIN_GAP_BPS):
@@ -82,21 +83,6 @@ def dynamic_dominance_authorization(*, direction, gemini_strike, kalshi_target, 
     return result
 
 
-def _restore_shared_kalshi_discovery() -> None:
-    # child_v2.marketdata.install() runs before this dynamic entrypoint and swaps the
-    # rollover hub to REST. Replace that process-local hub before any feed registers.
-    # ``rollover_optimizer.install`` then wires the same one-WS/multi-market hub into
-    # current and prewarmed feeds. No shared/global service is changed.
-    previous = rollover_optimizer._HUB
-    rollover_optimizer._HUB = rollover_optimizer.SharedKalshiOrderbookHub()
-    logger.warning(
-        "CRYPTO_BASIS_KALSHI_DISCOVERY_RESTORED transport=ONE_WS_ONE_SID_MULTI_MARKET "
-        "previous_transport=%s rest_polling_active=false quote_skew_gate_ms=50 "
-        "persistence_ms=100 risk_gates_changed=false",
-        type(previous).__name__,
-    )
-
-
 def dynamic_main() -> None:
     min_gap_bps, deadline = child._validate_process_authorization()
     v2._state_dir = child._local_state_dir
@@ -108,8 +94,11 @@ def dynamic_main() -> None:
         child._install_dominance_probe(min_gap_bps)
 
     v2.install_canary_v2 = install_basis_canary
+    # marketdata.install() has already installed the exact REST hub in the v2 child.
+    # _poll_interval_s() is read dynamically, so setting this before feeds register
+    # reproduces the historically productive paced transport without opening a WS.
+    os.environ["CRYPTO_BASIS_KALSHI_REST_POLL_INTERVAL_S"] = KALSHI_REST_POLL_INTERVAL_S
     near_miss.install()
-    _restore_shared_kalshi_discovery()
     rollover_optimizer.install()
     target_lifecycle_cache.install()
     target_freshness_guard.install()
@@ -130,7 +119,7 @@ def dynamic_main() -> None:
         "CRYPTO_BASIS_DYNAMIC_POLICY_ENABLED min_gap_bps=%s min_locked_profit=%s "
         "eligible_assets=%s btc_quarantined=true quantity=1 capital_limit_usd=1 "
         "approved_budget_usd=%s guaranteed_arb=false near_miss_telemetry=true "
-        "kalshi_discovery=ONE_WS_ONE_SID_MULTI_MARKET",
+        "kalshi_discovery=EXACT_REST_DEPTH1 poll_interval_ms=180 quote_timestamp=HTTP_REQUEST_START",
         min_gap_bps, DYNAMIC_MIN_LOCKED_PROFIT, ",".join(ELIGIBLE_ASSETS), child.APPROVED_BUDGET,
     )
     v2.main()
@@ -143,6 +132,6 @@ def install() -> None:
     logger.warning(
         "CRYPTO_BASIS_DYNAMIC_POLICY_INSTALLED scope=DEDICATED_BASIS_CHILD "
         "shared_guaranteed_arb_lock_changed=false min_gap_bps=%s min_locked_profit=%s "
-        "eligible_assets=%s btc_quarantined=true near_miss_telemetry=true",
+        "eligible_assets=%s btc_quarantined=true near_miss_telemetry=true kalshi_rest_poll_ms=180",
         DYNAMIC_MIN_GAP_BPS, DYNAMIC_MIN_LOCKED_PROFIT, ",".join(ELIGIBLE_ASSETS),
     )
