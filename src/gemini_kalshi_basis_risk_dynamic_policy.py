@@ -8,11 +8,11 @@ loss on BTC; ETH/SOL/XRP remain eligible. Exact depth, <=50ms quote skew, persis
 q=1, capital reservation and the $5 hard research budget remain unchanged.
 
 Kalshi currently rejects additional authenticated WebSocket handshakes with HTTP 429.
-The earlier live engine that actually produced fills used exact REST books paced around
-180ms. This policy therefore keeps the hardened exact REST transport installed by the
-basis-risk child and paces it at 180ms instead of the experimental 50ms hammering loop.
-Quotes retain conservative HTTP-request-start timestamps, so the existing <=50ms skew
-gate remains fail-closed rather than being weakened to accommodate transport latency.
+The live engine therefore uses the hardened exact REST transport. Its cadence is
+service-configurable inside the transport's existing 50-250ms safety envelope so we can
+sample more frequently when the account has clean REST capacity without changing any
+execution gate. Quotes retain conservative HTTP-request-start timestamps, and 429s
+continue to emit no quote and back off fail-closed.
 """
 from __future__ import annotations
 
@@ -35,7 +35,21 @@ logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_risk_dynamic_policy")
 DYNAMIC_MIN_GAP_BPS = D("0.5")
 DYNAMIC_MIN_LOCKED_PROFIT = D("0.03")
 ELIGIBLE_ASSETS = ("ETH", "SOL", "XRP")
-KALSHI_REST_POLL_INTERVAL_S = "0.18"
+KALSHI_REST_POLL_INTERVAL_ENV = "CRYPTO_BASIS_KALSHI_REST_POLL_INTERVAL_S"
+DEFAULT_KALSHI_REST_POLL_INTERVAL_S = D("0.18")
+MIN_KALSHI_REST_POLL_INTERVAL_S = D("0.05")
+MAX_KALSHI_REST_POLL_INTERVAL_S = D("0.25")
+
+
+def configured_kalshi_rest_poll_interval_s() -> Decimal:
+    raw = os.getenv(KALSHI_REST_POLL_INTERVAL_ENV, str(DEFAULT_KALSHI_REST_POLL_INTERVAL_S)).strip()
+    try:
+        value = D(raw)
+    except Exception:
+        value = DEFAULT_KALSHI_REST_POLL_INTERVAL_S
+    if not value.is_finite():
+        value = DEFAULT_KALSHI_REST_POLL_INTERVAL_S
+    return max(MIN_KALSHI_REST_POLL_INTERVAL_S, min(value, MAX_KALSHI_REST_POLL_INTERVAL_S))
 
 
 def dynamic_dominance_authorization(*, direction, gemini_strike, kalshi_target, min_gap_bps=DYNAMIC_MIN_GAP_BPS):
@@ -95,9 +109,10 @@ def dynamic_main() -> None:
 
     v2.install_canary_v2 = install_basis_canary
     # marketdata.install() has already installed the exact REST hub in the v2 child.
-    # _poll_interval_s() is read dynamically, so setting this before feeds register
-    # reproduces the historically productive paced transport without opening a WS.
-    os.environ["CRYPTO_BASIS_KALSHI_REST_POLL_INTERVAL_S"] = KALSHI_REST_POLL_INTERVAL_S
+    # _poll_interval_s() is read dynamically, so preserve the service-scoped value
+    # after clamping it to the transport's existing fail-closed 50-250ms envelope.
+    poll_interval_s = configured_kalshi_rest_poll_interval_s()
+    os.environ[KALSHI_REST_POLL_INTERVAL_ENV] = str(poll_interval_s)
     near_miss.install()
     rollover_optimizer.install()
     target_lifecycle_cache.install()
@@ -119,8 +134,12 @@ def dynamic_main() -> None:
         "CRYPTO_BASIS_DYNAMIC_POLICY_ENABLED min_gap_bps=%s min_locked_profit=%s "
         "eligible_assets=%s btc_quarantined=true quantity=1 capital_limit_usd=1 "
         "approved_budget_usd=%s guaranteed_arb=false near_miss_telemetry=true "
-        "kalshi_discovery=EXACT_REST_DEPTH1 poll_interval_ms=180 quote_timestamp=HTTP_REQUEST_START",
-        min_gap_bps, DYNAMIC_MIN_LOCKED_PROFIT, ",".join(ELIGIBLE_ASSETS), child.APPROVED_BUDGET,
+        "kalshi_discovery=EXACT_REST_DEPTH1 poll_interval_ms=%s quote_timestamp=HTTP_REQUEST_START",
+        min_gap_bps,
+        DYNAMIC_MIN_LOCKED_PROFIT,
+        ",".join(ELIGIBLE_ASSETS),
+        child.APPROVED_BUDGET,
+        int(poll_interval_s * D("1000")),
     )
     v2.main()
 
@@ -132,6 +151,9 @@ def install() -> None:
     logger.warning(
         "CRYPTO_BASIS_DYNAMIC_POLICY_INSTALLED scope=DEDICATED_BASIS_CHILD "
         "shared_guaranteed_arb_lock_changed=false min_gap_bps=%s min_locked_profit=%s "
-        "eligible_assets=%s btc_quarantined=true near_miss_telemetry=true kalshi_rest_poll_ms=180",
-        DYNAMIC_MIN_GAP_BPS, DYNAMIC_MIN_LOCKED_PROFIT, ",".join(ELIGIBLE_ASSETS),
+        "eligible_assets=%s btc_quarantined=true near_miss_telemetry=true kalshi_rest_poll_ms=%s",
+        DYNAMIC_MIN_GAP_BPS,
+        DYNAMIC_MIN_LOCKED_PROFIT,
+        ",".join(ELIGIBLE_ASSETS),
+        int(configured_kalshi_rest_poll_interval_s() * D("1000")),
     )
