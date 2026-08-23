@@ -69,6 +69,7 @@ def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-0
         "forecast_valid_time": valid_time,
         "model_local_date": local_date,
         "independent_anchor_local_date": local_date,
+        "independent_anchor_valid_time": f"{local_date}T23:59:59-04:00",
         "station_mapping_verified": True,
         "freshness_verified": True,
         "bracket_probability": "0.65",
@@ -114,6 +115,7 @@ def test_exact_market_provenance_model_sanity_and_local_day_are_fail_closed_gate
     assert row["exact_market_source_verified"] is True
     assert row["local_day_binding_verified"] is True
     assert row["forecast_valid_local_day_verified"] is True
+    assert row["anchor_valid_local_day_verified"] is True
     assert row["model_sanity_verified"] is True
     assert row["settlement_certified_shadow"] is True
     assert row["ev_certified_shadow"] is True
@@ -207,6 +209,7 @@ def test_verified_historical_nws_exact_market_can_override_current_twc_series_re
             valid_time="2026-08-12T23:59:59-04:00",
             model_local_date="2026-08-12",
             independent_anchor_local_date="2026-08-12",
+            independent_anchor_valid_time="2026-08-12T23:59:59-04:00",
             independent_anchor_observed_at="2026-08-12T05:30:00Z",
             calibration_window_end="2026-08-01T23:59:59Z",
         ),
@@ -221,6 +224,7 @@ def test_verified_historical_nws_exact_market_can_override_current_twc_series_re
     assert row["exact_market_source_verified"] is True
     assert row["local_day_binding_verified"] is True
     assert row["forecast_valid_local_day_verified"] is True
+    assert row["anchor_valid_local_day_verified"] is True
     assert row["model_sanity_verified"] is True
     assert "EXACT_MARKET_SETTLEMENT_REGIME_UNVERIFIED" not in row["blockers"]
     assert row["settlement_certified_shadow"] is True
@@ -347,3 +351,23 @@ def test_same_provider_derivative_anchor_cannot_certify_ev():
     assert row["model_sanity_verified"] is False
     assert row["ev_certified_shadow"] is False
     assert "INDEPENDENT_FORECAST_ANCHOR_PROVIDER_NOT_INDEPENDENT" in row["model_sanity_audit"]["blockers"]
+
+
+def test_missing_anchor_valid_time_cannot_certify_weather_ev():
+    row = _build(forecast=_forecast(independent_anchor_valid_time=None))
+    assert row["settlement_certified_shadow"] is True
+    assert row["anchor_valid_local_day_verified"] is False
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert row["best_shadow_side"] is None
+    assert row["economics_status"] == "INDEPENDENT_ANCHOR_VALID_TIME_LOCAL_DAY_UNVERIFIED_RESEARCH_ONLY"
+    assert "INDEPENDENT_ANCHOR_VALID_TIME_UNVERIFIED" in row["anchor_valid_local_day_audit"]["blockers"]
+
+
+def test_anchor_valid_time_on_adjacent_local_day_cannot_certify_weather_ev():
+    row = _build(forecast=_forecast(independent_anchor_valid_time="2026-08-22T04:00:00Z"))
+    assert row["settlement_certified_shadow"] is True
+    assert row["anchor_valid_local_day_verified"] is False
+    assert row["model_sanity_verified"] is False
+    assert row["ev_certified_shadow"] is False
+    assert "INDEPENDENT_ANCHOR_VALID_TIME_MARKET_DAY_MISMATCH" in row["anchor_valid_local_day_audit"]["blockers"]
