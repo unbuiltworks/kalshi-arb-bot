@@ -1,3 +1,9 @@
+"""Safety tests for bounded automatic q=1 basis-risk rollover.
+
+This file is also a watched-path deployment marker: the 2026-08-23 update forces
+Railway to build a fresh source snapshot after switching the service to test-only mode,
+avoiding Railway redeploy reuse of an older live start command.
+"""
 from decimal import Decimal
 from datetime import datetime, timezone
 
