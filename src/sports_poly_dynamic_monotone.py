@@ -30,8 +30,8 @@ def _group_key(identity: tuple[str, str, tuple[str, str], str, Decimal]) -> tupl
     return family, " ".join(player.lower().split()), tuple(sorted(teams)), game_date
 
 
-async def discover_current_pairs(*, horizon_hours: int = 36, max_pages: int = 20) -> tuple[dict[str, dict[str, Any]], list[tuple[str, str]]]:
-    """Return strict current market map plus monotone low/high slug pairs."""
+async def discover_current_pairs(*, horizon_hours: int = 36, max_pages: int = 12) -> tuple[dict[str, dict[str, Any]], list[tuple[str, str]]]:
+    """Return only strict markets that participate in a monotone low/high pair."""
     horizon = datetime.now(timezone.utc) + timedelta(hours=horizon_hours)
     groups: dict[tuple[str, str, tuple[str, str], str], dict[Decimal, dict[str, Any]]] = defaultdict(dict)
 
@@ -72,8 +72,6 @@ async def discover_current_pairs(*, horizon_hours: int = 36, max_pages: int = 20
                         continue
                     key = _group_key(identity)
                     threshold = identity[-1]
-                    # Duplicate semantic threshold is ambiguous; keep neither unless
-                    # the exact slug is identical. Fail closed rather than guess.
                     prior = groups[key].get(threshold)
                     if prior is not None and str(prior.get("slug") or "") != slug:
                         groups[key][threshold] = {"_ambiguous": True}
@@ -87,10 +85,12 @@ async def discover_current_pairs(*, horizon_hours: int = 36, max_pages: int = 20
     for threshold_map in groups.values():
         clean = [(line, m) for line, m in threshold_map.items() if not m.get("_ambiguous")]
         clean.sort(key=lambda x: x[0])
+        # Singles cannot form a monotone hedge. Excluding them prevents unnecessary
+        # exact-book requests and reduces startup/API pressure without losing trades.
+        if len(clean) < 2:
+            continue
         for _, market in clean:
             market_map[str(market["slug"])] = market
-        # All strict low/high combinations are valid monotone relations. The exact
-        # book scorer decides which are economically executable now.
         for i in range(len(clean)):
             for j in range(i + 1, len(clean)):
                 pairs.append((str(clean[i][1]["slug"]), str(clean[j][1]["slug"])))
@@ -106,8 +106,7 @@ def score_pairs(
 
     Eligibility still requires >=3c at the current maker bid. Ranking then computes
     the most aggressive post-only quote that still preserves the same 3c after-fee
-    floor. Candidates closest to the contra ask are tried first, because that is the
-    controllable variable most directly related to maker fill probability.
+    floor. Candidates closest to the contra ask are tried first.
     """
     rows: list[dict[str, Any]] = []
     for low_slug, high_slug in pairs:
@@ -163,6 +162,5 @@ def score_pairs(
                 }
             )
 
-    # Fill proximity first, then hedge capacity, then residual locked economics.
     rows.sort(key=lambda r: (r["maker_gap_to_ask"], -r["hedge_depth"], -r["quote_locked_profit"]))
     return rows
