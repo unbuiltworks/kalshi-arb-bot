@@ -1,3 +1,4 @@
+# Railway production gate for dynamic final-lag Polymarket discovery.
 from src import current_polymarket_mlb_props as discovery
 from src import mlb_prop_final_lag_live_q1_entry as entry
 
