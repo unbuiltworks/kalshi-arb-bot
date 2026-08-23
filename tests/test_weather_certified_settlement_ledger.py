@@ -6,6 +6,7 @@ from src.weather_certified_settlement_ledger import (
     PREFIX,
     certified_weather_settlement_external_id,
     ledger_event_from_weather_reconciliation,
+    parse_and_verify_weather_settlement_external_id,
 )
 
 
@@ -24,6 +25,8 @@ def _reconciled(**overrides):
         "settlement_outcome": "NO",
         "settlement_source_provider": "THE_WEATHER_COMPANY",
         "settlement_source_url": "https://weather.com/kalshi",
+        "terminal_record_stage_verified": True,
+        "terminal_record_stage": "FINAL",
         "read_only": True,
         "order_entry": False,
         "live_probe_ready": False,
@@ -49,6 +52,11 @@ def test_certified_weather_settlement_event_is_identity_bound_and_deterministic(
     assert first.side == "NO"
     assert first.event_type == "settlement"
     assert first.category == "weather"
+    assert parse_and_verify_weather_settlement_external_id(first) == {
+        "provider": "THE_WEATHER_COMPANY",
+        "source_url": "https://weather.com/kalshi",
+        "terminal_record_stage": "FINAL",
+    }
 
 
 def _external_id(**overrides):
@@ -58,6 +66,7 @@ def _external_id(**overrides):
         "settlement_key": "weather:KXHIGHMIA-26AUG21-B92.5",
         "provider": "THE_WEATHER_COMPANY",
         "source_url": "https://weather.com/kalshi",
+        "terminal_record_stage": "FINAL",
         "side": "NO",
         "quantity": Decimal("1"),
         "payout": Decimal("1"),
@@ -71,6 +80,7 @@ def test_external_id_changes_when_exact_provenance_changes():
     assert _external_id() != _external_id(
         provider="NWS",
         source_url="https://forecast.weather.gov/product.php?site=NWS&product=CLI&issuedby=MIA",
+        terminal_record_stage="NWS_CLI_FINAL",
     )
 
 
@@ -85,6 +95,11 @@ def test_external_id_changes_when_exact_provenance_changes():
 )
 def test_external_id_binds_terminal_payload(field, value):
     assert _external_id() != _external_id(**{field: value})
+
+
+def test_external_id_binds_twc_final_record_stage():
+    with pytest.raises(ValueError):
+        _external_id(terminal_record_stage="PRELIMINARY")
 
 
 @pytest.mark.parametrize(
@@ -120,6 +135,9 @@ def test_external_id_rejects_unofficial_or_mismatched_terminal_sources(provider,
         _reconciled(settlement_source_provider="THE_WEATHER_COMPANY", settlement_source_url="https://example.com/kalshi"),
         _reconciled(settlement_source_provider="THE_WEATHER_COMPANY", settlement_source_url="https://weather.com/weather/today"),
         _reconciled(settlement_source_provider="NWS", settlement_source_url="https://www.weather.gov/wrh/Climate?wfo=mfl"),
+        _reconciled(terminal_record_stage_verified=False),
+        _reconciled(terminal_record_stage_verified="true"),
+        _reconciled(terminal_record_stage="PRELIMINARY"),
     ],
 )
 def test_bad_or_incomplete_reconciliation_fails_closed(reconciliation):
@@ -131,6 +149,22 @@ def test_bad_or_incomplete_reconciliation_fails_closed(reconciliation):
             market_id="KXHIGHMIA-26AUG21-B92.5",
             settlement_ts_ms=2_000,
         )
+
+
+def test_historical_nws_path_uses_canonical_final_cli_stage_without_twc_flag():
+    event = ledger_event_from_weather_reconciliation(
+        reconciliation=_reconciled(
+            settlement_source_provider="NWS",
+            settlement_source_url="https://forecast.weather.gov/product.php?site=NWS&product=CLI&issuedby=MIA",
+            terminal_record_stage_verified=None,
+            terminal_record_stage=None,
+        ),
+        trade_group_id="weather:g1",
+        settlement_key="weather:KXHIGHMIA-26AUG21-B92.5",
+        market_id="KXHIGHMIA-26AUG21-B92.5",
+        settlement_ts_ms=2_000,
+    )
+    assert parse_and_verify_weather_settlement_external_id(event)["terminal_record_stage"] == "NWS_CLI_FINAL"
 
 
 def test_stringly_reconciled_true_does_not_pass():
