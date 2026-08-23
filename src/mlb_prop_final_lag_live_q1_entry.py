@@ -27,7 +27,9 @@ schedule guard, rule audit, stability, pricing, revalidation, and live-budget ga
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 import logging
+from statistics import median
 from typing import Any
 
 import httpx
@@ -116,6 +118,48 @@ async def _kalshi_events_throttled(http: httpx.AsyncClient) -> list[dict[str, An
     return events
 
 
+def _discovery_shape(candidates: list[Any], poly: list[dict[str, Any]]) -> dict[str, Any]:
+    """Measure independent contract inventory without changing candidate selection."""
+    by_slug = {str(row.get("slug") or ""): row for row in poly if str(row.get("slug") or "")}
+    semantic: Counter[tuple[Any, ...]] = Counter()
+    by_family: Counter[str] = Counter()
+    for candidate in candidates:
+        by_family[str(candidate.family)] += 1
+        row = by_slug.get(str(candidate.poly_slug))
+        identity = impl.decided.base._poly_identity(row) if row is not None else None
+        start = impl.decided.base.polymarket_start_utc(row) if row is not None else None
+        if identity is not None and start is not None:
+            family, player, teams, game_date, threshold = identity
+            key = (
+                str(family),
+                impl.decided.base._name(player),
+                tuple(sorted(str(team).lower() for team in teams)),
+                str(game_date),
+                str(threshold),
+                start.isoformat(),
+            )
+        else:
+            key = (
+                str(candidate.family),
+                impl.decided.base._name(candidate.player),
+                str(candidate.game_date),
+                str(candidate.threshold),
+                str(candidate.poly_slug),
+            )
+        semantic[key] += 1
+    fanout = list(semantic.values())
+    return {
+        "exact_pairs": len(candidates),
+        "unique_poly_contracts": len({str(row.poly_slug) for row in candidates}),
+        "unique_kalshi_contracts": len({str(row.kalshi_ticker) for row in candidates}),
+        "unique_semantic_contracts": len(semantic),
+        "duplicate_pair_rows": max(0, len(candidates) - len(semantic)),
+        "max_pairs_per_semantic_contract": max(fanout) if fanout else 0,
+        "median_pairs_per_semantic_contract": float(median(fanout)) if fanout else 0.0,
+        "by_family_pair_rows": dict(sorted(by_family.items())),
+    }
+
+
 async def _discover_seeded(http: httpx.AsyncClient) -> list[Any]:
     """Reuse one Kalshi slate fetch to seed broader strict Polymarket discovery."""
     kalshi = await _kalshi_events_throttled(http)
@@ -126,9 +170,14 @@ async def _discover_seeded(http: httpx.AsyncClient) -> list[Any]:
         player_queries=player_queries,
     )
     candidates = impl.decided.base.discover_strict_candidates(poly, kalshi)
+    shape = _discovery_shape(candidates, poly)
     logger.warning(
         "FINAL_LAG_DYNAMIC_DISCOVERY kalshi_events=%d seed_players=%d strict_poly_props=%d exact_candidates=%d order_entry_changed=false risk_gates_changed=false",
         len(kalshi), len(player_queries), len(poly), len(candidates),
+    )
+    logger.warning(
+        "FINAL_LAG_DISCOVERY_SHAPE %s order_entry_changed=false risk_gates_changed=false",
+        shape,
     )
     return candidates
 
