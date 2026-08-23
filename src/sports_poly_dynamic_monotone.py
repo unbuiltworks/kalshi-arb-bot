@@ -18,10 +18,11 @@ from typing import Any, Mapping
 import httpx
 
 from src.strict_mlb_prop_adapters import _poly_identity
-from src.sports_kp_poly_relay_live_q1 import D, ONE, TARGET, _ask, _bid, _locked
+from src.sports_kp_poly_relay_live_q1 import D, ONE, TARGET, TAKER_FEE_FLOOR, _ask, _bid, _locked
 from src.strict_mlb_prop_snapshot import TopBook
 
 BASE = "https://gateway.polymarket.us"
+TICK = D("0.01")
 
 
 def _group_key(identity: tuple[str, str, tuple[str, str], str, Decimal]) -> tuple[str, str, tuple[str, str], str]:
@@ -101,7 +102,13 @@ def score_pairs(
     books: Mapping[str, TopBook],
     pairs: list[tuple[str, str]],
 ) -> list[dict[str, Any]]:
-    """Score dynamic pairs using exact current top-of-book economics."""
+    """Score exact books and rank candidates for maker fill probability.
+
+    Eligibility still requires >=3c at the current maker bid. Ranking then computes
+    the most aggressive post-only quote that still preserves the same 3c after-fee
+    floor. Candidates closest to the contra ask are tried first, because that is the
+    controllable variable most directly related to maker fill probability.
+    """
     rows: list[dict[str, Any]] = []
     for low_slug, high_slug in pairs:
         low, high = feed.get(low_slug), feed.get(high_slug)
@@ -115,13 +122,22 @@ def score_pairs(
         hf, hp, ht, hd, hx = hi
         if (lf, " ".join(lp.lower().split()), set(lt), ld) != (hf, " ".join(hp.lower().split()), set(ht), hd) or lx >= hx:
             continue
-        for direction, maker_slug, maker_side, maker_px, maker_ask, hedge_slug, hedge_side, hedge_px, hedge_depth in (
+        for direction, maker_slug, maker_side, maker_bid, maker_ask, hedge_slug, hedge_side, hedge_px, hedge_depth in (
             ("MAKER_LOW_HEDGE_HIGH", low_slug, "YES", _bid(lb, "YES"), _ask(lb, "YES")[0], high_slug, "NO", *_ask(hb, "NO")),
             ("MAKER_HIGH_HEDGE_LOW", high_slug, "NO", _bid(hb, "NO"), _ask(hb, "NO")[0], low_slug, "YES", *_ask(lb, "YES")),
         ):
-            locked = _locked(maker_px, hedge_px)
-            if maker_px <= 0 or maker_px >= ONE or hedge_depth < ONE or locked < TARGET:
+            locked_at_bid = _locked(maker_bid, hedge_px)
+            if maker_bid <= 0 or maker_bid >= ONE or hedge_depth < ONE or locked_at_bid < TARGET:
                 continue
+
+            max_for_floor = ONE - hedge_px - TAKER_FEE_FLOOR - TARGET
+            improved = min(maker_ask - TICK, max_for_floor)
+            executable_maker_quote = max(maker_bid, improved)
+            quote_locked = _locked(executable_maker_quote, hedge_px)
+            if executable_maker_quote <= 0 or executable_maker_quote >= maker_ask or quote_locked < TARGET:
+                continue
+            maker_gap_to_ask = maker_ask - executable_maker_quote
+
             rows.append(
                 {
                     "direction": direction,
@@ -129,19 +145,24 @@ def score_pairs(
                     "high_slug": high_slug,
                     "maker_slug": maker_slug,
                     "maker_side": maker_side,
-                    "maker_price": maker_px,
+                    "maker_price": maker_bid,
                     "maker_ask": maker_ask,
-                    "maker_spread": maker_ask - maker_px,
+                    "maker_spread": maker_ask - maker_bid,
+                    "executable_maker_quote": executable_maker_quote,
+                    "maker_gap_to_ask": maker_gap_to_ask,
                     "hedge_slug": hedge_slug,
                     "hedge_side": hedge_side,
                     "hedge_ask": hedge_px,
                     "hedge_depth": hedge_depth,
-                    "locked_profit": locked,
+                    "locked_profit": locked_at_bid,
+                    "quote_locked_profit": quote_locked,
                     "low_threshold": lx,
                     "high_threshold": hx,
                     "family": lf,
                     "player": lp,
                 }
             )
-    rows.sort(key=lambda r: (r["locked_profit"], r["hedge_depth"], -r["maker_spread"]), reverse=True)
+
+    # Fill proximity first, then hedge capacity, then residual locked economics.
+    rows.sort(key=lambda r: (r["maker_gap_to_ask"], -r["hedge_depth"], -r["quote_locked_profit"]))
     return rows
