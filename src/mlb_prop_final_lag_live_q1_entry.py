@@ -18,6 +18,11 @@ Kalshi strict-prop discovery is serialized and retries HTTP 429 with short bound
 backoff. A persistently rate-limited family fails soft instead of causing the other
 families to disappear from the retained candidate universe. Quote freshness gates
 remain unchanged; this patch only smooths low-frequency discovery requests.
+
+Polymarket prop search is seeded from strictly parseable player names in that same
+current Kalshi slate. This improves discovery recall only: every result still passes
+the unchanged Polymarket identity parser, exact player/stat/threshold/game matcher,
+schedule guard, rule audit, stability, pricing, revalidation, and live-budget gates.
 """
 from __future__ import annotations
 
@@ -27,6 +32,7 @@ from typing import Any
 
 import httpx
 
+from src import current_polymarket_mlb_props as poly_discovery
 from src import mlb_prop_final_lag_live_q1 as impl
 
 logger = logging.getLogger("kalshi_arb.mlb_prop_final_lag_live_q1_entry")
@@ -110,9 +116,28 @@ async def _kalshi_events_throttled(http: httpx.AsyncClient) -> list[dict[str, An
     return events
 
 
-# ``mlb_prop_decided_shadow._discover`` dereferences this module attribute at call
-# time, so patching it here changes only this dedicated service process.
+async def _discover_seeded(http: httpx.AsyncClient) -> list[Any]:
+    """Reuse one Kalshi slate fetch to seed broader strict Polymarket discovery."""
+    kalshi = await _kalshi_events_throttled(http)
+    player_queries = poly_discovery.kalshi_seed_players(kalshi)
+    poly = await poly_discovery.fetch_current_poly_mlb_props(
+        http,
+        ttl_seconds=impl.decided.DEFAULT_DISCOVERY_SECONDS,
+        player_queries=player_queries,
+    )
+    candidates = impl.decided.base.discover_strict_candidates(poly, kalshi)
+    logger.warning(
+        "FINAL_LAG_DYNAMIC_DISCOVERY kalshi_events=%d seed_players=%d strict_poly_props=%d exact_candidates=%d order_entry_changed=false risk_gates_changed=false",
+        len(kalshi), len(player_queries), len(poly), len(candidates),
+    )
+    return candidates
+
+
+# Preserve the throttled fetch for any other control-plane caller in this process.
 impl.decided.base._fetch_kalshi_events = _kalshi_events_throttled
+# The final-lag scanner now fetches Kalshi once, derives strict player seeds, expands
+# Polymarket search, then applies the same exact matcher. No execution gate changes.
+impl.decided._discover = _discover_seeded
 
 
 if __name__ == "__main__":
