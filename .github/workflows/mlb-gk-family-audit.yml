@@ -1,5 +1,6 @@
 name: MLB GK Family Audit
 
+# Diagnostic-only public-market audit. No credentials or order transport.
 on:
   push:
     branches:
