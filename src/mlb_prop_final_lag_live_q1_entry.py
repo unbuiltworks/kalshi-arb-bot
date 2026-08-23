@@ -13,13 +13,23 @@ execution serialization rather than logging internals.
 Any nonzero fill that is not exactly q=1 is reclassified UNKNOWN. The parent then
 hard-halts and preserves the reservation rather than releasing capital while an
 unexpected fractional position may exist.
+
+Kalshi strict-prop discovery is serialized and retries HTTP 429 with short bounded
+backoff. A persistently rate-limited family fails soft instead of causing the other
+families to disappear from the retained candidate universe. Quote freshness gates
+remain unchanged; this patch only smooths low-frequency discovery requests.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Any
+
+import httpx
 
 from src import mlb_prop_final_lag_live_q1 as impl
 
+logger = logging.getLogger("kalshi_arb.mlb_prop_final_lag_live_q1_entry")
 impl.STRATEGY = "sports_gk_final_lag_kp_q1"
 
 
@@ -67,6 +77,42 @@ async def _submit_fail_closed(leg: Any) -> Any:
 
 
 impl._submit = _submit_fail_closed
+
+
+async def _kalshi_events_throttled(http: httpx.AsyncClient) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    series_list = list(dict.fromkeys(impl.decided.base.FAMILY_SERIES.values()))
+    for index, series in enumerate(series_list):
+        if index:
+            await asyncio.sleep(0.10)
+        group: list[dict[str, Any]] | None = None
+        for attempt in range(3):
+            response = await http.get(
+                f"{impl.decided.base.KALSHI}/events",
+                params={
+                    "limit": 200,
+                    "status": "open",
+                    "series_ticker": series,
+                    "with_nested_markets": "true",
+                },
+            )
+            if response.status_code == 200:
+                body = response.json()
+                group = list(body.get("events") or [])
+                break
+            if response.status_code != 429:
+                response.raise_for_status()
+            await asyncio.sleep(0.15 * (2 ** attempt))
+        if group is None:
+            logger.warning("FINAL_LAG_KALSHI_DISCOVERY_RATE_LIMIT series=%s attempts=3", series)
+            continue
+        events.extend(group)
+    return events
+
+
+# ``mlb_prop_decided_shadow._discover`` dereferences this module attribute at call
+# time, so patching it here changes only this dedicated service process.
+impl.decided.base._fetch_kalshi_events = _kalshi_events_throttled
 
 
 if __name__ == "__main__":
