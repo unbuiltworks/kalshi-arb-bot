@@ -1,11 +1,8 @@
-"""Read-only exact q1 quote-conditioned settlement reconciliation, v2.
+"""Fast read-only reconciliation of exact historical q=1 quote candidates.
 
-Fixes the Gemini identifier mismatch in v1: live/shadow logs identify the UP
-contract by instrumentSymbol, while historical AgreementRow records identify the
-parent Gemini event ticker. This module maps contract instrumentSymbol -> event
-ticker before joining the exact historical candidate to the settlement row.
-
-Public settled data only. No order transport is imported; this module cannot trade.
+Fetches only the five exact known Kalshi tickers and maps Gemini live
+instrumentSymbols to their parent settled events before matching by asset/expiry.
+Public data only; no order transport is imported and this module cannot trade.
 """
 from __future__ import annotations
 
@@ -16,12 +13,9 @@ import logging
 
 import httpx
 
-from src.gemini_kalshi_quote_conditioned_history_reconcile import (
-    CANDIDATES,
-    payoff_classification,
-)
-from src.gemini_kalshi_settlement_agreement import _gemini_settled
-from src.gemini_kalshi_settlement_probe import _kalshi_settled_paced, match_settled_true_windows
+from src.gemini_kalshi_fast_overlap import KALSHI_REST
+from src.gemini_kalshi_quote_conditioned_history_reconcile import CANDIDATES, payoff_classification
+from src.gemini_kalshi_settlement_agreement import _gemini_settled, match_settled
 from src.gemini_kalshi_threshold_dominance_study import classify
 
 D = Decimal
@@ -43,25 +37,35 @@ def _symbol_to_event_ticker(events: list[dict]) -> dict[str, str]:
     return out
 
 
+async def _exact_kalshi_markets(http: httpx.AsyncClient) -> list[dict]:
+    async def one(ticker: str) -> dict:
+        response = await http.get(f"{KALSHI_REST}/markets/{ticker}")
+        response.raise_for_status()
+        payload = response.json()
+        market = payload.get("market") if isinstance(payload, dict) else None
+        if not isinstance(market, dict):
+            raise RuntimeError(f"missing market payload for {ticker}")
+        return market
+
+    unique = sorted({str(c["kalshi_ticker"]) for c in CANDIDATES})
+    return await asyncio.gather(*(one(ticker) for ticker in unique))
+
+
 async def main_async() -> None:
     async with httpx.AsyncClient(timeout=30.0) as http:
-        gemini, kalshi = await asyncio.gather(
-            _gemini_settled(http, 10000),
-            _kalshi_settled_paced(http, 168),
-        )
+        gemini, kalshi = await asyncio.gather(_gemini_settled(http, 10000), _exact_kalshi_markets(http))
 
-    matched = match_settled_true_windows(gemini, kalshi, 30.0)
+    symbol_to_event = _symbol_to_event_ticker(gemini)
     event_by_ticker = {str(e.get("ticker") or ""): e for e in gemini}
     market_by_ticker = {str(m.get("ticker") or ""): m for m in kalshi}
+    matched = match_settled(gemini, kalshi, max_expiry_skew_s=30.0)
     rows_by_pair = {(str(r.gemini_ticker), str(r.kalshi_ticker)): r for r in matched}
-    symbol_to_event = _symbol_to_event_ticker(gemini)
 
     resolved: list[dict] = []
     missing: list[dict] = []
     for candidate in CANDIDATES:
         event_ticker = symbol_to_event.get(candidate["gemini_symbol"])
-        key = (event_ticker or "", candidate["kalshi_ticker"])
-        row = rows_by_pair.get(key)
+        row = rows_by_pair.get((event_ticker or "", candidate["kalshi_ticker"]))
         event = event_by_ticker.get(event_ticker or "")
         market = market_by_ticker.get(candidate["kalshi_ticker"])
         if row is None or event is None or market is None:
@@ -109,9 +113,7 @@ async def main_async() -> None:
         "safe_direction_adverse_double_losses": len(safe_adverse),
         "safe_direction_favorable_double_wins": len(safe_favorable),
         "safe_direction_normal_one_wins": len(safe_rows) - len(safe_adverse) - len(safe_favorable),
-        "safe_direction_total_observed_locked_quote_profit": str(
-            sum((D(r["best_observed_locked_quote_profit"]) for r in safe_rows), D("0"))
-        ),
+        "safe_direction_total_observed_locked_quote_profit": str(sum((D(r["best_observed_locked_quote_profit"]) for r in safe_rows), D("0"))),
         "all_candidate_adverse_double_losses": sum(1 for r in resolved if r["adverse_double_loss"]),
         "missing": missing,
         "interpretation": "Historical quote-conditioned settlement evidence only; no fills occurred and quoted profit is not realized P&L.",
