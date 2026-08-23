@@ -1,8 +1,68 @@
 # ARB Control Plane
 
-Last verified: 2026-08-23 03:24 UTC
+Last verified: 2026-08-23 12:35 UTC
 
 This is the durable ARB handoff. Production state wins over chat history. Before changing a workstream, verify current Railway deployment/runtime + GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the $480/day objective.
+
+## LATEST PRODUCTION CHECKPOINT — 2026-08-23 12:35 UTC
+
+This section supersedes older basis-risk probe ceilings/details below where they conflict. Historical sections are preserved for audit context.
+
+### Gemini/Kalshi basis-risk q1 promoted to 20 total probes — LIVE
+
+The dedicated settlement-basis research lane has now completed **5/5 real q=1 probes profitably**, with **0 realized losses** and authoritative realized net P&L **+$0.341900**. This remains **LIVE BASIS-RISK RESEARCH, not guaranteed arbitrage**.
+
+Authoritative Neon state immediately before promotion and again after deployment:
+- `CAPITAL_RESERVED`: **5**
+- `ORDER_SUBMITTED`: **5**
+- `TRADE_REALIZED`: **5**
+- realized losses: **0**
+- realized loss USD: **$0**
+- realized net P&L: **+$0.341900**
+- unresolved reservations: **0**
+- unresolved submissions: **0**
+
+User explicitly approved promotion beyond the five-probe ceiling. The lane is now bounded to **20 total q=1 probes**, not unlimited size/risk.
+
+Safety semantics of the promotion:
+- q=1 only;
+- <= **$1** capital reserved per probe;
+- at most **20 lifetime `CAPITAL_RESERVED` rows** for this strategy;
+- exactly **one unresolved/reserved probe at a time**;
+- every prior reservation must be authoritatively `TRADE_REALIZED` before the next reservation;
+- **any realized loss hard-stops all future automatic rollover**;
+- the already approved **$5 maximum-realized-loss research budget is unchanged and was not reset/increased**;
+- historical sequential reservation turnover may exceed $5 because resolved capital turnover is not cumulative realized loss; simultaneous exposure remains <=$1;
+- ETH/SOL/XRP only; BTC remains quarantined;
+- >=0.5bp protective threshold separation;
+- >=3c modeled after-fee locked edge;
+- existing protective orientation, 50ms persistence/skew, freshness, exact-depth, double-boundary, FOK, durable reservation, reconciliation and hard-halt controls remain unchanged;
+- shared guaranteed-arbitrage settlement-equivalence lock remains unchanged/hard-false;
+- q5 guaranteed-arbitrage promotion remains blocked.
+
+Promotion code on `feature/crypto-basis-risk-q1-canary`:
+- `src/gemini_kalshi_basis_risk_q1_child_v5.py` commit **`e6e4f8680aeb5d9abd69a7248fe68a7b085fa80d`** changes the promoted ceiling to 20 and correctly treats the $5 authorization as a maximum realized-loss budget rather than a lifetime reservation-turnover cap;
+- promotion tests commit **`07064db859cefcfd11bbd79f246a41511e8c867d`**;
+- rollover tests commit **`3419674c1d0d9a5490ad7e9265bb87bcd5113605`**;
+- rollover documentation/runtime checkpoint commit **`b96050ee9df1b893b6147ef9c1f48bf937b0b7f9`**.
+
+Production validation:
+- service was disarmed before code mutation;
+- targeted Railway pytest deployment **`6d48b090-4122-4b08-bed5-4b50794158cd`** on marker commit `a497dcd82eb3fd96b01ac045845aed0749f9c63f` finished **SUCCESS**;
+- ledger was rechecked clean at 5 reservations / 5 realized / 0 losses / +$0.341900 / 0 unresolved;
+- service start command restored to `python -m src.gemini_kalshi_basis_risk_rollover_supervisor` with ON_FAILURE max retries 5;
+- arm restored only after validation;
+- live source deployment **`a26c7073-2345-43d0-b441-e99b6474d784`** on commit **`8cbf2f29833a06123cc9aaa006a2aefc708e1ff8`** is **SUCCESS**.
+
+Verified live runtime logs:
+- `CRYPTO_BASIS_RISK_ROLLOVER_ENABLED ... probe_limit=20 ... approved_budget_usd=5 ... min_gap_bps=0.5 ... min_locked_profit=0.03 ... hard_stop_on_any_loss=true ... one_unresolved=true ... guaranteed_arb=false`;
+- `CRYPTO_BASIS_RISK_V5_PROMOTION_INSTALLED probe_limit=20 q=1 tranche_usd=1 approved_loss_budget_usd=5 one_unresolved=true hard_stop_on_any_loss=true shared_arb_lock_changed=false`;
+- parent/child ledger reconciliation reported `unresolved_prior_trades=0`;
+- fresh lease **`br0823123301`** started with deadline `2026-08-23T14:33:51Z`;
+- ETH/SOL/XRP hot feeds are scanning with live Gemini/Kalshi events and no reconnect/sequence-gap issue in the first verified summaries;
+- no sixth capital reservation had occurred at the 12:35 UTC ledger check.
+
+Do not silently raise the 20-probe ceiling, q size, or $5 maximum-realized-loss budget. Review the accumulated realized results before any further promotion. Do not call this lane guaranteed arbitrage.
 
 ## LATEST PRODUCTION CHECKPOINT — 2026-08-23 03:24 UTC
 
@@ -361,8 +421,8 @@ Remove only verified dead/test/superseded services after dependency checks.
 
 1. Read `ARB_STATUS.md`, then inspect current Railway/GitHub production state before mutation.
 2. Keep guaranteed-arb Gemini/Kalshi crypto q1/q5/maker blocked unless exact settlement + threshold equivalence is independently certified. Treat `crypto-basis-risk-q1-canary` separately as bounded basis-risk research only.
-3. **LATEST OVERRIDE:** inspect the automatic rollover supervisor and authoritative basis-risk ledger first. Do not use the stale `basis-0822-dyn-01` deadline below as current production state.
-4. Automatic basis-risk rollover may create fresh 120-minute leases only while: total reservations <3, there is no unresolved reservation/submission, no realized basis loss has occurred, the $5 approved budget is unchanged, and all live execution gates pass.
+3. **LATEST OVERRIDE:** inspect the automatic rollover supervisor and authoritative basis-risk ledger first. Do not use stale historical campaign deadlines below as current production state.
+4. Automatic basis-risk rollover may create fresh 120-minute leases only while: total reservations <20, there is no unresolved reservation/submission, no realized basis loss has occurred, the $5 maximum-realized-loss budget is unchanged/not exhausted, and all live execution gates pass. Sequential resolved reservation turnover is not the $5 loss budget.
 5. Any basis probe submission/fill remains LIVE BASIS-RISK PROBE / FILLED_NOT_SETTLED until official Gemini + Kalshi settlements reconcile. Only then write authoritative REALIZED P&L.
 6. If REST 429 bursts materially suppress qualifying evaluations, stagger/smooth exact-book requests rather than weakening freshness or reintroducing an unauthorized WebSocket path.
 7. For same-Gemini sports combos, keep **resting maker mode blocked**. Never infer indivisibility from q=1.
