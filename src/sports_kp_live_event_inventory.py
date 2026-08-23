@@ -56,6 +56,36 @@ def _market_type(market: Mapping[str, Any]) -> str:
     return _text(market.get("sportsMarketTypeV2") or market.get("sportsMarketType") or market.get("marketType") or "UNKNOWN").upper().removeprefix("SPORTS_MARKET_TYPE_")
 
 
+def _campaign_funnel(result: Mapping[str, Any]) -> dict[str, Any]:
+    attempts = [a for a in (result.get("attempts") or []) if isinstance(a, Mapping)]
+    statuses = [str(a.get("status") or "") for a in attempts]
+    maker_posted = sum(1 for a in attempts if a.get("maker_order_id"))
+    maker_filled = sum(
+        1
+        for status in statuses
+        if status.startswith("MAKER_FILLED_")
+        or status.startswith("HEDGE_")
+        or status.startswith("BOTH_FILLED")
+    )
+    hedge_filled = sum(1 for status in statuses if status.startswith("BOTH_FILLED"))
+    reconciled = sum(1 for status in statuses if status == "BOTH_FILLED_RECONCILED")
+    realized = sum(1 for a in attempts if bool(a.get("realized")))
+    return {
+        "eligible": int(result.get("candidate_count") or result.get("candidates") or 0),
+        "maker_attempts": len(attempts),
+        "maker_posted": maker_posted,
+        "maker_filled": maker_filled,
+        "hedge_filled": hedge_filled,
+        "fully_reconciled": reconciled,
+        "realized": realized,
+        "partial_fill_flattened": sum(1 for status in statuses if status == "MAKER_PARTIAL_FLATTENED"),
+        "rate_limit_stops": sum(1 for status in statuses if "RATE_LIMIT" in status),
+        "no_fill_cancels": sum(1 for status in statuses if status == "MAKER_NOT_FILLED_CANCELED"),
+        "edge_or_book_cancels": sum(1 for status in statuses if status == "MAKER_CANCELED_EDGE_GONE"),
+        "diagnostic_only": True,
+    }
+
+
 async def fetch_current_sports_events(http: httpx.AsyncClient, *, horizon_hours: int = 48, max_pages: int = 12) -> list[dict[str, Any]]:
     horizon = datetime.now(timezone.utc) + timedelta(hours=horizon_hours)
     out: list[dict[str, Any]] = []
@@ -123,9 +153,19 @@ async def run_once(http: httpx.AsyncClient | None = None) -> dict[str, Any]:
 
     try:
         from src.sports_kp_poly_relay_campaign_q1_v4 import run_once as revenue_campaign
-        await revenue_campaign()
+        campaign_result = await revenue_campaign()
+        funnel = _campaign_funnel(campaign_result)
+        print("SPORTS_POLY_EXECUTION_FUNNEL " + json.dumps(funnel, separators=(",", ":")), flush=True)
     except Exception:
         logger.exception("SPORTS_POLY_RELAY_CAMPAIGN_Q1_V4_ERROR")
+
+    # Independent read-only health census runs after the live campaign so its
+    # requests cannot consume quote capacity immediately before a mutation.
+    try:
+        from src.sports_kp_poly_quote_health import run_once as quote_health
+        await quote_health()
+    except Exception:
+        logger.exception("SPORTS_POLY_QUOTE_HEALTH_ERROR")
 
     owns = http is None
     client = http or httpx.AsyncClient(timeout=30.0)
