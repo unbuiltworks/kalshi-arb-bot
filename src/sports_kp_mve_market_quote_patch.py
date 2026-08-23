@@ -1,15 +1,20 @@
 """Normalize Kalshi market-list rows for targeted MVE manufacturing.
 
 Kalshi list responses can omit explicit asks while still exposing the economically
-identical opposite bid.  For a binary market:
+identical opposite bid. For a binary market:
 
     YES ask = 1 - NO bid
     NO ask  = 1 - YES bid
 
-with executable ask depth equal to the opposite bid depth.  The production
-same-market scanner already relies on this exact book identity.  This module
+with executable ask depth equal to the opposite bid depth. The production
+same-market scanner already relies on this exact book identity. This module
 installs the same fail-closed normalization into the targeted monotonicity seed
 without changing fees, q=1 depth requirements, horizons, or any order semantics.
+
+Kalshi sports rows also expose an administrative ``close_time`` that can be days
+after the event while ``expected_expiration_time`` tracks the actual expected
+resolution window. Candidate-horizon filtering therefore uses expected expiration
+first, falling back to occurrence/close/expiration only when needed.
 """
 from __future__ import annotations
 
@@ -24,6 +29,16 @@ D = Decimal
 ONE = D("1")
 
 
+def _candidate_time(market: Mapping[str, Any]) -> datetime | None:
+    return g._parse_dt(
+        market.get("expected_expiration_time")
+        or market.get("occurrence_datetime")
+        or market.get("close_time")
+        or market.get("expiration_time")
+        or market.get("latest_expiration_time")
+    )
+
+
 def selected_from_market(
     market: Mapping[str, Any],
     event_ticker: str,
@@ -35,11 +50,7 @@ def selected_from_market(
         return None
     if str(market.get("status") or "").lower() not in {"active", "open"}:
         return None
-    close = g._parse_dt(
-        market.get("close_time")
-        or market.get("expected_expiration_time")
-        or market.get("expiration_time")
-    )
+    close = _candidate_time(market)
     if close is None or close <= seed.datetime.now(seed.timezone.utc) or close > horizon:
         return None
     ticker = str(market.get("ticker") or "")
