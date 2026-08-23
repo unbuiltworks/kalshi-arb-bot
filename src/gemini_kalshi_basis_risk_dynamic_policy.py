@@ -16,6 +16,7 @@ import os
 import sys
 
 from src import gemini_kalshi_basis_risk_q1_child as child
+from src import gemini_kalshi_q1_near_miss_telemetry as near_miss
 from src import gemini_kalshi_rollover_optimizer as rollover_optimizer
 from src import gemini_kalshi_target_lifecycle_cache as target_lifecycle_cache
 from src import gemini_kalshi_target_freshness_guard as target_freshness_guard
@@ -86,6 +87,7 @@ def dynamic_main() -> None:
         child._install_dominance_probe(min_gap_bps)
 
     v2.install_canary_v2 = install_basis_canary
+    near_miss.install()
     rollover_optimizer.install()
     target_lifecycle_cache.install()
     target_freshness_guard.install()
@@ -105,7 +107,7 @@ def dynamic_main() -> None:
     logger.warning(
         "CRYPTO_BASIS_DYNAMIC_POLICY_ENABLED min_gap_bps=%s min_locked_profit=%s "
         "eligible_assets=%s btc_quarantined=true quantity=1 capital_limit_usd=1 "
-        "approved_budget_usd=%s guaranteed_arb=false",
+        "approved_budget_usd=%s guaranteed_arb=false near_miss_telemetry=true",
         min_gap_bps, DYNAMIC_MIN_LOCKED_PROFIT, ",".join(ELIGIBLE_ASSETS), child.APPROVED_BUDGET,
     )
     v2.main()
@@ -118,6 +120,6 @@ def install() -> None:
     logger.warning(
         "CRYPTO_BASIS_DYNAMIC_POLICY_INSTALLED scope=DEDICATED_BASIS_CHILD "
         "shared_guaranteed_arb_lock_changed=false min_gap_bps=%s min_locked_profit=%s "
-        "eligible_assets=%s btc_quarantined=true",
+        "eligible_assets=%s btc_quarantined=true near_miss_telemetry=true",
         DYNAMIC_MIN_GAP_BPS, DYNAMIC_MIN_LOCKED_PROFIT, ",".join(ELIGIBLE_ASSETS),
     )
