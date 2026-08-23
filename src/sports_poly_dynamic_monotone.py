@@ -85,8 +85,6 @@ async def discover_current_pairs(*, horizon_hours: int = 36, max_pages: int = 12
     for threshold_map in groups.values():
         clean = [(line, m) for line, m in threshold_map.items() if not m.get("_ambiguous")]
         clean.sort(key=lambda x: x[0])
-        # Singles cannot form a monotone hedge. Excluding them prevents unnecessary
-        # exact-book requests and reduces startup/API pressure without losing trades.
         if len(clean) < 2:
             continue
         for _, market in clean:
@@ -104,9 +102,11 @@ def score_pairs(
 ) -> list[dict[str, Any]]:
     """Score exact books and rank candidates for maker fill probability.
 
-    Eligibility still requires >=3c at the current maker bid. Ranking then computes
-    the most aggressive post-only quote that still preserves the same 3c after-fee
-    floor. Candidates closest to the contra ask are tried first.
+    Eligibility still requires >=3c at the current maker bid. Ranking computes the
+    most aggressive post-only quote that preserves the same 3c after-fee floor.
+    Quotes that improve the displayed bid are preferred because they have zero
+    observed queue ahead at the instant of scoring; only then do we rank by gap to
+    contra ask, hedge capacity, and residual locked economics.
     """
     rows: list[dict[str, Any]] = []
     for low_slug, high_slug in pairs:
@@ -136,6 +136,7 @@ def score_pairs(
             if executable_maker_quote <= 0 or executable_maker_quote >= maker_ask or quote_locked < TARGET:
                 continue
             maker_gap_to_ask = maker_ask - executable_maker_quote
+            improves_bid = executable_maker_quote > maker_bid
 
             rows.append(
                 {
@@ -149,6 +150,8 @@ def score_pairs(
                     "maker_spread": maker_ask - maker_bid,
                     "executable_maker_quote": executable_maker_quote,
                     "maker_gap_to_ask": maker_gap_to_ask,
+                    "improves_bid": improves_bid,
+                    "queue_mode": "ZERO_OBSERVED_QUEUE" if improves_bid else "JOINS_DISPLAYED_BID",
                     "hedge_slug": hedge_slug,
                     "hedge_side": hedge_side,
                     "hedge_ask": hedge_px,
@@ -162,5 +165,12 @@ def score_pairs(
                 }
             )
 
-    rows.sort(key=lambda r: (r["maker_gap_to_ask"], -r["hedge_depth"], -r["quote_locked_profit"]))
+    rows.sort(
+        key=lambda r: (
+            not r["improves_bid"],
+            r["maker_gap_to_ask"],
+            -r["hedge_depth"],
+            -r["quote_locked_profit"],
+        )
+    )
     return rows
