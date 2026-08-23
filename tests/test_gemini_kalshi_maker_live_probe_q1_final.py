@@ -20,12 +20,12 @@ def test_preflight_can_be_explicitly_disabled(monkeypatch):
     assert final.preflight_requested() is False
 
 
-def test_probe_target_can_be_lowered_to_one_cent(monkeypatch):
+def test_probe_target_accepts_three_cent_floor(monkeypatch):
     old_base, old_safe, old_hardened = base.TARGET_PROFIT, safe.TARGET_PROFIT, hardened.TARGET_PROFIT
     try:
-        monkeypatch.setenv(final.TARGET_ENV, "0.01")
+        monkeypatch.setenv(final.TARGET_ENV, "0.03")
         target = final.configure_target_profit()
-        assert target == D("0.01")
+        assert target == D("0.03")
         assert base.TARGET_PROFIT == target
         assert safe.TARGET_PROFIT == target
         assert hardened.TARGET_PROFIT == target
@@ -35,14 +35,29 @@ def test_probe_target_can_be_lowered_to_one_cent(monkeypatch):
         hardened.TARGET_PROFIT = old_hardened
 
 
-def test_probe_target_refuses_below_one_cent(monkeypatch):
-    monkeypatch.setenv(final.TARGET_ENV, "0.009")
-    with pytest.raises(ValueError):
+def test_probe_target_refuses_below_three_cent_floor(monkeypatch):
+    monkeypatch.setenv(final.TARGET_ENV, "0.029")
+    with pytest.raises(ValueError, match="may not weaken the 3-cent after-fee floor"):
         final.configure_target_profit()
 
 
-def test_probe_target_refuses_above_three_cents(monkeypatch):
-    monkeypatch.setenv(final.TARGET_ENV, "0.031")
+def test_probe_target_accepts_above_floor_within_cap(monkeypatch):
+    old_base, old_safe, old_hardened = base.TARGET_PROFIT, safe.TARGET_PROFIT, hardened.TARGET_PROFIT
+    try:
+        monkeypatch.setenv(final.TARGET_ENV, "0.031")
+        target = final.configure_target_profit()
+        assert target == D("0.031")
+        assert base.TARGET_PROFIT == target
+        assert safe.TARGET_PROFIT == target
+        assert hardened.TARGET_PROFIT == target
+    finally:
+        base.TARGET_PROFIT = old_base
+        safe.TARGET_PROFIT = old_safe
+        hardened.TARGET_PROFIT = old_hardened
+
+
+def test_probe_target_refuses_above_configured_cap(monkeypatch):
+    monkeypatch.setenv(final.TARGET_ENV, "0.251")
     with pytest.raises(ValueError):
         final.configure_target_profit()
 
