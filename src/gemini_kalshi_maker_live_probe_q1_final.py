@@ -23,6 +23,8 @@ TARGET_ENV = "MAKER_LIVE_PROBE_TARGET_PROFIT"
 POLICY_ENV = "MAKER_LIVE_PROBE_POLICY"
 ASSET_ENV = "MAKER_LIVE_PROBE_ASSET"
 ELIGIBLE_ASSETS = ("ETH", "SOL", "XRP")
+MIN_TARGET_PROFIT = D("0.03")
+MAX_TARGET_PROFIT = D("0.25")
 
 
 def preflight_requested() -> bool:
@@ -42,9 +44,12 @@ def configure_asset() -> str:
 
 
 def configure_target_profit() -> Decimal:
-    target = D(os.getenv(TARGET_ENV, "0.03").strip())
-    if target < D("0.01") or target > D("0.03"):
-        raise ValueError(f"{TARGET_ENV} must be between 0.01 and 0.03")
+    target = D(os.getenv(TARGET_ENV, str(MIN_TARGET_PROFIT)).strip())
+    if target < MIN_TARGET_PROFIT or target > MAX_TARGET_PROFIT:
+        raise ValueError(
+            f"{TARGET_ENV} must be between {MIN_TARGET_PROFIT} and {MAX_TARGET_PROFIT}; "
+            "the live maker lane may not weaken the 3-cent after-fee floor"
+        )
     base.TARGET_PROFIT = target
     safe.TARGET_PROFIT = target
     hardened.TARGET_PROFIT = target
@@ -83,6 +88,7 @@ async def readonly_preflight() -> dict:
             "btc_quarantined":True,
             "quantity_max":"1",
             "target_profit":str(target),
+            "min_target_profit":str(MIN_TARGET_PROFIT),
             "policy":policy,
             "fee_type":fee_meta.fee_type,
             "fee_multiplier":fee_meta.fee_multiplier,
@@ -123,6 +129,7 @@ async def run() -> dict:
         "maker_order_ttl_s":venue_once.ORDER_TTL_S,
         "quantity_max":"1",
         "target_profit":str(target),
+        "min_target_profit":str(MIN_TARGET_PROFIT),
         "policy":policy,
         "settlement_status":base.SETTLEMENT_STATUS,
         "kalshi_book_transport":"EXACT_REST_DEPTH1",
