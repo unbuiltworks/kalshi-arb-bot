@@ -185,7 +185,14 @@ async def run_once() -> dict[str, Any]:
                     legs = [dict(x) for x in (market.get("mve_selected_legs") or []) if isinstance(x, Mapping)]
                     if len(legs) not in scan.SUPPORTED_LEG_COUNTS or not scan._sportsish(legs):
                         continue
-                    close = scan._parse_dt(market.get("close_time") or market.get("expected_expiration_time"))
+                    # For sports MVEs, administrative close_time can trail the
+                    # underlying event by days. Use the expected settlement/event
+                    # horizon first so same-day combos are not discarded.
+                    close = scan._parse_dt(
+                        market.get("expected_expiration_time")
+                        or market.get("expiration_time")
+                        or market.get("close_time")
+                    )
                     if (
                         str(market.get("status") or "").lower() not in {"active", "open"}
                         or close is None or close <= now or close > horizon
@@ -236,7 +243,6 @@ async def run_once() -> dict[str, Any]:
             public_no = _public_combo_no(row["market"])
             prequalified.append({**row, "best_component": best_component, "public_no": public_no})
 
-        # First score any public q=1 NO side immediately.  No RFQ is needed.
         scored: list[dict[str, Any]] = []
         public_scored = 0
         for row in prequalified:
@@ -250,7 +256,6 @@ async def run_once() -> dict[str, Any]:
                 price_source="PUBLIC_BOOK",
             ))
 
-        # RFQ only a small diverse set where the public NO side is unavailable.
         needs_rfq = [row for row in prequalified if row["public_no"] is None]
         low = sorted(needs_rfq, key=lambda x: (x["best_component"]["all_in"], x["close"]))
         high = sorted(needs_rfq, key=lambda x: (-x["best_component"]["price"], x["close"]))
