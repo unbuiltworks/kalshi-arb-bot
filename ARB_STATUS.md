@@ -1,8 +1,76 @@
 # ARB Control Plane
 
-Last verified: 2026-08-23 02:05 UTC
+Last verified: 2026-08-23 03:16 UTC
 
 This is the durable ARB handoff. Production state wins over chat history. Before changing a workstream, verify current Railway deployment/runtime + GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the $480/day objective.
+
+## LATEST PRODUCTION CHECKPOINT — 2026-08-23 03:16 UTC
+
+This section supersedes older basis-risk details below where they conflict. Historical sections are preserved for audit context.
+
+### Basis-risk lane: first real probe PROFITABLE + automatic rollover LIVE
+
+The dedicated Gemini/Kalshi settlement-basis q1 lane has now produced a real, fully settled profitable live probe. This is **not guaranteed arbitrage**.
+
+Authoritative trade:
+- trade id `gkbasis-br-0822-2245-esx-03-01`
+- asset SOL
+- direction `KALSHI_YES_GEMINI_NO`
+- Gemini `GEMI-SOL15M2608230300-UP`
+- Kalshi `KXSOL15M-26AUG222300-00`
+- q=1; actual capital **$0.966300**
+- modeled locked quote profit **$0.0300**
+- threshold gap abs **~3.0631bp**; candidate matched threshold-dominance safe direction
+- both venue orders filled
+- both official venue outcomes settled YES
+- exact public venue settlement reconciliation
+- authoritative `TRADE_REALIZED` net P&L **+$0.033700**
+- `venue_outcomes_agree=true`
+
+Authoritative basis ledger at rollover promotion:
+- `CAPITAL_RESERVED`: 1
+- `TRADE_REALIZED`: 1
+- realized losses: 0
+- basis realized net P&L: **+$0.033700**
+- unresolved submitted crypto trades: 0
+- unresolved basis reservations: 0
+
+The old fixed 12:30 AM arm expiry is no longer an operational dormancy point. Service `crypto-basis-risk-q1-canary` (`9f6e8d88-868a-4a38-9758-e74fceb71ed6`) now runs:
+`python -m src.gemini_kalshi_basis_risk_rollover_supervisor`
+from branch `feature/crypto-basis-risk-q1-canary`.
+
+Production deployment `4977c651-a3e7-418d-a611-e8b398f9f0be` on source marker commit `026c50ab2987a13da37d4467e92753bd67678aad` verified:
+- `CRYPTO_BASIS_RISK_ROLLOVER_ENABLED`
+- 120-minute fresh authorization leases
+- q=1 / <=$1 per probe
+- promoted total probe ceiling **3**, including the already-settled first probe
+- approved maximum-loss research budget remains **$5**; not reset/increased
+- >=0.5bp protective threshold separation
+- >=3c modeled after-fee locked edge
+- ETH/SOL/XRP only; BTC remains quarantined
+- one unresolved/reserved trade maximum
+- **any realized loss hard-stops all future automatic rollover**
+- every prior reservation must be authoritatively `TRADE_REALIZED` before another can reserve
+- fresh short campaign ID and fresh deadline each lease; no expired arm token is reused
+- process-local basis authorization only; shared guaranteed-arb settlement-equivalence lock unchanged
+- q5 remains blocked
+
+First automatic lease started successfully at 03:16 UTC:
+- campaign `br0823031601`
+- deadline `2026-08-23T05:16:07Z`
+- parent saw reservations=1, realized=1, realized net +0.033700
+- child logged `CRYPTO_BASIS_RISK_V5_PROMOTION_INSTALLED probe_limit=3`
+- authenticated Gemini/Kalshi preflights passed
+- current exact books for ETH/SOL/XRP are scanning
+
+Rollover safety implementation:
+- `src/gemini_kalshi_basis_risk_q1_child_v5.py`
+- `src/gemini_kalshi_basis_risk_q1_campaign_v5.py`
+- `src/gemini_kalshi_basis_risk_rollover_supervisor.py`
+- targeted rollover tests: **6/6 passed**
+- existing Docker safety suite on fresh source build: **48/48 passed**
+
+Do not promote beyond the current three-total-q1 ceiling without reviewing the additional settled probes. Do not call this lane guaranteed arbitrage. The correct classification remains **LIVE BASIS-RISK PROBE** until each filled trade settles and is reconciled.
 
 ## State definitions
 
@@ -237,9 +305,9 @@ Remove only verified dead/test/superseded services after dependency checks.
 
 1. Read `ARB_STATUS.md`, then inspect current Railway/GitHub production state before mutation.
 2. Keep guaranteed-arb Gemini/Kalshi crypto q1/q5/maker blocked unless exact settlement + threshold equivalence is independently certified. Treat `crypto-basis-risk-q1-canary` separately as bounded basis-risk research only.
-3. First inspect campaign **`basis-0822-dyn-01`** and authoritative basis-risk ledger. Do not create another campaign while it has an unresolved claim/trade. Current arm deadline is 04:30 UTC.
-4. The explicitly bounded first-probe policy is **protective orientation + >=0.5bp threshold separation + >=7c modeled locked quote profit**, with q=1/<=1 USD/one trade max/$5 hard research budget and all existing 50ms persistence/skew, <=100ms freshness, exact-depth, 10bp double-boundary and durable reservation gates. Do not loosen it further from chat history alone.
-5. If the dynamic pilot submits/fills, classify it as LIVE BASIS-RISK PROBE / FILLED_NOT_SETTLED until official Gemini + Kalshi settlements reconcile. Only then write authoritative REALIZED P&L.
+3. **LATEST OVERRIDE:** inspect the automatic rollover supervisor and authoritative basis-risk ledger first. Do not use the stale `basis-0822-dyn-01` deadline below as current production state.
+4. Automatic basis-risk rollover may create fresh 120-minute leases only while: total reservations <3, there is no unresolved reservation/submission, no realized basis loss has occurred, the $5 approved budget is unchanged, and all live execution gates pass.
+5. Any basis probe submission/fill remains LIVE BASIS-RISK PROBE / FILLED_NOT_SETTLED until official Gemini + Kalshi settlements reconcile. Only then write authoritative REALIZED P&L.
 6. If REST 429 bursts materially suppress qualifying evaluations, stagger/smooth exact-book requests rather than weakening freshness or reintroducing an unauthorized WebSocket path.
 7. For same-Gemini sports combos, keep **resting maker mode blocked**. Never infer indivisibility from q=1.
 8. Verify the read-only FOK watcher is receiving all current symbol snapshots and whether `active_executable_signals` is still 0.
