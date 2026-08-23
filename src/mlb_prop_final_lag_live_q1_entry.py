@@ -9,6 +9,10 @@ The underlying handler uses an asyncio lock to serialize executions. Python's
 an RLock. The production entrypoint therefore makes logging's acquire/release hooks
 no-ops for this one event-loop handler; its asyncio lock remains exclusively for
 execution serialization rather than logging internals.
+
+Any nonzero fill that is not exactly q=1 is reclassified UNKNOWN. The parent then
+hard-halts and preserves the reservation rather than releasing capital while an
+unexpected fractional position may exist.
 """
 from __future__ import annotations
 
@@ -42,6 +46,27 @@ impl._unresolved_final_lag = _unresolved
 # that object; execution code still uses ``async with self.lock`` normally.
 impl.FinalLagLiveHandler.acquire = lambda self: None
 impl.FinalLagLiveHandler.release = lambda self: None
+
+_base_submit = impl._submit
+
+
+async def _submit_fail_closed(leg: Any) -> Any:
+    result = await _base_submit(leg)
+    filled = impl._d(result.filled_quantity)
+    if filled == impl.D("0") or filled == impl.ONE:
+        return result
+    return impl.VenueResult(
+        venue=result.venue,
+        order_id=result.order_id,
+        status="UNKNOWN",
+        filled_quantity=result.filled_quantity,
+        average_price=result.average_price,
+        reason=f"UNEXPECTED_PARTIAL_FILL_{result.filled_quantity}",
+        reconciled=result.reconciled,
+    )
+
+
+impl._submit = _submit_fail_closed
 
 
 if __name__ == "__main__":
