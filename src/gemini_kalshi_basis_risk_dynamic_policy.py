@@ -1,9 +1,10 @@
 """Process-local dynamic policy for the next q=1 settlement-basis live probe.
 
 This does not alter the shared guaranteed-arbitrage settlement-equivalence lock.
-It lowers the threshold-gap floor only inside the dedicated basis-risk child while
-raising the first-probe quote-edge floor to 7 cents. All existing exact-depth,
-freshness, persistence, q=1, capital reservation and $5 hard-budget controls remain.
+It lowers the threshold-gap floor only inside the dedicated basis-risk child and uses
+the existing 3-cent after-fee floor for the single bounded q=1 research probe. All
+existing exact-depth, freshness, persistence, q=1, capital reservation and $5 hard-
+budget controls remain.
 """
 from __future__ import annotations
 
@@ -24,7 +25,7 @@ D = Decimal
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_risk_dynamic_policy")
 
 DYNAMIC_MIN_GAP_BPS = D("0.5")
-DYNAMIC_MIN_LOCKED_PROFIT = D("0.07")
+DYNAMIC_MIN_LOCKED_PROFIT = D("0.03")
 
 
 def dynamic_dominance_authorization(*, direction, gemini_strike, kalshi_target, min_gap_bps=DYNAMIC_MIN_GAP_BPS):
