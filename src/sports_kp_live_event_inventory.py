@@ -1,8 +1,9 @@
 """Read-only current Polymarket US sports-event inventory for the K/P lane.
 
-This module deliberately performs no normalization, counterpart certification, or
-order entry. It exists to make the live discovery surface observable so the K/P
-executor cannot silently remain MLB-only while other sports are active.
+This module deliberately performs no cross-venue counterpart certification or order
+entry. It also runs the bounded, mutation-free same-venue Polymarket MLB maker q1
+preflight so authenticated validation happens on the low-request K/P service rather
+than the broad census worker.
 """
 from __future__ import annotations
 
@@ -156,6 +157,11 @@ async def run_once(http: httpx.AsyncClient | None = None) -> dict[str, Any]:
         encoded = json.dumps(payload, separators=(",", ":"), default=str)
         logger.info("SPORTS_POLY_LIVE_EVENT_INVENTORY %s", encoded)
         print("SPORTS_POLY_LIVE_EVENT_INVENTORY " + encoded, flush=True)
+        try:
+            from src.sports_kp_poly_maker_q1_preflight import run_once as maker_preflight
+            await maker_preflight(events)
+        except Exception:
+            logger.exception("SPORTS_KP_POLY_MAKER_Q1_PREFLIGHT_ERROR")
         return payload
     finally:
         if owns:
