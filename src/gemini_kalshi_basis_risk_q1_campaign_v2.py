@@ -1,8 +1,10 @@
-"""Hardened supervisor for the approved q=1 settlement-basis live probe.
+"""Hardened supervisor for the promoted q=1 settlement-basis live probe.
 
-The campaign remains one trade / <=$1 capital and retains the proven q=1 execution,
-settlement and authoritative P&L machinery. The child is the isolated v4 wrapper:
-v2 durable controls + v3 telemetry + conservative dynamic first-probe policy.
+The first live q=1 probe settled +$0.0337 net in the authoritative ledger.  The lane is
+now promoted only to three TOTAL q=1 reservations, including that completed trade.  Each
+campaign still runs at most one trade / <=$1 capital, requires prior settlement before a
+new submission, and retains the existing $5 maximum-loss research ceiling.  This is not
+promotion to guaranteed arbitrage or q5.
 """
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ from src import gemini_kalshi_crypto_live_campaign as crypto
 from src import gemini_kalshi_sol_live_canary_v2 as v2
 
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_risk_q1_campaign_v2")
+PROMOTED_TOTAL_PROBE_LIMIT = 3
 
 
 async def _obtain_hardened_execution(run_id: str, arm_deadline: datetime) -> dict[str, Any]:
@@ -69,6 +72,7 @@ def install() -> None:
     campaign.DEFAULT_MIN_GAP_BPS = dynamic_policy.DYNAMIC_MIN_GAP_BPS
     child.MODE = child_v2.LEDGER_MODE
     campaign.MODE = child_v2.LEDGER_MODE
+    child_v2.INITIAL_PROBE_LIMIT = PROMOTED_TOTAL_PROBE_LIMIT
     campaign._obtain_basis_execution = _obtain_hardened_execution
 
 
@@ -78,9 +82,9 @@ def main() -> None:
     os.environ[child.BASIS_RECONCILED_ENV] = "YES"
     install()
     logger.warning(
-        "CRYPTO_BASIS_RISK_V2_ENABLED ledger_mode=%s initial_probe_limit=%s "
-        "initial_tranche_usd=%s approved_max_loss_budget_usd=%s guaranteed_arb=false "
-        "child=v4_dynamic parent_min_gap_bps=%s",
+        "CRYPTO_BASIS_RISK_V2_ENABLED ledger_mode=%s total_probe_limit=%s "
+        "per_campaign_max_trades=1 initial_tranche_usd=%s approved_max_loss_budget_usd=%s "
+        "budget_increased=false guaranteed_arb=false child=v4_dynamic parent_min_gap_bps=%s",
         child_v2.LEDGER_MODE,
         child_v2.INITIAL_PROBE_LIMIT,
         child.INITIAL_TRANCHE_USD,
