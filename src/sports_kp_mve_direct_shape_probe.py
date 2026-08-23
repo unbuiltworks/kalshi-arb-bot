@@ -30,7 +30,7 @@ async def run_once() -> dict[str, Any]:
         listing_samples: list[dict[str, Any]] = []
         page_statuses: list[int] = []
         for _ in range(8):
-            params: dict[str, Any] = {"limit": 200, "with_nested_markets": "true"}
+            params: dict[str, Any] = {"limit": 200, "with_nested_markets": "true", "status": "open"}
             if cursor:
                 params["cursor"] = cursor
             er = await http.get(f"{BASE}/events/multivariate", params=params)
@@ -73,7 +73,7 @@ async def run_once() -> dict[str, Any]:
                 break
 
     out = {
-        "status": "SPORTS_MVE_DIRECT_SHAPE_V2",
+        "status": "SPORTS_MVE_DIRECT_SHAPE_V3_OPEN_ONLY",
         "http_status": r.status_code,
         "ticker": ticker,
         "direct": {
@@ -86,6 +86,7 @@ async def run_once() -> dict[str, Any]:
             "keys": sorted(target.keys()),
         },
         "multivariate_listing": {
+            "filter": "status=open",
             "page_statuses": page_statuses,
             "events_seen": events_seen,
             "markets_seen": markets_seen,
