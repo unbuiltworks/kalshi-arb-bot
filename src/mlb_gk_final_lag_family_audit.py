@@ -22,6 +22,7 @@ AUDIT_FAMILIES = (
     "baseball_player_hits_runs_rbis",
     "baseball_player_total_bases",
     "baseball_player_strikeouts",
+    "baseball_player_home_runs",
 )
 
 
