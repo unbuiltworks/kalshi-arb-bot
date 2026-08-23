@@ -1,7 +1,7 @@
 """Hardened supervisor for the approved q=1 settlement-basis live probe.
 
 The campaign remains one trade / <=$1 capital and retains the proven q=1 execution,
-settlement and authoritative P&L machinery. The child is now the isolated v4 wrapper:
+settlement and authoritative P&L machinery. The child is the isolated v4 wrapper:
 v2 durable controls + v3 telemetry + conservative dynamic first-probe policy.
 """
 from __future__ import annotations
@@ -14,6 +14,7 @@ import sys
 from datetime import datetime
 from typing import Any
 
+from src import gemini_kalshi_basis_risk_dynamic_policy as dynamic_policy
 from src import gemini_kalshi_basis_risk_q1_campaign as campaign
 from src import gemini_kalshi_basis_risk_q1_child as child
 from src import gemini_kalshi_basis_risk_q1_child_v2 as child_v2
@@ -63,6 +64,9 @@ async def _obtain_hardened_execution(run_id: str, arm_deadline: datetime) -> dic
 
 
 def install() -> None:
+    # Patch only this dedicated parent process. The guaranteed-arbitrage lane and
+    # shared settlement-equivalence hard stop are untouched.
+    campaign.DEFAULT_MIN_GAP_BPS = dynamic_policy.DYNAMIC_MIN_GAP_BPS
     child.MODE = child_v2.LEDGER_MODE
     campaign.MODE = child_v2.LEDGER_MODE
     campaign._obtain_basis_execution = _obtain_hardened_execution
@@ -75,11 +79,13 @@ def main() -> None:
     install()
     logger.warning(
         "CRYPTO_BASIS_RISK_V2_ENABLED ledger_mode=%s initial_probe_limit=%s "
-        "initial_tranche_usd=%s approved_max_loss_budget_usd=%s guaranteed_arb=false child=v4_dynamic",
+        "initial_tranche_usd=%s approved_max_loss_budget_usd=%s guaranteed_arb=false "
+        "child=v4_dynamic parent_min_gap_bps=%s",
         child_v2.LEDGER_MODE,
         child_v2.INITIAL_PROBE_LIMIT,
         child.INITIAL_TRANCHE_USD,
         child.APPROVED_BUDGET,
+        dynamic_policy.DYNAMIC_MIN_GAP_BPS,
     )
     campaign.main()
 
