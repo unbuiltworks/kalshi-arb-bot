@@ -14,6 +14,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import sys
 from typing import Any
 
 from src import strict_mlb_prop_snapshot_v2 as discovery
@@ -29,6 +30,23 @@ def _write_jsonl(path: Path, payload: dict[str, Any]) -> None:
         handle.write(line)
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def _configure_logging() -> None:
+    """Keep normal read-only telemetry on stdout so Railway severity stays truthful.
+
+    ``logging.basicConfig`` defaults to stderr. Railway classifies stderr records as
+    error-severity even when the Python record itself is INFO, which made healthy
+    HTTP 200s and SCAN_OK cycles look like failures in service telemetry. Route the
+    root handler to stdout; real exceptions remain distinguishable by their message
+    and Python log level without polluting the transport severity.
+    """
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-8s %(message)s",
+        stream=sys.stdout,
+        force=True,
+    )
 
 
 async def supervise(
@@ -120,7 +138,7 @@ def main() -> None:
         parser.error("--interval-seconds must be >= 5")
     if not 18 <= args.future_horizon_hours <= 48:
         parser.error("--future-horizon-hours must be between 18 and 48")
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
+    _configure_logging()
     asyncio.run(
         supervise(
             interval_seconds=args.interval_seconds,
