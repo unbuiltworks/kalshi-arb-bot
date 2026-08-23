@@ -8,7 +8,8 @@ and only fixes portfolio-level throughput policy:
 * ambiguous, one-leg, reserved-only, or otherwise unresolved exposure still
   blocks all new mutation;
 * an exact Polymarket/Kalshi candidate pair that has already filled two legs is
-  permanently duplicate-blocked, even across process restarts;
+  permanently removed from future discovery, with a second duplicate check at
+  reservation time to close the restart/race window;
 * the shared cumulative live sports ceiling remains the environment-authorized
   value (production is explicitly set to $20 in Railway).
 
@@ -16,12 +17,14 @@ The underlying lane remains classified as LIVE_RULE_RISK_PROBE_NOT_GUARANTEED_AR
 """
 from __future__ import annotations
 
+import asyncio
 from decimal import Decimal
 import logging
+import os
 from typing import Any
 
 from src import mlb_kp_rule_risk_live_q1 as core
-from src import mlb_kp_rule_risk_event_rollover as rollover
+from src import mlb_kp_rule_risk_event_live_q1 as lane
 
 logger = logging.getLogger("kalshi_arb.mlb_kp_rule_risk_parallel_entrypoint")
 D = Decimal
@@ -42,6 +45,12 @@ _DANGEROUS = {
     "HARD_HALT",
 }
 _DUPLICATE_PREFIX = "duplicate K/P settlement key blocks execution:"
+_SAFE_PRE_MUTATION_PREFIXES = (
+    "unresolved sports live trade blocks execution:",
+    "shared sports budget exhausted:",
+    _DUPLICATE_PREFIX,
+)
+HARD_HALT_RC = 70
 
 
 def _d(value: Any) -> D:
@@ -120,7 +129,31 @@ def _already_filled(rows: list[dict[str, Any]], *, poly_slug: str, kalshi_ticker
     return None
 
 
+def _filled_pairs(rows: list[dict[str, Any]]) -> set[tuple[str, str]]:
+    pairs: set[tuple[str, str]] = set()
+    for row in rows:
+        if str(row.get("mode") or "") not in {"LIVE", "LIVE_PROBE"}:
+            continue
+        if int(row.get("legs_filled") or 0) < 2:
+            continue
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        pair = _candidate_pair(metadata)
+        if pair is not None:
+            pairs.add(pair)
+    return pairs
+
+
 _original_reserve = core.reserve
+_original_discover = core.base.discover_strict_candidates
+_seen_filled_pairs: set[tuple[str, str]] = set()
+
+
+def _discover_without_filled(*args: Any, **kwargs: Any):
+    candidates = _original_discover(*args, **kwargs)
+    return [
+        candidate for candidate in candidates
+        if (candidate.poly_slug, candidate.kalshi_ticker) not in _seen_filled_pairs
+    ]
 
 
 async def _reserve_with_duplicate_guard(plan: core.DirectPlan, trade_id: str) -> None:
@@ -141,21 +174,54 @@ async def _reserve_with_duplicate_guard(plan: core.DirectPlan, trade_id: str) ->
 def install() -> None:
     core._unresolved = _safe_unresolved
     core.reserve = _reserve_with_duplicate_guard
-    if _DUPLICATE_PREFIX not in rollover._SAFE_PRE_MUTATION_PREFIXES:
-        rollover._SAFE_PRE_MUTATION_PREFIXES = (
-            *rollover._SAFE_PRE_MUTATION_PREFIXES,
-            _DUPLICATE_PREFIX,
-        )
+    # lane.base and core.base are the same imported module object.
+    core.base.discover_strict_candidates = _discover_without_filled
+
+
+def _safe_pre_mutation_block(exc: BaseException) -> bool:
+    return isinstance(exc, RuntimeError) and str(exc).startswith(_SAFE_PRE_MUTATION_PREFIXES)
+
+
+async def run() -> int:
+    global _seen_filled_pairs
+    install()
+    restart_delay_s = max(0.1, float(os.getenv("MLB_KP_RULE_RISK_ROLLOVER_DELAY_S", "0.5")))
+
+    logger.warning(
+        "MLB_KP_PARALLEL_POLICY fully_hedged_awaiting_settlement=allowed "
+        "ambiguous_or_one_leg=blocked duplicate_exact_pair=blocked shared_budget=%s restart_delay_s=%s",
+        core.CUMULATIVE_BUDGET,
+        restart_delay_s,
+    )
+
+    while True:
+        # Refresh permanent duplicate exclusions before each clean scan epoch.
+        rows = await core._trades()
+        _seen_filled_pairs = _filled_pairs(rows)
+        logger.info("MLB_KP_DUPLICATE_SET filled_exact_pairs=%d", len(_seen_filled_pairs))
+
+        try:
+            rc = await lane.run()
+        except RuntimeError as exc:
+            if not _safe_pre_mutation_block(exc):
+                raise
+            logger.warning("MLB_KP_PARALLEL_BLOCKED reason=%s", str(exc))
+            await asyncio.sleep(restart_delay_s)
+            continue
+
+        if rc == HARD_HALT_RC:
+            logger.error("MLB_KP_PARALLEL_HARD_HALT rc=%d", rc)
+            return rc
+        if rc not in (0, None):
+            raise RuntimeError(f"unexpected K/P lane return code: {rc}")
+
+        logger.info("MLB_KP_PARALLEL_RESTART clean_cycle=true")
+        await asyncio.sleep(restart_delay_s)
 
 
 def main() -> None:
-    install()
-    logger.warning(
-        "MLB_KP_PARALLEL_POLICY fully_hedged_awaiting_settlement=allowed "
-        "ambiguous_or_one_leg=blocked duplicate_exact_pair=blocked shared_budget=%s",
-        core.CUMULATIVE_BUDGET,
-    )
-    rollover.main()
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)-8s %(message)s")
+    raise SystemExit(asyncio.run(run()))
 
 
 if __name__ == "__main__":
