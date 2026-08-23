@@ -65,6 +65,8 @@ def _model_sanity_audit(
         disagreement_tolerance_audited=forecast.get("disagreement_tolerance_audited"),
         model_calibration_verified=forecast.get("model_calibration_verified"),
         model_id=model_id,
+        model_provider=forecast.get("model_provider"),
+        model_component_providers=forecast.get("model_component_providers"),
         calibration_model_id=forecast.get("calibration_model_id"),
         calibration_target=forecast.get("calibration_target"),
         calibration_evidence_verified=forecast.get("calibration_evidence_verified"),
@@ -75,6 +77,9 @@ def _model_sanity_audit(
         model_run_time=forecast.get("model_run_time"),
         quote_observed_at=quote.get("observed_at"),
         independent_anchor_source_id=forecast.get("independent_anchor_source_id"),
+        independent_anchor_provider=forecast.get("independent_anchor_provider"),
+        independent_anchor_model_id=forecast.get("independent_anchor_model_id"),
+        independent_anchor_provenance_url=forecast.get("independent_anchor_provenance_url"),
         independent_anchor_observed_at=forecast.get("independent_anchor_observed_at"),
     )
 
@@ -101,9 +106,12 @@ def build_exact_market_certified_shadow_row(
 
     Model EV additionally requires explicit model-sanity evidence on ``forecast``:
       - model_mean_f / model_station_id / model_id
+      - model_provider and, for ensembles, model_component_providers
       - independent_anchor_high_f / independent_anchor_station_id
       - independent_anchor_verified / same_local_day_verified
-      - independent_anchor_source_id / independent_anchor_observed_at
+      - independent_anchor_source_id / independent_anchor_provider
+      - independent_anchor_model_id / independent_anchor_provenance_url
+      - independent_anchor_observed_at
       - disagreement_tolerance_f / disagreement_tolerance_audited
       - model_calibration_verified
       - calibration_model_id / calibration_target
@@ -111,10 +119,12 @@ def build_exact_market_certified_shadow_row(
       - calibration_sample_count / calibration_station_id / calibration_window_end
 
     Calibration evidence must predate the model run being scored and must refer to the
-    same model and daily-maximum-temperature target. Independent anchor evidence must
-    have been observed no later than the quote being scored. This prevents a caller from
-    turning bare booleans, another model's calibration, or later forecast updates into
-    certified EV.
+    same model and daily-maximum-temperature target. Independent anchor evidence must be
+    structurally bound to an official provider URL, must come from a provider/model
+    outside the scored model or ensemble components, and must have been observed no later
+    than the quote being scored. This prevents a caller from turning bare booleans,
+    arbitrary source strings, same-provider derivative anchors, another model's
+    calibration, or later forecast updates into certified EV.
 
     Missing or mismatched settlement provenance quarantines all EV/capacity economics.
     Missing or failed model-sanity evidence preserves settlement/book/fee diagnostics but
