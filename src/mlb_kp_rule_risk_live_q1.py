@@ -13,9 +13,10 @@ Safety:
 - two direct REST revalidations separated by >=50ms;
 - each direct request <=100ms and cross-venue completion skew <=50ms;
 - exact q=1 depth on both legs;
-- durable shared-sports capital reservation before mutation;
+- a full $1 is durably reserved before mutation under the shared sports ceiling;
 - thinner displayed leg is submitted FOK first; second leg is revalidated after
-  the first fill and sent FOK only if >=3c still remains;
+  the first fill and sent FOK only if >=3c still remains using the frozen first
+  limit plus the new hedge price;
 - any ambiguous/one-leg outcome hard-stops and attempts bounded flattening;
 - no sportsbook routing.
 
@@ -115,6 +116,27 @@ def poly_taker_fee(price: D, quantity: int = 1) -> D:
     return raw.quantize(CENT, rounding=ROUND_HALF_EVEN)
 
 
+def _make_plan(
+    *, candidate: base.StrictCandidate, direction: str,
+    poly_outcome: str, poly_price: D, poly_depth: D,
+    kalshi_outcome: str, kalshi_price: D, kalshi_depth: D,
+    kalshi_fee_multiplier: D, poly_rtt_ms: float = 0.0,
+    kalshi_rtt_ms: float = 0.0, completion_skew_ms: float = 0.0,
+    proof: dict[str, Any] | None = None,
+) -> DirectPlan:
+    pfee = poly_taker_fee(poly_price)
+    kfee = base.conservative_kalshi_fee(1, kalshi_price, kalshi_fee_multiplier)
+    cost = poly_price + kalshi_price + pfee + kfee
+    return DirectPlan(
+        candidate=candidate, direction=direction,
+        poly_outcome=poly_outcome, poly_price=poly_price, poly_depth=poly_depth,
+        kalshi_outcome=kalshi_outcome, kalshi_price=kalshi_price, kalshi_depth=kalshi_depth,
+        poly_fee=pfee, kalshi_fee=kfee, all_in_cost=cost, locked_profit=ONE-cost,
+        poly_rtt_ms=poly_rtt_ms, kalshi_rtt_ms=kalshi_rtt_ms,
+        completion_skew_ms=completion_skew_ms, proof=proof or {},
+    )
+
+
 def score_q1(
     candidate: base.StrictCandidate,
     pbook: base.TopBook,
@@ -134,31 +156,41 @@ def score_q1(
     for direction, poutcome, ppx, pdepth, koutcome, kpx, kdepth in options:
         if pdepth < ONE or kdepth < ONE:
             continue
-        pfee = poly_taker_fee(ppx)
-        kfee = base.conservative_kalshi_fee(1, kpx, kalshi_fee_multiplier)
-        cost = ppx + kpx + pfee + kfee
-        locked = ONE - cost
-        row = DirectPlan(
-            candidate=candidate,
-            direction=direction,
-            poly_outcome=poutcome,
-            poly_price=ppx,
-            poly_depth=pdepth,
-            kalshi_outcome=koutcome,
-            kalshi_price=kpx,
-            kalshi_depth=kdepth,
-            poly_fee=pfee,
-            kalshi_fee=kfee,
-            all_in_cost=cost,
-            locked_profit=locked,
-            poly_rtt_ms=poly_rtt_ms,
-            kalshi_rtt_ms=kalshi_rtt_ms,
-            completion_skew_ms=completion_skew_ms,
-            proof=proof or {},
+        row = _make_plan(
+            candidate=candidate, direction=direction,
+            poly_outcome=poutcome, poly_price=ppx, poly_depth=pdepth,
+            kalshi_outcome=koutcome, kalshi_price=kpx, kalshi_depth=kdepth,
+            kalshi_fee_multiplier=kalshi_fee_multiplier,
+            poly_rtt_ms=poly_rtt_ms, kalshi_rtt_ms=kalshi_rtt_ms,
+            completion_skew_ms=completion_skew_ms, proof=proof,
         )
         if best is None or row.locked_profit > best.locked_profit:
             best = row
     return best
+
+
+def after_first_fill_plan(original: DirectPlan, fresh: DirectPlan, *, first_venue: str, kalshi_fee_multiplier: D) -> DirectPlan | None:
+    """Freeze filled leg at its original limit and replace only the hedge leg."""
+    if fresh.direction != original.direction or first_venue not in {"polymarket", "kalshi"}:
+        return None
+    if first_venue == "polymarket":
+        ppx, pdepth = original.poly_price, original.poly_depth
+        kpx, kdepth = fresh.kalshi_price, fresh.kalshi_depth
+    else:
+        ppx, pdepth = fresh.poly_price, fresh.poly_depth
+        kpx, kdepth = original.kalshi_price, original.kalshi_depth
+    row = _make_plan(
+        candidate=original.candidate, direction=original.direction,
+        poly_outcome=original.poly_outcome, poly_price=ppx, poly_depth=pdepth,
+        kalshi_outcome=original.kalshi_outcome, kalshi_price=kpx, kalshi_depth=kdepth,
+        kalshi_fee_multiplier=kalshi_fee_multiplier,
+        poly_rtt_ms=fresh.poly_rtt_ms, kalshi_rtt_ms=fresh.kalshi_rtt_ms,
+        completion_skew_ms=fresh.completion_skew_ms, proof=original.proof,
+    )
+    hedge_depth = row.kalshi_depth if first_venue == "polymarket" else row.poly_depth
+    if hedge_depth < ONE or row.locked_profit < MIN_PROFIT:
+        return None
+    return row
 
 
 async def _fetch_direct(http: httpx.AsyncClient, candidate: base.StrictCandidate, multiplier: D, proof: dict[str, Any]) -> DirectPlan | None:
@@ -189,9 +221,7 @@ async def _fetch_direct(http: httpx.AsyncClient, candidate: base.StrictCandidate
     return score_q1(
         candidate, pbook, kbook,
         kalshi_fee_multiplier=multiplier,
-        poly_rtt_ms=prtt,
-        kalshi_rtt_ms=krtt,
-        completion_skew_ms=skew,
+        poly_rtt_ms=prtt, kalshi_rtt_ms=krtt, completion_skew_ms=skew,
         proof=proof,
     )
 
@@ -219,11 +249,7 @@ async def _trades() -> list[dict[str, Any]]:
 
 def _shared_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     prefixes = ("sports_gk_", "sports_final_lag_", "sports_kp_rule_risk_")
-    return [
-        row for row in rows
-        if str(row.get("mode") or "") in {"LIVE", "LIVE_PROBE"}
-        and str(row.get("strategy") or "").startswith(prefixes)
-    ]
+    return [row for row in rows if str(row.get("mode") or "") in {"LIVE", "LIVE_PROBE"} and str(row.get("strategy") or "").startswith(prefixes)]
 
 
 def _budget_used(rows: list[dict[str, Any]]) -> D:
@@ -253,41 +279,26 @@ async def _post_event(event: dict[str, Any]) -> None:
     if not LEDGER_TOKEN:
         raise RuntimeError("LEDGER_INGEST_TOKEN missing; live execution denied")
     async with httpx.AsyncClient(timeout=4.0) as http:
-        response = await http.post(
-            f"{COMMAND_CENTER}/api/events",
-            headers={"Authorization": f"Bearer {LEDGER_TOKEN}"},
-            json=event,
-        )
+        response = await http.post(f"{COMMAND_CENTER}/api/events", headers={"Authorization": f"Bearer {LEDGER_TOKEN}"}, json=event)
         response.raise_for_status()
 
 
 async def reserve(plan: DirectPlan, trade_id: str) -> None:
-    if plan.all_in_cost <= 0 or plan.all_in_cost > ONE:
-        raise RuntimeError("q1 paired capital out of bounds")
     rows = await _trades()
     blocked = _unresolved(rows)
     if blocked is not None:
         raise RuntimeError(f"unresolved sports live trade blocks execution: {blocked.get('trade_id')}")
     used = _budget_used(rows)
-    if used + plan.all_in_cost > CUMULATIVE_BUDGET:
-        raise RuntimeError(f"shared sports budget exhausted: used={used} requested={plan.all_in_cost} ceiling={CUMULATIVE_BUDGET}")
+    if used + ONE > CUMULATIVE_BUDGET:
+        raise RuntimeError(f"shared sports budget exhausted: used={used} requested=1 ceiling={CUMULATIVE_BUDGET}")
     await _post_event({
-        "event_id": _safe_id(f"{trade_id}:capital-reserved"),
-        "trade_id": trade_id,
-        "event_type": "CAPITAL_RESERVED",
-        "event_ts": _now(),
-        "strategy": STRATEGY,
-        "mode": "LIVE_PROBE",
-        "market": f"{plan.candidate.family}|{plan.candidate.player}|{plan.candidate.threshold}",
-        "asset": plan.candidate.player,
-        "venues": ["polymarket", "kalshi"],
-        "side": plan.direction,
-        "status": "CAPITAL_RESERVED",
-        "amount": str(plan.all_in_cost),
-        "legs_required": 2,
-        "legs_filled": 0,
+        "event_id": _safe_id(f"{trade_id}:capital-reserved"), "trade_id": trade_id,
+        "event_type": "CAPITAL_RESERVED", "event_ts": _now(), "strategy": STRATEGY,
+        "mode": "LIVE_PROBE", "market": f"{plan.candidate.family}|{plan.candidate.player}|{plan.candidate.threshold}",
+        "asset": plan.candidate.player, "venues": ["polymarket", "kalshi"], "side": plan.direction,
+        "status": "CAPITAL_RESERVED", "amount": "1", "legs_required": 2, "legs_filled": 0,
         "metadata": {
-            "reserved_usd": str(plan.all_in_cost),
+            "reserved_usd": "1", "modeled_all_in_cost": str(plan.all_in_cost),
             "cumulative_budget_usd": str(CUMULATIVE_BUDGET),
             "classification": "LIVE_RULE_RISK_PROBE_NOT_GUARANTEED_ARB",
             "known_rule_differences": ["official_source", "interruption", "cancellation", "stat_corrections"],
@@ -298,31 +309,18 @@ async def reserve(plan: DirectPlan, trade_id: str) -> None:
 
 async def release(plan: DirectPlan, trade_id: str, reason: str) -> None:
     await _post_event({
-        "event_id": _safe_id(f"{trade_id}:capital-released"),
-        "trade_id": trade_id,
-        "event_type": "CAPITAL_RELEASED",
-        "event_ts": _now(),
-        "strategy": STRATEGY,
-        "mode": "LIVE_PROBE",
-        "market": f"{plan.candidate.family}|{plan.candidate.player}|{plan.candidate.threshold}",
-        "asset": plan.candidate.player,
-        "venues": ["polymarket", "kalshi"],
-        "side": plan.direction,
-        "status": "CAPITAL_RELEASED",
-        "amount": "0",
-        "legs_required": 2,
-        "legs_filled": 0,
+        "event_id": _safe_id(f"{trade_id}:capital-released"), "trade_id": trade_id,
+        "event_type": "CAPITAL_RELEASED", "event_ts": _now(), "strategy": STRATEGY,
+        "mode": "LIVE_PROBE", "market": f"{plan.candidate.family}|{plan.candidate.player}|{plan.candidate.threshold}",
+        "asset": plan.candidate.player, "venues": ["polymarket", "kalshi"], "side": plan.direction,
+        "status": "CAPITAL_RELEASED", "amount": "0", "legs_required": 2, "legs_filled": 0,
         "metadata": {"reserved_usd": "0", "reason": reason, "classification": "LIVE_RULE_RISK_PROBE_NOT_GUARANTEED_ARB"},
     })
 
 
 class PolyExecutor:
     def __init__(self) -> None:
-        self.client = PolymarketUS(
-            key_id=os.environ["POLYMARKET_KEY_ID"],
-            secret_key=os.environ["POLYMARKET_SECRET_KEY"],
-            timeout=5.0,
-        )
+        self.client = PolymarketUS(key_id=os.environ["POLYMARKET_KEY_ID"], secret_key=os.environ["POLYMARKET_SECRET_KEY"], timeout=5.0)
 
     def close(self) -> None:
         self.client.close()
@@ -353,14 +351,9 @@ class PolyExecutor:
         payload = {
             "marketSlug": slug,
             "intent": "ORDER_INTENT_BUY_LONG" if outcome == "YES" else "ORDER_INTENT_BUY_SHORT",
-            "type": "ORDER_TYPE_LIMIT",
-            "price": {"value": str(yes_space), "currency": "USD"},
-            "quantity": 1,
-            "tif": "TIME_IN_FORCE_FILL_OR_KILL",
-            "participateDontInitiate": False,
-            "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC",
-            "synchronousExecution": True,
-            "maxBlockTime": "2",
+            "type": "ORDER_TYPE_LIMIT", "price": {"value": str(yes_space), "currency": "USD"},
+            "quantity": 1, "tif": "TIME_IN_FORCE_FILL_OR_KILL", "participateDontInitiate": False,
+            "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC", "synchronousExecution": True, "maxBlockTime": "2",
         }
         try:
             body = await asyncio.to_thread(self.client.orders.create, payload)
@@ -379,11 +372,12 @@ class PolyExecutor:
                 pass
             return {"venue": "polymarket", "status": "UNKNOWN", "filled_quantity": "0", "order_id": None, "reason": f"{type(exc).__name__}:{str(exc)[:160]}", "payload": payload}
 
-    async def flatten(self, slug: str, raw_outcome_price: D) -> dict[str, Any]:
+    async def flatten(self, slug: str, outcome: str, raw_outcome_price: D) -> dict[str, Any]:
+        yes_space = raw_outcome_price if outcome == "YES" else ONE - raw_outcome_price
         try:
             await asyncio.to_thread(self.client.orders.close_position, {
                 "marketSlug": slug,
-                "slippageTolerance": {"currentPrice": {"value": str(raw_outcome_price), "currency": "USD"}, "ticks": 20},
+                "slippageTolerance": {"currentPrice": {"value": str(yes_space), "currency": "USD"}, "ticks": 20},
             })
             for _ in range(20):
                 if await self.position(slug) == 0:
@@ -395,21 +389,13 @@ class PolyExecutor:
 
 
 def kalshi_payload(plan: DirectPlan) -> dict[str, Any]:
-    outcome = plan.kalshi_outcome
-    raw = plan.kalshi_price
+    outcome, raw = plan.kalshi_outcome, plan.kalshi_price
     return {
-        "ticker": plan.candidate.kalshi_ticker,
-        "client_order_id": f"kp-risk-{uuid.uuid4().hex[:20]}-k",
-        "side": "bid" if outcome == "YES" else "ask",
-        "count": "1.00",
-        "price": str(raw if outcome == "YES" else ONE - raw),
-        "time_in_force": "fill_or_kill",
-        "self_trade_prevention_type": "taker_at_cross",
-        "post_only": False,
-        "cancel_order_on_pause": True,
-        "reduce_only": False,
-        "subaccount": 0,
-        "exchange_index": 0,
+        "ticker": plan.candidate.kalshi_ticker, "client_order_id": f"kp-risk-{uuid.uuid4().hex[:20]}-k",
+        "side": "bid" if outcome == "YES" else "ask", "count": "1.00",
+        "price": str(raw if outcome == "YES" else ONE - raw), "time_in_force": "fill_or_kill",
+        "self_trade_prevention_type": "taker_at_cross", "post_only": False, "cancel_order_on_pause": True,
+        "reduce_only": False, "subaccount": 0, "exchange_index": 0,
     }
 
 
@@ -417,7 +403,7 @@ async def _balances(poly: PolyExecutor, kalshi: KalshiV2Executor) -> dict[str, D
     p, response = await asyncio.gather(poly.cash(), kalshi.client.get("/portfolio/balance"))
     response.raise_for_status()
     k = D(str(response.json().get("balance") or "0")) / D("100")
-    if p < D("1") or k < D("1"):
+    if p < ONE or k < ONE:
         raise RuntimeError(f"insufficient venue cash polymarket={p} kalshi={k}")
     return {"polymarket": p, "kalshi": k}
 
@@ -437,9 +423,9 @@ async def _submit_second(plan: DirectPlan, second: str, poly: PolyExecutor, kals
     return {"venue": "kalshi", "status": result.status, "filled_quantity": result.filled_quantity, "reason": result.reason, "payload": kpayload}
 
 
-async def _flatten_first(plan: DirectPlan, first: str, result: dict[str, Any], poly: PolyExecutor, kalshi: KalshiV2Executor, kpayload: dict[str, Any]) -> dict[str, Any]:
+async def _flatten_first(plan: DirectPlan, first: str, poly: PolyExecutor, kalshi: KalshiV2Executor, kpayload: dict[str, Any]) -> dict[str, Any]:
     if first == "polymarket":
-        return await poly.flatten(plan.candidate.poly_slug, plan.poly_price)
+        return await poly.flatten(plan.candidate.poly_slug, plan.poly_outcome, plan.poly_price)
     flattened = await kalshi.emergency_flatten(kpayload)
     return {"venue": "kalshi", "status": flattened.status, "filled_quantity": flattened.filled_quantity, "reason": flattened.reason}
 
@@ -447,9 +433,7 @@ async def _flatten_first(plan: DirectPlan, first: str, result: dict[str, Any], p
 async def execute(plan: DirectPlan, http: httpx.AsyncClient, multiplier: D) -> tuple[dict[str, Any], bool]:
     trade_id = _safe_id(f"sports-kp-risk-{int(time.time())}-{uuid.uuid4().hex[:6]}")
     await reserve(plan, trade_id)
-    poly = PolyExecutor()
-    kalshi = KalshiV2Executor()
-    hard_halt = False
+    poly, kalshi = PolyExecutor(), KalshiV2Executor()
     try:
         balances = await _balances(poly, kalshi)
         if await poly.position(plan.candidate.poly_slug) != 0:
@@ -460,60 +444,37 @@ async def execute(plan: DirectPlan, http: httpx.AsyncClient, multiplier: D) -> t
         second = "kalshi" if first == "polymarket" else "polymarket"
         first_result, kpayload = await _submit_first(plan, first, poly, kalshi)
         if first_result.get("status") == "UNKNOWN":
-            hard_halt = True
             return {"trade_id": trade_id, "outcome": "AMBIGUOUS_FIRST_LEG", "first": first_result, "balances": {k: str(v) for k, v in balances.items()}}, True
         if D(str(first_result.get("filled_quantity") or "0")) != ONE:
             await release(plan, trade_id, "first_leg_no_fill")
             return {"trade_id": trade_id, "outcome": "FIRST_LEG_NO_FILL", "first": first_result}, False
 
-        # Revalidate the opposite hedge only after the first leg is confirmed. Use
-        # the original first-leg limit price as the conservative worst-case fill.
         fresh = await _fetch_direct(http, plan.candidate, multiplier, plan.proof)
-        if fresh is None or fresh.direction != plan.direction or fresh.locked_profit < MIN_PROFIT:
-            flatten = await _flatten_first(plan, first, first_result, poly, kalshi, kpayload)
-            hard_halt = str(flatten.get("status") or "").upper() not in {"FLATTENED", "FILLED"}
-            return {"trade_id": trade_id, "outcome": "HEDGE_EDGE_DISAPPEARED", "first": first_result, "flatten": flatten}, hard_halt
+        plan2 = None if fresh is None else after_first_fill_plan(plan, fresh, first_venue=first, kalshi_fee_multiplier=multiplier)
+        if plan2 is None:
+            flatten = await _flatten_first(plan, first, poly, kalshi, kpayload)
+            return {"trade_id": trade_id, "outcome": "HEDGE_EDGE_DISAPPEARED", "first": first_result, "flatten": flatten}, True
 
-        # Freeze the newest hedge price into the second order while retaining the
-        # already-filled first-leg limit as a conservative cost bound.
-        if second == "polymarket":
-            plan2 = DirectPlan(**{**plan.__dict__, "poly_price": fresh.poly_price, "poly_depth": fresh.poly_depth})
-        else:
-            plan2 = DirectPlan(**{**plan.__dict__, "kalshi_price": fresh.kalshi_price, "kalshi_depth": fresh.kalshi_depth})
+        if second == "kalshi":
             kpayload = kalshi_payload(plan2)
         second_result = await _submit_second(plan2, second, poly, kalshi, kpayload)
         if second_result.get("status") == "UNKNOWN" or D(str(second_result.get("filled_quantity") or "0")) != ONE:
-            flatten = await _flatten_first(plan, first, first_result, poly, kalshi, kpayload)
-            hard_halt = True
+            flatten = await _flatten_first(plan, first, poly, kalshi, kpayload)
             return {"trade_id": trade_id, "outcome": "SECOND_LEG_NOT_CONFIRMED", "first": first_result, "second": second_result, "flatten": flatten}, True
 
         report = {
-            "trade_id": trade_id,
-            "outcome": "BOTH_FILLED",
-            "first_venue": first,
-            "second_venue": second,
-            "first": first_result,
-            "second": second_result,
-            "plan": plan2.as_dict(),
+            "trade_id": trade_id, "outcome": "BOTH_FILLED", "first_venue": first, "second_venue": second,
+            "first": first_result, "second": second_result, "plan": plan2.as_dict(),
             "classification": "LIVE_RULE_RISK_PROBE_NOT_GUARANTEED_ARB",
             "balances_preflight": {k: str(v) for k, v in balances.items()},
         }
         await _post_event({
-            "event_id": _safe_id(f"{trade_id}:execution-result"),
-            "trade_id": trade_id,
-            "event_type": "EXECUTION_RESULT",
-            "event_ts": _now(),
-            "strategy": STRATEGY,
-            "mode": "LIVE_PROBE",
+            "event_id": _safe_id(f"{trade_id}:execution-result"), "trade_id": trade_id,
+            "event_type": "EXECUTION_RESULT", "event_ts": _now(), "strategy": STRATEGY, "mode": "LIVE_PROBE",
             "market": f"{plan.candidate.family}|{plan.candidate.player}|{plan.candidate.threshold}",
-            "asset": plan.candidate.player,
-            "venues": ["polymarket", "kalshi"],
-            "side": plan.direction,
-            "status": "FILLED_NOT_SETTLED",
-            "amount": str(plan2.all_in_cost),
-            "legs_required": 2,
-            "legs_filled": 2,
-            "metadata": {**report, "reserved_usd": str(plan2.all_in_cost)},
+            "asset": plan.candidate.player, "venues": ["polymarket", "kalshi"], "side": plan.direction,
+            "status": "FILLED_NOT_SETTLED", "amount": str(plan2.all_in_cost), "legs_required": 2, "legs_filled": 2,
+            "metadata": {**report, "reserved_usd": "1"},
         })
         return report, False
     finally:
@@ -522,8 +483,7 @@ async def execute(plan: DirectPlan, http: httpx.AsyncClient, multiplier: D) -> t
 
 
 async def _notify(message: str, *, title: str = "Sports K/P auto") -> None:
-    user = os.getenv("PUSHOVER_USER_KEY", "").strip()
-    token = os.getenv("PUSHOVER_APP_TOKEN", "").strip()
+    user, token = os.getenv("PUSHOVER_USER_KEY", "").strip(), os.getenv("PUSHOVER_APP_TOKEN", "").strip()
     if not user or not token:
         return
     try:
@@ -558,8 +518,6 @@ async def run() -> int:
                     cleared.append((c, proof_dict(proof)))
             logger.info("MLB_KP_RULE_RISK_CYCLE strict=%d participation_proven=%d live=%s", len(candidates), len(cleared), live_enabled())
 
-            # Trigger from Polymarket-side availability first, then touch only the
-            # exact Kalshi ticker for candidates whose participation is already proven.
             for candidate, proof in cleared:
                 multiplier = series_meta.get(base.FAMILY_SERIES[candidate.family])
                 if multiplier is None:
@@ -582,10 +540,8 @@ async def run() -> int:
                     p = report["plan"]
                     await _notify(
                         f"AUTO K/P q=1 FILLED\n{candidate.player} {candidate.threshold} {candidate.family}\n"
-                        f"BUY Polymarket {plan.poly_outcome} @ {p['poly_price']}\n"
-                        f"BUY Kalshi {plan.kalshi_outcome} @ {p['kalshi_price']}\n"
-                        f"Modeled after-fee lock: ${p['locked_profit']}\n"
-                        "RULE RISK — not guaranteed until settlement",
+                        f"BUY Polymarket {plan.poly_outcome} @ {p['poly_price']}\nBUY Kalshi {plan.kalshi_outcome} @ {p['kalshi_price']}\n"
+                        f"Modeled after-fee lock: ${p['locked_profit']}\nRULE RISK — not guaranteed until settlement",
                         title="Sports K/P auto FILLED",
                     )
                     return 0
