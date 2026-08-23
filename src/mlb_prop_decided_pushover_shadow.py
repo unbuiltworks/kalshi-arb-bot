@@ -1,12 +1,12 @@
 """Pushover wrapper for the read-only MLB decided-prop shadow.
 
 The underlying scanner remains unchanged and has no order-entry path. This wrapper
-listens only for FINAL_STAT_STABLE_RESEARCH_ONLY signals and sends a human-readable
-notification when a venue still offers the already-known winning side below its
-$1 settlement value after the scanner's conservative fee bound.
+listens only for FINAL_STAT_STABLE_RESEARCH_ONLY signals and sends an explicit
+manual-trade notification when a venue still offers the already-known winning side
+below its $1 settlement value after the scanner's conservative fee bound.
 
-These are settlement-lag signals, not cross-venue arbitrage. Threshold-reached
-in-game research signals are deliberately never alerted here.
+These are single-venue settlement-lag signals, not cross-venue arbitrage.
+Threshold-reached in-game research signals are deliberately never alerted here.
 """
 from __future__ import annotations
 
@@ -45,19 +45,22 @@ class _FinalSignalHandler(logging.Handler):
         profit = str(edge.get("known_winner_profit") or "?")
         statistic = str(row.get("official_statistic") or "?")
         game_pk = str(row.get("mlb_game_pk") or "?")
+        market_id = str(row.get("poly_slug") or "?") if venue == "Polymarket" else str(row.get("kalshi_ticker") or "?")
         key = "|".join((str(row.get("poly_slug")), str(row.get("kalshi_ticker")), venue, outcome))
         if key in self.sent:
             return
-        title = f"MLB FINAL EDGE — {player} {threshold}+ {family}"[:250]
+        title = f"BUY {outcome} — {venue} — {player} {threshold}+ {family}"[:250]
         message = "\n".join((
-            f"Official MLB game state: FINAL (game {game_pk})",
-            f"Official stat: {statistic} → known outcome {outcome}",
-            f"Venue: {venue}",
-            f"Winner ask: ${ask} + fee cap ${fee}",
-            f"Modeled profit: +${profit}/contract if final settlement is unchanged",
-            "Evidence held stable ≥60s / ≥3 observations.",
-            "SETTLEMENT-LAG SIGNAL — NOT CROSS-VENUE ARBITRAGE",
-            "Read-only scanner; no order was submitted.",
+            f"DO THIS: Buy 1 {outcome} contract on {venue} at ${ask} or better.",
+            f"IF PRICE > ${ask}: SKIP — do not chase it.",
+            f"MARKET: {player} {threshold}+ {family}",
+            f"MARKET ID: {market_id}",
+            f"FANDUEL HEDGE: NONE",
+            f"OTHER VENUE HEDGE: NONE",
+            f"Expected profit at ${ask}: +${profit}/contract after fee cap ${fee}, if final settlement is unchanged.",
+            f"WHY: MLB game FINAL (game {game_pk}); official stat {statistic} → {outcome}.",
+            "TYPE: SINGLE-VENUE SETTLEMENT-LAG TRADE — NOT CROSS-VENUE ARBITRAGE.",
+            "MANUAL ONLY: scanner is read-only; no order was submitted.",
         ))
         try:
             request_id = await self.sink.send(title=title, message=message[:1024])
