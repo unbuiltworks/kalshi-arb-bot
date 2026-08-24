@@ -3,6 +3,7 @@ from decimal import Decimal as D
 import src.sports_poly_live_fill_conversion_hotfix as base
 from src.sports_poly_live_fill_conversion_hotfix_v2 import (
     STICKY_LIFECYCLE_SECONDS,
+    _cleanup_clear,
     _near_touch_activity_sort_key,
     configure,
 )
@@ -40,3 +41,9 @@ def test_configure_makes_timer_non_operational_for_normal_mlb_lifecycle() -> Non
         assert base.mlb_v3.TARGET == D("0.03")
     finally:
         base.mlb_v3.STICKY_REST_SECONDS = prior
+
+
+def test_pre_recovery_account_cleanup_fails_closed_on_any_ambiguity() -> None:
+    assert _cleanup_clear({"unresolved": 0, "partial_unresolved": 0}) is True
+    assert _cleanup_clear({"unresolved": 1, "partial_unresolved": 0}) is False
+    assert _cleanup_clear({"unresolved": 0, "partial_unresolved": 1}) is False
