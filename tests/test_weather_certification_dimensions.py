@@ -10,6 +10,7 @@ def _clean_row():
         "quote_age_ms": 100,
         "max_quote_age_ms": 2_000,
         "quote_observed_at": "2026-08-24T04:00:00Z",
+        "quote_age_evaluated_at": "2026-08-24T04:00:00.100Z",
         "yes_ask_cents": 40,
         "yes_available_contracts": 5,
         "no_ask_cents": 61,
@@ -94,6 +95,7 @@ def test_only_fully_certified_read_only_shadow_can_clear_prereqs():
 
     assert out["settlement_rules_provenance_verified"] is True
     assert out["market_data_verified"] is True
+    assert out["quote_freshness_binding_verified"] is True
     assert out["fee_economics_verified"] is True
     assert out["fee_resolution_binding_verified"] is True
     assert out["model_probability_verified"] is True
@@ -160,6 +162,7 @@ def test_stringly_dimension_evidence_fails_closed():
 def test_stale_or_missing_book_evidence_fails_market_data_dimension():
     stale = _clean_row()
     stale["quote_age_ms"] = 2_001
+    stale["quote_age_evaluated_at"] = "2026-08-24T04:00:02.001Z"
     out = audit_weather_certification_dimensions(stale)
     assert out["market_data_verified"] is False
 
@@ -287,3 +290,32 @@ def test_plausible_fee_fields_without_resolver_binding_cannot_clear_fee_dimensio
     assert out["fee_resolution_binding_verified"] is False
     assert "AUTHORITATIVE_FEE_EVIDENCE_REQUIRED" in out["fee_blockers"]
     assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_quote_age_must_be_bound_to_exact_timestamps():
+    row = _clean_row()
+    row["quote_age_ms"] = 100
+    row["quote_age_evaluated_at"] = "2026-08-24T04:00:00.900Z"
+
+    out = audit_weather_certification_dimensions(row)
+
+    assert out["quote_freshness_binding_verified"] is False
+    assert out["market_data_verified"] is False
+    assert "QUOTE_AGE_TIMESTAMP_MISMATCH" in out["market_data_blockers"]
+    assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_future_or_missing_quote_timing_cannot_clear_market_data_dimension():
+    future = _clean_row()
+    future["quote_age_evaluated_at"] = "2026-08-24T03:59:59Z"
+    out = audit_weather_certification_dimensions(future)
+    assert out["quote_freshness_binding_verified"] is False
+    assert "QUOTE_TIMESTAMP_IN_FUTURE" in out["market_data_blockers"]
+    assert out["market_data_verified"] is False
+
+    missing = _clean_row()
+    missing.pop("quote_age_evaluated_at")
+    out = audit_weather_certification_dimensions(missing)
+    assert out["quote_freshness_binding_verified"] is False
+    assert "QUOTE_FRESHNESS_TIME_UNVERIFIED" in out["market_data_blockers"]
+    assert out["market_data_verified"] is False
