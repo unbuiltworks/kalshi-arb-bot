@@ -1,15 +1,15 @@
 """Single-maker revenue campaign combining structural totals and strict MLB props.
 
 Structural totals retain first priority. When no exact total is available, MLB props
-flow through the participation-gated v2 campaign. The v2 campaign owns its own
-separate live switch, so the shared structural live flag cannot arm MLB implicitly.
+flow through the participation-gated v3 maker-frontier wrapper. The MLB campaign owns
+its separate live switch, so the shared structural live flag cannot arm MLB implicitly.
 """
 from __future__ import annotations
 
 from typing import Any
 
 from src.sports_kp_poly_relay_campaign_q1_v5 import run_once as run_structural_totals
-from src.sports_poly_direct_mlb_campaign_q1_v2 import run_once as run_direct_mlb_v2
+from src.sports_poly_direct_mlb_campaign_q1_v3 import run_once as run_direct_mlb_v3
 from src.sports_poly_direct_sports_diagnostic import run_once as run_direct_sports_diagnostic
 
 
@@ -26,7 +26,7 @@ async def run_once() -> dict[str, Any]:
     if structural_status != "NO_EXACT_STRUCTURAL_TOTAL_Q1":
         return structural
 
-    mlb = dict(await run_direct_mlb_v2())
+    mlb = dict(await run_direct_mlb_v3())
     mlb_status = str(mlb.get("status") or "")
     mlb["structural_totals_status"] = structural_status
     if mlb_status not in MLB_EMPTY_STATUSES:
@@ -34,8 +34,8 @@ async def run_once() -> dict[str, Any]:
 
     diagnostic = dict(await run_direct_sports_diagnostic())
     diagnostic["structural_totals_status"] = structural_status
-    diagnostic["direct_mlb_v2_status"] = mlb_status
-    diagnostic["direct_mlb_v2"] = mlb
+    diagnostic["direct_mlb_v3_status"] = mlb_status
+    diagnostic["direct_mlb_v3"] = mlb
     diagnostic["structural_totals_strict_markets"] = structural.get("strict_markets")
     diagnostic["structural_totals_strict_pairs"] = structural.get("strict_pairs")
     return diagnostic
