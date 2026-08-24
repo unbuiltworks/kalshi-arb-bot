@@ -45,6 +45,24 @@ def _withhold_model_economics(row: dict[str, Any]) -> None:
         side["modeled_after_fee_edge_cents_per_contract"] = None
 
 
+def _identity_semantics_evidence(
+    *, market: dict[str, Any], station: dict[str, Any]
+) -> dict[str, bool]:
+    """Carry only literal producer verification into the canonical v2 row.
+
+    The downstream certification-dimension report deliberately requires affirmative
+    station/local-day/bracket evidence.  The legacy base row used those checks while
+    building blockers but did not preserve the booleans themselves, making a genuinely
+    audited v2 row impossible to certify downstream.  Preserve only literal ``True``;
+    strings and other truthy values still fail closed.
+    """
+    return {
+        "station_identity_verified": station.get("identity_verified") is True,
+        "local_day_verified": market.get("local_day_verified") is True,
+        "bracket_semantics_verified": market.get("bracket_semantics_verified") is True,
+    }
+
+
 def _model_sanity_audit(
     *,
     forecast: dict[str, Any] | None,
@@ -221,6 +239,7 @@ def build_exact_market_certified_shadow_row(
     )
 
     row = deepcopy(base)
+    row.update(_identity_semantics_evidence(market=market, station=station))
     row["exact_market_source_audit"] = audit
     row["exact_market_source_verified"] = audit["verified"] is True
     row["model_sanity_audit"] = model_sanity
