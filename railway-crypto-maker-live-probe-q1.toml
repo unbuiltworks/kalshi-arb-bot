@@ -1,8 +1,8 @@
-# Read-only live fractional-fill economics audit before bounded q1 maker promotion.
+# Read-only aggregate Gemini partial-fill history audit; no order mutation.
 [build]
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python -m src.gemini_kalshi_gemini_maker_partial_economics --seconds 60"
-preDeployCommand = ["python -m pytest -q tests/test_gemini_kalshi_maker_live_probe_q1.py tests/test_gemini_kalshi_maker_live_probe_q1_safe.py tests/test_gemini_kalshi_maker_live_probe_q1_final.py tests/test_gemini_kalshi_maker_live_probe_q1_venue_once.py tests/test_gemini_kalshi_maker_rest_guard.py tests/test_gemini_kalshi_maker_dominance_guard.py tests/test_gemini_kalshi_gemini_maker_partial_economics.py && python -m py_compile src/gemini_kalshi_gemini_maker_partial_economics.py src/gemini_kalshi_crypto_maker_budget.py"]
+startCommand = "python -m src.gemini_prediction_partial_history_audit"
+preDeployCommand = ["python -m pytest -q tests/test_gemini_kalshi_maker_live_probe_q1.py tests/test_gemini_kalshi_maker_live_probe_q1_safe.py tests/test_gemini_kalshi_maker_live_probe_q1_final.py tests/test_gemini_kalshi_maker_live_probe_q1_venue_once.py tests/test_gemini_kalshi_maker_rest_guard.py tests/test_gemini_kalshi_maker_dominance_guard.py tests/test_gemini_kalshi_gemini_maker_partial_economics.py && python -m py_compile src/gemini_prediction_partial_history_audit.py src/gemini_kalshi_gemini_maker_partial_economics.py src/gemini_kalshi_crypto_maker_budget.py"]
 restartPolicyType = "NEVER"
