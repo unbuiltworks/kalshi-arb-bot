@@ -1,10 +1,10 @@
 # Same-Gemini crypto threshold-ladder q=1 live canary.
-# Gemini 100ms partial-depth WebSockets + private Gemini order/fill/FOK transport.
-# REST is discovery/recovery only; old Gemini<->Kalshi maker remains parked.
+# Gemini 100ms partial-depth WebSockets + private orders@account lifecycle.
+# REST is bounded authoritative recovery only; old Gemini<->Kalshi maker remains parked.
 [build]
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python -m src.gemini_same_venue_crypto_maker_q1_depth"
-preDeployCommand = ["python -m pytest -q tests/test_gemini_same_venue_crypto_ladder_scan.py tests/test_gemini_same_venue_crypto_maker_q1.py tests/test_gemini_same_venue_crypto_maker_q1_depth.py && python -m py_compile src/gemini_same_venue_crypto_ladder_scan.py src/gemini_same_venue_crypto_budget.py src/gemini_same_venue_crypto_maker_q1.py src/gemini_same_venue_crypto_maker_q1_depth.py src/gemini_kalshi_execution_shadow.py src/gemini_kalshi_fast_overlap.py"]
+startCommand = "python -m src.gemini_same_venue_crypto_maker_q1_wsfirst"
+preDeployCommand = ["python -m pytest -q tests/test_gemini_same_venue_crypto_ladder_scan.py tests/test_gemini_same_venue_crypto_maker_q1.py tests/test_gemini_same_venue_crypto_maker_q1_depth.py && python -m py_compile src/gemini_same_venue_crypto_ladder_scan.py src/gemini_same_venue_crypto_budget.py src/gemini_same_venue_crypto_maker_q1.py src/gemini_same_venue_crypto_maker_q1_depth.py src/gemini_same_venue_crypto_maker_q1_wsfirst.py src/gemini_kalshi_execution_shadow.py src/gemini_kalshi_fast_overlap.py"]
 restartPolicyType = "NEVER"
