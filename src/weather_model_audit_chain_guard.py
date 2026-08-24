@@ -109,12 +109,39 @@ def audit_weather_model_audit_chain(row: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(sample_count, int) or isinstance(sample_count, bool) or sample_count <= 0:
             blockers.append("MODEL_SANITY_CALIBRATION_SAMPLE_COUNT_INVALID")
 
+        model_id = str(sanity.get("model_id") or "").strip()
+        calibration_model_id = str(sanity.get("calibration_model_id") or "").strip()
+        if model_id and calibration_model_id and model_id != calibration_model_id:
+            blockers.append("MODEL_SANITY_CALIBRATION_MODEL_ID_MISMATCH")
+
+        calibration_end = _aware_iso(sanity.get("calibration_window_end"))
+        anchor_observed = _aware_iso(sanity.get("independent_anchor_observed_at"))
+        if calibration_end is None:
+            blockers.append("MODEL_SANITY_CALIBRATION_TIME_INVALID")
+        if anchor_observed is None:
+            blockers.append("MODEL_SANITY_ANCHOR_OBSERVED_TIME_INVALID")
+
     provider = row.get("model_provider_provenance_audit")
     if isinstance(provider, dict):
-        if not provider.get("model_provider_family"):
+        model_family = provider.get("model_provider_family")
+        anchor_family = provider.get("independent_anchor_provider_family")
+        component_families = provider.get("model_component_provider_families")
+        if not model_family:
             blockers.append("MODEL_PROVIDER_FAMILY_MISSING")
-        if not provider.get("independent_anchor_provider_family"):
+        if not anchor_family:
             blockers.append("ANCHOR_PROVIDER_FAMILY_MISSING")
+        if not isinstance(component_families, list):
+            blockers.append("MODEL_COMPONENT_PROVIDER_FAMILIES_INVALID")
+        elif anchor_family and anchor_family in component_families:
+            blockers.append("ANCHOR_PROVIDER_NOT_INDEPENDENT")
+
+        if isinstance(sanity, dict):
+            sanity_model_provider = str(sanity.get("model_provider") or "").strip()
+            sanity_anchor_provider = str(sanity.get("independent_anchor_provider") or "").strip()
+            if sanity_model_provider and model_family and sanity_model_provider != model_family:
+                blockers.append("MODEL_PROVIDER_AUDIT_CROSSCHECK_MISMATCH")
+            if sanity_anchor_provider and anchor_family and sanity_anchor_provider != anchor_family:
+                blockers.append("ANCHOR_PROVIDER_AUDIT_CROSSCHECK_MISMATCH")
 
     local_day = row.get("local_day_binding_audit")
     if isinstance(local_day, dict):
@@ -158,6 +185,13 @@ def audit_weather_model_audit_chain(row: dict[str, Any]) -> dict[str, Any]:
         quote_time = _aware_iso(run_quote.get("quote_observed_at"))
         if run_time is None or quote_time is None or run_time > quote_time:
             blockers.append("MODEL_AUDIT_RUN_QUOTE_TIME_MISMATCH")
+        if isinstance(sanity, dict):
+            calibration_end = _aware_iso(sanity.get("calibration_window_end"))
+            anchor_observed = _aware_iso(sanity.get("independent_anchor_observed_at"))
+            if calibration_end is not None and run_time is not None and calibration_end > run_time:
+                blockers.append("MODEL_AUDIT_CALIBRATION_LOOKAHEAD_DETECTED")
+            if anchor_observed is not None and quote_time is not None and anchor_observed > quote_time:
+                blockers.append("MODEL_AUDIT_ANCHOR_LOOKAHEAD_DETECTED")
 
     blockers = sorted(set(blockers))
     verified = not blockers
