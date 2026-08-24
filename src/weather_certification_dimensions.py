@@ -11,6 +11,7 @@ classified blockers. It never authorizes order entry or live probes.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -54,6 +55,12 @@ MODEL_BLOCKERS = {
     "MODEL_RESEARCH_ONLY",
 }
 
+_CANONICAL_FEE_SOURCES = {
+    "series_current",
+    "scheduled_fee_change",
+    "historical_fee_change",
+}
+
 
 def _normalized_blockers(row: dict[str, Any]) -> set[str]:
     values = row.get("blockers") or row.get("readiness_blockers") or []
@@ -78,6 +85,21 @@ def _decimal(value: Any) -> Decimal | None:
     except Exception:
         return None
     return parsed if parsed.is_finite() else None
+
+
+def _aware_iso(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed
 
 
 def _valid_executable_side(row: dict[str, Any], side: str) -> bool:
@@ -118,14 +140,32 @@ def _book_evidence_verified(row: dict[str, Any]) -> bool:
 
 
 def _fee_evidence_verified(row: dict[str, Any]) -> bool:
-    """Require authoritative fee metadata, not merely absence of a fee blocker."""
+    """Require authoritative fee metadata plus complete quote-time schedule coverage.
+
+    A non-empty source label and ``fee_schedule_checked=True`` are not sufficient:
+    otherwise a partial/empty fee-change response can silently make current Series
+    metadata look authoritative even when a scheduled change was omitted.  Certification
+    therefore requires literal completeness evidence, exact Series binding, and a
+    timezone-aware fee-feed observation at or after the quote being scored.
+    """
     multiplier = row.get("fee_multiplier")
+    series_ticker = str(row.get("series_ticker") or "").strip().upper()
+    fee_series_ticker = str(row.get("fee_series_ticker") or "").strip().upper()
+    fee_source = str(row.get("fee_metadata_source") or "").strip()
+    quote_observed = _aware_iso(row.get("quote_observed_at"))
+    fee_schedule_observed = _aware_iso(row.get("fee_schedule_observed_at"))
+
     return (
         row.get("fee_type") == "quadratic"
         and _finite_nonnegative(multiplier)
-        and isinstance(row.get("fee_metadata_source"), str)
-        and bool(row.get("fee_metadata_source").strip())
+        and fee_source in _CANONICAL_FEE_SOURCES
         and row.get("fee_schedule_checked") is True
+        and row.get("fee_schedule_feed_complete") is True
+        and bool(series_ticker)
+        and fee_series_ticker == series_ticker
+        and quote_observed is not None
+        and fee_schedule_observed is not None
+        and fee_schedule_observed >= quote_observed
     )
 
 
