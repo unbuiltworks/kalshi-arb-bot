@@ -23,8 +23,8 @@ Fillability policy:
 - use sticky quote rounds to preserve queue priority;
 - zero-fill rounds/campaigns may continue; ANY fill/ambiguity/hard-halt ends supervisor;
 - fixed run-id/cycle trade IDs make an accidental redeploy of the same run fail closed;
-- market rollover without a published next pair is a zero-mutation wait state and
-  never consumes a durable cycle id.
+- market rollover without a published next pair and exact-strike refdata propagation
+  are zero-mutation wait states and never consume a durable cycle id.
 """
 from __future__ import annotations
 
@@ -45,6 +45,7 @@ CYCLE_PAUSE_SECONDS = max(1.0, min(float(os.getenv("CRYPTO_MAKER_SUPERVISOR_PAUS
 RUN_ID = os.getenv("CRYPTO_MAKER_SUPERVISOR_RUN_ID", "").strip()
 ARM = os.getenv("CRYPTO_MAKER_SUPERVISOR_ARM", "").strip()
 NO_PAIR_TEXT = "no viable XRP 15m pair beyond expiry cutoff"
+TRANSIENT_GEOMETRY_BLOCKERS = {"EXACT_GEMINI_STRIKE_UNAVAILABLE"}
 
 SAFE_CAMPAIGN_TERMINALS = {
     "MAX_REPRICE_ROUNDS_REACHED",
@@ -70,6 +71,19 @@ def cycle_root(run_id: str, cycle: int) -> str:
     return f"{safe}-c{int(cycle):02d}"[:64]
 
 
+def transient_zero_order_terminal(result: dict[str, Any]) -> tuple[bool, str]:
+    if str(result.get("status") or "") != "CAMPAIGN_STOPPED_ON_TERMINAL_ROUND":
+        return False, ""
+    if str(result.get("terminal_status") or "") != "DOMINANCE_NOT_AUTHORIZED_FOR_GEMINI_MAKER":
+        return False, ""
+    terminal = result.get("terminal_result") if isinstance(result.get("terminal_result"), dict) else {}
+    if bool(terminal.get("order_entry")):
+        return False, ""
+    geometry = terminal.get("geometry") if isinstance(terminal.get("geometry"), dict) else {}
+    blocker = str(geometry.get("blocker") or "")
+    return blocker in TRANSIENT_GEOMETRY_BLOCKERS, blocker
+
+
 def terminal_requires_stop(result: dict[str, Any]) -> tuple[bool, str]:
     status = str(result.get("status") or "")
     if status == "CAMPAIGN_STOPPED_ON_TERMINAL_ROUND":
@@ -89,10 +103,10 @@ async def _run_after_rollover(
     root_trade_id: str,
     armed: bool,
 ) -> dict[str, Any]:
-    """Retry only the zero-mutation no-next-pair boundary state with same cycle id."""
+    """Retry only zero-mutation pair/refdata boundary states with the same cycle id."""
     while True:
         try:
-            return await run_fn()
+            result = await run_fn()
         except RuntimeError as exc:
             if NO_PAIR_TEXT not in str(exc):
                 raise
@@ -105,12 +119,26 @@ async def _run_after_rollover(
                 order_entry=False,
             )
             if not armed:
-                return {
-                    "status": "NO_VIABLE_PAIR_YET",
-                    "order_entry": False,
-                    "realized": False,
-                }
+                return {"status": "NO_VIABLE_PAIR_YET", "order_entry": False, "realized": False}
             await asyncio.sleep(CYCLE_PAUSE_SECONDS)
+            continue
+
+        transient, blocker = transient_zero_order_terminal(result)
+        if transient:
+            emit(
+                "REFDATA_WAIT",
+                cycle=cycle,
+                root_trade_id=root_trade_id,
+                armed=armed,
+                status="TRANSIENT_DOMINANCE_REFDATA_WAIT",
+                blocker=blocker,
+                order_entry=False,
+            )
+            if not armed:
+                return result
+            await asyncio.sleep(CYCLE_PAUSE_SECONDS)
+            continue
+        return result
 
 
 async def run() -> dict[str, Any]:
@@ -140,10 +168,7 @@ async def run() -> dict[str, Any]:
     try:
         if not armed:
             result = await _run_after_rollover(
-                reprice.run,
-                cycle=0,
-                root_trade_id="READ_ONLY",
-                armed=False,
+                reprice.run, cycle=0, root_trade_id="READ_ONLY", armed=False
             )
             out.update({
                 "status": "READ_ONLY_SUPERVISOR_PREFLIGHT",
@@ -158,10 +183,7 @@ async def run() -> dict[str, Any]:
             root = cycle_root(RUN_ID, cycle)
             canary.trade_id = lambda root=root: root
             result = await _run_after_rollover(
-                reprice.run,
-                cycle=cycle,
-                root_trade_id=root,
-                armed=True,
+                reprice.run, cycle=cycle, root_trade_id=root, armed=True
             )
 
             row = {
