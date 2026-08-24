@@ -1,18 +1,10 @@
-"""Process-local dynamic policy for the next q=1 settlement-basis live probe.
+"""Process-local dynamic policy for q=1 settlement-basis live probes.
 
-This does not alter the shared guaranteed-arbitrage settlement-equivalence lock.
-It lowers the threshold-gap floor only inside the dedicated basis-risk child and uses
-the existing 3-cent after-fee floor for the single bounded q=1 research probe. BTC is
-quarantined because the authoritative ledger contains the only observed index-mismatch
-loss on BTC; ETH/SOL/XRP remain eligible. Exact depth, <=50ms quote skew, persistence,
-q=1, capital reservation and the $5 hard research budget remain unchanged.
-
-Kalshi currently rejects additional authenticated WebSocket handshakes with HTTP 429.
-The live engine therefore uses the hardened exact REST transport. Its cadence is
-service-configurable inside the transport's existing 50-250ms safety envelope so we can
-sample more frequently when the account has clean REST capacity without changing any
-execution gate. Quotes retain conservative HTTP-request-start timestamps, and 429s
-continue to emit no quote and back off fail-closed.
+The shared guaranteed-arbitrage settlement-equivalence lock is unchanged.  The
+basis-risk service keeps the >=3c after-fee floor, exact depth/freshness/skew gates,
+q=1 sizing, BTC quarantine and the existing $5 loss budget.  Supervisors may scope a
+child to one of ETH/SOL/XRP so independent asset lanes can scan concurrently without
+competing for the same first candidate.
 """
 from __future__ import annotations
 
@@ -35,10 +27,29 @@ logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_risk_dynamic_policy")
 DYNAMIC_MIN_GAP_BPS = D("0.5")
 DYNAMIC_MIN_LOCKED_PROFIT = D("0.03")
 ELIGIBLE_ASSETS = ("ETH", "SOL", "XRP")
+ASSET_SCOPE_ENV = "CRYPTO_BASIS_ASSETS"
 KALSHI_REST_POLL_INTERVAL_ENV = "CRYPTO_BASIS_KALSHI_REST_POLL_INTERVAL_S"
 DEFAULT_KALSHI_REST_POLL_INTERVAL_S = D("0.18")
 MIN_KALSHI_REST_POLL_INTERVAL_S = D("0.05")
 MAX_KALSHI_REST_POLL_INTERVAL_S = D("0.25")
+
+
+def configured_assets() -> tuple[str, ...]:
+    raw = os.getenv(ASSET_SCOPE_ENV, "").strip()
+    if not raw:
+        return ELIGIBLE_ASSETS
+    requested = []
+    for token in raw.replace(";", ",").split(","):
+        asset = token.strip().upper()
+        if not asset:
+            continue
+        if asset not in ELIGIBLE_ASSETS:
+            raise PermissionError(f"basis-risk asset scope contains ineligible asset {asset}")
+        if asset not in requested:
+            requested.append(asset)
+    if not requested:
+        raise PermissionError("basis-risk asset scope resolved to no eligible assets")
+    return tuple(requested)
 
 
 def configured_kalshi_rest_poll_interval_s() -> Decimal:
@@ -99,6 +110,7 @@ def dynamic_dominance_authorization(*, direction, gemini_strike, kalshi_target, 
 
 def dynamic_main() -> None:
     min_gap_bps, deadline = child._validate_process_authorization()
+    assets = configured_assets()
     v2._state_dir = child._local_state_dir
     v2._submit_and_persist_result = child._submit_and_persist_context
     original_install = v2.install_canary_v2
@@ -108,9 +120,6 @@ def dynamic_main() -> None:
         child._install_dominance_probe(min_gap_bps)
 
     v2.install_canary_v2 = install_basis_canary
-    # marketdata.install() has already installed the exact REST hub in the v2 child.
-    # _poll_interval_s() is read dynamically, so preserve the service-scoped value
-    # after clamping it to the transport's existing fail-closed 50-250ms envelope.
     poll_interval_s = configured_kalshi_rest_poll_interval_s()
     os.environ[KALSHI_REST_POLL_INTERVAL_ENV] = str(poll_interval_s)
     near_miss.install()
@@ -122,7 +131,7 @@ def dynamic_main() -> None:
     sys.argv = [
         sys.argv[0],
         "--arm-deadline-utc", deadline.isoformat(),
-        "--assets", *ELIGIBLE_ASSETS,
+        "--assets", *assets,
         "--seconds", "0",
         "--max-quote-skew-ms", "50",
         "--capital-limit", "1",
@@ -132,12 +141,13 @@ def dynamic_main() -> None:
     ]
     logger.warning(
         "CRYPTO_BASIS_DYNAMIC_POLICY_ENABLED min_gap_bps=%s min_locked_profit=%s "
-        "eligible_assets=%s btc_quarantined=true quantity=1 capital_limit_usd=1 "
+        "eligible_assets=%s scoped_assets=%s btc_quarantined=true quantity=1 capital_limit_usd=1 "
         "approved_budget_usd=%s guaranteed_arb=false near_miss_telemetry=true "
         "kalshi_discovery=EXACT_REST_DEPTH1 poll_interval_ms=%s quote_timestamp=HTTP_REQUEST_START",
         min_gap_bps,
         DYNAMIC_MIN_LOCKED_PROFIT,
         ",".join(ELIGIBLE_ASSETS),
+        ",".join(assets),
         child.APPROVED_BUDGET,
         int(poll_interval_s * D("1000")),
     )
