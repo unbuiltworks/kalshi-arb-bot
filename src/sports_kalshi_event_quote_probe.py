@@ -18,3 +18,5 @@ async def main_async() -> None:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
     asyncio.run(main_async())
+
+# Deploy marker: service is pinned to this read-only entrypoint.
