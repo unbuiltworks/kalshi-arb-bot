@@ -14,7 +14,9 @@ Fillability / notification policy:
   below the original 3c floor or if any execution is observed;
 - require >330s to expiry before a 240s rest, preserving the existing 90s no-new-risk
   cutoff even if the order survives its entire sticky rest;
-- after a clean zero-fill cancel, pause before considering another order.
+- after a clean zero-fill cancel, pause before considering another order;
+- compact deterministic round ids keep Gemini clientOrderId unique under its 36-char
+  limit instead of truncating away the round suffix.
 
 Gemini may generate its own venue-native order lifecycle notifications. This wrapper
 reduces those notifications by reducing actual order churn; it does not attempt to
@@ -24,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 from decimal import Decimal
+import hashlib
 import os
 from typing import Any
 
@@ -72,6 +75,12 @@ def cushioned_fillable_quote(**kwargs: Any) -> dict[str, Any] | None:
         triggered.TARGET = original_target
 
 
+def compact_round_trade_id(root_trade_id: str, round_number: int) -> str:
+    """Deterministic id short enough that '-mk'/'-flat' survive Gemini's 36-char cap."""
+    digest = hashlib.sha256(f"{root_trade_id}|{int(round_number)}".encode("utf-8")).hexdigest()[:20]
+    return f"xrpq-{digest}-r{int(round_number):02d}"
+
+
 async def run() -> dict[str, Any]:
     original_terminal = supervisor.terminal_requires_stop
     original_cycles = supervisor.MAX_CYCLES
@@ -79,6 +88,7 @@ async def run() -> dict[str, Any]:
     original_rounds = reprice.MAX_ROUNDS
     original_campaign = reprice.CAMPAIGN_SECONDS
     original_rest = reprice.ROUND_REST_SECONDS
+    original_round_id = reprice.round_trade_id
     original_expiry = triggered.MIN_SECONDS_TO_EXPIRY
     original_quote_fn = triggered.fillable_quote
 
@@ -93,6 +103,7 @@ async def run() -> dict[str, Any]:
     reprice.MAX_ROUNDS = 1
     reprice.ROUND_REST_SECONDS = STICKY_REST_SECONDS
     reprice.CAMPAIGN_SECONDS = max(300.0, STICKY_REST_SECONDS + 30.0)
+    reprice.round_trade_id = compact_round_trade_id
     triggered.MIN_SECONDS_TO_EXPIRY = STICKY_MIN_SECONDS_TO_EXPIRY
     triggered.fillable_quote = cushioned_fillable_quote
     try:
@@ -104,6 +115,7 @@ async def run() -> dict[str, Any]:
         reprice.MAX_ROUNDS = original_rounds
         reprice.CAMPAIGN_SECONDS = original_campaign
         reprice.ROUND_REST_SECONDS = original_rest
+        reprice.round_trade_id = original_round_id
         triggered.MIN_SECONDS_TO_EXPIRY = original_expiry
         triggered.fillable_quote = original_quote_fn
 
