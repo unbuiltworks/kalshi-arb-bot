@@ -6,6 +6,10 @@ per-order miss no longer kills the whole lane: that order alone falls back to
 paced exact REST reads while all existing cancel/reconciliation protections stay
 in force. Restart cleanup deliberately uses a wider lookback than live discovery
 so a late restart cannot forget a still-open maker from an older active event.
+
+The continuous revenue loop checks structurally certified totals first, then falls
+back to the existing strict MLB player-prop identity over Polymarket's direct PROP
+inventory. Both families share this same one-maker-at-a-time supervisor and cleanup.
 """
 from __future__ import annotations
 
@@ -18,6 +22,8 @@ from polymarket_us import PolymarketUS
 
 import src.sports_kp_poly_relay_campaign_q1_v4 as v4
 import src.sports_poly_structural_live_supervisor as supervisor
+import src.sports_poly_revenue_campaign_q1 as revenue_campaign
+from src.sports_poly_direct_mlb_campaign_q1 import current_direct_mlb_slugs
 from src.sports_poly_private_order_stream import PrivateOrderStream
 
 REST_FALLBACK_GAP_SECONDS = 0.75
@@ -99,22 +105,26 @@ def install_verified_private_order_transport(stream: PrivateOrderStream) -> Call
     return restore
 
 
-async def current_total_slugs() -> list[str]:
+async def current_revenue_slugs() -> list[str]:
+    """Cleanup universe for every family this process can mutate."""
     feed, _, _ = await supervisor.discover_structural_pairs(
         horizon_hours=HORIZON_HOURS,
         lookback_hours=CLEANUP_LOOKBACK_HOURS,
     )
-    return sorted({
+    total_slugs = {
         str(slug)
         for slug, market in feed.items()
         if (identity := supervisor.structural_identity(market)) is not None
         and str(identity[0]).startswith("TOTAL::")
-    })
+    }
+    mlb_slugs = set(await current_direct_mlb_slugs())
+    return sorted(total_slugs | mlb_slugs)
 
 
 async def main() -> None:
     supervisor.install_private_order_transport = install_verified_private_order_transport
-    supervisor._current_total_slugs = current_total_slugs
+    supervisor._current_total_slugs = current_revenue_slugs
+    supervisor.run_campaign = revenue_campaign.run_once
     await supervisor.main()
 
 
