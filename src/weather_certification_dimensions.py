@@ -5,10 +5,13 @@ mix settlement/rule provenance with quote, fee, and model readiness. This helper
 those dimensions separate for portfolio/reporting use without changing any upstream
 readiness state.
 
-It never authorizes order entry or live probes.
+A critical invariant here is that *absence of a blocker is not affirmative evidence*.
+Each dimension requires explicit, literal verification evidence in addition to having no
+classified blockers. It never authorizes order entry or live probes.
 """
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 SETTLEMENT_BLOCKERS = {
@@ -52,10 +55,6 @@ MODEL_BLOCKERS = {
 }
 
 
-def _literal_true(value: Any) -> bool:
-    return value is True
-
-
 def _normalized_blockers(row: dict[str, Any]) -> set[str]:
     values = row.get("blockers") or row.get("readiness_blockers") or []
     if not isinstance(values, (list, tuple, set)):
@@ -63,13 +62,77 @@ def _normalized_blockers(row: dict[str, Any]) -> set[str]:
     return {str(value).strip() for value in values if str(value).strip()}
 
 
+def _finite_nonnegative(value: Any) -> bool:
+    try:
+        parsed = Decimal(str(value))
+    except Exception:
+        return False
+    return parsed.is_finite() and parsed >= 0
+
+
+def _book_evidence_verified(row: dict[str, Any]) -> bool:
+    """Require an actually observed, fresh, side-specific executable book."""
+    age = row.get("quote_age_ms")
+    max_age = row.get("max_quote_age_ms")
+    if not _finite_nonnegative(age) or not _finite_nonnegative(max_age):
+        return False
+    if Decimal(str(age)) > Decimal(str(max_age)):
+        return False
+
+    for side in ("yes", "no"):
+        price = row.get(f"{side}_ask_cents")
+        qty = row.get(f"{side}_available_contracts")
+        if (
+            isinstance(price, int)
+            and not isinstance(price, bool)
+            and 1 <= price <= 99
+            and isinstance(qty, int)
+            and not isinstance(qty, bool)
+            and qty > 0
+        ):
+            return True
+    return False
+
+
+def _fee_evidence_verified(row: dict[str, Any]) -> bool:
+    """Require authoritative fee metadata, not merely absence of a fee blocker."""
+    multiplier = row.get("fee_multiplier")
+    return (
+        row.get("fee_type") == "quadratic"
+        and _finite_nonnegative(multiplier)
+        and isinstance(row.get("fee_metadata_source"), str)
+        and bool(row.get("fee_metadata_source").strip())
+        and row.get("fee_schedule_checked") is True
+    )
+
+
+def _model_evidence_verified(row: dict[str, Any]) -> bool:
+    """Require the canonical exact-market model audit chain to have passed."""
+    probability = row.get("forecast_bracket_probability")
+    try:
+        p = Decimal(str(probability))
+        probability_ok = p.is_finite() and Decimal(0) <= p <= Decimal(1)
+    except Exception:
+        probability_ok = False
+
+    return (
+        probability_ok
+        and row.get("model_sanity_verified") is True
+        and row.get("model_provider_provenance_verified") is True
+        and row.get("local_day_binding_verified") is True
+        and row.get("forecast_valid_local_day_verified") is True
+        and row.get("anchor_valid_local_day_verified") is True
+        and row.get("model_run_quote_time_verified") is True
+    )
+
+
 def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any]:
     """Split settlement, market-data, fee, and model evidence fail-closed.
 
     ``settlement_rules_provenance_verified`` is intentionally narrower than executable
     economics. ``executable_shadow_prereqs_verified`` requires *all* four dimensions,
-    explicit read-only state, and literal upstream certification flags where present.
-    It is still research-only and can never set live readiness.
+    explicit read-only state, and literal upstream certification flags. It is still
+    research-only and can never set live readiness.
     """
     if not isinstance(row, dict):
         raise TypeError("row must be a dict")
@@ -88,17 +151,30 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
     exact_source = row.get("exact_market_source_verified")
     if exact_source is not True:
         settlement.append("EXACT_MARKET_SOURCE_AUDIT_REQUIRED")
+    if row.get("settlement_certified_shadow") is not True:
+        settlement.append("SETTLEMENT_CERTIFICATION_EVIDENCE_REQUIRED")
     settlement = sorted(set(settlement))
 
-    settlement_verified = not settlement and exact_source is True
+    if not _book_evidence_verified(row):
+        market_data.append("EXECUTABLE_BOOK_EVIDENCE_REQUIRED")
+    market_data = sorted(set(market_data))
+
+    if not _fee_evidence_verified(row):
+        fee.append("AUTHORITATIVE_FEE_EVIDENCE_REQUIRED")
+    fee = sorted(set(fee))
+
+    if not _model_evidence_verified(row):
+        model.append("MODEL_AUDIT_CHAIN_EVIDENCE_REQUIRED")
+    model = sorted(set(model))
+
+    settlement_verified = not settlement
     market_data_verified = not market_data
     fee_verified = not fee
     model_verified = not model
 
     # Never upgrade malformed/unknown blocker telemetry into readiness.
     no_unknowns = not unclassified and "MALFORMED_BLOCKER_TELEMETRY" not in blockers
-    upstream_ev = row.get("ev_certified_shadow")
-    upstream_ev_ok = upstream_ev is True
+    upstream_ev_ok = row.get("ev_certified_shadow") is True
 
     executable_shadow = (
         settlement_verified
