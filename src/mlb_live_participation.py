@@ -1,13 +1,12 @@
 """Public MLB game-state participation proofs for strict player-prop research.
 
-This module is deliberately read-only. It uses MLB's public Stats API game schedule
-and boxscore data to answer only the participation question required by the audited
-Polymarket US <-> Kalshi player-prop rule guard:
+Read-only: uses MLB Stats API schedule + boxscore data to prove only the audited
+participation gates required before same-venue MLB maker ladders are considered:
 
-* batter families: player was a starter and has recorded >= 1 plate appearance
-* pitcher strikeouts: player was the starting pitcher and has recorded >= 1 pitch
+* batter families: player was a starter and recorded >=1 plate appearance;
+* pitcher strikeouts: player was the starting pitcher and recorded >=1 batter faced.
 
-It does not price markets, authenticate to a venue, or submit orders.
+No venue authentication or order entry.
 """
 from __future__ import annotations
 
@@ -22,49 +21,22 @@ from src.mlb_prop_rule_equivalence import ParticipationProof
 
 MLB_STATS = "https://statsapi.mlb.com/api"
 
-# Canonical market-team codes used by current Polymarket/Kalshi MLB slugs/tickers.
 TEAM_NAME_TO_CODE = {
-    "Arizona Diamondbacks": "az",
-    "Atlanta Braves": "atl",
-    "Athletics": "ath",
-    "Oakland Athletics": "ath",
-    "Baltimore Orioles": "bal",
-    "Boston Red Sox": "bos",
-    "Chicago Cubs": "chc",
-    "Chicago White Sox": "cws",
-    "Cincinnati Reds": "cin",
-    "Cleveland Guardians": "cle",
-    "Colorado Rockies": "col",
-    "Detroit Tigers": "det",
-    "Houston Astros": "hou",
-    "Kansas City Royals": "kc",
-    "Los Angeles Angels": "laa",
-    "Los Angeles Dodgers": "lad",
-    "Miami Marlins": "mia",
-    "Milwaukee Brewers": "mil",
-    "Minnesota Twins": "min",
-    "New York Mets": "nym",
-    "New York Yankees": "nyy",
-    "Philadelphia Phillies": "phi",
-    "Pittsburgh Pirates": "pit",
-    "San Diego Padres": "sd",
-    "San Francisco Giants": "sf",
-    "Seattle Mariners": "sea",
-    "St. Louis Cardinals": "stl",
-    "Tampa Bay Rays": "tb",
-    "Texas Rangers": "tex",
-    "Toronto Blue Jays": "tor",
+    "Arizona Diamondbacks": "az", "Atlanta Braves": "atl", "Athletics": "ath",
+    "Oakland Athletics": "ath", "Baltimore Orioles": "bal", "Boston Red Sox": "bos",
+    "Chicago Cubs": "chc", "Chicago White Sox": "cws", "Cincinnati Reds": "cin",
+    "Cleveland Guardians": "cle", "Colorado Rockies": "col", "Detroit Tigers": "det",
+    "Houston Astros": "hou", "Kansas City Royals": "kc", "Los Angeles Angels": "laa",
+    "Los Angeles Dodgers": "lad", "Miami Marlins": "mia", "Milwaukee Brewers": "mil",
+    "Minnesota Twins": "min", "New York Mets": "nym", "New York Yankees": "nyy",
+    "Philadelphia Phillies": "phi", "Pittsburgh Pirates": "pit", "San Diego Padres": "sd",
+    "San Francisco Giants": "sf", "Seattle Mariners": "sea", "St. Louis Cardinals": "stl",
+    "Tampa Bay Rays": "tb", "Texas Rangers": "tex", "Toronto Blue Jays": "tor",
     "Washington Nationals": "wsh",
 }
 TEAM_CODE_ALIASES = {
-    "ari": "az",
-    "oak": "ath",
-    "was": "wsh",
-    "chw": "cws",
-    "kcr": "kc",
-    "sdp": "sd",
-    "sfg": "sf",
-    "tbr": "tb",
+    "ari": "az", "oak": "ath", "was": "wsh", "chw": "cws", "kcr": "kc",
+    "sdp": "sd", "sfg": "sf", "tbr": "tb",
 }
 SLUG_GAME_RE = re.compile(
     r"(?:^|-)mlb-(?P<a>[a-z0-9]+)-(?P<b>[a-z0-9]+)-(?P<date>\d{4}-\d{2}-\d{2})(?:-|$)",
@@ -109,7 +81,7 @@ async def fetch_game_boxscores(
     *,
     concurrency: int = 6,
 ) -> dict[tuple[str, tuple[str, str]], dict[str, Any]]:
-    """Return MLB boxscores keyed by (date, sorted market team codes)."""
+    """Return live/final MLB boxscores keyed by (date, sorted team codes)."""
     schedule_rows: list[tuple[str, int, tuple[str, str], str]] = []
     for game_date in sorted(set(dates)):
         body = await _json(
@@ -131,7 +103,6 @@ async def fetch_game_boxscores(
 
     async def one(row: tuple[str, int, tuple[str, str], str]):
         game_date, game_pk, teams, status = row
-        # Pregame boxscores do not prove either required participation gate.
         if status.lower() not in {"live", "final"}:
             return None
         async with semaphore:
@@ -176,19 +147,27 @@ def participation_proof(
 
             if family == "baseball_player_strikeouts":
                 player_id = person.get("id")
-                starting_pitcher = bool(pitchers and player_id is not None and int(player_id) == pitchers[0])
+                starting_pitcher = bool(
+                    pitchers and player_id is not None and int(player_id) == pitchers[0]
+                )
                 pitching = stats.get("pitching") or {}
+                batters_faced = pitching.get("battersFaced")
                 pitches = pitching.get("pitchesThrown")
                 if pitches is None:
                     pitches = pitching.get("numberOfPitches")
+                try:
+                    batter_faced_recorded = int(batters_faced or 0) >= 1
+                except (TypeError, ValueError):
+                    batter_faced_recorded = False
                 try:
                     pitch_recorded = int(pitches or 0) >= 1
                 except (TypeError, ValueError):
                     pitch_recorded = False
                 return ParticipationProof(
                     starting_pitcher=starting_pitcher,
+                    batter_faced_recorded=batter_faced_recorded,
                     pitch_recorded=pitch_recorded,
-                    source=source if (starting_pitcher or pitch_recorded) else "",
+                    source=source if (starting_pitcher or batter_faced_recorded) else "",
                 )
 
             batting = stats.get("batting") or {}
@@ -197,8 +176,6 @@ def participation_proof(
             except (TypeError, ValueError):
                 plate_appearances = 0
             batting_order = str(row.get("battingOrder") or "").strip()
-            # MLB boxscore explicitly flags substitutes. A batting-order assignment
-            # plus isSubstitute=False is the fail-closed starter proof we need.
             started = bool(batting_order) and not bool(game_status.get("isSubstitute", False))
             return ParticipationProof(
                 started=started,
