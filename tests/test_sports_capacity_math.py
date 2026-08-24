@@ -32,7 +32,9 @@ def test_capacity_tiers_preserve_quantity_fee_rounding_and_floor():
     assert D(rows[5]["locked_profit"]) > D("0.15")
     assert rows[25]["status"] == "QUALIFIES"
     assert rows[50]["status"] == "DEPTH_BLOCKED"
+    assert result["largest_economic_tier"] == 25
     assert result["largest_qualifying_tier"] == 25
+    assert result["balances_supplied"] is False
 
 
 def test_capacity_rejects_positive_but_sub_floor_edge():
@@ -47,7 +49,31 @@ def test_capacity_rejects_positive_but_sub_floor_edge():
     assert result["largest_qualifying_tier"] == 0
 
 
-def test_summary_labels_snapshot_as_non_realized_capacity():
+def test_capacity_preserves_economic_opportunity_when_gemini_balance_blocks_size():
+    direction = CapacityDirection(
+        "GEMINI_YES_KALSHI_NO",
+        "mlb|balance",
+        (
+            _leg("gemini", "YES", "0.45", "100", gemini_predictions_taker_fee),
+            _leg("kalshi", "NO", "0.45", "100", _kalshi_fee),
+        ),
+    )
+    result = evaluate_direction(
+        direction,
+        available_by_venue={"gemini": D("12"), "kalshi": D("1000")},
+        default_free_buffer=D("5"),
+    )
+    rows = {row["quantity"]: row for row in result["tiers"]}
+    assert result["balances_supplied"] is True
+    assert result["largest_economic_tier"] == 100
+    assert result["largest_fundable_tier"] == 10
+    assert result["largest_qualifying_tier"] == 10
+    assert rows[25]["status"] == "CAPITAL_BLOCKED"
+    assert rows[25]["economic_profit_floor_pass"] is True
+    assert rows[25]["capital_blockers"] == ["gemini"]
+
+
+def test_summary_labels_snapshot_as_non_realized_capacity_and_counts_blockers():
     zero = lambda price, quantity: D("0")
     good = evaluate_direction(CapacityDirection(
         "GOOD", "k1", (_leg("a", "YES", "0.40", "10", zero), _leg("b", "NO", "0.50", "10", zero))
@@ -58,5 +84,6 @@ def test_summary_labels_snapshot_as_non_realized_capacity():
     summary = summarize_capacity([good, bad])
     assert summary["directions_evaluated"] == 2
     assert summary["directions_with_3c_capacity"] == 1
+    assert summary["tier_status_counts"]["EDGE_BLOCKED"] > 0
     assert summary["execution_eligible"] is False
     assert "not daily realized capacity" in summary["warning"]
