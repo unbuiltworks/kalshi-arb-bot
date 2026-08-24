@@ -21,6 +21,13 @@ def _clean_row():
         "fee_schedule_feed_complete": True,
         "fee_series_ticker": "KXHIGHMIA",
         "fee_schedule_observed_at": "2026-08-24T04:00:01Z",
+        "fee_resolution_verified": True,
+        "fee_resolution_series_ticker": "KXHIGHMIA",
+        "fee_resolution_fee_type": "quadratic",
+        "fee_resolution_fee_multiplier": 1,
+        "fee_resolution_source": "series_current",
+        "fee_resolution_observed_at": "2026-08-24T04:00:01Z",
+        "fee_resolution_effective_at": "2026-08-20T00:00:00Z",
         "forecast_bracket_probability": "0.55",
         "model_sanity_verified": True,
         "model_provider_provenance_verified": True,
@@ -88,6 +95,7 @@ def test_only_fully_certified_read_only_shadow_can_clear_prereqs():
     assert out["settlement_rules_provenance_verified"] is True
     assert out["market_data_verified"] is True
     assert out["fee_economics_verified"] is True
+    assert out["fee_resolution_binding_verified"] is True
     assert out["model_probability_verified"] is True
     assert out["executable_shadow_prereqs_verified"] is True
     assert out["live_probe_ready"] is False
@@ -233,5 +241,49 @@ def test_canonical_historical_or_scheduled_fee_source_can_clear_when_bound():
     for source in ("historical_fee_change", "scheduled_fee_change"):
         row = _clean_row()
         row["fee_metadata_source"] = source
+        row["fee_resolution_source"] = source
         out = audit_weather_certification_dimensions(row)
         assert out["fee_economics_verified"] is True
+        assert out["fee_resolution_binding_verified"] is True
+
+
+def test_fee_dimension_requires_literal_quote_time_resolution_verification():
+    for value in (None, False, "true", 1):
+        row = _clean_row()
+        row["fee_resolution_verified"] = value
+        out = audit_weather_certification_dimensions(row)
+        assert out["fee_economics_verified"] is False
+        assert out["fee_resolution_binding_verified"] is False
+        assert "FEE_RESOLUTION_NOT_VERIFIED" in out["fee_blockers"]
+        assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_fee_dimension_rejects_resolver_metadata_that_does_not_match_scored_fee():
+    cases = [
+        {"fee_resolution_series_ticker": "KXHIGHNY"},
+        {"fee_resolution_fee_multiplier": "0.5"},
+        {"fee_resolution_source": "scheduled_fee_change"},
+        {"fee_resolution_effective_at": "2026-08-24T04:00:02Z"},
+        {"fee_resolution_observed_at": "2026-08-24T03:59:59Z"},
+    ]
+    for patch in cases:
+        row = _clean_row()
+        row.update(patch)
+        out = audit_weather_certification_dimensions(row)
+        assert out["fee_economics_verified"] is False
+        assert out["fee_resolution_binding_verified"] is False
+        assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_plausible_fee_fields_without_resolver_binding_cannot_clear_fee_dimension():
+    row = _clean_row()
+    for key in list(row):
+        if key.startswith("fee_resolution_"):
+            row.pop(key)
+
+    out = audit_weather_certification_dimensions(row)
+
+    assert out["fee_economics_verified"] is False
+    assert out["fee_resolution_binding_verified"] is False
+    assert "AUTHORITATIVE_FEE_EVIDENCE_REQUIRED" in out["fee_blockers"]
+    assert out["executable_shadow_prereqs_verified"] is False
