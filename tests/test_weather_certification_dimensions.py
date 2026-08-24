@@ -157,3 +157,49 @@ def test_stale_or_missing_book_evidence_fails_market_data_dimension():
     missing["no_available_contracts"] = None
     out = audit_weather_certification_dimensions(missing)
     assert out["market_data_verified"] is False
+
+
+def test_fixed_point_q1_book_can_clear_market_data_dimension():
+    row = _clean_row()
+    row["yes_ask_cents"] = None
+    row["yes_available_contracts"] = None
+    row["no_ask_cents"] = None
+    row["no_available_contracts"] = None
+    row["yes_ask_dollars"] = "0.3845"
+    row["yes_ask_qty_fp"] = "1.25"
+
+    out = audit_weather_certification_dimensions(row)
+
+    assert out["market_data_verified"] is True
+    assert out["executable_shadow_prereqs_verified"] is True
+
+
+def test_fixed_point_sub_q1_depth_does_not_clear_executable_book_dimension():
+    row = _clean_row()
+    row["yes_ask_cents"] = None
+    row["yes_available_contracts"] = None
+    row["no_ask_cents"] = None
+    row["no_available_contracts"] = None
+    row["yes_ask_dollars"] = "0.3845"
+    row["yes_ask_qty_fp"] = "0.99"
+
+    out = audit_weather_certification_dimensions(row)
+
+    assert out["market_data_verified"] is False
+    assert "EXECUTABLE_BOOK_EVIDENCE_REQUIRED" in out["market_data_blockers"]
+    assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_malformed_fixed_point_book_fails_closed():
+    for price, qty in (("NaN", "5"), ("1.0000", "5"), ("0.5000", "Infinity"), ("0.5000", True)):
+        row = _clean_row()
+        row["yes_ask_cents"] = None
+        row["yes_available_contracts"] = None
+        row["no_ask_cents"] = None
+        row["no_available_contracts"] = None
+        row["yes_ask_dollars"] = price
+        row["yes_ask_qty_fp"] = qty
+
+        out = audit_weather_certification_dimensions(row)
+        assert out["market_data_verified"] is False
+        assert out["executable_shadow_prereqs_verified"] is False
