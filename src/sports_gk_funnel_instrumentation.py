@@ -4,14 +4,24 @@ This module only wraps existing read/gate functions. It does not change quote
 freshness, skew, participation, economics, revalidation, quantity, payloads, or
 submission behavior. The purpose is to make MLB_GK_MULTI_NO_ATTEMPT explainable
 before any production gate is reconsidered.
+
+The capacity observer deliberately looks past the canary's q=1 cap using the same
+fresh top-of-book objects and fee functions already supplied to ``evaluate_pair``.
+It reports what *would* satisfy the 3c/contract floor at fixed q tiers, but never
+changes ``max_quantity`` passed to the real evaluator and never labels the result
+execution-eligible.
 """
 from __future__ import annotations
 
 from collections import Counter
+from decimal import Decimal
 import json
 import logging
 from typing import Any
 
+from src.sports_capacity_math import CapacityDirection, CapacityLeg, evaluate_direction
+
+D = Decimal
 logger = logging.getLogger("kalshi_arb.sports_gk_funnel")
 
 
@@ -22,6 +32,8 @@ def install(canary: Any) -> None:
 
     stats: Counter[str] = Counter()
     family_participation_rejects: Counter[str] = Counter()
+    capacity_latest: dict[str, dict[str, Any]] = {}
+    capacity_peak: dict[str, dict[str, Any]] = {}
     original_run = canary.run
     original_next_update = canary._next_update
     original_participation = canary._participation_ok
@@ -86,8 +98,62 @@ def install(canary: Any) -> None:
                 pass
         return ok
 
+    def observe_capacity(args: tuple[Any, ...], kwargs: dict[str, Any]) -> None:
+        """Read-only capacity telemetry; failures must never affect the canary."""
+        try:
+            if len(args) < 2:
+                return
+            g, k = args[0], args[1]
+            gemini_fee = kwargs.get("gemini_fee")
+            kalshi_fee = kwargs.get("kalshi_fee")
+            if not callable(gemini_fee) or not callable(kalshi_fee):
+                return
+
+            directions = (
+                CapacityDirection(
+                    "GEMINI_YES_KALSHI_NO",
+                    f"{g.market_id}|{k.market_id}",
+                    (
+                        CapacityLeg("gemini", str(g.market_id), "YES", D(g.yes_ask), D(g.yes_ask_size), gemini_fee),
+                        CapacityLeg("kalshi", str(k.market_id), "NO", D(k.no_ask), D(k.no_ask_size), kalshi_fee),
+                    ),
+                ),
+                CapacityDirection(
+                    "KALSHI_YES_GEMINI_NO",
+                    f"{g.market_id}|{k.market_id}",
+                    (
+                        CapacityLeg("kalshi", str(k.market_id), "YES", D(k.yes_ask), D(k.yes_ask_size), kalshi_fee),
+                        CapacityLeg("gemini", str(g.market_id), "NO", D(g.no_ask), D(g.no_ask_size), gemini_fee),
+                    ),
+                ),
+            )
+            for direction in directions:
+                result = evaluate_direction(
+                    direction,
+                    min_profit_per_contract=D(str(canary.MIN_PROFIT)),
+                )
+                marker = f"{direction.settlement_key}|{direction.name}"
+                capacity_latest[marker] = result
+                tier = int(result.get("largest_qualifying_tier") or 0)
+                if tier > 0:
+                    stats["capacity_pair_direction_pass"] += 1
+                for tier_row in result.get("tiers") or []:
+                    q = int(tier_row.get("quantity") or 0)
+                    status = str(tier_row.get("status") or "UNKNOWN").lower()
+                    stats[f"capacity_q{q}_{status}"] += 1
+
+                previous = capacity_peak.get(marker)
+                prev_profit = D(str((previous or {}).get("largest_qualifying_locked_profit") or "0"))
+                profit = D(str(result.get("largest_qualifying_locked_profit") or "0"))
+                prev_tier = int((previous or {}).get("largest_qualifying_tier") or 0)
+                if previous is None or tier > prev_tier or (tier == prev_tier and profit > prev_profit):
+                    capacity_peak[marker] = result
+        except Exception:
+            stats["capacity_observer_error"] += 1
+
     def evaluate(*args: Any, **kwargs: Any):
         stats["economics_checks"] += 1
+        observe_capacity(args, kwargs)
         out = original_evaluate(*args, **kwargs)
         stats["raw_economic_candidates"] += len(out)
         qualifying = [
@@ -119,6 +185,8 @@ def install(canary: Any) -> None:
     async def run(*args: Any, **kwargs: Any) -> int:
         stats.clear()
         family_participation_rejects.clear()
+        capacity_latest.clear()
+        capacity_peak.clear()
         rc: int | None = None
         error_type: str | None = None
         try:
@@ -129,6 +197,16 @@ def install(canary: Any) -> None:
             raise
         finally:
             fresh_rejects = stats.get("fresh_reject", 0)
+            peak_rows = sorted(
+                capacity_peak.values(),
+                key=lambda row: D(str(row.get("largest_qualifying_locked_profit") or "0")),
+                reverse=True,
+            )
+            peak_positive = [row for row in peak_rows if int(row.get("largest_qualifying_tier") or 0) > 0]
+            peak_profit_sum = sum(
+                (D(str(row.get("largest_qualifying_locked_profit") or "0")) for row in peak_positive),
+                D("0"),
+            )
             payload = {
                 "run_id": canary._run_id() if hasattr(canary, "_run_id") else None,
                 "rc": rc,
@@ -144,6 +222,20 @@ def install(canary: Any) -> None:
                 "fresh_reject_avg_skew_ms": (
                     stats.get("fresh_skew_ms_sum", 0) / fresh_rejects if fresh_rejects else None
                 ),
+                "capacity_observed": {
+                    "tiers": [1, 5, 10, 25, 50, 100],
+                    "unique_pair_directions": len(capacity_peak),
+                    "pair_directions_with_3c_capacity": len(peak_positive),
+                    "sum_per_pair_peak_locked_profit": str(peak_profit_sum),
+                    "top_peak_rows": peak_positive[:10],
+                    "latest_rows": list(capacity_latest.values())[:10],
+                    "execution_eligible": False,
+                    "read_only": True,
+                    "warning": (
+                        "Per-epoch peak observations are not simultaneous, not daily capacity, and not realized P&L. "
+                        "They are used only to size future certified canaries."
+                    ),
+                },
                 "behavior_changed": False,
             }
             logger.warning("MLB_GK_MULTI_FUNNEL %s", json.dumps(payload, separators=(",", ":"), default=str))
