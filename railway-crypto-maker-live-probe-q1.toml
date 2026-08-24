@@ -6,5 +6,5 @@ builder = "NIXPACKS"
 
 [deploy]
 startCommand = "python -m src.gemini_same_venue_crypto_ladder_scan"
-preDeployCommand = ["python -m py_compile src/gemini_same_venue_crypto_ladder_scan.py src/gemini_kalshi_execution_shadow.py src/gemini_kalshi_fast_overlap.py"]
+preDeployCommand = ["python -m pytest -q tests/test_gemini_same_venue_crypto_ladder_scan.py && python -m py_compile src/gemini_same_venue_crypto_ladder_scan.py src/gemini_kalshi_execution_shadow.py src/gemini_kalshi_fast_overlap.py"]
 restartPolicyType = "NEVER"
