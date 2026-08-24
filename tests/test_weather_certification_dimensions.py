@@ -6,6 +6,9 @@ def _clean_row():
         "blockers": [],
         "exact_market_source_verified": True,
         "settlement_certified_shadow": True,
+        "station_identity_verified": True,
+        "local_day_verified": True,
+        "bracket_semantics_verified": True,
         "series_ticker": "KXHIGHMIA",
         "event_ticker": "KXHIGHMIA-26AUG24",
         "market_ticker": "KXHIGHMIA-26AUG24-B92.5",
@@ -55,6 +58,7 @@ def test_clean_row_clears_read_only_prereqs():
     out = audit_weather_certification_dimensions(_clean_row())
     assert out["blocker_telemetry_verified"] is True
     assert out["exact_market_source_audit_verified"] is True
+    assert out["settlement_identity_semantics_verified"] is True
     assert out["executable_shadow_prereqs_verified"] is True
     assert out["order_entry"] is False and out["live_probe_ready"] is False
 
@@ -123,3 +127,18 @@ def test_settlement_booleans_cannot_replace_exact_market_source_evidence():
     assert "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT" in out["settlement_blockers"]
     assert out["settlement_rules_provenance_verified"] is False
     assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_settlement_certified_boolean_cannot_replace_identity_semantics():
+    for field, blocker in (
+        ("station_identity_verified", "STATION_IDENTITY_EVIDENCE_REQUIRED"),
+        ("local_day_verified", "LOCAL_DAY_EVIDENCE_REQUIRED"),
+        ("bracket_semantics_verified", "BRACKET_SEMANTICS_EVIDENCE_REQUIRED"),
+    ):
+        row = _clean_row()
+        row[field] = "true"
+        out = audit_weather_certification_dimensions(row)
+        assert out["settlement_identity_semantics_verified"] is False
+        assert blocker in out["settlement_blockers"]
+        assert out["settlement_rules_provenance_verified"] is False
+        assert out["executable_shadow_prereqs_verified"] is False
