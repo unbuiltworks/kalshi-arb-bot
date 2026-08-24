@@ -2,9 +2,10 @@
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
     "preDeployCommand": [
-      "python -m py_compile src/sports_poly_structural_live_supervisor_recovered.py src/sports_poly_revenue_campaign_q1_resilient.py src/sports_poly_mlb_startup_recovery.py src/sports_poly_structural_live_supervisor_verified.py src/sports_poly_structural_live_supervisor.py src/sports_poly_private_order_stream.py src/sports_poly_structural_reporting.py src/sports_poly_mlb_rule_risk_budget.py src/sports_kp_poly_relay_campaign_q1_v5.py src/sports_kp_poly_relay_campaign_q1_v4.py src/sports_poly_structural_monotone.py src/sports_poly_direct_mlb_campaign_q1_v2.py src/sports_poly_direct_mlb_campaign_q1_v3.py src/sports_poly_current_fees.py src/sports_poly_mlb_participation_gate.py src/mlb_live_participation.py src/mlb_prop_rule_equivalence.py src/sports_poly_revenue_campaign_q1.py && pytest -q tests/test_sports_poly_mlb_maker_frontier_v3.py tests/test_sports_poly_mlb_runtime_recovery.py"
+      "python -m py_compile src/sports_poly_structural_live_supervisor_recovered.py src/sports_poly_fast_orphan_cleanup.py src/sports_poly_revenue_campaign_q1_resilient.py src/sports_poly_mlb_startup_recovery.py src/sports_poly_structural_live_supervisor_verified.py src/sports_poly_structural_live_supervisor.py src/sports_poly_private_order_stream.py src/sports_poly_structural_reporting.py src/sports_poly_mlb_rule_risk_budget.py src/sports_kp_poly_relay_campaign_q1_v5.py src/sports_kp_poly_relay_campaign_q1_v4.py src/sports_poly_structural_monotone.py src/sports_poly_direct_mlb_campaign_q1_v2.py src/sports_poly_direct_mlb_campaign_q1_v3.py src/sports_poly_current_fees.py src/sports_poly_mlb_participation_gate.py src/mlb_live_participation.py src/mlb_prop_rule_equivalence.py src/sports_poly_revenue_campaign_q1.py && pytest -q tests/test_sports_poly_mlb_maker_frontier_v3.py tests/test_sports_poly_mlb_runtime_recovery.py"
     ],
     "startCommand": "python -m src.sports_poly_structural_live_supervisor_recovered",
-    "restartPolicyType": "NEVER"
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 5
   }
 }
