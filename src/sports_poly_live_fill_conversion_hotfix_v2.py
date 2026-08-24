@@ -7,14 +7,22 @@ makes the resting window effectively lifecycle-bounded: the proven inner loop st
 rechecks hedge depth/economics every second and exits on fill, cancel, reject, expiry,
 missing hedge book, or loss of the exact >=3c floor. The large time bound is only a
 last-resort process guard, not the normal reason to surrender queue position.
+
+Rollout safety is account-authoritative: before Command Center reservation recovery,
+startup performs one all-open account read, cancels matching GTC sports orphans,
+flattens any known partial quantity, verifies the open set when needed, and only then
+allows the existing trade-activity recovery logic to decide whether a reservation can
+be released. Any cleanup ambiguity hard-stops.
 """
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any, Mapping
 
 import src.sports_poly_live_fill_conversion_hotfix as base
 import src.sports_poly_structural_live_supervisor_recovered as recovered
+from src.sports_poly_fast_orphan_cleanup import cleanup_current_revenue_orders_fast
 
 # Six hours is intentionally longer than an MLB market's useful live lifecycle.
 # Orders should normally leave via fill/market lifecycle/hedge economics, not TTL.
@@ -42,6 +50,10 @@ def _near_touch_activity_sort_key(row: Mapping[str, Any]) -> tuple[Any, ...]:
     )
 
 
+def _cleanup_clear(result: Mapping[str, Any]) -> bool:
+    return int(result.get("unresolved") or 0) == 0 and int(result.get("partial_unresolved") or 0) == 0
+
+
 def configure() -> None:
     base._activity_sort_key = _near_touch_activity_sort_key
     base.configure()
@@ -52,6 +64,38 @@ def configure() -> None:
 
 async def main() -> None:
     configure()
+    try:
+        cleanup = await cleanup_current_revenue_orders_fast()
+    except Exception as exc:
+        print(
+            "SPORTS_STRUCTURAL_SUPERVISOR "
+            + json.dumps(
+                {
+                    "status": "PRE_RECOVERY_ACCOUNT_CLEANUP_EXCEPTION_HARD_HALT",
+                    "error_type": type(exc).__name__,
+                    "order_entry": False,
+                },
+                separators=(",", ":"),
+            ),
+            flush=True,
+        )
+        return
+    print("SPORTS_STRUCTURAL_SUPERVISOR " + json.dumps(cleanup, separators=(",", ":"), default=str), flush=True)
+    if not _cleanup_clear(cleanup):
+        print(
+            "SPORTS_STRUCTURAL_SUPERVISOR "
+            + json.dumps(
+                {
+                    "status": "PRE_RECOVERY_ACCOUNT_CLEANUP_AMBIGUOUS_HARD_HALT",
+                    "unresolved": cleanup.get("unresolved"),
+                    "partial_unresolved": cleanup.get("partial_unresolved"),
+                    "order_entry": False,
+                },
+                separators=(",", ":"),
+            ),
+            flush=True,
+        )
+        return
     await recovered.main()
 
 
