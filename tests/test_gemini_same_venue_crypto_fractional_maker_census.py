@@ -15,7 +15,6 @@ def test_one_cent_grid_worst_fill_cannot_support_three_cent_floor():
     ok, details = c.worst_fill_floor(
         maker_price=D("0.40"),
         hedge_price=D("0.40"),
-        quantity if False else D("0"),
         maker_contract=_contract("0.01", "0.01"),
         hedge_contract=_contract("0.01", "0.01"),
         hedge_depth=D("10"),
