@@ -1,9 +1,9 @@
 """One-attempt promoted basis campaign using v6 Kalshi-first execution.
 
-A Kalshi-first FOK rejection is a safe no-fill, not an unresolved trade. The campaign
-writes an idempotent zero-P&L NO_FILL_RELEASED realization so the durable reservation
-is explicitly closed before the rollover supervisor starts another lease. Any actual
-one-leg fill, ambiguity, new realized loss, or settlement anomaly still fail-closes.
+A Kalshi-first FOK rejection is a safe no-fill.  Fully BOTH_FILLED q=1 positions may
+now await settlement while another asset-specific campaign scans, subject to v6's
+bounded paired-risk budget.  Any in-flight/unpaired execution risk, new realized loss,
+settlement anomaly or budget violation still fail-closes.
 """
 from __future__ import annotations
 
@@ -75,8 +75,6 @@ async def _basis_emit_execution_v6(http, run_id: str, record: dict[str, Any]):
         return await _ORIGINAL_BASIS_EMIT_EXECUTION(http, run_id, record)
 
     try:
-        # This emits the truthful ORDER_SUBMITTED / 0-filled state then raises because
-        # the base campaign only accepts BOTH_FILLED as a trade.
         return await _ORIGINAL_BASIS_EMIT_EXECUTION(http, run_id, record)
     except RuntimeError:
         gp = record.get("gemini_payload") or {}
@@ -129,6 +127,9 @@ def install() -> None:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
+    # Install the v6 risk-aware reconciliation before the parent campaign checks the
+    # ledger; fully paired open positions are allowed, unpaired/in-flight ones are not.
+    child_v6.install()
     child_v2.assert_prior_ledger_reconciled()
     os.environ[child.BASIS_RECONCILED_ENV] = "YES"
     with child_v2._connect() as conn:
@@ -139,15 +140,19 @@ def main() -> None:
     install()
     logger.warning(
         "CRYPTO_BASIS_RISK_V6_CAMPAIGN_ENABLED ledger_mode=%s probe_limit=%s reservations=%s realized=%s "
-        "realized_loss_usd=%s remaining_loss_budget_usd=%s tranche_usd=%s execution_sequence=KALSHI_THEN_GEMINI "
-        "new_loss_hard_stop=true guaranteed_arb=false parent_min_gap_bps=%s",
+        "open_paired=%s open_paired_reserved_usd=%s realized_loss_usd=%s remaining_loss_budget_usd=%s "
+        "tranche_usd=%s execution_sequence=KALSHI_THEN_GEMINI max_open_paired=%s "
+        "one_inflight_unpaired=true new_loss_hard_stop=true guaranteed_arb=false parent_min_gap_bps=%s",
         child_v2.LEDGER_MODE,
         child_v6.PROMOTED_PROBE_LIMIT,
         state["reservations"],
         state["realized"],
+        state["open_paired_count"],
+        state["open_paired_reserved_usd"],
         state["realized_loss_usd"],
         state["remaining_loss_budget_usd"],
         child.INITIAL_TRANCHE_USD,
+        child_v6.MAX_OPEN_PAIRED_RISK,
         dynamic_policy.DYNAMIC_MIN_GAP_BPS,
     )
     campaign.main()
