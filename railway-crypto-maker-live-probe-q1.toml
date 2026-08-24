@@ -1,11 +1,12 @@
 # Same-Gemini crypto threshold-ladder q=1 execution-first canary.
-# Account orphan gate -> continuously rechecked FOK/FOK arb -> flow-ranked sticky maker -> FOK hedge.
+# Account orphan gate -> all-pair continuously rechecked FOK/FOK arb -> flow-ranked sticky maker -> FOK hedge.
+# Every certified same-event/source/expiry L<H pair is evaluated; adjacency is not required.
 # Public execution state is WS-first; REST is discovery or bounded authoritative recovery.
 # Old Gemini<->Kalshi 15m basis maker remains parked.
 [build]
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python -m src.gemini_same_venue_crypto_execution_v3"
-preDeployCommand = ["python -m pytest -q tests/test_gemini_same_venue_crypto_ladder_scan.py tests/test_gemini_same_venue_crypto_maker_q1.py tests/test_gemini_same_venue_crypto_maker_q1_depth.py tests/test_gemini_same_venue_crypto_execution_v2.py tests/test_gemini_same_venue_crypto_execution_v3.py && python -m py_compile src/gemini_same_venue_crypto_ladder_scan.py src/gemini_same_venue_crypto_budget.py src/gemini_same_venue_crypto_maker_q1.py src/gemini_same_venue_crypto_maker_q1_depth.py src/gemini_same_venue_crypto_maker_q1_wsfirst.py src/gemini_same_venue_crypto_account_gate.py src/gemini_same_venue_crypto_flow_v2.py src/gemini_same_venue_crypto_taker_q1.py src/gemini_same_venue_crypto_taker_q1_hardened.py src/gemini_same_venue_crypto_execution_v2.py src/gemini_same_venue_crypto_execution_v3.py src/gemini_kalshi_execution_shadow.py src/gemini_kalshi_fast_overlap.py"]
+startCommand = "python -m src.gemini_same_venue_crypto_execution_v4"
+preDeployCommand = ["python -m pytest -q tests/test_gemini_same_venue_crypto_ladder_scan.py tests/test_gemini_same_venue_crypto_full_pairs.py tests/test_gemini_same_venue_crypto_maker_q1.py tests/test_gemini_same_venue_crypto_maker_q1_depth.py tests/test_gemini_same_venue_crypto_execution_v2.py tests/test_gemini_same_venue_crypto_execution_v3.py && python -m py_compile src/gemini_same_venue_crypto_ladder_scan.py src/gemini_same_venue_crypto_budget.py src/gemini_same_venue_crypto_maker_q1.py src/gemini_same_venue_crypto_maker_q1_depth.py src/gemini_same_venue_crypto_maker_q1_wsfirst.py src/gemini_same_venue_crypto_account_gate.py src/gemini_same_venue_crypto_flow_v2.py src/gemini_same_venue_crypto_taker_q1.py src/gemini_same_venue_crypto_taker_q1_hardened.py src/gemini_same_venue_crypto_full_pair_taker.py src/gemini_same_venue_crypto_execution_v2.py src/gemini_same_venue_crypto_execution_v3.py src/gemini_same_venue_crypto_execution_v4.py src/gemini_kalshi_execution_shadow.py src/gemini_kalshi_fast_overlap.py"]
 restartPolicyType = "NEVER"
