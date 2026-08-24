@@ -16,6 +16,7 @@ from typing import Any, Callable, Mapping
 from polymarket_us import PolymarketUS
 
 import src.sports_kp_poly_relay_campaign_q1_v4 as v4
+import src.sports_poly_revenue_campaign_q1_resilient as resilient_campaign
 import src.sports_poly_structural_live_supervisor as supervisor
 import src.sports_poly_structural_live_supervisor_verified as verified
 from src.sports_poly_mlb_startup_recovery import recover_unresolved_mlb_reservation
@@ -71,11 +72,6 @@ def install_recovered_private_order_transport(stream: PrivateOrderStream) -> Cal
         try:
             updated = await stream.wait_for_update(oid, supervisor.WS_REFRESH_WAIT_SECONDS)
         except RuntimeError as exc:
-            # Production incident 2026-08-24: an authenticated WS could remain
-            # connected but not observe the first new order during bootstrap.
-            # The stream already attempted exact REST before raising. Preserve the
-            # known oid and continue this order on paced authoritative REST instead
-            # of converting an identifiable order into an ambiguous mutation.
             rest_fallback_ids.add(oid)
             print(
                 "SPORTS_STRUCTURAL_SUPERVISOR "
@@ -152,7 +148,7 @@ async def main() -> None:
     supervisor.install_private_order_transport = install_recovered_private_order_transport
     supervisor._current_total_slugs = verified.current_revenue_slugs
     supervisor.cleanup_current_total_orders = verified.cleanup_current_revenue_orders_batched
-    supervisor.run_campaign = verified.revenue_campaign.run_once
+    supervisor.run_campaign = resilient_campaign.run_once
     await supervisor.main()
 
 
