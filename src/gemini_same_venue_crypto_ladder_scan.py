@@ -10,11 +10,16 @@ pays at least $1 at settlement. The scanner asks whether one leg can be posted a
 maker at the most aggressive post-only price while the other leg remains an exact
 current taker hedge and the pair preserves >=3c per contract after Gemini fees.
 
+A theoretical safe frontier is NOT actionable when an existing bid is already above
+that frontier. Actionable rows must seed the first bid or improve the current best
+bid while preserving the target. Joining a safe bid is tracked separately.
+
 READ ONLY. No authenticated calls and no order mutation.
 """
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_FLOOR
 import json
 import logging
@@ -95,6 +100,14 @@ def _level(raw: Any) -> tuple[D, D] | None:
     return p, q
 
 
+def _seconds_to_expiry(value: Any) -> float | None:
+    try:
+        expiry = datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
+    except Exception:
+        return None
+    return (expiry - datetime.now(timezone.utc)).total_seconds()
+
+
 def top(book: Mapping[str, Any]) -> dict[str, D | None]:
     bids = [x for x in (_level(r) for r in (book.get("bids") or [])) if x]
     asks = [x for x in (_level(r) for r in (book.get("asks") or [])) if x]
@@ -147,6 +160,16 @@ def safe_frontier(*, maker_ask: D | None, hedge_ask: D, tick: D, quantity: D = O
             return price
         steps -= 1
     return None
+
+
+def maker_action(*, existing_bid: D, safe_quote: D, tick: D) -> str:
+    if existing_bid <= 0 and safe_quote > 0:
+        return "SEED_FIRST_BID"
+    if safe_quote >= existing_bid + tick:
+        return "IMPROVE_TO_SAFE_FRONTIER"
+    if safe_quote == existing_bid:
+        return "JOIN_SAFE_BID"
+    return "BEHIND_UNSAFE_TOP_BID"
 
 
 def ladder_contracts(event: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -204,9 +227,19 @@ async def _books(http: httpx.AsyncClient, symbols: set[str]) -> tuple[dict[str, 
     return books, statuses
 
 
-def score(events: list[Mapping[str, Any]], books: Mapping[str, Mapping[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, int]]:
-    rows: list[dict[str, Any]] = []
-    telemetry = {"eligible_ladder_events": 0, "strict_ladder_contracts": 0, "adjacent_pairs": 0}
+def score(events: list[Mapping[str, Any]], books: Mapping[str, Mapping[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
+    actionable: list[dict[str, Any]] = []
+    joins: list[dict[str, Any]] = []
+    telemetry = {
+        "eligible_ladder_events": 0,
+        "strict_ladder_contracts": 0,
+        "adjacent_pairs": 0,
+        "raw_frontier_3c_rows": 0,
+        "seed_first_bid": 0,
+        "improve_to_safe_frontier": 0,
+        "join_safe_bid": 0,
+        "behind_unsafe_top_bid": 0,
+    }
     for event in events:
         contracts = ladder_contracts(event)
         if len(contracts) < 2:
@@ -234,16 +267,20 @@ def score(events: list[Mapping[str, Any]], books: Mapping[str, Mapping[str, Any]
                 tick = _tick(maker)
                 if not isinstance(hedge_ask, D) or not isinstance(hedge_depth, D) or hedge_depth < ONE or not isinstance(tick, D):
                     continue
-                quote = safe_frontier(maker_ask=mb.get("ask") if isinstance(mb.get("ask"), D) else None, hedge_ask=hedge_ask, tick=tick)
+                maker_ask = mb.get("ask") if isinstance(mb.get("ask"), D) else None
+                quote = safe_frontier(maker_ask=maker_ask, hedge_ask=hedge_ask, tick=tick)
                 if quote is None:
                     continue
+                telemetry["raw_frontier_3c_rows"] += 1
                 locked = locked_profit(quote, hedge_ask)
-                maker_ask = mb.get("ask") if isinstance(mb.get("ask"), D) else None
                 maker_bid = mb.get("bid") if isinstance(mb.get("bid"), D) else D("0")
-                rows.append({
+                action = maker_action(existing_bid=maker_bid, safe_quote=quote, tick=tick)
+                telemetry[action.lower()] += 1
+                row = {
                     "event_ticker": ticker,
                     "event_title": title,
                     "expiry": maker.get("_expiry"),
+                    "seconds_to_expiry": _seconds_to_expiry(maker.get("_expiry")),
                     "source": maker.get("_source"),
                     "low_symbol": low_symbol,
                     "low_strike": str(low.get("_strike")),
@@ -252,6 +289,7 @@ def score(events: list[Mapping[str, Any]], books: Mapping[str, Mapping[str, Any]
                     "direction": direction,
                     "maker_symbol": _symbol(maker),
                     "maker_outcome": maker_outcome,
+                    "maker_action": action,
                     "existing_maker_bid": str(maker_bid),
                     "maker_ask": None if maker_ask is None else str(maker_ask),
                     "maker_tick": str(tick),
@@ -270,13 +308,28 @@ def score(events: list[Mapping[str, Any]], books: Mapping[str, Mapping[str, Any]
                     "read_only": True,
                     "order_entry": False,
                     "realized": False,
-                })
-    rows.sort(key=lambda r: (
-        D(str(r["gap_to_ask"])) if r.get("gap_to_ask") is not None else D("1"),
-        -D(str(r["hedge_depth"])),
-        -D(str(r["locked_profit_q1"])),
-    ))
-    return rows, telemetry
+                }
+                if action in {"SEED_FIRST_BID", "IMPROVE_TO_SAFE_FRONTIER"}:
+                    actionable.append(row)
+                elif action == "JOIN_SAFE_BID":
+                    joins.append(row)
+
+    def rank(r: Mapping[str, Any]) -> tuple[Any, ...]:
+        secs = r.get("seconds_to_expiry")
+        # Prefer contracts expiring in the next 24h, but not already expired.
+        near_bucket = 0 if isinstance(secs, (int, float)) and 300 < secs <= 86400 else 1
+        expiry_rank = secs if isinstance(secs, (int, float)) and secs > 0 else 10**12
+        return (
+            near_bucket,
+            D(str(r.get("gap_to_ask"))) if r.get("gap_to_ask") is not None else D("1"),
+            -D(str(r.get("quote_improvement") or "0")),
+            -D(str(r.get("hedge_depth") or "0")),
+            expiry_rank,
+        )
+
+    actionable.sort(key=rank)
+    joins.sort(key=rank)
+    return actionable, joins, telemetry
 
 
 async def run() -> dict[str, Any]:
@@ -285,14 +338,17 @@ async def run() -> dict[str, Any]:
         strict = [(event, ladder_contracts(event)) for event in events]
         symbols = {_symbol(c) for _, contracts in strict for c in contracts}
         books, statuses = await _books(http, symbols)
-    candidates, telemetry = score(events, books)
+    actionable, joins, telemetry = score(events, books)
     out = {
         "gemini_active_crypto_events": len(events),
         **telemetry,
         "books_requested": len(symbols),
         "books_ok": sum(1 for symbol in symbols if statuses.get(symbol) == 200),
-        "maker_frontier_3c_candidates": len(candidates),
-        "top_candidates": candidates[:20],
+        "actionable_best_bid_candidates": len(actionable),
+        "join_safe_candidates": len(joins),
+        "top_actionable": actionable[:20],
+        "top_join_safe": joins[:10],
+        "live_canary_admission": "SEED_FIRST_BID_OR_IMPROVE_TO_SAFE_FRONTIER_ONLY",
         "fee_policy": "current Gemini predictions maker+taker fees, ceil-cent; maker rebates/rewards excluded",
         "target_per_contract": str(TARGET),
         "read_only": True,
