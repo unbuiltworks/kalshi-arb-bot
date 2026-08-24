@@ -55,7 +55,7 @@ async def _order_rows(*, status: str) -> list[Mapping[str, Any]]:
     now_ms = int(time.time() * 1000)
     response = await private_rest_request(
         "POST", "/v1/prediction-markets/orders/history",
-        params={"status": status, "symbol": SYMBOL, "limit": 1000,
+        params={"status": status, "symbol": SYMBOL, "limit": 100,
                 "from": now_ms - 4 * 60 * 60 * 1000, "to": now_ms + 60_000},
         timeout=5.0,
     )
