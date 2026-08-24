@@ -10,7 +10,7 @@ import asyncio
 from decimal import Decimal
 import json
 
-from src.gemini_kalshi_probe_transport import KalshiV2Executor
+from src.auth import KalshiClient
 from src.gemini_prediction_auth import private_rest_request
 
 D = Decimal
@@ -27,9 +27,9 @@ async def main_async() -> None:
                 gemini_usd = D(str(row.get("amount") or row.get("available") or "0"))
                 break
 
-    kalshi = KalshiV2Executor()
+    kalshi = KalshiClient()
     try:
-        resp = await kalshi.client.get("/portfolio/balance")
+        resp = await kalshi.get("/portfolio/balance")
         resp.raise_for_status()
         payload = resp.json()
         kalshi_usd = D(str(payload.get("balance") or "0")) / D("100")
