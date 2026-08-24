@@ -1,3 +1,5 @@
+import pytest
+
 from src import gemini_kalshi_xrp_first_fill_supervisor as supervisor
 
 
@@ -24,3 +26,15 @@ def test_any_terminal_round_stops_supervisor():
 def test_duplicate_fails_closed():
     stop, _ = supervisor.terminal_requires_stop({"status": "DUPLICATE_CAMPAIGN_BLOCKED"})
     assert stop
+
+
+@pytest.mark.asyncio
+async def test_read_only_rollover_is_zero_mutation_not_exception():
+    async def no_pair():
+        raise RuntimeError(supervisor.NO_PAIR_TEXT)
+
+    result = await supervisor._run_after_rollover(
+        no_pair, cycle=0, root_trade_id="READ_ONLY", armed=False
+    )
+    assert result["status"] == "NO_VIABLE_PAIR_YET"
+    assert result["order_entry"] is False
