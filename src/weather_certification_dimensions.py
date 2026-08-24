@@ -70,8 +70,43 @@ def _finite_nonnegative(value: Any) -> bool:
     return parsed.is_finite() and parsed >= 0
 
 
+def _decimal(value: Any) -> Decimal | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        parsed = Decimal(str(value))
+    except Exception:
+        return None
+    return parsed if parsed.is_finite() else None
+
+
+def _valid_executable_side(row: dict[str, Any], side: str) -> bool:
+    """Accept current fixed-point books or legacy integer books without inventing depth.
+
+    The certification dimension is intended to support a q1 micro-probe research view,
+    so sub-contract displayed quantity (<1.00) is useful diagnostics but is not enough
+    to clear executable-book evidence. Fixed-point price/quantity is preferred because
+    current Kalshi books can use sub-cent prices and fractional quantities.
+    """
+    price_fp = _decimal(row.get(f"{side}_ask_dollars"))
+    qty_fp = _decimal(row.get(f"{side}_ask_qty_fp"))
+    if price_fp is not None and qty_fp is not None:
+        return Decimal("0") < price_fp < Decimal("1") and qty_fp >= Decimal("1")
+
+    cents = row.get(f"{side}_ask_cents")
+    qty = row.get(f"{side}_available_contracts")
+    return (
+        isinstance(cents, int)
+        and not isinstance(cents, bool)
+        and 1 <= cents <= 99
+        and isinstance(qty, int)
+        and not isinstance(qty, bool)
+        and qty >= 1
+    )
+
+
 def _book_evidence_verified(row: dict[str, Any]) -> bool:
-    """Require an actually observed, fresh, side-specific executable book."""
+    """Require an actually observed, fresh, side-specific q1-executable book."""
     age = row.get("quote_age_ms")
     max_age = row.get("max_quote_age_ms")
     if not _finite_nonnegative(age) or not _finite_nonnegative(max_age):
@@ -79,19 +114,7 @@ def _book_evidence_verified(row: dict[str, Any]) -> bool:
     if Decimal(str(age)) > Decimal(str(max_age)):
         return False
 
-    for side in ("yes", "no"):
-        price = row.get(f"{side}_ask_cents")
-        qty = row.get(f"{side}_available_contracts")
-        if (
-            isinstance(price, int)
-            and not isinstance(price, bool)
-            and 1 <= price <= 99
-            and isinstance(qty, int)
-            and not isinstance(qty, bool)
-            and qty > 0
-        ):
-            return True
-    return False
+    return any(_valid_executable_side(row, side) for side in ("yes", "no"))
 
 
 def _fee_evidence_verified(row: dict[str, Any]) -> bool:
