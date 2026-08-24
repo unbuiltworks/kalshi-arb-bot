@@ -103,17 +103,39 @@ def _settlement_identity_semantics_verified(row: dict[str, Any]) -> bool:
 
 
 def _exact_market_source_audit(row: dict[str, Any]) -> dict[str, Any]:
-    """Re-run exact-market settlement provenance instead of trusting producer booleans."""
+    """Re-run exact-market settlement provenance instead of trusting producer booleans.
+
+    The v2 settlement-certified adapter stores its normalized authoritative source
+    evidence inside ``exact_market_source_audit``. Older report producers exposed the
+    same values as top-level fields. Support both shapes, but never trust the nested
+    ``verified`` boolean itself: replay the exact-source audit from normalized evidence.
+    This prevents a canonical-report false negative when consuming real v2 rows while
+    preserving fail-closed behavior for spoofed or incomplete evidence.
+    """
+    nested = row.get("exact_market_source_audit")
+    if isinstance(nested, dict):
+        provider = nested.get("settlement_source_provider")
+        source_url = nested.get("settlement_source_url")
+        evidence_url = nested.get("evidence_url")
+        evidence_market_ticker = row.get("evidence_market_ticker") or row.get("market_ticker")
+        evidence_market_date = row.get("evidence_market_date") or row.get("market_date")
+    else:
+        provider = row.get("settlement_source_provider")
+        source_url = row.get("settlement_source_url")
+        evidence_url = row.get("exact_market_evidence_url")
+        evidence_market_ticker = row.get("evidence_market_ticker")
+        evidence_market_date = row.get("evidence_market_date")
+
     return audit_exact_market_source(
         series_ticker=row.get("series_ticker"),
         event_ticker=row.get("event_ticker"),
         market_ticker=row.get("market_ticker"),
         market_date=row.get("market_date"),
-        provider=row.get("settlement_source_provider"),
-        source_url=row.get("settlement_source_url"),
-        evidence_url=row.get("exact_market_evidence_url"),
-        evidence_market_ticker=row.get("evidence_market_ticker"),
-        evidence_market_date=row.get("evidence_market_date"),
+        provider=provider,
+        source_url=source_url,
+        evidence_url=evidence_url,
+        evidence_market_ticker=evidence_market_ticker,
+        evidence_market_date=evidence_market_date,
     )
 
 
