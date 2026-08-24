@@ -16,6 +16,7 @@ from decimal import Decimal
 from typing import Any
 
 from src.weather_blocker_telemetry_guard import audit_weather_blocker_telemetry
+from src.weather_exact_market_source_audit import audit_exact_market_source
 from src.weather_fee_resolution_binding_guard import audit_weather_fee_resolution_binding
 from src.weather_quote_freshness_binding_guard import audit_weather_quote_freshness_binding
 
@@ -83,6 +84,21 @@ def _model_evidence_verified(row: dict[str, Any]) -> bool:
     return probability_ok and all(row.get(k) is True for k in ("model_sanity_verified", "model_provider_provenance_verified", "local_day_binding_verified", "forecast_valid_local_day_verified", "anchor_valid_local_day_verified", "model_run_quote_time_verified"))
 
 
+def _exact_market_source_audit(row: dict[str, Any]) -> dict[str, Any]:
+    """Re-run exact-market settlement provenance instead of trusting producer booleans."""
+    return audit_exact_market_source(
+        series_ticker=row.get("series_ticker"),
+        event_ticker=row.get("event_ticker"),
+        market_ticker=row.get("market_ticker"),
+        market_date=row.get("market_date"),
+        provider=row.get("settlement_source_provider"),
+        source_url=row.get("settlement_source_url"),
+        evidence_url=row.get("exact_market_evidence_url"),
+        evidence_market_ticker=row.get("evidence_market_ticker"),
+        evidence_market_date=row.get("evidence_market_date"),
+    )
+
+
 def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(row, dict): raise TypeError("row must be a dict")
 
@@ -94,6 +110,9 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
     classified = set(settlement) | set(market_data) | set(fee) | set(model)
     unclassified = sorted(blockers - classified)
 
+    exact_market_source = _exact_market_source_audit(row)
+    if exact_market_source.get("verified") is not True:
+        settlement.extend(exact_market_source.get("blockers") or ["EXACT_MARKET_SOURCE_AUDIT_REQUIRED"])
     if row.get("exact_market_source_verified") is not True: settlement.append("EXACT_MARKET_SOURCE_AUDIT_REQUIRED")
     if row.get("settlement_certified_shadow") is not True: settlement.append("SETTLEMENT_CERTIFICATION_EVIDENCE_REQUIRED")
     settlement = sorted(set(settlement))
@@ -116,6 +135,7 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
     return {
         "category": "weather", "classification": "SHADOW", "blocker_telemetry_verified": telemetry_verified,
         "blocker_source": blocker_audit.get("blocker_source"), "settlement_rules_provenance_verified": settlement_ok,
+        "exact_market_source_audit_verified": exact_market_source.get("verified") is True,
         "market_data_verified": market_ok, "quote_freshness_binding_verified": freshness.get("quote_freshness_binding_verified") is True,
         "derived_quote_age_ms": freshness.get("derived_quote_age_ms"), "fee_economics_verified": fee_ok,
         "fee_resolution_binding_verified": fee_binding.get("fee_resolution_binding_verified") is True, "model_probability_verified": model_ok,
