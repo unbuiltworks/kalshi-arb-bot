@@ -1,15 +1,9 @@
 """Verified private-order transport wrapper for the structural q1 supervisor.
 
-The first live maker still has to prove the authenticated private order stream.
-Once the stream has demonstrably delivered real order updates, an intermittent
-per-order miss no longer kills the whole lane: that order alone falls back to
-paced exact REST reads while all existing cancel/reconciliation protections stay
-in force. Restart cleanup deliberately uses a wider lookback than live discovery
-so a late restart cannot forget a still-open maker from an older active event.
-
-The continuous revenue loop checks structurally certified totals first, then falls
-back to the existing strict MLB player-prop identity over Polymarket's direct PROP
-inventory. Both families share this same one-maker-at-a-time supervisor and cleanup.
+Private order WebSocket remains primary state transport with paced REST fallback.
+The revenue loop shares one maker across structural totals and participation-gated
+MLB props. Restart cleanup covers every family this process can mutate and batches
+large MLB slug sets so authenticated order-list limits cannot block startup.
 """
 from __future__ import annotations
 
@@ -29,6 +23,8 @@ from src.sports_poly_private_order_stream import PrivateOrderStream
 REST_FALLBACK_GAP_SECONDS = 0.75
 HORIZON_HOURS = int(os.getenv("SPORTS_STRUCTURAL_HORIZON_HOURS", "168"))
 CLEANUP_LOOKBACK_HOURS = int(os.getenv("SPORTS_STRUCTURAL_CLEANUP_LOOKBACK_HOURS", "24"))
+ORDER_LIST_BATCH_SIZE = max(5, min(50, int(os.getenv("SPORTS_POLY_CLEANUP_BATCH_SIZE", "25"))))
+ORDER_LIST_BATCH_GAP_SECONDS = float(os.getenv("SPORTS_POLY_CLEANUP_BATCH_GAP_SECONDS", "0.12"))
 
 
 def install_verified_private_order_transport(stream: PrivateOrderStream) -> Callable[[], None]:
@@ -121,9 +117,118 @@ async def current_revenue_slugs() -> list[str]:
     return sorted(total_slugs | mlb_slugs)
 
 
+async def _list_orders_batched(client: PolymarketUS, slugs: list[str]) -> list[Mapping[str, Any]]:
+    rows: list[Mapping[str, Any]] = []
+    for start in range(0, len(slugs), ORDER_LIST_BATCH_SIZE):
+        batch = slugs[start : start + ORDER_LIST_BATCH_SIZE]
+        response = await asyncio.to_thread(client.orders.list, {"slugs": batch})
+        orders = response.get("orders") or [] if isinstance(response, Mapping) else []
+        rows.extend(raw for raw in orders if isinstance(raw, Mapping))
+        if start + ORDER_LIST_BATCH_SIZE < len(slugs):
+            await asyncio.sleep(max(0.0, ORDER_LIST_BATCH_GAP_SECONDS))
+    return rows
+
+
+async def cleanup_current_revenue_orders_batched() -> dict[str, Any]:
+    """Cancel/verify current revenue orders without oversized authenticated queries."""
+    slugs = await current_revenue_slugs()
+    if not slugs:
+        return {
+            "status": "CLEANUP_NO_REVENUE_SLUGS",
+            "slugs": 0,
+            "batches": 0,
+            "open_seen": 0,
+            "canceled": 0,
+            "unresolved": 0,
+            "partial_flattened": 0,
+            "partial_unresolved": 0,
+            "canceled_partial_audit_count": 0,
+        }
+
+    client = PolymarketUS(
+        key_id=os.environ["POLYMARKET_KEY_ID"],
+        secret_key=os.environ["POLYMARKET_SECRET_KEY"],
+        timeout=8.0,
+    )
+    try:
+        rows = await _list_orders_batched(client, slugs)
+        slug_set = set(slugs)
+        canceled_partial_audit = [
+            supervisor._order_summary(raw)
+            for raw in rows
+            if str(raw.get("marketSlug") or raw.get("market_slug") or "") in slug_set
+            and str(raw.get("state") or "") == "ORDER_STATE_CANCELED"
+            and supervisor._d(raw.get("cumQuantity") or raw.get("cum_quantity")) > 0
+        ]
+        open_orders = [
+            raw
+            for raw in rows
+            if str(raw.get("id") or "")
+            and str(raw.get("marketSlug") or raw.get("market_slug") or "") in slug_set
+            and str(raw.get("state") or "") not in supervisor.TERMINAL_STATES
+        ]
+        canceled: list[str] = []
+        unresolved: list[str] = []
+        partial_flattened: list[str] = []
+        partial_unresolved: list[str] = []
+
+        for raw in open_orders:
+            oid = str(raw.get("id") or "")
+            slug = str(raw.get("marketSlug") or raw.get("market_slug") or "")
+            cum_before = supervisor._d(raw.get("cumQuantity") or raw.get("cum_quantity"))
+            try:
+                await asyncio.to_thread(client.orders.cancel, oid, {"marketSlug": slug})
+                canceled.append(oid)
+            except Exception:
+                unresolved.append(oid)
+                continue
+
+            if cum_before > 0:
+                try:
+                    await asyncio.to_thread(
+                        client.orders.close_position,
+                        {
+                            "marketSlug": slug,
+                            "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC",
+                            "synchronousExecution": True,
+                            "maxBlockTime": "2",
+                        },
+                    )
+                    partial_flattened.append(oid)
+                except Exception:
+                    partial_unresolved.append(oid)
+
+        if open_orders:
+            await asyncio.sleep(1.0)
+            verify_rows = await _list_orders_batched(client, slugs)
+            for raw in verify_rows:
+                oid = str(raw.get("id") or "")
+                slug = str(raw.get("marketSlug") or raw.get("market_slug") or "")
+                state = str(raw.get("state") or "")
+                if oid and slug in slug_set and state not in supervisor.TERMINAL_STATES:
+                    unresolved.append(oid)
+
+        return {
+            "status": "STRUCTURAL_REVENUE_ORPHAN_CLEANUP",
+            "slugs": len(slugs),
+            "batches": (len(slugs) + ORDER_LIST_BATCH_SIZE - 1) // ORDER_LIST_BATCH_SIZE,
+            "batch_size": ORDER_LIST_BATCH_SIZE,
+            "open_seen": len(open_orders),
+            "canceled": len(canceled),
+            "unresolved": len(set(unresolved)),
+            "partial_flattened": len(partial_flattened),
+            "partial_unresolved": len(set(partial_unresolved)),
+            "canceled_partial_audit_count": len(canceled_partial_audit),
+            "canceled_partial_audit": canceled_partial_audit[-8:],
+        }
+    finally:
+        client.close()
+
+
 async def main() -> None:
     supervisor.install_private_order_transport = install_verified_private_order_transport
     supervisor._current_total_slugs = current_revenue_slugs
+    supervisor.cleanup_current_total_orders = cleanup_current_revenue_orders_batched
     supervisor.run_campaign = revenue_campaign.run_once
     await supervisor.main()
 
