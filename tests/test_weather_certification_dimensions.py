@@ -247,3 +247,47 @@ def test_nested_model_day_must_match_exact_market_day():
     assert out["model_audit_chain_verified"] is False
     assert "MODEL_AUDIT_LOCAL_DAY_MISMATCH" in out["model_blockers"]
     assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_nested_model_sanity_cannot_hide_calibration_lookahead():
+    row = _clean_row()
+    row["model_sanity_audit"]["calibration_window_end"] = "2026-08-24T03:30:00+00:00"
+    row["model_sanity_audit"]["model_sanity_verified"] = True
+    row["model_sanity_audit"]["blockers"] = []
+    out = audit_weather_certification_dimensions(row)
+    assert out["model_audit_chain_verified"] is False
+    assert "MODEL_AUDIT_CALIBRATION_LOOKAHEAD_DETECTED" in out["model_blockers"]
+    assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_nested_model_sanity_cannot_hide_anchor_lookahead():
+    row = _clean_row()
+    row["model_sanity_audit"]["independent_anchor_observed_at"] = "2026-08-24T04:30:00+00:00"
+    row["model_sanity_audit"]["model_sanity_verified"] = True
+    row["model_sanity_audit"]["blockers"] = []
+    out = audit_weather_certification_dimensions(row)
+    assert out["model_audit_chain_verified"] is False
+    assert "MODEL_AUDIT_ANCHOR_LOOKAHEAD_DETECTED" in out["model_blockers"]
+    assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_nested_model_sanity_cannot_hide_calibration_model_mismatch():
+    row = _clean_row()
+    row["model_sanity_audit"]["calibration_model_id"] = "other-model"
+    row["model_sanity_audit"]["model_sanity_verified"] = True
+    row["model_sanity_audit"]["blockers"] = []
+    out = audit_weather_certification_dimensions(row)
+    assert out["model_audit_chain_verified"] is False
+    assert "MODEL_SANITY_CALIBRATION_MODEL_ID_MISMATCH" in out["model_blockers"]
+    assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_nested_provider_audit_cannot_hide_anchor_source_overlap():
+    row = _clean_row()
+    row["model_provider_provenance_audit"]["model_component_provider_families"] = ["DWD", "ECMWF", "NOAA"]
+    row["model_provider_provenance_audit"]["provider_provenance_verified"] = True
+    row["model_provider_provenance_audit"]["blockers"] = []
+    out = audit_weather_certification_dimensions(row)
+    assert out["model_audit_chain_verified"] is False
+    assert "ANCHOR_PROVIDER_NOT_INDEPENDENT" in out["model_blockers"]
+    assert out["executable_shadow_prereqs_verified"] is False
