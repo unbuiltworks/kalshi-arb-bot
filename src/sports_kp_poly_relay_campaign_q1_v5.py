@@ -39,6 +39,7 @@ LIVE_FAMILY_PREFIXES = ("TOTAL::",)
 DISCOVERY_TIMEOUT_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_DISCOVERY_TIMEOUT_SECONDS", "25"))
 BOOK_TIMEOUT_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_BOOK_TIMEOUT_SECONDS", "35"))
 HORIZON_HOURS = int(os.getenv("SPORTS_STRUCTURAL_HORIZON_HOURS", "168"))
+LOOKBACK_HOURS = int(os.getenv("SPORTS_STRUCTURAL_LOOKBACK_HOURS", "12"))
 TIGHT_GAP = v4.D(os.getenv("SPORTS_STRUCTURAL_TIGHT_GAP", "0.15"))
 MID_GAP = v4.D(os.getenv("SPORTS_STRUCTURAL_MID_GAP", "0.30"))
 TIGHT_REST_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_TIGHT_REST_SECONDS", "60"))
@@ -72,12 +73,23 @@ def _rest_seconds(row: Mapping[str, Any]) -> float:
 
 
 async def run_once() -> dict[str, Any]:
-    _stage("DISCOVERY_START", timeout_seconds=DISCOVERY_TIMEOUT_SECONDS, horizon_hours=HORIZON_HOURS)
+    _stage(
+        "DISCOVERY_START",
+        timeout_seconds=DISCOVERY_TIMEOUT_SECONDS,
+        horizon_hours=HORIZON_HOURS,
+        lookback_hours=LOOKBACK_HOURS,
+    )
     feed, pairs, discovery = await asyncio.wait_for(
-        discover_structural_pairs(horizon_hours=HORIZON_HOURS),
+        discover_structural_pairs(horizon_hours=HORIZON_HOURS, lookback_hours=LOOKBACK_HOURS),
         timeout=DISCOVERY_TIMEOUT_SECONDS,
     )
-    _stage("DISCOVERY_DONE", strict_markets=len(feed), strict_pairs=len(pairs), horizon_hours=HORIZON_HOURS)
+    _stage(
+        "DISCOVERY_DONE",
+        strict_markets=len(feed),
+        strict_pairs=len(pairs),
+        horizon_hours=HORIZON_HOURS,
+        lookback_hours=LOOKBACK_HOURS,
+    )
 
     _stage("BOOKS_START", markets=len(feed), timeout_seconds=BOOK_TIMEOUT_SECONDS)
     books, quote_health = await asyncio.wait_for(
@@ -107,6 +119,7 @@ async def run_once() -> dict[str, Any]:
             "discovery": discovery,
             "quote_health": quote_health,
             "horizon_hours": HORIZON_HOURS,
+            "lookback_hours": LOOKBACK_HOURS,
             "order_entry": False,
             "locked_execution": False,
             "realized": False,
@@ -144,6 +157,7 @@ async def run_once() -> dict[str, Any]:
                 "balance_response_present": bool(balances),
                 "max_attempts": MAX_ATTEMPTS,
                 "horizon_hours": HORIZON_HOURS,
+                "lookback_hours": LOOKBACK_HOURS,
                 "order_entry": False,
                 "locked_execution": False,
                 "realized": False,
@@ -244,6 +258,7 @@ async def run_once() -> dict[str, Any]:
             "shadow_only_candidates": len(shadow_only),
             "quote_health": quote_health,
             "horizon_hours": HORIZON_HOURS,
+            "lookback_hours": LOOKBACK_HOURS,
             "attempts": attempts,
             "attempt_count": len(attempts),
             "locked_execution": locked_execution,
