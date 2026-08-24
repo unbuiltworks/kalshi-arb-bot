@@ -1,0 +1,7 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "deploy": {
+    "startCommand": "python -m src.sports_poly_structural_live_supervisor",
+    "restartPolicyType": "NEVER"
+  }
+}
