@@ -19,6 +19,7 @@ import json
 import logging
 from typing import Any
 
+from src.sports_capacity_ledger import emit_capacity_rows
 from src.sports_capacity_math import CapacityDirection, CapacityLeg, evaluate_direction
 
 D = Decimal
@@ -207,8 +208,10 @@ def install(canary: Any) -> None:
                 (D(str(row.get("largest_qualifying_locked_profit") or "0")) for row in peak_positive),
                 D("0"),
             )
+            run_id = canary._run_id() if hasattr(canary, "_run_id") else "unknown"
+            ledger_ingest = await emit_capacity_rows(peak_positive, run_id=str(run_id or "unknown"))
             payload = {
-                "run_id": canary._run_id() if hasattr(canary, "_run_id") else None,
+                "run_id": run_id,
                 "rc": rc,
                 "error_type": error_type,
                 "stats": dict(stats),
@@ -229,6 +232,7 @@ def install(canary: Any) -> None:
                     "sum_per_pair_peak_locked_profit": str(peak_profit_sum),
                     "top_peak_rows": peak_positive[:10],
                     "latest_rows": list(capacity_latest.values())[:10],
+                    "command_center_ingest": ledger_ingest,
                     "execution_eligible": False,
                     "read_only": True,
                     "warning": (
