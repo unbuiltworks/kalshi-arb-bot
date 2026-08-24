@@ -1,8 +1,8 @@
 """Fail-closed certification for same-venue Polymarket MLB prop ladders.
 
-This module is read-only. It combines the strict semantic pair already produced by
-the MLB ladder builder with official MLB Stats participation evidence and live market
-metadata needed for q1 order construction.
+This module is read-only. It combines strict same-game/player/stat ladder identity,
+official MLB Stats participation evidence, live game state, and market-reported q1
+order metadata.
 
 Passing this gate does NOT mean guaranteed arbitrage: Polymarket's suspension/delay
 last-fair-market-price branch remains residual rule risk after participation.
@@ -45,7 +45,7 @@ async def certify_pairs(
     feed: Mapping[str, Mapping[str, Any]],
     pairs: list[tuple[str, str]],
 ) -> tuple[list[tuple[str, str]], dict[str, dict[str, Any]], dict[str, Any]]:
-    """Return participation+metadata-ready pairs and fail-closed diagnostics."""
+    """Return live participation+metadata-ready pairs and fail-closed diagnostics."""
     dates = {
         game[0]
         for low_slug, _ in pairs
@@ -85,6 +85,11 @@ async def certify_pairs(
             reasons["STRICT_IDENTITY_FAILED"] += 1
             continue
 
+        game_key = candidate_game(low_slug)
+        game = games.get(game_key) if game_key is not None else None
+        game_state = str((game or {}).get("status") or "").upper()
+        game_live = game_state == "LIVE"
+
         proof = participation_proof(
             family=lf,
             player_name=lp,
@@ -99,8 +104,11 @@ async def certify_pairs(
             low_meta["tick_ok"] and low_meta["q1_lot_ok"]
             and high_meta["tick_ok"] and high_meta["q1_lot_ok"]
         )
+        certified = bool(game_live and participation_ok and metadata_ok)
 
-        if not participation_ok:
+        if not game_live:
+            reasons["GAME_NOT_LIVE"] += 1
+        elif not participation_ok:
             reasons[assessment.required_gate] += 1
         elif not metadata_ok:
             reasons["TICK_OR_Q1_LOT_METADATA_FAILED"] += 1
@@ -113,13 +121,15 @@ async def certify_pairs(
             "high_slug": high_slug,
             "family": lf,
             "player": lp,
+            "game_state": game_state or "UNKNOWN",
+            "game_live": game_live,
             "participation": proof_dict(proof),
             "rule": assessment.as_dict(),
             "low_order_metadata": {k: str(v) if isinstance(v, D) else v for k, v in low_meta.items()},
             "high_order_metadata": {k: str(v) if isinstance(v, D) else v for k, v in high_meta.items()},
             "participation_ok": participation_ok,
             "metadata_ok": metadata_ok,
-            "certified_for_q1_transport": bool(participation_ok and metadata_ok),
+            "certified_for_q1_transport": certified,
             "guaranteed_arbitrage": False,
             "rule_classification": "LIVE_RULE_RISK_LFMP_SUSPENSION_NOT_GUARANTEED_ARBITRAGE",
             "order_entry": False,
