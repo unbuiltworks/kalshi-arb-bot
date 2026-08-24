@@ -1,9 +1,10 @@
 # Same-Gemini crypto threshold-ladder q=1 live canary.
+# Authoritative public REST books + private Gemini order/fill transport.
 # The old Gemini<->Kalshi XRP maker remains parked because it carries settlement-index basis risk.
 [build]
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python -m src.gemini_same_venue_crypto_maker_q1"
-preDeployCommand = ["python -m pytest -q tests/test_gemini_same_venue_crypto_ladder_scan.py tests/test_gemini_same_venue_crypto_maker_q1.py && python -m py_compile src/gemini_same_venue_crypto_ladder_scan.py src/gemini_same_venue_crypto_budget.py src/gemini_same_venue_crypto_maker_q1.py src/gemini_kalshi_execution_shadow.py src/gemini_kalshi_fast_overlap.py"]
+startCommand = "python -m src.gemini_same_venue_crypto_maker_q1_rest"
+preDeployCommand = ["python -m pytest -q tests/test_gemini_same_venue_crypto_ladder_scan.py tests/test_gemini_same_venue_crypto_maker_q1.py tests/test_gemini_same_venue_crypto_maker_q1_rest.py && python -m py_compile src/gemini_same_venue_crypto_ladder_scan.py src/gemini_same_venue_crypto_budget.py src/gemini_same_venue_crypto_maker_q1.py src/gemini_same_venue_crypto_maker_q1_rest.py src/gemini_kalshi_execution_shadow.py src/gemini_kalshi_fast_overlap.py"]
 restartPolicyType = "NEVER"
