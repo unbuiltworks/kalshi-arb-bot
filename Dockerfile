@@ -15,7 +15,8 @@ COPY tests/ tests/
 # player-prop normalization, direct Gemini<->Kalshi prop discovery, event-driven
 # prop/game hot layers, sportsbook identity alignment, read-only Pushover
 # qualification/dedupe, live MLB participation proof, fail-closed game/prop/team-total
-# rule certification, and public Gemini rule/terms auditing for matched MLB props.
+# rule certification, public Gemini rule/terms auditing for matched MLB props, and
+# funded-venue cross-threshold middle math that never upgrades shadow P/L to realized.
 RUN pytest -q \
     tests/test_universal_sports_identity.py \
     tests/test_gemini_sports_adapter.py \
@@ -27,6 +28,7 @@ RUN pytest -q \
     tests/test_gemini_kalshi_mlb_prop_shadow.py \
     tests/test_gemini_kalshi_mlb_prop_hot_shadow.py \
     tests/test_the_odds_api_mlb_shadow_identity.py \
+    tests/test_four_venue_threshold_middle.py \
     tests/test_sports_pushover_alerts.py \
     tests/test_sports_pushover_odds_api_mlb_reliability.py \
     tests/test_three_venue_mlb_prop_pushover.py \
@@ -49,6 +51,8 @@ RUN pytest -q \
     src/gemini_mlb_prop_ws_probe.py \
     src/gemini_mlb_prop_terms_probe.py \
     src/the_odds_api_mlb_shadow.py \
+    src/four_venue_threshold_middle.py \
+    src/four_venue_threshold_middle_shadow.py \
     src/mlb_game_rule_certifications.py \
     src/mlb_prop_rule_equivalence.py \
     src/mlb_prop_rule_certifications.py \
