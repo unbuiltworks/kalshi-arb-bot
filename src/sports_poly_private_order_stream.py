@@ -1,9 +1,16 @@
 """Private Polymarket order-state stream used by the structural q1 executor.
 
 The REST order API remains the mutation and final-reconciliation authority. This
-module only replaces high-frequency status polling while a maker is resting with
-the exchange's authenticated private order WebSocket. If the stream becomes
-unhealthy, callers can fall back to the existing exact REST path.
+module replaces high-frequency status polling while a maker is resting with the
+exchange's authenticated private order WebSocket.
+
+An empty account is allowed to subscribe without receiving an initial order
+snapshot.  In that case the first newly-created live order becomes a bounded
+bootstrap proof: until the private stream actually observes that order, exact REST
+is sampled at a low rate.  If the stream has not observed the order within three
+seconds, one final exact read is performed and the attempt raises so the caller
+scoped-cancels and hard-halts.  This prevents an apparently connected but silent
+WebSocket from leaving a filled maker unhedged for the full resting TTL.
 
 No credentials are stored here; the SDK reads the same environment credentials
 already used by the live executor.
@@ -12,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 from decimal import Decimal, InvalidOperation
+import os
 import time
 from typing import Any, Mapping
 
@@ -24,6 +32,9 @@ TERMINAL_STATES = {
     "ORDER_STATE_REJECTED",
     "ORDER_STATE_EXPIRED",
 }
+START_SNAPSHOT_GRACE_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_WS_SNAPSHOT_GRACE_SECONDS", "1.5"))
+BOOTSTRAP_REST_INTERVAL_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_WS_BOOTSTRAP_REST_INTERVAL_SECONDS", "0.75"))
+BOOTSTRAP_TIMEOUT_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_WS_BOOTSTRAP_TIMEOUT_SECONDS", "3.0"))
 
 
 def _first(row: Mapping[str, Any], *keys: str) -> Any:
@@ -42,6 +53,15 @@ def _decimal(value: Any) -> D | None:
         return D(str(value))
     except (InvalidOperation, ValueError, TypeError):
         return None
+
+
+def _unwrap_order(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    nested = value.get("order")
+    if isinstance(nested, Mapping):
+        return normalize_order(nested)
+    return normalize_order(value)
 
 
 def normalize_order(raw: Mapping[str, Any]) -> dict[str, Any]:
@@ -106,13 +126,26 @@ class PrivateOrderStream:
         self._events: dict[str, asyncio.Event] = {}
         self._snapshot = asyncio.Event()
         self._healthy = False
+        self._subscribed = False
+        self._initial_snapshot_seen = False
         self._error_type = ""
         self._updates = 0
         self._last_update_mono = 0.0
+        self._stream_seen_ids: set[str] = set()
+        self._bootstrap_started: dict[str, float] = {}
+        self._last_bootstrap_rest: dict[str, float] = {}
 
     @property
     def healthy(self) -> bool:
         return self._healthy
+
+    @property
+    def subscribed(self) -> bool:
+        return self._subscribed
+
+    @property
+    def initial_snapshot_seen(self) -> bool:
+        return self._initial_snapshot_seen
 
     @property
     def updates(self) -> int:
@@ -122,6 +155,9 @@ class PrivateOrderStream:
     def error_type(self) -> str:
         return self._error_type
 
+    def seen(self, order_id: str) -> bool:
+        return order_id in self._stream_seen_ids
+
     def _event_for(self, order_id: str) -> asyncio.Event:
         event = self._events.get(order_id)
         if event is None:
@@ -129,7 +165,7 @@ class PrivateOrderStream:
             self._events[order_id] = event
         return event
 
-    def _merge(self, order: Mapping[str, Any]) -> None:
+    def _merge(self, order: Mapping[str, Any], *, source: str) -> None:
         oid = str(_first(order, "id", "orderId", "order_id") or "")
         if not oid:
             return
@@ -138,20 +174,26 @@ class PrivateOrderStream:
         merged.update(normalize_order(order))
         merged["id"] = oid
         self.orders[oid] = merged
-        self._updates += 1
-        self._last_update_mono = time.monotonic()
+        if source == "stream":
+            self._stream_seen_ids.add(oid)
+            self._updates += 1
+            self._last_update_mono = time.monotonic()
         self._event_for(oid).set()
 
     def _on_snapshot(self, payload: Any) -> None:
         for order in _walk_orders(payload):
-            self._merge(order)
+            self._merge(order, source="stream")
         self._healthy = True
+        self._initial_snapshot_seen = True
         self._snapshot.set()
 
     def _on_update(self, payload: Any) -> None:
         for order in _walk_orders(payload):
-            self._merge(order)
+            self._merge(order, source="stream")
         self._healthy = True
+        # Some empty-account subscriptions may provide no snapshot.  A valid
+        # first update is equally strong proof that the subscription is live.
+        self._snapshot.set()
 
     def _on_error(self, error: Any) -> None:
         self._healthy = False
@@ -160,19 +202,25 @@ class PrivateOrderStream:
         for event in self._events.values():
             event.set()
 
-    async def start(self, *, snapshot_timeout: float = 8.0) -> None:
+    async def start(self, *, snapshot_timeout: float = START_SNAPSHOT_GRACE_SECONDS) -> None:
         self.ws = self.client.ws.private()
         self.ws.on("order_snapshot", self._on_snapshot)
         self.ws.on("order_update", self._on_update)
         self.ws.on("error", self._on_error)
         await self.ws.connect()
         await self.ws.subscribe("arb-structural-orders", "SUBSCRIPTION_TYPE_ORDER")
+        self._subscribed = True
+        self._healthy = True
         try:
             await asyncio.wait_for(self._snapshot.wait(), timeout=snapshot_timeout)
-        except asyncio.TimeoutError as exc:
-            self._healthy = False
-            self._error_type = "SnapshotTimeout"
-            raise RuntimeError("private order websocket snapshot timed out") from exc
+        except asyncio.TimeoutError:
+            # Empty accounts are allowed to have no initial order snapshot.  Do
+            # not declare the stream proven; the first created order must do that
+            # under the bounded bootstrap logic in wait_for_update().
+            if self._healthy:
+                self._error_type = "NO_INITIAL_SNAPSHOT_BOOTSTRAP_REQUIRED"
+                return
+            raise RuntimeError(f"private order websocket unhealthy: {self._error_type or 'unknown'}")
         if not self._healthy:
             raise RuntimeError(f"private order websocket unhealthy: {self._error_type or 'unknown'}")
 
@@ -191,6 +239,30 @@ class PrivateOrderStream:
         row = self.orders.get(order_id)
         return dict(row) if row else None
 
+    async def _bootstrap_rest_refresh(self, order_id: str, *, force: bool = False) -> dict[str, Any] | None:
+        now = time.monotonic()
+        last = self._last_bootstrap_rest.get(order_id, 0.0)
+        if not force and now - last < BOOTSTRAP_REST_INTERVAL_SECONDS:
+            return self.get(order_id)
+        self._last_bootstrap_rest[order_id] = now
+        try:
+            detail = await asyncio.to_thread(self.client.orders.retrieve, order_id)
+        except Exception as exc:
+            raise RuntimeError(f"private ws bootstrap exact read failed: {type(exc).__name__}") from exc
+        order = _unwrap_order(detail)
+        if order:
+            order.setdefault("id", order_id)
+            self._merge(order, source="rest")
+        return self.get(order_id)
+
+    @staticmethod
+    def _has_fill_or_terminal(order: Mapping[str, Any] | None) -> bool:
+        if not isinstance(order, Mapping):
+            return False
+        cum = _decimal(order.get("cumQuantity")) or D("0")
+        state = str(order.get("state") or "")
+        return cum > 0 or state in TERMINAL_STATES
+
     async def wait_for_update(self, order_id: str, timeout: float) -> dict[str, Any] | None:
         event = self._event_for(order_id)
         event.clear()
@@ -198,7 +270,29 @@ class PrivateOrderStream:
             await asyncio.wait_for(event.wait(), timeout=timeout)
         except asyncio.TimeoutError:
             pass
-        return self.get(order_id)
+
+        current = self.get(order_id)
+        if self.seen(order_id):
+            return current
+        if not self._healthy:
+            return current
+
+        now = time.monotonic()
+        started = self._bootstrap_started.setdefault(order_id, now)
+        current = await self._bootstrap_rest_refresh(order_id)
+        if self._has_fill_or_terminal(current):
+            return current
+        if self.seen(order_id):
+            return self.get(order_id)
+
+        if now - started >= BOOTSTRAP_TIMEOUT_SECONDS:
+            current = await self._bootstrap_rest_refresh(order_id, force=True)
+            if self._has_fill_or_terminal(current):
+                return current
+            if self.seen(order_id):
+                return self.get(order_id)
+            raise RuntimeError("private order websocket did not observe new order during bootstrap")
+        return current
 
     async def wait_terminal(self, order_id: str, timeout: float) -> dict[str, Any] | None:
         deadline = time.monotonic() + timeout
