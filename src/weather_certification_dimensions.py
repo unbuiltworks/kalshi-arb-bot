@@ -84,6 +84,24 @@ def _model_evidence_verified(row: dict[str, Any]) -> bool:
     return probability_ok and all(row.get(k) is True for k in ("model_sanity_verified", "model_provider_provenance_verified", "local_day_binding_verified", "forecast_valid_local_day_verified", "anchor_valid_local_day_verified", "model_run_quote_time_verified"))
 
 
+def _settlement_identity_semantics_verified(row: dict[str, Any]) -> bool:
+    """Require affirmative exact-contract identity semantics, not just no blockers.
+
+    The source audit proves which official terminal source applies to the exact market.
+    It does not by itself prove the producer independently verified the station mapping,
+    local-day definition, and exact bracket/tail semantics used by that contract. These
+    fields therefore must survive as literal booleans into the canonical report.
+    """
+    return all(
+        row.get(key) is True
+        for key in (
+            "station_identity_verified",
+            "local_day_verified",
+            "bracket_semantics_verified",
+        )
+    )
+
+
 def _exact_market_source_audit(row: dict[str, Any]) -> dict[str, Any]:
     """Re-run exact-market settlement provenance instead of trusting producer booleans."""
     return audit_exact_market_source(
@@ -114,6 +132,10 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
     if exact_market_source.get("verified") is not True:
         settlement.extend(exact_market_source.get("blockers") or ["EXACT_MARKET_SOURCE_AUDIT_REQUIRED"])
     if row.get("exact_market_source_verified") is not True: settlement.append("EXACT_MARKET_SOURCE_AUDIT_REQUIRED")
+    identity_semantics_verified = _settlement_identity_semantics_verified(row)
+    if row.get("station_identity_verified") is not True: settlement.append("STATION_IDENTITY_EVIDENCE_REQUIRED")
+    if row.get("local_day_verified") is not True: settlement.append("LOCAL_DAY_EVIDENCE_REQUIRED")
+    if row.get("bracket_semantics_verified") is not True: settlement.append("BRACKET_SEMANTICS_EVIDENCE_REQUIRED")
     if row.get("settlement_certified_shadow") is not True: settlement.append("SETTLEMENT_CERTIFICATION_EVIDENCE_REQUIRED")
     settlement = sorted(set(settlement))
 
@@ -136,6 +158,7 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
         "category": "weather", "classification": "SHADOW", "blocker_telemetry_verified": telemetry_verified,
         "blocker_source": blocker_audit.get("blocker_source"), "settlement_rules_provenance_verified": settlement_ok,
         "exact_market_source_audit_verified": exact_market_source.get("verified") is True,
+        "settlement_identity_semantics_verified": identity_semantics_verified,
         "market_data_verified": market_ok, "quote_freshness_binding_verified": freshness.get("quote_freshness_binding_verified") is True,
         "derived_quote_age_ms": freshness.get("derived_quote_age_ms"), "fee_economics_verified": fee_ok,
         "fee_resolution_binding_verified": fee_binding.get("fee_resolution_binding_verified") is True, "model_probability_verified": model_ok,
