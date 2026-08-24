@@ -27,10 +27,16 @@ def test_near_touch_beats_far_high_volume_market() -> None:
     assert _near_touch_activity_sort_key(near_dead) < _near_touch_activity_sort_key(far_active)
 
 
-def test_activity_breaks_ties_inside_near_touch_bucket() -> None:
-    near_active = _row(gap="0.01", maker="100", hedge="80")
-    near_dead = _row(gap="0.01", maker="0", hedge="0")
-    assert _near_touch_activity_sort_key(near_active) < _near_touch_activity_sort_key(near_dead)
+def test_closer_far_quote_beats_more_active_far_quote() -> None:
+    closer_dead = _row(gap="0.02", maker="0", hedge="0")
+    far_active = _row(gap="0.18", maker="10000", hedge="10000")
+    assert _near_touch_activity_sort_key(closer_dead) < _near_touch_activity_sort_key(far_active)
+
+
+def test_activity_breaks_ties_at_same_price_distance() -> None:
+    active = _row(gap="0.01", maker="100", hedge="80")
+    dead = _row(gap="0.01", maker="0", hedge="0")
+    assert _near_touch_activity_sort_key(active) < _near_touch_activity_sort_key(dead)
 
 
 def test_configure_makes_timer_non_operational_for_normal_mlb_lifecycle() -> None:
