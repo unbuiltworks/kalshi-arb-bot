@@ -2,8 +2,14 @@
 
 For every exact same-event/source/expiry HI threshold pair L < H:
 BUY YES(L) + BUY NO(H) has a deterministic payout floor of $1. Adjacency is not
-required. This module is discovery only; execution/recovery remains owned by the
-hardened taker q1 transport.
+required. Every contract admitted by ladder_contracts is q=1-compatible: its
+minimum is <=1 and its quantity increment divides 1 exactly.
+
+Unlike the resting maker lane, this immediate lane does NOT require quantityMinimum
+and quantityIncrement both equal 1. Gemini documents FOK as full-fill-or-full-cancel
+with no partial fills, so q=1 is safe on fractional-grid contracts as long as q=1 is
+valid for the instrument. Execution/recovery remains owned by the hardened taker q1
+transport and still fail-closes on any unexpected state.
 """
 from __future__ import annotations
 
@@ -24,22 +30,22 @@ TARGET = D("0.03")
 async def discover() -> tuple[dict[str, Any] | None, dict[str, Any]]:
     async with httpx.AsyncClient(timeout=20.0) as http:
         events = await _gemini_active_crypto(http)
+        # ladder_contracts already enforces exact same source/expiry within the event
+        # and q1 compatibility (_q1_ok). Do not apply maker-only whole-contract rules.
         strict = [(event, scan.ladder_contracts(event)) for event in events]
-        symbols = {
-            scan._symbol(c)
-            for _, contracts in strict
-            for c in contracts
-            if base.live.base.whole_contract_only(c)
-        }
+        symbols = {scan._symbol(c) for _, contracts in strict for c in contracts}
         books, statuses = await scan._books(http, symbols)
 
     rows: list[dict[str, Any]] = []
     adjacent_count = 0
     pair_count = 0
-    for event, contracts0 in strict:
-        contracts = [c for c in contracts0 if base.live.base.whole_contract_only(c)]
+    contract_count = 0
+    fractional_grid_contracts = 0
+    for event, contracts in strict:
         if len(contracts) < 2:
             continue
+        contract_count += len(contracts)
+        fractional_grid_contracts += sum(1 for c in contracts if not base.live.base.whole_contract_only(c))
         adjacent_count += len(contracts) - 1
         pairs = scan.monotone_pairs(contracts)
         pair_count += len(pairs)
@@ -79,7 +85,7 @@ async def discover() -> tuple[dict[str, Any] | None, dict[str, Any]]:
                 "event_liquidity": str(event.get("liquidity") or "0"),
                 "classification": base.CLASSIFICATION,
                 "guaranteed_payout_floor_before_fees": "1",
-                "pair_scope": "ALL_CERTIFIED_L_LT_H",
+                "pair_scope": "ALL_Q1_COMPATIBLE_CERTIFIED_L_LT_H",
                 "realized": False,
             })
 
@@ -90,12 +96,14 @@ async def discover() -> tuple[dict[str, Any] | None, dict[str, Any]]:
         -D(str(r.get("event_volume") or "0")),
     ))
     diag = {
+        "q1_compatible_contracts": contract_count,
+        "fractional_grid_contracts_included_for_fok": fractional_grid_contracts,
         "strict_adjacent_pairs": adjacent_count,
         "strict_monotone_pairs": pair_count,
         "books_requested": len(symbols),
         "books_ok": sum(1 for s in symbols if statuses.get(s) == 200),
         "taker_taker_3c_candidates": len(rows),
-        "pair_scope": "ALL_CERTIFIED_L_LT_H",
+        "pair_scope": "ALL_Q1_COMPATIBLE_CERTIFIED_L_LT_H",
         "top": rows[:5],
         "order_entry": False,
         "realized": False,
