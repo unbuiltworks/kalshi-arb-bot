@@ -5,6 +5,9 @@ threshold rule, capital limit, or transport. It observes the already-existing
 threshold-dominance probe and writes one deduplicated non-P&L ledger row per
 asset/window/direction/blocker. Database/telemetry failure is swallowed and cannot
 change the underlying probe result.
+
+It also installs read-only Gemini-maker/Kalshi-taker feasibility telemetry before the
+normal taker/taker >=3c gate. That diagnostic cannot submit or authorize an order.
 """
 from __future__ import annotations
 
@@ -17,6 +20,7 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
+from src import gemini_kalshi_basis_risk_maker_shadow as maker_shadow
 from src import gemini_kalshi_basis_risk_q1_child as child
 from src import gemini_kalshi_basis_risk_q1_child_v2 as child_v2
 
@@ -122,6 +126,7 @@ def persist_observation_best_effort(payload: dict[str, Any]) -> bool:
 
 def _install_dominance_probe_with_telemetry(min_gap_bps: Decimal) -> None:
     _ORIGINAL_INSTALL_DOMINANCE(min_gap_bps)
+    maker_shadow.install(min_gap_bps=min_gap_bps)
     exact = child.v2.readiness.exact
     original_probe = exact._probe
 
