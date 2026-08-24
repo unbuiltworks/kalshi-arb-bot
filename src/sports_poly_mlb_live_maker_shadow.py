@@ -15,7 +15,7 @@ NOT guaranteed arbitrage. No authentication or mutation code is imported.
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_FLOOR
 import json
@@ -28,7 +28,6 @@ from src.mlb_live_participation import (
     candidate_game,
     fetch_game_boxscores,
     participation_proof,
-    proof_dict,
 )
 from src.mlb_prop_rule_equivalence import assess_rule_equivalence
 from src.sports_poly_current_fees import maker_then_taker_locked_profit
@@ -42,6 +41,7 @@ BASE = "https://gateway.polymarket.us"
 PAGE = 100
 MAX_PAGES = 50
 DISCOVERY_SECONDS = max(60.0, float(os.getenv("SPORTS_POLY_MLB_MAKER_DISCOVERY_SECONDS", "180")))
+PARTICIPATION_SECONDS = max(5.0, float(os.getenv("SPORTS_POLY_MLB_PARTICIPATION_SECONDS", "5")))
 HOT_SECONDS = max(1.0, float(os.getenv("SPORTS_POLY_MLB_MAKER_HOT_SECONDS", "2")))
 
 
@@ -91,7 +91,6 @@ def _safe_quote(
             best = px
             best_econ = econ
         else:
-            # Higher maker prices only worsen locked profit.
             break
     if best is None or best_econ is None:
         return None
@@ -197,30 +196,29 @@ async def _participation(
         return [], {"error": f"{type(exc).__name__}: {str(exc)[:240]}"}
 
     ready: list[dict[str, Any]] = []
-    assessments: list[dict[str, Any]] = []
+    status_counts: Counter[str] = Counter()
+    gate_counts: Counter[str] = Counter()
     for row in rows:
+        family = str(row.get("family") or "")
         proof = participation_proof(
-            family=str(row.get("family") or ""),
+            family=family,
             player_name=str(row.get("player") or ""),
             poly_slug=str(row.get("maker_slug") or ""),
             games=games,
         )
-        assessment = assess_rule_equivalence(str(row.get("family") or ""), proof)
-        assessment_row = {
-            "key": _candidate_key(row),
-            "player": row.get("player"),
-            "family": row.get("family"),
-            "maker_slug": row.get("maker_slug"),
-            "hedge_slug": row.get("hedge_slug"),
-            "proof": proof_dict(proof),
-            "rule": assessment.as_dict(),
-        }
-        assessments.append(assessment_row)
+        assessment = assess_rule_equivalence(family, proof)
+        status_counts[assessment.status.value] += 1
+        gate_counts[assessment.required_gate] += 1
         if assessment.settlement_equivalent_now:
-            ready.append(dict(row))
+            ready_row = dict(row)
+            ready_row["participation_proof_source"] = proof.source
+            ready.append(ready_row)
     return ready, {
         "games_with_live_or_final_boxscore": len(games),
-        "assessments": assessments[:50],
+        "assessed": len(rows),
+        "ready": len(ready),
+        "status_counts": dict(status_counts),
+        "gate_counts": dict(gate_counts),
     }
 
 
@@ -228,7 +226,11 @@ async def main() -> None:
     state: dict[str, dict[str, Any]] = defaultdict(dict)
     candidates: list[dict[str, Any]] = []
     metadata: dict[str, dict[str, Any]] = {}
+    ready: list[dict[str, Any]] = []
+    participation_diag: dict[str, Any] = {"assessed": 0, "ready": 0}
+    ready_keys: set[str] = set()
     next_discovery = 0.0
+    next_participation = 0.0
     cycle = 0
 
     timeout = httpx.Timeout(12.0)
@@ -248,6 +250,7 @@ async def main() -> None:
                     }
                     metadata = await _market_metadata(http, slugs)
                     next_discovery = loop.time() + DISCOVERY_SECONDS
+                    next_participation = 0.0
                     print(
                         "SPORTS_POLY_MLB_LIVE_MAKER_DISCOVERY "
                         + json.dumps(
@@ -256,6 +259,7 @@ async def main() -> None:
                                 "safe_discovery_candidates": len(candidates),
                                 "metadata_slugs": len(metadata),
                                 "discovery_seconds": DISCOVERY_SECONDS,
+                                "participation_seconds": PARTICIPATION_SECONDS,
                                 "hot_seconds": HOT_SECONDS,
                                 "order_entry": False,
                             },
@@ -269,15 +273,37 @@ async def main() -> None:
                         + json.dumps({"error": f"{type(exc).__name__}: {str(exc)[:300]}", "order_entry": False}),
                         flush=True,
                     )
-                    await asyncio.sleep(HOT_SECONDS)
+                    await asyncio.sleep(PARTICIPATION_SECONDS)
                     continue
 
-            ready, participation_diag = await _participation(http, candidates)
+            now_mono = loop.time()
+            if now_mono >= next_participation:
+                ready, participation_diag = await _participation(http, candidates)
+                next_participation = loop.time() + PARTICIPATION_SECONDS
+                new_ready_keys = {_candidate_key(row) for row in ready}
+                if new_ready_keys != ready_keys:
+                    entered = sorted(new_ready_keys - ready_keys)
+                    exited = sorted(ready_keys - new_ready_keys)
+                    print(
+                        "SPORTS_POLY_MLB_PARTICIPATION_TRANSITION "
+                        + json.dumps(
+                            {
+                                "observed_at": datetime.now(timezone.utc).isoformat(),
+                                "ready": len(new_ready_keys),
+                                "entered": entered[:25],
+                                "exited": exited[:25],
+                                "order_entry": False,
+                            },
+                            separators=(",", ":"),
+                        ),
+                        flush=True,
+                    )
+                    ready_keys = new_ready_keys
+
             hot_rows: list[dict[str, Any]] = []
             near_touch = 0
             crossed = 0
             safe_now = 0
-
             sem = asyncio.Semaphore(10)
 
             async def price(row: dict[str, Any]) -> dict[str, Any] | None:
@@ -343,7 +369,7 @@ async def main() -> None:
 
             cycle += 1
             summary = {
-                "status": "SPORTS_POLY_MLB_LIVE_MAKER_SHADOW_V1",
+                "status": "SPORTS_POLY_MLB_LIVE_MAKER_SHADOW_V2",
                 "observed_at": datetime.now(timezone.utc).isoformat(),
                 "cycle": cycle,
                 "discovery_candidates": len(candidates),
@@ -377,7 +403,7 @@ async def main() -> None:
                 + json.dumps(summary, separators=(",", ":"), default=str),
                 flush=True,
             )
-            await asyncio.sleep(HOT_SECONDS)
+            await asyncio.sleep(HOT_SECONDS if ready else PARTICIPATION_SECONDS)
 
 
 if __name__ == "__main__":
