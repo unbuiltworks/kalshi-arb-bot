@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+
 from src import gemini_kalshi_xrp_maker_reprice_campaign as campaign
 
 
@@ -29,3 +32,14 @@ def test_safe_to_continue_stops_on_fill_or_hard_halt():
     assert not campaign.safe_to_continue({"status": "BOTH_FILLED_RECONCILED_NOT_SETTLED", "filled_quantity": "1"})
     assert not campaign.safe_to_continue({"status": "FIRST_FILL_BELOW_3C_FLATTENED_HARD_HALT", "filled_quantity": "0.25"})
     assert not campaign.safe_to_continue({"status": "HARD_HALT_EXCEPTION"})
+
+
+def test_select_viable_pair_skips_expiring_current_window():
+    now = datetime(2026, 8, 24, 17, 14, 0, tzinfo=timezone.utc)
+    expiring = SimpleNamespace(asset="XRP", window_end=now + timedelta(seconds=60))
+    next_window = SimpleNamespace(asset="XRP", window_end=now + timedelta(minutes=16))
+    other_asset = SimpleNamespace(asset="SOL", window_end=now + timedelta(minutes=15))
+    chosen = campaign.select_viable_pair(
+        [expiring, other_asset, next_window], now_ts=now.timestamp()
+    )
+    assert chosen is next_window
