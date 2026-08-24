@@ -40,10 +40,10 @@ def _book_geometry(direction: str, g: Any, k: Any) -> tuple[Decimal, Decimal, De
     raise ValueError(direction)
 
 
-def _should_log(key: tuple[str, str], state: tuple[Any, ...], *, feasible: bool) -> bool:
+def _should_log(key: tuple[str, str], state: tuple[Any, ...], *, economically_feasible: bool) -> bool:
     now = time.monotonic()
     prior = _LAST_LOG.get(key)
-    interval = 2.0 if feasible else 10.0
+    interval = 2.0 if economically_feasible else 10.0
     if prior is not None and prior[0] == state and now - prior[1] < interval:
         return False
     _LAST_LOG[key] = (state, now)
@@ -94,9 +94,6 @@ def _observe(*, feed: Any, event: Any, kalshi_fee: Any, min_gap_bps: Decimal) ->
             kalshi_target=target_value,
             min_gap_bps=min_gap_bps,
         )
-        if not auth.get("authorized"):
-            continue
-
         maker_bid, maker_ask, hedge_ask, hedge_depth = _book_geometry(direction, g, k)
         if not (D("0") < maker_bid < D("1") and D("0") < maker_ask < D("1") and D("0") < hedge_ask < D("1")):
             continue
@@ -104,11 +101,13 @@ def _observe(*, feed: Any, event: Any, kalshi_fee: Any, min_gap_bps: Decimal) ->
         hedge_fee = D(kalshi_fee(hedge_ask, D("1")))
         total_cost = maker_bid + maker_fee + hedge_ask + hedge_fee
         locked_profit = D("1") - total_cost
-        feasible = bool(
+        economically_feasible = bool(
             maker_bid < maker_ask
             and hedge_depth >= D("1")
             and locked_profit >= MIN_LOCKED_PROFIT
         )
+        dominance_safe = bool(auth.get("authorized"))
+        live_candidate_shadow = bool(dominance_safe and economically_feasible)
         taker_to_bid_improvement = maker_ask - maker_bid
         floor_headroom = locked_profit - MIN_LOCKED_PROFIT
         payload = {
@@ -119,7 +118,9 @@ def _observe(*, feed: Any, event: Any, kalshi_fee: Any, min_gap_bps: Decimal) ->
             "basis_window_end_utc": snapshot.get("basis_window_end_utc"),
             "threshold_gap_bps": auth.get("threshold_gap_bps"),
             "threshold_gap_abs_bps": auth.get("threshold_gap_abs_bps"),
-            "dominance_safe": True,
+            "dominance_safe": dominance_safe,
+            "dominance_blocker": auth.get("blocker"),
+            "configured_min_gap_bps": str(min_gap_bps),
             "gemini_passive_quote_source": "CURRENT_BEST_BID_VALID_PRICE",
             "gemini_maker_bid": str(maker_bid),
             "gemini_maker_ask": str(maker_ask),
@@ -137,7 +138,8 @@ def _observe(*, feed: Any, event: Any, kalshi_fee: Any, min_gap_bps: Decimal) ->
             "kalshi_age_ms": kalshi_age_ms,
             "post_activation_books": post_activation,
             "fresh_250ms_and_50ms_skew": fresh,
-            "maker_join_bid_preserves_3c": feasible,
+            "maker_join_bid_preserves_3c": economically_feasible,
+            "dominance_and_maker_feasible": live_candidate_shadow,
             "classification": "LIVE_BASIS_RISK_MAKER_FEASIBILITY_SHADOW",
             "guaranteed_arb": False,
             "trade_authorized": False,
@@ -146,11 +148,11 @@ def _observe(*, feed: Any, event: Any, kalshi_fee: Any, min_gap_bps: Decimal) ->
         }
         state = (
             str(maker_bid), str(maker_ask), str(hedge_ask), str(hedge_depth),
-            str(locked_profit), str(auth.get("threshold_gap_abs_bps")), feasible,
-            snapshot.get("basis_window_end_utc"),
+            str(locked_profit), str(auth.get("threshold_gap_abs_bps")),
+            dominance_safe, economically_feasible, snapshot.get("basis_window_end_utc"),
         )
         key = (str(feed.asset), direction)
-        if _should_log(key, state, feasible=feasible):
+        if _should_log(key, state, economically_feasible=economically_feasible):
             logger.warning("CRYPTO_BASIS_MAKER_FEASIBILITY %s", json.dumps(payload, separators=(",", ":"), default=str))
 
 
