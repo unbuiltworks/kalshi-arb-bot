@@ -1,15 +1,14 @@
 """Read-only Gemini-maker/Kalshi-taker feasibility telemetry for basis-risk q1.
 
-This module deliberately cannot place, cancel, or modify orders.  It observes the
+This module deliberately cannot place, cancel, or modify orders. It observes the
 same synchronized books and threshold-dominance context as the isolated basis-risk
-process, but evaluates a passive Gemini quote at the *existing valid best bid* before
+process, but evaluates a passive Gemini quote at the existing valid best bid before
 the normal taker/taker >=3c candidate gate.
 
-Why best bid rather than inventing a price increment: the visible bid is known to be
-a valid instrument price.  If joining that bid cannot preserve the existing $0.03
-after-fee floor against the current Kalshi taker hedge, no more-aggressive Gemini
-maker quote can preserve it either.  If it can, the live maker->hedge transport still
-requires a separate reviewed implementation and fill-time hedge revalidation.
+The hook wraps ``basis_execution_revalidation._SAFE_EVALUATE`` because that function
+is invoked on every hot evaluation *before* ``_small_q_candidates`` applies the
+normal taker/taker economics gate. This lets us measure whether maker pricing could
+create the missing price improvement without changing live authorization.
 """
 from __future__ import annotations
 
@@ -32,7 +31,6 @@ _LAST_LOG: dict[tuple[str, str], tuple[tuple[Any, ...], float]] = {}
 
 
 def _book_geometry(direction: str, g: Any, k: Any) -> tuple[Decimal, Decimal, Decimal, Decimal]:
-    """Return Gemini maker bid/ask and Kalshi taker hedge ask/depth in outcome space."""
     if direction == "GEMINI_YES_KALSHI_NO":
         return D(g.yes_bid), D(g.yes_ask), D(k.no_ask), D(k.no_ask_size)
     if direction == "KALSHI_YES_GEMINI_NO":
@@ -73,8 +71,7 @@ def _observe(*, feed: Any, event: Any, kalshi_fee: Any, min_gap_bps: Decimal) ->
         return
 
     readiness = child.v2.readiness
-    basis = readiness.basis
-    snapshot = basis.basis_snapshot(feed.asset, now_ms)
+    snapshot = readiness.basis.basis_snapshot(feed.asset, now_ms)
     if snapshot is None:
         return
     target_info = readiness._KALSHI_TARGETS.get(feed.asset)
@@ -108,8 +105,6 @@ def _observe(*, feed: Any, event: Any, kalshi_fee: Any, min_gap_bps: Decimal) ->
         )
         dominance_safe = bool(auth.get("authorized"))
         live_candidate_shadow = bool(dominance_safe and economically_feasible)
-        taker_to_bid_improvement = maker_ask - maker_bid
-        floor_headroom = locked_profit - MIN_LOCKED_PROFIT
         payload = {
             "asset": feed.asset,
             "direction": direction,
@@ -131,8 +126,8 @@ def _observe(*, feed: Any, event: Any, kalshi_fee: Any, min_gap_bps: Decimal) ->
             "hypothetical_total_cost": str(total_cost),
             "hypothetical_locked_profit": str(locked_profit),
             "minimum_locked_profit": str(MIN_LOCKED_PROFIT),
-            "floor_headroom": str(floor_headroom),
-            "taker_ask_to_passive_bid_improvement": str(taker_to_bid_improvement),
+            "floor_headroom": str(locked_profit - MIN_LOCKED_PROFIT),
+            "taker_ask_to_passive_bid_improvement": str(maker_ask - maker_bid),
             "quote_skew_ms": quote_skew_ms,
             "gemini_age_ms": gemini_age_ms,
             "kalshi_age_ms": kalshi_age_ms,
@@ -161,11 +156,10 @@ def install(*, min_gap_bps: Decimal) -> None:
     if _INSTALLED:
         return
     exact = child.v2.readiness.exact
-    base = exact.base
-    original_evaluate = base._evaluate_event
+    original_safe_evaluate = exact._SAFE_EVALUATE
 
-    def evaluate_with_maker_shadow(*args: Any, **kwargs: Any):
-        result = original_evaluate(*args, **kwargs)
+    def safe_evaluate_with_maker_shadow(*args: Any, **kwargs: Any):
+        result = original_safe_evaluate(*args, **kwargs)
         try:
             feed = kwargs.get("feed")
             event = kwargs.get("event")
@@ -178,14 +172,13 @@ def install(*, min_gap_bps: Decimal) -> None:
                     min_gap_bps=D(min_gap_bps),
                 )
         except Exception as exc:
-            # Diagnostics must never alter live authorization or execution behavior.
             logger.warning("CRYPTO_BASIS_MAKER_FEASIBILITY_ERROR type=%s", type(exc).__name__)
         return result
 
-    base._evaluate_event = evaluate_with_maker_shadow
+    exact._SAFE_EVALUATE = safe_evaluate_with_maker_shadow
     _INSTALLED = True
     logger.warning(
-        "CRYPTO_BASIS_MAKER_FEASIBILITY_INSTALLED passive_quote=current_best_bid "
-        "gemini_fee=maker kalshi_hedge=taker q=1 min_profit=0.03 "
+        "CRYPTO_BASIS_MAKER_FEASIBILITY_INSTALLED hook=exact_safe_evaluate_pre_taker_gate "
+        "passive_quote=current_best_bid gemini_fee=maker kalshi_hedge=taker q=1 min_profit=0.03 "
         "execution_gates_changed=false trade_authorized=false order_entry=false"
     )
