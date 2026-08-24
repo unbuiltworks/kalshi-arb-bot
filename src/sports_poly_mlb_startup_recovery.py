@@ -37,8 +37,10 @@ def _parse_ts(value: Any) -> datetime | None:
 
 def _trade_ts(row: Mapping[str, Any]) -> datetime | None:
     for key in (
+        "latest_event_ts",
         "event_ts",
         "last_event_ts",
+        "submitted_at",
         "updated_at",
         "updatedAt",
         "created_at",
@@ -119,14 +121,10 @@ async def recover_unresolved_mlb_reservation() -> dict[str, Any]:
         timeout=8.0,
     )
     try:
-        # Cancellation is safe even if the ambiguous create never reached the exchange.
-        # Do not infer zero fill from cancellation; activity history is authoritative.
         for slug in (maker_slug, hedge_slug):
             try:
                 await asyncio.to_thread(client.orders.cancel_all, {"marketSlug": slug})
             except Exception:
-                # A cancel failure is not itself proof of exposure; the verification
-                # reads below decide whether startup may proceed.
                 pass
 
         await asyncio.sleep(0.75)
