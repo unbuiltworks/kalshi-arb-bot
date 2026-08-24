@@ -9,17 +9,26 @@ The hook wraps ``basis_execution_revalidation._SAFE_EVALUATE`` because that func
 is invoked on every hot evaluation *before* ``_small_q_candidates`` applies the
 normal taker/taker economics gate. This lets us measure whether maker pricing could
 create the missing price improvement without changing live authorization.
+
+For every live Gemini instrument observed, public event metadata is also fetched and
+logged once.  A future q=1 maker promotion must refuse mutation unless quantity=1 is
+aligned to the exact contract quantityMinimum/quantityIncrement and the price is
+aligned to priceMinimum/priceIncrement.  The metadata fetch itself is public/read-only.
 """
 from __future__ import annotations
 
+import asyncio
 from decimal import Decimal
 import json
 import logging
 import time
 from typing import Any
 
+import httpx
+
 from src import gemini_kalshi_basis_risk_q1_child as child
 from src.gemini_kalshi_execution_shadow import gemini_predictions_maker_fee
+from src.gemini_kalshi_fast_overlap import _gemini_active_crypto
 
 D = Decimal
 MIN_LOCKED_PROFIT = D("0.03")
@@ -28,6 +37,8 @@ MAX_BOOK_AGE_MS = 250
 logger = logging.getLogger("kalshi_arb.gemini_kalshi_basis_risk_maker_shadow")
 _INSTALLED = False
 _LAST_LOG: dict[tuple[str, str], tuple[tuple[Any, ...], float]] = {}
+_META: dict[str, dict[str, Any] | None] = {}
+_META_TASKS: set[str] = set()
 
 
 def _book_geometry(direction: str, g: Any, k: Any) -> tuple[Decimal, Decimal, Decimal, Decimal]:
@@ -48,10 +59,99 @@ def _should_log(key: tuple[str, str], state: tuple[Any, ...], *, economically_fe
     return True
 
 
+def _aligned(value: Decimal, *, minimum: Decimal, increment: Decimal) -> bool:
+    if increment <= 0 or value < minimum:
+        return False
+    return (value - minimum) % increment == 0
+
+
+def _contract_meta(contract: dict[str, Any]) -> dict[str, Any]:
+    q_inc = D(str(contract.get("quantityIncrement") or "0"))
+    q_min = D(str(contract.get("quantityMinimum") or "0"))
+    p_inc = D(str(contract.get("priceIncrement") or "0"))
+    p_min = D(str(contract.get("priceMinimum") or "0"))
+    quantity_one_aligned = _aligned(D("1"), minimum=q_min, increment=q_inc)
+    # q=1 is indivisible only when the permitted quantity grid cannot express a
+    # positive fill smaller than one contract.  This first maker canary refuses
+    # fractional-fill instruments even if quantity=1 itself is a valid order size.
+    quantity_one_indivisible = bool(quantity_one_aligned and q_inc >= D("1"))
+    return {
+        "instrumentSymbol": str(contract.get("instrumentSymbol") or contract.get("instrument_symbol") or ""),
+        "status": contract.get("status"),
+        "marketState": contract.get("marketState"),
+        "quantityIncrement": str(q_inc),
+        "quantityMinimum": str(q_min),
+        "priceIncrement": str(p_inc),
+        "priceMinimum": str(p_min),
+        "quantity_one_aligned": quantity_one_aligned,
+        "quantity_one_indivisible": quantity_one_indivisible,
+        "maker_live_q1_metadata_gate": bool(
+            quantity_one_indivisible
+            and p_inc > 0
+            and p_min > 0
+            and str(contract.get("marketState") or "").lower() == "open"
+        ),
+    }
+
+
+async def _fetch_metadata(symbol: str) -> None:
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as http:
+            events = await _gemini_active_crypto(http)
+        found = None
+        for event in events:
+            for contract in event.get("contracts") or []:
+                if not isinstance(contract, dict):
+                    continue
+                candidate = str(contract.get("instrumentSymbol") or contract.get("instrument_symbol") or "")
+                if candidate == symbol:
+                    found = _contract_meta(contract)
+                    break
+            if found is not None:
+                break
+        _META[symbol] = found
+        logger.warning(
+            "CRYPTO_BASIS_MAKER_CONTRACT_METADATA %s",
+            json.dumps({
+                "symbol": symbol,
+                "found": found is not None,
+                "metadata": found,
+                "trade_authorized": False,
+                "order_entry": False,
+            }, separators=(",", ":"), default=str),
+        )
+    except Exception as exc:
+        _META[symbol] = None
+        logger.warning(
+            "CRYPTO_BASIS_MAKER_CONTRACT_METADATA_ERROR symbol=%s type=%s",
+            symbol, type(exc).__name__,
+        )
+    finally:
+        _META_TASKS.discard(symbol)
+
+
+def _ensure_metadata(symbol: str) -> None:
+    if not symbol or symbol in _META or symbol in _META_TASKS:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    _META_TASKS.add(symbol)
+    loop.create_task(_fetch_metadata(symbol))
+
+
+def contract_metadata(symbol: str) -> dict[str, Any] | None:
+    """Expose the verified public contract grid to the future live maker module."""
+    value = _META.get(str(symbol))
+    return dict(value) if isinstance(value, dict) else None
+
+
 def _observe(*, feed: Any, event: Any, kalshi_fee: Any, min_gap_bps: Decimal) -> None:
     event_ms = int(event[1])
     if event_ms < int(feed.boundary_ms):
         return
+    _ensure_metadata(str(feed.pair.gemini_symbol))
     g = getattr(feed, "eval_gemini", None)
     k = getattr(feed, "eval_kalshi", None)
     if g is None or k is None:
@@ -105,6 +205,7 @@ def _observe(*, feed: Any, event: Any, kalshi_fee: Any, min_gap_bps: Decimal) ->
         )
         dominance_safe = bool(auth.get("authorized"))
         live_candidate_shadow = bool(dominance_safe and economically_feasible)
+        metadata = contract_metadata(str(feed.pair.gemini_symbol))
         payload = {
             "asset": feed.asset,
             "direction": direction,
@@ -135,6 +236,8 @@ def _observe(*, feed: Any, event: Any, kalshi_fee: Any, min_gap_bps: Decimal) ->
             "fresh_250ms_and_50ms_skew": fresh,
             "maker_join_bid_preserves_3c": economically_feasible,
             "dominance_and_maker_feasible": live_candidate_shadow,
+            "contract_metadata_loaded": metadata is not None,
+            "maker_live_q1_metadata_gate": bool(metadata and metadata.get("maker_live_q1_metadata_gate")),
             "classification": "LIVE_BASIS_RISK_MAKER_FEASIBILITY_SHADOW",
             "guaranteed_arb": False,
             "trade_authorized": False,
@@ -144,7 +247,9 @@ def _observe(*, feed: Any, event: Any, kalshi_fee: Any, min_gap_bps: Decimal) ->
         state = (
             str(maker_bid), str(maker_ask), str(hedge_ask), str(hedge_depth),
             str(locked_profit), str(auth.get("threshold_gap_abs_bps")),
-            dominance_safe, economically_feasible, snapshot.get("basis_window_end_utc"),
+            dominance_safe, economically_feasible,
+            bool(metadata and metadata.get("maker_live_q1_metadata_gate")),
+            snapshot.get("basis_window_end_utc"),
         )
         key = (str(feed.asset), direction)
         if _should_log(key, state, economically_feasible=economically_feasible):
@@ -180,5 +285,6 @@ def install(*, min_gap_bps: Decimal) -> None:
     logger.warning(
         "CRYPTO_BASIS_MAKER_FEASIBILITY_INSTALLED hook=exact_safe_evaluate_pre_taker_gate "
         "passive_quote=current_best_bid gemini_fee=maker kalshi_hedge=taker q=1 min_profit=0.03 "
-        "execution_gates_changed=false trade_authorized=false order_entry=false"
+        "metadata_grid_check=public_event_contract execution_gates_changed=false "
+        "trade_authorized=false order_entry=false"
     )
