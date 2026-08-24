@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections import Counter
+from datetime import datetime, timezone
 import json
 import logging
 import os
@@ -50,11 +51,19 @@ async def _soft_prediction_fetch(name: str, awaitable: Any) -> tuple[list[dict[s
         return [], detail
 
 
+def _start_ms(value: Any) -> int | None:
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
+    except Exception:
+        return None
+    return int(dt.timestamp() * 1000)
+
+
 def _sportsbook_start_map(events: list[Mapping[str, Any]]) -> dict[str, int]:
     out: dict[str, int] = {}
     for raw in events:
         event_id = str(raw.get("id") or "").strip()
-        start = base._start_ms(raw.get("commence_time"))
+        start = _start_ms(raw.get("commence_time"))
         if event_id and start is not None:
             out[event_id] = start
     return out
