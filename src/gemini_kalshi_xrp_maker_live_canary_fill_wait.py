@@ -32,6 +32,7 @@ def fillable_choose_quote(**kwargs: Any):
 
 
 async def main() -> dict[str, Any]:
+    canary.choose_quote = fillable_choose_quote
     if not canary.live_armed():
         result = await canary.run_once()
         print("CRYPTO_XRP_MAKER_FILL_WAIT " + json.dumps({
@@ -41,7 +42,6 @@ async def main() -> dict[str, Any]:
         }, separators=(",", ":")), flush=True)
         return result
 
-    canary.choose_quote = fillable_choose_quote
     deadline = time.monotonic() + max(1.0, WAIT_SECONDS)
     attempts = 0
     last: dict[str, Any] = {}
