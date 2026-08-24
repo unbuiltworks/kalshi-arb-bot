@@ -2,17 +2,19 @@
 
 This promotes only the safest generic structural family in the first live pass:
 exact same-parent / same-sportsMarketType totals ladders with independently
-corroborated numeric lines and "more than/over/above" wording.  For low < high,
+corroborated numeric lines and "more than/over/above" wording. For low < high,
 YES(low)+NO(high) pays at least $1 in every outcome.
 
-Other newly discovered structural families remain shadow-only until this lane
-proves repeatable reconciled fills.  All v4 order, hedge, partial-fill, rate-limit,
-and flatten protections are reused unchanged.
+The scanner can look farther ahead for additional independent events while the
+maker dwell is adaptive: tight quotes get more time at the front of the book,
+mid-gap quotes get a moderate dwell, and wide quotes keep the short probe. The
+existing one-second hedge revalidation, >=3c after-fee floor, q1 sizing, partial
+flattening, scoped cancellation and exact reconciliation remain unchanged.
 
 Important accounting rule: a reconciled two-leg execution is a locked execution,
-not realized P&L.  v5 mirrors exact fills to Command Center as
-AWAITING_SETTLEMENT and leaves realized=false until a settlement reconciler emits
-the authoritative TRADE_REALIZED event.
+not realized P&L. v5 mirrors exact fills to Command Center as AWAITING_SETTLEMENT
+and leaves realized=false until a settlement reconciler emits the authoritative
+TRADE_REALIZED event.
 """
 from __future__ import annotations
 
@@ -36,6 +38,12 @@ MAX_ATTEMPTS = 12
 LIVE_FAMILY_PREFIXES = ("TOTAL::",)
 DISCOVERY_TIMEOUT_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_DISCOVERY_TIMEOUT_SECONDS", "25"))
 BOOK_TIMEOUT_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_BOOK_TIMEOUT_SECONDS", "35"))
+HORIZON_HOURS = int(os.getenv("SPORTS_STRUCTURAL_HORIZON_HOURS", "168"))
+TIGHT_GAP = v4.D(os.getenv("SPORTS_STRUCTURAL_TIGHT_GAP", "0.15"))
+MID_GAP = v4.D(os.getenv("SPORTS_STRUCTURAL_MID_GAP", "0.30"))
+TIGHT_REST_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_TIGHT_REST_SECONDS", "60"))
+MID_REST_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_MID_REST_SECONDS", "30"))
+WIDE_REST_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_WIDE_REST_SECONDS", "12"))
 
 
 def _stage(stage: str, **fields: Any) -> None:
@@ -51,13 +59,25 @@ def _live_family(row: Mapping[str, Any]) -> bool:
     return any(family.startswith(prefix) for prefix in LIVE_FAMILY_PREFIXES)
 
 
+def _rest_seconds(row: Mapping[str, Any]) -> float:
+    try:
+        gap = v4.D(str(row.get("maker_gap_to_ask") or "1"))
+    except Exception:
+        return WIDE_REST_SECONDS
+    if gap <= TIGHT_GAP:
+        return TIGHT_REST_SECONDS
+    if gap <= MID_GAP:
+        return MID_REST_SECONDS
+    return WIDE_REST_SECONDS
+
+
 async def run_once() -> dict[str, Any]:
-    _stage("DISCOVERY_START", timeout_seconds=DISCOVERY_TIMEOUT_SECONDS)
+    _stage("DISCOVERY_START", timeout_seconds=DISCOVERY_TIMEOUT_SECONDS, horizon_hours=HORIZON_HOURS)
     feed, pairs, discovery = await asyncio.wait_for(
-        discover_structural_pairs(horizon_hours=72),
+        discover_structural_pairs(horizon_hours=HORIZON_HOURS),
         timeout=DISCOVERY_TIMEOUT_SECONDS,
     )
-    _stage("DISCOVERY_DONE", strict_markets=len(feed), strict_pairs=len(pairs))
+    _stage("DISCOVERY_DONE", strict_markets=len(feed), strict_pairs=len(pairs), horizon_hours=HORIZON_HOURS)
 
     _stage("BOOKS_START", markets=len(feed), timeout_seconds=BOOK_TIMEOUT_SECONDS)
     books, quote_health = await asyncio.wait_for(
@@ -86,6 +106,7 @@ async def run_once() -> dict[str, Any]:
             "shadow_only_candidates": len(shadow_only),
             "discovery": discovery,
             "quote_health": quote_health,
+            "horizon_hours": HORIZON_HOURS,
             "order_entry": False,
             "locked_execution": False,
             "realized": False,
@@ -99,8 +120,6 @@ async def run_once() -> dict[str, Any]:
         secret_key=os.environ["POLYMARKET_SECRET_KEY"],
         timeout=6.0,
     )
-    # v4's attempt engine resolves this module global at call time. Swap only
-    # its semantic gate; all mutation and reconciliation mechanics remain v4.
     v4._tradeable_exact = tradeable_structural_exact
     try:
         _stage("ACCOUNT_PREFLIGHT_START")
@@ -119,10 +138,12 @@ async def run_once() -> dict[str, Any]:
                 "best_locked": str(first["locked_profit"]),
                 "best_quote_locked": str(first["quote_locked_profit"]),
                 "best_hedge_depth": str(first["hedge_depth"]),
+                "best_maker_gap_to_ask": str(first["maker_gap_to_ask"]),
+                "best_rest_seconds": _rest_seconds(first),
                 "quote_health": quote_health,
                 "balance_response_present": bool(balances),
                 "max_attempts": MAX_ATTEMPTS,
-                "maker_rest_seconds": v4.POLL_SECONDS,
+                "horizon_hours": HORIZON_HOURS,
                 "order_entry": False,
                 "locked_execution": False,
                 "realized": False,
@@ -132,6 +153,7 @@ async def run_once() -> dict[str, Any]:
 
         attempts: list[dict[str, Any]] = []
         for idx, row in enumerate(scored[:MAX_ATTEMPTS], start=1):
+            rest_seconds = _rest_seconds(row)
             _stage(
                 "ATTEMPT_START",
                 attempt=idx,
@@ -142,7 +164,10 @@ async def run_once() -> dict[str, Any]:
                 hedge_side=row.get("hedge_side"),
                 quoted_locked_profit=row.get("quote_locked_profit"),
                 maker_gap_to_ask=row.get("maker_gap_to_ask"),
+                maker_rest_seconds=rest_seconds,
             )
+            prior_poll_seconds = v4.POLL_SECONDS
+            v4.POLL_SECONDS = rest_seconds
             try:
                 result = await v4._attempt(client, row, feed, idx)
             except v4.ReadRateLimitExhausted as exc:
@@ -166,12 +191,12 @@ async def run_once() -> dict[str, Any]:
                     "order_entry": True,
                     "realized": False,
                 }
+            finally:
+                v4.POLL_SECONDS = prior_poll_seconds
 
             result = dict(result)
             result.setdefault("family", row.get("family"))
-            # v4 historically called positive fully hedged economics "realized".
-            # Preserve the signal under a precise name and never let it enter v5
-            # reporting as realized P&L before venue settlement.
+            result.setdefault("configured_rest_seconds", rest_seconds)
             result["locked_execution"] = bool(result.pop("realized", False))
             result["realized"] = False
             _stage(
@@ -182,6 +207,7 @@ async def run_once() -> dict[str, Any]:
                 stage_name=result.get("stage"),
                 locked_execution=result.get("locked_execution"),
                 actual_net_locked_profit=result.get("actual_net_locked_profit"),
+                configured_rest_seconds=rest_seconds,
             )
 
             try:
@@ -217,6 +243,7 @@ async def run_once() -> dict[str, Any]:
             "candidate_count": len(scored),
             "shadow_only_candidates": len(shadow_only),
             "quote_health": quote_health,
+            "horizon_hours": HORIZON_HOURS,
             "attempts": attempts,
             "attempt_count": len(attempts),
             "locked_execution": locked_execution,
