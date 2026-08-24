@@ -15,6 +15,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
+from src.weather_fee_resolution_binding_guard import audit_weather_fee_resolution_binding
+
 SETTLEMENT_BLOCKERS = {
     "RULES_PENDING",
     "EXACT_MARKET_IDENTITY_UNVERIFIED",
@@ -140,13 +142,15 @@ def _book_evidence_verified(row: dict[str, Any]) -> bool:
 
 
 def _fee_evidence_verified(row: dict[str, Any]) -> bool:
-    """Require authoritative fee metadata plus complete quote-time schedule coverage.
+    """Require authoritative fee metadata plus exact quote-time resolver binding.
 
     A non-empty source label and ``fee_schedule_checked=True`` are not sufficient:
     otherwise a partial/empty fee-change response can silently make current Series
-    metadata look authoritative even when a scheduled change was omitted.  Certification
-    therefore requires literal completeness evidence, exact Series binding, and a
-    timezone-aware fee-feed observation at or after the quote being scored.
+    metadata look authoritative even when a scheduled change was omitted. Certification
+    therefore requires literal completeness evidence, exact Series binding, a
+    timezone-aware fee-feed observation at or after the quote, *and* an independently
+    verified quote-time fee-resolution record whose series/type/multiplier/source match
+    the values being scored.
     """
     multiplier = row.get("fee_multiplier")
     series_ticker = str(row.get("series_ticker") or "").strip().upper()
@@ -155,7 +159,7 @@ def _fee_evidence_verified(row: dict[str, Any]) -> bool:
     quote_observed = _aware_iso(row.get("quote_observed_at"))
     fee_schedule_observed = _aware_iso(row.get("fee_schedule_observed_at"))
 
-    return (
+    basic_evidence = (
         row.get("fee_type") == "quadratic"
         and _finite_nonnegative(multiplier)
         and fee_source in _CANONICAL_FEE_SOURCES
@@ -167,6 +171,11 @@ def _fee_evidence_verified(row: dict[str, Any]) -> bool:
         and fee_schedule_observed is not None
         and fee_schedule_observed >= quote_observed
     )
+    if not basic_evidence:
+        return False
+
+    binding = audit_weather_fee_resolution_binding(row)
+    return binding.get("fee_resolution_binding_verified") is True
 
 
 def _model_evidence_verified(row: dict[str, Any]) -> bool:
@@ -222,6 +231,9 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
         market_data.append("EXECUTABLE_BOOK_EVIDENCE_REQUIRED")
     market_data = sorted(set(market_data))
 
+    fee_binding = audit_weather_fee_resolution_binding(row)
+    if fee_binding.get("fee_resolution_binding_verified") is not True:
+        fee.extend(fee_binding.get("fee_resolution_binding_blockers") or [])
     if not _fee_evidence_verified(row):
         fee.append("AUTHORITATIVE_FEE_EVIDENCE_REQUIRED")
     fee = sorted(set(fee))
@@ -257,6 +269,7 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
         "settlement_rules_provenance_verified": settlement_verified,
         "market_data_verified": market_data_verified,
         "fee_economics_verified": fee_verified,
+        "fee_resolution_binding_verified": fee_binding.get("fee_resolution_binding_verified") is True,
         "model_probability_verified": model_verified,
         "executable_shadow_prereqs_verified": executable_shadow,
         "settlement_blockers": settlement,
