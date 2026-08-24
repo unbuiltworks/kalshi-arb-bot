@@ -28,6 +28,29 @@ def test_duplicate_fails_closed():
     assert stop
 
 
+def test_exact_strike_unavailable_is_only_transient_geometry_blocker():
+    transient, blocker = supervisor.transient_zero_order_terminal({
+        "status": "CAMPAIGN_STOPPED_ON_TERMINAL_ROUND",
+        "terminal_status": "DOMINANCE_NOT_AUTHORIZED_FOR_GEMINI_MAKER",
+        "terminal_result": {
+            "order_entry": False,
+            "geometry": {"blocker": "EXACT_GEMINI_STRIKE_UNAVAILABLE"},
+        },
+    })
+    assert transient
+    assert blocker == "EXACT_GEMINI_STRIKE_UNAVAILABLE"
+
+    transient, _ = supervisor.transient_zero_order_terminal({
+        "status": "CAMPAIGN_STOPPED_ON_TERMINAL_ROUND",
+        "terminal_status": "DOMINANCE_NOT_AUTHORIZED_FOR_GEMINI_MAKER",
+        "terminal_result": {
+            "order_entry": False,
+            "geometry": {"blocker": "THRESHOLD_DIRECTION_UNSAFE"},
+        },
+    })
+    assert not transient
+
+
 @pytest.mark.asyncio
 async def test_read_only_rollover_is_zero_mutation_not_exception():
     async def no_pair():
