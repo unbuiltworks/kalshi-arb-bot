@@ -10,11 +10,13 @@ Additional fail-closed gates here:
 - official MLB game must be LIVE;
 - hitter: starter + >=1 PA; pitcher: starting pitcher + >=1 batter faced;
 - both markets must report q1-compatible minimum quantity and positive tick size;
-- authenticated exact market metadata must agree with the discovery metadata;
+- authenticated exact market metadata must agree with discovery metadata;
 - current safe maker quote must be at most one reported tick from the contra ask;
 - 50ms pre-attempt persistence on the same maker/hedge direction;
-- separate SPORTS_POLY_DIRECT_MLB_LIVE_Q1 switch; the shared totals flag cannot arm it;
-- after the first reconciled two-leg MLB fill, return a review-required hard-halt status.
+- durable $1 Command Center reservation and global unresolved LIVE-sports guard;
+- existing $5 realized rule-risk loss ceiling is checked and never auto-increased;
+- separate SPORTS_POLY_DIRECT_MLB_LIVE_Q1 switch; shared totals flag cannot arm it;
+- after the first reconciled two-leg MLB fill, return a review-required hard halt.
 
 This remains LIVE RULE-RISK, not guaranteed arbitrage, because Polymarket's
 suspension/delay LFMP branch can still affect settlement after participation.
@@ -26,6 +28,7 @@ from decimal import Decimal
 import json
 import os
 from typing import Any, Mapping
+import uuid
 
 from polymarket_us import PolymarketUS
 
@@ -38,6 +41,7 @@ from src.sports_poly_mlb_participation_gate import (
     maker_tick_for_pair,
     market_order_metadata,
 )
+from src.sports_poly_mlb_rule_risk_budget import STRATEGY as MLB_STRATEGY, release, reserve
 from src.sports_poly_structural_monotone import fetch_books
 from src.sports_poly_structural_reporting import report_attempt
 
@@ -47,6 +51,13 @@ LIVE_ENV = "SPORTS_POLY_DIRECT_MLB_LIVE_Q1"
 PERSIST_SECONDS = float(os.getenv("SPORTS_POLY_MLB_PERSIST_SECONDS", "0.05"))
 MAX_ATTEMPTS = int(os.getenv("SPORTS_POLY_MLB_MAX_ATTEMPTS", "8"))
 MAX_NEAR_TOUCH_TICKS = D(os.getenv("SPORTS_POLY_MLB_MAX_NEAR_TOUCH_TICKS", "1"))
+ZERO_FILL_RELEASE_STATUSES = {
+    "MAKER_NOT_FILLED_CANCELED",
+    "MAKER_CANCELED_EDGE_GONE",
+    "SKIP_BOOK_MISSING",
+    "SKIP_HEDGE_DEPTH",
+    "SKIP_FLOOR",
+}
 
 
 def _stage(stage: str, **fields: Any) -> None:
@@ -289,14 +300,30 @@ async def run_once() -> dict[str, Any]:
                 })
                 continue
 
-            v4.TICK = maker_tick_for_pair(feed, persisted)
+            trade_id = f"sports-poly-mlb-maker:{uuid.uuid4().hex}"
+            attempt_row = dict(persisted)
+            attempt_row["_trade_id"] = trade_id
+            attempt_row["_strategy"] = MLB_STRATEGY
+            try:
+                budget = await reserve(row=attempt_row, certification=cert, trade_id=trade_id)
+            except Exception as exc:
+                attempts.append({
+                    "status": "MLB_RULE_RISK_BUDGET_OR_UNRESOLVED_BLOCK",
+                    "attempt": idx,
+                    "error_type": type(exc).__name__,
+                    "order_entry": False,
+                    "realized": False,
+                })
+                break
+
+            v4.TICK = maker_tick_for_pair(feed, attempt_row)
             rest_seconds = min(12.0, max(2.0, float(os.getenv("SPORTS_POLY_MLB_MAKER_REST_SECONDS", "8"))))
             prior_poll = v4.POLL_SECONDS
             v4.POLL_SECONDS = rest_seconds
             try:
-                result = await v4._attempt(client, persisted, feed, idx)
+                result = await v4._attempt(client, attempt_row, feed, idx)
             except v4.ReadRateLimitExhausted as exc:
-                await v4._clear_slug(client, str(persisted["maker_slug"]))
+                await v4._clear_slug(client, str(attempt_row["maker_slug"]))
                 result = {
                     "status": "READ_RATE_LIMIT_EXHAUSTED_SCOPED_CANCEL",
                     "attempt": idx,
@@ -305,7 +332,7 @@ async def run_once() -> dict[str, Any]:
                     "realized": False,
                 }
             except Exception as exc:
-                await v4._clear_slug(client, str(persisted["maker_slug"]))
+                await v4._clear_slug(client, str(attempt_row["maker_slug"]))
                 result = {
                     "status": "MLB_V2_ATTEMPT_ERROR_SCOPED_CANCEL",
                     "attempt": idx,
@@ -318,17 +345,29 @@ async def run_once() -> dict[str, Any]:
 
             result = dict(result)
             original_status = str(result.get("status") or "")
-            result["family"] = f"MLB_PROP::{persisted.get('family') or 'UNKNOWN'}"
+            result["family"] = f"MLB_PROP::{attempt_row.get('family') or 'UNKNOWN'}"
             result["rule_classification"] = "LIVE_RULE_RISK_LFMP_SUSPENSION_NOT_GUARANTEED_ARBITRAGE"
             result["guaranteed_arbitrage"] = False
             result["participation_certification"] = cert
+            result["capital_reservation"] = budget
             result["locked_execution"] = bool(result.pop("realized", False))
             result["realized"] = False
             try:
-                ledger = await report_attempt(client=client, row=persisted, result=result)
+                ledger = await report_attempt(client=client, row=attempt_row, result=result)
             except Exception as exc:
                 ledger = {"ledger_reported": False, "error_type": type(exc).__name__}
             result["ledger"] = ledger
+
+            if original_status in ZERO_FILL_RELEASE_STATUSES:
+                try:
+                    await release(row=attempt_row, trade_id=trade_id, reason=original_status)
+                    result["capital_released"] = True
+                except Exception as exc:
+                    result["capital_released"] = False
+                    result["capital_release_error_type"] = type(exc).__name__
+                    result["status"] = "MLB_ZERO_FILL_RELEASE_UNCONFIRMED_REVIEW_REQUIRED"
+                    attempts.append(result)
+                    break
 
             if original_status == "BOTH_FILLED_RECONCILED":
                 result["transport_status"] = original_status
@@ -337,13 +376,7 @@ async def run_once() -> dict[str, Any]:
                 break
 
             attempts.append(result)
-            if original_status not in {
-                "MAKER_NOT_FILLED_CANCELED",
-                "MAKER_CANCELED_EDGE_GONE",
-                "SKIP_BOOK_MISSING",
-                "SKIP_HEDGE_DEPTH",
-                "SKIP_FLOOR",
-            }:
+            if original_status not in ZERO_FILL_RELEASE_STATUSES:
                 break
             await asyncio.sleep(0.5)
 
