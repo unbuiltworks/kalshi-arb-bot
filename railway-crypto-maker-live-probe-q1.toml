@@ -1,8 +1,10 @@
-# TEMPORARY zero-fill reservation cleanup for g2.
+# Same-Gemini crypto threshold-ladder q=1 live canary.
+# Atomic sibling REST books + private Gemini order/fill/FOK transport.
+# The old Gemini<->Kalshi XRP maker remains parked because it carries settlement-index basis risk.
 [build]
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python -m src.gemini_same_venue_crypto_release_g2"
-preDeployCommand = ["python -m py_compile src/gemini_same_venue_crypto_release_g2.py src/gemini_same_venue_crypto_budget.py"]
+startCommand = "python -m src.gemini_same_venue_crypto_maker_q1_atomic"
+preDeployCommand = ["python -m pytest -q tests/test_gemini_same_venue_crypto_ladder_scan.py tests/test_gemini_same_venue_crypto_maker_q1.py tests/test_gemini_same_venue_crypto_maker_q1_atomic.py && python -m py_compile src/gemini_same_venue_crypto_ladder_scan.py src/gemini_same_venue_crypto_budget.py src/gemini_same_venue_crypto_maker_q1.py src/gemini_same_venue_crypto_maker_q1_atomic.py src/gemini_kalshi_execution_shadow.py src/gemini_kalshi_fast_overlap.py"]
 restartPolicyType = "NEVER"
