@@ -1,18 +1,14 @@
-"""Settlement-equivalence policy for Polymarket US <-> Kalshi MLB player props.
+"""Settlement-equivalence participation policy for MLB player props.
 
-Identity equivalence is not enough. Current venue participation rules differ before
-a player has actually participated in the role Kalshi requires:
+Identity equivalence is not enough. The audited MLB player-prop participation
+branch is treated conservatively before any maker opportunity is considered live:
 
-* Polymarket US: an MLB player prop settles at LFMP if the player does not
-  participate at all.
-* Kalshi batter props (Hits, H+R+RBI, Total Bases): a scratched/non-starting
-  player settles at fair market price even if he later enters; a starter must also
-  record at least one plate appearance before the statistic governs settlement.
-* Kalshi strikeout props: the named pitcher must start and record at least one
-  pitch; relief appearances do not count and otherwise settle at fair market price.
+* batter props: player is in the starting lineup and records >=1 plate appearance;
+* strikeout props: player is the starting pitcher and records >=1 batter faced.
 
-Therefore these families are only settlement-equivalent after an observable
-participation gate has occurred. This module deliberately exposes no order entry.
+The second condition is intentionally not approximated with "one pitch". A pitch
+can occur without a completed batter-faced statistic. This module remains
+research-only and exposes no order entry.
 """
 from __future__ import annotations
 
@@ -39,11 +35,12 @@ SUPPORTED_FAMILIES = BATTER_FAMILIES | PITCHER_FAMILIES
 
 @dataclass(frozen=True)
 class ParticipationProof:
-    """Observable game-state proof required before settlement rules align."""
+    """Observable official-game-state proof for the participation branch."""
 
     started: bool = False
     plate_appearance_recorded: bool = False
     starting_pitcher: bool = False
+    batter_faced_recorded: bool = False
     pitch_recorded: bool = False
     source: str = ""
 
@@ -75,14 +72,7 @@ class RuleAssessment:
 def assess_rule_equivalence(
     family: str, proof: ParticipationProof | None = None
 ) -> RuleAssessment:
-    """Classify current rule equivalence without ever granting execution eligibility.
-
-    The guard is intentionally stronger than simply checking a published lineup.
-    For batter props we require a confirmed start *and* at least one plate
-    appearance. For strikeouts we require the named pitcher to be the starter and
-    to have recorded at least one pitch. At that point the participation-specific
-    LFMP/fair-market-price branches can no longer diverge for the player.
-    """
+    """Classify the participation branch without granting execution eligibility."""
     proof = proof or ParticipationProof()
 
     if family in BATTER_FAMILIES:
@@ -93,10 +83,10 @@ def assess_rule_equivalence(
             and proof.source.strip()
         )
     elif family in PITCHER_FAMILIES:
-        gate = "CONFIRMED_STARTING_PITCHER_AND_FIRST_PITCH"
+        gate = "CONFIRMED_STARTING_PITCHER_AND_FIRST_BATTER_FACED"
         equivalent = bool(
             proof.starting_pitcher
-            and proof.pitch_recorded
+            and proof.batter_faced_recorded
             and proof.source.strip()
         )
     else:
@@ -115,8 +105,8 @@ def assess_rule_equivalence(
             required_gate=gate,
             settlement_equivalent_now=True,
             note=(
-                "Participation branch is resolved; continue to require exact event, "
-                "player, statistic, threshold, timing, and source-rule identity."
+                "Participation branch is resolved; exact lifecycle, source, correction, "
+                "threshold, identity, timing, and cancellation rules still apply."
             ),
         )
 
@@ -126,7 +116,7 @@ def assess_rule_equivalence(
         required_gate=gate,
         settlement_equivalent_now=False,
         note=(
-            "Do not count this pair as a guaranteed complementary settlement before "
-            "the participation gate is observed. Shadow pricing is research-only."
+            "Do not count this pair as guaranteed complementary settlement before "
+            "the audited participation gate is observed. Shadow pricing is research-only."
         ),
     )
