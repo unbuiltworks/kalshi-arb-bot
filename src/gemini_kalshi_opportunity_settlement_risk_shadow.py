@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import defaultdict
 import json
 import logging
+import sys
 from typing import Any
 
 from src import gemini_kalshi_opportunity_settlement_audit_shadow as audit
@@ -20,6 +21,23 @@ _ORIGINAL_EMIT = audit._emit_settled_audits
 _ASSET: defaultdict[str, defaultdict[str, int]] = defaultdict(lambda: defaultdict(int))
 _ASSET_DIRECTION: defaultdict[str, defaultdict[str, int]] = defaultdict(lambda: defaultdict(int))
 _ASSET_CELL: defaultdict[str, defaultdict[str, int]] = defaultdict(lambda: defaultdict(int))
+
+
+def configure_shadow_logging() -> None:
+    """Keep normal read-only telemetry on stdout so Railway severity stays accurate.
+
+    Python's default logging handler writes to stderr. Railway classifies stderr lines as
+    error severity even when the record itself says INFO, which makes a healthy shadow
+    scanner look unhealthy. Configure the root handler before the imported watcher main
+    has a chance to install its default handler; later non-force basicConfig calls are
+    then harmless no-ops. Real WARNING/ERROR records retain their logging level.
+    """
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-8s %(message)s",
+        stream=sys.stdout,
+        force=True,
+    )
 
 
 def _bump(bucket: defaultdict[str, int], agrees: bool) -> None:
@@ -86,6 +104,7 @@ def _emit_with_risk(rows: list[Any]) -> None:
 
 
 def main() -> None:
+    configure_shadow_logging()
     install_recent_settlements()
     audit._emit_settled_audits = _emit_with_risk
     logger.info(
