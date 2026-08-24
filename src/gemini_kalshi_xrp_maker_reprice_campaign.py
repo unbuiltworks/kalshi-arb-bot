@@ -6,7 +6,8 @@ partial-fill fee math, $1 Command Center reservation, first-fill freeze, exact
 fractional Kalshi FOK hedge, flatten paths, and settlement-risk labeling.
 
 The only new behavior is fill pursuit:
-- discover/certify one XRP 15m pair once per campaign (avoids catalog/API churn);
+- discover/certify one viable XRP 15m pair once per campaign (avoids catalog/API churn);
+- skip an expiring current window and select the next window with >90s remaining;
 - run short quote rounds with a unique durable trade id for each round;
 - each round recomputes the highest partial-safe maker quote from fresh atomic books;
 - only post when that safe quote is at/above the current Gemini bid;
@@ -23,7 +24,7 @@ import asyncio
 import json
 import os
 import time
-from typing import Any
+from typing import Any, Iterable
 
 from src import gemini_kalshi_xrp_maker_live_canary as canary
 from src import gemini_kalshi_xrp_maker_triggered_canary as triggered
@@ -66,6 +67,34 @@ def safe_to_continue(result: dict[str, Any]) -> bool:
     return not bool(result.get("realized"))
 
 
+def select_viable_pair(pairs: Iterable[Any], *, now_ts: float) -> Any | None:
+    viable = sorted(
+        (
+            p
+            for p in pairs
+            if getattr(p, "asset", None) == triggered.ASSET
+            and p.window_end.timestamp() - now_ts > triggered.MIN_SECONDS_TO_EXPIRY
+        ),
+        key=lambda p: p.window_end,
+    )
+    return viable[0] if viable else None
+
+
+async def discover_next_viable() -> tuple[Any, Any, Any, Any]:
+    """Discover once, choosing the next window that is not inside the no-new-risk cutoff."""
+    async with triggered.httpx.AsyncClient(timeout=15.0) as http:
+        pairs = await triggered._discover_pairs(http, 30.0)
+        pair = select_viable_pair(pairs, now_ts=time.time())
+        if pair is None:
+            raise RuntimeError("no viable XRP 15m pair beyond expiry cutoff")
+        fee_meta = await triggered.base.fetch_series_fee_metadata(
+            http, triggered.base.ASSET_SERIES[triggered.ASSET]
+        )
+        market = await triggered._kalshi_market(http, pair.kalshi_ticker)
+    geometry = await triggered.dominance.fetch_pair_geometry(pair, triggered.ASSET)
+    return pair, fee_meta, market, geometry
+
+
 async def run() -> dict[str, Any]:
     root_trade = canary.trade_id()
     armed = canary.live_armed()
@@ -85,8 +114,9 @@ async def run() -> dict[str, Any]:
 
     # Discover and certify exactly once. Every quote round still uses fresh atomic
     # Gemini-triggered Kalshi books and recomputes economics from those books.
-    cached_discovery = await triggered.discover_once()
+    cached_discovery = await discover_next_viable()
     pair = cached_discovery[0]
+    out["window_end_utc"] = pair.window_end.isoformat()
 
     async def cached_discover_once():
         return cached_discovery
