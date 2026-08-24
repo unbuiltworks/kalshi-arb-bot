@@ -1,6 +1,11 @@
 from decimal import Decimal as D
 
-from src.sports_poly_live_fill_conversion_hotfix_v2 import _near_touch_activity_sort_key
+import src.sports_poly_live_fill_conversion_hotfix as base
+from src.sports_poly_live_fill_conversion_hotfix_v2 import (
+    STICKY_LIFECYCLE_SECONDS,
+    _near_touch_activity_sort_key,
+    configure,
+)
 
 
 def _row(*, gap: str, maker: str, hedge: str) -> dict:
@@ -25,3 +30,13 @@ def test_activity_breaks_ties_inside_near_touch_bucket() -> None:
     near_active = _row(gap="0.01", maker="100", hedge="80")
     near_dead = _row(gap="0.01", maker="0", hedge="0")
     assert _near_touch_activity_sort_key(near_active) < _near_touch_activity_sort_key(near_dead)
+
+
+def test_configure_makes_timer_non_operational_for_normal_mlb_lifecycle() -> None:
+    prior = base.mlb_v3.STICKY_REST_SECONDS
+    try:
+        configure()
+        assert base.mlb_v3.STICKY_REST_SECONDS == STICKY_LIFECYCLE_SECONDS == 21600.0
+        assert base.mlb_v3.TARGET == D("0.03")
+    finally:
+        base.mlb_v3.STICKY_REST_SECONDS = prior
