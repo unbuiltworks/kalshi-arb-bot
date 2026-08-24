@@ -6,6 +6,9 @@ fill reconciliation. This wrapper makes that campaign safe to run continuously:
 
 * one campaign / one maker at a time;
 * current-universe orphan cleanup before any new maker and after rate limits;
+* any recovered open maker with a positive partial fill is flattened before the
+  startup state can be considered clean;
+* canceled orders with positive historical fills are surfaced for restart audit;
 * private order WebSocket is the primary resting-maker state transport, avoiding
   high-frequency authenticated REST polling; exact REST remains the fallback;
 * bounded cool-down instead of hot retries on Polymarket rate limits;
@@ -21,9 +24,10 @@ from __future__ import annotations
 
 import asyncio
 from collections import Counter
+from decimal import Decimal, InvalidOperation
 import json
 import os
-from typing import Any, Awaitable, Callable, Mapping
+from typing import Any, Callable, Mapping
 
 from polymarket_us import PolymarketUS
 
@@ -32,6 +36,7 @@ from src.sports_kp_poly_relay_campaign_q1_v5 import run_once as run_campaign
 from src.sports_poly_private_order_stream import PrivateOrderStream
 from src.sports_poly_structural_monotone import discover_structural_pairs, structural_identity
 
+D = Decimal
 MAX_RECONCILED_SUCCESSES = 20
 NORMAL_SLEEP_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_NORMAL_SLEEP_SECONDS", "8"))
 EMPTY_SLEEP_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_EMPTY_SLEEP_SECONDS", "30"))
@@ -60,6 +65,27 @@ SAFE_CONTINUE_STATUSES = {
 }
 
 
+def _d(value: Any) -> D:
+    if isinstance(value, Mapping):
+        value = value.get("value")
+    try:
+        return D(str(value or "0"))
+    except (InvalidOperation, ValueError, TypeError):
+        return D("0")
+
+
+def _order_summary(raw: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(raw.get("id") or ""),
+        "market_slug": str(raw.get("marketSlug") or raw.get("market_slug") or ""),
+        "state": str(raw.get("state") or ""),
+        "cum_quantity": str(_d(raw.get("cumQuantity") or raw.get("cum_quantity"))),
+        "quantity": str(_d(raw.get("quantity") or raw.get("qty"))),
+        "created_at": raw.get("createdAt") or raw.get("created_at"),
+        "updated_at": raw.get("updatedAt") or raw.get("updated_at"),
+    }
+
+
 def _is_rate_limit(exc: BaseException) -> bool:
     return type(exc).__name__ == "RateLimitError"
 
@@ -75,10 +101,19 @@ async def _current_total_slugs() -> list[str]:
 
 
 async def cleanup_current_total_orders() -> dict[str, Any]:
-    """Cancel and verify only open orders in the current strict totals universe."""
+    """Cancel/verify current structural orders and flatten recovered partials."""
     slugs = await _current_total_slugs()
     if not slugs:
-        return {"status": "CLEANUP_NO_TOTAL_SLUGS", "slugs": 0, "open_seen": 0, "canceled": 0, "unresolved": 0}
+        return {
+            "status": "CLEANUP_NO_TOTAL_SLUGS",
+            "slugs": 0,
+            "open_seen": 0,
+            "canceled": 0,
+            "unresolved": 0,
+            "partial_flattened": 0,
+            "partial_unresolved": 0,
+            "canceled_partial_audit_count": 0,
+        }
 
     client = PolymarketUS(
         key_id=os.environ["POLYMARKET_KEY_ID"],
@@ -88,23 +123,49 @@ async def cleanup_current_total_orders() -> dict[str, Any]:
     try:
         response = await asyncio.to_thread(client.orders.list, {"slugs": slugs})
         orders = response.get("orders") or [] if isinstance(response, Mapping) else []
+        rows = [raw for raw in orders if isinstance(raw, Mapping)]
+        canceled_partial_audit = [
+            _order_summary(raw)
+            for raw in rows
+            if str(raw.get("marketSlug") or raw.get("market_slug") or "") in slugs
+            and str(raw.get("state") or "") == "ORDER_STATE_CANCELED"
+            and _d(raw.get("cumQuantity") or raw.get("cum_quantity")) > 0
+        ]
         open_orders = [
-            raw for raw in orders
-            if isinstance(raw, Mapping)
-            and str(raw.get("id") or "")
-            and str(raw.get("marketSlug") or "") in slugs
+            raw for raw in rows
+            if str(raw.get("id") or "")
+            and str(raw.get("marketSlug") or raw.get("market_slug") or "") in slugs
             and str(raw.get("state") or "") not in TERMINAL_STATES
         ]
         canceled: list[str] = []
         unresolved: list[str] = []
+        partial_flattened: list[str] = []
+        partial_unresolved: list[str] = []
         for raw in open_orders:
             oid = str(raw.get("id") or "")
-            slug = str(raw.get("marketSlug") or "")
+            slug = str(raw.get("marketSlug") or raw.get("market_slug") or "")
+            cum_before = _d(raw.get("cumQuantity") or raw.get("cum_quantity"))
             try:
                 await asyncio.to_thread(client.orders.cancel, oid, {"marketSlug": slug})
                 canceled.append(oid)
             except Exception:
                 unresolved.append(oid)
+                continue
+
+            if cum_before > 0:
+                try:
+                    await asyncio.to_thread(
+                        client.orders.close_position,
+                        {
+                            "marketSlug": slug,
+                            "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC",
+                            "synchronousExecution": True,
+                            "maxBlockTime": "2",
+                        },
+                    )
+                    partial_flattened.append(oid)
+                except Exception:
+                    partial_unresolved.append(oid)
 
         # If any open order existed, a second scoped read must positively verify
         # no structural totals maker remains before another campaign can start.
@@ -115,7 +176,7 @@ async def cleanup_current_total_orders() -> dict[str, Any]:
                 if not isinstance(raw, Mapping):
                     continue
                 oid = str(raw.get("id") or "")
-                slug = str(raw.get("marketSlug") or "")
+                slug = str(raw.get("marketSlug") or raw.get("market_slug") or "")
                 state = str(raw.get("state") or "")
                 if oid and slug in slugs and state not in TERMINAL_STATES:
                     unresolved.append(oid)
@@ -125,6 +186,10 @@ async def cleanup_current_total_orders() -> dict[str, Any]:
             "open_seen": len(open_orders),
             "canceled": len(canceled),
             "unresolved": len(set(unresolved)),
+            "partial_flattened": len(partial_flattened),
+            "partial_unresolved": len(set(partial_unresolved)),
+            "canceled_partial_audit_count": len(canceled_partial_audit),
+            "canceled_partial_audit": canceled_partial_audit[-8:],
         }
     finally:
         client.close()
@@ -211,8 +276,8 @@ async def _ensure_clean() -> bool:
             "order_entry": False,
         }, separators=(",", ":")), flush=True)
         return False
-    print("SPORTS_STRUCTURAL_SUPERVISOR " + json.dumps(result, separators=(",", ":")), flush=True)
-    return int(result.get("unresolved") or 0) == 0
+    print("SPORTS_STRUCTURAL_SUPERVISOR " + json.dumps(result, separators=(",", ":"), default=str), flush=True)
+    return int(result.get("unresolved") or 0) == 0 and int(result.get("partial_unresolved") or 0) == 0
 
 
 async def main() -> None:
