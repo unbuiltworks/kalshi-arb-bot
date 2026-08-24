@@ -8,6 +8,11 @@ YES(low)+NO(high) pays at least $1 in every outcome.
 Other newly discovered structural families remain shadow-only until this lane
 proves repeatable reconciled fills.  All v4 order, hedge, partial-fill, rate-limit,
 and flatten protections are reused unchanged.
+
+Important accounting rule: a reconciled two-leg execution is a locked execution,
+not realized P&L.  v5 mirrors exact fills to Command Center as
+AWAITING_SETTLEMENT and leaves realized=false until a settlement reconciler emits
+the authoritative TRADE_REALIZED event.
 """
 from __future__ import annotations
 
@@ -25,6 +30,7 @@ from src.sports_poly_structural_monotone import (
     score_structural_pairs,
     tradeable_structural_exact,
 )
+from src.sports_poly_structural_reporting import report_attempt
 
 MAX_ATTEMPTS = 12
 LIVE_FAMILY_PREFIXES = ("TOTAL::",)
@@ -53,6 +59,7 @@ async def run_once() -> dict[str, Any]:
             "discovery": discovery,
             "quote_health": quote_health,
             "order_entry": False,
+            "locked_execution": False,
             "realized": False,
         }
         print("SPORTS_POLY_RELAY_CAMPAIGN_Q1_V5 " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
@@ -64,7 +71,7 @@ async def run_once() -> dict[str, Any]:
         secret_key=os.environ["POLYMARKET_SECRET_KEY"],
         timeout=6.0,
     )
-    # v4's attempt engine resolves this module global at call time.  Swap only
+    # v4's attempt engine resolves this module global at call time. Swap only
     # its semantic gate; all mutation and reconciliation mechanics remain v4.
     v4._tradeable_exact = tradeable_structural_exact
     try:
@@ -87,6 +94,7 @@ async def run_once() -> dict[str, Any]:
                 "max_attempts": MAX_ATTEMPTS,
                 "maker_rest_seconds": v4.POLL_SECONDS,
                 "order_entry": False,
+                "locked_execution": False,
                 "realized": False,
             }
             print("SPORTS_POLY_RELAY_CAMPAIGN_Q1_V5 " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
@@ -117,8 +125,21 @@ async def run_once() -> dict[str, Any]:
                     "order_entry": True,
                     "realized": False,
                 }
+
             result = dict(result)
             result.setdefault("family", row.get("family"))
+            # v4 historically called positive fully hedged economics "realized".
+            # Preserve the signal under a precise name and never let it enter v5
+            # reporting as realized P&L before venue settlement.
+            result["locked_execution"] = bool(result.pop("realized", False))
+            result["realized"] = False
+
+            try:
+                ledger = await report_attempt(client=client, row=row, result=result)
+            except Exception as exc:
+                ledger = {"ledger_reported": False, "error_type": type(exc).__name__}
+            result["ledger"] = ledger
+
             attempts.append(result)
             if result.get("status") not in {
                 "MAKER_NOT_FILLED_CANCELED",
@@ -130,6 +151,7 @@ async def run_once() -> dict[str, Any]:
                 break
             await asyncio.sleep(0.75)
 
+        locked_execution = any(bool(a.get("locked_execution")) for a in attempts)
         out = {
             "status": "STRUCTURAL_TOTAL_CAMPAIGN_COMPLETE",
             "strict_markets": len(feed),
@@ -140,7 +162,8 @@ async def run_once() -> dict[str, Any]:
             "quote_health": quote_health,
             "attempts": attempts,
             "attempt_count": len(attempts),
-            "realized": any(bool(a.get("realized")) for a in attempts),
+            "locked_execution": locked_execution,
+            "realized": False,
         }
         print("SPORTS_POLY_RELAY_CAMPAIGN_Q1_V5 " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
         return out
