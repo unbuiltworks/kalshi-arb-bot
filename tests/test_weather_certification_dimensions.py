@@ -6,16 +6,21 @@ def _clean_row():
         "blockers": [],
         "exact_market_source_verified": True,
         "settlement_certified_shadow": True,
+        "series_ticker": "KXHIGHMIA",
         "quote_age_ms": 100,
         "max_quote_age_ms": 2_000,
+        "quote_observed_at": "2026-08-24T04:00:00Z",
         "yes_ask_cents": 40,
         "yes_available_contracts": 5,
         "no_ask_cents": 61,
         "no_available_contracts": 5,
         "fee_type": "quadratic",
         "fee_multiplier": 1,
-        "fee_metadata_source": "SERIES_METADATA",
+        "fee_metadata_source": "series_current",
         "fee_schedule_checked": True,
+        "fee_schedule_feed_complete": True,
+        "fee_series_ticker": "KXHIGHMIA",
+        "fee_schedule_observed_at": "2026-08-24T04:00:01Z",
         "forecast_bracket_probability": "0.55",
         "model_sanity_verified": True,
         "model_provider_provenance_verified": True,
@@ -203,3 +208,30 @@ def test_malformed_fixed_point_book_fails_closed():
         out = audit_weather_certification_dimensions(row)
         assert out["market_data_verified"] is False
         assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_fee_schedule_must_be_complete_and_bound_to_exact_series_and_quote():
+    base = _clean_row()
+    cases = [
+        ("missing completeness", {"fee_schedule_feed_complete": False}),
+        ("string completeness", {"fee_schedule_feed_complete": "true"}),
+        ("wrong series", {"fee_series_ticker": "KXHIGHNY"}),
+        ("unknown source", {"fee_metadata_source": "SERIES_METADATA"}),
+        ("schedule observed before quote", {"fee_schedule_observed_at": "2026-08-24T03:59:59Z"}),
+        ("naive schedule timestamp", {"fee_schedule_observed_at": "2026-08-24T04:00:01"}),
+    ]
+    for _, patch in cases:
+        row = dict(base)
+        row.update(patch)
+        out = audit_weather_certification_dimensions(row)
+        assert out["fee_economics_verified"] is False
+        assert "AUTHORITATIVE_FEE_EVIDENCE_REQUIRED" in out["fee_blockers"]
+        assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_canonical_historical_or_scheduled_fee_source_can_clear_when_bound():
+    for source in ("historical_fee_change", "scheduled_fee_change"):
+        row = _clean_row()
+        row["fee_metadata_source"] = source
+        out = audit_weather_certification_dimensions(row)
+        assert out["fee_economics_verified"] is True
