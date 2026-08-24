@@ -2,13 +2,17 @@
 
 This intentionally avoids the Gemini<->Kalshi settlement-index mismatch. It only
 considers pairs of HI threshold contracts that belong to the same Gemini event and
-share exact expiry + source metadata. For low strike L < high strike H:
+share exact expiry + source metadata. For ANY low strike L < high strike H:
 
     BUY YES(L) + BUY NO(H)
 
-pays at least $1 at settlement. The scanner asks whether one leg can be posted as a
-maker at the most aggressive post-only price while the other leg remains an exact
-current taker hedge and the pair preserves >=3c per contract after Gemini fees.
+pays at least $1 at settlement. The middle state can pay $2, so adjacency is not
+required for the payout floor. The scanner therefore evaluates the complete
+monotone pair set, not merely neighboring thresholds.
+
+The scanner asks whether one leg can be posted as a maker at the most aggressive
+post-only price while the other leg remains an exact current taker hedge and the
+pair preserves >=3c per contract after Gemini fees.
 
 A theoretical safe frontier is NOT actionable when an existing bid is already above
 that frontier. Actionable rows must seed the first bid or improve the current best
@@ -206,6 +210,11 @@ def ladder_contracts(event: Mapping[str, Any]) -> list[dict[str, Any]]:
     return sorted(out, key=lambda r: D(str(r["_strike"])))
 
 
+def monotone_pairs(contracts: list[dict[str, Any]]) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """All L<H threshold pairs. Every pair has the same >=$1 payout floor."""
+    return [(contracts[i], contracts[j]) for i in range(len(contracts) - 1) for j in range(i + 1, len(contracts))]
+
+
 async def _books(http: httpx.AsyncClient, symbols: set[str]) -> tuple[dict[str, dict[str, Any]], dict[str, int]]:
     books: dict[str, dict[str, Any]] = {}
     statuses: dict[str, int] = {}
@@ -234,6 +243,7 @@ def score(events: list[Mapping[str, Any]], books: Mapping[str, Mapping[str, Any]
         "eligible_ladder_events": 0,
         "strict_ladder_contracts": 0,
         "adjacent_pairs": 0,
+        "monotone_pairs": 0,
         "raw_frontier_3c_rows": 0,
         "seed_first_bid": 0,
         "improve_to_safe_frontier": 0,
@@ -246,10 +256,12 @@ def score(events: list[Mapping[str, Any]], books: Mapping[str, Mapping[str, Any]
             continue
         telemetry["eligible_ladder_events"] += 1
         telemetry["strict_ladder_contracts"] += len(contracts)
+        telemetry["adjacent_pairs"] += len(contracts) - 1
+        pairs = monotone_pairs(contracts)
+        telemetry["monotone_pairs"] += len(pairs)
         ticker = str(event.get("ticker") or "")
         title = str(event.get("title") or "")
-        for low, high in zip(contracts, contracts[1:]):
-            telemetry["adjacent_pairs"] += 1
+        for low, high in pairs:
             low_symbol, high_symbol = _symbol(low), _symbol(high)
             lb = books.get(low_symbol)
             hb = books.get(high_symbol)
@@ -286,6 +298,7 @@ def score(events: list[Mapping[str, Any]], books: Mapping[str, Mapping[str, Any]
                     "low_strike": str(low.get("_strike")),
                     "high_symbol": high_symbol,
                     "high_strike": str(high.get("_strike")),
+                    "threshold_gap": str(D(str(high.get("_strike"))) - D(str(low.get("_strike")))),
                     "direction": direction,
                     "maker_symbol": _symbol(maker),
                     "maker_outcome": maker_outcome,
@@ -304,7 +317,7 @@ def score(events: list[Mapping[str, Any]], books: Mapping[str, Mapping[str, Any]
                     "taker_fee_q1": str(gemini_predictions_taker_fee(hedge_ask, ONE)),
                     "locked_profit_q1": str(locked),
                     "guaranteed_payout_floor_before_fees": "1",
-                    "settlement_classification": "SAME_GEMINI_EVENT_EXACT_SOURCE_EXPIRY_HI_LADDER",
+                    "settlement_classification": "SAME_GEMINI_EVENT_EXACT_SOURCE_EXPIRY_HI_LADDER_ANY_L_LT_H",
                     "read_only": True,
                     "order_entry": False,
                     "realized": False,
@@ -316,7 +329,6 @@ def score(events: list[Mapping[str, Any]], books: Mapping[str, Mapping[str, Any]
 
     def rank(r: Mapping[str, Any]) -> tuple[Any, ...]:
         secs = r.get("seconds_to_expiry")
-        # Prefer contracts expiring in the next 24h, but not already expired.
         near_bucket = 0 if isinstance(secs, (int, float)) and 300 < secs <= 86400 else 1
         expiry_rank = secs if isinstance(secs, (int, float)) and secs > 0 else 10**12
         return (
@@ -348,7 +360,7 @@ async def run() -> dict[str, Any]:
         "join_safe_candidates": len(joins),
         "top_actionable": actionable[:20],
         "top_join_safe": joins[:10],
-        "live_canary_admission": "SEED_FIRST_BID_OR_IMPROVE_TO_SAFE_FRONTIER_ONLY",
+        "live_canary_admission": "SEED_FIRST_BID_OR_IMPROVE_TO_SAFE_FRONTIER_OR_JOIN_SAFE_BID_FLOW_QUALIFIED",
         "fee_policy": "current Gemini predictions maker+taker fees, ceil-cent; maker rebates/rewards excluded",
         "target_per_contract": str(TARGET),
         "read_only": True,
