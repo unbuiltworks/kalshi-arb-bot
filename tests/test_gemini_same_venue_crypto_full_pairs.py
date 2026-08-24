@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal as D
 
 from src import gemini_same_venue_crypto_ladder_scan as scan
+from src import gemini_same_venue_crypto_maker_q1 as maker
 
 
 def _c(symbol: str, strike: str):
@@ -26,3 +27,15 @@ def test_any_low_high_pair_has_one_dollar_payout_floor():
         "above_high": D("1"),
     }
     assert min(payouts.values()) == D("1")
+
+
+def test_fractional_grid_contract_is_valid_for_q1_fok_but_not_resting_maker():
+    contract = {
+        "quantityMinimum": "0.01",
+        "quantityIncrement": "0.01",
+    }
+    # q=1 lands exactly on the instrument grid, so FOK can request exactly one.
+    assert scan._q1_ok(contract) is True
+    # We deliberately keep the stricter rule for the resting maker lane because a
+    # maker order can partially fill before cancellation/recovery.
+    assert maker.whole_contract_only(contract) is False
