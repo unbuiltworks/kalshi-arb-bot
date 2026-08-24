@@ -4,12 +4,13 @@ The first live maker still has to prove the authenticated private order stream.
 Once the stream has demonstrably delivered real order updates, an intermittent
 per-order miss no longer kills the whole lane: that order alone falls back to
 paced exact REST reads while all existing cancel/reconciliation protections stay
-in force. This preserves safety without turning a single dropped WS update into a
-full production halt.
+in force. The restart cleanup universe is kept identical to the live discovery
+horizon so a broader scanner can never leave future-event makers outside cleanup.
 """
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from typing import Any, Callable, Mapping
 
@@ -20,6 +21,7 @@ import src.sports_poly_structural_live_supervisor as supervisor
 from src.sports_poly_private_order_stream import PrivateOrderStream
 
 REST_FALLBACK_GAP_SECONDS = 0.75
+HORIZON_HOURS = int(os.getenv("SPORTS_STRUCTURAL_HORIZON_HOURS", "168"))
 
 
 def install_verified_private_order_transport(stream: PrivateOrderStream) -> Callable[[], None]:
@@ -71,9 +73,6 @@ def install_verified_private_order_transport(stream: PrivateOrderStream) -> Call
         try:
             updated = await stream.wait_for_update(oid, supervisor.WS_REFRESH_WAIT_SECONDS)
         except RuntimeError:
-            # If the stream has never delivered a real order update, keep the
-            # original fail-closed bootstrap behavior. If it has already proven
-            # itself globally, isolate this one order on exact paced REST instead.
             if stream.updates <= 0:
                 raise
             rest_fallback_ids.add(oid)
@@ -99,8 +98,19 @@ def install_verified_private_order_transport(stream: PrivateOrderStream) -> Call
     return restore
 
 
+async def current_total_slugs() -> list[str]:
+    feed, _, _ = await supervisor.discover_structural_pairs(horizon_hours=HORIZON_HOURS)
+    return sorted({
+        str(slug)
+        for slug, market in feed.items()
+        if (identity := supervisor.structural_identity(market)) is not None
+        and str(identity[0]).startswith("TOTAL::")
+    })
+
+
 async def main() -> None:
     supervisor.install_private_order_transport = install_verified_private_order_transport
+    supervisor._current_total_slugs = current_total_slugs
     await supervisor.main()
 
 
