@@ -21,7 +21,7 @@ from src.kalshi_prop_ws_exact_books import KalshiPropWsExactBooks
 from src.gemini_kalshi_probe_transport_fractional_safe import submit_dual_probe_fractional_safe
 from src.sports_gk_funnel_instrumentation import install as install_funnel
 from src.sports_gk_general_inventory import run_once as run_general_inventory
-from src.sports_nfl_gk_price_scan import run_once as run_nfl_price_scan
+from src.sports_nfl_gk_price_scan_verified import run_once as run_nfl_price_scan
 from src.three_venue_mlb_price_scan import run_once as run_mlb_game_price_scan
 
 D = Decimal
