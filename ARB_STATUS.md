@@ -1,231 +1,198 @@
 # ARB Control Plane
 
-Last verified: 2026-08-24 22:18 UTC
+Last verified: 2026-08-24 23:22 UTC
 
 This is the durable ARB handoff. **Production state wins over chat history.** Before changing any workstream, verify current Railway deployment/runtime and GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the **$428/day realized-net objective**. A candidate, modeled edge, submitted order, fill, hedge, reservation, or unsettled locked pair is not realized profit.
 
-Historical control-plane detail through 2026-08-23 remains in `ARB_STATUS_HISTORY_2026-08-23.md`. Earlier 2026-08-24 implementation detail is summarized below rather than treated as current production truth.
+Historical control-plane detail through 2026-08-23 remains in `ARB_STATUS_HISTORY_2026-08-23.md`.
 
-## LATEST PRODUCTION CHECKPOINT — 2026-08-24 22:18 UTC
+## LATEST PRODUCTION CHECKPOINT — 2026-08-24 23:22 UTC / ~7:22 PM ET
 
 ### Scoreboard
 
-Current new execution work:
-
 `QUALIFIED -> ORDER_SUBMITTED -> FILLED -> HEDGED -> SETTLED -> REALIZED`
 
-- same-Gemini crypto: qualified structural/frontier math exists, **no current executable-flow candidate**, no current order, 0 fills, 0 hedges, 0 settlements, **$0 new realized**;
-- Polymarket same-venue MLB: pregame inventory is healthy, participation not yet certified, 0 current attempts/fills, **$0 new realized**;
-- Gemini<->Kalshi MLB: exact joined inventory is healthy, participation not yet certified, 0 current-epoch attempts/fills, **$0 new realized**;
-- historical reconciled Gemini<->Kalshi sports evidence: **7 settled-compatible trades, approximately +$0.2679 realized net total**. This is historical proof only, not today's new P&L.
+- **Polymarket MLB same-venue:** live participation is now active. Latest clean production cycle saw **420 participation-ready pairs and 167 near-touch/priced candidates**. The recovered executor is cycling q=1 sticky maker attempts. Multiple attempts have aged through their sticky lifecycle and advanced to the next candidate with no confirmed fill yet. **0 confirmed new fills, 0 hedges, 0 settlements, $0 new realized.**
+- **Same-Gemini crypto:** executor is live again and continuously scans the complete safe q1 pair universe. Latest scans have **0 >=3c immediate FOK/FOK candidates**; current whole-contract maker candidates have no qualifying recent exact flow and remain suppressed. **0 current fills, $0 new realized.**
+- **Gemini<->Kalshi / general sports supervisor:** live and funded. Current three-venue full-game scan showed **190 priced quotes / 0 positive one-contract locks**. NFL G<->K scan showed **607 priced exact counterpart keys / 0 positive q1 locks**. No current-epoch new realized P&L.
+- Historical reconciled Gemini<->Kalshi sports proof remains **7 settled-compatible trades, approximately +$0.2679 realized net total**. This is historical evidence only, not new P&L from tonight.
 
-Do not combine modeled, shadow, locked-but-unsettled, or unconfirmed values with realized P&L.
+Do not combine modeled, shadow, reserved, submitted, filled-but-unsettled, or unconfirmed values with realized P&L.
 
-## SAME-GEMINI CRYPTO THRESHOLD LADDERS — LIVE EXECUTION V6
+## 7 PM MLB PRODUCTION INCIDENT — ROOT CAUSE FOUND AND FIXED
 
-Primary Railway service:
-- project: `sports-arb-autonomous` (`7e15f30d-1430-4514-8f7b-bb81c84d8f4d`)
-- production environment: `b51b1a8c-eefa-4a8a-a7e9-63a0430dc4a2`
-- service: `crypto-maker-live-probe-q1` (`6e0dffb2-8309-47cf-8196-9106eda284d8`)
-- branch: `feature/maker-live-probe-q1`
-- production source commit: `307fe09e58bfb4f162f1d3ae2d871a592a260d13`
-- verified deployment: `18a7020c-db12-4dcc-9eeb-2b475fb58424` — **SUCCESS**
-- start: `python -m src.gemini_same_venue_crypto_execution_v6`
-- targeted predeploy: **28 passed**
-- q=1
-- locked after-fee floor: **>= $0.03 per contract**
-- old Gemini<->Kalshi 15-minute basis maker remains parked because settlement-index basis risk is not guaranteed arbitrage.
+The earlier pregame explanation became stale once the first MLB games went live. At approximately **6:42 PM ET**, production correctly transitioned from `GAME_NOT_LIVE` to live participation and found:
+- 12 participation-certified pairs;
+- 2 near-touch candidates;
+- a real Nick Sogard BOS-MIA hits ladder attempt.
 
-### Private order lifecycle / orphan safety
+The attempt reserved $1, then hit `MLB_V2_ATTEMPT_ERROR_SCOPED_CANCEL` / `RuntimeError` and the sports executor hard-halted.
 
-The live path is now **WebSocket first** for private order state:
-- `orders@account` is primary for maker state/fills;
-- public books use 100ms depth WebSockets;
-- REST is bounded authoritative recovery/audit only;
-- a single REST timeout no longer causes an assumed zero-fill release;
-- ambiguous state retains the capital reservation and hard-stops;
-- startup audits the Gemini account itself before relying on Command Center state;
-- any prior `crypto-gem-ladder-*` zero-fill orphan is authoritatively canceled before new maker mutation;
-- any orphan with a fill hard-stops rather than being silently cleaned up;
-- maker client IDs are restart-unique so a new process cannot collide with an earlier canary ID.
+### Root cause 1: silent private Polymarket WS was treated as fatal
 
-This fixed a real production failure mode: prior deployments had left active zero-fill XRP makers behind even though the ledger appeared clear. The account-authoritative gate found/canceled those orphans. Latest v6 startup is clean:
-- active orders seen: **0**;
-- recent filled maker orphans: **0**;
-- orphan makers canceled on latest startup: **0**;
-- unresolved startup exposure: **none**.
+The private Polymarket order WebSocket was connected/healthy but had not yet observed any private order updates. The outer verified wrapper re-raised a bootstrap `RuntimeError` when `stream.updates <= 0` instead of preserving the known order id and using authoritative REST recovery.
 
-### Sticky maker behavior
+Fix now live:
+- private WS remains primary;
+- known order identity is preserved;
+- if WS bootstrap is silent/fails, that exact order degrades to paced authoritative REST state reads;
+- terminal ambiguity still hard-halts and retains reservation;
+- no ambiguous state is converted to assumed zero fill.
 
-There is no timer-only four-minute cancellation anymore. A live whole-contract maker remains resting while:
-- hedge book stays fresh;
-- hedge depth stays sufficient;
-- exact fee-adjusted locked floor remains >=3c;
-- market lifecycle remains valid;
-- private account WebSocket remains healthy.
+### Authoritative zero-fill recovery
 
-Cancel/recovery is caused by economics, depth, freshness, lifecycle, account-state failure, or fill — not elapsed time alone.
+The 6:42 Nick Sogard reservation was not blindly released. Startup recovery checked:
+- exact maker/hedge slugs;
+- open account orders;
+- authenticated Polymarket portfolio trade activity after the reservation timestamp.
 
-### Complete same-event pair coverage
+At **7:05:57 PM ET**, exchange evidence proved no open order and no post-reservation trade activity, so the reservation was released as confirmed zero fill.
 
-The exact structural relationship is evaluated for **every certified L < H pair** in one Gemini event, not only adjacent strikes:
+A later interrupted Nick Sogard attempt from the next build was also recovered the same way and confirmed zero fill before new order entry.
 
-`BUY YES(L) + BUY NO(H)`
+### Root cause 2: slow/invisible pre-order path
 
-For L < H the payout floor is at least $1 across all states; non-adjacent pairs can pay $2 in the middle state but never create a payout hole. Exact source and expiry matching are still mandatory.
+After WS recovery, production could reach hundreds of priced candidates but appeared frozen after pricing. Two hardening changes are now live:
 
-Latest production census:
-- strict q1-compatible ladder contracts: **255**;
-- adjacent pairs: **236**;
-- all certified monotone L<H pairs: **2,438**;
-- books requested / healthy: **255 / 255**.
+1. **Bounded pre-mutation reads**
+   - account balance read has a 12s safe timeout;
+   - persistence recheck has a 12s safe timeout;
+   - stage telemetry now logs `BALANCE_READ_START/OK/TIMEOUT` and `PERSISTENCE_START/DONE/TIMEOUT`;
+   - timeouts before reservation safely skip rather than freezing the process.
 
-### Immediate FOK/FOK taker lane
+2. **Fast authoritative startup orphan cleanup**
+   - old cleanup batched ~1,600+ revenue slugs into roughly 48-68 authenticated `orders.list` calls;
+   - current cleanup uses one unfiltered authenticated `orders.list()` call to obtain all account open orders, filters client-side to the revenue universe, and makes one verification read only if it canceled something;
+   - latest startup: **1,683 revenue slugs, 0 account open orders, 1 authenticated list call, 0 unresolved**.
 
-Immediate same-Gemini FOK/FOK now scans every q1-compatible contract grid, including 0.01-grid instruments. This does **not** relax the resting-maker rule. q=1 must be a valid exact instrument quantity and each FOK must fill completely or cancel.
+Sports live branch current source commit: `6817a82eef4202c3463b74f2763c368f3fed4c86`.
+Sports verified production deployment: `1a4a32bc-77ea-4c62-8949-6978f83024cd` — **SUCCESS**.
 
-Latest live scans:
-- q1-compatible contracts: **255**;
-- fractional-grid contracts included for FOK: **210**;
-- monotone pair set: **2,438**;
-- healthy books: **255 / 255**;
-- current exact after-fee >=3c taker/taker candidates: **0**.
+### Current live MLB maker activity
 
-The taker scan repeats on **every idle cycle** before considering another maker; it is no longer startup-only.
+Latest clean cycle at ~7:18 PM ET:
+- strict markets: **1,683**;
+- strict pairs: **1,695**;
+- participation-ready pairs: **420**;
+- games with live/final boxscore: **4**;
+- near-touch/priced candidates: **167**;
+- quote requests: 416;
+- successful books: 246;
+- empty books: 170;
+- balance read: OK;
+- startup account cleanup: clean.
 
-### Maker fill-quality selector
+Observed candidate progression after the fixes:
+- Michael Moniak COL-WSH H+R+RBI ladder passed persistence and entered a sticky maker lifecycle;
+- Wil Abreu BOS-MIA total-bases ladder passed persistence and spent ~70s in the execution lifecycle before advancing;
+- Framber Valdez TB-DET strikeout ladder passed persistence and spent ~60s in the lifecycle before advancing;
+- Kyle Stowers BOS-MIA H+R+RBI ladder was the next persistent candidate at the latest checkpoint.
 
-Whole-contract maker discovery currently sees:
-- whole-contract symbols: **45**;
-- raw >=3c frontier rows: about **191** in the latest snapshot;
-- robust whole-contract maker candidates: **19**;
-- candidates with recent exact maker-side flow/volume: **0**;
-- dead candidates suppressed: **19**.
+The previous `GAME_NOT_LIVE` condition is **not** the current blocker. The current bottleneck is maker fill conversion / available contra flow at the safe >=3c frontier.
 
-The suppressed rows were instrumented rather than guessed. Current examples across XRP/ETH show:
-- exact maker contract 30-minute quantity: **0**;
-- exact hedge contract 30-minute quantity: **0**;
-- event-wide contract quantity in the same window: **0**;
-- no maker contra ask;
-- reported current event liquidity: **0**.
-
-Lifetime event volume can be nonzero/high, but these books are not currently trading. **Do not force makers into these dead books merely to create order count.**
-
-Selection policy remains execution-first:
-- actual maker-side aggressor flow;
-- recent exact maker-contract volume;
-- recent hedge-contract volume;
-- queue ahead / ability to improve safely;
-- ask proximity;
-- event activity/liquidity;
-- hedge stability/depth;
-- expiry.
-
-### Fractional resting-maker census — closed as unsafe at current grids
-
-A read-only production census tested whether the 210 excluded 0.01-grid contracts could safely support q=1 resting makers despite partial fills.
-
-Worst-case policy:
-- assume the first partial fill can be one maker quantity increment;
-- test every increment multiple through q=1;
-- sibling must accept the exact same hedge quantity;
-- sibling depth must cover it;
-- use exact cent-rounded maker+taker fees;
-- include one adverse hedge tick;
-- require >=3c **per filled contract at every possible partial size**.
-
-Latest v6 census:
-- strict contracts: **255**;
-- whole-contract (`increment=1`): **45**;
-- fractional (`increment=0.01`): **210**;
-- fractional q1 arithmetic frontier directions: **2,626**;
-- fractional directions safe at every possible partial fill: **0**.
-
-Therefore **do not enable 0.01-grid resting makers**. The smallest possible partial fill plus cent-rounded fees destroys the 3c/contract floor. FOK/FOK remains allowed on those contracts because immediate all-or-none q=1 execution is a different risk shape.
-
-## MLB POLYMARKET SAME-VENUE MAKER -> FOK
+## POLYMARKET MLB SAME-VENUE MAKER -> FOK
 
 Primary Railway service:
 - service: `sports-kp-live-executor` (`bdcd4d42-bfcf-469c-9bd7-46b26acd8b87`)
 - branch: `feature/sports-kp-live-executor-impl`
-- verified deployment: `c28d50c5-e48a-428c-9cba-767e69b2e478` — **SUCCESS**
+- current source commit: `6817a82eef4202c3463b74f2763c368f3fed4c86`
+- current verified deployment: `1a4a32bc-77ea-4c62-8949-6978f83024cd` — **SUCCESS**
 - q=1
 - minimum modeled locked profit: **$0.03**
 - live rule-risk loss ceiling: **$5**, fixed; never silently reset/increase it.
+- restart policy: bounded `ON_FAILURE`; intentional fail-closed returns still remain halted until the underlying state is safe.
 
-This lane already evaluates all strict same-player/stat threshold combinations within each ladder, not only adjacent thresholds.
-
-Current capabilities preserved:
-- can seed the first safe post-only bid;
-- computes maximum-safe maker frontier with exact current Polymarket US fee math;
+Capabilities preserved:
+- all strict same-player/stat threshold combinations within a ladder;
+- first safe post-only bid / maximum-safe maker frontier;
+- exact current Polymarket US fee math;
 - near-touch is ranking, not admission;
-- sticky resting maker while hedge remains safe;
-- exact current hedge depth/economics revalidation;
+- sticky maker while hedge economics remain valid;
 - confirmed q1 maker fill -> q1 FOK sibling hedge;
-- durable reservation before mutation;
-- private order state + bounded recovery;
+- durable $1 reservation before mutation;
+- private WS primary + bounded REST recovery;
 - partial-fill / hedge-failure flatten + hard halt;
 - first reconciled two-leg live canary stops for review;
-- settlement is required before realized P&L.
+- settlement required before realized P&L.
 
-Participation gate remains mandatory and is **not** being weakened. Audited policy requires:
-- game state LIVE;
-- hitter: confirmed starter + >=1 plate appearance;
-- strikeout pitcher: confirmed starting pitcher + >=1 batter faced;
-- exact same game/player/stat identity and threshold ordering;
-- tick/q1 metadata intact.
+Participation remains mandatory:
+- game LIVE;
+- hitter starter + >=1 plate appearance;
+- strikeout pitcher confirmed starting pitcher + >=1 batter faced;
+- exact game/player/stat/threshold identity;
+- markets remain `LIVE_RULE_RISK_LFMP_SUSPENSION_NOT_GUARANTEED_ARBITRAGE`.
 
-Reason: these markets remain `LIVE_RULE_RISK_LFMP_SUSPENSION_NOT_GUARANTEED_ARBITRAGE`; identity alone is not enough before the participation branch is resolved.
+## SAME-GEMINI CRYPTO THRESHOLD LADDERS
 
-Latest pregame evidence from the current service:
-- roughly **1,470+ strict markets / 1,480+ strict pairs** in recent inventory snapshots;
-- `ready_pairs = 0` before the evening games were live;
-- rejection reason was `GAME_NOT_LIVE`, not missing books or broken transport;
-- 0 current attempts, 0 fills, $0 new realized.
+Primary Railway service:
+- service: `crypto-maker-live-probe-q1` (`6e0dffb2-8309-47cf-8196-9106eda284d8`)
+- branch: `feature/maker-live-probe-q1`
+- current deployment: `199b409e-dd2d-49e1-a7d0-184e5b92e7ad` — **SUCCESS**
+- start: `python -m src.gemini_same_venue_crypto_execution_v6`
+- q=1
+- locked after-fee floor: **>= $0.03 per contract**
+- restart policy changed from `NEVER` to bounded `ON_FAILURE` (max 10) after a transport/library crash left the service dead.
 
-## GEMINI <-> KALSHI MLB SPORTS SUPERVISOR
+Do **not** infer that the underlying WebSocket masking `TypeError` is fully root-caused yet. Availability is restored; account gate still reconciles before any mutation, and the failure has not recurred in the current deployment.
+
+Latest startup/current state:
+- targeted tests: **28 passed**;
+- account gate: active orders 0, recent filled maker orphans 0, orphan makers canceled 0;
+- startup unresolved exposure: none;
+- strict contracts: ~254;
+- fractional 0.01-grid maker contracts excluded: 209;
+- current books healthy: 254/254;
+- monotone q1 pair universe: about 2,430;
+- current >=3c FOK/FOK candidates: **0**;
+- robust whole-contract maker candidates with qualifying recent exact flow: **0**;
+- dead/no-flow candidates remain suppressed.
+
+Fractional resting-maker path remains closed: production worst-partial-fill census found **0 safe fractional maker directions** at the >=3c/contract floor because 0.01 partial fills plus cent-rounded fees destroy the guarantee. Fractional q1 contracts remain eligible only for immediate all-or-none FOK/FOK execution.
+
+Old Gemini<->Kalshi 15-minute basis lane remains parked because settlement-index basis risk is not guaranteed arbitrage.
+
+## GEMINI <-> KALSHI / GENERAL SPORTS SUPERVISOR
 
 Service: `sports-gk-autonomous-supervisor` (`0238eada-ced4-4927-8150-0ccce2e1a0a4`).
 
-Current live preflight remains armed with:
-- q=1;
-- >=3c minimum;
-- fixed hard rule-risk budget/loss controls preserved;
-- participation required;
-- exact rule/counterpart certification required.
+Current observed capital snapshot:
+- Gemini: about **$62.24**;
+- Kalshi: about **$3,405.71**;
+- free buffer: $5.
 
-Latest observed pregame inventory:
-- Gemini events: about **85**;
-- Kalshi MLB prop events: about **40**;
-- exact joined eligible keys: **329**;
-- families include hits and home runs in the current joined set;
-- prior supervisor epoch processed tens of thousands of trigger updates, but all were correctly rejected pregame for missing official participation;
-- current-epoch attempts/fills: **0 / 0** before games were live.
+Current scans around 7:21 PM ET:
+- three-venue MLB/full-game: 99 normalized counterpart keys, 190 priced quotes, **0 one-contract positive locks**;
+- NFL Gemini<->Kalshi: ~1,082 exact counterpart keys, 607 priced q1 keys, **0 positive q1 locks / 0 >=3c locks**.
 
-Historical reconciled evidence remains: seven compatible G<->K sports trades total approximately **+$0.2679 realized net**. Do not use that value as proof of current opportunity supply or current-day profit.
+Do not weaken rule fingerprints or quote-skew constraints to manufacture trades.
+
+Historical reconciled evidence: seven compatible G<->K sports trades total approximately **+$0.2679 realized net**.
 
 ## OTHER LANES / SAFETY
 
-### FanDuel / sportsbook comparison
+### FanDuel / sportsbook
 
-`the-odds-api-mlb-shadow` remains read-only. A prior false-positive defect matched different games within one series; current physical-event matching requires sportsbook commence time and prediction scheduled start within five minutes. After the fix, the prior hundreds of apparent rows collapsed to **0 same-physical-game actionable locks**. Never resurrect the old count as opportunity supply.
+Prior apparent hundreds of sportsbook rows were contaminated by cross-game matching. Current physical-event matching requires scheduled starts within the approved window. Do not reuse the old false-positive count as opportunity supply.
 
 ### Crypto basis
 
-Do not revive the old Gemini<->Kalshi 15-minute crypto maker as the primary lane. Settlement index differences created directional basis risk, including an already reconciled one-leg loss. Keep it parked unless a separately certified basis-risk strategy is intentionally approved.
+Do not revive the Gemini<->Kalshi 15-minute basis lane as guaranteed arbitrage. Settlement-index mismatch created directional basis risk and a prior reconciled one-leg loss.
 
 ### Weather / economic events
 
-Do not call modeled EV or one-sided rows arbitrage. Execution requires authoritative settlement/rule/fee certification and complementary executable legs.
+Do not call modeled EV or one-sided rows arbitrage. Execution requires settlement/rule/fee certification and complementary executable legs.
 
 ## OPERATING PRIORITY FROM THIS CHECKPOINT
 
-1. **Let the same-Gemini v6 service keep rechecking the complete 2,438-pair FOK universe and flow-qualified whole-contract maker set.** Do not place into dead books and do not enable fractional resting makers.
-2. **As MLB games become live, prioritize actual fills.** Both the Polymarket same-venue lane and Gemini<->Kalshi sports supervisor already have substantial certified inventory waiting on participation. Once participation passes, rank by real trade flow/volume, queue conditions, proximity and hedge stability before edge magnitude alone.
-3. Maintain one q=1 live maker exposure until maker fill -> hedge -> settlement -> realized lifecycle is proven cleanly.
-4. After a clean settled canary, scale quantity/number of simultaneous makers only from measured fill conversion, hedge reliability, capital reservation capacity and realized loss budget — never from scanner counts.
-5. Keep the scoreboard authoritative: `QUALIFIED -> ORDER_SUBMITTED -> FILLED -> HEDGED -> SETTLED -> REALIZED`.
+1. **Do not revisit the stale “games have not started” diagnosis. MLB participation is live and the Polymarket executor is actively cycling candidates.**
+2. Measure the now-live Polymarket maker funnel as: persistent candidate -> reservation -> maker submitted -> maker fill -> FOK hedge -> settlement. The immediate optimization target is **fill conversion**, not scanner count.
+3. Add/retain explicit maker-order-id and terminal-attempt telemetry so submitted-order counts never have to be inferred from elapsed sticky time.
+4. Rank safe candidates by real trade flow, recent exact volume, queue position, spread/proximity and hedge stability. Do not force makers into empty books merely to create order count.
+5. Keep same-Gemini v6 continuously scanning the complete safe FOK universe and flow-qualified whole-contract makers; its current absence of trades is economic, not scanner coverage.
+6. Keep the G<->K supervisor scanning live MLB and pregame/live football, but do not execute non-certified normal-event matches.
+7. Maintain q1 until the complete maker fill -> hedge -> settlement -> realized lifecycle is proven cleanly. Scale only from measured fill conversion and hedge reliability.
+8. Scoreboard remains authoritative: `QUALIFIED -> ORDER_SUBMITTED -> FILLED -> HEDGED -> SETTLED -> REALIZED`.
 
-Do not lower the 3c after-fee floor, weaken settlement/rule certification, bypass participation, silently increase/reset the $5 sports rule-risk ceiling, release ambiguous reservations, count shadow/locked/unsettled P&L as realized, or mix this infrastructure with the unrelated SOL executor.
+Do not lower the 3c after-fee floor, weaken settlement/rule certification, bypass participation, silently increase/reset the $5 Polymarket MLB rule-risk ceiling, release ambiguous reservations, count shadow/locked/unsettled P&L as realized, or mix this infrastructure with the unrelated SOL executor.
 
 Never store credentials, signing material, API keys, or other secrets here.
