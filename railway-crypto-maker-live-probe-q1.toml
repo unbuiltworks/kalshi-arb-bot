@@ -1,8 +1,8 @@
-# Dual-venue read-only maker supply census before bounded q1 promotion.
+# Consolidated read-only maker supply + duration inventory before bounded q1 promotion.
 [build]
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python -m src.gemini_kalshi_dual_maker_census --seconds 120"
-preDeployCommand = ["python -m pytest -q tests/test_gemini_kalshi_maker_live_probe_q1.py tests/test_gemini_kalshi_maker_live_probe_q1_safe.py tests/test_gemini_kalshi_maker_live_probe_q1_final.py tests/test_gemini_kalshi_maker_live_probe_q1_venue_once.py tests/test_gemini_kalshi_maker_rest_guard.py tests/test_gemini_kalshi_maker_dominance_guard.py && python -m py_compile src/gemini_kalshi_dual_maker_census.py"]
+startCommand = "sh -c 'python -m src.gemini_kalshi_dual_maker_census --seconds 60 && python -m src.gemini_kalshi_crypto_duration_inventory'"
+preDeployCommand = ["python -m pytest -q tests/test_gemini_kalshi_maker_live_probe_q1.py tests/test_gemini_kalshi_maker_live_probe_q1_safe.py tests/test_gemini_kalshi_maker_live_probe_q1_final.py tests/test_gemini_kalshi_maker_live_probe_q1_venue_once.py tests/test_gemini_kalshi_maker_rest_guard.py tests/test_gemini_kalshi_maker_dominance_guard.py && python -m py_compile src/gemini_kalshi_dual_maker_census.py src/gemini_kalshi_crypto_duration_inventory.py"]
 restartPolicyType = "NEVER"
