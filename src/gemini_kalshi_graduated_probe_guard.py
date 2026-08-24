@@ -34,11 +34,11 @@ def _q(value: Any) -> D:
 
 
 def _require_gates(gates: QuantitySafetyGates) -> None:
-    failed = gates.failed()
-    if failed:
-        raise ValueError("quantity safety gate failed: " + ",".join(failed))
+    failures = gates.failures()
+    if failures:
+        raise ValueError("quantity safety gate failed: " + ",".join(failures))
     # Keep this explicit even though rule_fingerprint_certified is included in
-    # ``failed`` so future edits cannot accidentally make q5 a rule-risk probe.
+    # ``failures`` so future edits cannot accidentally make q5 a rule-risk probe.
     if not gates.rule_fingerprint_certified:
         raise ValueError("complete rule fingerprint required for graduated quantity")
 
