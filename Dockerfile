@@ -12,9 +12,8 @@ COPY main.py .
 
 # Fail closed on identity, activation/event-order safety, basis/no-lookahead logic,
 # whole-episode gates, exact original-limit/depth math, original-episode binding,
-# conservative 20 bp readiness/executor behavior, the isolated SOL 10bp/50ms
-# canary override, the persistent/idempotent v2 one-shot state machine, and the
-# process-local Kalshi-first hedge coordinator used to eliminate Gemini-first orphans.
+# conservative readiness/executor behavior, persistent/idempotent one-shot state,
+# Kalshi-first hedge coordination, and bounded concurrent fully-paired basis risk.
 RUN PYTHONPATH=/app python -m pytest -q \
     tests/test_gemini_kalshi_predictive_hot.py \
     tests/test_gemini_kalshi_predictive_prewarmed.py \
@@ -26,10 +25,9 @@ RUN PYTHONPATH=/app python -m pytest -q \
     tests/test_gemini_kalshi_micro_live_executor_20bp_safe.py \
     tests/test_gemini_kalshi_sol_live_canary_10bp_50ms.py \
     tests/test_gemini_kalshi_sol_live_canary_v2.py \
-    tests/test_gemini_kalshi_sequential_probe_transport.py
+    tests/test_gemini_kalshi_sequential_probe_transport.py \
+    tests/test_gemini_kalshi_basis_risk_v6_concurrency.py
 
-# Keep the image default disarmed on the proven v1 scanner until a Railway service
-# explicitly selects a reviewed live child entrypoint.
 ENV BOT_MODE=paper
 
 CMD ["python", "-m", "src.gemini_kalshi_sol_live_canary_10bp_50ms", "--assets", "SOL", "--seconds", "0", "--max-quote-skew-ms", "50", "--capital-limit", "1", "--min-profit", "0.03", "--prewarm-lead-s", "1.0", "--output-dir", "/tmp/sol-live-canary"]
