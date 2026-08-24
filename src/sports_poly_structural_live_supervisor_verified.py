@@ -4,8 +4,8 @@ The first live maker still has to prove the authenticated private order stream.
 Once the stream has demonstrably delivered real order updates, an intermittent
 per-order miss no longer kills the whole lane: that order alone falls back to
 paced exact REST reads while all existing cancel/reconciliation protections stay
-in force. The restart cleanup universe is kept identical to the live discovery
-horizon so a broader scanner can never leave future-event makers outside cleanup.
+in force. Restart cleanup deliberately uses a wider lookback than live discovery
+so a late restart cannot forget a still-open maker from an older active event.
 """
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from src.sports_poly_private_order_stream import PrivateOrderStream
 
 REST_FALLBACK_GAP_SECONDS = 0.75
 HORIZON_HOURS = int(os.getenv("SPORTS_STRUCTURAL_HORIZON_HOURS", "168"))
+CLEANUP_LOOKBACK_HOURS = int(os.getenv("SPORTS_STRUCTURAL_CLEANUP_LOOKBACK_HOURS", "24"))
 
 
 def install_verified_private_order_transport(stream: PrivateOrderStream) -> Callable[[], None]:
@@ -99,7 +100,10 @@ def install_verified_private_order_transport(stream: PrivateOrderStream) -> Call
 
 
 async def current_total_slugs() -> list[str]:
-    feed, _, _ = await supervisor.discover_structural_pairs(horizon_hours=HORIZON_HOURS)
+    feed, _, _ = await supervisor.discover_structural_pairs(
+        horizon_hours=HORIZON_HOURS,
+        lookback_hours=CLEANUP_LOOKBACK_HOURS,
+    )
     return sorted({
         str(slug)
         for slug, market in feed.items()
