@@ -3,6 +3,12 @@
 This replaces no pricing logic and performs no order entry. It reuses the exact
 full-game-only v2 scanner primitives, then routes only fully rule-audited,
 actionable retail-vs-prediction locks through sports_pushover_alerts.
+
+Physical-event identity is a second hard gate. Semantic contract keys intentionally
+omit scheduled start, so repeated MLB series can otherwise make Monday and Tuesday
+games look identical after quote normalization. Retail-vs-prediction opportunities
+must therefore have authoritative normalized scheduled starts within five minutes
+before they can enter rule certification or alerting.
 """
 from __future__ import annotations
 
@@ -18,12 +24,15 @@ from typing import Any, Mapping
 import httpx
 
 import src.the_odds_api_mlb_shadow_v2 as base
+from src.kalshi_mlb_time_guard import normalize_kalshi_mlb_eastern
 from src.mlb_game_rule_certifications import CertificationStatus, apply_certification
+from src.mlb_game_side_normalization import normalize_gemini_mlb, normalize_polymarket_mlb
 from src.sports_pushover_alerts import ACTIONABLE_CONFIDENCE, SportsPushoverAlerts
 
 logger = logging.getLogger("kalshi_arb.sports_pushover_odds_api_mlb")
 _ALERTS = SportsPushoverAlerts()
-RULE_STATUS = "FULL_GAME_ONLY; MACHINE_RULE_CERTIFICATION_REQUIRED"
+RULE_STATUS = "FULL_GAME_ONLY; PHYSICAL_START_MATCH_REQUIRED; MACHINE_RULE_CERTIFICATION_REQUIRED"
+MAX_PHYSICAL_START_SKEW_MS = 5 * 60 * 1000
 
 
 async def _soft_prediction_fetch(name: str, awaitable: Any) -> tuple[list[dict[str, Any]], str | None]:
@@ -39,6 +48,67 @@ async def _soft_prediction_fetch(name: str, awaitable: Any) -> tuple[list[dict[s
             detail,
         )
         return [], detail
+
+
+def _sportsbook_start_map(events: list[Mapping[str, Any]]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for raw in events:
+        event_id = str(raw.get("id") or "").strip()
+        start = base._start_ms(raw.get("commence_time"))
+        if event_id and start is not None:
+            out[event_id] = start
+    return out
+
+
+def _prediction_start_map(
+    gemini: list[dict[str, Any]],
+    poly: list[dict[str, Any]],
+    kalshi: list[dict[str, Any]],
+) -> dict[tuple[str, str], int]:
+    """Map normalized prediction-market IDs to their physical scheduled start."""
+    out: dict[tuple[str, str], int] = {}
+    rows = (
+        normalize_gemini_mlb(gemini)
+        + normalize_polymarket_mlb(poly)
+        + normalize_kalshi_mlb_eastern(kalshi)
+    )
+    for row in rows:
+        out[(row.identity.venue, row.venue_market_id)] = row.identity.event.scheduled_start_ms
+    return out
+
+
+def _leg_start_ms(
+    venue: str,
+    market_id: str,
+    sportsbook_starts: Mapping[str, int],
+    prediction_starts: Mapping[tuple[str, str], int],
+) -> int | None:
+    venue_name = str(venue)
+    market = str(market_id)
+    if venue_name.startswith("sportsbook:"):
+        event_id = market.split(":", 1)[0]
+        return sportsbook_starts.get(event_id)
+    normalized_market = market.split("#", 1)[0]
+    return prediction_starts.get((venue_name, normalized_market))
+
+
+def _same_physical_game(
+    lock: Any,
+    sportsbook_starts: Mapping[str, int],
+    prediction_starts: Mapping[tuple[str, str], int],
+    *,
+    max_skew_ms: int = MAX_PHYSICAL_START_SKEW_MS,
+) -> tuple[bool, int | None]:
+    yes_start = _leg_start_ms(
+        str(lock.yes_venue), str(lock.yes_market_id), sportsbook_starts, prediction_starts
+    )
+    no_start = _leg_start_ms(
+        str(lock.no_venue), str(lock.no_market_id), sportsbook_starts, prediction_starts
+    )
+    if yes_start is None or no_start is None:
+        return False, None
+    skew = abs(yes_start - no_start)
+    return skew <= max(0, int(max_skew_ms)), skew
 
 
 async def run_once(api_key: str) -> dict[str, Any]:
@@ -76,10 +146,27 @@ async def run_once(api_key: str) -> dict[str, Any]:
         max_quote_skew_ms=70000,
         min_confidence="NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
     ))
-    retail_vs_prediction = [
+    retail_vs_prediction_before_time_guard = [
         row for row in locks
         if base._is_retail(row.yes_venue) != base._is_retail(row.no_venue)
     ]
+
+    sportsbook_starts = _sportsbook_start_map(events)
+    prediction_starts = _prediction_start_map(gemini, poly, kalshi)
+    retail_vs_prediction: list[Any] = []
+    physical_start_skews: list[int] = []
+    missing_start_count = 0
+    cross_game_filtered = 0
+    for row in retail_vs_prediction_before_time_guard:
+        same_game, start_skew = _same_physical_game(row, sportsbook_starts, prediction_starts)
+        if start_skew is None:
+            missing_start_count += 1
+            continue
+        if not same_game:
+            cross_game_filtered += 1
+            continue
+        physical_start_skews.append(start_skew)
+        retail_vs_prediction.append(row)
 
     certified_rows: list[Any] = []
     assessments: list[Any] = []
@@ -132,8 +219,16 @@ async def run_once(api_key: str) -> dict[str, Any]:
         "prediction_source_errors": source_errors,
         "direct_counterpart_keys": direct_keys,
         "direct_priced_quotes": len(direct_quotes),
+        "retail_vs_prediction_positive_locks_before_physical_start_guard": len(retail_vs_prediction_before_time_guard),
         "retail_vs_prediction_positive_locks": len(retail_vs_prediction),
         "retail_vs_prediction_actionable_locks": len(actionable_locks),
+        "physical_event_guard": {
+            "max_start_skew_ms": MAX_PHYSICAL_START_SKEW_MS,
+            "cross_game_filtered": cross_game_filtered,
+            "missing_start_filtered": missing_start_count,
+            "max_surviving_start_skew_ms": max(physical_start_skews) if physical_start_skews else None,
+            "requirement": "SPORTSBOOK_AND_PREDICTION_SCHEDULED_START_WITHIN_5_MIN",
+        },
         "top_retail_vs_prediction_locks": [x.as_dict() for x in certified_rows[:30]],
         "sportsbook_opportunity_tally": tally,
         "rule_audit": {
@@ -147,7 +242,7 @@ async def run_once(api_key: str) -> dict[str, Any]:
             "alerts_sent_this_scan": alerts_sent,
             "alert_errors_this_scan": alert_errors,
             "blocked_by_rule_or_settlement_gate": len(retail_vs_prediction) - len(actionable_locks),
-            "qualification": "FULL_RULES_AUDITED_EXECUTABLE + CERTIFIED_RULE_REGISTRY + positive_after_fee + freshness/skew + material_realert_only",
+            "qualification": "PHYSICAL_EVENT_MATCH + FULL_RULES_AUDITED_EXECUTABLE + CERTIFIED_RULE_REGISTRY + positive_after_fee + freshness/skew + material_realert_only",
         },
         "quota": quota,
         "fetch_error_count": len(errors) + len(source_errors),
