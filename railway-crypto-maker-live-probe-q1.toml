@@ -1,8 +1,9 @@
-# TEMPORARY READ-ONLY orphan reconciliation. Live maker arms are disabled in Railway.
+# TEMPORARY guarded ledger reconciliation after authoritative Gemini zero-fill proof.
+# Gemini/Kalshi live maker arms remain disabled in Railway.
 [build]
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python -m src.gemini_xrp_orphan_reconcile_readonly"
-preDeployCommand = ["python -m py_compile src/gemini_xrp_orphan_reconcile_readonly.py"]
+startCommand = "python -m src.gemini_xrp_orphan_release_oneoff"
+preDeployCommand = ["python -m py_compile src/gemini_xrp_orphan_reconcile_readonly.py src/gemini_xrp_orphan_release_oneoff.py"]
 restartPolicyType = "NEVER"
