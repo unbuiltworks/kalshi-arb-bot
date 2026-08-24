@@ -1,0 +1,1 @@
+Targeted read-only transport validation after replacing Kalshi WS with exact depth=1 REST for the bounded basis canary.

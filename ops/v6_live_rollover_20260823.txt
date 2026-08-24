@@ -1,0 +1,1 @@
+Production checkpoint: v6 basis-risk rollover, q=1, Kalshi-first then Gemini, 20 reservation ceiling, existing $5 realized-loss budget with $0.09 already consumed, any new/unreviewed loss hard-stops.

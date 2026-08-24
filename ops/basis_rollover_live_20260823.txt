@@ -1,0 +1,1 @@
+Production source marker for bounded automatic q=1 basis-risk rollover after 6/6 targeted safety tests and authoritative ledger reconciliation. The shared guaranteed-arbitrage settlement-equivalence lock remains unchanged.

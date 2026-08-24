@@ -1,0 +1,1 @@
+Read-only production preflight for reviewed-loss-aware Kalshi-first basis rollover. No order entry.

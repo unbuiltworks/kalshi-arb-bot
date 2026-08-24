@@ -1,0 +1,1 @@
+Read-only handshake diagnostic after pausing non-core WS consumers.

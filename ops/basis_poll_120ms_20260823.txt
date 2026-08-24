@@ -1,0 +1,5 @@
+Production source deployment marker for the bounded Gemini/Kalshi basis-risk q1 lane.
+
+Purpose: apply the service-scoped Kalshi exact REST poll interval of 120ms after verifying the transport fails closed on 429/stale/missing quotes.
+
+No execution/risk thresholds are changed: q=1, <=$1 per probe, >=$0.03 after-fee floor, >=0.5bp protective threshold separation, protective orientation, <=50ms skew/persistence, <=100ms freshness, exact q1 depth, one unresolved trade max, $5 max realized-loss budget, any-loss hard stop, ETH/SOL/XRP only, BTC quarantine, q5 blocked, shared guaranteed-arb lock unchanged.

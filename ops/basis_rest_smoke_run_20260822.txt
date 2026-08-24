@@ -1,0 +1,1 @@
+Read-only five-cycle BTC/ETH/SOL/XRP exact depth=1 REST smoke; no order path.
