@@ -41,3 +41,21 @@ def test_falsey_malformed_readiness_blockers_fail_closed_when_primary_absent():
         out = audit_weather_blocker_telemetry({"readiness_blockers": malformed})
         assert out["blocker_telemetry_verified"] is False
         assert out["blockers"] == ["MALFORMED_BLOCKER_TELEMETRY"]
+
+
+def test_malformed_entries_inside_valid_blocker_container_fail_closed():
+    for malformed_values in ([None], [""], ["   "], [0], [False], [{}], ["MODEL_RESEARCH_ONLY", None]):
+        out = audit_weather_blocker_telemetry({"blockers": malformed_values})
+        assert out["blocker_telemetry_verified"] is False
+        assert out["blocker_source"] == "blockers"
+        assert out["blockers"] == ["MALFORMED_BLOCKER_TELEMETRY"]
+        assert out["order_entry"] is False
+        assert out["live_probe_ready"] is False
+
+
+def test_duplicate_valid_string_entries_are_normalized_without_weakening_blockers():
+    out = audit_weather_blocker_telemetry({
+        "blockers": [" MODEL_RESEARCH_ONLY ", "MODEL_RESEARCH_ONLY", "TWC_SOURCE_ACCESS_REQUIRED"],
+    })
+    assert out["blocker_telemetry_verified"] is True
+    assert out["blockers"] == ["MODEL_RESEARCH_ONLY", "TWC_SOURCE_ACCESS_REQUIRED"]
