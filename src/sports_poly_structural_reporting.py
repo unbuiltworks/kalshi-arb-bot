@@ -1,13 +1,12 @@
-"""Best-effort authoritative ledger reporting for same-Polymarket structural q1.
+"""Authoritative execution reporting for same-Polymarket structural q1.
 
-Reporting never authorizes or submits an order. It mirrors already-completed
-campaign results into ARB Command Center using exact order details. Positive
-locked economics are NOT emitted as TRADE_REALIZED; a two-leg fill remains
-AWAITING_SETTLEMENT until a settlement reconciler observes definitive outcomes.
+Reporting never authorizes or submits an order. It mirrors completed campaign state
+using exact order details. Positive locked economics are NOT TRADE_REALIZED; a fully
+reconciled pair remains AWAITING_SETTLEMENT until definitive settlement accounting.
 
-Confirmed zero-fill maker outcomes are not re-read from the authenticated order
-API. That keeps ledger observability from consuming the rate-limit budget needed
-for execution.
+When a campaign provides a durable pre-mutation trade id, every fill/execution event
+uses that same id so the reservation, execution, and eventual settlement remain one
+ledger object.
 """
 from __future__ import annotations
 
@@ -107,12 +106,19 @@ async def report_attempt(
         except Exception:
             hedge_order = {}
 
-    trade_id = _safe_id(f"sports-poly:{maker_id or hedge_id}")
+    supplied_trade_id = str(row.get("_trade_id") or "").strip()
+    trade_id = _safe_id(supplied_trade_id or f"sports-poly:{maker_id or hedge_id}")
     market_key = f"{row.get('low_slug')}|{row.get('high_slug')}"
     family = str(row.get("family") or "structural_total")
-    classification = "LIVE_SAME_VENUE_STRUCTURAL_LOCK"
+    rule_risk = bool(row.get("guaranteed_arbitrage") is False or "RULE_RISK" in str(row.get("rule_classification") or "").upper())
+    classification = str(
+        row.get("rule_classification")
+        or ("LIVE_RULE_RISK_NOT_GUARANTEED_ARBITRAGE" if rule_risk else "LIVE_SAME_VENUE_STRUCTURAL_LOCK")
+    )
+    strategy = str(row.get("_strategy") or ("sports_poly_mlb_maker_q1" if rule_risk else "sports_poly_structural_q1"))
     base_meta = {
         "classification": classification,
+        "guaranteed_arbitrage": not rule_risk,
         "family": family,
         "low_slug": row.get("low_slug"),
         "high_slug": row.get("high_slug"),
@@ -151,7 +157,7 @@ async def report_attempt(
             "trade_id": trade_id,
             "event_type": "FILL",
             "event_ts": _now(),
-            "strategy": "sports_poly_structural_q1",
+            "strategy": strategy,
             "mode": "LIVE_PROBE",
             "market": market_key,
             "asset": family,
@@ -173,7 +179,7 @@ async def report_attempt(
         "trade_id": trade_id,
         "event_type": "EXECUTION_RESULT",
         "event_ts": _now(),
-        "strategy": "sports_poly_structural_q1",
+        "strategy": strategy,
         "mode": "LIVE_PROBE",
         "market": market_key,
         "asset": family,
