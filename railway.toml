@@ -1,0 +1,7 @@
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "python -m src.sports_gk_caleb_durbin_recovery"
+preDeployCommand = ["python -m py_compile src/sports_gk_caleb_durbin_recovery.py src/gemini_kalshi_probe_transport.py src/gemini_kalshi_live_shadow.py src/gemini_prediction_auth.py src/sports_trade_reporting.py"]
+restartPolicyType = "NEVER"
