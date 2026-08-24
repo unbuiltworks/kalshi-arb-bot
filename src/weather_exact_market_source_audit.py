@@ -37,14 +37,7 @@ def _official_kalshi_evidence(url: Any) -> bool:
 
 
 def _official_exact_market_evidence(url: Any, event_ticker: str) -> bool:
-    """Require market-page evidence to be bound to the exact event, not merely Kalshi-owned.
-
-    A generic Kalshi homepage, Series page, or terms document is useful rules evidence but
-    cannot prove which settlement-source regime applied to one historical exact market.
-    Current public exact-market pages include the event ticker in their `/markets/...`
-    path, so require that binding here. If Kalshi changes the URL shape, fail closed until
-    the extractor is independently updated rather than silently accepting generic proof.
-    """
+    """Require market-page evidence to be bound to the exact event, not merely Kalshi-owned."""
     parsed = _https_host(url)
     if parsed is None or not event_ticker:
         return False
@@ -113,9 +106,9 @@ def audit_exact_market_source(
 ) -> dict[str, Any]:
     """Validate exact-market settlement-source provenance without using current Series provider as truth.
 
-    The caller must extract ``provider``/``source_url`` from exact-market/date rules or
-    equivalent official Kalshi evidence. A changed current Series template is not
-    allowed to override that exact historical evidence.
+    The returned audit preserves the *evidence-side* market ticker/date separately from
+    the target market identity. Downstream trust boundaries must replay those explicit
+    fields rather than substituting the target identity when evidence identity is absent.
     """
     blockers: list[str] = []
     s = str(series_ticker or "").strip().upper()
@@ -147,6 +140,8 @@ def audit_exact_market_source(
         "event_ticker": e or None,
         "market_ticker": m or None,
         "market_date": md or None,
+        "evidence_market_ticker": em or None,
+        "evidence_market_date": ed or None,
         "settlement_source_provider": recognized,
         "settlement_source_url": str(source_url).strip() if recognized else None,
         "evidence_url": str(evidence_url).strip() if exact_evidence_ok else None,
