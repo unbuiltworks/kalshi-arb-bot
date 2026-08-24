@@ -1,9 +1,13 @@
 """Best-effort authoritative ledger reporting for same-Polymarket structural q1.
 
-Reporting never authorizes or submits an order.  It mirrors already-completed
-campaign results into ARB Command Center using exact order details.  Positive
+Reporting never authorizes or submits an order. It mirrors already-completed
+campaign results into ARB Command Center using exact order details. Positive
 locked economics are NOT emitted as TRADE_REALIZED; a two-leg fill remains
 AWAITING_SETTLEMENT until a settlement reconciler observes definitive outcomes.
+
+Confirmed zero-fill maker outcomes are not re-read from the authenticated order
+API. That keeps ledger observability from consuming the rate-limit budget needed
+for execution.
 """
 from __future__ import annotations
 
@@ -20,6 +24,13 @@ LEDGER_URL = os.getenv(
     "https://arb-command-center-production.up.railway.app/api/events",
 ).strip()
 LEDGER_TOKEN = os.getenv("LEDGER_INGEST_TOKEN", "").strip()
+ZERO_FILL_STATUSES = {
+    "MAKER_NOT_FILLED_CANCELED",
+    "MAKER_CANCELED_EDGE_GONE",
+    "SKIP_BOOK_MISSING",
+    "SKIP_HEDGE_DEPTH",
+    "SKIP_FLOOR",
+}
 
 
 def _now() -> str:
@@ -74,6 +85,10 @@ async def report_attempt(
     result: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Mirror exact known fills and execution state; never changes trading state."""
+    campaign_status = str(result.get("status") or "UNKNOWN")
+    if campaign_status in ZERO_FILL_STATUSES:
+        return {"ledger_reported": False, "reason": "confirmed_zero_fill"}
+
     maker_id = str(result.get("maker_order_id") or "")
     hedge_id = str(result.get("hedge_order_id") or "")
     if not maker_id and not hedge_id:
@@ -109,7 +124,7 @@ async def report_attempt(
         "hedge_side": row.get("hedge_side"),
         "maker_order_id": maker_id,
         "hedge_order_id": hedge_id,
-        "campaign_status": result.get("status"),
+        "campaign_status": campaign_status,
         "actual_net_locked_profit": result.get("actual_net_locked_profit"),
     }
 
@@ -142,7 +157,7 @@ async def report_attempt(
             "asset": family,
             "venues": ["polymarket"],
             "side": f"BUY {side}",
-            "status": str(order.get("state") or result.get("status") or "FILLED"),
+            "status": str(order.get("state") or campaign_status or "FILLED"),
             "quantity": str(qty),
             "price": str(price),
             "amount": str(amount),
@@ -152,9 +167,8 @@ async def report_attempt(
             "metadata": {**base_meta, "leg": leg, "slug": slug, "order_state": order.get("state")},
         })
 
-    campaign_status = str(result.get("status") or "UNKNOWN")
     awaiting = campaign_status == "BOTH_FILLED_RECONCILED" and fills == 2
-    await _post({
+    execution_posted = await _post({
         "event_id": _safe_id(f"{trade_id}:execution-result"),
         "trade_id": trade_id,
         "event_type": "EXECUTION_RESULT",
@@ -179,4 +193,9 @@ async def report_attempt(
             "settlement_state": "AWAITING_SETTLEMENT" if awaiting else "NOT_FULLY_HEDGED_OR_RECONCILED",
         },
     })
-    return {"ledger_reported": True, "trade_id": trade_id, "fills_reported": fills, "awaiting_settlement": awaiting}
+    return {
+        "ledger_reported": bool(execution_posted),
+        "trade_id": trade_id,
+        "fills_reported": fills,
+        "awaiting_settlement": awaiting,
+    }
