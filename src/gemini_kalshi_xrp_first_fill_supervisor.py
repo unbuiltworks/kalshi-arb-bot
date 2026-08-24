@@ -20,9 +20,11 @@ Safety invariants inherited from the underlying triggered canary:
 Fillability policy:
 - admission is optimized for a full q=1 maker fill. Fractional fills therefore carry
   explicitly bounded research risk and are handled by exact post-fill hedge/flatten;
-- use sticky 20s quote rounds by default to preserve queue priority;
+- use sticky quote rounds to preserve queue priority;
 - zero-fill rounds/campaigns may continue; ANY fill/ambiguity/hard-halt ends supervisor;
-- fixed run-id/cycle trade IDs make an accidental redeploy of the same run fail closed.
+- fixed run-id/cycle trade IDs make an accidental redeploy of the same run fail closed;
+- market rollover without a published next pair is a zero-mutation wait state and
+  never consumes a durable cycle id.
 """
 from __future__ import annotations
 
@@ -30,8 +32,7 @@ import asyncio
 from decimal import Decimal
 import json
 import os
-import time
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from src import gemini_kalshi_xrp_maker_live_canary as canary
 from src import gemini_kalshi_xrp_maker_reprice_campaign as reprice
@@ -43,6 +44,7 @@ MAX_CYCLES = max(1, min(int(os.getenv("CRYPTO_MAKER_SUPERVISOR_MAX_CYCLES", "8")
 CYCLE_PAUSE_SECONDS = max(1.0, min(float(os.getenv("CRYPTO_MAKER_SUPERVISOR_PAUSE_SECONDS", "5")), 30.0))
 RUN_ID = os.getenv("CRYPTO_MAKER_SUPERVISOR_RUN_ID", "").strip()
 ARM = os.getenv("CRYPTO_MAKER_SUPERVISOR_ARM", "").strip()
+NO_PAIR_TEXT = "no viable XRP 15m pair beyond expiry cutoff"
 
 SAFE_CAMPAIGN_TERMINALS = {
     "MAX_REPRICE_ROUNDS_REACHED",
@@ -75,11 +77,40 @@ def terminal_requires_stop(result: dict[str, Any]) -> tuple[bool, str]:
         return True, terminal
     if status in SAFE_CAMPAIGN_TERMINALS:
         return False, status
-    # A duplicate means this exact durable supervisor run has already attempted this
-    # cycle (for example after a redeploy). Fail closed rather than minting new IDs.
     if "DUPLICATE" in status:
         return True, status
     return True, status or "UNKNOWN_STATUS"
+
+
+async def _run_after_rollover(
+    run_fn: Callable[[], Awaitable[dict[str, Any]]],
+    *,
+    cycle: int,
+    root_trade_id: str,
+    armed: bool,
+) -> dict[str, Any]:
+    """Retry only the zero-mutation no-next-pair boundary state with same cycle id."""
+    while True:
+        try:
+            return await run_fn()
+        except RuntimeError as exc:
+            if NO_PAIR_TEXT not in str(exc):
+                raise
+            emit(
+                "ROLLOVER_WAIT",
+                cycle=cycle,
+                root_trade_id=root_trade_id,
+                armed=armed,
+                status="NO_VIABLE_PAIR_YET",
+                order_entry=False,
+            )
+            if not armed:
+                return {
+                    "status": "NO_VIABLE_PAIR_YET",
+                    "order_entry": False,
+                    "realized": False,
+                }
+            await asyncio.sleep(CYCLE_PAUSE_SECONDS)
 
 
 async def run() -> dict[str, Any]:
@@ -108,9 +139,12 @@ async def run() -> dict[str, Any]:
     cycles: list[dict[str, Any]] = []
     try:
         if not armed:
-            # Same exact mechanics, no mutation. Useful after deploy to prove current
-            # inventory/geometry without creating a durable cycle claim.
-            result = await reprice.run()
+            result = await _run_after_rollover(
+                reprice.run,
+                cycle=0,
+                root_trade_id="READ_ONLY",
+                armed=False,
+            )
             out.update({
                 "status": "READ_ONLY_SUPERVISOR_PREFLIGHT",
                 "underlying_status": result.get("status"),
@@ -123,16 +157,12 @@ async def run() -> dict[str, Any]:
         for cycle in range(1, MAX_CYCLES + 1):
             root = cycle_root(RUN_ID, cycle)
             canary.trade_id = lambda root=root: root
-            try:
-                result = await reprice.run()
-            except RuntimeError as exc:
-                # Around a 15m boundary the next pair may not yet be published. That
-                # is a zero-mutation discovery state; retry the same durable cycle id.
-                if "no viable XRP 15m pair beyond expiry cutoff" in str(exc):
-                    emit("CYCLE", cycle=cycle, root_trade_id=root, status="NO_VIABLE_PAIR_YET", order_entry=False)
-                    await asyncio.sleep(CYCLE_PAUSE_SECONDS)
-                    continue
-                raise
+            result = await _run_after_rollover(
+                reprice.run,
+                cycle=cycle,
+                root_trade_id=root,
+                armed=True,
+            )
 
             row = {
                 "cycle": cycle,
