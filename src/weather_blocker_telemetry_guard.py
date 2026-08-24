@@ -2,8 +2,8 @@
 
 Read-only research helper. Explicitly present blocker fields must be structurally valid;
 falsey malformed values such as ``""``, ``0``, ``False``, or ``{}`` are not equivalent
-to an empty blocker list. This prevents malformed producer telemetry from being
-silently upgraded to "no blockers" by truthiness-based fallback logic.
+to an empty blocker list. Individual blocker entries must also be non-empty strings so a
+container such as ``[None, ""]`` cannot silently collapse to "no blockers".
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def audit_weather_blocker_telemetry(row: dict[str, Any]) -> dict[str, Any]:
     Precedence is explicit: if ``blockers`` is present, it is authoritative and must be
     a list/tuple/set. Only when that key is absent may ``readiness_blockers`` be used.
     If both keys are absent, an empty blocker list is valid. Any malformed explicitly
-    supplied field fails closed.
+    supplied field or malformed blocker entry fails closed.
     """
     if not isinstance(row, dict):
         raise TypeError("row must be a dict")
@@ -43,7 +43,20 @@ def audit_weather_blocker_telemetry(row: dict[str, Any]) -> dict[str, Any]:
             "live_probe_ready": False,
         }
 
-    blockers = sorted({str(value).strip() for value in values if str(value).strip()})
+    normalized: set[str] = set()
+    for value in values:
+        if not isinstance(value, str) or not value.strip():
+            return {
+                "blocker_telemetry_verified": False,
+                "blocker_source": source,
+                "blockers": ["MALFORMED_BLOCKER_TELEMETRY"],
+                "read_only": True,
+                "order_entry": False,
+                "live_probe_ready": False,
+            }
+        normalized.add(value.strip())
+
+    blockers = sorted(normalized)
     return {
         "blocker_telemetry_verified": True,
         "blocker_source": source,
