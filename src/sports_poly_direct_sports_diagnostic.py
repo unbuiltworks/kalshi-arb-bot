@@ -1,9 +1,9 @@
 """Cached read-only diagnostic for Polymarket's direct active sports market surface.
 
-The event endpoint can omit player/alternate markets. This diagnostic pages the direct
-/v1/markets sports inventory, records structured field coverage, and tests whether a
-row would satisfy the existing structural identity after only safe metadata aliases
-(parent key and sportsMarketTypeV2 -> sportsMarketType). It never places orders.
+The unfiltered /v1/markets surface is dominated by futures and can hide the short-dated
+markets we care about. This diagnostic queries the structured TOTAL, PROP, SPREAD and
+MONEYLINE surfaces independently, records field coverage, and tests whether rows would
+satisfy the existing structural identity after only safe metadata aliases. No orders.
 """
 from __future__ import annotations
 
@@ -21,8 +21,14 @@ _CACHE: dict[str, Any] | None = None
 _CACHE_AT = 0.0
 _CACHE_LOCK = asyncio.Lock()
 TTL_SECONDS = 180.0
-MAX_PAGES = 12
+MAX_PAGES_PER_TYPE = 12
 LIMIT = 50
+TYPE_FILTERS = (
+    "SPORTS_MARKET_TYPE_TOTAL",
+    "SPORTS_MARKET_TYPE_PROP",
+    "SPORTS_MARKET_TYPE_SPREAD",
+    "SPORTS_MARKET_TYPE_MONEYLINE",
+)
 
 
 def _enrich(raw: Mapping[str, Any]) -> dict[str, Any]:
@@ -51,33 +57,54 @@ def _sample(row: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-async def _scan() -> dict[str, Any]:
+async def _scan_type(http: httpx.AsyncClient, sports_type: str) -> tuple[list[dict[str, Any]], dict[str, int]]:
     rows: list[dict[str, Any]] = []
-    pages_ok = 0
-    failures = 0
+    stats = {"pages_requested": 0, "pages_ok": 0, "page_failures": 0}
+    for page in range(MAX_PAGES_PER_TYPE):
+        stats["pages_requested"] += 1
+        try:
+            response = await http.get(
+                f"{BASE}/v1/markets",
+                params={
+                    "limit": LIMIT,
+                    "offset": page * LIMIT,
+                    "active": "true",
+                    "closed": "false",
+                    "categories": "sports",
+                    "sportsMarketTypes": sports_type,
+                },
+            )
+            response.raise_for_status()
+        except Exception:
+            stats["page_failures"] += 1
+            break
+        stats["pages_ok"] += 1
+        body = response.json() if response.content else {}
+        page_rows = body.get("markets") or [] if isinstance(body, Mapping) else []
+        rows.extend(dict(r) for r in page_rows if isinstance(r, Mapping))
+        if len(page_rows) < LIMIT:
+            break
+    return rows, stats
+
+
+async def _scan() -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=12.0) as http:
-        for page in range(MAX_PAGES):
-            try:
-                response = await http.get(
-                    f"{BASE}/v1/markets",
-                    params={
-                        "limit": LIMIT,
-                        "offset": page * LIMIT,
-                        "active": "true",
-                        "closed": "false",
-                        "categories": "sports",
-                    },
-                )
-                response.raise_for_status()
-            except Exception:
-                failures += 1
-                break
-            pages_ok += 1
-            body = response.json() if response.content else {}
-            page_rows = body.get("markets") or [] if isinstance(body, Mapping) else []
-            rows.extend(dict(r) for r in page_rows if isinstance(r, Mapping))
-            if len(page_rows) < LIMIT:
-                break
+        results = await asyncio.gather(*(_scan_type(http, sports_type) for sports_type in TYPE_FILTERS))
+
+    rows: list[dict[str, Any]] = []
+    per_filter: dict[str, Any] = {}
+    seen: set[str] = set()
+    for sports_type, (typed_rows, stats) in zip(TYPE_FILTERS, results):
+        unique = 0
+        for row in typed_rows:
+            slug = str(row.get("slug") or row.get("id") or "")
+            if slug and slug in seen:
+                continue
+            if slug:
+                seen.add(slug)
+            rows.append(row)
+            unique += 1
+        per_filter[sports_type] = {**stats, "rows": len(typed_rows), "unique_rows_added": unique}
 
     market_types = Counter(str(r.get("marketType") or "<missing>") for r in rows)
     sports_types = Counter(str(r.get("sportsMarketType") or "<missing>") for r in rows)
@@ -93,22 +120,19 @@ async def _scan() -> dict[str, Any]:
         if identity is not None:
             identities.append(enriched)
 
-    payload = {
-        "pages_requested": min(MAX_PAGES, pages_ok + failures),
-        "pages_ok": pages_ok,
-        "page_failures": failures,
+    return {
+        "per_filter": per_filter,
         "markets": len(rows),
         "market_types": dict(market_types.most_common(20)),
         "sports_market_types": dict(sports_types.most_common(30)),
         "sports_market_types_v2": dict(sports_v2_types.most_common(30)),
         "parent_fields": dict(parent_fields),
         "structural_identity_rows_after_safe_aliases": len(identities),
-        "structural_samples": [_sample(r) for r in identities[:8]],
-        "surface_samples": [_sample(r) for r in rows[:12]],
+        "structural_samples": [_sample(r) for r in identities[:12]],
+        "surface_samples": [_sample(r) for r in rows[:16]],
         "read_only": True,
         "order_entry": False,
     }
-    return payload
 
 
 async def run_once() -> dict[str, Any]:
