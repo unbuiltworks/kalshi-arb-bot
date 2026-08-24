@@ -14,6 +14,8 @@ Safety:
 - current threshold-dominance authorization and >=0.5bp protective gap;
 - highest partial-resilient quote that preserves >=3c/contract for a 0.25 first
   execution after one adverse Kalshi tick and conservative fees;
+- safe-frontier maker quote may rest behind a better current bid; near-touch is NOT
+  an admission requirement because the quote is canceled if hedge economics decay;
 - Gemini MOC (maker-only) resting order;
 - first actual execution immediately triggers remainder cancellation;
 - actual fill-event fee fields are accumulated; if REST reports uncaptured fill
@@ -31,7 +33,6 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from decimal import Decimal
 import json
 import os
@@ -129,13 +130,12 @@ class MakerFill:
         self.executions += 1
         if event.get("n") is None:
             self.missing_fee_events += 1
-            self.fees += D("0.01")  # fail-closed per-execution rounding assumption
+            self.fees += D("0.01")
         else:
             self.fees += max(D("0"), D(str(event.get("n") or "0")))
 
 
 class GeminiMakerSession:
-    """Isolated authenticated Gemini session exposing raw order execution events."""
     def __init__(self) -> None:
         self.ws = None
         self.reader: asyncio.Task | None = None
@@ -313,9 +313,6 @@ async def run_once() -> dict[str, Any]:
         "order_entry": False,
         "realized": False,
     }
-
-    # Durable campaign idempotency: once Command Center has ever seen this trade id,
-    # a redeploy with unchanged arm variables cannot submit again.
     rows = await budget._trades()
     if any(str(row.get("trade_id") or "") == trade for row in rows):
         out["status"] = "DUPLICATE_CAMPAIGN_BLOCKED"
@@ -358,11 +355,13 @@ async def run_once() -> dict[str, Any]:
             kalshi_market=market, fee_meta=fee_meta,
             min_safe_first_fill=MIN_SAFE_FIRST_FILL, target=TARGET,
         )
-        if quote is None or D(quote["maker_quote"]) < D(g.yes_bid):
-            out["status"] = "NO_PARTIAL_SAFE_QUOTE_AT_OR_ABOVE_BID"
+        if quote is None:
+            out["status"] = "NO_PARTIAL_SAFE_QUOTE"
             emit("RESULT", **out)
             return out
         out["quote"] = quote
+        out["safe_quote_behind_current_bid"] = D(quote["maker_quote"]) < D(g.yes_bid)
+        out["safe_quote_gap_to_current_bid"] = str(max(D("0"), D(g.yes_bid) - D(quote["maker_quote"])))
         candidate = {
             "maker_outcome": "YES", "hedge_outcome": "NO",
             "maker_price": str(quote["maker_quote"]),
@@ -401,7 +400,8 @@ async def run_once() -> dict[str, Any]:
         row = None
         for _ in range(10):
             row = await _order_by_client(client_id, pair.gemini_symbol)
-            if row is not None: break
+            if row is not None:
+                break
             await asyncio.sleep(0.05)
         emit("MAKER_POSTED", trade_id=trade, maker_price=str(quote["maker_quote"]), order_recovered=bool(row), order_entry=True)
 
@@ -413,15 +413,18 @@ async def run_once() -> dict[str, Any]:
             market_get = asyncio.create_task(market_queue.get())
             fill_get = asyncio.create_task(maker.events.get())
             done, pending = await asyncio.wait({market_get, fill_get}, timeout=0.20, return_when=asyncio.FIRST_COMPLETED)
-            for task in pending: task.cancel()
+            for task in pending:
+                task.cancel()
             await asyncio.gather(*pending, return_exceptions=True)
             if not done:
                 continue
             item = next(iter(done)).result()
             if isinstance(item, tuple) and len(item) == 3:
                 kind, _, top = item
-                if kind == "gemini": g = top
-                elif kind == "kalshi": k = top
+                if kind == "gemini":
+                    g = top
+                elif kind == "kalshi":
+                    k = top
                 now_ms = int(time.time() * 1000)
                 if g is None or k is None or max(now_ms-int(g.ts_ms), now_ms-int(k.ts_ms)) > MAX_AGE_MS or abs(int(g.ts_ms)-int(k.ts_ms)) > MAX_SKEW_MS:
                     cancel_reason = "BOOK_FRESHNESS_LOST"
@@ -444,7 +447,6 @@ async def run_once() -> dict[str, Any]:
                     break
 
         cancel = await _cancel_maker(maker, row=row)
-        # Drain any execution events already delivered during the cancel race.
         await asyncio.sleep(0.05)
         while not maker.events.empty():
             evt = maker.events.get_nowait()
