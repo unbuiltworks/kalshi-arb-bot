@@ -1,7 +1,7 @@
 """Read-only weather certification dimension audit.
 
 The canonical weather row intentionally fails closed, but its aggregate blocker list can
-mix settlement/rule provenance with quote, fee, and model readiness.  This helper keeps
+mix settlement/rule provenance with quote, fee, and model readiness. This helper keeps
 those dimensions separate for portfolio/reporting use without changing any upstream
 readiness state.
 
@@ -24,6 +24,7 @@ SETTLEMENT_BLOCKERS = {
     "LOCAL_DAY_UNVERIFIED",
     "BRACKET_SEMANTICS_UNVERIFIED",
     "SETTLEMENT_SOURCE_UNVERIFIED",
+    "TWC_SOURCE_ACCESS_REQUIRED",
 }
 
 MARKET_DATA_BLOCKERS = {
@@ -66,7 +67,7 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
     """Split settlement, market-data, fee, and model evidence fail-closed.
 
     ``settlement_rules_provenance_verified`` is intentionally narrower than executable
-    economics.  ``executable_shadow_prereqs_verified`` requires *all* four dimensions,
+    economics. ``executable_shadow_prereqs_verified`` requires *all* four dimensions,
     explicit read-only state, and literal upstream certification flags where present.
     It is still research-only and can never set live readiness.
     """
@@ -85,11 +86,11 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
     unclassified = sorted(blockers - classified)
 
     exact_source = row.get("exact_market_source_verified")
-    if exact_source is False:
+    if exact_source is not True:
         settlement.append("EXACT_MARKET_SOURCE_AUDIT_REQUIRED")
     settlement = sorted(set(settlement))
 
-    settlement_verified = not settlement and exact_source is not False
+    settlement_verified = not settlement and exact_source is True
     market_data_verified = not market_data
     fee_verified = not fee
     model_verified = not model
@@ -97,10 +98,7 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
     # Never upgrade malformed/unknown blocker telemetry into readiness.
     no_unknowns = not unclassified and "MALFORMED_BLOCKER_TELEMETRY" not in blockers
     upstream_ev = row.get("ev_certified_shadow")
-    if upstream_ev is not None and not _literal_true(upstream_ev):
-        upstream_ev_ok = False
-    else:
-        upstream_ev_ok = True
+    upstream_ev_ok = upstream_ev is True
 
     executable_shadow = (
         settlement_verified
@@ -109,6 +107,7 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
         and model_verified
         and no_unknowns
         and upstream_ev_ok
+        and row.get("read_only") is True
         and row.get("order_entry") is False
         and row.get("live_probe_ready") is False
     )
