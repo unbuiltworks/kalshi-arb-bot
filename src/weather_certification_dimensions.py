@@ -18,6 +18,7 @@ from typing import Any
 from src.weather_blocker_telemetry_guard import audit_weather_blocker_telemetry
 from src.weather_exact_market_source_audit import audit_exact_market_source
 from src.weather_fee_resolution_binding_guard import audit_weather_fee_resolution_binding
+from src.weather_model_audit_chain_guard import audit_weather_model_audit_chain
 from src.weather_quote_freshness_binding_guard import audit_weather_quote_freshness_binding
 
 SETTLEMENT_BLOCKERS = {
@@ -35,63 +36,98 @@ _CANONICAL_FEE_SOURCES = {"series_current", "scheduled_fee_change", "historical_
 
 
 def _finite_nonnegative(value: Any) -> bool:
-    try: parsed = Decimal(str(value))
-    except Exception: return False
+    try:
+        parsed = Decimal(str(value))
+    except Exception:
+        return False
     return parsed.is_finite() and parsed >= 0
 
 
 def _decimal(value: Any) -> Decimal | None:
-    if value is None or isinstance(value, bool): return None
-    try: parsed = Decimal(str(value))
-    except Exception: return None
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        parsed = Decimal(str(value))
+    except Exception:
+        return None
     return parsed if parsed.is_finite() else None
 
 
 def _aware_iso(value: Any) -> datetime | None:
-    if not isinstance(value, str) or not value.strip(): return None
+    if not isinstance(value, str) or not value.strip():
+        return None
     text = value.strip()
-    if text.endswith("Z"): text = text[:-1] + "+00:00"
-    try: parsed = datetime.fromisoformat(text)
-    except ValueError: return None
-    if parsed.tzinfo is None or parsed.utcoffset() is None: return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
     return parsed
 
 
 def _valid_executable_side(row: dict[str, Any], side: str) -> bool:
-    price_fp = _decimal(row.get(f"{side}_ask_dollars")); qty_fp = _decimal(row.get(f"{side}_ask_qty_fp"))
+    price_fp = _decimal(row.get(f"{side}_ask_dollars"))
+    qty_fp = _decimal(row.get(f"{side}_ask_qty_fp"))
     if price_fp is not None and qty_fp is not None:
         return Decimal("0") < price_fp < Decimal("1") and qty_fp >= Decimal("1")
-    cents = row.get(f"{side}_ask_cents"); qty = row.get(f"{side}_available_contracts")
-    return isinstance(cents, int) and not isinstance(cents, bool) and 1 <= cents <= 99 and isinstance(qty, int) and not isinstance(qty, bool) and qty >= 1
+    cents = row.get(f"{side}_ask_cents")
+    qty = row.get(f"{side}_available_contracts")
+    return (
+        isinstance(cents, int)
+        and not isinstance(cents, bool)
+        and 1 <= cents <= 99
+        and isinstance(qty, int)
+        and not isinstance(qty, bool)
+        and qty >= 1
+    )
 
 
 def _book_evidence_verified(row: dict[str, Any]) -> bool:
     freshness = audit_weather_quote_freshness_binding(row)
-    return freshness.get("quote_freshness_binding_verified") is True and any(_valid_executable_side(row, side) for side in ("yes", "no"))
+    return (
+        freshness.get("quote_freshness_binding_verified") is True
+        and any(_valid_executable_side(row, side) for side in ("yes", "no"))
+    )
 
 
 def _fee_evidence_verified(row: dict[str, Any]) -> bool:
-    multiplier = row.get("fee_multiplier"); series = str(row.get("series_ticker") or "").strip().upper(); fee_series = str(row.get("fee_series_ticker") or "").strip().upper()
-    source = str(row.get("fee_metadata_source") or "").strip(); quote = _aware_iso(row.get("quote_observed_at")); observed = _aware_iso(row.get("fee_schedule_observed_at"))
-    basic = row.get("fee_type") == "quadratic" and _finite_nonnegative(multiplier) and source in _CANONICAL_FEE_SOURCES and row.get("fee_schedule_checked") is True and row.get("fee_schedule_feed_complete") is True and bool(series) and fee_series == series and quote is not None and observed is not None and observed >= quote
-    return basic and audit_weather_fee_resolution_binding(row).get("fee_resolution_binding_verified") is True
+    multiplier = row.get("fee_multiplier")
+    series = str(row.get("series_ticker") or "").strip().upper()
+    fee_series = str(row.get("fee_series_ticker") or "").strip().upper()
+    source = str(row.get("fee_metadata_source") or "").strip()
+    quote = _aware_iso(row.get("quote_observed_at"))
+    observed = _aware_iso(row.get("fee_schedule_observed_at"))
+    basic = (
+        row.get("fee_type") == "quadratic"
+        and _finite_nonnegative(multiplier)
+        and source in _CANONICAL_FEE_SOURCES
+        and row.get("fee_schedule_checked") is True
+        and row.get("fee_schedule_feed_complete") is True
+        and bool(series)
+        and fee_series == series
+        and quote is not None
+        and observed is not None
+        and observed >= quote
+    )
+    return (
+        basic
+        and audit_weather_fee_resolution_binding(row).get("fee_resolution_binding_verified") is True
+    )
 
 
-def _model_evidence_verified(row: dict[str, Any]) -> bool:
+def _probability_evidence_verified(row: dict[str, Any]) -> bool:
     try:
-        p = Decimal(str(row.get("forecast_bracket_probability"))); probability_ok = p.is_finite() and Decimal(0) <= p <= Decimal(1)
-    except Exception: probability_ok = False
-    return probability_ok and all(row.get(k) is True for k in ("model_sanity_verified", "model_provider_provenance_verified", "local_day_binding_verified", "forecast_valid_local_day_verified", "anchor_valid_local_day_verified", "model_run_quote_time_verified"))
+        p = Decimal(str(row.get("forecast_bracket_probability")))
+        return p.is_finite() and Decimal(0) <= p <= Decimal(1)
+    except Exception:
+        return False
 
 
 def _settlement_identity_semantics_verified(row: dict[str, Any]) -> bool:
-    """Require affirmative exact-contract identity semantics, not just no blockers.
-
-    The source audit proves which official terminal source applies to the exact market.
-    It does not by itself prove the producer independently verified the station mapping,
-    local-day definition, and exact bracket/tail semantics used by that contract. These
-    fields therefore must survive as literal booleans into the canonical report.
-    """
+    """Require affirmative exact-contract identity semantics, not just no blockers."""
     return all(
         row.get(key) is True
         for key in (
@@ -103,15 +139,7 @@ def _settlement_identity_semantics_verified(row: dict[str, Any]) -> bool:
 
 
 def _exact_market_source_audit(row: dict[str, Any]) -> dict[str, Any]:
-    """Re-run exact-market settlement provenance instead of trusting producer booleans.
-
-    The v2 settlement-certified adapter stores its normalized authoritative source
-    evidence inside ``exact_market_source_audit``. Older report producers exposed the
-    same values as top-level fields. Support both shapes, but never trust the nested
-    ``verified`` boolean itself: replay the exact-source audit from normalized evidence.
-    This prevents a canonical-report false negative when consuming real v2 rows while
-    preserving fail-closed behavior for spoofed or incomplete evidence.
-    """
+    """Re-run exact-market settlement provenance instead of trusting producer booleans."""
     nested = row.get("exact_market_source_audit")
     if isinstance(nested, dict):
         provider = nested.get("settlement_source_provider")
@@ -140,51 +168,102 @@ def _exact_market_source_audit(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(row, dict): raise TypeError("row must be a dict")
+    if not isinstance(row, dict):
+        raise TypeError("row must be a dict")
 
     blocker_audit = audit_weather_blocker_telemetry(row)
     blockers = set(blocker_audit.get("blockers") or [])
     telemetry_verified = blocker_audit.get("blocker_telemetry_verified") is True
-    settlement = sorted(blockers & SETTLEMENT_BLOCKERS); market_data = sorted(blockers & MARKET_DATA_BLOCKERS); fee = sorted(blockers & FEE_BLOCKERS)
-    model = sorted(b for b in blockers if b in MODEL_BLOCKERS or b.startswith(MODEL_BLOCKER_PREFIXES))
+    settlement = sorted(blockers & SETTLEMENT_BLOCKERS)
+    market_data = sorted(blockers & MARKET_DATA_BLOCKERS)
+    fee = sorted(blockers & FEE_BLOCKERS)
+    model = sorted(
+        b for b in blockers if b in MODEL_BLOCKERS or b.startswith(MODEL_BLOCKER_PREFIXES)
+    )
     classified = set(settlement) | set(market_data) | set(fee) | set(model)
     unclassified = sorted(blockers - classified)
 
     exact_market_source = _exact_market_source_audit(row)
     if exact_market_source.get("verified") is not True:
-        settlement.extend(exact_market_source.get("blockers") or ["EXACT_MARKET_SOURCE_AUDIT_REQUIRED"])
-    if row.get("exact_market_source_verified") is not True: settlement.append("EXACT_MARKET_SOURCE_AUDIT_REQUIRED")
+        settlement.extend(
+            exact_market_source.get("blockers") or ["EXACT_MARKET_SOURCE_AUDIT_REQUIRED"]
+        )
+    if row.get("exact_market_source_verified") is not True:
+        settlement.append("EXACT_MARKET_SOURCE_AUDIT_REQUIRED")
     identity_semantics_verified = _settlement_identity_semantics_verified(row)
-    if row.get("station_identity_verified") is not True: settlement.append("STATION_IDENTITY_EVIDENCE_REQUIRED")
-    if row.get("local_day_verified") is not True: settlement.append("LOCAL_DAY_EVIDENCE_REQUIRED")
-    if row.get("bracket_semantics_verified") is not True: settlement.append("BRACKET_SEMANTICS_EVIDENCE_REQUIRED")
-    if row.get("settlement_certified_shadow") is not True: settlement.append("SETTLEMENT_CERTIFICATION_EVIDENCE_REQUIRED")
+    if row.get("station_identity_verified") is not True:
+        settlement.append("STATION_IDENTITY_EVIDENCE_REQUIRED")
+    if row.get("local_day_verified") is not True:
+        settlement.append("LOCAL_DAY_EVIDENCE_REQUIRED")
+    if row.get("bracket_semantics_verified") is not True:
+        settlement.append("BRACKET_SEMANTICS_EVIDENCE_REQUIRED")
+    if row.get("settlement_certified_shadow") is not True:
+        settlement.append("SETTLEMENT_CERTIFICATION_EVIDENCE_REQUIRED")
     settlement = sorted(set(settlement))
 
     freshness = audit_weather_quote_freshness_binding(row)
-    if freshness.get("quote_freshness_binding_verified") is not True: market_data.extend(freshness.get("quote_freshness_binding_blockers") or [])
-    if not _book_evidence_verified(row): market_data.append("EXECUTABLE_BOOK_EVIDENCE_REQUIRED")
+    if freshness.get("quote_freshness_binding_verified") is not True:
+        market_data.extend(freshness.get("quote_freshness_binding_blockers") or [])
+    if not _book_evidence_verified(row):
+        market_data.append("EXECUTABLE_BOOK_EVIDENCE_REQUIRED")
     market_data = sorted(set(market_data))
 
     fee_binding = audit_weather_fee_resolution_binding(row)
-    if fee_binding.get("fee_resolution_binding_verified") is not True: fee.extend(fee_binding.get("fee_resolution_binding_blockers") or [])
-    if not _fee_evidence_verified(row): fee.append("AUTHORITATIVE_FEE_EVIDENCE_REQUIRED")
+    if fee_binding.get("fee_resolution_binding_verified") is not True:
+        fee.extend(fee_binding.get("fee_resolution_binding_blockers") or [])
+    if not _fee_evidence_verified(row):
+        fee.append("AUTHORITATIVE_FEE_EVIDENCE_REQUIRED")
     fee = sorted(set(fee))
-    if not _model_evidence_verified(row): model.append("MODEL_AUDIT_CHAIN_EVIDENCE_REQUIRED")
+
+    model_chain = audit_weather_model_audit_chain(row)
+    if model_chain.get("model_audit_chain_verified") is not True:
+        model.extend(model_chain.get("blockers") or ["MODEL_AUDIT_CHAIN_EVIDENCE_REQUIRED"])
+    if not _probability_evidence_verified(row):
+        model.append("MODEL_PROBABILITY_EVIDENCE_REQUIRED")
     model = sorted(set(model))
 
-    settlement_ok = not settlement; market_ok = not market_data; fee_ok = not fee; model_ok = not model
-    no_unknowns = telemetry_verified and not unclassified and "MALFORMED_BLOCKER_TELEMETRY" not in blockers
-    executable = settlement_ok and market_ok and fee_ok and model_ok and no_unknowns and row.get("ev_certified_shadow") is True and row.get("read_only") is True and row.get("order_entry") is False and row.get("live_probe_ready") is False
+    settlement_ok = not settlement
+    market_ok = not market_data
+    fee_ok = not fee
+    model_ok = not model
+    no_unknowns = (
+        telemetry_verified
+        and not unclassified
+        and "MALFORMED_BLOCKER_TELEMETRY" not in blockers
+    )
+    executable = (
+        settlement_ok
+        and market_ok
+        and fee_ok
+        and model_ok
+        and no_unknowns
+        and row.get("ev_certified_shadow") is True
+        and row.get("read_only") is True
+        and row.get("order_entry") is False
+        and row.get("live_probe_ready") is False
+    )
     return {
-        "category": "weather", "classification": "SHADOW", "blocker_telemetry_verified": telemetry_verified,
-        "blocker_source": blocker_audit.get("blocker_source"), "settlement_rules_provenance_verified": settlement_ok,
+        "category": "weather",
+        "classification": "SHADOW",
+        "blocker_telemetry_verified": telemetry_verified,
+        "blocker_source": blocker_audit.get("blocker_source"),
+        "settlement_rules_provenance_verified": settlement_ok,
         "exact_market_source_audit_verified": exact_market_source.get("verified") is True,
         "settlement_identity_semantics_verified": identity_semantics_verified,
-        "market_data_verified": market_ok, "quote_freshness_binding_verified": freshness.get("quote_freshness_binding_verified") is True,
-        "derived_quote_age_ms": freshness.get("derived_quote_age_ms"), "fee_economics_verified": fee_ok,
-        "fee_resolution_binding_verified": fee_binding.get("fee_resolution_binding_verified") is True, "model_probability_verified": model_ok,
-        "executable_shadow_prereqs_verified": executable, "settlement_blockers": settlement, "market_data_blockers": market_data,
-        "fee_blockers": fee, "model_blockers": model, "unclassified_blockers": unclassified,
-        "read_only": True, "order_entry": False, "live_probe_ready": False,
+        "market_data_verified": market_ok,
+        "quote_freshness_binding_verified": freshness.get("quote_freshness_binding_verified") is True,
+        "derived_quote_age_ms": freshness.get("derived_quote_age_ms"),
+        "fee_economics_verified": fee_ok,
+        "fee_resolution_binding_verified": fee_binding.get("fee_resolution_binding_verified") is True,
+        "model_probability_verified": model_ok,
+        "model_audit_chain_verified": model_chain.get("model_audit_chain_verified") is True,
+        "executable_shadow_prereqs_verified": executable,
+        "settlement_blockers": settlement,
+        "market_data_blockers": market_data,
+        "fee_blockers": fee,
+        "model_blockers": model,
+        "unclassified_blockers": unclassified,
+        "read_only": True,
+        "order_entry": False,
+        "live_probe_ready": False,
     }
