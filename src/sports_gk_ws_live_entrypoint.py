@@ -2,8 +2,8 @@
 
 Keeps the explicitly authorized cumulative sports ceiling at $20, the fractional-
 fill-safe q=1 mutation transport, and the production REST market-data fallback.
-A separate read-only inventory task samples non-MLB Gemini/Kalshi sports every five
-minutes; it cannot authorize or submit an order.
+Read-only revenue monitors sample general sports inventory and current MLB game-line
+counterparts every five minutes; neither monitor can authorize or submit an order.
 """
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from src.kalshi_prop_ws_exact_books import KalshiPropWsExactBooks
 from src.gemini_kalshi_probe_transport_fractional_safe import submit_dual_probe_fractional_safe
 from src.sports_gk_funnel_instrumentation import install as install_funnel
 from src.sports_gk_general_inventory import run_once as run_general_inventory
+from src.three_venue_mlb_price_scan import run_once as run_mlb_game_price_scan
 
 D = Decimal
 AUTHORIZED_CUMULATIVE_SPORTS_BUDGET = D("20")
@@ -57,6 +58,12 @@ async def _inventory_monitor() -> None:
             raise
         except Exception as exc:
             log.warning("SPORTS_GK_GENERAL_INVENTORY_ERROR type=%s", type(exc).__name__)
+        try:
+            await asyncio.wait_for(run_mlb_game_price_scan(), timeout=75.0)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning("SPORTS_GK_MLB_GAME_PRICE_SCAN_ERROR type=%s", type(exc).__name__)
         await asyncio.sleep(300.0)
 
 
@@ -80,7 +87,7 @@ def main() -> None:
     epoch_seconds = max(30.0, args.epoch_seconds)
     cooldown_seconds = max(5.0, args.cooldown_seconds)
     logging.getLogger("kalshi_arb.sports_gk_ws_live_entrypoint").warning(
-        "SPORTS_GK_LIVE_POLICY cumulative_budget_usd=%s kalshi_transport=%s ws_opt_in=%s fractional_fill_policy=EXACT_QUANTITY_FLATTEN_AND_HALT funnel_telemetry=true general_inventory_read_only=true epoch_seconds=%s cooldown_seconds=%s",
+        "SPORTS_GK_LIVE_POLICY cumulative_budget_usd=%s kalshi_transport=%s ws_opt_in=%s fractional_fill_policy=EXACT_QUANTITY_FLATTEN_AND_HALT funnel_telemetry=true revenue_monitors_read_only=true epoch_seconds=%s cooldown_seconds=%s",
         AUTHORIZED_CUMULATIVE_SPORTS_BUDGET,
         transport,
         os.getenv(WS_ENV, "NO").strip().upper() == "YES",
