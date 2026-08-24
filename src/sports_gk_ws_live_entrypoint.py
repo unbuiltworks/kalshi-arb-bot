@@ -11,10 +11,13 @@ variant: any known nonzero non-1 fill hard-halts and attempts an exact-quantity
 flatten instead of being misclassified as an unfilled FOK.
 
 Per-epoch funnel instrumentation wraps only reads and gates; it changes no live
-execution thresholds or order behavior.
+execution thresholds or order behavior. The entrypoint parses epoch/cooldown
+arguments itself so Railway cannot silently fall back to the supervisor defaults.
 """
 from __future__ import annotations
 
+import argparse
+import asyncio
 from decimal import Decimal
 import logging
 import os
@@ -62,14 +65,24 @@ def install() -> str:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--epoch-seconds", type=float, default=600.0)
+    parser.add_argument("--cooldown-seconds", type=float, default=15.0)
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
     transport = install()
+    epoch_seconds = max(30.0, args.epoch_seconds)
+    cooldown_seconds = max(5.0, args.cooldown_seconds)
     logging.getLogger("kalshi_arb.sports_gk_ws_live_entrypoint").warning(
-        "SPORTS_GK_LIVE_POLICY cumulative_budget_usd=%s kalshi_transport=%s ws_opt_in=%s fractional_fill_policy=EXACT_QUANTITY_FLATTEN_AND_HALT funnel_telemetry=true",
+        "SPORTS_GK_LIVE_POLICY cumulative_budget_usd=%s kalshi_transport=%s ws_opt_in=%s fractional_fill_policy=EXACT_QUANTITY_FLATTEN_AND_HALT funnel_telemetry=true epoch_seconds=%s cooldown_seconds=%s",
         AUTHORIZED_CUMULATIVE_SPORTS_BUDGET,
         transport,
         os.getenv(WS_ENV, "NO").strip().upper() == "YES",
+        epoch_seconds,
+        cooldown_seconds,
     )
-    supervisor.main()
+    asyncio.run(supervisor.run_forever(epoch_seconds=epoch_seconds, cooldown_seconds=cooldown_seconds))
 
 
 if __name__ == "__main__":
