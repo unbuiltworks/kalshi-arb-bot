@@ -4,6 +4,10 @@ SportsEventIdentity canonicalizes participants to lowercase. The raw Kalshi pars
 intentionally keeps exchange ticker codes uppercase until identity construction.
 Normalize only the pre-identity lookup key here; all market semantics remain in the
 strict scanner and order entry remains impossible.
+
+The exported ``run_once`` uses the request-efficient scanner: Gemini embedded books
+are priced before Kalshi depth is requested, so exact counterpart keys with no
+usable Gemini quote do not consume Kalshi orderbook capacity.
 """
 from __future__ import annotations
 
@@ -35,4 +39,8 @@ def _case_aligned_gemini_match_index(
 
 
 core._gemini_match_index = _case_aligned_gemini_match_index
-run_once = core.run_once
+
+# Import only after installing the verified matcher patch.  The efficient scanner
+# references ``core._gemini_match_index`` dynamically and otherwise leaves all
+# strict identity/economic logic untouched.
+from src.sports_nfl_gk_price_scan_efficient import run_once  # noqa: E402
