@@ -1,8 +1,8 @@
-# Single-attempt XRP maker canary. Live only after a partial-safe quote reaches the current Gemini bid.
+# XRP maker canary using Gemini-triggered exact Kalshi paired books. Dedicated live arm remains off by default.
 [build]
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python -m src.gemini_kalshi_xrp_maker_live_canary_fill_wait"
-preDeployCommand = ["python -m pytest -q tests/test_gemini_kalshi_maker_live_probe_q1.py tests/test_gemini_kalshi_maker_live_probe_q1_safe.py tests/test_gemini_kalshi_maker_live_probe_q1_final.py tests/test_gemini_kalshi_maker_live_probe_q1_venue_once.py tests/test_gemini_kalshi_maker_rest_guard.py tests/test_gemini_kalshi_maker_dominance_guard.py tests/test_gemini_kalshi_gemini_maker_partial_economics.py tests/test_gemini_kalshi_gemini_maker_safe_quote.py tests/test_gemini_kalshi_xrp_maker_live_canary.py tests/test_gemini_kalshi_xrp_maker_live_canary_fill_wait.py && python -m py_compile src/gemini_kalshi_xrp_maker_live_canary.py src/gemini_kalshi_xrp_maker_live_canary_fill_wait.py src/gemini_kalshi_gemini_maker_safe_quote.py src/gemini_kalshi_gemini_maker_partial_economics.py src/gemini_kalshi_crypto_maker_budget.py"]
+startCommand = "python -m src.gemini_kalshi_xrp_maker_triggered_canary"
+preDeployCommand = ["python -m pytest -q tests/test_gemini_kalshi_maker_live_probe_q1.py tests/test_gemini_kalshi_maker_live_probe_q1_safe.py tests/test_gemini_kalshi_maker_live_probe_q1_final.py tests/test_gemini_kalshi_maker_live_probe_q1_venue_once.py tests/test_gemini_kalshi_maker_rest_guard.py tests/test_gemini_kalshi_maker_dominance_guard.py tests/test_gemini_kalshi_gemini_maker_partial_economics.py tests/test_gemini_kalshi_gemini_maker_safe_quote.py tests/test_gemini_kalshi_xrp_maker_live_canary.py tests/test_gemini_kalshi_xrp_maker_live_canary_fill_wait.py tests/test_gemini_kalshi_xrp_maker_triggered_canary.py && python -m py_compile src/gemini_kalshi_xrp_maker_live_canary.py src/gemini_kalshi_xrp_maker_triggered_canary.py src/gemini_kalshi_gemini_maker_safe_quote.py src/gemini_kalshi_gemini_maker_partial_economics.py src/gemini_kalshi_crypto_maker_budget.py"]
 restartPolicyType = "NEVER"
