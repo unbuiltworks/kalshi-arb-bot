@@ -16,6 +16,7 @@ from decimal import Decimal
 from typing import Any
 
 from src.weather_fee_resolution_binding_guard import audit_weather_fee_resolution_binding
+from src.weather_quote_freshness_binding_guard import audit_weather_quote_freshness_binding
 
 SETTLEMENT_BLOCKERS = {
     "RULES_PENDING",
@@ -130,14 +131,10 @@ def _valid_executable_side(row: dict[str, Any], side: str) -> bool:
 
 
 def _book_evidence_verified(row: dict[str, Any]) -> bool:
-    """Require an actually observed, fresh, side-specific q1-executable book."""
-    age = row.get("quote_age_ms")
-    max_age = row.get("max_quote_age_ms")
-    if not _finite_nonnegative(age) or not _finite_nonnegative(max_age):
+    """Require timestamp-bound freshness plus an actually observed q1-executable book."""
+    freshness = audit_weather_quote_freshness_binding(row)
+    if freshness.get("quote_freshness_binding_verified") is not True:
         return False
-    if Decimal(str(age)) > Decimal(str(max_age)):
-        return False
-
     return any(_valid_executable_side(row, side) for side in ("yes", "no"))
 
 
@@ -227,6 +224,9 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
         settlement.append("SETTLEMENT_CERTIFICATION_EVIDENCE_REQUIRED")
     settlement = sorted(set(settlement))
 
+    freshness_binding = audit_weather_quote_freshness_binding(row)
+    if freshness_binding.get("quote_freshness_binding_verified") is not True:
+        market_data.extend(freshness_binding.get("quote_freshness_binding_blockers") or [])
     if not _book_evidence_verified(row):
         market_data.append("EXECUTABLE_BOOK_EVIDENCE_REQUIRED")
     market_data = sorted(set(market_data))
@@ -268,6 +268,8 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
         "classification": "SHADOW",
         "settlement_rules_provenance_verified": settlement_verified,
         "market_data_verified": market_data_verified,
+        "quote_freshness_binding_verified": freshness_binding.get("quote_freshness_binding_verified") is True,
+        "derived_quote_age_ms": freshness_binding.get("derived_quote_age_ms"),
         "fee_economics_verified": fee_verified,
         "fee_resolution_binding_verified": fee_binding.get("fee_resolution_binding_verified") is True,
         "model_probability_verified": model_verified,
