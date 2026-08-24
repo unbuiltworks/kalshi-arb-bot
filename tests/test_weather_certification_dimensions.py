@@ -1,8 +1,72 @@
+from copy import deepcopy
+
 from src.weather_certification_dimensions import audit_weather_certification_dimensions
 
 
-def _clean_row():
+def _model_audits():
+    safety = {"blockers": [], "read_only": True, "order_entry": False, "live_probe_ready": False}
     return {
+        "model_sanity_audit": {
+            **safety,
+            "model_sanity_verified": True,
+            "model_id": "wx-ensemble-v1",
+            "model_provider": "ENSEMBLE",
+            "model_component_providers": ["DWD", "ECMWF"],
+            "calibration_model_id": "wx-ensemble-v1",
+            "calibration_target": "DAILY_MAX_TEMPERATURE_F",
+            "calibration_evidence_id": "cal-miami-v1",
+            "calibration_sample_count": 120,
+            "calibration_station_id": "CLIMIA",
+            "calibration_window_end": "2026-08-23T00:00:00+00:00",
+            "independent_anchor_source_id": "nws-miami-forecast",
+            "independent_anchor_provider": "NOAA",
+            "independent_anchor_model_id": "NWS_HUMAN_FORECAST",
+            "independent_anchor_provenance_url": "https://weather.gov/mfl/",
+            "independent_anchor_observed_at": "2026-08-24T03:30:00+00:00",
+        },
+        "model_provider_provenance_audit": {
+            **safety,
+            "provider_provenance_verified": True,
+            "model_provider_family": "ENSEMBLE",
+            "model_component_provider_families": ["DWD", "ECMWF"],
+            "independent_anchor_provider_family": "NOAA",
+        },
+        "local_day_binding_audit": {
+            **safety,
+            "local_day_binding_verified": True,
+            "market_local_date": "2026-08-24",
+            "model_local_date": "2026-08-24",
+            "independent_anchor_local_date": "2026-08-24",
+        },
+        "forecast_valid_local_day_audit": {
+            **safety,
+            "forecast_valid_local_day_verified": True,
+            "market_local_date": "2026-08-24",
+            "model_local_date": "2026-08-24",
+            "forecast_valid_time": "2026-08-24T12:00:00+00:00",
+            "station_timezone": "America/New_York",
+            "derived_forecast_local_date": "2026-08-24",
+        },
+        "anchor_valid_local_day_audit": {
+            **safety,
+            "anchor_valid_local_day_verified": True,
+            "market_local_date": "2026-08-24",
+            "independent_anchor_local_date": "2026-08-24",
+            "independent_anchor_valid_time": "2026-08-24T12:00:00+00:00",
+            "station_timezone": "America/New_York",
+            "derived_anchor_local_date": "2026-08-24",
+        },
+        "model_run_quote_time_audit": {
+            **safety,
+            "model_run_quote_time_verified": True,
+            "model_run_time": "2026-08-24T03:00:00+00:00",
+            "quote_observed_at": "2026-08-24T04:00:00+00:00",
+        },
+    }
+
+
+def _clean_row():
+    row = {
         "blockers": [],
         "exact_market_source_verified": True,
         "settlement_certified_shadow": True,
@@ -52,6 +116,8 @@ def _clean_row():
         "order_entry": False,
         "live_probe_ready": False,
     }
+    row.update(deepcopy(_model_audits()))
+    return row
 
 
 def test_clean_row_clears_read_only_prereqs():
@@ -59,6 +125,7 @@ def test_clean_row_clears_read_only_prereqs():
     assert out["blocker_telemetry_verified"] is True
     assert out["exact_market_source_audit_verified"] is True
     assert out["settlement_identity_semantics_verified"] is True
+    assert out["model_audit_chain_verified"] is True
     assert out["executable_shadow_prereqs_verified"] is True
     assert out["order_entry"] is False and out["live_probe_ready"] is False
 
@@ -142,3 +209,41 @@ def test_settlement_certified_boolean_cannot_replace_identity_semantics():
         assert blocker in out["settlement_blockers"]
         assert out["settlement_rules_provenance_verified"] is False
         assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_top_level_model_booleans_cannot_replace_underlying_audits():
+    row = _clean_row()
+    for key in (
+        "model_sanity_audit",
+        "model_provider_provenance_audit",
+        "local_day_binding_audit",
+        "forecast_valid_local_day_audit",
+        "anchor_valid_local_day_audit",
+        "model_run_quote_time_audit",
+    ):
+        row.pop(key)
+    out = audit_weather_certification_dimensions(row)
+    assert out["model_audit_chain_verified"] is False
+    assert out["model_probability_verified"] is False
+    assert out["executable_shadow_prereqs_verified"] is False
+    assert any(blocker.startswith("MODEL_AUDIT_ENVELOPE_INVALID:") for blocker in out["model_blockers"])
+
+
+def test_spoofed_nested_verified_flag_cannot_hide_failed_model_audit():
+    row = _clean_row()
+    row["model_sanity_audit"]["blockers"] = ["MODEL_CALIBRATION_LOOKAHEAD_DETECTED"]
+    row["model_sanity_audit"]["model_sanity_verified"] = True
+    row["model_sanity_verified"] = True
+    out = audit_weather_certification_dimensions(row)
+    assert out["model_audit_chain_verified"] is False
+    assert "MODEL_AUDIT_ENVELOPE_INVALID:model_sanity_audit" in out["model_blockers"]
+    assert out["executable_shadow_prereqs_verified"] is False
+
+
+def test_nested_model_day_must_match_exact_market_day():
+    row = _clean_row()
+    row["local_day_binding_audit"]["market_local_date"] = "2026-08-25"
+    out = audit_weather_certification_dimensions(row)
+    assert out["model_audit_chain_verified"] is False
+    assert "MODEL_AUDIT_LOCAL_DAY_MISMATCH" in out["model_blockers"]
+    assert out["executable_shadow_prereqs_verified"] is False
