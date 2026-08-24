@@ -1,14 +1,16 @@
 """Verified private-order transport wrapper for the structural q1 supervisor.
 
-This keeps the existing structural execution and restart-safety supervisor intact,
-but fixes one bootstrap ambiguity: an order cached only from the create response
-must never be mistaken for an order actually observed on the authenticated private
-WebSocket.  The first live maker therefore has to be seen by the stream within the
-bounded bootstrap window, or the existing campaign scoped-cancels and hard-halts.
+The first live maker still has to prove the authenticated private order stream.
+Once the stream has demonstrably delivered real order updates, an intermittent
+per-order miss no longer kills the whole lane: that order alone falls back to
+paced exact REST reads while all existing cancel/reconciliation protections stay
+in force. This preserves safety without turning a single dropped WS update into a
+full production halt.
 """
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any, Callable, Mapping
 
 from polymarket_us import PolymarketUS
@@ -17,11 +19,33 @@ import src.sports_kp_poly_relay_campaign_q1_v4 as v4
 import src.sports_poly_structural_live_supervisor as supervisor
 from src.sports_poly_private_order_stream import PrivateOrderStream
 
+REST_FALLBACK_GAP_SECONDS = 0.75
+
 
 def install_verified_private_order_transport(stream: PrivateOrderStream) -> Callable[[], None]:
     original_refresh = v4._refresh_order
     original_cancel = v4._cancel_scoped
     force_rest_refresh: set[str] = set()
+    rest_fallback_ids: set[str] = set()
+    rest_cache: dict[str, Mapping[str, Any]] = {}
+    last_rest_mono: dict[str, float] = {}
+
+    async def paced_rest_refresh(
+        client: PolymarketUS,
+        oid: str,
+        slug: str,
+        fallback: Mapping[str, Any],
+        *,
+        force: bool = False,
+    ) -> Mapping[str, Any]:
+        now = time.monotonic()
+        cached = rest_cache.get(oid, fallback)
+        if not force and now - last_rest_mono.get(oid, 0.0) < REST_FALLBACK_GAP_SECONDS:
+            return cached
+        row = await original_refresh(client, oid, slug, cached)
+        rest_cache[oid] = row
+        last_rest_mono[oid] = time.monotonic()
+        return row
 
     async def ws_refresh(
         client: PolymarketUS,
@@ -32,24 +56,33 @@ def install_verified_private_order_transport(stream: PrivateOrderStream) -> Call
         stream.register_fallback(oid, fallback)
         if oid in force_rest_refresh:
             force_rest_refresh.discard(oid)
-            return await original_refresh(client, oid, slug, fallback)
+            return await paced_rest_refresh(client, oid, slug, fallback, force=True)
+        if oid in rest_fallback_ids:
+            return await paced_rest_refresh(client, oid, slug, fallback)
         if not stream.healthy:
-            return await original_refresh(client, oid, slug, fallback)
+            rest_fallback_ids.add(oid)
+            return await paced_rest_refresh(client, oid, slug, fallback, force=True)
 
-        # Only stream.seen() proves that the private subscription actually
-        # delivered this order.  A create-response fallback in the cache is not
-        # sufficient proof and must flow through bounded bootstrap verification.
         if stream.seen(oid):
             cached = stream.get(oid)
             if cached is not None:
                 return cached
 
-        updated = await stream.wait_for_update(oid, supervisor.WS_REFRESH_WAIT_SECONDS)
+        try:
+            updated = await stream.wait_for_update(oid, supervisor.WS_REFRESH_WAIT_SECONDS)
+        except RuntimeError:
+            # If the stream has never delivered a real order update, keep the
+            # original fail-closed bootstrap behavior. If it has already proven
+            # itself globally, isolate this one order on exact paced REST instead.
+            if stream.updates <= 0:
+                raise
+            rest_fallback_ids.add(oid)
+            return await paced_rest_refresh(client, oid, slug, fallback, force=True)
         return updated if updated is not None else fallback
 
     async def ws_cancel(client: PolymarketUS, oid: str, slug: str) -> None:
         await original_cancel(client, oid, slug)
-        if not stream.healthy:
+        if oid in rest_fallback_ids or not stream.healthy:
             force_rest_refresh.add(oid)
             return
         terminal = await stream.wait_terminal(oid, supervisor.WS_CANCEL_CONFIRM_SECONDS)
