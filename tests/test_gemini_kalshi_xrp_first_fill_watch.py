@@ -60,3 +60,19 @@ def test_cushioned_quote_only_raises_admission_target_and_restores_hard_floor():
         assert before == D("0.03")
     finally:
         watch._ORIGINAL_FILLABLE_QUOTE = original
+
+
+def test_compact_round_ids_are_unique_and_leave_room_for_gemini_suffixes():
+    root = "xrp-sticky2-20260824-1348et-a1-c01"
+    r1 = watch.compact_round_trade_id(root, 1)
+    r2 = watch.compact_round_trade_id(root, 2)
+    assert r1 != r2
+    assert r1 == watch.compact_round_trade_id(root, 1)
+    assert len(r1 + "-mk") <= 36
+    assert len(r1 + "-flat") <= 36
+
+
+def test_compact_round_ids_change_across_cycles():
+    a = watch.compact_round_trade_id("run-c01", 1)
+    b = watch.compact_round_trade_id("run-c02", 1)
+    assert a != b
