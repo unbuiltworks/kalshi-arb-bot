@@ -2,12 +2,59 @@ from src.weather_certification_dimensions import audit_weather_certification_dim
 
 
 def _clean_row():
-    return {"blockers": [], "exact_market_source_verified": True, "settlement_certified_shadow": True, "series_ticker": "KXHIGHMIA", "quote_age_ms": 100, "max_quote_age_ms": 2000, "quote_observed_at": "2026-08-24T04:00:00Z", "quote_age_evaluated_at": "2026-08-24T04:00:00.100Z", "yes_ask_cents": 40, "yes_available_contracts": 5, "no_ask_cents": 61, "no_available_contracts": 5, "fee_type": "quadratic", "fee_multiplier": 1, "fee_metadata_source": "series_current", "fee_schedule_checked": True, "fee_schedule_feed_complete": True, "fee_series_ticker": "KXHIGHMIA", "fee_schedule_observed_at": "2026-08-24T04:00:01Z", "fee_resolution_verified": True, "fee_resolution_series_ticker": "KXHIGHMIA", "fee_resolution_fee_type": "quadratic", "fee_resolution_fee_multiplier": 1, "fee_resolution_source": "series_current", "fee_resolution_observed_at": "2026-08-24T04:00:01Z", "fee_resolution_effective_at": "2026-08-20T00:00:00Z", "forecast_bracket_probability": "0.55", "model_sanity_verified": True, "model_provider_provenance_verified": True, "local_day_binding_verified": True, "forecast_valid_local_day_verified": True, "anchor_valid_local_day_verified": True, "model_run_quote_time_verified": True, "ev_certified_shadow": True, "read_only": True, "order_entry": False, "live_probe_ready": False}
+    return {
+        "blockers": [],
+        "exact_market_source_verified": True,
+        "settlement_certified_shadow": True,
+        "series_ticker": "KXHIGHMIA",
+        "event_ticker": "KXHIGHMIA-26AUG24",
+        "market_ticker": "KXHIGHMIA-26AUG24-B92.5",
+        "market_date": "2026-08-24",
+        "settlement_source_provider": "THE_WEATHER_COMPANY",
+        "settlement_source_url": "https://weather.com/kalshi",
+        "exact_market_evidence_url": "https://kalshi.com/markets/kxhighmia-26aug24/miami-high-temperature/kxhighmia-26aug24-b92.5",
+        "evidence_market_ticker": "KXHIGHMIA-26AUG24-B92.5",
+        "evidence_market_date": "2026-08-24",
+        "quote_age_ms": 100,
+        "max_quote_age_ms": 2000,
+        "quote_observed_at": "2026-08-24T04:00:00Z",
+        "quote_age_evaluated_at": "2026-08-24T04:00:00.100Z",
+        "yes_ask_cents": 40,
+        "yes_available_contracts": 5,
+        "no_ask_cents": 61,
+        "no_available_contracts": 5,
+        "fee_type": "quadratic",
+        "fee_multiplier": 1,
+        "fee_metadata_source": "series_current",
+        "fee_schedule_checked": True,
+        "fee_schedule_feed_complete": True,
+        "fee_series_ticker": "KXHIGHMIA",
+        "fee_schedule_observed_at": "2026-08-24T04:00:01Z",
+        "fee_resolution_verified": True,
+        "fee_resolution_series_ticker": "KXHIGHMIA",
+        "fee_resolution_fee_type": "quadratic",
+        "fee_resolution_fee_multiplier": 1,
+        "fee_resolution_source": "series_current",
+        "fee_resolution_observed_at": "2026-08-24T04:00:01Z",
+        "fee_resolution_effective_at": "2026-08-20T00:00:00Z",
+        "forecast_bracket_probability": "0.55",
+        "model_sanity_verified": True,
+        "model_provider_provenance_verified": True,
+        "local_day_binding_verified": True,
+        "forecast_valid_local_day_verified": True,
+        "anchor_valid_local_day_verified": True,
+        "model_run_quote_time_verified": True,
+        "ev_certified_shadow": True,
+        "read_only": True,
+        "order_entry": False,
+        "live_probe_ready": False,
+    }
 
 
 def test_clean_row_clears_read_only_prereqs():
     out = audit_weather_certification_dimensions(_clean_row())
     assert out["blocker_telemetry_verified"] is True
+    assert out["exact_market_source_audit_verified"] is True
     assert out["executable_shadow_prereqs_verified"] is True
     assert out["order_entry"] is False and out["live_probe_ready"] is False
 
@@ -64,3 +111,15 @@ def test_quote_timestamp_binding_is_required():
     out = audit_weather_certification_dimensions(row)
     assert out["market_data_verified"] is False
     assert out["quote_freshness_binding_verified"] is False
+
+
+def test_settlement_booleans_cannot_replace_exact_market_source_evidence():
+    row = _clean_row()
+    row["exact_market_source_verified"] = True
+    row["settlement_certified_shadow"] = True
+    row["exact_market_evidence_url"] = "https://kalshi.com/markets/kxhighny-26aug24/new-york-high-temperature/kxhighny-26aug24-b80.5"
+    out = audit_weather_certification_dimensions(row)
+    assert out["exact_market_source_audit_verified"] is False
+    assert "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT" in out["settlement_blockers"]
+    assert out["settlement_rules_provenance_verified"] is False
+    assert out["executable_shadow_prereqs_verified"] is False
