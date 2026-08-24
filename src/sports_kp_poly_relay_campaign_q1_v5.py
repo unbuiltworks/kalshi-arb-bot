@@ -34,6 +34,16 @@ from src.sports_poly_structural_reporting import report_attempt
 
 MAX_ATTEMPTS = 12
 LIVE_FAMILY_PREFIXES = ("TOTAL::",)
+DISCOVERY_TIMEOUT_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_DISCOVERY_TIMEOUT_SECONDS", "25"))
+BOOK_TIMEOUT_SECONDS = float(os.getenv("SPORTS_STRUCTURAL_BOOK_TIMEOUT_SECONDS", "35"))
+
+
+def _stage(stage: str, **fields: Any) -> None:
+    print(
+        "SPORTS_STRUCTURAL_STAGE "
+        + json.dumps({"stage": stage, **fields}, separators=(",", ":"), default=str),
+        flush=True,
+    )
 
 
 def _live_family(row: Mapping[str, Any]) -> bool:
@@ -42,11 +52,29 @@ def _live_family(row: Mapping[str, Any]) -> bool:
 
 
 async def run_once() -> dict[str, Any]:
-    feed, pairs, discovery = await discover_structural_pairs(horizon_hours=72)
-    books, quote_health = await fetch_books(set(feed), concurrency=6)
+    _stage("DISCOVERY_START", timeout_seconds=DISCOVERY_TIMEOUT_SECONDS)
+    feed, pairs, discovery = await asyncio.wait_for(
+        discover_structural_pairs(horizon_hours=72),
+        timeout=DISCOVERY_TIMEOUT_SECONDS,
+    )
+    _stage("DISCOVERY_DONE", strict_markets=len(feed), strict_pairs=len(pairs))
+
+    _stage("BOOKS_START", markets=len(feed), timeout_seconds=BOOK_TIMEOUT_SECONDS)
+    books, quote_health = await asyncio.wait_for(
+        fetch_books(set(feed), concurrency=6),
+        timeout=BOOK_TIMEOUT_SECONDS,
+    )
+    _stage("BOOKS_DONE", books=len(books), quote_health=quote_health)
+
     all_scored = score_structural_pairs(feed, books, pairs)
     scored = [row for row in all_scored if _live_family(row)]
     shadow_only = [row for row in all_scored if not _live_family(row)]
+    _stage(
+        "SCORE_DONE",
+        all_candidates=len(all_scored),
+        live_family_candidates=len(scored),
+        shadow_only_candidates=len(shadow_only),
+    )
 
     if not scored:
         out = {
@@ -75,7 +103,9 @@ async def run_once() -> dict[str, Any]:
     # its semantic gate; all mutation and reconciliation mechanics remain v4.
     v4._tradeable_exact = tradeable_structural_exact
     try:
+        _stage("ACCOUNT_PREFLIGHT_START")
         balances = await v4._read_call("account_balances", client.account.balances)
+        _stage("ACCOUNT_PREFLIGHT_DONE", balance_response_present=bool(balances))
         first = scored[0]
         if os.getenv("SPORTS_POLY_RELAY_LIVE_Q1", "0") != "1":
             out = {
@@ -102,6 +132,17 @@ async def run_once() -> dict[str, Any]:
 
         attempts: list[dict[str, Any]] = []
         for idx, row in enumerate(scored[:MAX_ATTEMPTS], start=1):
+            _stage(
+                "ATTEMPT_START",
+                attempt=idx,
+                family=row.get("family"),
+                maker_slug=row.get("maker_slug"),
+                maker_side=row.get("maker_side"),
+                hedge_slug=row.get("hedge_slug"),
+                hedge_side=row.get("hedge_side"),
+                quoted_locked_profit=row.get("quote_locked_profit"),
+                maker_gap_to_ask=row.get("maker_gap_to_ask"),
+            )
             try:
                 result = await v4._attempt(client, row, feed, idx)
             except v4.ReadRateLimitExhausted as exc:
@@ -133,12 +174,28 @@ async def run_once() -> dict[str, Any]:
             # reporting as realized P&L before venue settlement.
             result["locked_execution"] = bool(result.pop("realized", False))
             result["realized"] = False
+            _stage(
+                "ATTEMPT_RESULT",
+                attempt=idx,
+                status=result.get("status"),
+                error_type=result.get("error_type"),
+                stage_name=result.get("stage"),
+                locked_execution=result.get("locked_execution"),
+                actual_net_locked_profit=result.get("actual_net_locked_profit"),
+            )
 
             try:
                 ledger = await report_attempt(client=client, row=row, result=result)
             except Exception as exc:
                 ledger = {"ledger_reported": False, "error_type": type(exc).__name__}
             result["ledger"] = ledger
+            _stage(
+                "LEDGER_RESULT",
+                attempt=idx,
+                ledger_reported=ledger.get("ledger_reported"),
+                fills_reported=ledger.get("fills_reported"),
+                awaiting_settlement=ledger.get("awaiting_settlement"),
+            )
 
             attempts.append(result)
             if result.get("status") not in {
