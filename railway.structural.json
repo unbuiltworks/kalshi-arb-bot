@@ -1,6 +1,9 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
+    "preDeployCommand": [
+      "python -m py_compile src/sports_poly_structural_live_supervisor.py src/sports_poly_private_order_stream.py src/sports_poly_structural_reporting.py src/sports_kp_poly_relay_campaign_q1_v5.py src/sports_kp_poly_relay_campaign_q1_v4.py src/sports_poly_structural_monotone.py"
+    ],
     "startCommand": "python -m src.sports_poly_structural_live_supervisor",
     "restartPolicyType": "NEVER"
   }
