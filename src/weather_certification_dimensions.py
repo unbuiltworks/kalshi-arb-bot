@@ -139,14 +139,20 @@ def _settlement_identity_semantics_verified(row: dict[str, Any]) -> bool:
 
 
 def _exact_market_source_audit(row: dict[str, Any]) -> dict[str, Any]:
-    """Re-run exact-market settlement provenance instead of trusting producer booleans."""
+    """Re-run exact-market settlement provenance instead of trusting producer booleans.
+
+    When v2 supplies a nested audit, the evidence-side market ticker/date must be
+    present in that audit. Never substitute the target market/date for missing evidence
+    identity; doing so would manufacture the very binding this trust boundary is meant
+    to verify.
+    """
     nested = row.get("exact_market_source_audit")
     if isinstance(nested, dict):
         provider = nested.get("settlement_source_provider")
         source_url = nested.get("settlement_source_url")
         evidence_url = nested.get("evidence_url")
-        evidence_market_ticker = row.get("evidence_market_ticker") or row.get("market_ticker")
-        evidence_market_date = row.get("evidence_market_date") or row.get("market_date")
+        evidence_market_ticker = nested.get("evidence_market_ticker")
+        evidence_market_date = nested.get("evidence_market_date")
     else:
         provider = row.get("settlement_source_provider")
         source_url = row.get("settlement_source_url")
