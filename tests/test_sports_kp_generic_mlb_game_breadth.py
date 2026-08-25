@@ -51,7 +51,19 @@ def test_orient_no_swaps_binary_contract_sides() -> None:
     assert book.opp_depth == D("10")
 
 
-def test_pairing_rejects_ambiguous_normal_event_mapping() -> None:
+def test_pairing_collapses_one_yes_plus_one_no_mirror() -> None:
+    p_yes = _side("polymarket", "p_yes", "YES")
+    p_no = _side("polymarket", "p_complement", "NO")
+    k_yes = _side("kalshi", "k_yes", "YES")
+    k_no = _side("kalshi", "k_complement", "NO")
+    pairs, ambiguous = _pair_normal_event_sides([p_yes, p_no], [k_yes, k_no])
+    assert ambiguous == 0
+    assert len(pairs) == 1
+    assert pairs[0].poly.venue_market_id == "p_yes"
+    assert pairs[0].kalshi.venue_market_id == "k_yes"
+
+
+def test_pairing_rejects_multiple_yes_normal_event_mapping() -> None:
     p = _side("polymarket", "p1", "YES")
     k1 = _side("kalshi", "k1", "YES")
     k2 = _side("kalshi", "k2", "YES")
@@ -70,8 +82,6 @@ def test_q1_economics_uses_real_fee_rounding_and_depth() -> None:
     kalshi = SimpleNamespace(yes_ask=D("0.46"), yes_depth=D("6"), no_ask=D("0.56"), no_depth=D("7"))
     row = _q1_economics(pair, poly, kalshi, poly_rate=D("0.05"), kalshi_rate=D("0.07"))
     assert row is not None
-    # Best route is Polymarket proposition + Kalshi complement: 0.45 + 0.56.
-    # Polymarket rounds its fee to 0.01 and Kalshi rounds up to 0.02.
     assert row["direction"] == "POLY_PROP_KALSHI_OPP"
     assert row["profit"] == D("-0.04")
     assert row["q1_depth"] == D("7")
