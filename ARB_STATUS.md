@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-25 12:53 UTC / 2026-08-25 08:53 ET**
+Last verified: **2026-08-25 13:38 UTC / 2026-08-25 09:38 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
@@ -26,7 +26,7 @@ Same-venue Gemini/Polymarket/Kalshi zero results are near-verdict evidence; do n
 
 ## Current authoritative scoreboard
 
-- **2026-08-25 ET:** fresh direct Neon query at 08:53 ET confirms **0 `TRADE_REALIZED` rows / $0.0000 realized net**.
+- **2026-08-25 ET:** fresh direct Neon query at 09:38 ET confirms **0 `TRADE_REALIZED` rows / $0.0000 realized net**.
 - Caleb Durbin remains a real settled one-leg sports loss at **gross -$0.42 / net -$0.44**; never shadow it away.
 - Weather since **2026-03-01:** fresh direct Neon query confirms **0 weather-tagged `TRADE_REALIZED` rows / $0.0000 verified realized weather P&L**. Seasonal/backtest edge remains excluded.
 - Same-Gemini crypto prior snapshot remains roughly **2,647 certified q1 pairs / 275 books / 0 immediate >=3c FOK/FOK locks**; near-verdict evidence only.
@@ -35,15 +35,27 @@ Same-venue Gemini/Polymarket/Kalshi zero results are near-verdict evidence; do n
 
 ### Kalshi<->Polymarket sports — `sports-kp-live-executor`
 
-The true event-driven K<->P collector remains **alive** on Railway deployment `b7bb8eb6-53a8-4bc1-b74e-e25a135d0d58` with `SUCCESS` status. The prior empty-slate crash storm fixed by PR #140 has not returned; the process stays alive under its in-process retry/backoff behavior.
+Railway deployment `b7bb8eb6-53a8-4bc1-b74e-e25a135d0d58` remains **SUCCESS** and the intended read-only command is active:
 
-However, the census is still **not decision-grade and the 72-hour K<->P verdict clock remains INVALID** because the Kalshi order-book websocket has not initialized. Direct Railway logs show the dedicated Kalshi websocket handshake returning **HTTP 429 continuously from at least 11:50 UTC through 12:52 UTC**. The first retry uses 15s and then the collector persists at a 30s backoff while remaining alive. No `EVENT_READY` state can be credited while Kalshi books remain unavailable, and therefore no >=1c/>=2c/>=3c edge, lifetime, depth, skew, or >=80ms capture observation from this interval counts toward deployable capacity.
+`python -m src.polymarket_kalshi_shadow_v5 --max-quote-age-ms 100`
 
-The previously established semantic-counterpart evidence remains valid for inventory breadth: genuine v5 discovery previously found **45 Polymarket MLB total candidates, 154 Kalshi candidates, and 42 exact cross-venue total matches** when the slate was populated. PR #140 remains the merged read-only repair for public Polymarket book seeding plus bounded no-inventory retry. It adds no order transport.
+`restartPolicy=ALWAYS` remains in place for this census-only service. PR #140's bounded no-inventory retry continues to prevent the prior restart storm.
+
+Fresh 13:26 UTC discovery is strong on inventory and Polymarket feed quality:
+
+- **45 Polymarket MLB total candidates**
+- **172 Kalshi candidates**
+- **42 exact cross-venue matches**
+- **42/42 Polymarket books seeded successfully** through `gateway.polymarket.us`
+- Polymarket websocket subscribed to all 42 and connected
+
+The current blocker is specifically the separate Kalshi websocket. It remains **0/42 initialized** and continues to receive **HTTP 429** on a long-lived process at the existing bounded cadence: initial 15s, then approximately **30s per retry**. Fresh logs show repeated retries through at least attempts 13-16 in this run. There is still no valid `EVENT_READY`, so the K<->P 72-hour verdict clock remains **INVALID** and no >=1c/>=2c/>=3c/lifetime/depth/skew/capture zeros from this interval may be interpreted as edge evidence.
+
+This materially rules out semantic-counterpart scarcity and the earlier Polymarket seed failure as the current blocker. Both counterpart inventory and the Polymarket side are healthy when the slate is populated.
 
 K<->P still needs event-driven coverage for full-game MLB **moneylines, spreads and totals**, plus strict player props only where lifecycle/participation/result-source equivalence can be proven. Semantic mirrors must be deduped. Participation-conditional or rule-mismatched rows never count as guaranteed arb.
 
-### Kalshi account-limit / 429 diagnosis — stronger evidence
+### Kalshi account-limit / 429 diagnosis — concurrent-WS evidence is now decisive
 
 Authenticated `/account/limits` remains:
 
@@ -52,27 +64,19 @@ Authenticated `/account/limits` remains:
 - write bucket capacity/refill: **900 / 300**
 - REST host: `external-api.kalshi.com`
 
-Fresh concurrent-consumer evidence now narrows the 429 diagnosis materially. The read-only G<->K hot-shadow process has maintained **272/272 Kalshi tickers initialized** continuously while the separate K<->P Kalshi websocket handshake is rejected every ~30 seconds with HTTP 429. G<->K is processing books normally rather than showing a general Kalshi data outage.
+At the exact same time the K<->P service is rejected on every fresh Kalshi websocket handshake, the independent read-only G<->K hot-shadow keeps its already-established Kalshi stream healthy with **272/272 tickers initialized** and continues receiving/evaluating book updates.
 
-This strongly favors **concurrent websocket connection/handshake policy or account-level connection contention** over a weak account tier or generic REST bucket exhaustion. Do not lower the existing K<->P backoff and do not stop unrelated live/read-only Kalshi services solely to improve census telemetry. The next engineering option should favor **sharing/multiplexing an already-established Kalshi market-data connection** or otherwise reducing redundant account handshakes, provided this can be done read-only and without disturbing existing live services.
+Fresh G<->K heartbeats during this run show roughly **28,900 comparable evaluations**, **54 hot evaluations**, and **36 completed hot signal lifecycles**, with recent modeled hot locks around **4-5c**. Those observations remain non-deployable because the full Gemini/Kalshi prop lifecycle/rule fingerprint is explicitly incomplete and `order_entry=false`.
+
+The combined evidence strongly favors **concurrent websocket connection/handshake policy or account-level WS connection contention**, not weak account tier, general Kalshi REST exhaustion, or a market-data outage. Do not lower the K<->P backoff and do not stop unrelated live/read-only Kalshi services solely to improve census telemetry.
+
+**Highest-value engineering direction:** eliminate the redundant K<->P Kalshi handshake by consuming a **shared/multiplexed already-established Kalshi market-data stream**. Implement this read-only and isolated first; do not disturb or mutate the working G<->K collector merely to make the census pass.
 
 ### Gemini<->Kalshi sports — `sports-gk-autonomous-supervisor`
 
-Fresh Railway heartbeat at 12:48 UTC proves this service is genuinely active and read-only:
+Railway deployment `030a6f3d-f40c-48ba-8337-d53285cff801` remains **SUCCESS** and is genuinely active. Its production command is the read-only event-driven `src.gemini_kalshi_mlb_prop_hot_shadow` collector. It has **272 Kalshi tickers / 272 initialized** while K<->P's separate connection is being rejected.
 
-- uptime roughly **34,070s**
-- **272 Gemini symbols / 272 connected**
-- **272 Kalshi tickers / 272 initialized**
-- 4,400 Gemini book updates
-- 27,002 comparable evaluations
-- 51 positive evaluations
-- 51 `hot_3c_evaluations`
-- 33 opens / 33 closes / 0 active positive keys
-- trigger->evaluation avg **0.039ms**, p95 **0.079ms**
-- `read_only=true`, `order_entry=false`
-- execution rule gate remains `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION`
-
-The 51 hot >=3c observations are **not deployable-capacity evidence yet** because the full lifecycle/rule fingerprint is still an explicit blocker; they remain shadow/census observations only. G<->K stays disarmed. Caleb's -$0.44 remains authoritative realized accounting.
+Recent positive evaluations are census/shadow observations only. The explicit execution blocker remains `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION`; G<->K remains disarmed and Caleb's -$0.44 remains authoritative realized accounting.
 
 ### Old Gemini<->Kalshi 15m crypto
 
@@ -84,10 +88,10 @@ Fresh authoritative central-ledger query confirms **0 weather-tagged realized tr
 
 ## Highest-value next actions
 
-1. **Do not start the K<->P 72-hour clock yet.** A lane with zero Kalshi books is unmeasurable, not a zero-edge result.
-2. Diagnose/implement a **read-only shared or multiplexed Kalshi market-data path** so K<->P can consume the existing healthy account connection without creating another repeatedly rejected websocket handshake. Do not disturb unrelated live services to do this.
+1. **Do not start the K<->P 72-hour clock yet.** The lane has 42 exact counterparts and healthy Polymarket books but zero usable Kalshi websocket books; that is unmeasurable, not zero-edge.
+2. Build/test a **read-only shared or multiplexed Kalshi market-data path** so K<->P can consume an already-established account stream without creating another repeatedly rejected websocket handshake. Do not disrupt the healthy G<->K stream to test it.
 3. Once both K<->P books are healthy, persist >=1c/>=2c/>=3c after-fee bins, q1 depth, quote skew, OPEN/CLOSE lifetimes, and >=80ms realistic-capture capacity.
 4. Before Wednesday, broaden event-driven K<->P to semantic-deduped MLB moneylines/spreads/totals plus strict rule-certified props. Participation-conditional/rule-mismatched rows remain excluded.
-5. Continue G<->K read-only census. Its current >=3c hot observations remain **non-deployable** until full lifecycle/rule fingerprint certification is satisfied.
+5. Continue G<->K read-only census. Its current hot observations remain **non-deployable** until full lifecycle/rule fingerprint certification is satisfied.
 6. Preserve the fixed verdict thresholds/deadline. If K<->P remains unmeasurable after the single allowed +24h feed-quality extension, count it as **$0 deployable capacity** rather than extending research.
 7. Continue querying authoritative ledger/weather directly; as of this checkpoint Aug 25 ET remains **0 realized trades / $0.00**, and weather since March remains **$0 verified realized**.
