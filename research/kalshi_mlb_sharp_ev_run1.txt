@@ -1,0 +1,2 @@
+One-day read-only diagnostic trigger for Kalshi MLB sharp-line EV research.
+No production deployment. No order entry. No roadmap service changes.
