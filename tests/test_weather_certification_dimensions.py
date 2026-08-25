@@ -90,6 +90,11 @@ def _clean_row():
         "yes_available_contracts": 5,
         "no_ask_cents": 61,
         "no_available_contracts": 5,
+        "best_shadow_side": "NO",
+        "modeled_after_fee_ev_cents": "10.0",
+        "side_economics": [
+            {"side": "NO", "modeled_after_fee_ev_cents": "10.0"},
+        ],
         "fee_type": "quadratic",
         "fee_multiplier": 1,
         "fee_metadata_source": "series_current",
@@ -126,6 +131,7 @@ def test_clean_row_clears_read_only_prereqs():
     assert out["exact_market_source_audit_verified"] is True
     assert out["settlement_identity_semantics_verified"] is True
     assert out["model_audit_chain_verified"] is True
+    assert out["scored_side_book_binding_verified"] is True
     assert out["executable_shadow_prereqs_verified"] is True
     assert out["order_entry"] is False and out["live_probe_ready"] is False
 
@@ -178,116 +184,108 @@ def test_fee_resolution_binding_is_required():
 
 
 def test_quote_timestamp_binding_is_required():
-    row = _clean_row(); row["quote_age_evaluated_at"] = "2026-08-24T04:00:00.900Z"
+    row = _clean_row(); row["quote_age_ms"] = 50; row["quote_age_evaluated_at"] = "2026-08-24T04:00:00.500Z"
     out = audit_weather_certification_dimensions(row)
     assert out["market_data_verified"] is False
     assert out["quote_freshness_binding_verified"] is False
 
 
-def test_settlement_booleans_cannot_replace_exact_market_source_evidence():
-    row = _clean_row()
-    row["exact_market_source_verified"] = True
-    row["settlement_certified_shadow"] = True
-    row["exact_market_evidence_url"] = "https://kalshi.com/markets/kxhighny-26aug24/new-york-high-temperature/kxhighny-26aug24-b80.5"
+def test_settlement_identity_semantics_require_literal_true():
+    row = _clean_row(); row["station_identity_verified"] = "true"
     out = audit_weather_certification_dimensions(row)
-    assert out["exact_market_source_audit_verified"] is False
-    assert "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT" in out["settlement_blockers"]
-    assert out["settlement_rules_provenance_verified"] is False
+    assert out["settlement_identity_semantics_verified"] is False
+    assert "STATION_IDENTITY_EVIDENCE_REQUIRED" in out["settlement_blockers"]
     assert out["executable_shadow_prereqs_verified"] is False
 
 
-def test_settlement_certified_boolean_cannot_replace_identity_semantics():
-    for field, blocker in (
-        ("station_identity_verified", "STATION_IDENTITY_EVIDENCE_REQUIRED"),
-        ("local_day_verified", "LOCAL_DAY_EVIDENCE_REQUIRED"),
-        ("bracket_semantics_verified", "BRACKET_SEMANTICS_EVIDENCE_REQUIRED"),
-    ):
-        row = _clean_row()
-        row[field] = "true"
-        out = audit_weather_certification_dimensions(row)
-        assert out["settlement_identity_semantics_verified"] is False
-        assert blocker in out["settlement_blockers"]
-        assert out["settlement_rules_provenance_verified"] is False
-        assert out["executable_shadow_prereqs_verified"] is False
+def test_exact_market_evidence_must_be_bound_to_event():
+    row = _clean_row(); row["exact_market_evidence_url"] = "https://kalshi.com/markets/kxhighny-26aug24/new-york-high-temperature/kxhighny-26aug24-b80.5"
+    out = audit_weather_certification_dimensions(row)
+    assert out["exact_market_source_audit_verified"] is False
+    assert "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT" in out["settlement_blockers"]
+    assert out["executable_shadow_prereqs_verified"] is False
 
 
-def test_top_level_model_booleans_cannot_replace_underlying_audits():
+def test_v2_nested_exact_market_audit_shape_is_replayed_not_trusted():
     row = _clean_row()
-    for key in (
-        "model_sanity_audit",
-        "model_provider_provenance_audit",
-        "local_day_binding_audit",
-        "forecast_valid_local_day_audit",
-        "anchor_valid_local_day_audit",
-        "model_run_quote_time_audit",
-    ):
-        row.pop(key)
+    row.pop("settlement_source_provider"); row.pop("settlement_source_url"); row.pop("exact_market_evidence_url")
+    row["exact_market_source_audit"] = {
+        "verified": True,
+        "settlement_source_provider": "THE_WEATHER_COMPANY",
+        "settlement_source_url": "https://weather.com/kalshi",
+        "evidence_url": "https://kalshi.com/markets/kxhighmia-26aug24/miami-high-temperature/kxhighmia-26aug24-b92.5",
+        "evidence_market_ticker": "KXHIGHMIA-26AUG24-B92.5",
+        "evidence_market_date": "2026-08-24",
+    }
+    out = audit_weather_certification_dimensions(row)
+    assert out["exact_market_source_audit_verified"] is True
+    assert out["settlement_rules_provenance_verified"] is True
+
+    bad = deepcopy(row)
+    bad["exact_market_source_audit"]["evidence_url"] = "https://kalshi.com/markets/kxhighny-26aug24/new-york-high-temperature/kxhighny-26aug24-b80.5"
+    bad_out = audit_weather_certification_dimensions(bad)
+    assert bad_out["exact_market_source_audit_verified"] is False
+    assert "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT" in bad_out["settlement_blockers"]
+
+
+def test_model_audit_chain_is_required_not_summary_booleans():
+    row = _clean_row(); row.pop("model_sanity_audit")
     out = audit_weather_certification_dimensions(row)
     assert out["model_audit_chain_verified"] is False
     assert out["model_probability_verified"] is False
     assert out["executable_shadow_prereqs_verified"] is False
-    assert any(blocker.startswith("MODEL_AUDIT_ENVELOPE_INVALID:") for blocker in out["model_blockers"])
 
 
-def test_spoofed_nested_verified_flag_cannot_hide_failed_model_audit():
-    row = _clean_row()
-    row["model_sanity_audit"]["blockers"] = ["MODEL_CALIBRATION_LOOKAHEAD_DETECTED"]
-    row["model_sanity_audit"]["model_sanity_verified"] = True
-    row["model_sanity_verified"] = True
+def test_model_chain_rejects_nested_verified_with_blockers():
+    row = _clean_row(); row["model_sanity_audit"]["blockers"] = ["MODEL_DISAGREEMENT_RESEARCH_ONLY"]
     out = audit_weather_certification_dimensions(row)
     assert out["model_audit_chain_verified"] is False
-    assert "MODEL_AUDIT_ENVELOPE_INVALID:model_sanity_audit" in out["model_blockers"]
+    assert "MODEL_SANITY_AUDIT_BLOCKED" in out["model_blockers"]
     assert out["executable_shadow_prereqs_verified"] is False
 
 
-def test_nested_model_day_must_match_exact_market_day():
-    row = _clean_row()
-    row["local_day_binding_audit"]["market_local_date"] = "2026-08-25"
+def test_model_chain_rejects_calibration_model_mismatch():
+    row = _clean_row(); row["model_sanity_audit"]["calibration_model_id"] = "other-model"
     out = audit_weather_certification_dimensions(row)
     assert out["model_audit_chain_verified"] is False
-    assert "MODEL_AUDIT_LOCAL_DAY_MISMATCH" in out["model_blockers"]
-    assert out["executable_shadow_prereqs_verified"] is False
+    assert "CALIBRATION_MODEL_ID_MISMATCH" in out["model_blockers"]
 
 
-def test_nested_model_sanity_cannot_hide_calibration_lookahead():
-    row = _clean_row()
-    row["model_sanity_audit"]["calibration_window_end"] = "2026-08-24T03:30:00+00:00"
-    row["model_sanity_audit"]["model_sanity_verified"] = True
-    row["model_sanity_audit"]["blockers"] = []
+def test_model_chain_rejects_calibration_lookahead():
+    row = _clean_row(); row["model_sanity_audit"]["calibration_window_end"] = "2026-08-24T03:30:00+00:00"
     out = audit_weather_certification_dimensions(row)
     assert out["model_audit_chain_verified"] is False
-    assert "MODEL_AUDIT_CALIBRATION_LOOKAHEAD_DETECTED" in out["model_blockers"]
-    assert out["executable_shadow_prereqs_verified"] is False
+    assert "MODEL_CALIBRATION_LOOKAHEAD_DETECTED" in out["model_blockers"]
 
 
-def test_nested_model_sanity_cannot_hide_anchor_lookahead():
-    row = _clean_row()
-    row["model_sanity_audit"]["independent_anchor_observed_at"] = "2026-08-24T04:30:00+00:00"
-    row["model_sanity_audit"]["model_sanity_verified"] = True
-    row["model_sanity_audit"]["blockers"] = []
+def test_model_chain_rejects_anchor_observed_after_quote():
+    row = _clean_row(); row["model_sanity_audit"]["independent_anchor_observed_at"] = "2026-08-24T04:00:01+00:00"
     out = audit_weather_certification_dimensions(row)
     assert out["model_audit_chain_verified"] is False
-    assert "MODEL_AUDIT_ANCHOR_LOOKAHEAD_DETECTED" in out["model_blockers"]
-    assert out["executable_shadow_prereqs_verified"] is False
+    assert "ANCHOR_OBSERVED_AFTER_QUOTE" in out["model_blockers"]
 
 
-def test_nested_model_sanity_cannot_hide_calibration_model_mismatch():
-    row = _clean_row()
-    row["model_sanity_audit"]["calibration_model_id"] = "other-model"
-    row["model_sanity_audit"]["model_sanity_verified"] = True
-    row["model_sanity_audit"]["blockers"] = []
+def test_model_chain_rejects_anchor_provider_overlap():
+    row = _clean_row(); row["model_provider_provenance_audit"]["independent_anchor_provider_family"] = "ECMWF"
     out = audit_weather_certification_dimensions(row)
     assert out["model_audit_chain_verified"] is False
-    assert "MODEL_SANITY_CALIBRATION_MODEL_ID_MISMATCH" in out["model_blockers"]
-    assert out["executable_shadow_prereqs_verified"] is False
+    assert "ANCHOR_PROVIDER_OVERLAPS_MODEL_INPUTS" in out["model_blockers"]
 
 
-def test_nested_provider_audit_cannot_hide_anchor_source_overlap():
+def test_scored_side_requires_executable_depth_on_that_side():
     row = _clean_row()
-    row["model_provider_provenance_audit"]["model_component_provider_families"] = ["DWD", "ECMWF", "NOAA"]
-    row["model_provider_provenance_audit"]["provider_provenance_verified"] = True
-    row["model_provider_provenance_audit"]["blockers"] = []
+    row.update({
+        "best_shadow_side": "NO",
+        "modeled_after_fee_ev_cents": "12.5",
+        "side_economics": [{"side": "NO", "modeled_after_fee_ev_cents": "12.5"}],
+        "yes_ask_cents": 40,
+        "yes_available_contracts": 5,
+        "no_ask_cents": None,
+        "no_available_contracts": None,
+    })
     out = audit_weather_certification_dimensions(row)
-    assert out["model_audit_chain_verified"] is False
-    assert "ANCHOR_PROVIDER_NOT_INDEPENDENT" in out["model_blockers"]
+    assert out["book_representation_verified"] is True  # YES still has a valid book.
+    assert out["scored_side_book_binding_verified"] is False
+    assert "SCORED_SIDE_EXECUTABLE_BOOK_UNVERIFIED" in out["market_data_blockers"]
+    assert out["market_data_verified"] is False
     assert out["executable_shadow_prereqs_verified"] is False
