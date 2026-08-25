@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-25 21:12 UTC / 2026-08-25 17:12 ET**
+Last verified: **2026-08-25 21:35 UTC / 2026-08-25 17:35 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
@@ -33,7 +33,9 @@ Same-venue Gemini/Polymarket/Kalshi zero results remain near-verdict evidence; d
 
 ### Kalshi<->Polymarket sports — `sports-kp-live-executor`
 
-Production remains healthy/read-only. Deployment **`11e53e98-d318-4455-8341-2cfadc5d275b`** is SUCCESS and reached `EVENT_READY` with **72 strict discovered / 72 matched live books / 72 seeded Polymarket books / 72 initialized Kalshi books**.
+Production remains healthy/read-only. Deployment **`11e53e98-d318-4455-8341-2cfadc5d275b`** is still Railway **SUCCESS** and previously reached `EVENT_READY` with **72 strict discovered / 72 matched live books / 72 seeded Polymarket books / 72 initialized Kalshi books**.
+
+Fresh one-hour Railway metrics at **17:35 ET** independently confirm the process is genuinely alive: **61/61 samples**, current CPU ~**0.064**, average CPU ~**0.120**, current network RX ~**0.0208 GB**, current network TX ~**0.0010 GB**. Runtime-log inspection is temporarily blocked by Railway's agent usage quota, so no newer `decision_census` bins are claimed from this interval; missing logs are not converted into zero-edge observations.
 
 The two census telemetry defects are now corrected in production:
 
@@ -50,7 +52,7 @@ First corrected decision telemetry proves the earlier zero-depth result was mech
 
 Kalshi transport for this census remains **`REST_SNAPSHOT_NOT_WS_LIFETIME` at 100ms**. Therefore REST-derived lifetime/capture is not promoted to authoritative sub-100ms executable evidence. The internal realistic-capture counter may register observations after 80ms, but under the fixed source-quality policy unsupported REST intervals still score **$0 realistic deployable capacity**. Descriptive price/depth evidence remains useful.
 
-Current v5 strict matcher is still **full-game MLB totals only** (`KXMLBTOTAL`). Required MLB moneyline/spread and strict rule-certified prop breadth remains incomplete. Missing breadth does not pause the 72-hour clock.
+Current v5 strict matcher is still **full-game MLB totals only** (`KXMLBTOTAL`). Required MLB moneyline/spread and strict rule-certified prop breadth remains incomplete. Missing breadth does not pause the 72-hour clock and will score $0 for unmeasured capacity if not instrumented by the deadline.
 
 ### Gemini<->Kalshi sports
 
@@ -72,13 +74,13 @@ The first corrected K<->P sample is economically relevant input to that lane: 1c
 
 ### Old Gemini<->Kalshi 15m crypto
 
-`crypto-15m-sol-live-canary-10bp-50ms` remains crashed from the previously confirmed bounded-campaign deadline -> `HALTED_FAIL_CLOSED` path. It is not being reopened here because settlement-index non-equivalence remains the stronger safety/economic blocker. AWS/low-latency maker-routing work remains isolated in the separate chat.
+`crypto-15m-sol-live-canary-10bp-50ms` remains Railway **CRASHED** from the previously confirmed bounded-campaign deadline -> `HALTED_FAIL_CLOSED` path. It is not being reopened here because settlement-index non-equivalence remains the stronger safety/economic blocker. AWS/low-latency maker-routing work remains isolated in the separate chat.
 
 ## Highest-value next actions
 
 1. Keep the K<->P 72-hour wall clock running without resets; use the corrected q1 depth telemetry and preserve REST source-quality exclusions.
 2. Rank actual >=1c/>=2c/>=3c q1 opportunity supply and identify deep sub-3c rows suitable as **inputs** to the isolated maker lane; do not count maker-model economics as realized.
-3. Add K<->P MLB moneyline/spread breadth and only strict props with provable rule/settlement equivalence; semantic mirrors must be deduped.
+3. Add K<->P MLB moneyline/spread breadth and only strict props with provable rule/settlement equivalence; semantic mirrors must be deduped. This is the highest-value unfinished census work because current v5 covers totals only.
 4. Leave the now-healthy G<->K q1 taker/taker canary armed under its existing safety controls and record only authoritative submissions/fills/settlements.
 5. Preserve Kalshi read-budget headroom for execution websocket traffic; background read-only collectors should not crowd out the live WS again.
 6. Preserve the fixed <$50 / $50-$149 / >=$150 verdict thresholds and do not extend the census because results are interesting.
