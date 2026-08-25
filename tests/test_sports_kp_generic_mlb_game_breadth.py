@@ -70,9 +70,9 @@ def test_q1_economics_uses_real_fee_rounding_and_depth() -> None:
     kalshi = SimpleNamespace(yes_ask=D("0.46"), yes_depth=D("6"), no_ask=D("0.56"), no_depth=D("7"))
     row = _q1_economics(pair, poly, kalshi, poly_rate=D("0.05"), kalshi_rate=D("0.07"))
     assert row is not None
-    # Best route is Kalshi proposition + Polymarket complement: 0.46 + 0.57,
-    # plus 0.01 rounded fee on each venue => -0.05 net at q=1.
-    assert row["direction"] == "KALSHI_PROP_POLY_OPP"
-    assert row["profit"] == D("-0.05")
-    assert row["q1_depth"] == D("6")
-    assert row["missing_to_3c"] == D("0.08")
+    # Best route is Polymarket proposition + Kalshi complement: 0.45 + 0.56.
+    # Polymarket rounds its fee to 0.01 and Kalshi rounds up to 0.02.
+    assert row["direction"] == "POLY_PROP_KALSHI_OPP"
+    assert row["profit"] == D("-0.04")
+    assert row["q1_depth"] == D("7")
+    assert row["missing_to_3c"] == D("0.07")
