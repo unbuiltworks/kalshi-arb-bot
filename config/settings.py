@@ -11,7 +11,8 @@ API_KEY_ID = os.getenv("KALSHI_API_KEY_ID", "")
 PRIVATE_KEY_PATH = os.getenv("KALSHI_PRIVATE_KEY_PATH", "./private_key.pem")
 
 # Kalshi's current API documentation recommends the dedicated external Trade API
-# hosts for API traders.  Keep signing paths unchanged; only the hostname differs.
+# hosts for API traders. Keep a service-local override so read-only collectors can
+# fail over to the documented shared host without changing any signing paths.
 BASE_URLS = {
     "demo": {
         "rest": "https://external-api.demo.kalshi.co/trade-api/v2",
@@ -24,7 +25,7 @@ BASE_URLS = {
 }
 
 REST_URL = BASE_URLS[ENV]["rest"]
-WS_URL = BASE_URLS[ENV]["ws"]
+WS_URL = os.getenv("KALSHI_WS_URL_OVERRIDE", BASE_URLS[ENV]["ws"])
 
 # --- Market Discovery ---
 MAX_MARKETS = 50
