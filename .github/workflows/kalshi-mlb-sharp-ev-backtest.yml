@@ -18,9 +18,9 @@ permissions:
   contents: write
 
 jobs:
-  espn-closing-backtest-diagnostic:
+  espn-closing-backtest-full:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,23 +29,23 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
-      - name: Run three-game-day ESPN DraftKings closing-line diagnostic
+      - name: Run full 2026 ESPN DraftKings closing-line backtest
         shell: bash
         run: |
           mkdir -p research/results
           rm -f research/results/espn_mlb_closing_ev_backtest.json
           set +e
-          python -m src.espn_mlb_closing_ev_backtest_runner --max-days 3 --output research/results/espn_mlb_closing_ev_backtest.json
+          python -m src.espn_mlb_closing_ev_backtest_runner --output research/results/espn_mlb_closing_ev_backtest.json
           code=$?
           set -e
-          printf '{"workflow_started":true,"provider":"espn_draftkings_close","diagnostic_exit_code":%s,"source_sha":"%s"}\n' "$code" "$GITHUB_SHA" > research/results/kalshi_mlb_sharp_ev_status.json
+          printf '{"workflow_started":true,"provider":"espn_draftkings_close","scope":"full_2026_to_yesterday","diagnostic_exit_code":%s,"source_sha":"%s"}\n' "$code" "$GITHUB_SHA" > research/results/kalshi_mlb_sharp_ev_status.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: kalshi-mlb-sharp-ev-closing-diagnostic
+          name: kalshi-mlb-sharp-ev-closing-full
           path: research/results/
           if-no-files-found: error
-      - name: Persist safe diagnostic result on research branch
+      - name: Persist full backtest result on research branch
         if: always()
         shell: bash
         run: |
@@ -56,8 +56,8 @@ jobs:
             git add research/results/espn_mlb_closing_ev_backtest.json
           fi
           if git diff --cached --quiet; then
-            echo 'No diagnostic change to commit.'
+            echo 'No backtest change to commit.'
             exit 0
           fi
-          git commit -m 'Research result: ESPN MLB closing-line diagnostic [skip ci]'
+          git commit -m 'Research result: full ESPN MLB closing-line backtest [skip ci]'
           git push origin HEAD:research/kalshi-mlb-sharp-ev
