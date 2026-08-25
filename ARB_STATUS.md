@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-25 16:45 UTC / 2026-08-25 12:45 ET**
+Last verified: **2026-08-25 17:40 UTC / 2026-08-25 13:40 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
@@ -35,57 +35,38 @@ Same-venue Gemini/Polymarket/Kalshi zero results are near-verdict evidence; do n
 
 ### Kalshi<->Polymarket sports — `sports-kp-live-executor`
 
-Railway deployment **`2108e5b0-84a5-48e0-9bd7-05a4e3e86f12`** remains **SUCCESS** and fresh one-hour metrics show sustained CPU plus nonzero network traffic, so the corrected K<->P process is alive rather than instant-exited.
+Railway deployment **`2108e5b0-84a5-48e0-9bd7-05a4e3e86f12`** remains **SUCCESS** and fresh two-hour service metrics show sustained CPU/memory activity plus nonzero network traffic, so the corrected K<->P process is alive rather than instant-exited.
 
-The active command remains:
+The bounded read-only Kalshi REST fallback remains enabled at a **100 ms minimum sampling floor**, batching the 42 known matched Kalshi tickers in one request and preserving the source label `REST_SNAPSHOT_NOT_WS_LIFETIME`. The prior async quote/coroutine crash has not recurred in the verified window.
 
-`python -m src.polymarket_kalshi_shadow_v5 --max-quote-age-ms 100`
+However, the verified runtime still does **not** provide independent `EVENT_READY` / decision-summary proof that both venues are continuously initialized. Therefore the **72-hour K<->P verdict clock remains INVALID**. Missing readiness is not scored as zero edge yet; if it remains unmeasurable after the one allowed +24h data-quality extension, the lane counts as $0 capacity.
 
-The bounded read-only Kalshi REST fallback remains enabled:
+Last fully verified counterpart state remains 45 Polymarket MLB total candidates, 172 Kalshi candidates, 42 exact cross-venue matches, and 42/42 Polymarket books seeded. The separate K<->P Kalshi websocket suffered repeated HTTP 429 handshakes; the REST fallback avoids opening another websocket and does not disturb the healthy G<->K feed.
 
-- `KALSHI_REST_BOOKS_FALLBACK=1`
-- `KALSHI_REST_BOOKS_INTERVAL_MS=100`
-- 42 matched Kalshi tickers in one <=100-ticker batch at startup
-- transport label `REST_SNAPSHOT_NOT_WS_LIFETIME`
-- `read_only=true`
-- `order_entry=false`
+Authenticated Kalshi `/account/limits` remains **advanced tier, 900 capacity / 300 refill for both reads and writes**. Evidence favors concurrent websocket handshake/account contention rather than low account tier or general API exhaustion. Do not weaken backoff or stop unrelated live services solely for census telemetry.
 
-Fresh deployment logs show the REST fallback starting and **no recurrence** of the prior async quote/coroutine traceback. However, the verified log window still contains **no visible `EVENT_READY` and no `EVENT_SUMMARY`**, and Railway's deeper read-only runtime agent hit its usage quota. Therefore exact initialized Kalshi book count is still not independently proven and the **72-hour K<->P verdict clock remains INVALID**.
+### Decision-grade K<->P telemetry — PR #145 merged
 
-Last fully verified healthy counterpart state before the fallback transition remains:
+PR **#145** is now **merged** at merge commit **`99027f6e87add109f26fa29d075d1418b1f539aa`** after both GitHub Actions test runs passed. This is a measurement milestone, not a trading change.
 
-- 45 Polymarket MLB total candidates
-- 172 Kalshi candidates
-- 42 exact cross-venue matches
-- 42/42 Polymarket books seeded successfully through `gateway.polymarket.us`
-- Polymarket websocket connected
-- the separate K<->P Kalshi websocket could not initialize because repeated HTTP 429 handshakes
+The merged `kp_census_decision_stats` helper is network- and order-entry-free and provides the exact pre-committed decision fields:
 
-Authenticated Kalshi `/account/limits` remains advanced tier, **900 capacity / 300 refill** for both reads and writes. The evidence still favors concurrent websocket handshake/account contention rather than low account tier or general API exhaustion. Do not disrupt the healthy G<->K websocket solely to improve K<->P telemetry.
-
-### New decision-telemetry blocker and repair — draft PR #145
-
-Source inspection found that even after K<->P reaches two-sided readiness, deployed v5 does **not yet emit the pre-committed decision summary needed for the verdict**. It logs event-level positive-edge signal lifecycle data, but not explicit cumulative >=1c/>=2c/>=3c bins plus a clearly labeled >=80ms realistic-capture summary. That is a measurement blocker, not a request to build another strategy.
-
-Draft **PR #145** (`feature/kp-census-decision-telemetry`) is now CI-green in **both GitHub Actions test runs**. It is intentionally isolated from live transport and adds only a network/order-entry-free telemetry helper with tests. It records:
-
-- explicit cumulative **>=1c / >=2c / >=3c after-fee bins**;
-- semantic-key deduped signal open/close lifecycles and lifetimes;
+- cumulative **>=1c / >=2c / >=3c after-fee bins**;
+- semantic-key deduped signal lifecycles and lifetimes;
 - q1 executable depth;
-- quote skew;
-- processing latency;
-- fixed **>=80ms realistic-capture** bins that additionally require q1 depth >=1;
-- source-quality labels so REST snapshots remain `REST_SNAPSHOT_NOT_WS_LIFETIME` and are never misrepresented as websocket lifetimes.
+- quote skew and process latency;
+- fixed **>=80ms realistic-capture bins** requiring q1 depth >=1;
+- source-quality preservation so REST snapshots remain `REST_SNAPSHOT_NOT_WS_LIFETIME` and are not misrepresented as websocket lifetimes.
 
-PR #145 remains **draft/unmerged**. No live service or order authority was changed. Next step is a reviewed integration into v5 only after the current readiness path is proven, then persist decision-grade summaries without altering economics/rule gates.
+**Important:** the helper is merged but is **not yet wired into the production v5 collector**. The highest-value instrumentation task is to integrate it read-only into every fully rule-certified two-sided evaluation and emit periodic verdict summaries. Do not start a 72-hour clock that cannot answer the fixed capacity question.
 
-K<->P still needs event-driven coverage for full-game MLB **moneylines, spreads and totals**, plus strict player props only where lifecycle/participation/result-source equivalence can be proven. Semantic mirrors must be deduped. Participation-conditional or rule-mismatched rows never count as guaranteed arb.
+K<->P production scope is also still incomplete for the full verdict: current v5 is strict full-game MLB totals. Before the instrumentation deadline, add semantic-deduped MLB **moneylines, spreads and totals**, plus strict player props only where lifecycle/participation/result-source equivalence is proven. Participation-conditional or rule-mismatched rows never count as guaranteed arb.
 
 ### Gemini<->Kalshi sports — `sports-gk-autonomous-supervisor`
 
-Production remains the read-only event-driven hot-shadow collector. Last verified feed state had **272 Kalshi tickers / 272 initialized** while K<->P's separate websocket was rejected. Positive evaluations remain census/shadow observations only; the explicit execution blocker is `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION`.
+Production remains the read-only event-driven hot-shadow collector and execution remains disarmed. Last fully verified feed state had **272 Kalshi tickers / 272 initialized** while the separate K<->P websocket was rejected. Positive hot-shadow evaluations remain census observations only; the explicit blocker is `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION`.
 
-G<->K remains disarmed. Caleb's **-$0.44** remains authoritative realized accounting.
+Caleb's **-$0.44** remains authoritative realized accounting.
 
 ### Old Gemini<->Kalshi 15m crypto
 
@@ -97,10 +78,9 @@ Fresh authoritative central-ledger evidence this run remains **0 weather-tagged 
 
 ## Highest-value next actions
 
-1. **Do not start the K<->P 72-hour clock yet.** Obtain direct runtime proof that deployment `2108e5b0-...` reaches `EVENT_READY`, initializes the Kalshi REST snapshots, and remains free of the prior coroutine crash.
-2. Integrate the now-CI-green PR #145 decision telemetry into v5 only through a reviewed read-only change, preserving REST source-quality labeling and all existing rule/economics gates.
-3. Persist explicit >=1c/>=2c/>=3c after-fee bins, q1 depth, quote skew, lifetimes and >=80ms realistic-capture capacity once both books are healthy.
-4. Before Wednesday's instrumentation deadline, broaden K<->P to semantic-deduped MLB moneylines/spreads/totals plus strict rule-certified props. Participation-conditional/rule-mismatched rows remain excluded.
-5. Continue G<->K read-only census; do not re-arm it merely because hot shadow signals exist.
-6. Preserve the fixed verdict thresholds/deadline. If K<->P remains unmeasurable after the single allowed +24h feed-quality extension, count it as **$0 deployable capacity** rather than extending research.
-7. Keep authoritative accounting direct: Aug 25 ET remains **0 realized trades / $0.00**, and weather since March remains **$0 verified realized**.
+1. **Do not start the K<->P 72-hour clock yet.** Obtain direct runtime proof that both Polymarket and Kalshi REST-backed books are continuously ready and measurable.
+2. Wire the now-merged PR #145 telemetry helper into v5 through a reviewed read-only change; emit explicit >=1c/>=2c/>=3c, q1 depth, skew, lifetime/source-quality and >=80ms realistic-capture summaries.
+3. Before Wednesday's instrumentation deadline, broaden K<->P to semantic-deduped MLB moneylines/spreads/totals plus strict rule-certified props.
+4. Continue G<->K read-only census; do not re-arm it merely because hot-shadow signals exist.
+5. Preserve the fixed verdict thresholds/deadline. If K<->P remains unmeasurable after the single allowed +24h feed-quality extension, count it as **$0 deployable capacity** rather than extending research.
+6. Keep authoritative accounting direct: Aug 25 ET remains **0 realized trades / $0.00**, weather since March remains **$0 verified realized**, and Caleb remains **-$0.44 realized**.
