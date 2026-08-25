@@ -75,16 +75,16 @@ def _num(value: Any, default: float = 0.0) -> float:
 
 
 def _selected_depth(row: dict[str, Any], quote: Any, *, venue: str) -> float:
-    """Return executable top-of-book depth for the exact side selected by plan.
+    """Return executable depth for the exact total-market side selected by plan.
 
-    ShadowPlan.as_dict() intentionally carries prices/sides but not book depth,
-    so decision telemetry must read depth from the already-loaded quote rather
-    than nonexistent serialized plan fields.
+    K/P total plans serialize semantic sides as OVER/UNDER while the book store
+    exposes binary YES/NO depth. OVER is the YES contract and UNDER is the NO
+    contract for these strictly certified full-game total markets.
     """
     side = str(row.get(f"{venue}_side") or "").upper()
-    if side == "YES":
+    if side in {"YES", "OVER"}:
         return _num(getattr(quote, "yes_depth", 0.0))
-    if side == "NO":
+    if side in {"NO", "UNDER"}:
         return _num(getattr(quote, "no_depth", 0.0))
     return 0.0
 
@@ -202,8 +202,6 @@ def _run_forever(args: argparse.Namespace) -> None:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    # v5 remains the authoritative event-driven scanner. Override only its
-    # read-only startup seed helper and attach transport-free decision metrics.
     v5._fetch_poly_book = _fetch_poly_book_public
     v5._evaluate = _evaluate_with_decision_stats
     v5._heartbeat = _heartbeat_with_decision_stats
