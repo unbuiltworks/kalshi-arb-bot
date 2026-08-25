@@ -1,7 +1,9 @@
 """Event notifications for the read-only cross-exchange order-book stores.
 
 These wrappers add bounded, non-blocking queues around the hardened v2 Polymarket
-and Kalshi book implementations. They contain no order-entry functionality.
+and Kalshi book implementations. They contain no order-entry functionality. Kalshi
+quote reads retain the base async interface so callers can safely share the store
+across websocket and REST-snapshot census transports.
 """
 
 from __future__ import annotations
