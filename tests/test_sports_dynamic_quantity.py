@@ -75,4 +75,6 @@ def test_max_net_cost_can_block_large_tier_and_fall_back_smaller():
         authorized_max_quantity=100,
         max_net_cost=D("5"),
     )
-    assert decision.quantity == 10
+    # Each contract costs $0.90 in this zero-fee fixture, so q10 costs $9 and
+    # must be rejected. q5 costs $4.50 and is the largest allowed tier <= $5.
+    assert decision.quantity == 5
