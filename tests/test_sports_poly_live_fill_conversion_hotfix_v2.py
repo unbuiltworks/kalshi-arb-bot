@@ -2,17 +2,19 @@ from decimal import Decimal as D
 
 import src.sports_poly_live_fill_conversion_hotfix as base
 from src.sports_poly_live_fill_conversion_hotfix_v2 import (
+    MAX_FILLABLE_GAP_TICKS,
     STICKY_LIFECYCLE_SECONDS,
     _cleanup_clear,
+    _fillable_gap,
     _near_touch_activity_sort_key,
     configure,
 )
 
 
-def _row(*, gap: str, maker: str, hedge: str) -> dict:
+def _row(*, gap: str, maker: str, hedge: str, tick: str = "0.01") -> dict:
     return {
         "maker_gap_to_ask": D(gap),
-        "reported_maker_tick": D("0.01"),
+        "reported_maker_tick": D(tick),
         "activity_maker_shares": D(maker),
         "activity_hedge_shares": D(hedge),
         "improves_bid": True,
@@ -39,14 +41,29 @@ def test_activity_breaks_ties_at_same_price_distance() -> None:
     assert _near_touch_activity_sort_key(active) < _near_touch_activity_sort_key(dead)
 
 
-def test_configure_makes_timer_non_operational_for_normal_mlb_lifecycle() -> None:
+def test_fillability_gate_allows_only_two_ticks_or_better() -> None:
+    assert MAX_FILLABLE_GAP_TICKS == D("2")
+    assert _fillable_gap(_row(gap="0.01", maker="0", hedge="0")) is True
+    assert _fillable_gap(_row(gap="0.02", maker="0", hedge="0")) is True
+    assert _fillable_gap(_row(gap="0.03", maker="10000", hedge="10000")) is False
+    assert _fillable_gap(_row(gap="0.17", maker="10000", hedge="10000")) is False
+
+
+def test_fillability_gate_respects_reported_tick() -> None:
+    assert _fillable_gap(_row(gap="0.04", maker="0", hedge="0", tick="0.02")) is True
+    assert _fillable_gap(_row(gap="0.05", maker="0", hedge="0", tick="0.02")) is False
+
+
+def test_configure_caps_live_maker_lifecycle_at_three_minutes() -> None:
     prior = base.mlb_v3.STICKY_REST_SECONDS
+    prior_ranked = base.mlb_v3._fresh_ranked
     try:
         configure()
-        assert base.mlb_v3.STICKY_REST_SECONDS == STICKY_LIFECYCLE_SECONDS == 21600.0
+        assert base.mlb_v3.STICKY_REST_SECONDS == STICKY_LIFECYCLE_SECONDS == 180.0
         assert base.mlb_v3.TARGET == D("0.03")
     finally:
         base.mlb_v3.STICKY_REST_SECONDS = prior
+        base.mlb_v3._fresh_ranked = prior_ranked
 
 
 def test_pre_recovery_account_cleanup_fails_closed_on_any_ambiguity() -> None:
