@@ -23,6 +23,7 @@ def _safe_odds_item(item: Mapping[str, Any]) -> dict[str, Any]:
     home = item.get("homeTeamOdds") if isinstance(item.get("homeTeamOdds"), Mapping) else {}
     away = item.get("awayTeamOdds") if isinstance(item.get("awayTeamOdds"), Mapping) else {}
     return {
+        "item_keys": sorted(str(k) for k in item.keys()),
         "provider_id": provider.get("id"),
         "provider_name": provider.get("name"),
         "details": item.get("details"),
@@ -32,6 +33,13 @@ def _safe_odds_item(item: Mapping[str, Any]) -> dict[str, Any]:
         "home_favorite": home.get("favorite"),
         "away_favorite": away.get("favorite"),
         "last_update": item.get("lastUpdate") or item.get("lastUpdated") or item.get("last_update"),
+        "last_modified": item.get("lastModified") or item.get("last_modified"),
+        "timestamp": item.get("timestamp"),
+        "date": item.get("date"),
+        "created": item.get("created") or item.get("createdAt"),
+        "updated": item.get("updated") or item.get("updatedAt"),
+        "home_keys": sorted(str(k) for k in home.keys()),
+        "away_keys": sorted(str(k) for k in away.keys()),
     }
 
 
