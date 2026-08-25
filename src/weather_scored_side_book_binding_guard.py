@@ -5,6 +5,10 @@ best side points at the other side. For portfolio SHADOW economics, proving that
 *either* side is executable is insufficient: the side whose EV is being ranked must be
 bound to defensible q1 executable depth.
 
+The selected side economics must also be bound to the audited executable ask and
+quantity. A stale/lower economics price cannot ride alongside a newer valid book and
+manufacture shadow edge, and modeled quantity cannot exceed displayed executable depth.
+
 This helper is read-only. It cannot authorize live probes or order entry.
 """
 from __future__ import annotations
@@ -25,8 +29,35 @@ def _decimal(value: Any) -> Decimal | None:
     return parsed if parsed.is_finite() else None
 
 
+def _audited_price_and_quantity(audit: dict[str, Any] | None) -> tuple[Decimal | None, Decimal | None]:
+    if not isinstance(audit, dict) or audit.get("book_representation_verified") is not True:
+        return None, None
+    source = audit.get("book_representation_source")
+    if source == "fixed_point":
+        return _decimal(audit.get("fixed_point_price")), _decimal(audit.get("fixed_point_quantity"))
+    if source == "legacy":
+        return _decimal(audit.get("legacy_price")), _decimal(audit.get("legacy_quantity"))
+    return None, None
+
+
+def _selected_economics_price(selected: dict[str, Any]) -> Decimal | None:
+    if "ask_dollars" in selected:
+        price = _decimal(selected.get("ask_dollars"))
+        return price if price is not None and Decimal("0") < price < Decimal("1") else None
+    cents = selected.get("ask_cents")
+    if not isinstance(cents, int) or isinstance(cents, bool) or not 1 <= cents <= 99:
+        return None
+    return Decimal(cents) / Decimal(100)
+
+
+def _selected_economics_quantity(selected: dict[str, Any]) -> Decimal | None:
+    value = selected.get("quantity", selected.get("available_contracts"))
+    qty = _decimal(value)
+    return qty if qty is not None and qty > 0 else None
+
+
 def audit_weather_scored_side_book_binding(row: dict[str, Any]) -> dict[str, Any]:
-    """Require the scored weather side to be the side with audited executable depth."""
+    """Require the scored weather side and its economics to match audited executable depth."""
     if not isinstance(row, dict):
         raise TypeError("row must be a dict")
 
@@ -48,9 +79,6 @@ def audit_weather_scored_side_book_binding(row: dict[str, Any]) -> dict[str, Any
     if ev is None:
         blockers.append("SCORED_SIDE_EV_REQUIRED")
 
-    # If side_economics is present, bind the selected summary to the same side and EV.
-    # Missing detail remains fail-closed because otherwise a stale top-level best-side
-    # summary could be detached from the executable side economics it supposedly ranks.
     economics = row.get("side_economics")
     selected: dict[str, Any] | None = None
     if not isinstance(economics, list):
@@ -64,6 +92,14 @@ def audit_weather_scored_side_book_binding(row: dict[str, Any]) -> dict[str, Any
             selected_ev = _decimal(selected.get("modeled_after_fee_ev_cents"))
             if ev is None or selected_ev is None or selected_ev != ev:
                 blockers.append("SCORED_SIDE_EV_MISMATCH")
+
+            audited_price, audited_qty = _audited_price_and_quantity(side_audit)
+            selected_price = _selected_economics_price(selected)
+            selected_qty = _selected_economics_quantity(selected)
+            if audited_price is None or selected_price is None or selected_price != audited_price:
+                blockers.append("SCORED_SIDE_ASK_MISMATCH")
+            if audited_qty is None or selected_qty is None or selected_qty > audited_qty:
+                blockers.append("SCORED_SIDE_QUANTITY_EXCEEDS_DEPTH")
 
     blockers = sorted(set(blockers))
     return {
