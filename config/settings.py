@@ -10,14 +10,16 @@ ENV = os.getenv("KALSHI_ENV", "demo")
 API_KEY_ID = os.getenv("KALSHI_API_KEY_ID", "")
 PRIVATE_KEY_PATH = os.getenv("KALSHI_PRIVATE_KEY_PATH", "./private_key.pem")
 
+# Kalshi's current API documentation recommends the dedicated external Trade API
+# hosts for API traders.  Keep signing paths unchanged; only the hostname differs.
 BASE_URLS = {
     "demo": {
-        "rest": "https://demo-api.kalshi.co/trade-api/v2",
-        "ws": "wss://demo-api.kalshi.co/trade-api/ws/v2",
+        "rest": "https://external-api.demo.kalshi.co/trade-api/v2",
+        "ws": "wss://external-api-ws.demo.kalshi.co/trade-api/ws/v2",
     },
     "prod": {
-        "rest": "https://api.elections.kalshi.com/trade-api/v2",
-        "ws": "wss://api.elections.kalshi.com/trade-api/ws/v2",
+        "rest": "https://external-api.kalshi.com/trade-api/v2",
+        "ws": "wss://external-api-ws.kalshi.com/trade-api/ws/v2",
     },
 }
 
