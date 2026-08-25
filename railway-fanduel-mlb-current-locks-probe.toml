@@ -1,4 +1,5 @@
-# Read-only current four-venue MLB threshold/middle validation.
+# Read-only focused FanDuel <-> Polymarket MLB authenticated preview probe.
+# FanDuel remains manual-only; this service has no orders.create path.
 [deploy]
-startCommand = "python -m src.four_venue_threshold_middle_shadow"
+startCommand = "python -m src.fanduel_poly_lock_preview"
 restartPolicyType = "NEVER"
