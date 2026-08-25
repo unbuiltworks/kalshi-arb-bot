@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-25 09:56 UTC / 2026-08-25 05:56 ET**
+Last verified: **2026-08-25 10:04 UTC / 2026-08-25 06:04 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
@@ -16,7 +16,7 @@ Only authoritative settlement/reconciliation can create `REALIZED` P&L. Stale qu
 - Settlement reconciler previously confirmed `open_reconcilable=0` and `one_leg_open=0`.
 - Prior historical proof remains approximately **+$0.2679** across seven earlier settled-compatible Gemini<->Kalshi sports trades; keep historical proof separate from Caleb.
 - Same-Gemini crypto most recently showed roughly 2,647 certified q1 pairs / 275 books and **0 immediate >=3c FOK/FOK locks**.
-- **2026-08-25 ET so far: 0 authoritative `TRADE_REALIZED` rows / $0.00 realized net** in the central Neon ledger as re-queried at 09:54 UTC.
+- **2026-08-25 ET so far: 0 authoritative `TRADE_REALIZED` rows / $0.00 realized net** in the central Neon ledger as re-queried this run.
 - Same-Polymarket census zeros remain same-venue near-verdict evidence only; they are not K<->P evidence.
 
 ## Fixed edge-census protocol
@@ -37,31 +37,39 @@ Same-venue Gemini/Polymarket/Kalshi zero results are near-verdict evidence; do n
 
 ### Kalshi<->Polymarket sports — `sports-kp-live-executor`
 
-The repo/service wiring now points at the **actual read-only K<->P event-driven collector**, `src.polymarket_kalshi_shadow_v5`. Strict discovery most recently found **45 Polymarket MLB total candidates, 154 Kalshi candidates and 42 exact cross-venue matches**. Polymarket seeded **42/42** current books and its websocket subscribed successfully. The K<->P verdict clock is still **not valid** because Kalshi has not reached live-book readiness.
+The service is now running the **actual read-only event-driven K<->P collector**, `src.polymarket_kalshi_shadow_v5`, on Railway deployment `9daf422f-8851-42e3-bf39-ac00faec3a37`, currently **SUCCESS**. The production path has no order-entry authority.
 
-Fresh runtime inspection exposed two separate feed-quality problems:
+Strict discovery remains strong: **45 Polymarket MLB total candidates, 154 Kalshi candidates and 42 exact cross-venue matches**, with validated examples showing zero-second scheduled-start skew and common MLB result source.
 
-1. **The 120-second outer startup timeout was self-amplifying Kalshi websocket churn.** Kalshi's own stream already backs HTTP 429 off to 15s then 30s, but after 120s the v5 process raised `startup readiness timeout`, Railway `restartPolicy=ALWAYS` restarted it, and a fresh websocket handshake sequence began. This was repeating roughly every two minutes with `poly_connected=True poly_books=42/42 kalshi_books=0/42`.
-2. **The K<->P Kalshi websocket was still inheriting the repo's legacy production WS host** (`wss://api.elections.kalshi.com/trade-api/ws/v2`) from `config.settings`, even though discovery REST already uses Kalshi's dedicated external API host. The K<->P collector had therefore not yet implemented the pre-committed preference for the dedicated external websocket endpoint.
+This run resolved three production wiring defects:
 
-PR **#137** was merged as commit `006f0822738d5a19e62f594bdbf757998c08fb9f`. It is deliberately read-only and makes two census reliability changes only:
+1. The old 120-second outer readiness timeout was restarting the read-only collector every ~2 minutes while Kalshi's internal WS client was already backing HTTP 429 off 15s/30s. That self-amplified handshake churn. The outer startup window is now **3600s**, preserving the existing exponential backoff instead of resetting it.
+2. The collector had inherited the legacy `api.elections.kalshi.com` websocket URL. PR **#137** moved this census lane only to `wss://external-api-ws.kalshi.com/trade-api/ws/v2`; no unrelated Kalshi service or global config was changed.
+3. Two stale branch dependencies caused immediate runtime import failures (`Match` imported from the wrong module, then missing `src.sports_kp_shadow`). PRs **#138/#139** repaired those read-only imports. The production predeploy gate now performs both compile **and actual module-import checks**, and the scoped Railway Docker suite passed **37/37**.
 
-- use `wss://external-api-ws.kalshi.com/trade-api/ws/v2` by default for this K<->P collector, with a census-specific env override if ever needed;
-- extend only the bounded startup-readiness window from 120s to **3600s**, so the existing exponential 15s/30s Kalshi backoff remains alive instead of being reset by Railway every ~2 minutes.
+The dedicated-host test is decisive: **Kalshi still returns HTTP 429 on `external-api-ws`**. Fresh runtime sequence on the stable process:
 
-No order authority, fee math, edge threshold, quote-age threshold, rule certification, depth requirement, websocket backoff, or unrelated Kalshi service was changed. The module still contains no order-entry path.
+- 10:03:17 UTC: dedicated-host WS handshake rejected HTTP 429 -> existing backoff **15s**.
+- 10:03:32 UTC: next handshake rejected HTTP 429 -> backoff **30s**.
+- 10:04:02 UTC: next handshake rejected HTTP 429 -> backoff remains **30s**.
 
-Repository CI for #137 reports **427 passed / 1 failed**. The sole failure is the unrelated existing `test_pitcher_must_be_starter_and_throw_pitch` MLB rule-equivalence assertion; neither changed file is involved. The production service also retains a targeted predeploy Python compile gate. The replacement Railway deployment `c81714a2-3575-4bc0-a38a-05e0959f2d63` is currently **BUILDING**; do not claim `EVENT_READY` until runtime proves Kalshi books initialize on the dedicated host.
+Crucially, the process stayed alive between those attempts instead of Railway restarting it. Therefore the legacy hostname was **not** the root cause. The remaining Kalshi blocker is websocket-handshake/account-wide connection contention or endpoint/account policy, not weak account tier and not generic REST depletion.
 
-The K<->P 72-hour verdict clock remains invalid until this service reaches `EVENT_READY` and produces both-venue `EVENT_SUMMARY`/`EVENT_SHADOW` telemetry. V5 records after-fee economics, q/depth, quote ages, cross-receive skew, trigger->calc latency and OPEN/MOVE/CLOSE lifetimes. It remains **full-game totals only**, so before the Wednesday instrumentation deadline the lane still needs semantic-deduped MLB moneyline/spread plus strict rule-certifiable props using the same event-driven measurement standard. Participation-conditional or rule-mismatched rows remain excluded.
+There is now a separate Polymarket feed-quality blocker. On the newest run, many unauthenticated REST book-seed calls to `api.polymarket.us/v1/markets/<slug>/book` returned **401 Unauthorized** while a small subset returned 200. Only **6 of the 42 strict pairs** had seedable two-sided Polymarket books, and the Polymarket WS subscribed to those 6. The live Polymarket stream itself is healthy for that subset (accepted updates continue), but the census currently lacks adequate book coverage.
+
+Because Kalshi has not initialized a single matched live book and Polymarket usable coverage is currently only 6/42, **the K<->P 72-hour verdict clock remains INVALID**. Do not extrapolate any edge-bin result from this degraded feed.
+
+V5 already records after-fee economics, executable q/depth, quote ages, cross-receive skew, trigger->calc latency and OPEN/MOVE/CLOSE lifetimes once both venue books are ready. It still covers **full-game totals only**; before the Wednesday instrumentation deadline the lane also needs semantic-deduped MLB moneyline/spread plus strict rule-certified props using the same event-driven standard. Participation-conditional and rule-mismatched rows remain excluded.
 
 ### Gemini<->Kalshi sports — `sports-gk-autonomous-supervisor`
 
-Latest deployment remains **SUCCESS** and the event-driven read-only hot shadow is active. Fresh heartbeat evidence around 09:34 UTC showed approximately **60.1M triggers/evaluations, 27,002 comparable evaluations, 51 hot >=3c evaluations and 33 OPEN / 33 CLOSE events**, with zero active signal at that instant. The process had **272 Gemini symbols and 272 initialized Kalshi tickers**. These hot observations are **not executable-capacity evidence yet** because the live rule gate remains `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION`; order entry is false.
+Latest deployment remains **SUCCESS** and the event-driven read-only hot shadow is active. Fresh heartbeat evidence this run showed approximately **60.1M triggers/evaluations, 27,002 comparable evaluations, 51 hot >=3c evaluations and 33 OPEN / 33 CLOSE events**, with zero active signal at that instant. The process had **272 Gemini symbols and 272 initialized Kalshi tickers**.
 
-The same process also performs large batched Kalshi orderbook REST refreshes roughly every five minutes and those sampled requests were returning HTTP 200. That is useful account-level evidence: Kalshi is not globally unavailable, and another active consumer can maintain a healthy Kalshi market-data path while K<->P websocket handshakes are 429ing. Do not stop G<->K solely to improve census telemetry.
+These rows are not deployable-capacity evidence yet because the live rule gate remains `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION`; order entry is false.
 
-G<->K live mutation remains disarmed. Caleb's -$0.44 one-leg loss remains authoritative realized accounting. Do not re-arm without a separate bounded-risk decision and fresh proof of zero open/unresolved exposure.
+The same process maintains a healthy Kalshi market-data path and sampled large REST orderbook refreshes returned HTTP 200. That account-level evidence matters: Kalshi is not globally unavailable while the new K<->P WS handshakes are 429ing. Do **not** stop G<->K solely to improve census telemetry.
+
+G<->K live mutation remains disarmed. Caleb's -$0.44 one-leg loss remains authoritative realized accounting.
 
 ### Kalshi account-limit / 429 diagnosis
 
@@ -74,9 +82,9 @@ Authenticated `/account/limits` evidence remains:
 - write refill rate: **300**
 - REST host: `external-api.kalshi.com`
 
-This rules out a weak account tier as the simple explanation. K<->P REST discovery succeeds with HTTP 200 while its legacy-host websocket handshakes returned HTTP 429. At the same time, the G<->K hot shadow maintains 272 initialized Kalshi tickers and periodically issues large orderbook REST batches successfully. The remaining diagnosis is therefore **websocket-handshake/account-wide connection contention or endpoint/scheduler behavior**, not generic REST depletion.
+This rules out a weak account tier as the simple explanation. K<->P REST discovery continues to receive HTTP 200 from `external-api.kalshi.com`, G<->K maintains 272 initialized Kalshi tickers, and the dedicated `external-api-ws` K<->P handshake still returns 429. The remaining diagnosis is therefore **WS handshake/concurrent-connection contention or account/endpoint-specific connection policy**.
 
-Do not lower exponential backoff or disrupt unrelated services solely to improve census telemetry. First verify whether the dedicated `external-api-ws` deployment reaches readiness while preserving the same account-wide load.
+Do not lower exponential backoff or disrupt unrelated services solely to improve census telemetry. The next account-level test is to inventory active continuous Kalshi websocket consumers and correlate K<->P handshake availability with natural connection turnover, not forced shutdowns.
 
 ### Same-Gemini crypto
 
@@ -84,7 +92,7 @@ Keep zero-order-entry census only. Prior snapshot remains ~2,647 certified q1 pa
 
 ### Old Gemini<->Kalshi 15m crypto
 
-`crypto-15m-sol-live-canary-10bp-50ms` remains a known **CRASHED** bounded-campaign case. Do not restart it as guaranteed arbitrage: settlement-index non-equivalence remains the stronger blocker. The safe rollover repair can remain review-ready but is not a reason to spend census time reopening this lane.
+`crypto-15m-sol-live-canary-10bp-50ms` remains a known **CRASHED** bounded-campaign case. Do not restart it as guaranteed arbitrage: settlement-index non-equivalence remains the stronger blocker. The safe rollover repair is not a reason to spend census time reopening this lane.
 
 ## Weather side question
 
@@ -94,9 +102,10 @@ The current weather live probe has been fail-closed on a finalized target market
 
 ## Next highest-value actions
 
-1. **Verify deployment `c81714a2-3575-4bc0-a38a-05e0959f2d63` on the dedicated Kalshi websocket host.** It must reach `EVENT_READY` with live Kalshi books; if it still receives 429, preserve backoff and measure handshake timing rather than restarting every two minutes.
-2. Correlate K<->P websocket failures with the already-active G<->K Kalshi consumer and other account-wide Railway consumers. The account is advanced 900/300, so determine whether there is a concurrent-connection/handshake constraint before changing pacing.
-3. Before Wednesday, extend event-driven K<->P measurement from totals to semantic-deduped MLB ML/spread and strict rule-certified props; persist explicit >=1c/>=2c/>=3c bins, depth, skew, OPEN/CLOSE lifetime and >=80ms realistic-capture capacity. Do not count participation-conditional or rule-mismatched rows.
-4. Continue G<->K hot-shadow measurement while order entry remains disarmed; only lifecycle-rule-certified rows can contribute deployable-capacity estimates.
-5. Continue weather record search only for authoritative settled P&L; until found, weather contributes $0 to the census decision.
-6. Preserve the fixed verdict thresholds and deadline. If K<->P remains unmeasurable after the single allowed +24h data-quality extension, count it as $0 deployable capacity rather than extending research.
+1. **Repair Polymarket book-seed coverage without adding order authority.** Determine the correct authenticated/public read path for the 42 strict K<->P books; current 6/42 coverage is not decision-grade.
+2. Keep the dedicated Kalshi WS process alive under its existing 15s/30s backoff and observe whether it acquires a connection without Railway-induced restart churn. Correlate failures with active account-wide WS consumers; do not disrupt unrelated services merely for telemetry.
+3. Once both books are ready, persist explicit >=1c/>=2c/>=3c bins, depth, skew, OPEN/CLOSE lifetime and >=80ms realistic-capture capacity. The clock starts only from decision-grade measurement, not from deployment `SUCCESS`.
+4. Before Wednesday, add event-driven MLB ML/spread and strict rule-certified props with semantic dedupe. Participation-conditional or rule-mismatched rows remain excluded.
+5. Continue G<->K hot-shadow measurement while disarmed; only lifecycle-rule-certified rows can contribute deployable-capacity estimates.
+6. Continue weather record search only for authoritative settled P&L; until found, weather contributes $0 to the census decision.
+7. Preserve the fixed verdict thresholds and deadline. If K<->P remains unmeasurable after the single allowed +24h data-quality extension, count it as $0 deployable capacity rather than extending research.
