@@ -43,6 +43,17 @@ class AgreementRow:
     gemini_settlement: float | None
     gemini_margin_bps: float | None
 
+    @property
+    def expiry_utc(self) -> datetime:
+        """Backward-compatible alias for read-only settlement-audit consumers.
+
+        ``expiry`` is the canonical window-end field. Older audit code emitted
+        ``settlement_expiry_utc`` from an ``expiry_utc`` attribute, so retain this
+        deterministic alias rather than letting the settlement join crash after the
+        AgreementRow field was normalized to ``expiry``.
+        """
+        return self.expiry
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "asset": self.asset,
