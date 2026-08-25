@@ -1,5 +1,6 @@
 # Read-only focused FanDuel <-> Polymarket MLB authenticated preview probe.
 # FanDuel remains manual-only; this service has no orders.create path.
+# Config is watched explicitly so preview entrypoint changes cannot be skipped.
 [deploy]
 startCommand = "python -m src.fanduel_poly_lock_preview"
 restartPolicyType = "NEVER"
