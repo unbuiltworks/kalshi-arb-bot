@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 import json
 import logging
+import random
 import time
 from typing import Any
 from urllib.parse import urlparse
@@ -82,20 +83,22 @@ class KalshiCrossBooks:
 
     async def run(self) -> None:
         self._running = True
-        backoff = 0.25
+        # Do not turn an account-wide 429 into a reconnect storm. Start at 5s
+        # and back off to 60s with jitter; a successful connection resets it.
+        backoff = 5.0
         while self._running:
             try:
                 await self._run_once()
-                backoff = 0.25
+                backoff = 5.0
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                logger.warning("Kalshi cross-book stream reset: %s", exc)
+                logger.warning("Kalshi cross-book stream reset: %s; retry_s=%.1f", exc, backoff)
             if not self._running:
                 return
             await self._invalidate_all()
-            await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, 5.0)
+            await asyncio.sleep(backoff + random.uniform(0.0, min(2.0, backoff * 0.10)))
+            backoff = min(backoff * 2, 60.0)
 
     async def _run_once(self) -> None:
         async with websockets.connect(
