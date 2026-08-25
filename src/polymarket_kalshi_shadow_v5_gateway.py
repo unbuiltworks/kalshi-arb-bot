@@ -183,6 +183,7 @@ def _run_forever(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     # v5 remains the authoritative event-driven scanner. Override only its
     # read-only startup seed helper and attach transport-free decision metrics.
     v5._fetch_poly_book = _fetch_poly_book_public
