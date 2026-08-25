@@ -23,21 +23,34 @@ def _finite_decimal(value: Any) -> Decimal | None:
     return parsed if parsed.is_finite() else None
 
 
+def _fail_closed(out: dict[str, Any], blocker: str) -> dict[str, Any]:
+    """Strip all selected-side economics when canonical side binding is not proven."""
+    blockers = set(out.get("blockers") or [])
+    blockers.add(blocker)
+    out["selected_side_schema_verified"] = False
+    out["selected_side_schema_blockers"] = [blocker]
+    out["ev_certified_shadow"] = False
+    out["best_shadow_side"] = None
+    out["best_shadow_side_detail"] = None
+    out["modeled_taker_fee_cents"] = None
+    out["modeled_after_fee_ev_cents"] = None
+    out["modeled_after_fee_edge_cents_per_contract"] = None
+    out["blockers"] = sorted(blockers)
+    out["read_only"] = True
+    out["order_entry"] = False
+    out["live_probe_ready"] = False
+    return out
+
+
 def normalize_selected_side_schema(row: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(row, dict):
         raise TypeError("row must be a dict")
 
     out = deepcopy(row)
-    blockers = set(out.get("blockers") or [])
     best = out.get("best_shadow_side")
 
     if best is None:
-        out["selected_side_schema_verified"] = False
-        out["selected_side_schema_blockers"] = ["BEST_SHADOW_SIDE_MISSING"]
-        out["read_only"] = True
-        out["order_entry"] = False
-        out["live_probe_ready"] = False
-        return out
+        return _fail_closed(out, "BEST_SHADOW_SIDE_MISSING")
 
     if isinstance(best, str):
         side = best.strip().upper()
@@ -47,53 +60,21 @@ def normalize_selected_side_schema(row: dict[str, Any]) -> dict[str, Any]:
         side = ""
 
     if side not in {"YES", "NO"}:
-        blockers.add("BEST_SHADOW_SIDE_INVALID")
-        out["selected_side_schema_verified"] = False
-        out["selected_side_schema_blockers"] = ["BEST_SHADOW_SIDE_INVALID"]
-        out["ev_certified_shadow"] = False
-        out["modeled_taker_fee_cents"] = None
-        out["modeled_after_fee_ev_cents"] = None
-        out["best_shadow_side"] = None
-        out["blockers"] = sorted(blockers)
-        out["read_only"] = True
-        out["order_entry"] = False
-        out["live_probe_ready"] = False
-        return out
+        return _fail_closed(out, "BEST_SHADOW_SIDE_INVALID")
 
     matches = [
         item for item in (out.get("side_economics") or [])
         if isinstance(item, dict) and str(item.get("side") or "").strip().upper() == side
     ]
     if len(matches) != 1:
-        blockers.add("SELECTED_SIDE_ECONOMICS_AMBIGUOUS")
-        out["selected_side_schema_verified"] = False
-        out["selected_side_schema_blockers"] = ["SELECTED_SIDE_ECONOMICS_AMBIGUOUS"]
-        out["ev_certified_shadow"] = False
-        out["modeled_taker_fee_cents"] = None
-        out["modeled_after_fee_ev_cents"] = None
-        out["best_shadow_side"] = None
-        out["blockers"] = sorted(blockers)
-        out["read_only"] = True
-        out["order_entry"] = False
-        out["live_probe_ready"] = False
-        return out
+        return _fail_closed(out, "SELECTED_SIDE_ECONOMICS_AMBIGUOUS")
 
     selected = matches[0]
     fee = _finite_decimal(selected.get("modeled_taker_fee_cents"))
     ev = _finite_decimal(selected.get("modeled_after_fee_ev_cents"))
-    if fee is None or fee < 0 or ev is None:
-        blockers.add("SELECTED_SIDE_ECONOMICS_INVALID")
-        out["selected_side_schema_verified"] = False
-        out["selected_side_schema_blockers"] = ["SELECTED_SIDE_ECONOMICS_INVALID"]
-        out["ev_certified_shadow"] = False
-        out["modeled_taker_fee_cents"] = None
-        out["modeled_after_fee_ev_cents"] = None
-        out["best_shadow_side"] = None
-        out["blockers"] = sorted(blockers)
-        out["read_only"] = True
-        out["order_entry"] = False
-        out["live_probe_ready"] = False
-        return out
+    edge = _finite_decimal(selected.get("modeled_after_fee_edge_cents_per_contract"))
+    if fee is None or fee < 0 or ev is None or edge is None:
+        return _fail_closed(out, "SELECTED_SIDE_ECONOMICS_INVALID")
 
     # Canonical selected-side schema. Preserve the full selected record separately for
     # diagnostics, but make the top-level fields unambiguous for downstream consumers.
