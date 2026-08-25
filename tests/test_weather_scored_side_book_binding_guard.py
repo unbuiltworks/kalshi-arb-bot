@@ -10,8 +10,8 @@ def _row():
         "no_ask_cents": 41,
         "no_available_contracts": 3,
         "side_economics": [
-            {"side": "YES", "modeled_after_fee_ev_cents": "-15.0"},
-            {"side": "NO", "modeled_after_fee_ev_cents": "12.5"},
+            {"side": "YES", "ask_cents": 60, "available_contracts": 5, "modeled_after_fee_ev_cents": "-15.0"},
+            {"side": "NO", "ask_cents": 41, "available_contracts": 3, "modeled_after_fee_ev_cents": "12.5"},
         ],
     }
 
@@ -31,7 +31,6 @@ def test_other_side_depth_cannot_rescue_unexecutable_scored_side():
     out = audit_weather_scored_side_book_binding(row)
     assert out["scored_side_book_binding_verified"] is False
     assert "SCORED_SIDE_EXECUTABLE_BOOK_UNVERIFIED" in out["blockers"]
-    # YES is still executable, but that must not certify NO-side EV.
     assert row["yes_available_contracts"] >= 1
 
 
@@ -62,7 +61,7 @@ def test_summary_ev_must_match_selected_side_economics():
 
 def test_side_economics_identity_must_be_unique():
     row = _row()
-    row["side_economics"].append({"side": "NO", "modeled_after_fee_ev_cents": "12.5"})
+    row["side_economics"].append({"side": "NO", "ask_cents": 41, "available_contracts": 3, "modeled_after_fee_ev_cents": "12.5"})
     out = audit_weather_scored_side_book_binding(row)
     assert out["scored_side_book_binding_verified"] is False
     assert "SCORED_SIDE_ECONOMICS_IDENTITY_UNVERIFIED" in out["blockers"]
@@ -75,3 +74,30 @@ def test_nonfinite_or_missing_ev_fails_closed():
         out = audit_weather_scored_side_book_binding(row)
         assert out["scored_side_book_binding_verified"] is False
         assert "SCORED_SIDE_EV_REQUIRED" in out["blockers"]
+
+
+def test_selected_economics_ask_must_match_audited_book():
+    row = _row()
+    row["side_economics"][1]["ask_cents"] = 35
+    out = audit_weather_scored_side_book_binding(row)
+    assert out["scored_side_book_binding_verified"] is False
+    assert "SCORED_SIDE_ASK_MISMATCH" in out["blockers"]
+
+
+def test_selected_economics_quantity_cannot_exceed_displayed_depth():
+    row = _row()
+    row["side_economics"][1]["available_contracts"] = 4
+    out = audit_weather_scored_side_book_binding(row)
+    assert out["scored_side_book_binding_verified"] is False
+    assert "SCORED_SIDE_QUANTITY_EXCEEDS_DEPTH" in out["blockers"]
+
+
+def test_fixed_point_selected_economics_must_match_fixed_point_book():
+    row = _row()
+    row.update({"no_ask_dollars": "0.4100", "no_ask_qty_fp": "2.50"})
+    row["no_available_contracts"] = 2
+    row["side_economics"][1] = {
+        "side": "NO", "ask_dollars": "0.4100", "quantity": "2.50", "modeled_after_fee_ev_cents": "12.5"
+    }
+    out = audit_weather_scored_side_book_binding(row)
+    assert out["scored_side_book_binding_verified"] is True
