@@ -1,6 +1,6 @@
 # Dedicated event-driven read-only Gemini <-> Kalshi MLB player-prop hot shadow.
 # Census mode: 1c threshold so 1c/2c/3c lifetimes can be reconstructed from OPEN/MOVE/CLOSE.
-# No order entry. Census deployment trigger: 2026-08-24 ET.
+# No order entry. Includes the Kalshi WS reconnect-backoff census fix.
 [deploy]
 startCommand = "python -m src.gemini_kalshi_mlb_prop_hot_shadow --max-book-age-ms 1000 --max-quote-skew-ms 50 --hot-book-age-ms 100 --hot-profit 0.01 --participation-refresh-seconds 5 --heartbeat-seconds 10"
 restartPolicyType = "ALWAYS"
