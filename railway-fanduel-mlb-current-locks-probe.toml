@@ -1,3 +1,4 @@
+# Read-only current four-venue MLB threshold/middle validation.
 [deploy]
 startCommand = "python -m src.four_venue_threshold_middle_shadow"
 restartPolicyType = "NEVER"
