@@ -1,17 +1,19 @@
-"""Second fill-conversion hotfix: executable price proximity first, activity second.
+"""Fill-conversion hotfix: executable proximity first with bounded sticky lifecycle.
 
-The v1 hotfix proved Polymarket book stats are available, but lifetime activity alone
-can select a maker far from the contra ask. This wrapper keeps all v1 safety changes
-while ranking the smallest safe gap to the contra ask first. Activity only breaks ties
-among similarly fillable prices. The resting window is effectively lifecycle-bounded:
-the proven inner loop still rechecks hedge depth/economics every second and exits on
-fill, cancel, reject, expiry, missing hedge book, or loss of the exact >=3c floor.
+The prior v2 wrapper accidentally hard-coded a six-hour maker lifecycle. That could
+occupy the only live maker slot on a quote many cents from the contra ask even though
+the inner loop was otherwise healthy. This version keeps the account-authoritative
+startup cleanup and all existing economics/risk gates, but:
 
-Rollout safety is account-authoritative: before Command Center reservation recovery,
-startup performs one all-open account read, cancels matching GTC sports orphans,
-flattens any known partial quantity, verifies the open set when needed, and only then
-allows the existing trade-activity recovery logic to decide whether a reservation can
-be released. Any cleanup ambiguity hard-stops.
+* caps one resting maker lifecycle at 180 seconds;
+* admits live maker rows only when the safe quote is within two reported ticks of
+  the current contra ask;
+* keeps price distance first and activity only as a tie-breaker;
+* preserves exact >=3c after-fee floor, q1 sizing, participation certification,
+  one-maker exposure, hedge rechecks, flatten paths, and shared $5 risk ceiling.
+
+A quote farther than two ticks may still be mathematically valid, but it is not a
+useful live fill-conversion candidate and does not consume the maker slot.
 """
 from __future__ import annotations
 
@@ -23,7 +25,8 @@ import src.sports_poly_live_fill_conversion_hotfix as base
 import src.sports_poly_structural_live_supervisor_recovered as recovered
 from src.sports_poly_fast_orphan_cleanup import cleanup_current_revenue_orders_fast
 
-STICKY_LIFECYCLE_SECONDS = 6 * 60 * 60.0
+STICKY_LIFECYCLE_SECONDS = 180.0
+MAX_FILLABLE_GAP_TICKS = base.D("2")
 
 
 def _near_touch_activity_sort_key(row: Mapping[str, Any]) -> tuple[Any, ...]:
@@ -47,14 +50,45 @@ def _near_touch_activity_sort_key(row: Mapping[str, Any]) -> tuple[Any, ...]:
     )
 
 
+def _fillable_gap(row: Mapping[str, Any]) -> bool:
+    gap = base._d(row.get("maker_gap_to_ask") or "1")
+    tick = base._d(row.get("reported_maker_tick") or "0")
+    if tick <= 0 or gap <= 0:
+        return False
+    return gap <= tick * MAX_FILLABLE_GAP_TICKS
+
+
+async def _fillable_ranked(
+    feed: Mapping[str, Mapping[str, Any]],
+    pairs: list[tuple[str, str]],
+    *,
+    require_near_touch: bool = False,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    rows, health = await base._activity_ranked(
+        feed,
+        pairs,
+        require_near_touch=require_near_touch,
+    )
+    admitted = [row for row in rows if _fillable_gap(row)]
+    health = dict(health)
+    health["pre_fillability_rows"] = len(rows)
+    health["fillable_rows"] = len(admitted)
+    health["far_gap_rows_suppressed"] = len(rows) - len(admitted)
+    health["max_fillable_gap_ticks"] = str(MAX_FILLABLE_GAP_TICKS)
+    return admitted, health
+
+
 def _cleanup_clear(result: Mapping[str, Any]) -> bool:
     return int(result.get("unresolved") or 0) == 0 and int(result.get("partial_unresolved") or 0) == 0
 
 
 def configure() -> None:
+    # Keep v1's safe-continue states and activity telemetry, then impose the
+    # production fillability gate and bounded lifecycle at the outermost layer.
     base._activity_sort_key = _near_touch_activity_sort_key
     base.configure()
     base.mlb_v3.STICKY_REST_SECONDS = STICKY_LIFECYCLE_SECONDS
+    base.mlb_v3._fresh_ranked = _fillable_ranked
 
 
 async def main() -> None:
