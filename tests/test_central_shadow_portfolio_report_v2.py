@@ -44,6 +44,26 @@ def test_literal_true_weather_certification_preserves_verified_shadow_path():
     assert sleeve["observed_shadow_dollars_per_day"] == "80"
 
 
+def test_certified_weather_with_remaining_hard_blocker_is_not_annualized():
+    row = _weather_row()
+    row["executable_shadow_prereqs_verified"] = True
+    row["hard_blockers"] = ["TWC_SOURCE_ACCESS_REQUIRED"]
+    sleeve = rank_sleeves([row])["sleeves"][0]
+    assert sleeve["promotable_score"] == "0"
+    assert sleeve["observed_shadow_dollars_per_day"] is None
+    assert "TWC_SOURCE_ACCESS_REQUIRED" in sleeve["hard_blockers"]
+
+
+def test_malformed_hard_blocker_entry_fails_closed_without_stringifying_it():
+    row = _weather_row()
+    row["executable_shadow_prereqs_verified"] = True
+    row["hard_blockers"] = [None, ""]
+    sleeve = rank_sleeves([row])["sleeves"][0]
+    assert sleeve["promotable_score"] == "0"
+    assert sleeve["observed_shadow_dollars_per_day"] is None
+    assert sleeve["hard_blockers"] == ["MALFORMED_HARD_BLOCKER_TELEMETRY"]
+
+
 def test_non_weather_behavior_is_unchanged():
     row = _weather_row()
     row["category"] = "mlb"
@@ -58,4 +78,5 @@ def test_malformed_hard_blockers_also_fail_closed():
     row["hard_blockers"] = ""
     sleeve = rank_sleeves([row])["sleeves"][0]
     assert sleeve["promotable_score"] == "0"
+    assert sleeve["observed_shadow_dollars_per_day"] is None
     assert "MALFORMED_HARD_BLOCKER_TELEMETRY" in sleeve["hard_blockers"]
