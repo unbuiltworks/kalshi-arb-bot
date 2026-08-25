@@ -1,10 +1,14 @@
-"""One-shot authenticated revalidation of current FanDuel <-> Polymarket MLB locks.
+"""Focused authenticated revalidation of current FanDuel <-> Polymarket MLB locks.
 
-Mutation-free: starts from the corrected physical-event scanner, re-fetches the
-relevant FanDuel quote and exact Polymarket public book, recomputes q=1 all-in
-economics, then performs only authenticated market retrieval and ``orders.preview``.
-It NEVER calls ``orders.create``. Preview qualification does not waive the separate
-settlement-rule audit and is never counted as realized profit.
+Mutation-free. Discovery intentionally reads only FanDuel (via The Odds API) and
+Polymarket so a transient retail/direct lock is not delayed by Gemini/Kalshi book
+reads. Physical MLB game date is still fail-closed using the same corrected gate
+as the four-venue scanner. Candidate economics are q=1 and must retain >=3c after
+the existing Polymarket fee model before authenticated ``orders.preview`` runs.
+
+This module NEVER calls ``orders.create``. FanDuel remains manual-only and a
+successful Polymarket preview remains rule-audit-required, not executable or
+realized profit.
 """
 from __future__ import annotations
 
@@ -12,14 +16,25 @@ import asyncio
 from decimal import Decimal
 import json
 import os
+import time
 from typing import Any, Mapping
 
 import httpx
 from polymarket_us import PolymarketUS
 
-from src.four_venue_threshold_middle_shadow import run_once as run_four_venue
+from src.four_venue_threshold_middle_shadow import (
+    _direct_observed,
+    _fanduel_observed,
+    _filter_exact_locks_by_physical_date,
+    _sportsbook_start_map,
+    price_all_threshold_sides,
+)
+from src.polymarket_scope_guard import full_game_only_events
 from src.strict_mlb_prop_snapshot import poly_top_book, polymarket_fee
 from src.the_odds_api_mlb_shadow import fetch_sportsbooks, sportsbook_quotes
+from src.three_venue_mlb_price_scan import _dedupe
+from src.universal_prediction_quant import find_cross_venue_locks
+from src.universal_three_venue_sports import fetch_polymarket_mlb
 
 D = Decimal
 ONE = D("1")
@@ -71,6 +86,7 @@ def _unwrap_market(resp: Mapping[str, Any]) -> Mapping[str, Any]:
 def _emit_result(scan: Mapping[str, Any], checked: list[dict[str, Any]], *, sdk_exit_stage: str = "") -> dict[str, Any]:
     result = {
         "status": "FANDUEL_POLY_LOCK_PREVIEW_ONLY",
+        "discovery_scope": "FOCUSED_FANDUEL_POLYMARKET_MLB_FULL_GAME_ONLY",
         "physical_date_surviving_locks": len(scan.get("top_same_threshold_positive_locks_math_only") or []),
         "fanduel_poly_rows_checked": len(checked),
         "preview_qualified_rule_audit_required": sum(
@@ -79,11 +95,72 @@ def _emit_result(scan: Mapping[str, Any], checked: list[dict[str, Any]], *, sdk_
         "rows": checked,
         "sdk_exit_stage": sdk_exit_stage,
         "mutation_performed": False,
+        "fanduel_transport": "MANUAL_ONLY",
         "order_entry": False,
         "realized_pnl_usd": "0",
     }
     print("FANDUEL_POLY_LOCK_PREVIEW " + json.dumps(result, separators=(",", ":"), default=str), flush=True)
     return result
+
+
+async def _focused_fd_poly_scan(odds_key: str) -> dict[str, Any]:
+    """Find current exact FanDuel/Polymarket q1 locks without Gemini/Kalshi reads."""
+    async with httpx.AsyncClient(timeout=20.0) as http:
+        sportsbook_result, poly_raw = await asyncio.gather(
+            fetch_sportsbooks(http, odds_key),
+            fetch_polymarket_mlb(http),
+        )
+        events, quota = sportsbook_result
+        poly = full_game_only_events(poly_raw)
+        # Reuse the four-venue pricing/date machinery with empty unused venues.
+        priced_rows, errors, normalized_threshold_sides = await price_all_threshold_sides(http, [], poly, [])
+
+    received_ms = int(time.time() * 1000)
+    retail = sportsbook_quotes(events, received_ms=received_ms)
+    fanduel_quotes = [q for q in retail if q.venue == "sportsbook:fanduel"]
+    start_by_event_id = _sportsbook_start_map(events)
+    direct_observed = [_direct_observed(priced, side) for priced, side in priced_rows]
+    fanduel_observed = [
+        row for q in fanduel_quotes
+        if (row := _fanduel_observed(q, start_by_event_id=start_by_event_id)) is not None
+    ]
+    observed = direct_observed + fanduel_observed
+
+    raw_locks = _dedupe(find_cross_venue_locks(
+        [priced.quote for priced, _side in priced_rows] + fanduel_quotes,
+        max_quote_skew_ms=70_000,
+        min_confidence="NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
+    ))
+    date_valid, cross_date_rejected = _filter_exact_locks_by_physical_date(raw_locks, observed)
+    locks = [
+        row for row in date_valid
+        if {str(row.yes_venue), str(row.no_venue)} == {"polymarket", "sportsbook:fanduel"}
+        and D(str(row.unit_profit)) >= TARGET
+    ]
+    locks.sort(key=lambda row: D(str(row.unit_profit)), reverse=True)
+    return {
+        "status": "FANDUEL_POLY_FOCUSED_DISCOVERY",
+        "raw_sportsbook_events": len(events),
+        "raw_polymarket_full_game_events": len(poly),
+        "normalized_polymarket_threshold_sides": normalized_threshold_sides,
+        "polymarket_priced_quotes": len(priced_rows),
+        "fanduel_quotes": len(fanduel_quotes),
+        "raw_positive_locks": len(raw_locks),
+        "cross_date_or_unresolved_rejected": cross_date_rejected,
+        "same_threshold_positive_locks_math_only": len(locks),
+        "top_same_threshold_positive_locks_math_only": [row.as_dict() for row in locks[:20]],
+        "fetch_error_count": len(errors),
+        "fetch_errors": errors[:20],
+        "quota": quota,
+        "physical_event_gate": "EXACT_MLB_EASTERN_DATE_REQUIRED_MARKET_ID_DATE_PREFERRED",
+        "min_q1_profit": str(TARGET),
+        "kalshi_rest_used": False,
+        "gemini_used": False,
+        "rule_gate": "SPORTSBOOK_RULE_AUDIT_REQUIRED_BEFORE_EXECUTION",
+        "read_only": True,
+        "order_entry": False,
+        "realized_pnl_usd": "0",
+    }
 
 
 async def _public_poly_book(slug: str) -> Any | None:
@@ -101,7 +178,8 @@ async def main_async() -> dict[str, Any]:
     if not odds_key or not poly_key or not poly_secret:
         raise RuntimeError("required referenced credentials missing")
 
-    scan = await run_four_venue(odds_key)
+    print("FANDUEL_POLY_PREVIEW_STAGE " + json.dumps({"stage": "FOCUSED_SCAN_START"}, separators=(",", ":")), flush=True)
+    scan = await _focused_fd_poly_scan(odds_key)
     locks = [
         row for row in (scan.get("top_same_threshold_positive_locks_math_only") or [])
         if isinstance(row, Mapping)
@@ -109,19 +187,25 @@ async def main_async() -> dict[str, Any]:
     ]
     print(
         "FANDUEL_POLY_PREVIEW_STAGE "
-        + json.dumps({"stage": "LOCKS_SELECTED", "candidate_count": len(locks)}, separators=(",", ":")),
+        + json.dumps({
+            "stage": "LOCKS_SELECTED",
+            "candidate_count": len(locks),
+            "poly_priced_quotes": scan.get("polymarket_priced_quotes"),
+            "fanduel_quotes": scan.get("fanduel_quotes"),
+            "fetch_error_count": scan.get("fetch_error_count"),
+            "cross_date_rejected": scan.get("cross_date_or_unresolved_rejected"),
+        }, separators=(",", ":")),
         flush=True,
     )
 
-    # Do not construct/close the authenticated SDK when there is nothing to
-    # preview. Besides avoiding unnecessary auth work, this guarantees every
-    # economically dry run emits its terminal verifier record.
     if not locks:
         return _emit_result(scan, [])
 
+    # Refresh FanDuel again only after discovery identifies a live lock. This
+    # prevents a stale sportsbook quote from reaching authenticated preview.
     async with httpx.AsyncClient(timeout=20.0) as http:
         events, _quota = await fetch_sportsbooks(http, odds_key)
-    fd_quotes = {q.market_id: q for q in sportsbook_quotes(events, received_ms=0) if q.venue == "sportsbook:fanduel"}
+    fd_quotes = {q.market_id: q for q in sportsbook_quotes(events, received_ms=int(time.time() * 1000)) if q.venue == "sportsbook:fanduel"}
     print(
         "FANDUEL_POLY_PREVIEW_STAGE "
         + json.dumps({"stage": "FANDUEL_REFRESHED", "quote_count": len(fd_quotes)}, separators=(",", ":")),
@@ -223,6 +307,8 @@ async def main_async() -> dict[str, Any]:
                 "authenticated_market_ok": market_ok,
                 "authenticated_preview_ok": preview_ok,
                 "preview_error_type": preview_error,
+                "rule_audit_required": True,
+                "fanduel_manual_only": True,
                 "order_entry": False,
                 "realized": False,
             })
