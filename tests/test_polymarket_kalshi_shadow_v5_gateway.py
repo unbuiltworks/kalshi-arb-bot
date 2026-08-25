@@ -5,6 +5,7 @@ import asyncio
 from src.polymarket_kalshi_shadow_v5_gateway import (
     POLY_PUBLIC_BOOK_HOST,
     _fetch_poly_book_public,
+    _retryable_inventory_gap,
 )
 
 
@@ -47,3 +48,14 @@ def test_public_seed_uses_gateway_and_origin_header():
     assert headers["Origin"] == "https://polymarket.us"
     assert "User-Agent" in headers
     assert store.rows[0][1] == "rest"
+
+
+def test_only_known_no_inventory_states_are_retryable():
+    assert _retryable_inventory_gap(
+        RuntimeError("No strict Polymarket/Kalshi matches discovered")
+    )
+    assert _retryable_inventory_gap(
+        RuntimeError("No strict pairs have a current two-sided Polymarket book")
+    )
+    assert not _retryable_inventory_gap(RuntimeError("startup readiness timeout"))
+    assert not _retryable_inventory_gap(ValueError("No strict Polymarket/Kalshi matches discovered"))
