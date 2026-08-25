@@ -18,6 +18,14 @@ SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scorebo
 CORE = "https://sports.core.api.espn.com/v2/sports/baseball/leagues/mlb"
 
 
+def _safe_nested(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(k): v for k, v in value.items() if isinstance(v, (str, int, float, bool, type(None)))}
+    if isinstance(value, (str, int, float, bool, type(None))):
+        return value
+    return None
+
+
 def _safe_odds_item(item: Mapping[str, Any]) -> dict[str, Any]:
     provider = item.get("provider") if isinstance(item.get("provider"), Mapping) else {}
     home = item.get("homeTeamOdds") if isinstance(item.get("homeTeamOdds"), Mapping) else {}
@@ -30,16 +38,20 @@ def _safe_odds_item(item: Mapping[str, Any]) -> dict[str, Any]:
         "over_under": item.get("overUnder"),
         "home_moneyline": home.get("moneyLine"),
         "away_moneyline": away.get("moneyLine"),
+        "home_open": _safe_nested(home.get("open")),
+        "home_current": _safe_nested(home.get("current")),
+        "home_close": _safe_nested(home.get("close")),
+        "away_open": _safe_nested(away.get("open")),
+        "away_current": _safe_nested(away.get("current")),
+        "away_close": _safe_nested(away.get("close")),
+        "market_open": _safe_nested(item.get("open")),
+        "market_current": _safe_nested(item.get("current")),
+        "market_close": _safe_nested(item.get("close")),
         "home_favorite": home.get("favorite"),
         "away_favorite": away.get("favorite"),
         "last_update": item.get("lastUpdate") or item.get("lastUpdated") or item.get("last_update"),
         "last_modified": item.get("lastModified") or item.get("last_modified"),
         "timestamp": item.get("timestamp"),
-        "date": item.get("date"),
-        "created": item.get("created") or item.get("createdAt"),
-        "updated": item.get("updated") or item.get("updatedAt"),
-        "home_keys": sorted(str(k) for k in home.keys()),
-        "away_keys": sorted(str(k) for k in away.keys()),
     }
 
 
