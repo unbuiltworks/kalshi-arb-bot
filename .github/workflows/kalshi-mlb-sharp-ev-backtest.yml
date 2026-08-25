@@ -9,6 +9,7 @@ on:
       - 'src/kalshi_mlb_sharp_ev_backtest_runner.py'
       - 'src/espn_mlb_odds_probe.py'
       - 'src/espn_mlb_closing_ev_backtest.py'
+      - 'src/espn_mlb_closing_ev_backtest_runner.py'
       - 'src/espn_mlb_match_probe.py'
       - '.github/workflows/kalshi-mlb-sharp-ev-backtest.yml'
   workflow_dispatch:
@@ -17,7 +18,7 @@ permissions:
   contents: write
 
 jobs:
-  espn-kalshi-match-diagnostic:
+  espn-closing-backtest-diagnostic:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -28,20 +29,20 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
-      - name: Diagnose three-game-day physical matching
+      - name: Run three-game-day ESPN DraftKings closing-line diagnostic
         shell: bash
         run: |
           mkdir -p research/results
-          rm -f research/results/espn_mlb_match_probe.json
+          rm -f research/results/espn_mlb_closing_ev_backtest.json
           set +e
-          python -m src.espn_mlb_match_probe
+          python -m src.espn_mlb_closing_ev_backtest_runner --max-days 3 --output research/results/espn_mlb_closing_ev_backtest.json
           code=$?
           set -e
-          printf '{"workflow_started":true,"provider":"espn_draftkings_close_match_probe","diagnostic_exit_code":%s,"source_sha":"%s"}\n' "$code" "$GITHUB_SHA" > research/results/kalshi_mlb_sharp_ev_status.json
+          printf '{"workflow_started":true,"provider":"espn_draftkings_close","diagnostic_exit_code":%s,"source_sha":"%s"}\n' "$code" "$GITHUB_SHA" > research/results/kalshi_mlb_sharp_ev_status.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: kalshi-mlb-sharp-ev-match-diagnostic
+          name: kalshi-mlb-sharp-ev-closing-diagnostic
           path: research/results/
           if-no-files-found: error
       - name: Persist safe diagnostic result on research branch
@@ -51,12 +52,12 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add research/results/kalshi_mlb_sharp_ev_status.json
-          if [ -f research/results/espn_mlb_match_probe.json ]; then
-            git add research/results/espn_mlb_match_probe.json
+          if [ -f research/results/espn_mlb_closing_ev_backtest.json ]; then
+            git add research/results/espn_mlb_closing_ev_backtest.json
           fi
           if git diff --cached --quiet; then
             echo 'No diagnostic change to commit.'
             exit 0
           fi
-          git commit -m 'Research result: ESPN Kalshi MLB match diagnostic [skip ci]'
+          git commit -m 'Research result: ESPN MLB closing-line diagnostic [skip ci]'
           git push origin HEAD:research/kalshi-mlb-sharp-ev
