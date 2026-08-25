@@ -12,7 +12,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,3 +21,21 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: pytest -q
+      - name: One-day Kalshi MLB sharp EV diagnostic
+        if: github.event_name == 'pull_request'
+        env:
+          THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+        shell: bash
+        run: |
+          if [ -z "$THE_ODDS_API_KEY" ]; then
+            echo 'THE_ODDS_API_SECRET_AVAILABLE=false'
+            exit 2
+          fi
+          echo 'THE_ODDS_API_SECRET_AVAILABLE=true'
+          python -m src.kalshi_mlb_sharp_ev_backtest --max-days 1 --output kalshi_mlb_sharp_ev_backtest.json
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request' && success()
+        with:
+          name: kalshi-mlb-sharp-ev-backtest
+          path: kalshi_mlb_sharp_ev_backtest.json
+          if-no-files-found: error
