@@ -98,7 +98,12 @@ def _clean_row():
         "best_shadow_side": "NO",
         "modeled_after_fee_ev_cents": "10.0",
         "side_economics": [
-            {"side": "NO", "modeled_after_fee_ev_cents": "10.0"},
+            {
+                "side": "NO",
+                "ask_cents": 61,
+                "available_contracts": 5,
+                "modeled_after_fee_ev_cents": "10.0",
+            },
         ],
         "fee_type": "quadratic",
         "fee_multiplier": 1,
@@ -282,7 +287,12 @@ def test_scored_side_requires_executable_depth_on_that_side():
     row.update({
         "best_shadow_side": "NO",
         "modeled_after_fee_ev_cents": "12.5",
-        "side_economics": [{"side": "NO", "modeled_after_fee_ev_cents": "12.5"}],
+        "side_economics": [{
+            "side": "NO",
+            "ask_cents": 35,
+            "available_contracts": 5,
+            "modeled_after_fee_ev_cents": "12.5",
+        }],
         "yes_ask_cents": 40,
         "yes_available_contracts": 5,
         "no_ask_cents": None,
