@@ -6,10 +6,8 @@ on:
       - research/kalshi-mlb-sharp-ev
     paths:
       - 'src/kalshi_mlb_sharp_ev_backtest.py'
+      - 'src/kalshi_mlb_sharp_ev_backtest_runner.py'
       - '.github/workflows/kalshi-mlb-sharp-ev-backtest.yml'
-  pull_request:
-    branches:
-      - research/kalshi-mlb-sharp-ev
   workflow_dispatch:
     inputs:
       max_days:
@@ -18,7 +16,7 @@ on:
         default: '1'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   backtest:
@@ -28,6 +26,8 @@ jobs:
       THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: research/kalshi-mlb-sharp-ev
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -43,15 +43,29 @@ jobs:
       - name: Run read-only diagnostic
         shell: bash
         run: |
+          mkdir -p research/results
           DAYS="${{ github.event.inputs.max_days || '1' }}"
           if [ "$DAYS" = "0" ]; then
-            python -m src.kalshi_mlb_sharp_ev_backtest --output kalshi_mlb_sharp_ev_backtest.json
+            python -m src.kalshi_mlb_sharp_ev_backtest_runner --output research/results/kalshi_mlb_sharp_ev_backtest.json
           else
-            python -m src.kalshi_mlb_sharp_ev_backtest --max-days "$DAYS" --output kalshi_mlb_sharp_ev_backtest.json
+            python -m src.kalshi_mlb_sharp_ev_backtest_runner --max-days "$DAYS" --output research/results/kalshi_mlb_sharp_ev_backtest.json
           fi
       - uses: actions/upload-artifact@v4
         if: success()
         with:
           name: kalshi-mlb-sharp-ev-backtest
-          path: kalshi_mlb_sharp_ev_backtest.json
+          path: research/results/kalshi_mlb_sharp_ev_backtest.json
           if-no-files-found: error
+      - name: Persist result on research branch
+        if: success() && github.event_name == 'push'
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add research/results/kalshi_mlb_sharp_ev_backtest.json
+          if git diff --cached --quiet; then
+            echo 'No result change to commit.'
+            exit 0
+          fi
+          git commit -m 'Research result: one-day Kalshi MLB sharp EV diagnostic [skip ci]'
+          git push origin HEAD:research/kalshi-mlb-sharp-ev
