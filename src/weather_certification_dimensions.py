@@ -16,6 +16,7 @@ from decimal import Decimal
 from typing import Any
 
 from src.weather_blocker_telemetry_guard import audit_weather_blocker_telemetry
+from src.weather_book_representation_guard import audit_weather_book_representation
 from src.weather_exact_market_source_audit import audit_exact_market_source
 from src.weather_fee_resolution_binding_guard import audit_weather_fee_resolution_binding
 from src.weather_model_audit_chain_guard import audit_weather_model_audit_chain
@@ -66,31 +67,6 @@ def _aware_iso(value: Any) -> datetime | None:
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         return None
     return parsed
-
-
-def _valid_executable_side(row: dict[str, Any], side: str) -> bool:
-    price_fp = _decimal(row.get(f"{side}_ask_dollars"))
-    qty_fp = _decimal(row.get(f"{side}_ask_qty_fp"))
-    if price_fp is not None and qty_fp is not None:
-        return Decimal("0") < price_fp < Decimal("1") and qty_fp >= Decimal("1")
-    cents = row.get(f"{side}_ask_cents")
-    qty = row.get(f"{side}_available_contracts")
-    return (
-        isinstance(cents, int)
-        and not isinstance(cents, bool)
-        and 1 <= cents <= 99
-        and isinstance(qty, int)
-        and not isinstance(qty, bool)
-        and qty >= 1
-    )
-
-
-def _book_evidence_verified(row: dict[str, Any]) -> bool:
-    freshness = audit_weather_quote_freshness_binding(row)
-    return (
-        freshness.get("quote_freshness_binding_verified") is True
-        and any(_valid_executable_side(row, side) for side in ("yes", "no"))
-    )
 
 
 def _fee_evidence_verified(row: dict[str, Any]) -> bool:
@@ -173,6 +149,16 @@ def _exact_market_source_audit(row: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _book_audit(row: dict[str, Any], side: str) -> dict[str, Any]:
+    """Audit one executable side without compatibility fallback.
+
+    Once a fixed-point field is present for a side, fixed-point is authoritative. A
+    malformed/partial/sub-q1 fixed-point representation must never be rescued by older
+    cents/integer compatibility fields.
+    """
+    return audit_weather_book_representation(row, side=side)
+
+
 def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(row, dict):
         raise TypeError("row must be a dict")
@@ -210,8 +196,17 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
     freshness = audit_weather_quote_freshness_binding(row)
     if freshness.get("quote_freshness_binding_verified") is not True:
         market_data.extend(freshness.get("quote_freshness_binding_blockers") or [])
-    if not _book_evidence_verified(row):
+
+    yes_book = _book_audit(row, "yes")
+    no_book = _book_audit(row, "no")
+    yes_book_ok = yes_book.get("book_representation_verified") is True
+    no_book_ok = no_book.get("book_representation_verified") is True
+    book_ok = yes_book_ok or no_book_ok
+    if not book_ok:
         market_data.append("EXECUTABLE_BOOK_EVIDENCE_REQUIRED")
+        for side, audit in (("YES", yes_book), ("NO", no_book)):
+            for blocker in audit.get("blockers") or []:
+                market_data.append(f"{side}_{blocker}")
     market_data = sorted(set(market_data))
 
     fee_binding = audit_weather_fee_resolution_binding(row)
@@ -257,6 +252,9 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
         "exact_market_source_audit_verified": exact_market_source.get("verified") is True,
         "settlement_identity_semantics_verified": identity_semantics_verified,
         "market_data_verified": market_ok,
+        "book_representation_verified": book_ok,
+        "yes_book_representation_audit": yes_book,
+        "no_book_representation_audit": no_book,
         "quote_freshness_binding_verified": freshness.get("quote_freshness_binding_verified") is True,
         "derived_quote_age_ms": freshness.get("derived_quote_age_ms"),
         "fee_economics_verified": fee_ok,
