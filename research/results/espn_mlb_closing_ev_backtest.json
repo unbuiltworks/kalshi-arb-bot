@@ -1,0 +1,68 @@
+{
+  "buckets": [
+    {
+      "edge": ">=1c",
+      "n": 0
+    },
+    {
+      "edge": ">=2c",
+      "n": 0
+    },
+    {
+      "edge": ">=3c",
+      "n": 0
+    },
+    {
+      "edge": ">=5c",
+      "n": 0
+    },
+    {
+      "edge": ">=8c",
+      "n": 0
+    }
+  ],
+  "calibration": {
+    "bins": [],
+    "ece": "0",
+    "n_unique_team_games": 0
+  },
+  "espn": {
+    "closing_events": 34,
+    "days": 3,
+    "scoreboard_events": 34
+  },
+  "go_no_go": {
+    "checks": {
+      "calibration_error_under_3_points": false,
+      "drawdown_under_15pct_of_total_stake": false,
+      "n_gte_300": false,
+      "positive_mean_net_return": false
+    },
+    "decision": "FAIL",
+    "rule": ">=3c bucket only; no threshold selection after results"
+  },
+  "kalshi": {
+    "markets_discovered": 8398,
+    "normalized_sides_in_range": 128
+  },
+  "matched_physical_games": 0,
+  "method": {
+    "devig": "multiplicative two-way",
+    "fee": "ceil_cent(0.07*C*P*(1-P)) at representative whole-contract ~$10 order",
+    "historical_depth": "not reconstructable from candlesticks; not assumed",
+    "kalshi_cutoff_seconds_before_scheduled_start": 60,
+    "max_kalshi_quote_age_seconds": 120,
+    "physical_match": "canonical teams + <=5 minute scheduled-start skew",
+    "realized_accounting": false,
+    "sportsbook": "ESPN archived DraftKings closing moneyline"
+  },
+  "observations": 0,
+  "range": {
+    "end": "2026-08-24",
+    "game_days": 3,
+    "start": "2026-03-25"
+  },
+  "sample_observations": [],
+  "status": "KALSHI_MLB_ESPN_DK_CLOSE_EV_BACKTEST_READ_ONLY",
+  "warning": "BACKTEST/EV ONLY \u2014 DraftKings closing-line fallback, not arbitrage, not executed, not realized P&L"
+}
