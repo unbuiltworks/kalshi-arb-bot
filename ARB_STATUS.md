@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-25 14:41 UTC / 2026-08-25 10:41 ET**
+Last verified: **2026-08-25 15:49 UTC / 2026-08-25 11:49 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
@@ -26,42 +26,57 @@ Same-venue Gemini/Polymarket/Kalshi zero results are near-verdict evidence; do n
 
 ## Current authoritative scoreboard
 
-- **2026-08-25 ET:** fresh direct Neon query at 10:40 ET confirms **0 `TRADE_REALIZED` rows / $0.0000 realized net**.
+- **2026-08-25 ET:** fresh direct Neon query at 11:48 ET confirms **0 `TRADE_REALIZED` rows / $0.0000 realized net**.
 - Caleb Durbin remains a real settled one-leg sports loss at **gross -$0.42 / net -$0.44**; never shadow it away.
-- Weather since **2026-03-01:** last verified direct Neon query confirms **0 weather-tagged `TRADE_REALIZED` rows / $0.0000 verified realized weather P&L**. Seasonal/backtest edge remains excluded.
+- Weather since **2026-03-01:** fresh direct Neon query at 11:48 ET confirms **0 weather-tagged `TRADE_REALIZED` rows / $0.0000 verified realized weather P&L**. Seasonal/backtest edge remains excluded.
 - Same-Gemini crypto prior snapshot remains roughly **2,647 certified q1 pairs / 275 books / 0 immediate >=3c FOK/FOK locks**; near-verdict evidence only.
 
 ## Fresh production verification
 
 ### Kalshi<->Polymarket sports — `sports-kp-live-executor`
 
-PR **#142** (`feature/kp-kalshi-rest-census-fallback`) is now **merged** after two GitHub Actions test runs completed **SUCCESS**. The change is read-only: websocket remains the default, while explicit `KALSHI_REST_BOOKS_FALLBACK=1` switches only the Kalshi census book store to authenticated batched REST snapshots. It has a hard **>=100 ms interval floor**, batches up to 100 tickers/request, bounded retry/backoff, emits existing update events, and contains no order transport.
+The bounded Kalshi REST fallback from merged PR **#142** exposed a new production bug during the first measurable runtime window. The fallback itself was active for **42 matched Kalshi tickers in one <=100-ticker batch at 100 ms sampling**, read-only with `order_entry=false`, but `polymarket_kalshi_shadow_v5._evaluate()` still treated `KalshiCrossBooks.quote()` as synchronous. The base Kalshi quote accessor is async. Production therefore repeatedly raised:
 
-Railway initially **SKIPPED** merge commit `a20fcba4b2efb30a9d462085629b38296177c801` because `src/eventing_books.py` was missing from the service watch patterns. That production wiring bug is fixed: `src/eventing_books.py` is now watched, with `restartPolicy=ALWAYS` preserved.
+`AttributeError: 'coroutine' object has no attribute 'received_ms'`
 
-Production variables now explicitly include:
+with `RuntimeWarning: coroutine 'KalshiCrossBooks.quote' was never awaited`.
+
+This means the post-#142 runtime was **not decision-grade census evidence**; no >=1c/>=2c/>=3c result from that crash loop may be counted, and the 72-hour K<->P clock remains **INVALID**.
+
+The adapter bug is now fixed on production source branch `feature/sports-kp-live-executor-impl` at commit **`1cd898f432930d2be7ed7976c39e045392941f76`** by awaiting the Kalshi quote read inside `_evaluate()`. No order authority or economics/rule gate changed.
+
+Railway then **SKIPPED** that commit because `src/polymarket_kalshi_shadow_v5*.py` was missing from the service watch patterns. The watch-pattern wiring is now repaired to include v5 scanner files. Because the skipped deployment had no snapshot available for direct redeploy, an already-watched read-only dependency was touched only to trigger the corrected build. Commit **`da717d7cb7a4d35708f96278e3c014f4f210e788`** deployed as Railway deployment **`2108e5b0-84a5-48e0-9bd7-05a4e3e86f12`**, which is **SUCCESS**. Scoped predeploy reported **2 passed**.
+
+Fresh logs from the replacement deployment confirm the bounded REST fallback starts with:
+
+- `tickers=42`
+- `chunks=1`
+- `interval_ms=100`
+- `transport=REST_SNAPSHOT_NOT_WS_LIFETIME`
+- `read_only=true`
+- `order_entry=false`
+
+No recurrence of the prior coroutine traceback has appeared in the initial replacement log window. However, runtime has **not yet emitted `EVENT_READY` or a decision-grade census summary in the verified window**, so do not yet start the 72-hour K<->P clock or claim initialized 42/42 Kalshi books.
+
+Production command remains:
+
+`python -m src.polymarket_kalshi_shadow_v5 --max-quote-age-ms 100`
+
+Production variables remain:
 
 - `KALSHI_REST_BOOKS_FALLBACK=1`
 - `KALSHI_REST_BOOKS_INTERVAL_MS=100`
 
-Replacement Railway deployment **`13bed315-8fcd-4221-a5f2-911124d15401` is SUCCESS** on commit `a20fcba4...`. The active command remains:
+Authenticated Kalshi `/account/limits` remains advanced tier, **900 capacity / 300 refill** for both reads and writes. The REST fallback avoids the second websocket handshake that was repeatedly receiving HTTP 429 while leaving the healthy G<->K websocket untouched.
 
-`python -m src.polymarket_kalshi_shadow_v5 --max-quote-age-ms 100`
-
-The predeploy gate compiles `polymarket_kalshi_shadow_v5.py`, `polymarket_kalshi_shadow_v4.py`, and `eventing_books.py`. The service variable list confirms the REST fallback variables are attached to production.
-
-Fresh runtime-log inspection is temporarily blocked by Railway Agent quota (`Agent usage limit reached`), so **do not yet claim `EVENT_READY`, exact Kalshi snapshot counts, or any >=1c/>=2c/>=3c census bins from the new deployment**. The 72-hour K<->P verdict clock remains **INVALID until both sides are proven healthy and measurable**.
-
-The last verified pre-fallback inventory/feed state remains:
+Last fully verified counterpart state before the fallback transition remains:
 
 - 45 Polymarket MLB total candidates
 - 172 Kalshi candidates
 - 42 exact cross-venue matches
 - 42/42 Polymarket books seeded successfully through `gateway.polymarket.us`
 - Polymarket websocket connected
-- separate Kalshi websocket 0/42 because repeated HTTP 429 handshakes
-
-Authenticated Kalshi `/account/limits` remains advanced tier, **900 capacity / 300 refill** for both reads and writes. At 42 matched tickers, the new REST census uses one <=100-ticker batch per >=100 ms cycle, intentionally avoiding the failing second websocket handshake while leaving the healthy G<->K connection untouched.
+- separate K<->P Kalshi websocket 0/42 because repeated HTTP 429 handshakes
 
 K<->P still needs event-driven coverage for full-game MLB **moneylines, spreads and totals**, plus strict player props only where lifecycle/participation/result-source equivalence can be proven. Semantic mirrors must be deduped. Participation-conditional or rule-mismatched rows never count as guaranteed arb.
 
@@ -77,12 +92,12 @@ Recent positive evaluations are census/shadow observations only. The explicit ex
 
 ## Weather side question
 
-Authoritative central-ledger evidence remains **0 weather-tagged realized trades / $0 verified realized P&L since March 1, 2026**. The separate weather project may have historical/seasonal or backtest evidence, but none of that may be substituted for realized P&L without an authoritative settlement record.
+Fresh authoritative central-ledger evidence remains **0 weather-tagged realized trades / $0 verified realized P&L since March 1, 2026**. The separate weather project may have historical/seasonal or backtest evidence, but none of that may be substituted for realized P&L without an authoritative settlement record.
 
 ## Highest-value next actions
 
-1. **Do not start the K<->P 72-hour clock yet.** Verify the new REST-fallback deployment actually initializes Kalshi snapshots and reaches measurable two-sided state first.
-2. At the first available runtime-log window, capture fallback transport, request/error/snapshot counters, exact initialized tickers, `EVENT_READY`, and >=1c/>=2c/>=3c after-fee observations. REST-sampled lifetimes must be labeled at their >=100 ms sampling resolution rather than presented as websocket lifetimes.
+1. **Do not start the K<->P 72-hour clock yet.** Verify deployment `2108e5b0-...` reaches `EVENT_READY`, initializes the Kalshi REST snapshots, and remains free of the coroutine crash.
+2. Capture fallback request/error/snapshot counters, exact initialized tickers, then persist >=1c/>=2c/>=3c after-fee bins. REST-sampled lifetimes must be labeled at their >=100 ms sampling resolution rather than presented as websocket lifetimes.
 3. Persist q1 depth, quote skew, OPEN/CLOSE lifetimes and >=80 ms realistic-capture capacity once both books are healthy.
 4. Before Wednesday, broaden K<->P to semantic-deduped MLB moneylines/spreads/totals plus strict rule-certified props. Participation-conditional/rule-mismatched rows remain excluded.
 5. Continue G<->K read-only census. Its current hot observations remain non-deployable until full lifecycle/rule fingerprint certification is satisfied.
