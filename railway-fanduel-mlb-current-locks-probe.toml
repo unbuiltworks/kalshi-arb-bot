@@ -1,8 +1,9 @@
-# Read-only focused FanDuel <-> Polymarket MLB authenticated preview probe.
+# Continuous read-only FanDuel <-> Polymarket MLB authenticated preview monitor.
 # Covers exact full-game moneyline, spread, and total counterparts.
 # Emits deduped explicit LIVE_RULE_RISK instructions only after authenticated preview.
 # FanDuel remains manual-only; this service has no orders.create path.
 # Config is watched explicitly so preview entrypoint changes cannot be skipped.
 [deploy]
-startCommand = "python -m src.fanduel_poly_actionable_preview"
-restartPolicyType = "NEVER"
+startCommand = "python -m src.fanduel_poly_actionable_monitor"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
