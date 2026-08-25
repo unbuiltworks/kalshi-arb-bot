@@ -8,60 +8,465 @@
       "name": "Atlanta Braves at Pittsburgh Pirates",
       "odds_items": [
         {
-          "away_close": {},
-          "away_current": {},
-          "away_favorite": false,
+          "away_close_shape": {
+            "_keys": [
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-110",
+              "american": "-110",
+              "decimal": 1.9,
+              "displayValue": "10/11",
+              "fraction": "10/11",
+              "value": 1.9
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american"
+              ],
+              "alternateDisplayValue": "-1.5",
+              "american": "-1.5"
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+137",
+              "american": "+137",
+              "decimal": 2.37,
+              "displayValue": "137/100",
+              "fraction": "137/100",
+              "value": 2.37
+            }
+          },
+          "away_current_shape": {
+            "_keys": [
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-110",
+              "american": "-110",
+              "decimal": 1.9,
+              "displayValue": "10/11",
+              "fraction": "10/11",
+              "value": 1.9
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american"
+              ],
+              "alternateDisplayValue": "-1.5",
+              "american": "-1.5"
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+137",
+              "american": "+137",
+              "decimal": 2.37,
+              "displayValue": "137/100",
+              "fraction": "137/100",
+              "value": 2.37
+            }
+          },
           "away_moneyline": -110,
-          "away_open": {
-            "favorite": true
+          "away_open_shape": {
+            "_keys": [
+              "favorite",
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "favorite": true,
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-115",
+              "american": "-115",
+              "decimal": 1.86,
+              "displayValue": "20/23",
+              "fraction": "20/23",
+              "value": 1.86
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american"
+              ],
+              "alternateDisplayValue": "-1.5",
+              "american": "-1.5"
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+135",
+              "american": "+135",
+              "decimal": 2.35,
+              "displayValue": "27/20",
+              "fraction": "27/20",
+              "value": 2.35
+            }
           },
           "details": "PIT -110",
-          "home_close": {},
-          "home_current": {},
-          "home_favorite": true,
-          "home_moneyline": -110,
-          "home_open": {
-            "favorite": false
+          "home_close_shape": {
+            "_keys": [
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-110",
+              "american": "-110",
+              "decimal": 1.9,
+              "displayValue": "10/11",
+              "fraction": "10/11",
+              "value": 1.9
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "+1.5",
+              "american": "+1.5",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-167",
+              "american": "-167",
+              "decimal": 1.59,
+              "displayValue": "100/167",
+              "fraction": "100/167",
+              "value": 1.59
+            }
           },
-          "item_keys": [
-            "awayTeamOdds",
-            "close",
-            "current",
-            "details",
-            "homeTeamOdds",
-            "initialOverUnder",
-            "initialSpread",
-            "links",
-            "moneylineWinner",
-            "open",
-            "overOdds",
-            "overUnder",
-            "price",
-            "propBets",
-            "provider",
-            "spread",
-            "spreadWinner",
-            "underOdds"
-          ],
-          "last_modified": null,
-          "last_update": null,
-          "market_close": {},
-          "market_current": {},
-          "market_open": {},
-          "over_under": 10.0,
+          "home_current_shape": {
+            "_keys": [
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-110",
+              "american": "-110",
+              "decimal": 1.9,
+              "displayValue": "10/11",
+              "fraction": "10/11",
+              "value": 1.9
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "+1.5",
+              "american": "+1.5",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-167",
+              "american": "-167",
+              "decimal": 1.59,
+              "displayValue": "100/167",
+              "fraction": "100/167",
+              "value": 1.59
+            }
+          },
+          "home_moneyline": -110,
+          "home_open_shape": {
+            "_keys": [
+              "favorite",
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "favorite": false,
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-105",
+              "american": "-105",
+              "decimal": 1.95,
+              "displayValue": "20/21",
+              "fraction": "20/21",
+              "value": 1.95
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "+1.5",
+              "american": "+1.5",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-163",
+              "american": "-163",
+              "decimal": 1.61,
+              "displayValue": "100/163",
+              "fraction": "100/163",
+              "value": 1.61
+            }
+          },
+          "market_close_shape": {
+            "_keys": [
+              "over",
+              "total",
+              "under"
+            ],
+            "over": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-104",
+              "american": "-104",
+              "decimal": 1.96,
+              "displayValue": "25/26",
+              "fraction": "25/26",
+              "value": 1.96
+            },
+            "total": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "10",
+              "american": "10",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "under": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-116",
+              "american": "-116",
+              "decimal": 1.86,
+              "displayValue": "25/29",
+              "fraction": "25/29",
+              "value": 1.86
+            }
+          },
+          "market_current_shape": {
+            "_keys": [
+              "over",
+              "total",
+              "under"
+            ],
+            "over": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-104",
+              "american": "-104",
+              "decimal": 1.96,
+              "displayValue": "25/26",
+              "fraction": "25/26",
+              "value": 1.96
+            },
+            "total": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "10",
+              "american": "10",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "under": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-116",
+              "american": "-116",
+              "decimal": 1.86,
+              "displayValue": "25/29",
+              "fraction": "25/29",
+              "value": 1.86
+            }
+          },
+          "market_open_shape": {
+            "_keys": [
+              "over",
+              "total",
+              "under"
+            ],
+            "over": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-110",
+              "american": "-110",
+              "decimal": 1.9,
+              "displayValue": "10/11",
+              "fraction": "10/11",
+              "value": 1.9
+            },
+            "total": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "9",
+              "american": "9",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "under": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-110",
+              "american": "-110",
+              "decimal": 1.9,
+              "displayValue": "10/11",
+              "fraction": "10/11",
+              "value": 1.9
+            }
+          },
           "provider_id": "100",
-          "provider_name": "DraftKings",
-          "timestamp": null
+          "provider_name": "DraftKings"
         }
       ],
       "odds_status": 200,
-      "odds_top_keys": [
-        "count",
-        "items",
-        "pageCount",
-        "pageIndex",
-        "pageSize"
-      ],
       "start": "2026-07-09T16:35Z"
     },
     {
@@ -70,60 +475,465 @@
       "name": "Kansas City Royals at New York Mets",
       "odds_items": [
         {
-          "away_close": {},
-          "away_current": {},
-          "away_favorite": false,
+          "away_close_shape": {
+            "_keys": [
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+124",
+              "american": "+124",
+              "decimal": 2.24,
+              "displayValue": "31/25",
+              "fraction": "31/25",
+              "value": 2.24
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american"
+              ],
+              "alternateDisplayValue": "+1.5",
+              "american": "+1.5"
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-165",
+              "american": "-165",
+              "decimal": 1.6,
+              "displayValue": "20/33",
+              "fraction": "20/33",
+              "value": 1.6
+            }
+          },
+          "away_current_shape": {
+            "_keys": [
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+124",
+              "american": "+124",
+              "decimal": 2.24,
+              "displayValue": "31/25",
+              "fraction": "31/25",
+              "value": 2.24
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american"
+              ],
+              "alternateDisplayValue": "+1.5",
+              "american": "+1.5"
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-165",
+              "american": "-165",
+              "decimal": 1.6,
+              "displayValue": "20/33",
+              "fraction": "20/33",
+              "value": 1.6
+            }
+          },
           "away_moneyline": 124,
-          "away_open": {
-            "favorite": false
+          "away_open_shape": {
+            "_keys": [
+              "favorite",
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "favorite": false,
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+119",
+              "american": "+119",
+              "decimal": 2.19,
+              "displayValue": "119/100",
+              "fraction": "119/100",
+              "value": 2.19
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american"
+              ],
+              "alternateDisplayValue": "+1.5",
+              "american": "+1.5"
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-171",
+              "american": "-171",
+              "decimal": 1.58,
+              "displayValue": "100/171",
+              "fraction": "100/171",
+              "value": 1.58
+            }
           },
           "details": "NYM -149",
-          "home_close": {},
-          "home_current": {},
-          "home_favorite": true,
-          "home_moneyline": -149,
-          "home_open": {
-            "favorite": true
+          "home_close_shape": {
+            "_keys": [
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-149",
+              "american": "-149",
+              "decimal": 1.67,
+              "displayValue": "100/149",
+              "fraction": "100/149",
+              "value": 1.67
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "-1.5",
+              "american": "-1.5",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+136",
+              "american": "+136",
+              "decimal": 2.36,
+              "displayValue": "34/25",
+              "fraction": "34/25",
+              "value": 2.36
+            }
           },
-          "item_keys": [
-            "awayTeamOdds",
-            "close",
-            "current",
-            "details",
-            "homeTeamOdds",
-            "initialOverUnder",
-            "initialSpread",
-            "links",
-            "moneylineWinner",
-            "open",
-            "overOdds",
-            "overUnder",
-            "price",
-            "propBets",
-            "provider",
-            "spread",
-            "spreadWinner",
-            "underOdds"
-          ],
-          "last_modified": null,
-          "last_update": null,
-          "market_close": {},
-          "market_current": {},
-          "market_open": {},
-          "over_under": 9.0,
+          "home_current_shape": {
+            "_keys": [
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-149",
+              "american": "-149",
+              "decimal": 1.67,
+              "displayValue": "100/149",
+              "fraction": "100/149",
+              "value": 1.67
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "-1.5",
+              "american": "-1.5",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+136",
+              "american": "+136",
+              "decimal": 2.36,
+              "displayValue": "34/25",
+              "fraction": "34/25",
+              "value": 2.36
+            }
+          },
+          "home_moneyline": -149,
+          "home_open_shape": {
+            "_keys": [
+              "favorite",
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "favorite": true,
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-143",
+              "american": "-143",
+              "decimal": 1.69,
+              "displayValue": "100/143",
+              "fraction": "100/143",
+              "value": 1.69
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "-1.5",
+              "american": "-1.5",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+141",
+              "american": "+141",
+              "decimal": 2.41,
+              "displayValue": "141/100",
+              "fraction": "141/100",
+              "value": 2.41
+            }
+          },
+          "market_close_shape": {
+            "_keys": [
+              "over",
+              "total",
+              "under"
+            ],
+            "over": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-120",
+              "american": "-120",
+              "decimal": 1.83,
+              "displayValue": "5/6",
+              "fraction": "5/6",
+              "value": 1.83
+            },
+            "total": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "9",
+              "american": "9",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "under": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-101",
+              "american": "-101",
+              "decimal": 1.99,
+              "displayValue": "100/101",
+              "fraction": "100/101",
+              "value": 1.99
+            }
+          },
+          "market_current_shape": {
+            "_keys": [
+              "over",
+              "total",
+              "under"
+            ],
+            "over": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-120",
+              "american": "-120",
+              "decimal": 1.83,
+              "displayValue": "5/6",
+              "fraction": "5/6",
+              "value": 1.83
+            },
+            "total": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "9",
+              "american": "9",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "under": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-101",
+              "american": "-101",
+              "decimal": 1.99,
+              "displayValue": "100/101",
+              "fraction": "100/101",
+              "value": 1.99
+            }
+          },
+          "market_open_shape": {
+            "_keys": [
+              "over",
+              "total",
+              "under"
+            ],
+            "over": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-105",
+              "american": "-105",
+              "decimal": 1.95,
+              "displayValue": "20/21",
+              "fraction": "20/21",
+              "value": 1.95
+            },
+            "total": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "9",
+              "american": "9",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "under": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-115",
+              "american": "-115",
+              "decimal": 1.86,
+              "displayValue": "20/23",
+              "fraction": "20/23",
+              "value": 1.86
+            }
+          },
           "provider_id": "100",
-          "provider_name": "DraftKings",
-          "timestamp": null
+          "provider_name": "DraftKings"
         }
       ],
       "odds_status": 200,
-      "odds_top_keys": [
-        "count",
-        "items",
-        "pageCount",
-        "pageIndex",
-        "pageSize"
-      ],
       "start": "2026-07-09T17:10Z"
     },
     {
@@ -132,60 +942,465 @@
       "name": "New York Yankees at Tampa Bay Rays",
       "odds_items": [
         {
-          "away_close": {},
-          "away_current": {},
-          "away_favorite": false,
+          "away_close_shape": {
+            "_keys": [
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+119",
+              "american": "+119",
+              "decimal": 2.19,
+              "displayValue": "119/100",
+              "fraction": "119/100",
+              "value": 2.19
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american"
+              ],
+              "alternateDisplayValue": "+1.5",
+              "american": "+1.5"
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-179",
+              "american": "-179",
+              "decimal": 1.55,
+              "displayValue": "100/179",
+              "fraction": "100/179",
+              "value": 1.55
+            }
+          },
+          "away_current_shape": {
+            "_keys": [
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+119",
+              "american": "+119",
+              "decimal": 2.19,
+              "displayValue": "119/100",
+              "fraction": "119/100",
+              "value": 2.19
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american"
+              ],
+              "alternateDisplayValue": "+1.5",
+              "american": "+1.5"
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-179",
+              "american": "-179",
+              "decimal": 1.55,
+              "displayValue": "100/179",
+              "fraction": "100/179",
+              "value": 1.55
+            }
+          },
           "away_moneyline": 119,
-          "away_open": {
-            "favorite": false
+          "away_open_shape": {
+            "_keys": [
+              "favorite",
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "favorite": false,
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+129",
+              "american": "+129",
+              "decimal": 2.29,
+              "displayValue": "129/100",
+              "fraction": "129/100",
+              "value": 2.29
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american"
+              ],
+              "alternateDisplayValue": "+1.5",
+              "american": "+1.5"
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-163",
+              "american": "-163",
+              "decimal": 1.61,
+              "displayValue": "100/163",
+              "fraction": "100/163",
+              "value": 1.61
+            }
           },
           "details": "TB -144",
-          "home_close": {},
-          "home_current": {},
-          "home_favorite": true,
-          "home_moneyline": -144,
-          "home_open": {
-            "favorite": true
+          "home_close_shape": {
+            "_keys": [
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-144",
+              "american": "-144",
+              "decimal": 1.69,
+              "displayValue": "25/36",
+              "fraction": "25/36",
+              "value": 1.69
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "-1.5",
+              "american": "-1.5",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+148",
+              "american": "+148",
+              "decimal": 2.48,
+              "displayValue": "37/25",
+              "fraction": "37/25",
+              "value": 2.48
+            }
           },
-          "item_keys": [
-            "awayTeamOdds",
-            "close",
-            "current",
-            "details",
-            "homeTeamOdds",
-            "initialOverUnder",
-            "initialSpread",
-            "links",
-            "moneylineWinner",
-            "open",
-            "overOdds",
-            "overUnder",
-            "price",
-            "propBets",
-            "provider",
-            "spread",
-            "spreadWinner",
-            "underOdds"
-          ],
-          "last_modified": null,
-          "last_update": null,
-          "market_close": {},
-          "market_current": {},
-          "market_open": {},
-          "over_under": 7.5,
+          "home_current_shape": {
+            "_keys": [
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-144",
+              "american": "-144",
+              "decimal": 1.69,
+              "displayValue": "25/36",
+              "fraction": "25/36",
+              "value": 1.69
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "-1.5",
+              "american": "-1.5",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+148",
+              "american": "+148",
+              "decimal": 2.48,
+              "displayValue": "37/25",
+              "fraction": "37/25",
+              "value": 2.48
+            }
+          },
+          "home_moneyline": -144,
+          "home_open_shape": {
+            "_keys": [
+              "favorite",
+              "moneyLine",
+              "pointSpread",
+              "spread"
+            ],
+            "favorite": true,
+            "moneyLine": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-156",
+              "american": "-156",
+              "decimal": 1.64,
+              "displayValue": "25/39",
+              "fraction": "25/39",
+              "value": 1.64
+            },
+            "pointSpread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "-1.5",
+              "american": "-1.5",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "spread": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "+135",
+              "american": "+135",
+              "decimal": 2.35,
+              "displayValue": "27/20",
+              "fraction": "27/20",
+              "value": 2.35
+            }
+          },
+          "market_close_shape": {
+            "_keys": [
+              "over",
+              "total",
+              "under"
+            ],
+            "over": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-110",
+              "american": "-110",
+              "decimal": 1.9,
+              "displayValue": "10/11",
+              "fraction": "10/11",
+              "value": 1.9
+            },
+            "total": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "7.5",
+              "american": "7.5",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "under": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-109",
+              "american": "-109",
+              "decimal": 1.91,
+              "displayValue": "100/109",
+              "fraction": "100/109",
+              "value": 1.91
+            }
+          },
+          "market_current_shape": {
+            "_keys": [
+              "over",
+              "total",
+              "under"
+            ],
+            "over": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-110",
+              "american": "-110",
+              "decimal": 1.9,
+              "displayValue": "10/11",
+              "fraction": "10/11",
+              "value": 1.9
+            },
+            "total": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "7.5",
+              "american": "7.5",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "under": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-109",
+              "american": "-109",
+              "decimal": 1.91,
+              "displayValue": "100/109",
+              "fraction": "100/109",
+              "value": 1.91
+            }
+          },
+          "market_open_shape": {
+            "_keys": [
+              "over",
+              "total",
+              "under"
+            ],
+            "over": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-110",
+              "american": "-110",
+              "decimal": 1.9,
+              "displayValue": "10/11",
+              "fraction": "10/11",
+              "value": 1.9
+            },
+            "total": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "value"
+              ],
+              "alternateDisplayValue": "7.5",
+              "american": "7.5",
+              "decimal": 0.0,
+              "value": 0.0
+            },
+            "under": {
+              "_keys": [
+                "alternateDisplayValue",
+                "american",
+                "decimal",
+                "displayValue",
+                "fraction",
+                "value"
+              ],
+              "alternateDisplayValue": "-110",
+              "american": "-110",
+              "decimal": 1.9,
+              "displayValue": "10/11",
+              "fraction": "10/11",
+              "value": 1.9
+            }
+          },
           "provider_id": "100",
-          "provider_name": "DraftKings",
-          "timestamp": null
+          "provider_name": "DraftKings"
         }
       ],
       "odds_status": 200,
-      "odds_top_keys": [
-        "count",
-        "items",
-        "pageCount",
-        "pageIndex",
-        "pageSize"
-      ],
       "start": "2026-07-09T17:10Z"
     }
   ],
