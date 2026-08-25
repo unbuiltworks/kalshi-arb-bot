@@ -2,24 +2,32 @@
 
 The existing exact-counterpart scanner starts from identical settlement keys.
 This scanner deliberately prices *all* supported full-game threshold rows first,
-then compares different thresholds inside the same normalized market family.  It
-therefore finds positive middles such as Over 7.5 + Under 8.5 that an exact-key
-join cannot see.
+then compares different thresholds inside the same normalized market family.
 
-FanDuel prices come from The Odds API discovery feed.  Sportsbook legs are
+Physical game identity is fail-closed. A normalized settlement key is not enough:
+feeds can expose the same teams/market family for multiple dates, and a stale or
+mis-normalized scheduled start can otherwise create false cross-game locks. Every
+observed quote therefore carries an explicit MLB Eastern game date. If a venue
+market id contains YYYY-MM-DD, that embedded date is authoritative for matching;
+otherwise the date is derived from the scheduled start in America/New_York.
+
+FanDuel prices come from The Odds API discovery feed. Sportsbook legs are
 manual-only; this process has no authenticated order clients and never places an
-order.  All candidate P/L is q=1 shadow math, never realized P/L.
+order. All candidate P/L is q=1 shadow math, never realized P/L.
 """
 from __future__ import annotations
 
 import asyncio
 from collections import Counter
+from datetime import datetime, timezone
 from decimal import Decimal
 import json
 import logging
 import os
+import re
 import time
 from typing import Any, Iterable, Mapping
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -42,6 +50,8 @@ from src.universal_three_venue_sports import fetch_gemini_mlb, fetch_kalshi_mlb,
 
 D = Decimal
 logger = logging.getLogger("kalshi_arb.four_venue_threshold_middle_shadow")
+ET = ZoneInfo("America/New_York")
+ISO_DATE_RE = re.compile(r"(?<!\d)(20\d{2}-\d{2}-\d{2})(?!\d)")
 
 
 def _d(value: Any) -> Decimal | None:
@@ -50,6 +60,20 @@ def _d(value: Any) -> Decimal | None:
     except Exception:
         return None
     return out if out.is_finite() else None
+
+
+def _physical_event_date(market_id: str, scheduled_start_ms: int) -> str:
+    """Return explicit MLB game date, preferring a date encoded by the venue id."""
+    match = ISO_DATE_RE.search(str(market_id or ""))
+    if match:
+        return match.group(1)
+    try:
+        if int(scheduled_start_ms) <= 0:
+            return ""
+        dt = datetime.fromtimestamp(int(scheduled_start_ms) / 1000, tz=timezone.utc).astimezone(ET)
+        return dt.date().isoformat()
+    except Exception:
+        return ""
 
 
 def _threshold_side(side: NormalizedSide) -> bool:
@@ -154,6 +178,7 @@ async def price_all_threshold_sides(
 
 def _direct_observed(priced: PricedQuote, side: NormalizedSide) -> ThresholdObservedQuote:
     identity = side.identity
+    event_date = _physical_event_date(side.venue_market_id, identity.event.scheduled_start_ms)
     return ThresholdObservedQuote(
         venue=identity.venue,
         market_id=priced.quote.market_id,
@@ -171,6 +196,7 @@ def _direct_observed(priced: PricedQuote, side: NormalizedSide) -> ThresholdObse
         no_depth=priced.quote.no_depth,
         scheduled_start_ms=identity.event.scheduled_start_ms,
         received_ms=priced.quote.received_ms,
+        physical_event_date=event_date,
         source_side=priced.source_side,
         rules_complete=identity.fully_rule_audited,
         rule_fingerprint=identity.execution_rule_fingerprint,
@@ -200,6 +226,7 @@ def _fanduel_observed(
     start = start_by_event_id.get(event_id)
     if start is None:
         return None
+    event_date = _physical_event_date(quote.market_id, start)
     return ThresholdObservedQuote(
         venue=quote.venue,
         market_id=quote.market_id,
@@ -217,6 +244,7 @@ def _fanduel_observed(
         no_depth=quote.no_depth,
         scheduled_start_ms=start,
         received_ms=quote.received_ms,
+        physical_event_date=event_date,
         source_side="CONTRACT",
         rules_complete=False,
         rule_fingerprint="INCOMPLETE",
@@ -231,7 +259,6 @@ def _sportsbook_start_map(events: Iterable[Mapping[str, Any]]) -> dict[str, int]
         if not event_id or not raw:
             continue
         try:
-            from datetime import datetime, timezone
             dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00")).astimezone(timezone.utc)
             out[event_id] = int(dt.timestamp() * 1000)
         except Exception:
@@ -244,6 +271,31 @@ def _venue_pair_counts(candidates: Iterable[Any]) -> dict[str, int]:
     for candidate in candidates:
         counts[" <-> ".join(candidate.venue_pair)] += 1
     return dict(sorted(counts.items()))
+
+
+def _physical_date_map(observed: Iterable[ThresholdObservedQuote]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for row in observed:
+        if not row.physical_event_date:
+            continue
+        out[row.market_id] = row.physical_event_date
+        out[row.underlying_market_id] = row.physical_event_date
+    return out
+
+
+def _filter_exact_locks_by_physical_date(locks: Iterable[Any], observed: Iterable[ThresholdObservedQuote]) -> tuple[list[Any], int]:
+    """Reject exact-key locks unless both market ids resolve to the same physical date."""
+    date_by_market = _physical_date_map(observed)
+    kept: list[Any] = []
+    rejected = 0
+    for lock in locks:
+        yes_date = date_by_market.get(str(lock.yes_market_id))
+        no_date = date_by_market.get(str(lock.no_market_id))
+        if not yes_date or not no_date or yes_date != no_date:
+            rejected += 1
+            continue
+        kept.append(lock)
+    return kept, rejected
 
 
 async def run_once(api_key: str) -> dict[str, Any]:
@@ -273,16 +325,18 @@ async def run_once(api_key: str) -> dict[str, Any]:
     ev_shapes = [x for x in candidates if x.classification == "SPORTS_MIDDLE_EV_SHAPE_NOT_ARBITRAGE"]
 
     funded_quotes = [priced.quote for priced, _side in priced_rows] + fanduel_quotes
-    exact_locks = _dedupe(find_cross_venue_locks(
+    raw_exact_locks = _dedupe(find_cross_venue_locks(
         funded_quotes,
         max_quote_skew_ms=70_000,
         min_confidence="NORMAL_EVENT_EQUIVALENT_NOT_EXECUTABLE",
     ))
+    exact_locks, exact_cross_date_rejected = _filter_exact_locks_by_physical_date(raw_exact_locks, observed)
 
     result = {
         "status": "FOUR_VENUE_THRESHOLD_MIDDLE_SHADOW",
         "funded_venues": sorted(FUNDED_VENUES),
         "scope": "MLB_FULL_CONTEST_SPREAD_AND_GAME_TOTAL_THRESHOLD_FAMILIES",
+        "physical_event_gate": "EXACT_MLB_EASTERN_DATE_REQUIRED_MARKET_ID_DATE_PREFERRED",
         "raw_events": {
             "gemini": len(gemini),
             "polymarket_full_game": len(poly),
@@ -294,6 +348,7 @@ async def run_once(api_key: str) -> dict[str, Any]:
         "priced_direct_by_venue": dict(Counter(priced.quote.venue for priced, _side in priced_rows)),
         "fanduel_threshold_quotes": len(fanduel_observed),
         "total_observed_threshold_quotes": len(observed),
+        "observed_missing_physical_event_date": sum(1 for row in observed if not row.physical_event_date),
         "cross_threshold_candidate_counts": {
             "locked_3c_plus_math_only": len(math_locks_3c),
             "positive_lock_below_3c_math_only": len(positive_below),
@@ -303,6 +358,8 @@ async def run_once(api_key: str) -> dict[str, Any]:
         "top_locked_3c_plus_math_only": [x.as_dict() for x in math_locks_3c[:50]],
         "top_positive_below_3c_math_only": [x.as_dict() for x in positive_below[:30]],
         "top_middle_ev_shapes_not_arbitrage": [x.as_dict() for x in ev_shapes[:30]],
+        "same_threshold_positive_locks_before_physical_date_gate": len(raw_exact_locks),
+        "same_threshold_cross_date_or_unresolved_rejected": exact_cross_date_rejected,
         "same_threshold_positive_locks_math_only": len(exact_locks),
         "top_same_threshold_positive_locks_math_only": [x.as_dict() for x in exact_locks[:30]],
         "fetch_error_count": len(errors),
