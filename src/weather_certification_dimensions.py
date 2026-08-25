@@ -21,6 +21,7 @@ from src.weather_exact_market_source_audit import audit_exact_market_source
 from src.weather_fee_resolution_binding_guard import audit_weather_fee_resolution_binding
 from src.weather_model_audit_chain_guard import audit_weather_model_audit_chain
 from src.weather_quote_freshness_binding_guard import audit_weather_quote_freshness_binding
+from src.weather_scored_side_book_binding_guard import audit_weather_scored_side_book_binding
 
 SETTLEMENT_BLOCKERS = {
     "RULES_PENDING", "EXACT_MARKET_IDENTITY_UNVERIFIED", "EXACT_MARKET_SETTLEMENT_REGIME_UNVERIFIED",
@@ -42,16 +43,6 @@ def _finite_nonnegative(value: Any) -> bool:
     except Exception:
         return False
     return parsed.is_finite() and parsed >= 0
-
-
-def _decimal(value: Any) -> Decimal | None:
-    if value is None or isinstance(value, bool):
-        return None
-    try:
-        parsed = Decimal(str(value))
-    except Exception:
-        return None
-    return parsed if parsed.is_finite() else None
 
 
 def _aware_iso(value: Any) -> datetime | None:
@@ -88,10 +79,7 @@ def _fee_evidence_verified(row: dict[str, Any]) -> bool:
         and observed is not None
         and observed >= quote
     )
-    return (
-        basic
-        and audit_weather_fee_resolution_binding(row).get("fee_resolution_binding_verified") is True
-    )
+    return basic and audit_weather_fee_resolution_binding(row).get("fee_resolution_binding_verified") is True
 
 
 def _probability_evidence_verified(row: dict[str, Any]) -> bool:
@@ -103,25 +91,12 @@ def _probability_evidence_verified(row: dict[str, Any]) -> bool:
 
 
 def _settlement_identity_semantics_verified(row: dict[str, Any]) -> bool:
-    """Require affirmative exact-contract identity semantics, not just no blockers."""
-    return all(
-        row.get(key) is True
-        for key in (
-            "station_identity_verified",
-            "local_day_verified",
-            "bracket_semantics_verified",
-        )
-    )
+    return all(row.get(key) is True for key in (
+        "station_identity_verified", "local_day_verified", "bracket_semantics_verified"
+    ))
 
 
 def _exact_market_source_audit(row: dict[str, Any]) -> dict[str, Any]:
-    """Re-run exact-market settlement provenance instead of trusting producer booleans.
-
-    When v2 supplies a nested audit, the evidence-side market ticker/date must be
-    present in that audit. Never substitute the target market/date for missing evidence
-    identity; doing so would manufacture the very binding this trust boundary is meant
-    to verify.
-    """
     nested = row.get("exact_market_source_audit")
     if isinstance(nested, dict):
         provider = nested.get("settlement_source_provider")
@@ -135,27 +110,15 @@ def _exact_market_source_audit(row: dict[str, Any]) -> dict[str, Any]:
         evidence_url = row.get("exact_market_evidence_url")
         evidence_market_ticker = row.get("evidence_market_ticker")
         evidence_market_date = row.get("evidence_market_date")
-
     return audit_exact_market_source(
-        series_ticker=row.get("series_ticker"),
-        event_ticker=row.get("event_ticker"),
-        market_ticker=row.get("market_ticker"),
-        market_date=row.get("market_date"),
-        provider=provider,
-        source_url=source_url,
-        evidence_url=evidence_url,
-        evidence_market_ticker=evidence_market_ticker,
+        series_ticker=row.get("series_ticker"), event_ticker=row.get("event_ticker"),
+        market_ticker=row.get("market_ticker"), market_date=row.get("market_date"), provider=provider,
+        source_url=source_url, evidence_url=evidence_url, evidence_market_ticker=evidence_market_ticker,
         evidence_market_date=evidence_market_date,
     )
 
 
 def _book_audit(row: dict[str, Any], side: str) -> dict[str, Any]:
-    """Audit one executable side without compatibility fallback.
-
-    Once a fixed-point field is present for a side, fixed-point is authoritative. A
-    malformed/partial/sub-q1 fixed-point representation must never be rescued by older
-    cents/integer compatibility fields.
-    """
     return audit_weather_book_representation(row, side=side)
 
 
@@ -169,17 +132,13 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
     settlement = sorted(blockers & SETTLEMENT_BLOCKERS)
     market_data = sorted(blockers & MARKET_DATA_BLOCKERS)
     fee = sorted(blockers & FEE_BLOCKERS)
-    model = sorted(
-        b for b in blockers if b in MODEL_BLOCKERS or b.startswith(MODEL_BLOCKER_PREFIXES)
-    )
+    model = sorted(b for b in blockers if b in MODEL_BLOCKERS or b.startswith(MODEL_BLOCKER_PREFIXES))
     classified = set(settlement) | set(market_data) | set(fee) | set(model)
     unclassified = sorted(blockers - classified)
 
     exact_market_source = _exact_market_source_audit(row)
     if exact_market_source.get("verified") is not True:
-        settlement.extend(
-            exact_market_source.get("blockers") or ["EXACT_MARKET_SOURCE_AUDIT_REQUIRED"]
-        )
+        settlement.extend(exact_market_source.get("blockers") or ["EXACT_MARKET_SOURCE_AUDIT_REQUIRED"])
     if row.get("exact_market_source_verified") is not True:
         settlement.append("EXACT_MARKET_SOURCE_AUDIT_REQUIRED")
     identity_semantics_verified = _settlement_identity_semantics_verified(row)
@@ -207,6 +166,10 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
         for side, audit in (("YES", yes_book), ("NO", no_book)):
             for blocker in audit.get("blockers") or []:
                 market_data.append(f"{side}_{blocker}")
+
+    scored_side = audit_weather_scored_side_book_binding(row)
+    if scored_side.get("scored_side_book_binding_verified") is not True:
+        market_data.extend(scored_side.get("blockers") or ["SCORED_SIDE_EXECUTABLE_BOOK_UNVERIFIED"])
     market_data = sorted(set(market_data))
 
     fee_binding = audit_weather_fee_resolution_binding(row)
@@ -227,34 +190,22 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
     market_ok = not market_data
     fee_ok = not fee
     model_ok = not model
-    no_unknowns = (
-        telemetry_verified
-        and not unclassified
-        and "MALFORMED_BLOCKER_TELEMETRY" not in blockers
-    )
+    no_unknowns = telemetry_verified and not unclassified and "MALFORMED_BLOCKER_TELEMETRY" not in blockers
     executable = (
-        settlement_ok
-        and market_ok
-        and fee_ok
-        and model_ok
-        and no_unknowns
-        and row.get("ev_certified_shadow") is True
-        and row.get("read_only") is True
-        and row.get("order_entry") is False
-        and row.get("live_probe_ready") is False
+        settlement_ok and market_ok and fee_ok and model_ok and no_unknowns
+        and row.get("ev_certified_shadow") is True and row.get("read_only") is True
+        and row.get("order_entry") is False and row.get("live_probe_ready") is False
     )
     return {
-        "category": "weather",
-        "classification": "SHADOW",
-        "blocker_telemetry_verified": telemetry_verified,
-        "blocker_source": blocker_audit.get("blocker_source"),
+        "category": "weather", "classification": "SHADOW",
+        "blocker_telemetry_verified": telemetry_verified, "blocker_source": blocker_audit.get("blocker_source"),
         "settlement_rules_provenance_verified": settlement_ok,
         "exact_market_source_audit_verified": exact_market_source.get("verified") is True,
         "settlement_identity_semantics_verified": identity_semantics_verified,
-        "market_data_verified": market_ok,
-        "book_representation_verified": book_ok,
-        "yes_book_representation_audit": yes_book,
-        "no_book_representation_audit": no_book,
+        "market_data_verified": market_ok, "book_representation_verified": book_ok,
+        "yes_book_representation_audit": yes_book, "no_book_representation_audit": no_book,
+        "scored_side_book_binding_verified": scored_side.get("scored_side_book_binding_verified") is True,
+        "scored_side_book_binding_audit": scored_side,
         "quote_freshness_binding_verified": freshness.get("quote_freshness_binding_verified") is True,
         "derived_quote_age_ms": freshness.get("derived_quote_age_ms"),
         "fee_economics_verified": fee_ok,
@@ -262,12 +213,7 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
         "model_probability_verified": model_ok,
         "model_audit_chain_verified": model_chain.get("model_audit_chain_verified") is True,
         "executable_shadow_prereqs_verified": executable,
-        "settlement_blockers": settlement,
-        "market_data_blockers": market_data,
-        "fee_blockers": fee,
-        "model_blockers": model,
-        "unclassified_blockers": unclassified,
-        "read_only": True,
-        "order_entry": False,
-        "live_probe_ready": False,
+        "settlement_blockers": settlement, "market_data_blockers": market_data,
+        "fee_blockers": fee, "model_blockers": model, "unclassified_blockers": unclassified,
+        "read_only": True, "order_entry": False, "live_probe_ready": False,
     }
