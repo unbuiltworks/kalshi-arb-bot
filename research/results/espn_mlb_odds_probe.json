@@ -8,31 +8,21 @@
       "name": "Atlanta Braves at Pittsburgh Pirates",
       "odds_items": [
         {
+          "away_close": {},
+          "away_current": {},
           "away_favorite": false,
-          "away_keys": [
-            "close",
-            "current",
-            "favorite",
-            "moneyLine",
-            "open",
-            "team",
-            "underdog"
-          ],
           "away_moneyline": -110,
-          "created": null,
-          "date": null,
+          "away_open": {
+            "favorite": true
+          },
           "details": "PIT -110",
+          "home_close": {},
+          "home_current": {},
           "home_favorite": true,
-          "home_keys": [
-            "close",
-            "current",
-            "favorite",
-            "moneyLine",
-            "open",
-            "team",
-            "underdog"
-          ],
           "home_moneyline": -110,
+          "home_open": {
+            "favorite": false
+          },
           "item_keys": [
             "awayTeamOdds",
             "close",
@@ -55,11 +45,13 @@
           ],
           "last_modified": null,
           "last_update": null,
+          "market_close": {},
+          "market_current": {},
+          "market_open": {},
           "over_under": 10.0,
           "provider_id": "100",
           "provider_name": "DraftKings",
-          "timestamp": null,
-          "updated": null
+          "timestamp": null
         }
       ],
       "odds_status": 200,
@@ -78,31 +70,21 @@
       "name": "Kansas City Royals at New York Mets",
       "odds_items": [
         {
+          "away_close": {},
+          "away_current": {},
           "away_favorite": false,
-          "away_keys": [
-            "close",
-            "current",
-            "favorite",
-            "moneyLine",
-            "open",
-            "team",
-            "underdog"
-          ],
           "away_moneyline": 124,
-          "created": null,
-          "date": null,
+          "away_open": {
+            "favorite": false
+          },
           "details": "NYM -149",
+          "home_close": {},
+          "home_current": {},
           "home_favorite": true,
-          "home_keys": [
-            "close",
-            "current",
-            "favorite",
-            "moneyLine",
-            "open",
-            "team",
-            "underdog"
-          ],
           "home_moneyline": -149,
+          "home_open": {
+            "favorite": true
+          },
           "item_keys": [
             "awayTeamOdds",
             "close",
@@ -125,11 +107,13 @@
           ],
           "last_modified": null,
           "last_update": null,
+          "market_close": {},
+          "market_current": {},
+          "market_open": {},
           "over_under": 9.0,
           "provider_id": "100",
           "provider_name": "DraftKings",
-          "timestamp": null,
-          "updated": null
+          "timestamp": null
         }
       ],
       "odds_status": 200,
@@ -148,31 +132,21 @@
       "name": "New York Yankees at Tampa Bay Rays",
       "odds_items": [
         {
+          "away_close": {},
+          "away_current": {},
           "away_favorite": false,
-          "away_keys": [
-            "close",
-            "current",
-            "favorite",
-            "moneyLine",
-            "open",
-            "team",
-            "underdog"
-          ],
           "away_moneyline": 119,
-          "created": null,
-          "date": null,
+          "away_open": {
+            "favorite": false
+          },
           "details": "TB -144",
+          "home_close": {},
+          "home_current": {},
           "home_favorite": true,
-          "home_keys": [
-            "close",
-            "current",
-            "favorite",
-            "moneyLine",
-            "open",
-            "team",
-            "underdog"
-          ],
           "home_moneyline": -144,
+          "home_open": {
+            "favorite": true
+          },
           "item_keys": [
             "awayTeamOdds",
             "close",
@@ -195,11 +169,13 @@
           ],
           "last_modified": null,
           "last_update": null,
+          "market_close": {},
+          "market_current": {},
+          "market_open": {},
           "over_under": 7.5,
           "provider_id": "100",
           "provider_name": "DraftKings",
-          "timestamp": null,
-          "updated": null
+          "timestamp": null
         }
       ],
       "odds_status": 200,
