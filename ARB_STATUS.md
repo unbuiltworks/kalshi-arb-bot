@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-25 05:32 UTC / 2026-08-25 01:32 ET**
+Last verified: **2026-08-25 06:48 UTC / 2026-08-25 02:48 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
@@ -16,7 +16,7 @@ Only authoritative settlement/reconciliation can create `REALIZED` P&L. Stale qu
 - Settlement reconciler previously confirmed `open_reconcilable=0` and `one_leg_open=0`.
 - Prior historical proof remains approximately **+$0.2679** across seven earlier settled-compatible Gemini<->Kalshi sports trades; keep historical proof separate from Caleb.
 - Same-Gemini crypto most recently showed roughly 2,647 certified q1 pairs / 275 books and **0 immediate >=3c FOK/FOK locks**.
-- K<->P strict-prop taker census is now durably emitting snapshots; the latest observed cycles have **0 >=1c, 0 >=2c and 0 >=3c after-fee locks** among books with usable quotes.
+- Previously observed K<->P strict-prop taker snapshots had **0 >=1c, 0 >=2c and 0 >=3c after-fee locks** among books with usable quotes, but the intended K<->P census has now been found miswired in production; do not treat same-Polymarket snapshots as K<->P evidence.
 - Recent Polymarket maker attempts were zero-fill. Maker-indicated rows are not arbitrage.
 
 ## Fixed edge-census protocol
@@ -37,27 +37,39 @@ Same-venue Gemini/Polymarket/Kalshi zero results are near-verdict evidence; do n
 
 ### Kalshi<->Polymarket sports — `sports-kp-live-executor`
 
-Service `bdcd4d42-bfcf-469c-9bd7-46b26acd8b87` remains **SUCCESS** on deployment `997fd17d-42ea-430e-b179-88d7c608fb26` and is actively cycling, not merely carrying a green badge. Current service-level config starts `python -m src.sports_poly_structural_live_supervisor_verified`, restartPolicy `NEVER`, in `us-west2`; live mutation remains disarmed by census policy.
+**Production drift/root cause found 02:33-02:48 ET.** Repo branch `feature/sports-kp-live-executor-impl` had already been changed to start `python -m src.sports_poly_mlb_edge_census --interval-seconds 15`, but Railway retained an older service-level override starting `python -m src.sports_poly_structural_live_supervisor_verified` with `restartPolicy=NEVER`.
 
-Fresh 1-hour Railway metrics at 01:32 ET independently confirm process activity: CPU average ~**0.0279**, current ~**0.0152**; network RX average ~**0.00431 GB/sample** and TX ~**0.000615 GB/sample**, with 61 one-minute samples. This is evidence the collector is alive, not evidence of edge.
+The Railway override was corrected to match the branch's intended zero-order census command, predeploy compile gate restored, `restartPolicy=ALWAYS`, and deployment `25cea885-e1f2-4522-a31a-58d6a5a58824` reached **SUCCESS** at 06:36:48 UTC. Fresh CPU/network metrics confirm the replacement process is active.
 
-The first durable hard census result remains unfavorable: across the latest participation-ready strict-player-prop snapshots, **>=1c / >=2c / >=3c after-fee taker-lock bins are all zero** for books that actually have usable two-sided quote data. Do not convert this into a whole-lane verdict yet because feed measurability is incomplete.
+However, the first replacement log exposed a deeper census wiring error: `src.sports_poly_mlb_edge_census` is a **same-Polymarket monotone-threshold census**, not a true Kalshi<->Polymarket cross-venue scanner. Its first snapshot reported `strict_markets=0`, `strict_pairs=0`, `books_requested=0`, and 0/0/0 in >=1c/>=2c/>=3c bins, with `order_entry=false`. Those zeros are same-venue near-verdict evidence only and **must not be credited as K<->P census data**.
 
-The principal data-quality blocker remains Polymarket book coverage. One fresh cycle requested roughly **160** books but only about **9** returned usable top-of-book quotes. Therefore the zero-edge result is valid for quoted books but not yet a complete estimate of deployable K<->P capacity. The current telemetry also explicitly lacks sub-second opportunity lifetimes / print-proxy capture, and full-game MLB moneyline/spread/total coverage is not yet represented in this census feed.
+A real event-driven read-only K<->P implementation already exists in `src/polymarket_kalshi_shadow_v5.py`: it strict-matches exact MLB participants, threshold, scheduled start within five minutes and MLB result source; seeds REST only at startup; then uses Polymarket/Kalshi book updates, after-fee two-leg economics, quote ages/skew and OPEN/MOVE/CLOSE lifetime telemetry with no order-entry code. Current v5 scope is **full-game totals only**, so it is useful but still insufficient for the pre-committed lane by itself.
 
-Before the 72-hour clock can be considered valid for this lane, instrument/persist: semantic-deduped full-game MLB ML/spread/total plus strict certifiable props, >=1c/>=2c/>=3c bins after exact fees, executable q1+ depth, first-seen/last-seen/bin-transition lifetimes, quote skew, and latency-floor-filtered realistic capture. Participation-conditional or rule-mismatched rows remain excluded from guaranteed-arb capacity.
+Separately, `src/three_venue_mlb_price_scan.py` contains read-only normalized cross-venue MLB pricing across Gemini/Polymarket/Kalshi with semantic counterpart keys and q1 after-fee locks; it can supply broader full-game identity/pricing primitives, but its current snapshot path uses up to 5-second quote skew and is not decision-grade lifetime/capture telemetry.
+
+Therefore the K<->P 72-hour verdict clock is **not valid yet**. Before Wednesday's instrumentation deadline the actual cross-venue collector must cover semantic-deduped full-game MLB moneyline/spread/total plus strict rule-certifiable props and persist >=1c/>=2c/>=3c bins, q1+ depth, quote skew, OPEN/CLOSE lifetime and >=80ms realistic-capture capacity. Participation-conditional or rule-mismatched rows remain excluded.
 
 ### Gemini<->Kalshi sports — `sports-gk-autonomous-supervisor`
 
-Latest deployment `030a6f3d-f40c-48ba-8337-d53285cff801` remains **SUCCESS**. Fresh 1-hour Railway metrics at 01:32 ET confirm sustained activity: CPU average ~**0.4365** (max ~0.6211), network RX average ~**0.02656 GB/sample** and TX ~**0.00986 GB/sample**, across 61 one-minute samples. Current start command remains the event-driven read-only hot shadow with `--hot-profit 0.01`, 50ms max quote skew, 100ms hot-book age, 10s heartbeat. G<->K live mutation remains disarmed and Caleb's realized one-leg loss remains in accounting.
+Latest deployment remains **SUCCESS** and the event-driven read-only hot shadow is active. Current start command uses `--hot-profit 0.01`, 50ms max quote skew, 100ms hot-book age and 10s heartbeat. Source inspection confirms it records positive OPEN/MOVE/CLOSE events, close `lifetime_ms`, quote ages and cross-venue skew and imports no order transport. G<->K live mutation remains disarmed and Caleb's realized one-leg loss remains in accounting.
 
-Do not re-arm G<->K unless the already-reconciled zero-open-exposure state remains conclusively true and a separate bounded-risk decision explicitly authorizes it. Census collection itself requires no live order authority.
+Do not re-arm G<->K unless the reconciled zero-open-exposure state remains conclusively true and a separate bounded-risk decision explicitly authorizes it. Census collection requires no live order authority.
 
-### Kalshi account-limit diagnosis
+### Kalshi account-limit diagnosis — RESOLVED
 
-A fresh targeted read-only Railway-agent attempt at 01:32 ET again returned **`Agent usage limit reached`** before runtime logs or authenticated `/account/limits` could be inspected. Therefore actual Kalshi tier/read/write/refill/bucket values and account-wide consumer contention remain uncertified this run.
+The authenticated account-limits probe was already successfully deployed at 03:00 UTC on service `sports-gk-account-preflight-now`. Its authoritative log reports:
 
-Do **not** change pacing/backoff or stop unrelated live Kalshi consumers based on inference. The next successful runtime inspection must capture `/account/limits` first, enumerate active account consumers, and distinguish account-tier/account-wide contention from local-service pacing. New census code should prefer Kalshi dedicated `external-api` / `external-api-ws` hosts where supported.
+- `usage_tier`: **advanced**
+- read bucket capacity: **900**
+- read refill rate: **300**
+- write bucket capacity: **900**
+- write refill rate: **300**
+- host: **external-api.kalshi.com**
+- `order_entry=false`
+
+This materially changes the 429 diagnosis: the account is **not on a low Kalshi tier**. Any recurrent 429s must now be investigated as aggregate account-wide contention, burst behavior, endpoint-specific limits, or local scheduler behavior rather than assuming insufficient account tier. Do not reduce safety/backoff or stop unrelated live services solely for census telemetry. New census code should continue preferring Kalshi dedicated `external-api` / `external-api-ws` hosts where supported.
+
+Next account-level step is to inventory concurrent Railway Kalshi consumers and correlate request bursts/429 timestamps against the 300-refill/900-capacity account envelope before changing pacing.
 
 ### Same-Gemini crypto
 
@@ -65,20 +77,20 @@ Keep zero-order-entry census only. Prior snapshot remains ~2,647 certified q1 pa
 
 ### Old Gemini<->Kalshi 15m crypto
 
-Fresh project status still reports `crypto-15m-sol-live-canary-10bp-50ms` **CRASHED** on deployment `03080d7a-1696-4c38-a86d-54fa41882892`. The old executor remains a known bounded-campaign crash case and must not be restarted as guaranteed arbitrage: settlement-index non-equivalence remains the stronger blocker. The safe rollover repair can remain review-ready but is not a reason to spend census time reopening this lane.
+Fresh project status still reports `crypto-15m-sol-live-canary-10bp-50ms` **CRASHED**. The old executor remains a known bounded-campaign crash case and must not be restarted as guaranteed arbitrage: settlement-index non-equivalence remains the stronger blocker. The safe rollover repair can remain review-ready but is not a reason to spend census time reopening this lane.
 
 ## Weather side question
 
-The central arb Neon ledger has **no weather-tagged trade events since 2026-03-01**, so it contributes **$0 verified realized weather P&L** from that source. This is not proof that the separate weather project has no historical realized records.
+The central arb Neon ledger has **no weather-tagged trade events since 2026-03-01**, so it contributes **$0 verified realized weather P&L** from that source. The separate Railway project `kalshi-weather-bot` is reachable, but current runtime logs do not contain authoritative March-to-date settlement/P&L history.
 
-The separate Railway project `kalshi-weather-bot` is reachable. Its current `weather-live-probe` uses `restartPolicy=NEVER`; separate authoritative March-to-date trade history remains unavailable from the currently exposed runtime records.
+Fresh separate-project verification: `weather-live-probe` is currently **CRASHED fail-closed** after passing 22 tests because its target market is finalized; the runtime explicitly logged `WEATHER_LIVE_PROBE_BLOCKED`, `order_entry=false`, `reason=market_not_open:finalized`. The main weather bot's exposed logs from Aug 19-24 show model-update monitoring with `EMERGENCY STOP ACTIVE` repeatedly skipping triggers, not authoritative realized trades.
 
-Therefore authoritative realized weather P&L since March remains **unverified outside the central ledger and must be credited as $0 until separate project records prove otherwise**. Historical/backtest/seasonal edge remains categorically separate from current realized performance.
+Therefore realized weather P&L since March remains **$0 verified from the records currently exposed**. Historical/backtest/seasonal edge remains categorically separate and cannot be credited to current realized performance unless a separate authoritative trade/settlement record is found.
 
 ## Next highest-value actions
 
-1. Finish K<->P census measurability before the fixed instrumentation deadline: improve usable book coverage, add semantic-deduped full-game MLB ML/spread/total, and persist exact >=1c/>=2c/>=3c depth/skew/lifetime/capture telemetry. Do not weaken rules to increase counts.
-2. Capture authenticated Kalshi `/account/limits` plus active Railway Kalshi consumer inventory before changing pacing/backoff. Current runtime-agent quota is a transient diagnostic blocker, not permission to guess.
-3. Verify G<->K hot-shadow OPEN/MOVE/CLOSE and latency telemetry is durably recorded while order entry stays disarmed.
-4. Extract authoritative realized weather P&L from the separate weather project's own records; until then weather contributes $0 to the verdict.
-5. Preserve the fixed verdict thresholds and deadline. If K<->P remains unmeasurable after the allowed +24h data-quality extension, count it as $0 deployable capacity rather than extending research.
+1. **Fix the actual K<->P census path before the Wednesday deadline.** Reuse the existing strict K<->P event-driven totals scanner and broader normalized MLB identity/pricing primitives, but add/route a zero-order collector covering full-game ML/spread/total plus strict certifiable props with explicit >=1c/>=2c/>=3c, depth, skew, OPEN/CLOSE lifetime and >=80ms capture telemetry. Do not count the current same-Polymarket census as K<->P.
+2. Inventory concurrent Railway Kalshi API consumers and correlate bursts/429s against the now-known **advanced 900-capacity / 300-refill** read/write account limits before changing pacing/backoff. Do not disrupt unrelated services.
+3. Verify G<->K hot-shadow OPEN/MOVE/CLOSE and latency telemetry is durably captured while order entry stays disarmed.
+4. Continue weather record search only for authoritative settled P&L. Until found, weather contributes $0 to the census decision.
+5. Preserve the fixed verdict thresholds and deadline. If K<->P remains unmeasurable after the single allowed +24h data-quality extension, count it as $0 deployable capacity rather than extending research.
