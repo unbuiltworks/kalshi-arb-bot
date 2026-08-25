@@ -34,7 +34,7 @@ def test_missing_correction_or_lifecycle_evidence_fails_closed():
     out = audit_weather_settlement_rule_semantics(row)
     assert out["settlement_rule_semantics_verified"] is False
     assert "CORRECTION_REVISION_SEMANTICS_VERIFIED_REQUIRED" in out["blockers"]
-    assert "SETTLEMENT_LIFECYCLE_SOURCE_EVIDENCE_REQUIRED" in out["blockers"]
+    assert "SETTLEMENT_LIFECYCLE_OFFICIAL_SOURCE_REQUIRED" in out["blockers"]
 
 
 def test_terminal_value_transform_must_be_explicit():
@@ -43,3 +43,25 @@ def test_terminal_value_transform_must_be_explicit():
     out = audit_weather_settlement_rule_semantics(row)
     assert out["settlement_rule_semantics_verified"] is False
     assert "TERMINAL_VALUE_TRANSFORM_EVIDENCE_REQUIRED" in out["blockers"]
+
+
+def test_unaudited_terminal_transform_fails_closed():
+    row = _row()
+    row["terminal_value_transform"] = "ROUND_NEAREST_INTEGER"
+    out = audit_weather_settlement_rule_semantics(row)
+    assert out["settlement_rule_semantics_verified"] is False
+    assert "TERMINAL_VALUE_TRANSFORM_UNAUDITED" in out["blockers"]
+
+
+def test_third_party_or_lookalike_lifecycle_source_fails_closed():
+    for url in (
+        "https://example.com/kalshi-weather-rules",
+        "https://kalshi.com.example.com/markets/kxhighmia-26aug25",
+        "http://kalshi.com/markets/kxhighmia-26aug25",
+        "https://kalshi.com/",
+    ):
+        row = _row()
+        row["settlement_lifecycle_evidence_url"] = url
+        out = audit_weather_settlement_rule_semantics(row)
+        assert out["settlement_rule_semantics_verified"] is False
+        assert "SETTLEMENT_LIFECYCLE_OFFICIAL_SOURCE_REQUIRED" in out["blockers"]
