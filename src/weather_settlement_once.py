@@ -1,4 +1,7 @@
-"""Read-only authoritative settlement lookup for the funded weather probe."""
+"""Read-only authoritative settlement lookup for the funded weather probe.
+
+Census reconciliation trigger: 2026-08-24 ET. No order mutation.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -31,7 +34,6 @@ async def main_async() -> None:
         fills_resp.raise_for_status()
         settlements = settlement_resp.json().get("settlements") or []
         fills = fills_resp.json().get("fills") or []
-        # Never log account credentials; only the funded ticker's trade economics.
         compact_fills = []
         total_fees = D("0")
         for row in fills:
