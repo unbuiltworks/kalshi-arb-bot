@@ -20,6 +20,7 @@ def _row():
         # Legacy producer bug: top-level values copied from YES.
         "modeled_taker_fee_cents": 1,
         "modeled_after_fee_ev_cents": "-4.0",
+        "modeled_after_fee_edge_cents_per_contract": "-0.8",
         "side_economics": [
             {
                 "side": "YES",
@@ -54,14 +55,17 @@ def test_normalizes_legacy_object_and_binds_top_level_to_selected_no_side():
     assert out["live_probe_ready"] is False
 
 
-def test_duplicate_selected_side_records_fail_closed():
+def test_duplicate_selected_side_records_fail_closed_and_strip_all_economics():
     row = _row()
     row["side_economics"].append(dict(row["side_economics"][1]))
     out = normalize_selected_side_schema(row)
     assert out["selected_side_schema_verified"] is False
     assert out["ev_certified_shadow"] is False
     assert out["best_shadow_side"] is None
+    assert out["best_shadow_side_detail"] is None
+    assert out["modeled_taker_fee_cents"] is None
     assert out["modeled_after_fee_ev_cents"] is None
+    assert out["modeled_after_fee_edge_cents_per_contract"] is None
     assert "SELECTED_SIDE_ECONOMICS_AMBIGUOUS" in out["blockers"]
 
 
@@ -72,7 +76,41 @@ def test_nonfinite_selected_ev_fails_closed():
     assert out["selected_side_schema_verified"] is False
     assert out["ev_certified_shadow"] is False
     assert out["best_shadow_side"] is None
+    assert out["modeled_after_fee_edge_cents_per_contract"] is None
     assert "SELECTED_SIDE_ECONOMICS_INVALID" in out["blockers"]
+
+
+def test_nonfinite_selected_edge_fails_closed():
+    row = _row()
+    row["side_economics"][1]["modeled_after_fee_edge_cents_per_contract"] = "Infinity"
+    out = normalize_selected_side_schema(row)
+    assert out["selected_side_schema_verified"] is False
+    assert out["ev_certified_shadow"] is False
+    assert out["modeled_after_fee_ev_cents"] is None
+    assert out["modeled_after_fee_edge_cents_per_contract"] is None
+    assert "SELECTED_SIDE_ECONOMICS_INVALID" in out["blockers"]
+
+
+def test_missing_selected_side_cannot_leave_stale_dashboard_economics():
+    row = _row()
+    row["best_shadow_side"] = None
+    row["best_shadow_side_detail"] = {"side": "NO"}
+    row["modeled_taker_fee_cents"] = "2"
+    row["modeled_after_fee_ev_cents"] = "51.0"
+    row["modeled_after_fee_edge_cents_per_contract"] = "10.2"
+
+    out = normalize_selected_side_schema(row)
+
+    assert out["selected_side_schema_verified"] is False
+    assert out["ev_certified_shadow"] is False
+    assert out["best_shadow_side"] is None
+    assert out["best_shadow_side_detail"] is None
+    assert out["modeled_taker_fee_cents"] is None
+    assert out["modeled_after_fee_ev_cents"] is None
+    assert out["modeled_after_fee_edge_cents_per_contract"] is None
+    assert "BEST_SHADOW_SIDE_MISSING" in out["blockers"]
+    assert out["order_entry"] is False
+    assert out["live_probe_ready"] is False
 
 
 def test_string_side_is_supported_but_still_rebound_to_exact_side_record():
