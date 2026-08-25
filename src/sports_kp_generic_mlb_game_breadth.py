@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from collections import Counter
 from dataclasses import dataclass
 from decimal import Decimal
 import json
@@ -67,11 +66,7 @@ class Pair:
         """Collapse complementary binary representations into one game market."""
         line = self.poly.identity.line
         line_key = "" if line is None else format(abs(line).normalize(), "f")
-        return "|".join((
-            self.poly.identity.event.event_key(),
-            self.family,
-            line_key,
-        ))
+        return "|".join((self.poly.identity.event.event_key(), self.family, line_key))
 
 
 @dataclass(frozen=True)
@@ -91,8 +86,26 @@ def _orient(quote: Any, side: str) -> OrientedBook | None:
     return None
 
 
+def _canonical_side(rows: Iterable[NormalizedSide]) -> NormalizedSide | None:
+    """Collapse binary mirrors without inventing a match.
+
+    Sports venues often expose proposition P twice: YES on a P market and NO on
+    its explicit complement market. Prefer a single distinct YES representation.
+    If multiple YES markets remain, or there is otherwise no unique physical
+    representation, fail closed as genuinely ambiguous.
+    """
+    distinct = {(row.venue_market_id, str(row.side).upper()): row for row in rows}
+    candidates = list(distinct.values())
+    yes_rows = [row for row in candidates if str(row.side).upper() == "YES"]
+    if len(yes_rows) == 1:
+        return yes_rows[0]
+    if not yes_rows and len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
 def _pair_normal_event_sides(poly: Iterable[NormalizedSide], kalshi: Iterable[NormalizedSide]) -> tuple[list[Pair], int]:
-    """Fail closed when either venue has multiple mappings for one proposition."""
+    """Pair exact normal-event propositions after canonical binary-mirror collapse."""
     pidx: dict[str, list[NormalizedSide]] = {}
     kidx: dict[str, list[NormalizedSide]] = {}
     for row in poly:
@@ -103,11 +116,11 @@ def _pair_normal_event_sides(poly: Iterable[NormalizedSide], kalshi: Iterable[No
     pairs: list[Pair] = []
     ambiguous = 0
     for key in sorted(set(pidx) & set(kidx)):
-        prows, krows = pidx[key], kidx[key]
-        if len(prows) != 1 or len(krows) != 1:
+        p = _canonical_side(pidx[key])
+        k = _canonical_side(kidx[key])
+        if p is None or k is None:
             ambiguous += 1
             continue
-        p, k = prows[0], krows[0]
         skew = abs(p.identity.event.scheduled_start_ms - k.identity.event.scheduled_start_ms)
         if skew > MAX_START_SKEW_MS:
             continue
@@ -129,13 +142,11 @@ def _q1_economics(
         return None
 
     candidates: list[dict[str, Any]] = []
-    # Buy the canonical proposition on Polymarket, its complement on Kalshi.
     p_fee = polymarket_taker_fee(1, p.prop_ask, poly_rate)
     k_fee = kalshi_taker_fee(1, k.opp_ask, kalshi_rate)
-    profit = D("1") - p.prop_ask - k.opp_ask - p_fee - k_fee
     candidates.append({
         "direction": "POLY_PROP_KALSHI_OPP",
-        "profit": profit,
+        "profit": D("1") - p.prop_ask - k.opp_ask - p_fee - k_fee,
         "q1_depth": min(p.prop_depth, k.opp_depth),
         "poly_price": p.prop_ask,
         "kalshi_price": k.opp_ask,
@@ -143,13 +154,11 @@ def _q1_economics(
         "kalshi_fee": k_fee,
     })
 
-    # Buy the canonical proposition on Kalshi, its complement on Polymarket.
     k_fee = kalshi_taker_fee(1, k.prop_ask, kalshi_rate)
     p_fee = polymarket_taker_fee(1, p.opp_ask, poly_rate)
-    profit = D("1") - k.prop_ask - p.opp_ask - k_fee - p_fee
     candidates.append({
         "direction": "KALSHI_PROP_POLY_OPP",
-        "profit": profit,
+        "profit": D("1") - k.prop_ask - p.opp_ask - k_fee - p_fee,
         "q1_depth": min(k.prop_depth, p.opp_depth),
         "poly_price": p.opp_ask,
         "kalshi_price": k.prop_ask,
@@ -183,7 +192,9 @@ async def _fetch_inputs(http: httpx.AsyncClient) -> tuple[list[dict[str, Any]], 
         params={"limit": 1000, "active": "true", "closed": "false"},
     )
     poly_resp.raise_for_status()
-    poly_events = [row for row in (poly_resp.json().get("events") or []) if isinstance(row, dict)]
+    poly_body = poly_resp.json()
+    poly_rows = poly_body.get("events") or [] if isinstance(poly_body, Mapping) else poly_body
+    poly_events = [row for row in poly_rows if isinstance(row, dict)]
 
     kalshi_events: list[dict[str, Any]] = []
     nested_quotes: dict[str, Any] = {}
@@ -194,7 +205,8 @@ async def _fetch_inputs(http: httpx.AsyncClient) -> tuple[list[dict[str, Any]], 
             params={"limit": 200, "status": "open", "series_ticker": series, "with_nested_markets": "true"},
         )
         response.raise_for_status()
-        rows = [row for row in (response.json().get("events") or []) if isinstance(row, dict)]
+        body = response.json()
+        rows = [row for row in (body.get("events") or []) if isinstance(row, dict)] if isinstance(body, Mapping) else []
         series_counts[series] = len(rows)
         kalshi_events.extend(rows)
         received_ms = int(time.time() * 1000)
@@ -257,8 +269,6 @@ async def run_once() -> dict[str, Any]:
             **econ,
         })
 
-    # Complementary YES/NO representations are not independent capacity. Keep
-    # the best economics per game/family/absolute-line group for headline bins.
     best_by_group: dict[str, dict[str, Any]] = {}
     for row in rows:
         current = best_by_group.get(row["group_key"])
