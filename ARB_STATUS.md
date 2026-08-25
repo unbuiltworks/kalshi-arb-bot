@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-25 13:38 UTC / 2026-08-25 09:38 ET**
+Last verified: **2026-08-25 13:48 UTC / 2026-08-25 09:48 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
@@ -70,7 +70,9 @@ Fresh G<->K heartbeats during this run show roughly **28,900 comparable evaluati
 
 The combined evidence strongly favors **concurrent websocket connection/handshake policy or account-level WS connection contention**, not weak account tier, general Kalshi REST exhaustion, or a market-data outage. Do not lower the K<->P backoff and do not stop unrelated live/read-only Kalshi services solely to improve census telemetry.
 
-**Highest-value engineering direction:** eliminate the redundant K<->P Kalshi handshake by consuming a **shared/multiplexed already-established Kalshi market-data stream**. Implement this read-only and isolated first; do not disturb or mutate the working G<->K collector merely to make the census pass.
+A read-only fallback has now been prepared as **draft PR #142** on isolated branch `feature/kp-kalshi-rest-census-fallback`. It keeps websocket as the default but can explicitly switch the K<->P book store to authenticated **batched Kalshi REST snapshots**, up to 100 tickers per request, with a hard **>=100ms interval floor**, bounded retry/backoff, and no order transport. At the current 42 matched tickers this is one batched read per sampling interval, conservatively below the verified 300 read-refill account limit. The intent is to measure a conservative >=100ms realistic-capture lower bound without disturbing the healthy G<->K websocket. **Do not merge/deploy until CI is green and the read-only isolation is verified.**
+
+A true shared/multiplexed websocket remains architecturally preferable if it can be implemented without touching the healthy consumer, but the bounded REST fallback is the shortest safe path to prevent the instrumentation deadline from expiring solely because Kalshi refuses a second websocket handshake.
 
 ### Gemini<->Kalshi sports — `sports-gk-autonomous-supervisor`
 
@@ -89,8 +91,8 @@ Fresh authoritative central-ledger query confirms **0 weather-tagged realized tr
 ## Highest-value next actions
 
 1. **Do not start the K<->P 72-hour clock yet.** The lane has 42 exact counterparts and healthy Polymarket books but zero usable Kalshi websocket books; that is unmeasurable, not zero-edge.
-2. Build/test a **read-only shared or multiplexed Kalshi market-data path** so K<->P can consume an already-established account stream without creating another repeatedly rejected websocket handshake. Do not disrupt the healthy G<->K stream to test it.
-3. Once both K<->P books are healthy, persist >=1c/>=2c/>=3c after-fee bins, q1 depth, quote skew, OPEN/CLOSE lifetimes, and >=80ms realistic-capture capacity.
+2. Get **draft PR #142** through CI and verify its bounded batched-REST path is read-only, account-budget-safe, and produces conservative ~100ms Kalshi snapshots without disturbing G<->K. Do not deploy it blind.
+3. Once both K<->P books are healthy, persist >=1c/>=2c/>=3c after-fee bins, q1 depth, quote skew, OPEN/CLOSE lifetimes, and >=80ms realistic-capture capacity; REST-sampled observations must be labeled with their sampling resolution rather than presented as websocket lifetimes.
 4. Before Wednesday, broaden event-driven K<->P to semantic-deduped MLB moneylines/spreads/totals plus strict rule-certified props. Participation-conditional/rule-mismatched rows remain excluded.
 5. Continue G<->K read-only census. Its current hot observations remain **non-deployable** until full lifecycle/rule fingerprint certification is satisfied.
 6. Preserve the fixed verdict thresholds/deadline. If K<->P remains unmeasurable after the single allowed +24h feed-quality extension, count it as **$0 deployable capacity** rather than extending research.
