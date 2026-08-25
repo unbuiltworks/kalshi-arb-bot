@@ -7,6 +7,9 @@ on:
     paths:
       - 'src/kalshi_mlb_sharp_ev_backtest.py'
       - '.github/workflows/kalshi-mlb-sharp-ev-backtest.yml'
+  pull_request:
+    branches:
+      - research/kalshi-mlb-sharp-ev
   workflow_dispatch:
     inputs:
       max_days:
