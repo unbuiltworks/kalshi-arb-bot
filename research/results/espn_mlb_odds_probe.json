@@ -1,0 +1,89 @@
+{
+  "date": "2026-07-09",
+  "event_count": 13,
+  "sample_events": [
+    {
+      "competition_id": "401816084",
+      "event_id": "401816084",
+      "name": "Atlanta Braves at Pittsburgh Pirates",
+      "odds_items": [
+        {
+          "away_favorite": false,
+          "away_moneyline": -110,
+          "details": "PIT -110",
+          "home_favorite": true,
+          "home_moneyline": -110,
+          "last_update": null,
+          "over_under": 10.0,
+          "provider_id": "100",
+          "provider_name": "DraftKings"
+        }
+      ],
+      "odds_status": 200,
+      "odds_top_keys": [
+        "count",
+        "items",
+        "pageCount",
+        "pageIndex",
+        "pageSize"
+      ],
+      "start": "2026-07-09T16:35Z"
+    },
+    {
+      "competition_id": "401816086",
+      "event_id": "401816086",
+      "name": "Kansas City Royals at New York Mets",
+      "odds_items": [
+        {
+          "away_favorite": false,
+          "away_moneyline": 124,
+          "details": "NYM -149",
+          "home_favorite": true,
+          "home_moneyline": -149,
+          "last_update": null,
+          "over_under": 9.0,
+          "provider_id": "100",
+          "provider_name": "DraftKings"
+        }
+      ],
+      "odds_status": 200,
+      "odds_top_keys": [
+        "count",
+        "items",
+        "pageCount",
+        "pageIndex",
+        "pageSize"
+      ],
+      "start": "2026-07-09T17:10Z"
+    },
+    {
+      "competition_id": "401816087",
+      "event_id": "401816087",
+      "name": "New York Yankees at Tampa Bay Rays",
+      "odds_items": [
+        {
+          "away_favorite": false,
+          "away_moneyline": 119,
+          "details": "TB -144",
+          "home_favorite": true,
+          "home_moneyline": -144,
+          "last_update": null,
+          "over_under": 7.5,
+          "provider_id": "100",
+          "provider_name": "DraftKings"
+        }
+      ],
+      "odds_status": 200,
+      "odds_top_keys": [
+        "count",
+        "items",
+        "pageCount",
+        "pageIndex",
+        "pageSize"
+      ],
+      "start": "2026-07-09T17:10Z"
+    }
+  ],
+  "scoreboard_status": 200,
+  "status": "ESPN_MLB_HISTORICAL_ODDS_PROBE_READ_ONLY"
+}
