@@ -1,198 +1,197 @@
 # ARB Control Plane
 
-Last verified: 2026-08-24 23:22 UTC
+Last verified: 2026-08-25 00:43 UTC / 2026-08-24 20:43 ET
 
-This is the durable ARB handoff. **Production state wins over chat history.** Before changing any workstream, verify current Railway deployment/runtime and GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the **$428/day realized-net objective**. A candidate, modeled edge, submitted order, fill, hedge, reservation, or unsettled locked pair is not realized profit.
+This is the durable ARB handoff. **Production state wins over chat history.** Before changing any workstream, verify current Railway deployment/runtime and GitHub commit. Only settled/reconciled **REALIZED** P&L counts toward the **$428/day realized-net objective**. A candidate, modeled edge, reservation, submitted order, fill, hedge, or unsettled locked pair is not realized profit.
 
-Historical control-plane detail through 2026-08-23 remains in `ARB_STATUS_HISTORY_2026-08-23.md`.
+Historical detail through earlier checkpoints remains in git history and `ARB_STATUS_HISTORY_2026-08-23.md`.
 
-## LATEST PRODUCTION CHECKPOINT — 2026-08-24 23:22 UTC / ~7:22 PM ET
-
-### Scoreboard
+## CURRENT SCOREBOARD
 
 `QUALIFIED -> ORDER_SUBMITTED -> FILLED -> HEDGED -> SETTLED -> REALIZED`
 
-- **Polymarket MLB same-venue:** live participation is now active. Latest clean production cycle saw **420 participation-ready pairs and 167 near-touch/priced candidates**. The recovered executor is cycling q=1 sticky maker attempts. Multiple attempts have aged through their sticky lifecycle and advanced to the next candidate with no confirmed fill yet. **0 confirmed new fills, 0 hedges, 0 settlements, $0 new realized.**
-- **Same-Gemini crypto:** executor is live again and continuously scans the complete safe q1 pair universe. Latest scans have **0 >=3c immediate FOK/FOK candidates**; current whole-contract maker candidates have no qualifying recent exact flow and remain suppressed. **0 current fills, $0 new realized.**
-- **Gemini<->Kalshi / general sports supervisor:** live and funded. Current three-venue full-game scan showed **190 priced quotes / 0 positive one-contract locks**. NFL G<->K scan showed **607 priced exact counterpart keys / 0 positive q1 locks**. No current-epoch new realized P&L.
-- Historical reconciled Gemini<->Kalshi sports proof remains **7 settled-compatible trades, approximately +$0.2679 realized net total**. This is historical evidence only, not new P&L from tonight.
+- **New realized P&L from tonight's repair work: $0.**
+- Historical proof remains approximately **+$0.2679 realized net across seven settled-compatible Gemini<->Kalshi sports trades**. Do not count that as new P&L.
+- Caleb Durbin incident: Gemini original q1 leg filled; Kalshi hedge did not. It is still **ONE_LEG_FILLED / unsettled** and therefore is not realized profit.
+- Polymarket MLB has submitted real q1 maker orders and received real exchange order ids, but the latest confirmed attempts were **zero-fill** and their reservations were released.
+- Same-Gemini crypto currently has **0 >=3c immediate FOK/FOK candidates** and no qualifying flow-active whole-contract maker candidate.
 
-Do not combine modeled, shadow, reserved, submitted, filled-but-unsettled, or unconfirmed values with realized P&L.
+## WHY TWO WEEKS PRODUCED ALMOST NO REALIZED PROFIT
 
-## 7 PM MLB PRODUCTION INCIDENT — ROOT CAUSE FOUND AND FIXED
+This was not simply a lack of scanner candidates. Production repeatedly found candidates, but the execution/control plane had defects that converted recoverable incidents into dead time:
 
-The earlier pregame explanation became stale once the first MLB games went live. At approximately **6:42 PM ET**, production correctly transitioned from `GAME_NOT_LIVE` to live participation and found:
-- 12 participation-certified pairs;
-- 2 near-touch candidates;
-- a real Nick Sogard BOS-MIA hits ladder attempt.
+1. **One-leg G<->K incident could globally freeze unrelated sports lanes.**
+   - Caleb Durbin q1 Gemini NO filled while Kalshi rejected/did not fill.
+   - The old sports guard treated any unresolved sports exposure as a global mutation halt, so that known G<->K incident also disabled independent Polymarket trading.
 
-The attempt reserved $1, then hit `MLB_V2_ATTEMPT_ERROR_SCOPED_CANCEL` / `RuntimeError` and the sports executor hard-halted.
+2. **The settlement reconciler could never clear a one-leg incident.**
+   - Old reconciliation admitted only `AWAITING_SETTLEMENT` trades with `legs_filled == 2`.
+   - `ONE_LEG_FILLED` was outside the reconciliation queue entirely, so a one-leg incident could remain a permanent manual-review blocker.
 
-### Root cause 1: silent private Polymarket WS was treated as fatal
+3. **Polymarket runtime configuration drift overrode the intended maker lifecycle.**
+   - `railway.structural.json` starts `sports_poly_live_fill_conversion_hotfix_v2` even when the service-level dashboard command shows the verified supervisor.
+   - That wrapper hard-coded `STICKY_LIFECYCLE_SECONDS = 6 * 60 * 60`, producing a reported **21,600-second / six-hour** maker lifecycle.
+   - This could occupy the only live maker slot on a low-fill-probability quote for hours.
 
-The private Polymarket order WebSocket was connected/healthy but had not yet observed any private order updates. The outer verified wrapper re-raised a bootstrap `RuntimeError` when `stream.updates <= 0` instead of preserving the known order id and using authoritative REST recovery.
+4. **Maker admission was too permissive after near-touch rows disappeared.**
+   - Ranking preferred proximity, but a far-away mathematical frontier was still eligible when no close quote existed.
+   - Production therefore attempted mathematically safe but practically unfillable quotes, including a live candidate 17c from the ask.
 
-Fix now live:
-- private WS remains primary;
-- known order identity is preserved;
-- if WS bootstrap is silent/fails, that exact order degrades to paced authoritative REST state reads;
-- terminal ambiguity still hard-halts and retains reservation;
-- no ambiguous state is converted to assumed zero fill.
+5. **Earlier execution transport defects were real.**
+   - Polymarket private WS silence was incorrectly fatal before REST recovery was repaired.
+   - G<->K concurrent submission allowed Gemini to fill while Kalshi rejected.
+   - Old Gemini emergency flatten used an invalid prediction-market MARKET order.
+   - Multiple pre-order/read and restart/orphan handling issues caused apparently healthy Railway services to stop producing useful execution.
 
-### Authoritative zero-fill recovery
+The system therefore spent too much time behaving like a validation lab rather than a reliable execution machine.
 
-The 6:42 Nick Sogard reservation was not blindly released. Startup recovery checked:
-- exact maker/hedge slugs;
-- open account orders;
-- authenticated Polymarket portfolio trade activity after the reservation timestamp.
+## LIVE FIX — STRATEGY-SCOPED KNOWN-EXPOSURE QUARANTINE
 
-At **7:05:57 PM ET**, exchange evidence proved no open order and no post-reservation trade activity, so the reservation was released as confirmed zero fill.
-
-A later interrupted Nick Sogard attempt from the next build was also recovered the same way and confirmed zero fill before new order entry.
-
-### Root cause 2: slow/invisible pre-order path
-
-After WS recovery, production could reach hundreds of priced candidates but appeared frozen after pricing. Two hardening changes are now live:
-
-1. **Bounded pre-mutation reads**
-   - account balance read has a 12s safe timeout;
-   - persistence recheck has a 12s safe timeout;
-   - stage telemetry now logs `BALANCE_READ_START/OK/TIMEOUT` and `PERSISTENCE_START/DONE/TIMEOUT`;
-   - timeouts before reservation safely skip rather than freezing the process.
-
-2. **Fast authoritative startup orphan cleanup**
-   - old cleanup batched ~1,600+ revenue slugs into roughly 48-68 authenticated `orders.list` calls;
-   - current cleanup uses one unfiltered authenticated `orders.list()` call to obtain all account open orders, filters client-side to the revenue universe, and makes one verification read only if it canceled something;
-   - latest startup: **1,683 revenue slugs, 0 account open orders, 1 authenticated list call, 0 unresolved**.
-
-Sports live branch current source commit: `6817a82eef4202c3463b74f2763c368f3fed4c86`.
-Sports verified production deployment: `1a4a32bc-77ea-4c62-8949-6978f83024cd` — **SUCCESS**.
-
-### Current live MLB maker activity
-
-Latest clean cycle at ~7:18 PM ET:
-- strict markets: **1,683**;
-- strict pairs: **1,695**;
-- participation-ready pairs: **420**;
-- games with live/final boxscore: **4**;
-- near-touch/priced candidates: **167**;
-- quote requests: 416;
-- successful books: 246;
-- empty books: 170;
-- balance read: OK;
-- startup account cleanup: clean.
-
-Observed candidate progression after the fixes:
-- Michael Moniak COL-WSH H+R+RBI ladder passed persistence and entered a sticky maker lifecycle;
-- Wil Abreu BOS-MIA total-bases ladder passed persistence and spent ~70s in the execution lifecycle before advancing;
-- Framber Valdez TB-DET strikeout ladder passed persistence and spent ~60s in the lifecycle before advancing;
-- Kyle Stowers BOS-MIA H+R+RBI ladder was the next persistent candidate at the latest checkpoint.
-
-The previous `GAME_NOT_LIVE` condition is **not** the current blocker. The current bottleneck is maker fill conversion / available contra flow at the safe >=3c frontier.
-
-## POLYMARKET MLB SAME-VENUE MAKER -> FOK
-
-Primary Railway service:
+Polymarket service:
 - service: `sports-kp-live-executor` (`bdcd4d42-bfcf-469c-9bd7-46b26acd8b87`)
 - branch: `feature/sports-kp-live-executor-impl`
-- current source commit: `6817a82eef4202c3463b74f2763c368f3fed4c86`
-- current verified deployment: `1a4a32bc-77ea-4c62-8949-6978f83024cd` — **SUCCESS**
-- q=1
-- minimum modeled locked profit: **$0.03**
-- live rule-risk loss ceiling: **$5**, fixed; never silently reset/increase it.
-- restart policy: bounded `ON_FAILURE`; intentional fail-closed returns still remain halted until the underlying state is safe.
+- current source commit: `670ff1788c3b782d3cdd49c3d73ff608a42917ae`
+- current deployment: `47829119-3b6c-48d2-bc64-c1ce6b6d82d4` — **SUCCESS**
 
-Capabilities preserved:
-- all strict same-player/stat threshold combinations within a ladder;
-- first safe post-only bid / maximum-safe maker frontier;
-- exact current Polymarket US fee math;
-- near-touch is ranking, not admission;
-- sticky maker while hedge economics remain valid;
-- confirmed q1 maker fill -> q1 FOK sibling hedge;
-- durable $1 reservation before mutation;
-- private WS primary + bounded REST recovery;
-- partial-fill / hedge-failure flatten + hard halt;
-- first reconciled two-leg live canary stops for review;
-- settlement required before realized P&L.
+New unresolved-exposure policy:
+- unknown/ambiguous sports mutation => **global halt**;
+- Polymarket's own unresolved mutation => **Polymarket halt**;
+- exact known G<->K `ONE_LEG_FILLED`, `legs_filled=1`, known capital => **G<->K quarantine only**;
+- the known one-leg risk still consumes the shared **$5** ceiling; it is not forgiven or released;
+- unknown other unresolved states remain fail-closed.
 
-Participation remains mandatory:
-- game LIVE;
-- hitter starter + >=1 plate appearance;
-- strikeout pitcher confirmed starting pitcher + >=1 batter faced;
-- exact game/player/stat/threshold identity;
-- markets remain `LIVE_RULE_RISK_LFMP_SUSPENSION_NOT_GUARANTEED_ARBITRAGE`.
+For Caleb, unresolved risk is conservatively charged at about **$0.97**, leaving about **$4.03** of the shared $5 ceiling before any new Polymarket q1 reservation.
+
+Verified production evidence:
+- Polymarket startup now reports `MLB_STARTUP_RECOVERY_CLEAR` even while Caleb remains quarantined in G<->K.
+- Caleb no longer globally freezes independent Polymarket MLB execution.
+
+## LIVE FIX — ONE-LEG SETTLEMENT RECONCILIATION
+
+Settlement service:
+- service: `sports-trade-settlement-reconciler` (`43c52248-e3cc-433e-8d5d-e6a0d70e3701`)
+- branch: `feature/sports-trade-settlement-reconciler`
+- source commit: `98e96317f836a514823b43572f3bf556c33ec2ab`
+- deployment: `b61628aa-9dd3-40e0-b783-5ddd8dc1923e` — **SUCCESS**
+- targeted predeploy: **17 passed**.
+
+New behavior:
+- original two-leg settlement path is preserved;
+- exact `ONE_LEG_FILLED`, `legs_filled=1` incidents now enter reconciliation;
+- only the actually filled venue's authoritative resolution is needed for a one-leg settlement;
+- successful flatten evidence prevents accidental double-realization;
+- P&L uses actual filled capital, recorded fees and actual settlement payout — never modeled edge;
+- terminal status becomes `SETTLED_ONE_LEG` only after authoritative resolution.
+
+Verified production log:
+- `open_reconcilable=1`
+- `one_leg_open=1`
+- Caleb currently: `SPORTS_ONE_LEG_SETTLEMENT_PENDING ... venue=gemini gemini=None`
+
+Gemini has not yet published a definitive resolution, so Caleb remains unsettled and unrealized.
+
+## LIVE FIX — POLYMARKET FILL-CONVERSION BOUNDS
+
+The hidden six-hour lifecycle is removed in current source.
+
+Current production behavior:
+- maximum maker lifecycle: **180 seconds**;
+- live maker admission requires the safe post-only quote to be **within 2 reported ticks of the ask**;
+- distance-to-ask ranks before activity; activity only improves ordering among similarly fillable prices;
+- exact after-fee floor remains **>= $0.03**;
+- q=1 remains fixed;
+- participation/rule certification remains mandatory;
+- one maker at a time;
+- hedge book/economics continue to be rechecked while the maker rests;
+- account-authoritative startup cleanup remains mandatory.
+
+Rollout evidence at ~20:42 ET:
+- startup saw **1 real open far-away Polymarket order** from the old six-hour process;
+- canceled: 1;
+- unresolved: 0;
+- partial flattened: 0;
+- partial unresolved: 0;
+- exact reservation was released as confirmed zero-fill;
+- verification read then found **0 account open orders**;
+- process reached `LIVE_LOOP_READY`.
+
+First bounded scan:
+- strict MLB markets: **1,737**;
+- strict MLB pairs: **1,749**;
+- participation-ready pairs: **621**;
+- raw safe maker-frontier rows after book availability: **59**;
+- rows within <=2 ticks while preserving >=3c: **0**;
+- far-gap rows suppressed: **59**;
+- order entry for that scan: **none**.
+
+This is the correct current negative result: there are mathematical maker frontiers, but none are presently close enough to the ask to be a credible fill-conversion attempt at the >=3c floor.
+
+## LAST CONFIRMED POLYMARKET ORDER LIFECYCLE
+
+Keibert Ruiz COL-WSH H+R+RBI ladder:
+- participation certified;
+- maker quote 49c;
+- hedge ask 43c;
+- modeled locked profit at entry: **7c**;
+- real exchange maker order id: `C2WHM71BEDJR`;
+- terminal: **MAKER_CANCELED_EDGE_GONE** after hedge book disappeared;
+- confirmed maker quantity: zero;
+- capital reservation released;
+- no hedge, no settlement, no realized P&L.
+
+The campaign continued after this terminal result instead of hard-halting on harmless skips/zero fills.
+
+## GEMINI <-> KALSHI SPORTS
+
+Service:
+- `sports-gk-autonomous-supervisor` (`0238eada-ced4-4927-8150-0ccce2e1a0a4`)
+- branch: `feature/sports-gk-autonomous-supervisor`
+- current commit: `94ee5da4ed98dd13c237879224173bebaabbcffd`
+- deployment: `68a3975a-9a05-45e7-bf33-315288bec2ae` — **SUCCESS**.
+
+Transport hardening after Caleb:
+- exact Kalshi market/tradeability preflight;
+- **Kalshi q1 FOK first**;
+- Gemini may submit only after confirmed Kalshi fill;
+- fresh Gemini revalidation before second mutation;
+- Gemini emergency reduction uses valid LIMIT+FOK, never MARKET;
+- exact position/flatten reconciliation is fail-closed;
+- cumulative live risk ceiling restored/pinned to **$5** after a stray source-controlled $50 value was discovered.
+
+G<->K new mutation remains quarantined by the unresolved Caleb incident. Do not rearm that strategy until Caleb is authoritatively settled or safely closed.
+
+Current capital telemetry continues to refresh successfully; last observed Gemini available was about **$61.80**, Kalshi about **$3,405.71**, with the existing $5 free buffer policy.
 
 ## SAME-GEMINI CRYPTO THRESHOLD LADDERS
 
-Primary Railway service:
-- service: `crypto-maker-live-probe-q1` (`6e0dffb2-8309-47cf-8196-9106eda284d8`)
-- branch: `feature/maker-live-probe-q1`
-- current deployment: `199b409e-dd2d-49e1-a7d0-184e5b92e7ad` — **SUCCESS**
-- start: `python -m src.gemini_same_venue_crypto_execution_v6`
-- q=1
-- locked after-fee floor: **>= $0.03 per contract**
-- restart policy changed from `NEVER` to bounded `ON_FAILURE` (max 10) after a transport/library crash left the service dead.
+Service:
+- `crypto-maker-live-probe-q1` (`6e0dffb2-8309-47cf-8196-9106eda284d8`)
+- q=1, >=3c after-fee floor.
 
-Do **not** infer that the underlying WebSocket masking `TypeError` is fully root-caused yet. Availability is restored; account gate still reconciles before any mutation, and the failure has not recurred in the current deployment.
+Current verified condition:
+- complete safe q1 monotone pair scans continue;
+- roughly 2,400+ q1 pairs are checked per cycle;
+- current **>=3c FOK/FOK candidates = 0**;
+- whole-contract maker rows lacking qualifying exact recent flow remain suppressed;
+- fractional resting-maker path remains closed because worst-case 0.01 partial fills plus cent-rounded fees destroy the >=3c/contract guarantee.
 
-Latest startup/current state:
-- targeted tests: **28 passed**;
-- account gate: active orders 0, recent filled maker orphans 0, orphan makers canceled 0;
-- startup unresolved exposure: none;
-- strict contracts: ~254;
-- fractional 0.01-grid maker contracts excluded: 209;
-- current books healthy: 254/254;
-- monotone q1 pair universe: about 2,430;
-- current >=3c FOK/FOK candidates: **0**;
-- robust whole-contract maker candidates with qualifying recent exact flow: **0**;
-- dead/no-flow candidates remain suppressed.
-
-Fractional resting-maker path remains closed: production worst-partial-fill census found **0 safe fractional maker directions** at the >=3c/contract floor because 0.01 partial fills plus cent-rounded fees destroy the guarantee. Fractional q1 contracts remain eligible only for immediate all-or-none FOK/FOK execution.
-
-Old Gemini<->Kalshi 15-minute basis lane remains parked because settlement-index basis risk is not guaranteed arbitrage.
-
-## GEMINI <-> KALSHI / GENERAL SPORTS SUPERVISOR
-
-Service: `sports-gk-autonomous-supervisor` (`0238eada-ced4-4927-8150-0ccce2e1a0a4`).
-
-Current observed capital snapshot:
-- Gemini: about **$62.24**;
-- Kalshi: about **$3,405.71**;
-- free buffer: $5.
-
-Current scans around 7:21 PM ET:
-- three-venue MLB/full-game: 99 normalized counterpart keys, 190 priced quotes, **0 one-contract positive locks**;
-- NFL Gemini<->Kalshi: ~1,082 exact counterpart keys, 607 priced q1 keys, **0 positive q1 locks / 0 >=3c locks**.
-
-Do not weaken rule fingerprints or quote-skew constraints to manufacture trades.
-
-Historical reconciled evidence: seven compatible G<->K sports trades total approximately **+$0.2679 realized net**.
-
-## OTHER LANES / SAFETY
-
-### FanDuel / sportsbook
-
-Prior apparent hundreds of sportsbook rows were contaminated by cross-game matching. Current physical-event matching requires scheduled starts within the approved window. Do not reuse the old false-positive count as opportunity supply.
-
-### Crypto basis
-
-Do not revive the Gemini<->Kalshi 15-minute basis lane as guaranteed arbitrage. Settlement-index mismatch created directional basis risk and a prior reconciled one-leg loss.
-
-### Weather / economic events
-
-Do not call modeled EV or one-sided rows arbitrage. Execution requires settlement/rule/fee certification and complementary executable legs.
+Do not force orders into dead books and do not revive the old Gemini<->Kalshi 15-minute basis lane.
 
 ## OPERATING PRIORITY FROM THIS CHECKPOINT
 
-1. **Do not revisit the stale “games have not started” diagnosis. MLB participation is live and the Polymarket executor is actively cycling candidates.**
-2. Measure the now-live Polymarket maker funnel as: persistent candidate -> reservation -> maker submitted -> maker fill -> FOK hedge -> settlement. The immediate optimization target is **fill conversion**, not scanner count.
-3. Add/retain explicit maker-order-id and terminal-attempt telemetry so submitted-order counts never have to be inferred from elapsed sticky time.
-4. Rank safe candidates by real trade flow, recent exact volume, queue position, spread/proximity and hedge stability. Do not force makers into empty books merely to create order count.
-5. Keep same-Gemini v6 continuously scanning the complete safe FOK universe and flow-qualified whole-contract makers; its current absence of trades is economic, not scanner coverage.
-6. Keep the G<->K supervisor scanning live MLB and pregame/live football, but do not execute non-certified normal-event matches.
-7. Maintain q1 until the complete maker fill -> hedge -> settlement -> realized lifecycle is proven cleanly. Scale only from measured fill conversion and hedge reliability.
-8. Scoreboard remains authoritative: `QUALIFIED -> ORDER_SUBMITTED -> FILLED -> HEDGED -> SETTLED -> REALIZED`.
+1. **Execution reliability before more scanner breadth.** A qualified row matters only if it can become a confirmed order, fill, hedge and settlement.
+2. Polymarket may submit only genuinely fillable <=2-tick q1 makers at >=3c. Do not occupy the maker slot with far-away mathematical frontiers.
+3. Keep one-leg settlement polling Caleb until Gemini publishes a definitive result. Do not count it as realized early.
+4. Keep G<->K quarantined until Caleb settles. The hardened Kalshi-first transport is the only allowed next G<->K mutation path.
+5. Same-Gemini crypto remains continuously armed for immediate >=3c FOK/FOK; no order merely for activity.
+6. Maintain the shared **$5** risk/loss ceiling. Never silently reset or increase it.
+7. Do not lower the 3c floor, bypass settlement/rule/participation certification, release ambiguous reservations, count unsettled/modelled P&L as realized, or mix this infrastructure with the unrelated SOL executor.
+8. Every future checkpoint must report the funnel explicitly: `QUALIFIED -> SUBMITTED -> FILLED -> HEDGED -> SETTLED -> REALIZED`.
 
-Do not lower the 3c after-fee floor, weaken settlement/rule certification, bypass participation, silently increase/reset the $5 Polymarket MLB rule-risk ceiling, release ambiguous reservations, count shadow/locked/unsettled P&L as realized, or mix this infrastructure with the unrelated SOL executor.
+## BOTTOM LINE
 
-Never store credentials, signing material, API keys, or other secrets here.
+The two-week problem was a combination of **real execution/control-plane bugs plus poor fill conversion**, not simply an absence of theoretical candidates. The global one-leg freeze, missing one-leg reconciliation, six-hour hidden maker lifecycle, and far-away maker admission have now been corrected in production.
+
+At the latest verified instant, the remaining blocker is **executable opportunity quality**: Polymarket has 59 mathematically safe frontier rows but 0 within two ticks at the >=3c floor; same-Gemini crypto has 0 >=3c immediate FOK/FOK rows; G<->K is correctly quarantined until Caleb settles.
+
+That means the current $0 new realized result must be reported as $0. The next milestone is not another candidate count; it is the first clean `SUBMITTED -> FILLED -> HEDGED -> SETTLED -> REALIZED` lifecycle under the corrected production architecture.
