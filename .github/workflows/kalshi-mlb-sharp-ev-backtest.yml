@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+      PARLAY_API_KEY: ${{ secrets.PARLAY_API_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,7 +32,7 @@ jobs:
         run: |
           mkdir -p research/results
           rm -f research/results/kalshi_mlb_sharp_ev_backtest.json
-          if [ -z "$THE_ODDS_API_KEY" ]; then
+          if [ -z "$PARLAY_API_KEY" ]; then
             credential=false
             code=2
           else
@@ -42,7 +42,7 @@ jobs:
             code=$?
             set -e
           fi
-          printf '{"workflow_started":true,"credential_present":%s,"diagnostic_exit_code":%s,"source_sha":"%s"}\n' "$credential" "$code" "$GITHUB_SHA" > research/results/kalshi_mlb_sharp_ev_status.json
+          printf '{"workflow_started":true,"provider":"parlayapi","credential_present":%s,"diagnostic_exit_code":%s,"source_sha":"%s"}\n' "$credential" "$code" "$GITHUB_SHA" > research/results/kalshi_mlb_sharp_ev_status.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
