@@ -15,6 +15,18 @@ def test_selected_depth_uses_exact_plan_side() -> None:
     assert _selected_depth({"kalshi_side": "NO"}, quote, venue="kalshi") == 11.0
 
 
+def test_selected_depth_maps_total_labels_to_binary_contract_sides() -> None:
+    quote = SimpleNamespace(
+        yes_depth=7,
+        no_depth=11,
+    )
+
+    assert _selected_depth({"poly_side": "OVER"}, quote, venue="poly") == 7.0
+    assert _selected_depth({"poly_side": "UNDER"}, quote, venue="poly") == 11.0
+    assert _selected_depth({"kalshi_side": "OVER"}, quote, venue="kalshi") == 7.0
+    assert _selected_depth({"kalshi_side": "UNDER"}, quote, venue="kalshi") == 11.0
+
+
 def test_selected_depth_fails_closed_for_missing_side() -> None:
     quote = SimpleNamespace(yes_depth=7, no_depth=11)
     assert _selected_depth({}, quote, venue="poly") == 0.0
