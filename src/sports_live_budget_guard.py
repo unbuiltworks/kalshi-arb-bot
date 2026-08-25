@@ -30,11 +30,10 @@ COMMAND_CENTER = os.getenv(
 ).rstrip("/")
 LEDGER_TOKEN = os.getenv("LEDGER_INGEST_TOKEN", "").strip()
 
-# Explicit source-controlled live growth campaign ceiling authorized 2026-08-23.
-# This intentionally supersedes the older Railway-only $5 setting so the bounded
-# campaign can progress without weakening any price, freshness, settlement, fill,
-# duplicate-exposure, capital-reservation, or reconciliation gate.
-CUMULATIVE_BUDGET = D("50")
+# Hard cumulative live-probe risk ceiling. This is intentionally source-controlled
+# so a Railway restart or stale environment variable cannot silently increase it.
+# Do not raise/reset this value without explicit user authorization.
+CUMULATIVE_BUDGET = D("5")
 
 
 class BudgetExhausted(RuntimeError):
