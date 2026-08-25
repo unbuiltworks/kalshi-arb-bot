@@ -77,14 +77,14 @@ def _num(value: Any, default: float = 0.0) -> float:
 def _selected_depth(row: dict[str, Any], quote: Any, *, venue: str) -> float:
     """Return executable top-of-book depth for the exact side selected by plan.
 
-    ShadowPlan.as_dict() intentionally carries prices/sides but not book depth,
-    so decision telemetry must read depth from the already-loaded quote rather
-    than nonexistent serialized plan fields.
+    ShadowPlan uses semantic sports-total labels (OVER/UNDER), while the quote
+    object uses binary-contract labels (YES/NO). For these certified total
+    markets, OVER is the YES contract and UNDER is the NO contract.
     """
     side = str(row.get(f"{venue}_side") or "").upper()
-    if side == "YES":
+    if side in {"YES", "OVER"}:
         return _num(getattr(quote, "yes_depth", 0.0))
-    if side == "NO":
+    if side in {"NO", "UNDER"}:
         return _num(getattr(quote, "no_depth", 0.0))
     return 0.0
 
