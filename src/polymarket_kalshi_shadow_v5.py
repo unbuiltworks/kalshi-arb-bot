@@ -167,7 +167,7 @@ async def _evaluate(
     calc_start_ns = time.perf_counter_ns()
     now_ms = int(time.time() * 1000)
     pq = poly.quote(match.poly.slug, max_age_ms=max_quote_age_ms)
-    kq = kalshi.quote(match.kalshi.ticker, max_age_ms=max_quote_age_ms)
+    kq = await kalshi.quote(match.kalshi.ticker, max_age_ms=max_quote_age_ms)
     poly_age = _safe_age(now_ms, pq.received_ms) if pq is not None else None
     kalshi_age = _safe_age(now_ms, kq.received_ms) if kq is not None else None
     cross_skew = abs(pq.received_ms - kq.received_ms) if pq is not None and kq is not None else None
