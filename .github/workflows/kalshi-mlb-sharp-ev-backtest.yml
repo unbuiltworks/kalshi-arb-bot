@@ -9,11 +9,6 @@ on:
       - 'src/kalshi_mlb_sharp_ev_backtest_runner.py'
       - '.github/workflows/kalshi-mlb-sharp-ev-backtest.yml'
   workflow_dispatch:
-    inputs:
-      max_days:
-        description: 'Diagnostic day limit; 0 means full run'
-        required: false
-        default: '1'
 
 permissions:
   contents: write
@@ -32,40 +27,41 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
-      - name: Verify historical-odds credential is present without exposing it
-        shell: bash
-        run: |
-          if [ -z "$THE_ODDS_API_KEY" ]; then
-            echo 'THE_ODDS_API_SECRET_AVAILABLE=false'
-            exit 2
-          fi
-          echo 'THE_ODDS_API_SECRET_AVAILABLE=true'
-      - name: Run read-only diagnostic
+      - name: Run one-day read-only diagnostic and write safe status
         shell: bash
         run: |
           mkdir -p research/results
-          DAYS="${{ github.event.inputs.max_days || '1' }}"
-          if [ "$DAYS" = "0" ]; then
-            python -m src.kalshi_mlb_sharp_ev_backtest_runner --output research/results/kalshi_mlb_sharp_ev_backtest.json
+          rm -f research/results/kalshi_mlb_sharp_ev_backtest.json
+          if [ -z "$THE_ODDS_API_KEY" ]; then
+            credential=false
+            code=2
           else
-            python -m src.kalshi_mlb_sharp_ev_backtest_runner --max-days "$DAYS" --output research/results/kalshi_mlb_sharp_ev_backtest.json
+            credential=true
+            set +e
+            python -m src.kalshi_mlb_sharp_ev_backtest_runner --max-days 1 --output research/results/kalshi_mlb_sharp_ev_backtest.json
+            code=$?
+            set -e
           fi
+          printf '{"workflow_started":true,"credential_present":%s,"diagnostic_exit_code":%s,"source_sha":"%s"}\n' "$credential" "$code" "$GITHUB_SHA" > research/results/kalshi_mlb_sharp_ev_status.json
       - uses: actions/upload-artifact@v4
-        if: success()
+        if: always()
         with:
           name: kalshi-mlb-sharp-ev-backtest
-          path: research/results/kalshi_mlb_sharp_ev_backtest.json
+          path: research/results/
           if-no-files-found: error
-      - name: Persist result on research branch
-        if: success() && github.event_name == 'push'
+      - name: Persist safe diagnostic status/result on research branch
+        if: always()
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add research/results/kalshi_mlb_sharp_ev_backtest.json
+          git add research/results/kalshi_mlb_sharp_ev_status.json
+          if [ -f research/results/kalshi_mlb_sharp_ev_backtest.json ]; then
+            git add research/results/kalshi_mlb_sharp_ev_backtest.json
+          fi
           if git diff --cached --quiet; then
-            echo 'No result change to commit.'
+            echo 'No diagnostic status change to commit.'
             exit 0
           fi
-          git commit -m 'Research result: one-day Kalshi MLB sharp EV diagnostic [skip ci]'
+          git commit -m 'Research result: Kalshi MLB sharp EV diagnostic status [skip ci]'
           git push origin HEAD:research/kalshi-mlb-sharp-ev
