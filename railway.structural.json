@@ -4,7 +4,7 @@
     "preDeployCommand": [
       "python -m py_compile src/polymarket_kalshi_shadow_v5.py src/polymarket_kalshi_shadow_v4.py src/eventing_books.py"
     ],
-    "startCommand": "python -m src.polymarket_kalshi_shadow_v5 --max-quote-age-ms 100 --startup-timeout-s 120",
+    "startCommand": "python -m src.polymarket_kalshi_shadow_v5 --max-quote-age-ms 100 --startup-timeout-s 3600",
     "restartPolicyType": "ALWAYS"
   }
 }
