@@ -2,9 +2,9 @@
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
     "preDeployCommand": [
-      "python -m py_compile src/sports_poly_mlb_edge_census.py src/sports_poly_direct_mlb_campaign_q1.py src/sports_poly_mlb_participation_gate.py src/sports_poly_structural_monotone.py src/sports_poly_current_fees.py src/sports_kp_poly_relay_campaign_q1_v4.py"
+      "python -m py_compile src/polymarket_kalshi_shadow_v5.py src/polymarket_kalshi_shadow_v4.py src/eventing_books.py"
     ],
-    "startCommand": "python -m src.sports_poly_mlb_edge_census --interval-seconds 15",
+    "startCommand": "python -m src.polymarket_kalshi_shadow_v5 --max-quote-age-ms 100",
     "restartPolicyType": "ALWAYS"
   }
 }
