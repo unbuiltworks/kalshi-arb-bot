@@ -1,0 +1,54 @@
+name: Kalshi MLB Sharp EV Backtest
+
+on:
+  push:
+    branches:
+      - research/kalshi-mlb-sharp-ev
+    paths:
+      - 'src/kalshi_mlb_sharp_ev_backtest.py'
+      - '.github/workflows/kalshi-mlb-sharp-ev-backtest.yml'
+  workflow_dispatch:
+    inputs:
+      max_days:
+        description: 'Diagnostic day limit; 0 means full run'
+        required: false
+        default: '1'
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Verify historical-odds credential is present without exposing it
+        shell: bash
+        run: |
+          if [ -z "$THE_ODDS_API_KEY" ]; then
+            echo 'THE_ODDS_API_SECRET_AVAILABLE=false'
+            exit 2
+          fi
+          echo 'THE_ODDS_API_SECRET_AVAILABLE=true'
+      - name: Run read-only diagnostic
+        shell: bash
+        run: |
+          DAYS="${{ github.event.inputs.max_days || '1' }}"
+          if [ "$DAYS" = "0" ]; then
+            python -m src.kalshi_mlb_sharp_ev_backtest --output kalshi_mlb_sharp_ev_backtest.json
+          else
+            python -m src.kalshi_mlb_sharp_ev_backtest --max-days "$DAYS" --output kalshi_mlb_sharp_ev_backtest.json
+          fi
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: kalshi-mlb-sharp-ev-backtest
+          path: kalshi_mlb_sharp_ev_backtest.json
+          if-no-files-found: error
