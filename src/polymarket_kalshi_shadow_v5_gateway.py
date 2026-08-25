@@ -74,6 +74,21 @@ def _num(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _selected_depth(row: dict[str, Any], quote: Any, *, venue: str) -> float:
+    """Return executable top-of-book depth for the exact side selected by plan.
+
+    ShadowPlan.as_dict() intentionally carries prices/sides but not book depth,
+    so decision telemetry must read depth from the already-loaded quote rather
+    than nonexistent serialized plan fields.
+    """
+    side = str(row.get(f"{venue}_side") or "").upper()
+    if side == "YES":
+        return _num(getattr(quote, "yes_depth", 0.0))
+    if side == "NO":
+        return _num(getattr(quote, "no_depth", 0.0))
+    return 0.0
+
+
 async def _evaluate_with_decision_stats(
     trigger: Any,
     match: Any,
@@ -124,9 +139,12 @@ async def _evaluate_with_decision_stats(
         return
 
     row = plan.as_dict()
-    qty = max(1.0, _num(row.get("qty"), 1.0))
+    qty = max(1.0, _num(row.get("quantity"), 1.0))
     edge_per_contract = _num(row.get("profit")) / qty
-    q1_depth = min(_num(row.get("poly_depth")), _num(row.get("kalshi_depth")))
+    q1_depth = min(
+        _selected_depth(row, pq, venue="poly"),
+        _selected_depth(row, kq, venue="kalshi"),
+    )
     skew_ms = abs(int(pq.received_ms) - int(kq.received_ms))
     process_latency_ms = (time.perf_counter_ns() - started_ns) / 1_000_000.0
     semantic_key = f"{match.poly.slug}|{match.kalshi.ticker}|{row.get('direction', 'unknown')}"
