@@ -4,7 +4,7 @@ Fetches the member settlement track from 2026-03-01 onward, filters to KXHIGH
 markets before logging, and computes net settlement P&L from payout, cost basis and
 settlement fee fields. This audits account weather activity; if manual KXHIGH trades
 exist, strategy attribution must be checked separately before calling every row a
-bot trade.
+bot trade. Census history trigger: 2026-08-24 ET.
 """
 from __future__ import annotations
 
@@ -39,8 +39,6 @@ def _row_pnl(row: dict[str, Any]) -> D:
     elif result == "no":
         payout = no
     else:
-        # Void/scalar rows are not inferred from binary counts. Use the API revenue
-        # field as cents only for audit display and exclude from binary-net total.
         return D("NaN")
     return payout - cost - fee
 
