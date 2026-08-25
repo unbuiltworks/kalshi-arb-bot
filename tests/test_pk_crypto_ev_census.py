@@ -13,10 +13,10 @@ from src.pk_crypto_ev_census import (
 def _flat_tape(start: datetime, *, price: float = 100.0) -> SpotTape:
     tape = SpotTape()
     start_ms = int(start.timestamp() * 1000)
-    # 15m of 30-second observations: enough history for the volatility guard
-    # and complete enough coverage for the TWAP proxy.
-    for i in range(31):
-        tape.add(start_ms + i * 30_000, price)
+    # 15m of five-second observations: full TWAP-window coverage plus well over
+    # the minimum 20 observations inside the five-minute volatility lookback.
+    for i in range(181):
+        tape.add(start_ms + i * 5_000, price)
     return tape
 
 
