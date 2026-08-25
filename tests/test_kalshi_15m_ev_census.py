@@ -1,6 +1,8 @@
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
+
 from src.kalshi_15m_ev_census import (
     EpisodeTracker,
     _basis_bp,
@@ -9,7 +11,7 @@ from src.kalshi_15m_ev_census import (
 
 
 def test_basis_bp_is_official_minus_proxy_relative_basis():
-    assert _basis_bp(100.10, 100.00) == 10.0
+    assert _basis_bp(100.10, 100.00) == pytest.approx(10.0)
     assert _basis_bp(None, 100.0) is None
     assert _basis_bp(100.0, 0.0) is None
 
