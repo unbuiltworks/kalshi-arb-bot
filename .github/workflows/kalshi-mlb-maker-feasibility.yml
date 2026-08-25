@@ -1,0 +1,59 @@
+name: Kalshi MLB Maker Feasibility
+
+on:
+  push:
+    branches:
+      - research/kalshi-mlb-sharp-ev
+    paths:
+      - 'src/espn_mlb_maker_feasibility.py'
+      - 'src/espn_mlb_maker_feasibility_runner.py'
+      - '.github/workflows/kalshi-mlb-maker-feasibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  maker-feasibility-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research/kalshi-mlb-sharp-ev
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Run three-game-day maker feasibility diagnostic
+        shell: bash
+        run: |
+          mkdir -p research/results
+          rm -f research/results/espn_mlb_maker_feasibility.json
+          set +e
+          python -m src.espn_mlb_maker_feasibility_runner --max-days 3 --output research/results/espn_mlb_maker_feasibility.json
+          code=$?
+          set -e
+          printf '{"workflow_started":true,"provider":"espn_draftkings_close_maker_feasibility","diagnostic_exit_code":%s,"source_sha":"%s"}\n' "$code" "$GITHUB_SHA" > research/results/espn_mlb_maker_feasibility_status.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kalshi-mlb-maker-feasibility-diagnostic
+          path: research/results/
+          if-no-files-found: error
+      - name: Persist safe diagnostic result on research branch
+        if: always()
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add research/results/espn_mlb_maker_feasibility_status.json
+          if [ -f research/results/espn_mlb_maker_feasibility.json ]; then
+            git add research/results/espn_mlb_maker_feasibility.json
+          fi
+          if git diff --cached --quiet; then
+            echo 'No maker diagnostic change to commit.'
+            exit 0
+          fi
+          git commit -m 'Research result: MLB maker feasibility diagnostic [skip ci]'
+          git push origin HEAD:research/kalshi-mlb-sharp-ev
