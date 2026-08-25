@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 
 from src.sports_live_budget_guard import (
+    CUMULATIVE_BUDGET,
     budget_used_from_trades,
     duplicate_settlement_exposure,
 )
@@ -24,6 +25,10 @@ def _row(*, trade_id: str, status: str, capital: str, reserved: str, market: str
         "capital_filled": capital,
         "metadata": {"reserved_usd": reserved},
     }
+
+
+def test_cumulative_live_risk_ceiling_is_five_dollars():
+    assert CUMULATIVE_BUDGET == Decimal("5")
 
 
 def test_settled_filled_trade_permanently_blocks_duplicate_settlement_key():
