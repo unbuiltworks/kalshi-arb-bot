@@ -240,7 +240,7 @@ def test_model_chain_rejects_nested_verified_with_blockers():
     row = _clean_row(); row["model_sanity_audit"]["blockers"] = ["MODEL_DISAGREEMENT_RESEARCH_ONLY"]
     out = audit_weather_certification_dimensions(row)
     assert out["model_audit_chain_verified"] is False
-    assert "MODEL_SANITY_AUDIT_BLOCKED" in out["model_blockers"]
+    assert "MODEL_AUDIT_ENVELOPE_INVALID:model_sanity_audit" in out["model_blockers"]
     assert out["executable_shadow_prereqs_verified"] is False
 
 
@@ -248,28 +248,28 @@ def test_model_chain_rejects_calibration_model_mismatch():
     row = _clean_row(); row["model_sanity_audit"]["calibration_model_id"] = "other-model"
     out = audit_weather_certification_dimensions(row)
     assert out["model_audit_chain_verified"] is False
-    assert "CALIBRATION_MODEL_ID_MISMATCH" in out["model_blockers"]
+    assert "MODEL_SANITY_CALIBRATION_MODEL_ID_MISMATCH" in out["model_blockers"]
 
 
 def test_model_chain_rejects_calibration_lookahead():
     row = _clean_row(); row["model_sanity_audit"]["calibration_window_end"] = "2026-08-24T03:30:00+00:00"
     out = audit_weather_certification_dimensions(row)
     assert out["model_audit_chain_verified"] is False
-    assert "MODEL_CALIBRATION_LOOKAHEAD_DETECTED" in out["model_blockers"]
+    assert "MODEL_AUDIT_CALIBRATION_LOOKAHEAD_DETECTED" in out["model_blockers"]
 
 
 def test_model_chain_rejects_anchor_observed_after_quote():
     row = _clean_row(); row["model_sanity_audit"]["independent_anchor_observed_at"] = "2026-08-24T04:00:01+00:00"
     out = audit_weather_certification_dimensions(row)
     assert out["model_audit_chain_verified"] is False
-    assert "ANCHOR_OBSERVED_AFTER_QUOTE" in out["model_blockers"]
+    assert "MODEL_AUDIT_ANCHOR_LOOKAHEAD_DETECTED" in out["model_blockers"]
 
 
 def test_model_chain_rejects_anchor_provider_overlap():
     row = _clean_row(); row["model_provider_provenance_audit"]["independent_anchor_provider_family"] = "ECMWF"
     out = audit_weather_certification_dimensions(row)
     assert out["model_audit_chain_verified"] is False
-    assert "ANCHOR_PROVIDER_OVERLAPS_MODEL_INPUTS" in out["model_blockers"]
+    assert "ANCHOR_PROVIDER_NOT_INDEPENDENT" in out["model_blockers"]
 
 
 def test_scored_side_requires_executable_depth_on_that_side():
