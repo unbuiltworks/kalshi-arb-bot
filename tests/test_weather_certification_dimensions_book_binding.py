@@ -18,7 +18,12 @@ def _scored_yes(row):
     row.update({
         "best_shadow_side": "YES",
         "modeled_after_fee_ev_cents": "12.5",
-        "side_economics": [{"side": "YES", "modeled_after_fee_ev_cents": "12.5"}],
+        "side_economics": [{
+            "side": "YES",
+            "ask_dollars": "0.385",
+            "available_contracts": "1.25",
+            "modeled_after_fee_ev_cents": "12.5",
+        }],
     })
     return row
 
@@ -72,7 +77,12 @@ def test_other_side_book_cannot_certify_scored_side_market_data():
     row.update({
         "best_shadow_side": "NO",
         "modeled_after_fee_ev_cents": "18.0",
-        "side_economics": [{"side": "NO", "modeled_after_fee_ev_cents": "18.0"}],
+        "side_economics": [{
+            "side": "NO",
+            "ask_dollars": "0.40",
+            "available_contracts": "1.00",
+            "modeled_after_fee_ev_cents": "18.0",
+        }],
         "yes_ask_dollars": "0.385",
         "yes_ask_qty_fp": "2.00",
         # NO is the scored side but has no executable q1 book evidence.
