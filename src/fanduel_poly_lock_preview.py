@@ -68,6 +68,24 @@ def _unwrap_market(resp: Mapping[str, Any]) -> Mapping[str, Any]:
     return row if isinstance(row, Mapping) else resp
 
 
+def _emit_result(scan: Mapping[str, Any], checked: list[dict[str, Any]], *, sdk_exit_stage: str = "") -> dict[str, Any]:
+    result = {
+        "status": "FANDUEL_POLY_LOCK_PREVIEW_ONLY",
+        "physical_date_surviving_locks": len(scan.get("top_same_threshold_positive_locks_math_only") or []),
+        "fanduel_poly_rows_checked": len(checked),
+        "preview_qualified_rule_audit_required": sum(
+            1 for row in checked if row.get("status") == "PREVIEW_QUALIFIED_RULE_AUDIT_REQUIRED"
+        ),
+        "rows": checked,
+        "sdk_exit_stage": sdk_exit_stage,
+        "mutation_performed": False,
+        "order_entry": False,
+        "realized_pnl_usd": "0",
+    }
+    print("FANDUEL_POLY_LOCK_PREVIEW " + json.dumps(result, separators=(",", ":"), default=str), flush=True)
+    return result
+
+
 async def _public_poly_book(slug: str) -> Any | None:
     async with httpx.AsyncClient(timeout=6.0) as http:
         response = await http.get(f"{BASE}/v1/markets/{slug}/book")
@@ -89,13 +107,35 @@ async def main_async() -> dict[str, Any]:
         if isinstance(row, Mapping)
         and {str(row.get("yes_venue")), str(row.get("no_venue"))} == {"polymarket", "sportsbook:fanduel"}
     ]
+    print(
+        "FANDUEL_POLY_PREVIEW_STAGE "
+        + json.dumps({"stage": "LOCKS_SELECTED", "candidate_count": len(locks)}, separators=(",", ":")),
+        flush=True,
+    )
+
+    # Do not construct/close the authenticated SDK when there is nothing to
+    # preview. Besides avoiding unnecessary auth work, this guarantees every
+    # economically dry run emits its terminal verifier record.
+    if not locks:
+        return _emit_result(scan, [])
 
     async with httpx.AsyncClient(timeout=20.0) as http:
         events, _quota = await fetch_sportsbooks(http, odds_key)
     fd_quotes = {q.market_id: q for q in sportsbook_quotes(events, received_ms=0) if q.venue == "sportsbook:fanduel"}
+    print(
+        "FANDUEL_POLY_PREVIEW_STAGE "
+        + json.dumps({"stage": "FANDUEL_REFRESHED", "quote_count": len(fd_quotes)}, separators=(",", ":")),
+        flush=True,
+    )
 
-    client = PolymarketUS(key_id=poly_key, secret_key=poly_secret, timeout=8.0)
+    try:
+        client = PolymarketUS(key_id=poly_key, secret_key=poly_secret, timeout=8.0)
+    except SystemExit as exc:
+        checked = [{"status": "SDK_INIT_SYSTEM_EXIT", "exit_code": getattr(exc, "code", None), "order_entry": False, "realized": False}]
+        return _emit_result(scan, checked, sdk_exit_stage="client_init")
+
     checked: list[dict[str, Any]] = []
+    sdk_exit_stage = ""
     try:
         seen: set[tuple[str, str, str]] = set()
         for lock in locks[:10]:
@@ -148,6 +188,18 @@ async def main_async() -> dict[str, Any]:
                     if market_ok:
                         preview = await asyncio.to_thread(client.orders.preview, {"request": _preview_payload(slug, poly_side, raw_poly)})
                         preview_ok = bool(preview)
+                except SystemExit as exc:
+                    preview_error = "SystemExit"
+                    sdk_exit_stage = "market_or_preview"
+                    checked.append({
+                        "status": "SDK_PREVIEW_SYSTEM_EXIT",
+                        "slug": slug,
+                        "poly_side": poly_side,
+                        "exit_code": getattr(exc, "code", None),
+                        "order_entry": False,
+                        "realized": False,
+                    })
+                    break
                 except Exception as exc:
                     preview_error = type(exc).__name__
 
@@ -175,20 +227,18 @@ async def main_async() -> dict[str, Any]:
                 "realized": False,
             })
     finally:
-        client.close()
+        try:
+            client.close()
+        except SystemExit as exc:
+            sdk_exit_stage = sdk_exit_stage or "client_close"
+            checked.append({
+                "status": "SDK_CLOSE_SYSTEM_EXIT",
+                "exit_code": getattr(exc, "code", None),
+                "order_entry": False,
+                "realized": False,
+            })
 
-    result = {
-        "status": "FANDUEL_POLY_LOCK_PREVIEW_ONLY",
-        "physical_date_surviving_locks": len(scan.get("top_same_threshold_positive_locks_math_only") or []),
-        "fanduel_poly_rows_checked": len(checked),
-        "preview_qualified_rule_audit_required": sum(1 for row in checked if row.get("status") == "PREVIEW_QUALIFIED_RULE_AUDIT_REQUIRED"),
-        "rows": checked,
-        "mutation_performed": False,
-        "order_entry": False,
-        "realized_pnl_usd": "0",
-    }
-    print("FANDUEL_POLY_LOCK_PREVIEW " + json.dumps(result, separators=(",", ":"), default=str), flush=True)
-    return result
+    return _emit_result(scan, checked, sdk_exit_stage=sdk_exit_stage)
 
 
 def main() -> None:
