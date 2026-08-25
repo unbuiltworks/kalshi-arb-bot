@@ -1,19 +1,24 @@
 from src.weather_settlement_rule_semantics_guard import audit_weather_settlement_rule_semantics
 
 
+EXACT_MARKET_URL = "https://kalshi.com/markets/kxhighmia-26aug25/miami-high-temperature"
+
+
 def _row():
     return {
         "rounding_tie_semantics_verified": True,
         "correction_revision_semantics_verified": True,
         "settlement_lifecycle_verified": True,
         "terminal_value_transform": "AS_PUBLISHED",
-        "settlement_lifecycle_evidence_url": "https://kalshi.com/markets/kxhighmia-26aug25/miami-high-temperature",
+        "settlement_lifecycle_evidence_url": EXACT_MARKET_URL,
+        "exact_market_evidence_url": EXACT_MARKET_URL,
     }
 
 
 def test_clean_rule_semantics_are_read_only_verified():
     out = audit_weather_settlement_rule_semantics(_row())
     assert out["settlement_rule_semantics_verified"] is True
+    assert out["rule_evidence_bound_to_exact_market"] is True
     assert out["blockers"] == []
     assert out["order_entry"] is False
     assert out["live_probe_ready"] is False
@@ -65,3 +70,29 @@ def test_third_party_or_lookalike_lifecycle_source_fails_closed():
         out = audit_weather_settlement_rule_semantics(row)
         assert out["settlement_rule_semantics_verified"] is False
         assert "SETTLEMENT_LIFECYCLE_OFFICIAL_SOURCE_REQUIRED" in out["blockers"]
+
+
+def test_rule_evidence_must_match_exact_market_evidence():
+    row = _row()
+    row["settlement_lifecycle_evidence_url"] = "https://kalshi.com/markets/kxhighny-26aug25/new-york-high-temperature"
+    out = audit_weather_settlement_rule_semantics(row)
+    assert out["settlement_rule_semantics_verified"] is False
+    assert out["rule_evidence_bound_to_exact_market"] is False
+    assert "SETTLEMENT_RULE_EVIDENCE_NOT_BOUND_TO_EXACT_MARKET" in out["blockers"]
+
+
+def test_missing_exact_market_evidence_fails_closed():
+    row = _row()
+    row.pop("exact_market_evidence_url")
+    out = audit_weather_settlement_rule_semantics(row)
+    assert out["settlement_rule_semantics_verified"] is False
+    assert "SETTLEMENT_RULE_EXACT_MARKET_EVIDENCE_REQUIRED" in out["blockers"]
+
+
+def test_nested_exact_market_evidence_is_supported_but_rechecked():
+    row = _row()
+    row.pop("exact_market_evidence_url")
+    row["exact_market_source_audit"] = {"verified": True, "evidence_url": EXACT_MARKET_URL}
+    out = audit_weather_settlement_rule_semantics(row)
+    assert out["settlement_rule_semantics_verified"] is True
+    assert out["rule_evidence_bound_to_exact_market"] is True
