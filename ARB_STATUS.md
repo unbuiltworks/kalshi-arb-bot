@@ -1,92 +1,66 @@
 # ARB Control Plane
 
-Last verified: **2026-08-25 20:46 UTC / 2026-08-25 16:46 ET**
+Last verified: **2026-08-25 21:00 UTC / 2026-08-25 17:00 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
 ## Objective and accounting rule
 
-Primary aspiration remains **$480/day REALIZED net**. We are no longer allowing telemetry-readiness or lifecycle-fingerprint work to freeze the roadmap indefinitely.
+Primary aspiration remains **$480/day REALIZED net**. Only authoritative settlement/reconciliation creates REALIZED P&L. Stale quotes, shadow/model P&L, rule-mismatched rows, unconfirmed fills and one-leg exposure never count.
 
-Only authoritative settlement/reconciliation can create `REALIZED` P&L. Stale quotes, maker-indicated economics, shadow/model P&L, unmatched rule-risk rows, unconfirmed fills and unsettled positions never count as realized arbitrage profit.
+## Edge-census protocol
 
-## Edge-census protocol — clock now runs through imperfect data
+The 72-hour K<->P wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and continues through imperfect data. Invalid/unmeasurable intervals are scored as **$0 deployable capacity for that wall-clock interval** rather than pausing the clock.
 
-The 72-hour K<->P census clock is **STARTED at 2026-08-25 20:43 UTC / 16:43 ET**. It is not paused for REST fallback, missing WS lifetime proof, temporary feed degradation, or incomplete source quality. Instead, periods that fail the committed capture-quality requirements count as **zero realistically deployable capacity for those periods**. This removes the telemetry gate without making weak data look executable.
+Fixed verdict thresholds remain unchanged:
 
-The fixed economic thresholds remain unchanged:
-
-- **<$50/day** realistically deployable locked-edge capacity: end dedicated arb engineering and archive the project.
+- **<$50/day** realistic deployable capacity: end dedicated ARB engineering and archive.
 - **$50-$149/day**: sidecar-only maintenance.
-- **>= $150/day**: active scaling justified toward the $480/day aspiration.
+- **>= $150/day**: active scaling justified toward $480/day.
 
-Required measurements remain >=1c/>=2c/>=3c after fees, exact executable depth, p50/p90/max lifetime where source quality supports it, quote skew, overlap-adjusted capacity, and latency-floor-filtered realistic capture. The provisional latency floor remains **80ms** and may rise to measured production p95 but may not be lowered to rescue capacity. Maker adverse-selection evidence uses public trade-print proxy, not census orders.
+Required evidence remains >=1c/>=2c/>=3c after fees, exact executable q1 depth, quote skew, source quality, signal lifetime where valid, overlap-adjusted capacity, and a provisional **>=80ms** realistic-capture floor. The latency floor may rise to measured production p95 but may not be lowered to rescue capacity.
 
-Source-quality labels remain mandatory. `REST_SNAPSHOT_NOT_WS_LIFETIME` observations may contribute descriptive price/depth information where valid, but they do **not** get promoted into valid sub-100ms lifetime/capture evidence. Their unsupported capture interval is scored as zero rather than stopping the clock.
-
-Same-venue Gemini/Polymarket/Kalshi zero results remain near-verdict evidence; do not spend engineering time manufacturing same-venue ladder violations.
+Same-venue Gemini/Polymarket/Kalshi zero results remain near-verdict evidence; do not spend engineering time manufacturing ladder violations.
 
 ## Current authoritative scoreboard
 
-- **2026-08-25 ET:** last direct Neon verification remains **0 `TRADE_REALIZED` guaranteed-arbitrage rows / $0.0000 realized guaranteed-arb net**.
-- Caleb Durbin remains a real settled one-leg sports loss at **gross -$0.42 / net -$0.44** and remains classified non-guaranteed.
-- Weather since **2026-03-01:** last direct Neon verification remains **0 weather-tagged `TRADE_REALIZED` rows / $0.0000 verified realized weather P&L**.
+- **2026-08-25 ET:** fresh Neon verification = **0 TRADE_REALIZED / $0.0000 net**.
+- Caleb Durbin remains a real settled one-leg sports loss at **net -$0.44** and is not reclassified away.
+- Weather since **2026-03-01:** fresh Neon verification = **0 weather-tagged TRADE_REALIZED / $0.0000 verified realized weather P&L**.
 - Same-Gemini crypto prior snapshot remains roughly **2,647 certified q1 pairs / 275 books / 0 immediate >=3c FOK/FOK locks**; near-verdict evidence only.
 
 ## Fresh production verification
 
 ### Kalshi<->Polymarket sports — `sports-kp-live-executor`
 
-Production is healthy and read-only. Fresh Railway project status shows latest deployment **`28e0fbab-0769-4b35-982d-da418618ffe3` = SUCCESS**.
+Production is healthy/read-only and reached `EVENT_READY` with **72 strict discovered / 72 matched live books / 72 seeded Polymarket books / 72 initialized Kalshi books**.
 
-The gateway decision telemetry is live and strict discovery has produced **72 exact certified counterparts** with event readiness observed. The Kalshi leg is deliberately using REST fallback after concurrent authenticated-WS 429 behavior. Consequently the decision census correctly labels affected observations `REST_SNAPSHOT_NOT_WS_LIFETIME`.
+The first decision-grade telemetry window initially appeared to show many nominal positive price gaps but zero q1 depth and zero realistic capture. That result is **not valid executable-capacity evidence** because a telemetry schema bug was found:
 
-That REST/source-quality limitation is **no longer a clock-start gate**. The 72-hour wall clock is running now. Unsupported lifetime/capture periods count as zero realistic capacity rather than extending or pausing the measurement window.
+- `ShadowPlan.as_dict()` emits `quantity` and side labels but does not emit `poly_depth` / `kalshi_depth`.
+- The gateway originally read `qty`, `poly_depth`, `kalshi_depth`, mechanically forcing depth to zero.
+- PR **#149** fixed `quantity` and changed depth telemetry to derive selected-side depth from the already-loaded quotes. CI passed and PR #149 merged at `0497113a773eaf37b47b0d2fd2bb81613e0a4753`; Railway deployment `d0e33137-3aff-4d45-b562-199e73c810b0` is **SUCCESS**.
+- The replacement runtime exposed a second label mismatch: total-market plans use **OVER/UNDER**, not YES/NO. Therefore the current helper still fails closed to zero depth until OVER->YES-depth and UNDER->NO-depth are explicitly mapped.
 
-The census methodology itself is unchanged: >=1c/>=2c/>=3c after fees, q1 executable depth, quote skew, source quality and the >=80ms realistic-capture filter remain explicit. We will not lower economic or latency thresholds to make the result look better.
+Consequently, all current `realistic_capture_bins=0` results from this depth telemetry are **invalid measurement intervals**, not proof of zero real liquidity. Under the fixed clock policy those wall-clock intervals contribute $0 deployable capacity, but they are not counted as market evidence that true q1 depth is zero.
 
-Breadth may still be improved during the running window when settlement/rule equivalence can be established cleanly, but missing breadth is no longer a reason to delay the verdict clock.
+Descriptive price-only evidence from the pre-fix run did show nominal positive observations (including >=1c/>=2c/>=3c bins), with typical cross-venue receive skew around 40-45ms and short observed signal lifetimes around ~0.18s average / ~0.44s max. Those are not executable-capacity claims until depth telemetry is correct and the >=80ms capture filter can be evaluated honestly.
+
+The current v5 strict matcher is also still **full-game MLB totals only** (`KXMLBTOTAL`). Required MLB moneyline/spread and strict rule-certified prop breadth is therefore incomplete. Missing breadth does not pause the 72-hour clock; unmeasured families count as zero unless added within the committed window.
 
 ### Gemini<->Kalshi sports
 
-The previous control-plane rule `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION` is **no longer a roadmap blocker**.
-
-The read-only `sports-gk-autonomous-supervisor` remains available for telemetry and is configured for its built-in Kalshi REST fallback. Positive shadow signals are no longer required to wait for a completed full lifecycle fingerprint before a bounded live probe.
-
-The existing isolated execution shell `sports-gk-multifamily-live-canary` is the permitted path because it retains:
-
-- q=1 exactly;
-- >=3c modeled after-fee economics;
-- <=50ms quote skew / <=100ms book age;
-- 50ms exact-price/depth revalidation;
-- dual-FOK transport with ambiguity reconciliation;
-- one submission attempt;
-- $5 hard budget;
-- Railway restart policy `NEVER`;
-- explicit accounting classification `LIVE_RULE_RISK_PROBE_NOT_GUARANTEED_ARB` until authoritative settlement supports a stronger classification.
-
-At **2026-08-25 20:43 UTC**, Railway variables were re-armed for this bounded canary. Deployment **`e029636d-5342-478e-a733-7f8c0dadf669` = SUCCESS**. Direct runtime logs prove:
-
-- `MLB_GK_MULTI_PREFLIGHT`: live requested, env gate true, one-use token present, armed true;
-- Gemini terms accepted;
-- available balances seen by preflight: Gemini USD **61.7955**, Kalshi USD **3405.71**;
-- `MLB_GK_MULTI_ARMED`: **139 eligible exact keys**, all currently Home Runs, q=1, >=3c, order entry true;
-- no `SUBMITTED`, `FILLED`, `RESULT`, or settlement event has been verified from this run.
-
-The current blocker is now transport, not policy: the live canary's authenticated Kalshi cross-book websocket is repeatedly rejected with **HTTP 429**. This is a real execution/feed constraint and is not to be disguised as a roadmap gate. No trade has been counted from this run.
-
-Removing the lifecycle gate does **not** convert a rule-risk live probe into guaranteed arbitrage. Any submitted/fill/settlement states must remain labeled accurately.
+Bounded q=1 canary deployment `e029636d-5342-478e-a733-7f8c0dadf669` remains `SUCCESS`. Fresh log checks after re-arm found **no SUBMITTED and no FILLED events**. Kalshi authenticated cross-book websocket 429 remains the current transport blocker. No live trade is counted.
 
 ### Old Gemini<->Kalshi 15m crypto
 
-`crypto-15m-sol-live-canary-10bp-50ms` remains crashed on deployment `03080d7a-1696-4c38-a86d-54fa41882892`. This lane is not being reopened here; settlement-index non-equivalence remains economically relevant evidence, and AWS/low-latency routing work is isolated in the separate maker chat.
+`crypto-15m-sol-live-canary-10bp-50ms` remains crashed from the previously confirmed bounded-campaign deadline -> `HALTED_FAIL_CLOSED` path. It is not being reopened here because settlement-index non-equivalence remains the stronger safety/economic blocker. AWS/low-latency maker-routing work remains isolated in the separate chat.
 
 ## Highest-value next actions
 
-1. **Let the K<->P 72-hour wall clock run now.** Do not pause it for source-quality failures; score unsupported capture intervals as zero.
-2. Treat G<->K lifecycle fingerprinting as non-blocking. The active issue is the Kalshi WS 429 on the bounded q=1 canary, not a policy gate.
-3. Preserve exact SUBMITTED / FILLED / SETTLED / REALIZED labeling if any live probe fires; current re-armed run has no verified submission/fill yet.
-4. Use the running census to rank actual >=3c q1 capacity and identify the shortest path to additional bounded live probes where capacity is real.
-5. Add K<->P breadth only when it can be done without corrupting settlement equivalence or disrupting the running instrumentation.
-6. Keep the 80ms floor and economic thresholds fixed. Removing roadmap gates is not permission to rescue weak results by changing the measuring stick.
-7. Keep AWS latency/maker-routing work in the isolated chat. Main chat consumes those results only as execution-design inputs.
+1. Finish and production-verify the **OVER/UNDER selected-side depth mapping** so K<->P realistic-capture bins become trustworthy. Do not pause the 72-hour wall clock while fixing it.
+2. Once depth is correct, rank actual >=1c/>=2c/>=3c q1 capacity after the >=80ms floor; price-only nominal gaps do not count.
+3. Add K<->P MLB moneyline/spread breadth and only strict props with provable rule/settlement equivalence; semantic mirrors must be deduped.
+4. Keep G<->K execution labeling exact; no current submission/fill is verified.
+5. Preserve the fixed <$50 / $50-$149 / >=$150 verdict thresholds and do not extend the census because results are interesting.
+6. Keep AWS latency/maker-routing work isolated from this main control-plane chat.
