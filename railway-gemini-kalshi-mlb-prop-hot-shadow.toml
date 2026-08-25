@@ -1,4 +1,5 @@
-# Dedicated event-driven read-only Gemini <-> Kalshi MLB player-prop hot shadow.
+# Paused duplicate Gemini <-> Kalshi MLB player-prop hot shadow.
+# The authoritative read-only census socket is owned by sports-gk-autonomous-supervisor.
 [deploy]
-startCommand = "python -m src.gemini_kalshi_mlb_prop_hot_shadow --max-book-age-ms 1000 --max-quote-skew-ms 50 --hot-book-age-ms 100 --hot-profit 0.03 --participation-refresh-seconds 5 --heartbeat-seconds 10"
-restartPolicyType = "ALWAYS"
+startCommand = "python -c \"print('PAUSED: redundant Gemini-Kalshi hot shadow; authoritative sports-gk-autonomous-supervisor owns Kalshi WS census')\""
+restartPolicyType = "NEVER"
