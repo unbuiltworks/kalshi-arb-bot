@@ -1,14 +1,12 @@
-# Same-Gemini crypto threshold-ladder q=1 execution-first canary.
-# Read-only worst-partial-fill census -> account orphan gate -> all-q1-pair FOK/FOK -> flow-ranked sticky whole-contract maker.
-# Every certified same-event/source/expiry L<H pair is evaluated; adjacency is not required.
-# Resting maker admission remains whole-contract-only. Fractional census cannot submit orders.
-# Public execution state is WS-first; REST is discovery or bounded authoritative recovery.
-# Old Gemini<->Kalshi 15m basis maker remains parked.
+# Same-Gemini crypto threshold-ladder zero-order-entry edge census.
+# Reuses the existing complete q1-certified L<H discovery path in place; no new service.
+# Broad REST snapshots measure >=1c/2c/3c after-fee incidence/depth but MUST NOT be
+# interpreted as sub-second lifetime evidence. WS lifetime/public-print proxy remains
+# a separate instrumentation layer required by ARB_EDGE_CENSUS_2026-08.md.
 [build]
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python -m src.gemini_same_venue_crypto_execution_v6"
-preDeployCommand = ["python -m pytest -q tests/test_gemini_same_venue_crypto_ladder_scan.py tests/test_gemini_same_venue_crypto_full_pairs.py tests/test_gemini_same_venue_crypto_fractional_maker_census.py tests/test_gemini_same_venue_crypto_maker_q1.py tests/test_gemini_same_venue_crypto_maker_q1_depth.py tests/test_gemini_same_venue_crypto_execution_v2.py tests/test_gemini_same_venue_crypto_execution_v3.py && python -m py_compile src/gemini_same_venue_crypto_fractional_maker_census.py src/gemini_same_venue_crypto_execution_v6.py src/gemini_same_venue_crypto_ladder_scan.py src/gemini_same_venue_crypto_budget.py src/gemini_same_venue_crypto_maker_q1.py src/gemini_same_venue_crypto_maker_q1_depth.py src/gemini_same_venue_crypto_maker_q1_wsfirst.py src/gemini_same_venue_crypto_account_gate.py src/gemini_same_venue_crypto_flow_v2.py src/gemini_same_venue_crypto_flow_v3.py src/gemini_same_venue_crypto_taker_q1.py src/gemini_same_venue_crypto_taker_q1_hardened.py src/gemini_same_venue_crypto_full_pair_taker.py src/gemini_same_venue_crypto_execution_v2.py src/gemini_same_venue_crypto_execution_v3.py src/gemini_same_venue_crypto_execution_v4.py src/gemini_same_venue_crypto_execution_v5.py src/gemini_kalshi_execution_shadow.py src/gemini_kalshi_fast_overlap.py"]
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10
+startCommand = "python -m src.gemini_same_venue_crypto_edge_census --interval-seconds 15"
+preDeployCommand = ["python -m pytest -q tests/test_gemini_same_venue_crypto_ladder_scan.py tests/test_gemini_same_venue_crypto_full_pairs.py && python -m py_compile src/gemini_same_venue_crypto_edge_census.py src/gemini_same_venue_crypto_full_pair_taker.py src/gemini_same_venue_crypto_ladder_scan.py src/gemini_same_venue_crypto_taker_q1.py"]
+restartPolicyType = "ALWAYS"
