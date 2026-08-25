@@ -18,7 +18,7 @@ import sys
 from typing import Any
 
 from src import strict_mlb_prop_snapshot_v2 as discovery
-from src import strict_mlb_prop_snapshot_v5 as scanner
+from src import strict_mlb_prop_snapshot_v5_safe as scanner
 
 logger = logging.getLogger("kalshi_arb.mlb_prop_paper_supervisor")
 
@@ -71,6 +71,7 @@ async def supervise(
                 "interval_seconds": interval_seconds,
                 "future_horizon_hours": future_horizon_hours,
                 "journal_path": str(journal_path),
+                "kalshi_book_integrity_guard": True,
             },
             separators=(",", ":"),
         ),
@@ -86,6 +87,7 @@ async def supervise(
                 "read_only": True,
                 "order_entry": False,
                 "actual_order_placed": False,
+                "kalshi_book_integrity_guard": True,
                 "result": result,
             }
         except Exception as exc:  # keep evidence collection alive; never fail open
@@ -98,6 +100,7 @@ async def supervise(
                 "read_only": True,
                 "order_entry": False,
                 "actual_order_placed": False,
+                "kalshi_book_integrity_guard": True,
             }
 
         _write_jsonl(journal_path, record)
@@ -114,6 +117,7 @@ async def supervise(
                     "positive_pairs": summary.get("conservative_positive_pairs", 0),
                     "paper_probe_candidates": len(summary.get("paper_probe_candidates") or []),
                     "ready_probe_packets": len(summary.get("ready_probe_packets") or []),
+                    "kalshi_book_integrity_guard": True,
                     "read_only": True,
                     "order_entry": False,
                     "actual_order_placed": False,
