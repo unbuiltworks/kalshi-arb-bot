@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-25 22:40 UTC / 2026-08-25 18:40 ET**
+Last verified: **2026-08-25 23:44 UTC / 2026-08-25 19:44 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
@@ -25,7 +25,8 @@ Same-venue Gemini/Polymarket/Kalshi zero results remain near-verdict evidence; d
 ## Current authoritative scoreboard
 
 - **2026-08-25 ET:** fresh Neon verification = **0 TRADE_REALIZED / $0.0000 net**.
-- Caleb Durbin remains a real settled one-leg sports loss at **net -$0.44** and is not reclassified away. Fresh Neon state shows no newer unresolved G<->K one-leg exposure.
+- Caleb Durbin remains a real settled one-leg sports loss at **net -$0.44** and is not reclassified away.
+- Fresh authoritative reservation reconciliation shows **0 trade IDs with CAPITAL_RESERVED and neither CAPITAL_RELEASED nor TRADE_REALIZED**. There is therefore no currently unresolved durable capital reservation in the central ledger.
 - Weather since **2026-03-01:** fresh Neon verification = **0 weather-tagged TRADE_REALIZED / $0.0000 verified realized weather P&L**.
 - Same-Gemini crypto prior snapshot remains roughly **2,647 certified q1 pairs / 275 books / 0 immediate >=3c FOK/FOK locks**; near-verdict evidence only.
 
@@ -33,9 +34,9 @@ Same-venue Gemini/Polymarket/Kalshi zero results remain near-verdict evidence; d
 
 ### Kalshi<->Polymarket sports — `sports-kp-live-executor`
 
-Production remains healthy/read-only on deployment **`11e53e98-d318-4455-8341-2cfadc5d275b`**, Railway **SUCCESS**. One-hour metrics show sustained CPU/network activity, so the process is genuinely alive rather than green-but-dead.
+Production remains healthy/read-only on deployment **`11e53e98-d318-4455-8341-2cfadc5d275b`**, Railway **SUCCESS**. Fresh deploy logs through ~23:42 UTC show the process continuously emitting `EVENT_SUMMARY`; triggers continue increasing, so the process is genuinely alive rather than green-but-dead.
 
-Direct Railway deploy logs now expose the cumulative decision-grade totals census. Latest verified summary near **22:39 UTC / 18:39 ET**:
+Latest cumulative decision-grade totals census remains:
 
 - **53,237 comparable evaluations**;
 - **1,661 decision-census observations** across **9 semantic keys**;
@@ -48,37 +49,34 @@ Direct Railway deploy logs now expose the cumulative decision-grade totals censu
 - source quality remains **`REST_SNAPSHOT_NOT_WS_LIFETIME`** with Kalshi `rest_batch` transport;
 - `read_only=true`, `order_entry=false`.
 
-This is the strongest census evidence so far: the measured, rule-certified MLB-total slice has abundant **1c** gaps and real depth, but **zero >=2c and zero >=3c observations**, including **zero >=2c/>=3c at the provisional >=80ms capture floor**. At the fixed 3c taker/taker floor, this measured slice currently contributes **$0 deployable capacity**. REST-derived lifetimes remain descriptive rather than authoritative websocket timing.
+The counters have not added new comparable evaluations since the prior checkpoint even though raw triggers continue increasing. This does not change the measured result: the certified MLB-total slice has deep 1c gaps but **zero >=2c and zero >=3c**, including zero >=2c/>=3c at the provisional >=80ms capture floor. At the fixed 3c taker/taker floor, this measured slice currently contributes **$0 deployable capacity**. The 3c floor is not being lowered.
 
 The existing v5 matcher still measures strict MLB totals only. Missing MLB moneyline/spread/strict-prop breadth does not pause the clock and counts $0 if not made measurable by the deadline.
 
-### K<->P MLB game breadth one-off
+### K<->P MLB game breadth — exact join root cause narrowed
 
-To avoid interrupting the active totals census, an obsolete one-off read-only audit service was repurposed for `src.sports_kp_generic_mlb_game_breadth` and completed **SUCCESS** at **22:39:55 UTC**. It used `external-api.kalshi.com` and `gateway.polymarket.us`, with no order authority.
+The read-only `sports-generic-counterpart-shadow` continues to expose real MLB inventory: latest snapshot grew to **52 Polymarket MLB events / 96 Kalshi events** (46 moneyline, 25 spread, 25 total), **896 Polymarket normalized sides / 846 Kalshi normalized sides**.
 
-Fresh snapshot:
+It still reports **0 normal-event pairs**, but the cause is now materially narrower than “no matching inventory”:
 
-- **52 Polymarket MLB events**;
-- **88 Kalshi events**: 38 moneyline (`KXMLBGAME`), 25 spread (`KXMLBSPREAD`), 25 total (`KXMLBTOTAL`);
-- **896 Polymarket normalized sides / 822 Kalshi normalized sides**;
-- **280 ambiguous contract keys rejected**;
-- **0 normal event pairs / 0 book-comparable physical pairs / 0 semantic unique groups** for moneyline, spread, or game-total in this generic matcher.
+- the pairing function only increments `ambiguous_contract_keys_rejected` for keys present in **both** normalized venue indexes;
+- production reports **280 ambiguous shared contract keys** on every cycle;
+- `_canonical_side()` then rejects a shared key whenever either venue has multiple distinct YES physical representations (or otherwise lacks a single unique physical representation);
+- therefore the generic normalizer is already finding **280 exact semantic contract-key intersections**, but all 280 are being discarded at the physical-representation canonicalization step before start-skew/economics checks.
 
-The diagnostic explicitly classified itself **`RULE_INCOMPLETE_NORMAL_EVENT_SHADOW_NOT_EXECUTION_ELIGIBLE`** and assigns **$0/day capacity credit**. This is a breadth/join result, not an edge result: the venues clearly expose MLB game inventory, but the generic normalizer currently produces no execution-certifiable cross-venue joins. No shadow row is promoted to guaranteed arb.
+This is an identity/canonicalization blocker, not evidence of zero cross-venue MLB game overlap. The next safe census repair is **read-only physical-representation expansion within each already-exact shared contract key**, followed by book pricing and semantic dedupe, rather than choosing an arbitrary duplicate or loosening team/start/line/rule identity. Until that is measured and rules are complete, ML/spread rows receive **$0 deployable-capacity credit**.
 
 ### Gemini<->Kalshi sports
 
-Bounded q=1 canary deployment **`e029636d-5342-478e-a733-7f8c0dadf669`** remains Railway **SUCCESS**. Fresh deploy-log filtering found **no `SUBMITTED` event** in the checked production window, and Neon shows no unresolved newer one-leg exposure after Caleb's settled -$0.44 loss. No new G<->K fill or P&L is credited.
+Fresh `sports-gk-multifamily-live-canary` deployment **`8b387af6-7eb7-4f39-82e2-8950c9052b0d`** is Railway **SUCCESS**, `restartPolicy=NEVER`, and its configured entrypoint is the genuine bounded q=1 HR/TB/K live rule-risk canary rather than a shadow collector. Source still requires exact identity, official MLB participation proof, >=3c modeled after-fee lock, <=100ms books, <=50ms skew, 50ms revalidation, one-use arm/deadline, deterministic IDs, and a single service-wide submission attempt. It remains explicitly classified **`LIVE_RULE_RISK_PROBE_NOT_GUARANTEED_ARB`**.
 
-The prior Kalshi authenticated websocket 429 loop remains cleared after reducing the background autonomous supervisor's REST polling from 100ms to 1000ms. No unrelated Kalshi service was stopped solely to improve census telemetry.
+The prerequisite one-leg safety state is now conclusively clean in the central ledger: Caleb is settled -$0.44 and there are **zero unresolved durable capital reservations**. Fresh ledger queries show **no new G<->K submission/fill/realization** after this deployment.
+
+The canary's Kalshi cross-book websocket is currently being rejected with **HTTP 429** and escalating 5s/10s/20s/60s backoff while MLB participation polling remains alive. This fresh second-connection failure reinforces the earlier account-level diagnosis of **Kalshi websocket handshake/concurrent-connection contention**, not a weak account tier. I did not shut down this bounded live service merely to improve census telemetry.
 
 ### Account-level Kalshi 429 diagnosis
 
-Previously authenticated `/account/limits` evidence remains authoritative: account tier is **advanced**, with **900 request bucket / 300 refill** for both reads and writes. K<->P's separate websocket handshake contention was therefore not attributed to a weak account tier. The active census remains on bounded batched REST while healthy established Kalshi websocket consumers are left undisturbed.
-
-### Maker lane relationship
-
-The fixed **3c net threshold is not being lowered**. The totals census now gives a useful boundary condition for the isolated maker lane: there are many deep 1c taker/taker gaps but no observed 2c/3c gaps in the measured slice. Maker routing may test whether fill-conditioned pricing can bridge that shortfall, but maker-model economics are not counted here as executable or realized capacity.
+Authenticated `/account/limits` evidence remains authoritative: account tier is **advanced**, with **900 request bucket / 300 refill** for both reads and writes. K<->P remains on bounded batched REST while established Kalshi websocket consumers are left undisturbed. New census code should continue to prefer `external-api.kalshi.com` / `external-api-ws.kalshi.com` and preserve backoff rather than trying to brute-force another handshake.
 
 ### Old Gemini<->Kalshi 15m crypto
 
@@ -87,9 +85,9 @@ The fixed **3c net threshold is not being lowered**. The totals census now gives
 ## Highest-value next actions
 
 1. Keep the K<->P 72-hour wall clock running without resets; measured MLB totals currently show **0 >=3c realistic-capture observations** and therefore $0 deployable taker/taker capacity so far.
-2. Diagnose why the generic MLB game normalizer yields **0 joins despite 52 Polymarket / 88 Kalshi events**, focusing only on exact team/start/line/canonical-side identity required to make moneyline/spread breadth measurable. Do not loosen rule certification.
-3. Add only strict props with provable rule/settlement equivalence and dedupe semantic mirrors; participation-conditional rows remain excluded from guaranteed capacity.
-4. Keep recording G<->K authoritative submissions/fills/settlements only; Caleb remains -$0.44 realized and no newer unresolved one-leg exposure is currently visible.
-5. Preserve Kalshi read-budget headroom; do not disrupt unrelated services or lower backoff merely to improve census telemetry.
+2. Repair the MLB game breadth census **without loosening identity**: for each of the 280 already-exact shared semantic contract keys, enumerate the duplicate physical venue representations, price only valid two-sided books, then semantic-dedupe the best executable representation. This should reveal actual ML/spread overlap instead of failing all shared keys at `_canonical_side()`.
+3. Keep rules incomplete / capacity credit $0 until settlement/postponement/cancellation semantics are explicitly certified. Add only strict props with provable rule equivalence; participation-conditional rows remain excluded from guaranteed capacity.
+4. Keep recording G<->K authoritative submissions/fills/settlements only. Caleb remains -$0.44 realized. Do not count the newly running canary unless both legs and final settlement reconcile.
+5. Preserve Kalshi read-budget headroom and websocket backoff; do not disrupt unrelated services merely to improve telemetry.
 6. Preserve the fixed **<$50 / $50-$149 / >=$150** verdict thresholds and the maximum one-time +24h data-quality allowance. Interesting results do not extend the census.
 7. Keep AWS latency/maker-routing work isolated from this main control-plane chat.
