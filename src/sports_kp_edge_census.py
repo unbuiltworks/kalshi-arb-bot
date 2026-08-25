@@ -10,6 +10,12 @@ wins when present; otherwise the normalized scheduled start is converted to the 
 Eastern calendar date. Cross-date/unresolved pairs are rejected before any census
 count.
 
+A binary native market is normalized into two semantic rows. Mirrored semantic
+YES/NO representations of the same two native purchases are deduped into one
+portfolio before incidence is reported. Existing full-game rule certificates are
+then applied fail-closed; price-positive but conditional Kalshi/Polymarket rows are
+kept visible but contribute zero to settlement-certified locked capacity.
+
 This measures incidence/depth only. Repeated REST/event snapshots must not be used
 to claim sub-second opportunity lifetimes. No credentials or order-entry code.
 """
@@ -28,6 +34,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from src.mlb_game_rule_certifications import assess_lock
 from src.mlb_game_side_normalization import normalize_polymarket_mlb
 from src.kalshi_mlb_time_guard import normalize_kalshi_mlb_eastern
 from src.polymarket_scope_guard import full_game_only_events
@@ -82,6 +89,42 @@ def _dedupe_physical(rows):
     return sorted(best.values(), key=lambda r: (r.unit_profit, r.max_locked_profit), reverse=True)
 
 
+def _market_and_source_side(quote_id: str) -> tuple[str, str]:
+    base, sep, side = str(quote_id).rpartition("#")
+    if not sep or side not in {"YES", "NO"}:
+        return str(quote_id), "UNKNOWN"
+    return base, side
+
+
+def _native_purchase(venue: str, quote_id: str, semantic_side: str) -> tuple[str, str, str]:
+    market_id, source_side = _market_and_source_side(quote_id)
+    if source_side == "UNKNOWN":
+        return str(venue), market_id, source_side
+    if semantic_side == "YES":
+        native_side = source_side
+    else:
+        native_side = "NO" if source_side == "YES" else "YES"
+    return str(venue), market_id, native_side
+
+
+def _actual_portfolio_key(row) -> tuple[tuple[str, str, str], tuple[str, str, str]]:
+    legs = (
+        _native_purchase(row.yes_venue, row.yes_market_id, "YES"),
+        _native_purchase(row.no_venue, row.no_market_id, "NO"),
+    )
+    return tuple(sorted(legs))  # type: ignore[return-value]
+
+
+def _dedupe_actual_portfolios(rows):
+    best = {}
+    for row in rows:
+        key = _actual_portfolio_key(row)
+        old = best.get(key)
+        if old is None or row.unit_profit > old.unit_profit:
+            best[key] = row
+    return sorted(best.values(), key=lambda r: (r.unit_profit, r.max_locked_profit), reverse=True)
+
+
 def _rows_for_threshold(quotes, threshold: D, date_by_quote_id: dict[str, str]):
     raw = _dedupe(find_cross_venue_locks(
         [row.quote for row in quotes if row.quote.venue in {"kalshi", "polymarket"}],
@@ -99,7 +142,10 @@ def _rows_for_threshold(quotes, threshold: D, date_by_quote_id: dict[str, str]):
             rejected += 1
             continue
         valid.append(row)
-    return _dedupe_physical(valid), rejected, len(kp)
+    semantic = _dedupe_physical(valid)
+    actual = _dedupe_actual_portfolios(semantic)
+    certified = [row for row in actual if assess_lock(row).execution_eligible]
+    return semantic, actual, certified, rejected, len(kp)
 
 
 async def run_once() -> dict[str, Any]:
@@ -117,19 +163,24 @@ async def run_once() -> dict[str, Any]:
     kp_quotes = [row for row in priced if row.quote.venue in {"kalshi", "polymarket"}]
     date_by_quote_id = _quote_dates(normalized)
     threshold_results = {str(t): _rows_for_threshold(kp_quotes, t, date_by_quote_id) for t in THRESHOLDS}
-    by_threshold = {k: v[0] for k, v in threshold_results.items()}
-    rejected_by_threshold = {k: v[1] for k, v in threshold_results.items()}
-    raw_by_threshold = {k: v[2] for k, v in threshold_results.items()}
+    semantic_by_threshold = {k: v[0] for k, v in threshold_results.items()}
+    actual_by_threshold = {k: v[1] for k, v in threshold_results.items()}
+    certified_by_threshold = {k: v[2] for k, v in threshold_results.items()}
+    rejected_by_threshold = {k: v[3] for k, v in threshold_results.items()}
+    raw_by_threshold = {k: v[4] for k, v in threshold_results.items()}
 
     top = []
-    for row in by_threshold["0.01"][:30]:
+    for row in actual_by_threshold["0.01"][:30]:
+        assessment = assess_lock(row)
         item = row.as_dict()
-        item["edge_key"] = "|".join((row.settlement_key, row.yes_venue, row.no_venue))
+        item["actual_portfolio_key"] = [list(leg) for leg in _actual_portfolio_key(row)]
         item["physical_game_date"] = date_by_quote_id.get(str(row.yes_market_id), "")
         item["passes_1c"] = row.unit_profit >= D("0.01")
         item["passes_2c"] = row.unit_profit >= D("0.02")
         item["passes_3c"] = row.unit_profit >= D("0.03")
-        item["visible_capacity_note"] = "top-of-book q=1 fee economics; max_quantity is visible matched depth at observed top prices"
+        item["rule_assessment"] = assessment.as_dict()
+        item["counts_toward_settlement_certified_capacity"] = assessment.execution_eligible
+        item["visible_capacity_note"] = "q=1 top-of-book fee economics; final capacity still requires overlap and event-driven lifetime gates"
         top.append(item)
 
     kp_clusters = [r for r in clusters if set(r.get("venues") or []) == {"kalshi", "polymarket"}]
@@ -146,18 +197,25 @@ async def run_once() -> dict[str, Any]:
         "priced_kp_quotes_by_venue": dict(Counter(r.quote.venue for r in kp_quotes)),
         "raw_positive_candidates_pre_physical_gate": raw_by_threshold,
         "cross_date_or_unresolved_rejected": rejected_by_threshold,
-        "taker_locked_1c_candidates": len(by_threshold["0.01"]),
-        "taker_locked_2c_candidates": len(by_threshold["0.02"]),
-        "taker_locked_3c_candidates": len(by_threshold["0.03"]),
-        "top_1c": top,
+        "semantic_positive_1c_rows": len(semantic_by_threshold["0.01"]),
+        "semantic_positive_2c_rows": len(semantic_by_threshold["0.02"]),
+        "semantic_positive_3c_rows": len(semantic_by_threshold["0.03"]),
+        "pricing_positive_actual_portfolios_1c": len(actual_by_threshold["0.01"]),
+        "pricing_positive_actual_portfolios_2c": len(actual_by_threshold["0.02"]),
+        "pricing_positive_actual_portfolios_3c": len(actual_by_threshold["0.03"]),
+        "settlement_certified_locked_1c": len(certified_by_threshold["0.01"]),
+        "settlement_certified_locked_2c": len(certified_by_threshold["0.02"]),
+        "settlement_certified_locked_3c": len(certified_by_threshold["0.03"]),
+        "top_pricing_positive_actual_1c": top,
         "fetch_error_count": len(errors),
         "fetch_errors": errors[:20],
         "families": ["moneyline", "spread", "game_total"],
         "scope_gate": "POLYMARKET_MAIN_FULL_GAME_ONLY",
         "physical_event_gate": "EXACT_MLB_EASTERN_DATE_REQUIRED_MARKET_ID_DATE_PREFERRED",
-        "rule_gate": "FULL_RULE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION",
-        "settlement_certified_for_final_capacity": False,
-        "capacity_note": "logical rows deduped by settlement key/direction; shared underlying book depth still requires final overlap adjustment",
+        "portfolio_dedupe": "NATIVE_VENUE_MARKET_SIDE_PURCHASE_SET",
+        "rule_gate": "MLB_GAME_RULE_CERTIFICATIONS_FAIL_CLOSED",
+        "rule_audit_date": "2026-08-18",
+        "capacity_note": "pricing-positive conditional portfolios are not locked arb; only settlement_certified_locked_* may enter final numerator, then depth overlap/latency/capital filters still apply",
         "lifetime_measurement": "NOT_FROM_REPEATED_REST_SNAPSHOT",
         "authenticated_kalshi_ws_used": False,
         "capital_reserved": False,
@@ -179,9 +237,12 @@ async def run_forever() -> None:
                 "cycle": cycle,
                 "snapshot_ts_ms": out["snapshot_ts_ms"],
                 "cross_date_or_unresolved_rejected": out["cross_date_or_unresolved_rejected"],
-                "taker_locked_1c_candidates": out["taker_locked_1c_candidates"],
-                "taker_locked_2c_candidates": out["taker_locked_2c_candidates"],
-                "taker_locked_3c_candidates": out["taker_locked_3c_candidates"],
+                "pricing_positive_actual_portfolios_1c": out["pricing_positive_actual_portfolios_1c"],
+                "pricing_positive_actual_portfolios_2c": out["pricing_positive_actual_portfolios_2c"],
+                "pricing_positive_actual_portfolios_3c": out["pricing_positive_actual_portfolios_3c"],
+                "settlement_certified_locked_1c": out["settlement_certified_locked_1c"],
+                "settlement_certified_locked_2c": out["settlement_certified_locked_2c"],
+                "settlement_certified_locked_3c": out["settlement_certified_locked_3c"],
                 "fetch_error_count": out["fetch_error_count"],
                 "lifetime_measurement": out["lifetime_measurement"],
                 "read_only": True,
