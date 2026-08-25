@@ -9,14 +9,57 @@
       "odds_items": [
         {
           "away_favorite": false,
+          "away_keys": [
+            "close",
+            "current",
+            "favorite",
+            "moneyLine",
+            "open",
+            "team",
+            "underdog"
+          ],
           "away_moneyline": -110,
+          "created": null,
+          "date": null,
           "details": "PIT -110",
           "home_favorite": true,
+          "home_keys": [
+            "close",
+            "current",
+            "favorite",
+            "moneyLine",
+            "open",
+            "team",
+            "underdog"
+          ],
           "home_moneyline": -110,
+          "item_keys": [
+            "awayTeamOdds",
+            "close",
+            "current",
+            "details",
+            "homeTeamOdds",
+            "initialOverUnder",
+            "initialSpread",
+            "links",
+            "moneylineWinner",
+            "open",
+            "overOdds",
+            "overUnder",
+            "price",
+            "propBets",
+            "provider",
+            "spread",
+            "spreadWinner",
+            "underOdds"
+          ],
+          "last_modified": null,
           "last_update": null,
           "over_under": 10.0,
           "provider_id": "100",
-          "provider_name": "DraftKings"
+          "provider_name": "DraftKings",
+          "timestamp": null,
+          "updated": null
         }
       ],
       "odds_status": 200,
@@ -36,14 +79,57 @@
       "odds_items": [
         {
           "away_favorite": false,
+          "away_keys": [
+            "close",
+            "current",
+            "favorite",
+            "moneyLine",
+            "open",
+            "team",
+            "underdog"
+          ],
           "away_moneyline": 124,
+          "created": null,
+          "date": null,
           "details": "NYM -149",
           "home_favorite": true,
+          "home_keys": [
+            "close",
+            "current",
+            "favorite",
+            "moneyLine",
+            "open",
+            "team",
+            "underdog"
+          ],
           "home_moneyline": -149,
+          "item_keys": [
+            "awayTeamOdds",
+            "close",
+            "current",
+            "details",
+            "homeTeamOdds",
+            "initialOverUnder",
+            "initialSpread",
+            "links",
+            "moneylineWinner",
+            "open",
+            "overOdds",
+            "overUnder",
+            "price",
+            "propBets",
+            "provider",
+            "spread",
+            "spreadWinner",
+            "underOdds"
+          ],
+          "last_modified": null,
           "last_update": null,
           "over_under": 9.0,
           "provider_id": "100",
-          "provider_name": "DraftKings"
+          "provider_name": "DraftKings",
+          "timestamp": null,
+          "updated": null
         }
       ],
       "odds_status": 200,
@@ -63,14 +149,57 @@
       "odds_items": [
         {
           "away_favorite": false,
+          "away_keys": [
+            "close",
+            "current",
+            "favorite",
+            "moneyLine",
+            "open",
+            "team",
+            "underdog"
+          ],
           "away_moneyline": 119,
+          "created": null,
+          "date": null,
           "details": "TB -144",
           "home_favorite": true,
+          "home_keys": [
+            "close",
+            "current",
+            "favorite",
+            "moneyLine",
+            "open",
+            "team",
+            "underdog"
+          ],
           "home_moneyline": -144,
+          "item_keys": [
+            "awayTeamOdds",
+            "close",
+            "current",
+            "details",
+            "homeTeamOdds",
+            "initialOverUnder",
+            "initialSpread",
+            "links",
+            "moneylineWinner",
+            "open",
+            "overOdds",
+            "overUnder",
+            "price",
+            "propBets",
+            "provider",
+            "spread",
+            "spreadWinner",
+            "underOdds"
+          ],
+          "last_modified": null,
           "last_update": null,
           "over_under": 7.5,
           "provider_id": "100",
-          "provider_name": "DraftKings"
+          "provider_name": "DraftKings",
+          "timestamp": null,
+          "updated": null
         }
       ],
       "odds_status": 200,
