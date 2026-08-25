@@ -17,7 +17,6 @@ import json
 import logging
 import os
 import signal
-import statistics
 import time
 from typing import Any
 
@@ -25,8 +24,9 @@ import httpx
 from polymarket_us import PolymarketUS
 
 from src.eventing_books import BookUpdate, EventingKalshiCrossBooks, EventingPolyBookStore
+from src.polymarket_kalshi_shadow import Match
 from src.polymarket_kalshi_shadow_v2 import run_poly_ws
-from src.polymarket_kalshi_shadow_v4 import Match, _fetch_poly_book, strict_discover_matches
+from src.polymarket_kalshi_shadow_v4 import strict_discover_matches
 from src.sports_kp_shadow import evaluate_both_directions
 
 logger = logging.getLogger("kalshi_arb.polymarket_kalshi_shadow_v5")
@@ -308,9 +308,6 @@ async def run(args: argparse.Namespace) -> None:
         if not discovered:
             raise RuntimeError("No strict Polymarket/Kalshi matches discovered")
 
-        # Seed Polymarket once, then fail closed on any strict pair that currently
-        # has no executable two-sided public book. This avoids one stale/empty market
-        # preventing the entire event-driven feed from becoming ready.
         poly_store = EventingPolyBookStore()
         discovered_slugs = [m.poly.slug for m in discovered]
         seeded = await _seed_poly(http, poly_store, discovered_slugs, args.rest_concurrency)
