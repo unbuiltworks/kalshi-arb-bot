@@ -6,7 +6,7 @@ import asyncio
 import logging
 
 from src.sports_poly_structural_settlement_reconciler import run_forever as run_poly_structural
-from src.sports_trade_settlement_reconciler import run_forever as run_gemini_kalshi
+from src.sports_trade_settlement_reconciler_v2 import run_forever as run_gemini_kalshi
 
 
 async def run(interval_seconds: float) -> None:
