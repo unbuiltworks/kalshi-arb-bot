@@ -7,6 +7,7 @@ on:
     paths:
       - 'src/kalshi_mlb_sharp_ev_backtest.py'
       - 'src/kalshi_mlb_sharp_ev_backtest_runner.py'
+      - 'src/espn_mlb_odds_probe.py'
       - '.github/workflows/kalshi-mlb-sharp-ev-backtest.yml'
   workflow_dispatch:
 
@@ -14,11 +15,9 @@ permissions:
   contents: write
 
 jobs:
-  backtest:
+  historical-source-probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      PARLAY_API_KEY: ${{ secrets.PARLAY_API_KEY }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,41 +26,35 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
-      - name: Run one-day read-only diagnostic and write safe status
+      - name: Probe free ESPN archived MLB odds
         shell: bash
         run: |
           mkdir -p research/results
-          rm -f research/results/kalshi_mlb_sharp_ev_backtest.json
-          if [ -z "$PARLAY_API_KEY" ]; then
-            credential=false
-            code=2
-          else
-            credential=true
-            set +e
-            python -m src.kalshi_mlb_sharp_ev_backtest_runner --max-days 1 --output research/results/kalshi_mlb_sharp_ev_backtest.json
-            code=$?
-            set -e
-          fi
-          printf '{"workflow_started":true,"provider":"parlayapi","credential_present":%s,"diagnostic_exit_code":%s,"source_sha":"%s"}\n' "$credential" "$code" "$GITHUB_SHA" > research/results/kalshi_mlb_sharp_ev_status.json
+          rm -f research/results/espn_mlb_odds_probe.json
+          set +e
+          python -m src.espn_mlb_odds_probe
+          code=$?
+          set -e
+          printf '{"workflow_started":true,"provider":"espn","diagnostic_exit_code":%s,"source_sha":"%s"}\n' "$code" "$GITHUB_SHA" > research/results/kalshi_mlb_sharp_ev_status.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: kalshi-mlb-sharp-ev-backtest
+          name: kalshi-mlb-sharp-ev-source-probe
           path: research/results/
           if-no-files-found: error
-      - name: Persist safe diagnostic status/result on research branch
+      - name: Persist safe probe result on research branch
         if: always()
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add research/results/kalshi_mlb_sharp_ev_status.json
-          if [ -f research/results/kalshi_mlb_sharp_ev_backtest.json ]; then
-            git add research/results/kalshi_mlb_sharp_ev_backtest.json
+          if [ -f research/results/espn_mlb_odds_probe.json ]; then
+            git add research/results/espn_mlb_odds_probe.json
           fi
           if git diff --cached --quiet; then
-            echo 'No diagnostic status change to commit.'
+            echo 'No diagnostic change to commit.'
             exit 0
           fi
-          git commit -m 'Research result: Kalshi MLB sharp EV diagnostic status [skip ci]'
+          git commit -m 'Research result: ESPN MLB historical odds probe [skip ci]'
           git push origin HEAD:research/kalshi-mlb-sharp-ev
