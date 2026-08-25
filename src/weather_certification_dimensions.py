@@ -22,6 +22,7 @@ from src.weather_fee_resolution_binding_guard import audit_weather_fee_resolutio
 from src.weather_model_audit_chain_guard import audit_weather_model_audit_chain
 from src.weather_quote_freshness_binding_guard import audit_weather_quote_freshness_binding
 from src.weather_scored_side_book_binding_guard import audit_weather_scored_side_book_binding
+from src.weather_settlement_rule_semantics_guard import audit_weather_settlement_rule_semantics
 
 SETTLEMENT_BLOCKERS = {
     "RULES_PENDING", "EXACT_MARKET_IDENTITY_UNVERIFIED", "EXACT_MARKET_SETTLEMENT_REGIME_UNVERIFIED",
@@ -150,6 +151,14 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
         settlement.append("BRACKET_SEMANTICS_EVIDENCE_REQUIRED")
     if row.get("settlement_certified_shadow") is not True:
         settlement.append("SETTLEMENT_CERTIFICATION_EVIDENCE_REQUIRED")
+
+    settlement_rule_semantics = audit_weather_settlement_rule_semantics(row)
+    settlement_rule_semantics_verified = settlement_rule_semantics.get("settlement_rule_semantics_verified") is True
+    if not settlement_rule_semantics_verified:
+        settlement.extend(
+            settlement_rule_semantics.get("blockers")
+            or ["SETTLEMENT_RULE_SEMANTICS_EVIDENCE_REQUIRED"]
+        )
     settlement = sorted(set(settlement))
 
     freshness = audit_weather_quote_freshness_binding(row)
@@ -202,6 +211,8 @@ def audit_weather_certification_dimensions(row: dict[str, Any]) -> dict[str, Any
         "settlement_rules_provenance_verified": settlement_ok,
         "exact_market_source_audit_verified": exact_market_source.get("verified") is True,
         "settlement_identity_semantics_verified": identity_semantics_verified,
+        "settlement_rule_semantics_verified": settlement_rule_semantics_verified,
+        "settlement_rule_semantics_audit": settlement_rule_semantics,
         "market_data_verified": market_ok, "book_representation_verified": book_ok,
         "yes_book_representation_audit": yes_book, "no_book_representation_audit": no_book,
         "scored_side_book_binding_verified": scored_side.get("scored_side_book_binding_verified") is True,
