@@ -1,15 +1,20 @@
 """Pure q=1 cross-threshold middle evaluation for funded sports venues.
 
-This module performs no network I/O and no order entry.  It compares two
-semantically-normalized contracts in the same event/market family at different
-thresholds and computes the payout in every normal-event region.  A candidate is
-only a mathematical lock when the *minimum* q=1 profit is non-negative; the
-middle payout is never used to hide an outside-region loss.
+This module performs no network I/O and no order entry. It compares two
+semantically-normalized contracts in the same physical event/market family at
+different thresholds and computes the payout in every normal-event region.
+A candidate is only a mathematical lock when the *minimum* q=1 profit is
+non-negative; the middle payout is never used to hide an outside-region loss.
 
-Rule certification is deliberately separate from normal-event math.  An observed
+Physical event date is an explicit matching dimension. Team names plus a similar
+scheduled-start timestamp are not enough: feeds can carry stale or mis-normalized
+starts for a different game in the same series. Missing or different event dates
+therefore fail closed before any candidate can be produced.
+
+Rule certification is deliberately separate from normal-event math. An observed
 price pair may be useful shadow telemetry while remaining ineligible for live
 execution because postponement, overtime/extra-innings, stat correction, push,
-or official-source semantics are not certified.  Sportsbooks remain manual-only.
+or official-source semantics are not certified. Sportsbooks remain manual-only.
 """
 from __future__ import annotations
 
@@ -43,6 +48,7 @@ class ThresholdObservedQuote:
     no_depth: Decimal
     scheduled_start_ms: int
     received_ms: int
+    physical_event_date: str = ""
     source_side: str = "CONTRACT"
     rules_complete: bool = False
     rule_fingerprint: str = "INCOMPLETE"
@@ -53,13 +59,12 @@ class ThresholdObservedQuote:
         if len(parts) < 10:
             raise ValueError(f"bad settlement key: {self.settlement_key}")
         # sport | league | participants | family | scope | subject_type |
-        # subject | stat | comparator | line
+        # subject | stat | comparator | line. Physical date is deliberately
+        # separate because legacy settlement keys do not encode it.
         return tuple(parts[:8])
 
     @property
     def underlying_market_id(self) -> str:
-        # Direct prediction quotes append '#YES'/'#NO' to preserve semantic
-        # orientation.  Retail market ids do not.
         if self.venue in {"gemini", "polymarket", "kalshi"} and "#" in self.market_id:
             return self.market_id.rsplit("#", 1)[0]
         return self.market_id
@@ -106,6 +111,7 @@ class MiddleLeg:
 @dataclass(frozen=True)
 class MiddleCandidate:
     family_key: tuple[str, ...]
+    physical_event_date: str
     comparator: str
     low_line: Decimal
     high_line: Decimal
@@ -132,6 +138,7 @@ class MiddleCandidate:
     def as_dict(self) -> dict[str, Any]:
         return {
             "family_key": "|".join(self.family_key),
+            "physical_event_date": self.physical_event_date,
             "venue_pair": list(self.venue_pair),
             "comparator": self.comparator,
             "low_line": str(self.low_line),
@@ -155,7 +162,6 @@ class MiddleCandidate:
 
 
 def _middle_actions(comparator: str) -> tuple[str, str, str]:
-    """Return (low-threshold action, high-threshold action, middle interval)."""
     if comparator == "GT":
         return "YES", "NO", "(low, high]"
     if comparator == "GE":
@@ -195,7 +201,7 @@ def _candidate_key(candidate: MiddleCandidate) -> tuple[Any, ...]:
         (candidate.low_leg.venue, candidate.low_leg.market_id, candidate.low_leg.actual_action),
         (candidate.high_leg.venue, candidate.high_leg.market_id, candidate.high_leg.actual_action),
     )))
-    return (legs, candidate.comparator, candidate.low_line, candidate.high_line)
+    return (legs, candidate.physical_event_date, candidate.comparator, candidate.low_line, candidate.high_line)
 
 
 def find_threshold_middles(
@@ -205,20 +211,20 @@ def find_threshold_middles(
     max_start_skew_ms: int = 5 * 60 * 1000,
     max_quote_skew_ms: int = 70_000,
 ) -> list[MiddleCandidate]:
-    """Evaluate all funded-venue q=1 cross-threshold pairs conservatively.
-
-    Same-threshold exact locks are handled by the existing lock scanner and are
-    intentionally excluded here.  This function only considers low < high.
-    """
+    """Evaluate funded-venue q=1 cross-threshold pairs conservatively."""
     rows = [q for q in quotes if q.venue in FUNDED_VENUES]
     best: dict[tuple[Any, ...], MiddleCandidate] = {}
     for i, left in enumerate(rows):
         if left.market_family not in THRESHOLD_FAMILIES or left.comparator not in SUPPORTED_COMPARATORS:
             continue
+        if not left.physical_event_date:
+            continue
         for right in rows[i + 1:]:
             if right.market_family not in THRESHOLD_FAMILIES:
                 continue
             if left.venue == right.venue:
+                continue
+            if not right.physical_event_date or left.physical_event_date != right.physical_event_date:
                 continue
             if left.family_key != right.family_key or left.comparator != right.comparator:
                 continue
@@ -256,6 +262,7 @@ def find_threshold_middles(
             autoexecution_eligible = classification == "SHADOW_LOCKED_MIDDLE_3C_PLUS" and rules_match and not sportsbook_present
             candidate = MiddleCandidate(
                 family_key=low.family_key,
+                physical_event_date=low.physical_event_date,
                 comparator=low.comparator,
                 low_line=low.line,
                 high_line=high.line,
