@@ -1,1 +1,1 @@
-{"workflow_started":true,"credential_present":false,"diagnostic_exit_code":2,"source_sha":"f770941a22158bbbc10fc97a4feaa4fd0be3e8a3"}
+{"workflow_started":true,"provider":"parlayapi","credential_present":true,"diagnostic_exit_code":1,"source_sha":"841d4e089f49c647df4c8bf11312c7d76ea948dd"}
