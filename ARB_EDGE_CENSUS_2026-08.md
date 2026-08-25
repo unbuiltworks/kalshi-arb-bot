@@ -5,10 +5,34 @@ Locked before interpreting census results. The purpose is to measure what the ma
 ## Decision dates
 
 - Instrument existing production scanners by **2026-08-26**.
-- Run the zero-order-entry locked-edge census for **72 hours** after instrumentation is complete.
+- Run the zero-order-entry locked-edge census for **72 hours** after cross-venue instrumentation is complete and data-quality gates below are healthy.
 - Publish the verdict on **2026-08-30**.
 
 Do not extend the census merely because the result is disappointing. Any extension requires a written data-quality reason, not a desire for a different answer.
+
+## Pre-committed Aug 30 business verdict thresholds
+
+These thresholds are locked **before valid Kalshi<->Gemini or Kalshi<->Polymarket cross-venue census data lands**. They may not be loosened on Aug 30 because a result looks interesting.
+
+Primary decision metric: the combined **settlement-certified, overlap-adjusted, after-fee, latency-floor-filtered, capital-constrained realistically capturable locked-arbitrage dollars/day** across independent automated lanes. Maker-indicated rows, manual FanDuel rows, rule-mismatched rows, shadow P&L and directional-EV strategies are excluded from this number.
+
+- **< $50/day:** end dedicated locked-arbitrage engineering after the Aug 30 verdict. Keep only low-cost passive collectors, settlement/reconciliation and safety records that have independent value. Do not build faster infrastructure, add venues, fund accounts or extend the census to rescue the project. Engineering time goes elsewhere.
+- **$50-$149/day:** locked arb becomes a **sidecar**, not a primary build. Operate only lanes that independently complete a clean `FILLED -> HEDGED -> SETTLED -> REALIZED` lifecycle and can run with low ongoing effort. No dedicated latency project, no speculative venue expansion and no major new infrastructure solely for arb.
+- **>= $150/day:** the measured market supports continued active execution/scaling engineering. Scale only from observed executable depth, settlement certainty, fill evidence and capital demand; do not extrapolate to $480/day without data.
+
+The **$480/day** figure remains a business aspiration, not a pass/fail threshold. A measured $120/day system is therefore not called a failed market; it is classified as a sidecar whose operating burden and independent profitability determine whether it should run.
+
+### No moving the measurement window
+
+The official 72-hour clock starts only when the required cross-venue lanes **Kalshi<->Gemini and Kalshi<->Polymarket** are both producing valid comparable observations with their required feeds healthy. Same-venue Gemini/Polymarket results do not delay this clock.
+
+Once the clock starts:
+
+- run 72 continuous wall-clock hours;
+- do **not** add an extra week for an inconclusive or disappointing economic result;
+- documented feed/data outages may add only the specifically invalid hours, capped at **24 additional hours total**;
+- if a required lane remains technically unmeasurable on the current rig after that allowance, classify it as `UNMEASURABLE_ON_CURRENT_RIG` and assign **$0 deployable capacity** for the Aug 30 decision rather than restarting the study;
+- target at least **90% valid feed coverage** across the measurement window for a lane to receive a numeric capacity estimate; otherwise use the unmeasurable classification above.
 
 ## Zero-risk census boundary
 
@@ -137,6 +161,6 @@ On **2026-08-30**, publish:
 2. one combined locked-arb capacity estimate with shared liquidity/capital overlap handled honestly;
 3. separate directional-EV lane economics;
 4. maker print-proxy adverse-selection findings;
-5. the next allocation decision: operate, scale, deprioritize, or stop each lane.
+5. the pre-committed business classification above: end dedicated arb engineering, sidecar, or continue active scaling.
 
 A clean `FILLED -> HEDGED -> SETTLED -> REALIZED` lifecycle remains necessary before scaling any lane that passes the capacity test, but plumbing proof is not a substitute for market-capacity evidence.
