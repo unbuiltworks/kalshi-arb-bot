@@ -123,6 +123,11 @@ def _blocking_unresolved_for_poly(rows: list[dict[str, Any]]) -> dict[str, Any] 
     return None
 
 
+def _unresolved_sports(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Backward-compatible name used by startup recovery, with scoped semantics."""
+    return _blocking_unresolved_for_poly(rows)
+
+
 def _unresolved_risk_used(rows: list[dict[str, Any]]) -> D:
     """Capital at risk from every nonterminal live-sports trade, deduped by trade."""
     by_trade: dict[str, D] = {}
