@@ -29,6 +29,8 @@ from src.sports_kp_generic_mlb_game_breadth import (
     _fetch_inputs,
 )
 
+# Runtime trigger note: this file is intentionally read-only and safe to run as a one-off.
+
 
 def _iso(ms: int) -> str:
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).isoformat()
