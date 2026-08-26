@@ -6,6 +6,7 @@ from src.weather_portfolio_metric_binding_guard import audit_weather_portfolio_m
 def _row():
     # NO: 41c q1 + 1.5c fee = 42.5c deployed capital; 17.5c EV.
     # Derived edge/dollar = 0.175 / 0.425 = 7/17.
+    # Empirical execution probability = 10 / 40 = 0.25.
     return {
         "best_shadow_side": "NO",
         "side_economics": [
@@ -29,6 +30,7 @@ def _row():
         "executable_probability": "0.25",
         "executable_probability_verified": True,
         "executable_probability_window_verified": True,
+        "executable_probability_success_count": 10,
         "executable_probability_sample_count": 40,
     }
 
@@ -39,6 +41,9 @@ def test_portfolio_metrics_bind_to_selected_side():
     assert out["weather_execution_probability_verified"] is True
     assert Decimal(out["derived_depth_dollars"]) == Decimal("0.41")
     assert Decimal(out["derived_net_edge_per_dollar"]) == Decimal("7") / Decimal("17")
+    assert Decimal(out["verified_executable_probability"]) == Decimal("0.25")
+    assert out["executable_probability_success_count"] == 10
+    assert out["executable_probability_sample_count"] == 40
     assert out["blockers"] == []
     assert out["order_entry"] is False
     assert out["live_probe_ready"] is False
@@ -65,6 +70,7 @@ def test_execution_probability_needs_empirical_verification():
         ("executable_probability_verified", "true"),
         ("executable_probability_window_verified", False),
         ("executable_probability_sample_count", 0),
+        ("executable_probability_success_count", -1),
         ("executable_probability", "1.01"),
     ):
         row = _row()
@@ -72,6 +78,24 @@ def test_execution_probability_needs_empirical_verification():
         out = audit_weather_portfolio_metric_binding(row)
         assert out["weather_portfolio_metric_binding_verified"] is False
         assert "WEATHER_EXECUTION_PROBABILITY_UNVERIFIED" in out["blockers"]
+
+
+def test_producer_probability_must_equal_probability_derived_from_counts():
+    row = _row()
+    row["executable_probability"] = "0.90"
+    out = audit_weather_portfolio_metric_binding(row)
+    assert out["weather_portfolio_metric_binding_verified"] is False
+    assert out["weather_execution_probability_verified"] is False
+    assert "WEATHER_EXECUTION_PROBABILITY_UNVERIFIED" in out["blockers"]
+
+
+def test_success_count_cannot_exceed_total_count():
+    row = _row()
+    row["executable_probability_success_count"] = 41
+    out = audit_weather_portfolio_metric_binding(row)
+    assert out["weather_portfolio_metric_binding_verified"] is False
+    assert out["verified_executable_probability"] is None
+    assert "WEATHER_EXECUTION_PROBABILITY_UNVERIFIED" in out["blockers"]
 
 
 def test_fixed_point_fractional_selected_side_is_supported():
