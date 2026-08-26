@@ -27,9 +27,28 @@ def _finite_decimal(value: Any) -> Decimal | None:
     return parsed if parsed.is_finite() else None
 
 
+def _normalized_blockers(value: Any) -> tuple[set[str], bool]:
+    """Return normalized blockers and whether producer telemetry was structurally valid."""
+    if value is None:
+        return set(), True
+    if not isinstance(value, (list, tuple, set)):
+        return {"MALFORMED_BLOCKER_TELEMETRY"}, False
+
+    normalized: set[str] = set()
+    valid = True
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            valid = False
+            continue
+        normalized.add(item.strip())
+    if not valid:
+        normalized.add("MALFORMED_BLOCKER_TELEMETRY")
+    return normalized, valid
+
+
 def _fail_closed(out: dict[str, Any], blocker: str) -> dict[str, Any]:
     """Strip all selected-side economics when canonical side binding is not proven."""
-    blockers = set(out.get("blockers") or [])
+    blockers, _ = _normalized_blockers(out.get("blockers"))
     blockers.add(blocker)
     out["selected_side_schema_verified"] = False
     out["selected_side_schema_blockers"] = [blocker]
@@ -85,6 +104,11 @@ def normalize_selected_side_schema(row: dict[str, Any]) -> dict[str, Any]:
         raise TypeError("row must be a dict")
 
     out = deepcopy(row)
+    existing_blockers, blockers_valid = _normalized_blockers(out.get("blockers"))
+    out["blockers"] = sorted(existing_blockers)
+    if not blockers_valid:
+        return _fail_closed(out, "MALFORMED_BLOCKER_TELEMETRY")
+
     best = out.get("best_shadow_side")
 
     if best is None:
@@ -115,8 +139,6 @@ def normalize_selected_side_schema(row: dict[str, Any]) -> dict[str, Any]:
     selected_values = yes_values if derived_side == "YES" else no_values
     fee, ev, edge = selected_values
 
-    # If the legacy producer supplied an embedded best-side object, require that object
-    # to agree with the independently selected record as additional provenance.
     if isinstance(best, dict):
         embedded_fee = _finite_decimal(best.get("modeled_taker_fee_cents"))
         embedded_ev = _finite_decimal(best.get("modeled_after_fee_ev_cents"))
@@ -124,8 +146,6 @@ def normalize_selected_side_schema(row: dict[str, Any]) -> dict[str, Any]:
         if embedded_fee != fee or embedded_ev != ev or embedded_edge != edge:
             return _fail_closed(out, "LEGACY_BEST_SHADOW_SIDE_DETAIL_MISMATCH")
 
-    # Canonical selected-side schema. Preserve the full selected record separately for
-    # diagnostics, but make the top-level fields unambiguous for downstream consumers.
     out["best_shadow_side_detail"] = deepcopy(selected)
     out["best_shadow_side"] = derived_side
     out["modeled_taker_fee_cents"] = selected.get("modeled_taker_fee_cents")
