@@ -5,7 +5,8 @@ certification is still incomplete. The legacy central report intentionally accep
 already-computed sleeve summaries and therefore cannot infer that distinction unless the
 caller repeats every weather blocker. This wrapper makes the boundary explicit:
 weather sleeves are promotable/annualizable only when the canonical weather certification
-audit has affirmatively cleared and no hard blocker remains.
+audit has affirmatively cleared, the selected-side schema has independently cleared, and
+no hard blocker remains.
 
 This module is read-only and cannot authorize order entry or live probes.
 """
@@ -16,11 +17,15 @@ from typing import Any, Iterable
 from src.central_shadow_portfolio_report import Sleeve, rank_sleeves as _rank_sleeves
 
 WEATHER_CERTIFICATION_BLOCKER = "WEATHER_CERTIFICATION_PREREQS_UNVERIFIED"
+WEATHER_SELECTED_SIDE_BLOCKER = "WEATHER_SELECTED_SIDE_SCHEMA_UNVERIFIED"
 MALFORMED_HARD_BLOCKER_TELEMETRY = "MALFORMED_HARD_BLOCKER_TELEMETRY"
 
 
 def _strict_weather_certified(row: dict[str, Any]) -> bool:
-    return row.get("executable_shadow_prereqs_verified") is True
+    return (
+        row.get("executable_shadow_prereqs_verified") is True
+        and row.get("selected_side_schema_verified") is True
+    )
 
 
 def _normalize_hard_blockers(value: Any) -> tuple[list[str], bool]:
@@ -50,9 +55,14 @@ def _guard_weather_row(row: dict[str, Any]) -> dict[str, Any]:
     blockers, blocker_telemetry_valid = _normalize_hard_blockers(
         guarded.get("hard_blockers", ())
     )
-    certified = _strict_weather_certified(guarded)
-    if not certified and WEATHER_CERTIFICATION_BLOCKER not in blockers:
+    prereqs_verified = guarded.get("executable_shadow_prereqs_verified") is True
+    selected_side_verified = guarded.get("selected_side_schema_verified") is True
+    certified = prereqs_verified and selected_side_verified
+
+    if not prereqs_verified and WEATHER_CERTIFICATION_BLOCKER not in blockers:
         blockers.append(WEATHER_CERTIFICATION_BLOCKER)
+    if not selected_side_verified and WEATHER_SELECTED_SIDE_BLOCKER not in blockers:
+        blockers.append(WEATHER_SELECTED_SIDE_BLOCKER)
 
     # Certification and blocker state are separate evidence surfaces. A producer can
     # be internally contradictory (for example certified=true while still carrying
@@ -62,6 +72,7 @@ def _guard_weather_row(row: dict[str, Any]) -> dict[str, Any]:
 
     guarded["hard_blockers"] = blockers
     guarded["weather_certification_verified"] = certified
+    guarded["weather_selected_side_schema_verified"] = selected_side_verified
     guarded["weather_hard_blocker_telemetry_verified"] = blocker_telemetry_valid
     guarded["weather_projection_verified"] = projection_verified
 
@@ -109,7 +120,8 @@ def rank_sleeves(rows: Iterable[dict[str, Any] | Sleeve]) -> dict[str, Any]:
     report = _rank_sleeves(guarded_rows)
     report["weather_projection_policy"] = (
         "Weather theoretical $/day and promotable score require literal "
-        "executable_shadow_prereqs_verified=true from the canonical weather certification "
-        "audit and an empty, structurally valid hard-blocker set."
+        "executable_shadow_prereqs_verified=true plus selected_side_schema_verified=true "
+        "from the canonical weather certification path and an empty, structurally valid "
+        "hard-blocker set."
     )
     return report
