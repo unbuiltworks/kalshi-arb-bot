@@ -17,7 +17,6 @@ def _row():
             "modeled_after_fee_ev_cents": "51.0",
             "modeled_after_fee_edge_cents_per_contract": "10.2",
         },
-        # Legacy producer bug: top-level values copied from YES.
         "modeled_taker_fee_cents": 1,
         "modeled_after_fee_ev_cents": "-4.0",
         "modeled_after_fee_edge_cents_per_contract": "-0.8",
@@ -99,9 +98,7 @@ def test_missing_selected_side_cannot_leave_stale_dashboard_economics():
     row["modeled_taker_fee_cents"] = "2"
     row["modeled_after_fee_ev_cents"] = "51.0"
     row["modeled_after_fee_edge_cents_per_contract"] = "10.2"
-
     out = normalize_selected_side_schema(row)
-
     assert out["selected_side_schema_verified"] is False
     assert out["ev_certified_shadow"] is False
     assert out["best_shadow_side"] is None
@@ -154,3 +151,31 @@ def test_legacy_best_detail_must_match_recomputed_selected_economics():
     assert out["ev_certified_shadow"] is False
     assert out["best_shadow_side"] is None
     assert "LEGACY_BEST_SHADOW_SIDE_DETAIL_MISMATCH" in out["blockers"]
+
+
+def test_string_blocker_telemetry_fails_closed_instead_of_becoming_characters():
+    row = _row()
+    row["blockers"] = "TWC_SOURCE_ACCESS_REQUIRED"
+    out = normalize_selected_side_schema(row)
+    assert out["selected_side_schema_verified"] is False
+    assert out["ev_certified_shadow"] is False
+    assert out["best_shadow_side"] is None
+    assert out["blockers"] == ["MALFORMED_BLOCKER_TELEMETRY"]
+
+
+def test_mixed_malformed_blocker_entries_fail_closed_and_preserve_valid_blocker():
+    row = _row()
+    row["blockers"] = ["TWC_SOURCE_ACCESS_REQUIRED", None, ""]
+    out = normalize_selected_side_schema(row)
+    assert out["selected_side_schema_verified"] is False
+    assert out["ev_certified_shadow"] is False
+    assert "MALFORMED_BLOCKER_TELEMETRY" in out["blockers"]
+    assert "TWC_SOURCE_ACCESS_REQUIRED" in out["blockers"]
+
+
+def test_valid_blocker_collection_is_normalized_without_losing_existing_evidence():
+    row = _row()
+    row["blockers"] = [" TWC_SOURCE_ACCESS_REQUIRED ", "TWC_SOURCE_ACCESS_REQUIRED"]
+    out = normalize_selected_side_schema(row)
+    assert out["selected_side_schema_verified"] is True
+    assert out["blockers"] == ["TWC_SOURCE_ACCESS_REQUIRED"]
