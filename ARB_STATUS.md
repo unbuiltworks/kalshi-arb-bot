@@ -1,8 +1,18 @@
 # ARB Control Plane
 
-Last verified: **2026-08-25 23:44 UTC / 2026-08-25 19:44 ET**
+Last verified: **2026-08-26 00:38 UTC / 2026-08-25 20:38 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
+
+## Latest run delta
+
+- Re-established Railway production state. `sports-kp-live-executor` remains **SUCCESS** on deployment `11e53e98-d318-4455-8341-2cfadc5d275b`; `sports-generic-counterpart-shadow` remains **SUCCESS** on deployment `577775cc-e429-4609-a622-12e87c90c3ad`; `sports-gk-multifamily-live-canary` remains **SUCCESS**; old `crypto-15m-sol-live-canary-10bp-50ms` remains **CRASHED** and was not reopened.
+- The measured K<->P strict MLB-total census remains decision-negative at the fixed 3c taker/taker floor: **1,031 >=1c / 0 >=2c / 0 >=3c**, and **137 >=1c / 0 >=2c / 0 >=3c** at the provisional >=80ms capture floor. This slice still contributes **$0/day deployable capacity**.
+- The MLB game breadth blocker is now implemented on isolated branch `feature/kp-mlb-physical-representation-expansion` at commit `4a5fda180b8c070a2bf090b2ac38e55126f48cef`. The read-only repair preserves exact `contract_key` identity and start-skew gates, enumerates duplicate physical market+side representations only *within* each already-exact shared semantic key, then relies on executable-book pricing and downstream semantic dedupe to select the best physical representation. It adds no order transport, no live authority, no rule certification, and no threshold changes.
+- Regression coverage was added for YES/NO mirror expansion, multiple same-side physical representations, and preservation of the start-skew gate. The normal PR creation action was safety-blocked this run, so the branch was **not** force-moved into production and no Railway service was redeployed around review/CI.
+- Until that read-only breadth repair is promoted and measured, moneyline/spread capacity credit remains **$0**. Missing breadth does not pause or reset the 72-hour wall clock.
+- Account-level Kalshi diagnosis is unchanged: authenticated `/account/limits` = **advanced**, **900 bucket / 300 refill** for reads and writes; do not disrupt unrelated Kalshi services or weaken websocket backoff solely to improve census telemetry.
+- Caleb Durbin remains **-$0.44 REALIZED**. No stale/shadow/unconfirmed row is counted as profit.
 
 ## Objective and accounting rule
 
@@ -64,7 +74,7 @@ It still reports **0 normal-event pairs**, but the cause is now materially narro
 - `_canonical_side()` then rejects a shared key whenever either venue has multiple distinct YES physical representations (or otherwise lacks a single unique physical representation);
 - therefore the generic normalizer is already finding **280 exact semantic contract-key intersections**, but all 280 are being discarded at the physical-representation canonicalization step before start-skew/economics checks.
 
-This is an identity/canonicalization blocker, not evidence of zero cross-venue MLB game overlap. The next safe census repair is **read-only physical-representation expansion within each already-exact shared contract key**, followed by book pricing and semantic dedupe, rather than choosing an arbitrary duplicate or loosening team/start/line/rule identity. Until that is measured and rules are complete, ML/spread rows receive **$0 deployable-capacity credit**.
+This is an identity/canonicalization blocker, not evidence of zero cross-venue MLB game overlap. The safe census repair is **read-only physical-representation expansion within each already-exact shared contract key**, followed by book pricing and semantic dedupe, rather than choosing an arbitrary duplicate or loosening team/start/line/rule identity. The isolated implementation now exists on `feature/kp-mlb-physical-representation-expansion` but is not promoted. Until measured and rules are complete, ML/spread rows receive **$0 deployable-capacity credit**.
 
 ### Gemini<->Kalshi sports
 
@@ -85,7 +95,7 @@ Authenticated `/account/limits` evidence remains authoritative: account tier is 
 ## Highest-value next actions
 
 1. Keep the K<->P 72-hour wall clock running without resets; measured MLB totals currently show **0 >=3c realistic-capture observations** and therefore $0 deployable taker/taker capacity so far.
-2. Repair the MLB game breadth census **without loosening identity**: for each of the 280 already-exact shared semantic contract keys, enumerate the duplicate physical venue representations, price only valid two-sided books, then semantic-dedupe the best executable representation. This should reveal actual ML/spread overlap instead of failing all shared keys at `_canonical_side()`.
+2. Promote the isolated MLB physical-representation expansion only through normal PR/CI review; then price the 280 already-exact shared semantic keys and semantic-dedupe the best executable physical representation. Do not loosen identity.
 3. Keep rules incomplete / capacity credit $0 until settlement/postponement/cancellation semantics are explicitly certified. Add only strict props with provable rule equivalence; participation-conditional rows remain excluded from guaranteed capacity.
 4. Keep recording G<->K authoritative submissions/fills/settlements only. Caleb remains -$0.44 realized. Do not count the newly running canary unless both legs and final settlement reconcile.
 5. Preserve Kalshi read-budget headroom and websocket backoff; do not disrupt unrelated services merely to improve telemetry.
