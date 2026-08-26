@@ -71,18 +71,18 @@ def test_top_level_ev_must_match_selected_record():
 
 def test_fixed_point_selected_side_arithmetic_is_supported():
     row = _row()
-    row["modeled_after_fee_ev_cents"] = "15.25"
+    row["modeled_after_fee_ev_cents"] = "15.0"
     row["side_economics"][1] = {
         "side": "NO",
         "ask_dollars": "0.4100",
         "quantity": "2.50",
         "modeled_taker_fee_dollars": "0.025",
         "forecast_side_probability": "0.48",
-        "modeled_after_fee_ev_cents": "15.25",
+        "modeled_after_fee_ev_cents": "15.0",
     }
     out = audit_weather_selected_side_economics_arithmetic(row)
     assert out["selected_side_economics_arithmetic_verified"] is True
-    assert out["recomputed_after_fee_ev_cents"] == "15.25000"
+    assert out["recomputed_after_fee_ev_cents"] == "15.00000"
 
 
 def test_selected_side_identity_must_be_unique():
