@@ -231,5 +231,6 @@ async def heartbeat(*args: Any, **kwargs: Any) -> None:
 base.evaluate_key = evaluate_key
 base.heartbeat = heartbeat
 
+# Deployment trigger after Railway watch-pattern update.
 if __name__ == "__main__":
     base.main()
