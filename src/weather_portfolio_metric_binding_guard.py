@@ -11,13 +11,18 @@ counts in a verified observation window. The probability denominator must repres
 complete scanner-snapshot window (including zero-opportunity snapshots), duplicate
 snapshot counting must be explicitly excluded, and the sample cohort must be bound to
 the exact Kalshi market, scored side, scored quantity, maximum executable ask, and
-minimum after-fee edge being ranked. It is read-only and cannot authorize order entry
-or a live probe.
+minimum after-fee edge being ranked. The empirical window must also end at or before
+the quote being ranked so later liquidity cannot leak into a prospective SHADOW score.
+It is read-only and cannot authorize order entry or a live probe.
 """
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 from typing import Any
+
+from src.weather_execution_probability_time_guard import (
+    audit_weather_execution_probability_time_binding,
+)
 
 D = Decimal
 
@@ -196,12 +201,17 @@ def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any
     sample_basis_verified = _sample_basis_verified(row)
     sample_scope_verified = _sample_scope_verified(row, record)
     sample_outcome_verified = _sample_outcome_verified(row, record)
+    time_audit = audit_weather_execution_probability_time_binding(row)
+    sample_time_verified = time_audit["weather_execution_probability_time_verified"] is True
     if not sample_basis_verified:
         blockers.append(EXECUTION_SAMPLE_BASIS_UNVERIFIED)
     if not sample_scope_verified:
         blockers.append(EXECUTION_SAMPLE_SCOPE_UNVERIFIED)
     if not sample_outcome_verified:
         blockers.append(EXECUTION_SAMPLE_OUTCOME_UNVERIFIED)
+    for blocker in time_audit.get("blockers", []):
+        if blocker not in blockers:
+            blockers.append(blocker)
 
     probability_verified = (
         row.get("executable_probability_verified") is True
@@ -209,6 +219,7 @@ def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any
         and sample_basis_verified
         and sample_scope_verified
         and sample_outcome_verified
+        and sample_time_verified
         and derived_probability is not None
         and producer_probability is not None
         and producer_probability == derived_probability
@@ -237,6 +248,7 @@ def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any
         "weather_execution_sample_basis_verified": sample_basis_verified,
         "weather_execution_sample_scope_verified": sample_scope_verified,
         "weather_execution_sample_outcome_verified": sample_outcome_verified,
+        "weather_execution_sample_time_verified": sample_time_verified,
         "execution_probability_sample_basis": row.get("executable_probability_sample_basis"),
         "execution_probability_sample_scope": row.get("executable_probability_sample_scope"),
         "execution_probability_market_ticker": row.get("executable_probability_market_ticker"),
@@ -247,6 +259,10 @@ def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any
         "execution_probability_min_after_fee_edge_cents_per_contract": row.get(
             "executable_probability_min_after_fee_edge_cents_per_contract"
         ),
+        "quote_observed_at": time_audit.get("quote_observed_at"),
+        "execution_probability_window_start": time_audit.get("execution_probability_window_start"),
+        "execution_probability_window_end": time_audit.get("execution_probability_window_end"),
+        "execution_probability_lookahead_detected": time_audit.get("execution_probability_lookahead_detected"),
         "selected_after_fee_edge_cents_per_contract": (
             None if selected_edge_cents_per_contract is None else str(selected_edge_cents_per_contract)
         ),
