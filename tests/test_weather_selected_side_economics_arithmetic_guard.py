@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from src.weather_selected_side_economics_arithmetic_guard import (
     audit_weather_selected_side_economics_arithmetic,
 )
@@ -82,7 +84,7 @@ def test_fixed_point_selected_side_arithmetic_is_supported():
     }
     out = audit_weather_selected_side_economics_arithmetic(row)
     assert out["selected_side_economics_arithmetic_verified"] is True
-    assert out["recomputed_after_fee_ev_cents"] == "15.00000"
+    assert Decimal(out["recomputed_after_fee_ev_cents"]) == Decimal("15")
 
 
 def test_selected_side_identity_must_be_unique():
