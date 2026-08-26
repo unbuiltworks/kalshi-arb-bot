@@ -17,6 +17,7 @@ import time
 from dataclasses import asdict
 from datetime import datetime, timezone
 
+from src.fee_calc import taker_fee_cents
 from src.weather_orderbook import executable_grid, fetch_orderbook
 from src.weather_shadow import WEATHER_SERIES, WeatherShadowRow, scan_weather
 
@@ -79,6 +80,44 @@ def _fill_payload(fill) -> dict[str, object]:
     }
 
 
+def _depth_repriced_q1_ev_cents(row: WeatherShadowRow, side: str, q1_fill) -> tuple[float | None, int | None]:
+    """Recompute q1 research EV from the actually consumable depth price.
+
+    The top-level market snapshot and the deeper order-book fetch are not atomic. A
+    displayed ask used by ``WeatherShadowRow`` can therefore differ from the price
+    actually consumable when depth is fetched moments later. Once depth exists, the
+    q1 research EV must use that q1 fill cost rather than the earlier displayed ask.
+
+    This remains research-only: the fee here is the existing modeled Kalshi taker
+    fee, not the authoritative fee audit required for executable-shadow readiness.
+    """
+    if (
+        q1_fill is None
+        or q1_fill.fully_fillable is not True
+        or q1_fill.filled_contracts < 1.0
+        or row.model_yes_probability is None
+    ):
+        return None, None
+    try:
+        cost_cents = float(q1_fill.total_cost_cents)
+        p_yes = float(row.model_yes_probability)
+    except (TypeError, ValueError):
+        return None, None
+    if not (0.0 <= p_yes <= 1.0) or not (0.0 < cost_cents < 100.0):
+        return None, None
+
+    side_norm = str(side).strip().lower()
+    if side_norm not in {"yes", "no"}:
+        return None, None
+    # q1 total_cost is the executable book cost in cents. Fee calculation accepts
+    # cents and remains explicitly modeled/research-only on this legacy integration
+    # branch.
+    fee_cents = taker_fee_cents(1, int(round(cost_cents)), row.market_ticker)
+    payout_probability = p_yes if side_norm == "yes" else (1.0 - p_yes)
+    ev_cents = round(payout_probability * 100.0 - cost_cents - fee_cents, 2)
+    return ev_cents, fee_cents
+
+
 def _side_readiness_blockers(row: WeatherShadowRow, q1_fill) -> list[str]:
     blockers = list(_research_blockers(row))
     if q1_fill is None or q1_fill.fully_fillable is not True:
@@ -119,6 +158,7 @@ def run_forever() -> None:
             candidates = candidates[:depth_candidates]
             depth_checked = 0
             depth_research_events = 0
+            depth_repriced_positive_events = 0
             execution_eligible_events = 0
 
             for row in candidates:
@@ -129,11 +169,16 @@ def run_forever() -> None:
                     book = fetch_orderbook(row.market_ticker, depth=100)
                     grid = executable_grid(book, max_q=5)
                     depth_checked += 1
-                    for side, research_ev in sides:
+                    for side, predepth_research_ev in sides:
                         side_grid = grid[side]
+                        q1_fill = side_grid.get(1)
                         fills = {str(q): _fill_payload(side_grid[q]) for q in range(1, 6)}
-                        blockers = _side_readiness_blockers(row, side_grid.get(1))
+                        depth_repriced_ev, depth_repriced_fee = _depth_repriced_q1_ev_cents(row, side, q1_fill)
+                        blockers = _side_readiness_blockers(row, q1_fill)
                         execution_eligible = not blockers
+                        depth_repriced_positive = (
+                            depth_repriced_ev is not None and depth_repriced_ev >= min_ev_cents
+                        )
                         print(json.dumps({
                             "event": "WEATHER_DEPTH_RESEARCH_SHADOW",
                             "classification": "SHADOW",
@@ -152,7 +197,10 @@ def run_forever() -> None:
                             "city": row.city,
                             "title": row.title,
                             "side": side.upper(),
-                            "q1_research_model_ev_cents": research_ev,
+                            "predepth_research_model_ev_cents": predepth_research_ev,
+                            "q1_research_model_ev_cents": depth_repriced_ev,
+                            "q1_depth_repriced_modeled_fee_cents": depth_repriced_fee,
+                            "q1_depth_repriced_positive": depth_repriced_positive,
                             "model_yes_probability": row.model_yes_probability,
                             "displayed_yes_ask_cents": row.yes_ask_cents,
                             "displayed_no_ask_cents": row.no_ask_cents,
@@ -160,6 +208,8 @@ def run_forever() -> None:
                             "ts": datetime.now(timezone.utc).isoformat(),
                         }, sort_keys=True), flush=True)
                         depth_research_events += 1
+                        if depth_repriced_positive:
+                            depth_repriced_positive_events += 1
                         if execution_eligible:
                             execution_eligible_events += 1
                 except Exception as exc:
@@ -179,6 +229,7 @@ def run_forever() -> None:
                 "positive_research_candidates": len(candidates),
                 "depth_checked": depth_checked,
                 "depth_research_events": depth_research_events,
+                "depth_repriced_positive_events": depth_repriced_positive_events,
                 "execution_eligible_events": execution_eligible_events,
                 "settlement_statuses": settlement_states,
                 "classification": "SHADOW",
