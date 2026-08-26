@@ -12,6 +12,7 @@ import asyncio
 from decimal import Decimal, ROUND_CEILING
 import json
 import logging
+import time
 from typing import Any
 
 from src import sports_kp_mlb_moneyline_maker_fill_shadow as impl
@@ -55,14 +56,12 @@ def _safe_decimal(value: Any) -> Decimal:
 
 
 class _CoverageRankingHandler(logging.Handler):
-    """Derive discounted incentive coverage and rank under-covered markets.
+    """Rank incentive scarcity using the venue's actual Target Size rule.
 
-    Coverage is deliberately the requested measurement:
-        discounted qualifying score / target size
-
-    It is reported per side and as the minimum side coverage. This does not
-    claim a venue reward share or realized income; it is only the scarcity
-    signal used to rank which live incentive markets deserve maker attention.
+    Polymarket Target Size is RAW resting size, not discounted score. A side
+    below target gets zero normalized snapshot score. Discounted score is kept
+    separately as a competition/tightness diagnostic and is never divided by
+    Target Size and called coverage.
     """
 
     def __init__(self) -> None:
@@ -83,56 +82,98 @@ class _CoverageRankingHandler(logging.Handler):
                 if venue == "KALSHI":
                     side_a_name = "yes"
                     side_b_name = "no"
+                    raw_a = _safe_decimal(payload.get("yes_total_raw_size"))
+                    raw_b = _safe_decimal(payload.get("no_total_raw_size"))
                     score_a = _safe_decimal(payload.get("yes_qualifying_score"))
                     score_b = _safe_decimal(payload.get("no_qualifying_score"))
+                    met_a = bool(payload.get("snapshot_two_sided_target_met"))
+                    met_b = met_a
                     phase = "active"
+                    event_start_ms = None
                 elif venue == "POLYMARKET_US":
                     side_a_name = "bid"
                     side_b_name = "ask"
+                    raw_a = _safe_decimal(payload.get("bid_total_raw_size"))
+                    raw_b = _safe_decimal(payload.get("ask_total_raw_size"))
                     score_a = _safe_decimal(payload.get("bid_qualifying_score"))
                     score_b = _safe_decimal(payload.get("ask_qualifying_score"))
+                    met_a = bool(payload.get("bid_target_met"))
+                    met_b = bool(payload.get("ask_target_met"))
                     phase = str(payload.get("applicable_period_by_event_clock") or payload.get("period") or "")
+                    try:
+                        event_start_ms = int(payload.get("event_start_ms"))
+                    except Exception:
+                        event_start_ms = None
                 else:
                     return
 
-                coverage_a = score_a / target
-                coverage_b = score_b / target
+                coverage_a = raw_a / target
+                coverage_b = raw_b / target
                 min_coverage = min(coverage_a, coverage_b)
+                activation_gap_a = max(ZERO, target - raw_a)
+                activation_gap_b = max(ZERO, target - raw_b)
+                time_to_game_minutes = None
+                if event_start_ms is not None:
+                    time_to_game_minutes = (D(event_start_ms) - D(int(time.time() * 1000))) / D("60000")
+
                 self.rows.append({
                     "venue": venue,
                     "market": str(payload.get("market") or ""),
                     "program_id": str(payload.get("program_id") or ""),
                     "phase": phase,
+                    "time_to_game_minutes": str(time_to_game_minutes) if time_to_game_minutes is not None else None,
                     "reward_pool_usd": str(reward),
                     "target_size": str(target),
-                    f"{side_a_name}_coverage_ratio": str(coverage_a),
-                    f"{side_b_name}_coverage_ratio": str(coverage_b),
-                    "min_coverage_ratio": str(min_coverage),
-                    "under_covered": min_coverage < ONE,
-                    "coverage_definition": "DISCOUNTED_QUALIFYING_SCORE_DIV_TARGET",
+                    f"{side_a_name}_raw_target_coverage": str(coverage_a),
+                    f"{side_b_name}_raw_target_coverage": str(coverage_b),
+                    "min_raw_target_coverage": str(min_coverage),
+                    f"{side_a_name}_activation_gap_contracts": str(activation_gap_a),
+                    f"{side_b_name}_activation_gap_contracts": str(activation_gap_b),
+                    f"{side_a_name}_target_met": met_a,
+                    f"{side_b_name}_target_met": met_b,
+                    f"{side_a_name}_discounted_qualifying_score": str(score_a),
+                    f"{side_b_name}_discounted_qualifying_score": str(score_b),
+                    "under_raw_target": (coverage_a < ONE) or (coverage_b < ONE),
+                    "coverage_definition": "RAW_RESTING_SIZE_DIV_TARGET_PER_DOCS",
+                    "score_note": "DISCOUNTED_SCORE_IS_COMPETITION_NOT_TARGET_COVERAGE",
                 })
                 return
 
             if message.startswith("KPMM_INCENTIVE_SUMMARY "):
                 under = [
                     row for row in self.rows
-                    if row.get("under_covered") and _safe_decimal(row.get("reward_pool_usd")) > 0
+                    if row.get("under_raw_target") and _safe_decimal(row.get("reward_pool_usd")) > 0
                 ]
                 under.sort(
                     key=lambda row: (
-                        _safe_decimal(row.get("min_coverage_ratio")),
+                        _safe_decimal(row.get("min_raw_target_coverage")),
                         -_safe_decimal(row.get("reward_pool_usd")),
                         str(row.get("venue")),
                         str(row.get("market")),
                     )
                 )
+                phase_counts: dict[str, int] = {}
+                for row in under:
+                    key = str(row.get("phase") or "unknown")
+                    phase_counts[key] = phase_counts.get(key, 0) + 1
+                observed = sorted(
+                    self.rows,
+                    key=lambda row: (
+                        _safe_decimal(row.get("min_raw_target_coverage")),
+                        str(row.get("market")),
+                    ),
+                )
                 impl.logger.warning("KPMM_INCENTIVE_COVERAGE_RANKING %s", json.dumps({
-                    "definition": "DISCOUNTED_QUALIFYING_SCORE_DIV_TARGET",
+                    "definition": "RAW_RESTING_SIZE_DIV_TARGET_PER_DOCS",
                     "markets_observed": len(self.rows),
-                    "under_covered_live_pool_candidates": len(under),
-                    "top_under_covered": under[:20],
-                    "ranking_order": "LOWEST_MIN_SIDE_COVERAGE_THEN_LARGEST_POOL",
-                    "yield_status": "SCARCITY_RANK_ONLY_NOT_REWARD_SHARE_NOT_REALIZED",
+                    "under_raw_target_live_pool_candidates": len(under),
+                    "under_target_by_phase": phase_counts,
+                    "top_under_raw_target": under[:20],
+                    "lowest_raw_target_coverage_observed": observed[:20],
+                    "ranking_order": "LOWEST_RAW_TARGET_COVERAGE_THEN_LARGEST_POOL",
+                    "allocation_rule": "PROGRAM_POOL_SHARED_ACROSS_PROGRAM_MARKETS; EACH_QUALIFYING_BOOK_SIDE_NORMALIZED_PER_SNAPSHOT",
+                    "programwide_denominator_status": "INCOMPLETE_UNTIL_ALL_PROGRAM_MARKETS_OBSERVED",
+                    "yield_status": "NO_YIELD_ESTIMATE_UNTIL_PROGRAMWIDE_NORMALIZED_SCORE_DENOMINATOR_AND_PICKOFF_COST",
                     "capacity_credit_usd_per_day": 0,
                     "read_only": True,
                     "order_entry": False,
