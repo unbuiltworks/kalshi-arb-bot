@@ -82,6 +82,6 @@ def test_ambiguous_selected_side_fails_closed(monkeypatch):
     assert out["best_shadow_side"] is None
     assert out["modeled_taker_fee_cents"] is None
     assert out["modeled_after_fee_ev_cents"] is None
-    assert "SELECTED_SIDE_ECONOMICS_AMBIGUOUS" in out["blockers"]
+    assert "SIDE_ECONOMICS_IDENTITY_UNVERIFIED" in out["blockers"]
     assert out["order_entry"] is False
     assert out["live_probe_ready"] is False
