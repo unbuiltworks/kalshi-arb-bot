@@ -7,8 +7,9 @@ to stale or malformed probability/fee/EV fields and contaminate portfolio rankin
 This helper independently recomputes arithmetic for *both* YES and NO records before it
 accepts the producer-selected best side. Auditing only the selected side is insufficient:
 a fabricated EV on the opposite side can change which side appears best without ever
-being checked. Both records must therefore be arithmetically coherent, and the unique
-best side from the independently recomputed EVs must match ``best_shadow_side``.
+being checked. Both records must therefore be arithmetically coherent, their forecast
+probabilities must describe one binary distribution (YES + NO = 1), and the unique best
+side from the independently recomputed EVs must match ``best_shadow_side``.
 
 It is read-only and cannot authorize order entry or live probes.
 """
@@ -106,6 +107,7 @@ def audit_weather_selected_side_economics_arithmetic(row: dict[str, Any]) -> dic
     - literal YES/NO selected side;
     - exactly one YES and one NO ``side_economics`` record;
     - finite probability in [0, 1] for both sides;
+    - YES and NO probabilities sum exactly to one binary distribution;
     - finite executable price, positive quantity, and non-negative modeled fee for both;
     - each reported side EV exactly equals its independent recomputation;
     - the unique best independently recomputed side matches the declared selected side;
@@ -142,6 +144,15 @@ def audit_weather_selected_side_economics_arithmetic(row: dict[str, Any]) -> dic
         if set(records) != {"YES", "NO"}:
             blockers.append("SELECTED_SIDE_ECONOMICS_REQUIRED")
             records = {}
+
+    probabilities: dict[str, Decimal] = {}
+    if records:
+        for item_side in ("YES", "NO"):
+            probability = _decimal(records[item_side].get("forecast_side_probability"))
+            if probability is not None and Decimal(0) <= probability <= Decimal(1):
+                probabilities[item_side] = probability
+        if set(probabilities) == {"YES", "NO"} and probabilities["YES"] + probabilities["NO"] != Decimal(1):
+            blockers.append("PROBABILITY_COMPLEMENT_MISMATCH")
 
     recomputed: dict[str, Decimal] = {}
     reported: dict[str, Decimal] = {}
