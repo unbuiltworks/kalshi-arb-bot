@@ -46,6 +46,7 @@ def _row():
 def test_normalizes_legacy_object_and_binds_top_level_to_selected_no_side():
     out = normalize_selected_side_schema(_row())
     assert out["selected_side_schema_verified"] is True
+    assert out["selected_side_recomputed"] is True
     assert out["best_shadow_side"] == "NO"
     assert out["best_shadow_side_detail"]["side"] == "NO"
     assert out["modeled_taker_fee_cents"] == 2
@@ -66,7 +67,7 @@ def test_duplicate_selected_side_records_fail_closed_and_strip_all_economics():
     assert out["modeled_taker_fee_cents"] is None
     assert out["modeled_after_fee_ev_cents"] is None
     assert out["modeled_after_fee_edge_cents_per_contract"] is None
-    assert "SELECTED_SIDE_ECONOMICS_AMBIGUOUS" in out["blockers"]
+    assert "SIDE_ECONOMICS_IDENTITY_UNVERIFIED" in out["blockers"]
 
 
 def test_nonfinite_selected_ev_fails_closed():
@@ -120,3 +121,36 @@ def test_string_side_is_supported_but_still_rebound_to_exact_side_record():
     out = normalize_selected_side_schema(row)
     assert out["selected_side_schema_verified"] is True
     assert out["modeled_after_fee_ev_cents"] == "51.0"
+
+
+def test_declared_worse_side_fails_closed_instead_of_misranking_portfolio():
+    row = _row()
+    row["best_shadow_side"] = "YES"
+    out = normalize_selected_side_schema(row)
+    assert out["selected_side_schema_verified"] is False
+    assert out["ev_certified_shadow"] is False
+    assert out["best_shadow_side"] is None
+    assert out["modeled_after_fee_ev_cents"] is None
+    assert "BEST_SHADOW_SIDE_RECOMPUTE_MISMATCH" in out["blockers"]
+
+
+def test_equal_yes_no_ev_fails_closed_as_ambiguous_best_side():
+    row = _row()
+    row["side_economics"][0]["modeled_after_fee_ev_cents"] = "51.0"
+    row["side_economics"][0]["modeled_after_fee_edge_cents_per_contract"] = "10.2"
+    out = normalize_selected_side_schema(row)
+    assert out["selected_side_schema_verified"] is False
+    assert out["ev_certified_shadow"] is False
+    assert out["best_shadow_side"] is None
+    assert out["modeled_after_fee_ev_cents"] is None
+    assert "BEST_SHADOW_SIDE_TIE" in out["blockers"]
+
+
+def test_legacy_best_detail_must_match_recomputed_selected_economics():
+    row = _row()
+    row["best_shadow_side"]["modeled_after_fee_ev_cents"] = "49.0"
+    out = normalize_selected_side_schema(row)
+    assert out["selected_side_schema_verified"] is False
+    assert out["ev_certified_shadow"] is False
+    assert out["best_shadow_side"] is None
+    assert "LEGACY_BEST_SHADOW_SIDE_DETAIL_MISMATCH" in out["blockers"]
