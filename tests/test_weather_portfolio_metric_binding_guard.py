@@ -8,6 +8,7 @@ def _row():
     # Derived edge/dollar = 0.175 / 0.425 = 7/17.
     # Empirical execution probability = 10 / 40 = 0.25.
     return {
+        "market_ticker": "KXHIGHMIA-26AUG25-B92.5",
         "best_shadow_side": "NO",
         "side_economics": [
             {
@@ -36,6 +37,10 @@ def _row():
         "executable_probability_complete_window_verified": True,
         "executable_probability_includes_zero_opportunity_snapshots": True,
         "executable_probability_duplicate_snapshot_counting_excluded": True,
+        "executable_probability_scope_verified": True,
+        "executable_probability_sample_scope": "EXACT_MARKET_SAME_SIDE_EXECUTABLE_SHADOW",
+        "executable_probability_market_ticker": "KXHIGHMIA-26AUG25-B92.5",
+        "executable_probability_side": "NO",
     }
 
 
@@ -44,6 +49,7 @@ def test_portfolio_metrics_bind_to_selected_side():
     assert out["weather_portfolio_metric_binding_verified"] is True
     assert out["weather_execution_probability_verified"] is True
     assert out["weather_execution_sample_basis_verified"] is True
+    assert out["weather_execution_sample_scope_verified"] is True
     assert Decimal(out["derived_depth_dollars"]) == Decimal("0.41")
     assert Decimal(out["derived_net_edge_per_dollar"]) == Decimal("7") / Decimal("17")
     assert Decimal(out["verified_executable_probability"]) == Decimal("0.25")
@@ -100,6 +106,33 @@ def test_execution_probability_requires_complete_nonduplicated_snapshot_basis():
         assert out["weather_portfolio_metric_binding_verified"] is False
         assert "WEATHER_EXECUTION_SAMPLE_BASIS_UNVERIFIED" in out["blockers"]
         assert "WEATHER_EXECUTION_PROBABILITY_UNVERIFIED" in out["blockers"]
+
+
+def test_execution_probability_requires_exact_market_and_side_scope():
+    cases = (
+        ("executable_probability_scope_verified", "true"),
+        ("executable_probability_sample_scope", "ALL_WEATHER_MARKETS"),
+        ("executable_probability_market_ticker", "KXHIGHNY-26AUG25-B82.5"),
+        ("executable_probability_side", "YES"),
+    )
+    for key, value in cases:
+        row = _row()
+        row[key] = value
+        out = audit_weather_portfolio_metric_binding(row)
+        assert out["weather_execution_sample_scope_verified"] is False
+        assert out["weather_execution_probability_verified"] is False
+        assert out["weather_portfolio_metric_binding_verified"] is False
+        assert "WEATHER_EXECUTION_SAMPLE_SCOPE_UNVERIFIED" in out["blockers"]
+        assert "WEATHER_EXECUTION_PROBABILITY_UNVERIFIED" in out["blockers"]
+
+
+def test_missing_market_identity_cannot_borrow_weather_wide_execution_rate():
+    row = _row()
+    del row["market_ticker"]
+    out = audit_weather_portfolio_metric_binding(row)
+    assert out["weather_execution_sample_scope_verified"] is False
+    assert out["weather_portfolio_metric_binding_verified"] is False
+    assert "WEATHER_EXECUTION_SAMPLE_SCOPE_UNVERIFIED" in out["blockers"]
 
 
 def test_producer_probability_must_equal_probability_derived_from_counts():
