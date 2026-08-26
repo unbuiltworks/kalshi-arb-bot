@@ -18,11 +18,44 @@ Safety rules:
 - Do not copy secrets into GitHub, shell history, SSM command text, logs, or this repo.
 - The runner verifies that `src/`, `config/`, `requirements.txt`, and `Dockerfile` still match the Railway strategy commit before starting.
 
-Required host paths:
+Known existing host:
 
+- OS: Ubuntu 26.04 LTS
 - repo: `/home/ssm-user/kalshi-arb-bot`
 - secure env file: `/etc/arb/sports-maker-shadow.env`
 - isolated worktree: `/opt/arb/aws-sports-maker-shadow`
+
+### One-shot host preparation
+
+The preparation step installs Docker, fixes runtime ownership, verifies strategy parity, and builds the AWS image **without starting the maker shadow**.
+
+Run this through Systems Manager `AWS-RunShellScript`:
+
+```bash
+set -euo pipefail
+REPO=/home/ssm-user/kalshi-arb-bot
+sudo -u ssm-user -H git -C "$REPO" fetch origin aws-migration-foundation
+sudo -u ssm-user -H bash -lc "git -C '$REPO' show origin/aws-migration-foundation:deploy/aws/prepare_hot_host.sh > /tmp/arb-prepare-hot-host.sh"
+chmod 0755 /tmp/arb-prepare-hot-host.sh
+bash /tmp/arb-prepare-hot-host.sh
+```
+
+The bootstrap supports Ubuntu 26.04 using Docker's official apt repository. Git always runs as `ssm-user`; the repo is not marked globally safe for root. A dedicated `arb` group protects runtime files and `/opt/arb` is writable by the runtime user.
+
+Expected successful ending before secrets are configured:
+
+```text
+BOOTSTRAP_OK
+ENV_MISSING
+STRATEGY_PARITY_OK commit=044204d31c98a098a180e726899162180556ef63
+IMAGE_BUILD_OK image=arb-sports-maker-shadow:aws-parity
+PREPARE_ONLY_OK
+ENV_MISSING
+AWS_HOT_HOST_PREPARED
+NEXT_GATE=secure_env
+```
+
+`ENV_MISSING` is expected at this stage.
 
 Required environment-variable names for the current Railway workload:
 
@@ -36,9 +69,9 @@ Required environment-variable names for the current Railway workload:
 - `POLYMARKET_SECRET_KEY`
 - `SPORTS_POLY_RELAY_LIVE_Q1`
 
-Prefer AWS Secrets Manager for permanent deployment. For the parity host, if an env file is used temporarily, keep it root-readable only (`chmod 600`) and never paste its values into SSM Run Command. AWS documents that Run Command history is retained and sensitive plaintext should not be embedded in commands.
+Prefer AWS Secrets Manager for permanent deployment. If an env file is materialized on the parity host, it must be owned `root:arb` and mode `0640`; never paste its values into SSM Run Command.
 
-Start the shadow:
+### Start the read-only shadow after the secure-env gate
 
 ```bash
 cd /home/ssm-user/kalshi-arb-bot
@@ -47,6 +80,8 @@ git show origin/aws-migration-foundation:deploy/aws/run_sports_maker_shadow.sh >
 chmod +x /tmp/run_sports_maker_shadow.sh
 /tmp/run_sports_maker_shadow.sh
 ```
+
+The runner forces `BOT_MODE=paper` even if the environment file says otherwise.
 
 Inspect:
 
