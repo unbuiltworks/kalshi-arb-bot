@@ -1,10 +1,14 @@
 """Fail-closed arithmetic audit for selected-side weather SHADOW economics.
 
 Book identity and depth are necessary but not sufficient evidence that a reported weather
-EV is economically coherent.  A producer could otherwise attach a plausible current ask
-and quantity to stale or malformed probability/fee/EV fields and contaminate portfolio
-ranking.  This helper independently recomputes selected-side after-fee EV from the
-producer's explicit probability, executable price, quantity, and modeled fee.
+EV is economically coherent. A producer could otherwise attach a plausible current ask
+to stale or malformed probability/fee/EV fields and contaminate portfolio ranking.
+
+This helper independently recomputes arithmetic for *both* YES and NO records before it
+accepts the producer-selected best side. Auditing only the selected side is insufficient:
+a fabricated EV on the opposite side can change which side appears best without ever
+being checked. Both records must therefore be arithmetically coherent, and the unique
+best side from the independently recomputed EVs must match ``best_shadow_side``.
 
 It is read-only and cannot authorize order entry or live probes.
 """
@@ -57,19 +61,59 @@ def _fee_cents(record: dict[str, Any]) -> Decimal | None:
     return fee if fee is not None and fee >= 0 else None
 
 
+def _audit_record(record: dict[str, Any]) -> tuple[Decimal | None, Decimal | None, list[str]]:
+    blockers: list[str] = []
+    probability = _decimal(record.get("forecast_side_probability"))
+    price = _price_dollars(record)
+    quantity = _quantity(record)
+    fee_cents = _fee_cents(record)
+    reported_ev = _decimal(record.get("modeled_after_fee_ev_cents"))
+
+    if probability is None or probability < 0 or probability > 1:
+        blockers.append("PROBABILITY_INVALID")
+    if price is None:
+        blockers.append("PRICE_INVALID")
+    if quantity is None:
+        blockers.append("QUANTITY_INVALID")
+    if fee_cents is None:
+        blockers.append("FEE_INVALID")
+    if reported_ev is None:
+        blockers.append("EV_INVALID")
+
+    recomputed_ev: Decimal | None = None
+    if (
+        probability is not None
+        and Decimal(0) <= probability <= Decimal(1)
+        and price is not None
+        and quantity is not None
+        and fee_cents is not None
+    ):
+        recomputed_ev = (
+            probability * Decimal(100) * quantity
+            - price * Decimal(100) * quantity
+            - fee_cents
+        )
+        if reported_ev is None or recomputed_ev != reported_ev:
+            blockers.append("EV_ARITHMETIC_MISMATCH")
+
+    return recomputed_ev, reported_ev, blockers
+
+
 def audit_weather_selected_side_economics_arithmetic(row: dict[str, Any]) -> dict[str, Any]:
-    """Independently recompute the selected-side modeled after-fee EV.
+    """Independently recompute both-side modeled after-fee EV before ranking.
 
     Required evidence:
     - literal YES/NO selected side;
-    - exactly one matching side_economics record;
-    - finite probability in [0, 1];
-    - finite executable price, positive quantity, and non-negative modeled fee;
-    - reported selected-side EV exactly equals the independent recomputation.
+    - exactly one YES and one NO ``side_economics`` record;
+    - finite probability in [0, 1] for both sides;
+    - finite executable price, positive quantity, and non-negative modeled fee for both;
+    - each reported side EV exactly equals its independent recomputation;
+    - the unique best independently recomputed side matches the declared selected side;
+    - top-level EV exactly matches that selected record.
 
     This guard deliberately does not decide whether the probability model or fee source is
-    authoritative; those are separate certification dimensions.  It only proves the
-    arithmetic is internally coherent before those evidence surfaces are combined.
+    authoritative; those are separate certification dimensions. It proves the arithmetic
+    and side ranking are internally coherent before those evidence surfaces are combined.
     """
     if not isinstance(row, dict):
         raise TypeError("row must be a dict")
@@ -80,53 +124,56 @@ def audit_weather_selected_side_economics_arithmetic(row: dict[str, Any]) -> dic
         blockers.append("SELECTED_SIDE_REQUIRED")
 
     economics = row.get("side_economics")
-    selected: dict[str, Any] | None = None
-    if not isinstance(economics, list) or side not in {"YES", "NO"}:
+    records: dict[str, dict[str, Any]] = {}
+    if not isinstance(economics, list) or len(economics) != 2:
         blockers.append("SELECTED_SIDE_ECONOMICS_REQUIRED")
     else:
-        matches = [
-            item for item in economics
-            if isinstance(item, dict) and str(item.get("side") or "").strip().upper() == side
-        ]
-        if len(matches) != 1:
+        for item in economics:
+            if not isinstance(item, dict):
+                blockers.append("SELECTED_SIDE_ECONOMICS_REQUIRED")
+                records = {}
+                break
+            item_side = str(item.get("side") or "").strip().upper()
+            if item_side not in {"YES", "NO"} or item_side in records:
+                blockers.append("SELECTED_SIDE_ECONOMICS_REQUIRED")
+                records = {}
+                break
+            records[item_side] = item
+        if set(records) != {"YES", "NO"}:
             blockers.append("SELECTED_SIDE_ECONOMICS_REQUIRED")
+            records = {}
+
+    recomputed: dict[str, Decimal] = {}
+    reported: dict[str, Decimal] = {}
+    if records:
+        for item_side in ("YES", "NO"):
+            recomputed_ev, reported_ev, record_blockers = _audit_record(records[item_side])
+            selected_record = item_side == side
+            for blocker in record_blockers:
+                if selected_record:
+                    blockers.append(f"SELECTED_SIDE_{blocker}")
+                else:
+                    blockers.append(f"OPPOSITE_SIDE_{blocker}")
+            if recomputed_ev is not None:
+                recomputed[item_side] = recomputed_ev
+            if reported_ev is not None:
+                reported[item_side] = reported_ev
+
+    recomputed_best_side: str | None = None
+    if set(recomputed) == {"YES", "NO"}:
+        if recomputed["YES"] == recomputed["NO"]:
+            blockers.append("RECOMPUTED_BEST_SIDE_TIE")
         else:
-            selected = matches[0]
+            recomputed_best_side = "YES" if recomputed["YES"] > recomputed["NO"] else "NO"
+            if side in {"YES", "NO"} and recomputed_best_side != side:
+                blockers.append("RECOMPUTED_BEST_SIDE_MISMATCH")
 
-    recomputed_ev: Decimal | None = None
-    reported_ev: Decimal | None = None
-    if selected is not None:
-        probability = _decimal(selected.get("forecast_side_probability"))
-        price = _price_dollars(selected)
-        quantity = _quantity(selected)
-        fee_cents = _fee_cents(selected)
-        reported_ev = _decimal(selected.get("modeled_after_fee_ev_cents"))
-
-        if probability is None or probability < 0 or probability > 1:
-            blockers.append("SELECTED_SIDE_PROBABILITY_INVALID")
-        if price is None:
-            blockers.append("SELECTED_SIDE_PRICE_INVALID")
-        if quantity is None:
-            blockers.append("SELECTED_SIDE_QUANTITY_INVALID")
-        if fee_cents is None:
-            blockers.append("SELECTED_SIDE_FEE_INVALID")
-        if reported_ev is None:
-            blockers.append("SELECTED_SIDE_EV_INVALID")
-
-        if (
-            probability is not None and Decimal(0) <= probability <= Decimal(1)
-            and price is not None and quantity is not None and fee_cents is not None
-        ):
-            recomputed_ev = (
-                probability * Decimal(100) * quantity
-                - price * Decimal(100) * quantity
-                - fee_cents
-            )
-            if reported_ev is None or recomputed_ev != reported_ev:
-                blockers.append("SELECTED_SIDE_EV_ARITHMETIC_MISMATCH")
-
+    selected_recomputed_ev = recomputed.get(side)
+    selected_reported_ev = reported.get(side)
     top_level_ev = _decimal(row.get("modeled_after_fee_ev_cents"))
-    if reported_ev is not None and (top_level_ev is None or top_level_ev != reported_ev):
+    if selected_reported_ev is not None and (
+        top_level_ev is None or top_level_ev != selected_reported_ev
+    ):
         blockers.append("SELECTED_SIDE_TOP_LEVEL_EV_MISMATCH")
 
     blockers = sorted(set(blockers))
@@ -135,13 +182,17 @@ def audit_weather_selected_side_economics_arithmetic(row: dict[str, Any]) -> dic
         "category": "weather",
         "classification": "SHADOW",
         "selected_side": side if side in {"YES", "NO"} else None,
+        "recomputed_best_side": recomputed_best_side,
         "selected_side_economics_arithmetic_verified": verified,
         "recomputed_after_fee_ev_cents": (
-            format(recomputed_ev, "f") if recomputed_ev is not None else None
+            format(selected_recomputed_ev, "f") if selected_recomputed_ev is not None else None
         ),
         "reported_after_fee_ev_cents": (
-            format(reported_ev, "f") if reported_ev is not None else None
+            format(selected_reported_ev, "f") if selected_reported_ev is not None else None
         ),
+        "recomputed_side_economics": {
+            item_side: format(value, "f") for item_side, value in sorted(recomputed.items())
+        },
         "blockers": blockers,
         "read_only": True,
         "order_entry": False,
