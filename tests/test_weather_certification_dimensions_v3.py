@@ -23,7 +23,7 @@ def _side_record(side, ev):
     }
 
 
-def _row(*, declared_side="NO", yes_ev="2.0", no_ev="10.0"):
+def _row(*, declared_side="NO", yes_ev="-6.0", no_ev="4.0"):
     return {
         "blockers": [],
         "best_shadow_side": declared_side,
@@ -56,7 +56,7 @@ def test_wrong_declared_side_fails_closed_before_portfolio_certification(monkeyp
         fake_base,
     )
     out = audit_weather_certification_dimensions_v3(
-        _row(declared_side="YES", yes_ev="2.0", no_ev="10.0")
+        _row(declared_side="YES", yes_ev="-6.0", no_ev="4.0")
     )
     assert out["selected_side_schema_verified"] is False
     assert out["selected_side_economics_arithmetic_verified"] is False
@@ -86,9 +86,9 @@ def test_unique_best_side_and_ev_arithmetic_are_recomputed_before_base_audit(mon
     assert out["selected_side_schema_verified"] is True
     assert out["selected_side_recomputed"] is True
     assert out["selected_side_economics_arithmetic_verified"] is True
-    assert out["selected_side_recomputed_after_fee_ev_cents"] == "10.00"
+    assert out["selected_side_recomputed_after_fee_ev_cents"] == "4.00"
     assert seen["best_shadow_side"] == "NO"
-    assert seen["modeled_after_fee_ev_cents"] == "10.0"
+    assert seen["modeled_after_fee_ev_cents"] == "4.0"
     assert out["executable_shadow_prereqs_verified"] is True
     assert out["order_entry"] is False and out["live_probe_ready"] is False
 
@@ -105,7 +105,7 @@ def test_tied_side_ev_fails_closed(monkeypatch):
         "src.weather_certification_dimensions_v3.audit_weather_certification_dimensions",
         fake_base,
     )
-    out = audit_weather_certification_dimensions_v3(_row(no_ev="2.0"))
+    out = audit_weather_certification_dimensions_v3(_row(yes_ev="-1.0", no_ev="-1.0"))
     assert out["selected_side_schema_verified"] is False
     assert out["selected_side_economics_arithmetic_verified"] is False
     assert "BEST_SHADOW_SIDE_TIE" in out["market_data_blockers"]
