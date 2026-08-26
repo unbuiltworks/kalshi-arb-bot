@@ -78,15 +78,24 @@ def _side_records(out: dict[str, Any]) -> tuple[dict[str, dict[str, Any]] | None
     if not isinstance(economics, list):
         return None, "SIDE_ECONOMICS_EVIDENCE_REQUIRED"
 
+    # Canonical weather SHADOW economics must contain exactly one YES and one NO
+    # record. Do not silently ignore extra malformed/unknown-side entries: doing so
+    # would allow a producer to attach contradictory economics while the two clean
+    # records still certify downstream portfolio ranking.
+    if len(economics) != 2:
+        return None, "SIDE_ECONOMICS_IDENTITY_UNVERIFIED"
+
     records: dict[str, dict[str, Any]] = {}
-    for side in ("YES", "NO"):
-        matches = [
-            item for item in economics
-            if isinstance(item, dict) and str(item.get("side") or "").strip().upper() == side
-        ]
-        if len(matches) != 1:
+    for item in economics:
+        if not isinstance(item, dict):
             return None, "SIDE_ECONOMICS_IDENTITY_UNVERIFIED"
-        records[side] = matches[0]
+        side = str(item.get("side") or "").strip().upper()
+        if side not in {"YES", "NO"} or side in records:
+            return None, "SIDE_ECONOMICS_IDENTITY_UNVERIFIED"
+        records[side] = item
+
+    if set(records) != {"YES", "NO"}:
+        return None, "SIDE_ECONOMICS_IDENTITY_UNVERIFIED"
     return records, None
 
 
