@@ -12,11 +12,14 @@ import asyncio
 from decimal import Decimal, ROUND_CEILING
 import json
 import logging
+from typing import Any
 
 from src import sports_kp_mlb_moneyline_maker_fill_shadow as impl
 from src.sports_maker_incentive_telemetry import IncentiveTelemetry
 
 D = Decimal
+ZERO = D("0")
+ONE = D("1")
 
 
 def _kxmlbgame_maker_fee_q1(price: Decimal) -> Decimal:
@@ -32,8 +35,8 @@ class _VerifiedFeeLabelFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         message = record.getMessage()
         message = message.replace(
-            '"maker_fee_applicability_certified":false',
-            '"maker_fee_applicability_certified":true',
+            '\"maker_fee_applicability_certified\":false',
+            '\"maker_fee_applicability_certified\":true',
         )
         message = message.replace(
             "GENERAL_0.0175_FORMULA_AND_ZERO_FEE_UPPER_BOUND_APPLICABILITY_UNCERTIFIED",
@@ -42,6 +45,101 @@ class _VerifiedFeeLabelFilter(logging.Filter):
         record.msg = message
         record.args = ()
         return True
+
+
+def _safe_decimal(value: Any) -> Decimal:
+    try:
+        return D(str(value))
+    except Exception:
+        return ZERO
+
+
+class _CoverageRankingHandler(logging.Handler):
+    """Derive discounted incentive coverage and rank under-covered markets.
+
+    Coverage is deliberately the requested measurement:
+        discounted qualifying score / target size
+
+    It is reported per side and as the minimum side coverage. This does not
+    claim a venue reward share or realized income; it is only the scarcity
+    signal used to rank which live incentive markets deserve maker attention.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.WARNING)
+        self.rows: list[dict[str, Any]] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            message = record.getMessage()
+            if message.startswith("KPMM_INCENTIVE_MARKET "):
+                payload = json.loads(message.split(" ", 1)[1])
+                target = _safe_decimal(payload.get("target_size"))
+                reward = _safe_decimal(payload.get("period_reward_usd"))
+                if target <= 0:
+                    return
+
+                venue = str(payload.get("venue") or "")
+                if venue == "KALSHI":
+                    side_a_name = "yes"
+                    side_b_name = "no"
+                    score_a = _safe_decimal(payload.get("yes_qualifying_score"))
+                    score_b = _safe_decimal(payload.get("no_qualifying_score"))
+                    phase = "active"
+                elif venue == "POLYMARKET_US":
+                    side_a_name = "bid"
+                    side_b_name = "ask"
+                    score_a = _safe_decimal(payload.get("bid_qualifying_score"))
+                    score_b = _safe_decimal(payload.get("ask_qualifying_score"))
+                    phase = str(payload.get("applicable_period_by_event_clock") or payload.get("period") or "")
+                else:
+                    return
+
+                coverage_a = score_a / target
+                coverage_b = score_b / target
+                min_coverage = min(coverage_a, coverage_b)
+                self.rows.append({
+                    "venue": venue,
+                    "market": str(payload.get("market") or ""),
+                    "program_id": str(payload.get("program_id") or ""),
+                    "phase": phase,
+                    "reward_pool_usd": str(reward),
+                    "target_size": str(target),
+                    f"{side_a_name}_coverage_ratio": str(coverage_a),
+                    f"{side_b_name}_coverage_ratio": str(coverage_b),
+                    "min_coverage_ratio": str(min_coverage),
+                    "under_covered": min_coverage < ONE,
+                    "coverage_definition": "DISCOUNTED_QUALIFYING_SCORE_DIV_TARGET",
+                })
+                return
+
+            if message.startswith("KPMM_INCENTIVE_SUMMARY "):
+                under = [
+                    row for row in self.rows
+                    if row.get("under_covered") and _safe_decimal(row.get("reward_pool_usd")) > 0
+                ]
+                under.sort(
+                    key=lambda row: (
+                        _safe_decimal(row.get("min_coverage_ratio")),
+                        -_safe_decimal(row.get("reward_pool_usd")),
+                        str(row.get("venue")),
+                        str(row.get("market")),
+                    )
+                )
+                impl.logger.warning("KPMM_INCENTIVE_COVERAGE_RANKING %s", json.dumps({
+                    "definition": "DISCOUNTED_QUALIFYING_SCORE_DIV_TARGET",
+                    "markets_observed": len(self.rows),
+                    "under_covered_live_pool_candidates": len(under),
+                    "top_under_covered": under[:20],
+                    "ranking_order": "LOWEST_MIN_SIDE_COVERAGE_THEN_LARGEST_POOL",
+                    "yield_status": "SCARCITY_RANK_ONLY_NOT_REWARD_SHARE_NOT_REALIZED",
+                    "capacity_credit_usd_per_day": 0,
+                    "read_only": True,
+                    "order_entry": False,
+                }, separators=(",", ":")))
+                self.rows.clear()
+        except Exception:
+            self.handleError(record)
 
 
 _BaseMakerFillShadow = impl.MakerFillShadow
@@ -107,6 +205,8 @@ class _IncentiveAwareMakerFillShadow(_BaseMakerFillShadow):
 impl._kalshi_maker_fee_q1 = _kxmlbgame_maker_fee_q1
 impl.MakerFillShadow = _IncentiveAwareMakerFillShadow
 impl.logger.addFilter(_VerifiedFeeLabelFilter())
+_coverage_handler = _CoverageRankingHandler()
+logging.getLogger("kalshi_arb.sports_maker_incentives").addHandler(_coverage_handler)
 
 
 if __name__ == "__main__":
