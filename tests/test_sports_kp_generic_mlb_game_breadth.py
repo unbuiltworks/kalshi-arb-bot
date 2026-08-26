@@ -51,25 +51,44 @@ def test_orient_no_swaps_binary_contract_sides() -> None:
     assert book.opp_depth == D("10")
 
 
-def test_pairing_collapses_one_yes_plus_one_no_mirror() -> None:
+def test_pairing_expands_yes_plus_no_physical_mirrors_inside_exact_key() -> None:
     p_yes = _side("polymarket", "p_yes", "YES")
     p_no = _side("polymarket", "p_complement", "NO")
     k_yes = _side("kalshi", "k_yes", "YES")
     k_no = _side("kalshi", "k_complement", "NO")
-    pairs, ambiguous = _pair_normal_event_sides([p_yes, p_no], [k_yes, k_no])
+    pairs, ambiguous, expanded = _pair_normal_event_sides([p_yes, p_no], [k_yes, k_no])
     assert ambiguous == 0
-    assert len(pairs) == 1
-    assert pairs[0].poly.venue_market_id == "p_yes"
-    assert pairs[0].kalshi.venue_market_id == "k_yes"
+    assert expanded == 1
+    assert len(pairs) == 4
+    assert {(p.poly.venue_market_id, p.kalshi.venue_market_id) for p in pairs} == {
+        ("p_yes", "k_yes"),
+        ("p_yes", "k_complement"),
+        ("p_complement", "k_yes"),
+        ("p_complement", "k_complement"),
+    }
 
 
-def test_pairing_rejects_multiple_yes_normal_event_mapping() -> None:
+def test_pairing_expands_multiple_same_side_physical_markets_instead_of_rejecting_key() -> None:
     p = _side("polymarket", "p1", "YES")
     k1 = _side("kalshi", "k1", "YES")
     k2 = _side("kalshi", "k2", "YES")
-    pairs, ambiguous = _pair_normal_event_sides([p], [k1, k2])
-    assert pairs == []
-    assert ambiguous == 1
+    pairs, ambiguous, expanded = _pair_normal_event_sides([p], [k1, k2])
+    assert ambiguous == 0
+    assert expanded == 1
+    assert len(pairs) == 2
+    assert {pair.kalshi.venue_market_id for pair in pairs} == {"k1", "k2"}
+    assert all(pair.contract_key == p.contract_key for pair in pairs)
+
+
+def test_pairing_keeps_start_skew_gate_for_every_physical_representation() -> None:
+    p = _side("polymarket", "p1", "YES", start_ms=1_700_000_000_000)
+    k_near = _side("kalshi", "k1", "YES", start_ms=1_700_000_060_000)
+    k_far = _side("kalshi", "k2", "YES", start_ms=1_700_000_600_001)
+    pairs, ambiguous, expanded = _pair_normal_event_sides([p], [k_near, k_far])
+    assert ambiguous == 0
+    assert expanded == 1
+    assert len(pairs) == 1
+    assert pairs[0].kalshi.venue_market_id == "k1"
 
 
 def test_q1_economics_uses_real_fee_rounding_and_depth() -> None:

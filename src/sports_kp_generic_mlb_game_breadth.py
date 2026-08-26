@@ -86,26 +86,36 @@ def _orient(quote: Any, side: str) -> OrientedBook | None:
     return None
 
 
-def _canonical_side(rows: Iterable[NormalizedSide]) -> NormalizedSide | None:
-    """Collapse binary mirrors without inventing a match.
+def _distinct_physical_sides(rows: Iterable[NormalizedSide]) -> list[NormalizedSide]:
+    """Return unique physical representations of one already-exact semantic key.
 
-    Sports venues often expose proposition P twice: YES on a P market and NO on
-    its explicit complement market. Prefer a single distinct YES representation.
-    If multiple YES markets remain, or there is otherwise no unique physical
-    representation, fail closed as genuinely ambiguous.
+    A semantic proposition can legitimately be represented by multiple physical
+    markets on one venue (for example YES on P and NO on an explicit complement
+    market). The census must not choose an arbitrary representative before it
+    sees executable books. Deduplicate only exact physical market+side mirrors;
+    semantic identity has already been enforced by contract_key.
     """
-    distinct = {(row.venue_market_id, str(row.side).upper()): row for row in rows}
-    candidates = list(distinct.values())
-    yes_rows = [row for row in candidates if str(row.side).upper() == "YES"]
-    if len(yes_rows) == 1:
-        return yes_rows[0]
-    if not yes_rows and len(candidates) == 1:
-        return candidates[0]
-    return None
+    distinct: dict[tuple[str, str], NormalizedSide] = {}
+    for row in rows:
+        distinct[(row.venue_market_id, str(row.side).upper())] = row
+    return list(distinct.values())
 
 
-def _pair_normal_event_sides(poly: Iterable[NormalizedSide], kalshi: Iterable[NormalizedSide]) -> tuple[list[Pair], int]:
-    """Pair exact normal-event propositions after canonical binary-mirror collapse."""
+def _pair_normal_event_sides(
+    poly: Iterable[NormalizedSide],
+    kalshi: Iterable[NormalizedSide],
+) -> tuple[list[Pair], int, int]:
+    """Enumerate physical representations only inside exact shared semantic keys.
+
+    The prior implementation rejected a key whenever either venue exposed more
+    than one physical YES representation. That discarded real overlap before
+    books could be priced. Here we keep the exact contract-key gate, enumerate
+    each distinct physical representation, enforce the same start-skew gate,
+    and let downstream executable-book pricing plus semantic group dedupe choose
+    the best representation. No team/start/line/rule identity is loosened.
+
+    Returns (pairs, unrecoverable_shared_keys, expanded_shared_keys).
+    """
     pidx: dict[str, list[NormalizedSide]] = {}
     kidx: dict[str, list[NormalizedSide]] = {}
     for row in poly:
@@ -114,18 +124,27 @@ def _pair_normal_event_sides(poly: Iterable[NormalizedSide], kalshi: Iterable[No
         kidx.setdefault(row.contract_key, []).append(row)
 
     pairs: list[Pair] = []
-    ambiguous = 0
+    unrecoverable = 0
+    expanded = 0
     for key in sorted(set(pidx) & set(kidx)):
-        p = _canonical_side(pidx[key])
-        k = _canonical_side(kidx[key])
-        if p is None or k is None:
-            ambiguous += 1
+        prows = _distinct_physical_sides(pidx[key])
+        krows = _distinct_physical_sides(kidx[key])
+        if not prows or not krows:
+            unrecoverable += 1
             continue
-        skew = abs(p.identity.event.scheduled_start_ms - k.identity.event.scheduled_start_ms)
-        if skew > MAX_START_SKEW_MS:
-            continue
-        pairs.append(Pair(poly=p, kalshi=k, start_skew_ms=skew))
-    return pairs, ambiguous
+        if len(prows) > 1 or len(krows) > 1:
+            expanded += 1
+        emitted = 0
+        for p in prows:
+            for k in krows:
+                skew = abs(p.identity.event.scheduled_start_ms - k.identity.event.scheduled_start_ms)
+                if skew > MAX_START_SKEW_MS:
+                    continue
+                pairs.append(Pair(poly=p, kalshi=k, start_skew_ms=skew))
+                emitted += 1
+        if emitted == 0:
+            unrecoverable += 1
+    return pairs, unrecoverable, expanded
 
 
 def _q1_economics(
@@ -244,7 +263,7 @@ async def run_once() -> dict[str, Any]:
         poly_events, kalshi_events, kal_meta = await _fetch_inputs(http)
         poly_sides = normalize_polymarket_mlb(poly_events)
         kalshi_sides = normalize_kalshi_mlb(kalshi_events)
-        pairs, ambiguous = _pair_normal_event_sides(poly_sides, kalshi_sides)
+        pairs, ambiguous, expanded = _pair_normal_event_sides(poly_sides, kalshi_sides)
         poly_store = await _seed_poly_books(http, (pair.poly.venue_market_id for pair in pairs))
 
     rows: list[dict[str, Any]] = []
@@ -304,6 +323,7 @@ async def run_once() -> dict[str, Any]:
         "kalshi_normalized_sides": len(kalshi_sides),
         "normal_event_pairs": len(pairs),
         "ambiguous_contract_keys_rejected": ambiguous,
+        "expanded_shared_contract_keys": expanded,
         "book_comparable_physical_pairs": len(rows),
         "semantic_unique_groups": len(unique_rows),
         "families": families,
