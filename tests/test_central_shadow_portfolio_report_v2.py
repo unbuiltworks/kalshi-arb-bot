@@ -1,3 +1,4 @@
+import src.central_shadow_portfolio_report_v2 as report_v2
 from src.central_shadow_portfolio_report_v2 import rank_sleeves
 
 
@@ -19,14 +20,35 @@ def _weather_row():
     }
 
 
+def _verified_audit(_row):
+    return {
+        "executable_shadow_prereqs_verified": True,
+        "selected_side_schema_verified": True,
+        "read_only": True,
+        "order_entry": False,
+        "live_probe_ready": False,
+    }
+
+
 def test_uncertified_weather_cannot_be_promoted_or_annualized():
     report = rank_sleeves([_weather_row()])
     sleeve = report["sleeves"][0]
     assert sleeve["capacity_score"] != "0"
     assert sleeve["promotable_score"] == "0"
     assert sleeve["observed_shadow_dollars_per_day"] is None
+    assert "WEATHER_CANONICAL_AUDIT_REPLAY_UNVERIFIED" in sleeve["hard_blockers"]
     assert "WEATHER_CERTIFICATION_PREREQS_UNVERIFIED" in sleeve["hard_blockers"]
     assert "WEATHER_SELECTED_SIDE_SCHEMA_UNVERIFIED" in sleeve["hard_blockers"]
+
+
+def test_producer_summary_booleans_alone_cannot_unlock_projection():
+    row = _weather_row()
+    row["executable_shadow_prereqs_verified"] = True
+    row["selected_side_schema_verified"] = True
+    sleeve = rank_sleeves([row])["sleeves"][0]
+    assert sleeve["promotable_score"] == "0"
+    assert sleeve["observed_shadow_dollars_per_day"] is None
+    assert "WEATHER_CANONICAL_AUDIT_REPLAY_UNVERIFIED" in sleeve["hard_blockers"]
 
 
 def test_string_true_weather_certification_fails_closed():
@@ -38,30 +60,41 @@ def test_string_true_weather_certification_fails_closed():
     assert sleeve["observed_shadow_dollars_per_day"] is None
 
 
-def test_literal_true_weather_certification_preserves_verified_shadow_path():
+def test_independently_replayed_weather_certification_preserves_shadow_projection(monkeypatch):
+    monkeypatch.setattr(report_v2, "audit_weather_certification_dimensions_v3", _verified_audit)
     row = _weather_row()
-    row["executable_shadow_prereqs_verified"] = True
-    row["selected_side_schema_verified"] = True
+    # Deliberately contradictory producer summary flags: the portfolio boundary trusts
+    # the independent canonical replay, not these caller-populated booleans.
+    row["executable_shadow_prereqs_verified"] = False
+    row["selected_side_schema_verified"] = False
     sleeve = rank_sleeves([row])["sleeves"][0]
     assert sleeve["promotable_score"] != "0"
     assert sleeve["observed_shadow_dollars_per_day"] == "80"
 
 
-def test_selected_side_schema_must_be_literal_true_for_projection():
+def test_canonical_replay_must_be_literal_true_for_projection(monkeypatch):
     for selected in (None, False, "true", 1):
+        def audit(_row, selected=selected):
+            return {
+                "executable_shadow_prereqs_verified": True,
+                "selected_side_schema_verified": selected,
+                "read_only": True,
+                "order_entry": False,
+                "live_probe_ready": False,
+            }
+
+        monkeypatch.setattr(report_v2, "audit_weather_certification_dimensions_v3", audit)
         row = _weather_row()
-        row["executable_shadow_prereqs_verified"] = True
-        row["selected_side_schema_verified"] = selected
         sleeve = rank_sleeves([row])["sleeves"][0]
         assert sleeve["promotable_score"] == "0"
         assert sleeve["observed_shadow_dollars_per_day"] is None
+        assert "WEATHER_CANONICAL_AUDIT_REPLAY_UNVERIFIED" in sleeve["hard_blockers"]
         assert "WEATHER_SELECTED_SIDE_SCHEMA_UNVERIFIED" in sleeve["hard_blockers"]
 
 
-def test_certified_weather_with_remaining_hard_blocker_is_not_annualized():
+def test_certified_weather_with_remaining_hard_blocker_is_not_annualized(monkeypatch):
+    monkeypatch.setattr(report_v2, "audit_weather_certification_dimensions_v3", _verified_audit)
     row = _weather_row()
-    row["executable_shadow_prereqs_verified"] = True
-    row["selected_side_schema_verified"] = True
     row["hard_blockers"] = ["TWC_SOURCE_ACCESS_REQUIRED"]
     sleeve = rank_sleeves([row])["sleeves"][0]
     assert sleeve["promotable_score"] == "0"
@@ -69,10 +102,9 @@ def test_certified_weather_with_remaining_hard_blocker_is_not_annualized():
     assert "TWC_SOURCE_ACCESS_REQUIRED" in sleeve["hard_blockers"]
 
 
-def test_malformed_hard_blocker_entry_fails_closed_without_stringifying_it():
+def test_malformed_hard_blocker_entry_fails_closed_without_stringifying_it(monkeypatch):
+    monkeypatch.setattr(report_v2, "audit_weather_certification_dimensions_v3", _verified_audit)
     row = _weather_row()
-    row["executable_shadow_prereqs_verified"] = True
-    row["selected_side_schema_verified"] = True
     row["hard_blockers"] = [None, ""]
     sleeve = rank_sleeves([row])["sleeves"][0]
     assert sleeve["promotable_score"] == "0"
@@ -88,10 +120,9 @@ def test_non_weather_behavior_is_unchanged():
     assert sleeve["observed_shadow_dollars_per_day"] == "80"
 
 
-def test_malformed_hard_blockers_also_fail_closed():
+def test_malformed_hard_blockers_also_fail_closed(monkeypatch):
+    monkeypatch.setattr(report_v2, "audit_weather_certification_dimensions_v3", _verified_audit)
     row = _weather_row()
-    row["executable_shadow_prereqs_verified"] = True
-    row["selected_side_schema_verified"] = True
     row["hard_blockers"] = ""
     sleeve = rank_sleeves([row])["sleeves"][0]
     assert sleeve["promotable_score"] == "0"
