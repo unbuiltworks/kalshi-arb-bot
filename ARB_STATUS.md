@@ -1,19 +1,18 @@
 # ARB Control Plane
 
-Last verified: **2026-08-26 01:55 UTC / 2026-08-25 21:55 ET**
+Last verified: **2026-08-26 02:40 UTC / 2026-08-25 22:40 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
 ## Latest run delta
 
-- Re-established authoritative accounting from Neon `arb-trade-ledger`: **2026-08-25 ET = 0 TRADE_REALIZED / $0.0000 net**, **0 unresolved durable capital reservations**, and **0 weather-tagged TRADE_REALIZED / $0 verified weather P&L since 2026-03-01**. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
-- K<->P strict MLB totals remain decision-negative at the fixed 3c taker/taker floor: **1,031 >=1c / 0 >=2c / 0 >=3c**; at the provisional >=80ms realistic-capture floor **137 >=1c / 0 >=2c / 0 >=3c**. Measured totals capacity remains **$0/day** at the fixed 3c floor.
-- The read-only MLB game breadth repair passed GitHub Actions and was promoted through **PR #152**, merged to `feature/sports-kp-live-executor-impl` at `58eddb8ad74af8ed56a01b9ca4f84995e547c5c7`. It preserves exact semantic `contract_key` identity and the <=5 minute start-skew gate, while enumerating duplicate physical market+side representations only inside each already-exact shared key. No order transport, live authority, rule relaxation, or threshold change was added.
-- Railway `sports-generic-counterpart-shadow` is now **SUCCESS** on deployment `f06bb651-8096-4e08-99d0-3e45c80f52de` running the #152 merge. Fresh production output proves the representation-expansion step is active: **50 Polymarket MLB events / 95 Kalshi events**, **836 / 838 normalized sides**, **268 expanded shared semantic keys**. However, **0 pairs pass the existing <=5 minute scheduled-start gate**, so `book_comparable_physical_pairs=0` and all ML/spread/total capacity remains $0.
-- That changes the next root cause: the 268 exact semantic overlaps are no longer being lost to duplicate physical representation. They are being rejected at **scheduled-start alignment** before book pricing. The next bounded diagnostic is to measure the start-skew distribution/source fields for those exact shared keys and correct only a proven timestamp-normalization mismatch; the <=5 minute gate must not be loosened to manufacture matches.
-- A PR-number race occurred during promotion: unrelated **PR #151** (`Precommit Aug 28 ARB decision gate`) already occupied that number and was merged before the collision was detected. It contains control-plane/read-only decision-gate work, not order authority. The intended census breadth change is correctly **PR #152**. Do not attribute #151 to the breadth repair.
-- Account-level Kalshi evidence remains authoritative: `/account/limits` = **advanced**, **900 bucket / 300 refill** for both reads and writes. Preserve dedicated `external-api` / `external-api-ws` hosts and current backoff; do not disrupt unrelated Kalshi services merely to improve census telemetry.
-- Old Gemini<->Kalshi 15m crypto remains **CRASHED/contained** from the previously confirmed bounded deadline -> `HALTED_FAIL_CLOSED` path. It is not reopened because settlement-index non-equivalence remains the stronger blocker.
+- Fresh Railway control-plane verification: `sports-kp-live-executor` remains **SUCCESS**; `sports-generic-counterpart-shadow` remains **SUCCESS** on deployment `f06bb651-8096-4e08-99d0-3e45c80f52de`; `sports-gk-autonomous-supervisor` is **SUCCESS**; the old `crypto-15m-sol-live-canary-10bp-50ms` remains **CRASHED** and contained.
+- Fresh authoritative Neon `arb-trade-ledger` query: **2026-08-25 ET = 0 TRADE_REALIZED / $0.0000 net**, **0 unresolved durable capital reservations**, and **0 weather-tagged TRADE_REALIZED / $0 verified weather P&L since 2026-03-01**. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
+- Decision-grade K<->P strict MLB totals remain unchanged: **1,031 >=1c / 0 >=2c / 0 >=3c** after fees; at the provisional >=80ms realistic-capture floor **137 >=1c / 0 >=2c / 0 >=3c**. Measured certified totals capacity remains **$0/day at the fixed 3c floor**.
+- PR #152 is still the active read-only MLB game breadth repair. Production now proves exact semantic overlap survives physical-representation expansion: **50 Polymarket MLB events / 95 Kalshi events / 268 exact shared semantic keys**, but **0 pairs pass the existing <=5 minute scheduled-start gate**, so moneyline/spread/game-total capacity remains $0.
+- Railway's deep read-only runtime agent is temporarily quota-blocked (`Agent usage limit reached`), so it could not directly extract raw timestamp samples this run. No service state, variables, backoff, or unrelated Kalshi consumer was changed.
+- Source inspection narrows the likely timestamp mismatch: Polymarket normalization prefers `market.gameStartTime`, then event start fields; Kalshi normalization first attempts a timestamp embedded in `event_ticker`, then falls back to `event.strike_date`, `market.expected_expiration_time`, or `market.close_time`. The current open MLB Kalshi ticker format may not contain HHMM, which makes the fallback path important. This is a hypothesis only until raw production fields are measured; **do not loosen the <=5 minute gate**.
+- To obtain that proof safely, draft **PR #153** (`feature/kp-mlb-start-skew-diagnostic`) now adds a strictly read-only timestamp-alignment diagnostic. It reports start-skew min/p50/p90/p99/max plus raw Polymarket and Kalshi timestamp source fields for rejected exact semantic keys. It adds no order transport, execution eligibility, rule relaxation, or threshold change. Head commit: `0a740fd7673ed158bc5893a925fc00558863bebf`. CI had not started at this checkpoint, so it is **not merged/deployed**.
 
 ## Objective and accounting rule
 
@@ -21,7 +20,7 @@ Primary aspiration remains **$480/day REALIZED net**. Only authoritative settlem
 
 ## Edge-census protocol
 
-The 72-hour K<->P wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and is **not paused or reset** by instrumentation defects. Invalid/unmeasurable intervals are scored as **$0 deployable capacity for that wall-clock interval**.
+The 72-hour K<->P wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and is **not paused or reset** by instrumentation defects. Invalid/unmeasurable intervals score **$0 deployable capacity for that wall-clock interval**.
 
 Fixed verdict thresholds remain unchanged:
 
@@ -29,9 +28,9 @@ Fixed verdict thresholds remain unchanged:
 - **$50-$149/day**: sidecar-only maintenance.
 - **>= $150/day**: active scaling justified toward $480/day.
 
-Data/feed quality may add at most one **+24 hour** extension. An unmeasurable lane after that contributes **$0 deployable capacity**. The thresholds may not move after seeing the results.
+Data/feed quality may add at most one **+24 hour** extension. An unmeasurable lane after that contributes **$0 deployable capacity**. Thresholds do not move after seeing results.
 
-Required evidence remains explicit >=1c/>=2c/>=3c after-fee bins, exact executable q1 depth, quote skew, source quality, signal lifetime where valid, semantic dedupe, overlap-adjusted capacity, and a provisional **>=80ms** realistic-capture floor. The latency floor may rise to measured production p95 but may not be lowered to rescue capacity.
+Required evidence remains explicit >=1c/>=2c/>=3c after-fee bins, exact executable q1 depth, quote skew, source quality, valid signal lifetime, semantic dedupe, overlap-adjusted capacity, and a provisional **>=80ms** realistic-capture floor. The latency floor may rise to measured production p95 but may not be lowered to rescue capacity.
 
 Same-venue Gemini/Polymarket/Kalshi zero results remain near-verdict evidence. Do not spend engineering time manufacturing ladder violations.
 
@@ -60,11 +59,11 @@ Same-venue Gemini/Polymarket/Kalshi zero results remain near-verdict evidence. D
 - Kalshi transport is bounded `rest_batch`, source quality **REST_SNAPSHOT_NOT_WS_LIFETIME**;
 - `read_only=true`, `order_entry=false`.
 
-Interpretation remains unchanged: liquidity is deep enough, but the measured certified totals slice has **zero >=2c and zero >=3c after-fee observations**, including zero >=2c/>=3c at the provisional realistic-capture floor. At the fixed 3c taker/taker floor this slice currently contributes **$0/day deployable capacity**.
+Interpretation: liquidity is deep enough, but this certified totals slice has **zero >=2c and zero >=3c after-fee observations**, including zero >=2c/>=3c at the provisional realistic-capture floor. At the fixed 3c taker/taker floor this slice currently contributes **$0/day deployable capacity**.
 
 ### K<->P MLB moneyline/spread/game-total breadth
 
-Production #152 output now proves exact semantic overlap survives physical-representation expansion:
+Production #152 currently reports:
 
 - Polymarket events: **50**;
 - Kalshi events: **95** (`KXMLBGAME=47`, `KXMLBSPREAD=24`, `KXMLBTOTAL=24`);
@@ -74,15 +73,17 @@ Production #152 output now proves exact semantic overlap survives physical-repre
 - book-comparable physical pairs: **0**;
 - semantic unique priced groups: **0**;
 - capacity credit: **$0/day**;
-- classification remains **RULE_INCOMPLETE_NORMAL_EVENT_SHADOW_NOT_EXECUTION_ELIGIBLE**.
+- classification: **RULE_INCOMPLETE_NORMAL_EVENT_SHADOW_NOT_EXECUTION_ELIGIBLE**.
 
-The important diagnosis is now **timestamp alignment**, not lack of semantic overlap and not physical duplicate canonicalization. `SportsEventIdentity.event_key()` intentionally excludes scheduled time; therefore exact team/family/side/line semantic keys can intersect while start timestamps still disagree. Do not loosen the <=5 minute gate. Diagnose whether Polymarket and Kalshi adapters are reading different notions of start time (scheduled first pitch vs market/event timestamp) and only correct a proven adapter normalization bug.
-
-Moneyline/spread rows remain rule-incomplete and receive **$0 capacity credit** until settlement/postponement/cancellation semantics are explicitly certified. Strict props may be added only when rule equivalence is proven; participation-conditional rows remain excluded from guaranteed-arb capacity.
+The current root cause is **scheduled-start alignment**. Do not loosen the gate. PR #153 exists only to expose the raw venue fields and skew distribution needed to prove whether one adapter is using expiry/close metadata rather than scheduled first pitch. Moneyline/spread rows remain capacity $0 until both timestamp identity and settlement/postponement/cancellation semantics are certified.
 
 ### Gemini<->Kalshi sports
 
-Central ledger reconciliation is clean: Caleb is settled -$0.44 and there are **zero unresolved durable reservations**. Do not count any G<->K canary/shadow row without authoritative both-leg fill and final settlement reconciliation. Kalshi secondary websocket 429s continue to support the account-level concurrent-handshake/contention diagnosis rather than a weak account tier.
+Central ledger reconciliation is clean: Caleb is settled -$0.44 and there are **zero unresolved durable reservations**. Keep G<->K disarmed unless any live canary is independently proven safe; do not count canary/shadow rows without authoritative both-leg fill and final settlement reconciliation. Kalshi secondary websocket 429s remain consistent with concurrent-handshake/contention, not a weak account tier. `/account/limits` remains **advanced**, **900 bucket / 300 refill** for both reads and writes.
+
+### Weather
+
+Authoritative central records still show **0 weather-tagged realized trades / $0 realized since 2026-03-01**. Historical or seasonal weather edge remains a separate research statistic and is not credited toward current realized performance.
 
 ### Old Gemini<->Kalshi 15m crypto
 
@@ -91,9 +92,9 @@ Central ledger reconciliation is clean: Caleb is settled -$0.44 and there are **
 ## Highest-value next actions
 
 1. Keep the K<->P 72-hour wall clock running with no resets. Current certified totals evidence remains **$0/day at >=3c**.
-2. Diagnose the **268 exact shared MLB game keys rejected solely on scheduled-start skew**. Emit start-skew distribution plus the raw Polymarket/Kalshi source timestamps for a small read-only sample. Correct only a proven timestamp-adapter bug; preserve the <=5 minute identity gate.
-3. Once timestamps align, price the resulting physical pairs and report moneyline/spread/game-total >=1c/>=2c/>=3c, q1 depth and missing-to-3c. Until then those families remain $0 capacity.
-4. Keep rules incomplete / capacity $0 until settlement/postponement/cancellation semantics are certified. Add only strict props with provable equivalence.
-5. Preserve Kalshi read-budget headroom and websocket backoff; do not stop unrelated services for census convenience.
+2. Get **PR #153** through normal CI/review, then run the read-only start-skew diagnostic. Measure raw timestamp fields and skew distribution for the 268 exact semantic keys; correct only a proven adapter bug and preserve the <=5 minute gate.
+3. If timestamps align after a proven normalization fix, immediately price moneyline/spread/game-total physical pairs and report >=1c/>=2c/>=3c, q1 depth, skew, and missing-to-3c. Until then those families remain $0 capacity.
+4. Keep rule-incomplete families at capacity $0 until settlement/postponement/cancellation semantics are certified. Add only strict props with provable equivalence; participation-conditional rows remain excluded.
+5. Preserve Kalshi account headroom and websocket backoff; do not stop unrelated services for census convenience.
 6. Preserve fixed **<$50 / $50-$149 / >=$150** verdict thresholds and the one-time +24h maximum data-quality allowance.
 7. Keep AWS latency/maker-routing work isolated from this control-plane workstream.
