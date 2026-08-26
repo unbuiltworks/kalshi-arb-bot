@@ -23,11 +23,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'cd /home/ssm-user/kalshi-arb-bot && git fetch origin aws-migration-foundation && git show origin/aws-migration-foundation:deploy/aws/run_sports_maker_shadow.sh > /tmp/run_sports_maker_shadow.sh && chmod +x /tmp/run_sports_maker_shadow.sh && /tmp/run_sports_maker_shadow.sh'"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.AWS_ARB_HOT_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --comment "ARB AWS parity shadow - read only" \
-            --parameters 'commands=["sudo -u ssm-user bash -lc '\''cd /home/ssm-user/kalshi-arb-bot && git fetch origin aws-migration-foundation && git show origin/aws-migration-foundation:deploy/aws/run_sports_maker_shadow.sh > /tmp/run_sports_maker_shadow.sh && chmod +x /tmp/run_sports_maker_shadow.sh && /tmp/run_sports_maker_shadow.sh'\''"]' \
+            --parameters "$PARAMETERS" \
             --query 'Command.CommandId' \
             --output text)
 
