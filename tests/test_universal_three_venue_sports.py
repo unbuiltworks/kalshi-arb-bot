@@ -67,22 +67,24 @@ def fixtures():
         ],
     }]
 
+    # Kalshi MLB event-ticker HHMM is Eastern wall-clock time. 14:40 ET on
+    # Aug. 17, 2026 is the same instant as 18:40 UTC in the other fixtures.
     kalshi = [
         {
             "series_ticker": "KXMLBGAME",
-            "event_ticker": "KXMLBGAME-26AUG171840MIAPHI",
+            "event_ticker": "KXMLBGAME-26AUG171440MIAPHI",
             "title": "Miami vs Philadelphia",
             "markets": [{"ticker": "KXMLBGAME-X-PHI", "title": "Philadelphia"}],
         },
         {
             "series_ticker": "KXMLBSPREAD",
-            "event_ticker": "KXMLBSPREAD-26AUG171840MIAPHI",
+            "event_ticker": "KXMLBSPREAD-26AUG171440MIAPHI",
             "title": "Miami vs Philadelphia",
             "markets": [{"ticker": "KXMLBSPREAD-X-PHI15", "title": "Philadelphia wins by over 1.5 runs"}],
         },
         {
             "series_ticker": "KXMLBTOTAL",
-            "event_ticker": "KXMLBTOTAL-26AUG171840MIAPHI",
+            "event_ticker": "KXMLBTOTAL-26AUG171440MIAPHI",
             "title": "Miami vs Philadelphia",
             "markets": [{"ticker": "KXMLBTOTAL-X-O85", "title": "Over 8.5 runs scored"}],
         },
