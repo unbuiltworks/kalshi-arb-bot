@@ -1,11 +1,14 @@
 # ARB Control Plane
 
-Last verified: **2026-08-26 07:55 UTC / 2026-08-26 03:55 ET**
+Last verified: **2026-08-26 08:34 UTC / 2026-08-26 04:34 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
 ## Latest run delta
 
+- Fresh Railway control-plane state: `sports-kp-live-executor`, `sports-generic-counterpart-shadow`, and `sports-gk-autonomous-supervisor` remain **SUCCESS**. The old `crypto-15m-sol-live-canary-10bp-50ms` remains **CRASHED/contained** and was not restarted.
+- Fresh generic MLB breadth logs remain heavily contaminated by the known partial-game scope bug. A latest cycle reported **115 semantic unique groups** (moneyline 1 / spread 25 / game total 89), with descriptive `>=3c` counts of **0 / 23 / 87** respectively. Those spread/total rows remain **$0 capacity** because current normalization can still map Polymarket first-five/partial-game markets to full-game Kalshi identities.
+- Prepared **draft PR #156** on isolated branch `feature/kp-full-game-scope-filter`. It adds a conservative read-only wrapper that rejects only Polymarket labels explicitly identifying partial-game scope (`First/1st 5 Innings`, `F5`, `First 3`, `First/1st Inning`) before the existing exact semantic matching/pricing pipeline. It adds no network/order transport and changes no start-time, pricing, settlement, or risk gate. Regression tests were added. CI had not started at this checkpoint, so #156 remains **draft/unmerged/un-deployed**; production census is not being altered blind.
 - **PR #155 is merged** after its green 451-test CI. The Kalshi MLB ticker HHMM normalization now interprets ticker time in `America/New_York` and converts to UTC; the existing <=5 minute start-time identity gate remains unchanged.
 - Railway exposed two production wiring issues during promotion of the read-only MLB breadth service. First, the service watch patterns omitted `src/mlb_game_side_normalization.py`, so the #155 merge was skipped. After adding that file, the effective start command was still pointing at a nonexistent `src.sports_kp_mlb_generic_breadth_loop` module. The service is now correctly configured as `python -m src.sports_kp_generic_mlb_game_breadth --interval-seconds 60`, `restartPolicy=ALWAYS`, with the normalization file in watch patterns. Fresh deployment `ea8bc853-8b7a-4c49-acf4-bfb712036178` is **SUCCESS** and the read-only loop is running.
 - The #155 timezone fix worked in production: a fresh breadth cycle found **164 exact shared semantic keys**, **0 start-skew rejects**, **360 physical representations**, **102 priceable semantic groups**, and **208 priced representations**. Start-time normalization is no longer the blocker.
@@ -65,23 +68,18 @@ Interpretation: liquidity is deep enough, but this certified totals slice has **
 
 ### K<->P MLB moneyline/spread/game-total breadth
 
-PR #155 is merged and the four-hour timestamp bug is fixed. The active read-only breadth loop now reaches book pricing:
+PR #155 is merged and the four-hour timestamp bug is fixed. The active read-only breadth loop now reaches book pricing.
 
-- **164 exact shared semantic keys**;
-- **0 start-skew rejects**;
-- **360 physical representations**;
-- **102 priceable semantic groups / 208 priced representations**.
-
-This proves the prior start-time normalization blocker is resolved.
-
-But the first post-fix pricing snapshot also exposed a stricter semantic issue: Polymarket partial-game / first-five (`f5`) totals are currently normalized as `scope="full_contest"` and can collide with Kalshi full-game `KXMLBTOTAL` identities. The very large descriptive >=3c totals/spread gaps therefore cannot receive guaranteed-arb capacity credit. `rules_complete=false` remains authoritative and `capacity_credit_usd=0.0` is correct.
+The first post-fix pricing snapshots expose a semantic-scope bug: Polymarket partial-game / first-five (`f5`) markets are currently normalized as `scope="full_contest"` and can collide with Kalshi full-game identities. The very large descriptive >=3c totals/spread gaps therefore cannot receive guaranteed-arb capacity credit. `rules_complete=false` remains authoritative and `capacity_credit_usd=0.0` is correct.
 
 Until partial-game scope is excluded or modeled distinctly and exact venue rule equivalence is certified:
 
-- moneyline descriptive result: **2 priceable groups, 0 >=1c / 0 >=2c / 0 >=3c**;
+- moneyline descriptive results remain near-zero/negative with **0 >=1c / 0 >=2c / 0 >=3c** in the last clean snapshot;
 - spread/game-total descriptive positive gaps: **do not count as arb**;
 - moneyline/spread/game-total guaranteed capacity remains **$0**;
 - census clock does not pause or reset.
+
+Draft PR #156 is the current bounded cleanup path. It fails closed only on explicit partial-game Polymarket labels before existing matching/pricing. It must pass normal CI/review before any deployment or capacity remeasurement.
 
 ### Gemini<->Kalshi sports
 
@@ -102,8 +100,8 @@ Fresh authoritative central records show **0 weather-tagged realized trades / $0
 ## Highest-value next actions
 
 1. Keep the K<->P 72-hour wall clock running with no resets. Current certified totals evidence remains **$0/day at >=3c**.
-2. Remove or separately classify Polymarket first-five/partial-game MLB markets before taking any generic spread/game-total breadth edge seriously. Do not loosen the existing team/start/line identity gates.
-3. Re-run the read-only breadth pricing after scope cleanup and report exact full-game moneyline/spread/game-total >=1c/>=2c/>=3c bins, q1 depth, and missing-to-3c. Rule-incomplete rows remain $0.
+2. Get draft PR #156 through normal CI/review. If green, deploy the read-only full-game scope filter and immediately rerun moneyline/spread/game-total pricing; explicit partial-game rows remain $0.
+3. Report exact cleaned full-game moneyline/spread/game-total >=1c/>=2c/>=3c bins, q1 depth, and missing-to-3c. Rule-incomplete rows remain $0 even after scope cleanup.
 4. Treat G<->K hot >=3c observations as **research-only capacity $0** until complete lifecycle settlement equivalence is certified. Keep guaranteed order entry disarmed.
 5. Keep rule-incomplete player props at capacity $0 until settlement/postponement/cancellation/stat-correction semantics are certified. Participation proof alone is insufficient.
 6. Preserve Kalshi account headroom and websocket backoff; do not stop unrelated services for census convenience.
