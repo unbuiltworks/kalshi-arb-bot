@@ -69,6 +69,33 @@ def test_duplicate_selected_side_records_fail_closed_and_strip_all_economics():
     assert "SIDE_ECONOMICS_IDENTITY_UNVERIFIED" in out["blockers"]
 
 
+def test_extra_unknown_side_record_fails_closed_instead_of_being_ignored():
+    row = _row()
+    row["side_economics"].append({
+        "side": "MAYBE",
+        "modeled_taker_fee_cents": 0,
+        "modeled_after_fee_ev_cents": "999",
+        "modeled_after_fee_edge_cents_per_contract": "999",
+    })
+    out = normalize_selected_side_schema(row)
+    assert out["selected_side_schema_verified"] is False
+    assert out["ev_certified_shadow"] is False
+    assert out["best_shadow_side"] is None
+    assert out["modeled_after_fee_ev_cents"] is None
+    assert "SIDE_ECONOMICS_IDENTITY_UNVERIFIED" in out["blockers"]
+
+
+def test_extra_nondict_side_record_fails_closed_instead_of_being_ignored():
+    row = _row()
+    row["side_economics"].append("NO=51c")
+    out = normalize_selected_side_schema(row)
+    assert out["selected_side_schema_verified"] is False
+    assert out["ev_certified_shadow"] is False
+    assert out["best_shadow_side"] is None
+    assert out["modeled_after_fee_ev_cents"] is None
+    assert "SIDE_ECONOMICS_IDENTITY_UNVERIFIED" in out["blockers"]
+
+
 def test_nonfinite_selected_ev_fails_closed():
     row = _row()
     row["side_economics"][1]["modeled_after_fee_ev_cents"] = "NaN"
