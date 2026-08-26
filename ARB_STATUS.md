@@ -1,17 +1,19 @@
 # ARB Control Plane
 
-Last verified: **2026-08-26 03:50 UTC / 2026-08-25 23:50 ET**
+Last verified: **2026-08-26 04:42 UTC / 2026-08-26 00:42 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
 ## Latest run delta
 
-- `sports-kp-live-executor` remains **SUCCESS** and decision telemetry is still live. Fresh runtime through ~03:48 UTC remains **1,031 >=1c / 0 >=2c / 0 >=3c** after fees; provisional >=80ms capture remains **137 >=1c / 0 >=2c / 0 >=3c**. Average selected-side q1 depth remains ~2,072.66 contracts, so liquidity is not the blocker; the certified MLB totals slice remains **$0/day deployable capacity at the fixed 3c floor**.
-- The merged PR #153 start-skew diagnostic was executed safely through an isolated, read-only GitHub Actions one-off (`feature/kp-start-skew-live-diagnostic-run`, commit `60911e82...`) without interrupting Railway collectors. The diagnostic code itself started correctly but the run failed specifically on **HTTP 403** from `https://external-api.kalshi.com/trade-api/v2/events?...KXMLBGAME...` from the GitHub-hosted runner. This is an execution-environment/auth-context blocker, not evidence that semantic MLB overlap disappeared and not evidence of a weak Kalshi account tier.
-- Do **not** loosen the <=5 minute start-skew gate. Moneyline/spread/game-total breadth remains **$0 capacity** until raw timestamp fields can be measured from an authenticated runtime context. The 72-hour wall clock continues with no reset; the failed diagnostic interval does not earn an extension beyond the one pre-committed +24h maximum.
-- Fresh G<->K runtime verification: `sports-gk-autonomous-supervisor` remains **SUCCESS**, explicitly `read_only=true` and `order_entry=false`, with **570/570 Kalshi tickers initialized** and 570 Gemini symbols. It has now recorded **6 hot >=3c evaluations / 4 complete open-close signals**. One fresh Elly De La Cruz hits signal modeled ~3.61c locked profit for ~963ms, but rule assessment remained **UNAUDITED / exact_settlement_equivalent=false / execution_eligible=false**, so it receives **$0 guaranteed-arb capacity credit** and no trade was sent.
-- Fresh authoritative Neon `arb-trade-ledger`: **2026-08-25 ET = 0 TRADE_REALIZED / $0.0000 net**, **0 unresolved durable capital reservations**, and **0 weather-tagged TRADE_REALIZED / $0 verified weather P&L since 2026-03-01**. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
-- Kalshi account diagnosis remains unchanged: authenticated `/account/limits` previously proved **advanced tier, 900 bucket / 300 refill** for both reads and writes. The new GitHub-runner 403 is therefore not a reason to weaken backoff or stop unrelated Kalshi consumers.
+- `sports-kp-live-executor` remains **SUCCESS**, read-only, and actively processing triggers. The decision-grade certified MLB totals result is still **1,031 >=1c / 0 >=2c / 0 >=3c** after fees from **1,661 observations / 9 semantic keys**. At the fixed provisional **>=80ms** realistic-capture floor it remains **137 >=1c / 0 >=2c / 0 >=3c**. Average selected-side q1 depth remains **~2,072.66 contracts**, max **22,647.58**; average quote skew **~45.53ms**; 612 closed signals average **~174.07ms** descriptive lifetime. Liquidity is not the blocker. The certified totals slice remains **$0/day deployable capacity at the fixed 3c floor**.
+- The generic K<->P MLB game breadth service is also **SUCCESS** and both venue discovery feeds are returning HTTP 200. Fresh state is **55 Polymarket events / 70 Kalshi events**, with **124 expanded exact shared semantic keys**, but **0 book-comparable physical pairs** because none pass the existing <=5 minute scheduled-start gate. These families remain **$0 capacity** until the timestamp normalization issue is proven and repaired; the gate is not loosened.
+- Source inspection now isolates the leading timestamp-normalization failure mode: `normalize_kalshi_mlb()` calls `_kalshi_start()`, which uses an event-ticker embedded `YYMONDDHHMM` timestamp when present, but otherwise falls back to `event.strike_date`, `market.expected_expiration_time`, then `market.close_time`. Current normal MLB event tickers are commonly date-only, so scheduled start can be replaced by strike/expiry/close metadata. This is a **leading diagnosis, not yet permission to patch**: raw venue timestamp fields still need authenticated runtime proof from merged diagnostic #153.
+- I attempted to execute merged PR #153 in Railway without touching the active collectors. Railway's read-only agent remains quota-blocked, and the safe one-off service retained its older #152 snapshot rather than running the diagnostic. A no-op diagnostic-file trigger commit (`367ff3a...`) did not produce a verified #153 runtime output. Therefore no start-time gate or adapter behavior was changed this run.
+- Fresh authoritative Neon `arb-trade-ledger`: **no events of any type after 2026-08-26 00:00 UTC**; **2026-08-26 ET = 0 TRADE_REALIZED / $0.0000 net**. There is no overnight G<->K order/fill/reservation hidden in the central ledger. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
+- Fresh authoritative weather query remains **0 weather-tagged TRADE_REALIZED / $0 verified realized since 2026-03-01**. Seasonal/historical weather edge is not credited as current realized performance.
+- The bounded `sports-gk-multifamily-live-canary` has no `SUBMITTED` evidence in its current Railway deployment logs, while the guaranteed-arb G<->K path remains research-only/disarmed because complete lifecycle rule/settlement equivalence is not certified. Do not credit hot-shadow signals as deployable guaranteed capacity.
+- Kalshi account diagnosis remains **advanced tier, 900 bucket / 300 refill** for both reads and writes. The active REST census calls to `external-api.kalshi.com` are healthy HTTP 200; do not weaken backoff or disrupt unrelated consumers.
 - The old `crypto-15m-sol-live-canary-10bp-50ms` remains **CRASHED/contained**. Its bounded-campaign failure is proven, but Gemini/Kalshi settlement-index equivalence remains unproven, so it is not reopened as guaranteed arbitrage.
 
 ## Objective and accounting rule
@@ -36,8 +38,8 @@ Same-venue Gemini/Polymarket/Kalshi zero results remain near-verdict evidence. D
 
 ## Current authoritative scoreboard
 
-- **2026-08-25 ET:** **0 TRADE_REALIZED / $0.0000 net**.
-- **Unresolved central durable reservations:** **0**.
+- **2026-08-26 ET:** **0 TRADE_REALIZED / $0.0000 net**.
+- **No central ledger event of any type after 2026-08-26 00:00 UTC** as of this checkpoint.
 - Caleb Durbin: **-$0.44 REALIZED one-leg sports loss**.
 - Weather since **2026-03-01:** **0 weather-tagged TRADE_REALIZED / $0.0000 verified realized**. Seasonal/historical edge is not substituted for realized performance.
 - Same-Gemini crypto prior snapshot: roughly **2,647 certified q1 pairs / 275 books / 0 immediate >=3c FOK/FOK locks**; near-verdict evidence only.
@@ -63,20 +65,20 @@ Interpretation: liquidity is deep enough, but this certified totals slice has **
 
 ### K<->P MLB moneyline/spread/game-total breadth
 
-PR #152 proved hundreds of exact shared semantic MLB game keys exist, but **0 pass the existing <=5 minute scheduled-start gate**, so none reach executable pricing. PR #153 is a read-only diagnostic that exposes raw Polymarket/Kalshi timestamp candidates and skew distribution without relaxing identity rules.
+Fresh production has **55 Polymarket events / 70 Kalshi events** and **124 exact shared semantic keys after physical-representation expansion**, but no key reaches book pricing because the existing <=5 minute scheduled-start identity gate rejects the venue-normalized starts.
 
-The first safe one-off execution of #153 failed specifically because a GitHub-hosted runner received **403 Forbidden** from Kalshi's dedicated `external-api` event discovery endpoint. Therefore:
+The leading source-level cause is `_kalshi_start()` fallback behavior when event tickers omit HHMM: `strike_date`, `expected_expiration_time`, and `close_time` are used as start candidates. Merged PR #153 exists specifically to expose raw timestamp fields and the skew distribution. Its first GitHub-hosted run received Kalshi HTTP 403; the attempted Railway one-off in this run did not obtain a current diagnostic snapshot. Therefore:
 
-- this is **not** proof of zero game-market overlap;
+- this is **not** proof of zero MLB game-market overlap;
 - the <=5 minute identity gate remains unchanged;
-- moneyline/spread/game-total capacity remains **$0** until timestamp alignment is measured from authenticated runtime context;
+- moneyline/spread/game-total capacity remains **$0** until authenticated raw timestamp evidence proves the normalization mismatch and a narrow adapter correction is tested;
 - the census clock does not pause or reset.
 
 ### Gemini<->Kalshi sports
 
-The production hot-shadow remains deliberately disarmed: `read_only=true`, `order_entry=false`. Fresh state has **570 Gemini symbols / 570 initialized Kalshi tickers**, >120k comparable evaluations, and **6 hot >=3c evaluations**. These are not guaranteed capacity because the complete Gemini prop lifecycle fingerprint remains uncertified. A fresh Elly De La Cruz hits signal lasted ~963ms and modeled ~3.61c locked profit, but its rule assessment explicitly remained `UNAUDITED`, `exact_settlement_equivalent=false`, and `execution_eligible=false`; it receives $0 guaranteed-arb credit and no order was sent.
+The guaranteed-arb path remains deliberately disarmed/research-only. Prior hot-shadow state had 570 Gemini symbols / 570 initialized Kalshi tickers and a handful of >=3c modeled signals, but complete Gemini prop lifecycle settlement equivalence remains uncertified. Those signals receive **$0 guaranteed-arb capacity credit**.
 
-Central ledger reconciliation is clean: Caleb is settled -$0.44 and there are **zero unresolved durable reservations**. Keep G<->K execution disarmed unless exact rule/settlement equivalence is independently certified.
+Central ledger reconciliation is clean: Caleb is settled -$0.44 and there is no new overnight ledger event. Keep guaranteed G<->K execution disarmed unless exact rule/settlement equivalence is independently certified.
 
 Kalshi secondary websocket 429s remain consistent with concurrent-handshake/contention, not a weak account tier. `/account/limits` remains **advanced**, **900 bucket / 300 refill** for both reads and writes.
 
@@ -91,9 +93,9 @@ Fresh authoritative central records show **0 weather-tagged realized trades / $0
 ## Highest-value next actions
 
 1. Keep the K<->P 72-hour wall clock running with no resets. Current certified totals evidence remains **$0/day at >=3c**.
-2. Move the merged #153 timestamp diagnostic into an **authenticated read-only runtime path** without interrupting the active collectors; measure raw timestamp fields and skew distribution and correct only a proven adapter normalization bug. Do not loosen the <=5 minute gate.
-3. If timestamps align after a proven normalization fix, immediately price moneyline/spread/game-total physical pairs and report >=1c/>=2c/>=3c, q1 depth, skew, and missing-to-3c. Until then those families remain $0 capacity.
-4. Treat G<->K hot >=3c observations as **research-only capacity $0** until complete lifecycle settlement equivalence is certified. Keep order entry disarmed.
+2. Obtain one authenticated, read-only #153 timestamp report from Railway/source runtime. Do not loosen the <=5 minute gate. If it proves Kalshi is substituting strike/expiry/close for scheduled first pitch, patch only that adapter normalization and test it before production.
+3. If timestamps align after a proven correction, immediately price moneyline/spread/game-total physical pairs and report >=1c/>=2c/>=3c, q1 depth, skew, and missing-to-3c. Until then those families remain $0 capacity.
+4. Treat G<->K hot >=3c observations as **research-only capacity $0** until complete lifecycle settlement equivalence is certified. Keep guaranteed order entry disarmed.
 5. Keep rule-incomplete player props at capacity $0 until settlement/postponement/cancellation/stat-correction semantics are certified. Participation proof alone is insufficient.
 6. Preserve Kalshi account headroom and websocket backoff; do not stop unrelated services for census convenience.
 7. Preserve fixed **<$50 / $50-$149 / >=$150** verdict thresholds and the one-time +24h maximum data-quality allowance.
