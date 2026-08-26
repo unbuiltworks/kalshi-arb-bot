@@ -10,8 +10,8 @@ and independently derives empirical execution probability from raw eligible/tota
 counts in a verified observation window. The probability denominator must represent the
 complete scanner-snapshot window (including zero-opportunity snapshots), duplicate
 snapshot counting must be explicitly excluded, and the sample cohort must be bound to
-the exact Kalshi market and scored side being ranked. It is read-only and cannot
-authorize order entry or a live probe.
+the exact Kalshi market, scored side, scored quantity, and maximum executable ask being
+ranked. It is read-only and cannot authorize order entry or a live probe.
 """
 from __future__ import annotations
 
@@ -98,17 +98,24 @@ def _sample_basis_verified(row: dict[str, Any]) -> bool:
     )
 
 
-def _sample_scope_verified(row: dict[str, Any]) -> bool:
-    """Bind empirical execution counts to the exact market and side being ranked.
+def _sample_scope_verified(row: dict[str, Any], record: dict[str, Any] | None) -> bool:
+    """Bind empirical execution counts to the exact opportunity shape being ranked.
 
-    A portfolio row must not borrow an execution rate measured on another city/date,
-    another bracket, or the opposite side. Aggregate weather-wide success counts remain
-    useful research diagnostics but cannot certify a specific market's capacity score.
+    Market + side alone is not enough. A q1 success rate must not certify q5 capacity,
+    and fills observed only at a worse ask must not count as executable for an edge that
+    exists only at the selected cheaper ask. Therefore the empirical cohort must match
+    the selected record's exact scored quantity and maximum executable ask as well.
     """
     market_ticker = str(row.get("market_ticker") or row.get("kalshi_ticker") or "").strip()
     selected_side = str(row.get("best_shadow_side") or "").strip().upper()
     sample_market_ticker = str(row.get("executable_probability_market_ticker") or "").strip()
     sample_side = str(row.get("executable_probability_side") or "").strip().upper()
+    sample_quantity = _decimal(row.get("executable_probability_quantity"))
+    sample_max_ask = _decimal(row.get("executable_probability_max_ask_dollars"))
+    parsed = None if record is None else _price_quantity_fee(record)
+    if parsed is None:
+        return False
+    selected_price, selected_quantity, _ = parsed
     return (
         bool(market_ticker)
         and selected_side in {"YES", "NO"}
@@ -116,6 +123,10 @@ def _sample_scope_verified(row: dict[str, Any]) -> bool:
         and row.get("executable_probability_sample_scope") == EXACT_MARKET_SIDE_SAMPLE_SCOPE
         and sample_market_ticker == market_ticker
         and sample_side == selected_side
+        and sample_quantity is not None
+        and sample_quantity == selected_quantity
+        and sample_max_ask is not None
+        and sample_max_ask == selected_price
     )
 
 
@@ -145,7 +156,7 @@ def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any
     producer_probability = _decimal(row.get("executable_probability"))
     derived_probability, success_count, sample_count = _empirical_execution_probability(row)
     sample_basis_verified = _sample_basis_verified(row)
-    sample_scope_verified = _sample_scope_verified(row)
+    sample_scope_verified = _sample_scope_verified(row, record)
     if not sample_basis_verified:
         blockers.append(EXECUTION_SAMPLE_BASIS_UNVERIFIED)
     if not sample_scope_verified:
@@ -187,6 +198,8 @@ def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any
         "execution_probability_sample_scope": row.get("executable_probability_sample_scope"),
         "execution_probability_market_ticker": row.get("executable_probability_market_ticker"),
         "execution_probability_side": row.get("executable_probability_side"),
+        "execution_probability_quantity": row.get("executable_probability_quantity"),
+        "execution_probability_max_ask_dollars": row.get("executable_probability_max_ask_dollars"),
         "derived_net_edge_per_dollar": None if derived_edge is None else str(derived_edge),
         "derived_depth_dollars": None if derived_depth is None else str(derived_depth),
         "verified_executable_probability": None if not probability_verified else str(derived_probability),
