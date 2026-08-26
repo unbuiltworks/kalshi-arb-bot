@@ -1,11 +1,13 @@
 """Targeted forensic replay of logged FanDuel↔Polymarket MLB moneyline gaps.
 
-This is deliberately not a random backtest.  It spends historical Odds API
+This is deliberately not a random backtest. It spends historical Odds API
 credits only on exact timestamps where the live watcher logged loud gaps, then
 asks what Pinnacle's EU-region h2h fair value was at the corresponding historical
-snapshot.  Polymarket executable depth is the depth captured by the watcher at
+snapshot. Polymarket executable depth is the depth captured by the watcher at
 that instant; it is not reconstructed later.
 
+PHI-SEA was already queried once; this continuation contains only the four
+remaining distinct moneyline events so no historical credit is spent twice.
 Read-only. No order entry.
 """
 from __future__ import annotations
@@ -18,22 +20,9 @@ from typing import Any
 import httpx
 
 URL = "https://api.the-odds-api.com/v4/historical/sports/baseball_mlb/odds"
-QUOTA_FLOOR = 800
+QUOTA_FLOOR = 700
 
 TARGETS = [
-    {
-        "label": "PHI-SEA loud moneyline",
-        "requested_ts": "2026-08-25T02:03:15Z",
-        "team_a": "Philadelphia Phillies",
-        "team_b": "Seattle Mariners",
-        "subject": "Philadelphia Phillies",
-        "watcher_poly_side": "NO",
-        "watcher_poly_ask": 0.695,
-        "watcher_poly_q1_depth": 5.0,
-        "watcher_fd_semantic_action": "YES",
-        "watcher_fd_implied_cost": 0.2173913043478261,
-        "watcher_locked_profit": 0.07760869565217391,
-    },
     {
         "label": "MIN-ATH 3.1c moneyline",
         "requested_ts": "2026-08-25T02:04:15Z",
@@ -151,11 +140,7 @@ def main() -> None:
             except ValueError:
                 remaining_before = 999999
             if remaining_before <= QUOTA_FLOOR:
-                rows.append({
-                    **target,
-                    "status": "SKIPPED_QUOTA_FLOOR",
-                    "quota_floor": QUOTA_FLOOR,
-                })
+                rows.append({**target, "status": "SKIPPED_QUOTA_FLOOR", "quota_floor": QUOTA_FLOOR})
                 break
 
             response = http.get(URL, params={
@@ -172,12 +157,7 @@ def main() -> None:
                 "last_cost": response.headers.get("x-requests-last", ""),
             }
             if response.status_code != 200:
-                rows.append({
-                    **target,
-                    "status": "HISTORICAL_HTTP_ERROR",
-                    "http_status": response.status_code,
-                    "quota": dict(last_quota),
-                })
+                rows.append({**target, "status": "HISTORICAL_HTTP_ERROR", "http_status": response.status_code, "quota": dict(last_quota)})
                 continue
 
             body = response.json()
@@ -185,22 +165,12 @@ def main() -> None:
             event = next((e for e in events if isinstance(e, dict) and _event_matches(e, target)), None)
             snapshot_ts = str(body.get("timestamp") or "") if isinstance(body, dict) else ""
             if event is None:
-                rows.append({
-                    **target,
-                    "status": "MATCHING_EVENT_NOT_FOUND",
-                    "snapshot_ts": snapshot_ts,
-                    "quota": dict(last_quota),
-                })
+                rows.append({**target, "status": "MATCHING_EVENT_NOT_FOUND", "snapshot_ts": snapshot_ts, "quota": dict(last_quota)})
                 continue
 
             fair = _pinnacle_fair(event)
             if fair is None:
-                rows.append({
-                    **target,
-                    "status": "PINNACLE_H2H_NOT_FOUND_IN_EU_SNAPSHOT",
-                    "snapshot_ts": snapshot_ts,
-                    "quota": dict(last_quota),
-                })
+                rows.append({**target, "status": "PINNACLE_H2H_NOT_FOUND_IN_EU_SNAPSHOT", "snapshot_ts": snapshot_ts, "quota": dict(last_quota)})
                 continue
             subject_fair = _subject_fair(fair, target["subject"])
             requested_dt = datetime.fromisoformat(target["requested_ts"].replace("Z", "+00:00")).astimezone(timezone.utc)
@@ -210,11 +180,7 @@ def main() -> None:
             except Exception:
                 ref_age_s = None
 
-            poly_yes_from_no_ask = (
-                1.0 - float(target["watcher_poly_ask"])
-                if target["watcher_poly_side"] == "NO"
-                else None
-            )
+            poly_yes_from_no_ask = 1.0 - float(target["watcher_poly_ask"]) if target["watcher_poly_side"] == "NO" else None
             rows.append({
                 **target,
                 "status": "FORENSIC_SNAPSHOT_MATCHED",
@@ -224,26 +190,16 @@ def main() -> None:
                 "pinnacle_fair": fair,
                 "pinnacle_fair_subject": subject_fair,
                 "poly_yes_bid_equivalent_from_no_ask": poly_yes_from_no_ask,
-                "pinnacle_minus_poly_bid_equivalent": (
-                    None if subject_fair is None or poly_yes_from_no_ask is None
-                    else subject_fair - poly_yes_from_no_ask
-                ),
-                "fanduel_implied_minus_pinnacle": (
-                    None if subject_fair is None
-                    else float(target["watcher_fd_implied_cost"]) - subject_fair
-                ),
+                "pinnacle_minus_poly_bid_equivalent": None if subject_fair is None or poly_yes_from_no_ask is None else subject_fair - poly_yes_from_no_ask,
+                "fanduel_implied_minus_pinnacle": None if subject_fair is None else float(target["watcher_fd_implied_cost"]) - subject_fair,
                 "quota": dict(last_quota),
-                "query_contract": {
-                    "regions": "eu",
-                    "markets": "h2h",
-                    "pinnacle_selected_from_response_only": True,
-                },
+                "query_contract": {"regions": "eu", "markets": "h2h", "pinnacle_selected_from_response_only": True},
                 "read_only": True,
                 "order_entry": False,
             })
 
     print(json.dumps({
-        "status": "MLB_POLY_GAP_FORENSIC_PINNACLE",
+        "status": "MLB_POLY_GAP_FORENSIC_PINNACLE_REMAINING",
         "design": "EXACT_LOGGED_GAP_TIMESTAMPS_NOT_RANDOM_SAMPLE",
         "snapshots_requested": len([r for r in rows if r.get("status") != "SKIPPED_QUOTA_FLOOR"]),
         "targets": rows,
@@ -253,6 +209,5 @@ def main() -> None:
     }, sort_keys=True, default=str))
 
 
-# Deployment trigger after watch-pattern change.
 if __name__ == "__main__":
     main()
