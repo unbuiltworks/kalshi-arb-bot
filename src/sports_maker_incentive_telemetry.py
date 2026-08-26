@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 import json
 import logging
@@ -38,6 +38,7 @@ KALSHI_INCENTIVES = "https://external-api.kalshi.com/trade-api/v2/incentive_prog
 POLY_INCENTIVES = "https://api.prod.polymarketexchange.com/v1/incentives"
 POLY_GATEWAY = "https://gateway.polymarket.us"
 SCENARIOS = (1, 10, 100, 500, 2500)
+SIX_HOURS_MS = 6 * 60 * 60 * 1000
 
 
 def _dec(value: Any, default: Decimal = ZERO) -> Decimal:
@@ -68,6 +69,28 @@ def _ticks(diff: Decimal, tick: Decimal = D("0.01")) -> int:
     if diff <= 0:
         return 0
     return max(0, int((diff / tick).to_integral_value()))
+
+
+def _poly_period_name(value: Any) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _expected_poly_period(now_ms: int, event_start_ms: int) -> str:
+    if now_ms < event_start_ms - SIX_HOURS_MS:
+        return "early"
+    if now_ms < event_start_ms:
+        return "day_of"
+    return "live"
+
+
+def _unwrap_poly_book(body: Any) -> dict[str, Any] | None:
+    if not isinstance(body, dict):
+        return None
+    if isinstance(body.get("marketData"), dict):
+        return body["marketData"]
+    if isinstance(body.get("market_data"), dict):
+        return body["market_data"]
+    return body
 
 
 @dataclass(frozen=True)
@@ -236,14 +259,19 @@ class IncentiveTelemetry:
         try:
             response = await http.get(f"{POLY_GATEWAY}/v1/markets/{slug}/book")
             response.raise_for_status()
-            body = response.json()
-            return body if isinstance(body, dict) else None
+            return _unwrap_poly_book(response.json())
         except Exception:
             return None
 
     async def snapshot(self) -> None:
         tickers = sorted({p.kalshi.venue_market_id for p in self.shadow.pairs})
         slugs = sorted({p.poly.venue_market_id for p in self.shadow.pairs})
+        poly_start_ms: dict[str, int] = {}
+        for pair in self.shadow.pairs:
+            try:
+                poly_start_ms[pair.poly.venue_market_id] = int(pair.poly.identity.event.scheduled_start_ms)
+            except Exception:
+                continue
         active_by_ticker = {q.ticker: q for q in self.shadow.active.values()}
         now_ms = int(time.time() * 1000)
 
@@ -331,22 +359,42 @@ class IncentiveTelemetry:
                     }
                     logger.warning("KPMM_INCENTIVE_MARKET %s", json.dumps(payload, separators=(",", ":")))
 
-            # Polymarket: record active program terms + per-market qualifying
-            # book size/score. Do not infer pool share from only our matched
-            # subset because a program can span additional markets.
+            # Polymarket: select only the incentive phase actually applicable to
+            # each event right now. The API can return early/day-of/live rows in
+            # one payload even when only one phase is currently earnable.
+            poly_program_periods: list[tuple[str, dict[str, Any], str]] = []
+            for row in poly_rows:
+                slug = str(row.get("marketSlug") or "")
+                start_ms = poly_start_ms.get(slug)
+                if not slug or start_ms is None:
+                    continue
+                expected = _expected_poly_period(now_ms, start_ms)
+                for period in row.get("timePeriods") or []:
+                    if not isinstance(period, dict):
+                        continue
+                    explicit_status = str(period.get("status") or "").strip().lower()
+                    if explicit_status and explicit_status != "active":
+                        continue
+                    period_name = _poly_period_name(period.get("period"))
+                    if period_name == "dayof":
+                        period_name = "day_of"
+                    if period_name != expected:
+                        continue
+                    poly_program_periods.append((slug, period, expected))
+
             poly_book_sem = asyncio.Semaphore(8)
+
             async def fetch_one(slug: str) -> tuple[str, dict[str, Any] | None]:
                 async with poly_book_sem:
                     return slug, await self._poly_book(http, slug)
 
-            poly_program_periods: list[tuple[str, dict[str, Any]]] = []
-            for row in poly_rows:
-                slug = str(row.get("marketSlug") or "")
-                for period in row.get("timePeriods") or []:
-                    if isinstance(period, dict) and str(period.get("status") or "active").lower() == "active":
-                        poly_program_periods.append((slug, period))
-            poly_books = dict(await asyncio.gather(*(fetch_one(slug) for slug in sorted({s for s, _ in poly_program_periods})))) if poly_program_periods else {}
-            for slug, period in poly_program_periods:
+            poly_books = dict(
+                await asyncio.gather(
+                    *(fetch_one(slug) for slug in sorted({s for s, _, _ in poly_program_periods}))
+                )
+            ) if poly_program_periods else {}
+
+            for slug, period, expected in poly_program_periods:
                 book = poly_books.get(slug) or {}
                 bids = [x for x in (_poly_level(v) for v in (book.get("bids") or [])) if x is not None]
                 asks = [x for x in (_poly_level(v) for v in (book.get("offers") or book.get("asks") or [])) if x is not None]
@@ -359,6 +407,8 @@ class IncentiveTelemetry:
                     "market": slug,
                     "program_id": str(period.get("programId") or ""),
                     "period": period.get("period"),
+                    "applicable_period_by_event_clock": expected,
+                    "event_start_ms": poly_start_ms.get(slug),
                     "period_reward_usd": str(_dec(period.get("rewardPool"))),
                     "period_start": period.get("start"),
                     "period_end": period.get("end"),
