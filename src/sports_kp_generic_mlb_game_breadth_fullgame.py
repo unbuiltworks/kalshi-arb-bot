@@ -60,3 +60,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# Deploy trigger for the read-only maker-fill shadow; no runtime behavior change.
