@@ -1,12 +1,12 @@
 """Read-only full-game-only wrapper for the generic K/P MLB breadth census.
 
 The generic normalizer currently labels every Polymarket MLB game market as
-``full_contest``.  That can accidentally compare first-five/partial-game
+``full_contest``. That can accidentally compare first-five/partial-game
 Polymarket markets with full-game Kalshi markets and manufacture false edge.
 
-This wrapper fails closed on clearly partial-game Polymarket labels before the
-existing semantic matching/pricing pipeline sees them.  It adds no venue
-requests and no order-entry capability.
+This wrapper fails closed on clearly partial-game Polymarket labels or market
+IDs before the existing semantic matching/pricing pipeline sees them. It adds
+no venue requests and no order-entry capability.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ _PARTIAL_GAME_PATTERNS = (
 
 
 def is_clearly_partial_game_label(source_label: str | None) -> bool:
-    """Return True only for labels that explicitly identify a partial game."""
+    """Return True only for text that explicitly identifies a partial game."""
     text = (source_label or "").replace("-", " ")
     return any(pattern.search(text) for pattern in _PARTIAL_GAME_PATTERNS)
 
@@ -34,10 +34,20 @@ _ORIGINAL_NORMALIZE_POLYMARKET = breadth.normalize_polymarket_mlb
 
 
 def _normalize_polymarket_full_game(*args, **kwargs):
-    side = _ORIGINAL_NORMALIZE_POLYMARKET(*args, **kwargs)
-    if side is not None and is_clearly_partial_game_label(side.source_label):
-        return None
-    return side
+    """Filter normalized Polymarket sides using both human label and market ID.
+
+    The base normalizer returns a list. ``source_label`` prefers question/title,
+    which may omit the F5 scope even when the canonical market slug contains
+    ``-f5-``. Filtering both fields prevents those rows from being mislabeled as
+    full-contest while preserving every existing identity and pricing gate.
+    """
+    sides = _ORIGINAL_NORMALIZE_POLYMARKET(*args, **kwargs)
+    return [
+        side
+        for side in sides
+        if not is_clearly_partial_game_label(side.source_label)
+        and not is_clearly_partial_game_label(side.venue_market_id)
+    ]
 
 
 def main() -> None:

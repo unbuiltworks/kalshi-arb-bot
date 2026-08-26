@@ -1,3 +1,6 @@
+from types import SimpleNamespace
+
+from src import sports_kp_generic_mlb_game_breadth_fullgame as fullgame
 from src.sports_kp_generic_mlb_game_breadth_fullgame import is_clearly_partial_game_label
 
 
@@ -27,3 +30,16 @@ def test_does_not_reject_normal_full_game_labels() -> None:
     ]
     for label in labels:
         assert not is_clearly_partial_game_label(label), label
+
+
+def test_normalized_filter_rejects_f5_slug_when_label_is_generic(monkeypatch) -> None:
+    full = SimpleNamespace(source_label="Game Total 6.5", venue_market_id="tsc-mlb-a-b-2026-08-26-6pt5")
+    f5 = SimpleNamespace(source_label="Game Total 6.5", venue_market_id="tsc-mlb-a-b-2026-08-26-f5-6pt5")
+    monkeypatch.setattr(fullgame, "_ORIGINAL_NORMALIZE_POLYMARKET", lambda *args, **kwargs: [full, f5])
+    assert fullgame._normalize_polymarket_full_game([]) == [full]
+
+
+def test_normalized_filter_handles_list_return_shape(monkeypatch) -> None:
+    full = SimpleNamespace(source_label="MLB Game Winner", venue_market_id="aec-mlb-a-b-2026-08-26")
+    monkeypatch.setattr(fullgame, "_ORIGINAL_NORMALIZE_POLYMARKET", lambda *args, **kwargs: [full])
+    assert fullgame._normalize_polymarket_full_game([]) == [full]
