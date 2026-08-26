@@ -54,6 +54,6 @@ def _receipt_fresh_ingest(self: base.OddsIoStore, message: Mapping[str, Any], *,
 
 base.OddsIoStore.ingest = _receipt_fresh_ingest
 
-
+# Railway deployment trigger after the service watch pattern was updated.
 if __name__ == "__main__":
     base.main()
