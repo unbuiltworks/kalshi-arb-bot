@@ -6,8 +6,9 @@ underlying weather settlement/book/fee/model audit passed: a malformed producer 
 attach inflated ranking inputs to otherwise valid SHADOW evidence.
 
 This guard independently derives the edge/depth terms from the selected executable side
-and requires explicit empirical evidence for execution probability. It is read-only and
-cannot authorize order entry or a live probe.
+and independently derives empirical execution probability from raw eligible/total sample
+counts in a verified observation window. It is read-only and cannot authorize order
+entry or a live probe.
 """
 from __future__ import annotations
 
@@ -63,13 +64,37 @@ def _price_quantity_fee(record: dict[str, Any]) -> tuple[Decimal, Decimal, Decim
     return price, qty, fee
 
 
+def _empirical_execution_probability(row: dict[str, Any]) -> tuple[Decimal | None, int | None, int | None]:
+    """Derive execution probability from raw verified observation counts.
+
+    A producer-supplied probability scalar is not evidence. The denominator must be the
+    complete verified observation window, including non-executable samples, and the
+    numerator must be the subset that met the executable-shadow condition. Counts are
+    intentionally integers so repeated fractional weighting cannot silently redefine the
+    sample basis.
+    """
+    eligible = row.get("executable_probability_success_count")
+    total = row.get("executable_probability_sample_count")
+    if (
+        not isinstance(eligible, int)
+        or isinstance(eligible, bool)
+        or not isinstance(total, int)
+        or isinstance(total, bool)
+        or total <= 0
+        or eligible < 0
+        or eligible > total
+    ):
+        return None, None, None
+    return D(eligible) / D(total), eligible, total
+
+
 def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any]:
     """Verify weather ranking inputs against raw selected-side SHADOW economics.
 
     ``net_edge_per_dollar`` and ``depth_dollars`` are recomputed rather than trusted.
     ``executable_probability`` is empirical and therefore cannot be inferred from one
-    quote; it requires literal verification plus a positive integer sample count and a
-    verified complete observation window.
+    quote or accepted as a producer scalar: it is independently derived from successful
+    executable samples divided by the full verified observation-window sample count.
     """
     blockers: list[str] = []
     record = _selected_record(row)
@@ -92,16 +117,15 @@ def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any
                 derived_depth = price * qty
                 derived_edge = (ev_cents / D("100")) / deployed_capital
 
-    probability = _decimal(row.get("executable_probability"))
-    sample_count = row.get("executable_probability_sample_count")
+    producer_probability = _decimal(row.get("executable_probability"))
+    derived_probability, success_count, sample_count = _empirical_execution_probability(row)
     probability_verified = (
         row.get("executable_probability_verified") is True
         and row.get("executable_probability_window_verified") is True
-        and isinstance(sample_count, int)
-        and not isinstance(sample_count, bool)
-        and sample_count > 0
-        and probability is not None
-        and D("0") <= probability <= D("1")
+        and derived_probability is not None
+        and producer_probability is not None
+        and producer_probability == derived_probability
+        and D("0") <= derived_probability <= D("1")
     )
     if not probability_verified:
         blockers.append(EXECUTION_PROBABILITY_UNVERIFIED)
@@ -125,8 +149,9 @@ def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any
         "weather_execution_probability_verified": probability_verified,
         "derived_net_edge_per_dollar": None if derived_edge is None else str(derived_edge),
         "derived_depth_dollars": None if derived_depth is None else str(derived_depth),
-        "verified_executable_probability": None if not probability_verified else str(probability),
-        "executable_probability_sample_count": sample_count if isinstance(sample_count, int) and not isinstance(sample_count, bool) else None,
+        "verified_executable_probability": None if not probability_verified else str(derived_probability),
+        "executable_probability_success_count": success_count,
+        "executable_probability_sample_count": sample_count,
         "blockers": blockers,
         "read_only": True,
         "order_entry": False,
