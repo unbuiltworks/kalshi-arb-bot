@@ -10,8 +10,9 @@ and independently derives empirical execution probability from raw eligible/tota
 counts in a verified observation window. The probability denominator must represent the
 complete scanner-snapshot window (including zero-opportunity snapshots), duplicate
 snapshot counting must be explicitly excluded, and the sample cohort must be bound to
-the exact Kalshi market, scored side, scored quantity, and maximum executable ask being
-ranked. It is read-only and cannot authorize order entry or a live probe.
+the exact Kalshi market, scored side, scored quantity, maximum executable ask, and
+minimum after-fee edge being ranked. It is read-only and cannot authorize order entry
+or a live probe.
 """
 from __future__ import annotations
 
@@ -24,8 +25,10 @@ PORTFOLIO_METRICS_UNVERIFIED = "WEATHER_PORTFOLIO_METRICS_UNVERIFIED"
 EXECUTION_PROBABILITY_UNVERIFIED = "WEATHER_EXECUTION_PROBABILITY_UNVERIFIED"
 EXECUTION_SAMPLE_BASIS_UNVERIFIED = "WEATHER_EXECUTION_SAMPLE_BASIS_UNVERIFIED"
 EXECUTION_SAMPLE_SCOPE_UNVERIFIED = "WEATHER_EXECUTION_SAMPLE_SCOPE_UNVERIFIED"
+EXECUTION_SAMPLE_OUTCOME_UNVERIFIED = "WEATHER_EXECUTION_SAMPLE_OUTCOME_UNVERIFIED"
 COMPLETE_SCANNER_SAMPLE_BASIS = "COMPLETE_SCANNER_SNAPSHOT_WINDOW"
 EXACT_MARKET_SIDE_SAMPLE_SCOPE = "EXACT_MARKET_SAME_SIDE_EXECUTABLE_SHADOW"
+EXACT_EDGE_OUTCOME_DEFINITION = "EXACT_MARKET_SAME_SIDE_QTY_PRICE_MIN_AFTER_FEE_EDGE"
 
 
 def _decimal(value: Any) -> Decimal | None:
@@ -69,6 +72,20 @@ def _price_quantity_fee(record: dict[str, Any]) -> tuple[Decimal, Decimal, Decim
     if not (D("0") < price < D("1")) or qty <= 0 or fee < 0:
         return None
     return price, qty, fee
+
+
+def _selected_edge_cents_per_contract(record: dict[str, Any] | None) -> Decimal | None:
+    if record is None:
+        return None
+    parsed = _price_quantity_fee(record)
+    ev_cents = _decimal(record.get("modeled_after_fee_ev_cents"))
+    if parsed is None or ev_cents is None:
+        return None
+    _, qty, _ = parsed
+    if qty <= 0:
+        return None
+    edge = ev_cents / qty
+    return edge if edge.is_finite() else None
 
 
 def _empirical_execution_probability(row: dict[str, Any]) -> tuple[Decimal | None, int | None, int | None]:
@@ -130,12 +147,33 @@ def _sample_scope_verified(row: dict[str, Any], record: dict[str, Any] | None) -
     )
 
 
+def _sample_outcome_verified(row: dict[str, Any], record: dict[str, Any] | None) -> bool:
+    """Require empirical successes to satisfy the same after-fee edge being ranked.
+
+    A cohort scoped only to market/side/quantity/price can still overstate execution
+    probability if its numerator counts snapshots where the model/fee state no longer
+    supports the current edge. Bind the success definition to the selected plan's exact
+    after-fee cents-per-contract threshold so weaker/no-edge snapshots cannot inflate
+    the capacity score assigned to a stronger opportunity.
+    """
+    selected_edge = _selected_edge_cents_per_contract(record)
+    sample_min_edge = _decimal(row.get("executable_probability_min_after_fee_edge_cents_per_contract"))
+    return (
+        row.get("executable_probability_outcome_definition_verified") is True
+        and row.get("executable_probability_outcome_definition") == EXACT_EDGE_OUTCOME_DEFINITION
+        and selected_edge is not None
+        and sample_min_edge is not None
+        and sample_min_edge == selected_edge
+    )
+
+
 def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any]:
     """Verify weather ranking inputs against raw selected-side SHADOW economics."""
     blockers: list[str] = []
     record = _selected_record(row)
     derived_edge: Decimal | None = None
     derived_depth: Decimal | None = None
+    selected_edge_cents_per_contract = _selected_edge_cents_per_contract(record)
 
     if record is None:
         blockers.append(PORTFOLIO_METRICS_UNVERIFIED)
@@ -157,16 +195,20 @@ def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any
     derived_probability, success_count, sample_count = _empirical_execution_probability(row)
     sample_basis_verified = _sample_basis_verified(row)
     sample_scope_verified = _sample_scope_verified(row, record)
+    sample_outcome_verified = _sample_outcome_verified(row, record)
     if not sample_basis_verified:
         blockers.append(EXECUTION_SAMPLE_BASIS_UNVERIFIED)
     if not sample_scope_verified:
         blockers.append(EXECUTION_SAMPLE_SCOPE_UNVERIFIED)
+    if not sample_outcome_verified:
+        blockers.append(EXECUTION_SAMPLE_OUTCOME_UNVERIFIED)
 
     probability_verified = (
         row.get("executable_probability_verified") is True
         and row.get("executable_probability_window_verified") is True
         and sample_basis_verified
         and sample_scope_verified
+        and sample_outcome_verified
         and derived_probability is not None
         and producer_probability is not None
         and producer_probability == derived_probability
@@ -194,12 +236,20 @@ def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any
         "weather_execution_probability_verified": probability_verified,
         "weather_execution_sample_basis_verified": sample_basis_verified,
         "weather_execution_sample_scope_verified": sample_scope_verified,
+        "weather_execution_sample_outcome_verified": sample_outcome_verified,
         "execution_probability_sample_basis": row.get("executable_probability_sample_basis"),
         "execution_probability_sample_scope": row.get("executable_probability_sample_scope"),
         "execution_probability_market_ticker": row.get("executable_probability_market_ticker"),
         "execution_probability_side": row.get("executable_probability_side"),
         "execution_probability_quantity": row.get("executable_probability_quantity"),
         "execution_probability_max_ask_dollars": row.get("executable_probability_max_ask_dollars"),
+        "execution_probability_outcome_definition": row.get("executable_probability_outcome_definition"),
+        "execution_probability_min_after_fee_edge_cents_per_contract": row.get(
+            "executable_probability_min_after_fee_edge_cents_per_contract"
+        ),
+        "selected_after_fee_edge_cents_per_contract": (
+            None if selected_edge_cents_per_contract is None else str(selected_edge_cents_per_contract)
+        ),
         "derived_net_edge_per_dollar": None if derived_edge is None else str(derived_edge),
         "derived_depth_dollars": None if derived_depth is None else str(derived_depth),
         "verified_executable_probability": None if not probability_verified else str(derived_probability),
