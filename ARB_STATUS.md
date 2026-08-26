@@ -1,19 +1,22 @@
 # ARB Control Plane
 
-Last verified: **2026-08-26 09:38 UTC / 2026-08-26 05:38 ET**
+Last verified: **2026-08-26 09:40 UTC / 2026-08-26 05:40 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
 ## Latest run delta
 
-- **PR #156 passed both GitHub Actions test runs, was promoted from draft, merged, and deployed.** It is read-only and intended to reject explicit Polymarket partial-game/F5 MLB rows before full-game K<->P semantic matching.
-- Railway exposed a production wiring miss after the merge: `sports-generic-counterpart-shadow` was still starting `src.sports_kp_generic_mlb_game_breadth`, so the new wrapper was not active. The effective start command was corrected to `python -m src.sports_kp_generic_mlb_game_breadth_fullgame --interval-seconds 60`; `restartPolicy=ALWAYS` is preserved. Replacement deployment `b0f1a02f-1fd9-435b-ac0f-61dc85c4bc74` is **SUCCESS**.
-- Fresh runtime then proved **#156 itself is insufficient**. The deployed wrapper still admits F5 slugs such as `tsc-mlb-...-f5-6pt5`, and the contaminated descriptive spread/total bins remain visible. Root cause from source inspection: the base Polymarket normalizer returns a **list** of normalized sides, while #156 treated the return as one side; additionally `source_label` prefers question/title and can omit the `f5` scope marker even though `venue_market_id` retains it. Therefore all current positive spread/game-total breadth rows remain **$0 capacity**.
-- Prepared **draft PR #157** on isolated branch `feature/kp-full-game-scope-slug-fix`. It filters the normalized list and fails closed when **either `source_label` or `venue_market_id`** identifies partial-game scope. Regression tests cover a generic human label with an F5 market slug and the normalizer list return shape. No order transport, pricing, start-time, settlement, rule, or risk gate changes. It remains draft pending normal CI/review.
-- The last contaminated breadth snapshot was: moneyline **26 semantic groups, 0 >=1c / 0 >=2c / 0 >=3c**; spread **26 groups, 12 / 10 / 9**; game total **112 groups, 70 / 70 / 70**. **Only the moneyline zero is non-suspicious descriptive evidence.** Spread/game-total positive rows contain explicit F5/full-game mismatches and receive $0 capacity credit.
+- **PR #156 passed CI, merged, and exposed two separate correctness problems in production rather than a real spread/total edge.** First Railway was still starting the unwrapped breadth module; that override was corrected to `python -m src.sports_kp_generic_mlb_game_breadth_fullgame --interval-seconds 60`. Second, the wrapper itself treated the base normalizer's list return as one side and inspected only `source_label`, while Polymarket human labels can omit the F5 marker even when `venue_market_id` retains `-f5-`.
+- Built **PR #157** to fix that exact defect: filter the normalized list and reject a Polymarket row when either its human label or physical market ID identifies partial-game scope. Regression tests cover a generic label paired with an `-f5-` slug and the real list return shape. No order transport, pricing, start-time, settlement, rule, or risk gate changed.
+- **PR #157 CI passed, it was promoted, merged at `9e11a4344e47b89bef67c37e257e01c2782a7f28`, and Railway deployment `f4de216f-0ba5-4706-aae7-d6f7e223319d` is SUCCESS.** The service retains `restartPolicy=ALWAYS` and the full-game wrapper entrypoint.
+- The first fresh post-#157 production snapshot is decisive: **630 Polymarket normalized sides / 536 Kalshi sides / 258 physical pairs / 97 semantic unique groups**, with **no F5 rows in the priced output**. Clean full-game family bins are now:
+  - moneyline: **26 semantic groups, 0 >=1c / 0 >=2c / 0 >=3c**;
+  - spread: **26 groups, 0 / 0 / 0**;
+  - game total: **45 groups, 0 / 0 / 0**.
+- The clean full-game sample is liquid but economically negative. Average q1 depth is about **4,948.50 moneyline / 953.23 spread / 891.55 game total**. The best rows are still negative after fees: roughly **-2c** at best; median missing-to-3c is about **6.5c moneyline / 6c spread / 6.5c game total**. These rows remain `RULE_INCOMPLETE_NORMAL_EVENT_SHADOW_NOT_EXECUTION_ELIGIBLE`, so guaranteed capacity is still $0 even before rule certification; importantly, the prior 30-40c F5 mirage is gone.
 - The separate decision-grade certified K<->P MLB totals collector remains unchanged: **1,031 >=1c / 0 >=2c / 0 >=3c** after fees from **1,661 observations / 9 semantic keys**. At the fixed provisional **>=80ms** realistic-capture floor it remains **137 >=1c / 0 >=2c / 0 >=3c**. Average selected-side q1 depth remains **~2,072.66 contracts**. This certified totals slice remains **$0/day deployable capacity at the fixed 3c floor**.
-- Fresh G<->K runtime is still `SUCCESS` but currently shows a **Gemini reconnect storm across many one-symbol shards**, followed by Railway log-rate limiting (`Messages dropped: 489`). This lane remains read-only/disarmed and is not decision-grade from this interval. No unrelated service was stopped to improve telemetry.
-- Fresh authoritative Neon `arb-trade-ledger`: **2026-08-26 ET = 0 TRADE_REALIZED / $0.0000 net**, and **0 unresolved durable capital reservations**. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
+- Fresh G<->K runtime remains `SUCCESS` but is currently producing a **Gemini reconnect storm across many one-symbol shards**, followed by Railway log-rate limiting (`Messages dropped: 489`). Guaranteed G<->K order entry remains disarmed/research-only; this interval is not decision-grade and no unrelated service was stopped to improve telemetry.
+- Fresh authoritative Neon `arb-trade-ledger`: **2026-08-26 ET = 0 TRADE_REALIZED / $0.0000 net**, with **0 unresolved durable capital reservations**. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
 - Fresh authoritative weather query: **0 weather-tagged TRADE_REALIZED / $0 verified realized since 2026-03-01**. Seasonal/historical weather edge is not credited as current realized performance.
 - Kalshi account diagnosis remains **advanced tier, 900 bucket / 300 refill** for both reads and writes. Do not weaken backoff or disrupt unrelated consumers solely for census telemetry.
 - The 72-hour wall clock continues with **no reset or pause**. Invalid/unmeasurable or rule-mismatched breadth contributes $0 for the relevant interval/family.
@@ -65,14 +68,15 @@ Interpretation: liquidity is not the blocker. This certified totals slice has no
 
 ### K<->P MLB moneyline/spread/game-total breadth
 
-PR #155 fixed the four-hour Kalshi scheduled-start timezone bug. Exact semantic overlap reaches book pricing, but current spread/game-total results remain contaminated by Polymarket partial-game/F5 rows colliding with full-game Kalshi contracts.
+The scheduled-start timezone bug and partial-game/F5 contamination are now both removed from the active read-only breadth path. PR #157 is merged and fresh production output contains only full-game physical market IDs.
 
-PR #156 is merged and the Railway service now starts its wrapper, but production verification proved the wrapper fails to filter these rows because it checks the wrong return shape/field. Draft **PR #157** is the bounded correction: filter the normalized list and inspect both human label and physical market slug. Until #157 passes CI, is promoted, and a fresh clean snapshot is observed:
+Latest clean descriptive snapshot:
 
-- moneyline descriptive evidence: **0 >=1c / 0 >=2c / 0 >=3c** in the latest snapshot;
-- spread/game-total positive rows: **invalid / $0 capacity**;
-- guaranteed MLB game breadth capacity: **$0**;
-- census clock does not pause or reset.
+- moneyline: **26 semantic groups, 0 >=1c / 0 >=2c / 0 >=3c**; avg q1 depth ~4,948.50; best edge about -2c;
+- spread: **26 groups, 0 / 0 / 0**; avg q1 depth ~953.23; best edge about -2c;
+- game total: **45 groups, 0 / 0 / 0**; avg q1 depth ~891.55; best edge about -3c.
+
+The generic breadth lane remains explicitly rule-incomplete/read-only, so these descriptive zeros are not settlement certification. They do, however, remove the earlier false-positive F5 rows and add strong evidence that current full-game taker/taker K<->P pricing is not approaching the fixed 3c floor. Guaranteed capacity remains **$0** unless both economics and exact settlement rules later pass.
 
 ### Gemini<->Kalshi sports
 
@@ -88,11 +92,10 @@ Authoritative central records show **0 weather-tagged realized trades / $0 reali
 
 ## Highest-value next actions
 
-1. Keep the fixed 72-hour wall clock running with no reset. Certified K<->P totals remain **$0/day at >=3c**.
-2. Get **draft PR #157** through normal CI/review. If green, merge and immediately verify that no `-f5-` Polymarket market reaches the full-game pricing output.
-3. Once clean, report full-game moneyline/spread/game-total >=1c/>=2c/>=3c bins, q1 depth, and missing-to-3c. Rule-incomplete rows remain $0 even after scope cleanup until exact settlement rules are certified.
+1. Keep the fixed 72-hour wall clock running with no reset. Certified K<->P totals remain **$0/day at >=3c**, and the first clean full-game ML/spread/total snapshot is also **0/0/0 across all three families**.
+2. Continue collecting clean full-game snapshots to establish realistic time-weighted/overlap-adjusted capacity; do not treat one snapshot as a final verdict, and do not lower the 3c floor.
+3. Add only **strict player props whose settlement/postponement/cancellation/stat-correction semantics can be proven equivalent**. Participation proof alone is insufficient; uncertified props remain $0 capacity.
 4. Keep G<->K disarmed and treat the current Gemini reconnect storm as a feed-quality interval, not executable capacity. Do not disrupt unrelated services solely to improve it.
-5. Keep rule-incomplete player props at capacity $0 until settlement/postponement/cancellation/stat-correction semantics are certified.
-6. Preserve Kalshi account headroom/backoff and the verified advanced **900 bucket / 300 refill** limits.
-7. Preserve fixed **<$50 / $50-$149 / >=$150** verdict thresholds and the one-time +24h maximum data-quality allowance.
-8. Keep AWS latency/maker-routing work isolated from this control-plane workstream.
+5. Preserve Kalshi account headroom/backoff and the verified advanced **900 bucket / 300 refill** limits.
+6. Preserve fixed **<$50 / $50-$149 / >=$150** verdict thresholds and the one-time +24h maximum data-quality allowance.
+7. Keep AWS latency/maker-routing work isolated from this control-plane workstream.
