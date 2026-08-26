@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-26 20:43 UTC / 2026-08-26 16:43 ET**
+Last verified: **2026-08-26 21:35 UTC / 2026-08-26 17:35 ET**
 
 This is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
@@ -19,8 +19,8 @@ The 72-hour wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and ends **20
 ## Fresh production state
 
 - `sports-kp-live-executor`: **SUCCESS/read-only census**. Last decision-grade totals sample remains the authoritative taker evidence below.
-- `sports-generic-counterpart-shadow`: **SUCCESS/read-only maker shadow**. Fresh event-level logs at 20:42 UTC materially expand the modeled-fill sample below.
-- `sports-gk-autonomous-supervisor`: guaranteed-arb execution remains **disarmed/read-only**. Caleb Durbin remains **-$0.44 REALIZED**.
+- `sports-generic-counterpart-shadow`: **SUCCESS/read-only maker + incentive shadow**. Fresh runtime at 21:34 UTC confirms active Polymarket book/incentive collection and explicitly keeps incentive capacity at $0 pending denominator/time-weighted/pickoff proof.
+- `sports-gk-autonomous-supervisor`: **SUCCESS/read-only/disarmed hot shadow**. At 21:35 UTC it had ~45.45M raw triggers but still only 120,836 comparable evaluations; Gemini 570 symbols / **0 connected**, Kalshi 570/570 initialized. No new comparable evidence is being credited.
 - `crypto-15m-sol-live-canary-10bp-50ms`: **CRASHED/contained**. Do not reopen as guaranteed arb while Gemini/Kalshi settlement-index equivalence remains unproven.
 
 ## Decision-grade K<->P evidence
@@ -44,7 +44,7 @@ After fixing start-time normalization and excluding F5/partial-game contaminatio
 
 ### Maker/fill shadow — larger sample, still $0 guaranteed capacity
 
-Fresh read-only maker telemetry at 20:42 UTC:
+Last fully verified read-only maker telemetry remains:
 
 - **92 matched moneyline pairs**;
 - **2,447 quote opens / 1,018 reprices / 1,230 cancels**;
@@ -61,7 +61,17 @@ Fresh read-only maker telemetry at 20:42 UTC:
 
 This is real evidence that maker fill conversion is non-zero, but it does **not** rescue guaranteed-arb capacity. The strongest mechanism is KXMLBGAME<->Polymarket US full-game MLB moneyline, whose postponement/reschedule lifecycles are not equivalent (Kalshi two-day treatment versus Polymarket US two-week treatment). Therefore these modeled fills and shadow P&L remain **$0 guaranteed-arb deployable capacity** and must not be armed or counted as realized.
 
-The incentive shadow also remains **$0 capacity credit**: 31 Polymarket incentive programs are visible, but the program denominator/time-weighted reward and pickoff accounting is incomplete. No reward estimate is counted as realized or deployable profit.
+### Polymarket liquidity incentives — fresh bounded evidence, still $0 capacity
+
+Fresh 21:34 UTC read-only telemetry confirms **31 active Polymarket MLB moneyline incentive programs/market-program rows are visible** across live/day-of/early phases. The currently observed qualified books are already above their raw target-size thresholds; the coverage census reported **0 under-target live-pool candidates**. Production also reports:
+
+- `program_denominator_complete=false`;
+- `daily_yield_status=PENDING_TIME_WEIGHTING_AND_PICKOFF_COST`;
+- `reward_accounting=SHADOW_ESTIMATE_NOT_REALIZED`;
+- `combined_capacity_credit_usd_per_day=0`;
+- `read_only=true`, `order_entry=false`.
+
+The visible reward pools do **not** become deployable or realized P&L without program-wide denominator, time-weighting, queue/fill, capital and adverse-selection/pickoff accounting. Do not use incentive headline dollars to rescue the census verdict.
 
 ### Strict MLB player props
 
@@ -69,7 +79,17 @@ No K<->P player-prop family currently has complete settlement/postponement/cance
 
 ## G<->K sports
 
-Guaranteed-arb execution remains **disarmed/read-only**. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away. Unmeasurable feed intervals receive $0 capacity; do not re-arm to improve census coverage.
+Guaranteed-arb execution remains **disarmed/read-only**. Fresh 21:35 UTC heartbeat:
+
+- ~**45.45M** raw triggers/evaluations;
+- **120,836 comparable evaluations** (unchanged);
+- **6 >=3c hot evaluations / 4 complete signal lifecycles** (historical, uncertified);
+- Gemini: **570 symbols / 0 connected symbols**;
+- Kalshi: **570/570 initialized**;
+- `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION`;
+- `read_only=true`, `order_entry=false`.
+
+This interval remains unmeasurable and receives $0 capacity credit. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away. Do not re-arm to improve census coverage.
 
 ## Kalshi account / 429 diagnosis
 
@@ -77,10 +97,11 @@ Authenticated account limits remain **advanced tier, 900 bucket / 300 refill** f
 
 ## Authoritative accounting
 
-Fresh direct Neon queries at 20:43 UTC:
+Fresh direct Neon queries at 21:31 UTC:
 
 - **2026-08-26 ET: 0 `TRADE_REALIZED` / $0.0000 net**;
 - **0 `CAPITAL_RESERVED` events since ET midnight**;
+- **no ledger events of any type since ET midnight** at the time of the query;
 - Caleb Durbin remains **-$0.44 REALIZED** from the prior sports one-leg settlement;
 - weather since **2026-03-01** remains **0 verified weather-tagged `TRADE_REALIZED` / $0.0000 net**.
 
@@ -93,18 +114,19 @@ Guaranteed-arb evidence remains strongly negative at the fixed 3c floor:
 - certified K<->P totals: **0 >=3c**;
 - clean full-game taker/taker: **0 >=3c**;
 - K<->P full-game moneyline maker: **197 modeled fills / 40 >=3c immediate fills, but rule lifecycle mismatch => $0 guaranteed capacity**;
+- Polymarket incentives: visible, but denominator/time-weighting/pickoff incomplete and current books not under raw target => **$0 capacity**;
 - strict props: uncertified => **$0**;
 - G<->K guaranteed execution: disarmed/unmeasurable => **$0**;
 - weather verified realized since March: **$0**.
 
-The fresh maker sample strengthens the conclusion that execution/fill mechanics can work, but the contract-rule mismatch blocks those economics from being guaranteed arbitrage. Do not replace failed certification with open-ended maker research during the census.
+The maker sample proves fill mechanics can work, but exact lifecycle mismatch blocks guaranteed-arb credit. The incentive sample does not currently provide a certified alternative revenue stream. Do not replace failed certification with open-ended maker/incentive research during the census.
 
 ## Highest-value next actions
 
 1. Keep the fixed census clock running through **2026-08-28 20:43 UTC / 16:43 ET** with no reset.
 2. Keep K<->P taker census alive; stale/unmeasurable intervals score $0 and are not mislabeled as fresh zero-edge samples.
-3. Continue maker telemetry only descriptively; **do not credit or arm KXMLBGAME<->Polymarket US full-game moneyline as guaranteed arb** under the lifecycle mismatch.
-4. Keep G<->K guaranteed execution disarmed; Caleb's loss remains realized.
+3. Continue maker/incentive telemetry only descriptively; do **not** credit or arm rule-mismatched full-game moneyline or incomplete incentive estimates.
+4. Keep G<->K guaranteed execution disarmed while Gemini remains 0 connected and rule lifecycle certification is incomplete; Caleb's loss remains realized.
 5. Do not manufacture same-venue ladder violations or force uncertified player props.
 6. Preserve Kalshi account headroom/backoff; do not disrupt unrelated live services solely for census telemetry.
 7. Keep weather historical/backtest edge separate from verified live realized P&L.
