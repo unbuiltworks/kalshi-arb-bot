@@ -5,8 +5,8 @@ certification is still incomplete. The legacy central report intentionally accep
 already-computed sleeve summaries and therefore cannot infer that distinction unless the
 caller repeats every weather blocker. This wrapper makes the boundary explicit:
 weather sleeves are promotable/annualizable only when the canonical weather certification
-audit has affirmatively cleared, the selected-side schema has independently cleared, and
-no hard blocker remains.
+audit is independently replayed and clears, the selected-side schema independently clears,
+and no hard blocker remains.
 
 This module is read-only and cannot authorize order entry or live probes.
 """
@@ -15,17 +15,12 @@ from __future__ import annotations
 from typing import Any, Iterable
 
 from src.central_shadow_portfolio_report import Sleeve, rank_sleeves as _rank_sleeves
+from src.weather_certification_dimensions_v3 import audit_weather_certification_dimensions_v3
 
 WEATHER_CERTIFICATION_BLOCKER = "WEATHER_CERTIFICATION_PREREQS_UNVERIFIED"
 WEATHER_SELECTED_SIDE_BLOCKER = "WEATHER_SELECTED_SIDE_SCHEMA_UNVERIFIED"
+WEATHER_CANONICAL_AUDIT_REPLAY_BLOCKER = "WEATHER_CANONICAL_AUDIT_REPLAY_UNVERIFIED"
 MALFORMED_HARD_BLOCKER_TELEMETRY = "MALFORMED_HARD_BLOCKER_TELEMETRY"
-
-
-def _strict_weather_certified(row: dict[str, Any]) -> bool:
-    return (
-        row.get("executable_shadow_prereqs_verified") is True
-        and row.get("selected_side_schema_verified") is True
-    )
 
 
 def _normalize_hard_blockers(value: Any) -> tuple[list[str], bool]:
@@ -47,6 +42,28 @@ def _normalize_hard_blockers(value: Any) -> tuple[list[str], bool]:
     return blockers, True
 
 
+def _replay_weather_audit(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    """Independently replay the canonical weather audit from raw evidence.
+
+    Producer summary booleans are not proof. A caller cannot unlock portfolio
+    annualization merely by setting ``executable_shadow_prereqs_verified=true`` or
+    ``selected_side_schema_verified=true``. The same raw settlement/book/fee/model
+    evidence must pass the canonical v3 audit again at the portfolio boundary.
+    """
+    try:
+        audit = audit_weather_certification_dimensions_v3(row)
+    except Exception:
+        return {}, False
+    verified = (
+        audit.get("executable_shadow_prereqs_verified") is True
+        and audit.get("selected_side_schema_verified") is True
+        and audit.get("read_only") is True
+        and audit.get("order_entry") is False
+        and audit.get("live_probe_ready") is False
+    )
+    return audit, verified
+
+
 def _guard_weather_row(row: dict[str, Any]) -> dict[str, Any]:
     guarded = dict(row)
     if str(guarded.get("category") or "").strip().lower() != "weather":
@@ -55,10 +72,13 @@ def _guard_weather_row(row: dict[str, Any]) -> dict[str, Any]:
     blockers, blocker_telemetry_valid = _normalize_hard_blockers(
         guarded.get("hard_blockers", ())
     )
-    prereqs_verified = guarded.get("executable_shadow_prereqs_verified") is True
-    selected_side_verified = guarded.get("selected_side_schema_verified") is True
-    certified = prereqs_verified and selected_side_verified
+    canonical_audit, canonical_verified = _replay_weather_audit(guarded)
+    prereqs_verified = canonical_audit.get("executable_shadow_prereqs_verified") is True
+    selected_side_verified = canonical_audit.get("selected_side_schema_verified") is True
+    certified = prereqs_verified and selected_side_verified and canonical_verified
 
+    if not canonical_verified and WEATHER_CANONICAL_AUDIT_REPLAY_BLOCKER not in blockers:
+        blockers.append(WEATHER_CANONICAL_AUDIT_REPLAY_BLOCKER)
     if not prereqs_verified and WEATHER_CERTIFICATION_BLOCKER not in blockers:
         blockers.append(WEATHER_CERTIFICATION_BLOCKER)
     if not selected_side_verified and WEATHER_SELECTED_SIDE_BLOCKER not in blockers:
@@ -73,8 +93,10 @@ def _guard_weather_row(row: dict[str, Any]) -> dict[str, Any]:
     guarded["hard_blockers"] = blockers
     guarded["weather_certification_verified"] = certified
     guarded["weather_selected_side_schema_verified"] = selected_side_verified
+    guarded["weather_canonical_audit_replay_verified"] = canonical_verified
     guarded["weather_hard_blocker_telemetry_verified"] = blocker_telemetry_valid
     guarded["weather_projection_verified"] = projection_verified
+    guarded["weather_canonical_audit"] = canonical_audit
 
     # Even a verified scanner window must not turn uncertified or still-blocked weather
     # model EV into a $/day capacity number. Preserve raw research P/L fields for
@@ -89,8 +111,8 @@ def rank_sleeves(rows: Iterable[dict[str, Any] | Sleeve]) -> dict[str, Any]:
     guarded_rows: list[dict[str, Any] | Sleeve] = []
     for row in rows:
         if isinstance(row, Sleeve):
-            # Existing Sleeve objects predate weather certification metadata. Treat a
-            # weather Sleeve as uncertified rather than silently trusting it.
+            # Existing Sleeve objects predate raw weather certification evidence. Treat a
+            # weather Sleeve as uncertified rather than silently trusting summary flags.
             if row.category.strip().lower() == "weather":
                 mapped = {
                     "name": row.name,
@@ -119,9 +141,9 @@ def rank_sleeves(rows: Iterable[dict[str, Any] | Sleeve]) -> dict[str, Any]:
 
     report = _rank_sleeves(guarded_rows)
     report["weather_projection_policy"] = (
-        "Weather theoretical $/day and promotable score require literal "
-        "executable_shadow_prereqs_verified=true plus selected_side_schema_verified=true "
-        "from the canonical weather certification path and an empty, structurally valid "
-        "hard-blocker set."
+        "Weather theoretical $/day and promotable score require an independent replay of "
+        "the canonical v3 weather certification audit from raw evidence, including the "
+        "selected-side schema, plus an empty structurally valid hard-blocker set. Producer "
+        "summary booleans alone cannot unlock projection."
     )
     return report
