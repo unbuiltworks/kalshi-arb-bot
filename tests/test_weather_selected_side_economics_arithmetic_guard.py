@@ -8,7 +8,7 @@ from src.weather_selected_side_economics_arithmetic_guard import (
 def _row():
     return {
         "best_shadow_side": "NO",
-        "modeled_after_fee_ev_cents": "12.5",
+        "modeled_after_fee_ev_cents": "17.5",
         "side_economics": [
             {
                 "side": "YES",
@@ -23,8 +23,8 @@ def _row():
                 "ask_cents": 41,
                 "available_contracts": 1,
                 "modeled_taker_fee_cents": "1.5",
-                "forecast_side_probability": "0.55",
-                "modeled_after_fee_ev_cents": "12.5",
+                "forecast_side_probability": "0.60",
+                "modeled_after_fee_ev_cents": "17.5",
             },
         ],
     }
@@ -33,8 +33,8 @@ def _row():
 def test_selected_side_ev_arithmetic_verifies():
     out = audit_weather_selected_side_economics_arithmetic(_row())
     assert out["selected_side_economics_arithmetic_verified"] is True
-    assert out["recomputed_after_fee_ev_cents"] == "12.50"
-    assert out["recomputed_side_economics"] == {"NO": "12.50", "YES": "-22.00"}
+    assert out["recomputed_after_fee_ev_cents"] == "17.50"
+    assert out["recomputed_side_economics"] == {"NO": "17.50", "YES": "-22.00"}
     assert out["recomputed_best_side"] == "NO"
     assert out["blockers"] == []
     assert out["order_entry"] is False
@@ -70,6 +70,11 @@ def test_recomputed_best_side_must_match_declared_selection():
         forecast_side_probability="0.60",
         modeled_after_fee_ev_cents="29",
     )
+    row["side_economics"][1].update(
+        forecast_side_probability="0.40",
+        modeled_after_fee_ev_cents="-2.5",
+    )
+    row["modeled_after_fee_ev_cents"] = "-2.5"
     out = audit_weather_selected_side_economics_arithmetic(row)
     assert out["selected_side_economics_arithmetic_verified"] is False
     assert out["recomputed_best_side"] == "YES"
@@ -91,6 +96,16 @@ def test_probability_fee_price_and_quantity_must_be_explicit_and_finite():
         assert out["selected_side_economics_arithmetic_verified"] is False
 
 
+def test_yes_no_probabilities_must_be_complements():
+    row = _row()
+    row["side_economics"][1]["forecast_side_probability"] = "0.55"
+    row["side_economics"][1]["modeled_after_fee_ev_cents"] = "12.5"
+    row["modeled_after_fee_ev_cents"] = "12.5"
+    out = audit_weather_selected_side_economics_arithmetic(row)
+    assert out["selected_side_economics_arithmetic_verified"] is False
+    assert "PROBABILITY_COMPLEMENT_MISMATCH" in out["blockers"]
+
+
 def test_top_level_ev_must_match_selected_record():
     row = _row()
     row["modeled_after_fee_ev_cents"] = "13"
@@ -101,18 +116,18 @@ def test_top_level_ev_must_match_selected_record():
 
 def test_fixed_point_selected_side_arithmetic_is_supported():
     row = _row()
-    row["modeled_after_fee_ev_cents"] = "15.0"
+    row["modeled_after_fee_ev_cents"] = "45.0"
     row["side_economics"][1] = {
         "side": "NO",
         "ask_dollars": "0.4100",
         "quantity": "2.50",
         "modeled_taker_fee_dollars": "0.025",
-        "forecast_side_probability": "0.48",
-        "modeled_after_fee_ev_cents": "15.0",
+        "forecast_side_probability": "0.60",
+        "modeled_after_fee_ev_cents": "45.0",
     }
     out = audit_weather_selected_side_economics_arithmetic(row)
     assert out["selected_side_economics_arithmetic_verified"] is True
-    assert Decimal(out["recomputed_after_fee_ev_cents"]) == Decimal("15")
+    assert Decimal(out["recomputed_after_fee_ev_cents"]) == Decimal("45")
 
 
 def test_selected_side_identity_must_be_unique():
