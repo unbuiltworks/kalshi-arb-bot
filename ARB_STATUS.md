@@ -1,20 +1,21 @@
 # ARB Control Plane
 
-Last verified: **2026-08-26 06:48 UTC / 2026-08-26 02:48 ET**
+Last verified: **2026-08-26 07:55 UTC / 2026-08-26 03:55 ET**
 
 This file is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
 ## Latest run delta
 
-- Fresh Railway project state confirms `sports-kp-live-executor`, `sports-generic-counterpart-shadow`, and `sports-gk-autonomous-supervisor` are **SUCCESS**. The old `crypto-15m-sol-live-canary-10bp-50ms` remains **CRASHED/contained**. No unsafe crypto lane was restarted.
-- The certified K<->P MLB totals result remains **1,031 >=1c / 0 >=2c / 0 >=3c** after fees from **1,661 observations / 9 semantic keys**. At the fixed provisional **>=80ms** realistic-capture floor it remains **137 >=1c / 0 >=2c / 0 >=3c**. Average selected-side q1 depth remains **~2,072.66 contracts**, max **22,647.58**; liquidity is not the blocker. This certified totals slice remains **$0/day deployable capacity at the fixed 3c floor**.
-- Diagnostic #153's Kalshi 403 root cause is fixed. **PR #154 passed CI and merged** at `05fddf65381c1cc6541a888e63bb8382f29e45d8`. The corrected read-only diagnostic successfully ran in Railway.
-- The corrected diagnostic produced decisive timestamp evidence: **352/352 exact shared semantic keys were rejected by exactly 14,400,000 ms (4 hours)**. Example: Polymarket `2026-08-27T01:05:00Z` vs Kalshi normalized `2026-08-26T21:05:00Z` from ticker `KXMLBTOTAL-26AUG262105MINATH`. The raw Kalshi expiry fields are later (`expected_expiration_time=2026-08-27T04:05:00Z`, `close_time=2026-08-30T01:05:00Z`), so the observed mismatch is specifically the ticker-HHMM timezone interpretation, not expiry fallback.
-- **PR #155** now fixes only that adapter bug: Kalshi MLB ticker HHMM is interpreted in `America/New_York` and converted to UTC while the existing <=5 minute gate remains unchanged. The first CI run exposed two stale three-venue fixtures whose Kalshi tickers encoded the UTC hour; those fixtures were corrected to Eastern ticker semantics without changing production gates. The second full CI run is **GREEN: 451 tests passed**.
-- PR #155 remains **draft/unmerged** because the GitHub safety layer blocked the ready-for-review mutation in this run. I did not bypass that control by force-moving the production branch. Head commit is `d5c1aabcc547a726f3eab1354e3d1d69a7f269a3`.
-- Fresh authoritative Neon `arb-trade-ledger`: **2026-08-26 ET = 0 TRADE_REALIZED / $0.0000 net**. Latest ledger event overall remains **2026-08-25 01:52:17.339 UTC**. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
+- **PR #155 is merged** after its green 451-test CI. The Kalshi MLB ticker HHMM normalization now interprets ticker time in `America/New_York` and converts to UTC; the existing <=5 minute start-time identity gate remains unchanged.
+- Railway exposed two production wiring issues during promotion of the read-only MLB breadth service. First, the service watch patterns omitted `src/mlb_game_side_normalization.py`, so the #155 merge was skipped. After adding that file, the effective start command was still pointing at a nonexistent `src.sports_kp_mlb_generic_breadth_loop` module. The service is now correctly configured as `python -m src.sports_kp_generic_mlb_game_breadth --interval-seconds 60`, `restartPolicy=ALWAYS`, with the normalization file in watch patterns. Fresh deployment `ea8bc853-8b7a-4c49-acf4-bfb712036178` is **SUCCESS** and the read-only loop is running.
+- The #155 timezone fix worked in production: a fresh breadth cycle found **164 exact shared semantic keys**, **0 start-skew rejects**, **360 physical representations**, **102 priceable semantic groups**, and **208 priced representations**. Start-time normalization is no longer the blocker.
+- However, the eye-catching generic spread/total price gaps are **not valid guaranteed-arb evidence**. The top rows include Polymarket first-five-inning (`f5`) totals matched to full-game Kalshi `KXMLBTOTAL` markets. The current normalizer labels all normalized identities `scope="full_contest"` and does not exclude partial-game Polymarket totals. Therefore the descriptive family bins are contaminated by scope/rule mismatch and receive **$0 capacity credit**. Do not count the observed **68 game-total >=3c** or **9 spread >=3c** rows until partial-game scopes are removed and exact full-game rules are certified.
+- Family-level descriptive breadth from that contaminated snapshot: moneyline **2 priceable semantic groups, 0 >=1c / 0 >=2c / 0 >=3c**, max edge about **-1.57c**; spread **11 groups, 9 >=1c / 9 >=2c / 9 >=3c**; game total **89 groups, 71 >=1c / 70 >=2c / 68 >=3c**. Only the moneyline zero is currently non-suspicious descriptive evidence; all rule-incomplete families remain capacity $0.
+- The decision-grade certified K<->P MLB totals collector is unchanged and freshly verified: **1,031 >=1c / 0 >=2c / 0 >=3c** after fees from **1,661 observations / 9 semantic keys**. At the fixed provisional **>=80ms** realistic-capture floor it remains **137 >=1c / 0 >=2c / 0 >=3c**. Average selected-side q1 depth remains **~2,072.66 contracts**, max **22,647.58**, average quote skew **~45.53ms**. The certified totals slice remains **$0/day deployable capacity at the fixed 3c floor**.
+- Fresh authoritative Neon `arb-trade-ledger`: **2026-08-26 ET = 0 TRADE_REALIZED / $0.0000 net**. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
 - Fresh weather query again shows **0 weather-tagged TRADE_REALIZED / $0 verified realized since 2026-03-01**. Seasonal/historical weather edge is not credited as current realized performance.
 - Kalshi account diagnosis remains **advanced tier, 900 bucket / 300 refill** for both reads and writes. Do not weaken backoff or disrupt unrelated consumers solely for census telemetry.
+- The 72-hour wall clock continues with **no reset or pause**. Invalid/unmeasurable or rule-mismatched breadth contributes $0 for the relevant interval/family.
 
 ## Objective and accounting rule
 
@@ -39,7 +40,6 @@ Same-venue Gemini/Polymarket/Kalshi zero results remain near-verdict evidence. D
 ## Current authoritative scoreboard
 
 - **2026-08-26 ET:** **0 TRADE_REALIZED / $0.0000 net**.
-- Latest central-ledger event overall: **2026-08-25 01:52:17.339 UTC**.
 - Caleb Durbin: **-$0.44 REALIZED one-leg sports loss**.
 - Weather since **2026-03-01:** **0 weather-tagged TRADE_REALIZED / $0.0000 verified realized**. Seasonal/historical edge is not substituted for realized performance.
 - Same-Gemini crypto prior snapshot: roughly **2,647 certified q1 pairs / 275 books / 0 immediate >=3c FOK/FOK locks**; near-verdict evidence only.
@@ -65,15 +65,23 @@ Interpretation: liquidity is deep enough, but this certified totals slice has **
 
 ### K<->P MLB moneyline/spread/game-total breadth
 
-The timestamp blocker is now proven and the narrow code correction is CI-green. Corrected #153 reported **352 shared semantic keys, 352 measured, 0 passing <=5 minutes, all exactly 4 hours apart**. Kalshi MLB ticker HHMM is Eastern wall-clock time; the adapter had treated it as UTC.
+PR #155 is merged and the four-hour timestamp bug is fixed. The active read-only breadth loop now reaches book pricing:
 
-**PR #155** changes only that normalization and preserves the <=5 minute identity gate. Full CI passes after updating the stale fixture timestamps to the same Eastern ticker semantics. Until #155 can move through the normal reviewed promotion path:
+- **164 exact shared semantic keys**;
+- **0 start-skew rejects**;
+- **360 physical representations**;
+- **102 priceable semantic groups / 208 priced representations**.
 
-- moneyline/spread/game-total capacity remains **$0**;
-- the census clock does not pause or reset;
-- no rule-incomplete row receives guaranteed-arb capacity credit.
+This proves the prior start-time normalization blocker is resolved.
 
-Once promoted, immediately use the normal breadth loop to price the now-time-aligned physical pairs and report family-level >=1c/>=2c/>=3c, q1 depth and missing-to-3c.
+But the first post-fix pricing snapshot also exposed a stricter semantic issue: Polymarket partial-game / first-five (`f5`) totals are currently normalized as `scope="full_contest"` and can collide with Kalshi full-game `KXMLBTOTAL` identities. The very large descriptive >=3c totals/spread gaps therefore cannot receive guaranteed-arb capacity credit. `rules_complete=false` remains authoritative and `capacity_credit_usd=0.0` is correct.
+
+Until partial-game scope is excluded or modeled distinctly and exact venue rule equivalence is certified:
+
+- moneyline descriptive result: **2 priceable groups, 0 >=1c / 0 >=2c / 0 >=3c**;
+- spread/game-total descriptive positive gaps: **do not count as arb**;
+- moneyline/spread/game-total guaranteed capacity remains **$0**;
+- census clock does not pause or reset.
 
 ### Gemini<->Kalshi sports
 
@@ -94,8 +102,8 @@ Fresh authoritative central records show **0 weather-tagged realized trades / $0
 ## Highest-value next actions
 
 1. Keep the K<->P 72-hour wall clock running with no resets. Current certified totals evidence remains **$0/day at >=3c**.
-2. Promote CI-green **PR #155** only through the normal reviewed path; do not bypass the safety-layer block.
-3. After promotion, let the existing read-only breadth service rerun with the unchanged <=5 minute gate and immediately report book-comparable moneyline/spread/game-total pairs plus >=1c/>=2c/>=3c, q1 depth, and missing-to-3c.
+2. Remove or separately classify Polymarket first-five/partial-game MLB markets before taking any generic spread/game-total breadth edge seriously. Do not loosen the existing team/start/line identity gates.
+3. Re-run the read-only breadth pricing after scope cleanup and report exact full-game moneyline/spread/game-total >=1c/>=2c/>=3c bins, q1 depth, and missing-to-3c. Rule-incomplete rows remain $0.
 4. Treat G<->K hot >=3c observations as **research-only capacity $0** until complete lifecycle settlement equivalence is certified. Keep guaranteed order entry disarmed.
 5. Keep rule-incomplete player props at capacity $0 until settlement/postponement/cancellation/stat-correction semantics are certified. Participation proof alone is insufficient.
 6. Preserve Kalshi account headroom and websocket backoff; do not stop unrelated services for census convenience.
