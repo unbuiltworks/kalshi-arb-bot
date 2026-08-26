@@ -26,11 +26,13 @@ def test_uncertified_weather_cannot_be_promoted_or_annualized():
     assert sleeve["promotable_score"] == "0"
     assert sleeve["observed_shadow_dollars_per_day"] is None
     assert "WEATHER_CERTIFICATION_PREREQS_UNVERIFIED" in sleeve["hard_blockers"]
+    assert "WEATHER_SELECTED_SIDE_SCHEMA_UNVERIFIED" in sleeve["hard_blockers"]
 
 
 def test_string_true_weather_certification_fails_closed():
     row = _weather_row()
     row["executable_shadow_prereqs_verified"] = "true"
+    row["selected_side_schema_verified"] = True
     sleeve = rank_sleeves([row])["sleeves"][0]
     assert sleeve["promotable_score"] == "0"
     assert sleeve["observed_shadow_dollars_per_day"] is None
@@ -39,14 +41,27 @@ def test_string_true_weather_certification_fails_closed():
 def test_literal_true_weather_certification_preserves_verified_shadow_path():
     row = _weather_row()
     row["executable_shadow_prereqs_verified"] = True
+    row["selected_side_schema_verified"] = True
     sleeve = rank_sleeves([row])["sleeves"][0]
     assert sleeve["promotable_score"] != "0"
     assert sleeve["observed_shadow_dollars_per_day"] == "80"
 
 
+def test_selected_side_schema_must_be_literal_true_for_projection():
+    for selected in (None, False, "true", 1):
+        row = _weather_row()
+        row["executable_shadow_prereqs_verified"] = True
+        row["selected_side_schema_verified"] = selected
+        sleeve = rank_sleeves([row])["sleeves"][0]
+        assert sleeve["promotable_score"] == "0"
+        assert sleeve["observed_shadow_dollars_per_day"] is None
+        assert "WEATHER_SELECTED_SIDE_SCHEMA_UNVERIFIED" in sleeve["hard_blockers"]
+
+
 def test_certified_weather_with_remaining_hard_blocker_is_not_annualized():
     row = _weather_row()
     row["executable_shadow_prereqs_verified"] = True
+    row["selected_side_schema_verified"] = True
     row["hard_blockers"] = ["TWC_SOURCE_ACCESS_REQUIRED"]
     sleeve = rank_sleeves([row])["sleeves"][0]
     assert sleeve["promotable_score"] == "0"
@@ -57,6 +72,7 @@ def test_certified_weather_with_remaining_hard_blocker_is_not_annualized():
 def test_malformed_hard_blocker_entry_fails_closed_without_stringifying_it():
     row = _weather_row()
     row["executable_shadow_prereqs_verified"] = True
+    row["selected_side_schema_verified"] = True
     row["hard_blockers"] = [None, ""]
     sleeve = rank_sleeves([row])["sleeves"][0]
     assert sleeve["promotable_score"] == "0"
@@ -75,6 +91,7 @@ def test_non_weather_behavior_is_unchanged():
 def test_malformed_hard_blockers_also_fail_closed():
     row = _weather_row()
     row["executable_shadow_prereqs_verified"] = True
+    row["selected_side_schema_verified"] = True
     row["hard_blockers"] = ""
     sleeve = rank_sleeves([row])["sleeves"][0]
     assert sleeve["promotable_score"] == "0"
