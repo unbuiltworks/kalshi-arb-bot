@@ -3,7 +3,8 @@
 This remains shadow-only. It adds the current KXMLBGAME maker-fee arithmetic
 and live liquidity-incentive telemetry to the existing pessimistic maker-fill
 measurement. Incentive values are estimates until a venue actually credits
-rewards; they never count as realized P&L here.
+rewards; they never count as realized P&L here. Polymarket incentive telemetry
+uses receipt-book depth and the event-clock applicable reward phase only.
 """
 from __future__ import annotations
 
