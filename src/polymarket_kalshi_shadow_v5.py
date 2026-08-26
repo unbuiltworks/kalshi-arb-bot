@@ -1,10 +1,8 @@
-"""Event-driven, read-only Polymarket US <-> Kalshi MLB total scanner.
+"""Event-driven Polymarket/Kalshi MLB shadow scanner.
 
-Every websocket book mutation wakes only the affected strict-matched pair and
-recalculates the after-fee two-leg arb immediately. REST is used only once to seed
-Polymarket books at startup and is never a trading-signal source.
-
-There is deliberately no order-entry code in this module.
+This module is deliberately read-only. REST is used only for discovery and the
+initial Polymarket seed; after readiness, quote changes are driven by venue
+websocket mutations and measured with monotonic receive timestamps.
 """
 
 from __future__ import annotations
@@ -12,8 +10,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
+import hashlib
 import json
 import logging
 import os
@@ -24,139 +23,169 @@ from typing import Any
 import httpx
 from polymarket_us import PolymarketUS
 
-from src import polymarket_kalshi_shadow as base
 from src.eventing_books import BookUpdate, EventingKalshiCrossBooks, EventingPolyBookStore
-from src.polymarket_kalshi_shadow_v2 import _fetch_poly_book, run_poly_ws
+from src.polymarket_kalshi_shadow import Match
+from src.polymarket_kalshi_shadow_v2 import run_poly_ws
 from src.polymarket_kalshi_shadow_v4 import strict_discover_matches
+from src.sports_kp_shadow import evaluate_both_directions
 
-logger = logging.getLogger("kalshi_arb.poly_kalshi_shadow_v5")
+logger = logging.getLogger("kalshi_arb.polymarket_kalshi_shadow_v5")
+DEDICATED_KALSHI_WS_URL = "wss://external-api-ws.kalshi.com/trade-api/ws/v2"
 
 
 @dataclass
 class ActiveSignal:
     opened_ms: int
     last_payload: dict[str, Any]
-    fingerprint: tuple[Any, ...]
+    fingerprint: str
 
 
+@dataclass
 class EventStats:
-    def __init__(self) -> None:
-        self.started_ms = int(time.time() * 1000)
-        self.triggers = 0
-        self.poly_triggers = 0
-        self.kalshi_triggers = 0
-        self.scans = 0
-        self.comparable = 0
-        self.positive_observations = 0
-        self.opens = 0
-        self.moves = 0
-        self.closes = 0
-        self.calc_us: deque[float] = deque(maxlen=50000)
-        self.trigger_to_calc_us: deque[float] = deque(maxlen=50000)
+    triggers: int = 0
+    evaluations: int = 0
+    comparable_evaluations: int = 0
+    positive_observations: int = 0
+    opens: int = 0
+    moves: int = 0
+    closes: int = 0
+    calc_us: deque[float] = field(default_factory=lambda: deque(maxlen=10000))
+    trigger_to_calc_us: deque[float] = field(default_factory=lambda: deque(maxlen=10000))
 
     @staticmethod
-    def _pct(values: deque[float], p: float) -> float | None:
+    def _avg(values: deque[float]) -> float:
+        return round(sum(values) / len(values), 2) if values else 0.0
+
+    @staticmethod
+    def _p95(values: deque[float]) -> float:
         if not values:
-            return None
-        rows = sorted(values)
-        idx = min(len(rows) - 1, max(0, round((len(rows) - 1) * p)))
-        return round(rows[idx], 2)
+            return 0.0
+        ordered = sorted(values)
+        idx = min(len(ordered) - 1, int(0.95 * (len(ordered) - 1)))
+        return round(ordered[idx], 2)
 
     def payload(self, *, poly: EventingPolyBookStore, kalshi: EventingKalshiCrossBooks) -> dict[str, Any]:
         return {
-            "uptime_s": round((int(time.time() * 1000) - self.started_ms) / 1000, 1),
             "triggers": self.triggers,
-            "poly_triggers": self.poly_triggers,
-            "kalshi_triggers": self.kalshi_triggers,
-            "scans": self.scans,
-            "comparable": self.comparable,
+            "evaluations": self.evaluations,
+            "comparable_evaluations": self.comparable_evaluations,
             "positive_observations": self.positive_observations,
             "opens": self.opens,
             "moves": self.moves,
             "closes": self.closes,
-            "calc_us_p50": self._pct(self.calc_us, 0.50),
-            "calc_us_p95": self._pct(self.calc_us, 0.95),
-            "calc_us_p99": self._pct(self.calc_us, 0.99),
-            "trigger_to_calc_us_p50": self._pct(self.trigger_to_calc_us, 0.50),
-            "trigger_to_calc_us_p95": self._pct(self.trigger_to_calc_us, 0.95),
-            "trigger_to_calc_us_p99": self._pct(self.trigger_to_calc_us, 0.99),
-            "poly_queue": poly.updates.qsize(),
-            "kalshi_queue": kalshi.updates.qsize(),
+            "calc_avg_us": self._avg(self.calc_us),
+            "calc_p95_us": self._p95(self.calc_us),
+            "trigger_to_calc_avg_us": self._avg(self.trigger_to_calc_us),
+            "trigger_to_calc_p95_us": self._p95(self.trigger_to_calc_us),
             "poly_dropped_updates": poly.dropped_updates,
             "kalshi_dropped_updates": kalshi.dropped_updates,
-            "poly_ws_updates": poly.ws_updates,
-            "kalshi_initialized_books": kalshi.initialized_count,
         }
 
 
-def _fingerprint(payload: dict[str, Any]) -> tuple[Any, ...]:
-    return (
-        payload["direction"], payload["quantity"], payload["poly_price"],
-        payload["kalshi_price"], payload["profit"],
-    )
-
-
-def _signal_key(match: base.Match, direction: str) -> str:
-    return f"{match.poly.slug}|{match.kalshi.ticker}|{direction}"
-
-
-def _log_signal(kind: str, payload: dict[str, Any], *, lifetime_ms: int) -> None:
-    logger.info(
-        "EVENT_SHADOW %s",
-        json.dumps({"kind": kind, "lifetime_ms": lifetime_ms, **payload}, separators=(",", ":")),
-    )
-
-
-def _drain(queue: asyncio.Queue[BookUpdate]) -> int:
-    n = 0
-    while True:
-        try:
-            queue.get_nowait()
-            n += 1
-        except asyncio.QueueEmpty:
-            return n
+def _safe_age(now_ms: int, received_ms: int) -> int:
+    return max(0, now_ms - received_ms)
 
 
 def _task_failure(name: str, task: asyncio.Task[Any]) -> RuntimeError:
     if task.cancelled():
-        return RuntimeError(f"{name} market-data task cancelled unexpectedly")
+        return RuntimeError(f"{name} websocket task exited unexpectedly: cancelled")
     exc = task.exception()
-    if exc is None:
-        return RuntimeError(f"{name} market-data task exited unexpectedly")
-    return RuntimeError(f"{name} market-data task failed: {type(exc).__name__}: {exc}")
+    if exc is not None:
+        return RuntimeError(f"{name} websocket task exited unexpectedly: {exc}")
+    return RuntimeError(f"{name} websocket task exited unexpectedly")
 
 
-async def _scan_pair(
-    match: base.Match,
-    *,
+def _drain(queue: asyncio.Queue[BookUpdate]) -> int:
+    count = 0
+    while True:
+        try:
+            queue.get_nowait()
+            count += 1
+        except asyncio.QueueEmpty:
+            return count
+
+
+def _fingerprint(payload: dict[str, Any]) -> str:
+    stable = {
+        k: payload[k]
+        for k in (
+            "direction",
+            "qty",
+            "profit",
+            "poly_price",
+            "kalshi_price",
+            "poly_depth",
+            "kalshi_depth",
+        )
+        if k in payload
+    }
+    return hashlib.sha256(json.dumps(stable, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _signal_key(match: Match, direction: str) -> str:
+    return f"{match.poly.slug}|{match.kalshi.ticker}|{direction}"
+
+
+def _log_signal(kind: str, payload: dict[str, Any], *, lifetime_ms: int | None = None) -> None:
+    row = dict(payload)
+    if lifetime_ms is not None:
+        row["lifetime_ms"] = lifetime_ms
+    logger.info("EVENT_SHADOW_%s %s", kind, json.dumps(row, separators=(",", ":")))
+
+
+async def _fetch_poly_book(
+    http: httpx.AsyncClient,
+    store: EventingPolyBookStore,
+    slug: str,
+    sem: asyncio.Semaphore,
+) -> bool:
+    url = f"https://api.polymarket.us/v1/markets/{slug}/book"
+    async with sem:
+        try:
+            resp = await http.get(url)
+            resp.raise_for_status()
+            return store.ingest(resp.json(), source="rest")
+        except Exception as exc:
+            logger.warning("Polymarket seed failed market=%s err=%s", slug, exc)
+            return False
+
+
+async def _evaluate(
     trigger: BookUpdate,
-    poly_store: EventingPolyBookStore,
-    kalshi_store: EventingKalshiCrossBooks,
+    match: Match,
+    poly: EventingPolyBookStore,
+    kalshi: EventingKalshiCrossBooks,
+    *,
     bankroll: Decimal,
     poly_rate: Decimal,
     kalshi_rate: Decimal,
     max_quote_age_ms: int,
-    active: dict[str, ActiveSignal],
     stats: EventStats,
+    active: dict[str, ActiveSignal],
 ) -> None:
+    stats.triggers += 1
     calc_start_ns = time.perf_counter_ns()
     now_ms = int(time.time() * 1000)
-    pq = poly_store.quote(match.poly.slug, max_age_ms=max_quote_age_ms)
-    kq = await kalshi_store.quote(match.kalshi.ticker, max_age_ms=max_quote_age_ms)
-    stats.scans += 1
+    pq = poly.quote(match.poly.slug, max_age_ms=max_quote_age_ms)
+    kq = await kalshi.quote(match.kalshi.ticker, max_age_ms=max_quote_age_ms)
+    poly_age = _safe_age(now_ms, pq.received_ms) if pq is not None else None
+    kalshi_age = _safe_age(now_ms, kq.received_ms) if kq is not None else None
+    cross_skew = abs(pq.received_ms - kq.received_ms) if pq is not None and kq is not None else None
 
-    plan: base.ShadowPlan | None = None
-    poly_age: int | None = None
-    kalshi_age: int | None = None
-    cross_skew: int | None = None
-    if pq is not None and kq is not None and poly_store.connected:
-        stats.comparable += 1
-        poly_age = max(0, now_ms - pq.received_ms)
-        kalshi_age = max(0, now_ms - kq.received_ms)
-        cross_skew = abs(pq.received_ms - kq.received_ms)
-        plan = base.best_plan(
-            pq,
-            kq,
+    plan = None
+    if pq is not None and kq is not None:
+        stats.comparable_evaluations += 1
+        plan = evaluate_both_directions(
+            match.poly.slug,
+            match.kalshi.ticker,
+            poly_yes_ask=pq.yes_ask,
+            poly_yes_depth=pq.yes_depth,
+            poly_no_ask=pq.no_ask,
+            poly_no_depth=pq.no_depth,
+            kalshi_yes_ask=kq.yes_ask,
+            kalshi_yes_depth=kq.yes_depth,
+            kalshi_no_ask=kq.no_ask,
+            kalshi_no_depth=kq.no_depth,
             bankroll=bankroll,
             poly_fee_rate=poly_rate,
             kalshi_fee_rate=kalshi_rate,
@@ -263,9 +292,10 @@ async def run(args: argparse.Namespace) -> None:
     bankroll = Decimal(str(args.bankroll))
     poly_rate = Decimal(os.getenv("POLYMARKET_TAKER_FEE_RATE", args.poly_taker_rate))
     kalshi_rate = Decimal(os.getenv("KALSHI_TAKER_FEE_RATE", args.kalshi_taker_rate))
+    kalshi_ws_url = os.getenv("KALSHI_CENSUS_WS_URL", DEDICATED_KALSHI_WS_URL).strip() or DEDICATED_KALSHI_WS_URL
     logger.info(
-        "EVENT_START shadow_only=true bankroll=%s poly_taker_rate=%s kalshi_taker_rate=%s max_quote_age_ms=%d",
-        bankroll, poly_rate, kalshi_rate, args.max_quote_age_ms,
+        "EVENT_START shadow_only=true bankroll=%s poly_taker_rate=%s kalshi_taker_rate=%s max_quote_age_ms=%d kalshi_ws_url=%s",
+        bankroll, poly_rate, kalshi_rate, args.max_quote_age_ms, kalshi_ws_url,
     )
 
     key_id = os.getenv("POLYMARKET_KEY_ID", "").strip()
@@ -278,9 +308,6 @@ async def run(args: argparse.Namespace) -> None:
         if not discovered:
             raise RuntimeError("No strict Polymarket/Kalshi matches discovered")
 
-        # Seed Polymarket once, then fail closed on any strict pair that currently
-        # has no executable two-sided public book. This avoids one stale/empty market
-        # preventing the entire event-driven feed from becoming ready.
         poly_store = EventingPolyBookStore()
         discovered_slugs = [m.poly.slug for m in discovered]
         seeded = await _seed_poly(http, poly_store, discovered_slugs, args.rest_concurrency)
@@ -305,7 +332,7 @@ async def run(args: argparse.Namespace) -> None:
         slug_to_match = {m.poly.slug: m for m in matches}
         ticker_to_match = {m.kalshi.ticker: m for m in matches}
         slugs = list(slug_to_match)
-        kalshi_store = EventingKalshiCrossBooks(list(ticker_to_match))
+        kalshi_store = EventingKalshiCrossBooks(list(ticker_to_match), ws_url=kalshi_ws_url)
 
         poly_client = PolymarketUS(key_id=key_id, secret_key=secret, timeout=10.0)
         poly_task = asyncio.create_task(run_poly_ws(poly_client, poly_store, slugs), name="poly_ws")
@@ -338,6 +365,7 @@ async def run(args: argparse.Namespace) -> None:
             "drained_startup_poly_updates": drained_poly,
             "drained_startup_kalshi_updates": drained_kalshi,
             "rest_is_signal_source": False,
+            "kalshi_ws_url": kalshi_ws_url,
         }, separators=(",", ":")))
 
         stats = EventStats()
@@ -360,57 +388,52 @@ async def run(args: argparse.Namespace) -> None:
                     return_when=asyncio.FIRST_COMPLETED,
                 )
                 if poly_task in done:
-                    update_task.cancel(); stop_task.cancel()
-                    await asyncio.gather(update_task, stop_task, return_exceptions=True)
                     raise _task_failure("Polymarket", poly_task)
                 if kalshi_task in done:
-                    update_task.cancel(); stop_task.cancel()
-                    await asyncio.gather(update_task, stop_task, return_exceptions=True)
                     raise _task_failure("Kalshi", kalshi_task)
-                if stop_task in done and stop_task.result():
+                if stop_task in done:
                     update_task.cancel()
                     await asyncio.gather(update_task, return_exceptions=True)
                     break
                 stop_task.cancel()
                 await asyncio.gather(stop_task, return_exceptions=True)
-
-                trigger = update_task.result()
-                stats.triggers += 1
-                if trigger.venue == "polymarket":
-                    stats.poly_triggers += 1
-                    match = slug_to_match.get(trigger.market_id)
-                else:
-                    stats.kalshi_triggers += 1
-                    match = ticker_to_match.get(trigger.market_id)
-                if match is not None:
-                    await _scan_pair(
-                        match, trigger=trigger, poly_store=poly_store, kalshi_store=kalshi_store,
-                        bankroll=bankroll, poly_rate=poly_rate, kalshi_rate=kalshi_rate,
-                        max_quote_age_ms=args.max_quote_age_ms, active=active, stats=stats,
-                    )
+                update = update_task.result()
+                match = slug_to_match.get(update.market_id) if update.venue == "polymarket" else ticker_to_match.get(update.market_id)
+                if match is None:
+                    continue
+                await _evaluate(
+                    update,
+                    match,
+                    poly_store,
+                    kalshi_store,
+                    bankroll=bankroll,
+                    poly_rate=poly_rate,
+                    kalshi_rate=kalshi_rate,
+                    max_quote_age_ms=args.max_quote_age_ms,
+                    stats=stats,
+                    active=active,
+                )
         finally:
-            heartbeat.cancel(); poly_task.cancel(); kalshi_task.cancel()
-            await kalshi_store.close()
-            try:
-                poly_client.close()
-            except Exception:
-                pass
+            stop.set()
+            heartbeat.cancel()
+            poly_task.cancel()
+            kalshi_task.cancel()
             await asyncio.gather(heartbeat, poly_task, kalshi_task, return_exceptions=True)
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Event-driven read-only Polymarket/Kalshi MLB total scanner")
-    p.add_argument("--bankroll", default="50")
-    p.add_argument("--poly-taker-rate", default="0.05")
-    p.add_argument("--kalshi-taker-rate", default="0.07")
-    p.add_argument("--max-quote-age-ms", type=int, default=1500)
-    p.add_argument("--startup-timeout-s", type=float, default=20.0)
-    p.add_argument("--rest-concurrency", type=int, default=12)
-    return p.parse_args()
+    parser = argparse.ArgumentParser(description="Event-driven strict MLB Polymarket/Kalshi shadow scanner")
+    parser.add_argument("--bankroll", type=str, default="1")
+    parser.add_argument("--poly-taker-rate", type=str, default="0.0")
+    parser.add_argument("--kalshi-taker-rate", type=str, default="0.0")
+    parser.add_argument("--max-quote-age-ms", type=int, default=250)
+    parser.add_argument("--rest-concurrency", type=int, default=16)
+    parser.add_argument("--startup-timeout-s", type=float, default=30.0)
+    return parser.parse_args()
 
 
 def main() -> None:
-    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)-8s %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     asyncio.run(run(parse_args()))
 
 

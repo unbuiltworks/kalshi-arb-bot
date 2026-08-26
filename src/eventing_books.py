@@ -1,7 +1,9 @@
 """Event notifications for the read-only cross-exchange order-book stores.
 
 These wrappers add bounded, non-blocking queues around the hardened v2 Polymarket
-and Kalshi book implementations. They contain no order-entry functionality.
+and Kalshi book implementations. They contain no order-entry functionality. Kalshi
+quote reads retain the base async interface so callers can safely share the store
+across websocket and REST-snapshot census transports.
 """
 
 from __future__ import annotations
@@ -10,9 +12,15 @@ import asyncio
 from dataclasses import dataclass
 import json
 import logging
+import os
 import time
 from typing import Any
+from urllib.parse import urlparse
 
+import httpx
+
+from config.settings import REST_URL
+from src.auth import auth_headers
 from src.kalshi_cross_book_v2 import KalshiCrossBooks
 from src.polymarket_kalshi_shadow_v2 import PolyBookStore
 
@@ -128,16 +136,120 @@ class EventingPolyBookStore(_UpdateMixin, PolyBookStore):
 
 
 class EventingKalshiCrossBooks(_UpdateMixin, KalshiCrossBooks):
+    """Read-only Kalshi books with optional bounded batched-REST census transport.
+
+    WebSocket remains the default.  Setting ``KALSHI_REST_BOOKS_FALLBACK=1``
+    switches only this read-only store to authenticated batched snapshots.  The
+    fallback exists for census collection when an additional Kalshi websocket
+    handshake is account-rate-limited; it never submits or mutates an order.
+    """
+
     def __init__(self, *args: Any, max_queue: int = 20000, **kwargs: Any) -> None:
         KalshiCrossBooks.__init__(self, *args, **kwargs)
         self._init_updates(max_queue)
+        self.transport = "ws"
+        self.rest_batch_requests = 0
+        self.rest_batch_errors = 0
+        self.rest_batch_snapshots = 0
+
+    async def run(self) -> None:
+        if os.getenv("KALSHI_REST_BOOKS_FALLBACK", "0").strip().lower() in {"1", "true", "yes", "on"}:
+            await self._run_rest_batch()
+            return
+        await super().run()
+
+    async def _fetch_rest_chunk(self, http: httpx.AsyncClient, tickers: tuple[str, ...]) -> list[dict[str, Any]]:
+        endpoint = f"{REST_URL}/markets/orderbooks"
+        headers = auth_headers(
+            self.private_key,
+            "GET",
+            urlparse(endpoint).path,
+            self.api_key_id,
+        )
+        response = await http.get(
+            endpoint,
+            params=[("tickers", ticker) for ticker in tickers],
+            headers=headers,
+        )
+        self.rest_batch_requests += 1
+        response.raise_for_status()
+        payload = response.json()
+        rows = payload.get("orderbooks") or []
+        return [row for row in rows if isinstance(row, dict)]
+
+    async def _run_rest_batch(self) -> None:
+        self._running = True
+        self.transport = "rest_batch"
+        interval_ms = max(100, int(os.getenv("KALSHI_REST_BOOKS_INTERVAL_MS", "100")))
+        chunks = tuple(
+            tuple(self.tickers[index:index + 100])
+            for index in range(0, len(self.tickers), 100)
+        )
+        logger.warning(
+            "KALSHI_REST_BATCH_FALLBACK %s",
+            json.dumps(
+                {
+                    "tickers": len(self.tickers),
+                    "chunks": len(chunks),
+                    "interval_ms": interval_ms,
+                    "transport": "REST_SNAPSHOT_NOT_WS_LIFETIME",
+                    "read_only": True,
+                    "order_entry": False,
+                },
+                separators=(",", ":"),
+            ),
+        )
+        backoff = 0.25
+        async with httpx.AsyncClient(timeout=5.0) as http:
+            while self._running:
+                cycle_start = time.perf_counter()
+                try:
+                    batches = await asyncio.gather(
+                        *(self._fetch_rest_chunk(http, chunk) for chunk in chunks)
+                    )
+                    for rows in batches:
+                        for row in rows:
+                            ticker = str(row.get("ticker") or "")
+                            orderbook = row.get("orderbook_fp") or row.get("orderbook") or {}
+                            if ticker not in self._yes_bids or not isinstance(orderbook, dict):
+                                continue
+                            await self.apply_snapshot(
+                                {
+                                    "msg": {
+                                        "market_ticker": ticker,
+                                        "yes_dollars": orderbook.get("yes_dollars") or orderbook.get("yes_dollars_fp") or [],
+                                        "no_dollars": orderbook.get("no_dollars") or orderbook.get("no_dollars_fp") or [],
+                                    }
+                                }
+                            )
+                            self.rest_batch_snapshots += 1
+                    backoff = 0.25
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    self.rest_batch_errors += 1
+                    logger.warning(
+                        "KALSHI_REST_BATCH_ERROR type=%s retry_s=%.2f requests=%d errors=%d",
+                        type(exc).__name__,
+                        backoff,
+                        self.rest_batch_requests,
+                        self.rest_batch_errors,
+                    )
+                    await asyncio.sleep(backoff)
+                    backoff = min(5.0, backoff * 2)
+                    continue
+
+                elapsed = time.perf_counter() - cycle_start
+                sleep_s = max(0.0, interval_ms / 1000.0 - elapsed)
+                if sleep_s:
+                    await asyncio.sleep(sleep_s)
 
     async def apply_snapshot(self, msg: dict[str, Any]) -> None:
         body = msg.get("msg", msg)
         ticker = str(body.get("market_ticker", ""))
         await super().apply_snapshot(msg)
         if ticker in self.tickers and ticker in self._initialized:
-            self._notify("kalshi", ticker, "snapshot")
+            self._notify("kalshi", ticker, "rest_batch" if self.transport == "rest_batch" else "snapshot")
 
     async def apply_delta(self, msg: dict[str, Any]) -> None:
         body = msg.get("msg", msg)

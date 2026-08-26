@@ -12,11 +12,13 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 import re
 from typing import Any, Iterable, Mapping
+from zoneinfo import ZoneInfo
 
 from src.gemini_sports_adapter import normalize_events as normalize_gemini_events
 from src.universal_sports_identity import RuleAudit, SportsContractIdentity, SportsEventIdentity
 
 D = Decimal
+MLB_TICKER_TZ = ZoneInfo("America/New_York")
 
 MLB_ALIASES = {
     "ARI": "AZ", "AZ": "AZ", "OAK": "ATH", "ATH": "ATH", "ATL": "ATL", "BAL": "BAL",
@@ -296,7 +298,17 @@ def _kalshi_start(event: Mapping[str, Any], market: Mapping[str, Any]) -> dateti
     months = {name: idx for idx, name in enumerate(("JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"), 1)}
     if m and m.group("mon") in months:
         try:
-            return datetime(2000 + int(m.group("yy")), months[m.group("mon")], int(m.group("dd")), int(m.group("hh")), int(m.group("mm")), tzinfo=timezone.utc)
+            # Kalshi MLB event-ticker HHMM is Eastern wall-clock time. Convert that
+            # local scheduled start to UTC before cross-venue identity comparison.
+            local_start = datetime(
+                2000 + int(m.group("yy")),
+                months[m.group("mon")],
+                int(m.group("dd")),
+                int(m.group("hh")),
+                int(m.group("mm")),
+                tzinfo=MLB_TICKER_TZ,
+            )
+            return local_start.astimezone(timezone.utc)
         except ValueError:
             pass
     for value in (event.get("strike_date"), market.get("expected_expiration_time"), market.get("close_time")):

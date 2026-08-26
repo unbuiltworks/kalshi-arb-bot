@@ -5,6 +5,8 @@ from src.mlb_game_side_normalization import NormalizedSide, _identity
 from src.three_venue_mlb_hot import GeminiHotStore, HotContract, HotUniverse
 from src.universal_sports_identity import SportsEventIdentity
 
+D = Decimal
+
 
 def _gemini_side() -> NormalizedSide:
     event = SportsEventIdentity(
@@ -29,13 +31,17 @@ def _universe() -> HotUniverse:
     )
 
 
-def _events(yes: str, no: str):
+def _events(yes: str, no: str, *, executable: bool = True):
+    prices = {"buy": {"yes": yes, "no": no}}
+    if executable:
+        prices["bestAsk"] = yes
+        prices["bestBid"] = str(D("1") - D(no))
     return [{
         "ticker": "MLB-2608172205-BAL-TB-M",
         "contracts": [{
             "instrumentSymbol": "GEMI-X",
             "label": "Baltimore",
-            "prices": {"buy": {"yes": yes, "no": no}},
+            "prices": prices,
         }],
     }]
 
@@ -66,6 +72,15 @@ def test_gemini_hot_store_builds_fee_inclusive_q1_quote():
     assert row.quote.no_depth == Decimal("1")
     assert row.quote.yes_cost >= Decimal("0.45")
     assert row.quote.no_cost >= Decimal("0.56")
+
+
+def test_gemini_reference_only_prices_are_not_ingested_as_executable():
+    universe = _universe()
+    key = next(iter(universe.contracts))
+    store = GeminiHotStore(universe)
+    assert store.ingest(_events("0.34", "0.66", executable=False), notify=True) == 0
+    assert store.quote(key, max_age_ms=10_000) is None
+    assert store.updates.empty()
 
 
 def test_hot_store_queue_is_asyncio_queue():

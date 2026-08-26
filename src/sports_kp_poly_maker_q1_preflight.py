@@ -1,0 +1,259 @@
+"""Targeted mutation-free Polymarket MLB maker->hedge q1 preflight.
+
+Uses the current near-term sports feed for strict same-game/player/stat semantics,
+then exact books for a small relay shortlist sourced from the latest broad census.
+Every relayed candidate is recomputed from current exact books; stale census prices
+are never trusted. The richest >=3c q1 path must also pass authenticated exact-market
+tradeability, balance presence, and both order previews. This module NEVER creates orders.
+"""
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+import hashlib
+import json
+import os
+from typing import Any, Mapping
+
+import httpx
+from polymarket_us import PolymarketUS
+
+from src.strict_mlb_prop_adapters import _poly_identity
+from src.strict_mlb_prop_snapshot import TopBook, poly_top_book
+
+D = Decimal
+ONE = D("1")
+TARGET = D("0.03")
+TAKER_FEE_FLOOR = D("0.01")
+BASE = "https://gateway.polymarket.us"
+
+# Fresh 20:25 UTC broad-census relay. Only slugs are relayed; all prices/depth are
+# discarded and fetched again here before any READY classification.
+RELAY_PAIRS = (
+    ("astatc-mlb-min-sd-2026-08-23-k-walbue-gte2", "astatc-mlb-min-sd-2026-08-23-k-walbue-gte3"),
+    ("astatc-mlb-chc-sea-2026-08-23-hrr-colyou-gte1", "astatc-mlb-chc-sea-2026-08-23-hrr-colyou-gte2"),
+    ("astatc-mlb-cin-az-2026-08-23-hrr-jorlaw-gte1", "astatc-mlb-cin-az-2026-08-23-hrr-jorlaw-gte2"),
+    ("astatc-mlb-cle-col-2026-08-23-hrr-natlow-gte2", "astatc-mlb-cle-col-2026-08-23-hrr-natlow-gte3"),
+    ("astatc-mlb-cin-az-2026-08-23-hrr-corcar-gte1", "astatc-mlb-cin-az-2026-08-23-hrr-corcar-gte2"),
+    ("astatc-mlb-cin-az-2026-08-23-hrr-jjble-gte1", "astatc-mlb-cin-az-2026-08-23-hrr-jjble-gte2"),
+    ("astatc-mlb-laa-tex-2026-08-23-tb-jakbur-gte2", "astatc-mlb-laa-tex-2026-08-23-tb-jakbur-gte3"),
+    ("astatc-mlb-cle-col-2026-08-23-hrr-wilcas-gte1", "astatc-mlb-cle-col-2026-08-23-hrr-wilcas-gte2"),
+    ("astatc-mlb-cle-col-2026-08-23-hrr-micmon-gte1", "astatc-mlb-cle-col-2026-08-23-hrr-micmon-gte2"),
+    ("astatc-mlb-cle-col-2026-08-23-hrr-jakmcc-gte1", "astatc-mlb-cle-col-2026-08-23-hrr-jakmcc-gte2"),
+    ("astatc-mlb-pit-lad-2026-08-23-hrr-kyltuc-gte1", "astatc-mlb-pit-lad-2026-08-23-hrr-kyltuc-gte2"),
+    ("astatc-mlb-pit-lad-2026-08-23-hrr-teoher-gte1", "astatc-mlb-pit-lad-2026-08-23-hrr-teoher-gte2"),
+    ("astatc-mlb-atl-mil-2026-08-23-tb-matols-gte3", "astatc-mlb-atl-mil-2026-08-23-tb-matols-gte4"),
+)
+
+
+def _locked_profit(maker_price: D, taker_price: D) -> D:
+    return ONE - maker_price - taker_price - TAKER_FEE_FLOOR
+
+
+def _ask(book: TopBook, buy_yes: bool) -> tuple[D, D]:
+    return (book.yes_ask, book.yes_depth) if buy_yes else (book.no_ask, book.no_depth)
+
+
+def _bid(book: TopBook, buy_yes: bool) -> D:
+    return ONE - (book.no_ask if buy_yes else book.yes_ask)
+
+
+def _native_to_yes(side: str, native: Any) -> D:
+    p = D(str(native))
+    return p if side == "YES" else ONE - p
+
+
+def _payload(slug: str, side: str, native: Any, *, maker: bool) -> dict[str, Any]:
+    return {
+        "marketSlug": slug,
+        "intent": "ORDER_INTENT_BUY_LONG" if side == "YES" else "ORDER_INTENT_BUY_SHORT",
+        "type": "ORDER_TYPE_LIMIT",
+        "price": {"value": str(_native_to_yes(side, native)), "currency": "USD"},
+        "quantity": 1,
+        "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL" if maker else "TIME_IN_FORCE_FILL_OR_KILL",
+        "participateDontInitiate": bool(maker),
+        "manualOrderIndicator": "MANUAL_ORDER_INDICATOR_AUTOMATIC",
+        "synchronousExecution": not maker,
+        **({"maxBlockTime": "2"} if not maker else {}),
+    }
+
+
+def _strict_pair(a: Mapping[str, Any], b: Mapping[str, Any]) -> tuple[tuple[Any, ...], D, D] | None:
+    ia, ib = _poly_identity(a), _poly_identity(b)
+    if ia is None or ib is None:
+        return None
+    af, ap, at, ad, ax = ia
+    bf, bp, bt, bd, bx = ib
+    if (af, ap.lower(), set(at), ad) != (bf, bp.lower(), set(bt), bd) or ax == bx:
+        return None
+    lo, hi = (ax, bx) if ax < bx else (bx, ax)
+    return (ad, af, ap.lower(), tuple(sorted(at))), lo, hi
+
+
+def _certify(feed_low: Mapping[str, Any], feed_high: Mapping[str, Any], exact_low: Mapping[str, Any], exact_high: Mapping[str, Any]) -> tuple[str, dict[str, Any]]:
+    pair = _strict_pair(feed_low, feed_high)
+    if pair is None:
+        raise PermissionError("strict same-game/player/stat identity mismatch")
+    key, lo, hi = pair
+    li, hi_id = _poly_identity(feed_low), _poly_identity(feed_high)
+    assert li is not None and hi_id is not None
+    if li[4] != lo or hi_id[4] != hi:
+        raise PermissionError("low/high threshold orientation mismatch")
+    low_slug, high_slug = str(feed_low.get("slug") or ""), str(feed_high.get("slug") or "")
+    if str(exact_low.get("slug") or "") != low_slug or str(exact_high.get("slug") or "") != high_slug:
+        raise PermissionError("exact market slug mismatch")
+    for m in (exact_low, exact_high):
+        if m.get("active") is False or m.get("closed") is True or m.get("archived") is True or m.get("orderBookEnabled") is False:
+            raise PermissionError("exact market not currently tradeable")
+        if D(str(m.get("minimumTradeQty") or "1")) > ONE:
+            raise PermissionError("exact market minimum quantity exceeds q1")
+    le = str(exact_low.get("eventId") or exact_low.get("event_id") or exact_low.get("eventSlug") or "")
+    he = str(exact_high.get("eventId") or exact_high.get("event_id") or exact_high.get("eventSlug") or "")
+    if le and he and le != he:
+        raise PermissionError("exact parent event mismatch")
+    evidence = {
+        "identity_key": list(key), "low_threshold": str(lo), "high_threshold": str(hi),
+        "low_slug": low_slug, "high_slug": high_slug, "exact_low_slug_match": True,
+        "exact_high_slug_match": True, "parent_event": le or he or None,
+        "monotone_identity": "YES(lower threshold)+NO(higher threshold)>=1",
+        "semantic_source": "canonical_/v1/events_market_fields",
+        "tradeability_source": "authenticated_exact_market_retrieval",
+    }
+    return hashlib.sha256(json.dumps(evidence, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest(), evidence
+
+
+async def _fetch_mlb_events() -> list[dict[str, Any]]:
+    horizon = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat().replace("+00:00", "Z")
+    found: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    async with httpx.AsyncClient(timeout=12.0) as http:
+        for page in range(12):
+            try:
+                r = await http.get(f"{BASE}/v1/events", params={
+                    "limit": 100, "offset": page * 100, "active": "true", "closed": "false",
+                    "ended": "false", "categories": "sports", "startTimeMax": horizon,
+                    "orderBy": "startTime", "orderDirection": "desc",
+                })
+                r.raise_for_status()
+            except Exception:
+                break
+            body = r.json() if r.content else {}
+            rows = [dict(e) for e in (body.get("events") or []) if isinstance(e, Mapping)]
+            for event in rows:
+                slug = str(event.get("slug") or event.get("id") or "")
+                series = str(event.get("seriesSlug") or event.get("subcategory") or "").lower()
+                if "mlb" not in series and "mlb" not in slug.lower():
+                    continue
+                key = str(event.get("id") or slug)
+                if key and key not in seen:
+                    seen.add(key); found.append(event)
+            if len(rows) < 100:
+                break
+    return found
+
+
+async def run_once(events: list[Mapping[str, Any]] | None = None) -> dict[str, Any]:
+    mlb_events = await _fetch_mlb_events()
+    market_by_slug: dict[str, dict[str, Any]] = {}
+    parseable = 0
+    for event in mlb_events:
+        for market in event.get("markets") or []:
+            if not isinstance(market, Mapping):
+                continue
+            row = dict(market)
+            slug = str(row.get("slug") or "")
+            if not slug:
+                continue
+            market_by_slug[slug] = row
+            if _poly_identity(row) is not None:
+                parseable += 1
+
+    relayed: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for low_slug, high_slug in RELAY_PAIRS:
+        low, high = market_by_slug.get(low_slug), market_by_slug.get(high_slug)
+        if low is None or high is None:
+            continue
+        pair = _strict_pair(low, high)
+        if pair is None:
+            continue
+        # Relay names encode low/high; still prove it from the semantic parser.
+        li, hi = _poly_identity(low), _poly_identity(high)
+        if li is None or hi is None or not li[4] < hi[4]:
+            continue
+        relayed.append((low, high))
+
+    slugs = sorted({str(m.get("slug")) for pair in relayed for m in pair})
+    books: dict[str, TopBook] = {}
+    async with httpx.AsyncClient(timeout=5.0) as http:
+        sem = asyncio.Semaphore(8)
+        async def fetch_book(slug: str) -> None:
+            async with sem:
+                try:
+                    res = await http.get(f"{BASE}/v1/markets/{slug}/book")
+                    if res.status_code == 200:
+                        b = poly_top_book(res.json())
+                        if b is not None:
+                            books[slug] = b
+                except Exception:
+                    return
+        await asyncio.gather(*(fetch_book(s) for s in slugs))
+
+    scored: list[dict[str, Any]] = []
+    for low, high in relayed:
+        low_slug, high_slug = str(low["slug"]), str(high["slug"])
+        if low_slug not in books or high_slug not in books:
+            continue
+        lb, hb = books[low_slug], books[high_slug]
+        options = (
+            ("MAKER_LOW_HEDGE_HIGH", "YES", _bid(lb, True), "NO", *_ask(hb, False)),
+            ("MAKER_HIGH_HEDGE_LOW", "NO", _bid(hb, False), "YES", *_ask(lb, True)),
+        )
+        for direction, maker_side, maker_px, hedge_side, hedge_px, hedge_depth in options:
+            locked = _locked_profit(maker_px, hedge_px)
+            if maker_px <= 0 or maker_px >= ONE or hedge_depth < ONE or locked < TARGET:
+                continue
+            scored.append({"low": low, "high": high, "direction": direction,
+                           "maker_side": maker_side, "maker_price": maker_px,
+                           "hedge_side": hedge_side, "hedge_ask": hedge_px,
+                           "hedge_depth": hedge_depth, "locked_profit": locked})
+    # Favor profit first, then deeper hedge for ties.
+    scored.sort(key=lambda r: (r["locked_profit"], r["hedge_depth"]), reverse=True)
+
+    if not scored:
+        out = {"status": "NO_RELAYED_MLB_MAKER_Q1", "mlb_events": len(mlb_events),
+               "parseable_prop_markets": parseable, "relay_pairs_present": len(relayed),
+               "books_fetched": len(books), "order_entry": False}
+        print("SPORTS_KP_POLY_MAKER_Q1_PREFLIGHT " + json.dumps(out, separators=(",", ":")), flush=True)
+        return out
+
+    row = scored[0]
+    client = PolymarketUS(key_id=os.environ["POLYMARKET_KEY_ID"], secret_key=os.environ["POLYMARKET_SECRET_KEY"], timeout=6.0)
+    try:
+        exact_low, exact_high = await asyncio.gather(
+            asyncio.to_thread(client.markets.retrieve_by_slug, row["low"]["slug"]),
+            asyncio.to_thread(client.markets.retrieve_by_slug, row["high"]["slug"]),
+        )
+        fp, evidence = _certify(row["low"], row["high"], exact_low, exact_high)
+        maker_slug = str(row["low"]["slug"] if row["direction"] == "MAKER_LOW_HEDGE_HIGH" else row["high"]["slug"])
+        hedge_slug = str(row["high"]["slug"] if row["direction"] == "MAKER_LOW_HEDGE_HIGH" else row["low"]["slug"])
+        maker_payload = _payload(maker_slug, row["maker_side"], row["maker_price"], maker=True)
+        hedge_payload = _payload(hedge_slug, row["hedge_side"], row["hedge_ask"], maker=False)
+        balances, mpv, hpv = await asyncio.gather(
+            asyncio.to_thread(client.account.balances),
+            asyncio.to_thread(client.orders.preview, {"request": maker_payload}),
+            asyncio.to_thread(client.orders.preview, {"request": hedge_payload}),
+        )
+        out = {"status": "READY_RELAYED_MLB_MAKER_Q1", "mlb_events": len(mlb_events),
+               "parseable_prop_markets": parseable, "relay_pairs_present": len(relayed), "books_fetched": len(books),
+               "locked_profit_after_hypothetical_fill": str(row["locked_profit"]),
+               "maker_slug": maker_slug, "maker_side": row["maker_side"], "maker_price": str(row["maker_price"]),
+               "hedge_slug": hedge_slug, "hedge_side": row["hedge_side"], "hedge_ask": str(row["hedge_ask"]),
+               "hedge_depth": str(row["hedge_depth"]), "conservative_q1_taker_fee_allowance": str(TAKER_FEE_FLOOR),
+               "rule_fingerprint_sha256": fp, "rule_evidence": evidence,
+               "balance_response_present": bool(balances), "maker_preview_ok": bool(mpv), "hedge_preview_ok": bool(hpv),
+               "order_entry": False, "realized": False}
+        print("SPORTS_KP_POLY_MAKER_Q1_PREFLIGHT " + json.dumps(out, separators=(",", ":"), default=str), flush=True)
+        return out
+    finally:
+        client.close()

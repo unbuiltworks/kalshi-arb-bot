@@ -1,0 +1,10 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "deploy": {
+    "preDeployCommand": [
+      "python -m pytest -q tests/test_polymarket_kalshi_shadow_v5_gateway.py && python -m py_compile src/polymarket_kalshi_shadow_v5_gateway.py src/polymarket_kalshi_shadow_v5.py src/polymarket_kalshi_shadow_v4.py src/eventing_books.py src/sports_kp_shadow.py && python -c \"import src.sports_kp_shadow; import src.polymarket_kalshi_shadow_v5_gateway\""
+    ],
+    "startCommand": "python -m src.polymarket_kalshi_shadow_v5_gateway --max-quote-age-ms 100 --startup-timeout-s 3600",
+    "restartPolicyType": "ALWAYS"
+  }
+}

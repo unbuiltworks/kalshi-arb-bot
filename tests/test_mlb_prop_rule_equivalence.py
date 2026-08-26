@@ -37,18 +37,31 @@ def test_batter_becomes_rule_equivalent_after_first_pa() -> None:
     assert result.execution_eligible is False
 
 
-def test_pitcher_must_be_starter_and_throw_pitch() -> None:
+def test_pitcher_must_be_starter_and_face_batter() -> None:
     not_enough = assess_rule_equivalence(
         "baseball_player_strikeouts",
         ParticipationProof(starting_pitcher=True, source="official MLB game state"),
     )
     assert not_enough.settlement_equivalent_now is False
 
-    aligned = assess_rule_equivalence(
+    # A mere pitch is intentionally insufficient; the audited gate requires
+    # an official batter-faced record.
+    pitch_only = assess_rule_equivalence(
         "baseball_player_strikeouts",
         ParticipationProof(
             starting_pitcher=True,
             pitch_recorded=True,
+            source="official MLB game state",
+        ),
+    )
+    assert pitch_only.status == RuleEquivalence.CONDITIONAL_PARTICIPATION
+    assert pitch_only.settlement_equivalent_now is False
+
+    aligned = assess_rule_equivalence(
+        "baseball_player_strikeouts",
+        ParticipationProof(
+            starting_pitcher=True,
+            batter_faced_recorded=True,
             source="official MLB game state",
         ),
     )
