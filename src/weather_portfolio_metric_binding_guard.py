@@ -7,8 +7,10 @@ attach inflated ranking inputs to otherwise valid SHADOW evidence.
 
 This guard independently derives the edge/depth terms from the selected executable side
 and independently derives empirical execution probability from raw eligible/total sample
-counts in a verified observation window. It is read-only and cannot authorize order
-entry or a live probe.
+counts in a verified observation window. The probability denominator must represent the
+complete scanner-snapshot window (including zero-opportunity snapshots), and duplicate
+snapshot counting must be explicitly excluded. It is read-only and cannot authorize
+order entry or a live probe.
 """
 from __future__ import annotations
 
@@ -19,6 +21,8 @@ D = Decimal
 
 PORTFOLIO_METRICS_UNVERIFIED = "WEATHER_PORTFOLIO_METRICS_UNVERIFIED"
 EXECUTION_PROBABILITY_UNVERIFIED = "WEATHER_EXECUTION_PROBABILITY_UNVERIFIED"
+EXECUTION_SAMPLE_BASIS_UNVERIFIED = "WEATHER_EXECUTION_SAMPLE_BASIS_UNVERIFIED"
+COMPLETE_SCANNER_SAMPLE_BASIS = "COMPLETE_SCANNER_SNAPSHOT_WINDOW"
 
 
 def _decimal(value: Any) -> Decimal | None:
@@ -88,6 +92,22 @@ def _empirical_execution_probability(row: dict[str, Any]) -> tuple[Decimal | Non
     return D(eligible) / D(total), eligible, total
 
 
+def _sample_basis_verified(row: dict[str, Any]) -> bool:
+    """Require probability counts to come from a complete, non-duplicated snapshot basis.
+
+    Counting only positive/executable snapshots biases the numerator upward. Likewise,
+    accidental duplicate scanner snapshots can overweight a resting quote. Fail closed
+    unless the producer explicitly verifies the complete window includes zero-opportunity
+    snapshots and duplicate snapshot counting has been excluded.
+    """
+    return (
+        row.get("executable_probability_sample_basis") == COMPLETE_SCANNER_SAMPLE_BASIS
+        and row.get("executable_probability_complete_window_verified") is True
+        and row.get("executable_probability_includes_zero_opportunity_snapshots") is True
+        and row.get("executable_probability_duplicate_snapshot_counting_excluded") is True
+    )
+
+
 def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any]:
     """Verify weather ranking inputs against raw selected-side SHADOW economics.
 
@@ -119,9 +139,14 @@ def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any
 
     producer_probability = _decimal(row.get("executable_probability"))
     derived_probability, success_count, sample_count = _empirical_execution_probability(row)
+    sample_basis_verified = _sample_basis_verified(row)
+    if not sample_basis_verified:
+        blockers.append(EXECUTION_SAMPLE_BASIS_UNVERIFIED)
+
     probability_verified = (
         row.get("executable_probability_verified") is True
         and row.get("executable_probability_window_verified") is True
+        and sample_basis_verified
         and derived_probability is not None
         and producer_probability is not None
         and producer_probability == derived_probability
@@ -147,6 +172,8 @@ def audit_weather_portfolio_metric_binding(row: dict[str, Any]) -> dict[str, Any
     return {
         "weather_portfolio_metric_binding_verified": metric_binding_verified,
         "weather_execution_probability_verified": probability_verified,
+        "weather_execution_sample_basis_verified": sample_basis_verified,
+        "execution_probability_sample_basis": row.get("executable_probability_sample_basis"),
         "derived_net_edge_per_dollar": None if derived_edge is None else str(derived_edge),
         "derived_depth_dollars": None if derived_depth is None else str(derived_depth),
         "verified_executable_probability": None if not probability_verified else str(derived_probability),
