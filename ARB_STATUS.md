@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-26 19:40 UTC / 2026-08-26 15:40 ET**
+Last verified: **2026-08-26 20:43 UTC / 2026-08-26 16:43 ET**
 
 This is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
@@ -18,20 +18,16 @@ The 72-hour wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and ends **20
 
 ## Fresh production state
 
-Fresh Railway project status at 19:40 UTC:
-
-- `sports-kp-live-executor`: **SUCCESS**. Last-hour metrics: 61/61 CPU/network samples, average CPU ~0.0904; process is alive.
-- `sports-generic-counterpart-shadow`: **SUCCESS**. Last-hour average CPU ~0.0610 with active network traffic; read-only maker/fill census remains alive.
-- `sports-gk-autonomous-supervisor`: **SUCCESS**. Last-hour average CPU ~0.563 with substantial network traffic; guaranteed-arb execution remains disarmed/read-only.
+- `sports-kp-live-executor`: **SUCCESS/read-only census**. Last decision-grade totals sample remains the authoritative taker evidence below.
+- `sports-generic-counterpart-shadow`: **SUCCESS/read-only maker shadow**. Fresh event-level logs at 20:42 UTC materially expand the modeled-fill sample below.
+- `sports-gk-autonomous-supervisor`: guaranteed-arb execution remains **disarmed/read-only**. Caleb Durbin remains **-$0.44 REALIZED**.
 - `crypto-15m-sol-live-canary-10bp-50ms`: **CRASHED/contained**. Do not reopen as guaranteed arb while Gemini/Kalshi settlement-index equivalence remains unproven.
-
-Railway's deep runtime/log agent is currently usage-limited, so this run does not claim newer event-level maker counts than the last verified summary.
 
 ## Decision-grade K<->P evidence
 
-### Strict MLB totals
+### Strict MLB totals taker/taker
 
-Last decision-grade totals summary remains:
+Last valid decision-grade summary remains:
 
 - **53,237 comparable evaluations**;
 - **1,661 decision observations** across 9 semantic keys;
@@ -40,36 +36,32 @@ Last decision-grade totals summary remains:
 - average selected-side q1 depth ~**2,073**, max ~22,648;
 - average quote skew ~45.5 ms, max 100 ms.
 
-The later trigger-only interval remains **unmeasurable/stale-comparison**, not millions of additional zero-edge observations. It receives **$0 capacity credit for the interval** and does not reset the wall clock. The valid certified totals sample still supports **$0/day deployable capacity at the fixed 3c taker/taker floor**.
+Later trigger-only/stale-comparison intervals remain **unmeasurable**, not additional zero-edge observations. They receive $0 capacity credit for those intervals and do not reset the wall clock. The valid certified totals slice still supports **$0/day deployable capacity at the fixed 3c taker/taker floor**.
 
 ### Clean MLB full-game taker/taker
 
 After fixing start-time normalization and excluding F5/partial-game contamination, clean full-game moneyline/spread/total evidence remains **0 >=1c / 0 >=2c / 0 >=3c** in the last certified snapshots. Displayed depth is substantial; edge magnitude, not liquidity, remains the limiting factor.
 
-### Maker/fill shadow — fill conversion real, guaranteed-arb certification fails
+### Maker/fill shadow — larger sample, still $0 guaranteed capacity
 
-Last verified read-only maker telemetry at 18:38 UTC:
+Fresh read-only maker telemetry at 20:42 UTC:
 
 - **92 matched moneyline pairs**;
-- roughly **1,290 quote opens / 420 reprices / 778 cancels**;
-- **25,200+ Kalshi public trades observed**;
-- roughly **1,280 qualifying opposite-side taker prints**;
-- **92 pessimistic simulated q1 fills**;
-- **58 trade-through / 34 exact-price fills**;
-- median quote age at fill **~763 ms**;
-- immediate-fill economics **37 >=1c / 23 >=2c / 11 >=3c** under the verified KXMLBGAME maker-fee model;
+- **2,447 quote opens / 1,018 reprices / 1,230 cancels**;
+- **42,077 Kalshi public trades observed**;
+- **2,600 qualifying opposite-side taker prints**;
+- **197 pessimistic simulated q1 fills**;
+- **121 trade-through / 76 exact-price fills**;
 - **0 hedge-missing-at-fill** events;
-- combined pure-trading **shadow** P&L about **$1.2768**;
-- `combined_maker_capacity_credit_usd_per_day=0`;
-- `read_only=true`, `order_entry=false`.
+- immediate-fill economics under the verified KXMLBGAME maker-fee model: **102 >=1c / 68 >=2c / 40 >=3c**;
+- zero-maker-fee upper bound: **141 >=1c / 84 >=2c / 62 >=3c**;
+- median quote age at fill **~1,004 ms**;
+- pure-trading **shadow** P&L about **+$4.2343**;
+- `rules_complete=false`, `capacity_credit_usd_per_day=0`, `read_only=true`, `order_entry=false`.
 
-The >=3c shadow fills are heavily concentrated in the **TB-DET full-game moneyline** representation. The bounded certification question is now answered: **Kalshi and Polymarket US do not have equivalent postponement/reschedule lifecycles for this full-game moneyline mechanism.**
+This is real evidence that maker fill conversion is non-zero, but it does **not** rescue guaranteed-arb capacity. The strongest mechanism is KXMLBGAME<->Polymarket US full-game MLB moneyline, whose postponement/reschedule lifecycles are not equivalent (Kalshi two-day treatment versus Polymarket US two-week treatment). Therefore these modeled fills and shadow P&L remain **$0 guaranteed-arb deployable capacity** and must not be armed or counted as realized.
 
-- Kalshi KXMLBGAME states that a postponed/delayed game remains live if completed **within two days**; if cancelled or rescheduled beyond two days it resolves to a fair price under venue rules.
-- Polymarket US MLB moneyline states that delayed/postponed/suspended games remain valid if rescheduled **within two weeks**; otherwise the market settles to last fair market price.
-- Both source the game outcome from MLB and include extra innings, but the **2-day vs 2-week lifecycle mismatch is sufficient to fail exact settlement/cancellation equivalence**.
-
-Therefore the TB-DET maker shadow and analogous KXMLBGAME<->Polymarket full-game moneyline rows are **not guaranteed arbitrage** and receive **$0 guaranteed-arb deployable capacity**, regardless of modeled fill economics. Do not arm this representation as guaranteed arb. Shadow fills/P&L remain descriptive only.
+The incentive shadow also remains **$0 capacity credit**: 31 Polymarket incentive programs are visible, but the program denominator/time-weighted reward and pickoff accounting is incomplete. No reward estimate is counted as realized or deployable profit.
 
 ### Strict MLB player props
 
@@ -77,9 +69,7 @@ No K<->P player-prop family currently has complete settlement/postponement/cance
 
 ## G<->K sports
 
-Guaranteed-arb execution remains **disarmed/read-only**. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
-
-Last event-level heartbeat showed comparable evaluations frozen at 120,836, Gemini 570 symbols / 0 connected and Kalshi 570/570 initialized. Fresh Railway resource metrics confirm the service process itself remains active, but without current two-sided Gemini connectivity that interval remains **unmeasurable and gets $0 capacity credit**. Do not re-arm it.
+Guaranteed-arb execution remains **disarmed/read-only**. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away. Unmeasurable feed intervals receive $0 capacity; do not re-arm to improve census coverage.
 
 ## Kalshi account / 429 diagnosis
 
@@ -87,10 +77,10 @@ Authenticated account limits remain **advanced tier, 900 bucket / 300 refill** f
 
 ## Authoritative accounting
 
-Fresh direct Neon queries at 19:40 UTC:
+Fresh direct Neon queries at 20:43 UTC:
 
-- **2026-08-26 ET: no ledger events at all since ET midnight; 0 `TRADE_REALIZED` / $0.0000 net**;
-- therefore **0 new `CAPITAL_RESERVED` events since ET midnight**;
+- **2026-08-26 ET: 0 `TRADE_REALIZED` / $0.0000 net**;
+- **0 `CAPITAL_RESERVED` events since ET midnight**;
 - Caleb Durbin remains **-$0.44 REALIZED** from the prior sports one-leg settlement;
 - weather since **2026-03-01** remains **0 verified weather-tagged `TRADE_REALIZED` / $0.0000 net**.
 
@@ -102,18 +92,18 @@ Guaranteed-arb evidence remains strongly negative at the fixed 3c floor:
 
 - certified K<->P totals: **0 >=3c**;
 - clean full-game taker/taker: **0 >=3c**;
-- K<->P full-game moneyline maker: **rule lifecycle mismatch => $0 guaranteed capacity** despite simulated fills;
+- K<->P full-game moneyline maker: **197 modeled fills / 40 >=3c immediate fills, but rule lifecycle mismatch => $0 guaranteed capacity**;
 - strict props: uncertified => **$0**;
-- G<->K current interval: unmeasurable/disarmed => **$0**;
+- G<->K guaranteed execution: disarmed/unmeasurable => **$0**;
 - weather verified realized since March: **$0**.
 
-The maker shadow remains useful execution research because fill conversion is demonstrably non-zero, but its strongest current representation fails guaranteed-arb lifecycle certification. That closes the only bounded maker question that could have rescued guaranteed K<->P capacity without changing the project definition. Do not replace the failed certification with open-ended strategy research during the census.
+The fresh maker sample strengthens the conclusion that execution/fill mechanics can work, but the contract-rule mismatch blocks those economics from being guaranteed arbitrage. Do not replace failed certification with open-ended maker research during the census.
 
 ## Highest-value next actions
 
 1. Keep the fixed census clock running through **2026-08-28 20:43 UTC / 16:43 ET** with no reset.
 2. Keep K<->P taker census alive; stale/unmeasurable intervals score $0 and are not mislabeled as fresh zero-edge samples.
-3. Continue collecting maker telemetry descriptively, but **do not credit or arm KXMLBGAME<->Polymarket full-game moneyline as guaranteed arb** under the current 2-day vs 2-week lifecycle mismatch.
+3. Continue maker telemetry only descriptively; **do not credit or arm KXMLBGAME<->Polymarket US full-game moneyline as guaranteed arb** under the lifecycle mismatch.
 4. Keep G<->K guaranteed execution disarmed; Caleb's loss remains realized.
 5. Do not manufacture same-venue ladder violations or force uncertified player props.
 6. Preserve Kalshi account headroom/backoff; do not disrupt unrelated live services solely for census telemetry.
