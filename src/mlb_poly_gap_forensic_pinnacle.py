@@ -98,8 +98,6 @@ def _event_matches(event: dict[str, Any], target: dict[str, Any]) -> bool:
     required = {_norm(target["team_a"]), _norm(target["team_b"])}
     if required <= names:
         return True
-    # Athletics naming has changed across feeds; accept either city-less or
-    # historical Oakland label only for this known target.
     if "athletics" in required:
         alt = {_norm(target["team_a"]), "oakland athletics"}
         return alt <= names or {_norm(target["team_a"]), "athletics"} <= names
@@ -255,5 +253,6 @@ def main() -> None:
     }, sort_keys=True, default=str))
 
 
+# Deployment trigger after watch-pattern change.
 if __name__ == "__main__":
     main()
