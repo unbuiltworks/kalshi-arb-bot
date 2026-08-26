@@ -1,14 +1,18 @@
 """Aggregate delayed-hedge markout telemetry for the read-only K/P MLB maker shadow.
 
-This is instrumentation only.  It preserves the existing pessimistic Kalshi maker-fill
-model and never submits orders.  Every simulated fill is evaluated at 80/250/500 ms
-using the then-current Polymarket opposite ask.  A delayed hedge receives executable
-credit only when the observed Polymarket book is post-fill, <=1 second old at the
-checkpoint, and displays at least q=1 ask depth.
+This is instrumentation only. It preserves the existing pessimistic Kalshi maker-fill
+model and never submits orders. Every simulated fill is evaluated at 80/250/500 ms
+using the then-current reconstructed Polymarket opposite ask.
 
-Missing/stale delayed books are not silently dropped.  They are counted explicitly and
-also contribute the maker leg's worst-case loss to a deliberately harsh lower-bound
-P&L.  This lower bound is diagnostic, not an expected-value estimate.
+Polymarket market-data is a stateful order book: no message after a Kalshi fill can
+correctly mean that the resting ask did not change. Therefore a post-fill market-specific
+update is NOT required. Delayed hedge credit instead requires: the Polymarket WS is
+connected, the overall WS stream is live within 1 second of the checkpoint, the current
+reconstructed market book is available, and q=1 ask depth remains displayed.
+
+Missing/unobservable delayed books are not silently dropped. They are counted and also
+contribute the maker leg's worst-case loss to a deliberately harsh diagnostic lower
+bound. This lower bound is not an expected-value estimate.
 """
 from __future__ import annotations
 
@@ -25,7 +29,7 @@ impl = generic.impl
 D = Decimal
 ZERO = D("0")
 DELAYS_MS = (80, 250, 500)
-MAX_DELAYED_BOOK_AGE_MS = 1000
+MAX_GLOBAL_WS_SILENCE_MS = 1000
 logger = logging.getLogger("kalshi_arb.sports_kp_mlb_moneyline_maker_markout_shadow")
 
 
@@ -34,7 +38,7 @@ def _bucket() -> dict[str, Any]:
         "completed": 0,
         "executable": 0,
         "hedge_missing": 0,
-        "stale_or_pre_fill_book": 0,
+        "ws_unhealthy": 0,
         "depth_insufficient": 0,
         "pnl_sum": ZERO,
         "markout_delta_sum": ZERO,
@@ -53,8 +57,6 @@ class _AggregateMarkoutMakerFillShadow(generic._IncentiveAwareMakerFillShadow):
         self._fill_profit_by_quote: dict[int, Decimal] = {}
 
     async def _record_fill(self, q: Any, trade: Any, fill_reason: str) -> None:
-        # Capture the same receipt-time hedge reference used by the existing immediate
-        # P&L summary so delayed markout can be stated as a delta from fill-time P&L.
         hedge = self._poly_hedge(q)
         if hedge is not None:
             hedge_price, hedge_depth, _ = hedge
@@ -83,6 +85,7 @@ class _AggregateMarkoutMakerFillShadow(generic._IncentiveAwareMakerFillShadow):
                 "group_key": q.group_key,
                 "delay_ms": delay_ms,
                 "hedge_available": False,
+                "poly_connected": bool(self.poly_store.connected),
                 "worst_case_pnl_if_unhedged": str(worst_case),
                 "read_only": True,
                 "order_entry": False,
@@ -93,18 +96,24 @@ class _AggregateMarkoutMakerFillShadow(generic._IncentiveAwareMakerFillShadow):
         hedge_price = D(str(hedge_price))
         hedge_depth = D(str(hedge_depth))
         received_ms = int(received_ms)
-        book_age_ms = max(0, checkpoint_ms - received_ms)
-        post_fill_book = received_ms >= int(trade.received_ms)
-        fresh_book = book_age_ms <= MAX_DELAYED_BOOK_AGE_MS
+        market_book_age_ms = max(0, checkpoint_ms - received_ms)
+        post_fill_market_update = received_ms >= int(trade.received_ms)
+        ws_last_ms = int(getattr(self.poly_store, "last_ws_message_ms", 0) or 0)
+        ws_silence_ms = max(0, checkpoint_ms - ws_last_ms) if ws_last_ms else None
+        ws_healthy = bool(
+            self.poly_store.connected
+            and ws_silence_ms is not None
+            and ws_silence_ms <= MAX_GLOBAL_WS_SILENCE_MS
+        )
         depth_ok = hedge_depth >= D("1")
-        executable = bool(post_fill_book and fresh_book and depth_ok)
+        executable = bool(ws_healthy and depth_ok)
 
         profit_fee, profit_zero, maker_fee, hedge_fee = self._profit(q.maker_price, hedge_price)
         fill_profit = self._fill_profit_by_quote.get(int(q.quote_id))
         markout_delta = profit_fee - fill_profit if fill_profit is not None else None
 
-        if not post_fill_book or not fresh_book:
-            bucket["stale_or_pre_fill_book"] += 1
+        if not ws_healthy:
+            bucket["ws_unhealthy"] += 1
         elif not depth_ok:
             bucket["depth_insufficient"] += 1
 
@@ -121,8 +130,6 @@ class _AggregateMarkoutMakerFillShadow(generic._IncentiveAwareMakerFillShadow):
             if profit_fee >= D("0.03"):
                 bucket["gte_3c"] += 1
         else:
-            # Do not treat an unobservable/stale delayed quote as zero cost.  The hard
-            # lower bound assumes the unhedged maker contract loses completely.
             bucket["worst_case_lower_bound_sum"] += worst_case
 
         logger.info("KPMM_HEDGE_MARKOUT %s", json.dumps({
@@ -135,10 +142,14 @@ class _AggregateMarkoutMakerFillShadow(generic._IncentiveAwareMakerFillShadow):
             "maker_price": str(q.maker_price),
             "poly_hedge_price": str(hedge_price),
             "poly_hedge_depth": str(hedge_depth),
-            "poly_book_received_ms": received_ms,
-            "poly_book_age_at_checkpoint_ms": book_age_ms,
-            "post_fill_book": post_fill_book,
-            "fresh_book_1000ms": fresh_book,
+            "poly_market_book_received_ms": received_ms,
+            "poly_market_book_age_at_checkpoint_ms": market_book_age_ms,
+            "post_fill_market_update_observed": post_fill_market_update,
+            "post_fill_market_update_required": False,
+            "poly_connected": bool(self.poly_store.connected),
+            "poly_last_ws_message_ms": ws_last_ms,
+            "poly_global_ws_silence_ms": ws_silence_ms,
+            "poly_global_ws_healthy_1000ms": ws_healthy,
             "q1_depth_ok": depth_ok,
             "delayed_hedge_executable": executable,
             "fill_time_profit_with_maker_fee": str(fill_profit) if fill_profit is not None else None,
@@ -159,8 +170,9 @@ class _AggregateMarkoutMakerFillShadow(generic._IncentiveAwareMakerFillShadow):
             "simulated_q1_fills_total": int(self.stats.simulated_fills),
             "immediate_hedged_fills": int(self.shadow_fills_with_hedge),
             "immediate_pnl_usd": str(self.shadow_trading_pnl_at_fill),
-            "delayed_book_credit_rule": "POST_FILL_BOOK_AND_AGE_LE_1000MS_AND_Q1_ASK_DEPTH_GE_1",
-            "missing_or_stale_policy": "NO_EXECUTABLE_CREDIT_PLUS_WORST_CASE_UNHEDGED_LOSS_IN_LOWER_BOUND",
+            "delayed_book_credit_rule": "CURRENT_RECONSTRUCTED_BOOK_PLUS_CONNECTED_GLOBAL_WS_SILENCE_LE_1000MS_PLUS_Q1_ASK_DEPTH_GE_1",
+            "stateful_book_note": "POST_FILL_MARKET_UPDATE_NOT_REQUIRED_IF_WS_STREAM_REMAINS_LIVE",
+            "unobservable_policy": "NO_EXECUTABLE_CREDIT_PLUS_WORST_CASE_UNHEDGED_LOSS_IN_LOWER_BOUND",
             "capacity_credit_usd_per_day": 0,
             "read_only": True,
             "order_entry": False,
@@ -175,7 +187,7 @@ class _AggregateMarkoutMakerFillShadow(generic._IncentiveAwareMakerFillShadow):
                 "executable": executable,
                 "executable_coverage": (executable / completed) if completed else None,
                 "hedge_missing": int(b["hedge_missing"]),
-                "stale_or_pre_fill_book": int(b["stale_or_pre_fill_book"]),
+                "ws_unhealthy": int(b["ws_unhealthy"]),
                 "depth_insufficient": int(b["depth_insufficient"]),
                 "executable_pnl_usd": str(pnl),
                 "avg_pnl_per_executable_fill": str(pnl / D(executable)) if executable else None,
@@ -203,8 +215,9 @@ impl.MakerFillShadow = _AggregateMarkoutMakerFillShadow
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
     logger.warning(
-        "KPMM_DELAYED_MARKOUT_ENABLED delays_ms=80,250,500 post_fill_book=true "
-        "max_book_age_ms=1000 q1_depth_required=true read_only=true order_entry=false"
+        "KPMM_DELAYED_MARKOUT_ENABLED delays_ms=80,250,500 stateful_poly_book=true "
+        "post_fill_market_update_required=false global_ws_silence_max_ms=1000 "
+        "q1_depth_required=true read_only=true order_entry=false"
     )
     impl.main()
 
