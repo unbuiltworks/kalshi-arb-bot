@@ -43,6 +43,9 @@ def _row():
         "executable_probability_side": "NO",
         "executable_probability_quantity": "1",
         "executable_probability_max_ask_dollars": "0.41",
+        "executable_probability_outcome_definition_verified": True,
+        "executable_probability_outcome_definition": "EXACT_MARKET_SAME_SIDE_QTY_PRICE_MIN_AFTER_FEE_EDGE",
+        "executable_probability_min_after_fee_edge_cents_per_contract": "17.5",
     }
 
 
@@ -52,9 +55,11 @@ def test_portfolio_metrics_bind_to_selected_side():
     assert out["weather_execution_probability_verified"] is True
     assert out["weather_execution_sample_basis_verified"] is True
     assert out["weather_execution_sample_scope_verified"] is True
+    assert out["weather_execution_sample_outcome_verified"] is True
     assert Decimal(out["derived_depth_dollars"]) == Decimal("0.41")
     assert Decimal(out["derived_net_edge_per_dollar"]) == Decimal("7") / Decimal("17")
     assert Decimal(out["verified_executable_probability"]) == Decimal("0.25")
+    assert Decimal(out["selected_after_fee_edge_cents_per_contract"]) == Decimal("17.5")
     assert out["executable_probability_success_count"] == 10
     assert out["executable_probability_sample_count"] == 40
     assert out["blockers"] == []
@@ -130,6 +135,33 @@ def test_execution_probability_requires_exact_market_side_price_and_quantity_sco
         assert "WEATHER_EXECUTION_PROBABILITY_UNVERIFIED" in out["blockers"]
 
 
+def test_execution_probability_requires_same_after_fee_edge_threshold():
+    row = _row()
+    # A cohort that counts execution at the same price/size but only 1c of edge must not
+    # certify the 17.5c/contract opportunity currently being ranked.
+    row["executable_probability_min_after_fee_edge_cents_per_contract"] = "1"
+    out = audit_weather_portfolio_metric_binding(row)
+    assert out["weather_execution_sample_outcome_verified"] is False
+    assert out["weather_execution_probability_verified"] is False
+    assert out["weather_portfolio_metric_binding_verified"] is False
+    assert "WEATHER_EXECUTION_SAMPLE_OUTCOME_UNVERIFIED" in out["blockers"]
+    assert "WEATHER_EXECUTION_PROBABILITY_UNVERIFIED" in out["blockers"]
+
+
+def test_execution_probability_outcome_definition_must_be_explicit_and_literal():
+    for key, value in (
+        ("executable_probability_outcome_definition_verified", "true"),
+        ("executable_probability_outcome_definition", "EXECUTABLE_AT_PRICE_ONLY"),
+        ("executable_probability_min_after_fee_edge_cents_per_contract", None),
+    ):
+        row = _row()
+        row[key] = value
+        out = audit_weather_portfolio_metric_binding(row)
+        assert out["weather_execution_sample_outcome_verified"] is False
+        assert out["weather_portfolio_metric_binding_verified"] is False
+        assert "WEATHER_EXECUTION_SAMPLE_OUTCOME_UNVERIFIED" in out["blockers"]
+
+
 def test_missing_market_identity_cannot_borrow_weather_wide_execution_rate():
     row = _row()
     del row["market_ticker"]
@@ -159,7 +191,7 @@ def test_success_count_cannot_exceed_total_count():
 
 def test_fixed_point_fractional_selected_side_is_supported():
     row = _row()
-    # NO: 0.41 * 2.5 + 0.025 = 1.05 capital; 45c EV.
+    # NO: 0.41 * 2.5 + 0.025 = 1.05 capital; 45c EV = 18c/contract.
     row["side_economics"][1] = {
         "side": "NO",
         "ask_dollars": "0.4100",
@@ -171,6 +203,7 @@ def test_fixed_point_fractional_selected_side_is_supported():
     row["net_edge_per_dollar"] = str(Decimal("0.45") / Decimal("1.05"))
     row["executable_probability_quantity"] = "2.50"
     row["executable_probability_max_ask_dollars"] = "0.4100"
+    row["executable_probability_min_after_fee_edge_cents_per_contract"] = "18"
     out = audit_weather_portfolio_metric_binding(row)
     assert out["weather_portfolio_metric_binding_verified"] is True
     assert Decimal(out["derived_depth_dollars"]) == Decimal("1.025")
@@ -187,6 +220,7 @@ def test_q1_execution_rate_cannot_certify_q5_capacity():
     }
     row["depth_dollars"] = "2.05"
     row["net_edge_per_dollar"] = str(Decimal("0.875") / Decimal("2.125"))
+    row["executable_probability_min_after_fee_edge_cents_per_contract"] = "17.5"
     # Keep empirical cohort scoped to q1. It must not certify this q5 plan.
     row["executable_probability_quantity"] = "1"
     out = audit_weather_portfolio_metric_binding(row)
