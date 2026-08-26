@@ -91,7 +91,7 @@ for key in required:
         continue
     label = key
     if key == "KALSHI_PRIVATE_KEY_PEM":
-        label += " (paste the one-line / \\n-escaped value)"
+        label += " (paste the one-line backslash-n escaped value)"
     while True:
         value = getpass.getpass(f"Enter {label}: ").strip()
         if value:
@@ -99,8 +99,8 @@ for key in required:
             break
         print(f"{key} cannot be empty", file=sys.stderr)
 
-# Docker --env-file requires one physical line per variable. Preserve literal \\n
-# escapes and convert any actual newline that may have arrived into the same form.
+# Docker --env-file requires one physical line per variable. Preserve literal
+# backslash-n escapes and convert any actual newline into the same representation.
 def one_line(value: str) -> str:
     return value.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\\n")
 
