@@ -24,7 +24,6 @@ from src.mlb_game_side_normalization import (
 )
 from src.sports_kp_generic_mlb_game_breadth import (
     MAX_START_SKEW_MS,
-    POLY_HEADERS,
     _distinct_physical_sides,
     _fetch_inputs,
 )
@@ -152,7 +151,10 @@ def build_start_skew_report(
 
 
 async def main_async() -> None:
-    async with httpx.AsyncClient(timeout=15.0, headers=POLY_HEADERS) as http:
+    # Match the working breadth loop: do not attach Polymarket-only Origin/User-Agent
+    # headers to the shared client, because that client is also used for Kalshi.
+    # Venue-specific Polymarket book headers remain scoped inside the breadth helper.
+    async with httpx.AsyncClient(timeout=15.0) as http:
         poly_events, kalshi_events, _ = await _fetch_inputs(http)
     report = build_start_skew_report(poly_events, kalshi_events)
     print("SPORTS_KP_MLB_START_SKEW " + json.dumps(report, separators=(",", ":"), default=str), flush=True)
