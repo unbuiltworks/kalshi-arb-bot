@@ -39,6 +39,7 @@ def _verified_metric_audit(_row):
         "weather_execution_episode_identity_verified": True,
         "weather_execution_episode_set_reconciled": True,
         "weather_execution_episode_records_verified": True,
+        "weather_execution_episode_record_time_verified": True,
         "derived_net_edge_per_dollar": "0.25",
         "derived_depth_dollars": "4",
         "verified_executable_probability": "0.5",
@@ -54,7 +55,7 @@ def _verified_metric_audit(_row):
 
 def _patch_verified(monkeypatch):
     monkeypatch.setattr(report_v2, "audit_weather_certification_dimensions_v3", _verified_audit)
-    monkeypatch.setattr(report_v2, "audit_weather_portfolio_metric_binding_v4", _verified_metric_audit)
+    monkeypatch.setattr(report_v2, "audit_weather_portfolio_metric_binding_v5", _verified_metric_audit)
 
 
 def test_uncertified_weather_cannot_be_promoted_or_annualized():
@@ -117,6 +118,7 @@ def test_metric_binding_failure_zeroes_weather_capacity_even_when_canonical_audi
             "weather_execution_episode_identity_verified": False,
             "weather_execution_episode_set_reconciled": False,
             "weather_execution_episode_records_verified": False,
+            "weather_execution_episode_record_time_verified": False,
             "derived_net_edge_per_dollar": "0.25",
             "derived_depth_dollars": "4",
             "verified_executable_probability": None,
@@ -126,7 +128,7 @@ def test_metric_binding_failure_zeroes_weather_capacity_even_when_canonical_audi
             "live_probe_ready": False,
         }
 
-    monkeypatch.setattr(report_v2, "audit_weather_portfolio_metric_binding_v4", bad_metrics)
+    monkeypatch.setattr(report_v2, "audit_weather_portfolio_metric_binding_v5", bad_metrics)
     row = _weather_row()
     row["net_edge_per_dollar"] = "999"
     row["depth_dollars"] = "999"
@@ -149,6 +151,7 @@ def test_snapshot_probability_without_unique_episode_verification_cannot_project
             "weather_execution_episode_identity_verified": False,
             "weather_execution_episode_set_reconciled": False,
             "weather_execution_episode_records_verified": False,
+            "weather_execution_episode_record_time_verified": False,
             "derived_net_edge_per_dollar": "0.25",
             "derived_depth_dollars": "4",
             "verified_executable_probability": "0.9",
@@ -158,7 +161,7 @@ def test_snapshot_probability_without_unique_episode_verification_cannot_project
             "live_probe_ready": False,
         }
 
-    monkeypatch.setattr(report_v2, "audit_weather_portfolio_metric_binding_v4", snapshot_only)
+    monkeypatch.setattr(report_v2, "audit_weather_portfolio_metric_binding_v5", snapshot_only)
     sleeve = rank_sleeves([_weather_row()])["sleeves"][0]
     assert sleeve["capacity_score"] == "0"
     assert sleeve["promotable_score"] == "0"
@@ -176,6 +179,7 @@ def test_episode_counts_without_explicit_identity_reconciliation_cannot_project(
             "weather_execution_episode_identity_verified": False,
             "weather_execution_episode_set_reconciled": False,
             "weather_execution_episode_records_verified": False,
+            "weather_execution_episode_record_time_verified": False,
             "derived_net_edge_per_dollar": "0.25",
             "derived_depth_dollars": "4",
             "verified_executable_probability": "0.5",
@@ -185,7 +189,7 @@ def test_episode_counts_without_explicit_identity_reconciliation_cannot_project(
             "live_probe_ready": False,
         }
 
-    monkeypatch.setattr(report_v2, "audit_weather_portfolio_metric_binding_v4", counts_only)
+    monkeypatch.setattr(report_v2, "audit_weather_portfolio_metric_binding_v5", counts_only)
     sleeve = rank_sleeves([_weather_row()])["sleeves"][0]
     assert sleeve["capacity_score"] == "0"
     assert sleeve["promotable_score"] == "0"
@@ -203,6 +207,7 @@ def test_episode_ids_without_canonical_open_records_cannot_project(monkeypatch):
             "weather_execution_episode_identity_verified": True,
             "weather_execution_episode_set_reconciled": True,
             "weather_execution_episode_records_verified": False,
+            "weather_execution_episode_record_time_verified": False,
             "derived_net_edge_per_dollar": "0.25",
             "derived_depth_dollars": "4",
             "verified_executable_probability": "0.5",
@@ -212,7 +217,25 @@ def test_episode_ids_without_canonical_open_records_cannot_project(monkeypatch):
             "live_probe_ready": False,
         }
 
-    monkeypatch.setattr(report_v2, "audit_weather_portfolio_metric_binding_v4", ids_without_records)
+    monkeypatch.setattr(report_v2, "audit_weather_portfolio_metric_binding_v5", ids_without_records)
+    sleeve = rank_sleeves([_weather_row()])["sleeves"][0]
+    assert sleeve["capacity_score"] == "0"
+    assert sleeve["promotable_score"] == "0"
+    assert sleeve["observed_shadow_dollars_per_day"] is None
+    assert "WEATHER_PORTFOLIO_METRIC_BINDING_UNVERIFIED" in sleeve["hard_blockers"]
+
+
+def test_open_records_without_time_binding_cannot_project(monkeypatch):
+    monkeypatch.setattr(report_v2, "audit_weather_certification_dimensions_v3", _verified_audit)
+
+    def untimed_records(_row):
+        audit = _verified_metric_audit(_row)
+        audit["weather_portfolio_metric_binding_verified"] = False
+        audit["weather_execution_episode_record_time_verified"] = False
+        audit["blockers"] = ["WEATHER_EXECUTION_EPISODE_RECORD_LOOKAHEAD_DETECTED"]
+        return audit
+
+    monkeypatch.setattr(report_v2, "audit_weather_portfolio_metric_binding_v5", untimed_records)
     sleeve = rank_sleeves([_weather_row()])["sleeves"][0]
     assert sleeve["capacity_score"] == "0"
     assert sleeve["promotable_score"] == "0"
@@ -221,7 +244,7 @@ def test_episode_ids_without_canonical_open_records_cannot_project(monkeypatch):
 
 
 def test_canonical_replay_must_be_literal_true_for_projection(monkeypatch):
-    monkeypatch.setattr(report_v2, "audit_weather_portfolio_metric_binding_v4", _verified_metric_audit)
+    monkeypatch.setattr(report_v2, "audit_weather_portfolio_metric_binding_v5", _verified_metric_audit)
     for selected in (None, False, "true", 1):
         def audit(_row, selected=selected):
             return {
