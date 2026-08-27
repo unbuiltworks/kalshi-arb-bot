@@ -33,6 +33,12 @@ ASSET_SEARCH_NAMES = {
     "SOL": "Solana",
     "XRP": "XRP",
 }
+ASSET_SLUGS = {
+    "BTC": "btc",
+    "ETH": "eth",
+    "SOL": "sol",
+    "XRP": "xrp",
+}
 WINDOW_RE = re.compile(
     r"(?P<h1>\d{1,2}):(?P<m1>\d{2})\s*(?P<a1>AM|PM)?\s*-\s*"
     r"(?P<h2>\d{1,2}):(?P<m2>\d{2})\s*(?P<a2>AM|PM)\s*ET",
@@ -166,18 +172,53 @@ def parse_market(row: dict[str, Any]) -> PolyBinaryMarket | None:
     )
 
 
+def _flatten_event(event: Any) -> list[dict[str, Any]]:
+    if not isinstance(event, dict):
+        return []
+    if event.get("closed") is True or event.get("active") is False:
+        return []
+    return [
+        _contextual_market_row(market, event)
+        for market in event.get("markets") or []
+        if isinstance(market, dict)
+    ]
+
+
 def _flatten_search_events(payload: Any) -> list[dict[str, Any]]:
     if not isinstance(payload, dict):
         return []
     rows: list[dict[str, Any]] = []
     for event in payload.get("events") or []:
-        if not isinstance(event, dict):
+        rows.extend(_flatten_event(event))
+    return rows
+
+
+def _deterministic_slug_rows(
+    http: httpx.Client,
+    *,
+    asset: str,
+    horizon: int,
+    now_s: int | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch current/nearby rolling windows from Polymarket's stable slug scheme.
+
+    Rolling crypto event URLs use e.g. `eth-updown-5m-<window_start_epoch>`.
+    We probe the previous, current, and several upcoming aligned starts so a
+    search-ranking miss cannot erase a venue/asset stream from measurement.
+    """
+    slug_asset = ASSET_SLUGS[asset]
+    interval_s = horizon * 60
+    now = int(time.time()) if now_s is None else int(now_s)
+    aligned = now - (now % interval_s)
+    rows: list[dict[str, Any]] = []
+    for offset in range(-1, 5):
+        start_s = aligned + offset * interval_s
+        slug = f"{slug_asset}-updown-{horizon}m-{start_s}"
+        response = http.get(f"{GAMMA_API}/events/slug/{slug}")
+        if response.status_code == 404:
             continue
-        if event.get("closed") is True or event.get("active") is False:
-            continue
-        for market in event.get("markets") or []:
-            if isinstance(market, dict):
-                rows.append(_contextual_market_row(market, event))
+        response.raise_for_status()
+        rows.extend(_flatten_event(response.json()))
     return rows
 
 
@@ -240,24 +281,19 @@ def discover_markets(
     assets: Iterable[str] = FIRST_TIER_ASSETS,
     horizons: Iterable[int] = (5, 15),
 ) -> list[PolyBinaryMarket]:
-    """Discover rolling short-crypto markets via Gamma search, then broad fallback.
-
-    Polymarket creates many rolling windows. Paging a few thousand arbitrary
-    active markets can therefore miss the current crypto windows entirely.
-    Public search is the primary discovery path; the broad market listing is
-    retained only as a fallback.
-    """
+    """Discover rolling short-crypto markets with deterministic + search paths."""
     wanted_assets = {a.upper() for a in assets}
     wanted_horizons = {int(x) for x in horizons}
     found: dict[str, PolyBinaryMarket] = {}
     now_ms = int(time.time() * 1000)
-    max_future_ms = now_ms + 45 * 60 * 1000
+    max_future_ms = now_ms + 70 * 60 * 1000
 
     candidate_rows: list[dict[str, Any]] = []
     for asset in sorted(wanted_assets):
         if asset not in ASSET_SEARCH_NAMES:
             continue
         for horizon in sorted(wanted_horizons):
+            candidate_rows.extend(_deterministic_slug_rows(http, asset=asset, horizon=horizon))
             candidate_rows.extend(_search_rows(http, asset=asset, horizon=horizon))
 
     if not candidate_rows:
@@ -360,9 +396,22 @@ class PolymarketTemporalShadow:
 
     def summary(self) -> dict[str, Any]:
         snapshots = [engine.snapshot() for engine in self.engines.values()]
+        by_stream: dict[str, dict[str, float | int]] = {}
+        for row in snapshots:
+            stream = row["stream"]
+            agg = by_stream.setdefault(
+                stream,
+                {"markets": 0, "completed": 0, "one_sided": 0, "quote_observations": 0, "locked_profit_usd": 0.0},
+            )
+            agg["markets"] += 1
+            agg["completed"] += int(row["state"] == "COMPLETED")
+            agg["one_sided"] += int(row["state"] == "ONE_SIDED")
+            agg["quote_observations"] += int(row["quote_observations"])
+            agg["locked_profit_usd"] += float(row["locked_profit_usd"] or 0.0)
         return {
             "type": "POLY_TEMPORAL_SHADOW_SUMMARY",
-            "streams": sorted({row["stream"] for row in snapshots}),
+            "streams": sorted(by_stream),
+            "by_stream": by_stream,
             "market_count": len(snapshots),
             "completed_pairs": sum(row["state"] == "COMPLETED" for row in snapshots),
             "one_sided_markets": sum(row["state"] == "ONE_SIDED" for row in snapshots),
