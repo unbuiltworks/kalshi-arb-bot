@@ -14,7 +14,7 @@ containers=(
 
 declare -A summary_patterns=(
   [arb-short-poly-maker-ws]='POLY_MAKER_WS_SHADOW_SUMMARY'
-  [arb-short-gemini-maker]='GEMINI_MAKER_SHADOW_SUMMARY'
+  [arb-short-gemini-maker]='GEMINI_(PARTIAL_DEPTH_)?MAKER_SHADOW_SUMMARY'
   [arb-short-gemini-fair-value]='GEMINI_FAIR_VALUE_SHADOW_SUMMARY'
   [arb-short-kalshi-temporal]='KALSHI_TEMPORAL_SHADOW_SUMMARY|KALSHI_TEMPORAL_LIVE_SHADOW_SUMMARY'
   [arb-short-kalshi-incentive]='KALSHI_INCENTIVE_SHADOW_SUMMARY'
