@@ -7,7 +7,8 @@ unless the caller repeats every weather blocker. This wrapper makes the boundary
 explicit: weather sleeves are promotable/annualizable only when the canonical weather
 certification audit is independently replayed and clears, the selected-side schema
 independently clears, the portfolio ranking metrics are independently bound to the raw
-selected-side economics, and no hard blocker remains.
+selected-side economics, execution probability is derived from unique OPEN episodes,
+and no hard blocker remains.
 
 This module is read-only and cannot authorize order entry or live probes.
 """
@@ -18,7 +19,7 @@ from typing import Any, Iterable
 
 from src.central_shadow_portfolio_report import Sleeve, rank_sleeves as _rank_sleeves
 from src.weather_certification_dimensions_v3 import audit_weather_certification_dimensions_v3
-from src.weather_portfolio_metric_binding_guard import audit_weather_portfolio_metric_binding
+from src.weather_portfolio_metric_binding_guard_v2 import audit_weather_portfolio_metric_binding_v2
 
 D = Decimal
 
@@ -30,14 +31,8 @@ MALFORMED_HARD_BLOCKER_TELEMETRY = "MALFORMED_HARD_BLOCKER_TELEMETRY"
 
 
 def _normalize_hard_blockers(value: Any) -> tuple[list[str], bool]:
-    """Return normalized blockers and whether the telemetry itself was valid.
-
-    Do not stringify malformed entries. Values such as ``None``, ``False`` or an
-    empty string must not collapse into apparently clean blocker telemetry.
-    """
     if not isinstance(value, (list, tuple, set)):
         return [MALFORMED_HARD_BLOCKER_TELEMETRY], False
-
     blockers: list[str] = []
     for raw in value:
         if not isinstance(raw, str) or not raw.strip():
@@ -49,13 +44,6 @@ def _normalize_hard_blockers(value: Any) -> tuple[list[str], bool]:
 
 
 def _replay_weather_audit(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-    """Independently replay the canonical weather audit from raw evidence.
-
-    Producer summary booleans are not proof. A caller cannot unlock portfolio
-    annualization merely by setting ``executable_shadow_prereqs_verified=true`` or
-    ``selected_side_schema_verified=true``. The same raw settlement/book/fee/model
-    evidence must pass the canonical v3 audit again at the portfolio boundary.
-    """
     try:
         audit = audit_weather_certification_dimensions_v3(row)
     except Exception:
@@ -71,19 +59,20 @@ def _replay_weather_audit(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
 
 
 def _replay_weather_portfolio_metrics(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-    """Bind ranking scalars to raw weather evidence instead of producer summaries.
+    """Bind ranking scalars to unique-episode weather evidence.
 
     Edge/depth are independently derived from the selected executable side. Execution
-    probability is empirical and must carry a verified observation window/sample count;
-    it is never inferred from one attractive quote.
+    probability must come from unique OPEN episodes across a complete, deduplicated
+    OPEN/MOVE/CLOSE observation window; repeated resting snapshots cannot increase the
+    empirical probability used by portfolio capacity reporting.
     """
     try:
-        audit = audit_weather_portfolio_metric_binding(row)
+        audit = audit_weather_portfolio_metric_binding_v2(row)
     except Exception:
         return {}, False
     verified = (
         audit.get("weather_portfolio_metric_binding_verified") is True
-        and audit.get("weather_execution_probability_verified") is True
+        and audit.get("weather_execution_episode_probability_verified") is True
         and audit.get("read_only") is True
         and audit.get("order_entry") is False
         and audit.get("live_probe_ready") is False
@@ -97,9 +86,7 @@ def _guard_weather_row(row: dict[str, Any]) -> dict[str, Any]:
     if str(guarded.get("category") or "").strip().lower() != "weather":
         return guarded
 
-    blockers, blocker_telemetry_valid = _normalize_hard_blockers(
-        guarded.get("hard_blockers", ())
-    )
+    blockers, blocker_telemetry_valid = _normalize_hard_blockers(guarded.get("hard_blockers", ()))
     canonical_audit, canonical_verified = _replay_weather_audit(guarded)
     metric_audit, metric_verified = _replay_weather_portfolio_metrics(guarded)
     prereqs_verified = canonical_audit.get("executable_shadow_prereqs_verified") is True
@@ -115,13 +102,7 @@ def _guard_weather_row(row: dict[str, Any]) -> dict[str, Any]:
     if not metric_verified and WEATHER_PORTFOLIO_METRIC_BINDING_BLOCKER not in blockers:
         blockers.append(WEATHER_PORTFOLIO_METRIC_BINDING_BLOCKER)
 
-    # Certification, metric binding, and blocker state are separate evidence surfaces.
-    # A producer can be internally contradictory (for example certified=true while
-    # still carrying TWC_SOURCE_ACCESS_REQUIRED). Such a row remains useful research
-    # evidence but must never be annualized or promoted until all surfaces clear.
-    projection_verified = (
-        certified and metric_verified and blocker_telemetry_valid and not blockers
-    )
+    projection_verified = certified and metric_verified and blocker_telemetry_valid and not blockers
 
     guarded["hard_blockers"] = blockers
     guarded["weather_certification_verified"] = certified
@@ -133,23 +114,15 @@ def _guard_weather_row(row: dict[str, Any]) -> dict[str, Any]:
     guarded["weather_canonical_audit"] = canonical_audit
     guarded["weather_portfolio_metric_audit"] = metric_audit
 
-    # When metric binding succeeds, replace producer ranking scalars with the verified
-    # values from the audit. This prevents a caller from attaching inflated edge/depth
-    # to otherwise valid evidence after the audit has run.
     if metric_verified:
         guarded["net_edge_per_dollar"] = metric_audit["derived_net_edge_per_dollar"]
         guarded["depth_dollars"] = metric_audit["derived_depth_dollars"]
         guarded["executable_probability"] = metric_audit["verified_executable_probability"]
     else:
-        # Keep diagnostics visible in the nested audit, but zero ranking scalars at the
-        # central boundary so uncertified capacity cannot influence sort order.
         guarded["net_edge_per_dollar"] = D("0")
         guarded["depth_dollars"] = D("0")
         guarded["executable_probability"] = D("0")
 
-    # Even a verified scanner window must not turn uncertified or still-blocked weather
-    # model EV into a $/day capacity number. Preserve raw research P/L fields for
-    # diagnostics, but fail closed at the projection boundary.
     if not projection_verified:
         guarded["observation_window_verified"] = False
 
@@ -160,9 +133,6 @@ def rank_sleeves(rows: Iterable[dict[str, Any] | Sleeve]) -> dict[str, Any]:
     guarded_rows: list[dict[str, Any] | Sleeve] = []
     for row in rows:
         if isinstance(row, Sleeve):
-            # Existing Sleeve objects predate raw weather certification/metric evidence.
-            # Treat a weather Sleeve as uncertified rather than silently trusting summary
-            # flags or ranking scalars.
             if row.category.strip().lower() == "weather":
                 mapped = {
                     "name": row.name,
@@ -193,9 +163,9 @@ def rank_sleeves(rows: Iterable[dict[str, Any] | Sleeve]) -> dict[str, Any]:
     report["weather_projection_policy"] = (
         "Weather theoretical $/day and promotable score require an independent replay of "
         "the canonical v3 weather certification audit from raw evidence, the selected-side "
-        "schema, and the portfolio metric-binding audit. Edge/depth are re-derived from the "
-        "selected executable side, and execution probability requires verified empirical "
-        "observation evidence; producer ranking scalars cannot unlock projection. A structurally "
-        "valid empty hard-blocker set is also mandatory."
+        "schema, and the v2 portfolio metric-binding audit. Edge/depth are re-derived from "
+        "the selected executable side, and execution probability must come from unique OPEN "
+        "episodes in a complete deduplicated OPEN/MOVE/CLOSE window; repeated resting snapshots "
+        "cannot unlock projection. A structurally valid empty hard-blocker set is also mandatory."
     )
     return report
