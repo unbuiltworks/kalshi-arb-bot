@@ -39,7 +39,7 @@ docker run -d \
   -e PYTHONUNBUFFERED=1 \
   -v "$OUTPUT_DIR:/out" \
   "$IMAGE" \
-  bash -lc "set -o pipefail; python -u -m src.polymarket_l5_full_history_backtest --start '$START' --end now --output /out/l5_full_history_backtest.json 2>&1 | tee /out/l5_full_history_summary.log"
+  bash -lc "set -o pipefail; python -u -m src.polymarket_l5_full_history_backtest_v2 --start '$START' --end now --output /out/l5_full_history_backtest.json 2>&1 | tee /out/l5_full_history_summary.log"
 
 sleep 2
 if docker ps --filter "name=^/${CONTAINER}$" --format '{{.Names}}' | grep -qx "$CONTAINER"; then
