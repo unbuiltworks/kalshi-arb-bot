@@ -107,12 +107,12 @@ Safety behavior:
 9. Any one-sided or fractional fill is risk, not arb; exact observed inventory is flattened via IOC and retained for reconciliation if flatten is incomplete.
 10. After execution, each outcome must be reconciled independently from authoritative Gemini order history/settlement before any profit classification.
 
-Fresh explicit user approval is required before this launcher is run.
+User explicitly approved exactly one live q=1 Gemini BTC5m canary #2 on AWS on 2026-08-27. Approval applies only to this one-shot campaign and does not authorize scaling or recurring live execution.
 
 ## Profit accounting
 
 As of this checkpoint for this workstream:
 - Realized live-probe venue P&L from canary #1: +$0.64.
 - Realized paired-arbitrage P&L: $0.
-- Canary #2: not yet executed.
+- Canary #2: approved, not yet executed.
 - Reference-wallet / backtest / shadow economics are separate and are not user realized profit.
