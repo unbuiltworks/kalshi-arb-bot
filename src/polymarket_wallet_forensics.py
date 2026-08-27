@@ -322,6 +322,113 @@ def reconstruct_short_crypto(
     }
 
 
+def classify_sports_market(trade: WalletTrade) -> str:
+    """Coarse title/outcome classifier for sports-wallet behavior.
+
+    This is descriptive only. It is not settlement certification and must not
+    be used to declare cross-market arbitrage.
+    """
+    title = trade.title.strip()
+    lowered = title.lower()
+    outcome = trade.outcome.strip().upper()
+
+    if classify_trade(trade)["family"] != "OTHER":
+        return "NON_SPORTS_CRYPTO"
+
+    if "both teams to score" in lowered:
+        return "BTTS"
+    if "o/u" in lowered or outcome in {"OVER", "UNDER"}:
+        return "TOTAL"
+    if lowered.startswith("spread:") or re.search(
+        r"\([+-]?\d+(?:\.\d+)?\)", title
+    ):
+        return "SPREAD"
+    if lowered.startswith("will ") and " win on " in lowered:
+        return "MONEYLINE"
+    if " vs. " in lowered or " vs " in lowered:
+        return "MATCH_OUTRIGHT"
+    return "UNCLASSIFIED"
+
+
+def _price_band(price: float) -> str:
+    if price < 0.10:
+        return "00-10c"
+    if price < 0.25:
+        return "10-25c"
+    if price < 0.50:
+        return "25-50c"
+    if price < 0.75:
+        return "50-75c"
+    if price < 0.90:
+        return "75-90c"
+    return "90-100c"
+
+
+def summarize_sports_forensics(trades: Iterable[WalletTrade]) -> dict:
+    """Describe sports-wallet structure without asserting a proven strategy."""
+    trades = list(trades)
+    market_types = Counter()
+    outcome_styles = Counter()
+    price_bands = Counter()
+    event_markets: dict[str, set[str]] = defaultdict(set)
+    event_trade_counts = Counter()
+    market_sides: dict[str, set[str]] = defaultdict(set)
+    sports_trade_count = 0
+    sports_notional = 0.0
+
+    for trade in trades:
+        market_type = classify_sports_market(trade)
+        if market_type in {"NON_SPORTS_CRYPTO", "UNCLASSIFIED"}:
+            continue
+
+        sports_trade_count += 1
+        sports_notional += trade.notional_usd
+        market_types[market_type] += 1
+        price_bands[_price_band(trade.price)] += 1
+
+        outcome = trade.outcome.strip().upper()
+        if outcome in {"YES", "NO", "OVER", "UNDER"}:
+            outcome_styles[outcome] += 1
+        else:
+            outcome_styles["NAMED_SIDE"] += 1
+
+        event_key = trade.event_slug or trade.title
+        event_markets[event_key].add(trade.condition_id)
+        event_trade_counts[event_key] += 1
+        market_sides[trade.condition_id].add(trade.side)
+
+    multi_market_events = {
+        event: markets
+        for event, markets in event_markets.items()
+        if len(markets) >= 2
+    }
+    return {
+        "sports_trade_count": sports_trade_count,
+        "observed_sports_notional_usd": sports_notional,
+        "market_type_counts": dict(market_types),
+        "outcome_style_counts": dict(outcome_styles),
+        "entry_price_band_counts": dict(price_bands),
+        "unique_sports_markets": len(
+            {
+                market
+                for markets in event_markets.values()
+                for market in markets
+                if market
+            }
+        ),
+        "multi_market_event_count": len(multi_market_events),
+        "trades_in_multi_market_events": sum(
+            event_trade_counts[event] for event in multi_market_events
+        ),
+        "markets_with_buys_and_sells": sum(
+            {"BUY", "SELL"}.issubset(sides) for sides in market_sides.values()
+        ),
+        "warning": (
+            "DESCRIPTIVE_ONLY_NOT_SETTLEMENT_CERTIFIED_OR_ARBITRAGE_ATTRIBUTION"
+        ),
+    }
+
+
 def summarize_wallet(trades: Iterable[WalletTrade]) -> dict:
     trades = list(trades)
     class_counts = Counter()
@@ -371,6 +478,7 @@ def main() -> None:
             trades,
             min_locked_edge_per_pair=args.min_locked_edge,
         ),
+        "sports_forensics": summarize_sports_forensics(trades),
     }
     if args.dump_trades:
         output["trades"] = [asdict(trade) for trade in trades]
