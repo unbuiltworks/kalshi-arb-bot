@@ -27,11 +27,21 @@ ASSET_PATTERNS = {
     "SOL": re.compile(r"\b(solana|sol)\b", re.I),
     "XRP": re.compile(r"\b(xrp|ripple)\b", re.I),
 }
+ASSET_SEARCH_NAMES = {
+    "BTC": "Bitcoin",
+    "ETH": "Ethereum",
+    "SOL": "Solana",
+    "XRP": "XRP",
+}
 WINDOW_RE = re.compile(
     r"(?P<h1>\d{1,2}):(?P<m1>\d{2})\s*(?P<a1>AM|PM)?\s*-\s*"
     r"(?P<h2>\d{1,2}):(?P<m2>\d{2})\s*(?P<a2>AM|PM)\s*ET",
     re.I,
 )
+HORIZON_TEXT_PATTERNS = {
+    5: re.compile(r"(?:\b5\s*(?:m|min|mins|minute|minutes)\b|[-_]5m[-_]|\b5m\b)", re.I),
+    15: re.compile(r"(?:\b15\s*(?:m|min|mins|minute|minutes)\b|[-_]15m[-_]|\b15m\b)", re.I),
+}
 
 
 @dataclass(frozen=True)
@@ -79,15 +89,20 @@ def _clock_minutes(hour: int, minute: int, ampm: str) -> int:
 
 
 def infer_horizon_minutes(text: str) -> int | None:
-    match = WINDOW_RE.search((text or "").replace("–", "-"))
-    if not match:
-        return None
-    end_ampm = match.group("a2").upper()
-    start_ampm = (match.group("a1") or end_ampm).upper()
-    start = _clock_minutes(int(match.group("h1")), int(match.group("m1")), start_ampm)
-    end = _clock_minutes(int(match.group("h2")), int(match.group("m2")), end_ampm)
-    duration = (end - start) % (24 * 60)
-    return duration or None
+    cleaned = (text or "").replace("–", "-")
+    match = WINDOW_RE.search(cleaned)
+    if match:
+        end_ampm = match.group("a2").upper()
+        start_ampm = (match.group("a1") or end_ampm).upper()
+        start = _clock_minutes(int(match.group("h1")), int(match.group("m1")), start_ampm)
+        end = _clock_minutes(int(match.group("h2")), int(match.group("m2")), end_ampm)
+        duration = (end - start) % (24 * 60)
+        if duration:
+            return duration
+    for minutes, pattern in HORIZON_TEXT_PATTERNS.items():
+        if pattern.search(cleaned):
+            return minutes
+    return None
 
 
 def _iso_ms(value: Any) -> int | None:
@@ -103,15 +118,25 @@ def _iso_ms(value: Any) -> int | None:
     return int(parsed.timestamp() * 1000)
 
 
+def _contextual_market_row(row: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    enriched = dict(row)
+    enriched["_event_title"] = str(event.get("title") or "")
+    enriched["_event_slug"] = str(event.get("slug") or "")
+    enriched["_event_end_date"] = event.get("endDate")
+    return enriched
+
+
 def parse_market(row: dict[str, Any]) -> PolyBinaryMarket | None:
     question = str(row.get("question") or row.get("title") or "")
     slug = str(row.get("slug") or "")
-    joined = f"{question} {slug}"
-    if "up or down" not in joined.lower():
+    event_title = str(row.get("_event_title") or "")
+    event_slug = str(row.get("_event_slug") or "")
+    joined = " ".join(x for x in (question, slug, event_title, event_slug) if x)
+    if "up or down" not in joined.lower() and "updown" not in joined.lower():
         return None
 
     asset = _asset(joined)
-    horizon = infer_horizon_minutes(question)
+    horizon = infer_horizon_minutes(joined)
     if asset not in FIRST_TIER_ASSETS or horizon not in {5, 15}:
         return None
 
@@ -131,26 +156,64 @@ def parse_market(row: dict[str, Any]) -> PolyBinaryMarket | None:
         condition_id=condition_id,
         asset=asset,
         horizon_minutes=horizon,
-        question=question,
-        slug=slug,
+        question=question or event_title,
+        slug=slug or event_slug,
         up_token_id=mapping["UP"],
         down_token_id=mapping["DOWN"],
-        end_ts_ms=_iso_ms(row.get("endDate") or row.get("endDateIso")),
+        end_ts_ms=_iso_ms(
+            row.get("endDate") or row.get("endDateIso") or row.get("_event_end_date")
+        ),
     )
 
 
-def discover_markets(
+def _flatten_search_events(payload: Any) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    rows: list[dict[str, Any]] = []
+    for event in payload.get("events") or []:
+        if not isinstance(event, dict):
+            continue
+        if event.get("closed") is True or event.get("active") is False:
+            continue
+        for market in event.get("markets") or []:
+            if isinstance(market, dict):
+                rows.append(_contextual_market_row(market, event))
+    return rows
+
+
+def _search_rows(
     http: httpx.Client,
     *,
-    assets: Iterable[str] = FIRST_TIER_ASSETS,
-    horizons: Iterable[int] = (5, 15),
-    max_pages: int = 8,
-) -> list[PolyBinaryMarket]:
-    wanted_assets = {a.upper() for a in assets}
-    wanted_horizons = {int(x) for x in horizons}
-    found: dict[str, PolyBinaryMarket] = {}
-    limit = 500
+    asset: str,
+    horizon: int,
+) -> list[dict[str, Any]]:
+    name = ASSET_SEARCH_NAMES[asset]
+    queries = [
+        f"{name} Up or Down {horizon}m",
+        f"{asset} Up or Down {horizon}m",
+    ]
+    rows: list[dict[str, Any]] = []
+    for query in dict.fromkeys(queries):
+        response = http.get(
+            f"{GAMMA_API}/public-search",
+            params={
+                "q": query,
+                "events_status": "active",
+                "limit_per_type": 50,
+                "page": 1,
+                "keep_closed_markets": 0,
+                "search_profiles": "false",
+                "search_tags": "false",
+            },
+        )
+        response.raise_for_status()
+        rows.extend(_flatten_search_events(response.json()))
+    return rows
 
+
+def _fallback_market_rows(http: httpx.Client, *, max_pages: int = 4) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    limit = 500
     for page in range(max_pages):
         response = http.get(
             f"{GAMMA_API}/markets",
@@ -165,14 +228,53 @@ def discover_markets(
         payload = response.json()
         if not isinstance(payload, list):
             raise ValueError("unexpected Gamma markets payload")
-        for row in payload:
-            if not isinstance(row, dict):
-                continue
-            market = parse_market(row)
-            if market and market.asset in wanted_assets and market.horizon_minutes in wanted_horizons:
-                found[market.condition_id] = market
+        rows.extend(row for row in payload if isinstance(row, dict))
         if len(payload) < limit:
             break
+    return rows
+
+
+def discover_markets(
+    http: httpx.Client,
+    *,
+    assets: Iterable[str] = FIRST_TIER_ASSETS,
+    horizons: Iterable[int] = (5, 15),
+) -> list[PolyBinaryMarket]:
+    """Discover rolling short-crypto markets via Gamma search, then broad fallback.
+
+    Polymarket creates many rolling windows. Paging a few thousand arbitrary
+    active markets can therefore miss the current crypto windows entirely.
+    Public search is the primary discovery path; the broad market listing is
+    retained only as a fallback.
+    """
+    wanted_assets = {a.upper() for a in assets}
+    wanted_horizons = {int(x) for x in horizons}
+    found: dict[str, PolyBinaryMarket] = {}
+    now_ms = int(time.time() * 1000)
+    max_future_ms = now_ms + 45 * 60 * 1000
+
+    candidate_rows: list[dict[str, Any]] = []
+    for asset in sorted(wanted_assets):
+        if asset not in ASSET_SEARCH_NAMES:
+            continue
+        for horizon in sorted(wanted_horizons):
+            candidate_rows.extend(_search_rows(http, asset=asset, horizon=horizon))
+
+    if not candidate_rows:
+        candidate_rows.extend(_fallback_market_rows(http))
+
+    for row in candidate_rows:
+        market = parse_market(row)
+        if market is None:
+            continue
+        if market.asset not in wanted_assets or market.horizon_minutes not in wanted_horizons:
+            continue
+        if market.end_ts_ms is not None:
+            if market.end_ts_ms < now_ms - 30_000:
+                continue
+            if market.end_ts_ms > max_future_ms:
+                continue
+        found[market.condition_id] = market
 
     return sorted(found.values(), key=lambda m: (m.asset, m.horizon_minutes, m.end_ts_ms or 0))
 
@@ -280,6 +382,7 @@ def run(
     *,
     poll_seconds: float,
     discovery_seconds: float,
+    summary_seconds: float,
     min_net_edge: float,
     first_leg_max_price: float,
     once: bool,
@@ -289,6 +392,7 @@ def run(
         first_leg_max_price=first_leg_max_price,
     )
     next_discovery = 0.0
+    next_summary = 0.0
 
     with httpx.Client(timeout=10.0, headers={"User-Agent": "arb-temporal-shadow/1.0"}) as http:
         while True:
@@ -298,6 +402,14 @@ def run(
                     markets = discover_markets(http, horizons=shadow.horizons)
                     for event in shadow.sync_markets(markets):
                         _emit(event)
+                    _emit({
+                        "type": "POLY_TEMPORAL_DISCOVERY_SUMMARY",
+                        "found": len(markets),
+                        "streams": sorted({m.stream.name for m in markets}),
+                        "shadow_only": True,
+                        "order_entry": False,
+                        "realized_pnl": 0.0,
+                    })
                     next_discovery = now + discovery_seconds
                 except Exception as exc:
                     _emit({
@@ -306,6 +418,7 @@ def run(
                         "message": str(exc)[:300],
                         "shadow_only": True,
                     })
+                    next_discovery = now + min(5.0, discovery_seconds)
 
             timestamp_ms = int(time.time() * 1000)
             for market in list(shadow.markets.values()):
@@ -336,7 +449,9 @@ def run(
                         "shadow_only": True,
                     })
 
-            _emit(shadow.summary())
+            if now >= next_summary:
+                _emit(shadow.summary())
+                next_summary = now + summary_seconds
             if once:
                 return
             time.sleep(max(0.05, poll_seconds))
@@ -346,6 +461,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Read-only Polymarket temporal crypto shadow")
     parser.add_argument("--poll-seconds", type=float, default=0.5)
     parser.add_argument("--discovery-seconds", type=float, default=20.0)
+    parser.add_argument("--summary-seconds", type=float, default=10.0)
     parser.add_argument("--min-net-edge", type=float, default=0.03)
     parser.add_argument("--first-leg-max-price", type=float, default=0.45)
     parser.add_argument("--once", action="store_true")
@@ -353,6 +469,7 @@ def main() -> None:
     run(
         poll_seconds=args.poll_seconds,
         discovery_seconds=args.discovery_seconds,
+        summary_seconds=args.summary_seconds,
         min_net_edge=args.min_net_edge,
         first_leg_max_price=args.first_leg_max_price,
         once=args.once,
