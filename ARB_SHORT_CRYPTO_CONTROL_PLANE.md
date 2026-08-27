@@ -1,6 +1,6 @@
 # ARB Short-Crypto Control Plane
 
-Status: **SHADOW / READ-ONLY / NO ORDER AUTHORITY**
+Status: **AWS SHADOW / READ-ONLY / NO ORDER AUTHORITY**
 
 Last established live state: 2026-08-27 ET.
 
@@ -19,9 +19,25 @@ The ARB program target remains at least $480/day REALIZED net profit, but this l
 - Keep Railway research in the separate project `arb-ev-wallet-shadow`.
 - Do **not** consume or alter `sports-arb-autonomous` services.
 - Do **not** modify the unrelated SOL executor.
-- Do **not** reuse the sports AWS maker host as the production crypto hot path. When AWS promotion begins, use a separately named crypto service/instance/process boundary with independent restart, logs, risk state, and credentials.
-- Railway is acceptable for discovery, public-wallet forensics, accounting, slow control-plane jobs, and early shadow collection.
-- AWS us-east-1 is the intended hot path for persistent WebSockets, queue/fill inference, cancel latency, fair-value feeds, and eventual canaries.
+- The AWS short-crypto stack now runs in a separately named worktree/container boundary from the sports AWS maker process.
+- Railway remains useful for discovery, public-wallet forensics, accounting, slow control-plane jobs, and comparison/fallback shadow collection.
+- AWS us-east-1 is now the primary hot-shadow path for persistent WebSockets, queue/fill inference, fair-value feeds, and eventual canaries.
+
+## AWS live checkpoint — 2026-08-27
+
+The short-crypto AWS hot shadow was started successfully from commit `aad72fabc2bc5e63754b017a5bb4b5bbc21d31ce` in `BOT_MODE=paper`.
+
+Running isolated containers:
+
+- `arb-short-poly-maker-ws` — Polymarket BTC/ETH/SOL/XRP x 5m/15m public CLOB WebSocket maker/reward shadow.
+- `arb-short-gemini-maker` — Gemini BTC/ETH/SOL/XRP x 5m/15m 100ms depth maker/reward shadow.
+- `arb-short-gemini-fair-value` — Gemini Kaiko settlement-index/strike/fair-value shadow for all 8 Gemini streams.
+- `arb-short-kalshi-temporal` — Kalshi BTC/ETH/SOL/XRP x 15m temporal control shadow.
+- `arb-short-kalshi-incentive` — Kalshi BTC/ETH/SOL/XRP x 15m incentive/top-book shadow.
+
+AWS worktree: `/opt/arb/aws-short-crypto-shadow`.
+
+All five containers are read-only. No live order authority is enabled. This checkpoint receives **$0 REALIZED P&L credit**.
 
 ## First-tier stream matrix
 
@@ -66,29 +82,9 @@ Working strategy model:
 
 Project: `arb-ev-wallet-shadow`.
 
-Persistent read-only services:
+Persistent read-only services include the public reference-wallet activity collector, settlement-aware temporal control, reward-aware Polymarket maker shadow, rolling reference-wallet economic ledger, Gemini maker shadow, Gemini fair-value shadow, Kalshi temporal shadow, and Kalshi incentive shadow.
 
-- `polymarket-wallet-shadow` — public reference-wallet activity/copyability collector.
-- `polymarket-temporal-shadow-run` — settlement-aware temporal control shadow.
-- `polymarket-maker-econ-shadow` — reward-aware two-sided Polymarket maker shadow.
-- `polymarket-l5-econ-ledger` — rolling public resolved trading + reward/rebate ledger.
-
-All active services are read-only and currently deploy successfully. No trading credentials or order mutation path is required for these shadows.
-
-### Polymarket maker-economics shadow
-
-Current design:
-
-- dynamically discovers the current BTC/ETH/SOL/XRP 5m/15m windows;
-- reads public liquidity-reward configuration;
-- samples only currently active markets;
-- parallelizes book reads;
-- records reward-eligible quote samples;
-- records conservative cross-through fill candidates only after a hypothetical quote has rested;
-- never labels a cross-through candidate as a confirmed fill;
-- never counts the displayed reward pool as our reward income.
-
-Initial runtime observation after optimization: roughly one second to sample all eight active Polymarket streams on Railway, which is sufficient for research but not the target execution architecture.
+Railway is no longer the preferred short-crypto hot path. It remains the control-plane/research/fallback comparison layer while AWS becomes the primary latency-sensitive shadow host.
 
 ## Venue economics and replication
 
@@ -112,22 +108,18 @@ Measure separately:
 Gemini is the highest-priority replication venue after Polymarket because the product shape closely matches the reference strategy:
 
 - BTC/ETH/SOL/XRP short-duration prediction contracts support 5m and 15m formats;
-- public real-time `bookTicker`, depth, trade, contract-status, and index-price WebSocket streams exist;
-- Gemini publishes a Maker Rebate Program for resting fills;
-- Gemini publishes a Liquidity Rewards Program for qualifying resting quotes;
-- Gemini's reward program explicitly values tight quotes, size, two-sided presence, and uptime;
-- the same resting order can potentially earn maker-rebate and liquidity-reward economics independently;
-- a separate taker-reward program may change the economics of selective aggressive inventory management while it remains active.
+- public real-time depth and index-price WebSocket streams exist;
+- Gemini publishes Maker Rebate and Liquidity Rewards programs;
+- the same resting order may contribute to maker-rebate and liquidity-reward economics independently;
+- a separate taker-reward program may alter selective aggressive inventory economics while active.
 
-A read-only `src/gemini_prediction_maker_shadow.py` adapter already exists on the branch. It is not live-authorized and should remain public-data-only until tested.
+The AWS stack now runs both the maker book shadow and a separate Kaiko settlement-index/strike fair-value process for all 8 Gemini streams.
 
 ### Kalshi
 
-Kalshi currently contributes four first-tier 15m streams: BTC/ETH/SOL/XRP.
+Kalshi contributes four first-tier 15m streams: BTC/ETH/SOL/XRP.
 
-The existing `src/kalshi_temporal_live_shadow.py` provides the first public-data temporal baseline with venue-specific q=1 fee handling and series/settlement-source checks.
-
-Replication should not stop at temporal pairing. Kalshi's regular-member Liquidity Incentive Program rewards resting orders based on size/proximity and relative liquidity contribution, and crypto 15m series are also listed in Kalshi's designated liquidity-provider program. Therefore Kalshi needs a separate reward-aware maker-economics shadow in addition to the temporal control.
+The AWS stack currently runs both the temporal control baseline and a separate incentive/top-book shadow. Authenticated WebSocket order-book deltas remain the next market-data upgrade when secure Kalshi credentials are deliberately added to the isolated crypto hot path.
 
 ## Correct target architecture
 
@@ -155,7 +147,7 @@ Each adapter owns:
 
 - discovery and lifecycle parsing;
 - exact settlement-source metadata;
-- public WebSocket market data;
+- public WebSocket market data where available;
 - fee/rebate/reward rules;
 - order semantics for eventual execution;
 - queue/fill/cancel telemetry;
@@ -242,7 +234,7 @@ Required before relying on a shadow:
 - correct fee and reward program mapping;
 - no order authority.
 
-### Gate 1 — Railway shadow
+### Gate 1 — Railway/control-plane shadow
 
 Required evidence:
 
@@ -253,15 +245,17 @@ Required evidence:
 
 ### Gate 2 — AWS hot shadow
 
-Move a venue adapter to AWS when REST/Railway latency materially limits inference.
+**Current lane state.**
 
 Requirements:
 
-- persistent WebSocket books;
+- persistent WebSocket books where available;
 - queue-aware simulator;
 - local state persistence/recovery;
 - latency and reconnect telemetry;
 - no live orders yet.
+
+The five-container AWS short-crypto stack is now running. Gate 2 is not considered complete until each process proves fresh live data and the unified per-stream scorecard is producing decision-grade economics.
 
 ### Gate 3 — q=1 canary
 
@@ -285,28 +279,26 @@ Scale one stream at a time based on actual realized economics and observed depth
 
 ### ChatGPT project
 
-Stay in the existing ARB project. Do not create another project; the control MD and lane boundaries provide the needed separation while preserving project history.
+Stay in the existing ARB project.
 
 ### Railway
 
-Stay in `arb-ev-wallet-shadow`. Do not create another Railway project right now. Add one service per independent shadow/ledger only when observability justifies it.
+Keep `arb-ev-wallet-shadow` as the research/control-plane/fallback environment. Do not use Railway quirks as the blocker for the hot path.
 
 ### AWS
 
-AWS is the correct production/hot-shadow direction, but it should be a **separate short-crypto deployment boundary**, not a modification of the sports-maker experiment. Gemini explicitly documents its public WebSocket service as AWS/us-east-1 optimized, making an in-region AWS deployment particularly attractive. Benchmark actual venue round-trip, market-data age, cancel time, and markout before choosing final placement.
+AWS is now the primary short-crypto hot-shadow environment. The deployment is intentionally isolated from the sports-maker AWS worktree and containers. Benchmark actual venue market-data age, reconnect quality, queue/fill inference, and markout here before any live-order promotion.
 
 ## Immediate build order
 
-1. Keep Polymarket maker-econ + wallet ledger collecting continuously.
-2. Deploy and validate the Gemini public WebSocket maker/reward shadow for all 8 Gemini streams.
-3. Deploy the existing Kalshi 15m temporal baseline for BTC/ETH/SOL/XRP.
-4. Build the Kalshi liquidity-incentive/maker-economics shadow.
-5. Replace Polymarket REST book sampling with persistent WebSocket/local-book state.
-6. Add settlement/reference-index streams and a common fair-value feature recorder.
-7. Add queue-aware fill simulation rather than simple cross-through counting.
-8. Produce a daily 20-stream scorecard ranked by total modeled economics and capacity.
-9. Move the top streams to a separate AWS short-crypto hot-shadow deployment.
-10. Consider q=1 live canaries only after the gates above pass.
+1. Verify all five AWS containers are not only running but emitting fresh live summaries.
+2. Add a shared 20-stream scorecard across the AWS outputs.
+3. Add queue-aware fill simulation to Polymarket/Gemini rather than simple cross-through counting.
+4. Add authenticated Kalshi WebSocket local books when secure credentials are available in the isolated crypto deployment.
+5. Add common fair-value feature recording across venue settlement/index truth plus faster lead feeds.
+6. Add cross-venue aggregate BTC/ETH/SOL/XRP directional-risk limits.
+7. Produce daily per-stream economics and capacity estimates.
+8. Consider q=1 live canaries only after the gates above pass.
 
 ## Highest-leverage improvements
 
@@ -315,14 +307,14 @@ AWS is the correct production/hot-shadow direction, but it should be a **separat
 3. **Queue-aware fills.** A crossed hypothetical price is not enough; track displayed size ahead, trade prints, cancellations, and time at level.
 4. **Reward denominator estimation.** Headline pools are misleading; estimate our share against competing qualifying liquidity.
 5. **Inventory-aware quoting.** Quote size and distance should depend on current residual inventory and fair-value confidence.
-6. **Asset/horizon separation.** The reference wallet's recent 5m trading economics were materially better than 15m; never assume one policy fits both.
+6. **Asset/horizon separation.** Never assume one policy fits all 20 streams.
 7. **Central crypto risk budget.** Independent venue workers may all become long the same asset direction simultaneously.
 8. **Actual economic attribution.** Trading P&L, rebates, liquidity rewards, taker rewards, and fees must remain separate through settlement.
 9. **Capital-efficiency ranking.** Rank by realized/model-supported dollars per dollar of capital and per unit of one-sided risk, not raw P&L alone.
-10. **AWS only where it earns its complexity.** Use Railway for control-plane/research and AWS for the latency-sensitive components after measuring the benefit.
+10. **AWS-first hot path, Railway control plane.** Keep the latency-sensitive strategy on AWS and the slower research/accounting jobs on Railway.
 
 ## Current decision
 
-The build direction is correct: **shared short-crypto maker/inventory core + independent Polymarket/Gemini/Kalshi workers + separate economic ledgers + AWS hot path after shadow validation**.
+The build direction is confirmed: **shared short-crypto maker/inventory core + independent Polymarket/Gemini/Kalshi workers + separate economic ledgers + AWS as the primary hot path**.
 
 The biggest improvement versus the first temporal-only design is that the system now treats **maker rebates and liquidity rewards as first-class economics** and treats **directional residual inventory as an explicit risk bucket rather than hiding it inside paired averages**.
