@@ -6,6 +6,9 @@ Maker/taker inference uses the Data API's documented `takerOnly` switch:
 `/trades?user=...&takerOnly=true` is compared as a multiset against
 `takerOnly=false`. Rows present only in the latter are inferred maker fills.
 Activity cashflows are read separately for MAKER_REBATE, REWARD and REDEEM.
+
+This module is intentionally runnable as a one-off audit before returning the
+persistent Railway service to the normal wallet collector.
 """
 from __future__ import annotations
 
