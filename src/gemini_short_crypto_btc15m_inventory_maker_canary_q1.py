@@ -50,8 +50,10 @@ def safe_inventory(yes_fill: D, no_fill: D) -> bool:
     return D("0") <= yes_fill <= ONE and D("0") <= no_fill <= ONE
 
 
-def inventory_status(yes_fill: D, no_fill: D) -> str:
+def inventory_status(yes_fill: D, no_fill: D, *, fill_signal_seen: bool = False) -> str:
     if yes_fill == 0 and no_fill == 0:
+        if fill_signal_seen:
+            return "FILL_SIGNAL_RECONCILIATION_PENDING"
         return "NO_FILL_RELEASED"
     if yes_fill == no_fill:
         return "MATCHED_INVENTORY_NOT_SETTLED"
@@ -231,7 +233,7 @@ async def run() -> None:
             started + MAX_WORK_SECONDS,
             started + max(1.0, event.seconds_to_expiry - STOP_BEFORE_EXPIRY_SECONDS),
         )
-        first_fill_emitted = False
+        fill_signals: dict[str, D] = {}
         while time.monotonic() < deadline:
             timeout = min(0.5, max(0.05, deadline - time.monotonic()))
             try:
@@ -245,15 +247,17 @@ async def run() -> None:
                 continue
             status = str(item.get("X") or "").upper()
             qty = D(str(item.get("Z") or "0"))
-            if status in {"PARTIALLY_FILLED", "FILLED"} and qty > 0 and not first_fill_emitted:
-                first_fill_emitted = True
-                emit(
-                    "FIRST_FILL_CONTINUE_WORKING",
-                    client_order_id=client_id,
-                    last_execution_quantity=str(qty),
-                    action="DO_NOT_FLATTEN_KEEP_OTHER_MAKER_RESTING",
-                    order_entry=True,
-                )
+            if status in {"PARTIALLY_FILLED", "FILLED"} and qty > 0:
+                first_for_campaign = not fill_signals
+                fill_signals[client_id] = max(fill_signals.get(client_id, D("0")), qty)
+                if first_for_campaign:
+                    emit(
+                        "FIRST_FILL_CONTINUE_WORKING",
+                        client_order_id=client_id,
+                        last_execution_quantity=str(qty),
+                        action="DO_NOT_FLATTEN_KEEP_OTHER_MAKER_RESTING",
+                        order_entry=True,
+                    )
 
         yes_row = await base._order_by_client(yes_id, event.symbol) or yes_row
         no_row = await base._order_by_client(no_id, event.symbol) or no_row
@@ -281,7 +285,7 @@ async def run() -> None:
             emit("HARD_HALT", status=status, yes_fill=str(yes_fill), no_fill=str(no_fill), order_entry=True)
             return
 
-        status = inventory_status(yes_fill, no_fill)
+        status = inventory_status(yes_fill, no_fill, fill_signal_seen=bool(fill_signals))
         if status == "NO_FILL_RELEASED":
             await budget.release(symbol=event.symbol, event_ticker=event.ticker, trade_id=trade_id, reason="INVENTORY_WINDOW_ZERO_FILL")
             reserved = False
@@ -304,6 +308,10 @@ async def run() -> None:
                 "normal_sell_exit_used": False,
                 "reference_replica_probe": True,
                 "horizon": "15m",
+                "websocket_fill_signal_seen": bool(fill_signals),
+                "websocket_fill_signals": {key: str(value) for key, value in fill_signals.items()},
+                "yes_client_order_id": yes_id,
+                "no_client_order_id": no_id,
             },
         )
         emit("COMPLETE", status=status, yes_fill=str(yes_fill), no_fill=str(no_fill), realized=False,
