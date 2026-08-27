@@ -6,6 +6,7 @@ best integer-quantity paired plans under $1 and $5 all-in modeled capital caps.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from decimal import Decimal
 import json
 import logging
@@ -18,12 +19,13 @@ from src import strict_mlb_prop_snapshot as base
 from src.strict_mlb_prop_snapshot_v2 import _fetch_poly_mlb_search
 from src import strict_mlb_prop_snapshot_v3 as v3
 from src.mlb_kalshi_book_guard import audit_kalshi_binary_book
+from src.mlb_kalshi_fee_guard import audit_current_series_fee
 
 logger = logging.getLogger("kalshi_arb.strict_mlb_prop_snapshot_v4")
 base._fetch_poly_mlb = _fetch_poly_mlb_search
 
 # Receive-time skew is not exchange quote age, but it is the strongest timing guard
-# available from these public REST book endpoints.  A wider gap can manufacture a
+# available from these public REST book endpoints. A wider gap can manufacture a
 # transient cross-venue lock when one venue moves between requests, so fail closed.
 MAX_BOOK_RECEIVE_SKEW_MS = 500
 
@@ -74,6 +76,38 @@ def best_capped_plan(
     return best
 
 
+def _quote_time_iso(*received_ms: int) -> str:
+    """Return an aware UTC quote observation timestamp from local receive evidence."""
+    latest_ms = max(received_ms)
+    return datetime.fromtimestamp(latest_ms / 1000, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _verified_series_fee(
+    *,
+    series: str,
+    series_meta: dict[str, Any] | None,
+    fee_changes_body: dict[str, Any] | None,
+    observed_at: str,
+) -> tuple[Decimal | None, dict[str, Any]]:
+    """Return a usable multiplier only when quote-time Series fee evidence verifies."""
+    audit = audit_current_series_fee(
+        series_ticker=series,
+        series_meta=series_meta,
+        fee_changes_body=fee_changes_body,
+        observed_at=observed_at,
+    )
+    if audit.get("verified") is not True:
+        return None, audit
+    raw = audit.get("fee_multiplier")
+    try:
+        multiplier = Decimal(str(raw))
+    except Exception:
+        return None, {**audit, "verified": False, "blockers": sorted(set([*audit.get("blockers", []), "FEE_MULTIPLIER_PARSE_FAILED"]))}
+    if not multiplier.is_finite() or multiplier < 0 or multiplier > Decimal("100"):
+        return None, {**audit, "verified": False, "blockers": sorted(set([*audit.get("blockers", []), "FEE_MULTIPLIER_INVALID_OR_MISSING"]))}
+    return multiplier, audit
+
+
 async def _fetch_optional_timed(
     http: httpx.AsyncClient,
     url: str,
@@ -105,6 +139,8 @@ def _empty(candidate: base.StrictCandidate, error: str | None) -> dict[str, Any]
         "quote_receive_skew_ms": None,
         "kalshi_book_integrity_verified": False,
         "kalshi_book_integrity_blocker": error,
+        "kalshi_fee_verified": False,
+        "kalshi_fee_blockers": [error] if error else [],
         "positive_conservative_plan": None,
         "probe_1usd": None,
         "probe_5usd": None,
@@ -123,10 +159,23 @@ async def run_once() -> dict[str, Any]:
         candidates = base.discover_strict_candidates(poly_markets, kalshi_events)
 
         series_meta: dict[str, dict[str, Any]] = {}
+        series_fee_changes: dict[str, dict[str, Any] | None] = {}
+        series_fee_fetch_errors: dict[str, str | None] = {}
         for series in sorted(set(base.FAMILY_SERIES.values())):
-            body, error = await v3._fetch_optional(http, f"{base.KALSHI}/series/{series}")
-            if body is not None and error is None:
-                series_meta[series] = dict(body.get("series") or {})
+            meta_result, changes_result = await asyncio.gather(
+                v3._fetch_optional(http, f"{base.KALSHI}/series/{series}"),
+                v3._fetch_optional(
+                    http,
+                    f"{base.KALSHI}/series/fee_changes",
+                    params={"series_ticker": series, "show_historical": "true"},
+                ),
+            )
+            meta_body, meta_error = meta_result
+            changes_body, changes_error = changes_result
+            if meta_body is not None and meta_error is None:
+                series_meta[series] = dict(meta_body.get("series") or {})
+            series_fee_changes[series] = changes_body if changes_error is None else None
+            series_fee_fetch_errors[series] = ";".join(x for x in (meta_error, changes_error) if x) or None
 
         slot = int(time.time() // v3.ROTATION_SECONDS)
         selected, batch_start = v3.select_batch(candidates, slot=slot)
@@ -170,17 +219,29 @@ async def run_once() -> dict[str, Any]:
             kbook = base.kalshi_top_book(kalshi_body) if kalshi_book_audit.get("verified") is True else None
             series = base.FAMILY_SERIES[candidate.family]
             meta = series_meta.get(series) or {}
-            fee_type = str(meta.get("fee_type") or "")
-            multiplier = base._d(meta.get("fee_multiplier"))
+            quote_observed_at = _quote_time_iso(poly_received_ms, kalshi_received_ms)
+            multiplier, fee_audit = _verified_series_fee(
+                series=series,
+                series_meta=meta,
+                fee_changes_body=series_fee_changes.get(series),
+                observed_at=quote_observed_at,
+            )
+            if series_fee_fetch_errors.get(series):
+                fee_audit = {
+                    **fee_audit,
+                    "verified": False,
+                    "blockers": sorted(set([*fee_audit.get("blockers", []), "FEE_SOURCE_FETCH_ERROR"])),
+                }
+                multiplier = None
+            fee_type = fee_audit.get("fee_type")
             plan = probe1 = probe5 = None
             if (
                 synchronized
                 and pbook is not None
                 and kbook is not None
                 and kalshi_book_audit.get("verified") is True
-                and fee_type in {"quadratic", "quadratic_with_maker_fees"}
+                and fee_audit.get("verified") is True
                 and multiplier is not None
-                and Decimal("0") <= multiplier <= Decimal("100")
             ):
                 plan = base.best_conservative_plan(pbook, kbook, kalshi_fee_multiplier=multiplier)
                 probe1 = best_capped_plan(
@@ -204,6 +265,12 @@ async def run_once() -> dict[str, Any]:
                 "settlement_equivalent_now": False,
                 "kalshi_fee_type": fee_type,
                 "kalshi_fee_multiplier": str(multiplier) if multiplier is not None else None,
+                "kalshi_fee_verified": fee_audit.get("verified") is True,
+                "kalshi_fee_blockers": list(fee_audit.get("blockers") or []),
+                "kalshi_fee_source": fee_audit.get("fee_source"),
+                "kalshi_fee_effective_change_id": fee_audit.get("effective_change_id"),
+                "kalshi_fee_next_change_scheduled_ts": fee_audit.get("next_change_scheduled_ts"),
+                "quote_observed_at": quote_observed_at,
                 "book_comparable": pbook is not None and kbook is not None,
                 "kalshi_book_integrity_verified": kalshi_book_audit.get("verified") is True,
                 "kalshi_book_integrity_blocker": kalshi_book_audit.get("blocker"),
@@ -246,6 +313,8 @@ async def run_once() -> dict[str, Any]:
         "kalshi_book_integrity_rejected_pairs": sum(
             bool(r.get("kalshi_book_integrity_verified") is False) for r in priced
         ),
+        "kalshi_fee_verified_pairs": sum(bool(r.get("kalshi_fee_verified") is True) for r in priced),
+        "kalshi_fee_rejected_pairs": sum(bool(r.get("kalshi_fee_verified") is False) for r in priced),
         "synchronized_book_pairs": sum(bool(r.get("synchronized_book_pair")) for r in priced),
         "receive_skew_rejected_pairs": sum(
             bool(r.get("book_comparable")) and not bool(r.get("synchronized_book_pair")) for r in priced
@@ -262,8 +331,9 @@ async def run_once() -> dict[str, Any]:
             "and independently audited settlement equivalence are satisfied."
         ),
         "probe_warning": (
-            "$1/$5 plans are capped paper-probe economics after modeled fees; malformed/crossed Kalshi books and "
-            "receive-time skew >500ms are rejected; no authentication/order-entry path exists."
+            "$1/$5 plans are capped paper-probe economics after modeled fees; malformed/crossed Kalshi books, "
+            "receive-time skew >500ms, and unverified quote-time Series fee evidence are rejected; no "
+            "authentication/order-entry path exists."
         ),
         "read_only": True,
         "order_entry": False,
