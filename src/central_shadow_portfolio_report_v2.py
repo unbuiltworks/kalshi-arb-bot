@@ -8,7 +8,8 @@ explicit: weather sleeves are promotable/annualizable only when the canonical we
 certification audit is independently replayed and clears, the selected-side schema
 independently clears, the portfolio ranking metrics are independently bound to the raw
 selected-side economics, execution probability is derived from explicit deduplicated
-canonical OPEN episode records, and no hard blocker remains.
+canonical OPEN episode records that are time-bound to the audited pre-quote empirical
+window, and no hard blocker remains.
 
 This module is read-only and cannot authorize order entry or live probes.
 """
@@ -19,7 +20,7 @@ from typing import Any, Iterable
 
 from src.central_shadow_portfolio_report import Sleeve, rank_sleeves as _rank_sleeves
 from src.weather_certification_dimensions_v3 import audit_weather_certification_dimensions_v3
-from src.weather_portfolio_metric_binding_guard_v4 import audit_weather_portfolio_metric_binding_v4
+from src.weather_portfolio_metric_binding_guard_v5 import audit_weather_portfolio_metric_binding_v5
 
 D = Decimal
 
@@ -59,19 +60,20 @@ def _replay_weather_audit(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
 
 
 def _replay_weather_portfolio_metrics(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-    """Bind ranking scalars to explicit canonical OPEN-episode weather evidence.
+    """Bind ranking scalars to explicit time-audited canonical OPEN evidence.
 
     Edge/depth are independently derived from the selected executable side. Execution
     probability must come from an explicit deduplicated population of unique OPEN
-    episodes across a complete OPEN/MOVE/CLOSE observation window. V4 additionally
-    requires every counted episode ID to reconcile to a canonical read-only OPEN record
-    for the exact market/side/quantity/price/min-edge cohort. Successful episodes must
-    match record-level execution-success evidence. Repeated resting/MOVE observations
-    and invented episode labels therefore cannot increase empirical probability used by
-    portfolio capacity reporting.
+    episodes across a complete OPEN/MOVE/CLOSE observation window. V5 requires every
+    counted episode ID to reconcile to a canonical read-only OPEN record for the exact
+    market/side/quantity/price/min-edge cohort and independently binds each record's
+    opening timestamp to the audited pre-quote empirical window. Successful episodes
+    must match record-level execution-success evidence. Repeated resting/MOVE samples,
+    invented episode labels, backfilled pre-window records, and post-quote records
+    therefore cannot increase empirical probability used by portfolio capacity reporting.
     """
     try:
-        audit = audit_weather_portfolio_metric_binding_v4(row)
+        audit = audit_weather_portfolio_metric_binding_v5(row)
     except Exception:
         return {}, False
     verified = (
@@ -80,6 +82,7 @@ def _replay_weather_portfolio_metrics(row: dict[str, Any]) -> tuple[dict[str, An
         and audit.get("weather_execution_episode_identity_verified") is True
         and audit.get("weather_execution_episode_set_reconciled") is True
         and audit.get("weather_execution_episode_records_verified") is True
+        and audit.get("weather_execution_episode_record_time_verified") is True
         and audit.get("read_only") is True
         and audit.get("order_entry") is False
         and audit.get("live_probe_ready") is False
@@ -118,6 +121,9 @@ def _guard_weather_row(row: dict[str, Any]) -> dict[str, Any]:
     guarded["weather_portfolio_metric_binding_verified"] = metric_verified
     guarded["weather_execution_episode_records_verified"] = (
         metric_audit.get("weather_execution_episode_records_verified") is True
+    )
+    guarded["weather_execution_episode_record_time_verified"] = (
+        metric_audit.get("weather_execution_episode_record_time_verified") is True
     )
     guarded["weather_hard_blocker_telemetry_verified"] = blocker_telemetry_valid
     guarded["weather_projection_verified"] = projection_verified
@@ -173,11 +179,13 @@ def rank_sleeves(rows: Iterable[dict[str, Any] | Sleeve]) -> dict[str, Any]:
     report["weather_projection_policy"] = (
         "Weather theoretical $/day and promotable score require an independent replay of "
         "the canonical v3 weather certification audit from raw evidence, the selected-side "
-        "schema, and the v4 portfolio metric-binding audit. Edge/depth are re-derived from "
+        "schema, and the v5 portfolio metric-binding audit. Edge/depth are re-derived from "
         "the selected executable side, and execution probability must reconcile to explicit "
-        "deduplicated canonical OPEN episode records in a complete OPEN/MOVE/CLOSE window; "
-        "successful episode IDs must agree with record-level success evidence. Repeated resting "
-        "snapshots, MOVE observations, or invented episode labels cannot unlock projection. A "
-        "structurally valid empty hard-blocker set is also mandatory."
+        "deduplicated canonical OPEN episode records in a complete OPEN/MOVE/CLOSE window. "
+        "Every counted OPEN record must be time-bound to that audited window and exist no "
+        "later than the quote being ranked; successful episode IDs must agree with record-level "
+        "success evidence. Repeated resting snapshots, MOVE observations, invented labels, "
+        "pre-window records, or post-quote lookahead cannot unlock projection. A structurally "
+        "valid empty hard-blocker set is also mandatory."
     )
     return report
