@@ -87,6 +87,38 @@ def test_recursive_nested_payload_is_inventoried_as_container_parser_drift():
     assert out["interpretation"] == "PARSER_OR_SCHEMA_DRIFT_CONFIRMED_IN_PAYLOAD"
 
 
+def test_nested_data_events_markets_is_not_misclassified_as_strict_search_container():
+    payload = {
+        "data": {
+            "events": [
+                {
+                    "id": "evt-1",
+                    "title": "NYY vs BOS",
+                    "markets": [
+                        {
+                            "id": "m-1",
+                            "slug": "astatc-mlb-nyy-bos-2026-08-27-k-gercole-gte6",
+                            "sportsMarketType": "baseball_player_strikeouts",
+                            "question": "Will Gerrit Cole record at least 6 pitching strikeouts in NYY vs BOS?",
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    out = audit_payload(payload, query="Gerrit Cole")
+    assert out["prop_like_rows"] == 1
+    assert out["prop_like_rows_in_event_markets"] == 0
+    assert out["prop_like_rows_outside_event_markets"] == 1
+    assert out["strict_parser_compatible_prop_rows"] == 0
+    assert out["parser_drift_prop_rows"] == 1
+    assert out["parser_drift_reason_counts"] == {"OUTSIDE_EVENT_MARKETS_CONTAINER": 1}
+    sample = out["prop_like_samples"][0]
+    assert sample["direct_event_market"] is False
+    assert sample["container_path"].startswith("data.events.")
+    assert sample["status"] == "PROP_LIKE_PARSER_DRIFT_DIAGNOSTIC_ONLY"
+
+
 def test_known_sports_market_type_and_slug_are_strict_discovery_compatible():
     payload = {
         "events": [
