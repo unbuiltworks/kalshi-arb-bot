@@ -66,25 +66,53 @@ Fix on `feature/gemini-short-crypto-live-q1`:
 - Regression test uses the same long canary-ID shape that caused the collision.
 - Exact fractional-fill flatten logic remains in place.
 
-Current feature branch checkpoint after reconciliation: `282522639047b3d41b2f37cb29758b4fe7e39e65`.
+Current fixed feature checkpoint: `282522639047b3d41b2f37cb29758b4fe7e39e65`.
 
 The old AWS live launcher `deploy/aws/run_gemini_short_crypto_btc5m_live_q1_local_once.sh` is intentionally hard-disabled and must not be reused.
 
-## Canary #2 gate
+## Canary #2 preflight — PASSED
 
-Before a second live q=1 campaign:
-1. Build the exact fixed feature commit on AWS.
-2. Run quantity-grid, client-ID uniqueness, fractional-flatten, and local-ledger tests on that image.
-3. Run authenticated DISARMED BTC5m market preflight.
-4. Confirm zero existing Gemini short-crypto orders/positions and no local reservation.
-5. Confirm fresh modeled pair edge >= $0.03.
-6. Only then request fresh explicit user approval for exactly one live q=1 BTC5m canary.
-7. After live execution, reconcile each outcome independently by distinct client ID/order history; never infer paired fill from a single position record.
-8. Do not call anything realized until Gemini settlement is authoritative.
+Disarmed AWS preflight passed on fixed commit `282522639047b3d41b2f37cb29758b4fe7e39e65`.
+
+Observed preflight market: `GEMI-BTC05M2608271750-UP`.
+- Safety tests: 8 passed.
+- Gemini terms accepted: true.
+- Available USD: $62.4255.
+- q=1 supported: true (`quantityMinimum=0.01`, `quantityIncrement=0.01`).
+- YES bid / maker quote: $0.27.
+- NO maker quote: $0.48.
+- Modeled pair cost: $0.75.
+- Conservative modeled pair edge: $0.23.
+- >=$0.03 live floor: passed.
+- Active short-crypto orders: 0.
+- Active short-crypto positions: 0.
+- AWS-local open reservation: false.
+- Order entry: false; mutation: false.
+
+This snapshot is stale immediately after observation and must never be reused as a live price. The live runner must fetch a fresh book and pass the >=$0.03 floor again.
+
+## Canary #2 live gate
+
+A new one-shot launcher exists at `deploy/aws/run_gemini_short_crypto_btc5m_canary2_live_once.sh` on `aws-migration-foundation`.
+
+Safety behavior:
+1. Pins the exact fixed feature commit `282522639047b3d41b2f37cb29758b4fe7e39e65`.
+2. Rebuilds and reruns quantity-grid, client-ID uniqueness, fractional-flatten, and local-ledger tests on the exact live image.
+3. Runs another authenticated DISARMED BTC5m market preflight.
+4. Calls the clean-account gate and fails closed on any existing short-crypto order, position, or local reservation.
+5. Generates the actual canary ID and proves the exact YES/NO client IDs are distinct and <=36 chars before arming.
+6. Rechecks a fresh modeled pair edge >=$0.03 again inside the live process before ledger reservation/order entry.
+7. Uses AWS-local fsynced reservation before the order-entry session connects.
+8. Runs exactly one q=1 BTC5m campaign and has no restart loop.
+9. Any one-sided or fractional fill is risk, not arb; exact observed inventory is flattened via IOC and retained for reconciliation if flatten is incomplete.
+10. After execution, each outcome must be reconciled independently from authoritative Gemini order history/settlement before any profit classification.
+
+Fresh explicit user approval is required before this launcher is run.
 
 ## Profit accounting
 
 As of this checkpoint for this workstream:
 - Realized live-probe venue P&L from canary #1: +$0.64.
 - Realized paired-arbitrage P&L: $0.
+- Canary #2: not yet executed.
 - Reference-wallet / backtest / shadow economics are separate and are not user realized profit.
