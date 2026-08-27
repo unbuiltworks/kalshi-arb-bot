@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-27 06:44 UTC / 2026-08-27 02:44 ET**
+Last verified: **2026-08-27 07:33 UTC / 2026-08-27 03:33 ET**
 
 This is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
@@ -18,11 +18,11 @@ The 72-hour wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and ends **20
 
 ## Fresh production state
 
-- `sports-kp-live-executor`: latest Railway deployment remains **SUCCESS/read-only census**. Fresh 1-hour metrics at ~06:44 UTC show 61/61 active samples, average CPU ~0.070 with continuous RX/TX traffic, so the process is alive. The latest valid decision sample remains frozen at 53,237 comparable evaluations / 1,661 observations; trigger-only intervals are unmeasurable and receive $0 capacity credit rather than being counted as fresh zero-edge evidence.
-- `sports-generic-counterpart-shadow`: **SUCCESS/read-only maker + delayed-hedge markout shadow**. Fresh 1-hour metrics show 61/61 active samples, average CPU ~0.025 with continuous network traffic. Last verified runtime produced 1,178 simulated q1 fills; delayed executable coverage remained only 134 fills and realistic P&L did not improve.
-- `sports-gk-autonomous-supervisor`: **SUCCESS/read-only/disarmed hot shadow**. A single 60-second metrics read briefly showed current CPU/network at zero, but an immediate 30-second recheck showed current CPU ~0.656 with active RX/TX and 121/121 samples over the hour. This was a transient sampling artifact, not a confirmed process exit. The comparable sample remains frozen at 120,836 and Gemini connectivity remains the governing measurement blocker from the last detailed runtime checkpoint.
+- `sports-kp-live-executor`: latest Railway deployment remains **SUCCESS/read-only census**. Fresh 1-hour metrics at ~07:33 UTC show 61/61 active samples, average CPU ~0.068 with continuous RX/TX traffic, so the process is alive. The latest valid decision sample remains frozen at 53,237 comparable evaluations / 1,661 observations; trigger-only intervals are unmeasurable and receive $0 capacity credit rather than being counted as fresh zero-edge evidence.
+- `sports-generic-counterpart-shadow`: latest deployment remains **SUCCESS/read-only maker + delayed-hedge markout shadow**, configured with `restartPolicy=ALWAYS`. Fresh 1-hour metrics show prior activity (average CPU ~0.019 with RX/TX), but current CPU/RX/TX are all zero. Railway's detailed log agent is usage-limited, so this cannot yet be distinguished between overnight no-slate idle behavior and a successful process exit. This interval receives **no new maker-capacity credit** and no newer markout counts are invented.
+- `sports-gk-autonomous-supervisor`: **SUCCESS/read-only/disarmed hot shadow**. Fresh 1-hour metrics show 61/61 active samples, average CPU ~0.619 with continuous RX/TX traffic; the process is clearly alive. The comparable sample remains frozen at 120,836 and Gemini connectivity remains the governing measurement blocker from the last detailed runtime checkpoint.
 - `crypto-15m-sol-live-canary-10bp-50ms`: remains **CRASHED/contained**. Do not reopen as guaranteed arb while Gemini/Kalshi settlement-index equivalence remains unproven.
-- Railway's detailed runtime/log agent is currently usage-limited, so no newer decision-census/maker summary is being invented from process metrics alone.
+- Railway's detailed runtime/log agent remains usage-limited, so no newer decision-census/maker summary is being invented from process metrics alone.
 
 ## Decision-grade K<->P evidence
 
@@ -78,7 +78,7 @@ No K<->P player-prop family currently has complete settlement/postponement/cance
 
 ## G<->K sports
 
-Guaranteed-arb execution remains **disarmed/read-only**. The last detailed runtime checkpoint showed the comparable sample frozen at **120,836**, with Gemini connectivity degraded while Kalshi remained initialized. Fresh metrics at ~06:44 UTC confirm the process itself is active; the earlier single zero-current sample was transient. This interval remains operationally unmeasurable and receives **$0 guaranteed capacity**, not a synthetic zero-edge count. Historical >=3c hot observations remain uncertified. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
+Guaranteed-arb execution remains **disarmed/read-only**. The last detailed runtime checkpoint showed the comparable sample frozen at **120,836**, with Gemini connectivity degraded while Kalshi remained initialized. Fresh metrics at ~07:33 UTC confirm the process itself is strongly active. This interval remains operationally unmeasurable and receives **$0 guaranteed capacity**, not a synthetic zero-edge count. Historical >=3c hot observations remain uncertified. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
 
 ## Kalshi account / 429 diagnosis
 
@@ -86,7 +86,7 @@ Authenticated account limits remain **advanced tier, 900 bucket / 300 refill** f
 
 ## Authoritative accounting
 
-Fresh direct Neon queries at ~06:44 UTC confirm:
+Fresh direct Neon queries at ~07:33 UTC confirm:
 
 - **2026-08-27 ET: no ledger events yet; 0 `TRADE_REALIZED` / $0.0000 net**;
 - weather remains **0 verified weather-tagged `TRADE_REALIZED` / $0.0000 since 2026-03-01**;
@@ -107,13 +107,13 @@ Guaranteed/deployable evidence remains strongly negative at the fixed 3c floor:
 - G<->K guaranteed execution: disarmed/feed-degraded => **$0**;
 - weather verified realized since March: **$0**.
 
-This run adds no evidence of scalable deployable edge. The cross-venue collectors remain alive, but the valid economic samples have not improved. Current evidence therefore continues to track toward the pre-committed **<$50/day** bucket.
+This run adds no evidence of scalable deployable edge. The cross-venue K<->P and G<->K collectors remain alive, while the maker-markout shadow's current idle/exited state is unverified and receives no new capacity credit. Current evidence therefore continues to track toward the pre-committed **<$50/day** bucket.
 
 ## Highest-value next actions
 
 1. Keep the fixed census clock running through **2026-08-28 20:43 UTC / 16:43 ET** with no reset.
 2. Keep K<->P taker census alive; stale/unmeasurable intervals score $0 and are not mislabeled as fresh zero-edge samples.
-3. Preserve the delayed maker markout only as decision evidence. Do not create a new engineering lane solely to rescue its observability; unobservable fills remain $0 capacity.
+3. Do not restart or redeploy the maker-markout shadow solely to improve telemetry while the log reader is quota-blocked and the overnight MLB slate is inactive; missing evidence receives $0 capacity.
 4. Keep G<->K guaranteed execution disarmed while Gemini connectivity and rule lifecycle certification remain incomplete; Caleb's loss remains realized.
 5. Do not manufacture same-venue ladder violations or force uncertified player props.
 6. Preserve Kalshi account headroom/backoff; do not disrupt unrelated live services solely for census telemetry.
