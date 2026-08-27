@@ -41,6 +41,12 @@ def test_v2_choose_balances_horizons():
     assert s._choose(ready, {"5m": 0, "15m": 0}, "15m")["horizon"] == "5m"
 
 
-def test_only_settlement_pending_is_retryable():
+def test_settlement_and_exact_history_lag_are_retryable():
     assert s.settlement_pending(RuntimeError("Gemini settlement not posted yet for inventory canary"))
+    assert s.settlement_pending(RuntimeError("missing exact canary order history expected=2 found=1"))
+    assert s.settlement_pending(RuntimeError("open reservation has zero authoritative fills; manual review required"))
     assert not s.settlement_pending(RuntimeError("client-id/outcome mismatch"))
+
+
+def test_fill_signal_pending_is_a_valid_open_status():
+    assert "FILL_SIGNAL_RECONCILIATION_PENDING" in s.VALID_OPEN_STATUSES
