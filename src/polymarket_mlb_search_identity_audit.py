@@ -32,13 +32,24 @@ START_TIME_TOLERANCE = timedelta(minutes=5)
 
 
 def _parse_utc(value: Any) -> datetime | None:
+    """Parse only timezone-aware timestamps and normalize them to UTC.
+
+    MLB event identity is time-sensitive.  A timezone-naive ISO timestamp is ambiguous
+    and Python's ``astimezone`` would otherwise interpret it using the runtime's local
+    timezone, which can silently turn malformed Search telemetry into a seemingly exact
+    scheduled-time match.  Diagnostic identity therefore fails closed unless the source
+    timestamp carries an explicit UTC marker or numeric offset.
+    """
     text = str(value or "").strip()
     if not text:
         return None
     try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(timezone.utc)
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(timezone.utc)
 
 
 def _nearby(event: dict[str, Any], now: datetime) -> bool:
@@ -72,12 +83,15 @@ def audit_search_identity(
 
     if not expected:
         status = "MISSING_EXPECTED_EVENT_SLUG"
+    elif expected_event_start_time not in (None, "") and expected_start is None:
+        status = "EXPECTED_EVENT_START_TIME_INVALID_OR_NAIVE"
+        start_time_verified = False
     elif len(exact) == 1:
         exact_event = exact[0]
         search_start = _parse_utc(exact_event.get("startTime"))
         if expected_start is not None:
             if search_start is None:
-                status = "EXACT_EVENT_START_TIME_MISSING"
+                status = "EXACT_EVENT_START_TIME_MISSING_OR_INVALID"
             else:
                 start_time_delta_seconds = abs((search_start - expected_start).total_seconds())
                 start_time_verified = start_time_delta_seconds <= START_TIME_TOLERANCE.total_seconds()
