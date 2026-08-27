@@ -9,6 +9,7 @@ import asyncio
 import json
 
 from src.gemini_short_crypto_btc5m_maker_canary_q1 import discover_btc5m, fresh_top, pair_model, ONE, TARGET
+from src.gemini_short_crypto_quantity import quantity_supported
 
 
 async def run() -> None:
@@ -27,7 +28,11 @@ async def run() -> None:
 
     bid, bid_size, ask, ask_size = await fresh_top(event.symbol)
     model = pair_model(bid, ask)
-    q1_supported = event.quantity_minimum == ONE and event.quantity_increment == ONE
+    q1_supported = quantity_supported(
+        quantity=ONE,
+        minimum=event.quantity_minimum,
+        increment=event.quantity_increment,
+    )
     print(json.dumps({
         "type": "GEMINI_BTC5M_PUBLIC_PREFLIGHT",
         "market": event.ticker,
