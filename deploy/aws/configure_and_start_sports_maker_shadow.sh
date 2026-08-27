@@ -90,7 +90,7 @@ def normalize_pem(value: str) -> str:
 
     # If the entire PEM was flattened onto one line with spaces, rebuild the body.
     match = re.search(
-        r"-----BEGIN ([A-Z0-9 ]+?)-----(.*?)-----END \\1-----",
+        r"-----BEGIN ([A-Z0-9 ]+?)-----(.*?)-----END \1-----",
         value,
         flags=re.DOTALL,
     )
