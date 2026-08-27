@@ -47,6 +47,7 @@ IDLE_POLL_S = 3.0
 VALID_OPEN_STATUSES = {
     "MATCHED_INVENTORY_NOT_SETTLED",
     "ONE_SIDED_OR_IMBALANCED_INVENTORY_NOT_SETTLED",
+    "FILL_SIGNAL_RECONCILIATION_PENDING",
 }
 
 
@@ -81,7 +82,15 @@ def loss_cap_hit(pnl: D) -> bool:
 
 
 def settlement_pending(exc: BaseException) -> bool:
-    return "settlement not posted yet" in str(exc).lower()
+    message = str(exc).lower()
+    return any(
+        marker in message
+        for marker in (
+            "settlement not posted yet",
+            "missing exact canary order history",
+            "open reservation has zero authoritative fills",
+        )
+    )
 
 
 async def _wait_for_settlement() -> dict[str, Any]:

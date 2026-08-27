@@ -1,12 +1,20 @@
 from decimal import Decimal
 
 from src import gemini_short_crypto_btc5m_inventory_maker_canary_q1 as inv
+from src import gemini_short_crypto_btc15m_inventory_maker_canary_q1 as inv15
 
 D = Decimal
 
 
 def test_inventory_status_zero_releases():
     assert inv.inventory_status(D("0"), D("0")) == "NO_FILL_RELEASED"
+    assert inv15.inventory_status(D("0"), D("0")) == "NO_FILL_RELEASED"
+
+
+def test_fill_signal_with_lagging_rest_retains_reservation():
+    expected = "FILL_SIGNAL_RECONCILIATION_PENDING"
+    assert inv.inventory_status(D("0"), D("0"), fill_signal_seen=True) == expected
+    assert inv15.inventory_status(D("0"), D("0"), fill_signal_seen=True) == expected
 
 
 def test_inventory_status_matched_waits_for_settlement():
