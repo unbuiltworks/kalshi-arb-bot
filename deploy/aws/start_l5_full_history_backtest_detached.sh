@@ -39,7 +39,7 @@ docker run -d \
   -e PYTHONUNBUFFERED=1 \
   -v "$OUTPUT_DIR:/out" \
   "$IMAGE" \
-  sh -lc "python -u -m src.polymarket_l5_full_history_backtest --start '$START' --end now --output /out/l5_full_history_backtest.json 2>&1 | tee /out/l5_full_history_summary.log"
+  bash -lc "set -o pipefail; python -u -m src.polymarket_l5_full_history_backtest --start '$START' --end now --output /out/l5_full_history_backtest.json 2>&1 | tee /out/l5_full_history_summary.log"
 
 sleep 2
 if docker ps --filter "name=^/${CONTAINER}$" --format '{{.Names}}' | grep -qx "$CONTAINER"; then
@@ -48,13 +48,18 @@ if docker ps --filter "name=^/${CONTAINER}$" --format '{{.Names}}' | grep -qx "$
   exit 0
 fi
 
-# It may have completed very quickly; distinguish success from failure.
-if [ -s "$OUT_JSON" ]; then
+STATUS="$(docker inspect -f '{{.State.ExitCode}}' "$CONTAINER" 2>/dev/null || echo unknown)"
+if [ "$STATUS" = "0" ] && [ -s "$OUT_JSON" ]; then
   echo "L5_FULL_HISTORY_COMPLETE commit=$COMMIT"
   echo "detail_json=$OUT_JSON"
   exit 0
 fi
 
-echo "L5_BACKTEST_FAILED_TO_STAY_RUNNING" >&2
-docker logs --tail 100 "$CONTAINER" >&2 || true
+echo "L5_BACKTEST_FAILED exit_code=$STATUS" >&2
+if [ -s "$OUT_LOG" ]; then
+  echo "=== SUMMARY LOG ===" >&2
+  tail -n 100 "$OUT_LOG" >&2 || true
+else
+  docker logs --tail 100 "$CONTAINER" >&2 || true
+fi
 exit 1
