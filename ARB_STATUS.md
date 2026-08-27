@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-27 04:50 UTC / 2026-08-27 00:50 ET**
+Last verified: **2026-08-27 05:38 UTC / 2026-08-27 01:38 ET**
 
 This is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
@@ -18,9 +18,9 @@ The 72-hour wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and ends **20
 
 ## Fresh production state
 
-- `sports-kp-live-executor`: latest successful Railway deployment remains **SUCCESS/read-only census**. Later commits are intentionally SKIPPED for this service because the delayed-maker work is routed through the generic shadow. Last decision-grade taker sample remains valid but frozen; trigger-only intervals are unmeasurable and receive $0 capacity credit.
-- `sports-generic-counterpart-shadow`: **SUCCESS/read-only maker + delayed-hedge markout shadow** on commit `044204d3…`. Fresh runtime at ~04:49 UTC is producing new maker/fill/markout summaries; no order authority.
-- `sports-gk-autonomous-supervisor`: **SUCCESS/read-only/disarmed hot shadow**, but fresh runtime shows a broad Gemini reconnect storm across one-symbol shards and Railway log-rate drops. This interval is unmeasurable and receives $0 guaranteed-capacity credit.
+- `sports-kp-live-executor`: latest effective Railway runtime remains **SUCCESS/read-only census**. At ~05:38 UTC raw triggers had advanced to ~67.7M while `comparable_evaluations` remained frozen at 53,237. This trigger-only interval is unmeasurable and receives $0 capacity credit rather than being counted as fresh zero-edge evidence.
+- `sports-generic-counterpart-shadow`: **SUCCESS/read-only maker + delayed-hedge markout shadow**. Fresh runtime at ~05:37 UTC produced 1,178 simulated q1 fills; delayed executable coverage remained only 134 fills and realistic P&L did not improve.
+- `sports-gk-autonomous-supervisor`: **SUCCESS/read-only/disarmed hot shadow**. At ~05:38 UTC raw triggers had advanced to ~61.4M while comparable evaluations remained frozen at 120,836; Gemini still showed 570 symbols but 0 connected versus Kalshi 570/570 initialized. This interval is unmeasurable and receives $0 guaranteed-capacity credit.
 - `crypto-15m-sol-live-canary-10bp-50ms`: remains **CRASHED/contained**. Do not reopen as guaranteed arb while Gemini/Kalshi settlement-index equivalence remains unproven.
 
 ## Decision-grade K<->P evidence
@@ -38,40 +38,40 @@ Last valid decision-grade summary remains:
 - average closed positive-signal lifetime ~174 ms, max 567 ms;
 - Kalshi transport remains explicitly labeled **REST_SNAPSHOT_NOT_WS_LIFETIME**.
 
-Later raw-trigger-only intervals remain **unmeasurable**, not additional zero-edge observations, and receive $0 capacity credit without resetting the wall clock. The valid certified totals slice still supports **$0/day deployable capacity at the fixed 3c taker/taker floor**.
+By ~05:38 UTC raw triggers had exceeded **67.7M** with no increase in comparable evaluations or decision observations. That interval remains **unmeasurable**, not additional zero-edge evidence, and receives $0 capacity credit without resetting the wall clock. The valid certified totals slice still supports **$0/day deployable capacity at the fixed 3c taker/taker floor**.
 
 ### Clean MLB full-game taker/taker
 
 After fixing start-time normalization and excluding F5/partial-game contamination, clean full-game moneyline/spread/total evidence remains **0 >=1c / 0 >=2c / 0 >=3c** in the last certified snapshots. Displayed depth is substantial; edge magnitude, not liquidity, remains the limiting factor.
 
-### Maker/fill shadow — much larger fill sample, delayed hedge evidence still fails the 3c capacity requirement
+### Maker/fill shadow — larger fill sample, delayed hedge evidence still fails the 3c capacity requirement
 
-Fresh production summary at ~04:49 UTC:
+Fresh production summary at ~05:37 UTC:
 
-- **1,176** pessimistic simulated q1 maker fills;
-- **784** trade-through fills / **392** exact-price fills;
+- **1,178** pessimistic simulated q1 maker fills;
+- **786** trade-through fills / **392** exact-price fills;
 - **291** fills were >=3c immediately after the verified general maker-fee model;
-- immediate/q1-sweep maker shadow P&L was about **+$32.6533**;
+- immediate/q1-sweep maker shadow P&L was about **+$32.6697**;
 - **0** missing Polymarket hedge books at the instant of fill and **0** immediate q1 sweep unfillable;
-- median displayed quote age at fill ~**686 ms**;
+- median displayed quote age at fill ~**687 ms**;
 - `rules_complete=false`, `RULE_INCOMPLETE_NOT_EXECUTION_ELIGIBLE`, `read_only=true`, `order_entry=false`, `capacity_credit_usd_per_day=0`.
 
 The delayed full-ladder hedge evidence remains the governing measurement:
 
-- only **134 / 1,176** fills are currently executable/observable in the delayed tracker; **1,042** are `ws_unhealthy` and receive no executable capacity credit;
+- only **134 / 1,178** fills are currently executable/observable in the delayed tracker; **1,044** are `ws_unhealthy` and receive no executable capacity credit;
 - at **80 ms**: **+$0.0408 total**, about **+$0.00030 per executable fill**, **22 >=1c / 9 >=2c / 2 >=3c**;
 - at **250 ms**: **-$0.7158 total**, about **-$0.00534/fill**, **14 / 8 / 2**;
 - at **500 ms**: **-$1.1384 total**, about **-$0.00850/fill**, **11 / 5 / 2**;
 - `hedge_missing=0`, `full_ladder_missing=0`, and `depth_insufficient=0` on the observable cohort, so deterioration is adverse price movement/feed observability rather than missing q1 depth;
-- the conservative full-sample lower-bound accounting is deeply negative because unobservable fills are not assumed safely hedgeable.
+- the conservative full-sample lower-bound accounting remains deeply negative because unobservable fills are not assumed safely hedgeable.
 
-This is the strongest fresh result of the run: simulated maker fills increased from 707 to 1,176 and immediate >=3c fills increased to 291, but **the realistic 80 ms aggregate P&L did not improve beyond +$0.0408 because the observable delayed cohort is still only 134 fills, with only 2 retaining >=3c**. By 250/500 ms the observable cohort is negative.
+This is the strongest fresh result: the maker sample advanced by only two fills from the prior checkpoint, while **the delayed executable cohort remained exactly 134 and the 80/250/500 ms P&L remained unchanged**. Additional immediate shadow fills are therefore not translating into additional realistic-capture capacity.
 
-The underlying K<->P full-game moneyline mechanism also still fails exact postponement/reschedule lifecycle equivalence. Therefore maker shadow remains **$0 guaranteed/deployable capacity and $0 REALIZED P&L**. Do not use the +$32.6533 immediate shadow P&L or 291 immediate >=3c fills to rescue the census verdict.
+The underlying K<->P full-game moneyline mechanism also still fails exact postponement/reschedule lifecycle equivalence. Therefore maker shadow remains **$0 guaranteed/deployable capacity and $0 REALIZED P&L**. Do not use the +$32.6697 immediate shadow P&L or 291 immediate >=3c fills to rescue the census verdict.
 
 ### Polymarket liquidity incentives
 
-Fresh runtime sees **28 active Polymarket MLB moneyline incentive programs/markets in the current snapshot**, but all sampled raw resting sizes already exceed target thresholds and the program-wide denominator/time-weighted yield/pickoff accounting remains incomplete. Production explicitly reports `capacity_credit_usd_per_day=0`. Do not use headline reward-pool dollars as deployable or realized P&L.
+Fresh runtime sees **28 active Polymarket MLB moneyline incentive programs/markets** in the current snapshot. Some sampled sides are below raw target size, but the program-wide denominator/time-weighted yield/pickoff accounting remains incomplete and production explicitly reports `capacity_credit_usd_per_day=0`. Do not use headline reward-pool dollars as deployable or realized P&L.
 
 ### Strict MLB player props
 
@@ -79,7 +79,7 @@ No K<->P player-prop family currently has complete settlement/postponement/cance
 
 ## G<->K sports
 
-Guaranteed-arb execution remains **disarmed/read-only**. Fresh runtime at ~04:49 UTC shows a broad Gemini reconnect storm across many one-symbol shards, severe enough for Railway to drop hundreds of log messages due to log rate. This interval is operationally unmeasurable and receives **$0 guaranteed capacity**, not a synthetic zero-edge count. Historical >=3c hot observations remain uncertified. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
+Guaranteed-arb execution remains **disarmed/read-only**. Fresh runtime at ~05:38 UTC shows ~**61.4M raw triggers** but still only **120,836 comparable evaluations**; historical state remains **6 >=3c hot evaluations / 4 complete signal lifecycles**. Gemini still reports **570 symbols / 0 connected**, while Kalshi remains **570/570 initialized**. This interval is operationally unmeasurable and receives **$0 guaranteed capacity**, not a synthetic zero-edge count. Historical >=3c hot observations remain uncertified. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
 
 ## Kalshi account / 429 diagnosis
 
@@ -87,9 +87,10 @@ Authenticated account limits remain **advanced tier, 900 bucket / 300 refill** f
 
 ## Authoritative accounting
 
-Fresh direct Neon query after ET midnight confirms:
+Fresh direct Neon query at ~05:38 UTC confirms:
 
 - **2026-08-27 ET: no ledger events yet; 0 `TRADE_REALIZED` / $0.0000 net**;
+- latest ledger event remains **2026-08-25 01:52:17 UTC**;
 - weather remains **0 verified weather-tagged `TRADE_REALIZED` / $0.0000 since 2026-03-01**;
 - Caleb Durbin remains the prior **`SETTLED_ONE_LEG`, -$0.44 REALIZED** sports loss.
 
@@ -101,14 +102,14 @@ Guaranteed/deployable evidence remains strongly negative at the fixed 3c floor:
 
 - certified K<->P totals: **0 >=3c**;
 - clean full-game taker/taker: **0 >=3c**;
-- maker delayed hedge: only **2/134 observable marks >=3c at 80 ms**, aggregate about **+$0.0408** at 80 ms and negative at 250/500 ms, while **1,042/1,176 fills are currently unobservable** to the delayed tracker;
+- maker delayed hedge: only **2/134 observable marks >=3c at 80 ms**, aggregate about **+$0.0408** at 80 ms and negative at 250/500 ms, while **1,044/1,178 fills are currently unobservable** to the delayed tracker;
 - K<->P moneyline maker rules: lifecycle mismatch => **$0 guaranteed capacity** regardless of shadow fill count;
-- Polymarket incentives: incomplete denominator/time-weighting/pickoff and currently over target => **$0 capacity**;
+- Polymarket incentives: incomplete denominator/time-weighting/pickoff => **$0 capacity**;
 - strict props: uncertified => **$0**;
 - G<->K guaranteed execution: disarmed/feed-degraded => **$0**;
 - weather verified realized since March: **$0**.
 
-The larger maker sample proves that fills occur, but it does **not** establish scalable deployable edge. Immediate shadow P&L grew sharply while delayed realistic-capture economics stayed essentially flat at 80 ms and negative beyond it. Current evidence therefore continues to track toward the pre-committed **<$50/day** bucket.
+The fresh hour adds no evidence of scalable deployable edge: immediate maker fills rose slightly, but realistic delayed coverage/P&L did not improve; taker and G<->K comparable samples remain frozen. Current evidence therefore continues to track toward the pre-committed **<$50/day** bucket.
 
 ## Highest-value next actions
 
