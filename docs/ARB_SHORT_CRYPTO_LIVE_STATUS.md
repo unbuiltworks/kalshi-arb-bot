@@ -1,6 +1,6 @@
 # ARB Short-Crypto Live Status
 
-Last updated: 2026-08-27 13:41 ET
+Last updated: 2026-08-27 13:55 ET
 
 ## Scope
 
@@ -89,30 +89,42 @@ Observed preflight market: `GEMI-BTC05M2608271750-UP`.
 - AWS-local open reservation: false.
 - Order entry: false; mutation: false.
 
-This snapshot is stale immediately after observation and must never be reused as a live price. The live runner must fetch a fresh book and pass the >=$0.03 floor again.
+This snapshot was stale immediately after observation and was not reused as a live price.
 
-## Canary #2 live gate
+## Canary #2 live attempt — CLEAN NO-TRADE
 
-A new one-shot launcher exists at `deploy/aws/run_gemini_short_crypto_btc5m_canary2_live_once.sh` on `aws-migration-foundation`.
+User approved exactly one q=1 campaign. The one-shot launcher ran on fixed commit `282522639047b3d41b2f37cb29758b4fe7e39e65`.
 
-Safety behavior:
-1. Pins the exact fixed feature commit `282522639047b3d41b2f37cb29758b4fe7e39e65`.
-2. Rebuilds and reruns quantity-grid, client-ID uniqueness, fractional-flatten, and local-ledger tests on the exact live image.
-3. Runs another authenticated DISARMED BTC5m market preflight.
-4. Calls the clean-account gate and fails closed on any existing short-crypto order, position, or local reservation.
-5. Generates the actual canary ID and proves the exact YES/NO client IDs are distinct and <=36 chars before arming.
-6. Rechecks a fresh modeled pair edge >=$0.03 again inside the live process before ledger reservation/order entry.
-7. Uses AWS-local fsynced reservation before the order-entry session connects.
-8. Runs exactly one q=1 BTC5m campaign and has no restart loop.
-9. Any one-sided or fractional fill is risk, not arb; exact observed inventory is flattened via IOC and retained for reconciliation if flatten is incomplete.
-10. After execution, each outcome must be reconciled independently from authoritative Gemini order history/settlement before any profit classification.
+Fresh live market selected: `GEMI-BTC05M2608271800-UP`.
+- Available USD: $62.4255.
+- YES maker quote: $0.48.
+- NO maker quote: $0.50.
+- Pair cost before modeled fees: $0.98.
+- Conservative maker fees: $0.01 YES + $0.01 NO.
+- Modeled pair edge after fees: $0.00.
+- Required floor: >=$0.03.
+- Gate result: FAILED.
+- Process stopped with `PAIR_FLOOR_BELOW_3C`.
+- Order entry: false.
+- Venue mutation: false.
+- Active short-crypto orders after run: 0.
+- Active short-crypto positions after run: 0.
+- AWS-local open reservation after run: false.
+- Realized P&L for canary #2: $0.
 
-User explicitly approved exactly one live q=1 Gemini BTC5m canary #2 on AWS on 2026-08-27. Approval applies only to this one-shot campaign and does not authorize scaling or recurring live execution.
+Interpretation: the earlier +$0.23 modeled preflight edge did not persist into the next live market/window. This is useful negative evidence about opportunity persistence. Do not lower the 3c floor and do not count the stale preflight edge as executable opportunity.
+
+## Next gate
+
+Do not blindly rerun the live launcher. The next useful step is to observe fresh BTC5m maker-pair edge continuously/read-only and only prepare another one-shot live probe when a currently active market has >=$0.03 modeled edge with sufficient time-to-expiry. Any new live attempt requires fresh explicit user approval because canary #2's one-shot approval has been consumed.
+
+After any future execution, reconcile YES and NO independently from authoritative Gemini order history/settlement. Never infer paired fills from a single position record.
 
 ## Profit accounting
 
 As of this checkpoint for this workstream:
 - Realized live-probe venue P&L from canary #1: +$0.64.
 - Realized paired-arbitrage P&L: $0.
-- Canary #2: approved, not yet executed.
+- Canary #2 realized P&L: $0 (no trade).
+- Total realized live-probe venue P&L in this workstream: +$0.64.
 - Reference-wallet / backtest / shadow economics are separate and are not user realized profit.
