@@ -57,14 +57,23 @@ def _market_like(row: dict[str, Any]) -> bool:
 
 
 def _direct_event_market(path: tuple[str, ...]) -> bool:
-    """Return True only for rows reached as a direct child of an event ``markets`` list.
+    """Return True only for the exact Search container consumed by v2 discovery.
 
-    The strict MLB discovery path iterates ``event['markets']``. A prop-shaped object that
-    exists elsewhere in a search response is important supply evidence, but it is not
-    reachable by that strict parser without a container/schema adapter. Treat that as a
-    separate diagnostic blocker rather than silently calling the row parser-compatible.
+    ``strict_mlb_prop_snapshot_v2._search_one_game`` reads only ``body.get('events')``
+    and then ``event.get('markets')``.  A recursive diagnostic that merely finds a key
+    named ``markets`` somewhere else (for example ``data.events[].markets[]``) is useful
+    evidence that Polymarket published a prop-shaped object, but it is *not* reachable by
+    the strict scanner.  Treat only the exact top-level ``events[].markets[]`` path as
+    discovery-compatible so the audit cannot send us debugging identity when the real
+    problem is a response-container drift.
     """
-    return len(path) >= 2 and path[-2] == "markets" and path[-1].startswith("[")
+    return (
+        len(path) == 4
+        and path[0] == "events"
+        and path[1].startswith("[")
+        and path[2] == "markets"
+        and path[3].startswith("[")
+    )
 
 
 def _strict_parser_diagnostic(
@@ -72,9 +81,9 @@ def _strict_parser_diagnostic(
 ) -> tuple[bool, list[str]]:
     """Explain whether v2's strict discovery would retain this row.
 
-    This mirrors the discovery contract only: v2 iterates ``event['markets']`` and
-    requires a recognized ``sportsMarketType`` plus a slug. Full event/player/threshold/
-    participation/rules checks still happen later.
+    This mirrors the discovery contract only: v2 iterates top-level
+    ``body['events'][*]['markets']`` and requires a recognized ``sportsMarketType`` plus
+    a slug. Full event/player/threshold/participation/rules checks still happen later.
     """
     blockers: list[str] = []
     if not direct_event_market:
