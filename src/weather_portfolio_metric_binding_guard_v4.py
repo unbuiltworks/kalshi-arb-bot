@@ -12,9 +12,7 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from src.weather_portfolio_metric_binding_guard_v3 import (
-    audit_weather_portfolio_metric_binding_v3,
-)
+from src.weather_portfolio_metric_binding_guard_v3 import audit_weather_portfolio_metric_binding_v3
 
 D = Decimal
 
@@ -34,6 +32,14 @@ def _norm_side(value: Any) -> str:
     return str(value or "").strip().upper()
 
 
+def _selected_economics(row: dict[str, Any], side: str) -> dict[str, Any] | None:
+    records = row.get("side_economics")
+    if not isinstance(records, (list, tuple)):
+        return None
+    matches = [r for r in records if isinstance(r, dict) and _norm_side(r.get("side")) == side]
+    return matches[0] if len(matches) == 1 else None
+
+
 def audit_weather_portfolio_metric_binding_v4(row: dict[str, Any]) -> dict[str, Any]:
     """Require counted execution episodes to be explicit canonical OPEN records."""
     base = audit_weather_portfolio_metric_binding_v3(row)
@@ -45,11 +51,17 @@ def audit_weather_portfolio_metric_binding_v4(row: dict[str, Any]) -> dict[str, 
 
     expected_market = str(row.get("market_ticker") or "").strip().upper()
     expected_side = _norm_side(row.get("best_shadow_side"))
-    expected_qty = _d(row.get("selected_quantity") or row.get("quantity"))
-    expected_max_ask = _d(row.get("selected_ask_cents") or row.get("ask_cents"))
-    expected_min_edge = _d(
-        row.get("executable_probability_min_after_fee_edge_cents_per_contract")
+    selected = _selected_economics(row, expected_side)
+    expected_qty = _d(
+        row.get("executable_probability_quantity")
+        if row.get("executable_probability_quantity") is not None
+        else (selected or {}).get("quantity", 1)
     )
+    expected_max_ask_dollars = _d(row.get("executable_probability_max_ask_dollars"))
+    expected_max_ask_cents = (
+        expected_max_ask_dollars * D("100") if expected_max_ask_dollars is not None else None
+    )
+    expected_min_edge = _d(row.get("executable_probability_min_after_fee_edge_cents_per_contract"))
 
     parsed: dict[str, dict[str, Any]] = {}
     structurally_valid = isinstance(records, (list, tuple)) and bool(records)
@@ -91,8 +103,8 @@ def audit_weather_portfolio_metric_binding_v4(row: dict[str, Any]) -> dict[str, 
         and _norm_side(rec.get("side")) == expected_side
         and _d(rec.get("quantity")) == expected_qty
         and _d(rec.get("ask_cents")) is not None
-        and expected_max_ask is not None
-        and _d(rec.get("ask_cents")) <= expected_max_ask
+        and expected_max_ask_cents is not None
+        and _d(rec.get("ask_cents")) <= expected_max_ask_cents
         and _d(rec.get("modeled_after_fee_edge_cents_per_contract")) is not None
         and expected_min_edge is not None
         and _d(rec.get("modeled_after_fee_edge_cents_per_contract")) >= expected_min_edge
@@ -101,22 +113,15 @@ def audit_weather_portfolio_metric_binding_v4(row: dict[str, Any]) -> dict[str, 
     if not scope_verified:
         blockers.append(EPISODE_RECORD_SCOPE_MISMATCH)
 
+    success_set = set(success_ids or [])
     success_verified = scope_verified and all(
-        rec_id in set(success_ids or [])
+        (rec.get("execution_success") is True) == (rec_id in success_set)
         for rec_id, rec in parsed.items()
-        if rec.get("execution_success") is True
-    ) and all(
-        parsed[rec_id].get("execution_success") is True
-        for rec_id in (success_ids or [])
     )
     if not success_verified:
         blockers.append(EPISODE_RECORDS_UNVERIFIED)
 
-    verified = (
-        base.get("weather_portfolio_metric_binding_verified") is True
-        and scope_verified
-        and success_verified
-    )
+    verified = base.get("weather_portfolio_metric_binding_verified") is True and scope_verified and success_verified
 
     return {
         **base,
