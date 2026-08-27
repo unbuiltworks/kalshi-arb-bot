@@ -25,23 +25,29 @@ if [[ "$running" != "true" ]]; then
   exit 1
 fi
 
-docker logs "$CONTAINER" 2>&1 | python3 - <<'PY'
+LOG_FILE="$(mktemp)"
+trap 'rm -f "$LOG_FILE"' EXIT
+docker logs "$CONTAINER" >"$LOG_FILE" 2>&1
+
+python3 - "$LOG_FILE" <<'PY'
 import json
 import sys
 
+path = sys.argv[1]
 fill = None
 mark = None
-for line in sys.stdin:
-    if "KPMM_FILL_SHADOW_SUMMARY " in line:
-        try:
-            fill = json.loads(line.split("KPMM_FILL_SHADOW_SUMMARY ", 1)[1])
-        except Exception:
-            pass
-    elif "KPMM_DELAYED_MARKOUT_SUMMARY " in line:
-        try:
-            mark = json.loads(line.split("KPMM_DELAYED_MARKOUT_SUMMARY ", 1)[1])
-        except Exception:
-            pass
+with open(path, "r", encoding="utf-8", errors="replace") as fh:
+    for line in fh:
+        if "KPMM_FILL_SHADOW_SUMMARY " in line:
+            try:
+                fill = json.loads(line.split("KPMM_FILL_SHADOW_SUMMARY ", 1)[1])
+            except Exception:
+                pass
+        elif "KPMM_DELAYED_MARKOUT_SUMMARY " in line:
+            try:
+                mark = json.loads(line.split("KPMM_DELAYED_MARKOUT_SUMMARY ", 1)[1])
+            except Exception:
+                pass
 
 if fill is None:
     print("AWS_SHADOW_SCORE status=no_fill_summary_yet")
