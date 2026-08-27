@@ -7,6 +7,8 @@ on:
     paths:
       - 'src/strict_mlb_prop_live_diagnostic.py'
       - 'src/polymarket_mlb_shape_diagnostic.py'
+      - 'src/polymarket_us_mlb_prop_supply_audit.py'
+      - 'src/polymarket_mlb_search_identity_audit.py'
       - 'src/strict_mlb_prop_schedule_guard.py'
       - '.github/workflows/mlb-prop-live-diagnostic.yml'
   workflow_dispatch:
@@ -28,3 +30,5 @@ jobs:
         run: python -m src.strict_mlb_prop_live_diagnostic
       - name: Inspect current Polymarket MLB payload shape
         run: python -m src.polymarket_mlb_shape_diagnostic
+      - name: Audit exact Polymarket MLB Search event identity
+        run: python -m src.polymarket_mlb_search_identity_audit
