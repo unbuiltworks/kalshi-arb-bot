@@ -20,13 +20,88 @@ def test_exact_event_with_strict_prop_supply_is_diagnostic_only():
         ]
     }
     out = audit_search_identity(
-        payload, expected_event_slug="mlb-nyy-bos-2026-08-27", query="NYY vs BOS"
+        payload,
+        expected_event_slug="mlb-nyy-bos-2026-08-27",
+        expected_event_start_time="2026-08-27T23:05:00Z",
+        query="NYY vs BOS",
     )
     assert out["status"] == "EXACT_EVENT_WITH_STRICT_PROP_SUPPLY"
     assert out["exact_event_match_count"] == 1
+    assert out["start_time_verified"] is True
+    assert out["start_time_delta_seconds"] == 0
     assert out["strict_parser_compatible_prop_rows"] == 1
     assert out["execution_eligible"] is False
     assert out["order_entry"] is False
+
+
+def test_exact_slug_with_materially_different_start_time_fails_closed():
+    payload = {
+        "events": [
+            {
+                "slug": "mlb-nyy-bos-2026-08-27",
+                "title": "NYY vs BOS",
+                "startTime": "2026-08-28T00:05:00Z",
+                "markets": [
+                    {
+                        "id": "m1",
+                        "slug": "astatc-mlb-nyy-bos-2026-08-27-k-gercole-gte6",
+                        "sportsMarketType": "baseball_player_strikeouts",
+                        "question": "Will Gerrit Cole record at least 6 strikeouts in NYY vs BOS?",
+                    }
+                ],
+            }
+        ]
+    }
+    out = audit_search_identity(
+        payload,
+        expected_event_slug="mlb-nyy-bos-2026-08-27",
+        expected_event_start_time="2026-08-27T23:05:00Z",
+    )
+    assert out["status"] == "EXACT_EVENT_START_TIME_MISMATCH"
+    assert out["start_time_verified"] is False
+    assert out["start_time_delta_seconds"] == 3600
+    assert out["execution_eligible"] is False
+
+
+def test_exact_slug_missing_search_start_time_fails_closed_when_league_time_known():
+    payload = {
+        "events": [
+            {
+                "slug": "mlb-nyy-bos-2026-08-27",
+                "title": "NYY vs BOS",
+                "markets": [],
+            }
+        ]
+    }
+    out = audit_search_identity(
+        payload,
+        expected_event_slug="mlb-nyy-bos-2026-08-27",
+        expected_event_start_time="2026-08-27T23:05:00Z",
+    )
+    assert out["status"] == "EXACT_EVENT_START_TIME_MISSING"
+    assert out["start_time_verified"] is False
+    assert out["execution_eligible"] is False
+
+
+def test_small_search_time_skew_remains_diagnostic_match():
+    payload = {
+        "events": [
+            {
+                "slug": "mlb-nyy-bos-2026-08-27",
+                "title": "NYY vs BOS",
+                "startTime": "2026-08-27T23:08:00Z",
+                "markets": [],
+            }
+        ]
+    }
+    out = audit_search_identity(
+        payload,
+        expected_event_slug="mlb-nyy-bos-2026-08-27",
+        expected_event_start_time="2026-08-27T23:05:00Z",
+    )
+    assert out["status"] == "EXACT_EVENT_NO_PLAYER_PROP_SUPPLY"
+    assert out["start_time_verified"] is True
+    assert out["start_time_delta_seconds"] == 180
 
 
 def test_exact_event_without_props_is_distinct_from_parser_drift():
