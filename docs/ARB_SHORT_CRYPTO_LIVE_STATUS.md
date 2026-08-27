@@ -1,6 +1,6 @@
 # ARB Short-Crypto Live Status
 
-Last updated: 2026-08-27 13:55 ET
+Last updated: 2026-08-27 14:00 ET
 
 ## Scope
 
@@ -8,11 +8,35 @@ This is the durable handoff for the isolated short-duration crypto maker workstr
 
 ## Current venue / strategy
 
-- Venue: Gemini Prediction Markets.
+- Venue for live validation: Gemini Prediction Markets.
 - Product under live validation: BTC 5-minute binary market.
-- Mode: isolated q=1 live probe only.
-- Intended strategy: two-sided maker BUYs on YES and NO when fresh modeled pair edge after conservative maker fees is >= $0.03.
-- Live scaling is NOT approved. One campaign at a time only.
+- Live mode remains isolated q=1 probes only unless separately authorized.
+- **Primary strategy target has changed from instant-pair canary logic to observable reference-wallet replication.**
+- Reference target: Polymarket `@l5Zn1bWoM8eTsK` / `0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68`.
+- Live scaling is NOT approved.
+
+## Reference-wallet replication target
+
+The goal is to reproduce the reference wallet's observable short-crypto execution pattern as closely as public data permits, then adapt it to Gemini's independent fees/rewards/queue/settlement rules.
+
+Observable target behavior:
+1. Participate in eligible 5m windows as a maker rather than waiting for a simultaneous locked pair.
+2. Maintain passive YES/NO liquidity and accumulate fills over time.
+3. Allow bounded temporary one-sided inventory; a one-sided passive fill is not automatically an error.
+4. Continue working the opposite side when doing so improves inventory economics.
+5. Use fair value + inventory to skew quote placement/size.
+6. Hold matched inventory to settlement; avoid routine SELL exits.
+7. Use taker fills selectively rather than as the default execution mode.
+8. Keep maker trading/spread, maker rebate, liquidity reward, and residual directional P&L as separate accounting buckets.
+
+Known public evidence from the research lane:
+- Recent 10k-fill maker/taker comparison inferred ~83.28% maker fills and ~16.72% taker fills.
+- Recent history is overwhelmingly BUY + REDEEM rather than SELL scalping.
+- Two-sided inventory is common, especially in 15m, but historical FIFO pairing is not proof of atomic arb.
+- 5m direct trading economics looked materially stronger than 15m in the audited recent sample.
+- Maker rebates and liquidity rewards are first-class parts of the reference wallet's economics.
+
+Exact quote placement/cancel policy cannot be recovered from fill history alone because public history does not expose resting orders that never filled. Therefore "exact replication" means exact observable behavior where measurable, plus forward quote/book alignment to infer the hidden quote policy without pretending it is known.
 
 ## Why Gemini
 
@@ -64,45 +88,23 @@ Fix on `feature/gemini-short-crypto-live-q1`:
 - Client IDs now use a deterministic SHA-256 digest of the trade ID plus outcome suffix.
 - IDs remain <=36 chars and are distinct (`...-yes`, `...-no`).
 - Regression test uses the same long canary-ID shape that caused the collision.
-- Exact fractional-fill flatten logic remains in place.
+- Exact fractional-fill flatten logic remains in place for the safety canary.
 
 Current fixed feature checkpoint: `282522639047b3d41b2f37cb29758b4fe7e39e65`.
 
 The old AWS live launcher `deploy/aws/run_gemini_short_crypto_btc5m_live_q1_local_once.sh` is intentionally hard-disabled and must not be reused.
 
-## Canary #2 preflight — PASSED
-
-Disarmed AWS preflight passed on fixed commit `282522639047b3d41b2f37cb29758b4fe7e39e65`.
-
-Observed preflight market: `GEMI-BTC05M2608271750-UP`.
-- Safety tests: 8 passed.
-- Gemini terms accepted: true.
-- Available USD: $62.4255.
-- q=1 supported: true (`quantityMinimum=0.01`, `quantityIncrement=0.01`).
-- YES bid / maker quote: $0.27.
-- NO maker quote: $0.48.
-- Modeled pair cost: $0.75.
-- Conservative modeled pair edge: $0.23.
-- >=$0.03 live floor: passed.
-- Active short-crypto orders: 0.
-- Active short-crypto positions: 0.
-- AWS-local open reservation: false.
-- Order entry: false; mutation: false.
-
-This snapshot was stale immediately after observation and was not reused as a live price.
-
 ## Canary #2 live attempt — CLEAN NO-TRADE
 
-User approved exactly one q=1 campaign. The one-shot launcher ran on fixed commit `282522639047b3d41b2f37cb29758b4fe7e39e65`.
+Disarmed preflight first showed `GEMI-BTC05M2608271750-UP` with a stale modeled +$0.23 pair edge. User approved one q=1 campaign.
 
 Fresh live market selected: `GEMI-BTC05M2608271800-UP`.
-- Available USD: $62.4255.
 - YES maker quote: $0.48.
 - NO maker quote: $0.50.
 - Pair cost before modeled fees: $0.98.
 - Conservative maker fees: $0.01 YES + $0.01 NO.
 - Modeled pair edge after fees: $0.00.
-- Required floor: >=$0.03.
+- Required safety-canary floor: >=$0.03.
 - Gate result: FAILED.
 - Process stopped with `PAIR_FLOOR_BELOW_3C`.
 - Order entry: false.
@@ -112,13 +114,35 @@ Fresh live market selected: `GEMI-BTC05M2608271800-UP`.
 - AWS-local open reservation after run: false.
 - Realized P&L for canary #2: $0.
 
-Interpretation: the earlier +$0.23 modeled preflight edge did not persist into the next live market/window. This is useful negative evidence about opportunity persistence. Do not lower the 3c floor and do not count the stale preflight edge as executable opportunity.
+Interpretation: the stale instant-pair snapshot did not persist. This is useful evidence that instant-pair gating is not the correct primary model for reference-wallet replication.
+
+## Replica profiling work
+
+On `ev-wallet-shadow`, `src/polymarket_l5_replica_profile.py` was added at commit `46c216b06e36c5fadb7216ba6534e489730c876e`.
+
+It reads the already-completed full-history SQLite spool only and profiles:
+- fill-size distribution;
+- first-fill timing;
+- inter-fill gaps;
+- YES/DOWN side-switching;
+- same-side run lengths;
+- first opposite-side fill lag;
+- temporary inventory imbalance;
+- FIFO pair lag and pair-cost distributions;
+- results by 5m/15m and asset stream.
+
+It makes no API calls and has no order authority.
+
+AWS read-only runner: `deploy/aws/run_l5_reference_replica_profile.sh` on `aws-migration-foundation`.
 
 ## Next gate
 
-Do not blindly rerun the live launcher. The next useful step is to observe fresh BTC5m maker-pair edge continuously/read-only and only prepare another one-shot live probe when a currently active market has >=$0.03 modeled edge with sufficient time-to-expiry. Any new live attempt requires fresh explicit user approval because canary #2's one-shot approval has been consumed.
-
-After any future execution, reconcile YES and NO independently from authoritative Gemini order history/settlement. Never infer paired fills from a single position record.
+Do not blindly rerun the old instant-pair live canary. Next:
+1. Run the full-history reference replica profiler against the existing AWS spool.
+2. Use those observed distributions to parameterize a Gemini BTC5m reference-replica shadow: continuous passive two-sided quoting, bounded inventory carry, opposite-side accumulation, fair-value/inventory skew, hold-to-settlement accounting.
+3. Add forward reference-wallet fill/book alignment because history alone cannot reveal unfilled resting quotes/cancel policy.
+4. Validate queue/fill and inventory economics in shadow.
+5. Only then propose a new q=1 **inventory-maker** live probe under fresh explicit approval. That probe should not use the old "first one-sided fill = emergency failure" semantics except for hard exposure limits or genuinely ambiguous states.
 
 ## Profit accounting
 
