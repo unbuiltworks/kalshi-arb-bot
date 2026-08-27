@@ -8,8 +8,8 @@ SOURCE_REPO="${SOURCE_REPO:-/home/ssm-user/kalshi-arb-bot}"
 WORKTREE="${WORKTREE:-/opt/arb/l5-reference-replica-profile}"
 OUTPUT_DIR="${OUTPUT_DIR:-/opt/arb/l5-full-history-output}"
 FEATURE_BRANCH="ev-wallet-shadow"
-PINNED_COMMIT="46c216b06e36c5fadb7216ba6534e489730c876e"
-IMAGE="arb-l5-reference-replica-profile:46c216b"
+PINNED_COMMIT="4e2f50116a1b5c1b359103293b321feec61cb39f"
+IMAGE="arb-l5-reference-replica-profile:4e2f501"
 OUT_JSON="$OUTPUT_DIR/l5_reference_replica_profile.json"
 
 for cmd in git docker find; do
@@ -43,6 +43,8 @@ echo "L5_REPLICA_PROFILE_SOURCE_READY commit=$actual"
 
 docker build -t "$IMAGE" "$WORKTREE" >/dev/null
 
+# The spool is bind-mounted read-only and the profiler opens it via SQLite
+# mode=ro from the first syscall, so no journal/lock write is attempted.
 docker run --rm --network none \
   -e BOT_MODE=paper \
   -e PYTHONUNBUFFERED=1 \
