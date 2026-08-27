@@ -82,10 +82,11 @@ docker run -d --name arb-short-gemini-maker "${common[@]}" "$IMAGE" \
     --summary-seconds 10
 
 docker run -d --name arb-short-gemini-fair-value "${common[@]}" "$IMAGE" \
-  python -u -m src.gemini_prediction_fair_value_shadow \
+  python -u -m src.gemini_prediction_fair_value_shadow_v2 \
     --discovery-seconds 30 \
     --summary-seconds 5 \
-    --vol-lookback-seconds 300
+    --vol-lookback-seconds 300 \
+    --lag-seconds 30
 
 docker run -d --name arb-short-kalshi-temporal "${common[@]}" "$IMAGE" \
   python -u -m src.kalshi_temporal_live_shadow_v2 \
