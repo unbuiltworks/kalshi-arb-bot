@@ -18,6 +18,7 @@ from typing import Any
 import httpx
 
 from src import strict_mlb_prop_snapshot as base
+from src.polymarket_mlb_search_identity_audit import audit_search_identity
 
 
 PAST_GRACE = timedelta(hours=2)
@@ -30,9 +31,12 @@ def _parse_utc(value: Any) -> datetime | None:
     if not text:
         return None
     try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(timezone.utc)
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(timezone.utc)
 
 
 def _nearby_event(event: dict[str, Any], now: datetime) -> bool:
@@ -56,6 +60,37 @@ def _player_prop_rows(event: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _resolve_exact_search_event(
+    body: dict[str, Any],
+    *,
+    event_slug: str,
+    event_title: str,
+    event_start: Any,
+) -> dict[str, Any] | None:
+    """Return the exact Search event only when slug *and* scheduled time verify.
+
+    The league inventory is the anchor for the nearby game instance.  Search can return
+    a stale/postponed document with the same slug, so exact slug equality alone is not
+    enough for prop discovery.  Reuse the independent identity audit and require the
+    strict-prop-supply state, which also proves Search reproduces the league start time
+    within the audit's bounded tolerance.
+    """
+    audit = audit_search_identity(
+        body,
+        expected_event_slug=event_slug,
+        expected_event_start_time=event_start,
+        query=event_title or event_slug,
+    )
+    if audit.get("status") != "EXACT_EVENT_WITH_STRICT_PROP_SUPPLY":
+        return None
+
+    events = [row for row in (body.get("events") or []) if isinstance(row, dict)]
+    exact = [row for row in events if str(row.get("slug") or "").strip() == event_slug]
+    if len(exact) != 1:
+        return None
+    return dict(exact[0])
+
+
 async def _search_one_game(
     http: httpx.AsyncClient,
     *,
@@ -76,19 +111,18 @@ async def _search_one_game(
             },
         )
 
-    candidates = list(body.get("events") or [])
-    exact = next(
-        (event for event in candidates if str(event.get("slug") or "") == event_slug),
-        None,
+    exact = _resolve_exact_search_event(
+        body,
+        event_slug=event_slug,
+        event_title=event_title,
+        event_start=event_start,
     )
     if exact is None:
-        # Fail closed: never grab a similarly named game just because search ranked it.
+        # Fail closed: never grab a similarly named, stale, postponed, or time-ambiguous
+        # game just because Search ranked it or reproduced the same slug.
         return []
 
-    resolved = dict(exact)
-    if not resolved.get("startTime") and event_start:
-        resolved["startTime"] = event_start
-    return _player_prop_rows(resolved)
+    return _player_prop_rows(exact)
 
 
 async def _fetch_poly_mlb_search(http: httpx.AsyncClient) -> list[dict[str, Any]]:
