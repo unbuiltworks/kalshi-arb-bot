@@ -35,6 +35,8 @@ def _row():
         "executable_probability_window_start": "2026-08-25T16:00:00-04:00",
         "executable_probability_window_end": "2026-08-25T18:00:00-04:00",
         "executable_probability_time_scope_verified": True,
+        "executable_probability_recency_verified": True,
+        "executable_probability_max_age_seconds": "60",
         "executable_probability_success_count": 10,
         "executable_probability_sample_count": 40,
         "executable_probability_sample_basis": "COMPLETE_SCANNER_SNAPSHOT_WINDOW",
@@ -257,6 +259,33 @@ def test_execution_probability_rejects_later_liquidity_lookahead():
     assert out["weather_portfolio_metric_binding_verified"] is False
     assert "WEATHER_EXECUTION_SAMPLE_LOOKAHEAD_DETECTED" in out["blockers"]
     assert "WEATHER_EXECUTION_PROBABILITY_UNVERIFIED" in out["blockers"]
+
+
+def test_execution_probability_rejects_stale_historical_liquidity_cohort():
+    row = _row()
+    row["executable_probability_window_end"] = "2026-08-25T17:58:59-04:00"
+    row["executable_probability_max_age_seconds"] = "60"
+    out = audit_weather_portfolio_metric_binding(row)
+    assert out["weather_execution_sample_time_verified"] is False
+    assert out["weather_execution_probability_verified"] is False
+    assert out["weather_portfolio_metric_binding_verified"] is False
+    assert "WEATHER_EXECUTION_SAMPLE_STALE" in out["blockers"]
+    assert "WEATHER_EXECUTION_PROBABILITY_UNVERIFIED" in out["blockers"]
+
+
+def test_execution_probability_recency_needs_explicit_audited_bound():
+    for key, value in (
+        ("executable_probability_recency_verified", "true"),
+        ("executable_probability_max_age_seconds", None),
+        ("executable_probability_max_age_seconds", "0"),
+    ):
+        row = _row()
+        row[key] = value
+        out = audit_weather_portfolio_metric_binding(row)
+        assert out["weather_execution_sample_time_verified"] is False
+        assert out["weather_execution_probability_verified"] is False
+        assert out["weather_portfolio_metric_binding_verified"] is False
+        assert "WEATHER_EXECUTION_SAMPLE_RECENCY_UNVERIFIED" in out["blockers"]
 
 
 def test_execution_probability_time_scope_must_be_literal_and_timezone_aware():
