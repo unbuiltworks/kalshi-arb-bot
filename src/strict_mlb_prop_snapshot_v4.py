@@ -17,6 +17,7 @@ import httpx
 from src import strict_mlb_prop_snapshot as base
 from src.strict_mlb_prop_snapshot_v2 import _fetch_poly_mlb_search
 from src import strict_mlb_prop_snapshot_v3 as v3
+from src.mlb_kalshi_book_guard import audit_kalshi_binary_book
 
 logger = logging.getLogger("kalshi_arb.strict_mlb_prop_snapshot_v4")
 base._fetch_poly_mlb = _fetch_poly_mlb_search
@@ -102,6 +103,8 @@ def _empty(candidate: base.StrictCandidate, error: str | None) -> dict[str, Any]
         "book_comparable": False,
         "synchronized_book_pair": False,
         "quote_receive_skew_ms": None,
+        "kalshi_book_integrity_verified": False,
+        "kalshi_book_integrity_blocker": error,
         "positive_conservative_plan": None,
         "probe_1usd": None,
         "probe_5usd": None,
@@ -163,7 +166,8 @@ async def run_once() -> dict[str, Any]:
                 return row
 
             pbook = base.poly_top_book(poly_body)
-            kbook = base.kalshi_top_book(kalshi_body)
+            kalshi_book_audit = audit_kalshi_binary_book(kalshi_body)
+            kbook = base.kalshi_top_book(kalshi_body) if kalshi_book_audit.get("verified") is True else None
             series = base.FAMILY_SERIES[candidate.family]
             meta = series_meta.get(series) or {}
             fee_type = str(meta.get("fee_type") or "")
@@ -173,6 +177,7 @@ async def run_once() -> dict[str, Any]:
                 synchronized
                 and pbook is not None
                 and kbook is not None
+                and kalshi_book_audit.get("verified") is True
                 and fee_type in {"quadratic", "quadratic_with_maker_fees"}
                 and multiplier is not None
                 and Decimal("0") <= multiplier <= Decimal("100")
@@ -200,6 +205,8 @@ async def run_once() -> dict[str, Any]:
                 "kalshi_fee_type": fee_type,
                 "kalshi_fee_multiplier": str(multiplier) if multiplier is not None else None,
                 "book_comparable": pbook is not None and kbook is not None,
+                "kalshi_book_integrity_verified": kalshi_book_audit.get("verified") is True,
+                "kalshi_book_integrity_blocker": kalshi_book_audit.get("blocker"),
                 "synchronized_book_pair": synchronized,
                 "poly_received_ms": poly_received_ms,
                 "kalshi_received_ms": kalshi_received_ms,
@@ -236,6 +243,9 @@ async def run_once() -> dict[str, Any]:
         "batch_start": batch_start,
         "rotation_slot": slot,
         "book_comparable": sum(bool(r["book_comparable"]) for r in priced),
+        "kalshi_book_integrity_rejected_pairs": sum(
+            bool(r.get("kalshi_book_integrity_verified") is False) for r in priced
+        ),
         "synchronized_book_pairs": sum(bool(r.get("synchronized_book_pair")) for r in priced),
         "receive_skew_rejected_pairs": sum(
             bool(r.get("book_comparable")) and not bool(r.get("synchronized_book_pair")) for r in priced
@@ -252,8 +262,8 @@ async def run_once() -> dict[str, Any]:
             "and independently audited settlement equivalence are satisfied."
         ),
         "probe_warning": (
-            "$1/$5 plans are capped paper-probe economics after modeled fees; receive-time skew >500ms is rejected; "
-            "no authentication/order-entry path exists."
+            "$1/$5 plans are capped paper-probe economics after modeled fees; malformed/crossed Kalshi books and "
+            "receive-time skew >500ms are rejected; no authentication/order-entry path exists."
         ),
         "read_only": True,
         "order_entry": False,
