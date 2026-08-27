@@ -66,6 +66,18 @@ def main() -> None:
                 "order_entry": False,
                 "realized_pnl": 0.0,
             }
+            if kind in {"MAKER_REBATE", "REWARD"}:
+                payload["payments"] = [
+                    {
+                        "timestamp": int(r.get("timestamp") or 0),
+                        "usdcSize": _f(r.get("usdcSize")),
+                        "size": _f(r.get("size")),
+                        "conditionId": r.get("conditionId"),
+                        "title": r.get("title"),
+                        "transactionHash": r.get("transactionHash"),
+                    }
+                    for r in rows
+                ]
             print(json.dumps(payload, sort_keys=True), flush=True)
 
 
