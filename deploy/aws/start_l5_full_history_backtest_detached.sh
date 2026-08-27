@@ -28,34 +28,41 @@ echo "L5_BACKTEST_IMAGE_READY image=$IMAGE"
 
 OUT_JSON="$OUTPUT_DIR/l5_full_history_backtest.json"
 OUT_LOG="$OUTPUT_DIR/l5_full_history_summary.log"
-rm -f "$OUT_JSON" "$OUT_LOG"
+OUT_DB="$OUTPUT_DIR/l5_full_history_spool.sqlite3"
+OUT_MARKETS="$OUTPUT_DIR/l5_full_history_markets.jsonl"
+rm -f "$OUT_JSON" "$OUT_LOG" "$OUT_MARKETS"
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 
-echo "L5_BACKTEST_STARTING container=$CONTAINER start=$START"
+echo "L5_BACKTEST_STARTING container=$CONTAINER start=$START mode=disk_backed_v3"
 docker run -d \
   --name "$CONTAINER" \
   --network host \
+  --memory 384m \
   -e BOT_MODE=paper \
   -e PYTHONUNBUFFERED=1 \
   -v "$OUTPUT_DIR:/out" \
   "$IMAGE" \
-  bash -lc "set -o pipefail; python -u -m src.polymarket_l5_full_history_backtest_v2 --start '$START' --end now --output /out/l5_full_history_backtest.json 2>&1 | tee /out/l5_full_history_summary.log"
+  bash -lc "set -o pipefail; python -u -m src.polymarket_l5_full_history_backtest_v3 --start '$START' --end now --output /out/l5_full_history_backtest.json --db /out/l5_full_history_spool.sqlite3 --markets-jsonl /out/l5_full_history_markets.jsonl 2>&1 | tee /out/l5_full_history_summary.log"
 
 sleep 2
 if docker ps --filter "name=^/${CONTAINER}$" --format '{{.Names}}' | grep -qx "$CONTAINER"; then
   echo "L5_BACKTEST_RUNNING container=$CONTAINER commit=$COMMIT"
+  echo "mode=disk_backed_v3 memory_cap=384m checkpoint_db=$OUT_DB"
   echo "The job is detached and will continue after SSM disconnects."
   exit 0
 fi
 
 STATUS="$(docker inspect -f '{{.State.ExitCode}}' "$CONTAINER" 2>/dev/null || echo unknown)"
+OOM="$(docker inspect -f '{{.State.OOMKilled}}' "$CONTAINER" 2>/dev/null || echo unknown)"
 if [ "$STATUS" = "0" ] && [ -s "$OUT_JSON" ]; then
   echo "L5_FULL_HISTORY_COMPLETE commit=$COMMIT"
   echo "detail_json=$OUT_JSON"
+  echo "markets_jsonl=$OUT_MARKETS"
+  echo "checkpoint_db=$OUT_DB"
   exit 0
 fi
 
-echo "L5_BACKTEST_FAILED exit_code=$STATUS" >&2
+echo "L5_BACKTEST_FAILED exit_code=$STATUS oom_killed=$OOM" >&2
 if [ -s "$OUT_LOG" ]; then
   echo "=== SUMMARY LOG ===" >&2
   tail -n 100 "$OUT_LOG" >&2 || true
