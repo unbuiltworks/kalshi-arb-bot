@@ -71,7 +71,7 @@ if [ -f "$ENV_FILE" ]; then
     -e GEMINI_SHORT_CRYPTO_LIVE_Q1=NO \
     -e GEMINI_SHORT_CRYPTO_CANARY_ID= \
     -e GEMINI_SHORT_CRYPTO_CANARY_ARM= \
-    "$IMAGE" python -u -m src.gemini_short_crypto_btc5m_maker_canary_q1
+    "$IMAGE" python -u -m src.gemini_short_crypto_btc5m_maker_canary_q1_v2
 else
   mode="PUBLIC_ONLY"
   echo "GEMINI_BTC5M_SECURE_ENV_ABSENT path=$ENV_FILE"
