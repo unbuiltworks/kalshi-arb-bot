@@ -57,11 +57,13 @@ common=(
 
 if [ -f "$ENV_FILE" ]; then
   mode="AUTHENTICATED_DISARMED"
-  # Refuse obviously broad permissions. 600/400 are preferred; owner-only variants
-  # such as 640 are allowed only if group has no write bit.
   perms="$(stat -c '%a' "$ENV_FILE")"
-  if (( (10#$perms % 10) != 0 )); then
-    echo "secure env file is accessible by others: $ENV_FILE mode=$perms" >&2
+  group_digit="${perms: -2:1}"
+  other_digit="${perms: -1}"
+  # Owner-only is ideal; group-read (640/440) is tolerated. Group write/execute
+  # and all world permissions are rejected.
+  if (( other_digit != 0 || group_digit == 2 || group_digit == 3 || group_digit == 6 || group_digit == 7 )); then
+    echo "secure env file permissions too broad: $ENV_FILE mode=$perms" >&2
     exit 1
   fi
   echo "GEMINI_BTC5M_SECURE_ENV_PRESENT path=$ENV_FILE mode=$perms"
