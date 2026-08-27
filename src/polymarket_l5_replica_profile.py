@@ -15,6 +15,7 @@ import argparse
 from collections import defaultdict
 import json
 import math
+from pathlib import Path
 import sqlite3
 from statistics import mean
 from typing import Any
@@ -171,7 +172,14 @@ def main() -> None:
     p.add_argument("--output", required=True)
     args = p.parse_args()
 
-    db = sqlite3.connect(args.db)
+    # The AWS runner deliberately mounts the completed spool read-only. Open it as
+    # a SQLite read-only URI from the first syscall rather than opening normally
+    # and setting query_only afterward; the latter may try to create journal/lock
+    # state and fails on a read-only Docker bind mount.
+    db_path = Path(args.db).resolve()
+    if not db_path.is_file():
+        raise SystemExit(f"SQLite spool missing: {db_path}")
+    db = sqlite3.connect(f"{db_path.as_uri()}?mode=ro", uri=True)
     db.execute("PRAGMA query_only=ON")
     cur = db.execute(
         "SELECT condition_id,payload FROM activity WHERE kind='TRADE' AND condition_id<>'' ORDER BY condition_id,ts,row_key"
@@ -223,6 +231,7 @@ def main() -> None:
     with open(args.output, "w", encoding="utf-8") as fh:
         json.dump(result, fh, indent=2, sort_keys=True)
         fh.write("\n")
+    db.close()
     print(json.dumps({"type": result["type"], "markets": result["markets"], "output": args.output, "shadow_only": True, "order_entry": False}, sort_keys=True))
 
 
