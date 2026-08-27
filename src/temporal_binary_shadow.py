@@ -9,10 +9,11 @@ zero realized-profit credit.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Callable, Literal
 
 Outcome = Literal["UP", "DOWN"]
 Venue = Literal["polymarket", "kalshi", "gemini"]
+FeeModel = Callable[[float, float], float]
 
 FIRST_TIER_ASSETS = ("BTC", "ETH", "SOL", "XRP")
 FIRST_TIER_VENUES = ("polymarket", "kalshi", "gemini")
@@ -93,7 +94,7 @@ class ShadowPair:
 
 
 class TemporalMarketShadow:
-    """One conservative q=1 temporal experiment for one binary market."""
+    """One conservative temporal experiment for one binary market."""
 
     def __init__(
         self,
@@ -104,6 +105,7 @@ class TemporalMarketShadow:
         min_net_edge: float = 0.03,
         first_leg_max_price: float = 0.45,
         taker_fee_rate: float = 0.0,
+        fee_model: FeeModel | None = None,
     ) -> None:
         if not market_id:
             raise ValueError("market_id is required")
@@ -122,6 +124,7 @@ class TemporalMarketShadow:
         self.min_net_edge = min_net_edge
         self.first_leg_max_price = first_leg_max_price
         self.taker_fee_rate = taker_fee_rate
+        self.fee_model = fee_model
         self.first_leg: ShadowLeg | None = None
         self.completed_pair: ShadowPair | None = None
         self.expired = False
@@ -129,12 +132,20 @@ class TemporalMarketShadow:
         self.last_observed_ms: int | None = None
         self.quote_observations = 0
 
+    def _fee(self, price: float) -> float:
+        if self.fee_model is not None:
+            fee = float(self.fee_model(self.quantity, price))
+            if fee < 0:
+                raise ValueError("fee model returned negative fee")
+            return fee
+        return taker_fee_usd(self.quantity, price, self.taker_fee_rate)
+
     def _leg(self, outcome: Outcome, price: float, timestamp_ms: int) -> ShadowLeg:
         return ShadowLeg(
             outcome=outcome,
             price=price,
             quantity=self.quantity,
-            fee_usd=taker_fee_usd(self.quantity, price, self.taker_fee_rate),
+            fee_usd=self._fee(price),
             timestamp_ms=timestamp_ms,
         )
 
