@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-27 09:41 UTC / 2026-08-27 05:41 ET**
+Last verified: **2026-08-27 10:38 UTC / 2026-08-27 06:38 ET**
 
 ## Objective and fixed verdict
 
@@ -16,16 +16,16 @@ The 72-hour wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and ends **20
 
 ## Fresh production state
 
-- `sports-kp-live-executor`: Railway **SUCCESS/read-only census**. Direct deploy logs are available again. At ~09:40 UTC the process was alive and emitting `EVENT_SUMMARY` every 10 seconds. Raw triggers advanced through ~77.57M, but `comparable_evaluations` remained frozen at 53,237 and `decision_census.observations` at 1,661. This interval is therefore unmeasurable and receives $0 capacity credit rather than being counted as fresh zero-edge evidence.
-- `sports-generic-counterpart-shadow`: Railway **SUCCESS/read-only maker + delayed-hedge shadow**. The prior uncertainty about whether the process had exited is now resolved: direct logs at ~09:40 UTC show it actively refreshing Polymarket books and emitting maker/fill/markout summaries. The modeled fill sample remains frozen at 1,178 fills / 291 immediate >=3c fills, with only 134 delayed-hedge-observable fills. No new maker capacity is credited. Polymarket incentive endpoints returned transient HTTP 503s; those incentive errors do not affect the core maker-fill/markout loop and incentive capacity remains $0.
-- `sports-gk-autonomous-supervisor`: Railway **SUCCESS/read-only/disarmed hot shadow**. Keep guaranteed execution disarmed while Gemini connectivity and exact rule lifecycle certification remain incomplete. Caleb Durbin remains **-$0.44 REALIZED**.
+- `sports-kp-live-executor`: Railway **SUCCESS/read-only census**. Fresh direct `EVENT_SUMMARY` logs through ~10:38 UTC prove the process is alive and emitting every 10 seconds. Raw triggers advanced to ~**79.90M**, while `comparable_evaluations` remains frozen at **53,237** and `decision_census.observations` at **1,661**. This interval is unmeasurable and receives $0 capacity credit rather than being counted as fresh zero-edge evidence.
+- `sports-generic-counterpart-shadow`: Railway **SUCCESS/read-only maker + delayed-hedge shadow**. Fresh direct runtime proves the process is alive, but the modeled sample remains frozen at **1,178 fills / 291 immediate >=3c fills**, with only **134 delayed-hedge-observable fills** and **1,044 ws_unhealthy**. No new maker capacity is credited.
+- `sports-gk-autonomous-supervisor`: Railway **SUCCESS/read-only/disarmed hot shadow**. Fresh heartbeat through ~10:37 UTC shows raw triggers advanced above **71.27M** while `comparable_evaluations` remains frozen at **120,836**. Gemini is still **570 symbols / 0 connected**; Kalshi remains **570/570 initialized**. Historical 6 >=3c hot evaluations remain uncertified and no order entry is enabled. This interval receives $0 capacity credit.
 - `crypto-15m-sol-live-canary-10bp-50ms`: remains **CRASHED/contained**. Do not reopen as guaranteed arb while Gemini/Kalshi settlement-index equivalence remains unproven.
 
 ## Decision-grade K<->P evidence
 
 ### Strict MLB totals taker/taker
 
-Fresh direct logs at ~09:40 UTC confirm the valid cumulative sample is unchanged:
+Fresh direct logs through ~10:38 UTC confirm the valid cumulative sample is unchanged:
 
 - **53,237 comparable evaluations**;
 - **1,661 decision observations** across 9 semantic keys;
@@ -44,7 +44,7 @@ After correcting start-time normalization and excluding F5/partial-game contamin
 
 ### Maker/fill shadow
 
-Fresh direct logs resolve the overnight process-state ambiguity but do not improve economics:
+Fresh direct logs prove the process is still alive but the fill/markout sample has not advanced:
 
 - **1,178** pessimistic simulated q1 maker fills;
 - **786** trade-through / **392** exact-price fills;
@@ -55,6 +55,7 @@ Fresh direct logs resolve the overnight process-state ambiguity but do not impro
 Delayed full-ladder hedge evidence remains governing:
 
 - only **134/1,178** fills are delayed-hedge observable; **1,044** are `ws_unhealthy` and receive no executable capacity credit;
+- delayed-observation coverage is only **11.38%**;
 - **80 ms:** +$0.0408 total, ~+$0.00030/executable fill, **22 >=1c / 9 >=2c / 2 >=3c**;
 - **250 ms:** -$0.7158 total, **14 / 8 / 2**;
 - **500 ms:** -$1.1384 total, **11 / 5 / 2**;
@@ -64,7 +65,7 @@ The underlying K<->P full-game moneyline mechanism also fails exact postponement
 
 ### Polymarket liquidity incentives
 
-Fresh logs show the incentive API returning transient **HTTP 503 Service Unavailable** around 09:40 UTC. Core book refreshes continued returning HTTP 200 and the maker-fill/markout loop remained alive. Incentive denominator/time-weighted yield/pickoff accounting remains incomplete and `combined_maker_capacity_credit_usd_per_day=0`; no incentive dollars are credited.
+Incentive denominator/time-weighted yield/pickoff accounting remains incomplete and `combined_maker_capacity_credit_usd_per_day=0`; no incentive dollars are credited.
 
 ### Strict MLB player props
 
@@ -72,7 +73,7 @@ No K<->P player-prop family currently has complete settlement/postponement/cance
 
 ## G<->K sports
 
-Guaranteed-arb execution remains **disarmed/read-only**. Historical >=3c hot observations remain uncertified. Unmeasurable feed intervals receive $0 guaranteed capacity rather than synthetic zero-edge counts. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
+Guaranteed-arb execution remains **disarmed/read-only**. Fresh heartbeat shows **>71.27M raw triggers but only 120,836 comparable evaluations**, with Gemini **570 symbols / 0 connected** and Kalshi **570/570 initialized**. Historical **6 >=3c hot evaluations / 4 completed signal lifecycles** remain uncertified under `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION`. This is an unmeasurable feed interval and receives $0 guaranteed capacity rather than synthetic zero-edge counts. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
 
 ## Kalshi account / 429 diagnosis
 
@@ -80,9 +81,9 @@ Authenticated account limits remain **advanced tier, 900 bucket / 300 refill** f
 
 ## Authoritative accounting
 
-Last successful direct Neon checkpoint remains:
+Fresh direct Neon queries in this run confirm:
 
-- **2026-08-27 ET: 0 `TRADE_REALIZED` / $0.0000 net**;
+- **2026-08-27 ET: no ledger events of any type; 0 `TRADE_REALIZED` / $0.0000 net**;
 - weather: **0 verified weather-tagged `TRADE_REALIZED` / $0.0000 since 2026-03-01**;
 - Caleb Durbin remains the prior **`SETTLED_ONE_LEG`, -$0.44 REALIZED** sports loss.
 
@@ -94,11 +95,11 @@ Guaranteed/deployable evidence remains strongly negative at the fixed 3c floor:
 
 - certified K<->P totals: **0 >=3c**;
 - clean full-game taker/taker: **0 >=3c**;
-- maker delayed hedge: only **2/134** observable marks >=3c at 80 ms, aggregate about **+$0.0408** at 80 ms and negative at 250/500 ms, while 1,044/1,178 fills are unobservable;
+- maker delayed hedge: only **2/134** observable marks >=3c at 80 ms, aggregate about **+$0.0408** at 80 ms and negative at 250/500 ms, while **1,044/1,178** fills are unobservable;
 - K<->P moneyline maker rules: lifecycle mismatch => **$0 guaranteed capacity**;
-- Polymarket incentives: incomplete and currently experiencing transient 503s => **$0 capacity**;
+- Polymarket incentives: incomplete => **$0 capacity**;
 - strict props: uncertified => **$0**;
-- G<->K guaranteed execution: disarmed/feed-degraded => **$0**;
+- G<->K guaranteed execution: disarmed and currently **0/570 Gemini connected**, comparable sample frozen => **$0**;
 - weather verified realized since March: **$0**.
 
 Current evidence continues to track toward the pre-committed **<$50/day** bucket. Do not declare the final verdict before the fixed deadline.
@@ -106,9 +107,9 @@ Current evidence continues to track toward the pre-committed **<$50/day** bucket
 ## Highest-value next actions
 
 1. Keep the fixed census clock running through **2026-08-28 20:43 UTC / 16:43 ET** with no reset.
-2. Keep K<->P taker census alive; stale/unmeasurable intervals score $0 and are not mislabeled as fresh zero-edge samples.
-3. Keep the maker/markout shadow read-only. Its process is confirmed alive; do not restart/redeploy merely to increase telemetry. Treat transient incentive 503s as non-core unless they persist into the verdict window.
-4. Keep G<->K guaranteed execution disarmed while Gemini connectivity and rule lifecycle certification remain incomplete; Caleb's loss remains realized.
+2. Keep K<->P taker census alive; stale/unmeasurable intervals score $0 and are not mislabeled as fresh zero-edge samples. Do not restart/redeploy solely to inflate trigger counts.
+3. Keep the maker/markout shadow read-only. The process is alive but its sample is frozen and 88.6% of delayed marks remain unobservable; no capacity is credited until fresh decision-usable observations appear.
+4. Keep G<->K guaranteed execution disarmed. Do not treat raw-trigger growth with **0 Gemini-connected symbols** as new executable evidence; Caleb's loss remains realized.
 5. Do not manufacture same-venue ladder violations or force uncertified player props.
 6. Preserve Kalshi account headroom/backoff; do not disrupt unrelated live services solely for census telemetry.
 7. Keep weather historical/backtest edge separate from verified live realized P&L.
