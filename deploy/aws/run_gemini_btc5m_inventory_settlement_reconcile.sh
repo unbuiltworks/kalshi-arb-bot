@@ -9,8 +9,8 @@ set -euo pipefail
 SOURCE_REPO="${SOURCE_REPO:-/home/ssm-user/kalshi-arb-bot}"
 WORKTREE="${WORKTREE:-/opt/arb/gemini-btc5m-inventory-settlement-reconcile}"
 BRANCH="feature/gemini-short-crypto-live-q1"
-PINNED_COMMIT="562e3d7e90b6348219063b99e05999b8d7c6200d"
-IMAGE="arb-gemini-btc5m-inventory-reconcile:562e3d7"
+PINNED_COMMIT="aa0ed03cecaf37e1cf8fc89d88f0d4e6749cfc8f"
+IMAGE="arb-gemini-btc5m-inventory-reconcile:aa0ed03"
 ENV_FILE="${ENV_FILE:-/opt/arb/secrets/gemini-short-crypto.env}"
 STATE_DIR="${STATE_DIR:-/opt/arb/gemini-short-crypto-state}"
 
