@@ -1,6 +1,6 @@
 # ARB Short-Crypto Live Status
 
-Last updated: 2026-08-27 14:00 ET
+Last updated: 2026-08-27 15:55 ET
 
 ## Scope
 
@@ -116,33 +116,63 @@ Fresh live market selected: `GEMI-BTC05M2608271800-UP`.
 
 Interpretation: the stale instant-pair snapshot did not persist. This is useful evidence that instant-pair gating is not the correct primary model for reference-wallet replication.
 
-## Replica profiling work
+## Inventory-maker q=1 canary — READY FOR FRESH LIVE APPROVAL
 
-On `ev-wallet-shadow`, `src/polymarket_l5_replica_profile.py` was added at commit `46c216b06e36c5fadb7216ba6534e489730c876e`.
+Feature checkpoint: `93217457dae996636b1cb4a3c40037ffeba53e69` on `feature/gemini-short-crypto-live-q1`.
 
-It reads the already-completed full-history SQLite spool only and profiles:
-- fill-size distribution;
-- first-fill timing;
-- inter-fill gaps;
-- YES/DOWN side-switching;
-- same-side run lengths;
-- first opposite-side fill lag;
-- temporary inventory imbalance;
-- FIFO pair lag and pair-cost distributions;
-- results by 5m/15m and asset stream.
+Behavior:
+- BTC 5m only.
+- Max q=1 posted per outcome.
+- BUY LIMIT MOC / maker-only entries.
+- Requires >=1c initial modeled matched-pair edge after conservative maker fees.
+- Requires >=180 seconds to expiry at entry.
+- A first one-sided/fractional fill does **not** trigger normal flattening. The opposite maker order keeps working until the bounded work window ends.
+- Remaining maker orders are cancelled before expiry.
+- Any observed inventory within q<=1/outcome is held for authoritative settlement; no normal SELL exit.
+- Operational second-post failure may use the proven exact-quantity emergency flatten helper.
+- Executed inventory remains non-realized until authoritative Gemini settlement/reconciliation.
+- Uses a separate inventory-specific dual-key arm namespace so the old canary variables cannot arm it.
+- Uses inventory-specific AWS-local ledger classification and does not label one-sided inventory as paired arbitrage.
 
-It makes no API calls and has no order authority.
+Successful disarmed AWS preflight at ~15:55 ET on 2026-08-27:
+- 13 tests passed in 0.40s.
+- Market: `GEMI-BTC05M2608272000-UP`.
+- Seconds to expiry: 297.084.
+- q=1 supported: true.
+- YES bid / maker quote: $0.58.
+- NO maker quote: $0.31.
+- Pair cost before fees: $0.89.
+- Conservative maker fees: $0.01 YES + $0.01 NO.
+- Modeled matched-pair edge after fees: +$0.09.
+- Inventory entry floor: +$0.01.
+- Gate passed: true.
+- Account clean: active short-crypto orders 0, positions 0, local reservation false.
+- Order entry during preflight: false.
 
-AWS read-only runner: `deploy/aws/run_l5_reference_replica_profile.sh` on `aws-migration-foundation`.
+Disarmed preflight runner: `deploy/aws/run_gemini_btc5m_inventory_maker_q1_preflight.sh`.
+
+One-shot live launcher is now ready on `aws-migration-foundation` at commit `1a878a27c85f381db98b17116e3715a5e4d4b3da`:
+`deploy/aws/run_gemini_btc5m_inventory_maker_q1_live_once.sh`.
+
+The live launcher re-runs the exact safety suite, a fresh authenticated DISARMED preflight, and a clean-account/local-state gate immediately before generating a unique inventory arm ID. It launches detached, runs exactly one campaign, has no restart/loop, and performs a read-only post-run audit. **Do not run without fresh explicit user approval. Do not rerun after an executed/ambiguous result until authoritative reconciliation clears the reservation/exposure.**
+
+## Replica profiling / live teacher work
+
+On `ev-wallet-shadow`, `src/polymarket_l5_replica_profile.py` profiles the completed full-history spool without refetching data. It measures fill sizes, first-fill timing, inter-fill gaps, side switching, opposite-side lag, inventory imbalance, FIFO pair lag/cost, and stream-level behavior.
+
+The existing live Polymarket wallet follower remains the teacher-data lane. The next research upgrade is pre-fill rolling CLOB book capture aligned to each newly observed wallet fill, so the hidden resting quote / repricing policy can be inferred rather than guessed.
 
 ## Next gate
 
-Do not blindly rerun the old instant-pair live canary. Next:
-1. Run the full-history reference replica profiler against the existing AWS spool.
-2. Use those observed distributions to parameterize a Gemini BTC5m reference-replica shadow: continuous passive two-sided quoting, bounded inventory carry, opposite-side accumulation, fair-value/inventory skew, hold-to-settlement accounting.
-3. Add forward reference-wallet fill/book alignment because history alone cannot reveal unfilled resting quotes/cancel policy.
-4. Validate queue/fill and inventory economics in shadow.
-5. Only then propose a new q=1 **inventory-maker** live probe under fresh explicit approval. That probe should not use the old "first one-sided fill = emergency failure" semantics except for hard exposure limits or genuinely ambiguous states.
+1. Obtain fresh explicit approval for exactly one q=1 inventory-maker live campaign.
+2. Run `deploy/aws/run_gemini_btc5m_inventory_maker_q1_live_once.sh` once.
+3. Classify the result from authoritative fills:
+   - zero fill => no trade, release reservation;
+   - matched inventory => executed, not realized until settlement;
+   - one-sided/imbalanced inventory => valid inventory-strategy execution, not paired arb, not realized until settlement;
+   - ambiguous cancel/operational failure => hard stop, no further live run until Gemini state is reconciled.
+4. After settlement, reconcile actual fill prices, fees, payout, any maker rebate/reward actually credited, and net realized P&L.
+5. Do not scale from q=1 until repeated live evidence supports positive realized economics.
 
 ## Profit accounting
 
@@ -150,5 +180,6 @@ As of this checkpoint for this workstream:
 - Realized live-probe venue P&L from canary #1: +$0.64.
 - Realized paired-arbitrage P&L: $0.
 - Canary #2 realized P&L: $0 (no trade).
+- Inventory-maker q=1 preflight realized P&L: $0 (no order entry).
 - Total realized live-probe venue P&L in this workstream: +$0.64.
 - Reference-wallet / backtest / shadow economics are separate and are not user realized profit.
