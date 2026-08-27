@@ -45,7 +45,6 @@ echo "SETTLEMENT_OVERNIGHT_GATE_SOURCE_READY commit=$actual"
 docker build -t "$IMAGE" "$WORKTREE" >/dev/null
 echo "SETTLEMENT_OVERNIGHT_GATE_IMAGE_READY image=$IMAGE"
 
-# Exact-image offline safety suite. No network and therefore no venue mutation.
 docker run --rm --network none "$IMAGE" python -m pytest -q \
   tests/test_gemini_short_crypto_inventory_overnight_supervisor.py \
   tests/test_gemini_short_crypto_inventory_settlement_reconcile.py \
@@ -55,10 +54,8 @@ docker run --rm --network none "$IMAGE" python -m pytest -q \
 
 echo "SETTLEMENT_OVERNIGHT_GATE_SAFETY_TESTS_OK"
 
-# Poll authoritative Gemini settlement in one process. Pending settlement is the
-# only retryable condition. Any identity/economics mismatch fails closed immediately.
 echo "=== WAITING FOR AUTHORITATIVE GEMINI SETTLEMENT ==="
-docker run --rm --network host \
+docker run -i --rm --network host \
   --env-file "$ENV_FILE" \
   -e PYTHONUNBUFFERED=1 \
   -e GEMINI_SHORT_CRYPTO_STATE_DIR=/state \
@@ -86,6 +83,8 @@ async def main():
             print("SETTLEMENT_RECONCILED " + json.dumps(result, sort_keys=True), flush=True)
             if not result.get("local_reservation_cleared"):
                 raise RuntimeError("authoritative reconciliation did not clear local reservation")
+            if local.local_open_state() is not None:
+                raise RuntimeError("local reservation file still present after reconciliation")
             return
         except RuntimeError as exc:
             msg = str(exc)
@@ -110,9 +109,21 @@ async def main():
 asyncio.run(main())
 PY
 
+# Prove release before printing success.
+docker run --rm --network host \
+  --env-file "$ENV_FILE" \
+  -e PYTHONUNBUFFERED=1 \
+  -e GEMINI_SHORT_CRYPTO_STATE_DIR=/state \
+  -v "$STATE_DIR:/state" \
+  "$IMAGE" python -u - <<'PY'
+from src import gemini_short_crypto_local_budget as b
+state = b.local_open_state()
+assert state is None, f"reservation still present: {state}"
+print("SETTLEMENT_LOCAL_RELEASE_PROVEN local_open_reservation=false")
+PY
+
 echo "SETTLEMENT_RECONCILED_AND_RESERVATION_RELEASED"
 
-# Post-reconcile read-only exposure/local-state audit.
 echo "=== POST-SETTLEMENT CLEAN AUDIT ==="
 docker run --rm --network host \
   --env-file "$ENV_FILE" \
@@ -121,7 +132,6 @@ docker run --rm --network host \
   -v "$STATE_DIR:/state" \
   "$IMAGE" python -u -m src.gemini_short_crypto_local_budget_audit
 
-# Old live namespaces must not arm the overnight supervisor.
 docker run --rm --network none \
   -e GEMINI_SHORT_CRYPTO_INVENTORY_LIVE_Q1=YES \
   -e GEMINI_SHORT_CRYPTO_INVENTORY_CANARY_ID=old \
@@ -132,7 +142,6 @@ assert s.live_armed() is False
 print("OVERNIGHT_Q1_ARM_NAMESPACE_OK overnight_armed=false")
 PY
 
-# Authenticated DISARMED v3 market preflight. No order authority.
 echo "=== OVERNIGHT DISARMED MARKET PREFLIGHT ==="
 docker run --rm --network host \
   --env-file "$ENV_FILE" \
@@ -146,7 +155,6 @@ docker run --rm --network host \
 
 echo "OVERNIGHT_Q1_DISARMED_MARKET_PREFLIGHT_OK order_entry=false"
 
-# Final clean-start gate for an eventual overnight live approval.
 docker run -i --rm --network host \
   --env-file "$ENV_FILE" \
   -e PYTHONUNBUFFERED=1 \
