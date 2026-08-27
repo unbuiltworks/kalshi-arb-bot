@@ -78,7 +78,50 @@ def test_exact_slug_missing_search_start_time_fails_closed_when_league_time_know
         expected_event_slug="mlb-nyy-bos-2026-08-27",
         expected_event_start_time="2026-08-27T23:05:00Z",
     )
-    assert out["status"] == "EXACT_EVENT_START_TIME_MISSING"
+    assert out["status"] == "EXACT_EVENT_START_TIME_MISSING_OR_INVALID"
+    assert out["start_time_verified"] is False
+    assert out["execution_eligible"] is False
+
+
+def test_naive_search_start_time_never_inherits_runtime_timezone():
+    payload = {
+        "events": [
+            {
+                "slug": "mlb-nyy-bos-2026-08-27",
+                "title": "NYY vs BOS",
+                "startTime": "2026-08-27T23:05:00",
+                "markets": [],
+            }
+        ]
+    }
+    out = audit_search_identity(
+        payload,
+        expected_event_slug="mlb-nyy-bos-2026-08-27",
+        expected_event_start_time="2026-08-27T23:05:00Z",
+    )
+    assert out["status"] == "EXACT_EVENT_START_TIME_MISSING_OR_INVALID"
+    assert out["start_time_verified"] is False
+    assert out["start_time_delta_seconds"] is None
+    assert out["execution_eligible"] is False
+
+
+def test_naive_expected_league_start_time_fails_closed():
+    payload = {
+        "events": [
+            {
+                "slug": "mlb-nyy-bos-2026-08-27",
+                "title": "NYY vs BOS",
+                "startTime": "2026-08-27T23:05:00Z",
+                "markets": [],
+            }
+        ]
+    }
+    out = audit_search_identity(
+        payload,
+        expected_event_slug="mlb-nyy-bos-2026-08-27",
+        expected_event_start_time="2026-08-27T23:05:00",
+    )
+    assert out["status"] == "EXPECTED_EVENT_START_TIME_INVALID_OR_NAIVE"
     assert out["start_time_verified"] is False
     assert out["execution_eligible"] is False
 
