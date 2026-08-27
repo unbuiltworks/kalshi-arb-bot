@@ -2,10 +2,11 @@
 
 The strict MLB prop scanner intentionally requires an exact event slug match between
 Polymarket's league inventory and `/v1/search`.  When strict counterpart discovery is
-zero, we need to distinguish four very different states without relaxing identity:
+zero, we need to distinguish several very different states without relaxing identity:
 
 * the exact league event is returned and has parser-reachable player props;
 * the exact league event is returned but currently has no player props;
+* Search returns the exact slug but with missing/materially different scheduled time;
 * Search returns similarly titled events but not the exact league slug (search identity drift);
 * Search returns no plausible event at all.
 
@@ -27,6 +28,7 @@ from src.polymarket_us_mlb_prop_supply_audit import audit_payload
 PAST_GRACE = timedelta(hours=2)
 FUTURE_HORIZON = timedelta(hours=18)
 SEARCH_CONCURRENCY = 4
+START_TIME_TOLERANCE = timedelta(minutes=5)
 
 
 def _parse_utc(value: Any) -> datetime | None:
@@ -45,33 +47,63 @@ def _nearby(event: dict[str, Any], now: datetime) -> bool:
 
 
 def audit_search_identity(
-    payload: dict[str, Any], *, expected_event_slug: str, query: str = ""
+    payload: dict[str, Any],
+    *,
+    expected_event_slug: str,
+    expected_event_start_time: Any = None,
+    query: str = "",
 ) -> dict[str, Any]:
-    """Classify whether Search exposes the exact event the strict scanner requires."""
+    """Classify whether Search exposes the exact event the strict scanner requires.
+
+    If the league inventory supplies a scheduled start time, Search must independently
+    reproduce it within a small diagnostic tolerance.  Exact slug equality alone is not
+    treated as sufficient evidence because postponed games, doubleheaders, or stale
+    Search documents can otherwise look exact while referring to a different scheduled
+    event instance.
+    """
     expected = str(expected_event_slug or "").strip()
+    expected_start = _parse_utc(expected_event_start_time)
     events = [row for row in (payload.get("events") or []) if isinstance(row, dict)]
     exact = [row for row in events if str(row.get("slug") or "").strip() == expected]
 
+    exact_event: dict[str, Any] | None = None
+    start_time_verified = expected_start is None
+    start_time_delta_seconds: float | None = None
+
     if not expected:
         status = "MISSING_EXPECTED_EVENT_SLUG"
-        exact_event = None
     elif len(exact) == 1:
         exact_event = exact[0]
-        nested_audit = audit_payload({"events": [exact_event]}, query=query)
-        if nested_audit["strict_parser_compatible_prop_rows"] > 0:
-            status = "EXACT_EVENT_WITH_STRICT_PROP_SUPPLY"
-        elif nested_audit["prop_like_rows"] > 0:
-            status = "EXACT_EVENT_PROP_SCHEMA_DRIFT"
+        search_start = _parse_utc(exact_event.get("startTime"))
+        if expected_start is not None:
+            if search_start is None:
+                status = "EXACT_EVENT_START_TIME_MISSING"
+            else:
+                start_time_delta_seconds = abs((search_start - expected_start).total_seconds())
+                start_time_verified = start_time_delta_seconds <= START_TIME_TOLERANCE.total_seconds()
+                if not start_time_verified:
+                    status = "EXACT_EVENT_START_TIME_MISMATCH"
+                else:
+                    nested_audit = audit_payload({"events": [exact_event]}, query=query)
+                    if nested_audit["strict_parser_compatible_prop_rows"] > 0:
+                        status = "EXACT_EVENT_WITH_STRICT_PROP_SUPPLY"
+                    elif nested_audit["prop_like_rows"] > 0:
+                        status = "EXACT_EVENT_PROP_SCHEMA_DRIFT"
+                    else:
+                        status = "EXACT_EVENT_NO_PLAYER_PROP_SUPPLY"
         else:
-            status = "EXACT_EVENT_NO_PLAYER_PROP_SUPPLY"
+            nested_audit = audit_payload({"events": [exact_event]}, query=query)
+            if nested_audit["strict_parser_compatible_prop_rows"] > 0:
+                status = "EXACT_EVENT_WITH_STRICT_PROP_SUPPLY"
+            elif nested_audit["prop_like_rows"] > 0:
+                status = "EXACT_EVENT_PROP_SCHEMA_DRIFT"
+            else:
+                status = "EXACT_EVENT_NO_PLAYER_PROP_SUPPLY"
     elif len(exact) > 1:
-        exact_event = None
         status = "DUPLICATE_EXACT_EVENT_SLUG_AMBIGUOUS"
     elif events:
-        exact_event = None
         status = "SEARCH_EVENT_SLUG_DRIFT_OR_MISSING_EXACT_EVENT"
     else:
-        exact_event = None
         status = "SEARCH_RETURNED_NO_EVENTS"
 
     event_samples = [
@@ -87,8 +119,12 @@ def audit_search_identity(
     out: dict[str, Any] = {
         "query": query,
         "expected_event_slug": expected,
+        "expected_event_start_time": expected_event_start_time,
         "search_event_count": len(events),
         "exact_event_match_count": len(exact),
+        "start_time_verified": start_time_verified,
+        "start_time_tolerance_seconds": int(START_TIME_TOLERANCE.total_seconds()),
+        "start_time_delta_seconds": start_time_delta_seconds,
         "status": status,
         "event_samples": event_samples,
         "read_only": True,
@@ -144,6 +180,7 @@ async def run_live() -> dict[str, Any]:
             return audit_search_identity(
                 body,
                 expected_event_slug=str(event.get("slug") or ""),
+                expected_event_start_time=event.get("startTime"),
                 query=query,
             )
 
