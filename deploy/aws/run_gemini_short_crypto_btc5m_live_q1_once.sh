@@ -7,6 +7,7 @@ set -euo pipefail
 # - pinned strategy commit; no floating live code
 # - separate worktree/image/container
 # - exact q=1 only, BTC 5m only (enforced in Python)
+# - fractional maker fills are flattened at exact observed quantity
 # - authenticated DISARMED preflight immediately before live run
 # - fresh >=3c modeled pair-edge gate rechecked inside live process
 # - durable ledger reservation occurs before Gemini order submission
@@ -16,8 +17,8 @@ set -euo pipefail
 SOURCE_REPO="${SOURCE_REPO:-/home/ssm-user/kalshi-arb-bot}"
 WORKTREE="${WORKTREE:-/opt/arb/gemini-short-crypto-live-q1}"
 BRANCH="feature/gemini-short-crypto-live-q1"
-PINNED_COMMIT="f3bf1aa1bef1377051574bb53e70931a2f89ac2c"
-IMAGE="arb-gemini-short-btc5m-q1:live-f3bf1aa"
+PINNED_COMMIT="8b88aefdc41c3bc4ef099cbc21d39c1accdcd5e2"
+IMAGE="arb-gemini-short-btc5m-q1:live-8b88aef"
 CONTAINER="arb-gemini-short-btc5m-q1-live"
 PREFLIGHT_CONTAINER="arb-gemini-short-btc5m-q1-live-preflight"
 ENV_FILE="${ENV_FILE:-/opt/arb/secrets/gemini-short-crypto.env}"
@@ -74,26 +75,59 @@ echo "LIVE_Q1_SOURCE_READY commit=$actual"
 docker build -t "$IMAGE" "$WORKTREE"
 echo "LIVE_Q1_IMAGE_READY image=$IMAGE"
 
-# Run the explicit q=1 grid regression test inside the exact image used live.
+# Explicit regression tests inside the exact image used live.
 docker run --rm --network none "$IMAGE" \
-  python -m pytest -q tests/test_gemini_short_crypto_quantity.py
-echo "LIVE_Q1_GRID_TEST_OK"
+  python -m pytest -q \
+    tests/test_gemini_short_crypto_quantity.py \
+    tests/test_gemini_short_crypto_btc5m_canary_v3.py
+echo "LIVE_Q1_SAFETY_TESTS_OK"
 
 # Fresh authenticated preflight, still forcibly disarmed. No ledger mutation or order entry.
+PREFLIGHT_LOG="$(mktemp)"
+trap 'rm -f "$PREFLIGHT_LOG"' EXIT
+
 docker run --name "$PREFLIGHT_CONTAINER" --network host \
   --env-file "$ENV_FILE" \
   -e PYTHONUNBUFFERED=1 \
   -e GEMINI_SHORT_CRYPTO_LIVE_Q1=NO \
   -e GEMINI_SHORT_CRYPTO_CANARY_ID= \
   -e GEMINI_SHORT_CRYPTO_CANARY_ARM= \
-  "$IMAGE" python -u -m src.gemini_short_crypto_btc5m_maker_canary_q1_v2
-preflight_rc=$?
+  "$IMAGE" python -u -m src.gemini_short_crypto_btc5m_maker_canary_q1_v3 \
+  2>&1 | tee "$PREFLIGHT_LOG"
 docker rm "$PREFLIGHT_CONTAINER" >/dev/null 2>&1 || true
-if [ "$preflight_rc" -ne 0 ]; then
-  echo "LIVE_Q1_PREFLIGHT_FAILED rc=$preflight_rc" >&2
-  exit "$preflight_rc"
-fi
-echo "LIVE_Q1_PREFLIGHT_OK order_entry=false"
+
+python3 - "$PREFLIGHT_LOG" <<'PY'
+import json, sys
+from decimal import Decimal
+p = sys.argv[1]
+report = None
+prefix = "GEMINI_BTC5M_MAKER_Q1 "
+with open(p, encoding="utf-8") as f:
+    for line in f:
+        if not line.startswith(prefix):
+            continue
+        try:
+            obj = json.loads(line[len(prefix):])
+        except Exception:
+            continue
+        if obj.get("stage") == "PREFLIGHT":
+            report = obj
+            break
+if report is None:
+    raise SystemExit("preflight JSON missing")
+checks = {
+    "terms_ok": report.get("terms_ok") is True,
+    "available_usd>=2": Decimal(str(report.get("available_usd") or "0")) >= Decimal("2"),
+    "q1_supported": report.get("q1_supported") is True,
+    "passes_3c_pair_floor": report.get("passes_3c_pair_floor") is True,
+    "armed_false": report.get("armed") is False,
+    "order_entry_false": report.get("order_entry") is False,
+}
+print("LIVE_Q1_PREFLIGHT_CHECKS", checks)
+if not all(checks.values()):
+    raise SystemExit("live q1 preflight gate failed")
+print("LIVE_Q1_PREFLIGHT_OK order_entry=false")
+PY
 
 CANARY_ID="aws-btc5m-q1-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 echo "LIVE_Q1_STARTING canary_id=$CANARY_ID commit=$PINNED_COMMIT q=1 venue=gemini asset=BTC horizon=5m"
@@ -105,7 +139,7 @@ docker run -d --name "$CONTAINER" --network host \
   -e GEMINI_SHORT_CRYPTO_LIVE_Q1=YES \
   -e GEMINI_SHORT_CRYPTO_CANARY_ID="$CANARY_ID" \
   -e GEMINI_SHORT_CRYPTO_CANARY_ARM="$CANARY_ID" \
-  "$IMAGE" python -u -m src.gemini_short_crypto_btc5m_maker_canary_q1_v2
+  "$IMAGE" python -u -m src.gemini_short_crypto_btc5m_maker_canary_q1_v3
 
 set +e
 rc="$(docker wait "$CONTAINER")"
