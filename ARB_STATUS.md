@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-27 11:31 UTC / 2026-08-27 07:31 ET**
+Last verified: **2026-08-27 13:47 UTC / 2026-08-27 09:47 ET**
 
 ## Objective and fixed verdict
 
@@ -16,17 +16,17 @@ The 72-hour wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and ends **20
 
 ## Fresh production state
 
-- `sports-kp-live-executor`: Railway **SUCCESS/read-only census**. Fresh last-hour Railway metrics show **61/61 samples**, current CPU ~0.0397, average CPU ~0.0703, with continuous RX/TX. This is an active process, not a green-but-dead deployment.
-- `sports-generic-counterpart-shadow`: Railway **SUCCESS/read-only maker + delayed-hedge shadow**. Fresh last-hour metrics show **61/61 samples**, current CPU ~0.0112, average ~0.0231, with continuous RX/TX. The process is active; no new decision-usable markout summary could be extracted because the Railway detailed-log agent is quota-blocked.
-- `sports-gk-autonomous-supervisor`: Railway **SUCCESS/read-only/disarmed hot shadow**. Fresh last-hour metrics show **61/61 samples**, current CPU ~0.351, average ~0.629, with heavy continuous RX/TX. It is active, but prior decision evidence remains blocked by Gemini connectivity/rule certification; order entry stays disarmed.
+- `sports-kp-live-executor`: Railway **SUCCESS/read-only census**. Fresh runtime summaries continue every ~10 seconds; raw triggers exceeded **87.6M** during this run. The process is alive, but `comparable_evaluations` remains frozen at **53,237** and the decision sample at **1,661**, so the current interval is unmeasurable rather than fresh zero-edge evidence.
+- `sports-generic-counterpart-shadow`: Railway **SUCCESS/read-only maker + delayed-hedge shadow**. Fresh direct logs are continuously emitting markout summaries. Current in-process state remains **1,178 simulated fills / 134 delayed-hedge-observable fills**. No order authority.
+- `sports-gk-autonomous-supervisor`: Railway **SUCCESS/read-only/disarmed hot shadow**. Fresh heartbeat advanced raw triggers from ~76.6M to **77.5M+**, but `comparable_evaluations` remains frozen at **120,836**. Gemini remains **570 symbols / 0 connected** while Kalshi remains **570/570 initialized**. Order entry is false.
 - `crypto-15m-sol-live-canary-10bp-50ms`: remains **CRASHED/contained**. Do not reopen as guaranteed arb while Gemini/Kalshi settlement-index equivalence remains unproven.
-- `crypto-live-balance-reconcile-v2`: new auxiliary blocker — latest deployment **CRASHED** at ~10:40 UTC. Effective command is the read-only `python -m src.gemini_kalshi_balance_reconcile_readonly`, `restartPolicy=NEVER`. Railway detailed logs are quota-blocked, so the exact exception is not yet classified. This crash does not authorize restarting any crypto trading lane.
+- `crypto-live-balance-reconcile-v2`: remains an auxiliary read-only reconciliation blocker from its latest crash; this does not authorize restarting any crypto trading lane.
 
 ## Decision-grade K<->P evidence
 
 ### Strict MLB totals taker/taker
 
-Latest directly verified cumulative sample remains:
+Fresh direct production summaries reconfirm the same cumulative sample:
 
 - **53,237 comparable evaluations**;
 - **1,661 decision observations** across 9 semantic keys;
@@ -37,7 +37,7 @@ Latest directly verified cumulative sample remains:
 - average closed positive-signal lifetime ~174 ms, max 567 ms;
 - Kalshi transport explicitly labeled **REST_SNAPSHOT_NOT_WS_LIFETIME**.
 
-The live process is active, but a newer cumulative event summary could not be retrieved this run because Railway's detailed runtime agent hit its usage limit. Missing telemetry is not converted into fresh zero-edge evidence. The currently certified totals slice supports **$0/day deployable capacity at the fixed 3c taker/taker floor**.
+Raw trigger volume is still rising rapidly but no new comparable/decision observations are being created. The trigger-only interval therefore contributes **$0 measurable capacity** and is not treated as millions of additional zero-edge observations. The certified totals slice supports **$0/day deployable capacity at the fixed 3c taker/taker floor**.
 
 ### Clean MLB full-game taker/taker
 
@@ -45,18 +45,18 @@ After correcting start-time normalization and excluding F5/partial-game contamin
 
 ### Maker/fill shadow
 
-Latest decision-usable maker evidence remains:
+Fresh production logs directly reconfirm:
 
 - **1,178** pessimistic simulated q1 maker fills;
-- **291** immediate fills >=3c after the verified maker-fee model;
 - immediate shadow P&L about **+$32.67**;
-- only **134/1,178** fills have delayed-hedge-observable marks; **1,044** are unobservable and receive $0 capacity credit;
+- only **134/1,178** fills have delayed-hedge-observable marks; **1,044** are `ws_unhealthy`/unobservable and receive $0 capacity credit;
 - **80 ms:** +$0.0408 total, **22 >=1c / 9 >=2c / 2 >=3c**;
 - **250 ms:** -$0.7158 total, **14 / 8 / 2**;
 - **500 ms:** -$1.1384 total, **11 / 5 / 2**;
-- no hedge-depth misses in the observable cohort.
+- no hedge-depth misses in the observable cohort;
+- the process explicitly reports `capacity_credit_usd_per_day=0`, `read_only=true`, `order_entry=false`.
 
-The underlying K<->P full-game moneyline mechanism also fails exact postponement/reschedule lifecycle equivalence. Maker shadow therefore remains **$0 guaranteed/deployable capacity and $0 REALIZED P&L**. Fresh service metrics prove the process is alive, but this run produced no independently retrievable newer decision summary.
+The K<->P full-game moneyline mechanism also fails exact postponement/reschedule lifecycle equivalence. Maker shadow therefore remains **$0 guaranteed/deployable capacity and $0 REALIZED P&L**. The low 11.4% observable coverage is itself a decision-quality constraint; unobservable fills are never assumed hedgeable.
 
 ### Strict MLB player props / incentives
 
@@ -64,7 +64,9 @@ No K<->P player-prop family currently has complete settlement/postponement/cance
 
 ## G<->K sports
 
-Guaranteed-arb execution remains **disarmed/read-only**. The service is strongly active at the process/network level, but the last directly verified decision state had **570 Gemini symbols / 0 connected**, Kalshi **570/570 initialized**, frozen comparable evaluations, and only historical uncertified >=3c hot observations. This interval remains unmeasurable/$0 guaranteed capacity until two-sided connectivity and full lifecycle certification are restored. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
+Guaranteed-arb execution remains **disarmed/read-only**. Fresh production heartbeat now exceeds **77.5M raw triggers** but remains frozen at **120,836 comparable evaluations**, **6 historical >=3c hot evaluations**, and 4 completed hot-signal lifecycles. Gemini is still **570 symbols / 0 connected**, while Kalshi is **570/570 initialized**. The service explicitly reports `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION`, `read_only=true`, `order_entry=false`.
+
+This interval is unmeasurable/$0 guaranteed capacity, not fresh negative edge. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
 
 ## Kalshi account / 429 diagnosis
 
@@ -72,9 +74,9 @@ Authenticated account limits remain **advanced tier, 900 bucket / 300 refill** f
 
 ## Authoritative accounting
 
-Last directly verified ledger state remains:
+Fresh direct Neon queries at **2026-08-27 09:47 ET** confirm:
 
-- **2026-08-27 ET: 0 `TRADE_REALIZED` / $0.0000 net**;
+- **2026-08-27 ET: 0 ledger events, 0 `TRADE_REALIZED`, $0.0000 realized net, 0 capital reservations**;
 - weather: **0 verified weather-tagged `TRADE_REALIZED` / $0.0000 since 2026-03-01**;
 - Caleb Durbin remains prior **`SETTLED_ONE_LEG`, -$0.44 REALIZED**.
 
@@ -86,7 +88,7 @@ Guaranteed/deployable evidence remains strongly negative at the fixed 3c floor:
 
 - certified K<->P totals: **0 >=3c**;
 - clean full-game taker/taker: **0 >=3c**;
-- maker delayed hedge: only **2/134** observable marks >=3c at 80 ms, aggregate about **+$0.0408** at 80 ms and negative at 250/500 ms, while **1,044/1,178** fills are unobservable;
+- maker delayed hedge: only **2/134** observable marks >=3c at 80 ms, aggregate only **+$0.0408** at 80 ms and negative at 250/500 ms, while **1,044/1,178** fills are unobservable;
 - K<->P moneyline maker rules: lifecycle mismatch => **$0 guaranteed capacity**;
 - strict props/incentives: uncertified/incomplete => **$0**;
 - G<->K: disarmed and currently not decision-measurable => **$0 guaranteed capacity**;
@@ -98,9 +100,8 @@ Current evidence continues to track toward the pre-committed **<$50/day** bucket
 
 1. Keep the fixed census clock running through **2026-08-28 20:43 UTC / 16:43 ET** with no reset.
 2. Keep K<->P taker and maker/markout collectors alive; active-but-unmeasurable intervals score $0 and are not mislabeled as fresh zero-edge samples.
-3. Keep G<->K guaranteed execution disarmed; do not count raw activity without two-sided connectivity and rule certification.
-4. Diagnose `crypto-live-balance-reconcile-v2` only as a read-only reconciliation utility; do not let its crash divert the census or reopen unsafe crypto execution.
-5. Do not manufacture same-venue ladder violations, loosen 3c economics, or force uncertified player props.
-6. Preserve Kalshi account headroom/backoff; do not disrupt unrelated live services solely for census telemetry.
-7. Keep weather historical/backtest edge separate from verified live realized P&L.
-8. At the deadline, apply the fixed **<$50 / $50-$149 / >=$150** verdict without moving thresholds.
+3. Keep G<->K guaranteed execution disarmed; do not count raw activity without two-sided Gemini connectivity and full lifecycle certification.
+4. Do not spend the remaining census window manufacturing same-venue violations or building around uncertified props.
+5. Preserve Kalshi account headroom/backoff; do not disrupt unrelated live services solely for census telemetry.
+6. Keep weather historical/backtest edge separate from verified live realized P&L.
+7. At the deadline, apply the fixed **<$50 / $50-$149 / >=$150** verdict without moving thresholds.
