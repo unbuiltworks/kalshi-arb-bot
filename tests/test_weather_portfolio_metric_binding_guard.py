@@ -37,6 +37,8 @@ def _row():
         "executable_probability_time_scope_verified": True,
         "executable_probability_recency_verified": True,
         "executable_probability_max_age_seconds": "60",
+        "executable_probability_window_span_verified": True,
+        "executable_probability_max_window_seconds": "7200",
         "executable_probability_success_count": 10,
         "executable_probability_sample_count": 40,
         "executable_probability_sample_basis": "COMPLETE_SCANNER_SNAPSHOT_WINDOW",
