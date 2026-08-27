@@ -102,7 +102,7 @@ fi
 echo "LOCAL_LIVE_Q1_PREFLIGHT_OK order_entry=false"
 
 # Explicit read-only account/local-state audit just before arming.
-docker run --name "$AUDIT_CONTAINER" --network host \
+docker run -i --name "$AUDIT_CONTAINER" --network host \
   --env-file "$ENV_FILE" \
   -e PYTHONUNBUFFERED=1 \
   -e GEMINI_SHORT_CRYPTO_STATE_DIR=/state \
