@@ -29,6 +29,17 @@ class _Session:
         return _Result(str(params["quantity"]))
 
 
+def test_maker_client_ids_remain_distinct_under_gemini_cap():
+    trade_id = "crypto-gem-btc5m-aws-local-btc5m-q1-20260827T172716Z-1253"
+    yes_id, no_id = canary.maker_client_ids(trade_id)
+    assert yes_id != no_id
+    assert yes_id.endswith("-yes")
+    assert no_id.endswith("-no")
+    assert len(yes_id) <= 36
+    assert len(no_id) <= 36
+    assert canary.maker_client_ids(trade_id) == (yes_id, no_id)
+
+
 def test_fractional_flatten_uses_exact_observed_quantity(monkeypatch):
     monkeypatch.setattr(canary.base, "GeminiTradingSession", _Session)
     original = {
