@@ -1,8 +1,9 @@
-"""Authoritative settlement reconciliation for one Gemini BTC5m inventory-maker canary.
+"""Authoritative settlement reconciliation for Gemini BTC5m inventory-maker q=1.
 
 Venue access is read-only. Local ledger changes occur only after exact client-order
 identity, fill quantity/outcome, and Gemini settled-position economics all agree.
-This module intentionally does not reuse the older collision-era reconciler.
+Supports the bounded strategy's valid one-sided, matched, and fractional fill shapes.
+This intentionally does not reuse the older collision-era reconciler.
 """
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ from src import gemini_short_crypto_inventory_local_budget as budget
 from src import gemini_short_crypto_local_budget as local_base
 
 ONE = D("1")
+ZERO = D("0")
 
 
 async def _post(path: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -50,11 +52,67 @@ def _price(row: Mapping[str, Any]) -> str:
     return str(row.get("avgExecutionPrice") or row.get("avg_execution_price") or row.get("price") or "")
 
 
-def _one_exact(rows: list[dict[str, Any]], client_id: str) -> dict[str, Any]:
-    hits = [r for r in rows if _client_id(r) == client_id]
-    if len(hits) != 1:
-        raise RuntimeError(f"expected exactly one authoritative order row for {client_id}, got {len(hits)}")
-    return hits[0]
+def _position_qty(row: Mapping[str, Any]) -> D:
+    return D(str(
+        row.get("positionQuantity")
+        or row.get("position_quantity")
+        or row.get("totalQuantity")
+        or row.get("total_quantity")
+        or "0"
+    ))
+
+
+def _position_cost(row: Mapping[str, Any]) -> D:
+    return D(str(row.get("costBasis") or row.get("cost_basis") or "0"))
+
+
+def _position_payout(row: Mapping[str, Any]) -> D:
+    return D(str(row.get("payout") or "0"))
+
+
+def _position_net_profit(row: Mapping[str, Any]) -> D:
+    return D(str(row.get("netProfit") or row.get("net_profit") or "0"))
+
+
+def _terminal_exact_rows(
+    rows: list[dict[str, Any]], yes_id: str, no_id: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    expected: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        cid = _client_id(row)
+        if cid not in {yes_id, no_id}:
+            continue
+        prior = expected.get(cid)
+        # A terminal order may appear in more than one status query. Prefer the row
+        # carrying the larger authoritative filledQuantity.
+        if prior is None or _filled(row) > _filled(prior):
+            expected[cid] = row
+    if set(expected) != {yes_id, no_id}:
+        raise RuntimeError(f"missing exact canary order history expected=2 found={len(expected)}")
+    return expected[yes_id], expected[no_id]
+
+
+def _settled_for_fill(
+    settled_positions: list[dict[str, Any]], *, outcome: str, quantity: D
+) -> dict[str, Any]:
+    matches = [r for r in settled_positions if _outcome(r) == outcome]
+    if len(matches) != 1:
+        raise RuntimeError(f"expected one settled position matching {outcome}, got {len(matches)}")
+    row = matches[0]
+    position_qty = _position_qty(row)
+    if position_qty != quantity:
+        raise RuntimeError(
+            f"settled quantity mismatch outcome={outcome} fill={quantity} position={position_qty}"
+        )
+    cost = _position_cost(row)
+    payout = _position_payout(row)
+    if cost <= 0:
+        raise RuntimeError(f"nonpositive settled cost basis outcome={outcome}")
+    if payout not in {ZERO, quantity}:
+        raise RuntimeError(
+            f"unexpected binary payout outcome={outcome} quantity={quantity} payout={payout}"
+        )
+    return row
 
 
 async def reconcile() -> dict[str, Any]:
@@ -77,38 +135,19 @@ async def reconcile() -> dict[str, Any]:
         _post("/v1/prediction-markets/positions/settled", {"eventTicker": event_ticker, "limit": 100, "offset": 0}),
     )
 
-    order_rows = _rows(filled_body, "orders") + _rows(cancelled_body, "orders")
-    # A venue may surface the same terminal order in multiple status queries; dedupe
-    # exact client IDs by preferring the row with the greater filled quantity.
-    expected: dict[str, dict[str, Any]] = {}
-    for row in order_rows:
-        cid = _client_id(row)
-        if cid not in {yes_id, no_id}:
-            continue
-        prior = expected.get(cid)
-        if prior is None or _filled(row) > _filled(prior):
-            expected[cid] = row
-    if set(expected) != {yes_id, no_id}:
-        raise RuntimeError(f"missing exact canary order history expected=2 found={len(expected)}")
-
-    yes_row = expected[yes_id]
-    no_row = expected[no_id]
+    yes_row, no_row = _terminal_exact_rows(
+        _rows(filled_body, "orders") + _rows(cancelled_body, "orders"), yes_id, no_id
+    )
     yes_fill, no_fill = _filled(yes_row), _filled(no_row)
     yes_outcome, no_outcome = _outcome(yes_row), _outcome(no_row)
     if yes_outcome != "yes" or no_outcome != "no":
         raise RuntimeError(
             f"client-id/outcome mismatch yes_id_outcome={yes_outcome!r} no_id_outcome={no_outcome!r}"
         )
-    if not (D("0") <= yes_fill <= ONE and D("0") <= no_fill <= ONE):
+    if not (ZERO <= yes_fill <= ONE and ZERO <= no_fill <= ONE):
         raise RuntimeError("inventory fill quantity outside q=1 bounds")
-    if (yes_fill > 0) + (no_fill > 0) != 1:
-        raise RuntimeError(f"expected exactly one one-sided fill, got yes={yes_fill} no={no_fill}")
-
-    actual_outcome = "yes" if yes_fill > 0 else "no"
-    actual_fill = yes_fill if yes_fill > 0 else no_fill
-    actual_row = yes_row if yes_fill > 0 else no_row
-    if actual_fill != ONE:
-        raise RuntimeError(f"expected full q=1 one-sided fill, got {actual_fill}")
+    if yes_fill == ZERO and no_fill == ZERO:
+        raise RuntimeError("open reservation has zero authoritative fills; manual review required")
 
     settled_positions = []
     for row in _rows(settled_body, "positions"):
@@ -118,74 +157,104 @@ async def reconcile() -> dict[str, Any]:
     if not settled_positions:
         raise RuntimeError("Gemini settlement not posted yet for inventory canary")
 
-    matches = [r for r in settled_positions if _outcome(r) == actual_outcome]
-    if len(matches) != 1:
-        raise RuntimeError(
-            f"expected one settled position matching {actual_outcome}, got {len(matches)}"
-        )
-    position = matches[0]
-    position_qty = D(str(position.get("positionQuantity") or position.get("position_quantity") or "0"))
-    resolution = str(position.get("resolutionSide") or position.get("resolution_side") or "").lower()
-    cost_basis = D(str(position.get("costBasis") or position.get("cost_basis") or "0"))
-    payout = D(str(position.get("payout") or "0"))
-    net_profit = D(str(position.get("netProfit") or position.get("net_profit") or "0"))
-    if position_qty != ONE:
-        raise RuntimeError(f"unexpected settled position quantity {position_qty}")
-    if resolution not in {"yes", "no"}:
-        raise RuntimeError("settlement resolution side missing")
-    if cost_basis <= 0 or payout not in {D("0"), D("1")}:
-        raise RuntimeError("unexpected settled position economics")
+    filled: list[tuple[str, D, dict[str, Any]]] = []
+    if yes_fill > ZERO:
+        filled.append(("yes", yes_fill, yes_row))
+    if no_fill > ZERO:
+        filled.append(("no", no_fill, no_row))
 
+    settled_by_outcome: dict[str, dict[str, Any]] = {}
+    resolutions: set[str] = set()
+    total_cost = ZERO
+    total_payout = ZERO
+    total_net_profit = ZERO
+    for outcome, qty, _ in filled:
+        position = _settled_for_fill(settled_positions, outcome=outcome, quantity=qty)
+        resolution = str(position.get("resolutionSide") or position.get("resolution_side") or "").lower()
+        if resolution not in {"yes", "no"}:
+            raise RuntimeError("settlement resolution side missing")
+        resolutions.add(resolution)
+        settled_by_outcome[outcome] = position
+        total_cost += _position_cost(position)
+        total_payout += _position_payout(position)
+        total_net_profit += _position_net_profit(position)
+    if len(resolutions) != 1:
+        raise RuntimeError(f"inconsistent resolution sides across settled positions: {sorted(resolutions)}")
+    resolution = next(iter(resolutions))
+
+    legs_filled = len(filled)
+    gross_quantity = yes_fill + no_fill
+    matched = yes_fill > ZERO and no_fill > ZERO
+    fill_prices = {
+        "yes": _price(yes_row) if yes_fill > ZERO else None,
+        "no": _price(no_row) if no_fill > ZERO else None,
+    }
+    settlement_detail = {
+        outcome: {
+            "quantity": str(qty),
+            "cost_basis": str(_position_cost(settled_by_outcome[outcome])),
+            "payout": str(_position_payout(settled_by_outcome[outcome])),
+            "net_profit": str(_position_net_profit(settled_by_outcome[outcome])),
+        }
+        for outcome, qty, _ in filled
+    }
+
+    correction_status = "INVENTORY_MATCHED_FILL_SETTLED" if matched else "INVENTORY_ONE_SIDED_FILL_SETTLED"
     correction = budget._event_base(
         trade_id=trade_id,
         symbol=symbol,
         event_ticker=event_ticker,
         event_type="RECONCILIATION_CORRECTION",
-        status="INVENTORY_ONE_SIDED_FILL_SETTLED",
+        status=correction_status,
     )
     correction["event_id"] = local_base._safe_id(f"{trade_id}:inventory-reconcile:settled")
-    correction.update({"quantity": "1", "legs_required": 0, "legs_filled": 1})
+    correction.update({"quantity": str(gross_quantity), "legs_required": 0, "legs_filled": legs_filled})
     correction["metadata"].update({
-        "authoritative_source": "GEMINI_EXACT_CLIENT_IDS_PLUS_SETTLED_POSITION",
+        "authoritative_source": "GEMINI_EXACT_CLIENT_IDS_PLUS_SETTLED_POSITIONS",
         "yes_client_order_id": yes_id,
         "no_client_order_id": no_id,
         "yes_order_outcome": yes_outcome,
         "no_order_outcome": no_outcome,
         "yes_fill": str(yes_fill),
         "no_fill": str(no_fill),
-        "actual_filled_outcome": actual_outcome,
-        "actual_fill_price": _price(actual_row),
+        "fill_prices": fill_prices,
         "resolution_side": resolution,
-        "cost_basis": str(cost_basis),
-        "payout": str(payout),
-        "net_profit": str(net_profit),
+        "settlement_by_outcome": settlement_detail,
+        "cost_basis": str(total_cost),
+        "payout": str(total_payout),
+        "net_profit": str(total_net_profit),
+        "matched_inventory": matched,
         "paired_arb": False,
         "client_order_id_collision": False,
     })
     local_base._append(correction)
 
+    realized_status = "SETTLED_REALIZED_MATCHED_INVENTORY" if matched else "SETTLED_REALIZED_ONE_SIDED_INVENTORY"
     realized = budget._event_base(
         trade_id=trade_id,
         symbol=symbol,
         event_ticker=event_ticker,
         event_type="TRADE_REALIZED",
-        status="SETTLED_REALIZED_ONE_SIDED_INVENTORY",
+        status=realized_status,
     )
     realized["event_id"] = local_base._safe_id(f"{trade_id}:inventory-trade-realized:settled")
     realized.update({
-        "quantity": "1",
-        "amount": str(cost_basis),
-        "net_pnl": str(net_profit),
+        "quantity": str(gross_quantity),
+        "amount": str(total_cost),
+        "net_pnl": str(total_net_profit),
         "legs_required": 0,
-        "legs_filled": 1,
+        "legs_filled": legs_filled,
     })
     realized["metadata"].update({
-        "authoritative_source": "GEMINI_SETTLED_POSITION",
+        "authoritative_source": "GEMINI_SETTLED_POSITIONS",
         "realized": True,
-        "actual_filled_outcome": actual_outcome,
+        "yes_fill": str(yes_fill),
+        "no_fill": str(no_fill),
         "resolution_side": resolution,
-        "cost_basis": str(cost_basis),
-        "payout": str(payout),
+        "settlement_by_outcome": settlement_detail,
+        "cost_basis": str(total_cost),
+        "payout": str(total_payout),
+        "matched_inventory": matched,
         "paired_arb": False,
     })
     local_base._append(realized)
@@ -207,12 +276,13 @@ async def reconcile() -> dict[str, Any]:
         "no_order_outcome": no_outcome,
         "yes_fill": str(yes_fill),
         "no_fill": str(no_fill),
-        "filled_outcome": actual_outcome,
-        "fill_price": _price(actual_row),
-        "cost_basis": str(cost_basis),
-        "payout": str(payout),
+        "fill_prices": fill_prices,
+        "matched_inventory": matched,
+        "settlement_by_outcome": settlement_detail,
+        "cost_basis": str(total_cost),
+        "payout": str(total_payout),
         "resolution_side": resolution,
-        "net_profit": str(net_profit),
+        "net_profit": str(total_net_profit),
         "paired_arb": False,
         "client_order_id_collision": False,
         "local_reservation_cleared": local_base.local_open_state() is None,
