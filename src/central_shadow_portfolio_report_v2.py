@@ -7,8 +7,8 @@ unless the caller repeats every weather blocker. This wrapper makes the boundary
 explicit: weather sleeves are promotable/annualizable only when the canonical weather
 certification audit is independently replayed and clears, the selected-side schema
 independently clears, the portfolio ranking metrics are independently bound to the raw
-selected-side economics, execution probability is derived from unique OPEN episodes,
-and no hard blocker remains.
+selected-side economics, execution probability is derived from explicit deduplicated
+unique OPEN episode identities, and no hard blocker remains.
 
 This module is read-only and cannot authorize order entry or live probes.
 """
@@ -19,7 +19,7 @@ from typing import Any, Iterable
 
 from src.central_shadow_portfolio_report import Sleeve, rank_sleeves as _rank_sleeves
 from src.weather_certification_dimensions_v3 import audit_weather_certification_dimensions_v3
-from src.weather_portfolio_metric_binding_guard_v2 import audit_weather_portfolio_metric_binding_v2
+from src.weather_portfolio_metric_binding_guard_v3 import audit_weather_portfolio_metric_binding_v3
 
 D = Decimal
 
@@ -59,20 +59,24 @@ def _replay_weather_audit(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
 
 
 def _replay_weather_portfolio_metrics(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-    """Bind ranking scalars to unique-episode weather evidence.
+    """Bind ranking scalars to explicit unique-episode weather evidence.
 
     Edge/depth are independently derived from the selected executable side. Execution
-    probability must come from unique OPEN episodes across a complete, deduplicated
-    OPEN/MOVE/CLOSE observation window; repeated resting snapshots cannot increase the
-    empirical probability used by portfolio capacity reporting.
+    probability must come from an explicit deduplicated population of unique OPEN
+    episode IDs across a complete OPEN/MOVE/CLOSE observation window. Successful
+    episodes must be a subset of that exact population and reconcile to the reported
+    numerator/denominator; repeated resting snapshots cannot increase empirical
+    probability used by portfolio capacity reporting.
     """
     try:
-        audit = audit_weather_portfolio_metric_binding_v2(row)
+        audit = audit_weather_portfolio_metric_binding_v3(row)
     except Exception:
         return {}, False
     verified = (
         audit.get("weather_portfolio_metric_binding_verified") is True
         and audit.get("weather_execution_episode_probability_verified") is True
+        and audit.get("weather_execution_episode_identity_verified") is True
+        and audit.get("weather_execution_episode_set_reconciled") is True
         and audit.get("read_only") is True
         and audit.get("order_entry") is False
         and audit.get("live_probe_ready") is False
@@ -163,9 +167,10 @@ def rank_sleeves(rows: Iterable[dict[str, Any] | Sleeve]) -> dict[str, Any]:
     report["weather_projection_policy"] = (
         "Weather theoretical $/day and promotable score require an independent replay of "
         "the canonical v3 weather certification audit from raw evidence, the selected-side "
-        "schema, and the v2 portfolio metric-binding audit. Edge/depth are re-derived from "
-        "the selected executable side, and execution probability must come from unique OPEN "
-        "episodes in a complete deduplicated OPEN/MOVE/CLOSE window; repeated resting snapshots "
-        "cannot unlock projection. A structurally valid empty hard-blocker set is also mandatory."
+        "schema, and the v3 portfolio metric-binding audit. Edge/depth are re-derived from "
+        "the selected executable side, and execution probability must reconcile to explicit "
+        "deduplicated unique OPEN episode IDs in a complete OPEN/MOVE/CLOSE window; successful "
+        "episodes must be a subset of that exact population. Repeated resting snapshots cannot "
+        "unlock projection. A structurally valid empty hard-blocker set is also mandatory."
     )
     return report
