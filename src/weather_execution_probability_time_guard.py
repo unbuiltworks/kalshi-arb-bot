@@ -8,7 +8,9 @@ market/side/quantity/price/edge scope is otherwise exact.
 Avoiding lookahead is not enough: an arbitrarily old cohort can also misrepresent current
 liquidity. Therefore the producer must supply an explicitly audited maximum cohort age,
 and the cohort window end must be no older than that bound relative to the scored quote.
-The guard does not invent a recency threshold.
+The cohort span itself must also be bounded: a recent window end cannot make months of
+stale history representative of current liquidity. The guard does not invent either a
+recency threshold or a maximum cohort span.
 
 This helper is read-only and cannot authorize order entry or a live probe.
 """
@@ -22,6 +24,8 @@ EXECUTION_SAMPLE_TIME_UNVERIFIED = "WEATHER_EXECUTION_SAMPLE_TIME_UNVERIFIED"
 EXECUTION_SAMPLE_LOOKAHEAD_DETECTED = "WEATHER_EXECUTION_SAMPLE_LOOKAHEAD_DETECTED"
 EXECUTION_SAMPLE_RECENCY_UNVERIFIED = "WEATHER_EXECUTION_SAMPLE_RECENCY_UNVERIFIED"
 EXECUTION_SAMPLE_STALE = "WEATHER_EXECUTION_SAMPLE_STALE"
+EXECUTION_SAMPLE_WINDOW_SPAN_UNVERIFIED = "WEATHER_EXECUTION_SAMPLE_WINDOW_SPAN_UNVERIFIED"
+EXECUTION_SAMPLE_WINDOW_TOO_BROAD = "WEATHER_EXECUTION_SAMPLE_WINDOW_TOO_BROAD"
 
 
 def _dt(value: Any) -> datetime | None:
@@ -68,8 +72,10 @@ def audit_weather_execution_probability_time_binding(row: dict[str, Any]) -> dic
 
     lookahead = False
     age_seconds: Decimal | None = None
+    window_span_seconds: Decimal | None = None
     if structurally_verified:
         age_seconds = Decimal(str((quote - end).total_seconds()))
+        window_span_seconds = Decimal(str((end - start).total_seconds()))
         if end > quote:
             lookahead = True
             blockers.append(EXECUTION_SAMPLE_LOOKAHEAD_DETECTED)
@@ -93,17 +99,52 @@ def audit_weather_execution_probability_time_binding(row: dict[str, Any]) -> dic
         stale = True
         blockers.append(EXECUTION_SAMPLE_STALE)
 
-    verified = structurally_verified and not lookahead and recency_evidence_verified and not stale
+    max_window_seconds = _positive_decimal(row.get("executable_probability_max_window_seconds"))
+    window_span_evidence_verified = (
+        row.get("executable_probability_window_span_verified") is True
+        and max_window_seconds is not None
+    )
+    if not window_span_evidence_verified:
+        blockers.append(EXECUTION_SAMPLE_WINDOW_SPAN_UNVERIFIED)
+
+    window_too_broad = False
+    if (
+        structurally_verified
+        and window_span_evidence_verified
+        and window_span_seconds is not None
+        and window_span_seconds > max_window_seconds
+    ):
+        window_too_broad = True
+        blockers.append(EXECUTION_SAMPLE_WINDOW_TOO_BROAD)
+
+    verified = (
+        structurally_verified
+        and not lookahead
+        and recency_evidence_verified
+        and not stale
+        and window_span_evidence_verified
+        and not window_too_broad
+    )
     return {
         "weather_execution_probability_time_verified": verified,
         "weather_execution_probability_recency_verified": recency_evidence_verified and not stale,
+        "weather_execution_probability_window_span_verified": (
+            window_span_evidence_verified and not window_too_broad
+        ),
         "quote_observed_at": None if quote is None else quote.isoformat(),
         "execution_probability_window_start": None if start is None else start.isoformat(),
         "execution_probability_window_end": None if end is None else end.isoformat(),
         "execution_probability_lookahead_detected": lookahead,
         "execution_probability_stale_detected": stale,
+        "execution_probability_window_too_broad_detected": window_too_broad,
         "execution_probability_age_seconds": None if age_seconds is None else str(age_seconds),
         "execution_probability_max_age_seconds": None if max_age_seconds is None else str(max_age_seconds),
+        "execution_probability_window_span_seconds": (
+            None if window_span_seconds is None else str(window_span_seconds)
+        ),
+        "execution_probability_max_window_seconds": (
+            None if max_window_seconds is None else str(max_window_seconds)
+        ),
         "blockers": blockers,
         "read_only": True,
         "order_entry": False,
