@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-27 02:33 UTC / 2026-08-26 22:33 ET**
+Last verified: **2026-08-27 03:41 UTC / 2026-08-26 23:41 ET**
 
 This is the current production checkpoint. Historical detail belongs in git history / `ARB_STATUS_HISTORY_2026-08-23.md`.
 
@@ -18,9 +18,9 @@ The 72-hour wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and ends **20
 
 ## Fresh production state
 
-- `sports-kp-live-executor`: **SUCCESS/read-only census**. Fresh one-hour Railway metrics show 61/61 samples with average CPU ~0.0745 and sustained RX/TX traffic, so the process is genuinely alive. Last decision-grade taker sample remains valid but frozen; trigger-only intervals are unmeasurable and receive $0 capacity credit.
-- `sports-generic-counterpart-shadow`: **SUCCESS/read-only maker + delayed-hedge markout shadow**. Latest deployment is SUCCESS and fresh one-hour metrics show 61/61 samples with average CPU ~0.0441 and sustained network traffic; no order authority.
-- `sports-gk-autonomous-supervisor`: **SUCCESS/read-only/disarmed hot shadow**. Fresh one-hour metrics show 61/61 samples with average CPU ~0.5926 and sustained network traffic. No fresh certifiable execution evidence was established in this checkpoint; no guaranteed capacity credit.
+- `sports-kp-live-executor`: **SUCCESS/read-only census**. Fresh one-hour Railway metrics show 61/61 samples, average CPU ~0.0703, and sustained RX/TX traffic, so the process is genuinely alive. Last decision-grade taker sample remains valid but frozen; trigger-only intervals are unmeasurable and receive $0 capacity credit.
+- `sports-generic-counterpart-shadow`: **SUCCESS/read-only maker + delayed-hedge markout shadow**. Fresh one-hour metrics show 61/61 samples, average CPU ~0.0338, and sustained network traffic; no order authority.
+- `sports-gk-autonomous-supervisor`: **SUCCESS/read-only/disarmed hot shadow**. Fresh one-hour metrics show 61/61 samples, average CPU ~0.5962, and sustained network traffic. No fresh certifiable execution evidence was established in this checkpoint; no guaranteed capacity credit.
 - `crypto-15m-sol-live-canary-10bp-50ms`: **CRASHED/contained**. Do not reopen as guaranteed arb while Gemini/Kalshi settlement-index equivalence remains unproven.
 
 Railway's deeper runtime-log agent is quota-limited in this checkpoint, so no newer event-level census values are claimed beyond the last directly verified summaries below. Process metrics prove liveness only; they do not create capacity credit.
@@ -89,12 +89,12 @@ Authenticated account limits remain **advanced tier, 900 bucket / 300 refill** f
 
 ## Authoritative accounting
 
-Fresh direct Neon query at ~02:33 UTC / 22:33 ET found **no trade-ledger events of any type during the 2026-08-26 ET day window**:
+Fresh direct Neon queries at ~03:41 UTC / 23:41 ET confirm:
 
 - **2026-08-26 ET: 0 `TRADE_REALIZED` / $0.0000 net**;
-- **0 capital reservations** and no new order/fill/settlement is being counted;
-- Caleb Durbin remains **-$0.44 REALIZED** from the prior sports one-leg settlement;
-- weather remains **0 verified weather-tagged `TRADE_REALIZED` / $0.0000 since 2026-03-01** from the last authoritative weather query.
+- **0 unresolved durable capital reservations**;
+- Caleb Durbin remains **`SETTLED_ONE_LEG`, -$0.44 REALIZED** from the prior sports one-leg settlement;
+- weather remains **0 verified weather-tagged `TRADE_REALIZED` / $0.0000 since 2026-03-01**.
 
 Historical/seasonal weather edge remains separate and receives no capacity credit without authoritative live records.
 
