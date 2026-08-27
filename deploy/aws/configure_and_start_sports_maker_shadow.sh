@@ -46,8 +46,9 @@ import textwrap
 from pathlib import Path
 
 out_path = Path(sys.argv[1])
-sources = [Path(p) for p in sys.argv[2:4]]
+local_sources = [Path(p) for p in sys.argv[2:4]]
 repo_dir = Path(sys.argv[4])
+scalar_sources = [out_path, *local_sources]
 required_scalar = [
     "KALSHI_API_KEY_ID",
     "POLYMARKET_KEY_ID",
@@ -84,11 +85,8 @@ def normalize_pem(value: str) -> str:
         value = value.split("=", 1)[1].strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
         value = value[1:-1]
-    # Convert common env/JSON escaped newline forms back to real PEM newlines.
     value = value.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\n")
     value = value.replace("\r\n", "\n").replace("\r", "\n").strip()
-
-    # If the entire PEM was flattened onto one line with spaces, rebuild the body.
     match = re.search(
         r"-----BEGIN ([A-Z0-9 ]+?)-----(.*?)-----END \1-----",
         value,
@@ -120,10 +118,8 @@ def prompt_pem() -> str:
             line = raw.rstrip("\r\n")
             lines.append(line)
             joined = "\n".join(lines)
-            # Normal multi-line PEM: stop when END marker arrives.
             if re.search(r"-----END [A-Z0-9 ]+?-----", line):
                 break
-            # One-line escaped PEM: BEGIN/END markers are both in the first line.
             if len(lines) == 1 and "-----BEGIN " in joined and "-----END " in joined:
                 break
     finally:
@@ -132,10 +128,11 @@ def prompt_pem() -> str:
     return normalize_pem("\n".join(lines))
 
 
-parsed_sources = [(path, parse_env(path)) for path in sources]
+parsed_scalar_sources = [(path, parse_env(path)) for path in scalar_sources]
+parsed_local_sources = [(path, parse_env(path)) for path in local_sources]
 values: dict[str, str] = {}
 used_sources: list[str] = []
-for source, parsed in parsed_sources:
+for source, parsed in parsed_scalar_sources:
     found_here = False
     for key in required_scalar:
         if not values.get(key) and parsed.get(key):
@@ -144,11 +141,12 @@ for source, parsed in parsed_sources:
     if found_here:
         used_sources.append(str(source))
 
-# Prefer an already-present PEM string or key path so the user does not need to
-# re-copy a private key that this host may already have.
+# Deliberately do NOT reuse KALSHI_PRIVATE_KEY_PEM from the existing AWS env file:
+# the previous failed attempt may contain malformed framing. Only trusted local envs
+# or actual key files are eligible for automatic PEM reuse.
 pem: str | None = None
 pem_source: str | None = None
-for source, parsed in parsed_sources:
+for source, parsed in parsed_local_sources:
     raw = parsed.get("KALSHI_PRIVATE_KEY_PEM", "").strip()
     if raw:
         pem = normalize_pem(raw)
@@ -156,7 +154,7 @@ for source, parsed in parsed_sources:
         break
 
 candidate_paths: list[Path] = []
-for source, parsed in parsed_sources:
+for source, parsed in parsed_local_sources:
     raw_path = parsed.get("KALSHI_PRIVATE_KEY_PATH", "").strip()
     if raw_path:
         p = Path(raw_path).expanduser()
@@ -203,7 +201,7 @@ if pem is None:
 if "-----BEGIN " not in pem or "PRIVATE KEY-----" not in pem or "-----END " not in pem:
     raise SystemExit("KALSHI_PRIVATE_KEY_PEM does not contain complete PEM framing")
 
-# Docker --env-file requires one physical line per variable.
+
 def one_line(value: str) -> str:
     return value.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\\n")
 
@@ -218,7 +216,6 @@ lines = [
     f"POLYMARKET_SECRET_KEY={values['POLYMARKET_SECRET_KEY']}",
 ]
 
-# Atomic write with restrictive permissions. Never print file contents.
 tmp = out_path.with_suffix(out_path.suffix + ".tmp")
 tmp.write_text("\n".join(lines) + "\n")
 os.chmod(tmp, 0o640)
@@ -232,7 +229,6 @@ PY
 chown root:arb "$ENV_FILE"
 chmod 0640 "$ENV_FILE"
 
-# Validate the PEM inside the exact parity image before starting anything.
 if ! docker run --rm \
   --env-file "$ENV_FILE" \
   -e BOT_MODE=paper \
@@ -242,7 +238,6 @@ if ! docker run --rm \
   exit 1
 fi
 
-# Pull the latest migration runner itself, then launch the parity shadow as ssm-user.
 sudo -u ssm-user -H git -C "$REPO_DIR" fetch origin "$BRANCH"
 sudo -u ssm-user -H bash -lc \
   "git -C '$REPO_DIR' show origin/$BRANCH:deploy/aws/run_sports_maker_shadow.sh > '$RUNNER'"
@@ -261,5 +256,4 @@ fi
 echo "AWS_SPORTS_MAKER_SHADOW_RUNNING"
 echo "READ_ONLY=TRUE"
 echo "ORDER_ENTRY=FALSE"
-# Show only application logs. The strategy does not log credentials.
 docker logs --tail 40 arb-sports-maker-shadow-aws 2>&1 || true
