@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from decimal import Decimal
+import hashlib
 import os
 import time
 import uuid
@@ -27,6 +28,20 @@ def _q(value: Any) -> D:
 def _qty_text(value: D) -> str:
     # Plain decimal notation; Gemini accepts quantities on the contract grid.
     return format(value.normalize(), "f")
+
+
+def maker_client_ids(trade_id: str) -> tuple[str, str]:
+    """Return distinct, deterministic Gemini client IDs within the 36-char cap.
+
+    Never truncate after appending an outcome suffix: doing that can collapse YES
+    and NO into the same ID when the common trade-id prefix is already long.
+    """
+    digest = hashlib.sha256(trade_id.encode("utf-8")).hexdigest()[:24]
+    yes_id = f"b5-{digest}-yes"
+    no_id = f"b5-{digest}-no"
+    if yes_id == no_id or len(yes_id) > 36 or len(no_id) > 36:
+        raise RuntimeError("invalid Gemini maker client-order IDs")
+    return yes_id, no_id
 
 
 async def flatten_exact(original_params: dict[str, Any], quantity: D) -> dict[str, Any]:
@@ -123,8 +138,7 @@ async def run() -> None:
 
     cid = base._clean_id(os.getenv(base.CANARY_ID_ENV, ""))
     trade_id = f"crypto-gem-btc5m-{cid}"[:64]
-    yes_id = f"{trade_id}-yes"[:36]
-    no_id = f"{trade_id}-no"[:36]
+    yes_id, no_id = maker_client_ids(trade_id)
     yes_params = {
         "symbol": event.symbol,
         "side": "BUY",
