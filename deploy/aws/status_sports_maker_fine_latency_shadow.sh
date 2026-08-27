@@ -19,7 +19,7 @@ echo "AWS_FINE_CONTAINER name=$CONTAINER running=$running started_at=$started_at
 
 if [[ "$running" != "true" ]]; then
   echo "ERROR container_not_running"
-  docker logs --tail 80 "$CONTAINER" 2>&1 || true
+  docker logs --tail 100 "$CONTAINER" 2>&1 || true
   exit 1
 fi
 
@@ -35,11 +35,19 @@ path = sys.argv[1]
 fill = None
 mark = None
 fine_enabled = False
+watchdog_enabled = False
+watchdog_reconnects = 0
+last_watchdog_line = None
 with open(path, "r", encoding="utf-8", errors="replace") as fh:
     for line in fh:
         if "KPMM_FINE_LATENCY_ENABLED" in line:
             fine_enabled = True
-        elif "KPMM_FILL_SHADOW_SUMMARY " in line:
+        if "KPMM_POLY_WS_WATCHDOG_ENABLED" in line:
+            watchdog_enabled = True
+        if "KPMM_POLY_WS_WATCHDOG_RECONNECT " in line:
+            watchdog_reconnects += 1
+            last_watchdog_line = line.strip()
+        if "KPMM_FILL_SHADOW_SUMMARY " in line:
             try:
                 fill = json.loads(line.split("KPMM_FILL_SHADOW_SUMMARY ", 1)[1])
             except Exception:
@@ -50,7 +58,13 @@ with open(path, "r", encoding="utf-8", errors="replace") as fh:
             except Exception:
                 pass
 
-print(f"AWS_FINE_CONFIG enabled={fine_enabled} delays_ms=20,40,60,80,120")
+print(
+    f"AWS_FINE_CONFIG enabled={fine_enabled} delays_ms=20,40,60,80,120 "
+    f"watchdog_enabled={watchdog_enabled} watchdog_reconnects={watchdog_reconnects}"
+)
+if last_watchdog_line:
+    print("AWS_FINE_WATCHDOG_LAST " + last_watchdog_line)
+
 if fill is None:
     print("AWS_FINE_SCORE status=no_fill_summary_yet")
     raise SystemExit(0)
