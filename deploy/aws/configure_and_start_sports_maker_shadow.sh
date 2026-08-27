@@ -32,21 +32,24 @@ fi
 
 install -d -m 0750 -o root -g arb "$ENV_DIR"
 
-# Build the minimum read-only runtime env without printing any secret values.
-# Existing local env files are consulted first so the EC2 host can reuse credentials
-# already present there. Missing values are prompted with terminal echo disabled.
-python3 - "$ENV_FILE" "$REPO_DIR/.env.gemini-live" "$REPO_DIR/.env" <<'PY'
+# Build the minimum read-only runtime env without printing secret values. Existing
+# local env/key files are consulted first. Missing values are prompted with terminal
+# echo disabled. The PEM reader accepts either a normal multi-line PEM paste or a
+# one-line value containing literal backslash-n escapes.
+python3 - "$ENV_FILE" "$REPO_DIR/.env.gemini-live" "$REPO_DIR/.env" "$REPO_DIR" <<'PY'
 import getpass
 import os
 import re
 import sys
+import termios
+import textwrap
 from pathlib import Path
 
 out_path = Path(sys.argv[1])
-sources = [Path(p) for p in sys.argv[2:]]
-required = [
+sources = [Path(p) for p in sys.argv[2:4]]
+repo_dir = Path(sys.argv[4])
+required_scalar = [
     "KALSHI_API_KEY_ID",
-    "KALSHI_PRIVATE_KEY_PEM",
     "POLYMARKET_KEY_ID",
     "POLYMARKET_SECRET_KEY",
 ]
@@ -74,33 +77,133 @@ def parse_env(path: Path) -> dict[str, str]:
         data[key] = value
     return data
 
+
+def normalize_pem(value: str) -> str:
+    value = value.strip()
+    if value.startswith("KALSHI_PRIVATE_KEY_PEM="):
+        value = value.split("=", 1)[1].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    # Convert common env/JSON escaped newline forms back to real PEM newlines.
+    value = value.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\n")
+    value = value.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+    # If the entire PEM was flattened onto one line with spaces, rebuild the body.
+    match = re.search(
+        r"-----BEGIN ([A-Z0-9 ]+?)-----(.*?)-----END \\1-----",
+        value,
+        flags=re.DOTALL,
+    )
+    if match:
+        kind = match.group(1)
+        body = re.sub(r"\s+", "", match.group(2))
+        if body:
+            wrapped = "\n".join(textwrap.wrap(body, 64))
+            value = f"-----BEGIN {kind}-----\n{wrapped}\n-----END {kind}-----"
+    return value.strip() + "\n"
+
+
+def prompt_pem() -> str:
+    print("Enter KALSHI_PRIVATE_KEY_PEM (multi-line PEM or one-line backslash-n value).")
+    print("Input is hidden. For a normal PEM paste, finish after the -----END ...----- line.")
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    lines: list[str] = []
+    try:
+        new = termios.tcgetattr(fd)
+        new[3] &= ~termios.ECHO
+        termios.tcsetattr(fd, termios.TCSADRAIN, new)
+        while True:
+            raw = sys.stdin.readline()
+            if raw == "":
+                raise SystemExit("stdin closed while reading KALSHI_PRIVATE_KEY_PEM")
+            line = raw.rstrip("\r\n")
+            lines.append(line)
+            joined = "\n".join(lines)
+            # Normal multi-line PEM: stop when END marker arrives.
+            if re.search(r"-----END [A-Z0-9 ]+?-----", line):
+                break
+            # One-line escaped PEM: BEGIN/END markers are both in the first line.
+            if len(lines) == 1 and "-----BEGIN " in joined and "-----END " in joined:
+                break
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        print()
+    return normalize_pem("\n".join(lines))
+
+
+parsed_sources = [(path, parse_env(path)) for path in sources]
 values: dict[str, str] = {}
 used_sources: list[str] = []
-for source in sources:
-    parsed = parse_env(source)
+for source, parsed in parsed_sources:
     found_here = False
-    for key in required:
+    for key in required_scalar:
         if not values.get(key) and parsed.get(key):
             values[key] = parsed[key]
             found_here = True
     if found_here:
         used_sources.append(str(source))
 
-for key in required:
+# Prefer an already-present PEM string or key path so the user does not need to
+# re-copy a private key that this host may already have.
+pem: str | None = None
+pem_source: str | None = None
+for source, parsed in parsed_sources:
+    raw = parsed.get("KALSHI_PRIVATE_KEY_PEM", "").strip()
+    if raw:
+        pem = normalize_pem(raw)
+        pem_source = str(source) + ":KALSHI_PRIVATE_KEY_PEM"
+        break
+
+candidate_paths: list[Path] = []
+for source, parsed in parsed_sources:
+    raw_path = parsed.get("KALSHI_PRIVATE_KEY_PATH", "").strip()
+    if raw_path:
+        p = Path(raw_path).expanduser()
+        if not p.is_absolute():
+            p = repo_dir / p
+        candidate_paths.append(p)
+candidate_paths.extend([
+    repo_dir / "private_key.pem",
+    repo_dir / "kalshi_private_key.pem",
+    Path("/home/ssm-user/private_key.pem"),
+    Path("/home/ssm-user/.kalshi/private_key.pem"),
+])
+if pem is None:
+    seen: set[str] = set()
+    for path in candidate_paths:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            if path.is_file():
+                raw = path.read_text(errors="strict")
+                if "-----BEGIN " in raw and "PRIVATE KEY-----" in raw:
+                    pem = normalize_pem(raw)
+                    pem_source = str(path)
+                    break
+        except (OSError, UnicodeError):
+            continue
+
+for key in required_scalar:
     if values.get(key):
         continue
-    label = key
-    if key == "KALSHI_PRIVATE_KEY_PEM":
-        label += " (paste the one-line backslash-n escaped value)"
     while True:
-        value = getpass.getpass(f"Enter {label}: ").strip()
+        value = getpass.getpass(f"Enter {key}: ").strip()
         if value:
             values[key] = value
             break
         print(f"{key} cannot be empty", file=sys.stderr)
 
-# Docker --env-file requires one physical line per variable. Preserve literal
-# backslash-n escapes and convert any actual newline into the same representation.
+if pem is None:
+    pem = prompt_pem()
+    pem_source = "interactive_hidden_input"
+
+if "-----BEGIN " not in pem or "PRIVATE KEY-----" not in pem or "-----END " not in pem:
+    raise SystemExit("KALSHI_PRIVATE_KEY_PEM does not contain complete PEM framing")
+
+# Docker --env-file requires one physical line per variable.
 def one_line(value: str) -> str:
     return value.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\\n")
 
@@ -109,9 +212,11 @@ lines = [
     "KALSHI_ENV=prod",
     "PYTHONUNBUFFERED=1",
     "LOG_LEVEL=INFO",
+    f"KALSHI_API_KEY_ID={values['KALSHI_API_KEY_ID']}",
+    f"KALSHI_PRIVATE_KEY_PEM={one_line(pem)}",
+    f"POLYMARKET_KEY_ID={values['POLYMARKET_KEY_ID']}",
+    f"POLYMARKET_SECRET_KEY={values['POLYMARKET_SECRET_KEY']}",
 ]
-for key in required:
-    lines.append(f"{key}={one_line(values[key])}")
 
 # Atomic write with restrictive permissions. Never print file contents.
 tmp = out_path.with_suffix(out_path.suffix + ".tmp")
@@ -120,18 +225,22 @@ os.chmod(tmp, 0o640)
 os.replace(tmp, out_path)
 print("SECURE_ENV_WRITTEN")
 print("REUSED_LOCAL_SOURCES=" + (",".join(used_sources) if used_sources else "none"))
+print("KALSHI_PEM_SOURCE=" + (pem_source or "unknown"))
 print("REQUIRED_VALUES_PRESENT=4/4")
 PY
 
 chown root:arb "$ENV_FILE"
 chmod 0640 "$ENV_FILE"
 
-# Validate that the Kalshi PEM can actually be parsed inside the exact parity image.
-docker run --rm \
+# Validate the PEM inside the exact parity image before starting anything.
+if ! docker run --rm \
   --env-file "$ENV_FILE" \
   -e BOT_MODE=paper \
   "$IMAGE" \
-  python -c 'from src.auth import load_private_key; load_private_key(); print("KALSHI_PRIVATE_KEY_PARSE_OK")'
+  python -c 'from src.auth import load_private_key; load_private_key(); print("KALSHI_PRIVATE_KEY_PARSE_OK")'; then
+  echo "ERROR: Kalshi private key still failed to parse. The AWS shadow was NOT started." >&2
+  exit 1
+fi
 
 # Pull the latest migration runner itself, then launch the parity shadow as ssm-user.
 sudo -u ssm-user -H git -C "$REPO_DIR" fetch origin "$BRANCH"
