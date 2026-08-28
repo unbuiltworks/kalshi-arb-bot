@@ -28,7 +28,8 @@ def _cleared_assessment():
 
 def test_participation_cleared_probe_is_paper_not_live():
     assessment, _ = _cleared_assessment()
-    probe5 = {"conservative_locked_profit": "0.04"}
+    # Preferred threshold is >=3 cents per contract, so this q1 +4c plan qualifies.
+    probe5 = {"quantity": 1, "conservative_locked_profit": "0.04"}
     positive, preferred = v5._paper_probe_flags(assessment, probe5)
     assert positive is True
     assert preferred is True
