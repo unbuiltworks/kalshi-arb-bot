@@ -1,6 +1,7 @@
 from decimal import Decimal as D
 
 from src.kalshi_l5_inventory_replay import (
+    MAX_UNITS_PER_OUTCOME,
     MarketReplay,
     apply_observation,
     kalshi_general_maker_fee,
@@ -55,7 +56,6 @@ def test_reversal_retains_first_side_and_can_accumulate_opposite():
     apply_observation(s, row(yes_bid="0.58", yes_ask="0.59", favored="YES", target=1, yes_quote="0.58"))
     assert s.yes_qty == 1
 
-    # NO becomes favored; buy-NO quote 0.31 means YES-side equivalent ask is 0.69.
     apply_observation(s, row(yes_bid="0.35", yes_ask="0.40", favored="NO", target=1, no_quote="0.61"))
     # next NO ask = 1 - 0.40 = 0.60, strictly through 0.61 => fill.
     apply_observation(s, row(yes_bid="0.40", yes_ask="0.42", favored="NO", target=1, no_quote="0.58"))
@@ -78,6 +78,33 @@ def test_portfolio_worst_case_distinguishes_matched_and_directional_inventory():
     # Whole portfolio is not locked despite profitable matched inventory.
     assert s.payoff("YES") == D("0.50")
     assert s.payoff("NO") == D("-0.50")
+
+
+def test_malformed_target_and_fill_can_never_exceed_three_per_side():
+    s = MarketReplay("T", "KXBTC15M")
+    assert MAX_UNITS_PER_OUTCOME == D("3")
+
+    # A malformed upstream target of 6 is clamped before the virtual order rests.
+    apply_observation(s, row(yes_bid="0.80", yes_ask="0.85", favored="YES", target=6, yes_quote="0.81", ts="a"))
+    assert s.pending_yes_qty == D("3")
+    apply_observation(s, row(yes_bid="0.70", yes_ask="0.79", favored="YES", target=6, yes_quote="0.71", ts="b"))
+    assert s.yes_qty == D("3")
+
+    # Even a direct malformed fill request is independently clipped at the ledger.
+    s._fill("YES", D("0.50"), D("9"), "c")
+    assert s.yes_qty == D("3")
+    assert sum(fill.quantity for fill in s.fills if fill.side == "YES") == D("3")
+
+    summary = s.summary()
+    assert summary["fill_chronology"] == [
+        {
+            "side": "YES",
+            "price": "0.81",
+            "quantity": "3",
+            "modeled_maker_fee_if_applicable": "0.01",
+            "observed_at": "b",
+        }
+    ]
 
 
 def test_general_maker_fee_scenario_rounds_up_to_cent():
