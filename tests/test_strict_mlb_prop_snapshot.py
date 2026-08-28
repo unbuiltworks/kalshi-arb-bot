@@ -1,9 +1,11 @@
+import inspect
 from decimal import Decimal
 
 from src.strict_mlb_prop_snapshot import (
     TopBook,
     best_conservative_plan,
     conservative_kalshi_fee,
+    discover_strict_candidates,
     kalshi_top_book,
     poly_top_book,
     polymarket_fee,
@@ -111,3 +113,8 @@ def test_depth_caps_quantity() -> None:
     )
     assert plan is not None
     assert plan["quantity"] <= 3
+
+
+def test_strict_candidate_identity_does_not_use_host_local_calendar_date() -> None:
+    source = inspect.getsource(discover_strict_candidates)
+    assert ".astimezone().date()" not in source
