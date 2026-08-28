@@ -132,7 +132,8 @@ def test_ambiguous_selected_side_fails_closed(monkeypatch):
     assert out["exact_market_contract_verified"] is True
     assert out["exact_quote_verified"] is True
     assert out["selected_side_schema_verified"] is False
-    assert out["settlement_certified_shadow"] is False
+    # Side-economics ambiguity invalidates EV only; exact-contract settlement evidence remains valid.
+    assert out["settlement_certified_shadow"] is True
     assert out["ev_certified_shadow"] is False
     assert out["best_shadow_side"] is None
     assert out["modeled_taker_fee_cents"] is None
