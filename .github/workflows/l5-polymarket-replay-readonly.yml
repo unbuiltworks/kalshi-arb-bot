@@ -1,0 +1,88 @@
+name: l5 polymarket replay readonly
+
+on:
+  push:
+    branches:
+      - feature/l5-polymarket-replay-v1
+    paths:
+      - src/l5_polymarket_replay.py
+      - tests/test_l5_polymarket_replay.py
+      - .github/workflows/l5-polymarket-replay-readonly.yml
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install minimal read-only dependencies
+        run: python -m pip install 'httpx>=0.27' 'pytest>=8'
+
+      - name: Test replay math and maker-fill query
+        run: pytest -q tests/test_l5_polymarket_replay.py
+
+      - name: Collect last six hours
+        shell: bash
+        run: |
+          set -euo pipefail
+          START="$(python - <<'PY'
+          import time
+          print(int(time.time()) - 21600)
+          PY
+          )"
+          mkdir -p artifacts
+          python -m src.l5_polymarket_replay \
+            --start "$START" \
+            --limit 10000 \
+            --latest-markets 30 \
+            > artifacts/l5-replay.json
+
+      - name: Print compact chronology summary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path('artifacts/l5-replay.json').read_text())
+          print('SUMMARY')
+          print(json.dumps(data['summary'], indent=2))
+          print('MARKETS', len(data['markets']))
+          for market in data['markets']:
+              final = market['final']
+              print(json.dumps({
+                  'slug': market['slug'],
+                  'coin': market['coin'],
+                  'horizon': market['horizon'],
+                  'trades': market['trade_count'],
+                  'buys': market['buy_count'],
+                  'sells': market['sell_count'],
+                  'switches': market['side_switches_between_buys'],
+                  'buys_ge_60c': market['high_probability_buy_count_ge_60c'],
+                  'sub_dollar_steps': market['sub_dollar_matched_steps'],
+                  'final_up_qty': final['up_qty'],
+                  'final_down_qty': final['down_qty'],
+                  'final_up_vwap': final['up_vwap'],
+                  'final_down_vwap': final['down_vwap'],
+                  'final_pair_cost': final['matched_pair_cost'],
+                  'final_locked_gross_per_pair': final['locked_gross_per_pair'],
+                  'residual_side': final['residual_side'],
+                  'residual_qty': final['residual_qty'],
+              }, separators=(',', ':')))
+          PY
+
+      - name: Upload raw replay report
+        uses: actions/upload-artifact@v4
+        with:
+          name: l5-replay-six-hours
+          path: artifacts/l5-replay.json
+          retention-days: 3
