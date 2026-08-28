@@ -55,7 +55,7 @@ def test_strict_blocks_negative_completion_even_with_projected_rebate():
     market.on_book(D('0.57'), D('0.59'))  # strict YES fill at .60
     strict = market.strict_trade_through
     assert strict.residual_side == 'YES'
-    # NO .39 would look sub-$1 raw, but q10 maker fees can make it negative.
-    market.on_book(D('0.59'), D('0.61'))
+    # A 40c NO would make the raw pair exactly $1; maker fees make it negative.
+    market.on_book(D('0.58'), D('0.60'))
     assert strict.no_quote is None
     assert strict.blocked_unprofitable_completion >= 1
