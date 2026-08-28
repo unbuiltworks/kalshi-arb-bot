@@ -144,8 +144,8 @@ echo "DYNAMIC_COMPLEMENT_Q1_CLEAN_START_OK"
 # Optional read-only qualifier wait. This uses the exact same discovery, fresh-book,
 # band, fee, q1-size, and time-to-expiry rules as the live child. Crucially, it runs
 # BEFORE the one-use approval marker is consumed and cannot submit orders. Transient
-# transport/timeouts are classified separately and retried; business/safety errors
-# remain fatal.
+# transport/timeouts and exact no-fresh-depth conditions are classified separately
+# and retried; business/safety errors remain fatal.
 if [ "$QUALIFY_WAIT_SECONDS" -gt 0 ]; then
   echo "DYNAMIC_COMPLEMENT_Q1_QUALIFIER_WAIT_START max_seconds=$QUALIFY_WAIT_SECONDS poll_seconds=$QUALIFY_POLL_SECONDS order_entry=false"
   QUALIFY_DEADLINE=$(( $(date +%s) + QUALIFY_WAIT_SECONDS ))
@@ -200,6 +200,17 @@ async def main():
                 "retryable_transport_error": type(exc).__name__,
             }, sort_keys=True), flush=True)
             raise SystemExit(4)
+        except RuntimeError as exc:
+            msg = str(exc)
+            if msg in {"no fresh Gemini BTC5m depth", "no fresh Gemini ETH5m depth"}:
+                print(json.dumps({
+                    "qualifies": False,
+                    "order_entry": False,
+                    "mutation": False,
+                    "retryable_market_data_error": msg,
+                }, sort_keys=True), flush=True)
+                raise SystemExit(4)
+            raise
     finally:
         core.base.discover_btc5m = original
 
