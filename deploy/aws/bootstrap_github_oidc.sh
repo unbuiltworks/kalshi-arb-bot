@@ -5,12 +5,17 @@ set -euo pipefail
 # Creates OR repairs the GitHub Actions OIDC provider and the narrowly scoped
 # SSM deployment role for the ARB hot host.
 #
+# IMPORTANT: this repair is account-bound. The q1 launch workflow currently
+# targets AWS account 318017571498. Abort rather than silently creating an
+# equivalent role/provider in a different account.
+#
 # The OIDC certificate chain can rotate. Do not pin a historical GitHub
 # thumbprint forever: derive the current top intermediate CA from the live TLS
 # chain, compare it with IAM, and update IAM when needed.
 
 REGION="${AWS_REGION:-us-east-1}"
 INSTANCE_ID="${AWS_ARB_HOT_INSTANCE_ID:-i-0b90f0a309153f47e}"
+EXPECTED_ACCOUNT_ID="${AWS_ARB_ACCOUNT_ID:-318017571498}"
 GITHUB_REPO="${GITHUB_REPO:-unbuiltworks/kalshi-arb-bot}"
 GITHUB_BRANCH="${GITHUB_BRANCH:-aws-migration-foundation}"
 ROLE_NAME="${ROLE_NAME:-arb-github-ssm-deployer}"
@@ -19,6 +24,13 @@ OIDC_HOST="token.actions.githubusercontent.com"
 OIDC_AUDIENCE="sts.amazonaws.com"
 
 ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+if [ "$ACCOUNT_ID" != "$EXPECTED_ACCOUNT_ID" ]; then
+  echo "AWS_ACCOUNT_MISMATCH expected=$EXPECTED_ACCOUNT_ID actual=$ACCOUNT_ID" >&2
+  echo "REFUSING_OIDC_REPAIR_IN_WRONG_ACCOUNT" >&2
+  exit 2
+fi
+
+echo "AWS_ACCOUNT_VERIFIED=$ACCOUNT_ID"
 INSTANCE_ARN="arn:aws:ec2:${REGION}:${ACCOUNT_ID}:instance/${INSTANCE_ID}"
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
 PROVIDER_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/${OIDC_HOST}"
@@ -169,6 +181,7 @@ FINAL_PROVIDER="$(aws iam get-open-id-connect-provider \
 FINAL_TRUST="$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.AssumeRolePolicyDocument' --output json)"
 
 printf '\nAWS_GITHUB_OIDC_READY\n'
+printf 'AWS_ACCOUNT_ID=%s\n' "$ACCOUNT_ID"
 printf 'AWS_ARB_DEPLOY_ROLE_ARN=%s\n' "$ROLE_ARN"
 printf 'AWS_ARB_REGION=%s\n' "$REGION"
 printf 'AWS_ARB_HOT_INSTANCE_ID=%s\n' "$INSTANCE_ID"
