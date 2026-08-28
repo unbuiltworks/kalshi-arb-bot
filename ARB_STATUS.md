@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-27 23:48 UTC / 2026-08-27 19:48 ET**
+Last verified: **2026-08-28 00:39 UTC / 2026-08-27 20:39 ET**
 
 ## Objective and fixed verdict
 
@@ -16,16 +16,16 @@ The 72-hour wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and ends **20
 
 ## Fresh production state
 
-Fresh direct Railway control-plane + one-hour metrics verification at ~19:48 ET:
+Fresh Railway control-plane verification at ~20:39 ET:
 
-- `sports-kp-live-executor`: latest deployment **SUCCESS**; 61 one-minute samples, avg CPU ~0.0683 with nonzero average RX/TX over the hour. The current instantaneous sample was zero, but the full-hour trace proves recent activity; detailed logs are still needed before claiming fresh decision counters.
-- `sports-generic-counterpart-shadow`: latest deployment **SUCCESS**; 61/61 one-minute samples active, avg CPU ~0.0379 with continuous network traffic. It remains strictly read-only.
-- `sports-gk-autonomous-supervisor`: latest deployment **SUCCESS**; 61 one-minute samples, avg CPU ~0.6768 with substantial RX/TX over the hour. The current instantaneous sample was zero, but the full-hour trace proves recent activity. It remains explicitly read-only/disarmed.
+- `sports-kp-live-executor`: latest deployment **SUCCESS**. No newer decision-grade counters are available in this run, so the last valid census statistics remain authoritative.
+- `sports-generic-counterpart-shadow`: latest deployment **SUCCESS** and remains read-only.
+- `sports-gk-autonomous-supervisor`: latest deployment **SUCCESS** and remains read-only/disarmed.
 - `crypto-15m-sol-live-canary-10bp-50ms`: latest deployment remains **CRASHED/contained**. Do not reopen as guaranteed arb while Gemini/Kalshi settlement-index equivalence remains unproven.
-- `crypto-live-balance-reconcile-v2`: newest deployment remains **SUCCESS** as of 18:50 ET, but it remains observability-only and grants no crypto execution authority.
-- canonical separate `kalshi-weather-bot` project: core bot **SUCCESS**, `weather-shadow-arb` **SUCCESS**, backtest **SUCCESS**, and `weather-live-probe` remains **CRASHED**. There is also a different `weather-live-probe` service inside the sports-arb project showing SUCCESS; that duplicate/adjacent service must not be confused with the canonical weather project's live probe or with realized weather P&L.
+- `crypto-live-balance-reconcile-v2`: a newer deployment created **2026-08-27 23:47 UTC / 19:47 ET** is now **SUCCESS**. This is observability/reconciliation only and grants no execution authority; a green deployment badge alone is not proof of reconciled venue state.
+- canonical separate `kalshi-weather-bot` project: core bot **SUCCESS**, `weather-shadow-arb` **SUCCESS**, backtest **SUCCESS**, and canonical `weather-live-probe` remains **CRASHED**. A different same-named service inside `sports-arb-autonomous` is green but does not supersede canonical weather state or create realized weather P&L.
 
-Railway's detailed runtime/log agent remains quota-blocked (`Agent usage limit reached`), so this run could not extract newer K<->P/G<->K decision counters from logs. Neither that tooling failure nor zero instantaneous metric samples are being converted into positive or negative edge evidence.
+No fresh decision-grade economics were recovered in this run. Tooling/runtime visibility limitations therefore do not change any edge bin, capacity estimate, realized P&L, or verdict threshold.
 
 ## Decision-grade K<->P evidence
 
@@ -43,7 +43,7 @@ Last decision-valid production output remains:
 - Kalshi transport explicitly labeled **REST_SNAPSHOT_NOT_WS_LIFETIME**;
 - `read_only=true`, `order_entry=false`.
 
-Fresh service metrics prove the collector had recent activity, but without fresh log counters this interval is **alive/recently-active-but-not-newly-measurable**. It receives no additional capacity credit. The certified totals slice still supports **$0/day deployable capacity at the fixed 3c taker/taker floor**.
+No newer decision summary was independently verified this run. Active-but-unmeasurable intervals receive no additional capacity credit. The certified totals slice still supports **$0/day deployable capacity at the fixed 3c taker/taker floor**.
 
 ### Clean MLB full-game taker/taker
 
@@ -65,7 +65,7 @@ Last decision-valid maker telemetry remains:
 - no hedge-missing, full-ladder-missing, or q1 depth-insufficient failures in the 134-fill observable cohort;
 - collector remains `rules_complete=false`, `read_only=true`, `order_entry=false`, `capacity_credit_usd_per_day=0`.
 
-Fresh Railway metrics prove this shadow is alive and active. No newer decision summary could be extracted because the log agent is quota-blocked. The K<->P full-game moneyline mechanism also fails exact postponement/reschedule lifecycle equivalence. Therefore the immediate shadow headline remains **$0 guaranteed/deployable capacity and $0 REALIZED P&L**. Do not spend the remaining census window repairing a maker mechanism already rule-ineligible.
+No newer decision summary was independently verified this run. The K<->P full-game moneyline mechanism also fails exact postponement/reschedule lifecycle equivalence. Therefore the immediate shadow headline remains **$0 guaranteed/deployable capacity and $0 REALIZED P&L**. Do not spend the remaining census window repairing a maker mechanism already rule-ineligible.
 
 ### Incentives
 
@@ -77,7 +77,7 @@ No K<->P player-prop family currently has complete settlement/postponement/cance
 
 ## G<->K sports
 
-Guaranteed-arb execution remains **disarmed/read-only**. Fresh one-hour Railway metrics prove substantial recent process activity, but detailed log inspection is currently quota-blocked. The last decision-valid heartbeat remains:
+Guaranteed-arb execution remains **disarmed/read-only**. The last decision-valid heartbeat remains:
 
 - raw evaluations: **~92.68 million and rising**;
 - comparable evaluations: still **120,836**;
@@ -88,7 +88,7 @@ Guaranteed-arb execution remains **disarmed/read-only**. Fresh one-hour Railway 
 - `read_only=true`, `order_entry=false`;
 - rule gate remains `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION`.
 
-Until two-sided Gemini connectivity and lifecycle certification are directly re-proven, this interval remains **unmeasurable/$0 guaranteed capacity**. Do not re-arm. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
+No newer two-sided Gemini proof was obtained this run. Until connectivity and lifecycle certification are directly re-proven, this interval remains **unmeasurable/$0 guaranteed capacity**. Do not re-arm. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
 
 ## Kalshi account / 429 diagnosis
 
@@ -96,7 +96,7 @@ Authenticated account limits remain **advanced tier, 900 bucket / 300 refill** f
 
 ## Authoritative accounting
 
-A fresh authoritative SQL reconciliation could not be completed in this run because the previously exposed Neon SQL connector remains unusable for this project context and Railway's detailed database/log AI path is quota-blocked. Accounting is therefore **not advanced speculatively**.
+No fresh authoritative SQL reconciliation was completed in this run, so accounting is **not advanced speculatively**.
 
 Last successful direct reconciliation remains **2026-08-27 11:46 ET**:
 
@@ -104,7 +104,7 @@ Last successful direct reconciliation remains **2026-08-27 11:46 ET**:
 - weather: **0 verified weather-tagged `TRADE_REALIZED` / $0.0000 since 2026-03-01**;
 - Caleb Durbin remains prior **`SETTLED_ONE_LEG`, -$0.44 REALIZED**.
 
-Canonical `kalshi-weather-bot` project state at 19:48 ET remains core bot/shadow/backtest green with `weather-live-probe` **CRASHED**. A separate similarly named service in the sports-arb project is green but does not override the canonical weather-project state and is not evidence of realized weather P&L. Seasonal historical/backtest edge remains explicitly separate from verified realized performance and gets no census credit.
+Canonical `kalshi-weather-bot` project state at 20:39 ET remains core bot/shadow/backtest green with canonical `weather-live-probe` **CRASHED**. A separate similarly named service in the sports-arb project is green but does not override canonical weather-project state and is not evidence of realized weather P&L. Seasonal historical/backtest edge remains explicitly separate from verified realized performance and gets no census credit.
 
 No shadow/model/incentive result is credited to realized P&L.
 
@@ -129,5 +129,5 @@ Current evidence continues to track toward the pre-committed **<$50/day** bucket
 4. Do not spend the remaining census window manufacturing same-venue violations, repairing rule-ineligible maker mechanics, or building around uncertified props.
 5. Preserve Kalshi account headroom/backoff; do not disrupt unrelated live services solely for census telemetry.
 6. Keep weather historical/backtest edge separate from verified live realized P&L; canonical weather-live-probe crash is not proof of realized loss or profit.
-7. Treat `crypto-live-balance-reconcile-v2` as observability-only until its actual output is independently verified; its green deployment badge is not execution authority.
+7. Treat `crypto-live-balance-reconcile-v2` as observability-only until its actual reconciliation output is independently verified; its newer green deployment is not execution authority.
 8. At the deadline, apply the fixed **<$50 / $50-$149 / >=$150** verdict without moving thresholds.
