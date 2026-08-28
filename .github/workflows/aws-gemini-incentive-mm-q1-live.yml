@@ -17,7 +17,7 @@ env:
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
   LIVE_BRANCH: feature/gemini-incentive-mm-live-probe-q1
   LIVE_CONTAINER: arb-gemini-incentive-mm-live-probe-q1
-  ETH5_MIN_COMMIT: e60a5bb91438e74d8819c2a4e6fb848135737403
+  ETH5_MIN_COMMIT: 9f647e4134af868bdbb0b50294e6c9c7170b7b3f
 
 jobs:
   launch:
@@ -58,7 +58,7 @@ jobs:
           APPROVAL_ID: ${{ steps.trigger.outputs.approval_id }}
         run: |
           set -euo pipefail
-          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin ${LIVE_BRANCH} >/dev/null; git cat-file -e \"${PINNED_COMMIT}^{commit}\"; git merge-base --is-ancestor ${PINNED_COMMIT} origin/${LIVE_BRANCH}; git merge-base --is-ancestor ${ETH5_MIN_COMMIT} ${PINNED_COMMIT}; git show ${PINNED_COMMIT}:src/gemini_incentive_mm_live_probe_q1.py | grep -q '\"'\"'TARGET_ASSET = \"ETH\"'\"'\"'; git show ${PINNED_COMMIT}:src/gemini_incentive_mm_live_probe_q1.py | grep -q '\"'\"'TARGET_HORIZON = \"5m\"'\"'\"'; git show ${PINNED_COMMIT}:deploy/aws/run_gemini_incentive_mm_live_probe_q1.sh > /tmp/run_gemini_incentive_mm_live_probe_q1.sh; chmod 0700 /tmp/run_gemini_incentive_mm_live_probe_q1.sh; PINNED_COMMIT=${PINNED_COMMIT} ARB_GEMINI_INCENTIVE_MM_Q1_APPROVED=YES ARB_GEMINI_INCENTIVE_MM_Q1_APPROVAL_ID=${APPROVAL_ID} /tmp/run_gemini_incentive_mm_live_probe_q1.sh'"
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin ${LIVE_BRANCH} >/dev/null; git cat-file -e \"${PINNED_COMMIT}^{commit}\"; git merge-base --is-ancestor ${PINNED_COMMIT} origin/${LIVE_BRANCH}; git merge-base --is-ancestor ${ETH5_MIN_COMMIT} ${PINNED_COMMIT}; git show ${PINNED_COMMIT}:src/gemini_incentive_mm_live_probe_q1.py | grep -q '\"'\"'TARGET_ASSET = \"ETH\"'\"'\"'; git show ${PINNED_COMMIT}:src/gemini_incentive_mm_live_probe_q1.py | grep -q '\"'\"'TARGET_HORIZON = \"5m\"'\"'\"'; git show ${PINNED_COMMIT}:src/gemini_short_crypto_btc5m_inventory_maker_canary_q1.py | grep -q '\"'\"'first_fill_latency_ms'\"'\"'; git show ${PINNED_COMMIT}:src/gemini_short_crypto_btc5m_inventory_maker_canary_q1.py | grep -q '\"'\"'cancel_roundtrip_ms'\"'\"'; git show ${PINNED_COMMIT}:deploy/aws/run_gemini_incentive_mm_live_probe_q1.sh > /tmp/run_gemini_incentive_mm_live_probe_q1.sh; chmod 0700 /tmp/run_gemini_incentive_mm_live_probe_q1.sh; PINNED_COMMIT=${PINNED_COMMIT} ARB_GEMINI_INCENTIVE_MM_Q1_APPROVED=YES ARB_GEMINI_INCENTIVE_MM_Q1_APPROVAL_ID=${APPROVAL_ID} /tmp/run_gemini_incentive_mm_live_probe_q1.sh'"
           PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$AWS_HOT_INSTANCE_ID" \
