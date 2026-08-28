@@ -1,6 +1,6 @@
 """Stateful, read-only replay of the bounded l5 scaling hypothesis on Kalshi.
 
-Input is JSONL emitted by :mod:`src.kalshi_l5_threshold_shadow`.  The replay
+Input is JSONL emitted by :mod:`src.kalshi_l5_threshold_shadow`. The replay
 turns quote observations into a deliberately pessimistic maker-fill proxy:
 
 * a virtual buy rests at the prior sampled maker quote;
@@ -28,6 +28,7 @@ from typing import Any, Iterable
 
 ONE = D("1")
 CENT = D("0.01")
+MAX_UNITS_PER_OUTCOME = D("3")
 GENERAL_MAKER_RATE = D("0.0175")
 
 
@@ -55,6 +56,15 @@ class Fill:
     modeled_maker_fee_if_applicable: D
     observed_at: str | None = None
 
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "side": self.side,
+            "price": str(self.price),
+            "quantity": str(self.quantity),
+            "modeled_maker_fee_if_applicable": str(self.modeled_maker_fee_if_applicable),
+            "observed_at": self.observed_at,
+        }
+
 
 @dataclass
 class MarketReplay:
@@ -78,15 +88,22 @@ class MarketReplay:
     def _fill(self, side: str, price: D, quantity: D, observed_at: str | None) -> None:
         if quantity <= 0:
             return
+        if side == "YES":
+            remaining = max(D("0"), MAX_UNITS_PER_OUTCOME - self.yes_qty)
+        elif side == "NO":
+            remaining = max(D("0"), MAX_UNITS_PER_OUTCOME - self.no_qty)
+        else:
+            raise ValueError(side)
+        quantity = min(quantity, remaining)
+        if quantity <= 0:
+            return
         fee = kalshi_general_maker_fee(price, quantity)
         if side == "YES":
             self.yes_qty += quantity
             self.yes_cost += price * quantity
-        elif side == "NO":
+        else:
             self.no_qty += quantity
             self.no_cost += price * quantity
-        else:
-            raise ValueError(side)
         self.modeled_maker_fees_if_applicable += fee
         self.fills.append(Fill(side, price, quantity, fee, observed_at))
 
@@ -148,6 +165,7 @@ class MarketReplay:
             "threshold_samples": self.threshold_samples,
             "side_switches": self.side_switches,
             "fills": len(self.fills),
+            "fill_chronology": [fill.as_dict() for fill in self.fills],
             "yes_qty": str(self.yes_qty),
             "no_qty": str(self.no_qty),
             "yes_cost": str(self.yes_cost),
@@ -176,7 +194,8 @@ def _D(row: dict[str, Any], key: str) -> D:
 
 
 def _desired_qty(row: dict[str, Any]) -> D:
-    return D(str(row.get("shadow_target_units") or 0))
+    desired = D(str(row.get("shadow_target_units") or 0))
+    return min(MAX_UNITS_PER_OUTCOME, max(D("0"), desired))
 
 
 def apply_observation(state: MarketReplay, row: dict[str, Any]) -> None:
@@ -212,10 +231,10 @@ def apply_observation(state: MarketReplay, row: dict[str, Any]) -> None:
     desired = _desired_qty(row)
     if favored == "YES" and desired > state.yes_qty:
         state.pending_yes_quote = _D(row, "shadow_yes_quote")
-        state.pending_yes_qty = desired - state.yes_qty
+        state.pending_yes_qty = min(MAX_UNITS_PER_OUTCOME - state.yes_qty, desired - state.yes_qty)
     elif favored == "NO" and desired > state.no_qty:
         state.pending_no_quote = _D(row, "shadow_no_quote")
-        state.pending_no_qty = desired - state.no_qty
+        state.pending_no_qty = min(MAX_UNITS_PER_OUTCOME - state.no_qty, desired - state.no_qty)
 
 
 def replay_rows(rows: Iterable[dict[str, Any]]) -> dict[str, MarketReplay]:
@@ -267,6 +286,7 @@ def aggregate(states: dict[str, MarketReplay]) -> dict[str, Any]:
         "markets_with_sub_one_matched_vwap": len(sub_one_pairs),
         "markets_with_positive_whole_portfolio_worst_case_no_maker_fee": len(whole_portfolio_positive),
         "total_virtual_fills": sum(len(s.fills) for s in states.values()),
+        "max_units_per_outcome": str(MAX_UNITS_PER_OUTCOME),
         "classification": "SHADOW_TRADE_THROUGH_REPLAY_NOT_REALIZED",
         "maker_fee_note": "general 0.0175 quadratic maker formula is scenario-only unless current fee schedule confirms applicability",
         "markets_detail": summaries,
