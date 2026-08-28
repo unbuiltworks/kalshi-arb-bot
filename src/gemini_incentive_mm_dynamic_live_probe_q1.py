@@ -17,7 +17,7 @@ import os
 import time
 from typing import Any
 
-from src import gemini_short_crypto_dynamic_complement_q1 as dyn
+from src import gemini_short_crypto_dynamic_complement_q1_v2 as dyn
 from src import gemini_short_crypto_btc5m_maker_canary_q1 as base
 from src import gemini_short_crypto_dual_horizon_settlement_reconcile_v2 as settle
 from src import gemini_short_crypto_local_budget as local_base
@@ -134,7 +134,7 @@ async def run() -> None:
         rescue_seconds=dyn.RESCUE_SECONDS,
         reprice_interval_seconds=dyn.REPRICE_INTERVAL_SECONDS,
         max_reprices=dyn.MAX_REPRICES,
-        quote_policy="RAW_ENTRY_EDGE_RESERVED_THEN_DYNAMIC_MAKER_COMPLEMENT",
+        quote_policy="RAW_ENTRY_EDGE_RESERVED_THEN_DYNAMIC_MAKER_COMPLEMENT_V2",
         taker_rescue_enabled=False,
         rewards_counted_as_realized=False,
         classification="LIVE_EXECUTION_PROBE_NOT_ARBITRAGE",
