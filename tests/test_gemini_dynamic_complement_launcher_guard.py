@@ -44,3 +44,17 @@ def test_launcher_runs_focused_safety_suite_before_live_start():
     marker_pos = text.index('> "$USED_MARKER.tmp"')
     live_pos = text.index("DYNAMIC_COMPLEMENT_Q1_LIVE_STARTING")
     assert test_pos < clean_pos < marker_pos < live_pos
+
+
+def test_launcher_qualifier_is_read_only_and_before_approval_consumption():
+    text = _text()
+    qualifier = text.index("DYNAMIC_COMPLEMENT_Q1_QUALIFIER_WAIT_START")
+    marker = text.index('> "$USED_MARKER.tmp"')
+    live = text.index("DYNAMIC_COMPLEMENT_Q1_LIVE_STARTING")
+    assert qualifier < marker < live
+    assert 'QUALIFY_WAIT_SECONDS="${QUALIFY_WAIT_SECONDS:-0}"' in text
+    assert 'QUALIFY_POLL_SECONDS="${QUALIFY_POLL_SECONDS:-10}"' in text
+    assert '"order_entry": False' in text
+    assert '"mutation": False' in text
+    assert "DYNAMIC_COMPLEMENT_Q1_NO_QUALIFYING_WINDOW order_entry=false approval_consumed=false" in text
+    assert "DYNAMIC_COMPLEMENT_Q1_QUALIFYING_WINDOW_FOUND order_entry=false approval_consumed=false" in text
