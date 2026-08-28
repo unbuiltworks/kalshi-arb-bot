@@ -3,7 +3,7 @@ set -euo pipefail
 
 # LIVE-CAPABLE, one-shot AWS launcher for the bounded Gemini incentive-MM q=1 probe.
 # No workflow/trigger should invoke this without fresh user approval. The launcher
-# requires an exact commit plus a one-use approval ID, then runs one BTC 5m campaign.
+# requires an exact commit plus a one-use approval ID, then runs one ETH 5m campaign.
 
 SOURCE_REPO="${SOURCE_REPO:-/home/ssm-user/kalshi-arb-bot}"
 WORKTREE="${WORKTREE:-/opt/arb/gemini-incentive-mm-live-probe-q1}"
@@ -125,7 +125,7 @@ mv "$USED_MARKER.tmp" "$USED_MARKER"
 sync "$STATE_DIR"
 
 PROBE_ID="immq1-${SAFE_APPROVAL_ID:0:12}-$(date -u +%H%M%S)"
-echo "INCENTIVE_MM_Q1_LIVE_STARTING probe_id=$PROBE_ID approval_id=$SAFE_APPROVAL_ID commit=$PINNED_COMMIT q=1_per_outcome asset=BTC horizon=5m max_campaigns=1 max_initial_pair_loss=0.01 liquidity_rewards_eligible=false auto_restart=false"
+echo "INCENTIVE_MM_Q1_LIVE_STARTING probe_id=$PROBE_ID approval_id=$SAFE_APPROVAL_ID commit=$PINNED_COMMIT q=1_per_outcome asset=ETH horizon=5m max_campaigns=1 max_initial_pair_loss=0.01 liquidity_rewards_eligible=false auto_restart=false"
 
 docker run -d --name "$CONTAINER" --network host --restart no \
   --env-file "$ENV_FILE" \
