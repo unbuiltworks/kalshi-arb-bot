@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-28 04:39 UTC / 2026-08-28 00:39 ET**
+Last verified: **2026-08-28 05:44 UTC / 2026-08-28 01:44 ET**
 
 ## Objective and fixed verdict
 
@@ -16,23 +16,21 @@ The 72-hour wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and ends **20
 
 ## Fresh production state
 
-Fresh Railway production status at ~00:39 ET:
+Fresh Railway verification at ~01:44 ET:
 
-- `sports-kp-live-executor`: **SUCCESS**. Keep census running read-only.
-- `sports-generic-counterpart-shadow`: **SUCCESS**. Maker/fill/markout remains shadow-only; no immediate shadow P&L counts as capacity or realized profit.
-- `sports-gk-autonomous-supervisor`: **SUCCESS**. Guaranteed execution remains read-only/disarmed.
-- `sports-gk-multifamily-live-canary`: **SUCCESS**, but this does not override the standing rule that G<->K guaranteed execution stays disarmed unless two-sided connectivity, lifecycle certification and zero unresolved exposure are all proven.
-- `crypto-15m-sol-live-canary-10bp-50ms`: still **CRASHED/contained**. Do not reopen as guaranteed arb while Gemini/Kalshi settlement-index equivalence remains unproven.
-- `crypto-live-balance-reconcile-v2`: newest deployment **SUCCESS** at 2026-08-28 03:39 UTC. Treat as observability/reconciliation only; a green badge is not proof of successful venue reconciliation and grants no execution authority.
-- canonical `kalshi-weather-bot/weather-live-probe`: still **CRASHED**. Other weather services (`kalshi-weather-bot`, `weather-shadow-arb`, `kalshi-weather-backtest`) are **SUCCESS**.
+- `sports-kp-live-executor`: **SUCCESS** with sustained CPU/network over the last hour. Read-only census remains alive.
+- `sports-generic-counterpart-shadow`: **SUCCESS** with sustained CPU/network and fresh delayed-markout summaries. Read-only; no order entry.
+- `sports-gk-autonomous-supervisor`: **SUCCESS** and actively emitting heartbeats. Guaranteed execution remains read-only/disarmed.
+- `crypto-15m-sol-live-canary-10bp-50ms`: **CRASHED/contained**. Do not reopen while Gemini/Kalshi settlement-index equivalence remains unproven.
+- `crypto-live-balance-reconcile-v2`: latest deployment **SUCCESS**; treat as observability/reconciliation only until actual venue reconciliation output is independently proven.
 
-No fresh decoded event/log counters were independently recovered this run, so prior decision-valid economics remain the governing evidence. Do not promote deployment status alone into edge evidence.
+Railway's higher-level agent remains usage-limited, but direct deployment logs are available and are the source of the fresh counters below.
 
 ## Decision-grade K<->P evidence
 
 ### Strict MLB totals taker/taker
 
-Last decision-valid production output remains:
+The valid sample remains frozen despite continued raw trigger activity:
 
 - comparable evaluations: **53,237**;
 - decision observations: **1,661** across 9 semantic keys;
@@ -44,45 +42,50 @@ Last decision-valid production output remains:
 - Kalshi transport remains `REST_SNAPSHOT_NOT_WS_LIFETIME`;
 - `read_only=true`, `order_entry=false`.
 
-The certified totals slice supports **$0/day deployable capacity at the fixed 3c taker/taker floor**.
+Raw triggers are now roughly **127M+**, but the comparable/decision sample has not advanced. Trigger-only intervals are therefore **unmeasurable/$0 capacity**, not millions of additional zero-edge observations.
+
+The certified totals slice still supports **$0/day deployable capacity at the fixed 3c taker/taker floor**.
 
 ### Clean MLB full-game taker/taker
 
 After scheduled-start normalization and F5/partial-game exclusion, clean full-game moneyline/spread/total snapshots remain **0 >=1c / 0 >=2c / 0 >=3c**. Available q1 depth was substantial; edge magnitude, not liquidity, remains the limiting factor.
 
-### Maker/fill shadow
+### Maker/fill/delayed-hedge shadow — fresh 01:44 ET
 
-Last decision-valid maker summary remains:
+Fresh production summaries materially increased the simulated-fill headline without increasing the usable delayed-hedge cohort:
 
-- **2,002 simulated q1 maker fills**;
-- immediate shadow P&L **+$125.7791** — descriptive only, never realized/capacity credit;
-- historical immediate after-fee maker bins: **1,297 >=1c / 1,023 >=2c / 838 >=3c**;
-- only **134/2,002 (6.69%)** have decision-usable delayed hedge observations;
-- **1,868** are `ws_unhealthy`/unobservable and receive **$0 executable-capacity credit**;
-- at **80 ms**: **+$0.0408 total**, 22 >=1c / 9 >=2c / **2 >=3c**;
+- **2,166 simulated q1 maker fills**;
+- immediate q1-sweep shadow P&L **+$128.6480** — descriptive only, never realized/capacity credit;
+- immediate q1 sweep executable: **2,166 / 2,166**, depth-unfillable **0**;
+- only **134 / 2,166 (6.19%)** have decision-usable delayed hedge observations;
+- **2,032 / 2,166 (93.81%)** are `ws_unhealthy`/unobservable and receive **$0 executable-capacity credit**;
+- at **80 ms**: **+$0.0408 total**, avg +$0.000304/fill, 22 >=1c / 9 >=2c / **2 >=3c**;
 - at **250 ms**: **-$0.7158 total**, 14 / 8 / **2**;
 - at **500 ms**: **-$1.1384 total**, 11 / 5 / **2**;
-- no q1 depth-insufficient failures in the 134-fill observable cohort;
-- `rules_complete=false`, `read_only=true`, `order_entry=false`, `capacity_credit_usd_per_day=0`.
+- delayed cohort has **0 hedge-missing, 0 full-ladder-missing, 0 depth-insufficient** failures;
+- worst-case full-sample lower bounds are approximately **-$999.9954 / -$1000.7520 / -$1001.1746** at 80/250/500 ms under the explicit unobservable-fill policy;
+- `capacity_credit_usd_per_day=0`, `read_only=true`, `order_entry=false`.
 
-The usable 80 ms cohort is tiny, delayed hedging is negative at 250/500 ms, and the K<->P full-game moneyline mechanism fails exact postponement/reschedule lifecycle equivalence. Therefore all maker shadow P&L remains **$0 guaranteed/deployable capacity and $0 REALIZED P&L**.
+This is a stronger negative measurement, not a positive one: immediate shadow P&L increased while usable realistic-hedge coverage fell to 6.19%. The usable cohort remains nearly flat at 80 ms and negative at 250/500 ms. Exact K<->P full-game moneyline postponement/reschedule lifecycle equivalence also fails independently. Therefore all maker shadow economics remain **$0 guaranteed/deployable capacity and $0 REALIZED P&L**.
 
 ### Strict props and incentives
 
 No K<->P player-prop family has complete settlement/postponement/cancellation/participation/stat-correction equivalence for this census window. Strict props and incomplete incentive telemetry remain **$0 guaranteed capacity**.
 
-## G<->K sports
+## G<->K sports — fresh 01:44 ET
 
-Last decision-valid heartbeat remains:
+Direct production heartbeats prove the process is alive but the two-sided sample remains frozen:
 
-- comparable evaluations: **120,836**;
+- raw triggers/evaluations: **108,332,190+** and continuing;
+- comparable evaluations: **120,836** unchanged;
 - historical **6 >=3c hot evaluations / 4 completed signal lifecycles**;
 - Gemini **570 symbols / 0 connected**;
+- Gemini book updates frozen at **76,955**;
 - Kalshi **570/570 initialized**;
 - `read_only=true`, `order_entry=false`;
 - rule gate remains `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION`.
 
-The lane remains **unmeasurable/$0 guaranteed capacity** until two-sided Gemini connectivity and complete lifecycle certification are re-proven. Do not re-arm. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
+The latest one-minute metric sample being idle was only a sample-boundary artifact; direct heartbeats continued through 01:44 ET. Economically the lane is still **unmeasurable/$0 guaranteed capacity** because Gemini remains 0/570 connected and comparables are frozen. Do not re-arm. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
 
 ## Kalshi account / 429 diagnosis
 
@@ -90,7 +93,7 @@ Authenticated account limits remain **advanced tier, 900 bucket / 300 refill** f
 
 ## Authoritative accounting and weather
 
-Fresh SQL reconciliation remains unavailable because the Neon connector has an internal `projectId`/`project_id` argument-contract mismatch. Accounting is therefore **not advanced speculatively**.
+Fresh SQL reconciliation remains unavailable because the Neon connector's direct SQL path is not currently exposed in a usable form for this project. Accounting is therefore **not advanced speculatively**.
 
 Last successful direct reconciliation remains:
 
@@ -98,14 +101,7 @@ Last successful direct reconciliation remains:
 - weather: **0 verified weather-tagged TRADE_REALIZED / $0.0000 since 2026-03-01**;
 - Caleb Durbin: prior `SETTLED_ONE_LEG`, **-$0.44 REALIZED**.
 
-Fresh canonical weather project state at ~00:39 ET:
-
-- `kalshi-weather-bot`: **SUCCESS**;
-- `weather-shadow-arb`: **SUCCESS**;
-- `kalshi-weather-backtest`: **SUCCESS**;
-- canonical `weather-live-probe`: **CRASHED**.
-
-Seasonal historical/backtest weather edge remains separate from verified realized performance and gets no census credit.
+Canonical weather `weather-live-probe` was last verified **CRASHED**. Seasonal historical/backtest weather edge remains separate from verified realized performance and gets no census credit.
 
 ## Current verdict trajectory
 
@@ -113,12 +109,12 @@ Guaranteed/deployable evidence remains strongly negative at the fixed 3c floor:
 
 - certified K<->P totals: **0 >=3c**;
 - clean full-game taker/taker: **0 >=3c**;
-- K<->P maker: immediate shadow headline is large, but realistic delayed-hedge evidence is tiny/weak, 250/500 ms aggregate economics are negative, exact lifecycle equivalence fails => **$0/day capacity**;
+- K<->P maker: 2,166-fill immediate shadow headline is non-deployable; only 134 delayed hedges are decision-usable, 250/500 ms aggregate economics are negative, and lifecycle equivalence fails => **$0/day capacity**;
 - strict props/incentives: uncertified/incomplete => **$0**;
-- G<->K: disarmed and last decoded Gemini state 0/570 connected => **$0 guaranteed capacity**;
+- G<->K: disarmed, Gemini 0/570 connected and comparables frozen => **$0 guaranteed capacity**;
 - weather verified realized since March: **$0** at the last authoritative query.
 
-Current evidence continues to track toward the pre-committed **<$50/day** bucket. Do not declare the final verdict before the fixed deadline.
+Current evidence continues to track strongly toward the pre-committed **<$50/day** bucket. Do not declare the final verdict before the fixed deadline.
 
 ## Highest-value next actions
 
