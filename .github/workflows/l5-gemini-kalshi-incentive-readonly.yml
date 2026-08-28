@@ -6,6 +6,8 @@ on:
       - feature/l5-gemini-aws-live-probe-v1
     paths:
       - src/gemini_l5_threshold_model.py
+      - src/gemini_l5_threshold_shadow.py
+      - src/gemini_l5_inventory_replay.py
       - src/gemini_short_crypto_l5_threshold_supervisor_v1.py
       - src/gemini_l5_threshold_preflight.py
       - src/kalshi_l5_threshold_model.py
@@ -13,6 +15,7 @@ on:
       - src/kalshi_l5_inventory_replay.py
       - src/short_crypto_incentive_snapshot.py
       - tests/test_gemini_l5_threshold_model.py
+      - tests/test_gemini_l5_inventory_replay.py
       - tests/test_gemini_short_crypto_l5_threshold_supervisor_v1.py
       - tests/test_kalshi_l5_threshold_model.py
       - tests/test_kalshi_l5_inventory_replay.py
@@ -26,7 +29,7 @@ permissions:
 jobs:
   readonly:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,6 +41,7 @@ jobs:
         run: |
           pytest -q \
             tests/test_gemini_l5_threshold_model.py \
+            tests/test_gemini_l5_inventory_replay.py \
             tests/test_short_crypto_incentive_snapshot.py \
             tests/test_kalshi_l5_threshold_model.py \
             tests/test_kalshi_l5_inventory_replay.py \
@@ -50,6 +54,17 @@ jobs:
         run: |
           mkdir -p artifacts
           python -m src.short_crypto_incentive_snapshot --pretty | tee artifacts/short-crypto-incentives.json
+      - name: Capture and score Gemini l5 threshold shadow
+        run: |
+          python -m src.gemini_l5_threshold_shadow \
+            --seconds 90 \
+            --poll-s 2 \
+            --output artifacts/gemini-l5-threshold-shadow.jsonl \
+            | tee artifacts/gemini-l5-threshold-shadow.log
+          python -m src.gemini_l5_inventory_replay \
+            artifacts/gemini-l5-threshold-shadow.jsonl \
+            --output artifacts/gemini-l5-inventory-replay.json \
+            | tee artifacts/gemini-l5-inventory-replay.log
       - name: Capture and score Kalshi l5 threshold shadow
         run: |
           python -m src.kalshi_l5_threshold_shadow \
