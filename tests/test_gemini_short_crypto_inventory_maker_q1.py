@@ -1,4 +1,5 @@
 from decimal import Decimal
+import json
 
 from src import gemini_short_crypto_btc5m_inventory_maker_canary_q1 as inv
 from src import gemini_short_crypto_btc15m_inventory_maker_canary_q1 as inv15
@@ -50,3 +51,22 @@ def test_inventory_arm_is_separate_from_old_canary(monkeypatch):
     monkeypatch.setenv(inv.CANARY_ID_ENV, "inventory-1")
     monkeypatch.setenv(inv.CANARY_ARM_ENV, "inventory-1")
     assert inv.live_armed()
+
+
+def test_inventory_trade_id_is_asset_aware():
+    eth = inv.inventory_trade_id("ETH05M2608281800", "probe-1")
+    btc = inv.inventory_trade_id("BTC05M2608281800", "probe-1")
+    assert eth.startswith("crypto-gem-eth5m-inventory-")
+    assert btc.startswith("crypto-gem-btc5m-inventory-")
+    assert eth != btc
+
+
+def test_emit_includes_utc_timestamp_and_generic_prefix(capsys):
+    inv.emit("TEST_EVIDENCE", value=1)
+    line = capsys.readouterr().out.strip()
+    prefix = "GEMINI_SHORT_CRYPTO_INVENTORY_Q1 "
+    assert line.startswith(prefix)
+    payload = json.loads(line[len(prefix):])
+    assert payload["stage"] == "TEST_EVIDENCE"
+    assert payload["value"] == 1
+    assert payload["observed_at_utc"].endswith("+00:00")
