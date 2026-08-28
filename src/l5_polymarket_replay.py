@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import re
 from collections import defaultdict
 from dataclasses import asdict, dataclass
@@ -119,7 +118,14 @@ def fetch_wallet_trades(
     limit: int = 10000,
     client: httpx.Client | None = None,
 ) -> list[Trade]:
-    params: dict[str, Any] = {"user": wallet, "limit": min(max(limit, 1), 10000), "start": max(start, 0)}
+    # Polymarket's public /trades endpoint defaults takerOnly=true. Explicitly
+    # disable that default so a wallet replay includes maker and taker fills.
+    params: dict[str, Any] = {
+        "user": wallet,
+        "limit": min(max(limit, 1), 10000),
+        "start": max(start, 0),
+        "takerOnly": False,
+    }
     if end is not None:
         params["end"] = max(end, 0)
     owns_client = client is None
