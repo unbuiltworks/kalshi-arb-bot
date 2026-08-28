@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-28 17:41 UTC / 2026-08-28 13:41 ET**
+Last verified: **2026-08-28 20:36 UTC / 2026-08-28 16:36 ET**
 
 ## Objective and fixed verdict
 
@@ -14,14 +14,14 @@ Pre-committed census verdict thresholds remain fixed:
 
 The 72-hour census started **2026-08-25 20:43 UTC / 16:43 ET** and ends **2026-08-28 20:43 UTC / 16:43 ET**. No reset. Data/feed quality may add at most one +24-hour allowance; a lane still unmeasurable after that allowance contributes **$0 deployable capacity**. Realistic-capture floor remains **>=80 ms**.
 
-## Fresh production state — 13:41 ET
+## Fresh production state — 16:36 ET
 
-- `sports-kp-live-executor`: Railway service identity is freshly re-verified. Its newest deployment records through Aug 26 are all explicitly **SKIPPED**, including delayed-hedge commit `044204d31c98a098a180e726899162180556ef63`; no hidden newer taker build is being promoted into decision evidence. Runtime/log retrieval against the newest record correctly returns SKIPPED rather than a false live telemetry sample.
-- `sports-generic-counterpart-shadow`: remains separate read-only maker/fill/delayed-hedge telemetry. Shadow results never count as REALIZED P&L.
-- `sports-gk-autonomous-supervisor`: remains read-only/disarmed for guaranteed execution. Last decoded two-sided state remains Gemini **0/570 connected** vs Kalshi **570/570 initialized**.
-- `crypto-live-balance-reconcile-v2`: Railway deployment badge is **SUCCESS** for its latest successful deployment, but prior fresh runtime verification proved the container immediately exits with `ModuleNotFoundError: No module named 'src.gemini_kalshi_probe_transport'` from `src/gemini_kalshi_balance_reconcile_readonly.py`. Treat this as **CRASHED in functional terms** until an authoritative payload is emitted. No fresh authoritative crypto balance reconciliation exists from this service.
-- The repository file `src/gemini_kalshi_balance_reconcile_readonly.py` imports `KalshiV2Executor` from that missing module. The missing-module regression is an observability blocker only; it does not clear one-leg risk or justify re-arming G<->K.
-- Canonical weather project `kalshi-weather-bot`: last verified main bot **SUCCESS**, weather shadow **SUCCESS**, weather backtest **SUCCESS**, canonical `weather-live-probe` **CRASHED**. A same-named service inside the sports project showing SUCCESS is not treated as the authoritative weather-live probe.
+- `sports-kp-live-executor`: fresh last-hour Railway metrics confirm sustained runtime activity: average CPU **0.06948**, average RX **0.004283 GB/sample**, average TX **0.002126 GB/sample**. This is runtime-health evidence only and creates no additional economic/capacity credit.
+- `sports-generic-counterpart-shadow`: fresh last-hour metrics likewise confirm sustained activity: average CPU **0.03858**, average RX **0.001322 GB/sample**, average TX **0.000347 GB/sample**. Shadow activity never counts as REALIZED P&L or deployable capacity by itself.
+- `sports-gk-autonomous-supervisor`: remains active, averaging CPU **0.79105**, RX **0.118415 GB/sample**, TX **0.064410 GB/sample** over the last hour, but no fresh certified two-sided state has displaced the last decoded Gemini **0/570 connected** vs Kalshi **570/570 initialized** state. Runtime/network activity does not rescue the lane's exhausted measurability grace.
+- `crypto-live-balance-reconcile-v2`: fresh last-hour metrics remain exactly **0 CPU / 0 memory / 0 RX / 0 TX**. Prior runtime verification showed immediate `ModuleNotFoundError: No module named 'src.gemini_kalshi_probe_transport'`. No authoritative crypto balance/exposure reconciliation exists from this service; G<->K remains disarmed.
+- `sports-kp-live-executor` deployment provenance remains unchanged: newest deployment records through Aug 26 are explicitly **SKIPPED**, including delayed-hedge commit `044204d31c98a098a180e726899162180556ef63`; no hidden newer taker build is promoted into decision evidence.
+- Canonical weather project `kalshi-weather-bot`: last verified main bot **SUCCESS**, weather shadow **SUCCESS**, weather backtest **SUCCESS**, canonical `weather-live-probe` **CRASHED**. A same-named service inside the sports project showing SUCCESS is not treated as authoritative weather-live evidence.
 - Prior authenticated Kalshi account limits remain **advanced tier, 900 bucket / 300 refill**. Last inspected K<->P polling used legacy `api.elections.kalshi.com` at roughly 0.1-second cadence with HTTP 200. Earlier 429 evidence continues to favor aggregate/concurrent request or connection contention over a weak account tier. Do not disrupt unrelated live services solely to improve census telemetry; new census code should prefer Kalshi dedicated external-api/external-api-ws hosts.
 
 ## K<->P decision-grade taker evidence
@@ -103,14 +103,14 @@ Guaranteed/deployable evidence at the fixed 3c floor:
 - G<->K: unmeasurable beyond grace and disarmed => **$0**;
 - weather verified realized since March: **$0** at last authoritative reconciliation.
 
-Current certified evidence remains strongly in the pre-committed **<$50/day** bucket. Do not move thresholds or declare the final verdict before **16:43 ET today**.
+Current certified evidence remains strongly in the pre-committed **<$50/day** bucket. Do not move thresholds or declare the final verdict before **16:43 ET today**. The 16:36 ET runtime pulse produced no new certified executable economics and therefore no change in capacity credit.
 
 ## Highest-value next actions
 
 1. Keep the fixed census running through **2026-08-28 20:43 UTC / 16:43 ET** with no reset.
 2. Preserve G<->K disarm and Caleb's **-$0.44 REALIZED** loss.
-3. Treat `crypto-live-balance-reconcile-v2` as functionally crashed despite Railway's SUCCESS badge until a run emits an authoritative balance payload. Repair only if it can restore reconciliation without opening a new trading lane or affecting the census deadline.
-4. Do not repair stale K<->P comparables, Gemini reconnects, maker delayed-WS coverage, incentive denominator plumbing, or Neon quota solely to extend the census; zero-credit treatment is already determined where applicable.
+3. Do not treat runtime health, raw-trigger growth, or shadow activity as economic evidence.
+4. Do not repair stale K<->P comparables, Gemini reconnects, maker delayed-WS coverage, incentive denominator plumbing, balance reconciler, or Neon quota solely to extend the census; zero-credit treatment is already determined where applicable.
 5. Preserve Kalshi account headroom/backoff and avoid disruption of unrelated live services. If the project survives the verdict, future census code should migrate to dedicated external-api/external-api-ws hosts.
 6. Keep weather historical/backtest edge separate from verified live realized P&L.
 7. At **16:43 ET**, aggregate only rule-certified, realistically executable capacity and apply **<$50 / $50-$149 / >=$150** exactly as committed.
