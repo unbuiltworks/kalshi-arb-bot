@@ -32,8 +32,6 @@ def test_profitable_completion_creates_trade_edge_without_rebate_credit():
     ledger.on_book(D('0.40'), D('0.42'))
     ledger.on_trade(D('0.40'), D('10'), True)  # YES maker fill
     # Market moves: NO best maker bid = 0.57. Combined raw price 0.97.
-    ledger.on_book(D('0.55'), D('0.43')) if False else None
-    # Directly present a valid YES book where NO bid = .57: yes ask=.43.
     ledger.on_book(D('0.41'), D('0.43'))
     assert ledger.no_quote == D('0.57')
     ledger.on_trade(D('0.43'), D('10'), False)  # seller maker condition for NO bid
@@ -47,7 +45,7 @@ def test_unprofitable_complement_is_blocked_even_if_rebate_exists():
     ledger = Ledger(min_trade_edge_per_pair=D('0.00'))
     ledger.on_book(D('0.60'), D('0.62'))
     ledger.on_trade(D('0.60'), D('10'), True)
-    # NO bid = .39, raw pair .99 but maker fees at q10 can make this negative.
-    ledger.on_book(D('0.59'), D('0.61'))
+    # NO bid = .40; raw pair is exactly par before maker fees, therefore negative after fees.
+    ledger.on_book(D('0.59'), D('0.60'))
     assert ledger.no_quote is None
     assert ledger.blocked_unprofitable_completion >= 1
