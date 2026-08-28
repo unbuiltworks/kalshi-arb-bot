@@ -49,7 +49,7 @@ jobs:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Replay retained public tape through rebate-first q10 policy
+      - name: Replay retained public tape through V2 q10 policy
         env:
           PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
           SOURCE_RUN_ID: ${{ steps.trigger.outputs.source_run_id }}
@@ -57,13 +57,14 @@ jobs:
         run: |
           set -euo pipefail
           SHORT_SHA="${PINNED_COMMIT:0:12}"
-          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; REPO=/home/ssm-user/kalshi-arb-bot; SOURCE=/home/ssm-user/gemini-l5-dynamic-shadow-v2-state/${SOURCE_RUN_ID}/capture.jsonl; WORK=/opt/arb/gemini-incentive-mm-q10-replay; OUT=/home/ssm-user/gemini-incentive-mm-q10-replay-state/${SOURCE_RUN_ID}-${SHORT_SHA}; test -f \"\$SOURCE\"; git -C \"\$REPO\" config --global --add safe.directory \"\$REPO\" || true; git -C \"\$REPO\" fetch origin feature/incentive-arb-engine-v1; git -C \"\$REPO\" cat-file -e \"${PINNED_COMMIT}^{commit}\"; git -C \"\$REPO\" worktree remove --force \"\$WORK\" >/dev/null 2>&1 || true; rm -rf \"\$WORK\"; git -C \"\$REPO\" worktree prune; git -C \"\$REPO\" worktree add --detach \"\$WORK\" \"${PINNED_COMMIT}\"; test \"\$(git -C \"\$WORK\" rev-parse HEAD)\" = \"${PINNED_COMMIT}\"; mkdir -p \"\$OUT\"; IMAGE=arb-gemini-incentive-mm-q10-replay:${SHORT_SHA}; docker build -t \"\$IMAGE\" \"\$WORK\" >/dev/null; docker run --rm --network none \"\$IMAGE\" python -m pytest -q tests/test_gemini_incentive_mm_replay_v1.py tests/test_incentive_arb_engine.py; docker run --rm --network none -v \"\$SOURCE:/input/capture.jsonl:ro\" -v \"\$OUT:/output\" \"\$IMAGE\" python -m src.gemini_incentive_mm_replay_v1 /input/capture.jsonl --output /output/summary.json >/dev/null; echo INCENTIVE_Q10_HEAD; head -n 8 \"\$OUT/summary.json\"; echo INCENTIVE_Q10_TAIL; tail -n 35 \"\$OUT/summary.json\"; echo INCENTIVE_Q10_OUTPUT=\$OUT/summary.json'"
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; REPO=/home/ssm-user/kalshi-arb-bot; SOURCE=/home/ssm-user/gemini-l5-dynamic-shadow-v2-state/${SOURCE_RUN_ID}/capture.jsonl; WORK=/opt/arb/gemini-incentive-mm-q10-replay-v2; OUT=/home/ssm-user/gemini-incentive-mm-q10-replay-v2-state/${SOURCE_RUN_ID}-${SHORT_SHA}; test -f \"\$SOURCE\"; git -C \"\$REPO\" config --global --add safe.directory \"\$REPO\" || true; git -C \"\$REPO\" fetch origin feature/incentive-arb-engine-v1; git -C \"\$REPO\" cat-file -e \"${PINNED_COMMIT}^{commit}\"; git -C \"\$REPO\" worktree remove --force \"\$WORK\" >/dev/null 2>&1 || true; rm -rf \"\$WORK\"; git -C \"\$REPO\" worktree prune; git -C \"\$REPO\" worktree add --detach \"\$WORK\" \"${PINNED_COMMIT}\"; test \"\$(git -C \"\$WORK\" rev-parse HEAD)\" = \"${PINNED_COMMIT}\"; mkdir -p \"\$OUT\"; IMAGE=arb-gemini-incentive-mm-q10-replay-v2:${SHORT_SHA}; docker build -t \"\$IMAGE\" \"\$WORK\" >/dev/null; docker run --rm --network none \"\$IMAGE\" python -m pytest -q tests/test_gemini_incentive_mm_replay_v1.py tests/test_gemini_incentive_mm_replay_v2.py tests/test_incentive_arb_engine.py; docker run --rm --network none -v \"\$SOURCE:/input/capture.jsonl:ro\" -v \"\$OUT:/output\" \"\$IMAGE\" python -m src.gemini_incentive_mm_replay_v2_runner /input/capture.jsonl --output /output/summary.json; echo INCENTIVE_Q10_V2_OUTPUT=\$OUT/summary.json'"
           PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
-          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB Gemini incentive MM q10 replay ${SHORT_SHA}" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB Gemini incentive MM q10 V2 replay ${SHORT_SHA}" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
           aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
-          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' > /tmp/incentive-q10.json
-          cat /tmp/incentive-q10.json
-          test "$(jq -r '.Status' /tmp/incentive-q10.json)" = "Success"
-          stdout=$(jq -r '.Stdout // ""' /tmp/incentive-q10.json)
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' > /tmp/incentive-q10-v2.json
+          cat /tmp/incentive-q10-v2.json
+          test "$(jq -r '.Status' /tmp/incentive-q10-v2.json)" = "Success"
+          stdout=$(jq -r '.Stdout // ""' /tmp/incentive-q10-v2.json)
           grep -q 'READ_ONLY_SHADOW_REPLAY_NOT_REALIZED' <<< "$stdout"
-          grep -q 'INCENTIVE_Q10_OUTPUT=' <<< "$stdout"
+          grep -q 'strict_trade_through' <<< "$stdout"
+          grep -q 'INCENTIVE_Q10_V2_OUTPUT=' <<< "$stdout"
