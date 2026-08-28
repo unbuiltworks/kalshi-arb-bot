@@ -8,8 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ src/
 COPY config/ config/
 
-# BOT_MODE controls paper vs live: set in Railway env vars
-# Default to paper for safety
-ENV BOT_MODE=paper
+ENV PYTHONUNBUFFERED=1
 
-CMD ["sh", "-c", "if [ \"$BOT_MODE\" = \"live\" ]; then python -m src; else python -m src --paper; fi"]
+# Isolated read-only public-wallet replay. No credentials or order-entry code.
+CMD ["python", "-u", "-m", "src.polymarket_wallet_replay", "--start", "1787873400", "--end", "1787875200", "--max-rows", "5000"]
