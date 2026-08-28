@@ -9,8 +9,12 @@ A missing REDEEM row is ambiguous: it can mean delayed/unobserved redemption, bu
 an aged binary market it can also mean the wallet only held losing outcome inventory
 and therefore had a zero payout. To avoid upward bias, this report exposes both the
 redeemed-only observed cashflow and a conservative scenario treating every no-redeem
-market as zero payout. Reward payments remain separate because earning-period
-attribution is not proven. No authentication or order entry.
+market as zero payout.
+
+Public MAKER_REBATE and TAKER_REBATE payments are reported separately by payment day.
+They are not automatically attributed to the cohort's earning day because the public
+activity row itself does not prove the earning period. No authentication or order
+entry.
 """
 from __future__ import annotations
 
@@ -27,7 +31,7 @@ from src.polymarket_l5_daily_economics import (
     fetch_activity_type,
     is_short_crypto,
 )
-from src.polymarket_l5_reward_snapshot import DEFAULT_WALLET, dec, fetch_reward_rows
+from src.polymarket_l5_reward_snapshot import DEFAULT_WALLET, REWARD_TYPES, dec, fetch_reward_rows
 
 
 def market_window_start(row: dict[str, Any]) -> int | None:
@@ -61,6 +65,15 @@ def _family_template() -> dict[str, D | int]:
         "no_redeem_buy_usdc": D("0"),
         "no_redeem_sell_usdc": D("0"),
     }
+
+
+def reward_totals_by_type(rows: list[dict[str, Any]]) -> dict[str, str]:
+    totals = {typ: D("0") for typ in REWARD_TYPES}
+    for row in rows:
+        typ = str(row.get("type") or "").strip().upper()
+        if typ in totals:
+            totals[typ] += dec(row.get("usdc_size"))
+    return {typ: str(totals[typ]) for typ in REWARD_TYPES}
 
 
 def reconcile_market_cohorts(
@@ -146,7 +159,6 @@ def reconcile_market_cohorts(
         "classification": "PUBLIC_MARKET_COHORT_CASHFLOW_REWARDS_SEPARATE_ZERO_REDEEM_SCENARIO",
         "market_count": len(trade_groups),
         "settled_market_count": len(settled_rows),
-        # Kept for compatibility; these are specifically markets with no observed redeem.
         "unresolved_market_count": len(no_redeem_rows),
         "no_redeem_observed_market_count": len(no_redeem_rows),
         "positive_market_count": positive,
@@ -185,7 +197,6 @@ def reconcile_market_cohorts(
 
 def reconcile_day(wallet: str, day: date, *, redeem_horizon_days: int = 3) -> dict[str, Any]:
     start, end = _utc_bounds(day)
-    # Include boundary tails, then assign markets by their encoded window start.
     trades = fetch_activity_type(wallet, "TRADE", start=max(0, start - 1800), end=end + 1800)
     trades = [row for row in trades if is_short_crypto(row)]
     redeems = fetch_activity_type(wallet, "REDEEM", start=max(0, start - 1800), end=end + 86400 * redeem_horizon_days)
@@ -193,6 +204,8 @@ def reconcile_day(wallet: str, day: date, *, redeem_horizon_days: int = 3) -> di
 
     same_rewards = fetch_reward_rows(wallet, start=start, end=end)
     next_rewards = fetch_reward_rows(wallet, start=end, end=end + 86400)
+    same_by_type = reward_totals_by_type(same_rewards)
+    next_by_type = reward_totals_by_type(next_rewards)
     result.update(
         {
             "wallet": wallet,
@@ -203,13 +216,18 @@ def reconcile_day(wallet: str, day: date, *, redeem_horizon_days: int = 3) -> di
             "order_entry": False,
             "reward_payments_not_attributed": {
                 "same_utc_day_total": str(sum((dec(r.get("usdc_size")) for r in same_rewards), D("0"))),
+                "same_utc_day_by_type": same_by_type,
                 "next_utc_day_total": str(sum((dec(r.get("usdc_size")) for r in next_rewards), D("0"))),
+                "next_utc_day_by_type": next_by_type,
                 "earning_period_attribution": "UNPROVEN",
+                "activity_types": list(REWARD_TYPES),
+                "liquidity_rewards_included": False,
             },
             "warnings": [
                 "Redeemed-only lifecycle cashflow can be upward-biased if losing positions produce no REDEEM row.",
                 "The zero-redeem scenario is conservative and may be too negative if redemption occurred outside the search horizon or is missing from the public API.",
-                "Reward payments are not added to lifecycle cashflow because earning-period attribution is unproven.",
+                "MAKER_REBATE and TAKER_REBATE payment rows are split by type but are not added to lifecycle cashflow until earning-period attribution is proven.",
+                "Polymarket liquidity rewards are a separate program and are not represented by these MAKER_REBATE/TAKER_REBATE activity rows.",
                 "Public Data API cashflow is observational and is not our realized P&L or tax characterization.",
             ],
         }
