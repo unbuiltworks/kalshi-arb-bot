@@ -1,4 +1,4 @@
-"""Authoritative BTC5m/BTC15m inventory reconciliation from exact fills + event resolution.
+"""Authoritative 5m/15m inventory reconciliation from exact fills + event resolution.
 
 The prior reconciler assumed every inventory fill would later appear in Gemini's
 `positions/settled` response. A fully matched YES+NO complete set can net away and
@@ -9,8 +9,10 @@ event settled. v2 therefore uses:
 2. Gemini's public event record as the authoritative resolution source; and
 3. Gemini's published maker-fee formula for the MOC/post-only fills.
 
-Maker rebates/rewards are deliberately excluded from trading P&L and must be
-accounted separately from Gemini's incentive payout APIs.
+The proven 5m ledger is accepted for BTC05M and ETH05M identities. 15m remains
+BTC15M-only in this reconciler. Maker rebates/rewards are deliberately excluded
+from trading P&L and must be accounted separately from Gemini's incentive payout
+APIs.
 
 Venue access is read-only. The only mutation is the AWS-local fsynced ledger and
 reservation release after all identity, fill, resolution, and economics checks pass.
@@ -50,7 +52,7 @@ async def _event(event_ticker: str) -> dict[str, Any]:
     async with httpx.AsyncClient(
         timeout=8.0,
         follow_redirects=True,
-        headers={"User-Agent": "arb-gemini-inventory-reconcile/2.0", "Cache-Control": "no-cache"},
+        headers={"User-Agent": "arb-gemini-inventory-reconcile/2.1", "Cache-Control": "no-cache"},
     ) as http:
         r = await http.get(f"{REST}/v1/prediction-markets/events/{event_ticker}")
     if r.status_code != 200:
@@ -89,8 +91,11 @@ def _strategy(local: Mapping[str, Any]):
     strategy = str(local.get("strategy") or "")
     symbol = str(local.get("symbol") or "")
     ticker = str(local.get("event_ticker") or "")
-    if strategy == budget5.STRATEGY and symbol.startswith("GEMI-BTC05M") and ticker.startswith("BTC05M"):
-        return "5m", budget5
+    if strategy == budget5.STRATEGY:
+        if symbol.startswith("GEMI-BTC05M") and ticker.startswith("BTC05M"):
+            return "5m", budget5
+        if symbol.startswith("GEMI-ETH05M") and ticker.startswith("ETH05M"):
+            return "5m", budget5
     if strategy == budget15.STRATEGY and symbol.startswith("GEMI-BTC15M") and ticker.startswith("BTC15M"):
         return "15m", budget15
     raise RuntimeError(f"unexpected dual-horizon reservation identity strategy={strategy!r} symbol={symbol!r}")
@@ -293,7 +298,7 @@ async def reconcile() -> dict[str, Any]:
         reason="AUTHORITATIVE_GEMINI_EVENT_SETTLEMENT_RECONCILED_V2",
     )
     return {
-        "type": "GEMINI_BTC_DUAL_HORIZON_INVENTORY_SETTLEMENT_RECONCILIATION_V2",
+        "type": "GEMINI_SHORT_CRYPTO_INVENTORY_SETTLEMENT_RECONCILIATION_V2",
         "horizon": horizon,
         "trade_id": trade_id,
         "symbol": symbol,
@@ -306,21 +311,23 @@ async def reconcile() -> dict[str, Any]:
         "maker_fees": str(economics["maker_fees"]),
         "raw_cost": str(economics["raw_cost"]),
         "payout": str(economics["payout"]),
+        "net_profit": str(economics["net_profit"]),
         "resolution_side": resolution,
+        "resolved_at": resolved_at,
         "matched_quantity": str(economics["matched_quantity"]),
         "residual_quantity": str(economics["residual_quantity"]),
         "matched_complete_set": matched,
-        "net_profit": str(economics["net_profit"]),
         "maker_rebate_included": False,
+        "maker_rebate_accounted_separately": True,
+        "released": True,
+        "realized": True,
         "paired_arb": False,
-        "local_reservation_cleared": local_base.local_open_state() is None,
-        "venue_mutation": False,
     }
 
 
-async def main() -> None:
-    print(json.dumps(await reconcile(), sort_keys=True), flush=True)
+def main() -> None:
+    print(json.dumps(asyncio.run(reconcile()), sort_keys=True, default=str))
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
