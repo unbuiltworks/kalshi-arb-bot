@@ -7,8 +7,10 @@ on:
     paths:
       - src/gemini_incentive_mm_replay_v1.py
       - src/gemini_incentive_mm_replay_v2.py
+      - src/gemini_incentive_mm_shadow_v2.py
       - tests/test_gemini_incentive_mm_replay_v1.py
       - tests/test_gemini_incentive_mm_replay_v2.py
+      - tests/test_gemini_incentive_mm_shadow_v2.py
       - .github/workflows/incentive-arb-gemini-mm-smoke.yml
   workflow_dispatch:
 
@@ -26,30 +28,29 @@ jobs:
           python-version: '3.12'
       - name: Install minimal dependencies
         run: python -m pip install 'httpx>=0.27' 'websockets>=12' 'pytest>=8'
-      - name: Test reward-eligible policy and strict ledger
-        run: pytest -q tests/test_gemini_incentive_mm_replay_v1.py tests/test_gemini_incentive_mm_replay_v2.py tests/test_incentive_arb_engine.py
-      - name: Capture two minutes of public Gemini tape
+      - name: Test reward-eligible policy, strict ledger, and online accounting
+        run: pytest -q tests/test_gemini_incentive_mm_replay_v1.py tests/test_gemini_incentive_mm_replay_v2.py tests/test_gemini_incentive_mm_shadow_v2.py tests/test_incentive_arb_engine.py
+      - name: Capture two minutes with online q10 policy
         run: |
           mkdir -p artifacts
-          python -m src.gemini_l5_tape_dynamic_shadow_v3 \
+          python -m src.gemini_incentive_mm_shadow_v2 \
             --seconds 120 \
             --discover-s 15 \
             --checkpoint-s 5 \
-            --output artifacts/public-capture.jsonl \
-            --summary-output artifacts/public-capture-summary.json
-      - name: Replay q10 incentive-aware two-sided MM with strict ledger
-        run: |
-          python -m src.gemini_incentive_mm_replay_v2 \
-            artifacts/public-capture.jsonl \
-            --output artifacts/incentive-mm-replay-v2.json \
-            > artifacts/incentive-mm-replay-v2.log
+            --output artifacts/incentive-mm-online-v2.jsonl \
+            --summary-output artifacts/incentive-mm-online-v2-summary.json \
+            > artifacts/incentive-mm-online-v2.log
           python - <<'PY'
           import json
           from pathlib import Path
-          r=json.loads(Path('artifacts/incentive-mm-replay-v2.json').read_text())
+          r=json.loads(Path('artifacts/incentive-mm-online-v2-summary.json').read_text())
           print(json.dumps({
             'classification': r['classification'],
+            'status': r['status'],
             'markets': r['markets'],
+            'trades': r['trades'],
+            'ws_connections': r['ws_connections'],
+            'ws_reconnects': r['ws_reconnects'],
             'tape_touch': r['tape_touch'],
             'strict_trade_through': r['strict_trade_through'],
           },indent=2))
