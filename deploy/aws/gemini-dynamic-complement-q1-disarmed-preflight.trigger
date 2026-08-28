@@ -1,3 +1,3 @@
-CHECK=dynamic_complement_q1_disarmed_preflight_corrected_ids
+CHECK=dynamic_complement_q1_disarmed_preflight_pipefix
 PINNED_COMMIT=e89ce0ddfc46801f24d37ed98042f521318012d8
 CLASSIFICATION=READ_ONLY_DISARMED_PREFLIGHT
