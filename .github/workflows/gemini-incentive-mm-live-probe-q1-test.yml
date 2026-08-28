@@ -7,6 +7,7 @@ on:
     paths:
       - src/gemini_incentive_mm_live_probe_q1.py
       - tests/test_gemini_incentive_mm_live_probe_q1.py
+      - deploy/aws/run_gemini_incentive_mm_live_probe_q1.sh
       - .github/workflows/gemini-incentive-mm-live-probe-q1-test.yml
   workflow_dispatch:
 
@@ -35,3 +36,17 @@ jobs:
             tests/test_gemini_short_crypto_inventory_settlement_reconcile.py \
             tests/test_gemini_short_crypto_dual_horizon_settlement_reconcile_v2.py \
             tests/test_gemini_short_crypto_local_budget.py
+      - name: Prove AWS launcher is syntax-valid and defaults disarmed
+        run: |
+          set -euo pipefail
+          SCRIPT=deploy/aws/run_gemini_incentive_mm_live_probe_q1.sh
+          bash -n "$SCRIPT"
+          set +e
+          PINNED_COMMIT=0000000000000000000000000000000000000000 bash "$SCRIPT" > /tmp/disarmed.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+          grep -q 'fresh incentive-MM q1 approval flag missing' /tmp/disarmed.log
+          ! grep -q 'secure env missing' /tmp/disarmed.log
+          ! grep -q 'SOURCE_READY' /tmp/disarmed.log
+          echo 'Q1_LAUNCHER_DEFAULT_DISARMED_OK'
