@@ -1,8 +1,9 @@
 """Read-only l5-style Kalshi 15-minute BTC/ETH threshold shadow.
 
 The runner discovers the nearest open KXBTC15M and KXETH15M markets, samples
-public depth-1 order books, applies the simple 60% favored-side one-tick model,
-and attaches an exact-market incentive row when one is publicly active.
+public depth-1 order books, applies the simple 60% favored-side model using each
+market's actual ``price_ranges`` tick schedule, and attaches an exact-market
+incentive row when one is publicly active.
 
 Safety:
 - public REST only;
@@ -17,7 +18,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 from datetime import datetime, timezone
-from decimal import Decimal as D
 import json
 from pathlib import Path
 import time
@@ -66,18 +66,60 @@ def _incentive_map(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
+async def _series_metadata(http: httpx.AsyncClient, series: str) -> dict[str, Any]:
+    response = await http.get(f"{KALSHI_REST}/series/{series}", params={"include_volume": "true"})
+    response.raise_for_status()
+    row = response.json().get("series") or {}
+    return {
+        "ticker": row.get("ticker"),
+        "title": row.get("title"),
+        "category": row.get("category"),
+        "fee_type": row.get("fee_type"),
+        "fee_multiplier": row.get("fee_multiplier"),
+        "volume_fp": row.get("volume_fp"),
+        "settlement_sources": row.get("settlement_sources"),
+    }
+
+
 async def capture(*, seconds: float, poll_s: float, output: Path) -> dict[str, Any]:
     output.parent.mkdir(parents=True, exist_ok=True)
     deadline = time.monotonic() + max(0.0, seconds)
     stats: dict[str, dict[str, int]] = {
-        series: {"samples": 0, "threshold_samples": 0, "exact_incentive_samples": 0, "errors": 0}
+        series: {
+            "samples": 0,
+            "threshold_samples": 0,
+            "yes_favored_samples": 0,
+            "no_favored_samples": 0,
+            "side_switches": 0,
+            "market_rollovers": 0,
+            "exact_incentive_samples": 0,
+            "one_sided_book_samples": 0,
+            "errors": 0,
+        }
         for series in SERIES
     }
     last_identity: dict[str, str] = {}
+    last_favored: dict[str, str | None] = {}
+    last_ticker: dict[str, str] = {}
     incentive_snapshot = await fetch_snapshot()
     incentives = _incentive_map(incentive_snapshot)
 
-    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, headers={"User-Agent": "arb-kalshi-l5-threshold-shadow/1.0"}) as http:
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, headers={"User-Agent": "arb-kalshi-l5-threshold-shadow/1.1"}) as http:
+        series_meta = {}
+        for series in SERIES:
+            try:
+                series_meta[series] = await _series_metadata(http, series)
+            except Exception as exc:
+                series_meta[series] = {"error_type": type(exc).__name__, "error": str(exc)[:240]}
+        print(json.dumps({
+            "type": "KALSHI_L5_THRESHOLD_SHADOW_PREFLIGHT",
+            "observed_at": _iso_now(),
+            "series_metadata": series_meta,
+            "target_15m_incentive_count": len(incentives),
+            "read_only": True,
+            "order_entry": False,
+        }, separators=(",", ":"), default=str), flush=True)
+
         with output.open("w", encoding="utf-8") as fh:
             while time.monotonic() < deadline:
                 loop_started = time.monotonic()
@@ -92,15 +134,53 @@ async def capture(*, seconds: float, poll_s: float, output: Path) -> dict[str, A
                         if close is None:
                             stats[series]["errors"] += 1
                             continue
-                        book = await kalshi_book_once(http, ticker)
-                        plan = plan_kalshi_threshold_quotes(book.yes_bid, book.yes_ask)
+                        try:
+                            book = await kalshi_book_once(http, ticker)
+                        except ValueError as exc:
+                            if "not two-sided" in str(exc):
+                                stats[series]["one_sided_book_samples"] += 1
+                                continue
+                            raise
+                        plan = plan_kalshi_threshold_quotes(
+                            book.yes_bid,
+                            book.yes_ask,
+                            price_ranges=market.get("price_ranges") or [],
+                        )
                         incentive = incentives.get(ticker)
                         seconds_to_close = max(0.0, (close - datetime.now(timezone.utc)).total_seconds())
+
+                        previous_ticker = last_ticker.get(series)
+                        if previous_ticker is not None and previous_ticker != ticker:
+                            stats[series]["market_rollovers"] += 1
+                            # A new 15-minute contract is a new chronology; do not
+                            # count its initial side as a within-market reversal.
+                            last_favored.pop(series, None)
+                        last_ticker[series] = ticker
+
+                        previous_side = last_favored.get(series)
+                        if (
+                            previous_side is not None
+                            and plan.favored_side is not None
+                            and previous_side != plan.favored_side
+                        ):
+                            stats[series]["side_switches"] += 1
+                        if plan.favored_side is not None:
+                            last_favored[series] = plan.favored_side
+
                         row = {
                             "type": "KALSHI_L5_THRESHOLD_SHADOW",
                             "observed_at": _iso_now(),
                             "series": series,
                             "ticker": ticker,
+                            "event_ticker": market.get("event_ticker"),
+                            "title": market.get("title"),
+                            "subtitle": market.get("subtitle"),
+                            "rules_primary": market.get("rules_primary"),
+                            "strike_type": market.get("strike_type"),
+                            "floor_strike": market.get("floor_strike"),
+                            "functional_strike": market.get("functional_strike"),
+                            "price_level_structure": market.get("price_level_structure"),
+                            "price_ranges": market.get("price_ranges"),
                             "close_time": close.isoformat(),
                             "seconds_to_close": round(seconds_to_close, 3),
                             "yes_bid": str(book.yes_bid),
@@ -112,11 +192,12 @@ async def capture(*, seconds: float, poll_s: float, output: Path) -> dict[str, A
                             "threshold": str(DEFAULT_THRESHOLD),
                             "shadow_yes_quote": str(plan.yes_quote),
                             "shadow_no_quote": str(plan.no_quote),
+                            "quote_step": str(plan.quote_step),
                             "quote_skew_ticks": plan.quote_skew_ticks,
                             "shadow_target_units": plan.shadow_target_units,
                             "pair_cost_if_both_fill": str(plan.pair_cost_if_both_fill),
                             "pre_fee_pair_margin": str(plan.pre_fee_pair_margin),
-                            "fee_status": "UNMODELED_DO_NOT_COUNT",
+                            "fee_status": "SERIES_METADATA_ONLY_DO_NOT_COUNT",
                             "fill_status": "NO_FILL_ASSUMED",
                             "trading_pnl_status": "SHADOW_NOT_REALIZED",
                             "exact_market_incentive_active": incentive is not None,
@@ -130,9 +211,10 @@ async def capture(*, seconds: float, poll_s: float, output: Path) -> dict[str, A
                         stats[series]["samples"] += 1
                         if plan.favored_side is not None:
                             stats[series]["threshold_samples"] += 1
+                            stats[series][f"{plan.favored_side.lower()}_favored_samples"] += 1
                         if incentive is not None:
                             stats[series]["exact_incentive_samples"] += 1
-                        identity = f"{ticker}:{plan.favored_side}:{plan.yes_quote}:{plan.no_quote}:{bool(incentive)}"
+                        identity = f"{ticker}:{plan.favored_side}:{plan.yes_quote}:{plan.no_quote}:{plan.quote_step}:{bool(incentive)}"
                         if last_identity.get(series) != identity:
                             print(json.dumps(row, separators=(",", ":"), default=str), flush=True)
                             last_identity[series] = identity
@@ -156,12 +238,13 @@ async def capture(*, seconds: float, poll_s: float, output: Path) -> dict[str, A
         "observed_at": _iso_now(),
         "seconds_requested": seconds,
         "poll_s": poll_s,
+        "series_metadata": series_meta,
         "series": stats,
         "read_only": True,
         "order_entry": False,
         "realized_pnl": None,
     }
-    print(json.dumps(summary, separators=(",", ":")), flush=True)
+    print(json.dumps(summary, separators=(",", ":"), default=str), flush=True)
     return summary
 
 
