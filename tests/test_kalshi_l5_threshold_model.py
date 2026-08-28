@@ -1,6 +1,13 @@
 from decimal import Decimal as D
 
-from src.kalshi_l5_threshold_model import plan_kalshi_threshold_quotes
+from src.kalshi_l5_threshold_model import kalshi_price_step, plan_kalshi_threshold_quotes
+
+
+TAPERED = [
+    {"start": "0.0000", "end": "0.1000", "step": "0.0010"},
+    {"start": "0.1000", "end": "0.9000", "step": "0.0100"},
+    {"start": "0.9000", "end": "1.0000", "step": "0.0010"},
+]
 
 
 def test_yes_favored_skews_one_tick_passively():
@@ -40,3 +47,20 @@ def test_pair_margin_is_pre_fee_only_math():
     plan = plan_kalshi_threshold_quotes(D("0.60"), D("0.65"))
     assert plan.pair_cost_if_both_fill == D("0.96")
     assert plan.pre_fee_pair_margin == D("0.04")
+
+
+def test_tapered_structure_uses_deci_cent_at_tails():
+    assert kalshi_price_step(D("0.050"), TAPERED) == D("0.0010")
+    assert kalshi_price_step(D("0.500"), TAPERED) == D("0.0100")
+    assert kalshi_price_step(D("0.950"), TAPERED) == D("0.0010")
+
+
+def test_no_favored_tail_skew_uses_subpenny_step():
+    plan = plan_kalshi_threshold_quotes(
+        D("0.0030"), D("0.0050"), price_ranges=TAPERED
+    )
+    assert plan.favored_side == "NO"
+    assert plan.no_quote == D("0.9960")
+    assert plan.quote_step == D("0.0010")
+    assert plan.quote_skew_ticks == 1
+    assert plan.passive is True
