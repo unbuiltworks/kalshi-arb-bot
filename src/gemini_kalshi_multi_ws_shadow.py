@@ -15,6 +15,7 @@ import json
 import logging
 from pathlib import Path
 import time
+from typing import Any
 
 import httpx
 
@@ -37,6 +38,63 @@ ASSET_SERIES = {
     "SOL": "KXSOL15M",
     "XRP": "KXXRP15M",
 }
+
+_TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
+_ASSET_RETRY_STAGGER_S = {"BTC": 0.0, "ETH": 1.0, "SOL": 2.0, "XRP": 3.0}
+
+
+def _status_from_exception(exc: BaseException) -> int | None:
+    """Best-effort status extraction without depending on one websockets version."""
+    for obj in (exc, getattr(exc, "response", None)):
+        if obj is None:
+            continue
+        for name in ("status_code", "status"):
+            raw = getattr(obj, name, None)
+            if raw is None:
+                continue
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                pass
+    return None
+
+
+def _is_transient_ws_error(exc: BaseException) -> bool:
+    """Return True only for failures that are reasonable to retry read-only.
+
+    Authentication, permission, malformed-message and programming failures remain
+    fatal. Admission/rate-limit and temporary upstream failures are retried with
+    bounded backoff so a 429 cannot turn a short data gap into a dead collector.
+    """
+    status = _status_from_exception(exc)
+    if status is not None:
+        return status in _TRANSIENT_HTTP_STATUSES
+
+    text = str(exc).lower()
+    transient_markers = (
+        "http 429",
+        "status code 429",
+        "rate limit",
+        "too many requests",
+        "http 500",
+        "http 502",
+        "http 503",
+        "http 504",
+        "temporarily unavailable",
+        "service unavailable",
+    )
+    return any(marker in text for marker in transient_markers)
+
+
+def _retry_backoff_s(attempt: int, asset: str) -> float:
+    """Bounded exponential admission backoff with deterministic asset staggering."""
+    if attempt < 0:
+        raise ValueError("attempt must be nonnegative")
+    normalized = asset.upper()
+    if normalized not in ASSET_SERIES:
+        raise ValueError(f"unsupported asset={asset}")
+    base = min(60.0, 5.0 * (2 ** min(attempt, 4)))
+    return min(60.0, base + _ASSET_RETRY_STAGGER_S[normalized])
 
 
 class PairDiscoveryCache:
@@ -78,6 +136,7 @@ async def _capture_pair(
     overall_deadline: float,
     output: Path,
     max_quote_skew_ms: int,
+    stream_epoch: int = 0,
 ) -> tuple[int, int]:
     queue: asyncio.Queue = asyncio.Queue(maxsize=100000)
     tasks = {
@@ -150,6 +209,8 @@ async def _capture_pair(
                     "kalshi_yes_ask": str(k.yes_ask),
                     "kalshi_yes_ask_size": str(k.yes_ask_size),
                     "both_taker_fee_candidates": _candidate_rows(candidates),
+                    "collector_stream_epoch": stream_epoch,
+                    "collector_reconnected_after_gap": stream_epoch > 0,
                     "settlement_status": "INDEX_MISMATCH_RESEARCH_ONLY",
                     "read_only": True,
                     "order_entry": False,
@@ -172,6 +233,7 @@ async def _capture_pair(
         "window_end_utc": pair.window_end.isoformat(),
         "samples": samples,
         "both_taker_fee_positive_event_samples": positive,
+        "collector_stream_epoch": stream_epoch,
         "read_only": True,
         "order_entry": False,
     }, separators=(",", ":")))
@@ -195,6 +257,9 @@ async def collect_asset(
     total_samples = 0
     total_positive = 0
     windows = 0
+    transient_reconnects = 0
+    retry_attempt = 0
+    stream_epoch = 0
     kalshi_fee = fee_meta.taker_fee_fn()
 
     while time.monotonic() < overall_deadline:
@@ -212,18 +277,48 @@ async def collect_asset(
             "fee_type": fee_meta.fee_type,
             "fee_multiplier": fee_meta.fee_multiplier,
             "gemini_stream": "bookTicker",
+            "collector_stream_epoch": stream_epoch,
             "read_only": True,
             "order_entry": False,
         }, separators=(",", ":")))
 
-        samples, positive = await _capture_pair(
-            asset=asset,
-            pair=pair,
-            kalshi_fee=kalshi_fee,
-            overall_deadline=overall_deadline,
-            output=output,
-            max_quote_skew_ms=max_quote_skew_ms,
-        )
+        try:
+            samples, positive = await _capture_pair(
+                asset=asset,
+                pair=pair,
+                kalshi_fee=kalshi_fee,
+                overall_deadline=overall_deadline,
+                output=output,
+                max_quote_skew_ms=max_quote_skew_ms,
+                stream_epoch=stream_epoch,
+            )
+        except Exception as exc:
+            if not _is_transient_ws_error(exc):
+                raise
+            remaining = max(0.0, overall_deadline - time.monotonic())
+            if remaining <= 0:
+                break
+            backoff_s = min(_retry_backoff_s(retry_attempt, asset), remaining)
+            transient_reconnects += 1
+            stream_epoch += 1
+            logger.warning("MULTI_WS_TRANSIENT_RECONNECT %s", json.dumps({
+                "asset": asset,
+                "kalshi_ticker": pair.kalshi_ticker,
+                "failure": type(exc).__name__,
+                "failure_text": str(exc)[:300],
+                "retry_attempt": retry_attempt,
+                "backoff_s": backoff_s,
+                "next_stream_epoch": stream_epoch,
+                "research_data_gap_detected": True,
+                "settlement_status": "INDEX_MISMATCH_RESEARCH_ONLY",
+                "read_only": True,
+                "order_entry": False,
+            }, separators=(",", ":")))
+            retry_attempt += 1
+            await asyncio.sleep(backoff_s)
+            continue
+
+        retry_attempt = 0
         windows += 1
         total_samples += samples
         total_positive += positive
@@ -233,6 +328,9 @@ async def collect_asset(
         "windows_captured": windows,
         "samples": total_samples,
         "both_taker_fee_positive_event_samples": total_positive,
+        "transient_ws_reconnects": transient_reconnects,
+        "research_data_gap_detected": transient_reconnects > 0,
+        "stream_epochs": stream_epoch + 1,
         "output": str(output),
         "gemini_stream": "bookTicker",
         "settlement_status": "INDEX_MISMATCH_RESEARCH_ONLY",

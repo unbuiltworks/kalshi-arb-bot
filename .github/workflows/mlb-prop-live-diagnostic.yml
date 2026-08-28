@@ -1,0 +1,34 @@
+name: MLB Prop Live Diagnostic
+
+on:
+  push:
+    branches:
+      - feature/universal-prediction-quant
+    paths:
+      - 'src/strict_mlb_prop_live_diagnostic.py'
+      - 'src/polymarket_mlb_shape_diagnostic.py'
+      - 'src/polymarket_us_mlb_prop_supply_audit.py'
+      - 'src/polymarket_mlb_search_identity_audit.py'
+      - 'src/strict_mlb_prop_schedule_guard.py'
+      - '.github/workflows/mlb-prop-live-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Run public read-only strict diagnostic
+        run: python -m src.strict_mlb_prop_live_diagnostic
+      - name: Inspect current Polymarket MLB payload shape
+        run: python -m src.polymarket_mlb_shape_diagnostic
+      - name: Audit exact Polymarket MLB Search event identity
+        run: python -m src.polymarket_mlb_search_identity_audit

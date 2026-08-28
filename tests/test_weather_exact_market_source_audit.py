@@ -1,0 +1,142 @@
+from src.weather_exact_market_source_audit import audit_exact_market_source
+
+
+def _base(**overrides):
+    data = {
+        "series_ticker": "KXHIGHAUS",
+        "event_ticker": "KXHIGHAUS-26AUG12",
+        "market_ticker": "KXHIGHAUS-26AUG12-B102.5",
+        "market_date": "2026-08-12",
+        "provider": "NWS",
+        "source_url": "https://forecast.weather.gov/product.php?site=NWS&product=CLI&issuedby=AUS",
+        "evidence_url": "https://kalshi.com/markets/kxhighaus/highest-temperature-in-austin/kxhighaus-26aug12",
+        "evidence_market_ticker": "KXHIGHAUS-26AUG12-B102.5",
+        "evidence_market_date": "2026-08-12",
+        "expected_cli_product": "CLIAUS",
+    }
+    data.update(overrides)
+    return data
+
+
+def test_pre_transition_exact_nws_market_can_verify_without_current_series_provider():
+    row = audit_exact_market_source(**_base())
+    assert row["verified"] is True
+    assert row["settlement_source_provider"] == "NWS"
+    assert row["expected_cli_product"] == "CLIAUS"
+    assert row["nws_cli_issuedby"] == "AUS"
+    assert row["read_only"] is True
+    assert row["order_entry"] is False
+    assert row["live_probe_ready"] is False
+
+
+def test_post_transition_exact_twc_market_can_verify():
+    row = audit_exact_market_source(**_base(
+        event_ticker="KXHIGHAUS-26AUG21",
+        market_ticker="KXHIGHAUS-26AUG21-B102.5",
+        market_date="2026-08-21",
+        provider="THE_WEATHER_COMPANY",
+        source_url="https://weather.com/kalshi",
+        evidence_url="https://kalshi.com/markets/kxhighaus/highest-temperature-in-austin/kxhighaus-26aug21",
+        evidence_market_ticker="KXHIGHAUS-26AUG21-B102.5",
+        evidence_market_date="2026-08-21",
+    ))
+    assert row["verified"] is True
+    assert row["settlement_source_provider"] == "THE_WEATHER_COMPANY"
+
+
+def test_series_prefix_or_evidence_mismatch_fails_closed():
+    row = audit_exact_market_source(**_base(
+        market_ticker="KXHIGHMIA-26AUG12-B102.5",
+        evidence_market_date="2026-08-13",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_IDENTITY_UNVERIFIED" in row["blockers"]
+    assert "EXACT_MARKET_EVIDENCE_MISMATCH" in row["blockers"]
+
+
+def test_unofficial_or_wrong_source_endpoint_fails_closed():
+    row = audit_exact_market_source(**_base(
+        provider="THE_WEATHER_COMPANY",
+        source_url="https://weather.com/weather/today",
+        evidence_url="https://example.com/kalshi-market-copy",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_SETTLEMENT_SOURCE_UNVERIFIED" in row["blockers"]
+    assert "EXACT_MARKET_EVIDENCE_UNOFFICIAL" in row["blockers"]
+
+
+def test_generic_nws_page_cannot_certify_daily_climate_settlement_source():
+    row = audit_exact_market_source(**_base(
+        source_url="https://www.weather.gov/wrh/Climate?wfo=ewx",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_SETTLEMENT_SOURCE_UNVERIFIED" in row["blockers"]
+    assert "EXACT_MARKET_SETTLEMENT_STATION_UNVERIFIED" in row["blockers"]
+    assert row["settlement_source_provider"] is None
+
+
+def test_nws_cli_source_requires_issuedby_station_product():
+    row = audit_exact_market_source(**_base(
+        source_url="https://forecast.weather.gov/product.php?site=NWS&product=CLI",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_SETTLEMENT_SOURCE_UNVERIFIED" in row["blockers"]
+    assert "EXACT_MARKET_SETTLEMENT_STATION_UNVERIFIED" in row["blockers"]
+
+
+def test_nws_cli_source_for_wrong_station_cannot_certify_target_market():
+    row = audit_exact_market_source(**_base(
+        source_url="https://forecast.weather.gov/product.php?site=NWS&product=CLI&issuedby=MIA",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_SETTLEMENT_SOURCE_UNVERIFIED" in row["blockers"]
+    assert "EXACT_MARKET_SETTLEMENT_STATION_UNVERIFIED" in row["blockers"]
+    assert row["nws_cli_issuedby"] == "MIA"
+
+
+def test_nws_cli_source_requires_expected_station_identity():
+    row = audit_exact_market_source(**_base(expected_cli_product=None))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_SETTLEMENT_STATION_UNVERIFIED" in row["blockers"]
+
+
+def test_generic_official_kalshi_url_cannot_certify_exact_market_regime():
+    row = audit_exact_market_source(**_base(
+        evidence_url="https://kalshi.com/markets/kxhighaus",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT" in row["blockers"]
+    assert row["evidence_url"] is None
+
+
+def test_other_event_page_cannot_certify_target_market_even_with_asserted_metadata():
+    row = audit_exact_market_source(**_base(
+        evidence_url="https://kalshi.com/markets/kxhighaus/highest-temperature-in-austin/kxhighaus-26aug21",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT" in row["blockers"]
+
+
+def test_event_ticker_substring_cannot_certify_target_market():
+    row = audit_exact_market_source(**_base(
+        evidence_url="https://kalshi.com/markets/kxhighaus/highest-temperature-in-austin/kxhighaus-26aug120",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT" in row["blockers"]
+    assert row["evidence_url"] is None
+
+
+def test_url_decoded_exact_event_token_can_certify():
+    row = audit_exact_market_source(**_base(
+        evidence_url="https://kalshi.com/markets/kxhighaus/highest-temperature-in-austin/KXHIGHAUS-26AUG12/",
+    ))
+    assert row["verified"] is True
+
+
+def test_stringly_or_missing_dates_do_not_pass():
+    row = audit_exact_market_source(**_base(
+        market_date="2026-8-12",
+        evidence_market_date="2026-8-12",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_EVIDENCE_MISMATCH" in row["blockers"]
