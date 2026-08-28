@@ -129,3 +129,58 @@ def test_terminal_rows_require_exact_distinct_client_ids():
     ], yid, nid)
     assert r._filled(y) == D("1")
     assert r._filled(n) == D("1")
+
+
+def test_dynamic_declared_ids_fall_back_to_static_pair():
+    yes, no = r._declared_client_ids({}, "trade-a")
+    assert len(yes) == len(no) == 1
+    assert yes[0] != no[0]
+
+
+def test_dynamic_declared_ids_use_exact_durable_chain():
+    yes, no = r._declared_client_ids({
+        "yes_client_order_ids": ["y0", "y1"],
+        "no_client_order_ids": ["n0", "n1", "n2"],
+    }, "trade-a")
+    assert yes == ["y0", "y1"]
+    assert no == ["n0", "n1", "n2"]
+
+
+def test_dynamic_declared_ids_reject_overlap_and_duplicates():
+    with pytest.raises(RuntimeError, match="distinct"):
+        r._declared_client_ids({"yes_client_order_ids": ["y0", "y0"], "no_client_order_ids": ["n0"]}, "t")
+    with pytest.raises(RuntimeError, match="overlap"):
+        r._declared_client_ids({"yes_client_order_ids": ["same"], "no_client_order_ids": ["same"]}, "t")
+
+
+def test_terminal_rows_many_requires_every_replacement_id():
+    rows = [
+        {"clientOrderId": "y0", "filledQuantity": "1", "outcome": "yes"},
+        {"clientOrderId": "n0", "filledQuantity": "0", "outcome": "no"},
+        {"clientOrderId": "n1", "filledQuantity": "1", "outcome": "no"},
+    ]
+    terminal = r._terminal_rows_many(rows, ["y0", "n0", "n1"])
+    assert set(terminal) == {"y0", "n0", "n1"}
+    with pytest.raises(RuntimeError, match="missing exact canary order history"):
+        r._terminal_rows_many(rows, ["y0", "n0", "n1", "n2"])
+
+
+def test_aggregate_side_sums_replacement_fills_and_fees_rowwise():
+    terminal = {
+        "n0": {"clientOrderId": "n0", "filledQuantity": "0", "outcome": "no", "price": "0.30"},
+        "n1": {"clientOrderId": "n1", "filledQuantity": "1", "outcome": "no", "avgExecutionPrice": "0.34"},
+    }
+    out = r._aggregate_side(terminal, ["n0", "n1"], "no")
+    assert out["fill"] == D("1")
+    assert out["cost"] == D("0.34")
+    assert out["fees"] == D("0.01")
+    assert out["avg_price"] == D("0.34")
+
+
+def test_aggregate_side_fails_closed_above_q1():
+    terminal = {
+        "n0": {"clientOrderId": "n0", "filledQuantity": "0.6", "outcome": "no", "avgExecutionPrice": "0.30"},
+        "n1": {"clientOrderId": "n1", "filledQuantity": "0.5", "outcome": "no", "avgExecutionPrice": "0.31"},
+    }
+    with pytest.raises(RuntimeError, match="exceeds q=1"):
+        r._aggregate_side(terminal, ["n0", "n1"], "no")
