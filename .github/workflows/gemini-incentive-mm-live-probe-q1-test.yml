@@ -1,0 +1,33 @@
+name: Gemini incentive MM q1 live probe test
+
+on:
+  push:
+    branches:
+      - feature/gemini-incentive-mm-live-probe-q1
+    paths:
+      - src/gemini_incentive_mm_live_probe_q1.py
+      - tests/test_gemini_incentive_mm_live_probe_q1.py
+      - .github/workflows/gemini-incentive-mm-live-probe-q1-test.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Run live-probe and proven-child regressions
+        run: |
+          pytest -q \
+            tests/test_gemini_incentive_mm_live_probe_q1.py \
+            tests/test_gemini_short_crypto_btc5m_inventory_maker_canary_q1.py \
+            tests/test_gemini_short_crypto_btc5m_inventory_maker_canary_q1_v3.py \
+            tests/test_gemini_short_crypto_dual_horizon_settlement_reconcile_v2.py
