@@ -1,2 +1,3 @@
-CHECK=dynamic_complement_q1_live_state
+CHECK=dynamic_complement_q1_terminal_monitor_proof
 CLASSIFICATION=READ_ONLY_LIVE_STATE_CHECK
+NONCE=20260828T2335Z
