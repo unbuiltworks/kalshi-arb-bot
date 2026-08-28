@@ -1,0 +1,37 @@
+name: l5 Gemini inventory v4 tests
+
+on:
+  push:
+    branches:
+      - feature/l5-gemini-inventory-v4
+    paths:
+      - src/gemini_l5_inventory_replay_v4.py
+      - src/gemini_l5_inventory_policy.py
+      - src/gemini_l5_fair_value.py
+      - tests/test_gemini_l5_inventory_replay_v4.py
+      - tests/test_gemini_l5_inventory_policy.py
+      - tests/test_gemini_l5_fair_value.py
+      - .github/workflows/l5-gemini-inventory-v4-test.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Pair-first strategy tests
+        run: |
+          pytest -q \
+            tests/test_gemini_l5_inventory_replay_v4.py \
+            tests/test_gemini_l5_inventory_policy.py \
+            tests/test_gemini_l5_fair_value.py
+      - name: Compile V4 replay
+        run: python -m py_compile src/gemini_l5_inventory_replay_v4.py
