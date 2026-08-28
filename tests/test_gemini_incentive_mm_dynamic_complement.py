@@ -89,3 +89,64 @@ def test_yes_fill_maps_correctly_to_no_book_ceiling():
 def test_invalid_final_edge_floor_rejected():
     with pytest.raises(ValueError):
         policy.max_edge_safe_complement_price(filled_price=D("0.33"), min_final_edge=D("-0.01"))
+
+
+def test_aggressive_entry_spends_huge_excess_edge_but_keeps_ten_cents():
+    # Actual 2026-08-28 live probe book: 23c YES bid / 76c YES ask.
+    # Raw maker pair was YES 23c + NO 24c = 47c before fees, but neither filled.
+    # Shadow policy moves both bids toward the market while preserving 10c after fees.
+    plan = policy.aggressive_entry_plan(
+        yes_bid=D("0.23"), yes_ask=D("0.76"), min_entry_edge=D("0.10")
+    )
+    assert plan["action"] == "IMPROVE_INITIAL_MAKERS"
+    assert plan["raw_yes_quote"] == D("0.23")
+    assert plan["raw_no_quote"] == D("0.24")
+    assert plan["raw_edge"] == D("0.51")
+    assert plan["yes_quote"] == D("0.44")
+    assert plan["no_quote"] == D("0.44")
+    assert plan["yes_improvement"] == D("0.21")
+    assert plan["no_improvement"] == D("0.20")
+    assert plan["final_edge"] == D("0.10")
+    assert plan["yes_quote"] <= plan["yes_passive_ceiling"]
+    assert plan["no_quote"] <= plan["no_passive_ceiling"]
+
+
+def test_aggressive_entry_only_spends_one_cent_on_eleven_cent_raw_edge():
+    # Earlier observed qualifying window: YES 38c / NO 49c had 11c after-fee raw edge.
+    # With a 10c target, only one tick can be spent on better queue position.
+    plan = policy.aggressive_entry_plan(
+        yes_bid=D("0.38"), yes_ask=D("0.51"), min_entry_edge=D("0.10")
+    )
+    assert plan["action"] == "IMPROVE_INITIAL_MAKERS"
+    assert plan["yes_quote"] == D("0.39")
+    assert plan["no_quote"] == D("0.49")
+    assert plan["final_edge"] == D("0.10")
+
+
+def test_aggressive_entry_holds_raw_when_ten_cent_budget_is_not_available():
+    plan = policy.aggressive_entry_plan(
+        yes_bid=D("0.45"), yes_ask=D("0.53"), min_entry_edge=D("0.10")
+    )
+    assert plan["action"] == "HOLD_RAW"
+    assert plan["reason"] == "INSUFFICIENT_EXCESS_EDGE"
+    assert plan["yes_quote"] == D("0.45")
+    assert plan["no_quote"] == D("0.47")
+    assert plan["final_edge"] < D("0.10")
+
+
+def test_aggressive_entry_balances_improvement_on_skewed_book():
+    plan = policy.aggressive_entry_plan(
+        yes_bid=D("0.55"), yes_ask=D("0.75"), min_entry_edge=D("0.10")
+    )
+    assert plan["yes_quote"] == D("0.59")
+    assert plan["no_quote"] == D("0.29")
+    assert plan["yes_improvement"] == plan["no_improvement"] == D("0.04")
+    assert plan["final_edge"] == D("0.10")
+
+
+def test_aggressive_entry_never_moves_outside_price_band():
+    plan = policy.aggressive_entry_plan(
+        yes_bid=D("0.81"), yes_ask=D("0.90"), min_entry_edge=D("0.10")
+    )
+    assert plan["action"] == "HOLD_RAW"
+    assert plan["reason"] == "RAW_QUOTE_OUTSIDE_PRICE_BAND"
