@@ -1,2 +1,2 @@
-CHECK=striking_distance_probe_retry1_complement_status
+CHECK=striking_distance_probe_retry1_terminal_state
 CLASSIFICATION=READ_ONLY_CHECK
