@@ -1,0 +1,62 @@
+name: AWS l5 Gemini q1 monitor v1
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - .github/workflows/aws-l5-gemini-q1-monitor-v1.yml
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      AWS_REGION: us-east-1
+      AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+      AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+      CONTAINER_NAME: arb-gemini-l5-threshold-q1-live-v1
+    steps:
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Monitor bounded live container through SSM
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime
+          final_sample=
+          for sample in $(seq 1 38); do
+            REMOTE_CMD="NAME=$CONTAINER_NAME; echo L5_MONITOR_AT_UTC=\$(date -u +%Y-%m-%dT%H:%M:%SZ); if docker inspect \"\$NAME\" >/dev/null 2>&1; then RUNNING=\$(docker inspect -f '{{.State.Running}}' \"\$NAME\"); STATUS=\$(docker inspect -f '{{.State.Status}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}' \"\$NAME\"); echo L5_CONTAINER_RUNNING=\$RUNNING; echo L5_CONTAINER_STATUS=\$STATUS; echo L5_LOG_TAIL_BEGIN; docker logs --tail 250 \"\$NAME\" 2>&1 | tail -c 18000; echo; echo L5_LOG_TAIL_END; else echo L5_CONTAINER_RUNNING=false; echo L5_CONTAINER_STATUS=not_found; fi"
+            PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+            COMMAND_ID=$(aws ssm send-command               --instance-ids "$AWS_HOT_INSTANCE_ID"               --document-name AWS-RunShellScript               --comment "ARB l5 q1 read-only monitor sample $sample"               --parameters "$PARAMETERS"               --query 'Command.CommandId'               --output text)
+            aws ssm wait command-executed               --command-id "$COMMAND_ID"               --instance-id "$AWS_HOT_INSTANCE_ID" || true
+            final_sample="runtime/sample-$(printf '%02d' "$sample").json"
+            aws ssm get-command-invocation               --command-id "$COMMAND_ID"               --instance-id "$AWS_HOT_INSTANCE_ID"               --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}'               > "$final_sample"
+            jq -r '.Stdout' "$final_sample" |
+              grep -E '^(L5_MONITOR_AT_UTC|L5_CONTAINER_RUNNING|L5_CONTAINER_STATUS)=' || true
+            running=$(jq -r '.Stdout' "$final_sample" |
+              awk -F= '$1=="L5_CONTAINER_RUNNING"{print $2; exit}')
+            if [ "$running" != "true" ]; then
+              break
+            fi
+            sleep 120
+          done
+          test -n "$final_sample"
+          cp "$final_sample" runtime/final.json
+          jq -r '.Stdout' runtime/final.json
+
+      - name: Upload l5 monitor evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aws-l5-gemini-q1-monitor-v1
+          path: runtime/
+          retention-days: 3
