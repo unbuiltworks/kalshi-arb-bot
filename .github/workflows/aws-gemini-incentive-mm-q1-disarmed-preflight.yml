@@ -15,7 +15,7 @@ env:
   AWS_REGION: us-east-1
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
-  Q1_COMMIT: e60a5bb91438e74d8819c2a4e6fb848135737403
+  Q1_COMMIT: 9f647e4134af868bdbb0b50294e6c9c7170b7b3f
 
 jobs:
   preflight:
@@ -26,11 +26,11 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Prove q1 launcher refuses to arm on AWS
+      - name: Prove instrumented ETH5 q1 launcher refuses to arm on AWS
         shell: bash
         run: |
           set -euo pipefail
-          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin feature/gemini-incentive-mm-live-probe-q1 >/dev/null; git merge-base --is-ancestor ${Q1_COMMIT} origin/feature/gemini-incentive-mm-live-probe-q1; git cat-file -e \"${Q1_COMMIT}^{commit}\"; git show ${Q1_COMMIT}:deploy/aws/run_gemini_incentive_mm_live_probe_q1.sh > /tmp/run_gemini_incentive_mm_live_probe_q1.sh; chmod 0700 /tmp/run_gemini_incentive_mm_live_probe_q1.sh; bash -n /tmp/run_gemini_incentive_mm_live_probe_q1.sh; set +e; PINNED_COMMIT=${Q1_COMMIT} bash /tmp/run_gemini_incentive_mm_live_probe_q1.sh >/tmp/q1-disarmed-preflight.log 2>&1; rc=\$?; set -e; test \$rc -ne 0; grep -q \"fresh incentive-MM q1 approval flag missing\" /tmp/q1-disarmed-preflight.log; ! grep -q \"secure env missing\" /tmp/q1-disarmed-preflight.log; ! grep -q \"SOURCE_READY\" /tmp/q1-disarmed-preflight.log; echo Q1_AWS_DISARMED_PREFLIGHT_OK commit=${Q1_COMMIT} target=ETH5 order_entry=false credentials_read=false'"
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin feature/gemini-incentive-mm-live-probe-q1 >/dev/null; git merge-base --is-ancestor ${Q1_COMMIT} origin/feature/gemini-incentive-mm-live-probe-q1; git cat-file -e \"${Q1_COMMIT}^{commit}\"; git show ${Q1_COMMIT}:src/gemini_incentive_mm_live_probe_q1.py | grep -q '\"'\"'TARGET_ASSET = \"ETH\"'\"'\"'; git show ${Q1_COMMIT}:src/gemini_incentive_mm_live_probe_q1.py | grep -q '\"'\"'TARGET_HORIZON = \"5m\"'\"'\"'; git show ${Q1_COMMIT}:src/gemini_short_crypto_btc5m_inventory_maker_canary_q1.py | grep -q '\"'\"'first_fill_latency_ms'\"'\"'; git show ${Q1_COMMIT}:src/gemini_short_crypto_btc5m_inventory_maker_canary_q1.py | grep -q '\"'\"'cancel_roundtrip_ms'\"'\"'; git show ${Q1_COMMIT}:deploy/aws/run_gemini_incentive_mm_live_probe_q1.sh > /tmp/run_gemini_incentive_mm_live_probe_q1.sh; chmod 0700 /tmp/run_gemini_incentive_mm_live_probe_q1.sh; bash -n /tmp/run_gemini_incentive_mm_live_probe_q1.sh; set +e; PINNED_COMMIT=${Q1_COMMIT} bash /tmp/run_gemini_incentive_mm_live_probe_q1.sh >/tmp/q1-disarmed-preflight.log 2>&1; rc=\$?; set -e; test \$rc -ne 0; grep -q \"fresh incentive-MM q1 approval flag missing\" /tmp/q1-disarmed-preflight.log; ! grep -q \"secure env missing\" /tmp/q1-disarmed-preflight.log; ! grep -q \"SOURCE_READY\" /tmp/q1-disarmed-preflight.log; echo Q1_AWS_DISARMED_PREFLIGHT_OK commit=${Q1_COMMIT} target=ETH5 instrumentation=ack_queue_fill_cancel order_entry=false credentials_read=false'"
           PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
           COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB q1 ETH5 disarmed preflight" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
           aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
