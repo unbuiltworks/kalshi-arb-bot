@@ -10,12 +10,12 @@ STATE_DIR="${STATE_DIR:-/home/ssm-user/gemini-l5-dynamic-shadow-v2-state}"
 BRANCH="feature/l5-gemini-dynamic-shadow-v2"
 PINNED_COMMIT="${PINNED_COMMIT:-}"
 CONTAINER="arb-gemini-l5-dynamic-shadow-v2"
-SECONDS="${SHADOW_SECONDS:-3600}"
+DURATION_SECONDS="${SHADOW_SECONDS:-3600}"
 DISCOVER_S="${SHADOW_DISCOVER_S:-10}"
 
 [ -n "$PINNED_COMMIT" ] || { echo "PINNED_COMMIT is required" >&2; exit 1; }
 [[ "$PINNED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "invalid PINNED_COMMIT" >&2; exit 1; }
-[[ "$SECONDS" =~ ^[0-9]+$ ]] || { echo "invalid SHADOW_SECONDS" >&2; exit 1; }
+[[ "$DURATION_SECONDS" =~ ^[0-9]+$ ]] || { echo "invalid SHADOW_SECONDS" >&2; exit 1; }
 
 for cmd in git docker; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "$cmd is required" >&2; exit 1; }
@@ -67,7 +67,7 @@ echo "L5_DYNAMIC_SHADOW_TESTS_OK"
 printf '%s\n' \
   "run_id=$RUN_ID" \
   "commit=$PINNED_COMMIT" \
-  "seconds=$SECONDS" \
+  "seconds=$DURATION_SECONDS" \
   "discover_s=$DISCOVER_S" \
   "classification=SHADOW_NOT_REALIZED" \
   "credentials_loaded=false" \
@@ -79,14 +79,14 @@ docker run -d --name "$CONTAINER" --network host --restart no \
   -e PYTHONUNBUFFERED=1 \
   -v "$RUN_DIR:/state" \
   "$IMAGE" python -u -m src.gemini_l5_tape_dynamic_shadow \
-    --seconds "$SECONDS" \
+    --seconds "$DURATION_SECONDS" \
     --discover-s "$DISCOVER_S" \
     --output /state/capture.jsonl \
     --summary-output /state/summary.json \
     > "$RUN_DIR/container-id.txt"
 
 container_id="$(cat "$RUN_DIR/container-id.txt")"
-echo "L5_DYNAMIC_SHADOW_STARTED container=$CONTAINER container_id=${container_id:0:12} run_id=$RUN_ID seconds=$SECONDS order_entry=false credentials_loaded=false"
+echo "L5_DYNAMIC_SHADOW_STARTED container=$CONTAINER container_id=${container_id:0:12} run_id=$RUN_ID seconds=$DURATION_SECONDS order_entry=false credentials_loaded=false"
 sleep 2
 docker ps -a --filter "name=^/${CONTAINER}$" --format 'L5_DYNAMIC_SHADOW_CONTAINER {{.Names}} {{.Status}} {{.Image}}'
 docker logs --tail 20 "$CONTAINER" 2>&1 || true
