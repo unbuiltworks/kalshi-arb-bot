@@ -18,6 +18,12 @@ import httpx
 
 GEMINI = "https://api.gemini.com"
 KALSHI = "https://external-api.kalshi.com/trade-api/v2"
+KALSHI_TARGET_15M_PREFIXES = (
+    "KXBTC15M-",
+    "KXETH15M-",
+    "KXSOL15M-",
+    "KXXRP15M-",
+)
 
 
 def _rows(payload: Any, *keys: str) -> list[dict[str, Any]]:
@@ -64,8 +70,16 @@ def is_kalshi_crypto15_incentive(row: Mapping[str, Any]) -> bool:
     return crypto and fifteen
 
 
+def is_kalshi_target_15m_incentive(row: Mapping[str, Any]) -> bool:
+    ticker = str(row.get("market_ticker") or row.get("marketTicker") or "").upper()
+    series = str(row.get("series_ticker") or row.get("seriesTicker") or "").upper()
+    if ticker.startswith(KALSHI_TARGET_15M_PREFIXES):
+        return True
+    return series in {prefix[:-1] for prefix in KALSHI_TARGET_15M_PREFIXES}
+
+
 async def fetch_snapshot(timeout_s: float = 15.0) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=timeout_s, follow_redirects=True, headers={"User-Agent": "arb-short-crypto-incentive-snapshot/1.0"}) as client:
+    async with httpx.AsyncClient(timeout=timeout_s, follow_redirects=True, headers={"User-Agent": "arb-short-crypto-incentive-snapshot/1.1"}) as client:
         async def get(url: str, params: dict[str, Any] | None = None) -> tuple[int, Any]:
             response = await client.get(url, params=params)
             payload: Any
@@ -89,6 +103,9 @@ async def fetch_snapshot(timeout_s: float = 15.0) -> dict[str, Any]:
 
     gem_event_rows = _rows(gem_event_payload, "events", "data", "liquidity_reward_events")
     kalshi_rows = _rows(kalshi_payload, "incentive_programs", "data")
+    crypto15_rows = [r for r in kalshi_rows if is_kalshi_crypto15_incentive(r)]
+    target_rows = [r for r in kalshi_rows if is_kalshi_target_15m_incentive(r)]
+    other_rows = [r for r in crypto15_rows if not is_kalshi_target_15m_incentive(r)]
 
     return {
         "observed_at": datetime.now(timezone.utc).isoformat(),
@@ -106,7 +123,10 @@ async def fetch_snapshot(timeout_s: float = 15.0) -> dict[str, Any]:
         "kalshi": {
             "incentives_http_status": kalshi_status,
             "active_incentive_count": len(kalshi_rows),
-            "crypto15_incentives": [r for r in kalshi_rows if is_kalshi_crypto15_incentive(r)],
+            "target_15m_incentives": target_rows,
+            "target_15m_incentive_count": len(target_rows),
+            "other_crypto15_incentives": other_rows,
+            "other_crypto15_incentive_count": len(other_rows),
         },
     }
 
