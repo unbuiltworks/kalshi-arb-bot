@@ -96,6 +96,22 @@ def test_other_event_page_cannot_certify_target_market_even_with_asserted_metada
     assert "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT" in row["blockers"]
 
 
+def test_event_ticker_substring_cannot_certify_target_market():
+    row = audit_exact_market_source(**_base(
+        evidence_url="https://kalshi.com/markets/kxhighaus/highest-temperature-in-austin/kxhighaus-26aug120",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT" in row["blockers"]
+    assert row["evidence_url"] is None
+
+
+def test_url_decoded_exact_event_token_can_certify():
+    row = audit_exact_market_source(**_base(
+        evidence_url="https://kalshi.com/markets/kxhighaus/highest-temperature-in-austin/KXHIGHAUS-26AUG12/",
+    ))
+    assert row["verified"] is True
+
+
 def test_stringly_or_missing_dates_do_not_pass():
     row = audit_exact_market_source(**_base(
         market_date="2026-8-12",
