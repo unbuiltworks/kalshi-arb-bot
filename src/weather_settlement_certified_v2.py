@@ -51,9 +51,9 @@ def _identity_semantics_evidence(
     """Carry only literal producer verification into the canonical v2 row.
 
     The downstream certification-dimension report deliberately requires affirmative
-    station/local-day/bracket evidence.  The legacy base row used those checks while
+    station/local-day/bracket evidence. The legacy base row used those checks while
     building blockers but did not preserve the booleans themselves, making a genuinely
-    audited v2 row impossible to certify downstream.  Preserve only literal ``True``;
+    audited v2 row impossible to certify downstream. Preserve only literal ``True``;
     strings and other truthy values still fail closed.
     """
     return {
@@ -224,6 +224,7 @@ def build_exact_market_certified_shadow_row(
         evidence_url=market.get("settlement_source_evidence_url"),
         evidence_market_ticker=market.get("settlement_source_evidence_market_ticker"),
         evidence_market_date=market.get("settlement_source_evidence_market_date"),
+        expected_cli_product=station.get("cli_product"),
     )
     model_sanity = _model_sanity_audit(forecast=forecast, station=station, quote=quote)
     provider_provenance = _model_provider_audit(forecast)
