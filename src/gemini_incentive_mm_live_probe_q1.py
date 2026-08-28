@@ -98,6 +98,14 @@ def patched_pair_model(original: Callable[[D, D], dict[str, D]]) -> Callable[[D,
     return model
 
 
+def _restore_env(saved: dict[str, str | None]) -> None:
+    for name, value in saved.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+
+
 async def _wait_for_settlement() -> dict[str, Any]:
     deadline = time.monotonic() + SETTLEMENT_TIMEOUT_S
     while time.monotonic() < deadline:
@@ -132,7 +140,8 @@ async def run() -> None:
             max_campaigns=1,
             max_initial_pair_loss=str(MAX_INITIAL_PAIR_LOSS),
             order_entry=False,
-            realized_pnl="0",
+            realized_pnl=None,
+            classification="DISARMED_NO_VENUE_CALLS",
         )
         return
 
@@ -143,6 +152,8 @@ async def run() -> None:
     child_id = f"immq1-{probe_id}"[:36]
     original_floor = inv.ENTRY_PAIR_EDGE
     original_pair_model = base.pair_model
+    child_env_names = (inv.LIVE_ENV, inv.CANARY_ID_ENV, inv.CANARY_ARM_ENV)
+    saved_child_env = {name: os.environ.get(name) for name in child_env_names}
 
     emit(
         "START",
@@ -168,14 +179,16 @@ async def run() -> None:
     finally:
         inv.ENTRY_PAIR_EDGE = original_floor
         base.pair_model = original_pair_model
+        _restore_env(saved_child_env)
 
     local = local_base.local_open_state()
     if local is None:
         emit(
-            "COMPLETE_NO_OPEN_INVENTORY",
+            "COMPLETE_NO_OPEN_RESERVATION",
             probe_id=probe_id,
             order_entry=False,
-            realized_pnl="0",
+            realized_pnl=None,
+            classification="LIVE_PROBE_EXECUTION_ENDED_NO_AUTHORITATIVE_SETTLEMENT_TO_REPORT",
         )
         return
 
