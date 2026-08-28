@@ -41,24 +41,63 @@ def test_patched_pair_model_poison_outside_incentive_band():
         return {
             "yes_quote": D("0.19"),
             "no_quote": D("0.80"),
-            "modeled_edge": D("0.05"),
+            "yes_fee": D("0.01"),
+            "no_fee": D("0.01"),
+            "pair_cost": D("0.99"),
+            "modeled_edge": D("-0.01"),
+            "spread": ask - bid,
         }
 
     out = probe.patched_pair_model(original)(D("0.19"), D("0.21"))
     assert out["modeled_edge"] == D("-1")
 
 
-def test_patched_pair_model_preserves_in_band_edge():
+def test_aggressive_pair_model_moves_both_quotes_inward_and_preserves_floor(monkeypatch):
+    monkeypatch.setattr(probe.base, "gemini_predictions_maker_fee", lambda price, qty: D("0.01"))
+
     def original(bid, ask):
         return {
-            "yes_quote": D("0.60"),
-            "no_quote": D("0.39"),
-            "modeled_edge": D("-0.01"),
+            "yes_quote": D("0.37"),
+            "no_quote": D("0.51"),
+            "yes_fee": D("0.01"),
+            "no_fee": D("0.01"),
+            "pair_cost": D("0.88"),
+            "modeled_edge": D("0.10"),
+            "spread": ask - bid,
         }
 
-    out = probe.patched_pair_model(original)(D("0.60"), D("0.61"))
-    assert out["modeled_edge"] == D("-0.01")
-    assert probe.PROBE_ENTRY_PAIR_EDGE == D("-0.01")
+    out = probe.aggressive_pair_model(original)(D("0.37"), D("0.49"))
+    assert out["yes_quote"] > D("0.37")
+    assert out["no_quote"] > D("0.51")
+    assert out["yes_quote"] < D("0.49")
+    assert out["no_quote"] < D("0.63")
+    assert out["modeled_edge"] >= probe.MIN_LOCKED_PAIR_EDGE
+    assert out["yes_inward_move"] > 0
+    assert out["no_inward_move"] > 0
+
+
+def test_aggressive_pair_model_never_spends_below_3c_floor(monkeypatch):
+    monkeypatch.setattr(probe.base, "gemini_predictions_maker_fee", lambda price, qty: D("0.01"))
+
+    def original(bid, ask):
+        return {
+            "yes_quote": D("0.45"),
+            "no_quote": D("0.49"),
+            "yes_fee": D("0.01"),
+            "no_fee": D("0.01"),
+            "pair_cost": D("0.94"),
+            "modeled_edge": D("0.04"),
+            "spread": ask - bid,
+        }
+
+    out = probe.aggressive_pair_model(original)(D("0.45"), D("0.51"))
+    assert out["modeled_edge"] >= D("0.03")
+    assert out["yes_quote"] + out["no_quote"] <= D("0.95")
+
+
+def test_probe_entry_floor_is_positive_3c():
+    assert probe.PROBE_ENTRY_PAIR_EDGE == D("0.03")
+    assert probe.MIN_LOCKED_PAIR_EDGE == D("0.03")
 
 
 @pytest.mark.asyncio
@@ -93,7 +132,7 @@ async def test_armed_run_restores_child_env_policy_and_discovery(monkeypatch):
         monkeypatch.setenv(name, value)
 
     async def child():
-        assert probe.inv.ENTRY_PAIR_EDGE == D("-0.01")
+        assert probe.inv.ENTRY_PAIR_EDGE == D("0.03")
         assert probe.base.pair_model is not original_pair_model
         assert probe.base.discover_btc5m is probe.discover_eth5m
         assert os.environ[probe.inv.LIVE_ENV] == "YES"
