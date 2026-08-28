@@ -6,6 +6,7 @@ on:
       - feature/l5-polymarket-replay-v1
     paths:
       - src/l5_polymarket_replay.py
+      - src/polymarket_wallet_replay.py
       - tests/test_l5_polymarket_replay.py
       - .github/workflows/l5-polymarket-replay-readonly.yml
 
@@ -40,12 +41,114 @@ jobs:
           print(int(time.time()) - 21600)
           PY
           )"
+          echo "$START" > artifacts-start.txt
           mkdir -p artifacts
           python -m src.l5_polymarket_replay \
             --start "$START" \
             --limit 10000 \
             --latest-markets 30 \
             > artifacts/l5-replay.json
+          python -m src.polymarket_wallet_replay \
+            --start "$START" \
+            --max-rows 5000 \
+            --summary-only \
+            > artifacts/l5-activity-summary.json
+
+      - name: Cross-check public activity source
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('artifacts/l5-activity-summary.json').read_text())
+          print('ACTIVITY_CROSSCHECK')
+          print(json.dumps(data, indent=2))
+          PY
+
+      - name: Enrich completed markets with public settlement
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          from pathlib import Path
+          import httpx
+
+          data = json.loads(Path('artifacts/l5-replay.json').read_text())
+          now = int(time.time())
+          out = []
+
+          def decode_list(value):
+              if isinstance(value, list):
+                  return value
+              if isinstance(value, str):
+                  try:
+                      parsed = json.loads(value)
+                      return parsed if isinstance(parsed, list) else []
+                  except Exception:
+                      return []
+              return []
+
+          with httpx.Client(timeout=15.0, follow_redirects=True) as client:
+              for replay in data['markets']:
+                  if replay['expiry_ts'] > now:
+                      continue
+                  slug = replay['slug']
+                  response = client.get(f'https://gamma-api.polymarket.com/events/slug/{slug}')
+                  response.raise_for_status()
+                  event = response.json()
+                  candidates = event.get('markets') or [] if isinstance(event, dict) else []
+                  market = next((m for m in candidates if str(m.get('conditionId') or '') == replay['condition_id']), None)
+                  if market is None and candidates:
+                      market = candidates[0]
+                  if not isinstance(market, dict):
+                      continue
+                  outcomes = [str(x) for x in decode_list(market.get('outcomes'))]
+                  prices_raw = decode_list(market.get('outcomePrices'))
+                  try:
+                      prices = [float(x) for x in prices_raw]
+                  except Exception:
+                      prices = []
+                  winner = None
+                  if bool(market.get('closed')) and outcomes and len(outcomes) == len(prices):
+                      best = max(range(len(prices)), key=prices.__getitem__)
+                      if prices[best] >= 0.999:
+                          winner = outcomes[best]
+
+                  up_qty = down_qty = total_cost = 0.0
+                  for step in replay['steps']:
+                      sign = 1.0 if step['side'] == 'BUY' else -1.0
+                      qty = float(step['size'])
+                      price = float(step['price'])
+                      total_cost += sign * qty * price
+                      if step['outcome'] == 'up':
+                          up_qty += sign * qty
+                      elif step['outcome'] == 'down':
+                          down_qty += sign * qty
+                  pnl_up = up_qty - total_cost
+                  pnl_down = down_qty - total_cost
+                  worst = min(pnl_up, pnl_down)
+                  gross_resolved = None
+                  if winner is not None:
+                      gross_resolved = pnl_up if winner.lower() == 'up' else pnl_down
+                  out.append({
+                      'slug': slug,
+                      'coin': replay['coin'],
+                      'horizon': replay['horizon'],
+                      'closed': bool(market.get('closed')),
+                      'winner': winner,
+                      'up_qty': up_qty,
+                      'down_qty': down_qty,
+                      'buy_cost_net_of_sells': total_cost,
+                      'gross_pnl_if_up': pnl_up,
+                      'gross_pnl_if_down': pnl_down,
+                      'final_whole_portfolio_worst_case_pnl': worst,
+                      'gross_pnl_at_resolution_before_fees_rebates': gross_resolved,
+                  })
+
+          Path('artifacts/l5-settlement.json').write_text(json.dumps(out, indent=2))
+          print('SETTLEMENT_CROSSCHECK')
+          for row in out:
+              print(json.dumps(row, separators=(',', ':')))
+          PY
 
       - name: Print compact chronology summary
         run: |
@@ -74,7 +177,7 @@ jobs:
                   'final_up_vwap': final['up_vwap'],
                   'final_down_vwap': final['down_vwap'],
                   'final_pair_cost': final['matched_pair_cost'],
-                  'final_locked_gross_per_pair': final['locked_gross_per_pair'],
+                  'final_pair_margin_per_pair': final['locked_gross_per_pair'],
                   'residual_side': final['residual_side'],
                   'residual_qty': final['residual_qty'],
               }, separators=(',', ':')))
@@ -84,5 +187,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: l5-replay-six-hours
-          path: artifacts/l5-replay.json
+          path: artifacts/
           retention-days: 3
