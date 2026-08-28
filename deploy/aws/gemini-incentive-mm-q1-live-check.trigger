@@ -1,2 +1,2 @@
-CHECK=striking_distance_probe_retry1_post_window
+CHECK=striking_distance_probe_retry1_settlement
 CLASSIFICATION=READ_ONLY_CHECK
