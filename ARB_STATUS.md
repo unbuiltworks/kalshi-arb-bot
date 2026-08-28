@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-28 08:36 UTC / 2026-08-28 04:36 ET**
+Last verified: **2026-08-28 09:40 UTC / 2026-08-28 05:40 ET**
 
 ## Objective and fixed verdict
 
@@ -14,33 +14,37 @@ Pre-committed census verdict thresholds remain fixed:
 
 The 72-hour wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and ends **2026-08-28 20:43 UTC / 16:43 ET**. It continues with no reset. Data/feed quality may add at most one +24-hour allowance; a lane that remains unmeasurable after that allowance contributes **$0 deployable capacity**. The realistic-capture floor remains **>=80 ms** and may not be lowered to rescue the result.
 
-## Fresh production state — 04:36 ET
+## Fresh production state — 05:40 ET
 
 - `sports-kp-live-executor`: **SUCCESS**, read-only, and actively issuing Kalshi orderbook requests.
-- Fresh 08:36 UTC runtime logs show repeated `GET .../trade-api/v2/markets/orderbooks` responses at **HTTP 200** with request cadence roughly every **0.1 second**.
-- Those calls are still using the legacy `https://api.elections.kalshi.com` host rather than the preferred dedicated external-api host. This is useful transport/contention evidence but **not economic evidence** and does not reset the census clock.
-- No 429 appeared in the inspected 08:36 UTC slice; prior authenticated account limits remain **advanced tier, 900 bucket / 300 refill** for reads and writes. The evidence continues to favor aggregate/concurrent request or connection contention rather than a weak account tier.
+- Its active successful deployment is still the **2026-08-25** build at commit `c1b0aaf4e8d54199fd33d7634ea7e1ae0c3ccded` (`Fix OVER/UNDER depth telemetry mapping`). Later Aug. 26 deployment attempts on this service, including delayed-hedge instrumentation, are **SKIPPED**.
+- The delayed Polymarket hedge instrumentation commit `044204d31c98a098a180e726899162180556ef63` instead successfully deployed on the separate read-only `sports-generic-counterpart-shadow`. This preserves provenance: maker/delayed-hedge evidence was not silently mixed into the taker runtime.
+- Fresh **09:39:51 UTC** taker heartbeat: `triggers=136,904,107`, `comparable_evaluations=53,237`, `decision_census.observations=1,661`, `read_only=true`, `order_entry=false`.
+- Fresh runtime logs again show repeated `GET .../trade-api/v2/markets/orderbooks` responses at **HTTP 200** using the legacy `https://api.elections.kalshi.com` host, at roughly **0.1-second cadence** in the inspected slice. No current 429 appeared.
+- Prior authenticated account limits remain **advanced tier, 900 bucket / 300 refill** for reads and writes. Current evidence continues to favor aggregate/concurrent request or connection contention rather than a weak account tier as the earlier 429 cause.
 - Do **not** rewrite, restart, throttle, or migrate the functioning census service solely to improve telemetry before the fixed deadline. New census code should prefer Kalshi's dedicated external-api/external-api-ws hosts.
-- `sports-generic-counterpart-shadow`: remains read-only; maker/fill/incentive telemetry only.
+- `sports-generic-counterpart-shadow`: read-only maker/fill/delayed-hedge telemetry only.
 - `sports-gk-autonomous-supervisor`: remains read-only/disarmed for guaranteed execution; last decoded two-sided state is Gemini **0/570 connected** vs Kalshi **570/570 initialized**.
 - Old Gemini<->Kalshi cross-index/15-minute crypto execution remains **CRASHED/contained** and must not be reopened from census pressure.
 
 ## K<->P decision-grade taker evidence
 
-No fresh decision-grade economics were observed in this run, so the last valid sample remains governing:
+Fresh triggers advanced materially, but decision-grade comparables did not move:
 
+- raw triggers: **136,904,107**;
 - comparable evaluations: **53,237**;
 - decision observations: **1,661** across 9 semantic keys;
 - after-fee bins: **1,031 >=1c / 0 >=2c / 0 >=3c**;
 - >=80 ms realistic-capture bins: **137 >=1c / 0 >=2c / 0 >=3c**;
 - average selected-side q1 depth: **2,072.66**, max **22,647.58**;
 - average quote skew: **45.53 ms**, max **100 ms**;
+- average process latency: **0.234 ms**;
 - closed positive signals: **612**;
 - average closed lifetime: **174.07 ms**, max **567 ms**;
 - source quality: `REST_SNAPSHOT_NOT_WS_LIFETIME`;
-- `read_only=true`, `order_entry=false`.
+- `kalshi_transport=rest_batch`, `read_only=true`, `order_entry=false`.
 
-The comparable sample has failed to advance for well beyond the allowed data-quality grace. Under the pre-committed rule, the stale tail is **locked at $0 deployable-capacity credit**. The valid certified totals slice itself has **0 >=3c**, hence **$0/day deployable capacity at the fixed 3c taker/taker floor**.
+The comparable sample has failed to advance for well beyond the allowed data-quality grace. Under the pre-committed rule, the stale tail is **locked at $0 deployable-capacity credit**. The valid certified totals slice itself has **0 >=3c**, hence **$0/day deployable capacity at the fixed 3c taker/taker floor**. The new 136.9M raw-trigger count is health/activity evidence only and is not misrepresented as fresh economic observations.
 
 After scheduled-start normalization and F5/partial-game exclusion, clean full-game MLB moneyline/spread/total snapshots remain **0 >=1c / 0 >=2c / 0 >=3c** with substantial q1 depth. Strict player props remain $0 guaranteed capacity because complete settlement/postponement/cancellation/participation/stat-correction equivalence has not been proven.
 
@@ -61,7 +65,7 @@ Last decision-valid maker evidence remains:
 - exact K<->P full-game moneyline postponement/reschedule lifecycle equivalence fails independently;
 - `rules_complete=false`, `capacity_credit_usd_per_day=0`, `read_only=true`, `order_entry=false`.
 
-Maker shadow remains **$0 guaranteed/deployable capacity and $0 REALIZED P&L**. Do not spend the remaining census window repairing delayed-WS coverage because even perfect observability would not make the rule-mismatched mechanism guaranteed arb.
+Maker shadow remains **$0 guaranteed/deployable capacity and $0 REALIZED P&L**. The deployment provenance is now explicit: these measurements come from the separate read-only counterpart-shadow deployment, not from the taker executor. Do not spend the remaining census window repairing delayed-WS coverage because even perfect observability would not make the rule-mismatched mechanism guaranteed arb.
 
 Polymarket incentive telemetry last saw **22 active MLB moneyline program rows** and **0 under-target live-pool candidates**; denominator/time-weighted yield/pickoff economics remain incomplete. Incentive capacity credit stays **$0**.
 
