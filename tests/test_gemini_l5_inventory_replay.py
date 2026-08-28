@@ -69,3 +69,15 @@ def test_directional_inventory_has_negative_worst_case():
     assert s.trading_payoff("NO") > 0
     assert s.trading_payoff("YES") < 0
     assert D(s.summary()["worst_case_trading_payoff"]) < 0
+
+
+def test_replay_never_exceeds_three_units_even_with_bad_upstream_target():
+    s = MarketReplay("T", "BTC", "5m")
+    apply_observation(s, row(yes_bid="0.60", yes_ask="0.65", favored="YES", target=6, yes_quote="0.61"))
+    apply_observation(s, row(yes_bid="0.57", yes_ask="0.59", favored="YES", target=6, yes_quote="0.58"))
+    assert s.yes_qty == D("3")
+    assert s.fills[-1].quantity == D("3")
+    # A later malformed target cannot add more inventory.
+    apply_observation(s, row(yes_bid="0.70", yes_ask="0.75", favored="YES", target=6, yes_quote="0.71"))
+    apply_observation(s, row(yes_bid="0.68", yes_ask="0.69", favored="YES", target=6, yes_quote="0.68"))
+    assert s.yes_qty == D("3")
