@@ -143,7 +143,9 @@ echo "DYNAMIC_COMPLEMENT_Q1_CLEAN_START_OK"
 
 # Optional read-only qualifier wait. This uses the exact same discovery, fresh-book,
 # band, fee, q1-size, and time-to-expiry rules as the live child. Crucially, it runs
-# BEFORE the one-use approval marker is consumed and cannot submit orders.
+# BEFORE the one-use approval marker is consumed and cannot submit orders. Transient
+# transport/timeouts are classified separately and retried; business/safety errors
+# remain fatal.
 if [ "$QUALIFY_WAIT_SECONDS" -gt 0 ]; then
   echo "DYNAMIC_COMPLEMENT_Q1_QUALIFIER_WAIT_START max_seconds=$QUALIFY_WAIT_SECONDS poll_seconds=$QUALIFY_POLL_SECONDS order_entry=false"
   QUALIFY_DEADLINE=$(( $(date +%s) + QUALIFY_WAIT_SECONDS ))
@@ -156,6 +158,7 @@ if [ "$QUALIFY_WAIT_SECONDS" -gt 0 ]; then
       "$IMAGE" python -u - <<'PY'
 import asyncio, json, sys
 from decimal import Decimal as D
+import httpx
 from src import gemini_short_crypto_dynamic_complement_q1 as core
 from src.gemini_incentive_mm_live_probe_q1 import discover_eth5m
 
@@ -163,31 +166,40 @@ async def main():
     original = core.base.discover_btc5m
     core.base.discover_btc5m = discover_eth5m
     try:
-        event, report = await core.preflight()
-        qualifies = False
-        payload = {
-            "qualifies": False,
-            "order_entry": False,
-            "mutation": False,
-            "market": None if event is None else event.ticker,
-            "symbol": None if event is None else event.symbol,
-            "seconds_to_expiry": None if event is None else event.seconds_to_expiry,
-        }
-        if event is not None and report.get("terms_ok") and report.get("q1_supported"):
-            if D(str(report.get("available_usd") or "0")) >= D("2") and event.seconds_to_expiry >= core.MIN_SECONDS_TO_EXPIRY:
-                bid, bid_size, ask, ask_size = await core.base.fresh_top(event.symbol)
-                model = core.raw_pair_model(bid, ask)
-                qualifies = bool(core.entry_eligible(model) and event.seconds_to_expiry >= core.MIN_SECONDS_TO_EXPIRY)
-                payload.update({
-                    "qualifies": qualifies,
-                    "yes_quote": str(model["yes_quote"]),
-                    "no_quote": str(model["no_quote"]),
-                    "modeled_edge": str(model["modeled_edge"]),
-                    "yes_bid_size": str(bid_size),
-                    "yes_ask_size": str(ask_size),
-                })
-        print(json.dumps(payload, sort_keys=True), flush=True)
-        raise SystemExit(0 if qualifies else 3)
+        try:
+            event, report = await core.preflight()
+            qualifies = False
+            payload = {
+                "qualifies": False,
+                "order_entry": False,
+                "mutation": False,
+                "market": None if event is None else event.ticker,
+                "symbol": None if event is None else event.symbol,
+                "seconds_to_expiry": None if event is None else event.seconds_to_expiry,
+            }
+            if event is not None and report.get("terms_ok") and report.get("q1_supported"):
+                if D(str(report.get("available_usd") or "0")) >= D("2") and event.seconds_to_expiry >= core.MIN_SECONDS_TO_EXPIRY:
+                    bid, bid_size, ask, ask_size = await core.base.fresh_top(event.symbol)
+                    model = core.raw_pair_model(bid, ask)
+                    qualifies = bool(core.entry_eligible(model) and event.seconds_to_expiry >= core.MIN_SECONDS_TO_EXPIRY)
+                    payload.update({
+                        "qualifies": qualifies,
+                        "yes_quote": str(model["yes_quote"]),
+                        "no_quote": str(model["no_quote"]),
+                        "modeled_edge": str(model["modeled_edge"]),
+                        "yes_bid_size": str(bid_size),
+                        "yes_ask_size": str(ask_size),
+                    })
+            print(json.dumps(payload, sort_keys=True), flush=True)
+            raise SystemExit(0 if qualifies else 3)
+        except (httpx.TransportError, asyncio.TimeoutError) as exc:
+            print(json.dumps({
+                "qualifies": False,
+                "order_entry": False,
+                "mutation": False,
+                "retryable_transport_error": type(exc).__name__,
+            }, sort_keys=True), flush=True)
+            raise SystemExit(4)
     finally:
         core.base.discover_btc5m = original
 
@@ -200,6 +212,11 @@ PY
     if [ "$QUALIFY_RC" -eq 0 ]; then
       QUALIFIED=1
       break
+    fi
+    if [ "$QUALIFY_RC" -eq 4 ]; then
+      echo "DYNAMIC_COMPLEMENT_Q1_QUALIFIER_TRANSIENT_RETRY approval_consumed=false"
+      sleep "$QUALIFY_POLL_SECONDS"
+      continue
     fi
     [ "$QUALIFY_RC" -eq 3 ] || { echo "qualifier failed unexpectedly rc=$QUALIFY_RC" >&2; exit "$QUALIFY_RC"; }
     sleep "$QUALIFY_POLL_SECONDS"
