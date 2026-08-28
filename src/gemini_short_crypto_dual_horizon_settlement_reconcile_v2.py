@@ -3,16 +3,18 @@
 The prior reconciler assumed every inventory fill would later appear in Gemini's
 `positions/settled` response. A fully matched YES+NO complete set can net away and
 produce no matching settled-position row, even though both orders filled and the
-event settled. v2 therefore uses:
+event settled. v2 therefore uses exact authenticated order history plus Gemini's
+settled event record.
 
-1. exact distinct client-order IDs from authenticated order history;
-2. Gemini's public event record as the authoritative resolution source; and
-3. Gemini's published maker-fee formula for the MOC/post-only fills.
+Dynamic-complement q=1 campaigns may cancel/repost the missing maker side under
+several distinct client-order IDs. The durable reservation carries that exact ID
+chain. Reconciliation requires every declared ID to appear in terminal order
+history, sums fills/costs/fees row by row, and fails closed if aggregate fill on
+either outcome exceeds q=1.
 
 The proven 5m ledger is accepted for BTC05M and ETH05M identities. 15m remains
 BTC15M-only in this reconciler. Maker rebates/rewards are deliberately excluded
-from trading P&L and must be accounted separately from Gemini's incentive payout
-APIs.
+from trading P&L and must be accounted separately.
 
 Venue access is read-only. The only mutation is the AWS-local fsynced ledger and
 reservation release after all identity, fill, resolution, and economics checks pass.
@@ -52,7 +54,7 @@ async def _event(event_ticker: str) -> dict[str, Any]:
     async with httpx.AsyncClient(
         timeout=8.0,
         follow_redirects=True,
-        headers={"User-Agent": "arb-gemini-inventory-reconcile/2.1", "Cache-Control": "no-cache"},
+        headers={"User-Agent": "arb-gemini-inventory-reconcile/2.2", "Cache-Control": "no-cache"},
     ) as http:
         r = await http.get(f"{REST}/v1/prediction-markets/events/{event_ticker}")
     if r.status_code != 200:
@@ -102,17 +104,47 @@ def _strategy(local: Mapping[str, Any]):
 
 
 def _terminal_rows(rows: list[dict[str, Any]], yes_id: str, no_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    expected = _terminal_rows_many(rows, [yes_id, no_id])
+    return expected[yes_id], expected[no_id]
+
+
+def _terminal_rows_many(rows: list[dict[str, Any]], client_ids: list[str]) -> dict[str, dict[str, Any]]:
+    ids = [str(x) for x in client_ids if str(x)]
+    if not ids or len(ids) != len(set(ids)):
+        raise RuntimeError("dynamic reconcile client IDs must be nonempty and distinct")
     expected: dict[str, dict[str, Any]] = {}
+    wanted = set(ids)
     for row in rows:
         cid = _client_id(row)
-        if cid not in {yes_id, no_id}:
+        if cid not in wanted:
             continue
         prior = expected.get(cid)
         if prior is None or _filled(row) > _filled(prior):
             expected[cid] = row
-    if set(expected) != {yes_id, no_id}:
-        raise RuntimeError(f"missing exact canary order history expected=2 found={len(expected)}")
-    return expected[yes_id], expected[no_id]
+    if set(expected) != wanted:
+        raise RuntimeError(f"missing exact canary order history expected={len(wanted)} found={len(expected)}")
+    return expected
+
+
+def _declared_client_ids(local: Mapping[str, Any], trade_id: str) -> tuple[list[str], list[str]]:
+    default_yes, default_no = maker_client_ids(trade_id)
+
+    def side(key: str, default: str) -> list[str]:
+        raw = local.get(key)
+        if raw is None:
+            return [default]
+        if not isinstance(raw, list):
+            raise RuntimeError(f"durable {key} must be a list")
+        values = [str(x).strip() for x in raw if str(x).strip()]
+        if not values or len(values) != len(set(values)):
+            raise RuntimeError(f"durable {key} must contain distinct nonempty IDs")
+        return values
+
+    yes_ids = side("yes_client_order_ids", default_yes)
+    no_ids = side("no_client_order_ids", default_no)
+    if set(yes_ids) & set(no_ids):
+        raise RuntimeError("YES/NO dynamic client ID chains overlap")
+    return yes_ids, no_ids
 
 
 def _event_resolution(event: Mapping[str, Any], symbol: str) -> tuple[str, str | None]:
@@ -132,12 +164,7 @@ def _event_resolution(event: Mapping[str, Any], symbol: str) -> tuple[str, str |
 
 
 def settled_economics(
-    *,
-    yes_fill: D,
-    no_fill: D,
-    yes_price: D,
-    no_price: D,
-    resolution_side: str,
+    *, yes_fill: D, no_fill: D, yes_price: D, no_price: D, resolution_side: str,
 ) -> dict[str, D | str | bool]:
     yes_fill, no_fill = D(str(yes_fill)), D(str(no_fill))
     yes_price, no_price = D(str(yes_price)), D(str(no_price))
@@ -150,24 +177,42 @@ def settled_economics(
         raise ValueError("invalid YES execution price")
     if no_fill > ZERO and not (ZERO < no_price < ONE):
         raise ValueError("invalid NO execution price")
-
     yes_fee = gemini_predictions_maker_fee(yes_price, yes_fill) if yes_fill > ZERO else ZERO
     no_fee = gemini_predictions_maker_fee(no_price, no_fill) if no_fill > ZERO else ZERO
-    raw_cost = yes_price * yes_fill + no_price * no_fill
-    maker_fees = yes_fee + no_fee
+    return _economics_from_totals(
+        yes_fill=yes_fill,
+        no_fill=no_fill,
+        yes_cost=yes_price * yes_fill,
+        no_cost=no_price * no_fill,
+        yes_fee=yes_fee,
+        no_fee=no_fee,
+        resolution_side=resolution,
+    )
+
+
+def _economics_from_totals(
+    *, yes_fill: D, no_fill: D, yes_cost: D, no_cost: D,
+    yes_fee: D, no_fee: D, resolution_side: str,
+) -> dict[str, D | str | bool]:
+    yes_fill, no_fill = D(str(yes_fill)), D(str(no_fill))
+    if not (ZERO <= yes_fill <= ONE and ZERO <= no_fill <= ONE):
+        raise ValueError("inventory fill quantity outside q=1 bounds")
+    resolution = str(resolution_side).lower()
+    if resolution not in {"yes", "no"}:
+        raise ValueError("invalid resolution side")
+    raw_cost = D(str(yes_cost)) + D(str(no_cost))
+    maker_fees = D(str(yes_fee)) + D(str(no_fee))
     payout = yes_fill if resolution == "yes" else no_fill
-    net_profit = payout - raw_cost - maker_fees
     matched_qty = min(yes_fill, no_fill)
-    residual_qty = abs(yes_fill - no_fill)
     return {
         "raw_cost": raw_cost,
-        "yes_maker_fee": yes_fee,
-        "no_maker_fee": no_fee,
+        "yes_maker_fee": D(str(yes_fee)),
+        "no_maker_fee": D(str(no_fee)),
         "maker_fees": maker_fees,
         "payout": payout,
-        "net_profit": net_profit,
+        "net_profit": payout - raw_cost - maker_fees,
         "matched_quantity": matched_qty,
-        "residual_quantity": residual_qty,
+        "residual_quantity": abs(yes_fill - no_fill),
         "matched_complete_set": matched_qty > ZERO,
         "resolution_side": resolution,
     }
@@ -181,6 +226,33 @@ def _history_resolution(row: Mapping[str, Any]) -> str | None:
     return value if value in {"yes", "no"} else None
 
 
+def _aggregate_side(
+    terminal: Mapping[str, Mapping[str, Any]], client_ids: list[str], expected_outcome: str,
+) -> dict[str, D]:
+    fill = ZERO
+    cost = ZERO
+    fees = ZERO
+    for cid in client_ids:
+        row = terminal[cid]
+        outcome = _outcome(row)
+        if outcome != expected_outcome:
+            raise RuntimeError(f"client-id/outcome mismatch id={cid} expected={expected_outcome!r} got={outcome!r}")
+        qty = _filled(row)
+        if qty < ZERO:
+            raise RuntimeError("negative Gemini fill quantity")
+        if qty > ZERO:
+            price = _price(row)
+            if not (ZERO < price < ONE):
+                raise RuntimeError(f"invalid execution price id={cid}")
+            fill += qty
+            cost += price * qty
+            fees += gemini_predictions_maker_fee(price, qty)
+    if fill > ONE:
+        raise RuntimeError(f"aggregate {expected_outcome} fill exceeds q=1 bound: {fill}")
+    avg = cost / fill if fill > ZERO else ZERO
+    return {"fill": fill, "cost": cost, "fees": fees, "avg_price": avg}
+
+
 async def reconcile() -> dict[str, Any]:
     local = local_base.local_open_state()
     if local is None:
@@ -192,39 +264,35 @@ async def reconcile() -> dict[str, Any]:
     if not trade_id:
         raise RuntimeError("reservation trade id missing")
 
-    yes_id, no_id = maker_client_ids(trade_id)
+    yes_ids, no_ids = _declared_client_ids(local, trade_id)
     filled_body, cancelled_body, event = await asyncio.gather(
         _post("/v1/prediction-markets/orders/history", {"status": "filled", "symbol": symbol, "limit": 100}),
         _post("/v1/prediction-markets/orders/history", {"status": "cancelled", "symbol": symbol, "limit": 100}),
         _event(event_ticker),
     )
-    yes_row, no_row = _terminal_rows(
-        _rows(filled_body, "orders") + _rows(cancelled_body, "orders"), yes_id, no_id
-    )
-    yes_fill, no_fill = _filled(yes_row), _filled(no_row)
-    yes_outcome, no_outcome = _outcome(yes_row), _outcome(no_row)
-    if yes_outcome != "yes" or no_outcome != "no":
-        raise RuntimeError(f"client-id/outcome mismatch yes={yes_outcome!r} no={no_outcome!r}")
-    if not (ZERO <= yes_fill <= ONE and ZERO <= no_fill <= ONE):
-        raise RuntimeError("inventory fill quantity outside q=1 bounds")
+    rows = _rows(filled_body, "orders") + _rows(cancelled_body, "orders")
+    terminal = _terminal_rows_many(rows, yes_ids + no_ids)
+    yes = _aggregate_side(terminal, yes_ids, "yes")
+    no = _aggregate_side(terminal, no_ids, "no")
+    yes_fill, no_fill = yes["fill"], no["fill"]
     if yes_fill == ZERO and no_fill == ZERO:
         raise RuntimeError("open reservation has zero authoritative fills; manual review required")
 
     resolution, resolved_at = _event_resolution(event, symbol)
-    for row in (yes_row, no_row):
+    for row in terminal.values():
         history_resolution = _history_resolution(row)
         if history_resolution is not None and history_resolution != resolution:
             raise RuntimeError(
                 f"order-history/event resolution mismatch history={history_resolution} event={resolution}"
             )
 
-    yes_price = _price(yes_row)
-    no_price = _price(no_row)
-    economics = settled_economics(
+    economics = _economics_from_totals(
         yes_fill=yes_fill,
         no_fill=no_fill,
-        yes_price=yes_price,
-        no_price=no_price,
+        yes_cost=yes["cost"],
+        no_cost=no["cost"],
+        yes_fee=yes["fees"],
+        no_fee=no["fees"],
         resolution_side=resolution,
     )
     gross_qty = yes_fill + no_fill
@@ -233,16 +301,18 @@ async def reconcile() -> dict[str, Any]:
     status = "INVENTORY_MATCHED_FILL_SETTLED" if yes_fill == no_fill and yes_fill > ZERO else "INVENTORY_ONE_SIDED_OR_IMBALANCED_SETTLED"
 
     common = {
-        "authoritative_source": "GEMINI_EXACT_ORDER_HISTORY_PLUS_SETTLED_EVENT_RESOLUTION",
+        "authoritative_source": "GEMINI_EXACT_ORDER_HISTORY_CHAIN_PLUS_SETTLED_EVENT_RESOLUTION",
         "horizon": horizon,
-        "yes_client_order_id": yes_id,
-        "no_client_order_id": no_id,
-        "yes_order_outcome": yes_outcome,
-        "no_order_outcome": no_outcome,
+        "yes_client_order_id": yes_ids[0],
+        "no_client_order_id": no_ids[0],
+        "yes_client_order_ids": yes_ids,
+        "no_client_order_ids": no_ids,
+        "yes_order_outcome": "yes",
+        "no_order_outcome": "no",
         "yes_fill": str(yes_fill),
         "no_fill": str(no_fill),
-        "yes_price": str(yes_price) if yes_fill > ZERO else None,
-        "no_price": str(no_price) if no_fill > ZERO else None,
+        "yes_price": str(yes["avg_price"]) if yes_fill > ZERO else None,
+        "no_price": str(no["avg_price"]) if no_fill > ZERO else None,
         "yes_maker_fee": str(economics["yes_maker_fee"]),
         "no_maker_fee": str(economics["no_maker_fee"]),
         "maker_fees": str(economics["maker_fees"]),
@@ -262,11 +332,8 @@ async def reconcile() -> dict[str, Any]:
     }
 
     correction = budget._event_base(
-        trade_id=trade_id,
-        symbol=symbol,
-        event_ticker=event_ticker,
-        event_type="RECONCILIATION_CORRECTION",
-        status=status,
+        trade_id=trade_id, symbol=symbol, event_ticker=event_ticker,
+        event_type="RECONCILIATION_CORRECTION", status=status,
     )
     correction["event_id"] = local_base._safe_id(f"{trade_id}:dual-horizon-v2-reconcile:settled")
     correction.update({"quantity": str(gross_qty), "legs_required": 0, "legs_filled": legs})
@@ -274,9 +341,7 @@ async def reconcile() -> dict[str, Any]:
     local_base._append(correction)
 
     realized = budget._event_base(
-        trade_id=trade_id,
-        symbol=symbol,
-        event_ticker=event_ticker,
+        trade_id=trade_id, symbol=symbol, event_ticker=event_ticker,
         event_type="TRADE_REALIZED",
         status="SETTLED_REALIZED_MATCHED_INVENTORY" if yes_fill == no_fill and yes_fill > ZERO else "SETTLED_REALIZED_INVENTORY",
     )
@@ -292,9 +357,7 @@ async def reconcile() -> dict[str, Any]:
     local_base._append(realized)
 
     await budget.release(
-        symbol=symbol,
-        event_ticker=event_ticker,
-        trade_id=trade_id,
+        symbol=symbol, event_ticker=event_ticker, trade_id=trade_id,
         reason="AUTHORITATIVE_GEMINI_EVENT_SETTLEMENT_RECONCILED_V2",
     )
     return {
@@ -302,12 +365,14 @@ async def reconcile() -> dict[str, Any]:
         "horizon": horizon,
         "trade_id": trade_id,
         "symbol": symbol,
-        "yes_client_order_id": yes_id,
-        "no_client_order_id": no_id,
+        "yes_client_order_id": yes_ids[0],
+        "no_client_order_id": no_ids[0],
+        "yes_client_order_ids": yes_ids,
+        "no_client_order_ids": no_ids,
         "yes_fill": str(yes_fill),
         "no_fill": str(no_fill),
-        "yes_price": str(yes_price) if yes_fill > ZERO else None,
-        "no_price": str(no_price) if no_fill > ZERO else None,
+        "yes_price": str(yes["avg_price"]) if yes_fill > ZERO else None,
+        "no_price": str(no["avg_price"]) if no_fill > ZERO else None,
         "maker_fees": str(economics["maker_fees"]),
         "raw_cost": str(economics["raw_cost"]),
         "payout": str(economics["payout"]),
