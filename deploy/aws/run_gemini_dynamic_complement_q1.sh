@@ -4,19 +4,25 @@ set -euo pipefail
 # LIVE-CAPABLE but disarmed-by-default one-shot AWS launcher for the bounded
 # Gemini ETH5 q=1 dynamic-complement maker probe.
 #
-# A future control workflow must provide BOTH a fresh approval flag and a unique
-# one-use approval ID. This launcher intentionally checks those gates BEFORE it
-# discovers/validates the secure Gemini env file, so a disarmed preflight cannot
-# read credentials or reach venue mutation.
+# A control workflow must provide BOTH a fresh approval flag and a unique one-use
+# approval ID. These gates are checked BEFORE secure-env discovery. When
+# QUALIFY_WAIT_SECONDS > 0, the launcher may then poll the exact tested image in
+# authenticated READ-ONLY mode for a qualifying ETH5 window; the one-use approval
+# marker is consumed only AFTER all entry gates pass.
 
 SOURCE_REPO="${SOURCE_REPO:-/home/ssm-user/kalshi-arb-bot}"
 WORKTREE="${WORKTREE:-/opt/arb/gemini-dynamic-complement-q1}"
 BRANCH="feature/gemini-incentive-mm-dynamic-complement-q1"
 PINNED_COMMIT="${PINNED_COMMIT:-}"
 CONTAINER="arb-gemini-dynamic-complement-live-probe-q1"
+QUALIFY_WAIT_SECONDS="${QUALIFY_WAIT_SECONDS:-0}"
+QUALIFY_POLL_SECONDS="${QUALIFY_POLL_SECONDS:-10}"
 
 [ -n "$PINNED_COMMIT" ] || { echo "PINNED_COMMIT is required" >&2; exit 1; }
 [[ "$PINNED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "invalid PINNED_COMMIT" >&2; exit 1; }
+[[ "$QUALIFY_WAIT_SECONDS" =~ ^[0-9]+$ ]] || { echo "invalid QUALIFY_WAIT_SECONDS" >&2; exit 1; }
+[[ "$QUALIFY_POLL_SECONDS" =~ ^[0-9]+$ ]] || { echo "invalid QUALIFY_POLL_SECONDS" >&2; exit 1; }
+[ "$QUALIFY_POLL_SECONDS" -ge 2 ] || { echo "QUALIFY_POLL_SECONDS must be >=2" >&2; exit 1; }
 
 # Fresh authorization is mandatory and is intentionally checked before ENV_FILE.
 [ "${ARB_GEMINI_DYNAMIC_COMPLEMENT_Q1_APPROVED:-NO}" = "YES" ] || {
@@ -101,8 +107,8 @@ docker run --rm --network none "$IMAGE" python -m pytest -q \
 
 echo "DYNAMIC_COMPLEMENT_Q1_SAFETY_TESTS_OK"
 
-# Exact-image clean-account preflight. This is authenticated/read-only and happens
-# only AFTER fresh user approval has passed all launcher gates.
+# Exact-image clean-account preflight. Authenticated/read-only and only after the
+# fresh user approval has passed the launcher gate.
 docker run -i --rm --network host \
   --env-file "$ENV_FILE" \
   -e PYTHONUNBUFFERED=1 \
@@ -134,6 +140,76 @@ asyncio.run(main())
 PY
 
 echo "DYNAMIC_COMPLEMENT_Q1_CLEAN_START_OK"
+
+# Optional read-only qualifier wait. This uses the exact same discovery, fresh-book,
+# band, fee, q1-size, and time-to-expiry rules as the live child. Crucially, it runs
+# BEFORE the one-use approval marker is consumed and cannot submit orders.
+if [ "$QUALIFY_WAIT_SECONDS" -gt 0 ]; then
+  echo "DYNAMIC_COMPLEMENT_Q1_QUALIFIER_WAIT_START max_seconds=$QUALIFY_WAIT_SECONDS poll_seconds=$QUALIFY_POLL_SECONDS order_entry=false"
+  QUALIFY_DEADLINE=$(( $(date +%s) + QUALIFY_WAIT_SECONDS ))
+  QUALIFIED=0
+  while [ "$(date +%s)" -lt "$QUALIFY_DEADLINE" ]; do
+    set +e
+    QUALIFY_OUT="$(docker run -i --rm --network host \
+      --env-file "$ENV_FILE" \
+      -e PYTHONUNBUFFERED=1 \
+      "$IMAGE" python -u - <<'PY'
+import asyncio, json, sys
+from decimal import Decimal as D
+from src import gemini_short_crypto_dynamic_complement_q1 as core
+from src.gemini_incentive_mm_live_probe_q1 import discover_eth5m
+
+async def main():
+    original = core.base.discover_btc5m
+    core.base.discover_btc5m = discover_eth5m
+    try:
+        event, report = await core.preflight()
+        qualifies = False
+        payload = {
+            "qualifies": False,
+            "order_entry": False,
+            "mutation": False,
+            "market": None if event is None else event.ticker,
+            "symbol": None if event is None else event.symbol,
+            "seconds_to_expiry": None if event is None else event.seconds_to_expiry,
+        }
+        if event is not None and report.get("terms_ok") and report.get("q1_supported"):
+            if D(str(report.get("available_usd") or "0")) >= D("2") and event.seconds_to_expiry >= core.MIN_SECONDS_TO_EXPIRY:
+                bid, bid_size, ask, ask_size = await core.base.fresh_top(event.symbol)
+                model = core.raw_pair_model(bid, ask)
+                qualifies = bool(core.entry_eligible(model) and event.seconds_to_expiry >= core.MIN_SECONDS_TO_EXPIRY)
+                payload.update({
+                    "qualifies": qualifies,
+                    "yes_quote": str(model["yes_quote"]),
+                    "no_quote": str(model["no_quote"]),
+                    "modeled_edge": str(model["modeled_edge"]),
+                    "yes_bid_size": str(bid_size),
+                    "yes_ask_size": str(ask_size),
+                })
+        print(json.dumps(payload, sort_keys=True), flush=True)
+        raise SystemExit(0 if qualifies else 3)
+    finally:
+        core.base.discover_btc5m = original
+
+asyncio.run(main())
+PY
+    )"
+    QUALIFY_RC=$?
+    set -e
+    echo "DYNAMIC_COMPLEMENT_Q1_QUALIFIER $QUALIFY_OUT"
+    if [ "$QUALIFY_RC" -eq 0 ]; then
+      QUALIFIED=1
+      break
+    fi
+    [ "$QUALIFY_RC" -eq 3 ] || { echo "qualifier failed unexpectedly rc=$QUALIFY_RC" >&2; exit "$QUALIFY_RC"; }
+    sleep "$QUALIFY_POLL_SECONDS"
+  done
+  if [ "$QUALIFIED" -ne 1 ]; then
+    echo "DYNAMIC_COMPLEMENT_Q1_NO_QUALIFYING_WINDOW order_entry=false approval_consumed=false"
+    exit 3
+  fi
+  echo "DYNAMIC_COMPLEMENT_Q1_QUALIFYING_WINDOW_FOUND order_entry=false approval_consumed=false"
+fi
 
 # Consume the one-use approval immediately before the live process can mutate venue
 # state. No automatic restart is permitted.
