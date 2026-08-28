@@ -3,6 +3,7 @@
 No credentials, balances, order placement, cancellation, or account streams are used.
 The probe:
 - discovers active BTC/ETH 5m + 15m prediction contracts via public REST;
+- seeds each market from a public REST book snapshot;
 - subscribes to public bookTicker + trade streams;
 - applies the existing 60/70/80 l5 threshold ladder;
 - keeps virtual inventory when the favored side flips;
@@ -29,7 +30,7 @@ import websockets
 
 from src.gemini_kalshi_execution_shadow import gemini_predictions_maker_fee
 from src.gemini_l5_threshold_model import maker_rebate_estimate, plan_threshold_quotes
-from src.gemini_l5_threshold_shadow import Event, discover
+from src.gemini_l5_threshold_shadow import Event, book, discover
 
 WS_URL = "wss://ws.gemini.com"
 ONE = D("1")
@@ -268,6 +269,9 @@ class MarketState:
 def _parse_book_ticker(message: dict[str, Any]) -> tuple[D, D] | None:
     if "b" not in message or "a" not in message:
         return None
+    # bookTicker uses scalar b/a. Ignore differential-depth arrays here.
+    if isinstance(message.get("b"), list) or isinstance(message.get("a"), list):
+        return None
     try:
         return D(str(message["b"])), D(str(message["a"]))
     except Exception:
@@ -286,15 +290,32 @@ def _parse_trade(message: dict[str, Any]) -> tuple[D, D, bool] | None:
         return None
 
 
+def _write(fh: Any, row: dict[str, Any]) -> None:
+    row.setdefault("read_only", True)
+    row.setdefault("order_entry", False)
+    fh.write(json.dumps(row, separators=(",", ":"), default=str) + "\n")
+    fh.flush()
+
+
 async def capture(*, seconds: float, discover_s: float, output: Path) -> dict[str, Any]:
     output.parent.mkdir(parents=True, exist_ok=True)
     deadline = time.monotonic() + max(0.0, seconds)
-    stats = {"messages": 0, "book_tickers": 0, "trades": 0, "errors": 0, "discoveries": 0, "subscriptions": 0}
+    stats = {
+        "messages": 0,
+        "book_tickers": 0,
+        "trades": 0,
+        "errors": 0,
+        "discoveries": 0,
+        "subscriptions": 0,
+        "rest_seeds": 0,
+        "control_messages": 0,
+        "subscription_errors": 0,
+    }
     states: dict[str, MarketState] = {}
     subscribed: set[str] = set()
     last_discover = 0.0
 
-    async with httpx.AsyncClient(timeout=8.0, follow_redirects=True, headers={"User-Agent": "arb-gemini-l5-tape-shadow/2.0"}) as http:
+    async with httpx.AsyncClient(timeout=8.0, follow_redirects=True, headers={"User-Agent": "arb-gemini-l5-tape-shadow/2.1"}) as http:
         async with websockets.connect(WS_URL, ping_interval=20, ping_timeout=20, close_timeout=5, max_size=2**20) as ws:
             with output.open("w", encoding="utf-8") as fh:
                 while time.monotonic() < deadline:
@@ -305,19 +326,32 @@ async def capture(*, seconds: float, discover_s: float, output: Path) -> dict[st
                             stats["discoveries"] += 1
                             desired_streams: list[str] = []
                             for event in events.values():
-                                states.setdefault(event.symbol, MarketState(event))
+                                key = event.symbol.upper()
+                                if key not in states:
+                                    state = MarketState(event)
+                                    states[key] = state
+                                    # Seed immediately from public REST so a quiet
+                                    # event-driven bookTicker cannot leave us blind.
+                                    try:
+                                        bid, _, ask, _ = await book(http, event.symbol)
+                                        for row in state.on_book(bid, ask, _iso()):
+                                            _write(fh, row)
+                                        stats["rest_seeds"] += 1
+                                    except Exception as exc:
+                                        stats["errors"] += 1
+                                        _write(fh, {"type": "REST_SEED_ERROR", "observed_at": _iso(), "symbol": event.symbol, "error_type": type(exc).__name__, "error": str(exc)[:240]})
                                 desired_streams.extend([f"{event.symbol}@bookTicker", f"{event.symbol}@trade"])
                             new_streams = [stream for stream in desired_streams if stream not in subscribed]
                             if new_streams:
-                                await ws.send(json.dumps({"id": str(stats["subscriptions"] + 1), "method": "SUBSCRIBE", "params": new_streams}))
+                                request_id = str(stats["subscriptions"] + 1)
+                                await ws.send(json.dumps({"id": request_id, "method": "SUBSCRIBE", "params": new_streams}))
+                                _write(fh, {"type": "WS_SUBSCRIBE_SENT", "observed_at": _iso(), "id": request_id, "streams": new_streams})
                                 subscribed.update(new_streams)
                                 stats["subscriptions"] += len(new_streams)
                             last_discover = now
                         except Exception as exc:
                             stats["errors"] += 1
-                            row = {"type": "SHADOW_DISCOVERY_ERROR", "observed_at": _iso(), "error_type": type(exc).__name__, "error": str(exc)[:240], "read_only": True, "order_entry": False}
-                            fh.write(json.dumps(row, separators=(",", ":")) + "\n")
-                            fh.flush()
+                            _write(fh, {"type":"SHADOW_DISCOVERY_ERROR","observed_at":_iso(),"error_type":type(exc).__name__,"error":str(exc)[:240]})
 
                     timeout = min(1.0, max(0.05, deadline - time.monotonic()))
                     try:
@@ -328,14 +362,19 @@ async def capture(*, seconds: float, discover_s: float, output: Path) -> dict[st
                         message = json.loads(raw)
                     except Exception:
                         stats["errors"] += 1
+                        _write(fh, {"type": "WS_NON_JSON", "observed_at": _iso(), "raw": str(raw)[:500]})
                         continue
                     if not isinstance(message, dict):
                         continue
                     stats["messages"] += 1
-                    symbol = str(message.get("s") or "")
+                    symbol = str(message.get("s") or "").upper()
                     state = states.get(symbol)
                     if state is None:
-                        # Subscription acknowledgements and lifecycle messages.
+                        stats["control_messages"] += 1
+                        status = message.get("status")
+                        if isinstance(status, int) and status >= 400:
+                            stats["subscription_errors"] += 1
+                        _write(fh, {"type": "WS_CONTROL", "observed_at": _iso(), "message": message})
                         continue
                     observed_at = _iso()
                     emitted: list[dict[str, Any]] = []
@@ -343,18 +382,14 @@ async def capture(*, seconds: float, discover_s: float, output: Path) -> dict[st
                     if trade is not None and "t" in message:
                         stats["trades"] += 1
                         emitted.extend(state.on_trade(*trade, observed_at))
-                        emitted.append({"type": "PUBLIC_TRADE", "observed_at": observed_at, "ticker": state.event.ticker, "symbol": symbol, "price": str(trade[0]), "quantity": str(trade[1]), "buyer_maker": trade[2], "trade_id": message.get("t"), "read_only": True, "order_entry": False})
+                        emitted.append({"type": "PUBLIC_TRADE", "observed_at": observed_at, "ticker": state.event.ticker, "symbol": symbol, "price": str(trade[0]), "quantity": str(trade[1]), "buyer_maker": trade[2], "trade_id": message.get("t")})
                     else:
-                        book = _parse_book_ticker(message)
-                        if book is not None:
+                        book_tick = _parse_book_ticker(message)
+                        if book_tick is not None:
                             stats["book_tickers"] += 1
-                            emitted.extend(state.on_book(*book, observed_at))
+                            emitted.extend(state.on_book(*book_tick, observed_at))
                     for row in emitted:
-                        row.setdefault("read_only", True)
-                        row.setdefault("order_entry", False)
-                        fh.write(json.dumps(row, separators=(",", ":"), default=str) + "\n")
-                    if emitted:
-                        fh.flush()
+                        _write(fh, row)
 
     summary = {
         "type": "GEMINI_L5_TAPE_DYNAMIC_SHADOW_SUMMARY",
