@@ -21,6 +21,7 @@ from src.gemini_kalshi_execution_shadow import gemini_predictions_maker_fee
 from src.gemini_l5_threshold_model import maker_rebate_estimate
 
 ONE = D("1")
+MAX_UNITS_PER_OUTCOME = D("3")
 
 
 @dataclass
@@ -60,16 +61,22 @@ class MarketReplay:
     def _fill(self, side: str, price: D, quantity: D, observed_at: str | None) -> None:
         if quantity <= 0:
             return
+        if side == "YES":
+            quantity = min(quantity, max(D("0"), MAX_UNITS_PER_OUTCOME - self.yes_qty))
+        elif side == "NO":
+            quantity = min(quantity, max(D("0"), MAX_UNITS_PER_OUTCOME - self.no_qty))
+        else:
+            raise ValueError(side)
+        if quantity <= 0:
+            return
         fee = gemini_predictions_maker_fee(price, quantity)
         rebate_raw, rebate_rounded = maker_rebate_estimate(price, quantity)
         if side == "YES":
             self.yes_qty += quantity
             self.yes_cost += price * quantity
-        elif side == "NO":
+        else:
             self.no_qty += quantity
             self.no_cost += price * quantity
-        else:
-            raise ValueError(side)
         self.maker_fees += fee
         self.modeled_rebate_raw += rebate_raw
         self.modeled_rebate_cent_rounded += rebate_rounded
@@ -131,6 +138,18 @@ class MarketReplay:
             "threshold_samples": self.threshold_samples,
             "side_switches": self.side_switches,
             "fills": len(self.fills),
+            "fill_chronology": [
+                {
+                    "side": fill.side,
+                    "price": str(fill.price),
+                    "quantity": str(fill.quantity),
+                    "maker_fee": str(fill.maker_fee),
+                    "rebate_raw": str(fill.rebate_raw),
+                    "rebate_cent_rounded": str(fill.rebate_cent_rounded),
+                    "observed_at": fill.observed_at,
+                }
+                for fill in self.fills
+            ],
             "yes_qty": str(self.yes_qty),
             "no_qty": str(self.no_qty),
             "yes_cost": str(self.yes_cost),
@@ -186,7 +205,7 @@ def apply_observation(state: MarketReplay, row: dict[str, Any]) -> None:
     state.pending_no_quote = None
     state.pending_no_qty = D("0")
 
-    desired = D(str(row.get("shadow_target_units") or 0))
+    desired = min(MAX_UNITS_PER_OUTCOME, max(D("0"), D(str(row.get("shadow_target_units") or 0))))
     if favored == "YES" and desired > state.yes_qty:
         state.pending_yes_quote = _dec(row, "shadow_yes_quote")
         state.pending_yes_qty = desired - state.yes_qty
@@ -237,6 +256,7 @@ def aggregate(states: dict[str, MarketReplay]) -> dict[str, Any]:
         "markets_with_both_sides_filled": len(both),
         "markets_with_sub_one_matched_vwap": len(sub_one),
         "total_virtual_fills": sum(len(state.fills) for state in states.values()),
+        "max_units_per_outcome": str(MAX_UNITS_PER_OUTCOME),
         "total_modeled_maker_fees": str(sum((state.maker_fees for state in states.values()), D("0"))),
         "total_modeled_maker_rebate_cent_rounded": str(sum((state.modeled_rebate_cent_rounded for state in states.values()), D("0"))),
         "liquidity_rewards": "NOT_MODELED_OR_REALIZED",
