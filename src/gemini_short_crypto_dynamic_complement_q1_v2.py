@@ -6,6 +6,9 @@ strictly better edge-safe maker target is available. We cancel-before-repost onl
 when we already have a better target. If the book moves during cancellation, we
 revalidate and either repost the last safe price or temporarily wait without
 crossing. Taker execution remains disabled.
+
+Only venue-accepted replacement client IDs are appended to the durable order chain.
+A rejected client ID must never be treated as an authoritative terminal order.
 """
 from __future__ import annotations
 
@@ -17,7 +20,6 @@ from typing import Any, Mapping
 from src import gemini_short_crypto_dynamic_complement_q1 as v1
 from src import gemini_incentive_mm_dynamic_complement as policy
 
-# Re-export the bounded configuration and arming names used by the wrapper.
 ENTRY_PAIR_EDGE = v1.ENTRY_PAIR_EDGE
 FINAL_PAIR_EDGE = v1.FINAL_PAIR_EDGE
 INITIAL_WAIT_SECONDS = v1.INITIAL_WAIT_SECONDS
@@ -77,10 +79,7 @@ async def _dynamic_rescue(
         ack, row, ack_ms = await v1._post_maker(
             maker, symbol=event.symbol, outcome=missing, price=price, client_id=rid,
         )
-        if missing == "YES":
-            yes_ids.append(rid)
-        else:
-            no_ids.append(rid)
+        accepted = int(ack.get("status", 0)) == 200
         v1.emit(
             "DYNAMIC_COMPLEMENT_REPOST",
             missing_outcome=missing,
@@ -93,12 +92,23 @@ async def _dynamic_rescue(
             )),
             ack_status=ack.get("status"),
             ack_latency_ms=round(ack_ms, 3),
-            accepted=int(ack.get("status", 0)) == 200,
+            accepted=accepted,
             maker_only_tif="MOC",
             order_entry=True,
         )
-        if int(ack.get("status", 0)) != 200:
-            return None, None, {"status": "DYNAMIC_COMPLEMENT_REPOST_REJECTED", "paired": False, "hard_halt": True}
+        if not accepted:
+            return None, None, {
+                "status": "DYNAMIC_COMPLEMENT_REPOST_REJECTED",
+                "paired": False,
+                "hard_halt": True,
+                "rejected_client_order_id": rid,
+            }
+        # Persist only accepted orders. Rejected IDs have no authoritative terminal
+        # row and therefore must not enter the settlement identity chain.
+        if missing == "YES":
+            yes_ids.append(rid)
+        else:
+            no_ids.append(rid)
         current_price = D(str(price))
         return rid, row, None
 
@@ -136,9 +146,6 @@ async def _dynamic_rescue(
         target_d = None if target is None else D(str(target))
 
         if current_id is None:
-            # A prior cancel was revalidated into a temporary no-order state. Prefer
-            # a better target; otherwise restore the last price only if it is still
-            # maker-safe and edge-safe on the current book.
             if plan.get("action") == "REPRICE_MAKER_COMPLEMENT" and target_d is not None and target_d > current_price:
                 rid, row, terminal = await post_replacement(target_d)
             elif _safe_to_rest_current(
@@ -153,8 +160,6 @@ async def _dynamic_rescue(
             current_id, current_row = rid, row
             continue
 
-        # Crucial V2 rule: keep the current complement working unless a strictly
-        # better safe maker price is available. No cancel merely to refresh.
         if plan.get("action") != "REPRICE_MAKER_COMPLEMENT" or target_d is None or target_d <= current_price:
             continue
         if sequence >= MAX_REPRICES:
@@ -180,7 +185,6 @@ async def _dynamic_rescue(
         current_id = None
         current_row = None
 
-        # Mutation-time revalidation after the cancel. Never submit the stale target.
         bid2, _, ask2, _ = await v1.base.fresh_top(event.symbol)
         plan2 = policy.dynamic_complement_plan(
             filled_outcome=filled_outcome,
