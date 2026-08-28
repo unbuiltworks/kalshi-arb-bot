@@ -3,10 +3,14 @@
 Calendar-day wallet cashflow can be badly distorted when a short-duration market is
 bought before UTC midnight and redeemed after midnight. This module instead assigns
 a market to the UTC day containing the market's own window start, then joins every
-observed trade for that condition to its eventual public REDEEM activity.
+observed trade for that condition to eventual public REDEEM activity.
 
-Reward payments remain separate because their earning-period attribution is not
-proven. No authentication or order entry.
+A missing REDEEM row is ambiguous: it can mean delayed/unobserved redemption, but for
+an aged binary market it can also mean the wallet only held losing outcome inventory
+and therefore had a zero payout. To avoid upward bias, this report exposes both the
+redeemed-only observed cashflow and a conservative scenario treating every no-redeem
+market as zero payout. Reward payments remain separate because earning-period
+attribution is not proven. No authentication or order entry.
 """
 from __future__ import annotations
 
@@ -46,6 +50,19 @@ def market_family(row: dict[str, Any]) -> tuple[str, str]:
     return "unknown", "unknown"
 
 
+def _family_template() -> dict[str, D | int]:
+    return {
+        "markets": 0,
+        "buy_usdc": D("0"),
+        "sell_usdc": D("0"),
+        "redeem_usdc": D("0"),
+        "cashflow": D("0"),
+        "no_redeem_markets": 0,
+        "no_redeem_buy_usdc": D("0"),
+        "no_redeem_sell_usdc": D("0"),
+    }
+
+
 def reconcile_market_cohorts(
     trades: list[dict[str, Any]],
     redeems: list[dict[str, Any]],
@@ -67,7 +84,7 @@ def reconcile_market_cohorts(
             redeem_groups[key].append(row)
 
     settled_rows: list[dict[str, Any]] = []
-    unresolved_rows: list[dict[str, Any]] = []
+    no_redeem_rows: list[dict[str, Any]] = []
     by_family: dict[str, dict[str, D | int]] = {}
 
     for key, rows in sorted(trade_groups.items()):
@@ -92,21 +109,23 @@ def reconcile_market_cohorts(
             "sell_usdc": str(sell_usdc),
             "redeem_usdc": str(redeem_usdc),
         }
+        family = f"{coin}_{horizon}"
+        agg = by_family.setdefault(family, _family_template())
+
         if redeem_usdc <= 0:
-            unresolved_rows.append(base)
+            no_redeem_rows.append(base)
+            agg["no_redeem_markets"] = int(agg["no_redeem_markets"]) + 1
+            agg["no_redeem_buy_usdc"] = D(str(agg["no_redeem_buy_usdc"])) + buy_usdc
+            agg["no_redeem_sell_usdc"] = D(str(agg["no_redeem_sell_usdc"])) + sell_usdc
             continue
 
         lifecycle = sell_usdc + redeem_usdc - buy_usdc
         base["observed_lifecycle_cashflow"] = str(lifecycle)
         settled_rows.append(base)
 
-        family = f"{coin}_{horizon}"
-        agg = by_family.setdefault(
-            family,
-            {"markets": 0, "buy_usdc": D("0"), "redeem_usdc": D("0"), "cashflow": D("0")},
-        )
         agg["markets"] = int(agg["markets"]) + 1
         agg["buy_usdc"] = D(str(agg["buy_usdc"])) + buy_usdc
+        agg["sell_usdc"] = D(str(agg["sell_usdc"])) + sell_usdc
         agg["redeem_usdc"] = D(str(agg["redeem_usdc"])) + redeem_usdc
         agg["cashflow"] = D(str(agg["cashflow"])) + lifecycle
 
@@ -114,15 +133,22 @@ def reconcile_market_cohorts(
     settled_redeem = sum((D(r["redeem_usdc"]) for r in settled_rows), D("0"))
     settled_sell = sum((D(r["sell_usdc"]) for r in settled_rows), D("0"))
     settled_cashflow = settled_sell + settled_redeem - settled_buy
+
+    no_redeem_buy = sum((D(r["buy_usdc"]) for r in no_redeem_rows), D("0"))
+    no_redeem_sell = sum((D(r["sell_usdc"]) for r in no_redeem_rows), D("0"))
+    conservative_cashflow = settled_cashflow + no_redeem_sell - no_redeem_buy
+
     positive = sum(1 for r in settled_rows if D(r["observed_lifecycle_cashflow"]) > 0)
     negative = sum(1 for r in settled_rows if D(r["observed_lifecycle_cashflow"]) < 0)
     flat = len(settled_rows) - positive - negative
 
     return {
-        "classification": "PUBLIC_SETTLED_MARKET_COHORT_CASHFLOW_REWARDS_SEPARATE",
+        "classification": "PUBLIC_MARKET_COHORT_CASHFLOW_REWARDS_SEPARATE_ZERO_REDEEM_SCENARIO",
         "market_count": len(trade_groups),
         "settled_market_count": len(settled_rows),
-        "unresolved_market_count": len(unresolved_rows),
+        # Kept for compatibility; these are specifically markets with no observed redeem.
+        "unresolved_market_count": len(no_redeem_rows),
+        "no_redeem_observed_market_count": len(no_redeem_rows),
         "positive_market_count": positive,
         "negative_market_count": negative,
         "flat_market_count": flat,
@@ -130,23 +156,36 @@ def reconcile_market_cohorts(
         "settled_sell_usdc": str(settled_sell),
         "settled_redeem_usdc": str(settled_redeem),
         "observed_settled_lifecycle_cashflow": str(settled_cashflow),
+        "no_redeem_observed_buy_usdc": str(no_redeem_buy),
+        "no_redeem_observed_sell_usdc": str(no_redeem_sell),
+        "conservative_cashflow_if_no_redeem_is_zero_payout": str(conservative_cashflow),
         "by_family": {
             key: {
                 "markets": int(value["markets"]),
                 "buy_usdc": str(value["buy_usdc"]),
+                "sell_usdc": str(value["sell_usdc"]),
                 "redeem_usdc": str(value["redeem_usdc"]),
                 "cashflow": str(value["cashflow"]),
+                "no_redeem_markets": int(value["no_redeem_markets"]),
+                "no_redeem_buy_usdc": str(value["no_redeem_buy_usdc"]),
+                "no_redeem_sell_usdc": str(value["no_redeem_sell_usdc"]),
+                "conservative_cashflow_if_no_redeem_is_zero_payout": str(
+                    D(str(value["cashflow"]))
+                    + D(str(value["no_redeem_sell_usdc"]))
+                    - D(str(value["no_redeem_buy_usdc"]))
+                ),
             }
             for key, value in sorted(by_family.items())
         },
         "markets": settled_rows,
-        "unresolved_markets": unresolved_rows,
+        "unresolved_markets": no_redeem_rows,
+        "no_redeem_observed_markets": no_redeem_rows,
     }
 
 
 def reconcile_day(wallet: str, day: date, *, redeem_horizon_days: int = 3) -> dict[str, Any]:
     start, end = _utc_bounds(day)
-    # Include the boundary tails, then assign markets by their encoded window start.
+    # Include boundary tails, then assign markets by their encoded window start.
     trades = fetch_activity_type(wallet, "TRADE", start=max(0, start - 1800), end=end + 1800)
     trades = [row for row in trades if is_short_crypto(row)]
     redeems = fetch_activity_type(wallet, "REDEEM", start=max(0, start - 1800), end=end + 86400 * redeem_horizon_days)
@@ -160,6 +199,7 @@ def reconcile_day(wallet: str, day: date, *, redeem_horizon_days: int = 3) -> di
             "cohort_day_utc": day.isoformat(),
             "window_start": start,
             "window_end": end,
+            "redeem_horizon_days": redeem_horizon_days,
             "order_entry": False,
             "reward_payments_not_attributed": {
                 "same_utc_day_total": str(sum((dec(r.get("usdc_size")) for r in same_rewards), D("0"))),
@@ -167,7 +207,8 @@ def reconcile_day(wallet: str, day: date, *, redeem_horizon_days: int = 3) -> di
                 "earning_period_attribution": "UNPROVEN",
             },
             "warnings": [
-                "Only settled market cohorts are included in lifecycle cashflow.",
+                "Redeemed-only lifecycle cashflow can be upward-biased if losing positions produce no REDEEM row.",
+                "The zero-redeem scenario is conservative and may be too negative if redemption occurred outside the search horizon or is missing from the public API.",
                 "Reward payments are not added to lifecycle cashflow because earning-period attribution is unproven.",
                 "Public Data API cashflow is observational and is not our realized P&L or tax characterization.",
             ],
