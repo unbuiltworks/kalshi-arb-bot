@@ -60,11 +60,13 @@ def test_launcher_qualifier_is_read_only_and_before_approval_consumption():
     assert "DYNAMIC_COMPLEMENT_Q1_QUALIFYING_WINDOW_FOUND order_entry=false approval_consumed=false" in text
 
 
-def test_launcher_retries_only_transient_qualifier_transport_failures():
+def test_launcher_retries_only_transient_qualifier_failures():
     text = _text()
     assert "httpx.TransportError" in text
     assert "asyncio.TimeoutError" in text
     assert '"retryable_transport_error": type(exc).__name__' in text
+    assert 'msg in {"no fresh Gemini BTC5m depth", "no fresh Gemini ETH5m depth"}' in text
+    assert '"retryable_market_data_error": msg' in text
     assert "raise SystemExit(4)" in text
     assert '[ "$QUALIFY_RC" -eq 4 ]' in text
     assert "DYNAMIC_COMPLEMENT_Q1_QUALIFIER_TRANSIENT_RETRY approval_consumed=false" in text
