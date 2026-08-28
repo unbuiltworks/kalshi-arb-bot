@@ -1,0 +1,51 @@
+name: l5 Gemini Kalshi incentive readonly
+
+on:
+  push:
+    branches:
+      - feature/l5-gemini-aws-live-probe-v1
+    paths:
+      - src/gemini_l5_threshold_model.py
+      - src/gemini_short_crypto_l5_threshold_supervisor_v1.py
+      - src/gemini_l5_threshold_preflight.py
+      - src/short_crypto_incentive_snapshot.py
+      - tests/test_gemini_l5_threshold_model.py
+      - tests/test_gemini_short_crypto_l5_threshold_supervisor_v1.py
+      - tests/test_short_crypto_incentive_snapshot.py
+      - deploy/aws/run_gemini_l5_threshold_q1_live_v1.sh
+      - .github/workflows/l5-gemini-kalshi-incentive-readonly.yml
+
+permissions:
+  contents: read
+
+jobs:
+  readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install minimal test dependencies
+        run: python -m pip install 'httpx>=0.27' 'websockets>=12' 'cryptography>=42' 'python-dotenv>=1.0' 'pytest>=8'
+      - name: Run focused l5 probe tests
+        run: |
+          pytest -q \
+            tests/test_gemini_l5_threshold_model.py \
+            tests/test_short_crypto_incentive_snapshot.py \
+            tests/test_gemini_short_crypto_l5_threshold_supervisor_v1.py \
+            tests/test_gemini_short_crypto_dual_horizon_settlement_reconcile_v2.py \
+            tests/test_gemini_short_crypto_inventory_maker_q1.py \
+            tests/test_gemini_short_crypto_inventory_rest_v3.py \
+            tests/test_gemini_short_crypto_btc5m_canary_v3.py
+      - name: Capture public incentive snapshot
+        run: |
+          mkdir -p artifacts
+          python -m src.short_crypto_incentive_snapshot --pretty | tee artifacts/short-crypto-incentives.json
+      - name: Upload read-only evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: l5-gemini-kalshi-incentive-readonly
+          path: artifacts/
+          retention-days: 3
