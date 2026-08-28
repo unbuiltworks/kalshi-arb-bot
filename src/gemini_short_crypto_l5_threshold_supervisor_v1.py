@@ -3,7 +3,7 @@
 This is an intentionally small live probe of the simplest hypothesis suggested
 by the observed l5 activity: when the market itself moves one outcome above a
 60% implied-probability threshold, bias the resting maker quote one tick toward
-that favored side while continuing to quote the opposite side.
+that favored side while continuing to quote the opposite outcome.
 
 The proven Gemini inventory canaries still own actual order placement, fill
 handling, cancellation, durable reservation, and authoritative settlement.
@@ -194,28 +194,33 @@ def _choose(ready: list[dict[str, Any]], counts: dict[str, int]) -> dict[str, An
     )[0]
 
 
-def _patched_pair_model(plan: QuotePlan) -> Callable[[D, D], dict[str, D]]:
-    # The child performs a second fresh book read immediately before mutation.
-    # Recompute from that fresh book; never reuse readiness prices.
+def _patched_pair_model(plan: QuotePlan, price_increment: D) -> Callable[[D, D], dict[str, D]]:
+    # The child performs another fresh book read immediately before mutation.
+    # Recompute from that fresh book; never reuse readiness prices. If the
+    # threshold/rebate-band condition faded, poison modeled_edge so the proven
+    # child fails its existing fresh-entry gate before sending any order.
     def model(bid: D, ask: D) -> dict[str, D]:
         fresh = plan_threshold_quotes(
             bid,
             ask,
             threshold=plan.threshold,
             pair_floor=plan.pair_floor,
-            price_increment=D("0.01"),
+            price_increment=price_increment,
         )
-        return fresh.as_model_dict()
+        out = fresh.as_model_dict()
+        if not fresh.actionable_live_q1:
+            out["modeled_edge"] = D("-1")
+        return out
 
     return model
 
 
-async def _run_child(horizon: str, cid: str, plan: QuotePlan) -> None:
+async def _run_child(horizon: str, cid: str, plan: QuotePlan, price_increment: D) -> None:
     if horizon == "5m":
         original = base5.pair_model
         try:
             base5.fresh_top = v5.rest_fresh_top
-            base5.pair_model = _patched_pair_model(plan)
+            base5.pair_model = _patched_pair_model(plan, price_increment)
             os.environ[inv5.LIVE_ENV] = "YES"
             os.environ[inv5.CANARY_ID_ENV] = cid
             os.environ[inv5.CANARY_ARM_ENV] = cid
@@ -227,7 +232,7 @@ async def _run_child(horizon: str, cid: str, plan: QuotePlan) -> None:
         original = base15.pair_model
         try:
             base15.fresh_top = v15.rest_fresh_top
-            base15.pair_model = _patched_pair_model(plan)
+            base15.pair_model = _patched_pair_model(plan, price_increment)
             os.environ[inv15.LIVE_ENV] = "YES"
             os.environ[inv15.CANARY_ID_ENV] = cid
             os.environ[inv15.CANARY_ARM_ENV] = cid
@@ -335,7 +340,7 @@ async def run() -> None:
         )
 
         try:
-            await _run_child(horizon, cid, plan)
+            await _run_child(horizon, cid, plan, event.price_increment)
         except Exception as exc:
             emit(
                 "HARD_HALT",
