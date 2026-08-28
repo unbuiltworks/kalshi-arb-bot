@@ -1,0 +1,50 @@
+name: l5 daily public economics
+
+on:
+  push:
+    branches:
+      - feature/incentive-arb-engine-v1
+    paths:
+      - deploy/l5-daily-economics.trigger
+      - .github/workflows/l5-daily-economics.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install minimal dependency
+        run: python -m pip install 'httpx>=0.27'
+      - name: Run completed UTC-day public reconciliation
+        run: |
+          mkdir -p artifacts
+          DAY=$(awk -F= '$1=="DATE_UTC"{print $2}' deploy/l5-daily-economics.trigger | tr -d '[:space:]')
+          [[ "$DAY" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]
+          python -m src.polymarket_l5_daily_economics --date "$DAY" --output artifacts/l5-daily-economics.json > /dev/null
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('artifacts/l5-daily-economics.json').read_text())
+          print(json.dumps({
+            'classification': r['classification'],
+            'trading_day_utc': r['trading_day_utc'],
+            'short_crypto': r['short_crypto'],
+            'same_day_reward_total': r['reward_payments']['same_utc_day_total'],
+            'next_day_reward_total': r['reward_payments']['next_utc_day_total'],
+            'scenarios_not_realized_attribution': r['scenarios_not_realized_attribution'],
+          }, indent=2))
+          PY
+      - name: Upload public evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: l5-daily-economics
+          path: artifacts/l5-daily-economics.json
+          retention-days: 3
