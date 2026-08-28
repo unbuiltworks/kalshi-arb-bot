@@ -6,9 +6,12 @@ on:
       - feature/l5-gemini-inventory-v4
     paths:
       - src/gemini_l5_inventory_replay_v4.py
+      - src/gemini_l5_inventory_replay_v4_runner.py
+      - src/gemini_l5_inventory_shadow_v4.py
       - src/gemini_l5_inventory_policy.py
       - src/gemini_l5_fair_value.py
       - tests/test_gemini_l5_inventory_replay_v4.py
+      - tests/test_gemini_l5_inventory_shadow_v4.py
       - tests/test_gemini_l5_inventory_policy.py
       - tests/test_gemini_l5_fair_value.py
       - .github/workflows/l5-gemini-inventory-v4-test.yml
@@ -27,11 +30,16 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Pair-first strategy tests
+      - name: Pair-first strategy and online reliability tests
         run: |
           pytest -q \
             tests/test_gemini_l5_inventory_replay_v4.py \
+            tests/test_gemini_l5_inventory_shadow_v4.py \
             tests/test_gemini_l5_inventory_policy.py \
             tests/test_gemini_l5_fair_value.py
-      - name: Compile V4 replay
-        run: python -m py_compile src/gemini_l5_inventory_replay_v4.py
+      - name: Compile V4 modules
+        run: |
+          python -m py_compile \
+            src/gemini_l5_inventory_replay_v4.py \
+            src/gemini_l5_inventory_replay_v4_runner.py \
+            src/gemini_l5_inventory_shadow_v4.py
