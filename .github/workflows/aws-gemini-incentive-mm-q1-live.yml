@@ -17,6 +17,7 @@ env:
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
   LIVE_BRANCH: feature/gemini-incentive-mm-live-probe-q1
   LIVE_CONTAINER: arb-gemini-incentive-mm-live-probe-q1
+  ETH5_MIN_COMMIT: e60a5bb91438e74d8819c2a4e6fb848135737403
 
 jobs:
   launch:
@@ -42,7 +43,7 @@ jobs:
           test "$CLASSIFICATION" = "FRESH_USER_APPROVED_Q1_LIVE_PROBE"
           echo "pinned_commit=$PINNED_COMMIT" >> "$GITHUB_OUTPUT"
           echo "approval_id=$APPROVAL_ID" >> "$GITHUB_OUTPUT"
-          echo "INCENTIVE_MM_Q1_TRIGGER commit=${PINNED_COMMIT:0:12} approval_id=$APPROVAL_ID"
+          echo "INCENTIVE_MM_Q1_TRIGGER commit=${PINNED_COMMIT:0:12} approval_id=$APPROVAL_ID target=ETH5"
 
       - name: Configure AWS credentials with OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -50,19 +51,19 @@ jobs:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Launch exact pinned q1 probe through SSM
+      - name: Launch exact pinned q1 ETH5 probe through SSM
         shell: bash
         env:
           PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
           APPROVAL_ID: ${{ steps.trigger.outputs.approval_id }}
         run: |
           set -euo pipefail
-          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin ${LIVE_BRANCH} >/dev/null; git merge-base --is-ancestor ${PINNED_COMMIT} origin/${LIVE_BRANCH}; git cat-file -e \"${PINNED_COMMIT}^{commit}\"; git show ${PINNED_COMMIT}:deploy/aws/run_gemini_incentive_mm_live_probe_q1.sh > /tmp/run_gemini_incentive_mm_live_probe_q1.sh; chmod 0700 /tmp/run_gemini_incentive_mm_live_probe_q1.sh; PINNED_COMMIT=${PINNED_COMMIT} ARB_GEMINI_INCENTIVE_MM_Q1_APPROVED=YES ARB_GEMINI_INCENTIVE_MM_Q1_APPROVAL_ID=${APPROVAL_ID} /tmp/run_gemini_incentive_mm_live_probe_q1.sh'"
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin ${LIVE_BRANCH} >/dev/null; git cat-file -e \"${PINNED_COMMIT}^{commit}\"; git merge-base --is-ancestor ${PINNED_COMMIT} origin/${LIVE_BRANCH}; git merge-base --is-ancestor ${ETH5_MIN_COMMIT} ${PINNED_COMMIT}; git show ${PINNED_COMMIT}:src/gemini_incentive_mm_live_probe_q1.py | grep -q '\"'\"'TARGET_ASSET = \"ETH\"'\"'\"'; git show ${PINNED_COMMIT}:src/gemini_incentive_mm_live_probe_q1.py | grep -q '\"'\"'TARGET_HORIZON = \"5m\"'\"'\"'; git show ${PINNED_COMMIT}:deploy/aws/run_gemini_incentive_mm_live_probe_q1.sh > /tmp/run_gemini_incentive_mm_live_probe_q1.sh; chmod 0700 /tmp/run_gemini_incentive_mm_live_probe_q1.sh; PINNED_COMMIT=${PINNED_COMMIT} ARB_GEMINI_INCENTIVE_MM_Q1_APPROVED=YES ARB_GEMINI_INCENTIVE_MM_Q1_APPROVAL_ID=${APPROVAL_ID} /tmp/run_gemini_incentive_mm_live_probe_q1.sh'"
           PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$AWS_HOT_INSTANCE_ID" \
             --document-name AWS-RunShellScript \
-            --comment "ARB Gemini incentive MM q1 live ${PINNED_COMMIT:0:12}" \
+            --comment "ARB Gemini incentive MM q1 ETH5 live ${PINNED_COMMIT:0:12}" \
             --parameters "$PARAMETERS" \
             --query 'Command.CommandId' --output text)
           aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
@@ -74,17 +75,18 @@ jobs:
             > runtime/aws-gemini-incentive-mm-q1-live-launch.json
           cat runtime/aws-gemini-incentive-mm-q1-live-launch.json
           test "$(jq -r '.Status' runtime/aws-gemini-incentive-mm-q1-live-launch.json)" = "Success"
+          grep -q 'asset=ETH horizon=5m' <<<"$(jq -r '.Stdout' runtime/aws-gemini-incentive-mm-q1-live-launch.json)"
 
-      - name: Read-only monitor probe to completion
+      - name: Read-only monitor probe to clean terminal state
         shell: bash
         run: |
           set -euo pipefail
-          REMOTE_CMD='NAME=arb-gemini-incentive-mm-live-probe-q1; echo Q1_MONITOR_STARTED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ); for i in $(seq 1 54); do if ! docker inspect "$NAME" >/dev/null 2>&1; then echo Q1_MONITOR_CONTAINER_MISSING; break; fi; running=$(docker inspect -f "{{.State.Running}}" "$NAME"); echo Q1_MONITOR_SAMPLE n=$i at=$(date -u +%Y-%m-%dT%H:%M:%SZ) running=$running; if [ "$running" != "true" ]; then break; fi; sleep 20; done; if docker inspect "$NAME" >/dev/null 2>&1; then echo Q1_MONITOR_FINAL=$(docker inspect -f "status={{.State.Status}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}" "$NAME"); echo Q1_MONITOR_LOGS_BEGIN; docker logs --tail 300 "$NAME" 2>&1 || true; echo Q1_MONITOR_LOGS_END; fi; echo Q1_MONITOR_FINISHED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+          REMOTE_CMD='NAME=arb-gemini-incentive-mm-live-probe-q1; echo Q1_MONITOR_STARTED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ); for i in $(seq 1 54); do if ! docker inspect "$NAME" >/dev/null 2>&1; then echo Q1_MONITOR_CONTAINER_MISSING; exit 2; fi; running=$(docker inspect -f "{{.State.Running}}" "$NAME"); echo Q1_MONITOR_SAMPLE n=$i at=$(date -u +%Y-%m-%dT%H:%M:%SZ) running=$running; if [ "$running" != "true" ]; then break; fi; sleep 20; done; test "$(docker inspect -f "{{.State.Running}}" "$NAME")" = "false"; status=$(docker inspect -f "{{.State.Status}}" "$NAME"); exit_code=$(docker inspect -f "{{.State.ExitCode}}" "$NAME"); echo Q1_MONITOR_FINAL=$(docker inspect -f "status={{.State.Status}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}" "$NAME"); echo Q1_MONITOR_LOGS_BEGIN; docker logs --tail 500 "$NAME" 2>&1 || true; echo Q1_MONITOR_LOGS_END; test "$status" = "exited"; test "$exit_code" = "0"; logs=$(docker logs --tail 500 "$NAME" 2>&1 || true); printf "%s\n" "$logs" | grep -Eq '"'"'"stage":"(SETTLED|COMPLETE_NO_OPEN_RESERVATION)"'"'"'; echo Q1_MONITOR_CLEAN_TERMINAL_OK; echo Q1_MONITOR_FINISHED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)'
           PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$AWS_HOT_INSTANCE_ID" \
             --document-name AWS-RunShellScript \
-            --comment "ARB Gemini incentive MM q1 read-only monitor" \
+            --comment "ARB Gemini incentive MM q1 ETH5 read-only monitor" \
             --parameters "$PARAMETERS" \
             --timeout-seconds 1200 \
             --query 'Command.CommandId' --output text)
@@ -96,8 +98,11 @@ jobs:
             --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
             > runtime/aws-gemini-incentive-mm-q1-live-monitor.json
           cat runtime/aws-gemini-incentive-mm-q1-live-monitor.json
+          test "$(jq -r '.Status' runtime/aws-gemini-incentive-mm-q1-live-monitor.json)" = "Success"
+          grep -q 'Q1_MONITOR_CLEAN_TERMINAL_OK' <<<"$(jq -r '.Stdout' runtime/aws-gemini-incentive-mm-q1-live-monitor.json)"
 
       - name: Upload non-secret launch and monitor evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: aws-gemini-incentive-mm-q1-live
