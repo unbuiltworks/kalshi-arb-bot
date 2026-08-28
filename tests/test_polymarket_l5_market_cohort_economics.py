@@ -1,6 +1,6 @@
 from decimal import Decimal as D
 
-from src.polymarket_l5_market_cohort_economics import reconcile_market_cohorts
+from src.polymarket_l5_market_cohort_economics import reconcile_market_cohorts, reward_totals_by_type
 
 
 def trade(ts, cid, slug, usdc, *, side="BUY"):
@@ -24,6 +24,18 @@ def redeem(ts, cid, slug, usdc):
         "eventSlug": slug,
         "usdcSize": str(usdc),
     }
+
+
+def test_reward_totals_keep_maker_and_taker_rebates_separate():
+    rows = [
+        {"type": "MAKER_REBATE", "usdc_size": "12.50"},
+        {"type": "TAKER_REBATE", "usdc_size": "3.25"},
+        {"type": "MAKER_REBATE", "usdc_size": "0.75"},
+        {"type": "OTHER", "usdc_size": "999"},
+    ]
+    out = reward_totals_by_type(rows)
+    assert D(out["MAKER_REBATE"]) == D("13.25")
+    assert D(out["TAKER_REBATE"]) == D("3.25")
 
 
 def test_cross_midnight_redeem_is_joined_to_market_cohort():
