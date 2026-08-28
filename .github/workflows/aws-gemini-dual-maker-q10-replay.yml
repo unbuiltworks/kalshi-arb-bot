@@ -1,0 +1,93 @@
+name: AWS Gemini dual-maker q10 replay
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/gemini-dual-maker-q10-replay.trigger
+      - .github/workflows/aws-gemini-dual-maker-q10-replay.yml
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+
+      - name: Read replay trigger
+        id: trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=deploy/aws/gemini-dual-maker-q10-replay.trigger
+          PINNED_COMMIT=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$FILE" | tr -d '[:space:]')
+          SOURCE_RUN_ID=$(awk -F= '$1=="SOURCE_RUN_ID"{print $2}' "$FILE" | tr -d '[:space:]')
+          CLASSIFICATION=$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$FILE" | tr -d '[:space:]')
+          ORDER_ENTRY=$(awk -F= '$1=="ORDER_ENTRY"{print $2}' "$FILE" | tr -d '[:space:]')
+          [[ "$PINNED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SOURCE_RUN_ID" =~ ^[A-Za-z0-9._-]+$ ]]
+          test "$CLASSIFICATION" = "SHADOW_REPLAY_NOT_REALIZED"
+          test "$ORDER_ENTRY" = "false"
+          echo "pinned_commit=$PINNED_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "source_run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "Q10_REPLAY_TRIGGER commit=${PINNED_COMMIT:0:12} source_run=$SOURCE_RUN_ID classification=$CLASSIFICATION order_entry=$ORDER_ENTRY"
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Replay retained public tape through q10 policy
+        env:
+          PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
+          SOURCE_RUN_ID: ${{ steps.trigger.outputs.source_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${PINNED_COMMIT:0:12}"
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; REPO=/home/ssm-user/kalshi-arb-bot; SOURCE=/home/ssm-user/gemini-l5-dynamic-shadow-v2-state/${SOURCE_RUN_ID}/capture.jsonl; WORK=/opt/arb/gemini-dual-maker-q10-replay; OUT=/home/ssm-user/gemini-dual-maker-q10-replay-state/${SOURCE_RUN_ID}-${SHORT_SHA}; test -f \"\$SOURCE\"; git -C \"\$REPO\" config --global --add safe.directory \"\$REPO\" || true; git -C \"\$REPO\" fetch origin feature/incentive-arb-engine-v1; git -C \"\$REPO\" cat-file -e \"${PINNED_COMMIT}^{commit}\"; git -C \"\$REPO\" worktree remove --force \"\$WORK\" >/dev/null 2>&1 || true; rm -rf \"\$WORK\"; git -C \"\$REPO\" worktree prune; git -C \"\$REPO\" worktree add --detach \"\$WORK\" \"${PINNED_COMMIT}\"; test \"\$(git -C \"\$WORK\" rev-parse HEAD)\" = \"${PINNED_COMMIT}\"; mkdir -p \"\$OUT\"; IMAGE=arb-gemini-dual-maker-q10-replay:${SHORT_SHA}; docker build -t \"\$IMAGE\" \"\$WORK\" >/dev/null; docker run --rm --network none \"\$IMAGE\" python -m pytest -q tests/test_gemini_dual_maker_replay_q10.py tests/test_incentive_arb_engine.py; docker run --rm --network none -v \"\$SOURCE:/input/capture.jsonl:ro\" -v \"\$OUT:/output\" \"\$IMAGE\" python -m src.gemini_dual_maker_replay_q10 --input /input/capture.jsonl --output /output/summary.json >/dev/null; python3 - \"\$OUT/summary.json\" <<\"PY\"
+          import json,sys
+          p=sys.argv[1]
+          d=json.load(open(p))
+          out={k:v for k,v in d.items() if k != "markets_detail"}
+          print("Q10_REPLAY_SUMMARY")
+          print(json.dumps(out,sort_keys=True))
+          assert d["classification"]=="SHADOW_REPLAY_NOT_REALIZED"
+          assert d["order_entry"] is False
+          assert d["credentials_loaded"] is False
+          assert d["realized_pnl"] is None
+          PY
+          echo Q10_REPLAY_OUTPUT=\$OUT/summary.json'"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "ARB Gemini dual-maker q10 replay ${SHORT_SHA}" \
+            --parameters "$PARAMETERS" \
+            --query 'Command.CommandId' \
+            --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+            > /tmp/q10-replay.json
+          cat /tmp/q10-replay.json
+          test "$(jq -r '.Status' /tmp/q10-replay.json)" = "Success"
+          stdout=$(jq -r '.Stdout // ""' /tmp/q10-replay.json)
+          grep -q 'Q10_REPLAY_SUMMARY' <<< "$stdout"
+          grep -q 'SHADOW_REPLAY_NOT_REALIZED' <<< "$stdout"
+          grep -q 'Q10_REPLAY_OUTPUT=' <<< "$stdout"
