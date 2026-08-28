@@ -9,13 +9,18 @@ short-crypto families. The proven BTC5 inventory-maker child is reused by swappi
 only its event-discovery function for an ETH5 adapter while armed; all child state
 is restored afterward.
 
+This revision moves both resting maker quotes inward before submission, using spare
+spread while preserving at least 3c of fee-adjusted matched-pair edge. The intent is
+that whichever side fills first, the complement is already within striking distance
+without cancel/repost churn or a second client-order identity.
+
 Hard bounds:
-- ETH 5m only for this first incentive probe;
+- ETH 5m only for this incentive probe;
 - exactly q=1 maximum per outcome;
 - one campaign, no automatic restart;
-- initial maker quotes must both be inside the 20c-80c incentive band;
-- initial fee-adjusted matched-pair economics may be at most 1c negative;
-- one-sided inventory may settle directionally, so this is NOT arbitrage;
+- both maker quotes must remain inside the 20c-80c band;
+- fee-adjusted matched-pair economics must preserve at least 3c;
+- one-sided inventory may settle directionally, so this is NOT guaranteed arbitrage;
 - durable reservation, cancel/reconcile, and authoritative settlement are reused
   from the proven q=1 child/reconciler;
 - maker rebates/rewards are never counted as realized trading P&L;
@@ -50,10 +55,12 @@ TARGET_ASSET = "ETH"
 TARGET_HORIZON = "5m"
 ETH5_EVENT_RE = re.compile(r"^ETH05M(\d{10})$")
 
+ONE = D("1")
 MIN_REBATE_BAND_PRICE = D("0.20")
 MAX_REBATE_BAND_PRICE = D("0.80")
-MAX_INITIAL_PAIR_LOSS = D("0.01")
-PROBE_ENTRY_PAIR_EDGE = -MAX_INITIAL_PAIR_LOSS
+PRICE_TICK = D("0.01")
+MIN_LOCKED_PAIR_EDGE = D("0.03")
+PROBE_ENTRY_PAIR_EDGE = MIN_LOCKED_PAIR_EDGE
 SETTLEMENT_TIMEOUT_S = 12 * 60
 SETTLEMENT_POLL_S = 5.0
 
@@ -92,7 +99,7 @@ def _clean(value: str, limit: int = 18) -> str:
     return out or "probe"
 
 
-def quotes_in_incentive_band(model: dict[str, Any]) -> bool:
+def quotes_in_incentive_band(model: Mapping[str, Any]) -> bool:
     try:
         yes_quote = D(str(model["yes_quote"]))
         no_quote = D(str(model["no_quote"]))
@@ -104,19 +111,106 @@ def quotes_in_incentive_band(model: dict[str, Any]) -> bool:
     )
 
 
-def patched_pair_model(original: Callable[[D, D], dict[str, D]]) -> Callable[[D, D], dict[str, D]]:
-    """Keep the proven quote model but reject books outside the incentive band.
+def _fee_adjusted_edge(yes_quote: D, no_quote: D) -> D:
+    yes_fee = base.gemini_predictions_maker_fee(yes_quote, ONE)
+    no_fee = base.gemini_predictions_maker_fee(no_quote, ONE)
+    return ONE - yes_quote - no_quote - yes_fee - no_fee
 
-    The child itself enforces ``inv.ENTRY_PAIR_EDGE``. During this probe that
-    floor is temporarily changed from +1c to -1c. Poisoning modeled_edge here
-    guarantees the child's fresh-book revalidation also enforces the 20c-80c
-    band immediately before order entry.
+
+def _price_grid(start: D, cap: D) -> list[D]:
+    start = D(str(start)).quantize(PRICE_TICK)
+    cap = D(str(cap)).quantize(PRICE_TICK)
+    if cap < start:
+        return [start]
+    out: list[D] = []
+    price = start
+    while price <= cap:
+        out.append(price)
+        price += PRICE_TICK
+    return out
+
+
+def aggressive_pair_model(original: Callable[[D, D], dict[str, D]]) -> Callable[[D, D], dict[str, D]]:
+    """Spend spare spread to bring both maker quotes inward while keeping >=3c edge.
+
+    For the YES instrument, a passive YES bid must stay below the current YES ask.
+    A passive NO bid is equivalent to staying below ``1 - YES bid``. We therefore
+    cap each side one tick from crossing and search the cent grid for the most
+    balanced inward move that still preserves ``MIN_LOCKED_PAIR_EDGE`` after the
+    current Gemini maker-fee formula.
     """
     def model(bid: D, ask: D) -> dict[str, D]:
-        out = dict(original(D(str(bid)), D(str(ask))))
+        bid = D(str(bid))
+        ask = D(str(ask))
+        raw = dict(original(bid, ask))
+        yes0 = D(str(raw["yes_quote"]))
+        no0 = D(str(raw["no_quote"]))
+
+        if not quotes_in_incentive_band(raw):
+            raw["modeled_edge"] = D("-1")
+            return raw
+
+        yes_cap = min(MAX_REBATE_BAND_PRICE, ask - PRICE_TICK)
+        no_cap = min(MAX_REBATE_BAND_PRICE, ONE - bid - PRICE_TICK)
+        yes_cap = max(yes0, yes_cap)
+        no_cap = max(no0, no_cap)
+
+        best_yes = yes0
+        best_no = no0
+        best_edge = _fee_adjusted_edge(yes0, no0)
+        best_score = (D("0"), D("0"))
+
+        for yes_quote in _price_grid(yes0, yes_cap):
+            for no_quote in _price_grid(no0, no_cap):
+                if not (
+                    MIN_REBATE_BAND_PRICE <= yes_quote <= MAX_REBATE_BAND_PRICE
+                    and MIN_REBATE_BAND_PRICE <= no_quote <= MAX_REBATE_BAND_PRICE
+                ):
+                    continue
+                edge = _fee_adjusted_edge(yes_quote, no_quote)
+                if edge < MIN_LOCKED_PAIR_EDGE:
+                    continue
+                yes_improve = yes_quote - yes0
+                no_improve = no_quote - no0
+                score = (min(yes_improve, no_improve), yes_improve + no_improve)
+                if score > best_score:
+                    best_score = score
+                    best_yes = yes_quote
+                    best_no = no_quote
+                    best_edge = edge
+
+        yes_fee = base.gemini_predictions_maker_fee(best_yes, ONE)
+        no_fee = base.gemini_predictions_maker_fee(best_no, ONE)
+        raw.update(
+            {
+                "yes_quote": best_yes,
+                "no_quote": best_no,
+                "yes_fee": yes_fee,
+                "no_fee": no_fee,
+                "pair_cost": best_yes + best_no,
+                "modeled_edge": best_edge,
+                "spread": ask - bid,
+                "raw_yes_quote": yes0,
+                "raw_no_quote": no0,
+                "yes_inward_move": best_yes - yes0,
+                "no_inward_move": best_no - no0,
+            }
+        )
+        return raw
+
+    return model
+
+
+def patched_pair_model(original: Callable[[D, D], dict[str, D]]) -> Callable[[D, D], dict[str, D]]:
+    """Apply striking-distance quoting and retain the 20c-80c safety band."""
+    aggressive = aggressive_pair_model(original)
+
+    def model(bid: D, ask: D) -> dict[str, D]:
+        out = dict(aggressive(D(str(bid)), D(str(ask))))
         if not quotes_in_incentive_band(out):
             out["modeled_edge"] = D("-1")
         return out
+
     return model
 
 
@@ -216,7 +310,7 @@ async def run() -> None:
             target_horizon=TARGET_HORIZON,
             q_per_outcome=1,
             max_campaigns=1,
-            max_initial_pair_loss=str(MAX_INITIAL_PAIR_LOSS),
+            min_locked_pair_edge=str(MIN_LOCKED_PAIR_EDGE),
             order_entry=False,
             realized_pnl=None,
             classification="DISARMED_NO_VENUE_CALLS",
@@ -242,7 +336,8 @@ async def run() -> None:
         target_horizon=TARGET_HORIZON,
         q_per_outcome=1,
         max_campaigns=1,
-        max_initial_pair_loss=str(MAX_INITIAL_PAIR_LOSS),
+        min_locked_pair_edge=str(MIN_LOCKED_PAIR_EDGE),
+        quote_policy="STRIKING_DISTANCE_TWO_SIDED_MAKER",
         incentive_price_band=f"{MIN_REBATE_BAND_PRICE}-{MAX_REBATE_BAND_PRICE}",
         liquidity_rewards_eligible_at_q1=False,
         maker_rewards_counted_as_realized=False,
