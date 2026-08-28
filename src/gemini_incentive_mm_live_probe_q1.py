@@ -3,8 +3,14 @@
 Purpose: measure real maker queue/fill behavior for the incentive-aware two-sided
 strategy without pretending the q=1 probe itself captures q=10 liquidity rewards.
 
+The first target is ETH 5m because both the conservative Gemini shadow fills and
+the corrected l5 public market-cohort audit currently favor ETH5 over the other
+short-crypto families. The proven BTC5 inventory-maker child is reused by swapping
+only its event-discovery function for an ETH5 adapter while armed; all child state
+is restored afterward.
+
 Hard bounds:
-- BTC 5m only via the already-proven inventory-maker child;
+- ETH 5m only for this first incentive probe;
 - exactly q=1 maximum per outcome;
 - one campaign, no automatic restart;
 - initial maker quotes must both be inside the 20c-80c incentive band;
@@ -24,8 +30,11 @@ import asyncio
 from decimal import Decimal as D
 import json
 import os
+import re
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
+
+import httpx
 
 from src import gemini_short_crypto_btc5m_inventory_maker_canary_q1 as inv
 from src import gemini_short_crypto_btc5m_maker_canary_q1 as base
@@ -35,6 +44,10 @@ from src import gemini_short_crypto_local_budget as local_base
 LIVE_ENV = "GEMINI_INCENTIVE_MM_LIVE_PROBE_Q1"
 PROBE_ID_ENV = "GEMINI_INCENTIVE_MM_PROBE_ID"
 PROBE_ARM_ENV = "GEMINI_INCENTIVE_MM_PROBE_ARM"
+
+TARGET_ASSET = "ETH"
+TARGET_HORIZON = "5m"
+ETH5_EVENT_RE = re.compile(r"^ETH05M(\d{10})$")
 
 MIN_REBATE_BAND_PRICE = D("0.20")
 MAX_REBATE_BAND_PRICE = D("0.80")
@@ -98,6 +111,58 @@ def patched_pair_model(original: Callable[[D, D], dict[str, D]]) -> Callable[[D,
     return model
 
 
+async def discover_eth5m() -> base.Event | None:
+    """Return the nearest eligible ETH05M event in the proven child Event shape."""
+    found: list[base.Event] = []
+    async with httpx.AsyncClient(
+        timeout=8.0,
+        follow_redirects=True,
+        headers={"User-Agent": "arb-gemini-eth5m-incentive-q1/1.0"},
+    ) as http:
+        offset = 0
+        while offset < 5000:
+            response = await http.get(
+                f"{base.REST}/v1/prediction-markets/events",
+                params=[("status", "active"), ("category", "Crypto"), ("limit", "500"), ("offset", str(offset))],
+            )
+            response.raise_for_status()
+            payload = response.json()
+            rows = payload.get("data") or [] if isinstance(payload, dict) else []
+            for row in rows:
+                if not isinstance(row, Mapping):
+                    continue
+                ticker = str(row.get("ticker") or "").strip().upper()
+                if not ETH5_EVENT_RE.match(ticker):
+                    continue
+                for contract in row.get("contracts") or []:
+                    if not isinstance(contract, Mapping):
+                        continue
+                    symbol = str(contract.get("instrumentSymbol") or "").strip()
+                    state = str(contract.get("marketState") or contract.get("status") or "").lower()
+                    if not symbol.upper().endswith("-UP") or state not in {"open", "active"}:
+                        continue
+                    expiry = base._iso_ms(contract.get("expiryDate") or row.get("expiryDate"))
+                    if expiry is None or expiry <= int(time.time() * 1000):
+                        continue
+                    found.append(
+                        base.Event(
+                            ticker=ticker,
+                            symbol=symbol,
+                            expiry_ms=expiry,
+                            quantity_minimum=D(str(contract.get("quantityMinimum") or "1")),
+                            quantity_increment=D(str(contract.get("quantityIncrement") or "1")),
+                            price_increment=D(str(contract.get("priceIncrement") or "0.01")),
+                        )
+                    )
+            pagination = payload.get("pagination") if isinstance(payload, dict) else None
+            total = int((pagination or {}).get("total") or len(rows))
+            offset += len(rows)
+            if not rows or offset >= total:
+                break
+    eligible = [event for event in found if event.seconds_to_expiry >= inv.MIN_SECONDS_TO_EXPIRY]
+    return min(eligible, key=lambda event: event.expiry_ms) if eligible else None
+
+
 def _restore_env(saved: dict[str, str | None]) -> None:
     for name, value in saved.items():
         if value is None:
@@ -136,6 +201,8 @@ async def run() -> None:
     if not live_armed():
         emit(
             "DISARMED",
+            target_asset=TARGET_ASSET,
+            target_horizon=TARGET_HORIZON,
             q_per_outcome=1,
             max_campaigns=1,
             max_initial_pair_loss=str(MAX_INITIAL_PAIR_LOSS),
@@ -152,6 +219,7 @@ async def run() -> None:
     child_id = f"immq1-{probe_id}"[:36]
     original_floor = inv.ENTRY_PAIR_EDGE
     original_pair_model = base.pair_model
+    original_discover = base.discover_btc5m
     child_env_names = (inv.LIVE_ENV, inv.CANARY_ID_ENV, inv.CANARY_ARM_ENV)
     saved_child_env = {name: os.environ.get(name) for name in child_env_names}
 
@@ -159,6 +227,8 @@ async def run() -> None:
         "START",
         probe_id=probe_id,
         child_canary_id=child_id,
+        target_asset=TARGET_ASSET,
+        target_horizon=TARGET_HORIZON,
         q_per_outcome=1,
         max_campaigns=1,
         max_initial_pair_loss=str(MAX_INITIAL_PAIR_LOSS),
@@ -172,6 +242,7 @@ async def run() -> None:
     try:
         inv.ENTRY_PAIR_EDGE = PROBE_ENTRY_PAIR_EDGE
         base.pair_model = patched_pair_model(original_pair_model)
+        base.discover_btc5m = discover_eth5m
         os.environ[inv.LIVE_ENV] = "YES"
         os.environ[inv.CANARY_ID_ENV] = child_id
         os.environ[inv.CANARY_ARM_ENV] = child_id
@@ -179,6 +250,7 @@ async def run() -> None:
     finally:
         inv.ENTRY_PAIR_EDGE = original_floor
         base.pair_model = original_pair_model
+        base.discover_btc5m = original_discover
         _restore_env(saved_child_env)
 
     local = local_base.local_open_state()
@@ -186,6 +258,7 @@ async def run() -> None:
         emit(
             "COMPLETE_NO_OPEN_RESERVATION",
             probe_id=probe_id,
+            target_asset=TARGET_ASSET,
             order_entry=False,
             realized_pnl=None,
             classification="LIVE_PROBE_EXECUTION_ENDED_NO_AUTHORITATIVE_SETTLEMENT_TO_REPORT",
@@ -197,7 +270,9 @@ async def run() -> None:
     emit(
         "SETTLED",
         probe_id=probe_id,
+        target_asset=TARGET_ASSET,
         trade_id=result.get("trade_id"),
+        symbol=result.get("symbol"),
         yes_fill=result.get("yes_fill"),
         no_fill=result.get("no_fill"),
         matched_quantity=result.get("matched_quantity"),
