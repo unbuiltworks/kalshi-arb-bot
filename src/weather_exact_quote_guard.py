@@ -68,10 +68,7 @@ def audit_exact_weather_quote(
             parsed.scheme == "https"
             and (parsed.hostname or "").lower().endswith("kalshi.com")
             and len(segments) >= 5
-            and segments[-4:-2] == ["TRADE-API", "V2"]
-            and segments[-2] == ticker
-            and segments[-1] == "ORDERBOOK"
-            and segments[-3] == "MARKETS"
+            and segments[-5:] == ["TRADE-API", "V2", "MARKETS", ticker, "ORDERBOOK"]
         )
     except Exception:
         exact_path = False
