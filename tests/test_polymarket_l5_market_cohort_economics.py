@@ -43,10 +43,11 @@ def test_cross_midnight_redeem_is_joined_to_market_cohort():
     assert D(out["settled_buy_usdc"]) == D("99")
     assert D(out["settled_redeem_usdc"]) == D("100")
     assert D(out["observed_settled_lifecycle_cashflow"]) == D("1")
+    assert D(out["conservative_cashflow_if_no_redeem_is_zero_payout"]) == D("1")
     assert out["positive_market_count"] == 1
 
 
-def test_unresolved_market_is_not_counted_as_lifecycle_profit_or_loss():
+def test_no_redeem_market_is_excluded_from_observed_but_counted_in_conservative_scenario():
     start = 2_000_000
     end = start + 86_400
     slug = f"eth-updown-15m-{start + 100}"
@@ -56,7 +57,25 @@ def test_unresolved_market_is_not_counted_as_lifecycle_profit_or_loss():
     assert out["market_count"] == 1
     assert out["settled_market_count"] == 0
     assert out["unresolved_market_count"] == 1
+    assert out["no_redeem_observed_market_count"] == 1
     assert D(out["observed_settled_lifecycle_cashflow"]) == D("0")
+    assert D(out["no_redeem_observed_buy_usdc"]) == D("75")
+    assert D(out["conservative_cashflow_if_no_redeem_is_zero_payout"]) == D("-75")
+    assert D(out["by_family"]["eth_15m"]["conservative_cashflow_if_no_redeem_is_zero_payout"]) == D("-75")
+
+
+def test_no_redeem_sell_cashflow_is_preserved_in_conservative_scenario():
+    start = 2_500_000
+    end = start + 86_400
+    slug = f"btc-updown-5m-{start + 100}"
+    trades = [
+        trade(start + 110, "c2b", slug, "75"),
+        trade(start + 120, "c2b", slug, "20", side="SELL"),
+    ]
+    out = reconcile_market_cohorts(trades, [], day_start=start, day_end=end)
+    assert D(out["no_redeem_observed_buy_usdc"]) == D("75")
+    assert D(out["no_redeem_observed_sell_usdc"]) == D("20")
+    assert D(out["conservative_cashflow_if_no_redeem_is_zero_payout"]) == D("-55")
 
 
 def test_market_window_start_controls_cohort_not_activity_timestamp():
