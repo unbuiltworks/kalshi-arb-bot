@@ -12,6 +12,7 @@ def _base(**overrides):
         "evidence_url": "https://kalshi.com/markets/kxhighaus/highest-temperature-in-austin/kxhighaus-26aug12",
         "evidence_market_ticker": "KXHIGHAUS-26AUG12-B102.5",
         "evidence_market_date": "2026-08-12",
+        "expected_cli_product": "CLIAUS",
     }
     data.update(overrides)
     return data
@@ -21,6 +22,8 @@ def test_pre_transition_exact_nws_market_can_verify_without_current_series_provi
     row = audit_exact_market_source(**_base())
     assert row["verified"] is True
     assert row["settlement_source_provider"] == "NWS"
+    assert row["expected_cli_product"] == "CLIAUS"
+    assert row["nws_cli_issuedby"] == "AUS"
     assert row["read_only"] is True
     assert row["order_entry"] is False
     assert row["live_probe_ready"] is False
@@ -68,6 +71,7 @@ def test_generic_nws_page_cannot_certify_daily_climate_settlement_source():
     ))
     assert row["verified"] is False
     assert "EXACT_MARKET_SETTLEMENT_SOURCE_UNVERIFIED" in row["blockers"]
+    assert "EXACT_MARKET_SETTLEMENT_STATION_UNVERIFIED" in row["blockers"]
     assert row["settlement_source_provider"] is None
 
 
@@ -77,6 +81,23 @@ def test_nws_cli_source_requires_issuedby_station_product():
     ))
     assert row["verified"] is False
     assert "EXACT_MARKET_SETTLEMENT_SOURCE_UNVERIFIED" in row["blockers"]
+    assert "EXACT_MARKET_SETTLEMENT_STATION_UNVERIFIED" in row["blockers"]
+
+
+def test_nws_cli_source_for_wrong_station_cannot_certify_target_market():
+    row = audit_exact_market_source(**_base(
+        source_url="https://forecast.weather.gov/product.php?site=NWS&product=CLI&issuedby=MIA",
+    ))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_SETTLEMENT_SOURCE_UNVERIFIED" in row["blockers"]
+    assert "EXACT_MARKET_SETTLEMENT_STATION_UNVERIFIED" in row["blockers"]
+    assert row["nws_cli_issuedby"] == "MIA"
+
+
+def test_nws_cli_source_requires_expected_station_identity():
+    row = audit_exact_market_source(**_base(expected_cli_product=None))
+    assert row["verified"] is False
+    assert "EXACT_MARKET_SETTLEMENT_STATION_UNVERIFIED" in row["blockers"]
 
 
 def test_generic_official_kalshi_url_cannot_certify_exact_market_regime():
