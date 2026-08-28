@@ -48,7 +48,7 @@ def _station(**overrides):
     row = {
         "name": "Central Park",
         "station_id": "CLINY",
-        "cli_product": "CLINY",
+        "cli_product": "CLINYC",
         "identity_verified": True,
         "timezone": "America/New_York",
         "timezone_mapping_verified": True,
@@ -64,7 +64,7 @@ def _forecast(run_time="2026-08-21T06:00:00Z", valid_time="2026-08-21T23:59:59-0
         "model_id": "GFS:v1",
         "model_provider": "NOAA",
         "model_component_providers": ["NOAA"],
-        "cli_product": "CLINY",
+        "cli_product": "CLINYC",
         "model_run_time": run_time,
         "forecast_valid_time": valid_time,
         "model_local_date": local_date,
@@ -288,7 +288,7 @@ def test_large_model_anchor_disagreement_keeps_settlement_certified_but_withhold
 def test_missing_model_sanity_evidence_cannot_certify_ev():
     row = _build(forecast={
         "model": "GFS:v1",
-        "cli_product": "CLINY",
+        "cli_product": "CLINYC",
         "model_run_time": "2026-08-21T06:00:00Z",
         "forecast_valid_time": "2026-08-21T23:59:59-04:00",
         "model_local_date": "2026-08-21",
