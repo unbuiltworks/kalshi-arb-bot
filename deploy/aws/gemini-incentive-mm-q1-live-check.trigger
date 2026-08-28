@@ -1,2 +1,2 @@
-CHECK=post_probe_terminal_state
+CHECK=striking_distance_probe_live_state
 CLASSIFICATION=READ_ONLY_CHECK
