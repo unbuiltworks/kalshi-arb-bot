@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-28 14:32 UTC / 2026-08-28 10:32 ET**
+Last verified: **2026-08-28 17:41 UTC / 2026-08-28 13:41 ET**
 
 ## Objective and fixed verdict
 
@@ -14,14 +14,14 @@ Pre-committed census verdict thresholds remain fixed:
 
 The 72-hour census started **2026-08-25 20:43 UTC / 16:43 ET** and ends **2026-08-28 20:43 UTC / 16:43 ET**. No reset. Data/feed quality may add at most one +24-hour allowance; a lane still unmeasurable after that allowance contributes **$0 deployable capacity**. Realistic-capture floor remains **>=80 ms**.
 
-## Fresh production state — 10:32 ET
+## Fresh production state — 13:41 ET
 
-- `sports-kp-live-executor`: production service still resolves to the established live deployment lineage; later Aug 26 instrumentation commits for delayed-hedge/incentive work are **SKIPPED** on this service and therefore are not promoted into taker-census evidence.
+- `sports-kp-live-executor`: Railway service identity is freshly re-verified. Its newest deployment records through Aug 26 are all explicitly **SKIPPED**, including delayed-hedge commit `044204d31c98a098a180e726899162180556ef63`; no hidden newer taker build is being promoted into decision evidence. Runtime/log retrieval against the newest record correctly returns SKIPPED rather than a false live telemetry sample.
 - `sports-generic-counterpart-shadow`: remains separate read-only maker/fill/delayed-hedge telemetry. Shadow results never count as REALIZED P&L.
 - `sports-gk-autonomous-supervisor`: remains read-only/disarmed for guaranteed execution. Last decoded two-sided state remains Gemini **0/570 connected** vs Kalshi **570/570 initialized**.
-- `crypto-live-balance-reconcile-v2`: Railway deployment badge is **SUCCESS** for deployment `18a6f428-...`, but fresh runtime logs prove the container immediately exits with `ModuleNotFoundError: No module named 'src.gemini_kalshi_probe_transport'` from `src/gemini_kalshi_balance_reconcile_readonly.py`. Treat this as **CRASHED in functional terms**. No fresh authoritative crypto balance reconciliation exists from this service.
+- `crypto-live-balance-reconcile-v2`: Railway deployment badge is **SUCCESS** for its latest successful deployment, but prior fresh runtime verification proved the container immediately exits with `ModuleNotFoundError: No module named 'src.gemini_kalshi_probe_transport'` from `src/gemini_kalshi_balance_reconcile_readonly.py`. Treat this as **CRASHED in functional terms** until an authoritative payload is emitted. No fresh authoritative crypto balance reconciliation exists from this service.
 - The repository file `src/gemini_kalshi_balance_reconcile_readonly.py` imports `KalshiV2Executor` from that missing module. The missing-module regression is an observability blocker only; it does not clear one-leg risk or justify re-arming G<->K.
-- Canonical weather project `kalshi-weather-bot`: main bot **SUCCESS**, weather shadow **SUCCESS**, weather backtest **SUCCESS**, canonical `weather-live-probe` **CRASHED**. A same-named service inside the sports project showing SUCCESS is not treated as the authoritative weather-live probe.
+- Canonical weather project `kalshi-weather-bot`: last verified main bot **SUCCESS**, weather shadow **SUCCESS**, weather backtest **SUCCESS**, canonical `weather-live-probe` **CRASHED**. A same-named service inside the sports project showing SUCCESS is not treated as the authoritative weather-live probe.
 - Prior authenticated Kalshi account limits remain **advanced tier, 900 bucket / 300 refill**. Last inspected K<->P polling used legacy `api.elections.kalshi.com` at roughly 0.1-second cadence with HTTP 200. Earlier 429 evidence continues to favor aggregate/concurrent request or connection contention over a weak account tier. Do not disrupt unrelated live services solely to improve census telemetry; new census code should prefer Kalshi dedicated external-api/external-api-ws hosts.
 
 ## K<->P decision-grade taker evidence
