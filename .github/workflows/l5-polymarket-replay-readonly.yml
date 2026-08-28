@@ -28,7 +28,7 @@ jobs:
         run: python -m pip install 'httpx>=0.27' 'pytest>=8'
       - name: Test read-only collectors
         run: pytest -q tests/test_l5_polymarket_replay.py tests/test_l5_polymarket_lifecycle.py
-      - name: Collect chronology and complete lifecycle
+      - name: Collect latest chronology and lifecycle
         shell: bash
         run: |
           set -euo pipefail
@@ -46,7 +46,6 @@ jobs:
           from datetime import datetime, timezone
           from pathlib import Path
           import httpx
-
           wallet='0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68'
           start=int(Path('artifacts/window-start.txt').read_text())
           end=int(Path('artifacts/window-end.txt').read_text())
@@ -60,20 +59,71 @@ jobs:
                   r.raise_for_status()
                   for row in r.json():
                       ts=int(row.get('timestamp') or 0)
-                      rows.append({
-                          'type':typ,
-                          'timestamp':ts,
+                      rows.append({'type':typ,'timestamp':ts,
                           'iso_utc':datetime.fromtimestamp(ts,timezone.utc).isoformat(),
-                          'usdcSize':row.get('usdcSize'),
-                          'slug':row.get('slug'),
-                          'eventSlug':row.get('eventSlug'),
-                          'conditionId':row.get('conditionId'),
-                          'transactionHash':row.get('transactionHash'),
-                      })
+                          'usdcSize':row.get('usdcSize'),'transactionHash':row.get('transactionHash')})
           rows.sort(key=lambda x:(x['timestamp'],x['type']))
           Path('artifacts/l5-rebates.json').write_text(json.dumps(rows,indent=2))
           print('REBATE_ROWS')
           print(json.dumps(rows,indent=2))
+          PY
+      - name: Audit prior UTC earning day
+        shell: bash
+        run: |
+          set -euo pipefail
+          DAY_START="$(python - <<'PY'
+          from datetime import datetime, timezone, timedelta
+          now=datetime.now(timezone.utc)
+          d=(now-timedelta(days=1)).date()
+          print(int(datetime(d.year,d.month,d.day,tzinfo=timezone.utc).timestamp()))
+          PY
+          )"
+          DAY_END="$((DAY_START+86399))"
+          CAPTURE_END="$((DAY_END+7200))"
+          python -m src.l5_polymarket_lifecycle --start "$DAY_START" --end "$CAPTURE_END" --slice-seconds 900 > artifacts/l5-prior-day-lifecycle.json
+          echo "$DAY_START" > artifacts/day-start.txt
+          echo "$DAY_END" > artifacts/day-end.txt
+          python - <<'PY'
+          import json
+          from collections import defaultdict
+          from decimal import Decimal
+          from pathlib import Path
+          D=Decimal
+          data=json.loads(Path('artifacts/l5-prior-day-lifecycle.json').read_text())
+          day_start=int(Path('artifacts/day-start.txt').read_text())
+          day_end=int(Path('artifacts/day-end.txt').read_text())
+          rows=[]
+          totals=defaultdict(lambda:{'markets':0,'buy':D('0'),'sell':D('0'),'redeem':D('0')})
+          for m in data['markets']:
+              start=int(m['window_start_ts'])
+              if not (day_start <= start <= day_end):
+                  continue
+              buy=D(m['trade_buy_notional']); sell=D(m['trade_sell_notional']); redeem=D(m['public_redeem_usdc'])
+              # Only score markets whose public lifecycle includes a redemption in the capture window.
+              if redeem <= 0:
+                  continue
+              pnl=redeem+sell-buy
+              key=f"{m['coin']}{m['horizon']}"
+              t=totals[key]; t['markets']+=1; t['buy']+=buy; t['sell']+=sell; t['redeem']+=redeem
+              rows.append({'slug':m['slug'],'coin':m['coin'],'horizon':m['horizon'],
+                           'buy':str(buy),'sell':str(sell),'redeem':str(redeem),'trade_redeem_cashflow':str(pnl)})
+          summary={}
+          all_buy=all_sell=all_redeem=D('0'); all_markets=0
+          for key,t in sorted(totals.items()):
+              pnl=t['redeem']+t['sell']-t['buy']
+              summary[key]={'markets':t['markets'],'buy':str(t['buy']),'sell':str(t['sell']),
+                            'redeem':str(t['redeem']),'trade_redeem_cashflow':str(pnl),
+                            'cashflow_pct_of_buy':str((pnl/t['buy']*100) if t['buy'] else D('0'))}
+              all_markets+=t['markets']; all_buy+=t['buy']; all_sell+=t['sell']; all_redeem+=t['redeem']
+          all_pnl=all_redeem+all_sell-all_buy
+          result={'utc_day_start':day_start,'utc_day_end':day_end,'settled_markets':all_markets,
+                  'buy':str(all_buy),'sell':str(all_sell),'redeem':str(all_redeem),
+                  'trade_redeem_cashflow':str(all_pnl),
+                  'cashflow_pct_of_buy':str((all_pnl/all_buy*100) if all_buy else D('0')),
+                  'by_lane':summary,'markets':rows}
+          Path('artifacts/l5-prior-day-cashflow.json').write_text(json.dumps(result,indent=2))
+          print('PRIOR_UTC_DAY_CASHFLOW')
+          print(json.dumps({k:v for k,v in result.items() if k!='markets'},indent=2))
           PY
       - name: Print evidence summary
         run: |
