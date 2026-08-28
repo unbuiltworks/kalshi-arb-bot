@@ -1,0 +1,74 @@
+name: AWS l5 Gemini inventory v4 replay
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/l5-gemini-inventory-v4-replay.trigger
+      - .github/workflows/aws-l5-gemini-inventory-v4-replay.yml
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+
+      - name: Read replay trigger
+        id: trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=deploy/aws/l5-gemini-inventory-v4-replay.trigger
+          PINNED_COMMIT=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$FILE" | tr -d '[:space:]')
+          SOURCE_RUN_ID=$(awk -F= '$1=="SOURCE_RUN_ID"{print $2}' "$FILE" | tr -d '[:space:]')
+          [[ "$PINNED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SOURCE_RUN_ID" =~ ^[A-Za-z0-9._-]+$ ]]
+          echo "pinned_commit=$PINNED_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "source_run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "V4_REPLAY_TRIGGER commit=${PINNED_COMMIT:0:12} source_run=$SOURCE_RUN_ID read_only=true"
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Replay exact retained V3 tape with V4 policy through SSM
+        env:
+          PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
+          SOURCE_RUN_ID: ${{ steps.trigger.outputs.source_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; REPO=/home/ssm-user/kalshi-arb-bot; BRANCH=feature/l5-gemini-inventory-v4; COMMIT=${PINNED_COMMIT}; SOURCE_RUN=${SOURCE_RUN_ID}; SOURCE=/home/ssm-user/gemini-l5-dynamic-shadow-v2-state/${SOURCE_RUN}/capture.jsonl; WORK=/opt/arb/gemini-l5-inventory-v4-replay; OUT=/home/ssm-user/gemini-l5-inventory-v4-replay-state/${SOURCE_RUN}-${PINNED_COMMIT:0:12}; test -f \"\$SOURCE\"; git -C \"\$REPO\" fetch origin \"\$BRANCH\"; git -C \"\$REPO\" cat-file -e \"\${COMMIT}^{commit}\"; git -C \"\$REPO\" worktree remove --force \"\$WORK\" >/dev/null 2>&1 || true; rm -rf \"\$WORK\"; git -C \"\$REPO\" worktree add --detach \"\$WORK\" \"\$COMMIT\"; mkdir -p \"\$OUT\"; IMAGE=arb-gemini-l5-inventory-v4-replay:${PINNED_COMMIT:0:12}; docker build -t \"\$IMAGE\" \"\$WORK\" >/dev/null; docker run --rm --network none \"\$IMAGE\" python -m pytest -q tests/test_gemini_l5_inventory_replay_v4.py tests/test_gemini_l5_inventory_policy.py tests/test_gemini_l5_fair_value.py; docker run --rm --network none -v \"\$SOURCE:/input/capture.jsonl:ro\" -v \"\$OUT:/output\" \"\$IMAGE\" python -m src.gemini_l5_inventory_replay_v4 --input /input/capture.jsonl --output /output/summary.json >/dev/null; python3 -c \"import json; s=json.load(open('\\\"\$OUT/summary.json\\\"')); print(json.dumps({'type':s['type'],'classification':s['classification'],'markets':s['markets'],'source_plans':s['source_plans'],'source_trades':s['source_trades'],'pair_floor_after_fees':s['pair_floor_after_fees'],'max_naked_units_per_market':s['max_naked_units_per_market'],'tape_touch':s['tape_touch'],'strict_trade_through':s['strict_trade_through'],'realized_pnl':s['realized_pnl'],'order_entry':s['order_entry'],'credentials_loaded':s['credentials_loaded']},sort_keys=True))\"; echo V4_REPLAY_OUTPUT=\$OUT/summary.json'"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "ARB l5 Gemini inventory v4 replay ${PINNED_COMMIT:0:12}" \
+            --parameters "$PARAMETERS" \
+            --query 'Command.CommandId' \
+            --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+            > /tmp/v4-replay.json
+          cat /tmp/v4-replay.json
+          test "$(jq -r '.Status' /tmp/v4-replay.json)" = "Success"
+          grep -q 'SHADOW_REPLAY_NOT_REALIZED' /tmp/v4-replay.json
+          grep -q 'order_entry' /tmp/v4-replay.json
