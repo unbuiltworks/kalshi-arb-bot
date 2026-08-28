@@ -1,0 +1,4 @@
+READ_ONLY=true
+ORDER_ENTRY=false
+CREDENTIALS_REQUIRED=false
+TARGET=public_polymarket_wallet_activity
