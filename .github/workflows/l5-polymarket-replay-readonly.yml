@@ -35,8 +35,46 @@ jobs:
           mkdir -p artifacts
           END="$(date +%s)"
           START="$((END-21600))"
+          echo "$START" > artifacts/window-start.txt
+          echo "$END" > artifacts/window-end.txt
           python -m src.l5_polymarket_replay --start "$START" --end "$END" --limit 10000 --latest-markets 30 > artifacts/l5-replay.json
           python -m src.l5_polymarket_lifecycle --start "$START" --end "$END" --slice-seconds 900 > artifacts/l5-lifecycle.json
+      - name: Fetch account-level rebate rows
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import httpx
+
+          wallet='0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68'
+          start=int(Path('artifacts/window-start.txt').read_text())
+          end=int(Path('artifacts/window-end.txt').read_text())
+          rows=[]
+          with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+              for typ in ('MAKER_REBATE','TAKER_REBATE'):
+                  r=client.get('https://data-api.polymarket.com/activity',params={
+                      'user':wallet,'type':typ,'start':start,'end':end,
+                      'sortBy':'TIMESTAMP','sortDirection':'ASC','limit':500,'offset':0,
+                  })
+                  r.raise_for_status()
+                  for row in r.json():
+                      ts=int(row.get('timestamp') or 0)
+                      rows.append({
+                          'type':typ,
+                          'timestamp':ts,
+                          'iso_utc':datetime.fromtimestamp(ts,timezone.utc).isoformat(),
+                          'usdcSize':row.get('usdcSize'),
+                          'slug':row.get('slug'),
+                          'eventSlug':row.get('eventSlug'),
+                          'conditionId':row.get('conditionId'),
+                          'transactionHash':row.get('transactionHash'),
+                      })
+          rows.sort(key=lambda x:(x['timestamp'],x['type']))
+          Path('artifacts/l5-rebates.json').write_text(json.dumps(rows,indent=2))
+          print('REBATE_ROWS')
+          print(json.dumps(rows,indent=2))
+          PY
       - name: Print evidence summary
         run: |
           python - <<'PY'
@@ -48,10 +86,6 @@ jobs:
           print(json.dumps(replay['summary'],indent=2))
           print('LIFECYCLE_SUMMARY')
           print(json.dumps({k:v for k,v in life.items() if k!='markets'},indent=2))
-          print('LIFECYCLE_MARKETS')
-          for m in life['markets']:
-              if any(m['type_counts'].get(t,0) for t in ('MERGE','SPLIT','REDEEM','MAKER_REBATE','TAKER_REBATE')):
-                  print(json.dumps(m,separators=(',',':')))
           PY
       - name: Upload evidence
         uses: actions/upload-artifact@v4
