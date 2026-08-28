@@ -17,6 +17,8 @@ import os
 import time
 from typing import Any
 
+import httpx
+
 from src import gemini_short_crypto_dynamic_complement_q1_v2 as dyn
 from src import gemini_short_crypto_btc5m_maker_canary_q1 as base
 from src import gemini_short_crypto_dual_horizon_settlement_reconcile_v2 as settle
@@ -30,6 +32,8 @@ TARGET_ASSET = "ETH"
 TARGET_HORIZON = "5m"
 SETTLEMENT_TIMEOUT_S = 12 * 60
 SETTLEMENT_POLL_S = 5.0
+PRE_MUTATION_MAX_ATTEMPTS = 3
+PRE_MUTATION_RETRY_DELAY_S = 1.0
 
 
 def emit(stage: str, **fields: Any) -> None:
@@ -89,6 +93,51 @@ async def _wait_for_settlement() -> dict[str, Any]:
     raise RuntimeError("dynamic-complement q1 settlement timeout with unresolved reservation")
 
 
+async def _run_child_with_pre_mutation_retry() -> None:
+    """Retry transient venue transport failures only while no mutation exists.
+
+    The dynamic child creates the durable local reservation before it can submit a
+    maker order. Therefore an empty local state is our hard proof that replaying the
+    child cannot duplicate an already-started campaign. Once any reservation exists,
+    a transport failure is never retried here; settlement/reconciliation owns it.
+    """
+    for attempt in range(1, PRE_MUTATION_MAX_ATTEMPTS + 1):
+        try:
+            await dyn.run()
+            return
+        except (httpx.TransportError, asyncio.TimeoutError) as exc:
+            local = local_base.local_open_state()
+            if local is not None:
+                emit(
+                    "TRANSIENT_FAILURE_AFTER_MUTATION_BLOCKED",
+                    attempt=attempt,
+                    error_type=type(exc).__name__,
+                    order_entry=False,
+                    retry=False,
+                    manual_review_required=True,
+                )
+                raise
+            if attempt >= PRE_MUTATION_MAX_ATTEMPTS:
+                emit(
+                    "PRE_MUTATION_TRANSIENT_RETRY_EXHAUSTED",
+                    attempt=attempt,
+                    error_type=type(exc).__name__,
+                    order_entry=False,
+                    retry=False,
+                )
+                raise
+            emit(
+                "PRE_MUTATION_TRANSIENT_RETRY",
+                attempt=attempt,
+                next_attempt=attempt + 1,
+                error_type=type(exc).__name__,
+                delay_seconds=PRE_MUTATION_RETRY_DELAY_S,
+                order_entry=False,
+                retry=True,
+            )
+            await asyncio.sleep(PRE_MUTATION_RETRY_DELAY_S)
+
+
 async def run() -> None:
     # Strong safety property: wrapper disarm is checked before local account state,
     # discovery, credentials, or any venue call.
@@ -134,6 +183,7 @@ async def run() -> None:
         rescue_seconds=dyn.RESCUE_SECONDS,
         reprice_interval_seconds=dyn.REPRICE_INTERVAL_SECONDS,
         max_reprices=dyn.MAX_REPRICES,
+        pre_mutation_max_attempts=PRE_MUTATION_MAX_ATTEMPTS,
         quote_policy="RAW_ENTRY_EDGE_RESERVED_THEN_DYNAMIC_MAKER_COMPLEMENT_V2",
         taker_rescue_enabled=False,
         rewards_counted_as_realized=False,
@@ -146,7 +196,7 @@ async def run() -> None:
         os.environ[dyn.LIVE_ENV] = "YES"
         os.environ[dyn.CANARY_ID_ENV] = child_id
         os.environ[dyn.CANARY_ARM_ENV] = child_id
-        await dyn.run()
+        await _run_child_with_pre_mutation_retry()
     finally:
         base.discover_btc5m = original_discover
         _restore_env(saved_child_env)
