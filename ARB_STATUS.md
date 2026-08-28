@@ -1,6 +1,6 @@
 # ARB Control Plane
 
-Last verified: **2026-08-28 07:45 UTC / 2026-08-28 03:45 ET**
+Last verified: **2026-08-28 08:36 UTC / 2026-08-28 04:36 ET**
 
 ## Objective and fixed verdict
 
@@ -14,40 +14,39 @@ Pre-committed census verdict thresholds remain fixed:
 
 The 72-hour wall clock started **2026-08-25 20:43 UTC / 16:43 ET** and ends **2026-08-28 20:43 UTC / 16:43 ET**. It continues with no reset. Data/feed quality may add at most one +24-hour allowance; a lane that remains unmeasurable after that allowance contributes **$0 deployable capacity**. The realistic-capture floor remains **>=80 ms** and may not be lowered to rescue the result.
 
-## Fresh production state — 03:45 ET
+## Fresh production state — 04:36 ET
 
-- `sports-kp-live-executor`: **SUCCESS** and actively emitting summaries; read-only.
-- `sports-generic-counterpart-shadow`: **SUCCESS**, read-only; maker/fill/incentive telemetry only.
-- `sports-gk-autonomous-supervisor`: **SUCCESS** and active, but Gemini remains **0/570 connected**; guaranteed execution remains read-only/disarmed.
-- old Gemini<->Kalshi cross-index/15-minute crypto execution remains **CRASHED/contained** and must not be reopened from census pressure.
-- No unrelated live service was restarted or throttled merely to improve census telemetry.
+- `sports-kp-live-executor`: **SUCCESS**, read-only, and actively issuing Kalshi orderbook requests.
+- Fresh 08:36 UTC runtime logs show repeated `GET .../trade-api/v2/markets/orderbooks` responses at **HTTP 200** with request cadence roughly every **0.1 second**.
+- Those calls are still using the legacy `https://api.elections.kalshi.com` host rather than the preferred dedicated external-api host. This is useful transport/contention evidence but **not economic evidence** and does not reset the census clock.
+- No 429 appeared in the inspected 08:36 UTC slice; prior authenticated account limits remain **advanced tier, 900 bucket / 300 refill** for reads and writes. The evidence continues to favor aggregate/concurrent request or connection contention rather than a weak account tier.
+- Do **not** rewrite, restart, throttle, or migrate the functioning census service solely to improve telemetry before the fixed deadline. New census code should prefer Kalshi's dedicated external-api/external-api-ws hosts.
+- `sports-generic-counterpart-shadow`: remains read-only; maker/fill/incentive telemetry only.
+- `sports-gk-autonomous-supervisor`: remains read-only/disarmed for guaranteed execution; last decoded two-sided state is Gemini **0/570 connected** vs Kalshi **570/570 initialized**.
+- Old Gemini<->Kalshi cross-index/15-minute crypto execution remains **CRASHED/contained** and must not be reopened from census pressure.
 
 ## K<->P decision-grade taker evidence
 
-Fresh 03:45 ET runtime is alive but still produces **zero new comparable evaluations** while raw triggers rise:
+No fresh decision-grade economics were observed in this run, so the last valid sample remains governing:
 
-- raw triggers: **132,271,483**;
-- current-cycle evaluations: **0**;
-- comparable evaluations: **53,237** (frozen);
+- comparable evaluations: **53,237**;
 - decision observations: **1,661** across 9 semantic keys;
 - after-fee bins: **1,031 >=1c / 0 >=2c / 0 >=3c**;
 - >=80 ms realistic-capture bins: **137 >=1c / 0 >=2c / 0 >=3c**;
 - average selected-side q1 depth: **2,072.66**, max **22,647.58**;
 - average quote skew: **45.53 ms**, max **100 ms**;
-- average process latency: **0.234 ms**;
 - closed positive signals: **612**;
 - average closed lifetime: **174.07 ms**, max **567 ms**;
 - source quality: `REST_SNAPSHOT_NOT_WS_LIFETIME`;
-- Kalshi transport: `rest_batch`;
 - `read_only=true`, `order_entry=false`.
 
 The comparable sample has failed to advance for well beyond the allowed data-quality grace. Under the pre-committed rule, the stale tail is **locked at $0 deployable-capacity credit**. The valid certified totals slice itself has **0 >=3c**, hence **$0/day deployable capacity at the fixed 3c taker/taker floor**.
 
-After scheduled-start normalization and F5/partial-game exclusion, clean full-game MLB moneyline/spread/total snapshots remain **0 >=1c / 0 >=2c / 0 >=3c** with substantial q1 depth. Edge magnitude, not liquidity, remains the limiting factor. Strict player props remain $0 guaranteed capacity because complete settlement/postponement/cancellation/participation/stat-correction equivalence has not been proven.
+After scheduled-start normalization and F5/partial-game exclusion, clean full-game MLB moneyline/spread/total snapshots remain **0 >=1c / 0 >=2c / 0 >=3c** with substantial q1 depth. Strict player props remain $0 guaranteed capacity because complete settlement/postponement/cancellation/participation/stat-correction equivalence has not been proven.
 
 ## K<->P maker/fill/delayed-hedge shadow
 
-Fresh runtime reconfirms the large immediate maker headline but does not improve decision-grade capacity:
+Last decision-valid maker evidence remains:
 
 - simulated q1 fills: **2,166**;
 - immediate maker-fee cumulative bins: **1,378 >=1c / 1,076 >=2c / 871 >=3c**;
@@ -62,32 +61,26 @@ Fresh runtime reconfirms the large immediate maker headline but does not improve
 - exact K<->P full-game moneyline postponement/reschedule lifecycle equivalence fails independently;
 - `rules_complete=false`, `capacity_credit_usd_per_day=0`, `read_only=true`, `order_entry=false`.
 
-Fresh current maker quote bins were **0 >=1c / 0 >=2c / 0 >=3c**. Maker shadow remains **$0 guaranteed/deployable capacity and $0 REALIZED P&L**. Do not spend the remaining census window repairing delayed-WS coverage because even perfect observability would not make the rule-mismatched mechanism guaranteed arb.
+Maker shadow remains **$0 guaranteed/deployable capacity and $0 REALIZED P&L**. Do not spend the remaining census window repairing delayed-WS coverage because even perfect observability would not make the rule-mismatched mechanism guaranteed arb.
 
-Polymarket incentive telemetry currently sees **22 active MLB moneyline program rows** and **0 under-target live-pool candidates**; denominator/time-weighted yield/pickoff economics remain incomplete. Incentive capacity credit stays **$0**.
+Polymarket incentive telemetry last saw **22 active MLB moneyline program rows** and **0 under-target live-pool candidates**; denominator/time-weighted yield/pickoff economics remain incomplete. Incentive capacity credit stays **$0**.
 
-## G<->K sports — fresh 03:45 ET
+## G<->K sports
 
-The process is unquestionably alive, but two-sided comparability remains frozen:
+Last decision-valid state remains:
 
-- raw triggers/evaluations: **112,220,551** at 03:45 ET and rising;
 - comparable evaluations: **120,836** (frozen);
 - historical positive/hot evidence: **6 positive / 6 >=3c hot evaluations, 4 completed lifecycles**, uncertified;
 - Gemini symbols: **570**, connected: **0**;
-- Gemini book updates: **76,955** cumulative but no current connected symbols;
 - Kalshi tickers: **570**, initialized: **570/570**;
 - rule gate: `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION`;
 - `read_only=true`, `order_entry=false`.
 
 This lane has remained two-sided-unmeasurable beyond the permitted data-quality grace. Its census contribution is therefore **locked at $0 deployable capacity**. Do not re-arm or repair connectivity merely to rescue the census. Caleb Durbin remains **-$0.44 REALIZED** and is not reclassified away.
 
-## Kalshi account / 429 diagnosis
-
-Authenticated account limits remain **advanced tier, 900 bucket / 300 refill** for reads and writes. Prior evidence favors concurrent websocket handshake/connection contention rather than a weak account tier. Fresh K<->P Kalshi traffic is healthy enough to keep the collector alive. New census code should prefer dedicated external-api/external-api-ws hosts, but there is no justification to rewrite or disrupt functioning services before the fixed deadline.
-
 ## Authoritative accounting and weather
 
-A fresh attempt to query the authoritative Neon project `arb-trade-ledger` reached the project but failed **before SQL execution** with HTTP **402: data transfer quota exceeded**. Accounting is therefore **not advanced speculatively**.
+The last fresh attempt to query the authoritative Neon project `arb-trade-ledger` failed **before SQL execution** with HTTP **402: data transfer quota exceeded**. Accounting is therefore **not advanced speculatively**.
 
 Last successful authoritative reconciliation remains:
 
@@ -116,6 +109,6 @@ Current certified evidence is therefore strongly in the pre-committed **<$50/day
 1. Keep the fixed census running through **2026-08-28 20:43 UTC / 16:43 ET** with no reset.
 2. Do **not** repair stale K<->P comparables, Gemini reconnects, maker delayed-WS coverage, incentive denominator plumbing, or Neon quota solely to extend the census; zero-credit treatment is already determined where applicable.
 3. Keep G<->K guaranteed execution disarmed and preserve Caleb's -$0.44 realized loss.
-4. Preserve Kalshi account headroom/backoff and do not disrupt unrelated live services.
+4. Preserve Kalshi account headroom/backoff and do not disrupt unrelated live services. Treat the observed ~0.1s legacy-host polling cadence as contention evidence to address only in future code if the project survives the fixed verdict.
 5. Keep weather historical/backtest edge separate from verified live realized P&L.
 6. At the fixed deadline, aggregate only rule-certified, realistically executable capacity and apply **<$50 / $50-$149 / >=$150** exactly as committed.
