@@ -25,14 +25,15 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Read-only dynamic q1 container state and logs
+      - name: Read-only dynamic q1 terminal monitor proof
         shell: bash
         run: |
           set -euo pipefail
-          REMOTE_CMD='NAME=arb-gemini-dynamic-complement-live-probe-q1; echo DYNAMIC_Q1_LIVE_CHECK_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ); if ! docker inspect "$NAME" >/dev/null 2>&1; then echo DYNAMIC_Q1_CONTAINER_MISSING; exit 2; fi; echo DYNAMIC_Q1_STATE=$(docker inspect -f "status={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}" "$NAME"); echo DYNAMIC_Q1_LOGS_BEGIN; docker logs --tail 800 "$NAME" 2>&1 || true; echo DYNAMIC_Q1_LOGS_END'
+          REMOTE_CMD='set -eu; NAME=arb-gemini-dynamic-complement-live-probe-q1; echo DYNAMIC_Q1_MONITOR_STARTED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ); if ! docker inspect "$NAME" >/dev/null 2>&1; then echo DYNAMIC_Q1_MONITOR_CONTAINER_MISSING; exit 2; fi; running=$(docker inspect -f "{{.State.Running}}" "$NAME"); status=$(docker inspect -f "{{.State.Status}}" "$NAME"); exit_code=$(docker inspect -f "{{.State.ExitCode}}" "$NAME"); echo DYNAMIC_Q1_MONITOR_FINAL=$(docker inspect -f "status={{.State.Status}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}" "$NAME"); echo DYNAMIC_Q1_MONITOR_LOGS_BEGIN; logs=$(docker logs --tail 800 "$NAME" 2>&1 || true); printf "%s\n" "$logs"; echo DYNAMIC_Q1_MONITOR_LOGS_END; if [ "$running" != "false" ] || [ "$status" != "exited" ]; then echo DYNAMIC_Q1_MONITOR_NOT_TERMINAL; exit 3; fi; if [ "$exit_code" != "0" ]; then echo DYNAMIC_Q1_MONITOR_BAD_EXIT_CODE=$exit_code; exit 4; fi; if ! printf "%s\n" "$logs" | grep -Eq "\"stage\":\"(SETTLED|COMPLETE_NO_OPEN_RESERVATION)\""; then echo DYNAMIC_Q1_MONITOR_MISSING_TERMINAL_STAGE; exit 5; fi; echo DYNAMIC_Q1_MONITOR_CLEAN_TERMINAL_OK; echo DYNAMIC_Q1_MONITOR_FINISHED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)'
           PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
-          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB dynamic q1 ETH5 live read-only check" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB dynamic q1 ETH5 terminal monitor proof" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
           aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
           RESULT=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
           echo "$RESULT"
           test "$(jq -r '.Status' <<<"$RESULT")" = "Success"
+          grep -q 'DYNAMIC_Q1_MONITOR_CLEAN_TERMINAL_OK' <<<"$(jq -r '.Stdout' <<<"$RESULT")"
