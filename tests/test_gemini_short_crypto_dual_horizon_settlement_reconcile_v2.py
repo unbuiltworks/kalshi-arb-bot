@@ -7,11 +7,17 @@ from src import gemini_short_crypto_inventory_local_budget as b5
 from src import gemini_short_crypto_inventory15_local_budget as b15
 
 
-def test_strategy_classifier_supports_both_horizons():
+def test_strategy_classifier_supports_btc5_eth5_and_btc15():
     h, b = r._strategy({
         "strategy": b5.STRATEGY,
         "symbol": "GEMI-BTC05M2608272040-UP",
         "event_ticker": "BTC05M2608272040",
+    })
+    assert h == "5m" and b is b5
+    h, b = r._strategy({
+        "strategy": b5.STRATEGY,
+        "symbol": "GEMI-ETH05M2608281700-UP",
+        "event_ticker": "ETH05M2608281700",
     })
     assert h == "5m" and b is b5
     h, b = r._strategy({
@@ -20,6 +26,15 @@ def test_strategy_classifier_supports_both_horizons():
         "event_ticker": "BTC15M2608272115",
     })
     assert h == "15m" and b is b15
+
+
+def test_strategy_classifier_rejects_eth15():
+    with pytest.raises(RuntimeError, match="unexpected dual-horizon reservation identity"):
+        r._strategy({
+            "strategy": b15.STRATEGY,
+            "symbol": "GEMI-ETH15M2608281715-UP",
+            "event_ticker": "ETH15M2608281715",
+        })
 
 
 def test_exact_live_matched_pair_is_plus_eleven_cents():
