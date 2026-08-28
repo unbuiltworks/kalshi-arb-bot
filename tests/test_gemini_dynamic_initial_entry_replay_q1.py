@@ -38,9 +38,6 @@ def _trade(ticker: str, price: str, buyer_maker: bool, asset: str = "ETH", horiz
 
 
 def test_aggressive_entry_creates_incremental_first_fill_evidence(tmp_path):
-    # Mirrors the latest live book: raw YES 23c / NO 24c. A 40c YES-side
-    # buyer-maker print would not touch the raw 23c bid, but would trade through
-    # the shadow aggressive 44c bid while still preserving 10c after fees.
     path = _write(tmp_path, [
         _plan("ETH05M-A", "0.23", "0.76"),
         _trade("ETH05M-A", "0.40", True),
@@ -55,6 +52,33 @@ def test_aggressive_entry_creates_incremental_first_fill_evidence(tmp_path):
     assert detail["aggressive_first_fill"]["quote"] == "0.44"
 
 
+def test_trade_rows_without_family_metadata_join_by_ticker_after_plan(tmp_path):
+    trade = _trade("ETH05M-NOFAMILY", "0.40", True)
+    trade.pop("asset")
+    trade.pop("horizon")
+    path = _write(tmp_path, [
+        _plan("ETH05M-NOFAMILY", "0.23", "0.76"),
+        trade,
+    ])
+    out = replay.replay(path, evidence_mode="STRICT_TRADE_THROUGH")
+    assert out["source_trade_rows_target_family"] == 1
+    assert out["aggressive_markets_with_first_fill_evidence"] == 1
+    assert out["incremental_first_fill_markets"] == 1
+
+
+def test_trade_before_first_plan_does_not_backfill_a_virtual_quote(tmp_path):
+    early = _trade("ETH05M-EARLY", "0.40", True)
+    early.pop("asset")
+    early.pop("horizon")
+    path = _write(tmp_path, [
+        early,
+        _plan("ETH05M-EARLY", "0.23", "0.76"),
+    ])
+    out = replay.replay(path, evidence_mode="TAPE_TOUCH_OPTIMISTIC")
+    assert out["source_trade_rows_target_family"] == 0
+    assert out["aggressive_markets_with_first_fill_evidence"] == 0
+
+
 def test_touch_and_strict_trade_through_are_kept_separate(tmp_path):
     path = _write(tmp_path, [
         _plan("ETH05M-B", "0.23", "0.76"),
@@ -67,7 +91,6 @@ def test_touch_and_strict_trade_through_are_kept_separate(tmp_path):
 
 
 def test_no_side_trade_mapping_uses_yes_equivalent_price(tmp_path):
-    # Aggressive NO is 44c, equivalent to a YES-side seller print at 56c.
     path = _write(tmp_path, [
         _plan("ETH05M-C", "0.23", "0.76"),
         _trade("ETH05M-C", "0.60", False),
@@ -79,8 +102,6 @@ def test_no_side_trade_mapping_uses_yes_equivalent_price(tmp_path):
 
 
 def test_when_raw_edge_is_between_five_and_ten_cents_aggressive_holds_raw(tmp_path):
-    # YES 42c + NO 49c plus modeled q1 maker fees leaves 7c. Raw is live-style
-    # eligible (>=5c), but there is no 10c budget to spend, so policies coincide.
     path = _write(tmp_path, [
         _plan("ETH05M-D", "0.42", "0.51"),
         _trade("ETH05M-D", "0.41", True),
