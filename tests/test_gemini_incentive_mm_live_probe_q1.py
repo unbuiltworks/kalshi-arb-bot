@@ -1,4 +1,5 @@
 from decimal import Decimal as D
+import os
 
 import pytest
 
@@ -63,3 +64,36 @@ async def test_disarmed_run_makes_no_child_call(monkeypatch):
 
     monkeypatch.setattr(probe.inv, "run", should_not_run)
     await probe.run()
+
+
+@pytest.mark.asyncio
+async def test_armed_run_restores_child_env_and_policy(monkeypatch):
+    monkeypatch.setenv(probe.LIVE_ENV, "YES")
+    monkeypatch.setenv(probe.PROBE_ID_ENV, "wrapper-1")
+    monkeypatch.setenv(probe.PROBE_ARM_ENV, "wrapper-1")
+    monkeypatch.setattr(probe.local_base, "local_open_state", lambda: None)
+
+    original_floor = probe.inv.ENTRY_PAIR_EDGE
+    original_pair_model = probe.base.pair_model
+    old_env = {
+        probe.inv.LIVE_ENV: "OLD_LIVE",
+        probe.inv.CANARY_ID_ENV: "OLD_ID",
+        probe.inv.CANARY_ARM_ENV: "OLD_ARM",
+    }
+    for name, value in old_env.items():
+        monkeypatch.setenv(name, value)
+
+    async def child():
+        assert probe.inv.ENTRY_PAIR_EDGE == D("-0.01")
+        assert probe.base.pair_model is not original_pair_model
+        assert os.environ[probe.inv.LIVE_ENV] == "YES"
+        assert os.environ[probe.inv.CANARY_ID_ENV].startswith("immq1-")
+        assert os.environ[probe.inv.CANARY_ARM_ENV] == os.environ[probe.inv.CANARY_ID_ENV]
+
+    monkeypatch.setattr(probe.inv, "run", child)
+    await probe.run()
+
+    assert probe.inv.ENTRY_PAIR_EDGE == original_floor
+    assert probe.base.pair_model is original_pair_model
+    for name, value in old_env.items():
+        assert os.environ[name] == value
