@@ -28,7 +28,7 @@ SETTLEMENT_BLOCKERS = {
     "RULES_PENDING", "EXACT_MARKET_IDENTITY_UNVERIFIED", "EXACT_MARKET_SETTLEMENT_REGIME_UNVERIFIED",
     "EXACT_MARKET_SOURCE_AUDIT_REQUIRED", "EXACT_MARKET_EVIDENCE_MISMATCH", "EXACT_MARKET_EVIDENCE_UNOFFICIAL",
     "EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT", "EXACT_MARKET_SETTLEMENT_SOURCE_UNVERIFIED",
-    "STATION_IDENTITY_UNVERIFIED", "LOCAL_DAY_UNVERIFIED", "BRACKET_SEMANTICS_UNVERIFIED",
+    "EXACT_MARKET_SETTLEMENT_STATION_UNVERIFIED", "STATION_IDENTITY_UNVERIFIED", "LOCAL_DAY_UNVERIFIED", "BRACKET_SEMANTICS_UNVERIFIED",
     "SETTLEMENT_SOURCE_UNVERIFIED", "TWC_SOURCE_ACCESS_REQUIRED",
 }
 MARKET_DATA_BLOCKERS = {"BOOK_UNVERIFIED", "QUOTE_STALE"}
@@ -105,17 +105,19 @@ def _exact_market_source_audit(row: dict[str, Any]) -> dict[str, Any]:
         evidence_url = nested.get("evidence_url")
         evidence_market_ticker = nested.get("evidence_market_ticker")
         evidence_market_date = nested.get("evidence_market_date")
+        expected_cli_product = nested.get("expected_cli_product") or row.get("cli_product")
     else:
         provider = row.get("settlement_source_provider")
         source_url = row.get("settlement_source_url")
         evidence_url = row.get("exact_market_evidence_url")
         evidence_market_ticker = row.get("evidence_market_ticker")
         evidence_market_date = row.get("evidence_market_date")
+        expected_cli_product = row.get("cli_product")
     return audit_exact_market_source(
         series_ticker=row.get("series_ticker"), event_ticker=row.get("event_ticker"),
         market_ticker=row.get("market_ticker"), market_date=row.get("market_date"), provider=provider,
         source_url=source_url, evidence_url=evidence_url, evidence_market_ticker=evidence_market_ticker,
-        evidence_market_date=evidence_market_date,
+        evidence_market_date=evidence_market_date, expected_cli_product=expected_cli_product,
     )
 
 
