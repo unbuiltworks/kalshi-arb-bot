@@ -35,6 +35,21 @@ def test_modeled_rebate_is_separate_from_trading_pnl():
     assert D(rebate["cent_rounded_total"]) == D("0")
 
 
+def test_fresh_pair_model_poison_edge_when_threshold_fades():
+    readiness_plan = plan_threshold_quotes(D("0.60"), D("0.65"))
+    model = sup._patched_pair_model(readiness_plan, D("0.01"))
+    # Fresh book is now balanced; no live order should survive the child's 1c gate.
+    faded = model(D("0.48"), D("0.52"))
+    assert faded["modeled_edge"] == D("-1")
+
+
+def test_fresh_pair_model_keeps_edge_when_threshold_still_actionable():
+    readiness_plan = plan_threshold_quotes(D("0.60"), D("0.65"))
+    model = sup._patched_pair_model(readiness_plan, D("0.01"))
+    fresh = model(D("0.61"), D("0.66"))
+    assert fresh["modeled_edge"] >= D("0.01")
+
+
 def test_child_ids_are_bounded_and_horizon_specific():
     assert sup.child_id("example-session", "5m", 1).startswith("l5v1-")
     assert "-5m-001" in sup.child_id("example-session", "5m", 1)
