@@ -32,7 +32,7 @@ def test_modeled_rebate_is_separate_from_trading_pnl():
     rebate = sup._modeled_rebate_for_result(plan, result)
     assert D(rebate["raw_total"]) > D("0")
     # q=1 rebates are sub-cent here, so the conservative cent-rounded model is zero.
-    assert rebate["cent_rounded_total"] == "0.00"
+    assert D(rebate["cent_rounded_total"]) == D("0")
 
 
 def test_child_ids_are_bounded_and_horizon_specific():
