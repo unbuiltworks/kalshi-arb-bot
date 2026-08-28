@@ -1,0 +1,2 @@
+CHECK=post_probe_terminal_state
+CLASSIFICATION=READ_ONLY_CHECK
