@@ -217,24 +217,36 @@ def replay(path: Path, *, evidence_mode: str, asset: str | None = "ETH", horizon
             row = json.loads(raw_line)
         except Exception:
             continue
-        if not _is_target_family(row, asset, horizon):
-            continue
         ticker = str(row.get("ticker") or "")
         if not ticker:
             continue
-        market = markets.setdefault(ticker, MarketComparison(
-            ticker=ticker,
-            symbol=str(row.get("symbol") or ""),
-            asset=str(row.get("asset") or ""),
-            horizon=str(row.get("horizon") or ""),
-        ))
+
         if row.get("type") == "SHADOW_PLAN":
+            # SHADOW_PLAN rows carry the market family metadata. They establish
+            # which tickers belong to ETH5. PUBLIC_TRADE rows on retained tape do
+            # not necessarily repeat asset/horizon, so trades are joined by ticker
+            # only after the target market has been established here.
+            if not _is_target_family(row, asset, horizon):
+                continue
+            market = markets.setdefault(ticker, MarketComparison(
+                ticker=ticker,
+                symbol=str(row.get("symbol") or ""),
+                asset=str(row.get("asset") or ""),
+                horizon=str(row.get("horizon") or ""),
+            ))
             try:
                 market.on_book(row)
                 source_books += 1
             except Exception:
                 continue
-        elif row.get("type") == "PUBLIC_TRADE":
+            continue
+
+        if row.get("type") == "PUBLIC_TRADE":
+            market = markets.get(ticker)
+            if market is None:
+                # A trade before the first target-family book snapshot cannot hit
+                # a virtual quote because no quote would have been established.
+                continue
             try:
                 market.on_trade(row, index, strict)
                 source_trades += 1
