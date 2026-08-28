@@ -27,6 +27,7 @@ venue calls before the wrapper dual-key is satisfied.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from decimal import Decimal as D
 import json
 import os
@@ -60,7 +61,15 @@ SETTLEMENT_POLL_S = 5.0
 def emit(stage: str, **fields: Any) -> None:
     print(
         "GEMINI_INCENTIVE_MM_LIVE_Q1 "
-        + json.dumps({"stage": stage, **fields}, separators=(",", ":"), default=str),
+        + json.dumps(
+            {
+                "stage": stage,
+                "observed_at_utc": datetime.now(timezone.utc).isoformat(),
+                **fields,
+            },
+            separators=(",", ":"),
+            default=str,
+        ),
         flush=True,
     )
 
@@ -189,6 +198,8 @@ async def _wait_for_settlement() -> dict[str, Any]:
                 raise
             emit(
                 "WAITING_FOR_SETTLEMENT",
+                target_asset=TARGET_ASSET,
+                target_horizon=TARGET_HORIZON,
                 seconds_remaining=max(0, int(deadline - time.monotonic())),
                 order_entry=False,
             )
@@ -259,6 +270,7 @@ async def run() -> None:
             "COMPLETE_NO_OPEN_RESERVATION",
             probe_id=probe_id,
             target_asset=TARGET_ASSET,
+            target_horizon=TARGET_HORIZON,
             order_entry=False,
             realized_pnl=None,
             classification="LIVE_PROBE_EXECUTION_ENDED_NO_AUTHORITATIVE_SETTLEMENT_TO_REPORT",
@@ -271,6 +283,7 @@ async def run() -> None:
         "SETTLED",
         probe_id=probe_id,
         target_asset=TARGET_ASSET,
+        target_horizon=TARGET_HORIZON,
         trade_id=result.get("trade_id"),
         symbol=result.get("symbol"),
         yes_fill=result.get("yes_fill"),
