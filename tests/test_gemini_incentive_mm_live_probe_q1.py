@@ -21,6 +21,14 @@ def test_dual_key_arming(monkeypatch):
     assert probe.live_armed()
 
 
+def test_probe_target_is_eth5_only():
+    assert probe.TARGET_ASSET == "ETH"
+    assert probe.TARGET_HORIZON == "5m"
+    assert probe.ETH5_EVENT_RE.match("ETH05M2608281700")
+    assert not probe.ETH5_EVENT_RE.match("BTC05M2608281700")
+    assert not probe.ETH5_EVENT_RE.match("ETH15M2608281700")
+
+
 def test_quote_band_gate():
     assert probe.quotes_in_incentive_band({"yes_quote": D("0.20"), "no_quote": D("0.80")})
     assert probe.quotes_in_incentive_band({"yes_quote": D("0.50"), "no_quote": D("0.49")})
@@ -67,7 +75,7 @@ async def test_disarmed_run_makes_no_child_call(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_armed_run_restores_child_env_and_policy(monkeypatch):
+async def test_armed_run_restores_child_env_policy_and_discovery(monkeypatch):
     monkeypatch.setenv(probe.LIVE_ENV, "YES")
     monkeypatch.setenv(probe.PROBE_ID_ENV, "wrapper-1")
     monkeypatch.setenv(probe.PROBE_ARM_ENV, "wrapper-1")
@@ -75,6 +83,7 @@ async def test_armed_run_restores_child_env_and_policy(monkeypatch):
 
     original_floor = probe.inv.ENTRY_PAIR_EDGE
     original_pair_model = probe.base.pair_model
+    original_discover = probe.base.discover_btc5m
     old_env = {
         probe.inv.LIVE_ENV: "OLD_LIVE",
         probe.inv.CANARY_ID_ENV: "OLD_ID",
@@ -86,6 +95,7 @@ async def test_armed_run_restores_child_env_and_policy(monkeypatch):
     async def child():
         assert probe.inv.ENTRY_PAIR_EDGE == D("-0.01")
         assert probe.base.pair_model is not original_pair_model
+        assert probe.base.discover_btc5m is probe.discover_eth5m
         assert os.environ[probe.inv.LIVE_ENV] == "YES"
         assert os.environ[probe.inv.CANARY_ID_ENV].startswith("immq1-")
         assert os.environ[probe.inv.CANARY_ARM_ENV] == os.environ[probe.inv.CANARY_ID_ENV]
@@ -95,5 +105,6 @@ async def test_armed_run_restores_child_env_and_policy(monkeypatch):
 
     assert probe.inv.ENTRY_PAIR_EDGE == original_floor
     assert probe.base.pair_model is original_pair_model
+    assert probe.base.discover_btc5m is original_discover
     for name, value in old_env.items():
         assert os.environ[name] == value
