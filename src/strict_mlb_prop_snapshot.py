@@ -221,8 +221,12 @@ def discover_strict_candidates(
                 skew = abs((p_start - k_start).total_seconds())
                 if skew > MAX_START_SKEW_SECONDS:
                     continue
-                if game_date != k_start.astimezone().date().isoformat() and game_date not in str(poly.get("slug") or ""):
-                    continue
+                # `game_date` is parsed from the strict Polymarket MLB slug by
+                # `_poly_identity`, while both venue starts above are parsed as
+                # timezone-aware absolute instants and must agree within five
+                # minutes. Do not derive another calendar date with bare
+                # `astimezone()`: that uses the process/host timezone and makes
+                # exact identity deployment-dependent near midnight.
                 pair_key = (str(poly.get("slug") or ""), ticker)
                 if pair_key in seen:
                     continue
