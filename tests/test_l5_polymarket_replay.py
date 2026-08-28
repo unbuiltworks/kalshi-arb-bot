@@ -1,7 +1,10 @@
 from decimal import Decimal
 
+import httpx
+
 from src.l5_polymarket_replay import (
     Trade,
+    fetch_wallet_trades,
     group_replays,
     hypothesis_summary,
     normalize_trade,
@@ -46,6 +49,20 @@ def test_normalize_trade_filters_non_short_crypto():
     assert good.expiry_ts == 1787875200
 
     assert normalize_trade({"slug": "some-election", "side": "BUY", "outcome": "Yes", "price": 0.5, "size": 1}) is None
+
+
+def test_fetch_wallet_trades_explicitly_includes_maker_fills():
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = request.url.params
+        assert params["user"] == "0xwallet"
+        assert params["takerOnly"] == "false"
+        assert params["start"] == "123"
+        assert params["end"] == "456"
+        return httpx.Response(200, json=[])
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        trades = fetch_wallet_trades("0xwallet", start=123, end=456, client=client)
+    assert trades == []
 
 
 def _trade(ts: int, outcome: str, price: str, size: str) -> Trade:
