@@ -7,9 +7,11 @@ on:
     paths:
       - src/incentive_arb_engine.py
       - src/gemini_dual_maker_incentive_scan.py
+      - src/gemini_dual_maker_replay_q10.py
       - src/polymarket_l5_reward_snapshot.py
       - src/short_crypto_incentive_snapshot.py
       - tests/test_incentive_arb_engine.py
+      - tests/test_gemini_dual_maker_replay_q10.py
       - tests/test_short_crypto_incentive_snapshot.py
       - .github/workflows/incentive-arb-public-census.yml
   workflow_dispatch:
@@ -32,6 +34,7 @@ jobs:
         run: |
           pytest -q \
             tests/test_incentive_arb_engine.py \
+            tests/test_gemini_dual_maker_replay_q10.py \
             tests/test_short_crypto_incentive_snapshot.py \
             tests/test_gemini_l5_inventory_policy.py
       - name: Capture public incentive state
