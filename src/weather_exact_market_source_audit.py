@@ -40,7 +40,7 @@ def _official_exact_market_evidence(url: Any, event_ticker: str) -> bool:
     """Require market-page evidence to contain the exact event path token.
 
     A substring check is not sufficient here: e.g. an evidence page for
-    ``...-26AUG120`` must never certify ``...-26AUG12``.  Treat URL path segments as
+    ``...-26AUG120`` must never certify ``...-26AUG12``. Treat URL path segments as
     identifiers and require exact, case-insensitive equality after URL decoding.
     """
     parsed = _https_host(url)
@@ -61,28 +61,47 @@ def _official_exact_market_evidence(url: Any, event_ticker: str) -> bool:
     return event_token in path_tokens
 
 
-def _official_nws_cli_source(source_url: Any) -> bool:
-    """Require the station-specific NWS Daily Climate Report product, not any weather.gov page."""
+def _nws_cli_issuedby(source_url: Any) -> str | None:
+    """Return the exact NWS CLI ``issuedby`` token for an official CLI product URL."""
     if not isinstance(source_url, str) or not source_url.strip():
-        return False
+        return None
     try:
         parsed = urlparse(source_url.strip())
     except Exception:
-        return False
+        return None
     if parsed.scheme.lower() != "https":
-        return False
+        return None
     host = (parsed.hostname or "").lower()
     if not (host == "weather.gov" or host == "www.weather.gov" or host.endswith(".weather.gov")):
-        return False
+        return None
     if (parsed.path or "").rstrip("/").lower() != "/product.php":
-        return False
-    query = {k.lower(): [v.upper() for v in values] for k, values in parse_qs(parsed.query).items()}
-    product = query.get("product", [])
-    issuedby = query.get("issuedby", [])
-    return "CLI" in product and any(token.strip() for token in issuedby)
+        return None
+    query = {k.lower(): [v.upper().strip() for v in values] for k, values in parse_qs(parsed.query).items()}
+    if "CLI" not in query.get("product", []):
+        return None
+    issuedby = [token for token in query.get("issuedby", []) if token]
+    if len(issuedby) != 1:
+        return None
+    return issuedby[0]
 
 
-def _recognized_source(provider: Any, source_url: Any) -> str | None:
+def _expected_cli_issuedby(expected_cli_product: Any) -> str | None:
+    """Normalize station metadata such as ``CLIAUS`` to NWS ``issuedby=AUS``."""
+    token = str(expected_cli_product or "").strip().upper()
+    if not token.startswith("CLI") or len(token) <= 3:
+        return None
+    suffix = token[3:]
+    return suffix if suffix.isalnum() else None
+
+
+def _official_nws_cli_source(source_url: Any, expected_cli_product: Any) -> bool:
+    """Require the exact station-specific NWS Daily Climate Report product."""
+    issuedby = _nws_cli_issuedby(source_url)
+    expected = _expected_cli_issuedby(expected_cli_product)
+    return issuedby is not None and expected is not None and issuedby == expected
+
+
+def _recognized_source(provider: Any, source_url: Any, expected_cli_product: Any) -> str | None:
     p = str(provider or "").strip().upper()
     parsed = _https_host(source_url)
     if parsed is None:
@@ -90,7 +109,7 @@ def _recognized_source(provider: Any, source_url: Any) -> str | None:
     host, path = parsed
     if p == "THE_WEATHER_COMPANY" and host in {"weather.com", "www.weather.com"} and path.rstrip("/").lower() == "/kalshi":
         return p
-    if p == "NWS" and _official_nws_cli_source(source_url):
+    if p == "NWS" and _official_nws_cli_source(source_url, expected_cli_product):
         return p
     return None
 
@@ -116,12 +135,16 @@ def audit_exact_market_source(
     evidence_url: Any,
     evidence_market_ticker: Any,
     evidence_market_date: Any,
+    expected_cli_product: Any = None,
 ) -> dict[str, Any]:
     """Validate exact-market settlement-source provenance without using current Series provider as truth.
 
     The returned audit preserves the *evidence-side* market ticker/date separately from
     the target market identity. Downstream trust boundaries must replay those explicit
     fields rather than substituting the target identity when evidence identity is absent.
+
+    NWS provenance is additionally bound to the expected station CLI product. A valid
+    Daily Climate Report for another city/station must never certify this contract.
     """
     blockers: list[str] = []
     s = str(series_ticker or "").strip().upper()
@@ -140,9 +163,11 @@ def audit_exact_market_source(
     elif not _official_exact_market_evidence(evidence_url, e):
         blockers.append("EXACT_MARKET_EVIDENCE_NOT_BOUND_TO_EVENT")
 
-    recognized = _recognized_source(provider, source_url)
+    recognized = _recognized_source(provider, source_url, expected_cli_product)
     if recognized is None:
         blockers.append("EXACT_MARKET_SETTLEMENT_SOURCE_UNVERIFIED")
+        if str(provider or "").strip().upper() == "NWS":
+            blockers.append("EXACT_MARKET_SETTLEMENT_STATION_UNVERIFIED")
 
     blockers = sorted(set(blockers))
     exact_evidence_ok = _official_exact_market_evidence(evidence_url, e)
@@ -155,6 +180,8 @@ def audit_exact_market_source(
         "market_date": md or None,
         "evidence_market_ticker": em or None,
         "evidence_market_date": ed or None,
+        "expected_cli_product": str(expected_cli_product or "").strip().upper() or None,
+        "nws_cli_issuedby": _nws_cli_issuedby(source_url) if str(provider or "").strip().upper() == "NWS" else None,
         "settlement_source_provider": recognized,
         "settlement_source_url": str(source_url).strip() if recognized else None,
         "evidence_url": str(evidence_url).strip() if exact_evidence_ok else None,
