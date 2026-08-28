@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal as D
 import json
 import re
+import time
 from typing import Any
 
 import httpx
@@ -42,6 +43,16 @@ def _dedupe_key(row: dict[str, Any]) -> tuple[str, ...]:
     )
 
 
+def _retry_delay_seconds(response: httpx.Response, attempt: int) -> float:
+    retry_after = response.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return min(30.0, max(0.25, float(retry_after)))
+        except ValueError:
+            pass
+    return min(30.0, 0.75 * (2 ** max(0, attempt - 1)))
+
+
 def fetch_activity_type(
     wallet: str,
     typ: str,
@@ -51,11 +62,13 @@ def fetch_activity_type(
     slice_seconds: int = 3600,
     page_limit: int = 500,
     timeout_s: float = 20.0,
+    max_attempts: int = 7,
 ) -> list[dict[str, Any]]:
     """Fetch one activity type using time slices + pagination.
 
     Data API offset has practical limits; slicing makes the query robust for a
     wallet doing thousands of fills per day. Boundary duplicates are deduped.
+    Transient 429/5xx responses are retried with bounded exponential backoff.
     """
     if end <= start:
         return []
@@ -64,26 +77,32 @@ def fetch_activity_type(
     with httpx.Client(
         timeout=timeout_s,
         follow_redirects=True,
-        headers={"User-Agent": "arb-polymarket-l5-daily-economics/1.0"},
+        headers={"User-Agent": "arb-polymarket-l5-daily-economics/1.1"},
     ) as client:
         cursor = start
         while cursor < end:
             slice_end = min(end, cursor + max(60, slice_seconds))
             offset = 0
             while True:
-                response = client.get(
-                    f"{DATA_API}/activity",
-                    params={
-                        "user": wallet,
-                        "type": typ,
-                        "start": cursor,
-                        "end": slice_end,
-                        "sortBy": "TIMESTAMP",
-                        "sortDirection": "ASC",
-                        "limit": page_limit,
-                        "offset": offset,
-                    },
-                )
+                params = {
+                    "user": wallet,
+                    "type": typ,
+                    "start": cursor,
+                    "end": slice_end,
+                    "sortBy": "TIMESTAMP",
+                    "sortDirection": "ASC",
+                    "limit": page_limit,
+                    "offset": offset,
+                }
+                response: httpx.Response | None = None
+                for attempt in range(1, max_attempts + 1):
+                    response = client.get(f"{DATA_API}/activity", params=params)
+                    if response.status_code != 429 and response.status_code < 500:
+                        break
+                    if attempt >= max_attempts:
+                        break
+                    time.sleep(_retry_delay_seconds(response, attempt))
+                assert response is not None
                 response.raise_for_status()
                 payload = response.json()
                 if not isinstance(payload, list):
