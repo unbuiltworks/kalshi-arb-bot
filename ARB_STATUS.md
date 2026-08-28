@@ -1,32 +1,39 @@
 # ARB Control Plane
 
-Last verified: **2026-08-28 20:36 UTC / 2026-08-28 16:36 ET**
+Last verified: **2026-08-28 21:32 UTC / 2026-08-28 17:32 ET**
 
-## Objective and fixed verdict
+## FINAL 72-hour census verdict — binding
 
-Primary aspiration remains **$480/day REALIZED net**. Only authoritative settlement/reconciliation creates REALIZED P&L. Stale quotes, shadow/model P&L, rule-mismatched rows, unconfirmed fills and one-leg exposure never count.
+Primary aspiration was **$480/day REALIZED net**. Only authoritative settlement/reconciliation counts as REALIZED P&L. Stale quotes, shadow/model P&L, rule-mismatched rows, unconfirmed fills and one-leg exposure never count.
 
-Pre-committed census verdict thresholds remain fixed:
+The pre-committed 72-hour census ran from **2026-08-25 20:43 UTC / 16:43 ET** through **2026-08-28 20:43 UTC / 16:43 ET**. The deadline has passed. The verdict thresholds were fixed before seeing the result:
 
 - **<$50/day** realistic deployable capacity: end dedicated ARB engineering and archive.
 - **$50-$149/day**: sidecar-only maintenance.
 - **>= $150/day**: active scaling justified toward $480/day.
 
-The 72-hour census started **2026-08-25 20:43 UTC / 16:43 ET** and ends **2026-08-28 20:43 UTC / 16:43 ET**. No reset. Data/feed quality may add at most one +24-hour allowance; a lane still unmeasurable after that allowance contributes **$0 deployable capacity**. Realistic-capture floor remains **>=80 ms**.
+### FINAL RESULT: **$0/day certified realistic deployable capacity at the fixed 3c floor**
 
-## Fresh production state — 16:36 ET
+This is in the pre-committed **<$50/day** bucket. Therefore **dedicated arbitrage engineering ends and the ARB project moves to archived/maintenance-only status**. Do not extend the census because the results are interesting. The optional +24-hour data-quality allowance is not invoked: every lane with unresolved measurement or feed quality already has a pre-committed zero-credit treatment, so additional observation time cannot improve the binding decision without changing the rules after seeing the data.
 
-- `sports-kp-live-executor`: fresh last-hour Railway metrics confirm sustained runtime activity: average CPU **0.06948**, average RX **0.004283 GB/sample**, average TX **0.002126 GB/sample**. This is runtime-health evidence only and creates no additional economic/capacity credit.
-- `sports-generic-counterpart-shadow`: fresh last-hour metrics likewise confirm sustained activity: average CPU **0.03858**, average RX **0.001322 GB/sample**, average TX **0.000347 GB/sample**. Shadow activity never counts as REALIZED P&L or deployable capacity by itself.
-- `sports-gk-autonomous-supervisor`: remains active, averaging CPU **0.79105**, RX **0.118415 GB/sample**, TX **0.064410 GB/sample** over the last hour, but no fresh certified two-sided state has displaced the last decoded Gemini **0/570 connected** vs Kalshi **570/570 initialized** state. Runtime/network activity does not rescue the lane's exhausted measurability grace.
-- `crypto-live-balance-reconcile-v2`: fresh last-hour metrics remain exactly **0 CPU / 0 memory / 0 RX / 0 TX**. Prior runtime verification showed immediate `ModuleNotFoundError: No module named 'src.gemini_kalshi_probe_transport'`. No authoritative crypto balance/exposure reconciliation exists from this service; G<->K remains disarmed.
-- `sports-kp-live-executor` deployment provenance remains unchanged: newest deployment records through Aug 26 are explicitly **SKIPPED**, including delayed-hedge commit `044204d31c98a098a180e726899162180556ef63`; no hidden newer taker build is promoted into decision evidence.
-- Canonical weather project `kalshi-weather-bot`: last verified main bot **SUCCESS**, weather shadow **SUCCESS**, weather backtest **SUCCESS**, canonical `weather-live-probe` **CRASHED**. A same-named service inside the sports project showing SUCCESS is not treated as authoritative weather-live evidence.
-- Prior authenticated Kalshi account limits remain **advanced tier, 900 bucket / 300 refill**. Last inspected K<->P polling used legacy `api.elections.kalshi.com` at roughly 0.1-second cadence with HTTP 200. Earlier 429 evidence continues to favor aggregate/concurrent request or connection contention over a weak account tier. Do not disrupt unrelated live services solely to improve census telemetry; new census code should prefer Kalshi dedicated external-api/external-api-ws hosts.
+No unrelated live service is being disrupted solely to improve census telemetry. Existing collectors may remain online for evidence preservation/other work, but their continued runtime does **not** reopen this census or authorize new dedicated ARB engineering.
 
-## K<->P decision-grade taker evidence
+## Fresh production state after cutoff
 
-Last decision-grade decoded sample remains:
+Fresh Railway one-hour metrics at the final adjudication confirm the two K<->P census processes are still running:
+
+- `sports-kp-live-executor`: average CPU **0.07011**, average RX **0.004303 GB/sample**, average TX **0.002138 GB/sample**.
+- `sports-generic-counterpart-shadow`: average CPU **0.03870**, average RX **0.001362 GB/sample**, average TX **0.000354 GB/sample**.
+
+This is runtime-health evidence only. It does not create additional economic/capacity credit after the cutoff.
+
+`crypto-live-balance-reconcile-v2` remains non-authoritative: the last verified runtime failed on `ModuleNotFoundError: No module named 'src.gemini_kalshi_probe_transport'`, and later Railway deployment-success badges did not produce verified reconciliation output. G<->K therefore stays disarmed.
+
+Prior authenticated Kalshi account limits remain **advanced tier, 900 bucket / 300 refill**. Earlier 429 evidence is more consistent with aggregate/concurrent request or connection contention than a weak account tier. Do not disrupt unrelated live services to improve telemetry; any future read-only census work should use Kalshi dedicated external-api/external-api-ws hosts.
+
+## K<->P taker — final decision-grade evidence
+
+Final decision-valid decoded sample:
 
 - raw triggers: **136,904,107**;
 - comparable evaluations: **53,237**;
@@ -41,17 +48,17 @@ Last decision-grade decoded sample remains:
 - source quality: `REST_SNAPSHOT_NOT_WS_LIFETIME`;
 - `kalshi_transport=rest_batch`, `read_only=true`, `order_entry=false`.
 
-Comparable sample failed to advance beyond allowed data-quality grace. The stale tail is therefore **$0 deployable-capacity credit**. The valid certified totals slice has **0 >=3c**, hence **$0/day deployable capacity at the fixed 3c taker/taker floor**. Raw-trigger growth is activity evidence only.
+The comparable sample stopped advancing beyond the allowed data-quality grace. Per the pre-committed rule, the stale tail contributes **$0 deployable-capacity credit**. The valid certified slice has **0 >=3c**, so taker/taker contributes **$0/day** at the fixed 3c floor.
 
-After scheduled-start normalization and F5/partial-game exclusion, clean full-game MLB moneyline/spread/total snapshots remain **0 >=1c / 0 >=2c / 0 >=3c** with substantial q1 depth. Strict player props remain $0 guaranteed capacity because complete settlement/postponement/cancellation/participation/stat-correction equivalence has not been proven.
+After scheduled-start normalization and F5/partial-game exclusion, clean full-game MLB moneyline/spread/total snapshots are **0 >=1c / 0 >=2c / 0 >=3c** with substantial q1 depth. Strict player props contribute **$0 guaranteed capacity** because complete settlement/postponement/cancellation/participation/stat-correction equivalence was not proven. Participation-conditional and rule-mismatched rows are not counted as guaranteed arbitrage. Semantic mirrors are deduped rather than counted as separate capacity.
 
-## K<->P maker/fill/delayed-hedge shadow
+## K<->P maker/fill/delayed-hedge shadow — final treatment
 
-Last decision-valid maker evidence remains:
+Last decision-valid maker evidence:
 
 - simulated q1 fills: **2,166**;
 - immediate maker-fee cumulative bins: **1,378 >=1c / 1,076 >=2c / 871 >=3c**;
-- immediate shadow P&L: **+$128.6480** — descriptive only;
+- immediate shadow P&L: **+$128.6480** — descriptive only, never REALIZED;
 - median quote age at fill: **994 ms**;
 - only **134 / 2,166 (6.19%)** have decision-usable delayed hedge observations;
 - **2,032** are WS-unhealthy/unobservable and receive $0 capacity credit;
@@ -62,11 +69,11 @@ Last decision-valid maker evidence remains:
 - exact K<->P full-game moneyline postponement/reschedule lifecycle equivalence fails independently;
 - `rules_complete=false`, `capacity_credit_usd_per_day=0`, `read_only=true`, `order_entry=false`.
 
-Maker shadow remains **$0 guaranteed/deployable capacity and $0 REALIZED P&L**. Do not repair delayed-WS coverage merely to rescue the census because rule-equivalence failure independently prevents guaranteed-arb certification.
+Maker shadow therefore contributes **$0 guaranteed/deployable capacity and $0 REALIZED P&L**. The positive immediate shadow headline is not promoted into the verdict because realistic delayed hedge economics are weak/negative and lifecycle equivalence independently fails.
 
-Polymarket incentive capacity remains **$0**: last telemetry saw **22 active MLB moneyline program rows** and **0 under-target live-pool candidates**, while denominator/time-weighted yield/pickoff economics remain incomplete.
+Polymarket incentive capacity is **$0**: last telemetry saw **22 active MLB moneyline program rows** and **0 under-target live-pool candidates**, while denominator/time-weighted yield/pickoff economics remain incomplete.
 
-## G<->K sports
+## G<->K sports — final treatment
 
 Last decision-valid state:
 
@@ -77,11 +84,15 @@ Last decision-valid state:
 - rule gate: `GEMINI_FULL_PROP_LIFECYCLE_FINGERPRINT_REQUIRED_BEFORE_EXECUTION`;
 - `read_only=true`, `order_entry=false`.
 
-This lane remained two-sided-unmeasurable beyond the permitted grace and therefore contributes **$0 deployable capacity**. Keep it disarmed. Caleb Durbin remains **-$0.44 REALIZED** and may not be reclassified away.
+The lane remained two-sided-unmeasurable beyond the permitted grace and therefore contributes **$0 deployable capacity**. **Keep G<->K disarmed** unless unresolved one-leg risk is conclusively cleared in a future, separately justified workstream. Caleb Durbin remains **-$0.44 REALIZED** and may not be shadowed away or reclassified.
+
+## Same-venue lanes
+
+Same-venue Gemini, Polymarket and Kalshi ladder-violation zeros are retained as near-verdict evidence. Do not spend dedicated engineering time trying to manufacture same-venue violations after this verdict.
 
 ## Authoritative accounting and weather
 
-Fresh balance reconciliation is blocked by the read-only reconciler import regression above. The last Neon ledger query attempt also failed **before SQL execution** with HTTP **402 data transfer quota exceeded**. Do not advance accounting speculatively.
+Fresh crypto balance reconciliation remains blocked by the read-only reconciler regression. The last Neon ledger query attempt also failed before SQL execution with HTTP **402 data transfer quota exceeded**. Do not advance accounting speculatively.
 
 Last successful authoritative reconciliation:
 
@@ -89,28 +100,31 @@ Last successful authoritative reconciliation:
 - weather: **0 verified weather-tagged TRADE_REALIZED / $0.0000 since 2026-03-01**;
 - Caleb Durbin: prior `SETTLED_ONE_LEG`, **-$0.44 REALIZED**.
 
-Seasonal/backtest/shadow weather edge remains separate from current verified realized performance and receives no census credit.
+Weather seasonal/backtest/shadow edge is historical/model evidence only. It is separate from current realized performance and receives no ARB census credit.
 
-## Current verdict trajectory
+## Final capacity aggregation
 
-Guaranteed/deployable evidence at the fixed 3c floor:
+At the fixed 3c floor and realistic-capture/rule-certification gates:
 
-- certified K<->P totals: **0 >=3c => $0/day**;
-- clean full-game taker/taker: **0 >=3c => $0/day**;
-- stale K<->P comparable tail: grace exhausted => **$0**;
-- K<->P maker: weak/negative realistic delayed economics plus lifecycle mismatch => **$0/day guaranteed capacity**;
-- strict props/incentives: uncertified/incomplete => **$0**;
-- G<->K: unmeasurable beyond grace and disarmed => **$0**;
+- certified K<->P taker/taker: **$0/day**;
+- clean full-game MLB taker/taker: **$0/day**;
+- stale K<->P comparable tail: **$0** by exhausted-grace rule;
+- K<->P maker: **$0/day guaranteed deployable capacity**;
+- strict props/incentives: **$0** uncertified/incomplete;
+- G<->K: **$0** unmeasurable beyond grace and disarmed;
+- same-venue ladder violations: **$0**;
 - weather verified realized since March: **$0** at last authoritative reconciliation.
 
-Current certified evidence remains strongly in the pre-committed **<$50/day** bucket. Do not move thresholds or declare the final verdict before **16:43 ET today**. The 16:36 ET runtime pulse produced no new certified executable economics and therefore no change in capacity credit.
+**FINAL CERTIFIED REALISTIC DEPLOYABLE CAPACITY: $0/day.**
 
-## Highest-value next actions
+**FINAL PRE-COMMITTED VERDICT: <$50/day => ARCHIVE dedicated ARB engineering.**
 
-1. Keep the fixed census running through **2026-08-28 20:43 UTC / 16:43 ET** with no reset.
-2. Preserve G<->K disarm and Caleb's **-$0.44 REALIZED** loss.
-3. Do not treat runtime health, raw-trigger growth, or shadow activity as economic evidence.
-4. Do not repair stale K<->P comparables, Gemini reconnects, maker delayed-WS coverage, incentive denominator plumbing, balance reconciler, or Neon quota solely to extend the census; zero-credit treatment is already determined where applicable.
-5. Preserve Kalshi account headroom/backoff and avoid disruption of unrelated live services. If the project survives the verdict, future census code should migrate to dedicated external-api/external-api-ws hosts.
+## Post-verdict operating policy
+
+1. Do not reopen or extend this census without a genuinely new economic premise; additional telemetry on the same exhausted lanes is not sufficient.
+2. Keep G<->K disarmed; preserve Caleb's **-$0.44 REALIZED** loss.
+3. Never promote runtime health, raw-trigger growth, stale quotes, shadow activity, mismatched rules, unconfirmed fills or one-leg exposure into REALIZED P&L or deployable capacity.
+4. Do not spend dedicated engineering time repairing same-venue zeros, stale K<->P comparables, maker delayed-WS coverage, Gemini reconnects, incentive denominator plumbing, or census-only telemetry.
+5. Preserve unrelated live services. Any future work must be justified independently by evidence of executable/realized dollars per day, not candidate count or infrastructure elegance.
 6. Keep weather historical/backtest edge separate from verified live realized P&L.
-7. At **16:43 ET**, aggregate only rule-certified, realistically executable capacity and apply **<$50 / $50-$149 / >=$150** exactly as committed.
+7. The **$480/day aspiration is not supported by this dedicated arbitrage census**. Reaching that income target requires a different strategy/economic premise rather than relaxing this census's rules.
