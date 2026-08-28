@@ -1,0 +1,50 @@
+name: AWS l5 Gemini inventory shadow v4 check
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/l5-gemini-inventory-shadow-v4-check.trigger
+      - .github/workflows/aws-l5-gemini-inventory-shadow-v4-check.yml
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read-only V4 health through SSM
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_CMD='NAME=arb-gemini-l5-inventory-shadow-v4; ROOT=/home/ssm-user/gemini-l5-inventory-shadow-v4-state; RUN_DIR=$(ls -1dt "$ROOT"/* 2>/dev/null | head -1); echo L5_V4_CHECK_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ); echo L5_V4_RUN_DIR=$RUN_DIR; if docker inspect "$NAME" >/dev/null 2>&1; then echo L5_V4_RUNNING=$(docker inspect -f "{{.State.Running}}" "$NAME"); echo L5_V4_STATUS=$(docker inspect -f "{{.State.Status}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}" "$NAME"); else echo L5_V4_RUNNING=false; echo L5_V4_STATUS=not_found; fi; if [ -n "$RUN_DIR" ] && [ -f "$RUN_DIR/summary.json" ]; then python3 -c "import json,sys; s=json.load(open(sys.argv[1])); print(json.dumps({\"status\":s.get(\"status\"),\"markets\":s.get(\"markets\"),\"trades\":s.get(\"trades\"),\"errors\":s.get(\"errors\"),\"checkpoints\":s.get(\"checkpoints\"),\"ws_connections\":s.get(\"ws_connections\"),\"ws_disconnects\":s.get(\"ws_disconnects\"),\"ws_reconnects\":s.get(\"ws_reconnects\"),\"tape_touch\":s.get(\"tape_touch\"),\"strict_trade_through\":s.get(\"strict_trade_through\"),\"read_only\":s.get(\"read_only\"),\"order_entry\":s.get(\"order_entry\"),\"credentials_loaded\":s.get(\"credentials_loaded\"),\"realized_pnl\":s.get(\"realized_pnl\")},sort_keys=True))" "$RUN_DIR/summary.json"; else echo SUMMARY_MISSING; fi'
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "ARB l5 Gemini inventory shadow v4 read-only health" \
+            --parameters "$PARAMETERS" \
+            --query 'Command.CommandId' \
+            --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+            > /tmp/v4-health.json
+          cat /tmp/v4-health.json
+          test "$(jq -r '.Status' /tmp/v4-health.json)" = "Success"
