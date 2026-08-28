@@ -1,0 +1,88 @@
+name: AWS OIDC diagnostic
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/oidc-diagnostic.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+
+      - name: Decode non-secret GitHub OIDC claims
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN_JSON=$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")
+          TOKEN=$(printf '%s' "$TOKEN_JSON" | jq -r .value)
+          export TOKEN
+          python - <<'PY'
+          import base64, json, os, urllib.request
+          token = os.environ['TOKEN']
+          header_b64, payload_b64, _ = token.split('.')
+          def dec(part):
+              part += '=' * (-len(part) % 4)
+              return json.loads(base64.urlsafe_b64decode(part.encode()))
+          header = dec(header_b64)
+          payload = dec(payload_b64)
+          public = {
+              'kid': header.get('kid'),
+              'alg': header.get('alg'),
+              'iss': payload.get('iss'),
+              'aud': payload.get('aud'),
+              'sub': payload.get('sub'),
+              'repository': payload.get('repository'),
+              'repository_id': payload.get('repository_id'),
+              'repository_owner': payload.get('repository_owner'),
+              'repository_owner_id': payload.get('repository_owner_id'),
+              'ref': payload.get('ref'),
+              'ref_type': payload.get('ref_type'),
+              'workflow_ref': payload.get('workflow_ref'),
+          }
+          print('OIDC_CLAIMS ' + json.dumps(public, sort_keys=True))
+          with urllib.request.urlopen('https://token.actions.githubusercontent.com/.well-known/openid-configuration', timeout=10) as r:
+              config = json.load(r)
+          with urllib.request.urlopen(config['jwks_uri'], timeout=10) as r:
+              jwks = json.load(r)
+          kids = {k.get('kid') for k in jwks.get('keys', [])}
+          print('OIDC_DISCOVERY ' + json.dumps({
+              'issuer': config.get('issuer'),
+              'jwks_uri': config.get('jwks_uri'),
+              'token_kid_present_in_live_jwks': header.get('kid') in kids,
+              'jwks_key_count': len(kids),
+          }, sort_keys=True))
+          PY
+
+      - name: Show current TLS chain SHA1 fingerprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oidc-certs
+          openssl s_client -servername token.actions.githubusercontent.com -showcerts -connect token.actions.githubusercontent.com:443 </dev/null 2>/dev/null \
+            | awk '/BEGIN CERTIFICATE/{n++} {if(n) print > ("/tmp/oidc-certs/cert" n ".pem")}'
+          for f in /tmp/oidc-certs/cert*.pem; do
+            [ -s "$f" ] || continue
+            printf 'OIDC_CERT '
+            openssl x509 -in "$f" -noout -subject -issuer -fingerprint -sha1 | tr '\n' ' '
+            printf '\n'
+          done
+
+      - name: Record bootstrap expectation
+        shell: bash
+        run: |
+          echo 'BOOTSTRAP_PROVIDER_URL=https://token.actions.githubusercontent.com'
+          echo 'BOOTSTRAP_AUDIENCE=sts.amazonaws.com'
+          echo 'BOOTSTRAP_BRANCH=aws-migration-foundation'
+          echo 'BOOTSTRAP_THUMBPRINT_1=6938fd4d98bab03faadb97b34396831e3780aea1'
+          echo 'GITHUB_DOCUMENTED_THUMBPRINT_2=1c58a3a8518e8759bf075b76b750d4f2df264fcd'
