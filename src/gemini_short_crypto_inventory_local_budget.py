@@ -100,13 +100,14 @@ async def result(*, symbol: str, event_ticker: str, trade_id: str,
         status=status,
     )
     legs = int(D(str(yes_fill or "0")) > 0) + int(D(str(no_fill or "0")) > 0)
+    details = dict(metadata)
     event.update({"quantity": "1", "legs_required": 0, "legs_filled": legs})
     event["event_id"] = base._safe_id(f"{trade_id}:inventory-result:{status}")
     event["metadata"].update({
         "guaranteed_profit": False,
         "yes_fill": str(yes_fill),
         "no_fill": str(no_fill),
-        **dict(metadata),
+        **details,
     })
     base._append(event)
     current = base.local_open_state() or {
@@ -122,4 +123,11 @@ async def result(*, symbol: str, event_ticker: str, trade_id: str,
         "no_fill": str(no_fill),
         "legs_filled": legs,
     })
+    # Dynamic-complement campaigns may use several sequential maker client IDs on
+    # the missing side. Persist the exact identity chain in the durable open record
+    # so authoritative settlement reconciliation never has to infer replacements.
+    for key in ("yes_client_order_ids", "no_client_order_ids", "order_execution_modes"):
+        value = details.get(key)
+        if value is not None:
+            current[key] = value
     base._write_open(current)
