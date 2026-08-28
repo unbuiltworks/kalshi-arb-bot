@@ -22,6 +22,7 @@ from src import strict_mlb_prop_snapshot_v4 as v4
 from src.strict_mlb_prop_snapshot_v2 import _fetch_poly_mlb_search
 from src.mlb_kalshi_book_guard import audit_kalshi_binary_book
 from src.mlb_live_participation import fetch_game_boxscores, participation_proof, proof_dict
+from src.mlb_paper_probe_preference import preferred_paper_probe as meets_preferred_paper_threshold
 
 logger = logging.getLogger("kalshi_arb.strict_mlb_prop_snapshot_v5")
 base._fetch_poly_mlb = _fetch_poly_mlb_search
@@ -33,8 +34,10 @@ def _paper_probe_flags(assessment, probe5: dict[str, Any] | None) -> tuple[bool,
     positive = bool(assessment.settlement_equivalent_now and probe5)
     preferred = bool(
         positive
-        and probe5 is not None
-        and Decimal(probe5["conservative_locked_profit"]) >= MIN_PREFERRED_NET
+        and meets_preferred_paper_threshold(
+            probe5,
+            min_net_per_contract=MIN_PREFERRED_NET,
+        )
     )
     return positive, preferred
 
@@ -349,6 +352,7 @@ async def run_once() -> dict[str, Any]:
         "ready_probe_packets": [],
         "live_probe_ready_pairs": 0,
         "preferred_probe_threshold": str(MIN_PREFERRED_NET),
+        "preferred_probe_threshold_basis": "PER_CONTRACT",
         "rules_status": "RULES_PENDING",
         "full_rules_audited": False,
         "fully_audited_shadow_ready_pairs": 0,
