@@ -71,6 +71,7 @@ jobs:
             > /tmp/v4-replay.json
           cat /tmp/v4-replay.json
           test "$(jq -r '.Status' /tmp/v4-replay.json)" = "Success"
-          grep -q 'SHADOW_REPLAY_NOT_REALIZED' /tmp/v4-replay.json
-          grep -q '"order_entry": false' /tmp/v4-replay.json
-          grep -q '"credentials_loaded": false' /tmp/v4-replay.json
+          stdout=$(jq -r '.Stdout // ""' /tmp/v4-replay.json)
+          grep -q 'SHADOW_REPLAY_NOT_REALIZED' <<< "$stdout"
+          grep -q '"order_entry": false' <<< "$stdout"
+          grep -q '"credentials_loaded": false' <<< "$stdout"
