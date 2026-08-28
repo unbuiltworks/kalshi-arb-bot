@@ -1,0 +1,43 @@
+name: l5 Gemini dynamic shadow v2 smoke
+
+on:
+  push:
+    branches:
+      - feature/l5-gemini-dynamic-shadow-v2
+    paths:
+      - deploy/l5-gemini-dynamic-shadow-v2-smoke.trigger
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Targeted unit tests
+        run: pytest -q tests/test_gemini_l5_tape_dynamic_shadow.py
+      - name: Compile v2
+        run: python -m py_compile src/gemini_l5_tape_dynamic_shadow.py
+      - name: Public WebSocket protocol smoke
+        run: |
+          mkdir -p artifacts
+          python -m src.gemini_l5_tape_dynamic_shadow \
+            --seconds 30 \
+            --discover-s 5 \
+            --output artifacts/gemini-l5-tape-dynamic-smoke.jsonl \
+            --summary-output artifacts/gemini-l5-tape-dynamic-smoke-summary.json \
+            | tee artifacts/gemini-l5-tape-dynamic-smoke.log
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l5-gemini-dynamic-shadow-v2-smoke
+          path: artifacts/
+          retention-days: 3
