@@ -30,30 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          REMOTE_CMD=$(cat <<'REMOTE'
-          set -euo pipefail
-          export HOME=/root
-          REPO=/home/ssm-user/kalshi-arb-bot
-          COMMIT=d7ab599df1df1580cf0bcd62792fbd7cddc83450
-          BRANCH=feature/gemini-incentive-mm-live-probe-q1
-          TMP=/tmp/run_gemini_incentive_mm_live_probe_q1.sh
-          git config --global --add safe.directory "$REPO" || true
-          git -C "$REPO" fetch origin "$BRANCH" >/dev/null
-          git -C "$REPO" cat-file -e "${COMMIT}^{commit}"
-          git -C "$REPO" show "${COMMIT}:deploy/aws/run_gemini_incentive_mm_live_probe_q1.sh" > "$TMP"
-          chmod 0700 "$TMP"
-          bash -n "$TMP"
-          set +e
-          PINNED_COMMIT="$COMMIT" bash "$TMP" >/tmp/q1-disarmed-preflight.log 2>&1
-          rc=$?
-          set -e
-          test "$rc" -ne 0
-          grep -q 'fresh incentive-MM q1 approval flag missing' /tmp/q1-disarmed-preflight.log
-          ! grep -q 'secure env missing' /tmp/q1-disarmed-preflight.log
-          ! grep -q 'SOURCE_READY' /tmp/q1-disarmed-preflight.log
-          echo Q1_AWS_DISARMED_PREFLIGHT_OK commit=$COMMIT order_entry=false credentials_read=false
-          REMOTE
-          )
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin feature/gemini-incentive-mm-live-probe-q1 >/dev/null; git cat-file -e \"${Q1_COMMIT}^{commit}\"; git show ${Q1_COMMIT}:deploy/aws/run_gemini_incentive_mm_live_probe_q1.sh > /tmp/run_gemini_incentive_mm_live_probe_q1.sh; chmod 0700 /tmp/run_gemini_incentive_mm_live_probe_q1.sh; bash -n /tmp/run_gemini_incentive_mm_live_probe_q1.sh; set +e; PINNED_COMMIT=${Q1_COMMIT} bash /tmp/run_gemini_incentive_mm_live_probe_q1.sh >/tmp/q1-disarmed-preflight.log 2>&1; rc=\$?; set -e; test \$rc -ne 0; grep -q \"fresh incentive-MM q1 approval flag missing\" /tmp/q1-disarmed-preflight.log; ! grep -q \"secure env missing\" /tmp/q1-disarmed-preflight.log; ! grep -q \"SOURCE_READY\" /tmp/q1-disarmed-preflight.log; echo Q1_AWS_DISARMED_PREFLIGHT_OK commit=${Q1_COMMIT} order_entry=false credentials_read=false'"
           PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
           COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB q1 disarmed preflight" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
           aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
