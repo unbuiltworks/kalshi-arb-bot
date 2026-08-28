@@ -1,0 +1,73 @@
+name: l5 Gemini multiwindow settlement shadow
+
+on:
+  push:
+    branches:
+      - feature/l5-gemini-aws-live-probe-v1
+    paths:
+      - deploy/l5-gemini-multiwindow.trigger
+
+permissions:
+  contents: read
+
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install focused dependencies
+        run: python -m pip install 'httpx>=0.27' 'websockets>=12' 'pytest>=8'
+      - name: Verify Gemini l5 replay tests
+        run: pytest -q tests/test_gemini_l5_threshold_model.py tests/test_gemini_l5_inventory_replay.py tests/test_l5_shadow_settlement_score.py
+      - name: Capture multiple 5m windows plus 15m rollover
+        run: |
+          mkdir -p artifacts
+          python -m src.gemini_l5_threshold_shadow \
+            --seconds 1320 \
+            --poll-s 2 \
+            --output artifacts/gemini-l5-multiwindow.jsonl \
+            | tee artifacts/gemini-l5-multiwindow.log
+      - name: Strict trade-through replay
+        run: |
+          python -m src.gemini_l5_inventory_replay \
+            artifacts/gemini-l5-multiwindow.jsonl \
+            --output artifacts/gemini-l5-multiwindow-replay.json \
+            | tee artifacts/gemini-l5-multiwindow-replay.log
+      - name: Allow captured contracts to finalize
+        run: sleep 360
+      - name: Attach official public settlements
+        run: |
+          python -m src.l5_shadow_settlement_score \
+            --venue gemini \
+            artifacts/gemini-l5-multiwindow-replay.json \
+            --output artifacts/gemini-l5-multiwindow-settlement.json \
+            | tee artifacts/gemini-l5-multiwindow-settlement.log
+      - name: Print compact decision evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('artifacts/gemini-l5-multiwindow-replay.json').read_text())
+          s=json.loads(Path('artifacts/gemini-l5-multiwindow-settlement.json').read_text())
+          print('MARKETS', r.get('markets'))
+          print('MARKETS_WITH_FILLS', r.get('markets_with_trade_through_fills'))
+          print('BOTH_SIDES', r.get('markets_with_both_sides_filled'))
+          print('SUB_ONE_PAIRS', r.get('markets_with_sub_one_matched_vwap'))
+          print('TOTAL_VIRTUAL_FILLS', r.get('total_virtual_fills'))
+          print('SETTLED', s.get('settled_markets'))
+          print('UNRESOLVED', s.get('unresolved_markets'))
+          print('TRADING_PNL', s.get('settled_shadow_total_trading_pnl'))
+          print('MODELED_REBATE_PNL', s.get('settled_shadow_total_modeled_pnl_with_maker_rebate'))
+          for x in s.get('settled_detail',[]):
+              if x.get('fills'):
+                  print('FILLED_MARKET',x.get('ticker'),x.get('resolution_side'),x.get('yes_qty'),x.get('no_qty'),x.get('settled_shadow_trading_pnl'))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: l5-gemini-multiwindow-settlement
+          path: artifacts/
+          retention-days: 3
