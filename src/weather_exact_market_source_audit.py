@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 _ALLOWED_KALSHI_HOSTS = {
     "kalshi.com",
@@ -37,15 +37,28 @@ def _official_kalshi_evidence(url: Any) -> bool:
 
 
 def _official_exact_market_evidence(url: Any, event_ticker: str) -> bool:
-    """Require market-page evidence to be bound to the exact event, not merely Kalshi-owned."""
+    """Require market-page evidence to contain the exact event path token.
+
+    A substring check is not sufficient here: e.g. an evidence page for
+    ``...-26AUG120`` must never certify ``...-26AUG12``.  Treat URL path segments as
+    identifiers and require exact, case-insensitive equality after URL decoding.
+    """
     parsed = _https_host(url)
     if parsed is None or not event_ticker:
         return False
     host, path = parsed
     if host not in {"kalshi.com", "www.kalshi.com"}:
         return False
-    normalized_path = path.rstrip("/").lower()
-    return normalized_path.startswith("/markets/") and event_ticker.lower() in normalized_path
+    normalized_path = path.rstrip("/")
+    if not normalized_path.lower().startswith("/markets/"):
+        return False
+    event_token = event_ticker.strip().lower()
+    path_tokens = {
+        unquote(token).strip().lower()
+        for token in normalized_path.split("/")
+        if token.strip()
+    }
+    return event_token in path_tokens
 
 
 def _official_nws_cli_source(source_url: Any) -> bool:
