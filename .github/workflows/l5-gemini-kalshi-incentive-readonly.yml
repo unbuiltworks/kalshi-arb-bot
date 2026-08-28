@@ -10,10 +10,12 @@ on:
       - src/gemini_l5_threshold_preflight.py
       - src/kalshi_l5_threshold_model.py
       - src/kalshi_l5_threshold_shadow.py
+      - src/kalshi_l5_inventory_replay.py
       - src/short_crypto_incentive_snapshot.py
       - tests/test_gemini_l5_threshold_model.py
       - tests/test_gemini_short_crypto_l5_threshold_supervisor_v1.py
       - tests/test_kalshi_l5_threshold_model.py
+      - tests/test_kalshi_l5_inventory_replay.py
       - tests/test_short_crypto_incentive_snapshot.py
       - deploy/aws/run_gemini_l5_threshold_q1_live_v1.sh
       - .github/workflows/l5-gemini-kalshi-incentive-readonly.yml
@@ -38,6 +40,7 @@ jobs:
             tests/test_gemini_l5_threshold_model.py \
             tests/test_short_crypto_incentive_snapshot.py \
             tests/test_kalshi_l5_threshold_model.py \
+            tests/test_kalshi_l5_inventory_replay.py \
             tests/test_gemini_short_crypto_l5_threshold_supervisor_v1.py \
             tests/test_gemini_short_crypto_dual_horizon_settlement_reconcile_v2.py \
             tests/test_gemini_short_crypto_inventory_maker_q1.py \
@@ -47,13 +50,17 @@ jobs:
         run: |
           mkdir -p artifacts
           python -m src.short_crypto_incentive_snapshot --pretty | tee artifacts/short-crypto-incentives.json
-      - name: Capture Kalshi l5 threshold shadow
+      - name: Capture and score Kalshi l5 threshold shadow
         run: |
           python -m src.kalshi_l5_threshold_shadow \
             --seconds 90 \
             --poll-s 2 \
             --output artifacts/kalshi-l5-threshold-shadow.jsonl \
             | tee artifacts/kalshi-l5-threshold-shadow.log
+          python -m src.kalshi_l5_inventory_replay \
+            artifacts/kalshi-l5-threshold-shadow.jsonl \
+            --output artifacts/kalshi-l5-inventory-replay.json \
+            | tee artifacts/kalshi-l5-inventory-replay.log
       - name: Upload read-only evidence
         uses: actions/upload-artifact@v4
         with:
