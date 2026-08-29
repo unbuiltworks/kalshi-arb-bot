@@ -86,12 +86,57 @@ def load_manual(manual_dir: str) -> tuple[list[dict], list[dict], dict]:
     return activity, markets, stats.as_dict()
 
 
+def _window_key(market: dict) -> tuple | None:
+    from src.l5.classify import classify_market
+
+    c = classify_market(market)
+    if c.asset and c.window_start_ts and c.window_end_ts:
+        return (c.asset, c.window_start_ts, c.window_end_ts)
+    return None
+
+
+def _supersede_manual(
+    api_markets: list[dict],
+    manual_activity: list[dict],
+    manual_markets: list[dict],
+) -> tuple[list[dict], list[dict], dict]:
+    api_keys = {k for k in (_window_key(m) for m in api_markets) if k}
+    if not api_keys:
+        return manual_activity, manual_markets, {"windows": 0, "rows": 0}
+
+    dropped_conditions = {
+        str(m.get("conditionId"))
+        for m in manual_markets
+        if _window_key(m) in api_keys
+    }
+    kept_activity = [
+        r for r in manual_activity if str(r.get("conditionId")) not in dropped_conditions
+    ]
+    kept_markets = [
+        m for m in manual_markets if str(m.get("conditionId")) not in dropped_conditions
+    ]
+    return kept_activity, kept_markets, {
+        "windows": len(dropped_conditions),
+        "rows": len(manual_activity) - len(kept_activity),
+    }
+
+
 def build(cache_dir: str, output_dir: str, manual_dir: str | None = None) -> dict[str, Any]:
     """Cache (+ any screenshot batches) -> the CSVs. Never touches the network."""
     raw = load_cache(cache_dir)
     manual_activity, manual_markets, manual_stats = load_manual(
         manual_dir or config.MANUAL_DIR
     )
+
+    # A window served by the API supersedes its screenshot transcription: the
+    # same fills would otherwise appear twice under two different condition
+    # IDs (the API's 0x... and the synthetic screenshot:...). Matching is by
+    # exact window identity -- asset plus start/end timestamps.
+    manual_activity, manual_markets, superseded = _supersede_manual(
+        raw["markets"], manual_activity, manual_markets
+    )
+    if isinstance(manual_stats, dict) and manual_stats:
+        manual_stats["superseded_by_api"] = superseded
 
     market_index = build_market_index(raw["markets"] + manual_markets)
 

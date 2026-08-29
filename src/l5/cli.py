@@ -34,6 +34,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--append", action="store_true", help="keep existing cache files instead of truncating"
     )
 
+    ingest = sub.add_parser(
+        "ingest", help="add user-downloaded data-api JSON pages to the raw cache"
+    )
+    _add_common(ingest)
+    ingest.add_argument("files", nargs="+", help="JSON files saved from the public data API")
+    ingest.add_argument("--wallet", default=config.TARGET_WALLET)
+
     build = sub.add_parser("build", help="cache -> CSVs (offline)")
     _add_common(build)
 
@@ -63,6 +70,12 @@ def main(argv: list[str] | None = None) -> int:
             reset=not getattr(args, "append", False),
         )
         print(json.dumps({"fetch_manifest": manifest}, indent=2)[:4000])
+
+    if args.command == "ingest":
+        from src.l5.userjson import ingest_files
+
+        stats = ingest_files(args.files, args.cache_dir, wallet=args.wallet)
+        print(json.dumps({"ingest": stats.as_dict()}, indent=2))
 
     if args.command == "build":
         result = pipeline.build(args.cache_dir, args.output_dir)
