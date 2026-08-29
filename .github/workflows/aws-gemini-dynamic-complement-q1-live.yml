@@ -17,7 +17,7 @@ env:
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
   LIVE_BRANCH: feature/gemini-incentive-mm-dynamic-complement-q1
   LIVE_CONTAINER: arb-gemini-dynamic-complement-live-probe-q1
-  EXACT_TESTED_COMMIT: 93fa9e07efcef66528013399d44450f6461462da
+  EXACT_TESTED_COMMIT: cb547d8562352efc36565463afa96d9f11f5e1fa
 
 jobs:
   live_probe:
