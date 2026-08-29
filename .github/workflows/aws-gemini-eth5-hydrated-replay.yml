@@ -1,0 +1,105 @@
+name: AWS Gemini ETH5 hydrated replay
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/gemini-eth5-hydrated-replay.trigger
+      - .github/workflows/aws-gemini-eth5-hydrated-replay.yml
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  SOURCE_BRANCH: feature/gemini-incentive-mm-dynamic-complement-q1
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - name: Read replay trigger
+        id: trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=deploy/aws/gemini-eth5-hydrated-replay.trigger
+          PINNED_COMMIT=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$FILE" | tr -d '[:space:]')
+          TAPE_RUN=$(awk -F= '$1=="TAPE_RUN"{print $2}' "$FILE" | tr -d '[:space:]')
+          CLASSIFICATION=$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$FILE" | tr -d '[:space:]')
+          [[ "$PINNED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$TAPE_RUN" =~ ^[0-9A-Za-z._-]+$ ]]
+          test "$CLASSIFICATION" = "SHADOW_REPLAY_NOT_REALIZED"
+          echo "pinned_commit=$PINNED_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "tape_run=$TAPE_RUN" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Hydrate retained ETH5 tape and replay offline
+        shell: bash
+        env:
+          PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
+          TAPE_RUN: ${{ steps.trigger.outputs.tape_run }}
+        run: |
+          set -Eeuo pipefail
+          SHORT_SHA="${PINNED_COMMIT:0:12}"
+          REMOTE_SCRIPT=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          ROOT=/home/ssm-user/gemini-l5-dynamic-shadow-v2-state
+          WORK=/opt/arb/gemini-eth5-hydrated-replay
+          TAPE="\$ROOT/${TAPE_RUN}/capture.jsonl"
+          OUT=/home/ssm-user/gemini-eth5-hydrated-replay-state/${TAPE_RUN}-${SHORT_SHA}
+          test -f "\$TAPE"
+          git -C "\$REPO" config --global --add safe.directory "\$REPO" || true
+          git -C "\$REPO" fetch origin ${SOURCE_BRANCH}
+          git -C "\$REPO" cat-file -e "${PINNED_COMMIT}^{commit}"
+          git -C "\$REPO" merge-base --is-ancestor "${PINNED_COMMIT}" origin/${SOURCE_BRANCH}
+          git -C "\$REPO" worktree remove --force "\$WORK" >/dev/null 2>&1 || true
+          rm -rf "\$WORK"
+          git -C "\$REPO" worktree prune
+          git -C "\$REPO" worktree add --detach "\$WORK" "${PINNED_COMMIT}"
+          bash -n "\$WORK/deploy/aws/run_gemini_eth5_hydrated_replay.sh"
+          IMAGE=arb-gemini-eth5-hydrated-replay:${SHORT_SHA}
+          docker build -t "\$IMAGE" "\$WORK" >/dev/null
+          docker run --rm --network none "\$IMAGE" python -m pytest -q tests/test_gemini_retained_eth5_trade_hydrate.py tests/test_gemini_dynamic_initial_entry_replay_q1.py tests/test_gemini_incentive_mm_dynamic_complement.py
+          mkdir -p "\$OUT"
+          bash "\$WORK/deploy/aws/run_gemini_eth5_hydrated_replay.sh" "\$IMAGE" "\$TAPE" "\$OUT"
+          echo AWS_ETH5_HYDRATED_REPLAY_OUTPUT_DIR="\$OUT"
+          echo AWS_ETH5_HYDRATED_REPLAY_CLASSIFICATION=SHADOW_REPLAY_NOT_REALIZED order_entry=false credentials_loaded=false
+          EOF
+          )
+          ENCODED=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
+          REMOTE_CMD="echo '$ENCODED' | base64 -d | sudo -u ssm-user bash"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "ARB ETH5 hydrated shadow replay ${SHORT_SHA}" \
+            --parameters "$PARAMETERS" \
+            --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 120); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || true)
+            case "$STATUS" in
+              Success|Failed|Cancelled|TimedOut) break ;;
+            esac
+            sleep 5
+          done
+          RESULT=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = "Success"
+          stdout=$(jq -r '.Stdout // ""' <<<"$RESULT")
+          grep -q 'GEMINI_ETH5_HYDRATED_REPLAY_COMPLETE' <<<"$stdout"
+          grep -q 'SHADOW_REPLAY_NOT_REALIZED' <<<"$stdout"
+          grep -q 'order_entry=false credentials_loaded=false' <<<"$stdout"
