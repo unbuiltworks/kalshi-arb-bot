@@ -12,6 +12,8 @@ on:
       - 'src/gemini_short_crypto_dual_horizon_settlement_reconcile_v2.py'
       - 'src/gemini_incentive_mm_live_probe_q1.py'
       - 'src/gemini_incentive_mm_dynamic_live_probe_q1.py'
+      - 'src/gemini_dynamic_initial_entry_replay_q1.py'
+      - 'src/gemini_retained_eth5_trade_hydrate.py'
       - 'deploy/aws/run_gemini_dynamic_complement_q1.sh'
       - 'tests/test_gemini_incentive_mm_dynamic_complement.py'
       - 'tests/test_gemini_short_crypto_dynamic_complement_q1.py'
@@ -21,6 +23,8 @@ on:
       - 'tests/test_gemini_incentive_mm_live_probe_q1.py'
       - 'tests/test_gemini_incentive_mm_dynamic_live_probe_q1.py'
       - 'tests/test_gemini_dynamic_complement_launcher_guard.py'
+      - 'tests/test_gemini_dynamic_initial_entry_replay_q1.py'
+      - 'tests/test_gemini_retained_eth5_trade_hydrate.py'
       - '.github/workflows/gemini-dynamic-complement-q1-test.yml'
   workflow_dispatch:
 
@@ -50,4 +54,6 @@ jobs:
             tests/test_gemini_short_crypto_dual_horizon_settlement_reconcile_v2.py \
             tests/test_gemini_incentive_mm_live_probe_q1.py \
             tests/test_gemini_incentive_mm_dynamic_live_probe_q1.py \
-            tests/test_gemini_dynamic_complement_launcher_guard.py
+            tests/test_gemini_dynamic_complement_launcher_guard.py \
+            tests/test_gemini_dynamic_initial_entry_replay_q1.py \
+            tests/test_gemini_retained_eth5_trade_hydrate.py
