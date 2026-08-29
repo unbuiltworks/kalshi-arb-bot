@@ -81,6 +81,66 @@ jobs:
           test "$(jq -r '.Status' <<<"$RESULT")" = Success
           grep -q 'ETH5_FRONT_QUEUE_CENSUS_STATUS' <<<"$(jq -r '.Stdout // ""' <<<"$RESULT")"
 
+  l5-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Read-only l5 mirror checkpoint
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE_SCRIPT=$(cat <<'EOF'
+          set -Eeuo pipefail
+          ROOT=/home/ssm-user/l5-realtime-shadow-state/20260829T0740ET-l5mirror3
+          NAME=arb-l5-realtime-shadow-mirror
+          test -f "$ROOT/mirror.jsonl"
+          running=false; status=missing
+          if docker inspect "$NAME" >/dev/null 2>&1; then
+            running=$(docker inspect -f '{{.State.Running}}' "$NAME")
+            status=$(docker inspect -f '{{.State.Status}}' "$NAME")
+          fi
+          python - "$ROOT/mirror.jsonl" <<'PY'
+          import json,sys
+          path=sys.argv[1]
+          rows=[]
+          with open(path) as f:
+            for line in f:
+              try: rows.append(json.loads(line))
+              except: pass
+          comps=[r for r in rows if r.get('type')=='L5_TRADE_COMPARISON']
+          snaps=[r for r in rows if r.get('type')=='MARKET_SNAPSHOT']
+          good=[r for r in comps if r.get('pretrade_context_quality')=='RECORDED_BEFORE_FILL']
+          agrees=[r for r in good if r.get('same_side') is True]
+          buys=[r for r in good if (r.get('our_shadow') or {}).get('action')=='PAPER_BUY']
+          print(json.dumps({
+            'classification':'READ_ONLY_L5_REALTIME_SHADOW_NOT_REALIZED',
+            'order_entry':False,'credentials_loaded':False,'realized_pnl':None,
+            'rows':len(rows),'market_snapshots':len(snaps),'l5_trade_comparisons':len(comps),
+            'with_recorded_pretrade_snapshot':len(good),'our_paper_buys':len(buys),
+            'same_side_when_we_bought':sum(1 for r in buys if r.get('same_side') is True),
+            'latest_comparisons':comps[-12:]
+          }, separators=(',',':')))
+          PY
+          echo "L5_MIRROR_STATUS running=$running status=$status order_entry=false credentials_loaded=false"
+          EOF
+          )
+          ENCODED=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
+          REMOTE_CMD="echo '$ENCODED' | base64 -d | sudo -u ssm-user bash"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB l5 mirror checkpoint" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
+          RESULT=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          grep -q 'L5_MIRROR_STATUS' <<<"$(jq -r '.Stdout // ""' <<<"$RESULT")"
+
   launch-l5-mirror:
     if: contains(github.event.head_commit.message, 'Launch l5 mirror')
     runs-on: ubuntu-latest
