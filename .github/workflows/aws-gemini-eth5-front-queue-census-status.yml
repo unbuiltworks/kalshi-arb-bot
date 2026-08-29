@@ -106,7 +106,7 @@ jobs:
             running=$(docker inspect -f '{{.State.Running}}' "$NAME")
             status=$(docker inspect -f '{{.State.Status}}' "$NAME")
           fi
-          python - "$ROOT/mirror.jsonl" <<'PY'
+          python3 - "$ROOT/mirror.jsonl" <<'PY'
           import json,sys
           path=sys.argv[1]
           rows=[]
@@ -117,7 +117,6 @@ jobs:
           comps=[r for r in rows if r.get('type')=='L5_TRADE_COMPARISON']
           snaps=[r for r in rows if r.get('type')=='MARKET_SNAPSHOT']
           good=[r for r in comps if r.get('pretrade_context_quality')=='RECORDED_BEFORE_FILL']
-          agrees=[r for r in good if r.get('same_side') is True]
           buys=[r for r in good if (r.get('our_shadow') or {}).get('action')=='PAPER_BUY']
           print(json.dumps({
             'classification':'READ_ONLY_L5_REALTIME_SHADOW_NOT_REALIZED',
