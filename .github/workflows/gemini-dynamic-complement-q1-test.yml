@@ -14,6 +14,7 @@ on:
       - 'src/gemini_incentive_mm_dynamic_live_probe_q1.py'
       - 'src/gemini_dynamic_initial_entry_replay_q1.py'
       - 'src/gemini_retained_eth5_trade_hydrate.py'
+      - 'src/gemini_eth5_forward_tape_shadow.py'
       - 'deploy/aws/run_gemini_dynamic_complement_q1.sh'
       - 'deploy/aws/run_gemini_eth5_hydrated_replay.sh'
       - 'tests/test_gemini_incentive_mm_dynamic_complement.py'
@@ -26,6 +27,7 @@ on:
       - 'tests/test_gemini_dynamic_complement_launcher_guard.py'
       - 'tests/test_gemini_dynamic_initial_entry_replay_q1.py'
       - 'tests/test_gemini_retained_eth5_trade_hydrate.py'
+      - 'tests/test_gemini_eth5_forward_tape_shadow.py'
       - '.github/workflows/gemini-dynamic-complement-q1-test.yml'
   workflow_dispatch:
 
@@ -59,4 +61,5 @@ jobs:
             tests/test_gemini_incentive_mm_dynamic_live_probe_q1.py \
             tests/test_gemini_dynamic_complement_launcher_guard.py \
             tests/test_gemini_dynamic_initial_entry_replay_q1.py \
-            tests/test_gemini_retained_eth5_trade_hydrate.py
+            tests/test_gemini_retained_eth5_trade_hydrate.py \
+            tests/test_gemini_eth5_forward_tape_shadow.py
