@@ -1,3 +1,4 @@
+# Focused regression coverage for the read-only realtime l5 mirror.
 from src.l5_realtime_shadow_mirror import best_prices, inventory_summary, is_target_trade, shadow_decision
 
 
