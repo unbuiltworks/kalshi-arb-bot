@@ -23,14 +23,13 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Schedule bounded stop on AWS
+      - name: Stop and summarize overdue read-only census
         shell: bash
         run: |
           set -Eeuo pipefail
           FILE=deploy/aws/gemini-eth5-front-queue-census-shorten.trigger
           RUN_ID=$(awk -F= '$1=="RUN_ID"{print $2}' "$FILE" | tr -d '[:space:]')
           PINNED_COMMIT=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$FILE" | tr -d '[:space:]')
-          STOP_AT_UTC=$(awk -F= '$1=="STOP_AT_UTC"{print substr($0,index($0,"=")+1)}' "$FILE" | tr -d '\r')
           [[ "$RUN_ID" =~ ^[0-9A-Za-z._-]+$ ]]
           [[ "$PINNED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           SHORT_SHA=${PINNED_COMMIT:0:12}
@@ -39,25 +38,34 @@ jobs:
           ROOT=/home/ssm-user/gemini-eth5-front-queue-census-state/${RUN_ID}
           IMAGE=arb-gemini-eth5-front-queue-census:${SHORT_SHA}
           NAME=${CONTAINER_NAME}
-          test -d \"\$ROOT\"
-          test -f \"\$ROOT/census.jsonl\"
-          docker inspect \"\$NAME\" >/dev/null
-          cat >/home/ssm-user/eth5-frontq-stop-${RUN_ID}.sh <<'EOS'
-          #!/usr/bin/env bash
-          set -Eeuo pipefail
-          ROOT=/home/ssm-user/gemini-eth5-front-queue-census-state/${RUN_ID}
-          IMAGE=arb-gemini-eth5-front-queue-census:${SHORT_SHA}
-          NAME=${CONTAINER_NAME}
-          docker stop -t 20 \"\$NAME\" >/dev/null 2>&1 || true
-          docker run --rm --network none -v \"\$ROOT:/output\" \"\$IMAGE\" python -m src.gemini_eth5_front_queue_census --summarize-only --output /output/census.jsonl >\"\$ROOT/summary.json.tmp\"
-          mv \"\$ROOT/summary.json.tmp\" \"\$ROOT/summary.json\"
-          echo 'ETH5_FRONT_QUEUE_CENSUS_STOPPED_AT_10H order_entry=false credentials_loaded=false' >\"\$ROOT/stop-marker.txt\"
-          EOS
-          chmod 755 /home/ssm-user/eth5-frontq-stop-${RUN_ID}.sh
-          systemctl stop arb-eth5-frontq-10h-${RUN_ID}.timer arb-eth5-frontq-10h-${RUN_ID}.service >/dev/null 2>&1 || true
-          systemd-run --unit=arb-eth5-frontq-10h-${RUN_ID} --on-calendar='${STOP_AT_UTC}' --timer-property=AccuracySec=1s /bin/bash /home/ssm-user/eth5-frontq-stop-${RUN_ID}.sh
-          systemctl list-timers arb-eth5-frontq-10h-${RUN_ID}.timer --no-pager
-          echo ETH5_FRONT_QUEUE_CENSUS_SHORTENED run_id=${RUN_ID} stop_at='${STOP_AT_UTC}' target_hours=10
+          test -d "\$ROOT"
+          test -f "\$ROOT/census.jsonl"
+          docker inspect "\$NAME" >/dev/null
+          docker stop -t 20 "\$NAME" >/dev/null 2>&1 || true
+          docker run --rm --network none -v "\$ROOT:/output" "\$IMAGE" python -m src.gemini_eth5_front_queue_census --summarize-only --output /output/census.jsonl >"\$ROOT/summary.json.tmp"
+          mv "\$ROOT/summary.json.tmp" "\$ROOT/summary.json"
+          echo 'ETH5_FRONT_QUEUE_CENSUS_STOPPED_AFTER_10H order_entry=false credentials_loaded=false' >"\$ROOT/stop-marker.txt"
+          test -s "\$ROOT/summary.json"
+          running=\$(docker inspect -f '{{.State.Running}}' "\$NAME")
+          status=\$(docker inspect -f '{{.State.Status}}' "\$NAME")
+          echo "ETH5_FRONT_QUEUE_CENSUS_FINALIZED running=\$running status=\$status summary_exists=true order_entry=false credentials_loaded=false"
+          python3 - "\$ROOT/summary.json" <<'PY'
+          import json,sys
+          s=json.load(open(sys.argv[1]))
+          print(json.dumps({
+            'snapshots':s.get('snapshots'),
+            'windows':len(s.get('windows') or []),
+            'qualifiers':s.get('qualifier_snapshots_raw_edge_ge_5c'),
+            'front_feasible_2c_snapshots':s.get('front_feasible_2c_snapshots'),
+            'front_feasible_2c_pct':s.get('front_feasible_2c_pct_of_qualifiers'),
+            'front_edge_median':s.get('front_edge_median'),
+            'front_edge_p10':s.get('front_edge_p10'),
+            'front_edge_p90':s.get('front_edge_p90'),
+            'extra_ticks_each_preserving_2c_median':s.get('max_symmetric_extra_ticks_each_from_v3_preserving_2c_median'),
+            'queue_yes_v3_median':s.get('visible_yes_queue_ahead_at_v3_median'),
+            'queue_no_v3_median':s.get('visible_no_queue_ahead_at_v3_median')
+          },separators=(',',':')))
+          PY
           EOF
           )
           ENC=$(printf '%s' "$REMOTE" | base64 -w0)
@@ -67,4 +75,4 @@ jobs:
           RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
           echo "$RESULT"
           test "$(jq -r '.Status' <<<"$RESULT")" = Success
-          grep -q ETH5_FRONT_QUEUE_CENSUS_SHORTENED <<<"$(jq -r '.Stdout // ""' <<<"$RESULT")"
+          grep -q ETH5_FRONT_QUEUE_CENSUS_FINALIZED <<<"$(jq -r '.Stdout // ""' <<<"$RESULT")"
