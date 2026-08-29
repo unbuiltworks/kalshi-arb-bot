@@ -1,0 +1,1 @@
+{"error":"transport error: Tunnel connection failed: 403 Forbidden","fetched_at":"2026-08-29T21:01:15.327218Z","params":{"limit":500,"offset":0,"redeemable":"true","sizeThreshold":0,"user":"0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"},"payload":null,"status":0,"tag":"positions_redeemable","url":"https://data-api.polymarket.com/positions"}
