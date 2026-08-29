@@ -1,0 +1,73 @@
+name: L5 Polymarket Historical Export
+
+# Read-only. Fetches one trader's public Polymarket history and uploads the
+# derived CSVs as a build artifact. No credentials, no order entry, no writes
+# to any venue. Runs here because the public Polymarket endpoints are not
+# reachable from every development environment.
+#
+# NOTE: workflow_dispatch only appears once this file is on the default branch.
+
+on:
+  workflow_dispatch:
+    inputs:
+      wallet:
+        description: Proxy wallet to export
+        required: false
+        default: "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"
+      start_ts:
+        description: Optional unix-second lower bound for the activity sweep
+        required: false
+        default: ""
+      end_ts:
+        description: Optional unix-second upper bound for the activity sweep
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run the L5 unit tests
+        run: |
+          python -m pip install --quiet pytest
+          python -m pytest tests/test_l5_classify.py tests/test_l5_normalize.py \
+                           tests/test_l5_inventory.py tests/test_l5_windows.py \
+                           tests/test_l5_stats.py tests/test_l5_pipeline.py -q
+
+      - name: Fetch public history
+        env:
+          L5_WALLET: ${{ inputs.wallet }}
+          L5_START_TS: ${{ inputs.start_ts }}
+          L5_END_TS: ${{ inputs.end_ts }}
+        run: |
+          ARGS=(--wallet "$L5_WALLET")
+          if [ -n "$L5_START_TS" ]; then ARGS+=(--start-ts "$L5_START_TS"); fi
+          if [ -n "$L5_END_TS" ]; then ARGS+=(--end-ts "$L5_END_TS"); fi
+          python -m src.l5 fetch "${ARGS[@]}"
+
+      - name: Build tables and analysis
+        run: python -m src.l5 analyze --findings L5_STRATEGY_FINDINGS.md
+
+      - name: Summarise
+        run: python scripts/l5_step_summary.py >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: l5-polymarket-export
+          path: |
+            data/l5/*.csv
+            data/l5/l5_analysis.json
+            data/l5/cache/*.jsonl
+            data/l5/cache/fetch_manifest.json
+            L5_STRATEGY_FINDINGS.md
+          retention-days: 30

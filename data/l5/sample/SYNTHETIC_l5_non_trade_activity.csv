@@ -1,0 +1,6 @@
+timestamp,timestamp_iso,activity_type,asset,window_minutes,condition_id,market_slug,event_slug,outcome,size,usdc_size,price,transaction_hash
+1788034480,2026-08-29T20:14:40Z,MERGE,BTC,15,0xw000,bitcoin-up-or-down-15m-0,bitcoin-up-or-down-15m-0,Up,10,,0.5,0x000m
+1788051880,2026-08-30T01:04:40Z,MERGE,ETH,5,0xw005,ethereum-up-or-down-5m-5,ethereum-up-or-down-5m-5,Down,10,,0.5,0x005m
+1788069880,2026-08-30T06:04:40Z,MERGE,BTC,5,0xw010,bitcoin-up-or-down-5m-10,bitcoin-up-or-down-5m-10,Up,10,,0.5,0x010m
+1788088480,2026-08-30T11:14:40Z,MERGE,ETH,15,0xw015,ethereum-up-or-down-15m-15,ethereum-up-or-down-15m-15,Down,10,,0.5,0x015m
+1788105880,2026-08-30T16:04:40Z,MERGE,BTC,5,0xw020,bitcoin-up-or-down-5m-20,bitcoin-up-or-down-5m-20,Up,10,,0.5,0x020m
