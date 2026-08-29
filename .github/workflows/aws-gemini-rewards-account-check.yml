@@ -56,7 +56,7 @@ jobs:
               except urllib.error.HTTPError as e:
                   return {'ok':False,'status':e.code,'body':e.read().decode('utf-8','replace')[:1000]}
 
-          nonce=int(time.time()*1000)
+          nonce=int(time.time())
           def signed(path, method='GET'):
               global nonce
               nonce += 1
