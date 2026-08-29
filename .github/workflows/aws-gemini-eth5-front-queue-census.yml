@@ -1,0 +1,171 @@
+name: AWS Gemini ETH5 front-queue census
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/gemini-eth5-front-queue-census.trigger
+      - .github/workflows/aws-gemini-eth5-front-queue-census.yml
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  SOURCE_BRANCH: feature/eth5-front-queue-census
+  CONTAINER_NAME: arb-gemini-eth5-front-queue-census
+
+jobs:
+  start-census:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+
+      - name: Read and validate read-only trigger
+        id: trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=deploy/aws/gemini-eth5-front-queue-census.trigger
+          for key in PINNED_COMMIT RUN_ID CAPTURE_SECONDS POLL_SECONDS CLASSIFICATION; do
+            value=$(awk -F= -v k="$key" '$1==k{print $2}' "$FILE" | tr -d '[:space:]')
+            test -n "$value"
+            echo "${key,,}=$value" >> "$GITHUB_OUTPUT"
+          done
+          PINNED_COMMIT=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$FILE" | tr -d '[:space:]')
+          RUN_ID=$(awk -F= '$1=="RUN_ID"{print $2}' "$FILE" | tr -d '[:space:]')
+          CAPTURE_SECONDS=$(awk -F= '$1=="CAPTURE_SECONDS"{print $2}' "$FILE" | tr -d '[:space:]')
+          POLL_SECONDS=$(awk -F= '$1=="POLL_SECONDS"{print $2}' "$FILE" | tr -d '[:space:]')
+          CLASSIFICATION=$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$FILE" | tr -d '[:space:]')
+          [[ "$PINNED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$RUN_ID" =~ ^[0-9A-Za-z._-]+$ ]]
+          [[ "$CAPTURE_SECONDS" =~ ^[0-9]+$ ]]
+          [[ "$POLL_SECONDS" =~ ^[0-9]+([.][0-9]+)?$ ]]
+          test "$CAPTURE_SECONDS" -eq 86400
+          test "$CLASSIFICATION" = "READ_ONLY_PUBLIC_BOOK_CENSUS_NOT_REALIZED"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build, smoke-test, and start detached public-book census
+        shell: bash
+        env:
+          PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
+          RUN_ID: ${{ steps.trigger.outputs.run_id }}
+          CAPTURE_SECONDS: ${{ steps.trigger.outputs.capture_seconds }}
+          POLL_SECONDS: ${{ steps.trigger.outputs.poll_seconds }}
+        run: |
+          set -Eeuo pipefail
+          SHORT_SHA="${PINNED_COMMIT:0:12}"
+          REMOTE_SCRIPT=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          WORK=/opt/arb/gemini-eth5-front-queue-census
+          ROOT=/home/ssm-user/gemini-eth5-front-queue-census-state/${RUN_ID}
+          IMAGE=arb-gemini-eth5-front-queue-census:${SHORT_SHA}
+          NAME=${CONTAINER_NAME}
+
+          git -C "\$REPO" config --global --add safe.directory "\$REPO" || true
+          git -C "\$REPO" fetch origin ${SOURCE_BRANCH} >/dev/null 2>&1
+          git -C "\$REPO" cat-file -e "${PINNED_COMMIT}^{commit}"
+          git -C "\$REPO" merge-base --is-ancestor "${PINNED_COMMIT}" origin/${SOURCE_BRANCH}
+          git -C "\$REPO" worktree remove --force "\$WORK" >/dev/null 2>&1 || true
+          rm -rf "\$WORK"
+          git -C "\$REPO" worktree prune
+          git -C "\$REPO" worktree add --detach "\$WORK" "${PINNED_COMMIT}" >/dev/null 2>&1
+
+          rm -rf "\$ROOT"
+          mkdir -p "\$ROOT"
+          docker build -t "\$IMAGE" "\$WORK" >"\$ROOT/build.log" 2>&1
+          docker run --rm --network none "\$IMAGE" \
+            python -m pytest -q tests/test_gemini_eth5_front_queue_census.py \
+            >"\$ROOT/tests.log" 2>&1
+
+          rm -f /tmp/eth5-front-census-smoke.jsonl /tmp/eth5-front-census-smoke-summary.json
+          docker run --rm --network host "\$IMAGE" \
+            python -m src.gemini_eth5_front_queue_census \
+              --seconds 8 --poll-s 2 \
+              --output /tmp/census.jsonl \
+              --summary-output /tmp/summary.json \
+            >/tmp/eth5-front-census-smoke.log 2>&1 || true
+          # The container filesystem is ephemeral, so do an explicit mounted smoke pass.
+          SMOKE=/tmp/eth5-front-census-smoke
+          rm -rf "\$SMOKE"; mkdir -p "\$SMOKE"
+          docker run --rm --network host -v "\$SMOKE:/output" "\$IMAGE" \
+            python -m src.gemini_eth5_front_queue_census \
+              --seconds 8 --poll-s 2 \
+              --output /output/census.jsonl \
+              --summary-output /output/summary.json \
+            >"\$ROOT/smoke.log" 2>&1
+          test -s "\$SMOKE/census.jsonl"
+          test -s "\$SMOKE/summary.json"
+          python3 - "\$SMOKE/summary.json" <<'PY'
+          import json, pathlib, sys
+          s=json.loads(pathlib.Path(sys.argv[1]).read_text())
+          assert s.get('classification') == 'READ_ONLY_PUBLIC_BOOK_CENSUS_NOT_REALIZED'
+          assert s.get('order_entry') is False
+          assert s.get('credentials_loaded') is False
+          assert int(s.get('snapshots') or 0) >= 1
+          print('ETH5_FRONT_QUEUE_CENSUS_SMOKE_OK', json.dumps({k:s.get(k) for k in ('snapshots','qualifier_snapshots_raw_edge_ge_5c','front_feasible_2c_snapshots')}, separators=(',',':')))
+          PY
+
+          if docker inspect "\$NAME" >/dev/null 2>&1; then
+            running=\$(docker inspect -f '{{.State.Running}}' "\$NAME")
+            if [ "\$running" = true ]; then
+              echo "STOP: census container already running"
+              exit 9
+            fi
+            docker rm "\$NAME" >/dev/null
+          fi
+
+          cat >"\$ROOT/run-metadata.json" <<META
+          {"run_id":"${RUN_ID}","commit":"${PINNED_COMMIT}","capture_seconds":${CAPTURE_SECONDS},"poll_seconds":${POLL_SECONDS},"classification":"READ_ONLY_PUBLIC_BOOK_CENSUS_NOT_REALIZED","order_entry":false,"credentials_loaded":false,"started_at_utc":"\$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+          META
+
+          docker run -d --name "\$NAME" --network host --restart=no \
+            -v "\$ROOT:/output" \
+            "\$IMAGE" \
+            python -m src.gemini_eth5_front_queue_census \
+              --seconds ${CAPTURE_SECONDS} --poll-s ${POLL_SECONDS} \
+              --output /output/census.jsonl \
+              --summary-output /output/summary.json \
+            >"\$ROOT/container-id.txt"
+          sleep 3
+          test "\$(docker inspect -f '{{.State.Running}}' "\$NAME")" = true
+          echo "ETH5_FRONT_QUEUE_CENSUS_STARTED run_id=${RUN_ID} commit=${PINNED_COMMIT} seconds=${CAPTURE_SECONDS} poll_s=${POLL_SECONDS} order_entry=false credentials_loaded=false"
+          docker logs --tail 5 "\$NAME" 2>&1 || true
+          EOF
+          )
+          ENCODED=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
+          REMOTE_CMD="echo '$ENCODED' | base64 -d | sudo -u ssm-user bash"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "ARB ETH5 front-queue read-only census ${RUN_ID}" \
+            --parameters "$PARAMETERS" \
+            --timeout-seconds 600 \
+            --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 120); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || true)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 5
+          done
+          RESULT=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          stdout=$(jq -r '.Stdout // ""' <<<"$RESULT")
+          grep -q 'ETH5_FRONT_QUEUE_CENSUS_SMOKE_OK' <<<"$stdout"
+          grep -q 'ETH5_FRONT_QUEUE_CENSUS_STARTED' <<<"$stdout"
+          grep -q 'order_entry=false credentials_loaded=false' <<<"$stdout"
