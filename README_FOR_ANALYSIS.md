@@ -22,6 +22,43 @@ internet access. No credentials are required.
 
 ---
 
+## Second input path: screenshot transcriptions
+
+Because the API is unreachable here, `src/l5/manual.py` ingests hand-transcribed
+activity-feed rows from `data/l5/manual/*.json` and converts them into **exactly the record
+shape the API returns**, so the whole downstream pipeline runs unchanged. Screenshot rows
+carry `source=screenshot` and are never merged into the API sources (they have no
+transaction hash, so cross-source dedup cannot match them — a later fetch can be compared
+against them instead of double-counting).
+
+Three properties of the feed drive that module:
+
+1. **Window bounds are exact.** Titles name the span — `"Bitcoin Up or Down - August 29,
+   5:00PM-5:15PM ET"` — so the window length is *derived*, not guessed, and
+   `window_source` is `metadata`. This also exposed a gap in the classifier: the real
+   titles carry a clock range, not a `"5m"` label, so `window_minutes_from_time_range()`
+   was added and is trusted above the label regex.
+2. **Displayed cents are rounded.** A row reading `Up 92¢, 30.5 shares, $28.17` is really
+   0.9236. `dollars / shares` is authoritative; the badge is kept as
+   `price_cents_displayed` and disagreements are counted.
+3. **Times are relative and coarse.** `"4m ago"` against a clock legible only to the
+   minute bounds a fill to a **two-minute interval**, not an instant. Seeing the same row
+   in two screenshots narrows it by intersection. Each row carries
+   `timestamp_uncertainty_s`. Ordering therefore comes from feed position (`feed_seq`),
+   which is exact, never from the derived timestamp.
+
+Sequential screenshots are stitched by their **seam** — the longest suffix of one page
+matching the prefix of the next. Unlike a global dedup this preserves a fill that genuinely
+repeats (identical price and size, two separate cards, which does occur), and a
+non-contiguous pair of pages is flagged as a gap rather than silently joined.
+
+### Partial windows
+
+A window straddling either edge of the capture is missing fills, so its final inventory,
+matched quantity and balanced-finish flag describe a fragment. Those carry
+`capture_complete=false` with a `capture_note`, and **every window-level statistic
+(questions 3–9) excludes them**. Per-trade statistics (question 2) use every fill.
+
 ## Read-only guarantees
 
 - Every network call is a `GET`. `src/l5/http.py` has no code path that can `POST`,

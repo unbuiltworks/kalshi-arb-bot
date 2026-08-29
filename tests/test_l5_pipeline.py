@@ -90,7 +90,13 @@ def run(tmp_path_factory):
     out_dir = root / "out"
     expected = _build_cache(cache_dir)
     findings = root / "L5_STRATEGY_FINDINGS.md"
-    result = pipeline.analyze(str(cache_dir), str(out_dir), str(findings))
+    # Explicit empty manual dir: without it the run would pick up the real
+    # screenshot batches in the repo and stop being hermetic.
+    manual_dir = root / "manual"
+    manual_dir.mkdir()
+    result = pipeline.analyze(
+        str(cache_dir), str(out_dir), str(findings), manual_dir=str(manual_dir)
+    )
     return {"out_dir": out_dir, "findings": findings, "result": result, "expected": expected}
 
 

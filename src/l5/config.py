@@ -74,6 +74,7 @@ MIN_SAMPLE_FOR_CLAIM = 20
 # --- Local paths -------------------------------------------------------------
 
 CACHE_DIR = "data/l5/cache"
+MANUAL_DIR = "data/l5/manual"   # screenshot transcriptions
 OUTPUT_DIR = "data/l5"
 
 RAW_ACTIVITY_JSONL = "raw_activity.jsonl"

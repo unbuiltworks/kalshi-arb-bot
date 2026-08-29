@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import glob
 import json
 import os
-from dataclasses import asdict
 from typing import Any
 
 from src.l5 import analysis as analysis_mod
-from src.l5 import config, csvout, report
+from src.l5 import config, csvout, manual, report
 from src.l5.fetch import (
     HttpJson,
     fetch_activity,
@@ -77,15 +77,39 @@ def load_cache(cache_dir: str) -> dict[str, list[dict]]:
     }
 
 
-def build(cache_dir: str, output_dir: str) -> dict[str, Any]:
-    """Cache -> the three deliverable CSVs. Never touches the network."""
-    raw = load_cache(cache_dir)
-    market_index = build_market_index(raw["markets"])
+def load_manual(manual_dir: str) -> tuple[list[dict], list[dict], list[dict]]:
+    """Screenshot transcriptions, converted to API-shaped records."""
+    paths = sorted(glob.glob(os.path.join(manual_dir, "*.json")))
+    if not paths:
+        return [], [], []
+    activity, markets, stats = manual.load_batches(paths)
+    return activity, markets, [s.as_dict() for s in stats]
 
-    trades, norm_stats = normalize(
-        {"activity": raw["activity"], "trades": raw["trades"]}, market_index
+
+def build(cache_dir: str, output_dir: str, manual_dir: str | None = None) -> dict[str, Any]:
+    """Cache (+ any screenshot batches) -> the CSVs. Never touches the network."""
+    raw = load_cache(cache_dir)
+    manual_activity, manual_markets, manual_stats = load_manual(
+        manual_dir or config.MANUAL_DIR
     )
-    non_trade = extract_non_trade_activity(raw["activity"], market_index)
+
+    market_index = build_market_index(raw["markets"] + manual_markets)
+
+    # Screenshot rows are a separate source, never merged into the API sources:
+    # they carry no transaction hash, so cross-source dedup cannot match them
+    # against fetched fills. Keeping them apart means a later fetch can be
+    # compared against them rather than silently double-counting.
+    trades, norm_stats = normalize(
+        {
+            "activity": raw["activity"],
+            "trades": raw["trades"],
+            "screenshot": manual_activity,
+        },
+        market_index,
+    )
+    non_trade = extract_non_trade_activity(
+        raw["activity"] + manual_activity, market_index
+    )
     pnl_index = build_pnl_index(raw["positions"])
     windows = build_windows(trades, pnl_index)
 
@@ -109,16 +133,23 @@ def build(cache_dir: str, output_dir: str) -> dict[str, Any]:
         "trades": trades,
         "windows": windows,
         "normalize_stats": norm_stats.as_dict(),
+        "manual_stats": manual_stats,
         "markets_classified": len(market_index),
         "markets_in_scope": sum(1 for m in market_index.values() if m.in_scope),
         "rows_written": written,
     }
 
 
-def analyze(cache_dir: str, output_dir: str, findings_path: str | None) -> dict[str, Any]:
-    built = build(cache_dir, output_dir)
+def analyze(
+    cache_dir: str,
+    output_dir: str,
+    findings_path: str | None,
+    manual_dir: str | None = None,
+) -> dict[str, Any]:
+    built = build(cache_dir, output_dir, manual_dir)
     results = analysis_mod.analyze(built["trades"], built["windows"])
     results["normalize_stats"] = built["normalize_stats"]
+    results["manual_stats"] = built["manual_stats"]
     results["markets_classified"] = built["markets_classified"]
     results["markets_in_scope"] = built["markets_in_scope"]
 
@@ -143,4 +174,5 @@ def analyze(cache_dir: str, output_dir: str, findings_path: str | None) -> dict[
         "findings_path": findings_path,
         "rows_written": built["rows_written"],
         "normalize_stats": built["normalize_stats"],
+        "manual_stats": built["manual_stats"],
     }

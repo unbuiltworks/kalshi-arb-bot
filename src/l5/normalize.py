@@ -54,7 +54,11 @@ class Trade:
     window_source: str
     window_conflict: bool
     bounds_reconstructed: bool
-    source: str                 # activity | trades
+    source: str                 # activity | trades | screenshot
+    # Screenshot-derived provenance; None for API rows.
+    feed_seq: int | None
+    timestamp_uncertainty_s: int | None
+    price_cents_displayed: int | None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -104,6 +108,33 @@ def condition_ids_in(records: Iterable[dict]) -> set[str]:
 
 
 # --- field parsing -----------------------------------------------------------
+
+
+def _opt_int(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _ordering_key(trade: "Trade") -> tuple:
+    """Chronological order.
+
+    `feed_seq` breaks ties before any value-derived field: screenshot rows all
+    land on the same minute, and the activity feed's own ordering is exact
+    where the timestamps are not.
+    """
+    return (
+        trade.timestamp,
+        trade.feed_seq if trade.feed_seq is not None else 0,
+        trade.condition_id,
+        trade.outcome,
+        trade.side,
+        trade.price,
+        trade.shares,
+    )
 
 
 def _num(value: Any) -> float | None:
@@ -307,6 +338,9 @@ def normalize(
                 window_conflict=market.window_conflict,
                 bounds_reconstructed=market.bounds_reconstructed,
                 source=source,
+                feed_seq=_opt_int(record.get("feedSeq")),
+                timestamp_uncertainty_s=_opt_int(record.get("tsUncertaintyS")),
+                price_cents_displayed=_opt_int(record.get("priceCentsDisplayed")),
             )
         )
         if market.window_conflict:
@@ -314,7 +348,7 @@ def normalize(
         if market.bounds_reconstructed:
             stats.bounds_reconstructed += 1
 
-    trades.sort(key=lambda t: (t.timestamp, t.condition_id, t.outcome, t.side, t.price, t.shares))
+    trades.sort(key=_ordering_key)
     stats.parsed = len(trades)
     return trades, stats
 

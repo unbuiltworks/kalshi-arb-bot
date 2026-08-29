@@ -112,6 +112,43 @@ def window_minutes_from_text(*text_parts: Any) -> int | None:
     return None
 
 
+_TIME_RANGE = re.compile(
+    r"(?<![a-z0-9:])(\d{1,2}):(\d{2})\s*([AaPp])\.?[Mm]\.?"
+    r"\s*[-\u2012\u2013\u2014\u2015]\s*"
+    r"(\d{1,2}):(\d{2})\s*([AaPp])\.?[Mm]\.?",
+)
+
+
+def _to_minutes_of_day(hour: int, minute: int, meridiem: str) -> int:
+    hour = hour % 12
+    if meridiem.lower() == "p":
+        hour += 12
+    return hour * 60 + minute
+
+
+def window_minutes_from_time_range(*text_parts: Any) -> int | None:
+    """Read the window length out of an explicit clock range in the title.
+
+    Polymarket names these markets by their span -- "Bitcoin Up or Down -
+    August 29, 5:00PM-5:15PM ET" -- so this is a *derived duration*, not a
+    text label, and it is trusted well above a bare "5m" token. It is still
+    weaker than market metadata, which is timezone-unambiguous.
+    """
+    text = _text_of(*text_parts)
+    match = _TIME_RANGE.search(text)
+    if not match:
+        return None
+    h1, m1, ap1, h2, m2, ap2 = match.groups()
+    start = _to_minutes_of_day(int(h1), int(m1), ap1)
+    end = _to_minutes_of_day(int(h2), int(m2), ap2)
+    delta = end - start
+    if delta < 0:  # range crosses midnight
+        delta += 24 * 60
+    if delta <= 0:
+        return None
+    return window_minutes_from_duration(delta * 60)
+
+
 def window_minutes_from_duration(duration_s: int | None) -> int | None:
     """Map an observed market duration onto a 5m/15m bucket, or None."""
     if duration_s is None or duration_s <= 0:
@@ -145,6 +182,7 @@ class MarketClassification:
     duration_s: int | None
     window_minutes: int | None
     window_minutes_from_metadata: int | None
+    window_minutes_from_time_range: int | None
     window_minutes_from_text: int | None
     window_source: str          # "metadata" | "text_fallback" | "unclassified"
     window_conflict: bool       # metadata and text disagree
@@ -218,12 +256,21 @@ def classify_market(market: dict) -> MarketClassification:
 
     duration_s = (end_ts - start_ts) if (start_ts is not None and end_ts is not None) else None
     from_meta = window_minutes_from_duration(duration_s)
+    from_range = window_minutes_from_time_range(question, event_title, slug, event_slug)
     from_text = window_minutes_from_text(slug, question, event_slug, event_title)
 
     bounds_reconstructed = False
     if from_meta is not None:
         window_minutes = from_meta
         source = "metadata"
+    elif from_range is not None and end_ts is not None:
+        # The title names an explicit clock span. Trust the span, keep the
+        # metadata end, and derive the start from it.
+        window_minutes = from_range
+        source = "title_timerange"
+        start_ts = end_ts - window_minutes * 60
+        duration_s = window_minutes * 60
+        bounds_reconstructed = True
     elif from_text is not None and end_ts is not None:
         # No usable duration (a missing or bogus start field is common on some
         # series). Fall back to the text, and reconstruct the start from the
@@ -238,9 +285,8 @@ def classify_market(market: dict) -> MarketClassification:
         window_minutes = None
         source = "unclassified"
 
-    conflict = (
-        from_meta is not None and from_text is not None and from_meta != from_text
-    )
+    claims = {c for c in (from_meta, from_range, from_text) if c is not None}
+    conflict = len(claims) > 1
 
     return MarketClassification(
         condition_id=str(market.get("conditionId") or ""),
@@ -256,6 +302,7 @@ def classify_market(market: dict) -> MarketClassification:
         duration_s=duration_s,
         window_minutes=window_minutes,
         window_minutes_from_metadata=from_meta,
+        window_minutes_from_time_range=from_range,
         window_minutes_from_text=from_text,
         window_source=source,
         window_conflict=conflict,

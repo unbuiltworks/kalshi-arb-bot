@@ -17,6 +17,7 @@ TRADE_COLUMNS = [
     "window_start_ts", "window_end_ts",
     "seconds_from_window_start", "seconds_to_expiry",
     "window_source", "window_conflict", "bounds_reconstructed", "source",
+    "feed_seq", "timestamp_uncertainty_s", "price_cents_displayed",
 ]
 
 SEQUENCE_COLUMNS = [
@@ -25,6 +26,7 @@ SEQUENCE_COLUMNS = [
     "trade_seq", "timestamp", "timestamp_iso",
     "seconds_from_window_start", "seconds_to_expiry",
     "outcome", "side", "price", "shares", "dollars", "transaction_hash",
+    "source", "timestamp_uncertainty_s",
     # cumulative state after this trade
     "up_qty", "up_spend", "up_avg_price",
     "down_qty", "down_spend", "down_avg_price",
@@ -55,6 +57,7 @@ SUMMARY_COLUMNS = [
     "residual_qty", "residual_side", "residual_frac_of_larger_leg", "finished_balanced",
     "traded_both_sides", "seconds_to_opposite_side", "trades_before_opposite_side",
     "realized_pnl", "pnl_source", "pnl_rows",
+    "capture_complete", "capture_note",
     "window_source", "window_conflict", "bounds_reconstructed", "oversold",
 ]
 
@@ -120,6 +123,8 @@ def write_window_sequences(path: str, windows: Sequence[Window]) -> int:
                         "shares": trade.shares,
                         "dollars": trade.dollars,
                         "transaction_hash": trade.transaction_hash,
+                        "source": trade.source,
+                        "timestamp_uncertainty_s": trade.timestamp_uncertainty_s,
                     }
                 )
                 yield row

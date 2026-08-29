@@ -73,6 +73,16 @@ WINDOW_RATES: dict[str, Callable[[WindowSummary], bool]] = {
 }
 
 
+def complete_windows(windows: Sequence[Window]) -> list[Window]:
+    """Windows the retrieved data spans end to end.
+
+    Every window-level statistic uses these. A partially captured window has a
+    truncated fill list, so its final inventory and balance are artefacts of
+    where the capture stopped, not of how the trader finished.
+    """
+    return [w for w in windows if w.summary and w.summary.capture_complete]
+
+
 def _metric_values(summaries: Sequence[WindowSummary], key: str) -> list[float]:
     return _clean(WINDOW_METRICS[key](s) for s in summaries)
 
@@ -128,6 +138,12 @@ def coverage(trades: Sequence[Trade], windows: Sequence[Window]) -> dict:
         "windows_with_window_conflict": sum(1 for s in summaries if s.window_conflict),
         "windows_with_reconstructed_bounds": sum(1 for s in summaries if s.bounds_reconstructed),
         "windows_with_oversold_flag": sum(1 for s in summaries if s.oversold),
+        "windows_fully_captured": sum(1 for s in summaries if s.capture_complete),
+        "windows_partially_captured": sum(1 for s in summaries if not s.capture_complete),
+        "note_on_partial_windows": (
+            "Window-level statistics (questions 3-9) use fully captured windows only. "
+            "Per-trade statistics (question 2) use every fill."
+        ),
     }
 
 
@@ -204,7 +220,7 @@ def q1_size_vs_price(trades: Sequence[Trade], windows: Sequence[Window]) -> dict
 
 
 def q2_duration_split(windows: Sequence[Window]) -> dict:
-    summaries = [w.summary for w in windows if w.summary]
+    summaries = [w.summary for w in complete_windows(windows)]
     five = [s for s in summaries if s.window_minutes == 5]
     fifteen = [s for s in summaries if s.window_minutes == 15]
     return {
@@ -214,7 +230,7 @@ def q2_duration_split(windows: Sequence[Window]) -> dict:
 
 
 def q3_asset_split(windows: Sequence[Window]) -> dict:
-    summaries = [w.summary for w in windows if w.summary]
+    summaries = [w.summary for w in complete_windows(windows)]
     btc = [s for s in summaries if s.asset == "BTC"]
     eth = [s for s in summaries if s.asset == "ETH"]
     return {
@@ -292,7 +308,7 @@ def q4_cheaper_side(trades: Sequence[Trade], windows: Sequence[Window]) -> dict:
 
 
 def q5_time_to_opposite(windows: Sequence[Window]) -> dict:
-    summaries = [w.summary for w in windows if w.summary]
+    summaries = [w.summary for w in complete_windows(windows)]
     both = [s for s in summaries if s.traded_both_sides and s.seconds_to_opposite_side is not None]
     seconds = [float(s.seconds_to_opposite_side) for s in both]
     frac_of_window = [
@@ -331,7 +347,8 @@ def q5_time_to_opposite(windows: Sequence[Window]) -> dict:
 
 
 def q6_pair_cost_target(windows: Sequence[Window]) -> dict:
-    summaries = [w.summary for w in windows if w.summary]
+    complete = complete_windows(windows)
+    summaries = [w.summary for w in complete]
     paired = [
         s
         for s in summaries
@@ -353,7 +370,7 @@ def q6_pair_cost_target(windows: Sequence[Window]) -> dict:
     # cost also being the running minimum for that window.
     final_is_min = 0
     considered = 0
-    for window in windows:
+    for window in complete:
         series = [
             s.matched_pair_cost_per_share
             for s in window.snapshots
@@ -408,7 +425,7 @@ def q6_pair_cost_target(windows: Sequence[Window]) -> dict:
 
 
 def q7_balanced_finish(windows: Sequence[Window]) -> dict:
-    summaries = [w.summary for w in windows if w.summary]
+    summaries = [w.summary for w in complete_windows(windows)]
     balanced = sum(1 for s in summaries if s.finished_balanced)
     by_cell = {}
     for asset in config.ASSETS:
@@ -445,7 +462,9 @@ def q7_balanced_finish(windows: Sequence[Window]) -> dict:
 
 
 def q8_pnl_split(windows: Sequence[Window]) -> dict:
-    summaries = [w.summary for w in windows if w.summary and w.summary.realized_pnl is not None]
+    summaries = [
+        w.summary for w in complete_windows(windows) if w.summary.realized_pnl is not None
+    ]
     winners = [s for s in summaries if s.realized_pnl > 0]
     losers = [s for s in summaries if s.realized_pnl < 0]
     flat = [s for s in summaries if s.realized_pnl == 0]

@@ -9,7 +9,7 @@ from typing import Any, Iterable
 from src.l5 import config
 from src.l5.classify import iso
 from src.l5.inventory import EPS, Inventory, Snapshot
-from src.l5.normalize import Trade
+from src.l5.normalize import Trade, _ordering_key
 
 BALANCED = "BALANCED"
 
@@ -129,6 +129,9 @@ class WindowSummary:
     pnl_source: str
     pnl_rows: int
 
+    capture_complete: bool
+    capture_note: str
+
     window_source: str
     window_conflict: bool
     bounds_reconstructed: bool
@@ -156,14 +159,22 @@ def group_trades(trades: Iterable[Trade]) -> dict[str, list[Trade]]:
     for trade in trades:
         grouped[trade.condition_id].append(trade)
     for rows in grouped.values():
-        rows.sort(key=lambda t: (t.timestamp, t.outcome, t.side, t.price, t.shares))
+        rows.sort(key=_ordering_key)
     return dict(grouped)
+
+
+def capture_bounds(trades: Iterable[Trade]) -> tuple[int | None, int | None]:
+    """The time span the retrieved data actually covers."""
+    stamps = [t.timestamp for t in trades]
+    return (min(stamps), max(stamps)) if stamps else (None, None)
 
 
 def build_windows(
     trades: Iterable[Trade], pnl_index: dict[str, dict[str, Any]] | None = None
 ) -> list[Window]:
     pnl_index = pnl_index or {}
+    trades = list(trades)
+    capture_start, capture_end = capture_bounds(trades)
     windows: list[Window] = []
 
     for condition_id, rows in group_trades(trades).items():
@@ -172,7 +183,10 @@ def build_windows(
             inventory.apply(t.outcome, t.side, t.shares, t.price, t.dollars) for t in rows
         ]
         window = Window(condition_id=condition_id, trades=rows, snapshots=snapshots)
-        window.summary = _summarize(rows, snapshots, inventory, pnl_index.get(condition_id))
+        window.summary = _summarize(
+            rows, snapshots, inventory, pnl_index.get(condition_id),
+            capture_start, capture_end,
+        )
         windows.append(window)
 
     windows.sort(
@@ -184,14 +198,37 @@ def build_windows(
     return windows
 
 
+def _assess_capture(
+    first: Trade, capture_start: int | None, capture_end: int | None
+) -> tuple[bool, str]:
+    """Did the retrieved data span this whole window?
+
+    A window straddling either edge of the capture is missing fills, so its
+    final inventory, matched quantity and balanced-finish flag describe a
+    fragment rather than the window. Those windows are flagged here and
+    excluded from the window-level statistics rather than silently averaged in.
+    """
+    start, end = first.window_start_ts, first.window_end_ts
+    if start is None or end is None or capture_start is None or capture_end is None:
+        return False, "window bounds or capture bounds unknown"
+    if start < capture_start:
+        return False, "window opened before the retrieved data begins"
+    if end > capture_end:
+        return False, "window had not closed when the data was captured"
+    return True, ""
+
+
 def _summarize(
     rows: list[Trade],
     snapshots: list[Snapshot],
     inventory: Inventory,
     pnl: dict[str, Any] | None,
+    capture_start: int | None = None,
+    capture_end: int | None = None,
 ) -> WindowSummary:
     first = rows[0]
     final = snapshots[-1]
+    capture_complete, capture_note = _assess_capture(first, capture_start, capture_end)
 
     buys = [t for t in rows if t.side == "BUY"]
     sells = [t for t in rows if t.side == "SELL"]
@@ -289,6 +326,8 @@ def _summarize(
         realized_pnl=realized,
         pnl_source=pnl_source,
         pnl_rows=pnl_rows,
+        capture_complete=capture_complete,
+        capture_note=capture_note,
         window_source=first.window_source,
         window_conflict=first.window_conflict,
         bounds_reconstructed=first.bounds_reconstructed,
