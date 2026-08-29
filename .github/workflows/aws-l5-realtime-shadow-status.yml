@@ -1,0 +1,113 @@
+name: AWS l5 realtime shadow status
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/l5-realtime-shadow-status.trigger
+      - .github/workflows/aws-l5-realtime-shadow-status.yml
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Read-only l5 mirror status and analysis
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE_SCRIPT=$(cat <<'EOS'
+          set -Eeuo pipefail
+          ROOT=/home/ssm-user/l5-realtime-shadow-state/20260829T0740ET-l5mirror3
+          NAME=arb-l5-realtime-shadow-mirror
+          export ROOT NAME
+          python3 - <<'PY'
+          import json, os, subprocess
+          from collections import defaultdict
+          from pathlib import Path
+
+          root=Path(os.environ['ROOT']); name=os.environ['NAME']
+          running=False; status='missing'; exit_code=None
+          try:
+              status=subprocess.check_output(['docker','inspect','-f','{{.State.Status}}',name], text=True).strip()
+              running=status=='running'
+              exit_code=int(subprocess.check_output(['docker','inspect','-f','{{.State.ExitCode}}',name], text=True).strip())
+          except Exception: pass
+          rows=[]
+          tape=root/'mirror.jsonl'
+          if tape.exists():
+              with tape.open() as f:
+                  for line in f:
+                      try: rows.append(json.loads(line))
+                      except Exception: pass
+          comps=[r for r in rows if r.get('type')=='L5_TRADE_COMPARISON']
+          def trade_ts(c):
+              t=float((c.get('trade') or {}).get('timestamp') or 0)
+              return t/1000 if t>1e10 else t
+          def snap_ts(c):
+              s=c.get('pretrade_snapshot') or {}
+              return float(s.get('ts') or 0)
+          clean=[c for c in comps if c.get('pretrade_snapshot') and snap_ts(c)>0 and snap_ts(c)<=trade_ts(c)]
+          paper=[c for c in clean if (c.get('our_shadow') or {}).get('action')=='PAPER_BUY']
+          same=sum(bool(c.get('same_side')) for c in paper)
+          by=defaultdict(list)
+          for c in comps:
+              tr=c.get('trade') or {}; cid=str(tr.get('conditionId') or '')
+              if cid: by[cid].append(c)
+          markets=[]
+          for cid,cs in by.items():
+              cs=sorted(cs,key=trade_ts)
+              tr0=cs[0].get('trade') or {}
+              title=str(tr0.get('title') or '')
+              slug=str(tr0.get('eventSlug') or tr0.get('slug') or '')
+              text=(title+' '+slug).lower()
+              symbol='ETH' if ('eth' in text or 'ethereum' in text) else 'BTC'
+              if '15m' not in text and '15 min' not in text and '15-minute' not in text: continue
+              q={'UP':0.0,'DOWN':0.0}; cost={'UP':0.0,'DOWN':0.0}; switches=0; prev=None
+              first_clean=bool(cs[0].get('pretrade_snapshot') and snap_ts(cs[0])<=trade_ts(cs[0]))
+              max_age=0.0; clean_n=0
+              for c in cs:
+                  tr=c.get('trade') or {}; side=str(tr.get('outcome') or '').upper(); side='UP' if side in ('UP','YES') else 'DOWN' if side in ('DOWN','NO') else side
+                  size=float(tr.get('size') or 0); price=float(tr.get('price') or 0); action=str(tr.get('side') or 'BUY').upper(); mult=-1 if action=='SELL' else 1
+                  if side in q:
+                      q[side]+=mult*size; cost[side]+=mult*size*price
+                      if prev and side!=prev: switches+=1
+                      prev=side
+                  if c.get('pretrade_snapshot') and snap_ts(c)<=trade_ts(c):
+                      clean_n+=1; max_age=max(max_age, max(0,trade_ts(c)-snap_ts(c)))
+              up=max(q['UP'],0); dn=max(q['DOWN'],0); matched=min(up,dn)
+              ua=cost['UP']/q['UP'] if q['UP']>0 else None; da=cost['DOWN']/q['DOWN'] if q['DOWN']>0 else None
+              pc=(ua+da) if ua is not None and da is not None else None
+              if pc is None: band='UNPAIRED'
+              elif pc<0.95: band='BELOW_0.95'
+              elif pc<0.98: band='BELOW_0.98'
+              elif pc<1.0: band='BELOW_1.00'
+              else: band='ABOVE_1.00'
+              markets.append({'condition_id':cid,'symbol':symbol,'title':title,'slug':slug,'first_trade_ts':trade_ts(cs[0]),'last_trade_ts':trade_ts(cs[-1]),'comparison_count':len(cs),'recorded_before_fill':clean_n,'first_trade_context':'RECORDED_BEFORE_FILL' if first_clean else 'FIRST_TRADE_IN_UNSEEN_15M_MARKET','up_qty':round(q['UP'],6),'down_qty':round(q['DOWN'],6),'up_avg':None if ua is None else round(ua,6),'down_avg':None if da is None else round(da,6),'matched_qty':round(matched,6),'matched_avg_pair_cost':None if pc is None else round(pc,6),'pair_cost_band':band,'unmatched_up':round(max(up-matched,0),6),'unmatched_down':round(max(dn-matched,0),6),'side_switches':switches,'max_clean_snapshot_age_s':round(max_age,3)})
+          markets.sort(key=lambda m:m['last_trade_ts'])
+          sub1=[m for m in markets if m['matched_avg_pair_cost'] is not None and m['matched_avg_pair_cost']<1]
+          payload={'classification':'READ_ONLY_L5_REALTIME_SHADOW_NOT_REALIZED','order_entry':False,'credentials_loaded':False,'realized_pnl':None,'container_status':status,'container_running':running,'container_exit_code':exit_code,'comparison_count':len(comps),'recorded_before_fill_count':len(clean),'paper_buy_count_clean':len(paper),'same_side_clean':same,'same_side_rate_clean':round(same/len(paper),6) if paper else None,'market_count_15m':len(markets),'sub1_market_count':len(sub1),'recent_markets':markets[-12:]}
+          print('L5_REALTIME_SHADOW_STATUS='+json.dumps(payload,separators=(',',':')))
+          PY
+          EOS
+          )
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_SCRIPT" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB read-only l5 realtime shadow status" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
+          RESULT=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          grep -q 'READ_ONLY_L5_REALTIME_SHADOW_NOT_REALIZED' <<<"$(jq -r '.Stdout // ""' <<<"$RESULT")"
