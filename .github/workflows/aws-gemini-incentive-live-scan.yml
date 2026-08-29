@@ -47,18 +47,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           SHORT_SHA="${PINNED_COMMIT:0:12}"
-          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -Eeuo pipefail; REPO=/home/ssm-user/kalshi-arb-bot; WORK=/opt/arb/gemini-incentive-live-scan; git -C \"\$REPO\" config --global --add safe.directory \"\$REPO\" || true; git -C \"\$REPO\" fetch origin feature/incentive-arb-engine-v1; git -C \"\$REPO\" cat-file -e \"${PINNED_COMMIT}^{commit}\"; git -C \"\$REPO\" worktree remove --force \"\$WORK\" >/dev/null 2>&1 || true; rm -rf \"\$WORK\"; git -C \"\$REPO\" worktree prune; git -C \"\$REPO\" worktree add --detach \"\$WORK\" \"${PINNED_COMMIT}\"; IMAGE=arb-gemini-incentive-live-scan:${SHORT_SHA}; docker build -t \"\$IMAGE\" \"\$WORK\" >/dev/null; docker run --rm --network host \"\$IMAGE\" python -m src.gemini_dual_maker_incentive_scan --quantity 10 > /tmp/gemini_incentive_live_scan.json; python3 - <<\"PY\"
-import json
-p=json.load(open('/tmp/gemini_incentive_live_scan.json'))
-rows=[r for r in p.get('rows',[]) if r.get('two_sided_reward_eligible_at_snapshot')]
-def dec(v,default=0):
-    try:return float(v)
-    except:return default
-rows.sort(key=lambda r:(r.get('reported_qualifying_maker_count') if r.get('reported_qualifying_maker_count') is not None else 999999,-dec(r.get('trade_only_locked_edge_per_pair')),dec(r.get('seconds_to_expiry'))))
-compact={k:p.get(k) for k in ['observed_at','classification','order_entry','credentials_loaded','active_crypto_rebate_rate','liquidity_rewards_enabled','reward_min_quantity','reward_max_distance_from_mid','markets','trade_only_arb_markets','two_sided_reward_eligible_markets_at_snapshot']}
-compact['top_candidates']=[{k:r.get(k) for k in ['ticker','asset','horizon','seconds_to_expiry','yes_bid','yes_ask','no_bid','spread','trade_only_locked_edge','trade_only_locked_edge_per_pair','projected_pair_rebate_if_both_filled','projected_pair_edge_if_rebates_later_paid','liquidity_reward_daily_pool_usd','liquidity_reward_pool_event_count','reported_qualifying_maker_count','yes_distance_from_mid','no_distance_from_mid']} for r in rows[:12]]
-print('GEMINI_INCENTIVE_LIVE_SCAN='+json.dumps(compact,separators=(',',':')))
-PY'"
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -Eeuo pipefail; REPO=/home/ssm-user/kalshi-arb-bot; WORK=/opt/arb/gemini-incentive-live-scan; git -C \"\$REPO\" config --global --add safe.directory \"\$REPO\" || true; git -C \"\$REPO\" fetch origin feature/incentive-arb-engine-v1; git -C \"\$REPO\" cat-file -e \"${PINNED_COMMIT}^{commit}\"; git -C \"\$REPO\" worktree remove --force \"\$WORK\" >/dev/null 2>&1 || true; rm -rf \"\$WORK\"; git -C \"\$REPO\" worktree prune; git -C \"\$REPO\" worktree add --detach \"\$WORK\" \"${PINNED_COMMIT}\"; IMAGE=arb-gemini-incentive-live-scan:${SHORT_SHA}; docker build -t \"\$IMAGE\" \"\$WORK\" >/dev/null; docker run --rm --network host \"\$IMAGE\" python -m src.gemini_incentive_live_scan_summary'"
           PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
           COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB Gemini incentive live scan ${SHORT_SHA}" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
           aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
