@@ -1,0 +1,138 @@
+name: AWS Gemini ETH5 forward capture replay
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/gemini-eth5-forward-replay.trigger
+      - .github/workflows/aws-gemini-eth5-forward-replay.yml
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  SOURCE_BRANCH: feature/gemini-incentive-mm-dynamic-complement-q1
+
+jobs:
+  capture-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - name: Read trigger
+        id: trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=deploy/aws/gemini-eth5-forward-replay.trigger
+          for key in PINNED_COMMIT RUN_ID CAPTURE_SECONDS FORWARD_SECONDS CLASSIFICATION; do
+            value=$(awk -F= -v k="$key" '$1==k{print $2}' "$FILE" | tr -d '[:space:]')
+            test -n "$value"
+            echo "${key,,}=$value" >> "$GITHUB_OUTPUT"
+          done
+          [[ "${{ steps.trigger.outputs.pinned_commit }}" == "" ]] || true
+      - name: Validate trigger
+        shell: bash
+        env:
+          PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
+          RUN_ID: ${{ steps.trigger.outputs.run_id }}
+          CAPTURE_SECONDS: ${{ steps.trigger.outputs.capture_seconds }}
+          FORWARD_SECONDS: ${{ steps.trigger.outputs.forward_seconds }}
+          CLASSIFICATION: ${{ steps.trigger.outputs.classification }}
+        run: |
+          set -euo pipefail
+          [[ "$PINNED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$RUN_ID" =~ ^[0-9A-Za-z._-]+$ ]]
+          [[ "$CAPTURE_SECONDS" =~ ^[0-9]+$ ]]
+          [[ "$FORWARD_SECONDS" =~ ^[0-9]+$ ]]
+          test "$CAPTURE_SECONDS" -ge 60
+          test "$CAPTURE_SECONDS" -le 600
+          test "$FORWARD_SECONDS" -ge 300
+          test "$FORWARD_SECONDS" -le 3600
+          test "$CLASSIFICATION" = "SHADOW_REPLAY_NOT_REALIZED"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Capture forward ETH5 tape, hydrate, and replay
+        shell: bash
+        env:
+          PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
+          RUN_ID: ${{ steps.trigger.outputs.run_id }}
+          CAPTURE_SECONDS: ${{ steps.trigger.outputs.capture_seconds }}
+          FORWARD_SECONDS: ${{ steps.trigger.outputs.forward_seconds }}
+        run: |
+          set -Eeuo pipefail
+          SHORT_SHA="${PINNED_COMMIT:0:12}"
+          REMOTE_SCRIPT=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          WORK=/opt/arb/gemini-eth5-forward-replay
+          ROOT=/home/ssm-user/gemini-eth5-forward-shadow-state/${RUN_ID}
+          CAPTURE=\$ROOT/capture.jsonl
+          SUMMARY=\$ROOT/capture-summary.json
+          REPLAY=\$ROOT/replay
+          git -C "\$REPO" config --global --add safe.directory "\$REPO" || true
+          git -C "\$REPO" fetch origin ${SOURCE_BRANCH}
+          git -C "\$REPO" cat-file -e "${PINNED_COMMIT}^{commit}"
+          git -C "\$REPO" merge-base --is-ancestor "${PINNED_COMMIT}" origin/${SOURCE_BRANCH}
+          git -C "\$REPO" worktree remove --force "\$WORK" >/dev/null 2>&1 || true
+          rm -rf "\$WORK"
+          git -C "\$REPO" worktree prune
+          git -C "\$REPO" worktree add --detach "\$WORK" "${PINNED_COMMIT}"
+          bash -n "\$WORK/deploy/aws/run_gemini_eth5_hydrated_replay.sh"
+          IMAGE=arb-gemini-eth5-forward-replay:${SHORT_SHA}
+          docker build -t "\$IMAGE" "\$WORK" >/dev/null
+          docker run --rm --network none "\$IMAGE" python -m pytest -q tests/test_gemini_eth5_forward_tape_shadow.py tests/test_gemini_retained_eth5_trade_hydrate.py tests/test_gemini_dynamic_initial_entry_replay_q1.py tests/test_gemini_incentive_mm_dynamic_complement.py
+          rm -rf "\$ROOT"
+          mkdir -p "\$ROOT"
+          docker run --rm \
+            -v "\$ROOT:/output" \
+            "\$IMAGE" \
+            python -m src.gemini_eth5_forward_tape_shadow \
+              --seconds ${CAPTURE_SECONDS} \
+              --discover-s 10 \
+              --max-seconds-to-expiry ${FORWARD_SECONDS} \
+              --output /output/capture.jsonl \
+              --summary-output /output/capture-summary.json
+          mkdir -p "\$REPLAY"
+          bash "\$WORK/deploy/aws/run_gemini_eth5_hydrated_replay.sh" "\$IMAGE" "\$CAPTURE" "\$REPLAY"
+          echo ETH5_FORWARD_CAPTURE_SUMMARY_BEGIN
+          cat "\$SUMMARY"
+          echo ETH5_FORWARD_CAPTURE_SUMMARY_END
+          echo AWS_ETH5_FORWARD_REPLAY_OUTPUT_DIR="\$ROOT"
+          echo GEMINI_ETH5_FORWARD_REPLAY_COMPLETE classification=SHADOW_REPLAY_NOT_REALIZED order_entry=false credentials_loaded=false
+          EOF
+          )
+          ENCODED=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
+          REMOTE_CMD="echo '$ENCODED' | base64 -d | sudo -u ssm-user bash"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "ARB ETH5 forward shadow replay ${RUN_ID}" \
+            --parameters "$PARAMETERS" \
+            --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 180); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || true)
+            case "$STATUS" in
+              Success|Failed|Cancelled|TimedOut) break ;;
+            esac
+            sleep 5
+          done
+          RESULT=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = "Success"
+          stdout=$(jq -r '.Stdout // ""' <<<"$RESULT")
+          grep -q 'GEMINI_ETH5_FORWARD_REPLAY_COMPLETE' <<<"$stdout"
+          grep -q 'SHADOW_REPLAY_NOT_REALIZED' <<<"$stdout"
+          grep -q 'order_entry=false credentials_loaded=false' <<<"$stdout"
