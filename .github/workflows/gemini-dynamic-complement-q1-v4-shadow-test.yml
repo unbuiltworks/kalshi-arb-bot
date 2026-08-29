@@ -1,0 +1,28 @@
+name: Gemini dynamic-complement q1 V4 shadow tests
+
+on:
+  push:
+    branches:
+      - feature/gemini-incentive-mm-dynamic-complement-q1
+    paths:
+      - 'src/gemini_short_crypto_dynamic_complement_q1_v4_shadow.py'
+      - 'tests/test_gemini_short_crypto_dynamic_complement_q1_v4_shadow.py'
+      - '.github/workflows/gemini-dynamic-complement-q1-v4-shadow-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused_v4_shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run V4 shadow placement safety suite
+        run: pytest -q tests/test_gemini_short_crypto_dynamic_complement_q1_v4_shadow.py
