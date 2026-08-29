@@ -5,5 +5,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ src/
 COPY tests/ tests/
-RUN pytest -q tests/test_l5_realtime_shadow_mirror.py
-CMD ["python", "-m", "src.l5_realtime_shadow_mirror", "--output-dir", "/output", "--duration-seconds", "36000", "--book-poll-seconds", "1", "--trade-poll-seconds", "2"]
+RUN pytest -q tests/test_l5_realtime_shadow_mirror.py \
+ && python -m py_compile src/l5_realtime_shadow_mirror.py src/l5_realtime_shadow_mirror_v2.py
+CMD ["python", "-m", "src.l5_realtime_shadow_mirror_v2", "--output-dir", "/output", "--duration-seconds", "36000", "--book-poll-seconds", "1", "--trade-poll-seconds", "2", "--seed-lookback-seconds", "1200"]
