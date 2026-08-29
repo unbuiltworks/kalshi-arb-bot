@@ -1,0 +1,39 @@
+name: AWS Gemini dynamic-complement q1 local reconcile
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/gemini-dynamic-complement-q1-local-reconcile.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Reconcile proven-flat venue state into AWS-local ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; IMAGE=arb-gemini-dynamic-complement:q1-32af5954c64e; if [ -f /opt/arb/secrets/gemini-short-crypto.env ]; then ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; else ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; fi; if [ -d /home/ssm-user/gemini-short-crypto-state ]; then STATE_DIR=/home/ssm-user/gemini-short-crypto-state; else STATE_DIR=/opt/arb/gemini-short-crypto-state; fi; docker run --rm --network host --env-file \"\$ENV_FILE\" -e GEMINI_SHORT_CRYPTO_STATE_DIR=/state -e PYTHONPATH=/app -v \"\$STATE_DIR:/state\" \"\$IMAGE\" python -c \"import asyncio,json; from src import gemini_short_crypto_local_budget as local; TRADE=\'crypto-gem-eth5m-dyn-dcq1-dcq1-eth5v3_20260-\'; SYMBOL=\'GEMI-ETH05M2608290140-UP\'; TICKER=\'ETH05M2608290140\'; async def go():\n s=local.local_open_state(); assert s and s.get(\'trade_id\')==TRADE and s.get(\'symbol\')==SYMBOL, s; snap=await local.account_exposure_snapshot(); assert snap[\'active_short_crypto_orders\']==0 and snap[\'active_short_crypto_positions\']==0, snap; await local.result(symbol=SYMBOL,event_ticker=TICKER,trade_id=TRADE,status=\'SETTLED_ONE_SIDED_YES_LOSS_RECONCILED\',legs_filled=1,metadata={\'yes_fill\':\'1\',\'yes_price\':\'0.45\',\'no_fill\':\'0\',\'no_price\':\'0.43\',\'available_usd_before\':\'61.8455\',\'available_usd_after\':\'61.3855\',\'account_cash_delta\':\'-0.4600\',\'reconciliation_basis\':\'EXACT_ORDER_HISTORY_PLUS_ACCOUNT_CASH_DELTA\',\'manual_reconciliation\':True}); await local.release(symbol=SYMBOL,event_ticker=TICKER,trade_id=TRADE,reason=\'POST_CRASH_SETTLED_ONE_SIDED_LOSS_RECONCILED\'); post=local.local_open_state(); snap2=await local.account_exposure_snapshot(); print(json.dumps({\'local_open_state\':post,**snap2},sort_keys=True)); assert post is None; assert snap2[\'active_short_crypto_orders\']==0 and snap2[\'active_short_crypto_positions\']==0\n asyncio.run(go())\"; echo DYNAMIC_Q1_LOCAL_RECONCILIATION_OK'"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB dynamic q1 local reconciliation after settled loss" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
+          RESULT=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = "Success"
+          grep -q 'DYNAMIC_Q1_LOCAL_RECONCILIATION_OK' <<<"$(jq -r '.Stdout' <<<"$RESULT")"
