@@ -61,7 +61,11 @@ jobs:
           EOF
           )
           ENC=$(printf '%s' "$REMOTE" | base64 -w0)
-          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          # AWS-RunShellScript executes as root on the instance. Keep this control-plane
+          # operation privileged because systemd-run/systemctl require root; the prior
+          # sudo -u ssm-user wrapper made the bounded-stop installation fail before any
+          # timer could be confirmed.
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | bash" '{commands:[$cmd]}')
           CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --parameters "$PARAMS" --query 'Command.CommandId' --output text)
           aws ssm wait command-executed --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
           RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
