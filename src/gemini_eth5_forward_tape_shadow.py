@@ -6,6 +6,11 @@ which left those prints outside our virtual-quote chronology. This collector fix
 that measurement blind spot by subscribing to every open ETH05M UP contract inside
 a bounded forward window.
 
+A future prediction contract may be discoverable/open before its public book has
+both sides. In that state ``book()`` intentionally raises ``incomplete Gemini
+book``. We treat that as expected seed-pending state and retry on later discovery
+passes until either REST or WebSocket book data establishes a usable quote.
+
 Public REST + public WebSocket only. No credentials, account state, or order entry.
 """
 from __future__ import annotations
@@ -18,7 +23,7 @@ import json
 from pathlib import Path
 import re
 import time
-from typing import Any, Mapping
+from typing import Any, Awaitable, Callable, Mapping
 
 import httpx
 import websockets
@@ -35,6 +40,8 @@ from src.gemini_l5_threshold_shadow import Event, book
 
 REST = "https://api.gemini.com"
 ETH5_RE = re.compile(r"^ETH05M\d{10}$")
+INCOMPLETE_BOOK_PREFIX = "incomplete Gemini book for "
+BookFn = Callable[[Any, str], Awaitable[tuple[D, D, D, D]]]
 
 
 def _iso_ms(value: Any) -> int | None:
@@ -116,6 +123,68 @@ async def discover_forward(
     )
 
 
+def seed_is_needed(state: MarketState) -> bool:
+    """REST seed until some usable public book has reached the state.
+
+    A successful REST seed increments ``book_updates`` through ``on_book``. A
+    WebSocket bookTicker can also make the seed unnecessary. A failed first REST
+    attempt must *not* permanently suppress later attempts.
+    """
+    return state.book_updates == 0
+
+
+async def seed_state_if_needed(
+    *,
+    http: Any,
+    state: MarketState,
+    fh: Any,
+    stats: dict[str, int],
+    attempt: int,
+    book_fn: BookFn = book,
+) -> bool:
+    if not seed_is_needed(state):
+        return False
+    stats["rest_seed_attempts"] += 1
+    try:
+        bid, _, ask, _ = await book_fn(http, state.event.symbol)
+        observed_at = _iso()
+        for row in state.on_book(bid, ask, observed_at):
+            _write(fh, row)
+        stats["rest_seeds"] += 1
+        _write(fh, {
+            "type": "REST_SEED_SUCCESS",
+            "observed_at": observed_at,
+            "ticker": state.event.ticker,
+            "symbol": state.event.symbol,
+            "asset": "ETH",
+            "horizon": "5m",
+            "attempt": attempt,
+        })
+        return True
+    except Exception as exc:
+        message = str(exc)[:240]
+        pending = isinstance(exc, RuntimeError) and message.startswith(INCOMPLETE_BOOK_PREFIX)
+        if pending:
+            stats["rest_seed_pending"] += 1
+            row_type = "REST_SEED_PENDING"
+        else:
+            stats["errors"] += 1
+            stats["rest_seed_errors"] += 1
+            row_type = "REST_SEED_ERROR"
+        _write(fh, {
+            "type": row_type,
+            "observed_at": _iso(),
+            "ticker": state.event.ticker,
+            "symbol": state.event.symbol,
+            "asset": "ETH",
+            "horizon": "5m",
+            "attempt": attempt,
+            "error_type": type(exc).__name__,
+            "error": message,
+        })
+        return False
+
+
 async def capture(
     *,
     seconds: float,
@@ -130,6 +199,7 @@ async def capture(
     deadline = time.monotonic() + max(0.0, seconds)
     states: dict[str, MarketState] = {}
     subscribed: set[str] = set()
+    seed_attempts_by_symbol: dict[str, int] = {}
     stats = {
         "messages": 0,
         "book_tickers": 0,
@@ -137,6 +207,9 @@ async def capture(
         "errors": 0,
         "discoveries": 0,
         "subscriptions": 0,
+        "rest_seed_attempts": 0,
+        "rest_seed_pending": 0,
+        "rest_seed_errors": 0,
         "rest_seeds": 0,
         "control_messages": 0,
         "subscription_errors": 0,
@@ -145,8 +218,9 @@ async def capture(
 
     def summary(status: str) -> dict[str, Any]:
         eth5_trade_markets = sum(1 for state in states.values() if state.trade_events > 0)
+        quoted_markets = sum(1 for state in states.values() if state.book_updates > 0)
         return {
-            "type": "GEMINI_ETH5_FORWARD_TAPE_SHADOW_V1",
+            "type": "GEMINI_ETH5_FORWARD_TAPE_SHADOW_V2",
             "classification": "READ_ONLY_PUBLIC_TAPE_CAPTURE",
             "order_entry": False,
             "credentials_loaded": False,
@@ -154,7 +228,9 @@ async def capture(
             "seconds": seconds,
             "max_seconds_to_expiry": max_seconds_to_expiry,
             "markets_seen": len(states),
+            "markets_with_usable_book": quoted_markets,
             "markets_with_public_trades": eth5_trade_markets,
+            "seed_attempts_by_symbol": seed_attempts_by_symbol,
             "stats": stats,
             "markets": [state.summary() for state in states.values()],
         }
@@ -162,7 +238,7 @@ async def capture(
     async with httpx.AsyncClient(
         timeout=8.0,
         follow_redirects=True,
-        headers={"User-Agent": "arb-gemini-eth5-forward-shadow/1.0"},
+        headers={"User-Agent": "arb-gemini-eth5-forward-shadow/2.0"},
     ) as http:
         async with websockets.connect(
             WS_URL,
@@ -190,25 +266,18 @@ async def capture(
                             for event in events.values():
                                 key = event.symbol.upper()
                                 if key not in states:
-                                    state = MarketState(event)
-                                    states[key] = state
-                                    try:
-                                        bid, _, ask, _ = await book(http, event.symbol)
-                                        for row in state.on_book(bid, ask, _iso()):
-                                            _write(fh, row)
-                                        stats["rest_seeds"] += 1
-                                    except Exception as exc:
-                                        stats["errors"] += 1
-                                        _write(fh, {
-                                            "type": "REST_SEED_ERROR",
-                                            "observed_at": _iso(),
-                                            "ticker": event.ticker,
-                                            "symbol": event.symbol,
-                                            "asset": "ETH",
-                                            "horizon": "5m",
-                                            "error_type": type(exc).__name__,
-                                            "error": str(exc)[:240],
-                                        })
+                                    states[key] = MarketState(event)
+                                state = states[key]
+                                if seed_is_needed(state):
+                                    attempt = seed_attempts_by_symbol.get(key, 0) + 1
+                                    seed_attempts_by_symbol[key] = attempt
+                                    await seed_state_if_needed(
+                                        http=http,
+                                        state=state,
+                                        fh=fh,
+                                        stats=stats,
+                                        attempt=attempt,
+                                    )
                                 desired.extend([f"{event.symbol}@bookTicker", f"{event.symbol}@trade"])
                             new_streams = [stream for stream in desired if stream not in subscribed]
                             if new_streams:
