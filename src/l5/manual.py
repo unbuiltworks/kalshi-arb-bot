@@ -251,6 +251,7 @@ class ManualStats:
     non_trades: int = 0
     markets: int = 0
     price_rounding_corrections: int = 0
+    batches: list[str] = field(default_factory=list)
     unparsed_titles: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
@@ -263,14 +264,19 @@ class ManualStats:
             "non_trades": self.non_trades,
             "markets": self.markets,
             "price_rounding_corrections": self.price_rounding_corrections,
+            "batches": self.batches,
             "unparsed_titles": self.unparsed_titles,
         }
 
 
-def convert_batch(batch: dict) -> tuple[list[dict], list[dict], ManualStats]:
-    """Screenshot batch -> (activity records, market records, stats)."""
+def convert_pages(pages: list[dict], reference_clock: str) -> tuple[list[dict], list[dict], ManualStats]:
+    """Screenshot pages -> (activity records, market records, stats).
+
+    Takes the full page sequence at once so seams are stitched *across* batch
+    boundaries too: a scroll continued in a later batch overlaps the previous
+    batch's last screenshot exactly like two pages inside one batch do.
+    """
     stats = ManualStats()
-    pages = batch.get("pages", [])
     stats.pages = len(pages)
 
     rows, dropped = dedupe_seam(pages)
@@ -278,12 +284,6 @@ def convert_batch(batch: dict) -> tuple[list[dict], list[dict], ManualStats]:
     stats.seam_duplicates_dropped = dropped
     stats.seam_gaps = sum(1 for r in rows if r.get("_seam_gap"))
 
-    header = batch.get("profile_header", {})
-    reference_clock = header.get("screenshot_clock_local") or (
-        pages[0].get("screenshot_clock_local") if pages else None
-    )
-    if reference_clock is None:
-        raise ManualParseError("batch has no screenshot_clock_local to anchor times")
     anchor = datetime.fromisoformat(reference_clock)
     year = anchor.year
     offset = (anchor.utcoffset() or timedelta(0)).total_seconds() / 3600.0
@@ -375,16 +375,46 @@ def convert_batch(batch: dict) -> tuple[list[dict], list[dict], ManualStats]:
     return activity, market_records, stats
 
 
-def load_batches(paths: Iterable[str]) -> tuple[list[dict], list[dict], list[ManualStats]]:
-    activity: list[dict] = []
-    markets: dict[str, dict] = {}
-    all_stats: list[ManualStats] = []
+def _reference_clock(batch: dict) -> str | None:
+    header = batch.get("profile_header", {}) or {}
+    clock = header.get("screenshot_clock_local")
+    if clock:
+        return clock
+    pages = batch.get("pages", [])
+    return pages[0].get("screenshot_clock_local") if pages else None
+
+
+def convert_batch(batch: dict) -> tuple[list[dict], list[dict], ManualStats]:
+    """Convenience wrapper for a single batch."""
+    clock = _reference_clock(batch)
+    if clock is None:
+        raise ManualParseError("batch has no screenshot_clock_local to anchor times")
+    return convert_pages(batch.get("pages", []), clock)
+
+
+def load_batches(paths: Iterable[str]) -> tuple[list[dict], list[dict], ManualStats]:
+    """Load every batch file and treat them as one continuous scroll.
+
+    Batches are concatenated in filename order before seam detection, because
+    a scroll paused at batch 1 and resumed at batch 2 leaves an overlap at the
+    join exactly as it does between two pages of one batch.
+    """
+    pages: list[dict] = []
+    reference_clock: str | None = None
+    batch_labels: list[str] = []
+
     for path in sorted(paths):
         with open(path, encoding="utf-8") as handle:
             batch = json.load(handle)
-        batch_activity, batch_markets, stats = convert_batch(batch)
-        activity.extend(batch_activity)
-        for market in batch_markets:
-            markets.setdefault(market["conditionId"], market)
-        all_stats.append(stats)
-    return activity, list(markets.values()), all_stats
+        batch_labels.append(str(batch.get("batch", path)))
+        if reference_clock is None:
+            reference_clock = _reference_clock(batch)
+        for page in batch.get("pages", []):
+            pages.append(dict(page, _batch=batch.get("batch")))
+
+    if reference_clock is None:
+        raise ManualParseError("no batch supplied a screenshot_clock_local")
+
+    activity, markets, stats = convert_pages(pages, reference_clock)
+    stats.batches = batch_labels
+    return activity, markets, stats

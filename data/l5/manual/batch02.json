@@ -1,0 +1,76 @@
+{
+  "batch": 2,
+  "source": "screenshot",
+  "profile": "l5zn1bwom8etsk",
+  "note": "Continues batch 1. Image 6 has an iMessage notification banner over the browser chrome; it covers no activity rows, and the seam onto batch 1 confirms continuity.",
+  "profile_header": {
+    "screenshot_clock_local": "2026-08-29T17:14:00-04:00"
+  },
+  "pages": [
+    {
+      "image": 6,
+      "screenshot_clock_local": "2026-08-29T17:14:00-04:00",
+      "rows": [
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 27, "shares": 5.2, "dollars": 1.40, "relative_minutes": 5},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 27, "shares": 2.0, "dollars": 0.54, "relative_minutes": 5},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 31, "shares": 2.0, "dollars": 0.62, "relative_minutes": 6},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 31, "shares": 6.6, "dollars": 2.05, "relative_minutes": 6},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 36, "shares": 4.7, "dollars": 1.69, "relative_minutes": 6},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 37, "shares": 1.1, "dollars": 0.41, "relative_minutes": 6},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 38, "shares": 50.0, "dollars": 19.00, "relative_minutes": 6}
+      ]
+    },
+    {
+      "image": 7,
+      "screenshot_clock_local": "2026-08-29T17:14:00-04:00",
+      "rows": [
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 38, "shares": 50.0, "dollars": 19.00, "relative_minutes": 6},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 61, "shares": 6.1, "dollars": 3.73, "relative_minutes": 6},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 62, "shares": 50.0, "dollars": 31.00, "relative_minutes": 6},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 64, "shares": 2.0, "dollars": 1.28, "relative_minutes": 6},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 65, "shares": 50.0, "dollars": 32.50, "relative_minutes": 6},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 64, "shares": 1.6, "dollars": 1.00, "relative_minutes": 6},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 64, "shares": 12.8, "dollars": 8.20, "relative_minutes": 6}
+      ]
+    },
+    {
+      "image": 8,
+      "screenshot_clock_local": "2026-08-29T17:14:00-04:00",
+      "rows": [
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 64, "shares": 12.8, "dollars": 8.20, "relative_minutes": 6},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 65, "shares": 50.0, "dollars": 32.50, "relative_minutes": 6},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 37, "shares": 50.0, "dollars": 18.50, "relative_minutes": 6},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 62, "shares": 22.0, "dollars": 13.64, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 62, "shares": 15.1, "dollars": 9.33, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 36, "shares": 5.1, "dollars": 1.83, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 70, "shares": 5.0, "dollars": 3.50, "relative_minutes": 7}
+      ]
+    },
+    {
+      "image": 9,
+      "screenshot_clock_local": "2026-08-29T17:14:00-04:00",
+      "rows": [
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 70, "shares": 5.0, "dollars": 3.50, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 70, "shares": 7.8, "dollars": 5.47, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 71, "shares": 50.0, "dollars": 35.50, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 20, "shares": 10.4, "dollars": 2.08, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 21, "shares": 6.8, "dollars": 1.44, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 20, "shares": 50.0, "dollars": 10.00, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 21, "shares": 12.6, "dollars": 2.65, "relative_minutes": 7}
+      ]
+    },
+    {
+      "image": 10,
+      "screenshot_clock_local": "2026-08-29T17:14:00-04:00",
+      "rows": [
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 21, "shares": 12.6, "dollars": 2.65, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 21, "shares": 18.2, "dollars": 3.81, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 60, "shares": 50.0, "dollars": 30.00, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Up", "price_cents_displayed": 61, "shares": 50.0, "dollars": 30.50, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 22, "shares": 15.1, "dollars": 3.32, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 22, "shares": 19.0, "dollars": 4.18, "relative_minutes": 7},
+        {"market_title": "Bitcoin Up or Down - August 29, 5:00PM-5:15PM ET", "action": "Buy", "outcome": "Down", "price_cents_displayed": 21, "shares": 19.2, "dollars": 4.03, "relative_minutes": 7}
+      ]
+    }
+  ]
+}

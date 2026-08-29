@@ -77,13 +77,13 @@ def load_cache(cache_dir: str) -> dict[str, list[dict]]:
     }
 
 
-def load_manual(manual_dir: str) -> tuple[list[dict], list[dict], list[dict]]:
+def load_manual(manual_dir: str) -> tuple[list[dict], list[dict], dict]:
     """Screenshot transcriptions, converted to API-shaped records."""
     paths = sorted(glob.glob(os.path.join(manual_dir, "*.json")))
     if not paths:
-        return [], [], []
+        return [], [], {}
     activity, markets, stats = manual.load_batches(paths)
-    return activity, markets, [s.as_dict() for s in stats]
+    return activity, markets, stats.as_dict()
 
 
 def build(cache_dir: str, output_dir: str, manual_dir: str | None = None) -> dict[str, Any]:

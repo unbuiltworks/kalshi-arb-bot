@@ -212,3 +212,46 @@ class TestRealBatchOne:
             "btc-up-or-down-5m-20260829T2105z",
             "btc-up-or-down-5m-20260829T2110z",
         ]
+
+
+class TestCrossBatchStitching:
+    """A scroll paused between batches still overlaps at the join."""
+
+    def test_batches_are_stitched_as_one_continuous_scroll(self, tmp_path):
+        import json as _json
+        from src.l5.manual import load_batches
+
+        shared = _row(BTC15, "Buy", "Down", 27, 5.2, 1.40, 5)
+        first = {
+            "batch": 1,
+            "profile_header": {"screenshot_clock_local": "2026-08-29T17:13:00-04:00"},
+            "pages": [{"image": 1, "screenshot_clock_local": "2026-08-29T17:13:00-04:00",
+                       "rows": [_row(BTC15, "Buy", "Up", 46, 5.0, 2.30, 4), shared]}],
+        }
+        second = {
+            "batch": 2,
+            "profile_header": {"screenshot_clock_local": "2026-08-29T17:14:00-04:00"},
+            "pages": [{"image": 2, "screenshot_clock_local": "2026-08-29T17:14:00-04:00",
+                       "rows": [dict(shared, relative_minutes=6),
+                                _row(BTC15, "Buy", "Down", 31, 2.0, 0.62, 6)]}],
+        }
+        (tmp_path / "batch01.json").write_text(_json.dumps(first))
+        (tmp_path / "batch02.json").write_text(_json.dumps(second))
+
+        activity, _, stats = load_batches(
+            [str(tmp_path / "batch01.json"), str(tmp_path / "batch02.json")]
+        )
+        assert stats.rows_read == 4
+        assert stats.seam_duplicates_dropped == 1, "the join is a seam, not new data"
+        assert len(activity) == 3
+        assert stats.batches == ["1", "2"]
+
+    def test_real_batches_stitch_without_gaps(self):
+        import glob
+        from src.l5.manual import load_batches
+
+        paths = sorted(glob.glob("data/l5/manual/*.json"))
+        activity, markets, stats = load_batches(paths)
+        assert stats.seam_gaps == 0, "screenshots must form one continuous scroll"
+        assert stats.unparsed_titles == []
+        assert len(activity) == stats.trades + stats.non_trades
