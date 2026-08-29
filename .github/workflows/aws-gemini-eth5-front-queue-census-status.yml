@@ -82,6 +82,7 @@ jobs:
           grep -q 'ETH5_FRONT_QUEUE_CENSUS_STATUS' <<<"$(jq -r '.Stdout // ""' <<<"$RESULT")"
 
   launch-l5-mirror:
+    if: contains(github.event.head_commit.message, 'Launch l5 mirror')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -127,18 +128,20 @@ jobs:
           docker run -d --name "\$NAME" --restart=no \
             -v "\$ROOT:/output" \
             "\$IMAGE" \
-            python -m src.l5_realtime_shadow_mirror \
+            python -m src.l5_realtime_shadow_mirror_v2 \
               --output-dir /output \
               --duration-seconds ${DURATION_S} \
               --book-poll-seconds 1 \
-              --trade-poll-seconds 2
+              --trade-poll-seconds 2 \
+              --seed-lookback-seconds 1200
           sleep 8
           test "\$(docker inspect -f '{{.State.Running}}' "\$NAME")" = true
           test -s "\$ROOT/mirror.jsonl"
           grep -q 'MIRROR_STARTED' "\$ROOT/mirror.jsonl"
+          grep -q 'REALTIME_SEED_COMPLETE' "\$ROOT/mirror.jsonl"
           echo "L5_REALTIME_SHADOW_STARTED run_id=${RUN_ID} commit=${PINNED_COMMIT} duration_s=${DURATION_S} order_entry=false credentials_loaded=false"
           echo "rows=\$(wc -l <"\$ROOT/mirror.jsonl")"
-          docker logs --tail 20 "\$NAME" || true
+          tail -n 10 "\$ROOT/mirror.jsonl"
           git -C "\$REPO" worktree remove --force "\$WORK" >/dev/null 2>&1 || true
           EOF
           )
