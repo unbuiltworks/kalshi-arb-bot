@@ -1,0 +1,27 @@
+name: Gemini ETH5 front-queue census focused tests
+
+on:
+  push:
+    branches:
+      - feature/eth5-front-queue-census
+    paths:
+      - src/gemini_eth5_front_queue_census.py
+      - tests/test_gemini_eth5_front_queue_census.py
+      - .github/workflows/gemini-eth5-front-queue-census-test.yml
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run front-queue census tests
+        run: pytest -q tests/test_gemini_eth5_front_queue_census.py
