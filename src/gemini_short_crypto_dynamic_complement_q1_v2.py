@@ -9,6 +9,13 @@ crossing. Taker execution remains disabled.
 
 Only venue-accepted replacement client IDs are appended to the durable order chain.
 A rejected client ID must never be treated as an authoritative terminal order.
+
+Transient loss of fresh public depth is expected infrastructure noise, not a reason
+to abandon a live post-fill rescue. While the existing complement is still resting,
+V2 leaves it untouched and retries on the next bounded reprice check. If depth is
+lost after a deliberate cancel, V2 waits without posting blindly and resumes only
+after a fresh edge-safe book is available. The normal rescue deadline remains the
+hard bound in both cases.
 """
 from __future__ import annotations
 
@@ -33,6 +40,8 @@ LIVE_ENV = v1.LIVE_ENV
 CANARY_ID_ENV = v1.CANARY_ID_ENV
 CANARY_ARM_ENV = v1.CANARY_ARM_ENV
 
+_TRANSIENT_DEPTH_ERROR = "no fresh Gemini BTC5m depth"
+
 
 def _safe_to_rest_current(*, missing: str, filled_price: D, current_price: D,
                           yes_bid: D, yes_ask: D, increment: D) -> bool:
@@ -50,6 +59,42 @@ def _safe_to_rest_current(*, missing: str, filled_price: D, current_price: D,
         and D(str(current_price)) <= passive
         and edge >= FINAL_PAIR_EDGE
     )
+
+
+async def _fresh_top_or_none(
+    symbol: str,
+    *,
+    missing: str,
+    current_id: str | None,
+    current_price: D,
+    phase: str,
+) -> tuple[D, D, D, D] | None:
+    """Return fresh top-of-book or None for the one known transient depth outage.
+
+    Do not swallow unrelated RuntimeErrors: once real money has mutated, masking an
+    unexpected programming/authentication failure would be less safe than halting.
+    """
+    try:
+        return await v1.base.fresh_top(symbol)
+    except RuntimeError as exc:
+        if _TRANSIENT_DEPTH_ERROR not in str(exc):
+            raise
+        v1.emit(
+            "DYNAMIC_RESCUE_DEPTH_UNAVAILABLE",
+            missing_outcome=missing,
+            client_order_id=current_id,
+            current_price=str(current_price),
+            complement_resting=current_id is not None,
+            phase=phase,
+            action=(
+                "KEEP_EXISTING_COMPLEMENT_AND_RETRY"
+                if current_id is not None
+                else "WAIT_FOR_FRESH_DEPTH_WITHOUT_BLIND_REPOST"
+            ),
+            maker_only_tif="MOC",
+            order_entry=True,
+        )
+        return None
 
 
 async def _dynamic_rescue(
@@ -130,7 +175,16 @@ async def _dynamic_rescue(
             continue
         next_reprice_check = now + REPRICE_INTERVAL_SECONDS
 
-        bid, _, ask, _ = await v1.base.fresh_top(event.symbol)
+        top = await _fresh_top_or_none(
+            event.symbol,
+            missing=missing,
+            current_id=current_id,
+            current_price=current_price,
+            phase="PRE_CANCEL_REPRICE_CHECK" if current_id is not None else "NO_RESTING_COMPLEMENT_RETRY",
+        )
+        if top is None:
+            continue
+        bid, _, ask, _ = top
         plan = policy.dynamic_complement_plan(
             filled_outcome=filled_outcome,
             filled_price=filled_price,
@@ -185,7 +239,19 @@ async def _dynamic_rescue(
         current_id = None
         current_row = None
 
-        bid2, _, ask2, _ = await v1.base.fresh_top(event.symbol)
+        top2 = await _fresh_top_or_none(
+            event.symbol,
+            missing=missing,
+            current_id=None,
+            current_price=current_price,
+            phase="POST_CANCEL_REVALIDATION",
+        )
+        if top2 is None:
+            # We deliberately do not repost from stale prices after a cancel. The
+            # next loop iteration will wait for fresh depth, bounded by the same
+            # rescue deadline, then re-evaluate both maker passivity and pair edge.
+            continue
+        bid2, _, ask2, _ = top2
         plan2 = policy.dynamic_complement_plan(
             filled_outcome=filled_outcome,
             filled_price=filled_price,
