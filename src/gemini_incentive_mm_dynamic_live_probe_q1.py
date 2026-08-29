@@ -19,7 +19,7 @@ from typing import Any
 
 import httpx
 
-from src import gemini_short_crypto_dynamic_complement_q1_v2 as dyn
+from src import gemini_short_crypto_dynamic_complement_q1_v3 as dyn
 from src import gemini_short_crypto_btc5m_maker_canary_q1 as base
 from src import gemini_short_crypto_dual_horizon_settlement_reconcile_v2 as settle
 from src import gemini_short_crypto_local_budget as local_base
@@ -148,6 +148,7 @@ async def run() -> None:
             target_horizon=TARGET_HORIZON,
             q_per_outcome=1,
             entry_pair_edge_floor=str(dyn.ENTRY_PAIR_EDGE),
+            initial_target_edge=str(dyn.INITIAL_TARGET_EDGE),
             final_pair_edge_floor=str(dyn.FINAL_PAIR_EDGE),
             initial_wait_seconds=dyn.INITIAL_WAIT_SECONDS,
             rescue_seconds=dyn.RESCUE_SECONDS,
@@ -178,13 +179,14 @@ async def run() -> None:
         q_per_outcome=1,
         max_campaigns=1,
         entry_pair_edge_floor=str(dyn.ENTRY_PAIR_EDGE),
+        initial_target_edge=str(dyn.INITIAL_TARGET_EDGE),
         final_pair_edge_floor=str(dyn.FINAL_PAIR_EDGE),
         initial_wait_seconds=dyn.INITIAL_WAIT_SECONDS,
         rescue_seconds=dyn.RESCUE_SECONDS,
         reprice_interval_seconds=dyn.REPRICE_INTERVAL_SECONDS,
         max_reprices=dyn.MAX_REPRICES,
         pre_mutation_max_attempts=PRE_MUTATION_MAX_ATTEMPTS,
-        quote_policy="RAW_ENTRY_EDGE_RESERVED_THEN_DYNAMIC_MAKER_COMPLEMENT_V2",
+        quote_policy="RAW_5C_GATE_THEN_SPEND_EXCESS_TO_10C_ENTRY_RESERVE_THEN_DYNAMIC_MAKER_COMPLEMENT_V2",
         taker_rescue_enabled=False,
         rewards_counted_as_realized=False,
         classification="LIVE_EXECUTION_PROBE_NOT_ARBITRAGE",
@@ -230,7 +232,7 @@ async def run() -> None:
         matched_quantity=result.get("matched_quantity"),
         residual_quantity=result.get("residual_quantity"),
         resolution_side=result.get("resolution_side"),
-        maker_fees=result.get("maker_fees"),
+        maker_fees=result.get("maker_fes") if "maker_fes" in result else result.get("maker_fees"),
         realized_trading_pnl=str(pnl),
         maker_rewards_included=False,
         classification="SETTLED_LIVE_PROBE_REALIZED_TRADING_PNL",
