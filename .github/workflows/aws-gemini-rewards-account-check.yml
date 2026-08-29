@@ -1,0 +1,108 @@
+name: AWS Gemini rewards account check
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/gemini-rewards-account-check.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Read-only Gemini maker rebate and liquidity rewards check
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE_SCRIPT=$(cat <<'EOF'
+          set -Eeuo pipefail
+          if [ -f /opt/arb/secrets/gemini-short-crypto.env ]; then
+            ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env
+          else
+            ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env
+          fi
+          test -f "$ENV_FILE"
+          IMAGE=arb-gemini-dynamic-complement:q1-32af5954c64e
+          docker image inspect "$IMAGE" >/dev/null
+          cat >/tmp/gemini_rewards_check.py <<'PY'
+          import base64, hashlib, hmac, json, os, time, urllib.request, urllib.error
+
+          BASE='https://api.gemini.com'
+          KEY=os.environ.get('GEMINI_API_KEY')
+          SECRET=os.environ.get('GEMINI_API_SECRET')
+          if not KEY or not SECRET:
+              raise SystemExit('missing Gemini credentials')
+
+          def public_get(path):
+              req=urllib.request.Request(BASE+path, headers={'User-Agent':'ARB-read-only-rewards-check/1.0'})
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      return {'ok':True,'status':r.status,'body':json.load(r)}
+              except urllib.error.HTTPError as e:
+                  return {'ok':False,'status':e.code,'body':e.read().decode('utf-8','replace')[:1000]}
+
+          nonce=int(time.time()*1000)
+          def signed(path, method='GET'):
+              global nonce
+              nonce += 1
+              payload={'request':path,'nonce':str(nonce)}
+              raw=json.dumps(payload,separators=(',',':')).encode()
+              b64=base64.b64encode(raw)
+              sig=hmac.new(SECRET.encode(), b64, hashlib.sha384).hexdigest()
+              headers={
+                  'X-GEMINI-APIKEY':KEY,
+                  'X-GEMINI-PAYLOAD':b64.decode(),
+                  'X-GEMINI-SIGNATURE':sig,
+                  'Content-Type':'text/plain',
+                  'Content-Length':'0',
+                  'Cache-Control':'no-cache',
+                  'User-Agent':'ARB-read-only-rewards-check/1.0',
+              }
+              data=b'' if method=='POST' else None
+              req=urllib.request.Request(BASE+path, data=data, method=method, headers=headers)
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      return {'ok':True,'status':r.status,'body':json.load(r)}
+              except urllib.error.HTTPError as e:
+                  return {'ok':False,'status':e.code,'body':e.read().decode('utf-8','replace')[:1000]}
+
+          out={
+              'classification':'READ_ONLY_GEMINI_REWARDS_ACCOUNT_CHECK',
+              'order_entry':False,
+              'credentials_loaded':True,
+              'maker_rebate_rates':public_get('/v1/prediction-markets/maker-rebate/rates'),
+              'liquidity_rewards_config':public_get('/v1/prediction-markets/liquidity-rewards/config'),
+              'liquidity_rewards_events':public_get('/v1/prediction-markets/liquidity-rewards/events?category=Crypto&sort=daily_pool_desc&limit=20'),
+              'maker_rebate_total':signed('/v1/prediction-markets/maker-rebate/summary/total','GET'),
+              'maker_rebate_payouts':signed('/v1/prediction-markets/maker-rebate/payouts?limit=20&offset=0','POST'),
+              'liquidity_rewards_total':signed('/v1/prediction-markets/liquidity-rewards/summary/total','GET'),
+          }
+          print('GEMINI_REWARDS_ACCOUNT_CHECK='+json.dumps(out,separators=(',',':')))
+          PY
+          docker run --rm --network host --env-file "$ENV_FILE" -v /tmp/gemini_rewards_check.py:/tmp/check.py:ro "$IMAGE" python /tmp/check.py
+          EOF
+          )
+          ENCODED=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
+          REMOTE_CMD="echo '$ENCODED' | base64 -d | sudo -u ssm-user bash"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB Gemini rewards read-only account check" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
+          RESULT=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          grep -q 'GEMINI_REWARDS_ACCOUNT_CHECK=' <<<"$(jq -r '.Stdout // ""' <<<"$RESULT")"
