@@ -1,0 +1,9 @@
+FROM python:3.11-slim
+WORKDIR /app
+ENV PYTHONPATH=/app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY src/ src/
+COPY tests/ tests/
+RUN pytest -q tests/test_l5_realtime_shadow_mirror.py
+CMD ["python", "-m", "src.l5_realtime_shadow_mirror", "--output-dir", "/output", "--duration-seconds", "36000", "--book-poll-seconds", "1", "--trade-poll-seconds", "2"]
