@@ -37,7 +37,6 @@ jobs:
             test -n "$value"
             echo "${key,,}=$value" >> "$GITHUB_OUTPUT"
           done
-          [[ "${{ steps.trigger.outputs.pinned_commit }}" == "" ]] || true
       - name: Validate trigger
         shell: bash
         env:
@@ -80,19 +79,24 @@ jobs:
           SUMMARY=\$ROOT/capture-summary.json
           REPLAY=\$ROOT/replay
           git -C "\$REPO" config --global --add safe.directory "\$REPO" || true
-          git -C "\$REPO" fetch origin ${SOURCE_BRANCH}
+          git -C "\$REPO" fetch origin ${SOURCE_BRANCH} >/dev/null 2>&1
           git -C "\$REPO" cat-file -e "${PINNED_COMMIT}^{commit}"
           git -C "\$REPO" merge-base --is-ancestor "${PINNED_COMMIT}" origin/${SOURCE_BRANCH}
           git -C "\$REPO" worktree remove --force "\$WORK" >/dev/null 2>&1 || true
           rm -rf "\$WORK"
           git -C "\$REPO" worktree prune
-          git -C "\$REPO" worktree add --detach "\$WORK" "${PINNED_COMMIT}"
+          git -C "\$REPO" worktree add --detach "\$WORK" "${PINNED_COMMIT}" >/dev/null 2>&1
           bash -n "\$WORK/deploy/aws/run_gemini_eth5_hydrated_replay.sh"
-          IMAGE=arb-gemini-eth5-forward-replay:${SHORT_SHA}
-          docker build -t "\$IMAGE" "\$WORK" >/dev/null
-          docker run --rm --network none "\$IMAGE" python -m pytest -q tests/test_gemini_eth5_forward_tape_shadow.py tests/test_gemini_retained_eth5_trade_hydrate.py tests/test_gemini_dynamic_initial_entry_replay_q1.py tests/test_gemini_incentive_mm_dynamic_complement.py
           rm -rf "\$ROOT"
-          mkdir -p "\$ROOT"
+          mkdir -p "\$ROOT" "\$REPLAY"
+          IMAGE=arb-gemini-eth5-forward-replay:${SHORT_SHA}
+          docker build -t "\$IMAGE" "\$WORK" >"\$ROOT/build.log" 2>&1
+          docker run --rm --network none "\$IMAGE" python -m pytest -q \
+            tests/test_gemini_eth5_forward_tape_shadow.py \
+            tests/test_gemini_retained_eth5_trade_hydrate.py \
+            tests/test_gemini_dynamic_initial_entry_replay_q1.py \
+            tests/test_gemini_incentive_mm_dynamic_complement.py \
+            >"\$ROOT/tests.log" 2>&1
           docker run --rm \
             -v "\$ROOT:/output" \
             "\$IMAGE" \
@@ -101,13 +105,48 @@ jobs:
               --discover-s 10 \
               --max-seconds-to-expiry ${FORWARD_SECONDS} \
               --output /output/capture.jsonl \
-              --summary-output /output/capture-summary.json
-          mkdir -p "\$REPLAY"
-          bash "\$WORK/deploy/aws/run_gemini_eth5_hydrated_replay.sh" "\$IMAGE" "\$CAPTURE" "\$REPLAY"
-          echo ETH5_FORWARD_CAPTURE_SUMMARY_BEGIN
-          cat "\$SUMMARY"
-          echo ETH5_FORWARD_CAPTURE_SUMMARY_END
-          echo AWS_ETH5_FORWARD_REPLAY_OUTPUT_DIR="\$ROOT"
+              --summary-output /output/capture-summary.json \
+            >"\$ROOT/capture.log" 2>&1
+          bash "\$WORK/deploy/aws/run_gemini_eth5_hydrated_replay.sh" \
+            "\$IMAGE" "\$CAPTURE" "\$REPLAY" \
+            >"\$ROOT/replay.log" 2>&1
+          python3 - "\$SUMMARY" "\$REPLAY/hydrate-summary.json" "\$REPLAY/touch.stdout" "\$REPLAY/strict.stdout" <<'PY'
+          import json, pathlib, sys
+          capture=json.loads(pathlib.Path(sys.argv[1]).read_text())
+          hydrate=json.loads(pathlib.Path(sys.argv[2]).read_text())
+          touch=json.loads(pathlib.Path(sys.argv[3]).read_text())
+          strict=json.loads(pathlib.Path(sys.argv[4]).read_text())
+          markets=[
+              {
+                  'ticker':m.get('ticker'),
+                  'book_updates':m.get('book_updates',0),
+                  'trade_events':m.get('trade_events',0),
+              }
+              for m in capture.get('markets',[])
+              if m.get('book_updates',0) or m.get('trade_events',0)
+          ]
+          keys=('rest_seed_attempts','rest_seed_pending','rest_seed_errors','rest_seeds','book_tickers','trades','errors','subscription_errors')
+          replay_keys=('eligible_markets','eligible_book_updates','source_trade_rows_target_family','raw_markets_with_first_fill_evidence','aggressive_markets_with_first_fill_evidence','incremental_first_fill_markets','both_first_fill_markets','lost_first_fill_markets')
+          result={
+              'type':'GEMINI_ETH5_FORWARD_REPLAY_RESULT_V2',
+              'classification':'SHADOW_REPLAY_NOT_REALIZED',
+              'order_entry':False,
+              'credentials_loaded':False,
+              'realized_pnl':None,
+              'capture':{
+                  'status':capture.get('status'),
+                  'markets_seen':capture.get('markets_seen'),
+                  'markets_with_usable_book':capture.get('markets_with_usable_book'),
+                  'markets_with_public_trades':capture.get('markets_with_public_trades'),
+                  'stats':{k:capture.get('stats',{}).get(k) for k in keys},
+                  'evidence_markets':markets,
+              },
+              'hydrate':{k:hydrate.get(k) for k in ('target_markets','target_plan_rows','history_rows_fetched','history_rows_added','history_rows_pre_quote_filtered','history_rows_post_capture_filtered','history_rows_duplicate_filtered')},
+              'touch':{k:touch.get(k) for k in replay_keys},
+              'strict':{k:strict.get(k) for k in replay_keys},
+          }
+          print(json.dumps(result,separators=(',',':')))
+          PY
           echo GEMINI_ETH5_FORWARD_REPLAY_COMPLETE classification=SHADOW_REPLAY_NOT_REALIZED order_entry=false credentials_loaded=false
           EOF
           )
