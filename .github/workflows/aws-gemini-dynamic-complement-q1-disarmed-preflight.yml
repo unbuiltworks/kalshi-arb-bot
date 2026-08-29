@@ -15,7 +15,7 @@ env:
   AWS_REGION: us-east-1
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
-  DYNAMIC_COMMIT: 93fa9e07efcef66528013399d44450f6461462da
+  DYNAMIC_COMMIT: cb547d8562352efc36565463afa96d9f11f5e1fa
   DYNAMIC_BRANCH: feature/gemini-incentive-mm-dynamic-complement-q1
 
 jobs:
