@@ -15,6 +15,7 @@ on:
       - 'src/gemini_dynamic_initial_entry_replay_q1.py'
       - 'src/gemini_retained_eth5_trade_hydrate.py'
       - 'deploy/aws/run_gemini_dynamic_complement_q1.sh'
+      - 'deploy/aws/run_gemini_eth5_hydrated_replay.sh'
       - 'tests/test_gemini_incentive_mm_dynamic_complement.py'
       - 'tests/test_gemini_short_crypto_dynamic_complement_q1.py'
       - 'tests/test_gemini_short_crypto_dynamic_complement_q1_v2.py'
@@ -42,8 +43,10 @@ jobs:
           python-version: '3.11'
           cache: pip
       - run: pip install -r requirements.txt
-      - name: Syntax-check AWS launcher
-        run: bash -n deploy/aws/run_gemini_dynamic_complement_q1.sh
+      - name: Syntax-check AWS launchers
+        run: |
+          bash -n deploy/aws/run_gemini_dynamic_complement_q1.sh
+          bash -n deploy/aws/run_gemini_eth5_hydrated_replay.sh
       - name: Run dynamic-complement safety suite
         run: |
           pytest -q \
