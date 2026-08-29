@@ -60,7 +60,7 @@ jobs:
           def signed(path, method='GET'):
               global nonce
               nonce += 1
-              payload={'request':path,'nonce':str(nonce)}
+              payload={'request':path,'nonce':nonce}
               raw=json.dumps(payload,separators=(',',':')).encode()
               b64=base64.b64encode(raw)
               sig=hmac.new(SECRET.encode(), b64, hashlib.sha384).hexdigest()
