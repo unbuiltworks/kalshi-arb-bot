@@ -179,15 +179,30 @@ def trade(
     return record
 
 
-def position(condition_id: str, token: str, realized: float, size: float = 0.0) -> dict:
-    return {
+def position(
+    condition_id: str,
+    token: str,
+    cash: float,
+    size: float = 0.0,
+    outcome_index: int = 0,
+    settled: bool = True,
+) -> dict:
+    """A /positions row with the semantics the real endpoint uses: cashPnl
+    carries the settlement result, redeemable marks a settled side, and a
+    live row instead carries curPrice."""
+    record = {
         "proxyWallet": WALLET,
         "conditionId": condition_id,
         "asset": token,
         "size": size,
-        "realizedPnl": realized,
-        "cashPnl": realized,
+        "outcomeIndex": outcome_index,
+        "realizedPnl": 0.0,
+        "cashPnl": cash,
+        "redeemable": settled,
     }
+    if not settled:
+        record["curPrice"] = 0.5
+    return record
 
 
 def simple_window_activity() -> list[dict]:

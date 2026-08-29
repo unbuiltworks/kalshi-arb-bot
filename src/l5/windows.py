@@ -26,15 +26,36 @@ def price_band(price: float) -> str:
 # --- realized P&L ------------------------------------------------------------
 
 
-def build_pnl_index(position_records: Iterable[dict]) -> dict[str, dict[str, Any]]:
-    """condition_id -> aggregated realized P&L from Polymarket position rows.
+def _f(value: Any) -> float | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
 
-    These figures are Polymarket's own accounting of settled positions. They do
-    not include liquidity rebates, maker incentives, or gas, and nothing here
-    adds them.
+
+def build_pnl_index(position_records: Iterable[dict]) -> dict[str, dict[str, Any]]:
+    """condition_id -> settlement P&L from Polymarket /positions rows.
+
+    Semantics verified against real pages, not assumed:
+
+    * rows are per *side* (outcomeIndex), and `cashPnl` -- not `realizedPnl` --
+      carries the settlement result (`realizedPnl` reflects only pre-settlement
+      sells, and `percentRealizedPnl` is -100 on losing sides either way);
+    * a live position has `redeemable=False` and a `curPrice`; its cashPnl is
+      unrealized and must not be booked;
+    * winning sides get redeemed to size 0 and drop out of size-sorted pages,
+      so a typical page shows mostly unredeemed losing sides.
+
+    A window's P&L from this endpoint is therefore usable only when *both*
+    sides' settled rows are present; anything less is one leg of a two-legged
+    book and is reported as unusable rather than summed into a wrong number.
     """
     index: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"realized_pnl": 0.0, "cash_pnl": 0.0, "rows": 0, "any_field": False}
+        lambda: {"cash_pnl": 0.0, "rows": 0, "sides_settled": set(), "live_rows": 0}
     )
     for record in position_records:
         condition_id = str(record.get("conditionId") or "")
@@ -42,18 +63,54 @@ def build_pnl_index(position_records: Iterable[dict]) -> dict[str, dict[str, Any
             continue
         entry = index[condition_id]
         entry["rows"] += 1
-        for source_key, target_key in (("realizedPnl", "realized_pnl"), ("cashPnl", "cash_pnl")):
-            value = record.get(source_key)
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                entry[target_key] += float(value)
-                entry["any_field"] = True
-            elif isinstance(value, str):
-                try:
-                    entry[target_key] += float(value)
-                    entry["any_field"] = True
-                except ValueError:
-                    pass
-    return dict(index)
+        settled = bool(record.get("redeemable")) or (
+            record.get("curPrice") is None and _f(record.get("cashPnl")) is not None
+        )
+        if not settled:
+            entry["live_rows"] += 1
+            continue
+        cash = _f(record.get("cashPnl"))
+        side = record.get("outcomeIndex")
+        if cash is not None and isinstance(side, int):
+            entry["cash_pnl"] += cash
+            entry["sides_settled"].add(side)
+    out: dict[str, dict[str, Any]] = {}
+    for condition_id, entry in index.items():
+        out[condition_id] = {
+            "cash_pnl": entry["cash_pnl"],
+            "rows": entry["rows"],
+            "both_sides_settled": {0, 1} <= entry["sides_settled"],
+            "live_rows": entry["live_rows"],
+        }
+    return out
+
+
+def build_redeem_index(non_trade_rows: Iterable[dict]) -> dict[str, dict[str, Any]]:
+    """condition_id -> redemption proceeds, from activity REDEEM rows.
+
+    A REDEEM row names the winning outcome and pays size x $1, so for a fully
+    captured window the settlement P&L is redeem proceeds minus net trading
+    cost -- derived entirely from activity, no positions page needed. The
+    redeemed size doubles as a check on the reconstructed inventory.
+    """
+    index: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"proceeds": 0.0, "qty": 0.0, "outcomes": set(), "rows": 0}
+    )
+    for row in non_trade_rows:
+        if str(row.get("activity_type") or "").upper() != "REDEEM":
+            continue
+        condition_id = str(row.get("condition_id") or "")
+        if not condition_id:
+            continue
+        entry = index[condition_id]
+        proceeds = row.get("usdc_size")
+        qty = row.get("size")
+        entry["proceeds"] += float(proceeds) if proceeds else 0.0
+        entry["qty"] += float(qty) if qty else 0.0
+        if row.get("outcome"):
+            entry["outcomes"].add(str(row["outcome"]).upper())
+        entry["rows"] += 1
+    return {k: dict(v, outcomes=sorted(v["outcomes"])) for k, v in index.items()}
 
 
 # --- window model ------------------------------------------------------------
@@ -128,6 +185,8 @@ class WindowSummary:
     realized_pnl: float | None
     pnl_source: str
     pnl_rows: int
+    redeemed_qty: float | None
+    redeem_qty_matches_inventory: bool | None
 
     capture_complete: bool
     capture_note: str
@@ -163,6 +222,25 @@ def group_trades(trades: Iterable[Trade]) -> dict[str, list[Trade]]:
     return dict(grouped)
 
 
+def merge_intervals(
+    intervals: Iterable[tuple[int, int]], join_gap_s: int = 120
+) -> list[tuple[int, int]]:
+    """Union of covered time ranges; ranges closer than join_gap_s merge.
+
+    Retrieval pages overlap by a row or two at their boundaries; a hole wider
+    than the join gap is a real gap in coverage, and a window straddling it
+    must not count as fully captured.
+    """
+    ordered = sorted((int(a), int(b)) for a, b in intervals if a is not None and b is not None)
+    merged: list[tuple[int, int]] = []
+    for start, end in ordered:
+        if merged and start <= merged[-1][1] + join_gap_s:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
 def capture_bounds(trades: Iterable[Trade]) -> tuple[int | None, int | None]:
     """The time span the retrieved data actually covers."""
     stamps = [t.timestamp for t in trades]
@@ -170,11 +248,22 @@ def capture_bounds(trades: Iterable[Trade]) -> tuple[int | None, int | None]:
 
 
 def build_windows(
-    trades: Iterable[Trade], pnl_index: dict[str, dict[str, Any]] | None = None
+    trades: Iterable[Trade],
+    pnl_index: dict[str, dict[str, Any]] | None = None,
+    coverage: list[tuple[int, int]] | None = None,
+    redeem_index: dict[str, dict[str, Any]] | None = None,
 ) -> list[Window]:
     pnl_index = pnl_index or {}
+    redeem_index = redeem_index or {}
     trades = list(trades)
     capture_start, capture_end = capture_bounds(trades)
+    if coverage is None:
+        coverage = (
+            [(capture_start, capture_end)]
+            if capture_start is not None and capture_end is not None
+            else []
+        )
+    coverage = merge_intervals(coverage)
     windows: list[Window] = []
 
     for condition_id, rows in group_trades(trades).items():
@@ -185,7 +274,7 @@ def build_windows(
         window = Window(condition_id=condition_id, trades=rows, snapshots=snapshots)
         window.summary = _summarize(
             rows, snapshots, inventory, pnl_index.get(condition_id),
-            capture_start, capture_end,
+            coverage, redeem_index.get(condition_id),
         )
         windows.append(window)
 
@@ -199,23 +288,28 @@ def build_windows(
 
 
 def _assess_capture(
-    first: Trade, capture_start: int | None, capture_end: int | None
+    first: Trade, coverage: list[tuple[int, int]]
 ) -> tuple[bool, str]:
     """Did the retrieved data span this whole window?
 
-    A window straddling either edge of the capture is missing fills, so its
-    final inventory, matched quantity and balanced-finish flag describe a
-    fragment rather than the window. Those windows are flagged here and
-    excluded from the window-level statistics rather than silently averaged in.
+    Coverage is a set of merged intervals, not one global range: retrieval can
+    have holes (a missing page), and a window straddling a hole is missing
+    fills exactly like one at the capture edge. Only a window lying entirely
+    inside a single covered interval counts as complete; everything else is
+    excluded from window-level statistics rather than silently averaged in.
     """
     start, end = first.window_start_ts, first.window_end_ts
-    if start is None or end is None or capture_start is None or capture_end is None:
+    if start is None or end is None or not coverage:
         return False, "window bounds or capture bounds unknown"
-    if start < capture_start:
-        return False, "window opened before the retrieved data begins"
-    if end > capture_end:
-        return False, "window had not closed when the data was captured"
-    return True, ""
+    for lo, hi in coverage:
+        if lo <= start and end <= hi:
+            return True, ""
+    for lo, hi in coverage:
+        if start < lo <= end:
+            return False, "window opened before the covering data range begins"
+        if start <= hi < end:
+            return False, "window had not closed within the covering data range"
+    return False, "window falls outside every covered data range"
 
 
 def _summarize(
@@ -223,12 +317,12 @@ def _summarize(
     snapshots: list[Snapshot],
     inventory: Inventory,
     pnl: dict[str, Any] | None,
-    capture_start: int | None = None,
-    capture_end: int | None = None,
+    coverage: list[tuple[int, int]] | None = None,
+    redeem: dict[str, Any] | None = None,
 ) -> WindowSummary:
     first = rows[0]
     final = snapshots[-1]
-    capture_complete, capture_note = _assess_capture(first, capture_start, capture_end)
+    capture_complete, capture_note = _assess_capture(first, coverage or [])
 
     buys = [t for t in rows if t.side == "BUY"]
     sells = [t for t in rows if t.side == "SELL"]
@@ -257,14 +351,46 @@ def _summarize(
         or (residual_frac is not None and residual_frac <= config.BALANCED_TOLERANCE_FRAC)
     )
 
-    if pnl and pnl.get("any_field"):
-        realized: float | None = float(pnl["realized_pnl"])
-        pnl_source = "polymarket_positions.realizedPnl"
-        pnl_rows = int(pnl["rows"])
-    else:
-        realized = None
-        pnl_source = "unavailable"
-        pnl_rows = int(pnl["rows"]) if pnl else 0
+    # Settlement P&L, best source first.
+    #
+    # 1. Derived from activity: redemption proceeds minus net trading cost.
+    #    Valid only when the window is fully captured (else cost is missing
+    #    fills) and the redeemed quantity matches the reconstructed winning
+    #    leg (else the reconstruction and the chain disagree).
+    # 2. Polymarket /positions cashPnl, only when both sides' settled rows
+    #    are present -- one leg of a two-legged book is not a window P&L.
+    #
+    # Both sources exclude liquidity rebates, incentives and gas.
+    realized: float | None = None
+    pnl_source = "unavailable"
+    pnl_rows = int(pnl["rows"]) if pnl else 0
+    winning_qty = None
+    redeem_qty_matches = None
+    if redeem and redeem.get("rows"):
+        outcomes = redeem.get("outcomes") or []
+        if outcomes == ["UP"]:
+            winning_qty = final.up_qty
+        elif outcomes == ["DOWN"]:
+            winning_qty = final.down_qty
+        if winning_qty is not None:
+            redeem_qty_matches = abs(redeem["qty"] - winning_qty) <= max(
+                1.0, 0.01 * max(winning_qty, 1.0)
+            )
+    if (
+        capture_complete
+        and redeem
+        and redeem.get("rows")
+        and redeem_qty_matches
+    ):
+        realized = (
+            float(redeem["proceeds"])
+            - final.cum_dollars_bought
+            + final.cum_dollars_sold
+        )
+        pnl_source = "settlement_derived_from_activity"
+    elif pnl and pnl.get("both_sides_settled"):
+        realized = float(pnl["cash_pnl"])
+        pnl_source = "polymarket_positions.cashPnl_both_sides"
 
     return WindowSummary(
         condition_id=first.condition_id,
@@ -326,6 +452,8 @@ def _summarize(
         realized_pnl=realized,
         pnl_source=pnl_source,
         pnl_rows=pnl_rows,
+        redeemed_qty=(float(redeem['qty']) if redeem and redeem.get('rows') else None),
+        redeem_qty_matches_inventory=redeem_qty_matches,
         capture_complete=capture_complete,
         capture_note=capture_note,
         window_source=first.window_source,

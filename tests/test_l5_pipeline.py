@@ -69,8 +69,8 @@ def _build_cache(directory) -> dict:
                          f"0x{i:03d}m", activity_type="MERGE")
             )
         realized = round(rng.uniform(-8.0, 12.0), 2)
-        positions.append(fx.position(condition_id, "tok_up", realized))
-        positions.append(fx.position(condition_id, "tok_down", 0.0))
+        positions.append(fx.position(condition_id, "tok_up", realized, outcome_index=0))
+        positions.append(fx.position(condition_id, "tok_down", 0.0, outcome_index=1))
 
     # Out-of-scope noise that must be filtered out downstream.
     markets.extend([fx.BTC_HOURLY_MARKET, fx.SOL_5M_MARKET])

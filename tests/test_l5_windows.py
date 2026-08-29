@@ -157,29 +157,111 @@ class TestDirectionalWindow:
         assert summary.residual_frac_of_larger_leg == pytest.approx(0.5)
 
 
-class TestRealizedPnl:
-    def test_sums_both_tokens_of_a_condition(self):
-        index = build_pnl_index([
-            fx.position("0xbtc5m01", "tok_up", 12.5),
-            fx.position("0xbtc5m01", "tok_down", -4.5),
-            fx.position("0xeth15m01", "tok_up", 3.0),
-        ])
-        assert index["0xbtc5m01"]["realized_pnl"] == pytest.approx(8.0)
-        assert index["0xbtc5m01"]["rows"] == 2
-        assert index["0xeth15m01"]["realized_pnl"] == pytest.approx(3.0)
+class TestPositionsPnl:
+    """Positions semantics: per-side rows, cashPnl carries settlement."""
 
-    def test_attaches_to_the_window_summary(self, index):
-        pnl = build_pnl_index([
-            fx.position("0xbtc5m01", "tok_up", 12.5),
-            fx.position("0xbtc5m01", "tok_down", -4.5),
+    def test_needs_both_settled_sides_to_be_usable(self):
+        index = build_pnl_index([
+            fx.position("0xbtc5m01", "tok_up", 12.5, outcome_index=0),
+            fx.position("0xbtc5m01", "tok_down", -4.5, outcome_index=1),
+            fx.position("0xeth15m01", "tok_up", 3.0, outcome_index=0),
         ])
-        summary = build_windows(_trades(index, fx.simple_window_activity()), pnl)[0].summary
+        assert index["0xbtc5m01"]["cash_pnl"] == pytest.approx(8.0)
+        assert index["0xbtc5m01"]["both_sides_settled"] is True
+        assert index["0xeth15m01"]["both_sides_settled"] is False, \
+            "one leg of a two-legged book is not a window P&L"
+
+    def test_live_rows_are_never_booked(self):
+        index = build_pnl_index([
+            fx.position("0xbtc5m01", "tok_up", 99.0, outcome_index=0, settled=False),
+            fx.position("0xbtc5m01", "tok_down", -4.5, outcome_index=1),
+        ])
+        assert index["0xbtc5m01"]["cash_pnl"] == pytest.approx(-4.5)
+        assert index["0xbtc5m01"]["both_sides_settled"] is False
+        assert index["0xbtc5m01"]["live_rows"] == 1
+
+    def test_attaches_to_the_window_summary_when_complete(self, index):
+        pnl = build_pnl_index([
+            fx.position("0xbtc5m01", "tok_up", 12.5, outcome_index=0),
+            fx.position("0xbtc5m01", "tok_down", -4.5, outcome_index=1),
+        ])
+        trades = _trades(index, fx.simple_window_activity())
+        summary = build_windows(trades, pnl)[0].summary
         assert summary.realized_pnl == pytest.approx(8.0)
-        assert summary.pnl_source == "polymarket_positions.realizedPnl"
-        assert summary.pnl_rows == 2
+        assert summary.pnl_source == "polymarket_positions.cashPnl_both_sides"
 
     def test_rows_without_pnl_fields_stay_unavailable(self, index):
         pnl = build_pnl_index([{"conditionId": "0xbtc5m01", "size": 10}])
         summary = build_windows(_trades(index, fx.simple_window_activity()), pnl)[0].summary
         assert summary.realized_pnl is None
         assert summary.pnl_source == "unavailable"
+
+
+class TestRedeemDerivedPnl:
+    """Settlement P&L from activity REDEEM rows, with the inventory check."""
+
+    def _window_with_redeem(self, index, redeem_size, coverage=None):
+        from src.l5.normalize import extract_non_trade_activity
+        from src.l5.windows import build_redeem_index
+
+        records = fx.simple_window_activity() + [
+            fx.trade("0xbtc5m01", "Up", None, 0.0, redeem_size, fx.BTC5M_END + 120,
+                     "0xr9", usdc=redeem_size, activity_type="REDEEM"),
+        ]
+        trades = _trades(index, records)
+        non_trade = extract_non_trade_activity(records, index)
+        redeem_index = build_redeem_index(non_trade)
+        cov = coverage or [(fx.BTC5M_START, fx.BTC5M_END + 300)]
+        return build_windows(trades, coverage=cov, redeem_index=redeem_index)[0].summary
+
+    def test_pnl_is_proceeds_minus_net_cost(self, index):
+        # Fixture window: 300 Up / 300 Down, $423 spent. Up wins, redeems 300.
+        summary = self._window_with_redeem(index, 300.0)
+        assert summary.realized_pnl == pytest.approx(300.0 - 423.0)
+        assert summary.pnl_source == "settlement_derived_from_activity"
+        assert summary.redeem_qty_matches_inventory is True
+        assert summary.redeemed_qty == pytest.approx(300.0)
+
+    def test_mismatched_redeem_quantity_blocks_the_derivation(self, index):
+        # Redeeming 200 when the reconstruction says 300 Up means fills are
+        # missing or the reconstruction is wrong -- either way, no P&L.
+        summary = self._window_with_redeem(index, 200.0)
+        assert summary.realized_pnl is None
+        assert summary.redeem_qty_matches_inventory is False
+
+    def test_partial_capture_blocks_the_derivation(self, index):
+        summary = self._window_with_redeem(
+            index, 300.0, coverage=[(fx.BTC5M_START + 60, fx.BTC5M_END + 300)]
+        )
+        assert summary.capture_complete is False
+        assert summary.realized_pnl is None
+
+
+class TestCoverageIntervals:
+    def test_merge_joins_touching_pages_and_keeps_real_holes(self):
+        from src.l5.windows import merge_intervals
+
+        merged = merge_intervals([(100, 200), (190, 300), (5000, 6000)])
+        assert merged == [(100, 300), (5000, 6000)]
+
+    def test_window_straddling_a_hole_is_not_complete(self, index):
+        records = [
+            fx.trade("0xbtc5m01", "Up", "BUY", 0.4, 10, fx.BTC5M_START + 10, "0xg1"),
+        ]
+        trades = _trades(index, records)
+        # Two covered ranges with a hole exactly over part of the window.
+        coverage = [
+            (fx.BTC5M_START - 600, fx.BTC5M_START + 60),
+            (fx.BTC5M_END - 60, fx.BTC5M_END + 600),
+        ]
+        summary = build_windows(trades, coverage=coverage)[0].summary
+        assert summary.capture_complete is False
+
+    def test_window_inside_one_range_is_complete(self, index):
+        records = [
+            fx.trade("0xbtc5m01", "Up", "BUY", 0.4, 10, fx.BTC5M_START + 10, "0xg1"),
+        ]
+        trades = _trades(index, records)
+        coverage = [(fx.BTC5M_START - 60, fx.BTC5M_END + 60)]
+        summary = build_windows(trades, coverage=coverage)[0].summary
+        assert summary.capture_complete is True

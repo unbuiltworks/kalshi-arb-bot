@@ -1,0 +1,2119 @@
+{
+  "config": {
+    "balanced_tolerance_frac": 0.05,
+    "balanced_tolerance_shares": 1.0,
+    "bootstrap_n": 4000,
+    "bootstrap_seed": 20260829,
+    "contemporaneous_window_s": 30,
+    "min_sample_for_claim": 20,
+    "price_band_edges": [
+      0.0,
+      0.7,
+      0.8,
+      0.9,
+      1.01
+    ]
+  },
+  "coverage": {
+    "first_trade_ts": 1788024439,
+    "last_trade_ts": 1788039649,
+    "n_trades": 2444,
+    "n_windows": 58,
+    "note_on_partial_windows": "Window-level statistics (questions 3-9) use fully captured windows only. Per-trade statistics (question 2) use every fill.",
+    "trades_by_cell": {
+      "BTC_15m": 2203,
+      "BTC_5m": 216,
+      "ETH_5m": 25
+    },
+    "windows_by_cell": {
+      "BTC_15m": 13,
+      "BTC_5m": 31,
+      "ETH_5m": 14
+    },
+    "windows_fully_captured": 47,
+    "windows_partially_captured": 11,
+    "windows_window_source_metadata": 58,
+    "windows_window_source_text_fallback": 0,
+    "windows_with_oversold_flag": 0,
+    "windows_with_realized_pnl": 42,
+    "windows_with_reconstructed_bounds": 0,
+    "windows_with_window_conflict": 0
+  },
+  "manual_stats": {
+    "batches": [
+      "1",
+      "2"
+    ],
+    "markets": 3,
+    "non_trades": 1,
+    "pages": 9,
+    "price_rounding_corrections": 20,
+    "rows_read": 62,
+    "seam_duplicates_dropped": 8,
+    "seam_gaps": 0,
+    "superseded_by_api": {
+      "rows": 54,
+      "windows": 3
+    },
+    "trades": 53,
+    "unparsed_titles": []
+  },
+  "markets_classified": 62,
+  "markets_in_scope": 62,
+  "normalize_stats": {
+    "bounds_reconstructed": 0,
+    "deduped_across_sources": 0,
+    "deduped_within_source": 5,
+    "dropped_bad_numbers": 0,
+    "dropped_no_market": 0,
+    "dropped_non_trade": 51,
+    "dropped_out_of_scope": 0,
+    "dropped_unresolved_outcome": 0,
+    "parsed": 2444,
+    "raw_records": 2500,
+    "window_conflicts": 0
+  },
+  "q1_size_vs_price": {
+    "by_price_band": {
+      "70to80": {
+        "dollars": {
+          "max": 40.108298,
+          "mean": 15.990645522012585,
+          "median": 11.606000000000002,
+          "min": 0.014,
+          "n": 318,
+          "p25": 4.46945,
+          "p75": 27.9965,
+          "stdev": 13.005674351982238
+        },
+        "n_trades": 318,
+        "shares": {
+          "max": 53.835614,
+          "mean": 21.50640366352201,
+          "median": 15.2,
+          "min": 0.02,
+          "n": 318,
+          "p25": 6.225,
+          "p75": 38.129309,
+          "stdev": 17.48786970802673
+        }
+      },
+      "80to90": {
+        "dollars": {
+          "max": 44.84265,
+          "mean": 22.284300815920396,
+          "median": 19.2942,
+          "min": 0.0174,
+          "n": 201,
+          "p25": 7.333333,
+          "p75": 40.5,
+          "stdev": 15.700443303432024
+        },
+        "n_trades": 201,
+        "shares": {
+          "max": 51.774425,
+          "mean": 26.328594104477606,
+          "median": 23.01,
+          "min": 0.02,
+          "n": 201,
+          "p25": 8.333332,
+          "p75": 50.0,
+          "stdev": 18.539256741133233
+        }
+      },
+      "gte90": {
+        "dollars": {
+          "max": 49.5,
+          "mean": 28.723737201680674,
+          "median": 28.826666,
+          "min": 0.2522,
+          "n": 119,
+          "p25": 13.285714,
+          "p75": 46.0,
+          "stdev": 17.343608983678617
+        },
+        "n_trades": 119,
+        "shares": {
+          "max": 50.591385,
+          "mean": 30.623496075630246,
+          "median": 30.666665,
+          "min": 0.26,
+          "n": 119,
+          "p25": 14.285713,
+          "p75": 50.0,
+          "stdev": 18.522491764070544
+        }
+      },
+      "lt70": {
+        "dollars": {
+          "max": 40.731649,
+          "mean": 6.490670257475081,
+          "median": 2.6451000000000002,
+          "min": 0.0012,
+          "n": 1806,
+          "p25": 0.646956,
+          "p75": 8.66464275,
+          "stdev": 8.523101547779278
+        },
+        "n_trades": 1806,
+        "shares": {
+          "max": 125.0,
+          "mean": 19.535397806201573,
+          "median": 10.0244915,
+          "min": 0.01,
+          "n": 1806,
+          "p25": 3.2896210000000004,
+          "p75": 38.2375,
+          "stdev": 19.122549072078417
+        }
+      }
+    },
+    "n_buy_trades": 2444,
+    "pooled_spearman_price_vs_dollars": {
+      "n": 2444,
+      "p": 8.379177044975005e-296,
+      "rho": 0.6519408743304866
+    },
+    "pooled_spearman_price_vs_shares": {
+      "n": 2444,
+      "p": 7.345771057403793e-20,
+      "rho": 0.1830593291257858
+    },
+    "question": "Does position size increase at 70c, 80c or 90c?",
+    "threshold_splits": {
+      "70c": {
+        "dollars": {
+          "a": {
+            "max": 40.731649,
+            "mean": 6.490670257475081,
+            "median": 2.6451000000000002,
+            "min": 0.0012,
+            "n": 1806,
+            "p25": 0.646956,
+            "p75": 8.66464275,
+            "stdev": 8.523101547779278
+          },
+          "b": {
+            "max": 49.5,
+            "mean": 20.34842392946708,
+            "median": 16.231585000000003,
+            "min": 0.014,
+            "n": 638,
+            "p25": 5.84975325,
+            "p75": 35.7785,
+            "stdev": 15.526074571395462
+          },
+          "effect_rank_biserial": -0.6053437340526354,
+          "group_a": "price<0.7",
+          "group_b": "price>=0.7",
+          "mann_whitney": {
+            "median_x": 2.6451000000000002,
+            "median_y": 16.231585000000003,
+            "n1": 1806,
+            "n2": 638,
+            "p": 1.1151187596864728e-114,
+            "rank_biserial": -0.6053437340526354,
+            "u": 227367.0,
+            "z": -22.76106219103985
+          },
+          "verdict": "strong evidence"
+        },
+        "shares": {
+          "a": {
+            "max": 125.0,
+            "mean": 19.535397806201573,
+            "median": 10.0244915,
+            "min": 0.01,
+            "n": 1806,
+            "p25": 3.2896210000000004,
+            "p75": 38.2375,
+            "stdev": 19.122549072078417
+          },
+          "b": {
+            "max": 53.835614,
+            "mean": 24.72614390752354,
+            "median": 20.0,
+            "min": 0.02,
+            "n": 638,
+            "p25": 7.5,
+            "p75": 46.0525,
+            "stdev": 18.33418657307395
+          },
+          "effect_rank_biserial": -0.20217092450452512,
+          "group_a": "price<0.7",
+          "group_b": "price>=0.7",
+          "mann_whitney": {
+            "median_x": 10.0244915,
+            "median_y": 20.0,
+            "n1": 1806,
+            "n2": 638,
+            "p": 2.3722982746337492e-14,
+            "rank_biserial": -0.20217092450452512,
+            "u": 459640.5,
+            "z": -7.628647220837764
+          },
+          "verdict": "strong evidence"
+        }
+      },
+      "80c": {
+        "dollars": {
+          "a": {
+            "max": 40.731649,
+            "mean": 7.912982938323928,
+            "median": 3.4554625000000003,
+            "min": 0.0012,
+            "n": 2124,
+            "p25": 0.818688,
+            "p75": 11.516250000000001,
+            "stdev": 9.92537909027907
+          },
+          "b": {
+            "max": 49.5,
+            "mean": 24.67896622187499,
+            "median": 23.492,
+            "min": 0.0174,
+            "n": 320,
+            "p25": 8.0,
+            "p75": 41.99457375,
+            "stdev": 16.5991610010112
+          },
+          "effect_rank_biserial": -0.6345721516007533,
+          "group_a": "price<0.8",
+          "group_b": "price>=0.8",
+          "mann_whitney": {
+            "median_x": 3.4554625000000003,
+            "median_y": 23.492,
+            "n1": 2124,
+            "n2": 320,
+            "p": 5.187154863876635e-75,
+            "rank_biserial": -0.6345721516007533,
+            "u": 124187.0,
+            "z": -18.325428220380562
+          },
+          "verdict": "strong evidence"
+        },
+        "shares": {
+          "a": {
+            "max": 125.0,
+            "mean": 19.830491903484006,
+            "median": 10.50705,
+            "min": 0.01,
+            "n": 2124,
+            "p25": 4.0224405,
+            "p75": 38.212500000000006,
+            "stdev": 18.89598780131427
+          },
+          "b": {
+            "max": 51.774425,
+            "mean": 27.925760775000004,
+            "median": 25.790713500000003,
+            "min": 0.02,
+            "n": 320,
+            "p25": 9.7461875,
+            "p75": 50.0,
+            "stdev": 18.620392078492674
+          },
+          "effect_rank_biserial": -0.273469868173258,
+          "group_a": "price<0.8",
+          "group_b": "price>=0.8",
+          "mann_whitney": {
+            "median_x": 10.50705,
+            "median_y": 25.790713500000003,
+            "n1": 2124,
+            "n2": 320,
+            "p": 2.2742357300476602e-15,
+            "rank_biserial": -0.273469868173258,
+            "u": 246904.0,
+            "z": -7.925394275851409
+          },
+          "verdict": "strong evidence"
+        }
+      },
+      "90c": {
+        "dollars": {
+          "a": {
+            "max": 44.84265,
+            "mean": 9.155406548387093,
+            "median": 4.0,
+            "min": 0.0012,
+            "n": 2325,
+            "p25": 0.965853,
+            "p75": 13.5,
+            "stdev": 11.292709780884028
+          },
+          "b": {
+            "max": 49.5,
+            "mean": 28.723737201680674,
+            "median": 28.826666,
+            "min": 0.2522,
+            "n": 119,
+            "p25": 13.285714,
+            "p75": 46.0,
+            "stdev": 17.343608983678617
+          },
+          "effect_rank_biserial": -0.6617403090268366,
+          "group_a": "price<0.9",
+          "group_b": "price>=0.9",
+          "mann_whitney": {
+            "median_x": 4.0,
+            "median_y": 28.826666,
+            "n1": 2325,
+            "n2": 119,
+            "p": 3.40885845207819e-34,
+            "rank_biserial": -0.6617403090268366,
+            "u": 46794.0,
+            "z": -12.192480270936256
+          },
+          "verdict": "strong evidence"
+        },
+        "shares": {
+          "a": {
+            "max": 125.0,
+            "mean": 20.392263319569885,
+            "median": 11.39,
+            "min": 0.01,
+            "n": 2325,
+            "p25": 4.761903,
+            "p75": 40.0,
+            "stdev": 18.94971658893025
+          },
+          "b": {
+            "max": 50.591385,
+            "mean": 30.623496075630246,
+            "median": 30.666665,
+            "min": 0.26,
+            "n": 119,
+            "p25": 14.285713,
+            "p75": 50.0,
+            "stdev": 18.522491764070544
+          },
+          "effect_rank_biserial": -0.3191686997379597,
+          "group_a": "price<0.9",
+          "group_b": "price>=0.9",
+          "mann_whitney": {
+            "median_x": 11.39,
+            "median_y": 30.666665,
+            "n1": 2325,
+            "n2": 119,
+            "p": 3.6022890741437528e-09,
+            "rank_biserial": -0.3191686997379597,
+            "u": 94184.5,
+            "z": -5.901491994528492
+          },
+          "verdict": "strong evidence"
+        }
+      }
+    },
+    "within_window": {
+      "bootstrap_median_rho": {
+        "hi": 0.18155113616933669,
+        "lo": -0.04923286677036716,
+        "n": 37,
+        "point": 0.10141851056742199
+      },
+      "n_windows_tested": 37,
+      "rho": {
+        "max": 0.9393939393939394,
+        "mean": -0.004903625420883669,
+        "median": 0.10141851056742199,
+        "min": -1.0,
+        "n": 37,
+        "p25": -0.10259783520851541,
+        "p75": 0.2867696673382022,
+        "stdev": 0.41447813516961607
+      },
+      "sign_test_positive_rho": {
+        "p": 0.7423083940717163,
+        "p_null": 0.5,
+        "rate": 0.5405405405405406,
+        "successes": 20,
+        "trials": 37,
+        "z": 0.3287979746107146
+      },
+      "verdict": "no evidence"
+    }
+  },
+  "q2_duration_split": {
+    "metrics": {
+      "first_price": {
+        "a": {
+          "max": 0.94,
+          "mean": 0.5880739733325,
+          "median": 0.645,
+          "min": 0.03,
+          "n": 40,
+          "p25": 0.385,
+          "p75": 0.7875000000000001,
+          "stdev": 0.26643101893283505
+        },
+        "b": {
+          "max": 0.67,
+          "mean": 0.5585714543285715,
+          "median": 0.5300001222,
+          "min": 0.4800000446,
+          "n": 7,
+          "p25": 0.51,
+          "p75": 0.60500000675,
+          "stdev": 0.06962482931501472
+        },
+        "effect_rank_biserial": 0.2749999999999999,
+        "group_a": "5m",
+        "group_b": "15m",
+        "mann_whitney": {
+          "median_x": 0.645,
+          "median_y": 0.5300001222,
+          "n1": 40,
+          "n2": 7,
+          "p": 0.25604213284179667,
+          "rank_biserial": 0.2749999999999999,
+          "u": 178.5,
+          "z": 1.1357955668720143
+        },
+        "verdict": "insufficient data"
+      },
+      "first_seconds_from_window_start": {
+        "a": {
+          "max": 249.0,
+          "mean": 100.275,
+          "median": 92.5,
+          "min": 4.0,
+          "n": 40,
+          "p25": 18.25,
+          "p75": 186.0,
+          "stdev": 84.46634514135474
+        },
+        "b": {
+          "max": 24.0,
+          "mean": 11.571428571428571,
+          "median": 12.0,
+          "min": 6.0,
+          "n": 7,
+          "p25": 7.0,
+          "p75": 12.5,
+          "stdev": 6.187545093630775
+        },
+        "effect_rank_biserial": 0.5535714285714286,
+        "group_a": "5m",
+        "group_b": "15m",
+        "mann_whitney": {
+          "median_x": 92.5,
+          "median_y": 12.0,
+          "n1": 40,
+          "n2": 7,
+          "p": 0.021221837848593057,
+          "rank_biserial": 0.5535714285714286,
+          "u": 217.5,
+          "z": 2.304014353873939
+        },
+        "verdict": "insufficient data"
+      },
+      "matched_pair_cost_per_share": {
+        "a": {
+          "max": 1.2845400824173208,
+          "mean": 0.9493999083848825,
+          "median": 0.9327023833228352,
+          "min": 0.725295,
+          "n": 28,
+          "p25": 0.8884646550263875,
+          "p75": 1.0155750661644445,
+          "stdev": 0.13217805887473655
+        },
+        "b": {
+          "max": 0.9980926677495807,
+          "mean": 0.9638183284889326,
+          "median": 0.9751674489767919,
+          "min": 0.9110841271270746,
+          "n": 7,
+          "p25": 0.9440322807064948,
+          "p75": 0.9871597470780453,
+          "stdev": 0.03270372735427221
+        },
+        "effect_rank_biserial": -0.20408163265306123,
+        "group_a": "5m",
+        "group_b": "15m",
+        "mann_whitney": {
+          "median_x": 0.9327023833228352,
+          "median_y": 0.9751674489767919,
+          "n1": 28,
+          "n2": 7,
+          "p": 0.42130085409811624,
+          "rank_biserial": -0.20408163265306123,
+          "u": 78.0,
+          "z": -0.8041664463712644
+        },
+        "verdict": "insufficient data"
+      },
+      "matched_qty": {
+        "a": {
+          "max": 335.0,
+          "mean": 73.4424425,
+          "median": 44.5,
+          "min": 0.0,
+          "n": 40,
+          "p25": 0.0,
+          "p75": 123.75,
+          "stdev": 85.42380011537935
+        },
+        "b": {
+          "max": 2760.3186710000004,
+          "mean": 1969.8602414285713,
+          "median": 1937.9442089999995,
+          "min": 1397.1223429999998,
+          "n": 7,
+          "p25": 1597.7693010000003,
+          "p75": 2249.0489325,
+          "stdev": 490.0923651843891
+        },
+        "effect_rank_biserial": -1.0,
+        "group_a": "5m",
+        "group_b": "15m",
+        "mann_whitney": {
+          "median_x": 44.5,
+          "median_y": 1937.9442089999995,
+          "n1": 40,
+          "n2": 7,
+          "p": 2.613827231215157e-05,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "z": -4.204739765237436
+        },
+        "verdict": "insufficient data"
+      },
+      "max_price_bought": {
+        "a": {
+          "max": 0.98,
+          "mean": 0.7777808450975001,
+          "median": 0.9,
+          "min": 0.03,
+          "n": 40,
+          "p25": 0.7625,
+          "p75": 0.94,
+          "stdev": 0.26633362187266313
+        },
+        "b": {
+          "max": 0.99,
+          "mean": 0.9585714285714285,
+          "median": 0.97,
+          "min": 0.89,
+          "n": 7,
+          "p25": 0.955,
+          "p75": 0.975,
+          "stdev": 0.03287784027201879
+        },
+        "effect_rank_biserial": -0.7642857142857142,
+        "group_a": "5m",
+        "group_b": "15m",
+        "mann_whitney": {
+          "median_x": 0.9,
+          "median_y": 0.97,
+          "n1": 40,
+          "n2": 7,
+          "p": 0.0014412533214552853,
+          "rank_biserial": -0.7642857142857142,
+          "u": 33.0,
+          "z": -3.186259354988021
+        },
+        "verdict": "insufficient data"
+      },
+      "residual_frac_of_larger_leg": {
+        "a": {
+          "max": 1.0,
+          "mean": 0.5731554909406923,
+          "median": 0.5906505705037826,
+          "min": 0.014229384536259186,
+          "n": 40,
+          "p25": 0.25410749645286296,
+          "p75": 1.0,
+          "stdev": 0.36523880059314767
+        },
+        "b": {
+          "max": 0.20414705211798584,
+          "mean": 0.09344220425352319,
+          "median": 0.07653143436578476,
+          "min": 0.005464487966448599,
+          "n": 7,
+          "p25": 0.04169803393650229,
+          "p75": 0.14227819372571932,
+          "stdev": 0.07246518931815109
+        },
+        "effect_rank_biserial": 0.7714285714285714,
+        "group_a": "5m",
+        "group_b": "15m",
+        "mann_whitney": {
+          "median_x": 0.5906505705037826,
+          "median_y": 0.07653143436578476,
+          "n1": 40,
+          "n2": 7,
+          "p": 0.0011988073499112678,
+          "rank_biserial": 0.7714285714285714,
+          "u": 248.0,
+          "z": 3.2391637285153574
+        },
+        "verdict": "insufficient data"
+      },
+      "seconds_to_opposite_side": {
+        "a": {
+          "max": 212.0,
+          "mean": 64.5,
+          "median": 54.0,
+          "min": 1.0,
+          "n": 28,
+          "p25": 21.75,
+          "p75": 84.5,
+          "stdev": 56.60879397722191
+        },
+        "b": {
+          "max": 58.0,
+          "mean": 26.142857142857142,
+          "median": 26.0,
+          "min": 2.0,
+          "n": 7,
+          "p25": 6.5,
+          "p75": 42.0,
+          "stdev": 22.99585884044177
+        },
+        "effect_rank_biserial": 0.44897959183673475,
+        "group_a": "5m",
+        "group_b": "15m",
+        "mann_whitney": {
+          "median_x": 54.0,
+          "median_y": 26.0,
+          "n1": 28,
+          "n2": 7,
+          "p": 0.07276741096886108,
+          "rank_biserial": 0.44897959183673475,
+          "u": 142.0,
+          "z": 1.794286755585138
+        },
+        "verdict": "insufficient data"
+      },
+      "total_dollars_bought": {
+        "a": {
+          "max": 324.681915,
+          "mean": 109.160225075,
+          "median": 105.830855,
+          "min": 0.74557,
+          "n": 40,
+          "p25": 32.300029249999994,
+          "p75": 170.20366199999998,
+          "stdev": 92.46089523467904
+        },
+        "b": {
+          "max": 2747.1655299999998,
+          "mean": 1976.915008857143,
+          "median": 1934.790826,
+          "min": 1417.544395,
+          "n": 7,
+          "p25": 1606.7424194999999,
+          "p75": 2262.7097360000007,
+          "stdev": 481.30865179447477
+        },
+        "effect_rank_biserial": -1.0,
+        "group_a": "5m",
+        "group_b": "15m",
+        "mann_whitney": {
+          "median_x": 105.830855,
+          "median_y": 1934.790826,
+          "n1": 40,
+          "n2": 7,
+          "p": 3.067994111017021e-05,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "z": -4.168359775053697
+        },
+        "verdict": "insufficient data"
+      },
+      "total_shares_bought": {
+        "a": {
+          "max": 690.12264,
+          "mean": 211.90938947499998,
+          "median": 187.6630375,
+          "min": 5.0,
+          "n": 40,
+          "p25": 52.55,
+          "p75": 339.7015465,
+          "stdev": 180.47453339548656
+        },
+        "b": {
+          "max": 5749.395694000001,
+          "mean": 4154.520449714286,
+          "median": 3886.5364769999996,
+          "min": 2827.810874,
+          "n": 7,
+          "p25": 3458.2069845,
+          "p75": 4850.743066999999,
+          "stdev": 1039.215590628969
+        },
+        "effect_rank_biserial": -1.0,
+        "group_a": "5m",
+        "group_b": "15m",
+        "mann_whitney": {
+          "median_x": 187.6630375,
+          "median_y": 3886.5364769999996,
+          "n1": 40,
+          "n2": 7,
+          "p": 3.067994111017021e-05,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "z": -4.168359775053697
+        },
+        "verdict": "insufficient data"
+      },
+      "total_trades": {
+        "a": {
+          "max": 16.0,
+          "mean": 5.6,
+          "median": 4.5,
+          "min": 1.0,
+          "n": 40,
+          "p25": 2.0,
+          "p75": 9.0,
+          "stdev": 4.2715516906803135
+        },
+        "b": {
+          "max": 263.0,
+          "mean": 213.71428571428572,
+          "median": 205.0,
+          "min": 143.0,
+          "n": 7,
+          "p25": 186.5,
+          "p75": 256.0,
+          "stdev": 46.874706348286544
+        },
+        "effect_rank_biserial": -1.0,
+        "group_a": "5m",
+        "group_b": "15m",
+        "mann_whitney": {
+          "median_x": 4.5,
+          "median_y": 205.0,
+          "n1": 40,
+          "n2": 7,
+          "p": 2.8597377550957692e-05,
+          "rank_biserial": -1.0,
+          "u": 0.0,
+          "z": -4.184357493043606
+        },
+        "verdict": "insufficient data"
+      }
+    },
+    "n_windows_a": 40,
+    "n_windows_b": 7,
+    "question": "Does behaviour differ between 5m and 15m windows?",
+    "rates": {
+      "bought_at_70c_plus": {
+        "group_a": "5m",
+        "group_b": "15m",
+        "two_proportion_z": {
+          "diff": -0.22499999999999998,
+          "k1": 31,
+          "k2": 7,
+          "n1": 40,
+          "n2": 7,
+          "p": 0.1627996928418617,
+          "p1": 0.775,
+          "p2": 1.0,
+          "z": -1.3957171331575295
+        },
+        "verdict": "insufficient data"
+      },
+      "bought_at_80c_plus": {
+        "group_a": "5m",
+        "group_b": "15m",
+        "two_proportion_z": {
+          "diff": -0.275,
+          "k1": 29,
+          "k2": 7,
+          "n1": 40,
+          "n2": 7,
+          "p": 0.11289687441572183,
+          "p1": 0.725,
+          "p2": 1.0,
+          "z": -1.5853057889392963
+        },
+        "verdict": "insufficient data"
+      },
+      "bought_at_90c_plus": {
+        "group_a": "5m",
+        "group_b": "15m",
+        "two_proportion_z": {
+          "diff": -0.3321428571428571,
+          "k1": 21,
+          "k2": 6,
+          "n1": 40,
+          "n2": 7,
+          "p": 0.10107416804385026,
+          "p1": 0.525,
+          "p2": 0.8571428571428571,
+          "z": -1.6396682300886067
+        },
+        "verdict": "insufficient data"
+      },
+      "finished_balanced": {
+        "group_a": "5m",
+        "group_b": "15m",
+        "two_proportion_z": {
+          "diff": -0.2107142857142857,
+          "k1": 3,
+          "k2": 2,
+          "n1": 40,
+          "n2": 7,
+          "p": 0.09530335200034726,
+          "p1": 0.075,
+          "p2": 0.2857142857142857,
+          "z": -1.6680623407981836
+        },
+        "verdict": "insufficient data"
+      },
+      "first_price_below_half": {
+        "group_a": "5m",
+        "group_b": "15m",
+        "two_proportion_z": {
+          "diff": 0.13214285714285717,
+          "k1": 11,
+          "k2": 1,
+          "n1": 40,
+          "n2": 7,
+          "p": 0.459490965385801,
+          "p1": 0.275,
+          "p2": 0.14285714285714285,
+          "z": 0.7396853072364604
+        },
+        "verdict": "insufficient data"
+      },
+      "traded_both_sides": {
+        "group_a": "5m",
+        "group_b": "15m",
+        "two_proportion_z": {
+          "diff": -0.30000000000000004,
+          "k1": 28,
+          "k2": 7,
+          "n1": 40,
+          "n2": 7,
+          "p": 0.0930964033962398,
+          "p1": 0.7,
+          "p2": 1.0,
+          "z": -1.6792855623746668
+        },
+        "verdict": "insufficient data"
+      }
+    }
+  },
+  "q3_asset_split": {
+    "metrics": {
+      "first_price": {
+        "a": {
+          "max": 0.89,
+          "mean": 0.6073623973818183,
+          "median": 0.61,
+          "min": 0.1829589547,
+          "n": 33,
+          "p25": 0.509999992,
+          "p75": 0.75,
+          "stdev": 0.18222019998077504
+        },
+        "b": {
+          "max": 0.94,
+          "mean": 0.5278571428571429,
+          "median": 0.65,
+          "min": 0.03,
+          "n": 14,
+          "p25": 0.10500000000000001,
+          "p75": 0.8175,
+          "stdev": 0.35927659307234355
+        },
+        "effect_rank_biserial": -0.010822510822510845,
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "mann_whitney": {
+          "median_x": 0.61,
+          "median_y": 0.65,
+          "n1": 33,
+          "n2": 14,
+          "p": 0.9628817136527984,
+          "rank_biserial": -0.010822510822510845,
+          "u": 228.5,
+          "z": -0.046537665768063244
+        },
+        "verdict": "insufficient data"
+      },
+      "first_seconds_from_window_start": {
+        "a": {
+          "max": 202.0,
+          "mean": 50.15151515151515,
+          "median": 22.0,
+          "min": 4.0,
+          "n": 33,
+          "p25": 7.0,
+          "p75": 91.0,
+          "stdev": 56.6607895793694
+        },
+        "b": {
+          "max": 249.0,
+          "mean": 174.07142857142858,
+          "median": 202.5,
+          "min": 4.0,
+          "n": 14,
+          "p25": 141.25,
+          "p75": 222.25,
+          "stdev": 74.25057812332744
+        },
+        "effect_rank_biserial": -0.7554112554112554,
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "mann_whitney": {
+          "median_x": 22.0,
+          "median_y": 202.5,
+          "n1": 33,
+          "n2": 14,
+          "p": 5.0514320379192256e-05,
+          "rank_biserial": -0.7554112554112554,
+          "u": 56.5,
+          "z": -4.053234507498061
+        },
+        "verdict": "insufficient data"
+      },
+      "matched_pair_cost_per_share": {
+        "a": {
+          "max": 1.2845400824173208,
+          "mean": 0.9571927041684275,
+          "median": 0.9556724246481061,
+          "min": 0.725295,
+          "n": 29,
+          "p25": 0.9170432211994832,
+          "p75": 0.9980926677495807,
+          "stdev": 0.11164052616476079
+        },
+        "b": {
+          "max": 1.208239696031249,
+          "mean": 0.9285562188858075,
+          "median": 0.9255478184098076,
+          "min": 0.7583923333333333,
+          "n": 6,
+          "p25": 0.8236054330144276,
+          "p75": 0.9543757115384615,
+          "stdev": 0.1588972254531359
+        },
+        "effect_rank_biserial": 0.2528735632183907,
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "mann_whitney": {
+          "median_x": 0.9556724246481061,
+          "median_y": 0.9255478184098076,
+          "n1": 29,
+          "n2": 6,
+          "p": 0.3466897748650602,
+          "rank_biserial": 0.2528735632183907,
+          "u": 109.0,
+          "z": 0.9410294354946783
+        },
+        "verdict": "insufficient data"
+      },
+      "matched_qty": {
+        "a": {
+          "max": 2760.3186710000004,
+          "mean": 502.96210272727274,
+          "median": 150.0,
+          "min": 0.0,
+          "n": 33,
+          "p25": 50.0,
+          "p75": 262.274833,
+          "stdev": 805.2954448717728
+        },
+        "b": {
+          "max": 39.0,
+          "mean": 9.212142857142856,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 14,
+          "p25": 0.0,
+          "p75": 10.0,
+          "stdev": 14.361033913160469
+        },
+        "effect_rank_biserial": 0.800865800865801,
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "mann_whitney": {
+          "median_x": 150.0,
+          "median_y": 0.0,
+          "n1": 33,
+          "n2": 14,
+          "p": 1.4957300197475857e-05,
+          "rank_biserial": 0.800865800865801,
+          "u": 416.0,
+          "z": 4.329316263747221
+        },
+        "verdict": "insufficient data"
+      },
+      "max_price_bought": {
+        "a": {
+          "max": 0.99,
+          "mean": 0.8979708744878787,
+          "median": 0.94,
+          "min": 0.37,
+          "n": 33,
+          "p25": 0.9,
+          "p75": 0.96,
+          "stdev": 0.11898585418047794
+        },
+        "b": {
+          "max": 0.94,
+          "mean": 0.5848710675571428,
+          "median": 0.685,
+          "min": 0.03,
+          "n": 14,
+          "p25": 0.25,
+          "p75": 0.8525,
+          "stdev": 0.34540318015290455
+        },
+        "effect_rank_biserial": 0.7445887445887447,
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "mann_whitney": {
+          "median_x": 0.94,
+          "median_y": 0.685,
+          "n1": 33,
+          "n2": 14,
+          "p": 6.485296349490966e-05,
+          "rank_biserial": 0.7445887445887447,
+          "u": 403.0,
+          "z": 3.9944194529730126
+        },
+        "verdict": "insufficient data"
+      },
+      "residual_frac_of_larger_leg": {
+        "a": {
+          "max": 1.0,
+          "mean": 0.40289399891494515,
+          "median": 0.26517917376692857,
+          "min": 0.005464487966448599,
+          "n": 33,
+          "p25": 0.08266213636363644,
+          "p75": 0.6666666666666666,
+          "stdev": 0.34545566085766083
+        },
+        "b": {
+          "max": 1.0,
+          "mean": 0.7346295073720831,
+          "median": 1.0,
+          "min": 0.03322580645161294,
+          "n": 14,
+          "p25": 0.40249999999999997,
+          "p75": 1.0,
+          "stdev": 0.3620899926687858
+        },
+        "effect_rank_biserial": -0.5216450216450217,
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "mann_whitney": {
+          "median_x": 0.26517917376692857,
+          "median_y": 1.0,
+          "n1": 33,
+          "n2": 14,
+          "p": 0.00487916866002163,
+          "rank_biserial": -0.5216450216450217,
+          "u": 110.5,
+          "z": -2.8149047917568457
+        },
+        "verdict": "insufficient data"
+      },
+      "seconds_to_opposite_side": {
+        "a": {
+          "max": 212.0,
+          "mean": 62.41379310344828,
+          "median": 51.0,
+          "min": 2.0,
+          "n": 29,
+          "p25": 23.0,
+          "p75": 81.0,
+          "stdev": 56.032208366119534
+        },
+        "b": {
+          "max": 74.0,
+          "mean": 29.833333333333332,
+          "median": 16.0,
+          "min": 1.0,
+          "n": 6,
+          "p25": 9.5,
+          "p75": 52.5,
+          "stdev": 30.81828461590078
+        },
+        "effect_rank_biserial": 0.3908045977011494,
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "mann_whitney": {
+          "median_x": 51.0,
+          "median_y": 16.0,
+          "n1": 29,
+          "n2": 6,
+          "p": 0.14249488951770992,
+          "rank_biserial": 0.3908045977011494,
+          "u": 121.0,
+          "z": 1.4665633008377654
+        },
+        "verdict": "insufficient data"
+      },
+      "total_dollars_bought": {
+        "a": {
+          "max": 2747.1655299999998,
+          "mean": 544.2096238181817,
+          "median": 183.69661799999997,
+          "min": 38.12225,
+          "n": 33,
+          "p25": 110.9779,
+          "p75": 322.22640099999995,
+          "stdev": 786.1223528524154
+        },
+        "b": {
+          "max": 46.40172,
+          "mean": 17.56403421428571,
+          "median": 7.9169,
+          "min": 0.74557,
+          "n": 14,
+          "p25": 2.1914024999999997,
+          "p75": 32.300029249999994,
+          "stdev": 17.511752086902696
+        },
+        "effect_rank_biserial": 0.9870129870129871,
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "mann_whitney": {
+          "median_x": 183.69661799999997,
+          "median_y": 7.9169,
+          "n1": 33,
+          "n2": 14,
+          "p": 1.2090059498037757e-07,
+          "rank_biserial": 0.9870129870129871,
+          "u": 459.0,
+          "z": 5.292128946641303
+        },
+        "verdict": "insufficient data"
+      },
+      "total_shares_bought": {
+        "a": {
+          "max": 5749.395694000001,
+          "mean": 1121.1641805757572,
+          "median": 348.7363,
+          "min": 50.45,
+          "n": 33,
+          "p25": 210.907165,
+          "p75": 580.26666,
+          "stdev": 1666.2448592275616
+        },
+        "b": {
+          "max": 139.0,
+          "mean": 39.97148342857144,
+          "median": 27.825,
+          "min": 5.0,
+          "n": 14,
+          "p25": 10.325,
+          "p75": 58.673075999999995,
+          "stdev": 38.249607411903824
+        },
+        "effect_rank_biserial": 0.9696969696969697,
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "mann_whitney": {
+          "median_x": 348.7363,
+          "median_y": 27.825,
+          "n1": 33,
+          "n2": 14,
+          "p": 2.0027675375631007e-07,
+          "rank_biserial": 0.9696969696969697,
+          "u": 455.0,
+          "z": 5.199080525601456
+        },
+        "verdict": "insufficient data"
+      },
+      "total_trades": {
+        "a": {
+          "max": 263.0,
+          "mean": 51.36363636363637,
+          "median": 9.0,
+          "min": 2.0,
+          "n": 33,
+          "p25": 5.0,
+          "p75": 15.0,
+          "stdev": 87.9899916829388
+        },
+        "b": {
+          "max": 3.0,
+          "mean": 1.7857142857142858,
+          "median": 2.0,
+          "min": 1.0,
+          "n": 14,
+          "p25": 1.0,
+          "p75": 2.0,
+          "stdev": 0.8017837257372732
+        },
+        "effect_rank_biserial": 0.9458874458874458,
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "mann_whitney": {
+          "median_x": 9.0,
+          "median_y": 2.0,
+          "n1": 33,
+          "n2": 14,
+          "p": 3.5692957144230926e-07,
+          "rank_biserial": 0.9458874458874458,
+          "u": 449.5,
+          "z": 5.090601434348956
+        },
+        "verdict": "insufficient data"
+      }
+    },
+    "n_windows_a": 33,
+    "n_windows_b": 14,
+    "question": "Does behaviour differ between BTC and ETH?",
+    "rates": {
+      "bought_at_70c_plus": {
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "two_proportion_z": {
+          "diff": 0.43939393939393945,
+          "k1": 31,
+          "k2": 7,
+          "n1": 33,
+          "n2": 14,
+          "p": 0.00046325210174475313,
+          "p1": 0.9393939393939394,
+          "p2": 0.5,
+          "z": 3.501151680091917
+        },
+        "verdict": "insufficient data"
+      },
+      "bought_at_80c_plus": {
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "two_proportion_z": {
+          "diff": 0.5822510822510822,
+          "k1": 31,
+          "k2": 5,
+          "n1": 33,
+          "n2": 14,
+          "p": 1.621199192257254e-05,
+          "p1": 0.9393939393939394,
+          "p2": 0.35714285714285715,
+          "z": 4.311542071298487
+        },
+        "verdict": "insufficient data"
+      },
+      "bought_at_90c_plus": {
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "two_proportion_z": {
+          "diff": 0.6147186147186148,
+          "k1": 25,
+          "k2": 2,
+          "n1": 33,
+          "n2": 14,
+          "p": 9.696322590313521e-05,
+          "p1": 0.7575757575757576,
+          "p2": 0.14285714285714285,
+          "z": 3.89806791392866
+        },
+        "verdict": "insufficient data"
+      },
+      "finished_balanced": {
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "two_proportion_z": {
+          "diff": 0.04978354978354979,
+          "k1": 4,
+          "k2": 1,
+          "n1": 33,
+          "n2": 14,
+          "p": 0.6126966278368015,
+          "p1": 0.12121212121212122,
+          "p2": 0.07142857142857142,
+          "z": 0.5062279616179771
+        },
+        "verdict": "insufficient data"
+      },
+      "first_price_below_half": {
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "two_proportion_z": {
+          "diff": -0.14502164502164502,
+          "k1": 7,
+          "k2": 5,
+          "n1": 33,
+          "n2": 14,
+          "p": 0.2970664296759811,
+          "p1": 0.21212121212121213,
+          "p2": 0.35714285714285715,
+          "z": -1.0427449582862214
+        },
+        "verdict": "insufficient data"
+      },
+      "traded_both_sides": {
+        "group_a": "BTC",
+        "group_b": "ETH",
+        "two_proportion_z": {
+          "diff": 0.45021645021645024,
+          "k1": 29,
+          "k2": 6,
+          "n1": 33,
+          "n2": 14,
+          "p": 0.0012071792853947953,
+          "p1": 0.8787878787878788,
+          "p2": 0.42857142857142855,
+          "z": 3.237178377963195
+        },
+        "verdict": "insufficient data"
+      }
+    }
+  },
+  "q4_cheaper_side": {
+    "all_buys_below_50c": {
+      "p": 1.2327148972116961e-11,
+      "p_null": 0.5,
+      "rate": 0.5687397708674304,
+      "successes": 1390,
+      "trials": 2444,
+      "z": 6.776324675275405
+    },
+    "opening_trade_below_50c": {
+      "assumption": "Treats 50c as the neutral point of a two-outcome market. It does not observe the opposite side's contemporaneous price.",
+      "p": 0.00039220562227906044,
+      "p_null": 0.5,
+      "rate": 0.25862068965517243,
+      "successes": 15,
+      "trials": 58,
+      "verdict": "strong evidence",
+      "z": -3.545273687212509
+    },
+    "question": "Does he systematically buy the cheaper side?",
+    "vs_contemporaneous_opposite_side": {
+      "assumption": "Both prices are this trader's own executed fills within 30s of each other. No resting book is inferred.",
+      "n_buys_total": 2444,
+      "n_comparable_buys": 2268,
+      "p": 2.002081084645404e-12,
+      "p_null": 0.5,
+      "price_margin_vs_opposite": {
+        "max": 0.97,
+        "mean": 0.09588601970930358,
+        "median": 0.21999999999999997,
+        "min": -0.97,
+        "n": 2268,
+        "p25": -0.41999999579999997,
+        "p75": 0.55,
+        "stdev": 0.5400631308286279
+      },
+      "rate": 0.5740740740740741,
+      "successes": 1302,
+      "trials": 2268,
+      "verdict": "strong evidence",
+      "z": 7.034338803227285
+    }
+  },
+  "q5_time_to_opposite": {
+    "bootstrap_median_seconds": {
+      "hi": 62.0,
+      "lo": 23.0,
+      "n": 35,
+      "point": 48.0
+    },
+    "by_window_length": {
+      "15m": {
+        "n": 7,
+        "seconds": {
+          "max": 58.0,
+          "mean": 26.142857142857142,
+          "median": 26.0,
+          "min": 2.0,
+          "n": 7,
+          "p25": 6.5,
+          "p75": 42.0,
+          "stdev": 22.99585884044177
+        },
+        "trades_before_opposite": {
+          "max": 9.0,
+          "mean": 3.142857142857143,
+          "median": 2.0,
+          "min": 1.0,
+          "n": 7,
+          "p25": 2.0,
+          "p75": 3.0,
+          "stdev": 2.734262327610589
+        }
+      },
+      "5m": {
+        "n": 28,
+        "seconds": {
+          "max": 212.0,
+          "mean": 64.5,
+          "median": 54.0,
+          "min": 1.0,
+          "n": 28,
+          "p25": 21.75,
+          "p75": 84.5,
+          "stdev": 56.60879397722191
+        },
+        "trades_before_opposite": {
+          "max": 5.0,
+          "mean": 1.8571428571428572,
+          "median": 1.5,
+          "min": 1.0,
+          "n": 28,
+          "p25": 1.0,
+          "p75": 2.0,
+          "stdev": 1.1454995906456331
+        }
+      }
+    },
+    "fraction_of_window_elapsed": {
+      "max": 0.7066666666666667,
+      "mean": 0.17780952380952378,
+      "median": 0.09666666666666666,
+      "min": 0.0022222222222222222,
+      "n": 35,
+      "p25": 0.043333333333333335,
+      "p75": 0.25333333333333335,
+      "stdev": 0.18462379769403045
+    },
+    "n_windows_both_sides": 35,
+    "n_windows_total": 47,
+    "question": "After the first side, how quickly does the opposite side follow?",
+    "seconds_to_opposite": {
+      "max": 212.0,
+      "mean": 56.82857142857143,
+      "median": 48.0,
+      "min": 1.0,
+      "n": 35,
+      "p25": 20.0,
+      "p75": 76.0,
+      "stdev": 53.66973389289771
+    },
+    "share_of_windows_both_sides": 0.7446808510638298,
+    "trades_before_opposite": {
+      "max": 9.0,
+      "mean": 2.1142857142857143,
+      "median": 2.0,
+      "min": 1.0,
+      "n": 35,
+      "p25": 1.0,
+      "p75": 2.0,
+      "stdev": 1.6228411645562084
+    }
+  },
+  "q6_pair_cost_target": {
+    "bootstrap_median_pair_cost": {
+      "hi": 0.9774342929206431,
+      "lo": 0.9179589999999999,
+      "n": 35,
+      "point": 0.95358
+    },
+    "by_cell": {
+      "BTC_15m": {
+        "max": 0.9980926677495807,
+        "mean": 0.9638183284889326,
+        "median": 0.9751674489767919,
+        "min": 0.9110841271270746,
+        "n": 7,
+        "p25": 0.9440322807064948,
+        "p75": 0.9871597470780453,
+        "stdev": 0.03270372735427221
+      },
+      "BTC_5m": {
+        "max": 1.2845400824173208,
+        "mean": 0.9550845509755391,
+        "median": 0.9327023833228352,
+        "min": 0.725295,
+        "n": 22,
+        "p25": 0.9054657942170652,
+        "p75": 1.0368075950056943,
+        "stdev": 0.12764510482613148
+      },
+      "ETH_15m": {
+        "max": null,
+        "mean": null,
+        "median": null,
+        "min": null,
+        "n": 0,
+        "p25": null,
+        "p75": null,
+        "stdev": null
+      },
+      "ETH_5m": {
+        "max": 1.208239696031249,
+        "mean": 0.9285562188858075,
+        "median": 0.9255478184098076,
+        "min": 0.7583923333333333,
+        "n": 6,
+        "p25": 0.8236054330144276,
+        "p75": 0.9543757115384615,
+        "stdev": 0.1588972254531359
+      }
+    },
+    "concentration_around_median": {
+      "within_0.005_of_median": {
+        "n": 3,
+        "rate": 0.08571428571428572
+      },
+      "within_0.01_of_median": {
+        "n": 4,
+        "rate": 0.11428571428571428
+      },
+      "within_0.02_of_median": {
+        "n": 6,
+        "rate": 0.17142857142857143
+      },
+      "within_0.05_of_median": {
+        "n": 18,
+        "rate": 0.5142857142857142
+      }
+    },
+    "final_pair_cost_is_running_minimum": {
+      "n_final_is_minimum": 10,
+      "n_windows_considered": 29,
+      "note": "A high rate is consistent with stopping once the pair is cheap enough, but is also what mechanically happens when the cheap side is bought last.",
+      "rate": 0.3448275862068966
+    },
+    "n_paired_windows": 35,
+    "pair_cost_below_1_00": {
+      "meaning": "A matched Up+Down pair costing under $1.00 settles at $1.00 and is locked profit before fees, rebates and gas.",
+      "p": 0.0023457869795667934,
+      "p_null": 0.5,
+      "rate": 0.7714285714285715,
+      "successes": 27,
+      "trials": 35,
+      "z": 3.04255531702266
+    },
+    "pair_cost_per_share": {
+      "max": 1.2845400824173208,
+      "mean": 0.9522835924056923,
+      "median": 0.95358,
+      "min": 0.725295,
+      "n": 35,
+      "p25": 0.9063453895083335,
+      "p75": 0.9974889344925142,
+      "stdev": 0.11873096764940251
+    },
+    "question": "Does he target a combined Up+Down acquisition-cost threshold?"
+  },
+  "q7_balanced_finish": {
+    "by_cell": {
+      "BTC_15m": {
+        "n": 7,
+        "n_balanced": 2,
+        "rate": 0.2857142857142857
+      },
+      "BTC_5m": {
+        "n": 26,
+        "n_balanced": 2,
+        "rate": 0.07692307692307693
+      },
+      "ETH_15m": {
+        "n": 0,
+        "n_balanced": 0,
+        "rate": null
+      },
+      "ETH_5m": {
+        "n": 14,
+        "n_balanced": 1,
+        "rate": 0.07142857142857142
+      }
+    },
+    "definition": "Balanced = residual |Up-Down| <= 1.0 shares or <= 5% of the larger leg.",
+    "n_balanced": 5,
+    "n_windows": 47,
+    "one_sided_windows": 12,
+    "question": "How often does he finish balanced rather than directional?",
+    "rate": 0.10638297872340426,
+    "residual_fraction": {
+      "max": 1.0,
+      "mean": 0.5017088312213267,
+      "median": 0.45231030147981083,
+      "min": 0.005464487966448599,
+      "n": 47,
+      "p25": 0.14947416556550183,
+      "p75": 0.9690787986675554,
+      "stdev": 0.3789298310958595
+    },
+    "residual_side_counts": {
+      "DOWN": 23,
+      "UP": 24
+    }
+  },
+  "q8_pnl_split": {
+    "caveat": "Realized P&L is Polymarket's own position accounting. It excludes liquidity rebates and maker incentives, which for a two-sided quoting strategy may be a large share of true economics. A negative trading P&L is therefore not proof the strategy loses money.",
+    "metrics": {
+      "first_price": {
+        "a": {
+          "max": 0.94,
+          "mean": 0.6911365191551724,
+          "median": 0.72,
+          "min": 0.1829589547,
+          "n": 29,
+          "p25": 0.59,
+          "p75": 0.82,
+          "stdev": 0.17521956888032755
+        },
+        "b": {
+          "max": 0.75,
+          "mean": 0.4946153890846154,
+          "median": 0.59,
+          "min": 0.08,
+          "n": 13,
+          "p25": 0.36,
+          "p75": 0.62,
+          "stdev": 0.2005249523531446
+        },
+        "effect_rank_biserial": 0.557029177718833,
+        "group_a": "profitable",
+        "group_b": "losing",
+        "mann_whitney": {
+          "median_x": 0.72,
+          "median_y": 0.59,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.004452281969955521,
+          "rank_biserial": 0.557029177718833,
+          "u": 293.5,
+          "z": 2.8442019425755873
+        },
+        "verdict": "insufficient data"
+      },
+      "first_seconds_from_window_start": {
+        "a": {
+          "max": 228.0,
+          "mean": 74.17241379310344,
+          "median": 36.0,
+          "min": 4.0,
+          "n": 29,
+          "p25": 7.0,
+          "p75": 127.0,
+          "stdev": 77.83869262112204
+        },
+        "b": {
+          "max": 249.0,
+          "mean": 77.3076923076923,
+          "median": 22.0,
+          "min": 4.0,
+          "n": 13,
+          "p25": 7.0,
+          "p75": 117.0,
+          "stdev": 88.16876300159126
+        },
+        "effect_rank_biserial": 0.039787798408488007,
+        "group_a": "profitable",
+        "group_b": "losing",
+        "mann_whitney": {
+          "median_x": 36.0,
+          "median_y": 22.0,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.8486705981946239,
+          "rank_biserial": 0.039787798408488007,
+          "u": 196.0,
+          "z": 0.19081492101739345
+        },
+        "verdict": "insufficient data"
+      },
+      "matched_pair_cost_per_share": {
+        "a": {
+          "max": 1.0490587767052388,
+          "mean": 0.910261512286139,
+          "median": 0.9222909680438268,
+          "min": 0.725295,
+          "n": 22,
+          "p25": 0.8985383905871096,
+          "p75": 0.9605072311620265,
+          "stdev": 0.08243938596127276
+        },
+        "b": {
+          "max": 1.2845400824173208,
+          "mean": 1.0233978818387828,
+          "median": 1.0049588017438196,
+          "min": 0.775771478836433,
+          "n": 13,
+          "p25": 0.95358,
+          "p75": 1.1037104050899502,
+          "stdev": 0.1390399189341459
+        },
+        "effect_rank_biserial": -0.5594405594405594,
+        "group_a": "profitable",
+        "group_b": "losing",
+        "mann_whitney": {
+          "median_x": 0.9222909680438268,
+          "median_y": 1.0049588017438196,
+          "n1": 22,
+          "n2": 13,
+          "p": 0.006645906136605966,
+          "rank_biserial": -0.5594405594405594,
+          "u": 63.0,
+          "z": -2.7140852494457026
+        },
+        "verdict": "insufficient data"
+      },
+      "matched_qty": {
+        "a": {
+          "max": 2760.3186710000004,
+          "mean": 425.85967437931026,
+          "median": 50.0,
+          "min": 0.0,
+          "n": 29,
+          "p25": 5.0,
+          "p75": 176.765614,
+          "stdev": 813.0396966780762
+        },
+        "b": {
+          "max": 1743.2800929999999,
+          "mean": 336.67606407692307,
+          "median": 100.90716499999999,
+          "min": 10.0,
+          "n": 13,
+          "p25": 50.0,
+          "p75": 195.0,
+          "stdev": 567.3105741089546
+        },
+        "effect_rank_biserial": -0.22546419098143233,
+        "group_a": "profitable",
+        "group_b": "losing",
+        "mann_whitney": {
+          "median_x": 50.0,
+          "median_y": 100.90716499999999,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.25184952434637375,
+          "rank_biserial": -0.22546419098143233,
+          "u": 146.0,
+          "z": -1.1458686022936393
+        },
+        "verdict": "insufficient data"
+      },
+      "max_price_bought": {
+        "a": {
+          "max": 0.98,
+          "mean": 0.8781791775206897,
+          "median": 0.92,
+          "min": 0.37,
+          "n": 29,
+          "p25": 0.83,
+          "p75": 0.95,
+          "stdev": 0.1278620329008376
+        },
+        "b": {
+          "max": 0.99,
+          "mean": 0.8764644350615385,
+          "median": 0.91,
+          "min": 0.62,
+          "n": 13,
+          "p25": 0.86,
+          "p75": 0.94,
+          "stdev": 0.1132248200512724
+        },
+        "effect_rank_biserial": 0.07427055702917773,
+        "group_a": "profitable",
+        "group_b": "losing",
+        "mann_whitney": {
+          "median_x": 0.92,
+          "median_y": 0.91,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.7129177104252507,
+          "rank_biserial": 0.07427055702917773,
+          "u": 202.5,
+          "z": 0.36794035278912895
+        },
+        "verdict": "insufficient data"
+      },
+      "residual_frac_of_larger_leg": {
+        "a": {
+          "max": 1.0,
+          "mean": 0.4772905581733901,
+          "median": 0.48395061307910375,
+          "min": 0.005464487966448599,
+          "n": 29,
+          "p25": 0.059934505644265355,
+          "p75": 0.9381575973351108,
+          "stdev": 0.3951320777122825
+        },
+        "b": {
+          "max": 0.8019047570750112,
+          "mean": 0.36452991387492634,
+          "median": 0.26517917376692857,
+          "min": 0.08266213636363644,
+          "n": 13,
+          "p25": 0.1752151762063998,
+          "p75": 0.45231030147981083,
+          "stdev": 0.24664770014572923
+        },
+        "effect_rank_biserial": 0.07692307692307687,
+        "group_a": "profitable",
+        "group_b": "losing",
+        "mann_whitney": {
+          "median_x": 0.48395061307910375,
+          "median_y": 0.26517917376692857,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.7026207370511849,
+          "rank_biserial": 0.07692307692307687,
+          "u": 203.0,
+          "z": 0.3817851465795441
+        },
+        "verdict": "insufficient data"
+      },
+      "seconds_to_opposite_side": {
+        "a": {
+          "max": 212.0,
+          "mean": 46.5,
+          "median": 29.5,
+          "min": 2.0,
+          "n": 22,
+          "p25": 21.25,
+          "p75": 61.0,
+          "stdev": 45.98731709214328
+        },
+        "b": {
+          "max": 207.0,
+          "mean": 74.3076923076923,
+          "median": 63.0,
+          "min": 1.0,
+          "n": 13,
+          "p25": 19.0,
+          "p75": 101.0,
+          "stdev": 62.71946084933104
+        },
+        "effect_rank_biserial": -0.24125874125874125,
+        "group_a": "profitable",
+        "group_b": "losing",
+        "mann_whitney": {
+          "median_x": 29.5,
+          "median_y": 63.0,
+          "n1": 22,
+          "n2": 13,
+          "p": 0.2456480843933151,
+          "rank_biserial": -0.24125874125874125,
+          "u": 108.5,
+          "z": -1.1609847913916922
+        },
+        "verdict": "insufficient data"
+      },
+      "total_dollars_bought": {
+        "a": {
+          "max": 2747.1655299999998,
+          "mean": 464.28322637931035,
+          "median": 141.73534899999999,
+          "min": 3.96006,
+          "n": 29,
+          "p25": 42.77002,
+          "p75": 231.29309500000002,
+          "stdev": 797.4192365186699
+        },
+        "b": {
+          "max": 1749.2501009999996,
+          "mean": 363.94166846153854,
+          "median": 132.746119,
+          "min": 33.639689,
+          "n": 13,
+          "p25": 66.10037,
+          "p75": 265.920937,
+          "stdev": 561.2225609595196
+        },
+        "effect_rank_biserial": -0.06631299734748008,
+        "group_a": "profitable",
+        "group_b": "losing",
+        "mann_whitney": {
+          "median_x": 141.73534899999999,
+          "median_y": 132.746119,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.7440553132905664,
+          "rank_biserial": -0.06631299734748008,
+          "u": 176.0,
+          "z": -0.32648780655523985
+        },
+        "verdict": "insufficient data"
+      },
+      "total_shares_bought": {
+        "a": {
+          "max": 5749.395694000001,
+          "mean": 946.633120275862,
+          "median": 231.66,
+          "min": 5.0,
+          "n": 29,
+          "p25": 100.0,
+          "p75": 477.125452,
+          "stdev": 1681.1255723008908
+        },
+        "b": {
+          "max": 3741.353354,
+          "mean": 770.5160183846157,
+          "median": 239.5,
+          "min": 60.480768,
+          "n": 13,
+          "p25": 210.907165,
+          "p75": 551.0410219999999,
+          "stdev": 1208.4838831056236
+        },
+        "effect_rank_biserial": -0.156498673740053,
+        "group_a": "profitable",
+        "group_b": "losing",
+        "mann_whitney": {
+          "median_x": 231.66,
+          "median_y": 239.5,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.430104876529546,
+          "rank_biserial": -0.156498673740053,
+          "u": 159.0,
+          "z": -0.7890121991751631
+        },
+        "verdict": "insufficient data"
+      },
+      "total_trades": {
+        "a": {
+          "max": 263.0,
+          "mean": 42.310344827586206,
+          "median": 6.0,
+          "min": 1.0,
+          "n": 29,
+          "p25": 3.0,
+          "p75": 13.0,
+          "stdev": 84.21066417379174
+        },
+        "b": {
+          "max": 205.0,
+          "mean": 37.53846153846154,
+          "median": 7.0,
+          "min": 2.0,
+          "n": 13,
+          "p25": 5.0,
+          "p75": 13.0,
+          "stdev": 74.19974773611136
+        },
+        "effect_rank_biserial": -0.12732095490716178,
+        "group_a": "profitable",
+        "group_b": "losing",
+        "mann_whitney": {
+          "median_x": 6.0,
+          "median_y": 7.0,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.5209383806540653,
+          "rank_biserial": -0.12732095490716178,
+          "u": 164.5,
+          "z": -0.6418995897179811
+        },
+        "verdict": "insufficient data"
+      }
+    },
+    "n_flat": 0,
+    "n_losers": 13,
+    "n_windows_a": 29,
+    "n_windows_b": 13,
+    "n_windows_with_pnl": 42,
+    "n_winners": 29,
+    "pnl": {
+      "max": 509.9140319999992,
+      "mean": 19.135362238095222,
+      "median": 7.514808000000009,
+      "min": -70.92093699999998,
+      "n": 42,
+      "p25": -6.51006799999989,
+      "p75": 18.712112750000017,
+      "stdev": 83.32690285020472
+    },
+    "question": "How do profitable and losing windows differ?",
+    "rates": {
+      "bought_at_70c_plus": {
+        "group_a": "profitable",
+        "group_b": "losing",
+        "two_proportion_z": {
+          "diff": 0.08488063660477452,
+          "k1": 27,
+          "k2": 11,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.3863105306921533,
+          "p1": 0.9310344827586207,
+          "p2": 0.8461538461538461,
+          "z": 0.8663276075846073
+        },
+        "verdict": "insufficient data"
+      },
+      "bought_at_80c_plus": {
+        "group_a": "profitable",
+        "group_b": "losing",
+        "two_proportion_z": {
+          "diff": 0.01591511936339518,
+          "k1": 25,
+          "k2": 11,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.8916132738546466,
+          "p1": 0.8620689655172413,
+          "p2": 0.8461538461538461,
+          "z": 0.13626312508266614
+        },
+        "verdict": "insufficient data"
+      },
+      "bought_at_90c_plus": {
+        "group_a": "profitable",
+        "group_b": "losing",
+        "two_proportion_z": {
+          "diff": -0.07161803713527848,
+          "k1": 18,
+          "k2": 9,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.6542929788404345,
+          "p1": 0.6206896551724138,
+          "p2": 0.6923076923076923,
+          "z": -0.4478063241835466
+        },
+        "verdict": "insufficient data"
+      },
+      "finished_balanced": {
+        "group_a": "profitable",
+        "group_b": "losing",
+        "two_proportion_z": {
+          "diff": 0.1724137931034483,
+          "k1": 5,
+          "k2": 0,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.11069517431549872,
+          "p1": 0.1724137931034483,
+          "p2": 0.0,
+          "z": 1.5950763011020421
+        },
+        "verdict": "insufficient data"
+      },
+      "first_price_below_half": {
+        "group_a": "profitable",
+        "group_b": "losing",
+        "two_proportion_z": {
+          "diff": -0.3925729442970822,
+          "k1": 2,
+          "k2": 6,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.0027423141791091833,
+          "p1": 0.06896551724137931,
+          "p2": 0.46153846153846156,
+          "z": -2.9952372866761467
+        },
+        "verdict": "insufficient data"
+      },
+      "traded_both_sides": {
+        "group_a": "profitable",
+        "group_b": "losing",
+        "two_proportion_z": {
+          "diff": -0.24137931034482762,
+          "k1": 22,
+          "k2": 13,
+          "n1": 29,
+          "n2": 13,
+          "p": 0.05231967397879011,
+          "p1": 0.7586206896551724,
+          "p2": 1.0,
+          "z": -1.9404940714620367
+        },
+        "verdict": "insufficient data"
+      }
+    },
+    "total_realized_pnl": 803.6852139999993
+  }
+}

@@ -115,6 +115,7 @@ def synthesize_markets(records: Iterable[dict]) -> tuple[list[dict], list[str]]:
 class IngestStats:
     files: list[str] = field(default_factory=list)
     records: int = 0
+    position_rows: int = 0
     trades: int = 0
     non_trades: int = 0
     wrong_wallet: int = 0
@@ -127,6 +128,7 @@ class IngestStats:
         return {
             "files": self.files,
             "records": self.records,
+            "position_rows": self.position_rows,
             "trades": self.trades,
             "non_trades": self.non_trades,
             "wrong_wallet": self.wrong_wallet,
@@ -135,6 +137,14 @@ class IngestStats:
             "oldest_ts": self.oldest_ts,
             "newest_ts": self.newest_ts,
         }
+
+
+def looks_like_positions(records: list[dict]) -> bool:
+    """A data-api /positions page: rows keyed by avgPrice/redeemable, no `type`."""
+    if not records:
+        return False
+    first = records[0]
+    return "avgPrice" in first and "type" not in first
 
 
 def _load_records(path: str) -> list[dict]:
@@ -176,6 +186,16 @@ def ingest_files(
                 stats.wrong_wallet += 1
                 continue
             kept.append(record)
+
+        if looks_like_positions(kept):
+            cache.append(
+                config.RAW_POSITIONS_JSONL, f"user-upload:{path}", {"user": wallet}, kept
+            )
+            stats.files.append(path)
+            stats.position_rows += len(kept)
+            continue
+
+        for record in kept:
             ts = record.get("timestamp")
             if isinstance(ts, (int, float)):
                 ts = int(ts)

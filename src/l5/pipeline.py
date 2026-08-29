@@ -24,7 +24,7 @@ from src.l5.normalize import (
     extract_non_trade_activity,
     normalize,
 )
-from src.l5.windows import build_pnl_index, build_windows
+from src.l5.windows import build_pnl_index, build_redeem_index, build_windows, merge_intervals
 
 
 def run_fetch(
@@ -84,6 +84,43 @@ def load_manual(manual_dir: str) -> tuple[list[dict], list[dict], dict]:
         return [], [], {}
     activity, markets, stats = manual.load_batches(paths)
     return activity, markets, stats.as_dict()
+
+
+def _coverage_intervals(cache_dir: str) -> list[tuple[int, int]]:
+    """Per-page (oldest, newest) trade-timestamp ranges from the raw cache.
+
+    Each cached activity envelope is one retrieval page. Its own range is the
+    span it proves was covered; holes between pages stay holes so the capture
+    check cannot mistake a missing page for continuous coverage.
+    """
+    cache = RawCache(cache_dir)
+    intervals: list[tuple[int, int]] = []
+    for envelope in cache.read_envelopes(config.RAW_ACTIVITY_JSONL):
+        stamps = [
+            int(r["timestamp"])
+            for r in _iter_env_records(envelope)
+            if isinstance(r.get("timestamp"), (int, float))
+        ]
+        if stamps:
+            intervals.append((min(stamps), max(stamps)))
+    return intervals
+
+
+def _iter_env_records(envelope: dict):
+    payload = envelope.get("payload")
+    if isinstance(payload, list):
+        for record in payload:
+            if isinstance(record, dict):
+                yield record
+
+
+def _manual_intervals(manual_activity: list[dict]) -> list[tuple[int, int]]:
+    stamps = [
+        int(r["timestamp"])
+        for r in manual_activity
+        if isinstance(r.get("timestamp"), (int, float))
+    ]
+    return [(min(stamps), max(stamps))] if stamps else []
 
 
 def _window_key(market: dict) -> tuple | None:
@@ -156,7 +193,11 @@ def build(cache_dir: str, output_dir: str, manual_dir: str | None = None) -> dic
         raw["activity"] + manual_activity, market_index
     )
     pnl_index = build_pnl_index(raw["positions"])
-    windows = build_windows(trades, pnl_index)
+    redeem_index = build_redeem_index(non_trade)
+    coverage = merge_intervals(
+        _coverage_intervals(cache_dir) + _manual_intervals(manual_activity)
+    )
+    windows = build_windows(trades, pnl_index, coverage=coverage, redeem_index=redeem_index)
 
     os.makedirs(output_dir, exist_ok=True)
     written = {

@@ -57,6 +57,7 @@ SUMMARY_COLUMNS = [
     "residual_qty", "residual_side", "residual_frac_of_larger_leg", "finished_balanced",
     "traded_both_sides", "seconds_to_opposite_side", "trades_before_opposite_side",
     "realized_pnl", "pnl_source", "pnl_rows",
+    "redeemed_qty", "redeem_qty_matches_inventory",
     "capture_complete", "capture_note",
     "window_source", "window_conflict", "bounds_reconstructed", "oversold",
 ]
