@@ -1,0 +1,48 @@
+name: Gemini q10 production candidate tests
+
+on:
+  push:
+    branches:
+      - feature/gemini-q10-production-executor
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  safety-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Compile production modules
+        run: |
+          python -m py_compile \
+            src/btc_spot_toxicity_guard.py \
+            src/gemini_liquidity_reward_dynamic_completion_q10.py \
+            src/gemini_q10_production_executor.py
+      - name: Run focused q10 production safety tests
+        run: |
+          pytest -q \
+            tests/test_btc_spot_toxicity_guard.py \
+            tests/test_gemini_liquidity_reward_dynamic_completion_q10.py \
+            tests/test_gemini_q10_production_executor.py
+      - name: Verify production executor defaults disarmed
+        env:
+          GEMINI_Q10_PRODUCTION_STATE_DIR: /tmp/gemini-q10-prod-ci-state
+        run: |
+          python - <<'PY'
+          import os
+          from src import gemini_q10_production_executor as p
+          for k in (p.LIVE_ENV, p.ARM_ID_ENV, p.ARM_ENV, p.CONTINUOUS_ENV):
+              os.environ.pop(k, None)
+          assert p.live_armed() is False
+          assert p.continuous_enabled() is False
+          print('disarmed-default-ok')
+          PY
