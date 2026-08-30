@@ -1,0 +1,129 @@
+name: AWS Gemini q10 V5 dead-man sidecar smoke
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-q10-v5-sidecar-smoke.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  FEATURE_BRANCH: feature/gemini-q10-production-executor
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - name: Read trigger
+        id: trigger
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          F=deploy/aws/gemini-q10-v5-sidecar-smoke.trigger
+          PIN=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$F" | tr -d '[:space:]')
+          RUN_ID=$(awk -F= '$1=="RUN_ID"{print $2}' "$F" | tr -d '[:space:]')
+          CLASS=$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$F" | tr -d '[:space:]')
+          test "$CLASS" = READ_ONLY_GEMINI_Q10_V5_DEADMAN_SIDECAR_SMOKE
+          [[ "$PIN" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$RUN_ID" =~ ^[A-Za-z0-9_-]+$ ]]
+          echo "pin=$PIN" >> "$GITHUB_OUTPUT"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Smoke sidecar on EC2 with synthetic isolated state
+        shell: bash
+        env:
+          PIN: ${{ steps.trigger.outputs.pin }}
+          RUN_ID: ${{ steps.trigger.outputs.run_id }}
+        run: |
+          set -Eeuo pipefail
+          SHORT=${PIN:0:12}
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          WORK=/opt/arb/gemini-q10-v5-sidecar-smoke
+          STATE=/home/ssm-user/gemini-q10-v5-sidecar-smoke-state
+          OUT=/home/ssm-user/gemini-q10-v5-sidecar-smoke/${RUN_ID}
+          IMAGE=arb-gemini-q10-v5-sidecar-smoke:${SHORT}
+          cd "\$REPO"
+          git config --global --add safe.directory "\$REPO" || true
+          git fetch origin ${FEATURE_BRANCH} >/dev/null
+          git cat-file -e "${PIN}^{commit}"
+          git merge-base --is-ancestor "${PIN}" origin/${FEATURE_BRANCH}
+          git worktree remove --force "\$WORK" >/dev/null 2>&1 || true
+          rm -rf "\$WORK" "\$STATE" "\$OUT"
+          git worktree prune
+          git worktree add --detach "\$WORK" "${PIN}" >/dev/null
+          docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
+          mkdir -p "\$STATE" "\$OUT"
+          echo V5_SIDECAR_TESTS_BEGIN
+          docker run --rm "\$IMAGE" python -m pytest -q \
+            tests/test_gemini_q10_v5_recovery_deadman.py \
+            tests/test_gemini_q10_v5_deadman_sidecar.py
+          echo V5_SIDECAR_TESTS_END
+          echo V5_SIDECAR_IDLE_BEGIN
+          set +e
+          timeout 2 docker run --rm \
+            -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
+            -e GEMINI_Q10_PRODUCTION_LIVE=NO \
+            -e GEMINI_Q10_PRODUCTION_ARM_ID= \
+            -e GEMINI_Q10_PRODUCTION_ARM= \
+            -e GEMINI_Q10_V5_RECOVERY_ARM= \
+            -e GEMINI_Q10_V5_WATCHDOG_ARM= \
+            -v "\$STATE:/prod_state" \
+            "\$IMAGE" python -m src.gemini_q10_v5_deadman_sidecar > "\$OUT/idle.log" 2>&1
+          RC=\$?
+          set -e
+          test "\$RC" = 124
+          grep -q 'WAITING_FOR_OPEN_CAMPAIGN' "\$OUT/idle.log"
+          echo V5_SIDECAR_IDLE_PASS
+          cat > "\$STATE/gemini-q10-production-state.json" <<'JSON'
+          {"open":true,"status":"BOTH_POSTED","heartbeat_at_utc":"2000-01-01T00:00:00+00:00","symbol":"GEMI-BTC05M-SYNTH-UP","yes_id":"synthetic-yes","no_id":"synthetic-no"}
+          JSON
+          echo V5_SIDECAR_STALE_DISARMED_BEGIN
+          docker run --rm \
+            -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
+            -e GEMINI_Q10_PRODUCTION_LIVE=NO \
+            -e GEMINI_Q10_PRODUCTION_ARM_ID= \
+            -e GEMINI_Q10_PRODUCTION_ARM= \
+            -e GEMINI_Q10_V5_RECOVERY_ARM= \
+            -e GEMINI_Q10_V5_WATCHDOG_ARM= \
+            -v "\$STATE:/prod_state" \
+            "\$IMAGE" python - <<'PY'
+          import asyncio, json
+          from src import gemini_q10_v5_deadman_sidecar as s
+          r=asyncio.run(s.tick())
+          print('V5_SIDECAR_STALE_DISARMED='+json.dumps(r,separators=(',',':'),default=str))
+          assert r['status']=='STALE_HEARTBEAT_WATCHDOG_NOT_ARMED'
+          assert r['intervened'] is False
+          PY
+          echo V5_SIDECAR_STALE_DISARMED_PASS
+          rm -f "\$STATE/gemini-q10-production-state.json"
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB V5 deadman sidecar smoke $RUN_ID" --parameters "$PARAMS" --timeout-seconds 800 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 360); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          OUT=$(jq -r '.Stdout // ""' <<<"$RESULT")
+          grep -q 'V5_SIDECAR_IDLE_PASS' <<<"$OUT"
+          grep -q 'V5_SIDECAR_STALE_DISARMED_PASS' <<<"$OUT"
