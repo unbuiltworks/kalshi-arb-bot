@@ -35,7 +35,7 @@ async def test_pre_cancel_missing_depth_keeps_live_complement(monkeypatch):
     top_calls = {'n':0}
 
     async def fake_order(cid, symbol):
-        return {'clientOrderId':cid,'filledQuantity':'0'}
+        return {'clientOrderId':cid,'filledQuantity':'10' if '-r1' in cid else '0'}
 
     async def fake_top(symbol):
         top_calls['n'] += 1
@@ -50,7 +50,7 @@ async def test_pre_cancel_missing_depth_keeps_live_complement(monkeypatch):
     posts = []
     async def fake_post(maker, *, symbol, outcome, price, cid):
         posts.append((outcome,price,cid))
-        return {'status':200}, {'clientOrderId':cid,'filledQuantity':'10'}, 3.0
+        return {'status':200}, {'clientOrderId':cid,'filledQuantity':'0'}, 3.0
 
     monkeypatch.setattr(v2.v1.base, '_order_by_client', fake_order)
     monkeypatch.setattr(v2.v1.base, '_filled', lambda r: D(str((r or {}).get('filledQuantity') or 0)))
@@ -110,7 +110,6 @@ async def test_post_cancel_missing_depth_never_blind_reposts(monkeypatch):
         symbol='GEMI-BTC05M-X-UP'; price_increment=D('0.01')
         @property
         def seconds_to_expiry(self):
-            # One initial iteration is enough; force deadline expiration after cancel.
             return 21.0 if calls['top'] < 2 else 19.0
 
     out = await v2._dynamic_complete_v2(
