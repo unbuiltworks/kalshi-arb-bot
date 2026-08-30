@@ -24,7 +24,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: aws-migration-foundation
-
       - name: Read trigger
         id: trigger
         shell: bash
@@ -41,13 +40,11 @@ jobs:
           test "$ORDER_ENTRY" = "false"
           echo "pinned_commit=$PINNED_COMMIT" >> "$GITHUB_OUTPUT"
           echo "source_run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
       - name: Run retained-tape stress replay
         env:
           PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
@@ -56,11 +53,11 @@ jobs:
         run: |
           set -euo pipefail
           SHORT_SHA="${PINNED_COMMIT:0:12}"
-          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; REPO=/home/ssm-user/kalshi-arb-bot; SOURCE=/home/ssm-user/gemini-l5-dynamic-shadow-v2-state/${SOURCE_RUN_ID}/capture.jsonl; WORK=/opt/arb/gemini-inventory-maker-toxicity-replay; OUT=/home/ssm-user/gemini-inventory-maker-toxicity-replay-state/${SOURCE_RUN_ID}-${SHORT_SHA}; test -f \"\$SOURCE\"; git -C \"\$REPO\" config --global --add safe.directory \"\$REPO\" || true; git -C \"\$REPO\" fetch origin feature/gemini-inventory-maker-toxicity-shadow; git -C \"\$REPO\" cat-file -e \"${PINNED_COMMIT}^{commit}\"; git -C \"\$REPO\" worktree remove --force \"\$WORK\" >/dev/null 2>&1 || true; rm -rf \"\$WORK\"; git -C \"\$REPO\" worktree prune; git -C \"\$REPO\" worktree add --detach \"\$WORK\" \"${PINNED_COMMIT}\"; mkdir -p \"\$OUT\"; IMAGE=arb-gemini-inventory-maker-toxicity-replay:${SHORT_SHA}; docker build -t \"\$IMAGE\" \"\$WORK\" >/dev/null; docker run --rm --network none \"\$IMAGE\" python -m pytest -q tests/test_gemini_inventory_maker_toxicity_shadow.py; for BPS in 0 10 25 50; do docker run --rm --network none -v \"\$SOURCE:/input/capture.jsonl:ro\" -v \"\$OUT:/output\" \"\$IMAGE\" python -m src.gemini_inventory_maker_toxicity_shadow /input/capture.jsonl --stale-pull-bps \"\$BPS\" --output \"/output/stale-\${BPS}bps.json\" >/dev/null; echo INVENTORY_TOXICITY_FILE=\"\$OUT/stale-\${BPS}bps.json\"; cat \"\$OUT/stale-\${BPS}bps.json\"; done'"
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; REPO=/home/ssm-user/kalshi-arb-bot; SOURCE=/home/ssm-user/gemini-l5-dynamic-shadow-v2-state/${SOURCE_RUN_ID}/capture.jsonl; WORK=/opt/arb/gemini-inventory-maker-toxicity-replay; OUT=/home/ssm-user/gemini-inventory-maker-toxicity-replay-state/${SOURCE_RUN_ID}-${SHORT_SHA}; test -f \"\$SOURCE\"; git -C \"\$REPO\" config --global --add safe.directory \"\$REPO\" || true; git -C \"\$REPO\" fetch origin feature/gemini-inventory-maker-toxicity-shadow; git -C \"\$REPO\" cat-file -e \"${PINNED_COMMIT}^{commit}\"; git -C \"\$REPO\" worktree remove --force \"\$WORK\" >/dev/null 2>&1 || true; rm -rf \"\$WORK\"; git -C \"\$REPO\" worktree prune; git -C \"\$REPO\" worktree add --detach \"\$WORK\" \"${PINNED_COMMIT}\"; mkdir -p \"\$OUT\"; IMAGE=arb-gemini-inventory-maker-toxicity-replay:${SHORT_SHA}; docker build -t \"\$IMAGE\" \"\$WORK\" >/dev/null; docker run --rm --network none \"\$IMAGE\" python -m pytest -q tests/test_gemini_inventory_maker_toxicity_shadow.py; docker run --rm --network none -v \"\$SOURCE:/input/capture.jsonl:ro\" -v \"\$OUT:/output\" \"\$IMAGE\" python -m src.gemini_inventory_maker_policy_compare /input/capture.jsonl --stale-pull-bps 10 --output /output/policy-compare.json >/dev/null; echo POLICY_COMPARE_FILE=\"\$OUT/policy-compare.json\"; cat \"\$OUT/policy-compare.json\"'"
           PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
-          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB Gemini inventory-maker toxicity replay ${SHORT_SHA}" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB Gemini maker policy compare ${SHORT_SHA}" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
           aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
           aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' > /tmp/result.json
           cat /tmp/result.json
           test "$(jq -r '.Status' /tmp/result.json)" = "Success"
-          grep -q 'INVENTORY_TOXICITY_FILE=' <(jq -r '.Stdout // ""' /tmp/result.json)
+          grep -q 'POLICY_COMPARE_FILE=' <(jq -r '.Stdout // ""' /tmp/result.json)
