@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/gemini-q10-production-candidate
+      - feature/gemini-q10-v3-nonce-status
   workflow_dispatch:
 
 permissions:
@@ -26,6 +27,7 @@ jobs:
           tests/test_gemini_q10_production_candidate.py
           tests/test_gemini_q10_production_candidate_v2.py
           tests/test_gemini_q10_production_candidate_v3.py
+          tests/test_gemini_q10_nonce_safe_status.py
           tests/test_gemini_liquidity_reward_dynamic_completion_q10.py
           tests/test_gemini_liquidity_reward_live_probe_q10.py
           tests/test_gemini_short_crypto_dynamic_complement_q1_v2.py
