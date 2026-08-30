@@ -1,0 +1,90 @@
+name: AWS L5 market-scoped redeem audit
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/l5-market-redeem-audit.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Run read-only market-scoped reconciliation on AWS
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          RUN_ID=$(awk -F= '$1=="RUN_ID"{print $2}' deploy/aws/l5-market-redeem-audit.trigger)
+          PIN=$(awk -F= '$1=="PIN"{print $2}' deploy/aws/l5-market-redeem-audit.trigger)
+          BRANCH=$(awk -F= '$1=="SOURCE_BRANCH"{print $2}' deploy/aws/l5-market-redeem-audit.trigger)
+          MAX_MARKETS=$(awk -F= '$1=="MAX_MARKETS"{print $2}' deploy/aws/l5-market-redeem-audit.trigger)
+          test -n "$RUN_ID" && test -n "$PIN" && test -n "$BRANCH" && test -n "$MAX_MARKETS"
+          REMOTE_SCRIPT=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          ROOT=/home/ssm-user/l5-market-redeem-audit/${RUN_ID}
+          WORK=\$ROOT/repo
+          IMAGE=arb-l5-market-redeem:${PIN:0:12}
+          mkdir -p "\$ROOT"
+          cd "\$REPO"
+          git config --global --add safe.directory "\$REPO" || true
+          git fetch origin "${BRANCH}" >/dev/null
+          git cat-file -e "${PIN}^{commit}"
+          if [ -d "\$WORK" ]; then git worktree remove --force "\$WORK" >/dev/null 2>&1 || rm -rf "\$WORK"; fi
+          git worktree prune
+          git worktree add --detach "\$WORK" "${PIN}" >/dev/null
+          docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
+          echo L5_MARKET_REDEEM_TESTS_START
+          docker run --rm \
+            -e PYTHONPATH=/app \
+            -v "\$WORK/tests:/app/tests:ro" \
+            "\$IMAGE" python -m pytest -q tests/test_l5_market_redeem_audit.py
+          echo L5_MARKET_REDEEM_TESTS_PASS
+          echo L5_MARKET_REDEEM_RUN_START run_id=${RUN_ID} pin=${PIN} max_markets=${MAX_MARKETS}
+          docker run --rm --network host "\$IMAGE" \
+            python -m src.l5_market_redeem_audit --max-markets "${MAX_MARKETS}" \
+            | tee "\$ROOT/audit.log" \
+            | grep -E '^L5_REDEEM_PROGRESS=|^L5_MARKET_REDEEM_AUDIT='
+          echo L5_MARKET_REDEEM_RUN_DONE
+          EOF
+          )
+          ENCODED=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
+          PARAMETERS=$(jq -nc --arg cmd "echo '$ENCODED' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "ARB L5 market-scoped redeem audit" \
+            --parameters "$PARAMETERS" \
+            --timeout-seconds 1800 \
+            --query 'Command.CommandId' --output text)
+          echo "SSM_COMMAND_ID=$COMMAND_ID"
+          for _ in $(seq 1 130); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || true)
+            case "$STATUS" in
+              Success|Failed|Cancelled|TimedOut|Cancelling) break ;;
+            esac
+            sleep 15
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          STDOUT=$(jq -r '.Stdout // ""' <<<"$RESULT")
+          grep -q 'L5_MARKET_REDEEM_TESTS_PASS' <<<"$STDOUT"
+          grep -q 'L5_MARKET_REDEEM_AUDIT=' <<<"$STDOUT"
