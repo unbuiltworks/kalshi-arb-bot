@@ -100,12 +100,7 @@ class DepthSnapshot:
         own_no_price: D | None = None,
         own_no_quantity: D = ZERO,
     ) -> "DepthSnapshot | None":
-        """Remove known owned resting BUY liquidity from the public depth ladder.
-
-        A YES BUY rests on the public YES bid side at its native price. A NO BUY at
-        price p transforms to public YES ask price 1-p. If removing owned quantity
-        exhausts the top level, the next public depth level becomes the rescue top.
-        """
+        """Remove known owned resting BUY liquidity from the public depth ladder."""
         bids = _subtract_level(
             self.bids,
             price=None if own_yes_price is None else D(str(own_yes_price)),
@@ -165,6 +160,36 @@ class GeminiDepth5Cache:
         snap = self.snapshot()
         age = None if snap is None else round(snap.age_ms, 3)
         raise RuntimeError(f"no fresh persistent Gemini depth5: symbol={self.symbol} age_ms={age}")
+
+    async def wait_newer(
+        self,
+        after_sequence: int,
+        *,
+        timeout: float = 0.75,
+        max_age_ms: int | None = None,
+    ) -> DepthSnapshot:
+        """Require a depth message newer than a known pre-mutation sequence."""
+        max_age = self.stale_ms if max_age_ms is None else int(max_age_ms)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            snap = self.snapshot()
+            if (
+                snap is not None
+                and snap.sequence > int(after_sequence)
+                and snap.age_ms <= max_age
+            ):
+                return snap
+            self._updated.clear()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                await asyncio.wait_for(self._updated.wait(), timeout=min(remaining, 0.10))
+            except asyncio.TimeoutError:
+                pass
+        raise RuntimeError(
+            f"no newer Gemini depth5 update: symbol={self.symbol} after_sequence={after_sequence}"
+        )
 
     async def run(self, stop: asyncio.Event) -> None:
         backoff = 0.10
