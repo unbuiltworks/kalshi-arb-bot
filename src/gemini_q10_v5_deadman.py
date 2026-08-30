@@ -102,10 +102,15 @@ async def check_once() -> dict:
 
 
 async def run() -> None:
+    terminal = {
+        "IDLE_NO_OPEN_CAMPAIGN",
+        "DEADMAN_INTERVENTION",
+        "STALE_HEARTBEAT_NO_DIRECTIONAL_RESIDUAL",
+    }
     while True:
         result = await check_once()
         print("GEMINI_Q10_V5_DEADMAN=" + json.dumps(result, separators=(",", ":"), default=str), flush=True)
-        if result["status"] in {"IDLE_NO_OPEN_CAMPAIGN", "DEADMAN_INTERVENTION"}:
+        if result["status"] in terminal:
             return
         await asyncio.sleep(poll_seconds())
 
