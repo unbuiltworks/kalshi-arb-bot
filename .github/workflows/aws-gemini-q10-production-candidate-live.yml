@@ -62,7 +62,8 @@ jobs:
           PINNED_COMMIT=${PINNED_COMMIT}
           APPROVAL_ID=${APPROVAL_ID}
           git -C "\$REPO" fetch origin "\$RELEASE_BRANCH"
-          test "\$(git -C \"\$REPO\" rev-parse \"origin/\$RELEASE_BRANCH\")" = "\$PINNED_COMMIT"
+          ACTUAL_RELEASE_COMMIT=\$(git -C "\$REPO" rev-parse "origin/\$RELEASE_BRANCH")
+          test "\$ACTUAL_RELEASE_COMMIT" = "\$PINNED_COMMIT"
           git -C "\$REPO" worktree remove --force "\$WORK" >/dev/null 2>&1 || true
           rm -rf "\$WORK"
           git -C "\$REPO" worktree prune
