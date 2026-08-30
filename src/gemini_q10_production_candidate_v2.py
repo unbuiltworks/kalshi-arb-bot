@@ -1,14 +1,17 @@
 """Hardened wrapper around the Gemini q10 production candidate.
 
-Adds two production-critical protections without changing the entry economics:
-1. durable one-use state so a process/container restart cannot silently create a
-   second campaign under the same approval id;
-2. q1-V2-style complement handling: transient missing depth never causes a live
-   complement to be cancelled, and after a deliberate cancel the executor waits
-   for fresh depth rather than blindly reposting stale prices.
+Adds production-critical protections without changing entry economics:
+1. durable one-use state so a restart cannot create a second campaign under the
+   same approval id;
+2. transient missing depth never cancels a live complement and post-cancel prices
+   are always revalidated before repost;
+3. WebSocket-first fill/cancel reconciliation so the hot complement loop does not
+   burn Gemini's epoch-second private REST nonce budget.
 
-Live mutation still requires the exact dual-key arm implemented by v1.  No taker
-rescue and no automatic restart are introduced here.
+Private REST is now only a slow fallback for a missed WebSocket fill. Normal fill,
+reprice, and cancel handling stays on the authenticated trading WebSocket. Live
+mutation still requires the exact dual-key arm implemented by v1. No taker rescue
+and no automatic restart are introduced here.
 """
 from __future__ import annotations
 
@@ -26,6 +29,8 @@ from src import gemini_q10_production_candidate as v1
 ZERO = D("0")
 Q = D("10")
 STATE_DIR_ENV = "GEMINI_Q10_PRODUCTION_STATE_DIR"
+STATUS_RECONCILE_SECONDS = 8.0
+CANCEL_RACE_LISTEN_SECONDS = 0.25
 
 
 def _state_path(run_id: str) -> Path:
@@ -83,6 +88,70 @@ async def _top_or_none(symbol: str):
         raise
 
 
+def _event_client_id(item: Mapping[str, Any]) -> str:
+    return str(item.get("c") or item.get("clientOrderId") or item.get("client_order_id") or "")
+
+
+def _event_filled(item: Mapping[str, Any]) -> D:
+    for key in ("Z", "filledQuantity", "executedQuantity", "filled_quantity"):
+        value = item.get(key)
+        if value not in (None, ""):
+            try:
+                return D(str(value))
+            except Exception:
+                return ZERO
+    return ZERO
+
+
+async def _wait_fill_event(maker: v1.base.GeminiMakerSession, cid: str, timeout: float) -> D:
+    """Return cumulative fill for cid from WS events without losing other order events."""
+    if not cid or timeout <= 0:
+        return ZERO
+    deadline = time.monotonic() + timeout
+    deferred: list[Any] = []
+    best = ZERO
+    try:
+        while time.monotonic() < deadline:
+            try:
+                item = await asyncio.wait_for(
+                    maker.events.get(), timeout=max(0.001, deadline - time.monotonic())
+                )
+            except asyncio.TimeoutError:
+                break
+            if not isinstance(item, Mapping):
+                deferred.append(item)
+                continue
+            if _event_client_id(item) != cid:
+                deferred.append(item)
+                continue
+            best = max(best, _event_filled(item))
+            if best >= Q:
+                break
+    finally:
+        for item in deferred:
+            maker.events.put_nowait(item)
+    return best
+
+
+def _known_order_id(row: Mapping[str, Any] | None) -> str | None:
+    if not row:
+        return None
+    value = row.get("orderId") or row.get("order_id") or row.get("id")
+    return None if value in (None, "") else str(value)
+
+
+async def _cancel_known(maker: v1.base.GeminiMakerSession, *, cid: str, symbol: str,
+                        row: Mapping[str, Any] | None) -> tuple[dict[str, Any], D, float]:
+    """Cancel a known order over WS and detect race fills from WS; never REST-poll."""
+    if not _known_order_id(row):
+        return {"method":"NO_KNOWN_ORDER_ID","ok":False}, ZERO, 0.0
+    started = time.monotonic()
+    result = await v1.base._cancel_maker(maker, row=row)
+    ms = (time.monotonic() - started) * 1000.0
+    race_fill = await _wait_fill_event(maker, cid, CANCEL_RACE_LISTEN_SECONDS)
+    return result, race_fill, ms
+
+
 def _current_price_safe(*, filled_outcome: str, filled_price: D, current_price: D,
                         yes_bid: D, yes_ask: D, seconds_to_expiry: float,
                         increment: D) -> bool:
@@ -112,20 +181,38 @@ async def _dynamic_complete_v2(maker: v1.base.GeminiMakerSession, *, event: v1.b
     reprices = 0
     deadline = time.monotonic() + max(0.0, event.seconds_to_expiry - v1.STOP_BEFORE_EXPIRY_SECONDS)
     next_check = 0.0
+    next_rest_reconcile = time.monotonic() + STATUS_RECONCILE_SECONDS
 
     while time.monotonic() < deadline:
-        row = await v1.base._order_by_client(current_id, event.symbol) if current_id else None
-        fill = v1.base._filled(row)
+        # Hot-path status comes from authenticated orderUpdate events. This is the
+        # critical nonce fix: do not call _order_by_client every 100-500 ms.
+        wait_for = min(0.10, max(0.001, deadline - time.monotonic()))
+        fill = await _wait_fill_event(maker, current_id, wait_for) if current_id else ZERO
         if fill == Q:
             return {"status":"PAIRED_BY_DYNAMIC_COMPLEMENT","paired":True,"reprices":reprices,
-                    "missing_outcome":missing,"final_price":str(current_price)}
+                    "missing_outcome":missing,"final_price":str(current_price),"fill_source":"WS"}
         if fill > ZERO:
             return {"status":"FRACTIONAL_COMPLEMENT_FILL","paired":False,"hard_halt":True,
-                    "reprices":reprices,"fill":str(fill)}
+                    "reprices":reprices,"fill":str(fill),"fill_source":"WS"}
 
         now = time.monotonic()
+        # Slow REST fallback only in case an orderUpdate is lost. At 8 seconds this
+        # remains comfortably inside Gemini's epoch-second nonce window even when
+        # _order_by_client needs active + history queries.
+        if current_id and now >= next_rest_reconcile:
+            next_rest_reconcile = now + STATUS_RECONCILE_SECONDS
+            row = await v1.base._order_by_client(current_id, event.symbol)
+            rest_fill = v1.base._filled(row)
+            if row is not None:
+                current_row = row
+            if rest_fill == Q:
+                return {"status":"PAIRED_BY_DYNAMIC_COMPLEMENT","paired":True,"reprices":reprices,
+                        "missing_outcome":missing,"final_price":str(current_price),"fill_source":"REST_FALLBACK"}
+            if rest_fill > ZERO:
+                return {"status":"FRACTIONAL_COMPLEMENT_FILL","paired":False,"hard_halt":True,
+                        "reprices":reprices,"fill":str(rest_fill),"fill_source":"REST_FALLBACK"}
+
         if now < next_check:
-            await asyncio.sleep(min(0.10, max(0.01, next_check-now)))
             continue
         next_check = now + v1.REPRICE_INTERVAL_SECONDS
         if event.seconds_to_expiry < v1.STOP_BEFORE_EXPIRY_SECONDS:
@@ -152,7 +239,7 @@ async def _dynamic_complete_v2(maker: v1.base.GeminiMakerSession, *, event: v1.b
         if reprices >= v1.MAX_REPRICES:
             continue
 
-        cancel, race_fill, cancel_ms = await v1._cancel(
+        cancel, race_fill, cancel_ms = await _cancel_known(
             maker, cid=current_id, symbol=event.symbol, row=current_row,
         )
         v1.emit("COMPLEMENT_REPRICE_CANCEL", cid=current_id, cancel=cancel,
@@ -166,8 +253,8 @@ async def _dynamic_complete_v2(maker: v1.base.GeminiMakerSession, *, event: v1.b
         current_row = None
 
         # We deliberately cancelled, so do not blindly reuse the stale target. Wait
-        # briefly for a fresh top.  If the improved target vanished but the old
-        # price is still safe/passive, restore that old price; otherwise remain dark.
+        # briefly for a fresh top. If the improved target vanished but the old price
+        # remains safe/passive, restore it; otherwise remain dark.
         post_cancel_top = None
         for _ in range(10):
             post_cancel_top = await _top_or_none(event.symbol)
@@ -212,9 +299,12 @@ async def _dynamic_complete_v2(maker: v1.base.GeminiMakerSession, *, event: v1.b
             return {"status":"COMPLEMENT_REPOST_REJECTED","paired":False,"hard_halt":True,
                     "reprices":reprices}
         current_id, current_row, current_price = new_id, row2, repost_price
+        next_rest_reconcile = time.monotonic() + STATUS_RECONCILE_SECONDS
 
     if current_id:
-        cancel, race_fill, cancel_ms = await v1._cancel(maker, cid=current_id, symbol=event.symbol, row=current_row)
+        cancel, race_fill, cancel_ms = await _cancel_known(
+            maker, cid=current_id, symbol=event.symbol, row=current_row
+        )
         v1.emit("COMPLEMENT_TIMEOUT_CANCEL", cid=current_id, cancel=cancel,
                 cancel_ms=round(cancel_ms,3), race_fill=str(race_fill), order_entry=True)
         if race_fill == Q:
@@ -227,8 +317,8 @@ async def _dynamic_complete_v2(maker: v1.base.GeminiMakerSession, *, event: v1.b
 
 
 async def run() -> None:
-    # Preserve the strongest property: disarmed means zero state, account, credential,
-    # or venue calls.
+    # Preserve the strongest property: disarmed means zero state, account,
+    # credential, or venue calls.
     if not v1.live_armed():
         await v1.run()
         return
@@ -245,9 +335,12 @@ async def run() -> None:
         "realized_pnl": None,
         "rewards_realized": None,
     })
-    # Swap only the rescue function; all existing entry gates stay unchanged.
-    original = v1._dynamic_complete
+    # Swap only the hot-path complement + cancel plumbing; all entry gates and
+    # economics remain unchanged.
+    original_dynamic = v1._dynamic_complete
+    original_cancel = v1._cancel
     v1._dynamic_complete = _dynamic_complete_v2
+    v1._cancel = _cancel_known
     try:
         await v1.run()
     except Exception as exc:
@@ -257,7 +350,8 @@ async def run() -> None:
     else:
         _replace_state(path, status="PROCESS_COMPLETED", ended_at_utc=datetime.now(timezone.utc).isoformat())
     finally:
-        v1._dynamic_complete = original
+        v1._dynamic_complete = original_dynamic
+        v1._cancel = original_cancel
 
 
 if __name__ == "__main__":
