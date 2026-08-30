@@ -24,7 +24,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Any, Iterable
 
 from src.l5 import config
-from src.l5.http import HttpJson, RawCache, _iter_records
+from src.l5.http import FetchError, HttpJson, RawCache, _iter_records
 
 
 @dataclass
@@ -51,6 +51,20 @@ def _timestamps(records: Iterable[dict]) -> list[int]:
     return out
 
 
+def _is_offset_cap_error(exc: FetchError, offset: int) -> bool:
+    """Treat Polymarket's 400/422 at deep offsets as an endpoint cap.
+
+    The data API currently rejects deep offsets before our conservative static
+    MAX_OFFSET is reached. That is not a fatal fetch error: /activity can step
+    backwards with an `end` cursor, while offset-only endpoints should mark the
+    older tail truncated rather than crash the entire read-only pipeline.
+    """
+    if offset <= 0:
+        return False
+    text = str(exc)
+    return "-> HTTP 400" in text or "-> HTTP 422" in text
+
+
 def _page_sweep(
     http: HttpJson,
     cache: RawCache,
@@ -58,10 +72,11 @@ def _page_sweep(
     base_params: dict[str, Any],
     max_offset: int,
 ) -> tuple[bool, int | None]:
-    """Walk `offset` until a short page or the offset cap.
+    """Walk `offset` until a short page or the endpoint's effective cap.
 
     Returns (exhausted, oldest_timestamp_seen). `exhausted` is True when a
-    short page proved we reached the end of this slice.
+    short page proved we reached the end of this slice. A deep-offset 400/422
+    is treated as the venue's effective offset cap and returns exhausted=False.
     """
     offset = 0
     oldest: int | None = None
@@ -69,7 +84,15 @@ def _page_sweep(
         params = dict(base_params)
         params["limit"] = config.PAGE_LIMIT
         params["offset"] = offset
-        payload = http.get(stats.endpoint, params)
+        try:
+            payload = http.get(stats.endpoint, params)
+        except FetchError as exc:
+            if _is_offset_cap_error(exc, offset):
+                stats.errors.append(
+                    f"effective offset cap at {offset}; switching/truncating as designed: {exc}"
+                )
+                return False, oldest
+            raise
         records = list(_iter_records(payload))
         cache.append(stats.name, stats.endpoint, params, payload)
         stats.pages += 1
@@ -94,7 +117,7 @@ def fetch_activity(
     start_ts: int | None = None,
     end_ts: int | None = None,
 ) -> FetchStats:
-    """Page /activity backwards in time, past the offset cap."""
+    """Page /activity backwards in time, past the effective offset cap."""
     stats = FetchStats(name=config.RAW_ACTIVITY_JSONL, endpoint=f"{config.DATA_API}/activity")
     cursor_end = end_ts
     guard = 0
@@ -138,21 +161,25 @@ def fetch_trades(http: HttpJson, cache: RawCache, wallet: str) -> FetchStats:
     if not exhausted:
         stats.truncated = True
         stats.truncation_reason = (
-            f"/trades offset cap ({config.MAX_OFFSET}) reached; endpoint has no time cursor. "
+            f"/trades effective offset cap reached; endpoint has no time cursor. "
             "Older fills come from /activity."
         )
     return stats
 
 
 def fetch_positions(http: HttpJson, cache: RawCache, wallet: str) -> FetchStats:
-    """Page /positions. `sizeThreshold=0` keeps fully-closed rows, which is
-    where realized P&L on settled windows lives."""
+    """Page /positions. `sizeThreshold=0` keeps fully-closed rows when exposed.
+
+    Positions are only a fallback P&L source downstream, and only when both
+    settled outcome rows are present. Redemption-derived activity accounting is
+    preferred precisely because size-sorted positions pages can omit redeemed winners.
+    """
     stats = FetchStats(name=config.RAW_POSITIONS_JSONL, endpoint=f"{config.DATA_API}/positions")
     base = {"user": wallet, "sizeThreshold": 0}
     exhausted, _ = _page_sweep(http, cache, stats, base, config.MAX_OFFSET)
     if not exhausted:
         stats.truncated = True
-        stats.truncation_reason = f"/positions offset cap ({config.MAX_OFFSET}) reached"
+        stats.truncation_reason = "/positions effective offset cap reached"
     return stats
 
 
@@ -188,8 +215,8 @@ def write_manifest(cache: RawCache, wallet: str, profile: str, stats: list[Fetch
             "Public activity exposes executed fills only. Resting and cancelled "
             "orders are not retrievable and are not inferred anywhere downstream.",
             "No historical order-book state is reconstructed.",
-            "Realized P&L, where present, comes from Polymarket position rows and "
-            "does not include liquidity rebates, incentives or gas.",
+            "Settlement-derived P&L prefers REDEEM activity minus net trading spend; "
+            "positions are only a both-sides-present fallback. Rebates, incentives and gas are separate.",
         ],
     }
     with open(cache.path(config.FETCH_MANIFEST_JSON), "w", encoding="utf-8") as handle:
