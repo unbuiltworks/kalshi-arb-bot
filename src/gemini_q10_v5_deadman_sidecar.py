@@ -3,7 +3,8 @@
 Designed to run in a separate container/process from the executor. It waits for an
 open durable campaign, then checks heartbeat/recovery continuously. The deployment
 supervisor stops this sidecar after the executor has exited and post-run account
-reconciliation is complete.
+reconciliation is complete. If a stale campaign is already matched with no active
+orders, the sidecar exits without intervention and leaves settlement to the supervisor.
 """
 from __future__ import annotations
 
@@ -26,7 +27,7 @@ async def run() -> None:
     while True:
         result = await tick()
         print("GEMINI_Q10_V5_DEADMAN_SIDECAR=" + json.dumps(result, separators=(",", ":"), default=str), flush=True)
-        if result.get("intervened"):
+        if result.get("intervened") or result.get("status") == "STALE_HEARTBEAT_NO_DIRECTIONAL_RESIDUAL":
             return
         await asyncio.sleep(deadman.poll_seconds())
 
