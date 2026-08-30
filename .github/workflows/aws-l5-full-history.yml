@@ -63,17 +63,14 @@ jobs:
             > "\$ROOT/console.log" 2>&1
           echo L5_FULL_HISTORY_DONE
           python3 - <<'PY'
-          import csv, json, os
-          root=os.environ.get('L5_ROOT','')
-          if not root:
-              root='${ROOT}'
+          import csv, json
+          from collections import Counter, defaultdict
+          root='/home/ssm-user/l5-full-history/${RUN_ID}'
           out=root+'/output'
           summary_csv=out+'/data/l5_windows_summary.csv'
           analysis_json=out+'/data/l5_analysis.json'
           rows=list(csv.DictReader(open(summary_csv,newline='',encoding='utf-8')))
-          def truth(v): return str(v).strip().lower() in {'1','true','yes'}
           pnl_rows=[]
-          from collections import Counter,defaultdict
           src=Counter(); by=defaultdict(lambda:{'n':0,'pnl':0.0,'w':0,'l':0,'f':0})
           redeem_match=0; redeem_checked=0
           for r in rows:
@@ -82,10 +79,10 @@ jobs:
                   v=float(p); pnl_rows.append(v); src[r.get('pnl_source') or '']+=1
                   k=f"{r.get('asset')}_{r.get('window_minutes')}m"
                   d=by[k]; d['n']+=1; d['pnl']+=v
-                  d['w']+=v>1e-9; d['l']+=v<-1e-9; d['f']+=abs(v)<=1e-9
+                  d['w']+=int(v>1e-9); d['l']+=int(v<-1e-9); d['f']+=int(abs(v)<=1e-9)
               m=str(r.get('redeem_qty_matches_inventory') or '').strip().lower()
               if m:
-                  redeem_checked+=1; redeem_match+=m in {'1','true','yes'}
+                  redeem_checked+=1; redeem_match+=int(m in {'1','true','yes'})
           a=json.load(open(analysis_json,encoding='utf-8'))
           result={
             'classification':'READ_ONLY_REDEMPTION_DERIVED_L5_FULL_HISTORY',
