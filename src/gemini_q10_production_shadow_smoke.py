@@ -1,0 +1,58 @@
+"""Public-only AWS smoke for the q10 production candidate.
+
+No credentials and no order entry. Measures current Gemini BTC spot REST latency,
+exercises the same momentum guard, and asks the existing public q10 entry selector
+whether a reward-eligible candidate exists.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import time
+
+import httpx
+
+from src import gemini_liquidity_reward_live_probe_q10 as probe
+from src import gemini_q10_production_candidate as production
+from src import gemini_q10_production_risk as risk
+
+
+async def main() -> None:
+    guard = risk.SpotMomentumGuard()
+    samples = []
+    async with httpx.AsyncClient(timeout=1.5, follow_redirects=True) as http:
+        for _ in range(10):
+            started = time.monotonic()
+            spot = await production._spot(http)
+            latency_ms = (time.monotonic() - started) * 1000.0
+            toxic = guard.observe(time.monotonic(), spot)
+            samples.append({
+                "spot": str(spot),
+                "latency_ms": round(latency_ms, 3),
+                "move_bps": str(guard.current_move_bps()),
+                "toxic": bool(toxic),
+            })
+            await asyncio.sleep(0.2)
+
+    found = await probe._candidate()
+    out = {
+        "classification": "READ_ONLY_PUBLIC_Q10_PRODUCTION_SHADOW_SMOKE",
+        "order_entry": False,
+        "credentials_loaded": False,
+        "spot_samples": samples,
+        "candidate": None,
+    }
+    if found is not None:
+        event, reward, model = found
+        out["candidate"] = {
+            "ticker": event.ticker,
+            "symbol": event.symbol,
+            "seconds_to_expiry": event.seconds_to_expiry,
+            "model": {key: str(value) for key, value in model.items()},
+            "qualifying_maker_count": reward["event"].get("qualifying_maker_count"),
+        }
+    print("Q10_PRODUCTION_SHADOW_SMOKE=" + json.dumps(out, separators=(",", ":")))
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
