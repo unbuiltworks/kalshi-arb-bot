@@ -31,30 +31,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           PINNED_COMMIT=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' deploy/aws/gemini-q10-production-shadow-smoke.trigger | tr -d '[:space:]')
-          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -Eeuo pipefail; REPO=/home/ssm-user/kalshi-arb-bot; WORK=/opt/arb/gemini-q10-production-shadow; git -C \"\$REPO\" fetch origin ${FEATURE_BRANCH}; git -C \"\$REPO\" cat-file -e \"${PINNED_COMMIT}^{commit}\"; git -C \"\$REPO\" merge-base --is-ancestor \"${PINNED_COMMIT}\" origin/${FEATURE_BRANCH}; git -C \"\$REPO\" worktree remove --force \"\$WORK\" >/dev/null 2>&1 || true; rm -rf \"\$WORK\"; git -C \"\$REPO\" worktree prune; git -C \"\$REPO\" worktree add --detach \"\$WORK\" \"${PINNED_COMMIT}\"; IMAGE=arb-gemini-q10-production-shadow:${PINNED_COMMIT:0:12}; docker build -t \"\$IMAGE\" \"\$WORK\" >/dev/null; docker run --rm --network host \"\$IMAGE\" python - <<\"PY\"
-import asyncio,json,time
-from decimal import Decimal as D
-import httpx
-from src import gemini_q10_production_candidate as p
-from src import gemini_liquidity_reward_live_probe_q10 as probe
-from src import gemini_q10_production_risk as risk
-async def main():
-    guard=risk.SpotMomentumGuard()
-    samples=[]
-    async with httpx.AsyncClient(timeout=1.5,follow_redirects=True) as h:
-        for _ in range(10):
-            t0=time.monotonic(); px=await p._spot(h); ms=(time.monotonic()-t0)*1000
-            toxic=guard.observe(time.monotonic(),px)
-            samples.append({\"spot\":str(px),\"latency_ms\":round(ms,3),\"move_bps\":str(guard.current_move_bps()),\"toxic\":toxic})
-            await asyncio.sleep(0.2)
-    found=await probe._candidate()
-    out={\"classification\":\"READ_ONLY_PUBLIC_Q10_PRODUCTION_SHADOW_SMOKE\",\"order_entry\":False,\"credentials_loaded\":False,\"spot_samples\":samples,\"candidate\":None}
-    if found:
-        event,reward,model=found
-        out[\"candidate\"]={\"ticker\":event.ticker,\"symbol\":event.symbol,\"seconds_to_expiry\":event.seconds_to_expiry,\"model\":{k:str(v) for k,v in model.items()},\"qualifying_maker_count\":reward[\"event\"].get(\"qualifying_maker_count\")}
-    print(\"Q10_PRODUCTION_SHADOW_SMOKE=\"+json.dumps(out,separators=(\",\",\":\")))
-asyncio.run(main())
-PY'"
+          SHORT_SHA="${PINNED_COMMIT:0:12}"
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -Eeuo pipefail; REPO=/home/ssm-user/kalshi-arb-bot; WORK=/opt/arb/gemini-q10-production-shadow; git -C \"\$REPO\" fetch origin ${FEATURE_BRANCH}; git -C \"\$REPO\" cat-file -e \"${PINNED_COMMIT}^{commit}\"; git -C \"\$REPO\" merge-base --is-ancestor \"${PINNED_COMMIT}\" origin/${FEATURE_BRANCH}; git -C \"\$REPO\" worktree remove --force \"\$WORK\" >/dev/null 2>&1 || true; rm -rf \"\$WORK\"; git -C \"\$REPO\" worktree prune; git -C \"\$REPO\" worktree add --detach \"\$WORK\" \"${PINNED_COMMIT}\"; IMAGE=arb-gemini-q10-production-shadow:${SHORT_SHA}; docker build -t \"\$IMAGE\" \"\$WORK\" >/dev/null; docker run --rm --network host \"\$IMAGE\" python -m src.gemini_q10_production_shadow_smoke'"
           PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
           COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB q10 production public shadow smoke" --parameters "$PARAMETERS" --timeout-seconds 480 --query 'Command.CommandId' --output text)
           aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
