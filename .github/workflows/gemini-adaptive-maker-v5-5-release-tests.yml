@@ -1,0 +1,44 @@
+name: Gemini adaptive maker V5.5 release tests
+
+on:
+  push:
+    branches: [release/gemini-adaptive-maker-v5-5]
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: python -m pip install -q -r requirements.txt pytest
+      - name: Compile V5.5 modules
+        run: |
+          python -m py_compile \
+            src/gemini_adaptive_maker_executor_v5_5.py \
+            src/gemini_adaptive_maker_v5_5_runtime.py
+      - name: Frozen predecessor plus V5.5 incident regressions
+        run: |
+          python -m pytest -q \
+            tests/test_btc_spot_toxicity_guard.py \
+            tests/test_gemini_prediction_book_cache.py \
+            tests/test_gemini_q10_rescue_policy.py \
+            tests/test_gemini_liquidity_reward_dynamic_completion_q10.py \
+            tests/test_gemini_q10_production_executor.py \
+            tests/test_gemini_q10_production_executor_v2.py \
+            tests/test_gemini_q10_production_executor_v5.py \
+            tests/test_gemini_q10_production_executor_v5_1.py \
+            tests/test_gemini_q10_v5_recovery_deadman.py \
+            tests/test_gemini_q10_v5_deadman_sidecar.py \
+            tests/test_gemini_q10_v5_2.py \
+            tests/test_gemini_adaptive_maker_v5_3.py \
+            tests/test_gemini_adaptive_maker_executor_v5_3.py \
+            tests/test_gemini_adaptive_maker_contract_grid_v5_3.py \
+            tests/test_gemini_adaptive_maker_v5_4.py \
+            tests/test_gemini_adaptive_maker_v5_5.py
