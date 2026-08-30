@@ -16,7 +16,7 @@ env:
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
   RELEASE_BRANCH: release/gemini-adaptive-maker-v5-3
-  REQUIRED_RELEASE_COMMIT: 3368c737d372d173cceea9835a89605da8cb8601
+  REQUIRED_RELEASE_COMMIT: 1f876470e9e4de43235914379636c4b16d02c8ab
 
 jobs:
   readiness:
@@ -30,7 +30,7 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Build exact release, run 84 tests, and audit flat account without mutation
+      - name: Build exact release, run 90 tests, and audit flat account without mutation
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -64,7 +64,8 @@ jobs:
             tests/test_gemini_q10_v5_deadman_sidecar.py \
             tests/test_gemini_q10_v5_2.py \
             tests/test_gemini_adaptive_maker_v5_3.py \
-            tests/test_gemini_adaptive_maker_executor_v5_3.py
+            tests/test_gemini_adaptive_maker_executor_v5_3.py \
+            tests/test_gemini_adaptive_maker_contract_grid_v5_3.py
 
           if [ -f /opt/arb/secrets/gemini-short-crypto.env ]; then ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; else ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; fi
           if [ -d /home/ssm-user/gemini-short-crypto-state ]; then BASE_STATE=/home/ssm-user/gemini-short-crypto-state; else BASE_STATE=/opt/arb/gemini-short-crypto-state; fi
@@ -84,12 +85,13 @@ jobs:
             -v "\$STATE:/prod_state" \
             "\$IMAGE" python - <<'PY'
           import asyncio, json
+          from src import gemini_adaptive_maker_contract_grid_v5_3 as grid
           from src import gemini_adaptive_maker_executor_v5_3 as v53
           from src import gemini_adaptive_maker_v5_3_recovery as r
           from src import gemini_adaptive_maker_v5_3_deadman as d
           from src import gemini_adaptive_maker_v5_3_deadman_sidecar as s
           async def main():
-              v53.install(); r.install()
+              grid.install(); r.install()
               report, _, _, _ = await r.audit()
               available, flat = await v53.v5.v1._preflight_flat()
               dead = await d.check_once()
@@ -130,7 +132,7 @@ jobs:
           echo "$RESULT"
           test "$(jq -r '.Status' <<<"$RESULT")" = Success
           OUT=$(jq -r '.Stdout // ""' <<<"$RESULT")
-          grep -q '84 passed' <<<"$OUT"
+          grep -q '90 passed' <<<"$OUT"
           grep -q 'V5_3_ADAPTIVE_READINESS=' <<<"$OUT"
           grep -q '"order_entry":false' <<<"$OUT"
           grep -q '"live_armed":false' <<<"$OUT"
