@@ -20,6 +20,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
       - name: Unit regressions
         run: python -m pytest -q tests/test_polymarket_l5_disciplined_clone.py
       - name: Replay recent observed fill paths at 10 percent scale
