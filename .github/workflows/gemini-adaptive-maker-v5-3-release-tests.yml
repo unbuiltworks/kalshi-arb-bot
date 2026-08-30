@@ -1,8 +1,8 @@
-name: Gemini adaptive maker V5.3 release tests
+name: Gemini adaptive maker V5.4 release tests
 
 on:
   push:
-    branches: [release/gemini-adaptive-maker-v5-3]
+    branches: [release/gemini-adaptive-maker-v5-4]
     paths:
       - src/gemini_prediction_depth_cache_v5_3.py
       - src/gemini_adaptive_maker_policy_v5_3.py
@@ -16,6 +16,7 @@ on:
       - tests/test_gemini_adaptive_maker_v5_3.py
       - tests/test_gemini_adaptive_maker_executor_v5_3.py
       - tests/test_gemini_adaptive_maker_contract_grid_v5_3.py
+      - tests/test_gemini_adaptive_maker_v5_4.py
       - .github/workflows/gemini-adaptive-maker-v5-3-release-tests.yml
   workflow_dispatch:
 
@@ -33,7 +34,7 @@ jobs:
           python-version: '3.11'
           cache: pip
       - run: python -m pip install -r requirements.txt
-      - name: Compile V5.3 modules
+      - name: Compile adaptive V5.4 successor modules
         run: |
           python -m py_compile \
             src/gemini_prediction_depth_cache_v5_3.py \
@@ -45,7 +46,7 @@ jobs:
             src/gemini_adaptive_maker_v5_3_deadman_sidecar.py \
             src/gemini_adaptive_maker_v5_3_runtime.py \
             src/gemini_adaptive_maker_v5_3_diagnostic.py
-      - name: Frozen V5.2 suite plus V5.3 adaptive regressions
+      - name: Frozen V5.2 suite plus adaptive V5.3/V5.4 regressions
         run: |
           pytest -q \
             tests/test_btc_spot_toxicity_guard.py \
@@ -61,4 +62,5 @@ jobs:
             tests/test_gemini_q10_v5_2.py \
             tests/test_gemini_adaptive_maker_v5_3.py \
             tests/test_gemini_adaptive_maker_executor_v5_3.py \
-            tests/test_gemini_adaptive_maker_contract_grid_v5_3.py
+            tests/test_gemini_adaptive_maker_contract_grid_v5_3.py \
+            tests/test_gemini_adaptive_maker_v5_4.py
