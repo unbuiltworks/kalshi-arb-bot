@@ -31,7 +31,10 @@ def market(
         "conditionId": condition_id,
         "slug": slug,
         "question": title,
-        "startDate": start_ts,
+        # Mirrors the real Gamma shape: startDate is the listing time (much
+        # earlier than the window), eventStartTime is the true window start.
+        "startDate": start_ts - 86_400,
+        "eventStartTime": start_ts,
         "endDate": start_ts + duration_s,
         "closed": closed,
         "outcomes": str(outcomes).replace("'", '"'),

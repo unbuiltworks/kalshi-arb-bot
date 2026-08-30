@@ -51,6 +51,7 @@ def test_duration_wins_over_conflicting_title():
 def test_text_only_classification_is_flagged_and_out_of_scope():
     raw = market("0xz", "bitcoin-up-or-down-5-minute", "Bitcoin Up or Down 5 minute", WINDOW_START, 300)
     raw.pop("startDate")
+    raw.pop("eventStartTime")
     raw.pop("endDate")
     meta = build_market_meta(raw)
     assert meta.window_minutes == 5
@@ -102,3 +103,32 @@ def test_missing_market_metadata_is_never_guessed_into_scope(tmp_path):
     in_scope, out_scope = annotate_trades(fills, {})
     assert in_scope == []
     assert all(row["exclusion_reason"] == "no_market_metadata" for row in out_scope)
+
+
+def test_listing_start_date_is_not_used_as_window_start():
+    # startDate is Polymarket's listing time; a market with only startDate must
+    # not classify (duration would be listing-to-close, not the window).
+    raw = market("0xz", "plain-slug", "Bitcoin Up or Down 5 minute", WINDOW_START, 300)
+    raw.pop("eventStartTime")
+    meta = build_market_meta(raw)
+    assert meta.start_ts is None or meta.start_ts != raw["startDate"]
+    assert meta.window_source in ("none", "text_only")
+    assert meta.in_scope is False
+
+
+def test_slug_epoch_serves_as_window_start_fallback():
+    raw = market("0xz", f"btc-updown-5m-{WINDOW_START}", "Bitcoin Up or Down", WINDOW_START, 300)
+    raw.pop("eventStartTime")
+    meta = build_market_meta(raw)
+    assert meta.start_ts == WINDOW_START
+    assert meta.window_minutes == 5
+    # the slug also carries "5m" text, so duration and text corroborate
+    assert meta.window_source == "both_agree"
+    assert meta.in_scope is True
+
+
+def test_slug_epoch_disagreement_is_flagged():
+    raw = market("0xz", f"btc-updown-5m-{WINDOW_START - 600}", "Bitcoin Up or Down", WINDOW_START, 300)
+    meta = build_market_meta(raw)
+    assert any(flag.startswith("slug_epoch_disagrees") for flag in meta.flags)
+    assert meta.start_ts == WINDOW_START  # explicit eventStartTime wins

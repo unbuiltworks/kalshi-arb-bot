@@ -118,8 +118,17 @@ def build_market_meta(raw: Dict[str, Any]) -> MarketMeta:
     events = raw.get("events") or []
     event = events[0] if isinstance(events, list) and events and isinstance(events[0], dict) else {}
 
-    start_ts = to_epoch_s(
-        raw.get("startDate") or raw.get("gameStartTime") or raw.get("start_date_iso") or event.get("startDate")
+    # Polymarket's `startDate` is the market's LISTING time (often a day early),
+    # not the trading window's start. The true window start is `eventStartTime`;
+    # the epoch suffix in the slug (btc-updown-5m-<epoch>) is a second source.
+    slug_text = str(raw.get("slug") or raw.get("market_slug") or "")
+    slug_epoch = None
+    match = re.search(r"-(\d{9,10})$", slug_text)
+    if match:
+        slug_epoch = to_epoch_s(int(match.group(1)))
+    start_ts = (
+        to_epoch_s(raw.get("eventStartTime") or raw.get("gameStartTime") or raw.get("start_date_iso"))
+        or slug_epoch
     )
     end_ts = to_epoch_s(raw.get("endDate") or raw.get("end_date_iso") or event.get("endDate"))
     duration_s = (end_ts - start_ts) if (start_ts and end_ts and end_ts > start_ts) else None
@@ -165,6 +174,10 @@ def build_market_meta(raw: Dict[str, Any]) -> MarketMeta:
             meta.flags.append(f"duration_off_bucket:{duration_s}s")
         else:
             meta.flags.append("no_duration_metadata")
+
+    explicit_start = to_epoch_s(raw.get("eventStartTime") or raw.get("gameStartTime") or raw.get("start_date_iso"))
+    if explicit_start is not None and slug_epoch is not None and abs(explicit_start - slug_epoch) > config.WINDOW_TOLERANCE_S:
+        meta.flags.append(f"slug_epoch_disagrees:{slug_epoch}")
 
     meta.is_up_down = bool(UPDOWN_RE.search(blob))
     meta.outcomes = [str(value) for value in _load_json_list(raw.get("outcomes"))]

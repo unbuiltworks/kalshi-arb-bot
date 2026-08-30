@@ -93,6 +93,94 @@ def fetch_activity(address: str, *, cache: RawCache, opener: Any = None, **kw) -
     )
 
 
+def fetch_activity_windowed(
+    address: str,
+    *,
+    cache: RawCache,
+    opener: Any = None,
+    limit: int = config.PAGE_LIMIT,
+    max_total_pages: int = 100,
+    window_page_cap: int = 9,
+) -> Dict[str, Any]:
+    """Walk /activity newest-first past its ~5000 offset cap.
+
+    The endpoint rejects offsets beyond ~5000, but accepts unix-second
+    ``start``/``end`` filters. So: page DESC inside a window, then slide ``end``
+    down to the oldest timestamp seen and reset the offset. The one-second
+    overlap at each boundary is intentional -- downstream dedup removes it.
+    ``window_page_cap`` stays under the venue's offset cap (9 * 500 = 4500).
+    """
+    report: Dict[str, Any] = {
+        "url": f"{config.DATA_API}/activity",
+        "tag": "activity",
+        "mode": "windowed_desc",
+        "windows": 0,
+        "pages": 0,
+        "items": 0,
+        "oldest_ts": None,
+        "newest_ts": None,
+        "stopped_because": "unknown",
+    }
+    from .timeutil import to_epoch_s
+
+    end: Any = None
+    while report["pages"] < max_total_pages:
+        window_min: Any = None
+        window_rows = 0
+        offset = 0
+        for _page in range(window_page_cap):
+            params: Dict[str, Any] = {
+                "user": address,
+                "sortBy": "TIMESTAMP",
+                "sortDirection": "DESC",
+                "limit": limit,
+                "offset": offset,
+            }
+            if end is not None:
+                params["end"] = int(end)
+            status, payload, error = get_json(
+                f"{config.DATA_API}/activity", params, cache=cache, tag="activity", opener=opener
+            )
+            report["pages"] += 1
+            if status != 200:
+                report["stopped_because"] = f"http_{status}: {error[:200]}"
+                return report
+            items = coerce_items(payload)
+            window_rows += len(items)
+            report["items"] += len(items)
+            for item in items:
+                ts = to_epoch_s(item.get("timestamp"))
+                if ts is None:
+                    continue
+                if window_min is None or ts < window_min:
+                    window_min = ts
+                if report["newest_ts"] is None or ts > report["newest_ts"]:
+                    report["newest_ts"] = ts
+                if report["oldest_ts"] is None or ts < report["oldest_ts"]:
+                    report["oldest_ts"] = ts
+            if len(items) < limit:
+                break
+            offset += limit
+            if report["pages"] >= max_total_pages:
+                break
+        report["windows"] += 1
+        if window_rows == 0:
+            report["stopped_because"] = "history_exhausted"
+            return report
+        if window_min is None or (end is not None and window_min >= int(end)):
+            # No progress. A short window means we just re-read the boundary
+            # second at the very start of history: that is exhaustion. A *full*
+            # window with no progress would mean one second holds more rows
+            # than a whole window can page -- stop rather than loop.
+            report["stopped_because"] = (
+                "history_exhausted" if window_rows < limit else "cursor_stalled"
+            )
+            return report
+        end = window_min
+    report["stopped_because"] = "max_total_pages"
+    return report
+
+
 def fetch_trades(address: str, *, cache: RawCache, opener: Any = None, **kw) -> Dict[str, Any]:
     """Secondary fill source; used for cross-checking activity coverage."""
     return paginate(
@@ -134,23 +222,33 @@ def fetch_markets_by_condition(
     """Market metadata from Gamma, batched by condition id, with a per-id fallback."""
     ids = [cid for cid in dict.fromkeys(condition_ids) if cid]
     report = {"requested": len(ids), "chunks_ok": 0, "chunks_failed": 0, "fallback_ok": 0, "fallback_failed": 0}
+    # Gamma's /markets excludes closed markets unless closed=true is passed, and a
+    # historical study is almost entirely closed markets -- so query each chunk in
+    # both states. The market index dedups by condition id downstream.
+    variants = ({"closed": "true"}, {})
     for start in range(0, len(ids), chunk):
         batch = ids[start : start + chunk]
-        status, _payload, _error = get_json(
-            f"{config.GAMMA_API}/markets",
-            {"condition_ids": batch, "limit": len(batch)},
-            cache=cache,
-            tag="markets",
-            opener=opener,
-        )
-        if status == 200:
+        chunk_ok = True
+        for extra in variants:
+            params = {"condition_ids": batch, "limit": len(batch)}
+            params.update(extra)
+            status, _payload, _error = get_json(
+                f"{config.GAMMA_API}/markets",
+                params,
+                cache=cache,
+                tag="markets",
+                opener=opener,
+            )
+            if status != 200:
+                chunk_ok = False
+        if chunk_ok:
             report["chunks_ok"] += 1
             continue
         report["chunks_failed"] += 1
         for cid in batch:
             single, _p, _e = get_json(
                 f"{config.GAMMA_API}/markets",
-                {"condition_ids": cid},
+                {"condition_ids": cid, "closed": "true"},
                 cache=cache,
                 tag="markets",
                 opener=opener,
