@@ -4,12 +4,15 @@ from __future__ import annotations
 import asyncio
 import json
 
+from src import gemini_adaptive_maker_contract_grid_v5_3 as contract_grid
 from src import gemini_adaptive_maker_executor_v5_3 as v53
 from src import gemini_adaptive_maker_v5_3_recovery as recovery53
 
 
 async def run() -> dict:
-    v53.install()
+    # Install instrument-specific quantity-grid admission before any new campaign.
+    # Recovery remains release-safe and does not depend on opening a new market.
+    contract_grid.install()
     recovery53.install()
     report, _, _, _ = await recovery53.audit()
     if report.open_state:
