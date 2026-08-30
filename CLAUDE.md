@@ -1,339 +1,223 @@
-# Kalshi Arb Bot
+# ARB — Autonomous Sports / Prediction-Market Arbitrage
 
-## What This Is
+This repository is the master engineering workspace for the ARB system. The old description of this repo as a single-platform Kalshi bot is obsolete.
 
-A single-platform arbitrage bot for Kalshi prediction markets. It buys YES + NO on the same market when YES_ask + NO_ask + total_fees < $1.00, locking a guaranteed profit since settlement always pays $1.00 on one side and $0.00 on the other.
+## Primary objective
 
-This is NOT a directional/prediction bot. It has no opinion on outcomes. It captures mechanical mispricings.
+Build toward **at least $480/day in realized net profit**, while measuring honestly whether available executable opportunity supports that target.
 
-## Architecture
+Optimization priority:
 
-```
-kalshi-arb-bot/
-├── CLAUDE.md              # You are here
-├── .env                   # API credentials (never commit)
-├── .env.example           # Template for credentials
-├── requirements.txt       # Python dependencies
-├── src/
-│   ├── __init__.py
-│   ├── main.py            # Entry point, orchestrates everything
-│   ├── auth.py            # RSA-PSS signing, header generation
-│   ├── ws_client.py       # WebSocket connection, subscriptions, reconnect
-│   ├── orderbook.py       # Local orderbook state from snapshots + deltas
-│   ├── fee_calc.py        # Kalshi fee math (taker + maker)
-│   ├── spread_scanner.py  # Computes edge on every book update
-│   ├── order_manager.py   # Paired order execution (maker leg → taker leg)
-│   ├── risk.py            # Filters, position limits, cooldowns
-│   └── logger.py          # Structured logging to file + stdout
-├── config/
-│   ├── settings.py        # All tunable parameters in one place
-│   └── markets.py         # Market discovery and filtering
-└── tests/
-    ├── test_fee_calc.py
-    ├── test_spread_scanner.py
-    └── test_orderbook.py
-```
+1. safe realized dollars/day;
+2. reliable execution and reconciliation;
+3. measurable executable opportunity;
+4. only then refactoring or additional research.
 
-## Environment
+Do not optimize for theoretical edge, shadow P&L, number of alerts, or number of tests passing if those metrics do not answer whether we can safely execute and realize profit.
 
-- **Language**: Python 3.11+
-- **Key dependencies**: `websockets`, `httpx` (async HTTP), `cryptography` (RSA-PSS signing), `python-dotenv`
-- **No frameworks** — this is a lightweight async bot, not a web app
+## Scope
 
-## Kalshi API Details
+ARB spans:
 
-### Base URLs
-- **Demo REST**: `https://demo-api.kalshi.co/trade-api/v2`
-- **Demo WebSocket**: `wss://demo-api.kalshi.co/trade-api/ws/v2`
-- **Prod REST**: `https://api.elections.kalshi.com/trade-api/v2`
-- **Prod WebSocket**: `wss://api.elections.kalshi.com/trade-api/ws/v2`
+- Gemini prediction markets / short-duration crypto markets;
+- Kalshi;
+- Polymarket;
+- FanDuel / sportsbooks where relevant;
+- Odds API / market-data feeds;
+- AWS low-latency infrastructure;
+- Railway services that remain active;
+- opportunity discovery and counterpart certification;
+- settlement-rule equivalence;
+- order execution and fill detection;
+- rescue / flatten logic;
+- risk controls and capital reservation;
+- alerts, observability, reconciliation, and realized P&L.
 
-### Authentication
-RSA-PSS signing with SHA-256. Every request (REST and WS handshake) requires:
-```
-KALSHI-ACCESS-KEY: <api_key_id>
-KALSHI-ACCESS-SIGNATURE: <base64_rsa_pss_signature>
-KALSHI-ACCESS-TIMESTAMP: <unix_ms>
-```
+Keep unrelated executors, especially the separate SOL executor, out of this architecture and out of ARB accounting.
 
-Signature message format: `{timestamp_ms}{METHOD}{path}` (e.g. `1234567890GET/trade-api/ws/v2`)
+## Accounting / status vocabulary
 
-### WebSocket Channels Needed
-1. **`orderbook_delta`** (requires auth) — gives initial snapshot then incremental updates per market_ticker
-2. **`fill`** (requires auth) — notifies when our orders fill
+Never blur these states:
 
-Subscribe format:
-```json
-{
-  "id": 1,
-  "cmd": "subscribe",
-  "params": {
-    "channels": ["orderbook_delta", "fill"],
-    "market_tickers": ["TICKER-1", "TICKER-2"]
-  }
-}
-```
+- **paper/shadow** — no venue mutation;
+- **candidate** — passes modeled gates only;
+- **executable** — fresh executable quotes, compatible settlement rules, sufficient depth/capital, and all live gates pass;
+- **submitted** — at least one real order sent;
+- **filled** — venue-confirmed fill(s);
+- **matched/locked** — all required legs filled such that economic outcome is locked, but settlement may still be pending;
+- **settled** — venue settlement complete;
+- **realized** — settled P&L reconciled against actual fills, fees, rewards/rebates actually received, and account state.
 
-Message types to handle:
-- `orderbook_snapshot` — full book state, rebuild local book
-- `orderbook_delta` — incremental update, apply to local book
-- `fill` — our order was filled, trigger second leg or log
-- `error` — handle gracefully
+Do **not** count stale quotes, mismatched settlement rules, modeled rewards, shadow results, unconfirmed fills, or open matched positions as realized arbitrage profit.
 
-### Order Creation (REST)
-```
-POST /trade-api/v2/portfolio/orders
-```
-```json
-{
-  "ticker": "MARKET-TICKER",
-  "action": "buy",
-  "side": "yes",
-  "type": "limit",
-  "yes_price": 65,
-  "count": 10,
-  "client_order_id": "uuid",
-  "post_only": true
-}
-```
+## Engineering operating contract
 
-Key fields:
-- `side`: "yes" or "no"
-- `action`: "buy" (always buy for arb — buy YES and buy NO)
-- `yes_price`: price in CENTS (integer). If buying NO, you still specify `yes_price` — the NO price is `100 - yes_price`
-- `post_only`: true for maker leg (rejected if would cross), false/omit for taker leg
-- `client_order_id`: UUID for tracking, required
+### 1. Repo first
 
-### Order Cancellation (REST)
-```
-DELETE /trade-api/v2/portfolio/orders/{order_id}
-```
+All code used for a diagnostic, test, deployment, launcher, recovery path, or live canary must exist in Git before it is relied upon.
 
-### Fee Structure (effective Feb 5, 2026)
-**Taker fee**: `ceil(0.07 × C × P × (1 - P))` — rounds UP to next cent
-**Maker fee**: `ceil(0.0175 × C × P × (1 - P))` — rounds UP to next cent
+Avoid large executable Python programs embedded in GitHub Actions YAML, chat messages, CloudShell snippets, or one-off SSM commands. Workflows should orchestrate committed code.
 
-Where:
-- P = price of contract in dollars (50 cents = 0.50)
-- C = number of contracts
+### 2. Exact-SHA execution
 
-Special lower fees for S&P500 (INX*) and NASDAQ-100 markets: 0.035 taker rate.
+AWS/Railway execution must identify the exact Git SHA being run. A workflow may live on a control branch while an executable strategy is pinned to a separate frozen release ref, but that split must be explicit.
 
-**No settlement fee. No membership fee.**
+Do not assume branch HEAD equals production.
 
-Fee examples for 100 contracts:
-| Price | Taker Fee | Maker Fee |
-|-------|-----------|-----------|
-| $0.10 | $0.63     | ~$0.16    |
-| $0.25 | $1.32     | ~$0.33    |
-| $0.50 | $1.75     | ~$0.44    |
-| $0.75 | $1.32     | ~$0.33    |
-| $0.90 | $0.63     | ~$0.16    |
+### 3. Frozen release discipline
 
-Fees are CONVEX — maximized at P=0.50. Lopsided markets (one side near 0 or 1) have lower fees.
+A frozen live release is immutable evidence. Do not silently modify it after a canary. If code changes, create and qualify a new release SHA/ref.
 
-## Core Logic: The Spread Scanner
+### 4. Establish live state before changing anything
 
-On every orderbook update for a tracked market:
+Before rebuilding, deploying, arming, or proposing a replacement:
 
-```python
-yes_ask = best_ask_price_yes  # cheapest YES available
-no_ask = best_ask_price_no    # cheapest NO available (= 100 - best_yes_bid... BUT read from the book directly)
+- inspect current Git refs;
+- inspect current AWS/Railway state;
+- inspect current account orders/positions/reservations;
+- inspect latest relevant workflow/deployment results;
+- determine what has already been built/tested/learned.
 
-# For arb, we need to BUY both sides
-# Kalshi's book is quoted in YES terms:
-#   - YES ask = cheapest price to buy YES
-#   - NO ask = 100 - best YES bid (because selling YES = buying NO)
-# WAIT — that's wrong for arb. We need the actual NO ask.
-# On Kalshi, to BUY NO contracts, we look at the NO side of the book.
-# The orderbook_delta gives us yes_bids and yes_asks (or no_bids and no_asks).
-# A NO ask IS the complement: if someone is bidding YES at 60, then NO is available at 40.
-# 
-# CRITICAL UNDERSTANDING:
-# YES ask = lowest price someone is selling YES at
-# To buy NO, we can either:
-#   (a) Buy NO directly at the NO ask, OR
-#   (b) Sell YES at the YES bid — which is economically equivalent
-#
-# For arb: total_cost = yes_ask + (100 - yes_bid)  [in cents]
-# Edge = 100 - yes_ask - (100 - yes_bid) = yes_bid - yes_ask... wait that's negative normally
-#
-# CORRECT FORMULATION:
-# To lock arb: buy YES at yes_ask AND buy NO at no_ask
-# On Kalshi's unified book: no_ask = 100 - yes_bid
-# Total cost per contract (cents) = yes_ask + (100 - yes_bid)
-# Total cost per contract (cents) = yes_ask - yes_bid + 100
-# This equals 100 + spread, so it's >100 when spread is positive (normal market)
-# ARB EXISTS when: yes_ask + (100 - yes_bid) + fees < 100
-# Equivalently: yes_ask < yes_bid - fees  (crossed book after fees)
-# This is a NEGATIVE spread situation — very rare but possible during fast moves
+Preserve working infrastructure and do not disrupt unrelated services.
 
-# ALTERNATIVE ARB (more common):
-# Some Kalshi events have MULTIPLE markets (e.g., "above X" and "below X")
-# Or the YES/NO on the SAME market can misprice transiently
-# The scanner should check: yes_best_ask + no_best_ask + total_fees < 100
+### 5. Read-only diagnosis before repeated live attempts
 
-quantity = min(depth_at_yes_ask, depth_at_no_ask, max_position_size)
-yes_fee = calc_taker_fee(quantity, yes_ask / 100)  # or maker fee if posting
-no_fee = calc_taker_fee(quantity, no_ask / 100)     # or maker fee if posting
-total_cost_cents = (yes_ask * quantity) + (no_ask * quantity) + yes_fee + no_fee
-guaranteed_payout = 100 * quantity  # $1 per contract
+If a live canary does not answer the intended question, do not keep repeating the same canary. First make the diagnostic answer *why*.
 
-edge_cents = guaranteed_payout - total_cost_cents
+A no-trade diagnostic must distinguish at least:
 
-if edge_cents > min_edge_threshold:
-    # SIGNAL: execute paired trade
-```
+- MARKET_GATE;
+- ECONOMIC_GATE;
+- SAFETY_GATE;
+- VENUE_DATA_ERROR;
+- INTERNAL/HARNESS_ERROR;
+- QUALIFIED.
 
-### Maker-First Execution Strategy
+For each rejection, record the exact gate and the relevant fresh market values. For transport failures, record endpoint/context, exception type, bounded error message, and timing.
 
-To minimize fees, we want one leg as maker (post_only) and one as taker:
+### 6. Tests must answer the business/execution question
 
-1. **Post maker leg** — the side with more depth (more likely to fill). Use `post_only: true`.
-2. **Watch for fill** via WebSocket `fill` channel.
-3. **On fill → immediately fire taker leg** on the other side. No `post_only`.
-4. **Timeout** — if maker leg doesn't fill within `MAX_FILL_WAIT_MS`, cancel it.
-5. **Legging risk** — if maker fills but taker fails/slips, we hold directional exposure. Must have a flatten rule.
+Passing unit tests is necessary but not sufficient. Every live workstream should state the question it is trying to answer.
 
-### Flatten Rule (Critical Safety)
-If we're legged (one side filled, other didn't):
-- Immediately attempt to exit the filled leg at breakeven or small loss
-- Log the incident
-- Increment cooldown counter
-- If cooldown threshold hit, pause bot for `COOLDOWN_PERIOD_MS`
+For the current Gemini BTC5 q10 lane the key question is:
 
-## Config Parameters (config/settings.py)
+> Can a real BTC5 opportunity pass qualification, enter q10 maker orders, experience a real first-leg fill, complete or rescue within the bounded loss invariant, reconcile cleanly, settle, and produce verifiable realized P&L without repeating a naked-leg loss?
 
-```python
-# Environment
-ENV = "demo"  # "demo" or "prod"
+A test campaign that only proves "the bot stayed safe and did not trade" is useful safety evidence, but it does **not** answer the full question above.
 
-# API
-API_KEY_ID = ""      # from .env
-PRIVATE_KEY_PATH = "" # from .env
+### 7. Live authorization boundaries
 
-# Scanning
-MARKETS_TO_TRACK = []           # populated by market discovery
-MAX_MARKETS = 50                # don't subscribe to too many
-SCAN_INTERVAL_MS = 0            # 0 = scan on every book update (event-driven)
+Real-money execution requires fresh explicit user authorization for the exact bounded action being taken. Authorization for one canary does not authorize another canary or changed code.
 
-# Execution  
-MIN_EDGE_CENTS = 3              # minimum profit per contract after ALL fees
-MIN_DEPTH = 10                  # minimum contracts available on both sides
-MAX_POSITION_PER_MARKET = 100   # max contracts per market
-MAX_TOTAL_POSITION = 500        # across all markets
-ORDER_SIZE = 10                 # contracts per trade
-MAKER_FIRST = True              # post maker leg first
+Never broaden q, duration, campaign count, continuous mode, loss limits, venues, or strategy behavior under an older approval.
 
-# Risk
-MAX_FILL_WAIT_MS = 5000         # cancel maker leg if not filled
-MAX_LEGS_OPEN = 1               # only one pending arb at a time
-COOLDOWN_AFTER_LEG_FAIL = 30000 # ms to pause after legging incident
-MAX_LEG_FAILS_BEFORE_HALT = 3   # halt bot after this many legging incidents
-SPREAD_FLARE_THRESHOLD = 0.10   # skip if spread > 10% of price
-MAX_DAILY_LOSS_CENTS = 5000     # $50 daily loss limit, halt bot
+### 8. Safety / recovery
 
-# Logging
-LOG_FILE = "arb_bot.log"
-LOG_LEVEL = "INFO"
-LOG_EVERY_SCAN = False          # True = log every book update (verbose)
-LOG_OPPORTUNITIES = True        # always log when edge is detected
-```
+Before order entry:
 
-## Market Discovery (config/markets.py)
+- account and local state must be reconciled;
+- required capital must be available/reserved;
+- settlement rules must be compatible where cross-venue;
+- fresh market data only;
+- rescue/flatten capacity must be proven for the maximum possible first fill;
+- loss and daily stops must be armed.
 
-On startup, the bot should:
-1. `GET /trade-api/v2/markets?status=open&limit=200` — fetch all open markets
-2. Filter for markets with reasonable volume/liquidity
-3. Subscribe to `orderbook_delta` for filtered markets
-4. Re-scan periodically (every 5 min) to pick up new markets
+After execution:
 
-Good arb candidates:
-- Recently opened markets (prices haven't settled)
-- Markets with multiple market makers
-- Events with many related markets (bracket-style)
-- NOT long-dated markets with no activity
+- reconcile orders and positions;
+- identify residual exposure explicitly;
+- do not call matched positions realized before settlement;
+- recover first if residual/open state exists; do not start a new campaign.
 
-## Build Order (for Claude Code)
+### 9. Observability must not break orchestration
 
-Build in this order. Each step should be testable independently.
+Do not let verbose logs cause false workflow failures. Success/failure markers needed by orchestration should be written to compact result files or emitted in bounded output that cannot be lost to SSM/GitHub truncation.
 
-### Step 1: Auth + REST client
-- `src/auth.py` — RSA-PSS signing, header generation
-- Basic REST client in `src/main.py` that can hit `GET /exchange/status`
-- Test: run and confirm authenticated response from demo API
+Watchdogs/sidecars should log state transitions or rate-limited heartbeats, not unbounded repetitive lines.
 
-### Step 2: Fee calculator
-- `src/fee_calc.py` — implement taker_fee() and maker_fee() 
-- Must handle the round-up (ceil) behavior
-- Must handle special INX/NASDAQ100 rates
-- `tests/test_fee_calc.py` — validate against the known fee table values
+### 10. Secrets
 
-### Step 3: WebSocket client
-- `src/ws_client.py` — connect, auth, subscribe, reconnect with backoff
-- Handle: orderbook_snapshot, orderbook_delta, fill, error messages
-- Test: connect to demo, subscribe to one market, print updates
+Never print, commit, or expose API keys, private keys, tokens, or credentials. Use existing secret stores/env files and preserve their boundaries.
 
-### Step 4: Local orderbook
-- `src/orderbook.py` — maintain bid/ask state per market from snapshots + deltas
-- Methods: `best_yes_ask()`, `best_yes_bid()`, `best_no_ask()`, `depth_at_price()`
-- `tests/test_orderbook.py`
+## Current Gemini BTC5 q10 V5.1 lane — review baseline
 
-### Step 5: Spread scanner
-- `src/spread_scanner.py` — on every book update, compute edge
-- Wire to orderbook updates
-- Log every opportunity found
-- Test: feed synthetic book data, verify edge calculation
+As of 2026-08-30:
 
-### Step 6: Order manager
-- `src/order_manager.py` — paired execution logic
-- Post maker leg → wait for fill → fire taker leg
-- Cancel on timeout
-- Track open orders, fills, positions
-- Flatten rule for legging
+- Frozen executable release ref: `release/gemini-q10-production-v5-1-final`
+- Frozen release SHA: `ff4bc84b40b5bf79c80406c8e0d7ade77ac58e85`
+- Control branch: `aws-migration-foundation`
+- AWS region: `us-east-1`
+- AWS hot host: `i-0b90f0a309153f47e`
 
-### Step 7: Risk layer
-- `src/risk.py` — all filters and circuit breakers
-- Position limits, daily loss, cooldowns, spread flare check
-- Wire into order manager as pre-trade checks
+The frozen V5.1 live workflow is intentionally bounded to one q10 BTC5 campaign with continuous mode off and the existing V5.1 safety limits.
 
-### Step 8: Main loop
-- `src/main.py` — orchestrate everything
-- Startup: auth → discover markets → connect WS → subscribe → scan loop
-- Graceful shutdown on SIGINT
+### Most recent live-canary evidence
 
-## Testing Strategy
+The first V5.1 q10 canary:
 
-- **Unit tests**: fee_calc, orderbook, spread_scanner (with synthetic data)
-- **Integration test**: connect to demo WS, subscribe, verify book updates arrive
-- **Paper trading**: run full bot on demo with real market data, log all signals and what trades WOULD have executed
-- **Only after paper trading looks clean**: switch ENV to "prod"
+- passed 58/58 focused release safety tests;
+- preflighted clean with 0 orders / 0 positions and $52.3155 available at that moment;
+- submitted **no orders**;
+- produced **no fills**;
+- produced **$0 realized P&L**;
+- returned `NO_CANDIDATE` after repeated qualifier `RuntimeError` / `TimeoutError` events;
+- left no demonstrated trading loss;
+- produced a misleading red GitHub workflow because orchestration searched truncated SSM stdout for a completion marker.
 
-## Important Gotchas
+This run is safety evidence, not execution/rescue proof.
 
-1. **Kalshi prices are in CENTS (integers)**. yes_price=65 means $0.65. Don't mix dollars and cents.
-2. **Orderbook is quoted in YES terms**. A NO ask = 100 - YES bid. Make sure the spread scanner handles this correctly.
-3. **post_only orders are rejected if they would immediately match**. This is what we want for maker legs — guarantees maker fee, not taker.
-4. **client_order_id is required** and must be unique (use UUID4).
-5. **Rate limits exist** — don't spam order creation. The bot should be event-driven (react to book updates), not polling.
-6. **WebSocket can disconnect** — implement reconnect with exponential backoff (1s, 2s, 4s, 8s, max 30s).
-7. **Fee rounding is UP (ceil), not nearest**. This matters — a $0.001 theoretical fee rounds to $0.01. Every cent counts in arb.
-8. **Legacy integer fields being removed March 12, 2026** — use the `_fp` (fixed-point string) and `_dollars` fields instead of integer cents fields where available.
-9. **Batched orders endpoint is now GA** — `POST /portfolio/orders/batched` could be useful for placing both legs simultaneously, reducing legging risk. Investigate this.
+### Known issue rediscovered
 
-## Logging Requirements
+On 2026-08-27 an earlier Gemini BTC5 lane already established that a single bounded `fresh_top()` websocket subscription can miss fresh depth transiently. A three-independent-attempt fresh-only retry was built and tested at historical commit:
 
-Every log line should include: timestamp, market_ticker, event type.
+`f1c70209a57764695b45fec586859a05d7640770`
 
-Log these events at INFO level:
-- Opportunity detected (edge, quantity, yes_ask, no_ask, fees)
-- Order placed (side, price, quantity, client_order_id)
-- Order filled (side, price, quantity, fill_id)
-- Order cancelled (reason)
-- Legging incident (which side filled, which didn't)
-- Bot halt (reason)
+That retry preserves fail-closed behavior and uses no REST/stale fallback.
 
-Log at DEBUG:
-- Every book update (if LOG_EVERY_SCAN=True)
-- Fee calculations
-- Filter rejections (why an opportunity was skipped)
+V5.1's qualifier still calls the older one-shot helper, so the same failure class resurfaced.
+
+### New reviewable control-branch files
+
+- `deploy/aws/v51_qualifier_diagnostic.py`
+  - read-only, no credentials required, no order entry;
+  - classifies every rejection and preserves exact bounded error detail;
+  - uses three independent fresh-depth attempts;
+  - emits one compact final result.
+
+- `src/gemini_btc5m_fresh_depth_retry.py`
+  - reusable dependency-injected fresh-only retry helper.
+
+- `tests/test_gemini_btc5m_fresh_depth_retry.py`
+  - retry-then-success, fail-closed exhaustion, and argument validation.
+
+- `.github/workflows/aws-gemini-q10-v5-1-qualifier-diagnostic.yml`
+  - runs committed diagnostic source against the exact frozen V5.1 release image;
+  - no live arming;
+  - no credentials required by the diagnostic;
+  - avoids the prior stdin/heredoc harness failure.
+
+- `docs/ARB_V5_1_CLAUDE_REVIEW_HANDOFF_20260830.md`
+  - review checklist, evidence, open questions, and required process.
+
+## Claude Code review request
+
+When reviewing this lane, do not merely run tests and report green/red. Independently inspect the frozen release implementation and answer:
+
+1. Why did V5.1's qualifier emit repeated `RuntimeError`/`TimeoutError` rather than a useful rejection reason?
+2. Is the proven three-attempt fresh-only depth retry safe to integrate into V5.1 qualification without weakening freshness or rescue invariants?
+3. Are there any other historical fixes in this repo that V5/V5.1 accidentally regressed or bypassed?
+4. Does V5.1 truly prove full-q10 rescue capacity before *any possible first fill*, including the sequential YES-before-NO posting window?
+5. Are partial fills, cancel races, ambiguous acks, stale books, websocket reconnects, and FOK reconciliation fail-closed?
+6. Can watchdog/sidecar telemetry be rate-limited while retaining enough evidence for recovery?
+7. Can live orchestration rely on a compact durable result artifact/file rather than grepping potentially truncated SSM stdout?
+8. Which tests are unit safety tests versus tests that actually exercise the end-to-end question?
+9. What is the smallest next release change that improves the probability that the next explicitly approved canary reaches a real qualifying opportunity without weakening safety?
+10. What evidence would be required after that canary to classify it as submitted, filled, matched, settled, and realized?
+
+Document findings in the repo. Prefer a small, auditable patch over a rewrite.
+
+## Key rule for all future work
+
+**Do not repeat a failed experiment until the instrumentation can explain the previous failure.**
+
+The purpose of testing is not to accumulate green checks. It is to reduce uncertainty about whether this system can safely convert executable opportunity into realized net dollars/day.
