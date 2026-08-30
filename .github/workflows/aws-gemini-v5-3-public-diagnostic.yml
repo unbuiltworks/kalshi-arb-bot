@@ -16,7 +16,7 @@ env:
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
   RELEASE_BRANCH: release/gemini-adaptive-maker-v5-3
-  REQUIRED_RELEASE_COMMIT: 3368c737d372d173cceea9835a89605da8cb8601
+  REQUIRED_RELEASE_COMMIT: 1f876470e9e4de43235914379636c4b16d02c8ab
 
 jobs:
   diagnose:
