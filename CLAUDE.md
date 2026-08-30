@@ -66,7 +66,7 @@ Do not assume branch HEAD equals production.
 
 ### 3. Frozen release discipline
 
-A frozen live release is immutable evidence. Do not silently modify it after a canary. If code changes, create and qualify a new release SHA/ref.
+A frozen live release is immutable evidence. Do not silently modify it after qualification or a canary. If code changes, create and qualify a new release SHA/ref.
 
 ### 4. Establish live state before changing anything
 
@@ -99,9 +99,9 @@ For each rejection, record the exact gate and the relevant fresh market values. 
 
 Passing unit tests is necessary but not sufficient. Every live workstream should state the question it is trying to answer.
 
-For the current Gemini BTC5 q10 lane the key question is:
+For the current Gemini BTC5 adaptive-maker lane the key question is:
 
-> Can a real BTC5 opportunity pass qualification, enter q10 maker orders, experience a real first-leg fill, complete or rescue within the bounded loss invariant, reconcile cleanly, settle, and produce verifiable realized P&L without repeating a naked-leg loss?
+> Can a real BTC5 opportunity pass qualification, select the largest safe valid clip up to q10, enter maker-only orders, experience a real first-leg fill, complete or rescue within the bounded loss invariant, reconcile cleanly, settle, and produce verifiable realized P&L without repeating a naked-leg loss?
 
 A test campaign that only proves "the bot stayed safe and did not trade" is useful safety evidence, but it does **not** answer the full question above.
 
@@ -110,6 +110,8 @@ A test campaign that only proves "the bot stayed safe and did not trade" is usef
 Real-money execution requires fresh explicit user authorization for the exact bounded action being taken. Authorization for one canary does not authorize another canary or changed code.
 
 Never broaden q, duration, campaign count, continuous mode, loss limits, venues, or strategy behavior under an older approval.
+
+Authorization to research, code, diagnose, qualify, freeze, or prepare a launcher is **not** authorization to trade.
 
 ### 8. Safety / recovery
 
@@ -139,82 +141,125 @@ Watchdogs/sidecars should log state transitions or rate-limited heartbeats, not 
 
 Never print, commit, or expose API keys, private keys, tokens, or credentials. Use existing secret stores/env files and preserve their boundaries.
 
-## Current Gemini BTC5 q10 V5.1 lane — review baseline
+## Required process reference
+
+Before changing or reviewing a live-capable strategy, read:
+
+- `docs/ARB_RELEASE_AND_LIVE_CANARY_PROCESS.md`
+
+That document is the default evidence/release discipline: repo first, exact SHA, deterministic failure-injection tests, credential-free public-market qualification, authenticated disarmed readiness, immutable freeze, inert launcher, fresh one-use authorization, and account-level post-canary reconciliation.
+
+## Current Gemini BTC5 adaptive maker V5.3 — review baseline
 
 As of 2026-08-30:
 
-- Frozen executable release ref: `release/gemini-q10-production-v5-1-final`
-- Frozen release SHA: `ff4bc84b40b5bf79c80406c8e0d7ade77ac58e85`
+- Frozen release branch: `release/gemini-adaptive-maker-v5-3-final`
+- Frozen release SHA: `1f876470e9e4de43235914379636c4b16d02c8ab`
 - Control branch: `aws-migration-foundation`
 - AWS region: `us-east-1`
 - AWS hot host: `i-0b90f0a309153f47e`
+- Qualification evidence: `docs/ARB_GEMINI_ADAPTIVE_V5_3_RELEASE_QUALIFICATION_20260830.md`
+- Live launcher: `.github/workflows/aws-gemini-adaptive-v5-3-live.yml`
+- Live trigger path: `deploy/aws/gemini-adaptive-v5-3-live.trigger`
+- Current trigger file: **absent**
+- V5.3 live orders/fills: **none yet**
+- V5.3 realized P&L: **$0**
 
-The frozen V5.1 live workflow is intentionally bounded to one q10 BTC5 campaign with continuous mode off and the existing V5.1 safety limits.
+### What changed from V5.1/V5.2
 
-### Most recent live-canary evidence
+V5.3 is **not** a liquidity-reward admission strategy. It does not count expected liquidity rewards or maker rebates in modeled P&L, and the maker-rebate price band is not treated as an execution gate.
 
-The first V5.1 q10 canary:
+V5.3 instead:
 
-- passed 58/58 focused release safety tests;
-- preflighted clean with 0 orders / 0 positions and $52.3155 available at that moment;
-- submitted **no orders**;
-- produced **no fills**;
-- produced **$0 realized P&L**;
-- returned `NO_CANDIDATE` after repeated qualifier `RuntimeError` / `TimeoutError` events;
-- left no demonstrated trading loss;
-- produced a misleading red GitHub workflow because orchestration searched truncated SSM stdout for a completion marker.
+- maintains a persistent public depth-5 cache;
+- honors live instrument `quantityMinimum`, `quantityIncrement`, and `priceIncrement`;
+- considers only valid integer clips q1..q10 for the instrument grid;
+- chooses the **largest safe valid clip**;
+- requires >=5c/contract completed-pair profit after conservative maker fees;
+- preserves the $0.30 absolute first-fill rescue-loss limit;
+- simulates/removes known owned resting liquidity before claiming external rescue depth;
+- requires newer post-mutation depth before relying on own-order-subtracted rescue checks;
+- persists selected quantity as the campaign exposure bound;
+- treats acknowledged-but-unresolved orders, fill/reconcile contradictions, pending completion/rescue state, and oversized residuals as ambiguity/hard-halt conditions rather than clean zero-fill outcomes;
+- inherits the hardened V5.2 FOK/recovery/dead-man behavior.
 
-This run is safety evidence, not execution/rescue proof.
+### Frozen qualification evidence
 
-### Known issue rediscovered
+Focused release test run:
 
-On 2026-08-27 an earlier Gemini BTC5 lane already established that a single bounded `fresh_top()` websocket subscription can miss fresh depth transiently. A three-independent-attempt fresh-only retry was built and tested at historical commit:
+- Run `33333850141`, job `99317120184`
+- Exact SHA `1f876470e9e4de43235914379636c4b16d02c8ab`
+- **90 passed**
 
-`f1c70209a57764695b45fec586859a05d7640770`
+Credential-free public AWS diagnostic:
 
-That retry preserves fail-closed behavior and uses no REST/stale fallback.
+- Run `33333898427`, job `99317249469`
+- Exact SHA `1f876470e9e4de43235914379636c4b16d02c8ab`
+- Current Gemini BTC5 contract metadata: quantity min `0.01`, quantity increment `0.01`, price increment `0.01`
+- Valid integer clips: q1..q10
+- Observed book: 41c bid / 61c ask, 100 contracts at both top levels
+- Selected plan: q10, YES 41c / NO 39c
+- Modeled completed-pair profit after conservative maker fees: **$1.90**
+- Required edge floor: $0.50
+- Worst immediate rescue loss: **$0.22** <= $0.30 limit
+- YES-only-posted simulation safe: true
+- Both-orders-posted standing rescue safe: true
+- Owned displayed depth removed before rescue evaluation: true
+- Liquidity rewards modeled: false
+- Maker rebates modeled: false
+- Order entry: false
+- Realized P&L: $0
 
-V5.1's qualifier still calls the older one-shot helper, so the same failure class resurfaced.
+Authenticated disarmed AWS readiness:
 
-### New reviewable control-branch files
+- Run `33333927235`, job `99317322238`
+- Exact SHA `1f876470e9e4de43235914379636c4b16d02c8ab`
+- Exact-image **90 passed**
+- Recovery audit: `CLEAN_NO_OPEN_STATE`
+- Account orders: 0
+- Account positions: 0
+- Available USD: $52.3155 at qualification
+- Dead-man: idle
+- Sidecar: waiting
+- Live/recovery/watchdog arms: false
+- Order entry: false
+- Realized P&L: $0
 
-- `deploy/aws/v51_qualifier_diagnostic.py`
-  - read-only, no credentials required, no order entry;
-  - classifies every rejection and preserves exact bounded error detail;
-  - uses three independent fresh-depth attempts;
-  - emits one compact final result.
+### Live launcher state
 
-- `src/gemini_btc5m_fresh_depth_retry.py`
-  - reusable dependency-injected fresh-only retry helper.
+The launcher is prepared but inert.
 
-- `tests/test_gemini_btc5m_fresh_depth_retry.py`
-  - retry-then-success, fail-closed exhaustion, and argument validation.
+It has no generic `workflow_dispatch` path for live mutation. It runs only if `deploy/aws/gemini-adaptive-v5-3-live.trigger` is created/changed on the control branch with:
 
-- `.github/workflows/aws-gemini-q10-v5-1-qualifier-diagnostic.yml`
-  - runs committed diagnostic source against the exact frozen V5.1 release image;
-  - no live arming;
-  - no credentials required by the diagnostic;
-  - avoids the prior stdin/heredoc harness failure.
+```text
+PINNED_COMMIT=1f876470e9e4de43235914379636c4b16d02c8ab
+APPROVAL_ID=<fresh unique one-use id>
+CLASSIFICATION=FRESH_USER_APPROVED_ONE_ADAPTIVE_BTC5_V5_3_CAMPAIGN
+LIVE_AUTHORIZATION=EXPLICIT_USER_APPROVAL_ADAPTIVE_BTC5_V5_3
+```
 
-- `docs/ARB_V5_1_CLAUDE_REVIEW_HANDOFF_20260830.md`
-  - review checklist, evidence, open questions, and required process.
+Do **not** create that file or infer approval from earlier V5.1/V5.2 canaries. The next live V5.3 canary requires fresh explicit user authorization after this frozen qualification.
+
+The launcher is bounded to one campaign, continuous mode off, adaptive q <= 10, $0.30 rescue loss, $1 campaign loss, $3 daily loss, independent V5.3 dead-man, bounded executor lifetime, and final account/residual reconciliation.
 
 ## Claude Code review request
 
-When reviewing this lane, do not merely run tests and report green/red. Independently inspect the frozen release implementation and answer:
+Review the frozen V5.3 release and the two process/evidence documents, not just the old V5.1 incident.
 
-1. Why did V5.1's qualifier emit repeated `RuntimeError`/`TimeoutError` rather than a useful rejection reason?
-2. Is the proven three-attempt fresh-only depth retry safe to integrate into V5.1 qualification without weakening freshness or rescue invariants?
-3. Are there any other historical fixes in this repo that V5/V5.1 accidentally regressed or bypassed?
-4. Does V5.1 truly prove full-q10 rescue capacity before *any possible first fill*, including the sequential YES-before-NO posting window?
-5. Are partial fills, cancel races, ambiguous acks, stale books, websocket reconnects, and FOK reconciliation fail-closed?
-6. Can watchdog/sidecar telemetry be rate-limited while retaining enough evidence for recovery?
-7. Can live orchestration rely on a compact durable result artifact/file rather than grepping potentially truncated SSM stdout?
-8. Which tests are unit safety tests versus tests that actually exercise the end-to-end question?
-9. What is the smallest next release change that improves the probability that the next explicitly approved canary reaches a real qualifying opportunity without weakening safety?
-10. What evidence would be required after that canary to classify it as submitted, filled, matched, settled, and realized?
+Primary questions:
 
-Document findings in the repo. Prefer a small, auditable patch over a rewrite.
+1. Does instrument-grid handling correctly prevent submission of a quantity invalid under `quantityMinimum` / `quantityIncrement` while still allowing q1..q10 where valid?
+2. Can the adaptive quote planner ever cross/take liquidity despite the maker-only/MOC intent?
+3. Does the depth-5 own-order subtraction correctly handle improved quotes, same-price external liquidity, partial fills, and fall-through to the next external level?
+4. After the first YES order is acknowledged, is there any path that can post NO without first proving the updated book/rescue invariant?
+5. Are acknowledged-but-unresolved YES/NO/grace/FOK orders fail-closed without duplicate mutation?
+6. Is selected adaptive quantity the true bound through cancellation, reconciliation, maker grace, FOK rescue, durable recovery, and dead-man intervention?
+7. Can partial fills or a partially completed maker-grace order produce an incorrect residual cost basis during crash recovery?
+8. Does the 15-second dead-man threshold still avoid racing legitimate REST/FOK/reconcile work under worst-case bounded timeouts?
+9. Is the inert live workflow's total SSM/GitHub timeout budget sufficient for candidate wait + executor + dead-man + settlement reconciliation, and can its compact output still false-red?
+10. What exact evidence should the first explicitly approved V5.3 live canary collect to decide whether to keep q adaptive up to 10, reduce size, improve quote placement, or abandon this lane?
+
+Document any new findings in the repo. Prefer small, auditable fixes. Any change to frozen release behavior requires a new release candidate and the full qualification sequence again.
 
 ## Key rule for all future work
 
