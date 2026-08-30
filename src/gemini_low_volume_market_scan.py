@@ -23,6 +23,16 @@ Q = D("10")
 ONE = D("1")
 ASSETS = ("BTC", "ETH", "SOL", "XRP")
 MAX_MARKETS_TO_SAMPLE = 12
+SAMPLE_CONCURRENCY = 3
+SAMPLE_ATTEMPTS = 3
+SAMPLE_TIMEOUT_S = 3.5
+SAMPLE_RETRY_DELAY_S = 0.18
+
+# Gemini's public predictions depth stream has shown transient misses when many
+# fresh_top websocket handshakes are opened simultaneously. Shadow sampling is
+# minute-cadence, so a tiny bounded retry is far preferable to treating a
+# handshake miss as a missing market. This remains public/read-only.
+_sample_slots = asyncio.Semaphore(SAMPLE_CONCURRENCY)
 
 
 def _iso_ms(value: Any) -> int | None:
@@ -119,16 +129,31 @@ async def active_reward_catalog() -> tuple[dict[str, Any], list[dict[str, Any]]]
 
 async def _sample(row: dict[str, Any]) -> dict[str, Any]:
     out = dict(row)
-    try:
-        bid, bid_q, ask, ask_q = await base.fresh_top(row["symbol"], timeout=3.0)
-        model = _model(bid, ask)
-        out.update({
-            "book_ok": True, "bid": str(bid), "bid_qty": str(bid_q), "ask": str(ask), "ask_qty": str(ask_q),
-            "model": {k:str(v) for k,v in model.items()},
-            "maker_rebate_band_both_sides": bool(D("0.20") <= model["yes_quote"] <= D("0.80") and D("0.20") <= model["no_quote"] <= D("0.80")),
-        })
-    except Exception as exc:
-        out.update({"book_ok":False,"error_type":type(exc).__name__})
+    last_exc: Exception | None = None
+    attempts = 0
+    async with _sample_slots:
+        for attempts in range(1, SAMPLE_ATTEMPTS + 1):
+            try:
+                bid, bid_q, ask, ask_q = await base.fresh_top(row["symbol"], timeout=SAMPLE_TIMEOUT_S)
+                model = _model(bid, ask)
+                out.update({
+                    "book_ok": True,
+                    "bid": str(bid), "bid_qty": str(bid_q),
+                    "ask": str(ask), "ask_qty": str(ask_q),
+                    "model": {k:str(v) for k,v in model.items()},
+                    "maker_rebate_band_both_sides": bool(D("0.20") <= model["yes_quote"] <= D("0.80") and D("0.20") <= model["no_quote"] <= D("0.80")),
+                    "sample_attempts": attempts,
+                })
+                return out
+            except Exception as exc:
+                last_exc = exc
+                if attempts < SAMPLE_ATTEMPTS:
+                    await asyncio.sleep(SAMPLE_RETRY_DELAY_S * attempts)
+    out.update({
+        "book_ok": False,
+        "error_type": type(last_exc).__name__ if last_exc is not None else "UnknownError",
+        "sample_attempts": attempts,
+    })
     return out
 
 
@@ -158,6 +183,12 @@ async def main() -> None:
         "max_spread_cents":str(cfg.get("max_spread_cents") or cfg.get("maxSpreadCents") or ""),
         "active_reward_contract_count":len(rows),
         "sampled":sampled,
+        "sampling_policy": {
+            "concurrency": SAMPLE_CONCURRENCY,
+            "attempts": SAMPLE_ATTEMPTS,
+            "timeout_s": SAMPLE_TIMEOUT_S,
+            "retry_delay_s": SAMPLE_RETRY_DELAY_S,
+        },
         "reward_pool_numbers_are_not_expected_or_realized_payouts":True,
     }
     print("GEMINI_LOW_VOLUME_LIVE_SCAN="+json.dumps(out,separators=(",",":"),default=str))
