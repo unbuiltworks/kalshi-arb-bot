@@ -1,0 +1,69 @@
+name: AWS Gemini inventory-maker toxicity replay
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/gemini-inventory-maker-toxicity-replay.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - name: Read trigger
+        id: trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=deploy/aws/gemini-inventory-maker-toxicity-replay.trigger
+          PINNED_COMMIT=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$FILE" | tr -d '[:space:]')
+          SOURCE_RUN_ID=$(awk -F= '$1=="SOURCE_RUN_ID"{print $2}' "$FILE" | tr -d '[:space:]')
+          test "$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$FILE" | tr -d '[:space:]')" = "READ_ONLY_INVENTORY_MAKER_TOXICITY_SHADOW_NOT_REALIZED"
+          test "$(awk -F= '$1=="ORDER_ENTRY"{print $2}' "$FILE" | tr -d '[:space:]')" = "false"
+          [[ "$PINNED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SOURCE_RUN_ID" =~ ^[A-Za-z0-9._-]+$ ]]
+          echo "pinned_commit=$PINNED_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "source_run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Run retained-tape stress replay
+        env:
+          PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
+          SOURCE_RUN_ID: ${{ steps.trigger.outputs.source_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${PINNED_COMMIT:0:12}"
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; REPO=/home/ssm-user/kalshi-arb-bot; SOURCE=/home/ssm-user/gemini-l5-dynamic-shadow-v2-state/${SOURCE_RUN_ID}/capture.jsonl; WORK=/opt/arb/gemini-inventory-maker-toxicity-replay; OUT=/home/ssm-user/gemini-inventory-maker-toxicity-replay-state/${SOURCE_RUN_ID}-${SHORT_SHA}; test -f \"\$SOURCE\"; git -C \"\$REPO\" config --global --add safe.directory \"\$REPO\" || true; git -C \"\$REPO\" fetch origin feature/gemini-inventory-maker-toxicity-shadow; git -C \"\$REPO\" cat-file -e \"${PINNED_COMMIT}^{commit}\"; git -C \"\$REPO\" worktree remove --force \"\$WORK\" >/dev/null 2>&1 || true; rm -rf \"\$WORK\"; git -C \"\$REPO\" worktree prune; git -C \"\$REPO\" worktree add --detach \"\$WORK\" \"${PINNED_COMMIT}\"; mkdir -p \"\$OUT\"; IMAGE=arb-gemini-inventory-maker-toxicity-replay:${SHORT_SHA}; docker build -t \"\$IMAGE\" \"\$WORK\" >/dev/null; docker run --rm --network none \"\$IMAGE\" python -m pytest -q tests/test_gemini_inventory_maker_toxicity_shadow.py; for BPS in 0 10 25 50; do docker run --rm --network none -v \"\$SOURCE:/input/capture.jsonl:ro\" -v \"\$OUT:/output\" \"\$IMAGE\" python -m src.gemini_inventory_maker_toxicity_shadow /input/capture.jsonl --stale-pull-bps \"\$BPS\" --output \"/output/stale-\${BPS}bps.json\" >/tmp/replay-\${BPS}.json; done; python3 - <<\"PY\"
+import json, pathlib
+out=pathlib.Path(\"'\"\$OUT\"'\")
+for p in sorted(out.glob(\"stale-*bps.json\")):
+ d=json.loads(p.read_text())
+ base=d[\"toxicity_sweep\"][0]
+ print(\"INVENTORY_TOXICITY_RESULT\",p.name,\"fills=\"+str(base[\"fills\"]),\"matched=\"+base[\"matched_qty\"],\"residual=\"+base[\"residual_qty\"],\"edge0=\"+base[\"matched_trade_edge_after_fees\"],\"be_grid=\"+str(d[\"break_even_toxicity_lower_bound_from_grid\"]),\"lr_frac=\"+str(d[\"liquidity_reward_rule_eligible_fraction\"]))
+PY
+          '"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB Gemini inventory-maker toxicity replay ${SHORT_SHA}" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' > /tmp/result.json
+          cat /tmp/result.json
+          test "$(jq -r '.Status' /tmp/result.json)" = "Success"
+          grep -q 'INVENTORY_TOXICITY_RESULT' <(jq -r '.Stdout // ""' /tmp/result.json)
