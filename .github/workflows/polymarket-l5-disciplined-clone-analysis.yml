@@ -1,0 +1,30 @@
+name: Polymarket L5 disciplined clone analysis
+
+on:
+  push:
+    branches: [analysis/polymarket-l5-disciplined-clone]
+    paths:
+      - .github/workflows/polymarket-l5-disciplined-clone-analysis.yml
+      - src/polymarket_l5/disciplined_clone.py
+      - tests/test_polymarket_l5_disciplined_clone.py
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Unit regressions
+        run: python -m pytest -q tests/test_polymarket_l5_disciplined_clone.py
+      - name: Replay recent observed fill paths at 10 percent scale
+        run: |
+          python -m src.polymarket_l5.disciplined_clone \
+            --sequences analysis/l5/l5_window_sequences.csv \
+            --summary analysis/l5/l5_windows_summary.csv \
+            --scale 0.10
