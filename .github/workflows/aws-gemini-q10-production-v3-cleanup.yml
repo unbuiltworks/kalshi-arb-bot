@@ -38,7 +38,7 @@ jobs:
           fi
           IMAGE=arb-gemini-q10-production-live:f619ed95e7c8
           docker image inspect "$IMAGE" >/dev/null
-          docker run --rm --network host --env-file "$ENV_FILE" "$IMAGE" python - <<'PY'
+          docker run -i --rm --network host --env-file "$ENV_FILE" "$IMAGE" python - <<'PY'
           import asyncio, json
           from decimal import Decimal as D
           from src import gemini_short_crypto_btc5m_maker_canary_q1 as base
