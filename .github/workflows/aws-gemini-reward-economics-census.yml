@@ -1,0 +1,81 @@
+name: AWS Gemini reward economics census read-only
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - .github/workflows/aws-gemini-reward-economics-census.yml
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  RELEASE_BRANCH: release/gemini-adaptive-maker-v5-4
+  REQUIRED_RELEASE_COMMIT: 135b17f111d4c60b05682e6c2059b57001681533
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Run committed public Gemini reward census on EC2
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          CENSUS_B64=$(base64 -w0 deploy/aws/gemini_reward_economics_census.py)
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          WORK=/opt/arb/gemini-reward-economics-census
+          SCRIPT=/opt/arb/gemini-reward-economics-census.py
+          IMAGE=arb-gemini-reward-census:${REQUIRED_RELEASE_COMMIT:0:12}
+          cd "\$REPO"
+          git config --global --add safe.directory "\$REPO" || true
+          git fetch origin ${RELEASE_BRANCH} >/dev/null
+          ACTUAL=\$(git rev-parse origin/${RELEASE_BRANCH})
+          test "\$ACTUAL" = "${REQUIRED_RELEASE_COMMIT}"
+          git worktree remove --force "\$WORK" >/dev/null 2>&1 || true
+          rm -rf "\$WORK" "\$SCRIPT"
+          git worktree prune
+          git worktree add --detach "\$WORK" "\$ACTUAL" >/dev/null
+          printf '%s' '${CENSUS_B64}' | base64 -d > "\$SCRIPT"
+          docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
+          docker run --rm --network host \
+            -e GEMINI_Q10_PRODUCTION_LIVE=NO \
+            -e GEMINI_Q10_PRODUCTION_ARM_ID= \
+            -e GEMINI_Q10_PRODUCTION_ARM= \
+            -e GEMINI_Q10_V5_RECOVERY_ARM= \
+            -e GEMINI_Q10_V5_WATCHDOG_ARM= \
+            -v "\$SCRIPT:/diag/gemini_reward_economics_census.py:ro" \
+            "\$IMAGE" python /diag/gemini_reward_economics_census.py
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB Gemini public reward economics census" --parameters "$PARAMS" --timeout-seconds 500 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 240); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          OUT=$(jq -r '.Stdout // ""' <<<"$RESULT")
+          grep -q 'GEMINI_REWARD_ECONOMICS_CENSUS=' <<<"$OUT"
+          grep -q 'GEMINI_REWARD_ECONOMICS_CENSUS_COMPLETE' <<<"$OUT"
+          grep -q '"order_entry":false' <<<"$OUT"
+          grep -q '"credentials_read":false' <<<"$OUT"
+          grep -q '"rewards_counted_as_realized_pnl":false' <<<"$OUT"
