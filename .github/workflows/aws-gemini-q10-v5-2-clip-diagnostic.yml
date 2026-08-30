@@ -1,0 +1,83 @@
+name: AWS Gemini q10 V5.2 reward-rescue clip diagnostic read-only
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - .github/workflows/aws-gemini-q10-v5-2-clip-diagnostic.yml
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  RELEASE_BRANCH: release/gemini-q10-production-v5-2
+  REQUIRED_RELEASE_COMMIT: 8a06f809c583ce16b507988f86d4617fae86ddd1
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Validate committed diagnostic
+        run: |
+          set -Eeuo pipefail
+          test -s deploy/aws/v52_reward_rescue_clip_diagnostic.py
+          python -m py_compile deploy/aws/v52_reward_rescue_clip_diagnostic.py
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Evaluate live-public reward/rescue safe clip sizes with no credentials
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          DIAG_B64=$(base64 -w0 deploy/aws/v52_reward_rescue_clip_diagnostic.py)
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          WORK=/opt/arb/gemini-q10-v5-2-clip-diagnostic
+          DIAG=/tmp/v52-clip-${GITHUB_SHA}.py
+          IMAGE=arb-gemini-q10-v5-2-clip:${REQUIRED_RELEASE_COMMIT:0:12}
+          cd "\$REPO"
+          git config --global --add safe.directory "\$REPO" || true
+          git fetch origin ${RELEASE_BRANCH} >/dev/null
+          ACTUAL=\$(git rev-parse origin/${RELEASE_BRANCH})
+          test "\$ACTUAL" = "${REQUIRED_RELEASE_COMMIT}"
+          git worktree remove --force "\$WORK" >/dev/null 2>&1 || true
+          rm -rf "\$WORK"
+          git worktree prune
+          git worktree add --detach "\$WORK" "\$ACTUAL" >/dev/null
+          docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
+          echo '${DIAG_B64}' | base64 -d > "\$DIAG"
+          chmod 600 "\$DIAG"
+          docker run --rm --network host \
+            -e GEMINI_Q10_PRODUCTION_LIVE=NO \
+            -e GEMINI_LIQUIDITY_REWARD_LIVE_Q10=NO \
+            -e PYTHONPATH=/app \
+            -v "\$DIAG:/diag/v52_clip.py:ro" \
+            "\$IMAGE" python /diag/v52_clip.py
+          rm -f "\$DIAG"
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB V5.2 read-only reward rescue clip diagnostic" --parameters "$PARAMS" --timeout-seconds 780 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 420); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          OUT=$(jq -r '.Stdout // ""' <<<"$RESULT")
+          grep -q 'V5_2_REWARD_RESCUE_CLIP_DIAG_COMPLETE' <<<"$OUT"
+          grep -q '"order_entry":false' <<<"$OUT"
