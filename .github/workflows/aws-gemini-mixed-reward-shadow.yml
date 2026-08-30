@@ -39,10 +39,10 @@ jobs:
           REMOTE_SCRIPT=$(cat <<EOF
           set -Eeuo pipefail
           REPO=/home/ssm-user/kalshi-arb-bot
-          WORK=/opt/arb/gemini-mixed-reward-shadow
+          WORK=/opt/arb/gemini-mixed-reward-shadow-${RUN_ID}
           STATE_ROOT=/home/ssm-user/gemini-mixed-reward-shadow-state
           STATE_DIR="\$STATE_ROOT/${RUN_ID}"
-          CONTAINER=arb-gemini-mixed-reward-shadow
+          CONTAINER=arb-gemini-mixed-reward-shadow-${RUN_ID}
           git -C "\$REPO" fetch origin ${FEATURE_BRANCH}
           test "\$(git -C "\$REPO" rev-parse origin/${FEATURE_BRANCH})" = "${PINNED_COMMIT}"
           git -C "\$REPO" worktree remove --force "\$WORK" >/dev/null 2>&1 || true
@@ -51,7 +51,7 @@ jobs:
           git -C "\$REPO" worktree add --detach "\$WORK" "${PINNED_COMMIT}"
           IMAGE=arb-gemini-mixed-reward-shadow:${SHORT_SHA}
           docker build -t "\$IMAGE" "\$WORK" >/dev/null
-          docker run --rm --network none "\$IMAGE" python -m pytest -q tests/test_gemini_low_volume_reward_allocator.py tests/test_gemini_multi_market_reward_shadow.py tests/test_gemini_mixed_reward_shadow.py
+          docker run --rm --network none "\$IMAGE" python -m pytest -q tests/test_gemini_low_volume_reward_allocator.py tests/test_gemini_multi_market_reward_shadow.py tests/test_gemini_mixed_reward_shadow.py tests/test_gemini_low_volume_market_scan_retries.py
           mkdir -p "\$STATE_DIR"
           docker rm -f "\$CONTAINER" >/dev/null 2>&1 || true
           docker run -d --name "\$CONTAINER" --restart=no --network host \
@@ -69,6 +69,7 @@ jobs:
           echo "GEMINI_MIXED_REWARD_SHADOW_LAUNCH_STATE="
           cat "\$STATE_DIR/current.json"
           echo "GEMINI_MIXED_REWARD_SHADOW_RUN_ID=${RUN_ID}"
+          echo "GEMINI_MIXED_REWARD_SHADOW_CONTAINER=\$CONTAINER"
           echo "GEMINI_MIXED_REWARD_SHADOW_STATE_DIR=\$STATE_DIR"
           EOF
           )
