@@ -1,12 +1,17 @@
-"""Instrument-specific quantity-grid adapter for Gemini adaptive maker V5.3.
+"""Instrument-grid and catastrophic-loss adapter for Gemini adaptive maker V5.4.
 
-Gemini prediction-market contracts publish quantityMinimum and quantityIncrement per
-instrument. V5.3 deliberately trades only integer clips q=1..10, but it must not
-assume quantityIncrement == 1. This adapter computes the integer clips that are
-actually valid on the live contract grid and patches the V5.3 planner to consider
-only that set.
+The underlying adaptive executor remains the reviewed V5.3 implementation, but this
+successor release adds two admission constraints before a plan may be used live:
 
-No network calls and no order entry.
+1. Gemini prediction contracts publish instrument-specific quantityMinimum and
+   quantityIncrement. We trade only integer clips q=1..10 that are valid on that
+   actual grid.
+2. Normal rescue availability is not a guaranteed loss cap: the book can gap between
+   admission and fill detection. Therefore every possible first maker leg must also
+   fit inside the configured campaign-loss ceiling even if rescue fails completely
+   and the directional contract settles at zero.
+
+Liquidity rewards and maker rebates are not used to relax either bound.
 """
 from __future__ import annotations
 
@@ -56,6 +61,50 @@ def metadata_dict(event: Any) -> dict[str, Any]:
     }
 
 
+def single_leg_settlement_loss(*, price: D, quantity: D) -> D:
+    """Conservative full loss if a filled YES/NO maker leg settles worthless."""
+    p = D(str(price))
+    q = D(str(quantity))
+    return q * p + policy.gemini_predictions_maker_fee(p, q)
+
+
+def catastrophic_loss_for_plan(plan: policy.AdaptiveMakerPlan) -> D:
+    return max(
+        single_leg_settlement_loss(price=plan.yes_quote, quantity=plan.quantity),
+        single_leg_settlement_loss(price=plan.no_quote, quantity=plan.quantity),
+    )
+
+
+def plan_within_campaign_bound(
+    plan: policy.AdaptiveMakerPlan,
+    *,
+    campaign_loss: D | None = None,
+) -> bool:
+    limit = v53.v5.max_campaign_loss() if campaign_loss is None else D(str(campaign_loss))
+    return catastrophic_loss_for_plan(plan) <= limit
+
+
+def _plan_for_valid_quantities(
+    valid: list[int],
+    *,
+    snap: Any,
+    increment: D,
+    max_loss: D,
+    edge_per_contract: D,
+):
+    for q in sorted(valid, reverse=True):
+        plan = policy.plan_for_quantity(
+            quantity=D(q),
+            snap=snap,
+            increment=increment,
+            max_loss=max_loss,
+            edge_per_contract=edge_per_contract,
+        )
+        if plan is not None and plan_within_campaign_bound(plan):
+            return plan
+    return None
+
+
 def select_plan_for_event(
     event: Any,
     *,
@@ -67,17 +116,13 @@ def select_plan_for_event(
     edge_per_contract: D = policy.DEFAULT_EDGE_PER_CONTRACT,
 ):
     valid = [q for q in valid_integer_quantities(event) if min_q <= q <= max_q]
-    for q in sorted(valid, reverse=True):
-        plan = policy.plan_for_quantity(
-            quantity=D(q),
-            snap=snap,
-            increment=increment,
-            max_loss=max_loss,
-            edge_per_contract=edge_per_contract,
-        )
-        if plan is not None:
-            return plan
-    return None
+    return _plan_for_valid_quantities(
+        valid,
+        snap=snap,
+        increment=increment,
+        max_loss=max_loss,
+        edge_per_contract=edge_per_contract,
+    )
 
 
 def event_contract_ok(event: Any) -> bool:
@@ -106,34 +151,22 @@ def select_plan_grid_aware(
     max_loss: D = policy.DEFAULT_MAX_LOSS,
     edge_per_contract: D = policy.DEFAULT_EDGE_PER_CONTRACT,
 ):
-    """Drop-in policy.select_plan replacement using the current event grid context."""
+    """Drop-in planner with contract-grid + worst-settlement campaign constraints."""
     if _current_valid_quantities is None:
-        return _ORIGINAL_SELECT_PLAN(
-            snap=snap,
-            increment=increment,
-            min_q=min_q,
-            max_q=max_q,
-            max_loss=max_loss,
-            edge_per_contract=edge_per_contract,
-        )
-    for q in sorted(
-        (q for q in _current_valid_quantities if min_q <= q <= max_q),
-        reverse=True,
-    ):
-        plan = policy.plan_for_quantity(
-            quantity=D(q),
-            snap=snap,
-            increment=increment,
-            max_loss=max_loss,
-            edge_per_contract=edge_per_contract,
-        )
-        if plan is not None:
-            return plan
-    return None
+        # Fail closed if no live event metadata has established the quantity grid.
+        return None
+    valid = [q for q in _current_valid_quantities if min_q <= q <= max_q]
+    return _plan_for_valid_quantities(
+        valid,
+        snap=snap,
+        increment=increment,
+        max_loss=max_loss,
+        edge_per_contract=edge_per_contract,
+    )
 
 
 def install() -> None:
-    """Install frozen V5.3, then replace only contract-grid admission/planning."""
+    """Install adaptive V5.3 execution, then enforce V5.4 admission constraints."""
     v53.install()
     v53._event_contract_ok = event_contract_ok
     policy.select_plan = select_plan_grid_aware
