@@ -20,4 +20,4 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install --upgrade pip pytest
       - name: Run focused tests
-        run: python -m pytest -q tests/test_gemini_inventory_maker_toxicity_shadow.py tests/test_gemini_liquidity_reward_dynamic_completion_q10.py
+        run: python -m pytest -q tests/test_gemini_inventory_maker_toxicity_shadow.py tests/test_gemini_liquidity_reward_dynamic_completion_q10.py tests/test_venue_flow_census.py
