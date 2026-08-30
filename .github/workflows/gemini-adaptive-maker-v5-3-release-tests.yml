@@ -11,6 +11,7 @@ on:
       - src/gemini_adaptive_maker_v5_3_deadman.py
       - src/gemini_adaptive_maker_v5_3_deadman_sidecar.py
       - src/gemini_adaptive_maker_v5_3_runtime.py
+      - src/gemini_adaptive_maker_v5_3_diagnostic.py
       - tests/test_gemini_adaptive_maker_v5_3.py
       - tests/test_gemini_adaptive_maker_executor_v5_3.py
       - .github/workflows/gemini-adaptive-maker-v5-3-release-tests.yml
@@ -39,7 +40,8 @@ jobs:
             src/gemini_adaptive_maker_v5_3_recovery.py \
             src/gemini_adaptive_maker_v5_3_deadman.py \
             src/gemini_adaptive_maker_v5_3_deadman_sidecar.py \
-            src/gemini_adaptive_maker_v5_3_runtime.py
+            src/gemini_adaptive_maker_v5_3_runtime.py \
+            src/gemini_adaptive_maker_v5_3_diagnostic.py
       - name: Frozen V5.2 suite plus V5.3 adaptive regressions
         run: |
           pytest -q \
