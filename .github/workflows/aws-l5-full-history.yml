@@ -53,8 +53,9 @@ jobs:
           docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
           echo L5_FOCUSED_TESTS_START
           docker run --rm \
+            -e PYTHONPATH=/app \
             -v "\$WORK/tests:/app/tests:ro" \
-            "\$IMAGE" pytest -q \
+            "\$IMAGE" python -m pytest -q \
             tests/test_l5_fetch_offset_cap.py \
             tests/test_l5_windows.py \
             tests/test_l5_pipeline.py
