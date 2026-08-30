@@ -1,0 +1,84 @@
+name: AWS Gemini mixed reward shadow
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-mixed-reward-shadow.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  FEATURE_BRANCH: feature/gemini-low-volume-reward-allocator
+
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Launch credential-free mixed reward shadow
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          PINNED_COMMIT=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' deploy/aws/gemini-mixed-reward-shadow.trigger | tr -d '[:space:]')
+          RUN_ID=$(awk -F= '$1=="RUN_ID"{print $2}' deploy/aws/gemini-mixed-reward-shadow.trigger | tr -d '[:space:]')
+          AVAILABLE_USD=$(awk -F= '$1=="AVAILABLE_USD"{print $2}' deploy/aws/gemini-mixed-reward-shadow.trigger | tr -d '[:space:]')
+          DURATION_S=$(awk -F= '$1=="DURATION_S"{print $2}' deploy/aws/gemini-mixed-reward-shadow.trigger | tr -d '[:space:]')
+          INTERVAL_S=$(awk -F= '$1=="INTERVAL_S"{print $2}' deploy/aws/gemini-mixed-reward-shadow.trigger | tr -d '[:space:]')
+          SHORT_SHA="${PINNED_COMMIT:0:12}"
+          REMOTE_SCRIPT=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          WORK=/opt/arb/gemini-mixed-reward-shadow
+          STATE_ROOT=/home/ssm-user/gemini-mixed-reward-shadow-state
+          STATE_DIR="\$STATE_ROOT/${RUN_ID}"
+          CONTAINER=arb-gemini-mixed-reward-shadow
+          git -C "\$REPO" fetch origin ${FEATURE_BRANCH}
+          test "\$(git -C "\$REPO" rev-parse origin/${FEATURE_BRANCH})" = "${PINNED_COMMIT}"
+          git -C "\$REPO" worktree remove --force "\$WORK" >/dev/null 2>&1 || true
+          rm -rf "\$WORK"
+          git -C "\$REPO" worktree prune
+          git -C "\$REPO" worktree add --detach "\$WORK" "${PINNED_COMMIT}"
+          IMAGE=arb-gemini-mixed-reward-shadow:${SHORT_SHA}
+          docker build -t "\$IMAGE" "\$WORK" >/dev/null
+          docker run --rm --network none "\$IMAGE" python -m pytest -q tests/test_gemini_low_volume_reward_allocator.py tests/test_gemini_multi_market_reward_shadow.py tests/test_gemini_mixed_reward_shadow.py
+          mkdir -p "\$STATE_DIR"
+          docker rm -f "\$CONTAINER" >/dev/null 2>&1 || true
+          docker run -d --name "\$CONTAINER" --restart=no --network host \
+            -e GEMINI_SHADOW_AVAILABLE_USD="${AVAILABLE_USD}" \
+            -e GEMINI_SHADOW_SAFETY_CASH="12" \
+            -e GEMINI_SHADOW_ONE_SIDE_CAP="15" \
+            -e GEMINI_SHADOW_DURATION_S="${DURATION_S}" \
+            -e GEMINI_SHADOW_INTERVAL_S="${INTERVAL_S}" \
+            -e GEMINI_SHADOW_STATE_DIR=/state \
+            -v "\$STATE_DIR:/state" \
+            "\$IMAGE" python -m src.gemini_mixed_reward_shadow >/dev/null
+          sleep 12
+          docker inspect "\$CONTAINER" --format 'status={{.State.Status}} exit={{.State.ExitCode}}'
+          test -s "\$STATE_DIR/current.json"
+          echo "GEMINI_MIXED_REWARD_SHADOW_LAUNCH_STATE="
+          cat "\$STATE_DIR/current.json"
+          echo "GEMINI_MIXED_REWARD_SHADOW_RUN_ID=${RUN_ID}"
+          echo "GEMINI_MIXED_REWARD_SHADOW_STATE_DIR=\$STATE_DIR"
+          EOF
+          )
+          ENCODED=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
+          REMOTE_CMD="echo '$ENCODED' | base64 -d | sudo -u ssm-user bash"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB Gemini mixed reward shadow" --parameters "$PARAMETERS" --timeout-seconds 540 --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
+          RESULT=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          OUT=$(jq -r '.Stdout // ""' <<<"$RESULT")
+          grep -q 'GEMINI_MIXED_REWARD_SHADOW_RUN_ID=' <<<"$OUT"
