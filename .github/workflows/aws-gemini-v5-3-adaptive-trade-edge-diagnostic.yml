@@ -5,6 +5,7 @@ on:
     branches: [aws-migration-foundation]
     paths:
       - .github/workflows/aws-gemini-v5-3-adaptive-trade-edge-diagnostic.yml
+      - deploy/aws/v53_adaptive_trade_edge_diagnostic.py
   workflow_dispatch:
 
 permissions:
@@ -82,3 +83,5 @@ jobs:
           grep -q 'V5_3_ADAPTIVE_TRADE_EDGE_DIAG_COMPLETE' <<<"$OUT"
           grep -q '"order_entry":false' <<<"$OUT"
           grep -q '"liquidity_rewards_modeled":false' <<<"$OUT"
+          grep -q '"maker_rebates_modeled":false' <<<"$OUT"
+          grep -q '"rebate_band_is_execution_gate":false' <<<"$OUT"
