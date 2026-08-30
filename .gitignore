@@ -8,3 +8,6 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# L5: normalized JSONL is derived from data/l5/raw by 'cli build'; keep the source of truth only
+data/l5/normalized/

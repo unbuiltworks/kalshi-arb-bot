@@ -408,6 +408,80 @@ def _count_values(rows: Sequence[Dict[str, str]], key: str) -> Dict[str, int]:
     return counts
 
 
+# --- Incentives and coverage eras --------------------------------------------
+
+
+def incentives_and_coverage(
+    trades: Sequence[Dict[str, str]], non_trade_path: Optional[Path] = None
+) -> Dict[str, Any]:
+    """Rebate/reward income from non-trade activity, plus observed-coverage eras.
+
+    Incentive rows come from the user's activity feed (MAKER_REBATE, TAKER_REBATE,
+    REWARD). They are reported separately from trading P&L and are only as complete
+    as the harvested activity coverage -- per-day figures use each era's own span.
+    """
+    import json as _json
+
+    path = Path(non_trade_path or (config.NORMALIZED_DIR / "non_trade_activity.jsonl"))
+    rows: List[Dict[str, Any]] = []
+    if path.exists():
+        with path.open("r", encoding="utf-8") as handle:
+            rows = [_json.loads(line) for line in handle if line.strip()]
+
+    by_type: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        kind = str(row.get("activity_type") or "")
+        bucket = by_type.setdefault(kind, {"n": 0, "total_usdc": 0.0})
+        bucket["n"] += 1
+        bucket["total_usdc"] += float(row.get("usdc_size") or 0.0)
+    for bucket in by_type.values():
+        bucket["total_usdc"] = round(bucket["total_usdc"], 4)
+
+    # Contiguous coverage eras: split observed fill timestamps at gaps > 1 day.
+    ts = sorted(t for t in (fnum(row, "timestamp") for row in trades) if t is not None)
+    eras: List[Dict[str, Any]] = []
+    if ts:
+        start = prev = ts[0]
+        count = 1
+        for value in ts[1:]:
+            if value - prev > 86_400:
+                eras.append({"start_ts": start, "end_ts": prev, "days": round((prev - start) / 86_400, 2), "fills": count})
+                start, count = value, 0
+            prev = value
+            count += 1
+        eras.append({"start_ts": start, "end_ts": prev, "days": round((prev - start) / 86_400, 2), "fills": count})
+
+    incentive_types = ("MAKER_REBATE", "TAKER_REBATE", "REWARD")
+    per_era: List[Dict[str, Any]] = []
+    for era in eras:
+        era_rows = [
+            row for row in rows
+            if str(row.get("activity_type")) in incentive_types
+            and row.get("timestamp") is not None
+            and era["start_ts"] <= float(row["timestamp"]) <= era["end_ts"]
+        ]
+        total = round(sum(float(row.get("usdc_size") or 0.0) for row in era_rows), 4)
+        days = max(era["days"], 1e-9)
+        per_era.append(
+            {
+                **era,
+                "incentive_rows": len(era_rows),
+                "incentive_usdc": total,
+                "incentive_usdc_per_day": round(total / days, 2) if era["days"] >= 0.5 else None,
+            }
+        )
+
+    return {
+        "note": (
+            "Incentive income is reported by Polymarket as separate activity rows and "
+            "is NOT included in any trading P&L figure in this study. Coverage is "
+            "limited to the harvested eras; incentives outside them are unobserved."
+        ),
+        "by_type": by_type,
+        "coverage_eras": per_era,
+    }
+
+
 # --- Driver -------------------------------------------------------------------
 
 
@@ -433,6 +507,7 @@ def analyze(output_dir: Optional[Path] = None) -> Dict[str, Any]:
     summary = read_csv(output_dir / config.SUMMARY_CSV)
     results = {
         "coverage": coverage(summary, trades),
+        "incentives": incentives_and_coverage(trades),
         "q1_size_vs_price": q1_size_vs_price(trades),
         "q2_window_length": q2_window_length(summary),
         "q3_asset": q3_asset(summary),

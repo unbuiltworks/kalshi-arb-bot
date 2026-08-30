@@ -252,6 +252,30 @@ def render(results: Dict[str, Any], summary: Sequence[Row], manifest: Dict[str, 
             )
         add("")
 
+    incentives = results.get("incentives", {})
+    if incentives.get("by_type"):
+        add("## 2b. Incentive income vs trading P&L (the headline)")
+        add("")
+        add(f"_{incentives.get('note', '')}_")
+        add("")
+        add("| Activity type | rows | total USDC |")
+        add("|---|---|---|")
+        for kind, bucket in sorted(incentives["by_type"].items()):
+            add(f"| {kind} | {bucket['n']} | {bucket['total_usdc']} |")
+        add("")
+        add("Observed coverage eras (gaps mean unharvested history, not inactivity):")
+        add("")
+        add("| Era start | Era end | days | fills | incentive USDC | ~USDC/day |")
+        add("|---|---|---|---|---|---|")
+        from .timeutil import iso_utc as _iso
+        for era in incentives.get("coverage_eras", []):
+            add(
+                f"| {_iso(int(era['start_ts']))} | {_iso(int(era['end_ts']))} | {era['days']} | "
+                f"{era['fills']} | {era['incentive_usdc']} | "
+                f"{era['incentive_usdc_per_day'] if era['incentive_usdc_per_day'] is not None else 'n/a'} |"
+            )
+        add("")
+
     add("## 3. Question-by-question results")
     add("")
 

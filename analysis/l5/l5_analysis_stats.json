@@ -1,236 +1,369 @@
 {
   "coverage": {
-    "first_trade_ts": null,
-    "last_trade_ts": null,
-    "n_trades": 0,
-    "n_windows": 0,
-    "windows_by_asset": {},
-    "windows_by_length": {},
-    "windows_by_window_source": {},
-    "windows_with_any_pnl": 0,
-    "windows_with_resolution": 0
+    "first_trade_ts": 1773914977.0,
+    "last_trade_ts": 1788124164.0,
+    "n_trades": 53926,
+    "n_windows": 1671,
+    "windows_by_asset": {
+      "BTC": 1151,
+      "ETH": 520
+    },
+    "windows_by_length": {
+      "15": 454,
+      "5": 1217
+    },
+    "windows_by_window_source": {
+      "both_agree": 1671
+    },
+    "windows_with_any_pnl": 1668,
+    "windows_with_resolution": 1668
+  },
+  "incentives": {
+    "by_type": {
+      "MAKER_REBATE": {
+        "n": 3,
+        "total_usdc": 2610.3916
+      },
+      "REDEEM": {
+        "n": 1540,
+        "total_usdc": 540510.6282
+      },
+      "REWARD": {
+        "n": 2,
+        "total_usdc": 4000.3765
+      },
+      "TAKER_REBATE": {
+        "n": 2,
+        "total_usdc": 384.3151
+      }
+    },
+    "coverage_eras": [
+      {
+        "days": 0.03,
+        "end_ts": 1773917919.0,
+        "fills": 5,
+        "incentive_rows": 0,
+        "incentive_usdc": 0,
+        "incentive_usdc_per_day": null,
+        "start_ts": 1773914977.0
+      },
+      {
+        "days": 3.26,
+        "end_ts": 1774722535.0,
+        "fills": 1281,
+        "incentive_rows": 0,
+        "incentive_usdc": 0,
+        "incentive_usdc_per_day": 0.0,
+        "start_ts": 1774440441.0
+      },
+      {
+        "days": 1.75,
+        "end_ts": 1775038215.0,
+        "fills": 730,
+        "incentive_rows": 0,
+        "incentive_usdc": 0,
+        "incentive_usdc_per_day": 0.0,
+        "start_ts": 1774886783.0
+      },
+      {
+        "days": 0.11,
+        "end_ts": 1775159017.0,
+        "fills": 150,
+        "incentive_rows": 0,
+        "incentive_usdc": 0,
+        "incentive_usdc_per_day": null,
+        "start_ts": 1775149213.0
+      },
+      {
+        "days": 0.04,
+        "end_ts": 1775510199.0,
+        "fills": 41,
+        "incentive_rows": 0,
+        "incentive_usdc": 0,
+        "incentive_usdc_per_day": null,
+        "start_ts": 1775506841.0
+      },
+      {
+        "days": 1.23,
+        "end_ts": 1775847231.0,
+        "fills": 405,
+        "incentive_rows": 0,
+        "incentive_usdc": 0,
+        "incentive_usdc_per_day": 0.0,
+        "start_ts": 1775740829.0
+      },
+      {
+        "days": 2.42,
+        "end_ts": 1776279520.0,
+        "fills": 882,
+        "incentive_rows": 0,
+        "incentive_usdc": 0,
+        "incentive_usdc_per_day": 0.0,
+        "start_ts": 1776070129.0
+      },
+      {
+        "days": 0.36,
+        "end_ts": 1776457598.0,
+        "fills": 118,
+        "incentive_rows": 0,
+        "incentive_usdc": 0,
+        "incentive_usdc_per_day": null,
+        "start_ts": 1776426470.0
+      },
+      {
+        "days": 0.81,
+        "end_ts": 1776759250.0,
+        "fills": 1657,
+        "incentive_rows": 1,
+        "incentive_usdc": 29.9379,
+        "incentive_usdc_per_day": 36.96,
+        "start_ts": 1776689624.0
+      },
+      {
+        "days": 2.56,
+        "end_ts": 1788124164.0,
+        "fills": 48657,
+        "incentive_rows": 6,
+        "incentive_usdc": 6965.1453,
+        "incentive_usdc_per_day": 2720.76,
+        "start_ts": 1787903127.0
+      }
+    ],
+    "note": "Incentive income is reported by Polymarket as separate activity rows and is NOT included in any trading P&L figure in this study. Coverage is limited to the harvested eras; incentives outside them are unobserved."
   },
   "q1_size_vs_price": {
-    "n_buy_fills": 0,
+    "n_buy_fills": 53924,
     "per_price_band": {
       "50_59": {
         "dollars": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 48.55464,
+          "mean": 12.131166036635003,
+          "median": 7.56,
+          "min": 0.01,
+          "n": 5159,
+          "p25": 3.36,
+          "p75": 23.30235,
+          "stdev": 10.28736882830483
         },
-        "n_fills": 0,
+        "n_fills": 5159,
         "shares": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 82.85714,
+          "mean": 22.087863271758117,
+          "median": 14.0,
+          "min": 0.02,
+          "n": 5159,
+          "p25": 6.0,
+          "p75": 42.5,
+          "stdev": 18.581264741796765
         }
       },
       "60_69": {
         "dollars": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 57.992789,
+          "mean": 14.81312743504473,
+          "median": 9.54738,
+          "min": 0.012,
+          "n": 5142,
+          "p25": 4.3265737500000006,
+          "p75": 29.12046175,
+          "stdev": 12.317233107074927
         },
-        "n_fills": 0,
+        "n_fills": 5142,
         "shares": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 83.692305,
+          "mean": 22.824454644690782,
+          "median": 15.0,
+          "min": 0.02,
+          "n": 5142,
+          "p25": 6.8725000000000005,
+          "p75": 45.0,
+          "stdev": 18.859307471159713
         }
       },
       "70_79": {
         "dollars": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 67.376066,
+          "mean": 17.539689025303687,
+          "median": 13.31,
+          "min": 0.014,
+          "n": 4940,
+          "p25": 4.9637762500000004,
+          "p75": 32.7632725,
+          "stdev": 14.022428953250376
         },
-        "n_fills": 0,
+        "n_fills": 4940,
         "shares": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 84.33,
+          "mean": 23.437021980769213,
+          "median": 17.9807685,
+          "min": 0.02,
+          "n": 4940,
+          "p25": 6.666665,
+          "p75": 44.0,
+          "stdev": 18.649680875052432
         }
       },
       "80_89": {
         "dollars": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 72.554398,
+          "mean": 21.459361671808672,
+          "median": 17.0,
+          "min": 0.0088,
+          "n": 4473,
+          "p25": 7.56,
+          "p75": 40.0,
+          "stdev": 16.074800618130052
         },
-        "n_fills": 0,
+        "n_fills": 4473,
         "shares": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 81.882351,
+          "mean": 25.315216750726478,
+          "median": 20.0,
+          "min": 0.01,
+          "n": 4473,
+          "p25": 9.0,
+          "p75": 50.0,
+          "stdev": 18.924780587279695
         }
       },
       "90_plus": {
         "dollars": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 78.50976,
+          "mean": 26.599515756177013,
+          "median": 22.99,
+          "min": 0.018,
+          "n": 3683,
+          "p25": 9.43948,
+          "p75": 46.0,
+          "stdev": 18.041611227641905
         },
-        "n_fills": 0,
+        "n_fills": 3683,
         "shares": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 81.758233,
+          "mean": 28.275179102633675,
+          "median": 24.7525,
+          "min": 0.02,
+          "n": 3683,
+          "p25": 10.0,
+          "p75": 50.0,
+          "stdev": 19.122860729058914
         }
       },
       "lt50": {
         "dollars": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 40.59944,
+          "mean": 4.092189539194824,
+          "median": 1.865833,
+          "min": 0.0004,
+          "n": 30527,
+          "p25": 0.56,
+          "p75": 5.0,
+          "stdev": 5.4380620393342936
         },
-        "n_fills": 0,
+        "n_fills": 30527,
         "shares": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 147.35,
+          "mean": 18.544953380745024,
+          "median": 10.0,
+          "min": 0.009777,
+          "n": 30527,
+          "p25": 4.98,
+          "p75": 30.0,
+          "stdev": 18.754601284607233
         }
       }
     },
     "question": "Does position size increase at 70c / 80c / 90c?",
     "spearman_price_vs_dollars": {
-      "n": 0,
-      "p_value": null,
-      "rho": null
+      "n": 53924,
+      "p_value": 0.0,
+      "rho": 0.6782405930717843
     },
     "spearman_price_vs_shares": {
-      "n": 0,
-      "p_value": null,
-      "rho": null
+      "n": 53924,
+      "p_value": 0.0,
+      "rho": 0.16446616701005867
     },
     "threshold_tests": {
       "ge_70c": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "dollars_rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 16.8,
+          "median2": 2.9,
+          "n1": 13096,
+          "n2": 40828,
+          "p_value": 0.0,
+          "rank_biserial": 0.6242058703709212,
+          "u": 100465458.0,
+          "u1": 434218030.0,
+          "u2": 100465458.0,
+          "z": 107.65695816573609
         },
         "shares_rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 20.0,
+          "median2": 10.273431500000001,
+          "n1": 13096,
+          "n2": 40828,
+          "p_value": 0.0,
+          "rank_biserial": 0.20518336073995247,
+          "u": 212487666.5,
+          "u1": 322195821.5,
+          "u2": 212487666.5,
+          "z": 35.49276828331887
         }
       },
       "ge_80c": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "dollars_rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 19.0498285,
+          "median2": 3.4408845,
+          "n1": 8156,
+          "n2": 45768,
+          "p_value": 0.0,
+          "rank_biserial": 0.621234085245937,
+          "u": 70693591.5,
+          "u1": 302590216.5,
+          "u2": 70693591.5,
+          "z": 89.52425628773453
         },
         "shares_rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 20.321537499999998,
+          "median2": 10.8989455,
+          "n1": 8156,
+          "n2": 45768,
+          "p_value": 0.0,
+          "rank_biserial": 0.22636561562295254,
+          "u": 144392594.5,
+          "u1": 228891213.5,
+          "u2": 144392594.5,
+          "z": 32.71744520897678
         }
       },
       "ge_90c": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "dollars_rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 22.99,
+          "median2": 3.952702,
+          "n1": 3683,
+          "n2": 50241,
+          "p_value": 0.0,
+          "rank_biserial": 0.635114717736589,
+          "u": 33758749.0,
+          "u1": 151278854.0,
+          "u2": 33758749.0,
+          "z": 64.43888893422807
         },
         "shares_rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 24.7525,
+          "median2": 11.5,
+          "n1": 3683,
+          "n2": 50241,
+          "p_value": 0.0,
+          "rank_biserial": 0.25982632297717356,
+          "u": 68479981.5,
+          "u1": 116557621.5,
+          "u2": 68479981.5,
+          "z": 26.440063438077917
         }
       }
     }
@@ -241,374 +374,392 @@
     "metrics": {
       "first_price": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 0.98,
+          "mean": 0.5571434881566965,
+          "median": 0.6,
+          "min": 0.01,
+          "n": 1217,
+          "p25": 0.41,
+          "p75": 0.73,
+          "stdev": 0.24044500351426712
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 0.98,
+          "mean": 0.5180351202068287,
+          "median": 0.51,
+          "min": 0.01,
+          "n": 454,
+          "p25": 0.46,
+          "p75": 0.57,
+          "stdev": 0.11920524235046989
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 0.6,
+          "median2": 0.51,
+          "n1": 1217,
+          "n2": 454,
+          "p_value": 1.850519737445211e-12,
+          "rank_biserial": 0.22373931709012185,
+          "u": 214449.0,
+          "u1": 338069.0,
+          "u2": 214449.0,
+          "z": 7.045307648367234
         }
       },
       "first_trade_seconds_from_start": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 277.0,
+          "mean": 88.76746096959737,
+          "median": 73.0,
+          "min": 4.0,
+          "n": 1217,
+          "p25": 21.0,
+          "p75": 141.0,
+          "stdev": 73.34731271455037
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 819.0,
+          "mean": 74.45154185022027,
+          "median": 18.5,
+          "min": 4.0,
+          "n": 454,
+          "p25": 7.0,
+          "p75": 59.0,
+          "stdev": 140.8929927106681
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 73.0,
+          "median2": 18.5,
+          "n1": 1217,
+          "n2": 454,
+          "p_value": 0.0,
+          "rank_biserial": 0.28928650288316393,
+          "u": 196341.0,
+          "u1": 356177.0,
+          "u2": 196341.0,
+          "z": 9.114343372836444
         }
       },
       "matched_pair_unit_cost": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 1.763293,
+          "mean": 1.0003234551122187,
+          "median": 0.9871245,
+          "min": 0.180605,
+          "n": 802,
+          "p25": 0.859823,
+          "p75": 1.13246175,
+          "stdev": 0.22187409252031084
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 1.510964,
+          "mean": 0.9713149718309843,
+          "median": 0.9659215,
+          "min": 0.589712,
+          "n": 426,
+          "p25": 0.9337274999999999,
+          "p75": 1.00027675,
+          "stdev": 0.0789679914610778
         },
-        "confidence": "insufficient-data",
+        "confidence": "moderate",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 0.9871245,
+          "median2": 0.9659215,
+          "n1": 802,
+          "n2": 426,
+          "p_value": 0.03735280875960978,
+          "rank_biserial": 0.07209089951178393,
+          "u": 158511.0,
+          "u1": 183141.0,
+          "u2": 158511.0,
+          "z": 2.0818868219440967
         }
       },
       "matched_qty": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 392.983969,
+          "mean": 57.53461418077239,
+          "median": 35.72,
+          "min": 0.0,
+          "n": 1217,
+          "p25": 0.0,
+          "p75": 100.0,
+          "stdev": 67.44561285827604
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 4842.320502,
+          "mean": 904.7176270792946,
+          "median": 644.0418935,
+          "min": 0.0,
+          "n": 454,
+          "p25": 81.574316,
+          "p75": 1613.53308025,
+          "stdev": 932.0072145374992
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 35.72,
+          "median2": 644.0418935,
+          "n1": 1217,
+          "n2": 454,
+          "p_value": 0.0,
+          "rank_biserial": -0.6603440973868724,
+          "u": 93833.0,
+          "u1": 93833.0,
+          "u2": 458685.0,
+          "z": -20.989324992639876
         }
       },
       "max_price_bought": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 0.98,
+          "mean": 0.7675524992381292,
+          "median": 0.85,
+          "min": 0.01,
+          "n": 1217,
+          "p25": 0.69,
+          "p75": 0.93,
+          "stdev": 0.2328380075276061
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 0.99,
+          "mean": 0.9062015345907511,
+          "median": 0.96,
+          "min": 0.01,
+          "n": 454,
+          "p25": 0.89,
+          "p75": 0.98,
+          "stdev": 0.1297264991523204
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 0.85,
+          "median2": 0.96,
+          "n1": 1217,
+          "n2": 454,
+          "p_value": 0.0,
+          "rank_biserial": -0.5472618086650571,
+          "u": 125073.0,
+          "u1": 125073.0,
+          "u2": 427445.0,
+          "z": -17.241555493503714
         }
       },
       "residual_qty_abs": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 535.414136,
+          "mean": 74.25689112489736,
+          "median": 50.45,
+          "min": 0.0,
+          "n": 1217,
+          "p25": 21.13118,
+          "p75": 105.0,
+          "stdev": 70.40269656292796
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 1168.43298,
+          "mean": 173.32931541629958,
+          "median": 70.185,
+          "min": 0.28,
+          "n": 454,
+          "p25": 22.262600749999997,
+          "p75": 254.08584675,
+          "stdev": 211.4485796191845
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 50.45,
+          "median2": 70.185,
+          "n1": 1217,
+          "n2": 454,
+          "p_value": 9.33803256941701e-10,
+          "rank_biserial": -0.1943791876463753,
+          "u": 222560.0,
+          "u1": 222560.0,
+          "u2": 329958.0,
+          "z": -6.1203324575190665
         }
       },
       "seconds_first_to_opposite_side": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 258.0,
+          "mean": 81.55610972568579,
+          "median": 66.0,
+          "min": 0.0,
+          "n": 802,
+          "p25": 30.0,
+          "p75": 126.0,
+          "stdev": 61.562935075490365
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 733.0,
+          "mean": 55.082159624413144,
+          "median": 28.0,
+          "min": 0.0,
+          "n": 426,
+          "p25": 12.0,
+          "p75": 62.75,
+          "stdev": 79.64778530820249
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 66.0,
+          "median2": 28.0,
+          "n1": 802,
+          "n2": 426,
+          "p_value": 0.0,
+          "rank_biserial": 0.3624536077646261,
+          "u": 108909.5,
+          "u1": 232742.5,
+          "u2": 108909.5,
+          "z": 10.467766684920159
         }
       },
       "total_dollars_bought": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 453.238725,
+          "mean": 96.69413603286776,
+          "median": 76.45185,
+          "min": 0.05346,
+          "n": 1217,
+          "p25": 27.98584,
+          "p75": 146.937347,
+          "stdev": 84.65144641273022
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 4848.554624,
+          "mean": 939.6455912731277,
+          "median": 712.3490959999999,
+          "min": 0.05,
+          "n": 454,
+          "p25": 96.537575,
+          "p75": 1658.56666325,
+          "stdev": 947.6089141737316
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 76.45185,
+          "median2": 712.3490959999999,
+          "n1": 1217,
+          "n2": 454,
+          "p_value": 0.0,
+          "rank_biserial": -0.5669697638809957,
+          "u": 119628.5,
+          "u1": 119628.5,
+          "u2": 432889.5,
+          "z": -17.851536921762545
         }
       },
       "total_trades": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 21.0,
+          "mean": 5.0575184880854565,
+          "median": 4.0,
+          "min": 1.0,
+          "n": 1217,
+          "p25": 2.0,
+          "p75": 7.0,
+          "stdev": 3.570480869528111
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 461.0,
+          "mean": 105.22246696035242,
+          "median": 81.0,
+          "min": 1.0,
+          "n": 454,
+          "p25": 19.0,
+          "p75": 172.75,
+          "stdev": 95.26645021235983
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 4.0,
+          "median2": 81.0,
+          "n1": 1217,
+          "n2": 454,
+          "p_value": 0.0,
+          "rank_biserial": -0.8423417879598493,
+          "u": 43554.5,
+          "u1": 43554.5,
+          "u2": 508963.5,
+          "z": -26.593116901653808
         }
       }
     },
-    "n_a": 0,
-    "n_b": 0,
+    "n_a": 1217,
+    "n_b": 454,
     "question": "Does behaviour differ between 5m and 15m windows?",
     "rates": {
       "any_buy_ge_80c": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": -0.24933486329857124,
+          "n1": 1217,
+          "n2": 454,
+          "p1": 0.6096959737058341,
+          "p2": 0.8590308370044053,
+          "p_value": 0.0,
+          "x1": 742,
+          "x2": 390,
+          "z": -9.698997614960774
         }
       },
       "any_buy_ge_90c": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": -0.3448539233110957,
+          "n1": 1217,
+          "n2": 454,
+          "p1": 0.3952341824157765,
+          "p2": 0.7400881057268722,
+          "p_value": 0.0,
+          "x1": 481,
+          "x2": 336,
+          "z": -12.544595096118208
         }
       },
       "balanced_at_end": {
-        "confidence": "insufficient-data",
+        "confidence": "no-evidence",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": -0.010853945029845182,
+          "n1": 1217,
+          "n2": 454,
+          "p1": 0.02218570254724733,
+          "p2": 0.03303964757709251,
+          "p_value": 0.20736242663488724,
+          "x1": 27,
+          "x2": 15,
+          "z": -1.2608513009627365
         }
       },
       "cheaper_side_first": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": -0.10908965861745679,
+          "n1": 1217,
+          "n2": 454,
+          "p1": 0.32703368940016436,
+          "p2": 0.43612334801762115,
+          "p_value": 3.4561629529417104e-05,
+          "x1": 398,
+          "x2": 198,
+          "z": -4.141118528262711
         }
       },
       "opposite_side_ever_bought": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": -0.27932845626748803,
+          "n1": 1217,
+          "n2": 454,
+          "p1": 0.6589975349219392,
+          "p2": 0.9383259911894273,
+          "p_value": 0.0,
+          "x1": 802,
+          "x2": 426,
+          "z": -11.507356695040224
         }
       }
     }
@@ -619,408 +770,432 @@
     "metrics": {
       "first_price": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 0.98,
+          "mean": 0.5327942608464812,
+          "median": 0.53,
+          "min": 0.01,
+          "n": 1151,
+          "p25": 0.44,
+          "p75": 0.66,
+          "stdev": 0.19492902394409317
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 0.979,
+          "mean": 0.5768949527428845,
+          "median": 0.63,
+          "min": 0.01,
+          "n": 520,
+          "p25": 0.48,
+          "p75": 0.76,
+          "stdev": 0.25158779515429314
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 0.53,
+          "median2": 0.63,
+          "n1": 1151,
+          "n2": 520,
+          "p_value": 5.670153235826092e-10,
+          "rank_biserial": -0.18915658624607368,
+          "u": 242653.0,
+          "u1": 242653.0,
+          "u2": 355867.0,
+          "z": -6.199336917880467
         }
       },
       "first_trade_seconds_from_start": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 819.0,
+          "mean": 68.09556907037359,
+          "median": 39.0,
+          "min": 4.0,
+          "n": 1151,
+          "p25": 9.0,
+          "p75": 93.5,
+          "stdev": 92.29618432643537
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 738.0,
+          "mean": 122.025,
+          "median": 118.0,
+          "min": 4.0,
+          "n": 520,
+          "p25": 43.0,
+          "p75": 187.0,
+          "stdev": 95.80773814187059
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 39.0,
+          "median2": 118.0,
+          "n1": 1151,
+          "n2": 520,
+          "p_value": 0.0,
+          "rank_biserial": -0.3922792889126512,
+          "u": 181866.5,
+          "u1": 181866.5,
+          "u2": 416653.5,
+          "z": -12.863487006358278
         }
       },
       "matched_pair_unit_cost": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 1.763293,
+          "mean": 0.9811183164682531,
+          "median": 0.9695865,
+          "min": 0.180605,
+          "n": 1008,
+          "p25": 0.917181,
+          "p75": 1.043754,
+          "stdev": 0.15845128492501837
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 1.662597,
+          "mean": 1.032146936363636,
+          "median": 0.992985,
+          "min": 0.419074,
+          "n": 220,
+          "p25": 0.8194487500000001,
+          "p75": 1.2460067499999998,
+          "stdev": 0.2750120235939974
         },
-        "confidence": "insufficient-data",
+        "confidence": "no-evidence",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 0.9695865,
+          "median2": 0.992985,
+          "n1": 1008,
+          "n2": 220,
+          "p_value": 0.16830942927444226,
+          "rank_biserial": -0.059212662337662314,
+          "u": 104314.5,
+          "u1": 104314.5,
+          "u2": 117445.5,
+          "z": -1.3776563010271055
         }
       },
       "matched_qty": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 4842.320502,
+          "mean": 411.4919790920932,
+          "median": 102.547776,
+          "min": 0.0,
+          "n": 1151,
+          "p25": 50.0,
+          "p75": 223.49,
+          "stdev": 709.7904841565347
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 116.23,
+          "mean": 13.71953887884615,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 520,
+          "p25": 0.0,
+          "p75": 17.895,
+          "stdev": 23.781690320855503
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 102.547776,
+          "median2": 0.0,
+          "n1": 1151,
+          "n2": 520,
+          "p_value": 0.0,
+          "rank_biserial": 0.7488404731671456,
+          "u": 75162.0,
+          "u1": 523358.0,
+          "u2": 75162.0,
+          "z": 24.77328500459254
         }
       },
       "max_price_bought": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 0.99,
+          "mean": 0.8600772414142522,
+          "median": 0.93,
+          "min": 0.01,
+          "n": 1151,
+          "p25": 0.8399999984,
+          "p75": 0.9625128194,
+          "stdev": 0.18175717974273836
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 0.979,
+          "mean": 0.6838038142484616,
+          "median": 0.75,
+          "min": 0.01,
+          "n": 520,
+          "p25": 0.6,
+          "p75": 0.86,
+          "stdev": 0.24354060915397507
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 0.93,
+          "median2": 0.75,
+          "n1": 1151,
+          "n2": 520,
+          "p_value": 0.0,
+          "rank_biserial": 0.5816230034084073,
+          "u": 125203.5,
+          "u1": 473316.5,
+          "u2": 125203.5,
+          "z": 19.0716819536721
         }
       },
       "residual_qty_abs": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 1168.43298,
+          "mean": 128.90839218853176,
+          "median": 84.588204,
+          "min": 0.0,
+          "n": 1151,
+          "p25": 32.1442,
+          "p75": 160.40360249999998,
+          "stdev": 150.426649807232
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 217.841895,
+          "mean": 39.78574286346154,
+          "median": 30.0,
+          "min": 0.0,
+          "n": 520,
+          "p25": 11.67733175,
+          "p75": 53.43233575,
+          "stdev": 35.63587624194903
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 84.588204,
+          "median2": 30.0,
+          "n1": 1151,
+          "n2": 520,
+          "p_value": 0.0,
+          "rank_biserial": 0.46962173360957027,
+          "u": 158721.0,
+          "u1": 439799.0,
+          "u2": 158721.0,
+          "z": 15.390033190833822
         }
       },
       "seconds_first_to_opposite_side": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 476.0,
+          "mean": 68.09821428571429,
+          "median": 48.0,
+          "min": 0.0,
+          "n": 1008,
+          "p25": 19.0,
+          "p75": 102.5,
+          "stdev": 63.38609232226336
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 733.0,
+          "mean": 91.95454545454545,
+          "median": 70.0,
+          "min": 0.0,
+          "n": 220,
+          "p25": 25.0,
+          "p75": 132.25,
+          "stdev": 90.10864942227069
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 48.0,
+          "median2": 70.0,
+          "n1": 1008,
+          "n2": 220,
+          "p_value": 0.00015372778782851704,
+          "rank_biserial": -0.16267135642135644,
+          "u": 92843.0,
+          "u1": 92843.0,
+          "u2": 128917.0,
+          "z": -3.7849689224304703
         }
       },
       "total_dollars_bought": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 4848.554624,
+          "mean": 456.3730438271071,
+          "median": 152.159189,
+          "min": 0.05,
+          "n": 1151,
+          "p25": 85.003787,
+          "p75": 301.8672585,
+          "stdev": 714.2597721126915
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 174.79026,
+          "mean": 36.52017027884612,
+          "median": 28.089329999999997,
+          "min": 0.05346,
+          "n": 520,
+          "p25": 8.7108375,
+          "p75": 53.042795,
+          "stdev": 34.27465197980674
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 152.159189,
+          "median2": 28.089329999999997,
+          "n1": 1151,
+          "n2": 520,
+          "p_value": 0.0,
+          "rank_biserial": 0.7842077123571476,
+          "u": 64578.0,
+          "u1": 533942.0,
+          "u2": 64578.0,
+          "z": 25.69880569698183
         }
       },
       "total_trades": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 461.0,
+          "mean": 45.524761077324065,
+          "median": 9.0,
+          "min": 1.0,
+          "n": 1151,
+          "p25": 5.0,
+          "p75": 30.0,
+          "stdev": 76.85293151212967
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 13.0,
+          "mean": 2.9365384615384613,
+          "median": 2.0,
+          "min": 1.0,
+          "n": 520,
+          "p25": 1.0,
+          "p75": 4.0,
+          "stdev": 2.0769891546229866
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 9.0,
+          "median2": 2.0,
+          "n1": 1151,
+          "n2": 520,
+          "p_value": 0.0,
+          "rank_biserial": 0.7463827441021185,
+          "u": 75897.5,
+          "u1": 522622.5,
+          "u2": 75897.5,
+          "z": 24.52497677486388
         }
       }
     },
-    "n_a": 0,
-    "n_b": 0,
+    "n_a": 1151,
+    "n_b": 520,
     "question": "Does behaviour differ between BTC and ETH?",
     "rates": {
       "any_buy_ge_80c": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": 0.425115284368108,
+          "n1": 1151,
+          "n2": 520,
+          "p1": 0.8097306689834927,
+          "p2": 0.38461538461538464,
+          "p_value": 0.0,
+          "x1": 932,
+          "x2": 200,
+          "z": 17.211419193085945
         }
       },
       "any_buy_ge_90c": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": 0.46971529773441156,
+          "n1": 1151,
+          "n2": 520,
+          "p1": 0.6350999131190269,
+          "p2": 0.16538461538461538,
+          "p_value": 0.0,
+          "x1": 731,
+          "x2": 86,
+          "z": 17.783707209133883
         }
       },
       "balanced_at_end": {
-        "confidence": "insufficient-data",
+        "confidence": "moderate",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": 0.01694680211187596,
+          "n1": 1151,
+          "n2": 520,
+          "p1": 0.030408340573414423,
+          "p2": 0.013461538461538462,
+          "p_value": 0.040467572399808915,
+          "x1": 35,
+          "x2": 7,
+          "z": 2.0489441917895745
         }
       },
       "cheaper_side_first": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": 0.11577892133930362,
+          "n1": 1151,
+          "n2": 520,
+          "p1": 0.39270199826238056,
+          "p2": 0.27692307692307694,
+          "p_value": 4.776933802741468e-06,
+          "x1": 452,
+          "x2": 144,
+          "z": 4.574353209634699
         }
       },
       "opposite_side_ever_bought": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": 0.45268328543741226,
+          "n1": 1151,
+          "n2": 520,
+          "p1": 0.8757602085143353,
+          "p2": 0.4230769230769231,
+          "p_value": 0.0,
+          "x1": 1008,
+          "x2": 220,
+          "z": 19.409796016077415
         }
       }
     }
   },
   "q4_cheaper_side": {
     "all_buys_below_50c": {
-      "ci95": null,
-      "n": 0,
+      "ci95": [
+        0.5619239125410987,
+        0.5702897976153559
+      ],
+      "n": 53924,
       "p0": 0.5,
-      "p_hat": null,
-      "p_value": null,
-      "successes": 0,
-      "z": null
+      "p_hat": 0.5661115644240041,
+      "p_value": 0.0,
+      "successes": 30527,
+      "z": 30.704249033094722
     },
-    "all_buys_confidence": "insufficient-data",
+    "all_buys_confidence": "strong",
     "first_buy_cheaper_side": {
-      "ci95": null,
-      "n": 0,
+      "ci95": [
+        0.34217804240236177,
+        0.38884723658969994
+      ],
+      "n": 1632,
       "p0": 0.5,
-      "p_hat": null,
-      "p_value": null,
-      "successes": 0,
-      "z": null
+      "p_hat": 0.36519607843137253,
+      "p_value": 0.0,
+      "successes": 596,
+      "z": -10.89162297274342
     },
-    "first_buy_confidence": "insufficient-data",
+    "first_buy_confidence": "strong",
     "first_price_distribution": {
-      "max": null,
-      "mean": null,
-      "median": null,
-      "min": null,
-      "n": 0,
-      "p25": null,
-      "p75": null,
-      "stdev": null
+      "max": 0.98,
+      "mean": 0.5465179950093368,
+      "median": 0.5500000788,
+      "min": 0.01,
+      "n": 1671,
+      "p25": 0.449999986,
+      "p75": 0.69,
+      "stdev": 0.21506770921874593
     },
     "note": "On a binary Up/Down market the two sides price to ~$1.00, so 'cheaper side' is equivalent to a fill below $0.50 at that moment.",
     "question": "Does he systematically buy the cheaper side (first / overall)?"
@@ -1028,169 +1203,178 @@
   "q5_opposite_latency": {
     "by_asset": {
       "BTC": {
-        "max": null,
-        "mean": null,
-        "median": null,
-        "min": null,
-        "n": 0,
-        "p25": null,
-        "p75": null,
-        "stdev": null
+        "max": 476.0,
+        "mean": 68.09821428571429,
+        "median": 48.0,
+        "min": 0.0,
+        "n": 1008,
+        "p25": 19.0,
+        "p75": 102.5,
+        "stdev": 63.38609232226336
       },
       "ETH": {
-        "max": null,
-        "mean": null,
-        "median": null,
-        "min": null,
-        "n": 0,
-        "p25": null,
-        "p75": null,
-        "stdev": null
+        "max": 733.0,
+        "mean": 91.95454545454545,
+        "median": 70.0,
+        "min": 0.0,
+        "n": 220,
+        "p25": 25.0,
+        "p75": 132.25,
+        "stdev": 90.10864942227069
       }
     },
     "by_window_minutes": {
       "15m": {
-        "max": null,
-        "mean": null,
-        "median": null,
-        "min": null,
-        "n": 0,
-        "p25": null,
-        "p75": null,
-        "stdev": null
+        "max": 733.0,
+        "mean": 55.082159624413144,
+        "median": 28.0,
+        "min": 0.0,
+        "n": 426,
+        "p25": 12.0,
+        "p75": 62.75,
+        "stdev": 79.64778530820249
       },
       "5m": {
-        "max": null,
-        "mean": null,
-        "median": null,
-        "min": null,
-        "n": 0,
-        "p25": null,
-        "p75": null,
-        "stdev": null
+        "max": 258.0,
+        "mean": 81.55610972568579,
+        "median": 66.0,
+        "min": 0.0,
+        "n": 802,
+        "p25": 30.0,
+        "p75": 126.0,
+        "stdev": 61.562935075490365
       }
     },
     "latency_as_fraction_of_window": {
-      "max": null,
-      "mean": null,
-      "median": null,
-      "min": null,
-      "n": 0,
-      "p25": null,
-      "p75": null,
-      "stdev": null
+      "max": 0.86,
+      "mean": 0.19877759681505572,
+      "median": 0.125,
+      "min": 0.0,
+      "n": 1228,
+      "p25": 0.04,
+      "p75": 0.30666666666666664,
+      "stdev": 0.20066134400171298
     },
-    "latency_median_ci95": null,
+    "latency_median_ci95": [
+      48.0,
+      57.0
+    ],
     "latency_seconds": {
-      "max": null,
-      "mean": null,
-      "median": null,
-      "min": null,
-      "n": 0,
-      "p25": null,
-      "p75": null,
-      "stdev": null
+      "max": 733.0,
+      "mean": 72.37214983713355,
+      "median": 52.0,
+      "min": 0.0,
+      "n": 1228,
+      "p25": 20.0,
+      "p75": 109.0,
+      "stdev": 69.50097433853172
     },
-    "n_windows": 0,
-    "n_windows_with_opposite_buy": 0,
+    "n_windows": 1671,
+    "n_windows_with_opposite_buy": 1228,
     "question": "After buying the favoured side, how quickly is the opposite side bought?",
-    "share_with_opposite_buy": null
+    "share_with_opposite_buy": 0.7348892878515859
   },
   "q6_pair_cost_threshold": {
-    "confidence": "insufficient-data",
+    "confidence": "no-evidence",
     "cumulative_share_at_or_below": {
-      "<= 0.90": null,
-      "<= 0.91": null,
-      "<= 0.92": null,
-      "<= 0.93": null,
-      "<= 0.94": null,
-      "<= 0.95": null,
-      "<= 0.96": null,
-      "<= 0.97": null,
-      "<= 0.98": null,
-      "<= 0.99": null,
-      "<= 1.00": null,
-      "<= 1.01": null,
-      "<= 1.02": null,
-      "<= 1.03": null,
-      "<= 1.04": null,
-      "<= 1.05": null
+      "<= 0.90": 0.24185667752442996,
+      "<= 0.91": 0.26058631921824105,
+      "<= 0.92": 0.28501628664495116,
+      "<= 0.93": 0.31840390879478825,
+      "<= 0.94": 0.3542345276872964,
+      "<= 0.95": 0.3982084690553746,
+      "<= 0.96": 0.44788273615635177,
+      "<= 0.97": 0.495928338762215,
+      "<= 0.98": 0.5350162866449512,
+      "<= 0.99": 0.5675895765472313,
+      "<= 1.00": 0.6091205211726385,
+      "<= 1.01": 0.6392508143322475,
+      "<= 1.02": 0.6661237785016286,
+      "<= 1.03": 0.6832247557003257,
+      "<= 1.04": 0.7068403908794788,
+      "<= 1.05": 0.7280130293159609
     },
     "interpretation": "A matched Up+Down pair pays exactly $1.00 at resolution. A unit cost clustered just below $1.00 is consistent with a pair-cost target; a wide, unimodal-at-nothing spread is not.",
-    "iqr_width": null,
-    "n_windows_with_pairs": 0,
+    "iqr_width": 0.15820275000000006,
+    "n_windows_with_pairs": 1228,
     "question": "Does he target a combined Up+Down acquisition-cost threshold?",
-    "share_below_1_00": null,
-    "share_within_1c_of_median": null,
-    "share_within_2c_of_median": null,
+    "share_below_1_00": 0.6091205211726385,
+    "share_within_1c_of_median": 0.08794788273615635,
+    "share_within_2c_of_median": 0.17182410423452768,
     "unit_cost": {
-      "max": null,
-      "mean": null,
-      "median": null,
-      "min": null,
-      "n": 0,
-      "p25": null,
-      "p75": null,
-      "stdev": null
+      "max": 1.763293,
+      "mean": 0.9902602516286648,
+      "median": 0.9714160000000001,
+      "min": 0.180605,
+      "n": 1228,
+      "p25": 0.90501125,
+      "p75": 1.063214,
+      "stdev": 0.18570799561571985
     },
-    "unit_cost_median_ci95": null
+    "unit_cost_median_ci95": [
+      0.965204,
+      0.9787785
+    ]
   },
   "q7_balanced_finish": {
     "balanced_test_vs_50pct": {
-      "ci95": null,
-      "n": 0,
+      "ci95": [
+        0.018648409008197614,
+        0.033799217219215166
+      ],
+      "n": 1671,
       "p0": 0.5,
-      "p_hat": null,
-      "p_value": null,
-      "successes": 0,
-      "z": null
+      "p_hat": 0.025134649910233394,
+      "p_value": 0.0,
+      "successes": 42,
+      "z": -38.82296512613274
     },
-    "balanced_windows": 0,
+    "balanced_windows": 42,
     "by_group": {
       "asset=BTC": {
-        "balanced": 0,
-        "n": 0,
-        "share": null
+        "balanced": 35,
+        "n": 1151,
+        "share": 0.030408340573414423
       },
       "asset=ETH": {
-        "balanced": 0,
-        "n": 0,
-        "share": null
+        "balanced": 7,
+        "n": 520,
+        "share": 0.013461538461538462
       },
       "window_minutes=15": {
-        "balanced": 0,
-        "n": 0,
-        "share": null
+        "balanced": 15,
+        "n": 454,
+        "share": 0.03303964757709251
       },
       "window_minutes=5": {
-        "balanced": 0,
-        "n": 0,
-        "share": null
+        "balanced": 27,
+        "n": 1217,
+        "share": 0.02218570254724733
       }
     },
-    "confidence": "insufficient-data",
+    "confidence": "strong",
     "definition": "balanced = residual <= 1.0 share or <= 1% of the larger leg",
-    "n_windows": 0,
+    "n_windows": 1671,
     "question": "How often does he finish balanced vs directional?",
     "residual_qty_abs": {
-      "max": null,
-      "mean": null,
-      "median": null,
-      "min": null,
-      "n": 0,
-      "p25": null,
-      "p75": null,
-      "stdev": null
+      "max": 1168.43298,
+      "mean": 101.17423440933582,
+      "median": 55.0,
+      "min": 0.0,
+      "n": 1671,
+      "p25": 21.613302,
+      "p75": 126.81605200000001,
+      "stdev": 132.96810737348872
     },
     "residual_share_of_larger_leg": {
-      "max": null,
-      "mean": null,
-      "median": null,
-      "min": null,
-      "n": 0,
-      "p25": null,
-      "p75": null,
-      "stdev": null
+      "max": 1.0,
+      "mean": 0.5449494400153375,
+      "median": 0.5256385993959811,
+      "min": 0.0,
+      "n": 1671,
+      "p25": 0.19419161632852663,
+      "p75": 1.0,
+      "stdev": 0.3576313825976906
     }
   },
   "q8_profit_vs_loss": {
@@ -1200,392 +1384,413 @@
     "metrics": {
       "first_price": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 0.98,
+          "mean": 0.6022947502927424,
+          "median": 0.6,
+          "min": 0.03,
+          "n": 937,
+          "p25": 0.49,
+          "p75": 0.76,
+          "stdev": 0.197753771462299
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 0.95,
+          "mean": 0.4755094494101514,
+          "median": 0.51,
+          "min": 0.01,
+          "n": 729,
+          "p25": 0.36,
+          "p75": 0.62,
+          "stdev": 0.2155577408076549
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 0.6,
+          "median2": 0.51,
+          "n1": 937,
+          "n2": 729,
+          "p_value": 0.0,
+          "rank_biserial": 0.3222056793344197,
+          "u": 231491.5,
+          "u1": 451581.5,
+          "u2": 231491.5,
+          "z": 11.29800408167832
         }
       },
       "first_trade_seconds_from_start": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 741.0,
+          "mean": 87.26254002134472,
+          "median": 60.0,
+          "min": 4.0,
+          "n": 937,
+          "p25": 12.0,
+          "p75": 136.0,
+          "stdev": 98.58088903462803
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 819.0,
+          "mean": 81.92318244170096,
+          "median": 54.0,
+          "min": 4.0,
+          "n": 729,
+          "p25": 11.0,
+          "p75": 118.0,
+          "stdev": 94.17094651685369
         },
-        "confidence": "insufficient-data",
+        "confidence": "no-evidence",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 60.0,
+          "median2": 54.0,
+          "n1": 937,
+          "n2": 729,
+          "p_value": 0.37349736788854493,
+          "rank_biserial": 0.02536624928814346,
+          "u": 332873.0,
+          "u1": 350200.0,
+          "u2": 332873.0,
+          "z": 0.8899413712426819
         }
       },
       "matched_pair_unit_cost": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 1.496983,
+          "mean": 0.9212840123839003,
+          "median": 0.9364055,
+          "min": 0.180605,
+          "n": 646,
+          "p25": 0.845577,
+          "p75": 0.98451725,
+          "stdev": 0.15992655372323916
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 1.763293,
+          "mean": 1.0684943778162892,
+          "median": 1.026909,
+          "min": 0.402219,
+          "n": 577,
+          "p25": 0.963039,
+          "p75": 1.159008,
+          "stdev": 0.1818016978385094
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 0.9364055,
+          "median2": 1.026909,
+          "n1": 646,
+          "n2": 577,
+          "p_value": 0.0,
+          "rank_biserial": -0.5033401119272849,
+          "u": 92563.0,
+          "u1": 92563.0,
+          "u2": 280179.0,
+          "z": -15.213727303077613
         }
       },
       "matched_qty": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 3510.462252,
+          "mean": 261.09316255389535,
+          "median": 50.0,
+          "min": 0.0,
+          "n": 937,
+          "p25": 0.0,
+          "p75": 141.0389,
+          "stdev": 581.4958119814462
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 4842.320502,
+          "mean": 319.0794264814815,
+          "median": 75.0,
+          "min": 0.0,
+          "n": 729,
+          "p25": 10.0,
+          "p75": 160.0,
+          "stdev": 655.913959771851
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 50.0,
+          "median2": 75.0,
+          "n1": 937,
+          "n2": 729,
+          "p_value": 3.5730686230195374e-05,
+          "rank_biserial": -0.11677229227330022,
+          "u": 301654.5,
+          "u1": 301654.5,
+          "u2": 381418.5,
+          "z": -4.1334829189212074
         }
       },
       "max_price_bought": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 0.99,
+          "mean": 0.841287477397228,
+          "median": 0.89,
+          "min": 0.13,
+          "n": 937,
+          "p25": 0.77,
+          "p75": 0.95,
+          "stdev": 0.14803647435856226
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 0.99,
+          "mean": 0.7588621700353927,
+          "median": 0.89,
+          "min": 0.01,
+          "n": 729,
+          "p25": 0.68,
+          "p75": 0.95,
+          "stdev": 0.2784748840536821
         },
-        "confidence": "insufficient-data",
+        "confidence": "no-evidence",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 0.89,
+          "median2": 0.89,
+          "n1": 937,
+          "n2": 729,
+          "p_value": 0.0029945683398069356,
+          "rank_biserial": 0.08460881926236286,
+          "u": 312639.5,
+          "u1": 370433.5,
+          "u2": 312639.5,
+          "z": 2.968294942954535
         }
       },
       "residual_qty_abs": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 762.047972,
+          "mean": 80.38177353148339,
+          "median": 50.0,
+          "min": 0.0,
+          "n": 937,
+          "p25": 18.62,
+          "p75": 111.5025,
+          "stdev": 88.33207520232338
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 1154.031265,
+          "mean": 125.97688770507555,
+          "median": 62.3,
+          "min": 0.0,
+          "n": 729,
+          "p25": 27.700475,
+          "p75": 146.442713,
+          "stdev": 166.28192070666012
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 50.0,
+          "median2": 62.3,
+          "n1": 937,
+          "n2": 729,
+          "p_value": 1.7455685696887713e-06,
+          "rank_biserial": -0.13635438672001376,
+          "u": 294966.5,
+          "u1": 294966.5,
+          "u2": 388106.5,
+          "z": -4.780848520702401
         }
       },
       "seconds_first_to_opposite_side": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 733.0,
+          "mean": 73.44272445820434,
+          "median": 52.0,
+          "min": 0.0,
+          "n": 646,
+          "p25": 21.0,
+          "p75": 107.75,
+          "stdev": 72.69075819407432
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 571.0,
+          "mean": 71.07798960138648,
+          "median": 51.0,
+          "min": 0.0,
+          "n": 577,
+          "p25": 19.0,
+          "p75": 110.0,
+          "stdev": 65.6115659591962
         },
-        "confidence": "insufficient-data",
+        "confidence": "no-evidence",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 52.0,
+          "median2": 51.0,
+          "n1": 646,
+          "n2": 577,
+          "p_value": 0.7892483505070769,
+          "rank_biserial": 0.008842577439623023,
+          "u": 184723.0,
+          "u1": 188019.0,
+          "u2": 184723.0,
+          "z": 0.2672867983622877
         }
       },
       "total_dollars_bought": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 3474.645622,
+          "mean": 296.5063565005336,
+          "median": 93.291229,
+          "min": 0.81969,
+          "n": 937,
+          "p25": 35.65954,
+          "p75": 188.319998,
+          "stdev": 572.5955548566478
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 4848.554624,
+          "mean": 360.34244786694063,
+          "median": 108.9621,
+          "min": 0.05,
+          "n": 729,
+          "p25": 34.847529,
+          "p75": 220.60361,
+          "stdev": 679.2694731038475
         },
-        "confidence": "insufficient-data",
+        "confidence": "no-evidence",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 93.291229,
+          "median2": 108.9621,
+          "n1": 937,
+          "n2": 729,
+          "p_value": 0.3125480561703051,
+          "rank_biserial": -0.02880365641739613,
+          "u": 331699.0,
+          "u1": 331699.0,
+          "u2": 351374.0,
+          "z": -1.0098898706917785
         }
       },
       "total_trades": {
         "a": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 369.0,
+          "mean": 28.804695837780148,
+          "median": 5.0,
+          "min": 1.0,
+          "n": 937,
+          "p25": 2.0,
+          "p75": 11.0,
+          "stdev": 61.835797685171364
         },
         "b": {
-          "max": null,
-          "mean": null,
-          "median": null,
-          "min": null,
-          "n": 0,
-          "p25": null,
-          "p75": null,
-          "stdev": null
+          "max": 461.0,
+          "mean": 36.319615912208505,
+          "median": 7.0,
+          "min": 1.0,
+          "n": 729,
+          "p25": 3.0,
+          "p75": 17.0,
+          "stdev": 71.82561040285267
         },
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "rank_sum": {
-          "median1": null,
-          "median2": null,
-          "n1": 0,
-          "n2": 0,
-          "p_value": null,
-          "rank_biserial": null,
-          "u": null,
-          "z": null
+          "median1": 5.0,
+          "median2": 7.0,
+          "n1": 937,
+          "n2": 729,
+          "p_value": 4.725684114248452e-06,
+          "rank_biserial": -0.130180815227655,
+          "u": 297075.0,
+          "u1": 297075.0,
+          "u2": 385998.0,
+          "z": -4.576611267192592
         }
       }
     },
-    "n_a": 0,
-    "n_b": 0,
-    "n_flat": 0,
-    "n_losing": 0,
-    "n_profitable": 0,
-    "n_windows_with_pnl": 0,
+    "n_a": 937,
+    "n_b": 729,
+    "n_flat": 2,
+    "n_losing": 729,
+    "n_profitable": 937,
+    "n_windows_with_pnl": 1668,
     "pnl_distribution": {
-      "max": null,
-      "mean": null,
-      "median": null,
-      "min": null,
-      "n": 0,
-      "p25": null,
-      "p75": null,
-      "stdev": null
+      "max": 579.002699,
+      "mean": 0.1046030383693059,
+      "median": 1.870439,
+      "min": -312.852,
+      "n": 1668,
+      "p25": -9.0641905,
+      "p75": 16.7877975,
+      "stdev": 53.19484266292445
     },
-    "pnl_sources": {},
+    "pnl_sources": {
+      "derived_resolution": 1517,
+      "polymarket_positions": 151
+    },
     "question": "How do profitable and losing windows differ?",
     "rates": {
       "any_buy_ge_80c": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": 0.07810146206920787,
+          "n1": 937,
+          "n2": 729,
+          "p1": 0.7118463180362861,
+          "p2": 0.6337448559670782,
+          "p_value": 0.0007150746133857133,
+          "x1": 667,
+          "x2": 462,
+          "z": 3.3837331671578657
         }
       },
       "any_buy_ge_90c": {
-        "confidence": "insufficient-data",
+        "confidence": "no-evidence",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": 0.012648721293331777,
+          "n1": 937,
+          "n2": 729,
+          "p1": 0.49413020277481323,
+          "p2": 0.48148148148148145,
+          "p_value": 0.6083904414594774,
+          "x1": 463,
+          "x2": 351,
+          "z": 0.5123723457914803
         }
       },
       "balanced_at_end": {
-        "confidence": "insufficient-data",
+        "confidence": "no-evidence",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": 0.005800258537520881,
+          "n1": 937,
+          "n2": 729,
+          "p1": 0.02774813233724653,
+          "p2": 0.02194787379972565,
+          "p_value": 0.4537335672090892,
+          "x1": 26,
+          "x2": 16,
+          "z": 0.7492051473273992
         }
       },
       "cheaper_side_first": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": -0.195314410026454,
+          "n1": 937,
+          "n2": 729,
+          "p1": 0.2710779082177161,
+          "p2": 0.4663923182441701,
+          "p_value": 0.0,
+          "x1": 254,
+          "x2": 340,
+          "z": -8.256856352496122
         }
       },
       "opposite_side_ever_bought": {
-        "confidence": "insufficient-data",
+        "confidence": "strong",
         "test": {
-          "diff": null,
-          "n1": 0,
-          "n2": 0,
-          "p1": null,
-          "p2": null,
-          "p_value": null,
-          "x1": 0,
-          "x2": 0,
-          "z": null
+          "diff": -0.10206083390794252,
+          "n1": 937,
+          "n2": 729,
+          "p1": 0.6894343649946638,
+          "p2": 0.7914951989026063,
+          "p_value": 2.9037401465537016e-06,
+          "x1": 646,
+          "x2": 577,
+          "z": -4.6775138165916355
         }
       }
     },
-    "total_pnl": null
+    "total_pnl": 174.47786800000225
   }
 }
