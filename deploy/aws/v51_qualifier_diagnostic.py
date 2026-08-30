@@ -40,6 +40,11 @@ MAX_RESCUE_LOSS = D("0.30")
 MIN_PAIR_EDGE = D("0.50")
 MIN_PRICE = D("0.20")
 MAX_PRICE = D("0.80")
+# The frozen V5.1 qualifier still enforces the probe's one-sided premium cap
+# (V5.1's install() replaces only the executor entry gate, not probe._candidate),
+# so the diagnostic must apply it too or it can report QUALIFIED where the live
+# qualifier would return NO_CANDIDATE. Read it from the probe to stay in lockstep.
+MAX_ONE_SIDED_PREMIUM = D(str(getattr(probe, "MAX_ONE_SIDED_PREMIUM", "6.50")))
 RELEASE_COMMIT = os.getenv("V51_DIAG_RELEASE_COMMIT", "unknown")
 
 
@@ -236,6 +241,16 @@ async def evaluate_once() -> tuple[tuple[Any, dict[str, Any], dict[str, D]] | No
         return None, {
             "classification": "ECONOMIC_GATE",
             "reason": "PAIR_EDGE_GATE",
+            **common,
+            **metrics,
+            "depth": depth_meta,
+            **reward_meta,
+        }
+    if model["max_one_sided_premium"] > MAX_ONE_SIDED_PREMIUM:
+        return None, {
+            "classification": "ECONOMIC_GATE",
+            "reason": "ONE_SIDED_PREMIUM_GATE",
+            "max_one_sided_premium_cap": str(MAX_ONE_SIDED_PREMIUM),
             **common,
             **metrics,
             "depth": depth_meta,
