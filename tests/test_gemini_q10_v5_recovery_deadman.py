@@ -157,11 +157,38 @@ async def test_deadman_stale_armed_invokes_recovery(monkeypatch):
     monkeypatch.setattr(d.v5.v1, '_read_state', lambda: state)
     monkeypatch.setattr(d, 'watchdog_armed', lambda: True)
     monkeypatch.setattr(d.recovery, 'recovery_armed', lambda: True)
+    async def audit(): return audit_obj(), state, None, None
+    monkeypatch.setattr(d.recovery, 'audit', audit)
     async def recover(): return {'status':'RECOVERED_FLAT'}
     monkeypatch.setattr(d.recovery, 'recover', recover)
     result = await d.check_once()
     assert result['status'] == 'DEADMAN_INTERVENTION'
     assert result['intervened'] is True
+
+
+@pytest.mark.asyncio
+async def test_deadman_stale_matched_pair_does_not_intervene(monkeypatch):
+    state = {
+        'open':True, 'status':'MATCHED_NOT_SETTLED',
+        'heartbeat_at_utc':(datetime.now(timezone.utc)-timedelta(seconds=10)).isoformat(),
+    }
+    monkeypatch.setattr(d.v5.v1, '_read_state', lambda: state)
+    monkeypatch.setattr(d, 'watchdog_armed', lambda: True)
+    monkeypatch.setattr(d.recovery, 'recovery_armed', lambda: True)
+    matched = audit_obj(
+        status='OPEN_STATE_FLAT_FILLS', yes_fill=D('10'), no_fill=D('10'),
+        residual_outcome=None, residual_quantity=D('0'), exact_residual=True,
+        active_known_orders=0, account_positions=2,
+    )
+    async def audit(): return matched, state, None, None
+    monkeypatch.setattr(d.recovery, 'audit', audit)
+    async def never_recover():
+        raise AssertionError('matched pair must not invoke recovery')
+    monkeypatch.setattr(d.recovery, 'recover', never_recover)
+    result = await d.check_once()
+    assert result['status'] == 'STALE_HEARTBEAT_NO_DIRECTIONAL_RESIDUAL'
+    assert result['intervened'] is False
+    assert result['audit']['residual_quantity'] == '0'
 
 
 @pytest.mark.asyncio
