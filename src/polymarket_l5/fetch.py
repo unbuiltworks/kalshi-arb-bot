@@ -101,6 +101,10 @@ def fetch_activity_windowed(
     limit: int = config.PAGE_LIMIT,
     max_total_pages: int = 100,
     window_page_cap: int = 9,
+    endpoint: str = "activity",
+    tag: str = "activity",
+    extra_params: Optional[Dict[str, Any]] = None,
+    stop_before_ts: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Walk /activity newest-first past its ~5000 offset cap.
 
@@ -111,8 +115,8 @@ def fetch_activity_windowed(
     ``window_page_cap`` stays under the venue's offset cap (9 * 500 = 4500).
     """
     report: Dict[str, Any] = {
-        "url": f"{config.DATA_API}/activity",
-        "tag": "activity",
+        "url": f"{config.DATA_API}/{endpoint}",
+        "tag": tag,
         "mode": "windowed_desc",
         "windows": 0,
         "pages": 0,
@@ -136,10 +140,11 @@ def fetch_activity_windowed(
                 "limit": limit,
                 "offset": offset,
             }
+            params.update(extra_params or {})
             if end is not None:
                 params["end"] = int(end)
             status, payload, error = get_json(
-                f"{config.DATA_API}/activity", params, cache=cache, tag="activity", opener=opener
+                f"{config.DATA_API}/{endpoint}", params, cache=cache, tag=tag, opener=opener
             )
             report["pages"] += 1
             if status != 200:
@@ -164,6 +169,9 @@ def fetch_activity_windowed(
             if report["pages"] >= max_total_pages:
                 break
         report["windows"] += 1
+        if stop_before_ts is not None and report["oldest_ts"] is not None and report["oldest_ts"] <= stop_before_ts:
+            report["stopped_because"] = "reached_stop_ts"
+            return report
         if window_rows == 0:
             report["stopped_because"] = "history_exhausted"
             return report
