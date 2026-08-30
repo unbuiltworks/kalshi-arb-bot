@@ -51,16 +51,26 @@ jobs:
           git worktree prune
           git worktree add --detach "\$WORK" "${PIN}" >/dev/null
           docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
+          echo L5_FOCUSED_TESTS_START
+          docker run --rm "\$IMAGE" pytest -q \
+            tests/test_l5_fetch_offset_cap.py \
+            tests/test_l5_windows.py \
+            tests/test_l5_pipeline.py
+          echo L5_FOCUSED_TESTS_PASS
           rm -rf "\$OUT/cache" "\$OUT/data" "\$OUT/L5_STRATEGY_FINDINGS.md"
           echo L5_FULL_HISTORY_START run_id=${RUN_ID} pin=${PIN}
-          docker run --rm --network host \
+          if ! docker run --rm --network host \
             -v "\$OUT:/out" \
             "\$IMAGE" \
             python -m src.l5 all \
               --cache-dir /out/cache \
               --output-dir /out/data \
               --findings /out/L5_STRATEGY_FINDINGS.md \
-            > "\$ROOT/console.log" 2>&1
+            > "\$ROOT/console.log" 2>&1; then
+            echo L5_FULL_HISTORY_FAILED
+            tail -n 260 "\$ROOT/console.log" || true
+            exit 1
+          fi
           echo L5_FULL_HISTORY_DONE
           python3 - <<'PY'
           import csv, json
