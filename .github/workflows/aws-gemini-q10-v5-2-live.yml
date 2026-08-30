@@ -1,0 +1,268 @@
+name: AWS Gemini q10 V5.2 one-canary live
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-q10-v5-2-live.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  RELEASE_BRANCH: release/gemini-q10-production-v5-2
+  REQUIRED_RELEASE_COMMIT: 8a06f809c583ce16b507988f86d4617fae86ddd1
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+
+      - name: Validate fresh V5.2 live authorization
+        id: gate
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          F=deploy/aws/gemini-q10-v5-2-live.trigger
+          test -f "$F"
+          PIN=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$F" | tr -d '[:space:]')
+          APPROVAL=$(awk -F= '$1=="APPROVAL_ID"{print $2}' "$F" | tr -d '[:space:]')
+          CLASS=$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$F" | tr -d '\r')
+          AUTH=$(awk -F= '$1=="LIVE_AUTHORIZATION"{print $2}' "$F" | tr -d '\r')
+          test "$PIN" = "$REQUIRED_RELEASE_COMMIT"
+          [[ "$APPROVAL" =~ ^[A-Za-z0-9_-]+$ ]]
+          test "$CLASS" = FRESH_USER_APPROVED_ONE_Q10_BTC5_V5_2_CAMPAIGN
+          test "$AUTH" = EXPLICIT_USER_APPROVAL_Q10_PRODUCTION_V5_2
+          echo "pin=$PIN" >> "$GITHUB_OUTPUT"
+          echo "approval=$APPROVAL" >> "$GITHUB_OUTPUT"
+          echo 'Fresh authorization accepted for exactly one q10 V5.2 campaign; continuous mode disabled.'
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run exactly one bounded V5.2 campaign with independent dead-man
+        shell: bash
+        env:
+          PIN: ${{ steps.gate.outputs.pin }}
+          APPROVAL: ${{ steps.gate.outputs.approval }}
+        run: |
+          set -Eeuo pipefail
+          SHORT=${PIN:0:12}
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          WORK=/opt/arb/gemini-q10-v5-2-live
+          STATE=/home/ssm-user/gemini-q10-v5-2-live-state/${APPROVAL}
+          OUT=/home/ssm-user/gemini-q10-v5-2-live-output/${APPROVAL}
+          IMAGE=arb-gemini-q10-v5-2-live:${SHORT}
+          SIDECAR=v52q-live-watch-${APPROVAL}
+          EXECUTOR=v52q-live-exec-${APPROVAL}
+          cd "\$REPO"
+          git config --global --add safe.directory "\$REPO" || true
+          git fetch origin ${RELEASE_BRANCH} >/dev/null
+          ACTUAL=\$(git rev-parse origin/${RELEASE_BRANCH})
+          test "\$ACTUAL" = "${PIN}"
+          if [ -e "\$STATE" ]; then echo 'STOP: approval state path already exists'; exit 41; fi
+          mkdir -p "\$STATE" "\$OUT"
+          chmod 700 "\$STATE" "\$OUT"
+          git worktree remove --force "\$WORK" >/dev/null 2>&1 || true
+          rm -rf "\$WORK"
+          docker rm -f "\$SIDECAR" "\$EXECUTOR" >/dev/null 2>&1 || true
+          git worktree prune
+          git worktree add --detach "\$WORK" "${PIN}" >/dev/null
+          docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
+
+          echo '=== V5.2 EXACT RELEASE SAFETY TESTS ==='
+          docker run --rm --network none "\$IMAGE" python -m pytest -q \
+            tests/test_btc_spot_toxicity_guard.py \
+            tests/test_gemini_prediction_book_cache.py \
+            tests/test_gemini_q10_rescue_policy.py \
+            tests/test_gemini_liquidity_reward_dynamic_completion_q10.py \
+            tests/test_gemini_q10_production_executor.py \
+            tests/test_gemini_q10_production_executor_v2.py \
+            tests/test_gemini_q10_production_executor_v5.py \
+            tests/test_gemini_q10_production_executor_v5_1.py \
+            tests/test_gemini_q10_v5_recovery_deadman.py \
+            tests/test_gemini_q10_v5_deadman_sidecar.py \
+            tests/test_gemini_q10_v5_2.py
+
+          if [ -f /opt/arb/secrets/gemini-short-crypto.env ]; then ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; else ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; fi
+          if [ -d /home/ssm-user/gemini-short-crypto-state ]; then BASE_STATE=/home/ssm-user/gemini-short-crypto-state; else BASE_STATE=/opt/arb/gemini-short-crypto-state; fi
+          test -f "\$ENV_FILE"
+
+          echo '=== FRESH READ-ONLY ACCOUNT / RECOVERY PREFLIGHT ==='
+          docker run --rm -i --network host --env-file "\$ENV_FILE" \
+            -e GEMINI_SHORT_CRYPTO_STATE_DIR=/base_state \
+            -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
+            -e GEMINI_Q10_PRODUCTION_LIVE=NO \
+            -v "\$BASE_STATE:/base_state:ro" \
+            -v "\$STATE:/prod_state" \
+            "\$IMAGE" python - <<'PY'
+          import asyncio, json
+          from decimal import Decimal as D
+          from src import gemini_q10_production_executor_v5_2 as v52
+          from src import gemini_q10_v5_2_recovery as r
+          from src import gemini_q10_production_executor_v5_1 as v51
+          async def main():
+              v52.install(); r.install()
+              report, _, _, _ = await r.audit()
+              available, flat = await v52.v5.v1._preflight_flat()
+              print('V5_2_LIVE_PREFLIGHT='+json.dumps({'recovery':report.as_dict(),'available_usd':str(available),'flat':flat},separators=(',',':'),default=str))
+              assert report.status == 'CLEAN_NO_OPEN_STATE'
+              assert report.account_orders == 0 and report.account_positions == 0
+              assert D(str(available)) >= v51.MIN_AVAILABLE_V5_1
+          asyncio.run(main())
+          PY
+
+          echo '=== START INDEPENDENT V5.2 DEAD-MAN SIDECAR ==='
+          docker run -d --name "\$SIDECAR" --network host --env-file "\$ENV_FILE" \
+            -e GEMINI_SHORT_CRYPTO_STATE_DIR=/base_state \
+            -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
+            -e GEMINI_Q10_PRODUCTION_LIVE=YES \
+            -e GEMINI_Q10_PRODUCTION_ARM_ID=${APPROVAL} \
+            -e GEMINI_Q10_PRODUCTION_ARM=${APPROVAL} \
+            -e GEMINI_Q10_V5_RECOVERY_ARM=${APPROVAL} \
+            -e GEMINI_Q10_V5_WATCHDOG_ARM=${APPROVAL} \
+            -e GEMINI_Q10_V5_WATCHDOG_STALE_SECONDS=15 \
+            -e GEMINI_Q10_V5_MAX_RESCUE_LOSS_USD=0.30 \
+            -e GEMINI_Q10_V5_MAX_CAMPAIGN_LOSS_USD=1.00 \
+            -e GEMINI_Q10_V5_MAX_DAILY_LOSS_USD=3.00 \
+            -v "\$BASE_STATE:/base_state:ro" \
+            -v "\$STATE:/prod_state" \
+            "\$IMAGE" python -m src.gemini_q10_v5_2_deadman_sidecar >/dev/null
+          sleep 0.5
+          test "\$(docker inspect -f '{{.State.Running}}' "\$SIDECAR")" = true
+
+          echo '=== ONE USER-APPROVED Q10 V5.2 CAMPAIGN ==='
+          docker run -d --name "\$EXECUTOR" --network host --env-file "\$ENV_FILE" \
+            -e GEMINI_SHORT_CRYPTO_STATE_DIR=/base_state \
+            -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
+            -e GEMINI_Q10_PRODUCTION_LIVE=YES \
+            -e GEMINI_Q10_PRODUCTION_ARM_ID=${APPROVAL} \
+            -e GEMINI_Q10_PRODUCTION_ARM=${APPROVAL} \
+            -e GEMINI_Q10_PRODUCTION_CONTINUOUS=NO \
+            -e GEMINI_Q10_PRODUCTION_MAX_CAMPAIGNS=1 \
+            -e GEMINI_Q10_V5_RECOVERY_ARM=${APPROVAL} \
+            -e GEMINI_Q10_V5_WATCHDOG_ARM=${APPROVAL} \
+            -e GEMINI_Q10_V5_WATCHDOG_STALE_SECONDS=15 \
+            -e GEMINI_Q10_V5_MAX_RESCUE_LOSS_USD=0.30 \
+            -e GEMINI_Q10_V5_MAX_CAMPAIGN_LOSS_USD=1.00 \
+            -e GEMINI_Q10_V5_MAX_DAILY_LOSS_USD=3.00 \
+            -v "\$BASE_STATE:/base_state:ro" \
+            -v "\$STATE:/prod_state" \
+            "\$IMAGE" python -m src.gemini_q10_v5_2_runtime >/dev/null
+          set +e
+          EXEC_RC=\$(docker wait "\$EXECUTOR")
+          set -e
+          docker logs "\$EXECUTOR" > "\$OUT/executor.log" 2>&1 || true
+
+          # A crashed executor with unresolved state must give the 15s watchdog enough
+          # time to audit/intervene before the supervisor proceeds.
+          sleep 17
+          docker logs "\$SIDECAR" > "\$OUT/sidecar.log" 2>&1 || true
+          docker rm -f "\$EXECUTOR" "\$SIDECAR" >/dev/null 2>&1 || true
+
+          echo '=== POST-CAMPAIGN READ-ONLY RECONCILIATION ==='
+          set +e
+          docker run --rm -i --network host --env-file "\$ENV_FILE" \
+            -e GEMINI_SHORT_CRYPTO_STATE_DIR=/base_state \
+            -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
+            -e GEMINI_Q10_PRODUCTION_LIVE=NO \
+            -v "\$BASE_STATE:/base_state:ro" \
+            -v "\$STATE:/prod_state" \
+            "\$IMAGE" python - <<'PY' > "\$OUT/post.log" 2>&1
+          import asyncio, json
+          from src import gemini_q10_production_executor_v5_2 as v52
+          from src import gemini_q10_v5_2_recovery as r
+          async def main():
+              v52.install(); r.install()
+              report, state, _, _ = await r.audit()
+              print('V5_2_LIVE_POST='+json.dumps({'audit':report.as_dict(),'state':state},separators=(',',':'),default=str))
+              if not report.exact_residual or report.residual_quantity != v52.ZERO:
+                  raise SystemExit(42)
+              if report.account_positions:
+                  cleared = await v52.v5.v1._wait_flat_after_settlement(timeout=600.0)
+                  print('V5_2_SETTLEMENT_CLEAR='+json.dumps({'cleared':cleared},separators=(',',':')))
+                  if not cleared:
+                      raise SystemExit(43)
+              final, _, _, _ = await r.audit()
+              print('V5_2_LIVE_FINAL='+json.dumps(final.as_dict(),separators=(',',':'),default=str))
+              if final.account_orders != 0 or final.account_positions != 0:
+                  raise SystemExit(44)
+          asyncio.run(main())
+          PY
+          POST_RC=\$?
+          set -e
+
+          python3 - <<PY
+          import json
+          payload = {
+              'executor_rc': int('${EXEC_RC}'),
+              'post_rc': int('${POST_RC}'),
+              'marker': 'V5_2_ONE_CANARY_COMPLETE' if int('${EXEC_RC}') == 0 and int('${POST_RC}') == 0 else 'V5_2_ONE_CANARY_FAILED',
+              'approval': '${APPROVAL}',
+              'pin': '${PIN}',
+          }
+          open('${OUT}/result.json','w').write(json.dumps(payload,separators=(',',':'))+'\n')
+          PY
+
+          echo '=== COMPACT LOG TAILS ==='
+          tail -c 4000 "\$OUT/executor.log" || true
+          tail -c 4000 "\$OUT/sidecar.log" || true
+          tail -c 4000 "\$OUT/post.log" || true
+          test "\$POST_RC" = 0
+          test "\$EXEC_RC" = 0
+          EOF
+          )
+
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "ARB one user-approved Gemini q10 V5.2 canary" \
+            --parameters "$PARAMS" \
+            --timeout-seconds 2400 \
+            --query 'Command.CommandId' \
+            --output text)
+          for _ in $(seq 1 1230); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+
+          # Success is determined from a compact durable host result, never from the
+          # potentially truncated stdout of the long-running SSM command.
+          RESULT_PATH=/home/ssm-user/gemini-q10-v5-2-live-output/${APPROVAL}/result.json
+          PARAMS2=$(jq -nc --arg cmd "cat '$RESULT_PATH'" '{commands:[$cmd]}')
+          CID2=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "ARB V5.2 compact canary result ${APPROVAL}" \
+            --parameters "$PARAMS2" \
+            --timeout-seconds 60 \
+            --query 'Command.CommandId' \
+            --output text)
+          for _ in $(seq 1 30); do
+            S2=$(aws ssm get-command-invocation --command-id "$CID2" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$S2" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          COMPACT=$(aws ssm get-command-invocation --command-id "$CID2" --instance-id "$AWS_HOT_INSTANCE_ID" --query StandardOutputContent --output text)
+          echo "V5_2_COMPACT_RESULT=$COMPACT"
+          test "$(jq -r '.marker' <<<"$COMPACT")" = V5_2_ONE_CANARY_COMPLETE
+          test "$(jq -r '.executor_rc' <<<"$COMPACT")" = 0
+          test "$(jq -r '.post_rc' <<<"$COMPACT")" = 0
