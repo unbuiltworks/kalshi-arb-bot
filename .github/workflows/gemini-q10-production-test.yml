@@ -35,6 +35,7 @@ jobs:
             src/gemini_q10_production_shadow_v5_1.py \
             src/gemini_q10_v5_recovery.py \
             src/gemini_q10_v5_deadman.py \
+            src/gemini_q10_v5_deadman_sidecar.py \
             src/gemini_q10_v5_runtime.py \
             src/gemini_q10_v5_1_runtime.py
       - name: Run focused q10 production safety tests
@@ -48,7 +49,8 @@ jobs:
             tests/test_gemini_q10_production_executor_v2.py \
             tests/test_gemini_q10_production_executor_v5.py \
             tests/test_gemini_q10_production_executor_v5_1.py \
-            tests/test_gemini_q10_v5_recovery_deadman.py
+            tests/test_gemini_q10_v5_recovery_deadman.py \
+            tests/test_gemini_q10_v5_deadman_sidecar.py
       - name: Verify production executors default disarmed
         env:
           GEMINI_Q10_PRODUCTION_STATE_DIR: /tmp/gemini-q10-prod-ci-state
