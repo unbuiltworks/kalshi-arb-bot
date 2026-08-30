@@ -5,6 +5,11 @@ executor. It does not create fresh campaigns. When a live campaign heartbeat bec
 stale it invokes the separately armed startup-recovery path, which cancels only the
 known campaign orders and, only when exact residual state is provable, attempts V5's
 bounded FOK rescue.
+
+A stale heartbeat with an already matched/non-directional position is *not* treated
+as a rescue emergency. Before intervening the armed watchdog performs a read-only
+audit; if the reconstructed residual is exactly zero and no known campaign orders are
+still active, it leaves the paired position alone for normal settlement/reconciliation.
 """
 from __future__ import annotations
 
@@ -70,6 +75,22 @@ async def check_once() -> dict:
         return {"status":"STALE_HEARTBEAT_WATCHDOG_NOT_ARMED", "intervened":False, "heartbeat_age_s":age}
     if not recovery.recovery_armed():
         return {"status":"STALE_HEARTBEAT_RECOVERY_NOT_ARMED", "intervened":False, "heartbeat_age_s":age}
+
+    # Armed stale state: audit first. A completed/matched pair may legitimately stop
+    # heartbeating while waiting for settlement and must not be "recovered" as if it
+    # were directional exposure. Active campaign orders still force intervention.
+    report, _, _, _ = await recovery.audit()
+    if (
+        report.exact_residual
+        and report.residual_quantity == v5.ZERO
+        and report.active_known_orders == 0
+    ):
+        return {
+            "status":"STALE_HEARTBEAT_NO_DIRECTIONAL_RESIDUAL",
+            "intervened":False,
+            "heartbeat_age_s":age,
+            "audit":report.as_dict(),
+        }
 
     result = await recovery.recover()
     return {
