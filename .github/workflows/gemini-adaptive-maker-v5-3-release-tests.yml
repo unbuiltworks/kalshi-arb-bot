@@ -7,6 +7,7 @@ on:
       - src/gemini_prediction_depth_cache_v5_3.py
       - src/gemini_adaptive_maker_policy_v5_3.py
       - src/gemini_adaptive_maker_executor_v5_3.py
+      - src/gemini_adaptive_maker_contract_grid_v5_3.py
       - src/gemini_adaptive_maker_v5_3_recovery.py
       - src/gemini_adaptive_maker_v5_3_deadman.py
       - src/gemini_adaptive_maker_v5_3_deadman_sidecar.py
@@ -14,6 +15,7 @@ on:
       - src/gemini_adaptive_maker_v5_3_diagnostic.py
       - tests/test_gemini_adaptive_maker_v5_3.py
       - tests/test_gemini_adaptive_maker_executor_v5_3.py
+      - tests/test_gemini_adaptive_maker_contract_grid_v5_3.py
       - .github/workflows/gemini-adaptive-maker-v5-3-release-tests.yml
   workflow_dispatch:
 
@@ -37,6 +39,7 @@ jobs:
             src/gemini_prediction_depth_cache_v5_3.py \
             src/gemini_adaptive_maker_policy_v5_3.py \
             src/gemini_adaptive_maker_executor_v5_3.py \
+            src/gemini_adaptive_maker_contract_grid_v5_3.py \
             src/gemini_adaptive_maker_v5_3_recovery.py \
             src/gemini_adaptive_maker_v5_3_deadman.py \
             src/gemini_adaptive_maker_v5_3_deadman_sidecar.py \
@@ -57,4 +60,5 @@ jobs:
             tests/test_gemini_q10_v5_deadman_sidecar.py \
             tests/test_gemini_q10_v5_2.py \
             tests/test_gemini_adaptive_maker_v5_3.py \
-            tests/test_gemini_adaptive_maker_executor_v5_3.py
+            tests/test_gemini_adaptive_maker_executor_v5_3.py \
+            tests/test_gemini_adaptive_maker_contract_grid_v5_3.py
