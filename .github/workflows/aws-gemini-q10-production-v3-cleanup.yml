@@ -1,0 +1,86 @@
+name: AWS Gemini q10 production V3 cleanup
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-q10-production-v3-cleanup.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Cancel only approved q10 V3 campaign orders and reconcile
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE_SCRIPT=$(cat <<'EOF'
+          set -Eeuo pipefail
+          if [ -f /opt/arb/secrets/gemini-short-crypto.env ]; then
+            ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env
+          else
+            ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env
+          fi
+          IMAGE=arb-gemini-q10-production-live:f619ed95e7c8
+          docker image inspect "$IMAGE" >/dev/null
+          docker run --rm --network host --env-file "$ENV_FILE" "$IMAGE" python - <<'PY'
+          import asyncio, json
+          from decimal import Decimal as D
+          from src import gemini_short_crypto_btc5m_maker_canary_q1 as base
+          from src import gemini_short_crypto_local_budget as local
+
+          SYMBOL='GEMI-BTC05M2608300230-UP'
+          IDS=['q10p-usr-q10v3-20260829-yes-i','q10p-usr-q10v3-20260829-no-i'] + [f'q10p-usr-q10v3-20260829-no-r{i}' for i in range(1,7)] + [f'q10p-usr-q10v3-20260829-yes-r{i}' for i in range(1,7)]
+
+          async def main():
+              maker=base.GeminiMakerSession()
+              await maker.connect()
+              before={}; actions=[]
+              try:
+                  for cid in IDS:
+                      row=await base._order_by_client(cid,SYMBOL)
+                      if not row:
+                          continue
+                      status=str(row.get('status') or row.get('orderStatus') or '').upper()
+                      filled=D(str(row.get('filledQuantity') or row.get('executedQuantity') or 0))
+                      qty=D(str(row.get('quantity') or 10))
+                      before[cid]={'status':status,'filled':str(filled),'quantity':str(qty),'price':str(row.get('price'))}
+                      if status not in {'FILLED','CANCELLED','CANCELED','REJECTED','EXPIRED'} and filled < qty:
+                          result=await base._cancel_maker(maker,row=row)
+                          actions.append({'cid':cid,'cancel':result})
+              finally:
+                  await maker.close()
+              after={}
+              for cid in IDS:
+                  row=await base._order_by_client(cid,SYMBOL)
+                  if row:
+                      after[cid]={'status':str(row.get('status') or row.get('orderStatus') or ''),'filled':str(row.get('filledQuantity') or row.get('executedQuantity') or 0),'quantity':str(row.get('quantity') or ''),'price':str(row.get('price') or '')}
+              snap=await local.account_exposure_snapshot()
+              print('Q10_V3_EMERGENCY_CLEANUP='+json.dumps({'classification':'LIVE_SAFETY_CLEANUP_NOT_NEW_CAMPAIGN','symbol':SYMBOL,'before':before,'actions':actions,'after':after,'account':snap},default=str,separators=(',',':')))
+          asyncio.run(main())
+          PY
+          EOF
+          )
+          ENCODED=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
+          PARAMETERS=$(jq -nc --arg cmd "echo '$ENCODED' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB q10 V3 safety cleanup" --parameters "$PARAMETERS" --timeout-seconds 420 --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
+          RESULT=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          grep -q 'Q10_V3_EMERGENCY_CLEANUP=' <<<"$(jq -r '.Stdout // ""' <<<"$RESULT")"
