@@ -53,10 +53,14 @@ def test_residual_cap_declines_heavy_side_until_light_side_arrives():
         PassiveTrade("gemini", "m1", "NO", D("100"), 4),
     ]
     c = q_aware_residual_cap_ceiling(trades, q=D("10"), residual_cap=D("10"))
+    # First YES consumes the residual budget; second heavy-side YES is declined.
+    # The first NO balances the book. Once balanced, the next NO may use the
+    # residual budget in the opposite direction, ending at the cap rather than
+    # exceeding it.
     assert c["yes_accepted"] == D("10")
-    assert c["no_accepted"] == D("10")
+    assert c["no_accepted"] == D("20")
     assert c["matched"] == D("10")
-    assert c["residual"] == D("0")
+    assert c["residual"] == D("10")
     assert c["skipped_heavy_events"] == 1
 
 
