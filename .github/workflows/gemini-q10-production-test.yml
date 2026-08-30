@@ -29,7 +29,8 @@ jobs:
             src/gemini_q10_rescue_policy.py \
             src/gemini_liquidity_reward_dynamic_completion_q10.py \
             src/gemini_q10_production_executor.py \
-            src/gemini_q10_production_executor_v2.py
+            src/gemini_q10_production_executor_v2.py \
+            src/gemini_q10_production_executor_v5.py
       - name: Run focused q10 production safety tests
         run: |
           pytest -q \
@@ -38,7 +39,8 @@ jobs:
             tests/test_gemini_q10_rescue_policy.py \
             tests/test_gemini_liquidity_reward_dynamic_completion_q10.py \
             tests/test_gemini_q10_production_executor.py \
-            tests/test_gemini_q10_production_executor_v2.py
+            tests/test_gemini_q10_production_executor_v2.py \
+            tests/test_gemini_q10_production_executor_v5.py
       - name: Verify production executors default disarmed
         env:
           GEMINI_Q10_PRODUCTION_STATE_DIR: /tmp/gemini-q10-prod-ci-state
@@ -47,10 +49,12 @@ jobs:
           import os
           from src import gemini_q10_production_executor as p
           from src import gemini_q10_production_executor_v2 as p2
+          from src import gemini_q10_production_executor_v5 as p5
           for k in (p.LIVE_ENV, p.ARM_ID_ENV, p.ARM_ENV, p.CONTINUOUS_ENV):
               os.environ.pop(k, None)
           assert p.live_armed() is False
           assert p.continuous_enabled() is False
           assert p2.v1.live_armed() is False
+          assert p5.live_armed() is False
           print('disarmed-default-ok')
           PY
