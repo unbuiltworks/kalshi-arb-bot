@@ -33,7 +33,10 @@ jobs:
           REMOTE_SCRIPT=$(cat <<EOF
           set -Eeuo pipefail
           STATE_DIR=/home/ssm-user/gemini-mixed-reward-shadow-state/${RUN_ID}
-          CONTAINER=arb-gemini-mixed-reward-shadow
+          RUN_CONTAINER=arb-gemini-mixed-reward-shadow-${RUN_ID}
+          LEGACY_CONTAINER=arb-gemini-mixed-reward-shadow
+          if docker inspect "\$RUN_CONTAINER" >/dev/null 2>&1; then CONTAINER="\$RUN_CONTAINER"; else CONTAINER="\$LEGACY_CONTAINER"; fi
+          echo "GEMINI_MIXED_REWARD_SHADOW_CONTAINER_NAME=\$CONTAINER"
           echo "GEMINI_MIXED_REWARD_SHADOW_CONTAINER="
           docker inspect "\$CONTAINER" --format 'status={{.State.Status}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}' 2>/dev/null || echo 'status=missing'
           echo "GEMINI_MIXED_REWARD_SHADOW_CURRENT="
