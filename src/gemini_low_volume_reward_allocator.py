@@ -25,6 +25,7 @@ ZERO = D("0")
 ONE = D("1")
 MIN_PLANNED_UPTIME = D("0.50")
 DEFAULT_SAFETY_CASH = D("12")
+DEFAULT_MAX_PORTFOLIO_ONE_SIDE_USD = D("15")
 MAX_SAME_ASSET_WINDOWS = 1
 
 
@@ -46,8 +47,6 @@ class Candidate:
 
     @property
     def reserve_usd(self) -> D:
-        # Both q10 orders can fill. Reserve the full acquisition principal rather
-        # than assuming only one side fills.
         return Q * (self.yes_quote + self.no_quote)
 
     @property
@@ -56,9 +55,6 @@ class Candidate:
 
     @property
     def midpoint_distance_cents(self) -> D:
-        # YES+NO quotes are expressed on their own outcomes. For a symmetric
-        # binary book, total acquisition below $1 is also a useful conservative
-        # proxy for how aggressively we sit toward the inside.
         pair_discount = max(ZERO, ONE - self.yes_quote - self.no_quote)
         return pair_discount * D("50")
 
@@ -85,11 +81,6 @@ def eligible(c: Candidate) -> tuple[bool, str]:
 
 
 def reward_proxy_usd(c: Candidate) -> D:
-    """Conservative scarcity-weighted ranking proxy; never label as expected P&L."""
-    # Treat ourselves as one additional maker and haircut by planned uptime.
-    # Proximity is intentionally coarse because the exact production LR curve is
-    # not reproduced here.  Quotes with positive pair discount get a modest boost,
-    # capped so this proxy cannot dominate pool scarcity.
     scarcity_share = c.daily_pool_usd / D(max(1, c.qualifying_makers + 1))
     proximity = min(D("1"), D("0.50") + c.midpoint_distance_cents / D("20"))
     return scarcity_share * c.planned_uptime * proximity
@@ -99,21 +90,27 @@ def risk_adjusted_score(c: Candidate) -> D:
     ok, _ = eligible(c)
     if not ok:
         return D("-999999")
-    # Favor scarce reward dollars and positive locked pair economics, penalize
-    # toxicity and capital tied up. Pair profit is an observed/model input, not a
-    # promise that both sides fill.
     value = reward_proxy_usd(c) + max(ZERO, c.modeled_pair_profit) - c.toxicity_penalty
     return value / max(D("1"), c.reserve_usd)
 
 
 def allocate(candidates: Iterable[Candidate], available_usd: D,
              safety_cash: D = DEFAULT_SAFETY_CASH,
-             max_same_asset_windows: int = MAX_SAME_ASSET_WINDOWS) -> dict[str, Any]:
+             max_same_asset_windows: int = MAX_SAME_ASSET_WINDOWS,
+             max_portfolio_one_side_usd: D = DEFAULT_MAX_PORTFOLIO_ONE_SIDE_USD) -> dict[str, Any]:
+    """Select candidates while bounding both capital reserve and simultaneous residual risk.
+
+    `max_portfolio_one_side_usd` is deliberately conservative: it sums the worst
+    one-side acquisition premium for every selected market rather than assuming
+    crypto assets diversify during a fast move.
+    """
     budget = max(ZERO, D(str(available_usd)) - D(str(safety_cash)))
+    residual_budget = max(ZERO, D(str(max_portfolio_one_side_usd)))
     ranked = sorted(candidates, key=lambda c: (risk_adjusted_score(c), reward_proxy_usd(c)), reverse=True)
     selected: list[Candidate] = []
     rejected: list[dict[str, Any]] = []
     used = ZERO
+    one_side_used = ZERO
     asset_counts: dict[str, int] = {}
     for c in ranked:
         ok, reason = eligible(c)
@@ -126,8 +123,12 @@ def allocate(candidates: Iterable[Candidate], available_usd: D,
         if used + c.reserve_usd > budget:
             rejected.append({"ticker": c.ticker, "reason": "INSUFFICIENT_FREE_BUDGET"})
             continue
+        if one_side_used + c.max_one_side_usd > residual_budget:
+            rejected.append({"ticker": c.ticker, "reason": "PORTFOLIO_ONE_SIDE_RISK_CAP"})
+            continue
         selected.append(c)
         used += c.reserve_usd
+        one_side_used += c.max_one_side_usd
         asset_counts[c.asset] = asset_counts.get(c.asset, 0) + 1
 
     return {
@@ -135,9 +136,12 @@ def allocate(candidates: Iterable[Candidate], available_usd: D,
         "available_usd": str(available_usd),
         "safety_cash_usd": str(safety_cash),
         "allocatable_budget_usd": str(budget),
+        "max_portfolio_one_side_usd": str(residual_budget),
         "reserved_usd": str(used),
+        "portfolio_one_side_risk_usd": str(one_side_used),
         "unreserved_allocatable_usd": str(max(ZERO, budget-used)),
         "selected": [dict(asdict(c), reserve_usd=str(c.reserve_usd),
+                          max_one_side_usd=str(c.max_one_side_usd),
                           reward_proxy_usd=str(reward_proxy_usd(c)),
                           risk_adjusted_score=str(risk_adjusted_score(c)),
                           reward_proxy_is_realized=False) for c in selected],
@@ -149,12 +153,12 @@ def allocate(candidates: Iterable[Candidate], available_usd: D,
 def _asset_and_window(ticker: str) -> tuple[str, int]:
     t = ticker.upper()
     asset = next((a for a in ("BTC", "ETH", "SOL", "XRP") if a in t), "OTHER")
-    window = 5 if "05M" in t or "5M" in t else 15 if "15M" in t else 0
+    # Check 15M before the generic 5M suffix so BTC15M is never misclassified.
+    window = 15 if "15M" in t else 5 if "05M" in t or "5M" in t else 0
     return asset, window
 
 
 async def public_reward_rows() -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Fetch current public reward config/events only; no auth and no order calls."""
     async with httpx.AsyncClient(timeout=8.0, follow_redirects=True,
                                  headers={"User-Agent":"arb-low-volume-reward-allocator/1.0"}) as http:
         cfg_r, ev_r = await asyncio.gather(
