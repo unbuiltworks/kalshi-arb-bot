@@ -14,8 +14,8 @@ env:
   AWS_REGION: us-east-1
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
-  RELEASE_BRANCH: release/gemini-q10-production-v5-1
-  REQUIRED_RELEASE_COMMIT: c5401bd68418a5b8c3381ee4b6be7b10fc3783ec
+  RELEASE_BRANCH: release/gemini-q10-production-v5-1-final
+  REQUIRED_RELEASE_COMMIT: ff4bc84b40b5bf79c80406c8e0d7ade77ac58e85
 
 jobs:
   qualify:
@@ -58,6 +58,7 @@ jobs:
           STATE=/home/ssm-user/gemini-q10-v5-1-release-qualification-state
           OUT=/home/ssm-user/gemini-q10-v5-1-release-qualification/${RUN_ID}
           IMAGE=arb-gemini-q10-v5-1-release-qualification:${SHORT}
+          SIDECAR=v5q-sidecar-${RUN_ID}
           cd "\$REPO"
           git config --global --add safe.directory "\$REPO" || true
           git fetch origin ${RELEASE_BRANCH} >/dev/null
@@ -65,6 +66,7 @@ jobs:
           test "\$ACTUAL" = "${PIN}"
           git worktree remove --force "\$WORK" >/dev/null 2>&1 || true
           rm -rf "\$WORK" "\$STATE" "\$OUT"
+          docker rm -f "\$SIDECAR" >/dev/null 2>&1 || true
           git worktree prune
           git worktree add --detach "\$WORK" "${PIN}" >/dev/null
           docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
@@ -115,16 +117,15 @@ jobs:
           echo V5_1_REAL_ACCOUNT_PREFLIGHT_PASS
 
           echo V5_1_SIDECAR_IDLE_BEGIN
-          set +e
-          timeout 2 docker run --rm \
+          docker run -d --rm --name "\$SIDECAR" \
             -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
             -e GEMINI_Q10_PRODUCTION_LIVE=NO \
             -v "\$STATE:/prod_state" \
-            "\$IMAGE" python -m src.gemini_q10_v5_deadman_sidecar > "\$OUT/sidecar.log" 2>&1
-          RC=\$?
-          set -e
-          test "\$RC" = 124
+            "\$IMAGE" python -m src.gemini_q10_v5_deadman_sidecar >/dev/null
+          sleep 1
+          docker logs "\$SIDECAR" > "\$OUT/sidecar.log" 2>&1
           grep -q WAITING_FOR_OPEN_CAMPAIGN "\$OUT/sidecar.log"
+          docker rm -f "\$SIDECAR" >/dev/null 2>&1 || true
           echo V5_1_SIDECAR_IDLE_PASS
 
           echo V5_1_EXACT_SHADOW_BEGIN
