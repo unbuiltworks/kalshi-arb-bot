@@ -52,7 +52,9 @@ jobs:
           git worktree add --detach "\$WORK" "${PIN}" >/dev/null
           docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
           echo L5_FOCUSED_TESTS_START
-          docker run --rm "\$IMAGE" pytest -q \
+          docker run --rm \
+            -v "\$WORK/tests:/app/tests:ro" \
+            "\$IMAGE" pytest -q \
             tests/test_l5_fetch_offset_cap.py \
             tests/test_l5_windows.py \
             tests/test_l5_pipeline.py
