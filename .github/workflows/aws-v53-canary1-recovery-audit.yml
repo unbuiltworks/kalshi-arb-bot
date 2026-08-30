@@ -5,6 +5,7 @@ on:
     branches: [aws-migration-foundation]
     paths:
       - .github/workflows/aws-v53-canary1-recovery-audit.yml
+      - deploy/aws/v53_canary1_recovery_audit.py
   workflow_dispatch:
 
 permissions:
