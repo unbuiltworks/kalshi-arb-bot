@@ -6,7 +6,13 @@ on:
     paths:
       - src/gemini_prediction_depth_cache_v5_3.py
       - src/gemini_adaptive_maker_policy_v5_3.py
+      - src/gemini_adaptive_maker_executor_v5_3.py
+      - src/gemini_adaptive_maker_v5_3_recovery.py
+      - src/gemini_adaptive_maker_v5_3_deadman.py
+      - src/gemini_adaptive_maker_v5_3_deadman_sidecar.py
+      - src/gemini_adaptive_maker_v5_3_runtime.py
       - tests/test_gemini_adaptive_maker_v5_3.py
+      - tests/test_gemini_adaptive_maker_executor_v5_3.py
       - .github/workflows/gemini-adaptive-maker-v5-3-release-tests.yml
   workflow_dispatch:
 
@@ -28,7 +34,12 @@ jobs:
         run: |
           python -m py_compile \
             src/gemini_prediction_depth_cache_v5_3.py \
-            src/gemini_adaptive_maker_policy_v5_3.py
+            src/gemini_adaptive_maker_policy_v5_3.py \
+            src/gemini_adaptive_maker_executor_v5_3.py \
+            src/gemini_adaptive_maker_v5_3_recovery.py \
+            src/gemini_adaptive_maker_v5_3_deadman.py \
+            src/gemini_adaptive_maker_v5_3_deadman_sidecar.py \
+            src/gemini_adaptive_maker_v5_3_runtime.py
       - name: Frozen V5.2 suite plus V5.3 adaptive regressions
         run: |
           pytest -q \
@@ -43,4 +54,5 @@ jobs:
             tests/test_gemini_q10_v5_recovery_deadman.py \
             tests/test_gemini_q10_v5_deadman_sidecar.py \
             tests/test_gemini_q10_v5_2.py \
-            tests/test_gemini_adaptive_maker_v5_3.py
+            tests/test_gemini_adaptive_maker_v5_3.py \
+            tests/test_gemini_adaptive_maker_executor_v5_3.py
