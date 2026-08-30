@@ -2,10 +2,10 @@
 
 The live canary unexpectedly executed the V5.2 campaign path, so this diagnostic
 uses the native V5.2 recovery audit against the exact durable canary state. It does
-not arm recovery and cannot place/cancel orders. If an exact one-sided residual is
-still open and fresh depth still exists, it also computes rescue routes under the
-original $0.30 rescue bound and the already-configured $1.00 campaign-loss ceiling.
-Account/audit evidence is always emitted even when the expired market has no book.
+not arm recovery and cannot place/cancel orders. Account/audit evidence and current
+available USD are emitted even when the expired market has no book. If an exact
+one-sided residual is still open and fresh depth exists, rescue routes are computed
+under the original $0.30 rescue bound and the configured $1.00 campaign-loss ceiling.
 """
 from __future__ import annotations
 
@@ -29,10 +29,19 @@ async def main() -> None:
     recovery52.install()
     report, state, yrow, nrow = await recovery52.audit()
     account = await v5.v1._flat_snapshot()
+    available_usd = None
+    available_error = None
+    if int(account.get("orders", 0)) == 0 and int(account.get("positions", 0)) == 0:
+        try:
+            available_usd, _ = await v5.v1._preflight_flat()
+        except Exception as exc:
+            available_error = {"type": type(exc).__name__, "message": str(exc)[:240]}
     out = {
         "classification": "READ_ONLY_V53_CANARY1_NATIVE_V52_RECOVERY_AUDIT",
         "audit": report.as_dict(),
         "account": account,
+        "available_usd": None if available_usd is None else str(available_usd),
+        "available_error": available_error,
         "state_status": None if not state else state.get("status"),
         "state_classification": None if not state else state.get("classification"),
         "recovery_armed": recovery52.recovery.recovery_armed(),
@@ -43,7 +52,8 @@ async def main() -> None:
     }
 
     if (
-        report.open_state
+        int(account.get("positions", 0)) > 0
+        and report.open_state
         and report.exact_residual
         and report.residual_outcome in {"YES", "NO"}
         and report.residual_quantity > ZERO
