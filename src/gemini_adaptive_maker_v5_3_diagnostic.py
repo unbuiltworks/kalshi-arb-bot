@@ -1,10 +1,11 @@
 """Credential-free live-public diagnostic for Gemini adaptive maker V5.3.
 
 No account calls and no order entry. It waits for an eligible BTC5 window, keeps the
-same depth-5 subscription hot, selects the exact V5.3 adaptive plan, then simulates
-our YES and NO maker orders inside the public depth ladder. The final standing rescue
-check removes the simulated owned depth and proves the engine can see the next real
-external level rather than counting its own orders.
+same depth-5 subscription hot, selects the exact V5.3 adaptive plan using the live
+instrument quantity grid, then simulates our YES and NO maker orders inside the
+public depth ladder. The final standing rescue check removes the simulated owned
+depth and proves the engine can see the next real external level rather than counting
+its own orders.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from decimal import Decimal as D
 import json
 import time
 
+from src import gemini_adaptive_maker_contract_grid_v5_3 as contract_grid
 from src import gemini_adaptive_maker_policy_v5_3 as policy
 from src import gemini_q10_production_executor_v5 as v5
 from src import gemini_q10_rescue_policy as rescue
@@ -91,6 +93,7 @@ async def run() -> dict:
     cache_symbol = None
     polls = 0
     reasons: dict[str, int] = {}
+    metadata_sample = None
     try:
         while time.monotonic() < deadline:
             polls += 1
@@ -105,12 +108,13 @@ async def run() -> dict:
                 reasons["NO_ACTIVE_BTC5"] = reasons.get("NO_ACTIVE_BTC5", 0) + 1
                 await asyncio.sleep(POLL_SECONDS)
                 continue
-            if not (
-                D(str(event.quantity_minimum)) == D("1")
-                and D(str(event.quantity_increment)) == D("1")
-                and D(str(event.price_increment)) > ZERO
-            ):
-                reasons["UNSUPPORTED_CONTRACT_METADATA"] = reasons.get("UNSUPPORTED_CONTRACT_METADATA", 0) + 1
+
+            valid_qs = contract_grid.valid_integer_quantities(event)
+            metadata_sample = contract_grid.metadata_dict(event)
+            if not valid_qs:
+                reasons["NO_VALID_INTEGER_Q1_TO_Q10_ON_CONTRACT_GRID"] = reasons.get(
+                    "NO_VALID_INTEGER_Q1_TO_Q10_ON_CONTRACT_GRID", 0
+                ) + 1
                 await asyncio.sleep(POLL_SECONDS)
                 continue
             if not (v5.v1.ENTRY_MIN_SECONDS <= event.seconds_to_expiry <= v5.v1.ENTRY_MAX_SECONDS):
@@ -138,7 +142,8 @@ async def run() -> dict:
                 await asyncio.sleep(POLL_SECONDS)
                 continue
 
-            plan = policy.select_plan(
+            plan = contract_grid.select_plan_for_event(
+                event,
                 snap=snap,
                 increment=event.price_increment,
                 max_loss=v5.max_rescue_loss(),
@@ -169,6 +174,7 @@ async def run() -> dict:
                 "seconds_to_expiry": round(event.seconds_to_expiry, 3),
                 "polls": polls,
                 "reason_counts": reasons,
+                "contract_metadata": contract_grid.metadata_dict(event),
                 "book": {
                     "bids": [[str(p), str(q)] for p, q in snap.bids],
                     "asks": [[str(p), str(q)] for p, q in snap.asks],
@@ -193,6 +199,7 @@ async def run() -> dict:
             "classification": "READ_ONLY_NO_SAFE_PLAN_WITHIN_WINDOW",
             "polls": polls,
             "reason_counts": reasons,
+            "contract_metadata_sample": metadata_sample,
             "liquidity_rewards_modeled": False,
             "maker_rebates_modeled": False,
             "order_entry": False,
