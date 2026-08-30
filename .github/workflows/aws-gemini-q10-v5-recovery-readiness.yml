@@ -74,6 +74,7 @@ jobs:
             tests/test_gemini_q10_production_executor.py \
             tests/test_gemini_q10_production_executor_v2.py \
             tests/test_gemini_q10_production_executor_v5.py \
+            tests/test_gemini_q10_production_executor_v5_1.py \
             tests/test_gemini_q10_v5_recovery_deadman.py
           echo V5_RECOVERY_FOCUSED_TESTS_END
           if [ -f /opt/arb/secrets/gemini-short-crypto.env ]; then ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; else ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; fi
@@ -81,7 +82,7 @@ jobs:
           test -f "\$ENV_FILE"
           mkdir -p "\$STATE"
           echo V5_RECOVERY_REAL_ACCOUNT_AUDIT_BEGIN
-          docker run --rm --network host --env-file "\$ENV_FILE" \
+          docker run --rm -i --network host --env-file "\$ENV_FILE" \
             -e GEMINI_SHORT_CRYPTO_STATE_DIR=/base_state \
             -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
             -e GEMINI_Q10_PRODUCTION_LIVE=NO \
@@ -95,8 +96,10 @@ jobs:
           import asyncio, json
           from src import gemini_q10_v5_recovery as r
           from src import gemini_q10_v5_deadman as d
+          from src import gemini_q10_production_executor_v5_1 as v51
           from src import gemini_q10_production_executor_v5 as v5
           async def main():
+              v51.install()
               report, state, _, _ = await r.audit()
               print('V5_RECOVERY_AUDIT='+json.dumps(report.as_dict(),separators=(',',':'),default=str))
               assert report.status == 'CLEAN_NO_OPEN_STATE'
@@ -104,6 +107,7 @@ jobs:
               assert report.account_positions == 0
               assert not r.recovery_armed()
               assert not d.watchdog_armed()
+              assert v5.v1.MIN_AVAILABLE == v51.MIN_AVAILABLE_V5_1
               dead = await d.check_once()
               print('V5_DEADMAN_AUDIT='+json.dumps(dead,separators=(',',':'),default=str))
               assert dead['status'] == 'IDLE_NO_OPEN_CAMPAIGN'
