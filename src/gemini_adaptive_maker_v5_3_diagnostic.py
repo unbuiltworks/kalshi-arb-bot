@@ -1,11 +1,10 @@
-"""Credential-free live-public diagnostic for Gemini adaptive maker V5.3.
+"""Credential-free live-public diagnostic for Gemini adaptive maker V5.4.
 
 No account calls and no order entry. It waits for an eligible BTC5 window, keeps the
-same depth-5 subscription hot, selects the exact V5.3 adaptive plan using the live
-instrument quantity grid, then simulates our YES and NO maker orders inside the
-public depth ladder. The final standing rescue check removes the simulated owned
-depth and proves the engine can see the next real external level rather than counting
-its own orders.
+same depth-5 subscription hot, selects the exact adaptive plan using the live
+instrument quantity grid plus the hard campaign-loss bound, then simulates our YES
+and NO maker orders inside the public depth ladder. The final standing rescue check
+removes simulated owned depth so rescue capacity is based only on external liquidity.
 """
 from __future__ import annotations
 
@@ -35,41 +34,18 @@ def _add_level(levels, *, price: D, quantity: D, reverse: bool):
 
 
 def simulate_owned_orders(snap: DepthSnapshot, plan: policy.AdaptiveMakerPlan) -> DepthSnapshot:
-    bids = _add_level(
-        snap.bids,
-        price=plan.yes_quote,
-        quantity=plan.quantity,
-        reverse=True,
-    )
-    asks = _add_level(
-        snap.asks,
-        price=ONE - plan.no_quote,
-        quantity=plan.quantity,
-        reverse=False,
-    )
+    bids = _add_level(snap.bids, price=plan.yes_quote, quantity=plan.quantity, reverse=True)
+    asks = _add_level(snap.asks, price=ONE - plan.no_quote, quantity=plan.quantity, reverse=False)
     return replace(snap, bids=bids, asks=asks, sequence=snap.sequence + 1)
 
 
-def yes_only_route_after_simulation(
-    original: DepthSnapshot,
-    plan: policy.AdaptiveMakerPlan,
-    *,
-    increment: D,
-):
+def yes_only_route_after_simulation(original: DepthSnapshot, plan: policy.AdaptiveMakerPlan, *, increment: D):
     with_yes = replace(
         original,
-        bids=_add_level(
-            original.bids,
-            price=plan.yes_quote,
-            quantity=plan.quantity,
-            reverse=True,
-        ),
+        bids=_add_level(original.bids, price=plan.yes_quote, quantity=plan.quantity, reverse=True),
         sequence=original.sequence + 1,
     )
-    external = with_yes.externalized(
-        own_yes_price=plan.yes_quote,
-        own_yes_quantity=plan.quantity,
-    )
+    external = with_yes.externalized(own_yes_price=plan.yes_quote, own_yes_quantity=plan.quantity)
     if external is None:
         return None
     return rescue.best_route_after_fill(
@@ -149,10 +125,15 @@ async def run() -> dict:
                 max_loss=v5.max_rescue_loss(),
             )
             if plan is None:
-                reasons["NO_SAFE_TRADE_EDGE_PLAN"] = reasons.get("NO_SAFE_TRADE_EDGE_PLAN", 0) + 1
+                reasons["NO_SAFE_TRADE_EDGE_AND_CAMPAIGN_BOUND_PLAN"] = reasons.get(
+                    "NO_SAFE_TRADE_EDGE_AND_CAMPAIGN_BOUND_PLAN", 0
+                ) + 1
                 await asyncio.sleep(POLL_SECONDS)
                 continue
 
+            catastrophic_loss = contract_grid.catastrophic_loss_for_plan(plan)
+            campaign_limit = v5.max_campaign_loss()
+            hard_campaign_safe = catastrophic_loss <= campaign_limit
             simulated = simulate_owned_orders(snap, plan)
             standing = policy.standing_rescue_for_plan(
                 plan=plan,
@@ -162,11 +143,7 @@ async def run() -> dict:
                 no_resting=True,
                 max_loss=v5.max_rescue_loss(),
             )
-            yes_route = yes_only_route_after_simulation(
-                snap,
-                plan,
-                increment=event.price_increment,
-            )
+            yes_route = yes_only_route_after_simulation(snap, plan, increment=event.price_increment)
             result = {
                 "classification": "READ_ONLY_PUBLIC_NO_CREDENTIALS_NO_ORDER_ENTRY",
                 "ticker": event.ticker,
@@ -182,6 +159,10 @@ async def run() -> dict:
                     "sequence": snap.sequence,
                 },
                 "plan": plan.as_dict(),
+                "normal_rescue_loss_limit": str(v5.max_rescue_loss()),
+                "catastrophic_settlement_loss": str(catastrophic_loss),
+                "campaign_loss_limit": str(campaign_limit),
+                "hard_campaign_bound_safe": hard_campaign_safe,
                 "yes_post_only_route": None if yes_route is None else yes_route.as_dict(),
                 "yes_post_only_safe": bool(yes_route is not None and yes_route.safe),
                 "both_posted_standing": None if standing is None else standing.as_dict(),
@@ -192,7 +173,11 @@ async def run() -> dict:
                 "order_entry": False,
                 "realized_pnl": 0,
             }
-            if not result["yes_post_only_safe"] or not result["both_posted_safe"]:
+            if (
+                not result["yes_post_only_safe"]
+                or not result["both_posted_safe"]
+                or not result["hard_campaign_bound_safe"]
+            ):
                 result["classification"] = "READ_ONLY_PLAN_FAILED_POST_SIMULATION_SAFETY"
             return result
         return {
@@ -200,6 +185,8 @@ async def run() -> dict:
             "polls": polls,
             "reason_counts": reasons,
             "contract_metadata_sample": metadata_sample,
+            "campaign_loss_limit": str(v5.max_campaign_loss()),
+            "normal_rescue_loss_limit": str(v5.max_rescue_loss()),
             "liquidity_rewards_modeled": False,
             "maker_rebates_modeled": False,
             "order_entry": False,
@@ -215,5 +202,5 @@ async def run() -> dict:
 
 if __name__ == "__main__":
     result = asyncio.run(run())
-    print("GEMINI_ADAPTIVE_MAKER_V5_3_DIAG=" + json.dumps(result, separators=(",", ":"), default=str))
-    print("GEMINI_ADAPTIVE_MAKER_V5_3_DIAG_COMPLETE")
+    print("GEMINI_ADAPTIVE_MAKER_V5_4_DIAG=" + json.dumps(result, separators=(",", ":"), default=str))
+    print("GEMINI_ADAPTIVE_MAKER_V5_4_DIAG_COMPLETE")
