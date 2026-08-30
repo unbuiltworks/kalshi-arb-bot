@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/polymarket-l5-disciplined-clone-analysis.yml
       - src/polymarket_l5/disciplined_clone.py
+      - src/polymarket_l5/disciplined_clone_v2.py
       - src/polymarket_l5/reconcile_disciplined_clone.py
       - tests/test_polymarket_l5_disciplined_clone.py
 
@@ -26,15 +27,15 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Unit regressions
         run: python -m pytest -q tests/test_polymarket_l5_disciplined_clone.py
-      - name: Reconcile no-policy replay to source PnL
+      - name: Reconcile old no-policy replay to source PnL
         run: |
           python -m src.polymarket_l5.reconcile_disciplined_clone \
             --sequences analysis/l5/l5_window_sequences.csv \
             --summary analysis/l5/l5_windows_summary.csv \
             --scale 0.10
-      - name: Replay recent observed fill paths at 10 percent scale
+      - name: Run source-accounted causal replay v2
         run: |
-          python -m src.polymarket_l5.disciplined_clone \
+          python -m src.polymarket_l5.disciplined_clone_v2 \
             --sequences analysis/l5/l5_window_sequences.csv \
             --summary analysis/l5/l5_windows_summary.csv \
             --scale 0.10
