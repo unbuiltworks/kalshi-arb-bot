@@ -3,8 +3,9 @@
 The live canary unexpectedly executed the V5.2 campaign path, so this diagnostic
 uses the native V5.2 recovery audit against the exact durable canary state. It does
 not arm recovery and cannot place/cancel orders. If an exact one-sided residual is
-still open, it also computes fresh rescue routes under the original $0.30 rescue
-bound and the already-configured $1.00 campaign-loss ceiling for decision support.
+still open and fresh depth still exists, it also computes rescue routes under the
+original $0.30 rescue bound and the already-configured $1.00 campaign-loss ceiling.
+Account/audit evidence is always emitted even when the expired market has no book.
 """
 from __future__ import annotations
 
@@ -38,6 +39,7 @@ async def main() -> None:
         "order_entry": False,
         "route_030": None,
         "route_100": None,
+        "route_error": None,
     }
 
     if (
@@ -54,31 +56,39 @@ async def main() -> None:
         filled_price = v5._fill_price(row, fallback)
         increment = D(str(state.get("price_increment") or "0.01"))
         symbol = str(state.get("symbol") or "")
+        out["filled_price"] = str(filled_price)
         cache = GeminiTopCache(symbol, stale_ms=750)
         stop = asyncio.Event()
         task = asyncio.create_task(cache.run(stop))
         try:
-            snap = await cache.wait_fresh(timeout=3.0, max_age_ms=v5.BOOK_MAX_AGE_MS)
-            common = dict(
-                filled_outcome=outcome,
-                filled_price=filled_price,
-                quantity=report.residual_quantity,
-                yes_bid=snap.bid,
-                yes_bid_size=snap.bid_size,
-                yes_ask=snap.ask,
-                yes_ask_size=snap.ask_size,
-                increment=increment,
-            )
-            out["book"] = {
-                "bid": str(snap.bid),
-                "bid_size": str(snap.bid_size),
-                "ask": str(snap.ask),
-                "ask_size": str(snap.ask_size),
-                "age_ms": round(snap.age_ms, 3),
-            }
-            out["filled_price"] = str(filled_price)
-            out["route_030"] = rescue.best_route_after_fill(max_loss=D("0.30"), **common).as_dict()
-            out["route_100"] = rescue.best_route_after_fill(max_loss=D("1.00"), **common).as_dict()
+            try:
+                snap = await cache.wait_fresh(timeout=3.0, max_age_ms=v5.BOOK_MAX_AGE_MS)
+            except Exception as exc:
+                out["route_error"] = {
+                    "type": type(exc).__name__,
+                    "message": str(exc)[:240],
+                    "classification": "NO_FRESH_BOOK_ROUTE_NOT_ATTEMPTED",
+                }
+            else:
+                common = dict(
+                    filled_outcome=outcome,
+                    filled_price=filled_price,
+                    quantity=report.residual_quantity,
+                    yes_bid=snap.bid,
+                    yes_bid_size=snap.bid_size,
+                    yes_ask=snap.ask,
+                    yes_ask_size=snap.ask_size,
+                    increment=increment,
+                )
+                out["book"] = {
+                    "bid": str(snap.bid),
+                    "bid_size": str(snap.bid_size),
+                    "ask": str(snap.ask),
+                    "ask_size": str(snap.ask_size),
+                    "age_ms": round(snap.age_ms, 3),
+                }
+                out["route_030"] = rescue.best_route_after_fill(max_loss=D("0.30"), **common).as_dict()
+                out["route_100"] = rescue.best_route_after_fill(max_loss=D("1.00"), **common).as_dict()
         finally:
             stop.set()
             task.cancel()
