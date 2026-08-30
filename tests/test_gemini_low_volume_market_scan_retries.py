@@ -36,7 +36,7 @@ def test_sample_retries_transient_depth_failure(monkeypatch):
     assert out["book_ok"] is True
     assert out["sample_attempts"] == 2
     assert calls == 2
-    assert out["model"]["modeled_pair_profit_after_fees"] == "0.1000"
+    assert D(out["model"]["modeled_pair_profit_after_fees"]) == D("0.10")
 
 
 def test_sample_stops_after_bounded_attempts(monkeypatch):
