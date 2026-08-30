@@ -63,9 +63,28 @@ jobs:
             -e GEMINI_SHADOW_STATE_DIR=/state \
             -v "\$STATE_DIR:/state" \
             "\$IMAGE" python -m src.gemini_mixed_reward_shadow >/dev/null
-          sleep 12
+
+          # A retry-heavy public-book snapshot can legitimately take longer than
+          # 12 seconds. Wait up to 90 seconds for the first durable state while
+          # proving the detached container remains alive. This prevents healthy
+          # launches from being marked red just because public depth was slow.
+          READY=0
+          for _ in \$(seq 1 18); do
+            STATUS=\$(docker inspect "\$CONTAINER" --format '{{.State.Status}}' 2>/dev/null || echo missing)
+            EXIT=\$(docker inspect "\$CONTAINER" --format '{{.State.ExitCode}}' 2>/dev/null || echo 255)
+            if [ "\$STATUS" != running ]; then
+              echo "container_not_running status=\$STATUS exit=\$EXIT"
+              docker logs --tail 80 "\$CONTAINER" 2>&1 || true
+              exit 1
+            fi
+            if [ -s "\$STATE_DIR/current.json" ]; then
+              READY=1
+              break
+            fi
+            sleep 5
+          done
+          test "\$READY" = 1
           docker inspect "\$CONTAINER" --format 'status={{.State.Status}} exit={{.State.ExitCode}}'
-          test -s "\$STATE_DIR/current.json"
           echo "GEMINI_MIXED_REWARD_SHADOW_LAUNCH_STATE="
           cat "\$STATE_DIR/current.json"
           echo "GEMINI_MIXED_REWARD_SHADOW_RUN_ID=${RUN_ID}"
