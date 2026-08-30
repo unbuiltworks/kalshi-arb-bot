@@ -1,0 +1,133 @@
+name: AWS L5 full-history redemption reconciliation
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/l5-full-history.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Run pinned redemption-derived L5 analyzer on AWS
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          RUN_ID=$(awk -F= '$1=="RUN_ID"{print $2}' deploy/aws/l5-full-history.trigger)
+          PIN=$(awk -F= '$1=="PIN"{print $2}' deploy/aws/l5-full-history.trigger)
+          BRANCH=$(awk -F= '$1=="SOURCE_BRANCH"{print $2}' deploy/aws/l5-full-history.trigger)
+          test -n "$RUN_ID" && test -n "$PIN" && test -n "$BRANCH"
+          REMOTE_SCRIPT=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          ROOT=/home/ssm-user/l5-full-history/${RUN_ID}
+          WORK=\$ROOT/repo
+          OUT=\$ROOT/output
+          IMAGE=arb-l5-full-history:${PIN:0:12}
+          mkdir -p "\$ROOT" "\$OUT"
+          cd "\$REPO"
+          git config --global --add safe.directory "\$REPO" || true
+          git fetch origin "${BRANCH}" >/dev/null
+          git cat-file -e "${PIN}^{commit}"
+          if [ -d "\$WORK" ]; then git worktree remove --force "\$WORK" >/dev/null 2>&1 || rm -rf "\$WORK"; fi
+          git worktree prune
+          git worktree add --detach "\$WORK" "${PIN}" >/dev/null
+          docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
+          rm -rf "\$OUT/cache" "\$OUT/data" "\$OUT/L5_STRATEGY_FINDINGS.md"
+          echo L5_FULL_HISTORY_START run_id=${RUN_ID} pin=${PIN}
+          docker run --rm --network host \
+            -v "\$OUT:/out" \
+            "\$IMAGE" \
+            python -m src.l5 all \
+              --cache-dir /out/cache \
+              --output-dir /out/data \
+              --findings /out/L5_STRATEGY_FINDINGS.md \
+            > "\$ROOT/console.log" 2>&1
+          echo L5_FULL_HISTORY_DONE
+          python3 - <<'PY'
+          import csv, json, os
+          root=os.environ.get('L5_ROOT','')
+          if not root:
+              root='${ROOT}'
+          out=root+'/output'
+          summary_csv=out+'/data/l5_windows_summary.csv'
+          analysis_json=out+'/data/l5_analysis.json'
+          rows=list(csv.DictReader(open(summary_csv,newline='',encoding='utf-8')))
+          def truth(v): return str(v).strip().lower() in {'1','true','yes'}
+          pnl_rows=[]
+          from collections import Counter,defaultdict
+          src=Counter(); by=defaultdict(lambda:{'n':0,'pnl':0.0,'w':0,'l':0,'f':0})
+          redeem_match=0; redeem_checked=0
+          for r in rows:
+              p=str(r.get('realized_pnl') or '').strip()
+              if p:
+                  v=float(p); pnl_rows.append(v); src[r.get('pnl_source') or '']+=1
+                  k=f"{r.get('asset')}_{r.get('window_minutes')}m"
+                  d=by[k]; d['n']+=1; d['pnl']+=v
+                  d['w']+=v>1e-9; d['l']+=v<-1e-9; d['f']+=abs(v)<=1e-9
+              m=str(r.get('redeem_qty_matches_inventory') or '').strip().lower()
+              if m:
+                  redeem_checked+=1; redeem_match+=m in {'1','true','yes'}
+          a=json.load(open(analysis_json,encoding='utf-8'))
+          result={
+            'classification':'READ_ONLY_REDEMPTION_DERIVED_L5_FULL_HISTORY',
+            'window_rows':len(rows),
+            'windows_with_pnl':len(pnl_rows),
+            'total_realized_pnl':round(sum(pnl_rows),6),
+            'avg_realized_pnl_per_pnl_window':round(sum(pnl_rows)/len(pnl_rows),6) if pnl_rows else None,
+            'positive_windows':sum(x>1e-9 for x in pnl_rows),
+            'negative_windows':sum(x<-1e-9 for x in pnl_rows),
+            'flat_windows':sum(abs(x)<=1e-9 for x in pnl_rows),
+            'positive_rate':round(sum(x>1e-9 for x in pnl_rows)/len(pnl_rows),6) if pnl_rows else None,
+            'pnl_source_counts':dict(src),
+            'redeem_inventory_match':{'matched':redeem_match,'checked':redeem_checked},
+            'by_cell':{k:{**v,'pnl':round(v['pnl'],6),'avg':round(v['pnl']/v['n'],6) if v['n'] else None} for k,v in sorted(by.items())},
+            'coverage':a.get('coverage'),
+          }
+          print('L5_FULL_HISTORY_SUMMARY='+json.dumps(result,separators=(',',':'),default=str))
+          PY
+          echo L5_FINDINGS_BEGIN
+          sed -n '1,260p' "\$OUT/L5_STRATEGY_FINDINGS.md"
+          echo L5_FINDINGS_END
+          echo L5_OUTPUT_DIR=\$OUT
+          EOF
+          )
+          ENCODED=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
+          PARAMETERS=$(jq -nc --arg cmd "echo '$ENCODED' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "ARB L5 full-history redemption reconciliation" \
+            --parameters "$PARAMETERS" \
+            --timeout-seconds 3300 \
+            --query 'Command.CommandId' --output text)
+          echo "SSM_COMMAND_ID=$COMMAND_ID"
+          for _ in $(seq 1 220); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || true)
+            case "$STATUS" in
+              Success|Failed|Cancelled|TimedOut|Cancelling) break ;;
+            esac
+            sleep 15
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          grep -q 'L5_FULL_HISTORY_SUMMARY=' <<<"$(jq -r '.Stdout // ""' <<<"$RESULT")"
