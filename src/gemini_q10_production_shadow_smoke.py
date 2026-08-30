@@ -1,9 +1,8 @@
 """Public-only AWS smoke for the q10 production candidate.
 
-No credentials and no order entry. Measures current Gemini BTC spot REST latency,
-probes Gemini's event reference-price WebSocket stream, exercises the momentum guard,
-and asks the existing public q10 entry selector whether a reward-eligible candidate
-exists.
+No credentials and no order entry. Compares REST ticker timing with Gemini's
+low-latency BTCUSD bookTicker WebSocket, probes the exact prediction-market
+settlement-reference stream, and asks the public q10 selector for a candidate.
 """
 from __future__ import annotations
 
@@ -17,6 +16,7 @@ from src import gemini_liquidity_reward_live_probe_q10 as probe
 from src import gemini_q10_production_candidate as production
 from src import gemini_q10_production_risk as risk
 from src import gemini_q10_reference_ws_probe as reference_ws
+from src import gemini_q10_spot_ws_guard as spot_ws
 
 
 async def main() -> None:
@@ -37,6 +37,10 @@ async def main() -> None:
             await asyncio.sleep(0.2)
 
     try:
+        spot_stream = await spot_ws.probe(duration_s=2.0)
+    except Exception as exc:
+        spot_stream = {"ok": False, "error_type": type(exc).__name__, "error": str(exc)[:300]}
+    try:
         ref = await reference_ws.probe(max_messages=5, timeout_s=4.0)
     except Exception as exc:
         ref = {"ok": False, "error_type": type(exc).__name__, "error": str(exc)[:300]}
@@ -45,7 +49,8 @@ async def main() -> None:
         "classification": "READ_ONLY_PUBLIC_Q10_PRODUCTION_SHADOW_SMOKE",
         "order_entry": False,
         "credentials_loaded": False,
-        "spot_samples": samples,
+        "rest_spot_samples": samples,
+        "spot_ws": spot_stream,
         "reference_ws": ref,
         "candidate": None,
     }
