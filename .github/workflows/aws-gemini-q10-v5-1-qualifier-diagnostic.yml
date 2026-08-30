@@ -82,6 +82,7 @@ jobs:
           chmod 600 "\$DIAG"
 
           docker run --rm --network host \
+            -e PYTHONPATH=/app \
             -e GEMINI_Q10_PRODUCTION_LIVE=NO \
             -e GEMINI_LIQUIDITY_REWARD_LIVE_Q10=NO \
             -e V51_DIAG_RELEASE_COMMIT=${REQUIRED_RELEASE_COMMIT} \
