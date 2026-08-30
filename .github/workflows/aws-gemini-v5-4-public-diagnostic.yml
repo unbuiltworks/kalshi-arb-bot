@@ -16,7 +16,7 @@ env:
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
   RELEASE_BRANCH: release/gemini-adaptive-maker-v5-4
-  REQUIRED_RELEASE_COMMIT: 135b17f111d4c60b05682e6c2059b57001681533
+  REQUIRED_RELEASE_COMMIT: 1a02c6ca5c707193475bb00f1b476e809a4af127
 
 jobs:
   diagnose:
@@ -77,7 +77,6 @@ jobs:
           grep -q '"order_entry":false' <<<"$OUT"
           grep -q '"liquidity_rewards_modeled":false' <<<"$OUT"
           grep -q '"maker_rebates_modeled":false' <<<"$OUT"
-          # If a plan was found, the new catastrophic campaign bound must be explicit and true.
           if grep -q '"plan":' <<<"$OUT"; then
             grep -q '"hard_campaign_bound_safe":true' <<<"$OUT"
             grep -q '"campaign_loss_limit":"1.00"' <<<"$OUT"
