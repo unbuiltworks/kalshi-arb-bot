@@ -41,17 +41,22 @@ def test_invalid_metadata_fails_closed():
     assert grid.valid_integer_quantities(event(pinc="0")) == ()
 
 
-def test_event_specific_planner_uses_largest_valid_safe_quantity():
-    e = event(qmin="1", qinc="2")
+def test_event_specific_planner_uses_largest_grid_and_campaign_safe_quantity(monkeypatch):
+    monkeypatch.setenv("GEMINI_Q10_V5_MAX_CAMPAIGN_LOSS_USD", "1.00")
+    e = event(qmin="1", qinc="0.01")
     plan = grid.select_plan_for_event(e, snap=snap(), increment=D("0.01"))
     assert plan is not None
-    assert plan.quantity == D("10")
+    # On this 14c/54c plan, q2's NO-side full settlement loss exceeds $1,
+    # so q1 is the largest clip satisfying both the instrument grid and hard cap.
+    assert plan.quantity == D("1")
+    assert grid.catastrophic_loss_for_plan(plan) <= D("1.00")
 
 
-def test_grid_aware_drop_in_never_selects_invalid_quantity(monkeypatch):
+def test_grid_aware_drop_in_fails_closed_when_no_legal_clip_fits_campaign_bound(monkeypatch):
+    monkeypatch.setenv("GEMINI_Q10_V5_MAX_CAMPAIGN_LOSS_USD", "1.00")
     e = event(qmin="1", qinc="2")
     assert grid.event_contract_ok(e)
     monkeypatch.setattr(policy, "select_plan", grid.select_plan_grid_aware)
-    plan = policy.select_plan(snap=snap(), increment=D("0.01"))
-    assert plan is not None
-    assert int(plan.quantity) in {2, 4, 6, 8, 10}
+    # q2 is the smallest legal grid clip, but the 54c NO leg can lose >$1 at
+    # settlement. There is therefore no quantity that satisfies both constraints.
+    assert policy.select_plan(snap=snap(), increment=D("0.01")) is None
