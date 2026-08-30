@@ -15,6 +15,11 @@ class FakeCache:
         return self.snap
 
 
+class ErrorCache:
+    async def wait_fresh(self, **kwargs):
+        raise TimeoutError('synthetic stale book')
+
+
 class FakeMaker:
     def __init__(self):
         self.calls = []
@@ -110,6 +115,105 @@ async def test_bounded_fok_refuses_to_send_when_one_tick_beyond_loss_bound(monke
     assert result['hard_halt'] is True
     assert result['status'] == 'RESCUE_BOUND_NO_LONGER_AVAILABLE'
     assert maker.calls == []
+
+
+@pytest.mark.asyncio
+async def test_rescue_stale_book_halts_before_order_send(monkeypatch, tmp_path):
+    monkeypatch.setenv(p.v1.STATE_ENV, str(tmp_path))
+    maker = FakeMaker()
+    result = await p._bounded_fok(
+        maker,
+        cache=ErrorCache(),
+        symbol='GEMI-BTC05M-TEST-UP',
+        filled_outcome='YES',
+        filled_price=D('0.48'),
+        quantity=D('10'),
+        increment=D('0.01'),
+        trade_id='v5stale',
+        state={'open': True},
+    )
+    assert result['status'] == 'RESCUE_BOOK_NOT_FRESH'
+    assert result['hard_halt'] is True
+    assert maker.calls == []
+
+
+@pytest.mark.asyncio
+async def test_rescue_ack_timeout_is_ambiguous_hard_halt(monkeypatch, tmp_path):
+    monkeypatch.setenv(p.v1.STATE_ENV, str(tmp_path))
+
+    class TimeoutMaker(FakeMaker):
+        async def request(self, method, params, timeout=3.0):
+            self.calls.append((method, params, timeout))
+            raise TimeoutError('synthetic ack timeout')
+
+    maker = TimeoutMaker()
+    result = await p._bounded_fok(
+        maker,
+        cache=FakeCache(snap()),
+        symbol='GEMI-BTC05M-TEST-UP',
+        filled_outcome='YES',
+        filled_price=D('0.48'),
+        quantity=D('10'),
+        increment=D('0.01'),
+        trade_id='v5ack',
+        state={'open': True},
+    )
+    assert result['status'] == 'RESCUE_FOK_ACK_AMBIGUOUS'
+    assert result['hard_halt'] is True
+    assert len(maker.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_fok_partial_fill_is_treated_as_exchange_ambiguity(monkeypatch, tmp_path):
+    monkeypatch.setenv(p.v1.STATE_ENV, str(tmp_path))
+    maker = FakeMaker()
+
+    async def partial_row(client_id, symbol):
+        return {'filledQuantity': '3', 'avgExecutionPrice': '0.48'}
+
+    monkeypatch.setattr(p.v1.base, '_find_row', partial_row)
+    result = await p._bounded_fok(
+        maker,
+        cache=FakeCache(snap()),
+        symbol='GEMI-BTC05M-TEST-UP',
+        filled_outcome='YES',
+        filled_price=D('0.48'),
+        quantity=D('10'),
+        increment=D('0.01'),
+        trade_id='v5partial',
+        state={'open': True},
+    )
+    assert result['status'] == 'RESCUE_FOK_PARTIAL_AMBIGUITY'
+    assert result['hard_halt'] is True
+    assert result['filled'] == '3'
+
+
+@pytest.mark.asyncio
+async def test_cancel_race_reconciles_fill_after_cancel(monkeypatch):
+    calls = {'cancel': 0, 'reconcile': 0}
+
+    async def cancel_pair(*args, **kwargs):
+        calls['cancel'] += 1
+
+    async def reconcile(yes_id, no_id, symbol):
+        calls['reconcile'] += 1
+        return (
+            {'filledQuantity': '10', 'avgExecutionPrice': '0.48', 'status': 'FILLED'},
+            {'filledQuantity': '0', 'status': 'CANCELLED'},
+            D('10'), D('0'),
+        )
+
+    monkeypatch.setattr(p.v1, '_cancel_pair', cancel_pair)
+    monkeypatch.setattr(p.v1.probe, '_reconcile', reconcile)
+    yf, nf, yrow, nrow = await p._cancel_original_pair(
+        object(), yes_id='yes', no_id='no', symbol='GEMI-BTC05M-TEST-UP',
+        yes_row={'filledQuantity': '0'}, no_row={'filledQuantity': '0'},
+    )
+    assert calls == {'cancel': 1, 'reconcile': 1}
+    assert yf == D('10')
+    assert nf == D('0')
+    assert yrow['status'] == 'FILLED'
+    assert nrow['status'] == 'CANCELLED'
 
 
 @pytest.mark.asyncio
