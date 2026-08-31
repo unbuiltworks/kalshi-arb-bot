@@ -7,7 +7,9 @@ on:
     paths:
       - 'src/gemini_rebate_buyer_30_49.py'
       - 'src/gemini_rebate_buyer_30_49_shadow.py'
+      - 'src/gemini_rebate_buyer_30_49_replay.py'
       - 'tests/test_gemini_rebate_buyer_30_49.py'
+      - 'tests/test_gemini_rebate_buyer_30_49_replay.py'
       - '.github/workflows/gemini-rebate-buyer-30-49-shadow.yml'
 
 permissions:
@@ -24,7 +26,7 @@ jobs:
           python-version: '3.12'
       - run: pip install -r requirements.txt
       - name: Focused policy tests
-        run: pytest -q tests/test_gemini_rebate_buyer_30_49.py tests/test_gemini_l5_fair_value.py
+        run: pytest -q tests/test_gemini_rebate_buyer_30_49.py tests/test_gemini_rebate_buyer_30_49_replay.py tests/test_gemini_l5_fair_value.py
       - name: Public read-only BTC ETH 5m shadow
         run: |
           mkdir -p artifacts
@@ -33,10 +35,17 @@ jobs:
             --poll-s 5 \
             --output artifacts/gemini-rebate-buyer-30-49.jsonl \
             | tee artifacts/gemini-rebate-buyer-30-49.log
+      - name: Strict causal trade-through replay
+        run: |
+          python -m src.gemini_rebate_buyer_30_49_replay \
+            artifacts/gemini-rebate-buyer-30-49.jsonl \
+            --output artifacts/gemini-rebate-buyer-30-49.strict.json \
+            | tee artifacts/gemini-rebate-buyer-30-49.strict.log
       - name: Assert no order-entry claims
         run: |
           grep -q '"order_entry":false' artifacts/gemini-rebate-buyer-30-49.log
           grep -q 'GEMINI_REBATE_BUYER_30_49_SUMMARY' artifacts/gemini-rebate-buyer-30-49.log
+          grep -q 'READ_ONLY_STRICT_TRADE_THROUGH_NOT_REALIZED' artifacts/gemini-rebate-buyer-30-49.strict.json
           ! grep -Eq 'REALIZED[_ ]PNL|ORDER[_ ]PLACED|SUBMITTED' artifacts/gemini-rebate-buyer-30-49.log
       - uses: actions/upload-artifact@v4
         if: always()
