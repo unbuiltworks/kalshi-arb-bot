@@ -42,3 +42,22 @@ architecture fixes it.
 
 The L-series read (Sep 1, 13:00 UTC) still answers the mechanical
 question; this note answers the scale question ahead of it.
+
+## Companion measurement: Kalshi flow (same day, our tape)
+
+Deduped by trade_id (0 duplicates found), KXBTC15M + KXETH15M only:
+
+- **$19.4M premium traded in ~22.4 hours** (Aug 31 UTC), ~300x Gemini's
+  entire crypto up/down flow.
+- **Evening-ET hours (23:00–05:00 UTC): $7.7M** — the regime where our
+  scored +3.79¢/$ edge lives.
+- The $480/day requirement at full shadow edge (~$12.7k/day of our
+  turnover) is **~0.16% of evening flow** on two series; at half-edge
+  (~$25k/day) still <0.4%.
+
+Conclusion: **on Kalshi, venue capacity is a non-issue for the target.**
+The binding question is purely edge survival in the live queue —
+real-vs-shadow capture and adverse selection — which is exactly what
+tonight's canary measures. Scaling Kalshi is an edge-preservation
+problem; scaling Gemini is a flow-scarcity problem. Same target, opposite
+bottlenecks.
