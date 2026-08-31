@@ -1,4 +1,25 @@
-# Lane 2 Scored Report — Policy D on Kalshi/Gemini (interim, 2026-08-31 04:42 UTC)
+# Lane 2 Scored Report — Policy D on Kalshi/Gemini (FINAL, 2026-08-31 11:15 UTC)
+
+## FINAL RESULT (supersedes the interim numbers below)
+
+50 settled Kalshi windows over the full ~16h collection: **net −$52.48 =
+−0.80¢/$ after fees.** The aggregate hides a sharp, consistent regime split:
+
+| Regime | Windows | Positive | Net | ¢/$ |
+|---|---|---|---|---|
+| Evening (~19:00–01:00 UTC, active flow, ~6.6k prints/window) | 28 | 17 | +$202.97 | **+3.79¢** |
+| Overnight (01:00–11:00 UTC, dead flow, ~1.5k prints/window) | 22 | ~2–5 | ~−$255 | **~−25¢** |
+
+Verdict: the ported Policy D signal EXISTS on Kalshi and is fee-positive in
+active hours; it is decisively unprofitable in dead hours, where the 30-print
+tape goes stale and "fade the stampede" degenerates into buying the wrong side
+of a thin drift. Any live use requires a flow-density gate (proposed: cap the
+wall-clock span of the 30-print tape), chosen once on this data and frozen —
+not yet implemented, pending user sign-off. Lane focus has since shifted to
+the Gemini paired-maker engine (see analysis/gemini/).
+
+---
+
 
 Frozen Policy D (2026-08-30 constants, untouched) shadow-run against live
 public tape collected 2026-08-30 ~19:15 UTC → 2026-08-31 ~04:35 UTC.
