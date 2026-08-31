@@ -4,6 +4,8 @@ set -euo pipefail
 # One-shot AWS launcher for the bounded Gemini BTC5m paired-maker live canary.
 # Fresh user approval + unique one-use ID are mandatory. The approval marker is
 # consumed only after exact-image tests and authenticated clean-account preflight.
+# The live container stays ATTACHED to this launcher so a launcher/control-path
+# failure cannot silently leave venue-capable execution running unattended.
 
 SOURCE_REPO="${SOURCE_REPO:-/home/ssm-user/kalshi-arb-bot}"
 WORKTREE="${WORKTREE:-/opt/arb/gemini-paired-maker-live10}"
@@ -150,7 +152,16 @@ sync "$STATE_DIR"
 PROBE_ID="pm10-${SAFE_APPROVAL_ID:0:10}-$(date -u +%H%M%S)"
 echo "PAIRED_MAKER_LIVE10_STARTING probe_id=$PROBE_ID approval_id=$SAFE_APPROVAL_ID commit=$PINNED_COMMIT asset=BTC horizon=5m q=1 one_pair_outstanding=true max_window_spend=10 max_rescue_loss=2 taker_normal=false auto_restart=false"
 
-docker run -d --name "$CONTAINER" --network host --restart no \
+# Fail closed at the process boundary. If this launcher/SSM shell is interrupted,
+# the trap stops the venue-capable container instead of leaving it detached.
+cleanup_live() {
+  docker stop "$CONTAINER" >/dev/null 2>&1 || true
+}
+trap cleanup_live EXIT INT TERM
+
+echo "PAIRED_MAKER_LIVE10_ATTACHED container=$CONTAINER probe_id=$PROBE_ID"
+set +e
+docker run --name "$CONTAINER" --network host --restart no \
   --env-file "$ENV_FILE" \
   -e PYTHONUNBUFFERED=1 \
   -e GEMINI_SHORT_CRYPTO_STATE_DIR=/state \
@@ -159,10 +170,17 @@ docker run -d --name "$CONTAINER" --network host --restart no \
   -e GEMINI_PAIRED_MAKER_LIVE_10_ARM="$PROBE_ID" \
   -v "$STATE_DIR:/state" \
   "$IMAGE" python -u -m src.gemini_maker.live_10_canary_v2
+LIVE_RC=$?
+set -e
 
-echo "PAIRED_MAKER_LIVE10_DETACHED container=$CONTAINER probe_id=$PROBE_ID"
-sleep 2
+echo "PAIRED_MAKER_LIVE10_PROCESS_EXIT rc=$LIVE_RC"
 docker ps -a --filter "name=^/${CONTAINER}$" --format 'PAIRED_MAKER_LIVE10_CONTAINER {{.Names}} {{.Status}} {{.Image}}'
-docker logs --tail 80 "$CONTAINER" 2>&1 || true
+docker logs --tail 3000 "$CONTAINER" 2>&1 || true
 
-echo "Emergency stop: docker stop $CONTAINER"
+if [ "$LIVE_RC" -ne 0 ]; then
+  echo "PAIRED_MAKER_LIVE10_PROCESS_NOT_CLEAN rc=$LIVE_RC" >&2
+  exit "$LIVE_RC"
+fi
+
+trap - EXIT INT TERM
+echo "PAIRED_MAKER_LIVE10_ATTACHED_COMPLETE container=$CONTAINER probe_id=$PROBE_ID"
