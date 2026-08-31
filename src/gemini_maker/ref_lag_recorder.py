@@ -251,6 +251,46 @@ async def _pred_ws_session(sink: Sink, stop: asyncio.Event, http: httpx.AsyncCli
                                   "E": msg.get("E"), "tid": msg.get("t")})
 
 
+async def settlement_task(sink: Sink, stop: asyncio.Event) -> None:
+    """Ground-truth labels: settled events expose settlementValue (the exact
+    reference index at settlement) and resolutionSide. These, not the spot
+    proxy, are the labels the calibration study must use (audit fix)."""
+    seen: Set[str] = set()
+    async with httpx.AsyncClient(timeout=10.0,
+                                 headers={"User-Agent": "arb-reflag-readonly/1.0"}) as http:
+        while not stop.is_set():
+            try:
+                response = await http.get(f"{GEMINI_REST}/v1/prediction-markets/events",
+                                          params=[("status", "settled"),
+                                                  ("category", "Crypto"),
+                                                  ("limit", "100")])
+                if response.status_code == 200:
+                    for row in response.json().get("data", []):
+                        ticker = str(row.get("ticker") or "").upper()
+                        if not WINDOW_RE.match(ticker) or ticker in seen:
+                            continue
+                        for contract in row.get("contracts", []) or []:
+                            sym = str(contract.get("instrumentSymbol") or "")
+                            if not sym.upper().endswith("-UP"):
+                                continue
+                            seen.add(ticker)
+                            await sink.write({
+                                "kind": "settlement", "market": sym.upper(),
+                                "ticker": ticker,
+                                "settlement_value": contract.get("settlementValue"),
+                                "resolution_side": contract.get("resolutionSide"),
+                                "expiry": contract.get("expiryDate"),
+                                "source": contract.get("source"),
+                            })
+            except Exception as exc:
+                await sink.write({"kind": "error", "where": "settlement",
+                                  "error": type(exc).__name__})
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=60.0)
+            except asyncio.TimeoutError:
+                pass
+
+
 async def vol_task(sink: Sink, stop: asyncio.Event) -> None:
     last: Dict[str, float] = {}
     async with httpx.AsyncClient(timeout=10.0,
@@ -291,6 +331,7 @@ async def run(out_dir: Path, hours: float) -> None:
         asyncio.create_task(spot_task(sink, stop)),
         asyncio.create_task(pred_task(sink, stop)),
         asyncio.create_task(vol_task(sink, stop)),
+        asyncio.create_task(settlement_task(sink, stop)),
     ]
     try:
         await asyncio.sleep(hours * 3600)

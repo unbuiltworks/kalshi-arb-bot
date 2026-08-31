@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-08-31T13:45:03.004973+00:00",
+ "generated_utc": "2026-08-31T14:04:59.116800+00:00",
  "params": {
   "signal_delta_p": 0.05,
   "stale_edge_p": 0.03,
@@ -10,38 +10,38 @@
  },
  "aggregate": {
   "evidence_class": "READ_ONLY_LAG_STUDY_SETTLE_PROXY",
-  "windows_analyzed": 13,
-  "signals": 120,
+  "windows_analyzed": 20,
+  "signals": 158,
   "stale_executable_by_horizon_ms": {
-   "10": 17,
-   "25": 17,
-   "50": 17,
-   "100": 17,
-   "250": 18,
-   "500": 21,
-   "1000": 20
+   "10": 24,
+   "25": 24,
+   "50": 24,
+   "100": 24,
+   "250": 25,
+   "500": 28,
+   "1000": 29
   },
-  "stale_share_at_250ms": 0.15,
-  "simulated_takes": 3,
-  "take_pnl": -5.2,
-  "take_notional": 15.2,
-  "take_pnl_per_dollar": -0.3421,
-  "median_take_edge": 0.1136,
-  "calibration": {
+  "stale_share_at_250ms": 0.158,
+  "simulated_takes": 6,
+  "take_pnl": -6.8,
+  "take_notional": 26.8,
+  "take_pnl_per_dollar": -0.2537,
+  "median_take_edge": 0.1124,
+  "calibration_diagnostic_correlated": {
    "0.0": {
-    "n": 3,
+    "n": 10,
     "outcome_rate": 0.0
    },
    "0.1": {
-    "n": 3,
+    "n": 10,
     "outcome_rate": 0.0
    },
    "0.2": {
-    "n": 4,
+    "n": 11,
     "outcome_rate": 0.0
    },
    "0.3": {
-    "n": 2,
+    "n": 5,
     "outcome_rate": 0.0
    },
    "0.4": {
@@ -68,6 +68,18 @@
     "n": 6,
     "outcome_rate": 0.5
    }
+  },
+  "fixed_tte": {
+   "observations": 28,
+   "with_exact_labels": 0,
+   "brier_all": 0.0998,
+   "brier_exact_labels": null,
+   "brier_climatology_baseline": 0.25
+  },
+  "settlement_proxy_check": {
+   "windows_compared": 0,
+   "side_agreement_rate": null,
+   "median_abs_err": null
   }
  },
  "takes": [
@@ -77,7 +89,7 @@
    "side": "sell",
    "px": 0.34,
    "qty": 10.0,
-   "edge": 0.2309,
+   "edge": 0.2322,
    "settle": "no",
    "pnl": 3.4
   },
@@ -90,6 +102,36 @@
    "edge": 0.1136,
    "settle": "no",
    "pnl": -6.8
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184382.2271485,
+   "side": "buy",
+   "px": 0.15,
+   "qty": 10.0,
+   "edge": 0.1504,
+   "settle": "no",
+   "pnl": -1.5
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184430.5178673,
+   "side": "buy",
+   "px": 0.13,
+   "qty": 10.0,
+   "edge": 0.0647,
+   "settle": "no",
+   "pnl": -1.3
+  },
+  {
+   "market": "GEMI-ETH15M2608311400-UP",
+   "t": 1788184615.6675076,
+   "side": "sell",
+   "px": 0.12,
+   "qty": 10.0,
+   "edge": 0.0734,
+   "settle": "no",
+   "pnl": 1.2
   },
   {
    "market": "GEMI-SOL05M2608311335-UP",
@@ -106,48 +148,48 @@
   {
    "market": "GEMI-BTC05M2608311330-UP",
    "t": 1788182941.6977026,
-   "p": 0.1091,
+   "p": 0.1078,
    "tte": 58.3,
    "stale": {
     "10": {
      "side": "sell",
-     "edge": 0.2309,
+     "edge": 0.2322,
      "px": 0.34,
      "depth": 441.0
     },
     "25": {
      "side": "sell",
-     "edge": 0.2309,
+     "edge": 0.2322,
      "px": 0.34,
      "depth": 441.0
     },
     "50": {
      "side": "sell",
-     "edge": 0.2309,
+     "edge": 0.2322,
      "px": 0.34,
      "depth": 441.0
     },
     "100": {
      "side": "sell",
-     "edge": 0.2309,
+     "edge": 0.2322,
      "px": 0.34,
      "depth": 441.0
     },
     "250": {
      "side": "sell",
-     "edge": 0.2309,
+     "edge": 0.2322,
      "px": 0.34,
      "depth": 441.0
     },
     "500": {
      "side": "sell",
-     "edge": 0.2309,
+     "edge": 0.2322,
      "px": 0.34,
      "depth": 441.0
     },
     "1000": {
      "side": "sell",
-     "edge": 0.2309,
+     "edge": 0.2322,
      "px": 0.34,
      "depth": 441.0
     }
@@ -395,6 +437,91 @@
    "stale": {}
   },
   {
+   "market": "GEMI-BTC05M2608311355-UP",
+   "t": 1788184382.2271485,
+   "p": 0.2617,
+   "tte": 117.8,
+   "stale": {
+    "10": {
+     "side": "buy",
+     "edge": 0.0317,
+     "px": 0.23,
+     "depth": 100.0
+    },
+    "25": {
+     "side": "buy",
+     "edge": 0.0317,
+     "px": 0.23,
+     "depth": 100.0
+    },
+    "50": {
+     "side": "buy",
+     "edge": 0.0317,
+     "px": 0.23,
+     "depth": 100.0
+    },
+    "100": {
+     "side": "buy",
+     "edge": 0.0317,
+     "px": 0.23,
+     "depth": 100.0
+    },
+    "250": {
+     "side": "buy",
+     "edge": 0.0317,
+     "px": 0.23,
+     "depth": 100.0
+    },
+    "500": {
+     "side": "buy",
+     "edge": 0.0317,
+     "px": 0.23,
+     "depth": 100.0
+    },
+    "1000": {
+     "side": "buy",
+     "edge": 0.0317,
+     "px": 0.23,
+     "depth": 100.0
+    }
+   }
+  },
+  {
+   "market": "GEMI-BTC05M2608311355-UP",
+   "t": 1788184383.1812482,
+   "p": 0.1738,
+   "tte": 116.8,
+   "stale": {}
+  },
+  {
+   "market": "GEMI-BTC05M2608311355-UP",
+   "t": 1788184385.3406389,
+   "p": 0.2272,
+   "tte": 114.7,
+   "stale": {}
+  },
+  {
+   "market": "GEMI-BTC05M2608311355-UP",
+   "t": 1788184403.375951,
+   "p": 0.1743,
+   "tte": 96.6,
+   "stale": {}
+  },
+  {
+   "market": "GEMI-BTC05M2608311355-UP",
+   "t": 1788184405.3935947,
+   "p": 0.1011,
+   "tte": 94.6,
+   "stale": {}
+  },
+  {
+   "market": "GEMI-BTC05M2608311355-UP",
+   "t": 1788184430.5178673,
+   "p": 0.043,
+   "tte": 69.5,
+   "stale": {}
+  },
+  {
    "market": "GEMI-BTC15M2608311345-UP",
    "t": 1788183017.4246411,
    "p": 0.719,
@@ -604,6 +731,319 @@
    "t": 1788183430.5816557,
    "p": 0.3276,
    "tte": 469.4,
+   "stale": {}
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184382.2271485,
+   "p": 0.3004,
+   "tte": 417.8,
+   "stale": {
+    "10": {
+     "side": "buy",
+     "edge": 0.1204,
+     "px": 0.18,
+     "depth": 182.0
+    },
+    "25": {
+     "side": "buy",
+     "edge": 0.1204,
+     "px": 0.18,
+     "depth": 182.0
+    },
+    "50": {
+     "side": "buy",
+     "edge": 0.1204,
+     "px": 0.18,
+     "depth": 182.0
+    },
+    "100": {
+     "side": "buy",
+     "edge": 0.1504,
+     "px": 0.15,
+     "depth": 176.0
+    },
+    "250": {
+     "side": "buy",
+     "edge": 0.1504,
+     "px": 0.15,
+     "depth": 226.0
+    },
+    "500": {
+     "side": "buy",
+     "edge": 0.1504,
+     "px": 0.15,
+     "depth": 176.0
+    },
+    "1000": {
+     "side": "buy",
+     "edge": 0.1504,
+     "px": 0.15,
+     "depth": 176.0
+    }
+   }
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184403.401838,
+   "p": 0.2495,
+   "tte": 396.6,
+   "stale": {
+    "10": {
+     "side": "buy",
+     "edge": 0.0895,
+     "px": 0.16,
+     "depth": 178.0
+    },
+    "25": {
+     "side": "buy",
+     "edge": 0.0895,
+     "px": 0.16,
+     "depth": 178.0
+    },
+    "50": {
+     "side": "buy",
+     "edge": 0.0895,
+     "px": 0.16,
+     "depth": 178.0
+    },
+    "100": {
+     "side": "buy",
+     "edge": 0.0895,
+     "px": 0.16,
+     "depth": 178.0
+    },
+    "250": {
+     "side": "buy",
+     "edge": 0.0995,
+     "px": 0.15,
+     "depth": 176.0
+    },
+    "500": {
+     "side": "buy",
+     "edge": 0.0995,
+     "px": 0.15,
+     "depth": 176.0
+    },
+    "1000": {
+     "side": "buy",
+     "edge": 0.1095,
+     "px": 0.14,
+     "depth": 174.0
+    }
+   }
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184430.5178673,
+   "p": 0.1947,
+   "tte": 369.5,
+   "stale": {
+    "10": {
+     "side": "buy",
+     "edge": 0.0647,
+     "px": 0.13,
+     "depth": 172.0
+    },
+    "25": {
+     "side": "buy",
+     "edge": 0.0647,
+     "px": 0.13,
+     "depth": 172.0
+    },
+    "50": {
+     "side": "buy",
+     "edge": 0.0647,
+     "px": 0.13,
+     "depth": 172.0
+    },
+    "100": {
+     "side": "buy",
+     "edge": 0.0647,
+     "px": 0.13,
+     "depth": 172.0
+    },
+    "250": {
+     "side": "buy",
+     "edge": 0.0647,
+     "px": 0.13,
+     "depth": 172.0
+    },
+    "500": {
+     "side": "buy",
+     "edge": 0.0647,
+     "px": 0.13,
+     "depth": 172.0
+    },
+    "1000": {
+     "side": "buy",
+     "edge": 0.0647,
+     "px": 0.13,
+     "depth": 172.0
+    }
+   }
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184478.4361742,
+   "p": 0.1347,
+   "tte": 321.6,
+   "stale": {
+    "10": {
+     "side": "buy",
+     "edge": 0.0447,
+     "px": 0.09,
+     "depth": 164.0
+    },
+    "25": {
+     "side": "buy",
+     "edge": 0.0447,
+     "px": 0.09,
+     "depth": 164.0
+    },
+    "50": {
+     "side": "buy",
+     "edge": 0.0447,
+     "px": 0.09,
+     "depth": 164.0
+    },
+    "100": {
+     "side": "buy",
+     "edge": 0.0447,
+     "px": 0.09,
+     "depth": 164.0
+    },
+    "250": {
+     "side": "buy",
+     "edge": 0.0447,
+     "px": 0.09,
+     "depth": 164.0
+    },
+    "500": {
+     "side": "buy",
+     "edge": 0.0447,
+     "px": 0.09,
+     "depth": 164.0
+    },
+    "1000": {
+     "side": "buy",
+     "edge": 0.0447,
+     "px": 0.09,
+     "depth": 164.0
+    }
+   }
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184543.9297247,
+   "p": 0.2321,
+   "tte": 256.1,
+   "stale": {}
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184546.7094016,
+   "p": 0.2828,
+   "tte": 253.3,
+   "stale": {
+    "1000": {
+     "side": "buy",
+     "edge": 0.0328,
+     "px": 0.25,
+     "depth": 200.0
+    }
+   }
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184549.6534426,
+   "p": 0.3336,
+   "tte": 250.3,
+   "stale": {
+    "10": {
+     "side": "buy",
+     "edge": 0.0336,
+     "px": 0.3,
+     "depth": 214.0
+    },
+    "25": {
+     "side": "buy",
+     "edge": 0.0336,
+     "px": 0.3,
+     "depth": 214.0
+    },
+    "50": {
+     "side": "buy",
+     "edge": 0.0336,
+     "px": 0.3,
+     "depth": 214.0
+    },
+    "100": {
+     "side": "buy",
+     "edge": 0.0336,
+     "px": 0.3,
+     "depth": 214.0
+    },
+    "250": {
+     "side": "buy",
+     "edge": 0.0336,
+     "px": 0.3,
+     "depth": 214.0
+    },
+    "500": {
+     "side": "buy",
+     "edge": 0.0336,
+     "px": 0.3,
+     "depth": 214.0
+    },
+    "1000": {
+     "side": "buy",
+     "edge": 0.0336,
+     "px": 0.3,
+     "depth": 214.0
+    }
+   }
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184562.7399485,
+   "p": 0.2527,
+   "tte": 237.3,
+   "stale": {}
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184590.394933,
+   "p": 0.3986,
+   "tte": 209.6,
+   "stale": {}
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184614.728969,
+   "p": 0.2957,
+   "tte": 185.3,
+   "stale": {}
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184640.3650844,
+   "p": 0.1631,
+   "tte": 159.6,
+   "stale": {}
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184651.3573823,
+   "p": 0.0986,
+   "tte": 148.6,
+   "stale": {}
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "t": 1788184674.6055262,
+   "p": 0.037,
+   "tte": 125.4,
    "stale": {}
   },
   {
@@ -940,6 +1380,84 @@
    "stale": {}
   },
   {
+   "market": "GEMI-ETH15M2608311400-UP",
+   "t": 1788184451.324865,
+   "p": 0.0157,
+   "tte": 348.7,
+   "stale": {}
+  },
+  {
+   "market": "GEMI-ETH15M2608311400-UP",
+   "t": 1788184548.5931714,
+   "p": 0.0801,
+   "tte": 251.4,
+   "stale": {
+    "1000": {
+     "side": "sell",
+     "edge": 0.0399,
+     "px": 0.12,
+     "depth": 50.0
+    }
+   }
+  },
+  {
+   "market": "GEMI-ETH15M2608311400-UP",
+   "t": 1788184582.1262238,
+   "p": 0.1314,
+   "tte": 217.9,
+   "stale": {}
+  },
+  {
+   "market": "GEMI-ETH15M2608311400-UP",
+   "t": 1788184615.6675076,
+   "p": 0.0466,
+   "tte": 184.3,
+   "stale": {
+    "10": {
+     "side": "sell",
+     "edge": 0.0534,
+     "px": 0.1,
+     "depth": 50.0
+    },
+    "25": {
+     "side": "sell",
+     "edge": 0.0534,
+     "px": 0.1,
+     "depth": 50.0
+    },
+    "50": {
+     "side": "sell",
+     "edge": 0.0534,
+     "px": 0.1,
+     "depth": 50.0
+    },
+    "100": {
+     "side": "sell",
+     "edge": 0.0534,
+     "px": 0.1,
+     "depth": 50.0
+    },
+    "250": {
+     "side": "sell",
+     "edge": 0.0734,
+     "px": 0.12,
+     "depth": 50.0
+    },
+    "500": {
+     "side": "sell",
+     "edge": 0.0734,
+     "px": 0.12,
+     "depth": 50.0
+    },
+    "1000": {
+     "side": "sell",
+     "edge": 0.0634,
+     "px": 0.11,
+     "depth": 50.0
+    }
+   }
+  },
+  {
    "market": "GEMI-SOL05M2608311330-UP",
    "t": 1788182907.7907803,
    "p": 0.4336,
@@ -1084,395 +1602,261 @@
    "p": 0.3978,
    "tte": 64.8,
    "stale": {}
-  },
-  {
-   "market": "GEMI-SOL05M2608311335-UP",
-   "t": 1788183263.6188686,
-   "p": 0.2913,
-   "tte": 36.4,
-   "stale": {
-    "10": {
-     "side": "buy",
-     "edge": 0.1113,
-     "px": 0.18,
-     "depth": 182.0
-    },
-    "25": {
-     "side": "buy",
-     "edge": 0.1113,
-     "px": 0.18,
-     "depth": 182.0
-    },
-    "50": {
-     "side": "buy",
-     "edge": 0.1113,
-     "px": 0.18,
-     "depth": 182.0
-    },
-    "100": {
-     "side": "buy",
-     "edge": 0.1113,
-     "px": 0.18,
-     "depth": 182.0
-    },
-    "250": {
-     "side": "buy",
-     "edge": 0.1113,
-     "px": 0.18,
-     "depth": 182.0
-    },
-    "500": {
-     "side": "buy",
-     "edge": 0.0713,
-     "px": 0.22,
-     "depth": 192.0
-    },
-    "1000": {
-     "side": "buy",
-     "edge": 0.0813,
-     "px": 0.21,
-     "depth": 189.0
-    }
-   }
-  },
-  {
-   "market": "GEMI-SOL05M2608311335-UP",
-   "t": 1788183263.8172429,
-   "p": 0.4034,
-   "tte": 36.2,
-   "stale": {
-    "10": {
-     "side": "buy",
-     "edge": 0.2234,
-     "px": 0.18,
-     "depth": 182.0
-    },
-    "25": {
-     "side": "buy",
-     "edge": 0.2234,
-     "px": 0.18,
-     "depth": 182.0
-    },
-    "50": {
-     "side": "buy",
-     "edge": 0.2234,
-     "px": 0.18,
-     "depth": 182.0
-    },
-    "100": {
-     "side": "buy",
-     "edge": 0.2234,
-     "px": 0.18,
-     "depth": 182.0
-    },
-    "250": {
-     "side": "buy",
-     "edge": 0.2334,
-     "px": 0.17,
-     "depth": 180.0
-    },
-    "500": {
-     "side": "buy",
-     "edge": 0.1934,
-     "px": 0.21,
-     "depth": 189.0
-    },
-    "1000": {
-     "side": "buy",
-     "edge": 0.1934,
-     "px": 0.21,
-     "depth": 189.0
-    }
-   }
-  },
-  {
-   "market": "GEMI-SOL05M2608311335-UP",
-   "t": 1788183263.8173993,
-   "p": 0.457,
-   "tte": 36.2,
-   "stale": {
-    "10": {
-     "side": "buy",
-     "edge": 0.277,
-     "px": 0.18,
-     "depth": 182.0
-    },
-    "25": {
-     "side": "buy",
-     "edge": 0.277,
-     "px": 0.18,
-     "depth": 182.0
-    },
-    "50": {
-     "side": "buy",
-     "edge": 0.277,
-     "px": 0.18,
-     "depth": 182.0
-    },
-    "100": {
-     "side": "buy",
-     "edge": 0.277,
-     "px": 0.18,
-     "depth": 182.0
-    },
-    "250": {
-     "side": "buy",
-     "edge": 0.287,
-     "px": 0.17,
-     "depth": 180.0
-    },
-    "500": {
-     "side": "buy",
-     "edge": 0.247,
-     "px": 0.21,
-     "depth": 189.0
-    },
-    "1000": {
-     "side": "buy",
-     "edge": 0.247,
-     "px": 0.21,
-     "depth": 189.0
-    }
-   }
-  },
-  {
-   "market": "GEMI-SOL05M2608311335-UP",
-   "t": 1788183265.2610247,
-   "p": 0.3628,
-   "tte": 34.7,
-   "stale": {
-    "10": {
-     "side": "buy",
-     "edge": 0.1628,
-     "px": 0.2,
-     "depth": 187.0
-    },
-    "25": {
-     "side": "buy",
-     "edge": 0.1628,
-     "px": 0.2,
-     "depth": 187.0
-    },
-    "50": {
-     "side": "buy",
-     "edge": 0.1628,
-     "px": 0.2,
-     "depth": 187.0
-    },
-    "100": {
-     "side": "buy",
-     "edge": 0.1628,
-     "px": 0.2,
-     "depth": 187.0
-    },
-    "250": {
-     "side": "buy",
-     "edge": 0.1628,
-     "px": 0.2,
-     "depth": 187.0
-    },
-    "500": {
-     "side": "buy",
-     "edge": 0.1628,
-     "px": 0.2,
-     "depth": 187.0
-    },
-    "1000": {
-     "side": "buy",
-     "edge": 0.1628,
-     "px": 0.2,
-     "depth": 187.0
-    }
-   }
-  },
-  {
-   "market": "GEMI-SOL05M2608311335-UP",
-   "t": 1788183280.486586,
-   "p": 0.0914,
-   "tte": 19.5,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-SOL15M2608311345-UP",
-   "t": 1788183005.802706,
-   "p": 0.5837,
-   "tte": 894.2,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-SOL15M2608311345-UP",
-   "t": 1788183023.4953177,
-   "p": 0.6597,
-   "tte": 876.5,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-SOL15M2608311345-UP",
-   "t": 1788183043.7472224,
-   "p": 0.7318,
-   "tte": 856.3,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-SOL15M2608311345-UP",
-   "t": 1788183058.3785312,
-   "p": 0.6291,
-   "tte": 841.6,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-SOL15M2608311345-UP",
-   "t": 1788183063.3562186,
-   "p": 0.6922,
-   "tte": 836.6,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-SOL15M2608311345-UP",
-   "t": 1788183097.2693024,
-   "p": 0.6017,
-   "tte": 802.7,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-SOL15M2608311345-UP",
-   "t": 1788183103.4379606,
-   "p": 0.6576,
-   "tte": 796.6,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-SOL15M2608311345-UP",
-   "t": 1788183213.297245,
-   "p": 0.4411,
-   "tte": 686.7,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-SOL15M2608311345-UP",
-   "t": 1788183263.8172429,
-   "p": 0.497,
-   "tte": 636.2,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-SOL15M2608311345-UP",
-   "t": 1788183311.8130589,
-   "p": 0.3993,
-   "tte": 588.2,
-   "stale": {
-    "250": {
-     "side": "buy",
-     "edge": 0.0393,
-     "px": 0.36,
-     "depth": 50.0
-    },
-    "500": {
-     "side": "buy",
-     "edge": 0.0393,
-     "px": 0.36,
-     "depth": 50.0
-    }
-   }
-  },
-  {
-   "market": "GEMI-SOL15M2608311345-UP",
-   "t": 1788183351.2461421,
-   "p": 0.3349,
-   "tte": 548.8,
-   "stale": {
-    "10": {
-     "side": "buy",
-     "edge": 0.0649,
-     "px": 0.27,
-     "depth": 205.0
-    },
-    "25": {
-     "side": "buy",
-     "edge": 0.0649,
-     "px": 0.27,
-     "depth": 205.0
-    },
-    "50": {
-     "side": "buy",
-     "edge": 0.0649,
-     "px": 0.27,
-     "depth": 205.0
-    },
-    "100": {
-     "side": "buy",
-     "edge": 0.0849,
-     "px": 0.25,
-     "depth": 50.0
-    },
-    "250": {
-     "side": "buy",
-     "edge": 0.0849,
-     "px": 0.25,
-     "depth": 50.0
-    },
-    "500": {
-     "side": "buy",
-     "edge": 0.0849,
-     "px": 0.25,
-     "depth": 50.0
-    },
-    "1000": {
-     "side": "buy",
-     "edge": 0.0749,
-     "px": 0.26,
-     "depth": 202.0
-    }
-   }
-  },
-  {
-   "market": "GEMI-SOL15M2608311345-UP",
-   "t": 1788183458.9100196,
-   "p": 0.262,
-   "tte": 441.1,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-XRP05M2608311335-UP",
-   "t": 1788183005.8500648,
-   "p": 0.6797,
-   "tte": 294.1,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-XRP05M2608311335-UP",
-   "t": 1788183014.4280088,
-   "p": 0.7416,
-   "tte": 285.6,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-XRP05M2608311335-UP",
-   "t": 1788183017.1277258,
-   "p": 0.8156,
-   "tte": 282.9,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-XRP05M2608311335-UP",
-   "t": 1788183018.4170845,
-   "p": 0.868,
-   "tte": 281.6,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-XRP05M2608311335-UP",
-   "t": 1788183033.5046296,
-   "p": 0.92,
-   "tte": 266.5,
-   "stale": {}
-  },
-  {
-   "market": "GEMI-XRP05M2608311335-UP",
-   "t": 1788183115.5125837,
-   "p": 0.9721,
-   "tte": 184.5,
-   "stale": {}
   }
- ]
+ ],
+ "fixed_tte_obs": [
+  {
+   "market": "GEMI-BTC05M2608311330-UP",
+   "tte": 30.0,
+   "p": 0.001,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788182970.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-BTC05M2608311335-UP",
+   "tte": 180.0,
+   "p": 0.932,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788183120.0,
+   "brier": 0.8687
+  },
+  {
+   "market": "GEMI-BTC05M2608311335-UP",
+   "tte": 120.0,
+   "p": 0.225,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788183180.0,
+   "brier": 0.0506
+  },
+  {
+   "market": "GEMI-BTC05M2608311335-UP",
+   "tte": 60.0,
+   "p": 0.1921,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788183240.0,
+   "brier": 0.0369
+  },
+  {
+   "market": "GEMI-BTC05M2608311335-UP",
+   "tte": 30.0,
+   "p": 0.001,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788183270.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-BTC05M2608311355-UP",
+   "tte": 120.0,
+   "p": 0.0219,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184380.0,
+   "brier": 0.0005
+  },
+  {
+   "market": "GEMI-BTC05M2608311355-UP",
+   "tte": 60.0,
+   "p": 0.0028,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184440.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-BTC05M2608311355-UP",
+   "tte": 30.0,
+   "p": 0.001,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184470.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "tte": 180.0,
+   "p": 0.2921,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184620.0,
+   "brier": 0.0853
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "tte": 120.0,
+   "p": 0.0323,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184680.0,
+   "brier": 0.001
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "tte": 60.0,
+   "p": 0.001,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184740.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-BTC15M2608311400-UP",
+   "tte": 30.0,
+   "p": 0.001,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184770.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-ETH15M2608311400-UP",
+   "tte": 180.0,
+   "p": 0.0586,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184620.0,
+   "brier": 0.0034
+  },
+  {
+   "market": "GEMI-ETH15M2608311400-UP",
+   "tte": 120.0,
+   "p": 0.0011,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184680.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-ETH15M2608311400-UP",
+   "tte": 60.0,
+   "p": 0.001,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184740.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-ETH15M2608311400-UP",
+   "tte": 30.0,
+   "p": 0.001,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184770.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-SOL05M2608311335-UP",
+   "tte": 180.0,
+   "p": 0.766,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788183120.0,
+   "brier": 0.5867
+  },
+  {
+   "market": "GEMI-SOL05M2608311335-UP",
+   "tte": 120.0,
+   "p": 0.9281,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788183180.0,
+   "brier": 0.8614
+  },
+  {
+   "market": "GEMI-SOL05M2608311335-UP",
+   "tte": 60.0,
+   "p": 0.3864,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788183240.0,
+   "brier": 0.1493
+  },
+  {
+   "market": "GEMI-SOL05M2608311335-UP",
+   "tte": 30.0,
+   "p": 0.3288,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788183270.0,
+   "brier": 0.1081
+  },
+  {
+   "market": "GEMI-SOL05M2608311355-UP",
+   "tte": 60.0,
+   "p": 0.001,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184440.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-SOL05M2608311355-UP",
+   "tte": 30.0,
+   "p": 0.001,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184470.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-XRP05M2608311335-UP",
+   "tte": 180.0,
+   "p": 0.974,
+   "outcome": 1,
+   "label_source": "proxy",
+   "t": 1788183120.0,
+   "brier": 0.0007
+  },
+  {
+   "market": "GEMI-XRP05M2608311335-UP",
+   "tte": 120.0,
+   "p": 0.9982,
+   "outcome": 1,
+   "label_source": "proxy",
+   "t": 1788183180.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-XRP05M2608311335-UP",
+   "tte": 60.0,
+   "p": 0.7987,
+   "outcome": 1,
+   "label_source": "proxy",
+   "t": 1788183240.0,
+   "brier": 0.0405
+  },
+  {
+   "market": "GEMI-XRP05M2608311335-UP",
+   "tte": 30.0,
+   "p": 0.9938,
+   "outcome": 1,
+   "label_source": "proxy",
+   "t": 1788183270.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-XRP05M2608311355-UP",
+   "tte": 60.0,
+   "p": 0.001,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184440.0,
+   "brier": 0.0
+  },
+  {
+   "market": "GEMI-XRP05M2608311355-UP",
+   "tte": 30.0,
+   "p": 0.001,
+   "outcome": 0,
+   "label_source": "proxy",
+   "t": 1788184470.0,
+   "brier": 0.0
+  }
+ ],
+ "proxy_errors": []
 }

@@ -42,6 +42,7 @@ from src.gemini_maker.fair_value import fair_value, realized_vol_per_sqrt_s
 OUT_PATH = Path("analysis/gemini/ref_lag_study.json")
 
 HORIZONS_MS = (10, 25, 50, 100, 250, 500, 1000)
+FIXED_TTE_POINTS_S = (180.0, 120.0, 60.0, 30.0)
 SIGNAL_DELTA_P = 0.05
 STALE_EDGE_P = 0.03        # quote counted stale if fair-vs-quote gap >= this
 TAKE_EDGE_P = 0.05         # simulated take threshold at the 250ms horizon
@@ -56,6 +57,7 @@ def _load(tape_dir: str) -> Dict[str, Any]:
     spot: Dict[str, List[Tuple[float, float]]] = defaultdict(list)  # (t_s, px)
     books: Dict[str, List[Tuple[int, dict]]] = defaultdict(list)
     windows: Dict[str, dict] = {}
+    settlements: Dict[str, dict] = {}
     for path in sorted(glob.glob(f"{tape_dir}/reflag_*.jsonl")):
         with open(path, encoding="utf-8") as fh:
             for line in fh:
@@ -75,11 +77,14 @@ def _load(tape_dir: str) -> Dict[str, Any]:
                     books[e["market"]].append((e["t_ns"], row))
                 elif kind == "window":
                     windows[e["market"]] = e
+                elif kind == "settlement":
+                    settlements[e["market"]] = e
     for sym in spot:
         spot[sym].sort()
     for m in books:
         books[m].sort(key=lambda r: r[0])
-    return {"spot": spot, "books": books, "windows": windows}
+    return {"spot": spot, "books": books, "windows": windows,
+            "settlements": settlements}
 
 
 def _book_at(rows: List[Tuple[int, dict]], keys: List[int],
@@ -118,10 +123,13 @@ def _fair_at(spot_rows: List[Tuple[float, float]], t_s: float, strike: float,
     realized_mean = None
     coverage = 0.0
     if tau < 60.0:
-        win = [p for (tt, p) in trail if expiry_s - 60.0 <= tt <= t_s]
-        if win:
-            realized_mean = sum(win) / len(win)
-            coverage = min(t_s - (expiry_s - 60.0), 60.0 - tau)
+        win = [(tt, p) for (tt, p) in trail if expiry_s - 60.0 <= tt <= t_s]
+        if len(win) >= 3:
+            realized_mean = sum(p for _, p in win) / len(win)
+            # Coverage from the ACTUAL observation span, never wall-clock
+            # elapsed (audit fix): a lone sparse print must not masquerade as
+            # covering the whole realized stretch.
+            coverage = win[-1][0] - win[0][0]
     return fair_value(strike=strike, spot_now=spot_now, seconds_to_expiry=tau,
                       sigma=sigma, realized_mean=realized_mean,
                       realized_coverage_s=coverage)
@@ -140,6 +148,8 @@ def run(tape_dir: str = "data/ref_lag") -> Dict[str, Any]:
     signals: List[dict] = []
     takes: List[dict] = []
     calib: List[dict] = []
+    fixed_tte_obs: List[dict] = []
+    proxy_errors: List[dict] = []
     windows_seen = 0
     for market, meta in sorted(data["windows"].items()):
         asset = _asset(market)
@@ -159,7 +169,50 @@ def run(tape_dir: str = "data/ref_lag") -> Dict[str, Any]:
         bkeys = [t for t, _ in brows]
         spot_rows = data["spot"][asset]
         windows_seen += 1
-        settle = _settle_proxy(spot_rows, expiry_s, strike)
+        # GROUND TRUTH first (audit fix): actual resolutionSide/settlementValue
+        # from the settled event; the spot proxy is fallback only, flagged.
+        srec = data["settlements"].get(market)
+        settle_value = None
+        if srec and srec.get("resolution_side") in ("yes", "no"):
+            settle = srec["resolution_side"]
+            label_source = "exact"
+            try:
+                settle_value = float(srec.get("settlement_value"))
+            except (TypeError, ValueError):
+                pass
+        else:
+            settle = _settle_proxy(spot_rows, expiry_s, strike)
+            label_source = "proxy"
+        proxy_side = _settle_proxy(spot_rows, expiry_s, strike)
+        if settle_value is not None and proxy_side is not None:
+            win = [p for (t, p) in spot_rows
+                   if expiry_s - 60.0 <= t <= expiry_s]
+            proxy_val = sum(win) / len(win) if win else None
+            proxy_errors.append({
+                "market": market,
+                "settlement_value": settle_value,
+                "proxy_value": round(proxy_val, 4) if proxy_val else None,
+                "abs_err": round(abs(proxy_val - settle_value), 4)
+                if proxy_val else None,
+                "side_agrees": (proxy_side == settle),
+            })
+        # Window-clustered calibration: ONE observation per fixed TTE point
+        # per window, labeled with settlement (audit fix: 13 windows are 13
+        # observations, not 120).
+        for tte_pt in FIXED_TTE_POINTS_S:
+            t_obs = expiry_s - tte_pt
+            if t_obs < effective_s:
+                continue
+            fv_obs = _fair_at(spot_rows, t_obs, strike, expiry_s)
+            if fv_obs is None or settle is None:
+                continue
+            outcome = 1 if settle == "yes" else 0
+            fixed_tte_obs.append({
+                "market": market, "tte": tte_pt, "p": round(fv_obs.p_yes, 4),
+                "outcome": outcome, "label_source": label_source,
+                "t": t_obs,
+                "brier": round((fv_obs.p_yes - outcome) ** 2, 4),
+            })
 
         baseline_p: Optional[float] = None
         last_take_t = 0.0
@@ -236,9 +289,30 @@ def run(tape_dir: str = "data/ref_lag") -> Dict[str, Any]:
     buckets: Dict[str, List[int]] = defaultdict(list)
     for c in calib:
         buckets[f"{int(c['p'] * 10) / 10:.1f}"].append(c["outcome"])
-    agg["calibration"] = {
+    agg["calibration_diagnostic_correlated"] = {
         k: {"n": len(v), "outcome_rate": round(sum(v) / len(v), 3)}
         for k, v in sorted(buckets.items())
+    }
+    # Decision-grade calibration: window-clustered fixed-TTE observations
+    # with (preferentially) exact settlement labels.
+    exact_obs = [o for o in fixed_tte_obs if o["label_source"] == "exact"]
+    agg["fixed_tte"] = {
+        "observations": len(fixed_tte_obs),
+        "with_exact_labels": len(exact_obs),
+        "brier_all": round(statistics.mean(o["brier"] for o in fixed_tte_obs), 4)
+        if fixed_tte_obs else None,
+        "brier_exact_labels": round(statistics.mean(o["brier"] for o in exact_obs), 4)
+        if exact_obs else None,
+        "brier_climatology_baseline": 0.25,
+    }
+    agg["settlement_proxy_check"] = {
+        "windows_compared": len(proxy_errors),
+        "side_agreement_rate": round(
+            sum(1 for e in proxy_errors if e["side_agrees"]) / len(proxy_errors), 3)
+        if proxy_errors else None,
+        "median_abs_err": round(statistics.median(
+            e["abs_err"] for e in proxy_errors if e["abs_err"] is not None), 4)
+        if any(e["abs_err"] is not None for e in proxy_errors) else None,
     }
     payload = {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
@@ -248,6 +322,8 @@ def run(tape_dir: str = "data/ref_lag") -> Dict[str, Any]:
         "aggregate": agg,
         "takes": takes[:200],
         "signals_sample": signals[:100],
+        "fixed_tte_obs": fixed_tte_obs,
+        "proxy_errors": proxy_errors,
     }
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_text(json.dumps(payload, indent=1), encoding="utf-8")

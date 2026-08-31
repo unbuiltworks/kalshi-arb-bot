@@ -55,10 +55,14 @@ class InventoryV3:
     no_qty: float = 0.0
     no_cost: float = 0.0
     realized: float = 0.0
+    gross_bought: float = 0.0   # cumulative purchase notional; NEVER decreases
+    # (audit fix: the $10/window ceiling is on gross deployment — a same-side
+    # sale lowers spend but must not let capital recycle past the ceiling)
 
     def buy(self, side: str, qty: float, price: float) -> None:
         if qty <= 0:
             return
+        self.gross_bought += qty * price
         if side == "yes":
             self.yes_qty += qty
             self.yes_cost += qty * price
@@ -170,20 +174,22 @@ def _config(h: int) -> HorizonConfig:
     return CONFIG_5M if h <= 5 else CONFIG_15M
 
 
-def _entry_intent(s: MarketSnapshot, cfg: HorizonConfig) -> Optional[OrderIntent]:
-    """Fair-value maker entry: one side, q1, edge must clear the gate."""
+def _entry_intent(s: MarketSnapshot, cfg: HorizonConfig,
+                  maker_fee: float) -> Optional[OrderIntent]:
+    """Fair-value maker entry: one side, q1, edge must clear the gate NET of
+    the live maker fee per contract (audit fix). Rebates never count."""
     if s.fair_p_yes is None or not s.fair_confident:
         return None
     p = s.fair_p_yes
     candidates: List[Tuple[float, OrderIntent]] = []
     if s.book.yes_bid is not None:
-        edge = p - s.book.yes_bid
+        edge = p - s.book.yes_bid - maker_fee
         if edge >= cfg.min_entry_edge:
             candidates.append((edge, OrderIntent(
                 "yes", "buy", s.book.yes_bid, BASE_SIZE, "POST_ONLY",
                 "FAIR_VALUE_ENTRY")))
     if s.book.no_bid is not None:
-        edge = (1 - p) - s.book.no_bid
+        edge = (1 - p) - s.book.no_bid - maker_fee
         if edge >= cfg.min_entry_edge:
             candidates.append((edge, OrderIntent(
                 "no", "buy", s.book.no_bid, BASE_SIZE, "POST_ONLY",
@@ -192,8 +198,8 @@ def _entry_intent(s: MarketSnapshot, cfg: HorizonConfig) -> Optional[OrderIntent
         return None
     candidates.sort(key=lambda c: -c[0])
     intent = candidates[0][1]
-    # Reserve exit capital: entry + worst-case completion must fit the ceiling.
-    if s.inventory.spend + intent.size * PAIR_CEILING > WINDOW_SPEND_CEILING:
+    # Ceiling is on GROSS deployment; reserve room for the exit leg too.
+    if s.inventory.gross_bought + intent.size * PAIR_CEILING > WINDOW_SPEND_CEILING:
         return None
     return intent
 
@@ -263,7 +269,8 @@ def _exit_intent(s: MarketSnapshot, cfg: HorizonConfig) -> Optional[OrderIntent]
 
 
 def decide_market(s: MarketSnapshot, *, halted: bool = False,
-                  global_cycle_open: bool = False) -> MarketDecision:
+                  global_cycle_open: bool = False,
+                  maker_fee: float = 0.0) -> MarketDecision:
     """One evaluation for one market. Wrapper calls on every update and after
     every fill. global_cycle_open=True means another market already holds an
     open inventory cycle: no fresh entries anywhere (one cycle at a time)."""
@@ -284,7 +291,7 @@ def decide_market(s: MarketSnapshot, *, halted: bool = False,
         return MarketDecision("OBSERVE", [], True, "NO_NEW_RISK_NEAR_EXPIRY")
     if global_cycle_open:
         return MarketDecision("OBSERVE", [], True, "GLOBAL_CYCLE_OPEN")
-    if s.inventory.spend >= WINDOW_SPEND_CEILING - 1e-9:
+    if s.inventory.gross_bought >= WINDOW_SPEND_CEILING - 1e-9:
         return MarketDecision("OBSERVE", [], True, "WINDOW_SPEND_CEILING")
 
     label = s.flow.label
@@ -298,7 +305,7 @@ def decide_market(s: MarketSnapshot, *, halted: bool = False,
                                   "DELEGATE_SUBSIDY")
         return MarketDecision("OBSERVE", [], True, "DEAD_NO_POOL")
 
-    entry = _entry_intent(s, cfg)
+    entry = _entry_intent(s, cfg, maker_fee)
     if entry is None:
         return MarketDecision("OBSERVE", [], True, "NO_FAIR_VALUE_EDGE")
     return MarketDecision("FAIR_VALUE_MAKER", [entry], False, entry.reason)

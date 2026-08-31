@@ -77,8 +77,11 @@ def test_pairable_alternating_two_sided():
     assert fc.label == "PAIRABLE"
 
 
-def test_dislocated_beats_other_labels():
-    prints = [(0.0, "buy", 50.0)]
+def test_dislocated_when_flow_not_toxic():
+    # Balanced two-sided prints + big fair-vs-mid gap -> DISLOCATED.
+    # (A one-way burst with the same gap is TOXIC — audit fix, tested below.)
+    prints = [(i * 1.0, "buy" if i % 2 == 0 else "sell", 12.0)
+              for i in range(10)]
     fc = classify(FlowInputs(prints=prints, bid_depth=50, ask_depth=50,
                              mid=0.30, fair_p_yes=0.55, ref_velocity_sign=0))
     assert fc.label == "DISLOCATED"
@@ -193,3 +196,36 @@ def test_allocator_prefers_bigger_edge_and_zeros_toxic():
     ranked = rank_markets([a, b, t])
     assert [m for _, m in ranked] == ["B", "A"]
     assert score_market(t) == 0.0
+
+
+# ---------- audit fixes (ChatGPT review of 5007493) ----------
+
+def test_toxic_beats_dislocated_for_maker_entry():
+    # One-way burst AND a big fair-vs-mid gap: toxicity must win the label,
+    # so a miscalibrated fair value cannot convert a burst into an entry.
+    prints = [(0.0, "buy", 200.0), (0.5, "buy", 30.0)]
+    fc = classify(FlowInputs(prints=prints, bid_depth=50, ask_depth=50,
+                             mid=0.30, fair_p_yes=0.55, ref_velocity_sign=+1))
+    assert fc.label == "TOXIC"
+
+
+def test_entry_edge_is_net_of_maker_fee():
+    # fair 0.54 vs bid 0.47: gross edge 0.07 > 0.06 gate, but a 2c maker fee
+    # brings it to 0.05 -> no entry.
+    d = decide_market(_snap(fair=0.54), maker_fee=0.02)
+    assert d.mode == "OBSERVE" and d.reason == "NO_FAIR_VALUE_EDGE"
+    d2 = decide_market(_snap(fair=0.54), maker_fee=0.0)
+    assert d2.mode == "FAIR_VALUE_MAKER"
+
+
+def test_window_ceiling_is_gross_not_net():
+    # Buy and fully sell back 9.5 notional: spend returns ~0 but gross sticks,
+    # so capital must NOT recycle past the $10 ceiling.
+    inv = InventoryV3()
+    inv.buy("yes", 19, 0.50)   # gross 9.50
+    inv.sell("yes", 19, 0.50)  # spend back to 0, flat
+    assert inv.gross_bought >= 9.5
+    d = decide_market(_snap(fair=0.60, inv=inv))
+    assert d.reason in ("WINDOW_SPEND_CEILING", "NO_FAIR_VALUE_EDGE") or \
+        not d.intents  # entry+reserve (1.0) would breach 10 -> refused
+    assert d.mode != "FAIR_VALUE_MAKER"

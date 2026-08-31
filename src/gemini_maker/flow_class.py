@@ -62,7 +62,19 @@ def classify(inp: FlowInputs) -> FlowClass:
     flips = sum(1 for (_, s0, _), (_, s1, _) in zip(rows, rows[1:]) if s0 != s1)
     alternation = flips / (len(rows) - 1) if len(rows) > 1 else 0.0
 
-    # DISLOCATED beats everything: the book is simply wrong vs fair value.
+    # TOXICITY WINS (audit fix): a one-way information burst must veto new
+    # maker inventory even when a (possibly miscalibrated) fair value calls
+    # the book dislocated. A verified dislocation DURING toxic flow is a
+    # separate, tightly-bounded immediate-execution case, not a maker entry.
+    if total >= DEAD_FLOW_60S:
+        toxic = (one_side >= TOXIC_ONE_SIDE_SHARE
+                 and largest_share >= TOXIC_LARGEST_PRINT_SHARE)
+        if toxic or (one_side >= TOXIC_ONE_SIDE_SHARE
+                     and inp.ref_velocity_sign == dominant_dir
+                     and inp.ref_velocity_sign != 0):
+            return FlowClass("TOXIC", total, one_side, alternation,
+                             largest_share, "ONE_WAY_BURST")
+
     if (inp.mid is not None and inp.fair_p_yes is not None
             and abs(inp.fair_p_yes - inp.mid) >= DISLOCATION_CENTS):
         return FlowClass("DISLOCATED", total, one_side, alternation,
@@ -71,14 +83,6 @@ def classify(inp: FlowInputs) -> FlowClass:
     if total < DEAD_FLOW_60S:
         return FlowClass("DEAD", total, one_side, alternation, largest_share,
                          "NO_FLOW")
-
-    toxic = (one_side >= TOXIC_ONE_SIDE_SHARE
-             and largest_share >= TOXIC_LARGEST_PRINT_SHARE)
-    if toxic or (one_side >= TOXIC_ONE_SIDE_SHARE
-                 and inp.ref_velocity_sign == dominant_dir
-                 and inp.ref_velocity_sign != 0):
-        return FlowClass("TOXIC", total, one_side, alternation, largest_share,
-                         "ONE_WAY_BURST")
 
     two_sided_depth = (inp.bid_depth is not None and inp.ask_depth is not None
                        and inp.bid_depth >= MIN_TWO_SIDED_DEPTH
