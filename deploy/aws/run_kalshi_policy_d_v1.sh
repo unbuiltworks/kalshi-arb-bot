@@ -159,7 +159,7 @@ sync "$USED_MARKER.tmp"
 mv "$USED_MARKER.tmp" "$USED_MARKER"
 sync "$APPROVAL_DIR"
 
-echo "POLICY_D_AWS_LIVE_STARTING commit=$PINNED_COMMIT series=KXBTC15M q=1 max_windows=$MAX_WINDOWS max_session_seconds=$MAX_SESSION_SECONDS auto_restart=false rebates_counted=false"
+echo "POLICY_D_AWS_LIVE_STARTING commit=$PINNED_COMMIT series=KXBTC15M q=1 max_windows=$MAX_WINDOWS max_session_seconds=$MAX_SESSION_SECONDS auto_restart=false rebates_counted=false fail_closed_entrypoint=true"
 docker run -d --name "$CONTAINER" --network host --restart no \
   --env-file "$ENV_FILE" \
   -e PYTHONUNBUFFERED=1 \
@@ -171,7 +171,7 @@ docker run -d --name "$CONTAINER" --network host --restart no \
   -e KALSHI_POLICY_D_V1_MAX_WINDOWS="$MAX_WINDOWS" \
   -e KALSHI_POLICY_D_V1_MAX_SESSION_SECONDS="$MAX_SESSION_SECONDS" \
   -v "$STATE_DIR:/state" \
-  "$IMAGE" python -u -m src.kalshi_btc15m_policy_d_live_v1 >/dev/null
+  "$IMAGE" python -u -m src.kalshi_btc15m_policy_d_live_v1_entry >/dev/null
 sleep 2
 RUNNING_NOW="$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null || echo false)"
 [ "$RUNNING_NOW" = "true" ] || {
