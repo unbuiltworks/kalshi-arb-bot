@@ -1,0 +1,85 @@
+name: Gemini L5 Crypto + Sports Shadow Quickstart
+
+on:
+  push:
+    branches:
+      - experiment/gemini-l5-crypto-sports-shadow
+    paths:
+      - deploy/gemini-l5-crypto-sports-shadow.trigger
+
+permissions:
+  contents: read
+
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: experiment/gemini-l5-crypto-sports-shadow
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Safety/unit tests
+        run: |
+          python -m pytest -q \
+            tests/test_crypto_sports_l5_shadow.py \
+            tests/test_pair_engine.py \
+            tests/test_engine_v3.py
+
+      - name: 60-second public-data smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime
+          python -u -m src.gemini_maker.crypto_sports_l5_shadow \
+            --seconds 60 \
+            --max-sports-symbols 12 \
+            --sports-hours 24 \
+            --discover-s 60 \
+            --checkpoint-s 10 \
+            --output runtime/smoke.jsonl \
+            --summary-output runtime/smoke-summary.json
+          cat runtime/smoke-summary.json
+          python - <<'PY'
+          import json
+          s=json.load(open('runtime/smoke-summary.json'))
+          assert s['order_entry'] is False
+          assert s['credentials_loaded'] is False
+          assert s['classification']=='SHADOW_MAKER_PRINT_PROXY_NOT_EXECUTABLE'
+          assert s['stats']['ws_connections'] >= 1
+          print('CRYPTO_SPORTS_SHADOW_SMOKE_OK',
+                'crypto_markets=',s['crypto']['markets_recorded'],
+                'sports_markets=',s['sports']['markets_recorded'],
+                'sports_certified=',s['sports_certified_markets'],
+                'messages=',s['stats']['messages'])
+          PY
+
+      - name: Long isolated capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "CRYPTO_SPORTS_SHADOW_LONG_START order_entry=false credentials_loaded=false"
+          python -u -m src.gemini_maker.crypto_sports_l5_shadow \
+            --seconds 19800 \
+            --max-sports-symbols 50 \
+            --sports-hours 24 \
+            --discover-s 600 \
+            --checkpoint-s 30 \
+            --output runtime/capture.jsonl \
+            --summary-output runtime/summary.json
+
+      - name: Upload shadow evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-l5-crypto-sports-shadow
+          path: runtime/
+          retention-days: 7
+          if-no-files-found: warn
