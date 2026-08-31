@@ -6,6 +6,37 @@ measurement instrument, not a deployment. One clean session answers the only
 question the shadow can't: *what fraction of the shadow edge survives a real
 order queue?*
 
+## FROZEN BENCHMARK AND SUCCESS DEFINITION (reconciled 2026-08-31)
+
+Earlier drafts cited +7.6c/$ — an interim reading at 14 windows. The final
+50-window scored result superseded it with a regime split:
+
+- **Evening regime (~7:30pm–1am ET): +3.79c/$ net after fees, 28 windows,
+  17 positive.** This is the edge the canary tests.
+- Overnight (1am–7am ET): ~−25c/$. The canary must NOT run overnight.
+
+**Frozen benchmark = the same-window shadow.** Success is never judged
+against the historical +3.79c average: while the canary runs, the shadow
+evaluation runs on the same windows, and the comparison is
+real-vs-shadow on identical windows:
+
+1. **Capture ratio** = real filled notional / shadow filled notional
+   (same windows).
+2. **Fill quality** = realized c/$ on real fills vs shadow c/$ on the same
+   windows. Real fills materially worse than shadow's on the same windows =
+   adverse selection at the back of the queue — the key failure mode.
+3. **Ops cleanliness** = zero unexplained rejects, zero deadman halts, zero
+   unsettled inventory, clean settlement reconciliation.
+
+Promotion discussion needs >= 3 clean evening sessions with positive realized
+net P&L, not one lucky run. One session answers "does anything fill and is it
+poisoned"; three answer "is it repeatable".
+
+## WHEN TO RUN
+
+Evenings only, ~7:30pm–1am ET (the measured edge regime). Do not run
+overnight sessions; the shadow says that regime loses ~25c/$.
+
 ## Where to run it
 
 **On your own machine or your AWS box — NOT in a Claude cloud session.**
@@ -26,10 +57,30 @@ for exactly that failure, but don't invite it.
 The CLI can only tighten these. Raising them requires editing the source —
 which per our rules we don't do to force progress.
 
-## Setup
+## Setup — Railway (preferred: credentials already live there)
+
+The existing Railway environment already holds `KALSHI_API_KEY_ID` and
+`KALSHI_PRIVATE_KEY_PEM`, and `src/auth.py` reads `KALSHI_PRIVATE_KEY_PEM`
+directly (literal `\n` in the PEM is handled). No new key, no laptop PEM.
+
+Attach an isolated one-off service (restart policy **NEVER** — a crash must
+not auto-restart a live trader; the next manual start's sweep cancels
+leftovers) to branch `claude/polymarket-l5-historical-analysis-2ih9ui`:
+
+- Build: `pip install -r requirements.txt`
+- Env: `KALSHI_ENV=prod` (+ the two existing Kalshi secrets)
+- Start (dry run first): `python3 -m src.kalshi_maker.live_canary --max-windows 2`
+- Start (live): `python3 -m src.kalshi_maker.live_canary --live --max-windows 5`
+
+Every event mirrors to stdout, so **Railway logs are the full record** — the
+local JSONL under `data/kalshi_canary/` is ephemeral on Railway. Save the
+deploy logs after each session (or paste them back) so the real-vs-shadow
+scoring can run on them.
+
+## Setup — laptop (fallback)
 
 1. Clone the repo, branch `claude/polymarket-l5-historical-analysis-2ih9ui`.
-2. `pip install -r requirements.txt` (needs `httpx`, `cryptography`, `python-dotenv`).
+2. `pip install -r requirements.txt`.
 3. Create a Kalshi API key (kalshi.com → account → API), save the RSA private
    key PEM to a file OUTSIDE the repo.
 4. Create `.env` in the repo root (never commit it):
@@ -69,12 +120,9 @@ no secrets) so Claude can score real-vs-shadow.
 
 ## What the scoring will compare
 
-- **Fill rate**: real fills per quoted window vs shadow fills per window.
-- **Fill quality**: settlement win-rate of real fills vs shadow's (+7.6¢/$
-  benchmark). If real fills are systematically worse (adverse selection at
-  the back of the queue), it shows up here immediately.
-- **Ops cleanliness**: any `order_rejected`, `deadman_halt`, or unsettled
-  inventory ends the session as "not clean" regardless of P&L.
+See the frozen success definition above: capture ratio, same-window fill
+quality vs shadow, and ops cleanliness. Any `order_rejected`, `deadman_halt`,
+or unsettled inventory ends the session as "not clean" regardless of P&L.
 
 ## Stopping / safety
 
