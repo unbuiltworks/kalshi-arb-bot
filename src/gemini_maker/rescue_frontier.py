@@ -83,7 +83,20 @@ from src.gemini_maker.flow_class import (
 )
 
 OUT_PATH = Path("analysis/gemini/rescue_frontier.json")
-FUTURE_CUTOFF_UTC = "2026-08-31T15:45"   # windows closing after this = evidence
+FUTURE_CUTOFF_UTC = "2026-08-31T15:45"   # R0-R4: windows after this = evidence
+
+# --- STRIKE-ZONE variants (NEW hypothesis, user-specified 2026-08-31 ~16:00,
+# informed by in-sample data => FRESH evidence clock, frozen at commit) -----
+# After the first maker fill, immediately quote the missing side INSIDE the
+# spread ("strike zone") instead of joining its bid or spending the ceiling:
+#   S1: initial completion price = min(comp_ask - 0.02, ceiling)
+#   S2: initial completion price = min(comp_ask - 0.01, ceiling)
+# Escalate +1c every SZ_ESCALATE_S seconds since first fill, never above
+# min(comp_ask - 0.01, ceiling). Rescue = emergency-only (same as R1) with
+# the depth cap. Everything else identical to R1.
+SZ_CUTOFF_UTC = "2026-08-31T16:10"       # S1/S2: windows after this = evidence
+SZ_ESCALATE_S = 30.0
+SZ_START_OFFSET = {"S1": 0.02, "S2": 0.01}
 
 # Predeclared constants (do not tune after replay)
 WARM_FLOW_60S = 10.0
@@ -99,7 +112,7 @@ EMERGENCY_MIN_WORST_LOSS = 0.50
 UNWIND_MIN_PROFIT = 0.01
 MAX_SPEND = 25.0
 MAX_WORST_LOSS = 5.0
-VARIANTS = ("R0", "R1", "R2", "R3", "R4")
+VARIANTS = ("R0", "R1", "R2", "R3", "R4", "S1", "S2")
 
 
 class Inv:
@@ -178,7 +191,9 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
 
     dual_exit = variant in ("R2", "R4")
     pair_gate = variant in ("R3", "R4")
-    patient = variant != "R0"
+    strike_zone = variant in ("S1", "S2")
+    patient = variant != "R0" and not strike_zone
+    first_fill_t: Optional[float] = None
 
     def flow60(now: float) -> List[tuple]:
         while flow and now - flow[0][0] > 60.0:
@@ -227,7 +242,15 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
                 comp_bid = book["nb"] if comp == "no" else book["yb"]
                 comp_ask = book["na"] if comp == "no" else book["ya"]
                 if ceil_p is not None and ceil_p >= 0.01:
-                    if patient:
+                    if strike_zone:
+                        # Immediately inside the spread; escalate 1c per
+                        # SZ_ESCALATE_S since first fill; cap at ask-1c and
+                        # the portfolio ceiling.
+                        elapsed = (t - first_fill_t) if first_fill_t else 0.0
+                        off = max(0.01, SZ_START_OFFSET[variant]
+                                  - 0.01 * int(elapsed / SZ_ESCALATE_S))
+                        px = (comp_ask - off) if comp_ask else ceil_p
+                    elif patient:
                         frac = 1.0 if tte <= LEAN_FULL_S else (
                             0.0 if tte >= LEAN_START_S else
                             (LEAN_START_S - tte) / (LEAN_START_S - LEAN_FULL_S))
@@ -257,6 +280,8 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
                 elif kind == "sell" and side == "no" and taker_sold and (1 - price) >= qprice - 1e-9:
                     filled = min(qsize, qty, inv.no_qty); inv.sell("no", filled, qprice)
                 if filled > 0:
+                    if first_fill_t is None:
+                        first_fill_t = t
                     fills.append({"t": round(t - start, 1), "kind": kind,
                                   "side": side, "price": qprice, "qty": filled})
                     consumed.add(key)
@@ -330,12 +355,15 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
 def run(future_only: bool = False) -> Dict[str, Any]:
     since = datetime.fromisoformat("2026-08-31T10:59").replace(
         tzinfo=timezone.utc).timestamp()
-    cutoff = datetime.fromisoformat(FUTURE_CUTOFF_UTC).replace(
+    cutoff_r = datetime.fromisoformat(FUTURE_CUTOFF_UTC).replace(
+        tzinfo=timezone.utc).timestamp()
+    cutoff_s = datetime.fromisoformat(SZ_CUTOFF_UTC).replace(
         tzinfo=timezone.utc).timestamp()
     windows = load_ref_lag_windows("data/ref_lag", since)
     settlements = load_settlements()
     table: Dict[str, Any] = {}
     for variant in VARIANTS:
+        cutoff = cutoff_s if variant.startswith("S") else cutoff_r
         results = []
         for symbol, rows in sorted(windows.items()):
             close = _win_close_epoch(symbol)
