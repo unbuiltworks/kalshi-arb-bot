@@ -326,7 +326,12 @@ def run_fetch(
         "address": address,
         "profile_slug": config.TARGET_PROFILE_SLUG,
     }
-    report["activity"] = fetch_activity(address, cache=cache, opener=opener)
+    # The plain ASC offset walk dies at the venue's ~5000-offset cap (~10 pages)
+    # and silently truncates history. The windowed DESC walk pages inside
+    # sliding `end` windows and recovers everything the API will serve.
+    report["activity"] = fetch_activity_windowed(
+        address, cache=cache, opener=opener, max_total_pages=4000
+    )
     report["trades"] = fetch_trades(address, cache=cache, opener=opener)
     report["positions"] = fetch_positions(address, cache=cache, opener=opener)
 

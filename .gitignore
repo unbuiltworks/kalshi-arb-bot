@@ -11,3 +11,6 @@ build/
 
 # L5: normalized JSONL is derived from data/l5/raw by 'cli build'; keep the source of truth only
 data/l5/normalized/
+
+# L5 backfill: ~300MB slim raw cache, regenerable via 'python -m src.polymarket_l5.backfill'
+data/l5/raw/activity_gap.jsonl

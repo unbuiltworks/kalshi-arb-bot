@@ -1,0 +1,191 @@
+{
+ "generated_at": "2026-08-31T17:41:48.939469+00:00",
+ "activity_counts": {
+  "TRADE": 167939,
+  "REDEEM": 4444,
+  "MAKER_REBATE": 9,
+  "TAKER_REBATE": 8,
+  "REWARD": 8
+ },
+ "unknown_types": {},
+ "n_markets": 4989,
+ "n_updown_windows": 4989,
+ "n_other_markets": 0,
+ "trading": {
+  "buy_usdc": 1831975.23,
+  "sell_usdc": 2.18,
+  "redeem_usdc": 1821971.15,
+  "net_trading_cash": -10001.9,
+  "pair_locked": 52729.33,
+  "residual_and_timing": -62731.23,
+  "unredeemed_qty": 2034012.16,
+  "other_markets_net_cash": 0
+ },
+ "income": {
+  "MAKER_REBATE": 10418.03,
+  "REWARD": 13487.38,
+  "TAKER_REBATE": 1836.42
+ },
+ "income_total": 25741.83,
+ "reconciliation": {
+  "markets_matched": 562,
+  "markets_unmatched_ours": 4427,
+  "our_cash_plus_marks_sum": -7779.62,
+  "their_cashpnl_sum": -8868.81,
+  "sum_abs_diff": 1745.15,
+  "median_abs_diff": -0.3059,
+  "pct_within_1c": 1.6,
+  "pct_within_10c": 25.6,
+  "pct_within_1usd": 80.1,
+  "worst_5": [
+   {
+    "abs_diff": 1414.9014,
+    "condition_id": "0x32b8960a3682845d037f76603c0e3db87edddfbbd5040e517da706a145e6fcb0"
+   },
+   {
+    "abs_diff": 4.7094,
+    "condition_id": "0x6e91adbba9821524866538dbffb42f15a8419cac5e452a871c1af4115d4ae802"
+   },
+   {
+    "abs_diff": 4.0513,
+    "condition_id": "0x964cc5978925888c07a6682255be72305afe3c9573548814bfbd2e144c66f49e"
+   },
+   {
+    "abs_diff": 3.9478,
+    "condition_id": "0x43aa6cb87a9a17b9de45feb61d5b053c5b1e9abd044c3ffdede17edb7d6e3fb8"
+   },
+   {
+    "abs_diff": 3.8163,
+    "condition_id": "0xe82f9c565e926e0a88cbf2fb0a6c95652d8b91de320dfd87a8a98c05114f09e1"
+   }
+  ]
+ },
+ "grand_total_cash": 15739.93,
+ "income_rows": [
+  {
+   "ts": 1776733228,
+   "type": "MAKER_REBATE",
+   "usdc": 29.9379
+  },
+  {
+   "ts": 1787356804,
+   "type": "REWARD",
+   "usdc": 1637.9055
+  },
+  {
+   "ts": 1787357422,
+   "type": "TAKER_REBATE",
+   "usdc": 312.9246
+  },
+  {
+   "ts": 1787359528,
+   "type": "MAKER_REBATE",
+   "usdc": 1745.1438
+  },
+  {
+   "ts": 1787443210,
+   "type": "REWARD",
+   "usdc": 591.459
+  },
+  {
+   "ts": 1787443816,
+   "type": "TAKER_REBATE",
+   "usdc": 81.4726
+  },
+  {
+   "ts": 1787445906,
+   "type": "MAKER_REBATE",
+   "usdc": 424.7646
+  },
+  {
+   "ts": 1787616018,
+   "type": "REWARD",
+   "usdc": 1622.2443
+  },
+  {
+   "ts": 1787616616,
+   "type": "TAKER_REBATE",
+   "usdc": 179.7977
+  },
+  {
+   "ts": 1787618718,
+   "type": "MAKER_REBATE",
+   "usdc": 1088.5074
+  },
+  {
+   "ts": 1787702412,
+   "type": "REWARD",
+   "usdc": 2303.3744
+  },
+  {
+   "ts": 1787703021,
+   "type": "TAKER_REBATE",
+   "usdc": 339.4638
+  },
+  {
+   "ts": 1787705122,
+   "type": "MAKER_REBATE",
+   "usdc": 1579.5486
+  },
+  {
+   "ts": 1787788810,
+   "type": "REWARD",
+   "usdc": 1489.2451
+  },
+  {
+   "ts": 1787789440,
+   "type": "TAKER_REBATE",
+   "usdc": 265.9156
+  },
+  {
+   "ts": 1787791542,
+   "type": "MAKER_REBATE",
+   "usdc": 1307.2214
+  },
+  {
+   "ts": 1787875876,
+   "type": "TAKER_REBATE",
+   "usdc": 272.5308
+  },
+  {
+   "ts": 1787877937,
+   "type": "MAKER_REBATE",
+   "usdc": 1662.4554
+  },
+  {
+   "ts": 1787882689,
+   "type": "REWARD",
+   "usdc": 1842.771
+  },
+  {
+   "ts": 1787961607,
+   "type": "REWARD",
+   "usdc": 1794.6578
+  },
+  {
+   "ts": 1787962222,
+   "type": "TAKER_REBATE",
+   "usdc": 192.11
+  },
+  {
+   "ts": 1787964310,
+   "type": "MAKER_REBATE",
+   "usdc": 1233.5698
+  },
+  {
+   "ts": 1788048019,
+   "type": "REWARD",
+   "usdc": 2205.7187
+  },
+  {
+   "ts": 1788048616,
+   "type": "TAKER_REBATE",
+   "usdc": 192.2051
+  },
+  {
+   "ts": 1788050746,
+   "type": "MAKER_REBATE",
+   "usdc": 1346.8839
+  }
+ ]
+}
