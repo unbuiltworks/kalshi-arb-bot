@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-08-31T15:55:00.835463+00:00",
+ "generated_utc": "2026-08-31T16:04:51.494855+00:00",
  "evidence_class": "SHADOW_MAKER_PRINT_PROXY_NOT_EXECUTABLE",
  "sample": "IN_SAMPLE_DIAGNOSTIC",
  "future_cutoff_utc": "2026-08-31T15:45",
@@ -106,47 +106,113 @@
    "realized_sep2_per_capital_minute": null
   },
   "S1": {
-   "engaged": 14,
+   "engaged": 16,
    "flat_windows": 0,
-   "maker_fills": 20,
+   "maker_fills": 24,
    "unwind_fills": 0,
-   "pairs": 15.0,
+   "pairs": 20.0,
    "rescues": 0,
    "rescues_per_15_pairs": 0.0,
    "locked_flat_pnl": 0,
    "realized_settlement_pnl_all": "INCOMPLETE",
    "unresolved_windows": [
-    "GEMI-ETH15M2608311600-UP"
+    "GEMI-BTC05M2608311605-UP"
    ],
    "realized_net_aug31": null,
    "realized_net_sep2": null,
    "max_single_window_loss": -3.25,
-   "worst_case_residual_exposure": 21.53,
-   "rebates_separate": 0.26,
+   "worst_case_residual_exposure": 25.18,
+   "rebates_separate": 0.33,
    "rescue_depth_coverage_avg": null,
-   "capital_minutes": 51.5,
+   "capital_minutes": 81.8,
    "realized_sep2_per_capital_minute": null
   },
   "S2": {
-   "engaged": 14,
+   "engaged": 16,
    "flat_windows": 0,
-   "maker_fills": 20,
+   "maker_fills": 24,
    "unwind_fills": 0,
-   "pairs": 15.0,
+   "pairs": 20.0,
    "rescues": 0,
    "rescues_per_15_pairs": 0.0,
    "locked_flat_pnl": 0,
    "realized_settlement_pnl_all": "INCOMPLETE",
    "unresolved_windows": [
-    "GEMI-ETH15M2608311600-UP"
+    "GEMI-BTC05M2608311605-UP"
    ],
    "realized_net_aug31": null,
    "realized_net_sep2": null,
    "max_single_window_loss": -3.25,
-   "worst_case_residual_exposure": 21.58,
-   "rebates_separate": 0.26,
+   "worst_case_residual_exposure": 25.23,
+   "rebates_separate": 0.33,
    "rescue_depth_coverage_avg": null,
-   "capital_minutes": 51.5,
+   "capital_minutes": 81.8,
+   "realized_sep2_per_capital_minute": null
+  },
+  "C5": {
+   "engaged": 16,
+   "flat_windows": 0,
+   "maker_fills": 24,
+   "unwind_fills": 0,
+   "pairs": 20.0,
+   "rescues": 0,
+   "rescues_per_15_pairs": 0.0,
+   "locked_flat_pnl": 0,
+   "realized_settlement_pnl_all": "INCOMPLETE",
+   "unresolved_windows": [
+    "GEMI-BTC05M2608311605-UP"
+   ],
+   "realized_net_aug31": null,
+   "realized_net_sep2": null,
+   "max_single_window_loss": -3.25,
+   "worst_case_residual_exposure": 25.13,
+   "rebates_separate": 0.33,
+   "rescue_depth_coverage_avg": null,
+   "capital_minutes": 81.5,
+   "realized_sep2_per_capital_minute": null
+  },
+  "C10": {
+   "engaged": 16,
+   "flat_windows": 0,
+   "maker_fills": 24,
+   "unwind_fills": 0,
+   "pairs": 34.5,
+   "rescues": 0,
+   "rescues_per_15_pairs": 0.0,
+   "locked_flat_pnl": 0,
+   "realized_settlement_pnl_all": "INCOMPLETE",
+   "unresolved_windows": [
+    "GEMI-BTC05M2608311605-UP"
+   ],
+   "realized_net_aug31": null,
+   "realized_net_sep2": null,
+   "max_single_window_loss": -6.5,
+   "worst_case_residual_exposure": 51.98,
+   "rebates_separate": 0.77,
+   "rescue_depth_coverage_avg": null,
+   "capital_minutes": 160.3,
+   "realized_sep2_per_capital_minute": null
+  },
+  "C25": {
+   "engaged": 16,
+   "flat_windows": 1,
+   "maker_fills": 24,
+   "unwind_fills": 0,
+   "pairs": 64.5,
+   "rescues": 0,
+   "rescues_per_15_pairs": 0.0,
+   "locked_flat_pnl": 0.25,
+   "realized_settlement_pnl_all": "INCOMPLETE",
+   "unresolved_windows": [
+    "GEMI-BTC05M2608311605-UP"
+   ],
+   "realized_net_aug31": null,
+   "realized_net_sep2": null,
+   "max_single_window_loss": -16.25,
+   "worst_case_residual_exposure": 102.07,
+   "rebates_separate": 1.55,
+   "rescue_depth_coverage_avg": null,
+   "capital_minutes": 266.3,
    "realized_sep2_per_capital_minute": null
   }
  }
