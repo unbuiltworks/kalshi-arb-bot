@@ -1,0 +1,86 @@
+name: AWS Gemini selective maker V5.6 public diagnostic V2
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths: ['.github/workflows/aws-gemini-selective-v5-6-public-diagnostic-v2.yml']
+
+permissions: {id-token: write, contents: read}
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  RELEASE_BRANCH: release/gemini-selective-maker-v5-6
+  REQUIRED_RELEASE_COMMIT: 1231adf4f4e22628b4fecd4b1b57e6f1e16434e6
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with: {role-to-assume: '${{ env.AWS_DEPLOY_ROLE_ARN }}', aws-region: '${{ env.AWS_REGION }}'}
+      - name: Exact-SHA live-public BTC15m tape/depth diagnostic
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          WORK=/opt/arb/gemini-selective-v5-6-public-v2
+          IMAGE=arb-gemini-selective-v5-6-public-v2:${REQUIRED_RELEASE_COMMIT:0:12}
+          cd "\$REPO"; git config --global --add safe.directory "\$REPO" || true
+          git fetch origin ${RELEASE_BRANCH} >/dev/null
+          ACTUAL=\$(git rev-parse origin/${RELEASE_BRANCH}); test "\$ACTUAL" = "${REQUIRED_RELEASE_COMMIT}"
+          git worktree remove --force "\$WORK" >/dev/null 2>&1 || true; rm -rf "\$WORK"; git worktree prune
+          git worktree add --detach "\$WORK" "\$ACTUAL" >/dev/null
+          docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
+          timeout 650s docker run --rm --network host \
+            -e GEMINI_Q10_V5_MAX_RESCUE_LOSS_USD=0.30 \
+            -e GEMINI_Q10_V5_MAX_CAMPAIGN_LOSS_USD=1.00 \
+            "\$IMAGE" python - <<'PY'
+          import asyncio,json,time
+          from src import gemini_selective_maker_v5_6 as v56
+          from src.gemini_prediction_depth_cache_v5_3 import GeminiDepth5Cache
+          async def main():
+              deadline=time.monotonic()+610; samples=[]
+              while time.monotonic()<deadline:
+                  event=await v56.discover_btc15m()
+                  if event is None: await asyncio.sleep(1); continue
+                  tape=v56.GeminiTradeTape30(event.symbol); cache=GeminiDepth5Cache(event.symbol,stale_ms=750)
+                  ts,bs=asyncio.Event(),asyncio.Event(); tt=asyncio.create_task(tape.run(ts)); bt=asyncio.create_task(cache.run(bs))
+                  try:
+                      if not await tape.wait_ready(timeout=max(1,min(240,event.seconds_to_expiry-v56.STOP_NEW_SECONDS))):
+                          samples.append({'ticker':event.ticker,'reason':'NO_30_TRADE_TAPE','tape':tape.snapshot()}); continue
+                      while event.seconds_to_expiry>v56.STOP_NEW_SECONDS and time.monotonic()<deadline:
+                          try: snap=await cache.wait_fresh(timeout=1,max_age_ms=500)
+                          except Exception as exc:
+                              samples.append({'ticker':event.ticker,'reason':'DEPTH','error':type(exc).__name__}); await asyncio.sleep(.1); continue
+                          plan=v56.select_safe_plan(event,snap=snap,tape=tape)
+                          if plan:
+                              out={'classification':'READ_ONLY_LIVE_PUBLIC_SAFE_SELECTIVE_PLAN','release_commit':'${REQUIRED_RELEASE_COMMIT}',
+                                   'ticker':event.ticker,'symbol':event.symbol,'seconds_to_expiry':round(event.seconds_to_expiry,3),
+                                   'tape':tape.snapshot(),'book':{'bids':[[str(p),str(q)] for p,q in snap.bids],
+                                   'asks':[[str(p),str(q)] for p,q in snap.asks],'age_ms':round(snap.age_ms,3)},
+                                   'plan':plan.as_dict(),'campaign_loss_limit':'1.00','rescue_loss_limit':'0.30',
+                                   'order_entry':False,'credentials_used':False,'realized_pnl':0}
+                              print('V5_6_PUBLIC_DIAGNOSTIC='+json.dumps(out,separators=(',',':'),default=str)); print('V5_6_PUBLIC_DIAGNOSTIC_COMPLETE'); return
+                          await asyncio.sleep(.1)
+                      samples.append({'ticker':event.ticker,'reason':'NO_SAFE_SIGNAL','tape':tape.snapshot()})
+                  finally:
+                      ts.set();bs.set();tt.cancel();bt.cancel();await asyncio.gather(tt,bt,return_exceptions=True)
+              out={'classification':'READ_ONLY_NO_SAFE_SIGNAL_WITHIN_BOUND','release_commit':'${REQUIRED_RELEASE_COMMIT}',
+                   'samples':samples[-10:],'order_entry':False,'credentials_used':False,'realized_pnl':0}
+              print('V5_6_PUBLIC_DIAGNOSTIC='+json.dumps(out,separators=(',',':'))); print('V5_6_PUBLIC_DIAGNOSTIC_COMPLETE')
+          asyncio.run(main())
+          PY
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --parameters "$PARAMS" --timeout-seconds 760 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 380); do STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending); case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac; sleep 2; done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"; test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          OUT=$(jq -r '.Stdout // ""' <<<"$RESULT"); grep -q 'V5_6_PUBLIC_DIAGNOSTIC_COMPLETE' <<<"$OUT"; grep -q '"order_entry":false' <<<"$OUT"
