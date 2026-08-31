@@ -73,14 +73,21 @@ REBATE_BAND = (0.20, 0.80)
 
 
 def _fee(count: float, price: float, rate: float) -> float:
+    """Per-fill fee, ROUNDED UP to the next cent (official Gemini rule)."""
+    return math.ceil(rate * count * price * (1.0 - price) * 100.0 - 1e-9) / 100.0
+
+
+def _fee_raw(count: float, price: float, rate: float) -> float:
     return rate * count * price * (1.0 - price)
 
 
 def _rebate(count: float, price: float) -> float:
+    """Per-fill rebate: 30% of the RAW taker-fee formula, floored to cents,
+    only on maker fills priced in the 20-80c band."""
     if not (REBATE_BAND[0] <= price <= REBATE_BAND[1]):
         return 0.0
     return math.floor(
-        REBATE_MULT * _fee(count, price, TAKER_FEE_RATE) * 100.0) / 100.0
+        REBATE_MULT * _fee_raw(count, price, TAKER_FEE_RATE) * 100.0) / 100.0
 
 
 def _policy_cap(policy: str, tte: float, held_avg: float,
@@ -234,11 +241,53 @@ def evaluate_window_policy(symbol: str, rows: List[dict], policy: str,
     }
 
 
+def load_ref_lag_windows(tape_dir: str, since_ts: float) -> Dict[str, List[dict]]:
+    """Tick-level source: ref_lag pbook (every bookTicker update, ns stamps)
+    + ptrade, converted to the evaluator's event schema. This is the fresh-
+    book replay the coarse ~5s-throttled policy_d_port tape cannot support."""
+    import glob as _glob
+    events: Dict[str, List[dict]] = defaultdict(list)
+    for path in sorted(_glob.glob(f"{tape_dir}/reflag_*.jsonl")):
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                try:
+                    e = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                kind = e.get("kind")
+                if kind not in ("pbook", "ptrade"):
+                    continue
+                t = e.get("t_ns", 0) / 1e9
+                if t < since_ts:
+                    continue
+                market = str(e.get("market") or "")
+                if not market.endswith("-UP"):
+                    continue
+                if kind == "pbook":
+                    try:
+                        b = float(e["b"]); B = float(e["B"])
+                        a = float(e["a"]); A = float(e["A"])
+                    except (TypeError, ValueError):
+                        continue
+                    events[market].append({"t": t, "kind": "bbo",
+                                           "bids": [[b, B]], "asks": [[a, A]]})
+                else:
+                    events[market].append({"t": t, "kind": "print",
+                                           "price": e.get("price"),
+                                           "qty": e.get("qty"),
+                                           "buyer_is_maker": e.get("buyer_is_maker")})
+    return events
+
+
 def run(tape_dir: str = "data/policy_d_port",
-        since_utc: str = "2026-08-31T10:59") -> Dict[str, Any]:
+        since_utc: str = "2026-08-31T10:59",
+        source: str = "coarse") -> Dict[str, Any]:
     since_ts = datetime.fromisoformat(since_utc).replace(
         tzinfo=timezone.utc).timestamp()
-    windows = load_windows(tape_dir, since_ts)
+    if source == "ref_lag":
+        windows = load_ref_lag_windows("data/ref_lag", since_ts)
+    else:
+        windows = load_windows(tape_dir, since_ts)
     table: Dict[str, Any] = {}
     for policy in POLICIES:
         by_age: Dict[str, Any] = {}
@@ -284,6 +333,7 @@ def run(tape_dir: str = "data/policy_d_port",
         table[policy] = by_age
     payload = {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
+        "source": source,
         "evidence_class": "SHADOW_MAKER_PRINT_PROXY_NOT_EXECUTABLE",
         "predeclared": {"LEAN_START_S": LEAN_START_S, "LEAN_FULL_S": LEAN_FULL_S,
                         "C_SAFETY_S": C_SAFETY_S, "D_T1_S": D_T1_S,
@@ -297,13 +347,17 @@ def run(tape_dir: str = "data/policy_d_port",
                      "thresholds are tape-limited, not market-limited",
         "frontier": table,
     }
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUT_PATH.write_text(json.dumps(payload, indent=1), encoding="utf-8")
+    out = OUT_PATH if source == "coarse" else Path(
+        "analysis/gemini/completion_frontier_tick.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=1), encoding="utf-8")
     return payload
 
 
 if __name__ == "__main__":
-    p = run()
+    import sys
+    src = "ref_lag" if "--tick" in sys.argv else "coarse"
+    p = run(source=src)
     for policy, ages in p["frontier"].items():
         row = ages["5.0"]
         print(f'{policy}: eng={row["engaged_windows"]} flat={row["flat_windows"]} '

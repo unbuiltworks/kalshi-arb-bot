@@ -1,5 +1,6 @@
 {
- "generated_utc": "2026-08-31T15:05:20.134480+00:00",
+ "generated_utc": "2026-08-31T15:29:00.920102+00:00",
+ "source": "coarse",
  "evidence_class": "SHADOW_MAKER_PRINT_PROXY_NOT_EXECUTABLE",
  "predeclared": {
   "LEAN_START_S": 120.0,
@@ -27,7 +28,7 @@
     "rescue_count": 0,
     "gross_deployed": 1.05,
     "rebate_model_separate": 0.01,
-    "net_aug31_fees": -0.0145,
+    "net_aug31_fees": -0.02,
     "net_sep2_feefree": 0
    },
    "0.5": {
@@ -44,7 +45,7 @@
     "rescue_count": 0,
     "gross_deployed": 1.05,
     "rebate_model_separate": 0.01,
-    "net_aug31_fees": -0.0145,
+    "net_aug31_fees": -0.02,
     "net_sep2_feefree": 0
    },
    "1.0": {
@@ -61,8 +62,8 @@
     "rescue_count": 1,
     "gross_deployed": 8.95,
     "rebate_model_separate": 0.05,
-    "net_aug31_fees": -0.122,
-    "net_sep2_feefree": -0.0581
+    "net_aug31_fees": -0.15,
+    "net_sep2_feefree": -0.06
    },
    "2.0": {
     "engaged_windows": 6,
@@ -78,8 +79,8 @@
     "rescue_count": 2,
     "gross_deployed": 19.57,
     "rebate_model_separate": 0.1,
-    "net_aug31_fees": -0.0045,
-    "net_sep2_feefree": 0.1103
+    "net_aug31_fees": -0.06,
+    "net_sep2_feefree": 0.1
    },
    "5.0": {
     "engaged_windows": 8,
@@ -95,8 +96,8 @@
     "rescue_count": 4,
     "gross_deployed": 32.01,
     "rebate_model_separate": 0.16,
-    "net_aug31_fees": -0.3903,
-    "net_sep2_feefree": -0.2038
+    "net_aug31_fees": -0.47,
+    "net_sep2_feefree": -0.22
    },
    "30.0": {
     "engaged_windows": 8,
@@ -112,8 +113,8 @@
     "rescue_count": 4,
     "gross_deployed": 32.01,
     "rebate_model_separate": 0.16,
-    "net_aug31_fees": -0.3903,
-    "net_sep2_feefree": -0.2038
+    "net_aug31_fees": -0.47,
+    "net_sep2_feefree": -0.22
    }
   },
   "B": {
@@ -131,7 +132,7 @@
     "rescue_count": 0,
     "gross_deployed": 1.05,
     "rebate_model_separate": 0.01,
-    "net_aug31_fees": -0.0145,
+    "net_aug31_fees": -0.02,
     "net_sep2_feefree": 0
    },
    "0.5": {
@@ -148,7 +149,7 @@
     "rescue_count": 0,
     "gross_deployed": 1.05,
     "rebate_model_separate": 0.01,
-    "net_aug31_fees": -0.0145,
+    "net_aug31_fees": -0.02,
     "net_sep2_feefree": 0
    },
    "1.0": {
@@ -165,8 +166,8 @@
     "rescue_count": 1,
     "gross_deployed": 8.95,
     "rebate_model_separate": 0.05,
-    "net_aug31_fees": -0.122,
-    "net_sep2_feefree": -0.0581
+    "net_aug31_fees": -0.15,
+    "net_sep2_feefree": -0.06
    },
    "2.0": {
     "engaged_windows": 6,
@@ -182,8 +183,8 @@
     "rescue_count": 2,
     "gross_deployed": 19.57,
     "rebate_model_separate": 0.1,
-    "net_aug31_fees": -0.0045,
-    "net_sep2_feefree": 0.1103
+    "net_aug31_fees": -0.06,
+    "net_sep2_feefree": 0.1
    },
    "5.0": {
     "engaged_windows": 8,
@@ -199,8 +200,8 @@
     "rescue_count": 4,
     "gross_deployed": 31.41,
     "rebate_model_separate": 0.16,
-    "net_aug31_fees": -0.2414,
-    "net_sep2_feefree": -0.0538
+    "net_aug31_fees": -0.32,
+    "net_sep2_feefree": -0.07
    },
    "30.0": {
     "engaged_windows": 8,
@@ -216,8 +217,8 @@
     "rescue_count": 4,
     "gross_deployed": 31.41,
     "rebate_model_separate": 0.16,
-    "net_aug31_fees": -0.2414,
-    "net_sep2_feefree": -0.0538
+    "net_aug31_fees": -0.32,
+    "net_sep2_feefree": -0.07
    }
   },
   "C": {
@@ -235,7 +236,7 @@
     "rescue_count": 0,
     "gross_deployed": 1.05,
     "rebate_model_separate": 0.01,
-    "net_aug31_fees": -0.0145,
+    "net_aug31_fees": -0.02,
     "net_sep2_feefree": 0
    },
    "0.5": {
@@ -252,7 +253,7 @@
     "rescue_count": 0,
     "gross_deployed": 1.05,
     "rebate_model_separate": 0.01,
-    "net_aug31_fees": -0.0145,
+    "net_aug31_fees": -0.02,
     "net_sep2_feefree": 0
    },
    "1.0": {
@@ -269,8 +270,8 @@
     "rescue_count": 1,
     "gross_deployed": 8.95,
     "rebate_model_separate": 0.05,
-    "net_aug31_fees": -0.122,
-    "net_sep2_feefree": -0.0581
+    "net_aug31_fees": -0.15,
+    "net_sep2_feefree": -0.06
    },
    "2.0": {
     "engaged_windows": 6,
@@ -286,8 +287,8 @@
     "rescue_count": 2,
     "gross_deployed": 19.57,
     "rebate_model_separate": 0.1,
-    "net_aug31_fees": -0.0045,
-    "net_sep2_feefree": 0.1103
+    "net_aug31_fees": -0.06,
+    "net_sep2_feefree": 0.1
    },
    "5.0": {
     "engaged_windows": 8,
@@ -303,8 +304,8 @@
     "rescue_count": 4,
     "gross_deployed": 31.93,
     "rebate_model_separate": 0.16,
-    "net_aug31_fees": -0.3408,
-    "net_sep2_feefree": -0.1538
+    "net_aug31_fees": -0.42,
+    "net_sep2_feefree": -0.17
    },
    "30.0": {
     "engaged_windows": 8,
@@ -320,8 +321,8 @@
     "rescue_count": 4,
     "gross_deployed": 31.93,
     "rebate_model_separate": 0.16,
-    "net_aug31_fees": -0.3408,
-    "net_sep2_feefree": -0.1538
+    "net_aug31_fees": -0.42,
+    "net_sep2_feefree": -0.17
    }
   },
   "D": {
@@ -339,7 +340,7 @@
     "rescue_count": 0,
     "gross_deployed": 1.05,
     "rebate_model_separate": 0.01,
-    "net_aug31_fees": -0.0145,
+    "net_aug31_fees": -0.02,
     "net_sep2_feefree": 0
    },
    "0.5": {
@@ -356,7 +357,7 @@
     "rescue_count": 0,
     "gross_deployed": 1.05,
     "rebate_model_separate": 0.01,
-    "net_aug31_fees": -0.0145,
+    "net_aug31_fees": -0.02,
     "net_sep2_feefree": 0
    },
    "1.0": {
@@ -373,8 +374,8 @@
     "rescue_count": 1,
     "gross_deployed": 8.95,
     "rebate_model_separate": 0.05,
-    "net_aug31_fees": -0.122,
-    "net_sep2_feefree": -0.0581
+    "net_aug31_fees": -0.15,
+    "net_sep2_feefree": -0.06
    },
    "2.0": {
     "engaged_windows": 6,
@@ -390,8 +391,8 @@
     "rescue_count": 2,
     "gross_deployed": 19.57,
     "rebate_model_separate": 0.1,
-    "net_aug31_fees": -0.0045,
-    "net_sep2_feefree": 0.1103
+    "net_aug31_fees": -0.06,
+    "net_sep2_feefree": 0.1
    },
    "5.0": {
     "engaged_windows": 8,
@@ -407,8 +408,8 @@
     "rescue_count": 4,
     "gross_deployed": 31.88,
     "rebate_model_separate": 0.16,
-    "net_aug31_fees": -0.2911,
-    "net_sep2_feefree": -0.1038
+    "net_aug31_fees": -0.37,
+    "net_sep2_feefree": -0.12
    },
    "30.0": {
     "engaged_windows": 8,
@@ -424,8 +425,8 @@
     "rescue_count": 4,
     "gross_deployed": 31.88,
     "rebate_model_separate": 0.16,
-    "net_aug31_fees": -0.2911,
-    "net_sep2_feefree": -0.1038
+    "net_aug31_fees": -0.37,
+    "net_sep2_feefree": -0.12
    }
   }
  }
