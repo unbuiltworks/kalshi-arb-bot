@@ -1,7 +1,9 @@
 """Safety wrapper for the bounded $10 paired-maker live canary.
 
-V1 contains the trading loop. V2 closes two terminal-accounting gaps without
+V1 contains the trading loop. V2 closes terminal-accounting and rescue gaps without
 loosening any entry rule:
+- install the Gemini prediction-market emergency flatten patch so rescue uses a
+  supported SELL LIMIT IOC rather than the historically rejected MARKET IOC;
 - if a known one-sided fill remains after an unambiguous missing-side order
   rejection, flatten that q1 outcome immediately instead of hard-stopping naked;
 - treat a confirmed full emergency flatten as the terminal path before the generic
@@ -14,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src import gemini_kalshi_gemini_flatten_fix as flatten_fix
 from src.gemini_maker import live_10_canary as v1
 
 
@@ -70,6 +73,9 @@ _ORIGINAL_EXECUTE = v1._execute_one_pair
 
 
 async def run() -> None:
+    # Scope the venue-specific transport correction to this hardened canary process.
+    # The patch only changes the emergency exit payload; normal entry remains maker-only.
+    flatten_fix.install()
     original_complete = v1._complete_missing
     original_execute = v1._execute_one_pair
     try:
