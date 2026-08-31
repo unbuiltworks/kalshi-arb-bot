@@ -1,14 +1,25 @@
 {
- "generated_utc": "2026-08-31T11:03:42.144336+00:00",
+ "generated_utc": "2026-08-31T11:45:12.562400+00:00",
  "since_utc": "2026-08-31T10:59",
+ "assumptions": {
+  "queue_model": "one fill per side per BBO snapshot; still a print-through proxy",
+  "maker_fees": "excluded here; live promo economics must be applied separately",
+  "rescue_taker_fees": "not modeled; rescue windows are not promotion grade",
+  "winner": "last-print heuristic diagnostic only; never promotion accounting",
+  "incentives": "excluded from decisions and shadow P&L"
+ },
  "aggregate": {
+  "evidence_class": "SHADOW_MAKER_PRINT_PROXY_NOT_EXECUTABLE",
   "windows_with_fills": 0,
-  "windows_scored": 0,
+  "flat_windows": 0,
+  "promotion_grade_windows": 0,
   "total_pairs": 0,
-  "pairs_le_100": 0,
+  "flat_pairs_le_100": 0,
   "total_spend": 0,
-  "total_trading_pnl": 0,
-  "windows_flat_at_expiry": 0
+  "locked_pnl_flat_windows": 0,
+  "residual_worst_loss": 0,
+  "rescue_fills": 0,
+  "stale_book_skips": 0
  },
  "per_window": []
 }
