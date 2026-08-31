@@ -109,6 +109,29 @@ SWEEP_VARIANT = "S2"
 SWEEP_SPEND_MULT = 3.0        # max_spend = 3.0 * entry_size dollars
 SWEEP_WORST_LOSS_MULT = 1.0   # worst-loss cap = 1.0 * entry_size dollars
 
+# --- C-SERIES: completion-priority size x aggression (predeclared, fresh
+# clock; ChatGPT-scoped after the capacity sweep showed 0 flat windows at
+# every size). "Safe churn capacity" = largest q where inventory completes
+# maker->maker, residual stays capped, rescues stay rare, and settlement-
+# scored economics are positive.
+#   Mechanics (all C variants): entry joins both bids at size q; after the
+#   first fill, the complement goes STRAIGHT to the strike zone AND a
+#   same-side maker unwind ask rests simultaneously (whichever flattens
+#   first wins); pair-cost target LADDERS with time since first fill;
+#   completion price = min(comp_ask-0.01, target - held_avg, portfolio
+#   ceiling); emergency-only rescue (30s tte AND worst-loss > 0.10*q),
+#   depth-capped.
+#   C5 : q=5,  target 0.98 (<45s since fill) -> 0.99 (<90s) -> 1.00
+#   C10: q=10, target 0.99 (<60s) -> 1.00
+#   C25: q=25, target 0.99 (<60s) -> 1.00
+#   (q50 only if lower sizes prove capacity — not declared yet.)
+C_CUTOFF_UTC = "2026-08-31T16:25"   # C-series evidence = windows after this
+C_SIZES = {"C5": 5.0, "C10": 10.0, "C25": 25.0}
+C_LADDER = {"C5": ((45.0, 0.98), (90.0, 0.99), (None, 1.00)),
+            "C10": ((60.0, 0.99), (None, 1.00)),
+            "C25": ((60.0, 0.99), (None, 1.00))}
+C_EMERGENCY_WL_MULT = 0.10
+
 # Predeclared constants (do not tune after replay)
 WARM_FLOW_60S = 10.0
 ENTRY_SIZE = 5.0
@@ -123,7 +146,7 @@ EMERGENCY_MIN_WORST_LOSS = 0.50
 UNWIND_MIN_PROFIT = 0.01
 MAX_SPEND = 25.0
 MAX_WORST_LOSS = 5.0
-VARIANTS = ("R0", "R1", "R2", "R3", "R4", "S1", "S2")
+VARIANTS = ("R0", "R1", "R2", "R3", "R4", "S1", "S2", "C5", "C10", "C25")
 
 
 class Inv:
@@ -203,10 +226,15 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
     cap_seconds = 0.0
     last_t = None
 
-    dual_exit = variant in ("R2", "R4")
+    c_series = variant.startswith("C")
+    dual_exit = variant in ("R2", "R4") or c_series
     pair_gate = variant in ("R3", "R4")
     strike_zone = variant in ("S1", "S2")
-    patient = variant != "R0" and not strike_zone
+    patient = variant not in ("R0",) and not strike_zone and not c_series
+    if c_series:
+        entry_size = C_SIZES[variant]
+        max_spend = SWEEP_SPEND_MULT * entry_size
+        max_worst_loss = SWEEP_WORST_LOSS_MULT * entry_size
     first_fill_t: Optional[float] = None
 
     def flow60(now: float) -> List[tuple]:
@@ -256,7 +284,22 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
                 comp_bid = book["nb"] if comp == "no" else book["yb"]
                 comp_ask = book["na"] if comp == "no" else book["ya"]
                 if ceil_p is not None and ceil_p >= 0.01:
-                    if strike_zone:
+                    if c_series:
+                        # Ladder pair-cost target by time since first fill,
+                        # priced at min(strike zone, target-held_avg, ceiling).
+                        elapsed = (t - first_fill_t) if first_fill_t else 0.0
+                        target = 1.00
+                        for limit_s, tgt in C_LADDER[variant]:
+                            if limit_s is None or elapsed < limit_s:
+                                target = tgt
+                                break
+                        heavy_qty = max(inv.yes_qty, inv.no_qty)
+                        heavy_cost = (inv.yes_cost if inv.yes_qty >= inv.no_qty
+                                      else inv.no_cost)
+                        held_avg = heavy_cost / heavy_qty if heavy_qty else 0.0
+                        px = min((comp_ask - 0.01) if comp_ask else ceil_p,
+                                 target - held_avg, ceil_p)
+                    elif strike_zone:
                         # Immediately inside the spread; escalate 1c per
                         # SZ_ESCALATE_S since first fill; cap at ask-1c and
                         # the portfolio ceiling.
@@ -311,8 +354,10 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
                            and comp_ask is not None
                            and comp_ask <= ceil_p + BASE_RESCUE_PREMIUM)
             else:
+                wl_min = (C_EMERGENCY_WL_MULT * entry_size if c_series
+                          else EMERGENCY_MIN_WORST_LOSS)
                 allowed = (tte <= EMERGENCY_RESCUE_ZONE_S
-                           and inv.worst_loss() > EMERGENCY_MIN_WORST_LOSS
+                           and inv.worst_loss() > wl_min
                            and comp_ask is not None and ceil_p is not None
                            and comp_ask <= ceil_p + BASE_RESCUE_PREMIUM)
             if allowed:
@@ -348,8 +393,10 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
         settlement_pnl = payout - inv.spend + inv.realized
     rescue_req = sum(f.get("requested", f["qty"]) for f in rescues)
     rescue_fill = sum(f["qty"] for f in rescues)
+    denom = inv.pairs() + abs(inv.residual)
     return {
         "market": symbol, "flat": flat, "maker_fills": len(maker),
+        "completion_pct": round(inv.pairs() / denom, 3) if denom else None,
         "unwind_fills": sum(1 for f in maker if f["kind"] == "sell"),
         "rescues": len(rescues), "pairs": round(inv.pairs(), 1),
         "locked_raw": round(locked, 4) if locked is not None else None,
@@ -373,11 +420,14 @@ def run(future_only: bool = False) -> Dict[str, Any]:
         tzinfo=timezone.utc).timestamp()
     cutoff_s = datetime.fromisoformat(SZ_CUTOFF_UTC).replace(
         tzinfo=timezone.utc).timestamp()
+    cutoff_c = datetime.fromisoformat(C_CUTOFF_UTC).replace(
+        tzinfo=timezone.utc).timestamp()
     windows = load_ref_lag_windows("data/ref_lag", since)
     settlements = load_settlements()
     table: Dict[str, Any] = {}
     for variant in VARIANTS:
-        cutoff = cutoff_s if variant.startswith("S") else cutoff_r
+        cutoff = (cutoff_c if variant.startswith("C")
+                  else cutoff_s if variant.startswith("S") else cutoff_r)
         results = []
         for symbol, rows in sorted(windows.items()):
             close = _win_close_epoch(symbol)
