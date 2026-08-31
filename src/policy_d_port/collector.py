@@ -328,7 +328,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Read-only Lane-2 tape collector")
     parser.add_argument("--hours", type=float, default=5.0)
     parser.add_argument("--out-dir", default="data/policy_d_port")
+    parser.add_argument("--series", default="",
+                        help="comma-separated Kalshi series override "
+                             "(e.g. KXSOL15M,KXXRP15M); default keeps the "
+                             "standard BTC/ETH pair")
     args = parser.parse_args()
+    if args.series:
+        global KALSHI_SERIES
+        KALSHI_SERIES = tuple(s.strip() for s in args.series.split(",") if s.strip())
     asyncio.run(run(Path(args.out_dir), args.hours))
 
 
