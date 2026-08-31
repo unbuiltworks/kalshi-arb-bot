@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-08-31T15:52:23.807563+00:00",
+ "generated_utc": "2026-08-31T15:55:00.835463+00:00",
  "evidence_class": "SHADOW_MAKER_PRINT_PROXY_NOT_EXECUTABLE",
  "sample": "IN_SAMPLE_DIAGNOSTIC",
  "future_cutoff_utc": "2026-08-31T15:45",
@@ -103,6 +103,50 @@
    "rebates_separate": 0,
    "rescue_depth_coverage_avg": null,
    "capital_minutes": 0,
+   "realized_sep2_per_capital_minute": null
+  },
+  "S1": {
+   "engaged": 14,
+   "flat_windows": 0,
+   "maker_fills": 20,
+   "unwind_fills": 0,
+   "pairs": 15.0,
+   "rescues": 0,
+   "rescues_per_15_pairs": 0.0,
+   "locked_flat_pnl": 0,
+   "realized_settlement_pnl_all": "INCOMPLETE",
+   "unresolved_windows": [
+    "GEMI-ETH15M2608311600-UP"
+   ],
+   "realized_net_aug31": null,
+   "realized_net_sep2": null,
+   "max_single_window_loss": -3.25,
+   "worst_case_residual_exposure": 21.53,
+   "rebates_separate": 0.26,
+   "rescue_depth_coverage_avg": null,
+   "capital_minutes": 51.5,
+   "realized_sep2_per_capital_minute": null
+  },
+  "S2": {
+   "engaged": 14,
+   "flat_windows": 0,
+   "maker_fills": 20,
+   "unwind_fills": 0,
+   "pairs": 15.0,
+   "rescues": 0,
+   "rescues_per_15_pairs": 0.0,
+   "locked_flat_pnl": 0,
+   "realized_settlement_pnl_all": "INCOMPLETE",
+   "unresolved_windows": [
+    "GEMI-ETH15M2608311600-UP"
+   ],
+   "realized_net_aug31": null,
+   "realized_net_sep2": null,
+   "max_single_window_loss": -3.25,
+   "worst_case_residual_exposure": 21.58,
+   "rebates_separate": 0.26,
+   "rescue_depth_coverage_avg": null,
+   "capital_minutes": 51.5,
    "realized_sep2_per_capital_minute": null
   }
  }

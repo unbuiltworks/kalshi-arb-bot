@@ -98,6 +98,17 @@ SZ_CUTOFF_UTC = "2026-08-31T16:10"       # S1/S2: windows after this = evidence
 SZ_ESCALATE_S = 30.0
 SZ_START_OFFSET = {"S1": 0.02, "S2": 0.01}
 
+# --- CAPACITY SWEEP (predeclared 2026-08-31 16:00 UTC) ----------------------
+# Question: how do completion and rescue behavior change as size scales,
+# with fills capped by ACTUAL print sizes and rescues by displayed depth?
+# Frozen S2 mechanics at entry sizes below; caps scale with size so they
+# measure the market, not our own limits. Entry fill utilization and
+# completion ratio are the capacity signals.
+SWEEP_SIZES = (5.0, 10.0, 25.0, 50.0, 100.0)
+SWEEP_VARIANT = "S2"
+SWEEP_SPEND_MULT = 3.0        # max_spend = 3.0 * entry_size dollars
+SWEEP_WORST_LOSS_MULT = 1.0   # worst-loss cap = 1.0 * entry_size dollars
+
 # Predeclared constants (do not tune after replay)
 WARM_FLOW_60S = 10.0
 ENTRY_SIZE = 5.0
@@ -173,7 +184,10 @@ def _pairable(prints: List[tuple], bid_depth: float, ask_depth: float) -> bool:
 
 
 def evaluate(symbol: str, rows: List[dict], variant: str,
-             settle: Optional[str] = None) -> Optional[Dict[str, Any]]:
+             settle: Optional[str] = None,
+             entry_size: float = ENTRY_SIZE,
+             max_spend: float = MAX_SPEND,
+             max_worst_loss: float = MAX_WORST_LOSS) -> Optional[Dict[str, Any]]:
     close = _win_close_epoch(symbol)
     if close is None:
         return None
@@ -223,7 +237,7 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
         tte = close - t
         fl = flow60(t)
         fresh = book is not None and book_t is not None and t - book_t <= MAX_BOOK_AGE_S
-        if fresh and inv.spend < MAX_SPEND:
+        if fresh and inv.spend < max_spend:
             quotes: List[tuple] = []   # (kind, side, price, size)
             res = inv.residual
             if abs(res) < 1.0:
@@ -232,10 +246,10 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
                 if entry_ok and pair_gate:
                     entry_ok = _pairable(fl, book["yB"], book["yA"])
                 if entry_ok:
-                    probe_wl = max(book["yb"], book["nb"]) * ENTRY_SIZE
-                    if probe_wl <= MAX_WORST_LOSS:
-                        quotes.append(("buy", "yes", book["yb"], ENTRY_SIZE))
-                        quotes.append(("buy", "no", book["nb"], ENTRY_SIZE))
+                    probe_wl = max(book["yb"], book["nb"]) * entry_size
+                    if probe_wl <= max_worst_loss:
+                        quotes.append(("buy", "yes", book["yb"], entry_size))
+                        quotes.append(("buy", "no", book["nb"], entry_size))
             else:
                 held, comp = ("yes", "no") if res > 0 else ("no", "yes")
                 ceil_p = inv.ceiling()
@@ -444,6 +458,70 @@ def run(future_only: bool = False) -> Dict[str, Any]:
     return payload
 
 
+
+
+def run_sweep() -> Dict[str, Any]:
+    """Capacity sweep: frozen S2 mechanics at SWEEP_SIZES, all windows since
+    10:59 (capacity diagnostic, not variant selection). Fills remain capped
+    by actual print sizes; rescues by displayed depth; caps scale with size."""
+    since = datetime.fromisoformat("2026-08-31T10:59").replace(
+        tzinfo=timezone.utc).timestamp()
+    windows = load_ref_lag_windows("data/ref_lag", since)
+    settlements = load_settlements()
+    table: Dict[str, Any] = {}
+    for size in SWEEP_SIZES:
+        results = []
+        for symbol, rows in sorted(windows.items()):
+            if _win_close_epoch(symbol) is None:
+                continue
+            r = evaluate(symbol, rows, SWEEP_VARIANT,
+                         settle=settlements.get(symbol),
+                         entry_size=size,
+                         max_spend=SWEEP_SPEND_MULT * size,
+                         max_worst_loss=SWEEP_WORST_LOSS_MULT * size)
+            if r:
+                results.append(r)
+        pairs = sum(r["pairs"] for r in results)
+        rescues = sum(r["rescues"] for r in results)
+        unresolved = [r["market"] for r in results if r["settlement_pnl"] is None]
+        realized = (sum(r["settlement_pnl"] for r in results)
+                    if not unresolved else None)
+        taker_fees = sum(r["taker_fees"] for r in results)
+        cap_min = sum(r["capital_minutes"] for r in results)
+        table[str(int(size))] = {
+            "engaged": len(results),
+            "pairs": round(pairs, 1),
+            "pairs_per_window": round(pairs / len(results), 2) if results else None,
+            "flat_windows": sum(1 for r in results if r["flat"]),
+            "rescues": rescues,
+            "rescues_per_15_pairs": round(15 * rescues / pairs, 2) if pairs else None,
+            "realized_settlement_pnl": round(realized, 2)
+            if realized is not None else "INCOMPLETE",
+            "realized_net_sep2": round(realized - taker_fees, 2)
+            if realized is not None else None,
+            "worst_case_residual": round(sum(
+                r["residual_worst_loss"] for r in results if not r["flat"]), 2),
+            "rebates_separate": round(sum(r["rebates_separate"] for r in results), 2),
+            "capital_minutes": round(cap_min, 1),
+        }
+    payload = {"generated_utc": datetime.now(timezone.utc).isoformat(),
+               "sample": "ALL_WINDOWS_CAPACITY_DIAGNOSTIC",
+               "variant": SWEEP_VARIANT, "sizes": list(SWEEP_SIZES),
+               "sweep": table}
+    out = Path("analysis/gemini/capacity_sweep.json")
+    out.write_text(json.dumps(payload, indent=1), encoding="utf-8")
+    for size, row in table.items():
+        print(f'q{size}: eng={row["engaged"]} pairs={row["pairs"]} '
+              f'(per-win {row["pairs_per_window"]}) flat={row["flat_windows"]} '
+              f'rescues={row["rescues"]} (per15={row["rescues_per_15_pairs"]}) '
+              f'realized={row["realized_settlement_pnl"]} netSep2={row["realized_net_sep2"]} '
+              f'rebates={row["rebates_separate"]} resid={row["worst_case_residual"]}')
+    return payload
+
+
 if __name__ == "__main__":
     import sys
-    run(future_only="--future" in sys.argv)
+    if "--sweep" in sys.argv:
+        run_sweep()
+    else:
+        run(future_only="--future" in sys.argv)
