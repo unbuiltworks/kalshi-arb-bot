@@ -2,54 +2,54 @@
   "address": "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68",
   "build": {
     "dedup": {
-      "activity_fills_after_dedup": 53926,
+      "activity_fills_after_dedup": 71984,
       "non_trade_activity_skipped": {
-        "MAKER_REBATE": 3,
-        "REDEEM": 1541,
-        "REWARD": 2,
-        "TAKER_REBATE": 2
+        "MAKER_REBATE": 4,
+        "REDEEM": 2126,
+        "REWARD": 3,
+        "TAKER_REBATE": 3
       },
-      "raw_activity_rows": 55500,
+      "raw_activity_rows": 78000,
       "raw_trades_rows": 10500,
       "supplemented_from_trades": 0,
-      "total_fills": 53926,
+      "total_fills": 71984,
       "trades_fills_after_dedup": 10457
     },
-    "fills_in_scope": 53926,
+    "fills_in_scope": 71984,
     "fills_out_of_scope": 0,
-    "markets_in_scope": 2983,
-    "markets_indexed": 2983,
-    "non_trade_activity_rows": 1547,
+    "markets_in_scope": 3528,
+    "markets_indexed": 3528,
+    "non_trade_activity_rows": 2036,
     "normalized_dir": "/home/user/kalshi-arb-bot/data/l5/normalized",
     "output_dir": "/home/user/kalshi-arb-bot/analysis/l5",
-    "positions_with_reported_pnl": 1461,
+    "positions_with_reported_pnl": 1520,
     "rows_written": {
-      "l5_all_trades.csv": 53926,
+      "l5_all_trades.csv": 71984,
       "l5_excluded_markets.csv": 0,
-      "l5_window_sequences.csv": 53926,
-      "l5_windows_summary.csv": 1671
+      "l5_window_sequences.csv": 71984,
+      "l5_windows_summary.csv": 2216
     },
-    "windows": 1671
+    "windows": 2216
   },
-  "code_version": "fb3a69d",
+  "code_version": "4ad8b98",
   "coverage": {
     "first_trade_ts": 1773914977.0,
-    "last_trade_ts": 1788124164.0,
-    "n_trades": 53926,
-    "n_windows": 1671,
+    "last_trade_ts": 1788217879.0,
+    "n_trades": 71984,
+    "n_windows": 2216,
     "windows_by_asset": {
-      "BTC": 1151,
-      "ETH": 520
+      "BTC": 1484,
+      "ETH": 732
     },
     "windows_by_length": {
-      "15": 454,
-      "5": 1217
+      "15": 556,
+      "5": 1660
     },
     "windows_by_window_source": {
-      "both_agree": 1671
+      "both_agree": 2216
     },
-    "windows_with_any_pnl": 1668,
-    "windows_with_resolution": 1668
+    "windows_with_any_pnl": 2216,
+    "windows_with_resolution": 2216
   },
   "fetch": {
     "activity": {
@@ -186,5 +186,5 @@
   "fetch_status": "ok",
   "profile_slug": "l5zn1bwom8etsk",
   "raw_dir": "/home/user/kalshi-arb-bot/data/l5/raw",
-  "updated_at": "2026-08-30T21:14:37.437522Z"
+  "updated_at": "2026-08-31T23:35:38.727381Z"
 }
