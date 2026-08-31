@@ -39,28 +39,47 @@ for cmd in git docker date grep awk; do
 done
 [ -d "$SOURCE_REPO/.git" ] || { echo "POLICY_D_AWS_BLOCKED source repo missing" >&2; exit 1; }
 
-# Find a secure env without printing values. Require the PEM form because it is
-# self-contained inside the container; if AWS does not have it, fail closed and
-# leave venue state untouched.
+# Find existing secure Kalshi wiring without ever printing values. The host may
+# use either an inline PEM or a private-key file. For the file form we mount the
+# already-present key read-only at a fixed container path and override only the
+# path variable; the key bytes never leave EC2.
 ENV_FILE=""
+HOST_KEY_FILE=""
 for candidate in \
   /opt/arb/secrets/kalshi.env \
   /opt/arb/secrets/prediction-markets.env \
   /opt/arb/secrets/gemini-short-crypto.env \
   "$SOURCE_REPO/.env"
 do
-  if [ -f "$candidate" ] \
-    && grep -q '^KALSHI_API_KEY_ID=.' "$candidate" \
-    && grep -q '^KALSHI_PRIVATE_KEY_PEM=.' "$candidate"; then
+  [ -f "$candidate" ] || continue
+  grep -q '^KALSHI_API_KEY_ID=.' "$candidate" || continue
+  if grep -q '^KALSHI_PRIVATE_KEY_PEM=.' "$candidate"; then
     ENV_FILE="$candidate"
     break
   fi
+  for key_candidate in \
+    "$SOURCE_REPO/private_key.pem" \
+    /opt/arb/secrets/kalshi_private_key.pem \
+    /opt/arb/secrets/kalshi.pem
+  do
+    if [ -f "$key_candidate" ] && grep -q 'BEGIN .*PRIVATE KEY' "$key_candidate" 2>/dev/null; then
+      ENV_FILE="$candidate"
+      HOST_KEY_FILE="$key_candidate"
+      break 2
+    fi
+  done
 done
 [ -n "$ENV_FILE" ] || {
-  echo "POLICY_D_AWS_BLOCKED Kalshi credentials not present in an approved AWS env file" >&2
+  echo "POLICY_D_AWS_BLOCKED Kalshi credentials not present in approved AWS wiring" >&2
   exit 1
 }
-echo "POLICY_D_AWS_SECURE_ENV_PRESENT path=$ENV_FILE values_redacted=true"
+KEY_MODE="inline_pem"
+KEY_ARGS=()
+if [ -n "$HOST_KEY_FILE" ]; then
+  KEY_MODE="read_only_key_file"
+  KEY_ARGS=(-v "$HOST_KEY_FILE:/run/secrets/kalshi_private_key.pem:ro" -e KALSHI_PRIVATE_KEY_PATH=/run/secrets/kalshi_private_key.pem)
+fi
+echo "POLICY_D_AWS_SECURE_ENV_PRESENT path=$ENV_FILE key_mode=$KEY_MODE values_redacted=true"
 
 # Isolated durable state and one-use approval marker.
 SAFE_APPROVAL="$(printf '%s' "$APPROVAL_ID" | tr -cd 'A-Za-z0-9_-')"
@@ -135,6 +154,7 @@ fi
 # positions, and durable state while LIVE remains disarmed.
 PREFLIGHT="$(docker run --rm --network host \
   --env-file "$ENV_FILE" \
+  "${KEY_ARGS[@]}" \
   -e PYTHONUNBUFFERED=1 \
   -e KALSHI_ENV=prod \
   -e KALSHI_POLICY_D_V1_STATE_DIR=/state \
@@ -162,6 +182,7 @@ sync "$APPROVAL_DIR"
 echo "POLICY_D_AWS_LIVE_STARTING commit=$PINNED_COMMIT series=KXBTC15M q=1 max_windows=$MAX_WINDOWS max_session_seconds=$MAX_SESSION_SECONDS auto_restart=false rebates_counted=false fail_closed_entrypoint=true"
 docker run -d --name "$CONTAINER" --network host --restart no \
   --env-file "$ENV_FILE" \
+  "${KEY_ARGS[@]}" \
   -e PYTHONUNBUFFERED=1 \
   -e KALSHI_ENV=prod \
   -e KALSHI_POLICY_D_V1_STATE_DIR=/state \
