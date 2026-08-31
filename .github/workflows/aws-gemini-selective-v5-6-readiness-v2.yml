@@ -1,0 +1,87 @@
+name: AWS Gemini selective maker V5.6 authenticated readiness V2
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths: ['.github/workflows/aws-gemini-selective-v5-6-readiness-v2.yml']
+
+permissions: {id-token: write, contents: read}
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  RELEASE_BRANCH: release/gemini-selective-maker-v5-6
+  REQUIRED_RELEASE_COMMIT: 1231adf4f4e22628b4fecd4b1b57e6f1e16434e6
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with: {role-to-assume: '${{ env.AWS_DEPLOY_ROLE_ARN }}', aws-region: '${{ env.AWS_REGION }}'}
+      - name: Exact-SHA tests and disarmed real-account readiness
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          WORK=/opt/arb/gemini-selective-v5-6-readiness-v2
+          STATE=/home/ssm-user/gemini-selective-v5-6-readiness-state-v2
+          RISK=/home/ssm-user/gemini-selective-v5-6-readiness-risk-v2
+          PROD_RISK=/home/ssm-user/gemini-adaptive-v5-4-risk-state
+          IMAGE=arb-gemini-selective-v5-6-readiness-v2:${REQUIRED_RELEASE_COMMIT:0:12}
+          cd "\$REPO"; git config --global --add safe.directory "\$REPO" || true
+          git fetch origin ${RELEASE_BRANCH} >/dev/null
+          ACTUAL=\$(git rev-parse origin/${RELEASE_BRANCH}); test "\$ACTUAL" = "${REQUIRED_RELEASE_COMMIT}"
+          git worktree remove --force "\$WORK" >/dev/null 2>&1 || true; rm -rf "\$WORK" "\$STATE" "\$RISK"; git worktree prune
+          git worktree add --detach "\$WORK" "\$ACTUAL" >/dev/null; docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
+          docker run --rm --network none "\$IMAGE" python -m pytest -q \
+            tests/test_btc_spot_toxicity_guard.py tests/test_gemini_prediction_book_cache.py \
+            tests/test_gemini_q10_rescue_policy.py tests/test_gemini_liquidity_reward_dynamic_completion_q10.py \
+            tests/test_gemini_q10_production_executor.py tests/test_gemini_q10_production_executor_v2.py \
+            tests/test_gemini_q10_production_executor_v5.py tests/test_gemini_q10_production_executor_v5_1.py \
+            tests/test_gemini_q10_v5_recovery_deadman.py tests/test_gemini_q10_v5_deadman_sidecar.py \
+            tests/test_gemini_q10_v5_2.py tests/test_gemini_adaptive_maker_v5_3.py \
+            tests/test_gemini_adaptive_maker_executor_v5_3.py tests/test_gemini_adaptive_maker_contract_grid_v5_3.py \
+            tests/test_gemini_adaptive_maker_v5_4.py tests/test_gemini_adaptive_maker_v5_5.py \
+            tests/test_gemini_selective_maker_v5_6.py
+          if [ -f /opt/arb/secrets/gemini-short-crypto.env ]; then ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; else ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; fi
+          if [ -d /home/ssm-user/gemini-short-crypto-state ]; then BASE_STATE=/home/ssm-user/gemini-short-crypto-state; else BASE_STATE=/opt/arb/gemini-short-crypto-state; fi
+          test -f "\$ENV_FILE"; mkdir -p "\$STATE" "\$RISK"; chmod 700 "\$STATE" "\$RISK"
+          if [ -f "\$PROD_RISK/daily-risk.json" ]; then cp "\$PROD_RISK/daily-risk.json" "\$RISK/daily-risk.json"; chmod 600 "\$RISK/daily-risk.json"; fi
+          docker run --rm -i --network host --env-file "\$ENV_FILE" \
+            -e GEMINI_SHORT_CRYPTO_STATE_DIR=/base_state -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
+            -e GEMINI_ADAPTIVE_V5_4_RISK_STATE_DIR=/risk_state \
+            -e GEMINI_Q10_PRODUCTION_LIVE=NO -e GEMINI_Q10_PRODUCTION_ARM_ID= -e GEMINI_Q10_PRODUCTION_ARM= \
+            -e GEMINI_Q10_V5_RECOVERY_ARM= -e GEMINI_Q10_V5_WATCHDOG_ARM= \
+            -e GEMINI_Q10_V5_MAX_RESCUE_LOSS_USD=0.30 -e GEMINI_Q10_V5_MAX_CAMPAIGN_LOSS_USD=1.00 \
+            -e GEMINI_Q10_V5_MAX_DAILY_LOSS_USD=20.00 -e GEMINI_Q10_V5_CALM_MAKER_GRACE_SECONDS=0 \
+            -e GEMINI_SELECTIVE_V5_6_MAX_SESSION_LOSS_USD=5.00 \
+            -v "\$BASE_STATE:/base_state:ro" -v "\$STATE:/prod_state" -v "\$RISK:/risk_state" \
+            "\$IMAGE" python - <<'PY'
+          import asyncio,json
+          from src import gemini_selective_maker_v5_6 as v56
+          from src import gemini_selective_maker_v5_6_deadman as dead
+          from src import gemini_adaptive_maker_executor_v5_3 as v53
+          async def main():
+              available,flat=await v53.v5.v1._preflight_flat(); result=await v56.run(); d=await dead.check_once()
+              out={'release_commit':'${REQUIRED_RELEASE_COMMIT}','available_usd':str(available),'flat':flat,
+                   'runtime':result,'deadman':d,'live_armed':v53.v5.live_armed(),'order_entry':False,'realized_pnl':0}
+              print('V5_6_AUTH_READINESS='+json.dumps(out,separators=(',',':'),default=str))
+              assert flat['orders']==0 and flat['positions']==0
+              assert result['status']=='DISARMED_READY' and result['order_entry'] is False
+              assert result['daily_risk']['blocked'] is False
+              assert d['status']=='IDLE_NO_OPEN_CAMPAIGN' and not v53.v5.live_armed()
+          asyncio.run(main())
+          PY
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0); PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --parameters "$PARAMS" --timeout-seconds 800 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 390); do STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending); case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac; sleep 2; done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"; test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          OUT=$(jq -r '.Stdout // ""' <<<"$RESULT"); grep -q '112 passed' <<<"$OUT"; grep -q 'V5_6_AUTH_READINESS=' <<<"$OUT"; grep -q '"order_entry":false' <<<"$OUT"
