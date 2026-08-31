@@ -22,7 +22,8 @@ jobs:
         run: |
           python -m py_compile \
             src/gemini_selective_maker_v5_6.py \
-            src/gemini_selective_maker_v5_6_deadman.py
+            src/gemini_selective_maker_v5_6_deadman.py \
+            src/gemini_selective_maker_v5_6_sidecar.py
       - name: Frozen V5.5 substrate plus V5.6 selective-maker regressions
         run: |
           python -m pytest -q \
