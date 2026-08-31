@@ -1,0 +1,337 @@
+{
+ "generated_utc": "2026-08-31T21:51:50.227995+00:00",
+ "units_caveat": "volume fields are event contracts; dollars assume 0.50 avg premium/contract",
+ "lookback_days": 14,
+ "categories": {
+  "Crypto": {
+   "active_events": 95,
+   "active_volume24h_contracts": 17873.2,
+   "active_total_volume_contracts": 30116.2,
+   "active_median_duration_h": 1.2,
+   "settled_total_listed": 1000,
+   "settled_recent_events": 1000,
+   "settled_recent_days_covered": 1,
+   "settled_contracts_per_day": 401368.3,
+   "settled_median_duration_h": 1.2,
+   "est_dollars_per_day": 200684.1,
+   "capture_scenarios_usd_per_day": {
+    "cap20_net0.2c": 80.3,
+    "cap20_net0.5c": 200.7,
+    "cap20_net1.0c": 401.4,
+    "cap40_net0.2c": 160.5,
+    "cap40_net0.5c": 401.4,
+    "cap40_net1.0c": 802.7,
+    "cap60_net0.2c": 240.8,
+    "cap60_net0.5c": 602.1,
+    "cap60_net1.0c": 1204.1
+   },
+   "active_subcategory_volume24h": {
+    "Bitcoin": 16087.02,
+    "XRP": 807.86,
+    "Zcash": 647.3499999999999,
+    "Ether": 210.41,
+    "Solana": 120.59
+   }
+  },
+  "Sports": {
+   "active_events": 586,
+   "active_volume24h_contracts": 141160.7,
+   "active_total_volume_contracts": 1070091.7,
+   "active_median_duration_h": 330.5,
+   "settled_total_listed": 250,
+   "settled_recent_events": 0,
+   "settled_recent_days_covered": 0,
+   "settled_contracts_per_day": 0.0,
+   "settled_median_duration_h": 0,
+   "est_dollars_per_day": 0.0,
+   "capture_scenarios_usd_per_day": {
+    "cap20_net0.2c": 0.0,
+    "cap20_net0.5c": 0.0,
+    "cap20_net1.0c": 0.0,
+    "cap40_net0.2c": 0.0,
+    "cap40_net0.5c": 0.0,
+    "cap40_net1.0c": 0.0,
+    "cap60_net0.2c": 0.0,
+    "cap60_net0.5c": 0.0,
+    "cap60_net1.0c": 0.0
+   },
+   "active_subcategory_volume24h": {
+    "US Open": 84878.07999999999,
+    "Pro Baseball": 26686.07,
+    "College Football": 16371.64,
+    "Pro Football": 5276.37,
+    "EPL": 2731.02,
+    "F1": 1675.22,
+    "Soccer": 1660.0,
+    "MLS": 1381.31
+   }
+  },
+  "Economics": {
+   "active_events": 9,
+   "active_volume24h_contracts": 21649.0,
+   "active_total_volume_contracts": 544355.0,
+   "active_median_duration_h": 7281.4,
+   "settled_total_listed": 250,
+   "settled_recent_events": 0,
+   "settled_recent_days_covered": 0,
+   "settled_contracts_per_day": 0.0,
+   "settled_median_duration_h": 0,
+   "est_dollars_per_day": 0.0,
+   "capture_scenarios_usd_per_day": {
+    "cap20_net0.2c": 0.0,
+    "cap20_net0.5c": 0.0,
+    "cap20_net1.0c": 0.0,
+    "cap40_net0.2c": 0.0,
+    "cap40_net0.5c": 0.0,
+    "cap40_net1.0c": 0.0,
+    "cap60_net0.2c": 0.0,
+    "cap60_net0.5c": 0.0,
+    "cap60_net1.0c": 0.0
+   },
+   "active_subcategory_volume24h": {
+    "Fed": 14361.0,
+    "Macro Indicators": 6586.0,
+    "Economics": 702.0
+   }
+  },
+  "Politics": {
+   "active_events": 221,
+   "active_volume24h_contracts": 15011.1,
+   "active_total_volume_contracts": 1876834.1,
+   "active_median_duration_h": 2458.4,
+   "settled_total_listed": 250,
+   "settled_recent_events": 6,
+   "settled_recent_days_covered": 6,
+   "settled_contracts_per_day": 63692.8,
+   "settled_median_duration_h": 5662.5,
+   "est_dollars_per_day": 31846.4,
+   "capture_scenarios_usd_per_day": {
+    "cap20_net0.2c": 12.7,
+    "cap20_net0.5c": 31.8,
+    "cap20_net1.0c": 63.7,
+    "cap40_net0.2c": 25.5,
+    "cap40_net0.5c": 63.7,
+    "cap40_net1.0c": 127.4,
+    "cap60_net0.2c": 38.2,
+    "cap60_net0.5c": 95.5,
+    "cap60_net1.0c": 191.1
+   },
+   "active_subcategory_volume24h": {
+    "International": 5223.0,
+    "House": 4417.0,
+    "Congressional": 4109.0,
+    "Presidential": 537.12,
+    "Governor": 450.0,
+    "Senate": 275.0,
+    "Courts": 0.0,
+    "Local": 0.0
+   }
+  },
+  "Tech": {
+   "active_events": 5,
+   "active_volume24h_contracts": 5362.0,
+   "active_total_volume_contracts": 221559.9,
+   "active_median_duration_h": 7295.8,
+   "settled_total_listed": 250,
+   "settled_recent_events": 1,
+   "settled_recent_days_covered": 1,
+   "settled_contracts_per_day": 532.0,
+   "settled_median_duration_h": 6701.1,
+   "est_dollars_per_day": 266.0,
+   "capture_scenarios_usd_per_day": {
+    "cap20_net0.2c": 0.1,
+    "cap20_net0.5c": 0.3,
+    "cap20_net1.0c": 0.5,
+    "cap40_net0.2c": 0.2,
+    "cap40_net0.5c": 0.5,
+    "cap40_net1.0c": 1.1,
+    "cap60_net0.2c": 0.3,
+    "cap60_net0.5c": 0.8,
+    "cap60_net1.0c": 1.6
+   },
+   "active_subcategory_volume24h": {
+    "AI Models": 5268.0,
+    "Space": 94.0,
+    "Tech": 0.0
+   }
+  },
+  "Business": {
+   "active_events": 6,
+   "active_volume24h_contracts": 36.0,
+   "active_total_volume_contracts": 297742.0,
+   "active_median_duration_h": 7236.4,
+   "settled_total_listed": 250,
+   "settled_recent_events": 2,
+   "settled_recent_days_covered": 2,
+   "settled_contracts_per_day": 87726.5,
+   "settled_median_duration_h": 16049.2,
+   "est_dollars_per_day": 43863.2,
+   "capture_scenarios_usd_per_day": {
+    "cap20_net0.2c": 17.5,
+    "cap20_net0.5c": 43.9,
+    "cap20_net1.0c": 87.7,
+    "cap40_net0.2c": 35.1,
+    "cap40_net0.5c": 87.7,
+    "cap40_net1.0c": 175.5,
+    "cap60_net0.2c": 52.6,
+    "cap60_net0.5c": 131.6,
+    "cap60_net1.0c": 263.2
+   },
+   "active_subcategory_volume24h": {
+    "Business": 36.0,
+    "IPOs": 0.0
+   }
+  },
+  "Commodities": {
+   "active_events": 18,
+   "active_volume24h_contracts": 1895.3,
+   "active_total_volume_contracts": 2367.3,
+   "active_median_duration_h": 185.1,
+   "settled_total_listed": 943,
+   "settled_recent_events": 84,
+   "settled_recent_days_covered": 14,
+   "settled_contracts_per_day": 12942.1,
+   "settled_median_duration_h": 25.1,
+   "est_dollars_per_day": 6471.0,
+   "capture_scenarios_usd_per_day": {
+    "cap20_net0.2c": 2.6,
+    "cap20_net0.5c": 6.5,
+    "cap20_net1.0c": 12.9,
+    "cap40_net0.2c": 5.2,
+    "cap40_net0.5c": 12.9,
+    "cap40_net1.0c": 25.9,
+    "cap60_net0.2c": 7.8,
+    "cap60_net0.5c": 19.4,
+    "cap60_net1.0c": 38.8
+   },
+   "active_subcategory_volume24h": {
+    "Oil (Brent)": 1010.92,
+    "Copper": 650.42,
+    "Oil (WTI)": 178.97,
+    "Silver": 38.0,
+    "Natural Gas": 11.0,
+    "Gold": 6.0
+   }
+  },
+  "Weather": {
+   "active_events": 44,
+   "active_volume24h_contracts": 3867.5,
+   "active_total_volume_contracts": 3880.5,
+   "active_median_duration_h": 39.0,
+   "settled_total_listed": 1000,
+   "settled_recent_events": 277,
+   "settled_recent_days_covered": 14,
+   "settled_contracts_per_day": 10091.7,
+   "settled_median_duration_h": 39.0,
+   "est_dollars_per_day": 5045.9,
+   "capture_scenarios_usd_per_day": {
+    "cap20_net0.2c": 2.0,
+    "cap20_net0.5c": 5.0,
+    "cap20_net1.0c": 10.1,
+    "cap40_net0.2c": 4.0,
+    "cap40_net0.5c": 10.1,
+    "cap40_net1.0c": 20.2,
+    "cap60_net0.2c": 6.1,
+    "cap60_net0.5c": 15.1,
+    "cap60_net1.0c": 30.3
+   },
+   "active_subcategory_volume24h": {
+    "Daily Temperature": 3867.48
+   }
+  },
+  "Culture": {
+   "active_events": 5,
+   "active_volume24h_contracts": 786.0,
+   "active_total_volume_contracts": 97793.0,
+   "active_median_duration_h": 3581.3,
+   "settled_total_listed": 250,
+   "settled_recent_events": 0,
+   "settled_recent_days_covered": 0,
+   "settled_contracts_per_day": 0.0,
+   "settled_median_duration_h": 0,
+   "est_dollars_per_day": 0.0,
+   "capture_scenarios_usd_per_day": {
+    "cap20_net0.2c": 0.0,
+    "cap20_net0.5c": 0.0,
+    "cap20_net1.0c": 0.0,
+    "cap40_net0.2c": 0.0,
+    "cap40_net0.5c": 0.0,
+    "cap40_net1.0c": 0.0,
+    "cap60_net0.2c": 0.0,
+    "cap60_net0.5c": 0.0,
+    "cap60_net1.0c": 0.0
+   },
+   "active_subcategory_volume24h": {
+    "Awards": 388.0,
+    "Movies": 200.0,
+    "Video Games": 198.0,
+    "Television": 0.0
+   }
+  }
+ },
+ "ranked_by_est_dollars_per_day": [
+  {
+   "category": "Crypto",
+   "est_dollars_per_day": 200684.1,
+   "median_duration_h": 1.2,
+   "dollars_per_day_at_cap20_net1c": 401.4
+  },
+  {
+   "category": "Business",
+   "est_dollars_per_day": 43863.2,
+   "median_duration_h": 16049.2,
+   "dollars_per_day_at_cap20_net1c": 87.7
+  },
+  {
+   "category": "Politics",
+   "est_dollars_per_day": 31846.4,
+   "median_duration_h": 5662.5,
+   "dollars_per_day_at_cap20_net1c": 63.7
+  },
+  {
+   "category": "Commodities",
+   "est_dollars_per_day": 6471.0,
+   "median_duration_h": 25.1,
+   "dollars_per_day_at_cap20_net1c": 12.9
+  },
+  {
+   "category": "Weather",
+   "est_dollars_per_day": 5045.9,
+   "median_duration_h": 39.0,
+   "dollars_per_day_at_cap20_net1c": 10.1
+  },
+  {
+   "category": "Tech",
+   "est_dollars_per_day": 266.0,
+   "median_duration_h": 6701.1,
+   "dollars_per_day_at_cap20_net1c": 0.5
+  },
+  {
+   "category": "Sports",
+   "est_dollars_per_day": 0.0,
+   "median_duration_h": 0,
+   "dollars_per_day_at_cap20_net1c": 0.0
+  },
+  {
+   "category": "Economics",
+   "est_dollars_per_day": 0.0,
+   "median_duration_h": 0,
+   "dollars_per_day_at_cap20_net1c": 0.0
+  },
+  {
+   "category": "Culture",
+   "est_dollars_per_day": 0.0,
+   "median_duration_h": 0,
+   "dollars_per_day_at_cap20_net1c": 0.0
+  }
+ ],
+ "limitations": {
+  "settled_listing_unavailable": [
+   "Sports",
+   "Economics",
+   "Culture"
+  ],
+  "note": "status=settled for these categories returns 503 at every offset (server-side; largest categories). Their daily volume is proxied by active-event volume24h, which UNDERCOUNTS categories whose events settle and leave 'active' within the day.",
+  "subsidy_caveat": "Maker-rebate program is documented for CRYPTO event contracts; rebate/LR availability for Sports and other categories is UNVERIFIED until the Sept 2 live check."
+ }
+}
