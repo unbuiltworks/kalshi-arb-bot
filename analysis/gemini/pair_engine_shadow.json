@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-08-31T11:45:12.562400+00:00",
+ "generated_utc": "2026-08-31T14:36:23.875617+00:00",
  "since_utc": "2026-08-31T10:59",
  "assumptions": {
   "queue_model": "one fill per side per BBO snapshot; still a print-through proxy",
@@ -10,16 +10,243 @@
  },
  "aggregate": {
   "evidence_class": "SHADOW_MAKER_PRINT_PROXY_NOT_EXECUTABLE",
-  "windows_with_fills": 0,
-  "flat_windows": 0,
-  "promotion_grade_windows": 0,
-  "total_pairs": 0,
-  "flat_pairs_le_100": 0,
-  "total_spend": 0,
-  "locked_pnl_flat_windows": 0,
-  "residual_worst_loss": 0,
-  "rescue_fills": 0,
+  "windows_with_fills": 6,
+  "flat_windows": 3,
+  "promotion_grade_windows": 1,
+  "total_pairs": 18.0,
+  "flat_pairs_le_100": 3,
+  "total_spend": 20.96,
+  "locked_pnl_flat_windows": 0.0,
+  "residual_worst_loss": 2.9614,
+  "rescue_fills": 2,
   "stale_book_skips": 0
  },
- "per_window": []
+ "per_window": [
+  {
+   "market": "GEMI-BTC05M2608311120-UP",
+   "fills": [
+    {
+     "t": 249.8,
+     "side": "yes",
+     "price": 0.37,
+     "qty": 5.0,
+     "reason": "HOT_JOIN"
+    },
+    {
+     "t": 249.8,
+     "side": "no",
+     "price": 0.63,
+     "qty": 5.0,
+     "reason": "RESCUE_TAKER"
+    }
+   ],
+   "maker_fills": 1,
+   "rescue_fills": 1,
+   "yes_qty": 5.0,
+   "no_qty": 5.0,
+   "pairs": 5.0,
+   "flat_at_expiry": true,
+   "avg_pair_cost_if_flat": 1.0,
+   "residual": 0.0,
+   "worst_settlement_loss": 0.0,
+   "spend": 5.0,
+   "locked_pnl_if_flat": 0.0,
+   "first_hot_s": 249.8,
+   "state_counts": {
+    "IDLE": 2,
+    "WARM": 2,
+    "HOT": 3
+   },
+   "stale_book_skips": 0,
+   "winner_heuristic": "no",
+   "heuristic_pnl_not_for_promotion": 0.0,
+   "promotion_grade": false
+  },
+  {
+   "market": "GEMI-BTC05M2608311215-UP",
+   "fills": [
+    {
+     "t": 53.5,
+     "side": "no",
+     "price": 0.42,
+     "qty": 3.34,
+     "reason": "HOT_JOIN"
+    },
+    {
+     "t": 240.0,
+     "side": "yes",
+     "price": 0.58,
+     "qty": 3.0,
+     "reason": "LEAN_COMPLETE_PORTFOLIO"
+    }
+   ],
+   "maker_fills": 2,
+   "rescue_fills": 0,
+   "yes_qty": 3.0,
+   "no_qty": 3.34,
+   "pairs": 3.0,
+   "flat_at_expiry": false,
+   "avg_pair_cost_if_flat": null,
+   "residual": -0.33999999999999986,
+   "worst_settlement_loss": 0.1428,
+   "spend": 3.1428,
+   "locked_pnl_if_flat": null,
+   "first_hot_s": 53.5,
+   "state_counts": {
+    "IDLE": 1,
+    "WARM": 4,
+    "HOT": 18,
+    "INVENTORY_MANAGE": 1
+   },
+   "stale_book_skips": 0,
+   "winner_heuristic": "no",
+   "heuristic_pnl_not_for_promotion": 0.1972,
+   "promotion_grade": false
+  },
+  {
+   "market": "GEMI-BTC05M2608311220-UP",
+   "fills": [
+    {
+     "t": 69.7,
+     "side": "no",
+     "price": 0.58,
+     "qty": 1.67,
+     "reason": "HOT_JOIN"
+    }
+   ],
+   "maker_fills": 1,
+   "rescue_fills": 0,
+   "yes_qty": 0.0,
+   "no_qty": 1.67,
+   "pairs": 0.0,
+   "flat_at_expiry": false,
+   "avg_pair_cost_if_flat": null,
+   "residual": -1.67,
+   "worst_settlement_loss": 0.9686,
+   "spend": 0.9686,
+   "locked_pnl_if_flat": null,
+   "first_hot_s": 69.7,
+   "state_counts": {
+    "IDLE": 1,
+    "HOT": 1
+   },
+   "stale_book_skips": 0,
+   "winner_heuristic": "no",
+   "heuristic_pnl_not_for_promotion": 0.7014,
+   "promotion_grade": false
+  },
+  {
+   "market": "GEMI-BTC05M2608311340-UP",
+   "fills": [
+    {
+     "t": 152.6,
+     "side": "no",
+     "price": 0.37,
+     "qty": 5.0,
+     "reason": "WARM_JOIN"
+    }
+   ],
+   "maker_fills": 1,
+   "rescue_fills": 0,
+   "yes_qty": 0.0,
+   "no_qty": 5.0,
+   "pairs": 0.0,
+   "flat_at_expiry": false,
+   "avg_pair_cost_if_flat": null,
+   "residual": -5.0,
+   "worst_settlement_loss": 1.85,
+   "spend": 1.85,
+   "locked_pnl_if_flat": null,
+   "first_hot_s": 161.5,
+   "state_counts": {
+    "IDLE": 3,
+    "WARM": 1,
+    "HOT": 1
+   },
+   "stale_book_skips": 0,
+   "winner_heuristic": "yes",
+   "heuristic_pnl_not_for_promotion": -1.85,
+   "promotion_grade": false
+  },
+  {
+   "market": "GEMI-BTC05M2608311410-UP",
+   "fills": [
+    {
+     "t": 267.9,
+     "side": "yes",
+     "price": 0.79,
+     "qty": 5.0,
+     "reason": "HOT_JOIN"
+    },
+    {
+     "t": 267.9,
+     "side": "no",
+     "price": 0.20999999999999996,
+     "qty": 5.0,
+     "reason": "RESCUE_TAKER"
+    }
+   ],
+   "maker_fills": 1,
+   "rescue_fills": 1,
+   "yes_qty": 5.0,
+   "no_qty": 5.0,
+   "pairs": 5.0,
+   "flat_at_expiry": true,
+   "avg_pair_cost_if_flat": 1.0,
+   "residual": 0.0,
+   "worst_settlement_loss": 0.0,
+   "spend": 5.0,
+   "locked_pnl_if_flat": 0.0,
+   "first_hot_s": 267.9,
+   "state_counts": {
+    "IDLE": 3,
+    "WARM": 1,
+    "HOT": 5
+   },
+   "stale_book_skips": 0,
+   "winner_heuristic": "yes",
+   "heuristic_pnl_not_for_promotion": 0.0,
+   "promotion_grade": false
+  },
+  {
+   "market": "GEMI-BTC05M2608311415-UP",
+   "fills": [
+    {
+     "t": 40.4,
+     "side": "yes",
+     "price": 0.31,
+     "qty": 5.0,
+     "reason": "HOT_JOIN"
+    },
+    {
+     "t": 105.9,
+     "side": "no",
+     "price": 0.69,
+     "qty": 5.0,
+     "reason": "LEAN_COMPLETE_PORTFOLIO"
+    }
+   ],
+   "maker_fills": 2,
+   "rescue_fills": 0,
+   "yes_qty": 5.0,
+   "no_qty": 5.0,
+   "pairs": 5.0,
+   "flat_at_expiry": true,
+   "avg_pair_cost_if_flat": 1.0,
+   "residual": 0.0,
+   "worst_settlement_loss": 0.0,
+   "spend": 5.0,
+   "locked_pnl_if_flat": 0.0,
+   "first_hot_s": 40.4,
+   "state_counts": {
+    "IDLE": 1,
+    "HOT": 1,
+    "INVENTORY_MANAGE": 1
+   },
+   "stale_book_skips": 0,
+   "winner_heuristic": "no",
+   "heuristic_pnl_not_for_promotion": 0.0,
+   "promotion_grade": true
+  }
+ ]
 }

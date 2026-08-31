@@ -34,7 +34,9 @@ MAX_BOOK_AGE_S = 30.0
 
 
 def _win_close_epoch(symbol: str) -> Optional[float]:
-    core = symbol.split("-")[0]
+    # "GEMI-BTC05M2608311215-UP" -> window core is the middle segment
+    parts = symbol.split("-")
+    core = parts[-2] if len(parts) >= 3 else parts[0]
     digits = core[-10:]
     if not digits.isdigit():
         return None
