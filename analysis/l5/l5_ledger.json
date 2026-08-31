@@ -1,71 +1,947 @@
 {
- "generated_at": "2026-08-31T17:41:48.939469+00:00",
+ "generated_at": "2026-08-31T17:59:23.645168+00:00",
  "activity_counts": {
-  "TRADE": 167939,
-  "REDEEM": 4444,
-  "MAKER_REBATE": 9,
-  "TAKER_REBATE": 8,
-  "REWARD": 8
+  "TRADE": 742964,
+  "REDEEM": 15243,
+  "MAKER_REBATE": 109,
+  "TAKER_REBATE": 72,
+  "REWARD": 19
  },
  "unknown_types": {},
- "n_markets": 4989,
- "n_updown_windows": 4989,
+ "n_markets": 16501,
+ "n_updown_windows": 16501,
  "n_other_markets": 0,
  "trading": {
-  "buy_usdc": 1831975.23,
+  "buy_usdc": 7423850.29,
   "sell_usdc": 2.18,
-  "redeem_usdc": 1821971.15,
-  "net_trading_cash": -10001.9,
-  "pair_locked": 52729.33,
-  "residual_and_timing": -62731.23,
-  "unredeemed_qty": 2034012.16,
+  "redeem_usdc": 7437534.55,
+  "net_trading_cash": 13686.44,
+  "pair_locked": 155076.06,
+  "residual_and_timing": -141389.62,
+  "unredeemed_qty": 7890189.33,
   "other_markets_net_cash": 0
  },
  "income": {
-  "MAKER_REBATE": 10418.03,
-  "REWARD": 13487.38,
-  "TAKER_REBATE": 1836.42
+  "MAKER_REBATE": 33929.41,
+  "REWARD": 26956.26,
+  "TAKER_REBATE": 7322.73
  },
- "income_total": 25741.83,
+ "income_total": 68208.4,
  "reconciliation": {
-  "markets_matched": 562,
-  "markets_unmatched_ours": 4427,
-  "our_cash_plus_marks_sum": -7779.62,
-  "their_cashpnl_sum": -8868.81,
-  "sum_abs_diff": 1745.15,
-  "median_abs_diff": -0.3059,
-  "pct_within_1c": 1.6,
-  "pct_within_10c": 25.6,
-  "pct_within_1usd": 80.1,
+  "markets_matched": 1459,
+  "markets_nonterminal_skipped": 0,
+  "markets_unmatched_ours": 15042,
+  "our_cash_plus_marks_sum": -34775.25,
+  "their_cashpnl_sum": -33639.86,
+  "sum_abs_diff": 1159.56,
+  "median_abs_diff": 0.4928,
+  "pct_within_1c": 1.0,
+  "pct_within_10c": 16.2,
+  "pct_within_1usd": 74.8,
   "worst_5": [
    {
-    "abs_diff": 1414.9014,
-    "condition_id": "0x32b8960a3682845d037f76603c0e3db87edddfbbd5040e517da706a145e6fcb0"
+    "abs_diff": 10.897,
+    "condition_id": "0xfa13545e4406e8f925878509e7c3d5644885939e58ffed7cbec150a9529af083"
    },
    {
-    "abs_diff": 4.7094,
-    "condition_id": "0x6e91adbba9821524866538dbffb42f15a8419cac5e452a871c1af4115d4ae802"
+    "abs_diff": 6.923,
+    "condition_id": "0x2003bf61dfcd700d1aec0bc27ae5d6aff8d95ad22d3c8b3e5f63cd7318ff00f4"
    },
    {
-    "abs_diff": 4.0513,
-    "condition_id": "0x964cc5978925888c07a6682255be72305afe3c9573548814bfbd2e144c66f49e"
+    "abs_diff": 6.7687,
+    "condition_id": "0x78b4969700ed0820c33260b6666832c374179a374912376634732e8d22f4379d"
    },
    {
-    "abs_diff": 3.9478,
-    "condition_id": "0x43aa6cb87a9a17b9de45feb61d5b053c5b1e9abd044c3ffdede17edb7d6e3fb8"
+    "abs_diff": 6.5153,
+    "condition_id": "0x590967d04c838cfc9002beb8ddae51c5e3da2c68e571eda9cd487f91759ac124"
    },
    {
-    "abs_diff": 3.8163,
-    "condition_id": "0xe82f9c565e926e0a88cbf2fb0a6c95652d8b91de320dfd87a8a98c05114f09e1"
+    "abs_diff": 6.2365,
+    "condition_id": "0x5d776d0b24ae8a290a4b15107d8c8a8444ae080e67804384abd25b3ec0d5cee5"
    }
   ]
  },
- "grand_total_cash": 15739.93,
+ "grand_total_cash": 81894.84,
  "income_rows": [
   {
    "ts": 1776733228,
    "type": "MAKER_REBATE",
    "usdc": 29.9379
+  },
+  {
+   "ts": 1776819646,
+   "type": "MAKER_REBATE",
+   "usdc": 77.7858
+  },
+  {
+   "ts": 1776906044,
+   "type": "MAKER_REBATE",
+   "usdc": 113.1981
+  },
+  {
+   "ts": 1776992424,
+   "type": "MAKER_REBATE",
+   "usdc": 106.8854
+  },
+  {
+   "ts": 1777078826,
+   "type": "MAKER_REBATE",
+   "usdc": 79.6787
+  },
+  {
+   "ts": 1777165254,
+   "type": "MAKER_REBATE",
+   "usdc": 69.0054
+  },
+  {
+   "ts": 1777251692,
+   "type": "MAKER_REBATE",
+   "usdc": 55.3972
+  },
+  {
+   "ts": 1777338034,
+   "type": "MAKER_REBATE",
+   "usdc": 196.732
+  },
+  {
+   "ts": 1777424438,
+   "type": "MAKER_REBATE",
+   "usdc": 38.8784
+  },
+  {
+   "ts": 1777531814,
+   "type": "MAKER_REBATE",
+   "usdc": 150.3769
+  },
+  {
+   "ts": 1777596390,
+   "type": "MAKER_REBATE",
+   "usdc": 173.6918
+  },
+  {
+   "ts": 1777682780,
+   "type": "MAKER_REBATE",
+   "usdc": 199.4925
+  },
+  {
+   "ts": 1777769172,
+   "type": "MAKER_REBATE",
+   "usdc": 63.3019
+  },
+  {
+   "ts": 1777855528,
+   "type": "MAKER_REBATE",
+   "usdc": 94.469
+  },
+  {
+   "ts": 1777941912,
+   "type": "MAKER_REBATE",
+   "usdc": 148.6204
+  },
+  {
+   "ts": 1778028316,
+   "type": "MAKER_REBATE",
+   "usdc": 217.6823
+  },
+  {
+   "ts": 1778114713,
+   "type": "MAKER_REBATE",
+   "usdc": 26.8042
+  },
+  {
+   "ts": 1778201122,
+   "type": "MAKER_REBATE",
+   "usdc": 36.4471
+  },
+  {
+   "ts": 1778287530,
+   "type": "MAKER_REBATE",
+   "usdc": 75.0006
+  },
+  {
+   "ts": 1778373924,
+   "type": "MAKER_REBATE",
+   "usdc": 21.3733
+  },
+  {
+   "ts": 1778460321,
+   "type": "MAKER_REBATE",
+   "usdc": 5.8437
+  },
+  {
+   "ts": 1778546736,
+   "type": "MAKER_REBATE",
+   "usdc": 77.8588
+  },
+  {
+   "ts": 1778633113,
+   "type": "MAKER_REBATE",
+   "usdc": 37.1636
+  },
+  {
+   "ts": 1778719528,
+   "type": "MAKER_REBATE",
+   "usdc": 54.8784
+  },
+  {
+   "ts": 1778805941,
+   "type": "MAKER_REBATE",
+   "usdc": 61.9565
+  },
+  {
+   "ts": 1778892335,
+   "type": "MAKER_REBATE",
+   "usdc": 75.6292
+  },
+  {
+   "ts": 1779151508,
+   "type": "MAKER_REBATE",
+   "usdc": 75.8124
+  },
+  {
+   "ts": 1779237916,
+   "type": "MAKER_REBATE",
+   "usdc": 39.5662
+  },
+  {
+   "ts": 1779330757,
+   "type": "MAKER_REBATE",
+   "usdc": 64.968
+  },
+  {
+   "ts": 1779410706,
+   "type": "MAKER_REBATE",
+   "usdc": 52.2021
+  },
+  {
+   "ts": 1779497123,
+   "type": "MAKER_REBATE",
+   "usdc": 94.055
+  },
+  {
+   "ts": 1779583527,
+   "type": "MAKER_REBATE",
+   "usdc": 28.8158
+  },
+  {
+   "ts": 1779669912,
+   "type": "MAKER_REBATE",
+   "usdc": 13.2504
+  },
+  {
+   "ts": 1779756310,
+   "type": "MAKER_REBATE",
+   "usdc": 49.3305
+  },
+  {
+   "ts": 1779842715,
+   "type": "MAKER_REBATE",
+   "usdc": 46.9708
+  },
+  {
+   "ts": 1779929120,
+   "type": "MAKER_REBATE",
+   "usdc": 57.9291
+  },
+  {
+   "ts": 1780015519,
+   "type": "MAKER_REBATE",
+   "usdc": 59.8548
+  },
+  {
+   "ts": 1780101932,
+   "type": "MAKER_REBATE",
+   "usdc": 50.9039
+  },
+  {
+   "ts": 1780361109,
+   "type": "MAKER_REBATE",
+   "usdc": 94.2965
+  },
+  {
+   "ts": 1780447520,
+   "type": "MAKER_REBATE",
+   "usdc": 95.1864
+  },
+  {
+   "ts": 1780533939,
+   "type": "MAKER_REBATE",
+   "usdc": 106.5082
+  },
+  {
+   "ts": 1780620324,
+   "type": "MAKER_REBATE",
+   "usdc": 100.2115
+  },
+  {
+   "ts": 1780706722,
+   "type": "MAKER_REBATE",
+   "usdc": 77.243
+  },
+  {
+   "ts": 1780965907,
+   "type": "MAKER_REBATE",
+   "usdc": 93.4289
+  },
+  {
+   "ts": 1781052331,
+   "type": "MAKER_REBATE",
+   "usdc": 88.5242
+  },
+  {
+   "ts": 1781138712,
+   "type": "MAKER_REBATE",
+   "usdc": 45.4216
+  },
+  {
+   "ts": 1781225116,
+   "type": "MAKER_REBATE",
+   "usdc": 22.9186
+  },
+  {
+   "ts": 1781311515,
+   "type": "MAKER_REBATE",
+   "usdc": 30.9887
+  },
+  {
+   "ts": 1781570724,
+   "type": "MAKER_REBATE",
+   "usdc": 60.2588
+  },
+  {
+   "ts": 1781657120,
+   "type": "MAKER_REBATE",
+   "usdc": 85.6735
+  },
+  {
+   "ts": 1781756056,
+   "type": "MAKER_REBATE",
+   "usdc": 51.5754
+  },
+  {
+   "ts": 1781829908,
+   "type": "MAKER_REBATE",
+   "usdc": 32.7455
+  },
+  {
+   "ts": 1781914213,
+   "type": "TAKER_REBATE",
+   "usdc": 9.8575
+  },
+  {
+   "ts": 1781916307,
+   "type": "MAKER_REBATE",
+   "usdc": 36.3116
+  },
+  {
+   "ts": 1782173422,
+   "type": "TAKER_REBATE",
+   "usdc": 13.341
+  },
+  {
+   "ts": 1782173426,
+   "type": "TAKER_REBATE",
+   "usdc": 6.0294
+  },
+  {
+   "ts": 1782173453,
+   "type": "TAKER_REBATE",
+   "usdc": 16.7974
+  },
+  {
+   "ts": 1782173462,
+   "type": "TAKER_REBATE",
+   "usdc": 17.7179
+  },
+  {
+   "ts": 1782173477,
+   "type": "TAKER_REBATE",
+   "usdc": 17.1532
+  },
+  {
+   "ts": 1782173525,
+   "type": "TAKER_REBATE",
+   "usdc": 74.4178
+  },
+  {
+   "ts": 1782173539,
+   "type": "TAKER_REBATE",
+   "usdc": 9.6164
+  },
+  {
+   "ts": 1782173554,
+   "type": "TAKER_REBATE",
+   "usdc": 13.881
+  },
+  {
+   "ts": 1782173576,
+   "type": "TAKER_REBATE",
+   "usdc": 8.5654
+  },
+  {
+   "ts": 1782173597,
+   "type": "TAKER_REBATE",
+   "usdc": 13.1207
+  },
+  {
+   "ts": 1782173660,
+   "type": "TAKER_REBATE",
+   "usdc": 20.3999
+  },
+  {
+   "ts": 1782173666,
+   "type": "TAKER_REBATE",
+   "usdc": 28.1352
+  },
+  {
+   "ts": 1782173693,
+   "type": "TAKER_REBATE",
+   "usdc": 13.601
+  },
+  {
+   "ts": 1782173720,
+   "type": "TAKER_REBATE",
+   "usdc": 12.3622
+  },
+  {
+   "ts": 1782226522,
+   "type": "MAKER_REBATE",
+   "usdc": 42.9266
+  },
+  {
+   "ts": 1782259814,
+   "type": "TAKER_REBATE",
+   "usdc": 11.9736
+  },
+  {
+   "ts": 1782261913,
+   "type": "MAKER_REBATE",
+   "usdc": 14.3309
+  },
+  {
+   "ts": 1782346219,
+   "type": "TAKER_REBATE",
+   "usdc": 80.3094
+  },
+  {
+   "ts": 1782348331,
+   "type": "MAKER_REBATE",
+   "usdc": 80.6908
+  },
+  {
+   "ts": 1782442528,
+   "type": "MAKER_REBATE",
+   "usdc": 27.1769
+  },
+  {
+   "ts": 1782519014,
+   "type": "TAKER_REBATE",
+   "usdc": 86.8408
+  },
+  {
+   "ts": 1782521128,
+   "type": "MAKER_REBATE",
+   "usdc": 88.0435
+  },
+  {
+   "ts": 1782780307,
+   "type": "MAKER_REBATE",
+   "usdc": 105.8428
+  },
+  {
+   "ts": 1782864604,
+   "type": "TAKER_REBATE",
+   "usdc": 46.2866
+  },
+  {
+   "ts": 1782864622,
+   "type": "TAKER_REBATE",
+   "usdc": 64.4532
+  },
+  {
+   "ts": 1782864671,
+   "type": "TAKER_REBATE",
+   "usdc": 37.2118
+  },
+  {
+   "ts": 1782866723,
+   "type": "MAKER_REBATE",
+   "usdc": 65.4397
+  },
+  {
+   "ts": 1782951020,
+   "type": "TAKER_REBATE",
+   "usdc": 18.4613
+  },
+  {
+   "ts": 1783008413,
+   "type": "MAKER_REBATE",
+   "usdc": 47.6044
+  },
+  {
+   "ts": 1783037410,
+   "type": "TAKER_REBATE",
+   "usdc": 36.5502
+  },
+  {
+   "ts": 1783039535,
+   "type": "MAKER_REBATE",
+   "usdc": 98.1151
+  },
+  {
+   "ts": 1783125940,
+   "type": "MAKER_REBATE",
+   "usdc": 94.8623
+  },
+  {
+   "ts": 1783165180,
+   "type": "TAKER_REBATE",
+   "usdc": 70.3858
+  },
+  {
+   "ts": 1783383034,
+   "type": "TAKER_REBATE",
+   "usdc": 68.4569
+  },
+  {
+   "ts": 1783385152,
+   "type": "MAKER_REBATE",
+   "usdc": 93.6333
+  },
+  {
+   "ts": 1783469441,
+   "type": "TAKER_REBATE",
+   "usdc": 61.4292
+  },
+  {
+   "ts": 1783471514,
+   "type": "MAKER_REBATE",
+   "usdc": 47.264
+  },
+  {
+   "ts": 1783555814,
+   "type": "TAKER_REBATE",
+   "usdc": 56.5486
+  },
+  {
+   "ts": 1783557937,
+   "type": "MAKER_REBATE",
+   "usdc": 73.7643
+  },
+  {
+   "ts": 1783631756,
+   "type": "TAKER_REBATE",
+   "usdc": 594.68
+  },
+  {
+   "ts": 1783642235,
+   "type": "TAKER_REBATE",
+   "usdc": 77.3488
+  },
+  {
+   "ts": 1783644317,
+   "type": "MAKER_REBATE",
+   "usdc": 86.498
+  },
+  {
+   "ts": 1783728622,
+   "type": "TAKER_REBATE",
+   "usdc": 99.8101
+  },
+  {
+   "ts": 1783730729,
+   "type": "MAKER_REBATE",
+   "usdc": 93.2661
+  },
+  {
+   "ts": 1783987820,
+   "type": "TAKER_REBATE",
+   "usdc": 49.5513
+  },
+  {
+   "ts": 1783989926,
+   "type": "MAKER_REBATE",
+   "usdc": 26.3856
+  },
+  {
+   "ts": 1784074217,
+   "type": "TAKER_REBATE",
+   "usdc": 99.667
+  },
+  {
+   "ts": 1784076380,
+   "type": "MAKER_REBATE",
+   "usdc": 99.9884
+  },
+  {
+   "ts": 1784160616,
+   "type": "TAKER_REBATE",
+   "usdc": 181.2403
+  },
+  {
+   "ts": 1784162710,
+   "type": "MAKER_REBATE",
+   "usdc": 187.8074
+  },
+  {
+   "ts": 1784247008,
+   "type": "TAKER_REBATE",
+   "usdc": 147.9891
+  },
+  {
+   "ts": 1784249119,
+   "type": "MAKER_REBATE",
+   "usdc": 166.503
+  },
+  {
+   "ts": 1784333415,
+   "type": "TAKER_REBATE",
+   "usdc": 104.5288
+  },
+  {
+   "ts": 1784335527,
+   "type": "MAKER_REBATE",
+   "usdc": 101.7083
+  },
+  {
+   "ts": 1784506240,
+   "type": "TAKER_REBATE",
+   "usdc": 25.7966
+  },
+  {
+   "ts": 1784592615,
+   "type": "TAKER_REBATE",
+   "usdc": 118.0257
+  },
+  {
+   "ts": 1784594734,
+   "type": "MAKER_REBATE",
+   "usdc": 212.0918
+  },
+  {
+   "ts": 1784679022,
+   "type": "TAKER_REBATE",
+   "usdc": 166.7665
+  },
+  {
+   "ts": 1784681148,
+   "type": "MAKER_REBATE",
+   "usdc": 393.9042
+  },
+  {
+   "ts": 1784765415,
+   "type": "TAKER_REBATE",
+   "usdc": 98.4835
+  },
+  {
+   "ts": 1784767540,
+   "type": "MAKER_REBATE",
+   "usdc": 165.0344
+  },
+  {
+   "ts": 1784851809,
+   "type": "TAKER_REBATE",
+   "usdc": 131.2112
+  },
+  {
+   "ts": 1784853910,
+   "type": "MAKER_REBATE",
+   "usdc": 264.8562
+  },
+  {
+   "ts": 1784938231,
+   "type": "TAKER_REBATE",
+   "usdc": 85.5356
+  },
+  {
+   "ts": 1784940355,
+   "type": "MAKER_REBATE",
+   "usdc": 234.3047
+  },
+  {
+   "ts": 1785197424,
+   "type": "TAKER_REBATE",
+   "usdc": 47.5761
+  },
+  {
+   "ts": 1785199521,
+   "type": "MAKER_REBATE",
+   "usdc": 193.2678
+  },
+  {
+   "ts": 1785283835,
+   "type": "TAKER_REBATE",
+   "usdc": 35.448
+  },
+  {
+   "ts": 1785285916,
+   "type": "MAKER_REBATE",
+   "usdc": 77.1371
+  },
+  {
+   "ts": 1785370214,
+   "type": "TAKER_REBATE",
+   "usdc": 81.3502
+  },
+  {
+   "ts": 1785372305,
+   "type": "MAKER_REBATE",
+   "usdc": 159.4646
+  },
+  {
+   "ts": 1785456615,
+   "type": "TAKER_REBATE",
+   "usdc": 102.7476
+  },
+  {
+   "ts": 1785458747,
+   "type": "MAKER_REBATE",
+   "usdc": 82.6975
+  },
+  {
+   "ts": 1785543030,
+   "type": "TAKER_REBATE",
+   "usdc": 120.0985
+  },
+  {
+   "ts": 1785545138,
+   "type": "MAKER_REBATE",
+   "usdc": 153.1038
+  },
+  {
+   "ts": 1785629432,
+   "type": "TAKER_REBATE",
+   "usdc": 12.8718
+  },
+  {
+   "ts": 1785631535,
+   "type": "MAKER_REBATE",
+   "usdc": 12.2879
+  },
+  {
+   "ts": 1785802215,
+   "type": "TAKER_REBATE",
+   "usdc": 75.9878
+  },
+  {
+   "ts": 1785804306,
+   "type": "MAKER_REBATE",
+   "usdc": 138.0718
+  },
+  {
+   "ts": 1785890711,
+   "type": "MAKER_REBATE",
+   "usdc": 243.1886
+  },
+  {
+   "ts": 1785898052,
+   "type": "TAKER_REBATE",
+   "usdc": 125.9222
+  },
+  {
+   "ts": 1785975033,
+   "type": "TAKER_REBATE",
+   "usdc": 38.1634
+  },
+  {
+   "ts": 1785977123,
+   "type": "MAKER_REBATE",
+   "usdc": 271.3124
+  },
+  {
+   "ts": 1786061421,
+   "type": "TAKER_REBATE",
+   "usdc": 39.4058
+  },
+  {
+   "ts": 1786063517,
+   "type": "MAKER_REBATE",
+   "usdc": 408.4035
+  },
+  {
+   "ts": 1786147206,
+   "type": "REWARD",
+   "usdc": 471.5112
+  },
+  {
+   "ts": 1786147810,
+   "type": "TAKER_REBATE",
+   "usdc": 109.4224
+  },
+  {
+   "ts": 1786149939,
+   "type": "MAKER_REBATE",
+   "usdc": 624.6774
+  },
+  {
+   "ts": 1786233607,
+   "type": "REWARD",
+   "usdc": 1222.5904
+  },
+  {
+   "ts": 1786234225,
+   "type": "TAKER_REBATE",
+   "usdc": 58.0863
+  },
+  {
+   "ts": 1786236318,
+   "type": "MAKER_REBATE",
+   "usdc": 858.3373
+  },
+  {
+   "ts": 1786406410,
+   "type": "REWARD",
+   "usdc": 750.0216
+  },
+  {
+   "ts": 1786407012,
+   "type": "TAKER_REBATE",
+   "usdc": 56.5333
+  },
+  {
+   "ts": 1786409104,
+   "type": "MAKER_REBATE",
+   "usdc": 666.0933
+  },
+  {
+   "ts": 1786492810,
+   "type": "REWARD",
+   "usdc": 1207.239
+  },
+  {
+   "ts": 1786493422,
+   "type": "TAKER_REBATE",
+   "usdc": 94.874
+  },
+  {
+   "ts": 1786495536,
+   "type": "MAKER_REBATE",
+   "usdc": 937.8543
+  },
+  {
+   "ts": 1786579206,
+   "type": "REWARD",
+   "usdc": 1016.6514
+  },
+  {
+   "ts": 1786579806,
+   "type": "TAKER_REBATE",
+   "usdc": 76.8235
+  },
+  {
+   "ts": 1786581928,
+   "type": "MAKER_REBATE",
+   "usdc": 1272.2723
+  },
+  {
+   "ts": 1786666212,
+   "type": "TAKER_REBATE",
+   "usdc": 78.0187
+  },
+  {
+   "ts": 1786668334,
+   "type": "MAKER_REBATE",
+   "usdc": 998.472
+  },
+  {
+   "ts": 1786752606,
+   "type": "TAKER_REBATE",
+   "usdc": 101.2133
+  },
+  {
+   "ts": 1786754710,
+   "type": "MAKER_REBATE",
+   "usdc": 1546.6896
+  },
+  {
+   "ts": 1786838418,
+   "type": "REWARD",
+   "usdc": 442.359
+  },
+  {
+   "ts": 1786839024,
+   "type": "TAKER_REBATE",
+   "usdc": 89.9483
+  },
+  {
+   "ts": 1786841125,
+   "type": "MAKER_REBATE",
+   "usdc": 1303.3345
+  },
+  {
+   "ts": 1786924804,
+   "type": "REWARD",
+   "usdc": 201.043
+  },
+  {
+   "ts": 1786927513,
+   "type": "MAKER_REBATE",
+   "usdc": 132.8736
+  },
+  {
+   "ts": 1786962153,
+   "type": "TAKER_REBATE",
+   "usdc": 9.763
+  },
+  {
+   "ts": 1787011222,
+   "type": "REWARD",
+   "usdc": 1664.9336
+  },
+  {
+   "ts": 1787011816,
+   "type": "TAKER_REBATE",
+   "usdc": 202.6974
+  },
+  {
+   "ts": 1787013921,
+   "type": "MAKER_REBATE",
+   "usdc": 1391.5468
+  },
+  {
+   "ts": 1787097610,
+   "type": "REWARD",
+   "usdc": 2559.3694
+  },
+  {
+   "ts": 1787098219,
+   "type": "TAKER_REBATE",
+   "usdc": 386.4745
+  },
+  {
+   "ts": 1787100306,
+   "type": "MAKER_REBATE",
+   "usdc": 1796.5732
+  },
+  {
+   "ts": 1787184010,
+   "type": "REWARD",
+   "usdc": 2061.7337
+  },
+  {
+   "ts": 1787186757,
+   "type": "MAKER_REBATE",
+   "usdc": 1830.3671
+  },
+  {
+   "ts": 1787240370,
+   "type": "TAKER_REBATE",
+   "usdc": 294.1444
+  },
+  {
+   "ts": 1787270419,
+   "type": "REWARD",
+   "usdc": 1871.4363
+  },
+  {
+   "ts": 1787271028,
+   "type": "TAKER_REBATE",
+   "usdc": 354.1974
+  },
+  {
+   "ts": 1787273128,
+   "type": "MAKER_REBATE",
+   "usdc": 1588.207
   },
   {
    "ts": 1787356804,
