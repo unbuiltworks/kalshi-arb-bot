@@ -84,11 +84,13 @@ jobs:
           if [ -d /home/ssm-user/gemini-short-crypto-state ]; then BASE_STATE=/home/ssm-user/gemini-short-crypto-state; else BASE_STATE=/opt/arb/gemini-short-crypto-state; fi
           test -f "\$ENV_FILE"
           TMP_STATE=\$(mktemp -d)
-          trap 'rm -rf "\$TMP_STATE"' EXIT
+          TMP_RISK=\$(mktemp -d)
+          trap 'rm -rf "\$TMP_STATE" "\$TMP_RISK"' EXIT
           echo '=== AUTHENTICATED DISARMED PREFLIGHT ==='
           docker run --rm -i --network host --env-file "\$ENV_FILE" \
             -e GEMINI_SHORT_CRYPTO_STATE_DIR=/base_state \
             -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
+            -e GEMINI_ADAPTIVE_V5_4_RISK_STATE_DIR=/risk_state \
             -e GEMINI_Q10_PRODUCTION_LIVE=NO \
             -e GEMINI_Q10_PRODUCTION_ARM_ID= \
             -e GEMINI_Q10_PRODUCTION_ARM= \
@@ -101,14 +103,18 @@ jobs:
             -e GEMINI_SELECTIVE_V5_6_MAX_SESSION_LOSS_USD=${SESSION_LOSS_LIMIT_USD} \
             -e GEMINI_SELECTIVE_V5_6_MAX_WINDOWS=${MAX_WINDOWS} \
             -e GEMINI_SELECTIVE_V5_6_MAX_SESSION_SECONDS=${MAX_SESSION_SECONDS} \
-            -v "\$BASE_STATE:/base_state:ro" -v "\$TMP_STATE:/prod_state" \
+            -v "\$BASE_STATE:/base_state:ro" -v "\$TMP_STATE:/prod_state" -v "\$TMP_RISK:/risk_state" \
             "\$IMAGE" python - <<'PY'
           import asyncio,json
+          from datetime import datetime,timezone
           from decimal import Decimal as D
+          from src import gemini_adaptive_maker_daily_risk_v5_4 as daily
           from src import gemini_adaptive_maker_executor_v5_3 as v53
           from src import gemini_selective_maker_v5_6 as v56
           async def main():
               available,flat=await v53.v5.v1._preflight_flat()
+              daily.seed(date_utc=datetime.now(timezone.utc).date().isoformat(),baseline_available_usd=available,
+                         current_available_usd=available,source='V5_6_BOUNDED_PREFLIGHT_DISPOSABLE')
               result=await v56.run()
               out={'release_commit':'${PIN}','available_usd':str(available),'flat':flat,
                    'runtime':result,'limits':{'daily':'${DAILY_LOSS_LIMIT_USD}','session':'${SESSION_LOSS_LIMIT_USD}',
@@ -119,6 +125,7 @@ jobs:
               assert flat['orders']==0 and flat['positions']==0
               assert available >= D('15')
               assert result['status']=='DISARMED_READY' and result['order_entry'] is False
+              assert result['daily_risk']['blocked'] is False
           asyncio.run(main())
           PY
           echo V5_6_BOUNDED_PREFLIGHT_COMPLETE
