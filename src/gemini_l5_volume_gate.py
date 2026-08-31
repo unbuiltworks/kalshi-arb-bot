@@ -1,17 +1,16 @@
-"""Causal flow gate for Gemini 5-minute L5 strategies.
+"""Causal public-USD-volume gate for Gemini 5-minute L5 strategies.
 
-The gate uses cumulative *contract quantity* observed in the current 5-minute
-window. Gemini documents per-contract volume metrics in shares/contracts, not USD.
-For a $1-settled binary contract this is also payout-notional scale, but callers
-should keep it distinct from cash turnover (trade price x quantity).
+Gemini's documented prediction-event schema exposes ``volume`` as total trading
+volume in USD. For a 5-minute event that is the same cumulative window-volume
+concept shown in the product UI, so this gate uses that public field directly.
 
 Only information observable before an entry decision is used. Final window volume
 is never used to select a historical winner. The gate controls NEW exposure only;
 rescue, cancel, reconciliation, and flatten logic must remain active after entry
 even if flow later cools and this gate closes.
 
-Initial use is read-only shadow/replay. Thresholds are deliberately configurable
-until retained/live data shows which early-flow bands actually improve L5 fills and
+Initial use is read-only shadow. Thresholds are deliberately configurable until
+live retained telemetry shows which early-flow bands actually improve L5 fills and
 completed-pair economics.
 """
 from __future__ import annotations
@@ -30,11 +29,11 @@ class VolumeGateConfig:
     warmup_seconds: float = 20.0
     velocity_window_seconds: float = 30.0
     min_velocity_span_seconds: float = 5.0
-    enter_volume_contracts: D = D("150")
-    enter_projected_contracts: D = D("500")
-    enter_velocity_contracts_per_second: D = D("1.50")
-    exit_projected_contracts: D = D("300")
-    exit_velocity_contracts_per_second: D = D("0.50")
+    enter_volume_usd: D = D("150")
+    enter_projected_volume_usd: D = D("500")
+    enter_velocity_usd_per_second: D = D("1.50")
+    exit_projected_volume_usd: D = D("300")
+    exit_velocity_usd_per_second: D = D("0.50")
     confirmations_to_open: int = 2
     confirmations_to_close: int = 3
 
@@ -46,11 +45,11 @@ class VolumeGateConfig:
         if not 0 < self.min_velocity_span_seconds <= self.velocity_window_seconds:
             raise ValueError("min_velocity_span_seconds must be positive and <= velocity window")
         for name, value in (
-            ("enter_volume_contracts", self.enter_volume_contracts),
-            ("enter_projected_contracts", self.enter_projected_contracts),
-            ("enter_velocity_contracts_per_second", self.enter_velocity_contracts_per_second),
-            ("exit_projected_contracts", self.exit_projected_contracts),
-            ("exit_velocity_contracts_per_second", self.exit_velocity_contracts_per_second),
+            ("enter_volume_usd", self.enter_volume_usd),
+            ("enter_projected_volume_usd", self.enter_projected_volume_usd),
+            ("enter_velocity_usd_per_second", self.enter_velocity_usd_per_second),
+            ("exit_projected_volume_usd", self.exit_projected_volume_usd),
+            ("exit_velocity_usd_per_second", self.exit_velocity_usd_per_second),
         ):
             if value < ZERO:
                 raise ValueError(f"{name} must be non-negative")
@@ -62,9 +61,9 @@ class VolumeGateConfig:
 class VolumeGateDecision:
     elapsed_seconds: float
     seconds_to_expiry: float
-    volume_contracts: D
-    velocity_contracts_per_second: D
-    projected_final_contracts: D
+    volume_usd: D
+    velocity_usd_per_second: D
+    projected_final_volume_usd: D
     tier: str
     gate_open: bool
     allow_new_entries: bool
@@ -76,9 +75,9 @@ class VolumeGateDecision:
         return {
             "elapsed_seconds": round(self.elapsed_seconds, 3),
             "seconds_to_expiry": round(self.seconds_to_expiry, 3),
-            "volume_contracts": str(self.volume_contracts),
-            "velocity_contracts_per_second": str(self.velocity_contracts_per_second),
-            "projected_final_contracts": str(self.projected_final_contracts),
+            "volume_usd": str(self.volume_usd),
+            "velocity_usd_per_second": str(self.velocity_usd_per_second),
+            "projected_final_volume_usd": str(self.projected_final_volume_usd),
             "tier": self.tier,
             "gate_open": self.gate_open,
             "allow_new_entries": self.allow_new_entries,
@@ -89,7 +88,7 @@ class VolumeGateDecision:
 
 
 class FiveMinuteVolumeGate:
-    """Stateful, hysteretic gate using only cumulative contracts observed so far."""
+    """Stateful, hysteretic gate using only cumulative public USD volume so far."""
 
     def __init__(self, config: VolumeGateConfig | None = None) -> None:
         self.config = config or VolumeGateConfig()
@@ -109,15 +108,15 @@ class FiveMinuteVolumeGate:
     def _clean_volume(value: D) -> D:
         value = D(str(value))
         if value < ZERO:
-            raise ValueError("volume_contracts cannot be negative")
+            raise ValueError("volume_usd cannot be negative")
         return value
 
-    def _append(self, elapsed_seconds: float, volume_contracts: D) -> None:
+    def _append(self, elapsed_seconds: float, volume_usd: D) -> None:
         if self.samples and elapsed_seconds < self.samples[-1][0]:
             raise ValueError("elapsed_seconds must be monotonic within a window")
-        if self.samples and volume_contracts < self.samples[-1][1]:
-            raise ValueError("volume_contracts decreased; reset gate for the new window")
-        self.samples.append((elapsed_seconds, volume_contracts))
+        if self.samples and volume_usd < self.samples[-1][1]:
+            raise ValueError("volume_usd decreased; reset gate for the new window")
+        self.samples.append((elapsed_seconds, volume_usd))
         cutoff = elapsed_seconds - self.config.velocity_window_seconds
         while len(self.samples) > 2 and self.samples[1][0] <= cutoff:
             self.samples.popleft()
@@ -133,8 +132,8 @@ class FiveMinuteVolumeGate:
         return max(ZERO, newest_v - oldest_v) / D(str(span))
 
     @staticmethod
-    def _tier(volume_contracts: D, projected: D) -> str:
-        effective = max(volume_contracts, projected)
+    def _tier(volume_usd: D, projected: D) -> str:
+        effective = max(volume_usd, projected)
         if effective >= D("1000"):
             return "VERY_HOT"
         if effective >= D("500"):
@@ -143,8 +142,8 @@ class FiveMinuteVolumeGate:
             return "WARM"
         return "COLD"
 
-    def observe(self, *, volume_contracts: D, seconds_to_expiry: float) -> VolumeGateDecision:
-        volume = self._clean_volume(volume_contracts)
+    def observe(self, *, volume_usd: D, seconds_to_expiry: float) -> VolumeGateDecision:
+        volume = self._clean_volume(volume_usd)
         seconds_left = max(0.0, min(WINDOW_SECONDS, float(seconds_to_expiry)))
         elapsed = WINDOW_SECONDS - seconds_left
         self._append(elapsed, volume)
@@ -157,10 +156,10 @@ class FiveMinuteVolumeGate:
             reason = "WARMUP"
         else:
             entry_signal = bool(
-                volume >= self.config.enter_volume_contracts
+                volume >= self.config.enter_volume_usd
                 or (
-                    projected >= self.config.enter_projected_contracts
-                    and velocity >= self.config.enter_velocity_contracts_per_second
+                    projected >= self.config.enter_projected_volume_usd
+                    and velocity >= self.config.enter_velocity_usd_per_second
                 )
             )
             if not self.gate_open:
@@ -173,8 +172,8 @@ class FiveMinuteVolumeGate:
                     reason = "FLOW_CONFIRMING" if entry_signal else "FLOW_BELOW_ENTRY_GATE"
             else:
                 exit_signal = bool(
-                    projected < self.config.exit_projected_contracts
-                    and velocity < self.config.exit_velocity_contracts_per_second
+                    projected < self.config.exit_projected_volume_usd
+                    and velocity < self.config.exit_velocity_usd_per_second
                 )
                 self._close_confirmations = self._close_confirmations + 1 if exit_signal else 0
                 if self._close_confirmations >= self.config.confirmations_to_close:
@@ -187,9 +186,9 @@ class FiveMinuteVolumeGate:
         return VolumeGateDecision(
             elapsed_seconds=elapsed,
             seconds_to_expiry=seconds_left,
-            volume_contracts=volume,
-            velocity_contracts_per_second=velocity,
-            projected_final_contracts=projected,
+            volume_usd=volume,
+            velocity_usd_per_second=velocity,
+            projected_final_volume_usd=projected,
             tier=tier,
             gate_open=self.gate_open,
             allow_new_entries=self.gate_open,
@@ -199,10 +198,10 @@ class FiveMinuteVolumeGate:
         )
 
 
-def threshold_grid(*, volume_contracts: D, projected_final_contracts: D) -> dict[str, bool]:
-    """Non-binding labels for comparing candidate high-flow bands in shadow/replay."""
-    volume = max(ZERO, D(str(volume_contracts)))
-    projected = max(volume, D(str(projected_final_contracts)))
+def threshold_grid(*, volume_usd: D, projected_final_volume_usd: D) -> dict[str, bool]:
+    """Non-binding labels for comparing candidate public-USD-volume bands."""
+    volume = max(ZERO, D(str(volume_usd)))
+    projected = max(volume, D(str(projected_final_volume_usd)))
     effective = max(volume, projected)
     return {
         "projected_250_plus": effective >= D("250"),
