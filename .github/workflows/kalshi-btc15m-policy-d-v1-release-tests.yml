@@ -18,12 +18,16 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: python -m pip install -q -r requirements.txt pytest
-      - name: Compile live module
-        run: python -m py_compile src/kalshi_btc15m_policy_d_live_v1.py
+      - name: Compile live modules
+        run: |
+          python -m py_compile \
+            src/kalshi_btc15m_policy_d_live_v1.py \
+            src/kalshi_btc15m_policy_d_live_v1_entry.py
       - name: Run focused Kalshi and Policy-D tests
         run: |
           python -m pytest -q \
             tests/test_kalshi_btc15m_policy_d_live_v1.py \
+            tests/test_kalshi_btc15m_policy_d_live_v1_entry.py \
             tests/test_sports_kp_execution.py \
             tests/test_sports_kp_venue_hardening.py \
             tests/test_orderbook.py
