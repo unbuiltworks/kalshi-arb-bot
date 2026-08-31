@@ -20,5 +20,9 @@ jobs:
         run: |
           python -m py_compile src/gemini_l5_volume_gate.py
           python -m py_compile src/gemini_eth5_l5_volume_gate_shadow.py
+          python -m py_compile src/gemini_crypto5_l5_policy_matrix_shadow.py
       - name: Run focused tests
-        run: pytest -q tests/test_gemini_l5_volume_gate.py
+        run: |
+          pytest -q \
+            tests/test_gemini_l5_volume_gate.py \
+            tests/test_gemini_crypto5_l5_policy_matrix.py
