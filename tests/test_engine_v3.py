@@ -96,12 +96,13 @@ def test_toxic_flow_never_enters_regardless_of_volume():
 
 def test_no_entry_without_fair_value_edge():
     # fair 0.50 vs yes bid 0.47: edge 0.03 < 5m gate 0.06 -> observe.
-    d = decide_market(_snap(fair=0.50))
+    d = decide_market(_snap(fair=0.50), fair_value_enabled=True)
     assert d.mode == "OBSERVE" and d.reason == "NO_FAIR_VALUE_EDGE"
 
 
 def test_entry_is_single_q1_maker_on_edge_side():
-    d = decide_market(_snap(fair=0.55))  # edge 0.08 on yes side
+    # exercises the gated fair-value feature -> enable explicitly
+    d = decide_market(_snap(fair=0.55), fair_value_enabled=True)  # edge 0.08 on yes side
     assert d.mode == "FAIR_VALUE_MAKER"
     assert len(d.intents) == 1
     i = d.intents[0]
@@ -110,9 +111,12 @@ def test_entry_is_single_q1_maker_on_edge_side():
 
 
 def test_no_entry_when_model_unconfident_or_near_expiry_or_cycle_open():
-    assert decide_market(_snap(fair=0.60, confident=False)).mode == "OBSERVE"
-    assert decide_market(_snap(fair=0.60, tte=45.0)).reason == "NO_NEW_RISK_NEAR_EXPIRY"
-    assert decide_market(_snap(fair=0.60), global_cycle_open=True).reason == "GLOBAL_CYCLE_OPEN"
+    assert decide_market(_snap(fair=0.60, confident=False),
+                         fair_value_enabled=True).mode == "OBSERVE"
+    assert decide_market(_snap(fair=0.60, tte=45.0),
+                         fair_value_enabled=True).reason == "NO_NEW_RISK_NEAR_EXPIRY"
+    assert decide_market(_snap(fair=0.60), global_cycle_open=True,
+                         fair_value_enabled=True).reason == "GLOBAL_CYCLE_OPEN"
 
 
 def test_dead_without_verified_pool_is_observe():
@@ -125,7 +129,9 @@ def test_dead_without_verified_pool_is_observe():
 def test_same_side_round_trip_preferred_when_ask_above_fair():
     inv = InventoryV3(); inv.buy("yes", 1, 0.31)
     book = BookV3(yes_bid=0.33, yes_bid_depth=50, yes_ask=0.36, yes_ask_depth=50)
-    d = decide_market(_snap(book=book, fair=0.33, inv=inv))
+    # round-trip exit compares ask vs fair -> needs the gated feature on
+    d = decide_market(_snap(book=book, fair=0.33, inv=inv),
+                      fair_value_enabled=True)
     assert d.mode == "INVENTORY"
     i = d.intents[0]
     assert (i.side, i.action, i.tif) == ("yes", "sell", "POST_ONLY")
@@ -146,7 +152,8 @@ def test_ioc_rescue_sell_bounded_by_premium():
     inv = InventoryV3(); inv.buy("yes", 1, 0.47)
     # rescue zone; fair 0.40, bid 0.38: premium 0.02 <= 0.03 -> IOC allowed
     book = BookV3(yes_bid=0.38, yes_bid_depth=50, yes_ask=0.60, yes_ask_depth=50)
-    d = decide_market(_snap(book=book, fair=0.40, inv=inv, tte=50.0))
+    d = decide_market(_snap(book=book, fair=0.40, inv=inv, tte=50.0),
+                      fair_value_enabled=True)
     reasons = {i.reason for i in d.intents}
     assert d.mode == "INVENTORY"
     # some exit chosen; if it's the IOC sell it must be the rescue variant
@@ -161,7 +168,8 @@ def test_hold_when_every_exit_too_expensive():
     # completion quote clamps to ceiling 0.53... so remove comp bid by having
     # no yes_ask? Use a book with no asks and low bid.
     book = BookV3(yes_bid=0.30, yes_bid_depth=50, yes_ask=None, yes_ask_depth=0)
-    d = decide_market(_snap(book=book, fair=0.40, inv=inv, tte=50.0))
+    d = decide_market(_snap(book=book, fair=0.40, inv=inv, tte=50.0),
+                      fair_value_enabled=True)
     assert d.mode == "INVENTORY"
     # completion path (no bid) unavailable without yes_ask; IOC sell premium
     # too big; round trip needs an ask. Only remaining could be none -> hold.
@@ -173,7 +181,8 @@ def test_ioc_complete_never_breaks_pair_ceiling():
     inv = InventoryV3(); inv.buy("yes", 1, 0.47)   # ceiling for no = 0.53
     book = BookV3(yes_bid=0.40, yes_bid_depth=50, yes_ask=0.44, yes_ask_depth=50)
     # no_ask = 1 - 0.40 = 0.60 > 0.53 -> IOC completion must not appear
-    d = decide_market(_snap(book=book, fair=0.45, inv=inv, tte=50.0))
+    d = decide_market(_snap(book=book, fair=0.45, inv=inv, tte=50.0),
+                      fair_value_enabled=True)
     for i in d.intents:
         if i.tif == "IOC" and i.action == "buy":
             raise AssertionError("IOC completion above pair ceiling")
@@ -212,9 +221,11 @@ def test_toxic_beats_dislocated_for_maker_entry():
 def test_entry_edge_is_net_of_maker_fee():
     # fair 0.54 vs bid 0.47: gross edge 0.07 > 0.06 gate, but a 2c maker fee
     # brings it to 0.05 -> no entry.
-    d = decide_market(_snap(fair=0.54), maker_fee=0.02)
+    d = decide_market(_snap(fair=0.54), maker_fee=0.02,
+                      fair_value_enabled=True)
     assert d.mode == "OBSERVE" and d.reason == "NO_FAIR_VALUE_EDGE"
-    d2 = decide_market(_snap(fair=0.54), maker_fee=0.0)
+    d2 = decide_market(_snap(fair=0.54), maker_fee=0.0,
+                       fair_value_enabled=True)
     assert d2.mode == "FAIR_VALUE_MAKER"
 
 
@@ -225,7 +236,17 @@ def test_window_ceiling_is_gross_not_net():
     inv.buy("yes", 19, 0.50)   # gross 9.50
     inv.sell("yes", 19, 0.50)  # spend back to 0, flat
     assert inv.gross_bought >= 9.5
-    d = decide_market(_snap(fair=0.60, inv=inv))
+    d = decide_market(_snap(fair=0.60, inv=inv), fair_value_enabled=True)
     assert d.reason in ("WINDOW_SPEND_CEILING", "NO_FAIR_VALUE_EDGE") or \
         not d.intents  # entry+reserve (1.0) would breach 10 -> refused
     assert d.mode != "FAIR_VALUE_MAKER"
+
+
+def test_fair_value_is_feature_gated_off_by_default():
+    # Audit guardrail: the model must be a no-op for decisions until the
+    # control experiment proves incremental value. Default-off means no
+    # fair-value entry even with a huge modeled edge.
+    d = decide_market(_snap(fair=0.70))
+    assert d.mode == "OBSERVE"
+    d2 = decide_market(_snap(fair=0.70), fair_value_enabled=True)
+    assert d2.mode == "FAIR_VALUE_MAKER"

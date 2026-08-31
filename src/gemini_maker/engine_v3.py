@@ -268,9 +268,18 @@ def _exit_intent(s: MarketSnapshot, cfg: HorizonConfig) -> Optional[OrderIntent]
     return options[0][1]
 
 
+# FEATURE GATE (audit guardrail, 2026-08-31): the fair-value model is a
+# RESEARCH FEATURE. Until the predeclared control experiment (C mechanics
+# alone vs +book-gate vs +fair-value-gate vs +both) proves incremental value
+# over simple book signals, fair value must not influence production
+# decisions. Default False; enabling requires an explicit, audited change.
+FAIR_VALUE_ENABLED_DEFAULT = False
+
+
 def decide_market(s: MarketSnapshot, *, halted: bool = False,
                   global_cycle_open: bool = False,
-                  maker_fee: float = 0.0) -> MarketDecision:
+                  maker_fee: float = 0.0,
+                  fair_value_enabled: bool = FAIR_VALUE_ENABLED_DEFAULT) -> MarketDecision:
     """One evaluation for one market. Wrapper calls on every update and after
     every fill. global_cycle_open=True means another market already holds an
     open inventory cycle: no fresh entries anywhere (one cycle at a time)."""
@@ -279,6 +288,14 @@ def decide_market(s: MarketSnapshot, *, halted: bool = False,
     if s.seconds_to_expiry is None:
         return MarketDecision("HALTED", [], True, "NO_CLOCK")
     cfg = _config(s.horizon_minutes)
+    if not fair_value_enabled:
+        # Neutralize the research feature: no fair-value-driven entries or
+        # EV-ranked exits; the snapshot's model output is ignored entirely.
+        s = MarketSnapshot(
+            market=s.market, horizon_minutes=s.horizon_minutes, book=s.book,
+            flow=s.flow, fair_p_yes=None, fair_confident=False,
+            seconds_to_expiry=s.seconds_to_expiry, inventory=s.inventory,
+            in_reward_pool_verified=s.in_reward_pool_verified)
 
     # Inventory management always comes first and is allowed until expiry.
     if s.inventory.held_side() is not None:
