@@ -83,10 +83,18 @@ async def spot_task(sink: Sink, stop: asyncio.Event) -> None:
                                           ping_timeout=8, max_queue=10000) as ws:
                 await ws.send(json.dumps({"type": "subscribe", "subscriptions": [
                     {"name": "l2", "symbols": list(SPOT_SYMBOLS)}]}))
+                last_msg = time.monotonic()
                 while not stop.is_set():
                     try:
                         raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
+                        last_msg = time.monotonic()
                     except asyncio.TimeoutError:
+                        # The feed can go silently half-dead (recv times out
+                        # forever, no exception). Force a reconnect on silence.
+                        if time.monotonic() - last_msg > 30.0:
+                            await sink.write({"kind": "error", "where": "spot",
+                                              "error": "SilentFeedReconnect"})
+                            break
                         continue
                     t_ns = _now_ns()
                     try:
