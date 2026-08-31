@@ -1,0 +1,46 @@
+name: Gemini 30-49c rebate buyer shadow
+
+on:
+  push:
+    branches:
+      - feature/gemini-rebate-buyer-30-49-v1
+    paths:
+      - 'src/gemini_rebate_buyer_30_49.py'
+      - 'src/gemini_rebate_buyer_30_49_shadow.py'
+      - 'tests/test_gemini_rebate_buyer_30_49.py'
+      - '.github/workflows/gemini-rebate-buyer-30-49-shadow.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Focused policy tests
+        run: pytest -q tests/test_gemini_rebate_buyer_30_49.py tests/test_gemini_l5_fair_value.py
+      - name: Public read-only BTC ETH 5m shadow
+        run: |
+          mkdir -p artifacts
+          python -m src.gemini_rebate_buyer_30_49_shadow \
+            --seconds 120 \
+            --poll-s 5 \
+            --output artifacts/gemini-rebate-buyer-30-49.jsonl \
+            | tee artifacts/gemini-rebate-buyer-30-49.log
+      - name: Assert no order-entry claims
+        run: |
+          grep -q '"order_entry":false' artifacts/gemini-rebate-buyer-30-49.log
+          grep -q 'GEMINI_REBATE_BUYER_30_49_SUMMARY' artifacts/gemini-rebate-buyer-30-49.log
+          ! grep -Eq 'REALIZED[_ ]PNL|ORDER[_ ]PLACED|SUBMITTED' artifacts/gemini-rebate-buyer-30-49.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gemini-rebate-buyer-30-49-shadow
+          path: artifacts/gemini-rebate-buyer-30-49.*
+          retention-days: 3
