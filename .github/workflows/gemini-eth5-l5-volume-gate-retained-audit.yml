@@ -1,0 +1,48 @@
+name: Gemini ETH5 L5 retained volume gate audit
+
+on:
+  push:
+    branches:
+      - feature/gemini-l5-volume-gate-v1
+    paths:
+      - '.github/workflows/gemini-eth5-l5-volume-gate-retained-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Download retained L5 artifacts
+        run: |
+          mkdir -p /tmp/retained/run1 /tmp/retained/run2
+          gh api -H 'Accept: application/vnd.github+json' \
+            /repos/${GITHUB_REPOSITORY}/actions/artifacts/9678250407/zip > /tmp/run1.zip
+          gh api -H 'Accept: application/vnd.github+json' \
+            /repos/${GITHUB_REPOSITORY}/actions/artifacts/9679670931/zip > /tmp/run2.zip
+          unzip -q /tmp/run1.zip -d /tmp/retained/run1
+          unzip -q /tmp/run2.zip -d /tmp/retained/run2
+          find /tmp/retained -maxdepth 3 -type f -print
+      - name: Audit causal ETH5 flow gate
+        run: |
+          python -m src.gemini_eth5_volume_gate_retained_audit \
+            --root /tmp/retained \
+            --output /tmp/gemini_eth5_l5_retained_volume_gate_audit.json
+      - name: Upload retained audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-eth5-l5-retained-volume-gate-audit
+          path: /tmp/gemini_eth5_l5_retained_volume_gate_audit.json
+          retention-days: 14
