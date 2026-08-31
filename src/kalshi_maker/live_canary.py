@@ -142,6 +142,7 @@ class Canary:
         self.series = series
         self.markets: Dict[str, MarketState] = {}
         self.settling: Dict[str, MarketState] = {}
+        self.finished: Set[str] = set()  # closed windows must never be re-tracked
         self.windows_quoted = 0
         self.session_realized = 0.0
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -171,7 +172,8 @@ class Canary:
                 continue
             for market in resp.json().get("markets", []):
                 ticker = market.get("ticker")
-                if not ticker or ticker in self.markets or ticker in self.settling:
+                if (not ticker or ticker in self.markets
+                        or ticker in self.settling or ticker in self.finished):
                     continue
                 if self.windows_quoted + len(self.markets) >= self.max_windows:
                     continue
@@ -437,6 +439,7 @@ class Canary:
         if seconds_to_expiry is not None and seconds_to_expiry <= 0:
             await self.cancel_all(st, "WINDOW_CLOSED")
             self.markets.pop(st.ticker, None)
+            self.finished.add(st.ticker)
             if st.inventory.spend > 0:
                 self.settling[st.ticker] = st
                 self.log.write("window_closed_settling", market=st.ticker,
