@@ -260,12 +260,23 @@ async def settlement_task(sink: Sink, stop: asyncio.Event) -> None:
                                  headers={"User-Agent": "arb-reflag-readonly/1.0"}) as http:
         while not stop.is_set():
             try:
-                response = await http.get(f"{GEMINI_REST}/v1/prediction-markets/events",
-                                          params=[("status", "settled"),
-                                                  ("category", "Crypto"),
-                                                  ("limit", "100")])
-                if response.status_code == 200:
-                    for row in response.json().get("data", []):
+                # The settled listing is oldest-first and ignores sort params;
+                # walk offset pages (500/page, capped) to reach recent
+                # settlements.
+                rows_all: List[dict] = []
+                for offset in range(0, 3000, 500):
+                    response = await http.get(
+                        f"{GEMINI_REST}/v1/prediction-markets/events",
+                        params=[("status", "settled"), ("category", "Crypto"),
+                                ("limit", "500"), ("offset", str(offset))])
+                    if response.status_code != 200:
+                        break
+                    page = response.json().get("data", [])
+                    if not page:
+                        break
+                    rows_all.extend(page)
+                if rows_all:
+                    for row in rows_all:
                         ticker = str(row.get("ticker") or "").upper()
                         if not WINDOW_RE.match(ticker) or ticker in seen:
                             continue
