@@ -7,11 +7,13 @@ on:
     paths:
       - 'src/gemini_maker/**'
       - 'tests/test_gemini_maker_live_10_canary.py'
+      - 'deploy/aws/run_gemini_paired_maker_live_10.sh'
       - '.github/workflows/gemini-paired-maker-live-10-ci.yml'
   pull_request:
     paths:
       - 'src/gemini_maker/**'
       - 'tests/test_gemini_maker_live_10_canary.py'
+      - 'deploy/aws/run_gemini_paired_maker_live_10.sh'
 
 jobs:
   focused:
@@ -31,3 +33,5 @@ jobs:
             tests/test_gemini_short_crypto_dynamic_complement_q1_v2.py
       - name: Compile live module
         run: python -m py_compile src/gemini_maker/live_10_canary.py
+      - name: Validate AWS launcher syntax
+        run: bash -n deploy/aws/run_gemini_paired_maker_live_10.sh
