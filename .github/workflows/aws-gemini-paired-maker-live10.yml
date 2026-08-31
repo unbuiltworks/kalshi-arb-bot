@@ -6,6 +6,7 @@ on:
       - aws-migration-foundation
     paths:
       - deploy/aws/gemini-paired-maker-live10.trigger
+      - .github/workflows/aws-gemini-paired-maker-live10.yml
 
 permissions:
   id-token: write
@@ -16,7 +17,6 @@ env:
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
   LIVE_BRANCH: feature/gemini-paired-maker-live-10-canary
-  LIVE_CONTAINER: arb-gemini-paired-maker-live10
   EXACT_TESTED_COMMIT: 017e3a2c8c3d28666f530a7141335fa4da9c9f98
 
 jobs:
@@ -62,7 +62,6 @@ jobs:
           REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin ${LIVE_BRANCH} >/dev/null; test ${PINNED_COMMIT} = ${EXACT_TESTED_COMMIT}; git cat-file -e \"${PINNED_COMMIT}^{commit}\"; git merge-base --is-ancestor ${PINNED_COMMIT} origin/${LIVE_BRANCH}; git show ${PINNED_COMMIT}:deploy/aws/run_gemini_paired_maker_live_10.sh > /tmp/run_gemini_paired_maker_live_10.sh; chmod 0700 /tmp/run_gemini_paired_maker_live_10.sh; PINNED_COMMIT=${PINNED_COMMIT} ARB_GEMINI_PAIRED_MAKER_LIVE10_APPROVED=YES ARB_GEMINI_PAIRED_MAKER_LIVE10_APPROVAL_ID=${APPROVAL_ID} /tmp/run_gemini_paired_maker_live_10.sh'"
           PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
           COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB paired-maker live10 BTC5m ${PINNED_COMMIT:0:12}" --parameters "$PARAMETERS" --timeout-seconds 1200 --query 'Command.CommandId' --output text)
-          echo "$COMMAND_ID" > /tmp/live10-launch-command-id
           for i in $(seq 1 600); do
             STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
             case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
@@ -79,17 +78,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          REMOTE_CMD='set -euo pipefail; NAME=arb-gemini-paired-maker-live10; for i in $(seq 1 300); do if ! docker inspect "$NAME" >/dev/null 2>&1; then echo PAIRED_MAKER_LIVE10_CONTAINER_MISSING; exit 2; fi; running=$(docker inspect -f "{{.State.Running}}" "$NAME"); echo PAIRED_MAKER_LIVE10_MONITOR n=$i at=$(date -u +%Y-%m-%dT%H:%M:%SZ) running=$running; if [ "$running" != "true" ]; then break; fi; sleep 15; done; running=$(docker inspect -f "{{.State.Running}}" "$NAME"); status=$(docker inspect -f "{{.State.Status}}" "$NAME"); exit_code=$(docker inspect -f "{{.State.ExitCode}}" "$NAME"); image=$(docker inspect -f "{{.Config.Image}}" "$NAME"); echo PAIRED_MAKER_LIVE10_FINAL=$(docker inspect -f "status={{.State.Status}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}} image={{.Config.Image}}" "$NAME"); echo PAIRED_MAKER_LIVE10_LOGS_BEGIN; logs=$(docker logs --tail 2000 "$NAME" 2>&1 || true); printf "%s\n" "$logs"; echo PAIRED_MAKER_LIVE10_LOGS_END; test "$running" = "false"; test "$status" = "exited"; test "$exit_code" = "0"; printf "%s\n" "$logs" | grep -Eq '"stage":"(SETTLED|FLATTENED|COMPLETE_NO_SETTLED_TRADE)"'; ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; [ -f "$ENV_FILE" ] || ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; STATE_DIR=/home/ssm-user/gemini-short-crypto-state; [ -d "$STATE_DIR" ] || STATE_DIR=/opt/arb/gemini-short-crypto-state; docker run -i --rm --network host --env-file "$ENV_FILE" -e GEMINI_SHORT_CRYPTO_STATE_DIR=/state -v "$STATE_DIR:/state" "$image" python -u - <<'"'"'PY'"'"'
-import asyncio, json
-from src import gemini_short_crypto_local_budget as b
-async def main():
-    snap = await b.account_exposure_snapshot()
-    print("PAIRED_MAKER_LIVE10_TERMINAL_ACCOUNT " + json.dumps(snap, sort_keys=True))
-    if snap["active_short_crypto_orders"] or snap["active_short_crypto_positions"]:
-        raise RuntimeError("terminal Gemini short-crypto exposure is not flat")
-asyncio.run(main())
-PY
-          echo PAIRED_MAKER_LIVE10_CLEAN_TERMINAL_OK'
+          REMOTE_CMD='set -euo pipefail; NAME=arb-gemini-paired-maker-live10; for i in $(seq 1 300); do docker inspect "$NAME" >/dev/null 2>&1 || { echo PAIRED_MAKER_LIVE10_CONTAINER_MISSING; exit 2; }; running=$(docker inspect -f "{{.State.Running}}" "$NAME"); echo PAIRED_MAKER_LIVE10_MONITOR n=$i at=$(date -u +%Y-%m-%dT%H:%M:%SZ) running=$running; [ "$running" = "true" ] || break; sleep 15; done; running=$(docker inspect -f "{{.State.Running}}" "$NAME"); status=$(docker inspect -f "{{.State.Status}}" "$NAME"); exit_code=$(docker inspect -f "{{.State.ExitCode}}" "$NAME"); image=$(docker inspect -f "{{.Config.Image}}" "$NAME"); echo PAIRED_MAKER_LIVE10_FINAL=$(docker inspect -f "status={{.State.Status}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}} image={{.Config.Image}}" "$NAME"); echo PAIRED_MAKER_LIVE10_LOGS_BEGIN; logs=$(docker logs --tail 2000 "$NAME" 2>&1 || true); printf "%s\n" "$logs"; echo PAIRED_MAKER_LIVE10_LOGS_END; test "$running" = "false"; test "$status" = "exited"; test "$exit_code" = "0"; printf "%s\n" "$logs" | grep -Eq '"'"'"stage"'"':"'"'(SETTLED|FLATTENED|COMPLETE_NO_SETTLED_TRADE)"'"''; ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; [ -f "$ENV_FILE" ] || ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; STATE_DIR=/home/ssm-user/gemini-short-crypto-state; [ -d "$STATE_DIR" ] || STATE_DIR=/opt/arb/gemini-short-crypto-state; docker run --rm --network host --env-file "$ENV_FILE" -e GEMINI_SHORT_CRYPTO_STATE_DIR=/state -v "$STATE_DIR:/state" "$image" python -c "import asyncio,json; from src import gemini_short_crypto_local_budget as b; async def m(): pass" >/dev/null 2>&1 || true; snap=$(docker run --rm --network host --env-file "$ENV_FILE" -e GEMINI_SHORT_CRYPTO_STATE_DIR=/state -v "$STATE_DIR:/state" "$image" python -c "import asyncio,json; from src import gemini_short_crypto_local_budget as b; s=asyncio.run(b.account_exposure_snapshot()); print(json.dumps(s,sort_keys=True)); raise SystemExit(1 if s['"'"'active_short_crypto_orders'"'"'] or s['"'"'active_short_crypto_positions'"'"'] else 0)"); echo PAIRED_MAKER_LIVE10_TERMINAL_ACCOUNT "$snap"; echo PAIRED_MAKER_LIVE10_CLEAN_TERMINAL_OK'
           PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
           COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB paired-maker live10 terminal monitor" --parameters "$PARAMETERS" --timeout-seconds 4700 --query 'Command.CommandId' --output text)
           for i in $(seq 1 480); do
