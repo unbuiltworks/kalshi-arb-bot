@@ -18,7 +18,7 @@
    "types": [
     "liquidity"
    ],
-   "upcoming": 105
+   "upcoming": 63
   },
   "KXCRYPTOLEAD15M": {
    "active_now": 5,
@@ -30,7 +30,7 @@
    "types": [
     "liquidity"
    ],
-   "upcoming": 525
+   "upcoming": 315
   },
   "KXETH15M": {
    "active_now": 0,
@@ -50,7 +50,7 @@
    "types": [
     "liquidity"
    ],
-   "upcoming": 105
+   "upcoming": 63
   },
   "KXNATGAS15M": {
    "active_now": 1,
@@ -62,7 +62,7 @@
    "types": [
     "liquidity"
    ],
-   "upcoming": 105
+   "upcoming": 63
   },
   "KXSILVER15M": {
    "active_now": 1,
@@ -74,7 +74,7 @@
    "types": [
     "liquidity"
    ],
-   "upcoming": 105
+   "upcoming": 63
   },
   "KXWTI15M": {
    "active_now": 1,
@@ -86,8 +86,8 @@
    "types": [
     "liquidity"
    ],
-   "upcoming": 105
+   "upcoming": 63
   }
  },
- "observed_at": "2026-08-31T01:31:04Z"
+ "observed_at": "2026-08-31T12:10:20Z"
 }
