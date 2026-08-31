@@ -58,7 +58,10 @@ and the middle months.
 **Paid liquidity provision, not trading edge.**
 
 - **83% of his profit is incentive income.** Net trading cash on $7.42M of
-  turnover is +$13.7k ≈ **0.18¢ per dollar** — statistically near zero.
+  turnover is +$13.7k ≈ **0.184¢ per dollar** — weekly-block bootstrap
+  95% CI **[−0.08, +0.55]¢/$**, P(≤0) = 8.4%: statistically
+  indistinguishable from zero. His total take (trading + incentives) is
+  **1.10¢/$, CI [0.83, 1.31]** — tight, positive, and subsidy-driven.
   Pair-locked margin (+$155k) and residual bleed (−$141k) nearly cancel.
 - **He never sells.** $2.18 of sell proceeds in 743k trades. No unwind
   legs, no rescues, no stop-losses. Every position is held to settlement
@@ -110,11 +113,13 @@ sides, and faster completion is strictly better.
 
 ## Gemini-testable findings (each independently falsifiable on our tape)
 
-1. **Hold-to-settlement beats rescue exits at small size.** L5 takes zero
-   unwind legs; his residual bleed is −1.9¢ per residual dollar, paid
-   willingly. Test: compare C-series variants with rescues disabled and
-   residual settled, on settlement-scored economics (fresh predeclared
-   clock — NOT a change to the sealed C-series).
+1. **Hold-to-settlement is L5's exit policy — whether it BEATS rescuing is
+   an open counterfactual.** (Audit correction: L5 proves holding can
+   coexist with profitable overall economics when subsidies are large; it
+   does not give the P&L of rescuing those same positions.) Test: compare
+   C-series-style variants with rescues disabled and residual settled, on
+   settlement-scored economics (fresh predeclared clock — NOT a change to
+   the sealed C-series).
 2. **The profit condition is incentives ≥ ~1¢/$ of turnover.** L5 is only
    viable because rewards+rebates pay ~1.4¢/$ at peak. Test on Gemini
    Sept 2: measure the live maker-rebate + fee-waiver + Liquidity Rewards
@@ -140,3 +145,35 @@ sides, and faster completion is strictly better.
   is a Polymarket number.
 - Reconciliation is ~$0.50/market median, not cent-exact; `unredeemed_qty`
   in the windows CSV includes worthless losing-side shares by construction.
+- The reconstructed grand total (+$81.9k) does not exactly match the
+  profile's ~$70.3k P/L + ~$3.0k open positions. Per-market reconciliation
+  is strong, but the account-level profile measures evidently use
+  different semantics (e.g. incentive treatment, avgPrice rounding);
+  treat the profile figure as corroboration, not ground truth.
+
+## Size-tier implication for Gemini (audit addendum, 2026-08-31)
+
+Gemini's crypto maker rebate is 30% of the raw taker formula
+(0.30 × 0.07 × C × P(1−P)), floored to the cent per fill, 20–80¢ fills
+only — a theoretical ceiling of ~1.05¢ per $1 of balanced paired turnover,
+i.e. exactly the neighborhood L5's economics say matters. Sept 2 also
+waives qualifying maker fees through Dec 31, and Liquidity Rewards stack
+independently (min size 10, two-sided tight quotes, 50% uptime).
+
+- **q1** — execution canary only; per-fill rebates floor to $0.
+- **q5** — earns some rebate but sits below the LR 10-contract minimum;
+  cent-flooring still punitive.
+- **q10** — first economically meaningful tier: meets the LR minimum and
+  flooring loss is small. Tonight's sealed C10 read is therefore the most
+  economically significant of the C-series.
+- **q25+** — approaches the theoretical rebate rate and more LR share, but
+  only matters once inventory absorption at that size is proven safe.
+
+Target math: at ~1¢/$ net subsidy, $480/day needs ~$48k/day of maker
+turnover (~$34k/day at L5's peak 1.4¢/$), MORE after residual losses and
+any pair overpay. Turnover ≠ bankroll — capital recycles through
+short-duration windows; L5 scaled by turnover and breadth, not position
+size. The decisive live measurement is Sept 2: the actual credited
+rebate + fee-waiver + LR stack per dollar of two-sided turnover at our
+sizes. ≥~1¢/$ and controlled residual ⇒ the L5 model may transfer;
+0.3–0.5¢/$ or residual-dominated ⇒ it does not support the target.
