@@ -1,0 +1,14 @@
+{
+ "generated_utc": "2026-08-31T11:03:42.144336+00:00",
+ "since_utc": "2026-08-31T10:59",
+ "aggregate": {
+  "windows_with_fills": 0,
+  "windows_scored": 0,
+  "total_pairs": 0,
+  "pairs_le_100": 0,
+  "total_spend": 0,
+  "total_trading_pnl": 0,
+  "windows_flat_at_expiry": 0
+ },
+ "per_window": []
+}
