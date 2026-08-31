@@ -1,0 +1,63 @@
+name: Gemini BTC15m REST trades probe
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - .github/workflows/gemini-btc15m-rest-trades-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 1231adf4f4e22628b4fecd4b1b57e6f1e16434e6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -q -r requirements.txt
+      - name: Probe current BTC15m public trades
+        run: |
+          python - <<'PY'
+          import asyncio, json
+          import httpx
+          from src import gemini_selective_maker_v5_6 as v56
+
+          async def main():
+              event = None
+              for _ in range(30):
+                  event = await v56.discover_btc15m()
+                  if event is not None:
+                      break
+                  await asyncio.sleep(1)
+              if event is None:
+                  raise SystemExit('NO_CURRENT_BTC15M')
+              url = f'https://api.gemini.com/v1/trades/{event.symbol}'
+              async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+                  response = await client.get(url, params={'limit_trades':'50'})
+              body = response.json() if response.headers.get('content-type','').startswith('application/json') else response.text
+              rows = body if isinstance(body, list) else []
+              safe = []
+              for row in rows[:8]:
+                  if not isinstance(row, dict):
+                      continue
+                  safe.append({k: row.get(k) for k in ('timestampms','tid','price','amount','type','broken') if k in row})
+              out = {
+                  'status_code': response.status_code,
+                  'ticker': event.ticker,
+                  'symbol': event.symbol,
+                  'seconds_to_expiry': round(event.seconds_to_expiry,3),
+                  'row_count': len(rows),
+                  'sample': safe,
+              }
+              print('BTC15M_REST_TRADES_PROBE='+json.dumps(out,separators=(',',':')))
+              assert response.status_code == 200
+              assert rows
+              assert all(str(r.get('type') or '') in {'buy','sell'} for r in rows[:min(10,len(rows))] if isinstance(r,dict))
+          asyncio.run(main())
+          PY
