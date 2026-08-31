@@ -236,46 +236,72 @@ async def gemini_task(sink: Sink, stop: asyncio.Event) -> None:
                     pass
 
 
-async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]) -> None:
-    """One ws session subscribed to trades+depth for the current window set.
+GEMINI_WS_SESSION_SECONDS = 600.0  # hold one connection; subscribe rolled windows live
 
-    Returns after DISCOVER_SECONDS so the caller re-discovers rolled windows.
+
+async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]) -> None:
+    """One long-lived ws session for trades+depth.
+
+    Reconnect churn every DISCOVER_SECONDS was dropping exactly the bursts we
+    need to time (all big overnight windows had zero captured prints), so the
+    session now persists GEMINI_WS_SESSION_SECONDS and re-discovers newly
+    rolled windows in-place, subscribing them on the same connection.
     """
-    streams = [f"{s}@trade" for s in symbols] + [f"{s}@depth5@100ms" for s in symbols]
+    subscribed = set(symbols)
     last_top_write: Dict[str, float] = {}
-    session_deadline = time.monotonic() + DISCOVER_SECONDS
+    last_discover = time.monotonic()
+    session_deadline = time.monotonic() + GEMINI_WS_SESSION_SECONDS
     async with websockets.connect(GEMINI_WS, open_timeout=5, ping_interval=15, ping_timeout=8, max_queue=5000) as ws:
+        streams = [f"{s}@trade" for s in subscribed] + [f"{s}@depth5@100ms" for s in subscribed]
         await ws.send(json.dumps({"id": "laneD", "method": "SUBSCRIBE", "params": streams}))
-        while not stop.is_set() and time.monotonic() < session_deadline:
-            try:
-                raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
-            except asyncio.TimeoutError:
-                continue
-            try:
-                msg = json.loads(raw)
-            except Exception:
-                continue
-            if not isinstance(msg, dict):
-                continue
-            symbol = str(msg.get("s") or msg.get("symbol") or "")
-            if "p" in msg and "q" in msg and "m" in msg:
-                await sink.write({
-                    "t": _now(), "venue": "gemini", "kind": "print",
-                    "market": symbol.upper(),
-                    "event_ns": msg.get("E"), "trade_id": msg.get("t"),
-                    "price": msg.get("p"), "qty": msg.get("q"),
-                    "buyer_is_maker": bool(msg.get("m")),
-                })
-            elif "bids" in msg and "asks" in msg:
-                now = _now()
-                key = symbol.upper()
-                if now - last_top_write.get(key, 0.0) >= GEMINI_BBO_RECORD_SECONDS:
-                    last_top_write[key] = now
+        async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "arb-laneD-readonly/1.0"}) as http:
+            while not stop.is_set() and time.monotonic() < session_deadline:
+                if time.monotonic() - last_discover >= DISCOVER_SECONDS:
+                    last_discover = time.monotonic()
+                    try:
+                        fresh = await _gemini_active_symbols(http)
+                        new = [s for s in fresh if s not in subscribed]
+                        if new:
+                            subscribed.update(new)
+                            for symbol in new:
+                                await sink.write({"t": _now(), "venue": "gemini",
+                                                  "kind": "window", "market": symbol,
+                                                  **fresh[symbol]})
+                            await ws.send(json.dumps({
+                                "id": "laneD-add", "method": "SUBSCRIBE",
+                                "params": [f"{s}@trade" for s in new] + [f"{s}@depth5@100ms" for s in new],
+                            }))
+                    except (httpx.HTTPError, websockets.WebSocketException):
+                        pass
+                try:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    continue
+                try:
+                    msg = json.loads(raw)
+                except Exception:
+                    continue
+                if not isinstance(msg, dict):
+                    continue
+                symbol = str(msg.get("s") or msg.get("symbol") or "")
+                if "p" in msg and "q" in msg and "m" in msg:
                     await sink.write({
-                        "t": now, "venue": "gemini", "kind": "bbo", "market": key,
-                        "bids": (msg.get("bids") or [])[:2],
-                        "asks": (msg.get("asks") or [])[:2],
+                        "t": _now(), "venue": "gemini", "kind": "print",
+                        "market": symbol.upper(),
+                        "event_ns": msg.get("E"), "trade_id": msg.get("t"),
+                        "price": msg.get("p"), "qty": msg.get("q"),
+                        "buyer_is_maker": bool(msg.get("m")),
                     })
+                elif "bids" in msg and "asks" in msg:
+                    now = _now()
+                    key = symbol.upper()
+                    if now - last_top_write.get(key, 0.0) >= GEMINI_BBO_RECORD_SECONDS:
+                        last_top_write[key] = now
+                        await sink.write({
+                            "t": now, "venue": "gemini", "kind": "bbo", "market": key,
+                            "bids": (msg.get("bids") or [])[:2],
+                            "asks": (msg.get("asks") or [])[:2],
+                        })
 
 
 async def run(out_dir: Path, hours: float) -> None:
