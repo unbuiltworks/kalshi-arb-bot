@@ -62,3 +62,26 @@ Gemini maker MUST be flow-gated — the reward-farm tier (resting quotes for
 incentives in dead hours) and the active tier (quote only on flow) are
 different businesses, and the overnight data says the active tier simply does
 not exist off-peak. Nothing here changes the frozen Policy D constants.
+
+## Hot-window update (12:00–15:00 UTC, 2026-08-31)
+
+Volume census (final volume per window closing in the hot block):
+
+| Series | n | median | p90 | max | ≥$250 | ≥$1000 |
+|---|---|---|---|---|---|---|
+| BTC5m | 48 | $0 | $419 | $3,317 | 31% | 2% |
+| ETH5m | 48 | $0 | $250 | $950 | 25% | 0% |
+| BTC15m | 16 | $0 | $50 | $238 | 0% | 0% |
+| ETH15m | 16 | $0 | $50 | $68 | 0% | 0% |
+
+- Hot hours are real: ~3 in 10 BTC5m windows carry $250+, vs ~5% overnight.
+  But medians are still $0 — flow stays BURSTY even at peak; the engine's
+  window-selection (flow gating / allocator) is load-bearing at all hours.
+- 15m series were commercially dead even in the hot block: the pair engine's
+  observed opportunities were 100% BTC5m. SOL/XRP census pending (vol feed
+  tracks them since ~13:30 UTC only).
+- Pair-engine results on this block (see completion_frontier.json): 8 engaged
+  windows, 3 structurally-flat at $1.000 baseline; predeclared completion
+  frontier shows join-then-lean (B) dominating baseline (avg pair 0.990,
+  locked +$0.15, same completion rate). Official fee schedule applied:
+  maker 0.0175 / taker 0.07 / 30%-of-taker rebate in 20–80c band.
