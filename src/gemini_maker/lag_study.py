@@ -207,11 +207,28 @@ def run(tape_dir: str = "data/ref_lag") -> Dict[str, Any]:
             if fv_obs is None or settle is None:
                 continue
             outcome = 1 if settle == "yes" else 0
+            # Audit item 3: contemporaneous MARKET probability (book mid at
+            # the same instant, <=5s old) as the benchmark to beat.
+            mbk = _book_at(brows, bkeys, int(t_obs * 1e9))
+            market_p = None
+            if mbk is not None:
+                idx = bisect_right(bkeys, int(t_obs * 1e9)) - 1
+                if idx >= 0 and t_obs - bkeys[idx] / 1e9 <= 5.0:
+                    market_p = (mbk["b"] + mbk["a"]) / 2.0
+            def _ll(p):
+                p = min(max(p, 1e-4), 1 - 1e-4)
+                return -(outcome * math.log(p) + (1 - outcome) * math.log(1 - p))
             fixed_tte_obs.append({
                 "market": market, "tte": tte_pt, "p": round(fv_obs.p_yes, 4),
+                "market_p": round(market_p, 4) if market_p is not None else None,
                 "outcome": outcome, "label_source": label_source,
                 "t": t_obs,
                 "brier": round((fv_obs.p_yes - outcome) ** 2, 4),
+                "market_brier": round((market_p - outcome) ** 2, 4)
+                if market_p is not None else None,
+                "logloss": round(_ll(fv_obs.p_yes), 4),
+                "market_logloss": round(_ll(market_p), 4)
+                if market_p is not None else None,
             })
 
         baseline_p: Optional[float] = None
@@ -259,13 +276,19 @@ def run(tape_dir: str = "data/ref_lag") -> Dict[str, Any]:
                     pnl = qty * ((1.0 if settle == "yes" else 0.0) - st["px"])
                 else:
                     pnl = qty * (st["px"] - (1.0 if settle == "yes" else 0.0))
+                # Official taker fee, ceil-to-cent per fill (audit item 1).
+                fee = math.ceil(0.07 * qty * st["px"] * (1 - st["px"]) * 100.0
+                                - 1e-9) / 100.0
                 takes.append({"market": market, "t": t_s, "side": st["side"],
                               "px": st["px"], "qty": qty,
                               "edge": st["edge"], "settle": settle,
-                              "pnl": round(pnl, 4)})
+                              "pnl": round(pnl, 4), "taker_fee": fee,
+                              "pnl_net": round(pnl - fee, 4)})
     stale_by_h = {h: sum(1 for s in signals if h in s["stale"])
                   for h in HORIZONS_MS}
     take_pnl = sum(t["pnl"] for t in takes)
+    take_fees = sum(t["taker_fee"] for t in takes)
+    take_net = take_pnl - take_fees
     take_notional = sum(t["qty"] * (t["px"] if t["side"] == "buy" else 1 - t["px"])
                         for t in takes)
     agg = {
@@ -276,13 +299,31 @@ def run(tape_dir: str = "data/ref_lag") -> Dict[str, Any]:
         "stale_share_at_250ms": round(stale_by_h.get(250, 0) / len(signals), 3)
         if signals else None,
         "simulated_takes": len(takes),
-        "take_pnl": round(take_pnl, 2),
+        "take_pnl_raw": round(take_pnl, 2),
+        "take_fees_ceil": round(take_fees, 2),
+        "take_pnl_net": round(take_net, 2),
         "take_notional": round(take_notional, 2),
         "take_pnl_per_dollar": round(take_pnl / take_notional, 4)
         if take_notional else None,
         "median_take_edge": round(statistics.median(t["edge"] for t in takes), 4)
         if takes else None,
     }
+    # Robustness (audit item 2): leave-best-trade-out and leave-best-window-out.
+    if takes:
+        best = max(takes, key=lambda t: t["pnl_net"])
+        rest = [t for t in takes if t is not best]
+        agg["leave_best_trade_out_net"] = round(
+            sum(t["pnl_net"] for t in rest), 2)
+        agg["best_trade"] = {"market": best["market"],
+                             "pnl_net": best["pnl_net"]}
+        by_win: Dict[str, float] = defaultdict(float)
+        for t in takes:
+            by_win[t["market"]] += t["pnl_net"]
+        best_w = max(by_win, key=lambda k: by_win[k])
+        agg["leave_best_window_out_net"] = round(
+            sum(v for k, v in by_win.items() if k != best_w), 2)
+        agg["best_window"] = {"market": best_w,
+                              "pnl_net": round(by_win[best_w], 2)}
     # Model calibration: within each predicted-p bucket, how often did YES
     # actually settle? A well-calibrated model matches bucket midpoints; an
     # overconfident one shows outcome rates pulled toward 0.5.
@@ -305,6 +346,17 @@ def run(tape_dir: str = "data/ref_lag") -> Dict[str, Any]:
         if exact_obs else None,
         "brier_climatology_baseline": 0.25,
     }
+    paired = [o for o in fixed_tte_obs if o["market_brier"] is not None]
+    if paired:
+        agg["fixed_tte"]["model_vs_market"] = {
+            "paired_obs": len(paired),
+            "model_brier": round(statistics.mean(o["brier"] for o in paired), 4),
+            "market_brier": round(statistics.mean(o["market_brier"] for o in paired), 4),
+            "model_logloss": round(statistics.mean(o["logloss"] for o in paired), 4),
+            "market_logloss": round(statistics.mean(o["market_logloss"] for o in paired), 4),
+            "model_wins_brier_pct": round(sum(
+                1 for o in paired if o["brier"] < o["market_brier"]) / len(paired), 3),
+        }
     agg["settlement_proxy_check"] = {
         "windows_compared": len(proxy_errors),
         "side_agreement_rate": round(
