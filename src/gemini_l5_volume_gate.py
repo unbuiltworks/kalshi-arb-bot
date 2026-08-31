@@ -152,7 +152,7 @@ class FiveMinuteVolumeGate:
         projected = max(volume, volume + velocity * D(str(seconds_left)))
         tier = self._tier(volume, projected)
 
-        if elapsed < self.config.warmup_seconds:
+        if elapsed <= self.config.warmup_seconds:
             self._open_confirmations = 0
             reason = "WARMUP"
         else:
