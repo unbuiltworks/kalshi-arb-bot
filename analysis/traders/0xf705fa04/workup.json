@@ -1,0 +1,24 @@
+{
+ "name": "0xf705fa04",
+ "fills_in_scope": 0,
+ "fills_out_of_scope": 48834,
+ "windows": 0,
+ "coverage": {
+  "first_ts": null,
+  "last_ts": null
+ },
+ "by_asset_window": [],
+ "sides": [],
+ "dollars_in_scope": 0,
+ "taker_share_dollars": null,
+ "median_pair_cost": null,
+ "pair_cost_below_1_share": null,
+ "derived_trading_pnl": null,
+ "incentives_usdc": {
+  "MAKER_REBATE": 775.52,
+  "YIELD": 1154.75,
+  "TAKER_REBATE": 27577.43
+ },
+ "merge_events": 1388,
+ "merge_usdc": 2572767.54
+}
