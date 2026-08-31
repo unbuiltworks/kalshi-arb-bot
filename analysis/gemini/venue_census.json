@@ -333,5 +333,41 @@
   ],
   "note": "status=settled for these categories returns 503 at every offset (server-side; largest categories). Their daily volume is proxied by active-event volume24h, which UNDERCOUNTS categories whose events settle and leave 'active' within the day.",
   "subsidy_caveat": "Maker-rebate program is documented for CRYPTO event contracts; rebate/LR availability for Sports and other categories is UNVERIFIED until the Sept 2 live check."
+ },
+ "sports_expiry_buckets_volume24h_contracts": {
+  "lt24h": {
+   "events": 73,
+   "contracts": 86995
+  },
+  "24_72h": {
+   "events": 86,
+   "contracts": 2985
+  },
+  "3_7d": {
+   "events": 252,
+   "contracts": 10350
+  },
+  "gt7d": {
+   "events": 175,
+   "contracts": 45374
+  },
+  "fast_lt72h_share_pct": 61.8,
+  "note": "86% of the fast bucket is same-day events (US Open etc.); futures are a minority of live volume"
+ },
+ "dollar_calibration": {
+  "crypto_check": "50c-avg-premium method estimated ~$201k/day vs $63k/day measured from prints -> ~3.2x overstatement on crypto",
+  "implication": "category dollar figures are upper bounds; Sports actual dollars need price*qty prints (planned, not tonight)"
+ },
+ "kalshi_sibling_series": {
+  "confirmed_live": [
+   "KXSOL15M",
+   "KXXRP15M",
+   "KXDOGE15M",
+   "KXBTC(hourly,100 open)",
+   "KXETH(hourly)",
+   "KXXRP(hourly)",
+   "KXDOGE(hourly)"
+  ],
+  "volume_fields": "public REST returns zeroed volume (auth-gated); measuring via our own ext tape (SOL/XRP/DOGE started 22:07 UTC)"
  }
 }
