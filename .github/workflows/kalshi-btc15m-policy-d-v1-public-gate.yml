@@ -1,0 +1,66 @@
+name: Kalshi BTC15m Policy-D V1 public qualification
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - .github/workflows/kalshi-btc15m-policy-d-v1-public-gate.yml
+
+permissions:
+  contents: read
+
+jobs:
+  public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: e80969196c7f71a7c646c10f9108d34afd7e56bb
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -q -r requirements.txt pytest
+      - name: Prove live KXBTC15M tape and BBO without credentials
+        run: |
+          python - <<'PY'
+          import asyncio, json, time
+          import httpx
+          from src import kalshi_btc15m_policy_d_live_v1 as v1
+
+          async def main():
+              deadline = time.monotonic() + 180
+              async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as http:
+                  last = None
+                  while time.monotonic() < deadline:
+                      market = await v1.discover_current_market(http)
+                      if market is None:
+                          await asyncio.sleep(1)
+                          continue
+                      prints, yes_bid, no_bid = await v1.public_snapshot(http, market.ticker)
+                      tape = v1.Tape30(); tape.ingest(prints)
+                      last = {
+                          'classification':'READ_ONLY_PUBLIC_KXBTC15M_POLICY_D_GATE',
+                          'release_commit':'e80969196c7f71a7c646c10f9108d34afd7e56bb',
+                          'ticker':market.ticker,
+                          'seconds_to_close':round(market.seconds_to_close,3),
+                          'unique_prints':len({p.trade_id for p in prints}),
+                          'yes_bid':None if yes_bid is None else str(yes_bid),
+                          'no_bid':None if no_bid is None else str(no_bid),
+                          'tape':tape.snapshot(),
+                          'signal':None if v1.signal_from(tape,yes_bid=yes_bid,no_bid=no_bid) is None else v1.signal_from(tape,yes_bid=yes_bid,no_bid=no_bid).as_dict(),
+                          'order_entry':False,
+                          'credentials_used':False,
+                          'realized_pnl':0,
+                      }
+                      if tape.ready and yes_bid is not None and no_bid is not None:
+                          print('KALSHI_POLICY_D_PUBLIC_GATE='+json.dumps(last,separators=(',',':'),default=str))
+                          assert len({p.trade_id for p in prints}) >= 30
+                          assert 0 < yes_bid < 1 and 0 < no_bid < 1
+                          assert last['order_entry'] is False and last['credentials_used'] is False
+                          return
+                      await asyncio.sleep(1)
+                  print('KALSHI_POLICY_D_PUBLIC_GATE='+json.dumps(last or {'status':'NO_CURRENT_MARKET'},separators=(',',':'),default=str))
+                  raise SystemExit('PUBLIC_GATE_DID_NOT_PROVE_30_PRINT_TAPE_AND_BBO')
+          asyncio.run(main())
+          PY
