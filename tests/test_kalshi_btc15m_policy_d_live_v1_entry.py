@@ -24,7 +24,7 @@ def test_definite_create_reject_is_raised_once(monkeypatch):
         return httpx.Response(400, json={"error": "bad_order", "message": "definite reject"})
 
     monkeypatch.setattr(entry.BaseKalshiClient, "post", fake_post)
-    client = entry.FailClosedKalshiClient(base_url="https://example.com")
+    client = object.__new__(entry.FailClosedKalshiClient)
     with pytest.raises(entry.DefiniteOrderCreateRejected) as exc:
         asyncio.run(client.post("/portfolio/events/orders", json={}))
     assert exc.value.status_code == 400
@@ -37,6 +37,6 @@ def test_non_order_post_passthrough(monkeypatch):
         return httpx.Response(400, json={"error": "other"})
 
     monkeypatch.setattr(entry.BaseKalshiClient, "post", fake_post)
-    client = entry.FailClosedKalshiClient(base_url="https://example.com")
+    client = object.__new__(entry.FailClosedKalshiClient)
     response = asyncio.run(client.post("/some/other/path", json={}))
     assert response.status_code == 400
