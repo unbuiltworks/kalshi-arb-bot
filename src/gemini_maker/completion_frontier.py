@@ -61,16 +61,26 @@ POLICIES = ("A", "B", "C", "D")
 
 BOOK_AGE_THRESHOLDS_S = (0.25, 0.5, 1.0, 2.0, 5.0, 30.0)
 
-FEE_RATE_AUG31 = 0.07      # reverse-engineered; live fetch required
+# Official Gemini prediction-market schedule (user-verified 2026-08-31):
+#   maker fee: 0.0175 * C * P * (1-P)   (waived Sep 2 - Dec 31)
+#   taker fee: 0.07   * C * P * (1-P)
+#   crypto maker rebate: 30% of the TAKER-fee formula, on eligible maker
+#   fills priced between 20c and 80c, floored per fill to the cent.
+MAKER_FEE_RATE = 0.0175
+TAKER_FEE_RATE = 0.07
 REBATE_MULT = 0.30
+REBATE_BAND = (0.20, 0.80)
 
 
-def _fee(count: float, price: float, rate: float = FEE_RATE_AUG31) -> float:
+def _fee(count: float, price: float, rate: float) -> float:
     return rate * count * price * (1.0 - price)
 
 
 def _rebate(count: float, price: float) -> float:
-    return math.floor(REBATE_MULT * _fee(count, price) * 100.0) / 100.0
+    if not (REBATE_BAND[0] <= price <= REBATE_BAND[1]):
+        return 0.0
+    return math.floor(
+        REBATE_MULT * _fee(count, price, TAKER_FEE_RATE) * 100.0) / 100.0
 
 
 def _policy_cap(policy: str, tte: float, held_avg: float,
@@ -202,8 +212,10 @@ def evaluate_window_policy(symbol: str, rows: List[dict], policy: str,
     flat = abs(inv.residual) < 1e-9
     maker_fills = [f for f in fills if f["reason"] != "RESCUE_TAKER"]
     rescue_fills = [f for f in fills if f["reason"] == "RESCUE_TAKER"]
-    maker_fees_aug31 = sum(_fee(f["qty"], f["price"]) for f in maker_fills)
-    rescue_cost_fees = sum(_fee(f["qty"], f["price"]) for f in rescue_fills)
+    maker_fees_aug31 = sum(_fee(f["qty"], f["price"], MAKER_FEE_RATE)
+                           for f in maker_fills)
+    rescue_cost_fees = sum(_fee(f["qty"], f["price"], TAKER_FEE_RATE)
+                           for f in rescue_fills)
     rebate_model = sum(_rebate(f["qty"], f["price"]) for f in maker_fills)
     locked = (inv.pairs_completed() - inv.spend) if flat else None
     return {
@@ -276,9 +288,11 @@ def run(tape_dir: str = "data/policy_d_port",
         "predeclared": {"LEAN_START_S": LEAN_START_S, "LEAN_FULL_S": LEAN_FULL_S,
                         "C_SAFETY_S": C_SAFETY_S, "D_T1_S": D_T1_S,
                         "D_T2_S": D_T2_S,
-                        "fee_model": "rate*C*P*(1-P), FEE_RATE_AUG31=0.07 "
-                                     "(reverse-engineered; live fetch required)",
-                        "rebate_model": "floor_cents(0.30*fee); separate line"},
+                        "fee_model": "official schedule: maker 0.0175, taker "
+                                     "0.07 * C*P*(1-P); maker waived Sep2-Dec31",
+                        "rebate_model": "floor_cents(0.30 * taker-fee formula) "
+                                        "on maker fills in 20-80c band; "
+                                        "separate line"},
         "tape_note": "policy_d_port BBO writes throttled ~5s: sub-5s book-age "
                      "thresholds are tape-limited, not market-limited",
         "frontier": table,
