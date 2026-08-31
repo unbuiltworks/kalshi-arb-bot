@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal as D
 import time
 
@@ -21,7 +22,7 @@ def _event(asset: str = "ETH") -> Event:
 
 
 def test_discovery_rows_cover_all_supported_crypto5_assets_and_usd_volume() -> None:
-    now_ms = 1_788_145_000_000
+    now_ms = int(datetime.fromisoformat("2026-08-31T03:55:00+00:00").timestamp() * 1000)
     expiry = "2026-08-31T04:00:00+00:00"
     rows = []
     for asset, volume in (("BTC", "1600.25"), ("ETH", "500"), ("SOL", "250"), ("XRP", "0")):
