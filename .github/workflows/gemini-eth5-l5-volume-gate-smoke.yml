@@ -1,0 +1,38 @@
+name: Gemini ETH5 L5 volume gate smoke
+
+on:
+  push:
+    branches:
+      - feature/gemini-l5-volume-gate-v1
+    paths:
+      - '.github/workflows/gemini-eth5-l5-volume-gate-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Capture public ETH5 flow
+        run: |
+          python -m src.gemini_eth5_l5_volume_gate_shadow \
+            --seconds 90 \
+            --sample-s 5 \
+            --discover-s 10 \
+            --max-seconds-to-expiry 650 \
+            --output /tmp/gemini_eth5_l5_volume_gate_shadow.jsonl \
+            --summary-output /tmp/gemini_eth5_l5_volume_gate_shadow_summary.json
+      - name: Upload read-only capture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-eth5-l5-volume-gate-smoke
+          path: |
+            /tmp/gemini_eth5_l5_volume_gate_shadow.jsonl
+            /tmp/gemini_eth5_l5_volume_gate_shadow_summary.json
+          retention-days: 7
