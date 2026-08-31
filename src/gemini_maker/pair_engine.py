@@ -3,33 +3,55 @@
 The engine makes liquidity. Volume only changes maker aggressiveness; it never
 switches the normal strategy to taker. Taker exists only as bounded rescue.
 
+Initial live-canary discipline:
+  * $10 is a HARD per-window spend ceiling, not a target.
+  * New inventory scales progressively: q1 in WARM flow, q2 in HOT flow,
+    q3 only in VERY_HOT bursts, then tapers back down as budget is consumed.
+  * Every new-entry tranche reserves enough window budget to complete the
+    opposite side at the $1.00 pair ceiling.
+  * No new inventory is opened in the final 60s. Existing inventory may still
+    be completed maker-first; taker remains bounded rescue only.
+  * q10 subsidy/reward farming is deliberately disabled at a $10 window budget
+    because one qualifying q10 pair can consume essentially the whole canary.
+    Reward farming remains a separate, larger-budget lane.
+
 Promotion invariant: incentives are not allowed to justify a structurally
 losing pair. While inventory is imbalanced, the engine quotes only the missing
 side and prices it from the *whole portfolio* so a complete maker fill would
-finish at an average pair cost <= $1.00. This avoids the false safety that can
-come from looking only at the held side's average fill price.
+finish at an average pair cost <= $1.00.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import List, Optional
 
+# Trailing-60s traded-dollar regimes. v1 proposals pending hot-tape validation.
 WARM_FLOW_60S = 10.0
 HOT_FLOW_60S = 100.0
+VERY_HOT_FLOW_60S = 500.0
 
+# Progressive new-entry tranches.
+WARM_ENTRY_SIZE = 1
+HOT_ENTRY_SIZE = 2
+VERY_HOT_ENTRY_SIZE = 3
+WARM_JOIN_BACKOFF = 0.01
+HOT_JOIN_BACKOFF = 0.00
+VERY_HOT_JOIN_BACKOFF = 0.00
+
+# Reward mode exists, but is intentionally not allowed to consume a $10 canary.
 SUBSIDY_MIN_SIZE = 10
 SUBSIDY_BACKOFF = 0.04
-ACTIVE_SIZE = 5
-WARM_JOIN_BACKOFF = 0.01
-HOT_JOIN_BACKOFF = 0.0
+SUBSIDY_MIN_WINDOW_BUDGET = 20.0
 
 PAIR_CEILING = 1.00
 
+# Risk envelope for the initial live canary.
+NEW_ENTRY_STOP_BEFORE_EXPIRY_S = 60.0
 STOP_QUOTING_BEFORE_EXPIRY_S = 30.0
 RESCUE_ZONE_BEFORE_EXPIRY_S = 60.0
 RESCUE_MAX_PREMIUM = 0.03
-MAX_SPEND_PER_WINDOW = 25.0
-MAX_WORST_LOSS_PER_WINDOW = 5.0
+MAX_SPEND_PER_WINDOW = 10.0
+MAX_WORST_LOSS_PER_WINDOW = 2.0
 MIN_PRICE = 0.05
 MAX_PRICE = 0.95
 
@@ -113,6 +135,8 @@ def _clamp(price: float) -> Optional[float]:
 
 
 def _flow_state(flow_60s: float) -> str:
+    if flow_60s >= VERY_HOT_FLOW_60S:
+        return "VERY_HOT"
     if flow_60s >= HOT_FLOW_60S:
         return "HOT"
     if flow_60s >= WARM_FLOW_60S:
@@ -120,14 +144,51 @@ def _flow_state(flow_60s: float) -> str:
     return "DEAD"
 
 
-def _full_completion_ceiling(inv: PairInventory) -> Optional[float]:
-    """Max missing-side price that would make the *whole portfolio* flat at
-    <= PAIR_CEILING average cost if the entire residual fills now.
+def _entry_backoff(flow_state: str) -> float:
+    if flow_state == "WARM":
+        return WARM_JOIN_BACKOFF
+    if flow_state == "HOT":
+        return HOT_JOIN_BACKOFF
+    return VERY_HOT_JOIN_BACKOFF
 
-    This is portfolio-safe. Example: an old 100c pair plus a new YES fill at
-    90c cannot use 1-YES-average as a fake 35c ceiling; the whole-book math
-    correctly leaves only 10c for the missing NO.
+
+def _progressive_entry_size(
+    inv: PairInventory,
+    flow_state: str,
+    max_spend: float,
+) -> float:
+    """Size a *new* flat-inventory tranche without eating the window budget.
+
+    Because one side may fill before the other, reserve a full $1.00 of window
+    budget per proposed pair. This means a q3 entry requires at least $3 of
+    remaining pair budget even if the first filled leg itself costs only $1.20.
     """
+    base = {
+        "WARM": WARM_ENTRY_SIZE,
+        "HOT": HOT_ENTRY_SIZE,
+        "VERY_HOT": VERY_HOT_ENTRY_SIZE,
+    }.get(flow_state, 0)
+    if base <= 0:
+        return 0.0
+
+    remaining = max(0.0, max_spend - inv.spend)
+    pair_capacity = int(remaining / PAIR_CEILING)
+    if pair_capacity <= 0:
+        return 0.0
+
+    # Taper as capital is consumed. $10 is a ceiling, never a quota.
+    spent_frac = inv.spend / max_spend if max_spend > 0 else 1.0
+    if spent_frac >= 0.70:
+        tranche_cap = 1
+    elif spent_frac >= 0.40:
+        tranche_cap = 2
+    else:
+        tranche_cap = base
+    return float(max(0, min(base, tranche_cap, pair_capacity)))
+
+
+def _full_completion_ceiling(inv: PairInventory) -> Optional[float]:
+    """Max missing-side price that makes the whole portfolio flat at <=$1/pair."""
     qty = abs(inv.residual)
     if qty < 1e-9:
         return None
@@ -160,6 +221,9 @@ def _subsidy_quotes(
     max_spend: float,
     max_worst_loss: float,
 ) -> List[Quote]:
+    # Keep q10 reward farming out of the $10 progressive canary.
+    if max_spend < SUBSIDY_MIN_WINDOW_BUDGET - 1e-9:
+        return []
     if abs(inv.residual) >= 1e-9:
         return []
     quotes: List[Quote] = []
@@ -182,7 +246,6 @@ def _subsidy_quotes(
 def _inventory_completion_quote(
     inv: PairInventory,
     book: PairBook,
-    state: str,
     max_spend: float,
     max_worst_loss: float,
 ) -> Optional[Quote]:
@@ -198,15 +261,12 @@ def _inventory_completion_quote(
     if ceiling is None or ceiling < MIN_PRICE - 1e-9:
         return None
     maker_cap = (ask - 0.01) if ask is not None else ceiling
-    price = min(ceiling, maker_cap)
-    price = _clamp(price)
+    price = _clamp(min(ceiling, maker_cap))
     if price is None or price > ceiling + 1e-9:
         return None
     requested = abs(residual)
     size = _safe_size(inv, missing, price, requested, max_spend, max_worst_loss)
-    if size < 1.0:
-        return None
-    if size + 1e-9 < float(int(requested)):
+    if size < 1.0 or size + 1e-9 < float(int(requested)):
         return None
     return Quote(missing, price, size, "LEAN_COMPLETE_PORTFOLIO")
 
@@ -236,22 +296,31 @@ def decide(
 
     flow_state = _flow_state(flow_60s)
 
+    # Existing imbalance always gets priority over new exposure, even if flow cools.
     if abs(inv.residual) >= 1.0:
-        q = _inventory_completion_quote(inv, book, flow_state, max_spend, max_worst_loss)
+        q = _inventory_completion_quote(inv, book, max_spend, max_worst_loss)
         state = "INVENTORY_MANAGE" if flow_state == "DEAD" else flow_state
         if q is None:
             return EngineDecision(state, [], rescue, True, "NO_SAFE_COMPLETION_QUOTE")
         return EngineDecision(state, [q], rescue, False, "MISSING_SIDE_ONLY")
+
+    # Flat in final minute: protect the $10 canary; do not start another pair.
+    if seconds_to_expiry <= NEW_ENTRY_STOP_BEFORE_EXPIRY_S:
+        return EngineDecision("ENTRY_STOP", [], None, True, "NO_NEW_INVENTORY_FINAL_60S")
 
     if flow_state == "DEAD":
         if not in_reward_pool:
             return EngineDecision("IDLE", [], rescue, True, "DEAD_NO_POOL")
         quotes = _subsidy_quotes(inv, book, max_spend, max_worst_loss)
         if len(quotes) != 2:
-            return EngineDecision("IDLE", [], rescue, True, "SUBSIDY_UNSAFE_OR_UNQUALIFIED")
+            return EngineDecision("IDLE", [], rescue, True, "SUBSIDY_DISABLED_OR_UNSAFE")
         return EngineDecision("SUBSIDY", quotes, rescue, False, "SUBSIDY_TWO_SIDED")
 
-    backoff = WARM_JOIN_BACKOFF if flow_state == "WARM" else HOT_JOIN_BACKOFF
+    requested = _progressive_entry_size(inv, flow_state, max_spend)
+    if requested < 1.0:
+        return EngineDecision(flow_state, [], rescue, True, "NO_PAIR_BUDGET_REMAINING")
+
+    backoff = _entry_backoff(flow_state)
     quotes: List[Quote] = []
     for side, bid in (("yes", book.yes_bid), ("no", book.no_bid)):
         if bid is None:
@@ -259,7 +328,7 @@ def decide(
         price = _clamp(bid - backoff)
         if price is None:
             continue
-        size = _safe_size(inv, side, price, ACTIVE_SIZE, max_spend, max_worst_loss)
+        size = _safe_size(inv, side, price, requested, max_spend, max_worst_loss)
         if size >= 1.0:
             quotes.append(Quote(side, price, size, f"{flow_state}_JOIN"))
     if not quotes:
