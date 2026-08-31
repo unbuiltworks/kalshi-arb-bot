@@ -236,6 +236,10 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
         max_spend = SWEEP_SPEND_MULT * entry_size
         max_worst_loss = SWEEP_WORST_LOSS_MULT * entry_size
     first_fill_t: Optional[float] = None
+    was_imbalanced = False
+    cycles_started = 0
+    flattened_maker = 0
+    flattened_rescue = 0
 
     def flow60(now: float) -> List[tuple]:
         while flow and now - flow[0][0] > 60.0:
@@ -337,11 +341,20 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
                 elif kind == "sell" and side == "no" and taker_sold and (1 - price) >= qprice - 1e-9:
                     filled = min(qsize, qty, inv.no_qty); inv.sell("no", filled, qprice)
                 if filled > 0:
-                    if first_fill_t is None:
-                        first_fill_t = t
                     fills.append({"t": round(t - start, 1), "kind": kind,
                                   "side": side, "price": qprice, "qty": filled})
                     consumed.add(key)
+                    # Cycle-scoped ladder clock (audit fix): starts when flat
+                    # inventory becomes imbalanced, resets when a maker exit
+                    # returns it below the flat threshold.
+                    imb = abs(inv.residual) >= 1.0
+                    if imb and not was_imbalanced:
+                        cycles_started += 1
+                        first_fill_t = t
+                    elif not imb and was_imbalanced:
+                        first_fill_t = None
+                        flattened_maker += 1
+                    was_imbalanced = imb
                     break
         # Rescue check (uses fresh book only)
         res = inv.residual
@@ -374,6 +387,11 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
                                   "side": comp, "price": comp_ask,
                                   "qty": qty_r, "requested": abs(res),
                                   "displayed_depth": displayed})
+                    imb = abs(inv.residual) >= 1.0
+                    if not imb and was_imbalanced:
+                        first_fill_t = None
+                        flattened_rescue += 1
+                    was_imbalanced = imb
         flow.append((t, "buy" if not taker_sold else "sell", price * qty))
 
     if not fills:
@@ -396,7 +414,10 @@ def evaluate(symbol: str, rows: List[dict], variant: str,
     denom = inv.pairs() + abs(inv.residual)
     return {
         "market": symbol, "flat": flat, "maker_fills": len(maker),
-        "completion_pct": round(inv.pairs() / denom, 3) if denom else None,
+        "pair_completion_pct": round(inv.pairs() / denom, 3) if denom else None,
+        "cycles_started": cycles_started,
+        "flattened_maker": flattened_maker,
+        "flattened_rescue": flattened_rescue,
         "unwind_fills": sum(1 for f in maker if f["kind"] == "sell"),
         "rescues": len(rescues), "pairs": round(inv.pairs(), 1),
         "locked_raw": round(locked, 4) if locked is not None else None,
@@ -467,6 +488,13 @@ def run(future_only: bool = False) -> Dict[str, Any]:
             "unwind_fills": sum(r["unwind_fills"] for r in results),
             "pairs": round(pairs, 1), "rescues": rescues,
             "rescues_per_15_pairs": round(15.0 * rescues / pairs, 2) if pairs else None,
+            "cycles_started": sum(r["cycles_started"] for r in results),
+            "maker_flatten_pct": round(
+                sum(r["flattened_maker"] for r in results)
+                / max(1, sum(r["cycles_started"] for r in results)), 3),
+            "rescue_flatten_pct": round(
+                sum(r["flattened_rescue"] for r in results)
+                / max(1, sum(r["cycles_started"] for r in results)), 3),
             "locked_flat_pnl": round(locked, 2),
             "realized_settlement_pnl_all": round(realized_all, 2)
             if realized_all is not None else "INCOMPLETE",
