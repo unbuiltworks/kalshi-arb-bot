@@ -163,6 +163,53 @@ async def _gemini_active_symbols(http: httpx.AsyncClient) -> Dict[str, Dict[str,
     return symbols
 
 
+GEMINI_VOLUME_POLL_SECONDS = 20.0
+
+
+async def gemini_volume_task(sink: Sink, stop: asyncio.Event) -> None:
+    """Poll cumulative per-window volume from the events REST feed.
+
+    This is the robust flow signal for the burst census: deltas between polls
+    give minute-by-minute volume velocity per window, independent of websocket
+    trade-capture gaps."""
+    async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "arb-laneD-readonly/1.0"}) as http:
+        last: Dict[str, float] = {}
+        while not stop.is_set():
+            try:
+                response = await http.get(
+                    f"{GEMINI_REST}/v1/prediction-markets/events",
+                    params=[("status", "active"), ("category", "Crypto"), ("limit", "500")],
+                )
+                if response.status_code == 200:
+                    now = _now()
+                    for row in response.json().get("data", []):
+                        ticker = str(row.get("ticker") or "").upper()
+                        if not GEMINI_WINDOW_RE.match(ticker):
+                            continue
+                        try:
+                            volume = float(row.get("volume") or 0.0)
+                        except (TypeError, ValueError):
+                            continue
+                        if last.get(ticker) != volume:
+                            await sink.write({
+                                "t": now, "venue": "gemini", "kind": "vol",
+                                "market": ticker, "volume": volume,
+                                "expiry": row.get("expiryDate"),
+                            })
+                            last[ticker] = volume
+                    for gone in [k for k in last if k not in {
+                        str(r.get("ticker") or "").upper() for r in response.json().get("data", [])
+                    }]:
+                        last.pop(gone, None)
+            except Exception as exc:
+                await sink.write({"t": _now(), "venue": "gemini", "kind": "error",
+                                  "error": f"vol:{type(exc).__name__}"})
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=GEMINI_VOLUME_POLL_SECONDS)
+            except asyncio.TimeoutError:
+                pass
+
+
 async def gemini_task(sink: Sink, stop: asyncio.Event) -> None:
     known: Set[str] = set()
     async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "arb-laneD-readonly/1.0"}) as http:
@@ -237,7 +284,11 @@ async def run(out_dir: Path, hours: float) -> None:
     sink = Sink(out_dir / f"tape_{stamp}.jsonl")
     await sink.write({"t": _now(), "kind": "collector_start", "venue": "meta",
                       "bounded_hours": hours, "kalshi_series": list(KALSHI_SERIES)})
-    tasks = [asyncio.create_task(kalshi_task(sink, stop)), asyncio.create_task(gemini_task(sink, stop))]
+    tasks = [
+        asyncio.create_task(kalshi_task(sink, stop)),
+        asyncio.create_task(gemini_task(sink, stop)),
+        asyncio.create_task(gemini_volume_task(sink, stop)),
+    ]
     try:
         await asyncio.sleep(hours * 3600)
     finally:
