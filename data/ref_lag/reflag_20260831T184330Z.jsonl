@@ -1094,3 +1094,7 @@
 {"t_ns":1788201834225441079,"kind":"spot_rfr","sym":"BTCUSD","rfr":79126.4463,"n":8}
 {"t_ns":1788201839293763091,"kind":"spot_trade","sym":"XRPUSD","price":1.39367,"qty":4.498397,"ev_ms":1788201839298}
 {"t_ns":1788201839293877442,"kind":"spot_rfr","sym":"XRPUSD","rfr":1.3926,"n":7}
+{"t_ns":1788201850254149463,"kind":"spot_trade","sym":"BTCUSD","price":79139.23,"qty":0.00414572,"ev_ms":1788201850201}
+{"t_ns":1788201850254276532,"kind":"spot_rfr","sym":"BTCUSD","rfr":79127.8667,"n":9}
+{"t_ns":1788201855918193895,"kind":"spot_trade","sym":"XRPUSD","price":1.39397,"qty":3.55212,"ev_ms":1788201855888}
+{"t_ns":1788201855918306294,"kind":"spot_rfr","sym":"XRPUSD","rfr":1.3928,"n":8}
