@@ -1,0 +1,93 @@
+{
+ "by_series": {
+  "KXBTC15M": {
+   "active_now": 0,
+   "latest_end_date": null,
+   "programs_total": 0,
+   "reward_values": [],
+   "types": [],
+   "upcoming": 0
+  },
+  "KXCOPPER15M": {
+   "active_now": 1,
+   "latest_end_date": "2026-09-01T04:00:00Z",
+   "programs_total": 242,
+   "reward_values": [
+    200000
+   ],
+   "types": [
+    "liquidity"
+   ],
+   "upcoming": 105
+  },
+  "KXCRYPTOLEAD15M": {
+   "active_now": 5,
+   "latest_end_date": "2026-09-01T04:00:00Z",
+   "programs_total": 3545,
+   "reward_values": [
+    200000
+   ],
+   "types": [
+    "liquidity"
+   ],
+   "upcoming": 525
+  },
+  "KXETH15M": {
+   "active_now": 0,
+   "latest_end_date": null,
+   "programs_total": 0,
+   "reward_values": [],
+   "types": [],
+   "upcoming": 0
+  },
+  "KXGOLD15M": {
+   "active_now": 1,
+   "latest_end_date": "2026-09-01T04:00:00Z",
+   "programs_total": 2020,
+   "reward_values": [
+    200000
+   ],
+   "types": [
+    "liquidity"
+   ],
+   "upcoming": 105
+  },
+  "KXNATGAS15M": {
+   "active_now": 1,
+   "latest_end_date": "2026-09-01T04:00:00Z",
+   "programs_total": 242,
+   "reward_values": [
+    200000
+   ],
+   "types": [
+    "liquidity"
+   ],
+   "upcoming": 105
+  },
+  "KXSILVER15M": {
+   "active_now": 1,
+   "latest_end_date": "2026-09-01T04:00:00Z",
+   "programs_total": 2020,
+   "reward_values": [
+    200000
+   ],
+   "types": [
+    "liquidity"
+   ],
+   "upcoming": 105
+  },
+  "KXWTI15M": {
+   "active_now": 1,
+   "latest_end_date": "2026-09-01T04:00:00Z",
+   "programs_total": 2020,
+   "reward_values": [
+    200000
+   ],
+   "types": [
+    "liquidity"
+   ],
+   "upcoming": 105
+  }
+ },
+ "observed_at": "2026-08-31T01:31:04Z"
+}
