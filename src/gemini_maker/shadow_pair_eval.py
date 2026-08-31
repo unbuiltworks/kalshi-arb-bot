@@ -1,25 +1,21 @@
-"""Shadow-replay the paired-maker engine over collected Gemini tape.
+"""Conservative shadow replay for the Gemini paired-maker engine.
 
-Answers the test the plan names: could we detect the start of a hot window,
-acquire BOTH sides as maker, and finish near-flat at <= 100c combined cost?
+Evidence class: SHADOW_MAKER_PRINT_PROXY_NOT_EXECUTABLE.
 
-Fill proxy (same discipline as the Kalshi shadow): a real print fills our
-resting quote when it trades at/through our price - front-of-queue assumption,
-stated caveat. Anti-lookahead: quotes come from book+flow state STRICTLY
-before the scored print; the scored print is excluded from its own flow gauge.
+Causal rules:
+- quotes are computed from book + flow strictly before the scored print;
+- the scored print is added to the flow gauge only after scoring;
+- one maker fill per side is allowed per BBO snapshot (consumed quote proxy),
+  avoiding instantaneous infinite re-quoting at the front of the queue;
+- rescue is recomputed after any maker fill before it can execute, so a maker
+  completion cannot be followed by a stale taker rescue from the pre-fill state.
 
-Book mapping (single UP-contract book): our yes bid rests on the UP bid side;
-our no bid at q is an UP ask at (1-q).
-  - taker SELL print (buyer_is_maker=True) at p fills our yes bid if bid >= p
-  - taker BUY print (buyer_is_maker=False) at p fills our no bid if bid >= 1-p
-
-Fees: maker fees 0 (Gemini waives qualifying prediction maker fees Sep 2 -
-Dec 31); rescue taker cost is the crossing price itself, no extra fee modeled
-(flagged - real taker fee schedule TBD). Incentives are NOT included anywhere.
-
-Winner: last-print heuristic (last UP price >= 0.5 -> Up). Flagged.
-
-Usage: python3 -m src.gemini_maker.shadow_pair_eval [--since-utc 2026-08-31T11:00]
+Promotion accounting:
+- outcome-independent locked P&L is reported only for flat portfolios;
+- last-print winner P&L is retained as a clearly-labeled heuristic diagnostic;
+- incentives are excluded;
+- rescue taker fees are not modeled, so any window using rescue is not
+  promotion-grade evidence.
 """
 from __future__ import annotations
 
@@ -31,24 +27,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.gemini_maker.pair_engine import (
-    PairBook,
-    PairInventory,
-    decide,
-)
+from src.gemini_maker.pair_engine import PairBook, PairInventory, decide
 
 OUT_PATH = Path("analysis/gemini/pair_engine_shadow.json")
+MAX_BOOK_AGE_S = 30.0
 
 
 def _win_close_epoch(symbol: str) -> Optional[float]:
-    # BTC05M2608311205-UP -> closes 2026-08-31 12:05 UTC
     core = symbol.split("-")[0]
     digits = core[-10:]
     if not digits.isdigit():
         return None
     try:
-        return datetime(2000 + int(digits[0:2]), int(digits[2:4]), int(digits[4:6]),
-                        int(digits[6:8]), int(digits[8:10]), tzinfo=timezone.utc).timestamp()
+        return datetime(
+            2000 + int(digits[0:2]), int(digits[2:4]), int(digits[4:6]),
+            int(digits[6:8]), int(digits[8:10]), tzinfo=timezone.utc,
+        ).timestamp()
     except ValueError:
         return None
 
@@ -56,17 +50,18 @@ def _win_close_epoch(symbol: str) -> Optional[float]:
 def load_windows(tape_dir: str, since_ts: float) -> Dict[str, List[dict]]:
     events: Dict[str, List[dict]] = defaultdict(list)
     for path in sorted(glob.glob(f"{tape_dir}/tape_*.jsonl")):
-        for line in open(path, encoding="utf-8"):
-            try:
-                e = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if e.get("venue") != "gemini" or e.get("kind") not in ("print", "bbo"):
-                continue
-            market = str(e.get("market") or "")
-            if not market.endswith("-UP") or e.get("t", 0) < since_ts:
-                continue
-            events[market].append(e)
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                try:
+                    e = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if e.get("venue") != "gemini" or e.get("kind") not in ("print", "bbo"):
+                    continue
+                market = str(e.get("market") or "")
+                if not market.endswith("-UP") or e.get("t", 0) < since_ts:
+                    continue
+                events[market].append(e)
     return events
 
 
@@ -77,30 +72,28 @@ def evaluate_window(symbol: str, rows: List[dict]) -> Optional[Dict[str, Any]]:
     dur = 300 if "05M" in symbol else 900
     start = close - dur
     rows.sort(key=lambda e: e["t"])
+
     inv = PairInventory()
-    flow = deque()          # (t, dollars)
+    flow = deque()  # (t, print dollars), only prints strictly before current score
     book = PairBook(None, None, None, None)
+    book_t: Optional[float] = None
+    consumed_sides = set()
     fills: List[dict] = []
     states = defaultdict(int)
-    rescue_done = False
     last_up_price = None
     first_hot_t = None
+    stale_book_skips = 0
 
-    def flow_60s(now: float, exclude_last: bool = False) -> float:
+    def flow_60s(now: float) -> float:
         while flow and now - flow[0][0] > 60.0:
             flow.popleft()
-        rows_ = list(flow)[:-1] if (exclude_last and flow) else list(flow)
-        return sum(d for _, d in rows_)
+        return sum(d for _, d in flow)
 
     for e in rows:
         t = e["t"]
         if t < start or t > close:
-            if e["kind"] == "print":
-                try:
-                    last_up_price = float(e["price"])
-                except (TypeError, ValueError):
-                    pass
             continue
+
         if e["kind"] == "bbo":
             try:
                 bids = [(float(p), float(q)) for p, q in (e.get("bids") or [])]
@@ -114,103 +107,155 @@ def evaluate_window(symbol: str, rows: List[dict]) -> Optional[Dict[str, Any]]:
                 no_bid=(1 - ya) if ya is not None else None,
                 no_ask=(1 - yb) if yb is not None else None,
             )
+            book_t = t
+            consumed_sides.clear()
             continue
-        # print
+
         try:
-            price = float(e["price"]); qty = float(e["qty"])
+            price = float(e["price"])
+            qty = float(e["qty"])
         except (TypeError, ValueError):
             continue
         taker_sold = bool(e.get("buyer_is_maker"))
         dollars = price * qty
-        flow.append((t, dollars))
         last_up_price = price
-        # decide from state BEFORE this print (exclude it from the gauge)
-        f60 = flow_60s(t, exclude_last=True)
+
+        # Strict anti-lookahead: current print is not yet in flow.
+        f60 = flow_60s(t)
+        if book_t is None or t - book_t > MAX_BOOK_AGE_S:
+            stale_book_skips += 1
+            flow.append((t, dollars))
+            continue
+
         decision = decide(inv, book, f60, close - t, in_reward_pool=False)
         states[decision.state] += 1
         if decision.state == "HOT" and first_hot_t is None:
             first_hot_t = t - start
+
+        maker_filled = False
         for q in decision.quotes:
+            if q.side in consumed_sides:
+                continue
             if q.side == "yes" and taker_sold and q.price >= price - 1e-9:
                 filled = min(q.size, qty)
                 inv.apply_fill("yes", filled, q.price)
-                fills.append({"t": round(t - start, 1), "side": "yes",
-                              "price": q.price, "qty": filled, "reason": q.reason})
+                fills.append({"t": round(t - start, 1), "side": "yes", "price": q.price,
+                              "qty": filled, "reason": q.reason})
+                consumed_sides.add("yes")
+                maker_filled = True
                 break
             if q.side == "no" and not taker_sold and q.price >= (1 - price) - 1e-9:
                 filled = min(q.size, qty)
                 inv.apply_fill("no", filled, q.price)
-                fills.append({"t": round(t - start, 1), "side": "no",
-                              "price": q.price, "qty": filled, "reason": q.reason})
+                fills.append({"t": round(t - start, 1), "side": "no", "price": q.price,
+                              "qty": filled, "reason": q.reason})
+                consumed_sides.add("no")
+                maker_filled = True
                 break
-        if decision.rescue is not None and not rescue_done:
-            r = decision.rescue
-            inv.apply_fill(r.side, r.size, r.price)
-            fills.append({"t": round(t - start, 1), "side": r.side, "price": r.price,
-                          "qty": r.size, "reason": "RESCUE_TAKER"})
-            rescue_done = True
+
+        # Recompute rescue AFTER maker fill. This closes the stale-rescue bug
+        # where the pre-fill decision could rescue an inventory already paired
+        # by the scored maker print.
+        rescue = decision.rescue
+        if maker_filled:
+            rescue = decide(inv, book, f60, close - t, in_reward_pool=False).rescue
+        if rescue is not None:
+            inv.apply_fill(rescue.side, rescue.size, rescue.price)
+            fills.append({"t": round(t - start, 1), "side": rescue.side,
+                          "price": rescue.price, "qty": rescue.size,
+                          "reason": "RESCUE_TAKER"})
+
+        # Only now may the scored print influence subsequent flow state.
+        flow.append((t, dollars))
 
     if not fills:
         return None
-    winner = None
+
+    flat = abs(inv.residual) < 1e-9
+    flat_pair_cost = inv.avg_pair_cost() if flat else None
+    locked_pnl = (inv.pairs_completed() - inv.spend) if flat else None
+
+    heuristic_winner = None
+    heuristic_pnl = None
     if last_up_price is not None:
-        winner = "yes" if last_up_price >= 0.5 else "no"
-    payout = None
-    pnl = None
-    if winner is not None:
-        payout = inv.yes_qty if winner == "yes" else inv.no_qty
-        pnl = payout - inv.spend
+        heuristic_winner = "yes" if last_up_price >= 0.5 else "no"
+        payout = inv.yes_qty if heuristic_winner == "yes" else inv.no_qty
+        heuristic_pnl = payout - inv.spend
+
+    rescue_fills = sum(1 for f in fills if f["reason"] == "RESCUE_TAKER")
     return {
         "market": symbol,
         "fills": fills,
-        "maker_fills": sum(1 for f in fills if f["reason"] != "RESCUE_TAKER"),
-        "rescue_fills": sum(1 for f in fills if f["reason"] == "RESCUE_TAKER"),
-        "yes_qty": inv.yes_qty, "no_qty": inv.no_qty,
+        "maker_fills": len(fills) - rescue_fills,
+        "rescue_fills": rescue_fills,
+        "yes_qty": inv.yes_qty,
+        "no_qty": inv.no_qty,
         "pairs": inv.pairs_completed(),
-        "avg_pair_cost": inv.avg_pair_cost(),
+        "flat_at_expiry": flat,
+        "avg_pair_cost_if_flat": flat_pair_cost,
         "residual": inv.residual,
+        "worst_settlement_loss": round(inv.worst_settlement_loss(), 4),
         "spend": round(inv.spend, 4),
+        "locked_pnl_if_flat": round(locked_pnl, 4) if locked_pnl is not None else None,
         "first_hot_s": round(first_hot_t, 1) if first_hot_t is not None else None,
         "state_counts": dict(states),
-        "winner_heuristic": winner,
-        "trading_pnl": round(pnl, 4) if pnl is not None else None,
+        "stale_book_skips": stale_book_skips,
+        "winner_heuristic": heuristic_winner,
+        "heuristic_pnl_not_for_promotion": round(heuristic_pnl, 4) if heuristic_pnl is not None else None,
+        "promotion_grade": bool(flat and rescue_fills == 0 and flat_pair_cost is not None and flat_pair_cost <= 1.0 + 1e-9),
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tape-dir", default="data/policy_d_port")
-    parser.add_argument("--since-utc", default="2026-08-31T10:59",
-                        help="only score tape at/after this UTC time (persistent-ws era)")
+    parser.add_argument("--since-utc", default="2026-08-31T10:59")
     args = parser.parse_args()
-    since_ts = datetime.fromisoformat(args.since_utc).replace(
-        tzinfo=timezone.utc).timestamp()
+    since_ts = datetime.fromisoformat(args.since_utc).replace(tzinfo=timezone.utc).timestamp()
     windows = load_windows(args.tape_dir, since_ts)
     results = []
     for symbol, rows in sorted(windows.items()):
         r = evaluate_window(symbol, rows)
         if r:
             results.append(r)
-    scored = [r for r in results if r["trading_pnl"] is not None]
+
+    flat = [r for r in results if r["flat_at_expiry"]]
     agg = {
+        "evidence_class": "SHADOW_MAKER_PRINT_PROXY_NOT_EXECUTABLE",
         "windows_with_fills": len(results),
-        "windows_scored": len(scored),
+        "flat_windows": len(flat),
+        "promotion_grade_windows": sum(1 for r in results if r["promotion_grade"]),
         "total_pairs": sum(r["pairs"] for r in results),
-        "pairs_le_100": sum(1 for r in results if r["avg_pair_cost"] is not None
-                            and r["avg_pair_cost"] <= 1.0 + 1e-9),
+        "flat_pairs_le_100": sum(1 for r in flat if r["avg_pair_cost_if_flat"] is not None
+                                 and r["avg_pair_cost_if_flat"] <= 1.0 + 1e-9),
         "total_spend": round(sum(r["spend"] for r in results), 2),
-        "total_trading_pnl": round(sum(r["trading_pnl"] for r in scored), 4),
-        "windows_flat_at_expiry": sum(1 for r in results if abs(r["residual"]) < 1.0),
+        "locked_pnl_flat_windows": round(sum(r["locked_pnl_if_flat"] or 0.0 for r in flat), 4),
+        "residual_worst_loss": round(sum(r["worst_settlement_loss"] for r in results if not r["flat_at_expiry"]), 4),
+        "rescue_fills": sum(r["rescue_fills"] for r in results),
+        "stale_book_skips": sum(r["stale_book_skips"] for r in results),
     }
-    payload = {"generated_utc": datetime.now(timezone.utc).isoformat(),
-               "since_utc": args.since_utc, "aggregate": agg, "per_window": results}
+    payload = {
+        "generated_utc": datetime.now(timezone.utc).isoformat(),
+        "since_utc": args.since_utc,
+        "assumptions": {
+            "queue_model": "one fill per side per BBO snapshot; still a print-through proxy",
+            "maker_fees": "excluded here; live promo economics must be applied separately",
+            "rescue_taker_fees": "not modeled; rescue windows are not promotion grade",
+            "winner": "last-print heuristic diagnostic only; never promotion accounting",
+            "incentives": "excluded from decisions and shadow P&L",
+        },
+        "aggregate": agg,
+        "per_window": results,
+    }
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_text(json.dumps(payload, indent=1), encoding="utf-8")
     print(json.dumps(agg, indent=1))
     for r in results:
-        print(f'{r["market"]:24s} pairs={r["pairs"]:.0f} avg_pair='
-              f'{(r["avg_pair_cost"] or 0):.3f} residual={r["residual"]:+.0f} '
-              f'pnl={r["trading_pnl"]} first_hot_s={r["first_hot_s"]}')
+        pc = r["avg_pair_cost_if_flat"]
+        print(f'{r["market"]:24s} pairs={r["pairs"]:.0f} flat={r["flat_at_expiry"]} '
+              f'pair_cost={(pc if pc is not None else float("nan")):.3f} '
+              f'residual={r["residual"]:+.0f} locked={r["locked_pnl_if_flat"]} '
+              f'rescues={r["rescue_fills"]} hot_s={r["first_hot_s"]}')
 
 
 if __name__ == "__main__":
