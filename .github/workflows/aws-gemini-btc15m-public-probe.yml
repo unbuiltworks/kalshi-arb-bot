@@ -1,0 +1,52 @@
+name: AWS Gemini BTC15m public probe
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - '.github/workflows/aws-gemini-btc15m-public-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Public Gemini crypto short-window inventory
+        run: |
+          python - <<'PY'
+          import json, urllib.parse, urllib.request
+          base='https://api.gemini.com/v1/prediction-markets/events'
+          qs=urllib.parse.urlencode([('status','active'),('category','Crypto'),('limit','500')])
+          with urllib.request.urlopen(base+'?'+qs, timeout=12) as r:
+              p=json.load(r)
+          rows=[]
+          for e in p.get('data',[]):
+              t=str(e.get('ticker') or '').upper()
+              if not any(x in t for x in ('BTC05M','BTC15M','ETH05M','ETH15M')):
+                  continue
+              cs=[]
+              for c in e.get('contracts') or []:
+                  cs.append({
+                    'ticker':c.get('ticker'),
+                    'symbol':c.get('instrumentSymbol'),
+                    'label':c.get('label'),
+                    'state':c.get('marketState') or c.get('status'),
+                    'expiry':c.get('expiryDate'),
+                    'qmin':c.get('quantityMinimum'),
+                    'qinc':c.get('quantityIncrement'),
+                    'pinc':c.get('priceIncrement'),
+                    'bid':(c.get('prices') or {}).get('bestBid') or c.get('bestBid'),
+                    'ask':(c.get('prices') or {}).get('bestAsk') or c.get('bestAsk'),
+                  })
+              rows.append({'ticker':t,'title':e.get('title'),'expiry':e.get('expiryDate'),'contracts':cs})
+          print('GEMINI_SHORT_WINDOW_PUBLIC='+json.dumps(rows,separators=(',',':'),default=str))
+          print('BTC15M_COUNT='+str(sum(1 for x in rows if 'BTC15M' in x['ticker'])))
+          print('BTC05M_COUNT='+str(sum(1 for x in rows if 'BTC05M' in x['ticker'])))
+          print('ORDER_ENTRY=false')
+          PY
