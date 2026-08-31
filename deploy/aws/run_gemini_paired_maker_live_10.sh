@@ -88,6 +88,7 @@ docker build -t "$IMAGE" "$WORKTREE" >/dev/null
 # Focused exact-image regressions, network disabled.
 docker run --rm --network none "$IMAGE" python -m pytest -q \
   tests/test_gemini_maker_live_10_canary.py \
+  tests/test_gemini_maker_live_10_canary_v2.py \
   tests/test_gemini_incentive_mm_dynamic_complement.py \
   tests/test_gemini_short_crypto_dynamic_complement_q1_v2.py
 
@@ -157,7 +158,7 @@ docker run -d --name "$CONTAINER" --network host --restart no \
   -e GEMINI_PAIRED_MAKER_LIVE_10_ID="$PROBE_ID" \
   -e GEMINI_PAIRED_MAKER_LIVE_10_ARM="$PROBE_ID" \
   -v "$STATE_DIR:/state" \
-  "$IMAGE" python -u -m src.gemini_maker.live_10_canary
+  "$IMAGE" python -u -m src.gemini_maker.live_10_canary_v2
 
 echo "PAIRED_MAKER_LIVE10_DETACHED container=$CONTAINER probe_id=$PROBE_ID"
 sleep 2
