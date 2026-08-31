@@ -16,12 +16,12 @@ env:
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
   RELEASE_BRANCH: release/gemini-selective-maker-v5-6-final
   REQUIRED_RELEASE_COMMIT: 1231adf4f4e22628b4fecd4b1b57e6f1e16434e6
-  DAILY_LOSS_LIMIT_USD: '20.00'
-  SESSION_LOSS_LIMIT_USD: '5.00'
+  DAILY_LOSS_LIMIT_USD: '3.00'
+  SESSION_LOSS_LIMIT_USD: '1.00'
   CAMPAIGN_LOSS_LIMIT_USD: '1.00'
   RESCUE_LOSS_LIMIT_USD: '0.30'
-  MAX_WINDOWS: '4'
-  MAX_SESSION_SECONDS: '3600'
+  MAX_WINDOWS: '1'
+  MAX_SESSION_SECONDS: '1200'
 
 jobs:
   live:
@@ -96,8 +96,6 @@ jobs:
           mkdir -p "\$STATE" "\$OUT"
           chmod 700 "\$STATE" "\$OUT"
 
-          # Do not overlap another live Gemini short-crypto executor. Readiness is account-level;
-          # this process-level gate closes the race where another executor is merely waiting.
           OTHER=\$(docker ps --format '{{.Names}} {{.Image}}' | grep -Ei 'v54.*(exec|live)|v55.*(exec|live)|v56.*(exec|live)|gemini.*q10.*(exec|live)' || true)
           if [ -n "\$OTHER" ]; then echo 'STOP: another Gemini live executor is running'; echo "\$OTHER"; exit 42; fi
 
@@ -189,7 +187,7 @@ jobs:
             -e GEMINI_Q10_V5_CALM_MAKER_GRACE_SECONDS=0 \
             -e GEMINI_SELECTIVE_V5_6_MAX_SESSION_LOSS_USD=${SESSION_LOSS_LIMIT_USD} \
             -v "\$BASE_STATE:/base_state:ro" -v "\$STATE:/prod_state" -v "\$RISK_STATE:/risk_state" \
-            "\$IMAGE" python -m src.gemini_selective_maker_v5_6_deadman >/dev/null
+            "\$IMAGE" python -m src.gemini_selective_maker_v5_6_sidecar >/dev/null
           sleep 1
           test "\$(docker inspect -f '{{.State.Running}}' "\$SIDECAR")" = true
 
@@ -217,7 +215,6 @@ jobs:
           set -e
           docker rm -f "\$EXECUTOR" >/dev/null 2>&1 || true
 
-          # Give the watchdog enough time to act if the executor died with open state.
           sleep 17
           docker logs "\$SIDECAR" > "\$OUT/sidecar.log" 2>&1 || true
           docker rm -f "\$SIDECAR" >/dev/null 2>&1 || true
