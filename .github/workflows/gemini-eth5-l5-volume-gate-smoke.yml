@@ -11,19 +11,19 @@ on:
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 7
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt
-      - name: Capture public ETH5 flow
+      - name: Capture public ETH5 USD-volume flow
         run: |
           python -m src.gemini_eth5_l5_volume_gate_shadow \
-            --seconds 90 \
+            --seconds 180 \
             --sample-s 5 \
-            --discover-s 10 \
+            --discover-s 5 \
             --max-seconds-to-expiry 650 \
             --output /tmp/gemini_eth5_l5_volume_gate_shadow.jsonl \
             --summary-output /tmp/gemini_eth5_l5_volume_gate_shadow_summary.json
