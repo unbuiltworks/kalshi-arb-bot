@@ -36,7 +36,7 @@ jobs:
           git worktree remove --force "\$WORK" >/dev/null 2>&1 || true; rm -rf "\$WORK"; git worktree prune
           git worktree add --detach "\$WORK" "\$ACTUAL" >/dev/null
           docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
-          timeout 650s docker run --rm --network host \
+          timeout 650s docker run --rm -i --network host \
             -e GEMINI_Q10_V5_MAX_RESCUE_LOSS_USD=0.30 \
             -e GEMINI_Q10_V5_MAX_CAMPAIGN_LOSS_USD=1.00 \
             "\$IMAGE" python - <<'PY'
