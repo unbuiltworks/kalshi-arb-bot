@@ -1,0 +1,284 @@
+name: AWS Gemini selective maker V5.6 bounded live
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-selective-v5-6-live.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  RELEASE_BRANCH: release/gemini-selective-maker-v5-6-final
+  REQUIRED_RELEASE_COMMIT: 1231adf4f4e22628b4fecd4b1b57e6f1e16434e6
+  DAILY_LOSS_LIMIT_USD: '20.00'
+  SESSION_LOSS_LIMIT_USD: '5.00'
+  CAMPAIGN_LOSS_LIMIT_USD: '1.00'
+  RESCUE_LOSS_LIMIT_USD: '0.30'
+  MAX_WINDOWS: '4'
+  MAX_SESSION_SECONDS: '3600'
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+
+      - name: Validate fresh V5.6 bounded-live authorization
+        id: gate
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          F=deploy/aws/gemini-selective-v5-6-live.trigger
+          test -f "$F"
+          PIN=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$F" | tr -d '[:space:]')
+          APPROVAL=$(awk -F= '$1=="APPROVAL_ID"{print $2}' "$F" | tr -d '[:space:]')
+          CLASS=$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$F" | tr -d '\r')
+          AUTH=$(awk -F= '$1=="LIVE_AUTHORIZATION"{print $2}' "$F" | tr -d '\r')
+          DAILY=$(awk -F= '$1=="DAILY_LOSS_LIMIT_USD"{print $2}' "$F" | tr -d '[:space:]')
+          SESSION=$(awk -F= '$1=="SESSION_LOSS_LIMIT_USD"{print $2}' "$F" | tr -d '[:space:]')
+          CAMPAIGN=$(awk -F= '$1=="CAMPAIGN_LOSS_LIMIT_USD"{print $2}' "$F" | tr -d '[:space:]')
+          RESCUE=$(awk -F= '$1=="RESCUE_LOSS_LIMIT_USD"{print $2}' "$F" | tr -d '[:space:]')
+          WINDOWS=$(awk -F= '$1=="MAX_WINDOWS"{print $2}' "$F" | tr -d '[:space:]')
+          SECONDS=$(awk -F= '$1=="MAX_SESSION_SECONDS"{print $2}' "$F" | tr -d '[:space:]')
+          test "$PIN" = "$REQUIRED_RELEASE_COMMIT"
+          [[ "$APPROVAL" =~ ^[A-Za-z0-9_-]+$ ]]
+          test "$CLASS" = FRESH_USER_APPROVED_BOUNDED_BTC15M_SELECTIVE_MAKER_V5_6_SESSION
+          test "$AUTH" = EXPLICIT_USER_APPROVAL_BOUNDED_BTC15M_SELECTIVE_MAKER_V5_6
+          test "$DAILY" = "$DAILY_LOSS_LIMIT_USD"
+          test "$SESSION" = "$SESSION_LOSS_LIMIT_USD"
+          test "$CAMPAIGN" = "$CAMPAIGN_LOSS_LIMIT_USD"
+          test "$RESCUE" = "$RESCUE_LOSS_LIMIT_USD"
+          test "$WINDOWS" = "$MAX_WINDOWS"
+          test "$SECONDS" = "$MAX_SESSION_SECONDS"
+          echo "pin=$PIN" >> "$GITHUB_OUTPUT"
+          echo "approval=$APPROVAL" >> "$GITHUB_OUTPUT"
+          echo 'Fresh user authorization accepted for one bounded V5.6 session; no automatic restart.'
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run one bounded V5.6 BTC15m selective-maker session
+        shell: bash
+        env:
+          PIN: ${{ steps.gate.outputs.pin }}
+          APPROVAL: ${{ steps.gate.outputs.approval }}
+        run: |
+          set -Eeuo pipefail
+          SHORT=${PIN:0:12}
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          WORK=/opt/arb/gemini-selective-v5-6-live
+          STATE=/home/ssm-user/gemini-selective-v5-6-live-state/${APPROVAL}
+          RISK_STATE=/home/ssm-user/gemini-adaptive-v5-4-risk-state
+          OUT=/home/ssm-user/gemini-selective-v5-6-live-output/${APPROVAL}
+          IMAGE=arb-gemini-selective-v5-6-live:${SHORT}
+          SIDECAR=v56-watch-${APPROVAL}
+          EXECUTOR=v56-exec-${APPROVAL}
+
+          cd "\$REPO"
+          git config --global --add safe.directory "\$REPO" || true
+          git fetch origin ${RELEASE_BRANCH} >/dev/null
+          ACTUAL=\$(git rev-parse origin/${RELEASE_BRANCH})
+          test "\$ACTUAL" = "${PIN}"
+          if [ -e "\$STATE" ]; then echo 'STOP: approval state path already exists'; exit 41; fi
+          mkdir -p "\$STATE" "\$OUT"
+          chmod 700 "\$STATE" "\$OUT"
+
+          # Do not overlap another live Gemini short-crypto executor. Readiness is account-level;
+          # this process-level gate closes the race where another executor is merely waiting.
+          OTHER=\$(docker ps --format '{{.Names}} {{.Image}}' | grep -Ei 'v54.*(exec|live)|v55.*(exec|live)|v56.*(exec|live)|gemini.*q10.*(exec|live)' || true)
+          if [ -n "\$OTHER" ]; then echo 'STOP: another Gemini live executor is running'; echo "\$OTHER"; exit 42; fi
+
+          git worktree remove --force "\$WORK" >/dev/null 2>&1 || true
+          rm -rf "\$WORK"
+          docker rm -f "\$SIDECAR" "\$EXECUTOR" >/dev/null 2>&1 || true
+          git worktree prune
+          git worktree add --detach "\$WORK" "${PIN}" >/dev/null
+          test "\$(git -C "\$WORK" rev-parse HEAD)" = "${PIN}"
+          docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
+
+          echo '=== V5.6 EXACT RELEASE SAFETY TESTS ==='
+          docker run --rm --network none "\$IMAGE" python -m pytest -q \
+            tests/test_btc_spot_toxicity_guard.py \
+            tests/test_gemini_prediction_book_cache.py \
+            tests/test_gemini_q10_rescue_policy.py \
+            tests/test_gemini_liquidity_reward_dynamic_completion_q10.py \
+            tests/test_gemini_q10_production_executor.py \
+            tests/test_gemini_q10_production_executor_v2.py \
+            tests/test_gemini_q10_production_executor_v5.py \
+            tests/test_gemini_q10_production_executor_v5_1.py \
+            tests/test_gemini_q10_v5_recovery_deadman.py \
+            tests/test_gemini_q10_v5_deadman_sidecar.py \
+            tests/test_gemini_q10_v5_2.py \
+            tests/test_gemini_adaptive_maker_v5_3.py \
+            tests/test_gemini_adaptive_maker_executor_v5_3.py \
+            tests/test_gemini_adaptive_maker_contract_grid_v5_3.py \
+            tests/test_gemini_adaptive_maker_v5_4.py \
+            tests/test_gemini_adaptive_maker_v5_5.py \
+            tests/test_gemini_selective_maker_v5_6.py
+
+          if [ -f /opt/arb/secrets/gemini-short-crypto.env ]; then ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; else ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; fi
+          if [ -d /home/ssm-user/gemini-short-crypto-state ]; then BASE_STATE=/home/ssm-user/gemini-short-crypto-state; else BASE_STATE=/opt/arb/gemini-short-crypto-state; fi
+          test -f "\$ENV_FILE"
+
+          echo '=== FRESH AUTHENTICATED FLAT / REAL DAILY-RISK PREFLIGHT ==='
+          docker run --rm -i --network host --env-file "\$ENV_FILE" \
+            -e GEMINI_SHORT_CRYPTO_STATE_DIR=/base_state \
+            -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
+            -e GEMINI_ADAPTIVE_V5_4_RISK_STATE_DIR=/risk_state \
+            -e GEMINI_Q10_PRODUCTION_LIVE=NO \
+            -e GEMINI_Q10_PRODUCTION_ARM_ID= \
+            -e GEMINI_Q10_PRODUCTION_ARM= \
+            -e GEMINI_Q10_V5_RECOVERY_ARM= \
+            -e GEMINI_Q10_V5_WATCHDOG_ARM= \
+            -e GEMINI_Q10_V5_MAX_RESCUE_LOSS_USD=${RESCUE_LOSS_LIMIT_USD} \
+            -e GEMINI_Q10_V5_MAX_CAMPAIGN_LOSS_USD=${CAMPAIGN_LOSS_LIMIT_USD} \
+            -e GEMINI_Q10_V5_MAX_DAILY_LOSS_USD=${DAILY_LOSS_LIMIT_USD} \
+            -e GEMINI_Q10_V5_CALM_MAKER_GRACE_SECONDS=0 \
+            -e GEMINI_SELECTIVE_V5_6_MAX_SESSION_LOSS_USD=${SESSION_LOSS_LIMIT_USD} \
+            -e GEMINI_SELECTIVE_V5_6_MAX_WINDOWS=${MAX_WINDOWS} \
+            -e GEMINI_SELECTIVE_V5_6_MAX_SESSION_SECONDS=${MAX_SESSION_SECONDS} \
+            -v "\$BASE_STATE:/base_state:ro" \
+            -v "\$STATE:/prod_state" \
+            -v "\$RISK_STATE:/risk_state" \
+            "\$IMAGE" python - <<'PY'
+          import asyncio,json
+          from decimal import Decimal as D
+          from src import gemini_adaptive_maker_executor_v5_3 as v53
+          from src import gemini_adaptive_maker_daily_risk_v5_4 as daily
+          from src import gemini_selective_maker_v5_6 as v56
+          async def main():
+              available,flat=await v53.v5.v1._preflight_flat()
+              risk=daily.check(current_available_usd=available,loss_limit_usd=D('${DAILY_LOSS_LIMIT_USD}'),account_flat=True,allow_rollover=True)
+              result=await v56.run()
+              out={'release_commit':'${PIN}','available_usd':str(available),'flat':flat,'daily_risk':risk.as_dict(),
+                   'runtime':result,'order_entry':False,'realized_pnl':0}
+              print('V5_6_LIVE_PREFLIGHT='+json.dumps(out,separators=(',',':'),default=str))
+              assert flat['orders']==0 and flat['positions']==0
+              assert available >= D('15')
+              assert not risk.blocked
+              assert result['status']=='DISARMED_READY' and result['order_entry'] is False
+          asyncio.run(main())
+          PY
+
+          echo '=== START INDEPENDENT V5.6 DEAD-MAN SIDECAR ==='
+          docker run -d --name "\$SIDECAR" --network host --env-file "\$ENV_FILE" \
+            -e GEMINI_SHORT_CRYPTO_STATE_DIR=/base_state \
+            -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
+            -e GEMINI_ADAPTIVE_V5_4_RISK_STATE_DIR=/risk_state \
+            -e GEMINI_Q10_PRODUCTION_LIVE=YES \
+            -e GEMINI_Q10_PRODUCTION_ARM_ID=${APPROVAL} \
+            -e GEMINI_Q10_PRODUCTION_ARM=${APPROVAL} \
+            -e GEMINI_Q10_V5_RECOVERY_ARM=${APPROVAL} \
+            -e GEMINI_Q10_V5_WATCHDOG_ARM=${APPROVAL} \
+            -e GEMINI_Q10_V5_MAX_RESCUE_LOSS_USD=${RESCUE_LOSS_LIMIT_USD} \
+            -e GEMINI_Q10_V5_MAX_CAMPAIGN_LOSS_USD=${CAMPAIGN_LOSS_LIMIT_USD} \
+            -e GEMINI_Q10_V5_MAX_DAILY_LOSS_USD=${DAILY_LOSS_LIMIT_USD} \
+            -e GEMINI_Q10_V5_CALM_MAKER_GRACE_SECONDS=0 \
+            -e GEMINI_SELECTIVE_V5_6_MAX_SESSION_LOSS_USD=${SESSION_LOSS_LIMIT_USD} \
+            -v "\$BASE_STATE:/base_state:ro" -v "\$STATE:/prod_state" -v "\$RISK_STATE:/risk_state" \
+            "\$IMAGE" python -m src.gemini_selective_maker_v5_6_deadman >/dev/null
+          sleep 1
+          test "\$(docker inspect -f '{{.State.Running}}' "\$SIDECAR")" = true
+
+          echo '=== USER-APPROVED BOUNDED V5.6 BTC15M SELECTIVE-MAKER SESSION ==='
+          set +e
+          timeout --signal=TERM --kill-after=10s 4800s docker run --name "\$EXECUTOR" --network host --env-file "\$ENV_FILE" \
+            -e GEMINI_SHORT_CRYPTO_STATE_DIR=/base_state \
+            -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
+            -e GEMINI_ADAPTIVE_V5_4_RISK_STATE_DIR=/risk_state \
+            -e GEMINI_Q10_PRODUCTION_LIVE=YES \
+            -e GEMINI_Q10_PRODUCTION_ARM_ID=${APPROVAL} \
+            -e GEMINI_Q10_PRODUCTION_ARM=${APPROVAL} \
+            -e GEMINI_Q10_V5_RECOVERY_ARM=${APPROVAL} \
+            -e GEMINI_Q10_V5_WATCHDOG_ARM=${APPROVAL} \
+            -e GEMINI_Q10_V5_MAX_RESCUE_LOSS_USD=${RESCUE_LOSS_LIMIT_USD} \
+            -e GEMINI_Q10_V5_MAX_CAMPAIGN_LOSS_USD=${CAMPAIGN_LOSS_LIMIT_USD} \
+            -e GEMINI_Q10_V5_MAX_DAILY_LOSS_USD=${DAILY_LOSS_LIMIT_USD} \
+            -e GEMINI_Q10_V5_CALM_MAKER_GRACE_SECONDS=0 \
+            -e GEMINI_SELECTIVE_V5_6_MAX_SESSION_LOSS_USD=${SESSION_LOSS_LIMIT_USD} \
+            -e GEMINI_SELECTIVE_V5_6_MAX_WINDOWS=${MAX_WINDOWS} \
+            -e GEMINI_SELECTIVE_V5_6_MAX_SESSION_SECONDS=${MAX_SESSION_SECONDS} \
+            -v "\$BASE_STATE:/base_state:ro" -v "\$STATE:/prod_state" -v "\$RISK_STATE:/risk_state" \
+            "\$IMAGE" python -m src.gemini_selective_maker_v5_6 > "\$OUT/executor.log" 2>&1
+          EXEC_RC=\$?
+          set -e
+          docker rm -f "\$EXECUTOR" >/dev/null 2>&1 || true
+
+          # Give the watchdog enough time to act if the executor died with open state.
+          sleep 17
+          docker logs "\$SIDECAR" > "\$OUT/sidecar.log" 2>&1 || true
+          docker rm -f "\$SIDECAR" >/dev/null 2>&1 || true
+
+          echo '=== FINAL READ-ONLY ACCOUNT RECONCILIATION ==='
+          set +e
+          docker run --rm -i --network host --env-file "\$ENV_FILE" \
+            -e GEMINI_SHORT_CRYPTO_STATE_DIR=/base_state \
+            -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state \
+            -e GEMINI_ADAPTIVE_V5_4_RISK_STATE_DIR=/risk_state \
+            -e GEMINI_Q10_PRODUCTION_LIVE=NO \
+            -e GEMINI_Q10_PRODUCTION_ARM_ID= -e GEMINI_Q10_PRODUCTION_ARM= \
+            -e GEMINI_Q10_V5_RECOVERY_ARM= -e GEMINI_Q10_V5_WATCHDOG_ARM= \
+            -e GEMINI_Q10_V5_MAX_DAILY_LOSS_USD=${DAILY_LOSS_LIMIT_USD} \
+            -v "\$BASE_STATE:/base_state:ro" -v "\$STATE:/prod_state" -v "\$RISK_STATE:/risk_state" \
+            "\$IMAGE" python - <<'PY' > "\$OUT/post.log" 2>&1
+          import asyncio,json
+          from decimal import Decimal as D
+          from src import gemini_adaptive_maker_executor_v5_3 as v53
+          from src import gemini_adaptive_maker_daily_risk_v5_4 as daily
+          async def main():
+              available,flat=await v53.v5.v1._preflight_flat()
+              state=v53.v5.v1._read_state()
+              risk=daily.check(current_available_usd=available,loss_limit_usd=D('${DAILY_LOSS_LIMIT_USD}'),account_flat=True,allow_rollover=True)
+              out={'available_usd':str(available),'flat':flat,'state':state,'daily_risk':risk.as_dict(),'order_entry':False}
+              print('V5_6_LIVE_POST='+json.dumps(out,separators=(',',':'),default=str))
+              assert flat['orders']==0 and flat['positions']==0
+              if state and bool(state.get('open')): raise SystemExit(44)
+          asyncio.run(main())
+          PY
+          POST_RC=\$?
+          set -e
+
+          cat "\$OUT/post.log"
+          echo '=== EXECUTOR SUMMARY ==='
+          grep -E 'V5_6_(QUOTE_START|MAKER_POST|QUOTE_PULLED|WINDOW_RESULT|SESSION_LOSS_STOP)|GEMINI_SELECTIVE_MAKER_V5_6_RUNTIME' "\$OUT/executor.log" | tail -n 120 || true
+          echo '=== DEADMAN SUMMARY ==='
+          tail -n 80 "\$OUT/sidecar.log" || true
+          echo "V5_6_EXECUTOR_RC=\$EXEC_RC"
+          echo "V5_6_POST_RC=\$POST_RC"
+          test "\$POST_RC" -eq 0
+          test "\$EXEC_RC" -eq 0
+          echo 'V5_6_BOUNDED_LIVE_SESSION_COMPLETE'
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript \
+            --comment "ARB V5.6 bounded BTC15m selective maker live ${APPROVAL}" --parameters "$PARAMS" \
+            --timeout-seconds 5400 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 2700); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          OUT=$(jq -r '.Stdout // ""' <<<"$RESULT")
+          grep -q '112 passed' <<<"$OUT"
+          grep -q 'V5_6_LIVE_PREFLIGHT=' <<<"$OUT"
+          grep -q 'V5_6_LIVE_POST=' <<<"$OUT"
+          grep -q 'V5_6_BOUNDED_LIVE_SESSION_COMPLETE' <<<"$OUT"
