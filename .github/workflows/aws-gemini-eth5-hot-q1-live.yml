@@ -1,0 +1,191 @@
+name: AWS Gemini ETH5 hot-volume q1 live
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/gemini-eth5-hot-q1-live.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  LIVE_BRANCH: feature/gemini-incentive-mm-dynamic-complement-q1
+  LIVE_CONTAINER: arb-gemini-dynamic-complement-live-probe-q1
+  EXACT_TESTED_COMMIT: d0e3a99c24a029a63b38df8e4ebdbe3fe9f77e9d
+
+jobs:
+  hot_q1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+
+      - name: Read one-use user approval
+        id: trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=deploy/aws/gemini-eth5-hot-q1-live.trigger
+          test -f "$FILE"
+          PINNED_COMMIT=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$FILE" | tr -d '[:space:]')
+          APPROVAL_ID=$(awk -F= '$1=="APPROVAL_ID"{print $2}' "$FILE" | tr -d '[:space:]')
+          CLASSIFICATION=$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$FILE" | tr -d '[:space:]')
+          [[ "$PINNED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$APPROVAL_ID" =~ ^[A-Za-z0-9_-]+$ ]]
+          test "$PINNED_COMMIT" = "$EXACT_TESTED_COMMIT"
+          test "$CLASSIFICATION" = "FRESH_USER_APPROVED_VOLUME_GATED_DYNAMIC_COMPLEMENT_Q1_LIVE_PROBE"
+          echo "pinned_commit=$PINNED_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "approval_id=$APPROVAL_ID" >> "$GITHUB_OUTPUT"
+          echo "HOT_Q1_APPROVAL_READY target=ETH5 q=1 max_campaigns=1 approval_consumed=false"
+
+      - name: Wait for causal hot ETH5 volume signal
+        id: hot
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee /tmp/hot-window.out
+          import json, time, urllib.parse, urllib.request
+          from datetime import datetime
+          from decimal import Decimal as D
+
+          URL='https://api.gemini.com/v1/prediction-markets/events'
+          POLL=5
+          WATCH=9000
+          START=time.monotonic()
+          current=None
+          samples=[]
+          confirmations=0
+
+          def iso_ms(v):
+              if not v: return None
+              try:
+                  dt=datetime.fromisoformat(str(v).replace('Z','+00:00'))
+                  return int(dt.timestamp()*1000)
+              except Exception:
+                  return None
+
+          def fetch_rows():
+              params=urllib.parse.urlencode({'status':'active','category':'Crypto','limit':'500','offset':'0'})
+              req=urllib.request.Request(URL+'?'+params, headers={'User-Agent':'arb-hot-q1-gate/1.0','Cache-Control':'no-cache'})
+              with urllib.request.urlopen(req, timeout=8) as r:
+                  payload=json.load(r)
+              return payload.get('data') or []
+
+          while time.monotonic()-START < WATCH:
+              now_ms=int(time.time()*1000)
+              chosen=None
+              try:
+                  for row in fetch_rows():
+                      ticker=str(row.get('ticker') or '').upper()
+                      if not ticker.startswith('ETH05M'):
+                          continue
+                      for c in row.get('contracts') or []:
+                          sym=str(c.get('instrumentSymbol') or '')
+                          state=str(c.get('marketState') or c.get('status') or '').lower()
+                          if not sym.upper().endswith('-UP') or state not in {'open','active'}:
+                              continue
+                          expiry=iso_ms(c.get('expiryDate') or row.get('expiryDate'))
+                          if expiry is None: continue
+                          left=(expiry-now_ms)/1000.0
+                          if 0 < left <= 300:
+                              vol=D(str(row.get('volume') or '0'))
+                              chosen=(ticker,sym,left,vol)
+                              break
+                      if chosen: break
+              except Exception as e:
+                  print(json.dumps({'type':'HOT_Q1_GATE_FETCH_RETRY','error_type':type(e).__name__}), flush=True)
+                  time.sleep(POLL); continue
+
+              if not chosen:
+                  print(json.dumps({'type':'HOT_Q1_GATE_NO_CURRENT_ETH5'}), flush=True)
+                  time.sleep(POLL); continue
+
+              ticker,sym,left,vol=chosen
+              elapsed=300-left
+              if ticker != current:
+                  current=ticker; samples=[]; confirmations=0
+              samples.append((elapsed,vol))
+              cutoff=elapsed-30
+              while len(samples)>2 and samples[1][0] <= cutoff:
+                  samples.pop(0)
+              velocity=D('0')
+              if len(samples)>=2:
+                  span=samples[-1][0]-samples[0][0]
+                  if span>=5:
+                      velocity=max(D('0'),samples[-1][1]-samples[0][1])/D(str(span))
+              projected=max(vol, vol+velocity*D(str(left)))
+              signal=(elapsed>20 and (vol>=D('150') or (projected>=D('500') and velocity>=D('1.5'))))
+              confirmations=confirmations+1 if signal else 0
+              row={'type':'HOT_Q1_GATE_SAMPLE','ticker':ticker,'symbol':sym,'seconds_to_expiry':round(left,1),'volume_usd':str(vol),'velocity_usd_s':str(velocity),'projected_final_usd':str(projected),'signal':signal,'confirmations':confirmations}
+              print(json.dumps(row, sort_keys=True), flush=True)
+              if confirmations>=2 and left>=250:
+                  print('HOT_Q1_WINDOW_FOUND ticker=%s symbol=%s seconds_to_expiry=%.1f volume_usd=%s projected_final_usd=%s approval_consumed=false' % (ticker,sym,left,vol,projected), flush=True)
+                  raise SystemExit(0)
+              time.sleep(POLL)
+          print('HOT_Q1_NO_WINDOW_WITHIN_WATCH approval_consumed=false', flush=True)
+          raise SystemExit(3)
+          PY
+          grep -q 'HOT_Q1_WINDOW_FOUND' /tmp/hot-window.out
+          echo "found=true" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Launch exact tested q1 probe through SSM
+        shell: bash
+        env:
+          PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
+          APPROVAL_ID: ${{ steps.trigger.outputs.approval_id }}
+        run: |
+          set -euo pipefail
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin ${LIVE_BRANCH} >/dev/null; test ${PINNED_COMMIT} = ${EXACT_TESTED_COMMIT}; git cat-file -e \"${PINNED_COMMIT}^{commit}\"; git merge-base --is-ancestor ${PINNED_COMMIT} origin/${LIVE_BRANCH}; git show ${PINNED_COMMIT}:deploy/aws/run_gemini_dynamic_complement_q1.sh > /tmp/run_gemini_dynamic_complement_q1.sh; chmod 0700 /tmp/run_gemini_dynamic_complement_q1.sh; PINNED_COMMIT=${PINNED_COMMIT} QUALIFY_WAIT_SECONDS=0 QUALIFY_POLL_SECONDS=2 ARB_GEMINI_DYNAMIC_COMPLEMENT_Q1_APPROVED=YES ARB_GEMINI_DYNAMIC_COMPLEMENT_Q1_APPROVAL_ID=${APPROVAL_ID} /tmp/run_gemini_dynamic_complement_q1.sh'"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB hot-volume dynamic q1 ETH5 ${PINNED_COMMIT:0:12}" --parameters "$PARAMETERS" --timeout-seconds 900 --query 'Command.CommandId' --output text)
+          echo "$COMMAND_ID" > /tmp/launch-command-id
+          for i in $(seq 1 450); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          mkdir -p runtime
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' > runtime/aws-gemini-eth5-hot-q1-launch.json
+          cat runtime/aws-gemini-eth5-hot-q1-launch.json
+          test "$(jq -r '.Status' runtime/aws-gemini-eth5-hot-q1-launch.json)" = "Success"
+          grep -q 'DYNAMIC_COMPLEMENT_Q1_LIVE_DETACHED' <<<"$(jq -r '.Stdout' runtime/aws-gemini-eth5-hot-q1-launch.json)"
+
+      - name: Monitor to terminal reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_CMD='set -eu; NAME=arb-gemini-dynamic-complement-live-probe-q1; for i in $(seq 1 80); do if ! docker inspect "$NAME" >/dev/null 2>&1; then echo HOT_Q1_CONTAINER_MISSING; exit 2; fi; running=$(docker inspect -f "{{.State.Running}}" "$NAME"); echo HOT_Q1_MONITOR n=$i at=$(date -u +%Y-%m-%dT%H:%M:%SZ) running=$running; if [ "$running" != "true" ]; then break; fi; sleep 15; done; running=$(docker inspect -f "{{.State.Running}}" "$NAME"); status=$(docker inspect -f "{{.State.Status}}" "$NAME"); exit_code=$(docker inspect -f "{{.State.ExitCode}}" "$NAME"); echo HOT_Q1_FINAL=$(docker inspect -f "status={{.State.Status}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}" "$NAME"); echo HOT_Q1_LOGS_BEGIN; logs=$(docker logs --tail 1000 "$NAME" 2>&1 || true); printf "%s\n" "$logs"; echo HOT_Q1_LOGS_END; test "$running" = "false"; test "$status" = "exited"; test "$exit_code" = "0"; printf "%s\n" "$logs" | grep -Eq "\"stage\":\"(SETTLED|COMPLETE_NO_OPEN_RESERVATION)\""; echo HOT_Q1_CLEAN_TERMINAL_OK'
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB hot-volume q1 ETH5 terminal monitor" --parameters "$PARAMETERS" --timeout-seconds 1500 --query 'Command.CommandId' --output text)
+          for i in $(seq 1 150); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 10
+          done
+          mkdir -p runtime
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' > runtime/aws-gemini-eth5-hot-q1-monitor.json
+          cat runtime/aws-gemini-eth5-hot-q1-monitor.json
+          test "$(jq -r '.Status' runtime/aws-gemini-eth5-hot-q1-monitor.json)" = "Success"
+          grep -q 'HOT_Q1_CLEAN_TERMINAL_OK' <<<"$(jq -r '.Stdout' runtime/aws-gemini-eth5-hot-q1-monitor.json)"
+
+      - name: Upload non-secret evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aws-gemini-eth5-hot-q1-live
+          path: runtime/aws-gemini-eth5-hot-q1-*.json
+          retention-days: 3
