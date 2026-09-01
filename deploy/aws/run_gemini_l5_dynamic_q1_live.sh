@@ -43,10 +43,13 @@ rm -rf "$WORKTREE"; git -C "$SOURCE_REPO" worktree prune; git -C "$SOURCE_REPO" 
 IMAGE=arb-gemini-l5-dynamic:q1-${PINNED_COMMIT:0:12}
 docker build -t "$IMAGE" "$WORKTREE" >/dev/null
 
-# Exact-image execution and upgrade-safety tests.
+# Exact-image execution and upgrade-safety tests.  Completion economics and the
+# cancel->inactive-verify->repost sequence are deployment blockers.
 docker run --rm --network none "$IMAGE" python -m pytest -q \
   tests/test_gemini_l5_dynamic_q1.py \
   tests/test_gemini_l5_pair_q1.py \
+  tests/test_gemini_l5_completion_policy.py \
+  tests/test_gemini_l5_dynamic_completion_rescue.py \
   tests/test_gemini_l5_dynamic_exact_stop.py \
   tests/test_gemini_l5_ladder_q1.py \
   tests/test_gemini_short_crypto_inventory_rest_v3.py \
@@ -80,7 +83,7 @@ asyncio.run(main())
 PY
 echo L5_DYNAMIC_ACCOUNT_PREFLIGHT_OK
 
-# Public-only queue-aware economics read. No credentials and no order entry.
+# Public-only completion-reserve economics read. No credentials and no order entry.
 docker run --rm --network host "$IMAGE" python - <<'PY'
 import asyncio
 from decimal import Decimal as D
@@ -92,7 +95,7 @@ async def main():
         print({'ready':False,'reason':'NO_ETH5_WITH_ENOUGH_TTE','order_entry':False}); return
     bid,bs,ask,asz=await l.fresh_top_retry(e.symbol)
     model=p.choose_pair(bid,ask,min_edge=D('0.01'),yes_queue=bs,no_queue=asz,tie_seed='public-preflight')
-    print({'ready':model is not None,'event':e.ticker,'symbol':e.symbol,'bid':str(bid),'ask':str(ask),'model':{k:str(v) for k,v in model.items()} if model else None,'yes_queue':str(bs),'no_queue':str(asz),'max_new_residual_qty':1,'order_entry':False})
+    print({'ready':model is not None,'event':e.ticker,'symbol':e.symbol,'bid':str(bid),'ask':str(ask),'model':{k:str(v) for k,v in model.items()} if model else None,'yes_queue':str(bs),'no_queue':str(asz),'completion_reserve_ticks':1,'max_complement_reprices':6,'max_new_residual_qty':1,'order_entry':False})
 asyncio.run(main())
 PY
 echo L5_DYNAMIC_PUBLIC_READ_OK
@@ -101,7 +104,7 @@ printf '%s\n' "approval=$SAFE commit=$PINNED_COMMIT consumed=$(date -u +%FT%TZ)"
 SID=dynq1-${SAFE:0:10}-$(date -u +%H%M%S)
 rm -f "$STATE_DIR/session.json"
 
-echo "L5_DYNAMIC_LIVE_START session=$SID q=1 one_pair_at_a_time=true max_new_residual_qty=1 asymmetric_min_total_backoff=true queue_aware=true backoff_per_side=0,1,2c first_wait=45 complement_wait=60 max_matched_q=12 max_campaigns=48 max_session_seconds=21600 min_pair_edge=0.01 auto_restart=false"
+echo "L5_DYNAMIC_LIVE_START session=$SID q=1 one_pair_at_a_time=true max_new_residual_qty=1 completion_reserve_ticks=1 dynamic_complement_reprices=6 cancel_before_repost=true exact_inactive_gate=true backoff_per_side=0,1,2c first_wait=45 complement_wait=60 max_matched_q=12 max_campaigns=48 max_session_seconds=21600 min_final_pair_edge=0.01 auto_restart=false"
 docker run -d --name "$CONTAINER" --network host --restart no --env-file "$ENV_FILE" \
   -e PYTHONUNBUFFERED=1 \
   -e GEMINI_L5_DYNAMIC_LIVE_Q1=YES \
@@ -129,4 +132,4 @@ LOGS=$(docker logs --tail 240 "$CONTAINER" 2>&1 || true)
 grep -q '"stage":"LIVE_START"' <<<"$LOGS"
 test "$(docker inspect -f '{{.State.Running}}' "$CONTAINER")" = true
 echo "$LOGS"
-echo "L5_DYNAMIC_OWNER_RUNNING container=$CONTAINER session=$SID restart=no max_new_residual_qty=1"
+echo "L5_DYNAMIC_OWNER_RUNNING container=$CONTAINER session=$SID restart=no max_new_residual_qty=1 completion_reserve_ticks=1 dynamic_complement_reprices=6"
