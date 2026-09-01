@@ -188,6 +188,16 @@ frequencies; "automation" stays inference):
   hypothesis; time-of-day shifted (17–22 UTC → 13–20 UTC), which is a
   confound we flag rather than resolve. Maker/taker is UNKNOWN for Mar–May
   (takerOnly coverage is Aug 28–31 only).
+* **Venue-liquidity control** (`venue_control.py`, all-participant tape +
+  CLOB rewards config, 13 pre / 24 post markets): pre-breakpoint BTC-15m
+  windows already carried median **3,780 trades / $63.9k volume / ~800
+  wallets**; Mar 27 windows show 3,828 / $52.6k / ~757 — no venue
+  liquidity increase — and the rewards config is IDENTICAL on both sides
+  (min_size 50, max_spread 4.5). L5's own share is ~0–0.2% of window
+  volume pre and 0.1–0.6% post. **The Mar 27 breakpoint is trader-side
+  activation, not a venue regime shift.** (Pre-era sample = windows L5
+  chose to trade; that bias could only overstate pre-era liquidity, which
+  strengthens the no-increase finding.)
 
 ## Fill-level microstructure (`microstructure.py`, UI-grounded)
 
