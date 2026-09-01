@@ -15,6 +15,7 @@ ONE=D("1"); ZERO=D("0"); TICK=D("0.01")
 OFFSETS=(D("0"),D("0.01"),D("0.02"))
 MIN_PRICE=D("0.20"); MAX_PRICE=D("0.70"); MIN_EDGE=D("0.00")
 FIRST_WAIT=120.0; COMPLEMENT_WAIT=75.0; MIN_TTE=120.0
+FRESH_TOP_ATTEMPTS=5; FRESH_TOP_RETRY_S=0.6
 LIVE_ENV="GEMINI_L5_LADDER_LIVE_Q1"; SID_ENV="GEMINI_L5_LADDER_SESSION_ID"; ARM_ENV="GEMINI_L5_LADDER_ARM"; STATE_ENV="GEMINI_L5_LADDER_STATE_FILE"
 
 def emit(stage:str,**kw:Any)->None:
@@ -37,6 +38,18 @@ def edge(y:D,n:D)->D: return ONE-y-n-gemini_predictions_maker_fee(y,ONE)-gemini_
 
 def safe(ys:tuple[D,...],ns:tuple[D,...])->bool:
     return len(set(ys))==3 and len(set(ns))==3 and all(MIN_PRICE<=x<=MAX_PRICE for x in (*ys,*ns)) and edge(ys[0],ns[0])>=MIN_EDGE
+
+async def fresh_top_retry(symbol:str,attempts:int=FRESH_TOP_ATTEMPTS,delay_s:float=FRESH_TOP_RETRY_S):
+    """Get a fresh depth snapshot before mutation, tolerating brief WS gaps only."""
+    last:Exception|None=None
+    for i in range(max(1,int(attempts))):
+        try:
+            return await base.fresh_top(symbol)
+        except RuntimeError as exc:
+            last=exc
+            if i+1 < max(1,int(attempts)):
+                await asyncio.sleep(max(0.0,float(delay_s)))
+    raise RuntimeError(f"no fresh Gemini ETH5 depth after {max(1,int(attempts))} attempts") from last
 
 async def refresh(spec:dict[str,Any],symbol:str)->None: spec["row"]=await base._order_by_client(spec["id"],symbol) or spec.get("row")
 async def cancel(maker:base.GeminiMakerSession,spec:dict[str,Any],symbol:str)->dict[str,Any]:
@@ -63,7 +76,7 @@ async def run()->None:
     if await _gemini_available_usd()<D("8"): raise RuntimeError("insufficient bounded test balance")
     event=await discover_eth5m()
     if event is None or event.seconds_to_expiry<MIN_TTE: emit("STOP",reason="NO_ETH5_WITH_ENOUGH_TTE",order_entry=False); return
-    bid,bs,ask,asz=await base.fresh_top(event.symbol); ys=prices(bid); ns=prices(ONE-ask)
+    bid,bs,ask,asz=await fresh_top_retry(event.symbol); ys=prices(bid); ns=prices(ONE-ask)
     if not safe(ys,ns): emit("STOP",reason="UNSAFE_LADDER",yes=[str(x) for x in ys],no=[str(x) for x in ns],top_edge=str(edge(ys[0],ns[0])),order_entry=False); return
     sid=os.getenv(SID_ENV,"").strip()[:16]
     specs=[]
