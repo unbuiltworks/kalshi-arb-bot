@@ -1,15 +1,15 @@
 """Bounded continuous owner for adaptive Gemini ETH5 q1 maker pairs.
 
-The owner repeatedly re-discovers the live ETH 5m contract, spends the minimum
-total 0/1/2c-per-side backoff needed for the configured after-fee pair edge,
-runs exactly one q1 YES+NO pair cycle, reconciles it authoritatively, and only
-then decides whether another cycle is allowed.  Queue imbalance decides which
-side gives up price when equal-total-backoff choices exist.
+The owner repeatedly re-discovers the live ETH 5m contract, requires enough
+fee-adjusted entry edge to reserve one tick for complement completion, runs
+exactly one q1 YES+NO pair cycle, reconciles it authoritatively, and only then
+decides whether another cycle is allowed.
 
-Critical invariant: one cycle has at most one q1 order per outcome, so a venue or
-cancel race can create at most one new directional contract.  Any residual,
-orphan/active order, unexpected position, post reject, or account inconsistency
-halts the session fail-closed.  Matched pairs are locked economically but are not
+After a first fill, the pair primitive may spend only reserved edge on bounded,
+maker-only complement reprices.  Critical invariant: one cycle can create at
+most q=1 directional inventory.  Any residual, orphan/active order, unexpected
+position, ambiguous completion state, post reject, or account inconsistency
+halts the session fail-closed. Matched pairs are locked economically but are not
 reported as realized P&L until Gemini settlement.
 """
 from __future__ import annotations
@@ -27,6 +27,8 @@ from src import gemini_l5_pair_q1 as pair
 from src.gemini_prediction_auth import private_rest_request
 
 ZERO = D("0")
+MATCHED_STATUSES = frozenset({"MATCHED", "MATCHED_DYNAMIC_COMPLETION"})
+NO_FILL_STATUSES = frozenset({"NO_FILL_TIMEOUT", "NO_AUTHORITATIVE_FILL"})
 
 LIVE_ENV = "GEMINI_L5_DYNAMIC_LIVE_Q1"
 SID_ENV = "GEMINI_L5_DYNAMIC_SESSION_ID"
@@ -122,7 +124,20 @@ async def _run_cycle(session_id: str, number: int, state_dir: Path) -> dict[str,
     try: cycle_path.unlink()
     except FileNotFoundError: pass
     os.environ[pair.LIVE_ENV]="YES"; os.environ[pair.SID_ENV]=cycle_sid; os.environ[pair.ARM_ENV]=cycle_sid; os.environ[pair.STATE_ENV]=str(cycle_path)
-    emit("CYCLE_START", cycle=number, cycle_session=cycle_sid, min_pair_edge=str(MIN_TOP_PAIR_EDGE), max_backoff_per_side="0.02", max_new_residual_qty=1, first_wait_s=FIRST_WAIT_SECONDS, complement_wait_s=COMPLEMENT_WAIT_SECONDS, order_entry=True, realized_pnl=None)
+    emit(
+        "CYCLE_START",
+        cycle=number,
+        cycle_session=cycle_sid,
+        min_final_pair_edge=str(MIN_TOP_PAIR_EDGE),
+        completion_reserve_ticks=pair.COMPLETION_RESERVE_TICKS,
+        max_complement_reprices=pair.MAX_COMPLEMENT_REPRICES,
+        max_backoff_per_side="0.02",
+        max_new_residual_qty=1,
+        first_wait_s=FIRST_WAIT_SECONDS,
+        complement_wait_s=COMPLEMENT_WAIT_SECONDS,
+        order_entry=True,
+        realized_pnl=None,
+    )
     await pair.run(min_edge=MIN_TOP_PAIR_EDGE, first_wait=FIRST_WAIT_SECONDS, complement_wait=COMPLEMENT_WAIT_SECONDS, min_tte=MIN_TTE_SECONDS)
     return _read_cycle(cycle_path)
 
@@ -134,7 +149,29 @@ async def run() -> None:
     startup=await account_guard(set()); emit("ACCOUNT_START_FLAT", **startup, order_entry=False, realized_pnl=None)
     deadline=time.monotonic()+MAX_SESSION_SECONDS; allowed_symbols:set[str]=set(); campaigns=[]; matched_total=ZERO; attempts=0; terminal_reason="SESSION_LIMIT"
     outer={"terminal":False,"sid":session_id,"started_at_utc":datetime.now(timezone.utc).isoformat(),"matched_qty":"0","campaigns":campaigns}; _write_state(outer)
-    emit("LIVE_START", session=session_id, q_per_side=1, max_new_residual_qty=1, adaptive_backoff_cents=[0,1,2], asymmetric_min_total_backoff=True, queue_aware=True, max_campaigns=MAX_CAMPAIGNS, max_matched_q=str(MAX_MATCHED_Q), max_session_seconds=MAX_SESSION_SECONDS, min_pair_edge=str(MIN_TOP_PAIR_EDGE), first_wait_s=FIRST_WAIT_SECONDS, complement_wait_s=COMPLEMENT_WAIT_SECONDS, residual_policy="HALT_ON_ANY_RESIDUAL", auto_restart=False, order_entry=True, realized_pnl=None)
+    emit(
+        "LIVE_START",
+        session=session_id,
+        q_per_side=1,
+        max_new_residual_qty=1,
+        adaptive_backoff_cents=[0,1,2],
+        completion_reserve_ticks=pair.COMPLETION_RESERVE_TICKS,
+        dynamic_complement_reprices=pair.MAX_COMPLEMENT_REPRICES,
+        cancel_before_repost=True,
+        exact_inactive_before_terminal_fill_check=True,
+        exact_inactive_gate=True,
+        queue_aware=True,
+        max_campaigns=MAX_CAMPAIGNS,
+        max_matched_q=str(MAX_MATCHED_Q),
+        max_session_seconds=MAX_SESSION_SECONDS,
+        min_final_pair_edge=str(MIN_TOP_PAIR_EDGE),
+        first_wait_s=FIRST_WAIT_SECONDS,
+        complement_wait_s=COMPLEMENT_WAIT_SECONDS,
+        residual_policy="HALT_ON_ANY_RESIDUAL",
+        auto_restart=False,
+        order_entry=True,
+        realized_pnl=None,
+    )
     try:
         while time.monotonic()<deadline and len(campaigns)<MAX_CAMPAIGNS and matched_total<MAX_MATCHED_Q:
             attempts+=1
@@ -143,15 +180,36 @@ async def run() -> None:
             if cycle is None:
                 emit("CYCLE_IDLE",attempt=attempts,reason="NO_MUTATING_CYCLE_STATE",order_entry=False,realized_pnl=None); await asyncio.sleep(IDLE_POLL_SECONDS); continue
             status=str(cycle.get("status") or ""); symbol=str(cycle.get("symbol") or "").strip().upper(); yes_qty=D(str(cycle.get("yes_qty") or "0")); no_qty=D(str(cycle.get("no_qty") or "0")); matched=min(yes_qty,no_qty); residual=abs(yes_qty-no_qty)
-            record={"attempt":attempts,"event":cycle.get("event"),"symbol":symbol,"status":status,"yes_backoff":str(cycle.get("yes_backoff") or ""),"no_backoff":str(cycle.get("no_backoff") or ""),"total_backoff":str(cycle.get("total_backoff") or ""),"preferred_backoff_side":str(cycle.get("preferred_backoff_side") or ""),"entry_edge":str(cycle.get("entry_edge") or ""),"yes_qty":str(yes_qty),"no_qty":str(no_qty),"matched_qty":str(matched),"residual_qty":str(residual),"maker_turnover":str(cycle.get("maker_turnover") or "0"),"maker_fees":str(cycle.get("maker_fees") or "0"),"realized":False}
+            record={
+                "attempt":attempts,
+                "event":cycle.get("event"),
+                "symbol":symbol,
+                "status":status,
+                "rescue_status":str(cycle.get("rescue_status") or ""),
+                "completion_reserve_ticks":int(cycle.get("completion_reserve_ticks") or 0),
+                "completion_reprices":int(cycle.get("completion_reprices") or 0),
+                "yes_backoff":str(cycle.get("yes_backoff") or ""),
+                "no_backoff":str(cycle.get("no_backoff") or ""),
+                "total_backoff":str(cycle.get("total_backoff") or ""),
+                "preferred_backoff_side":str(cycle.get("preferred_backoff_side") or ""),
+                "entry_edge":str(cycle.get("entry_edge") or ""),
+                "yes_qty":str(yes_qty),
+                "no_qty":str(no_qty),
+                "matched_qty":str(matched),
+                "residual_qty":str(residual),
+                "maker_turnover":str(cycle.get("maker_turnover") or "0"),
+                "maker_fees":str(cycle.get("maker_fees") or "0"),
+                "realized":False,
+            }
             campaigns.append(record); matched_total+=matched; outer.update({"campaigns":campaigns,"matched_qty":str(matched_total)}); _write_state(outer)
             emit("CYCLE_COMPLETE",**record,session_matched_qty=str(matched_total),order_entry=False,realized_pnl=None)
             if residual>ZERO:
                 terminal_reason="RESIDUAL_DETECTED"; raise RuntimeError(f"dynamic session halted on residual symbol={symbol} yes={yes_qty} no={no_qty}")
-            if status=="MATCHED":
+            if status in MATCHED_STATUSES:
                 if not symbol: terminal_reason="MATCHED_WITHOUT_SYMBOL"; raise RuntimeError("matched cycle missing symbol")
                 allowed_symbols.add(symbol)
-            elif status in {"NO_FILL_TIMEOUT","NO_AUTHORITATIVE_FILL"}: pass
+            elif status in NO_FILL_STATUSES:
+                pass
             else:
                 terminal_reason=f"UNSAFE_CYCLE_STATUS_{status or 'MISSING'}"; raise RuntimeError(f"dynamic session halted on cycle status={status!r}")
             after=await account_guard(allowed_symbols); emit("POST_CYCLE_GUARD_OK",attempt=attempts,**after,order_entry=False,realized_pnl=None)
