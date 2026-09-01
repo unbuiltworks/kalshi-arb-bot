@@ -44,9 +44,9 @@ rm -rf "$WORKTREE"; git -C "$SOURCE_REPO" worktree prune; git -C "$SOURCE_REPO" 
 IMAGE=arb-gemini-l5-dynamic:q1-${PINNED_COMMIT:0:12}
 docker build -t "$IMAGE" "$WORKTREE" >/dev/null
 
-# Exact-image execution and upgrade-safety tests.  The bounded rescue suite proves
-# the live failure case, q1 FOK semantics, fee-aware 5c cap, entry flattenability,
-# no unbounded cross, and FOK partial-fill fail-closed behavior.
+# Exact-image execution and upgrade-safety tests. V3 adds two live-learned gates:
+# short quote lifetime to prevent stale maker pickoffs, and direct bounded FOK after
+# exact sibling cancellation instead of burning time on a breakeven maker repost.
 docker run --rm --network none "$IMAGE" python -m pytest -q \
   tests/test_gemini_prediction_auth_pacing.py \
   tests/test_gemini_l5_crypto5m_selector.py \
@@ -55,6 +55,7 @@ docker run --rm --network none "$IMAGE" python -m pytest -q \
   tests/test_gemini_l5_completion_policy.py \
   tests/test_gemini_l5_dynamic_completion_rescue.py \
   tests/test_gemini_l5_bounded_rescue_q1.py \
+  tests/test_gemini_l5_bounded_rescue_q1_v3.py \
   tests/test_gemini_l5_dynamic_exception_cleanup.py \
   tests/test_gemini_l5_dynamic_exact_stop.py \
   tests/test_gemini_l5_ladder_q1.py \
@@ -62,11 +63,11 @@ docker run --rm --network none "$IMAGE" python -m pytest -q \
   tests/test_gemini_short_crypto_inventory_fresh_top_retry.py
 echo L5_DYNAMIC_SAFETY_TESTS_OK
 
-# Both legacy/base entry points and the actual bounded-rescue V2 entry point must
-# be demonstrably disarmed with zero venue access when no dual-key arm exists.
+# Base, V2 and actual V3 entry points must all remain disarmed without dual-key arm.
 docker run --rm --network none -e GEMINI_L5_DYNAMIC_ASSETS="$ASSETS" "$IMAGE" python -m src.gemini_l5_dynamic_q1 | grep -q '"stage":"DISARMED"'
 docker run --rm --network none "$IMAGE" python -m src.gemini_l5_pair_q1 | grep -q '"stage":"DISARMED"'
 docker run --rm --network none -e GEMINI_L5_DYNAMIC_ASSETS="$ASSETS" "$IMAGE" python -m src.gemini_l5_bounded_rescue_q1_v2 | grep -q '"stage":"DISARMED"'
+docker run --rm --network none -e GEMINI_L5_DYNAMIC_ASSETS="$ASSETS" "$IMAGE" python -m src.gemini_l5_bounded_rescue_q1_v3 | grep -q '"stage":"DISARMED"'
 echo L5_DYNAMIC_DISARMED_OK
 
 # Venue account must be truly flat immediately before a fresh owner starts.
@@ -92,22 +93,21 @@ asyncio.run(main())
 PY
 echo L5_DYNAMIC_ACCOUNT_PREFLIGHT_OK
 
-# Public-only breadth/economics read using the exact V2 entry gate.  No credentials
-# and no order entry.  Candidate selection is rejected unless either possible
-# first fill could currently be FOK-flattened q1 within the 5c completed-pair cap.
+# Public-only breadth/economics read using the exact V3 entry gate. No credentials
+# and no order entry. The existing fee-aware q1 emergency-flatten preflight remains.
 docker run --rm --network host \
   -e GEMINI_L5_DYNAMIC_ASSETS="$ASSETS" \
   -e GEMINI_L5_MAX_EMERGENCY_LOSS=0.05 \
   "$IMAGE" python - <<'PY'
 import asyncio, json
 from decimal import Decimal as D
-from src import gemini_l5_bounded_rescue_q1_v2 as rescue
+from src import gemini_l5_bounded_rescue_q1_v3 as rescue
 rescue.install()
 from src import gemini_l5_crypto5m_selector as s
 async def main():
     assets=s.normalize_assets('BTC,ETH,SOL,XRP'.split(','))
     events=await s.discover_nearest_events(assets=assets,min_tte=105)
-    candidate=await s.select_best_candidate(assets=assets,min_edge=D('0.01'),min_tte=105,tie_seed='public-preflight')
+    candidate=await s.select_best_candidate(assets=assets,min_edge=D('0.01'),min_tte=105,tie_seed='public-preflight-v3')
     print(json.dumps({
         'ready': candidate is not None,
         'requested_assets': list(assets),
@@ -122,8 +122,9 @@ async def main():
         'emergency_flatten_preflight': None if candidate is None else candidate.model.get('emergency_flatten_preflight'),
         'max_emergency_completed_pair_loss':'0.05',
         'emergency_tif':'FOK',
-        'profit_maker_stage_s':3,
-        'breakeven_maker_stage_s':3,
+        'profit_maker_stage_s':0,
+        'breakeven_maker_stage_s':0,
+        'quote_ttl_s':5,
         'max_emergency_fok_attempts':3,
         'max_new_residual_qty':1,
         'one_market_only':True,
@@ -138,14 +139,14 @@ printf '%s\n' "approval=$SAFE commit=$PINNED_COMMIT consumed=$(date -u +%FT%TZ)"
 SID=dynq1-${SAFE:0:10}-$(date -u +%H%M%S)
 rm -f "$STATE_DIR/session.json"
 
-echo "L5_DYNAMIC_LIVE_START session=$SID assets=$ASSETS q=1 one_market_only=true one_pair_at_a_time=true public_scan_before_private=true max_new_residual_qty=1 rescue=profit_moc_then_breakeven_moc_then_bounded_fok max_emergency_completed_pair_loss=0.05 emergency_tif=FOK profit_stage_s=3 breakeven_stage_s=3 max_fok_attempts=3 cancel_before_repost=true exact_inactive_gate=true exception_exact_cleanup=true private_rest_min_interval=1.05s first_wait=45 max_matched_q=12 max_campaigns=48 max_session_seconds=21600 min_entry_pair_edge=0.01 auto_restart=false"
+echo "L5_DYNAMIC_LIVE_START session=$SID assets=$ASSETS q=1 one_market_only=true one_pair_at_a_time=true public_scan_before_private=true max_new_residual_qty=1 rescue=exact_cancel_then_bounded_fok max_emergency_completed_pair_loss=0.05 emergency_tif=FOK profit_stage_s=0 breakeven_stage_s=0 quote_ttl_s=5 max_fok_attempts=3 cancel_before_repost=true exact_inactive_gate=true exception_exact_cleanup=true private_rest_min_interval=1.05s first_wait=5 max_matched_q=12 max_campaigns=48 max_session_seconds=21600 min_entry_pair_edge=0.01 auto_restart=false"
 docker run -d --name "$CONTAINER" --network host --restart no --env-file "$ENV_FILE" \
   -e PYTHONUNBUFFERED=1 \
   -e GEMINI_PRIVATE_REST_MIN_INTERVAL_SECONDS=1.05 \
   -e GEMINI_L5_DYNAMIC_ASSETS="$ASSETS" \
   -e GEMINI_L5_MAX_EMERGENCY_LOSS=0.05 \
-  -e GEMINI_L5_PROFIT_STAGE_SECONDS=3 \
-  -e GEMINI_L5_BREAKEVEN_STAGE_SECONDS=3 \
+  -e GEMINI_L5_PROFIT_STAGE_SECONDS=0 \
+  -e GEMINI_L5_BREAKEVEN_STAGE_SECONDS=0 \
   -e GEMINI_L5_MAX_IOC_ATTEMPTS=3 \
   -e GEMINI_L5_IOC_RETRY_SECONDS=0.35 \
   -e GEMINI_L5_MIN_EMERGENCY_TTE_SECONDS=8 \
@@ -157,11 +158,11 @@ docker run -d --name "$CONTAINER" --network host --restart no --env-file "$ENV_F
   -e GEMINI_L5_DYNAMIC_MAX_CAMPAIGNS=48 \
   -e GEMINI_L5_DYNAMIC_MAX_MATCHED_Q=12 \
   -e GEMINI_L5_DYNAMIC_MIN_TOP_PAIR_EDGE=0.01 \
-  -e GEMINI_L5_DYNAMIC_FIRST_WAIT_SECONDS=45 \
+  -e GEMINI_L5_DYNAMIC_FIRST_WAIT_SECONDS=5 \
   -e GEMINI_L5_DYNAMIC_COMPLEMENT_WAIT_SECONDS=60 \
   -e GEMINI_L5_DYNAMIC_MIN_TTE_SECONDS=105 \
   -v "$STATE_DIR:/state" \
-  "$IMAGE" python -u -m src.gemini_l5_bounded_rescue_q1_v2 >/dev/null
+  "$IMAGE" python -u -m src.gemini_l5_bounded_rescue_q1_v3 >/dev/null
 
 for i in $(seq 1 25); do
   RUNNING_NOW=$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null || echo false)
@@ -174,4 +175,4 @@ LOGS=$(docker logs --tail 340 "$CONTAINER" 2>&1 || true)
 grep -q '"stage":"LIVE_START"' <<<"$LOGS"
 test "$(docker inspect -f '{{.State.Running}}' "$CONTAINER")" = true
 echo "$LOGS"
-echo "L5_DYNAMIC_OWNER_RUNNING container=$CONTAINER session=$SID assets=$ASSETS restart=no one_market_only=true max_new_residual_qty=1 rescue=bounded_fok max_emergency_completed_pair_loss=0.05 emergency_tif=FOK private_rest_min_interval=1.05s exception_exact_cleanup=true"
+echo "L5_DYNAMIC_OWNER_RUNNING container=$CONTAINER session=$SID assets=$ASSETS restart=no one_market_only=true max_new_residual_qty=1 rescue=direct_bounded_fok quote_ttl_s=5 max_emergency_completed_pair_loss=0.05 emergency_tif=FOK private_rest_min_interval=1.05s exception_exact_cleanup=true"
