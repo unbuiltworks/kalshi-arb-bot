@@ -1,2 +1,2 @@
-STATUS_ID=l5lad-q1-postrun-status-20260901-0212
+STATUS_ID=l5lad-q1-replication-status-20260901-0225
 MODE=READ_ONLY_LADDER_STATE
