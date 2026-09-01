@@ -1,6 +1,7 @@
 import asyncio
 import json
 from decimal import Decimal as D
+from types import SimpleNamespace
 
 import pytest
 
@@ -13,6 +14,23 @@ class Response:
         self._body = body
     def json(self):
         return self._body
+
+
+def candidate(asset="ETH", edge="0.02"):
+    return m.selector.PublicCandidate(
+        asset=asset,
+        event=SimpleNamespace(ticker=f"{asset}05M", symbol=f"{asset}-UP", expiry_ms=9999999999999),
+        bid=D("0.48"),
+        bid_size=D("100"),
+        ask=D("0.52"),
+        ask_size=D("100"),
+        model={
+            "yes": D("0.47"), "no": D("0.49"), "edge": D(edge),
+            "yes_backoff": D("0.01"), "no_backoff": D("0.01"),
+            "total_backoff": D("0.02"), "preferred_backoff_side": "YES",
+            "preferred_backoff": D("0.01"), "completion_reserve_ticks": 1,
+        },
+    )
 
 
 def test_disarmed_makes_no_venue_call(monkeypatch):
@@ -70,20 +88,24 @@ def test_account_guard_rejects_unbalanced_session_positions(monkeypatch):
         asyncio.run(m.account_guard({"ETH-UP"}))
 
 
-def test_run_cycle_uses_unique_inner_session_and_pair_config(monkeypatch, tmp_path):
+def test_run_cycle_uses_unique_inner_session_and_selected_event(monkeypatch, tmp_path):
     monkeypatch.setattr(m, "MIN_TOP_PAIR_EDGE", D("0.01"))
+    selected = candidate("SOL")
+    original_discover = m.pair.discover_eth5m
     seen = {}
+
     async def fake_run(*, min_edge, first_wait, complement_wait, min_tte):
         seen["sid"] = m.os.environ[m.pair.SID_ENV]
         seen["min_edge"] = min_edge
         seen["first_wait"] = first_wait
+        event = await m.pair.discover_eth5m()
+        seen["event"] = event.ticker
         path = m.Path(m.os.environ[m.pair.STATE_ENV])
         path.write_text(json.dumps({
             "terminal": True,
             "status": "MATCHED",
-            "symbol": "ETH-UP",
-            "event": "ETH05M",
-            "backoff": "0.01",
+            "symbol": "SOL-UP",
+            "event": "SOL05M",
             "entry_edge": "0.02",
             "yes_qty": "1",
             "no_qty": "1",
@@ -91,12 +113,48 @@ def test_run_cycle_uses_unique_inner_session_and_pair_config(monkeypatch, tmp_pa
             "maker_fees": "0.02",
         }))
     monkeypatch.setattr(m.pair, "run", fake_run)
-    out = asyncio.run(m._run_cycle("outer", 7, tmp_path))
+    out = asyncio.run(m._run_cycle("outer", 7, tmp_path, selected=selected))
     assert seen["sid"] == "outer-c007"
     assert seen["min_edge"] == D("0.01")
     assert seen["first_wait"] == m.FIRST_WAIT_SECONDS
+    assert seen["event"] == "SOL05M"
     assert out["status"] == "MATCHED"
-    assert out["backoff"] == "0.01"
+    assert out["selected_asset"] == "SOL"
+    assert m.pair.discover_eth5m is original_discover
+
+
+def test_public_idle_scan_does_not_add_private_guard(monkeypatch, tmp_path):
+    monkeypatch.setattr(m, "armed", lambda: True)
+    monkeypatch.setenv(m.SID_ENV, "public-idle-test")
+    monkeypatch.setenv(m.STATE_ENV, str(tmp_path / "session.json"))
+    monkeypatch.setattr(m, "MAX_SESSION_SECONDS", 1.0)
+    monkeypatch.setattr(m, "IDLE_POLL_SECONDS", 0.0)
+    clock = [0.0]
+    guards = []
+    scans = []
+
+    monkeypatch.setattr(m.time, "monotonic", lambda: clock[0])
+
+    async def flat(allowed):
+        guards.append(set(allowed))
+        return {"active_orders": 0, "positions": [], "mutation": False}
+
+    async def no_candidate(**_kwargs):
+        scans.append(True)
+        clock[0] = 2.0
+        return None
+
+    async def no_sleep(_delay):
+        return None
+
+    monkeypatch.setattr(m, "account_guard", flat)
+    monkeypatch.setattr(m.selector, "select_best_candidate", no_candidate)
+    monkeypatch.setattr(m.asyncio, "sleep", no_sleep)
+    asyncio.run(m.run())
+
+    assert len(scans) == 1
+    # Startup + final guard only. There is no per-idle-scan private guard.
+    assert len(guards) == 2
 
 
 def test_outer_accepts_dynamic_completion_match_and_records_rescue(monkeypatch, tmp_path):
@@ -107,19 +165,25 @@ def test_outer_accepts_dynamic_completion_match_and_records_rescue(monkeypatch, 
     monkeypatch.setattr(m, "MAX_CAMPAIGNS", 1)
     monkeypatch.setattr(m, "MAX_MATCHED_Q", D("12"))
     monkeypatch.setattr(m, "CYCLE_PAUSE_SECONDS", 0.0)
+    chosen = candidate("ETH")
     seen_allowed = []
+
+    async def choose(**_kwargs):
+        return chosen
 
     async def flat(allowed):
         seen_allowed.append(set(allowed))
         return {"active_orders": 0, "positions": [], "mutation": False}
 
-    async def matched(_sid, _number, _state_dir):
+    async def matched(_sid, _number, _state_dir, *, selected=None):
+        assert selected is chosen
         return {
             "terminal": True,
             "status": "MATCHED_DYNAMIC_COMPLETION",
             "rescue_status": "MATCHED",
             "completion_reserve_ticks": 1,
             "completion_reprices": 1,
+            "selected_asset": "ETH",
             "symbol": "ETH-UP",
             "event": "ETH05M",
             "yes_backoff": "0.01",
@@ -133,12 +197,14 @@ def test_outer_accepts_dynamic_completion_match_and_records_rescue(monkeypatch, 
             "maker_fees": "0.02",
         }
 
+    monkeypatch.setattr(m.selector, "select_best_candidate", choose)
     monkeypatch.setattr(m, "account_guard", flat)
     monkeypatch.setattr(m, "_run_cycle", matched)
     asyncio.run(m.run())
 
     state = json.loads((tmp_path / "session.json").read_text())
     assert state["terminal"] is True
+    assert state["campaigns"][0]["asset"] == "ETH"
     assert state["campaigns"][0]["status"] == "MATCHED_DYNAMIC_COMPLETION"
     assert state["campaigns"][0]["rescue_status"] == "MATCHED"
     assert state["campaigns"][0]["completion_reprices"] == 1
@@ -153,22 +219,30 @@ def test_dynamic_halts_immediately_on_q1_residual(monkeypatch, tmp_path):
     monkeypatch.setattr(m, "MAX_SESSION_SECONDS", 60.0)
     monkeypatch.setattr(m, "MAX_CAMPAIGNS", 3)
     monkeypatch.setattr(m, "MAX_MATCHED_Q", D("12"))
+    chosen = candidate("BTC")
+
+    async def choose(**_kwargs):
+        return chosen
 
     async def flat(_allowed):
         return {"active_orders": 0, "positions": [], "mutation": False}
-    async def residual(_sid, _number, _state_dir):
+
+    async def residual(_sid, _number, _state_dir, *, selected=None):
+        assert selected is chosen
         return {
             "terminal": True,
             "status": "ONE_SIDED_RESIDUAL",
-            "symbol": "ETH-UP",
-            "event": "ETH05M",
-            "backoff": "0.01",
+            "selected_asset": "BTC",
+            "symbol": "BTC-UP",
+            "event": "BTC05M",
             "entry_edge": "0.02",
             "yes_qty": "1",
             "no_qty": "0",
             "maker_turnover": "0.47",
             "maker_fees": "0.01",
         }
+
+    monkeypatch.setattr(m.selector, "select_best_candidate", choose)
     monkeypatch.setattr(m, "account_guard", flat)
     monkeypatch.setattr(m, "_run_cycle", residual)
 
@@ -177,4 +251,5 @@ def test_dynamic_halts_immediately_on_q1_residual(monkeypatch, tmp_path):
     state = json.loads((tmp_path / "session.json").read_text())
     assert state["terminal"] is True
     assert state["terminal_reason"] == "RESIDUAL_DETECTED"
+    assert state["campaigns"][0]["asset"] == "BTC"
     assert state["campaigns"][0]["residual_qty"] == "1"
