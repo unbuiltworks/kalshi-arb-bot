@@ -1,0 +1,58 @@
+name: Gemini L5 Crypto + Sports q1 readiness
+
+on:
+  push:
+    branches:
+      - feature/gemini-l5-crypto-sports-live-q1
+    paths:
+      - src/gemini_sports_l5_*.py
+      - tests/test_gemini_sports_l5_live_probe_q1.py
+      - .github/workflows/gemini-l5-crypto-sports-q1-readiness.yml
+      - deploy/gemini-l5-crypto-sports-q1-readiness.trigger
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/gemini-l5-crypto-sports-live-q1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Safety tests
+        run: |
+          python -m pytest -q \
+            tests/test_gemini_sports_l5_live_probe_q1.py \
+            tests/test_gemini_short_crypto_inventory_maker_q1.py \
+            tests/test_gemini_incentive_mm_live_probe_q1.py
+      - name: Verify disarmed Sports wrapper
+        run: |
+          unset GEMINI_SPORTS_L5_LIVE_Q1 GEMINI_SPORTS_L5_PROBE_ID GEMINI_SPORTS_L5_PROBE_ARM
+          python -m src.gemini_sports_l5_live_probe_q1 | tee /tmp/disarmed.log
+          grep -q '"stage":"DISARMED"' /tmp/disarmed.log
+          grep -q '"order_entry":false' /tmp/disarmed.log
+      - name: Public Sports candidate readiness
+        run: |
+          python - <<'PY'
+          import asyncio, json
+          from src.gemini_sports_l5_live_probe_q1 import discover_sports_moneyline
+          event = asyncio.run(discover_sports_moneyline())
+          if event is None:
+              print(json.dumps({"type":"SPORTS_Q1_PUBLIC_READINESS","candidate":False,"order_entry":False}))
+              raise SystemExit(2)
+          print(json.dumps({
+              "type":"SPORTS_Q1_PUBLIC_READINESS",
+              "candidate":True,
+              "event_ticker":event.ticker,
+              "symbol":event.symbol,
+              "seconds_to_expiry":round(event.seconds_to_expiry,1),
+              "order_entry":False,
+          }))
+          PY
