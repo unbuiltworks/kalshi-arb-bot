@@ -99,6 +99,53 @@ def test_run_cycle_uses_unique_inner_session_and_pair_config(monkeypatch, tmp_pa
     assert out["backoff"] == "0.01"
 
 
+def test_outer_accepts_dynamic_completion_match_and_records_rescue(monkeypatch, tmp_path):
+    monkeypatch.setattr(m, "armed", lambda: True)
+    monkeypatch.setenv(m.SID_ENV, "dynamic-rescue-test")
+    monkeypatch.setenv(m.STATE_ENV, str(tmp_path / "session.json"))
+    monkeypatch.setattr(m, "MAX_SESSION_SECONDS", 60.0)
+    monkeypatch.setattr(m, "MAX_CAMPAIGNS", 1)
+    monkeypatch.setattr(m, "MAX_MATCHED_Q", D("12"))
+    monkeypatch.setattr(m, "CYCLE_PAUSE_SECONDS", 0.0)
+    seen_allowed = []
+
+    async def flat(allowed):
+        seen_allowed.append(set(allowed))
+        return {"active_orders": 0, "positions": [], "mutation": False}
+
+    async def matched(_sid, _number, _state_dir):
+        return {
+            "terminal": True,
+            "status": "MATCHED_DYNAMIC_COMPLETION",
+            "rescue_status": "MATCHED",
+            "completion_reserve_ticks": 1,
+            "completion_reprices": 1,
+            "symbol": "ETH-UP",
+            "event": "ETH05M",
+            "yes_backoff": "0.01",
+            "no_backoff": "0.01",
+            "total_backoff": "0.02",
+            "preferred_backoff_side": "NO",
+            "entry_edge": "0.02",
+            "yes_qty": "1",
+            "no_qty": "1",
+            "maker_turnover": "0.97",
+            "maker_fees": "0.02",
+        }
+
+    monkeypatch.setattr(m, "account_guard", flat)
+    monkeypatch.setattr(m, "_run_cycle", matched)
+    asyncio.run(m.run())
+
+    state = json.loads((tmp_path / "session.json").read_text())
+    assert state["terminal"] is True
+    assert state["campaigns"][0]["status"] == "MATCHED_DYNAMIC_COMPLETION"
+    assert state["campaigns"][0]["rescue_status"] == "MATCHED"
+    assert state["campaigns"][0]["completion_reprices"] == 1
+    assert state["campaigns"][0]["realized"] is False
+    assert {"ETH-UP"} in seen_allowed
+
+
 def test_dynamic_halts_immediately_on_q1_residual(monkeypatch, tmp_path):
     monkeypatch.setattr(m, "armed", lambda: True)
     monkeypatch.setenv(m.SID_ENV, "dynamic-test")
