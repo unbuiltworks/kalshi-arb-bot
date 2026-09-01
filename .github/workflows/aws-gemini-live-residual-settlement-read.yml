@@ -38,6 +38,7 @@ jobs:
           docker image inspect "$IMAGE" >/dev/null
           docker run --rm --network host --env-file "$ENV_FILE" "$IMAGE" python - <<"PY"
 import asyncio, json
+from collections import defaultdict
 from decimal import Decimal as D
 import httpx
 from src.gemini_prediction_auth import private_rest_request
@@ -45,8 +46,11 @@ from src.gemini_kalshi_execution_shadow import gemini_predictions_maker_fee
 
 REST="https://api.gemini.com"
 TARGETS=[
- {"label":"incremental_eth5_yes","symbol":"GEMI-ETH05M2609010130-UP","event":"ETH05M2609010130","client":"b5-2e960f80180a73cdfe114737-yes","outcome":"yes"},
- {"label":"prior_tennis_yes","symbol":"GEMI-TENNIS-ATPUSO-20260830-SHA2-TRU-SHA2","event":"TENNIS-ATPUSO-20260830-SHA2-TRU","client":"b5-fe118f5716df07dd7a38efe6-yes","outcome":"yes"},
+ {"group":"dynamic_rescue_1145","label":"dynamic_yes_initial_66","symbol":"GEMI-ETH05M2609011145-UP","event":"ETH05M2609011145","client":"l5lad-2ba09059ba961c589e76e0-y0","outcome":"yes"},
+ {"group":"dynamic_rescue_1145","label":"dynamic_no_initial_21","symbol":"GEMI-ETH05M2609011145-UP","event":"ETH05M2609011145","client":"l5lad-56b24a51085adf95ef51b3-n0","outcome":"no"},
+ {"group":"dynamic_rescue_1145","label":"dynamic_yes_rescue_76","symbol":"GEMI-ETH05M2609011145-UP","event":"ETH05M2609011145","client":"l5lad-99aad12482e8126a92a43b-y1","outcome":"yes"},
+ {"group":"prior","label":"incremental_eth5_yes","symbol":"GEMI-ETH05M2609010130-UP","event":"ETH05M2609010130","client":"b5-2e960f80180a73cdfe114737-yes","outcome":"yes"},
+ {"group":"prior","label":"prior_tennis_yes","symbol":"GEMI-TENNIS-ATPUSO-20260830-SHA2-TRU-SHA2","event":"TENNIS-ATPUSO-20260830-SHA2-TRU","client":"b5-fe118f5716df07dd7a38efe6-yes","outcome":"yes"},
 ]
 
 def rows(body):
@@ -63,8 +67,10 @@ async def history(symbol):
     out=[]
     for status in ("filled","cancelled"):
         r=await private_rest_request("POST","/v1/prediction-markets/orders/history",params={"status":status,"symbol":symbol,"limit":100},timeout=8.0)
-        if r.status_code==200:
-            out += rows(r.json())
+        if r.status_code!=200:
+            raise RuntimeError(f"history read failed symbol={symbol} status={status} http={r.status_code}")
+        out += rows(r.json())
+        await asyncio.sleep(0.15)
     return out
 
 async def event(ticker):
@@ -75,16 +81,26 @@ async def event(ticker):
     x=r.json(); return x if isinstance(x,dict) else {}
 
 async def main():
+    symbols=sorted({t["symbol"] for t in TARGETS})
+    events=sorted({t["event"] for t in TARGETS})
+    history_by_symbol={}
+    for symbol in symbols:
+        history_by_symbol[symbol]=await history(symbol)
+    event_by_ticker={ticker:await event(ticker) for ticker in events}
+
     result=[]
+    group_pnl=defaultdict(lambda: D("0"))
+    group_has_unsettled=defaultdict(bool)
     for t in TARGETS:
-        hs, ev = await asyncio.gather(history(t["symbol"]), event(t["event"]))
+        hs=history_by_symbol[t["symbol"]]
+        ev=event_by_ticker[t["event"]]
         matches=[r for r in hs if str(r.get("clientOrderId") or "")==t["client"]]
         row=max(matches,key=filled) if matches else None
         contracts=ev.get("contracts") if isinstance(ev,dict) else []
         contracts=contracts if isinstance(contracts,list) else []
         cm=[c for c in contracts if isinstance(c,dict) and str(c.get("instrumentSymbol") or "")==t["symbol"]]
         c=cm[0] if len(cm)==1 else {}
-        res=str(c.get("resolutionSide") or "").lower()
+        res=str(c.get("resolutionSide") or c.get("resolution") or "").lower()
         status=str(c.get("status") or c.get("marketState") or "").lower()
         q=filled(row) if row else D("0")
         p=price(row) if row else D("0")
@@ -94,10 +110,17 @@ async def main():
         if settled and q>0:
             payout=q if res==t["outcome"] else D("0")
             pnl=payout-p*q-fee
-        result.append({"label":t["label"],"history_found":row is not None,"fill":str(q),"price":str(p) if p>0 else None,"maker_fee":str(fee),"contract_status":status or None,"resolution":res or None,"settled":settled,"realized_trading_pnl":None if pnl is None else str(pnl),"rebates_included":False})
+            group_pnl[t["group"]]+=pnl
+        elif q>0:
+            group_has_unsettled[t["group"]]=True
+        result.append({"group":t["group"],"label":t["label"],"client":t["client"],"history_found":row is not None,"fill":str(q),"price":str(p) if p>0 else None,"maker_fee":str(fee),"contract_status":status or None,"resolution":res or None,"settled":settled,"realized_trading_pnl":None if pnl is None else str(pnl),"rebates_included":False})
+
     active=await private_rest_request("POST","/v1/prediction-markets/orders/active",params={"limit":100,"offset":0},timeout=8.0)
     ac=len(rows(active.json())) if active.status_code==200 else None
-    print(json.dumps({"type":"GEMINI_LIVE_RESIDUAL_SETTLEMENT_READ","active_prediction_orders":ac,"targets":result,"mutation":False,"order_entry":False},sort_keys=True))
+    groups={}
+    for group in sorted({t["group"] for t in TARGETS}):
+        groups[group]={"realized_trading_pnl":None if group_has_unsettled[group] else str(group_pnl[group]),"fully_settled":not group_has_unsettled[group]}
+    print(json.dumps({"type":"GEMINI_LIVE_RESIDUAL_SETTLEMENT_READ","active_prediction_orders":ac,"groups":groups,"targets":result,"mutation":False,"order_entry":False},sort_keys=True))
 asyncio.run(main())
 PY'
           EOF
