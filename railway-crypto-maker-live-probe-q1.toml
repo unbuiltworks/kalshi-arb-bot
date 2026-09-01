@@ -1,3 +1,4 @@
+# Restored after bounded Gemini q10 live canary; keep this service read-only.
 # Same-Gemini crypto threshold-ladder zero-order-entry edge census.
 # Reuses the existing complete q1-certified L<H discovery path in place; no new service.
 # Broad REST snapshots measure >=1c/2c/3c after-fee incidence/depth but MUST NOT be
