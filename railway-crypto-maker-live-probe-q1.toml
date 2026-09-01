@@ -2,6 +2,6 @@
 builder = "RAILPACK"
 
 [deploy]
-startCommand = "python -u -m src.gemini_q10_reward_band_shadow"
-preDeployCommand = ["python -m py_compile src/gemini_q10_reward_band_shadow.py src/gemini_liquidity_reward_live_probe_q10.py src/gemini_q10_rescue_policy.py src/gemini_kalshi_execution_shadow.py"]
+startCommand = "python -u -m src.gemini_q10_maxwidth_reward_shadow"
+preDeployCommand = ["python -m py_compile src/gemini_q10_maxwidth_reward_shadow.py src/gemini_liquidity_reward_live_probe_q10.py src/gemini_q10_rescue_policy.py src/gemini_kalshi_execution_shadow.py"]
 restartPolicyType = "NEVER"
