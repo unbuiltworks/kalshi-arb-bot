@@ -1,12 +1,7 @@
-# Same-Gemini crypto threshold-ladder zero-order-entry edge census.
-# Reuses the existing complete q1-certified L<H discovery path in place; no new service.
-# Broad REST snapshots measure >=1c/2c/3c after-fee incidence/depth but MUST NOT be
-# interpreted as sub-second lifetime evidence. WS lifetime/public-print proxy remains
-# a separate instrumentation layer required by ARB_EDGE_CENSUS_2026-08.md.
 [build]
-builder = "NIXPACKS"
+builder = "RAILPACK"
 
 [deploy]
-startCommand = "python -m src.gemini_same_venue_crypto_edge_census --interval-seconds 15"
-preDeployCommand = ["python -m pytest -q tests/test_gemini_same_venue_crypto_ladder_scan.py tests/test_gemini_same_venue_crypto_full_pairs.py && python -m py_compile src/gemini_same_venue_crypto_edge_census.py src/gemini_same_venue_crypto_full_pair_taker.py src/gemini_same_venue_crypto_ladder_scan.py src/gemini_same_venue_crypto_taker_q1.py"]
-restartPolicyType = "ALWAYS"
+startCommand = "bash scripts/run_gemini_q10_v52_canary.sh"
+preDeployCommand = ["python -m py_compile src/gemini_btc5m_fresh_depth_retry.py src/gemini_q10_production_executor_v5_2.py src/gemini_q10_v5_2_recovery.py src/gemini_q10_v5_2_deadman.py src/gemini_q10_v5_2_deadman_sidecar.py src/gemini_q10_v5_2_runtime.py && python -m pytest -q tests/test_btc_spot_toxicity_guard.py tests/test_gemini_prediction_book_cache.py tests/test_gemini_q10_rescue_policy.py tests/test_gemini_liquidity_reward_dynamic_completion_q10.py tests/test_gemini_q10_production_executor.py tests/test_gemini_q10_production_executor_v2.py tests/test_gemini_q10_production_executor_v5.py tests/test_gemini_q10_production_executor_v5_1.py tests/test_gemini_q10_v5_recovery_deadman.py tests/test_gemini_q10_v5_deadman_sidecar.py tests/test_gemini_q10_v5_2.py"]
+restartPolicyType = "NEVER"
