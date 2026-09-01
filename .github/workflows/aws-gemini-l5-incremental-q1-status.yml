@@ -1,0 +1,40 @@
+name: AWS Gemini L5 incremental q1 status
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-l5-incremental-q1-status.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Read-only incremental q1 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE='set +e; echo L5_INC_STATUS_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ); if docker inspect arb-gemini-l5-incremental-q1 >/dev/null 2>&1; then echo CONTAINER_EXISTS=true; docker inspect -f "running={{.State.Running}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}" arb-gemini-l5-incremental-q1; else echo CONTAINER_EXISTS=false; fi; F=/opt/arb/state/gemini-l5-incremental-q1/l5inc-q1-user-approved-20260901-0130/session.json; if [ -f "$F" ]; then echo STATE_FILE_PRESENT=true; cat "$F"; else echo STATE_FILE_PRESENT=false; fi'
+          PARAMS=$(jq -nc --arg cmd "$REMOTE" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --parameters "$PARAMS" --query 'Command.CommandId' --output text)
+          for i in $(seq 1 30); do
+            S=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$S" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}'
