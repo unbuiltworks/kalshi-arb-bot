@@ -1,18 +1,16 @@
-"""Bounded continuous owner for adaptive Gemini ETH5 q1 maker pairs.
+"""Bounded continuous owner for adaptive Gemini crypto-5m q1 maker pairs.
 
-The owner repeatedly re-discovers the live ETH 5m contract, requires enough
-fee-adjusted entry edge to reserve one tick for complement completion, runs
-exactly one q1 YES+NO pair cycle, reconciles it authoritatively, and only then
-decides whether another cycle is allowed.
+The owner scans BTC/ETH/SOL/XRP 5-minute markets using public data only, selects
+at most one fee-safe same-contract YES/NO candidate, then performs private account
+checks immediately before mutation. Exactly one q1 pair may be active at a time.
 
 After a first fill, the pair primitive may spend only reserved edge on bounded,
-maker-only complement reprices. Critical invariant: one cycle can create at
-most q=1 directional inventory. Any residual, orphan/active order, unexpected
-position, ambiguous completion state, post reject, account inconsistency, or
-execution exception halts the session fail-closed. Unexpected exceptions trigger
-an exact-ID cleanup of the current durable cycle before the owner exits. Matched
-pairs are locked economically but are not reported as realized P&L until Gemini
-settlement.
+maker-only complement reprices. Critical invariant: one cycle can create at most
+q=1 directional inventory. Any residual, orphan/active order, unexpected position,
+ambiguous completion state, post reject, account inconsistency, or execution
+exception halts the session fail-closed. Unexpected exceptions trigger an exact-ID
+cleanup of the current durable cycle before the owner exits. Matched pairs are
+locked economically but are not reported as realized P&L until Gemini settlement.
 """
 from __future__ import annotations
 
@@ -25,6 +23,7 @@ from decimal import Decimal as D
 from pathlib import Path
 from typing import Any, Mapping
 
+from src import gemini_l5_crypto5m_selector as selector
 from src import gemini_l5_dynamic_exception_cleanup as exception_cleanup
 from src import gemini_l5_pair_q1 as pair
 from src.gemini_prediction_auth import PRIVATE_REST_MIN_INTERVAL_ENV, private_rest_request
@@ -37,6 +36,7 @@ LIVE_ENV = "GEMINI_L5_DYNAMIC_LIVE_Q1"
 SID_ENV = "GEMINI_L5_DYNAMIC_SESSION_ID"
 ARM_ENV = "GEMINI_L5_DYNAMIC_ARM"
 STATE_ENV = "GEMINI_L5_DYNAMIC_STATE_FILE"
+ASSETS_ENV = "GEMINI_L5_DYNAMIC_ASSETS"
 
 MAX_SESSION_SECONDS = float(os.getenv("GEMINI_L5_DYNAMIC_MAX_SESSION_SECONDS", "21600"))
 MAX_CAMPAIGNS = int(os.getenv("GEMINI_L5_DYNAMIC_MAX_CAMPAIGNS", "48"))
@@ -47,6 +47,12 @@ COMPLEMENT_WAIT_SECONDS = float(os.getenv("GEMINI_L5_DYNAMIC_COMPLEMENT_WAIT_SEC
 MIN_TTE_SECONDS = float(os.getenv("GEMINI_L5_DYNAMIC_MIN_TTE_SECONDS", "105"))
 IDLE_POLL_SECONDS = float(os.getenv("GEMINI_L5_DYNAMIC_IDLE_POLL_SECONDS", "5"))
 CYCLE_PAUSE_SECONDS = float(os.getenv("GEMINI_L5_DYNAMIC_CYCLE_PAUSE_SECONDS", "1.0"))
+
+
+def configured_assets() -> tuple[str, ...]:
+    raw = os.getenv(ASSETS_ENV, ",".join(selector.DEFAULT_ASSETS))
+    assets = selector.normalize_assets(raw.split(","))
+    return assets or selector.DEFAULT_ASSETS
 
 
 def emit(stage: str, **fields: Any) -> None:
@@ -122,7 +128,13 @@ def _read_cycle(path: Path) -> dict[str, Any] | None:
     return payload
 
 
-async def _run_cycle(session_id: str, number: int, state_dir: Path) -> dict[str, Any] | None:
+async def _run_cycle(
+    session_id: str,
+    number: int,
+    state_dir: Path,
+    *,
+    selected: selector.PublicCandidate | None = None,
+) -> dict[str, Any] | None:
     cycle_sid=f"{session_id}-c{number:03d}"; cycle_path=state_dir/f"cycle-{number:03d}.json"
     try: cycle_path.unlink()
     except FileNotFoundError: pass
@@ -131,6 +143,9 @@ async def _run_cycle(session_id: str, number: int, state_dir: Path) -> dict[str,
         "CYCLE_START",
         cycle=number,
         cycle_session=cycle_sid,
+        selected_asset=None if selected is None else selected.asset,
+        selected_event=None if selected is None else selected.event.ticker,
+        public_scan_edge=None if selected is None else str(selected.edge),
         min_final_pair_edge=str(MIN_TOP_PAIR_EDGE),
         completion_reserve_ticks=pair.COMPLETION_RESERVE_TICKS,
         max_complement_reprices=pair.MAX_COMPLEMENT_REPRICES,
@@ -141,34 +156,52 @@ async def _run_cycle(session_id: str, number: int, state_dir: Path) -> dict[str,
         order_entry=True,
         realized_pnl=None,
     )
+
+    original_discover = pair.discover_eth5m
+    if selected is not None:
+        async def _selected_event():
+            return selected.event
+        pair.discover_eth5m = _selected_event
     try:
-        await pair.run(min_edge=MIN_TOP_PAIR_EDGE, first_wait=FIRST_WAIT_SECONDS, complement_wait=COMPLEMENT_WAIT_SECONDS, min_tte=MIN_TTE_SECONDS)
-    except Exception as exc:
-        error=f"{type(exc).__name__}: {exc}"
         try:
-            cleanup = await exception_cleanup.cleanup_cycle(cycle_path, error=error)
-        except Exception as cleanup_exc:
+            await pair.run(
+                min_edge=MIN_TOP_PAIR_EDGE,
+                first_wait=FIRST_WAIT_SECONDS,
+                complement_wait=COMPLEMENT_WAIT_SECONDS,
+                min_tte=MIN_TTE_SECONDS,
+            )
+        except Exception as exc:
+            error=f"{type(exc).__name__}: {exc}"
+            try:
+                cleanup = await exception_cleanup.cleanup_cycle(cycle_path, error=error)
+            except Exception as cleanup_exc:
+                emit(
+                    "CYCLE_EXCEPTION_CLEANUP_FAILED",
+                    cycle=number,
+                    error=error,
+                    cleanup_error=f"{type(cleanup_exc).__name__}: {cleanup_exc}",
+                    order_entry=False,
+                    realized_pnl=None,
+                )
+                raise RuntimeError(
+                    f"pair execution failed ({error}); exact cleanup also failed: {type(cleanup_exc).__name__}: {cleanup_exc}"
+                ) from exc
             emit(
-                "CYCLE_EXCEPTION_CLEANUP_FAILED",
+                "CYCLE_EXCEPTION_CLEANED",
                 cycle=number,
                 error=error,
-                cleanup_error=f"{type(cleanup_exc).__name__}: {cleanup_exc}",
+                cleanup=cleanup,
                 order_entry=False,
                 realized_pnl=None,
             )
-            raise RuntimeError(
-                f"pair execution failed ({error}); exact cleanup also failed: {type(cleanup_exc).__name__}: {cleanup_exc}"
-            ) from exc
-        emit(
-            "CYCLE_EXCEPTION_CLEANED",
-            cycle=number,
-            error=error,
-            cleanup=cleanup,
-            order_entry=False,
-            realized_pnl=None,
-        )
-        raise
-    return _read_cycle(cycle_path)
+            raise
+    finally:
+        pair.discover_eth5m = original_discover
+
+    cycle = _read_cycle(cycle_path)
+    if cycle is not None and selected is not None:
+        cycle["selected_asset"] = selected.asset
+    return cycle
 
 
 def _exception_reason(exc: Exception) -> str:
@@ -180,14 +213,18 @@ def _exception_reason(exc: Exception) -> str:
 
 async def run() -> None:
     if not armed():
-        emit("DISARMED", q_per_side=1, max_new_residual_qty=1, max_campaigns=MAX_CAMPAIGNS, max_matched_q=str(MAX_MATCHED_Q), max_session_seconds=MAX_SESSION_SECONDS, order_entry=False, realized_pnl=None); return
+        emit("DISARMED", q_per_side=1, max_new_residual_qty=1, assets=list(configured_assets()), max_campaigns=MAX_CAMPAIGNS, max_matched_q=str(MAX_MATCHED_Q), max_session_seconds=MAX_SESSION_SECONDS, order_entry=False, realized_pnl=None); return
     session_id=os.getenv(SID_ENV,"").strip(); state_dir=_state_path().parent; state_dir.mkdir(parents=True,exist_ok=True)
+    assets=configured_assets()
     startup=await account_guard(set()); emit("ACCOUNT_START_FLAT", **startup, order_entry=False, realized_pnl=None)
     deadline=time.monotonic()+MAX_SESSION_SECONDS; allowed_symbols:set[str]=set(); campaigns=[]; matched_total=ZERO; attempts=0; terminal_reason="RUNNING"
-    outer={"terminal":False,"sid":session_id,"started_at_utc":datetime.now(timezone.utc).isoformat(),"matched_qty":"0","campaigns":campaigns}; _write_state(outer)
+    outer={"terminal":False,"sid":session_id,"started_at_utc":datetime.now(timezone.utc).isoformat(),"assets":list(assets),"matched_qty":"0","campaigns":campaigns}; _write_state(outer)
     emit(
         "LIVE_START",
         session=session_id,
+        assets=list(assets),
+        selector="PUBLIC_BEST_EDGE_THEN_QUEUE_ONE_MARKET_ONLY",
+        private_reads_only_after_public_candidate=True,
         q_per_side=1,
         max_new_residual_qty=1,
         adaptive_backoff_cents=[0,1,2],
@@ -213,13 +250,45 @@ async def run() -> None:
     try:
         while time.monotonic()<deadline and len(campaigns)<MAX_CAMPAIGNS and matched_total<MAX_MATCHED_Q:
             attempts+=1
+            selected = await selector.select_best_candidate(
+                assets=assets,
+                min_edge=MIN_TOP_PAIR_EDGE,
+                min_tte=MIN_TTE_SECONDS,
+                tie_seed=f"{session_id}-{attempts}",
+            )
+            if selected is None:
+                emit(
+                    "PUBLIC_SCAN_IDLE",
+                    attempt=attempts,
+                    assets=list(assets),
+                    reason="NO_SAFE_CRYPTO5_PAIR_WITH_COMPLETION_RESERVE",
+                    private_account_read=False,
+                    order_entry=False,
+                    realized_pnl=None,
+                )
+                await asyncio.sleep(IDLE_POLL_SECONDS)
+                continue
+            emit(
+                "PUBLIC_CANDIDATE",
+                attempt=attempts,
+                asset=selected.asset,
+                event=selected.event.ticker,
+                symbol=selected.event.symbol,
+                bid=str(selected.bid),
+                ask=str(selected.ask),
+                pair_edge=str(selected.edge),
+                max_queue=str(selected.max_queue),
+                order_entry=False,
+                realized_pnl=None,
+            )
             before=await account_guard(allowed_symbols); emit("ACCOUNT_GUARD_OK",attempt=attempts,**before,order_entry=False,realized_pnl=None)
-            cycle=await _run_cycle(session_id,attempts,state_dir)
+            cycle=await _run_cycle(session_id,attempts,state_dir,selected=selected)
             if cycle is None:
-                emit("CYCLE_IDLE",attempt=attempts,reason="NO_MUTATING_CYCLE_STATE",order_entry=False,realized_pnl=None); await asyncio.sleep(IDLE_POLL_SECONDS); continue
+                emit("CYCLE_IDLE",attempt=attempts,reason="PUBLIC_CANDIDATE_STALE_BEFORE_MUTATION",order_entry=False,realized_pnl=None); await asyncio.sleep(IDLE_POLL_SECONDS); continue
             status=str(cycle.get("status") or ""); symbol=str(cycle.get("symbol") or "").strip().upper(); yes_qty=D(str(cycle.get("yes_qty") or "0")); no_qty=D(str(cycle.get("no_qty") or "0")); matched=min(yes_qty,no_qty); residual=abs(yes_qty-no_qty)
             record={
                 "attempt":attempts,
+                "asset":str(cycle.get("selected_asset") or selected.asset),
                 "event":cycle.get("event"),
                 "symbol":symbol,
                 "status":status,
