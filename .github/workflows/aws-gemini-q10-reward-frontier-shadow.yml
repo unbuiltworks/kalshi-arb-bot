@@ -1,0 +1,113 @@
+name: AWS Gemini q10 reward frontier shadow
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-q10-reward-frontier-shadow.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  SOURCE_BRANCH: feature/maker-live-probe-q1
+  REQUIRED_SOURCE_COMMIT: cf1b503cbaecf8dea4b50240c0976cbc7080cf1d
+  CONTAINER_NAME: arb-gemini-q10-reward-frontier-shadow
+  RUN_SECONDS: '3600'
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+
+      - name: Validate pinned read-only authorization
+        id: gate
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          F=deploy/aws/gemini-q10-reward-frontier-shadow.trigger
+          test -f "$F"
+          PIN=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$F" | tr -d '[:space:]')
+          CLASS=$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$F" | tr -d '\r')
+          test "$PIN" = "$REQUIRED_SOURCE_COMMIT"
+          test "$CLASS" = READ_ONLY_AWS_GEMINI_Q10_REWARD_FRONTIER_SHADOW
+          echo "pin=$PIN" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build, test, and start pinned AWS shadow
+        shell: bash
+        env:
+          PIN: ${{ steps.gate.outputs.pin }}
+        run: |
+          set -Eeuo pipefail
+          SHORT=${PIN:0:12}
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          WORK=/opt/arb/gemini-q10-reward-frontier-shadow
+          IMAGE=arb-gemini-q10-reward-frontier-shadow:${SHORT}
+          CONTAINER=${CONTAINER_NAME}
+
+          cd "\$REPO"
+          git config --global --add safe.directory "\$REPO" || true
+          git fetch origin ${SOURCE_BRANCH} >/dev/null
+          ACTUAL=\$(git rev-parse origin/${SOURCE_BRANCH})
+          test "\$ACTUAL" = "${PIN}"
+
+          docker rm -f "\$CONTAINER" >/dev/null 2>&1 || true
+          git worktree remove --force "\$WORK" >/dev/null 2>&1 || true
+          rm -rf "\$WORK"
+          git worktree prune
+          git worktree add --detach "\$WORK" "${PIN}" >/dev/null
+          test "\$(git -C "\$WORK" rev-parse HEAD)" = "${PIN}"
+
+          docker build -q -t "\$IMAGE" "\$WORK" >/dev/null
+
+          echo '=== PINNED READ-ONLY SAFETY TESTS ==='
+          docker run --rm --network none "\$IMAGE" python -m pytest -q \
+            tests/test_btc_spot_toxicity_guard.py \
+            tests/test_gemini_prediction_book_cache.py \
+            tests/test_gemini_q10_rescue_policy.py \
+            tests/test_gemini_q10_maxwidth_spotguard_shadow_v2.py \
+            tests/test_gemini_q10_reward_frontier_shadow.py
+
+          echo '=== START AWS Q10 REWARD FRONTIER SHADOW ==='
+          docker run -d --name "\$CONTAINER" --network host \
+            -e GEMINI_Q10_FRONTIER_SECONDS=${RUN_SECONDS} \
+            -e GEMINI_Q10_FRONTIER_LOOP_SECONDS=0.05 \
+            -e GEMINI_Q10_FRONTIER_CALM_REPOST_SECONDS=0.50 \
+            -e GEMINI_Q10_FRONTIER_DISTANCES=0.09,0.08,0.07,0.06,0.05,0.04,0.03,0.02 \
+            -e GEMINI_Q10_SPOTGUARD_MAX_RESCUE_LOSS=0.50 \
+            "\$IMAGE" python -u -m src.gemini_q10_reward_frontier_shadow >/dev/null
+          sleep 3
+          test "\$(docker inspect -f '{{.State.Running}}' "\$CONTAINER")" = true
+          docker logs --tail 20 "\$CONTAINER"
+          echo 'AWS_Q10_REWARD_FRONTIER_STARTED read_only=true order_entry=false pinned_commit=${PIN}'
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB q10 reward frontier read-only start" --parameters "$PARAMS" --timeout-seconds 780 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 390); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          OUT=$(jq -r '.Stdout // ""' <<<"$RESULT")
+          grep -q 'AWS_Q10_REWARD_FRONTIER_STARTED' <<<"$OUT"
+          grep -q 'order_entry=false' <<<"$OUT"
