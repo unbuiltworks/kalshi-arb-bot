@@ -1,0 +1,7 @@
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "python -u -m src.gemini_q10_prefill_recenter_shadow"
+preDeployCommand = ["python -m py_compile src/gemini_q10_prefill_recenter_shadow.py src/gemini_q10_production_executor_v5.py src/gemini_q10_production_executor_v5_1.py src/gemini_q10_rescue_policy.py"]
+restartPolicyType = "NEVER"
