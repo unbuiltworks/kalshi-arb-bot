@@ -15,7 +15,7 @@ env:
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
   SOURCE_BRANCH: feature/maker-live-probe-q1
-  REQUIRED_SOURCE_COMMIT: cf1b503cbaecf8dea4b50240c0976cbc7080cf1d
+  REQUIRED_SOURCE_COMMIT: 8f385c7e11a3dc463db9007ce6487c3ff3cb6059
   CONTAINER_NAME: arb-gemini-q10-reward-frontier-shadow
   RUN_SECONDS: '3600'
 
