@@ -25,7 +25,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import re
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,24 +33,22 @@ from typing import Any, Dict, Optional
 import httpx
 
 from . import config
-from .realtime_mirror_base import DATA_API, L5_WALLET, fnum, normalize_outcome
+from .adapters import DEFAULT_ADAPTER, VenueAdapter
+from .realtime_mirror_base import DATA_API, L5_WALLET, fnum
 
 MIRROR_DIR = config.DATA_DIR / "mirror"
 BEHAVIOR = config.OUTPUT_DIR / "l5_behavior.json"
-WINDOW_RE = re.compile(r"^(btc|eth)-updown-(5m|15m)-(\d+)$", re.IGNORECASE)
 POLL_SECONDS = 10.0
 
 
-def parse_window(trade: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    slug = str(trade.get("slug") or trade.get("eventSlug") or "")
-    m = WINDOW_RE.match(slug)
-    if not m:
+def parse_window(trade: Dict[str, Any],
+                 adapter: VenueAdapter = DEFAULT_ADAPTER) -> Optional[Dict[str, Any]]:
+    win = adapter.parse_window(trade)
+    if win is None:
         return None
-    start = int(m.group(3))
-    dur_min = 5 if m.group(2).lower() == "5m" else 15
-    return {"asset": m.group(1).upper(), "duration_minutes": dur_min,
-            "window_start": start, "window_end": start + dur_min * 60,
-            "slug": slug}
+    return {"asset": win.asset, "duration_minutes": win.duration_minutes,
+            "window_start": win.window_start, "window_end": win.window_end,
+            "slug": win.window_id}
 
 
 class WindowState:
@@ -62,15 +59,13 @@ class WindowState:
         self.seq = 0
 
 
-def canonical_row(trade: Dict[str, Any], win: Dict[str, Any], st: WindowState) -> Optional[Dict[str, Any]]:
-    outcome = str(normalize_outcome(trade.get("outcome")) or "").title()
-    if outcome not in ("Up", "Down"):
+def canonical_row(trade: Dict[str, Any], win: Dict[str, Any], st: WindowState,
+                  adapter: VenueAdapter = DEFAULT_ADAPTER) -> Optional[Dict[str, Any]]:
+    fill = adapter.normalize_fill(trade)
+    if fill is None:
         return None
-    ts = int(fnum(trade.get("timestamp")) or 0)
-    price = fnum(trade.get("price")) or 0.0
-    qty = fnum(trade.get("size")) or 0.0
-    usdc = fnum(trade.get("usdcSize")) or price * qty
-    side = str(trade.get("side") or "").upper()
+    outcome, side = fill.outcome, fill.side
+    ts, price, qty, usdc = fill.timestamp, fill.price, fill.quantity, fill.dollars
     sign = 1.0 if side == "BUY" else -1.0
     if outcome == "Up":
         st.up_qty += sign * qty
@@ -102,8 +97,8 @@ def canonical_row(trade: Dict[str, Any], win: Dict[str, Any], st: WindowState) -
         "residual_qty_signed": round(residual, 6),
         "residual_side": "Up" if residual > 1e-9 else "Down" if residual < -1e-9 else "",
         "settlement_outcome": "", "resolution_source": "",
-        "source": "polymarket_public_activity_realtime",
-        "transaction_hash": str(trade.get("transactionHash") or ""),
+        "source": f"{adapter.venue}_public_activity_realtime",
+        "transaction_hash": fill.transaction_id,
     }
 
 

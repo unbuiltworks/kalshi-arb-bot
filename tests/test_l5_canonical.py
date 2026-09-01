@@ -16,6 +16,8 @@ from pathlib import Path
 import pytest
 
 from src.polymarket_l5 import canonical_sequence as cs
+from src.polymarket_l5 import action_model as am
+from src.polymarket_l5.adapters import PolymarketUpDownAdapter
 from src.polymarket_l5.realtime_mirror import WindowState, canonical_row, parse_window
 from src.polymarket_l5.ledger import _finalize, WindowAgg
 from src.polymarket_l5.fetch import fetch_activity_windowed
@@ -87,6 +89,43 @@ def test_ledger_finalize_decomposition_is_exactly_additive():
     assert row["net_trading_cash"] == pytest.approx(10.0 - 7.4)
     assert row["residual_and_timing"] == pytest.approx(
         row["net_trading_cash"] - row["pair_locked"])
+
+
+def test_ledger_settlement_loser_side_never_redeems():
+    """Winner side redeems $1/share; loser side produces NO redeem row.
+
+    A matched pair therefore realizes exactly (1 - pair_cost) per pair in
+    cash whichever side wins, and the losing residual realizes -cost.
+    """
+    # 4 Up @0.60 and 4 Down @0.35, fully matched; Down wins.
+    agg = WindowAgg("0xdef")
+    agg.slug = "eth-updown-5m-2000000"
+    agg.asset, agg.horizon_m, agg.window_start = "ETH", 5, 2000000
+    agg.fills = [(2000060, 0, 1, 4, 0.60, 2.4), (2000070, 1, 1, 4, 0.35, 1.4)]
+    agg.redeem_usdc, agg.redeem_qty, agg.redeem_n = 4.0, 4.0, 1  # Down side only
+    row = _finalize(agg)
+    assert row["net_trading_cash"] == pytest.approx(4.0 - 3.8)
+    assert row["pair_locked"] == pytest.approx(4 * (1 - 0.95))
+    # fully matched -> the whole result is the locked pair edge
+    assert row["residual_and_timing"] == pytest.approx(0.0)
+    # winner shares all redeemed; the 4 losing shares are worthless, not
+    # "unredeemed winners"
+    assert row["unredeemed_qty"] == pytest.approx(4.0)
+
+    # Same book, but Up (the residual-heavy case): 10 Up / 4 Down, Down wins
+    # -> only the 4 Down shares redeem; the 6 unmatched Up expire worthless.
+    agg2 = WindowAgg("0xdef2")
+    agg2.slug = "eth-updown-5m-2000300"
+    agg2.asset, agg2.horizon_m, agg2.window_start = "ETH", 5, 2000300
+    agg2.fills = [(2000360, 0, 1, 10, 0.60, 6.0), (2000370, 1, 1, 4, 0.35, 1.4)]
+    agg2.redeem_usdc, agg2.redeem_qty, agg2.redeem_n = 4.0, 4.0, 1
+    row2 = _finalize(agg2)
+    assert row2["net_trading_cash"] == pytest.approx(4.0 - 7.4)
+    assert row2["pair_locked"] == pytest.approx(0.2)
+    # loss = locked edge minus the incinerated residual: 0.2 - 6*0.60
+    assert row2["residual_and_timing"] == pytest.approx(-3.6)
+    assert row2["residual_and_timing"] == pytest.approx(
+        row2["net_trading_cash"] - row2["pair_locked"])
 
 
 # ---------- pagination / deep-history (offset cap) ----------
@@ -189,3 +228,87 @@ def test_canonical_sequence_build_is_deterministic(tmp_path, monkeypatch):
     assert row["settlement_outcome"] == "Up"
     assert row["residual_side"] == "Up"
     assert row["source"] == "polymarket_public_activity"
+
+
+# ---------- venue adapter separation ----------
+
+def test_polymarket_adapter_isolates_venue_specifics():
+    ad = PolymarketUpDownAdapter()
+    win = ad.parse_window({"slug": "btc-updown-15m-3000000"})
+    assert (win.venue, win.asset, win.duration_minutes) == ("polymarket", "BTC", 15)
+    assert win.window_end - win.window_start == 900
+    assert ad.parse_window({"slug": "doge-updown-5m-1"}) is None
+
+    fill = ad.normalize_fill(_trade(3000100, "yes", "buy", 0.4, 7))
+    assert (fill.outcome, fill.side) == ("Up", "BUY")
+    assert fill.dollars == pytest.approx(2.8)
+    assert ad.normalize_fill(_trade(3000100, "Maybe", "BUY", 0.4, 7)) is None
+    assert ad.normalize_fill({"type": "REDEEM", "outcome": "Up"}) is None
+    # mirror path consumes the adapter and stays canonical
+    st = WindowState()
+    row = canonical_row(_trade(3000100, "up", "BUY", 0.4, 7),
+                        parse_window({"slug": "btc-updown-15m-3000000"}), st)
+    assert row["outcome"] == "Up" and row["cum_up_qty"] == 7
+    assert row["source"] == "polymarket_public_activity_realtime"
+
+
+# ---------- action-by-action comparison foundation ----------
+
+def _seq_csv(tmp_path):
+    """Two-window synthetic canonical sequence exercising all relations."""
+    path = tmp_path / "seq.csv"
+    cols = ["window_id", "timestamp", "trade_seq", "outcome", "side", "price",
+            "quantity", "seconds_to_settlement", "residual_qty_signed"]
+    rows = [
+        # window A: open Up, then complete with Down, then extend Down
+        ("wA", 100, 1, "Up", "BUY", 0.60, 10, 240, 10),
+        ("wA", 110, 2, "Down", "BUY", 0.38, 10, 230, 0),
+        ("wA", 120, 3, "Down", "BUY", 0.40, 5, 220, -5),
+        # window B: same first two states/actions as A
+        ("wB", 400, 1, "Up", "BUY", 0.61, 10, 240, 10),
+        ("wB", 410, 2, "Down", "BUY", 0.37, 10, 230, 0),
+    ]
+    with open(path, "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(cols)
+        w.writerows(rows)
+    return path
+
+
+def test_action_model_states_relations_and_lookup(tmp_path):
+    model = am.build_model(_seq_csv(tmp_path))
+    assert model["n_windows"] == 2
+    assert model["n_decisions"] == 3   # A:1->2, A:2->3, B:1->2
+    # after a 0.60 Up fill with residual 10, tte 230s: L5 completed both times
+    sk = am.state_key(0.60, 230, 10)
+    st = am.next_action_stats(model, sk)
+    assert st["n"] == 2
+    assert st["modal_action"] == "complete|q5-15"
+    assert st["action_probs"]["complete|q5-15"] == 1.0
+    # flat book -> "open" relation
+    sk_flat = am.state_key(0.38, 220, 0)
+    assert am.next_action_stats(model, sk_flat)["modal_action"] == "open|q5-15"
+    # never-visited state is an explicit off-distribution signal
+    assert am.next_action_stats(model, am.state_key(0.95, 10, 100)) is None
+    scored = am.compare_action(model, sk, "complete|q5-15")
+    assert scored["probability"] == 1.0 and scored["rank"] == 1
+    assert am.compare_action(model, sk, "extend|q<5")["probability"] == 0.0
+
+
+def test_action_model_policy_hook_agreement(tmp_path):
+    model = am.build_model(_seq_csv(tmp_path))
+
+    def l5_mimic(state):        # always do what L5 modally did
+        st = am.next_action_stats(model, state)
+        return st["modal_action"] if st else None
+
+    perfect = am.compare_policy(model, l5_mimic)
+    assert perfect["expected_agreement_exact"] == 1.0
+    assert perfect["expected_agreement_relation"] == 1.0
+
+    always_extend = am.compare_policy(model, lambda s: "extend|q>40")
+    assert always_extend["expected_agreement_exact"] == 0.0
+
+    abstainer = am.compare_policy(model, lambda s: None)
+    assert abstainer["expected_agreement_exact"] is None
+    assert abstainer["policy_abstained_weight"] == 3

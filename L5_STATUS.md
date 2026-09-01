@@ -28,6 +28,7 @@ python3 -m src.polymarket_l5.canonical_sequence     # offline: canonical per-tra
 python3 -m src.polymarket_l5.ledger                 # offline: cashflow ledger + reconciliation
 python3 -m src.polymarket_l5.behavior               # offline: 12-question behavioral report
 python3 -m src.polymarket_l5.reconcile_disciplined_clone   # offline: no-hindsight replay recon
+python3 -m src.polymarket_l5.action_model           # offline: state->next-action model
 python3 -m src.polymarket_l5.realtime_mirror --minutes 30  # network: READ-ONLY live mirror
 python3 -m src.polymarket_l5.realtime_mirror --compare <stream.jsonl>
 python3 -m pytest tests/test_l5_canonical.py tests/test_polymarket_l5_disciplined_clone.py tests/test_l5_realtime_mirror.py
@@ -116,6 +117,39 @@ Two datasets with DIFFERENT coverage:
 across 5 windows** into the canonical schema and rendered the live-vs-
 historical comparison (both-sides %, pair cost, residual). Stream files:
 `data/l5/mirror/mirror_*.jsonl`.
+
+## Action-by-action comparison foundation (`action_model.py`)
+
+The direct machinery for "at this exact market state, what did L5 do next —
+and what would our clone have done?":
+
+* **State** = last-fill price band × time-to-settlement bucket × residual
+  imbalance bucket (coarse on purpose; sample size beats resolution).
+* **Action** = relation to inventory (`open` / `complete` the deficit side /
+  `extend` the surplus side / `sell`) × size bucket.
+* Built from the canonical sequence: **69,768 decisions over 2,216 windows
+  → 136 visited states** (`analysis/l5/l5_action_model.json`). A state L5
+  never visited returns `None` — itself the off-distribution alarm for a
+  clone.
+* `compare_action(model, state, action)` scores one live/replayed action
+  (probability under L5, rank, modal action); `compare_policy(model,
+  policy)` scores any `policy(state)->action` hook by expected
+  per-decision agreement, exact and at relation level. Tested with a
+  perfect-mimic (agreement 1.0), a constant policy (0.0), and an abstainer.
+* Headline read of the empirical table: modal actions are `complete` vs
+  `extend` at 15–20% probability each — L5's next action is genuinely
+  stochastic at this granularity; no single deterministic rule reproduces
+  him, which is why comparison is distributional, not exact-match.
+
+## Market-agnostic separation (`adapters.py`)
+
+Venue specifics (slug regex, outcome label conventions, field names) are
+isolated behind a `VenueAdapter` protocol (`parse_window`,
+`normalize_fill` → frozen `WindowInfo`/`NormalizedFill` dataclasses).
+`PolymarketUpDownAdapter` is the only implementation; the realtime mirror
+consumes the adapter, so policy/analysis code never sees venue fields.
+Porting the pipeline to another binary-window venue (e.g. Kalshi KXBTC15M)
+means one new adapter, not policy changes.
 
 ## Remaining unknowns blocking a "we reproduced L5" claim
 
