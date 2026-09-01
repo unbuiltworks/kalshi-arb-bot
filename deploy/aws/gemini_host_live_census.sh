@@ -2,8 +2,18 @@
 set -Eeuo pipefail
 : "${AWS_HOT_INSTANCE_ID:?AWS_HOT_INSTANCE_ID is required}"
 
-REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; echo GEMINI_HOST_CENSUS_BEGIN; docker ps --format \"{{.Names}}|{{.Image}}|{{.Status}}\" | grep -Ei \"gemini|q10|v5[0-9]|dynamic|l5\" || true; echo GEMINI_HOST_CENSUS_END'"
-PARAMS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+REMOTE=$(cat <<'EOF'
+set -Eeuo pipefail
+echo GEMINI_HOST_CENSUS_BEGIN
+mapfile -t NAMES < <(docker ps --format '{{.Names}}|{{.Image}}' | grep -Ei 'gemini|q10|v5[0-9]|dynamic|l5' | cut -d'|' -f1 || true)
+for name in "${NAMES[@]}"; do
+  docker inspect -f 'CONTAINER name={{.Name}} image={{.Config.Image}} path={{.Path}} args={{json .Args}} restart={{.HostConfig.RestartPolicy.Name}} network={{.HostConfig.NetworkMode}} running={{.State.Running}} started={{.State.StartedAt}}' "$name"
+done
+echo GEMINI_HOST_CENSUS_END
+EOF
+)
+ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
 CID=$(aws ssm send-command \
   --instance-ids "$AWS_HOT_INSTANCE_ID" \
   --document-name AWS-RunShellScript \
