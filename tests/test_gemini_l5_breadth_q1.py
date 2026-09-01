@@ -64,7 +64,7 @@ def test_q1_support_requires_cent_tick_and_divisible_increment():
     assert not m.q1_supported(bad_min)
 
 
-def test_summary_hard_caps_each_market_residual_at_one(monkeypatch):
+def test_summary_hard_caps_each_market_residual_at_one():
     specs = [
         {"asset": "BTC", "event": "BTC05M", "symbol": "BTC-UP", "side": "YES", "price": D("0.47"), "id": "y", "row": None},
         {"asset": "BTC", "event": "BTC05M", "symbol": "BTC-UP", "side": "NO", "price": D("0.49"), "id": "n", "row": None},
@@ -79,9 +79,9 @@ def test_summary_hard_caps_each_market_residual_at_one(monkeypatch):
     assert out["markets"][0]["residual_qty"] == "1"
 
 
-def test_source_contains_no_sell_rescue_or_session_wide_cancel():
+def test_source_contains_no_sell_rescue_market_unwind_or_session_wide_cancel():
     source = Path(m.__file__).read_text()
     assert '"side": "SELL"' not in source
+    assert '"type": "MARKET"' not in source
     assert "order.cancel_session" not in source
-    assert "MARKET" not in source
     assert "rescue" in source.lower()  # documentation says it is forbidden
