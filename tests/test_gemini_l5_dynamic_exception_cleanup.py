@@ -43,8 +43,11 @@ def test_cleanup_cancels_only_exact_cycle_ids(monkeypatch, tmp_path: Path):
             return Response({"ok": True})
         raise AssertionError(endpoint)
 
+    async def fake_sleep(_delay):
+        return None
+
     monkeypatch.setattr(m, "private_rest_request", fake_request)
-    monkeypatch.setattr(m.asyncio, "sleep", lambda *_: asyncio.sleep(0))
+    monkeypatch.setattr(m.asyncio, "sleep", fake_sleep)
 
     out = asyncio.run(m.cleanup_cycle(path, error="RuntimeError: boom"))
     assert out["cleanup_verified"] is True
