@@ -43,13 +43,15 @@ rm -rf "$WORKTREE"; git -C "$SOURCE_REPO" worktree prune; git -C "$SOURCE_REPO" 
 IMAGE=arb-gemini-l5-dynamic:q1-${PINNED_COMMIT:0:12}
 docker build -t "$IMAGE" "$WORKTREE" >/dev/null
 
-# Exact-image execution and upgrade-safety tests.  Completion economics and the
-# cancel->inactive-verify->repost sequence are deployment blockers.
+# Exact-image execution and upgrade-safety tests. Completion economics, nonce
+# pacing, exact exception cleanup, and cancel->inactive->repost are blockers.
 docker run --rm --network none "$IMAGE" python -m pytest -q \
+  tests/test_gemini_prediction_auth_pacing.py \
   tests/test_gemini_l5_dynamic_q1.py \
   tests/test_gemini_l5_pair_q1.py \
   tests/test_gemini_l5_completion_policy.py \
   tests/test_gemini_l5_dynamic_completion_rescue.py \
+  tests/test_gemini_l5_dynamic_exception_cleanup.py \
   tests/test_gemini_l5_dynamic_exact_stop.py \
   tests/test_gemini_l5_ladder_q1.py \
   tests/test_gemini_short_crypto_inventory_rest_v3.py \
@@ -104,9 +106,10 @@ printf '%s\n' "approval=$SAFE commit=$PINNED_COMMIT consumed=$(date -u +%FT%TZ)"
 SID=dynq1-${SAFE:0:10}-$(date -u +%H%M%S)
 rm -f "$STATE_DIR/session.json"
 
-echo "L5_DYNAMIC_LIVE_START session=$SID q=1 one_pair_at_a_time=true max_new_residual_qty=1 completion_reserve_ticks=1 dynamic_complement_reprices=6 cancel_before_repost=true exact_inactive_gate=true backoff_per_side=0,1,2c first_wait=45 complement_wait=60 max_matched_q=12 max_campaigns=48 max_session_seconds=21600 min_final_pair_edge=0.01 auto_restart=false"
+echo "L5_DYNAMIC_LIVE_START session=$SID q=1 one_pair_at_a_time=true max_new_residual_qty=1 completion_reserve_ticks=1 dynamic_complement_reprices=6 cancel_before_repost=true exact_inactive_gate=true exception_exact_cleanup=true private_rest_min_interval=1.05s backoff_per_side=0,1,2c first_wait=45 complement_wait=60 max_matched_q=12 max_campaigns=48 max_session_seconds=21600 min_final_pair_edge=0.01 auto_restart=false"
 docker run -d --name "$CONTAINER" --network host --restart no --env-file "$ENV_FILE" \
   -e PYTHONUNBUFFERED=1 \
+  -e GEMINI_PRIVATE_REST_MIN_INTERVAL_SECONDS=1.05 \
   -e GEMINI_L5_DYNAMIC_LIVE_Q1=YES \
   -e GEMINI_L5_DYNAMIC_SESSION_ID="$SID" \
   -e GEMINI_L5_DYNAMIC_ARM="$SID" \
@@ -121,15 +124,15 @@ docker run -d --name "$CONTAINER" --network host --restart no --env-file "$ENV_F
   -v "$STATE_DIR:/state" \
   "$IMAGE" python -u -m src.gemini_l5_dynamic_q1 >/dev/null
 
-for i in $(seq 1 15); do
+for i in $(seq 1 20); do
   RUNNING_NOW=$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null || echo false)
-  LOGS=$(docker logs --tail 180 "$CONTAINER" 2>&1 || true)
+  LOGS=$(docker logs --tail 220 "$CONTAINER" 2>&1 || true)
   if grep -q '"stage":"LIVE_START"' <<<"$LOGS"; then break; fi
   if [ "$RUNNING_NOW" != true ]; then echo dynamic_owner_exited_during_startup >&2; echo "$LOGS" >&2; exit 1; fi
   sleep 1
 done
-LOGS=$(docker logs --tail 240 "$CONTAINER" 2>&1 || true)
+LOGS=$(docker logs --tail 280 "$CONTAINER" 2>&1 || true)
 grep -q '"stage":"LIVE_START"' <<<"$LOGS"
 test "$(docker inspect -f '{{.State.Running}}' "$CONTAINER")" = true
 echo "$LOGS"
-echo "L5_DYNAMIC_OWNER_RUNNING container=$CONTAINER session=$SID restart=no max_new_residual_qty=1 completion_reserve_ticks=1 dynamic_complement_reprices=6"
+echo "L5_DYNAMIC_OWNER_RUNNING container=$CONTAINER session=$SID restart=no max_new_residual_qty=1 completion_reserve_ticks=1 dynamic_complement_reprices=6 private_rest_min_interval=1.05s exception_exact_cleanup=true"
