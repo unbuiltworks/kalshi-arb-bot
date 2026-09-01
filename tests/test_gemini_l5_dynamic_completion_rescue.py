@@ -76,6 +76,62 @@ def test_rescue_cancel_verifies_inactive_then_reposts_and_matches(monkeypatch):
     assert specs[-1]["id"] == "no1"
 
 
+def test_terminal_race_fill_after_cancel_is_seen_before_any_repost(monkeypatch):
+    specs = _specs()
+    state = {"orders": []}
+    fill_reads = 0
+    sequence = []
+    posted = False
+
+    async def fake_fills(current_specs, symbol):
+        nonlocal fill_reads
+        fill_reads += 1
+        # initial read and pre-reprice loop read: only YES filled.  The first
+        # authoritative read *after* exact inactive confirmation sees the NO
+        # terminal race fill. No replacement is then allowed.
+        if fill_reads < 3:
+            return {"yes0": D("1"), "no0": D("0")}
+        return {"yes0": D("1"), "no0": D("1")}
+
+    async def fake_top(symbol, attempts=5, delay_s=0.6):
+        return D("0.48"), D("100"), D("0.51"), D("100")
+
+    async def fake_cancel(maker, spec, symbol):
+        sequence.append("cancel")
+        return {"ok": True}
+
+    async def fake_active(client_id, symbol):
+        sequence.append("inactive_confirmed")
+        return False
+
+    async def fake_post(*args, **kwargs):
+        nonlocal posted
+        posted = True
+        raise AssertionError("replacement posted before terminal old-order fill was reconciled")
+
+    monkeypatch.setattr(m.ladder, "fills", fake_fills)
+    monkeypatch.setattr(m.ladder, "fresh_top_retry", fake_top)
+    monkeypatch.setattr(m.ladder, "cancel", fake_cancel)
+    monkeypatch.setattr(m, "_exact_active", fake_active)
+    monkeypatch.setattr(m, "_post_replacement", fake_post)
+    monkeypatch.setattr(m, "_write_state", lambda payload: None)
+
+    status = asyncio.run(m._dynamic_complement_rescue(
+        DummyMaker(),
+        event=_event(),
+        sid="s",
+        specs=specs,
+        state=state,
+        filled_side="YES",
+        min_edge=D("0.01"),
+        complement_wait=5.0,
+    ))
+    assert status == "MATCHED"
+    assert sequence == ["cancel", "inactive_confirmed"]
+    assert fill_reads == 3
+    assert posted is False
+
+
 def test_rescue_never_reposts_when_cancel_identity_remains_active(monkeypatch):
     specs = _specs()
     state = {"orders": []}
