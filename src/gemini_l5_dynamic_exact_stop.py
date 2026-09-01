@@ -1,14 +1,15 @@
 """Exact-ID shutdown/reconciliation for the Gemini L5 dynamic q1 owner.
 
-The outer shell freezes the Docker owner before this module runs.  This module
-cancels only the newest durable cycle's exact client IDs and refuses an upgrade
-while any order or prediction position remains.  If that exact cycle filled,
-an upgrade is permitted only after Gemini's public event record independently
-shows the contract SETTLED with a YES/NO resolution and the private account is
-flat.  Thus a historical settled fill does not block upgrades forever, while an
-unsettled fill can never be waved through.
+The outer shell freezes the Docker owner before this module runs. This module
+binds itself to the current durable outer session ID, cancels only that session's
+newest cycle exact client IDs, and refuses an upgrade while any order or prediction
+position remains. Historical cycle files from prior sessions are never eligible
+for cancellation merely because their filename has a larger cycle number.
 
-There is deliberately no account/session-wide cancel fallback.
+If the current exact cycle filled, an upgrade is permitted only after Gemini's
+public event record independently shows the contract SETTLED with a YES/NO
+resolution and the private account is flat. There is deliberately no account-wide
+or session-wide cancel fallback.
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ from src.gemini_prediction_auth import private_rest_request
 
 ZERO = D("0")
 STATE_DIR_ENV = "GEMINI_L5_DYNAMIC_STATE_DIR"
+SESSION_FILE = "session.json"
 REST = "https://api.gemini.com"
 
 
@@ -48,14 +50,41 @@ def _filled(row: Mapping[str, Any] | None) -> D:
     return D(str(row.get("filledQuantity") or row.get("filled_quantity") or "0"))
 
 
-def newest_cycle(state_dir: Path) -> tuple[Path, dict[str, Any]] | None:
-    files=sorted(state_dir.glob("cycle-*.json"))
-    if not files: return None
-    path=files[-1]
-    try: payload=json.loads(path.read_text())
-    except (OSError,json.JSONDecodeError) as exc: raise RuntimeError(f"latest cycle state unreadable path={path}") from exc
-    if not isinstance(payload,dict): raise RuntimeError("latest cycle state is not an object")
-    return path,payload
+def _load_json(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        payload=json.loads(path.read_text())
+    except (OSError,json.JSONDecodeError) as exc:
+        raise RuntimeError(f"{label} state unreadable path={path}") from exc
+    if not isinstance(payload,dict):
+        raise RuntimeError(f"{label} state is not an object path={path}")
+    return payload
+
+
+def current_session_id(state_dir: Path) -> str | None:
+    path=state_dir/SESSION_FILE
+    if not path.exists():
+        return None
+    payload=_load_json(path,label="outer session")
+    sid=str(payload.get("sid") or "").strip()
+    if not sid:
+        raise RuntimeError(f"outer session state missing sid path={path}")
+    return sid
+
+
+def newest_cycle(
+    state_dir: Path,
+    *,
+    session_id: str | None = None,
+) -> tuple[Path, dict[str, Any]] | None:
+    """Return newest durable cycle, optionally restricted to one outer session."""
+    matches: list[tuple[Path,dict[str,Any]]] = []
+    prefix = None if session_id is None else f"{session_id}-c"
+    for path in sorted(state_dir.glob("cycle-*.json")):
+        payload=_load_json(path,label="cycle")
+        if prefix is not None and not str(payload.get("sid") or "").startswith(prefix):
+            continue
+        matches.append((path,payload))
+    return matches[-1] if matches else None
 
 
 def cycle_client_ids(payload: Mapping[str, Any]) -> set[str]:
@@ -114,13 +143,17 @@ async def public_settlement(event_ticker: str, symbol: str) -> dict[str, Any]:
 
 
 async def run() -> dict[str, Any]:
-    state_dir=Path(os.getenv(STATE_DIR_ENV,"/state")); latest=newest_cycle(state_dir)
+    state_dir=Path(os.getenv(STATE_DIR_ENV,"/state"))
+    session_id=current_session_id(state_dir)
+    latest=newest_cycle(state_dir,session_id=session_id)
     payload: dict[str,Any]={}
     if latest is None:
         ids:set[str]=set(); cycle_path=None; cycle_terminal=None; event_ticker=""; symbol=""
     else:
         path,payload=latest; ids=cycle_client_ids(payload); cycle_path=str(path); cycle_terminal=bool(payload.get("terminal")); event_ticker=str(payload.get("event") or ""); symbol=str(payload.get("symbol") or "")
-        if not ids: raise RuntimeError(f"latest dynamic cycle has no exact client IDs path={path}")
+        if session_id is not None and not str(payload.get("sid") or "").startswith(f"{session_id}-c"):
+            raise RuntimeError("selected cycle does not belong to current outer session")
+        if not ids: raise RuntimeError(f"latest current-session dynamic cycle has no exact client IDs path={path}")
 
     active_before=await _active(); exact_active=[row for row in active_before if _client(row) in ids]; unknown_active=[row for row in active_before if _client(row) not in ids]
     if unknown_active:
@@ -157,6 +190,7 @@ async def run() -> dict[str, Any]:
 
     return {
         "type":"GEMINI_L5_DYNAMIC_EXACT_STOP",
+        "current_session_id":session_id,
         "cycle_path":cycle_path,
         "cycle_terminal_before_stop":cycle_terminal,
         "exact_client_ids":sorted(ids),
