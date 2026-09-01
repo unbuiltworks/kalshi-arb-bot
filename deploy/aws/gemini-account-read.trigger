@@ -1,2 +1,2 @@
-READ_ID=gemini-account-read-20260901-0152
+READ_ID=gemini-account-read-20260901-aggr-001
 MODE=READ_ONLY_NO_MUTATION
