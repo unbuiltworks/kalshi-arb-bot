@@ -29,42 +29,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          REMOTE=$(cat <<'EOF'
-          sudo -u ssm-user bash -lc 'set -euo pipefail
-          ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env
-          [ -f "$ENV_FILE" ] || ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env
-          IMAGE=arb-gemini-l5-incremental:q1-9942a8cfeb6e
-          docker image inspect "$IMAGE" >/dev/null
-          docker run --rm --network host --env-file "$ENV_FILE" "$IMAGE" python - <<"PY"
-import asyncio, json
-from decimal import Decimal as D
-from src.gemini_prediction_auth import private_rest_request
-
-async def post(path, params):
-    r = await private_rest_request("POST", path, params=params, timeout=8.0)
-    if r.status_code != 200:
-        raise RuntimeError(f"read failed {path} http={r.status_code}")
-    x = r.json()
-    return x if isinstance(x, dict) else {}
-
-async def main():
-    active = await post("/v1/prediction-markets/orders/active", {"limit":1000,"offset":0})
-    positions = await post("/v1/prediction-markets/positions", {"limit":1000,"offset":0,"sort":"+expiryDate"})
-    orders = active.get("orders") if isinstance(active.get("orders"), list) else []
-    pos = positions.get("positions") if isinstance(positions.get("positions"), list) else []
-    nonzero=[]
-    for r in pos:
-        if not isinstance(r,dict):
-            continue
-        try: q=D(str(r.get("totalQuantity") or "0"))
-        except Exception: q=D("0")
-        if q>0:
-            nonzero.append({"symbol":str(r.get("symbol") or ""),"qty":str(q),"eventOutcome":str(r.get("eventOutcome") or r.get("outcome") or "")})
-    print(json.dumps({"type":"GEMINI_ACCOUNT_EXPOSURE_READ","active_prediction_orders":len(orders),"nonzero_prediction_positions":nonzero,"mutation":False,"order_entry":False}, sort_keys=True))
-asyncio.run(main())
-PY'
-          EOF
-          )
+          PY_B64='aW1wb3J0IGFzeW5jaW8sIGpzb24KZnJvbSBkZWNpbWFsIGltcG9ydCBEZWNpbWFsIGFzIEQKZnJvbSBzcmMuZ2VtaW5pX3ByZWRpY3Rpb25fYXV0aCBpbXBvcnQgcHJpdmF0ZV9yZXN0X3JlcXVlc3QKCmFzeW5jIGRlZiBwb3N0KHBhdGgsIHBhcmFtcyk6CiAgICByID0gYXdhaXQgcHJpdmF0ZV9yZXN0X3JlcXVlc3QoIlBPU1QiLCBwYXRoLCBwYXJhbXM9cGFyYW1zLCB0aW1lb3V0PTguMCkKICAgIGlmIHIuc3RhdHVzX2NvZGUgIT0gMjAwOgogICAgICAgIHJhaXNlIFJ1bnRpbWVFcnJvcihmInJlYWQgZmFpbGVkIHtwYXRofSBodHRwPXtyLnN0YXR1c19jb2RlfSIpCiAgICB4ID0gci5qc29uKCkKICAgIHJldHVybiB4IGlmIGlzaW5zdGFuY2UoeCwgZGljdCkgZWxzZSB7fQoKYXN5bmMgZGVmIG1haW4oKToKICAgIGFjdGl2ZSA9IGF3YWl0IHBvc3QoIi92MS9wcmVkaWN0aW9uLW1hcmtldHMvb3JkZXJzL2FjdGl2ZSIsIHsibGltaXQiOjEwMDAsIm9mZnNldCI6MH0pCiAgICBwb3NpdGlvbnMgPSBhd2FpdCBwb3N0KCIvdjEvcHJlZGljdGlvbi1tYXJrZXRzL3Bvc2l0aW9ucyIsIHsibGltaXQiOjEwMDAsIm9mZnNldCI6MCwic29ydCI6IitleHBpcnlEYXRlIn0pCiAgICBvcmRlcnMgPSBhY3RpdmUuZ2V0KCJvcmRlcnMiKSBpZiBpc2luc3RhbmNlKGFjdGl2ZS5nZXQoIm9yZGVycyIpLCBsaXN0KSBlbHNlIFtdCiAgICBwb3MgPSBwb3NpdGlvbnMuZ2V0KCJwb3NpdGlvbnMiKSBpZiBpc2luc3RhbmNlKHBvc2l0aW9ucy5nZXQoInBvc2l0aW9ucyIpLCBsaXN0KSBlbHNlIFtdCiAgICBub256ZXJvPVtdCiAgICBmb3IgciBpbiBwb3M6CiAgICAgICAgaWYgbm90IGlzaW5zdGFuY2UociwgZGljdCk6CiAgICAgICAgICAgIGNvbnRpbnVlCiAgICAgICAgdHJ5OgogICAgICAgICAgICBxPUQoc3RyKHIuZ2V0KCJ0b3RhbFF1YW50aXR5Iikgb3IgIjAiKSkKICAgICAgICBleGNlcHQgRXhjZXB0aW9uOgogICAgICAgICAgICBxPUQoIjAiKQogICAgICAgIGlmIHE+MDoKICAgICAgICAgICAgbm9uemVyby5hcHBlbmQoewogICAgICAgICAgICAgICAgInN5bWJvbCI6c3RyKHIuZ2V0KCJzeW1ib2wiKSBvciAiIiksCiAgICAgICAgICAgICAgICAicXR5IjpzdHIocSksCiAgICAgICAgICAgICAgICAiZXZlbnRPdXRjb21lIjpzdHIoci5nZXQoImV2ZW50T3V0Y29tZSIpIG9yIHIuZ2V0KCJvdXRjb21lIikgb3IgIiIpCiAgICAgICAgICAgIH0pCiAgICBwcmludChqc29uLmR1bXBzKHsKICAgICAgICAidHlwZSI6IkdFTUlOSV9BQ0NPVU5UX0VYUE9TVVJFX1JFQUQiLAogICAgICAgICJhY3RpdmVfcHJlZGljdGlvbl9vcmRlcnMiOmxlbihvcmRlcnMpLAogICAgICAgICJub256ZXJvX3ByZWRpY3Rpb25fcG9zaXRpb25zIjpub256ZXJvLAogICAgICAgICJtdXRhdGlvbiI6RmFsc2UsCiAgICAgICAgIm9yZGVyX2VudHJ5IjpGYWxzZQogICAgfSwgc29ydF9rZXlzPVRydWUpKQoKYXN5bmNpby5ydW4obWFpbigpKQo='
+          REMOTE="sudo -u ssm-user bash -lc 'set -euo pipefail; ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; [ -f \"\$ENV_FILE\" ] || ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; IMAGE=arb-gemini-l5-ladder:q1-b1f37dc1b612; docker image inspect \"\$IMAGE\" >/dev/null; echo $PY_B64 | base64 -d | docker run -i --rm --network host --env-file \"\$ENV_FILE\" \"\$IMAGE\" python -'"
           PARAMS=$(jq -nc --arg cmd "$REMOTE" '{commands:[$cmd]}')
           CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --parameters "$PARAMS" --query 'Command.CommandId' --output text)
           for i in $(seq 1 60); do
