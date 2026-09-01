@@ -29,6 +29,10 @@ python3 -m src.polymarket_l5.ledger                 # offline: cashflow ledger +
 python3 -m src.polymarket_l5.behavior               # offline: 12-question behavioral report
 python3 -m src.polymarket_l5.reconcile_disciplined_clone   # offline: no-hindsight replay recon
 python3 -m src.polymarket_l5.action_model           # offline: state->next-action model
+python3 -m src.polymarket_l5.early_era              # offline: Mar->May cohorts, eras, refinement
+python3 -m src.polymarket_l5.microstructure         # offline: UI-grounded fill-level tests
+python3 -m src.polymarket_l5.venue_control          # network: Mar 27 venue-liquidity control
+python3 -m src.polymarket_l5.ops collect|shadow|regression|status   # 24/7 ops layer
 python3 -m src.polymarket_l5.realtime_mirror --minutes 30  # network: READ-ONLY live mirror
 python3 -m src.polymarket_l5.realtime_mirror --compare <stream.jsonl>
 python3 -m pytest tests/test_l5_canonical.py tests/test_polymarket_l5_disciplined_clone.py tests/test_l5_realtime_mirror.py
@@ -150,6 +154,83 @@ isolated behind a `VenueAdapter` protocol (`parse_window`,
 consumes the adapter, so policy/analysis code never sees venue fields.
 Porting the pipeline to another binary-window venue (e.g. Kalshi KXBTC15M)
 means one new adapter, not policy changes.
+
+## Launch and refinement chronology (`early_era.py`, 2026-09-01)
+
+Three-era comparison confirms a ~48h behavioral regime change (FACT-level
+frequencies; "automation" stays inference):
+
+| | Mar 19–25 | Mar 26 | Mar 27 → Apr 25 |
+|---|---|---|---|
+| windows | 7 | 8 | 398 |
+| median $/window | $1.00 | $26.33 | $227.43 |
+| both-sides % | 0% | 50% | 96.2% |
+| fills/window (med) | 1 | 12 | 21 |
+| matched qty % | 0% | 68.5% | 90.4% |
+
+* Regime similarity (total variation on action relations): Mar 27–Apr 4 vs
+  Aug 28–Sep 1 = **0.05** (near-identical) vs Mar 19–26 = 0.12 on only 122
+  decisions. **Mar 27+ is the correct primary training cohort**; state-level
+  TV vs Aug (0.66) is dominated by the market-mix shift (Mar–May is 100%
+  BTC-15m; 5m windows come later).
+* **The Mar 27 launch was not incentive-driven**: first credited incentive
+  row in the source stream is ~Apr 20; Mar 27–Apr 19 ran on trading economics
+  alone (mostly negative). The volume ramp (13.8 → 35+ windows/day, notional
+  ×3–8) begins exactly the week incentives first appear (Apr 20–26).
+* Scaling decomposition (Mar 27–Apr 10 vs May 11–31): turnover ×37 =
+  windows/day ×2.6 × notional ×8.1; matched 82→91%; pair cost ~unchanged;
+  trading ¢/$ −0.90 → +0.87; incentives 0 → 0.24¢/$. Same policy, larger
+  size, better completion, plus incentives — not a second regime change.
+* Refinement (Mar 30–Apr 2 vs Apr 6–10): opposite-leg gap median 38s → 116s,
+  final pair cost 0.9992 → 0.9230, residual tolerance up (0.106 → 0.197 of
+  qty), notional DOWN ($95 → $62), size unchanged, first-leg price/TTE
+  unchanged. Consistent with the "became more patient about the second leg"
+  hypothesis; time-of-day shifted (17–22 UTC → 13–20 UTC), which is a
+  confound we flag rather than resolve. Maker/taker is UNKNOWN for Mar–May
+  (takerOnly coverage is Aug 28–31 only).
+
+## Fill-level microstructure (`microstructure.py`, UI-grounded)
+
+* **Sizing**: share qty rises with price (8 sh at 15–30c → 24 sh at 85–95c)
+  with a cheap-tail completion bump (<5c completion legs median 34.9 sh);
+  notional rises steeply ($0.75 at <5c → $21–27 at 85c+). Neither
+  constant-dollars nor constant-shares; matches the UI screenshots.
+* **Completion tendency**: next buy lands on the deficit side ~49% —
+  share-count deficit does NOT drive the next action; 57.1% of completion
+  fills create a sub-$1 incremental pair.
+* **Fragmentation**: 11,080 runs of consecutive same-side fills at an
+  identical price (max run 24); verified fills inside runs are 96% maker
+  (18,372 vs 712 taker) — the resting-order-fragment signature is real.
+* **Pair-cost trajectory**: median ≥$1.00 at the window's first quartiles,
+  descending to 0.9705 by the end — pairs start expensive and are worked
+  DOWN below $1 late; the final pair cost understates the intra-window path.
+* **Extreme bands**: <5c buys are 65% extension / 33% completion on a
+  share basis — cheap fills mostly deepen the already-share-heavy cheap
+  side (dollar-balanced books are share-skewed cheap); ">95c" buys are 60%
+  completion. "Cheap = lottery ticket" remains unsupported; "cheap =
+  always completion" is also too simple on shares.
+* **Concurrency**: 73.9% of window entries happen while ≥1 other window is
+  live (max 4 concurrent); concurrent entries carry ~4× less notional
+  (median $67 vs $256 solo) — capital is split, not cloned, across windows.
+
+## 24/7 READ-ONLY operations layer (`ops.py` + `.github/workflows/l5-ops.yml`)
+
+Claude is NOT the always-on process: `ops collect|shadow|regression|status`
+are one-shot, restart-safe, idempotent subcommands for ordinary durable
+infrastructure. Collector: cursor + fingerprint dedup, append-only dated
+raw JSONL with provenance, heartbeat with cursor lag, failure artifacts
+retained under `data/l5/ops/failures/`. Shadow: incremental behavioral
+comparison of new fills vs `l5_behavior.json` + the action model (state
+coverage, mean probability of observed actions) — no P&L claimed.
+Regression: canonical-sha check, action-model rebuild comparison, test
+suite. Live validation (Sep 1): 4,000 fills collected (cursor lag <60s),
+123 windows shadowed, mean action probability 0.138, **1 off-distribution
+decision out of 3,772** — live L5 sits inside the historical model.
+The workflow is scheduled (30-min collect+shadow, daily regression) but
+GitHub only runs schedules from the default branch, so on
+`feature/l5-canonical` it is inert except manual dispatch — merging to
+`main` is the owner's explicit activation decision. Adapter-agnostic:
+new venues/categories plug in via the `ADAPTERS`/`SOURCES` registries.
 
 ## Remaining unknowns blocking a "we reproduced L5" claim
 
