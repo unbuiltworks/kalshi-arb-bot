@@ -1,9 +1,16 @@
 import asyncio
+import importlib
 
 from src import gemini_kalshi_multi_ws_hot_catalog as catalog_mod
 
 
+def _fresh_catalog_module():
+    """Reset module-level compatibility wiring leaked by collection/import order."""
+    return importlib.reload(catalog_mod)
+
+
 def test_failed_initial_discovery_is_singleflight_and_cooldown_blocks_retry(monkeypatch):
+    mod = _fresh_catalog_module()
     calls = 0
 
     async def fail_discovery(_http, _max_window_skew_s):
@@ -11,10 +18,10 @@ def test_failed_initial_discovery_is_singleflight_and_cooldown_blocks_retry(monk
         calls += 1
         raise RuntimeError("rate limited")
 
-    monkeypatch.setattr(catalog_mod, "_discover_pairs", fail_discovery)
+    monkeypatch.setattr(mod, "_discover_pairs", fail_discovery)
 
     async def scenario():
-        catalog = catalog_mod.BackgroundPairCatalog(refresh_s=30.0)
+        catalog = mod.BackgroundPairCatalog(refresh_s=30.0)
         assets = ["BTC", "ETH", "SOL", "XRP"]
 
         first = await asyncio.gather(
@@ -42,6 +49,7 @@ def test_failed_initial_discovery_is_singleflight_and_cooldown_blocks_retry(monk
 
 
 def test_success_resets_failure_backoff(monkeypatch):
+    mod = _fresh_catalog_module()
     calls = 0
 
     async def fail_then_succeed(_http, _max_window_skew_s):
@@ -51,10 +59,10 @@ def test_success_resets_failure_backoff(monkeypatch):
             raise RuntimeError("rate limited")
         return []
 
-    monkeypatch.setattr(catalog_mod, "_discover_pairs", fail_then_succeed)
+    monkeypatch.setattr(mod, "_discover_pairs", fail_then_succeed)
 
     async def scenario():
-        catalog = catalog_mod.BackgroundPairCatalog(refresh_s=30.0)
+        catalog = mod.BackgroundPairCatalog(refresh_s=30.0)
         try:
             await catalog._refresh(object())
         except RuntimeError:
