@@ -1,0 +1,58 @@
+name: AWS Gemini q10 reward frontier status
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-q10-reward-frontier-status.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  CONTAINER_NAME: arb-gemini-q10-reward-frontier-shadow
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Read shadow status and logs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          C=${CONTAINER_NAME}
+          if ! docker inspect "\$C" >/dev/null 2>&1; then
+            echo 'AWS_Q10_REWARD_FRONTIER_STATUS container_present=false'
+            exit 0
+          fi
+          RUNNING=\$(docker inspect -f '{{.State.Running}}' "\$C")
+          EXIT=\$(docker inspect -f '{{.State.ExitCode}}' "\$C")
+          STARTED=\$(docker inspect -f '{{.State.StartedAt}}' "\$C")
+          FINISHED=\$(docker inspect -f '{{.State.FinishedAt}}' "\$C")
+          echo "AWS_Q10_REWARD_FRONTIER_STATUS container_present=true running=\$RUNNING exit_code=\$EXIT started_at=\$STARTED finished_at=\$FINISHED read_only=true order_entry=false"
+          docker logs --tail 250 "\$C" 2>&1 || true
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB q10 reward frontier read-only status" --parameters "$PARAMS" --timeout-seconds 300 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 150); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
