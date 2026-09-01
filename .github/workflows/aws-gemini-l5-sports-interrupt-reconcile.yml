@@ -14,6 +14,8 @@ env:
   AWS_REGION: us-east-1
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  CLEANUP_COMMIT: 0ae1facd13493c7937b1fd15f1bc414d51800daf
+  LIVE_BRANCH: feature/gemini-l5-crypto-sports-live-q1
 
 jobs:
   reconcile:
@@ -29,80 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; [ -f \"\$ENV_FILE\" ] || ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; STATE_DIR=/home/ssm-user/gemini-short-crypto-state; IMAGE=arb-gemini-l5-crypto-sports:q1-10ea65d31512; docker image inspect \"\$IMAGE\" >/dev/null; docker run --rm --network host --env-file \"\$ENV_FILE\" -e PYTHONUNBUFFERED=1 -e GEMINI_SHORT_CRYPTO_STATE_DIR=/state -v \"\$STATE_DIR:/state\" \"\$IMAGE\" python -u - <<\"PY\"
-import asyncio, json
-from decimal import Decimal as D
-from src import gemini_short_crypto_btc5m_maker_canary_q1 as base
-from src.gemini_short_crypto_btc5m_maker_canary_q1_v3 import maker_client_ids
-from src import gemini_short_crypto_local_budget as local
-from src import gemini_sports_l5_inventory_local_budget as budget
-from src.gemini_short_crypto_btc5m_inventory_maker_canary_q1 import inventory_status
-
-async def main():
-    state = local.local_open_state()
-    if state is None:
-        print(json.dumps({\"type\":\"SPORTS_INTERRUPT_RECONCILE\",\"status\":\"NO_LOCAL_RESERVATION\",\"order_entry\":False}, sort_keys=True))
-        return
-    if str(state.get(\"strategy\") or \"\") != budget.STRATEGY:
-        raise RuntimeError(f\"unexpected reservation strategy={state.get('strategy')!r}\")
-    trade_id = str(state.get(\"trade_id\") or \"\")
-    symbol = str(state.get(\"symbol\") or \"\")
-    event_ticker = str(state.get(\"event_ticker\") or \"\")
-    if not trade_id or not symbol or not event_ticker:
-        raise RuntimeError(\"incomplete Sports reservation identity\")
-    yes_id, no_id = maker_client_ids(trade_id)
-    maker = base.GeminiMakerSession()
-    try:
-        await maker.connect()
-        yes_row = await base._order_by_client(yes_id, symbol)
-        no_row = await base._order_by_client(no_id, symbol)
-        yes_cancel = await base._cancel_maker(maker, row=yes_row)
-        no_cancel = await base._cancel_maker(maker, row=no_row)
-        await asyncio.sleep(0.25)
-        _, _, yes_fill, no_fill = await base._reconcile_pair(yes_id, no_id, symbol)
-    finally:
-        await maker.close()
-    if not (D(\"0\") <= yes_fill <= D(\"1\") and D(\"0\") <= no_fill <= D(\"1\")):
-        raise RuntimeError(\"q1 fill bounds violated\")
-    status = inventory_status(yes_fill, no_fill)
-    if yes_fill == 0 and no_fill == 0:
-        if not yes_cancel.get(\"ok\") or not no_cancel.get(\"ok\"):
-            raise RuntimeError(\"zero-fill canary cancel not authoritative\")
-        await budget.release(symbol=symbol, event_ticker=event_ticker, trade_id=trade_id, reason=\"INTERRUPTED_CANARY_ZERO_FILL_CANCELLED\")
-        released = True
-    else:
-        await budget.result(
-            symbol=symbol, event_ticker=event_ticker, trade_id=trade_id,
-            status=status, yes_fill=str(yes_fill), no_fill=str(no_fill),
-            metadata={
-                \"interrupt_reconciled\": True,
-                \"yes_cancel\": yes_cancel,
-                \"no_cancel\": no_cancel,
-                \"settlement_required\": True,
-                \"normal_sell_exit\": False,
-            },
-        )
-        released = False
-    print(json.dumps({
-        \"type\":\"SPORTS_INTERRUPT_RECONCILE\",
-        \"status\":status,
-        \"trade_id\":trade_id,
-        \"symbol\":symbol,
-        \"event_ticker\":event_ticker,
-        \"yes_client_id\":yes_id,
-        \"no_client_id\":no_id,
-        \"yes_fill\":str(yes_fill),
-        \"no_fill\":str(no_fill),
-        \"yes_cancel_ok\":bool(yes_cancel.get(\"ok\")),
-        \"no_cancel_ok\":bool(no_cancel.get(\"ok\")),
-        \"reservation_released\":released,
-        \"settlement_required\":not released,
-        \"realized\":False,
-        \"order_entry\":False,
-    }, sort_keys=True, default=str))
-
-asyncio.run(main())
-PY'"
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin ${LIVE_BRANCH} >/dev/null; git cat-file -e \"${CLEANUP_COMMIT}^{commit}\"; git show ${CLEANUP_COMMIT}:src/gemini_sports_l5_interrupt_cleanup.py > /tmp/gemini_sports_l5_interrupt_cleanup.py; ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; [ -f \"\$ENV_FILE\" ] || ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; STATE_DIR=/home/ssm-user/gemini-short-crypto-state; IMAGE=arb-gemini-l5-crypto-sports:q1-10ea65d31512; docker image inspect \"\$IMAGE\" >/dev/null; docker run --rm --network host --env-file \"\$ENV_FILE\" -e PYTHONUNBUFFERED=1 -e GEMINI_SHORT_CRYPTO_STATE_DIR=/state -v \"\$STATE_DIR:/state\" -v /tmp/gemini_sports_l5_interrupt_cleanup.py:/app/gemini_sports_l5_interrupt_cleanup.py:ro \"\$IMAGE\" python -u /app/gemini_sports_l5_interrupt_cleanup.py'"
           PARAMS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
           CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --parameters "$PARAMS" --query 'Command.CommandId' --output text)
           for i in $(seq 1 80); do
