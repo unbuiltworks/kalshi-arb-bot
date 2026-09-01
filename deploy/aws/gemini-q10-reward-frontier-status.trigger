@@ -1,0 +1,2 @@
+READ_ID=q10-reward-frontier-status-20260901-0641
+MODE=READ_ONLY_STATUS
