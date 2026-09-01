@@ -1,0 +1,2 @@
+Read-only q10 pre-fill recenter shadow deployment trigger.
+No live order entry. Live production arm is disabled while this diagnostic runs.
