@@ -30,9 +30,12 @@ load_dotenv()
 GEMINI_REST = "https://api.gemini.com"
 GEMINI_WS = "wss://ws.gemini.com"
 MAX_NONCE_FUTURE_S = 25
+PRIVATE_REST_MIN_INTERVAL_ENV = "GEMINI_PRIVATE_REST_MIN_INTERVAL_SECONDS"
 
 _nonce_lock = threading.Lock()
 _last_nonce = 0
+_pacer_registry_lock = threading.Lock()
+_private_rest_pacers: dict[int, dict[str, Any]] = {}
 
 
 def next_nonce() -> int:
@@ -51,6 +54,45 @@ def next_nonce() -> int:
             raise RuntimeError("Gemini time-based nonce rate exceeded")
         _last_nonce = candidate
         return candidate
+
+
+def _private_rest_min_interval() -> float:
+    raw = os.getenv(PRIVATE_REST_MIN_INTERVAL_ENV, "0").strip()
+    try:
+        value = float(raw or "0")
+    except ValueError as exc:
+        raise RuntimeError(f"invalid {PRIVATE_REST_MIN_INTERVAL_ENV}={raw!r}") from exc
+    if value < 0:
+        raise RuntimeError(f"{PRIVATE_REST_MIN_INTERVAL_ENV} must be >= 0")
+    return value
+
+
+async def _pace_private_rest() -> None:
+    """Optionally serialize nonce-consuming REST auth without blocking WS reads.
+
+    Time-based Gemini nonces are second-granularity. A continuously running owner
+    can otherwise push its local monotonic nonce tens of seconds into the future
+    simply by polling several private endpoints in a burst. The live L5 owner
+    enables this pacer so REST authentication averages no faster than one request
+    per configured interval. WebSocket order/fill traffic remains unpaced.
+    """
+    interval = _private_rest_min_interval()
+    if interval <= 0:
+        return
+    loop = asyncio.get_running_loop()
+    key = id(loop)
+    with _pacer_registry_lock:
+        state = _private_rest_pacers.get(key)
+        if state is None or state.get("loop") is not loop:
+            state = {"loop": loop, "lock": asyncio.Lock(), "next_allowed": 0.0}
+            _private_rest_pacers[key] = state
+    lock: asyncio.Lock = state["lock"]
+    async with lock:
+        now = time.monotonic()
+        wait = float(state["next_allowed"]) - now
+        if wait > 0:
+            await asyncio.sleep(wait)
+        state["next_allowed"] = time.monotonic() + interval
 
 
 def credentials() -> tuple[str, str]:
@@ -139,6 +181,7 @@ async def private_rest_request(
     secret = api_secret or secret
     if not key or not secret:
         raise RuntimeError("Gemini API credentials are not configured")
+    await _pace_private_rest()
     headers = rest_auth_headers(key, secret, path, params=params)
     async with httpx.AsyncClient(timeout=timeout) as client:
         return await client.request(
