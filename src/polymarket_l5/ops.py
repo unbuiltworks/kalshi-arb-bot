@@ -331,7 +331,7 @@ def run_regression() -> Dict[str, Any]:
     report["checks"]["canonical_sha_matches_meta"] = (
         digest == meta.get("content_sha256_16"))
     committed = json.loads(ACTION_MODEL.read_text())
-    rebuilt = am.build_model()
+    rebuilt = am.build_model(since_epoch=committed.get("since_epoch"))
     report["checks"]["action_model_reproducible"] = (
         rebuilt["n_decisions"] == committed["n_decisions"]
         and rebuilt["n_states"] == committed["n_states"])

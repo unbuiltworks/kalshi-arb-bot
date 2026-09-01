@@ -106,10 +106,21 @@ def _rows_by_window(csv_path: Path) -> Iterable[List[Dict[str, str]]]:
             yield current
 
 
-def build_model(csv_path: Path = SEQUENCE_CSV) -> Dict[str, Any]:
+# Systematic-regime start (2026-03-27 00:00 UTC): the behavioral changepoint
+# established by early_era.py. Pre-regime decisions (Mar 19-26, 122 of
+# 69,768) are experimentation-era noise; excluding them makes the model the
+# "primary training cohort" per issue #167.
+SYSTEMATIC_REGIME_EPOCH = 1774569600
+
+
+def build_model(csv_path: Path = SEQUENCE_CSV,
+                since_epoch: Optional[int] = None) -> Dict[str, Any]:
     counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
     n_decisions = n_windows = 0
     for rows in _rows_by_window(csv_path):
+        if since_epoch is not None and rows and \
+                int(float(rows[0]["timestamp"])) < since_epoch:
+            continue
         n_windows += 1
         rows.sort(key=lambda r: (int(r["timestamp"]), int(r["trade_seq"] or 0)))
         for prev, nxt in zip(rows, rows[1:]):
@@ -135,6 +146,7 @@ def build_model(csv_path: Path = SEQUENCE_CSV) -> Dict[str, Any]:
     return {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "source": str(csv_path),
+        "since_epoch": since_epoch,
         "n_windows": n_windows,
         "n_decisions": n_decisions,
         "n_states": len(states),
@@ -217,7 +229,7 @@ def compare_policy(model: Dict[str, Any], policy: PolicyHook) -> Dict[str, Any]:
 
 
 def main() -> int:
-    model = build_model()
+    model = build_model(since_epoch=SYSTEMATIC_REGIME_EPOCH)
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUT_JSON.write_text(json.dumps(model, indent=1))
     top = sorted(model["states"].items(), key=lambda kv: -kv[1]["n"])[:12]
