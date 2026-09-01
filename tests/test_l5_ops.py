@@ -93,3 +93,72 @@ def test_failure_artifact_and_heartbeat_flip(ops_dirs, monkeypatch):
     assert saved["context"] == {"extra": "ctx"}
     hb = json.loads((ops_dirs / "heartbeat.json").read_text())
     assert hb["status"] == "error" and hb["failure_artifact"] == str(path)
+
+
+# ---------- true ex-ante scorer ----------
+
+def _fake_model():
+    from src.polymarket_l5 import exante_scorer as ex
+    model = {
+        "since_epoch": 1774569600, "n_decisions": 100,
+        "states": {
+            "sA": {"n": 80, "action_probs": {"complete|q5-15": 0.6,
+                                             "extend|q5-15": 0.4},
+                   "modal_action": "complete|q5-15"},
+            "sB": {"n": 20, "action_probs": {"extend|q<5": 1.0},
+                   "modal_action": "extend|q<5"},
+        },
+    }
+    # pooled marginal: complete|q5-15 48/100, extend|q5-15 32/100, extend|q<5 20/100
+    import collections
+    pooled = collections.defaultdict(float)
+    tot = 0.0
+    for st in model["states"].values():
+        for a, p in st["action_probs"].items():
+            pooled[a] += st["n"] * p
+        tot += st["n"]
+    model["_marginal"] = {a: v / tot for a, v in pooled.items()}
+    model["_vocab"] = sorted(pooled)
+    model["_sha256_16"] = "testsha"
+    return model
+
+
+def test_exante_scoring_arms_and_off_distribution():
+    from src.polymarket_l5 import exante_scorer as ex
+    model = _fake_model()
+    pred = ex._predict(model, "sA")
+    row = ex._score(pred, model, "complete|q5-15")
+    assert row["p_conditional"] == 0.6
+    assert row["p_marginal"] == 0.48
+    assert row["exact_hit_conditional"] is True
+    assert row["relation_hit_conditional"] is True
+    # observed action the state never produced
+    row2 = ex._score(pred, model, "extend|q<5")
+    assert row2["p_conditional"] == 0.0 and row2["exact_hit_conditional"] is False
+    # unvisited state -> off-distribution, conditional metrics absent
+    row3 = ex._score(ex._predict(model, "sZ"), model, "complete|q5-15")
+    assert row3["off_distribution"] is True
+    assert row3["p_conditional"] is None and row3["p_marginal"] == 0.48
+
+
+def test_exante_summarize_predeclared_comparison(tmp_path):
+    from src.polymarket_l5 import exante_scorer as ex
+    model = _fake_model()
+    tape = tmp_path / "tape.jsonl"
+    rows = [{"kind": "session_start", "utc": "t", "model_sha256_16": "testsha",
+             "model_decisions": 100, "predeclared": "x"}]
+    pred = ex._predict(model, "sA")
+    for i, actual in enumerate(["complete|q5-15"] * 6 + ["extend|q5-15"] * 4):
+        r = ex._score(pred, model, actual)
+        r.update({"kind": "scored", "window_id": "w", "fill_ts": i,
+                  "pred_cycle": i, "score_cycle": i + 1,
+                  "strict_temporal": True, "seq": i})
+        rows.append(r)
+    tape.write_text("\n".join(json.dumps(r) for r in rows))
+    s = ex.summarize(tape)
+    a = s["all_transitions"]
+    assert a["n_scored"] == 10 and a["off_distribution"] == 0
+    # actual mix matches sA's conditional -> conditional beats marginal on logp
+    assert a["mean_logp_conditional"] > a["mean_logp_marginal"]
+    assert a["exact_top1_pct_conditional"] == 60.0
+    assert s["strict_temporal_subset"]["n_scored"] == 10
