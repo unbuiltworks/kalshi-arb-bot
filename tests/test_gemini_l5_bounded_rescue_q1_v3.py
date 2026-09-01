@@ -29,17 +29,46 @@ def test_v3_install_removes_maker_wait_and_breakeven_repost():
     old_be = v1.BREAKEVEN_STAGE_SECONDS
     old_post = v2._post_breakeven_maker
     old_rescue = pair._dynamic_complement_rescue
+    old_select = v3.selector.select_best_candidate
     try:
         v3.install()
         assert v1.PROFIT_STAGE_SECONDS == 0.0
         assert v1.BREAKEVEN_STAGE_SECONDS == 0.0
         assert v2._post_breakeven_maker is v3._skip_breakeven_maker
         assert pair._dynamic_complement_rescue is v2._dynamic_complement_rescue
+        assert v3.selector.select_best_candidate is v3._fail_soft_public_select
     finally:
         v1.PROFIT_STAGE_SECONDS = old_profit
         v1.BREAKEVEN_STAGE_SECONDS = old_be
         v2._post_breakeven_maker = old_post
         pair._dynamic_complement_rescue = old_rescue
+        v3.selector.select_best_candidate = old_select
+
+
+def test_public_selector_timeout_is_fail_soft(monkeypatch, capsys):
+    async def timeout(*args, **kwargs):
+        raise asyncio.TimeoutError()
+
+    monkeypatch.setattr(v3, "_ORIGINAL_SELECT_BEST", timeout)
+    out = asyncio.run(v3._fail_soft_public_select(assets=("BTC",), min_edge=D("0.01"), min_tte=105, tie_seed="t"))
+    assert out is None
+    text = capsys.readouterr().out
+    assert '"stage":"PUBLIC_SCAN_TIMEOUT"' in text
+    assert '"private_account_read":false' in text
+    assert '"order_entry":false' in text
+
+
+def test_public_selector_non_timeout_still_fails_closed(monkeypatch):
+    async def boom(*args, **kwargs):
+        raise RuntimeError("bad public payload")
+
+    monkeypatch.setattr(v3, "_ORIGINAL_SELECT_BEST", boom)
+    try:
+        asyncio.run(v3._fail_soft_public_select())
+    except RuntimeError as exc:
+        assert "bad public payload" in str(exc)
+    else:
+        raise AssertionError("non-timeout public errors must not be silently swallowed")
 
 
 def test_v3_first_fill_goes_cancel_then_bounded_fok_without_repost(monkeypatch):
@@ -73,8 +102,6 @@ def test_v3_first_fill_goes_cancel_then_bounded_fok_without_repost(monkeypatch):
     monkeypatch.setattr(v1, "IOC_RETRY_SECONDS", 0.0)
     monkeypatch.setattr(pair.ladder, "fills", fake_fills)
     monkeypatch.setattr(v2, "_cancel_current", fake_cancel)
-    # Exercise the hook V3 installs: no maker replacement exists between exact
-    # sibling cancellation and the bounded FOK decision.
     monkeypatch.setattr(v2, "_post_breakeven_maker", v3._skip_breakeven_maker)
     monkeypatch.setattr(pair.ladder, "fresh_top_retry", fake_top)
     monkeypatch.setattr(v2, "_post_emergency_fok", fake_fok)
