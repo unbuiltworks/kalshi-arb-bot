@@ -44,6 +44,7 @@ def evaluate_v2(*, yes_quote: D, no_quote: D, bid: D, bid_size: D,
     mid = (bid + ask) / D("2")
     yes_distance = mid - yes_quote
     no_distance = (D("1") - mid) - no_quote
+    price_valid = bool(D("0") < yes_quote < D("1") and D("0") < no_quote < D("1"))
     reward_ok = reward_quote_eligible(
         yes_quote=yes_quote,
         no_quote=no_quote,
@@ -57,7 +58,29 @@ def evaluate_v2(*, yes_quote: D, no_quote: D, bid: D, bid_size: D,
     )
     yes_cross = ask <= yes_quote
     no_cross = (D("1") - bid) <= no_quote
-    maker_ok = not yes_cross and not no_cross
+    maker_ok = bool(price_valid and not yes_cross and not no_cross)
+
+    # Near an extreme midpoint a 9c target can round to 0c or 100c. Fee/rescue helpers
+    # correctly reject those prices, but a read-only shadow should classify the
+    # candidate rather than spam loop exceptions. Fail closed before calling them.
+    if not price_valid:
+        return {
+            "yes_quote": str(yes_quote),
+            "no_quote": str(no_quote),
+            "yes_distance": str(yes_distance),
+            "no_distance": str(no_distance),
+            "price_valid": False,
+            "reward_ok": False,
+            "rebate_band_ok": False,
+            "maker_ok": False,
+            "yes_cross": yes_cross,
+            "no_cross": no_cross,
+            "locked_edge": "0",
+            "rescue_safe": False,
+            "qualified_safe": False,
+            "rescue": {"safe": False, "reason": "INVALID_QUOTE_PRICE"},
+        }
+
     locked_edge = (
         base.Q * (D("1") - yes_quote - no_quote)
         - gemini_predictions_maker_fee(yes_quote, base.Q)
@@ -79,6 +102,7 @@ def evaluate_v2(*, yes_quote: D, no_quote: D, bid: D, bid_size: D,
         "no_quote": str(no_quote),
         "yes_distance": str(yes_distance),
         "no_distance": str(no_distance),
+        "price_valid": True,
         "reward_ok": reward_ok,
         "rebate_band_ok": rebate_band_ok,
         "maker_ok": maker_ok,
