@@ -1,2 +1,2 @@
-STATUS_ID=l5lad-q1-residual-clear-check-20260901-0232
+STATUS_ID=l5lad-q1-rep3-postsettle-20260901-0241
 MODE=READ_ONLY_LADDER_STATE
