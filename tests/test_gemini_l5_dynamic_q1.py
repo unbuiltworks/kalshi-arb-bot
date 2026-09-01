@@ -72,6 +72,16 @@ def test_account_guard_rejects_unbalanced_session_positions(monkeypatch):
 
 def test_run_cycle_uses_unique_inner_session_and_reads_terminal_state(monkeypatch, tmp_path):
     monkeypatch.setattr(m, "MIN_TOP_PAIR_EDGE", D("0.01"))
+    # Register the imported ladder globals/env with monkeypatch so the test cannot
+    # leak the dynamic cycle overrides into later repository tests.
+    monkeypatch.setattr(m.ladder, "MIN_EDGE", m.ladder.MIN_EDGE)
+    monkeypatch.setattr(m.ladder, "FIRST_WAIT", m.ladder.FIRST_WAIT)
+    monkeypatch.setattr(m.ladder, "COMPLEMENT_WAIT", m.ladder.COMPLEMENT_WAIT)
+    monkeypatch.setattr(m.ladder, "MIN_TTE", m.ladder.MIN_TTE)
+    monkeypatch.setenv(m.ladder.LIVE_ENV, "TEST_PREVIOUS")
+    monkeypatch.setenv(m.ladder.SID_ENV, "TEST_PREVIOUS")
+    monkeypatch.setenv(m.ladder.ARM_ENV, "TEST_PREVIOUS")
+    monkeypatch.setenv(m.ladder.STATE_ENV, "TEST_PREVIOUS")
     seen = {}
     async def fake_run():
         seen["sid"] = m.os.environ[m.ladder.SID_ENV]
