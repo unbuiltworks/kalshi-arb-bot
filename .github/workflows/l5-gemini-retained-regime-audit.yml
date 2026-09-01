@@ -1,0 +1,70 @@
+name: l5 Gemini retained regime audit
+
+on:
+  push:
+    branches:
+      - feature/l5-gemini-aws-live-probe-v1
+    paths:
+      - deploy/l5-gemini-retained-regime-audit.trigger
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ARTIFACT_ONE: '9678250407'
+      ARTIFACT_TWO: '9679670931'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download exact retained multiwindow artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/run1 artifacts/run2 artifacts/audit
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ONE}/zip" > /tmp/run1.zip
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_TWO}/zip" > /tmp/run2.zip
+          unzip -q /tmp/run1.zip -d artifacts/run1
+          unzip -q /tmp/run2.zip -d artifacts/run2
+      - name: Audit fill regime transitions
+        run: |
+          set -euo pipefail
+          python -m src.gemini_l5_fill_regime_transition_audit \
+            artifacts/run1/gemini-l5-multiwindow.jsonl \
+            artifacts/run1/gemini-l5-multiwindow-settlement.json \
+            --output artifacts/audit/run1-regime.json
+          python -m src.gemini_l5_fill_regime_transition_audit \
+            artifacts/run2/gemini-l5-multiwindow.jsonl \
+            artifacts/run2/gemini-l5-multiwindow-settlement.json \
+            --output artifacts/audit/run2-regime.json
+      - name: Aggregate decision evidence
+        run: |
+          python - <<'PY' | tee artifacts/audit/combined-summary.txt
+          import json
+          from pathlib import Path
+          rows=[]
+          for name in ('run1-regime.json','run2-regime.json'):
+              data=json.loads((Path('artifacts/audit')/name).read_text())
+              rows.extend(data.get('detail',[]))
+          adverse={'FLIPPED_AGAINST_FILL_SIDE','FAVORED_REGIME_DISAPPEARED'}
+          print('STRICT_FILLS', len(rows))
+          print('ADVERSE_TRANSITION_FILLS', sum(r.get('transition') in adverse for r in rows))
+          print('FILL_SIDE_STILL_FAVORED', sum(r.get('transition') == 'FILL_SIDE_STILL_FAVORED' for r in rows))
+          print('PRIOR_SAMPLE_STILL_FAVORED', sum(r.get('prior_favored_side') == r.get('fill_side') for r in rows))
+          print('SHADOW_PNL', sum(float(r.get('settled_shadow_trading_pnl') or 0) for r in rows))
+          for r in rows:
+              print('FILL', r['ticker'], r['fill_side'], r['transition'], 'prior='+str(r['prior_favored_side']), 'at_fill='+str(r['fill_observation_favored_side']), 'pnl='+str(r['settled_shadow_trading_pnl']))
+          PY
+      - name: Upload audit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: l5-gemini-retained-regime-audit
+          path: artifacts/audit/
+          retention-days: 7

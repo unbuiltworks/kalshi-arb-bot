@@ -3,9 +3,11 @@
 This module contains authentication/transport plumbing only. It never submits an
 order. Credentials are read from environment variables and are never logged.
 
-Gemini time-based API keys use an epoch-seconds nonce. REST private calls use
-Gemini's standard signed payload headers; Prediction Markets WebSocket auth uses
-the same account-scoped key and time-based nonce.
+The account key used by Prediction Markets is provisioned in Gemini's time-based
+nonce mode. Private REST payloads therefore use the current Unix timestamp in
+seconds (the server validates a +/-30 second window). Authenticated WebSocket
+handshakes also use seconds, with a process-local monotonic guard so reconnects in
+the same second still advance the connection nonce.
 """
 
 from __future__ import annotations
@@ -32,25 +34,30 @@ GEMINI_WS = "wss://ws.gemini.com"
 MAX_NONCE_FUTURE_S = 25
 
 _nonce_lock = threading.Lock()
-_last_nonce = 0
+_last_ws_nonce = 0
 
 
 def next_nonce() -> int:
-    """Return a monotonic epoch-seconds nonce for a Gemini time-based API key.
-
-    Gemini rejects time-based nonces that drift more than roughly 30 seconds from
-    server time. When multiple private requests occur inside one second, advance
-    by one second to preserve monotonicity, but fail closed before local request
-    volume can push the nonce outside the accepted clock window.
-    """
-    global _last_nonce
+    """Return a monotonic epoch-seconds nonce for authenticated WS reconnects."""
+    global _last_ws_nonce
     with _nonce_lock:
         now = int(time.time())
-        candidate = max(now, _last_nonce + 1)
+        candidate = max(now, _last_ws_nonce + 1)
         if candidate > now + MAX_NONCE_FUTURE_S:
-            raise RuntimeError("Gemini time-based nonce rate exceeded")
-        _last_nonce = candidate
+            raise RuntimeError("Gemini WebSocket time-based nonce rate exceeded")
+        _last_ws_nonce = candidate
         return candidate
+
+
+def rest_nonce() -> int:
+    """Return the current epoch second for a time-based private REST request.
+
+    Do not artificially increment REST nonces. Time-based API keys are validated
+    against server time and are explicitly intended for distributed/stateless
+    clients. Incrementing once per request can push a busy client outside Gemini's
+    30-second clock window, which is exactly the failure this helper avoids.
+    """
+    return int(time.time())
 
 
 def credentials() -> tuple[str, str]:
@@ -100,12 +107,8 @@ def rest_auth_headers(
     nonce: int | None = None,
     params: dict[str, Any] | None = None,
 ) -> dict[str, str]:
-    """Build Gemini private REST HMAC headers.
-
-    The signed payload is base64(JSON({request, nonce, ...params})). The JSON is
-    carried in X-GEMINI-PAYLOAD, not emitted to logs by this module.
-    """
-    value = int(nonce if nonce is not None else next_nonce())
+    """Build Gemini private REST HMAC headers for a time-based API key."""
+    value = int(nonce if nonce is not None else rest_nonce())
     body: dict[str, Any] = {"request": path, "nonce": value}
     if params:
         body.update(params)

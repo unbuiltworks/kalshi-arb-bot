@@ -1,0 +1,54 @@
+name: Gemini q10 V5.2 release tests
+
+on:
+  push:
+    branches:
+      - release/gemini-q10-production-v5-2
+    paths:
+      - 'src/gemini_btc5m_fresh_depth_retry.py'
+      - 'src/gemini_q10_production_executor_v5_2.py'
+      - 'src/gemini_q10_v5_2_recovery.py'
+      - 'src/gemini_q10_v5_2_deadman.py'
+      - 'src/gemini_q10_v5_2_deadman_sidecar.py'
+      - 'src/gemini_q10_v5_2_runtime.py'
+      - 'tests/test_gemini_q10_v5_2.py'
+      - '.github/workflows/gemini-q10-v5-2-release-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused-release-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - name: Compile V5.2 modules
+        run: |
+          python -m py_compile \
+            src/gemini_btc5m_fresh_depth_retry.py \
+            src/gemini_q10_production_executor_v5_2.py \
+            src/gemini_q10_v5_2_recovery.py \
+            src/gemini_q10_v5_2_deadman.py \
+            src/gemini_q10_v5_2_deadman_sidecar.py \
+            src/gemini_q10_v5_2_runtime.py
+      - name: Frozen V5.1 focused suite plus V5.2 regressions
+        run: |
+          pytest -q \
+            tests/test_btc_spot_toxicity_guard.py \
+            tests/test_gemini_prediction_book_cache.py \
+            tests/test_gemini_q10_rescue_policy.py \
+            tests/test_gemini_liquidity_reward_dynamic_completion_q10.py \
+            tests/test_gemini_q10_production_executor.py \
+            tests/test_gemini_q10_production_executor_v2.py \
+            tests/test_gemini_q10_production_executor_v5.py \
+            tests/test_gemini_q10_production_executor_v5_1.py \
+            tests/test_gemini_q10_v5_recovery_deadman.py \
+            tests/test_gemini_q10_v5_deadman_sidecar.py \
+            tests/test_gemini_q10_v5_2.py

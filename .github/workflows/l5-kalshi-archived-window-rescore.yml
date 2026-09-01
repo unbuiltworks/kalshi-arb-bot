@@ -1,0 +1,89 @@
+name: l5 Kalshi archived-window rescore
+
+on:
+  push:
+    branches:
+      - feature/l5-gemini-aws-live-probe-v1
+    paths:
+      - deploy/l5-kalshi-archived-rescore.trigger
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  rescore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HISTORICAL_ARTIFACT_ID: "9671925385"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install focused dependencies
+        run: python -m pip install 'httpx>=0.27' 'websockets>=12' 'cryptography>=42' 'python-dotenv>=1.0' 'pytest>=8'
+      - name: Verify hardened replay and settlement tests
+        run: |
+          pytest -q \
+            tests/test_kalshi_l5_threshold_model.py \
+            tests/test_kalshi_l5_inventory_replay.py \
+            tests/test_short_crypto_incentive_snapshot.py
+      - name: Download exact archived full-window raw evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/raw artifacts/rescore
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORICAL_ARTIFACT_ID}/zip" \
+            > /tmp/l5-kalshi-old.zip
+          unzip -q /tmp/l5-kalshi-old.zip -d artifacts/raw
+          test -s artifacts/raw/kalshi-l5-full-window.jsonl
+          sha256sum artifacts/raw/kalshi-l5-full-window.jsonl \
+            | tee artifacts/rescore/raw-jsonl.sha256
+          wc -l artifacts/raw/kalshi-l5-full-window.jsonl \
+            | tee artifacts/rescore/raw-jsonl-lines.txt
+      - name: Replay exact raw window with current capped logic
+        run: |
+          set -euo pipefail
+          python -m src.kalshi_l5_inventory_replay \
+            artifacts/raw/kalshi-l5-full-window.jsonl \
+            --output artifacts/rescore/kalshi-l5-inventory-replay-current.json \
+            | tee artifacts/rescore/kalshi-l5-inventory-replay-current.log
+      - name: Score against official public Kalshi settlements
+        run: |
+          set -euo pipefail
+          python -m src.l5_shadow_settlement_score \
+            --venue kalshi \
+            artifacts/rescore/kalshi-l5-inventory-replay-current.json \
+            --output artifacts/rescore/kalshi-l5-settlement-score-current.json \
+            | tee artifacts/rescore/kalshi-l5-settlement-score-current.log
+      - name: Print decision evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          replay = json.loads(Path('artifacts/rescore/kalshi-l5-inventory-replay-current.json').read_text())
+          score = json.loads(Path('artifacts/rescore/kalshi-l5-settlement-score-current.json').read_text())
+          print('RESCORE_MARKETS', replay.get('markets'))
+          print('RESCORE_MARKETS_WITH_FILLS', replay.get('markets_with_trade_through_fills'))
+          print('RESCORE_BOTH_SIDES', replay.get('markets_with_both_sides_filled'))
+          print('RESCORE_SUB_ONE_PAIRS', replay.get('markets_with_sub_one_matched_vwap'))
+          print('RESCORE_TOTAL_VIRTUAL_FILLS', replay.get('total_virtual_fills'))
+          print('RESCORE_MAX_UNITS_PER_OUTCOME', replay.get('max_units_per_outcome'))
+          print('SCORE_SETTLED_MARKETS', score.get('settled_markets'))
+          print('SCORE_UNRESOLVED_MARKETS', score.get('unresolved_markets'))
+          print('SCORE_TOTAL_NO_MAKER_FEE', score.get('settled_shadow_total_no_maker_fee'))
+          print('SCORE_TOTAL_GENERAL_MAKER_FEE_IF_APPLICABLE', score.get('settled_shadow_total_with_general_maker_fee_if_applicable'))
+          for row in score.get('settled_detail', []):
+              print('MARKET', row.get('ticker'), 'resolution='+str(row.get('resolution_side')), 'yes_qty='+str(row.get('yes_qty')), 'no_qty='+str(row.get('no_qty')), 'pnl_no_fee='+str(row.get('settled_shadow_pnl_no_maker_fee')), 'pnl_fee_scenario='+str(row.get('settled_shadow_pnl_with_general_maker_fee_if_applicable')))
+          PY
+      - name: Upload reproducible rescore evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: l5-kalshi-archived-window-rescore
+          path: artifacts/rescore/
+          retention-days: 7
