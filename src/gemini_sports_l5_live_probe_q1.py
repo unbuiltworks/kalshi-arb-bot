@@ -1,17 +1,18 @@
 """One-shot q1 Gemini Sports L5-style live mechanics canary.
 
-Reuses the already-proven Gemini inventory-maker child for order placement,
-fill/cancel handling, durable reservation, and queue telemetry.  Only event
-discovery and ledger identity are substituted.  This is a mechanics probe, not
-an assertion that Sports receives rebates/LR or that the strategy is profitable.
+Reuses the proven Gemini inventory-maker child for order placement, fill/cancel
+handling, durable reservation, and queue telemetry. Only event discovery and
+ledger identity are substituted. This is a mechanics probe, not a claim that
+Sports receives rebates/LR or that the strategy is profitable.
 
 Live bounds:
-- one MLB moneyline contract only, expiring within six hours;
+- one same-day baseball or tennis moneyline contract only (<24h expiry);
 - exactly q=1 maximum YES and q=1 maximum NO on the SAME Gemini contract;
+- exactly two active outcomes in the parent event (no 3-way moneylines);
 - both quotes maker-only and inside 20c-80c;
 - current fee-adjusted matched-pair edge >=1c at entry;
 - maximum 180 seconds resting, inherited from the proven child;
-- no normal sell/rescue/chase; residual inventory is held to Gemini settlement;
+- no normal sell/rescue/chase; residual inventory held to Gemini settlement;
 - no automatic restart;
 - dual-key arming required before any venue/account call in this wrapper.
 """
@@ -40,10 +41,11 @@ PROBE_ARM_ENV = "GEMINI_SPORTS_L5_PROBE_ARM"
 ONE = D("1")
 MIN_PRICE = D("0.20")
 MAX_PRICE = D("0.80")
-MAX_EXPIRY_S = 6 * 60 * 60
+MAX_EXPIRY_S = 24 * 60 * 60
 MLB_MONEYLINE_RE = re.compile(
     r"^(?:GEMI-)?MLB-\d{10}-[A-Z]{2,4}-[A-Z]{2,4}-M$", re.I
 )
+ALLOWED_SPORTS = {"baseball", "tennis"}
 
 
 def emit(stage: str, **fields: Any) -> None:
@@ -80,6 +82,22 @@ def _q1(contract: Mapping[str, Any]) -> bool:
     return qmin <= ONE and qinc > 0 and ONE / qinc == (ONE / qinc).to_integral_value()
 
 
+def _simple_moneyline(row: Mapping[str, Any]) -> tuple[bool, str]:
+    """Use documented sportsMarket metadata when present; retain strict MLB
+    ticker fallback for the older live response shape."""
+    sports = row.get("sportsMarket")
+    if isinstance(sports, Mapping):
+        sport = str(sports.get("sport") or "").strip().lower()
+        typ = str(sports.get("type") or "").strip().lower()
+        if sport in ALLOWED_SPORTS and typ == "moneyline":
+            return True, f"{sport}_moneyline"
+        return False, ""
+    ticker = str(row.get("ticker") or "").strip().upper()
+    if MLB_MONEYLINE_RE.fullmatch(ticker):
+        return True, "baseball_moneyline_ticker_fallback"
+    return False, ""
+
+
 def _sports_pair_model(original):
     def model(bid: D, ask: D) -> dict[str, D]:
         out = dict(original(D(str(bid)), D(str(ask))))
@@ -91,13 +109,13 @@ def _sports_pair_model(original):
 
 
 async def discover_sports_moneyline() -> base.Event | None:
-    """Choose a liquid, short-dated MLB moneyline contract that already passes
-    the live child's fresh q1/band/edge shape.  Public-data only."""
+    """Choose a liquid same-day baseball/tennis moneyline contract already
+    satisfying the q1/band/edge shape. Public-data only."""
     now_ms = int(time.time() * 1000)
-    candidates: list[tuple[float, int, base.Event]] = []
+    candidates: list[tuple[float, int, str, base.Event]] = []
     async with httpx.AsyncClient(
         timeout=8.0, follow_redirects=True,
-        headers={"User-Agent": "arb-gemini-sports-l5-q1/1.0"},
+        headers={"User-Agent": "arb-gemini-sports-l5-q1/1.1"},
     ) as http:
         offset = 0
         while offset < 5000:
@@ -112,16 +130,17 @@ async def discover_sports_moneyline() -> base.Event | None:
             for row in rows:
                 if not isinstance(row, Mapping):
                     continue
-                ticker = str(row.get("ticker") or "").strip().upper()
-                if not MLB_MONEYLINE_RE.fullmatch(ticker):
+                eligible_family, family = _simple_moneyline(row)
+                if not eligible_family:
                     continue
+                ticker = str(row.get("ticker") or "").strip().upper()
                 active = [
                     c for c in (row.get("contracts") or [])
                     if isinstance(c, Mapping)
                     and str(c.get("marketState") or c.get("status") or "").lower()
                     in {"open", "active"}
                 ]
-                # MLB moneyline event must expose exactly the two team outcomes.
+                # Excludes soccer 3-way moneyline and large categorical winner grids.
                 if len(active) != 2:
                     continue
                 event_vol = float(row.get("volume24h") or 0.0)
@@ -141,7 +160,7 @@ async def discover_sports_moneyline() -> base.Event | None:
                         pinc = D(str(contract.get("priceIncrement") or "0.01"))
                     except Exception:
                         continue
-                    candidates.append((event_vol, expiry, base.Event(
+                    candidates.append((event_vol, expiry, family, base.Event(
                         ticker=ticker, symbol=symbol, expiry_ms=expiry,
                         quantity_minimum=qmin, quantity_increment=qinc,
                         price_increment=pinc,
@@ -152,25 +171,29 @@ async def discover_sports_moneyline() -> base.Event | None:
             if not rows or offset >= total:
                 break
 
-    # Highest recent event activity first, then shortest capital tie-up.
-    candidates.sort(key=lambda row: (-row[0], row[1], row[2].symbol))
+    # Prefer real current flow, then shortest capital tie-up.
+    candidates.sort(key=lambda row: (-row[0], row[1], row[3].symbol))
     patched = _sports_pair_model(base.pair_model)
-    for _, _, event in candidates[:12]:
+    for _, _, family, event in candidates[:30]:
         try:
-            bid, _, ask, _ = await base.fresh_top(event.symbol, timeout=2.5)
+            bid, _, ask, _ = await base.fresh_top(event.symbol, timeout=2.0)
             model = patched(bid, ask)
         except Exception:
             continue
-        if model["modeled_edge"] >= inv.ENTRY_PAIR_EDGE:
+        if model["modeled_edge"] >= D("0.01"):
             emit(
                 "CANDIDATE_SELECTED", event_ticker=event.ticker,
                 symbol=event.symbol, seconds_to_expiry=round(event.seconds_to_expiry, 1),
                 yes_bid=str(bid), yes_ask=str(ask),
                 yes_quote=str(model["yes_quote"]), no_quote=str(model["no_quote"]),
                 modeled_pair_edge=str(model["modeled_edge"]),
-                market_family="MLB_MONEYLINE", order_entry=False,
+                market_family=family, order_entry=False,
             )
             return event
+    emit(
+        "NO_CANDIDATE", candidates_checked=min(len(candidates), 30),
+        raw_simple_moneyline_contracts=len(candidates), order_entry=False,
+    )
     return None
 
 
@@ -179,11 +202,10 @@ def _sports_trade_id(event_ticker: str, canary_id: str) -> str:
 
 
 async def run() -> None:
-    # No venue/account calls before this wrapper's dual-key arm.
     if not live_armed():
         emit(
             "DISARMED", q_per_outcome=1, max_campaigns=1,
-            target="MLB_MONEYLINE_LT6H", order_entry=False,
+            target="BASEBALL_OR_TENNIS_MONEYLINE_LT24H", order_entry=False,
             realized_pnl=None, classification="DISARMED_NO_VENUE_CALLS",
         )
         return
@@ -201,8 +223,8 @@ async def run() -> None:
 
     emit(
         "START", probe_id=pid, q_per_outcome=1, max_campaigns=1,
-        target="MLB_MONEYLINE_LT6H", price_band="0.20-0.80",
-        min_fee_adjusted_pair_edge=str(original_floor),
+        target="BASEBALL_OR_TENNIS_MONEYLINE_LT24H", price_band="0.20-0.80",
+        min_fee_adjusted_pair_edge="0.01",
         maker_rewards_counted_as_realized=False,
         classification="LIVE_MECHANICS_PROBE_NOT_PROVEN_ECONOMIC_EDGE",
         order_entry=True,
