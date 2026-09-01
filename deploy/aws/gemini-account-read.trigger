@@ -1,2 +1,2 @@
-READ_ID=gemini-account-read-20260901-aws-start-001
+READ_ID=gemini-account-read-20260901-0640
 MODE=READ_ONLY_NO_MUTATION
