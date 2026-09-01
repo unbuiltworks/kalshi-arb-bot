@@ -1,12 +1,16 @@
 """Adaptive single-pair Gemini ETH5 maker primitive for continuous operation.
 
-Only one q1 YES order and one q1 NO order may be active for this cycle.  The
-quote chooses the shallowest symmetric backoff (0c, 1c, 2c) that preserves the
-configured fee-adjusted complete-pair edge.  Therefore a same-side cancellation
-race cannot create more than one new directional contract in this cycle.
+Only one q1 YES order and one q1 NO order may be active for this cycle.  Quotes
+spend the *minimum total* 0/1/2c-per-side backoff required to preserve the
+configured fee-adjusted complete-pair edge.  When several equally aggressive
+pairs are safe, queue imbalance decides which side gives up a cent: the side
+with the smaller visible queue is backed off first, leaving the slower/larger
+queue side at the top.  This aims to balance fill probabilities without paying
+for unnecessary edge.
 
-This module is one-cycle only.  The dynamic owner decides whether another cycle
-is allowed after authoritative reconciliation.
+A cycle can therefore create at most one new directional contract.  This module
+runs one cycle only; the dynamic owner decides whether another cycle is allowed
+after authoritative reconciliation.
 """
 from __future__ import annotations
 
@@ -31,7 +35,7 @@ BACKOFFS = (D("0"), D("0.01"), D("0.02"))
 MIN_PRICE = D("0.20")
 MAX_PRICE = D("0.80")
 DEFAULT_MIN_PAIR_EDGE = D("0.01")
-DEFAULT_FIRST_WAIT = 75.0
+DEFAULT_FIRST_WAIT = 45.0
 DEFAULT_COMPLEMENT_WAIT = 60.0
 DEFAULT_MIN_TTE = 105.0
 
@@ -83,19 +87,65 @@ def pair_edge(yes: D, no: D) -> D:
     )
 
 
-def choose_pair(bid: D, ask: D, *, min_edge: D = DEFAULT_MIN_PAIR_EDGE) -> dict[str, D] | None:
-    """Choose the most aggressive safe pair from 0/1/2c symmetric backoff."""
-    bid = D(str(bid))
-    ask = D(str(ask))
-    for backoff in BACKOFFS:
-        yes = (bid - backoff).quantize(TICK)
-        no = (ONE - ask - backoff).quantize(TICK)
-        if not (MIN_PRICE <= yes <= MAX_PRICE and MIN_PRICE <= no <= MAX_PRICE):
-            continue
-        edge = pair_edge(yes, no)
-        if edge >= D(str(min_edge)):
-            return {"yes": yes, "no": no, "edge": edge, "backoff": backoff}
-    return None
+def _preferred_backoff_side(yes_queue: D, no_queue: D, tie_seed: str = "") -> str:
+    """Back off the visibly faster/smaller queue; tie-break deterministically."""
+    yq, nq = D(str(yes_queue)), D(str(no_queue))
+    if yq < nq:
+        return "YES"
+    if nq < yq:
+        return "NO"
+    # Alternate equal-queue ties across unique cycle IDs without randomness.
+    return "YES" if sum(tie_seed.encode("utf-8")) % 2 == 0 else "NO"
+
+
+def choose_pair(
+    bid: D,
+    ask: D,
+    *,
+    min_edge: D = DEFAULT_MIN_PAIR_EDGE,
+    yes_queue: D = ZERO,
+    no_queue: D = ZERO,
+    tie_seed: str = "",
+) -> dict[str, D | str] | None:
+    """Choose minimum-total-backoff safe pair; queue imbalance breaks ties."""
+    bid, ask = D(str(bid)), D(str(ask))
+    preferred = _preferred_backoff_side(yes_queue, no_queue, tie_seed)
+    candidates: list[dict[str, D | str]] = []
+    for yes_backoff in BACKOFFS:
+        for no_backoff in BACKOFFS:
+            yes = (bid - yes_backoff).quantize(TICK)
+            no = (ONE - ask - no_backoff).quantize(TICK)
+            if not (MIN_PRICE <= yes <= MAX_PRICE and MIN_PRICE <= no <= MAX_PRICE):
+                continue
+            edge = pair_edge(yes, no)
+            if edge < D(str(min_edge)):
+                continue
+            total = yes_backoff + no_backoff
+            preferred_backoff = yes_backoff if preferred == "YES" else no_backoff
+            candidates.append(
+                {
+                    "yes": yes,
+                    "no": no,
+                    "edge": edge,
+                    "yes_backoff": yes_backoff,
+                    "no_backoff": no_backoff,
+                    "total_backoff": total,
+                    "preferred_backoff_side": preferred,
+                    "preferred_backoff": preferred_backoff,
+                }
+            )
+    if not candidates:
+        return None
+    # First minimize total price concession.  For equal total concession, put as
+    # much of it as possible on the smaller/faster queue side.
+    candidates.sort(
+        key=lambda x: (
+            D(str(x["total_backoff"])),
+            -D(str(x["preferred_backoff"])),
+            D(str(x["yes_backoff"])),
+        )
+    )
+    return candidates[0]
 
 
 def summarize(specs: list[dict[str, Any]], fills: Mapping[str, D]) -> dict[str, Any]:
@@ -115,12 +165,7 @@ def summarize(specs: list[dict[str, Any]], fills: Mapping[str, D]) -> dict[str, 
             no_qty += qty
             no_cost += cost
         detail.append(
-            {
-                "side": spec["side"],
-                "price": str(spec["price"]),
-                "qty": str(qty),
-                "fee": str(fee),
-            }
+            {"side": spec["side"], "price": str(spec["price"]), "qty": str(qty), "fee": str(fee)}
         )
     return {
         "fills": detail,
@@ -154,11 +199,19 @@ async def run(
         return
 
     bid, bid_size, ask, ask_size = await ladder.fresh_top_retry(event.symbol)
-    model = choose_pair(bid, ask, min_edge=D(str(min_edge)))
+    sid = os.getenv(SID_ENV, "").strip()
+    model = choose_pair(
+        bid,
+        ask,
+        min_edge=D(str(min_edge)),
+        yes_queue=bid_size,
+        no_queue=ask_size,
+        tie_seed=sid,
+    )
     if model is None:
         emit(
             "STOP",
-            reason="NO_SAFE_PAIR_WITHIN_2C_BACKOFF",
+            reason="NO_SAFE_PAIR_WITHIN_2C_PER_SIDE",
             symbol=event.symbol,
             event_ticker=event.ticker,
             bid=str(bid),
@@ -169,17 +222,19 @@ async def run(
         )
         return
 
-    sid = os.getenv(SID_ENV, "").strip()
     specs = [
-        {"side": "YES", "price": model["yes"], "id": ladder.cid(sid, "YES", 0), "row": None},
-        {"side": "NO", "price": model["no"], "id": ladder.cid(sid, "NO", 0), "row": None},
+        {"side": "YES", "price": D(str(model["yes"])), "id": ladder.cid(sid, "YES", 0), "row": None},
+        {"side": "NO", "price": D(str(model["no"])), "id": ladder.cid(sid, "NO", 0), "row": None},
     ]
     state: dict[str, Any] = {
         "terminal": False,
         "sid": sid,
         "symbol": event.symbol,
         "event": event.ticker,
-        "backoff": str(model["backoff"]),
+        "yes_backoff": str(model["yes_backoff"]),
+        "no_backoff": str(model["no_backoff"]),
+        "total_backoff": str(model["total_backoff"]),
+        "preferred_backoff_side": str(model["preferred_backoff_side"]),
         "entry_edge": str(model["edge"]),
         "orders": [
             {"side": spec["side"], "price": str(spec["price"]), "id": spec["id"]}
@@ -193,7 +248,10 @@ async def run(
         event_ticker=event.ticker,
         yes=str(model["yes"]),
         no=str(model["no"]),
-        backoff=str(model["backoff"]),
+        yes_backoff=str(model["yes_backoff"]),
+        no_backoff=str(model["no_backoff"]),
+        total_backoff=str(model["total_backoff"]),
+        preferred_backoff_side=str(model["preferred_backoff_side"]),
         pair_edge=str(model["edge"]),
         yes_queue_hint=str(bid_size),
         no_queue_hint=str(ask_size),
@@ -272,9 +330,17 @@ async def run(
             await asyncio.sleep(0.3)
             fills = await ladder.fills(specs, event.symbol)
             summary = summarize(specs, fills)
-            state.update({"terminal": True, "status": "NO_FILL_TIMEOUT", **summary})
+            yes_qty, no_qty = D(summary["yes_qty"]), D(summary["no_qty"])
+            status = (
+                "MATCHED"
+                if yes_qty > ZERO and yes_qty == no_qty
+                else "ONE_SIDED_RESIDUAL"
+                if yes_qty > ZERO or no_qty > ZERO
+                else "NO_FILL_TIMEOUT"
+            )
+            state.update({"terminal": True, "status": status, **summary})
             _write_state(state)
-            emit("COMPLETE", status="NO_FILL_TIMEOUT", **summary, order_entry=False, realized_pnl=None)
+            emit("COMPLETE", status=status, **summary, order_entry=False, realized_pnl=None)
             return
 
         other_side = "NO" if first_side == "YES" else "YES"
@@ -311,8 +377,7 @@ async def run(
         await asyncio.sleep(0.35)
         fills = await ladder.fills(specs, event.symbol)
         summary = summarize(specs, fills)
-        yes_qty = D(summary["yes_qty"])
-        no_qty = D(summary["no_qty"])
+        yes_qty, no_qty = D(summary["yes_qty"]), D(summary["no_qty"])
         if yes_qty > ONE or no_qty > ONE:
             raise RuntimeError(f"q1 pair fill bound violated yes={yes_qty} no={no_qty}")
         status = (
