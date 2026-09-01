@@ -14,7 +14,7 @@ env:
   AWS_REGION: us-east-1
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
-  CLEANUP_COMMIT: 0ae1facd13493c7937b1fd15f1bc414d51800daf
+  CLEANUP_COMMIT: 86de57aeebd6769eba55ac601c40462197b11010
   LIVE_BRANCH: feature/gemini-l5-crypto-sports-live-q1
 
 jobs:
