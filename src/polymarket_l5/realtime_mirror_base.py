@@ -12,8 +12,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import httpx
-
 L5_WALLET = "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"
 DATA_API = "https://data-api.polymarket.com"
 GAMMA_API = "https://gamma-api.polymarket.com"
@@ -175,6 +173,7 @@ class MirrorCollector:
         self.paper_ledger: list[dict[str, Any]] = []
         self.latest_spot: dict[str, float] = {}
         self.start_ts = utc_now()
+        import httpx   # network path only; adapters/ops import this module without it
         timeout = httpx.Timeout(5.0, connect=5.0)
         self.client = httpx.AsyncClient(timeout=timeout, headers={"User-Agent": "arb-l5-shadow/1.0"})
 

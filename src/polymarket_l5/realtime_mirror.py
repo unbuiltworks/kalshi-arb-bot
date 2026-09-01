@@ -30,8 +30,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import httpx
-
 from . import config
 from .adapters import DEFAULT_ADAPTER, VenueAdapter
 from .realtime_mirror_base import DATA_API, L5_WALLET, fnum
@@ -103,6 +101,7 @@ def canonical_row(trade: Dict[str, Any], win: Dict[str, Any], st: WindowState,
 
 
 async def run_mirror(minutes: float) -> Path:
+    import httpx   # network path only; ops/shadow import this module without it
     MIRROR_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_path = MIRROR_DIR / f"mirror_{stamp}.jsonl"

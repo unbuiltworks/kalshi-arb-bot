@@ -5,9 +5,13 @@
 # artifacts back to the branch so no agent session needs to stay open.
 #
 # ACTIVATION NOTE (deliberate): GitHub only runs `schedule:` triggers from
-# the DEFAULT branch. While this file lives only on feature/l5-canonical it
-# is inert except for manual workflow_dispatch runs against that branch —
-# merging it to main is the owner's explicit deployment decision, not ours.
+# the DEFAULT branch, and merging this file to main is NOT the activation
+# path — main/.github/workflows/deploy.yml redeploys the Railway trading
+# service on every main push, so the merge itself would violate isolation.
+# The approved activation design is the ISOLATED research service described
+# in docs/L5_OPS_DEPLOYMENT.md (scripts/l5_ops_runner.sh +
+# research/Dockerfile). This workflow remains only as a manual
+# workflow_dispatch fallback against the research branch.
 #
 # SAFETY: read-only public HTTP only. No exchange credentials are used or
 # available to this workflow; it cannot place orders. It does not touch the
