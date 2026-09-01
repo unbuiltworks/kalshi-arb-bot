@@ -1,0 +1,120 @@
+name: AWS Gemini L5 ladder score read
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-l5-ladder-score.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Read exact settled ladder campaigns
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE=$(cat <<'EOF'
+          sudo -u ssm-user bash -lc 'set -euo pipefail
+          ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env
+          [ -f "$ENV_FILE" ] || ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env
+          IMAGE=arb-gemini-l5-ladder:q1-b1f37dc1b612
+          docker image inspect "$IMAGE" >/dev/null
+          docker run --rm --network host --env-file "$ENV_FILE" "$IMAGE" python - <<"PY"
+import asyncio, json
+from decimal import Decimal as D
+import httpx
+from src.gemini_prediction_auth import private_rest_request
+from src.gemini_kalshi_execution_shadow import gemini_predictions_maker_fee
+
+REST="https://api.gemini.com"
+TARGETS=[
+ ("ETH05M2609010215","GEMI-ETH05M2609010215-UP"),
+ ("ETH05M2609010230","GEMI-ETH05M2609010230-UP"),
+ ("ETH05M2609010240","GEMI-ETH05M2609010240-UP"),
+]
+
+def rows(body):
+    x=body.get("orders") if isinstance(body,dict) else None
+    return x if isinstance(x,list) else []
+
+def qty(row): return D(str(row.get("filledQuantity") or row.get("filled_quantity") or "0"))
+def price(row): return D(str(row.get("avgExecutionPrice") or row.get("avg_execution_price") or row.get("price") or "0"))
+def outcome(row):
+    x=str(row.get("eventOutcome") or row.get("event_outcome") or "").lower()
+    if x in {"yes","no"}: return x
+    cid=str(row.get("clientOrderId") or "")
+    if cid.endswith(("-y0","-y1","-y2")): return "yes"
+    if cid.endswith(("-n0","-n1","-n2")): return "no"
+    return ""
+
+async def history(symbol):
+    out=[]
+    for status in ("filled","cancelled"):
+        r=await private_rest_request("POST","/v1/prediction-markets/orders/history",params={"status":status,"symbol":symbol,"limit":100},timeout=8.0)
+        if r.status_code==200: out += rows(r.json())
+    by={}
+    for row in out:
+        if not isinstance(row,dict): continue
+        cid=str(row.get("clientOrderId") or "")
+        if not cid.startswith("l5lad-"): continue
+        if cid not in by or qty(row)>qty(by[cid]): by[cid]=row
+    return list(by.values())
+
+async def event(ticker):
+    async with httpx.AsyncClient(timeout=8.0,follow_redirects=True) as h:
+        r=await h.get(f"{REST}/v1/prediction-markets/events/{ticker}")
+    if r.status_code!=200: return {}
+    x=r.json(); return x if isinstance(x,dict) else {}
+
+async def one(ticker,symbol):
+    hs,ev=await asyncio.gather(history(symbol),event(ticker))
+    contracts=ev.get("contracts") if isinstance(ev,dict) else []
+    contracts=contracts if isinstance(contracts,list) else []
+    match=[c for c in contracts if isinstance(c,dict) and str(c.get("instrumentSymbol") or "")==symbol]
+    c=match[0] if len(match)==1 else {}
+    resolution=str(c.get("resolutionSide") or "").lower()
+    status=str(c.get("status") or c.get("marketState") or "").lower()
+    settled=resolution in {"yes","no"} and status=="settled"
+    fills=[]; spend=D("0"); fees=D("0"); payout=D("0")
+    for row in hs:
+        q=qty(row); p=price(row); o=outcome(row)
+        if q<=0 or p<=0 or o not in {"yes","no"}: continue
+        f=gemini_predictions_maker_fee(p,q)
+        spend += p*q; fees += f
+        if settled and o==resolution: payout += q
+        fills.append({"client":str(row.get("clientOrderId") or ""),"outcome":o,"qty":str(q),"price":str(p),"fee":str(f)})
+    pnl=(payout-spend-fees) if settled else None
+    return {"event":ticker,"symbol":symbol,"settled":settled,"status":status or None,"resolution":resolution or None,"fills":fills,"turnover":str(spend),"maker_fees":str(fees),"payout":str(payout) if settled else None,"realized_trading_pnl":str(pnl) if pnl is not None else None,"rebates_included":False}
+
+async def main():
+    result=[]
+    for t,s in TARGETS: result.append(await one(t,s))
+    print(json.dumps({"type":"GEMINI_L5_LADDER_SETTLED_SCORE","campaigns":result,"mutation":False,"order_entry":False},sort_keys=True))
+asyncio.run(main())
+PY'
+          EOF
+          )
+          PARAMS=$(jq -nc --arg cmd "$REMOTE" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --parameters "$PARAMS" --query 'Command.CommandId' --output text)
+          for i in $(seq 1 50); do
+            S=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$S" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}'
