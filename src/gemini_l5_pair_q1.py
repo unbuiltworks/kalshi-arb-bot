@@ -377,22 +377,13 @@ async def _dynamic_complement_rescue(
         if sequence >= MAX_COMPLEMENT_REPRICES:
             continue
 
+        # Critical no-duplicate ordering: cancel first, prove the exact old ID is
+        # inactive, then read its terminal fill quantity.  Once the active-order
+        # endpoint proves the old ID is gone it cannot subsequently race-fill;
+        # the following fill read therefore captures its final terminal quantity
+        # before any replacement client ID can be submitted.
         cancel = await ladder.cancel(maker, current, event.symbol)
         await asyncio.sleep(0.12)
-        fs_after_cancel = await ladder.fills(specs, event.symbol)
-        sm_after_cancel = summarize(specs, fs_after_cancel)
-        yq, nq = D(sm_after_cancel["yes_qty"]), D(sm_after_cancel["no_qty"])
-        if yq == ONE and nq == ONE:
-            emit(
-                "COMPLEMENT_FILLED_DURING_CANCEL",
-                prior_id=current["id"],
-                prior_price=str(current_price),
-                order_entry=True,
-            )
-            return "MATCHED"
-        mq = nq if missing == "NO" else yq
-        if mq > ZERO:
-            return "UNEXPECTED_FRACTIONAL_COMPLEMENT_FILL"
         active = await _exact_active(current["id"], event.symbol)
         emit(
             "COMPLEMENT_REPRICE_CANCEL",
@@ -407,8 +398,24 @@ async def _dynamic_complement_rescue(
         if active or not cancel.get("ok"):
             return "COMPLEMENT_CANCEL_AMBIGUOUS"
 
-        # The old exact ID is now authoritatively inactive.  Re-read the book and
-        # recompute both passivity and economics before creating a new ID.
+        fs_after_inactive = await ladder.fills(specs, event.symbol)
+        sm_after_inactive = summarize(specs, fs_after_inactive)
+        yq, nq = D(sm_after_inactive["yes_qty"]), D(sm_after_inactive["no_qty"])
+        if yq == ONE and nq == ONE:
+            emit(
+                "COMPLEMENT_FILLED_BEFORE_INACTIVE_CONFIRMATION",
+                prior_id=current["id"],
+                prior_price=str(current_price),
+                order_entry=True,
+            )
+            return "MATCHED"
+        mq = nq if missing == "NO" else yq
+        if mq > ZERO:
+            return "UNEXPECTED_FRACTIONAL_COMPLEMENT_FILL"
+
+        # The old exact ID is authoritatively inactive and its terminal fill is
+        # known to be zero. Re-read the book and recompute both passivity and
+        # economics before creating a new ID.
         try:
             bid2, _, ask2, _ = await ladder.fresh_top_retry(event.symbol, attempts=3, delay_s=0.15)
         except RuntimeError:
@@ -477,14 +484,14 @@ async def _dynamic_complement_rescue(
 
     cancel = await ladder.cancel(maker, current, event.symbol)
     await asyncio.sleep(0.15)
+    active = await _exact_active(current["id"], event.symbol)
+    if active or not cancel.get("ok"):
+        return "RESCUE_TIMEOUT_CANCEL_AMBIGUOUS"
     fs = await ladder.fills(specs, event.symbol)
     sm = summarize(specs, fs)
     yq, nq = D(sm["yes_qty"]), D(sm["no_qty"])
     if yq == ONE and nq == ONE:
         return "MATCHED"
-    active = await _exact_active(current["id"], event.symbol)
-    if active or not cancel.get("ok"):
-        return "RESCUE_TIMEOUT_CANCEL_AMBIGUOUS"
     return "RESCUE_EXPIRED_ONE_SIDED"
 
 
@@ -670,7 +677,7 @@ async def run(
             complement_wait=complement_wait,
         )
         # Cancel any exact orders still represented by this cycle before final
-        # authoritative reconciliation.  Filled/cancelled rows are harmless; the
+        # authoritative reconciliation. Filled/cancelled rows are harmless; the
         # cancel helper targets captured exact order IDs and never broad-cancels
         # while a row is present.
         await asyncio.gather(
