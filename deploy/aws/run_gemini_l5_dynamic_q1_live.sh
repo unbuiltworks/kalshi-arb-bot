@@ -9,6 +9,7 @@ PINNED_COMMIT=${PINNED_COMMIT:-}
 APPROVAL_ID=${ARB_GEMINI_L5_DYNAMIC_Q1_APPROVAL_ID:-}
 APPROVED=${ARB_GEMINI_L5_DYNAMIC_Q1_APPROVED:-NO}
 CONTAINER=arb-gemini-l5-dynamic-q1
+ASSETS=BTC,ETH,SOL,XRP
 
 [ "$APPROVED" = YES ] || { echo missing_approval >&2; exit 1; }
 [[ "$PINNED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo bad_pinned_commit >&2; exit 1; }
@@ -43,10 +44,12 @@ rm -rf "$WORKTREE"; git -C "$SOURCE_REPO" worktree prune; git -C "$SOURCE_REPO" 
 IMAGE=arb-gemini-l5-dynamic:q1-${PINNED_COMMIT:0:12}
 docker build -t "$IMAGE" "$WORKTREE" >/dev/null
 
-# Exact-image execution and upgrade-safety tests. Completion economics, nonce
-# pacing, exact exception cleanup, and cancel->inactive->repost are blockers.
+# Exact-image execution and upgrade-safety tests. Multiasset public selection,
+# completion economics, nonce pacing, exact exception cleanup, and the
+# cancel->inactive->terminal-fill->repost order are all mutation blockers.
 docker run --rm --network none "$IMAGE" python -m pytest -q \
   tests/test_gemini_prediction_auth_pacing.py \
+  tests/test_gemini_l5_crypto5m_selector.py \
   tests/test_gemini_l5_dynamic_q1.py \
   tests/test_gemini_l5_pair_q1.py \
   tests/test_gemini_l5_completion_policy.py \
@@ -58,7 +61,7 @@ docker run --rm --network none "$IMAGE" python -m pytest -q \
   tests/test_gemini_short_crypto_inventory_fresh_top_retry.py
 echo L5_DYNAMIC_SAFETY_TESTS_OK
 
-docker run --rm --network none "$IMAGE" python -m src.gemini_l5_dynamic_q1 | grep -q '"stage":"DISARMED"'
+docker run --rm --network none -e GEMINI_L5_DYNAMIC_ASSETS="$ASSETS" "$IMAGE" python -m src.gemini_l5_dynamic_q1 | grep -q '"stage":"DISARMED"'
 docker run --rm --network none "$IMAGE" python -m src.gemini_l5_pair_q1 | grep -q '"stage":"DISARMED"'
 echo L5_DYNAMIC_DISARMED_OK
 
@@ -85,19 +88,33 @@ asyncio.run(main())
 PY
 echo L5_DYNAMIC_ACCOUNT_PREFLIGHT_OK
 
-# Public-only completion-reserve economics read. No credentials and no order entry.
-docker run --rm --network host "$IMAGE" python - <<'PY'
-import asyncio
+# Public-only breadth/economics read. No credentials and no order entry. This
+# proves what asset set actually exists at launch instead of assuming all four do.
+docker run --rm --network host -e GEMINI_L5_DYNAMIC_ASSETS="$ASSETS" "$IMAGE" python - <<'PY'
+import asyncio, json
 from decimal import Decimal as D
-from src import gemini_l5_pair_q1 as p
-from src import gemini_l5_ladder_q1 as l
+from src import gemini_l5_crypto5m_selector as s
 async def main():
-    e=await p.discover_eth5m()
-    if e is None or e.seconds_to_expiry<105:
-        print({'ready':False,'reason':'NO_ETH5_WITH_ENOUGH_TTE','order_entry':False}); return
-    bid,bs,ask,asz=await l.fresh_top_retry(e.symbol)
-    model=p.choose_pair(bid,ask,min_edge=D('0.01'),yes_queue=bs,no_queue=asz,tie_seed='public-preflight')
-    print({'ready':model is not None,'event':e.ticker,'symbol':e.symbol,'bid':str(bid),'ask':str(ask),'model':{k:str(v) for k,v in model.items()} if model else None,'yes_queue':str(bs),'no_queue':str(asz),'completion_reserve_ticks':1,'max_complement_reprices':6,'max_new_residual_qty':1,'order_entry':False})
+    assets=s.normalize_assets('BTC,ETH,SOL,XRP'.split(','))
+    events=await s.discover_nearest_events(assets=assets,min_tte=105)
+    candidate=await s.select_best_candidate(assets=assets,min_edge=D('0.01'),min_tte=105,tie_seed='public-preflight')
+    print(json.dumps({
+        'ready': candidate is not None,
+        'requested_assets': list(assets),
+        'discovered_assets': sorted(events.keys()),
+        'selected_asset': None if candidate is None else candidate.asset,
+        'event': None if candidate is None else candidate.event.ticker,
+        'symbol': None if candidate is None else candidate.event.symbol,
+        'bid': None if candidate is None else str(candidate.bid),
+        'ask': None if candidate is None else str(candidate.ask),
+        'pair_edge': None if candidate is None else str(candidate.edge),
+        'max_queue': None if candidate is None else str(candidate.max_queue),
+        'completion_reserve_ticks':1,
+        'max_complement_reprices':6,
+        'max_new_residual_qty':1,
+        'one_market_only':True,
+        'order_entry':False,
+    },sort_keys=True))
 asyncio.run(main())
 PY
 echo L5_DYNAMIC_PUBLIC_READ_OK
@@ -106,10 +123,11 @@ printf '%s\n' "approval=$SAFE commit=$PINNED_COMMIT consumed=$(date -u +%FT%TZ)"
 SID=dynq1-${SAFE:0:10}-$(date -u +%H%M%S)
 rm -f "$STATE_DIR/session.json"
 
-echo "L5_DYNAMIC_LIVE_START session=$SID q=1 one_pair_at_a_time=true max_new_residual_qty=1 completion_reserve_ticks=1 dynamic_complement_reprices=6 cancel_before_repost=true exact_inactive_gate=true exception_exact_cleanup=true private_rest_min_interval=1.05s backoff_per_side=0,1,2c first_wait=45 complement_wait=60 max_matched_q=12 max_campaigns=48 max_session_seconds=21600 min_final_pair_edge=0.01 auto_restart=false"
+echo "L5_DYNAMIC_LIVE_START session=$SID assets=$ASSETS q=1 one_market_only=true one_pair_at_a_time=true public_scan_before_private=true max_new_residual_qty=1 completion_reserve_ticks=1 dynamic_complement_reprices=6 cancel_before_repost=true exact_inactive_gate=true exception_exact_cleanup=true private_rest_min_interval=1.05s backoff_per_side=0,1,2c first_wait=45 complement_wait=60 max_matched_q=12 max_campaigns=48 max_session_seconds=21600 min_final_pair_edge=0.01 auto_restart=false"
 docker run -d --name "$CONTAINER" --network host --restart no --env-file "$ENV_FILE" \
   -e PYTHONUNBUFFERED=1 \
   -e GEMINI_PRIVATE_REST_MIN_INTERVAL_SECONDS=1.05 \
+  -e GEMINI_L5_DYNAMIC_ASSETS="$ASSETS" \
   -e GEMINI_L5_DYNAMIC_LIVE_Q1=YES \
   -e GEMINI_L5_DYNAMIC_SESSION_ID="$SID" \
   -e GEMINI_L5_DYNAMIC_ARM="$SID" \
@@ -124,15 +142,15 @@ docker run -d --name "$CONTAINER" --network host --restart no --env-file "$ENV_F
   -v "$STATE_DIR:/state" \
   "$IMAGE" python -u -m src.gemini_l5_dynamic_q1 >/dev/null
 
-for i in $(seq 1 20); do
+for i in $(seq 1 25); do
   RUNNING_NOW=$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null || echo false)
-  LOGS=$(docker logs --tail 220 "$CONTAINER" 2>&1 || true)
+  LOGS=$(docker logs --tail 240 "$CONTAINER" 2>&1 || true)
   if grep -q '"stage":"LIVE_START"' <<<"$LOGS"; then break; fi
   if [ "$RUNNING_NOW" != true ]; then echo dynamic_owner_exited_during_startup >&2; echo "$LOGS" >&2; exit 1; fi
   sleep 1
 done
-LOGS=$(docker logs --tail 280 "$CONTAINER" 2>&1 || true)
+LOGS=$(docker logs --tail 320 "$CONTAINER" 2>&1 || true)
 grep -q '"stage":"LIVE_START"' <<<"$LOGS"
 test "$(docker inspect -f '{{.State.Running}}' "$CONTAINER")" = true
 echo "$LOGS"
-echo "L5_DYNAMIC_OWNER_RUNNING container=$CONTAINER session=$SID restart=no max_new_residual_qty=1 completion_reserve_ticks=1 dynamic_complement_reprices=6 private_rest_min_interval=1.05s exception_exact_cleanup=true"
+echo "L5_DYNAMIC_OWNER_RUNNING container=$CONTAINER session=$SID assets=$ASSETS restart=no one_market_only=true max_new_residual_qty=1 completion_reserve_ticks=1 dynamic_complement_reprices=6 private_rest_min_interval=1.05s exception_exact_cleanup=true"
