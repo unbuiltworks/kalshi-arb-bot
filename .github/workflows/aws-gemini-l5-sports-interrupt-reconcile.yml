@@ -44,9 +44,137 @@ jobs:
           cat runtime/sports-interrupt-reconcile.json
           test "$(jq -r '.Status' runtime/sports-interrupt-reconcile.json)" = "Success"
           grep -q 'SPORTS_INTERRUPT_RECONCILE' <<<"$(jq -r '.Stdout' runtime/sports-interrupt-reconcile.json)"
+
+      - name: Release exact settled Sports reservation only after flat-account proof
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE=$(cat <<'EOF'
+          set -Eeuo pipefail
+          ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env
+          [ -f "$ENV_FILE" ] || ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env
+          STATE_DIR=/home/ssm-user/gemini-short-crypto-state
+          IMAGE=arb-gemini-l5-crypto-sports:q1-10ea65d31512
+          docker image inspect "$IMAGE" >/dev/null
+          docker run --rm --network host --env-file "$ENV_FILE" \
+            -e PYTHONUNBUFFERED=1 \
+            -e GEMINI_SHORT_CRYPTO_STATE_DIR=/state \
+            -v "$STATE_DIR:/state" \
+            "$IMAGE" python - <<'PY'
+import asyncio, json
+from decimal import Decimal as D
+import httpx
+from src.gemini_prediction_auth import private_rest_request
+from src import gemini_short_crypto_local_budget as local
+from src import gemini_sports_l5_inventory_local_budget as budget
+
+EXPECT_SYMBOL = "GEMI-TENNIS-ATPUSO-20260830-SHA2-TRU-SHA2"
+EXPECT_EVENT = "TENNIS-ATPUSO-20260830-SHA2-TRU"
+EXPECT_STATUS = "ONE_SIDED_OR_IMBALANCED_INVENTORY_NOT_SETTLED"
+
+async def post(path, params):
+    r = await private_rest_request("POST", path, params=params, timeout=8.0)
+    if r.status_code != 200:
+        raise RuntimeError(f"account proof failed path={path} http={r.status_code}")
+    x = r.json()
+    return x if isinstance(x, dict) else {}
+
+def rows(body, key):
+    x = body.get(key) if isinstance(body, dict) else None
+    return [r for r in x if isinstance(r, dict)] if isinstance(x, list) else []
+
+async def main():
+    state = local.local_open_state()
+    if state is None:
+        print(json.dumps({"type":"SPORTS_SETTLED_RESERVATION_RELEASE","status":"NO_LOCAL_RESERVATION","released":False,"mutation":False}, sort_keys=True))
+        return
+    if str(state.get("strategy") or "") != budget.STRATEGY:
+        raise RuntimeError(f"unexpected reservation strategy={state.get('strategy')!r}")
+    if str(state.get("symbol") or "") != EXPECT_SYMBOL or str(state.get("event_ticker") or "") != EXPECT_EVENT:
+        raise RuntimeError("refusing non-target Sports reservation")
+    if str(state.get("status") or "") != EXPECT_STATUS:
+        raise RuntimeError(f"unexpected target reservation status={state.get('status')!r}")
+    if D(str(state.get("yes_fill") or "0")) != D("1") or D(str(state.get("no_fill") or "0")) != D("0"):
+        raise RuntimeError("unexpected target fill shape")
+
+    active, positions = await asyncio.gather(
+        post("/v1/prediction-markets/orders/active", {"limit":1000,"offset":0}),
+        post("/v1/prediction-markets/positions", {"limit":1000,"offset":0,"sort":"+expiryDate"}),
+    )
+    active_rows = rows(active, "orders")
+    nonzero = []
+    for row in rows(positions, "positions"):
+        try:
+            q = D(str(row.get("totalQuantity") or "0"))
+        except Exception:
+            q = D("0")
+        if q != 0:
+            nonzero.append({"symbol":str(row.get("symbol") or ""),"qty":str(q)})
+    if active_rows or nonzero:
+        raise RuntimeError(f"account not flat active={len(active_rows)} nonzero={nonzero}")
+
+    async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as h:
+        r = await h.get(f"https://api.gemini.com/v1/prediction-markets/events/{EXPECT_EVENT}")
+    if r.status_code != 200:
+        raise RuntimeError(f"event read failed http={r.status_code}")
+    ev = r.json()
+    contracts = ev.get("contracts") if isinstance(ev, dict) else None
+    contracts = contracts if isinstance(contracts, list) else []
+    matches = [c for c in contracts if isinstance(c, dict) and str(c.get("instrumentSymbol") or "") == EXPECT_SYMBOL]
+    if len(matches) != 1:
+        raise RuntimeError(f"target contract match count={len(matches)}")
+    contract = matches[0]
+    market_status = str(contract.get("status") or contract.get("marketState") or "").lower()
+    resolution = str(contract.get("resolutionSide") or "").lower()
+    if market_status != "settled" or resolution not in {"yes","no"}:
+        raise RuntimeError(f"target residual not settled status={market_status!r} resolution={resolution!r}")
+
+    trade_id = str(state.get("trade_id") or "")
+    if not trade_id:
+        raise RuntimeError("target reservation missing trade_id")
+    await budget.release(
+        symbol=EXPECT_SYMBOL,
+        event_ticker=EXPECT_EVENT,
+        trade_id=trade_id,
+        reason=f"SETTLED_RESIDUAL_CONFIRMED_{resolution.upper()}_ACCOUNT_FLAT",
+    )
+    if local.local_open_state() is not None:
+        raise RuntimeError("local reservation still open after exact release")
+    print(json.dumps({
+        "type":"SPORTS_SETTLED_RESERVATION_RELEASE",
+        "status":"RELEASED",
+        "symbol":EXPECT_SYMBOL,
+        "event_ticker":EXPECT_EVENT,
+        "resolution":resolution,
+        "active_prediction_orders":0,
+        "nonzero_prediction_positions":[],
+        "released":True,
+        "venue_mutation":False,
+        "local_ledger_mutation":True,
+        "order_entry":False,
+    }, sort_keys=True))
+
+asyncio.run(main())
+PY
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --parameters "$PARAMS" --query 'Command.CommandId' --output text)
+          for i in $(seq 1 80); do
+            S=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$S" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 5
+          done
+          aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' > runtime/sports-interrupt-settlement-release.json
+          cat runtime/sports-interrupt-settlement-release.json
+          test "$(jq -r '.Status' runtime/sports-interrupt-settlement-release.json)" = "Success"
+          grep -q 'SPORTS_SETTLED_RESERVATION_RELEASE' <<<"$(jq -r '.Stdout' runtime/sports-interrupt-settlement-release.json)"
+          grep -q '"released": true' <<<"$(jq -r '.Stdout' runtime/sports-interrupt-settlement-release.json)"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: sports-interrupt-reconcile
-          path: runtime/sports-interrupt-reconcile.json
+          path: runtime/sports-interrupt-*.json
           retention-days: 7
