@@ -1,5 +1,5 @@
 {
- "generated_utc": "2026-09-01T07:24:14.889682+00:00",
+ "generated_utc": "2026-09-01T08:21:32.554758+00:00",
  "evidence_class": "SHADOW_MAKER_PRINT_PROXY_NOT_EXECUTABLE",
  "sample": "FUTURE_EVIDENCE",
  "ladder_cutoff_utc": "2026-08-31T21:45",
@@ -45,25 +45,25 @@
    }
   },
   "L1": {
-   "engaged": 30,
+   "engaged": 32,
    "missing_labels": 0,
    "status": "COMPLETE",
-   "n_fills": 139,
-   "turnover_usdc": 64.22,
-   "matched_pct_qty": 0.3885,
+   "n_fills": 141,
+   "turnover_usdc": 64.8,
+   "matched_pct_qty": 0.383,
    "pair_locked": 4.8264,
-   "realized_settlement_pnl_all": -2.22,
-   "net_sep2": -2.22,
-   "net_aug31": -3.61,
-   "maker_fees": 1.39,
+   "realized_settlement_pnl_all": -2.8,
+   "net_sep2": -2.8,
+   "net_aug31": -4.21,
+   "maker_fees": 1.41,
    "rebates_separate": 0.0,
-   "residual_pnl": -7.0464,
-   "mech_net_per_turnover": -0.03457,
-   "worst_residual_loss_sum": 43.52,
+   "residual_pnl": -7.6264,
+   "mech_net_per_turnover": -0.04321,
+   "worst_residual_loss_sum": 44.1,
    "max_single_window_loss": -5.06,
    "capital_minutes": 66.7,
    "rung_fill_counts": {
-    "0": 139
+    "0": 141
    }
   },
   "L2": {
@@ -91,25 +91,25 @@
    }
   },
   "L3": {
-   "engaged": 30,
+   "engaged": 32,
    "missing_labels": 0,
    "status": "COMPLETE",
-   "n_fills": 145,
-   "turnover_usdc": 67.74,
-   "matched_pct_qty": 0.3726,
+   "n_fills": 147,
+   "turnover_usdc": 68.32,
+   "matched_pct_qty": 0.3675,
    "pair_locked": 4.8634,
-   "realized_settlement_pnl_all": -0.7364,
-   "net_sep2": -0.7364,
-   "net_aug31": -2.1864,
-   "maker_fees": 1.45,
+   "realized_settlement_pnl_all": -1.3164,
+   "net_sep2": -1.3164,
+   "net_aug31": -2.7864,
+   "maker_fees": 1.47,
    "rebates_separate": 0.0,
-   "residual_pnl": -5.5998,
-   "mech_net_per_turnover": -0.01087,
-   "worst_residual_loss_sum": 47.73,
+   "residual_pnl": -6.1798,
+   "mech_net_per_turnover": -0.01927,
+   "worst_residual_loss_sum": 48.31,
    "max_single_window_loss": -5.06,
    "capital_minutes": 71.1,
    "rung_fill_counts": {
-    "0": 139,
+    "0": 141,
     "1": 5,
     "2": 1
    }
