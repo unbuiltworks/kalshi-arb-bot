@@ -1,15 +1,15 @@
-"""Bounded continuous controller around the proven Gemini ETH5 3x3 q1 ladder.
+"""Bounded continuous owner for adaptive Gemini ETH5 q1 maker pairs.
 
-The controller is deliberately aggressive in *time* and resting breadth, not in
-per-order size.  It repeatedly re-discovers the live ETH 5m contract and rebuilds
-the proven 3x3 maker ladder from fresh depth.  A cycle may continue only when the
-previous cycle has either zero authoritative fills or perfectly matched YES/NO
-inventory.  Any residual, orphan/active order, unexpected position, post reject,
-or account inconsistency ends the session fail-closed.
+The owner repeatedly re-discovers the live ETH 5m contract, chooses the most
+aggressive 0/1/2c-backoff q1 YES+NO pair that still preserves the configured
+after-fee pair edge, runs exactly one pair cycle, reconciles it authoritatively,
+and only then decides whether another cycle is allowed.
 
-Matched pairs are economically locked but are not reported as realized P&L until
-Gemini settles them.  Live mutation requires an outer dual-key arm plus the inner
-per-cycle ladder arm.
+Critical invariant: one cycle has at most one q1 order per outcome, so a venue or
+cancel race can create at most one new directional contract.  Any residual,
+orphan/active order, unexpected position, post reject, or account inconsistency
+halts the session fail-closed.  Matched pairs are locked economically but are not
+reported as realized P&L until Gemini settlement.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from decimal import Decimal as D
 from pathlib import Path
 from typing import Any, Mapping
 
-from src import gemini_l5_ladder_q1 as ladder
+from src import gemini_l5_pair_q1 as pair
 from src.gemini_prediction_auth import private_rest_request
 
 ZERO = D("0")
@@ -47,11 +47,7 @@ def emit(stage: str, **fields: Any) -> None:
     print(
         "GEMINI_L5_DYNAMIC_Q1 "
         + json.dumps(
-            {
-                "stage": stage,
-                "observed_at_utc": datetime.now(timezone.utc).isoformat(),
-                **fields,
-            },
+            {"stage": stage, "observed_at_utc": datetime.now(timezone.utc).isoformat(), **fields},
             separators=(",", ":"),
             default=str,
         ),
@@ -111,18 +107,21 @@ async def account_guard(allowed_balanced_symbols: set[str]) -> dict[str, Any]:
         raise RuntimeError(f"unexpected active prediction orders={len(active_rows)}")
 
     grouped: dict[str, dict[str, D]] = {}
-    raw_positions = _rows(positions.json(), "positions")
     visible: list[dict[str, str]] = []
-    for row in raw_positions:
+    for row in _rows(positions.json(), "positions"):
         qty = D(str(row.get("totalQuantity") or "0"))
         if qty <= ZERO:
             continue
         symbol = str(row.get("symbol") or "").strip().upper()
         outcome = str(row.get("eventOutcome") or row.get("event_outcome") or "").strip().lower()
         if not symbol or outcome not in {"yes", "no"}:
-            raise RuntimeError(f"unrecognized nonzero prediction position symbol={symbol!r} outcome={outcome!r}")
+            raise RuntimeError(
+                f"unrecognized nonzero prediction position symbol={symbol!r} outcome={outcome!r}"
+            )
         if symbol not in allowed_balanced_symbols:
-            raise RuntimeError(f"unexpected prediction position symbol={symbol} qty={qty} outcome={outcome}")
+            raise RuntimeError(
+                f"unexpected prediction position symbol={symbol} qty={qty} outcome={outcome}"
+            )
         bucket = grouped.setdefault(symbol, {"yes": ZERO, "no": ZERO})
         bucket[outcome] += qty
         visible.append({"symbol": symbol, "outcome": outcome, "qty": str(qty)})
@@ -155,28 +154,28 @@ async def _run_cycle(session_id: str, number: int, state_dir: Path) -> dict[str,
     except FileNotFoundError:
         pass
 
-    # Preserve the proven ladder mechanics while making timing/economics explicit
-    # for a continuously re-evaluated session.
-    ladder.MIN_EDGE = MIN_TOP_PAIR_EDGE
-    ladder.FIRST_WAIT = FIRST_WAIT_SECONDS
-    ladder.COMPLEMENT_WAIT = COMPLEMENT_WAIT_SECONDS
-    ladder.MIN_TTE = MIN_TTE_SECONDS
-    os.environ[ladder.LIVE_ENV] = "YES"
-    os.environ[ladder.SID_ENV] = cycle_sid
-    os.environ[ladder.ARM_ENV] = cycle_sid
-    os.environ[ladder.STATE_ENV] = str(cycle_path)
-
+    os.environ[pair.LIVE_ENV] = "YES"
+    os.environ[pair.SID_ENV] = cycle_sid
+    os.environ[pair.ARM_ENV] = cycle_sid
+    os.environ[pair.STATE_ENV] = str(cycle_path)
     emit(
         "CYCLE_START",
         cycle=number,
         cycle_session=cycle_sid,
-        min_top_pair_edge=str(MIN_TOP_PAIR_EDGE),
+        min_pair_edge=str(MIN_TOP_PAIR_EDGE),
+        max_backoff="0.02",
+        max_new_residual_qty=1,
         first_wait_s=FIRST_WAIT_SECONDS,
         complement_wait_s=COMPLEMENT_WAIT_SECONDS,
         order_entry=True,
         realized_pnl=None,
     )
-    await ladder.run()
+    await pair.run(
+        min_edge=MIN_TOP_PAIR_EDGE,
+        first_wait=FIRST_WAIT_SECONDS,
+        complement_wait=COMPLEMENT_WAIT_SECONDS,
+        min_tte=MIN_TTE_SECONDS,
+    )
     return _read_cycle(cycle_path)
 
 
@@ -184,8 +183,8 @@ async def run() -> None:
     if not armed():
         emit(
             "DISARMED",
-            q_per_rung=1,
-            rungs_per_side=3,
+            q_per_side=1,
+            max_new_residual_qty=1,
             max_campaigns=MAX_CAMPAIGNS,
             max_matched_q=str(MAX_MATCHED_Q),
             max_session_seconds=MAX_SESSION_SECONDS,
@@ -198,13 +197,12 @@ async def run() -> None:
     state_dir = _state_path().parent
     state_dir.mkdir(parents=True, exist_ok=True)
 
-    # Startup must be truly flat.  Matched inventory is allowed only if this exact
-    # controller creates it after this point.
+    # Startup must be truly flat. Matched inventory is permitted only after this
+    # exact owner creates and records it.
     startup = await account_guard(set())
     emit("ACCOUNT_START_FLAT", **startup, order_entry=False, realized_pnl=None)
 
-    started = time.monotonic()
-    deadline = started + MAX_SESSION_SECONDS
+    deadline = time.monotonic() + MAX_SESSION_SECONDS
     allowed_symbols: set[str] = set()
     campaigns: list[dict[str, Any]] = []
     matched_total = ZERO
@@ -222,12 +220,13 @@ async def run() -> None:
     emit(
         "LIVE_START",
         session=session_id,
-        q_per_rung=1,
-        rungs_per_side=3,
+        q_per_side=1,
+        max_new_residual_qty=1,
+        adaptive_backoff_cents=[0, 1, 2],
         max_campaigns=MAX_CAMPAIGNS,
         max_matched_q=str(MAX_MATCHED_Q),
         max_session_seconds=MAX_SESSION_SECONDS,
-        min_top_pair_edge=str(MIN_TOP_PAIR_EDGE),
+        min_pair_edge=str(MIN_TOP_PAIR_EDGE),
         residual_policy="HALT_ON_ANY_RESIDUAL",
         auto_restart=False,
         order_entry=True,
@@ -235,15 +234,30 @@ async def run() -> None:
     )
 
     try:
-        while time.monotonic() < deadline and len(campaigns) < MAX_CAMPAIGNS and matched_total < MAX_MATCHED_Q:
+        while (
+            time.monotonic() < deadline
+            and len(campaigns) < MAX_CAMPAIGNS
+            and matched_total < MAX_MATCHED_Q
+        ):
             attempts += 1
             before = await account_guard(allowed_symbols)
-            emit("ACCOUNT_GUARD_OK", attempt=attempts, **before, order_entry=False, realized_pnl=None)
+            emit(
+                "ACCOUNT_GUARD_OK",
+                attempt=attempts,
+                **before,
+                order_entry=False,
+                realized_pnl=None,
+            )
 
             cycle = await _run_cycle(session_id, attempts, state_dir)
             if cycle is None:
-                # Ladder STOP before mutation (no eligible event / unsafe ladder).
-                emit("CYCLE_IDLE", attempt=attempts, reason="NO_MUTATING_CYCLE_STATE", order_entry=False, realized_pnl=None)
+                emit(
+                    "CYCLE_IDLE",
+                    attempt=attempts,
+                    reason="NO_MUTATING_CYCLE_STATE",
+                    order_entry=False,
+                    realized_pnl=None,
+                )
                 await asyncio.sleep(IDLE_POLL_SECONDS)
                 continue
 
@@ -258,6 +272,8 @@ async def run() -> None:
                 "event": cycle.get("event"),
                 "symbol": symbol,
                 "status": status,
+                "backoff": str(cycle.get("backoff") or ""),
+                "entry_edge": str(cycle.get("entry_edge") or ""),
                 "yes_qty": str(yes_qty),
                 "no_qty": str(no_qty),
                 "matched_qty": str(matched),
@@ -270,7 +286,13 @@ async def run() -> None:
             matched_total += matched
             outer.update({"campaigns": campaigns, "matched_qty": str(matched_total)})
             _write_state(outer)
-            emit("CYCLE_COMPLETE", **record, session_matched_qty=str(matched_total), order_entry=False, realized_pnl=None)
+            emit(
+                "CYCLE_COMPLETE",
+                **record,
+                session_matched_qty=str(matched_total),
+                order_entry=False,
+                realized_pnl=None,
+            )
 
             if residual > ZERO:
                 terminal_reason = "RESIDUAL_DETECTED"
@@ -288,11 +310,14 @@ async def run() -> None:
                 terminal_reason = f"UNSAFE_CYCLE_STATUS_{status or 'MISSING'}"
                 raise RuntimeError(f"dynamic session halted on cycle status={status!r}")
 
-            # Every mutation cycle must end with no active orders and only balanced,
-            # session-owned inventory before another order can be submitted.
             after = await account_guard(allowed_symbols)
-            emit("POST_CYCLE_GUARD_OK", attempt=attempts, **after, order_entry=False, realized_pnl=None)
-
+            emit(
+                "POST_CYCLE_GUARD_OK",
+                attempt=attempts,
+                **after,
+                order_entry=False,
+                realized_pnl=None,
+            )
             if matched_total >= MAX_MATCHED_Q:
                 terminal_reason = "MATCHED_CAP_REACHED"
                 break
@@ -303,13 +328,15 @@ async def run() -> None:
             elif time.monotonic() >= deadline:
                 terminal_reason = "SESSION_TIME_REACHED"
     except Exception as exc:
-        outer.update({
-            "terminal": True,
-            "terminal_reason": terminal_reason,
-            "error": f"{type(exc).__name__}: {exc}",
-            "matched_qty": str(matched_total),
-            "ended_at_utc": datetime.now(timezone.utc).isoformat(),
-        })
+        outer.update(
+            {
+                "terminal": True,
+                "terminal_reason": terminal_reason,
+                "error": f"{type(exc).__name__}: {exc}",
+                "matched_qty": str(matched_total),
+                "ended_at_utc": datetime.now(timezone.utc).isoformat(),
+            }
+        )
         _write_state(outer)
         emit(
             "HALT",
@@ -323,12 +350,14 @@ async def run() -> None:
         raise
 
     final_guard = await account_guard(allowed_symbols)
-    outer.update({
-        "terminal": True,
-        "terminal_reason": terminal_reason,
-        "matched_qty": str(matched_total),
-        "ended_at_utc": datetime.now(timezone.utc).isoformat(),
-    })
+    outer.update(
+        {
+            "terminal": True,
+            "terminal_reason": terminal_reason,
+            "matched_qty": str(matched_total),
+            "ended_at_utc": datetime.now(timezone.utc).isoformat(),
+        }
+    )
     _write_state(outer)
     emit(
         "COMPLETE",
