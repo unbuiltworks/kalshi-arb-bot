@@ -45,10 +45,7 @@ def test_rescue_cancel_verifies_inactive_then_reposts_and_matches(monkeypatch):
 
     async def fake_post(maker, *, event, sid, missing, price, sequence: int):
         assert sequence == 1
-        sequence_log = globals().get("_unused")
-        del sequence_log
         spec = {"side": missing, "price": D(str(price)), "id": "no1", "row": {"orderId": "3"}}
-        # Use outer list without shadowing the function parameter.
         order_log.append(("post", spec["id"], str(price)))
         return spec
 
@@ -58,6 +55,7 @@ def test_rescue_cancel_verifies_inactive_then_reposts_and_matches(monkeypatch):
     monkeypatch.setattr(m.ladder, "cancel", fake_cancel)
     monkeypatch.setattr(m, "_exact_active", fake_active)
     monkeypatch.setattr(m, "_post_replacement", fake_post)
+    monkeypatch.setattr(m, "_write_state", lambda payload: None)
 
     status = asyncio.run(m._dynamic_complement_rescue(
         DummyMaker(),
@@ -105,6 +103,7 @@ def test_rescue_never_reposts_when_cancel_identity_remains_active(monkeypatch):
     monkeypatch.setattr(m.ladder, "cancel", fake_cancel)
     monkeypatch.setattr(m, "_exact_active", fake_active)
     monkeypatch.setattr(m, "_post_replacement", fake_post)
+    monkeypatch.setattr(m, "_write_state", lambda payload: None)
 
     status = asyncio.run(m._dynamic_complement_rescue(
         DummyMaker(),
