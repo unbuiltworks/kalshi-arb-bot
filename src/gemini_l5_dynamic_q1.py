@@ -6,11 +6,13 @@ exactly one q1 YES+NO pair cycle, reconciles it authoritatively, and only then
 decides whether another cycle is allowed.
 
 After a first fill, the pair primitive may spend only reserved edge on bounded,
-maker-only complement reprices.  Critical invariant: one cycle can create at
-most q=1 directional inventory.  Any residual, orphan/active order, unexpected
-position, ambiguous completion state, post reject, or account inconsistency
-halts the session fail-closed. Matched pairs are locked economically but are not
-reported as realized P&L until Gemini settlement.
+maker-only complement reprices. Critical invariant: one cycle can create at
+most q=1 directional inventory. Any residual, orphan/active order, unexpected
+position, ambiguous completion state, post reject, account inconsistency, or
+execution exception halts the session fail-closed. Unexpected exceptions trigger
+an exact-ID cleanup of the current durable cycle before the owner exits. Matched
+pairs are locked economically but are not reported as realized P&L until Gemini
+settlement.
 """
 from __future__ import annotations
 
@@ -23,8 +25,9 @@ from decimal import Decimal as D
 from pathlib import Path
 from typing import Any, Mapping
 
+from src import gemini_l5_dynamic_exception_cleanup as exception_cleanup
 from src import gemini_l5_pair_q1 as pair
-from src.gemini_prediction_auth import private_rest_request
+from src.gemini_prediction_auth import PRIVATE_REST_MIN_INTERVAL_ENV, private_rest_request
 
 ZERO = D("0")
 MATCHED_STATUSES = frozenset({"MATCHED", "MATCHED_DYNAMIC_COMPLETION"})
@@ -138,8 +141,41 @@ async def _run_cycle(session_id: str, number: int, state_dir: Path) -> dict[str,
         order_entry=True,
         realized_pnl=None,
     )
-    await pair.run(min_edge=MIN_TOP_PAIR_EDGE, first_wait=FIRST_WAIT_SECONDS, complement_wait=COMPLEMENT_WAIT_SECONDS, min_tte=MIN_TTE_SECONDS)
+    try:
+        await pair.run(min_edge=MIN_TOP_PAIR_EDGE, first_wait=FIRST_WAIT_SECONDS, complement_wait=COMPLEMENT_WAIT_SECONDS, min_tte=MIN_TTE_SECONDS)
+    except Exception as exc:
+        error=f"{type(exc).__name__}: {exc}"
+        try:
+            cleanup = await exception_cleanup.cleanup_cycle(cycle_path, error=error)
+        except Exception as cleanup_exc:
+            emit(
+                "CYCLE_EXCEPTION_CLEANUP_FAILED",
+                cycle=number,
+                error=error,
+                cleanup_error=f"{type(cleanup_exc).__name__}: {cleanup_exc}",
+                order_entry=False,
+                realized_pnl=None,
+            )
+            raise RuntimeError(
+                f"pair execution failed ({error}); exact cleanup also failed: {type(cleanup_exc).__name__}: {cleanup_exc}"
+            ) from exc
+        emit(
+            "CYCLE_EXCEPTION_CLEANED",
+            cycle=number,
+            error=error,
+            cleanup=cleanup,
+            order_entry=False,
+            realized_pnl=None,
+        )
+        raise
     return _read_cycle(cycle_path)
+
+
+def _exception_reason(exc: Exception) -> str:
+    text = str(exc).lower()
+    if "nonce" in text and "rate" in text:
+        return "NONCE_RATE_EXCEPTION"
+    return f"EXECUTION_EXCEPTION_{type(exc).__name__.upper()}"
 
 
 async def run() -> None:
@@ -147,7 +183,7 @@ async def run() -> None:
         emit("DISARMED", q_per_side=1, max_new_residual_qty=1, max_campaigns=MAX_CAMPAIGNS, max_matched_q=str(MAX_MATCHED_Q), max_session_seconds=MAX_SESSION_SECONDS, order_entry=False, realized_pnl=None); return
     session_id=os.getenv(SID_ENV,"").strip(); state_dir=_state_path().parent; state_dir.mkdir(parents=True,exist_ok=True)
     startup=await account_guard(set()); emit("ACCOUNT_START_FLAT", **startup, order_entry=False, realized_pnl=None)
-    deadline=time.monotonic()+MAX_SESSION_SECONDS; allowed_symbols:set[str]=set(); campaigns=[]; matched_total=ZERO; attempts=0; terminal_reason="SESSION_LIMIT"
+    deadline=time.monotonic()+MAX_SESSION_SECONDS; allowed_symbols:set[str]=set(); campaigns=[]; matched_total=ZERO; attempts=0; terminal_reason="RUNNING"
     outer={"terminal":False,"sid":session_id,"started_at_utc":datetime.now(timezone.utc).isoformat(),"matched_qty":"0","campaigns":campaigns}; _write_state(outer)
     emit(
         "LIVE_START",
@@ -160,6 +196,8 @@ async def run() -> None:
         cancel_before_repost=True,
         exact_inactive_before_terminal_fill_check=True,
         exact_inactive_gate=True,
+        exception_exact_cleanup=True,
+        private_rest_min_interval_s=os.getenv(PRIVATE_REST_MIN_INTERVAL_ENV, "0"),
         queue_aware=True,
         max_campaigns=MAX_CAMPAIGNS,
         max_matched_q=str(MAX_MATCHED_Q),
@@ -219,6 +257,8 @@ async def run() -> None:
             if len(campaigns)>=MAX_CAMPAIGNS: terminal_reason="CAMPAIGN_CAP_REACHED"
             elif time.monotonic()>=deadline: terminal_reason="SESSION_TIME_REACHED"
     except Exception as exc:
+        if terminal_reason == "RUNNING":
+            terminal_reason = _exception_reason(exc)
         outer.update({"terminal":True,"terminal_reason":terminal_reason,"error":f"{type(exc).__name__}: {exc}","matched_qty":str(matched_total),"ended_at_utc":datetime.now(timezone.utc).isoformat()}); _write_state(outer)
         emit("HALT",reason=terminal_reason,error=f"{type(exc).__name__}: {exc}",matched_qty=str(matched_total),campaigns=len(campaigns),order_entry=False,realized_pnl=None); raise
     final_guard=await account_guard(allowed_symbols)
