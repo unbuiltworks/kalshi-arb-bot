@@ -3,9 +3,9 @@
 This module contains authentication/transport plumbing only. It never submits an
 order. Credentials are read from environment variables and are never logged.
 
-Gemini time-based API keys use an epoch-seconds nonce. REST private calls use
+Gemini time-based API keys accept epoch-millisecond nonces. REST private calls use
 Gemini's standard signed payload headers; Prediction Markets WebSocket auth uses
-the same account-scoped key and time-based nonce.
+the same account-scoped key and monotonic time-based nonce.
 """
 
 from __future__ import annotations
@@ -29,25 +29,24 @@ load_dotenv()
 
 GEMINI_REST = "https://api.gemini.com"
 GEMINI_WS = "wss://ws.gemini.com"
-MAX_NONCE_FUTURE_S = 25
+MAX_NONCE_FUTURE_MS = 25_000
 
 _nonce_lock = threading.Lock()
 _last_nonce = 0
 
 
 def next_nonce() -> int:
-    """Return a monotonic epoch-seconds nonce for a Gemini time-based API key.
+    """Return a monotonic epoch-millisecond nonce for a Gemini time-based API key.
 
-    Gemini rejects time-based nonces that drift more than roughly 30 seconds from
-    server time. When multiple private requests occur inside one second, advance
-    by one second to preserve monotonicity, but fail closed before local request
-    volume can push the nonce outside the accepted clock window.
+    Millisecond resolution preserves strict monotonicity during bursts without the
+    old one-second-per-request drift. The 25-second future bound remains fail-closed
+    if request volume somehow advances the local sequence too far ahead of wall time.
     """
     global _last_nonce
     with _nonce_lock:
-        now = int(time.time())
-        candidate = max(now, _last_nonce + 1)
-        if candidate > now + MAX_NONCE_FUTURE_S:
+        now_ms = time.time_ns() // 1_000_000
+        candidate = max(now_ms, _last_nonce + 1)
+        if candidate > now_ms + MAX_NONCE_FUTURE_MS:
             raise RuntimeError("Gemini time-based nonce rate exceeded")
         _last_nonce = candidate
         return candidate
