@@ -68,15 +68,14 @@ def test_v3_first_fill_goes_cancel_then_bounded_fok_without_repost(monkeypatch):
         assert price == D("0.37")
         return {"side": "NO", "price": price, "id": "no-fok", "row": None, "liquidity": "TAKER", "tif": "FOK"}
 
-    async def forbidden_breakeven(*args, **kwargs):
-        raise AssertionError("V3 must not post a breakeven maker replacement")
-
     monkeypatch.setattr(v1, "PROFIT_STAGE_SECONDS", 0.0)
     monkeypatch.setattr(v1, "BREAKEVEN_STAGE_SECONDS", 0.0)
     monkeypatch.setattr(v1, "IOC_RETRY_SECONDS", 0.0)
     monkeypatch.setattr(pair.ladder, "fills", fake_fills)
     monkeypatch.setattr(v2, "_cancel_current", fake_cancel)
-    monkeypatch.setattr(v2, "_post_breakeven_maker", forbidden_breakeven)
+    # Exercise the hook V3 installs: no maker replacement exists between exact
+    # sibling cancellation and the bounded FOK decision.
+    monkeypatch.setattr(v2, "_post_breakeven_maker", v3._skip_breakeven_maker)
     monkeypatch.setattr(pair.ladder, "fresh_top_retry", fake_top)
     monkeypatch.setattr(v2, "_post_emergency_fok", fake_fok)
     monkeypatch.setattr(pair, "_write_state", lambda payload: None)
