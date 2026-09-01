@@ -3,20 +3,70 @@
 Status: **PROPOSED, NOT ACTIVATED.** Activation is a single owner-side
 action described below; nothing in this repo activates on its own.
 
-## Current live state (re-established 2026-09-01, from `origin/main`)
+## Current live state (corrected 2026-09-01 after connected Railway verification)
 
-* **Railway**: ONE service. `.github/workflows/deploy.yml` runs
-  `railway up --service $RAILWAY_SERVICE_ID` on **every push to `main`**
-  (no path filter). The service builds the ROOT `Dockerfile`, which runs
-  the trading bot (`python -m src`, `BOT_MODE` paper/live).
-  ⇒ Confirmed: any push to `main` — including a docs-only merge —
-  redeploys the trading service. **Therefore: no main pushes for this.**
-* **GitHub Actions**: all other 15 workflows trigger on `issues: opened`
-  only. There are **no** scheduled workflows and none that fire on pushes
-  to research or data branches.
+Two DIFFERENT views that must not be conflated:
+
+**(a) What the repo's CI can deploy** (from `origin/main`):
+`.github/workflows/deploy.yml` runs `railway up --service
+$RAILWAY_SERVICE_ID` on **every push to `main`** (no path filter),
+building the ROOT `Dockerfile` = the trading bot (`python -m src`,
+`BOT_MODE` paper/live). It targets exactly ONE specific service (the ID
+in the secret). ⇒ any push to `main` — even docs-only — redeploys that
+trading service. **Therefore: no main pushes for this.**
+
+**(b) What actually exists in Railway** (connected verification via the
+owner/ChatGPT, 2026-09-01 — NOT inferable from the repo, and not
+queryable from this environment, which holds no Railway credentials):
+project **`arb-ev-wallet-shadow`** contains **11 services**, most with
+latest deployments from ~Aug 27:
+
+| Existing service | Workstream (by name ↔ repo modules) | Disposition for this activation |
+|---|---|---|
+| `polymarket-wallet-shadow` | older Polymarket wallet shadow | untouched |
+| `polymarket-temporal-shadow-run` | older Polymarket temporal shadow | untouched |
+| `polymarket-maker-econ-shadow` | older Polymarket maker-econ shadow | untouched |
+| `polymarket-maker-ws-shadow` | older Polymarket WS shadow | untouched |
+| `polymarket-l5-econ-ledger` | pre-canonical L5 ledger | untouched (retire candidate LATER, see below) |
+| `polymarket-l5-replay-once` | pre-canonical L5 replay — latest deployment **CRASHED** | untouched; preserve until new service is clean |
+| `gemini-maker-shadow` | Gemini maker research | untouched |
+| `gemini-fair-value-shadow` | Gemini fair-value research | untouched |
+| `kalshi-temporal-shadow` | Kalshi shadow collection | untouched |
+| `kalshi-incentive-shadow` | Kalshi incentive watch | untouched |
+| (empty temporal service, no latest deployment) | — | untouched |
+
+Which of these (if any) is the live-adjacent trading service that
+`deploy.yml` targets is determined by the `RAILWAY_SERVICE_ID` secret,
+which is not readable from here — the activation gate below therefore
+records ALL existing service+deployment IDs, so "nothing redeployed" is
+proven for every service regardless of which one is the trading target.
+
+* **GitHub Actions**: the other workflows trigger on `issues: opened`
+  only; no scheduled workflows; nothing fires on pushes to research or
+  data branches. `l5-canonical-ci.yml` (added on the research branch)
+  runs the test suite on pushes to `feature/l5-canonical` only —
+  read-only CI, no secrets, no deploys — so test results are
+  independently produced by Actions rather than only locally.
 * **AWS**: not referenced by any workflow in this repository. The Kalshi
   canary is deployed separately (release branches, operator-managed) and
-  is unreachable from anything here.
+  is unreachable from anything here. Untouched.
+
+### Existing L5/Polymarket services: retire or reuse?
+
+Assessed from repo evidence only (their connected branches/start commands
+are visible only in the Railway dashboard — confirm there before acting):
+
+* `polymarket-l5-econ-ledger` and `polymarket-l5-replay-once` are
+  superseded by the canonical pipeline this branch carries (`ledger.py`,
+  `ops.py`); the replay service is already crashed. **Recommendation:
+  retire (do not reuse) AFTER `l5-ops-research` has run clean for a few
+  days** — reuse would inherit unpinned pre-canonical code and settings.
+  Not touched now, per review instruction.
+* The four `polymarket-*-shadow` services may target other wallets or
+  questions; the new ops collector supersedes only the L5-wallet shadow
+  function. Inventory each service's source branch in the dashboard
+  before retiring anything.
+* Gemini/Kalshi services belong to other active workstreams — keep.
 
 ## Recommended topology: isolated Railway research service
 
@@ -78,14 +128,22 @@ action described below; nothing in this repo activates on its own.
 5. Deploy. Nothing else changes: no push to `main` occurs, the trading
    service is not rebuilt, `deploy.yml` does not run.
 
-## Verification checklist (prove live services unchanged)
+## Verification checklist (prove ALL existing services unchanged)
+
+Target: project **`arb-ev-wallet-shadow`**, default environment, new
+service name **`l5-ops-research`** — the ONLY object created.
 
 Before activation, record; after activation, re-check:
 
+* [ ] Railway: list all 11 existing services with their **service IDs and
+      latest deployment IDs** (dashboard or `railway status` by the
+      credential holder). After activation this list must be IDENTICAL —
+      same deployment IDs, no restarts — with exactly one addition:
+      `l5-ops-research`.
 * [ ] `git log origin/main` — unchanged (no new commits).
 * [ ] Actions tab — no `Deploy to Railway` run triggered.
-* [ ] Railway: existing trading service shows **no new deployment** and
-      unchanged env; the only new object is the `l5-ops-research` service.
+* [ ] The crashed `polymarket-l5-replay-once` service is still present and
+      still crashed (preserved, not repurposed).
 * [ ] AWS/canary: untouched by construction (nothing here references it).
 * [ ] New service logs show: `starting: … interval=1800s`, `code version:
       <sha>`, `restored N state files from l5-ops-data` (or "starting

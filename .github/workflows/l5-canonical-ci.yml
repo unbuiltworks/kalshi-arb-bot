@@ -1,0 +1,34 @@
+# Read-only CI for the L5 research branch (issue #167).
+#
+# Exists so the test suite is INDEPENDENTLY run by GitHub Actions on this
+# branch, not only locally. No secrets, no deploys, no writes; push-scoped
+# to feature/l5-canonical only, so it never runs for main or any other
+# branch and cannot interact with the Railway deploy workflow.
+
+name: l5-canonical-ci
+
+on:
+  push:
+    branches: [feature/l5-canonical]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test deps
+        run: pip install --quiet pytest httpx
+      - name: Run test suite
+        run: python3 -m pytest tests/ -q
+      - name: Ops-layer smoke (offline pieces)
+        run: |
+          python3 -m src.polymarket_l5.ops status
+          python3 -m src.polymarket_l5.ops regression
