@@ -10,6 +10,7 @@ from src import gemini_short_crypto_btc5m_maker_canary_q1 as base
 from src.gemini_incentive_mm_live_probe_q1 import discover_eth5m
 from src.gemini_kalshi_execution_shadow import gemini_predictions_maker_fee
 from src.gemini_kalshi_live_service import _gemini_available_usd, _gemini_terms_ok
+from src.gemini_prediction_auth import private_rest_request
 
 ONE=D("1"); ZERO=D("0"); TICK=D("0.01")
 OFFSETS=(D("0"),D("0.01"),D("0.02"))
@@ -51,12 +52,38 @@ async def fresh_top_retry(symbol:str,attempts:int=FRESH_TOP_ATTEMPTS,delay_s:flo
                 await asyncio.sleep(max(0.0,float(delay_s)))
     raise RuntimeError(f"no fresh Gemini ETH5 depth after {max(1,int(attempts))} attempts") from last
 
-async def refresh(spec:dict[str,Any],symbol:str)->None: spec["row"]=await base._order_by_client(spec["id"],symbol) or spec.get("row")
 async def cancel(maker:base.GeminiMakerSession,spec:dict[str,Any],symbol:str)->dict[str,Any]:
-    await refresh(spec,symbol); return await base._cancel_maker(maker,row=spec["row"]) if spec.get("row") else {"ok":False,"reason":"EXACT_ROW_NOT_FOUND"}
+    """Cancel by the exact order row captured immediately after post; no REST refresh burst."""
+    row=spec.get("row")
+    return await base._cancel_maker(maker,row=row) if row else {"ok":False,"reason":"EXACT_ROW_NOT_FOUND"}
+
+async def _batch_rows(specs:list[dict[str,Any]],symbol:str)->dict[str,dict[str,Any]]:
+    """Authoritatively reconcile all six IDs with three private REST calls total."""
+    wanted={s["id"] for s in specs}; found:dict[str,dict[str,Any]]={}
+    now_ms=int(time.time()*1000)
+    queries=[
+        ("/v1/prediction-markets/orders/active",{"symbol":symbol,"limit":100,"offset":0}),
+        ("/v1/prediction-markets/orders/history",{"status":"filled","symbol":symbol,"limit":100,"from":now_ms-900000,"to":now_ms+1000}),
+        ("/v1/prediction-markets/orders/history",{"status":"cancelled","symbol":symbol,"limit":100,"from":now_ms-900000,"to":now_ms+1000}),
+    ]
+    for path,params in queries:
+        response=await private_rest_request("POST",path,params=params,timeout=5.0)
+        if response.status_code!=200:
+            continue
+        body=response.json(); rows=body.get("orders",[]) if isinstance(body,Mapping) else []
+        for row in rows:
+            if not isinstance(row,Mapping): continue
+            client=str(row.get("clientOrderId") or "")
+            if client not in wanted: continue
+            candidate=dict(row); prior=found.get(client)
+            if prior is None or base._filled(candidate)>=base._filled(prior): found[client]=candidate
+    return found
+
 async def fills(specs:list[dict[str,Any]],symbol:str)->dict[str,D]:
-    out={}
-    for s in specs: await refresh(s,symbol); out[s["id"]]=base._filled(s.get("row"))
+    rows=await _batch_rows(specs,symbol); out={}
+    for s in specs:
+        if s["id"] in rows: s["row"]=rows[s["id"]]
+        out[s["id"]]=base._filled(s.get("row"))
     return out
 
 def summary(specs:list[dict[str,Any]],fs:Mapping[str,D])->dict[str,Any]:
@@ -78,7 +105,7 @@ async def run()->None:
     if event is None or event.seconds_to_expiry<MIN_TTE: emit("STOP",reason="NO_ETH5_WITH_ENOUGH_TTE",order_entry=False); return
     bid,bs,ask,asz=await fresh_top_retry(event.symbol); ys=prices(bid); ns=prices(ONE-ask)
     if not safe(ys,ns): emit("STOP",reason="UNSAFE_LADDER",yes=[str(x) for x in ys],no=[str(x) for x in ns],top_edge=str(edge(ys[0],ns[0])),order_entry=False); return
-    sid=os.getenv(SID_ENV,"").strip()[:16]
+    sid=os.getenv(SID_ENV,"").strip()
     specs=[]
     for side,arr in (("YES",ys),("NO",ns)):
         for i,p in enumerate(arr): specs.append({"side":side,"rung":i,"price":p,"id":cid(sid,side,i),"row":None})
