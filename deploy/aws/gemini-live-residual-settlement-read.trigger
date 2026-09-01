@@ -1,0 +1,2 @@
+READ_ID=gemini-live-residual-settlement-20260901-0149
+MODE=READ_ONLY_EXACT_RESIDUALS
