@@ -15,6 +15,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 COPY src/pmus_sports_collector.py src/pmus_sports_collector.py
+COPY src/pmus_status_report.py src/pmus_status_report.py
 RUN touch src/__init__.py
 
 ENV PMUS_COLLECTOR_ROOT=/state/pmus-sports \

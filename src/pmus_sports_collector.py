@@ -70,6 +70,8 @@ DISCOVERY_ENV = "PMUS_DISCOVERY_SECONDS"
 DEFAULT_DISCOVERY_S = 60.0
 INCENTIVES_SNAP_ENV = "PMUS_INCENTIVES_SNAPSHOT_SECONDS"
 DEFAULT_INCENTIVES_SNAP_S = 300.0
+STATUS_EVERY_ENV = "PMUS_STATUS_EVERY_SECONDS"
+DEFAULT_STATUS_EVERY_S = 60.0     # rolling status line to stdout (0=off)
 CA_ENV = "PMUS_CA_BUNDLE"            # optional override; system TLS default
 
 CALLS_PER_MARKET = 2                 # bbo + book
@@ -332,6 +334,20 @@ def run(minutes: Optional[float] = None) -> int:
         heartbeat(root, markets=len(targets), cycles=state["cycles"],
                   rows_written=state["rows_written"],
                   effective_poll_s=plan["effective_poll_s"])
+        status_every = float(os.getenv(STATUS_EVERY_ENV,
+                                       str(DEFAULT_STATUS_EVERY_S)))
+        if status_every > 0 and \
+                now_mono - getattr(run, "_last_status", 0.0) >= status_every:
+            try:
+                # additive tape-analysis line for Railway logs; failures
+                # never affect collection
+                from src import pmus_status_report
+                pmus_status_report.emit(root)
+            except Exception as exc:
+                append_rows(root, [{"kind": "error", "stage": "status",
+                                    "t": _utcnow().isoformat(),
+                                    "err": str(exc)[:120]}])
+            run._last_status = now_mono
         time.sleep(plan["effective_poll_s"] if targets else
                    max(poll_s, 20.0))
     return 0
