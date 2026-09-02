@@ -73,8 +73,25 @@ DEFAULT_INCENTIVES_SNAP_S = 300.0
 STATUS_EVERY_ENV = "PMUS_STATUS_EVERY_SECONDS"
 DEFAULT_STATUS_EVERY_S = 60.0     # rolling status line to stdout (0=off)
 CA_ENV = "PMUS_CA_BUNDLE"            # optional override; system TLS default
+ROLE_ENV = "PMUS_SERVICE_ROLE"       # identity guard vs config collisions
+MY_ROLE = "collector"
 
 CALLS_PER_MARKET = 2                 # bbo + book
+
+
+def assert_service_role() -> None:
+    """Permanent guard against the Railway config collision: if this
+    process starts inside a service declared (via env) to be a DIFFERENT
+    worker — e.g. pmus-ws-evidence-recorder built from the root
+    railway.json by mistake — refuse to run instead of silently
+    collecting under the wrong service. A crash loop is visible; the
+    wrong worker is not."""
+    role = os.getenv(ROLE_ENV, "").strip()
+    if role and role != MY_ROLE:
+        raise SystemExit(
+            f"SERVICE_ROLE_MISMATCH: this image runs the '{MY_ROLE}' "
+            f"worker but the service declares {ROLE_ENV}={role!r}; "
+            "fix the service's Config File Path (see deploy/*/railway.json)")
 
 
 def _utcnow() -> datetime:
@@ -244,6 +261,7 @@ def heartbeat(root: Path, **fields: Any) -> None:
 # ------------------------- main loop -------------------------
 
 def run(minutes: Optional[float] = None) -> int:
+    assert_service_role()
     root = root_dir()
     leagues = [x.strip() for x in
                os.getenv(LEAGUES_ENV, DEFAULT_LEAGUES).split(",") if x.strip()]

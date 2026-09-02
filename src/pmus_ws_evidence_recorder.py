@@ -71,30 +71,70 @@ DEFAULT_STATUS_EVERY_S = 60.0
 # ---------------- authenticated-stream state + status line ----------------
 
 def _walk_market_events(msg: Any, out: list, slug_hint: str = "") -> None:
-    """Tolerant extractor over snake_case WS payloads: collects book and
-    trade events wherever they appear in the message tree."""
+    """Tolerant extractor over the LIVE documented WS schema (camelCase
+    like `marketData`/`marketSlug`/`lastTradePx`/`offers`, with snake_case
+    equivalents accepted): collects book and trade events wherever they
+    appear in the message tree."""
     if isinstance(msg, list):
         for item in msg:
             _walk_market_events(item, out, slug_hint)
         return
     if not isinstance(msg, Mapping):
         return
-    slug = str(msg.get("market_slug") or msg.get("slug") or slug_hint or "")
-    if slug and ("bids" in msg or "asks" in msg or "best_bid" in msg
-                 or "best_ask" in msg):
+    slug = str(msg.get("marketSlug") or msg.get("market_slug")
+               or msg.get("slug") or slug_hint or "")
+    asks = msg.get("offers") if "offers" in msg else msg.get("asks")
+    if slug and ("bids" in msg or "offers" in msg or "asks" in msg
+                 or "bestBid" in msg or "best_bid" in msg
+                 or "bestAsk" in msg or "best_ask" in msg):
         out.append({"kind": "book", "slug": slug,
-                    "bids": msg.get("bids"), "asks": msg.get("asks"),
-                    "best_bid": msg.get("best_bid"),
-                    "best_ask": msg.get("best_ask")})
+                    "bids": msg.get("bids"), "asks": asks,
+                    "best_bid": msg.get("bestBid") or msg.get("best_bid"),
+                    "best_ask": msg.get("bestAsk") or msg.get("best_ask"),
+                    "last_trade_px": msg.get("lastTradePx")
+                    or msg.get("last_trade_px")})
     if slug and "price" in msg and ("qty" in msg or "quantity" in msg
                                     or "size" in msg):
         out.append({"kind": "trade", "slug": slug,
                     "price": msg.get("price"),
                     "qty": msg.get("qty") or msg.get("quantity")
                     or msg.get("size"),
-                    "side": msg.get("side") or msg.get("taker_side")})
+                    "trade_time": msg.get("tradeTime")
+                    or msg.get("trade_time"),
+                    "maker": msg.get("maker"), "taker": msg.get("taker"),
+                    "side": msg.get("side") or msg.get("takerSide")
+                    or msg.get("taker_side")})
     for v in msg.values():
         _walk_market_events(v, out, slug)
+
+
+def _trade_direction(ev: Mapping[str, Any],
+                     market: Mapping[str, Any]) -> str:
+    """Resolve taker direction: explicit side, then taker/maker side
+    fields, then price vs current BBO, else unknown."""
+    side = str(ev.get("side") or "").upper()
+    if side in ("BUY", "SELL"):
+        return side.lower()
+    for part, flip in (("taker", False), ("maker", True)):
+        p = ev.get(part)
+        if isinstance(p, Mapping):
+            ps = str(p.get("side") or "").upper()
+            if ps in ("BUY", "SELL"):
+                if flip:
+                    return "sell" if ps == "BUY" else "buy"
+                return ps.lower()
+    try:
+        from decimal import Decimal as D
+        px = D(str(ev["price"]))
+        bid = D(str(market.get("bid"))) if market.get("bid") else None
+        ask = D(str(market.get("ask"))) if market.get("ask") else None
+        if ask is not None and px >= ask:
+            return "buy"
+        if bid is not None and px <= bid:
+            return "sell"
+    except Exception:
+        pass
+    return "unknown"
 
 
 def _px(value: Any) -> Optional[str]:
@@ -124,6 +164,8 @@ def apply_events(state: dict, msg: Any, now: float) -> None:
             ask, ask_qty = _level(ev.get("asks"))
             s["bid"] = _px(ev.get("best_bid")) or bid or s["bid"]
             s["ask"] = _px(ev.get("best_ask")) or ask or s["ask"]
+            if _px(ev.get("last_trade_px")):
+                s["last_trade_px"] = _px(ev.get("last_trade_px"))
             if bid_qty is not None:
                 s["bid_qty"] = bid_qty
             if ask_qty is not None:
@@ -132,12 +174,11 @@ def apply_events(state: dict, msg: Any, now: float) -> None:
                 s["both_sides_served"] = True
             s["book_updates"] += 1
         else:
-            side = str(ev.get("side") or "").upper()
             s["trades"].append({
                 "t": now, "px": str(ev["price"]),
                 "qty": str(ev.get("qty")),
-                "dir": "buy" if side == "BUY" else
-                       "sell" if side == "SELL" else "unknown"})
+                "trade_time": ev.get("trade_time"),
+                "dir": _trade_direction(ev, s)})
             del s["trades"][:-500]
 
 
@@ -372,6 +413,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--minutes", type=float, default=None)
     args = ap.parse_args()
+    role = os.getenv("PMUS_SERVICE_ROLE", "").strip()
+    if role and role != "ws-recorder":
+        raise SystemExit(
+            "SERVICE_ROLE_MISMATCH: this image runs the 'ws-recorder' "
+            f"worker but the service declares PMUS_SERVICE_ROLE={role!r}")
     if not has_credentials():
         print(json.dumps({"verdict": "NO_CREDENTIALS",
                           "need_env_names": [KEY_ENV, SECRET_ENV],
