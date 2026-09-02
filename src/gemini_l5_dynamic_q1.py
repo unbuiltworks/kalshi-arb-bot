@@ -26,6 +26,7 @@ from typing import Any, Mapping
 from src import gemini_l5_crypto5m_selector as selector
 from src import gemini_l5_dynamic_exception_cleanup as exception_cleanup
 from src import gemini_l5_pair_q1 as pair
+from src import gemini_l5_v1_campaign as v1_campaign
 from src import gemini_l5_v1_policy as v1_policy
 from src.gemini_prediction_auth import PRIVATE_REST_MIN_INTERVAL_ENV, private_rest_request
 
@@ -165,12 +166,23 @@ async def _run_cycle(
         pair.discover_eth5m = _selected_event
     try:
         try:
-            await pair.run(
-                min_edge=MIN_TOP_PAIR_EDGE,
-                first_wait=FIRST_WAIT_SECONDS,
-                complement_wait=COMPLEMENT_WAIT_SECONDS,
-                min_tte=MIN_TTE_SECONDS,
-            )
+            # V1 driver: the frozen L5 model controls opening + post-fill
+            # relation via the v1 campaign; the classic pair engine remains
+            # the default when the driver flag is off.
+            if os.getenv("GEMINI_L5_V1_DRIVER", "").strip() in {"1", "true", "TRUE", "yes", "on"}:
+                await v1_campaign.run(
+                    min_edge=MIN_TOP_PAIR_EDGE,
+                    first_wait=FIRST_WAIT_SECONDS,
+                    complement_wait=COMPLEMENT_WAIT_SECONDS,
+                    min_tte=MIN_TTE_SECONDS,
+                )
+            else:
+                await pair.run(
+                    min_edge=MIN_TOP_PAIR_EDGE,
+                    first_wait=FIRST_WAIT_SECONDS,
+                    complement_wait=COMPLEMENT_WAIT_SECONDS,
+                    min_tte=MIN_TTE_SECONDS,
+                )
         except Exception as exc:
             error=f"{type(exc).__name__}: {exc}"
             try:
