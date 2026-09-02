@@ -216,13 +216,20 @@ def ws_gate(s: Mapping[str, Any], now: float, window_s: float = 3600.0) -> dict:
                 "ask_book_missing": not s.get("both_sides_served")}]
     counts: dict = {}
     if obs and trades:
-        t0 = min(t["t"] for t in trades)
+        # start the slot grid 1ms BEFORE the first trade: slot_replay's
+        # in-slot filter is strictly '>', so a grid anchored exactly on
+        # the first trade would drop that trade from its own slot
+        t0 = min(t["t"] for t in trades) - 0.001
         t_end = max(t["t"] for t in trades)
         t = t0
         while t <= t_end:
+            # +1ms guard: isoformat() truncates to microseconds, which can
+            # land the synthetic observation a hair BEFORE slot_start and
+            # fail slot_replay's >= entry lookup (the live BAL/COL
+            # NO_QUOTE-despite-served-BBO symptom)
             row = rep.slot_replay(
                 [{**obs[0], "t": datetime.fromtimestamp(
-                    t, timezone.utc).isoformat()}], trades, t)
+                    t + 0.001, timezone.utc).isoformat()}], trades, t)
             counts[row["status"]] = counts.get(row["status"], 0) + 1
             t += rep.SLOT_S
     matched = counts.get("MATCHED", 0)

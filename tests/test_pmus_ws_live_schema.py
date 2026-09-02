@@ -162,3 +162,30 @@ def test_multi_interval_state_accumulates_without_reset():
         status = rec.build_status(st, True, 10 * (i + 1), 40, now + i * 60)
         assert status["top_markets"][0]["trades_1h"] == i + 1
     assert len(st["aec-mlb-sea-bos-2026-09-02"]["trades"]) == 5
+
+
+def test_no_quote_microsecond_truncation_regression():
+    """Live BAL/COL symptom (#167 comment 5516959618): a fractional epoch
+    whose microsecond rounding lands BELOW slot_start made ws_gate's
+    synthetic observation fail the >= entry lookup -> NO_QUOTE despite a
+    fully served two-sided book. The +1ms guard must yield real slot
+    verdicts instead."""
+    def book(slug, bid, bq, ask, aq):
+        return {"marketData": {"marketSlug": slug,
+                               "bids": [{"px": {"value": bid}, "qty": bq}],
+                               "offers": [{"px": {"value": ask}, "qty": aq}]}}
+
+    def trade(slug, price, side):
+        return {"trade": {"marketSlug": slug, "price": {"value": price},
+                          "quantity": "1", "taker": {"side": side}}}
+
+    st = {}
+    base = 1_700_000_000.0000004        # rounds DOWN at microsecond precision
+    rec.apply_events(st, book("aec-mlb-bal-col", "0.4500", "1001",
+                              "0.4550", "4850"), base)
+    rec.apply_events(st, trade("aec-mlb-bal-col", "0.4500", "SELL"), base)
+    rec.apply_events(st, trade("aec-mlb-bal-col", "0.4700", "BUY"),
+                     base + 100)
+    g = rec.ws_gate(st["aec-mlb-bal-col"], base + 200)
+    assert "NO_QUOTE" not in g["slot_counts_theoretical"], g
+    assert g["slot_counts_theoretical"].get("MATCHED", 0) >= 1, g
