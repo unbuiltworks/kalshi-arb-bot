@@ -1,4 +1,4 @@
-name: AWS PMUS q1 current-schema v2 stage
+name: AWS PMUS q1 current-schema stage
 
 on:
   push:
@@ -28,90 +28,63 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Patch staged executor and run fail-closed schema tests
+      - name: Apply post-only hardening v3 and test fail-closed behavior
         shell: bash
         run: |
           set -Eeuo pipefail
-          PATCH_B64=$(base64 -w0 deploy/aws/patch_pmus_q1_schema_v2.py)
+          PATCH_B64=$(base64 -w0 deploy/aws/patch_pmus_q1_hardening_v3.py)
           REMOTE=$(cat <<EOF
           set -Eeuo pipefail
           STAGE=/home/ssm-user/l5-pmus-q1-stage
-          test -f "\$STAGE/src/pmus_q1_executor.py"
-          printf '%s' '$PATCH_B64' | base64 -d > /tmp/patch_pmus_q1_schema_v2.py
-          chmod 600 /tmp/patch_pmus_q1_schema_v2.py
-          python3 /tmp/patch_pmus_q1_schema_v2.py
-          rm -f /tmp/patch_pmus_q1_schema_v2.py
+          printf '%s' '$PATCH_B64' | base64 -d > /tmp/patch_pmus_q1_hardening_v3.py
+          python3 /tmp/patch_pmus_q1_hardening_v3.py
+          rm -f /tmp/patch_pmus_q1_hardening_v3.py
           python3 -m py_compile "\$STAGE/src/pmus_q1_executor.py"
           export PYTHONPATH="\$STAGE"
-          export PMUS_Q1_STATE_DIR=/tmp/pmus-q1-schema-v2-test-state
+          export PMUS_Q1_STATE_DIR=/tmp/pmus-q1-v3-test
           rm -rf "\$PMUS_Q1_STATE_DIR"
           python3 - <<'PY'
-          import os
           from decimal import Decimal as D
+          from urllib.error import HTTPError
           from src import pmus_q1_executor as e
-
-          class Fake:
-              def __init__(self, mode='clean'):
-                  self.mode=mode; self.calls=[]; self.cancelled=False
-              def request(self, method, path, body=None, base=e.API):
-                  self.calls.append((method,path,body,base))
-                  if path == '/v1/account/balances':
-                      p = 1.50 if self.mode == 'low' else 5.00
-                      return {'balances':[{'currency':'USD','buyingPower':p,'currentBalance':p}]}
-                  if path == '/v1/portfolio/positions':
-                      net = '1' if self.mode == 'position' else '0'
-                      return {'positions':{'test-market':{'netPosition':net}}}
-                  if path == '/v1/orders/open':
-                      return {'orders':[]}
-                  if path.endswith('/bbo'):
-                      return {'marketData':{'bestBid':{'value':'0.47'},'bestAsk':{'value':'0.475'}}}
-                  if path == '/v1/order/preview':
-                      assert body and 'request' in body
-                      r=body['request']; assert r['price']['currency']=='USD'
-                      return {'order':{'marketSlug':r['marketSlug'],'quantity':1}}
-                  if path == '/v1/orders' and method == 'POST':
-                      return {'id':'order-123'}
-                  if path == '/v1/order/order-123':
-                      return {'order':{'id':'order-123','marketSlug':'test-market','state':'ORDER_STATE_CANCELED' if self.cancelled else 'ORDER_STATE_NEW','cumQuantity':0}}
-                  if path == '/v1/order/order-123/cancel':
-                      assert body == {'marketSlug':'test-market'}
-                      self.cancelled=True; return {}
-                  if path == '/v1/orders/open/cancel':
-                      assert body == {'slugs':['test-market']}; return {'canceledOrderIds':[]}
-                  raise AssertionError((method,path,body,base))
-
-          assert e.preflight(Fake(), 'test-market') is None
-          assert e.preflight(Fake('low'), 'test-market').startswith('buying_power_unverified_or_low')
-          assert e.preflight(Fake('position'), 'test-market') == 'existing_position_in_target_market'
-          fill=e.authoritative_fill({'state':'ORDER_STATE_FILLED','cumQuantity':1,'avgPx':{'value':'0.47'}})
-          assert fill and fill['price']==D('0.47') and fill['qty']==D('1')
-          f=Fake(); oid=e.place_limit_buy(f,'test-market','OUTCOME_SIDE_YES',D('0.47'),'first_leg')
-          assert oid=='order-123'
-          assert e.cancel_exact(f,oid) is True
-          e.cancel_all_deadman(f,'test-market')
-          for k in (e.LIVE_ENV,e.SID_ENV,e.ARM_ENV,e.MARKET_ENV,e.GATE_ENV,e.KEY_ENV,e.SECRET_ENV):
-              os.environ.pop(k,None)
-          report=e.run_campaign()
-          assert report['status']=='DISARMED' and report['qty']==1 and report['realized_pnl'] is None
-          print('PMUS_Q1_SCHEMA_V2_TESTS_OK balance_list=true positions_map=true create_id=true fill_state=true cancel_slug=true deadman_slugs=true disarmed=true order_entry_live=false')
+          class Stale:
+              def __init__(self): self.posts=0
+              def request(self,m,p,body=None,base=e.API):
+                  if p=='/v1/order/preview': return {'order':{'marketSlug':'m'}}
+                  if p.endswith('/bbo'): return {'marketData':{'bestBid':{'value':'0.470'},'bestAsk':{'value':'0.475'}}}
+                  if p=='/v1/orders': self.posts+=1; raise AssertionError('mutation')
+                  raise AssertionError((m,p))
+          f=Stale()
+          try: e.place_limit_buy(f,'m','OUTCOME_SIDE_YES',D('0.475'),'first_leg'); raise AssertionError('expected refuse')
+          except e.Halt as x: assert 'POST_ONLY_STALE_REFUSE' in str(x)
+          assert f.posts==0
+          class R:
+              def __init__(self): self.n=0
+              def request(self,m,p,body=None,base=e.API):
+                  self.n+=1
+                  if self.n==1: raise HTTPError('x',404,'Not Found',None,None)
+                  if self.n==2: raise HTTPError('x',429,'Too Many Requests',None,None)
+                  return {'order':{'id':'abc','state':'ORDER_STATE_REJECTED','cumQuantity':0}}
+          r=R()
+          try: e._order_status(r,'abc'); raise AssertionError('expected rejected')
+          except e.RejectedNoFill: pass
+          assert r.n==3
+          print('PMUS_Q1_HARDENING_V3_TESTS_OK stale_post_only_refused=true mutation_replay=false get_404_429_retry=true rejected_zero_fill_terminal=true live_order=false')
           PY
-          rm -rf /tmp/pmus-q1-schema-v2-test-state
+          rm -rf /tmp/pmus-q1-v3-test
           EOF
           )
           ENC=$(printf '%s' "$REMOTE" | base64 -w0)
           PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
-          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript \
-            --comment 'L5 PMUS q1 current-schema v2 stage; no live order' --parameters "$PARAMS" --timeout-seconds 180 \
-            --query 'Command.CommandId' --output text)
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment 'L5 PMUS q1 hardening v3 test only' --parameters "$PARAMS" --timeout-seconds 180 --query 'Command.CommandId' --output text)
           for _ in $(seq 1 90); do
             STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
             case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
             sleep 2
           done
-          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" \
-            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
           echo "$RESULT"
           test "$(jq -r '.Status' <<<"$RESULT")" = Success
           OUT=$(jq -r '.Stdout' <<<"$RESULT")
-          grep -q 'PMUS_Q1_SCHEMA_V2_PATCH_OK' <<<"$OUT"
-          grep -q 'PMUS_Q1_SCHEMA_V2_TESTS_OK' <<<"$OUT"
+          grep -q 'PMUS_Q1_HARDENING_V3_PATCH_OK' <<<"$OUT"
+          grep -q 'PMUS_Q1_HARDENING_V3_TESTS_OK' <<<"$OUT"
