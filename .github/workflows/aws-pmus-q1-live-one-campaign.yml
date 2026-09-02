@@ -1,0 +1,109 @@
+name: AWS PMUS q1 live one-campaign probe
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/pmus-q1-live-one-campaign.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  one_campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Execute exactly one bounded PMUS q1 campaign
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          TR=deploy/aws/pmus-q1-live-one-campaign.trigger
+          SLUG=$(sed -n 's/^MARKET_SLUG=//p' "$TR" | head -1)
+          GATE=$(sed -n 's/^GATE_EVIDENCE=//p' "$TR" | head -1)
+          SID=$(sed -n 's/^SESSION_ID=//p' "$TR" | head -1)
+          APPROVAL=$(sed -n 's/^APPROVAL=//p' "$TR" | head -1)
+          [[ "$SLUG" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'invalid market slug'; exit 2; }
+          [[ "$SID" =~ ^[A-Za-z0-9._-]{8,80}$ ]] || { echo 'invalid session id'; exit 2; }
+          test "$GATE" = "$SLUG"
+          test "$APPROVAL" = PMUS_Q1_ONE_CAMPAIGN_APPROVED
+
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          STAGE=/home/ssm-user/l5-pmus-q1-stage
+          STATE=/home/ssm-user/l5-pmus-q1-state
+          CREDS=/home/ssm-user/l5-pmus-q1-credentials.env
+          VENV=/home/ssm-user/l5-pmus-q1-venv
+          test -f "\$CREDS" && test "\$(stat -c %a "\$CREDS")" = 600
+          test -x "\$VENV/bin/python"
+          "\$VENV/bin/python" -c 'import cryptography'
+          test -f "\$STAGE/src/pmus_q1_executor.py"
+          if pgrep -af 'src\.pmus_q1_executor' | grep -v pgrep >/dev/null 2>&1; then
+            echo PMUS_Q1_REFUSE_CONCURRENT_EXECUTOR
+            exit 2
+          fi
+          set -a
+          . "\$CREDS"
+          set +a
+          export PMUS_Q1_STATE_DIR="\$STATE"
+          export PMUS_Q1_LIVE=YES
+          export PMUS_Q1_SESSION_ID='${SID}'
+          export PMUS_Q1_ARM='${SID}'
+          export PMUS_Q1_MARKET_SLUG='${SLUG}'
+          export PMUS_Q1_GATE_EVIDENCE='${GATE}'
+          export PMUS_Q1_FIRST_WAIT_SECONDS=180
+          export PMUS_Q1_DEADLINE_SECONDS=300
+          export PMUS_Q1_RESIDUAL_ACTION=hold
+          cd "\$STAGE"
+          rm -f /tmp/pmus-q1-live-report.json /tmp/pmus-q1-live-stderr.log
+          set +e
+          "\$VENV/bin/python" -m src.pmus_q1_executor > /tmp/pmus-q1-live-report.json 2>/tmp/pmus-q1-live-stderr.log
+          rc=\$?
+          set -e
+          # Never echo credential env; only the executor's scrubbed report.
+          cat /tmp/pmus-q1-live-report.json
+          "\$VENV/bin/python" - <<'PY'
+          import json
+          p='/tmp/pmus-q1-live-report.json'
+          d=json.load(open(p))
+          assert d.get('campaign') == 'pmus-q1', d
+          assert d.get('qty') == 1, d
+          assert 'PMUS_API_' not in json.dumps(d), d
+          print('PMUS_Q1_ONE_CAMPAIGN_COMPLETE status='+str(d.get('status'))+' realized_pnl='+str(d.get('realized_pnl')))
+          PY
+          echo PMUS_Q1_EXECUTOR_EXIT=\$rc
+          # Deliberately return success after a valid report so GitHub never
+          # invites an automatic retry of a one-shot financial campaign.
+          exit 0
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript \
+            --comment "L5 PMUS q1 ONE campaign $SLUG session=$SID" --parameters "$PARAMS" --timeout-seconds 480 \
+            --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 250); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          grep -q 'PMUS_Q1_ONE_CAMPAIGN_COMPLETE' <<<"$(jq -r '.Stdout' <<<"$RESULT")"
