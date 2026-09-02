@@ -26,6 +26,7 @@ from typing import Any, Mapping
 from src import gemini_l5_crypto5m_selector as selector
 from src import gemini_l5_dynamic_exception_cleanup as exception_cleanup
 from src import gemini_l5_pair_q1 as pair
+from src import gemini_l5_v1_policy as v1_policy
 from src.gemini_prediction_auth import PRIVATE_REST_MIN_INTERVAL_ENV, private_rest_request
 
 ZERO = D("0")
@@ -268,6 +269,22 @@ async def run() -> None:
                 )
                 await asyncio.sleep(IDLE_POLL_SECONDS)
                 continue
+            if v1_policy.enabled():
+                verdict = dict(v1_policy.gate_candidate(
+                    selected.bid, selected.ask,
+                    selected.event.seconds_to_expiry))
+                emit(
+                    "V1_POLICY_GATE",
+                    attempt=attempts,
+                    asset=selected.asset,
+                    event=selected.event.ticker,
+                    order_entry=False,
+                    realized_pnl=None,
+                    **verdict,
+                )
+                if not verdict.get("allow"):
+                    await asyncio.sleep(IDLE_POLL_SECONDS)
+                    continue
             emit(
                 "PUBLIC_CANDIDATE",
                 attempt=attempts,
