@@ -189,3 +189,43 @@ def test_no_quote_microsecond_truncation_regression():
     g = rec.ws_gate(st["aec-mlb-bal-col"], base + 200)
     assert "NO_QUOTE" not in g["slot_counts_theoretical"], g
     assert g["slot_counts_theoretical"].get("MATCHED", 0) >= 1, g
+
+
+def test_price_drift_cannot_falsely_clear_the_gate():
+    """Regression for #167 comment 5517600205: replaying old slots against
+    the CURRENT bid manufactured MATCHED verdicts after a big move. With
+    time-aligned snapshots, trades that never crossed the book that
+    actually existed at the slot yield no MATCHED."""
+    def book(bid, ask):
+        return {"marketData": {"marketSlug": "aec-drift",
+                               "bids": [{"px": {"value": bid}, "qty": "500"}],
+                               "offers": [{"px": {"value": ask}, "qty": "500"}]}}
+
+    def trade(price, side):
+        return {"trade": {"marketSlug": "aec-drift",
+                          "price": {"value": price}, "quantity": "1",
+                          "taker": {"side": side}}}
+
+    st = {}
+    base = 1_700_000_000.0
+    # book that ACTUALLY existed during the old slot: 0.45/0.455
+    rec.apply_events(st, book("0.4500", "0.4550"), base - 10)
+    # old-slot trades: a sell at 0.50 (hit resting bids ABOVE our 0.45
+    # join) and a buy at 0.70 — under a manufactured 0.65 join these
+    # would look like fill + complement; against the real 0.45 book the
+    # sell never reaches our join
+    rec.apply_events(st, trade("0.5000", "SELL"), base)
+    rec.apply_events(st, trade("0.7000", "BUY"), base + 100)
+    # price then drifts: CURRENT book is 0.65/0.655
+    rec.apply_events(st, book("0.6500", "0.6550"), base + 400)
+    g = rec.ws_gate(st["aec-drift"], base + 500)
+    assert g["slot_counts_theoretical"].get("MATCHED", 0) == 0, g
+    assert g["gate_status"] != "Q1_GATE_CLEARED", g
+    # and the honest positive still works: trades that DID cross the
+    # time-aligned book produce a MATCHED slot
+    st2 = {}
+    rec.apply_events(st2, book("0.4500", "0.4550"), base - 10)
+    rec.apply_events(st2, trade("0.4500", "SELL"), base)      # fills 0.45
+    rec.apply_events(st2, trade("0.5500", "BUY"), base + 100)  # >= 0.46
+    g2 = rec.ws_gate(st2["aec-drift"], base + 200)
+    assert g2["slot_counts_theoretical"].get("MATCHED", 0) == 1, g2

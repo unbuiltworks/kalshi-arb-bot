@@ -173,6 +173,14 @@ def apply_events(state: dict, msg: Any, now: float) -> None:
             if bid_qty is not None and ask_qty is not None:
                 s["both_sides_served"] = True
             s["book_updates"] += 1
+            # bounded TIME-ALIGNED snapshot history: slot replay must use
+            # the book that actually existed at each slot, never the
+            # current BBO (issue #167 comment 5517600205)
+            s.setdefault("bbo_history", []).append({
+                "t": now, "bid": s["bid"], "ask": s["ask"],
+                "bid_qty": s["bid_qty"],
+                "ask_book_missing": not s["both_sides_served"]})
+            del s["bbo_history"][:-2000]
         else:
             # fail closed PER ROW: a malformed price/qty is dropped and
             # counted, never persisted, never allowed to crash the status
@@ -207,15 +215,23 @@ def ws_gate(s: Mapping[str, Any], now: float, window_s: float = 3600.0) -> dict:
         except Exception:
             continue          # belt-and-braces: bad row never crashes status
     dirs = {t["dir_inferred"] for t in trades} - {"unknown"}
-    obs = []
-    if s.get("bid") and s.get("ask"):
-        obs = [{"t": datetime.fromtimestamp(now - window_s,
-                                            timezone.utc).isoformat(),
-                "bid": s["bid"], "ask": s["ask"],
-                "bid_qty": s.get("bid_qty"),
-                "ask_book_missing": not s.get("both_sides_served")}]
+    history = [h for h in s.get("bbo_history", [])
+               if h.get("bid") and h.get("ask")
+               and now - h["t"] <= window_s + rep.SLOT_S]
+
+    def prevailing(slot_start: float, slot_end: float) -> Optional[dict]:
+        """The book that actually existed for this slot: the last
+        snapshot at/before slot_start, else the first one appearing
+        inside the slot. No snapshot -> no verdict (NO_QUOTE), never the
+        current BBO (issue #167 comment 5517600205)."""
+        before = [h for h in history if h["t"] <= slot_start]
+        if before:
+            return before[-1]
+        inside = [h for h in history if slot_start < h["t"] <= slot_end]
+        return inside[0] if inside else None
+
     counts: dict = {}
-    if obs and trades:
+    if history and trades:
         # start the slot grid 1ms BEFORE the first trade: slot_replay's
         # in-slot filter is strictly '>', so a grid anchored exactly on
         # the first trade would drop that trade from its own slot
@@ -223,13 +239,21 @@ def ws_gate(s: Mapping[str, Any], now: float, window_s: float = 3600.0) -> dict:
         t_end = max(t["t"] for t in trades)
         t = t0
         while t <= t_end:
+            snap = prevailing(t, t + rep.SLOT_S)
+            if snap is None:
+                counts["NO_QUOTE"] = counts.get("NO_QUOTE", 0) + 1
+                t += rep.SLOT_S
+                continue
             # +1ms guard: isoformat() truncates to microseconds, which can
-            # land the synthetic observation a hair BEFORE slot_start and
-            # fail slot_replay's >= entry lookup (the live BAL/COL
-            # NO_QUOTE-despite-served-BBO symptom)
+            # land the observation a hair BEFORE slot_start and fail
+            # slot_replay's >= entry lookup
             row = rep.slot_replay(
-                [{**obs[0], "t": datetime.fromtimestamp(
-                    t + 0.001, timezone.utc).isoformat()}], trades, t)
+                [{"t": datetime.fromtimestamp(
+                    t + 0.001, timezone.utc).isoformat(),
+                  "bid": snap["bid"], "ask": snap["ask"],
+                  "bid_qty": snap.get("bid_qty"),
+                  "ask_book_missing": snap.get("ask_book_missing", True)}],
+                trades, t)
             counts[row["status"]] = counts.get(row["status"], 0) + 1
             t += rep.SLOT_S
     matched = counts.get("MATCHED", 0)
