@@ -94,7 +94,8 @@ def test_shadow_loop_iteration_is_mutation_free(sroot, monkeypatch, capsys):
                 {"type": "buy", "price": "0.60"}]
     monkeypatch.setattr(sup, "_public_trades", fake_trades)
     monkeypatch.setattr(sup, "IDLE_SLEEP_S", 0.01)
-    monkeypatch.setattr(sup.camp, "STOP_BEFORE_EXPIRY_SECONDS", 199.0)
+    monkeypatch.setattr(sup, "SHADOW_POLL_S", 0.01)
+    monkeypatch.setattr(sup.camp, "STOP_BEFORE_EXPIRY_SECONDS", 190.0)
 
     asyncio.run(sup.run_loop(max_iterations=1))
     ledger = (sroot / "campaigns.jsonl").read_text().strip().splitlines()
@@ -155,3 +156,76 @@ def test_ws_evidence_module_is_subscribe_only():
     assert "order.place" not in src
     assert "order.cancel" not in src
     assert "request(" not in src          # never calls the session request API
+
+
+# ---------- per-event dedup (live-shadow finding 2026-09-02) ----------
+
+def _mk_candidate(ticker):
+    return SimpleNamespace(
+        bid=D("0.48"), bid_size=D("250"), ask=D("0.50"), ask_size=D("250"),
+        event=SimpleNamespace(ticker=ticker, symbol=f"GEMI-{ticker}-UP",
+                              seconds_to_expiry=200.0))
+
+
+def _wire_shadow(monkeypatch, tickers):
+    calls = {"i": 0}
+
+    async def fake_candidate(**_kw):
+        t = tickers[min(calls["i"], len(tickers) - 1)]
+        calls["i"] += 1
+        return _mk_candidate(t)
+    monkeypatch.setattr(sup.selector, "select_best_candidate", fake_candidate)
+    monkeypatch.setenv("GEMINI_L5_V1_POLICY", "1")
+    monkeypatch.setenv("GEMINI_L5_FORCED_COMPLETION", "1")
+
+    async def fake_trades(http, symbol, since_ms):
+        return [{"type": "sell", "price": "0.48"},
+                {"type": "buy", "price": "0.60"}]
+    monkeypatch.setattr(sup, "_public_trades", fake_trades)
+    monkeypatch.setattr(sup, "IDLE_SLEEP_S", 0.01)
+    monkeypatch.setattr(sup, "SHADOW_POLL_S", 0.01)
+    monkeypatch.setattr(sup.camp, "STOP_BEFORE_EXPIRY_SECONDS", 190.0)
+
+
+def test_same_event_never_attempted_twice(sroot, monkeypatch):
+    """Regression: selector repeatedly returns the same open window; only
+    ONE campaign may run on it; skips never consume the daily cap."""
+    _wire_shadow(monkeypatch, ["BTC05M2609021420"])
+    asyncio.run(sup.run_loop(max_iterations=3))
+    st = sup.load_state()
+    assert st["campaigns_today"] == 1
+    assert list(st["attempted_events"]) == ["BTC05M2609021420"]
+    assert st["attempted_events"]["BTC05M2609021420"].startswith("SHADOW")
+    rows = [json.loads(l) for l in
+            (sroot / "campaigns.jsonl").read_text().strip().splitlines()]
+    statuses = [r["status"] for r in rows]
+    assert sum(1 for x in statuses if x.startswith("SHADOW")) == 1
+    assert statuses.count("EVENT_ALREADY_ATTEMPTED") == 2
+
+
+def test_attempted_set_survives_restart(sroot, monkeypatch):
+    _wire_shadow(monkeypatch, ["BTC05M2609021420"])
+    asyncio.run(sup.run_loop(max_iterations=1))
+    # simulated restart: fresh state load in a new loop run
+    asyncio.run(sup.run_loop(max_iterations=1))
+    st = sup.load_state()
+    assert st["campaigns_today"] == 1                 # not re-attempted
+    assert "BTC05M2609021420" in st["attempted_events"]
+
+
+def test_next_event_progresses_normally(sroot, monkeypatch):
+    _wire_shadow(monkeypatch, ["BTC05M2609021420", "BTC05M2609021425"])
+    asyncio.run(sup.run_loop(max_iterations=2))
+    st = sup.load_state()
+    assert st["campaigns_today"] == 2
+    assert set(st["attempted_events"]) == {"BTC05M2609021420",
+                                           "BTC05M2609021425"}
+
+
+def test_dedup_resets_on_day_rollover(sroot):
+    st = sup.load_state()
+    sup.mark_event_attempted(st, "BTC05MOLD", "SHADOW_MATCHED")
+    st["day"] = "20260901"                        # force yesterday
+    sup.save_state(st)
+    st2 = sup.rollover_day(sup.load_state())
+    assert st2["attempted_events"] == {}

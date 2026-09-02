@@ -76,6 +76,7 @@ DEFAULT_ROOT = "/state/l5-supervisor"
 DEFAULT_MAX_PER_DAY = 6
 DEFAULT_LOSS_STOP = D("1.00")
 IDLE_SLEEP_S = 20.0
+SHADOW_POLL_S = 5.0
 SETTLE_POLL_S = 60.0
 SETTLE_POLL_MAX = 15
 MIN_EDGE = D("0.01")
@@ -122,7 +123,8 @@ def load_state() -> Dict[str, Any]:
         except json.JSONDecodeError:
             pass
     return {"day": _day(), "campaigns_today": 0, "realized_today_usd": "0",
-            "halt": False, "halt_reason": "", "iterations": 0}
+            "halt": False, "halt_reason": "", "iterations": 0,
+            "attempted_events": {}}
 
 
 def save_state(st: Dict[str, Any]) -> None:
@@ -150,7 +152,7 @@ def rollover_day(st: Dict[str, Any]) -> Dict[str, Any]:
             "halt": st.get("halt", False),
             "halt_reason": st.get("halt_reason", "")})
         st.update({"day": _day(), "campaigns_today": 0,
-                   "realized_today_usd": "0"})
+                   "realized_today_usd": "0", "attempted_events": {}})
     return st
 
 
@@ -173,6 +175,30 @@ def halt(st: Dict[str, Any], reason: str) -> None:
     save_state(st)
     emit("HALT", reason=reason)
     heartbeat("halted", reason=reason)
+
+
+# ---------------- per-event dedup (persistent, daily) ----------------
+# Live-shadow finding (2026-09-02): the selector legitimately keeps
+# returning a still-open window, so without dedup one 5m event can burn
+# the whole daily campaign budget. At most ONE qualifying campaign per
+# eventTicker per day; the attempted set persists in state.json under the
+# durable root (NOTE: on Railway without a mounted volume that root is
+# container-local and resets on redeploy — attach a volume when the
+# platform limit clears; documented, not hidden). NO_CANDIDATE /
+# SCAN_ERROR / EVENT_ALREADY_ATTEMPTED never consume cap and never mark
+# an event attempted.
+
+def event_attempted(st: Dict[str, Any], event_ticker: str) -> bool:
+    return bool(event_ticker) and event_ticker in (
+        st.get("attempted_events") or {})
+
+
+def mark_event_attempted(st: Dict[str, Any], event_ticker: str,
+                         status: str) -> None:
+    if not event_ticker:
+        return
+    st.setdefault("attempted_events", {})[event_ticker] = status
+    save_state(st)
 
 
 # ---------------- shadow campaign (zero mutation, public data only) ----------
@@ -206,7 +232,9 @@ def shadow_fillable(trades: List[dict], side: str, price: D) -> Optional[dict]:
     return None
 
 
-async def shadow_campaign(number: int) -> Dict[str, Any]:
+async def shadow_campaign(number: int,
+                          st: Optional[Dict[str, Any]] = None
+                          ) -> Dict[str, Any]:
     """Identical decision path to live, mutation-free, all theoretical."""
     row: Dict[str, Any] = {"campaign": number, "theoretical": True,
                            "kind": "shadow_campaign"}
@@ -222,6 +250,10 @@ async def shadow_campaign(number: int) -> Dict[str, Any]:
         return row
     if cand is None:
         row["status"] = "NO_CANDIDATE"
+        return row
+    if st is not None and event_attempted(st, cand.event.ticker):
+        row["status"] = "EVENT_ALREADY_ATTEMPTED"
+        row["event"] = cand.event.ticker
         return row
     verdict = dict(v1_policy.gate_candidate(cand.bid, cand.ask,
                                             cand.event.seconds_to_expiry))
@@ -252,7 +284,7 @@ async def shadow_campaign(number: int) -> Dict[str, Any]:
                                           int(t0 * 1000))
             fill = shadow_fillable(trades, open_side, open_px)
             if fill is None:
-                await asyncio.sleep(5.0)
+                await asyncio.sleep(SHADOW_POLL_S)
         if fill is None:
             row["status"] = "SHADOW_NO_FILL_TIMEOUT"
             return row
@@ -276,7 +308,7 @@ async def shadow_campaign(number: int) -> Dict[str, Any]:
                                           int(t_fill * 1000))
             comp_fill = shadow_fillable(trades, comp_side, comp_px)
             if comp_fill is None:
-                await asyncio.sleep(5.0)
+                await asyncio.sleep(SHADOW_POLL_S)
     if comp_fill is not None:
         row["status"] = "SHADOW_MATCHED"
         row["shadow_complement"]["evidence_print"] = comp_fill
@@ -392,6 +424,17 @@ async def run_loop(max_iterations: int = 0) -> None:
         save_state(st)
         heartbeat("scanning", campaigns_today=st.get("campaigns_today"))
         if mode() == "LIVE":
+            skip = await _live_dedup_peek(st)
+            if skip is not None:
+                ledger_append(skip)
+                emit("CAMPAIGN_DONE", **{k: skip.get(k) for k in
+                                         ("campaign", "status", "event")})
+                heartbeat("idle", last_status=skip["status"],
+                          campaigns_today=st.get("campaigns_today"))
+                if max_iterations and n >= max_iterations:
+                    return
+                await asyncio.sleep(IDLE_SLEEP_S)
+                continue
             row = await live_campaign(st["iterations"])
             if row["status"] == "OWNER_EXCEPTION":
                 ledger_append(row)
@@ -402,6 +445,7 @@ async def run_loop(max_iterations: int = 0) -> None:
                 save_state(st)
                 # settlement reconciliation from the owner's session state
                 ev = _last_owner_event()
+                mark_event_attempted(st, ev, row["status"])
                 if ev:
                     verdict = await reconcile_event(ev)
                     row["settlement"] = verdict
@@ -416,13 +460,16 @@ async def run_loop(max_iterations: int = 0) -> None:
                         save_state(st)
         else:
             try:
-                row = await shadow_campaign(st["iterations"])
+                row = await shadow_campaign(st["iterations"], st)
             except Exception as exc:      # belt-and-braces: loop never dies
                 row = {"campaign": st["iterations"], "theoretical": True,
                        "kind": "shadow_campaign", "status": "SCAN_ERROR",
                        "error": f"{type(exc).__name__}: {exc}"}
-            if row["status"] not in ("NO_CANDIDATE", "SCAN_ERROR"):
+            if row["status"] not in ("NO_CANDIDATE", "SCAN_ERROR",
+                                     "EVENT_ALREADY_ATTEMPTED"):
                 st["campaigns_today"] = st.get("campaigns_today", 0) + 1
+                mark_event_attempted(st, str(row.get("event") or ""),
+                                     row["status"])
                 save_state(st)
         ledger_append(row)
         emit("CAMPAIGN_DONE", **{k: row.get(k) for k in
@@ -432,6 +479,23 @@ async def run_loop(max_iterations: int = 0) -> None:
         if max_iterations and n >= max_iterations:
             return
         await asyncio.sleep(IDLE_SLEEP_S)
+
+
+async def _live_dedup_peek(st: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Public-only peek before an armed owner run: if the current best
+    candidate's event was already attempted today, skip the iteration
+    without burning cap or invoking any private path."""
+    try:
+        cand = await selector.select_best_candidate(
+            assets=SHADOW_ASSETS, min_edge=MIN_EDGE, min_tte=MIN_TTE,
+            tie_seed=f"live-peek-{st.get('iterations', 0)}")
+    except Exception:
+        return None                 # peek failure: let the owner decide
+    if cand is not None and event_attempted(st, cand.event.ticker):
+        return {"campaign": st.get("iterations"), "kind": "live_campaign",
+                "theoretical": False, "status": "EVENT_ALREADY_ATTEMPTED",
+                "event": cand.event.ticker}
+    return None
 
 
 def _last_owner_event() -> str:
