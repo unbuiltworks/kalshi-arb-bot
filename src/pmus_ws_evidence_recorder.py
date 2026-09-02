@@ -189,8 +189,7 @@ async def run(minutes: Optional[float]) -> int:
                     except json.JSONDecodeError:
                         msg = {"raw": str(raw)[:2000]}
                     if isinstance(msg, dict) and "heartbeat" in msg:
-                        await ws.send(json.dumps(
-                            guard_outbound({"heartbeat": {}})))
+                        await ws.send(json.dumps(guard_outbound({"heartbeat": {}})))
                     append(root, {"kind": "ws",
                                   "t": datetime.now(timezone.utc).isoformat(),
                                   "msg": msg})

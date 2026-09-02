@@ -73,7 +73,9 @@ def test_structurally_no_order_or_private_paths():
                       "preview", "cancel-order", "rfq"):
         assert forbidden not in src, forbidden
     # the only websocket URL is the markets stream
-    assert src.count("wss://") == 1 and "/v1/ws/markets" in src
+    import re
+    assert set(re.findall(r"wss://[a-z0-9.-]+(/[a-z0-9/._-]*)?", src)) == \
+        {"/v1/ws/markets"}
     # every outbound send passes through the guard
     sends = [l for l in src.splitlines() if "ws.send(" in l]
     assert sends and all("guard_outbound" in l for l in sends)
