@@ -59,3 +59,55 @@ def test_event_window_end_parsing():
     assert end == datetime(2026, 9, 2, 12, 10,
                            tzinfo=timezone.utc).timestamp() + 300
     assert aud.event_window_end_epoch("NOTAWINDOW") is None
+
+
+# ---------- mixed-event regression (AWS-observed probe #4 pattern) ----------
+
+def _settled_with_meta(event, outcome, qty, cost, payout):
+    return {"contractMetadata": {"eventTicker": event}, "outcome": outcome,
+            "positionQuantity": qty, "costBasis": cost, "payout": payout,
+            "netProfit": "0"}
+
+
+def test_mixed_event_settled_rows_are_filtered_to_exact_target():
+    target = "BTC05M2609021210"
+    rows = [
+        _settled_with_meta(target, "yes", "1", "0.48", "1"),
+        _settled_with_meta(target, "no", "1", "0.49", "0"),
+        # the AWS failure pattern: unrelated events in the same response
+        _settled_with_meta("BTC05M2609020045", "yes", "3", "1.20", "0"),
+        {"symbol": "GEMI-ETH05M2609020100-UP", "outcome": "yes",
+         "positionQuantity": "2", "costBasis": "0.9", "payout": "2"},
+    ]
+    filt = aud.filter_settled_rows(rows, target)
+    assert len(filt["exact"]) == 2
+    assert filt["unrelated_dropped"] == 2
+    assert filt["ambiguous"] == 0
+    # classification over exact rows only: probe-4 economics realize cleanly
+    fills = [_fill("yes", "1", "0.48"), _fill("no", "1", "0.49", "c2")]
+    r = aud.classify_event(fills, filt["exact"], [], window_over=True)
+    assert r["status"] == "REALIZED" and r["realized_cash"] == "0.03"
+
+
+def test_ambiguous_settled_identity_fails_closed():
+    target = "BTC05M2609021210"
+    rows = [
+        _settled_with_meta(target, "yes", "1", "0.48", "1"),
+        {"outcome": "no", "positionQuantity": "1", "costBasis": "0.49",
+         "payout": "0"},               # no identity anywhere -> ambiguous
+    ]
+    filt = aud.filter_settled_rows(rows, target)
+    assert filt["ambiguous"] == 1 and len(filt["exact"]) == 1
+    # audit() maps any ambiguity to AMBIGUOUS_SETTLEMENT_IDENTITY (fail
+    # closed); at the pure level: never feed ambiguous rows to classify
+
+
+def test_identity_resolution_precedence():
+    # contractMetadata wins over top-level and symbol
+    row = {"contractMetadata": {"eventTicker": "A"}, "eventTicker": "B",
+           "symbol": "GEMI-C-UP"}
+    assert aud._row_event_identity(row) == "A"
+    assert aud._row_event_identity({"eventTicker": "B"}) == "B"
+    assert aud._row_event_identity({"symbol": "GEMI-BTC05M2609021210-UP"}) \
+        == "BTC05M2609021210"
+    assert aud._row_event_identity({"outcome": "yes"}) == ""

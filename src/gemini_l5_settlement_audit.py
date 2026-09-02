@@ -100,6 +100,56 @@ def _rows(body: Any, *keys: str) -> List[dict]:
     return []
 
 
+# ---------------- settled-row identity filtering (AWS bug fix) ----------------
+# Observed live: /v1/prediction-markets/positions/settled returns MIXED
+# events even when called with eventTicker. Every settled row must
+# therefore be locally re-verified against the exact target event before
+# it can count as settlement evidence. Rows whose identity cannot be
+# confirmed are AMBIGUOUS and fail closed (never counted as settled).
+
+def _row_event_identity(row: Mapping[str, Any]) -> str:
+    meta = row.get("contractMetadata")
+    if isinstance(meta, Mapping):
+        ev = _s(meta, "eventTicker", "event_ticker")
+        if ev:
+            return ev
+    ev = _s(row, "eventTicker", "event_ticker")
+    if ev:
+        return ev
+    sym = _s(row, "symbol", "instrumentSymbol", "instrument_symbol")
+    if sym.startswith("GEMI-"):
+        core = sym[5:]
+        for suffix in ("-UP", "-DOWN", "-YES", "-NO"):
+            if core.endswith(suffix):
+                return core[: -len(suffix)]
+        return core
+    return ""
+
+
+def filter_settled_rows(rows: List[dict],
+                        event_ticker: str) -> Dict[str, Any]:
+    """Split settled rows into exact-target / unrelated / ambiguous.
+
+    exact: identity == event_ticker via contractMetadata.eventTicker or an
+           instrument/event identifier that resolves to the same event.
+    unrelated: identity confirms a DIFFERENT event (dropped, counted).
+    ambiguous: no confirmable identity — fail-closed (their presence means
+           settlement cannot be asserted from this response).
+    """
+    exact: List[dict] = []
+    unrelated = ambiguous = 0
+    for row in rows:
+        ident = _row_event_identity(row)
+        if not ident:
+            ambiguous += 1
+        elif ident == event_ticker:
+            exact.append(row)
+        else:
+            unrelated += 1
+    return {"exact": exact, "unrelated_dropped": unrelated,
+            "ambiguous": ambiguous}
+
+
 # ---------------- pure classification (unit-testable) ----------------
 
 def classify_event(fills: List[dict], settled: List[dict],
@@ -206,11 +256,28 @@ async def audit(days: float, event_filter: str = "") -> Dict[str, Any]:
         settled_body = await _post("/v1/prediction-markets/positions/settled",
                                    {"eventTicker": ev, "limit": 100,
                                     "offset": 0})
-        settled = _rows(settled_body, "positions")
+        settled_raw = _rows(settled_body, "positions")
+        # AWS-observed bug: the endpoint returns mixed events despite the
+        # eventTicker param. Locally verify every row's identity; classify
+        # with exact-target rows only, fail closed on ambiguity.
+        filt = filter_settled_rows(settled_raw, ev)
+        settled = filt["exact"]
         wend = event_window_end_epoch(ev)
         window_over = (wend is not None and now > wend + 120)
-        row = classify_event(ev_fills, settled, open_by_event.get(ev, []),
-                             window_over)
+        if filt["ambiguous"] > 0:
+            row = {"status": "AMBIGUOUS_SETTLEMENT_IDENTITY",
+                   "ambiguous_rows": filt["ambiguous"],
+                   "unrelated_dropped": filt["unrelated_dropped"],
+                   "note": ("settled response contained rows with no "
+                            "confirmable event identity; settlement cannot "
+                            "be asserted — fail closed")}
+        else:
+            row = classify_event(ev_fills, settled, open_by_event.get(ev, []),
+                                 window_over)
+            row["settled_identity_filter"] = {
+                "exact": len(settled),
+                "unrelated_dropped": filt["unrelated_dropped"],
+                "ambiguous": 0}
         row["fills"] = [{
             "clientOrderId": _s(r, "clientOrderId", "client_order_id"),
             "outcome": _s(r, "eventOutcome", "outcome"),

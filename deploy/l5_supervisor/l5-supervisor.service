@@ -1,0 +1,24 @@
+# systemd staging for the L5 transfer supervisor (AWS host alternative to
+# the Docker --restart pattern). NOT installed by this repo — the operator
+# copies it to /etc/systemd/system/ and enables it explicitly. SHADOW by
+# default; LIVE additionally requires the operator's arming envs, which
+# deliberately do NOT belong in this unit file.
+[Unit]
+Description=L5 transfer supervisor (SHADOW default; read-only public data)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Restart=always
+RestartSec=15
+ExecStartPre=-/usr/bin/docker rm -f l5-supervisor
+ExecStart=/usr/bin/docker run --rm --name l5-supervisor \
+  --env-file /home/ssm-user/.env \
+  -e GEMINI_L5_V1_POLICY=1 \
+  -e GEMINI_L5_FORCED_COMPLETION=1 \
+  -v /home/ssm-user/l5probe/supervisor:/state/l5-supervisor \
+  l5-supervisor:PINNED_SHA
+ExecStop=/usr/bin/docker stop l5-supervisor
+
+[Install]
+WantedBy=multi-user.target
