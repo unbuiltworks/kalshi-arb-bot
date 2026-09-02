@@ -114,3 +114,51 @@ def test_collector_refuses_to_run_under_recorder_role(monkeypatch):
     col.assert_service_role()                    # no raise
     monkeypatch.delenv(col.ROLE_ENV)
     col.assert_service_role()                    # unset stays permissive
+
+
+LIVE_TRADE_OBJECT_PRICE = {
+    "subscriptionType": 3,
+    "trade": {
+        "marketSlug": "aec-mlb-sea-bos-2026-09-02",
+        "price": {"value": "0.4850"},
+        "quantity": {"value": "12.00"},
+        "tradeTime": "2026-09-02T21:45:00.000Z",
+        "maker": {"orderId": "m9"},
+        "taker": {"orderId": "t9", "side": "SELL"},
+    },
+}
+
+
+def test_object_valued_price_and_quantity_parse_and_gate_survives():
+    """Regression for the live crash (issue #167 comment 5516903060):
+    trade.price arriving as {value: ...} must normalize, and a malformed
+    price must be dropped per-row — build_status can never raise."""
+    st = {}
+    now = time.time()
+    rec.apply_events(st, LIVE_BOOK, now)
+    rec.apply_events(st, LIVE_TRADE_OBJECT_PRICE, now)
+    s = st["aec-mlb-sea-bos-2026-09-02"]
+    assert s["trades"][-1]["px"] == "0.4850"
+    assert s["trades"][-1]["dir"] == "sell"
+    # malformed price: dropped and counted, never persisted, never raises
+    rec.apply_events(st, {"trade": {"marketSlug": "aec-mlb-sea-bos-2026-09-02",
+                                    "price": {"weird": True},
+                                    "quantity": "1"}}, now)
+    assert s.get("bad_trade_rows", 0) == 1
+    assert all("weird" not in str(t["px"]) for t in s["trades"])
+    status = rec.build_status(st, True, 100, 40, now)   # must not raise
+    top = status["top_markets"][0]
+    assert top["trades_1h"] >= 1 and "gate_status" in top
+
+
+def test_multi_interval_state_accumulates_without_reset():
+    """History must survive across status intervals (the crash loop was
+    resetting it): repeated apply/build cycles keep extending counts."""
+    st = {}
+    now = time.time()
+    rec.apply_events(st, LIVE_BOOK, now)
+    for i in range(5):
+        rec.apply_events(st, LIVE_TRADE_SIDED, now + i * 60)
+        status = rec.build_status(st, True, 10 * (i + 1), 40, now + i * 60)
+        assert status["top_markets"][0]["trades_1h"] == i + 1
+    assert len(st["aec-mlb-sea-bos-2026-09-02"]["trades"]) == 5

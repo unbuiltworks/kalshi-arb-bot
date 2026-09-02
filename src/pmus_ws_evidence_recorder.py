@@ -96,9 +96,9 @@ def _walk_market_events(msg: Any, out: list, slug_hint: str = "") -> None:
     if slug and "price" in msg and ("qty" in msg or "quantity" in msg
                                     or "size" in msg):
         out.append({"kind": "trade", "slug": slug,
-                    "price": msg.get("price"),
-                    "qty": msg.get("qty") or msg.get("quantity")
-                    or msg.get("size"),
+                    "price": _px(msg.get("price")),
+                    "qty": _px(msg.get("qty") or msg.get("quantity")
+                               or msg.get("size")),
                     "trade_time": msg.get("tradeTime")
                     or msg.get("trade_time"),
                     "maker": msg.get("maker"), "taker": msg.get("taker"),
@@ -174,11 +174,20 @@ def apply_events(state: dict, msg: Any, now: float) -> None:
                 s["both_sides_served"] = True
             s["book_updates"] += 1
         else:
+            # fail closed PER ROW: a malformed price/qty is dropped and
+            # counted, never persisted, never allowed to crash the status
+            # layer or the recorder
+            try:
+                from decimal import Decimal
+                px = Decimal(str(ev.get("price")))
+            except Exception:
+                s["bad_trade_rows"] = s.get("bad_trade_rows", 0) + 1
+                continue
             s["trades"].append({
-                "t": now, "px": str(ev["price"]),
-                "qty": str(ev.get("qty")),
+                "t": now, "px": str(px),
+                "qty": ev.get("qty"),
                 "trade_time": ev.get("trade_time"),
-                "dir": _trade_direction(ev, s)})
+                "dir": _trade_direction({**ev, "price": str(px)}, s)})
             del s["trades"][:-500]
 
 
@@ -188,10 +197,15 @@ def ws_gate(s: Mapping[str, Any], now: float, window_s: float = 3600.0) -> dict:
     via the same fill semantics; THEORETICAL throughout."""
     from decimal import Decimal as D
     from src import pmus_status_report as rep
-    trades = [{"t": t["t"], "px": D(t["px"]), "vol": 1.0,
-               "dir_inferred": t["dir"]}
-              for t in s.get("trades", []) if now - t["t"] <= window_s
-              and t.get("px")]
+    trades = []
+    for t in s.get("trades", []):
+        if not t.get("px") or now - t["t"] > window_s:
+            continue
+        try:
+            trades.append({"t": t["t"], "px": D(str(t["px"])), "vol": 1.0,
+                           "dir_inferred": t["dir"]})
+        except Exception:
+            continue          # belt-and-braces: bad row never crashes status
     dirs = {t["dir_inferred"] for t in trades} - {"unknown"}
     obs = []
     if s.get("bid") and s.get("ask"):
@@ -392,9 +406,19 @@ async def run(minutes: Optional[float]) -> int:
                                        subscribed=len(slugs))
                     if status_every > 0 and \
                             time.monotonic() - last_status >= status_every:
-                        print("PMUS_WS_STATUS " + json.dumps(
-                            build_status(mstate, True, msgs, len(slugs)),
-                            separators=(",", ":"), default=str), flush=True)
+                        try:
+                            print("PMUS_WS_STATUS " + json.dumps(
+                                build_status(mstate, True, msgs, len(slugs)),
+                                separators=(",", ":"), default=str),
+                                flush=True)
+                        except Exception as exc:
+                            # a status bug must never cost the connection
+                            # or the tape
+                            print("PMUS_WS_STATUS "
+                                  + json.dumps({"status_error":
+                                                str(exc)[:120],
+                                                "messages_received": msgs}),
+                                  flush=True)
                         last_status = time.monotonic()
         except Exception as exc:
             append(root, {"kind": "error",
