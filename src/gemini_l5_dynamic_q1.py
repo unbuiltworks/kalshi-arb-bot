@@ -31,8 +31,24 @@ from src import gemini_l5_v1_policy as v1_policy
 from src.gemini_prediction_auth import PRIVATE_REST_MIN_INTERVAL_ENV, private_rest_request
 
 ZERO = D("0")
-MATCHED_STATUSES = frozenset({"MATCHED", "MATCHED_DYNAMIC_COMPLETION"})
-NO_FILL_STATUSES = frozenset({"NO_FILL_TIMEOUT", "NO_AUTHORITATIVE_FILL"})
+MATCHED_STATUSES = frozenset({"MATCHED", "MATCHED_DYNAMIC_COMPLETION",
+                              "MATCHED_V1_COMPLETION"})
+NO_FILL_STATUSES = frozenset({"NO_FILL_TIMEOUT", "NO_AUTHORITATIVE_FILL",
+                              "V1_ABSTAIN_FLAT", "NO_FEE_SAFE_MAKER_PRICE"})
+
+
+def classify_cycle_status(status: str, residual: D) -> str:
+    """Owner-side terminal classification, extracted for testability.
+    Residual halts take precedence over status recognition (fail-closed
+    shell invariant); one-sided v1 policy holds therefore land in
+    RESIDUAL_HALT, matched v1 completions in MATCHED."""
+    if residual > ZERO:
+        return "RESIDUAL_HALT"
+    if status in MATCHED_STATUSES:
+        return "MATCHED"
+    if status in NO_FILL_STATUSES:
+        return "NO_TRADE"
+    return "UNSAFE"
 
 LIVE_ENV = "GEMINI_L5_DYNAMIC_LIVE_Q1"
 SID_ENV = "GEMINI_L5_DYNAMIC_SESSION_ID"
@@ -339,12 +355,13 @@ async def run() -> None:
             }
             campaigns.append(record); matched_total+=matched; outer.update({"campaigns":campaigns,"matched_qty":str(matched_total)}); _write_state(outer)
             emit("CYCLE_COMPLETE",**record,session_matched_qty=str(matched_total),order_entry=False,realized_pnl=None)
-            if residual>ZERO:
+            klass=classify_cycle_status(status,residual)
+            if klass=="RESIDUAL_HALT":
                 terminal_reason="RESIDUAL_DETECTED"; raise RuntimeError(f"dynamic session halted on residual symbol={symbol} yes={yes_qty} no={no_qty}")
-            if status in MATCHED_STATUSES:
+            if klass=="MATCHED":
                 if not symbol: terminal_reason="MATCHED_WITHOUT_SYMBOL"; raise RuntimeError("matched cycle missing symbol")
                 allowed_symbols.add(symbol)
-            elif status in NO_FILL_STATUSES:
+            elif klass=="NO_TRADE":
                 pass
             else:
                 terminal_reason=f"UNSAFE_CYCLE_STATUS_{status or 'MISSING'}"; raise RuntimeError(f"dynamic session halted on cycle status={status!r}")

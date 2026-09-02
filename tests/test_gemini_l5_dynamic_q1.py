@@ -253,3 +253,125 @@ def test_dynamic_halts_immediately_on_q1_residual(monkeypatch, tmp_path):
     assert state["terminal_reason"] == "RESIDUAL_DETECTED"
     assert state["campaigns"][0]["asset"] == "BTC"
     assert state["campaigns"][0]["residual_qty"] == "1"
+
+
+def test_outer_accepts_v1_completion_match_end_to_end(monkeypatch, tmp_path):
+    """Simulated full owner session: a MATCHED_V1_COMPLETION cycle must
+    terminate the session cleanly (matched-cap reached), never as
+    UNSAFE_CYCLE_STATUS_*."""
+    monkeypatch.setattr(m, "armed", lambda: True)
+    monkeypatch.setenv(m.SID_ENV, "v1-match-test")
+    monkeypatch.setenv(m.STATE_ENV, str(tmp_path / "session.json"))
+    monkeypatch.setattr(m, "MAX_SESSION_SECONDS", 60.0)
+    monkeypatch.setattr(m, "MAX_CAMPAIGNS", 1)
+    monkeypatch.setattr(m, "MAX_MATCHED_Q", D("1"))
+    monkeypatch.setattr(m, "CYCLE_PAUSE_SECONDS", 0.0)
+    chosen = candidate("BTC")
+
+    async def choose(**_kwargs):
+        return chosen
+
+    async def flat(_allowed):
+        return {"active_orders": 0, "positions": [], "mutation": False}
+
+    async def v1_matched(_sid, _number, _state_dir, *, selected=None):
+        return {
+            "terminal": True,
+            "status": "MATCHED_V1_COMPLETION",
+            "driver": "V1_POLICY",
+            "initializer": "TRANSFER_INITIALIZER",
+            "selected_asset": "BTC",
+            "symbol": "BTC-UP",
+            "event": "BTC05M",
+            "entry_edge": "0.01",
+            "yes_qty": "1",
+            "no_qty": "1",
+            "maker_turnover": "0.97",
+            "maker_fees": "0.02",
+            "first_fill_exec_price": "0.48",
+        }
+
+    monkeypatch.setattr(m.selector, "select_best_candidate", choose)
+    monkeypatch.setattr(m, "account_guard", flat)
+    monkeypatch.setattr(m, "_run_cycle", v1_matched)
+    asyncio.run(m.run())    # must not raise
+
+    state = json.loads((tmp_path / "session.json").read_text())
+    assert state["terminal"] is True
+    assert state["terminal_reason"] == "MATCHED_CAP_REACHED"
+    assert state["campaigns"][0]["status"] == "MATCHED_V1_COMPLETION"
+    assert state["campaigns"][0]["matched_qty"] == "1"
+    assert state["campaigns"][0]["realized"] is False
+
+
+def test_outer_halts_failclosed_on_v1_policy_hold(monkeypatch, tmp_path):
+    """A one-sided v1 policy hold carries residual and must halt the
+    session via the residual invariant (fail-closed), not UNSAFE-status."""
+    monkeypatch.setattr(m, "armed", lambda: True)
+    monkeypatch.setenv(m.SID_ENV, "v1-hold-test")
+    monkeypatch.setenv(m.STATE_ENV, str(tmp_path / "session.json"))
+    monkeypatch.setattr(m, "MAX_SESSION_SECONDS", 60.0)
+    monkeypatch.setattr(m, "MAX_CAMPAIGNS", 1)
+    monkeypatch.setattr(m, "MAX_MATCHED_Q", D("1"))
+    chosen = candidate("BTC")
+
+    async def choose(**_kwargs):
+        return chosen
+
+    async def flat(_allowed):
+        return {"active_orders": 0, "positions": [], "mutation": False}
+
+    async def v1_hold(_sid, _number, _state_dir, *, selected=None):
+        return {
+            "terminal": True,
+            "status": "ONE_SIDED_RESIDUAL_POLICY_HOLD",
+            "driver": "V1_POLICY",
+            "selected_asset": "BTC",
+            "symbol": "BTC-UP",
+            "event": "BTC05M",
+            "yes_qty": "1",
+            "no_qty": "0",
+            "maker_turnover": "0.48",
+            "maker_fees": "0.01",
+        }
+
+    monkeypatch.setattr(m.selector, "select_best_candidate", choose)
+    monkeypatch.setattr(m, "account_guard", flat)
+    monkeypatch.setattr(m, "_run_cycle", v1_hold)
+
+    with pytest.raises(RuntimeError, match="halted on residual"):
+        asyncio.run(m.run())
+    state = json.loads((tmp_path / "session.json").read_text())
+    assert state["terminal_reason"] == "RESIDUAL_DETECTED"
+    assert state["campaigns"][0]["residual_qty"] == "1"
+
+
+def test_outer_treats_v1_abstain_as_benign_no_trade(monkeypatch, tmp_path):
+    monkeypatch.setattr(m, "armed", lambda: True)
+    monkeypatch.setenv(m.SID_ENV, "v1-abstain-test")
+    monkeypatch.setenv(m.STATE_ENV, str(tmp_path / "session.json"))
+    monkeypatch.setattr(m, "MAX_SESSION_SECONDS", 60.0)
+    monkeypatch.setattr(m, "MAX_CAMPAIGNS", 1)
+    monkeypatch.setattr(m, "MAX_MATCHED_Q", D("1"))
+    monkeypatch.setattr(m, "CYCLE_PAUSE_SECONDS", 0.0)
+    chosen = candidate("BTC")
+
+    async def choose(**_kwargs):
+        return chosen
+
+    async def flat(_allowed):
+        return {"active_orders": 0, "positions": [], "mutation": False}
+
+    async def v1_abstain(_sid, _number, _state_dir, *, selected=None):
+        return {"terminal": True, "status": "V1_ABSTAIN_FLAT",
+                "selected_asset": "BTC", "symbol": "BTC-UP",
+                "event": "BTC05M", "yes_qty": "0", "no_qty": "0"}
+
+    monkeypatch.setattr(m.selector, "select_best_candidate", choose)
+    monkeypatch.setattr(m, "account_guard", flat)
+    monkeypatch.setattr(m, "_run_cycle", v1_abstain)
+    asyncio.run(m.run())    # must not raise
+    state = json.loads((tmp_path / "session.json").read_text())
+    assert state["terminal"] is True
+    assert state["terminal_reason"] == "CAMPAIGN_CAP_REACHED"
+    assert state["campaigns"][0]["status"] == "V1_ABSTAIN_FLAT"

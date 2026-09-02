@@ -1,39 +1,41 @@
 """v1-DRIVEN q1 campaign: the frozen L5 model controls the actions.
 
-Addresses the review correction on the earlier integration: the v1 policy
-is no longer a filter in front of the fixed pair engine — it IS the
-decision maker for opening, post-fill relation, and completion timing.
-The proven transport/cancel/reservation/settlement shell is reused
-verbatim (GeminiMakerSession, exact-ID cancel, authoritative fill
-reconciliation, durable state file, q1 fill-bound assertion); only the
-SEQUENCING is v1's.
+The v1 policy is the decision maker for opening, post-fill relation, and
+completion timing; the proven transport/cancel/reservation/settlement
+shell is reused verbatim. Pre-GO review fixes incorporated:
 
-Decision contract (pure functions, unit-tested without network):
-  decide_flat(verdict)        -> "OPEN_ONE_SIDE" | "ABSTAIN"
-      From flat inventory the model must be in-distribution and modally
-      "open"; then exactly ONE maker order is placed. v1's relation
-      vocabulary is side-symmetric on a flat book, so WHICH side is
-      delegated to the risk adapter (fee-safe 20-80c maker price, deeper
-      queue as tiebreak) — economics as adapter, never as the brain.
-      BOTH SIDES ARE NEVER POSTED SIMULTANEOUSLY: the empirical L5
-      both-sides-per-window pattern emerges from sequential decisions,
-      and the fill-level model never emits a "post both" action.
-  decide_after_fill(verdict)  -> "COMPLETE" | "ABSTAIN_EXTEND_CAPPED"
-                                 | "ABSTAIN"
-      After an authoritative fill the Gemini inventory state is rebuilt
-      and v1 is re-asked with the ACTUAL residual. Modal "complete" →
-      place the complement maker order (completion-reserve bounded).
-      Modal "extend" is INFEASIBLE under the q=1 residual cap → abstain
-      and hold (re-evaluated as tte decays; if v1 flips to complete, the
-      complement is placed then). Off-distribution or modal "sell" →
-      abstain-hold. There is NO automatic complement: one side filling
-      is not, by itself, a reason to act.
+  * STATUS CONTRACT — terminal statuses are declared here and recognized
+    by the outer owner (MATCHED_V1_COMPLETION as matched;
+    V1_ABSTAIN_FLAT / NO_FEE_SAFE_MAKER_PRICE as no-trade).
+  * V1 STATE FIDELITY — after the first authoritative fill, v1 is re-asked
+    with the ACTUAL EXECUTION PRICE of that fill (the reconciler's field
+    chain avgExecutionPrice -> avg_execution_price -> price; fail-closed
+    if a filled row carries none) as `last_price`, held fixed until
+    another fill; only TTE and residual evolve between re-evaluations.
+    Completion economics also use the actual fill price.
+  * DURABLE EXACT-ID SAFETY — every client ID is appended to the durable
+    cycle state and fsync'd BEFORE its order.place call, so exception
+    cleanup always knows every ID that could exist at the venue. After a
+    complement post, `_find_row` must return a row or the campaign fails
+    closed. Before any terminal return every accepted ID is PROVEN
+    inactive via the shell's `_exact_active` check.
+  * TRANSFER_INITIALIZER LABELING — v1's flat states predict the next
+    RELATION, not a directional first side; the opening side comes from
+    the Gemini risk/queue adapter and is explicitly labeled
+    `TRANSFER_INITIALIZER`, not validated L5 side/timing behavior.
 
-Bounds for the FIRST live probe (per review): exactly one market, one
-campaign, q=1, no auto-restart; the campaign terminates on no-fill
-timeout, one completed matched q1, or any residual/safety condition —
-residual is held to settlement (L5's own behavior) and reported, never
-re-traded. Dual-key arming identical to the pair engine. NOT armed here.
+Decision contract (pure, unit-tested):
+  decide_flat: in-distribution + modal "open" -> OPEN_ONE_SIDE else ABSTAIN.
+  decide_after_fill: modal "complete" -> COMPLETE; modal "extend" ->
+  ABSTAIN_EXTEND_CAPPED (q=1 residual cap; re-asked as tte decays);
+  off-distribution / "sell" -> ABSTAIN. No automatic complement exists.
+
+Strict accounting persisted in the durable state: per-order limit price,
+authoritative execution price, filled qty, maker fees, turnover, matched
+and residual qty, every policy decision, settlement_required.
+realized_pnl stays None until Gemini settlement; rebates/rewards are
+accounted separately. Dual-key arming identical to the pair engine.
+NOT armed here.
 """
 from __future__ import annotations
 
@@ -46,6 +48,7 @@ from typing import Any, Mapping, Optional
 from src import gemini_l5_ladder_q1 as ladder
 from src import gemini_l5_pair_q1 as pair
 from src import gemini_l5_v1_policy as v1_policy
+from src.gemini_kalshi_execution_shadow import gemini_predictions_maker_fee
 
 ONE = D("1")
 ZERO = D("0")
@@ -53,6 +56,14 @@ MIN_PRICE = pair.MIN_PRICE
 MAX_PRICE = pair.MAX_PRICE
 STOP_BEFORE_EXPIRY_SECONDS = pair.STOP_BEFORE_EXPIRY_SECONDS
 REEVAL_INTERVAL_SECONDS = 5.0
+
+# Terminal status contract (owner imports these)
+STATUS_MATCHED = "MATCHED_V1_COMPLETION"
+STATUS_RESIDUAL_HOLD = "ONE_SIDED_RESIDUAL_POLICY_HOLD"
+STATUS_LATE_FILL_HOLD = "LATE_FILL_RESIDUAL_HOLD"
+NO_TRADE_STATUSES = frozenset({"V1_ABSTAIN_FLAT", "NO_FEE_SAFE_MAKER_PRICE"})
+
+INITIALIZER_LABEL = "TRANSFER_INITIALIZER"   # NOT validated L5 side/timing
 
 emit = pair.emit
 
@@ -79,9 +90,12 @@ def decide_after_fill(verdict: Mapping[str, Any]) -> str:
 
 
 def choose_open_side(bid: D, bid_size: D, ask: D, ask_size: D) -> Optional[dict]:
-    """Risk adapter: among the two policy-equivalent open actions, pick the
-    side whose MAKER price is fee-safe inside 20-80c; deeper queue breaks
-    ties. Returns {side, price} or None if neither side is safe."""
+    """TRANSFER_INITIALIZER risk adapter — NOT validated L5 behavior.
+
+    v1's relation vocabulary is side-symmetric on a flat book, so the
+    opening side among the two policy-equivalent "open" actions is chosen
+    by economics only: fee-safe 20-80c maker price, deeper queue as
+    tiebreak. Returns {side, price} or None if neither side is safe."""
     yes_price = D(str(bid))                     # join best bid = buy YES maker
     no_price = (ONE - D(str(ask)))              # join best ask = buy NO maker
     candidates = []
@@ -97,22 +111,84 @@ def choose_open_side(bid: D, bid_size: D, ask: D, ask_size: D) -> Optional[dict]
     return {"side": candidates[0]["side"], "price": candidates[0]["price"]}
 
 
-def complement_price(first_side: str, first_price: D, min_edge: D) -> Optional[D]:
-    """Completion-reserve bound: complement must lock >= min_edge after
-    both maker fees, inside 20-80c. Returns None if no such price."""
-    from src.gemini_l5_ladder_q1 import edge
-    px = (ONE - D(str(first_price)) - D(str(min_edge))).quantize(pair.TICK)
+def complement_price(first_side: str, first_exec_price: D,
+                     min_edge: D) -> Optional[D]:
+    """Completion-reserve bound against the ACTUAL first-fill execution
+    price: complement must lock >= min_edge after both maker fees,
+    inside 20-80c. Returns None if no such price exists."""
+    px = (ONE - D(str(first_exec_price)) - D(str(min_edge))).quantize(pair.TICK)
     while px >= MIN_PRICE:
-        y, n = ((D(str(first_price)), px) if first_side == "YES"
-                else (px, D(str(first_price))))
-        if px <= MAX_PRICE and edge(y, n) >= D(str(min_edge)):
+        y, n = ((D(str(first_exec_price)), px) if first_side == "YES"
+                else (px, D(str(first_exec_price))))
+        if px <= MAX_PRICE and ladder.edge(y, n) >= D(str(min_edge)):
             return px
         px -= pair.TICK
     return None
 
 
+def authoritative_fill_price(row: Mapping[str, Any] | None) -> D:
+    """Execution price via the settlement reconciler's exact field chain.
+    Fails closed on a filled row that carries no price."""
+    if not row:
+        raise RuntimeError("authoritative fill row missing")
+    raw = (row.get("avgExecutionPrice") or row.get("avg_execution_price")
+           or row.get("price"))
+    if raw in (None, ""):
+        raise RuntimeError("filled row carries no execution price")
+    return D(str(raw))
+
+
 def _residual_shares(yes_qty: D, no_qty: D) -> float:
     return float(yes_qty - no_qty)
+
+
+# ---------------- durable-first order placement ----------------
+
+async def place_order_durable(maker: Any, state: dict, spec: dict,
+                              symbol: str) -> bool:
+    """Reserve-then-act: the client ID is persisted into the durable cycle
+    state BEFORE order.place, so exception cleanup always knows it. On
+    reject the persisted entry is marked rejected. On accept, _find_row
+    must locate the exact row or we fail closed."""
+    entry = {"side": spec["side"], "price": str(spec["price"]),
+             "id": spec["id"], "accepted": False}
+    state.setdefault("orders", []).append(entry)
+    pair._write_state(state)
+    ack = await maker.request("order.place", {
+        "symbol": symbol, "side": "BUY", "type": "LIMIT",
+        "timeInForce": "MOC", "price": str(spec["price"]),
+        "quantity": "1", "eventOutcome": spec["side"],
+        "clientOrderId": spec["id"]}, timeout=4.0)
+    if int(ack.get("status", 0)) != 200:
+        entry["accepted"] = False
+        entry["rejected"] = True
+        pair._write_state(state)
+        return False
+    entry["accepted"] = True
+    pair._write_state(state)
+    spec["row"] = await ladder.base._find_row(spec["id"], symbol)
+    if spec["row"] is None:
+        raise RuntimeError(
+            f"accepted exact v1 order not discoverable id={spec['id']}")
+    return True
+
+
+async def prove_all_inactive(specs: list, symbol: str) -> None:
+    """Before any terminal return: every accepted exact ID must be proven
+    no longer active at the venue (filled or cancelled)."""
+    for spec in specs:
+        if await pair._exact_active(spec["id"], symbol):
+            raise RuntimeError(
+                f"exact order still active at terminal id={spec['id']}")
+
+
+def _record_decision(state: dict, stage: str, decision: str,
+                     verdict: Mapping[str, Any]) -> None:
+    state.setdefault("policy_decisions", []).append({
+        "stage": stage, "decision": decision,
+        "state": verdict.get("state"), "modal": verdict.get("modal_relation"),
+        "allow": verdict.get("allow")})
+    pair._write_state(state)
 
 
 # ---------------- campaign runner (reuses proven shell I/O) ----------------
@@ -146,14 +222,30 @@ async def run(*, min_edge: D = pair.DEFAULT_MIN_PAIR_EDGE,
     bid, bid_size, ask, ask_size = await ladder.fresh_top_retry(event.symbol)
     verdict = dict(v1_policy.gate_candidate(bid, ask, event.seconds_to_expiry))
     open_decision = decide_flat(verdict)
+    state: dict[str, Any] = {
+        "terminal": False, "sid": sid, "driver": "V1_POLICY",
+        "initializer": INITIALIZER_LABEL,
+        "policy_model_sha256_16": verdict.get("model_sha256_16"),
+        "symbol": event.symbol, "event": event.ticker,
+        "orders": [], "policy_decisions": [],
+    }
+    pair._write_state(state)
+    _record_decision(state, "FLAT", open_decision, verdict)
     emit("V1_FLAT_DECISION", decision=open_decision, order_entry=False,
-         realized_pnl=None, symbol=event.symbol, **verdict)
+         realized_pnl=None, symbol=event.symbol,
+         initializer=INITIALIZER_LABEL, **verdict)
     if open_decision != "OPEN_ONE_SIDE":
+        state.update({"terminal": True, "status": "V1_ABSTAIN_FLAT",
+                      "yes_qty": "0", "no_qty": "0"})
+        pair._write_state(state)
         emit("COMPLETE", status="V1_ABSTAIN_FLAT", order_entry=False,
              realized_pnl=None)
         return
     chosen = choose_open_side(bid, bid_size, ask, ask_size)
     if chosen is None:
+        state.update({"terminal": True, "status": "NO_FEE_SAFE_MAKER_PRICE",
+                      "yes_qty": "0", "no_qty": "0"})
+        pair._write_state(state)
         emit("COMPLETE", status="NO_FEE_SAFE_MAKER_PRICE", order_entry=False,
              realized_pnl=None)
         return
@@ -161,40 +253,27 @@ async def run(*, min_edge: D = pair.DEFAULT_MIN_PAIR_EDGE,
     spec = {"side": chosen["side"], "price": chosen["price"],
             "id": ladder.cid(sid, chosen["side"], 0), "row": None}
     comp_spec: Optional[dict] = None
-    state: dict[str, Any] = {
-        "terminal": False, "sid": sid, "driver": "V1_POLICY",
-        "policy_model_sha256_16": verdict["model_sha256_16"],
-        "symbol": event.symbol, "event": event.ticker,
-        "orders": [{"side": spec["side"], "price": str(spec["price"]),
-                    "id": spec["id"]}],
-    }
-    pair._write_state(state)
     emit("V1_OPEN", side=spec["side"], price=str(spec["price"]),
-         state=verdict["state"], order_entry=True, realized_pnl=None)
+         state=verdict["state"], initializer=INITIALIZER_LABEL,
+         order_entry=True, realized_pnl=None)
 
     maker = ladder.base.GeminiMakerSession()
     await maker.connect()
     try:
-        ack = await maker.request("order.place", {
-            "symbol": event.symbol, "side": "BUY", "type": "LIMIT",
-            "timeInForce": "MOC", "price": str(spec["price"]),
-            "quantity": "1", "eventOutcome": spec["side"],
-            "clientOrderId": spec["id"]}, timeout=4.0)
-        if int(ack.get("status", 0)) != 200:
-            state.update({"terminal": True, "status": "POST_REJECT"})
+        if not await place_order_durable(maker, state, spec, event.symbol):
+            state.update({"terminal": True, "status": "POST_REJECT",
+                          "yes_qty": "0", "no_qty": "0"})
             pair._write_state(state)
             emit("COMPLETE", status="POST_REJECT", order_entry=False,
                  realized_pnl=None)
             return
-        spec["row"] = await ladder.base._find_row(spec["id"], event.symbol)
-        if spec["row"] is None:
-            raise RuntimeError("accepted exact v1 order not discoverable")
 
         # --- wait for the first fill ---
+        t_entry = time.monotonic()
+        tte_entry = float(event.seconds_to_expiry)
         first_deadline = min(
-            time.monotonic() + float(first_wait),
-            time.monotonic() + max(1.0, event.seconds_to_expiry -
-                                   STOP_BEFORE_EXPIRY_SECONDS))
+            t_entry + float(first_wait),
+            t_entry + max(1.0, tte_entry - STOP_BEFORE_EXPIRY_SECONDS))
         filled = False
         while time.monotonic() < first_deadline and not filled:
             try:
@@ -215,35 +294,36 @@ async def run(*, min_edge: D = pair.DEFAULT_MIN_PAIR_EDGE,
             await ladder.cancel(maker, spec, event.symbol)
             await asyncio.sleep(0.3)
             fills = await ladder.fills(specs, event.symbol)
-            yes_q = fills.get(spec["id"], ZERO) if spec["side"] == "YES" else ZERO
-            no_q = fills.get(spec["id"], ZERO) if spec["side"] == "NO" else ZERO
-            status = ("NO_FILL_TIMEOUT" if yes_q == ZERO and no_q == ZERO
-                      else "LATE_FILL_RESIDUAL_HOLD")
-            state.update({"terminal": True, "status": status,
-                          "yes_qty": str(yes_q), "no_qty": str(no_q)})
-            pair._write_state(state)
-            emit("COMPLETE", status=status, order_entry=False,
-                 realized_pnl=None,
-                 settlement_required=(yes_q > ZERO or no_q > ZERO))
+            qty = fills.get(spec["id"], ZERO)
+            yes_q = qty if spec["side"] == "YES" else ZERO
+            no_q = qty if spec["side"] == "NO" else ZERO
+            await prove_all_inactive(specs, event.symbol)
+            status = ("NO_FILL_TIMEOUT" if qty == ZERO
+                      else STATUS_LATE_FILL_HOLD)
+            _finalize(state, specs, yes_q, no_q, status)
             return
 
-        # --- v1 decides the post-fill relation, re-asked as state evolves ---
-        t_entry = time.monotonic()
-        tte_entry = float(event.seconds_to_expiry)
+        # --- v1 decides the post-fill relation, re-asked as state evolves.
+        # last_price is the AUTHORITATIVE EXECUTION PRICE of our fill,
+        # fixed until another fill; only tte/residual evolve. ---
         stop_at = t_entry + max(1.0, tte_entry - STOP_BEFORE_EXPIRY_SECONDS)
         comp_deadline = min(time.monotonic() + float(complement_wait), stop_at)
         completed = False
+        first_exec_px: Optional[D] = None
         while time.monotonic() < comp_deadline and not completed:
             fills = await ladder.fills(specs, event.symbol)
             first_qty = fills.get(spec["id"], ZERO)
             if first_qty == ZERO:
                 await asyncio.sleep(REEVAL_INTERVAL_SECONDS)
                 continue
+            if first_exec_px is None:
+                first_exec_px = authoritative_fill_price(spec.get("row"))
+                state["first_fill_exec_price"] = str(first_exec_px)
+                pair._write_state(state)
             yes_q = first_qty if spec["side"] == "YES" else ZERO
             no_q = first_qty if spec["side"] == "NO" else ZERO
             if comp_spec is not None:
-                comp_fill = (await ladder.fills([comp_spec], event.symbol)
-                             ).get(comp_spec["id"], ZERO)
+                comp_fill = fills.get(comp_spec["id"], ZERO)
                 if comp_spec["side"] == "YES":
                     yes_q += comp_fill
                 else:
@@ -252,17 +332,17 @@ async def run(*, min_edge: D = pair.DEFAULT_MIN_PAIR_EDGE,
                     completed = True
                     break
             tte_now = tte_entry - (time.monotonic() - t_entry)
-            b, _, a, _ = await ladder.fresh_top_retry(event.symbol)
             verdict = dict(v1_policy.evaluate(
-                float((D(str(b)) + D(str(a))) / 2), max(tte_now, 0.0),
+                float(first_exec_px), max(tte_now, 0.0),
                 _residual_shares(yes_q, no_q)))
             decision = decide_after_fill(verdict)
+            _record_decision(state, "POST_FILL", decision, verdict)
             emit("V1_POST_FILL_DECISION", decision=decision,
-                 residual=str(yes_q - no_q), order_entry=False,
-                 realized_pnl=None, **verdict)
+                 residual=str(yes_q - no_q), last_price_source="EXEC_PRICE",
+                 order_entry=False, realized_pnl=None, **verdict)
             if decision == "COMPLETE" and comp_spec is None:
                 comp_side = "NO" if spec["side"] == "YES" else "YES"
-                px = complement_price(spec["side"], spec["price"], min_edge)
+                px = complement_price(spec["side"], first_exec_px, min_edge)
                 if px is None:
                     emit("V1_COMPLETE_INFEASIBLE", reason="no_fee_safe_price",
                          order_entry=False, realized_pnl=None)
@@ -270,45 +350,70 @@ async def run(*, min_edge: D = pair.DEFAULT_MIN_PAIR_EDGE,
                     comp_spec = {"side": comp_side, "price": px,
                                  "id": ladder.cid(sid, comp_side, 1),
                                  "row": None}
-                    ack = await maker.request("order.place", {
-                        "symbol": event.symbol, "side": "BUY",
-                        "type": "LIMIT", "timeInForce": "MOC",
-                        "price": str(px), "quantity": "1",
-                        "eventOutcome": comp_side,
-                        "clientOrderId": comp_spec["id"]}, timeout=4.0)
-                    if int(ack.get("status", 0)) != 200:
-                        comp_spec = None
-                        emit("V1_COMPLEMENT_POST_REJECT", order_entry=False,
-                             realized_pnl=None)
-                    else:
-                        comp_spec["row"] = await ladder.base._find_row(
-                            comp_spec["id"], event.symbol)
+                    if await place_order_durable(maker, state, comp_spec,
+                                                 event.symbol):
                         specs = [spec, comp_spec]
                         emit("V1_COMPLEMENT_POSTED", side=comp_side,
                              price=str(px), order_entry=True)
+                    else:
+                        comp_spec = None
+                        emit("V1_COMPLEMENT_POST_REJECT", order_entry=False,
+                             realized_pnl=None)
             await asyncio.sleep(REEVAL_INTERVAL_SECONDS)
 
-        # --- terminal reconcile (proven shell semantics) ---
+        # --- terminal reconcile (proven shell semantics + inactivity proof) ---
         await asyncio.gather(*(ladder.cancel(maker, s, event.symbol)
                                for s in specs), return_exceptions=True)
         await asyncio.sleep(0.35)
         fills = await ladder.fills(specs, event.symbol)
-        yes_q = sum((q for s, q in ((x, fills.get(x["id"], ZERO))
-                                    for x in specs) if s["side"] == "YES"),
-                    ZERO)
-        no_q = sum((q for s, q in ((x, fills.get(x["id"], ZERO))
-                                   for x in specs) if s["side"] == "NO"), ZERO)
+        yes_q = sum((fills.get(s["id"], ZERO) for s in specs
+                     if s["side"] == "YES"), ZERO)
+        no_q = sum((fills.get(s["id"], ZERO) for s in specs
+                    if s["side"] == "NO"), ZERO)
         if yes_q > ONE or no_q > ONE:
             raise RuntimeError(f"q1 v1 fill bound violated yes={yes_q} no={no_q}")
-        status = ("MATCHED_V1_COMPLETION" if yes_q == ONE and no_q == ONE
-                  else "ONE_SIDED_RESIDUAL_POLICY_HOLD"
+        await prove_all_inactive(specs, event.symbol)
+        status = (STATUS_MATCHED if yes_q == ONE and no_q == ONE
+                  else STATUS_RESIDUAL_HOLD
                   if yes_q > ZERO or no_q > ZERO
                   else "NO_AUTHORITATIVE_FILL")
-        state.update({"terminal": True, "status": status,
-                      "yes_qty": str(yes_q), "no_qty": str(no_q)})
-        pair._write_state(state)
-        emit("COMPLETE", status=status, yes_qty=str(yes_q), no_qty=str(no_q),
-             settlement_required=(yes_q > ZERO or no_q > ZERO),
-             order_entry=False, realized_pnl=None)
+        _finalize(state, specs, yes_q, no_q, status)
     finally:
         await maker.close()
+
+
+def _finalize(state: dict, specs: list, yes_q: D, no_q: D,
+              status: str) -> None:
+    """Persist strict accounting from authoritative rows, then emit."""
+    turnover = ZERO
+    fees = ZERO
+    order_details = []
+    for s in specs:
+        row = s.get("row")
+        qty = ladder.base._filled(row)
+        exec_px = None
+        if qty > ZERO:
+            exec_px = authoritative_fill_price(row)
+            turnover += exec_px * qty
+            fees += gemini_predictions_maker_fee(exec_px, qty)
+        order_details.append({
+            "side": s["side"], "id": s["id"], "limit_price": str(s["price"]),
+            "exec_price": str(exec_px) if exec_px is not None else None,
+            "filled_qty": str(qty)})
+    matched = min(yes_q, no_q)
+    state.update({
+        "terminal": True, "status": status,
+        "yes_qty": str(yes_q), "no_qty": str(no_q),
+        "matched_qty": str(matched),
+        "residual_qty": str(abs(yes_q - no_q)),
+        "maker_turnover": str(turnover), "maker_fees": str(fees),
+        "order_details": order_details,
+        "settlement_required": bool(yes_q > ZERO or no_q > ZERO),
+        "realized_pnl": None,      # only Gemini settlement realizes P&L
+    })
+    pair._write_state(state)
+    emit("COMPLETE", status=status, yes_qty=str(yes_q), no_qty=str(no_q),
+         matched_qty=str(matched), maker_turnover=str(turnover),
+         maker_fees=str(fees),
+         settlement_required=state["settlement_required"],
+         order_entry=False, realized_pnl=None)
