@@ -64,6 +64,144 @@ DISCOVERY_ENV = "PMUS_WS_DISCOVERY_SECONDS"
 SUB_MARKET_DATA = 1
 SUB_TRADE = 3
 OUTBOUND_FRAME_KEYS = frozenset({"subscribe", "unsubscribe", "heartbeat"})
+STATUS_EVERY_ENV = "PMUS_WS_STATUS_EVERY_SECONDS"
+DEFAULT_STATUS_EVERY_S = 60.0
+
+
+# ---------------- authenticated-stream state + status line ----------------
+
+def _walk_market_events(msg: Any, out: list, slug_hint: str = "") -> None:
+    """Tolerant extractor over snake_case WS payloads: collects book and
+    trade events wherever they appear in the message tree."""
+    if isinstance(msg, list):
+        for item in msg:
+            _walk_market_events(item, out, slug_hint)
+        return
+    if not isinstance(msg, Mapping):
+        return
+    slug = str(msg.get("market_slug") or msg.get("slug") or slug_hint or "")
+    if slug and ("bids" in msg or "asks" in msg or "best_bid" in msg
+                 or "best_ask" in msg):
+        out.append({"kind": "book", "slug": slug,
+                    "bids": msg.get("bids"), "asks": msg.get("asks"),
+                    "best_bid": msg.get("best_bid"),
+                    "best_ask": msg.get("best_ask")})
+    if slug and "price" in msg and ("qty" in msg or "quantity" in msg
+                                    or "size" in msg):
+        out.append({"kind": "trade", "slug": slug,
+                    "price": msg.get("price"),
+                    "qty": msg.get("qty") or msg.get("quantity")
+                    or msg.get("size"),
+                    "side": msg.get("side") or msg.get("taker_side")})
+    for v in msg.values():
+        _walk_market_events(v, out, slug)
+
+
+def _px(value: Any) -> Optional[str]:
+    if isinstance(value, Mapping):
+        return value.get("value") or value.get("px")
+    return None if value is None else str(value)
+
+
+def _level(levels: Any) -> tuple[Optional[str], Optional[str]]:
+    if isinstance(levels, list) and levels and isinstance(levels[0], Mapping):
+        lv = levels[0]
+        return _px(lv.get("px") or lv.get("price")), \
+            (str(lv.get("qty")) if lv.get("qty") is not None else None)
+    return None, None
+
+
+def apply_events(state: dict, msg: Any, now: float) -> None:
+    """Fold one received message into per-market state (pure dict)."""
+    events: list = []
+    _walk_market_events(msg, events)
+    for ev in events:
+        s = state.setdefault(ev["slug"], {
+            "bid": None, "bid_qty": None, "ask": None, "ask_qty": None,
+            "both_sides_served": False, "trades": [], "book_updates": 0})
+        if ev["kind"] == "book":
+            bid, bid_qty = _level(ev.get("bids"))
+            ask, ask_qty = _level(ev.get("asks"))
+            s["bid"] = _px(ev.get("best_bid")) or bid or s["bid"]
+            s["ask"] = _px(ev.get("best_ask")) or ask or s["ask"]
+            if bid_qty is not None:
+                s["bid_qty"] = bid_qty
+            if ask_qty is not None:
+                s["ask_qty"] = ask_qty
+            if bid_qty is not None and ask_qty is not None:
+                s["both_sides_served"] = True
+            s["book_updates"] += 1
+        else:
+            side = str(ev.get("side") or "").upper()
+            s["trades"].append({
+                "t": now, "px": str(ev["price"]),
+                "qty": str(ev.get("qty")),
+                "dir": "buy" if side == "BUY" else
+                       "sell" if side == "SELL" else "unknown"})
+            del s["trades"][:-500]
+
+
+def ws_gate(s: Mapping[str, Any], now: float, window_s: float = 3600.0) -> dict:
+    """Sequential maker-first gate on AUTHENTICATED evidence: real trades,
+    genuinely served two-sided book. Reuses the tape-report slot mechanics
+    via the same fill semantics; THEORETICAL throughout."""
+    from decimal import Decimal as D
+    from src import pmus_status_report as rep
+    trades = [{"t": t["t"], "px": D(t["px"]), "vol": 1.0,
+               "dir_inferred": t["dir"]}
+              for t in s.get("trades", []) if now - t["t"] <= window_s
+              and t.get("px")]
+    dirs = {t["dir_inferred"] for t in trades} - {"unknown"}
+    obs = []
+    if s.get("bid") and s.get("ask"):
+        obs = [{"t": datetime.fromtimestamp(now - window_s,
+                                            timezone.utc).isoformat(),
+                "bid": s["bid"], "ask": s["ask"],
+                "bid_qty": s.get("bid_qty"),
+                "ask_book_missing": not s.get("both_sides_served")}]
+    counts: dict = {}
+    if obs and trades:
+        t0 = min(t["t"] for t in trades)
+        t_end = max(t["t"] for t in trades)
+        t = t0
+        while t <= t_end:
+            row = rep.slot_replay(
+                [{**obs[0], "t": datetime.fromtimestamp(
+                    t, timezone.utc).isoformat()}], trades, t)
+            counts[row["status"]] = counts.get(row["status"], 0) + 1
+            t += rep.SLOT_S
+    matched = counts.get("MATCHED", 0)
+    q1 = bool(s.get("bid_qty")) and float(s.get("bid_qty") or 0) >= 1
+    if matched >= 2 and s.get("both_sides_served") and q1:
+        status = "Q1_GATE_CLEARED"
+    elif len(dirs) == 2 and q1:
+        status = "SHADOW_CANDIDATE"
+    else:
+        status = "NOT_READY"
+    return {"trades_1h": len(trades), "two_sided_trades": len(dirs) == 2,
+            "slot_counts_theoretical": counts, "gate_status": status}
+
+
+def build_status(state: Mapping[str, Any], connected: bool, msgs: int,
+                 subscribed: int, now: Optional[float] = None) -> dict:
+    now = now or time.time()
+    tops = sorted(state.items(),
+                  key=lambda kv: -len(kv[1].get("trades", [])))[:5]
+    return {
+        "t": datetime.now(timezone.utc).isoformat(),
+        "conn": "connected" if connected else "reconnecting",
+        "auth": "ok" if connected else "unknown",
+        "subscribed_markets": subscribed,
+        "messages_received": msgs,
+        "labeling": "authenticated stream; fills/economics THEORETICAL",
+        "top_markets": [
+            {"slug": slug, "bid": s.get("bid"), "bid_qty": s.get("bid_qty"),
+             "ask": s.get("ask"), "ask_qty": s.get("ask_qty"),
+             "both_sides_served": s.get("both_sides_served", False),
+             "book_updates": s.get("book_updates", 0),
+             **ws_gate(s, now)}
+            for slug, s in tops],
+    }
 
 
 def has_credentials() -> bool:
@@ -133,6 +271,15 @@ def discover_slugs() -> list[str]:
     from src import pmus_sports_collector as col
     leagues = [x.strip() for x in
                os.getenv(LEAGUES_ENV, "mlb").split(",") if x.strip()]
+    if leagues == ["all"]:
+        # full-slate discovery: every league the venue lists (removes the
+        # configured-league blind spot; incentive markets still added below)
+        try:
+            lg = col.http_get_json("/v2/leagues")
+            rows = lg if isinstance(lg, list) else lg.get("leagues") or []
+            leagues = [r["slug"] for r in rows if r.get("slug")]
+        except Exception:
+            leagues = ["mlb"]
     events_by_league = {}
     for lg in leagues:
         try:
@@ -157,7 +304,11 @@ async def run(minutes: Optional[float]) -> int:
     deadline = time.monotonic() + minutes * 60 if minutes else None
     backoff = 1.0
     rediscover_s = float(os.getenv(DISCOVERY_ENV, "300"))
+    status_every = float(os.getenv(STATUS_EVERY_ENV,
+                                   str(DEFAULT_STATUS_EVERY_S)))
     msgs = 0
+    mstate: dict = {}
+    last_status = 0.0
     while deadline is None or time.monotonic() < deadline:
         slugs = discover_slugs()
         append(root, {"kind": "recorder_start",
@@ -194,13 +345,24 @@ async def run(minutes: Optional[float]) -> int:
                                   "t": datetime.now(timezone.utc).isoformat(),
                                   "msg": msg})
                     msgs += 1
+                    apply_events(mstate, msg, time.time())
                     if msgs % 200 == 0:
                         heartbeat_file(root, messages=msgs,
                                        subscribed=len(slugs))
+                    if status_every > 0 and \
+                            time.monotonic() - last_status >= status_every:
+                        print("PMUS_WS_STATUS " + json.dumps(
+                            build_status(mstate, True, msgs, len(slugs)),
+                            separators=(",", ":"), default=str), flush=True)
+                        last_status = time.monotonic()
         except Exception as exc:
             append(root, {"kind": "error",
                           "t": datetime.now(timezone.utc).isoformat(),
                           "err": str(exc)[:150], "backoff_s": backoff})
+            print("PMUS_WS_STATUS " + json.dumps(
+                {**build_status(mstate, False, msgs, len(slugs)),
+                 "last_error": str(exc)[:120]},
+                separators=(",", ":"), default=str), flush=True)
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 30.0)
     return 0
