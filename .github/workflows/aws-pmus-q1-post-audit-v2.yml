@@ -1,0 +1,111 @@
+name: AWS PMUS q1 post-probe read-only audit v2
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/pmus-q1-post-audit-v2.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Read-only PMUS account/order/state audit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SLUG=$(sed -n 's/^MARKET_SLUG=//p' deploy/aws/pmus-q1-post-audit-v2.trigger | head -1)
+          [[ "$SLUG" =~ ^[A-Za-z0-9._-]+$ ]] || exit 2
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          STAGE=/home/ssm-user/l5-pmus-q1-stage
+          STATE=/home/ssm-user/l5-pmus-q1-state
+          CREDS=/home/ssm-user/l5-pmus-q1-credentials.env
+          VENV=/home/ssm-user/l5-pmus-q1-venv
+          test -f "\$CREDS" && test "\$(stat -c %a "\$CREDS")" = 600
+          set -a; . "\$CREDS"; set +a
+          cd "\$STAGE"
+          "\$VENV/bin/python" - <<'PY'
+          import json
+          from decimal import Decimal as D
+          from pathlib import Path
+          from src.pmus_q1_executor import Transport
+          slug='$SLUG'
+          t=Transport()
+          opened=t.request('GET','/v1/orders/open')
+          orders=opened.get('orders') if isinstance(opened,dict) else []
+          orders=orders if isinstance(orders,list) else []
+          target_open=[]
+          for o in orders:
+              if isinstance(o,dict) and o.get('marketSlug')==slug:
+                  target_open.append({'id':o.get('id') or o.get('orderId'),'state':o.get('state') or o.get('status'),'cumQuantity':o.get('cumQuantity') or o.get('filledQuantity')})
+          pos=t.request('GET','/v1/portfolio/positions')
+          positions=pos.get('positions') if isinstance(pos,dict) else None
+          target_pos=None
+          if isinstance(positions,dict):
+              p=positions.get(slug)
+              if isinstance(p,dict): target_pos=p.get('netPosition') if p.get('netPosition') is not None else p.get('quantity')
+          elif isinstance(positions,list):
+              for p in positions:
+                  if isinstance(p,dict) and p.get('marketSlug')==slug:
+                      target_pos=p.get('netPosition') if p.get('netPosition') is not None else p.get('quantity')
+          state_path=Path('$STATE/campaign_state.json')
+          intents=[]; accepted=[]
+          if state_path.exists():
+              try: st=json.loads(state_path.read_text())
+              except Exception: st={}
+              for r in st.get('orders') or []:
+                  if not isinstance(r,dict): continue
+                  if r.get('slug')==slug and r.get('stage') in ('first_leg','complement'):
+                      intents.append({'stage':r.get('stage'),'price':r.get('price'),'qty':r.get('qty')})
+                  if str(r.get('stage','')).endswith(':accepted') and r.get('order_id'):
+                      accepted.append({'stage':r.get('stage'),'order_id':r.get('order_id')})
+          ledger_path=Path('$STATE/ledger.jsonl')
+          rows=[]
+          if ledger_path.exists():
+              for line in ledger_path.read_text().splitlines()[-30:]:
+                  try: r=json.loads(line)
+                  except Exception: continue
+                  if r.get('slug')==slug or r.get('kind') in ('submitted','filled','halt','campaign_report'):
+                      rows.append({k:r.get(k) for k in ('t','kind','stage','slug','side','price','order_id','status','reason','realized_pnl') if k in r})
+          accepted_status=[]
+          for a in accepted:
+              try:
+                  resp=t.request('GET','/v1/order/'+str(a['order_id']))
+                  o=resp.get('order') if isinstance(resp,dict) and isinstance(resp.get('order'),dict) else resp
+                  accepted_status.append({'order_id':a['order_id'],'http_get':'ok','state':o.get('state') or o.get('status'),'cumQuantity':o.get('cumQuantity') or o.get('filledQuantity')})
+              except Exception as exc:
+                  accepted_status.append({'order_id':a['order_id'],'http_get':'error:'+type(exc).__name__})
+          print(json.dumps({'status':'PMUS_Q1_POST_AUDIT_OK','slug':slug,'open_orders_total':len(orders),'target_open_orders':target_open,'target_position':target_pos,'intents':intents,'accepted':accepted,'accepted_status':accepted_status,'recent_ledger':rows,'order_entry':False},separators=(',',':')))
+          PY
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "L5 PMUS q1 post-probe read-only audit $SLUG" --parameters "$PARAMS" --timeout-seconds 180 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          grep -q 'PMUS_Q1_POST_AUDIT_OK' <<<"$(jq -r '.Stdout' <<<"$RESULT")"
