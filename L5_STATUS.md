@@ -1,9 +1,53 @@
-# L5 Canonical Pipeline — Status (2026-09-01)
+# L5 Canonical Pipeline — Status (2026-09-02)
 
 Subject: Polymarket trader `l5zn1bwom8etsk`
 (`0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68`). Research only: every code
 path here is public-data GET-only; nothing trades, authenticates for
 orders, or touches live services.
+
+## Current Live Transfer / Handoff (2026-09-02, for fresh sessions)
+
+Exact state to re-establish from GitHub alone. Labels are strict:
+HISTORICAL (source data), SHADOW/MODELED (never realized), LIVE
+submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
+
+* **Probe branch**: `feature/gemini-l5-dynamic-q1-v1policy`, current head
+  `f62697224278447233846f28eebda4d9a9fff3b4` (prior verified base
+  `dda0c040761ac0665cbd19da3e6ad4d34a534e60`). Frozen v1 model
+  `a846e6bc96fc8079` (Mar 27+ regime; ex-ante gate PASSED 2026-09-01,
+  clustered log-prob CI [+0.021, +0.099]).
+* **LIVE probes to date** (q=1, BTC-5m, operator-run in Docker from
+  `dda0c040`):
+  - #1: order accepted, no fill, $0. Account flat after.
+  - #2: NO filled @0.50 (submitted→filled authoritative), v1 said EXTEND,
+    q=1 cap → one-sided hold; YES settled (authoritative settlement);
+    **REALIZED −$0.51**. Account flat after.
+  - #3: order accepted, no fill, $0. Account flat after.
+  - **Cumulative realized live trading: −$0.51.** Nothing else is
+    realized; every other economic figure in this repo is HISTORICAL or
+    MODELED.
+* **Bounded-extension HISTORICAL result** (`extension_study.py`,
+  `l5-canonical@496b62ab`): after "one-sided + next relation EXTEND",
+  L5 later complements 74.8% of the time (median 60 s) — but with median
+  interim imbalance ~$72 (p90 $281), far above any q=1 budget; modeled
+  q=1 counterfactuals: hold P(loss) 44.2%, forced completion 33.7%.
+* **Simplified next configuration at `f6269722`** (implemented, tested,
+  DISARMED): BTC-5m only, q=1, one campaign/session,
+  `FORCED_COMPLETION_RISK_OVERLAY` (`GEMINI_L5_FORCED_COMPLETION=1`):
+  180 s first-leg maker rest, then immediately after the first
+  authoritative fill post the fee-safe opposite-side complement
+  preserving ≥1¢ completed-pair edge computed from the ACTUAL execution
+  price, kept working maker-only until the TTE stop; no same-side
+  extension exists; frozen-v1 decisions are still recomputed and logged
+  every re-evaluation (`v1_pure_decision`) but never suppress the
+  complement — an explicit transfer/risk overlay, NOT validated L5
+  behavior. All shell safety semantics inherited (durable exact IDs,
+  exec-price accounting, exact-inactive proof, residual fail-closed,
+  `settlement_required`, `realized_pnl=None` until settlement).
+  **692 tests pass** on the probe branch.
+* **Arming**: operator-side only (dual-key envs + Docker on the
+  credentialed host). **Nothing is currently armed**; this research
+  environment holds no exchange credentials by design.
 
 ## Consolidation lineage (Phase 1 audit result)
 
