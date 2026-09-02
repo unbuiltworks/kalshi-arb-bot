@@ -49,6 +49,43 @@ submitted/filled/settled, REALIZED (authoritative settlement + cashflow).
   credentialed host). **Nothing is currently armed**; this research
   environment holds no exchange credentials by design.
 
+### Always-on architecture (added 2026-09-02, probe branch @ post-d0f19dd8)
+
+The one-off probes are superseded by a durable supervisor on
+`feature/gemini-l5-dynamic-q1-v1policy`:
+
+* `src/gemini_l5_transfer_supervisor.py` — continuous loop, **SHADOW
+  (mutation-free, public-data) by default**, `mode` stamped on every emit
+  and ledger row. Shadow follows the exact live decision path (selector →
+  v1 flat gate → TRANSFER_INITIALIZER → 180 s rest → forced complement at
+  the fee-safe bound) with THEORETICAL fills detected from the public
+  trade tape. LIVE mode delegates single campaigns to the proven dynamic
+  owner (operator dual-key arming unchanged; the supervisor never arms).
+  Hard bounds: BTC-05M, q=1, one campaign at a time, residual cap 1,
+  campaigns/day cap (default 6), **daily realized-loss stop $1**
+  (authoritative settlement only), persistent HALT on any
+  unresolved/ambiguous settlement, owner exception, or loss stop —
+  survives restarts, operator-cleared only. Durable state root:
+  state.json / campaigns.jsonl / heartbeat.json / daily summaries.
+  One-command report: `... gemini_l5_transfer_supervisor status`.
+* `src/gemini_l5_settlement_audit.py` — settlement authority
+  (`positions/settled` rows only), now with **local exact-identity
+  filtering** (`contractMetadata.eventTicker` precedence) after the
+  live-observed bug where the endpoint returned mixed events; ambiguous
+  rows fail closed as `AMBIGUOUS_SETTLEMENT_IDENTITY`.
+  `available_usd` / `positions=[]` are never settlement proof.
+* Service staging (NOT deployed): `deploy/l5_supervisor/Dockerfile` +
+  `l5-supervisor.service` (systemd template; arming envs deliberately
+  absent).
+
+**Probe #4 (`v1probe-20260902-04`, BTC05M2609021210) current state**:
+LIVE submitted → filled 1 YES + 1 NO (`MATCHED_V1_COMPLETION`, maker
+turnover 0.97, logged fees 0.02, residual 0) → **settlement NOT yet
+source-confirmed**: the +$0.03 balance move and `positions=[]` are NOT
+proof; realization awaits exact-identity `positions/settled` rows via the
+corrected auditor. Cumulative REALIZED live trading remains **−$0.51**
+(probe #2) until then.
+
 ## Consolidation lineage (Phase 1 audit result)
 
 | Source branch | What was taken | Where it lives now |
