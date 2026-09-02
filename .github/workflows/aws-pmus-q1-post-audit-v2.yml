@@ -36,7 +36,6 @@ jobs:
           REMOTE=$(cat <<EOF
           set -Eeuo pipefail
           STAGE=/home/ssm-user/l5-pmus-q1-stage
-          STATE=/home/ssm-user/l5-pmus-q1-state
           CREDS=/home/ssm-user/l5-pmus-q1-credentials.env
           VENV=/home/ssm-user/l5-pmus-q1-venv
           test -f "\$CREDS" && test "\$(stat -c %a "\$CREDS")" = 600
@@ -44,7 +43,6 @@ jobs:
           cd "\$STAGE"
           "\$VENV/bin/python" - <<'PY'
           import json
-          from decimal import Decimal as D
           from pathlib import Path
           from src.pmus_q1_executor import Transport
           slug='$SLUG'
@@ -66,7 +64,7 @@ jobs:
               for p in positions:
                   if isinstance(p,dict) and p.get('marketSlug')==slug:
                       target_pos=p.get('netPosition') if p.get('netPosition') is not None else p.get('quantity')
-          state_path=Path('$STATE/campaign_state.json')
+          state_path=Path('/home/ssm-user/l5-pmus-q1-state/campaign_state.json')
           intents=[]; accepted=[]
           if state_path.exists():
               try: st=json.loads(state_path.read_text())
@@ -77,7 +75,7 @@ jobs:
                       intents.append({'stage':r.get('stage'),'price':r.get('price'),'qty':r.get('qty')})
                   if str(r.get('stage','')).endswith(':accepted') and r.get('order_id'):
                       accepted.append({'stage':r.get('stage'),'order_id':r.get('order_id')})
-          ledger_path=Path('$STATE/ledger.jsonl')
+          ledger_path=Path('/home/ssm-user/l5-pmus-q1-state/ledger.jsonl')
           rows=[]
           if ledger_path.exists():
               for line in ledger_path.read_text().splitlines()[-30:]:
