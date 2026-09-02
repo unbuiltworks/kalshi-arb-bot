@@ -1,0 +1,597 @@
+{
+ "generated_utc": "2026-09-02T17:43:44.168144+00:00",
+ "labeling": "ALL THEORETICAL, print-only tier: no historical book exists, maker joins proxied by traded prices, v1 TTE gate not applicable to games; optimistic AND strict are queue-blind upper bounds; rewards not modeled",
+ "provenance": {
+  "events": "gamma-api.polymarket.com closed events, end 2026-08-31T00:00Z..2026-09-02T14:00Z",
+  "trades": "data-api.polymarket.com/trades per conditionId, complete via offset pagination"
+ },
+ "families": {
+  "epl:moneyline": {
+   "markets": 3,
+   "game_hours": 6.6,
+   "clob_fees_bps_seen": [
+    "(1000, 1000)"
+   ],
+   "flow": {
+    "slots": 78,
+    "two_sided": 70,
+    "empty": 0,
+    "two_sided_pct": 89.7
+   },
+   "optimistic": {
+    "slots": 78,
+    "first_leg_fill_rate": 0.4103,
+    "p_complement_given_first_fill": 0.9062,
+    "one_sided_hold_rate": 0.0385,
+    "matched": 29,
+    "matched_per_game_hour": 4.36,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 50.0,
+    "hold_pnl_theoretical_total": "0.8699998295",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "MATCHED": 29,
+     "NO_FEE_SAFE_MAKER_PRICE": 46,
+     "ONE_SIDED_HOLD": 3
+    }
+   },
+   "strict": {
+    "slots": 78,
+    "first_leg_fill_rate": 0.359,
+    "p_complement_given_first_fill": 0.8214,
+    "one_sided_hold_rate": 0.0641,
+    "matched": 23,
+    "matched_per_game_hour": 3.46,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 56.8,
+    "hold_pnl_theoretical_total": "0.9299999993",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "MATCHED": 23,
+     "NO_FEE_SAFE_MAKER_PRICE": 46,
+     "ONE_SIDED_HOLD": 5,
+     "NO_FILL_TIMEOUT": 4
+    }
+   }
+  },
+  "epl:spreads": {
+   "markets": 3,
+   "game_hours": 6.1,
+   "clob_fees_bps_seen": [
+    "(1000, 1000)"
+   ],
+   "flow": {
+    "slots": 72,
+    "two_sided": 32,
+    "empty": 23,
+    "two_sided_pct": 44.4
+   },
+   "optimistic": {
+    "slots": 72,
+    "first_leg_fill_rate": 0.3056,
+    "p_complement_given_first_fill": 0.5909,
+    "one_sided_hold_rate": 0.125,
+    "matched": 13,
+    "matched_per_game_hour": 2.12,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 78.2,
+    "hold_pnl_theoretical_total": "-0.8900000417",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "MATCHED": 13,
+     "ONE_SIDED_HOLD": 9,
+     "NO_FEE_SAFE_MAKER_PRICE": 19,
+     "NO_FILL_TIMEOUT": 31
+    }
+   },
+   "strict": {
+    "slots": 72,
+    "first_leg_fill_rate": 0.2083,
+    "p_complement_given_first_fill": 0.4667,
+    "one_sided_hold_rate": 0.1111,
+    "matched": 7,
+    "matched_per_game_hour": 1.14,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 113.9,
+    "hold_pnl_theoretical_total": "-0.5300000608",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "MATCHED": 7,
+     "ONE_SIDED_HOLD": 8,
+     "NO_FILL_TIMEOUT": 38,
+     "NO_FEE_SAFE_MAKER_PRICE": 19
+    }
+   }
+  },
+  "epl:totals": {
+   "markets": 6,
+   "game_hours": 11.0,
+   "clob_fees_bps_seen": [
+    "(1000, 1000)"
+   ],
+   "flow": {
+    "slots": 128,
+    "two_sided": 71,
+    "empty": 14,
+    "two_sided_pct": 55.5
+   },
+   "optimistic": {
+    "slots": 128,
+    "first_leg_fill_rate": 0.3672,
+    "p_complement_given_first_fill": 0.7234,
+    "one_sided_hold_rate": 0.1016,
+    "matched": 34,
+    "matched_per_game_hour": 3.1,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 47.2,
+    "hold_pnl_theoretical_total": "-4.1500000298",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "MATCHED": 34,
+     "ONE_SIDED_HOLD": 13,
+     "NO_FEE_SAFE_MAKER_PRICE": 61,
+     "NO_FILL_TIMEOUT": 20
+    }
+   },
+   "strict": {
+    "slots": 128,
+    "first_leg_fill_rate": 0.2812,
+    "p_complement_given_first_fill": 0.5833,
+    "one_sided_hold_rate": 0.1172,
+    "matched": 21,
+    "matched_per_game_hour": 1.91,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 72.2,
+    "hold_pnl_theoretical_total": "-4.4600544622",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "MATCHED": 21,
+     "NO_FILL_TIMEOUT": 31,
+     "ONE_SIDED_HOLD": 15,
+     "NO_FEE_SAFE_MAKER_PRICE": 61
+    }
+   }
+  },
+  "mlb:moneyline": {
+   "markets": 15,
+   "game_hours": 48.7,
+   "clob_fees_bps_seen": [
+    "(1000, 1000)"
+   ],
+   "flow": {
+    "slots": 577,
+    "two_sided": 476,
+    "empty": 54,
+    "two_sided_pct": 82.5
+   },
+   "optimistic": {
+    "slots": 577,
+    "first_leg_fill_rate": 0.6222,
+    "p_complement_given_first_fill": 0.6435,
+    "one_sided_hold_rate": 0.2218,
+    "matched": 231,
+    "matched_per_game_hour": 4.74,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 65.1,
+    "hold_pnl_theoretical_total": "6.1622249360",
+    "hold_outcomes_ambiguous": 5,
+    "statuses": {
+     "ONE_SIDED_HOLD": 128,
+     "MATCHED": 231,
+     "NO_FEE_SAFE_MAKER_PRICE": 158,
+     "NO_FILL_TIMEOUT": 60
+    }
+   },
+   "strict": {
+    "slots": 577,
+    "first_leg_fill_rate": 0.5113,
+    "p_complement_given_first_fill": 0.4915,
+    "one_sided_hold_rate": 0.26,
+    "matched": 145,
+    "matched_per_game_hour": 2.98,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 78.2,
+    "hold_pnl_theoretical_total": "7.0487590942",
+    "hold_outcomes_ambiguous": 5,
+    "statuses": {
+     "ONE_SIDED_HOLD": 150,
+     "MATCHED": 145,
+     "NO_FILL_TIMEOUT": 124,
+     "NO_FEE_SAFE_MAKER_PRICE": 158
+    }
+   }
+  },
+  "mlb:totals": {
+   "markets": 3,
+   "game_hours": 6.3,
+   "clob_fees_bps_seen": [
+    "(1000, 1000)"
+   ],
+   "flow": {
+    "slots": 74,
+    "two_sided": 25,
+    "empty": 26,
+    "two_sided_pct": 33.8
+   },
+   "optimistic": {
+    "slots": 74,
+    "first_leg_fill_rate": 0.3649,
+    "p_complement_given_first_fill": 0.2963,
+    "one_sided_hold_rate": 0.2568,
+    "matched": 8,
+    "matched_per_game_hour": 1.27,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 63.8,
+    "hold_pnl_theoretical_total": "-3.3471986268",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "ONE_SIDED_HOLD": 19,
+     "MATCHED": 8,
+     "NO_FEE_SAFE_MAKER_PRICE": 12,
+     "NO_FILL_TIMEOUT": 35
+    }
+   },
+   "strict": {
+    "slots": 74,
+    "first_leg_fill_rate": 0.2027,
+    "p_complement_given_first_fill": 0.0667,
+    "one_sided_hold_rate": 0.1892,
+    "matched": 1,
+    "matched_per_game_hour": 0.16,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 88.0,
+    "hold_pnl_theoretical_total": "-2.9328107666",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "ONE_SIDED_HOLD": 14,
+     "NO_FILL_TIMEOUT": 47,
+     "NO_FEE_SAFE_MAKER_PRICE": 12,
+     "MATCHED": 1
+    }
+   }
+  },
+  "soccer:moneyline": {
+   "markets": 3,
+   "game_hours": 11.9,
+   "clob_fees_bps_seen": [
+    "(1000, 1000)"
+   ],
+   "flow": {
+    "slots": 141,
+    "two_sided": 64,
+    "empty": 43,
+    "two_sided_pct": 45.4
+   },
+   "optimistic": {
+    "slots": 141,
+    "first_leg_fill_rate": 0.3972,
+    "p_complement_given_first_fill": 0.5893,
+    "one_sided_hold_rate": 0.1631,
+    "matched": 33,
+    "matched_per_game_hour": 2.78,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 76.2,
+    "hold_pnl_theoretical_total": "-6.9590091591",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "MATCHED": 33,
+     "ONE_SIDED_HOLD": 23,
+     "NO_FEE_SAFE_MAKER_PRICE": 27,
+     "NO_FILL_TIMEOUT": 58
+    }
+   },
+   "strict": {
+    "slots": 141,
+    "first_leg_fill_rate": 0.2411,
+    "p_complement_given_first_fill": 0.4118,
+    "one_sided_hold_rate": 0.1418,
+    "matched": 14,
+    "matched_per_game_hour": 1.18,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 97.2,
+    "hold_pnl_theoretical_total": "-2.3395283566",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "MATCHED": 14,
+     "NO_FILL_TIMEOUT": 80,
+     "ONE_SIDED_HOLD": 20,
+     "NO_FEE_SAFE_MAKER_PRICE": 27
+    }
+   }
+  },
+  "soccer:spreads": {
+   "markets": 1,
+   "game_hours": 1.9,
+   "clob_fees_bps_seen": [
+    "(1000, 1000)"
+   ],
+   "flow": {
+    "slots": 23,
+    "two_sided": 0,
+    "empty": 20,
+    "two_sided_pct": 0.0
+   },
+   "optimistic": {
+    "slots": 23,
+    "first_leg_fill_rate": 0.0,
+    "p_complement_given_first_fill": null,
+    "one_sided_hold_rate": 0.0,
+    "matched": 0,
+    "matched_per_game_hour": 0.0,
+    "median_pair_cost": null,
+    "mean_time_to_complement_s": null,
+    "hold_pnl_theoretical_total": "0",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "NO_FEE_SAFE_MAKER_PRICE": 2,
+     "NO_FILL_TIMEOUT": 21,
+     "MATCHED": 0,
+     "ONE_SIDED_HOLD": 0
+    }
+   },
+   "strict": {
+    "slots": 23,
+    "first_leg_fill_rate": 0.0,
+    "p_complement_given_first_fill": null,
+    "one_sided_hold_rate": 0.0,
+    "matched": 0,
+    "matched_per_game_hour": 0.0,
+    "median_pair_cost": null,
+    "mean_time_to_complement_s": null,
+    "hold_pnl_theoretical_total": "0",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "NO_FEE_SAFE_MAKER_PRICE": 2,
+     "NO_FILL_TIMEOUT": 21,
+     "MATCHED": 0,
+     "ONE_SIDED_HOLD": 0
+    }
+   }
+  },
+  "soccer:totals": {
+   "markets": 14,
+   "game_hours": 31.5,
+   "clob_fees_bps_seen": [
+    "(1000, 1000)"
+   ],
+   "flow": {
+    "slots": 371,
+    "two_sided": 128,
+    "empty": 85,
+    "two_sided_pct": 34.5
+   },
+   "optimistic": {
+    "slots": 371,
+    "first_leg_fill_rate": 0.3881,
+    "p_complement_given_first_fill": 0.4444,
+    "one_sided_hold_rate": 0.2156,
+    "matched": 64,
+    "matched_per_game_hour": 2.03,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 88.7,
+    "hold_pnl_theoretical_total": "3.4322363698",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "MATCHED": 64,
+     "ONE_SIDED_HOLD": 80,
+     "NO_FILL_TIMEOUT": 130,
+     "NO_FEE_SAFE_MAKER_PRICE": 97
+    }
+   },
+   "strict": {
+    "slots": 371,
+    "first_leg_fill_rate": 0.1914,
+    "p_complement_given_first_fill": 0.2254,
+    "one_sided_hold_rate": 0.1482,
+    "matched": 16,
+    "matched_per_game_hour": 0.51,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 104.4,
+    "hold_pnl_theoretical_total": "0.0679944393",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "ONE_SIDED_HOLD": 55,
+     "NO_FILL_TIMEOUT": 203,
+     "MATCHED": 16,
+     "NO_FEE_SAFE_MAKER_PRICE": 97
+    }
+   }
+  },
+  "tennis:moneyline": {
+   "markets": 17,
+   "game_hours": 95.6,
+   "clob_fees_bps_seen": [
+    "(1000, 1000)"
+   ],
+   "flow": {
+    "slots": 1139,
+    "two_sided": 172,
+    "empty": 795,
+    "two_sided_pct": 15.1
+   },
+   "optimistic": {
+    "slots": 1139,
+    "first_leg_fill_rate": 0.1308,
+    "p_complement_given_first_fill": 0.3423,
+    "one_sided_hold_rate": 0.086,
+    "matched": 51,
+    "matched_per_game_hour": 0.53,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 81.7,
+    "hold_pnl_theoretical_total": "3.9445655350",
+    "hold_outcomes_ambiguous": 16,
+    "statuses": {
+     "NO_FILL_TIMEOUT": 853,
+     "NO_FEE_SAFE_MAKER_PRICE": 137,
+     "ONE_SIDED_HOLD": 98,
+     "MATCHED": 51
+    }
+   },
+   "strict": {
+    "slots": 1139,
+    "first_leg_fill_rate": 0.0781,
+    "p_complement_given_first_fill": 0.3483,
+    "one_sided_hold_rate": 0.0509,
+    "matched": 31,
+    "matched_per_game_hour": 0.32,
+    "median_pair_cost": "0.9900000089",
+    "mean_time_to_complement_s": 90.1,
+    "hold_pnl_theoretical_total": "4.0198709737",
+    "hold_outcomes_ambiguous": 4,
+    "statuses": {
+     "NO_FILL_TIMEOUT": 913,
+     "NO_FEE_SAFE_MAKER_PRICE": 137,
+     "ONE_SIDED_HOLD": 58,
+     "MATCHED": 31
+    }
+   }
+  },
+  "wnba:moneyline": {
+   "markets": 1,
+   "game_hours": 2.9,
+   "clob_fees_bps_seen": [
+    "(1000, 1000)"
+   ],
+   "flow": {
+    "slots": 34,
+    "two_sided": 17,
+    "empty": 6,
+    "two_sided_pct": 50.0
+   },
+   "optimistic": {
+    "slots": 34,
+    "first_leg_fill_rate": 0.0,
+    "p_complement_given_first_fill": null,
+    "one_sided_hold_rate": 0.0,
+    "matched": 0,
+    "matched_per_game_hour": 0.0,
+    "median_pair_cost": null,
+    "mean_time_to_complement_s": null,
+    "hold_pnl_theoretical_total": "0",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "NO_FEE_SAFE_MAKER_PRICE": 25,
+     "NO_FILL_TIMEOUT": 9,
+     "MATCHED": 0,
+     "ONE_SIDED_HOLD": 0
+    }
+   },
+   "strict": {
+    "slots": 34,
+    "first_leg_fill_rate": 0.0,
+    "p_complement_given_first_fill": null,
+    "one_sided_hold_rate": 0.0,
+    "matched": 0,
+    "matched_per_game_hour": 0.0,
+    "median_pair_cost": null,
+    "mean_time_to_complement_s": null,
+    "hold_pnl_theoretical_total": "0",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "NO_FEE_SAFE_MAKER_PRICE": 25,
+     "NO_FILL_TIMEOUT": 9,
+     "MATCHED": 0,
+     "ONE_SIDED_HOLD": 0
+    }
+   }
+  },
+  "wnba:spreads": {
+   "markets": 3,
+   "game_hours": 8.2,
+   "clob_fees_bps_seen": [
+    "(1000, 1000)"
+   ],
+   "flow": {
+    "slots": 96,
+    "two_sided": 23,
+    "empty": 40,
+    "two_sided_pct": 24.0
+   },
+   "optimistic": {
+    "slots": 96,
+    "first_leg_fill_rate": 0.3229,
+    "p_complement_given_first_fill": 0.3226,
+    "one_sided_hold_rate": 0.2188,
+    "matched": 10,
+    "matched_per_game_hour": 1.22,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 122.9,
+    "hold_pnl_theoretical_total": "-5.3000000687",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "NO_FILL_TIMEOUT": 51,
+     "ONE_SIDED_HOLD": 21,
+     "MATCHED": 10,
+     "NO_FEE_SAFE_MAKER_PRICE": 14
+    }
+   },
+   "strict": {
+    "slots": 96,
+    "first_leg_fill_rate": 0.1354,
+    "p_complement_given_first_fill": 0.0769,
+    "one_sided_hold_rate": 0.125,
+    "matched": 1,
+    "matched_per_game_hour": 0.12,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 219.0,
+    "hold_pnl_theoretical_total": "-1.2201860707",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "NO_FILL_TIMEOUT": 69,
+     "ONE_SIDED_HOLD": 12,
+     "MATCHED": 1,
+     "NO_FEE_SAFE_MAKER_PRICE": 14
+    }
+   }
+  },
+  "wnba:totals": {
+   "markets": 2,
+   "game_hours": 5.0,
+   "clob_fees_bps_seen": [
+    "(1000, 1000)"
+   ],
+   "flow": {
+    "slots": 59,
+    "two_sided": 15,
+    "empty": 28,
+    "two_sided_pct": 25.4
+   },
+   "optimistic": {
+    "slots": 59,
+    "first_leg_fill_rate": 0.2373,
+    "p_complement_given_first_fill": 0.4286,
+    "one_sided_hold_rate": 0.1356,
+    "matched": 6,
+    "matched_per_game_hour": 1.2,
+    "median_pair_cost": "0.9900000723",
+    "mean_time_to_complement_s": 35.2,
+    "hold_pnl_theoretical_total": "2.2299999913",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "MATCHED": 6,
+     "ONE_SIDED_HOLD": 8,
+     "NO_FILL_TIMEOUT": 31,
+     "NO_FEE_SAFE_MAKER_PRICE": 14
+    }
+   },
+   "strict": {
+    "slots": 59,
+    "first_leg_fill_rate": 0.1356,
+    "p_complement_given_first_fill": 0.125,
+    "one_sided_hold_rate": 0.1186,
+    "matched": 1,
+    "matched_per_game_hour": 0.2,
+    "median_pair_cost": "0.99",
+    "mean_time_to_complement_s": 30.0,
+    "hold_pnl_theoretical_total": "3.63",
+    "hold_outcomes_ambiguous": 0,
+    "statuses": {
+     "MATCHED": 1,
+     "ONE_SIDED_HOLD": 7,
+     "NO_FILL_TIMEOUT": 37,
+     "NO_FEE_SAFE_MAKER_PRICE": 14
+    }
+   }
+  }
+ }
+}
