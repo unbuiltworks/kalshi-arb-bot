@@ -312,3 +312,50 @@ def test_action_model_policy_hook_agreement(tmp_path):
     abstainer = am.compare_policy(model, lambda s: None)
     assert abstainer["expected_agreement_exact"] is None
     assert abstainer["policy_abstained_weight"] == 3
+
+
+# ---------- bounded-extension study ----------
+
+def test_extension_study_episode_detection_and_settle(monkeypatch):
+    from src.polymarket_l5 import extension_study as ex
+
+    def fake_windows():
+        # window: open Up x2 (one-sided), next fill EXTENDS Up, then complement
+        base_ts = ex.SYSTEMATIC_REGIME_EPOCH + 1000
+        rows = [
+            {"window_id": "w1", "asset": "BTC", "duration_minutes": "5",
+             "timestamp": str(base_ts), "trade_seq": "1", "outcome": "Up",
+             "side": "BUY", "price": "0.5", "quantity": "2",
+             "seconds_to_settlement": "240", "residual_qty_signed": "2",
+             "matched_qty": "0", "matched_pair_unit_cost": "",
+             "settlement_outcome": "Down"},
+            {"window_id": "w1", "asset": "BTC", "duration_minutes": "5",
+             "timestamp": str(base_ts + 10), "trade_seq": "2", "outcome": "Up",
+             "side": "BUY", "price": "0.52", "quantity": "1",
+             "seconds_to_settlement": "230", "residual_qty_signed": "3",
+             "matched_qty": "0", "matched_pair_unit_cost": "",
+             "settlement_outcome": "Down"},
+            {"window_id": "w1", "asset": "BTC", "duration_minutes": "5",
+             "timestamp": str(base_ts + 70), "trade_seq": "3",
+             "outcome": "Down", "side": "BUY", "price": "0.45",
+             "quantity": "3", "seconds_to_settlement": "170",
+             "residual_qty_signed": "0", "matched_qty": "3",
+             "matched_pair_unit_cost": "0.97", "settlement_outcome": "Down"},
+        ]
+        yield rows
+
+    monkeypatch.setattr(ex, "_windows", fake_windows)
+    res = ex.analyze()
+    a = res["part_a_extend_episodes"]["overall"]
+    assert a["episodes"] == 1
+    assert a["p_complement_before_end"] == 1.0
+    assert a["latency_to_first_complement_s"]["median"] == 70.0
+    assert a["pair_cost_when_complemented_median"] == 0.97
+    cf = res["part_b_counterfactual_q1_MODELED"]
+    # hold: Up loses (Down won): -0.5 - fee
+    hold = cf["hold_ABSTAIN_EXTEND_CAPPED"]["mean_modeled_usd_per_episode"]
+    assert hold == pytest.approx(-0.5 - ex._fee(0.5), abs=1e-3)
+    # force: complement bound 0.49 >= first comp price 0.45 -> pair locks
+    force = cf["forced_economic_completion"]["mean_modeled_usd_per_episode"]
+    assert force == pytest.approx(1 - 0.5 - 0.45 - ex._fee(0.5) - ex._fee(0.45), abs=1e-3)
+    assert cf["force_completion_rate"] == 1.0
