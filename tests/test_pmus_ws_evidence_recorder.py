@@ -1,0 +1,79 @@
+"""Deterministic tests for the authenticated read-only PMUS WS recorder."""
+from __future__ import annotations
+
+import base64
+import inspect
+import json
+
+import pytest
+
+from src import pmus_ws_evidence_recorder as rec
+
+
+def test_fails_closed_without_credentials(monkeypatch, capsys):
+    monkeypatch.delenv(rec.KEY_ENV, raising=False)
+    monkeypatch.delenv(rec.SECRET_ENV, raising=False)
+    assert rec.has_credentials() is False
+    assert rec.main.__wrapped__ if hasattr(rec.main, "__wrapped__") else True
+    # main() exits 2 with NO_CREDENTIALS before touching the network
+    import sys
+    monkeypatch.setattr(sys, "argv", ["prog"])
+    assert rec.main() == 2
+    out = capsys.readouterr().out
+    assert "NO_CREDENTIALS" in out and rec.KEY_ENV in out
+
+
+def test_auth_headers_match_documented_scheme():
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    seed = b"\x07" * 32
+    secret_b64 = base64.b64encode(seed).decode()
+    h = rec.auth_headers("key-123", secret_b64, now_ms=1700000000000)
+    assert h["X-PM-Access-Key"] == "key-123"
+    assert h["X-PM-Timestamp"] == "1700000000000"
+    pub = ed25519.Ed25519PrivateKey.from_private_bytes(seed).public_key()
+    pub.verify(base64.b64decode(h["X-PM-Signature"]),
+               b"1700000000000GET/v1/ws/markets")   # raises on mismatch
+
+
+def test_subscribe_frames_are_market_data_and_trade_only():
+    frames = rec.subscribe_frames(["b-slug", "a-slug"])
+    assert [f["subscribe"]["subscription_type"] for f in frames] == [1, 3]
+    for f in frames:
+        assert set(f) == {"subscribe"}
+        assert f["subscribe"]["market_slugs"] == ["a-slug", "b-slug"]
+        assert f["subscribe"]["request_id"]
+
+
+def test_outbound_guard_blocks_anything_but_read_only_frames():
+    rec.guard_outbound({"subscribe": {}})
+    rec.guard_outbound({"heartbeat": {}})
+    rec.guard_outbound({"unsubscribe": {}})
+    with pytest.raises(RuntimeError):
+        rec.guard_outbound({"order": {"side": "buy"}})
+    with pytest.raises(RuntimeError):
+        rec.guard_outbound({"subscribe": {}, "cancel": {}})
+
+
+def test_daily_rotation_and_heartbeat(tmp_path):
+    from datetime import datetime, timezone
+    d1 = datetime(2026, 9, 2, 23, 59, tzinfo=timezone.utc)
+    d2 = datetime(2026, 9, 3, 0, 1, tzinfo=timezone.utc)
+    assert rec.daily_path(tmp_path, d1).name == "pmus_ws_20260902.jsonl"
+    assert rec.daily_path(tmp_path, d2).name == "pmus_ws_20260903.jsonl"
+    rec.append(tmp_path, {"kind": "x"})
+    rec.heartbeat_file(tmp_path, messages=5)
+    hb = json.loads((tmp_path / "heartbeat.json").read_text())
+    assert hb["mode"] == "READ_ONLY_WS_RECORDER" and hb["messages"] == 5
+
+
+def test_structurally_no_order_or_private_paths():
+    src = inspect.getsource(rec)
+    for forbidden in ("/v1/orders", "/v1/ws/private", "close-position",
+                      "close_position", "modify", '"POST"', "'POST'",
+                      "preview", "cancel-order", "rfq"):
+        assert forbidden not in src, forbidden
+    # the only websocket URL is the markets stream
+    assert src.count("wss://") == 1 and "/v1/ws/markets" in src
+    # every outbound send passes through the guard
+    sends = [l for l in src.splitlines() if "ws.send(" in l]
+    assert sends and all("guard_outbound" in l for l in sends)
