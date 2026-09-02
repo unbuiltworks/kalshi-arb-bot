@@ -65,6 +65,19 @@ NO_TRADE_STATUSES = frozenset({"V1_ABSTAIN_FLAT", "NO_FEE_SAFE_MAKER_PRICE"})
 
 INITIALIZER_LABEL = "TRANSFER_INITIALIZER"   # NOT validated L5 side/timing
 
+# Forced-completion risk overlay (issue #167 simplified transfer config).
+# EXPLICITLY a transfer/risk adapter, NOT validated L5 behavior: after the
+# first authoritative fill the fee-safe reserve-bound complement is posted
+# immediately, whatever v1's relation verdict says; the frozen v1 decision
+# is still recomputed and logged on every re-evaluation for fidelity
+# analysis. Evidence: extension study (l5-canonical@496b62ab) — modeled
+# P(loss) 44.2% hold vs 33.7% forced completion; BTC-05M contra-flow
+# 6.1%@45s -> 15.8%@180s, hence the longer default rest.
+POSTURE_ENV = "GEMINI_L5_FORCED_COMPLETION"
+FC_FIRST_WAIT_ENV = "GEMINI_L5_FC_FIRST_WAIT_SECONDS"
+FC_DEFAULT_FIRST_WAIT_S = 180.0
+POSTURE_LABEL = "FORCED_COMPLETION_RISK_OVERLAY"
+
 emit = pair.emit
 
 
@@ -87,6 +100,28 @@ def decide_after_fill(verdict: Mapping[str, Any]) -> str:
     if modal == "extend":
         return "ABSTAIN_EXTEND_CAPPED"      # q=1 residual cap forbids extend
     return "ABSTAIN"
+
+
+def forced_completion_enabled() -> bool:
+    return os.getenv(POSTURE_ENV, "").strip() in {"1", "true", "TRUE", "yes", "on"}
+
+
+def effective_first_wait(first_wait: float) -> float:
+    """Under the forced-completion overlay the first-side maker rest
+    defaults to 180s (env-overridable); otherwise unchanged. The caller
+    still clamps to MIN_TTE and the pre-expiry stop."""
+    if not forced_completion_enabled():
+        return float(first_wait)
+    return float(os.getenv(FC_FIRST_WAIT_ENV, str(FC_DEFAULT_FIRST_WAIT_S)))
+
+
+def post_fill_action(verdict: Mapping[str, Any]) -> str:
+    """The action actually taken after a fill. Overlay ON: always attempt
+    the economically safe complement (v1 verdict logged, never suppressive).
+    Overlay OFF: pure v1 (decide_after_fill). No path ever extends."""
+    if forced_completion_enabled():
+        return "COMPLETE"
+    return decide_after_fill(verdict)
 
 
 def choose_open_side(bid: D, bid_size: D, ask: D, ask_size: D) -> Optional[dict]:
@@ -217,6 +252,8 @@ async def run(*, min_edge: D = pair.DEFAULT_MIN_PAIR_EDGE,
         return
     sid = os.getenv(pair.SID_ENV, "").strip()
     min_edge = D(str(min_edge))
+    first_wait = effective_first_wait(first_wait)
+    posture = forced_completion_enabled()
 
     # --- v1 decides the opening action from flat state ---
     bid, bid_size, ask, ask_size = await ladder.fresh_top_retry(event.symbol)
@@ -225,6 +262,8 @@ async def run(*, min_edge: D = pair.DEFAULT_MIN_PAIR_EDGE,
     state: dict[str, Any] = {
         "terminal": False, "sid": sid, "driver": "V1_POLICY",
         "initializer": INITIALIZER_LABEL,
+        "posture": POSTURE_LABEL if posture else "V1_PURE",
+        "first_wait_s": first_wait,
         "policy_model_sha256_16": verdict.get("model_sha256_16"),
         "symbol": event.symbol, "event": event.ticker,
         "orders": [], "policy_decisions": [],
@@ -307,7 +346,10 @@ async def run(*, min_edge: D = pair.DEFAULT_MIN_PAIR_EDGE,
         # last_price is the AUTHORITATIVE EXECUTION PRICE of our fill,
         # fixed until another fill; only tte/residual evolve. ---
         stop_at = t_entry + max(1.0, tte_entry - STOP_BEFORE_EXPIRY_SECONDS)
-        comp_deadline = min(time.monotonic() + float(complement_wait), stop_at)
+        # overlay keeps the complement working until the TTE stop; pure v1
+        # keeps the original bounded complement window
+        comp_deadline = (stop_at if posture else
+                         min(time.monotonic() + float(complement_wait), stop_at))
         completed = False
         first_exec_px: Optional[D] = None
         while time.monotonic() < comp_deadline and not completed:
@@ -335,9 +377,14 @@ async def run(*, min_edge: D = pair.DEFAULT_MIN_PAIR_EDGE,
             verdict = dict(v1_policy.evaluate(
                 float(first_exec_px), max(tte_now, 0.0),
                 _residual_shares(yes_q, no_q)))
-            decision = decide_after_fill(verdict)
+            v1_decision = decide_after_fill(verdict)
+            decision = post_fill_action(verdict)
             _record_decision(state, "POST_FILL", decision, verdict)
+            state["policy_decisions"][-1]["v1_pure_decision"] = v1_decision
+            pair._write_state(state)
             emit("V1_POST_FILL_DECISION", decision=decision,
+                 v1_pure_decision=v1_decision,
+                 posture=POSTURE_LABEL if posture else "V1_PURE",
                  residual=str(yes_q - no_q), last_price_source="EXEC_PRICE",
                  order_entry=False, realized_pnl=None, **verdict)
             if decision == "COMPLETE" and comp_spec is None:
@@ -354,11 +401,20 @@ async def run(*, min_edge: D = pair.DEFAULT_MIN_PAIR_EDGE,
                                                  event.symbol):
                         specs = [spec, comp_spec]
                         emit("V1_COMPLEMENT_POSTED", side=comp_side,
-                             price=str(px), order_entry=True)
+                             price=str(px),
+                             posture=POSTURE_LABEL if posture else "V1_PURE",
+                             order_entry=True)
                     else:
                         comp_spec = None
-                        emit("V1_COMPLEMENT_POST_REJECT", order_entry=False,
+                        comp_rejects = int(state.get("complement_rejects", 0)) + 1
+                        state["complement_rejects"] = comp_rejects
+                        pair._write_state(state)
+                        emit("V1_COMPLEMENT_POST_REJECT",
+                             rejects=comp_rejects, order_entry=False,
                              realized_pnl=None)
+                        if comp_rejects > pair.MAX_COMPLEMENT_REPRICES:
+                            raise RuntimeError(
+                                "complement post rejected beyond reprice cap")
             await asyncio.sleep(REEVAL_INTERVAL_SECONDS)
 
         # --- terminal reconcile (proven shell semantics + inactivity proof) ---
