@@ -42,6 +42,7 @@ jobs:
           [[ "$SID" =~ ^[A-Za-z0-9._-]{8,80}$ ]] || { echo 'invalid session id'; exit 2; }
           test "$GATE" = "$SLUG"
           test "$APPROVAL" = PMUS_Q1_ONE_CAMPAIGN_APPROVED
+          EXPECTED_SHA=06c7bc3ef38f721b2c3cdc8a4d8c627c34b06caf15d96709c85cefc4bd7e6b98
 
           REMOTE=$(cat <<EOF
           set -Eeuo pipefail
@@ -53,6 +54,8 @@ jobs:
           test -x "\$VENV/bin/python"
           "\$VENV/bin/python" -c 'import cryptography'
           test -f "\$STAGE/src/pmus_q1_executor.py"
+          ACTUAL=\$(sha256sum "\$STAGE/src/pmus_q1_executor.py" | cut -d' ' -f1)
+          test "\$ACTUAL" = "$EXPECTED_SHA" || { echo PMUS_Q1_STAGE_SHA_MISMATCH; exit 2; }
           if pgrep -af 'src\.pmus_q1_executor' | grep -v pgrep >/dev/null 2>&1; then
             echo PMUS_Q1_REFUSE_CONCURRENT_EXECUTOR
             exit 2
@@ -75,7 +78,6 @@ jobs:
           "\$VENV/bin/python" -m src.pmus_q1_executor > /tmp/pmus-q1-live-report.json 2>/tmp/pmus-q1-live-stderr.log
           rc=\$?
           set -e
-          # Never echo credential env; only the executor's scrubbed report.
           cat /tmp/pmus-q1-live-report.json
           "\$VENV/bin/python" - <<'PY'
           import json
@@ -87,8 +89,6 @@ jobs:
           print('PMUS_Q1_ONE_CAMPAIGN_COMPLETE status='+str(d.get('status'))+' realized_pnl='+str(d.get('realized_pnl')))
           PY
           echo PMUS_Q1_EXECUTOR_EXIT=\$rc
-          # Deliberately return success after a valid report so GitHub never
-          # invites an automatic retry of a one-shot financial campaign.
           exit 0
           EOF
           )
