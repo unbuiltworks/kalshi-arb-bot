@@ -1,0 +1,64 @@
+# Read-only CI for the PMUS sports forward collector branch (issue #167
+# comment 5514826329).
+#
+# Independent Actions evidence for feature/l5-transfer-backtest: full test
+# suite plus a bounded collector smoke. No secrets, no deploys, no writes
+# to any external system — the smoke performs only public keyless GETs
+# against gateway.polymarket.us and writes to the runner's temp dir.
+# Push-scoped to this branch only; never runs for main or any other branch.
+
+name: pmus-collector-ci
+
+on:
+  push:
+    branches: [feature/l5-transfer-backtest]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install --quiet -r requirements.txt
+      - name: Full test suite
+        run: python3 -m pytest tests/ -q
+      - name: Collector structural read-only proof (targeted)
+        run: python3 -m pytest tests/test_pmus_sports_collector.py -q
+      - name: Bounded collector smoke (public GETs only, temp-dir state)
+        run: |
+          export PMUS_COLLECTOR_ROOT="$RUNNER_TEMP/pmus-smoke"
+          timeout 90 python3 -m src.pmus_sports_collector --minutes 0.5
+          test -s "$PMUS_COLLECTOR_ROOT"/raw/pmus_*.jsonl
+          python3 - <<'EOF'
+          import json, os, glob
+          root = os.environ["PMUS_COLLECTOR_ROOT"]
+          hb = json.load(open(os.path.join(root, "heartbeat.json")))
+          assert hb["mode"] == "READ_ONLY_COLLECTOR", hb
+          assert hb["cycles"] >= 1 and hb["rows_written"] >= 0, hb
+          rows = [json.loads(l) for f in glob.glob(root + "/raw/*.jsonl")
+                  for l in open(f)]
+          kinds = {r.get("kind") for r in rows}
+          assert "collector_start" in kinds and "discovery" in kinds, kinds
+          assert "incentives_snapshot" in kinds, kinds
+          print("smoke ok:", {k: sum(1 for r in rows if r.get("kind") == k)
+                             for k in sorted(kinds)})
+          EOF
+      - name: Railway config selects the collector image (deploy-safety)
+        run: |
+          python3 - <<'EOF'
+          import json
+          cfg = json.load(open("railway.json"))
+          assert cfg["build"]["dockerfilePath"] == \
+              "deploy/pmus_sports_collector/Dockerfile", cfg
+          assert cfg["deploy"]["startCommand"] == \
+              "python3 -m src.pmus_sports_collector", cfg
+          print("railway.json pins the collector image + start command")
+          EOF
