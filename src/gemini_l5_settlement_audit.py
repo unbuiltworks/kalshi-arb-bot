@@ -197,12 +197,94 @@ def classify_event(fills: List[dict], settled: List[dict],
         out["status"] = "SETTLED_PARTIAL"
         return out
     if window_over and open_qty == ZERO:
-        out["status"] = "UNRESOLVED"          # loud flag: fills, window over,
-        return out                            # no settled rows, no open pos
+        if matched:
+            # VENUE SEMANTICS (Gemini docs): /positions/settled returns
+            # positions HELD UNTIL RESOLUTION. A fully matched YES+NO pair
+            # the venue nets/closes before resolution legitimately never
+            # appears there. A matched q1 pair carries NO residual
+            # liability (both legs sum to a guaranteed $1 whichever side
+            # wins), so this is not the loud UNRESOLVED alarm — but it is
+            # NOT settled and NOT realized either. Confirmation requires
+            # source-accounted netting evidence (WS fills incl fee `n`,
+            # balance `c` updates, or transfer rows) via
+            # apply_netting_evidence(); balance drift alone never counts.
+            out["status"] = "MATCHED_PAIR_NO_SETTLED_ROWS"
+            out["residual_liability"] = False
+            out["netting_note"] = ("doc-consistent with pre-resolution "
+                                   "venue netting; awaiting source-"
+                                   "accounted netting evidence")
+            return out
+        out["status"] = "UNRESOLVED"          # unmatched: loud flag, halts
+        out["residual_liability"] = True
+        return out
     if window_over:
         out["status"] = "PENDING_SETTLEMENT"
         return out
     out["status"] = "MATCHED_UNSETTLED" if matched else "FILLED_UNSETTLED"
+    return out
+
+
+# ------------- matched-pair netting reconciliation (source-accounted) -------
+
+def apply_netting_evidence(classified: Dict[str, Any], fills: List[dict],
+                           evidence: Mapping[str, Any]) -> Dict[str, Any]:
+    """Upgrade MATCHED_PAIR_NO_SETTLED_ROWS using EXACT netting evidence.
+
+    evidence = {
+      "ws_fills":        [{clientOrderId, n(fee), m(maker), price, qty}, ...]
+      "balance_updates": [{"c": confirmed_balance, "ts": ...}, ...]  (>=2:
+                          bracketing the pair, authenticated WS `c` field)
+      "transfers":       optional venue transfer rows for the credit
+    }
+    MATCHED_NETTED_CONFIRMED requires ALL of:
+      * exact pair fills (already in `classified`)
+      * WS fill rows covering every clientOrderId of the pair, with fee `n`
+      * confirmed-balance (`c`) delta across the pair equal to
+        matched_qty * $1 - pair cost - sum(fees) (exact, cent tolerance)
+    Anything less leaves MATCHED_NETTING_UNCONFIRMED (safe to continue —
+    zero residual liability — but never realized from balance alone).
+    Even when confirmed, the status is NOT the project's REALIZED label:
+    finality of venue netting as economic settlement is recorded as
+    netting_final=True evidence for the operator's accounting decision.
+    """
+    out = dict(classified)
+    if out.get("status") != "MATCHED_PAIR_NO_SETTLED_ROWS":
+        return out
+    ws_fills = list(evidence.get("ws_fills") or [])
+    balances = list(evidence.get("balance_updates") or [])
+    pair_ids = {_s(r, "clientOrderId", "client_order_id") for r in fills}
+    ws_ids = {_s(r, "clientOrderId", "client_order_id") for r in ws_fills}
+    if not pair_ids or not pair_ids.issubset(ws_ids) or len(balances) < 2:
+        out["status"] = "MATCHED_NETTING_UNCONFIRMED"
+        out["netting_evidence"] = {"ws_fill_ids_seen": sorted(ws_ids & pair_ids),
+                                   "balance_updates": len(balances)}
+        return out
+    fees = sum((_f(r, "n", "fee", "feeAmount") for r in ws_fills
+                if _s(r, "clientOrderId", "client_order_id") in pair_ids), ZERO)
+    cost = sum((_f(r, "price") * _f(r, "quantity", "qty", default="1")
+                for r in ws_fills
+                if _s(r, "clientOrderId", "client_order_id") in pair_ids), ZERO)
+    matched_qty = min(D(str(out.get("yes_qty", "0"))),
+                      D(str(out.get("no_qty", "0"))))
+    expected_credit = matched_qty * D("1") - cost - fees
+    observed_delta = (_f(balances[-1], "c", "confirmed", "balance")
+                      - _f(balances[0], "c", "confirmed", "balance"))
+    consistent = abs(observed_delta - expected_credit) <= D("0.01")
+    out["netting_evidence"] = {
+        "ws_fee_total": str(fees), "ws_pair_cost": str(cost),
+        "expected_credit": str(expected_credit),
+        "observed_confirmed_balance_delta": str(observed_delta),
+        "consistent": consistent,
+    }
+    if consistent:
+        out["status"] = "MATCHED_NETTED_CONFIRMED"
+        out["netting_final"] = True
+        out["netted_cash_source_accounted"] = str(observed_delta)
+    else:
+        # contradictory evidence is a HALT condition, not a safe-continue
+        out["status"] = "NETTING_CASHFLOW_INCONSISTENT"
+        out["netting_note"] = ("confirmed-balance delta contradicts pair "
+                               "economics — halt and investigate")
     return out
 
 

@@ -304,17 +304,64 @@ async def live_campaign(number: int) -> Dict[str, Any]:
     return row
 
 
+# Verdicts on which the supervisor may safely continue: a fully matched
+# q1 pair carries zero residual liability even when the venue netted it
+# before resolution (Gemini docs: positions/settled only shows positions
+# held to resolution), so those statuses are not halts. Everything
+# contradictory or unmatched still halts.
+SAFE_CONTINUE_STATUSES = frozenset({
+    "REALIZED", "SETTLED",
+    "MATCHED_NETTED_CONFIRMED",           # exact WS fee+balance reconcile
+    "MATCHED_NETTING_UNCONFIRMED",        # matched pair, evidence incomplete
+    "MATCHED_PAIR_NO_SETTLED_ROWS",       # matched pair, doc-consistent
+})
+HALT_STATUSES = frozenset({
+    "UNRESOLVED",                         # unmatched residual shape
+    "AMBIGUOUS_SETTLEMENT_IDENTITY",
+    "NETTING_CASHFLOW_INCONSISTENT",
+})
+
+
 async def reconcile_event(event_ticker: str) -> Dict[str, Any]:
-    """Poll the corrected auditor until exact-identity settled rows
-    classify the event, or the poll budget is spent (UNRESOLVED)."""
+    """Poll the corrected auditor until a terminal classification exists,
+    attaching WS netting evidence when a recorder file is available."""
+    ev: Optional[Dict[str, Any]] = None
     for attempt in range(SETTLE_POLL_MAX):
         out = await audit_mod.audit(days=0.5, event_filter=event_ticker)
         ev = out["events"].get(event_ticker)
-        if ev and ev["status"] in ("REALIZED", "SETTLED",
-                                   "AMBIGUOUS_SETTLEMENT_IDENTITY"):
+        if ev and ev["status"] == "MATCHED_PAIR_NO_SETTLED_ROWS":
+            ev = _try_netting_evidence(event_ticker, ev)
+        if ev and (ev["status"] in SAFE_CONTINUE_STATUSES
+                   or ev["status"] in HALT_STATUSES):
             return ev
         await asyncio.sleep(SETTLE_POLL_S)
     return ev or {"status": "UNRESOLVED"}
+
+
+def _try_netting_evidence(event_ticker: str,
+                          classified: Dict[str, Any]) -> Dict[str, Any]:
+    """Attach WS evidence (if a recorder file exists) to upgrade a matched
+    pair to MATCHED_NETTED_CONFIRMED; incomplete evidence leaves the safe
+    MATCHED_NETTING_UNCONFIRMED, never a fabricated confirmation."""
+    try:
+        from src import gemini_l5_ws_evidence as wse
+        ev_dir = Path(os.getenv(wse.OUT_DIR_ENV, wse.DEFAULT_DIR))
+        files = sorted(ev_dir.glob("ws_evidence_*.jsonl"))
+        fills = classified.get("fills") or []
+        ids = {str(f.get("clientOrderId") or "") for f in fills} - {""}
+        if not files or not ids:
+            out = dict(classified)
+            out["status"] = "MATCHED_NETTING_UNCONFIRMED"
+            out["netting_evidence"] = {"recorder_files": len(files)}
+            return out
+        evidence = wse.load_evidence(files[-1], ids)
+        return dict(audit_mod.apply_netting_evidence(
+            classified, fills, evidence))
+    except Exception as exc:
+        out = dict(classified)
+        out["status"] = "MATCHED_NETTING_UNCONFIRMED"
+        out["netting_evidence_error"] = f"{type(exc).__name__}: {exc}"
+        return out
 
 
 # ---------------- supervisor loop ----------------
@@ -358,8 +405,7 @@ async def run_loop(max_iterations: int = 0) -> None:
                 if ev:
                     verdict = await reconcile_event(ev)
                     row["settlement"] = verdict
-                    if verdict["status"] in ("UNRESOLVED",
-                                             "AMBIGUOUS_SETTLEMENT_IDENTITY"):
+                    if verdict["status"] in HALT_STATUSES:
                         ledger_append(row)
                         halt(st, f"settlement {verdict['status']} for {ev}")
                         return

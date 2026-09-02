@@ -22,10 +22,13 @@ def test_matched_pair_is_not_settled_until_source_rows_exist():
     r = aud.classify_event(fills, settled=[], open_positions=[],
                            window_over=False)
     assert r["status"] == "MATCHED_UNSETTLED" and r["matched"] is True
-    # window over, no settled rows yet, no open position -> flagged
+    # window over, no settled rows, no open position: for a MATCHED pair
+    # this is venue-netting-consistent (docs: settled = held-to-resolution)
+    # -> zero-residual-liability state, still NOT settled/realized
     r2 = aud.classify_event(fills, settled=[], open_positions=[],
                             window_over=True)
-    assert r2["status"] == "UNRESOLVED"
+    assert r2["status"] == "MATCHED_PAIR_NO_SETTLED_ROWS"
+    assert r2["residual_liability"] is False
 
 
 def test_realized_only_with_consistent_settled_economics():
@@ -111,3 +114,78 @@ def test_identity_resolution_precedence():
     assert aud._row_event_identity({"symbol": "GEMI-BTC05M2609021210-UP"}) \
         == "BTC05M2609021210"
     assert aud._row_event_identity({"outcome": "yes"}) == ""
+
+
+# ---------- matched-pair netting reconciliation (venue-semantics fix) ----------
+
+def _pair_fills():
+    return [{"clientOrderId": "cid-y0", "eventOutcome": "yes",
+             "filledQuantity": "1", "avgExecutionPrice": "0.47"},
+            {"clientOrderId": "cid-n1", "eventOutcome": "no",
+             "filledQuantity": "1", "avgExecutionPrice": "0.50"}]
+
+
+def test_matched_pair_omitted_from_settled_is_not_unresolved():
+    # probe #4 shape: matched q1 pair, window over, no settled rows, no
+    # open positions -> venue-netting-consistent, zero residual liability
+    r = aud.classify_event(_pair_fills(), settled=[], open_positions=[],
+                           window_over=True)
+    assert r["status"] == "MATCHED_PAIR_NO_SETTLED_ROWS"
+    assert r["residual_liability"] is False
+    # unmatched single fill in the same shape still halts loudly
+    r2 = aud.classify_event([_pair_fills()[0]], [], [], True)
+    assert r2["status"] == "UNRESOLVED" and r2["residual_liability"] is True
+
+
+def test_confirmed_netting_requires_ws_fees_and_balance_delta():
+    base = aud.classify_event(_pair_fills(), [], [], True)
+    evidence = {
+        "ws_fills": [
+            {"clientOrderId": "cid-y0", "n": "0.01", "m": True,
+             "price": "0.47", "quantity": "1"},
+            {"clientOrderId": "cid-n1", "n": "0.01", "m": True,
+             "price": "0.50", "quantity": "1"},
+        ],
+        # credit = 1*1 - 0.97 - 0.02 = 0.01 exactly
+        "balance_updates": [{"c": "100.00"}, {"c": "100.01"}],
+    }
+    r = aud.apply_netting_evidence(base, _pair_fills(), evidence)
+    assert r["status"] == "MATCHED_NETTED_CONFIRMED"
+    assert r["netting_final"] is True
+    assert r["netting_evidence"]["consistent"] is True
+    assert r["netting_evidence"]["ws_fee_total"] == "0.02"
+
+
+def test_balance_movement_alone_never_confirms():
+    base = aud.classify_event(_pair_fills(), [], [], True)
+    # only balance updates, no WS fill rows -> stays unconfirmed
+    r = aud.apply_netting_evidence(base, _pair_fills(), {
+        "ws_fills": [], "balance_updates": [{"c": "100"}, {"c": "100.03"}]})
+    assert r["status"] == "MATCHED_NETTING_UNCONFIRMED"
+    # and unconfirmed is never realized: no realized_cash key
+    assert "realized_cash" not in r and "netted_cash_source_accounted" not in r
+
+
+def test_inconsistent_cashflow_is_a_halt_condition():
+    base = aud.classify_event(_pair_fills(), [], [], True)
+    evidence = {
+        "ws_fills": [
+            {"clientOrderId": "cid-y0", "n": "0.01", "price": "0.47",
+             "quantity": "1"},
+            {"clientOrderId": "cid-n1", "n": "0.01", "price": "0.50",
+             "quantity": "1"}],
+        "balance_updates": [{"c": "100.00"}, {"c": "100.50"}],  # way off
+    }
+    r = aud.apply_netting_evidence(base, _pair_fills(), evidence)
+    assert r["status"] == "NETTING_CASHFLOW_INCONSISTENT"
+
+
+def test_netting_never_bypasses_identity_filter_or_ambiguity():
+    # ambiguity still classifies fail-closed before any netting logic runs
+    rows = [{"outcome": "yes", "positionQuantity": "1", "costBasis": "0.47",
+             "payout": "1"}]
+    filt = aud.filter_settled_rows(rows, "BTC05M2609021210")
+    assert filt["ambiguous"] == 1
+    # apply_netting_evidence refuses to touch non-matched-pair statuses
+    realized = {"status": "REALIZED"}
+    assert aud.apply_netting_evidence(realized, _pair_fills(), {}) == realized

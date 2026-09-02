@@ -133,3 +133,25 @@ def test_scan_error_never_kills_the_loop_or_burns_a_campaign(sroot, monkeypatch)
     rows = [json.loads(l) for l in ledger]
     assert all(r["status"] == "SCAN_ERROR" for r in rows)
     assert all(r["mode"] == "SHADOW" for r in rows)
+
+
+def test_supervisor_halt_taxonomy_for_netting(sroot):
+    assert "MATCHED_PAIR_NO_SETTLED_ROWS" in sup.SAFE_CONTINUE_STATUSES
+    assert "MATCHED_NETTED_CONFIRMED" in sup.SAFE_CONTINUE_STATUSES
+    assert "MATCHED_NETTING_UNCONFIRMED" in sup.SAFE_CONTINUE_STATUSES
+    assert "UNRESOLVED" in sup.HALT_STATUSES
+    assert "AMBIGUOUS_SETTLEMENT_IDENTITY" in sup.HALT_STATUSES
+    assert "NETTING_CASHFLOW_INCONSISTENT" in sup.HALT_STATUSES
+    # structural: the live loop halts exactly on HALT_STATUSES
+    import inspect
+    src = inspect.getsource(sup.run_loop)
+    assert "in HALT_STATUSES" in src
+
+
+def test_ws_evidence_module_is_subscribe_only():
+    import inspect
+    from src import gemini_l5_ws_evidence as wse
+    src = inspect.getsource(wse)
+    assert "order.place" not in src
+    assert "order.cancel" not in src
+    assert "request(" not in src          # never calls the session request API
