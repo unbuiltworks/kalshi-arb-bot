@@ -1,0 +1,4 @@
+Railway shadow deployment trigger for the isolated l5-transfer-supervisor-shadow service.
+
+Base supervisor implementation: d813b765e309594dd9977e4db53b989110e17ed1
+Mode: SHADOW only; no credentials or live arming variables are part of this file.
