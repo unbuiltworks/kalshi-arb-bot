@@ -84,11 +84,13 @@ jobs:
                   if r.get('slug')==slug or r.get('kind') in ('submitted','filled','halt','campaign_report'):
                       rows.append({k:r.get(k) for k in ('t','kind','stage','slug','side','price','order_id','status','reason','realized_pnl') if k in r})
           accepted_status=[]
+          safe_fields=('id','marketSlug','state','status','cumQuantity','filledQuantity','avgPx','quantity','price','rejectReason','rejectionReason','reason','message','error','statusMessage','tif','participateDontInitiate','outcomeSide','action')
           for a in accepted:
               try:
                   resp=t.request('GET','/v1/order/'+str(a['order_id']))
                   o=resp.get('order') if isinstance(resp,dict) and isinstance(resp.get('order'),dict) else resp
-                  accepted_status.append({'order_id':a['order_id'],'http_get':'ok','state':o.get('state') or o.get('status'),'cumQuantity':o.get('cumQuantity') or o.get('filledQuantity')})
+                  details={k:o.get(k) for k in safe_fields if isinstance(o,dict) and k in o}
+                  accepted_status.append({'order_id':a['order_id'],'http_get':'ok','keys':sorted(o.keys()) if isinstance(o,dict) else [],'details':details})
               except Exception as exc:
                   accepted_status.append({'order_id':a['order_id'],'http_get':'error:'+type(exc).__name__})
           print(json.dumps({'status':'PMUS_Q1_POST_AUDIT_OK','slug':slug,'open_orders_total':len(orders),'target_open_orders':target_open,'target_position':target_pos,'intents':intents,'accepted':accepted,'accepted_status':accepted_status,'recent_ledger':rows,'order_entry':False},separators=(',',':')))
