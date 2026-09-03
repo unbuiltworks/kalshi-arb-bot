@@ -303,3 +303,151 @@ def test_isolation_from_read_only_workers():
     src = inspect.getsource(ex)
     assert "pmus_ws_evidence_recorder" not in src
     assert "pmus_sports_collector" not in src
+
+
+# ------- current live REST schema + first-probe hardening (5518048857/-178633) -------
+
+def _current_schema_script(first_price="0.4500"):
+    """Fixtures in the CURRENT documented/observed live shapes."""
+    polls = {"n": 0}
+
+    def first_order(_calls):
+        polls["n"] += 1
+        if polls["n"] >= 2:
+            return {"order": {"state": "ORDER_STATE_FILLED",
+                              "cumQuantity": "1", "avgPx": first_price}}
+        return {"order": {"state": "ORDER_STATE_OPEN", "cumQuantity": "0"}}
+
+    return {
+        "GET /v1/account/balances": {           # LIST shape
+            "balances": [{"currency": "USD",
+                          "buyingPower": {"value": "39.50"}}]},
+        "GET /v1/portfolio/positions": {"positions": {}},   # MAP shape
+        "GET /v1/orders/open": {"orders": []},
+        f"GET /v1/markets/{SLUG}/bbo": {"marketData": {
+            "bestBid": {"value": "0.4500"},
+            "bestAsk": {"value": "0.4550"}}},
+        "POST /v1/order/preview": {},
+        "POST /v1/orders": {"id": "C8N87XC00MVV"},          # top-level id
+        "GET /v1/order/C8N87XC00MVV": first_order,
+        "POST /v1/orders/open/cancel": {},
+    }
+
+
+def test_current_schema_shapes_parse_end_to_end(env):
+    arm(env)
+    script = _current_schema_script()
+
+    def orders_post(calls):
+        n = sum(1 for m, p, _ in calls if m == "POST" and p == "/v1/orders")
+        return {"id": "C8N87XC00MVV"} if n == 1 else {"id": "ord-2"}
+    comp_polls = {"n": 0}
+
+    def comp_order(_calls):
+        comp_polls["n"] += 1
+        if comp_polls["n"] >= 2:
+            return {"order": {"state": "ORDER_STATE_FILLED",
+                              "cumQuantity": "1", "avgPx": "0.5400"}}
+        return {"order": {"state": "ORDER_STATE_OPEN", "cumQuantity": "0"}}
+    script["POST /v1/orders"] = orders_post
+    script["GET /v1/order/ord-2"] = comp_order
+    t = FakeTransport(script)
+    clock, slp = _fast()
+    rep = ex.run_campaign(t, clock=clock, sleep=slp)
+    assert rep["status"] == "MATCHED" and rep["pair_cost"] == "0.9900"
+
+
+def test_positions_map_keyed_by_slug_blocks_preflight(env):
+    arm(env)
+    script = _current_schema_script()
+    script["GET /v1/portfolio/positions"] = {
+        "positions": {SLUG: {"quantity": "2"}}}
+    t = FakeTransport(script)
+    clock, slp = _fast()
+    rep = ex.run_campaign(t, clock=clock, sleep=slp)
+    assert rep["status"] == "PREFLIGHT_FAILED"
+    assert rep["reason"] == "existing_position_in_target_market"
+
+
+def test_rejected_zero_fill_is_terminal_not_halt(env):
+    """First live probe shape: ORDER_STATE_REJECTED, cumQuantity=0,
+    avgPx=0.0000 -> REJECTED_NO_FILL terminal, exit-clean, no replay."""
+    arm(env)
+    script = _current_schema_script()
+    script["GET /v1/order/C8N87XC00MVV"] = {"order": {
+        "state": "ORDER_STATE_REJECTED", "cumQuantity": "0",
+        "avgPx": "0.0000"}}
+    t = FakeTransport(script)
+    clock, slp = _fast()
+    rep = ex.run_campaign(t, clock=clock, sleep=slp)
+    assert rep["status"] == "REJECTED_NO_FILL" and rep["stage"] == "first_leg"
+    posts = [p for m, p, _ in t.calls if m == "POST" and p == "/v1/orders"]
+    assert len(posts) == 1                     # mutation NEVER replayed
+
+
+def test_fresh_ask_check_refuses_would_cross_before_post(env):
+    """Post-only race guard: BBO moves so the join meets the ask between
+    preview and POST -> local refusal, zero mutations."""
+    arm(env)
+    script = _current_schema_script()
+    bbo_calls = {"n": 0}
+
+    def moving_bbo(_calls):
+        bbo_calls["n"] += 1
+        if bbo_calls["n"] <= 2:                # preflight + entry reads
+            return {"marketData": {"bestBid": {"value": "0.4750"},
+                                   "bestAsk": {"value": "0.4800"}}}
+        return {"marketData": {"bestBid": {"value": "0.4700"},
+                               "bestAsk": {"value": "0.4750"}}}  # ask==join
+    script[f"GET /v1/markets/{SLUG}/bbo"] = moving_bbo
+    t = FakeTransport(script)
+    clock, slp = _fast()
+    rep = ex.run_campaign(t, clock=clock, sleep=slp)
+    assert rep["status"] == "STALE_PRICE_REFUSED"
+    assert not any(p == "/v1/orders" and m == "POST" for m, p, _ in t.calls)
+
+
+def test_transient_404_on_status_retried_get_only(env):
+    """Eventual consistency after an accepted id: bounded GET retries,
+    never a POST replay."""
+    arm(env)
+    script = _current_schema_script()
+    polls = {"n": 0}
+
+    class E404(Exception):
+        code = 404
+
+    def flaky_status(_calls):
+        polls["n"] += 1
+        if polls["n"] <= 2:
+            raise E404("transient")
+        return {"order": {"state": "ORDER_STATE_FILLED",
+                          "cumQuantity": "1", "avgPx": "0.4500"}}
+    script["GET /v1/order/C8N87XC00MVV"] = flaky_status
+    script["POST /v1/orders"] = {"id": "C8N87XC00MVV"}
+    t = FakeTransport(script)
+    clock, slp = _fast()
+    rep = ex.run_campaign(t, clock=clock, sleep=slp)
+    # first leg filled after retries; complement path proceeds (hold ok)
+    assert rep["status"] in ("MATCHED", "ONE_SIDED_HOLD")
+    posts = [p for m, p, _ in t.calls if m == "POST" and p == "/v1/orders"]
+    assert len(posts) <= 2                     # one per leg, no replays
+    assert polls["n"] >= 3                     # the GET actually retried
+
+
+def test_cancel_bodies_use_current_schema_keys(env):
+    arm(env)
+    script = _current_schema_script()
+    script["GET /v1/order/C8N87XC00MVV"] = {"order": {
+        "state": "ORDER_STATE_OPEN", "cumQuantity": "0"}}
+    script["POST /v1/order/C8N87XC00MVV/cancel"] = {}
+    t = FakeTransport(script)
+    clock, slp = _fast()
+    env.setenv(ex.FIRST_WAIT_ENV, "20")
+    rep = ex.run_campaign(t, clock=clock, sleep=slp)
+    assert rep["status"] == "NO_FILL"
+    exact = [b for m, p, b in t.calls
+             if p == "/v1/order/C8N87XC00MVV/cancel"]
+    assert exact and exact[0] == {"marketSlug": SLUG}
+    deadman = [b for m, p, b in t.calls if p == "/v1/orders/open/cancel"]
+    assert deadman and deadman[-1] == {"slugs": [SLUG]}

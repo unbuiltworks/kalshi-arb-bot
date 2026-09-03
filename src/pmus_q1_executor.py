@@ -222,22 +222,69 @@ class Halt(RuntimeError):
     pass
 
 
-def _order_status(t: Transport, order_id: str) -> dict:
-    resp = t.request("GET", f"/v1/order/{order_id}")
+class StaleRefuse(RuntimeError):
+    """Local refusal: the intended maker price would cross the live book
+    (post-only race observed on order C8N87XC00MVV). Never a venue error."""
+
+
+TRANSIENT_CODES = {404, 429, 500, 502, 503, 504}
+GET_RETRY_MAX = 5
+GET_RETRY_SLEEP_S = 1.0
+
+
+def _get_with_retry(t: Transport, path: str, base: str = API,
+                    sleep=time.sleep) -> Any:
+    """Bounded retry for READ-ONLY GETs on transient 404/429/5xx
+    (eventual consistency after an accepted order id, rate limiting).
+    Mutations are NEVER retried or replayed anywhere in this module."""
+    last: Optional[Exception] = None
+    for attempt in range(GET_RETRY_MAX):
+        try:
+            return t.request("GET", path, base=base)
+        except Exception as exc:
+            code = getattr(exc, "code", None)
+            if code not in TRANSIENT_CODES:
+                raise
+            last = exc
+            sleep(GET_RETRY_SLEEP_S)
+    raise Halt(f"GET_RETRIES_EXHAUSTED:{path}:{last}")
+
+
+def _order_status(t: Transport, order_id: str, sleep=time.sleep) -> dict:
+    resp = _get_with_retry(t, f"/v1/order/{order_id}", sleep=sleep)
     return resp.get("order") or resp
+
+
+def order_state_str(order: Mapping[str, Any]) -> str:
+    return str(order.get("state") or order.get("status")
+               or order.get("orderStatus") or "").upper()
+
+
+def _filled_qty(order: Mapping[str, Any]) -> D:
+    for key in ("cumQuantity", "filledQuantity", "cumQty"):
+        v = order.get(key)
+        if v is not None:
+            try:
+                return D(str(v))
+            except Exception:
+                continue
+    return D("0")
+
+
+def terminal_rejection(order: Mapping[str, Any]) -> bool:
+    """Authoritative REJECTED with zero fill is a TERMINAL no-fill
+    outcome (first live probe: ORDER_STATE_REJECTED, cumQuantity=0,
+    avgPx=0.0000) — never a HALT, never retried."""
+    return "REJECT" in order_state_str(order) and _filled_qty(order) == 0
 
 
 def authoritative_fill(order: Mapping[str, Any]) -> Optional[dict]:
     """Filled state from the venue's own order record. Returns None while
     unfilled; raises Halt when the record says filled but the execution
     price cannot be determined — a fill is never assumed or guessed."""
-    status = str(order.get("status") or order.get("orderStatus") or "")
-    filled_qty = order.get("filledQuantity") or order.get("cumQty") or 0
-    try:
-        filled = D(str(filled_qty))
-    except Exception:
-        filled = D("0")
-    if filled < QTY and "FILLED" not in status.upper():
+    status = order_state_str(order)
+    filled = _filled_qty(order)
+    if filled < QTY and "FILLED" not in status:
         return None
     for key in ("avgPx", "avgPrice", "averagePrice", "avgExecutionPrice"):
         v = order.get(key)
@@ -245,16 +292,36 @@ def authoritative_fill(order: Mapping[str, Any]) -> Optional[dict]:
             v = v.get("value")
         if v is not None:
             try:
-                return {"price": D(str(v)), "qty": filled or D(str(QTY))}
+                px = D(str(v))
             except Exception:
                 continue
+            if px > 0:
+                return {"price": px, "qty": filled or D(str(QTY))}
     raise Halt("AMBIGUOUS_FILL_PRICE: order reports filled but no "
                "parseable average execution price")
 
 
+def fresh_bbo(t: Transport, slug: str, sleep=time.sleep) -> dict:
+    md = _get_with_retry(t, f"/v1/markets/{slug}/bbo", base=GATEWAY,
+                         sleep=sleep).get("marketData") or {}
+    return {"bid": (md.get("bestBid") or {}).get("value"),
+            "ask": (md.get("bestAsk") or {}).get("value")}
+
+
+def would_cross(outcome_side: str, price: D, bbo: Mapping[str, Any]) -> bool:
+    """Post-only race guard: a maker BUY that meets/crosses the live
+    opposite quote will be rejected by PDI — refuse locally instead.
+    BUY YES at p crosses when p >= YES ask; BUY NO at p_no crosses when
+    p_no >= NO ask = 1 - YES bid."""
+    bid, ask = bbo.get("bid"), bbo.get("ask")
+    if outcome_side == "OUTCOME_SIDE_YES":
+        return bool(ask) and D(str(price)) >= D(str(ask))
+    return bool(bid) and D(str(price)) >= ONE - D(str(bid))
+
+
 def place_limit_buy(t: Transport, slug: str, outcome_side: str,
-                    price: D, stage: str) -> str:
-    """Preview-first, post-only, durable-intent, q=1."""
+                    price: D, stage: str, sleep=time.sleep) -> str:
+    """Preview-first, fresh-BBO-guarded, post-only, durable-intent, q=1."""
     body = {"marketSlug": slug, "type": "ORDER_TYPE_LIMIT",
             "price": {"value": str(price)}, "quantity": QTY,
             "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
@@ -265,12 +332,16 @@ def place_limit_buy(t: Transport, slug: str, outcome_side: str,
     preview = t.request("POST", "/v1/order/preview", body)
     if preview.get("error") or preview.get("warnings"):
         raise Halt(f"PREVIEW_REJECTED:{stage}")
+    # fresh BBO check IMMEDIATELY before the mutation: a maker price that
+    # meets the live opposite quote is refused locally, never submitted
+    if would_cross(outcome_side, price, fresh_bbo(t, slug, sleep=sleep)):
+        raise StaleRefuse(f"WOULD_CROSS:{stage}:{price}")
     persist_intent({"stage": stage, "slug": slug, "side": outcome_side,
                     "price": str(price), "qty": QTY,
                     "submitted_utc": datetime.now(timezone.utc).isoformat()})
     resp = t.request("POST", "/v1/orders", body)
-    order_id = str(resp.get("orderId") or (resp.get("order") or {}).get("id")
-                   or "")
+    order_id = str(resp.get("id") or resp.get("orderId")
+                   or (resp.get("order") or {}).get("id") or "")
     if not order_id:
         raise Halt(f"NO_ORDER_ID:{stage}")
     persist_intent({"stage": stage + ":accepted", "order_id": order_id})
@@ -280,67 +351,111 @@ def place_limit_buy(t: Transport, slug: str, outcome_side: str,
     return order_id
 
 
-def cancel_exact(t: Transport, order_id: str) -> bool:
-    t.request("POST", f"/v1/order/{order_id}/cancel", {})
-    order = _order_status(t, order_id)
-    status = str(order.get("status") or "").upper()
-    return "CANCEL" in status or "FILLED" not in status
+def cancel_exact(t: Transport, order_id: str, slug: str,
+                 sleep=time.sleep) -> bool:
+    t.request("POST", f"/v1/order/{order_id}/cancel",
+              {"marketSlug": slug})
+    order = _order_status(t, order_id, sleep=sleep)
+    status = order_state_str(order)
+    return "CANCEL" in status or "REJECT" in status or \
+        "FILLED" not in status
 
 
 def cancel_all_deadman(t: Transport, slug: str) -> None:
     try:
-        t.request("POST", "/v1/orders/open/cancel",
-                  {"marketSlugs": [slug]})
+        t.request("POST", "/v1/orders/open/cancel", {"slugs": [slug]})
     except Exception as exc:
         ledger_append({"kind": "error", "stage": "deadman",
                        "err": str(exc)[:120]})
 
 
 def wait_for_fill(t: Transport, order_id: str, until: float,
-                  clock=time.monotonic, sleep=time.sleep) -> Optional[dict]:
+                  clock=time.monotonic, sleep=time.sleep) -> dict:
+    """-> {"fill": {...}} | {"terminal": "REJECTED_NO_FILL"} |
+    {"timeout": True}. GET-only; transient 404/429/5xx retried bounded;
+    the mutation is never replayed on status ambiguity."""
     while clock() < until:
-        fill = authoritative_fill(_order_status(t, order_id))
+        order = _order_status(t, order_id, sleep=sleep)
+        if terminal_rejection(order):
+            return {"terminal": "REJECTED_NO_FILL"}
+        fill = authoritative_fill(order)
         if fill is not None:
-            return fill
+            return {"fill": fill}
         sleep(POLL_S)
-    return None
+    return {"timeout": True}
 
 
 # ------------------------- preflight -------------------------
 
-def preflight(t: Transport, slug: str) -> Optional[str]:
-    """Read-auth preflight; returns a failure reason or None when clean."""
-    bal = t.request("GET", "/v1/account/balances")
-    power = None
-    for key in ("buyingPower", "availableBalance", "cashBalance"):
-        v = bal.get(key) or (bal.get("balances") or {}).get(key) \
-            if isinstance(bal.get("balances"), Mapping) else bal.get(key)
-        if isinstance(v, Mapping):
-            v = v.get("value")
-        if v is not None:
-            try:
-                power = D(str(v))
-                break
-            except Exception:
-                continue
+def _buying_power(bal: Mapping[str, Any]) -> Optional[D]:
+    """Current schema: /v1/account/balances returns `balances` as a LIST
+    of entries carrying buyingPower; older mapping/top-level shapes are
+    still accepted."""
+    entries: list = []
+    raw = bal.get("balances")
+    if isinstance(raw, list):
+        entries.extend(raw)
+    elif isinstance(raw, Mapping):
+        entries.append(raw)
+    entries.append(bal)
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
+        for key in ("buyingPower", "availableBalance", "cashBalance"):
+            v = entry.get(key)
+            if isinstance(v, Mapping):
+                v = v.get("value")
+            if v is not None:
+                try:
+                    return D(str(v))
+                except Exception:
+                    continue
+    return None
+
+
+def _position_qty(pos: Mapping[str, Any], slug: str) -> D:
+    """Current schema: `positions` is a MAP keyed by market slug; list
+    shape still accepted."""
+    raw = pos.get("positions")
+    rows: list = []
+    if isinstance(raw, Mapping):
+        entry = raw.get(slug)
+        if entry is not None:
+            rows.append(entry if isinstance(entry, Mapping)
+                        else {"quantity": entry})
+    elif isinstance(raw, list):
+        rows.extend(p for p in raw if p.get("marketSlug") == slug)
+    for p in rows:
+        for key in ("quantity", "positionQuantity", "qty"):
+            v = p.get(key)
+            if v is not None:
+                try:
+                    return D(str(v))
+                except Exception:
+                    continue
+    return D("0")
+
+
+def preflight(t: Transport, slug: str, sleep=time.sleep) -> Optional[str]:
+    """Read-auth preflight; returns a failure reason or None when clean.
+    GET-only with bounded transient retry; no mutation here ever."""
+    bal = _get_with_retry(t, "/v1/account/balances", sleep=sleep)
+    power = _buying_power(bal)
     if power is None or power < MIN_BUYING_POWER:
         return f"buying_power_unverified_or_low:{power}"
-    pos = t.request("GET", "/v1/portfolio/positions")
-    for p in pos.get("positions") or []:
-        if p.get("marketSlug") == slug and \
-                D(str(p.get("quantity") or 0)) != 0:
-            return "existing_position_in_target_market"
-    open_orders = t.request("GET", "/v1/orders/open")
-    if open_orders.get("orders"):
+    pos = _get_with_retry(t, "/v1/portfolio/positions", sleep=sleep)
+    if _position_qty(pos, slug) != 0:
+        return "existing_position_in_target_market"
+    open_orders = _get_with_retry(t, "/v1/orders/open", sleep=sleep)
+    raw_open = open_orders.get("orders")
+    if raw_open and (list(raw_open) if not isinstance(raw_open, Mapping)
+                     else list(raw_open.values())):
         return "open_orders_present"
-    bbo = t.request("GET", f"/v1/markets/{slug}/bbo",
-                    base=GATEWAY).get("marketData") or {}
-    bid = (bbo.get("bestBid") or {}).get("value")
-    ask = (bbo.get("bestAsk") or {}).get("value")
-    if not bid or not ask:
+    bbo = fresh_bbo(t, slug, sleep=sleep)
+    if not bbo.get("bid") or not bbo.get("ask"):
         return "bbo_not_two_sided"
-    if not entry_ok(D(str(bid))):
-        return f"entry_out_of_band:{bid}"
+    if not entry_ok(D(str(bbo["bid"]))):
+        return f"entry_out_of_band:{bbo['bid']}"
     return None
 
 
@@ -369,13 +484,12 @@ def run_campaign(t: Optional[Transport] = None,
     start = clock()
     stop_at = start + deadline_s
     try:
-        reason = preflight(t, slug)
+        reason = preflight(t, slug, sleep=sleep)
         if reason:
             return {**report, "status": "PREFLIGHT_FAILED",
                     "reason": reason}
-        bbo = t.request("GET", f"/v1/markets/{slug}/bbo",
-                        base=GATEWAY).get("marketData") or {}
-        bid = D(str((bbo.get("bestBid") or {}).get("value")))
+        bbo = fresh_bbo(t, slug, sleep=sleep)
+        bid = D(str(bbo["bid"]))
         if not entry_ok(bid):
             return {**report, "status": "ENTRY_OUT_OF_BAND",
                     "bid": str(bid)}
@@ -383,13 +497,22 @@ def run_campaign(t: Optional[Transport] = None,
         # <= 0.80 (+fee) via entry_ok, matched pair <= 0.99 via
         # complement_bound, one-sided worst case = first leg cost alone
         first_id = place_limit_buy(t, slug, "OUTCOME_SIDE_YES", bid,
-                                   "first_leg")
-        fill1 = wait_for_fill(t, first_id,
-                              min(start + first_wait, stop_at),
-                              clock, sleep)
-        if fill1 is None:
-            ok = cancel_exact(t, first_id)
-            late = authoritative_fill(_order_status(t, first_id))
+                                   "first_leg", sleep=sleep)
+        out1 = wait_for_fill(t, first_id,
+                             min(start + first_wait, stop_at),
+                             clock, sleep)
+        if out1.get("terminal"):
+            return {**report, "status": "REJECTED_NO_FILL",
+                    "stage": "first_leg", "order_id": first_id,
+                    "note": "authoritative REJECTED with zero fill — "
+                            "terminal, not a halt; mutation never replayed"}
+        if out1.get("timeout"):
+            ok = cancel_exact(t, first_id, slug, sleep=sleep)
+            post = _order_status(t, first_id, sleep=sleep)
+            if terminal_rejection(post):
+                return {**report, "status": "REJECTED_NO_FILL",
+                        "stage": "first_leg", "order_id": first_id}
+            late = authoritative_fill(post)
             if late is not None:
                 ledger_append({"kind": "filled", "stage": "first_leg_late",
                                "price": str(late["price"])})
@@ -400,7 +523,7 @@ def run_campaign(t: Optional[Transport] = None,
                         os.getenv(RESIDUAL_ACTION_ENV, "hold")}
             return {**report, "status": "NO_FILL",
                     "cancel_verified": ok}
-        first_cost = fill1["price"]
+        first_cost = out1["fill"]["price"]
         ledger_append({"kind": "filled", "stage": "first_leg",
                        "price": str(first_cost),
                        "maker_rebate_separate":
@@ -413,12 +536,29 @@ def run_campaign(t: Optional[Transport] = None,
                     "residual": RESIDUAL_CAP,
                     "residual_action":
                     os.getenv(RESIDUAL_ACTION_ENV, "hold")}
-        comp_id = place_limit_buy(t, slug, "OUTCOME_SIDE_NO", comp,
-                                  "complement")
-        fill2 = wait_for_fill(t, comp_id, stop_at, clock, sleep)
+        try:
+            comp_id = place_limit_buy(t, slug, "OUTCOME_SIDE_NO", comp,
+                                      "complement", sleep=sleep)
+        except StaleRefuse:
+            return {**report, "status": "ONE_SIDED_HOLD",
+                    "reason": "complement_would_cross_refused_locally",
+                    "first_cost": str(first_cost),
+                    "residual": RESIDUAL_CAP,
+                    "residual_action":
+                    os.getenv(RESIDUAL_ACTION_ENV, "hold")}
+        out2 = wait_for_fill(t, comp_id, stop_at, clock, sleep)
+        fill2 = out2.get("fill")
         if fill2 is None:
-            ok = cancel_exact(t, comp_id)
-            fill2 = authoritative_fill(_order_status(t, comp_id))
+            if out2.get("terminal"):
+                return {**report, "status": "ONE_SIDED_HOLD",
+                        "reason": "complement_rejected_no_fill",
+                        "first_cost": str(first_cost),
+                        "residual": RESIDUAL_CAP,
+                        "residual_action":
+                        os.getenv(RESIDUAL_ACTION_ENV, "hold")}
+            ok = cancel_exact(t, comp_id, slug, sleep=sleep)
+            fill2 = authoritative_fill(_order_status(t, comp_id,
+                                                     sleep=sleep))
             if fill2 is None:
                 return {**report, "status": "ONE_SIDED_HOLD",
                         "first_cost": str(first_cost),
@@ -442,6 +582,12 @@ def run_campaign(t: Optional[Transport] = None,
                     + maker_rebate(fill2["price"])),
                 "settlement": "PENDING — realized only after settlement "
                               "rows reconcile"}
+    except StaleRefuse as stale:
+        ledger_append({"kind": "stale_refused", "reason": str(stale)})
+        return {**report, "status": "STALE_PRICE_REFUSED",
+                "reason": str(stale),
+                "note": "maker price met the live opposite quote; refused "
+                        "locally before submission (post-only race guard)"}
     except Halt as halt:
         ledger_append({"kind": "halt", "reason": str(halt)})
         return {**report, "status": "HALT", "reason": str(halt)}
@@ -453,7 +599,9 @@ def main() -> int:
     report = run_campaign()
     print(json.dumps(report, indent=1, default=str))
     ledger_append({"kind": "campaign_report", **report})
-    return 0 if report["status"] in ("MATCHED", "NO_FILL", "DISARMED") else 1
+    return 0 if report["status"] in ("MATCHED", "NO_FILL", "DISARMED",
+                                     "REJECTED_NO_FILL",
+                                     "STALE_PRICE_REFUSED") else 1
 
 
 if __name__ == "__main__":
