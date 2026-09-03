@@ -14,7 +14,7 @@ env:
   AWS_REGION: us-east-1
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
-  SPRING_REF: 55d42b60a5062489b6d7f1150ac8b65b0cd23e08
+  SPRING_REF: 61d84039b8b7ee4b46733bc7fc07eccd3450cae8
 
 jobs:
   stage:
@@ -35,6 +35,9 @@ jobs:
           test -f src/pmus_spring_l5_session.py
           test -f src/pmus_micro_executor.py
           test -f src/pmus_l5_persistence_v2.py
+          test -f src/pmus_ws_evidence_recorder.py
+          test -f src/pmus_sports_collector.py
+          test -f src/pmus_status_report.py
           test -f analysis/l5/l5_action_model_v2.json
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -50,6 +53,9 @@ jobs:
             src/pmus_micro_executor.py
             src/pmus_l5_persistence_v2.py
             src/pmus_spring_l5_session.py
+            src/pmus_ws_evidence_recorder.py
+            src/pmus_sports_collector.py
+            src/pmus_status_report.py
             src/polymarket_l5/__init__.py
             src/polymarket_l5/action_model.py
             src/polymarket_l5/config.py
@@ -73,7 +79,10 @@ jobs:
             /home/ssm-user/l5-pmus-engine-venv/bin/python -m py_compile \
             "\$APP/src/pmus_micro_executor.py" \
             "\$APP/src/pmus_l5_persistence_v2.py" \
-            "\$APP/src/pmus_spring_l5_session.py"
+            "\$APP/src/pmus_spring_l5_session.py" \
+            "\$APP/src/pmus_ws_evidence_recorder.py" \
+            "\$APP/src/pmus_sports_collector.py" \
+            "\$APP/src/pmus_status_report.py"
           OUT=\$(sudo -u ssm-user env PYTHONPATH="\$APP" PMUS_Q1_STATE_DIR="\$STATE" \
             PMUS_Q1_LIVE=NO PMUS_MICRO_LIVE=NO PMUS_SPRING_LIVE=NO \
             /home/ssm-user/l5-pmus-engine-venv/bin/python -m src.pmus_spring_l5_session)
@@ -90,7 +99,10 @@ jobs:
           assert not m.micro_armed()
           assert not s.armed()
           assert s.SPRING_PAIR_TARGET == s.D('0.96')
-          print('PMUS_SPRING_STAGE_UNIT_OK model_v2=true spring_armed=false micro_armed=false q1_unchanged=true')
+          inv=s.Inventory()
+          inv.record(True, s.D('0.50'), s.D('0.01'), 'open')
+          assert inv.behavioral_residual() == 1.0
+          print('PMUS_SPRING_STAGE_UNIT_OK model_v2=true spring_armed=false micro_armed=false q1_unchanged=true action_unit_adapter=true')
           PY
           test "\$(systemctl is-active l5-pmus-recorder.service)" = active
           test "\$(systemctl is-active l5-pmus-supervisor.service)" = active
