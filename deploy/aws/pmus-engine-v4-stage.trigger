@@ -1,3 +1,3 @@
-DEPLOY_ID=pmus-engine-v4-live-reconcile-fix-20260903-0219Z
+DEPLOY_ID=pmus-engine-v4-full-sports-props-20260903-0241Z
 MODE=DISARMED_24X7
-ENGINE_REF=c7ce685bdbf97f0fa9a3185c3c9c16f022cd4c70
+ENGINE_REF=deecb0493de29e06aed6aff4dbb21ddb2560a117
