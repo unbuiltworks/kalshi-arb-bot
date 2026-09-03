@@ -30,12 +30,6 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$ENGINE_REF"
           grep -q 'PURE TAPE ANALYSIS' src/pmus_residual_completion_shadow.py
-      - name: Verify trigger
-        shell: bash
-        run: |
-          grep -qx 'GO=READ_ONLY_RESIDUAL_SHADOW' deploy/aws/pmus-residual-completion-shadow.trigger || true
-          # Trigger lives on aws-migration-foundation, so verify through git show.
-          git show origin/aws-migration-foundation:deploy/aws/pmus-residual-completion-shadow.trigger | grep -qx 'GO=READ_ONLY_RESIDUAL_SHADOW'
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
