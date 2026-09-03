@@ -3,6 +3,12 @@ name: Deploy to Railway
 on:
   push:
     branches: [main]
+    paths-ignore:
+      # Read-only L5 ops/tape workflow maintenance must never trigger the
+      # generic trading-service deploy. These workflows have their own
+      # isolated execution and no order transport.
+      - '.github/workflows/l5-ops-24x7.yml'
+      - '.github/workflows/kalshi-l5-tape-5m.yml'
 
 jobs:
   deploy:
