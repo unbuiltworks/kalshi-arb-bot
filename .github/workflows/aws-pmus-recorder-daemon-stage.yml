@@ -34,6 +34,7 @@ jobs:
           set -Eeuo pipefail
           REC_B64=$(base64 -w0 src/pmus_ws_evidence_recorder.py)
           COL_B64=$(base64 -w0 src/pmus_sports_collector.py)
+          REP_B64=$(base64 -w0 src/pmus_status_report.py)
           REMOTE=$(cat <<EOF
           set -Eeuo pipefail
           APP=/home/ssm-user/l5-pmus-ws
@@ -44,9 +45,10 @@ jobs:
           install -d -o ssm-user -g ssm-user "\$APP/src" "\$STATE"
           printf '%s' '$REC_B64' | base64 -d > "\$APP/src/pmus_ws_evidence_recorder.py"
           printf '%s' '$COL_B64' | base64 -d > "\$APP/src/pmus_sports_collector.py"
+          printf '%s' '$REP_B64' | base64 -d > "\$APP/src/pmus_status_report.py"
           touch "\$APP/src/__init__.py"
           chown -R ssm-user:ssm-user "\$APP" "\$STATE"
-          chmod 600 "\$APP/src/pmus_ws_evidence_recorder.py" "\$APP/src/pmus_sports_collector.py"
+          chmod 600 "\$APP/src/"*.py
           if [[ ! -x "\$VENV/bin/python" ]]; then
             sudo -u ssm-user python3 -m venv "\$VENV"
           fi
@@ -87,7 +89,7 @@ jobs:
           echo PMUS_AWS_RECORDER_REF=${RECORDER_REF}
           echo PMUS_AWS_RECORDER_READ_ONLY=true
           echo PMUS_AWS_RECORDER_STATE=\$STATE
-          journalctl -u l5-pmus-recorder.service --no-pager -n 12 | sed -E 's/(X-PM-[A-Za-z-]+)[=:][^ ,}]+/\1=REDACTED/g'
+          journalctl -u l5-pmus-recorder.service --no-pager -n 20 | sed -E 's/(X-PM-[A-Za-z-]+)[=:][^ ,}]+/\1=REDACTED/g'
           EOF
           )
           ENC=$(printf '%s' "$REMOTE" | base64 -w0)
