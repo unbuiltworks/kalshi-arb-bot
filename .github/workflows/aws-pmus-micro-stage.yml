@@ -14,7 +14,7 @@ env:
   AWS_REGION: us-east-1
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
-  MICRO_REF: 94bd687bfedf23480cfaba50e9494801176d09a4
+  MICRO_REF: 6e0669c19fd20eec706a7df3db570c80c2f74016
 
 jobs:
   stage:
@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feature/l5-pmus-micro-live
+          ref: feature/l5-transfer-backtest
           fetch-depth: 1
       - name: Verify exact micro commit
         shell: bash
