@@ -18,6 +18,7 @@ FROM python:3.11-slim
 WORKDIR /app
 RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"
 COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
+COPY src/pmus_ws_evidence_recorder_enriched.py src/pmus_ws_evidence_recorder_enriched.py
 COPY src/pmus_sports_collector.py src/pmus_sports_collector.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
 COPY src/pmus_priority_queue.py src/pmus_priority_queue.py
@@ -43,4 +44,4 @@ ENV PMUS_SERVICE_ROLE=ws-recorder \
     PMUS_WS_MAX_MARKETS=40 \
     PYTHONUNBUFFERED=1
 
-CMD ["python3", "-m", "src.pmus_ws_evidence_recorder"]
+CMD ["python3", "-m", "src.pmus_ws_evidence_recorder_enriched"]
