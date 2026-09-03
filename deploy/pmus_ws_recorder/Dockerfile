@@ -19,6 +19,7 @@ WORKDIR /app
 RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"
 COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
 COPY src/pmus_ws_evidence_recorder_enriched.py src/pmus_ws_evidence_recorder_enriched.py
+COPY src/pmus_spring_shadow_replay.py src/pmus_spring_shadow_replay.py
 COPY src/pmus_l5_compute_allocator.py src/pmus_l5_compute_allocator.py
 COPY src/pmus_sports_collector.py src/pmus_sports_collector.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
