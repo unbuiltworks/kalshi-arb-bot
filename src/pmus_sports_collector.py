@@ -220,7 +220,12 @@ def _market_meta(m: Mapping[str, Any]) -> dict:
     market-agnostic); only known-present keys are copied."""
     meta = {}
     for key in ("name", "title", "type", "marketType", "sportsMarketTypeV2",
-                "category", "eventSlug", "event_slug"):
+                "category", "eventSlug", "event_slug",
+                # cheap pre-WS screening fields (issue #167 comment
+                # 5521333079): copied only when the venue actually served
+                # them — never guessed, never defaulted
+                "bestBidQuote", "bestAskQuote", "outcomePrices",
+                "volume", "volume24hr", "liquidity", "gameStartTime"):
         if m.get(key) is not None:
             meta[key] = m.get(key)
     return meta

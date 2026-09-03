@@ -17,11 +17,11 @@
    "qualifying_windows": 23,
    "qualifying_detected": 23,
    "time_to_observe_median_cycles": 1,
-   "q1_compatible_state_cycles_observed": 306,
-   "completion_evidence_cycles_captured": 223,
+   "q1_compatible_state_cycles_observed": 298,
+   "completion_evidence_cycles_captured": 215,
    "coverage_latency_median_cycles": 3.0,
    "coverage_latency_p95_cycles": 9.0,
-   "slot_utilization_pct": 52.1
+   "slot_utilization_pct": 52.0
   }
  ]
 }

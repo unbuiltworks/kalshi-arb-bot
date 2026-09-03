@@ -49,15 +49,75 @@ def _clamp01(x: float) -> float:
     return 0.0 if x < 0 else (1.0 if x > 1 else x)
 
 
+def _qnum(v) -> Optional[float]:
+    """Tolerant numeric from venue quote/price shapes ({value:..},
+    {price:..}, scalar). None when absent/unparseable — never guessed."""
+    if isinstance(v, Mapping):
+        v = v.get("value", v.get("price", v.get("px")))
+    try:
+        f = float(v)
+        return f if f == f else None
+    except (TypeError, ValueError):
+        return None
+
+
+def seed_components(target: Optional[Mapping[str, Any]]) -> dict:
+    """Cheap PRE-WS screening from discovery metadata (issue #167
+    comments 5521287107/5521333079): scores a never-observed market from
+    fields the venue actually served — public BBO/spread, volume/
+    activity, live/phase. Unknown stays None (neutral), never zero."""
+    comp: dict[str, Optional[float]] = {
+        "seed_spread_quality": None, "seed_activity": None,
+        "seed_live_phase": None,
+    }
+    if not target:
+        return comp
+    meta = target.get("market_meta") or {}
+    bid = _qnum(meta.get("bestBidQuote"))
+    ask = _qnum(meta.get("bestAskQuote"))
+    if bid is not None and ask is not None and ask >= bid:
+        comp["seed_spread_quality"] = _clamp01(1.0 - (ask - bid) / 0.05)
+    vol = _qnum(meta.get("volume24hr"))
+    if vol is None:
+        vol = _qnum(meta.get("volume"))
+    if vol is None:
+        vol = _qnum(meta.get("liquidity"))
+    if vol is not None:
+        comp["seed_activity"] = _clamp01(vol / 1000.0)
+    ev = target.get("event_state")
+    if isinstance(ev, Mapping) and "live" in ev:
+        comp["seed_live_phase"] = 1.0 if ev.get("live") else 0.2
+    return comp
+
+
+def seed_signature(target: Optional[Mapping[str, Any]]) -> tuple:
+    """Public-metadata fingerprint: a CHANGE in it on a cold/idle market
+    is a wake signal even before authenticated sampling."""
+    if not target:
+        return ()
+    meta = target.get("market_meta") or {}
+    return (_qnum(meta.get("bestBidQuote")), _qnum(meta.get("bestAskQuote")),
+            _qnum(meta.get("volume24hr")) or _qnum(meta.get("volume")))
+
+
 def score_market(s: Optional[Mapping[str, Any]], now: float,
-                 l5_info: Optional[Mapping[str, Any]] = None) -> dict:
-    """Bounded component scores from evidence already in recorder state.
+                 l5_info: Optional[Mapping[str, Any]] = None,
+                 target: Optional[Mapping[str, Any]] = None) -> dict:
+    """Bounded component scores. AUTHENTICATED evidence dominates: once a
+    market has been WS-observed, only authenticated components score it
+    and the seed components go None; a never-observed market scores from
+    the cheap discovery seed instead of sitting at None until sampled.
     None = missing (exposed, never treated as zero)."""
     comp: dict[str, Optional[float]] = {
         "trade_rate": None, "book_rate": None, "two_sided": None,
         "depth": None, "spread_quality": None, "tte_phase": None,
         "l5_suitability": None, "completion_prob": None,
+        "seed_spread_quality": None, "seed_activity": None,
+        "seed_live_phase": None,
     }
+    observed = bool(s and (s.get("book_updates") or s.get("trades")))
+    if not observed:
+        comp.update(seed_components(target))
     if s:
         trades = [t for t in s.get("trades", [])
                   if now - t.get("t", 0) <= 600]
@@ -110,12 +170,18 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
     cooldown = int(os.getenv(COOLDOWN_ENV, "2"))
     wake_trades = int(os.getenv(WAKE_TRADES_ENV, "3"))
 
-    slugs = list(dict.fromkeys(t["slug"] for t in targets if t.get("slug")))
+    target_by_slug: dict[str, Mapping[str, Any]] = {}
+    for t in targets:
+        if t.get("slug") and t["slug"] not in target_by_slug:
+            target_by_slug[t["slug"]] = t
+    slugs = list(target_by_slug)
     scored: dict[str, dict] = {}
     wakes: set[str] = set()
+    sigs: dict[str, tuple] = {}
     for slug in slugs:
         s = state.get(slug)
-        sc = score_market(s, now, (l5_infos or {}).get(slug))
+        sc = score_market(s, now, (l5_infos or {}).get(slug),
+                          target=target_by_slug.get(slug))
         scored[slug] = sc
         p = prev.get(slug) or {}
         n_trades = len((s or {}).get("trades", []))
@@ -123,6 +189,15 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
         # trades must promote rapidly, bypassing the cooldown
         if p.get("tier") in ("cold", "idle") and \
                 n_trades - int(p.get("trades_seen", 0)) >= wake_trades:
+            wakes.add(slug)
+        # public-metadata wake (issue #167 comment 5521287107): a CHANGE
+        # in the cheap discovery fingerprint on a cold/idle market lifts
+        # it before authenticated sampling ever reached it
+        sig = seed_signature(target_by_slug.get(slug))
+        sigs[slug] = sig
+        old_sig = p.get("seed_sig")
+        if p.get("tier") in ("cold", "idle") and old_sig is not None and \
+                tuple(old_sig) != sig and any(v is not None for v in sig):
             wakes.add(slug)
 
     ranked = sorted(slugs, key=lambda x: (
@@ -196,6 +271,7 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
         if slug in sub_set:
             p["last_obs"] = cycle
         p["trades_seen"] = len((state.get(slug) or {}).get("trades", []))
+        p["seed_sig"] = sigs.get(slug, ())
         new_prev[slug] = p
 
     l5_n = min(20, max(5, int(os.getenv(L5_ALLOC_ENV, "10"))))

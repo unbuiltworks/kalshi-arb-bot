@@ -118,6 +118,80 @@ def test_l5_state_allocation_cap_and_status_wiring():
     assert skipped                                       # some not allocated
 
 
+def _seeded_target(slug, bid=None, ask=None, vol=None, live=None):
+    meta = {}
+    if bid is not None:
+        meta["bestBidQuote"] = {"value": bid}
+    if ask is not None:
+        meta["bestAskQuote"] = {"value": ask}
+    if vol is not None:
+        meta["volume24hr"] = vol
+    t = {"slug": slug, "market_meta": meta}
+    if live is not None:
+        t["event_state"] = {"live": live}
+    return t
+
+
+def test_pre_ws_seed_ranks_never_observed_markets(monkeypatch):
+    """Issue #167 comment 5521333079: two never-WS-observed markets with
+    different discovery metadata — the stronger cheap-screen candidate
+    gets the earlier WARM/HOT seat; all-missing targets still age fairly
+    through cold sampling."""
+    now = time.time()
+    strong = _seeded_target("seed-strong", "0.50", "0.505", 800, live=True)
+    weak = _seeded_target("seed-weak", "0.30", "0.40", 5, live=False)
+    blanks = [{"slug": f"blank-{i:02d}"} for i in range(30)]
+    targets = [strong, weak] + blanks
+    sc_strong = pq.score_market(None, now, target=strong)
+    sc_weak = pq.score_market(None, now, target=weak)
+    assert sc_strong["score"] > sc_weak["score"] > 0
+    assert sc_strong["components"]["seed_spread_quality"] > 0.8
+    p = pq.plan(targets, {}, 8, 0, {}, now=now)
+    assert "seed-strong" in p["subscribe"]
+    r_strong = p["per_market"]["seed-strong"]["rank"]
+    r_weak = p["per_market"]["seed-weak"]["rank"]
+    assert r_strong < r_weak
+    # all-missing markets score None but are still coverable by aging
+    prev = p["state"]
+    seen: set = set()
+    for cycle in range(1, 30):
+        p = pq.plan(targets, {}, 8, cycle, prev, now=now)
+        prev = p["state"]
+        seen.update(p["subscribe"])
+    assert {b["slug"] for b in blanks} <= seen        # fairness preserved
+
+
+def test_authenticated_evidence_dominates_seed_once_observed():
+    now = time.time()
+    great_seed = _seeded_target("m", "0.50", "0.505", 900, live=True)
+    observed_poor = {"trades": [], "book_updates": 5,
+                     "both_sides_served": False, "bid": "0.10",
+                     "ask": "0.40", "bid_qty": "1", "ask_qty": "1"}
+    sc = pq.score_market(observed_poor, now, target=great_seed)
+    assert sc["components"]["seed_spread_quality"] is None   # seed dropped
+    assert sc["components"]["seed_activity"] is None
+    assert sc["components"]["book_rate"] is not None         # auth used
+    assert sc["score"] < 0.5
+
+
+def test_public_metadata_change_wakes_cold_market():
+    now = time.time()
+    sleeper = _seeded_target("pub-sleeper", "0.50", "0.52", 10)
+    busy = [{"slug": f"busy-{i:02d}"} for i in range(20)]
+    state = _mstate({f"busy-{i:02d}": 40 for i in range(20)}, now)
+    targets = busy + [sleeper]
+    prev: dict = {}
+    for cycle in range(3):
+        p = pq.plan(targets, state, 12, cycle, prev, now=now)
+        prev = p["state"]
+    assert prev["pub-sleeper"]["tier"] in ("cold", "idle")
+    # public BBO moves + volume jumps on the still-unobserved sleeper
+    woke = _seeded_target("pub-sleeper", "0.55", "0.555", 400)
+    p = pq.plan(busy + [woke], state, 12, 3, prev, now=now)
+    assert "pub-sleeper" in p["diagnostics"]["wake_promotions"]
+    assert "pub-sleeper" in p["subscribe"]
+
+
 def test_planner_is_pure_no_network_no_arming():
     src = Path(pq.__file__).read_text()
     for banned in ("urllib", "websockets", "requests", "Transport",
