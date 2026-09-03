@@ -151,12 +151,29 @@ def _event_state_summary(event: Mapping[str, Any]) -> dict:
             "period": st.get("period") if isinstance(st, Mapping) else None}
 
 
+PRIMARY_MARKET_PREFIXES = ("aec-", "a5c-")   # labeling ONLY, never admission
+
+
+def _market_meta(m: Mapping[str, Any]) -> dict:
+    """Tolerant market metadata (kept so the L5 engine stays
+    market-agnostic); only known-present keys are copied."""
+    meta = {}
+    for key in ("name", "title", "type", "marketType", "category",
+                "eventSlug", "event_slug"):
+        if m.get(key) is not None:
+            meta[key] = m.get(key)
+    return meta
+
+
 def discover_targets(events_by_league: Mapping[str, list],
                      incentives: Mapping[str, Any],
                      prefixes: Iterable[str],
                      include_incentive_markets: bool = True) -> list[dict]:
-    """Pure selection: live league events' prefixed markets first (in
-    configured league order), then active-liquidity-program markets."""
+    """Pure selection: live league events' markets first (in configured
+    league order), then active-liquidity-program markets. An EMPTY
+    `prefixes` admits every market on live events — props included; a
+    non-empty tuple keeps the legacy prefix filter for callers that want
+    it. Prop labeling is diagnostic only and never excludes a market."""
     prefixes = tuple(prefixes)
     targets: list[dict] = []
     seen = set()
@@ -167,18 +184,27 @@ def discover_targets(events_by_league: Mapping[str, list],
             state = _event_state_summary(ev)
             for m in ev.get("markets", []) or []:
                 slug = m.get("slug", "")
-                if slug and slug.startswith(prefixes) and slug not in seen:
-                    seen.add(slug)
-                    targets.append({"slug": slug, "league": league,
-                                    "why": "live_league_market",
-                                    "event_state": state})
+                if not slug or slug in seen:
+                    continue
+                if prefixes and not slug.startswith(prefixes):
+                    continue
+                seen.add(slug)
+                targets.append({"slug": slug, "league": league,
+                                "why": "live_league_market",
+                                "event_state": state,
+                                "prop": not slug.startswith(
+                                    PRIMARY_MARKET_PREFIXES),
+                                "market_meta": _market_meta(m)})
     if include_incentive_markets:
         for slug in active_incentive_slugs(incentives):
             if slug not in seen:
                 seen.add(slug)
                 targets.append({"slug": slug, "league": "incentive_program",
                                 "why": "active_liquidity_program",
-                                "event_state": None})
+                                "event_state": None,
+                                "prop": not slug.startswith(
+                                    PRIMARY_MARKET_PREFIXES),
+                                "market_meta": {}})
     return targets
 
 

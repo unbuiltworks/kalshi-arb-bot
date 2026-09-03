@@ -26,9 +26,17 @@ Environment (names only; never commit values):
                         targets are discovered from the public gateway
                         (live league markets + active-incentive markets,
                         same rules as the keyless collector)
-  PMUS_WS_LEAGUES       discovery leagues (default "mlb")
-  PMUS_WS_MAX_MARKETS   subscription cap (default 24)
+  PMUS_WS_LEAGUES       discovery leagues (default "mlb"; "all" = every
+                        league the venue lists)
+  PMUS_WS_PREFIXES      optional slug-prefix filter; default EMPTY = every
+                        market on live events, props included
+  PMUS_WS_MAX_MARKETS   venue subscription cap (default 24). Above the
+                        cap a core of the most active observed markets is
+                        pinned and the remainder rotates every discovery
+                        cycle — nothing is silently excluded
   PMUS_WS_DISCOVERY_SECONDS  rediscovery interval (default 300)
+  PMUS_WS_HYDRATE_MAX_BYTES  restart hydration read bound per daily tape
+                        file (default 64MiB; 0 = unbounded)
 
 Fails closed with NO_CREDENTIALS (exit 2) when the two key envs are
 absent. Reconnects with exponential backoff (1..30s).
@@ -60,6 +68,9 @@ MARKETS_ENV = "PMUS_WS_MARKETS"
 LEAGUES_ENV = "PMUS_WS_LEAGUES"
 MAX_MARKETS_ENV = "PMUS_WS_MAX_MARKETS"
 DISCOVERY_ENV = "PMUS_WS_DISCOVERY_SECONDS"
+PREFIXES_ENV = "PMUS_WS_PREFIXES"          # default "" = ALL markets (props too)
+HYDRATE_BYTES_ENV = "PMUS_WS_HYDRATE_MAX_BYTES"
+DEFAULT_HYDRATE_BYTES = 64 * 1024 * 1024   # per daily tape file; 0 = unbounded
 
 SUB_MARKET_DATA = 1
 SUB_TRADE = 3
@@ -277,7 +288,8 @@ def _market_row(slug: str, s: Mapping[str, Any], now: float) -> dict:
 
 
 def build_status(state: Mapping[str, Any], connected: bool, msgs: int,
-                 subscribed: int, now: Optional[float] = None) -> dict:
+                 subscribed: int, now: Optional[float] = None,
+                 discovery: Optional[Mapping[str, Any]] = None) -> dict:
     now = now or time.time()
     # Gate every tracked market once per cycle: a Q1_GATE_CLEARED market
     # outside the five-row display must still be visible to the supervisor.
@@ -287,7 +299,7 @@ def build_status(state: Mapping[str, Any], connected: bool, msgs: int,
     eligible = sorted(
         (r for r in rows.values() if r.get("gate_status") == "Q1_GATE_CLEARED"),
         key=lambda r: (-int(r.get("trades_1h") or 0), str(r.get("slug"))))
-    return {
+    status = {
         "t": datetime.now(timezone.utc).isoformat(),
         "conn": "connected" if connected else "reconnecting",
         "auth": "ok" if connected else "unknown",
@@ -296,7 +308,11 @@ def build_status(state: Mapping[str, Any], connected: bool, msgs: int,
         "labeling": "authenticated stream; fills/economics THEORETICAL",
         "top_markets": [rows[slug] for slug, _ in tops],
         "eligible_markets": eligible,
+        "eligible_total": len(eligible),
     }
+    if discovery:
+        status["discovery"] = dict(discovery)
+    return status
 
 
 def has_credentials() -> bool:
@@ -357,12 +373,18 @@ def heartbeat_file(root: Path, **fields: Any) -> None:
     os.replace(tmp, root / "heartbeat.json")
 
 
-def discover_slugs() -> list[str]:
-    """Public-gateway discovery, same selection rules as the collector."""
+def discover_universe() -> list[dict]:
+    """Public-gateway discovery of the FULL live sports universe — props
+    included. No hardcoded market-type/prefix assumption is applied
+    unless the operator sets PMUS_WS_PREFIXES; market/event/league
+    metadata is preserved so the engine stays market-agnostic
+    (issue #167 comment 5519422461)."""
     explicit = [s.strip() for s in os.getenv(MARKETS_ENV, "").split(",")
                 if s.strip()]
     if explicit:
-        return explicit
+        return [{"slug": s, "league": None, "why": "explicit_env",
+                 "event_state": None, "prop": False, "market_meta": {}}
+                for s in explicit]
     from src import pmus_sports_collector as col
     leagues = [x.strip() for x in
                os.getenv(LEAGUES_ENV, "mlb").split(",") if x.strip()]
@@ -387,10 +409,135 @@ def discover_slugs() -> list[str]:
         incentives = col.http_get_json("/v1/incentives")
     except Exception:
         incentives = {}
-    targets = col.discover_targets(events_by_league, incentives,
-                                   ["aec-", "a5c-"], True)
+    prefixes = [p.strip() for p in
+                os.getenv(PREFIXES_ENV, "").split(",") if p.strip()]
+    return col.discover_targets(events_by_league, incentives, prefixes, True)
+
+
+def _activity_score(s: Mapping[str, Any], now: float) -> float:
+    """Observed-evidence priority for subscription planning: real recent
+    trades dominate, a genuinely served two-sided book and book flow
+    break ties. Unobserved markets score 0 and are covered by rotation."""
+    trades = sum(1 for t in s.get("trades", [])
+                 if now - t.get("t", 0) <= 3600.0)
+    return (trades * 10.0
+            + (5.0 if s.get("both_sides_served") else 0.0)
+            + min(float(s.get("book_updates", 0)), 500.0) / 100.0)
+
+
+def subscription_plan(targets: list[dict], state: Mapping[str, Any],
+                      cap: int, cycle: int,
+                      now: Optional[float] = None) -> dict:
+    """Deterministic full-coverage plan under the venue subscription cap.
+
+    <= cap markets: subscribe everything. Above cap: pin a CORE of the
+    most active observed markets and fill the rest of the cap with a
+    ROTATING window over the remainder, advancing every discovery cycle —
+    so no market (props included) is ever silently excluded; each is
+    observed within a bounded number of cycles. Never loosens the gate."""
+    now = now or time.time()
+    cap = max(1, int(cap))
+    slugs_seen: set = set()
+    uniq = []
+    for t in targets:
+        if t["slug"] not in slugs_seen:
+            slugs_seen.add(t["slug"])
+            uniq.append(t)
+    props_discovered = sum(1 for t in uniq if t.get("prop"))
+    if len(uniq) <= cap:
+        subs = [t["slug"] for t in uniq]
+        excluded: list[dict] = []
+    else:
+        ranked = sorted(
+            uniq, key=lambda t: (-_activity_score(
+                state.get(t["slug"], {}), now), t["slug"]))
+        rotate_n = max(1, cap // 4)
+        core = ranked[:cap - rotate_n]
+        rest = ranked[cap - rotate_n:]
+        start = (cycle * rotate_n) % len(rest)
+        window = (rest + rest)[start:start + rotate_n]
+        subs = [t["slug"] for t in core] + [t["slug"] for t in window]
+        chosen = set(subs)
+        excluded = [{"slug": t["slug"], "reason": "rotation_pending"}
+                    for t in uniq if t["slug"] not in chosen]
+    chosen = set(subs)
+    return {
+        "subscribe": subs,
+        "excluded": excluded,
+        "diagnostics": {
+            "discovered_total": len(uniq),
+            "subscribed_total": len(subs),
+            "excluded_total": len(excluded),
+            "excluded_reasons": sorted({e["reason"] for e in excluded}),
+            "props_discovered": props_discovered,
+            "props_subscribed": sum(1 for t in uniq
+                                    if t.get("prop") and t["slug"] in chosen),
+            "rotation_cycle": cycle,
+        },
+    }
+
+
+def discover_slugs() -> list[str]:
+    """Back-compat single-shot discovery: full universe, cycle-0 plan."""
     cap = int(os.getenv(MAX_MARKETS_ENV, "24"))
-    return [t["slug"] for t in targets[:cap]]
+    return subscription_plan(discover_universe(), {}, cap, 0)["subscribe"]
+
+
+# ----------------- restart hydration from the persisted tape -----------------
+
+def iter_recent_tape_rows(root: Path, now: Optional[float] = None,
+                          max_bytes: int = 0):
+    """Yield (epoch_t, msg) from the persisted daily JSONL tape (today and
+    yesterday, in order), bounded to the last `max_bytes` per file.
+    Malformed lines are skipped — hydration can never crash startup."""
+    now_dt = datetime.fromtimestamp(now or time.time(), timezone.utc)
+    from datetime import timedelta
+    for day in (now_dt - timedelta(days=1), now_dt):
+        path = daily_path(root, day)
+        if not path.exists():
+            continue
+        with path.open("rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - max_bytes) if max_bytes else 0)
+            data = f.read().decode("utf-8", errors="replace")
+        lines = data.splitlines()
+        if max_bytes and size > max_bytes and lines:
+            lines = lines[1:]                     # drop the partial first line
+        for line in lines:
+            try:
+                row = json.loads(line)
+                if not isinstance(row, Mapping) or row.get("kind") != "ws":
+                    continue
+                dt = datetime.fromisoformat(
+                    str(row["t"]).replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                yield dt.timestamp(), row.get("msg")
+            except Exception:
+                continue
+
+
+def hydrate_state(state: dict, rows, now: Optional[float] = None,
+                  window_s: float = 3600.0) -> dict:
+    """Rebuild in-memory gate evidence from persisted authenticated tape
+    rows so a restart/deploy does not reset MATCHED history to zero.
+    Each row is folded at ITS RECORDED timestamp, so time-alignment and
+    provenance are exactly what the live fold would have produced; rows
+    older than the gate horizon are skipped and thus still age out
+    (issue #167 comment 5519422461)."""
+    from src import pmus_status_report as rep
+    now = now or time.time()
+    cutoff = now - (window_s + 2 * rep.SLOT_S)
+    used = skipped = 0
+    for t, msg in rows:
+        if t < cutoff or t > now:
+            skipped += 1
+            continue
+        apply_events(state, msg, t)
+        used += 1
+    return {"hydrated_rows": used, "skipped_rows": skipped,
+            "hydrated_markets": len(state)}
 
 
 async def run(minutes: Optional[float]) -> int:
@@ -404,11 +551,31 @@ async def run(minutes: Optional[float]) -> int:
     msgs = 0
     mstate: dict = {}
     last_status = 0.0
+    cycle = 0
+    # Restart hydration: rebuild gate evidence from the persisted tape so
+    # a deploy does not cold-start MATCHED history to zero. Failure here
+    # can never block startup.
+    try:
+        hyd_bytes = int(os.getenv(HYDRATE_BYTES_ENV,
+                                  str(DEFAULT_HYDRATE_BYTES)))
+        hydration = hydrate_state(
+            mstate, iter_recent_tape_rows(root, max_bytes=hyd_bytes))
+    except Exception as exc:
+        hydration = {"hydration_error": str(exc)[:120]}
+    print("PMUS_WS_STATUS " + json.dumps(
+        {"hydration": hydration}, separators=(",", ":"), default=str),
+        flush=True)
     while deadline is None or time.monotonic() < deadline:
-        slugs = discover_slugs()
+        cap = int(os.getenv(MAX_MARKETS_ENV, "24"))
+        plan = subscription_plan(discover_universe(), mstate, cap, cycle)
+        cycle += 1
+        slugs = plan["subscribe"]
+        discovery_diag = plan["diagnostics"]
         append(root, {"kind": "recorder_start",
                       "t": datetime.now(timezone.utc).isoformat(),
                       "subscribed": slugs, "read_only": True,
+                      "discovery": discovery_diag,
+                      "excluded": plan["excluded"][:200],
                       "note": "subscribe/heartbeat frames only; no order "
                               "path exists in this worker"})
         try:
@@ -448,7 +615,8 @@ async def run(minutes: Optional[float]) -> int:
                             time.monotonic() - last_status >= status_every:
                         try:
                             print("PMUS_WS_STATUS " + json.dumps(
-                                build_status(mstate, True, msgs, len(slugs)),
+                                build_status(mstate, True, msgs, len(slugs),
+                                             discovery=discovery_diag),
                                 separators=(",", ":"), default=str),
                                 flush=True)
                         except Exception as exc:
