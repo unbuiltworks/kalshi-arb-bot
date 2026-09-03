@@ -114,9 +114,37 @@ def collect() -> dict:
                     if isinstance(e.get("markets") or [], list) else None,
                 "declared_markets": _market_count(e)}
 
+    # per-event detail probe (issue #167 comment 5525317831): does the
+    # single-event surface return the COMPLETE market set for a live
+    # event? Compare embedded/declared vs by-id and by-slug responses on
+    # the two live events with the largest declared market counts.
+    detail = []
+    probes = sorted(live, key=lambda e: -(_market_count(e) or 0))[:2]
+    for e in probes:
+        row = {"slug": e.get("slug"), "declared": _market_count(e),
+               "list_embedded": len(e.get("markets") or [])
+               if isinstance(e.get("markets") or [], list) else None}
+        for label, path in (("by_id", f"/v1/events/{e.get('id')}"),
+                            ("by_slug", f"/v1/events/slug/{e.get('slug')}")):
+            try:
+                resp = col.http_get_json(path)
+                ev = resp.get("event") if isinstance(resp, Mapping) and \
+                    isinstance(resp.get("event"), Mapping) else resp
+                ms = ev.get("markets") if isinstance(ev, Mapping) else None
+                row[label] = {"markets": len(ms) if isinstance(ms, list)
+                              else None,
+                              "keys": sorted(ev.keys())[:12]
+                              if isinstance(ev, Mapping) else None}
+            except Exception as exc:
+                row[label] = {"error":
+                              f"{type(exc).__name__}:{str(exc)[:100]}"}
+            time.sleep(0.06)
+        detail.append(row)
+
     return {
         "t": datetime.now(timezone.utc).isoformat(),
         "mode": "READ_ONLY_LIVE_DISCOVERY_DIAGNOSTIC",
+        "event_detail_probe": detail,
         "events": {"returned": len(events), "live_true": len(live),
                    "pages": epages, "hit_cap": ecap, "error": eerr,
                    "embedded_markets": embedded,

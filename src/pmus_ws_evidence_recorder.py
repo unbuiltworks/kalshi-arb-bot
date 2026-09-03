@@ -523,13 +523,32 @@ def discover_universe() -> list[dict]:
     targets = col.discover_targets(events_by_league, incentives, prefixes,
                                    True)
     embedded_n = len(targets)
-    # Full-universe expansion: embedded event.markets carry at most ~15
-    # rows while marketCounts reports 47-162+ per event. Enumerate the
-    # global open-market listing and join to LIVE events on the exact
-    # gameStartTime key; failure degrades to embedded-only, with the
-    # gap visible in diagnostics rather than hidden.
+    # PRIMARY live surface (issue #167 comments 5525261365/5525293221/
+    # 5525317831): the server-side /v1/events?live=true set carries the
+    # complete live slate with complete embedded market sets (measured
+    # live; the legacy global-market join below buried live rows beyond
+    # its page cap). Failure is surfaced in diagnostics and behavior
+    # degrades to the legacy league path — never silently.
+    v1_diag: dict = {"v1_live_events": 0, "v1_live_error": "not_run"}
+    v1_added = 0
+    try:
+        live_events, v1_diag = col.fetch_live_events(col.http_get_json)
+        seen = {t["slug"] for t in targets}
+        for row in col.live_event_targets(live_events, prefixes):
+            if row["slug"] not in seen:
+                seen.add(row["slug"])
+                targets.append(row)
+                v1_added += 1
+    except Exception as exc:
+        v1_diag = {"v1_live_events": 0,
+                   "v1_live_error": f"{type(exc).__name__}:{str(exc)[:80]}"}
+    # Legacy full-universe expansion kept as supplemental/fallback; its
+    # (measured) emptiness is now explained by the join diagnostics
+    # instead of hidden. PMUS_WS_EXPAND_PAGES=0 disables it.
     pages = 0
     expanded: list[dict] = []
+    open_rows: list = []
+    max_pages = 0
     try:
         max_pages = int(os.getenv(EXPAND_PAGES_ENV,
                                   str(col.ENUM_MAX_PAGES_DEFAULT)))
@@ -547,12 +566,20 @@ def discover_universe() -> list[dict]:
         if row["slug"] not in seen:
             seen.add(row["slug"])
             targets.append(row)
+    try:
+        join_diag = col.enumeration_join_diagnostics(
+            events_by_league, open_rows, pages >= max_pages > 0)
+    except Exception:
+        join_diag = {}
     DISCOVERY_DIAG.clear()
     DISCOVERY_DIAG.update({
         "events_discovered": sum(len(v) for v in events_by_league.values()),
         "markets_embedded": embedded_n,
-        "markets_expanded": len(targets) - embedded_n,
+        "markets_expanded": len(targets) - embedded_n - v1_added,
+        "v1_live_markets_added": v1_added,
         "enumeration_pages_fetched": pages,
+        **v1_diag,
+        **join_diag,
     })
     return targets
 

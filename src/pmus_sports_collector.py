@@ -187,6 +187,120 @@ def enumerate_open_markets(get_json, max_pages: int = ENUM_MAX_PAGES_DEFAULT,
     return rows, pages
 
 
+LIVE_EVENTS_PATH = ("/v1/events?live=true&active=true&closed=false"
+                    "&categories=sports")
+LIVE_EVENTS_MAX_PAGES = 4
+
+
+def fetch_live_events(get_json, max_pages: int = LIVE_EVENTS_MAX_PAGES,
+                      page_size: int = EVENTS_PAGE_LIMIT) -> tuple[list, dict]:
+    """Server-side authoritative live set (issue #167 comments
+    5525261365/5525293221/5525317831). Measured live 2026-09-03T12:31Z:
+    38 live events returned in ONE page with `live:true`, eventState
+    period/score, and COMPLETE embedded market sets (list embedded ==
+    declared == by-id == by-slug on probed events), while the global
+    /v1/markets listing buried the live rows beyond the 50-page cap
+    (first 5,000 sports rows: 4,998 FUTURE types, zero start-time
+    matches). Bounded pagination; failure returns what was gathered with
+    the error surfaced so callers degrade VISIBLY to the legacy path."""
+    rows: list = []
+    pages = 0
+    err = None
+    for page in range(max_pages):
+        try:
+            resp = get_json(f"{LIVE_EVENTS_PATH}&limit={page_size}"
+                            f"&offset={page * page_size}")
+        except Exception as exc:
+            err = f"{type(exc).__name__}:{str(exc)[:100]}"
+            break
+        evs = resp if isinstance(resp, list) else (
+            resp.get("events") if isinstance(resp, Mapping) else None)
+        if not isinstance(evs, list):
+            err = "unexpected_response_shape"
+            break
+        pages += 1
+        # fail-closed: only rows the venue itself marks live are kept,
+        # even on the live=true query — never inferred from startTime
+        rows.extend(e for e in evs if isinstance(e, Mapping)
+                    and e.get("live") is True and not e.get("ended"))
+        if len(evs) < page_size:
+            break
+    return rows, {"v1_live_events": len(rows), "v1_live_pages": pages,
+                  "v1_live_hit_cap": pages >= max_pages,
+                  "v1_live_error": err}
+
+
+def live_event_targets(live_events: list,
+                       prefixes: Iterable[str] = ()) -> list[dict]:
+    """Targets from the server-side live set's embedded markets — the
+    complete per-event set, props included (empty prefixes admits all;
+    prop labeling stays diagnostic-only). Admission is exactly the
+    venue's own live flag: scheduled-but-started events without it and
+    ended events are never admitted (no future/futures leakage)."""
+    prefixes = tuple(prefixes)
+    out: list[dict] = []
+    seen: set = set()
+    for ev in live_events or []:
+        if not isinstance(ev, Mapping) or ev.get("live") is not True \
+                or ev.get("ended"):
+            continue
+        state = _event_state_summary(ev)
+        slug_head = str(ev.get("slug") or "").split("-", 1)[0]
+        league = slug_head or str(ev.get("category") or "sports")
+        for m in ev.get("markets") or []:
+            if not isinstance(m, Mapping):
+                continue
+            slug = str(m.get("slug") or "")
+            if not slug or slug in seen:
+                continue
+            if prefixes and not slug.startswith(prefixes):
+                continue
+            seen.add(slug)
+            out.append({"slug": slug, "league": league,
+                        "why": "v1_live_event_market",
+                        "event_state": state,
+                        "prop": not slug.startswith(
+                            PRIMARY_MARKET_PREFIXES),
+                        "market_meta": _market_meta(m)})
+    return out
+
+
+def enumeration_join_diagnostics(events_by_league: Mapping[str, list],
+                                 open_markets: list,
+                                 hit_cap: bool) -> dict:
+    """Measured explanation for markets_expanded=0 (issue #167 comment
+    5525287122): how many globally-enumerated rows could EVER join, and
+    whether the bounded listing even reached today's live rows."""
+    any_starts: set = set()
+    live_starts: set = set()
+    for events in events_by_league.values():
+        for ev in events or []:
+            if not isinstance(ev, Mapping):
+                continue
+            key = str(ev.get("startTime") or ev.get("startDate") or "")
+            if key:
+                any_starts.add(key)
+                if ev.get("live"):
+                    live_starts.add(key)
+    with_start = [str(m.get("gameStartTime"))
+                  for m in open_markets
+                  if isinstance(m, Mapping) and m.get("gameStartTime")]
+    sample = {}
+    for label, m in (("first", open_markets[0] if open_markets else None),
+                     ("last", open_markets[-1] if open_markets else None)):
+        if isinstance(m, Mapping):
+            sample[label] = {"slug": m.get("slug"),
+                            "gameStartTime": m.get("gameStartTime")}
+    return {"enumerated_open_rows": len(open_markets),
+            "enumeration_hit_cap": hit_cap,
+            "enum_rows_with_gameStartTime": len(with_start),
+            "enum_rows_matching_any_event_start":
+            sum(1 for s in with_start if s in any_starts),
+            "enum_rows_matching_live_event_start":
+            sum(1 for s in with_start if s in live_starts),
+            "enum_sample": sample}
+
+
 def expand_live_event_markets(events_by_league: Mapping[str, list],
                               open_markets: list) -> list[dict]:
     """Join globally-enumerated open markets to LIVE events on the exact
