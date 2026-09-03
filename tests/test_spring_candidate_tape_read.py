@@ -1,7 +1,7 @@
 """Exact-candidate tape read regressions (issue #167 comments
 5521435419/5521463344): slug-scoped tape extraction, deterministic clone
-timeline + completion executability, price-aware A-vs-B adapter counters,
-verdict rules, and read-only purity."""
+timeline + completion executability, canonical strict spring replay,
+price-aware A-vs-B adapter counters, verdict rules, and read-only purity."""
 from __future__ import annotations
 
 from decimal import Decimal as D
@@ -50,7 +50,8 @@ def test_slug_events_extracts_and_scopes_with_rolling_bbo():
     ]
     events = tape.slug_events(rows, SLUG)
     assert [e["kind"] for e in events] == ["book", "trade"]
-    tr = events[1]
+    book, tr = events
+    assert book["ask_book_missing"] is False
     assert tr["px"] == "0.5000" and tr["dir"] == "sell"
     assert tr["bid"] == "0.5000" and tr["ask"] == "0.5200"
 
@@ -60,7 +61,7 @@ def _pair_events(base):
     COMPLETEs NO at 0.45; pair 0.95 <= spring 0.96)."""
     return [
         {"kind": "book", "t": base, "bid": "0.5000", "ask": "0.5200",
-         "bid_qty": "100", "ask_qty": "100"},
+         "bid_qty": "100", "ask_qty": "100", "ask_book_missing": False},
         {"kind": "trade", "t": base + 10, "px": "0.5000", "dir": "sell",
          "bid": "0.5000", "ask": "0.5200"},
         {"kind": "trade", "t": base + 40, "px": "0.5500", "dir": "buy",
@@ -83,6 +84,10 @@ def test_clone_timeline_completion_and_probe_verdict():
     ce = r["completion_executability"]
     assert ce["spring"] >= 2 and ce["hard"] >= 2
     assert ce["first_spring_latency_s"] == 30.0
+    strict = r["strict_spring_replay"]
+    assert strict["spring_repeated_completion"] is True
+    assert strict["spring_matched_slots"] >= 2
+    assert all(D(x) <= D("0.96") for x in strict["spring_pair_costs"])
     gaps = r["opp_side_gaps_s"]
     # 30s inside each pair; the 370s middle gap spans pair-to-pair
     assert gaps["gaps"] == [30.0, 370.0, 30.0] and gaps["p50"] == 30.0
@@ -91,10 +96,29 @@ def test_clone_timeline_completion_and_probe_verdict():
     assert "SHADOW/THEORETICAL" in r["labels"]
 
 
+def test_loose_two_fill_slots_do_not_clear_without_repeated_strict_spring():
+    # This was the old false-positive shape: two clone-fill slots and one
+    # executable <=0.96 completion, but only ONE canonical strict spring
+    # pair completion. Advisory readiness must now fail closed.
+    events = _pair_events(1000.0) + [
+        {"kind": "book", "t": 1400.0, "bid": "0.5000", "ask": "0.5200",
+         "bid_qty": "100", "ask_qty": "100", "ask_book_missing": False},
+        {"kind": "trade", "t": 1410.0, "px": "0.5000", "dir": "sell",
+         "bid": "0.5000", "ask": "0.5200"},
+    ]
+    r = tape.analyze(events, SLUG, TICK, model=_model(), v2={})
+    assert r["no_fill_explanation"]["slots_with_clone_fill"] == 2
+    assert r["completion_executability"]["spring"] >= 1
+    assert r["strict_spring_replay"]["spring_matched_slots"] == 1
+    assert r["strict_spring_replay"]["spring_repeated_completion"] is False
+    assert r["verdict"] == "KEEP_SHADOWING"
+
+
 def test_single_slot_pair_keeps_shadowing():
     r = tape.analyze(_pair_events(1000.0), SLUG, TICK,
                      model=_model(), v2={})
     assert r["clone"]["matched"] == 1
+    assert r["strict_spring_replay"]["spring_repeated_completion"] is False
     assert r["verdict"] == "KEEP_SHADOWING"
 
 
@@ -105,9 +129,10 @@ def test_two_hours_without_any_fill_rejects():
         m["states"][sk]["action_probs"] = {"complete|q<5": 1.0}
     events = [{"kind": "trade", "t": 1000.0 + i * 400, "px": "0.5000",
                "dir": "buy", "bid": "0.5000", "ask": "0.5200"}
-              for i in range(20)]                      # 7600s window
+              for i in range(20)]
     r = tape.analyze(events, SLUG, TICK, model=m, v2={})
     assert r["clone"]["n_fills"] == 0
+    assert r["strict_spring_replay"]["spring_repeated_completion"] is False
     assert r["verdict"] == "REJECT"
 
 
@@ -120,7 +145,7 @@ def test_adapter_b_one_tick_improvement_price_aware():
     base = 1000.0
     events = [
         {"kind": "book", "t": base, "bid": "0.5000", "ask": "0.5200",
-         "bid_qty": "100", "ask_qty": "100"},
+         "bid_qty": "100", "ask_qty": "100", "ask_book_missing": False},
         # sell print BETWEEN the levels: A (join 0.50) misses, B (0.505)
         # fills — this is the epoch the diagnostic exists for
         {"kind": "trade", "t": base + 5, "px": "0.5050", "dir": "sell",
