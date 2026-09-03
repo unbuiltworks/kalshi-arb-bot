@@ -8,6 +8,7 @@ spring-shaped markets, then delegates to the canonical read-only recorder.
 """
 from __future__ import annotations
 
+import os
 from typing import Any, Mapping, Optional
 
 from src import pmus_ws_evidence_recorder as base
@@ -17,6 +18,42 @@ from src.pmus_l5_compute_allocator import allocate_with_spring_reserve
 
 _ORIGINAL_ALLOCATE_L5 = pq.allocate_l5
 _ORIGINAL_WS_GATE = base.ws_gate
+
+# Conservative, configurable completion floor for the binary advisory
+# status (issue #167 comment 5525966568): no invented P&L threshold —
+# evidence sufficiency + existing spring invariants only, raw counts
+# always reported so the stage decision stays with the operator/owner.
+PROBE_MIN_ENV = "PMUS_SPRING_PROBE_MIN_COMPLETIONS"
+PROBE_MIN_TRADES_1H = 10
+
+
+def probe_evidence(row: Mapping[str, Any]) -> dict:
+    """ADVISORY-ONLY probe-evidence status for one spring-watch row.
+    Never mutates or relaxes spring_candidate_gate / micro_eligible."""
+    min_completions = max(1, int(os.getenv(PROBE_MIN_ENV, "3")))
+    reasons: list[str] = []
+    trades = row.get("trades_1h")
+    if trades is None or int(trades) < PROBE_MIN_TRADES_1H:
+        reasons.append(f"thin_flow:{trades}")
+    if row.get("two_sided_trades") is not True:
+        reasons.append("one_directional_flow")
+    off = row.get("off_distribution")
+    if off is True:
+        reasons.append("v2_off_distribution")
+    elif off is None:
+        reasons.append("l5_state_unknown")
+    missing = row.get("spring_evidence_missing") or []
+    reasons.extend(missing)
+    matched = int(row.get("spring_matched_slots") or 0)
+    if matched < min_completions:
+        reasons.append(
+            f"insufficient_completions:{matched}<{min_completions}")
+    return {"status": ("READY_FOR_REVIEW" if not reasons
+                       else "INSUFFICIENT_EVIDENCE"),
+            "reasons": reasons,
+            "min_completions_required": min_completions,
+            "labels": "ADVISORY ONLY; stage decision is operator/owner's; "
+                      "no gate is mutated or relaxed by this field"}
 
 
 def _count(counts: Mapping[str, Any], key: str) -> int:
@@ -71,6 +108,27 @@ def spring_watch(rows: Mapping[str, Mapping[str, Any]],
         no_fill = _count(counts, "NO_FILL")
         spring_counts = dict(r.get("spring_slot_counts_theoretical") or {})
         spring_matched = _count(spring_counts, "SPRING_MATCHED")
+        v2 = shadow.get("v2") if isinstance(shadow.get("v2"), Mapping) \
+            else {}
+        off = v2.get("off_distribution")
+        if off is None:
+            off = shadow.get("off_distribution")
+        evidence = {
+            # completion-evidence fields (issue #167 comment 5525966568),
+            # copied verbatim from the strict replay; explicit missingness
+            "spring_evaluable_slots": r.get("spring_evaluable_slots"),
+            "spring_matched_fraction": r.get("spring_matched_fraction"),
+            "spring_latest_slot": r.get("spring_latest_slot"),
+            "spring_completion_latency_s":
+            r.get("spring_completion_latency_s"),
+            "spring_pair_costs": r.get("spring_pair_costs") or [],
+            "spring_le_096_completions":
+            r.get("spring_le_096_completions"),
+            "spring_fee_safe_completions":
+            r.get("spring_fee_safe_completions"),
+            "spring_evidence_missing":
+            r.get("spring_evidence_missing") or [],
+        }
         picked.append(({
             "slug": slug,
             "bid": r.get("bid"),
@@ -91,9 +149,10 @@ def spring_watch(rows: Mapping[str, Mapping[str, Any]],
             "spring_repeated_completion": spring_matched >= 2,
             "spring_matches_theoretical": r.get(
                 "spring_matches_theoretical") or [],
+            **evidence,
             "l5_allocated": (slug in l5_alloc) if l5_alloc is not None
             else None,
-            "off_distribution": shadow.get("off_distribution"),
+            "off_distribution": off,
             "labels": "SHADOW/THEORETICAL; advisory only, not an "
                       "execution admission",
         }, depth))
@@ -102,7 +161,10 @@ def spring_watch(rows: Mapping[str, Mapping[str, Any]],
                                 -int(rd[0].get("trades_1h") or 0),
                                 -rd[1], str(rd[0]["slug"])))
     lim = base.SPRING_WATCH_LIMIT if limit is None else limit
-    return [row for row, _ in picked[:max(0, lim)]]
+    out = [row for row, _ in picked[:max(0, lim)]]
+    for row in out:
+        row["probe_evidence"] = probe_evidence(row)
+    return out
 
 
 def allocate_l5(subscribed_slugs, state, targets=None, now=None,

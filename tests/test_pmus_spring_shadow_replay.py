@@ -68,3 +68,37 @@ def test_prevailing_snapshot_not_current_bbo_controls_slot():
     assert row["status"] == "SPRING_MATCHED"
     assert row["join"] == "0.50"
     assert row["pair_cost"] == "0.96"
+
+
+def test_summary_emits_completion_evidence_fields():
+    s = {
+        "bbo_history": [_snap(100.0), _snap(400.0), _snap(700.0)],
+        "trades": [
+            _trade(100.001, "0.50", "sell"),
+            _trade(130.0, "0.54", "buy"),          # strict match, 30s latency
+            _trade(400.001, "0.50", "sell"),
+            _trade(460.0, "0.51", "buy"),          # 99c-only fee-safe hold
+            _trade(700.001, "0.50", "sell"),       # unresolved hold
+        ],
+    }
+    out = spring.summarize_state(s, now=750.0)
+    assert out["spring_evaluable_slots"] == 3
+    assert out["spring_matched_slots"] == 1
+    assert out["spring_matched_fraction"] == round(1 / 3, 4)
+    assert out["spring_completion_latency_s"] == {"p50": 30.0, "p95": 30.0,
+                                                  "n": 1}
+    assert out["spring_pair_costs"] == ["0.96"]
+    assert out["spring_le_096_completions"] == 1
+    assert out["spring_fee_safe_completions"] == 2   # strict + 99c-only
+    assert out["spring_latest_slot"]["status"] == "SPRING_ONE_SIDED_HOLD"
+    assert out["spring_latest_slot"]["age_s"] > 0
+    assert out["spring_evidence_missing"] == []
+
+
+def test_summary_reports_explicit_missingness():
+    out = spring.summarize_state({"trades": [], "bbo_history": []}, now=10.0)
+    assert set(out["spring_evidence_missing"]) == \
+        {"no_bbo_history", "no_trades_in_window"}
+    assert out["spring_matched_fraction"] is None
+    assert out["spring_completion_latency_s"] is None
+    assert out["spring_latest_slot"] is None

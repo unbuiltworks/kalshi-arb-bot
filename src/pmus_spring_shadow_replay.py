@@ -87,12 +87,26 @@ def replay_slot(snapshot: Mapping[str, Any], trades: list[Mapping[str, Any]],
             "t_comp": float(hits[0][0]["t"]),
             "yes_threshold_for_comp": str(yes_threshold),
         }
+    # the strict <=0.96 complement never printed; did the ordinary
+    # fee-safe (<=0.99, >=1c edge) complement print? Advisory context for
+    # the pair-cost distribution — never a spring completion.
+    fee_safe_pair = None
+    comp99 = _floor_tick(D("0.99") - join)
+    if comp99 > 0:
+        thresh99 = D("1") - comp99
+        for t in inslot:
+            px = _d(t.get("px"))
+            if (float(t.get("t", 0)) > float(f1["t"]) and px is not None
+                    and t.get("dir_inferred") == "buy" and px >= thresh99):
+                fee_safe_pair = str(join + comp99)
+                break
     return {
         "status": "SPRING_ONE_SIDED_HOLD",
         "join": str(join),
         "target_comp": str(comp),
         "yes_threshold_for_comp": str(yes_threshold),
         "residual_since": float(f1["t"]),
+        "fee_safe_pair_cost": fee_safe_pair,
     }
 
 
@@ -132,6 +146,8 @@ def summarize_state(s: Mapping[str, Any], now: float,
 
     counts: dict[str, int] = {}
     matches: list[dict] = []
+    fee_safe_only = 0
+    latest: Optional[dict] = None
     if history and trades:
         # Match the canonical WS gate's grid anchoring exactly so strict and
         # ordinary evidence are comparable without using current-BBO lookahead.
@@ -147,14 +163,45 @@ def summarize_state(s: Mapping[str, Any], now: float,
             counts[st] = counts.get(st, 0) + 1
             if st == "SPRING_MATCHED":
                 matches.append(row)
+            elif row.get("fee_safe_pair_cost"):
+                fee_safe_only += 1
+            latest = {"status": st, "slot_start": t}
             t += SLOT_S
 
     matched = counts.get("SPRING_MATCHED", 0)
+    # evaluable = slots where a spring join actually existed (in band,
+    # two-sided book), so a completion COULD have been evidenced
+    evaluable = sum(counts.get(k, 0) for k in
+                    ("SPRING_MATCHED", "SPRING_ONE_SIDED_HOLD",
+                     "SPRING_NO_FILL"))
+    lat = sorted(float(m["t_comp"]) - float(m["t_first"]) for m in matches)
+    missing = []
+    if not history:
+        missing.append("no_bbo_history")
+    if not trades:
+        missing.append("no_trades_in_window")
+    if history and trades and evaluable == 0:
+        missing.append("no_evaluable_slots")
     return {
         "spring_pair_target": str(SPRING_PAIR_TARGET),
         "spring_slot_counts_theoretical": counts,
+        "spring_evaluable_slots": evaluable,
+        "spring_matched_fraction": (round(matched / evaluable, 4)
+                                    if evaluable else None),
         "spring_matched_slots": matched,
         "spring_repeated_completion": matched >= 2,
+        "spring_latest_slot": ({"status": latest["status"],
+                                "age_s": round(now - latest["slot_start"],
+                                               1)}
+                               if latest else None),
+        "spring_completion_latency_s": (
+            {"p50": round(lat[len(lat) // 2], 1),
+             "p95": round(lat[int(0.95 * (len(lat) - 1))], 1),
+             "n": len(lat)} if lat else None),
+        "spring_pair_costs": [m["pair_cost"] for m in matches][-12:],
+        "spring_le_096_completions": matched,   # <=0.96 by construction
+        "spring_fee_safe_completions": matched + fee_safe_only,
+        "spring_evidence_missing": missing,
         "spring_matches_theoretical": matches[-3:],
         "spring_labels": "SHADOW/THEORETICAL; strict <=0.96 slot replay",
     }

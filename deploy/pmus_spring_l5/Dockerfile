@@ -28,7 +28,7 @@ RUN touch src/__init__.py
 
 ENV PMUS_SERVICE_ROLE=spring-l5-probe \
     PMUS_Q1_STATE_DIR=/state/pmus-spring \
-    PMUS_SPRING_MAX_ACTIONS=5 \
+    PMUS_SPRING_MAX_ACTIONS=6 \
     PYTHONUNBUFFERED=1
 
 # Repo-side deployment-isolation tripwire. A wrong service/image selection

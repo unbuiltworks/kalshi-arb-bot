@@ -21,7 +21,7 @@ def test_spring_probe_image_is_dedicated_and_fail_closed():
 
 def test_probe1_keeps_stricter_five_action_bound():
     text = DOCKERFILE.read_text()
-    assert "PMUS_SPRING_MAX_ACTIONS=5" in text
+    assert "PMUS_SPRING_MAX_ACTIONS=6" in text   # 5525966568: default 6
 
 
 def test_image_does_not_start_other_workers():

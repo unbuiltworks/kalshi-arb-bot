@@ -350,7 +350,8 @@ def run_session(t: Optional[Transport] = None,
 
     t = t or Transport()
     deadline_s = float(os.getenv(DEADLINE_ENV, "900"))
-    max_actions = int(os.getenv(MAX_ACTIONS_ENV, "5"))   # probe-1 bound
+    max_actions = int(os.getenv(MAX_ACTIONS_ENV, "6"))   # probe-1 bound
+    # (default 6 per issue #167 comment 5525966568)
     # (issue #167 comment 5520665580 item 8: max 5 incremental actions
     # OR the $0.05 cumulative cap, whichever hits first)
     settle_ts = os.getenv(SETTLEMENT_ENV, "").strip()
