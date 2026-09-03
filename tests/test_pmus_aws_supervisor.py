@@ -78,6 +78,7 @@ def test_residual_blocks_even_with_live_gate(monkeypatch):
     st = _status()
     monkeypatch.setattr(s, "latest_recorder_status", lambda: st)
     monkeypatch.setattr(s, "status_age_seconds", lambda status: 1.0)
+    monkeypatch.setattr(s, "armed", lambda: True)
     result = s.run_once(FakeAccount(position="1"))
     assert result["action"] == "BLOCK"
     assert "nonzero_positions" in result["reason"]
