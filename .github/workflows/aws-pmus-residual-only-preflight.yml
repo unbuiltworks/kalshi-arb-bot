@@ -1,0 +1,111 @@
+name: AWS PMUS residual-only completion preflight READ ONLY
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/pmus-residual-only-preflight.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  residual-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+          fetch-depth: 1
+      - name: Verify trigger
+        shell: bash
+        run: grep -qx 'GO=READ_ONLY_RESIDUAL_PREFLIGHT' deploy/aws/pmus-residual-only-preflight.trigger
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Check existing DET MIN residual and fee-safe complement only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE=$(cat <<'EOF'
+          set -Eeuo pipefail
+          CREDS=/home/ssm-user/l5-pmus-q1-credentials.env
+          test -f "$CREDS" && test "$(stat -c %a "$CREDS")" = 600
+          test "$(systemctl is-active l5-pmus-supervisor.service)" = active
+          grep -q '^Environment=PMUS_SUPERVISOR_LIVE=NO$' /etc/systemd/system/l5-pmus-supervisor.service
+          sudo -u ssm-user bash -lc '
+            set -Eeuo pipefail
+            set -a; . /home/ssm-user/l5-pmus-q1-credentials.env; set +a
+            export PYTHONPATH=/home/ssm-user/l5-pmus-engine
+            /home/ssm-user/l5-pmus-engine-venv/bin/python - <<"PY"
+          import json
+          from decimal import Decimal as D
+          from src import pmus_q1_executor_v4 as q
+          slug="aec-mlb-det-min-2026-09-02"
+          first=D("0.42")
+          t=q.Transport()
+          out={"slug":slug,"first_cost":str(first),"read_only":True}
+
+          # Position must be exactly +1 YES residual from the known campaign.
+          try:
+              pos=q._position_for_slug(t,slug)
+              out["position"]=str(pos)
+          except Exception as exc:
+              out["position_error"]=type(exc).__name__
+              print("PMUS_RESIDUAL_PREFLIGHT "+json.dumps(out,separators=(",",":")))
+              raise SystemExit(0)
+
+          # No open order may coexist with residual completion work.
+          try:
+              opened=t.request("GET","/v1/orders/open")
+              orders=opened.get("orders") if isinstance(opened,dict) else None
+              out["open_orders_total"]=len(orders or [])
+          except Exception as exc:
+              out["orders_error"]=type(exc).__name__
+              print("PMUS_RESIDUAL_PREFLIGHT "+json.dumps(out,separators=(",",":")))
+              raise SystemExit(0)
+
+          # Public BBO: NO ask = 1 - YES bid.
+          try:
+              b=q.outcome_bbo(t,slug,"OUTCOME_SIDE_NO")
+              no_ask=b["ask"]
+              out.update({"yes_bid":str(b["yes_bid"]),"yes_ask":str(b["yes_ask"]),"no_ask":str(no_ask),"complement_bound":str(q.complement_bound(first)),"taker_fee":str(q.taker_fee(no_ask)),"fee_safe_now":bool(q.taker_completion_ok(first,no_ask))})
+              if q.taker_completion_ok(first,no_ask):
+                  out["locked_edge_after_taker_fee"]=str(D("1")-first-no_ask-q.taker_fee(no_ask))
+          except Exception as exc:
+              out["bbo_error"]=type(exc).__name__
+
+          # Settlement endpoint is read-only evidence; 404 means unresolved/not available.
+          try:
+              out["settlement"]=t.request("GET",f"/v1/markets/{slug}/settlement")
+          except Exception as exc:
+              out["settlement_error"]=type(exc).__name__
+              out["settlement_http_code"]=getattr(exc,"code",None)
+
+          out["ready_for_residual_only_completion"]=(out.get("position")=="1.0000" and out.get("open_orders_total")==0 and out.get("fee_safe_now") is True and out.get("settlement_http_code") in (None,404))
+          print("PMUS_RESIDUAL_PREFLIGHT "+json.dumps(out,separators=(",",":"),default=str))
+          PY
+          '
+          echo PMUS_RESIDUAL_ONLY_PREFLIGHT_OK read_only=true new_first_leg=false permanent_supervisor_disarmed=true
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment 'L5 PMUS residual-only completion preflight READ ONLY' --parameters "$PARAMS" --timeout-seconds 180 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          grep -q 'PMUS_RESIDUAL_ONLY_PREFLIGHT_OK' <<<"$(jq -r '.Stdout' <<<"$RESULT")"
