@@ -23,7 +23,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.ENGINE_REF }}
+          ref: feature/l5-transfer-backtest
+          fetch-depth: 1
+      - name: Verify exact engine commit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ACTUAL="$(git rev-parse HEAD)"
+          echo "PMUS_ENGINE_CHECKOUT_HEAD=$ACTUAL"
+          test "$ACTUAL" = "$ENGINE_REF"
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
