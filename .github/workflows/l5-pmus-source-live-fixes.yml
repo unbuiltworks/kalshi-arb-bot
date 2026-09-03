@@ -35,29 +35,43 @@ jobs:
           set -Eeuo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           # 1) Current PMUS positions may expose only netPositionDecimal.
+          # Match both Mapping and legacy-list branches regardless of indent.
           p=Path('src/pmus_q1_executor_v4.py')
           s=p.read_text()
-          old='''            raw = p.get("netPosition")\n            if raw is None:\n                raw = p.get("quantity")'''
-          new='''            raw = p.get("netPositionDecimal")\n            if raw is None:\n                raw = p.get("netPosition")\n            if raw is None:\n                raw = p.get("quantity")'''
-          n=s.count(old)
+          pat=re.compile(r'(?P<i>^[ \t]*)raw = p\.get\("netPosition"\)\n(?P=i)if raw is None:\n(?P=i)    raw = p\.get\("quantity"\)', re.M)
+          def v4_repl(m):
+              i=m.group('i')
+              return (i+'raw = p.get("netPositionDecimal")\n'
+                      +i+'if raw is None:\n'
+                      +i+'    raw = p.get("netPosition")\n'
+                      +i+'if raw is None:\n'
+                      +i+'    raw = p.get("quantity")')
+          s,n=pat.subn(v4_repl,s)
           if n != 2:
               raise SystemExit(f'V4_POSITION_MARKER_COUNT={n}')
-          p.write_text(s.replace(old,new))
+          p.write_text(s)
 
           p=Path('src/pmus_aws_supervisor.py')
           s=p.read_text()
-          old='''        raw = row.get("netPosition")\n        if raw is None:\n            raw = row.get("quantity")'''
-          new='''        raw = row.get("netPositionDecimal")\n        if raw is None:\n            raw = row.get("netPosition")\n        if raw is None:\n            raw = row.get("quantity")'''
-          n=s.count(old)
+          pat=re.compile(r'(?P<i>^[ \t]*)raw = row\.get\("netPosition"\)\n(?P=i)if raw is None:\n(?P=i)    raw = row\.get\("quantity"\)', re.M)
+          def sup_repl(m):
+              i=m.group('i')
+              return (i+'raw = row.get("netPositionDecimal")\n'
+                      +i+'if raw is None:\n'
+                      +i+'    raw = row.get("netPosition")\n'
+                      +i+'if raw is None:\n'
+                      +i+'    raw = row.get("quantity")')
+          s,n=pat.subn(sup_repl,s)
           if n != 1:
               raise SystemExit(f'SUP_POSITION_MARKER_COUNT={n}')
-          p.write_text(s.replace(old,new))
+          p.write_text(s)
 
           # 2) Live auth proves signing query strings in the path yields 401.
-          # Read the authenticated activity page with the documented base path
-          # and filter market/type locally.
+          # Read the authenticated activity page with the base path and filter
+          # market/type locally.
           p=Path('src/pmus_settlement_auditor.py')
           s=p.read_text()
           a=s.index('def _activities(')
