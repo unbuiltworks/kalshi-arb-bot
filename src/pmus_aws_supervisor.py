@@ -2,11 +2,11 @@
 
 The supervisor removes GitHub/SSM from the opportunity -> order hot path.
 It is deliberately DISARMED by default and is safe to run 24/7 in watch
-mode.  Live mode requires a separate dual-key supervisor arm; even then it
+mode. Live mode requires a separate dual-key supervisor arm; even then it
 can run only one q=1 campaign at a time and delegates all order/economic
 rules to :mod:`src.pmus_q1_executor_v4`.
 
-Input is the authenticated read-only recorder's local stdout log.  The AWS
+Input is the authenticated read-only recorder's local stdout log. The AWS
 systemd unit writes that output to a persistent file, so the supervisor
 never needs Railway or GitHub to discover a gate clear.
 
@@ -147,7 +147,7 @@ def eligible_candidates(status: Mapping[str, Any]) -> list[dict]:
         ask_qty = _dec(row.get("ask_qty")) or D("0")
         spread = ask - bid
         trades = int(row.get("trades_1h") or 0)
-        # Ranking only chooses among already-cleared markets.  Tight spread,
+        # Ranking only chooses among already-cleared markets. Tight spread,
         # repeated completion evidence, flow and q1 depth are preferred.
         score = (D(matched) * D("100") + D(min(trades, 500)) / D("10")
                  + min(bid_qty, ask_qty, D("100")) / D("100")
@@ -158,12 +158,19 @@ def eligible_candidates(status: Mapping[str, Any]) -> list[dict]:
 
 
 def account_block_reason(t: q1.Transport) -> Optional[str]:
-    opened = t.request("GET", "/v1/orders/open")
+    """Authoritative pre-campaign reconciliation.
+
+    These are read-only REST calls and can transiently return 404/429/5xx.
+    Reuse the audited bounded GET retry path; mutations are never replayed.
+    This function is intentionally called only when LIVE and immediately
+    before a campaign, not on every 2-second DISARMED watch tick.
+    """
+    opened = q1.base._get_with_retry(t, "/v1/orders/open")
     orders = opened.get("orders") if isinstance(opened, Mapping) else None
     if isinstance(orders, list) and orders:
         return f"open_orders:{len(orders)}"
 
-    resp = t.request("GET", "/v1/portfolio/positions")
+    resp = q1.base._get_with_retry(t, "/v1/portfolio/positions")
     rows = resp.get("positions") if isinstance(resp, Mapping) else None
     nonzero = []
     if isinstance(rows, Mapping):
@@ -233,6 +240,15 @@ def run_once(t: Optional[q1.Transport] = None) -> dict:
         return {"action": "WAIT", "reason": "no_q1_gate_clear",
                 "status_age_s": age}
 
+    chosen = candidates[0]
+    # DISARMED watch is market-data-only. Do not burn authenticated REST
+    # limits every two seconds just to say WOULD_TRADE. LIVE mode performs
+    # the authoritative account reconciliation immediately before campaign.
+    if not armed():
+        return {"action": "WOULD_TRADE", "reason": "supervisor_disarmed",
+                "candidate": chosen.get("slug"), "bid": chosen.get("bid"),
+                "ask": chosen.get("ask"), "score": chosen.get("score")}
+
     try:
         block = account_block_reason(t)
     except Exception as exc:
@@ -240,13 +256,7 @@ def run_once(t: Optional[q1.Transport] = None) -> dict:
                 f"account_reconcile_error:{type(exc).__name__}"}
     if block:
         return {"action": "BLOCK", "reason": block,
-                "candidate": candidates[0].get("slug")}
-
-    chosen = candidates[0]
-    if not armed():
-        return {"action": "WOULD_TRADE", "reason": "supervisor_disarmed",
-                "candidate": chosen.get("slug"), "bid": chosen.get("bid"),
-                "ask": chosen.get("ask"), "score": chosen.get("score")}
+                "candidate": chosen.get("slug")}
 
     slug = str(chosen["slug"])
     campaign_sid = f"aws24-{int(time.time())}-{uuid.uuid4().hex[:8]}"
@@ -292,7 +302,7 @@ def run_forever() -> int:
             state["last_campaign"] = result
             state["last_campaign_t"] = _now_iso()
             _save_state(state)
-            # No-fill can recycle after a short operational cooldown.  Any
+            # No-fill can recycle after a short operational cooldown. Any
             # fill/residual will be caught by account reconciliation and block.
             if r.get("status") in ("NO_FILL", "REJECTED_NO_FILL",
                                     "NO_FILL_SAFE_REFUSAL"):
