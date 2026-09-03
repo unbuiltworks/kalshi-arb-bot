@@ -1,0 +1,62 @@
+name: PMUS full sports + props coverage patch
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/pmus-full-prop-coverage-patch.trigger
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/l5-transfer-backtest
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Patch discovery to include every live-event market
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/pmus_ws_evidence_recorder.py')
+          s=p.read_text()
+          old='''    targets = col.discover_targets(events_by_league, incentives,\n                                   ["aec-", "a5c-"], True)\n    cap = int(os.getenv(MAX_MARKETS_ENV, "24"))\n    return [t["slug"] for t in targets[:cap]]\n'''
+          new='''    # Full live-event universe: do not filter by market-prefix here.\n    # Sports props use additional slug families and were previously invisible\n    # to the L5 selector.  Active-incentive markets remain additive.\n    slugs = []\n    seen = set()\n    for events in events_by_league.values():\n        for ev in events or []:\n            if not ev.get("live"):\n                continue\n            for market in ev.get("markets", []) or []:\n                slug = str(market.get("slug") or "").strip()\n                if slug and slug not in seen:\n                    seen.add(slug)\n                    slugs.append(slug)\n    for slug in col.active_incentive_slugs(incentives):\n        if slug not in seen:\n            seen.add(slug)\n            slugs.append(slug)\n    cap = int(os.getenv(MAX_MARKETS_ENV, "24"))\n    return slugs[:cap]\n'''
+          if old not in s:
+              raise SystemExit('expected discovery block not found; refusing blind patch')
+          p.write_text(s.replace(old,new,1))
+
+          svc=Path('deploy/aws/l5-pmus-recorder.service')
+          t=svc.read_text()
+          old_cap='Environment=PMUS_WS_MAX_MARKETS=40'
+          if old_cap not in t:
+              raise SystemExit('expected AWS 40-market cap marker not found')
+          svc.write_text(t.replace(old_cap,'Environment=PMUS_WS_MAX_MARKETS=200',1))
+
+          test=Path('tests/test_pmus_full_prop_discovery.py')
+          test.write_text('''import os\n\nfrom src import pmus_ws_evidence_recorder as r\nfrom src import pmus_sports_collector as c\n\n\ndef test_discovery_includes_non_aec_live_prop(monkeypatch):\n    monkeypatch.delenv(r.MARKETS_ENV, raising=False)\n    monkeypatch.setenv(r.LEAGUES_ENV, "mlb")\n    monkeypatch.setenv(r.MAX_MARKETS_ENV, "200")\n\n    def fake_get(path):\n        if path == "/v2/leagues/mlb/events":\n            return [{"live": True, "markets": [\n                {"slug": "aec-game-moneyline"},\n                {"slug": "player-prop-strikeouts-o55"},\n                {"slug": "team-prop-runs-o45"},\n            ]}]\n        if path == "/v1/incentives":\n            return {"programs": []}\n        raise AssertionError(path)\n\n    monkeypatch.setattr(c, "http_get_json", fake_get)\n    slugs = r.discover_slugs()\n    assert "aec-game-moneyline" in slugs\n    assert "player-prop-strikeouts-o55" in slugs\n    assert "team-prop-runs-o45" in slugs\n''')
+          PY
+      - name: Install test dependency
+        run: python -m pip install -q pytest
+      - name: Focused coverage regression
+        run: python -m pytest -q tests/test_pmus_full_prop_discovery.py tests/test_pmus_ws_evidence_recorder.py tests/test_pmus_aws_supervisor.py
+      - name: Compile affected modules
+        run: python -m py_compile src/pmus_ws_evidence_recorder.py src/pmus_aws_supervisor.py
+      - name: Commit to transfer branch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'unbuiltworks'
+          git config user.email 'unbuiltapp@gmail.com'
+          git add src/pmus_ws_evidence_recorder.py deploy/aws/l5-pmus-recorder.service tests/test_pmus_full_prop_discovery.py
+          git commit -m 'PMUS: include all live sports props in AWS recorder'
+          git push origin HEAD:feature/l5-transfer-backtest
