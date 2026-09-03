@@ -1,15 +1,20 @@
 """Read-only spring-watch enrichment for the PMUS WS evidence recorder.
 
 This module does not discover markets, subscribe, mutate venue state, or alter
-any execution gate. It only adds already-computed theoretical slot evidence to
-the recorder's advisory ``spring_watch`` rows, then delegates to the canonical
-read-only recorder.
+any execution gate. It adds already-computed theoretical slot evidence to the
+recorder's advisory ``spring_watch`` rows and reserves a bounded subset of the
+existing expensive L5-shadow compute seats for already-subscribed spring-shaped
+markets, then delegates to the canonical read-only recorder.
 """
 from __future__ import annotations
 
 from typing import Any, Mapping, Optional
 
 from src import pmus_ws_evidence_recorder as base
+from src import pmus_priority_queue as pq
+from src.pmus_l5_compute_allocator import allocate_with_spring_reserve
+
+_ORIGINAL_ALLOCATE_L5 = pq.allocate_l5
 
 
 def _count(counts: Mapping[str, Any], key: str) -> int:
@@ -77,9 +82,18 @@ def spring_watch(rows: Mapping[str, Mapping[str, Any]],
     return [row for row, _ in picked[:max(0, lim)]]
 
 
+def allocate_l5(subscribed_slugs, state, targets=None, now=None,
+                l5_infos=None):
+    """Keep total L5 seats fixed while reserving a few for spring watch."""
+    return allocate_with_spring_reserve(
+        _ORIGINAL_ALLOCATE_L5, subscribed_slugs, state, targets=targets,
+        now=now, l5_infos=l5_infos)
+
+
 def install() -> None:
-    """Install the read-only display enrichment into the canonical worker."""
+    """Install read-only status and compute-allocation enrichments."""
     base.spring_watch = spring_watch
+    pq.allocate_l5 = allocate_l5
 
 
 def main() -> int:
