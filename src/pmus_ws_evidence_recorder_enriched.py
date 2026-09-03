@@ -18,6 +18,105 @@ from src.pmus_l5_compute_allocator import allocate_with_spring_reserve
 
 _ORIGINAL_ALLOCATE_L5 = pq.allocate_l5
 _ORIGINAL_WS_GATE = base.ws_gate
+_ORIGINAL_PLAN = pq.plan
+
+# Spring evidence-pursuit WS retention (issue #167 comments 5531925556/
+# 5531961242): a market with exactly one canonical strict SPRING_MATCHED
+# kept losing its WS seat to flow-ranked rotation before a second 300s
+# completion could ever be observed, leaving stale in-memory state that
+# LOOKED alive in status rows. A small bounded reserve keeps such
+# candidates on the live tape — eligibility requires FRESH canonical
+# strict evidence AND authenticated source freshness, and expires fail
+# closed. Never promotes loose Q1 MATCHED; never touches admission.
+PURSUIT_SEATS_ENV = "PMUS_SPRING_PURSUIT_SEATS"   # default 3, clamped 0..4
+PURSUIT_TTL_ENV = "PMUS_SPRING_PURSUIT_TTL_S"     # default 900s
+
+
+def _last_authenticated_update_age(s: Mapping[str, Any],
+                                   now: float) -> Optional[float]:
+    """Age of the newest authenticated book/trade update for one market;
+    None when the state has never carried a timestamped update. This is
+    the stale-state detector: a frozen status row keeps its old counts
+    but this age keeps growing."""
+    ts = []
+    for t in s.get("trades") or []:
+        try:
+            ts.append(float(t.get("t", 0)))
+        except (TypeError, ValueError):
+            pass
+    for h in s.get("bbo_history") or []:
+        try:
+            ts.append(float(h.get("t", 0)))
+        except (TypeError, ValueError):
+            pass
+    return (now - max(ts)) if ts else None
+
+
+def evidence_pursuit_candidates(state: Mapping[str, Any], now: float,
+                                exclude: set, ttl: float) -> list[dict]:
+    """Markets worth a bounded WS evidence-pursuit seat: canonical strict
+    spring evidence (>=1 SPRING_MATCHED inside the rolling replay window
+    — loose Q1 MATCHED never qualifies) AND a fresh authenticated source
+    (last book/trade update within ttl). A rolling strict match that has
+    aged out of the replay window yields matched=0 here and loses the
+    seat; a stale source fails closed regardless of remembered counts."""
+    out = []
+    for slug, s in state.items():
+        if slug in exclude or not isinstance(s, Mapping):
+            continue
+        age = _last_authenticated_update_age(s, now)
+        if age is None or age > ttl:
+            continue
+        try:
+            summary = spring_replay.summarize_state(s, now)
+        except Exception:
+            continue
+        matched = int(summary.get("spring_matched_slots") or 0)
+        if matched < 1:
+            continue
+        out.append({"slug": slug, "reason": "strict_match_pursuit",
+                    "strict_matches": matched,
+                    "last_update_age_s": round(age, 1)})
+    out.sort(key=lambda r: (-r["strict_matches"], r["last_update_age_s"],
+                            r["slug"]))
+    return out
+
+
+def plan(targets, state, cap, cycle, prev=None, now=None, l5_infos=None):
+    """Canonical priority plan plus a bounded evidence-pursuit reserve.
+
+    The global cap is UNCHANGED: each reserved candidate replaces the
+    lowest-ranked WARM seat only — hot seats and the COLD/starvation
+    sampler are never evicted, so broad coverage is preserved. With no
+    warm seat available, fewer (or zero) seats are reserved: fail closed
+    rather than widen the subscription set."""
+    import time as _time
+    now = now or _time.time()
+    p = _ORIGINAL_PLAN(targets, state, cap, cycle, prev, now=now,
+                       l5_infos=l5_infos)
+    seats = max(0, min(4, int(os.getenv(PURSUIT_SEATS_ENV, "3"))))
+    ttl = float(os.getenv(PURSUIT_TTL_ENV, "900"))
+    p["diagnostics"]["spring_ws_reserved"] = []
+    if seats == 0:
+        return p
+    subscribe = list(p["subscribe"])
+    cands = evidence_pursuit_candidates(state, now, set(subscribe),
+                                        ttl)[:seats]
+    if not cands:
+        return p
+    per = p.get("per_market") or {}
+    warm_tail = [s for s in reversed(subscribe)
+                 if per.get(s, {}).get("tier") == "warm"]
+    reserved = []
+    for cand in cands:
+        if not warm_tail:
+            break
+        evicted = warm_tail.pop(0)
+        subscribe[subscribe.index(evicted)] = cand["slug"]
+        reserved.append({**cand, "evicted_warm_seat": evicted})
+    p["subscribe"] = subscribe
+    p["diagnostics"]["spring_ws_reserved"] = reserved
+    return p
 
 # Conservative, configurable completion floor for the binary advisory
 # status (issue #167 comment 5525966568): no invented P&L threshold —
@@ -72,6 +171,12 @@ def ws_gate(s: Mapping[str, Any], now: float,
     """
     out = dict(_ORIGINAL_WS_GATE(s, now, window_s))
     out.update(spring_replay.summarize_state(s, now, window_s))
+    # stale-state visibility (issue #167 comment 5531961242): frozen
+    # counters on a rotated-out market keep their values, but this age
+    # keeps growing — the proof of continuous vs stale observation
+    age = _last_authenticated_update_age(s, now)
+    out["last_authenticated_update_age_s"] = (round(age, 1)
+                                              if age is not None else None)
     return out
 
 
@@ -128,6 +233,8 @@ def spring_watch(rows: Mapping[str, Mapping[str, Any]],
             r.get("spring_fee_safe_completions"),
             "spring_evidence_missing":
             r.get("spring_evidence_missing") or [],
+            "last_authenticated_update_age_s":
+            r.get("last_authenticated_update_age_s"),
         }
         picked.append(({
             "slug": slug,
@@ -180,6 +287,7 @@ def install() -> None:
     base.ws_gate = ws_gate
     base.spring_watch = spring_watch
     pq.allocate_l5 = allocate_l5
+    pq.plan = plan
 
 
 def main() -> int:
