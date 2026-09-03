@@ -10,8 +10,8 @@
   },
   "KXCOPPER15M": {
    "active_now": 1,
-   "latest_end_date": "2026-09-03T04:00:00Z",
-   "programs_total": 434,
+   "latest_end_date": "2026-09-04T04:00:00Z",
+   "programs_total": 522,
    "reward_values": [
     200000
    ],
@@ -22,8 +22,8 @@
   },
   "KXCRYPTOLEAD15M": {
    "active_now": 5,
-   "latest_end_date": "2026-09-03T04:00:00Z",
-   "programs_total": 4505,
+   "latest_end_date": "2026-09-04T04:00:00Z",
+   "programs_total": 4945,
    "reward_values": [
     200000
    ],
@@ -42,8 +42,8 @@
   },
   "KXGOLD15M": {
    "active_now": 1,
-   "latest_end_date": "2026-09-03T04:00:00Z",
-   "programs_total": 2174,
+   "latest_end_date": "2026-09-04T04:00:00Z",
+   "programs_total": 2042,
    "reward_values": [
     200000
    ],
@@ -54,8 +54,8 @@
   },
   "KXNATGAS15M": {
    "active_now": 1,
-   "latest_end_date": "2026-09-03T04:00:00Z",
-   "programs_total": 434,
+   "latest_end_date": "2026-09-04T04:00:00Z",
+   "programs_total": 522,
    "reward_values": [
     200000
    ],
@@ -66,8 +66,8 @@
   },
   "KXSILVER15M": {
    "active_now": 1,
-   "latest_end_date": "2026-09-03T04:00:00Z",
-   "programs_total": 2174,
+   "latest_end_date": "2026-09-04T04:00:00Z",
+   "programs_total": 2042,
    "reward_values": [
     200000
    ],
@@ -78,8 +78,8 @@
   },
   "KXWTI15M": {
    "active_now": 1,
-   "latest_end_date": "2026-09-03T04:00:00Z",
-   "programs_total": 2174,
+   "latest_end_date": "2026-09-04T04:00:00Z",
+   "programs_total": 2042,
    "reward_values": [
     200000
    ],
@@ -89,5 +89,5 @@
    "upcoming": 63
   }
  },
- "observed_at": "2026-09-02T12:09:33Z"
+ "observed_at": "2026-09-03T12:09:23Z"
 }
