@@ -2,9 +2,8 @@
 """Read-only PMUS settlement/activity reconciliation for one market."""
 import json
 import sys
-from urllib.parse import quote
 
-from src.pmus_q1_executor import Transport, API
+from src.pmus_q1_executor import Transport
 
 slug = sys.argv[1]
 t = Transport()
@@ -38,19 +37,20 @@ if isinstance(p, dict):
     out["position_realized"] = p.get("realized")
     out["position_cash_value"] = p.get("cashValue")
 
-path = "/v1/portfolio/activities?marketSlug=" + quote(slug, safe="") + "&limit=100"
-acts = t.request("GET", path)
+# Sign only the documented endpoint path. Filter the returned activity page
+# locally so query-string canonicalization can never invalidate auth.
+acts = t.request("GET", "/v1/portfolio/activities")
 for a in (acts.get("activities") if isinstance(acts, dict) else []) or []:
     if not isinstance(a, dict):
         continue
     typ = a.get("type")
     if typ == "ACTIVITY_TYPE_POSITION_RESOLUTION":
         r = a.get("positionResolution") or {}
-        if isinstance(r, dict):
+        if isinstance(r, dict) and r.get("marketSlug") == slug:
             out["resolutions"].append({k: r.get(k) for k in ("marketSlug", "side", "tradeId", "updateTime") if k in r})
     elif typ == "ACTIVITY_TYPE_TRADE":
         tr = a.get("trade") or {}
-        if isinstance(tr, dict):
+        if isinstance(tr, dict) and tr.get("marketSlug") == slug:
             def amount(v):
                 if isinstance(v, dict): return v.get("value")
                 return v
