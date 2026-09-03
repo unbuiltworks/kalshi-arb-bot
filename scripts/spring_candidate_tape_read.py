@@ -16,6 +16,7 @@ Reports, all THEORETICAL (no orders exist anywhere in this module):
   - pair-cost path and residual duration/severity
   - whether a spring (pair<=0.96) or hard (>=1c-after-fee) completion
     print was ever executable while a residual was held
+  - canonical strict spring slot replay over the same time-aligned tape
   - why a slot shows NO_FILL (crossing-print latency vs slot length)
   - execution-adapter diagnostic A vs B: canonical join-current-bid vs
     one-tick price improvement inside the spread (still post-only);
@@ -36,6 +37,7 @@ from typing import Any, Mapping, Optional
 from src import pmus_l5_action_shadow as shadow
 from src import pmus_l5_persistence_v2 as pv2
 from src import pmus_spring_l5_session as spring
+from src import pmus_spring_shadow_replay as strict_spring
 from src import pmus_status_report as rep
 from src import pmus_ws_evidence_recorder as rec
 
@@ -47,7 +49,13 @@ def slug_events(rows, slug: str) -> list[dict]:
     """(t, msg) tape rows -> ordered slug-scoped book/trade events with a
     rolling BBO folded exactly like the live recorder."""
     events: list[dict] = []
-    market = {"bid": None, "ask": None, "bid_qty": None, "ask_qty": None}
+    market = {
+        "bid": None,
+        "ask": None,
+        "bid_qty": None,
+        "ask_qty": None,
+        "both_sides_served": False,
+    }
     for t, msg in rows:
         found: list = []
         rec._walk_market_events(msg, found)
@@ -65,15 +73,51 @@ def slug_events(rows, slug: str) -> list[dict]:
                     market["bid_qty"] = bid_qty
                 if ask_qty is not None:
                     market["ask_qty"] = ask_qty
-                events.append({"kind": "book", "t": t, **market})
+                if bid_qty is not None and ask_qty is not None:
+                    market["both_sides_served"] = True
+                events.append({
+                    "kind": "book",
+                    "t": t,
+                    **market,
+                    "ask_book_missing": not market["both_sides_served"],
+                })
             elif ev["kind"] == "trade" and ev.get("price"):
-                events.append({"kind": "trade", "t": t,
-                               "px": str(ev["price"]),
-                               "qty": ev.get("qty"),
-                               "dir": rec._trade_direction(ev, market),
-                               **{k: market[k] for k in
-                                  ("bid", "ask", "bid_qty", "ask_qty")}})
+                events.append({
+                    "kind": "trade",
+                    "t": t,
+                    "px": str(ev["price"]),
+                    "qty": ev.get("qty"),
+                    "dir": rec._trade_direction(ev, market),
+                    **{k: market[k] for k in
+                       ("bid", "ask", "bid_qty", "ask_qty")},
+                })
     return events
+
+
+def _strict_replay(events: list[dict], trades: list[dict], now: float) -> dict:
+    """Run the canonical <=96c spring replay over the same time-aligned tape."""
+    return strict_spring.summarize_state(
+        {
+            "bbo_history": [
+                {
+                    "t": e["t"],
+                    "bid": e.get("bid"),
+                    "ask": e.get("ask"),
+                    "bid_qty": e.get("bid_qty"),
+                    "ask_book_missing": e.get(
+                        "ask_book_missing", not bool(e.get("ask_qty"))
+                    ),
+                }
+                for e in events
+                if e["kind"] == "book"
+            ],
+            "trades": [
+                {"t": tr["t"], "px": tr["px"], "dir": tr["dir"]}
+                for tr in trades
+            ],
+        },
+        now=now,
+    )
 
 
 def analyze(events: list[dict], slug: str, tick: D,
@@ -106,8 +150,8 @@ def analyze(events: list[dict], slug: str, tick: D,
     resid_max = 0
     last_t = t0
     completion_exec = {"spring": 0, "hard": 0,
-                      "first_spring_latency_s": None,
-                      "first_hard_latency_s": None}
+                       "first_spring_latency_s": None,
+                       "first_hard_latency_s": None}
     resid_since: Optional[float] = None
 
     for tr in trades:
@@ -181,7 +225,7 @@ def analyze(events: list[dict], slug: str, tick: D,
                     b_d, a_d = D(str(bid)), D(str(ask))
                     ab["epochs"] += 1
                     if a_d - b_d <= tick:
-                        ab["b_room_blocked"] += 1       # no inside room
+                        ab["b_room_blocked"] += 1
                     if side_up and tr["dir"] == "sell":
                         a_hit = px <= b_d
                         b_hit = a_d - b_d > tick and px <= b_d + tick
@@ -198,7 +242,7 @@ def analyze(events: list[dict], slug: str, tick: D,
         if filled:
             f = {"t": t, "relation": st.last_rel,
                  "side": "up" if side_up else "down",
-                 "px": str(px if side_up else D('1') - px),
+                 "px": str(px if side_up else D("1") - px),
                  "residual_after": st.residual,
                  "matched_after": st.matched}
             fills.append(f)
@@ -218,6 +262,8 @@ def analyze(events: list[dict], slug: str, tick: D,
     assert (ref.up_qty, ref.dn_qty, ref.n_fills) == \
         (st.up_qty, st.dn_qty, st.n_fills), "A-fold diverged from canonical"
 
+    strict_replay = _strict_replay(events, trades, t1 or 0.0)
+
     opp_gaps = []
     for i, f in enumerate(fills):
         nxt = next((g for g in fills[i + 1:] if g["side"] != f["side"]),
@@ -231,7 +277,8 @@ def analyze(events: list[dict], slug: str, tick: D,
     first_cross = fills[0]["t"] - t0 if fills and t0 is not None else None
 
     matched_slots = len(fill_slots)
-    if matched_slots >= 2 and completion_exec["spring"] > 0:
+    strict_repeated = strict_replay.get("spring_repeated_completion") is True
+    if matched_slots >= 2 and strict_repeated:
         verdict = "BOUNDED_PROBE_GATE_MET"
     elif window_s >= REJECT_MIN_WINDOW_S and (
             not fills or (st.residual != 0 and completion_exec["hard"] == 0)):
@@ -255,14 +302,15 @@ def analyze(events: list[dict], slug: str, tick: D,
                   "residual_seconds_weighted": round(resid_area, 1),
                   "residual_max": resid_max,
                   "first_crossing_latency_s": (round(first_cross, 1)
-                                               if first_cross is not None
-                                               else None)},
+                                                if first_cross is not None
+                                                else None)},
         "opp_side_gaps_s": {"gaps": opp_gaps,
                             "p50": median(opp_gaps) if opp_gaps else None,
                             "max": max(opp_gaps) if opp_gaps else None,
                             "unresolved_holds":
                             sum(1 for f in fills if f["residual_after"])},
         "completion_executability": completion_exec,
+        "strict_spring_replay": strict_replay,
         "no_fill_explanation": {
             "slots_seen": len(slot_ids), "slots_with_clone_fill":
             matched_slots, "slot_seconds": rep.SLOT_S,
@@ -283,11 +331,12 @@ def analyze(events: list[dict], slug: str, tick: D,
         "timeline_tail": timeline[-40:],
         "verdict": verdict,
         "verdict_rule": "BOUNDED_PROBE_GATE_MET iff >=2 distinct 300s "
-                        "slots carry clone fills AND >=1 spring(<=0.96) "
-                        "completion print was executable while a residual "
-                        "was held; REJECT iff >=2h of tape with zero "
-                        "fills or a residual no hard-bound print could "
-                        "ever complete; else KEEP_SHADOWING",
+                        "slots carry clone fills AND the canonical strict "
+                        "spring replay reports repeated completion "
+                        "(>=2 SPRING_MATCHED slots, each pair<=0.96); "
+                        "REJECT iff >=2h of tape with zero fills or a "
+                        "residual no hard-bound print could ever complete; "
+                        "else KEEP_SHADOWING",
     }
 
 
@@ -310,9 +359,10 @@ def main() -> int:
     out = Path(args.out) if args.out else \
         root / f"spring_read_{args.slug}.json"
     out.write_text(json.dumps(result, indent=1, default=str))
-    slim = {k: result[k] for k in ("slug", "verdict", "window", "clone",
-                                   "completion_executability",
-                                   "adapter_a_vs_b")}
+    slim = {k: result[k] for k in (
+        "slug", "verdict", "window", "clone",
+        "completion_executability", "strict_spring_replay", "adapter_a_vs_b"
+    )}
     print(json.dumps(slim, default=str))
     print(f"full report: {out}")
     return 0
