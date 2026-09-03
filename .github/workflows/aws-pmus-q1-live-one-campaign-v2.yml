@@ -40,7 +40,7 @@ jobs:
           [[ "$SID" =~ ^[A-Za-z0-9._-]{8,80}$ ]] || { echo INVALID_SESSION; exit 2; }
           test "$GATE" = "$SLUG"
           test "$APPROVAL" = PMUS_Q1_ONE_CAMPAIGN_APPROVED
-          EXPECTED_SHA=06c7bc3ef38f721b2c3cdc8a4d8c627c34b06caf15d96709c85cefc4bd7e6b98
+          EXPECTED_SHA=fcfd2d4723ab671c6f1110477d39365be70d9fc0dcf5842d36954dc0bbb7c465
           REMOTE=$(cat <<EOF
           set -Eeuo pipefail
           STAGE=/home/ssm-user/l5-pmus-q1-stage
