@@ -29,6 +29,10 @@ COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
 COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
 COPY analysis/l5/l5_action_model.json analysis/l5/l5_action_model.json
 COPY analysis/l5/l5_action_model_v2.json analysis/l5/l5_action_model_v2.json
+# Optional one-shot, READ-ONLY planner benchmark over the mounted authenticated
+# tape. It runs only when PMUS_WS_PRIORITY_EVAL_ON_START=1 and never blocks
+# recorder startup if the diagnostic itself fails.
+COPY scripts/priority_vs_rotation_eval.py scripts/priority_vs_rotation_eval.py
 RUN touch src/__init__.py
 
 ENV PMUS_SERVICE_ROLE=ws-recorder \
@@ -37,4 +41,4 @@ ENV PMUS_SERVICE_ROLE=ws-recorder \
     PMUS_WS_MAX_MARKETS=40 \
     PYTHONUNBUFFERED=1
 
-CMD ["python3", "-m", "src.pmus_ws_evidence_recorder"]
+CMD ["sh", "-c", "if [ \"${PMUS_WS_PRIORITY_EVAL_ON_START:-0}\" = \"1\" ]; then echo PMUS_PRIORITY_EVAL_START; python3 scripts/priority_vs_rotation_eval.py --tape-root \"${PMUS_WS_ROOT:-/state/pmus-ws}\" || echo PMUS_PRIORITY_EVAL_FAILED:$?; fi; exec python3 -m src.pmus_ws_evidence_recorder"]
