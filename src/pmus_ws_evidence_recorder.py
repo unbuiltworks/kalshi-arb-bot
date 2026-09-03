@@ -289,6 +289,7 @@ def _l5_compact(s: Mapping[str, Any], now: float,
     try:
         from src import pmus_l5_action_shadow as l5s
         row = l5s.market_shadow_row(s, now, gate)
+        v2 = row.get("persistence_v2") or {}
         return {"l5_state": row["l5_state"],
                 "last_rel": row["last_rel"],
                 "sim_inventory": row["sim_inventory"],
@@ -297,6 +298,17 @@ def _l5_compact(s: Mapping[str, Any], now: float,
                 "off_distribution": row["off_distribution"],
                 "divergent_vs_pair_gate": row["comparison"]["divergent"],
                 "model_sha256_16": row["model_sha256_16"],
+                "v2": ({"recommended_relation": v2.get(
+                            "recommended_relation"),
+                        "persist_extend_p": v2.get("persist_extend_p"),
+                        "switch_complete_p": v2.get("switch_complete_p"),
+                        "side": v2.get("side"),
+                        "price_zone": v2.get("price_zone"),
+                        "next_reevaluation_s": v2.get(
+                            "next_reevaluation_s"),
+                        "off_distribution": v2.get("off_distribution"),
+                        "model_sha256_16": v2.get("model_sha256_16")}
+                       if not v2.get("error") else v2),
                 "labels": "THEORETICAL"}
     except Exception as exc:
         return {"error": f"l5_shadow_unavailable:{type(exc).__name__}"}

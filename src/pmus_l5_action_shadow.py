@@ -54,7 +54,8 @@ from typing import Any, Mapping, Optional
 
 from src.polymarket_l5.action_model import state_key
 
-MODEL_PATH = Path("analysis/l5/l5_action_model.json")
+MODEL_PATH = (Path(__file__).resolve().parents[1]
+              / "analysis/l5/l5_action_model.json")   # cwd-independent
 SPORTS_TTE_DEFAULT_S = 1e9          # no settlement clock -> coarsest bucket
 TOP_ACTIONS = 6
 LABELS = ("THEORETICAL per-market L5 clone shadow; frozen canonical "
@@ -221,6 +222,21 @@ def market_shadow_row(s: Mapping[str, Any], now: float,
     gate_status = gate.get("gate_status")
     gate_next = ("q1_first_leg_candidate"
                  if gate_status == "Q1_GATE_CLEARED" else "wait")
+    # persistence-v2 arm (issue #167 comment 5519823659): the SAME clone
+    # state scored by the last_rel/last_size-conditioned model, emitted
+    # side-by-side with v1; the frozen v1 stays untouched. Unavailable
+    # artifact degrades to an explicit marker, never an exception.
+    try:
+        from src import pmus_l5_persistence_v2 as pv2
+        m2 = pv2.load_v2()
+        v2 = pv2.proposal(m2, sk, st.last_rel or "open", "q<5",
+                          residual=st.residual,
+                          clone_avg_cost=(
+                              str(st.cost_up / st.up_qty)
+                              if st.up_qty else None))
+        v2_block = {**v2, "model_sha256_16": m2["_sha256_16"]}
+    except Exception as exc:
+        v2_block = {"error": f"v2_unavailable:{type(exc).__name__}"}
     return {
         "labels": LABELS,
         "model_sha256_16": model["_sha256_16"],
@@ -237,6 +253,7 @@ def market_shadow_row(s: Mapping[str, Any], now: float,
             sorted(ranked_src.items(), key=lambda kv: -kv[1])[:TOP_ACTIONS]],
         "next_relation_ranked": [
             {"relation": r, "p": round(p, 4)} for r, p in rel_ranked],
+        "persistence_v2": v2_block,
         "tte_adapter": ("settlement_clock" if settlement_t
                         else "sports_default_coarsest_bucket"),
         "comparison": {
