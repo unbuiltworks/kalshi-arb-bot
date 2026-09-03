@@ -1,0 +1,118 @@
+name: L5 Ops 24x7
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: l5-ops-24x7
+  cancel-in-progress: false
+
+jobs:
+  collect-shadow:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '*/10 * * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout canonical L5 code
+        uses: actions/checkout@v4
+        with:
+          ref: feature/l5-canonical
+          path: code
+          fetch-depth: 1
+
+      - name: Checkout durable L5 ops state
+        uses: actions/checkout@v4
+        with:
+          ref: l5-ops-data
+          path: state
+          fetch-depth: 1
+
+      - name: Restore durable state
+        shell: bash
+        run: |
+          mkdir -p code/data/l5/ops
+          if [ -d state/data/l5/ops ]; then
+            cp -a state/data/l5/ops/. code/data/l5/ops/
+          fi
+
+      - name: Collect current L5 public activity
+        working-directory: code
+        run: python3 -m src.polymarket_l5.ops collect
+
+      - name: Run action-by-action shadow comparison
+        working-directory: code
+        run: python3 -m src.polymarket_l5.ops shadow
+
+      - name: Persist cursor, raw provenance, shadow, heartbeat, and failures
+        shell: bash
+        run: |
+          mkdir -p state/data/l5/ops
+          rm -rf state/data/l5/ops/*
+          cp -a code/data/l5/ops/. state/data/l5/ops/
+          cd state
+          git config user.name "l5-ops-24x7"
+          git config user.email "l5-ops-24x7@users.noreply.github.com"
+          git add -A data/l5/ops
+          if git diff --cached --quiet; then
+            echo "No state changes"
+            exit 0
+          fi
+          git commit -m "l5-ops: 10m state snapshot $(date -u +%FT%TZ)"
+          git push origin HEAD:l5-ops-data
+
+  daily-regression:
+    if: github.event.schedule == '17 3 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout canonical L5 code
+        uses: actions/checkout@v4
+        with:
+          ref: feature/l5-canonical
+          path: code
+          fetch-depth: 1
+
+      - name: Checkout durable L5 ops state
+        uses: actions/checkout@v4
+        with:
+          ref: l5-ops-data
+          path: state
+          fetch-depth: 1
+
+      - name: Restore durable state
+        shell: bash
+        run: |
+          mkdir -p code/data/l5/ops
+          if [ -d state/data/l5/ops ]; then
+            cp -a state/data/l5/ops/. code/data/l5/ops/
+          fi
+
+      - name: Install regression dependency
+        run: python3 -m pip install --disable-pip-version-check pytest
+
+      - name: Run canonical L5 regression
+        working-directory: code
+        run: python3 -m src.polymarket_l5.ops regression
+
+      - name: Persist regression artifacts
+        shell: bash
+        run: |
+          mkdir -p state/data/l5/ops
+          rm -rf state/data/l5/ops/*
+          cp -a code/data/l5/ops/. state/data/l5/ops/
+          cd state
+          git config user.name "l5-ops-24x7"
+          git config user.email "l5-ops-24x7@users.noreply.github.com"
+          git add -A data/l5/ops
+          if git diff --cached --quiet; then
+            echo "No regression state changes"
+            exit 0
+          fi
+          git commit -m "l5-ops: daily regression $(date -u +%FT%TZ)"
+          git push origin HEAD:l5-ops-data
