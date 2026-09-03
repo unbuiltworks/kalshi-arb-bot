@@ -46,6 +46,11 @@ jobs:
           export PYTHONPATH="\$STAGE"
           "\$VENV/bin/python" /tmp/pmus_settlement_audit.py "$SLUG"
           rm -f /tmp/pmus_settlement_audit.py
+          echo PMUS_ENGINE_HEARTBEAT_BEGIN
+          cat /home/ssm-user/l5-pmus-supervisor-state/heartbeat.json
+          echo
+          echo PMUS_RECORDER_STATUS_BEGIN
+          grep 'PMUS_WS_STATUS ' /home/ssm-user/l5-pmus-ws-state/recorder.log | tail -n 3
           EOF
           )
           ENC=$(printf '%s' "$REMOTE" | base64 -w0)
@@ -62,3 +67,5 @@ jobs:
           OUT=$(jq -r '.Stdout' <<<"$RESULT")
           grep -q 'PMUS_SETTLEMENT_AUDIT_OK' <<<"$OUT"
           grep -q '"order_entry":false' <<<"$OUT"
+          grep -q 'PMUS_ENGINE_HEARTBEAT_BEGIN' <<<"$OUT"
+          grep -q 'PMUS_RECORDER_STATUS_BEGIN' <<<"$OUT"
