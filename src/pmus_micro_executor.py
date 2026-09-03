@@ -1,6 +1,6 @@
 """Penny-scale PMUS executor for bounded L5 live probes.
 
-This module is deliberately separate from ``pmus_q1_executor_v4``.  The
+This module is deliberately separate from ``pmus_q1_executor_v4``. The
 proven q=1 path keeps its existing constants and behavior; MICRO mode adds
 fractional venue-aware quantity only when an extra arming key is present.
 
@@ -12,9 +12,11 @@ Safety invariants:
   at the entry-time binary complement bound (gross pair capital <= about 4c)
 * current 0.005 tick is required; any other live tick fails closed
 * Decimal quantity survives request, fill, ledger and residual accounting
+* a partial fill is never promoted to a full fill by state-string matching
 * a partial complement is never treated as matched
 * any unexpected residual above the actual first-fill quantity is reported
   as a cap breach, never rounded/truncated
+* account reconciliation is self-contained and GET-only before first mutation
 * all q1 economics, post-only checks, GET retry behavior and deadman logic are
   reused; POST mutations are never retried
 """
@@ -63,9 +65,9 @@ def choose_micro_quantity(entry_price: D, minimum_trade_qty: D,
                           max_leg_notional: D = DEFAULT_MAX_LEG_NOTIONAL) -> D:
     """Return a legal min-qty multiple while bounding either binary leg.
 
-    Quantity first aims for ``target_notional`` on the maker entry.  It is
+    Quantity first aims for ``target_notional`` on the maker entry. It is
     then capped so neither the entry nor a worst-case binary complement at
-    ``1-entry`` can exceed ``max_leg_notional``.  This intentionally chooses
+    ``1-entry`` can exceed ``max_leg_notional``. This intentionally chooses
     *less* than one cent when necessary rather than allowing a cheap entry to
     imply a large expensive complement.
     """
@@ -124,6 +126,48 @@ def market_micro_spec(t: Transport, slug: str, entry_price: D) -> dict[str, D]:
     }
 
 
+def account_block_reason(t: Transport) -> Optional[str]:
+    """Global authoritative account reconciliation immediately before live.
+
+    Uses only the audited bounded GET retry helper. Any open order anywhere or
+    any non-zero Decimal position anywhere blocks a new MICRO first leg.
+    Keeping this helper local avoids a runtime dependency on the long-running
+    supervisor module in the isolated one-shot stage.
+    """
+    opened = q1.base._get_with_retry(t, "/v1/orders/open")
+    orders = opened.get("orders") if isinstance(opened, Mapping) else None
+    if isinstance(orders, list) and orders:
+        return f"open_orders:{len(orders)}"
+
+    resp = q1.base._get_with_retry(t, "/v1/portfolio/positions")
+    rows = resp.get("positions") if isinstance(resp, Mapping) else None
+    if isinstance(rows, Mapping):
+        iterable = rows.items()
+    elif isinstance(rows, list):
+        iterable = ((str(r.get("marketSlug") or ""), r)
+                    for r in rows if isinstance(r, Mapping))
+    else:
+        iterable = []
+    nonzero = []
+    for slug, row in iterable:
+        if not isinstance(row, Mapping):
+            continue
+        raw = row.get("netPositionDecimal")
+        if raw is None:
+            raw = row.get("netPosition")
+        if raw is None:
+            raw = row.get("quantity")
+        value = _d(raw)
+        if value is None:
+            return "position_unparseable"
+        if value != 0:
+            nonzero.append((str(slug), str(value)))
+    if nonzero:
+        return "nonzero_positions:" + ",".join(
+            f"{slug}={value}" for slug, value in nonzero[:5])
+    return None
+
+
 def _body(slug: str, outcome_side: str, price: D, qty: D,
           post_only: bool) -> dict[str, Any]:
     qty = D(str(qty))
@@ -145,8 +189,6 @@ def _body(slug: str, outcome_side: str, price: D, qty: D,
 
 def authoritative_fill(order: Mapping[str, Any], requested_qty: D,
                        *, accept_partial: bool = False) -> Optional[dict]:
-    state = str(order.get("state") or order.get("status") or
-                order.get("orderStatus") or "").upper()
     raw = order.get("cumQuantity")
     if raw is None:
         raw = order.get("filledQuantity")
@@ -154,9 +196,15 @@ def authoritative_fill(order: Mapping[str, Any], requested_qty: D,
         raw = order.get("cumQty")
     filled = _d(raw) or D("0")
     requested = D(str(requested_qty))
+    if requested <= 0:
+        raise Halt("MICRO_BAD_REQUESTED_QTY")
     if filled <= 0:
         return None
-    if not accept_partial and filled < requested and "FILLED" not in state:
+    if filled > requested:
+        raise Halt(f"MICRO_FILL_QTY_EXCEEDS_REQUESTED:{filled}>{requested}")
+    # Never infer a full fill from a status substring such as
+    # ORDER_STATE_PARTIALLY_FILLED. Quantity is the authoritative threshold.
+    if filled < requested and not accept_partial:
         return None
     for key in ("avgPx", "avgPrice", "averagePrice", "avgExecutionPrice"):
         px = _d(order.get(key))
@@ -374,8 +422,7 @@ def run_campaign(t: Optional[Transport] = None,
     try:
         # Stronger than q1 target-only preflight: no open order or nonzero
         # position anywhere in the account before a MICRO first leg.
-        from src import pmus_aws_supervisor as supervisor
-        block = supervisor.account_block_reason(t)
+        block = account_block_reason(t)
         if block:
             return {**report, "status": "PREFLIGHT_FAILED", "reason": block}
         reason = q1.preflight(t, slug)
