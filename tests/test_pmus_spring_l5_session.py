@@ -89,6 +89,12 @@ def _arm(monkeypatch, tmp_path, slug=SLUG):
     monkeypatch.setenv(spring.SPRING_ARM_ENV, "s1")
     monkeypatch.setenv(spring.SPRING_MARKET_ENV, slug)
     monkeypatch.setenv(spring.SPRING_GATE_ENV, slug)
+    # P0-D/P0-E (issue #167 comments 5526683554/5526791808): operator
+    # asserts strict repeated completion + durable state for these
+    # already-armed fixtures; dedicated tests below cover the fail-closed
+    # paths when either assertion is absent.
+    monkeypatch.setenv(spring.SPRING_STRICT_ENV, slug)
+    monkeypatch.setenv(spring.STATE_DURABLE_ENV, "1")
     monkeypatch.setenv(q1.base.KEY_ENV, "k")
     monkeypatch.setenv(q1.base.SECRET_ENV, "s")
     monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
@@ -202,6 +208,10 @@ def test_candidate_gate_thin_flow_and_off_distribution():
     row["two_sided_trades"] = False
     assert spring.spring_candidate_gate(row) == "one_directional_flow"
     row["two_sided_trades"] = True
+    # P0-D: without strict replay evidence the gate now fails CLOSED
+    assert spring.spring_candidate_gate(row) == \
+        "spring_completion_not_repeated"
+    row["spring_repeated_completion"] = True
     assert spring.spring_candidate_gate(row) is None
     # off-distribution v2 state blocks
     assert spring.spring_candidate_gate(
@@ -412,3 +422,110 @@ def test_rank_spring_candidates_consumes_spring_watch(monkeypatch):
     assert mine["two_sided_trades"] is True
     # advisory only: the canonical gates still decide admission
     assert "spring_skip" in mine
+
+
+# ---- P0-D: strict replay wired into admission, fail closed (5526683554) ----
+
+def _flowing_row(**extra):
+    return {"slug": "x", "bid": "0.50", "skip_reason": None,
+            "both_sides_served": True, "trades_1h": 20,
+            "two_sided_trades": True, **extra}
+
+
+def test_loose_q1_matched_history_is_not_spring_evidence():
+    # loose Q1 MATCHED:2 rode along, strict replay says 0 -> BLOCKED
+    row = _flowing_row(slot_counts_theoretical={"MATCHED": 2},
+                       spring_repeated_completion=False,
+                       spring_matched_slots=0)
+    assert spring.spring_candidate_gate(row) == \
+        "spring_completion_not_repeated"
+
+
+def test_single_strict_completion_is_blocked():
+    row = _flowing_row(spring_repeated_completion=False,
+                       spring_matched_slots=1)
+    assert spring.spring_candidate_gate(row) == \
+        "spring_completion_not_repeated"
+
+
+def test_repeated_strict_completion_plus_gates_admits():
+    row = _flowing_row(spring_repeated_completion=True,
+                       spring_matched_slots=2,
+                       spring_slot_counts_theoretical={"SPRING_MATCHED": 2})
+    assert spring.spring_candidate_gate(row) is None
+
+
+def test_missing_strict_field_fails_closed():
+    assert spring.spring_candidate_gate(_flowing_row()) == \
+        "spring_completion_not_repeated"
+
+
+def test_rank_carries_strict_fields_from_status_rows(monkeypatch):
+    status = {"spring_watch": [
+        {"slug": "with-evidence", "trades_1h": 20, "two_sided_trades": True,
+         "both_sides_served": True, "spring_repeated_completion": True,
+         "spring_matched_slots": 2, "spring_pair_target": "0.96",
+         "spring_slot_counts_theoretical": {"SPRING_MATCHED": 2}},
+        {"slug": "no-evidence", "trades_1h": 30, "two_sided_trades": True,
+         "both_sides_served": True},
+    ]}
+    monkeypatch.setattr(spring.micro, "micro_eligible",
+                        lambda t, slug: {"slug": slug, "bid": "0.5000",
+                                         "skip_reason": None})
+    monkeypatch.setattr(spring.pv2, "load_v2", lambda: None)
+    rows = {r["slug"]: r for r in spring.rank_spring_candidates(None, status)}
+    good = rows["with-evidence"]
+    assert good["spring_repeated_completion"] is True
+    assert good["spring_matched_slots"] == 2
+    assert good["spring_pair_target"] == "0.96"
+    assert good["spring_skip"] is None
+    bad = rows["no-evidence"]
+    assert "spring_repeated_completion" not in bad       # stayed missing
+    assert bad["spring_skip"] == "spring_completion_not_repeated"
+
+
+def test_live_session_blocks_without_strict_assertion(monkeypatch, tmp_path):
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.delenv(spring.SPRING_STRICT_ENV, raising=False)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _tiny_model())
+    fake = Fake()
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 0.0)
+    assert rep["status"] == "SPRING_SKIP_NOT_QUALIFYING"
+    assert rep["reason"] == "spring_completion_not_repeated"
+    assert fake.posts == []                              # nothing reached venue
+
+
+# ---- P0-E: durable-state arming preflight (5526791808) ----
+
+def test_armed_session_refuses_ephemeral_state(monkeypatch, tmp_path):
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.delenv(spring.STATE_DURABLE_ENV, raising=False)
+    monkeypatch.setattr(spring.os.path, "ismount", lambda p: False)
+    fake = Fake()
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 0.0)
+    assert rep["status"] == "STATE_NOT_DURABLE"
+    assert rep["reason"] == "state_dir_not_durable_no_mount"
+    assert "Railway volume" in rep["required_action"]
+    assert fake.posts == []
+
+
+def test_mounted_state_dir_passes_durability(monkeypatch, tmp_path):
+    monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
+    monkeypatch.delenv(spring.STATE_DURABLE_ENV, raising=False)
+    mounted = {str(tmp_path.resolve())}
+    monkeypatch.setattr(spring.os.path, "ismount",
+                        lambda p: str(p) in mounted)
+    assert spring.state_dir_block_reason() is None
+
+
+def test_unwritable_state_dir_fails_closed(monkeypatch, tmp_path):
+    # a FILE where a directory must be: mkdir/write genuinely fails even
+    # for root (chmod-based denial is a no-op under uid 0)
+    blocker = tmp_path / "not-a-dir"
+    blocker.write_text("x")
+    monkeypatch.setenv(q1.base.STATE_ENV, str(blocker / "state"))
+    monkeypatch.setenv(spring.STATE_DURABLE_ENV, "1")
+    reason = spring.state_dir_block_reason()
+    assert reason and reason.startswith("state_dir_not_writable")

@@ -79,9 +79,15 @@ SPRING_SID_ENV = "PMUS_SPRING_SESSION_ID"
 SPRING_ARM_ENV = "PMUS_SPRING_ARM"
 SPRING_MARKET_ENV = "PMUS_SPRING_MARKET_SLUG"
 SPRING_GATE_ENV = "PMUS_SPRING_GATE_EVIDENCE"
+# operator-asserted STRICT replay evidence (issue #167 comment
+# 5526683554): must EQUAL the slug, copied from a recorder status row
+# whose spring_repeated_completion is true. Absent => admission fails
+# closed with spring_completion_not_repeated.
+SPRING_STRICT_ENV = "PMUS_SPRING_REPEATED_COMPLETION"
 DEADLINE_ENV = "PMUS_SPRING_DEADLINE_SECONDS"      # default 900
 SETTLEMENT_ENV = "PMUS_SPRING_SETTLEMENT_TS"       # optional epoch seconds
 MAX_ACTIONS_ENV = "PMUS_SPRING_MAX_ACTIONS"        # default 6
+STATE_DURABLE_ENV = "PMUS_SPRING_STATE_DURABLE"    # operator override "1"
 
 # Spring gates — measured, from analysis/l5/l5_ramp_analysis.json
 SPRING_BAND_LO, SPRING_BAND_HI = D("0.45"), D("0.55")   # modal spring entry
@@ -103,6 +109,43 @@ def armed() -> bool:
 
 def gate_asserted(slug: str) -> bool:
     return bool(slug) and os.getenv(SPRING_GATE_ENV, "").strip() == slug
+
+
+def strict_completion_asserted(slug: str) -> bool:
+    """Operator copies the strict-replay verdict (spring_repeated_completion
+    true on the recorder status row for THIS slug) into the env; anything
+    else fails closed downstream (issue #167 comment 5526683554)."""
+    return bool(slug) and os.getenv(SPRING_STRICT_ENV, "").strip() == slug
+
+
+def state_dir_block_reason() -> Optional[str]:
+    """Live spring refuses to arm on ephemeral or unwritable state (issue
+    #167 comment 5526791808): the ledger, session records, and the $0.05
+    cumulative-notional cap live under PMUS_Q1_STATE_DIR; without a
+    durable mount a restart would forget spent notional. Durable =
+    the dir (or a parent below /) is an OS mountpoint, or the operator
+    explicitly asserts PMUS_SPRING_STATE_DURABLE=1 for hosts where mount
+    detection is unreliable. Fail closed on any doubt."""
+    d = q1.state_dir()
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        probe = d / ".durability_probe"
+        probe.write_text("ok")
+        probe.unlink()
+    except OSError as exc:
+        return f"state_dir_not_writable:{type(exc).__name__}"
+    if os.getenv(STATE_DURABLE_ENV, "").strip() == "1":
+        return None
+    p = d.resolve()
+    while True:
+        if os.path.ismount(p):
+            return None
+        if p.parent == p:
+            break
+        p = p.parent
+        if str(p) == "/":
+            break
+    return "state_dir_not_durable_no_mount"
 
 
 class Inventory:
@@ -236,6 +279,12 @@ def spring_candidate_gate(row: Mapping[str, Any],
         return f"thin_flow:{trades}"
     if row.get("two_sided_trades") is False:
         return "one_directional_flow"
+    # STRICT spring-replay admission (issue #167 comments 5526683554/
+    # 5526736870): loose Q1 MATCHED history is NOT spring evidence — the
+    # slot must have STARTED 45-55c and completed <=0.96, repeatedly.
+    # Missing field fails CLOSED: absence of evidence blocks.
+    if row.get("spring_repeated_completion") is not True:
+        return "spring_completion_not_repeated"
     if model is not None:
         d = pv2.v2_dist(model, state_key(float(b), SPORTS_TTE_DEFAULT_S,
                                          0.0), "open", "q<5")
@@ -278,6 +327,13 @@ def rank_spring_candidates(t: Transport,
                                                      True))
         row["trades_1h"] = srow.get("trades_1h")
         row["two_sided_trades"] = srow.get("two_sided_trades")
+        # strict-replay evidence rides with the candidate (issue #167
+        # comment 5526683554); a status row without it stays missing and
+        # the gate below fails closed on it
+        for key in ("spring_repeated_completion", "spring_matched_slots",
+                    "spring_slot_counts_theoretical", "spring_pair_target"):
+            if key in srow:
+                row[key] = srow[key]
         row["spring_skip"] = spring_candidate_gate(row, model)
         out.append(row)
     def _rank(r):
@@ -345,6 +401,14 @@ def run_session(t: Optional[Transport] = None,
         return {**report, "status": "NO_CREDENTIALS"}
     if not gate_asserted(slug):
         return {**report, "status": "GATE_NOT_CLEARED"}
+    sd_block = state_dir_block_reason()
+    if sd_block:
+        # issue #167 comment 5526791808: never run live on ephemeral state
+        return {**report, "status": "STATE_NOT_DURABLE", "reason": sd_block,
+                "required_action":
+                "attach an isolated Railway volume mounted at the spring "
+                "service's PMUS_Q1_STATE_DIR (/state/pmus-spring); do not "
+                "share the recorder volume"}
     if q1.realized_today() <= q1.DAILY_LOSS_STOP:
         return {**report, "status": "DAILY_LOSS_STOP"}
 
@@ -372,7 +436,9 @@ def run_session(t: Optional[Transport] = None,
         block = micro.account_block_reason(t)
         if block:
             return {**report, "status": "PREFLIGHT_FAILED", "reason": block}
-        row = micro.micro_eligible(t, slug)
+        row = dict(micro.micro_eligible(t, slug))
+        if strict_completion_asserted(slug):
+            row["spring_repeated_completion"] = True
         skip = spring_candidate_gate(row, model)
         if skip:
             return {**report, "status": "SPRING_SKIP_NOT_QUALIFYING",
