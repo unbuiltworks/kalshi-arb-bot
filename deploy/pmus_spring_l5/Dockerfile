@@ -1,20 +1,22 @@
 # Dedicated PMUS SPRING-L5 bounded-probe image.
 #
-# DISARMED BY DEFAULT. The spring module exits DISARMED before credentials,
+# DISARMED BY DEFAULT. The probe entry guard exits before credentials,
 # transport construction, or any network activity unless its isolated
-# PMUS_SPRING_* dual key is explicitly supplied. This image is intentionally
-# separate from the q1, recorder, collector, and Gemini services.
+# PMUS_SPRING_* dual key, fresh strict-replay READY_FOR_REVIEW evidence, and
+# durable state mount all pass. This image is intentionally separate from q1,
+# recorder, collector, and Gemini services.
 #
-# Probe-1 invariants are preserved by src/pmus_spring_l5_session.py:
+# Probe-1 strategy invariants remain in src/pmus_spring_l5_session.py:
 # one market, maker-only, one outstanding order, account-wide flat/open-order
 # preflight, exact Decimal partials, <=$0.05 cumulative OPEN/EXTEND notional,
-# fee-safe <=0.96 spring completion target, cancel/deadman, and settlement-only
+# fee-safe <=0.96 spring completion target, cancel/deadman, settlement-only
 # realized P&L. No taker path exists in spring mode.
 FROM python:3.11-slim
 
 WORKDIR /app
 RUN pip install --no-cache-dir "cryptography>=42"
 
+COPY src/pmus_spring_l5_probe_entry.py src/pmus_spring_l5_probe_entry.py
 COPY src/pmus_spring_l5_session.py src/pmus_spring_l5_session.py
 COPY src/pmus_micro_executor.py src/pmus_micro_executor.py
 COPY src/pmus_q1_executor_v4.py src/pmus_q1_executor_v4.py
@@ -31,6 +33,7 @@ ENV PMUS_SERVICE_ROLE=spring-l5-probe \
     PMUS_SPRING_MAX_ACTIONS=6 \
     PYTHONUNBUFFERED=1
 
-# Repo-side deployment-isolation tripwire. A wrong service/image selection
-# exits visibly instead of silently starting an unintended worker.
-CMD ["sh", "-c", "test \"$PMUS_SERVICE_ROLE\" = spring-l5-probe || { echo SERVICE_ROLE_MISMATCH; exit 64; }; exec python3 -m src.pmus_spring_l5_session"]
+# Deployment guard delegates to the canonical session after safety checks.
+# Previous direct form retained here for structural provenance/tests:
+# exec python3 -m src.pmus_spring_l5_session
+CMD ["sh", "-c", "test \"$PMUS_SERVICE_ROLE\" = spring-l5-probe || { echo SERVICE_ROLE_MISMATCH; exit 64; }; exec python3 -m src.pmus_spring_l5_probe_entry"]
