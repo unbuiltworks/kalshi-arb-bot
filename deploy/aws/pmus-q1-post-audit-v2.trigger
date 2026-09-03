@@ -1,3 +1,3 @@
 MARKET_SLUG=aec-mlb-sf-pit-2026-09-02
-AUDIT_ID=pmus-q1-settlement-recheck-20260903-0115Z
+AUDIT_ID=pmus-q1-readiness-recheck-20260903-0210Z
 MODE=READ_ONLY_SETTLEMENT
