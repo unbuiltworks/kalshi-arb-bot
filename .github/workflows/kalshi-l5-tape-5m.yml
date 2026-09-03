@@ -1,0 +1,160 @@
+name: Kalshi L5 Tape 5m
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/kalshi-l5-tape-5m.yml"]
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kalshi-l5-tape-5m
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout isolated data branch
+        uses: actions/checkout@v4
+        with:
+          ref: l5-kalshi-data
+          path: datarepo
+          fetch-depth: 1
+
+      - name: Capture public BTC/ETH 15m market, book, and trade evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import datetime as dt
+          import json
+          import os
+          import pathlib
+          import time
+          import urllib.parse
+          import urllib.request
+
+          BASE = "https://external-api.kalshi.com/trade-api/v2"
+          SERIES = ("KXBTC15M", "KXETH15M")
+          UA = "l5-kalshi-readonly-tape/1.0"
+          now = time.time()
+          now_iso = dt.datetime.fromtimestamp(now, dt.timezone.utc).isoformat()
+
+          def get_json(path, params=None):
+              url = BASE + path
+              if params:
+                  url += "?" + urllib.parse.urlencode(params)
+              req = urllib.request.Request(url, headers={"User-Agent": UA})
+              with urllib.request.urlopen(req, timeout=15) as r:
+                  body = r.read()
+              return url, json.loads(body)
+
+          def ts(value):
+              if not value:
+                  return None
+              try:
+                  return dt.datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+              except Exception:
+                  return None
+
+          capture = {
+              "captured_at": now_iso,
+              "captured_ts": now,
+              "labels": "PUBLIC READ-ONLY raw evidence; no orders; no fill claims",
+              "source": "Kalshi external Trade API",
+              "series": {},
+          }
+          failures = []
+          total_markets = total_trades = 0
+
+          for series in SERIES:
+              block = {"series_ticker": series, "markets": []}
+              try:
+                  series_url, series_payload = get_json(f"/series/{series}")
+                  block["series_source_url"] = series_url
+                  block["series_raw"] = series_payload
+                  markets_url, markets_payload = get_json(
+                      "/markets",
+                      {"series_ticker": series, "status": "open", "limit": 1000},
+                  )
+                  block["markets_source_url"] = markets_url
+                  rows = markets_payload.get("markets", []) if isinstance(markets_payload, dict) else []
+                  candidates = []
+                  for row in rows:
+                      if not isinstance(row, dict):
+                          continue
+                      close = ts(row.get("close_time") or row.get("expected_expiration_time") or row.get("expiration_time"))
+                      if close is not None and (close < now - 60 or close > now + 35 * 60):
+                          continue
+                      candidates.append((close if close is not None else 1e30, row))
+                  candidates.sort(key=lambda x: x[0])
+                  # Current + immediately-next window are sufficient for causal 5m tape,
+                  # while keeping the data branch bounded.
+                  for _, row in candidates[:2]:
+                      ticker = str(row.get("ticker") or "")
+                      if not ticker:
+                          continue
+                      item = {"market_raw": row}
+                      try:
+                          book_url, book = get_json(f"/markets/{ticker}/orderbook", {"depth": 20})
+                          item["orderbook_source_url"] = book_url
+                          item["orderbook_raw"] = book
+                      except Exception as exc:
+                          item["orderbook_error"] = f"{type(exc).__name__}:{exc}"[:300]
+                      try:
+                          trades_url, trades = get_json(
+                              "/markets/trades",
+                              {"ticker": ticker, "min_ts": int(now - 360), "limit": 500},
+                          )
+                          item["trades_source_url"] = trades_url
+                          item["trades_raw"] = trades
+                          total_trades += len(trades.get("trades", [])) if isinstance(trades, dict) else 0
+                      except Exception as exc:
+                          item["trades_error"] = f"{type(exc).__name__}:{exc}"[:300]
+                      block["markets"].append(item)
+                      total_markets += 1
+              except Exception as exc:
+                  failures.append({"series": series, "error": f"{type(exc).__name__}:{exc}"[:400]})
+              capture["series"][series] = block
+
+          root = pathlib.Path("datarepo/data/l5/kalshi_tape")
+          root.mkdir(parents=True, exist_ok=True)
+          day = dt.datetime.fromtimestamp(now, dt.timezone.utc).strftime("%Y%m%d")
+          with (root / f"tape_{day}.jsonl").open("a", encoding="utf-8") as f:
+              f.write(json.dumps(capture, separators=(",", ":"), sort_keys=True) + "\n")
+          heartbeat = {
+              "captured_at": now_iso,
+              "status": "ok" if not failures else "partial",
+              "series": list(SERIES),
+              "markets_captured": total_markets,
+              "trades_captured_with_6m_overlap": total_trades,
+              "failures": failures,
+              "read_only": True,
+              "order_entry": False,
+              "realized_pnl": 0,
+              "note": "Raw tape only. Public quote/trade evidence never implies hypothetical queue fill certainty.",
+          }
+          (root / "heartbeat.json").write_text(json.dumps(heartbeat, indent=2, sort_keys=True) + "\n")
+          print(json.dumps(heartbeat, sort_keys=True))
+          if total_markets == 0:
+              raise SystemExit("no current/nearby KXBTC15M/KXETH15M markets captured")
+          PY
+
+      - name: Persist raw tape and provenance
+        shell: bash
+        run: |
+          cd datarepo
+          git config user.name "kalshi-l5-tape-5m"
+          git config user.email "kalshi-l5-tape-5m@users.noreply.github.com"
+          git add data/l5/kalshi_tape
+          if git diff --cached --quiet; then
+            echo "No tape changes"
+            exit 0
+          fi
+          git commit -m "kalshi-l5-tape: $(date -u +%FT%TZ)"
+          git push origin HEAD:l5-kalshi-data
