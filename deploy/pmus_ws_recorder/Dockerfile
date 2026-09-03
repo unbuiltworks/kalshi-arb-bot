@@ -29,15 +29,13 @@ COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
 COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
 COPY analysis/l5/l5_action_model.json analysis/l5/l5_action_model.json
 COPY analysis/l5/l5_action_model_v2.json analysis/l5/l5_action_model_v2.json
-# Optional one-shot READ-ONLY diagnostics over the mounted authenticated tape.
-# Candidate tape analysis is launched through a stub that injects ONLY the pure
-# spring economics constants and deliberately does not package/import any order
-# executor modules into this image.
+# READ-ONLY diagnostics are packaged for explicit operator/one-shot use only.
+# They are deliberately NOT in ENTRYPOINT/CMD so a historical scan can never
+# block continuous authenticated capture during a live slate.
 COPY scripts/priority_vs_rotation_eval.py scripts/priority_vs_rotation_eval.py
 COPY scripts/spring_candidate_tape_read.py scripts/spring_candidate_tape_read.py
 COPY scripts/pmus_candidate_tape_readonly.py scripts/pmus_candidate_tape_readonly.py
-COPY deploy/pmus_ws_recorder/entrypoint.sh /app/recorder-entrypoint.sh
-RUN chmod +x /app/recorder-entrypoint.sh && touch src/__init__.py
+RUN touch src/__init__.py
 
 ENV PMUS_SERVICE_ROLE=ws-recorder \
     PMUS_WS_ROOT=/state/pmus-ws \
@@ -45,8 +43,4 @@ ENV PMUS_SERVICE_ROLE=ws-recorder \
     PMUS_WS_MAX_MARKETS=40 \
     PYTHONUNBUFFERED=1
 
-# ENTRYPOINT is preserved when Railway overrides CMD/startCommand, so the
-# optional read-only tape diagnostic cannot be silently bypassed by a stale
-# service-level command. The wrapper then execs the configured recorder command.
-ENTRYPOINT ["/app/recorder-entrypoint.sh"]
-CMD ["sh", "-c", "if [ \"${PMUS_WS_PRIORITY_EVAL_ON_START:-0}\" = \"1\" ]; then echo PMUS_PRIORITY_EVAL_START; PYTHONPATH=/app python3 scripts/priority_vs_rotation_eval.py --tape-root \"${PMUS_WS_ROOT:-/state/pmus-ws}\" || echo PMUS_PRIORITY_EVAL_FAILED:$?; fi; exec python3 -m src.pmus_ws_evidence_recorder"]
+CMD ["python3", "-m", "src.pmus_ws_evidence_recorder"]
