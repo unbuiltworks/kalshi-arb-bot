@@ -1,0 +1,100 @@
+name: AWS PMUS Spring-L5 slate diagnostic READ ONLY
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/pmus-spring-slate-diagnostic.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Raw eligible rows plus Spring/penny filters
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE=$(cat <<'EOF'
+          set -Eeuo pipefail
+          APP=/home/ssm-user/l5-pmus-micro-stage
+          RECLOG=/home/ssm-user/l5-pmus-ws-state/recorder.log
+          test -f "$APP/src/pmus_micro_executor.py"
+          test -f "$RECLOG"
+          test "$(systemctl is-active l5-pmus-recorder.service)" = active
+          test "$(systemctl is-active l5-pmus-supervisor.service)" = active
+          grep -q '^Environment=PMUS_SUPERVISOR_LIVE=NO$' /etc/systemd/system/l5-pmus-supervisor.service
+          sudo -u ssm-user env PYTHONPATH="$APP" PMUS_MICRO_LIVE=NO PMUS_Q1_LIVE=NO \
+            /home/ssm-user/l5-pmus-engine-venv/bin/python - <<'PY'
+          import json, subprocess
+          from decimal import Decimal as D
+          from datetime import datetime, timezone
+          from src import pmus_micro_executor as m
+          from src import pmus_q1_executor_v4 as q
+
+          raw=subprocess.check_output(['tail','-n','500','/home/ssm-user/l5-pmus-ws-state/recorder.log'], text=True)
+          statuses=[]
+          for line in raw.splitlines():
+              if 'PMUS_WS_STATUS ' not in line: continue
+              try: statuses.append(json.loads(line.split('PMUS_WS_STATUS ',1)[1]))
+              except Exception: pass
+          if not statuses: raise SystemExit('NO_RECORDER_STATUS')
+          st=statuses[-1]
+          ts=datetime.fromisoformat(str(st.get('t')).replace('Z','+00:00'))
+          if ts.tzinfo is None: ts=ts.replace(tzinfo=timezone.utc)
+          age=(datetime.now(timezone.utc)-ts).total_seconds()
+          t=q.Transport()
+          rows=[]
+          for c in st.get('eligible_markets') or []:
+              slug=str(c.get('slug') or '')
+              out={'slug':slug,'raw_gate_status':c.get('gate_status'),'bid':c.get('bid'),'ask':c.get('ask'),
+                   'bid_qty':c.get('bid_qty'),'ask_qty':c.get('ask_qty'),'trades_1h':c.get('trades_1h'),
+                   'slot_counts':c.get('slot_counts_theoretical'),'both_sides_served':c.get('both_sides_served'),
+                   'l5_v2':((c.get('l5_shadow') or {}).get('v2') if isinstance(c.get('l5_shadow'),dict) else None)}
+              try:
+                  bid=D(str(c.get('bid')))
+                  out['q1_entry_band']=bool(q.MIN_PRICE <= bid <= q.MAX_PRICE)
+                  out['spring_mid_band']=bool(D('0.45') <= bid <= D('0.55'))
+              except Exception:
+                  out['q1_entry_band']=False; out['spring_mid_band']=False
+              try:
+                  out['micro']=m.micro_eligible(t,slug)
+              except Exception as exc:
+                  out['micro']={'skip_reason':'diagnostic:'+type(exc).__name__}
+              rows.append(out)
+          print('SPRING_SLATE_STATUS '+json.dumps({'t':st.get('t'),'age_s':round(age,3),'conn':st.get('conn'),'auth':st.get('auth'),
+              'eligible_total_reported':st.get('eligible_total'),'raw_eligible_count':len(st.get('eligible_markets') or []),
+              'discovery':st.get('discovery')},separators=(',',':'),default=str))
+          print('SPRING_RAW_ELIGIBLE '+json.dumps(rows,separators=(',',':'),default=str))
+          print('SPRING_SLATE_DIAGNOSTIC_OK read_only=true private_calls=false mutation_methods=[]')
+          PY
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment 'Spring L5 raw slate diagnostic read only' --parameters "$PARAMS" --timeout-seconds 120 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          grep -q 'SPRING_SLATE_DIAGNOSTIC_OK' <<<"$(jq -r '.Stdout' <<<"$RESULT")"
