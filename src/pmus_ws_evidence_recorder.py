@@ -710,6 +710,7 @@ async def run(minutes: Optional[float]) -> int:
         flush=True)
     plan_state: dict = {}
     l5_alloc: Optional[set] = None
+    fast_realloc_count = 0
     while deadline is None or time.monotonic() < deadline:
         cap = int(os.getenv(MAX_MARKETS_ENV, "24"))
         targets = discover_universe()
@@ -772,6 +773,30 @@ async def run(minutes: Optional[float]) -> int:
                                        subscribed=len(slugs))
                     if status_every > 0 and \
                             time.monotonic() - last_status >= status_every:
+                        # fast intra-cycle L5 allocation (issue #167
+                        # comment 5524827113): re-rank the CURRENT
+                        # subscribed slugs on CURRENT evidence every
+                        # status tick — the expensive per-market shadow
+                        # follows activity between discovery cycles. No
+                        # resubscribe, no planner-state mutation.
+                        if l5_alloc is not None:
+                            try:
+                                from src import pmus_priority_queue as pq
+                                new_alloc = set(pq.allocate_l5(
+                                    slugs, mstate, targets=targets))
+                                fast_realloc_count += 1
+                                discovery_diag = {
+                                    **discovery_diag,
+                                    "l5_fast_realloc_count":
+                                    fast_realloc_count,
+                                    "l5_fast_realloc_changed":
+                                    new_alloc != l5_alloc}
+                                l5_alloc = new_alloc
+                            except Exception as exc:
+                                discovery_diag = {
+                                    **discovery_diag,
+                                    "l5_fast_realloc_error":
+                                    str(exc)[:80]}
                         try:
                             print("PMUS_WS_STATUS " + json.dumps(
                                 build_status(mstate, True, msgs, len(slugs),

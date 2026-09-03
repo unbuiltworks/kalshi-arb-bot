@@ -153,6 +153,32 @@ def score_market(s: Optional[Mapping[str, Any]], now: float,
             "present": len(present), "missing": len(comp) - len(present)}
 
 
+def allocate_l5(subscribed_slugs, state: Mapping[str, Any],
+                targets: Optional[list[Mapping[str, Any]]] = None,
+                now: Optional[float] = None,
+                l5_infos: Optional[Mapping[str, Mapping[str, Any]]] = None
+                ) -> list[str]:
+    """Fast intra-cycle L5 allocation (issue #167 comment 5524827113):
+    re-rank ONLY the already-subscribed slugs on CURRENT evidence, with
+    the exact score_market ranking and PMUS_WS_L5_ALLOC bound plan()
+    uses. Pure and read-only — no tier or planner-state mutation, no
+    subscription change; callers keep the live subscribe set as-is and
+    only move the expensive per-market L5 shadow between status ticks."""
+    now = now or time.time()
+    target_by_slug: dict[str, Mapping[str, Any]] = {}
+    for t in targets or []:
+        if t.get("slug") and t["slug"] not in target_by_slug:
+            target_by_slug[t["slug"]] = t
+    slugs = list(dict.fromkeys(subscribed_slugs))
+    scored = {s: score_market(state.get(s), now, (l5_infos or {}).get(s),
+                              target=target_by_slug.get(s)) for s in slugs}
+    ranked = sorted(slugs, key=lambda x: (
+        -(scored[x]["score"] if scored[x]["score"] is not None else -1.0),
+        x))
+    l5_n = min(20, max(5, int(os.getenv(L5_ALLOC_ENV, "10"))))
+    return ranked[:l5_n]
+
+
 def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
          cap: int, cycle: int, prev: Optional[Mapping[str, Any]] = None,
          now: Optional[float] = None,

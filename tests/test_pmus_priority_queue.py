@@ -214,3 +214,38 @@ def test_deploy_isolation_tripwire_baked_into_both_images():
                    "l5_action_model.json", "l5_action_model_v2.json"):
         assert needed in recorder, needed
     assert (root / "deploy/RAILWAY_ISOLATION.md").exists()
+
+
+# --- fast intra-cycle L5 allocation (issue #167 comment 5524827113) ---
+
+def test_fast_intra_cycle_l5_realloc_swaps_without_resubscribe():
+    """Market A holds an L5 seat from discovery with zero trades; market B
+    is subscribed but unallocated. Once B earns authenticated activity,
+    the fast per-status-tick allocation swaps B in — while the subscribe
+    set stays byte-for-byte unchanged and no planner state is touched."""
+    now = time.time()
+    subscribed = [f"m-{i:02d}" for i in range(9)] + \
+        ["a-zero", "z-later", "z-tail"]
+    frozen = list(subscribed)
+    state = _mstate({f"m-{i:02d}": 20 for i in range(9)}, now)
+    alloc0 = pq.allocate_l5(subscribed, state, now=now)
+    assert len(alloc0) == 10                       # default bound
+    assert "a-zero" in alloc0                      # rode in on aging rank
+    assert "z-later" not in alloc0
+    # B gets authenticated activity between discovery cycles
+    state["z-later"] = _mstate({"z-later": 30}, now)["z-later"]
+    alloc1 = pq.allocate_l5(subscribed, state, now=now)
+    assert "z-later" in alloc1                     # swapped in this tick
+    assert "a-zero" not in alloc1
+    assert set(alloc1) <= set(subscribed)
+    assert subscribed == frozen                    # no subscription change
+    # only already-subscribed slugs are ever rankable
+    assert "outsider" not in pq.allocate_l5(
+        subscribed, {**state, "outsider": state["m-00"]}, now=now)
+
+
+def test_fast_realloc_diagnostics_wired_into_recorder_status_path():
+    src = Path(rec.__file__).read_text()
+    assert "allocate_l5" in src
+    assert "l5_fast_realloc_count" in src
+    assert "l5_fast_realloc_changed" in src
