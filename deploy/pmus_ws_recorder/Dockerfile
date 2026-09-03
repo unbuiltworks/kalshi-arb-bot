@@ -29,10 +29,13 @@ COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
 COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
 COPY analysis/l5/l5_action_model.json analysis/l5/l5_action_model.json
 COPY analysis/l5/l5_action_model_v2.json analysis/l5/l5_action_model_v2.json
-# Optional one-shot, READ-ONLY planner benchmark over the mounted authenticated
-# tape. It runs only when PMUS_WS_PRIORITY_EVAL_ON_START=1 and never blocks
-# recorder startup if the diagnostic itself fails.
+# Optional one-shot READ-ONLY diagnostics over the mounted authenticated tape.
+# Candidate tape analysis is launched through a stub that injects ONLY the pure
+# spring economics constants and deliberately does not package/import any order
+# executor modules into this image.
 COPY scripts/priority_vs_rotation_eval.py scripts/priority_vs_rotation_eval.py
+COPY scripts/spring_candidate_tape_read.py scripts/spring_candidate_tape_read.py
+COPY scripts/pmus_candidate_tape_readonly.py scripts/pmus_candidate_tape_readonly.py
 RUN touch src/__init__.py
 
 ENV PMUS_SERVICE_ROLE=ws-recorder \
