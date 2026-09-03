@@ -1,0 +1,115 @@
+name: AWS PMUS SPRING-L5 isolated stage DISARMED
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/pmus-spring-l5-stage.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  SPRING_REF: 55d42b60a5062489b6d7f1150ac8b65b0cd23e08
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SPRING_REF }}
+          fetch-depth: 1
+      - name: Verify exact spring commit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ACTUAL="$(git rev-parse HEAD)"
+          echo "PMUS_SPRING_CHECKOUT_HEAD=$ACTUAL"
+          test "$ACTUAL" = "$SPRING_REF"
+          test -f src/pmus_spring_l5_session.py
+          test -f src/pmus_micro_executor.py
+          test -f src/pmus_l5_persistence_v2.py
+          test -f analysis/l5/l5_action_model_v2.json
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Stage spring code without touching permanent services
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          FILES=(
+            src/pmus_q1_executor.py
+            src/pmus_q1_executor_v4.py
+            src/pmus_micro_executor.py
+            src/pmus_l5_persistence_v2.py
+            src/pmus_spring_l5_session.py
+            src/polymarket_l5/__init__.py
+            src/polymarket_l5/action_model.py
+            src/polymarket_l5/config.py
+            analysis/l5/l5_action_model_v2.json
+          )
+          tar -czf /tmp/pmus-spring-stage.tgz "${FILES[@]}"
+          ARCHIVE_B64=$(base64 -w0 /tmp/pmus-spring-stage.tgz)
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          APP=/home/ssm-user/l5-pmus-spring-stage
+          STATE=\$APP/state
+          test "\$(systemctl is-active l5-pmus-recorder.service)" = active
+          test "\$(systemctl is-active l5-pmus-supervisor.service)" = active
+          grep -q '^Environment=PMUS_SUPERVISOR_LIVE=NO$' /etc/systemd/system/l5-pmus-supervisor.service
+          install -d -o ssm-user -g ssm-user "\$APP" "\$STATE"
+          rm -rf "\$APP/src" "\$APP/analysis"
+          printf '%s' '$ARCHIVE_B64' | base64 -d | tar -xzf - -C "\$APP"
+          chown -R ssm-user:ssm-user "\$APP"
+          sudo -u ssm-user env PYTHONPATH="\$APP" PMUS_Q1_STATE_DIR="\$STATE" \
+            PMUS_Q1_LIVE=NO PMUS_MICRO_LIVE=NO PMUS_SPRING_LIVE=NO \
+            /home/ssm-user/l5-pmus-engine-venv/bin/python -m py_compile \
+            "\$APP/src/pmus_micro_executor.py" \
+            "\$APP/src/pmus_l5_persistence_v2.py" \
+            "\$APP/src/pmus_spring_l5_session.py"
+          OUT=\$(sudo -u ssm-user env PYTHONPATH="\$APP" PMUS_Q1_STATE_DIR="\$STATE" \
+            PMUS_Q1_LIVE=NO PMUS_MICRO_LIVE=NO PMUS_SPRING_LIVE=NO \
+            /home/ssm-user/l5-pmus-engine-venv/bin/python -m src.pmus_spring_l5_session)
+          echo "\$OUT"
+          grep -q '"status": "DISARMED"' <<<"\$OUT"
+          sudo -u ssm-user env PYTHONPATH="\$APP" \
+            /home/ssm-user/l5-pmus-engine-venv/bin/python - <<'PY'
+          from src import pmus_spring_l5_session as s
+          from src import pmus_micro_executor as m
+          from src import pmus_q1_executor_v4 as q
+          model=s.pv2.load_v2()
+          assert model.get('n_transitions') == 69646
+          assert q.QTY == 1
+          assert not m.micro_armed()
+          assert not s.armed()
+          assert s.SPRING_PAIR_TARGET == s.D('0.96')
+          print('PMUS_SPRING_STAGE_UNIT_OK model_v2=true spring_armed=false micro_armed=false q1_unchanged=true')
+          PY
+          test "\$(systemctl is-active l5-pmus-recorder.service)" = active
+          test "\$(systemctl is-active l5-pmus-supervisor.service)" = active
+          grep -q '^Environment=PMUS_SUPERVISOR_LIVE=NO$' /etc/systemd/system/l5-pmus-supervisor.service
+          echo PMUS_SPRING_STAGE_OK ref=$SPRING_REF permanent_supervisor_disarmed=true credentials_loaded=false services_restarted=false
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment 'L5 PMUS SPRING isolated DISARMED stage' --parameters "$PARAMS" --timeout-seconds 180 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          OUT=$(jq -r '.Stdout' <<<"$RESULT")
+          grep -q 'PMUS_SPRING_STAGE_OK' <<<"$OUT"
+          grep -q 'permanent_supervisor_disarmed=true' <<<"$OUT"
+          grep -q 'credentials_loaded=false' <<<"$OUT"
