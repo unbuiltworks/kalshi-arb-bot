@@ -22,6 +22,7 @@ Read-only research; no network, nothing armed.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import random
 from pathlib import Path
@@ -64,7 +65,64 @@ def synthetic_tape(seed: int = 7):
     return slugs, activity, qualifying
 
 
-def run_planner(kind: str, slugs, activity, qualifying):
+def real_tape(root, cycle_s: float = 60.0):
+    """Derive per-cycle activity + qualifying windows from the persisted
+    authenticated recorder tape (kind=ws rows on the durable volume).
+
+    OBSERVATION-BIASED by construction: the tape only carries markets a
+    planner actually subscribed to, so unsubscribed markets contribute
+    nothing and the comparison measures re-planning over the observed
+    universe, not true full-universe discovery. Label results
+    accordingly. Qualifying windows are a documented heuristic: maximal
+    activity spans (gaps <= 2 cycles) at least 5 cycles long containing
+    both buy and sell prints (two-sided flow)."""
+    per: dict[str, list] = {}
+    t0 = t1 = None
+    for t, msg in rec.iter_recent_tape_rows(Path(root)):
+        found: list = []
+        rec._walk_market_events(msg, found)
+        for ev in found:
+            if ev["kind"] == "trade" and ev.get("price"):
+                d = rec._trade_direction(ev, {}).upper()
+                per.setdefault(ev["slug"], []).append((t, d))
+                t0 = t if t0 is None else min(t0, t)
+                t1 = t if t1 is None else max(t1, t)
+    if not per:
+        return [], {}, [], 0
+    n_cycles = int((t1 - t0) // cycle_s) + 1
+    slugs = sorted(per)
+    activity = {s: [0] * n_cycles for s in slugs}
+    dirs = {s: [set() for _ in range(n_cycles)] for s in slugs}
+    for s, prints in per.items():
+        for t, d in prints:
+            c = int((t - t0) // cycle_s)
+            activity[s][c] += 1
+            if d in ("BUY", "SELL"):
+                dirs[s][c].add(d)
+    qualifying = []
+    for s in slugs:
+        start = None
+        gap = 0
+        seen: set = set()
+        for c in range(n_cycles + 1):
+            live = c < n_cycles and activity[s][c] > 0
+            if live:
+                if start is None:
+                    start, seen = c, set()
+                seen |= dirs[s][c]
+                gap = 0
+            elif start is not None:
+                gap += 1
+                if gap > 2 or c == n_cycles:
+                    end = c - gap
+                    if end - start + 1 >= 5 and seen == {"BUY", "SELL"}:
+                        qualifying.append((s, start, end - start + 1))
+                    start, gap = None, 0
+    return slugs, activity, qualifying, n_cycles
+
+
+def run_planner(kind: str, slugs, activity, qualifying,
+                n_cycles: int = N_CYCLES, cap: int = CAP):
     targets = [{"slug": s} for s in slugs]
     state: dict = {}
     prev: dict = {}
@@ -77,13 +135,13 @@ def run_planner(kind: str, slugs, activity, qualifying):
     total_slot_cycles = 0
     cov_samples = []
     qwin = {(s): (a, a + ln) for s, a, ln in qualifying}
-    for cycle in range(N_CYCLES):
+    for cycle in range(n_cycles):
         if kind == "priority":
-            p = pq.plan(targets, state, CAP, cycle, prev, now=now)
+            p = pq.plan(targets, state, cap, cycle, prev, now=now)
             prev = p["state"]
             subs = p["subscribe"]
         else:
-            p = rec.subscription_plan(targets, state, CAP, cycle, now=now)
+            p = rec.subscription_plan(targets, state, cap, cycle, now=now)
             subs = p["subscribe"]
         total_slot_cycles += len(subs)
         for s in subs:
@@ -114,6 +172,7 @@ def run_planner(kind: str, slugs, activity, qualifying):
         "planner": kind,
         "qualifying_windows": len(qualifying),
         "qualifying_detected": detected,
+        "qualifying_detected_slugs": sorted(q_first_seen),
         "time_to_observe_median_cycles": (
             median(sorted(q_first_seen.values())) if q_first_seen else None),
         "q1_compatible_state_cycles_observed": q_states_observed,
@@ -126,22 +185,46 @@ def run_planner(kind: str, slugs, activity, qualifying):
 
 
 def main() -> int:
-    slugs, activity, qualifying = synthetic_tape()
-    rows = [run_planner(k, slugs, activity, qualifying)
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--tape-root", default=None,
+                    help="recorder state root holding raw/pmus_ws_*.jsonl "
+                         "(e.g. /state/pmus-ws); omit for synthetic")
+    ap.add_argument("--cycle-seconds", type=float, default=60.0)
+    ap.add_argument("--cap", type=int, default=CAP)
+    args = ap.parse_args()
+    if args.tape_root:
+        slugs, activity, qualifying, n_cycles = real_tape(
+            args.tape_root, args.cycle_seconds)
+        if not slugs:
+            print(json.dumps({"error": "no_trade_events_in_tape",
+                              "root": args.tape_root}))
+            return 1
+        label = (f"REAL recorder tape ({len(slugs)} tape-visible markets "
+                 f"x {n_cycles} cycles of {args.cycle_seconds}s, cap "
+                 f"{args.cap}); OBSERVATION-BIASED: only markets some "
+                 "planner subscribed to appear; SHADOW/THEORETICAL "
+                 "observation quality only — no P&L claim")
+    else:
+        slugs, activity, qualifying = synthetic_tape()
+        n_cycles = N_CYCLES
+        label = ("SYNTHETIC activity tape (150 markets x 200 cycles, "
+                 "cap 40); pass --tape-root on the durable host for the "
+                 "real tape; observation quality only — no P&L claim")
+    rows = [run_planner(k, slugs, activity, qualifying,
+                        n_cycles=n_cycles, cap=args.cap)
             for k in ("rotation", "priority")]
-    out = {
-        "labels": "SYNTHETIC activity tape (150 markets x 200 cycles, "
-                  "cap 40); same harness accepts a real recorder tape "
-                  "on-host; observation quality only — no P&L claim",
-        "results": rows,
-    }
+    d_rot, d_pri = (set(r["qualifying_detected_slugs"]) for r in rows)
+    out = {"labels": label, "results": rows,
+           "detection_diff": {"rotation_only": sorted(d_rot - d_pri),
+                              "priority_only": sorted(d_pri - d_rot)}}
     OUT.write_text(json.dumps(out, indent=1))
     hdr = f"{'metric':<42}{'rotation':>12}{'priority':>12}"
     print(hdr)
     for key in rows[0]:
-        if key == "planner":
+        if key in ("planner", "qualifying_detected_slugs"):
             continue
         print(f"{key:<42}{str(rows[0][key]):>12}{str(rows[1][key]):>12}")
+    print("detection_diff:", json.dumps(out["detection_diff"]))
     print(f"wrote {OUT}")
     return 0
 

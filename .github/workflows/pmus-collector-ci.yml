@@ -51,14 +51,27 @@ jobs:
           print("smoke ok:", {k: sum(1 for r in rows if r.get("kind") == k)
                              for k in sorted(kinds)})
           EOF
-      - name: Railway config selects the collector image (deploy-safety)
+      - name: Railway deploy isolation invariants (deploy-safety)
+        # Image selection lives in per-service RAILWAY_DOCKERFILE_PATH
+        # variables (leading slash), never in repo-wide railway.json —
+        # see deploy/RAILWAY_ISOLATION.md. CI asserts the invariants that
+        # make a cross-service build fail closed instead.
         run: |
           python3 - <<'EOF'
-          import json
-          cfg = json.load(open("railway.json"))
-          assert cfg["build"]["dockerfilePath"] == \
-              "deploy/pmus_sports_collector/Dockerfile", cfg
-          assert cfg["deploy"]["startCommand"] == \
-              "python3 -m src.pmus_sports_collector", cfg
-          print("railway.json pins the collector image + start command")
+          import json, os
+          if os.path.exists("railway.json"):
+              cfg = json.load(open("railway.json"))
+              assert "build" not in cfg and "deploy" not in cfg, (
+                  "railway.json must not carry repo-wide build/deploy "
+                  "overrides; per-service RAILWAY_DOCKERFILE_PATH selects "
+                  "images (deploy/RAILWAY_ISOLATION.md)", cfg)
+          rec = open("deploy/pmus_ws_recorder/Dockerfile").read()
+          col = open("deploy/pmus_sports_collector/Dockerfile").read()
+          assert "PMUS_SERVICE_ROLE=ws-recorder" in rec
+          assert "PMUS_SERVICE_ROLE=collector" in col
+          assert "src.pmus_sports_collector" in col
+          assert "src.pmus_ws_evidence_recorder" not in col
+          assert os.path.exists("deploy/RAILWAY_ISOLATION.md")
+          print("isolation invariants hold: no repo-wide overrides; "
+                "role tripwire baked into both images")
           EOF

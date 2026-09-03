@@ -341,3 +341,74 @@ def test_spring_complement_price_exposes_both_bounds():
     none_px, econ2 = spring.spring_complement_price(D("0.80"), D("0.21"),
                                                     D("0.005"))
     assert none_px is None                       # 0.16 bound below band
+
+
+# --- spring_watch selector blind spot (issue #167 comment 5521430953) ---
+
+def _sw_book(slug, bid, ask, qty="200"):
+    return {"marketData": {"marketSlug": slug,
+                           "bids": [{"px": {"value": bid}, "qty": qty}],
+                           "offers": [{"px": {"value": ask}, "qty": qty}]}}
+
+
+def _sw_trade(slug, price, side):
+    return {"trade": {"marketSlug": slug, "price": {"value": price},
+                      "quantity": "1", "taker": {"side": side}}}
+
+
+def _sw_state():
+    """Ten out-of-band markets outrank the one qualifying 0.50 market by
+    trade count, so it is #11 overall: invisible to the 5-row display and
+    not gate-cleared."""
+    from src import pmus_ws_evidence_recorder as rec
+    st: dict = {}
+    base = 1_700_000_000.0
+    for i, px in enumerate(["0.85"] * 5 + ["0.70"] * 5):
+        slug = f"aec-flow-{i}"
+        rec.apply_events(st, _sw_book(slug, f"{px}00", f"{px}50"), base)
+        for k in range(30 - i):
+            rec.apply_events(st, _sw_trade(slug, f"{px}50", "BUY"),
+                             base + k)
+    fit = "aec-spring-fit"
+    rec.apply_events(st, _sw_book(fit, "0.5000", "0.5200"), base)
+    for k in range(6):   # modest genuine two-sided flow
+        side = "BUY" if k % 2 else "SELL"
+        rec.apply_events(st, _sw_trade(fit, "0.5100", side), base + k * 30)
+    return rec, st, base + 400, fit
+
+
+def test_spring_watch_surfaces_band_market_hidden_by_display():
+    rec, st, now, fit = _sw_state()
+    status = rec.build_status(st, True, 100, 11, now, l5_alloc=set())
+    tops = [r["slug"] for r in status["top_markets"]]
+    assert fit not in tops and len(tops) == 5        # display-hidden
+    assert not any(r["slug"] == fit
+                   for r in status["eligible_markets"])
+    watch = status["spring_watch"]
+    assert [r["slug"] for r in watch] == [fit]       # band prefilter only
+    row = watch[0]
+    assert row["two_sided_trades"] is True
+    assert row["trades_1h"] == 6
+    assert row["gate_status"] in ("NOT_READY", "SHADOW_CANDIDATE")
+    assert "not an execution admission" in row["labels"]
+    assert len(watch) <= rec.SPRING_WATCH_LIMIT
+
+
+def test_rank_spring_candidates_consumes_spring_watch(monkeypatch):
+    rec, st, now, fit = _sw_state()
+    status = rec.build_status(st, True, 100, 11, now, l5_alloc=set())
+    seen: list[str] = []
+
+    def fake_eligible(t, slug):
+        seen.append(slug)
+        return {"slug": slug, "bid": "0.5000", "ask": "0.5200",
+                "skip_reason": None}
+
+    monkeypatch.setattr(spring.micro, "micro_eligible", fake_eligible)
+    rows = spring.rank_spring_candidates(None, status)
+    assert fit in seen                               # selector now sees it
+    mine = [r for r in rows if r["slug"] == fit][0]
+    assert mine["trades_1h"] == 6                    # watch row facts flow
+    assert mine["two_sided_trades"] is True
+    # advisory only: the canonical gates still decide admission
+    assert "spring_skip" in mine

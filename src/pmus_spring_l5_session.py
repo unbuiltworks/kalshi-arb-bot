@@ -255,14 +255,21 @@ def rank_spring_candidates(t: Transport,
         model = pv2.load_v2()
     except Exception:
         pass
+    # spring_watch (issue #167 comment 5521430953) surfaces band-fit
+    # markets the small display lists can hide; advisory rows only — the
+    # gates below stay authoritative for admission.
+    _KEYS = ("eligible_markets", "top_markets", "spring_watch")
     slugs: list[str] = []
-    for key in ("eligible_markets", "top_markets"):
+    for key in _KEYS:
         for row in status.get(key) or []:
             if isinstance(row, Mapping) and row.get("slug"):
                 slugs.append(str(row["slug"]))
     slugs.extend(extra_slugs or [])
-    by_slug = {r["slug"]: r for key in ("eligible_markets", "top_markets")
-               for r in (status.get(key) or []) if isinstance(r, Mapping)}
+    by_slug: dict[str, Mapping] = {}
+    for key in _KEYS:  # richer eligible/top rows win over watch rows
+        for r in status.get(key) or []:
+            if isinstance(r, Mapping) and r.get("slug"):
+                by_slug.setdefault(str(r["slug"]), r)
     out = []
     for slug in dict.fromkeys(slugs):
         row = dict(micro.micro_eligible(t, slug))

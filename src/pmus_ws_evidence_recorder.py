@@ -338,6 +338,57 @@ def _market_row(slug: str, s: Mapping[str, Any], now: float,
                           else {"skipped": "not_allocated"})}
 
 
+SPRING_WATCH_LIMIT = int(os.getenv("PMUS_SPRING_WATCH_LIMIT", "10"))
+SPRING_WATCH_LO = 0.45
+SPRING_WATCH_HI = 0.55
+
+
+def spring_watch(rows: Mapping[str, Mapping[str, Any]],
+                 l5_alloc: Optional[set] = None,
+                 limit: Optional[int] = None) -> list[dict]:
+    """Bounded spring prefilter over ALL currently tracked markets (issue
+    #167 comment 5521430953), so a 45-55c spring-fit market stays visible
+    to the selector even when higher-activity out-of-band markets occupy
+    the display rows. Prefilters ONLY on spring-relevant observational
+    facts — YES bid inside the band with a genuinely served two-sided
+    book — then ranks by two-sided trade flow, trades_1h, displayed
+    depth. Advisory visibility only: NOT an execution admission; the
+    canonical spring gate + micro_eligible stay authoritative."""
+    picked = []
+    for slug, r in rows.items():
+        try:
+            b = float(r.get("bid"))
+        except (TypeError, ValueError):
+            continue
+        if not (SPRING_WATCH_LO <= b <= SPRING_WATCH_HI):
+            continue
+        if not r.get("both_sides_served"):
+            continue
+        try:
+            depth = min(float(r.get("bid_qty") or 0),
+                        float(r.get("ask_qty") or 0))
+        except (TypeError, ValueError):
+            depth = 0.0
+        shadow = r.get("l5_shadow") or {}
+        picked.append(({
+            "slug": slug, "bid": r.get("bid"), "ask": r.get("ask"),
+            "bid_qty": r.get("bid_qty"), "ask_qty": r.get("ask_qty"),
+            "trades_1h": r.get("trades_1h"),
+            "two_sided_trades": r.get("two_sided_trades"),
+            "gate_status": r.get("gate_status"),
+            "l5_allocated": (slug in l5_alloc) if l5_alloc is not None
+            else None,
+            "off_distribution": shadow.get("off_distribution"),
+            "labels": "SHADOW/THEORETICAL; advisory only, not an "
+                      "execution admission",
+        }, depth))
+    picked.sort(key=lambda rd: (not rd[0].get("two_sided_trades"),
+                                -int(rd[0].get("trades_1h") or 0),
+                                -rd[1], str(rd[0]["slug"])))
+    lim = SPRING_WATCH_LIMIT if limit is None else limit
+    return [r for r, _ in picked[:max(0, lim)]]
+
+
 def build_status(state: Mapping[str, Any], connected: bool, msgs: int,
                  subscribed: int, now: Optional[float] = None,
                  discovery: Optional[Mapping[str, Any]] = None,
@@ -363,6 +414,7 @@ def build_status(state: Mapping[str, Any], connected: bool, msgs: int,
         "top_markets": [rows[slug] for slug, _ in tops],
         "eligible_markets": eligible,
         "eligible_total": len(eligible),
+        "spring_watch": spring_watch(rows, l5_alloc),
     }
     if discovery:
         status["discovery"] = dict(discovery)
