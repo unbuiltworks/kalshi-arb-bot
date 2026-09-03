@@ -82,6 +82,54 @@ def test_authoritative_fill_threshold_is_requested_decimal_qty():
     assert f["partial"] is False
 
 
+def test_partially_filled_state_string_never_promotes_partial_qty():
+    # Regression: substring "FILLED" appears in PARTIALLY_FILLED. Quantity,
+    # not the state string, decides whether the requested MICRO order is full.
+    row = {"state": "ORDER_STATE_PARTIALLY_FILLED",
+           "cumQuantity": "0.0100", "avgPx": {"value": "0.5750"}}
+    assert m.authoritative_fill(row, D("0.02")) is None
+    p = m.authoritative_fill(row, D("0.02"), accept_partial=True)
+    assert p["partial"] is True
+    assert p["qty"] == D("0.0100")
+
+
+def test_fill_above_requested_qty_fails_loudly():
+    row = {"state": "ORDER_STATE_FILLED", "cumQuantity": "0.0300",
+           "avgPx": {"value": "0.5750"}}
+    with pytest.raises(m.Halt, match="MICRO_FILL_QTY_EXCEEDS_REQUESTED"):
+        m.authoritative_fill(row, D("0.02"))
+
+
+def test_account_gate_is_self_contained_and_preserves_decimal_position(monkeypatch):
+    calls = []
+
+    def fake_get(t, path, *args, **kwargs):
+        calls.append(path)
+        if path == "/v1/orders/open":
+            return {"orders": []}
+        if path == "/v1/portfolio/positions":
+            return {"positions": {"m": {"netPositionDecimal": "0.0100"}}}
+        raise AssertionError(path)
+
+    monkeypatch.setattr(q1.base, "_get_with_retry", fake_get)
+    reason = m.account_block_reason(object())
+    assert reason == "nonzero_positions:m=0.0100"
+    assert calls == ["/v1/orders/open", "/v1/portfolio/positions"]
+    assert "pmus_aws_supervisor" not in inspect.getsource(m)
+
+
+def test_account_gate_all_flat_passes(monkeypatch):
+    def fake_get(t, path, *args, **kwargs):
+        if path == "/v1/orders/open":
+            return {"orders": []}
+        if path == "/v1/portfolio/positions":
+            return {"positions": [{"marketSlug": "m", "netPositionDecimal": "0.0000"}]}
+        raise AssertionError(path)
+
+    monkeypatch.setattr(q1.base, "_get_with_retry", fake_get)
+    assert m.account_block_reason(object()) is None
+
+
 def test_residual_report_preserves_point_zero_one_not_zero_or_one(monkeypatch):
     monkeypatch.setattr(q1, "_position_for_slug", lambda *a, **k: D("0.0100"))
     report = m._residual_report(
