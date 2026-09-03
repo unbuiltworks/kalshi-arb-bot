@@ -1,0 +1,101 @@
+name: AWS PMUS MICRO executor isolated stage DISARMED
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/pmus-micro-stage.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  MICRO_REF: 94bd687bfedf23480cfaba50e9494801176d09a4
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/l5-pmus-micro-live
+          fetch-depth: 1
+      - name: Verify exact micro commit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ACTUAL="$(git rev-parse HEAD)"
+          echo "PMUS_MICRO_CHECKOUT_HEAD=$ACTUAL"
+          test "$ACTUAL" = "$MICRO_REF"
+          test -f src/pmus_micro_executor.py
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Stage micro code without touching live services
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          FILES=(src/pmus_q1_executor.py src/pmus_q1_executor_v4.py src/pmus_micro_executor.py)
+          tar -czf /tmp/pmus-micro-stage.tgz "${FILES[@]}"
+          ARCHIVE_B64=$(base64 -w0 /tmp/pmus-micro-stage.tgz)
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          APP=/home/ssm-user/l5-pmus-micro-stage
+          STATE=\$APP/state
+          test "\$(systemctl is-active l5-pmus-recorder.service)" = active
+          test "\$(systemctl is-active l5-pmus-supervisor.service)" = active
+          grep -q '^Environment=PMUS_SUPERVISOR_LIVE=NO$' /etc/systemd/system/l5-pmus-supervisor.service
+          install -d -o ssm-user -g ssm-user "\$APP" "\$STATE"
+          rm -rf "\$APP/src"
+          printf '%s' '$ARCHIVE_B64' | base64 -d | tar -xzf - -C "\$APP"
+          touch "\$APP/src/__init__.py"
+          chown -R ssm-user:ssm-user "\$APP"
+          sudo -u ssm-user env PYTHONPATH="\$APP" PMUS_Q1_STATE_DIR="\$STATE" \
+            PMUS_Q1_LIVE=NO PMUS_MICRO_LIVE=NO \
+            /home/ssm-user/l5-pmus-engine-venv/bin/python -m py_compile \
+            "\$APP/src/pmus_q1_executor.py" "\$APP/src/pmus_q1_executor_v4.py" \
+            "\$APP/src/pmus_micro_executor.py"
+          sudo -u ssm-user env PYTHONPATH="\$APP" PMUS_Q1_STATE_DIR="\$STATE" \
+            PMUS_Q1_LIVE=NO PMUS_MICRO_LIVE=NO \
+            /home/ssm-user/l5-pmus-engine-venv/bin/python - <<'PY'
+          from decimal import Decimal as D
+          from src import pmus_micro_executor as m
+          from src import pmus_q1_executor_v4 as q
+          assert q.QTY == 1
+          assert m.choose_micro_quantity(D('0.575'), D('0.01')) == D('0.01')
+          assert m.choose_micro_quantity(D('0.29'), D('0.01')) == D('0.02')
+          assert not m.micro_armed()
+          print('PMUS_MICRO_STAGE_UNIT_OK q1_unchanged=true micro_armed=false')
+          PY
+          OUT=\$(sudo -u ssm-user env PYTHONPATH="\$APP" PMUS_Q1_STATE_DIR="\$STATE" \
+            PMUS_Q1_LIVE=NO PMUS_MICRO_LIVE=NO \
+            /home/ssm-user/l5-pmus-engine-venv/bin/python -m src.pmus_micro_executor)
+          echo "\$OUT"
+          grep -q '"status": "DISARMED"' <<<"\$OUT"
+          test "\$(systemctl is-active l5-pmus-recorder.service)" = active
+          test "\$(systemctl is-active l5-pmus-supervisor.service)" = active
+          grep -q '^Environment=PMUS_SUPERVISOR_LIVE=NO$' /etc/systemd/system/l5-pmus-supervisor.service
+          echo PMUS_MICRO_STAGE_OK ref=$MICRO_REF permanent_supervisor_disarmed=true credentials_loaded=false services_restarted=false
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment 'L5 PMUS MICRO isolated DISARMED stage' --parameters "$PARAMS" --timeout-seconds 180 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          OUT=$(jq -r '.Stdout' <<<"$RESULT")
+          grep -q 'PMUS_MICRO_STAGE_OK' <<<"$OUT"
+          grep -q 'permanent_supervisor_disarmed=true' <<<"$OUT"
+          grep -q 'credentials_loaded=false' <<<"$OUT"
