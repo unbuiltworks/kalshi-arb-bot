@@ -1,3 +1,3 @@
-MARKET_SLUG=aec-mlb-sf-pit-2026-09-02
-AUDIT_ID=pmus-q1-live-readiness-20260903-0223Z
+MARKET_SLUG=aec-mlb-det-min-2026-09-02
+AUDIT_ID=pmus-det-min-readiness-20260903-0319Z
 MODE=READ_ONLY_SETTLEMENT_AND_ENGINE_STATUS
