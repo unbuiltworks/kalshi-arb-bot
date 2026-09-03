@@ -18,7 +18,10 @@ COPY src/pmus_sports_collector.py src/pmus_sports_collector.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
 RUN touch src/__init__.py
 
-ENV PMUS_COLLECTOR_ROOT=/state/pmus-sports \
+# Baked role tripwire (issue #167 comment 5521210994): a cross-built
+# service exits SERVICE_ROLE_MISMATCH loudly instead of running silently.
+ENV PMUS_SERVICE_ROLE=collector \
+    PMUS_COLLECTOR_ROOT=/state/pmus-sports \
     PMUS_COLLECTOR_LEAGUES=mlb \
     PMUS_COLLECT_INCENTIVE_MARKETS=1 \
     PMUS_POLL_SECONDS=5 \

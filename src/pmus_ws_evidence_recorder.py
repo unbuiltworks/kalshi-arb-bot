@@ -72,6 +72,7 @@ PREFIXES_ENV = "PMUS_WS_PREFIXES"          # default "" = ALL markets (props too
 HYDRATE_BYTES_ENV = "PMUS_WS_HYDRATE_MAX_BYTES"
 DEFAULT_HYDRATE_BYTES = 64 * 1024 * 1024   # per daily tape file; 0 = unbounded
 EXPAND_PAGES_ENV = "PMUS_WS_EXPAND_PAGES"  # 0 disables global enumeration
+PLANNER_ENV = "PMUS_WS_PLANNER"            # "priority" (default) | "rotation"
 
 # last discovery diagnostics (issue #167 comment 5520693117): merged into
 # the status line so an incomplete embedded page can never hide again
@@ -319,23 +320,34 @@ def _l5_compact(s: Mapping[str, Any], now: float,
         return {"error": f"l5_shadow_unavailable:{type(exc).__name__}"}
 
 
-def _market_row(slug: str, s: Mapping[str, Any], now: float) -> dict:
+def _market_row(slug: str, s: Mapping[str, Any], now: float,
+                l5: bool = True) -> dict:
     gate = ws_gate(s, now)
+    if isinstance(s, dict):
+        # persist the latest slot verdicts so the priority planner's
+        # completion-probability component scores on real evidence
+        s["_slot_counts"] = gate.get("slot_counts_theoretical")
     return {"slug": slug, "bid": s.get("bid"), "bid_qty": s.get("bid_qty"),
             "ask": s.get("ask"), "ask_qty": s.get("ask_qty"),
             "both_sides_served": s.get("both_sides_served", False),
             "book_updates": s.get("book_updates", 0),
             **gate,
-            "l5_shadow": _l5_compact(s, now, gate)}
+            # expensive per-market L5 state only for the allocated top
+            # candidates (issue #167 comment 5521210994 funnel step 4)
+            "l5_shadow": (_l5_compact(s, now, gate) if l5
+                          else {"skipped": "not_allocated"})}
 
 
 def build_status(state: Mapping[str, Any], connected: bool, msgs: int,
                  subscribed: int, now: Optional[float] = None,
-                 discovery: Optional[Mapping[str, Any]] = None) -> dict:
+                 discovery: Optional[Mapping[str, Any]] = None,
+                 l5_alloc: Optional[set] = None) -> dict:
     now = now or time.time()
     # Gate every tracked market once per cycle: a Q1_GATE_CLEARED market
     # outside the five-row display must still be visible to the supervisor.
-    rows = {slug: _market_row(slug, s, now) for slug, s in state.items()}
+    rows = {slug: _market_row(slug, s, now,
+                              l5=(l5_alloc is None or slug in l5_alloc))
+            for slug, s in state.items()}
     tops = sorted(state.items(),
                   key=lambda kv: -len(kv[1].get("trades", [])))[:5]
     eligible = sorted(
@@ -644,17 +656,33 @@ async def run(minutes: Optional[float]) -> int:
     print("PMUS_WS_STATUS " + json.dumps(
         {"hydration": hydration}, separators=(",", ":"), default=str),
         flush=True)
+    plan_state: dict = {}
+    l5_alloc: Optional[set] = None
     while deadline is None or time.monotonic() < deadline:
         cap = int(os.getenv(MAX_MARKETS_ENV, "24"))
-        plan = subscription_plan(discover_universe(), mstate, cap, cycle)
+        targets = discover_universe()
+        if os.getenv(PLANNER_ENV, "priority").strip() == "rotation":
+            plan = subscription_plan(targets, mstate, cap, cycle)
+            slugs = plan["subscribe"]
+            l5_alloc = None
+            discovery_diag = {**plan["diagnostics"], **DISCOVERY_DIAG}
+        else:
+            # HOT/WARM/COLD priority tiers (issue #167 comment 5521210994)
+            from src import pmus_priority_queue as pq
+            p = pq.plan(targets, mstate, cap, cycle, plan_state)
+            plan_state = p["state"]
+            slugs = p["subscribe"]
+            l5_alloc = set(p["l5_allocated"])
+            discovery_diag = {**p["diagnostics"], **DISCOVERY_DIAG}
+            append(root, {"kind": "priority_plan",
+                          "t": datetime.now(timezone.utc).isoformat(),
+                          "diagnostics": p["diagnostics"],
+                          "per_market": p["per_market"]})
         cycle += 1
-        slugs = plan["subscribe"]
-        discovery_diag = {**plan["diagnostics"], **DISCOVERY_DIAG}
         append(root, {"kind": "recorder_start",
                       "t": datetime.now(timezone.utc).isoformat(),
                       "subscribed": slugs, "read_only": True,
                       "discovery": discovery_diag,
-                      "excluded": plan["excluded"][:200],
                       "note": "subscribe/heartbeat frames only; no order "
                               "path exists in this worker"})
         try:
@@ -695,7 +723,8 @@ async def run(minutes: Optional[float]) -> int:
                         try:
                             print("PMUS_WS_STATUS " + json.dumps(
                                 build_status(mstate, True, msgs, len(slugs),
-                                             discovery=discovery_diag),
+                                             discovery=discovery_diag,
+                                             l5_alloc=l5_alloc),
                                 separators=(",", ":"), default=str),
                                 flush=True)
                         except Exception as exc:
