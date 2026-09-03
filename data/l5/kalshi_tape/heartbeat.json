@@ -1,0 +1,15 @@
+{
+  "captured_at": "2026-09-03T22:44:16.151536+00:00",
+  "failures": [],
+  "markets_captured": 2,
+  "note": "Raw tape only. Public quote/trade evidence never implies hypothetical queue fill certainty.",
+  "order_entry": false,
+  "read_only": true,
+  "realized_pnl": 0,
+  "series": [
+    "KXBTC15M",
+    "KXETH15M"
+  ],
+  "status": "ok",
+  "trades_captured_with_6m_overlap": 1000
+}
