@@ -287,7 +287,8 @@ A residual must never be hidden by integer conversion. Any nonzero Decimal posit
 
 ## 12. Evidence that remains missing / next P0s
 
-- reconcile PR #169 and transfer-branch micro implementations into exactly one canonical micro executor;
+- ~~reconcile PR #169 and transfer-branch micro implementations into exactly one canonical micro executor~~ — **done at `6e0669c1`** (#169 engine + isolated `PMUS_MICRO_*` arming, SKIP semantics, $0.05 durable cap, `micro_eligible`);
+- run the bounded `spring_l5` one-market session (`src/pmus_spring_l5_session.py`) per comment 5520504343 once staged DISARMED and reviewed;
 - wire accurate sports TTE/event clock into persistence-v2;
 - collect realtime persistence-v2 shadow sequences across sports/props;
 - validate bucket→executable size/cadence mapping with real micro fills;
