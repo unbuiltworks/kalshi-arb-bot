@@ -37,8 +37,6 @@ jobs:
           from pathlib import Path
           import re
 
-          # 1) Current PMUS positions may expose only netPositionDecimal.
-          # Match both Mapping and legacy-list branches regardless of indent.
           p=Path('src/pmus_q1_executor_v4.py')
           s=p.read_text()
           pat=re.compile(r'(?P<i>^[ \t]*)raw = p\.get\("netPosition"\)\n(?P=i)if raw is None:\n(?P=i)    raw = p\.get\("quantity"\)', re.M)
@@ -69,9 +67,6 @@ jobs:
               raise SystemExit(f'SUP_POSITION_MARKER_COUNT={n}')
           p.write_text(s)
 
-          # 2) Live auth proves signing query strings in the path yields 401.
-          # Read the authenticated activity page with the base path and filter
-          # market/type locally.
           p=Path('src/pmus_settlement_auditor.py')
           s=p.read_text()
           a=s.index('def _activities(')
@@ -136,6 +131,7 @@ jobs:
       - name: Focused tests
         shell: bash
         run: |
+          python3 -m pip install --disable-pip-version-check -q pytest
           python3 -m pytest -q \
             tests/test_pmus_aws_supervisor.py \
             tests/test_pmus_q1_executor_v4.py \
