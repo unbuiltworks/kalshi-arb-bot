@@ -97,4 +97,7 @@ def test_all_league_discovery_mode(monkeypatch):
     monkeypatch.delenv(rec.MARKETS_ENV, raising=False)
     rec.discover_slugs()
     assert "/v2/leagues" in calls
-    assert "/v2/leagues/epl/events" in calls   # every listed league queried
+    assert any(c.startswith("/v2/leagues/epl/events") for c in calls), calls
+    # every listed league queried, with the 10-event default cap lifted
+    assert any("limit=500" in c for c in calls
+               if c.startswith("/v2/leagues/epl/events"))

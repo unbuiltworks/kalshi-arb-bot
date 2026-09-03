@@ -71,6 +71,11 @@ DISCOVERY_ENV = "PMUS_WS_DISCOVERY_SECONDS"
 PREFIXES_ENV = "PMUS_WS_PREFIXES"          # default "" = ALL markets (props too)
 HYDRATE_BYTES_ENV = "PMUS_WS_HYDRATE_MAX_BYTES"
 DEFAULT_HYDRATE_BYTES = 64 * 1024 * 1024   # per daily tape file; 0 = unbounded
+EXPAND_PAGES_ENV = "PMUS_WS_EXPAND_PAGES"  # 0 disables global enumeration
+
+# last discovery diagnostics (issue #167 comment 5520693117): merged into
+# the status line so an incomplete embedded page can never hide again
+DISCOVERY_DIAG: dict = {}
 
 SUB_MARKET_DATA = 1
 SUB_TRADE = 3
@@ -437,7 +442,10 @@ def discover_universe() -> list[dict]:
     events_by_league = {}
     for lg in leagues:
         try:
-            ev = col.http_get_json(f"/v2/leagues/{lg}/events")
+            # limit=500: the default events page is capped at 10/league
+            # (issue #167 comment 5520693117 — coverage audit)
+            ev = col.http_get_json(
+                f"/v2/leagues/{lg}/events?limit={col.EVENTS_PAGE_LIMIT}")
             events_by_league[lg] = ev if isinstance(ev, list) \
                 else ev.get("events") or []
         except Exception:
@@ -448,7 +456,41 @@ def discover_universe() -> list[dict]:
         incentives = {}
     prefixes = [p.strip() for p in
                 os.getenv(PREFIXES_ENV, "").split(",") if p.strip()]
-    return col.discover_targets(events_by_league, incentives, prefixes, True)
+    targets = col.discover_targets(events_by_league, incentives, prefixes,
+                                   True)
+    embedded_n = len(targets)
+    # Full-universe expansion: embedded event.markets carry at most ~15
+    # rows while marketCounts reports 47-162+ per event. Enumerate the
+    # global open-market listing and join to LIVE events on the exact
+    # gameStartTime key; failure degrades to embedded-only, with the
+    # gap visible in diagnostics rather than hidden.
+    pages = 0
+    expanded: list[dict] = []
+    try:
+        max_pages = int(os.getenv(EXPAND_PAGES_ENV,
+                                  str(col.ENUM_MAX_PAGES_DEFAULT)))
+        if max_pages > 0:
+            open_rows, pages = col.enumerate_open_markets(
+                col.http_get_json, max_pages)
+            expanded = col.expand_live_event_markets(events_by_league,
+                                                     open_rows)
+    except Exception:
+        expanded = []
+    seen = {t["slug"] for t in targets}
+    for row in expanded:
+        if prefixes and not row["slug"].startswith(tuple(prefixes)):
+            continue
+        if row["slug"] not in seen:
+            seen.add(row["slug"])
+            targets.append(row)
+    DISCOVERY_DIAG.clear()
+    DISCOVERY_DIAG.update({
+        "events_discovered": sum(len(v) for v in events_by_league.values()),
+        "markets_embedded": embedded_n,
+        "markets_expanded": len(targets) - embedded_n,
+        "enumeration_pages_fetched": pages,
+    })
+    return targets
 
 
 def _activity_score(s: Mapping[str, Any], now: float) -> float:
@@ -607,7 +649,7 @@ async def run(minutes: Optional[float]) -> int:
         plan = subscription_plan(discover_universe(), mstate, cap, cycle)
         cycle += 1
         slugs = plan["subscribe"]
-        discovery_diag = plan["diagnostics"]
+        discovery_diag = {**plan["diagnostics"], **DISCOVERY_DIAG}
         append(root, {"kind": "recorder_start",
                       "t": datetime.now(timezone.utc).isoformat(),
                       "subscribed": slugs, "read_only": True,

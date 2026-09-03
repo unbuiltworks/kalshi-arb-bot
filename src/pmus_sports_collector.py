@@ -153,13 +153,74 @@ def _event_state_summary(event: Mapping[str, Any]) -> dict:
 
 PRIMARY_MARKET_PREFIXES = ("aec-", "a5c-")   # labeling ONLY, never admission
 
+# Coverage audit (issue #167 comment 5520693117): the events endpoint
+# defaults to 10 events/league and embeds at most ~15 markets/event,
+# while event.marketCounts.numMarkets reports 47-162+ per event. The
+# full open universe is served by /v1/markets?active=true&closed=false
+# with limit/offset paging; rows join to events on gameStartTime ==
+# event startTime (exact ISO match, verified live).
+EVENTS_PAGE_LIMIT = 500
+ENUM_PAGE_SIZE = 500
+ENUM_MAX_PAGES_DEFAULT = 50
+
+
+def enumerate_open_markets(get_json, max_pages: int = ENUM_MAX_PAGES_DEFAULT,
+                           page_size: int = ENUM_PAGE_SIZE) -> tuple[list, int]:
+    """Bounded GET-only enumeration of ALL open+active markets. Returns
+    (rows, pages_fetched); stops on the first short page. A mid-way
+    failure returns what was gathered — discovery degrades, never dies."""
+    rows: list = []
+    pages = 0
+    for page in range(max_pages):
+        try:
+            resp = get_json(f"/v1/markets?active=true&closed=false"
+                            f"&limit={page_size}&offset={page * page_size}")
+        except Exception:
+            break
+        ms = resp.get("markets") if isinstance(resp, Mapping) else None
+        if not isinstance(ms, list):
+            break
+        pages += 1
+        rows.extend(m for m in ms if isinstance(m, Mapping))
+        if len(ms) < page_size:
+            break
+    return rows, pages
+
+
+def expand_live_event_markets(events_by_league: Mapping[str, list],
+                              open_markets: list) -> list[dict]:
+    """Join globally-enumerated open markets to LIVE events on the exact
+    gameStartTime == event startTime key. Only live events expand; rows
+    without a matching live event (futures etc.) are never admitted."""
+    start_index: dict[str, tuple[str, dict]] = {}
+    for league, events in events_by_league.items():
+        for ev in events or []:
+            if not isinstance(ev, Mapping) or not ev.get("live"):
+                continue
+            key = str(ev.get("startTime") or ev.get("startDate") or "")
+            if key:
+                start_index[key] = (league, _event_state_summary(ev))
+    out: list[dict] = []
+    for m in open_markets:
+        slug = str(m.get("slug") or "")
+        hit = start_index.get(str(m.get("gameStartTime") or ""))
+        if not slug or hit is None:
+            continue
+        league, state = hit
+        out.append({"slug": slug, "league": league,
+                    "why": "expanded_enumeration",
+                    "event_state": state,
+                    "prop": not slug.startswith(PRIMARY_MARKET_PREFIXES),
+                    "market_meta": _market_meta(m)})
+    return out
+
 
 def _market_meta(m: Mapping[str, Any]) -> dict:
     """Tolerant market metadata (kept so the L5 engine stays
     market-agnostic); only known-present keys are copied."""
     meta = {}
-    for key in ("name", "title", "type", "marketType", "category",
-                "eventSlug", "event_slug"):
+    for key in ("name", "title", "type", "marketType", "sportsMarketTypeV2",
+                "category", "eventSlug", "event_slug"):
         if m.get(key) is not None:
             meta[key] = m.get(key)
     return meta
