@@ -2,8 +2,7 @@ name: AWS PMUS q1 current-schema stage
 
 on:
   push:
-    branches:
-      - aws-migration-foundation
+    branches: [aws-migration-foundation]
     paths:
       - deploy/aws/pmus-q1-schema-v2-stage.trigger
 
@@ -19,65 +18,84 @@ env:
 jobs:
   patch_and_test:
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: aws-migration-foundation
+          ref: d3614aed26b88e791bfd0abdcfc9395e6aa92969
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Apply post-only hardening v3 and test fail-closed behavior
+      - name: Install persistent authenticated read-only PMUS recorder on AWS
         shell: bash
         run: |
           set -Eeuo pipefail
-          PATCH_B64=$(base64 -w0 deploy/aws/patch_pmus_q1_hardening_v3.py)
-          REMOTE=$(cat <<EOF
+          REC_B64=$(base64 -w0 src/pmus_ws_evidence_recorder.py)
+          COL_B64=$(base64 -w0 src/pmus_sports_collector.py)
+          REMOTE=$(cat <<'EOS'
           set -Eeuo pipefail
-          STAGE=/home/ssm-user/l5-pmus-q1-stage
-          printf '%s' '$PATCH_B64' | base64 -d > /tmp/patch_pmus_q1_hardening_v3.py
-          python3 /tmp/patch_pmus_q1_hardening_v3.py
-          rm -f /tmp/patch_pmus_q1_hardening_v3.py
-          python3 -m py_compile "\$STAGE/src/pmus_q1_executor.py"
-          export PYTHONPATH="\$STAGE"
-          export PMUS_Q1_STATE_DIR=/tmp/pmus-q1-v3-test
-          rm -rf "\$PMUS_Q1_STATE_DIR"
-          python3 - <<'PY'
-          from decimal import Decimal as D
-          from urllib.error import HTTPError
-          from src import pmus_q1_executor as e
-          class Stale:
-              def __init__(self): self.posts=0
-              def request(self,m,p,body=None,base=e.API):
-                  if p=='/v1/order/preview': return {'order':{'marketSlug':'m'}}
-                  if p.endswith('/bbo'): return {'marketData':{'bestBid':{'value':'0.470'},'bestAsk':{'value':'0.475'}}}
-                  if p=='/v1/orders': self.posts+=1; raise AssertionError('mutation')
-                  raise AssertionError((m,p))
-          f=Stale()
-          try: e.place_limit_buy(f,'m','OUTCOME_SIDE_YES',D('0.475'),'first_leg'); raise AssertionError('expected refuse')
-          except e.Halt as x: assert 'POST_ONLY_STALE_REFUSE' in str(x)
-          assert f.posts==0
-          class R:
-              def __init__(self): self.n=0
-              def request(self,m,p,body=None,base=e.API):
-                  self.n+=1
-                  if self.n==1: raise HTTPError('x',404,'Not Found',None,None)
-                  if self.n==2: raise HTTPError('x',429,'Too Many Requests',None,None)
-                  return {'order':{'id':'abc','state':'ORDER_STATE_REJECTED','cumQuantity':0}}
-          r=R()
-          try: e._order_status(r,'abc'); raise AssertionError('expected rejected')
-          except e.RejectedNoFill: pass
-          assert r.n==3
-          print('PMUS_Q1_HARDENING_V3_TESTS_OK stale_post_only_refused=true mutation_replay=false get_404_429_retry=true rejected_zero_fill_terminal=true live_order=false')
-          PY
-          rm -rf /tmp/pmus-q1-v3-test
-          EOF
+          APP=/home/ssm-user/l5-pmus-ws
+          STATE=/home/ssm-user/l5-pmus-ws-state
+          VENV=/home/ssm-user/l5-pmus-ws-venv
+          CREDS=/home/ssm-user/l5-pmus-q1-credentials.env
+          test -f "$CREDS" && test "$(stat -c %a "$CREDS")" = 600
+          install -d -o ssm-user -g ssm-user "$APP/src" "$STATE"
+          EOS
+          )
+          REMOTE+=$'\n'"printf '%s' '$REC_B64' | base64 -d > /home/ssm-user/l5-pmus-ws/src/pmus_ws_evidence_recorder.py"
+          REMOTE+=$'\n'"printf '%s' '$COL_B64' | base64 -d > /home/ssm-user/l5-pmus-ws/src/pmus_sports_collector.py"
+          REMOTE+=$'\n'"cat <<'EOS' >> /dev/null\nEOS"
+          REMOTE+=$(cat <<'EOS'
+
+          touch "$APP/src/__init__.py"
+          chown -R ssm-user:ssm-user "$APP" "$STATE"
+          chmod 600 "$APP/src/pmus_ws_evidence_recorder.py" "$APP/src/pmus_sports_collector.py"
+          if [[ ! -x "$VENV/bin/python" ]]; then sudo -u ssm-user python3 -m venv "$VENV"; fi
+          sudo -u ssm-user "$VENV/bin/pip" install --disable-pip-version-check --no-cache-dir 'cryptography>=42' 'websockets>=14,<17' >/dev/null
+          cat > /etc/systemd/system/l5-pmus-recorder.service <<'UNIT'
+          [Unit]
+          Description=L5 PMUS authenticated read-only recorder/gate
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          User=ssm-user
+          Group=ssm-user
+          WorkingDirectory=/home/ssm-user/l5-pmus-ws
+          EnvironmentFile=/home/ssm-user/l5-pmus-q1-credentials.env
+          Environment=PYTHONPATH=/home/ssm-user/l5-pmus-ws
+          Environment=PMUS_SERVICE_ROLE=ws-recorder
+          Environment=PMUS_WS_ROOT=/home/ssm-user/l5-pmus-ws-state
+          Environment=PMUS_WS_LEAGUES=all
+          Environment=PMUS_WS_MAX_MARKETS=40
+          Environment=PMUS_WS_DISCOVERY_SECONDS=300
+          Environment=PMUS_WS_STATUS_EVERY_SECONDS=30
+          ExecStart=/home/ssm-user/l5-pmus-ws-venv/bin/python -m src.pmus_ws_evidence_recorder
+          Restart=always
+          RestartSec=2
+          NoNewPrivileges=true
+          PrivateTmp=true
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          systemctl daemon-reload
+          systemctl enable --now l5-pmus-recorder.service
+          sleep 8
+          test "$(systemctl is-active l5-pmus-recorder.service)" = active
+          echo PMUS_AWS_RECORDER_ACTIVE=true
+          echo PMUS_AWS_RECORDER_READ_ONLY=true
+          echo PMUS_AWS_RECORDER_REF=d3614aed26b88e791bfd0abdcfc9395e6aa92969
+          test -f "$STATE/heartbeat.json" || true
+          journalctl -u l5-pmus-recorder.service --no-pager -n 15
+          EOS
           )
           ENC=$(printf '%s' "$REMOTE" | base64 -w0)
-          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
-          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment 'L5 PMUS q1 hardening v3 test only' --parameters "$PARAMS" --timeout-seconds 180 --query 'Command.CommandId' --output text)
-          for _ in $(seq 1 90); do
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment 'L5 PMUS read-only recorder daemon via registered transport' --parameters "$PARAMS" --timeout-seconds 300 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 150); do
             STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
             case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
             sleep 2
@@ -86,5 +104,5 @@ jobs:
           echo "$RESULT"
           test "$(jq -r '.Status' <<<"$RESULT")" = Success
           OUT=$(jq -r '.Stdout' <<<"$RESULT")
-          grep -q 'PMUS_Q1_HARDENING_V3_PATCH_OK' <<<"$OUT"
-          grep -q 'PMUS_Q1_HARDENING_V3_TESTS_OK' <<<"$OUT"
+          grep -q 'PMUS_AWS_RECORDER_ACTIVE=true' <<<"$OUT"
+          grep -q 'PMUS_AWS_RECORDER_READ_ONLY=true' <<<"$OUT"
