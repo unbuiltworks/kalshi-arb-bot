@@ -293,14 +293,18 @@ def _position_for_slug(t: Transport, slug: str) -> D:
     if isinstance(rows, Mapping):
         p = rows.get(slug)
         if isinstance(p, Mapping):
-            raw = p.get("netPosition")
+            raw = p.get("netPositionDecimal")
+            if raw is None:
+                raw = p.get("netPosition")
             if raw is None:
                 raw = p.get("quantity")
             return _d(raw) or D("0")
     if isinstance(rows, list):
         for p in rows:
             if isinstance(p, Mapping) and p.get("marketSlug") == slug:
-                raw = p.get("netPosition")
+                raw = p.get("netPositionDecimal")
+                if raw is None:
+                    raw = p.get("netPosition")
                 if raw is None:
                     raw = p.get("quantity")
                 return _d(raw) or D("0")

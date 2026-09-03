@@ -36,13 +36,21 @@ def _amount(value: Any) -> Optional[D]:
 
 
 def _activities(t: q1.Transport, slug: str, typ: str) -> list[dict]:
-    path = ("/v1/portfolio/activities?types=" + quote(typ, safe="")
-            + "&marketSlug=" + quote(slug, safe="")
-            + "&limit=100&sortOrder=SORT_ORDER_DESCENDING")
-    resp = t.request("GET", path)
+    resp = t.request("GET", "/v1/portfolio/activities")
     rows = resp.get("activities") if isinstance(resp, Mapping) else None
-    return [dict(r) for r in (rows or []) if isinstance(r, Mapping)]
-
+    out: list[dict] = []
+    for row in (rows or []):
+        if not isinstance(row, Mapping) or row.get("type") != typ:
+            continue
+        if typ == "ACTIVITY_TYPE_POSITION_RESOLUTION":
+            payload = row.get("positionResolution")
+        elif typ == "ACTIVITY_TYPE_TRADE":
+            payload = row.get("trade")
+        else:
+            payload = None
+        if isinstance(payload, Mapping) and payload.get("marketSlug") == slug:
+            out.append(dict(row))
+    return out
 
 def _position(t: q1.Transport, slug: str) -> Optional[dict]:
     resp = t.request("GET", "/v1/portfolio/positions")

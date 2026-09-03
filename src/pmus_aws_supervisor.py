@@ -171,7 +171,9 @@ def account_block_reason(t: q1.Transport) -> Optional[str]:
     for slug, row in iterable:
         if not isinstance(row, Mapping):
             continue
-        raw = row.get("netPosition")
+        raw = row.get("netPositionDecimal")
+        if raw is None:
+            raw = row.get("netPosition")
         if raw is None:
             raw = row.get("quantity")
         try:
