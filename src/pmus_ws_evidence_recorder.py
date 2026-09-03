@@ -279,12 +279,37 @@ def ws_gate(s: Mapping[str, Any], now: float, window_s: float = 3600.0) -> dict:
             "slot_counts_theoretical": counts, "gate_status": status}
 
 
+def _l5_compact(s: Mapping[str, Any], now: float,
+                gate: Mapping[str, Any]) -> dict:
+    """Compact per-market L5 action-shadow fields (issue #167 comments
+    5519672916/5519746304): THEORETICAL clone state + ranked next
+    relation from the frozen canonical model, alongside the pair gate.
+    A shadow failure is contained to this field — never the status line,
+    never the gate."""
+    try:
+        from src import pmus_l5_action_shadow as l5s
+        row = l5s.market_shadow_row(s, now, gate)
+        return {"l5_state": row["l5_state"],
+                "last_rel": row["last_rel"],
+                "sim_inventory": row["sim_inventory"],
+                "next_relation_ranked": row["next_relation_ranked"][:3],
+                "l5_next_relation": row["comparison"]["l5_next_relation"],
+                "off_distribution": row["off_distribution"],
+                "divergent_vs_pair_gate": row["comparison"]["divergent"],
+                "model_sha256_16": row["model_sha256_16"],
+                "labels": "THEORETICAL"}
+    except Exception as exc:
+        return {"error": f"l5_shadow_unavailable:{type(exc).__name__}"}
+
+
 def _market_row(slug: str, s: Mapping[str, Any], now: float) -> dict:
+    gate = ws_gate(s, now)
     return {"slug": slug, "bid": s.get("bid"), "bid_qty": s.get("bid_qty"),
             "ask": s.get("ask"), "ask_qty": s.get("ask_qty"),
             "both_sides_served": s.get("both_sides_served", False),
             "book_updates": s.get("book_updates", 0),
-            **ws_gate(s, now)}
+            **gate,
+            "l5_shadow": _l5_compact(s, now, gate)}
 
 
 def build_status(state: Mapping[str, Any], connected: bool, msgs: int,

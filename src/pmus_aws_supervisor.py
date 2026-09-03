@@ -119,6 +119,28 @@ def _dec(value: Any) -> Optional[D]:
         return None
 
 
+def _l5_score_term(shadow: Any) -> D:
+    """Bounded L5-compatibility ranking term (issue #167 comment
+    5519746304 item 4): among ALREADY-CLEARED candidates only, prefer
+    markets where the frozen L5 action model puts more mass on acting
+    (open/extend/complete) at the current state, weighted down when the
+    state is off-distribution. Never admits a market the gate did not
+    clear and never exceeds +50 (matched evidence stays worth 100/slot)."""
+    if not isinstance(shadow, Mapping) or shadow.get("error"):
+        return D("0")
+    if shadow.get("off_distribution"):
+        return D("0")
+    act = D("0")
+    for row in shadow.get("next_relation_ranked") or []:
+        if isinstance(row, Mapping) and \
+                row.get("relation") in ("open", "extend", "complete"):
+            try:
+                act += D(str(row.get("p") or 0))
+            except Exception:
+                return D("0")
+    return min(act, D("1")) * D("50")
+
+
 def eligible_candidates(status: Mapping[str, Any]) -> list[dict]:
     # Prefer the recorder's full-slate cleared list; a valid candidate must
     # never be invisible just because it sits outside the five display rows.
@@ -152,6 +174,7 @@ def eligible_candidates(status: Mapping[str, Any]) -> list[dict]:
         score = (D(matched) * D("100") + D(min(trades, 500)) / D("10")
                  + min(bid_qty, ask_qty, D("100")) / D("100")
                  - spread * D("1000"))
+        score += _l5_score_term(row.get("l5_shadow"))
         out.append({**dict(row), "score": str(score)})
     out.sort(key=lambda r: D(r["score"]), reverse=True)
     return out
