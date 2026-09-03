@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths: [".github/workflows/l5-ops-24x7.yml"]
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/5 * * * *"
     - cron: "17 3 * * *"
   workflow_dispatch:
 
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   collect-shadow:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.schedule == '*/10 * * * *'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.schedule == '*/5 * * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -66,7 +66,7 @@ jobs:
             echo "No state changes"
             exit 0
           fi
-          git commit -m "l5-ops: 10m state snapshot $(date -u +%FT%TZ)"
+          git commit -m "l5-ops: 5m state snapshot $(date -u +%FT%TZ)"
           git push origin HEAD:l5-ops-data
 
   daily-regression:
