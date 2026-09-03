@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"
 COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
 COPY src/pmus_sports_collector.py src/pmus_sports_collector.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
+COPY src/pmus_priority_queue.py src/pmus_priority_queue.py
 # L5 action-shadow emission (per-market l5_shadow on every status row)
 COPY src/pmus_l5_action_shadow.py src/pmus_l5_action_shadow.py
 COPY src/pmus_l5_persistence_v2.py src/pmus_l5_persistence_v2.py
