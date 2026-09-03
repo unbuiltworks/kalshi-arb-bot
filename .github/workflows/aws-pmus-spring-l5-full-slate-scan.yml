@@ -14,7 +14,7 @@ env:
   AWS_REGION: us-east-1
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
-  SPRING_REF: 55d42b60a5062489b6d7f1150ac8b65b0cd23e08
+  SPRING_REF: 61d84039b8b7ee4b46733bc7fc07eccd3450cae8
 
 jobs:
   scan:
@@ -32,14 +32,13 @@ jobs:
           REMOTE=$(cat <<'EOF'
           set -Eeuo pipefail
           APP=/home/ssm-user/l5-pmus-spring-stage
-          ENGINE=/home/ssm-user/l5-pmus-engine
           VENV=/home/ssm-user/l5-pmus-engine-venv/bin/python
           CREDS=/home/ssm-user/l5-pmus-q1-credentials.env
-          PROD_STATE=/home/ssm-user/l5-pmus-q1-state
-          PERM_REC=/home/ssm-user/l5-pmus-ws-state/recorder.log
           TMPROOT=/home/ssm-user/l5-pmus-spring-scan-$(date +%s)
           install -d -o ssm-user -g ssm-user "$TMPROOT"
           test -f "$APP/src/pmus_spring_l5_session.py"
+          test -f "$APP/src/pmus_ws_evidence_recorder.py"
+          test -f "$APP/src/pmus_sports_collector.py"
           test -f "$CREDS" && test "$(stat -c %a "$CREDS")" = 600
           test "$(systemctl is-active l5-pmus-recorder.service)" = active
           test "$(systemctl is-active l5-pmus-supervisor.service)" = active
@@ -50,10 +49,10 @@ jobs:
             set -a; . /home/ssm-user/l5-pmus-q1-credentials.env; set +a
             export PMUS_Q1_STATE_DIR=/home/ssm-user/l5-pmus-q1-state
             export PMUS_Q1_LIVE=NO PMUS_MICRO_LIVE=NO PMUS_SPRING_LIVE=NO
-            export PMUS_WS_LEAGUES=all PMUS_WS_PREFIXES=
+            export PMUS_WS_LEAGUES=all PMUS_WS_PREFIXES= PMUS_WS_EXPAND_PAGES=50
             export TMPROOT="'$TMPROOT'"
 
-            PYTHONPATH=/home/ssm-user/l5-pmus-engine /home/ssm-user/l5-pmus-engine-venv/bin/python - <<"PY"
+            PYTHONPATH=/home/ssm-user/l5-pmus-spring-stage /home/ssm-user/l5-pmus-engine-venv/bin/python - <<"PY"
           import json, os
           from pathlib import Path
           from src import pmus_ws_evidence_recorder as rec
@@ -62,7 +61,8 @@ jobs:
           print("SPRING_UNIVERSE "+json.dumps({
               "discovered_total":len(universe),
               "props":sum(1 for x in universe if x.get("prop")),
-              "leagues":sorted({str(x.get("league")) for x in universe if x.get("league")})
+              "leagues":sorted({str(x.get("league")) for x in universe if x.get("league")}),
+              "discovery_diag":dict(rec.DISCOVERY_DIAG)
           },separators=(",",":")))
           PY
 
@@ -97,7 +97,7 @@ jobs:
                   return super().request(method,path,body,base)
           t=ScanTransport()
           universe=json.loads(Path(os.environ["TMPROOT"],"universe.json").read_text())
-          rows=[]; errors=0
+          rows=[]; errors=[]
           for x in universe:
               slug=str(x.get("slug") or "")
               if not slug: continue
@@ -112,15 +112,17 @@ jobs:
                       "worst_complement_notional":str(spec["worst_complement_notional"]),
                       "min_trade_qty":str(spec["minimum_trade_qty"]),"tick":str(spec["tick"]),
                       "prop":bool(x.get("prop")),"league":x.get("league"),
+                      "market_meta":x.get("market_meta") or {},
                       "distance_from_half":str(abs(bid-D("0.50")))})
-              except Exception:
-                  errors += 1
+              except Exception as exc:
+                  if len(errors) < 20:
+                      errors.append({"slug":slug,"error":type(exc).__name__+":"+str(exc)[:100]})
           rows.sort(key=lambda r:(D(r["distance_from_half"]),r["slug"]))
           shortlist=rows[:40]
           Path(os.environ["TMPROOT"],"public_shortlist.json").write_text(json.dumps(shortlist))
           Path(os.environ["TMPROOT"],"slugs.txt").write_text(",".join(r["slug"] for r in shortlist))
           print("SPRING_PUBLIC_SHORTLIST "+json.dumps({"midband_micro_total":len(rows),
-              "targeted_count":len(shortlist),"scan_errors":errors,"top":shortlist[:12]},separators=(",",":")))
+              "targeted_count":len(shortlist),"sample_errors":errors,"top":shortlist[:12]},separators=(",",":")))
           PY
 
             SLUGS=$(cat "'$TMPROOT'/slugs.txt")
@@ -130,10 +132,10 @@ jobs:
               export PMUS_WS_MAX_MARKETS=40
               export PMUS_WS_STATUS_EVERY_SECONDS=30
               export PMUS_WS_DISCOVERY_SECONDS=300
-              PYTHONPATH=/home/ssm-user/l5-pmus-engine /home/ssm-user/l5-pmus-engine-venv/bin/python -m src.pmus_ws_evidence_recorder --minutes 1.5 > "'$TMPROOT'/targeted.log" 2>&1
+              PYTHONPATH=/home/ssm-user/l5-pmus-spring-stage /home/ssm-user/l5-pmus-engine-venv/bin/python -m src.pmus_ws_evidence_recorder --minutes 1.5 > "'$TMPROOT'/targeted.log" 2>&1
             fi
 
-            PYTHONPATH=/home/ssm-user/l5-pmus-engine /home/ssm-user/l5-pmus-engine-venv/bin/python - <<"PY"
+            PYTHONPATH=/home/ssm-user/l5-pmus-spring-stage /home/ssm-user/l5-pmus-engine-venv/bin/python - <<"PY"
           import json, os, time
           from pathlib import Path
           from src import pmus_ws_evidence_recorder as rec
@@ -146,12 +148,12 @@ jobs:
           print("SPRING_TARGETED_EVIDENCE "+json.dumps({"observed_markets":len(rows),
               "two_sided_books":sum(1 for r in rows if r.get("both_sides_served")),
               "two_sided_flow":sum(1 for r in rows if r.get("two_sided_trades")),
-              "q1_gate_clear":sum(1 for r in rows if r.get("gate_status")=="Q1_GATE_CLEARED")},separators=(",",":")))
+              "q1_gate_clear":sum(1 for r in rows if r.get("gate_status")=="Q1_GATE_CLEARED"),
+              "top_activity":sorted(rows,key=lambda r:-int(r.get("trades_1h") or 0))[:12]},separators=(",",":"),default=str))
           PY
 
             PYTHONPATH=/home/ssm-user/l5-pmus-spring-stage /home/ssm-user/l5-pmus-engine-venv/bin/python - <<"PY"
           import json, os
-          from decimal import Decimal as D
           from pathlib import Path
           from src import pmus_spring_l5_session as s
           from src import pmus_micro_executor as m
@@ -163,7 +165,7 @@ jobs:
           qual=[r for r in ranked if r.get("spring_skip") is None]
           block=None; account_error=None
           try: block=m.account_block_reason(t)
-          except Exception as exc: account_error=type(exc).__name__
+          except Exception as exc: account_error=type(exc).__name__+":"+str(exc)[:160]
           power=None
           try:
               bal=q.base._get_with_retry(t,"/v1/account/balances")
@@ -172,12 +174,12 @@ jobs:
                   if isinstance(r,dict) and str(r.get("currency","")).upper()=="USD":
                       power=q._d(r.get("buyingPower")); break
           except Exception as exc:
-              account_error=account_error or type(exc).__name__
+              account_error=account_error or (type(exc).__name__+":"+str(exc)[:160])
           realized=q.realized_today()
           account_ready=(account_error is None and block is None and power is not None
                          and power >= q.MIN_BUYING_POWER and realized > q.DAILY_LOSS_STOP)
           out={"mode":"SPRING_FULL_SLATE_GET_AND_WS_READ_ONLY",
-               "spring_ref":"55d42b60a5062489b6d7f1150ac8b65b0cd23e08",
+               "spring_ref":"61d84039b8b7ee4b46733bc7fc07eccd3450cae8",
                "spring_armed":s.armed(),"micro_armed":m.micro_armed(),
                "qualifying_count":len(qual),"qualifying":qual[:12],
                "account":{"ready":account_ready,"block_reason":block,"error":account_error,
@@ -196,8 +198,8 @@ jobs:
           )
           ENC=$(printf '%s' "$REMOTE" | base64 -w0)
           PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | bash" '{commands:[$cmd]}')
-          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment 'L5 SPRING full-slate targeted read-only scan' --parameters "$PARAMS" --timeout-seconds 420 --query 'Command.CommandId' --output text)
-          for _ in $(seq 1 230); do
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment 'L5 SPRING corrected full-slate targeted read-only scan' --parameters "$PARAMS" --timeout-seconds 540 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 290); do
             STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
             case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
             sleep 2
