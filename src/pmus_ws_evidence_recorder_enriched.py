@@ -1,10 +1,10 @@
 """Read-only spring-watch enrichment for the PMUS WS evidence recorder.
 
 This module does not discover markets, subscribe, mutate venue state, or alter
-any execution gate. It adds already-computed theoretical slot evidence to the
-recorder's advisory ``spring_watch`` rows and reserves a bounded subset of the
-existing expensive L5-shadow compute seats for already-subscribed spring-shaped
-markets, then delegates to the canonical read-only recorder.
+any execution gate. It adds explicit ordinary-Q1 and strict SPRING <=0.96
+slot evidence to advisory ``spring_watch`` rows, reserves a bounded subset of
+the existing expensive L5-shadow compute seats for already-subscribed
+spring-shaped markets, then delegates to the canonical read-only recorder.
 """
 from __future__ import annotations
 
@@ -12,9 +12,11 @@ from typing import Any, Mapping, Optional
 
 from src import pmus_ws_evidence_recorder as base
 from src import pmus_priority_queue as pq
+from src import pmus_spring_shadow_replay as spring_replay
 from src.pmus_l5_compute_allocator import allocate_with_spring_reserve
 
 _ORIGINAL_ALLOCATE_L5 = pq.allocate_l5
+_ORIGINAL_WS_GATE = base.ws_gate
 
 
 def _count(counts: Mapping[str, Any], key: str) -> int:
@@ -24,14 +26,27 @@ def _count(counts: Mapping[str, Any], key: str) -> int:
         return 0
 
 
+def ws_gate(s: Mapping[str, Any], now: float,
+            window_s: float = 3600.0) -> dict:
+    """Canonical Q1 gate plus independent strict spring shadow evidence.
+
+    The canonical ``gate_status`` is preserved byte-for-byte.  The extra
+    spring fields are advisory/theoretical and cannot promote execution.
+    """
+    out = dict(_ORIGINAL_WS_GATE(s, now, window_s))
+    out.update(spring_replay.summarize_state(s, now, window_s))
+    return out
+
+
 def spring_watch(rows: Mapping[str, Mapping[str, Any]],
                  l5_alloc: Optional[set] = None,
                  limit: Optional[int] = None) -> list[dict]:
     """Canonical spring-watch ranking plus explicit completion evidence.
 
-    Visibility only. ``repeated_completion`` is an advisory label derived
-    from the same authenticated-tape theoretical slot counts already present
-    on each row. It is NOT an execution admission and changes no gate.
+    ``repeated_completion`` is the existing ordinary 99c/Q1 advisory label.
+    ``spring_repeated_completion`` is stricter: only slots that themselves
+    STARTED 45-55c and later showed a <=0.96 maker-complement path count.
+    Neither is an execution admission.
     """
     picked = []
     for slug, r in rows.items():
@@ -54,6 +69,8 @@ def spring_watch(rows: Mapping[str, Mapping[str, Any]],
         matched = _count(counts, "MATCHED")
         one_sided = _count(counts, "ONE_SIDED_HOLD")
         no_fill = _count(counts, "NO_FILL")
+        spring_counts = dict(r.get("spring_slot_counts_theoretical") or {})
+        spring_matched = _count(spring_counts, "SPRING_MATCHED")
         picked.append(({
             "slug": slug,
             "bid": r.get("bid"),
@@ -68,6 +85,12 @@ def spring_watch(rows: Mapping[str, Mapping[str, Any]],
             "one_sided_holds": one_sided,
             "no_fill_slots": no_fill,
             "repeated_completion": matched >= 2,
+            "spring_pair_target": r.get("spring_pair_target", "0.96"),
+            "spring_slot_counts_theoretical": spring_counts,
+            "spring_matched_slots": spring_matched,
+            "spring_repeated_completion": spring_matched >= 2,
+            "spring_matches_theoretical": r.get(
+                "spring_matches_theoretical") or [],
             "l5_allocated": (slug in l5_alloc) if l5_alloc is not None
             else None,
             "off_distribution": shadow.get("off_distribution"),
@@ -91,7 +114,8 @@ def allocate_l5(subscribed_slugs, state, targets=None, now=None,
 
 
 def install() -> None:
-    """Install read-only status and compute-allocation enrichments."""
+    """Install read-only status/replay and compute-allocation enrichments."""
+    base.ws_gate = ws_gate
     base.spring_watch = spring_watch
     pq.allocate_l5 = allocate_l5
 
