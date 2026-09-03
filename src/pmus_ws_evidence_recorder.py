@@ -268,11 +268,25 @@ def ws_gate(s: Mapping[str, Any], now: float, window_s: float = 3600.0) -> dict:
             "slot_counts_theoretical": counts, "gate_status": status}
 
 
+def _market_row(slug: str, s: Mapping[str, Any], now: float) -> dict:
+    return {"slug": slug, "bid": s.get("bid"), "bid_qty": s.get("bid_qty"),
+            "ask": s.get("ask"), "ask_qty": s.get("ask_qty"),
+            "both_sides_served": s.get("both_sides_served", False),
+            "book_updates": s.get("book_updates", 0),
+            **ws_gate(s, now)}
+
+
 def build_status(state: Mapping[str, Any], connected: bool, msgs: int,
                  subscribed: int, now: Optional[float] = None) -> dict:
     now = now or time.time()
+    # Gate every tracked market once per cycle: a Q1_GATE_CLEARED market
+    # outside the five-row display must still be visible to the supervisor.
+    rows = {slug: _market_row(slug, s, now) for slug, s in state.items()}
     tops = sorted(state.items(),
                   key=lambda kv: -len(kv[1].get("trades", [])))[:5]
+    eligible = sorted(
+        (r for r in rows.values() if r.get("gate_status") == "Q1_GATE_CLEARED"),
+        key=lambda r: (-int(r.get("trades_1h") or 0), str(r.get("slug"))))
     return {
         "t": datetime.now(timezone.utc).isoformat(),
         "conn": "connected" if connected else "reconnecting",
@@ -280,13 +294,8 @@ def build_status(state: Mapping[str, Any], connected: bool, msgs: int,
         "subscribed_markets": subscribed,
         "messages_received": msgs,
         "labeling": "authenticated stream; fills/economics THEORETICAL",
-        "top_markets": [
-            {"slug": slug, "bid": s.get("bid"), "bid_qty": s.get("bid_qty"),
-             "ask": s.get("ask"), "ask_qty": s.get("ask_qty"),
-             "both_sides_served": s.get("both_sides_served", False),
-             "book_updates": s.get("book_updates", 0),
-             **ws_gate(s, now)}
-            for slug, s in tops],
+        "top_markets": [rows[slug] for slug, _ in tops],
+        "eligible_markets": eligible,
     }
 
 

@@ -120,7 +120,12 @@ def _dec(value: Any) -> Optional[D]:
 
 
 def eligible_candidates(status: Mapping[str, Any]) -> list[dict]:
-    rows = status.get("top_markets")
+    # Prefer the recorder's full-slate cleared list; a valid candidate must
+    # never be invisible just because it sits outside the five display rows.
+    # Older status lines without the field fall back to top_markets.
+    rows = status.get("eligible_markets")
+    if not isinstance(rows, list):
+        rows = status.get("top_markets")
     if not isinstance(rows, list):
         return []
     out = []
