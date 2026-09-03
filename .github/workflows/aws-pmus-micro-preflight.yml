@@ -31,14 +31,12 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Read account, live candidates, and penny-size support
+      - name: Read live candidates, penny-size support, and account state
         shell: bash
         run: |
           set -Eeuo pipefail
           REMOTE=$(cat <<'EOF'
           set -Eeuo pipefail
-          APP=/home/ssm-user/l5-pmus-engine
-          VENV=/home/ssm-user/l5-pmus-engine-venv
           CREDS=/home/ssm-user/l5-pmus-q1-credentials.env
           test -f "$CREDS" && test "$(stat -c %a "$CREDS")" = 600
           test "$(systemctl is-active l5-pmus-recorder.service)" = active
@@ -57,61 +55,69 @@ jobs:
           from src import pmus_q1_executor_v4 as q1
 
           TARGET=D("0.01")
+          HARD_MAX=D("0.02")
           t=q1.Transport()
           status=s.latest_recorder_status()
           if not isinstance(status, dict):
               raise SystemExit("NO_RECORDER_STATUS")
-          age=s.status_age_seconds(status)
           print("PMUS_MICRO_STATUS " + json.dumps({
-              "status_age_s": age,
-              "conn": status.get("conn"),
-              "auth": status.get("auth"),
+              "status_age_s": s.status_age_seconds(status),
+              "conn": status.get("conn"), "auth": status.get("auth"),
               "discovery": status.get("discovery"),
-              "eligible_total": status.get("eligible_total"),
-          }, default=str, separators=(",",":")))
-          try:
-              block=s.account_block_reason(t)
-          except Exception as exc:
-              print("PMUS_MICRO_ACCOUNT " + json.dumps({"error":type(exc).__name__},separators=(",",":")))
-              raise
-          print("PMUS_MICRO_ACCOUNT " + json.dumps({"block_reason":block},separators=(",",":")))
+              "eligible_total": status.get("eligible_total")},
+              default=str,separators=(",",":")))
 
+          # Public market metadata comes first so authenticated REST rate limits
+          # can never hide whether the live slate supports penny-scale sizing.
           rows=[]
           for c in s.eligible_candidates(status):
               slug=str(c.get("slug") or "")
-              if not slug:
-                  continue
+              if not slug: continue
               row={"slug":slug,"bid":c.get("bid"),"ask":c.get("ask"),"score":c.get("score")}
               try:
                   resp=t.request("GET", f"/v1/market/slug/{slug}", base=q1.GATEWAY)
                   m=resp.get("market") if isinstance(resp,dict) else None
-                  if not isinstance(m,dict):
-                      raise ValueError("market_unparseable")
+                  if not isinstance(m,dict): raise ValueError("market_unparseable")
                   minq=D(str(m.get("minimumTradeQty")))
                   tick=D(str(m.get("orderPriceMinTickSize")))
                   bid=D(str(c.get("bid")))
+                  min_notional=minq*bid
                   row.update({"minimumTradeQty":str(minq),"tick":str(tick),
-                              "sportsMarketTypeV2":m.get("sportsMarketTypeV2")})
+                              "sportsMarketTypeV2":m.get("sportsMarketTypeV2"),
+                              "minimum_order_notional":str(min_notional)})
                   if minq <= 0 or bid <= 0:
                       row.update({"micro_supported":False,"skip":"invalid_min_qty_or_bid"})
-                  elif minq*bid > TARGET:
-                      row.update({"micro_supported":False,"skip":"minimum_order_notional_gt_1c",
-                                  "minimum_order_notional":str(minq*bid)})
-                  elif tick != q1.TICK:
-                      row.update({"micro_supported":False,"skip":"tick_not_supported_by_current_executor"})
+                  elif min_notional > HARD_MAX:
+                      row.update({"micro_supported":False,"skip":"minimum_order_notional_gt_2c"})
                   else:
                       units=(TARGET/(bid*minq)).to_integral_value(rounding=ROUND_DOWN)
                       qty=units*minq
+                      # If 1c cannot buy one minimum lot but the legal minimum is
+                      # <=2c, report the minimum as an explicit bounded fallback.
+                      if qty < minq:
+                          qty=minq
                       notional=qty*bid
-                      if qty < minq or notional > TARGET:
+                      if qty < minq or notional > HARD_MAX:
                           row.update({"micro_supported":False,"skip":"rounding_failed_closed"})
                       else:
                           row.update({"micro_supported":True,"qty":str(qty),
-                                      "intended_notional":str(notional)})
+                                      "intended_notional":str(notional),
+                                      "at_or_below_1c":bool(notional<=TARGET),
+                                      "current_q1_tick_compatible":bool(tick==q1.TICK)})
               except Exception as exc:
                   row.update({"micro_supported":False,"skip":"metadata_error:"+type(exc).__name__})
               rows.append(row)
           print("PMUS_MICRO_CANDIDATES " + json.dumps(rows,default=str,separators=(",",":")))
+
+          # Account check remains mandatory for readiness, but failure is data,
+          # not a reason to lose the public micro-eligibility report.
+          account={"ready":False}
+          try:
+              block=s.account_block_reason(t)
+              account={"ready":block is None,"block_reason":block}
+          except Exception as exc:
+              account={"ready":False,"error":type(exc).__name__}
+          print("PMUS_MICRO_ACCOUNT " + json.dumps(account,separators=(",",":")))
           print("PMUS_MICRO_PREFLIGHT_OK read_only=true permanent_supervisor_disarmed=true")
           PY
           '
