@@ -18,7 +18,6 @@ FROM python:3.11-slim
 WORKDIR /app
 RUN pip install --no-cache-dir "websockets>=12" "cryptography>=42"
 COPY src/pmus_ws_evidence_recorder.py src/pmus_ws_evidence_recorder.py
-COPY src/pmus_ws_evidence_recorder_fast.py src/pmus_ws_evidence_recorder_fast.py
 COPY src/pmus_sports_collector.py src/pmus_sports_collector.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
 COPY src/pmus_priority_queue.py src/pmus_priority_queue.py
@@ -42,4 +41,4 @@ ENV PMUS_SERVICE_ROLE=ws-recorder \
     PMUS_WS_MAX_MARKETS=40 \
     PYTHONUNBUFFERED=1
 
-CMD ["sh", "-c", "if [ \"${PMUS_WS_PRIORITY_EVAL_ON_START:-0}\" = \"1\" ]; then echo PMUS_PRIORITY_EVAL_START; python3 scripts/priority_vs_rotation_eval.py --tape-root \"${PMUS_WS_ROOT:-/state/pmus-ws}\" || echo PMUS_PRIORITY_EVAL_FAILED:$?; fi; exec python3 -m src.pmus_ws_evidence_recorder_fast"]
+CMD ["sh", "-c", "if [ \"${PMUS_WS_PRIORITY_EVAL_ON_START:-0}\" = \"1\" ]; then echo PMUS_PRIORITY_EVAL_START; PYTHONPATH=/app python3 scripts/priority_vs_rotation_eval.py --tape-root \"${PMUS_WS_ROOT:-/state/pmus-ws}\" || echo PMUS_PRIORITY_EVAL_FAILED:$?; fi; exec python3 -m src.pmus_ws_evidence_recorder"]
