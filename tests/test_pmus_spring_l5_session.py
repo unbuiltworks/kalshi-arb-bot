@@ -212,7 +212,7 @@ def test_candidate_gate_thin_flow_and_off_distribution():
 def test_cumulative_cap_blocks_new_spend(monkeypatch, tmp_path):
     _arm(monkeypatch, tmp_path)
     _script_proposals(monkeypatch, ["extend"])
-    monkeypatch.setattr(micro, "cumulative_first_leg_notional",
+    monkeypatch.setattr(spring, "spring_cumulative_notional",
                         lambda slug: D("0.045"))
     fake = Fake()                     # next 0.01 action would breach 0.05
     rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
@@ -263,6 +263,72 @@ def test_unfilled_orders_cancel_and_session_holds_no_ghost_inventory(
     assert len(cancels) == len(creates) >= 1     # every order cancelled
     assert ("/v1/orders/open/cancel", {"slugs": [SLUG]}) in \
         [(p, b) for p, b in fake.posts]          # deadman ran
+
+
+def test_penny_residual_is_never_flat_in_behavioral_state():
+    """Issue #167 comment 5520710312: a 0.01-contract first fill must
+    read as +/-1 behavioral unit, EXTEND must increase the behavioral
+    imbalance, COMPLETE must reduce it — never int()-truncated to 0."""
+    inv = spring.Inventory()
+    assert inv.behavioral_residual() == 0.0
+    inv.record(True, D("0.50"), D("0.01"), "open")      # first penny fill
+    assert inv.behavioral_residual() == 1.0
+    key = spring.spring_state_key(inv, D("0.50"), None, 0.0)
+    assert key.endswith("imb1-10") and "flat" not in key
+    inv.record(True, D("0.50"), D("0.01"), "extend")    # extend -> 2 units
+    assert inv.behavioral_residual() == 2.0
+    inv.record(False, D("0.46"), D("0.01"), "complete")  # complete -> 1
+    assert inv.behavioral_residual() == 1.0
+    # partial fills map proportionally, sign preserved
+    inv2 = spring.Inventory()
+    inv2.record(False, D("0.50"), D("0.02"), "open")
+    inv2.record(False, D("0.50"), D("0.01"), "extend")   # NO surplus
+    assert inv2.behavioral_residual() == -1.5
+    key2 = spring.spring_state_key(inv2, D("0.50"), None, 0.0)
+    assert key2.endswith("imb1-10")
+
+
+def test_sequence_uses_behavioral_states_at_penny_sizing(monkeypatch,
+                                                         tmp_path):
+    _arm(monkeypatch, tmp_path)
+    _script_proposals(monkeypatch, ["open", "extend", "complete",
+                                    "complete"])
+    fake = Fake()
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0)
+    assert rep["status"] == "SPRING_MATCHED", rep
+    states = [d["state"] for d in rep["decisions"]]
+    assert states[0].endswith("flat")             # before any fill
+    assert all(s.endswith("imb1-10") for s in states[1:3])  # 1-2 units
+    assert "flat" not in states[1] and "flat" not in states[2]
+
+
+def test_spring_cumulative_counter_counts_open_extend_not_complete(
+        monkeypatch, tmp_path):
+    import json as _json
+    monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
+    slug = SLUG
+    rows = [
+        {"kind": "submitted", "stage": "spring_open_1", "slug": slug,
+         "price": "0.50", "qty": "0.02"},
+        {"kind": "submitted", "stage": "spring_extend_2", "slug": slug,
+         "price": "0.50", "qty": "0.02"},
+        {"kind": "submitted", "stage": "spring_complete_3", "slug": slug,
+         "price": "0.46", "qty": "0.04"},              # excluded
+        {"kind": "submitted", "stage": "micro_first_leg", "slug": slug,
+         "price": "0.48", "qty": "0.02", "micro": True},  # shared cap
+        {"kind": "submitted", "stage": "spring_open_1", "slug": "other",
+         "price": "0.50", "qty": "0.02"},              # other market
+    ]
+    (tmp_path / "ledger.jsonl").write_text(
+        "\n".join(_json.dumps(r) for r in rows) + "\n")
+    assert spring.spring_cumulative_notional(slug) == D("0.0296")
+    # unparseable row counts as the full cap — fail closed
+    (tmp_path / "ledger.jsonl").write_text(
+        '{"kind": "submitted", "stage": "spring_open_1", '
+        f'"slug": "{slug}", "price": "x", "qty": "0.02"}}\n')
+    assert spring.spring_cumulative_notional(slug) == \
+        spring.SESSION_NOTIONAL_CAP
 
 
 def test_spring_complement_price_exposes_both_bounds():

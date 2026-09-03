@@ -106,13 +106,23 @@ def gate_asserted(slug: str) -> bool:
 
 
 class Inventory:
-    """Exact-Decimal per-market session inventory."""
+    """Exact-Decimal per-market session inventory.
+
+    Venue quantities/notionals stay exact Decimal everywhere. For the
+    BEHAVIORAL model only (issue #167 comment 5520710312), the signed
+    residual is normalized to ACTION-UNIT equivalents — the first
+    authoritative fill defines one behavioral unit, so a 0.01-contract
+    penny fill reads as +/-1 to the historical share-based imbalance
+    buckets instead of collapsing to 'flat'; partial fills map
+    proportionally and the sign is always preserved. Venue inventory is
+    never faked."""
 
     def __init__(self) -> None:
         self.up = self.dn = D("0")
         self.cost_up = self.cost_dn = D("0")
         self.last_rel: Optional[str] = None
         self.last_px: Optional[D] = None
+        self.unit: Optional[D] = None          # first fill = 1 behavioral unit
         self.actions: list[dict] = []
 
     @property
@@ -132,7 +142,16 @@ class Inventory:
     def spent(self) -> D:
         return self.cost_up + self.cost_dn
 
+    def behavioral_residual(self) -> float:
+        """Signed residual in action-unit equivalents for the historical
+        model; proportional for partials, sign-preserving, never int()."""
+        if self.unit is None or self.unit == 0:
+            return 0.0
+        return float(self.residual / self.unit)
+
     def record(self, side_up: bool, px: D, qty: D, relation: str) -> None:
+        if self.unit is None and qty > 0:
+            self.unit = qty
         if side_up:
             self.up += qty
             self.cost_up += px * qty
@@ -162,7 +181,39 @@ def spring_state_key(inv: Inventory, market_px: D,
     tte = (max(settlement_t - now, 0.0) if settlement_t
            else SPORTS_TTE_DEFAULT_S)
     px = inv.last_px if inv.last_px is not None else market_px
-    return state_key(float(px), tte, float(inv.residual))
+    # behavioral action-unit residual, NOT raw penny contracts — a 0.01
+    # first fill must not read as 'flat' (issue #167 comment 5520710312)
+    return state_key(float(px), tte, inv.behavioral_residual())
+
+
+def spring_cumulative_notional(slug: str) -> D:
+    """Durable <=\\$0.05 cumulative SURPLUS-SPEND cap across invocations
+    (issue #167 comment 5520710312 item 5): sums this market's submitted
+    spring OPEN/EXTEND rows AND micro first-leg rows from the campaign
+    ledger — completion legs are excluded, and an unparseable row counts
+    as the full cap (fail closed)."""
+    total = D("0")
+    path = q1.base.state_dir() / "ledger.jsonl"
+    if not path.exists():
+        return total
+    for line in path.read_text().splitlines():
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        if not (isinstance(row, dict) and row.get("kind") == "submitted"
+                and row.get("slug") == slug):
+            continue
+        stage = str(row.get("stage", ""))
+        if not (stage.startswith("spring_open")
+                or stage.startswith("spring_extend")
+                or stage == "micro_first_leg"):
+            continue
+        price, qty = micro._d(row.get("price")), micro._d(row.get("qty"))
+        if price is None or qty is None:
+            return SESSION_NOTIONAL_CAP
+        total += price * qty
+    return total
 
 
 def spring_candidate_gate(row: Mapping[str, Any],
@@ -292,7 +343,9 @@ def run_session(t: Optional[Transport] = None,
 
     t = t or Transport()
     deadline_s = float(os.getenv(DEADLINE_ENV, "900"))
-    max_actions = int(os.getenv(MAX_ACTIONS_ENV, "6"))
+    max_actions = int(os.getenv(MAX_ACTIONS_ENV, "5"))   # probe-1 bound
+    # (issue #167 comment 5520665580 item 8: max 5 incremental actions
+    # OR the $0.05 cumulative cap, whichever hits first)
     settle_ts = os.getenv(SETTLEMENT_ENV, "").strip()
     settlement_t = float(settle_ts) if settle_ts else None
     start = clock()
@@ -316,7 +369,7 @@ def run_session(t: Optional[Transport] = None,
         if skip:
             return {**report, "status": "SPRING_SKIP_NOT_QUALIFYING",
                     "reason": skip, "candidate_row": row}
-        cum = micro.cumulative_first_leg_notional(slug)
+        cum = spring_cumulative_notional(slug)
         report["spring_gates"] = {
             "band": f"{SPRING_BAND_LO}-{SPRING_BAND_HI}",
             "pair_target": str(SPRING_PAIR_TARGET),
@@ -329,10 +382,10 @@ def run_session(t: Optional[Transport] = None,
             bbo = q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES")
             spec = micro.market_micro_spec(t, slug, bbo["bid"])
             skey = spring_state_key(inv, bbo["bid"], settlement_t, wall())
+            # behavioral units, sign preserved — never int() a fractional
+            # venue residual (issue #167 comment 5520710312)
             prop = pv2.proposal(model, skey, inv.last_rel or "open", "q<5",
-                                residual=int(inv.residual.copy_abs()
-                                             .to_integral_value()) *
-                                (1 if inv.residual >= 0 else -1))
+                                residual=inv.behavioral_residual())
             relation = ("open" if inv.up + inv.dn == 0
                         else prop["recommended_relation"])
             report.setdefault("decisions", []).append(
