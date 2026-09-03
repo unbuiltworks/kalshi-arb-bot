@@ -14,7 +14,7 @@ env:
   AWS_REGION: us-east-1
   AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
-  ENGINE_REF: 303f9456785ede8ee1849ce3b791db3883d33dff
+  ENGINE_REF: c7ce685bdbf97f0fa9a3185c3c9c16f022cd4c70
 
 jobs:
   stage:
