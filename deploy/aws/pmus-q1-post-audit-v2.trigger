@@ -1,3 +1,3 @@
 MARKET_SLUG=aec-mlb-sf-pit-2026-09-02
-AUDIT_ID=pmus-q1-attempt2-20260903-0019Z
+AUDIT_ID=pmus-q1-residual-watch-20260903-0027Z
 MODE=READ_ONLY
