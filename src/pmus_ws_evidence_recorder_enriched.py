@@ -30,6 +30,12 @@ _ORIGINAL_PLAN = pq.plan
 # closed. Never promotes loose Q1 MATCHED; never touches admission.
 PURSUIT_SEATS_ENV = "PMUS_SPRING_PURSUIT_SEATS"   # default 3, clamped 0..4
 PURSUIT_TTL_ENV = "PMUS_SPRING_PURSUIT_TTL_S"     # default 900s
+# Operator-named slugs to bring under AUTHENTICATED observation so a
+# corrected sports candidate can earn observed spring_watch evidence
+# (issue #167 comment 5541176027 item 4). Read-only: pinning changes
+# what this recorder WATCHES, never any gate, threshold or admission.
+PIN_SLUGS_ENV = "PMUS_WS_PIN_SLUGS"               # comma-separated
+PIN_SLUGS_MAX = 4
 
 # Same-stream/category evidence bar (OWNER DECISION 5533476555 item 3,
 # replacing the per-market >=2-in-60m rule the representativeness study
@@ -117,25 +123,50 @@ def plan(targets, state, cap, cycle, prev=None, now=None, l5_infos=None):
     seats = max(0, min(4, int(os.getenv(PURSUIT_SEATS_ENV, "3"))))
     ttl = float(os.getenv(PURSUIT_TTL_ENV, "900"))
     p["diagnostics"]["spring_ws_reserved"] = []
-    if seats == 0:
-        return p
+    p["diagnostics"]["spring_pinned"] = []
     subscribe = list(p["subscribe"])
-    cands = evidence_pursuit_candidates(state, now, set(subscribe),
-                                        ttl)[:seats]
-    if not cands:
-        return p
     per = p.get("per_market") or {}
     warm_tail = [s for s in reversed(subscribe)
                  if per.get(s, {}).get("tier") == "warm"]
-    reserved = []
-    for cand in cands:
+
+    # PROVENANCE BRIDGE (issue #167 comment 5541176027 item 4). The
+    # keyless collector infers trade direction; the spring guard requires
+    # OBSERVED trades from this authenticated recorder. When the
+    # collector surfaces a corrected candidate that this recorder is not
+    # yet watching, the operator names it here and the recorder starts
+    # observing it — closing the bridge by ADDING authenticated coverage,
+    # never by weakening the provenance gate. Bounded exactly like the
+    # pursuit reserve: warm-tail eviction only, cap unchanged, fail
+    # closed when no warm seat is free.
+    pinned = [s.strip() for s in os.getenv(PIN_SLUGS_ENV, "").split(",")
+              if s.strip()][:PIN_SLUGS_MAX]
+    for slug in pinned:
+        if slug in subscribe:
+            p["diagnostics"]["spring_pinned"].append(
+                {"slug": slug, "reason": "already_subscribed"})
+            continue
         if not warm_tail:
-            break
+            p["diagnostics"]["spring_pinned"].append(
+                {"slug": slug, "reason": "no_warm_seat_available"})
+            continue
         evicted = warm_tail.pop(0)
-        subscribe[subscribe.index(evicted)] = cand["slug"]
-        reserved.append({**cand, "evicted_warm_seat": evicted})
+        subscribe[subscribe.index(evicted)] = slug
+        p["diagnostics"]["spring_pinned"].append(
+            {"slug": slug, "reason": "pinned_for_authenticated_provenance",
+             "evicted_warm_seat": evicted})
+
+    if seats:
+        cands = evidence_pursuit_candidates(state, now, set(subscribe),
+                                            ttl)[:seats]
+        reserved = []
+        for cand in cands:
+            if not warm_tail:
+                break
+            evicted = warm_tail.pop(0)
+            subscribe[subscribe.index(evicted)] = cand["slug"]
+            reserved.append({**cand, "evicted_warm_seat": evicted})
+        p["diagnostics"]["spring_ws_reserved"] = reserved
     p["subscribe"] = subscribe
-    p["diagnostics"]["spring_ws_reserved"] = reserved
     return p
 
 # Conservative, configurable completion floor for the binary advisory

@@ -138,3 +138,55 @@ Operator actions before any q=1 probe:
    provenance-blocked for arming on its own);
 3. supply the `PMUS_SPRING_*` dual key plus the strict-evidence and
    category assertions at arm time.
+
+### Lane C first deployment (issue #167 comment 5541176027)
+
+Ground truth from Railway: the service exists but has **never had a
+successful build**, so every commit shows `SKIPPED` and "redeploy" has no
+snapshot to copy. `SKIPPED` here is not a watch-path symptom to debug —
+it is the absence of a first build. Two operator steps, in order, both
+still DISARMED:
+
+**1. First build of the EXISTING service** (do not create a duplicate —
+reuse service id `d84d9a68-…`):
+
+```
+railway link                       # select this project/environment
+railway service d84d9a68-...       # the EXISTING pmus-spring-l5-probe
+railway variables --set RAILWAY_DOCKERFILE_PATH=/deploy/pmus_spring_l5/Dockerfile
+railway up --service d84d9a68-... --detach
+```
+
+`RAILWAY_DOCKERFILE_PATH` is the supported per-service image pin (repo-wide
+`railway.json` build/deploy overrides are forbidden and CI asserts their
+absence). Once one build succeeds, source-triggered deploys work normally.
+
+**2. Watch patterns** so future changes to the guard/transfer path
+actually trigger a build. Set the service's watch paths to:
+
+```
+deploy/pmus_spring_l5/**
+src/pmus_spring_l5_probe_entry.py
+src/pmus_spring_l5_session.py
+src/pmus_micro_executor.py
+src/pmus_q1_executor*.py
+src/pmus_l5_persistence_v2.py
+src/polymarket_l5/**
+analysis/l5/l5_action_model_v2.json
+```
+
+That set is exactly the image's COPY list;
+`tests/test_pmus_spring_evidence_transfer.py` asserts the COPY list covers
+the entry module's load-time import graph, so a first build cannot produce
+an image that imports cleanly in CI and then dies on Railway.
+
+**3. Volume** (still required, still absent): create an isolated volume and
+mount it at `/state/pmus-spring` on this service only. Without it
+`durable_state_reason()` returns `spring_state_dir_not_persistent_mount`
+and an armed session performs no network call.
+
+**Expected first-boot behaviour, DISARMED:** the guard exits before
+credentials or transport with `DISARMED` (no `PMUS_SPRING_*` key present)
+and the container stops. `restartPolicy=NEVER` is correct for a one-shot
+bounded probe — a probe that self-resumes could re-enter a market after a
+crash with stale inventory assumptions.

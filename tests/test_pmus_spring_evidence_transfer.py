@@ -222,3 +222,116 @@ def test_off_distribution_is_carried_from_the_decision_layer():
     ev = xfer.compose_evidence(SLUG, by_slug, base + 26 * 35 + 30,
                                off_distribution=False)
     assert ev["off_distribution"] is False
+
+
+# ---- 5541176027: deploy currency, provenance bridge, probe entry ----
+
+def test_spring_image_copies_every_module_it_imports_at_load_time():
+    """The probe service has never had a successful build. A first build
+    must not produce an image that imports cleanly in CI and then dies on
+    Railway, so the COPY list is checked against the load-time import
+    graph of the entry module. Deferred imports inside functions are
+    excluded deliberately (the probe loads the prebuilt model artifact
+    and never rebuilds it)."""
+    import ast
+    import re
+    root = Path(xfer.__file__).resolve().parents[1]
+    docker = (root / "deploy/pmus_spring_l5/Dockerfile").read_text()
+    copied = set(re.findall(r"^COPY (src/[^\s]+)", docker, re.M))
+    assert "RUN touch src/__init__.py" in docker      # package marker
+
+    def top_level_src_imports(path: Path):
+        for node in ast.parse(path.read_text()).body:
+            if isinstance(node, ast.ImportFrom) and node.module \
+                    and node.module.startswith("src"):
+                yield node.module
+                for a in node.names:
+                    yield f"{node.module}.{a.name}"
+            elif isinstance(node, ast.Import):
+                for a in node.names:
+                    if a.name.startswith("src"):
+                        yield a.name
+
+    seen, stack, missing = set(), ["src/pmus_spring_l5_probe_entry.py"], []
+    while stack:
+        rel = stack.pop()
+        if rel in seen:
+            continue
+        seen.add(rel)
+        if not (root / rel).exists():
+            continue
+        for mod in top_level_src_imports(root / rel):
+            for cand in (mod.replace(".", "/") + ".py",
+                         mod.replace(".", "/") + "/__init__.py"):
+                if (root / cand).exists():
+                    if cand not in seen:
+                        stack.append(cand)
+                    if cand not in copied and cand != "src/__init__.py":
+                        missing.append(f"{cand} (imported by {rel})")
+                    break
+    assert not missing, f"spring image would crash on import: {missing}"
+
+
+def test_probe_entry_action_is_planned_from_flat_inventory():
+    """A first bounded probe holds no position. The replayed inventory is
+    a per-window artifact, so a market whose replay hit the residual cap
+    must still be able to present a probe entry."""
+    base = 1_000_000.0
+    rows = _flowing(base, bid="0.7000", ask="0.7200")
+    r = l5d.decide_market(SLUG, rows, base + 26 * 35, _model())
+    assert abs(r["inventory_final"]["residual"]) == l5d.MAX_RESIDUAL_UNITS
+    assert r["next_action"]["decision"] == "no_action"     # continuation
+    probe = r["probe_entry_action"]
+    assert probe["decision"] == "quote"                    # entry from flat
+    assert probe["relation"] == "open" and probe["side"] == "NO"
+    assert "flat" in probe["from_inventory"]
+
+
+def test_pinned_slug_enters_authenticated_coverage_bounded(monkeypatch):
+    """Provenance bridge: the operator names a corrected sports slug and
+    the recorder starts OBSERVING it. Coverage is added; no gate moves."""
+    import time as _t
+    from tests.test_pmus_spring_evidence_pursuit import (
+        _busy_state, _targets)
+    now = _t.time()
+    state = _busy_state(30, now)
+    state["aec-atp-andned-johnik-2026-09-04"] = dict(state["busy-00"])
+    monkeypatch.setenv(enriched.PIN_SLUGS_ENV,
+                       "aec-atp-andned-johnik-2026-09-04")
+    monkeypatch.setenv(enriched.PURSUIT_SEATS_ENV, "0")
+    p = enriched.plan(_targets(state), state, 12, 0, {}, now=now)
+    assert len(p["subscribe"]) == 12                        # cap unchanged
+    pins = p["diagnostics"]["spring_pinned"]
+    assert [x["slug"] for x in pins] == [
+        "aec-atp-andned-johnik-2026-09-04"]
+    if pins[0]["reason"] == "pinned_for_authenticated_provenance":
+        assert "aec-atp-andned-johnik-2026-09-04" in p["subscribe"]
+        assert "evicted_warm_seat" in pins[0]
+
+
+def test_pinning_is_bounded_and_never_widens_the_cap(monkeypatch):
+    import time as _t
+    from tests.test_pmus_spring_evidence_pursuit import (
+        _busy_state, _targets)
+    now = _t.time()
+    state = _busy_state(30, now)
+    extra = [f"pin-{i}" for i in range(9)]
+    for s in extra:
+        state[s] = dict(state["busy-00"])
+    monkeypatch.setenv(enriched.PIN_SLUGS_ENV, ",".join(extra))
+    monkeypatch.setenv(enriched.PURSUIT_SEATS_ENV, "0")
+    p = enriched.plan(_targets(state), state, 12, 0, {}, now=now)
+    assert len(p["subscribe"]) == 12
+    assert len(p["diagnostics"]["spring_pinned"]) <= enriched.PIN_SLUGS_MAX
+
+
+def test_hardcoded_yes_cannot_reenter_either_call_site():
+    """Directive item 8: the deleted bug derived the side from the sign
+    of the residual for open/extend. Neither call site may reconstruct
+    it — both must route through the shared planner."""
+    src = inspect.getsource(l5d)
+    assert 'rel in ("open", "extend") and inv.residual >= 0' not in src
+    assert src.count("plan_action(") >= 3        # def + both call sites
+    for fn in (l5d.decide_market,):
+        body = inspect.getsource(fn)
+        assert "side_yes = (" not in body

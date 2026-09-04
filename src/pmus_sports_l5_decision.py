@@ -329,10 +329,36 @@ def decide_market(slug: str, obs: list, now: float,
         next_action = {"decision": "no_action",
                        "reason": f"book_stale:{round(last_age or -1, 1)}s"}
 
+    # PROBE-ENTRY action (issue #167 comments 5541136270/5541176027): the
+    # action above CONTINUES the replayed inventory, which is a per-window
+    # artifact starting from flat — useful as behavioural evidence, wrong
+    # as probe admission. A first bounded q=1 probe holds NO position, so
+    # it is planned from flat. Without this, a market whose replay hit
+    # residual_cap could never be a preflight candidate even though the
+    # probe itself would simply OPEN one unit. Same economics, same
+    # bound; only the starting inventory differs.
+    probe_action: dict[str, Any] = {"decision": "no_action",
+                                    "reason": "no_fresh_book"}
+    if book is not None and book["bid"] is not None:
+        probe_inv = Inventory()
+        pprop = _proposal(model, float(book["bid"]), probe_inv, "")
+        if pprop.get("off_distribution"):
+            probe_action = {"decision": "no_action",
+                            "reason": "v2_off_distribution",
+                            "state": pprop["state"]}
+        else:
+            probe_action = {
+                **_public(plan_action(pprop["recommended_relation"],
+                                      probe_inv, book)),
+                "state": pprop["state"],
+                "from_inventory": "flat (first bounded q=1 probe holds "
+                                  "no position)",
+            }
+
     fresh_ok = fresh.get("status") in ("Q1_GATE_CLEARED",)
     executable_now = bool(fresh_ok and last_age is not None
                           and last_age <= FRESH_BOOK_TTL_S
-                          and next_action.get("decision") == "quote")
+                          and probe_action.get("decision") == "quote")
     stale_reason = None
     if hist.get("status") == "Q1_GATE_CLEARED" and not fresh_ok:
         stale_reason = ("stale_qualifier_not_executable:"
@@ -352,6 +378,7 @@ def decide_market(slug: str, obs: list, now: float,
         "pair_costs_theoretical": pair_costs,
         "inventory_final": inv.snapshot(),
         "next_action": next_action,
+        "probe_entry_action": probe_action,
         "order_entry": False, "realized_pnl": None, "labels": LABELS,
     }
 
@@ -383,6 +410,7 @@ def slate_decisions(by_slug: Mapping[str, list], now: Optional[float] = None,
         "rows": rows,
         "preflight_candidate": ({
             "slug": preflight["slug"],
+            "probe_entry_action": preflight["probe_entry_action"],
             "next_action": preflight["next_action"],
             "fresh_15m_status": preflight["fresh_15m_status"],
             "execution_path_if_approved": (
