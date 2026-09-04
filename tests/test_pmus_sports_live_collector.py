@@ -40,9 +40,11 @@ def test_surplus_rotates_without_losing_event_floor():
     second, d1 = live.select_for_poll(universe, 64, cycle=1)
     assert len({r["event_slug"] for r in first}) == 50
     assert len({r["event_slug"] for r in second}) == 50
-    extra0 = {r["slug"] for r in first if not r["slug"].endswith("-0")}
-    extra1 = {r["slug"] for r in second if not r["slug"].endswith("-0")}
-    assert extra0 != extra1
+    # The first 50 rows are the deterministic one-per-event floor; only the
+    # 14 surplus seats should rotate between discovery cycles.
+    assert {r["slug"] for r in first[:50]} == {r["slug"] for r in second[:50]}
+    assert {r["slug"] for r in first[50:]} != {r["slug"] for r in second[50:]}
+    assert d0["rotation_cycle"] == 0
     assert d1["rotation_cycle"] == 1
 
 
