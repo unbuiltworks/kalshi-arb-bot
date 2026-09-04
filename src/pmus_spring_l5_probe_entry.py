@@ -61,18 +61,28 @@ def strict_evidence_reason(slug: str, evidence: Optional[Mapping[str, Any]],
         reasons = probe.get("reasons") or []
         suffix = ",".join(str(x) for x in reasons[:4]) or "not_ready"
         return f"probe_evidence_not_ready:{suffix}"
-    if evidence.get("spring_repeated_completion") is not True:
-        return "spring_completion_not_repeated"
+    # Category evidence bar (OWNER DECISION 5533476555): >=2 strict
+    # completions within the rolling hour from >=2 DISTINCT same-category
+    # markets. An isolated one-off market can never clear this alone.
+    if evidence.get("spring_category_bar_met") is not True:
+        return "spring_category_bar_not_met"
+    cat = evidence.get("spring_category_evidence")
+    if not isinstance(cat, Mapping):
+        return "spring_category_evidence_missing"
     try:
-        matched = int(evidence.get("spring_matched_slots"))
+        completions = int(cat.get("completions_60m"))
+        distinct = int(cat.get("distinct_markets_60m"))
     except (TypeError, ValueError):
-        return "spring_matched_slots_missing"
+        return "spring_category_counts_missing"
     try:
         required = max(2, int(probe.get("min_completions_required") or 2))
     except (TypeError, ValueError):
         return "probe_min_completions_invalid"
-    if matched < required:
-        return f"spring_matched_slots_lt_required:{matched}<{required}"
+    if completions < required:
+        return (f"spring_category_completions_lt_required:"
+                f"{completions}<{required}")
+    if distinct < 2:
+        return f"spring_category_distinct_markets_lt_2:{distinct}"
     try:
         pair_target = D(str(evidence.get("spring_pair_target")))
     except Exception:
@@ -161,11 +171,18 @@ def evidence_from_status(status: Mapping[str, Any], slug: str) -> Optional[dict]
                 "spring_matched_slots": row.get("spring_matched_slots"),
                 "spring_repeated_completion": row.get(
                     "spring_repeated_completion"),
+                "spring_category": row.get("spring_category"),
+                "spring_category_evidence": row.get(
+                    "spring_category_evidence"),
+                "spring_category_bar_met": row.get(
+                    "spring_category_bar_met"),
                 "spring_slot_counts_theoretical": row.get(
                     "spring_slot_counts_theoretical"),
                 "spring_evaluable_slots": row.get("spring_evaluable_slots"),
                 "spring_matched_fraction": row.get("spring_matched_fraction"),
                 "spring_pair_costs": row.get("spring_pair_costs") or [],
+                "spring_fee_safe_completions": row.get(
+                    "spring_fee_safe_completions"),
                 "spring_evidence_missing": row.get("spring_evidence_missing") or [],
                 "probe_evidence": row.get("probe_evidence"),
                 "label": "SHADOW/THEORETICAL strict spring replay evidence",

@@ -145,8 +145,10 @@ def test_open_extend_extend_complete_decimal_inventory(monkeypatch,
     a3 = acts[3]["inventory_after"]
     assert (a3["dn"], a3["matched"], a3["residual"]) == \
         ("0.04", "0.04", "0.00")
-    # spring pair economics: complement at 0.46 -> pair exactly the target
-    assert D(rep["pair_unit_cost"]) == D("0.96")
+    # spring pair economics: complement at 0.48 -> pair exactly the
+    # 0.98 observation cap (OWNER DECISION 5533476555); the >=1c hard
+    # bound (0.49 here) still participates in the min()
+    assert D(rep["pair_unit_cost"]) == D("0.98")
     assert rep["pair_economics"]["regime"] == "spring_target"
     assert rep["pair_economics"]["hard_bound_px"] is not None
     # maker-only bodies
@@ -208,10 +210,12 @@ def test_candidate_gate_thin_flow_and_off_distribution():
     row["two_sided_trades"] = False
     assert spring.spring_candidate_gate(row) == "one_directional_flow"
     row["two_sided_trades"] = True
-    # P0-D: without strict replay evidence the gate now fails CLOSED
+    # P0-D + OWNER DECISION 5533476555: without the CATEGORY evidence
+    # bar the gate fails CLOSED (per-market repetition alone is no
+    # longer evidence)
     assert spring.spring_candidate_gate(row) == \
-        "spring_completion_not_repeated"
-    row["spring_repeated_completion"] = True
+        "spring_category_bar_not_met"
+    row["spring_category_bar_met"] = True
     assert spring.spring_candidate_gate(row) is None
     # off-distribution v2 state blocks
     assert spring.spring_candidate_gate(
@@ -344,10 +348,10 @@ def test_spring_cumulative_counter_counts_open_extend_not_complete(
 def test_spring_complement_price_exposes_both_bounds():
     px, econ = spring.spring_complement_price(D("0.50"), D("0.50"),
                                               D("0.005"))
-    assert px == D("0.460")                      # 0.96 - 0.50
+    assert px == D("0.480")                      # 0.98 - 0.50 (5533476555)
     assert econ["regime"] == "spring_target"
     assert D(econ["hard_bound_px"]) == D("0.49")
-    assert D(econ["spring_bound_px"]) == D("0.46")
+    assert D(econ["spring_bound_px"]) == D("0.48")
     none_px, econ2 = spring.spring_complement_price(D("0.80"), D("0.21"),
                                                     D("0.005"))
     assert none_px is None                       # 0.16 bound below band
@@ -433,39 +437,69 @@ def _flowing_row(**extra):
 
 
 def test_loose_q1_matched_history_is_not_spring_evidence():
-    # loose Q1 MATCHED:2 rode along, strict replay says 0 -> BLOCKED
+    # loose Q1 MATCHED:2 rode along, category bar not met -> BLOCKED
     row = _flowing_row(slot_counts_theoretical={"MATCHED": 2},
-                       spring_repeated_completion=False,
-                       spring_matched_slots=0)
+                       spring_category_bar_met=False)
     assert spring.spring_candidate_gate(row) == \
-        "spring_completion_not_repeated"
+        "spring_category_bar_not_met"
 
 
-def test_single_strict_completion_is_blocked():
-    row = _flowing_row(spring_repeated_completion=False,
-                       spring_matched_slots=1)
+def test_isolated_market_own_completions_cannot_arm():
+    """OWNER DECISION 5533476555 item 3: even a market with >=2 of its
+    OWN strict completions is blocked while its category evidence comes
+    from that single market alone — an isolated one-off can never arm."""
+    row = _flowing_row(
+        spring_repeated_completion=True,          # old per-market label
+        spring_matched_slots=2,                   # 2 own completions
+        spring_slot_counts_theoretical={"SPRING_MATCHED": 2},
+        spring_category="mlb",
+        spring_category_evidence={"completions_60m": 2,
+                                  "distinct_markets_60m": 1,
+                                  "markets": ["x"], "bar_met": False},
+        spring_category_bar_met=False)
     assert spring.spring_candidate_gate(row) == \
-        "spring_completion_not_repeated"
+        "spring_category_bar_not_met"
 
 
-def test_repeated_strict_completion_plus_gates_admits():
-    row = _flowing_row(spring_repeated_completion=True,
-                       spring_matched_slots=2,
-                       spring_slot_counts_theoretical={"SPRING_MATCHED": 2})
+def test_two_distinct_same_category_markets_meet_bar():
+    row = _flowing_row(
+        spring_category="mlb",
+        spring_category_evidence={"completions_60m": 2,
+                                  "distinct_markets_60m": 2,
+                                  "markets": ["x", "y"], "bar_met": True},
+        spring_category_bar_met=True)
     assert spring.spring_candidate_gate(row) is None
 
 
 def test_missing_strict_field_fails_closed():
     assert spring.spring_candidate_gate(_flowing_row()) == \
-        "spring_completion_not_repeated"
+        "spring_category_bar_not_met"
+
+
+def test_owner_decision_observation_constants():
+    """OWNER DECISION 5533476555 item 1: observation regime is 35-65
+    open / <=0.98 completion; the live >=1c-after-fees bound is
+    q1.complement_bound and stays in every complement min()."""
+    assert (spring.SPRING_BAND_LO, spring.SPRING_BAND_HI) == \
+        (D("0.35"), D("0.65"))
+    assert spring.SPRING_PAIR_TARGET == D("0.98")
+    # widened cap never admits <1c net: at avg 0.50 the chosen px obeys
+    # the hard bound even if the observation cap were looser
+    px, econ = spring.spring_complement_price(D("0.50"), D("0.99"),
+                                              D("0.005"))
+    assert px is not None and px <= D(econ["hard_bound_px"])
 
 
 def test_rank_carries_strict_fields_from_status_rows(monkeypatch):
+    cat_ev = {"completions_60m": 2, "distinct_markets_60m": 2,
+              "markets": ["a", "b"], "bar_met": True}
     status = {"spring_watch": [
         {"slug": "with-evidence", "trades_1h": 20, "two_sided_trades": True,
          "both_sides_served": True, "spring_repeated_completion": True,
-         "spring_matched_slots": 2, "spring_pair_target": "0.96",
-         "spring_slot_counts_theoretical": {"SPRING_MATCHED": 2}},
+         "spring_matched_slots": 2, "spring_pair_target": "0.98",
+         "spring_slot_counts_theoretical": {"SPRING_MATCHED": 2},
+         "spring_category": "mlb", "spring_category_evidence": cat_ev,
+         "spring_category_bar_met": True},
         {"slug": "no-evidence", "trades_1h": 30, "two_sided_trades": True,
          "both_sides_served": True},
     ]}
@@ -475,13 +509,15 @@ def test_rank_carries_strict_fields_from_status_rows(monkeypatch):
     monkeypatch.setattr(spring.pv2, "load_v2", lambda: None)
     rows = {r["slug"]: r for r in spring.rank_spring_candidates(None, status)}
     good = rows["with-evidence"]
-    assert good["spring_repeated_completion"] is True
+    assert good["spring_category_bar_met"] is True
+    assert good["spring_category"] == "mlb"
+    assert good["spring_category_evidence"] == cat_ev
     assert good["spring_matched_slots"] == 2
-    assert good["spring_pair_target"] == "0.96"
+    assert good["spring_pair_target"] == "0.98"
     assert good["spring_skip"] is None
     bad = rows["no-evidence"]
-    assert "spring_repeated_completion" not in bad       # stayed missing
-    assert bad["spring_skip"] == "spring_completion_not_repeated"
+    assert "spring_category_bar_met" not in bad          # stayed missing
+    assert bad["spring_skip"] == "spring_category_bar_not_met"
 
 
 def test_live_session_blocks_without_strict_assertion(monkeypatch, tmp_path):
@@ -492,7 +528,7 @@ def test_live_session_blocks_without_strict_assertion(monkeypatch, tmp_path):
     rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
                              wall=lambda: 0.0)
     assert rep["status"] == "SPRING_SKIP_NOT_QUALIFYING"
-    assert rep["reason"] == "spring_completion_not_repeated"
+    assert rep["reason"] == "spring_category_bar_not_met"
     assert fake.posts == []                              # nothing reached venue
 
 

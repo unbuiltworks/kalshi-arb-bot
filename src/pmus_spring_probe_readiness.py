@@ -1,29 +1,40 @@
 """Deterministic READ-ONLY first-probe readiness report (issue #167
-comment 5532064571).
+comments 5532064571, 5533476555, 5533650823).
 
-TWO EVIDENCE LAYERS, reconciled so the first live probe can never be
-armed from an ambiguous interpretation:
+The report separates the question "does the pattern replicate?" from the
+question "is it executable at live economics?" so neither can be
+mistaken for the other:
 
-- canonical ``spring_repeated_completion`` (>=2 strict <=0.96
-  completions inside the rolling replay window) is the CANDIDATE label:
-  necessary, never sufficient.
-- the advisory ``probe_evidence`` floor
-  (``PMUS_SPRING_PROBE_MIN_COMPLETIONS``, default 3) is the REVIEW bar;
-  the deployment entry guard enforces it via ``READY_FOR_REVIEW`` and
-  ADDITIONALLY clamps its own completion requirement to
-  ``max(2, floor)`` — so no environment setting can push the effective
-  arm bar below 2 strict completions, and the default bar is 3.
-- The BINDING pre-arm bar is therefore the STRICTER of the layers:
-  ``READY_FOR_REVIEW`` at the configured floor AND
-  ``spring_matched_slots >= max(2, floor)`` AND
-  ``spring_repeated_completion is True`` — plus evidence freshness,
-  band/flow/two-sided/on-distribution, durable state, and the full
-  isolated dual-key + assertion env set. "Two strict completions" alone
-  NEVER arms anything.
+REPLICATION_EVIDENCE — has the strict spring pattern been observed
+  repeating, under the OWNER-DECIDED category bar?
+  - observation regime is 35-65c open / pair <= 0.98 (evidence
+    collection only, OWNER DECISION 5533476555);
+  - the category bar needs >=2 strict completions within a rolling 60
+    minutes from >=2 DISTINCT same-category markets — an isolated
+    one-off market can never satisfy it alone;
+  - the advisory review floor (``PMUS_SPRING_PROBE_MIN_COMPLETIONS``,
+    default 3) applies to CATEGORY completions; the entry guard clamps
+    its requirement to ``max(2, floor)`` so no environment setting can
+    push the effective bar below the category bar;
+  - evidence must be fresh (<=120s default) and for the exact slug.
+
+EXECUTABLE_ECONOMICS — would the observed completions have cleared the
+  LIVE execution bound, which is unchanged by the widened observation
+  regime? Live complements always price through
+  ``min(SPRING_PAIR_TARGET - cost, q1.complement_bound)`` — the hard
+  >=1c-after-known-fees bound participates in every live pricing
+  decision, so a <=0.98 observation can never admit a <1c-net pair.
+  This layer checks the hard bound is present and that at least one
+  observed completion was consistent with it (not only with the wider
+  observation cap).
+
+OPERATIONAL — durable state mount, env assertions, and the isolated
+  dual key (operator-held, supplied only at arm time).
 
 This module consumes a saved recorder status JSON plus the local
 environment. It cannot arm, set credentials, submit or cancel orders,
-or mutate Railway — it only names each gate and its exact blocker.
+or mutate Railway — it only names each gate, its layer, and its exact
+blocker.
 
     python3 -m src.pmus_spring_probe_readiness \
         --status-json status.json --slug <market-slug>
@@ -40,68 +51,124 @@ from typing import Any, Mapping, Optional
 from src import pmus_spring_l5_probe_entry as entry
 from src import pmus_spring_l5_session as session
 
+LAYER_REPLICATION = "REPLICATION_EVIDENCE"
+LAYER_ECONOMICS = "EXECUTABLE_ECONOMICS"
+LAYER_OPERATIONAL = "OPERATIONAL"
 
-def _gate(name: str, blocker: Optional[str]) -> dict:
-    return {"gate": name, "ok": blocker is None, "blocker": blocker}
+
+def _gate(layer: str, name: str, blocker: Optional[str]) -> dict:
+    return {"layer": layer, "gate": name, "ok": blocker is None,
+            "blocker": blocker}
+
+
+def _executable_economics_gates(evidence: Optional[Mapping[str, Any]]) \
+        -> list[dict]:
+    gates: list[dict] = []
+    # structural: the live hard bound function must exist and the
+    # session's observation cap must not exceed the owner-decided 0.98
+    hard_ok = callable(getattr(session.q1, "complement_bound", None))
+    gates.append(_gate(
+        LAYER_ECONOMICS, "live_hard_bound_present",
+        None if hard_ok else
+        "q1.complement_bound missing; live >=1c-after-fees bound absent"))
+    from decimal import Decimal as D
+    gates.append(_gate(
+        LAYER_ECONOMICS, "observation_cap_not_widened_past_owner_decision",
+        None if session.SPRING_PAIR_TARGET <= D("0.98") else
+        f"SPRING_PAIR_TARGET {session.SPRING_PAIR_TARGET} > 0.98"))
+    if evidence is not None:
+        # at least one observed completion consistent with the LIVE
+        # fee-safe bound, not merely the wider observation cap
+        try:
+            fee_safe = int(evidence.get("spring_fee_safe_completions"))
+        except (TypeError, ValueError):
+            fee_safe = None
+        gates.append(_gate(
+            LAYER_ECONOMICS, "fee_safe_completion_observed",
+            None if (fee_safe or 0) >= 1 else
+            (f"spring_fee_safe_completions:{fee_safe} — pattern replicates "
+             "only at observation economics; no observed completion "
+             "cleared the live >=1c-after-known-fees bound"
+             if fee_safe is not None else
+             "spring_fee_safe_completions missing from evidence")))
+    return gates
 
 
 def readiness_report(status: Mapping[str, Any], slug: str,
                      now: Optional[float] = None) -> dict:
     """Every gate between here and a first bounded live probe, with the
-    exact blocker per gate. Purely observational."""
+    layer and exact blocker per gate. Purely observational."""
     now = time.time() if now is None else now
     gates: list[dict] = []
 
     evidence = entry.evidence_from_status(status, slug)
-    gates.append(_gate("evidence_row_in_status",
+    gates.append(_gate(LAYER_REPLICATION, "evidence_row_in_status",
                        None if evidence else
                        f"slug_not_in_status_rows:{slug}"))
     if evidence:
-        # the composed two-layer evidence bar (entry-guard semantics,
-        # including the max(2, floor) clamp and freshness)
-        gates.append(_gate("strict_evidence_composed",
+        # the composed evidence bar (entry-guard semantics: category bar,
+        # max(2, floor) clamp on category completions, freshness)
+        gates.append(_gate(LAYER_REPLICATION, "strict_evidence_composed",
                            entry.strict_evidence_reason(slug, evidence,
                                                         now=now)))
 
-    gates.append(_gate("durable_state", entry.durable_state_reason()))
+    gates.extend(_executable_economics_gates(evidence))
 
+    gates.append(_gate(LAYER_OPERATIONAL, "durable_state",
+                       entry.durable_state_reason()))
     gates.append(_gate(
-        "gate_evidence_env_asserted",
+        LAYER_REPLICATION, "gate_evidence_env_asserted",
         None if session.gate_asserted(slug) else
         f"{session.SPRING_GATE_ENV} not set to slug"))
     gates.append(_gate(
-        "strict_completion_env_asserted",
+        LAYER_REPLICATION, "strict_completion_env_asserted",
         None if session.strict_completion_asserted(slug) else
         f"{session.SPRING_STRICT_ENV} not set to slug"))
     ev_json = entry.parse_strict_evidence()
     gates.append(_gate(
-        "strict_evidence_json_env",
+        LAYER_REPLICATION, "strict_evidence_json_env",
         None if ev_json is not None else
         f"{entry.STRICT_EVIDENCE_ENV} absent or invalid JSON"))
     if ev_json is not None:
-        gates.append(_gate("strict_evidence_json_valid",
+        gates.append(_gate(LAYER_REPLICATION, "strict_evidence_json_valid",
                            entry.strict_evidence_reason(slug, ev_json,
                                                         now=now)))
     gates.append(_gate(
-        "isolated_dual_key_armed",
+        LAYER_OPERATIONAL, "isolated_dual_key_armed",
         None if session.armed() else
         "PMUS_SPRING_LIVE/SESSION_ID/ARM dual key absent (expected while "
         "DISARMED; the operator supplies it only at arm time)"))
 
+    def layer_view(layer: str) -> dict:
+        rows = [g for g in gates if g["layer"] == layer]
+        blockers = [f"{g['gate']}: {g['blocker']}" for g in rows
+                    if not g["ok"]]
+        return {"ok": not blockers, "blockers": blockers}
+
+    layers = {
+        LAYER_REPLICATION: layer_view(LAYER_REPLICATION),
+        LAYER_ECONOMICS: layer_view(LAYER_ECONOMICS),
+        LAYER_OPERATIONAL: layer_view(LAYER_OPERATIONAL),
+    }
     blockers = [g for g in gates if not g["ok"]]
     non_code = [g["blocker"] for g in blockers
                 if g["gate"] == "durable_state"]
     return {
         "slug": slug,
         "ready": not blockers,
+        "layers": layers,
         "gates": gates,
         "non_code_blockers": non_code,
-        "binding_bar": "READY_FOR_REVIEW at the configured floor AND "
-                       ">=max(2, floor) strict <=0.96 completions AND "
-                       "spring_repeated_completion true; floor default 3, "
-                       "never effectively below 2",
+        "binding_bar": "category bar (>=2 strict completions / >=2 "
+                       "distinct same-category markets / 60m) AND "
+                       "category completions >= max(2, review floor; "
+                       "default 3) AND READY_FOR_REVIEW AND fresh "
+                       "evidence — replication alone never arms: "
+                       "executable economics and operational layers "
+                       "must independently clear",
         "labels": "READ-ONLY readiness report; cannot arm, set "
-                  "credentials, place/cancel orders, or mutate Railway",
+                  "credentials, place/cancel orders, or mutate Railway; "
+                  "all evidence is SHADOW/THEORETICAL",
     }
 
 

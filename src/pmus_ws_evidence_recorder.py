@@ -339,8 +339,8 @@ def _market_row(slug: str, s: Mapping[str, Any], now: float,
 
 
 SPRING_WATCH_LIMIT = int(os.getenv("PMUS_SPRING_WATCH_LIMIT", "10"))
-SPRING_WATCH_LO = 0.45
-SPRING_WATCH_HI = 0.55
+SPRING_WATCH_LO = 0.35   # OWNER DECISION 5533476555: observation 35-65
+SPRING_WATCH_HI = 0.65
 
 
 def spring_watch(rows: Mapping[str, Mapping[str, Any]],

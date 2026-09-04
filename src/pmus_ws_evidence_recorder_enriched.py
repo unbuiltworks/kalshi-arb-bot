@@ -31,6 +31,53 @@ _ORIGINAL_PLAN = pq.plan
 PURSUIT_SEATS_ENV = "PMUS_SPRING_PURSUIT_SEATS"   # default 3, clamped 0..4
 PURSUIT_TTL_ENV = "PMUS_SPRING_PURSUIT_TTL_S"     # default 900s
 
+# Same-stream/category evidence bar (OWNER DECISION 5533476555 item 3,
+# replacing the per-market >=2-in-60m rule the representativeness study
+# proved unrealistic even on L5's home venue). Conservative deterministic
+# pick, documented: >=2 strict completions within a rolling 60 minutes
+# among markets of the SAME category, from >=2 DISTINCT markets — an
+# isolated one-off market can never satisfy the bar by itself. The
+# advisory review floor (PMUS_SPRING_PROBE_MIN_COMPLETIONS, default 3)
+# now applies to CATEGORY completions and stays >= the bar.
+CATEGORY_BAR_COMPLETIONS = 2
+CATEGORY_BAR_DISTINCT_MARKETS = 2
+CATEGORY_BAR_SPAN_S = 3600.0
+
+
+def slug_category(slug: str) -> str:
+    """Deterministic stream/category key: the league segment of the slug
+    (second dash token — aec-mlb-... -> mlb, atc-lal-... -> lal);
+    single-token slugs fall back to themselves."""
+    parts = str(slug).split("-")
+    return parts[1] if len(parts) > 1 else parts[0]
+
+
+def category_spring_evidence(rows: Mapping[str, Mapping[str, Any]],
+                             now: float) -> dict:
+    """Rolling-hour strict-completion evidence aggregated per category,
+    from the same per-market strict replays the watch rows carry."""
+    per_cat: dict[str, list] = {}
+    for slug, r in rows.items():
+        for m in r.get("spring_matches_theoretical") or []:
+            try:
+                t = float(m.get("t_comp"))
+            except (TypeError, ValueError):
+                continue
+            if now - t <= CATEGORY_BAR_SPAN_S:
+                per_cat.setdefault(slug_category(slug), []).append(
+                    (t, str(slug)))
+    out = {}
+    for cat, evs in per_cat.items():
+        distinct = sorted({s for _, s in evs})
+        out[cat] = {
+            "completions_60m": len(evs),
+            "distinct_markets_60m": len(distinct),
+            "markets": distinct,
+            "bar_met": (len(evs) >= CATEGORY_BAR_COMPLETIONS
+                        and len(distinct) >= CATEGORY_BAR_DISTINCT_MARKETS),
+        }
+    return out
+
 
 def _last_authenticated_update_age(s: Mapping[str, Any],
                                    now: float) -> Optional[float]:
@@ -128,8 +175,13 @@ PROBE_MIN_TRADES_1H = 10
 
 def probe_evidence(row: Mapping[str, Any]) -> dict:
     """ADVISORY-ONLY probe-evidence status for one spring-watch row.
-    Never mutates or relaxes spring_candidate_gate / micro_eligible."""
-    min_completions = max(1, int(os.getenv(PROBE_MIN_ENV, "3")))
+    Never mutates or relaxes spring_candidate_gate / micro_eligible.
+    Repetition is judged at CATEGORY level (OWNER DECISION 5533476555):
+    the bar needs >=2 completions from >=2 distinct same-category
+    markets in the rolling hour, and the review floor applies to
+    category completions."""
+    min_completions = max(CATEGORY_BAR_COMPLETIONS,
+                          int(os.getenv(PROBE_MIN_ENV, "3")))
     reasons: list[str] = []
     trades = row.get("trades_1h")
     if trades is None or int(trades) < PROBE_MIN_TRADES_1H:
@@ -143,14 +195,25 @@ def probe_evidence(row: Mapping[str, Any]) -> dict:
         reasons.append("l5_state_unknown")
     missing = row.get("spring_evidence_missing") or []
     reasons.extend(missing)
-    matched = int(row.get("spring_matched_slots") or 0)
-    if matched < min_completions:
+    cat = row.get("spring_category_evidence") or {}
+    if not cat.get("bar_met"):
         reasons.append(
-            f"insufficient_completions:{matched}<{min_completions}")
+            "category_bar_not_met:"
+            f"{cat.get('completions_60m', 0)}completions/"
+            f"{cat.get('distinct_markets_60m', 0)}markets"
+            f"<{CATEGORY_BAR_COMPLETIONS}/"
+            f"{CATEGORY_BAR_DISTINCT_MARKETS}")
+    n_cat = int(cat.get("completions_60m") or 0)
+    if n_cat < min_completions:
+        reasons.append(
+            f"insufficient_category_completions:{n_cat}<{min_completions}")
     return {"status": ("READY_FOR_REVIEW" if not reasons
                        else "INSUFFICIENT_EVIDENCE"),
             "reasons": reasons,
             "min_completions_required": min_completions,
+            "category_bar": f">={CATEGORY_BAR_COMPLETIONS} completions / "
+                            f">={CATEGORY_BAR_DISTINCT_MARKETS} distinct "
+                            "same-category markets / 60m",
             "labels": "ADVISORY ONLY; stage decision is operator/owner's; "
                       "no gate is mutated or relaxed by this field"}
 
@@ -187,9 +250,14 @@ def spring_watch(rows: Mapping[str, Mapping[str, Any]],
 
     ``repeated_completion`` is the existing ordinary 99c/Q1 advisory label.
     ``spring_repeated_completion`` is stricter: only slots that themselves
-    STARTED 45-55c and later showed a <=0.96 maker-complement path count.
-    Neither is an execution admission.
+    STARTED in the observation band and later showed a maker-complement
+    path inside the observation cap count. Neither is an execution
+    admission. Rows additionally carry the CATEGORY evidence bar
+    (OWNER DECISION 5533476555).
     """
+    import time as _time
+    now = _time.time()
+    cats = category_spring_evidence(rows, now)
     picked = []
     for slug, r in rows.items():
         try:
@@ -236,6 +304,13 @@ def spring_watch(rows: Mapping[str, Mapping[str, Any]],
             "last_authenticated_update_age_s":
             r.get("last_authenticated_update_age_s"),
         }
+        cat_key = slug_category(slug)
+        cat_ev = cats.get(cat_key) or {"completions_60m": 0,
+                                       "distinct_markets_60m": 0,
+                                       "markets": [], "bar_met": False}
+        evidence["spring_category"] = cat_key
+        evidence["spring_category_evidence"] = cat_ev
+        evidence["spring_category_bar_met"] = bool(cat_ev["bar_met"])
         picked.append(({
             "slug": slug,
             "bid": r.get("bid"),

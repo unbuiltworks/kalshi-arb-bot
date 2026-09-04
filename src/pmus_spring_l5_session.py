@@ -90,9 +90,13 @@ MAX_ACTIONS_ENV = "PMUS_SPRING_MAX_ACTIONS"        # default 6
 STATE_DURABLE_ENV = "PMUS_SPRING_STATE_DURABLE"    # operator override "1"
 
 # Spring gates — measured, from analysis/l5/l5_ramp_analysis.json
-SPRING_BAND_LO, SPRING_BAND_HI = D("0.45"), D("0.55")   # modal spring entry
+SPRING_BAND_LO, SPRING_BAND_HI = D("0.35"), D("0.65")   # OWNER 5533476555
 SPRING_MIN_TRADES_1H = 10                # thin-flow floor (gate diagnosis)
-SPRING_PAIR_TARGET = D("0.96")           # pre-rebate spring pair regime
+# OBSERVATION/target cap per OWNER DECISION 5533476555. Execution stays
+# fail-closed on q1.complement_bound (>=1c after known fees) — the
+# spring_complement_price min() below never lets this cap admit a pair
+# with <1c net edge.
+SPRING_PAIR_TARGET = D("0.98")
 SESSION_NOTIONAL_CAP = micro.PER_MARKET_FIRST_LEG_CAP    # $0.05
 STOP_BEFORE_SETTLEMENT_S = 120.0
 SPORTS_TTE_DEFAULT_S = 1e9               # no settlement clock -> coarsest
@@ -112,9 +116,10 @@ def gate_asserted(slug: str) -> bool:
 
 
 def strict_completion_asserted(slug: str) -> bool:
-    """Operator copies the strict-replay verdict (spring_repeated_completion
-    true on the recorder status row for THIS slug) into the env; anything
-    else fails closed downstream (issue #167 comment 5526683554)."""
+    """Operator copies the strict-replay verdict — since OWNER DECISION
+    5533476555 that means spring_category_bar_met true on the recorder
+    status row for THIS slug — into the env; anything else fails closed
+    downstream (issue #167 comment 5526683554)."""
     return bool(slug) and os.getenv(SPRING_STRICT_ENV, "").strip() == slug
 
 
@@ -279,12 +284,14 @@ def spring_candidate_gate(row: Mapping[str, Any],
         return f"thin_flow:{trades}"
     if row.get("two_sided_trades") is False:
         return "one_directional_flow"
-    # STRICT spring-replay admission (issue #167 comments 5526683554/
-    # 5526736870): loose Q1 MATCHED history is NOT spring evidence — the
-    # slot must have STARTED 45-55c and completed <=0.96, repeatedly.
-    # Missing field fails CLOSED: absence of evidence blocks.
-    if row.get("spring_repeated_completion") is not True:
-        return "spring_completion_not_repeated"
+    # STRICT spring-replay admission, CATEGORY evidence bar (OWNER
+    # DECISION 5533476555, replacing the per-market repeated rule the
+    # representativeness study proved unrealistic): the candidate's
+    # category must show >=2 strict completions from >=2 DISTINCT
+    # same-category markets within the rolling hour. Loose Q1 MATCHED
+    # is never spring evidence; a missing field fails CLOSED.
+    if row.get("spring_category_bar_met") is not True:
+        return "spring_category_bar_not_met"
     if model is not None:
         d = pv2.v2_dist(model, state_key(float(b), SPORTS_TTE_DEFAULT_S,
                                          0.0), "open", "q<5")
@@ -331,7 +338,9 @@ def rank_spring_candidates(t: Transport,
         # comment 5526683554); a status row without it stays missing and
         # the gate below fails closed on it
         for key in ("spring_repeated_completion", "spring_matched_slots",
-                    "spring_slot_counts_theoretical", "spring_pair_target"):
+                    "spring_slot_counts_theoretical", "spring_pair_target",
+                    "spring_category", "spring_category_evidence",
+                    "spring_category_bar_met"):
             if key in srow:
                 row[key] = srow[key]
         row["spring_skip"] = spring_candidate_gate(row, model)
@@ -345,9 +354,12 @@ def rank_spring_candidates(t: Transport,
 def spring_complement_price(avg_cost: D, opp_ask: D, tick: D) -> \
         tuple[Optional[D], dict]:
     """Maker-only completion price on the deficit side: the tighter of the
-    spring pair target (pair <= 0.96) and the hard >=1c-after-fee bound,
-    floored to the venue tick and strictly below the opposite ask. The
-    caller's report shows which regime was executable."""
+    spring pair target (observation cap, pair <= 0.98 per OWNER DECISION
+    5533476555) and the hard >=1c-after-known-fees bound, floored to the
+    venue tick and strictly below the opposite ask. The hard bound always
+    participates in the min(), so the widened observation cap can never
+    admit a pair with <1c net edge. The caller's report shows which
+    regime was executable."""
     hard = q1.complement_bound(avg_cost)
     spring = SPRING_PAIR_TARGET - D(str(avg_cost))
     info = {"spring_pair_target": str(SPRING_PAIR_TARGET),
@@ -438,7 +450,7 @@ def run_session(t: Optional[Transport] = None,
             return {**report, "status": "PREFLIGHT_FAILED", "reason": block}
         row = dict(micro.micro_eligible(t, slug))
         if strict_completion_asserted(slug):
-            row["spring_repeated_completion"] = True
+            row["spring_category_bar_met"] = True
         skip = spring_candidate_gate(row, model)
         if skip:
             return {**report, "status": "SPRING_SKIP_NOT_QUALIFYING",

@@ -143,7 +143,7 @@ def test_no_admission_or_execution_behavior_changes():
            "both_sides_served": True, "trades_1h": 20,
            "two_sided_trades": True}
     assert spring.spring_candidate_gate(row) == \
-        "spring_completion_not_repeated"
+        "spring_category_bar_not_met"
     # zero seats disables pursuit entirely and the plan passes through
     now = time.time()
     state = _busy_state(30, now)

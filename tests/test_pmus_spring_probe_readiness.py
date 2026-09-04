@@ -14,18 +14,30 @@ from src import pmus_spring_probe_readiness as ready
 SLUG = "atc-lal-rso-cel-2026-09-03-rso"
 
 
-def _row(matched=3, floor=3, status="READY_FOR_REVIEW", **over):
+def _row(matched=3, floor=3, status="READY_FOR_REVIEW",
+         cat_completions=None, cat_markets=2, fee_safe=None, **over):
+    cat_completions = matched if cat_completions is None else cat_completions
+    bar = (cat_completions >= 2 and cat_markets >= 2)
     row = {
         "slug": SLUG, "bid": "0.50", "trades_1h": 120,
         "two_sided_trades": True, "off_distribution": False,
-        "spring_pair_target": "0.96",
+        "spring_pair_target": "0.98",
         "spring_matched_slots": matched,
         "spring_repeated_completion": matched >= 2,
         "spring_slot_counts_theoretical": {"SPRING_MATCHED": matched},
+        "spring_fee_safe_completions": (matched + 1 if fee_safe is None
+                                        else fee_safe),
+        "spring_category": "lal",
+        "spring_category_evidence": {
+            "completions_60m": cat_completions,
+            "distinct_markets_60m": cat_markets,
+            "markets": [f"m{i}" for i in range(cat_markets)],
+            "bar_met": bar},
+        "spring_category_bar_met": bar,
         "probe_evidence": {"status": status,
                            "min_completions_required": floor,
                            "reasons": [] if status == "READY_FOR_REVIEW"
-                           else ["insufficient_completions"]},
+                           else ["insufficient_category_completions"]},
     }
     row.update(over)
     return row
@@ -51,18 +63,31 @@ def test_two_layer_bar_default_floor_blocks_two_completions():
 
 def test_floor_cannot_weaken_below_two_strict_completions():
     """Even a (mis)configured floor of 1 with a READY label AND a falsely
-    asserted repeated flag cannot arm on one completion: the entry guard
-    clamps its requirement to max(2, floor)."""
+    asserted category-bar flag cannot arm on one category completion:
+    the entry guard clamps its requirement to max(2, floor)."""
     row = _row(matched=1, floor=1, status="READY_FOR_REVIEW",
-               spring_repeated_completion=True)
+               cat_completions=1, cat_markets=2,
+               spring_category_bar_met=True)
     reason = entry.strict_evidence_reason(
         SLUG, entry.evidence_from_status(_status(row), SLUG),
         now=time.time())
-    assert reason == "spring_matched_slots_lt_required:1<2"
+    assert reason == "spring_category_completions_lt_required:1<2"
 
 
-def test_floor_two_with_two_strict_completions_passes_evidence_layer():
-    row = _row(matched=2, floor=2, status="READY_FOR_REVIEW")
+def test_isolated_market_blocked_in_readiness_report():
+    """OWNER DECISION 5533476555 item 3: a market alone in its category
+    (even with 2 own completions) is blocked at the replication layer."""
+    row = _row(matched=2, floor=2, cat_completions=2, cat_markets=1)
+    rep = ready.readiness_report(_status(row), SLUG, now=time.time())
+    layer = rep["layers"]["REPLICATION_EVIDENCE"]
+    assert layer["ok"] is False
+    assert any("spring_category_bar_not_met" in b for b in layer["blockers"])
+    assert rep["ready"] is False
+
+
+def test_floor_two_with_two_category_completions_passes_evidence_layer():
+    row = _row(matched=2, floor=2, status="READY_FOR_REVIEW",
+               cat_completions=2, cat_markets=2)
     reason = entry.strict_evidence_reason(
         SLUG, entry.evidence_from_status(_status(row), SLUG),
         now=time.time())
@@ -90,7 +115,10 @@ def test_report_names_every_remaining_gate_and_blocker(monkeypatch):
     assert by["isolated_dual_key_armed"]["ok"] is False
     assert "DISARMED" in by["isolated_dual_key_armed"]["blocker"]
     assert rep["ready"] is False
-    assert "never effectively below 2" in rep["binding_bar"]
+    assert "max(2, review floor" in rep["binding_bar"]
+    # the three layers are cleanly separated with their own blockers
+    assert rep["layers"]["REPLICATION_EVIDENCE"]["ok"] is False
+    assert rep["layers"]["OPERATIONAL"]["ok"] is False
 
 
 def test_fully_asserted_environment_reports_ready(monkeypatch):
@@ -108,6 +136,22 @@ def test_fully_asserted_environment_reports_ready(monkeypatch):
     rep = ready.readiness_report(status, SLUG, now=time.time())
     assert rep["ready"] is True
     assert all(g["ok"] for g in rep["gates"])
+    assert all(v["ok"] for v in rep["layers"].values())
+
+
+def test_replication_without_executable_economics_is_separated():
+    """Directive 5533650823 item 5: REPLICATION_EVIDENCE can be green
+    while EXECUTABLE_ECONOMICS is red — evidence at observation
+    economics (<=0.98) with no completion clearing the live
+    >=1c-after-known-fees bound never reads as executable."""
+    row = _row(matched=3, floor=3, fee_safe=0)
+    rep = ready.readiness_report(_status(row), SLUG, now=time.time())
+    by = {g["gate"]: g for g in rep["gates"]}
+    assert by["strict_evidence_composed"]["ok"] is True
+    econ = rep["layers"]["EXECUTABLE_ECONOMICS"]
+    assert econ["ok"] is False
+    assert any("observation economics" in b for b in econ["blockers"])
+    assert rep["ready"] is False
 
 
 def test_readiness_module_is_purely_observational():

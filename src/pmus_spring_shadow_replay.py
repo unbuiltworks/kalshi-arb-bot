@@ -3,10 +3,10 @@
 This module is deliberately independent of every executor.  It answers one
 narrow question for observation only:
 
-    Did a 300s slot START in the spring 45-55c entry band, get a
+    Did a 300s slot START in the spring 35-65c observation band, get a
     maker-first fill at the prevailing YES bid, and later show public trade
     evidence consistent with a maker complement that would complete the pair
-    at <= 0.96?
+    at <= 0.98 (observation cap, OWNER DECISION 5533476555)?
 
 All outputs are THEORETICAL.  No orders, credentials, REST mutations, arming
 keys, or execution admission live here.
@@ -19,9 +19,11 @@ from typing import Any, Mapping, Optional
 
 SLOT_S = 300.0
 WINDOW_S = 3600.0
-SPRING_LO = D("0.45")
-SPRING_HI = D("0.55")
-SPRING_PAIR_TARGET = D("0.96")
+SPRING_LO = D("0.35")    # OWNER DECISION 5533476555: observation 35-65
+SPRING_HI = D("0.65")
+# OBSERVATION completion cap (5533476555). The live >=1c-after-known-fees
+# execution bound lives in q1.complement_bound and is separate/unchanged.
+SPRING_PAIR_TARGET = D("0.98")
 TICK = D("0.01")
 
 
@@ -199,9 +201,12 @@ def summarize_state(s: Mapping[str, Any], now: float,
              "p95": round(lat[int(0.95 * (len(lat) - 1))], 1),
              "n": len(lat)} if lat else None),
         "spring_pair_costs": [m["pair_cost"] for m in matches][-12:],
-        "spring_le_096_completions": matched,   # <=0.96 by construction
+        # key name kept for consumer compatibility; completions are
+        # <= SPRING_PAIR_TARGET by construction (0.98 per 5533476555)
+        "spring_le_096_completions": matched,
         "spring_fee_safe_completions": matched + fee_safe_only,
         "spring_evidence_missing": missing,
         "spring_matches_theoretical": matches[-3:],
-        "spring_labels": "SHADOW/THEORETICAL; strict <=0.96 slot replay",
+        "spring_labels": ("SHADOW/THEORETICAL; strict "
+                          f"<={SPRING_PAIR_TARGET} slot replay"),
     }

@@ -87,7 +87,11 @@ def test_clone_timeline_completion_and_probe_verdict():
     strict = r["strict_spring_replay"]
     assert strict["spring_repeated_completion"] is True
     assert strict["spring_matched_slots"] >= 2
-    assert all(D(x) <= D("0.96") for x in strict["spring_pair_costs"])
+    from src import pmus_spring_shadow_replay as replay
+    # strict pairs are capped by the observation target (0.98 per OWNER
+    # DECISION 5533476555)
+    assert all(D(x) <= replay.SPRING_PAIR_TARGET
+               for x in strict["spring_pair_costs"])
     gaps = r["opp_side_gaps_s"]
     # 30s inside each pair; the 370s middle gap spans pair-to-pair
     assert gaps["gaps"] == [30.0, 370.0, 30.0] and gaps["p50"] == 30.0
