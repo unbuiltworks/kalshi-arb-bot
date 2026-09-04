@@ -1,0 +1,309 @@
+"""Authoritative all-live-sports runner for the read-only PMUS collector.
+
+This is a production wrapper around :mod:`src.pmus_sports_collector` that
+fixes the remaining discovery choke point without changing any execution
+path.  It uses the venue's server-side live sports surface as the primary
+universe, guarantees broad event coverage under the polling cap, and keeps
+stale incentive-only markets from crowding out genuinely live sports.
+
+READ ONLY: every venue call is delegated to the base collector's GET-only
+``http_get_json`` helper; persistence uses the base append/state helpers.
+"""
+from __future__ import annotations
+
+import math
+import os
+import time
+from collections import defaultdict
+from typing import Any, Iterable, Mapping, Optional
+
+from src import pmus_sports_collector as col
+
+
+def _number(value: Any) -> float:
+    if isinstance(value, Mapping):
+        value = value.get("value") or value.get("px")
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _market_score(target: Mapping[str, Any]) -> float:
+    """Cheap pre-poll L5-relevance rank from venue-served metadata only.
+
+    Volume/liquidity dominate.  A modest bonus is applied when the served
+    BBO midpoint lies in the owner's 35-65 observation band.  No missing
+    field is invented and this score is selection-only, never admission.
+    """
+    meta = target.get("market_meta") or {}
+    volume = max(_number(meta.get("volume24hr")), _number(meta.get("volume")))
+    liquidity = _number(meta.get("liquidity"))
+    score = math.log1p(max(volume, 0.0)) * 5.0 + math.log1p(max(liquidity, 0.0))
+    bid = _number(meta.get("bestBidQuote"))
+    ask = _number(meta.get("bestAskQuote"))
+    if bid > 0 and ask > 0 and ask >= bid:
+        mid = (bid + ask) / 2.0
+        spread = ask - bid
+        if 0.35 <= mid <= 0.65:
+            score += 6.0
+        score += max(0.0, 2.0 - 10.0 * spread)
+    elif bid > 0 and 0.35 <= bid <= 0.65:
+        score += 3.0
+    return score
+
+
+def live_targets(live_events: Iterable[Mapping[str, Any]],
+                 prefixes: Iterable[str] = ()) -> list[dict]:
+    """Flatten the full authoritative live slate and retain event identity."""
+    out: list[dict] = []
+    for ev in live_events or []:
+        event_slug = str(ev.get("slug") or ev.get("id") or "unknown-event")
+        for row in col.live_event_targets([ev], prefixes):
+            out.append({**row, "event_slug": event_slug})
+    return out
+
+
+def select_for_poll(targets: Iterable[Mapping[str, Any]], cap: int,
+                    cycle: int = 0) -> tuple[list[dict], dict]:
+    """Cover events before markets, then rotate surplus markets.
+
+    With ~50 live events and a cap of 64 this guarantees at least one
+    market from every event before extra markets consume seats.  Remaining
+    seats rotate across the ranked surplus on each discovery cycle so the
+    full discovered universe is eventually sampled rather than silently
+    excluded forever.
+    """
+    cap = max(1, int(cap))
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for raw in targets:
+        row = dict(raw)
+        key = str(row.get("event_slug") or row.get("league") or row.get("slug"))
+        groups[key].append(row)
+    for rows in groups.values():
+        rows.sort(key=lambda r: (-_market_score(r), str(r.get("slug"))))
+
+    event_order = sorted(
+        groups,
+        key=lambda k: (-_market_score(groups[k][0]), k),
+    )
+    selected: list[dict] = []
+    chosen: set[str] = set()
+
+    # First pass: one best market per event.
+    for key in event_order:
+        if len(selected) >= cap:
+            break
+        row = groups[key][0]
+        slug = str(row.get("slug"))
+        if slug and slug not in chosen:
+            selected.append(row)
+            chosen.add(slug)
+
+    # Second pass: ranked surplus, rotated once the event-coverage floor is met.
+    surplus = [r for key in event_order for r in groups[key][1:]
+               if str(r.get("slug")) not in chosen]
+    surplus.sort(key=lambda r: (-_market_score(r), str(r.get("slug"))))
+    room = cap - len(selected)
+    if room > 0 and surplus:
+        start = (max(0, int(cycle)) * room) % len(surplus)
+        rotated = (surplus + surplus)[start:start + room]
+        for row in rotated:
+            slug = str(row.get("slug"))
+            if slug and slug not in chosen and len(selected) < cap:
+                selected.append(row)
+                chosen.add(slug)
+
+    return selected, {
+        "discovered_markets": sum(len(v) for v in groups.values()),
+        "discovered_events": len(groups),
+        "selected_markets": len(selected),
+        "selected_events": len({str(r.get("event_slug") or r.get("league"))
+                                for r in selected}),
+        "rotation_cycle": int(cycle),
+        "selection": "event_floor_then_rotating_l5_rank",
+    }
+
+
+def _legacy_targets(leagues: list[str], prefixes: list[str], incentives: dict,
+                    include_inc: bool) -> tuple[list[dict], dict]:
+    """Visible fallback only when the authoritative live surface is unavailable."""
+    if leagues == ["all"]:
+        try:
+            raw = col.http_get_json("/v2/leagues")
+            rows = raw if isinstance(raw, list) else raw.get("leagues") or []
+            leagues = [str(r.get("slug")) for r in rows if r.get("slug")]
+        except Exception:
+            leagues = ["mlb"]
+    events_by_league: dict[str, list] = {}
+    errors: dict[str, str] = {}
+    for league in leagues:
+        try:
+            raw = col.http_get_json(
+                f"/v2/leagues/{league}/events?limit={col.EVENTS_PAGE_LIMIT}")
+            events_by_league[league] = raw if isinstance(raw, list) \
+                else raw.get("events") or []
+        except Exception as exc:
+            events_by_league[league] = []
+            errors[league] = f"{type(exc).__name__}:{str(exc)[:80]}"
+    rows = col.discover_targets(events_by_league, incentives, prefixes, include_inc)
+    for row in rows:
+        row["event_slug"] = str((row.get("market_meta") or {}).get("eventSlug")
+                                or row.get("league") or row.get("slug"))
+    return rows, {"fallback_leagues": leagues, "fallback_errors": errors}
+
+
+def discover_poll_targets(incentives: dict, include_inc: bool, cap: int,
+                          cycle: int = 0) -> tuple[list[dict], dict]:
+    """Primary live-sports discovery with explicit, measured fallback."""
+    # Empty by default: the full live sports market set (props included).
+    prefixes = [x.strip() for x in os.getenv(col.PREFIXES_ENV, "").split(",")
+                if x.strip()]
+    leagues = [x.strip() for x in
+               os.getenv(col.LEAGUES_ENV, "all").split(",") if x.strip()]
+
+    live_events, live_diag = col.fetch_live_events(col.http_get_json)
+    if live_events and live_diag.get("v1_live_error") is None:
+        universe = live_targets(live_events, prefixes)
+        selected, selection_diag = select_for_poll(universe, cap, cycle)
+        # Incentive-only slugs are intentionally NOT appended here. If an
+        # incentive market is actually live sports it is already in universe.
+        return selected, {
+            **live_diag,
+            **selection_diag,
+            "source_mode": "v1_live_sports_authoritative",
+            "incentive_only_admitted": 0,
+        }
+
+    fallback, fallback_diag = _legacy_targets(
+        leagues, prefixes, incentives, include_inc)
+    selected, selection_diag = select_for_poll(fallback, cap, cycle)
+    return selected, {
+        **live_diag,
+        **fallback_diag,
+        **selection_diag,
+        "source_mode": "legacy_visible_fallback",
+        "incentive_only_admitted": sum(
+            1 for r in selected if r.get("why") == "active_liquidity_program"),
+    }
+
+
+def run(minutes: Optional[float] = None) -> int:
+    col.assert_service_role()
+    root = col.root_dir()
+    include_inc = os.getenv(col.INCENTIVE_MARKETS_ENV, "1").strip().lower() not in \
+        {"0", "false", "no", "off"}
+    poll_s = float(os.getenv(col.POLL_ENV, str(col.DEFAULT_POLL_S)))
+    budget = float(os.getenv(col.BUDGET_ENV, str(col.DEFAULT_BUDGET_RPS)))
+    max_markets = int(os.getenv(col.MAX_MARKETS_ENV, str(col.DEFAULT_MAX_MARKETS)))
+    discovery_s = float(os.getenv(col.DISCOVERY_ENV, str(col.DEFAULT_DISCOVERY_S)))
+    inc_snap_s = float(os.getenv(col.INCENTIVES_SNAP_ENV,
+                                 str(col.DEFAULT_INCENTIVES_SNAP_S)))
+
+    state = col.load_state(root)
+    state["restarts"] = int(state.get("restarts", 0)) + 1
+    col.save_state(root, state)
+    col.append_rows(root, [{
+        "kind": "collector_start", "t": col._utcnow().isoformat(),
+        "source": col.SOURCE, "read_only": True,
+        "discovery_mode": "v1_live_sports_authoritative",
+        "poll_s": poll_s, "budget_rps": budget, "max_markets": max_markets,
+    }])
+
+    deadline = time.monotonic() + minutes * 60 if minutes else None
+    targets: list[dict] = []
+    incentives: dict = {}
+    discovery_diag: dict = {}
+    last_discovery = last_inc_snap = 0.0
+    discovery_cycle = 0
+
+    while deadline is None or time.monotonic() < deadline:
+        now_mono = time.monotonic()
+        if now_mono - last_inc_snap >= inc_snap_s or not incentives:
+            try:
+                incentives = col.http_get_json("/v1/incentives")
+                col.append_rows(root, [{
+                    "kind": "incentives_snapshot", "t": col._utcnow().isoformat(),
+                    "active_market_slugs": col.active_incentive_slugs(incentives),
+                    "programs": incentives.get("programs"), "source": col.SOURCE,
+                }])
+            except Exception as exc:
+                col.append_rows(root, [{"kind": "error", "stage": "incentives",
+                                       "t": col._utcnow().isoformat(),
+                                       "err": str(exc)[:120]}])
+            last_inc_snap = now_mono
+
+        if now_mono - last_discovery >= discovery_s or not targets:
+            try:
+                targets, discovery_diag = discover_poll_targets(
+                    incentives, include_inc, max_markets, discovery_cycle)
+                discovery_cycle += 1
+                plan = col.plan_cycle(len(targets), poll_s, budget, max_markets)
+                col.append_rows(root, [{
+                    "kind": "discovery", "t": col._utcnow().isoformat(),
+                    "targets": [{"slug": t.get("slug"),
+                                 "league": t.get("league"),
+                                 "event_slug": t.get("event_slug"),
+                                 "why": t.get("why")}
+                                for t in targets],
+                    "plan": plan, "diagnostics": discovery_diag,
+                    "source": col.SOURCE,
+                }])
+            except Exception as exc:
+                discovery_diag = {"source_mode": "discovery_error",
+                                  "error": f"{type(exc).__name__}:{str(exc)[:100]}"}
+                col.append_rows(root, [{"kind": "error", "stage": "discovery",
+                                       "t": col._utcnow().isoformat(),
+                                       "err": str(exc)[:120]}])
+            last_discovery = now_mono
+
+        plan = col.plan_cycle(len(targets), poll_s, budget, max_markets)
+        rows = []
+        for target in targets:
+            slug = target["slug"]
+            try:
+                bbo = col.http_get_json(f"/v1/markets/{slug}/bbo")["marketData"]
+                book = col.http_get_json(f"/v1/markets/{slug}/book")["marketData"]
+                rows.append(col.bbo_book_row(slug, target, bbo, book))
+            except Exception as exc:
+                rows.append({"kind": "error", "stage": "poll", "slug": slug,
+                             "t": col._utcnow().isoformat(),
+                             "err": str(exc)[:120]})
+        if rows:
+            col.append_rows(root, rows)
+
+        state["cycles"] = int(state.get("cycles", 0)) + 1
+        state["rows_written"] = int(state.get("rows_written", 0)) + len(rows)
+        col.save_state(root, state)
+        col.heartbeat(root, markets=len(targets), cycles=state["cycles"],
+                      rows_written=state["rows_written"],
+                      effective_poll_s=plan["effective_poll_s"],
+                      discovery=discovery_diag)
+
+        status_every = float(os.getenv(col.STATUS_EVERY_ENV,
+                                       str(col.DEFAULT_STATUS_EVERY_S)))
+        if status_every > 0 and \
+                now_mono - getattr(run, "_last_status", 0.0) >= status_every:
+            try:
+                from src import pmus_status_report
+                pmus_status_report.emit(root)
+            except Exception as exc:
+                col.append_rows(root, [{"kind": "error", "stage": "status",
+                                       "t": col._utcnow().isoformat(),
+                                       "err": str(exc)[:120]}])
+            run._last_status = now_mono
+
+        time.sleep(plan["effective_poll_s"] if targets else max(poll_s, 20.0))
+    return 0
+
+
+def main() -> int:
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--minutes", type=float, default=None)
+    args = ap.parse_args()
+    return run(args.minutes)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
