@@ -350,4 +350,4 @@ def test_dual_key_is_an_arm_time_step_not_a_readiness_blocker():
     assert any("isolated_dual_key" in a for a in r["arming_prerequisites"])
     assert not any("dual_key" in b for b in r["blockers"])
     # the session's own arming predicate is untouched
-    assert session.armed() is False
+    assert xfer.session.armed() is False
