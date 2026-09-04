@@ -187,3 +187,31 @@ def test_pins_do_not_change_any_gate_or_economics():
     for banned in ("MIN_EDGE", "GAP_S", "q1_depth", "Q1_GATE_CLEARED",
                    "pmus_spring", "complement", "armed"):
         assert banned not in src, banned
+
+
+def test_interleaved_order_makes_pin_cadence_a_fraction_of_the_sweep():
+    """Being in every cycle is not enough: a 64-market sequential sweep
+    runs ~60s, right at the gap threshold. Pins must recur WITHIN the
+    sweep so their inter-poll gap is a fraction of it."""
+    targets = [{"slug": f"m{i}"} for i in range(64)]
+    order = live.interleaved_order(targets, ["m3", "m7"], every=15)
+    seq = [t["slug"] for t in order]
+    pos = [i for i, s in enumerate(seq) if s == "m3"]
+    assert len(pos) >= 4, "pin must recur several times per sweep"
+    assert max(b - a for a, b in zip(pos, pos[1:])) <= 20
+    # every unpinned market is still polled exactly once per sweep
+    assert sum(1 for s in seq if s == "m10") == 1
+    assert len({s for s in seq}) == 64          # full breadth retained
+
+
+def test_interleaving_is_a_noop_without_pins():
+    targets = [{"slug": f"m{i}"} for i in range(10)]
+    order = live.interleaved_order(targets, [], every=3)
+    assert [t["slug"] for t in order] == [f"m{i}" for i in range(10)]
+
+
+def test_interleave_every_zero_disables_recurrence(monkeypatch):
+    monkeypatch.setenv(live.PIN_INTERLEAVE_ENV, "0")
+    targets = [{"slug": f"m{i}"} for i in range(10)]
+    order = live.interleaved_order(targets, ["m2"])
+    assert sum(1 for t in order if t["slug"] == "m2") == 1

@@ -51,6 +51,43 @@ PIN_MAX_CEILING = 12
 _auto_pins: list[str] = []              # fed from the L5 candidate path
 
 
+# Being IN every cycle is necessary but not sufficient: a cycle is a
+# sequential sweep of ~64 markets x 2 GETs, so its wall clock lands near
+# 60s — right at the gap threshold. Pinned markets therefore re-enter the
+# poll order every PIN_INTERLEAVE_EVERY markets, making their cadence a
+# fraction of the sweep instead of equal to it. The rate plan is computed
+# on the INTERLEAVED order so the venue budget is still honoured.
+PIN_INTERLEAVE_ENV = "PMUS_PIN_INTERLEAVE_EVERY"
+PIN_INTERLEAVE_DEFAULT = 15
+
+
+def pin_interleave_every() -> int:
+    try:
+        return max(0, int(os.getenv(PIN_INTERLEAVE_ENV,
+                                    str(PIN_INTERLEAVE_DEFAULT))))
+    except ValueError:
+        return PIN_INTERLEAVE_DEFAULT
+
+
+def interleaved_order(targets: Iterable[Mapping[str, Any]],
+                      pin_slugs: Iterable[str],
+                      every: Optional[int] = None) -> list[dict]:
+    """Poll order where pinned markets recur every `every` markets."""
+    every = pin_interleave_every() if every is None else every
+    pin_set = {str(s) for s in pin_slugs}
+    rows = [dict(t) for t in targets]
+    pins = [t for t in rows if str(t.get("slug")) in pin_set]
+    rest = [t for t in rows if str(t.get("slug")) not in pin_set]
+    if not pins:
+        return rest
+    out = list(pins)
+    for i, t in enumerate(rest, 1):
+        out.append(t)
+        if every and i % every == 0 and i < len(rest):
+            out.extend(pins)
+    return out
+
+
 def pin_max() -> int:
     try:
         return max(0, min(PIN_MAX_CEILING,
@@ -346,9 +383,14 @@ def run(minutes: Optional[float] = None) -> int:
                                        "err": str(exc)[:120]}])
             last_discovery = now_mono
 
-        plan = col.plan_cycle(len(targets), poll_s, budget, max_markets)
+        pin_slugs = [p["slug"] for p in priority_pins()]
+        order = interleaved_order(targets, pin_slugs)
+        # rate plan computed on the INTERLEAVED length so pin re-polls
+        # are paid for out of the same budget, never on top of it
+        plan = col.plan_cycle(len(order), poll_s, budget,
+                              max(max_markets, len(order)))
         rows = []
-        for target in targets:
+        for target in order:
             slug = target["slug"]
             try:
                 bbo = col.http_get_json(f"/v1/markets/{slug}/bbo")["marketData"]
