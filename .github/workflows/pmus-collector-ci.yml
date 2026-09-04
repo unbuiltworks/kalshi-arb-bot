@@ -69,7 +69,10 @@ jobs:
           col = open("deploy/pmus_sports_collector/Dockerfile").read()
           assert "PMUS_SERVICE_ROLE=ws-recorder" in rec
           assert "PMUS_SERVICE_ROLE=collector" in col
-          assert "src.pmus_sports_collector" in col
+          # owner directive 5534173817: collector CMD is the authoritative
+          # all-live-sports runner, delegating to the base module (COPY'd)
+          assert "src.pmus_sports_live_collector" in col
+          assert "src/pmus_sports_collector.py" in col
           assert "src.pmus_ws_evidence_recorder" not in col
           assert os.path.exists("deploy/RAILWAY_ISOLATION.md")
           print("isolation invariants hold: no repo-wide overrides; "
