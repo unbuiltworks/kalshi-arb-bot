@@ -115,7 +115,7 @@ the image.
 | CMD | `python3 -m src.pmus_spring_l5_probe_entry` | guard, not the session directly |
 | `PMUS_SERVICE_ROLE` | `spring-l5-probe` | baked tripwire; mismatch exits 64 |
 | `PMUS_Q1_STATE_DIR` | `/state/pmus-spring` | baked in the image ENV |
-| **durable volume** | **mount a volume at `/state/pmus-spring`** | **NOT YET ATTACHED on Railway** |
+| **durable volume** | **mount a volume at `/state/pmus-spring`** | **ATTACHED and verified on Railway (owner check 2026-09-04)** |
 | restart policy | `NEVER` | a probe must never self-resume |
 | arming vars | none present | operator-held dual key, arm time only |
 
@@ -132,20 +132,30 @@ sharing either would let one service's rotation truncate the probe's
 ledger.
 
 Operator actions before any q=1 probe:
-1. attach an isolated volume at `/state/pmus-spring`;
+1. ~~attach an isolated volume at `/state/pmus-spring`~~ — DONE, verified
+   2026-09-04;
 2. corroborate the candidate market in the authenticated recorder's
    `spring_watch` (the keyless sports tape infers trade direction and is
    provenance-blocked for arming on its own);
 3. supply the `PMUS_SPRING_*` dual key plus the strict-evidence and
    category assertions at arm time.
 
-### Lane C first deployment (issue #167 comment 5541176027)
+### Lane C first deployment — COMPLETE (issue #167 comments 5541176027, owner verification 2026-09-04)
 
-Ground truth from Railway: the service exists but has **never had a
-successful build**, so every commit shows `SKIPPED` and "redeploy" has no
-snapshot to copy. `SKIPPED` here is not a watch-path symptom to debug —
-it is the absence of a first build. Two operator steps, in order, both
-still DISARMED:
+**Status: done.** Deployment `af7434cc-49d3-4695-983e-8ada4fbf6cfb` built and
+ran SUCCESS on the existing service, and the boot log shows `DISARMED` with
+no network activity — the expected first-boot behaviour described below. The
+isolated `/state/pmus-spring` volume is attached to that same service.
+
+Durable state and deploy currency are therefore **no longer readiness
+blockers**. A `spring_state_dir_missing:/state/pmus-q1` line in a readiness
+artifact means the one-shot was run OFF the probe host: `/state/pmus-q1` is
+the q1 default for `PMUS_Q1_STATE_DIR`, which the probe image overrides to
+`/state/pmus-spring`. Only an artifact produced on the probe host speaks to
+this gate.
+
+The original two-step first-build procedure is retained below as the
+reference for rebuilding this service, or for standing up an equivalent one:
 
 **1. First build of the EXISTING service** (do not create a duplicate —
 reuse service id `d84d9a68-…`):
@@ -180,10 +190,11 @@ That set is exactly the image's COPY list;
 the entry module's load-time import graph, so a first build cannot produce
 an image that imports cleanly in CI and then dies on Railway.
 
-**3. Volume** (still required, still absent): create an isolated volume and
-mount it at `/state/pmus-spring` on this service only. Without it
-`durable_state_reason()` returns `spring_state_dir_not_persistent_mount`
-and an armed session performs no network call.
+**3. Volume** (required; ATTACHED as of the owner verification above): an
+isolated volume mounted at `/state/pmus-spring` on this service only.
+Without it `durable_state_reason()` returns
+`spring_state_dir_not_persistent_mount` and an armed session performs no
+network call.
 
 **Expected first-boot behaviour, DISARMED:** the guard exits before
 credentials or transport with `DISARMED` (no `PMUS_SPRING_*` key present)
