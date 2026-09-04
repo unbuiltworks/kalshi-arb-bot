@@ -449,3 +449,50 @@ def test_load_recorder_status_reads_json_and_jsonl_tail(tmp_path):
     stream = tmp_path / "status.jsonl"
     stream.write_text('{"t": 1}\nnot json\n{"t": 2}\n', encoding="utf-8")
     assert xfer.load_recorder_status(stream)["t"] == 2
+
+
+# ---- off_distribution reads the action admission is based on ----
+
+def test_residual_cap_on_replayed_inventory_is_not_a_distribution_verdict():
+    """`next_action` continues the REPLAYED inventory, so it can be
+    no_action for reasons that say nothing about the frozen model's
+    distribution. residual_cap is a risk limit on a hypothetical
+    position; reporting it as "distribution unknown" failed the guard on
+    a market v2 had in fact visited. Same correction as preflight
+    SELECTION in 64ec032c: a first probe holds no position, so the
+    governing action is the one planned from flat."""
+    row = {
+        "slug": SLUG,
+        "next_action": {"decision": "no_action", "relation": "extend",
+                        "reason": "residual_cap:3>=3"},
+        "probe_entry_action": {"decision": "quote", "relation": "open",
+                               "side": "YES", "target_price": "0.4800"},
+    }
+    assert xfer.off_distribution_of(row) is False
+
+
+def test_off_distribution_still_blocks_from_either_action():
+    """The gate is not softened: a v2 off-distribution verdict on the
+    entry action, or on the continuation when the entry action is silent,
+    still reports True and still blocks."""
+    assert xfer.off_distribution_of({
+        "probe_entry_action": {"decision": "no_action",
+                               "reason": "v2_off_distribution"},
+        "next_action": {"decision": "quote"}}) is True
+    assert xfer.off_distribution_of({
+        "probe_entry_action": {},
+        "next_action": {"decision": "no_action",
+                        "reason": "v2_off_distribution"}}) is True
+
+
+def test_stale_book_still_fails_closed_as_unknown():
+    """A market with no fresh book yields no verdict from either action
+    and must stay None so the entry guard refuses it."""
+    row = {"slug": SLUG,
+           "next_action": {"decision": "no_action",
+                           "reason": "book_stale:244.6s"},
+           "probe_entry_action": {"decision": "no_action",
+                                  "reason": "no_fresh_book"}}
+    assert xfer.off_distribution_of(row) is None
+    assert xfer.off_distribution_of(None) is None
+    assert xfer.off_distribution_of({}) is None

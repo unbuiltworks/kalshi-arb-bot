@@ -92,17 +92,39 @@ def strict_rows_from_sports(by_slug: Mapping[str, list],
     return out
 
 
-def off_distribution_of(row: Optional[Mapping[str, Any]]) -> Optional[bool]:
-    """Read the persistence-v2 distribution verdict out of a decision row.
-    Unknown stays None so the entry guard fails closed on it."""
-    if not row:
-        return None
-    na = row.get("next_action") or {}
-    if na.get("reason") == "v2_off_distribution":
+def _verdict(action: Optional[Mapping[str, Any]]) -> Optional[bool]:
+    action = action or {}
+    if action.get("reason") == "v2_off_distribution":
         return True
-    if na.get("decision") == "quote":
+    if action.get("decision") == "quote":
         return False
     return None
+
+
+def off_distribution_of(row: Optional[Mapping[str, Any]]) -> Optional[bool]:
+    """Read the persistence-v2 distribution verdict out of a decision row.
+
+    Reads `probe_entry_action` first, then falls back to `next_action`.
+    Unknown stays None so the entry guard fails closed on it.
+
+    The ordering matters and is the same correction made to preflight
+    SELECTION in 64ec032c. `next_action` continues the REPLAYED inventory,
+    so it can come back `no_action` for reasons that say nothing about the
+    model's distribution — `residual_cap:3>=3` being the live case: that is
+    a risk limit on a hypothetical position, not a statement that v2 never
+    visited this state, yet it was being reported as "distribution
+    unknown" and failing the guard. A first bounded probe holds no
+    position, so the action whose distribution actually governs admission
+    is the one planned from flat.
+
+    This does not soften the gate. `v2_off_distribution` from either
+    action still returns True and still blocks, and a genuinely unknown or
+    stale book still returns None and still fails closed.
+    """
+    if not row:
+        return None
+    probe = _verdict(row.get("probe_entry_action"))
+    return probe if probe is not None else _verdict(row.get("next_action"))
 
 
 def compose_evidence(slug: str, by_slug: Mapping[str, list], now: float,
