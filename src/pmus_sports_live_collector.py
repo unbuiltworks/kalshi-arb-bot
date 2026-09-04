@@ -109,13 +109,41 @@ def operator_pins() -> list[str]:
             if s.strip()]
 
 
-def priority_pins() -> list[dict]:
-    """Operator pins first, then the L5 candidate path's own ranking."""
+# INCENTIVE AUTO-PIN. Every active PMUS liquidityProgram observed to date
+# sits on college-football moneyline, and a program market only earns while
+# its game is in play. Live discovery does surface such a market once the
+# game starts, but it lands in the rotating surplus and therefore spends its
+# first hour tripping the 60s gap rule -- losing exactly the window the
+# reward pool is paid over. Pinning it the moment it appears live is what
+# "target live events as they come" requires. Pure priority: no gate,
+# threshold or admission changes, and breadth is untouched because pins are
+# bounded by the same pin_max() as every other pin source.
+INCENTIVE_AUTOPIN_ENV = "PMUS_INCENTIVE_AUTOPIN"     # "0" disables
+
+
+def incentive_autopin_enabled() -> bool:
+    return os.getenv(INCENTIVE_AUTOPIN_ENV, "1").strip().lower() not in (
+        "0", "false", "no")
+
+
+def priority_pins(program_slugs: Iterable[str] = ()) -> list[dict]:
+    """Operator pins, then live incentive-program markets, then L5 ranking.
+
+    Operator intent still outranks everything. Program markets come next
+    because their earning window is bounded by the game clock, whereas the
+    L5 auto-pin ranking is advisory and re-derived every cycle.
+    """
     out, seen = [], set()
     for slug in operator_pins():
         if slug not in seen:
             seen.add(slug)
             out.append({"slug": slug, "reason": "operator_pin"})
+    if incentive_autopin_enabled():
+        for slug in program_slugs or ():
+            if slug not in seen:
+                seen.add(slug)
+                out.append({"slug": slug,
+                            "reason": "live_incentive_program"})
     for slug in _auto_pins:
         if slug not in seen:
             seen.add(slug)
@@ -292,24 +320,39 @@ def discover_poll_targets(incentives: dict, include_inc: bool, cap: int,
     leagues = [x.strip() for x in
                os.getenv(col.LEAGUES_ENV, "all").split(",") if x.strip()]
 
+    program_slugs = set(col.active_incentive_slugs(incentives or {}))
+
     live_events, live_diag = col.fetch_live_events(col.http_get_json)
     if live_events and live_diag.get("v1_live_error") is None:
         universe = live_targets(live_events, prefixes)
-        selected, selection_diag = select_for_poll(universe, cap, cycle,
-                                                   pins=priority_pins())
-        # Incentive-only slugs are intentionally NOT appended here. If an
-        # incentive market is actually live sports it is already in universe.
+        # Incentive-only slugs are still NOT appended to the poll set: a
+        # program market whose game has not started is a closed book and
+        # polling it densely buys nothing. What DOES matter is that the
+        # moment such a market appears in the live universe it is pinned,
+        # so it holds sub-60s cadence across the window its pool is paid
+        # over instead of rotating for its first hour.
+        live_programs = sorted(
+            {str(t.get("slug")) for t in universe
+             if str(t.get("slug")) in program_slugs})
+        selected, selection_diag = select_for_poll(
+            universe, cap, cycle, pins=priority_pins(live_programs))
         return selected, {
             **live_diag,
             **selection_diag,
             "source_mode": "v1_live_sports_authoritative",
             "incentive_only_admitted": 0,
+            "incentive_programs_known": len(program_slugs),
+            "incentive_programs_live": live_programs,
+            "incentive_autopin": incentive_autopin_enabled(),
         }
 
     fallback, fallback_diag = _legacy_targets(
         leagues, prefixes, incentives, include_inc)
-    selected, selection_diag = select_for_poll(fallback, cap, cycle,
-                                               pins=priority_pins())
+    live_programs = sorted(
+        {str(t.get("slug")) for t in fallback
+         if str(t.get("slug")) in program_slugs})
+    selected, selection_diag = select_for_poll(
+        fallback, cap, cycle, pins=priority_pins(live_programs))
     return selected, {
         **live_diag,
         **fallback_diag,
@@ -317,6 +360,9 @@ def discover_poll_targets(incentives: dict, include_inc: bool, cap: int,
         "source_mode": "legacy_visible_fallback",
         "incentive_only_admitted": sum(
             1 for r in selected if r.get("why") == "active_liquidity_program"),
+        "incentive_programs_known": len(program_slugs),
+        "incentive_programs_live": live_programs,
+        "incentive_autopin": incentive_autopin_enabled(),
     }
 
 

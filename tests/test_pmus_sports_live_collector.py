@@ -239,3 +239,58 @@ def test_default_interleave_keeps_pins_well_inside_the_60s_gap_rule():
     # breadth is not sacrificed for cadence
     assert len(set(seq)) == 64
     assert sum(1 for s in seq if s == "m10") == 1
+
+
+# ---- live incentive-program markets are pinned as they go live ----
+
+def test_live_program_market_is_pinned_the_moment_it_appears(monkeypatch):
+    """Every active PMUS liquidityProgram observed sits on cfb moneyline and
+    only earns while its game is in play. A program market that lands in the
+    rotating surplus trips the 60s gap rule for its first hour -- exactly the
+    window the pool pays over."""
+    monkeypatch.delenv(live.PIN_SLUGS_ENV, raising=False)
+    live._auto_pins = []
+    pins = live.priority_pins(["aec-cfb-ala-uk-2026-09-12"])
+    assert [p["slug"] for p in pins] == ["aec-cfb-ala-uk-2026-09-12"]
+    assert pins[0]["reason"] == "live_incentive_program"
+
+
+def test_operator_pins_still_outrank_program_pins(monkeypatch):
+    monkeypatch.setenv(live.PIN_SLUGS_ENV, "op-1")
+    live._auto_pins = ["auto-1"]
+    pins = live.priority_pins(["prog-1"])
+    assert [p["reason"] for p in pins] == [
+        "operator_pin", "live_incentive_program", "l5_candidate_auto_pin"]
+
+
+def test_program_autopin_respects_pin_cap_and_can_be_disabled(monkeypatch):
+    monkeypatch.delenv(live.PIN_SLUGS_ENV, raising=False)
+    monkeypatch.setenv(live.PIN_MAX_ENV, "2")
+    live._auto_pins = []
+    assert len(live.priority_pins([f"p{i}" for i in range(9)])) == 2
+    monkeypatch.setenv(live.INCENTIVE_AUTOPIN_ENV, "0")
+    assert live.priority_pins([f"p{i}" for i in range(9)]) == []
+
+
+def test_closed_program_markets_are_not_added_to_the_poll_set(monkeypatch):
+    """Pre-game program markets are closed books; pinning is about cadence
+    once live, never about polling a book that cannot trade."""
+    monkeypatch.delenv(live.PIN_SLUGS_ENV, raising=False)
+    live._auto_pins = []
+    incentives = {"programs": [
+        {"marketSlug": "aec-cfb-live-now-2026-09-05",
+         "timePeriods": [{"status": "active"}]},
+        {"marketSlug": "aec-cfb-not-started-2026-09-12",
+         "timePeriods": [{"status": "active"}]},
+    ]}
+    events = [{"slug": "ev1", "live": True, "markets": [
+        {"slug": "aec-cfb-live-now-2026-09-05"}]}]
+    monkeypatch.setattr(col, "fetch_live_events",
+                        lambda _get: (events, {"v1_live_error": None}))
+    selected, diag = live.discover_poll_targets(incentives, True, cap=8)
+    slugs = [t["slug"] for t in selected]
+    assert "aec-cfb-live-now-2026-09-05" in slugs
+    assert "aec-cfb-not-started-2026-09-12" not in slugs   # closed, not polled
+    assert diag["incentive_programs_live"] == ["aec-cfb-live-now-2026-09-05"]
+    assert diag["incentive_programs_known"] == 2
+    assert diag["pinned_markets"][0]["slug"] == "aec-cfb-live-now-2026-09-05"
