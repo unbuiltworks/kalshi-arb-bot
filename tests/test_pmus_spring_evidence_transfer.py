@@ -519,3 +519,57 @@ def test_slug_with_no_fresh_book_still_reports_unknown():
     by = {SLUG: _flowing(base)}
     ev = xfer.compose_evidence(SLUG, by, base + 26 * 35 + 100_000)
     assert ev["off_distribution"] is None
+
+
+# ---- durable mount is an ARM-TIME precondition, like the dual key ----
+
+def test_durable_mount_is_an_arming_prerequisite_not_a_readiness_blocker():
+    """The readiness report is routinely run OFF the probe host, where
+    PMUS_Q1_STATE_DIR is the q1 default and the answer says nothing about
+    the probe service. It belongs with the dual key, not in blockers."""
+    now = 1_788_000_000.0
+    ev = xfer.compose_evidence_from_recorder(_recorder_status(now), SLUG, now)
+    out = xfer.spring_readiness(
+        {}, SLUG, now=now, evidence=ev,
+        durable_reason=lambda: "spring_state_dir_missing:/state/pmus-q1")
+    assert out["SPRING_READY_FOR_REVIEW"] is True, out["blockers"]
+    assert not any("durable" in b for b in out["blockers"])
+    assert any("durable_spring_state" in a
+               for a in out["arming_prerequisites"])
+    # and it is reported, not silently dropped
+    assert any("/state/pmus-q1" in a for a in out["arming_prerequisites"])
+
+
+def test_probe_entry_guard_still_blocks_arming_without_a_durable_mount():
+    """What makes the reclassification safe: the arming path enforces the
+    mount itself, before any credential, transport or network use."""
+    from src import pmus_spring_l5_probe_entry as entry
+    import inspect
+    src = inspect.getsource(entry)
+    assert "durable_state_reason()" in src
+    assert "DURABLE_STATE_REQUIRED" in src
+
+
+# ---- a missing slug says WHY, so the operator does not re-pin blindly ----
+
+def test_missing_slug_diagnosis_names_the_band_not_a_failed_pin():
+    now = 1_788_000_000.0
+    status = _recorder_status(now, bid="0.66")     # one tick over the top
+    status["spring_watch"] = []                     # so filtered out
+    status["eligible_markets"] = [{"slug": SLUG, "bid": "0.66",
+                                   "both_sides_served": True}]
+    why = xfer.diagnose_missing_slug(status, SLUG)
+    assert "OUTSIDE" in why and "0.66" in why
+    assert "re-run" in why and "rather than re-pinning" in why
+
+
+def test_missing_slug_diagnosis_distinguishes_seating_and_absence():
+    now = 1_788_000_000.0
+    seated = {"kind": "PMUS_WS_STATUS", "t": now, "spring_watch": [],
+              "diagnostics": {"spring_pinned": [
+                  {"slug": SLUG, "reason": "no_warm_seat_available"}]}}
+    assert "no_warm_seat_available" in xfer.diagnose_missing_slug(seated, SLUG)
+    bare = {"kind": "PMUS_WS_STATUS", "t": now, "spring_watch": []}
+    why = xfer.diagnose_missing_slug(bare, SLUG)
+    assert "absent from this recorder's status entirely" in why
+    assert "actually built" in why

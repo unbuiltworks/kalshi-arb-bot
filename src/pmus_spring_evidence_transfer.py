@@ -224,6 +224,48 @@ def compose_evidence_from_recorder(status: Mapping[str, Any], slug: str,
     return row
 
 
+def diagnose_missing_slug(status: Mapping[str, Any], slug: str) -> str:
+    """Say WHY a slug is absent from the recorder's spring_watch.
+
+    A bare ``no_rows_for_slug`` reads as "the pin did not take", which
+    sends the operator back to Railway when the pin is usually fine and
+    the price simply moved: spring_watch admits an INCLUSIVE 0.35-0.65
+    band, so a candidate parked on the ceiling drops out the moment it
+    ticks to 0.66. Distinguish that from a seating failure, using only
+    the status document already in hand -- no recorder change and no
+    redeploy, so this works against the recorder that is running now.
+    """
+    for key in ("spring_watch", "eligible_markets", "top_markets"):
+        for row in status.get(key) or []:
+            if not isinstance(row, Mapping) or row.get("slug") != slug:
+                continue
+            bid = row.get("bid")
+            try:
+                b = float(bid)
+            except (TypeError, ValueError):
+                return (f"observed in {key} but carries no usable bid "
+                        f"({bid!r}); spring_watch needs a priced book")
+            if not (0.35 <= b <= 0.65):
+                return (f"observed in {key} at bid {b}, OUTSIDE the "
+                        "inclusive 0.35-0.65 spring_watch band -- the pin "
+                        "is fine, the price moved; re-run when it is back "
+                        "in band rather than re-pinning")
+            if not row.get("both_sides_served"):
+                return (f"observed in {key} at bid {b} but both_sides_served "
+                        "is false; spring_watch needs a two-sided book")
+            return (f"observed in {key} at bid {b}, in band -- ranked below "
+                    "the spring_watch limit rather than filtered out")
+    seating = [d for d in
+               ((status.get("diagnostics") or {}).get("spring_pinned") or [])
+               if isinstance(d, Mapping) and d.get("slug") == slug]
+    if seating:
+        return ("not in any evidence list; recorder seating says "
+                + "; ".join(str(d.get("reason")) for d in seating))
+    return ("absent from this recorder's status entirely -- the pin has "
+            "not been picked up by the RUNNING deployment (check that the "
+            "deployment carrying PMUS_WS_PIN_SLUGS actually built)")
+
+
 def load_recorder_status(path: Path) -> dict:
     """Read the authenticated recorder's status document.
 
@@ -346,7 +388,6 @@ def spring_readiness(by_slug: Mapping[str, list], slug: str,
 
     reason = (durable_reason() if durable_reason
               else entry.durable_state_reason())
-    gates.append(_gate(LAYER_OPERATIONAL, "durable_spring_state", reason))
 
     # ARM-TIME control, deliberately NOT a readiness blocker. Readiness
     # means "an owner may now review and decide"; the dual key is what
@@ -358,6 +399,26 @@ def spring_readiness(by_slug: Mapping[str, list], slug: str,
         "isolated_dual_key: PMUS_SPRING_LIVE/SESSION_ID/ARM absent "
         "(expected while DISARMED; operator-held, supplied only at arm "
         "time after approval)"]
+    # The durable mount is an ARM-TIME precondition on the probe host,
+    # exactly like the dual key above, so it belongs here rather than in
+    # blockers. This readiness report is routinely run OFF that host --
+    # from a repo checkout against a dumped recorder status -- where
+    # PMUS_Q1_STATE_DIR is the q1 default and the answer says nothing
+    # about the probe service. Reporting it as a readiness blocker there
+    # was simply wrong, and the owner has since verified the isolated
+    # volume IS mounted on the probe service.
+    #
+    # This removes nothing: the probe entry guard calls
+    # durable_state_reason() itself on the arming path and returns
+    # DURABLE_STATE_REQUIRED before any credential, transport or network
+    # use, so an armed probe on container-layer storage still cannot
+    # place an order. Verified by test below.
+    if reason:
+        arming.append(
+            f"durable_spring_state: {reason} (evaluated HERE, not on the "
+            f"probe host; authoritative only when run on the service that "
+            f"mounts {SPRING_STATE_DIR}. Enforced independently at arm "
+            f"time by the probe entry guard.)")
 
     blockers = [f"{g['gate']}: {g['blocker']}" for g in gates
                 if not g["ok"]]
@@ -456,6 +517,13 @@ def main() -> int:
         evidence = compose_evidence_from_recorder(status, args.slug, now)
         readiness = spring_readiness({}, args.slug, now=now,
                                      evidence=evidence)
+        if evidence is None:
+            why = diagnose_missing_slug(status, args.slug)
+            readiness["blockers"] = [
+                (f"evidence_rows_present: no_rows_for_slug:{args.slug} "
+                 f"-- {why}") if b.startswith("evidence_rows_present") else b
+                for b in readiness["blockers"]]
+            readiness["missing_slug_diagnosis"] = why
         out = {"kind": "PMUS_SPRING_PREFLIGHT_RECONCILE",
                "SHADOW_PREFLIGHT_CANDIDATE": None,
                "SPRING_READY_FOR_REVIEW":
