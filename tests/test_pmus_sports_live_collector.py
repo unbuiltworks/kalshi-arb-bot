@@ -215,3 +215,27 @@ def test_interleave_every_zero_disables_recurrence(monkeypatch):
     targets = [{"slug": f"m{i}"} for i in range(10)]
     order = live.interleaved_order(targets, ["m2"])
     assert sum(1 for t in order if t["slug"] == "m2") == 1
+
+
+def test_default_interleave_keeps_pins_well_inside_the_60s_gap_rule():
+    """The default must clear the gate it exists for, with margin.
+
+    Measured live on 2026-09-04 against the PMUS slate: every=15 left
+    pinned markets at a 56.5s median / 127s worst inter-poll gap, still
+    tripping analyze_market's 60s rule, while every=6 held them to a
+    10.5s median / 11.9s worst. Expressed here as poll-slot spacing so
+    the bound is checked without a live venue: at the ~2.3s/market
+    observed sweep rate, a <=10-slot spacing is ~23s, comfortably under
+    60s even if per-market latency doubles.
+    """
+    assert live.PIN_INTERLEAVE_DEFAULT <= 8
+    targets = [{"slug": f"m{i}"} for i in range(64)]
+    order = live.interleaved_order(targets, ["m3", "m7"],
+                                   every=live.PIN_INTERLEAVE_DEFAULT)
+    seq = [t["slug"] for t in order]
+    for pin in ("m3", "m7"):
+        pos = [i for i, s in enumerate(seq) if s == pin]
+        assert max(b - a for a, b in zip(pos, pos[1:])) <= 10, pin
+    # breadth is not sacrificed for cadence
+    assert len(set(seq)) == 64
+    assert sum(1 for s in seq if s == "m10") == 1

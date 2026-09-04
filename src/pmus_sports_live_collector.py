@@ -57,8 +57,16 @@ _auto_pins: list[str] = []              # fed from the L5 candidate path
 # poll order every PIN_INTERLEAVE_EVERY markets, making their cadence a
 # fraction of the sweep instead of equal to it. The rate plan is computed
 # on the INTERLEAVED order so the venue budget is still honoured.
+#
+# The default is 6, not 15, because 15 does not actually clear the gate it
+# exists to clear. Measured live against the PMUS slate on 2026-09-04:
+# every=15 left pinned markets at a 56.5s median and a 127s worst gap —
+# still tripping analyze_market's 60s rule — while every=6 held the same
+# markets to a 10.5s median and an 11.9s worst gap. Raising this value
+# trades pinned-market cadence for slate breadth and can silently put a
+# pinned market back over 60s, so re-measure before doing so.
 PIN_INTERLEAVE_ENV = "PMUS_PIN_INTERLEAVE_EVERY"
-PIN_INTERLEAVE_DEFAULT = 15
+PIN_INTERLEAVE_DEFAULT = 6
 
 
 def pin_interleave_every() -> int:
