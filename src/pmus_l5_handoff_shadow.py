@@ -122,6 +122,40 @@ def rank_events(rows: list, now: float,
             "model_sha": model.get("_sha256_16")}
 
 
+# Reasons that describe how much we LOOKED, not what the market IS.
+OBSERVATION_REASONS = ("flow_unmeasured_only_", "stale_cadence",
+                       "no_observations_in_window")
+
+
+def _observation_limited(reasons: list) -> bool:
+    return bool(reasons) and all(r.startswith(OBSERVATION_REASONS)
+                                 for r in reasons)
+
+
+def pin_recommendations(ranking: Mapping[str, Any]) -> list:
+    """Markets whose ONLY blockers are observation blockers.
+
+    These are not rejected markets -- they are markets the rotation never
+    gave enough continuity to judge. Discarding them silently would let
+    the probe conclude "nothing qualifies" when the truthful statement is
+    "nothing was watched closely enough to qualify". Pin these and ask
+    again.
+    """
+    out = []
+    for e in ranking.get("events") or []:
+        for m in e.get("markets") or []:
+            if m["executable"] or not _observation_limited(m["reasons"]):
+                continue
+            out.append({"slug": m["slug"], "event_slug": e["event_slug"],
+                        "similarity": m["similarity"],
+                        "in_distribution": m["in_distribution"],
+                        "observations": m.get("observations"),
+                        "blocked_only_by": m["reasons"]})
+    out.sort(key=lambda m: (m["in_distribution"], m["similarity"],
+                            m["observations"] or 0), reverse=True)
+    return out
+
+
 def select_event(ranking: Mapping[str, Any]) -> dict:
     """Exactly one event, or a refusal naming every blocker. Fail closed:
     an event with no executable market is never selected, because the
@@ -254,6 +288,7 @@ def run(root: Path, hours: float = 1.0, now: Optional[float] = None,
     model = pv2.load_v2()
     ranking = rank_events(rows, now, model)
     choice = select_event(ranking)
+    pins = pin_recommendations(ranking)
 
     session: Optional[dict] = None
     if choice.get("selected"):
@@ -285,20 +320,27 @@ def run(root: Path, hours: float = 1.0, now: Optional[float] = None,
         },
         "ranking": ranking,
         "selection": choice,
+        "pin_recommendations": pins[:12],
+        "observation_limited_markets": len(pins),
         "session": session,
-        "submission_boundary": submission_boundary(choice, session),
+        "submission_boundary": submission_boundary(choice, session, pins),
         "realized_pnl": None,
         "labels": ho.LABELS,
     }
 
 
 def submission_boundary(choice: Mapping[str, Any],
-                        session: Optional[Mapping[str, Any]]) -> dict:
+                        session: Optional[Mapping[str, Any]],
+                        pins: Optional[list] = None) -> dict:
     """What is still missing before an owner could arm this. Fail closed:
     the default answer is NOT_READY and every blocker is named."""
     blockers = list(choice.get("blockers") or [])
     if not choice.get("selected"):
         blockers.append("no_executable_event_selected")
+        if pins:
+            # distinguish "nothing qualifies" from "nothing was watched"
+            blockers.append(
+                f"observation_limited_candidates_unpinned:{len(pins)}")
     if session is not None:
         acts = [a for a in session["actions"]
                 if a["refuse_reason"] is None]

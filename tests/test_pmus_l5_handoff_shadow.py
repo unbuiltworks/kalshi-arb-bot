@@ -222,3 +222,54 @@ def test_similarity_is_model_support_not_a_tight_spread():
     w = sh.rank_events(wide, T0 + 240)["events"][0]["best_similarity"]
     t = sh.rank_events(tight, T0 + 240)["events"][0]["best_similarity"]
     assert w == t
+
+
+# ---- observation limits are not market verdicts ----
+
+def test_flow_is_unmeasured_not_thin_when_we_barely_looked():
+    """One rotation visit yields zero inferred trades by construction --
+    volume-delta inference needs consecutive snapshots. Reporting that as
+    thin flow asserts a market does not trade when we did not look."""
+    rows = _tape(n=2, step=6.0)
+    obs = [r for r in rows if r["kind"] == "bbo_book"]
+    sim = ho.event_similarity(obs, T0 + 12)
+    assert any(r.startswith("flow_unmeasured_only_") for r in sim["reasons"])
+    assert not any(r.startswith("thin_flow") for r in sim["reasons"])
+    assert sim["measurable"] is False
+
+
+def test_flow_is_judged_once_there_is_enough_to_judge():
+    rows = _tape(n=40, step=6.0)
+    obs = [r for r in rows if r["kind"] == "bbo_book"]
+    sim = ho.event_similarity(obs, T0 + 240)
+    assert sim["measurable"] is True
+    assert not any(r.startswith("flow_unmeasured") for r in sim["reasons"])
+
+
+def test_an_unwatched_candidate_becomes_a_pin_recommendation():
+    """A market blocked ONLY by how little we watched it must surface as
+    something to pin, not vanish into 'nothing qualifies'."""
+    rows = _tape(n=2, step=6.0)
+    rank = sh.rank_events(rows, T0 + 12)
+    pins = sh.pin_recommendations(rank)
+    assert [p["slug"] for p in pins] == ["mkt-a"]
+    assert pins[0]["blocked_only_by"]
+
+
+def test_a_genuinely_unsuitable_market_is_not_a_pin_recommendation():
+    """More observation cannot fix an off-distribution state or a price
+    outside the band, so those must never be recommended for pinning."""
+    rows = _tape(n=2, step=6.0)
+    for r in rows:
+        if r["kind"] == "bbo_book":
+            r["bid"], r["ask"], r["last_trade_px"] = "0.0200", "0.0300", "0.02"
+    rank = sh.rank_events(rows, T0 + 12)
+    assert sh.pin_recommendations(rank) == []
+
+
+def test_boundary_says_unwatched_rather_than_nothing_qualifies():
+    out = sh.submission_boundary(
+        {"selected": None, "blockers": ["thin_flow"]}, None,
+        pins=[{"slug": "mkt-a"}])
+    assert any(b.startswith("observation_limited_candidates_unpinned")
+               for b in out["blockers"])

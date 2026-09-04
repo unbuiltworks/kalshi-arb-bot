@@ -50,6 +50,10 @@ DAILY_REALIZED_LOSS_STOP = D("-1.00")
 FRESH_STATE_MAX_AGE_S = 120.0
 MIN_REEVALUATION_GAP_S = 10.0
 
+# Volume-delta inference needs consecutive snapshots; below this many
+# observations a market's flow is UNMEASURED, never measured as zero.
+MIN_OBS_TO_MEASURE_FLOW = 6
+
 # Execution/risk constraint ONLY -- never an entry condition.
 PAIR_RISK_BOUND = l5d.hard_pair_bound()      # 0.99, >=1c after known fees
 
@@ -116,10 +120,22 @@ def event_similarity(obs: list, now: float,
     out["bid"], out["ask"], out["spread"] = str(b), str(k), str(spread)
     if not (l5d.D("0.35") <= b <= l5d.D("0.65")):
         out["reasons"].append(f"outside_observation_band:{b}")
-    if (a.get("inferred_trades") or 0) < 10:
-        out["reasons"].append(f"thin_flow:{a.get('inferred_trades')}")
-    if a.get("two_sided_inferred_flow") is not True:
-        out["reasons"].append("one_directional_flow")
+    # Flow is inferred from volume deltas BETWEEN consecutive snapshots,
+    # so a market the rotation visited once necessarily reads zero trades.
+    # Calling that "thin flow" asserts the market does not trade when we
+    # simply did not look -- the same error that once made a whole prop
+    # tail read as dead. Below the measurement floor the honest answer is
+    # that flow is unmeasured, and the market is unobserved, not bad.
+    n_obs = a.get("observations") or 0
+    if n_obs < MIN_OBS_TO_MEASURE_FLOW:
+        out["reasons"].append(f"flow_unmeasured_only_{n_obs}_observations")
+        out["measurable"] = False
+    else:
+        out["measurable"] = True
+        if (a.get("inferred_trades") or 0) < 10:
+            out["reasons"].append(f"thin_flow:{a.get('inferred_trades')}")
+        if a.get("two_sided_inferred_flow") is not True:
+            out["reasons"].append("one_directional_flow")
     if (a.get("collector_gaps") or 0) > 0:
         out["reasons"].append(f"stale_cadence:{a.get('collector_gaps')}")
     if not out["in_distribution"]:
