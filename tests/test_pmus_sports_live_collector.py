@@ -323,3 +323,73 @@ def test_program_pin_actually_recurs_in_the_poll_order(monkeypatch):
     pos = [i for i, s in enumerate(order) if s == "aec-cfb-live-2026-09-05"]
     assert len(pos) >= 10, f"program pin polled only {len(pos)}x per sweep"
     assert max(b - a for a, b in zip(pos, pos[1:])) <= 10
+
+
+# ---- prop tail must not starve the markets that actually trade ----
+
+def _mkt(slug, prop, bid, ask, vol=None, liq=None):
+    return {"slug": slug, "event_slug": "ev", "prop": prop,
+            "market_meta": {"bestBidQuote": {"value": str(bid)},
+                            "bestAskQuote": {"value": str(ask)},
+                            "volume24hr": vol, "liquidity": liq}}
+
+
+def test_moneyline_outranks_dead_props_when_volume_metadata_is_null():
+    """Measured live: one MLB doubleheader was 349 of 473 live markets,
+    almost all props at a 0.01 bid, all serving volume24hr=null. The
+    volume terms collapsed to zero, ranking went arbitrary, and 29 of the
+    event's 30 seats went to dead props while its moneyline -- 0.4750,
+    half-cent spread, ~629k shares/hour -- got one."""
+    money = _mkt("aec-mlb-det-cle", False, 0.4750, 0.4800)
+    dead = _mkt("astatc-mlb-det-cle-hr-x-gte1", True, 0.0100, 0.0200)
+    assert live._market_score(money) > live._market_score(dead)
+    # and the gap is decisive, not marginal
+    assert live._market_score(money) - live._market_score(dead) > 50.0
+
+
+def test_out_of_band_touch_is_penalised_but_never_excluded():
+    """A 0.01 prop cannot pass the 35-65 observation band, so it should
+    not consume budget ahead of markets that can -- but breadth is
+    preserved: it stays in the universe and still gets polled."""
+    inband = _mkt("aec-a", False, 0.45, 0.46)
+    faroff = _mkt("aec-b", False, 0.02, 0.03)
+    assert live._market_score(inband) > live._market_score(faroff)
+    universe = [inband, faroff]
+    sel, _ = live.select_for_poll(universe, 64, cycle=0)
+    assert {t["slug"] for t in sel} == {"aec-a", "aec-b"}
+
+
+def test_top_in_band_primaries_are_pinned_for_dense_cadence(monkeypatch):
+    """Ranking first is not enough: with 64 seats over ~476 markets every
+    seat turns at sweep cadence, so a 629k-shares/hour moneyline was
+    polled about once a minute and kept tripping the 60s rule."""
+    monkeypatch.delenv(live.PIN_SLUGS_ENV, raising=False)
+    live._auto_pins = []
+    universe = [_mkt("aec-mlb-money", False, 0.45, 0.46),
+                _mkt("aec-other", False, 0.50, 0.52),
+                _mkt("astatc-prop", True, 0.01, 0.02),
+                _mkt("aec-outofband", False, 0.95, 0.96)]
+    pins = live.top_primary_pins(universe)
+    assert "aec-mlb-money" in pins
+    assert "astatc-prop" not in pins        # props never auto-pin
+    assert "aec-outofband" not in pins      # out-of-band cannot qualify
+
+
+def test_top_primary_autopin_is_bounded_and_disableable(monkeypatch):
+    monkeypatch.delenv(live.PIN_SLUGS_ENV, raising=False)
+    live._auto_pins = []
+    universe = [_mkt(f"aec-m{i}", False, 0.45, 0.46) for i in range(9)]
+    monkeypatch.setenv(live.TOP_PRIMARY_AUTOPIN_ENV, "2")
+    assert len(live.top_primary_pins(universe)) == 2
+    monkeypatch.setenv(live.TOP_PRIMARY_AUTOPIN_ENV, "0")
+    assert live.top_primary_pins(universe) == []
+
+
+def test_pin_precedence_operator_then_program_then_primary(monkeypatch):
+    monkeypatch.setenv(live.PIN_SLUGS_ENV, "op-1")
+    monkeypatch.setenv(live.PIN_MAX_ENV, "6")
+    live._auto_pins = ["l5-1"]
+    pins = live.priority_pins(["prog-1"], ["prim-1"])
+    assert [p["reason"] for p in pins] == [
+        "operator_pin", "live_incentive_program",
+        "top_in_band_primary", "l5_candidate_auto_pin"]

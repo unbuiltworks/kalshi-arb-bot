@@ -126,28 +126,76 @@ def incentive_autopin_enabled() -> bool:
         "0", "false", "no")
 
 
-def priority_pins(program_slugs: Iterable[str] = ()) -> list[dict]:
-    """Operator pins, then live incentive-program markets, then L5 ranking.
+# TOP-PRIMARY AUTO-PIN. Ranking the moneyline first is necessary but not
+# sufficient: with 64 seats over a ~476-market universe every seat still
+# turns at roughly sweep cadence, so the MLB moneyline measured at ~200k
+# shares/hour with a half-cent spread was polled about once a minute and
+# kept tripping the 60s freshness rule. Flow that dense deserves the
+# pinned lane. Bounded by the same pin_max() as every other source and
+# restricted to IN-BAND primaries, because an out-of-band moneyline
+# cannot pass the observation gate anyway.
+TOP_PRIMARY_AUTOPIN_ENV = "PMUS_TOP_PRIMARY_AUTOPIN"   # "0" disables
+TOP_PRIMARY_AUTOPIN_DEFAULT = 3
 
-    Operator intent still outranks everything. Program markets come next
-    because their earning window is bounded by the game clock, whereas the
-    L5 auto-pin ranking is advisory and re-derived every cycle.
+
+def top_primary_autopin_n() -> int:
+    raw = os.getenv(TOP_PRIMARY_AUTOPIN_ENV,
+                    str(TOP_PRIMARY_AUTOPIN_DEFAULT)).strip()
+    if raw.lower() in ("0", "false", "no"):
+        return 0
+    try:
+        return max(0, min(pin_max(), int(raw)))
+    except ValueError:
+        return TOP_PRIMARY_AUTOPIN_DEFAULT
+
+
+def top_primary_pins(universe: Iterable[Mapping[str, Any]]) -> list[str]:
+    """Highest-scoring IN-BAND primary markets from the live universe."""
+    n = top_primary_autopin_n()
+    if not n:
+        return []
+    cands = []
+    for t in universe or ():
+        if t.get("prop", False):
+            continue
+        meta = t.get("market_meta") or {}
+        bid = _number(meta.get("bestBidQuote"))
+        ask = _number(meta.get("bestAskQuote"))
+        mid = (bid + ask) / 2.0 if (bid > 0 and ask > 0 and ask >= bid) else bid
+        if not (0.35 <= mid <= 0.65):
+            continue
+        cands.append((-_market_score(t), str(t.get("slug"))))
+    cands.sort()
+    return [slug for _, slug in cands[:n]]
+
+
+def priority_pins(program_slugs: Iterable[str] = (),
+                  primary_slugs: Iterable[str] = ()) -> list[dict]:
+    """Operator pins, live incentive-program markets, top in-band
+    primaries, then the L5 candidate ranking.
+
+    Operator intent outranks everything. Program markets come next
+    because their earning window is bounded by the game clock. Top
+    primaries come before the L5 ranking because the L5 ranking can only
+    surface a market that already has enough observation to score, which
+    is precisely what a market starved of cadence does not have.
     """
     out, seen = [], set()
-    for slug in operator_pins():
-        if slug not in seen:
+
+    def add(slug, reason):
+        if slug and slug not in seen:
             seen.add(slug)
-            out.append({"slug": slug, "reason": "operator_pin"})
+            out.append({"slug": slug, "reason": reason})
+
+    for slug in operator_pins():
+        add(slug, "operator_pin")
     if incentive_autopin_enabled():
         for slug in program_slugs or ():
-            if slug not in seen:
-                seen.add(slug)
-                out.append({"slug": slug,
-                            "reason": "live_incentive_program"})
+            add(slug, "live_incentive_program")
+    for slug in primary_slugs or ():
+        add(slug, "top_in_band_primary")
     for slug in _auto_pins:
-        if slug not in seen:
-            seen.add(slug)
-            out.append({"slug": slug, "reason": "l5_candidate_auto_pin"})
+        add(slug, "l5_candidate_auto_pin")
     return out[:pin_max()]
 
 
@@ -161,27 +209,52 @@ def update_auto_pins(report: Optional[Mapping[str, Any]]) -> list[str]:
     return _auto_pins
 
 
+# Measured on the live board 2026-09-04: ONE MLB doubleheader contributed
+# 349 of 473 live markets -- almost all player props (hits/total-bases/HR
+# lines), most resting at a 0.01 bid. Those props also serve volume24hr
+# and liquidity as NULL, so the volume terms below collapse to zero and
+# ranking became effectively arbitrary: 29 of the 30 seats that event won
+# went to dead props while its moneyline -- bid 0.4750, half-cent spread,
+# ~200k shares/hour, squarely in the 35-65 band -- got exactly one.
+#
+# That is a selection defect, not a property of sports. A prop at a 0.01
+# bid cannot pass the observation band and cannot carry L5 flow, so
+# spending observation budget on it starves the markets that can. The
+# structural signals (is this the primary market; is the served touch in
+# band) therefore have to outrank absent volume metadata rather than sit
+# below it. Selection only: no gate, threshold or admission changes, and
+# the prop tail is still polled, just after the markets that can qualify.
+PRIMARY_MARKET_BONUS = 40.0
+IN_BAND_BONUS = 25.0
+DEAD_TOUCH_PENALTY = 30.0       # bid <=0.10 or >=0.90: unreachable band
+
+
 def _market_score(target: Mapping[str, Any]) -> float:
     """Cheap pre-poll L5-relevance rank from venue-served metadata only.
 
-    Volume/liquidity dominate.  A modest bonus is applied when the served
-    BBO midpoint lies in the owner's 35-65 observation band.  No missing
+    Structure first (primary market, touch in the observation band), then
+    volume/liquidity where the venue actually serves them. No missing
     field is invented and this score is selection-only, never admission.
     """
     meta = target.get("market_meta") or {}
     volume = max(_number(meta.get("volume24hr")), _number(meta.get("volume")))
     liquidity = _number(meta.get("liquidity"))
     score = math.log1p(max(volume, 0.0)) * 5.0 + math.log1p(max(liquidity, 0.0))
+
+    # a moneyline outranks a prop even when the venue serves no volume
+    if not target.get("prop", False):
+        score += PRIMARY_MARKET_BONUS
+
     bid = _number(meta.get("bestBidQuote"))
     ask = _number(meta.get("bestAskQuote"))
-    if bid > 0 and ask > 0 and ask >= bid:
-        mid = (bid + ask) / 2.0
-        spread = ask - bid
+    mid = (bid + ask) / 2.0 if (bid > 0 and ask > 0 and ask >= bid) else bid
+    if mid > 0:
         if 0.35 <= mid <= 0.65:
-            score += 6.0
-        score += max(0.0, 2.0 - 10.0 * spread)
-    elif bid > 0 and 0.35 <= bid <= 0.65:
-        score += 3.0
+            score += IN_BAND_BONUS
+        elif mid <= 0.10 or mid >= 0.90:
+            score -= DEAD_TOUCH_PENALTY
+    if bid > 0 and ask > 0 and ask >= bid:
+        score += max(0.0, 2.0 - 10.0 * (ask - bid))
     return score
 
 
@@ -334,13 +407,16 @@ def discover_poll_targets(incentives: dict, include_inc: bool, cap: int,
         live_programs = sorted(
             {str(t.get("slug")) for t in universe
              if str(t.get("slug")) in program_slugs})
+        primaries = top_primary_pins(universe)
         selected, selection_diag = select_for_poll(
-            universe, cap, cycle, pins=priority_pins(live_programs))
+            universe, cap, cycle,
+            pins=priority_pins(live_programs, primaries))
         return selected, {
             **live_diag,
             **selection_diag,
             "source_mode": "v1_live_sports_authoritative",
             "incentive_only_admitted": 0,
+            "top_in_band_primaries": primaries,
             "incentive_programs_known": len(program_slugs),
             "incentive_programs_live": live_programs,
             "incentive_autopin": incentive_autopin_enabled(),
@@ -444,7 +520,10 @@ def run(minutes: Optional[float] = None) -> int:
         # and persists between discovery cycles, exactly as `targets` does.
         program_live = list(
             (discovery_diag or {}).get("incentive_programs_live") or [])
-        pin_slugs = [p["slug"] for p in priority_pins(program_live)]
+        primary_live = list(
+            (discovery_diag or {}).get("top_in_band_primaries") or [])
+        pin_slugs = [p["slug"]
+                     for p in priority_pins(program_live, primary_live)]
         order = interleaved_order(targets, pin_slugs)
         # rate plan computed on the INTERLEAVED length so pin re-polls
         # are paid for out of the same budget, never on top of it
