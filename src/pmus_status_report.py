@@ -186,8 +186,17 @@ def analyze_market(obs: list[dict], now: float, window_s: float) -> dict:
         counts[s["status"]] = counts.get(s["status"], 0) + 1
     matched = counts.get("MATCHED", 0)
     holds = counts.get("ONE_SIDED_HOLD", 0)
-    q1_depth = bool(obs and obs[-1].get("bid_qty") and
-                    float(obs[-1]["bid_qty"]) >= 1)
+    # collector rows record the top-of-book size as bid_touch_qty
+    # (issue #167 comment 5534955417 follow-up); the historical bid_qty
+    # read matched no collector field and falsely failed q=1 depth.
+    # bid_qty stays only as a fallback for old recorded rows.
+    _bq = obs[-1].get("bid_touch_qty") if obs else None
+    if _bq is None and obs:
+        _bq = obs[-1].get("bid_qty")
+    try:
+        q1_depth = float(_bq) >= 1
+    except (TypeError, ValueError):
+        q1_depth = False
     two_sided = len(dirs) == 2
     if not trades or not q1_depth or gaps or not two_sided:
         status = "NOT_READY"
@@ -208,7 +217,9 @@ def analyze_market(obs: list[dict], now: float, window_s: float) -> dict:
             "ask_side_served_pct": round(100 * ask_served / len(obs), 1),
             "collector_gaps": gaps, "q1_depth_support": q1_depth,
             "bid": last.get("bid"), "ask": last.get("ask"),
-            "bid_touch_qty": last.get("bid_qty") or last.get("bid_touch_qty"),
+            "bid_touch_qty": (last.get("bid_touch_qty")
+                              if last.get("bid_touch_qty") is not None
+                              else last.get("bid_qty")),
             "slot_counts_theoretical": counts,
             "matched": matched, "one_sided_holds": holds,
             "theoretical_dollars_per_capital_hour": round(per_cap_hour, 4),

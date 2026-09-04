@@ -128,3 +128,36 @@ def test_report_layer_is_read_only():
     assert re.findall(r"https://", src) == []      # no network at all
     for forbidden in ("urllib", "http", "order", "cancel", "X-PM-"):
         assert forbidden not in src, forbidden
+
+
+def test_q1_depth_reads_collector_bid_touch_qty_field():
+    """Issue #167 comments 5534675078/5534766043 follow-up: the collector
+    records top-of-book size as `bid_touch_qty`, but the readiness gate
+    historically read a nonexistent `bid_qty` field — falsely failing
+    q=1 depth (and pinning live markets at NOT_READY) on every
+    collector-shaped row. The authoritative field now drives the gate;
+    `bid_qty` survives only as a fallback for old recorded rows."""
+    base = 1000.0
+    obs, cum = [], 100
+    for i in range(130):
+        o = _obs(base + i * 5, "0.48", "0.50", str(cum), "0.48",
+                 ask_missing=False)
+        del o["bid_qty"]                     # real collector shape
+        o["bid_touch_qty"] = "500"
+        if i in (4, 34, 64, 94):
+            cum += 10; o["shares_traded_cum"] = str(cum)
+            o["last_trade_px"] = "0.48"
+        if i in (20, 50, 80, 110):
+            cum += 10; o["shares_traded_cum"] = str(cum)
+            o["last_trade_px"] = "0.50"
+        obs.append(o)
+    a = rep.analyze_market(obs, base + 130 * 5, 3600)
+    assert a["q1_depth_support"] is True
+    assert a["bid_touch_qty"] == "500"
+    assert a["status"] == "Q1_GATE_CLEARED"
+    # neither field present -> depth support stays fail-closed False
+    for o in obs:
+        del o["bid_touch_qty"]
+    a2 = rep.analyze_market(obs, base + 130 * 5, 3600)
+    assert a2["q1_depth_support"] is False
+    assert a2["status"] == "NOT_READY"
