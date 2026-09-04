@@ -2,7 +2,7 @@
 
 **Purpose:** This is the first file ChatGPT/Claude should read when resuming L5 work after a new chat, context-limit error, handoff, or interruption. It is deliberately short. Do not reconstruct current state from old chat transcripts when this file plus live GitHub/Railway checks can answer it.
 
-**Snapshot:** 2026-09-03 ~21:55 America/New_York (2026-09-04 ~01:55 UTC)
+**Snapshot:** 2026-09-03 ~21:56 America/New_York (2026-09-04 ~01:56 UTC)
 
 ## Primary objective
 
@@ -18,16 +18,16 @@ Historical target: **$480/day realized net profit**. Target only; never assume a
 
 Repository: `unbuiltworks/kalshi-arb-bot`
 
-- `main` checked at `ed53f79037554c1ce24379ca140954f7d7801db1` (`ops: fail open generic deploy when Railway secrets are unset`).
-- **Active sports work:** `feature/l5-sports-live-universe-hotfix` checked at `59263edda5cd5d2865eb6c05a62167ed70560b78`.
-- Recent sports-branch work includes:
-  - authoritative all-live sports collector;
-  - tests locking full live-sports coverage and stale-incentive exclusion;
-  - full-slate prefix default in the deployment wrapper;
-  - rotating-surplus identification by selection order.
-- Historical/canonical L5 research branch: `feature/l5-canonical`, checked at `c6b357675410a988a0d906438d4e875eb6320964`.
+- **Active operational sports line:** `feature/l5-transfer-backtest` at `365bd1ac64871d97e7f0938de611970fd72a7cd2`.
+- `feature/l5-sports-live-universe-hotfix` at `59263edda5cd5d2865eb6c05a62167ed70560b78` is the merge base of that current line; `feature/l5-transfer-backtest` is **2 commits ahead**.
+- Those two follow-up commits:
+  - raised the authoritative live-sports runner default to **64 seats** while preserving explicit `PMUS_MAX_MARKETS` as the operator rate-safety knob and kept everything **DISARMED**; suite reported **475 green**;
+  - aligned the deploy-safety workflow with the authoritative `src.pmus_sports_live_collector` CMD and isolation invariant.
+- Earlier sports work on the lineage includes the authoritative all-live sports collector, full live-sports coverage/stale-incentive exclusion tests, full-slate deployment behavior, and rotating-surplus identification by selection order.
+- Historical/canonical L5 research branch: `feature/l5-canonical` at `c6b357675410a988a0d906438d4e875eb6320964` when last checked.
 - GitHub issue **#167** remains the canonical consolidation mission.
-- `L5_STATUS.md` on the canonical/sports lineage contains the deeper historical facts, behavioral reconstruction, replay coverage, and strict profit-accounting definitions. It is useful background but is older than this operational snapshot.
+- `L5_STATUS.md` on the canonical lineage contains deeper historical facts, behavioral reconstruction, replay coverage, and strict profit-accounting definitions. It is useful background but is older than this operational snapshot.
+- Always re-fetch `main` and the active branch head before making changes; this file is a pointer, not a substitute for current Git state.
 
 ## Current Railway state
 
@@ -41,18 +41,20 @@ Relevant service snapshot:
 - `pmus-ws-evidence-recorder` — **SUCCESS**
 - `pmus-spring-l5-probe` — **SUCCESS**
 - `pmus-q1-executor` — **SUCCESS deployment**
-- `pmus-sports-forward-collector` — **DEPLOYING** at snapshot time
+- `pmus-sports-forward-collector` — **SUCCESS**, deployment `8e4df7f1-38b3-44aa-85e9-a09b7fa02948`, from `feature/l5-transfer-backtest@365bd1ac`
 
-**Important:** Railway deployment success does NOT mean live trading is armed. Before any order-capable action, separately verify arming keys, current account/exposure, durable state, risk caps, and exact executor preflight. Never infer `armed` from `SUCCESS`.
+The authoritative sports collector deployment is therefore no longer the blocker it was at the start of this snapshot.
+
+**Important:** Railway deployment success does NOT mean live trading is armed. Current sports collector commit explicitly says everything stays **DISARMED**. Before any future order-capable action, separately verify arming keys, current account/exposure, durable state, risk caps, and exact executor preflight. Never infer `armed` from `SUCCESS`.
 
 ## Current bottleneck
 
-The working hypothesis is that the sports bottleneck is **market discovery / universe coverage / evidence capture / readiness logic**, not absence of live sports markets. The current sports hotfix is aimed directly at that.
+The sports bottleneck has moved from deployment toward **verifying actual live-universe capture and evidence quality/readiness**. The collector now has the authoritative all-live sports path with a >=64 default market capacity.
 
 Near-term sequence:
 
-1. finish/verify full live sports ingestion;
-2. confirm the recorder sees the actual live universe and preserves the required book/flow/evidence state;
+1. verify the live collector is actually seeing the broad current sports slate, not merely running successfully;
+2. confirm the evidence recorder preserves required book/flow/state for those markets;
 3. rank markets using L5-relevant conditions (two-sided flow, spread/depth, movement, time remaining, executable economics);
 4. shadow the L5-style policy across eligible sports;
 5. compare action-by-action against the behavioral model where applicable;
