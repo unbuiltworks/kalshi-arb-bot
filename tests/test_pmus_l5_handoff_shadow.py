@@ -296,3 +296,28 @@ def test_boundary_does_not_invent_a_legging_blocker_when_flat():
                                  session)
     assert not any(b.startswith("event_ends_legged") for b in out["blockers"])
     assert "model_never_emitted_a_completion_in_window" not in out["blockers"]
+
+
+def test_residual_exposure_is_quantified_not_merely_flagged():
+    """"Ends legged" is not actionable on its own -- the owner needs the
+    dollars at risk if the unmatched units settle to zero."""
+    rows = _tape(n=60, step=6.0)
+    obs = [r for r in rows if r["kind"] == "bbo_book"]
+    res = sh.shadow_market(obs, T0 + 360)
+    assert res["inventory"].residual != 0, "fixture must end legged"
+    cost = res["residual_cost_theoretical"]
+    assert cost > 0
+    assert cost <= ho.MAX_EVENT_NOTIONAL
+
+
+def test_a_flat_session_reports_no_residual_exposure():
+    inv = l5d.Inventory()
+    assert inv.residual == 0
+    out = sh.submission_boundary({"selected": "e", "blockers": []},
+                                 {"actions": [{"refuse_reason": None,
+                                               "fill": {"filled": True},
+                                               "predicted_action":
+                                                   {"relation": "complete"}}],
+                                  "ended_legged": False,
+                                  "residual_uncompleted": 0})
+    assert "owner_decision_needed_hold_vs_clear_residual" not in out["blockers"]

@@ -217,6 +217,7 @@ def shadow_market(obs: list, now: float,
     rows: list = []
     spent = D("0")
     last_rel = ""
+    last_qty = D("0")
     clock = st._ts(obs[0]) if obs else None
     if clock is None:
         return {"actions": [], "inventory": inv, "spent": spent,
@@ -269,6 +270,7 @@ def shadow_market(obs: list, now: float,
         fill = _simulate_fill(trades, clock, px, bool(plan["_side_yes"]))
         if fill["filled"]:
             inv.record(bool(plan["_side_yes"]), px)
+            last_qty = qty
             spent += notional
             last_rel = str(plan.get("relation") or last_rel)
         rows.append(ho.audit_row(clock, state, plan, None, fill, inv))
@@ -276,8 +278,18 @@ def shadow_market(obs: list, now: float,
         if clock > (st._ts(obs[-1]) or 0.0):
             break
 
+    # Worst case on an event that ends legged: the unmatched units settle
+    # to zero. Their cost is what we paid for them -- bounded, but real,
+    # and it is the whole exposure of a probe that never completes.
+    res_cost = D("0")
+    if inv.residual:
+        side_yes = inv.residual > 0
+        avg = inv.avg(side_yes)
+        if avg is not None:
+            res_cost = ho.action_notional(avg * abs(inv.residual), last_qty)
     return {"actions": rows, "inventory": inv, "spent": spent,
-            "trades_inferred": len(trades)}
+            "trades_inferred": len(trades),
+            "residual_cost_theoretical": res_cost}
 
 
 def run(root: Path, hours: float = 1.0, now: Optional[float] = None,
@@ -298,6 +310,8 @@ def run(root: Path, hours: float = 1.0, now: Optional[float] = None,
                                     res["inventory"], res["spent"])
         session["market_slug"] = choice["market"]
         session["trades_inferred"] = res.get("trades_inferred")
+        session["residual_cost_theoretical"] = str(
+            res.get("residual_cost_theoretical"))
 
     return {
         "kind": "PMUS_L5_HANDOFF_SHADOW",
@@ -354,6 +368,13 @@ def submission_boundary(choice: Mapping[str, Any],
             # module clears it -- the bounded residual manager must.
             blockers.append(
                 f"event_ends_legged_residual:{session['residual_uncompleted']}")
+            # NOT self-evidently a defect: L5's own measured behaviour is
+            # to hold residual to settlement and redeem ($2.18 of lifetime
+            # sells against 15,243 redeems). Owner rule R5 instead
+            # requires the residual be cleared before settlement. The two
+            # conflict, and which governs is an owner decision -- so this
+            # blocks rather than resolving itself either way.
+            blockers.append("owner_decision_needed_hold_vs_clear_residual")
         if not any(a["predicted_action"].get("relation") == "complete"
                    for a in acts):
             blockers.append("model_never_emitted_a_completion_in_window")
