@@ -201,3 +201,38 @@ credentials or transport with `DISARMED` (no `PMUS_SPRING_*` key present)
 and the container stops. `restartPolicy=NEVER` is correct for a one-shot
 bounded probe — a probe that self-resumes could re-enter a market after a
 crash with stale inventory assumptions.
+
+### The authoritative readiness one-shot (which root to point it at)
+
+`SPRING_READY_FOR_REVIEW` can only ever be true from the AUTHENTICATED
+recorder's evidence. The keyless sports collector infers trade direction
+from `lastTradePx` vs BBO rather than observing it, so a `--collector-root`
+run is pinned at `evidence_provenance: inferred` **by construction** and
+stays blocked at `EVIDENCE_PROVENANCE` no matter how strong the market
+evidence gets. Re-running it against better sports data cannot flip the
+answer; a test asserts this so the property cannot be lost.
+
+Sports-tape run — ranks candidates, never arms anything:
+
+```
+python3 -m src.pmus_spring_evidence_transfer \
+    --collector-root /state/pmus-sports --slug <SLUG>
+```
+
+Authoritative run — on the probe host, against the recorder's status:
+
+```
+python3 -m src.pmus_spring_evidence_transfer \
+    --recorder-status /state/pmus-ws/status.json --slug <SLUG>
+```
+
+Authenticated provenance is not a bypass. The recorder payload goes through
+the same entry guard as any other: price band, flow, two-sidedness,
+off-distribution, freshness, fee-safe completion, the category bar, and the
+durable mount all still fail closed on it, and the ≥1c-after-known-fees
+bound is untouched. The only thing the recorder changes is that trade
+direction is observed rather than inferred.
+
+Operator sequence for a candidate: pin the slug in `PMUS_WS_PIN_SLUGS` on
+the recorder, wait for it to appear in the recorder's `spring_watch`, then
+run the authoritative form above on the probe host.

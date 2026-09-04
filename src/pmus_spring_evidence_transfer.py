@@ -157,7 +157,72 @@ def compose_evidence(slug: str, by_slug: Mapping[str, list], now: float,
     return row
 
 
-def _probe_evidence(row: Mapping[str, Any]) -> dict:
+def compose_evidence_from_recorder(status: Mapping[str, Any], slug: str,
+                                   now: float,
+                                   model_sha: Optional[str] = None
+                                   ) -> Optional[dict]:
+    """Build the guard's evidence payload from the AUTHENTICATED recorder's
+    own status document.
+
+    This is the ONLY path allowed to claim authenticated provenance, and it
+    claims it for exactly one reason: the recorder observes trade direction
+    on the authenticated stream instead of inferring it from lastTradePx vs
+    BBO. Nothing here relabels a sports payload — the caller must hand in a
+    recorder status, and every other field still comes from the recorder's
+    own row via the guard's canonical reader, so the strict predicate,
+    freshness, band, category bar and fee-safety gates all apply unchanged.
+    """
+    row = entry.evidence_from_status(status, slug)
+    if not row:
+        return None
+    row = dict(row)
+    row["evidence_provenance"] = PROVENANCE_AUTHENTICATED
+    row["evidence_source"] = SOURCE_RECORDER
+    if row.get("action_model_sha") is None:
+        row["action_model_sha"] = model_sha
+    row["labels"] = ("OBSERVED authenticated recorder evidence; trade "
+                     "direction observed on the authenticated stream, "
+                     "not inferred")
+    row["probe_evidence"] = _probe_evidence(
+        row, source_label="recorder-sourced, authenticated provenance")
+    return row
+
+
+def load_recorder_status(path: Path) -> dict:
+    """Read the authenticated recorder's status document.
+
+    Accepts either the status JSON itself or a JSONL stream whose last
+    parseable object is the newest status, which is how the recorder
+    writes its durable heartbeat.
+    """
+    text = Path(path).read_text(encoding="utf-8").strip()
+    if not text:
+        raise ValueError(f"empty recorder status: {path}")
+    try:
+        obj = json.loads(text)
+        if isinstance(obj, Mapping):
+            return dict(obj)
+    except json.JSONDecodeError:
+        pass
+    newest = None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            cand = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(cand, Mapping):
+            newest = cand
+    if newest is None:
+        raise ValueError(f"no JSON object in recorder status: {path}")
+    return dict(newest)
+
+
+def _probe_evidence(row: Mapping[str, Any],
+                    source_label: str = "sports-sourced, inferred "
+                                        "provenance") -> dict:
     """Advisory READY_FOR_REVIEW verdict in the recorder's own shape, so
     the entry guard can validate a sports-sourced payload unchanged."""
     import os
@@ -183,7 +248,7 @@ def _probe_evidence(row: Mapping[str, Any]) -> dict:
     return {"status": ("READY_FOR_REVIEW" if not reasons
                        else "INSUFFICIENT_EVIDENCE"),
             "reasons": reasons, "min_completions_required": floor,
-            "labels": "ADVISORY; sports-sourced, inferred provenance"}
+            "labels": f"ADVISORY; {source_label}"}
 
 
 def _gate(layer: str, name: str, blocker: Optional[str]) -> dict:
@@ -195,14 +260,23 @@ def spring_readiness(by_slug: Mapping[str, list], slug: str,
                      now: Optional[float] = None,
                      model_sha: Optional[str] = None,
                      durable_reason=None,
-                     off_distribution: Optional[bool] = None) -> dict:
-    """The binary answer, with every blocker named."""
+                     off_distribution: Optional[bool] = None,
+                     evidence: Optional[Mapping[str, Any]] = None) -> dict:
+    """The binary answer, with every blocker named.
+
+    `evidence` lets a caller supply an already-composed payload — the
+    authenticated recorder path uses it. When omitted the payload is
+    composed from the keyless sports tape, which is permanently
+    `inferred` and therefore permanently blocked at the provenance gate.
+    Every other gate runs identically on either payload.
+    """
     now = time.time() if now is None else now
     gates: list[dict] = []
-    evidence = compose_evidence(slug, by_slug, now, model_sha=model_sha,
-                                off_distribution=off_distribution)
+    if evidence is None:
+        evidence = compose_evidence(slug, by_slug, now, model_sha=model_sha,
+                                    off_distribution=off_distribution)
 
-    gates.append(_gate(LAYER_REPLICATION, "sports_rows_present",
+    gates.append(_gate(LAYER_REPLICATION, "evidence_rows_present",
                        None if evidence else f"no_rows_for_slug:{slug}"))
     if evidence:
         gates.append(_gate(
@@ -328,7 +402,31 @@ def main() -> int:
                     help="market to test; default = freshest shadow "
                          "preflight candidate")
     ap.add_argument("--hours", type=float, default=2.0)
+    ap.add_argument("--recorder-status", default="",
+                    help="path to the AUTHENTICATED recorder's status "
+                         "document (e.g. /state/pmus-ws/status.json). "
+                         "Requires --slug. This is the only mode that can "
+                         "satisfy the provenance gate: the keyless "
+                         "collector infers trade direction, so a "
+                         "--collector-root run is permanently blocked at "
+                         "EVIDENCE_PROVENANCE no matter how strong the "
+                         "market evidence gets.")
     args = ap.parse_args()
+    if args.recorder_status:
+        if not args.slug:
+            ap.error("--recorder-status requires --slug")
+        now = time.time()
+        status = load_recorder_status(Path(args.recorder_status))
+        evidence = compose_evidence_from_recorder(status, args.slug, now)
+        readiness = spring_readiness({}, args.slug, now=now,
+                                     evidence=evidence)
+        out = {"kind": "PMUS_SPRING_PREFLIGHT_RECONCILE",
+               "SHADOW_PREFLIGHT_CANDIDATE": None,
+               "SPRING_READY_FOR_REVIEW":
+                   readiness["SPRING_READY_FOR_REVIEW"],
+               "spring_readiness": readiness, "labels": LABELS}
+        print(json.dumps(out, indent=1, default=str))
+        return 0
     by_slug = load_collector_rows(Path(args.collector_root), args.hours)
     if args.slug:
         out = spring_readiness(by_slug, args.slug)

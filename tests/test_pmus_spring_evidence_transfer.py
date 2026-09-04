@@ -351,3 +351,101 @@ def test_dual_key_is_an_arm_time_step_not_a_readiness_blocker():
     assert not any("dual_key" in b for b in r["blockers"])
     # the session's own arming predicate is untouched
     assert xfer.session.armed() is False
+
+
+# ---- provenance: the recorder path is the ONLY authenticated one ----
+
+def _recorder_status(now, slug=SLUG, bid="0.48", trades=26,
+                     completions=3, markets=2, bar_met=True):
+    """The authenticated recorder's status shape, as the guard reads it."""
+    return {
+        "kind": "PMUS_WS_STATUS", "t": now,
+        "spring_watch": [{
+            "slug": slug, "bid": bid, "trades_1h": trades,
+            "two_sided_trades": True, "off_distribution": False,
+            "spring_pair_target": "0.98", "spring_matched_slots": 2,
+            "spring_repeated_completion": True,
+            "spring_slot_counts_theoretical": {"SPRING_MATCHED": 2},
+            "spring_evaluable_slots": 3, "spring_matched_fraction": 0.67,
+            "spring_pair_costs": ["0.9800", "0.9800"],
+            "spring_fee_safe_completions": 2,
+            "spring_evidence_missing": [],
+            "spring_category": "atp",
+            "spring_category_evidence": {
+                "completions_60m": completions,
+                "distinct_markets_60m": markets,
+                "markets": [slug, SIB][:max(1, markets)],
+                "bar_met": bar_met},
+            "spring_category_bar_met": bar_met,
+            "l5_shadow": {"off_distribution": False},
+        }],
+    }
+
+
+def test_sports_tape_can_never_claim_authenticated_provenance():
+    """The keyless collector infers direction, so no amount of market
+    evidence may flip the provenance gate on that path."""
+    now = 1_788_000_000.0
+    by = {SLUG: _flowing(now - 900)}
+    ev = xfer.compose_evidence(SLUG, by, now, off_distribution=False)
+    assert ev["evidence_provenance"] == xfer.PROVENANCE_INFERRED
+    assert ev["evidence_source"] == xfer.SOURCE_SPORTS
+    out = xfer.spring_readiness(by, SLUG, now=now, off_distribution=False,
+                                durable_reason=lambda: None)
+    assert out["SPRING_READY_FOR_REVIEW"] is False
+    assert any("authenticated_source_required" in b for b in out["blockers"])
+    assert out["layers"][xfer.LAYER_PROVENANCE]["ok"] is False
+
+
+def test_recorder_status_satisfies_the_provenance_gate():
+    now = 1_788_000_000.0
+    ev = xfer.compose_evidence_from_recorder(_recorder_status(now), SLUG, now)
+    assert ev["evidence_provenance"] == xfer.PROVENANCE_AUTHENTICATED
+    assert ev["evidence_source"] == xfer.SOURCE_RECORDER
+    out = xfer.spring_readiness({}, SLUG, now=now, evidence=ev,
+                                durable_reason=lambda: None)
+    assert out["layers"][xfer.LAYER_PROVENANCE]["ok"] is True, out["blockers"]
+    assert out["SPRING_READY_FOR_REVIEW"] is True, out["blockers"]
+
+
+def test_recorder_path_still_enforces_every_other_gate():
+    """Authenticated provenance is not a bypass: band, flow, category bar
+    and off-distribution still fail closed on the recorder payload."""
+    now = 1_788_000_000.0
+    for kw, expect in (({"bid": "0.83"}, "outside_band"),
+                       ({"trades": 2}, "thin_flow"),
+                       ({"completions": 1, "markets": 1, "bar_met": False},
+                        "category")):
+        status = _recorder_status(now, **kw)
+        ev = xfer.compose_evidence_from_recorder(status, SLUG, now)
+        assert ev["evidence_provenance"] == xfer.PROVENANCE_AUTHENTICATED
+        out = xfer.spring_readiness({}, SLUG, now=now, evidence=ev,
+                                    durable_reason=lambda: None)
+        assert out["SPRING_READY_FOR_REVIEW"] is False, (kw, out["blockers"])
+        assert any(expect in b for b in out["blockers"]), (kw, out["blockers"])
+    # a stale recorder payload is refused on freshness alone
+    ev = xfer.compose_evidence_from_recorder(
+        _recorder_status(now - 86_400), SLUG, now)
+    out = xfer.spring_readiness({}, SLUG, now=now, evidence=ev,
+                                durable_reason=lambda: None)
+    assert out["SPRING_READY_FOR_REVIEW"] is False
+    assert any("stale" in b for b in out["blockers"]), out["blockers"]
+
+
+def test_recorder_status_absent_slug_fails_closed():
+    now = 1_788_000_000.0
+    assert xfer.compose_evidence_from_recorder(
+        _recorder_status(now), "aec-atp-nobody-here-2026-09-04", now) is None
+    out = xfer.spring_readiness({}, "aec-atp-nobody-here-2026-09-04",
+                                now=now, evidence=None,
+                                durable_reason=lambda: None)
+    assert out["SPRING_READY_FOR_REVIEW"] is False
+
+
+def test_load_recorder_status_reads_json_and_jsonl_tail(tmp_path):
+    doc = tmp_path / "status.json"
+    doc.write_text('{"kind": "PMUS_WS_STATUS", "t": 1}', encoding="utf-8")
+    assert xfer.load_recorder_status(doc)["t"] == 1
+    stream = tmp_path / "status.jsonl"
+    stream.write_text('{"t": 1}\nnot json\n{"t": 2}\n', encoding="utf-8")
+    assert xfer.load_recorder_status(stream)["t"] == 2
