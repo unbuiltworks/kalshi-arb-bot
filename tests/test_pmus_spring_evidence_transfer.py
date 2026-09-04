@@ -335,3 +335,19 @@ def test_hardcoded_yes_cannot_reenter_either_call_site():
     for fn in (l5d.decide_market,):
         body = inspect.getsource(fn)
         assert "side_yes = (" not in body
+
+
+def test_dual_key_is_an_arm_time_step_not_a_readiness_blocker():
+    """Readiness means 'an owner may now review and decide'. The dual key
+    is what the owner supplies AFTER deciding, so counting it as a
+    readiness blocker would make SPRING_READY_FOR_REVIEW unreachable in
+    the DISARMED state the review must happen in. It is reported
+    separately and still gates actual arming in the session/entry guard."""
+    base = 1_000_000.0
+    r = xfer.spring_readiness({SLUG: _flowing(base)}, SLUG,
+                              now=base + 26 * 35 + 30,
+                              durable_reason=lambda: None)
+    assert any("isolated_dual_key" in a for a in r["arming_prerequisites"])
+    assert not any("dual_key" in b for b in r["blockers"])
+    # the session's own arming predicate is untouched
+    assert session.armed() is False

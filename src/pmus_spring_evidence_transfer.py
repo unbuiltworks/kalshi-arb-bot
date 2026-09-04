@@ -237,11 +237,17 @@ def spring_readiness(by_slug: Mapping[str, list], slug: str,
     reason = (durable_reason() if durable_reason
               else entry.durable_state_reason())
     gates.append(_gate(LAYER_OPERATIONAL, "durable_spring_state", reason))
-    gates.append(_gate(
-        LAYER_OPERATIONAL, "isolated_dual_key_armed",
-        None if session.armed() else
-        "PMUS_SPRING_LIVE/SESSION_ID/ARM absent (expected while DISARMED; "
-        "operator-held, supplied only at arm time)"))
+
+    # ARM-TIME control, deliberately NOT a readiness blocker. Readiness
+    # means "an owner may now review and decide"; the dual key is what
+    # the owner supplies AFTER deciding. Counting it here would make
+    # SPRING_READY_FOR_REVIEW unreachable while DISARMED, which is the
+    # exact state the review is supposed to happen in. The key still
+    # gates actual arming inside the session and entry guard, untouched.
+    arming = [] if session.armed() else [
+        "isolated_dual_key: PMUS_SPRING_LIVE/SESSION_ID/ARM absent "
+        "(expected while DISARMED; operator-held, supplied only at arm "
+        "time after approval)"]
 
     blockers = [f"{g['gate']}: {g['blocker']}" for g in gates
                 if not g["ok"]]
@@ -258,6 +264,7 @@ def spring_readiness(by_slug: Mapping[str, list], slug: str,
         "slug": slug,
         "SPRING_READY_FOR_REVIEW": not blockers,
         "blockers": blockers,
+        "arming_prerequisites": arming,
         "layers": layers,
         "gates": gates,
         "evidence": evidence,
