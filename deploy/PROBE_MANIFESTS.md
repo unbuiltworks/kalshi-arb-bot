@@ -101,3 +101,40 @@ Probe mechanics (one campaign):
 Whichever lane clears first uses its manifest verbatim; the other keeps
 collecting. This file is configuration-as-documentation only — nothing
 here arms, and no credentials appear anywhere in this repo.
+
+## Lane C — PMUS spring L5 probe (`pmus-spring-l5-probe`), DISARMED
+
+Issue #167 comment 5540937360 item 4. Repo-side statement of the exact
+deployment requirement; this file is asserted by
+`tests/test_pmus_spring_evidence_transfer.py` so it cannot drift from
+the image.
+
+| requirement | value | why |
+|---|---|---|
+| image | `deploy/pmus_spring_l5/Dockerfile` | isolated from recorder/collector |
+| CMD | `python3 -m src.pmus_spring_l5_probe_entry` | guard, not the session directly |
+| `PMUS_SERVICE_ROLE` | `spring-l5-probe` | baked tripwire; mismatch exits 64 |
+| `PMUS_Q1_STATE_DIR` | `/state/pmus-spring` | baked in the image ENV |
+| **durable volume** | **mount a volume at `/state/pmus-spring`** | **NOT YET ATTACHED on Railway** |
+| restart policy | `NEVER` | a probe must never self-resume |
+| arming vars | none present | operator-held dual key, arm time only |
+
+**The mount is a hard precondition, not a nicety.** `durable_state_reason()`
+requires `/state/pmus-spring` to be a real writable OS mount point, so an
+armed session on container-layer storage returns `STATE_NOT_DURABLE` and
+performs no network call. The ledger and cumulative-notional state live
+there; without the mount, a container replacement silently resets the
+$0.05 cumulative cap.
+
+**Do not reuse another service's volume.** `/state/pmus-ws` belongs to the
+authenticated recorder and `/state/pmus-sports` to the keyless collector;
+sharing either would let one service's rotation truncate the probe's
+ledger.
+
+Operator actions before any q=1 probe:
+1. attach an isolated volume at `/state/pmus-spring`;
+2. corroborate the candidate market in the authenticated recorder's
+   `spring_watch` (the keyless sports tape infers trade direction and is
+   provenance-blocked for arming on its own);
+3. supply the `PMUS_SPRING_*` dual key plus the strict-evidence and
+   category assertions at arm time.

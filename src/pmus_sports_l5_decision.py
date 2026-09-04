@@ -49,6 +49,15 @@ SPORTS_TTE_DEFAULT_S = 1e9          # in-game sports: no settlement clock
 FRESH_BOOK_TTL_S = 120.0            # newest row must be this fresh
 DECISION_MIN_GAP_S = 30.0           # bounded action cadence
 MAX_ACTIONS = 12
+# Bounded one-sided exposure (issue #167 comment 5540937360 item 7). The
+# frozen model emits a RELATION, never a side and never a size, so an
+# unbounded replay could stack arbitrary one-sided inventory that the
+# live executor would refuse. Live binds tighter still: the spring
+# session caps cumulative OPEN/EXTEND notional at $0.05 and total
+# actions at 6, so this shadow cap can only ever be the looser of the
+# two — it exists so the shadow never displays behaviour the executor
+# would not take.
+MAX_RESIDUAL_UNITS = 3
 MAX_DECISION_ROWS = 8               # bounded status emission
 LABELS = ("SHADOW/THEORETICAL sequential L5 decision layer; DISARMED; "
           "no credentials or order path; fills are 'possible' upper "
@@ -146,6 +155,87 @@ def _fill_evidence(trades: list, quote_t: float, side_yes: bool,
     return None
 
 
+def open_side_yes(book: Mapping[str, Any]) -> Optional[bool]:
+    """ADAPTER CONVENTION, not a model output (issue #167 comment
+    5540937360 item 7): the frozen L5 model predicts a RELATION
+    (open/extend/complete), never which outcome to buy. Historically the
+    side came from the market, so the shadow opens the side whose maker
+    join leaves MORE headroom under the pair bound — i.e. the cheaper
+    touch. YES joins at the bid; NO joins at 1 - ask. Ties go to YES,
+    documented rather than accidental. Returns None when neither side is
+    priceable."""
+    yes_join = book.get("bid")
+    ask = book.get("ask")
+    no_join = (ONE - ask) if ask is not None else None
+    if yes_join is None and no_join is None:
+        return None
+    if no_join is None:
+        return True
+    if yes_join is None:
+        return False
+    return yes_join <= no_join
+
+
+def _touch_for(side_yes: bool, book: Mapping[str, Any]) -> Optional[D]:
+    """Maker join price on the requested side, in that side's own price."""
+    if side_yes:
+        return book.get("bid")
+    ask = book.get("ask")
+    return (ONE - ask) if ask is not None else None
+
+
+def plan_action(rel: str, inv: "Inventory",
+                book: Mapping[str, Any]) -> dict:
+    """Map a model RELATION + inventory + book into one concrete maker
+    action, or a reasoned refusal. Shared by the historical replay and
+    the live next-action so the two can never diverge.
+
+    OPEN/EXTEND join the touch on their own side; only COMPLETE prices
+    through the pair bound, because only a completion forms a pair."""
+    if rel == "sell":
+        return {"decision": "no_action", "reason": "l5_sell_is_noop"}
+    # canonical relation semantics (action_model._relation): any buy from
+    # |residual| < 1 IS an open, whatever label the model emitted
+    if inv.residual == 0:
+        rel = "open"
+
+    if rel == "complete":
+        side_yes = inv.residual < 0
+        surplus_avg = inv.avg(not side_yes)
+        if surplus_avg is None:
+            return {"decision": "no_action",
+                    "reason": "complete_without_surplus"}
+        px, econ = complement_target(surplus_avg, _touch_for(side_yes, book))
+        if px is None:
+            return {"decision": "no_action", "relation": rel, **econ}
+    else:                                        # open / extend
+        if inv.residual == 0:
+            side_yes = open_side_yes(book)
+            if side_yes is None:
+                return {"decision": "no_action",
+                        "reason": "no_priceable_side"}
+        else:
+            side_yes = inv.residual > 0          # extend the surplus side
+            if abs(inv.residual) >= MAX_RESIDUAL_UNITS:
+                return {"decision": "no_action", "relation": rel,
+                        "reason": (f"residual_cap:{abs(inv.residual)}"
+                                   f">={MAX_RESIDUAL_UNITS}")}
+        px = _touch_for(side_yes, book)
+        if px is None:
+            return {"decision": "no_action", "reason": "one_sided_book"}
+        econ = {"max_pair_cost": str(min(hard_pair_bound(),
+                                         PAIR_OBSERVATION_CAP))}
+    return {"decision": "quote", "relation": rel,
+            "side": "YES" if side_yes else "NO",
+            "target_price": str(px), "q1_size": 1,
+            "inventory_effect": ("+1 YES" if side_yes else "+1 NO"),
+            "_px": px, "_side_yes": side_yes, **econ}
+
+
+def _public(plan: Mapping[str, Any]) -> dict:
+    return {k: v for k, v in plan.items() if not k.startswith("_")}
+
+
 def _book_at(obs: list, t: float) -> Optional[dict]:
     prior = [o for o in obs if (st._ts(o) or 0) < t]
     if not prior:
@@ -189,32 +279,17 @@ def decide_market(slug: str, obs: list, now: float,
                             "decision": "no_action",
                             "reason": "v2_off_distribution"})
             continue
-        rel = prop["recommended_relation"]
-        if rel == "sell":
+        plan = plan_action(prop["recommended_relation"], inv, book)
+        if plan["decision"] != "quote":
+            actions.append({"t": round(t, 1), "state": prop["state"],
+                            **_public(plan)})
             continue
-        # canonical relation semantics (action_model._relation): any buy
-        # from |residual| < 1 IS an open, whatever the model's label
-        if inv.residual == 0:
-            rel = "open"
-        side_yes = (rel in ("open", "extend") and inv.residual >= 0) or \
-                   (rel == "complete" and inv.residual < 0)
-        if side_yes:
-            px, econ = book["bid"], {}
-        else:
-            deficit_bid = (ONE - book["ask"]) if book["ask"] else None
-            avg_s = inv.avg(True) if inv.residual > 0 else inv.avg(False)
-            px, econ = complement_target(avg_s or book["bid"], deficit_bid)
-            if px is None:
-                actions.append({"t": round(t, 1), "state": prop["state"],
-                                "decision": "no_action", **econ})
-                continue
+        px, side_yes, rel = plan["_px"], plan["_side_yes"], plan["relation"]
         ev = _fill_evidence(trades, t, side_yes, px,
                             min(t + st.SLOT_S, now))
-        act = {"t": round(t, 1), "state": prop["state"], "relation": rel,
-               "side": "YES" if side_yes else "NO",
-               "target_price": str(px), "q1_size": 1,
-               "fill_class": "possible" if ev else "no_fill",
-               **econ}
+        act = {"t": round(t, 1), "state": prop["state"],
+               **_public(plan),
+               "fill_class": "possible" if ev else "no_fill"}
         if ev:
             matched_before = inv.matched
             inv.record(side_yes, px)
@@ -240,40 +315,16 @@ def decide_market(slug: str, obs: list, now: float,
                            "reason": "v2_off_distribution",
                            "state": prop["state"]}
         else:
-            rel = prop["recommended_relation"]
-            # canonical semantics: any buy from |residual| < 1 is an open
-            if inv.residual == 0 and rel != "sell":
-                rel = "open"
-            side_yes = (rel in ("open", "extend") and inv.residual >= 0) \
-                or (rel == "complete" and inv.residual < 0)
-            if rel == "sell":
-                next_action = {"decision": "no_action",
-                               "reason": "l5_sell_is_noop"}
-            else:
-                if side_yes:
-                    px, econ = book["bid"], {
-                        "max_pair_cost": str(min(hard_pair_bound(),
-                                                 PAIR_OBSERVATION_CAP))}
-                else:
-                    deficit_bid = (ONE - book["ask"]) if book["ask"] else None
-                    avg_s = inv.avg(inv.residual > 0)
-                    px, econ = complement_target(avg_s or book["bid"],
-                                                 deficit_bid)
-                if px is None:
-                    next_action = {"decision": "no_action", **econ}
-                else:
-                    next_action = {
-                        "decision": "quote", "relation": rel,
-                        "side": "YES" if side_yes else "NO",
-                        "target_price": str(px), "q1_size": 1,
-                        "inventory_effect": ("+1 YES" if side_yes
-                                             else "+1 NO"),
-                        "state": prop["state"],
-                        "reason": (f"v2 recommends {rel} "
-                                   f"(p={prop.get('switch_complete_p') if rel == 'complete' else prop.get('persist_extend_p')}) "
-                                   "under the >=1c-after-known-fees bound"),
-                        **econ,
-                    }
+            plan = plan_action(prop["recommended_relation"], inv, book)
+            rel = plan.get("relation", prop["recommended_relation"])
+            p = (prop.get("switch_complete_p") if rel == "complete"
+                 else prop.get("persist_extend_p"))
+            next_action = {**_public(plan), "state": prop["state"]}
+            if plan["decision"] == "quote":
+                next_action["reason"] = (
+                    f"v2 recommends {rel} (p={p}) under the "
+                    ">=1c-after-known-fees bound; side chosen by cheaper "
+                    "maker touch (adapter convention, not a model output)")
     elif obs:
         next_action = {"decision": "no_action",
                        "reason": f"book_stale:{round(last_age or -1, 1)}s"}

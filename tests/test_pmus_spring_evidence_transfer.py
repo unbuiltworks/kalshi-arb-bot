@@ -1,0 +1,224 @@
+"""Sports candidate -> spring preflight reconciliation (issue #167
+comment 5540937360): binary SPRING_READY_FOR_REVIEW with named
+blockers, provenance separation, the durable-mount manifest, and the
+one-sided-YES investigation fixes."""
+from __future__ import annotations
+
+import inspect
+from datetime import datetime, timezone
+from decimal import Decimal as D
+from pathlib import Path
+
+from src import pmus_spring_evidence_transfer as xfer
+from src import pmus_sports_l5_decision as l5d
+from src import pmus_spring_shadow_replay as replay
+from src import pmus_ws_evidence_recorder_enriched as enriched
+
+SLUG = "aec-atp-yanmil-juaser-2026-09-04"
+SIB = "aec-atp-pedrma-alecan-2026-09-04"
+
+
+def _iso(ts): return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+
+
+def _obs(ts, slug=SLUG, bid="0.48", ask="0.50", cum="100", last=None):
+    return {"kind": "bbo_book", "t": _iso(ts), "slug": slug,
+            "league": "atp", "bid": bid, "ask": ask,
+            "bid_touch_qty": "500", "ask_touch_qty": "400",
+            "ask_book_missing": False, "last_trade_px": last,
+            "shares_traded_cum": cum}
+
+
+def _model():
+    full = {}
+    for band in ("p25-45c", "p45-55c", "p55-75c"):
+        for imb in ("flat", "imb1-10"):
+            for last in ("open", "extend", "complete"):
+                full[f"{band}|tte>10m|{imb}|{last}|q<5"] = {
+                    "extend|q<5": 8, "complete|q<5": 2}
+    return {"full": full, "base": {},
+            "marginal": {"extend|q<5": 5, "open|q<5": 2},
+            "cadence_modal": {}, "_sha256_16": "xfertest00000000"}
+
+
+def _flowing(base, slug=SLUG, bid="0.48", ask="0.50", n=26):
+    rows, cum = [], 100
+    for i in range(n):
+        t, last = base + i * 35, None
+        if i % 3 == 1:
+            cum += 10; last = bid
+        if i % 3 == 2:
+            cum += 10; last = ask
+        rows.append(_obs(t, slug=slug, bid=bid, ask=ask,
+                         cum=str(cum), last=last))
+    return rows
+
+
+# ---- item 7: one-sided YES was an ADAPTER ARTIFACT, now fixed ----
+
+def test_open_side_follows_cheaper_touch_not_hardcoded_yes():
+    """The frozen model emits a relation, never a side. Opening was
+    hardcoded YES, which structurally produced YES-heavy inventory."""
+    cheap_no = {"bid": D("0.70"), "ask": D("0.72")}     # NO join 0.28
+    cheap_yes = {"bid": D("0.28"), "ask": D("0.30")}    # YES join 0.28
+    assert l5d.open_side_yes(cheap_no) is False
+    assert l5d.open_side_yes(cheap_yes) is True
+    assert l5d.open_side_yes({"bid": None, "ask": None}) is None
+
+
+def test_shadow_opens_no_when_no_is_cheaper():
+    base = 1_000_000.0
+    rows = _flowing(base, bid="0.7000", ask="0.7200")
+    r = l5d.decide_market(SLUG, rows, base + 26 * 35, _model())
+    sides = {a.get("side") for a in r["actions_replayed"] if a.get("side")}
+    assert sides == {"NO"}, sides
+    assert r["inventory_final"]["yes"] == 0
+
+
+def test_residual_cap_bounds_one_sided_accumulation():
+    base = 1_000_000.0
+    rows = _flowing(base, bid="0.7000", ask="0.7200")
+    r = l5d.decide_market(SLUG, rows, base + 26 * 35, _model())
+    assert abs(r["inventory_final"]["residual"]) <= l5d.MAX_RESIDUAL_UNITS
+    caps = [a for a in r["actions_replayed"]
+            if str(a.get("reason", "")).startswith("residual_cap")]
+    assert caps, "cap must be visible in the audit trail, not silent"
+
+
+def test_extend_joins_its_own_touch_and_only_complete_uses_pair_bound():
+    """Latent mispricing found in the same pass: a NO-side action was
+    priced through the pair bound even when it was an EXTEND."""
+    inv = l5d.Inventory()
+    book = {"bid": D("0.70"), "ask": D("0.72")}
+    opened = l5d.plan_action("open", inv, book)
+    assert opened["side"] == "NO" and opened["target_price"] == "0.28"
+    inv.record(False, D("0.28"))
+    ext = l5d.plan_action("extend", inv, book)
+    assert ext["side"] == "NO" and ext["target_price"] == "0.28"
+    comp = l5d.plan_action("complete", inv, book)
+    assert comp["side"] == "YES"
+    # completion is the only action bounded by >=1c-after-fees
+    assert D(comp["target_price"]) <= l5d.hard_pair_bound() - D("0.28")
+
+
+# ---- items 1-3: candidate is not readiness; provenance is explicit ----
+
+def test_shadow_candidate_never_implies_spring_ready():
+    base = 1_000_000.0
+    by_slug = {SLUG: _flowing(base), SIB: _flowing(base, slug=SIB)}
+    out = xfer.reconcile(by_slug, now=base + 26 * 35 + 30)
+    assert out["kind"] == "PMUS_SPRING_PREFLIGHT_RECONCILE"
+    assert out["SPRING_READY_FOR_REVIEW"] is False
+    assert "does NOT mean" in out["note"]
+    if out["SHADOW_PREFLIGHT_CANDIDATE"]:
+        assert out["spring_readiness"]["blockers"]
+
+
+def test_provenance_gate_blocks_inferred_sports_evidence():
+    base = 1_000_000.0
+    by_slug = {SLUG: _flowing(base), SIB: _flowing(base, slug=SIB)}
+    r = xfer.spring_readiness(by_slug, SLUG, now=base + 26 * 35 + 30,
+                              durable_reason=lambda: None)
+    assert r["SPRING_READY_FOR_REVIEW"] is False
+    prov = r["layers"][xfer.LAYER_PROVENANCE]
+    assert prov["ok"] is False
+    assert any("evidence_provenance_inferred" in b for b in prov["blockers"])
+    assert any("authenticated recorder" in b for b in prov["blockers"])
+
+
+def test_composed_evidence_preserves_provenance_age_category_and_sha():
+    base = 1_000_000.0
+    now = base + 26 * 35 + 30
+    by_slug = {SLUG: _flowing(base), SIB: _flowing(base, slug=SIB)}
+    ev = xfer.compose_evidence(SLUG, by_slug, now, model_sha="abc123")
+    assert ev["slug"] == SLUG
+    assert ev["evidence_provenance"] == xfer.PROVENANCE_INFERRED
+    assert "/state/pmus-sports" in ev["evidence_source"]
+    assert ev["action_model_sha"] == "abc123"
+    assert ev["evidence_t"] is not None and ev["evidence_t"] <= now
+    assert ev["spring_category"] == "atp"
+    assert set(ev["spring_category_evidence"]) >= {
+        "completions_60m", "distinct_markets_60m", "markets", "bar_met"}
+    assert ev["probe_evidence"]["status"] in (
+        "READY_FOR_REVIEW", "INSUFFICIENT_EVIDENCE")
+
+
+def test_missing_slug_fails_closed_with_named_blocker():
+    r = xfer.spring_readiness({}, "aec-atp-nope", now=1_000_000.0)
+    assert r["SPRING_READY_FOR_REVIEW"] is False
+    assert any("no_rows_for_slug" in b for b in r["blockers"])
+
+
+def test_every_layer_is_reported_even_when_blocked():
+    base = 1_000_000.0
+    r = xfer.spring_readiness({SLUG: _flowing(base)}, SLUG,
+                              now=base + 26 * 35 + 30)
+    assert set(r["layers"]) == {
+        xfer.LAYER_REPLICATION, xfer.LAYER_ECONOMICS,
+        xfer.LAYER_PROVENANCE, xfer.LAYER_OPERATIONAL}
+    assert r["required_mount"] == "/state/pmus-spring"
+
+
+# ---- item 4: durable mount is unambiguous in repo state ----
+
+def test_durable_spring_mount_is_declared_and_documented():
+    root = Path(xfer.__file__).resolve().parents[1]
+    docker = (root / "deploy/pmus_spring_l5/Dockerfile").read_text()
+    assert "PMUS_Q1_STATE_DIR=/state/pmus-spring" in docker
+    manifest = (root / "deploy/PROBE_MANIFESTS.md").read_text()
+    assert "/state/pmus-spring" in manifest
+    # the recorder's own volume must never be reused for the probe
+    assert "/state/pmus-ws" in manifest
+    assert xfer.SPRING_STATE_DIR == "/state/pmus-spring"
+
+
+# ---- shared canonical definitions, no drift ----
+
+def test_category_bar_has_one_canonical_definition():
+    assert enriched.slug_category is replay.slug_category
+    assert enriched.category_spring_evidence is replay.category_spring_evidence
+    assert enriched.CATEGORY_BAR_COMPLETIONS == \
+        replay.CATEGORY_BAR_COMPLETIONS == 2
+    assert enriched.CATEGORY_BAR_DISTINCT_MARKETS == \
+        replay.CATEGORY_BAR_DISTINCT_MARKETS == 2
+
+
+def test_transfer_module_cannot_arm_or_order():
+    src = inspect.getsource(xfer)
+    for banned in ("urllib", "websockets", "requests", "Transport",
+                   "/v1/orders", "X-PM-", "run_session", "submit",
+                   "os.environ["):
+        assert banned not in src, banned
+    assert '"order_entry": False' in src
+
+
+def test_one_shot_stays_out_of_the_keyless_collector_image():
+    """This module imports the spring entry guard, which transitively
+    imports the micro/q1 executors. That chain must never enter the
+    keyless collector image, so the one-shot is an OPERATOR tool run
+    off-service against a copy of the tape — deliberately, not by
+    omission."""
+    root = Path(xfer.__file__).resolve().parents[1]
+    collector = (root / "deploy/pmus_sports_collector/Dockerfile").read_text()
+    for banned in ("pmus_spring_evidence_transfer", "pmus_spring_l5_session",
+                   "pmus_spring_l5_probe_entry", "pmus_micro_executor",
+                   "pmus_q1_executor"):
+        assert banned not in collector, banned
+    # and the decision layer that DOES ship in that image stays clean
+    assert "pmus_sports_l5_decision.py" in collector
+
+
+def test_off_distribution_is_carried_from_the_decision_layer():
+    """Unknown must fail closed, but a genuine on-distribution verdict
+    has to reach the guard or the replication layer could never pass."""
+    assert xfer.off_distribution_of(None) is None
+    assert xfer.off_distribution_of(
+        {"next_action": {"decision": "quote"}}) is False
+    assert xfer.off_distribution_of(
+        {"next_action": {"decision": "no_action",
+                         "reason": "v2_off_distribution"}}) is True
+    base = 1_000_000.0
+    by_slug = {SLUG: _flowing(base), SIB: _flowing(base, slug=SIB)}
+    ev = xfer.compose_evidence(SLUG, by_slug, base + 26 * 35 + 30,
+                               off_distribution=False)
+    assert ev["off_distribution"] is False

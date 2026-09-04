@@ -27,6 +27,50 @@ SPRING_PAIR_TARGET = D("0.98")
 TICK = D("0.01")
 
 
+# Same-stream/category evidence bar (OWNER DECISION 5533476555 item 3).
+# Canonical home: this module is keyless and dependency-free, so both the
+# authenticated recorder and the keyless sports path share ONE definition
+# instead of drifting copies (issue #167 comment 5540937360 item 2).
+CATEGORY_BAR_COMPLETIONS = 2
+CATEGORY_BAR_DISTINCT_MARKETS = 2
+CATEGORY_BAR_SPAN_S = 3600.0
+
+
+def slug_category(slug: str) -> str:
+    """Deterministic stream/category key: the league segment of the slug
+    (second dash token — aec-mlb-... -> mlb, atc-lal-... -> lal);
+    single-token slugs fall back to themselves."""
+    parts = str(slug).split("-")
+    return parts[1] if len(parts) > 1 else parts[0]
+
+
+def category_spring_evidence(rows: Mapping[str, Mapping[str, Any]],
+                             now: float) -> dict:
+    """Rolling-hour strict-completion evidence aggregated per category,
+    from the same per-market strict replays each row carries."""
+    per_cat: dict[str, list] = {}
+    for slug, r in rows.items():
+        for m in r.get("spring_matches_theoretical") or []:
+            try:
+                t = float(m.get("t_comp"))
+            except (TypeError, ValueError):
+                continue
+            if now - t <= CATEGORY_BAR_SPAN_S:
+                per_cat.setdefault(slug_category(slug), []).append(
+                    (t, str(slug)))
+    out = {}
+    for cat, evs in per_cat.items():
+        distinct = sorted({s for _, s in evs})
+        out[cat] = {
+            "completions_60m": len(evs),
+            "distinct_markets_60m": len(distinct),
+            "markets": distinct,
+            "bar_met": (len(evs) >= CATEGORY_BAR_COMPLETIONS
+                        and len(distinct) >= CATEGORY_BAR_DISTINCT_MARKETS),
+        }
+    return out
+
+
 def _d(v: Any) -> Optional[D]:
     try:
         return D(str(v)) if v is not None else None
