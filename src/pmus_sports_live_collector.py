@@ -136,6 +136,11 @@ def incentive_autopin_enabled() -> bool:
 # cannot pass the observation gate anyway.
 CANDIDATE_AUTOPIN_ENV = "PMUS_CANDIDATE_AUTOPIN"   # "0" disables
 CANDIDATE_AUTOPIN_DEFAULT = 3
+# A challenger must beat an incumbent by this margin to take its seat.
+# Sized above the cycle-to-cycle noise in short-window observed stats so
+# ordinary jitter cannot evict a market mid-observation.
+PIN_INCUMBENT_MARGIN = 12.0
+_pinned_now: set = set()
 
 
 def candidate_autopin_n() -> int:
@@ -164,6 +169,21 @@ def top_candidate_pins(universe: Iterable[Mapping[str, Any]],
     n = candidate_autopin_n()
     if not n:
         return []
+
+    # PIN HYSTERESIS. Measured on a 30-minute type-blind run: the pin set
+    # changed in 18 of 20 discovery cycles, and 19 of 20 pinned markets
+    # breached the 60s gap rule with a p50 of 69.1s. Re-ranking every
+    # cycle on short-window observed stats is noisy, so a market was
+    # pinned, polled densely once, then dropped -- which is exactly the
+    # discontinuity the pin exists to prevent. Observation-driven pinning
+    # is self-defeating without stickiness: a market can never accumulate
+    # the sustained evidence that would justify keeping it.
+    #
+    # An incumbent therefore holds its seat while it remains ELIGIBLE and
+    # a challenger has not beaten it by a clear margin. Eligibility is
+    # re-checked every cycle, so a market that leaves the band or loses
+    # two-sidedness is still dropped immediately -- this adds inertia,
+    # never blindness.
     cands = []
     for t in universe or ():
         slug = str(t.get("slug") or "")
@@ -180,9 +200,15 @@ def top_candidate_pins(universe: Iterable[Mapping[str, Any]],
                    if (bid > 0 and ask > 0 and ask >= bid) else bid)
             if not (0.35 <= mid <= 0.65):
                 continue
-        cands.append((-_market_score(t, now), slug))
+        score = _market_score(t, now)
+        if slug in _pinned_now:
+            score += PIN_INCUMBENT_MARGIN
+        cands.append((-score, slug))
     cands.sort()
-    return [slug for _, slug in cands[:n]]
+    picked = [slug for _, slug in cands[:n]]
+    _pinned_now.clear()
+    _pinned_now.update(picked)
+    return picked
 
 
 # retained name so existing callers/tests keep working

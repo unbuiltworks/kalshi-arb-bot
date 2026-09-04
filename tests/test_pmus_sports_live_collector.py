@@ -456,3 +456,48 @@ def test_pin_precedence_operator_then_program_then_candidate(monkeypatch):
     assert [p["reason"] for p in pins] == [
         "operator_pin", "live_incentive_program",
         "top_observed_candidate", "l5_candidate_auto_pin"]
+
+
+# ---- pin hysteresis: churn destroys the continuity pinning exists for ----
+
+def test_incumbent_pin_is_not_evicted_by_ordinary_score_jitter(monkeypatch):
+    """Measured regression: the pin set changed in 18 of 20 cycles and 19
+    of 20 pinned markets breached the 60s rule (p50 69.1s). A market was
+    pinned, polled once, dropped -- the exact discontinuity the pin
+    prevents. An incumbent must survive noise-level challenges."""
+    monkeypatch.setenv(live.CANDIDATE_AUTOPIN_ENV, "1")   # one seat: a contest
+    live._observed.clear(); live._pinned_now.clear()
+    inc = _mkt("aec-incumbent", False, 0.45, 0.47)
+    chal = _mkt("aec-challenger", True, 0.45, 0.47)
+    first = live.top_candidate_pins([inc], None)
+    assert first == ["aec-incumbent"]
+    # challenger is identical -> must NOT displace the incumbent
+    held = live.top_candidate_pins([inc, chal], None)
+    assert held == ["aec-incumbent"], held
+
+
+def test_incumbent_is_dropped_immediately_when_it_becomes_ineligible(
+        monkeypatch):
+    """Hysteresis adds inertia, never blindness: a market that leaves the
+    band or loses two-sidedness loses its seat on the next cycle."""
+    monkeypatch.setenv(live.CANDIDATE_AUTOPIN_ENV, "1")
+    live._observed.clear(); live._pinned_now.clear()
+    inc = _mkt("aec-incumbent", False, 0.45, 0.47)
+    assert live.top_candidate_pins([inc], None) == ["aec-incumbent"]
+    gone = _mkt("aec-incumbent", False, 0.92, 0.94)      # left the band
+    other = _mkt("aec-other", True, 0.45, 0.47)
+    pins = live.top_candidate_pins([gone, other], None)
+    assert "aec-incumbent" not in pins
+    assert pins == ["aec-other"], pins
+
+
+def test_clearly_better_challenger_still_wins_the_seat(monkeypatch):
+    """Stickiness must not freeze the set: a decisively better candidate
+    still takes over."""
+    monkeypatch.setenv(live.CANDIDATE_AUTOPIN_ENV, "1")
+    live._observed.clear(); live._pinned_now.clear()
+    weak = _mkt("aec-weak", False, 0.45, 0.455)          # 0.5c spread
+    assert live.top_candidate_pins([weak], None) == ["aec-weak"]
+    strong = _mkt("aec-strong", True, 0.45, 0.49, vol=50000, liq=9000)
+    pins = live.top_candidate_pins([weak, strong], None)
+    assert pins == ["aec-strong"], pins
