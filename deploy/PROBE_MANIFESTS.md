@@ -236,3 +236,64 @@ direction is observed rather than inferred.
 Operator sequence for a candidate: pin the slug in `PMUS_WS_PIN_SLUGS` on
 the recorder, wait for it to appear in the recorder's `spring_watch`, then
 run the authoritative form above on the probe host.
+
+### Recorder deploy state: SKIPPED latest blocks redeploy (issue #167 comment 5543009251)
+
+**Symptom.** `PMUS_WS_PIN_SLUGS` is set on the recorder
+(`71b6ea99-ea6a-4b20-9602-fa873721ed35`), Railway records the latest
+deployment as `SKIPPED` (`d4a7b2ed-…`), the running container never picks
+up the new pin, and `redeploy` then refuses because it resolves the
+latest deployment as SKIPPED and has no snapshot to copy. The last good
+deployment (`8b59e1db-…`, commit `8746c92f`) cannot be re-cloned through
+the connected action.
+
+**Cause — and it is not the same as Lane C's.** Lane C's `SKIPPED` was
+the *absence of a first build*. This one is the opposite: the service
+builds fine, and Railway skipped a **source-triggered** deploy because
+the pushed commit changed nothing inside the recorder's watch paths.
+`321bd48c` touched only `src/pmus_spring_evidence_transfer.py` and its
+test — neither is in this image's COPY list — so the skip was correct
+behaviour. The damage is that the SKIPPED record becomes "latest" and
+shadows the good deployment for redeploy purposes.
+
+**Fix, on the EXISTING service — do not create a duplicate.** Force a
+build from source, which bypasses watch-path evaluation entirely and
+writes a fresh non-SKIPPED latest:
+
+```
+railway link
+railway service 71b6ea99-ea6a-4b20-9602-fa873721ed35
+railway up --service 71b6ea99-ea6a-4b20-9602-fa873721ed35 --detach
+```
+
+`railway up` uploads the working tree and builds unconditionally, so it
+is the correct lever whenever a SKIPPED record has shadowed a good
+deployment. The pin is an ordinary service variable and is picked up by
+the resulting container; nothing about arming, gates or credentials
+changes.
+
+**Do not** try to clear this by pushing a no-op commit that touches a
+recorder watch path. That is an empty build trigger wearing a costume: it
+puts a meaningless commit in the branch history and still depends on
+Railway's watch-path evaluation going the way you hoped.
+
+**Prevention.** Set the recorder's watch paths to exactly its image COPY
+list (`deploy/pmus_ws_recorder/Dockerfile`), so an unrelated push is
+skipped *and* every relevant push builds:
+
+```
+deploy/pmus_ws_recorder/**
+src/pmus_ws_evidence_recorder*.py
+src/pmus_spring_shadow_replay.py
+src/pmus_l5_compute_allocator.py
+src/pmus_sports_collector.py
+src/pmus_status_report.py
+src/pmus_priority_queue.py
+src/pmus_l5_action_shadow.py
+src/pmus_l5_persistence_v2.py
+src/polymarket_l5/**
+analysis/l5/l5_action_model*.json
+```
+
+Skips are then expected and harmless for commits outside that set; use
+`railway up` when one has shadowed a good deployment.
