@@ -1,103 +1,71 @@
 # L5 NOW — Fast Recovery State
 
-**Purpose:** This is the first file ChatGPT/Claude should read when resuming L5 work after a new chat, context-limit error, handoff, or interruption. It is deliberately short. Do not reconstruct current state from old chat transcripts when this file plus live GitHub/Railway checks can answer it.
+**Purpose:** First recovery file for any new L5 chat. Re-check live GitHub/Railway state before acting; do not reconstruct from old transcripts.
 
-**Snapshot:** 2026-09-03 ~21:56 America/New_York (2026-09-04 ~01:56 UTC)
+**Snapshot:** 2026-09-03 ~22:50 America/New_York (2026-09-04 ~02:50 UTC)
 
 ## Primary objective
-
-Reverse-engineer Polymarket trader `l5zn1bwom8etsk`, reproduce the sequential decision process as faithfully as public data allows, validate it, then deploy adapted versions only where executable conditions support positive realized expectancy.
-
-Historical target: **$480/day realized net profit**. Target only; never assume achieved.
+Reverse-engineer Polymarket trader `l5zn1bwom8etsk`, reproduce the sequential decision process, validate it, then deploy adapted versions only where executable conditions support positive realized expectancy. Historical target: **$480/day realized net profit**; target only, never assumed.
 
 ## Current priority
-
-**Polymarket live sports first.** There are many live sporting events, so lack of opportunity supply is not an acceptable default explanation. The immediate job is to ingest the full live sports universe, capture L5-relevant market state/evidence, rank usable markets, and validate the sports version of the L5 engine. Do not drift back to Gemini, generic arbitrage, or unrelated strategies unless evidence makes that the highest-impact path.
+**Polymarket live sports first.** The sports shadow system is now operational across the broad live slate. Do not drift to Gemini/generic arbitrage unless evidence makes that higher impact.
 
 ## Current GitHub state
-
 Repository: `unbuiltworks/kalshi-arb-bot`
 
-- **Active operational sports line:** `feature/l5-transfer-backtest` at `365bd1ac64871d97e7f0938de611970fd72a7cd2`.
-- `feature/l5-sports-live-universe-hotfix` at `59263edda5cd5d2865eb6c05a62167ed70560b78` is the merge base of that current line; `feature/l5-transfer-backtest` is **2 commits ahead**.
-- Those two follow-up commits:
-  - raised the authoritative live-sports runner default to **64 seats** while preserving explicit `PMUS_MAX_MARKETS` as the operator rate-safety knob and kept everything **DISARMED**; suite reported **475 green**;
-  - aligned the deploy-safety workflow with the authoritative `src.pmus_sports_live_collector` CMD and isolation invariant.
-- Earlier sports work on the lineage includes the authoritative all-live sports collector, full live-sports coverage/stale-incentive exclusion tests, full-slate deployment behavior, and rotating-surplus identification by selection order.
-- Historical/canonical L5 research branch: `feature/l5-canonical` at `c6b357675410a988a0d906438d4e875eb6320964` when last checked.
-- GitHub issue **#167** remains the canonical consolidation mission.
-- `L5_STATUS.md` on the canonical lineage contains deeper historical facts, behavioral reconstruction, replay coverage, and strict profit-accounting definitions. It is useful background but is older than this operational snapshot.
-- Always re-fetch `main` and the active branch head before making changes; this file is a pointer, not a substitute for current Git state.
+- Active sports line: `feature/l5-transfer-backtest`.
+- Current head at this checkpoint: `65b508e0af6c9acf14354153a0081c96e0576d53`.
+- Parent `1d268962f00d97382559fa3324f57e6a24de21e5` is Claude's permanent PMUS `offers` ask-side parser fix + regressions; reported full suite **479 green**.
+- `65b508e0` adds a read-only status hotfix so q=1 depth reads the collector's actual `bid_touch_qty` field instead of nonexistent `bid_qty`; it does not loosen the >=1c economic gate.
+- Collector image packages the hotfix module.
+- GitHub issue #167 remains canonical for implementation/research decisions.
 
 ## Current Railway state
+Project `arb-ev-wallet-shadow`, production env `f3642d27-26dc-4e21-9170-bc76290c076f`.
 
-Project: `arb-ev-wallet-shadow`
-Production environment: `f3642d27-26dc-4e21-9170-bc76290c076f`
+Relevant services:
+- `pmus-sports-forward-collector`: **SUCCESS** on deployment `f6f86b36-566e-4f27-95e0-8e0bc1d19c87`; persistent `/state/pmus-sports` volume mounted; restart policy ALWAYS.
+- `pmus-ws-evidence-recorder`: **SUCCESS**; Claude raised baked market cap 40 -> 64 on `1d268962` and Railway deployed it successfully.
+- `l5-ops-research-live`: SUCCESS; do not disturb.
+- `l5-transfer-supervisor-shadow`: SUCCESS; do not disturb.
+- `pmus-q1-executor`: SUCCESS deployment, but do not infer armed.
+- `pmus-spring-l5-probe`: SUCCESS deployment but **NO volume mount is present in its service config** at this checkpoint; this remains a live-probe infrastructure blocker.
 
-Relevant service snapshot:
+## Tonight's breakthrough
+The broad sports collector was already discovering the live universe, but readiness was falsely stuck at `ask_side_served_pct=0.0` because the base collector parsed `book["asks"]` while PMUS serves sell depth under `book["offers"]`.
 
-- `l5-ops-research-live` — **SUCCESS**
-- `l5-transfer-supervisor-shadow` — **SUCCESS**
-- `pmus-ws-evidence-recorder` — **SUCCESS**
-- `pmus-spring-l5-probe` — **SUCCESS**
-- `pmus-q1-executor` — **SUCCESS deployment**
-- `pmus-sports-forward-collector` — **SUCCESS**, deployment `8e4df7f1-38b3-44aa-85e9-a09b7fa02948`, from `feature/l5-transfer-backtest@365bd1ac`
+That is now fixed. Fresh post-fix status immediately showed served asks (including multiple markets at 100%), proving the venue was not actually bid-only.
 
-The authoritative sports collector deployment is therefore no longer the blocker it was at the start of this snapshot.
+A second false readiness gate was found: `pmus_status_report.analyze_market()` checked `bid_qty`, while collector rows contain `bid_touch_qty`. `65b508e0` corrects this interpretation without weakening the economic threshold.
 
-**Important:** Railway deployment success does NOT mean live trading is armed. Current sports collector commit explicitly says everything stays **DISARMED**. Before any future order-capable action, separately verify arming keys, current account/exposure, durable state, risk caps, and exact executor preflight. Never infer `armed` from `SUCCESS`.
+## Fresh live sports status after both corrections
+From the first clean status cycle on deployment `f6f86b36...`:
+- `markets_tracked`: **1502** in retained tape
+- 15m `markets_with_data`: **383**
+- fresh selected markets since restart: **64**
+- 15m statuses: **11 SHADOW_CANDIDATE**, **372 NOT_READY**, **0 Q1_GATE_CLEARED**
+- Example shadow candidate `aec-setkameua-pitser-kimdmy-2026-09-04`: two-sided inferred flow, ask-side served **35.2%**, 1 theoretical matched slot, 0 one-sided holds.
+- Example MLB market `atc-mlb-stl-lad-2026-09-03-f5-stl`: two-sided inferred flow, ask-side served **55.6%**, 1 theoretical matched slot.
+- Several fresh markets showed ask-side served **100%** immediately after restart.
 
-## Current bottleneck
+Everything above is **shadow/theoretical**, not realized profit.
 
-The sports bottleneck has moved from deployment toward **verifying actual live-universe capture and evidence quality/readiness**. The collector now has the authoritative all-live sports path with a >=64 default market capacity.
+## Immediate blocker / next action
+The major discovery/data-schema blockers are cleared. The next evidence gate is genuine repetition:
+1. strict readiness requires **>=2 qualifying 5-minute matched slots** with two-sided flow, q=1 depth, served ask evidence, and no collector gaps;
+2. first fresh cycle had only one qualifying matched slot on the leading candidates, so `Q1_GATE_CLEARED=0` is currently correct;
+3. keep the >=1c after-known-fees bound fail-closed; do not lower it to manufacture a candidate;
+4. before any bounded live probe, also resolve the missing persistent `/state/pmus-spring` volume and re-check all current spring/category/operator arming assertions.
 
-Near-term sequence:
+## Safety / accounting
+Status ladder: `historical replay -> shadow -> live probe -> submitted -> filled -> settled -> realized`.
+Never call modeled/shadow/theoretical profit realized. Do not arm or submit merely because a Railway service is SUCCESS.
 
-1. verify the live collector is actually seeing the broad current sports slate, not merely running successfully;
-2. confirm the evidence recorder preserves required book/flow/state for those markets;
-3. rank markets using L5-relevant conditions (two-sided flow, spread/depth, movement, time remaining, executable economics);
-4. shadow the L5-style policy across eligible sports;
-5. compare action-by-action against the behavioral model where applicable;
-6. only then advance a bounded live probe when strict executable evidence clears the gate.
-
-## Strict accounting / safety
-
-Use status labels exactly:
-
-`historical replay -> shadow -> live probe -> submitted -> filled -> settled -> realized`
-
-Never call modeled/shadow/theoretical profit realized. Realized requires authoritative fills, settlement, and confirmed cashflow.
-
-Keep separate:
-- matched-pair economics;
-- directional residual P&L;
-- spread capture;
-- maker rebates;
-- liquidity rewards;
-- fees;
-- settlement/redemption cashflows.
-
-Do not weaken risk limits to manufacture activity. Do not recommend evading Polymarket geographic/platform restrictions.
-
-## Fresh-chat recovery protocol
-
-When the user says **"Continue L5"**, **"pick up where we left off"**, or a chat hits its context limit:
-
-1. Read this file first.
-2. Re-fetch the heads of `main` and the active branch above; if another L5 branch is newer/material, identify it rather than assuming this snapshot is current.
-3. Check Railway status for `arb-ev-wallet-shadow`, especially the L5/PMUS services above.
-4. Check issue #167 only for mission/decisions that are not already reflected here.
-5. Read deeper `L5_STATUS.md` only when historical/research detail is needed.
-6. Continue from the live state. **Do not ask the user to paste the previous chat.**
-7. After a material change in active branch, deployment, blocker, live-probe status, or realized P&L, update this file with a new timestamp.
-
-## Context-budget rule
-
-Keep chats lean:
-
-- Do not paste full logs, giant test outputs, entire issue bodies, or old handoffs unless required for a decision.
-- Summarize deltas and cite the commit/deployment/source of truth.
-- Store durable state/results in GitHub, not only in chat.
-- Prefer one canonical pipeline and one current handoff file over new parallel implementations/status documents.
-
-This file is an operational pointer, not a replacement for source data, tests, ledgers, or authoritative exchange evidence.
+## Fresh-chat protocol
+When user says **Continue L5**:
+1. read this file;
+2. re-fetch active branch head and latest relevant Railway deployments;
+3. read newest PMUS sports collector status lines;
+4. check whether any market/category now has >=2 strict qualifying slots and `Q1_GATE_CLEARED`;
+5. verify spring persistent volume and current execution preflight before any live-probe action;
+6. continue immediately without asking user to paste old chat.
