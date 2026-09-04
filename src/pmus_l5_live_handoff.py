@@ -95,6 +95,12 @@ def event_similarity(obs: list, now: float,
     bid, ask = a.get("bid"), a.get("ask")
     out = {"slug": None, "in_distribution": False, "similarity": 0.0,
            "executable": False, "reasons": []}
+    if not a.get("observations"):
+        # a market we never observed in-window is not a one-sided book --
+        # calling starvation "one-sided" hides a collector problem behind
+        # a market-quality reason.
+        out["reasons"].append("no_observations_in_window")
+        return out
     if bid is None or ask is None:
         out["reasons"].append("book_not_two_sided")
         return out
