@@ -297,3 +297,59 @@ analysis/l5/l5_action_model*.json
 
 Skips are then expected and harmless for commits outside that set; use
 `railway up` when one has shadowed a good deployment.
+
+---
+
+## Live-path shadow: choosing the one event
+
+`src/pmus_l5_handoff_shadow.py` answers, from a durable collector tape
+alone, which single live event the frozen L5 action model would trade
+and what action sequence it would produce. It is the step between "the
+collector is running" and "an owner could arm one probe".
+
+```
+python3 -m src.pmus_l5_handoff_shadow --root /state/pmus-sports --hours 1
+```
+
+Run it from a repo checkout or the spring image — **not** the sports
+collector image. It delegates sizing to
+`pmus_micro_executor.choose_micro_quantity` so it cannot size
+differently from the live executor, and that module carries the order
+transport, which the read-only collector image deliberately does not
+ship. The shadow only reads a tape; it never needs to run beside the
+collector.
+
+It performs no venue call, no order path, no arming, and no write to the
+tape. `realized_pnl` is null in every row it emits.
+
+### Reading the output
+
+* **`selection`** — the one event, or `selected: null` plus every named
+  blocker. It fails closed: an event with no executable market is never
+  selected, because the probe is one event only.
+* **`pin_recommendations`** — markets blocked *only* by how little we
+  watched them (`flow_unmeasured_only_N_observations`, `stale_cadence`).
+  These are not rejected markets. They are the answer to "what should
+  the collector pin next". A market blocked by an off-distribution state
+  or a price outside the 35–65¢ band never appears here, because more
+  looking cannot fix either.
+* **`session`** — the action-by-action replay. Read `actions_admitted`,
+  not `actions_submitted`: while disarmed nothing is ever submitted, so
+  `actions_submitted` is always 0.
+* **`submission_boundary`** — always `ready: false`, with every blocker
+  named. Arming is operator-held dual key and never happens from here.
+
+### The sizing assumption
+
+The venue `minimumTradeQty` is **not** in the collector tape; the live
+executor reads it per market at submit time via
+`mx.market_micro_spec`. The shadow therefore declares it, and every
+report states the source:
+
+```
+--min-trade-qty 0.01     ->  minimum_trade_qty_source: operator_supplied
+(omitted)                ->  minimum_trade_qty_source: declared_assumption
+```
+
+Supply the real value when you have it. An assumption that quietly
+becomes a fact is how a notional cap gets widened by accident.
