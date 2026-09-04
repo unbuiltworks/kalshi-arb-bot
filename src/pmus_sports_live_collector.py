@@ -19,6 +19,12 @@ from typing import Any, Iterable, Mapping, Optional
 
 from src import pmus_sports_collector as col
 
+# Owner directive 5534173817 item 2: the authoritative all-sports runner
+# targets the full live universe — at least 64 seats, ranked before
+# capping — even when the deployment env is absent. The base module's
+# legacy DEFAULT_MAX_MARKETS=24 stays untouched for the fallback tools.
+DEFAULT_LIVE_MAX_MARKETS = 64
+
 
 def _number(value: Any) -> float:
     if isinstance(value, Mapping):
@@ -195,7 +201,9 @@ def run(minutes: Optional[float] = None) -> int:
         {"0", "false", "no", "off"}
     poll_s = float(os.getenv(col.POLL_ENV, str(col.DEFAULT_POLL_S)))
     budget = float(os.getenv(col.BUDGET_ENV, str(col.DEFAULT_BUDGET_RPS)))
-    max_markets = int(os.getenv(col.MAX_MARKETS_ENV, str(col.DEFAULT_MAX_MARKETS)))
+    # default >=64; an explicit env stays the operator's rate-safety knob
+    max_markets = int(os.getenv(col.MAX_MARKETS_ENV,
+                                str(DEFAULT_LIVE_MAX_MARKETS)))
     discovery_s = float(os.getenv(col.DISCOVERY_ENV, str(col.DEFAULT_DISCOVERY_S)))
     inc_snap_s = float(os.getenv(col.INCENTIVES_SNAP_ENV,
                                  str(col.DEFAULT_INCENTIVES_SNAP_S)))

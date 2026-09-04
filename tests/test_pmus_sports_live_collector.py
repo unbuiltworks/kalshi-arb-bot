@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from src import pmus_sports_live_collector as live
 from src import pmus_sports_collector as col
 
@@ -89,3 +91,25 @@ def test_explicit_prefix_filter_is_respected_but_default_is_full_slate(monkeypat
     monkeypatch.setenv(col.PREFIXES_ENV, "aec-")
     filtered, _ = live.discover_poll_targets({}, False, 64, cycle=0)
     assert {r["slug"] for r in filtered} == {"aec-keep"}
+
+
+def test_authoritative_runner_defaults_to_at_least_64_seats(monkeypatch):
+    """Owner directive 5534173817 item 2: without any deployment env the
+    authoritative runner must not fall back to the legacy 24-seat cap."""
+    monkeypatch.delenv(col.MAX_MARKETS_ENV, raising=False)
+    assert live.DEFAULT_LIVE_MAX_MARKETS >= 64
+    assert int(os.getenv(col.MAX_MARKETS_ENV,
+                         str(live.DEFAULT_LIVE_MAX_MARKETS))) >= 64
+
+
+def test_production_image_runs_the_all_sports_path():
+    """Directive item 9: production run() actually uses the all-sports
+    path — the deployed CMD is this module, whose discovery is
+    v1_live_sports_authoritative with visible fallback only."""
+    from pathlib import Path
+    root = Path(live.__file__).resolve().parents[1]
+    docker = (root / "deploy/pmus_sports_collector/Dockerfile").read_text()
+    assert 'CMD ["python3", "-m", "src.pmus_sports_live_collector"]' in docker
+    src = Path(live.__file__).read_text()
+    assert "v1_live_sports_authoritative" in src
+    assert "legacy_visible_fallback" in src

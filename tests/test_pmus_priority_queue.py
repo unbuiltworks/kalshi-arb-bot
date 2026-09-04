@@ -206,7 +206,11 @@ def test_deploy_isolation_tripwire_baked_into_both_images():
     assert "PMUS_SERVICE_ROLE=ws-recorder" in recorder
     assert "PMUS_SERVICE_ROLE=collector" in collector
     assert "src.pmus_ws_evidence_recorder" in recorder
-    assert "src.pmus_sports_collector" in collector
+    # owner directive 5534173817: the collector image's CMD is the
+    # authoritative all-live-sports runner, which delegates to the base
+    # collector module (still COPY'd into the image)
+    assert "src.pmus_sports_live_collector" in collector
+    assert "src/pmus_sports_collector.py" in collector
     assert "src.pmus_ws_evidence_recorder" not in collector
     # the recorder image must carry everything its status emission imports
     for needed in ("pmus_l5_action_shadow.py", "pmus_l5_persistence_v2.py",
