@@ -348,6 +348,15 @@ def submission_boundary(choice: Mapping[str, Any],
             blockers.append("shadow_produced_no_admissible_action")
         if not any(a.get("fill", {}).get("filled") for a in acts):
             blockers.append("shadow_produced_no_simulated_fill")
+        if session.get("ended_legged"):
+            # The event ended holding unmatched directional inventory.
+            # That is exposure, not a locked pair, and nothing in this
+            # module clears it -- the bounded residual manager must.
+            blockers.append(
+                f"event_ends_legged_residual:{session['residual_uncompleted']}")
+        if not any(a["predicted_action"].get("relation") == "complete"
+                   for a in acts):
+            blockers.append("model_never_emitted_a_completion_in_window")
     blockers.append("provenance_inferred_not_observed")
     blockers.append("venue_minimum_trade_qty_unread_from_tape")
     if not ho.armed():

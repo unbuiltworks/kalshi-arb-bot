@@ -178,6 +178,14 @@ def risk_gate(plan: Mapping[str, Any], inv: "l5d.Inventory",
     nxt = inv.residual + (1 if side_yes else -1)
     if abs(nxt) > MAX_RESIDUAL_UNITS:
         return f"residual_cap:{abs(nxt)}>{MAX_RESIDUAL_UNITS}"
+    # An action budget spent entirely on entries leaves a residual that
+    # cannot be completed inside the event -- the probe would end legged
+    # by construction. Reserve one action per unit we would then owe.
+    # This only ever REFUSES an entry; it never raises a cap.
+    if plan.get("relation") != "complete":
+        if MAX_ACTIONS - (n_actions + 1) < abs(nxt):
+            return (f"completion_capacity_reserved:"
+                    f"{MAX_ACTIONS - (n_actions + 1)}<{abs(nxt)}")
     if abs(inv.yes + (1 if side_yes else 0)
            - (inv.no + (0 if side_yes else 1))) > MAX_IMBALANCE_UNITS:
         return f"imbalance_cap:>{MAX_IMBALANCE_UNITS}"
@@ -246,6 +254,17 @@ def session_report(event_slug: str, rows: list, inv: "l5d.Inventory",
         "actions": rows,
         "actions_submitted": sum(1 for r in rows
                                  if r["submit_decision"] == "submitted"),
+        # Unarmed, nothing is ever "submitted". Admitted/refused is what
+        # the shadow actually measures; reporting only actions_submitted
+        # made a full seven-action session read as if nothing happened.
+        "actions_admitted": sum(1 for r in rows
+                                if r["refuse_reason"] is None),
+        "actions_refused": sum(1 for r in rows
+                               if r["refuse_reason"] is not None),
+        "actions_filled_shadow": sum(
+            1 for r in rows if (r.get("fill") or {}).get("filled")),
+        "residual_uncompleted": inv.residual,
+        "ended_legged": inv.residual != 0,
         "inventory_final": inv.snapshot(),
         "event_notional_spent": str(spent),
         "caps": {

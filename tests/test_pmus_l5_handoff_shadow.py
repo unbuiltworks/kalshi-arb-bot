@@ -273,3 +273,26 @@ def test_boundary_says_unwatched_rather_than_nothing_qualifies():
         pins=[{"slug": "mkt-a"}])
     assert any(b.startswith("observation_limited_candidates_unpinned")
                for b in out["blockers"])
+
+
+def test_boundary_blocks_on_an_event_that_would_end_legged():
+    """Ending with unmatched inventory is directional exposure, not a
+    locked pair. Nothing in the handoff clears it, so it must block."""
+    session = {"actions": [{"refuse_reason": None, "fill": {"filled": True},
+                            "predicted_action": {"relation": "open"}}],
+               "ended_legged": True, "residual_uncompleted": 2}
+    out = sh.submission_boundary({"selected": "evt-a", "blockers": []},
+                                 session)
+    assert "event_ends_legged_residual:2" in out["blockers"]
+    assert "model_never_emitted_a_completion_in_window" in out["blockers"]
+    assert out["ready"] is False
+
+
+def test_boundary_does_not_invent_a_legging_blocker_when_flat():
+    session = {"actions": [{"refuse_reason": None, "fill": {"filled": True},
+                            "predicted_action": {"relation": "complete"}}],
+               "ended_legged": False, "residual_uncompleted": 0}
+    out = sh.submission_boundary({"selected": "evt-a", "blockers": []},
+                                 session)
+    assert not any(b.startswith("event_ends_legged") for b in out["blockers"])
+    assert "model_never_emitted_a_completion_in_window" not in out["blockers"]

@@ -132,3 +132,52 @@ def test_module_has_no_independent_order_path():
     src = Path(ho.__file__).read_text()
     for banned in ("urllib", "requests", "POST", "/v1/orders", "X-PM-"):
         assert banned not in src, banned
+
+
+# ---- the action budget must leave room to get flat ----
+
+def test_entries_stop_before_completion_becomes_unreachable():
+    """Six actions all spent on entries leaves a residual with no budget
+    left to complete it -- the probe ends legged by construction. The
+    reservation refuses the entry instead."""
+    inv = _inv(yes=2, ycost="0.80")          # residual +2; a 3rd is legal
+    plan = ho.next_action(D("0.45"), D("0.47"), inv, "extend")
+    assert plan["decision"] == "quote", "the residual cap must not pre-empt"
+    # 3 actions already placed; a 4th entry would leave residual 3 with
+    # only 2 actions of budget left -- one short of getting flat.
+    gate = ho.risk_gate(plan, inv, D("0.01"), 3, D("0.005"))
+    assert gate == "completion_capacity_reserved:2<3", gate
+    # the same entry earlier in the event, with budget to spare, passes
+    assert ho.risk_gate(plan, inv, D("0.01"), 1, D("0.005")) is None
+
+
+def test_the_reservation_never_blocks_a_completion():
+    """Reserving budget FOR completions must not refuse a completion."""
+    inv = _inv(yes=3, ycost="1.20")
+    completion = {"decision": "quote", "relation": "complete",
+                  "_px": D("0.50"), "_side_yes": False}
+    assert ho.risk_gate(completion, inv, D("0.01"), 5, D("0.005")) is None
+
+
+def test_the_reservation_only_tightens_it_never_raises_a_cap():
+    """An early entry with plenty of budget left is unaffected."""
+    inv = _inv()
+    plan = ho.next_action(D("0.45"), D("0.47"), inv, "")
+    assert ho.risk_gate(plan, inv, D("0"), 0, D("0.005")) is None
+
+
+def test_session_report_distinguishes_admitted_from_submitted():
+    """Unarmed, nothing is ever submitted; a report that only counted
+    submissions made a full session read as though nothing happened."""
+    inv = _inv(yes=1, ycost="0.45")
+    rows = [ho.audit_row(1.0, {}, {"relation": "open"}, None,
+                         {"filled": True}, inv),
+            ho.audit_row(2.0, {}, {"relation": "extend"}, "residual_cap:4>3",
+                         None, inv)]
+    rep = ho.session_report("evt", rows, inv, D("0.005"))
+    assert rep["actions_submitted"] == 0        # disarmed
+    assert rep["actions_admitted"] == 1
+    assert rep["actions_refused"] == 1
+    assert rep["actions_filled_shadow"] == 1
+    assert rep["residual_uncompleted"] == 1
+    assert rep["ended_legged"] is True
