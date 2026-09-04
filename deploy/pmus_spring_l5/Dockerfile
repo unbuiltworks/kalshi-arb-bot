@@ -9,8 +9,9 @@
 # Probe-1 strategy invariants remain in src/pmus_spring_l5_session.py:
 # one market, maker-only, one outstanding order, account-wide flat/open-order
 # preflight, exact Decimal partials, <=$0.05 cumulative OPEN/EXTEND notional,
-# fee-safe <=0.96 spring completion target, cancel/deadman, settlement-only
-# realized P&L. No taker path exists in spring mode.
+# <=0.98 spring observation cap with the >=1c-after-known-fees hard bound
+# always in the complement min() (OWNER DECISION 5533476555), cancel/deadman,
+# settlement-only realized P&L. No taker path exists in spring mode.
 FROM python:3.11-slim
 
 WORKDIR /app
