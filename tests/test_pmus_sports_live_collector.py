@@ -113,3 +113,77 @@ def test_production_image_runs_the_all_sports_path():
     src = Path(live.__file__).read_text()
     assert "v1_live_sports_authoritative" in src
     assert "legacy_visible_fallback" in src
+
+
+# ---- bounded continuously-polled priority set (5541422910) ----
+
+def _uni(n_events=50, per_event=3):
+    """A universe far larger than the cap, so rotation is forced."""
+    rows = []
+    for e in range(n_events):
+        for m in range(per_event):
+            rows.append({"slug": f"aec-atp-e{e:02d}-m{m}",
+                         "event_slug": f"ev-{e:02d}",
+                         "market_meta": {"volume24hr": 1000 - e,
+                                         "liquidity": 500}})
+    return rows
+
+
+def test_pinned_markets_are_selected_every_cycle_while_rest_rotate():
+    """Acceptance 3: a pinned slug must never be rotated out, which is
+    what keeps its inter-poll gap under the 60s readiness threshold."""
+    universe = _uni()
+    pins = [{"slug": "aec-atp-e40-m2", "reason": "operator_pin"}]
+    seen_rotating = set()
+    for cycle in range(12):
+        sel, diag = live.select_for_poll(universe, 64, cycle, pins=pins)
+        slugs = [r["slug"] for r in sel]
+        assert "aec-atp-e40-m2" in slugs, f"dropped on cycle {cycle}"
+        assert len(sel) == 64                       # cap unchanged
+        assert diag["pinned_count"] == 1
+        assert diag["pinned_markets"][0]["reason"] == "operator_pin"
+        seen_rotating.update(slugs)
+    # acceptance 2: breadth preserved — rotation still sweeps the slate
+    assert len(seen_rotating) > 64
+
+
+def test_pin_set_is_hard_capped_and_absences_are_reported(monkeypatch):
+    universe = _uni()
+    monkeypatch.setenv(live.PIN_MAX_ENV, "2")
+    pins = [{"slug": f"aec-atp-e0{i}-m0"} for i in range(5)]
+    sel, diag = live.select_for_poll(universe, 64, 0, pins=pins)
+    assert diag["pinned_count"] == 2 == diag["pin_cap"]
+    # a pin that is not in the live universe is reported, never invented
+    sel2, diag2 = live.select_for_poll(
+        universe, 64, 0, pins=[{"slug": "aec-atp-not-live"}])
+    assert diag2["pinned_absent_from_universe"] == ["aec-atp-not-live"]
+    assert all(r["slug"] != "aec-atp-not-live" for r in sel2)
+
+
+def test_priority_set_merges_operator_pins_then_l5_candidates(monkeypatch):
+    monkeypatch.setenv(live.PIN_SLUGS_ENV, "op-1, op-2")
+    live.update_auto_pins({"l5_sports_decisions": {"rows": [
+        {"slug": "cand-1"}, {"slug": "op-1"}, {"slug": "cand-2"}]}})
+    pins = live.priority_pins()
+    assert [p["slug"] for p in pins][:2] == ["op-1", "op-2"]
+    assert {"slug": "cand-1", "reason": "l5_candidate_auto_pin"} in pins
+    # no duplicate when an operator pin also ranks in the candidate path
+    assert sum(1 for p in pins if p["slug"] == "op-1") == 1
+
+
+def test_auto_pins_are_bounded_and_empty_report_is_safe(monkeypatch):
+    monkeypatch.setenv(live.PIN_MAX_ENV, "3")
+    live.update_auto_pins({"l5_sports_decisions": {
+        "rows": [{"slug": f"c{i}"} for i in range(9)]}})
+    assert len(live._auto_pins) == 3
+    assert live.update_auto_pins(None) == []
+    assert live.update_auto_pins({}) == []
+
+
+def test_pins_do_not_change_any_gate_or_economics():
+    """Acceptance 1: the pin mechanism is selection-only."""
+    import inspect
+    src = inspect.getsource(live)
+    for banned in ("MIN_EDGE", "GAP_S", "q1_depth", "Q1_GATE_CLEARED",
+                   "pmus_spring", "complement", "armed"):
+        assert banned not in src, banned

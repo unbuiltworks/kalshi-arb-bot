@@ -35,6 +35,59 @@ def _number(value: Any) -> float:
         return 0.0
 
 
+# Bounded continuously-polled priority set (issue #167 comment
+# 5541422910). Rotation makes per-market cadence jittery, and
+# analyze_market fails a market for ANY inter-poll gap over 60s, so a
+# rotated market is structurally unable to earn readiness evidence no
+# matter how good its book is. Pinned slugs are selected EVERY cycle so
+# their cadence equals the cycle time; the rest of the slate keeps
+# rotating under the unchanged cap and rate budget. Read-only: this
+# changes only WHICH markets are polled, never a gate, threshold, fee,
+# freshness, residual or loss rule.
+PIN_SLUGS_ENV = "PMUS_PIN_SLUGS"        # operator-pinned, comma-separated
+PIN_MAX_ENV = "PMUS_PIN_MAX"            # hard-capped below
+PIN_MAX_DEFAULT = 6
+PIN_MAX_CEILING = 12
+_auto_pins: list[str] = []              # fed from the L5 candidate path
+
+
+def pin_max() -> int:
+    try:
+        return max(0, min(PIN_MAX_CEILING,
+                          int(os.getenv(PIN_MAX_ENV, str(PIN_MAX_DEFAULT)))))
+    except ValueError:
+        return PIN_MAX_DEFAULT
+
+
+def operator_pins() -> list[str]:
+    return [s.strip() for s in os.getenv(PIN_SLUGS_ENV, "").split(",")
+            if s.strip()]
+
+
+def priority_pins() -> list[dict]:
+    """Operator pins first, then the L5 candidate path's own ranking."""
+    out, seen = [], set()
+    for slug in operator_pins():
+        if slug not in seen:
+            seen.add(slug)
+            out.append({"slug": slug, "reason": "operator_pin"})
+    for slug in _auto_pins:
+        if slug not in seen:
+            seen.add(slug)
+            out.append({"slug": slug, "reason": "l5_candidate_auto_pin"})
+    return out[:pin_max()]
+
+
+def update_auto_pins(report: Optional[Mapping[str, Any]]) -> list[str]:
+    """Feed the priority set from the L5 sports decision ranking, which
+    is already ordered fresh-Q1 first, then SHADOW_CANDIDATE."""
+    global _auto_pins
+    dec = (report or {}).get("l5_sports_decisions") or {}
+    _auto_pins = [r["slug"] for r in (dec.get("rows") or [])
+                  if r.get("slug")][:pin_max()]
+    return _auto_pins
+
+
 def _market_score(target: Mapping[str, Any]) -> float:
     """Cheap pre-poll L5-relevance rank from venue-served metadata only.
 
@@ -71,14 +124,16 @@ def live_targets(live_events: Iterable[Mapping[str, Any]],
 
 
 def select_for_poll(targets: Iterable[Mapping[str, Any]], cap: int,
-                    cycle: int = 0) -> tuple[list[dict], dict]:
-    """Cover events before markets, then rotate surplus markets.
+                    cycle: int = 0,
+                    pins: Iterable[Any] = ()) -> tuple[list[dict], dict]:
+    """Priority pins every cycle, then cover events, then rotate surplus.
 
     With ~50 live events and a cap of 64 this guarantees at least one
     market from every event before extra markets consume seats.  Remaining
     seats rotate across the ranked surplus on each discovery cycle so the
     full discovered universe is eventually sampled rather than silently
-    excluded forever.
+    excluded forever.  A small pinned set is exempt from rotation so it
+    can hold sub-60s cadence and become gate-eligible.
     """
     cap = max(1, int(cap))
     groups: dict[str, list[dict]] = defaultdict(list)
@@ -95,6 +150,24 @@ def select_for_poll(targets: Iterable[Mapping[str, Any]], cap: int,
     )
     selected: list[dict] = []
     chosen: set[str] = set()
+
+    # Pass 0: the bounded priority set, every cycle, never rotated out.
+    by_slug = {str(r.get("slug")): r
+               for rows in groups.values() for r in rows}
+    pin_rows, pin_absent = [], []
+    for pin in list(pins)[:pin_max()]:
+        slug = str(pin.get("slug") if isinstance(pin, Mapping) else pin)
+        reason = (pin.get("reason") if isinstance(pin, Mapping)
+                  else "operator_pin")
+        row = by_slug.get(slug)
+        if row is None:
+            pin_absent.append(slug)      # not in the live universe now
+            continue
+        if slug in chosen or len(selected) >= cap:
+            continue
+        selected.append(row)
+        chosen.add(slug)
+        pin_rows.append({"slug": slug, "reason": reason})
 
     # First pass: one best market per event.
     for key in event_order:
@@ -127,7 +200,13 @@ def select_for_poll(targets: Iterable[Mapping[str, Any]], cap: int,
         "selected_events": len({str(r.get("event_slug") or r.get("league"))
                                 for r in selected}),
         "rotation_cycle": int(cycle),
-        "selection": "event_floor_then_rotating_l5_rank",
+        "pinned_markets": pin_rows,
+        "pinned_count": len(pin_rows),
+        "pinned_absent_from_universe": pin_absent,
+        "pin_cap": pin_max(),
+        "selection": ("priority_pins_then_event_floor_then_rotating_l5_rank"
+                      if pin_rows else
+                      "event_floor_then_rotating_l5_rank"),
     }
 
 
@@ -171,7 +250,8 @@ def discover_poll_targets(incentives: dict, include_inc: bool, cap: int,
     live_events, live_diag = col.fetch_live_events(col.http_get_json)
     if live_events and live_diag.get("v1_live_error") is None:
         universe = live_targets(live_events, prefixes)
-        selected, selection_diag = select_for_poll(universe, cap, cycle)
+        selected, selection_diag = select_for_poll(universe, cap, cycle,
+                                                   pins=priority_pins())
         # Incentive-only slugs are intentionally NOT appended here. If an
         # incentive market is actually live sports it is already in universe.
         return selected, {
@@ -183,7 +263,8 @@ def discover_poll_targets(incentives: dict, include_inc: bool, cap: int,
 
     fallback, fallback_diag = _legacy_targets(
         leagues, prefixes, incentives, include_inc)
-    selected, selection_diag = select_for_poll(fallback, cap, cycle)
+    selected, selection_diag = select_for_poll(fallback, cap, cycle,
+                                               pins=priority_pins())
     return selected, {
         **live_diag,
         **fallback_diag,
@@ -294,7 +375,9 @@ def run(minutes: Optional[float] = None) -> int:
                 now_mono - getattr(run, "_last_status", 0.0) >= status_every:
             try:
                 from src import pmus_status_report
-                pmus_status_report.emit(root)
+                # the L5 decision ranking inside the report feeds the
+                # bounded priority set for the NEXT discovery cycle
+                update_auto_pins(pmus_status_report.emit(root))
             except Exception as exc:
                 col.append_rows(root, [{"kind": "error", "stage": "status",
                                        "t": col._utcnow().isoformat(),
