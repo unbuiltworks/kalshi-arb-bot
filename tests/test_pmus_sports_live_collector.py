@@ -294,3 +294,32 @@ def test_closed_program_markets_are_not_added_to_the_poll_set(monkeypatch):
     assert diag["incentive_programs_live"] == ["aec-cfb-live-now-2026-09-05"]
     assert diag["incentive_programs_known"] == 2
     assert diag["pinned_markets"][0]["slug"] == "aec-cfb-live-now-2026-09-05"
+
+
+def test_run_interleaves_the_same_pin_set_selection_used():
+    """Regression: run() derived its interleave pins from priority_pins()
+    with NO program slugs, so a live program market was seated every cycle
+    yet polled only once per sweep -- ~60s cadence, tripping the exact gap
+    rule the pin exists to clear. The interleave must see the live program
+    slugs that discovery reported."""
+    import inspect
+    src = inspect.getsource(live.run)
+    assert "incentive_programs_live" in src, (
+        "run() must feed live program slugs into its pin set")
+    assert "priority_pins()" not in src, (
+        "run() must not re-derive pins without the program slugs")
+
+
+def test_program_pin_actually_recurs_in_the_poll_order(monkeypatch):
+    """End-to-end on the ordering primitive: a program-pinned slug in a
+    64-market sweep must recur many times, not once."""
+    monkeypatch.delenv(live.PIN_SLUGS_ENV, raising=False)
+    live._auto_pins = []
+    targets = [{"slug": f"m{i}"} for i in range(64)]
+    targets.append({"slug": "aec-cfb-live-2026-09-05"})
+    pins = [p["slug"] for p in
+            live.priority_pins(["aec-cfb-live-2026-09-05"])]
+    order = [t["slug"] for t in live.interleaved_order(targets, pins)]
+    pos = [i for i, s in enumerate(order) if s == "aec-cfb-live-2026-09-05"]
+    assert len(pos) >= 10, f"program pin polled only {len(pos)}x per sweep"
+    assert max(b - a for a, b in zip(pos, pos[1:])) <= 10

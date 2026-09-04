@@ -437,7 +437,14 @@ def run(minutes: Optional[float] = None) -> int:
                                        "err": str(exc)[:120]}])
             last_discovery = now_mono
 
-        pin_slugs = [p["slug"] for p in priority_pins()]
+        # The interleave must see the SAME pin set the selection used, or a
+        # program market is seated every cycle yet polled only once per
+        # sweep -- ~60s cadence, which trips the very gap rule the pin
+        # exists to clear. discovery_diag carries the live program slugs
+        # and persists between discovery cycles, exactly as `targets` does.
+        program_live = list(
+            (discovery_diag or {}).get("incentive_programs_live") or [])
+        pin_slugs = [p["slug"] for p in priority_pins(program_live)]
         order = interleaved_order(targets, pin_slugs)
         # rate plan computed on the INTERLEAVED length so pin re-polls
         # are paid for out of the same budget, never on top of it
