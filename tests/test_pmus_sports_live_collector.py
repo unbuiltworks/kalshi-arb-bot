@@ -325,7 +325,7 @@ def test_program_pin_actually_recurs_in_the_poll_order(monkeypatch):
     assert max(b - a for a, b in zip(pos, pos[1:])) <= 10
 
 
-# ---- prop tail must not starve the markets that actually trade ----
+# ---- priority comes from MEASURED conditions, never market type ----
 
 def _mkt(slug, prop, bid, ask, vol=None, liq=None):
     return {"slug": slug, "event_slug": "ev", "prop": prop,
@@ -334,62 +334,125 @@ def _mkt(slug, prop, bid, ask, vol=None, liq=None):
                             "volume24hr": vol, "liquidity": liq}}
 
 
-def test_moneyline_outranks_dead_props_when_volume_metadata_is_null():
-    """Measured live: one MLB doubleheader was 349 of 473 live markets,
-    almost all props at a 0.01 bid, all serving volume24hr=null. The
-    volume terms collapsed to zero, ranking went arbitrary, and 29 of the
-    event's 30 seats went to dead props while its moneyline -- 0.4750,
-    half-cent spread, ~629k shares/hour -- got one."""
-    money = _mkt("aec-mlb-det-cle", False, 0.4750, 0.4800)
-    dead = _mkt("astatc-mlb-det-cle-hr-x-gte1", True, 0.0100, 0.0200)
-    assert live._market_score(money) > live._market_score(dead)
-    # and the gap is decisive, not marginal
-    assert live._market_score(money) - live._market_score(dead) > 50.0
+def _obs_rows(slug, n, bid, ask, cum_step, t0=1_788_600_000.0, dt=10.0):
+    from datetime import datetime, timezone
+    out = []
+    for i in range(n):
+        out.append({"kind": "bbo_book",
+                    "t": datetime.fromtimestamp(t0 + i * dt,
+                                                tz=timezone.utc).isoformat(),
+                    "slug": slug, "bid": str(bid), "ask": str(ask),
+                    "bid_touch_qty": "500", "ask_touch_qty": "500",
+                    "shares_traded_cum": str(100 + i * cum_step)})
+    return out
+
+
+def test_market_type_is_not_an_input_to_priority():
+    """A prop and a primary with IDENTICAL observable conditions must
+    score identically. The earlier +40 primary bonus pre-decided that a
+    moneyline beats a player prop, which the evidence never showed."""
+    live._observed.clear()
+    prop = _mkt("astatc-x-hits-gte2", True, 0.45, 0.47)
+    prim = _mkt("aec-x", False, 0.45, 0.47)
+    assert live._market_score(prop) == live._market_score(prim)
+
+
+def test_a_prop_with_better_observed_conditions_outranks_a_primary():
+    """Type-blind means a prop CAN win, and must, when it is the better
+    L5 candidate on measured conditions."""
+    live._observed.clear()
+    now = 1_788_600_000.0 + 600
+    live.update_observed(_obs_rows("astatc-live-prop", 30, 0.48, 0.50, 40),
+                         now=1_788_600_000.0)
+    for i, r in enumerate(_obs_rows("astatc-live-prop", 30, 0.48, 0.50, 40)):
+        pass
+    # rebuild with real timestamps so span/prints are meaningful
+    live._observed.clear()
+    for i in range(30):
+        live.update_observed(
+            [{"kind": "bbo_book", "slug": "astatc-live-prop",
+              "bid": "0.48", "ask": "0.50", "bid_touch_qty": "500",
+              "ask_touch_qty": "500", "shares_traded_cum": str(100 + i * 40)}],
+            now=1_788_600_000.0 + i * 10)
+        live.update_observed(
+            [{"kind": "bbo_book", "slug": "aec-quiet-primary",
+              "bid": "0.20", "ask": "0.24", "bid_touch_qty": "5",
+              "ask_touch_qty": "5", "shares_traded_cum": "100"}],
+            now=1_788_600_000.0 + i * 10)
+    prop = _mkt("astatc-live-prop", True, 0.48, 0.50)
+    prim = _mkt("aec-quiet-primary", False, 0.20, 0.24)
+    assert live._market_score(prop, now) > live._market_score(prim, now)
+    pins = live.top_candidate_pins([prop, prim], now)
+    assert pins == ["astatc-live-prop"], pins
+
+
+def test_null_metadata_means_unknown_not_dead():
+    """A market the venue serves no volume for is UNMEASURED, not dead:
+    it gets an exploration allowance so it can be observed and prove
+    itself, rather than being ranked as if volume were zero."""
+    live._observed.clear()
+    unknown = _mkt("aec-unknown", False, 0.45, 0.47, vol=None, liq=None)
+    known_zero = _mkt("aec-zero", False, 0.45, 0.47, vol=0, liq=0)
+    assert live._market_score(unknown) > live._market_score(known_zero)
+    assert live.UNKNOWN_EXPLORATION_BONUS > 0
+
+
+def test_observed_tape_supersedes_served_metadata():
+    live._observed.clear()
+    now = 1_788_600_000.0 + 300
+    for i in range(30):
+        live.update_observed(
+            [{"kind": "bbo_book", "slug": "aec-m", "bid": "0.45",
+              "ask": "0.47", "bid_touch_qty": "900", "ask_touch_qty": "900",
+              "shares_traded_cum": str(100 + i * 50)}],
+            now=1_788_600_000.0 + i * 10)
+    st = live.observed_stats("aec-m", now)
+    assert st["prints_per_min"] > 0
+    assert st["two_sided_rate"] == 1.0
+    assert st["band_residency"] == 1.0
+    assert st["median_spread"] is not None
+    assert live.observed_stats("never-seen", now) is None
 
 
 def test_out_of_band_touch_is_penalised_but_never_excluded():
-    """A 0.01 prop cannot pass the 35-65 observation band, so it should
-    not consume budget ahead of markets that can -- but breadth is
-    preserved: it stays in the universe and still gets polled."""
+    """A touch that cannot reach 35-65 should not consume budget ahead of
+    markets that can -- but breadth is preserved: it stays in the
+    universe and is still polled."""
+    live._observed.clear()
     inband = _mkt("aec-a", False, 0.45, 0.46)
     faroff = _mkt("aec-b", False, 0.02, 0.03)
     assert live._market_score(inband) > live._market_score(faroff)
-    universe = [inband, faroff]
-    sel, _ = live.select_for_poll(universe, 64, cycle=0)
+    sel, _ = live.select_for_poll([inband, faroff], 64, cycle=0)
     assert {t["slug"] for t in sel} == {"aec-a", "aec-b"}
 
 
-def test_top_in_band_primaries_are_pinned_for_dense_cadence(monkeypatch):
-    """Ranking first is not enough: with 64 seats over ~476 markets every
-    seat turns at sweep cadence, so a 629k-shares/hour moneyline was
-    polled about once a minute and kept tripping the 60s rule."""
+def test_two_sided_and_spread_that_can_clear_the_bound_are_rewarded():
+    """A maker pair edge equals the spread, so a sub-1c spread cannot
+    reach the <=0.99 bound however much it trades."""
+    live._observed.clear()
+    wide = _mkt("aec-wide", False, 0.45, 0.47)     # 2c
+    tight = _mkt("aec-tight", False, 0.45, 0.455)  # 0.5c
+    onesided = _mkt("aec-one", True, 0.0, 0.06)
+    assert live._market_score(wide) > live._market_score(tight)
+    assert live._market_score(tight) > live._market_score(onesided)
+
+
+def test_candidate_autopin_is_bounded_and_disableable(monkeypatch):
+    live._observed.clear()
     monkeypatch.delenv(live.PIN_SLUGS_ENV, raising=False)
     live._auto_pins = []
-    universe = [_mkt("aec-mlb-money", False, 0.45, 0.46),
-                _mkt("aec-other", False, 0.50, 0.52),
-                _mkt("astatc-prop", True, 0.01, 0.02),
-                _mkt("aec-outofband", False, 0.95, 0.96)]
-    pins = live.top_primary_pins(universe)
-    assert "aec-mlb-money" in pins
-    assert "astatc-prop" not in pins        # props never auto-pin
-    assert "aec-outofband" not in pins      # out-of-band cannot qualify
+    universe = [_mkt(f"m{i}", i % 2 == 0, 0.45, 0.47) for i in range(9)]
+    monkeypatch.setenv(live.CANDIDATE_AUTOPIN_ENV, "2")
+    assert len(live.top_candidate_pins(universe)) == 2
+    monkeypatch.setenv(live.CANDIDATE_AUTOPIN_ENV, "0")
+    assert live.top_candidate_pins(universe) == []
 
 
-def test_top_primary_autopin_is_bounded_and_disableable(monkeypatch):
-    monkeypatch.delenv(live.PIN_SLUGS_ENV, raising=False)
-    live._auto_pins = []
-    universe = [_mkt(f"aec-m{i}", False, 0.45, 0.46) for i in range(9)]
-    monkeypatch.setenv(live.TOP_PRIMARY_AUTOPIN_ENV, "2")
-    assert len(live.top_primary_pins(universe)) == 2
-    monkeypatch.setenv(live.TOP_PRIMARY_AUTOPIN_ENV, "0")
-    assert live.top_primary_pins(universe) == []
-
-
-def test_pin_precedence_operator_then_program_then_primary(monkeypatch):
+def test_pin_precedence_operator_then_program_then_candidate(monkeypatch):
     monkeypatch.setenv(live.PIN_SLUGS_ENV, "op-1")
     monkeypatch.setenv(live.PIN_MAX_ENV, "6")
     live._auto_pins = ["l5-1"]
-    pins = live.priority_pins(["prog-1"], ["prim-1"])
+    pins = live.priority_pins(["prog-1"], ["cand-1"])
     assert [p["reason"] for p in pins] == [
         "operator_pin", "live_incentive_program",
-        "top_in_band_primary", "l5_candidate_auto_pin"]
+        "top_observed_candidate", "l5_candidate_auto_pin"]

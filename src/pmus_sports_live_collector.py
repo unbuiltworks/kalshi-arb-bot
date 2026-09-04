@@ -134,39 +134,59 @@ def incentive_autopin_enabled() -> bool:
 # pinned lane. Bounded by the same pin_max() as every other source and
 # restricted to IN-BAND primaries, because an out-of-band moneyline
 # cannot pass the observation gate anyway.
-TOP_PRIMARY_AUTOPIN_ENV = "PMUS_TOP_PRIMARY_AUTOPIN"   # "0" disables
-TOP_PRIMARY_AUTOPIN_DEFAULT = 3
+CANDIDATE_AUTOPIN_ENV = "PMUS_CANDIDATE_AUTOPIN"   # "0" disables
+CANDIDATE_AUTOPIN_DEFAULT = 3
 
 
-def top_primary_autopin_n() -> int:
-    raw = os.getenv(TOP_PRIMARY_AUTOPIN_ENV,
-                    str(TOP_PRIMARY_AUTOPIN_DEFAULT)).strip()
+def candidate_autopin_n() -> int:
+    raw = os.getenv(CANDIDATE_AUTOPIN_ENV,
+                    str(CANDIDATE_AUTOPIN_DEFAULT)).strip()
     if raw.lower() in ("0", "false", "no"):
         return 0
     try:
         return max(0, min(pin_max(), int(raw)))
     except ValueError:
-        return TOP_PRIMARY_AUTOPIN_DEFAULT
+        return CANDIDATE_AUTOPIN_DEFAULT
 
 
-def top_primary_pins(universe: Iterable[Mapping[str, Any]]) -> list[str]:
-    """Highest-scoring IN-BAND primary markets from the live universe."""
-    n = top_primary_autopin_n()
+def top_candidate_pins(universe: Iterable[Mapping[str, Any]],
+                       now: Optional[float] = None) -> list[str]:
+    """Best OBSERVED L5 candidates, regardless of market type.
+
+    Deliberately type-blind: a player prop showing two-sided flow inside
+    the band with a workable spread is a better candidate than a
+    moneyline that is not, and the earlier primary-only restriction
+    pre-decided that question. Eligibility is a measured touch inside
+    35-65 -- from observed tape when we have it, from served quotes when
+    we do not -- because a market outside the band cannot pass the
+    observation gate whatever else it does.
+    """
+    n = candidate_autopin_n()
     if not n:
         return []
     cands = []
     for t in universe or ():
-        if t.get("prop", False):
-            continue
-        meta = t.get("market_meta") or {}
-        bid = _number(meta.get("bestBidQuote"))
-        ask = _number(meta.get("bestAskQuote"))
-        mid = (bid + ask) / 2.0 if (bid > 0 and ask > 0 and ask >= bid) else bid
-        if not (0.35 <= mid <= 0.65):
-            continue
-        cands.append((-_market_score(t), str(t.get("slug"))))
+        slug = str(t.get("slug") or "")
+        obs = observed_stats(slug, now)
+        if obs is not None:
+            # measured: require the touch to actually sit in band
+            if obs["band_residency"] < 0.5 or obs["two_sided_rate"] < 0.5:
+                continue
+        else:
+            meta = t.get("market_meta") or {}
+            bid = _number(meta.get("bestBidQuote"))
+            ask = _number(meta.get("bestAskQuote"))
+            mid = ((bid + ask) / 2.0
+                   if (bid > 0 and ask > 0 and ask >= bid) else bid)
+            if not (0.35 <= mid <= 0.65):
+                continue
+        cands.append((-_market_score(t, now), slug))
     cands.sort()
     return [slug for _, slug in cands[:n]]
+
+
+# retained name so existing callers/tests keep working
+top_primary_pins = top_candidate_pins
 
 
 def priority_pins(program_slugs: Iterable[str] = (),
@@ -193,7 +213,7 @@ def priority_pins(program_slugs: Iterable[str] = (),
         for slug in program_slugs or ():
             add(slug, "live_incentive_program")
     for slug in primary_slugs or ():
-        add(slug, "top_in_band_primary")
+        add(slug, "top_observed_candidate")
     for slug in _auto_pins:
         add(slug, "l5_candidate_auto_pin")
     return out[:pin_max()]
@@ -209,52 +229,147 @@ def update_auto_pins(report: Optional[Mapping[str, Any]]) -> list[str]:
     return _auto_pins
 
 
-# Measured on the live board 2026-09-04: ONE MLB doubleheader contributed
-# 349 of 473 live markets -- almost all player props (hits/total-bases/HR
-# lines), most resting at a 0.01 bid. Those props also serve volume24hr
-# and liquidity as NULL, so the volume terms below collapse to zero and
-# ranking became effectively arbitrary: 29 of the 30 seats that event won
-# went to dead props while its moneyline -- bid 0.4750, half-cent spread,
-# ~200k shares/hour, squarely in the 35-65 band -- got exactly one.
+# L5-RELEVANCE SCORING FROM OBSERVED CONDITIONS, NOT MARKET TYPE.
 #
-# That is a selection defect, not a property of sports. A prop at a 0.01
-# bid cannot pass the observation band and cannot carry L5 flow, so
-# spending observation budget on it starves the markets that can. The
-# structural signals (is this the primary market; is the served touch in
-# band) therefore have to outrank absent volume metadata rather than sit
-# below it. Selection only: no gate, threshold or admission changes, and
-# the prop tail is still polled, just after the markets that can qualify.
-PRIMARY_MARKET_BONUS = 40.0
-IN_BAND_BONUS = 25.0
-DEAD_TOUCH_PENALTY = 30.0       # bid <=0.10 or >=0.90: unreachable band
+# History of this function matters. It first ranked on volume24hr and
+# liquidity; when a 349-market MLB prop tail served both as NULL those
+# terms collapsed to zero, ranking went arbitrary, and the budget drained
+# into 1-cent contracts. My first fix gave non-props a flat +40, which
+# traded one pre-decided answer for another: it asserts that a moneyline
+# is inherently better than a player prop, which the evidence does NOT
+# show. What the evidence showed was that THOSE SPECIFIC contracts had
+# 1-cent touches, one-sided books and null metadata -- all measurable
+# conditions that say nothing about props as a category.
+#
+# So type is not an input. A market earns priority by exhibiting the
+# conditions L5 needs, and any market type can exhibit them: moneylines,
+# spreads, totals, innings and player props are all eligible.
+#
+# NULL METADATA MEANS UNKNOWN, NEVER ZERO. A market the venue serves no
+# volume for is not dead, it is unmeasured -- it receives an exploration
+# allowance so it can be observed and prove itself, and observed tape
+# supersedes served metadata the moment we have any.
+TWO_SIDED_BONUS = 25.0          # a pair needs both directions to exist
+IN_BAND_BONUS = 20.0            # 35-65 is where the strategy operates
+SPREAD_CLEARS_BOUND_BONUS = 15.0  # >=1c: a maker pair can reach <=0.99
+FAR_FROM_BAND_PENALTY = 15.0    # touch <=0.10 / >=0.90 cannot reach band
+UNKNOWN_EXPLORATION_BONUS = 12.0  # unmeasured != dead; go and look
+METADATA_UNKNOWN_BONUS = 3.0    # null volume/liquidity != zero
+OBSERVED_FLOW_WEIGHT = 35.0     # measured prints dominate served guesses
+OBSERVED_BAND_WEIGHT = 20.0
+OBSERVED_TWO_SIDED_WEIGHT = 20.0
+
+# Rolling observed evidence, keyed by slug, fed from the tape this process
+# is already writing. Bounded per slug so memory cannot grow without limit.
+OBSERVED_WINDOW_S = 900.0
+OBSERVED_MAX_POINTS = 60
+_observed: dict = defaultdict(list)
 
 
-def _market_score(target: Mapping[str, Any]) -> float:
-    """Cheap pre-poll L5-relevance rank from venue-served metadata only.
+def update_observed(rows: Iterable[Mapping[str, Any]],
+                    now: Optional[float] = None) -> None:
+    """Accumulate measured per-market conditions from polled rows."""
+    now = time.time() if now is None else now
+    for r in rows or ():
+        if r.get("kind") != "bbo_book" or not r.get("slug"):
+            continue
+        bid = _number(r.get("bid"))
+        ask = _number(r.get("ask"))
+        try:
+            cum = float(r.get("shares_traded_cum"))
+        except (TypeError, ValueError):
+            cum = None
+        pts = _observed[str(r["slug"])]
+        pts.append({"t": now, "bid": bid, "ask": ask, "cum": cum,
+                    "bidq": _number(r.get("bid_touch_qty")),
+                    "askq": _number(r.get("ask_touch_qty"))})
+        if len(pts) > OBSERVED_MAX_POINTS:
+            del pts[:-OBSERVED_MAX_POINTS]
 
-    Structure first (primary market, touch in the observation band), then
-    volume/liquidity where the venue actually serves them. No missing
-    field is invented and this score is selection-only, never admission.
-    """
+
+def observed_stats(slug: str, now: Optional[float] = None) -> Optional[dict]:
+    """Measured L5-relevant conditions, or None when never observed."""
+    now = time.time() if now is None else now
+    pts = [p for p in _observed.get(str(slug), ())
+           if now - p["t"] <= OBSERVED_WINDOW_S]
+    if len(pts) < 2:
+        return None
+    span = max(1e-6, pts[-1]["t"] - pts[0]["t"])
+    prints = sum(1 for a, b in zip(pts, pts[1:])
+                 if a["cum"] is not None and b["cum"] is not None
+                 and b["cum"] != a["cum"])
+    two_sided = [p for p in pts if p["bid"] > 0 and p["ask"] > 0]
+    inband = [p for p in pts if 0.35 <= p["bid"] <= 0.65]
+    spreads = sorted(p["ask"] - p["bid"] for p in two_sided
+                     if p["ask"] >= p["bid"])
+    depths = sorted(min(p["bidq"], p["askq"]) for p in two_sided)
+    return {
+        "polls": len(pts),
+        "span_s": round(span, 1),
+        "prints_per_min": round(prints * 60.0 / span, 3),
+        "two_sided_rate": round(len(two_sided) / len(pts), 3),
+        "band_residency": round(len(inband) / len(pts), 3),
+        "median_spread": (spreads[len(spreads) // 2] if spreads else None),
+        "median_depth": (depths[len(depths) // 2] if depths else None),
+        "max_gap_s": round(max((b["t"] - a["t"])
+                               for a, b in zip(pts, pts[1:])), 1),
+    }
+
+
+def _market_score(target: Mapping[str, Any],
+                  now: Optional[float] = None) -> float:
+    """L5-relevance rank from MEASURED conditions; market type is not an
+    input. Observed tape supersedes served metadata; null metadata is
+    unknown and earns exploration, never a penalty."""
     meta = target.get("market_meta") or {}
-    volume = max(_number(meta.get("volume24hr")), _number(meta.get("volume")))
-    liquidity = _number(meta.get("liquidity"))
-    score = math.log1p(max(volume, 0.0)) * 5.0 + math.log1p(max(liquidity, 0.0))
+    slug = str(target.get("slug") or "")
+    score = 0.0
 
-    # a moneyline outranks a prop even when the venue serves no volume
-    if not target.get("prop", False):
-        score += PRIMARY_MARKET_BONUS
+    obs = observed_stats(slug, now)
+    if obs:
+        # measured conditions dominate: this market has shown us what it is
+        score += OBSERVED_FLOW_WEIGHT * min(1.0, obs["prints_per_min"] / 2.0)
+        score += OBSERVED_TWO_SIDED_WEIGHT * obs["two_sided_rate"]
+        score += OBSERVED_BAND_WEIGHT * obs["band_residency"]
+        if obs["median_spread"] is not None and obs["median_spread"] >= 0.0099:
+            score += SPREAD_CLEARS_BOUND_BONUS
+        if obs["median_depth"]:
+            score += min(8.0, math.log1p(obs["median_depth"]))
+    else:
+        score += UNKNOWN_EXPLORATION_BONUS
+
+    # Served metadata: used when present, UNKNOWN when absent. The
+    # distinction is load-bearing -- a venue that reports no volume for a
+    # market has told us nothing, whereas a venue reporting volume 0 has
+    # told us the market is genuinely inactive. Scoring those the same is
+    # what drained the budget into the prop tail in the first place, so
+    # an unknown ranks strictly ABOVE a measured zero and goes on the
+    # list to be observed.
+    vol = meta.get("volume24hr") if meta.get("volume24hr") is not None \
+        else meta.get("volume")
+    if vol is not None:
+        score += math.log1p(max(_number(vol), 0.0)) * 2.0
+    else:
+        score += METADATA_UNKNOWN_BONUS
+    if meta.get("liquidity") is not None:
+        score += math.log1p(max(_number(meta.get("liquidity")), 0.0))
+    else:
+        score += METADATA_UNKNOWN_BONUS
 
     bid = _number(meta.get("bestBidQuote"))
     ask = _number(meta.get("bestAskQuote"))
-    mid = (bid + ask) / 2.0 if (bid > 0 and ask > 0 and ask >= bid) else bid
+    if bid > 0 and ask > 0 and ask >= bid:
+        score += TWO_SIDED_BONUS
+        if (ask - bid) >= 0.0099:
+            score += SPREAD_CLEARS_BOUND_BONUS
+        mid = (bid + ask) / 2.0
+    else:
+        mid = bid
     if mid > 0:
         if 0.35 <= mid <= 0.65:
             score += IN_BAND_BONUS
         elif mid <= 0.10 or mid >= 0.90:
-            score -= DEAD_TOUCH_PENALTY
-    if bid > 0 and ask > 0 and ask >= bid:
-        score += max(0.0, 2.0 - 10.0 * (ask - bid))
+            score -= FAR_FROM_BAND_PENALTY
     return score
 
 
@@ -407,7 +522,7 @@ def discover_poll_targets(incentives: dict, include_inc: bool, cap: int,
         live_programs = sorted(
             {str(t.get("slug")) for t in universe
              if str(t.get("slug")) in program_slugs})
-        primaries = top_primary_pins(universe)
+        primaries = top_candidate_pins(universe)
         selected, selection_diag = select_for_poll(
             universe, cap, cycle,
             pins=priority_pins(live_programs, primaries))
@@ -416,7 +531,7 @@ def discover_poll_targets(incentives: dict, include_inc: bool, cap: int,
             **selection_diag,
             "source_mode": "v1_live_sports_authoritative",
             "incentive_only_admitted": 0,
-            "top_in_band_primaries": primaries,
+            "top_observed_candidates": primaries,
             "incentive_programs_known": len(program_slugs),
             "incentive_programs_live": live_programs,
             "incentive_autopin": incentive_autopin_enabled(),
@@ -521,7 +636,7 @@ def run(minutes: Optional[float] = None) -> int:
         program_live = list(
             (discovery_diag or {}).get("incentive_programs_live") or [])
         primary_live = list(
-            (discovery_diag or {}).get("top_in_band_primaries") or [])
+            (discovery_diag or {}).get("top_observed_candidates") or [])
         pin_slugs = [p["slug"]
                      for p in priority_pins(program_live, primary_live)]
         order = interleaved_order(targets, pin_slugs)
@@ -542,6 +657,9 @@ def run(minutes: Optional[float] = None) -> int:
                              "err": str(exc)[:120]})
         if rows:
             col.append_rows(root, rows)
+            # measured conditions feed the next cycle's ranking, so a
+            # market earns priority by what it DOES, not by its type
+            update_observed(rows)
 
         state["cycles"] = int(state.get("cycles", 0)) + 1
         state["rows_written"] = int(state.get("rows_written", 0)) + len(rows)
