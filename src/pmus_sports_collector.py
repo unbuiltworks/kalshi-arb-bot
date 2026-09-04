@@ -392,9 +392,20 @@ def bbo_book_row(slug: str, meta: Mapping[str, Any],
                  bbo_md: Mapping[str, Any],
                  book_md: Mapping[str, Any]) -> dict:
     """Normalize one observation. Ask depth is NEVER fabricated: when the
-    public book omits the ask side we record null plus a limitation flag."""
+    public book omits the ask side we record null plus a limitation flag.
+
+    PMUS /v1/markets/{slug}/book serves sell depth under ``offers``
+    (issue #167 comments 5534675078/5534766043; the authenticated WS
+    recorder already consumed it correctly). When the venue serves the
+    ``offers`` key it is authoritative — an empty ``offers`` array means
+    the sell side is genuinely missing even if a stale ``asks`` field
+    rides along. Legacy ``asks`` is accepted only as a fallback for
+    recorded fixtures that predate the schema confirmation."""
     bids = book_md.get("bids") or []
-    asks = book_md.get("asks") or []
+    if "offers" in book_md:
+        asks = book_md.get("offers") or []
+    else:
+        asks = book_md.get("asks") or []
     def val(k):
         v = bbo_md.get(k)
         return v.get("value") if isinstance(v, Mapping) else v

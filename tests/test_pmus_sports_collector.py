@@ -101,9 +101,64 @@ def test_row_never_fabricates_ask_depth():
     assert row["ask_touch_qty"] is None and row["ask_book_missing"] is True
     assert row["source"] == "gateway.polymarket.us"
     both = dict(book_bid_only, asks=[{"px": {"value": "0.41"}, "qty": "5"}])
+    del both["asks"]  # legacy fallback covered separately below
+    both["offers"] = [{"px": {"value": "0.41"}, "qty": "5"}]
     row2 = col.bbo_book_row("aec-x", {"league": "mlb", "why": "w",
                                       "event_state": None}, bbo, both)
     assert row2["ask_touch_qty"] == "5" and row2["ask_book_missing"] is False
+
+
+def _meta():
+    return {"league": "mlb", "why": "w", "event_state": None}
+
+
+def test_documented_offers_schema_is_the_canonical_ask_side():
+    """Issue #167 comments 5534675078/5534766043: PMUS /v1 book serves
+    sell depth under `offers`. The falsely-missing ask side (asks-only
+    parsing) zeroed ask_side_served_pct across the live slate — this
+    locks the documented live shape."""
+    bbo = {"bestBid": {"value": "0.40"}, "bestAsk": {"value": "0.42"}}
+    book = {"bids": [{"px": {"value": "0.40"}, "qty": "1000"}],
+            "offers": [{"px": {"value": "0.42"}, "qty": "77"},
+                       {"px": {"value": "0.44"}, "qty": "900"}]}
+    row = col.bbo_book_row("aec-x", _meta(), bbo, book)
+    assert row["ask_touch_qty"] == "77"          # offers[0].qty exactly
+    assert row["ask_book_missing"] is False
+
+
+def test_empty_or_absent_offers_stays_missing_fail_closed():
+    bbo = {"bestBid": {"value": "0.40"}}
+    for book in ({"bids": [], "offers": []},
+                 {"bids": [], "offers": None},
+                 {"bids": []}):
+        row = col.bbo_book_row("aec-x", _meta(), bbo, book)
+        assert row["ask_touch_qty"] is None
+        assert row["ask_book_missing"] is True
+
+
+def test_served_offers_key_is_authoritative_over_stale_asks():
+    """Never a regression back to asks-only parsing: when the venue
+    serves the offers key, it decides the sell side — a stale asks
+    field can neither fabricate depth (empty offers) nor be preferred
+    (both present)."""
+    bbo = {"bestBid": {"value": "0.40"}}
+    stale = {"bids": [], "offers": [],
+             "asks": [{"px": {"value": "0.41"}, "qty": "5"}]}
+    row = col.bbo_book_row("aec-x", _meta(), bbo, stale)
+    assert row["ask_touch_qty"] is None and row["ask_book_missing"] is True
+    both = {"bids": [], "offers": [{"px": {"value": "0.42"}, "qty": "7"}],
+            "asks": [{"px": {"value": "0.41"}, "qty": "5"}]}
+    row2 = col.bbo_book_row("aec-x", _meta(), bbo, both)
+    assert row2["ask_touch_qty"] == "7" and row2["ask_book_missing"] is False
+
+
+def test_legacy_asks_only_fixture_still_parses_as_fallback():
+    # recorded fixtures predating the schema confirmation carry `asks`
+    # with no offers key at all — the fallback keeps them readable
+    bbo = {"bestBid": {"value": "0.40"}}
+    legacy = {"bids": [], "asks": [{"px": {"value": "0.41"}, "qty": "5"}]}
+    row = col.bbo_book_row("aec-x", _meta(), bbo, legacy)
+    assert row["ask_touch_qty"] == "5" and row["ask_book_missing"] is False
 
 
 def test_structurally_read_only_keyless():

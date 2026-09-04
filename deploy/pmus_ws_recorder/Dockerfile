@@ -43,7 +43,7 @@ RUN touch src/__init__.py
 ENV PMUS_SERVICE_ROLE=ws-recorder \
     PMUS_WS_ROOT=/state/pmus-ws \
     PMUS_WS_LEAGUES=all \
-    PMUS_WS_MAX_MARKETS=40 \
+    PMUS_WS_MAX_MARKETS=64 \
     PYTHONUNBUFFERED=1
 
 CMD ["python3", "-m", "src.pmus_ws_evidence_recorder_enriched"]
