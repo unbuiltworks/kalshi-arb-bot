@@ -12,6 +12,15 @@ COPY src/pmus_sports_collector.py src/pmus_sports_collector.py
 COPY src/pmus_sports_live_collector.py src/pmus_sports_live_collector.py
 COPY src/pmus_sports_offers_hotfix.py src/pmus_sports_offers_hotfix.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
+# sequential L5 decision layer (issue #167 comment 5535231759): frozen
+# read-only policy + its model artifact; no executor module enters this
+# keyless image
+COPY src/pmus_sports_l5_decision.py src/pmus_sports_l5_decision.py
+COPY src/pmus_l5_persistence_v2.py src/pmus_l5_persistence_v2.py
+COPY src/polymarket_l5/__init__.py src/polymarket_l5/__init__.py
+COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
+COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
+COPY analysis/l5/l5_action_model_v2.json analysis/l5/l5_action_model_v2.json
 RUN touch src/__init__.py
 
 # Baked role tripwire: cross-built services fail closed. The live wrapper

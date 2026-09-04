@@ -290,6 +290,22 @@ def emit(root: Optional[Path] = None) -> dict:
                        for w, d in rep["windows"].items()}
     print("PMUS_STATUS " + json.dumps(slim, separators=(",", ":"),
                                       default=str), flush=True)
+    # Sequential L5 decision layer (issue #167 comment 5535231759):
+    # candidates reach the frozen L5 policy and an auditable next action
+    # lands in the log + report. Guarded so a decision-layer error can
+    # never break the collector heartbeat; DISARMED, read-only.
+    try:
+        from src import pmus_sports_l5_decision as l5d
+        now = time.time()
+        since = datetime.fromtimestamp(now - 7200, timezone.utc)
+        by_slug: dict[str, list] = {}
+        for r in load_tape(root, since):
+            if r.get("kind") == "bbo_book" and r.get("slug"):
+                by_slug.setdefault(r["slug"], []).append(r)
+        rep["l5_sports_decisions"] = l5d.emit_decisions(by_slug, now=now)
+    except Exception as exc:
+        rep["l5_sports_decisions"] = {
+            "error": f"{type(exc).__name__}:{str(exc)[:100]}"}
     try:
         (root / "status_report.json").write_text(
             json.dumps(rep, indent=1, default=str))
