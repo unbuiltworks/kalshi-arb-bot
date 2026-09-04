@@ -137,6 +137,20 @@ def compose_evidence(slug: str, by_slug: Mapping[str, list], now: float,
     obs = by_slug.get(slug)
     if not obs:
         return None
+    if off_distribution is None:
+        # Do NOT inherit "unknown" from the caller's slate: slate_decisions
+        # truncates to MAX_DECISION_ROWS, so a perfectly good candidate
+        # drops out of the rows list purely because OTHER markets got
+        # busier, and its distribution verdict then reads unknown and
+        # fails the guard. Whether v2 has visited this market's state is a
+        # property of this market, not of how many others outrank it, so
+        # plan this slug's entry action directly. Still fails closed: a
+        # stale book or an off-distribution state yields None/True.
+        try:
+            off_distribution = off_distribution_of(
+                l5d.decide_market(slug, obs, now, l5d.pv2.load_v2()))
+        except Exception:
+            off_distribution = None
     strict_rows = strict_rows_from_sports(by_slug, now)
     cats = replay.category_spring_evidence(strict_rows, now)
     mine = strict_rows.get(slug) or {}

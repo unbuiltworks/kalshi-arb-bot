@@ -496,3 +496,26 @@ def test_stale_book_still_fails_closed_as_unknown():
     assert xfer.off_distribution_of(row) is None
     assert xfer.off_distribution_of(None) is None
     assert xfer.off_distribution_of({}) is None
+
+
+def test_decision_row_cap_does_not_make_a_candidate_off_distribution():
+    """slate_decisions truncates to MAX_DECISION_ROWS, so a good market
+    drops out of the rows list purely because OTHER markets outrank it.
+    Whether v2 visited THIS market's state cannot depend on that, so the
+    verdict is planned for the slug directly rather than inherited as
+    unknown from a truncated slate."""
+    base = 1_000_000.0
+    now = base + 26 * 35 + 30
+    by = {SLUG: _flowing(base), SIB: _flowing(base, slug=SIB)}
+    # caller supplies nothing, exactly as when the slug missed the cut
+    ev = xfer.compose_evidence(SLUG, by, now)
+    assert ev["off_distribution"] is False, ev["off_distribution"]
+
+
+def test_slug_with_no_fresh_book_still_reports_unknown():
+    """The direct plan must not manufacture a verdict: an observation set
+    too old to price still fails closed."""
+    base = 1_000_000.0
+    by = {SLUG: _flowing(base)}
+    ev = xfer.compose_evidence(SLUG, by, base + 26 * 35 + 100_000)
+    assert ev["off_distribution"] is None
