@@ -1319,3 +1319,96 @@ def test_first_read_after_an_outage_is_reported_and_resweeps_open_orders(
     assert rec["errors"] == 3 and rec["held"] is None
     assert rec["sweep"]["foreign"] == [] and rec["outage_s"] >= 0
     assert rep["status"] == "CAMPAIGN_NO_CANDIDATE"
+
+
+# ---- OWNER 5554127702 #1/#5: recovery gate, postmortem stamps, burst ----
+
+def test_recovery_gate_waits_for_public_prints_then_resumes_and_reports_burst(
+        monkeypatch, tmp_path):
+    """Account reads healthy is not enough: no session runs until public
+    prints move (sharesTraded up or the recorder tape shows trades).
+    Outage start / account recovery / trades resumed are stamped, and the
+    30-minute recovery burst is reported."""
+    from tests.test_pmus_spring_l5_session import Fake
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    tape = {"trades": 0}
+    monkeypatch.setattr(
+        entry, "load_status_document",
+        lambda path=None: (_status([_row("x", touch="900",
+                                         trades_1h=tape["trades"])]),
+                           "status_url:test"))
+    fake = Fake()
+    shares = {"v": 100.0}
+    real = fake.request
+
+    def req(method, path, body=None, **kw):
+        out = real(method, path, body)
+        if path.endswith("/bbo"):
+            out["marketData"]["sharesTraded"] = str(shares["v"])
+        return out
+    fake.request = req
+    calls = {"n": 0}
+
+    def flaky_held(t):
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise q1.Halt("GET_RETRIES_EXHAUSTED:/v1/orders/open:HTTP Error 500")
+        if calls["n"] == 6:
+            shares["v"] = 101.0                 # a print lands...
+            tape["trades"] = 25                 # ...and the row's flow returns
+        return None
+    monkeypatch.setattr(cont, "held_market", flaky_held)
+    ran = []
+
+    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s, **kw):
+        ran.append(slug)
+        return {"status": "SPRING_NO_FILL", "slug": slug,
+                "inventory": {"up": "0", "dn": "0"}, "actions": [],
+                "orders": [{"outcome": "no_fill_cancelled",
+                            "end_reason": "deadline", "filled_qty": "0"}],
+                "decisions": [{"acted": "open",
+                               "shadow_differs_from_executed": False}]}
+    import itertools
+    # each tick is 5 minutes of clock so the 30-minute milestone is reached
+    ticks = itertools.chain([0.0], (300.0 * i for i in range(1, 40)),
+                            itertools.repeat(100000.0))
+    rep = cont.run_campaign(fake, clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=20000.0, session_runner=fake_session)
+    assert rep["outages"] and rep["outages"][0]["errors"] == 2
+    o = rep["outages"][0]
+    assert o["start_utc"] and o["account_recovered_utc"] and o["trades_resumed_utc"]
+    assert o["trades_resumed_by"] == {"markets_moved": ["x"]}
+    # no session ran while the gate was pending (held calls 3..5)
+    assert ran and calls["n"] >= 6
+    assert rep["recovery_bursts"] and rep["recovery_bursts"][0]["minutes"] == 30
+    rb = rep["recovery_bursts"][0]
+    assert rb["sessions"] >= 1 and rb["submitted"] >= 1 and rb["filled"] == 0
+    assert rb["decisions_by_action"]["open"] >= 1
+
+
+def test_recovery_gate_accepts_the_recorder_tape_as_prints(monkeypatch,
+                                                            tmp_path):
+    from tests.test_pmus_spring_l5_session import Fake
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    monkeypatch.setattr(entry, "load_status_document",
+                        lambda path=None: (_status([_row("x", touch="0.1")]),
+                                           "status_url:test"))   # trades_1h 25
+    calls = {"n": 0}
+
+    def flaky_held(t):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise q1.Halt("GET_RETRIES_EXHAUSTED:/v1/orders/open:HTTP Error 500")
+        return None
+    monkeypatch.setattr(cont, "held_market", flaky_held)
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 10, itertools.repeat(1000.0))
+    rep = cont.run_campaign(Fake(), clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=500.0, session_runner=lambda *a, **k: {})
+    assert rep["outages"][0]["trades_resumed_by"] == {"recorder_tape": True}
+    assert rep["status"] == "CAMPAIGN_NO_CANDIDATE"
+    assert rep["rung"]["ladder_rung"] == "R1" and rep["ramp_ladder"][0]["id"] == "R1"

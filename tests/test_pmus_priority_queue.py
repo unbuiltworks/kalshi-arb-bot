@@ -253,3 +253,16 @@ def test_fast_realloc_diagnostics_wired_into_recorder_status_path():
     assert "allocate_l5" in src
     assert "l5_fast_realloc_count" in src
     assert "l5_fast_realloc_changed" in src
+
+
+def test_l5_allocation_zero_means_no_allocation(monkeypatch):
+    """OWNER 5554106892: no hardcoded reserved allocation; 0 is valid."""
+    monkeypatch.setenv(pq.L5_ALLOC_ENV, "0")
+    now = time.time()
+    targets = _targets(60)
+    state = _mstate({f"m-{i:03d}": 30 for i in range(60)}, now)
+    p = pq.plan(targets, state, 40, 0, {})
+    assert p["l5_allocated"] == []
+    assert len(p["subscribe"]) == 40                     # coverage unchanged
+    monkeypatch.setenv(pq.L5_ALLOC_ENV, "50")
+    assert len(pq.plan(targets, state, 40, 0, {})["l5_allocated"]) == 20

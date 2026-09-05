@@ -42,7 +42,7 @@ COLD_SLOTS_ENV = "PMUS_WS_COLD_SLOTS"      # default max(2, cap//10)
 MIN_HOLD_ENV = "PMUS_WS_MIN_HOLD_CYCLES"   # default 3
 COOLDOWN_ENV = "PMUS_WS_PROMOTE_COOLDOWN"  # default 2 cycles after demote
 WAKE_TRADES_ENV = "PMUS_WS_WAKE_TRADES"    # default 3 new trades
-L5_ALLOC_ENV = "PMUS_WS_L5_ALLOC"          # default 10 (bounded 5..20)
+L5_ALLOC_ENV = "PMUS_WS_L5_ALLOC"          # default 10 (bounded 0..20; 0 = no L5 allocation, OWNER 5554106892)
 
 
 def _clamp01(x: float) -> float:
@@ -175,7 +175,7 @@ def allocate_l5(subscribed_slugs, state: Mapping[str, Any],
     ranked = sorted(slugs, key=lambda x: (
         -(scored[x]["score"] if scored[x]["score"] is not None else -1.0),
         x))
-    l5_n = min(20, max(5, int(os.getenv(L5_ALLOC_ENV, "10"))))
+    l5_n = min(20, max(0, int(os.getenv(L5_ALLOC_ENV, "10"))))
     return ranked[:l5_n]
 
 
@@ -300,7 +300,7 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
         p["seed_sig"] = sigs.get(slug, ())
         new_prev[slug] = p
 
-    l5_n = min(20, max(5, int(os.getenv(L5_ALLOC_ENV, "10"))))
+    l5_n = min(20, max(0, int(os.getenv(L5_ALLOC_ENV, "10"))))
     l5_allocated = [s for s in ranked if s in sub_set][:l5_n]
 
     ages = [cycle - int(new_prev[s].get("last_obs", cycle)) for s in slugs]

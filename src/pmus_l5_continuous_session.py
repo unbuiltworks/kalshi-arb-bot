@@ -40,6 +40,7 @@ from typing import Any, Mapping, Optional
 from src import pmus_spring_l5_probe_entry as entry
 from src import pmus_spring_l5_session as base
 from src import pmus_l5_persistence_v2 as pv2
+from src import pmus_l5_ramp_ladder as ladder
 from src.polymarket_l5.action_model import state_key
 
 CAMPAIGN_SECONDS_ENV = "PMUS_SPRING_CAMPAIGN_SECONDS"
@@ -440,6 +441,95 @@ def sweep_orphan_orders(t) -> dict:
     return out
 
 
+def _utc(wall) -> str:
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(float(wall()), tz=timezone.utc).isoformat()
+
+
+def liveness_sample(t, slugs) -> dict:
+    """OWNER 5554127702 #1: public, read-only `sharesTraded` per market
+    from the venue's own market data -- the signal that trades are
+    printing again. None when unreadable; never raises."""
+    out: dict = {}
+    for slug in list(dict.fromkeys(s for s in slugs if s))[:6]:
+        try:
+            md = t.request("GET", f"/v1/markets/{slug}/bbo",
+                           base=base.q1.GATEWAY)
+            md = md.get("marketData") if isinstance(md, Mapping) else None
+            raw = (md or {}).get("sharesTraded")
+            out[slug] = float(raw) if raw not in (None, "") else None
+        except Exception:                          # noqa: BLE001
+            out[slug] = None
+    return out
+
+
+def liveness_slugs() -> list:
+    """Markets to watch for prints: the ledger's unsettled (held) markets
+    plus the deepest rows of the recorder's latest status."""
+    slugs = list(unsettled_slugs())
+    try:
+        status, _ = entry.load_status_document(None)
+        rows = [r for r in (status or {}).get("spring_watch") or []
+                if isinstance(r, Mapping) and r.get("slug")]
+        rows.sort(key=lambda r: -float(r.get("bid_touch_qty") or 0))
+        slugs += [str(r["slug"]) for r in rows[:3]]
+    except Exception:                              # noqa: BLE001
+        pass
+    return slugs
+
+
+def status_has_trades() -> bool:
+    """The recorder's own tape: any watch row with trades in the hour."""
+    try:
+        status, _ = entry.load_status_document(None)
+        return any(int(r.get("trades_1h") or 0) > 0
+                   for r in (status or {}).get("spring_watch") or []
+                   if isinstance(r, Mapping))
+    except Exception:                              # noqa: BLE001
+        return False
+
+
+def burst_report(report: Mapping[str, Any], funnel: Mapping[str, Any],
+                 burst: Mapping[str, Any], minutes: int) -> dict:
+    """OWNER 5554127702 #5: what happened in the first N minutes after
+    the venue resumed -- eligible/selected/decisions/submitted/rested/
+    filled/cancelled, shadow vs executed, inventory trajectory, realized
+    settlements, and the exact refusal reasons, all as deltas from the
+    moment of recovery."""
+    f0 = burst["funnel0"]
+    sessions = (report.get("sessions") or [])[burst["sessions0"]:]
+    orders = [o for s in sessions for o in (s.get("orders") or [])]
+    decisions = [d for s in sessions for d in (s.get("decisions") or [])]
+    filled = [o for o in orders if str(o.get("outcome")) == "filled"]
+    rested = [o for o in orders if str(o.get("end_reason")) == "deadline"]
+    rejected = [o for o in orders
+                if str(o.get("end_reason", "")).startswith("rejected")]
+    refusals = {k: int(v) - int(f0.get("refusals", {}).get(k, 0))
+                for k, v in (funnel.get("refusals") or {}).items()}
+    settles = (report.get("settlements") or [])[burst["settlements0"]:]
+    return {
+        "minutes": minutes,
+        "eligible_admitted": int(funnel.get("admitted", 0)) - int(f0.get("admitted", 0)),
+        "universe_rows": int(funnel.get("universe_rows", 0)) - int(f0.get("universe_rows", 0)),
+        "selected_markets": sorted({str(s.get("slug")) for s in sessions if s.get("slug")}),
+        "sessions": len(sessions),
+        "decisions": len(decisions),
+        "decisions_by_action": {a: sum(1 for d in decisions if d.get("acted") == a)
+                                for a in ("open", "extend", "complete", "hold")},
+        "shadow_differs_from_executed": sum(
+            1 for d in decisions if d.get("shadow_differs_from_executed")),
+        "submitted": len(orders), "filled": len(filled),
+        "rested_to_deadline": len(rested), "rejected": len(rejected),
+        "cancelled": len(orders) - len(filled),
+        "inventory_trajectory": [{"slug": s.get("slug"),
+                                  "inventory": s.get("inventory")}
+                                 for s in sessions if s.get("inventory")],
+        "settlements": [{"slug": s.get("slug"), "status": s.get("status"),
+                         "realized_usd": s.get("realized_usd")} for s in settles],
+        "refusal_reasons_delta": {k: v for k, v in refusals.items() if v},
+    }
+
+
 def _sum_realized(report: Mapping[str, Any]) -> Optional[str]:
     """Campaign realized = the sum of VENUE-confirmed realized amounts
     over this campaign's settlements; None until the first one."""
@@ -515,8 +605,16 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     last_settle_audit = float("-inf")
     settled_here: set = set()
     iteration_errors: list = []          # clock() stamps of recent errors
-    rung_markets = max(1, int(os.getenv(RUNG_MARKETS_ENV,
-                                        str(DEFAULT_RUNG_MARKETS))))
+    # OWNER 5554127702 #4: the prebuilt ladder names the active rung
+    # (PMUS_SPRING_RUNG, default R1 = the authorized 3-market rung). Only
+    # the THROUGHPUT levers are wired here (markets per campaign, actions
+    # per session); the per-market cap and concurrency stay the session's
+    # hard constants until the owner changes them by decision.
+    active_rung = ladder.rung()
+    rung_markets = max(1, int(os.getenv(
+        RUNG_MARKETS_ENV, str(active_rung["markets_per_campaign"]))))
+    os.environ.setdefault(base.MAX_ACTIONS_ENV,
+                          str(active_rung["max_actions_per_session"]))
     filled_markets: set = set()          # markets with a fill this campaign
     report["rung"] = {
         "markets_allowed": rung_markets,
@@ -524,7 +622,18 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         "worst_case_usd": str(base.SESSION_NOTIONAL_CAP * rung_markets),
         "daily_loss_stop_usd": str(base.q1.DAILY_LOSS_STOP),
         "concurrency": 1,
+        "ladder_rung": active_rung["id"],
+        "max_actions_per_session": os.environ.get(base.MAX_ACTIONS_ENV),
     }
+    report["ramp_ladder"] = ladder.ladder()
+    # OWNER 5554127702 #1/#5: outage bookkeeping for the postmortem, the
+    # recovery gate (account reads healthy AND public prints moving), and
+    # the recovery-burst milestones
+    outage: Optional[dict] = None
+    liveness_baseline: dict = {}
+    recovery_gate: Optional[dict] = None
+    burst: Optional[dict] = None
+    gate_logs = 0
 
     def _rung_gate() -> Optional[str]:
         """After the rung's markets are all flat/settled: stop at the
@@ -554,6 +663,11 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         report["advance_gate"] = {"filled_markets": sorted(filled_markets),
                                   **clean}
         _log("advance_gate", **report["advance_gate"])
+        # the ladder's verdict on THIS rung from venue-confirmed evidence;
+        # informational -- promotion is the owner's env change
+        report["ramp_evaluation"] = ladder.evaluate(
+            active_rung["id"], ladder.evidence_from_campaign(report))
+        _log("ramp_evaluation", **report["ramp_evaluation"])
         return "CAMPAIGN_RUNG_COMPLETE"
     # OWNER 5552841170 #4: throughput funnel, accumulated for the campaign
     # and printed per selection cycle
@@ -565,7 +679,11 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     _log("campaign_start", mode=report["mode"], campaign_s=campaign_s,
          campaign_expires_at=wall() + campaign_s,
          max_sessions=MAX_SESSIONS_PER_CAMPAIGN,
-         per_market_cap=str(base.SESSION_NOTIONAL_CAP))
+         per_market_cap=str(base.SESSION_NOTIONAL_CAP),
+         rung=report["rung"])
+    _log("ramp_ladder", active=active_rung["id"],
+         rungs=[{"id": r["id"], "lever": r["lever"],
+                 "worst_case": r["worst_case"]} for r in report["ramp_ladder"]])
     while clock() < stop_at and len(report["sessions"]) < \
             MAX_SESSIONS_PER_CAMPAIGN + resumes:
         try:
@@ -592,6 +710,59 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     if sweep["foreign"]:
                         status = "CAMPAIGN_STOP:FOREIGN_OPEN_ORDERS"
                         break
+                    if outage is None:
+                        outage = {"start_clock": clock() - outage_s,
+                                  "start_utc": None}
+                    outage["account_recovered_utc"] = _utc(wall)
+                    outage["errors"] = n_err
+                    outage["sweep"] = sweep
+                    # OWNER 5554127702 #1: account reads healthy is not
+                    # enough -- public prints must move again before any
+                    # session runs; until then every iteration waits here
+                    recovery_gate = {"pending": True, "checks": 0}
+                if recovery_gate and recovery_gate.get("pending"):
+                    live = liveness_sample(t, list(liveness_baseline)
+                                           or liveness_slugs())
+                    moved = [s for s, v in live.items()
+                             if v is not None
+                             and liveness_baseline.get(s) is not None
+                             and v > liveness_baseline[s]]
+                    tape = status_has_trades()
+                    recovery_gate["checks"] += 1
+                    if moved or tape:
+                        recovery_gate["pending"] = False
+                        outage["trades_resumed_utc"] = _utc(wall)
+                        outage["trades_resumed_by"] = (
+                            {"markets_moved": moved} if moved
+                            else {"recorder_tape": True})
+                        report.setdefault("outages", []).append(outage)
+                        _log("venue_trading_resumed", **outage)
+                        burst = {"start_clock": clock(),
+                                 "funnel0": json.loads(json.dumps(funnel)),
+                                 "sessions0": len(report["sessions"]),
+                                 "settlements0": len(report.get("settlements") or []),
+                                 "milestones": [30, 60, 120], "done": []}
+                        outage, liveness_baseline = None, {}
+                    else:
+                        gate_logs += 1
+                        if gate_logs % 4 == 1:
+                            _log("recovery_gate_waiting",
+                                 checks=recovery_gate["checks"],
+                                 baseline=liveness_baseline, now=live,
+                                 recorder_tape=tape)
+                        status = "CAMPAIGN_WAITING:VENUE_PRINTS"
+                        sleep(SELECT_POLL_S)
+                        continue
+                if burst:
+                    elapsed_min = (clock() - burst["start_clock"]) / 60.0
+                    for m in burst["milestones"]:
+                        if m not in burst["done"] and elapsed_min >= m:
+                            burst["done"].append(m)
+                            rb = burst_report(report, funnel, burst, m)
+                            report.setdefault("recovery_bursts", []).append(rb)
+                            _log("recovery_burst", **rb)
+                    if len(burst["done"]) == len(burst["milestones"]):
+                        burst = None
                 if held == MULTI_HELD:
                     status = f"CAMPAIGN_STOP:{MULTI_HELD}"
                     break
@@ -771,6 +942,15 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             iteration_errors[:] = [e for e in iteration_errors
                                    if now_c - e < ITERATION_ERROR_WINDOW_S]
             iteration_errors.append(now_c)
+            if outage is None:
+                # postmortem timestamps + the public-print baseline the
+                # recovery gate compares against (read-only, may be empty)
+                outage = {"start_clock": now_c, "start_utc": _utc(wall),
+                          "first_error": f"{type(exc).__name__}:{str(exc)[:120]}"}
+                if t is not None:
+                    liveness_baseline = liveness_sample(t, liveness_slugs())
+                _log("venue_outage_start", **outage,
+                     liveness_baseline=liveness_baseline)
             _log("campaign_iteration_error",
                  err=f"{type(exc).__name__}:{str(exc)[:160]}",
                  errors_in_window=len(iteration_errors),
