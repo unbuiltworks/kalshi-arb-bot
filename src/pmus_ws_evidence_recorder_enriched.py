@@ -350,7 +350,98 @@ def spring_watch(rows: Mapping[str, Mapping[str, Any]],
     out = [row for row, _ in picked[:max(0, lim)]]
     for row in out:
         row["probe_evidence"] = probe_evidence(row)
+        _attach_open_facts(row, now)
     return out
+
+
+# --- OPEN safety facts the admission guard REQUIRES (OWNER 5551236878) ---
+#
+# The guard fails closed on each of these, so a recorder that does not
+# emit them cannot admit anything -- rebuilding it without this change
+# would have produced a status document the probe still refuses.
+
+MARKET_STATE_TTL_S = 120.0        # bounded: <=10 watch rows, cached
+# same 60s threshold the collector tape uses, so "cadence" means one
+# thing across both evidence paths
+CADENCE_MAX_AGE_S = 60.0
+_MARKET_STATE_CACHE: dict = {}
+
+
+def market_state(slug: str, now: float, get=None) -> Optional[dict]:
+    """The venue's authoritative open-state, cached and bounded.
+
+    PMUS serves no settlement timestamp for live sports, so the guard
+    uses active/archived/closed/status/endDate from
+    `/v1/market/slug/{slug}`. The recorder is a WS process; this is the
+    one small REST read it needs, over at most SPRING_WATCH_LIMIT slugs
+    and cached for MARKET_STATE_TTL_S. Never raises: a failed read
+    leaves the field ABSENT, and absent fails closed downstream, which
+    is the correct outcome -- it must never look like a pass.
+    """
+    hit = _MARKET_STATE_CACHE.get(slug)
+    if hit and now - hit[0] < MARKET_STATE_TTL_S:
+        return hit[1]
+    try:
+        from src import pmus_sports_collector as col
+        get = col.http_get_json if get is None else get
+        m = (get(f"/v1/market/slug/{slug}") or {}).get("market") or {}
+        state = {k: m.get(k) for k in
+                 ("active", "archived", "closed", "status", "endDate")}
+        state["minimumTradeQty"] = m.get("minimumTradeQty")
+        state["orderPriceMinTickSize"] = m.get("orderPriceMinTickSize")
+    except Exception:
+        return None
+    _MARKET_STATE_CACHE[slug] = (now, state)
+    return state
+
+
+def probe_entry_action(row: Mapping[str, Any]) -> Optional[dict]:
+    """What the canonical L5 model would do FIRST here, from flat.
+
+    Computed with the frozen v2 artifact and the shared planner, so the
+    recorder cannot drift from the decision layer. Absent on any failure
+    -- the guard then refuses, which is correct.
+    """
+    try:
+        from decimal import Decimal as D
+        from src import pmus_sports_l5_decision as l5d
+        from src import pmus_l5_persistence_v2 as pv2
+        bid, ask = row.get("bid"), row.get("ask")
+        if bid is None or ask is None:
+            return None
+        b, a = D(str(bid)), D(str(ask))
+        inv = l5d.Inventory()
+        d = pv2.v2_dist(pv2.load_v2(),
+                        l5d.state_key(float(b), l5d.SPORTS_TTE_DEFAULT_S, 0.0),
+                        "open", "q<5")
+        if d.get("backed_off"):
+            return {"decision": "no_action", "reason": "v2_off_distribution",
+                    "state": d.get("state")}
+        rels = pv2.relation_mass(d["dist"])
+        plan = l5d.plan_action(max(rels, key=rels.get), inv,
+                               {"bid": b, "ask": a})
+        return {k: v for k, v in plan.items() if not k.startswith("_")}
+    except Exception:
+        return None
+
+
+def _attach_open_facts(row: dict, now: float) -> None:
+    # both_sides_served is the filter above, so it is True for every row
+    # that reaches here -- emit it EXPLICITLY rather than leaving the
+    # consumer to infer it from the row's existence.
+    row["both_sides_served"] = True
+    row["bid_touch_qty"] = row.get("bid_qty")
+    age = row.get("last_authenticated_update_age_s")
+    # cadence: the authenticated stream is either current or it is not.
+    # An unknown age stays unknown; it must not read as zero gaps.
+    row["collector_gaps"] = (None if age is None else
+                             (0 if float(age) <= CADENCE_MAX_AGE_S else 1))
+    state = market_state(str(row.get("slug") or ""), now)
+    if state is not None:
+        row["market_state"] = state
+    action = probe_entry_action(row)
+    if action is not None:
+        row["probe_entry_action"] = action
 
 
 def allocate_l5(subscribed_slugs, state, targets=None, now=None,

@@ -27,6 +27,10 @@ COPY src/pmus_priority_queue.py src/pmus_priority_queue.py
 # L5 action-shadow emission (per-market l5_shadow on every status row)
 COPY src/pmus_l5_action_shadow.py src/pmus_l5_action_shadow.py
 COPY src/pmus_l5_persistence_v2.py src/pmus_l5_persistence_v2.py
+# the canonical planner: spring_watch rows now carry probe_entry_action,
+# computed with the SHARED planner so the recorder cannot drift from the
+# decision layer (OWNER 5551236878)
+COPY src/pmus_sports_l5_decision.py src/pmus_sports_l5_decision.py
 COPY src/polymarket_l5/__init__.py src/polymarket_l5/__init__.py
 COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
 COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py

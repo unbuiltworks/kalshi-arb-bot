@@ -185,3 +185,99 @@ def test_probe_evidence_surfaces_missingness_and_unknown_l5():
     row2 = enriched.spring_watch({"u": unknown})[0]
     assert "l5_state_unknown" in row2["probe_evidence"]["reasons"]
     assert "no_bbo_history" in row2["probe_evidence"]["reasons"]
+
+
+# ---- OPEN safety facts on spring_watch rows (OWNER 5551236878) ----
+
+def _watch_row(**over):
+    row = {"slug": "aec-x-1", "bid": "0.45", "ask": "0.47",
+           "bid_qty": "500", "ask_qty": "400",
+           "last_authenticated_update_age_s": 3.0}
+    row.update(over)
+    return row
+
+
+def test_open_facts_are_emitted_for_the_guard(monkeypatch):
+    """The guard fails closed on each of these, so a recorder that does
+    not emit them cannot admit anything. Rebuilding without this change
+    would have produced a status the probe still refuses."""
+    monkeypatch.setattr(enriched, "market_state",
+                        lambda slug, now, get=None: {
+                            "active": True, "archived": False,
+                            "closed": False, "status": "MARKET_STATUS_OPEN",
+                            "endDate": "2026-09-19T11:00:00Z"})
+    row = _watch_row()
+    enriched._attach_open_facts(row, now=1_000_000.0)
+    assert row["both_sides_served"] is True
+    assert row["bid_touch_qty"] == "500"
+    assert row["collector_gaps"] == 0
+    assert row["market_state"]["status"] == "MARKET_STATUS_OPEN"
+    assert row["probe_entry_action"]["decision"] in ("quote", "no_action")
+
+
+def test_a_stale_authenticated_stream_reports_a_cadence_gap(monkeypatch):
+    monkeypatch.setattr(enriched, "market_state",
+                        lambda slug, now, get=None: None)
+    row = _watch_row(last_authenticated_update_age_s=600.0)
+    enriched._attach_open_facts(row, now=1_000_000.0)
+    assert row["collector_gaps"] == 1
+
+
+def test_unknown_stream_age_stays_unknown_not_zero(monkeypatch):
+    """An unknown age must not read as 'no gaps' -- that would turn a
+    missing measurement into a passing one."""
+    monkeypatch.setattr(enriched, "market_state",
+                        lambda slug, now, get=None: None)
+    row = _watch_row(last_authenticated_update_age_s=None)
+    enriched._attach_open_facts(row, now=1_000_000.0)
+    assert row["collector_gaps"] is None
+
+
+def test_a_failed_market_read_leaves_the_field_absent(monkeypatch):
+    """Absent fails closed downstream. A default would look like a pass."""
+    def boom(path):
+        raise RuntimeError("venue down")
+    enriched._MARKET_STATE_CACHE.clear()
+    assert enriched.market_state("aec-x-1", 1_000_000.0, get=boom) is None
+    row = _watch_row()
+    monkeypatch.setattr(enriched, "market_state",
+                        lambda slug, now, get=None: None)
+    enriched._attach_open_facts(row, now=1_000_000.0)
+    assert "market_state" not in row
+
+
+def test_market_state_is_cached_within_its_ttl():
+    calls = []
+
+    def get(path):
+        calls.append(path)
+        return {"market": {"active": True, "archived": False,
+                           "closed": False, "status": "MARKET_STATUS_OPEN",
+                           "endDate": "2026-09-19T11:00:00Z",
+                           "minimumTradeQty": "0.01",
+                           "orderPriceMinTickSize": "0.01"}}
+
+    enriched._MARKET_STATE_CACHE.clear()
+    t = 1_000_000.0
+    a = enriched.market_state("aec-x-1", t, get=get)
+    b = enriched.market_state("aec-x-1", t + 1.0, get=get)
+    assert a == b and len(calls) == 1
+    enriched.market_state("aec-x-1", t + enriched.MARKET_STATE_TTL_S + 1,
+                          get=get)
+    assert len(calls) == 2
+    assert a["minimumTradeQty"] == "0.01"
+
+
+def test_probe_entry_action_uses_the_shared_planner():
+    """Computed with the canonical planner so the recorder cannot drift
+    from the decision layer."""
+    act = enriched.probe_entry_action(_watch_row(bid="0.45", ask="0.47"))
+    assert act is not None
+    if act["decision"] == "quote":
+        assert act["relation"] == "open"
+        assert act["side"] in ("YES", "NO")
+
+
+def test_probe_entry_action_is_absent_without_a_book():
+    assert enriched.probe_entry_action(
+        {"slug": "x", "bid": None, "ask": None}) is None
