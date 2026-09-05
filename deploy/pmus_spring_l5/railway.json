@@ -1,0 +1,26 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/pmus_spring_l5/Dockerfile",
+    "watchPatterns": [
+      "deploy/pmus_spring_l5/**",
+      "src/pmus_spring_l5_probe_entry.py",
+      "src/pmus_spring_l5_session.py",
+      "src/pmus_spring_evidence_transfer.py",
+      "src/pmus_spring_shadow_replay.py",
+      "src/pmus_micro_executor.py",
+      "src/pmus_q1_executor.py",
+      "src/pmus_q1_executor_v4.py",
+      "src/pmus_status_report.py",
+      "src/pmus_sports_l5_decision.py",
+      "src/pmus_l5_persistence_v2.py",
+      "src/polymarket_l5/**",
+      "analysis/l5/l5_action_model_v2.json"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.pmus_spring_l5_probe_entry",
+    "restartPolicyType": "NEVER"
+  }
+}

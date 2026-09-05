@@ -66,3 +66,53 @@ def test_a_missing_composer_refuses_rather_than_raising(monkeypatch):
     ev, source = entry.evidence_from_status_path("mkt", "/tmp/whatever.jsonl")
     assert ev is None
     assert source.startswith("evidence_composer_unavailable")
+
+
+# ---- the one-shot probe manifest ----
+
+RAILWAY = Path("deploy/pmus_spring_l5/railway.json")
+
+
+def _manifest():
+    import json
+    return json.loads(RAILWAY.read_text(encoding="utf-8"))
+
+
+def test_probe_never_restarts_itself():
+    """Probe #1 is ONE bounded session. An auto-restart would silently
+    turn a one-shot campaign into a repeating one against the same caps."""
+    assert _manifest()["deploy"]["restartPolicyType"] == "NEVER"
+
+
+def test_probe_manifest_starts_the_guard_not_the_session():
+    """Starting the session directly would bypass the strict-evidence,
+    provenance and durable-state guards entirely."""
+    assert _manifest()["deploy"]["startCommand"] == (
+        "python3 -m src.pmus_spring_l5_probe_entry")
+
+
+def test_probe_manifest_builds_its_own_isolated_image():
+    assert _manifest()["build"]["dockerfilePath"] == (
+        "deploy/pmus_spring_l5/Dockerfile")
+
+
+def test_watch_patterns_cover_every_file_the_image_copies():
+    """A file in the image but not in the watch list means a change to it
+    silently never rebuilds -- which is exactly how the probe image came
+    to be missing the evidence composer."""
+    import fnmatch
+    patterns = _manifest()["build"]["watchPatterns"]
+    copied = [line.split()[1] for line in
+              DOCKERFILE.read_text(encoding="utf-8").splitlines()
+              if line.startswith("COPY ")]
+    for path in copied:
+        assert any(fnmatch.fnmatch(path, pat) or
+                   (pat.endswith("/**") and path.startswith(pat[:-2]))
+                   for pat in patterns), f"{path} is built but never watched"
+
+
+def test_the_probe_manifest_does_not_touch_the_collector():
+    """Item 2 of the directive: do not disturb the working collector."""
+    text = RAILWAY.read_text(encoding="utf-8")
+    assert "sports_collector" not in text
+    assert "pmus_sports_live_collector" not in text
