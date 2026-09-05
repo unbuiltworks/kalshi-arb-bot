@@ -412,6 +412,20 @@ SPORTS_MAKER_REST_MAX_S = 30.0
 # (pmus_sports_l5_decision.MAX_RESIDUAL_UNITS); EXTEND stops here,
 # COMPLETE does not
 MAX_RESIDUAL_UNITS = 3
+# OWNER 5554106892: prebuilt, OFF by default ("1" enables): a capped
+# EXTEND falls to COMPLETE when COMPLETE carries at least this mass
+CAP_FALLBACK_ENV = "PMUS_SPRING_CAP_FALLBACK_COMPLETE"
+CAP_FALLBACK_MIN_P = 0.20
+
+
+def _relation_mass(prop: Mapping[str, Any], relation: str) -> float:
+    for r in prop.get("relation_ranked") or []:
+        if isinstance(r, Mapping) and r.get("relation") == relation:
+            try:
+                return float(r.get("p") or 0.0)
+            except (TypeError, ValueError):
+                return 0.0
+    return 0.0
 
 
 def _await_order(t: Transport, oid: str, qty: D, until: float,
@@ -837,6 +851,21 @@ def run_session(t: Optional[Transport] = None,
                 relation, refusal = "hold", (
                     f"residual_cap:{abs(inv.behavioral_residual())}"
                     f">={MAX_RESIDUAL_UNITS}")
+                # OWNER 5554106892 (next behavioral mismatch, prebuilt,
+                # OFF by default): at the cap the modal policy HOLDs 100%
+                # of the time, while L5 in the same imb states COMPLETEs
+                # 43-48% (v2 base: p55-75c|imb1-10 n=316 complete 0.434;
+                # p45-55c n=281 0.452; p25-45c n=366 0.484). With the
+                # flag, a capped EXTEND falls to the SECOND-ranked
+                # relation when it is COMPLETE with mass >= the floor;
+                # the complement still has to clear <=0.98 and >=1c after
+                # known fees or it stays a HOLD. Pairs only ever REDUCE
+                # directional exposure; no cap is touched.
+                comp_p = _relation_mass(prop, "complete")
+                if os.getenv(CAP_FALLBACK_ENV, "").strip() == "1" and \
+                        comp_p >= CAP_FALLBACK_MIN_P:
+                    relation = "complete"
+                    refusal = f"residual_cap:fallback_complete:p={comp_p:.3f}"
             # OWNER 5553674206 #2/#3/#4: SHADOW fields only -- the seeded
             # draw from this same distribution, L5's size and taker share
             # for this state; nothing here is acted on

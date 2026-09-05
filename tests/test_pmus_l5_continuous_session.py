@@ -1412,3 +1412,58 @@ def test_recovery_gate_accepts_the_recorder_tape_as_prints(monkeypatch,
     assert rep["outages"][0]["trades_resumed_by"] == {"recorder_tape": True}
     assert rep["status"] == "CAMPAIGN_NO_CANDIDATE"
     assert rep["rung"]["ladder_rung"] == "R1" and rep["ramp_ladder"][0]["id"] == "R1"
+
+
+def test_capped_extend_falls_to_complete_only_when_the_flag_is_on(monkeypatch,
+                                                                   tmp_path):
+    """OWNER 5554106892 next-mismatch candidate, prebuilt OFF: at the
+    residual cap the modal policy HOLDs 100% while L5 COMPLETEs 43-48% in
+    those states. With PMUS_SPRING_CAP_FALLBACK_COMPLETE=1 a capped
+    EXTEND becomes the second-ranked COMPLETE (mass >= 0.20), priced by
+    the unchanged <=0.98 / >=1c bounds; without the flag nothing moves."""
+    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    _armed_session_env(monkeypatch, tmp_path)
+    rows = []
+    for i in range(3):                          # three 0.02 YES fills = cap
+        rows.append({"kind": "submitted", "stage": f"spring_extend_{i}",
+                     "slug": "held", "order_id": f"F{i}",
+                     "side": "OUTCOME_SIDE_YES", "price": "0.49",
+                     "qty": "0.02"})
+        rows.append({"kind": "order_terminal", "slug": "held",
+                     "order_id": f"F{i}", "filled_qty": "0.02",
+                     "price": "0.49"})
+    (tmp_path / "ledger.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows))
+    monkeypatch.setattr(pv2, "proposal", lambda *a, **k: {
+        "recommended_relation": "extend", "persist_extend_p": 0.756,
+        "switch_complete_p": 0.244, "next_reevaluation_s": 2.0,
+        "relation_ranked": [{"relation": "extend", "p": 0.756},
+                            {"relation": "complete", "p": 0.244}],
+        "state_n": 16, "off_distribution": False})
+    monkeypatch.setenv(base.MAX_ACTIONS_ENV, "1")
+    # flag OFF: hold at the cap, no order
+    monkeypatch.delenv(base.CAP_FALLBACK_ENV, raising=False)
+    fake = Fake(bid="0.6900", ask="0.7400")     # NO ask 0.31: pair 0.80
+    fake.positions["held"] = {"netPositionDecimal": "0.06"}
+    rep = base.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                           wall=lambda: 1000.0, slug="held", gate_ok=True,
+                           resume=True)
+    assert rep["decisions"][0]["acted"] == "hold"
+    assert rep["decisions"][0]["refusal"].startswith("residual_cap:3.0")
+    assert not rep.get("orders")
+    # flag ON: the capped extend becomes a fee-safe COMPLETE on the NO side
+    monkeypatch.setenv(base.CAP_FALLBACK_ENV, "1")
+    fake = Fake(bid="0.6900", ask="0.7400")
+    fake.positions["held"] = {"netPositionDecimal": "0.06"}
+    rep = base.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                           wall=lambda: 1000.0, slug="held", gate_ok=True,
+                           resume=True)
+    d = rep["decisions"][0]
+    assert d["acted"] == "complete"
+    assert d["refusal"].startswith("residual_cap:fallback_complete:p=0.244")
+    o = rep["orders"][0]
+    assert o["relation"] == "complete" and o["side"] == "NO"
+    assert base.D(o["px"]) <= base.D("0.49")          # <= 0.98 - avg 0.49
+    assert rep["pair_economics"]["regime"] in ("spring_target", "hard_bound_only")
+    assert not any(b.get("action") == "ORDER_ACTION_SELL"
+                   for p, b in fake.posts if p == "/v1/orders")
