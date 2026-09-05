@@ -759,9 +759,11 @@ def run_session(t: Optional[Transport] = None,
                     return f"bbo_unreadable:{type(exc).__name__}"
                 if b.get("bid") is None or b.get("ask") is None:
                     return "book_one_sided"
-                if relation_ in ("open", "extend") and not (
-                        q1.entry_ok(b["bid"])
-                        and SPRING_BAND_LO <= b["bid"] <= SPRING_BAND_HI):
+                if relation_ in ("open", "extend") and not q1.entry_ok(
+                        b["bid"]):
+                    return f"price_bound_left:{b['bid']}"
+                if relation_ == "open" and not (
+                        SPRING_BAND_LO <= b["bid"] <= SPRING_BAND_HI):
                     return f"band_left:{b['bid']}"
                 # our price must still be the touch on our side; a moved
                 # touch means L5 would re-quote, and a price at/through
@@ -850,11 +852,16 @@ def run_session(t: Optional[Transport] = None,
                 px = bbo["bid"] if side_up else (q1.ONE - bbo["ask"])
                 px = (px / spec["tick"]).to_integral_value(
                     rounding=ROUND_DOWN) * spec["tick"]
+                # OWNER 5552841170 #1: the 0.35-0.65 band is OPEN
+                # admission. A CONTINUATION (EXTEND on existing inventory)
+                # is governed by the model's in-distribution state at the
+                # CURRENT price -- an off-distribution state already HOLDs
+                # above -- plus the venue price bounds and every cap.
+                in_band = SPRING_BAND_LO <= bbo["bid"] <= SPRING_BAND_HI
                 if not q1.entry_ok(bbo["bid"]) or \
-                        not (SPRING_BAND_LO <= bbo["bid"] <= SPRING_BAND_HI):
-                    # band left us: stop extending. Named, because a
-                    # zero-order session must be distinguishable from an
-                    # unfilled one in the log.
+                        (inv.up + inv.dn == 0 and not in_band):
+                    # Named, because a zero-order session must be
+                    # distinguishable from an unfilled one in the log.
                     report["stop_reason"] = (
                         f"entry_band_left:bid={bbo['bid']}:"
                         f"q1_entry_ok={q1.entry_ok(bbo['bid'])}")

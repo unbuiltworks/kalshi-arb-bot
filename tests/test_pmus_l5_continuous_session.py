@@ -826,7 +826,9 @@ def test_resolved_held_market_is_settled_from_venue_activities(monkeypatch,
                             campaign_s=500.0, session_runner=_gone_session)
     assert rep["status"] == "CAMPAIGN_SETTLED:REALIZED"
     assert rep["realized_pnl"] == "0.0152"           # venue's number, verbatim
-    assert rep["settlement"]["ledger_rows_written"] == ["settled", "realized"]
+    assert len(rep["settlements"]) == 1              # audited once, not looped
+    assert rep["settlements"][0]["ledger_rows_written"] == \
+        ["settled", "realized"]
     rows = [json.loads(l) for l in
             (tmp_path / "ledger.jsonl").read_text().splitlines()]
     assert [r["kind"] for r in rows if r.get("slug") == "held"] == \
@@ -887,3 +889,108 @@ def test_flat_campaign_settles_markets_the_ledger_filled_in(monkeypatch,
     assert rep["settlements"][0]["status"] == "REALIZED"
     assert cont.unsettled_slugs() == []              # ledger now carries it
     assert base.q1.base.realized_today() == base.D("0.0152")
+
+
+# ---- OWNER 5552841170: continuation band, state-change wait, funnel ----
+
+def test_continuation_extend_is_not_blocked_by_the_open_band(monkeypatch,
+                                                              tmp_path):
+    """The 0.35-0.65 band is OPEN admission. A held position whose model
+    state at the CURRENT price (0.66) is in-distribution and says EXTEND
+    extends; the band no longer freezes a valid continuation."""
+    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")
+    monkeypatch.setattr(pv2, "proposal", lambda *a, **k: {
+        "recommended_relation": "extend", "persist_extend_p": 0.7,
+        "switch_complete_p": 0.3, "next_reevaluation_s": 2.0,
+        "relation_ranked": [], "state_n": 16, "off_distribution": False})
+    monkeypatch.setenv(base.MAX_ACTIONS_ENV, "1")
+    fake = Fake(bid="0.6600", ask="0.6700")
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    rep = base.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                           wall=lambda: 1000.0, slug="held", gate_ok=True,
+                           resume=True)
+    assert rep.get("stop_reason") is None, rep
+    assert rep["orders"][0]["relation"] == "extend"
+    assert base.D(rep["orders"][0]["px"]) == base.D("0.66")
+    assert base.D(rep["inventory"]["up"]) > base.D("0.02")   # extended
+
+
+def test_open_admission_band_still_applies_to_a_fresh_market(monkeypatch,
+                                                              tmp_path):
+    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    _armed_session_env(monkeypatch, tmp_path)
+    _open_proposal(monkeypatch)
+    fake = Fake(bid="0.6600", ask="0.6700")
+    rep = base.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                           wall=lambda: 1000.0, slug="fresh", gate_ok=True)
+    assert rep["status"] == "SPRING_SKIP_NOT_QUALIFYING"
+    assert rep["reason"].startswith("outside_spring_band")
+
+
+def test_off_distribution_continuation_holds(monkeypatch, tmp_path):
+    """Do not extrapolate L5 beyond observed states: an off-distribution
+    current state on a held position is a logged HOLD, no order."""
+    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")
+    monkeypatch.setattr(pv2, "proposal", lambda *a, **k: {
+        "recommended_relation": "extend", "persist_extend_p": 0.7,
+        "switch_complete_p": 0.3, "next_reevaluation_s": 2.0,
+        "relation_ranked": [], "state_n": 0, "off_distribution": True})
+    monkeypatch.setenv(base.MAX_ACTIONS_ENV, "2")
+    fake = Fake(bid="0.7800", ask="0.7900")
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    rep = base.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                           wall=lambda: 1000.0, slug="held", gate_ok=True,
+                           resume=True)
+    assert rep["status"] == "SPRING_RESIDUAL_HOLD"
+    assert not rep.get("orders")
+    assert all(d["refusal"] == "off_distribution_hold"
+               for d in rep["decisions"])
+
+
+def test_await_state_change_wakes_on_book_move_else_heartbeat():
+    from tests.test_pmus_spring_l5_session import Fake
+    fake = Fake()
+    t = {"v": 0.0}
+
+    def clock():
+        return t["v"]
+
+    def sleep(s):
+        t["v"] += s
+        if t["v"] >= 15:
+            fake.bid = "0.5100"
+    out = cont.await_state_change(fake, "m", clock, sleep, max_wait_s=120,
+                                  poll_s=5)
+    assert out["reason"] == "book_changed" and out["waited_s"] <= 20
+    quiet = Fake()
+    t["v"] = 0.0
+    out2 = cont.await_state_change(quiet, "m", clock,
+                                   lambda s: t.__setitem__("v", t["v"] + s),
+                                   max_wait_s=120, poll_s=5)
+    assert out2["reason"] == "heartbeat" and out2["waited_s"] >= 120
+
+
+def test_funnel_counts_every_cycle_by_exact_reason(monkeypatch, tmp_path):
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    st = _status([_row("thin", touch="0.1"), _row("gone", gaps=0,
+                  status="MARKET_STATUS_RESOLVED",
+                  market_state={"active": False, "archived": True,
+                                "closed": True,
+                                "status": "MARKET_STATUS_RESOLVED",
+                                "endDate": "2026-09-05T08:00:00Z"})])
+    monkeypatch.setattr(entry, "load_status_document",
+                        lambda path=None: (st, "status_url:test"))
+    ticks = iter([0.0, 1.0, 2.0, 3.0, 100.0, 100.0])
+    rep = cont.run_campaign(clock=lambda: next(ticks), sleep=lambda s: None,
+                            wall=lambda: 1005.0, campaign_s=50.0,
+                            session_runner=lambda *a, **k: {})
+    f = rep["funnel"]
+    assert f["cycles"] >= 1 and f["universe_rows"] == 2 * f["cycles"]
+    assert f["admitted"] == 0 and f["submitted"] == 0 and f["filled"] == 0
+    assert set(f["refusals"]) == {"strict_evidence_no_q1_touch_depth",
+                                  "strict_evidence_market_active"}

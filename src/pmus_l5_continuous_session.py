@@ -41,13 +41,20 @@ from src import pmus_spring_l5_session as base
 from src import pmus_l5_persistence_v2 as pv2
 from src.polymarket_l5.action_model import state_key
 
-CAMPAIGN_SECONDS_ENV = "PMUS_SPRING_CAMPAIGN_SECONDS"   # default 3600
-DEFAULT_CAMPAIGN_S = 3600.0
+CAMPAIGN_SECONDS_ENV = "PMUS_SPRING_CAMPAIGN_SECONDS"
+# OWNER 5552841170 #3: the approved bounded campaign keeps operating
+# without an operator redeploy per market. The arm still EXPIRES (this
+# bound, logged at boot as campaign_expires_at) and restart is NEVER;
+# the money limits are untouched: <=$0.05 filled OPEN/EXTEND per
+# market, one market at a time, daily-loss stop, action/attempt caps.
+DEFAULT_CAMPAIGN_S = 6 * 3600.0
 SELECT_POLL_S = 15.0            # recorder status cadence is ~20s
 SESSION_DEADLINE_S = 900.0      # per-market bound, as the one-shot probe
 RETRY_COOLDOWN_S = 120.0        # a market that just refused/no-filled waits
-MAX_SESSIONS_PER_CAMPAIGN = 8   # bounded reselection, not a runaway
+MAX_SESSIONS_PER_CAMPAIGN = 48  # bounded reselection, not a runaway
 MAX_SESSIONS_PER_SLUG = 3       # attempt cap per market (x6 orders each)
+RESUME_HEARTBEAT_S = 120.0      # re-evaluate a held market at least this often
+RESUME_BOOK_POLL_S = 5.0        # ...and sooner when the book actually moves
 SPORTS_TTE_DEFAULT_S = base.SPORTS_TTE_DEFAULT_S
 LABEL_SHADOW = "SHADOW/THEORETICAL; DISARMED; no venue network"
 
@@ -181,8 +188,33 @@ def select_candidate(now: Optional[float] = None,
     return {"chosen": chosen, "source": source, **ranking}
 
 
-RESUME_REEVAL_S = 30.0          # between resume sessions on a held market
+RESUME_REEVAL_S = 30.0          # legacy fixed pause (tests); see heartbeat
 MULTI_HELD = "MULTIPLE_POSITIONS"
+
+
+def await_state_change(t, slug: str, clock, sleep,
+                       max_wait_s: float = RESUME_HEARTBEAT_S,
+                       poll_s: float = RESUME_BOOK_POLL_S) -> dict:
+    """OWNER 5552841170 #2: between resume sessions, wait for a MEANINGFUL
+    fresh book change (best bid or ask moved) with a heartbeat fallback,
+    instead of a blind fixed pause. Read-only BBO polls; never raises."""
+    start = clock()
+
+    def _bbo():
+        try:
+            b = base.q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES")
+            return (str(b.get("bid")), str(b.get("ask")))
+        except Exception as exc:                   # noqa: BLE001
+            return ("err", type(exc).__name__)
+    first = _bbo()
+    while clock() - start < max_wait_s:
+        sleep(poll_s)
+        cur = _bbo()
+        if cur != first:
+            return {"reason": "book_changed", "from": first, "to": cur,
+                    "waited_s": round(clock() - start, 1)}
+    return {"reason": "heartbeat", "book": first,
+            "waited_s": round(clock() - start, 1)}
 
 
 def held_market(t) -> Optional[str]:
@@ -264,6 +296,17 @@ def unsettled_slugs() -> list:
     return [s for s in filled if s not in settled]
 
 
+def _sum_realized(report: Mapping[str, Any]) -> Optional[str]:
+    """Campaign realized = the sum of VENUE-confirmed realized amounts
+    over this campaign's settlements; None until the first one."""
+    from decimal import Decimal
+    vals = [s.get("realized_usd") for s in (report.get("settlements") or [])
+            if s.get("status") == "REALIZED" and s.get("realized_usd")]
+    if not vals:
+        return None
+    return str(sum(Decimal(str(v)) for v in vals))
+
+
 def _has_inventory(report: Mapping[str, Any]) -> bool:
     inv = report.get("inventory") or {}
     try:
@@ -318,6 +361,18 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     status = "CAMPAIGN_NO_CANDIDATE"
     resumes = 0
     last_settle_audit = float("-inf")
+    settled_here: set = set()
+    # OWNER 5552841170 #4: throughput funnel, accumulated for the campaign
+    # and printed per selection cycle
+    funnel: dict[str, Any] = {"cycles": 0, "universe_rows": 0,
+                              "in_distribution": 0, "admitted": 0,
+                              "sessions": 0, "submitted": 0, "filled": 0,
+                              "refusals": {}}
+    report["funnel"] = funnel
+    _log("campaign_start", mode=report["mode"], campaign_s=campaign_s,
+         campaign_expires_at=wall() + campaign_s,
+         max_sessions=MAX_SESSIONS_PER_CAMPAIGN,
+         per_market_cap=str(base.SESSION_NOTIONAL_CAP))
     while clock() < stop_at and len(report["sessions"]) < \
             MAX_SESSIONS_PER_CAMPAIGN + resumes:
         now = wall()
@@ -329,6 +384,10 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             if held == MULTI_HELD:
                 status = f"CAMPAIGN_STOP:{MULTI_HELD}"
                 break
+            if held in settled_here:
+                # the venue already confirmed this market's resolution;
+                # a lingering positions row is not inventory to act on
+                held = None
             if not held and t is not None and \
                     clock() - last_settle_audit >= SETTLE_AUDIT_EVERY_S:
                 # flat, but the ledger remembers fills the venue has since
@@ -338,12 +397,15 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 for slug in unsettled_slugs()[:5]:
                     audit = settle_held(t, slug)
                     _log("settlement", slug=slug, **audit)
+                    if audit.get("settled"):
+                        settled_here.add(slug)
                     report.setdefault("settlements", []).append(
                         {"slug": slug, **audit})
                     if audit.get("status") == "REALIZED":
                         _log("REALIZED", slug=slug,
                              realized_usd=audit.get("realized_usd"),
                              resolution=audit.get("resolution"))
+                        report["realized_pnl"] = _sum_realized(report)
             if held:
                 _log("resume_start", slug=held)
                 rep = dict(session_runner(
@@ -371,6 +433,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                          "NO_CREDENTIALS", "DISARMED"):
                     status = f"CAMPAIGN_STOP:{rep.get('status')}"
                     break
+                funnel["submitted"] += len(rep.get("orders") or [])
+                funnel["filled"] += len(rep.get("actions") or [])
                 if _market_gone(rep):
                     # no book / venue says not open: the held market may
                     # have RESOLVED. Ask the venue's own activities for
@@ -379,16 +443,33 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     _log("settlement", slug=held, **audit)
                     if audit.get("status") in ("REALIZED", "SETTLED",
                                                "SETTLED_WITH_BUSTED_TRADE_REVIEW"):
-                        report["settlement"] = audit
+                        settled_here.add(held)
+                        report.setdefault("settlements", []).append(
+                            {"slug": held, **audit})
                         if audit.get("status") == "REALIZED":
-                            report["realized_pnl"] = audit.get("realized_usd")
+                            _log("REALIZED", slug=held,
+                                 realized_usd=audit.get("realized_usd"))
+                            report["realized_pnl"] = _sum_realized(report)
+                        # OWNER 5552841170 #3: flat again -> straight back
+                        # to full-sports selection, no redeploy
                         status = f"CAMPAIGN_SETTLED:{audit.get('status')}"
-                        break
+                        continue
                 status = f"CAMPAIGN_RESUMING:{rep.get('status')}"
-                sleep(RESUME_REEVAL_S)
+                woke = await_state_change(t, held, clock, sleep)
+                _log("resume_wait", slug=held, **woke)
                 continue
         sel = select_candidate(now, model, cooldown)
         report["selections"] += 1
+        funnel["cycles"] += 1
+        funnel["universe_rows"] += len(sel["admitted"]) + len(sel["refused"])
+        funnel["in_distribution"] += sum(
+            1 for x in sel["admitted"] + sel["refused"]
+            if x.get("off_distribution") is False)
+        funnel["admitted"] += len(sel["admitted"])
+        for x in sel["refused"]:
+            key = str(x["reason"]).split(":")[0]
+            funnel["refusals"][key] = funnel["refusals"].get(key, 0) + 1
+        _log("funnel", **{k: v for k, v in funnel.items()})
         chosen = sel["chosen"]
         if chosen is None:
             sleep(SELECT_POLL_S)
@@ -408,6 +489,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                              slug=chosen["slug"], gate_ok=True,
                              deadline_s=min(SESSION_DEADLINE_S, remaining))
         rep = dict(rep or {})
+        funnel["sessions"] += 1
+        funnel["submitted"] += len(rep.get("orders") or [])
+        funnel["filled"] += len(rep.get("actions") or [])
         rep["selected"] = {k: chosen.get(k) for k in
                            ("rank", "state", "state_n", "p_buy",
                             "relation_ranked", "bid", "ask",
