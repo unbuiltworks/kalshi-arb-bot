@@ -407,6 +407,10 @@ def spring_complement_price(avg_cost: D, opp_ask: D, tick: D) -> \
 # the book/state moves so that the chosen action is no longer the
 # current L5 action or would breach post-only. Maker only; no taker.
 SPORTS_MAKER_REST_MAX_S = 30.0
+# bounded imbalance in behavioral units, the shared planner's bound
+# (pmus_sports_l5_decision.MAX_RESIDUAL_UNITS); EXTEND stops here,
+# COMPLETE does not
+MAX_RESIDUAL_UNITS = 3
 
 
 def _await_order(t: Transport, oid: str, qty: D, until: float,
@@ -434,8 +438,10 @@ def _await_order(t: Transport, oid: str, qty: D, until: float,
                     end_reason = f"repriced:{why}"
                     break
             sleep(q1.POLL_S)
-    except RejectedNoFill:
-        return D("0"), round(clock() - start, 3), "rejected"
+    except RejectedNoFill as exc:
+        # the venue's verdict, with whatever reason it attached: a NO-side
+        # rejection pattern is only diagnosable if the reason is logged
+        return D("0"), round(clock() - start, 3), f"rejected:{str(exc)[:120]}"
     if fill is None:
         try:
             q1.cancel_exact(t, oid)
@@ -802,12 +808,21 @@ def run_session(t: Optional[Transport] = None,
             relation = ("open" if inv.up + inv.dn == 0
                         else prop["recommended_relation"])
             off = bool(prop.get("off_distribution"))
+            refusal = None
             if off and inv.up + inv.dn > 0:
                 # OWNER 5552036210 item 4: the policy is distributional; a
                 # state the model never saw gets a LOGGED refusal and a
                 # hold, never a substituted deterministic rule. Nothing is
                 # flattened -- the residual holds to settlement.
-                relation = "hold"
+                relation, refusal = "hold", "off_distribution_hold"
+            elif relation == "extend" and abs(
+                    inv.behavioral_residual()) >= MAX_RESIDUAL_UNITS:
+                # bounded imbalance (same bound as the shared planner):
+                # no further same-side EXTEND past the residual cap; a
+                # COMPLETE is still allowed, and nothing is flattened
+                relation, refusal = "hold", (
+                    f"residual_cap:{abs(inv.behavioral_residual())}"
+                    f">={MAX_RESIDUAL_UNITS}")
             # model probability and rank for EVERY decision (item 4)
             report.setdefault("decisions", []).append(
                 {"state": skey, "last_rel": inv.last_rel,
@@ -818,8 +833,7 @@ def run_session(t: Optional[Transport] = None,
                  "persist_extend_p": prop["persist_extend_p"],
                  "switch_complete_p": prop["switch_complete_p"],
                  "acted": relation,
-                 "refusal": ("off_distribution_hold" if relation == "hold"
-                             else None)})
+                 "refusal": refusal})
             if relation == "hold":
                 sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                 actions += 1

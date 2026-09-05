@@ -149,7 +149,15 @@ def _order_status(t: Transport, order_id: str) -> dict:
                 raw = order.get("filledQuantity")
             cum = _d(raw) or D("0")
             if "REJECT" in state and cum == 0:
-                raise RejectedNoFill(f"ORDER_REJECTED_ZERO_FILL:{order_id}")
+                why = None
+                for key in ("rejectReason", "reject_reason", "statusReason",
+                            "reason", "rejectionReason", "text", "message"):
+                    if order.get(key):
+                        why = str(order.get(key))[:80]
+                        break
+                raise RejectedNoFill(
+                    f"ORDER_REJECTED_ZERO_FILL:{order_id}:{state}"
+                    + (f":{why}" if why else ""))
             return dict(order)
         except RejectedNoFill:
             raise

@@ -1049,3 +1049,41 @@ def test_open_order_in_a_market_we_never_touched_stops_the_campaign(
                             session_runner=lambda *a, **k: {})
     assert rep["status"] == "CAMPAIGN_STOP:FOREIGN_OPEN_ORDERS"
     assert fake.orders["X1"]["state"] == "ORDER_STATE_OPEN"     # untouched
+
+
+def test_extend_stops_at_the_residual_cap_but_complete_may_continue(
+        monkeypatch, tmp_path):
+    """Bounded imbalance: at 5 behavioral units of residual the model's
+    EXTEND is a logged HOLD (residual_cap), nothing is flattened, and a
+    COMPLETE still prices through the pair bounds."""
+    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    _armed_session_env(monkeypatch, tmp_path)
+    rows = []
+    for i in range(5):                          # five 0.02 YES fills
+        rows.append({"kind": "submitted", "stage": f"spring_extend_{i}",
+                     "slug": "held", "order_id": f"F{i}",
+                     "side": "OUTCOME_SIDE_YES", "price": "0.41",
+                     "qty": "0.02"})
+        rows.append({"kind": "order_terminal", "slug": "held",
+                     "order_id": f"F{i}", "filled_qty": "0.02",
+                     "price": "0.41"})
+    (tmp_path / "ledger.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows))
+    rels = iter(["extend", "complete"])
+    monkeypatch.setattr(pv2, "proposal", lambda *a, **k: {
+        "recommended_relation": next(rels), "persist_extend_p": 0.6,
+        "switch_complete_p": 0.4, "next_reevaluation_s": 2.0,
+        "relation_ranked": [], "state_n": 49, "off_distribution": False})
+    monkeypatch.setenv(base.MAX_ACTIONS_ENV, "2")
+    fake = Fake(bid="0.4100", ask="0.4200")
+    fake.positions["held"] = {"netPositionDecimal": "0.10"}
+    rep = base.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                           wall=lambda: 1000.0, slug="held", gate_ok=True,
+                           resume=True)
+    assert rep["decisions"][0]["acted"] == "hold"
+    assert rep["decisions"][0]["refusal"].startswith("residual_cap:5")
+    assert rep["decisions"][1]["acted"] == "complete"
+    assert rep["orders"][0]["relation"] == "complete"
+    assert rep["orders"][0]["side"] == "NO"
+    assert not any(b.get("action") == "ORDER_ACTION_SELL"
+                   for p, b in fake.posts if p == "/v1/orders")
