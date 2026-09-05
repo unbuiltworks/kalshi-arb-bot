@@ -288,7 +288,7 @@ def shadow_market(obs: list, now: float,
         if avg is not None:
             res_cost = ho.action_notional(avg * abs(inv.residual), last_qty)
     return {"actions": rows, "inventory": inv, "spent": spent,
-            "trades_inferred": len(trades),
+            "trades_inferred": len(trades), "last_qty": last_qty,
             "residual_cost_theoretical": res_cost}
 
 
@@ -312,6 +312,8 @@ def run(root: Path, hours: float = 1.0, now: Optional[float] = None,
         session["trades_inferred"] = res.get("trades_inferred")
         session["residual_cost_theoretical"] = str(
             res.get("residual_cost_theoretical"))
+        session["residual_settlement"] = ho.residual_settlement_accounting(
+            res["inventory"], res.get("last_qty") or D("0"))
 
     return {
         "kind": "PMUS_L5_HANDOFF_SHADOW",
@@ -349,6 +351,7 @@ def submission_boundary(choice: Mapping[str, Any],
     """What is still missing before an owner could arm this. Fail closed:
     the default answer is NOT_READY and every blocker is named."""
     blockers = list(choice.get("blockers") or [])
+    disclosures: list = []
     if not choice.get("selected"):
         blockers.append("no_executable_event_selected")
         if pins:
@@ -362,27 +365,26 @@ def submission_boundary(choice: Mapping[str, Any],
             blockers.append("shadow_produced_no_admissible_action")
         if not any(a.get("fill", {}).get("filled") for a in acts):
             blockers.append("shadow_produced_no_simulated_fill")
+        # OWNER DECISION 5547834091 answered the hold-vs-clear question:
+        # a bounded residual is HELD to settlement, preserving L5's own
+        # behaviour. So ending legged is EXPECTED, not a blocker -- it is
+        # a disclosure with an accounting attached. Blocking on it would
+        # now block the intended behaviour.
         if session.get("ended_legged"):
-            # The event ended holding unmatched directional inventory.
-            # That is exposure, not a locked pair, and nothing in this
-            # module clears it -- the bounded residual manager must.
-            blockers.append(
-                f"event_ends_legged_residual:{session['residual_uncompleted']}")
-            # NOT self-evidently a defect: L5's own measured behaviour is
-            # to hold residual to settlement and redeem ($2.18 of lifetime
-            # sells against 15,243 redeems). Owner rule R5 instead
-            # requires the residual be cleared before settlement. The two
-            # conflict, and which governs is an owner decision -- so this
-            # blocks rather than resolving itself either way.
-            blockers.append("owner_decision_needed_hold_vs_clear_residual")
+            disclosures.append(
+                f"holds_residual_to_settlement:"
+                f"{session['residual_uncompleted']} units")
         if not any(a["predicted_action"].get("relation") == "complete"
                    for a in acts):
-            blockers.append("model_never_emitted_a_completion_in_window")
+            disclosures.append("no_completion_in_window: the event would "
+                               "be entered and held, not paired")
     blockers.append("provenance_inferred_not_observed")
     blockers.append("venue_minimum_trade_qty_unread_from_tape")
     if not ho.armed():
         blockers.append("handoff_disarmed_by_design")
     return {"ready": False, "blockers": sorted(set(blockers)),
+            "disclosures": sorted(set(disclosures)),
+            "residual_policy": ho.RESIDUAL_POLICY,
             "arming": "operator-held dual key only; never armed from here"}
 
 

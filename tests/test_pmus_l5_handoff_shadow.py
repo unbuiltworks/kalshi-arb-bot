@@ -275,27 +275,31 @@ def test_boundary_says_unwatched_rather_than_nothing_qualifies():
                for b in out["blockers"])
 
 
-def test_boundary_blocks_on_an_event_that_would_end_legged():
-    """Ending with unmatched inventory is directional exposure, not a
-    locked pair. Nothing in the handoff clears it, so it must block."""
+def test_holding_a_residual_is_disclosed_not_blocked():
+    """OWNER DECISION 5547834091: a bounded residual is HELD to
+    settlement. That is the intended behaviour, so it must be disclosed
+    with its accounting -- blocking on it would block the strategy."""
     session = {"actions": [{"refuse_reason": None, "fill": {"filled": True},
                             "predicted_action": {"relation": "open"}}],
                "ended_legged": True, "residual_uncompleted": 2}
     out = sh.submission_boundary({"selected": "evt-a", "blockers": []},
                                  session)
-    assert "event_ends_legged_residual:2" in out["blockers"]
-    assert "model_never_emitted_a_completion_in_window" in out["blockers"]
-    assert out["ready"] is False
+    assert any(b.startswith("holds_residual_to_settlement")
+               for b in out["disclosures"])
+    assert any("no_completion_in_window" in b for b in out["disclosures"])
+    assert not any("legged" in b for b in out["blockers"])
+    assert not any("hold_vs_clear" in b for b in out["blockers"])
+    assert out["residual_policy"] == "HOLD_TO_SETTLEMENT"
 
 
-def test_boundary_does_not_invent_a_legging_blocker_when_flat():
+def test_a_flat_session_discloses_no_residual():
     session = {"actions": [{"refuse_reason": None, "fill": {"filled": True},
                             "predicted_action": {"relation": "complete"}}],
                "ended_legged": False, "residual_uncompleted": 0}
     out = sh.submission_boundary({"selected": "evt-a", "blockers": []},
                                  session)
-    assert not any(b.startswith("event_ends_legged") for b in out["blockers"])
-    assert "model_never_emitted_a_completion_in_window" not in out["blockers"]
+    assert not any("residual" in d for d in out["disclosures"])
+    assert not any("no_completion_in_window" in d for d in out["disclosures"])
 
 
 def test_residual_exposure_is_quantified_not_merely_flagged():
@@ -321,3 +325,70 @@ def test_a_flat_session_reports_no_residual_exposure():
                                   "ended_legged": False,
                                   "residual_uncompleted": 0})
     assert "owner_decision_needed_hold_vs_clear_residual" not in out["blockers"]
+
+
+# ---- HOLD-to-settlement accounting (OWNER DECISION 5547834091) ----
+
+def test_a_held_residual_reports_both_ends_of_settlement():
+    """Quoting only the loss understates the position; quoting only the
+    payout flatters it. Both ends, or the number is propaganda."""
+    inv = l5d.Inventory()
+    inv.record(True, D("0.40"))
+    inv.record(True, D("0.50"))          # 2 YES units, avg 0.45
+    acct = ho.residual_settlement_accounting(inv, D("0.02"))
+    assert acct["policy"] == "HOLD_TO_SETTLEMENT"
+    assert acct["residual_units"] == 2
+    assert acct["residual_side"] == "YES"
+    assert acct["held_to_settlement"] is True
+    # cost basis 0.45 * 2 * 0.02 = 0.018
+    assert D(acct["cost_basis"]) == D("0.018")
+    assert D(acct["worst_case_settlement"]) == D("-0.018")
+    # payout 2 * 0.02 = 0.04, less the 0.018 paid
+    assert D(acct["best_case_settlement"]) == D("0.022")
+    assert acct["realized_pnl"] is None
+
+
+def test_a_flat_book_holds_nothing_and_says_so():
+    acct = ho.residual_settlement_accounting(l5d.Inventory(), D("0.02"))
+    assert acct["residual_units"] == 0
+    assert acct["held_to_settlement"] is False
+    assert acct["realized_pnl"] is None
+
+
+def test_the_worst_case_never_exceeds_what_was_actually_committed():
+    """A held residual cannot lose more than it cost -- these are
+    binaries, not margin. The cap on spend is therefore the cap on loss."""
+    inv = l5d.Inventory()
+    for px in ("0.60", "0.62", "0.65"):
+        inv.record(True, D(px))
+    acct = ho.residual_settlement_accounting(inv, D("0.02"))
+    assert -D(acct["worst_case_settlement"]) == D(acct["cost_basis"])
+    assert D(acct["cost_basis"]) <= ho.MAX_EVENT_NOTIONAL
+
+
+def test_no_flatten_path_exists_in_the_handoff():
+    """The owner ruled HOLD, and explicitly ruled out inventing a flatten
+    behaviour. Scanned as CODE, not prose -- the module discusses
+    flattening in comments precisely because it must never do it."""
+    import ast
+    tree = ast.parse(open(ho.__file__, encoding="utf-8").read())
+    banned = ("flatten", "sell", "close_position", "liquidate", "exit_position")
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.Attribute):
+            names.add(node.attr)
+        elif isinstance(node, ast.Name):
+            names.add(node.id)
+    for b in banned:
+        hits = [n for n in names if b in n.lower()]
+        assert not hits, f"no exit path may exist here: {b} -> {hits}"
+
+
+def test_the_session_report_states_the_residual_policy():
+    inv = l5d.Inventory()
+    inv.record(True, D("0.45"))
+    rep = ho.session_report("evt", [], inv, D("0.009"))
+    assert rep["residual_policy"] == "HOLD_TO_SETTLEMENT"
+    assert rep["realized_pnl"] is None

@@ -47,6 +47,17 @@ MAX_ACTION_NOTIONAL = D("0.01")    # per single action
 MAX_RESIDUAL_UNITS = 3             # signed directional units
 MAX_IMBALANCE_UNITS = 3            # |yes - no| ceiling
 DAILY_REALIZED_LOSS_STOP = D("-1.00")
+
+# OWNER DECISION 5547834091. A bounded residual is HELD to settlement and
+# redeemed -- it is not flattened. This preserves L5's own measured
+# behaviour ($2.18 of lifetime sells against 15,243 redeems) and
+# supersedes rule R5 for this isolated replication probe only. It adds no
+# exposure: the residual is already bounded by MAX_RESIDUAL_UNITS and by
+# the event notional cap, and holding it changes only what happens at the
+# end, not how much can be committed. There is deliberately NO flatten
+# path in this module; a residual settling to zero is accounted honestly
+# as directional residual P&L, never netted away or called locked.
+RESIDUAL_POLICY = "HOLD_TO_SETTLEMENT"
 FRESH_STATE_MAX_AGE_S = 120.0
 MIN_REEVALUATION_GAP_S = 10.0
 
@@ -215,6 +226,42 @@ def next_action(bid: D, ask: D, inv: "l5d.Inventory", last_rel: str,
     return plan
 
 
+def residual_settlement_accounting(inv: "l5d.Inventory",
+                                   qty: D) -> dict:
+    """What the HELD residual is worth at settlement, stated as a range.
+
+    The unmatched units are directional: they pay $1 each if the side we
+    hold wins and $0 if it loses. Both ends are reported because quoting
+    only the loss would understate the position and quoting only the
+    payout would flatter it. `realized_pnl` stays null regardless --
+    nothing here is realized until authoritative settlement.
+    """
+    n = abs(inv.residual)
+    if n == 0:
+        return {"policy": RESIDUAL_POLICY, "residual_units": 0,
+                "held_to_settlement": False, "realized_pnl": None}
+    side_yes = inv.residual > 0
+    avg = inv.avg(side_yes)
+    cost = (avg * n * qty).quantize(D("0.000001")) if avg is not None \
+        else None
+    payout = (D(n) * qty).quantize(D("0.000001"))
+    return {
+        "policy": RESIDUAL_POLICY,
+        "residual_units": n,
+        "residual_side": "YES" if side_yes else "NO",
+        "held_to_settlement": True,
+        "cost_basis": None if cost is None else str(cost),
+        # settles to zero: we lose exactly what we paid for these units
+        "worst_case_settlement": None if cost is None else str(-cost),
+        # settles in our favour: each unit redeems at $1
+        "best_case_settlement": None if cost is None
+        else str((payout - cost).quantize(D("0.000001"))),
+        "accounting": ("directional residual P&L, reported separately "
+                       "from pair-locked cash; never netted into it"),
+        "realized_pnl": None,
+    }
+
+
 def audit_row(t: float, state: Mapping[str, Any], plan: Mapping[str, Any],
               gate: Optional[str], fill: Optional[Mapping[str, Any]],
               inv: "l5d.Inventory") -> dict:
@@ -265,6 +312,7 @@ def session_report(event_slug: str, rows: list, inv: "l5d.Inventory",
             1 for r in rows if (r.get("fill") or {}).get("filled")),
         "residual_uncompleted": inv.residual,
         "ended_legged": inv.residual != 0,
+        "residual_policy": RESIDUAL_POLICY,
         "inventory_final": inv.snapshot(),
         "event_notional_spent": str(spent),
         "caps": {
