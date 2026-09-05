@@ -342,3 +342,27 @@ def test_fill_updates_inventory_and_requeries_model_before_next_action(
     assert rep["pair_economics"]["hard_bound_px"] is not None
     assert all(b["participateDontInitiate"] is True
                for p, b in fake.posts if p == "/v1/orders")
+
+
+def test_spent_cap_market_is_not_reselected_this_campaign(monkeypatch,
+                                                          tmp_path):
+    """A market whose durable per-market cap is spent cannot change inside
+    the campaign; reselecting it every cooldown just burns cycles."""
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    st = _status([_row("a", touch="900"), _row("b", touch="100")])
+    monkeypatch.setattr(entry, "load_status_document",
+                        lambda path=None: (st, "status_url:test"))
+    ran = []
+
+    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s):
+        ran.append(slug)
+        return {"status": "SPRING_NO_FILL", "slug": slug,
+                "stop_reason": "spend_cap_reached",
+                "inventory": {"up": "0", "dn": "0"}, "actions": []}
+    ticks = iter([0.0] + [1.0] * 40)
+    rep = cont.run_campaign(clock=lambda: next(ticks), sleep=lambda s: None,
+                            wall=lambda: 1005.0, campaign_s=500.0,
+                            session_runner=fake_session)
+    assert ran[:2] == ["a", "b"]
+    assert "a" not in ran[1:]

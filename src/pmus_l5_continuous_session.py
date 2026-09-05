@@ -231,6 +231,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         _log("session_end", slug=chosen["slug"], status=rep.get("status"),
              reason=rep.get("reason"), stop_reason=rep.get("stop_reason"),
              inventory=rep.get("inventory"),
+             spring_gates=rep.get("spring_gates"),
              filled_actions=len(rep.get("actions") or []),
              submitted=len(rep.get("orders") or []),
              orders=(rep.get("orders") or [])[-8:],
@@ -245,7 +246,12 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             # one market at a time; residual holds to settlement
             status = f"CAMPAIGN_HOLD:{rep.get('status')}"
             break
-        cooldown[chosen["slug"]] = wall() + RETRY_COOLDOWN_S
+        if rep.get("stop_reason") == "spend_cap_reached":
+            # the durable per-market cap is spent for this slug; it will
+            # not change inside this campaign, so stop reselecting it
+            cooldown[chosen["slug"]] = float("inf")
+        else:
+            cooldown[chosen["slug"]] = wall() + RETRY_COOLDOWN_S
         status = "CAMPAIGN_RESELECTING"
     return {**report, "status": status}
 
