@@ -462,16 +462,22 @@ def held_inventory_from_ledger(slug: str) -> Inventory:
     path = q1.base.state_dir() / "ledger.jsonl"
     if not path.exists():
         return inv
-    submitted: dict[str, dict] = {}
-    filled_ids: set[str] = set()
-    events: list[tuple[int, bool, D, D, str]] = []
+    rows: list[tuple[int, dict]] = []
     for i, line in enumerate(path.read_text().splitlines()):
         try:
             row = json.loads(line)
         except Exception:
             continue
-        if not (isinstance(row, dict) and row.get("slug") == slug):
-            continue
+        if isinstance(row, dict) and row.get("slug") == slug:
+            rows.append((i, row))
+    # pass 1: every order with a `filled` row is accounted by that row
+    # ALONE. The live session writes the terminal row before the filled
+    # row for the same order, so a single pass that trusted whichever
+    # came first counted one fill twice (ledger 0.04 vs venue 0.03).
+    submitted: dict[str, dict] = {}
+    filled_ids: set[str] = set()
+    events: list[tuple[int, bool, D, D, str]] = []
+    for i, row in rows:
         kind, stage = row.get("kind"), str(row.get("stage", ""))
         oid = str(row.get("order_id") or "")
         if kind == "submitted" and stage.startswith("spring_"):
@@ -483,19 +489,23 @@ def held_inventory_from_ledger(slug: str) -> Inventory:
             filled_ids.add(oid)
             events.append((i, str(row.get("side")).upper() != "NO", px, qty,
                            stage.split("_")[1] if "_" in stage else "open"))
-        elif kind == "order_terminal" and oid in submitted and \
-                oid not in filled_ids:
-            got = micro._d(row.get("filled_qty"))
-            px = micro._d(row.get("price")) or \
-                micro._d(submitted[oid].get("price"))
-            if got is None or px is None or got <= 0:
-                continue
-            filled_ids.add(oid)
-            sub_stage = str(submitted[oid].get("stage", ""))
-            events.append((i, str(submitted[oid].get("side")).upper()
-                           != "OUTCOME_SIDE_NO", px, got,
-                           sub_stage.split("_")[1] if "_" in sub_stage
-                           else "open"))
+    # pass 2: orders an earlier build left with only a terminal row
+    for i, row in rows:
+        oid = str(row.get("order_id") or "")
+        if row.get("kind") != "order_terminal" or oid not in submitted or \
+                oid in filled_ids:
+            continue
+        got = micro._d(row.get("filled_qty"))
+        px = micro._d(row.get("price")) or \
+            micro._d(submitted[oid].get("price"))
+        if got is None or px is None or got <= 0:
+            continue
+        filled_ids.add(oid)
+        sub_stage = str(submitted[oid].get("stage", ""))
+        events.append((i, str(submitted[oid].get("side")).upper()
+                       != "OUTCOME_SIDE_NO", px, got,
+                       sub_stage.split("_")[1] if "_" in sub_stage
+                       else "open"))
     for _, side_up, px, qty, rel in sorted(events, key=lambda e: e[0]):
         inv.record(side_up, px, qty, rel)
     return inv

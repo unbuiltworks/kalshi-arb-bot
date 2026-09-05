@@ -764,3 +764,31 @@ def test_resume_reconciles_an_unterminated_fill_before_rebuilding(
     assert rep["resumed_inventory"]["up"] == "0.02"
     assert base.D(rep["resumed_inventory"]["avg_up"]) == base.D("0.43")
     assert rep["inventory"]["up"] == "0.04"       # extend filled on top
+
+
+def test_held_inventory_counts_a_live_fill_once(monkeypatch, tmp_path):
+    """The live session writes order_terminal BEFORE filled for the same
+    order; a single pass trusting whichever came first counted one fill
+    twice (ledger 0.04 vs venue 0.03 at 15:15Z). Filled rows win."""
+    monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
+    rows = [
+        {"kind": "submitted", "stage": "spring_open_3", "slug": "m",
+         "order_id": "OLD", "side": "OUTCOME_SIDE_YES", "price": "0.43",
+         "qty": "0.02"},
+        {"kind": "order_terminal", "slug": "m", "order_id": "OLD",
+         "filled_qty": "0.02", "price": "0.43"},        # old build: no filled
+        {"kind": "submitted", "stage": "spring_extend_1", "slug": "m",
+         "order_id": "NEW", "side": "OUTCOME_SIDE_YES", "price": "0.62",
+         "qty": "0.01"},
+        {"kind": "order_terminal", "slug": "m", "order_id": "NEW",
+         "filled_qty": "0.01", "price": "0.62"},        # new build: both
+        {"kind": "filled", "stage": "spring_extend_1", "slug": "m",
+         "order_id": "NEW", "side": "YES", "price": "0.62", "qty": "0.01"},
+    ]
+    (tmp_path / "ledger.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows))
+    inv = base.held_inventory_from_ledger("m")
+    assert inv.snapshot()["up"] == "0.03"
+    assert inv.spent() == base.D("0.43") * base.D("0.02") + \
+        base.D("0.62") * base.D("0.01")
+    assert inv.last_rel == "extend"
