@@ -54,6 +54,10 @@ from src import pmus_spring_l5_session as session
 LAYER_REPLICATION = "REPLICATION_EVIDENCE"
 LAYER_ECONOMICS = "EXECUTABLE_ECONOMICS"
 LAYER_OPERATIONAL = "OPERATIONAL"
+# Provenance was reported by the transfer tool but NOT by this readiness
+# report, so a payload with inferred or absent provenance could read
+# ready:true here. It gets its own layer, like every other bar.
+LAYER_PROVENANCE = "EVIDENCE_PROVENANCE"
 
 
 def _gate(layer: str, name: str, blocker: Optional[str]) -> dict:
@@ -108,9 +112,12 @@ def readiness_report(status: Mapping[str, Any], slug: str,
     if evidence:
         # the composed evidence bar (entry-guard semantics: category bar,
         # max(2, floor) clamp on category completions, freshness)
+        # provenance is this report's own layer below; asking the
+        # replication gate to judge it too would show one problem twice
         gates.append(_gate(LAYER_REPLICATION, "strict_evidence_composed",
-                           entry.strict_evidence_reason(slug, evidence,
-                                                        now=now)))
+                           entry.strict_evidence_reason(
+                               slug, evidence, now=now,
+                               require_provenance=False)))
 
     gates.extend(_executable_economics_gates(evidence))
 
@@ -124,15 +131,24 @@ def readiness_report(status: Mapping[str, Any], slug: str,
         LAYER_REPLICATION, "strict_completion_env_asserted",
         None if session.strict_completion_asserted(slug) else
         f"{session.SPRING_STRICT_ENV} not set to slug"))
-    ev_json = entry.parse_strict_evidence()
+    # Resolve evidence exactly as the guard will, so the report cannot
+    # say "ready" about a path the guard would not actually take.
+    ev_used, ev_source = entry.resolve_strict_evidence(slug, now=now)
     gates.append(_gate(
-        LAYER_REPLICATION, "strict_evidence_json_env",
-        None if ev_json is not None else
-        f"{entry.STRICT_EVIDENCE_ENV} absent or invalid JSON"))
-    if ev_json is not None:
-        gates.append(_gate(LAYER_REPLICATION, "strict_evidence_json_valid",
-                           entry.strict_evidence_reason(slug, ev_json,
-                                                        now=now)))
+        LAYER_REPLICATION, "strict_evidence_available",
+        None if ev_used is not None else
+        f"no strict evidence resolved (source: {ev_source})"))
+    if ev_used is not None:
+        gates.append(_gate(LAYER_REPLICATION, "strict_evidence_valid",
+                           entry.strict_evidence_reason(
+                               slug, ev_used, now=now,
+                               require_provenance=False)))
+        prov = str(ev_used.get("evidence_provenance") or "").strip().lower()
+        gates.append(_gate(
+            LAYER_PROVENANCE, "evidence_authenticated",
+            None if prov == entry.PROVENANCE_AUTHENTICATED else
+            f"evidence_provenance={prov or 'missing'}; only trade "
+            "direction OBSERVED on the authenticated stream admits"))
     gates.append(_gate(
         LAYER_OPERATIONAL, "isolated_dual_key_armed",
         None if session.armed() else
@@ -149,12 +165,15 @@ def readiness_report(status: Mapping[str, Any], slug: str,
         LAYER_REPLICATION: layer_view(LAYER_REPLICATION),
         LAYER_ECONOMICS: layer_view(LAYER_ECONOMICS),
         LAYER_OPERATIONAL: layer_view(LAYER_OPERATIONAL),
+        LAYER_PROVENANCE: layer_view(LAYER_PROVENANCE),
     }
     blockers = [g for g in gates if not g["ok"]]
     non_code = [g["blocker"] for g in blockers
                 if g["gate"] == "durable_state"]
     return {
         "slug": slug,
+        "evidence_source": ev_source,
+        "evidence_age_s": entry.evidence_age_s(ev_used, now),
         "ready": not blockers,
         "layers": layers,
         "gates": gates,

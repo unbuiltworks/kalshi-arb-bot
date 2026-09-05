@@ -28,6 +28,14 @@ STRICT_EVIDENCE_ENV = "PMUS_SPRING_STRICT_EVIDENCE_JSON"
 STRICT_EVIDENCE_MAX_AGE_ENV = "PMUS_SPRING_STRICT_EVIDENCE_MAX_AGE_SECONDS"
 DEFAULT_EVIDENCE_MAX_AGE_S = 120.0
 
+# A status document the probe reads ITSELF at admission time, so no human
+# stands inside a 120s freshness window. Set it and the pasted-JSON env is
+# not consulted at all.
+EVIDENCE_STATUS_PATH_ENV = "PMUS_SPRING_EVIDENCE_STATUS_PATH"
+
+# Only trade direction OBSERVED on the authenticated stream is admissible.
+PROVENANCE_AUTHENTICATED = "authenticated"
+
 
 def _epoch(value: Any) -> Optional[float]:
     if value is None:
@@ -48,8 +56,17 @@ def _epoch(value: Any) -> Optional[float]:
 
 def strict_evidence_reason(slug: str, evidence: Optional[Mapping[str, Any]],
                            now: Optional[float] = None,
-                           max_age_s: Optional[float] = None) -> Optional[str]:
-    """Return why strict recorder evidence is insufficient; None means pass."""
+                           max_age_s: Optional[float] = None,
+                           require_provenance: bool = True) -> Optional[str]:
+    """Return why strict recorder evidence is insufficient; None means pass.
+
+    `require_provenance` is True for ADMISSION, which must refuse an
+    inferred payload outright. The readiness report passes False because
+    it reports provenance in its own EVIDENCE_PROVENANCE layer, and
+    folding it into the replication layer would make one red gate look
+    like two unrelated failures. Nothing can reach a live probe through
+    the False path -- only the report uses it.
+    """
     if not isinstance(evidence, Mapping):
         return "strict_evidence_missing"
     if str(evidence.get("slug") or "") != slug:
@@ -105,6 +122,19 @@ def strict_evidence_reason(slug: str, evidence: Optional[Mapping[str, Any]],
         return "strict_evidence_not_two_sided"
     if evidence.get("off_distribution") is not False:
         return "strict_evidence_off_distribution_or_unknown"
+    # PROVENANCE, checked HERE and not only in the readiness report.
+    # The readiness layers refuse inferred evidence, but this guard is
+    # what actually admits a live probe -- and it accepted any payload
+    # whose fields looked right, provenance unread. That was survivable
+    # while a human pasted each payload. It is not survivable once a feed
+    # composes payloads automatically, so the guard now reads provenance
+    # itself. Missing or inferred fails CLOSED; only trade direction
+    # OBSERVED on the authenticated stream qualifies.
+    if require_provenance:
+        prov = str(evidence.get("evidence_provenance") or "").strip().lower()
+        if prov != PROVENANCE_AUTHENTICATED:
+            return ("strict_evidence_provenance_not_authenticated:"
+                    f"{prov or 'missing'}")
     ts = _epoch(evidence.get("evidence_t") or evidence.get("status_t")
                 or evidence.get("t"))
     if ts is None:
@@ -119,6 +149,47 @@ def strict_evidence_reason(slug: str, evidence: Optional[Mapping[str, Any]],
     if age > max_age_s:
         return f"strict_evidence_stale:{round(age, 3)}"
     return None
+
+
+def evidence_from_status_path(slug: str, path: Optional[str] = None,
+                             now: Optional[float] = None) -> tuple:
+    """Compose strict evidence from a status document the probe reads.
+
+    Returns ``(evidence, source)``. The manual path required a human to
+    copy a payload into an env var and redeploy inside its own 120s
+    freshness bound -- which the paste itself usually spent. Reading the
+    status here removes the human from that window entirely; it does not
+    relax the window, and every gate downstream is unchanged.
+
+    Imported lazily: `pmus_spring_evidence_transfer` imports this module.
+    """
+    path = os.getenv(EVIDENCE_STATUS_PATH_ENV, "") if path is None else path
+    if not str(path).strip():
+        return None, "unset"
+    from src import pmus_spring_evidence_transfer as xfer
+    try:
+        status = xfer.load_recorder_status(Path(str(path)))
+    except (OSError, ValueError) as exc:
+        return None, f"status_unreadable:{type(exc).__name__}"
+    now = time.time() if now is None else now
+    ev = xfer.compose_evidence_from_recorder(status, slug, now)
+    if ev is None:
+        return None, f"slug_absent:{xfer.diagnose_missing_slug(status, slug)}"
+    return ev, f"status_path:{path}"
+
+
+def resolve_strict_evidence(slug: str,
+                            now: Optional[float] = None) -> tuple:
+    """The one place evidence enters the guard. A configured status path
+    is authoritative and is never silently backfilled by the pasted env
+    var -- a stale paste standing in for a broken feed is exactly the
+    failure this replaces."""
+    raw_path = os.getenv(EVIDENCE_STATUS_PATH_ENV, "").strip()
+    if raw_path:
+        return evidence_from_status_path(slug, raw_path, now)
+    ev = parse_strict_evidence()
+    return ev, ("operator_pasted_json" if ev is not None
+                else "operator_pasted_json_absent")
 
 
 def parse_strict_evidence(raw: Optional[str] = None) -> Optional[dict]:
@@ -196,11 +267,13 @@ def run_session(t=None, clock=time.monotonic, sleep=time.sleep,
     if not base.armed():
         return base.run_session(t=t, clock=clock, sleep=sleep, wall=wall)
     slug = os.getenv(base.SPRING_MARKET_ENV, "").strip()
-    evidence = parse_strict_evidence()
+    evidence, source = resolve_strict_evidence(slug, now=wall())
     reason = strict_evidence_reason(slug, evidence, now=wall())
     if reason:
         return {"session": "pmus-spring-l5-v1", "slug": slug,
                 "status": "STRICT_GATE_NOT_CLEARED", "reason": reason,
+                "evidence_source": source,
+                "evidence_age_s": evidence_age_s(evidence, wall()),
                 "realized_pnl": None,
                 "labels": "SHADOW/THEORETICAL evidence prerequisite; no network"}
     reason = durable_state_reason()
@@ -209,7 +282,24 @@ def run_session(t=None, clock=time.monotonic, sleep=time.sleep,
                 "status": "DURABLE_STATE_REQUIRED", "reason": reason,
                 "realized_pnl": None,
                 "labels": "live mutation blocked before network; durable ledger required"}
-    return base.run_session(t=t, clock=clock, sleep=sleep, wall=wall)
+    report = base.run_session(t=t, clock=clock, sleep=sleep, wall=wall)
+    if isinstance(report, dict):
+        report.setdefault("evidence_source", source)
+        report.setdefault("evidence_age_s",
+                          evidence_age_s(evidence, wall()))
+    return report
+
+
+def evidence_age_s(evidence: Optional[Mapping[str, Any]],
+                   now: float) -> Optional[float]:
+    """Age of the evidence actually used, for the report. None when the
+    payload carries no usable timestamp -- which the guard already
+    refuses; this never invents one."""
+    if not isinstance(evidence, Mapping):
+        return None
+    ts = _epoch(evidence.get("evidence_t") or evidence.get("status_t")
+                or evidence.get("t"))
+    return None if ts is None else round(now - ts, 3)
 
 
 def main() -> int:

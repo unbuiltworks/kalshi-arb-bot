@@ -29,6 +29,10 @@ def evidence(**overrides):
         "spring_category_bar_met": True,
         "probe_evidence": {"status": "READY_FOR_REVIEW", "reasons": [],
                            "min_completions_required": 3},
+        # admission requires OBSERVED authenticated provenance; the guard
+        # reads it itself rather than trusting the readiness report to
+        # have done so
+        "evidence_provenance": "authenticated",
     }
     row.update(overrides)
     return row
@@ -196,3 +200,116 @@ def test_armed_valid_evidence_but_ephemeral_state_blocks_before_base(monkeypatch
     report = entry.run_session(wall=lambda: 1001.0)
     assert report["status"] == "DURABLE_STATE_REQUIRED"
     assert called["base"] is False
+
+
+# ---- provenance is read by the GUARD, not just by the report ----
+
+def test_admission_refuses_evidence_with_no_provenance():
+    """Every other field can be perfect. Admission still refuses: this
+    guard is what lets a live probe run, and it used to accept any
+    payload whose fields looked right without reading provenance."""
+    ev = evidence()
+    ev.pop("evidence_provenance")
+    reason = entry.strict_evidence_reason("mkt", ev, now=1000.0)
+    assert reason == "strict_evidence_provenance_not_authenticated:missing"
+
+
+def test_admission_refuses_inferred_provenance():
+    ev = evidence(evidence_provenance="inferred")
+    reason = entry.strict_evidence_reason("mkt", ev, now=1000.0)
+    assert reason == "strict_evidence_provenance_not_authenticated:inferred"
+
+
+def test_the_report_path_may_skip_provenance_but_admission_may_not():
+    """readiness reports provenance in its own layer, so its replication
+    gate asks only replication questions. Admission asks both."""
+    ev = evidence(evidence_provenance="inferred")
+    assert entry.strict_evidence_reason("mkt", ev, now=1000.0,
+                                        require_provenance=False) is None
+    assert entry.strict_evidence_reason("mkt", ev, now=1000.0) is not None
+
+
+# ---- the automatic evidence feed ----
+
+def _recorder_status(slug="mkt", t=1000.0, **row):
+    base_row = {
+        "slug": slug, "bid": "0.50", "trades_1h": 25,
+        "two_sided_trades": True, "off_distribution": False,
+        "both_sides_served": True,
+        "spring_pair_target": "0.98", "spring_matched_slots": 3,
+        "spring_repeated_completion": True,
+        "spring_category": "mlb",
+        "spring_category_evidence": {"completions_60m": 3,
+                                     "distinct_markets_60m": 2,
+                                     "markets": ["mkt", "mkt2"],
+                                     "bar_met": True},
+        "spring_category_bar_met": True,
+        "spring_fee_safe_completions": 2,
+        "probe_evidence": {"status": "READY_FOR_REVIEW", "reasons": [],
+                           "min_completions_required": 2},
+    }
+    base_row.update(row)
+    return {"t": t, "spring_watch": [base_row]}
+
+
+def test_status_path_removes_the_human_from_the_freshness_window(tmp_path):
+    """The pasted-JSON path required a human to copy a payload and
+    redeploy inside its own 120s bound -- which the paste itself spent.
+    Read from a status document, the evidence is as fresh as the file."""
+    now = 1000.0
+    p = tmp_path / "status.jsonl"
+    p.write_text(json.dumps(_recorder_status(t=now - 5)) + "\n",
+                 encoding="utf-8")
+    ev, source = entry.evidence_from_status_path("mkt", str(p), now=now)
+    assert ev is not None
+    assert ev["evidence_provenance"] == entry.PROVENANCE_AUTHENTICATED
+    assert str(p) in source
+    assert entry.strict_evidence_reason("mkt", ev, now=now) is None
+
+
+def test_a_stale_status_file_is_still_refused(tmp_path):
+    """Automating the feed must not smuggle staleness past the bound."""
+    now = 1000.0
+    p = tmp_path / "status.jsonl"
+    p.write_text(json.dumps(_recorder_status(t=now - 600)) + "\n",
+                 encoding="utf-8")
+    ev, _ = entry.evidence_from_status_path("mkt", str(p), now=now)
+    reason = entry.strict_evidence_reason("mkt", ev, now=now)
+    assert reason and reason.startswith("strict_evidence_stale")
+
+
+def test_a_configured_path_is_never_backfilled_by_a_stale_paste(
+        tmp_path, monkeypatch):
+    """A broken feed must fail closed, not silently fall back to whatever
+    an operator pasted hours ago -- that is the failure being replaced."""
+    monkeypatch.setenv(entry.STRICT_EVIDENCE_ENV, json.dumps(evidence()))
+    monkeypatch.setenv(entry.EVIDENCE_STATUS_PATH_ENV,
+                       str(tmp_path / "does_not_exist.jsonl"))
+    ev, source = entry.resolve_strict_evidence("mkt", now=1000.0)
+    assert ev is None
+    assert source.startswith("status_unreadable")
+
+
+def test_an_absent_slug_says_why_rather_than_just_missing(tmp_path,
+                                                          monkeypatch):
+    p = tmp_path / "status.jsonl"
+    p.write_text(json.dumps(_recorder_status(slug="other")) + "\n",
+                 encoding="utf-8")
+    monkeypatch.setenv(entry.EVIDENCE_STATUS_PATH_ENV, str(p))
+    ev, source = entry.resolve_strict_evidence("mkt", now=1000.0)
+    assert ev is None
+    assert source.startswith("slug_absent:")
+
+
+def test_the_pasted_path_still_works_when_no_path_is_configured(monkeypatch):
+    monkeypatch.delenv(entry.EVIDENCE_STATUS_PATH_ENV, raising=False)
+    monkeypatch.setenv(entry.STRICT_EVIDENCE_ENV, json.dumps(evidence()))
+    ev, source = entry.resolve_strict_evidence("mkt", now=1000.0)
+    assert ev is not None
+    assert source == "operator_pasted_json"
+
+
+def test_evidence_age_is_reported_not_invented():
+    assert entry.evidence_age_s(evidence(evidence_t=900.0), 1000.0) == 100.0
+    assert entry.evidence_age_s({"slug": "mkt"}, 1000.0) is None
+    assert entry.evidence_age_s(None, 1000.0) is None

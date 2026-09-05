@@ -70,7 +70,7 @@ def test_floor_cannot_weaken_below_two_strict_completions():
                spring_category_bar_met=True)
     reason = entry.strict_evidence_reason(
         SLUG, entry.evidence_from_status(_status(row), SLUG),
-        now=time.time())
+        now=time.time(), require_provenance=False)
     assert reason == "spring_category_completions_lt_required:1<2"
 
 
@@ -90,7 +90,7 @@ def test_floor_two_with_two_category_completions_passes_evidence_layer():
                cat_completions=2, cat_markets=2)
     reason = entry.strict_evidence_reason(
         SLUG, entry.evidence_from_status(_status(row), SLUG),
-        now=time.time())
+        now=time.time(), require_provenance=False)
     assert reason is None
 
 
@@ -111,7 +111,7 @@ def test_report_names_every_remaining_gate_and_blocker(monkeypatch):
     assert session.SPRING_GATE_ENV in \
         by["gate_evidence_env_asserted"]["blocker"]
     assert by["strict_completion_env_asserted"]["ok"] is False
-    assert by["strict_evidence_json_env"]["ok"] is False
+    assert by["strict_evidence_available"]["ok"] is False
     assert by["isolated_dual_key_armed"]["ok"] is False
     assert "DISARMED" in by["isolated_dual_key_armed"]["blocker"]
     assert rep["ready"] is False
@@ -127,8 +127,9 @@ def test_fully_asserted_environment_reports_ready(monkeypatch):
     status = _status(row)
     monkeypatch.setenv(session.SPRING_GATE_ENV, SLUG)
     monkeypatch.setenv(session.SPRING_STRICT_ENV, SLUG)
-    monkeypatch.setenv(entry.STRICT_EVIDENCE_ENV, _json.dumps(
-        entry.evidence_from_status(status, SLUG)))
+    ev = dict(entry.evidence_from_status(status, SLUG))
+    ev["evidence_provenance"] = entry.PROVENANCE_AUTHENTICATED
+    monkeypatch.setenv(entry.STRICT_EVIDENCE_ENV, _json.dumps(ev))
     monkeypatch.setenv(session.SPRING_LIVE_ENV, "YES")
     monkeypatch.setenv(session.SPRING_SID_ENV, "s1")
     monkeypatch.setenv(session.SPRING_ARM_ENV, "s1")
@@ -159,3 +160,34 @@ def test_readiness_module_is_purely_observational():
     for banned in ("urllib", "websockets", "requests", "Transport(",
                    "/v1/orders", "POST", "setenv", "os.environ["):
         assert banned not in src, banned
+
+
+# ---- provenance is its own bar in this report, not an afterthought ----
+
+def test_inferred_evidence_can_never_report_ready(monkeypatch):
+    """A payload whose direction was INFERRED from lastTradePx vs BBO is
+    not authenticated evidence, however strong every other field looks.
+    Before this layer existed the report said ready:true for one."""
+    import json as _json
+    status = _status(_row(matched=3, floor=3))
+    ev = dict(entry.evidence_from_status(status, SLUG))
+    ev["evidence_provenance"] = "inferred"
+    monkeypatch.setenv(session.SPRING_GATE_ENV, SLUG)
+    monkeypatch.setenv(session.SPRING_STRICT_ENV, SLUG)
+    monkeypatch.setenv(entry.STRICT_EVIDENCE_ENV, _json.dumps(ev))
+    monkeypatch.setenv(session.SPRING_LIVE_ENV, "YES")
+    monkeypatch.setenv(session.SPRING_SID_ENV, "s1")
+    monkeypatch.setenv(session.SPRING_ARM_ENV, "s1")
+    monkeypatch.setattr(entry, "durable_state_reason", lambda *a, **k: None)
+    rep = ready.readiness_report(status, SLUG, now=time.time())
+    assert rep["ready"] is False
+    assert rep["layers"]["EVIDENCE_PROVENANCE"]["ok"] is False
+    # and the replication layer is NOT dragged down by it
+    assert rep["layers"]["REPLICATION_EVIDENCE"]["ok"] is True
+
+
+def test_report_states_which_source_the_evidence_came_from(monkeypatch):
+    for env in (entry.STRICT_EVIDENCE_ENV, entry.EVIDENCE_STATUS_PATH_ENV):
+        monkeypatch.delenv(env, raising=False)
+    rep = ready.readiness_report(_status(_row()), SLUG, now=time.time())
+    assert rep["evidence_source"] == "operator_pasted_json_absent"
