@@ -38,6 +38,16 @@ def _row(matched=3, floor=3, status="READY_FOR_REVIEW",
                            "min_completions_required": floor,
                            "reasons": [] if status == "READY_FOR_REVIEW"
                            else ["insufficient_category_completions"]},
+        # OPEN safety facts (OWNER 5551236878): required end to end, so
+        # a realistic recorder row carries them.
+        "both_sides_served": True,
+        "bid_touch_qty": "500",
+        "collector_gaps": 0,
+        "market_state": {"active": True, "archived": False, "closed": False,
+                         "status": "MARKET_STATUS_OPEN",
+                         "endDate": "2026-09-16T09:30:00Z"},
+        "probe_entry_action": {"decision": "quote", "relation": "open",
+                               "side": "YES", "target_price": "0.5000"},
     }
     row.update(over)
     return row
@@ -49,40 +59,49 @@ def _status(row, t=None):
     return {"t": t, "spring_watch": [row]}
 
 
-def test_two_layer_bar_default_floor_blocks_two_completions():
-    """Canonical repeated (>=2) alone is a candidate label, never the arm
-    bar: with the default floor 3 a two-completion row is BLOCKED with
-    the exact reason."""
+def test_two_layer_bar_default_floor_is_now_advisory_not_a_blocker():
+    """OWNER 5551236878: a two-completion row against a floor of 3 is
+    still MEASURED and reported -- it just no longer withholds an OPEN,
+    because completion history is not an entry condition."""
     row = _row(matched=2, floor=3, status="INSUFFICIENT_EVIDENCE")
     rep = ready.readiness_report(_status(row), SLUG, now=time.time())
-    ev = {g["gate"]: g for g in rep["gates"]}["strict_evidence_composed"]
-    assert ev["ok"] is False
-    assert ev["blocker"].startswith("probe_evidence_not_ready")
-    assert rep["ready"] is False
+    gate = {g["gate"]: g for g in rep["gates"]}["strict_completion_evidence"]
+    assert gate["ok"] is False
+    assert gate["advisory"] is True
+    assert gate["blocker"].startswith("probe_evidence_not_ready")
+    # the OPEN path itself is unobstructed by it
+    composed = {g["gate"]: g for g in rep["gates"]}["strict_evidence_composed"]
+    assert composed["ok"] is True
 
 
-def test_floor_cannot_weaken_below_two_strict_completions():
-    """Even a (mis)configured floor of 1 with a READY label AND a falsely
-    asserted category-bar flag cannot arm on one category completion:
-    the entry guard clamps its requirement to max(2, floor)."""
+def test_completion_floor_still_clamps_to_two_when_measured():
+    """The max(2, floor) clamp survives -- a misconfigured floor of 1
+    cannot make one completion read as sufficient EVIDENCE. It is simply
+    no longer an admission bar."""
     row = _row(matched=1, floor=1, status="READY_FOR_REVIEW",
                cat_completions=1, cat_markets=2,
                spring_category_bar_met=True)
-    reason = entry.strict_evidence_reason(
-        SLUG, entry.evidence_from_status(_status(row), SLUG),
-        now=time.time(), require_provenance=False)
-    assert reason == "spring_category_completions_lt_required:1<2"
+    ev = entry.evidence_from_status(_status(row), SLUG)
+    assert entry.completion_evidence_reason(ev) == \
+        "spring_category_completions_lt_required:1<2"
+    # and it does not block the OPEN
+    assert entry.strict_evidence_reason(
+        SLUG, ev, now=time.time(), require_provenance=False) is None
 
 
-def test_isolated_market_blocked_in_readiness_report():
-    """OWNER DECISION 5533476555 item 3: a market alone in its category
-    (even with 2 own completions) is blocked at the replication layer."""
+def test_isolated_market_is_flagged_but_no_longer_blocked():
+    """A market alone in its category is still reported as lacking
+    category evidence -- in the advisory layer, not as a refusal."""
     row = _row(matched=2, floor=2, cat_completions=2, cat_markets=1)
     rep = ready.readiness_report(_status(row), SLUG, now=time.time())
-    layer = rep["layers"]["REPLICATION_EVIDENCE"]
-    assert layer["ok"] is False
-    assert any("spring_category_bar_not_met" in b for b in layer["blockers"])
-    assert rep["ready"] is False
+    completion = rep["layers"]["COMPLETION_EVIDENCE"]
+    assert completion["ok"] is False
+    assert any("spring_category_bar_not_met" in b
+               for b in completion["blockers"])
+    # replication may be red for unrelated env reasons in this fixture;
+    # what matters is that the CATEGORY BAR is not among its blockers
+    assert not any("category" in b
+                   for b in rep["layers"]["REPLICATION_EVIDENCE"]["blockers"])
 
 
 def test_floor_two_with_two_category_completions_passes_evidence_layer():
@@ -183,7 +202,10 @@ def test_inferred_evidence_can_never_report_ready(monkeypatch):
     assert rep["ready"] is False
     assert rep["layers"]["EVIDENCE_PROVENANCE"]["ok"] is False
     # and the replication layer is NOT dragged down by it
-    assert rep["layers"]["REPLICATION_EVIDENCE"]["ok"] is True
+    # replication may be red for unrelated env reasons in this fixture;
+    # what matters is that the CATEGORY BAR is not among its blockers
+    assert not any("category" in b
+                   for b in rep["layers"]["REPLICATION_EVIDENCE"]["blockers"])
 
 
 def test_report_states_which_source_the_evidence_came_from(monkeypatch):

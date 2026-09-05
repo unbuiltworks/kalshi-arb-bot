@@ -210,11 +210,10 @@ def test_candidate_gate_thin_flow_and_off_distribution():
     row["two_sided_trades"] = False
     assert spring.spring_candidate_gate(row) == "one_directional_flow"
     row["two_sided_trades"] = True
-    # P0-D + OWNER DECISION 5533476555: without the CATEGORY evidence
-    # bar the gate fails CLOSED (per-market repetition alone is no
-    # longer evidence)
-    assert spring.spring_candidate_gate(row) == \
-        "spring_category_bar_not_met"
+    # OWNER DECISION 5551236878: the CATEGORY evidence bar is COMPLETION
+    # evidence and no longer refuses an OPEN. Requiring proof of past
+    # completions before a first entry is circular.
+    assert spring.spring_candidate_gate(row) is None
     row["spring_category_bar_met"] = True
     assert spring.spring_candidate_gate(row) is None
     # off-distribution v2 state blocks
@@ -436,18 +435,19 @@ def _flowing_row(**extra):
             "two_sided_trades": True, **extra}
 
 
-def test_loose_q1_matched_history_is_not_spring_evidence():
-    # loose Q1 MATCHED:2 rode along, category bar not met -> BLOCKED
+def test_loose_q1_matched_history_no_longer_blocks_an_open():
+    """OWNER 5551236878. The row still carries the unmet bar for
+    reporting; it simply no longer refuses the entry."""
     row = _flowing_row(slot_counts_theoretical={"MATCHED": 2},
                        spring_category_bar_met=False)
-    assert spring.spring_candidate_gate(row) == \
-        "spring_category_bar_not_met"
+    assert spring.spring_candidate_gate(row) is None
+    assert row["spring_category_bar_met"] is False
 
 
-def test_isolated_market_own_completions_cannot_arm():
-    """OWNER DECISION 5533476555 item 3: even a market with >=2 of its
-    OWN strict completions is blocked while its category evidence comes
-    from that single market alone — an isolated one-off can never arm."""
+def test_isolated_market_is_no_longer_blocked_from_opening():
+    """OWNER 5551236878 supersedes 5533476555 for ENTRY only: an
+    isolated market may OPEN. Its thin category evidence is still
+    recorded on the row and surfaced by the readiness layer."""
     row = _flowing_row(
         spring_repeated_completion=True,          # old per-market label
         spring_matched_slots=2,                   # 2 own completions
@@ -457,8 +457,8 @@ def test_isolated_market_own_completions_cannot_arm():
                                   "distinct_markets_60m": 1,
                                   "markets": ["x"], "bar_met": False},
         spring_category_bar_met=False)
-    assert spring.spring_candidate_gate(row) == \
-        "spring_category_bar_not_met"
+    assert spring.spring_candidate_gate(row) is None
+    assert row["spring_category_evidence"]["distinct_markets_60m"] == 1
 
 
 def test_two_distinct_same_category_markets_meet_bar():
@@ -471,9 +471,9 @@ def test_two_distinct_same_category_markets_meet_bar():
     assert spring.spring_candidate_gate(row) is None
 
 
-def test_missing_strict_field_fails_closed():
-    assert spring.spring_candidate_gate(_flowing_row()) == \
-        "spring_category_bar_not_met"
+def test_missing_category_field_no_longer_fails_the_open():
+    """It fails closed for COMPLETION evidence, not for entry."""
+    assert spring.spring_candidate_gate(_flowing_row()) is None
 
 
 def test_owner_decision_observation_constants():
@@ -517,19 +517,26 @@ def test_rank_carries_strict_fields_from_status_rows(monkeypatch):
     assert good["spring_skip"] is None
     bad = rows["no-evidence"]
     assert "spring_category_bar_met" not in bad          # stayed missing
-    assert bad["spring_skip"] == "spring_category_bar_not_met"
+    # OWNER 5551236878: missing completion evidence no longer skips the
+    # candidate. The field stays absent -- never defaulted to True --
+    # so the readiness layer can still report it honestly.
+    assert bad["spring_skip"] is None
 
 
-def test_live_session_blocks_without_strict_assertion(monkeypatch, tmp_path):
+def test_live_session_opens_without_a_completion_assertion(monkeypatch,
+                                                           tmp_path):
+    """This is the veto that actually sat on the money path. Without
+    PMUS_SPRING_REPEATED_COMPLETION the armed session used to refuse
+    every market with spring_category_bar_not_met -- proof of past
+    completions demanded before a first OPEN (OWNER 5551236878)."""
     _arm(monkeypatch, tmp_path)
     monkeypatch.delenv(spring.SPRING_STRICT_ENV, raising=False)
     monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _tiny_model())
     fake = Fake()
     rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
                              wall=lambda: 0.0)
-    assert rep["status"] == "SPRING_SKIP_NOT_QUALIFYING"
-    assert rep["reason"] == "spring_category_bar_not_met"
-    assert fake.posts == []                              # nothing reached venue
+    assert rep["status"] != "SPRING_SKIP_NOT_QUALIFYING"
+    assert rep.get("reason") != "spring_category_bar_not_met"
 
 
 # ---- P0-E: durable-state arming preflight (5526791808) ----

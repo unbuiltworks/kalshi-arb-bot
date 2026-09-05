@@ -33,69 +33,70 @@ def evidence(**overrides):
         # reads it itself rather than trusting the readiness report to
         # have done so
         "evidence_provenance": "authenticated",
+        # OPEN-relevant facts (OWNER 5551236878). All REQUIRED: absent is
+        # a blocker, never a skipped check.
+        "both_sides_served": True,
+        "bid_touch_qty": "500",
+        "collector_gaps": 0,
+        "market_state": {"active": True, "archived": False, "closed": False,
+                         "status": "MARKET_STATUS_OPEN",
+                         "endDate": "2026-09-16T09:30:00Z"},
+        "probe_entry_action": {"decision": "quote", "relation": "open",
+                               "side": "YES", "target_price": "0.5000"},
     }
     row.update(overrides)
     return row
 
 
-def test_loose_q1_match_does_not_substitute_for_strict_readiness():
+# ---- completion evidence: measured and reported, never an entry bar ----
+
+def test_completion_evidence_no_longer_blocks_an_open():
+    """OWNER DECISION 5551236878. READY_FOR_REVIEW and the category bar
+    are COMPLETION evidence. Requiring proof of past completions before a
+    first OPEN is circular -- nothing completes if nothing may open."""
     ev = evidence(spring_repeated_completion=False, spring_matched_slots=0,
-                  slot_counts_theoretical={"MATCHED": 2},
+                  spring_category_bar_met=False,
+                  spring_category_evidence={"completions_60m": 0,
+                                            "distinct_markets_60m": 0,
+                                            "markets": [], "bar_met": False},
                   probe_evidence={"status": "INSUFFICIENT_EVIDENCE",
                                   "reasons": ["insufficient_completions:0<3"],
                                   "min_completions_required": 3})
-    assert entry.strict_evidence_reason("mkt", ev, now=1001.0).startswith(
+    assert entry.strict_evidence_reason("mkt", ev, now=1001.0) is None
+
+
+def test_completion_evidence_is_still_measured_and_reported():
+    """It ranks a candidate now; it does not gate one. Losing the
+    measurement entirely would be the opposite error."""
+    ev = evidence(probe_evidence={"status": "INSUFFICIENT_EVIDENCE",
+                                  "reasons": ["insufficient_completions:0<3"],
+                                  "min_completions_required": 3})
+    assert entry.completion_evidence_reason(ev).startswith(
         "probe_evidence_not_ready:")
+    assert entry.completion_evidence_reason(evidence()) is None
 
 
-def test_one_or_two_strict_matches_are_blocked_at_default_three_floor():
-    for n in (1, 2):
-        ev = evidence(spring_matched_slots=n,
-                      probe_evidence={"status": "INSUFFICIENT_EVIDENCE",
-                                      "reasons": [f"insufficient_completions:{n}<3"],
-                                      "min_completions_required": 3})
-        assert entry.strict_evidence_reason("mkt", ev, now=1001.0).startswith(
-            "probe_evidence_not_ready:")
-
-
-def test_ready_category_bar_met_passes_evidence_layer():
-    assert entry.strict_evidence_reason("mkt", evidence(), now=1001.0) is None
-
-
-def test_ready_label_cannot_contradict_raw_category_counts():
-    # a READY probe label cannot override the raw category counts
-    ev = evidence(spring_category_evidence={"completions_60m": 2,
-                                            "distinct_markets_60m": 2,
-                                            "markets": ["mkt", "mkt2"],
-                                            "bar_met": True})
-    assert entry.strict_evidence_reason("mkt", ev, now=1001.0) == \
-        "spring_category_completions_lt_required:2<3"
-
-
-def test_isolated_market_cannot_pass_entry_guard():
-    """OWNER DECISION 5533476555 item 3: category bar unmet (single
-    market) fails closed, and even a bar_met=True label cannot smuggle
-    an isolated market past the distinct-markets floor."""
-    ev = evidence(spring_category_bar_met=False,
-                  spring_category_evidence={"completions_60m": 3,
-                                            "distinct_markets_60m": 1,
-                                            "markets": ["mkt"],
-                                            "bar_met": False})
-    assert entry.strict_evidence_reason("mkt", ev, now=1001.0) == \
-        "spring_category_bar_not_met"
+def test_completion_evidence_still_checks_the_raw_category_counts():
     lying = evidence(spring_category_evidence={"completions_60m": 3,
                                                "distinct_markets_60m": 1,
                                                "markets": ["mkt"],
                                                "bar_met": True})
-    assert entry.strict_evidence_reason("mkt", lying, now=1001.0) == \
+    assert entry.completion_evidence_reason(lying) == \
         "spring_category_distinct_markets_lt_2:1"
-
-
-def test_missing_category_evidence_fails_closed():
-    ev = evidence()
-    del ev["spring_category_evidence"]
-    assert entry.strict_evidence_reason("mkt", ev, now=1001.0) == \
+    short = evidence(spring_category_evidence={"completions_60m": 2,
+                                               "distinct_markets_60m": 2,
+                                               "markets": ["mkt", "mkt2"],
+                                               "bar_met": True})
+    assert entry.completion_evidence_reason(short) == \
+        "spring_category_completions_lt_required:2<3"
+    missing = evidence()
+    del missing["spring_category_evidence"]
+    assert entry.completion_evidence_reason(missing) == \
         "spring_category_evidence_missing"
+
+
+def test_a_fully_valid_open_payload_is_admitted():
+    assert entry.strict_evidence_reason("mkt", evidence(), now=1001.0) is None
 
 
 def test_missing_stale_and_wrong_slug_fail_closed():
@@ -247,6 +248,14 @@ def _recorder_status(slug="mkt", t=1000.0, **row):
         "spring_fee_safe_completions": 2,
         "probe_evidence": {"status": "READY_FOR_REVIEW", "reasons": [],
                            "min_completions_required": 2},
+        # the OPEN-relevant facts the recorder must carry end to end
+        "bid_touch_qty": "500",
+        "collector_gaps": 0,
+        "market_state": {"active": True, "archived": False, "closed": False,
+                         "status": "MARKET_STATUS_OPEN",
+                         "endDate": "2026-09-16T09:30:00Z"},
+        "probe_entry_action": {"decision": "quote", "relation": "open",
+                               "side": "YES", "target_price": "0.5000"},
     }
     base_row.update(row)
     return {"t": t, "spring_watch": [base_row]}
@@ -313,3 +322,117 @@ def test_evidence_age_is_reported_not_invented():
     assert entry.evidence_age_s(evidence(evidence_t=900.0), 1000.0) == 100.0
     assert entry.evidence_age_s({"slug": "mkt"}, 1000.0) is None
     assert entry.evidence_age_s(None, 1000.0) is None
+
+
+# ---- OPEN safety facts: absent must BLOCK, never skip (OWNER 5551236878) ----
+
+def test_every_open_safety_fact_is_required_not_optional():
+    """`if present: check` lets a payload that simply omits a field walk
+    past a safety gate. Each of these must fail closed when absent."""
+    for field, expected in (
+            ("both_sides_served", "strict_evidence_book_not_two_sided"),
+            ("bid_touch_qty", "strict_evidence_touch_depth_missing"),
+            ("collector_gaps", "strict_evidence_cadence_missing"),
+            ("market_state", "strict_evidence_market_state_missing"),
+            ("probe_entry_action",
+             "strict_evidence_probe_entry_action_missing")):
+        ev = evidence()
+        del ev[field]
+        reason = entry.strict_evidence_reason("mkt", ev, now=1001.0)
+        assert reason is not None, f"{field} absent was admitted"
+        assert reason.startswith(expected), f"{field} -> {reason}"
+
+
+def test_liquidity_facts_block_on_bad_values_too():
+    assert entry.strict_evidence_reason(
+        "mkt", evidence(both_sides_served=False), now=1001.0).startswith(
+            "strict_evidence_book_not_two_sided")
+    assert entry.strict_evidence_reason(
+        "mkt", evidence(bid_touch_qty="0"), now=1001.0).startswith(
+            "strict_evidence_no_q1_touch_depth")
+    assert entry.strict_evidence_reason(
+        "mkt", evidence(collector_gaps=3), now=1001.0) == \
+        "strict_evidence_cadence_gap:3"
+
+
+def test_market_close_safety_uses_the_venue_authoritative_fields():
+    """PMUS serves no settlement_ts for live sports, so the guard uses
+    active/archived/closed/status/endDate -- verified live 2026-09-05,
+    where a resolved market reports closed=True and
+    status=MARKET_STATUS_RESOLVED."""
+    resolved = evidence(market_state={"active": True, "archived": False,
+                                      "closed": True,
+                                      "status": "MARKET_STATUS_RESOLVED",
+                                      "endDate": "2026-09-16T09:30:00Z"})
+    assert entry.strict_evidence_reason("mkt", resolved, now=1001.0) == \
+        "strict_evidence_market_closed:True"
+    inactive = evidence(market_state={"active": False, "archived": False,
+                                      "closed": False,
+                                      "status": "MARKET_STATUS_OPEN",
+                                      "endDate": "2026-09-16T09:30:00Z"})
+    assert entry.strict_evidence_reason("mkt", inactive, now=1001.0) == \
+        "strict_evidence_market_active:False"
+    archived = evidence(market_state={"active": True, "archived": True,
+                                      "closed": False,
+                                      "status": "MARKET_STATUS_OPEN",
+                                      "endDate": "2026-09-16T09:30:00Z"})
+    assert entry.strict_evidence_reason("mkt", archived, now=1001.0) == \
+        "strict_evidence_market_archived:True"
+
+
+def test_each_market_state_field_is_itself_required():
+    for field in ("active", "archived", "closed", "status", "endDate"):
+        state = {"active": True, "archived": False, "closed": False,
+                 "status": "MARKET_STATUS_OPEN",
+                 "endDate": "2026-09-16T09:30:00Z"}
+        del state[field]
+        reason = entry.strict_evidence_reason(
+            "mkt", evidence(market_state=state), now=1001.0)
+        assert reason is not None and field.lower() in reason.lower(), \
+            f"{field} absent -> {reason}"
+
+
+def test_never_opens_into_a_market_about_to_settle():
+    import datetime as _dt
+    now = 1_757_000_000.0
+    soon = _dt.datetime.fromtimestamp(
+        now + 30.0, _dt.timezone.utc).isoformat()
+    ev = evidence(market_state={"active": True, "archived": False,
+                                "closed": False,
+                                "status": "MARKET_STATUS_OPEN",
+                                "endDate": soon})
+    assert entry.strict_evidence_reason("mkt", ev, now=now).startswith(
+        "strict_evidence_too_close_to_settlement")
+
+
+def test_the_model_must_actually_recommend_an_open():
+    """In-distribution is not enough: a state v2 has visited but would
+    not open in is not an entry."""
+    assert entry.strict_evidence_reason(
+        "mkt", evidence(probe_entry_action={"decision": "no_action",
+                                            "reason": "v2_off_distribution"}),
+        now=1001.0) == "strict_evidence_model_no_open:v2_off_distribution"
+    assert entry.strict_evidence_reason(
+        "mkt", evidence(probe_entry_action={"decision": "quote",
+                                            "relation": "complete"}),
+        now=1001.0) == "strict_evidence_first_action_not_an_open:complete"
+
+
+def test_pair_economics_stay_out_of_open_but_bind_a_complete():
+    """<=0.98 / >=1c belong to the complement, never to the entry."""
+    from src import pmus_sports_l5_decision as l5d
+    inv = l5d.Inventory()
+    inv.record(True, l5d.D("0.24"))
+    px, econ = l5d.complement_target(inv.avg(True), l5d.D("0.80"))
+    assert px == l5d.D("0.74")                     # the 0.98 cap, tighter
+    assert econ["max_pair_cost"] == "0.98"
+    assert l5d.hard_pair_bound() == l5d.D("0.99")
+    # and the entry payload carries no pair-economics prerequisite
+    assert entry.strict_evidence_reason("mkt", evidence(), now=1001.0) is None
+
+
+def test_a_loosened_pair_target_is_still_refused():
+    """The <=0.98 cap may not be widened by a payload claiming otherwise."""
+    assert entry.strict_evidence_reason(
+        "mkt", evidence(spring_pair_target="0.995"), now=1001.0) == \
+        "spring_pair_target_too_loose:0.995"

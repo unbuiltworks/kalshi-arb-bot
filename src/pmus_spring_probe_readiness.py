@@ -58,11 +58,23 @@ LAYER_OPERATIONAL = "OPERATIONAL"
 # report, so a payload with inferred or absent provenance could read
 # ready:true here. It gets its own layer, like every other bar.
 LAYER_PROVENANCE = "EVIDENCE_PROVENANCE"
+# Advisory only since OWNER 5551236878: completion history ranks a
+# candidate, it does not gate an OPEN.
+LAYER_COMPLETION = "COMPLETION_EVIDENCE"
 
 
-def _gate(layer: str, name: str, blocker: Optional[str]) -> dict:
+def _gate(layer: str, name: str, blocker: Optional[str],
+          advisory: bool = False) -> dict:
+    """`advisory` gates are MEASURED and shown but never withhold ready.
+
+    Completion evidence is the only advisory gate: OWNER 5551236878 took
+    it out of OPEN admission, so it must not silently return here as a
+    readiness blocker -- but dropping the measurement entirely would be
+    the opposite error, since it still ranks one candidate against
+    another.
+    """
     return {"layer": layer, "gate": name, "ok": blocker is None,
-            "blocker": blocker}
+            "blocker": blocker, "advisory": advisory}
 
 
 def _executable_economics_gates(evidence: Optional[Mapping[str, Any]]) \
@@ -118,6 +130,11 @@ def readiness_report(status: Mapping[str, Any], slug: str,
                            entry.strict_evidence_reason(
                                slug, evidence, now=now,
                                require_provenance=False)))
+        # Completion evidence: measured and shown, ADVISORY. It ranks a
+        # candidate; since OWNER 5551236878 it no longer gates an OPEN.
+        gates.append(_gate(LAYER_COMPLETION, "strict_completion_evidence",
+                           entry.completion_evidence_reason(evidence),
+                           advisory=True))
 
     gates.extend(_executable_economics_gates(evidence))
 
@@ -127,10 +144,14 @@ def readiness_report(status: Mapping[str, Any], slug: str,
         LAYER_REPLICATION, "gate_evidence_env_asserted",
         None if session.gate_asserted(slug) else
         f"{session.SPRING_GATE_ENV} not set to slug"))
+    # Advisory since OWNER 5551236878: this env var asserts REPEATED
+    # COMPLETION, which is completion evidence and no longer an OPEN
+    # prerequisite. Still surfaced so an operator can see whether they
+    # asserted it.
     gates.append(_gate(
-        LAYER_REPLICATION, "strict_completion_env_asserted",
+        LAYER_COMPLETION, "strict_completion_env_asserted",
         None if session.strict_completion_asserted(slug) else
-        f"{session.SPRING_STRICT_ENV} not set to slug"))
+        f"{session.SPRING_STRICT_ENV} not set to slug", advisory=True))
     # Resolve evidence exactly as the guard will, so the report cannot
     # say "ready" about a path the guard would not actually take.
     ev_used, ev_source = entry.resolve_strict_evidence(slug, now=now)
@@ -166,8 +187,9 @@ def readiness_report(status: Mapping[str, Any], slug: str,
         LAYER_ECONOMICS: layer_view(LAYER_ECONOMICS),
         LAYER_OPERATIONAL: layer_view(LAYER_OPERATIONAL),
         LAYER_PROVENANCE: layer_view(LAYER_PROVENANCE),
+        LAYER_COMPLETION: layer_view(LAYER_COMPLETION),
     }
-    blockers = [g for g in gates if not g["ok"]]
+    blockers = [g for g in gates if not g["ok"] and not g.get("advisory")]
     non_code = [g["blocker"] for g in blockers
                 if g["gate"] == "durable_state"]
     return {

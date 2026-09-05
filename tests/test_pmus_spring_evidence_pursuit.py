@@ -142,8 +142,12 @@ def test_no_admission_or_execution_behavior_changes():
     row = {"slug": "x", "bid": "0.50", "skip_reason": None,
            "both_sides_served": True, "trades_1h": 20,
            "two_sided_trades": True}
-    assert spring.spring_candidate_gate(row) == \
-        "spring_category_bar_not_met"
+    # OWNER 5551236878: completion evidence no longer refuses an OPEN,
+    # so the canonical gate admits this row. What matters for pursuit is
+    # that it still calls the CANONICAL gate rather than a local copy.
+    assert spring.spring_candidate_gate(row) is None
+    assert spring.spring_candidate_gate({**row, "bid": "0.90"}) == \
+        "outside_spring_band:0.90"
     # zero seats disables pursuit entirely and the plan passes through
     now = time.time()
     state = _busy_state(30, now)

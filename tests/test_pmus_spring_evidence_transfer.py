@@ -10,6 +10,7 @@ from decimal import Decimal as D
 from pathlib import Path
 
 from src import pmus_spring_evidence_transfer as xfer
+from src import pmus_spring_l5_probe_entry as entry
 from src import pmus_sports_l5_decision as l5d
 from src import pmus_spring_shadow_replay as replay
 from src import pmus_ws_evidence_recorder_enriched as enriched
@@ -378,6 +379,16 @@ def _recorder_status(now, slug=SLUG, bid="0.48", trades=26,
                 "bar_met": bar_met},
             "spring_category_bar_met": bar_met,
             "l5_shadow": {"off_distribution": False},
+            # OPEN safety facts (OWNER 5551236878), required end to end
+            "both_sides_served": True,
+            "bid_touch_qty": "500",
+            "collector_gaps": 0,
+            "market_state": {"active": True, "archived": False,
+                             "closed": False,
+                             "status": "MARKET_STATUS_OPEN",
+                             "endDate": "2026-09-16T09:30:00Z"},
+            "probe_entry_action": {"decision": "quote", "relation": "open",
+                                   "side": "YES", "target_price": "0.5000"},
         }],
     }
 
@@ -409,13 +420,17 @@ def test_recorder_status_satisfies_the_provenance_gate():
 
 
 def test_recorder_path_still_enforces_every_other_gate():
-    """Authenticated provenance is not a bypass: band, flow, category bar
-    and off-distribution still fail closed on the recorder payload."""
+    """Authenticated provenance is not a bypass: band, flow and
+    off-distribution still fail closed on the recorder payload.
+
+    The CATEGORY BAR is deliberately absent from this list since OWNER
+    5551236878 -- it is completion evidence, reported but no longer an
+    entry gate. `test_recorder_completion_evidence_is_advisory` below
+    pins that it is still measured.
+    """
     now = 1_788_000_000.0
     for kw, expect in (({"bid": "0.83"}, "outside_band"),
-                       ({"trades": 2}, "thin_flow"),
-                       ({"completions": 1, "markets": 1, "bar_met": False},
-                        "category")):
+                       ({"trades": 2}, "thin_flow")):
         status = _recorder_status(now, **kw)
         ev = xfer.compose_evidence_from_recorder(status, SLUG, now)
         assert ev["evidence_provenance"] == xfer.PROVENANCE_AUTHENTICATED
@@ -573,3 +588,16 @@ def test_missing_slug_diagnosis_distinguishes_seating_and_absence():
     why = xfer.diagnose_missing_slug(bare, SLUG)
     assert "absent from this recorder's status entirely" in why
     assert "actually built" in why
+
+
+def test_recorder_completion_evidence_is_advisory_not_a_gate():
+    """OWNER 5551236878: an isolated market with one completion is still
+    MEASURED as lacking category evidence, and still admitted to OPEN."""
+    now = 1_788_000_000.0
+    status = _recorder_status(now, completions=1, markets=1, bar_met=False)
+    ev = xfer.compose_evidence_from_recorder(status, SLUG, now)
+    assert ev["evidence_provenance"] == xfer.PROVENANCE_AUTHENTICATED
+    # measured
+    assert entry.completion_evidence_reason(ev) is not None
+    # but not a refusal
+    assert entry.strict_evidence_reason(SLUG, ev, now=now) is None

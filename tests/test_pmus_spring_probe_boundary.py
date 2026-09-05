@@ -120,6 +120,13 @@ def test_a_recorder_status_reaches_the_admission_guard(tmp_path):
             "spring_category_bar_met": True,
             "probe_evidence": {"status": "READY_FOR_REVIEW", "reasons": [],
                                "min_completions_required": 2},
+            "bid_touch_qty": "500", "collector_gaps": 0,
+            "market_state": {"active": True, "archived": False,
+                             "closed": False,
+                             "status": "MARKET_STATUS_OPEN",
+                             "endDate": "2026-09-16T09:30:00Z"},
+            "probe_entry_action": {"decision": "quote", "relation": "open",
+                                   "side": "YES", "target_price": "0.5000"},
         }]}) + "\n", encoding="utf-8")
     out = bd.run(root, status, now=now)
     rec = out["evidence"]["recorder"]

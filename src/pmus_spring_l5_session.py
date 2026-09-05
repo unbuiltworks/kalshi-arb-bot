@@ -284,14 +284,14 @@ def spring_candidate_gate(row: Mapping[str, Any],
         return f"thin_flow:{trades}"
     if row.get("two_sided_trades") is False:
         return "one_directional_flow"
-    # STRICT spring-replay admission, CATEGORY evidence bar (OWNER
-    # DECISION 5533476555, replacing the per-market repeated rule the
-    # representativeness study proved unrealistic): the candidate's
-    # category must show >=2 strict completions from >=2 DISTINCT
-    # same-category markets within the rolling hour. Loose Q1 MATCHED
-    # is never spring evidence; a missing field fails CLOSED.
-    if row.get("spring_category_bar_met") is not True:
-        return "spring_category_bar_not_met"
+    # The CATEGORY evidence bar (>=2 strict completions from >=2 distinct
+    # same-category markets in the rolling hour) used to refuse here.
+    # OWNER DECISION 5551236878 removed it from OPEN admission: it is
+    # COMPLETION evidence, and requiring proof of past completions before
+    # a first entry is circular -- nothing completes if nothing may open.
+    # It stays measured on the row and reported by the readiness layer;
+    # the safety and provenance intent of 5533476555 is untouched, and
+    # <=0.98 / >=1c still bind every complement below.
     if model is not None:
         d = pv2.v2_dist(model, state_key(float(b), SPORTS_TTE_DEFAULT_S,
                                          0.0), "open", "q<5")

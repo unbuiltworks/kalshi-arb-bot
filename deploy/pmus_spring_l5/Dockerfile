@@ -2,7 +2,10 @@
 #
 # DISARMED BY DEFAULT. The probe entry guard exits before credentials,
 # transport construction, or any network activity unless its isolated
-# PMUS_SPRING_* dual key, fresh strict-replay READY_FOR_REVIEW evidence, and
+# PMUS_SPRING_* dual key, fresh AUTHENTICATED OPEN evidence (exact slug,
+# two-sided served book, q1 touch depth, observation cadence, venue
+# market-open safety, in-distribution canonical L5 OPEN recommendation --
+# NOT completion history, per OWNER 5551236878), and
 # durable state mount all pass. This image is intentionally separate from q1,
 # recorder, collector, and Gemini services.
 #

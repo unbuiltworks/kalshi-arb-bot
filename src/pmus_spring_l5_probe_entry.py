@@ -36,6 +36,15 @@ EVIDENCE_STATUS_PATH_ENV = "PMUS_SPRING_EVIDENCE_STATUS_PATH"
 # Only trade direction OBSERVED on the authenticated stream is admissible.
 PROVENANCE_AUTHENTICATED = "authenticated"
 
+# The venue's authoritative open state on /v1/market/slug/{slug}. A
+# resolved market reports MARKET_STATUS_RESOLVED with closed=True.
+MARKET_STATUS_OPEN = "MARKET_STATUS_OPEN"
+
+# Minimum touch depth to rest a q=1 behavioural unit against. The venue's
+# minimumTradeQty is 0.01, so one unit of depth is already generous; the
+# point is that ZERO depth is not a book.
+MIN_TOUCH_DEPTH = D("1")
+
 
 def _epoch(value: Any) -> Optional[float]:
     if value is None:
@@ -52,6 +61,50 @@ def _epoch(value: Any) -> Optional[float]:
         return dt.timestamp()
     except (TypeError, ValueError):
         return None
+
+
+def market_open_reason(evidence: Mapping[str, Any],
+                       now: Optional[float] = None) -> Optional[str]:
+    """Why this market is not safe to OPEN into. None means it is.
+
+    PMUS serves no `settlement_ts` for live sports, so none is invented
+    and none is silently waived (OWNER 5551236878 item 4). The venue's
+    own authoritative fields on `/v1/market/slug/{slug}` are used
+    instead, verified live 2026-09-05:
+
+        active     True        archived  False
+        closed     False       status    MARKET_STATUS_OPEN
+        endDate    2026-09-16T09:30:00Z
+
+    and a resolved market really does report `closed=True`,
+    `status=MARKET_STATUS_RESOLVED`, `ep3Status=EXPIRED`. Every one of
+    these is REQUIRED: a payload that omits one fails closed naming the
+    field, because "we could not check" must never read as "safe".
+    """
+    state = evidence.get("market_state")
+    if not isinstance(state, Mapping):
+        return ("strict_evidence_market_state_missing: needs "
+                "/v1/market/slug/{slug} active,archived,closed,status,endDate")
+    for field, want in (("active", True), ("archived", False),
+                        ("closed", False)):
+        got = state.get(field)
+        if got is None:
+            return f"strict_evidence_market_{field}_missing"
+        if bool(got) is not want:
+            return f"strict_evidence_market_{field}:{got!r}"
+    status = str(state.get("status") or "")
+    if not status:
+        return "strict_evidence_market_status_missing"
+    if status != MARKET_STATUS_OPEN:
+        return f"strict_evidence_market_not_open:{status}"
+    end = _epoch(state.get("endDate"))
+    if end is None:
+        return ("strict_evidence_market_end_missing: needs endDate from "
+                "/v1/market/slug/{slug}")
+    remaining = end - (time.time() if now is None else now)
+    if remaining < base.STOP_BEFORE_SETTLEMENT_S:
+        return f"strict_evidence_too_close_to_settlement:{round(remaining, 1)}s"
+    return None
 
 
 def strict_evidence_reason(slug: str, evidence: Optional[Mapping[str, Any]],
@@ -71,35 +124,60 @@ def strict_evidence_reason(slug: str, evidence: Optional[Mapping[str, Any]],
         return "strict_evidence_missing"
     if str(evidence.get("slug") or "") != slug:
         return "strict_evidence_slug_mismatch"
-    probe = evidence.get("probe_evidence")
-    if not isinstance(probe, Mapping):
-        return "probe_evidence_missing"
-    if probe.get("status") != "READY_FOR_REVIEW":
-        reasons = probe.get("reasons") or []
-        suffix = ",".join(str(x) for x in reasons[:4]) or "not_ready"
-        return f"probe_evidence_not_ready:{suffix}"
-    # Category evidence bar (OWNER DECISION 5533476555): >=2 strict
-    # completions within the rolling hour from >=2 DISTINCT same-category
-    # markets. An isolated one-off market can never clear this alone.
-    if evidence.get("spring_category_bar_met") is not True:
-        return "spring_category_bar_not_met"
-    cat = evidence.get("spring_category_evidence")
-    if not isinstance(cat, Mapping):
-        return "spring_category_evidence_missing"
+    # OWNER DECISION 5551236878: strict READY_FOR_REVIEW and the
+    # >=2 completions / >=2 distinct markets category bar are COMPLETION
+    # evidence and must NOT gate a first OPEN. Same circular prerequisite
+    # removed from `preflight_candidate` in d784c1c8 -- proof of past
+    # completions cannot be required before the first entry, because
+    # nothing completes if nothing may open. Both remain measured and
+    # reported by `completion_evidence_reason`; the safety and provenance
+    # intent of 5533476555 is untouched.
+    if not isinstance(evidence.get("probe_evidence"), Mapping):
+        return "probe_evidence_missing"        # payload shape, not a bar
+    # LIQUIDITY -- a book we can actually rest an order against. The bar
+    # is the book itself, never its trading history. ABSENT IS A BLOCKER:
+    # `if present: check` would let a payload that simply omits the field
+    # walk past a safety gate, which is the opposite of fail-closed.
+    if evidence.get("both_sides_served") is not True:
+        return (f"strict_evidence_book_not_two_sided:"
+                f"{evidence.get('both_sides_served')!r}")
+    depth = evidence.get("bid_touch_qty")
+    if depth is None:
+        return "strict_evidence_touch_depth_missing"
     try:
-        completions = int(cat.get("completions_60m"))
-        distinct = int(cat.get("distinct_markets_60m"))
-    except (TypeError, ValueError):
-        return "spring_category_counts_missing"
+        if D(str(depth)) < MIN_TOUCH_DEPTH:
+            return f"strict_evidence_no_q1_touch_depth:{depth}"
+    except Exception:
+        return f"strict_evidence_touch_depth_unreadable:{depth!r}"
+    # CADENCE -- an observation window with a hole in it is not a window.
+    gaps = evidence.get("collector_gaps")
+    if gaps is None:
+        return "strict_evidence_cadence_missing"
     try:
-        required = max(2, int(probe.get("min_completions_required") or 2))
+        if int(gaps) > 0:
+            return f"strict_evidence_cadence_gap:{gaps}"
     except (TypeError, ValueError):
-        return "probe_min_completions_invalid"
-    if completions < required:
-        return (f"spring_category_completions_lt_required:"
-                f"{completions}<{required}")
-    if distinct < 2:
-        return f"spring_category_distinct_markets_lt_2:{distinct}"
+        return f"strict_evidence_cadence_unreadable:{gaps!r}"
+    # MARKET-OPEN SAFETY, from the venue's own authoritative fields.
+    # PMUS serves no "settlement_ts" for live sports, so none is invented
+    # and none is waived: `/v1/market/slug/{slug}` carries `active`,
+    # `archived`, `closed`, `status` and `endDate`, and those are the
+    # facts used. A payload without them fails closed and names the field.
+    market_block = market_open_reason(evidence, now)
+    if market_block:
+        return market_block
+    # THE MODEL -- the canonical L5 probe-entry recommendation, from
+    # FLAT. Distribution alone is not enough: a state v2 has visited but
+    # would not open in is not an entry.
+    entry_action = evidence.get("probe_entry_action")
+    if not isinstance(entry_action, Mapping):
+        return "strict_evidence_probe_entry_action_missing"
+    if entry_action.get("decision") != "quote":
+        return (f"strict_evidence_model_no_open:"
+                f"{entry_action.get('reason') or 'no_action'}")
+    if entry_action.get("relation") != "open":
+        return (f"strict_evidence_first_action_not_an_open:"
+                f"{entry_action.get('relation')}")
     try:
         pair_target = D(str(evidence.get("spring_pair_target")))
     except Exception:
@@ -195,6 +273,43 @@ def resolve_strict_evidence(slug: str,
                 else "operator_pasted_json_absent")
 
 
+def completion_evidence_reason(evidence: Optional[Mapping[str, Any]]
+                               ) -> Optional[str]:
+    """Why this market lacks strict COMPLETION evidence; None means it
+    has it. Reported, never used to admit or refuse an OPEN.
+
+    Kept because the evidence is still worth knowing -- a market that has
+    completed pairs recently is a better bet than one that has not -- but
+    it now RANKS a candidate rather than gating one.
+    """
+    if not isinstance(evidence, Mapping):
+        return "strict_evidence_missing"
+    probe = evidence.get("probe_evidence")
+    if not isinstance(probe, Mapping):
+        return "probe_evidence_missing"
+    if probe.get("status") != "READY_FOR_REVIEW":
+        reasons = probe.get("reasons") or []
+        return (f"probe_evidence_not_ready:"
+                f"{','.join(str(x) for x in reasons[:4]) or 'not_ready'}")
+    if evidence.get("spring_category_bar_met") is not True:
+        return "spring_category_bar_not_met"
+    cat = evidence.get("spring_category_evidence")
+    if not isinstance(cat, Mapping):
+        return "spring_category_evidence_missing"
+    try:
+        completions = int(cat.get("completions_60m"))
+        distinct = int(cat.get("distinct_markets_60m"))
+        required = max(2, int(probe.get("min_completions_required") or 2))
+    except (TypeError, ValueError):
+        return "spring_category_counts_missing"
+    if completions < required:
+        return (f"spring_category_completions_lt_required:"
+                f"{completions}<{required}")
+    if distinct < 2:
+        return f"spring_category_distinct_markets_lt_2:{distinct}"
+    return None
+
+
 def parse_strict_evidence(raw: Optional[str] = None) -> Optional[dict]:
     raw = os.getenv(STRICT_EVIDENCE_ENV, "") if raw is None else raw
     if not str(raw).strip():
@@ -250,6 +365,19 @@ def evidence_from_status(status: Mapping[str, Any], slug: str) -> Optional[dict]
                     "spring_category_evidence"),
                 "spring_category_bar_met": row.get(
                     "spring_category_bar_met"),
+                # OPEN-relevant liquidity / cadence / market-state /
+                # model fields (OWNER DECISION 5551236878). Absent stays
+                # absent HERE and the guard fails closed on it there --
+                # the composer never substitutes a default, because a
+                # default is indistinguishable from a real measurement
+                # once it is inside the payload.
+                "both_sides_served": row.get("both_sides_served"),
+                "bid_touch_qty": (row.get("bid_touch_qty")
+                                  if row.get("bid_touch_qty") is not None
+                                  else row.get("bid_qty")),
+                "collector_gaps": row.get("collector_gaps"),
+                "market_state": row.get("market_state"),
+                "probe_entry_action": row.get("probe_entry_action"),
                 "spring_slot_counts_theoretical": row.get(
                     "spring_slot_counts_theoretical"),
                 "spring_evaluable_slots": row.get("spring_evaluable_slots"),

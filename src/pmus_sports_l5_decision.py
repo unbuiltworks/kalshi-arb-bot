@@ -458,7 +458,9 @@ def slate_decisions(by_slug: Mapping[str, list], now: Optional[float] = None,
             "execution_path_if_approved": (
                 "src.pmus_spring_l5_probe_entry (spring session): "
                 "operator-held PMUS_SPRING_* dual key + fresh strict "
-                "READY_FOR_REVIEW evidence + category bar + durable "
+                "authenticated fresh evidence (two-sided book, q1 touch "
+                "depth, cadence, market-open safety, in-distribution L5 "
+                "OPEN recommendation) + durable "
                 "/state/pmus-spring mount; NOT invoked from here"),
         } if preflight else None),
         "order_entry": False, "realized_pnl": None, "labels": LABELS,
