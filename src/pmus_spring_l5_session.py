@@ -558,10 +558,15 @@ def reconcile_submissions(t: Transport, slug: str, limit: int = 50) -> dict:
         elif row.get("kind") == "order_terminal":
             terminal.add(str(row.get("order_id")))
     pending = [oid for oid in submitted if oid not in terminal][:limit]
-    out = {"checked": len(pending), "reconciled": 0, "unresolved": 0}
+    out: dict[str, Any] = {"checked": len(pending), "reconciled": 0,
+                           "unresolved": 0, "unresolved_reasons": []}
     for oid in pending:
         try:
-            order = q1._order_status(t, oid)
+            try:
+                order = q1._order_status(t, oid)
+            except RejectedNoFill:
+                # the venue's own verdict: rejected, zero filled
+                order = {"state": "ORDER_STATE_REJECTED", "cumQuantity": "0"}
             state = str(order.get("state") or order.get("status") or "").upper()
             if not any(x in state for x in ("CANCEL", "EXPIRED", "REJECT",
                                             "FILLED")):
@@ -577,8 +582,11 @@ def reconcile_submissions(t: Transport, slug: str, limit: int = 50) -> dict:
                                         else submitted[oid].get("price")),
                               "source": "reconcile"})
             out["reconciled"] += 1
-        except Exception:                          # noqa: BLE001
+        except Exception as exc:                   # noqa: BLE001
             out["unresolved"] += 1                 # keeps counting as spend
+            if len(out["unresolved_reasons"]) < 5:
+                out["unresolved_reasons"].append(
+                    f"{oid}:{type(exc).__name__}:{str(exc)[:60]}")
     return out
 
 

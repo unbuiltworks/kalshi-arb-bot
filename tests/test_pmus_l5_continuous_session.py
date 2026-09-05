@@ -512,7 +512,7 @@ def test_reconcile_gives_old_zero_fill_submissions_a_terminal_row(
     from decimal import Decimal as D
     assert base.spring_cumulative_notional("m") == D("0.0046")
     out = base.reconcile_submissions(fake, "m")
-    assert out == {"checked": 1, "reconciled": 1, "unresolved": 0}
+    assert (out["checked"], out["reconciled"], out["unresolved"]) == (1, 1, 0)
     assert base.spring_cumulative_notional("m") == D("0")
 
 
