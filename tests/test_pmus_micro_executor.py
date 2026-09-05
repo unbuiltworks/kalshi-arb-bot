@@ -51,11 +51,36 @@ def test_market_spec_uses_live_min_qty_and_tick(monkeypatch):
     assert spec["entry_notional"] == D("0.00575")
 
 
-def test_market_spec_fails_closed_on_unaudited_tick(monkeypatch):
+def test_the_venue_tick_is_authoritative_not_a_constant(monkeypatch):
+    """PMUS sports serve orderPriceMinTickSize=0.01 while q1.TICK is
+    0.005. A hardcoded equality check refused EVERY sports market with
+    MICRO_TICK_UNSUPPORTED:0.01 -- the live path could not have placed a
+    sports order at all."""
     monkeypatch.delenv(m.TARGET_NOTIONAL_ENV, raising=False)
     monkeypatch.delenv(m.MAX_LEG_NOTIONAL_ENV, raising=False)
-    with pytest.raises(m.Halt, match="MICRO_TICK_UNSUPPORTED"):
-        m.market_micro_spec(MetaFake(tick="0.01"), "m", D("0.50"))
+    spec = m.market_micro_spec(MetaFake(tick="0.01"), "m", D("0.50"))
+    assert spec["tick"] == D("0.01")
+
+
+def test_a_price_off_the_venue_grid_fails_closed(monkeypatch):
+    """0.4950 is legal on a 0.005 grid and ILLEGAL on a 0.01 grid. This
+    is where the suspicious $0.00495 notional came from -- an off-grid
+    price, not a sizing error."""
+    monkeypatch.delenv(m.TARGET_NOTIONAL_ENV, raising=False)
+    monkeypatch.delenv(m.MAX_LEG_NOTIONAL_ENV, raising=False)
+    with pytest.raises(m.Halt, match="MICRO_PRICE_OFF_TICK"):
+        m.market_micro_spec(MetaFake(tick="0.01"), "m", D("0.495"))
+    # the same price is fine on the grid that admits it
+    assert m.market_micro_spec(MetaFake(tick="0.005"), "m",
+                               D("0.495"))["tick"] == D("0.005")
+
+
+def test_an_implausible_tick_still_fails_closed(monkeypatch):
+    monkeypatch.delenv(m.TARGET_NOTIONAL_ENV, raising=False)
+    monkeypatch.delenv(m.MAX_LEG_NOTIONAL_ENV, raising=False)
+    for bad in ("0", "-0.01", "1", "2"):
+        with pytest.raises(m.Halt, match="MICRO_TICK_IMPLAUSIBLE"):
+            m.market_micro_spec(MetaFake(tick=bad), "m", D("0.50"))
 
 
 def test_body_emits_decimal_quantity_without_touching_q1():
@@ -219,11 +244,11 @@ class CampaignFake:
 
 def test_f2_pre_mutation_failures_skip_with_exit_zero(monkeypatch, tmp_path):
     _arm_micro(monkeypatch, tmp_path)
-    # unsupported tick -> SKIP (not HALT), zero mutations
-    fake = CampaignFake(meta=("0.01", "0.01"))
+    # implausible tick -> SKIP (not HALT), zero mutations
+    fake = CampaignFake(meta=("0.01", "0"))
     rep = m.run_campaign(fake, clock=lambda: 0.0, sleep=lambda s: None)
     assert rep["status"] == "MICRO_SKIP_SAFE_REFUSAL"
-    assert "MICRO_TICK_UNSUPPORTED" in rep["reason"]
+    assert "MICRO_TICK_IMPLAUSIBLE" in rep["reason"]
     assert fake.posts == 0
     # whole-contract minimum -> SKIP too
     fake2 = CampaignFake(meta=("1", "0.005"))

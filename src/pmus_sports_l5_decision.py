@@ -177,11 +177,19 @@ def open_side_yes(book: Mapping[str, Any]) -> Optional[bool]:
 
 
 def _touch_for(side_yes: bool, book: Mapping[str, Any]) -> Optional[D]:
-    """Maker join price on the requested side, in that side's own price."""
+    """Maker join price on the requested side, in that side's own price.
+
+    ALIGNED TO THE VENUE TICK. The NO join is `1 - ask`, and on a 0.01
+    tick grid an ask of 0.5050 produces 0.4950 -- a price the venue will
+    not accept. That is where the $0.00495 notional came from: not a
+    sizing error, an off-grid PRICE. Flooring is the safe direction for a
+    buy: it pays one tick less, never more.
+    """
     if side_yes:
-        return book.get("bid")
+        bid = book.get("bid")
+        return None if bid is None else _floor_tick(bid)
     ask = book.get("ask")
-    return (ONE - ask) if ask is not None else None
+    return None if ask is None else _floor_tick(ONE - ask)
 
 
 def plan_action(rel: str, inv: "Inventory",

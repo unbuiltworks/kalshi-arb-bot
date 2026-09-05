@@ -141,10 +141,16 @@ def market_micro_spec(t: Transport, slug: str, entry_price: D) -> dict[str, D]:
     tick = _d(market.get("orderPriceMinTickSize"))
     if minq is None or tick is None:
         raise Halt("MICRO_MARKET_METADATA_MISSING")
-    # v1 MICRO deliberately reuses the audited q1 tick math. A different
-    # product tick gets a safe refusal until the pricing helpers are adapted.
-    if tick != q1.TICK:
-        raise Halt(f"MICRO_TICK_UNSUPPORTED:{tick}")
+    # The venue's own per-market tick is authoritative. PMUS sports serve
+    # orderPriceMinTickSize=0.01 while q1.TICK is 0.005 (the crypto
+    # product), so a hardcoded equality check REFUSED EVERY SPORTS MARKET
+    # with MICRO_TICK_UNSUPPORTED:0.01 -- the live path could not have
+    # placed a sports order at all. Accept the venue's grid, and validate
+    # the price against THAT rather than against a constant.
+    if tick <= 0 or tick >= q1.ONE:
+        raise Halt(f"MICRO_TICK_IMPLAUSIBLE:{tick}")
+    if (D(str(entry_price)) / tick) % 1 != 0:
+        raise Halt(f"MICRO_PRICE_OFF_TICK:{entry_price}/{tick}")
     target = _positive_env(TARGET_NOTIONAL_ENV, DEFAULT_TARGET_NOTIONAL)
     max_leg = _positive_env(MAX_LEG_NOTIONAL_ENV, DEFAULT_MAX_LEG_NOTIONAL)
     qty = choose_micro_quantity(entry_price, minq, target, max_leg)
