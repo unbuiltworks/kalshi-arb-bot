@@ -504,6 +504,93 @@ def write_status_doc(root: Path, status: Mapping[str, Any]) -> None:
         pass
 
 
+# Read-only status handoff over Railway's private network. The spring
+# probe and the recorder sit on different volumes, so the status document
+# cannot be shared as a file; this serves the SAME document the recorder
+# already writes, byte for byte. GET only, no state, no credentials, no
+# order path. "0" disables it.
+STATUS_PORT_ENV = "PMUS_WS_STATUS_PORT"
+DEFAULT_STATUS_PORT = 8080
+STATUS_HTTP_PATHS = ("/status", "/status/pmus_ws_status.jsonl")
+
+
+def status_port() -> int:
+    raw = os.getenv(STATUS_PORT_ENV, "").strip() or os.getenv(
+        "PORT", "").strip() or str(DEFAULT_STATUS_PORT)
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 0
+
+
+def serve_status_doc(root: Path, port: int):
+    """Serve the status document read-only on a daemon thread.
+
+    Returns the server (so tests can learn the bound port and shut it
+    down) or None when disabled/unbindable. Never raises: a handoff
+    failure must not cost the connection or the tape.
+    """
+    if port <= 0:
+        return None
+    import socket
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    doc = status_doc_path(root)
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_a: Any) -> None:     # keep stdout for status
+            pass
+
+        def do_GET(self) -> None:                     # noqa: N802
+            if self.path.split("?", 1)[0] not in STATUS_HTTP_PATHS:
+                self.send_response(404)
+                self.end_headers()
+                return
+            try:
+                body = doc.read_bytes()
+            except OSError:
+                self.send_response(503)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+    class DualStack(HTTPServer):
+        # Railway private networking is IPv6-only; "::" also accepts v4.
+        address_family = socket.AF_INET6
+        allow_reuse_address = True
+
+        def server_bind(self) -> None:
+            try:
+                self.socket.setsockopt(socket.IPPROTO_IPV6,
+                                       socket.IPV6_V6ONLY, 0)
+            except (OSError, AttributeError):
+                pass
+            super().server_bind()
+
+    try:
+        try:
+            srv = DualStack(("::", port), Handler)
+        except OSError:
+            srv = HTTPServer(("0.0.0.0", port), Handler)
+    except OSError as exc:
+        print("PMUS_WS_STATUS " + json.dumps(
+            {"status_http": "unbound", "port": port, "err": str(exc)[:80]}),
+            flush=True)
+        return None
+    threading.Thread(target=srv.serve_forever, name="pmus-ws-status-http",
+                     daemon=True).start()
+    print("PMUS_WS_STATUS " + json.dumps(
+        {"status_http": "serving", "port": srv.server_address[1],
+         "paths": list(STATUS_HTTP_PATHS), "read_only": True}), flush=True)
+    return srv
+
+
 def heartbeat_file(root: Path, **fields: Any) -> None:
     tmp = root / "heartbeat.tmp"
     root.mkdir(parents=True, exist_ok=True)
@@ -772,6 +859,7 @@ async def run(minutes: Optional[float]) -> int:
     plan_state: dict = {}
     l5_alloc: Optional[set] = None
     fast_realloc_count = 0
+    serve_status_doc(root, status_port())
     while deadline is None or time.monotonic() < deadline:
         cap = int(os.getenv(MAX_MARKETS_ENV, "24"))
         targets = discover_universe()

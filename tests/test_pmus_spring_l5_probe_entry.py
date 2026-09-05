@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+
+import pytest
 from pathlib import Path
 
 from src import pmus_spring_l5_probe_entry as entry
@@ -436,3 +438,87 @@ def test_a_loosened_pair_target_is_still_refused():
     assert entry.strict_evidence_reason(
         "mkt", evidence(spring_pair_target="0.995"), now=1001.0) == \
         "spring_pair_target_too_loose:0.995"
+
+
+# ---- recorder HTTP handoff: the probe and recorder share no volume ----
+
+def _serve(tmp_path, text):
+    from src import pmus_ws_evidence_recorder as rec
+    root = tmp_path / "root"
+    rec.write_status_doc(root, {"placeholder": True})
+    rec.status_doc_path(root).write_text(text, encoding="utf-8")
+    srv = rec.serve_status_doc(root, 0)       # 0 -> disabled by contract
+    assert srv is None
+    # bind an ephemeral port instead: pick one the OS hands us
+    import socket
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    srv = rec.serve_status_doc(root, port)
+    assert srv is not None
+    return srv, f"http://127.0.0.1:{srv.server_address[1]}/status"
+
+
+def test_status_url_composes_the_same_evidence_as_the_file(tmp_path):
+    now = 1000.0
+    srv, url = _serve(tmp_path, json.dumps(_recorder_status(t=now - 5)) + "\n")
+    try:
+        ev, source = entry.evidence_from_status_path("mkt", url, now=now)
+    finally:
+        srv.shutdown()
+    assert ev is not None
+    assert source == f"status_url:{url}"
+    assert ev["evidence_provenance"] == entry.PROVENANCE_AUTHENTICATED
+    assert entry.strict_evidence_reason("mkt", ev, now=now) is None
+
+
+def test_status_url_serves_only_the_status_document(tmp_path):
+    import urllib.request
+    import urllib.error
+    srv, url = _serve(tmp_path, json.dumps(_recorder_status()) + "\n")
+    try:
+        with pytest.raises(urllib.error.HTTPError) as ei:
+            urllib.request.urlopen(url.replace("/status", "/state"),
+                                   timeout=5)
+        assert ei.value.code == 404
+        with pytest.raises(urllib.error.HTTPError) as ei:
+            urllib.request.urlopen(urllib.request.Request(
+                url, data=b"x", method="POST"), timeout=5)
+        assert ei.value.code in (404, 501)
+    finally:
+        srv.shutdown()
+
+
+def test_an_unreachable_status_url_fails_closed(monkeypatch):
+    monkeypatch.setenv(entry.STRICT_EVIDENCE_ENV, json.dumps(evidence()))
+    monkeypatch.setenv(entry.EVIDENCE_STATUS_URL_ENV,
+                       "http://127.0.0.1:9/status")   # discard port
+    ev, source = entry.resolve_strict_evidence("mkt", now=1000.0)
+    assert ev is None
+    assert source.startswith("status_unreadable")
+
+
+def test_a_stale_document_over_http_is_still_refused(tmp_path):
+    now = 1000.0
+    srv, url = _serve(tmp_path,
+                      json.dumps(_recorder_status(t=now - 600)) + "\n")
+    try:
+        ev, _ = entry.evidence_from_status_path("mkt", url, now=now)
+    finally:
+        srv.shutdown()
+    reason = entry.strict_evidence_reason("mkt", ev, now=now)
+    assert reason and reason.startswith("strict_evidence_stale")
+
+
+def test_the_url_outranks_the_path_which_outranks_the_paste(monkeypatch,
+                                                            tmp_path):
+    monkeypatch.setenv(entry.STRICT_EVIDENCE_ENV, json.dumps(evidence()))
+    monkeypatch.setenv(entry.EVIDENCE_STATUS_PATH_ENV,
+                       str(tmp_path / "missing.jsonl"))
+    monkeypatch.setenv(entry.EVIDENCE_STATUS_URL_ENV,
+                       "http://127.0.0.1:9/status")
+    _, source = entry.resolve_strict_evidence("mkt", now=1000.0)
+    assert source.startswith("status_unreadable")
+    monkeypatch.delenv(entry.EVIDENCE_STATUS_URL_ENV)
+    _, source = entry.resolve_strict_evidence("mkt", now=1000.0)
+    assert source.startswith("status_unreadable")

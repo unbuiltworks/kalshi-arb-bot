@@ -267,13 +267,21 @@ def diagnose_missing_slug(status: Mapping[str, Any], slug: str) -> str:
 
 
 def load_recorder_status(path: Path) -> dict:
-    """Read the authenticated recorder's status document.
+    """Read the authenticated recorder's status document from disk."""
+    return parse_recorder_status(Path(path).read_text(encoding="utf-8"),
+                                 str(path))
+
+
+def parse_recorder_status(text: str, origin: str = "<text>") -> dict:
+    """Parse the recorder's status document.
 
     Accepts either the status JSON itself or a JSONL stream whose last
     parseable object is the newest status, which is how the recorder
-    writes its durable heartbeat.
+    writes its durable heartbeat. Shared by the file path and the
+    recorder's read-only HTTP handoff so both parse identically.
     """
-    text = Path(path).read_text(encoding="utf-8").strip()
+    path = origin
+    text = (text or "").strip()
     if not text:
         raise ValueError(f"empty recorder status: {path}")
     try:

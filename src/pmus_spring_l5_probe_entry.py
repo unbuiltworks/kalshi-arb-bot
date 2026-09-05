@@ -32,6 +32,11 @@ DEFAULT_EVIDENCE_MAX_AGE_S = 120.0
 # stands inside a 120s freshness window. Set it and the pasted-JSON env is
 # not consulted at all.
 EVIDENCE_STATUS_PATH_ENV = "PMUS_SPRING_EVIDENCE_STATUS_PATH"
+# Same document fetched from the recorder's read-only HTTP handoff over the
+# private network (the two services do not share a volume). Takes
+# precedence over the path; both take precedence over the pasted env.
+EVIDENCE_STATUS_URL_ENV = "PMUS_SPRING_EVIDENCE_STATUS_URL"
+STATUS_FETCH_TIMEOUT_S = 5.0
 
 # Only trade direction OBSERVED on the authenticated stream is admissible.
 PROVENANCE_AUTHENTICATED = "authenticated"
@@ -248,15 +253,24 @@ def evidence_from_status_path(slug: str, path: Optional[str] = None,
         from src import pmus_spring_evidence_transfer as xfer
     except ImportError as exc:      # image missing the composer
         return None, f"evidence_composer_unavailable:{exc.name}"
+    path = str(path).strip()
+    is_url = path.startswith(("http://", "https://"))
     try:
-        status = xfer.load_recorder_status(Path(str(path)))
-    except (OSError, ValueError) as exc:
+        if is_url:
+            import urllib.request
+            with urllib.request.urlopen(          # noqa: S310 (scheme checked)
+                    path, timeout=STATUS_FETCH_TIMEOUT_S) as resp:
+                text = resp.read().decode("utf-8")
+            status = xfer.parse_recorder_status(text, path)
+        else:
+            status = xfer.load_recorder_status(Path(path))
+    except (OSError, ValueError) as exc:     # URLError/HTTPError are OSError
         return None, f"status_unreadable:{type(exc).__name__}"
     now = time.time() if now is None else now
     ev = xfer.compose_evidence_from_recorder(status, slug, now)
     if ev is None:
         return None, f"slug_absent:{xfer.diagnose_missing_slug(status, slug)}"
-    return ev, f"status_path:{path}"
+    return ev, f"{'status_url' if is_url else 'status_path'}:{path}"
 
 
 def resolve_strict_evidence(slug: str,
@@ -265,7 +279,8 @@ def resolve_strict_evidence(slug: str,
     is authoritative and is never silently backfilled by the pasted env
     var -- a stale paste standing in for a broken feed is exactly the
     failure this replaces."""
-    raw_path = os.getenv(EVIDENCE_STATUS_PATH_ENV, "").strip()
+    raw_path = (os.getenv(EVIDENCE_STATUS_URL_ENV, "").strip()
+                or os.getenv(EVIDENCE_STATUS_PATH_ENV, "").strip())
     if raw_path:
         return evidence_from_status_path(slug, raw_path, now)
     ev = parse_strict_evidence()
