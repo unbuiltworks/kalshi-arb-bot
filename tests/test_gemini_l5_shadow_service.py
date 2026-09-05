@@ -124,3 +124,32 @@ def test_replay_error_becomes_a_record_not_a_crash(tmp_path, monkeypatch):
     assert recs and all(r["status"] == "REPLAY_ERROR" for r in recs)
     assert (tmp_path / "tape.jsonl").exists()
     assert s.status()["orders_placed"] == 0
+
+
+def test_restart_restores_records_once_and_never_replays_a_window_twice(tmp_path):
+    """OWNER 5555118026: a controlled restart keeps tape/records/summary
+    and cannot double-count a window."""
+    now0 = 1788638000.0
+    sym, exp, fetch = _scripted(now0)
+    t = {"v": exp - 295.0}
+    clock = lambda: t["v"]
+    sleep = lambda x: t.__setitem__("v", t["v"] + x)
+    s1 = svc.ShadowService(fetch=fetch, clock=clock, sleep=sleep, root=tmp_path)
+    s1.run(until=exp + 40.0)
+    n1 = len((tmp_path / "records.jsonl").read_text().splitlines())
+    assert n1 == len(gs.SHELLS) * len(gs.POLICIES)
+    # restart inside the same window's grace period: the symbol is on disk
+    t["v"] = exp - 100.0
+    s2 = svc.ShadowService(fetch=fetch, clock=clock, sleep=sleep, root=tmp_path)
+    assert len(s2.seen) == n1
+    s2.run(until=exp + 40.0)
+    n2 = len((tmp_path / "records.jsonl").read_text().splitlines())
+    assert n2 == n1                                   # no duplicate accounting
+    assert sym not in s2.tapes
+    # a duplicated line on disk is dropped on restore
+    with (tmp_path / "records.jsonl").open("a") as f:
+        f.write((tmp_path / "records.jsonl").read_text().splitlines()[0] + "\n")
+    s3 = svc.ShadowService(fetch=fetch, clock=clock, sleep=sleep, root=tmp_path)
+    assert sum(len(v) for v in s3.rows.values()) == n1
+    rec = s3.rows["rest_60s:modal"][0]
+    assert rec["coverage"] in ("full", "partial")

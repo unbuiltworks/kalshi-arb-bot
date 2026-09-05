@@ -74,6 +74,7 @@ class WindowTape:
         self.bbo: list[dict] = []
         self.prints: dict[int, dict] = {}
         self.replayed = False
+        self.opened_at: float = 0.0
 
     def add_book(self, raw: Mapping[str, Any], now: float) -> Optional[dict]:
         row = gs.book_from_public(self.symbol, raw, now)
@@ -131,8 +132,14 @@ class ShadowService:
         return self.root / "records.jsonl"
 
     def _reload_records(self) -> None:
+        """Restore every record from the volume; a (symbol, shell, policy)
+        seen twice on disk is kept once (first wins) so a restart can
+        never double-count a window (OWNER 5555118026)."""
         p = self._records_path()
+        self.seen: set = set()
+        dupes = 0
         if not p.exists():
+            _log("records_restored", windows=0, duplicates_dropped=0)
             return
         for line in p.read_text(encoding="utf-8").splitlines():
             try:
@@ -140,8 +147,14 @@ class ShadowService:
             except Exception:
                 continue
             key = f"{r.get('shell')}:{r.get('policy')}"
+            ident = (r.get("symbol"), key)
+            if ident in self.seen:
+                dupes += 1
+                continue
+            self.seen.add(ident)
             self.rows.setdefault(key, []).append(r)
-        _log("records_restored", windows=sum(len(v) for v in self.rows.values()))
+        _log("records_restored", windows=sum(len(v) for v in self.rows.values()),
+             symbols=len({i[0] for i in self.seen}), duplicates_dropped=dupes)
 
     def _append_record(self, rec: Mapping[str, Any]) -> None:
         with self._records_path().open("a", encoding="utf-8") as f:
@@ -159,8 +172,13 @@ class ShadowService:
         for sym in gs.nearest_windows(datetime.fromtimestamp(now, timezone.utc)):
             tape = self.tapes.get(sym)
             if tape is None:
+                if any((sym, k) in self.seen for k in
+                       (f"{n}:{p_}" for n in gs.SHELLS for p_ in gs.POLICIES)):
+                    continue                  # already accounted for on disk
                 tape = self.tapes[sym] = WindowTape(sym)
-                _log("window_open", symbol=sym, expiry_utc=_utc(tape.expiry))
+                tape.opened_at = now
+                _log("window_open", symbol=sym, expiry_utc=_utc(tape.expiry),
+                     tte_at_open_s=round((tape.expiry or now) - now, 1))
             try:
                 self.fetches += 1
                 book = self.fetch(f"{API}/v1/book/{sym}?limit_bids=1&limit_asks=1")
@@ -292,6 +310,8 @@ class ShadowService:
                                                "shadow_differs_from_executed")}
                         for d in r.get("decisions") or []]
                     rec["decisions_n"] = len(r.get("decisions") or [])
+                    rec["coverage"] = ("full" if (tape.expiry or 0) - getattr(
+                        tape, "opened_at", 0) >= tb.ENTRY_MAX_TTE_S else "partial")
                     rec["orders_placed"] = 0
                     rec["optimistic_unknown"] = {
                         "first_fills_at_price_only": max(0, len(opt_first) - len(strict_first)),
@@ -300,6 +320,9 @@ class ShadowService:
                                   "NOT strict; excluded from every metric"}
                     rec["labels"] = LABELS
                     key = f"{name}:{policy}"
+                    if (sym, key) in self.seen:
+                        continue                  # never a second record
+                    self.seen.add((sym, key))
                     self.rows.setdefault(key, []).append(rec)
                     self._append_record(rec)
                     summary[key] = {"status": rec["status"],
