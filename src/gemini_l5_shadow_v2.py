@@ -94,11 +94,27 @@ def _book_at(rows: list, t: float) -> Optional[dict]:
     return last
 
 
+def _two_sided(r: Mapping[str, Any]) -> bool:
+    return r.get("bid") is not None and r.get("ask") is not None
+
+
 def _mid_at(rows: list, t: float) -> Optional[D]:
-    r = _book_at(rows, t)
-    if r is None:
+    """Mid from the last TWO-SIDED quote at or before t (a live Gemini
+    book goes one-sided near expiry; LIVE 21:10:23Z crash)."""
+    last = None
+    for r in rows:
+        if r["t"] > t:
+            break
+        if _two_sided(r):
+            last = r
+    if last is None:
         return None
-    return (D(r["bid"]) + D(r["ask"])) / 2
+    return (D(last["bid"]) + D(last["ask"])) / 2
+
+
+def outcome_proxy_safe(rows: list, expiry: float) -> str:
+    """Vendored outcome proxy over two-sided quotes only."""
+    return tb.outcome_proxy([r for r in rows if _two_sided(r)], expiry)
 
 
 def _touch_moved_at(rows: list, adapter: GeminiAdapter, side_yes: bool,
@@ -150,7 +166,7 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
     stop_at = expiry - tb.STOP_BEFORE_EXPIRY_S
     entry = None
     for r in bbo_rows:
-        if tb.MIN_TTE_S <= expiry - r["t"] <= tb.ENTRY_MAX_TTE_S:
+        if tb.MIN_TTE_S <= expiry - r["t"] <= tb.ENTRY_MAX_TTE_S and _two_sided(r):
             entry = r
             break
     if entry is None:
@@ -168,6 +184,7 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
                  "entry_tte_s": round(expiry - t, 1),
                  "entry_book": entry_book.as_dict() if entry_book else None}
     actions = 0
+    one_sided = 0
     stop_reason = None
     while t < stop_at and actions < max_actions:
         raw = _book_at(bbo_rows, t)
@@ -175,6 +192,11 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
         if book is None:
             stop_reason = "no_book"
             break
+        if book.yes_bid is None or book.yes_ask is None:
+            # one-sided book: nothing to join against; wait, no action
+            one_sided += 1
+            t += MIN_REEVAL_S
+            continue
         state = l5_state(book, inv)
         prop = pv2.proposal(model, state, inv.last_rel or "open", "q<5",
                             residual=inv.behavioral_residual())
@@ -316,7 +338,7 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
                 t = t_until
         actions += 1
     # ---- theoretical settlement (mid proxy; never realized) ----
-    proxy = tb.outcome_proxy(bbo_rows, expiry)
+    proxy = outcome_proxy_safe(bbo_rows, expiry)
     pair_pnl = hold_pnl = None
     fees = D("0")
     if inv.matched > 0:
@@ -334,6 +356,7 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
     status = ("MATCHED" if inv.matched > 0 and inv.residual == 0 else
               "RESIDUAL_HOLD" if inv.total > 0 else "NO_FILL")
     return {**out, "status": status, "stop_reason": stop_reason,
+            "one_sided_book_waits": one_sided,
             "decisions": decisions, "orders": orders, "fills": fills,
             "inventory": inv.snapshot(), "pair_unit_cost": str(inv.pair_cost()),
             "pair_cost_after_fees": (str(inv.pair_cost() + fees / inv.matched)

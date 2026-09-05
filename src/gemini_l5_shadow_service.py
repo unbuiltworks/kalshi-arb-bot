@@ -256,14 +256,27 @@ class ShadowService:
             summary = {}
             for name, sh in gs.SHELLS.items():
                 for policy in gs.POLICIES:
-                    r = gs.replay_window(sym, tape.bbo, prints, model=self.model,
-                                         art=self.art, policy=policy,
-                                         mode="strict", shell={**sh, "name": name})
-                    # at-price / queue-unknown fills: SEPARATE label, never
-                    # counted in any strict metric (OWNER 5554553793 B item 3)
-                    ro = gs.replay_window(sym, tape.bbo, prints, model=self.model,
-                                          art=self.art, policy=policy,
-                                          mode="optimistic", shell={**sh, "name": name})
+                    try:
+                        r = gs.replay_window(sym, tape.bbo, prints, model=self.model,
+                                             art=self.art, policy=policy,
+                                             mode="strict", shell={**sh, "name": name})
+                        # at-price / queue-unknown fills: SEPARATE label,
+                        # never counted in any strict metric (item 3)
+                        ro = gs.replay_window(sym, tape.bbo, prints, model=self.model,
+                                              art=self.art, policy=policy,
+                                              mode="optimistic",
+                                              shell={**sh, "name": name})
+                    except Exception as exc:              # noqa: BLE001
+                        # LIVE 21:10:23Z: a one-sided book crashed the loop
+                        # and lost the in-memory tape. A replay error is a
+                        # RECORD (the tape is already on disk), never a crash.
+                        r = {"symbol": sym,
+                             "status": "REPLAY_ERROR", "policy": policy,
+                             "shell": name,
+                             "err": f"{type(exc).__name__}:{str(exc)[:120]}"}
+                        ro = {}
+                        _log("replay_error", symbol=sym, shell=name,
+                             policy=policy, err=r["err"])
                     opt_first = [f for f in ro.get("fills") or [] if f["relation"] != "complete"]
                     strict_first = [f for f in r.get("fills") or [] if f["relation"] != "complete"]
                     rec = {k: r.get(k) for k in (

@@ -107,3 +107,20 @@ def test_transfer_gate_thresholds_come_only_from_the_frozen_file():
              "entry_book": None} for i in range(300)]
     v = gs.transfer_gate_verdict(rows, gate)
     assert v["verdict"] == "REJECT" and v["checks"]["net_after_fees_usd"]["ok"] is False
+
+
+def test_replay_error_becomes_a_record_not_a_crash(tmp_path, monkeypatch):
+    now0 = 1788638000.0
+    sym, exp, fetch = _scripted(now0)
+    t = {"v": exp - 295.0}
+    s = svc.ShadowService(fetch=fetch, clock=lambda: t["v"],
+                          sleep=lambda x: t.__setitem__("v", t["v"] + x),
+                          root=tmp_path)
+    def boom(*a, **k):
+        raise TypeError("conversion from NoneType to Decimal is not supported")
+    monkeypatch.setattr(gs, "replay_window", boom)
+    s.run(until=exp + 40.0)
+    recs = [json.loads(l) for l in (tmp_path / "records.jsonl").read_text().splitlines()]
+    assert recs and all(r["status"] == "REPLAY_ERROR" for r in recs)
+    assert (tmp_path / "tape.jsonl").exists()
+    assert s.status()["orders_placed"] == 0

@@ -135,3 +135,19 @@ def test_run_live_counts_fetch_errors_and_never_orders(tmp_path):
                       sleep=lambda s: None, clock=clock)
     assert rep["fetch_errors"] == 2 and rep["orders_placed"] == 0
     assert rep["executable_now"] == 0
+
+
+def test_one_sided_book_rows_never_crash_the_replay():
+    """LIVE 21:10:23Z: the Gemini book went one-sided near expiry and the
+    vendored outcome proxy raised on a None side."""
+    model = _model()
+    bbo = [_bbo(T0 - 5), {"symbol": SYM, "t": T0 + 30, "bid": None, "bid_sz": None,
+                          "ask": "0.50", "ask_sz": "5"},
+           _bbo(T0 + 100), {"symbol": SYM, "t": EXP - 1, "bid": "0.90",
+                            "bid_sz": "1", "ask": None, "ask_sz": None}]
+    r = gs.replay_window(SYM, bbo, [_p(T0 + 5, "sell", "0.47")], model=model,
+                         art=None, policy="modal", mode="strict")
+    assert r["status"] == "RESIDUAL_HOLD"
+    assert r["one_sided_book_waits"] >= 1
+    assert r["outcome_proxy"] == "AMBIGUOUS"      # last TWO-SIDED mid 0.49
+    assert gs._mid_at(bbo, EXP) == D("0.49")
