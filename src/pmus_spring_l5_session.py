@@ -517,6 +517,8 @@ def run_session(t: Optional[Transport] = None,
                         SESSION_NOTIONAL_CAP:
                     relation = "complete" if inv.residual != 0 else "stop"
             if relation == "sell" or relation == "stop":
+                report["stop_reason"] = ("l5_sell_is_noop" if relation == "sell"
+                                         else "spend_cap_reached")
                 break
 
             if relation in ("open", "extend"):
@@ -529,6 +531,7 @@ def run_session(t: Optional[Transport] = None,
                     side_up = l5d.open_side_yes(
                         {"bid": bbo["bid"], "ask": bbo["ask"]})
                     if side_up is None:
+                        report["stop_reason"] = "no_priceable_side"
                         break
                 else:
                     side_up = inv.residual > 0     # extend the surplus side
@@ -537,7 +540,13 @@ def run_session(t: Optional[Transport] = None,
                     rounding=ROUND_DOWN) * spec["tick"]
                 if not q1.entry_ok(bbo["bid"]) or \
                         not (SPRING_BAND_LO <= bbo["bid"] <= SPRING_BAND_HI):
-                    break                       # band left us: stop extending
+                    # band left us: stop extending. Named, because a
+                    # zero-order session must be distinguishable from an
+                    # unfilled one in the log.
+                    report["stop_reason"] = (
+                        f"entry_band_left:bid={bbo['bid']}:"
+                        f"q1_entry_ok={q1.entry_ok(bbo['bid'])}")
+                    break
                 qty = spec["qty"]
                 oid = micro.place_limit_buy(
                     t, slug, "OUTCOME_SIDE_YES" if side_up

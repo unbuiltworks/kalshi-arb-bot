@@ -229,7 +229,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                             "bid_touch_qty")}
         report["sessions"].append(rep)
         _log("session_end", slug=chosen["slug"], status=rep.get("status"),
-             reason=rep.get("reason"), inventory=rep.get("inventory"),
+             reason=rep.get("reason"), stop_reason=rep.get("stop_reason"),
+             inventory=rep.get("inventory"),
              filled_actions=len(rep.get("actions") or []),
              submitted=len(rep.get("orders") or []),
              orders=(rep.get("orders") or [])[-8:],
