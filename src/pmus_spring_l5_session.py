@@ -450,6 +450,70 @@ def _await_order(t: Transport, oid: str, qty: D, until: float,
     return got, round(clock() - start, 3), end_reason
 
 
+def held_inventory_from_ledger(slug: str) -> Inventory:
+    """OWNER 5552607804: rebuild this market's REAL inventory from the
+    durable ledger so a later session continues the position L5-style
+    instead of freezing it. Fills come from `filled` rows and, for orders
+    submitted by an earlier build that wrote no `filled` row, from a
+    terminal row with a positive filled quantity joined to its
+    submission. Ledger order is preserved so avg cost, the behavioral
+    unit and last_rel are the real ones."""
+    inv = Inventory()
+    path = q1.base.state_dir() / "ledger.jsonl"
+    if not path.exists():
+        return inv
+    submitted: dict[str, dict] = {}
+    filled_ids: set[str] = set()
+    events: list[tuple[int, bool, D, D, str]] = []
+    for i, line in enumerate(path.read_text().splitlines()):
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        if not (isinstance(row, dict) and row.get("slug") == slug):
+            continue
+        kind, stage = row.get("kind"), str(row.get("stage", ""))
+        oid = str(row.get("order_id") or "")
+        if kind == "submitted" and stage.startswith("spring_"):
+            submitted[oid] = row
+        elif kind == "filled" and stage.startswith("spring_"):
+            px, qty = micro._d(row.get("price")), micro._d(row.get("qty"))
+            if px is None or qty is None or qty <= 0:
+                continue
+            filled_ids.add(oid)
+            events.append((i, str(row.get("side")).upper() != "NO", px, qty,
+                           stage.split("_")[1] if "_" in stage else "open"))
+        elif kind == "order_terminal" and oid in submitted and \
+                oid not in filled_ids:
+            got = micro._d(row.get("filled_qty"))
+            px = micro._d(row.get("price")) or \
+                micro._d(submitted[oid].get("price"))
+            if got is None or px is None or got <= 0:
+                continue
+            filled_ids.add(oid)
+            sub_stage = str(submitted[oid].get("stage", ""))
+            events.append((i, str(submitted[oid].get("side")).upper()
+                           != "OUTCOME_SIDE_NO", px, got,
+                           sub_stage.split("_")[1] if "_" in sub_stage
+                           else "open"))
+    for _, side_up, px, qty, rel in sorted(events, key=lambda e: e[0]):
+        inv.record(side_up, px, qty, rel)
+    return inv
+
+
+def resume_block_reason(t: Transport, slug: str) -> Optional[str]:
+    """Account preflight for RESUMING a held market: any open order
+    anywhere and any position in ANY OTHER market still block (one
+    market at a time); a position in this market is the point."""
+    block = micro.account_block_reason(t)
+    if block is None or not block.startswith("nonzero_positions:"):
+        return block
+    others = [p for p in block.split(":", 1)[1].split(",")
+              if p and not p.startswith(slug + "=")]
+    return ("nonzero_positions_elsewhere:" + ",".join(others)) if others \
+        else None
+
+
 def live_market_open_reason(t: Transport, slug: str,
                             now: Optional[float] = None) -> Optional[str]:
     """Execution-freshness rule (OWNER 5552475548 item 2): immediately
@@ -522,7 +586,8 @@ def run_session(t: Optional[Transport] = None,
                 clock=time.monotonic, sleep=time.sleep,
                 wall=time.time, slug: Optional[str] = None,
                 gate_ok: bool = False,
-                deadline_s: Optional[float] = None) -> dict:
+                deadline_s: Optional[float] = None,
+                resume: bool = False) -> dict:
     """One bounded sequential session on ONE market.
 
     ``slug`` / ``gate_ok`` / ``deadline_s`` exist for the continuous
@@ -581,16 +646,39 @@ def run_session(t: Optional[Transport] = None,
 
     try:
         model = pv2.load_v2()
-        block = micro.account_block_reason(t)
+        block = (resume_block_reason(t, slug) if resume
+                 else micro.account_block_reason(t))
         if block:
             return {**report, "status": "PREFLIGHT_FAILED", "reason": block}
         row = dict(micro.micro_eligible(t, slug))
         if strict_completion_asserted(slug):
             row["spring_category_bar_met"] = True
-        skip = spring_candidate_gate(row, model)
-        if skip:
-            return {**report, "status": "SPRING_SKIP_NOT_QUALIFYING",
-                    "reason": skip, "candidate_row": row}
+        if resume:
+            # OWNER 5552607804: a HELD market is continued L5-style
+            # (EXTEND / COMPLEMENT / HOLD from the model on the real
+            # inventory), so the OPEN-admission band gate does not apply;
+            # a readable two-sided book still does
+            if row.get("skip_reason") and not str(
+                    row["skip_reason"]).startswith("entry_out_of_band"):
+                return {**report, "status": "SPRING_SKIP_NOT_QUALIFYING",
+                        "reason": f"resume:{row['skip_reason']}",
+                        "candidate_row": row}
+            inv = held_inventory_from_ledger(slug)
+            venue_pos = q1._position_for_slug(t, slug)
+            if inv.up + inv.dn == 0 or \
+                    inv.residual.copy_abs() != venue_pos.copy_abs():
+                # the ledger and the venue disagree about what we hold:
+                # never act on inventory we cannot reconstruct exactly
+                return {**report, "status": "SPRING_SAFE_REFUSAL",
+                        "reason": (f"inventory_mismatch:ledger_residual="
+                                   f"{inv.residual}:venue={venue_pos}"),
+                        "ledger_inventory": inv.snapshot()}
+            report["resumed_inventory"] = inv.snapshot()
+        else:
+            skip = spring_candidate_gate(row, model)
+            if skip:
+                return {**report, "status": "SPRING_SKIP_NOT_QUALIFYING",
+                        "reason": skip, "candidate_row": row}
         # execution-freshness rule (OWNER 5552475548 item 2): the venue's
         # LIVE market document, immediately before any submission
         live_block = live_market_open_reason(t, slug, wall())
@@ -601,6 +689,9 @@ def run_session(t: Optional[Transport] = None,
         # row before the cap is computed from FILLED notional
         report["reconcile"] = reconcile_submissions(t, slug)
         cum = spring_cumulative_notional(slug)
+        # on a resume the durable cap already contains this session's
+        # starting inventory; only NEW spend adds to it
+        prior_spent = inv.spent()
         report["spring_gates"] = {
             "band": f"{SPRING_BAND_LO}-{SPRING_BAND_HI}",
             "pair_target": str(SPRING_PAIR_TARGET),
@@ -711,8 +802,8 @@ def run_session(t: Optional[Transport] = None,
 
             if relation in ("open", "extend"):
                 # spend caps: session + durable cumulative, before sizing
-                if cum + inv.spent() + spec["entry_notional"] > \
-                        SESSION_NOTIONAL_CAP:
+                if cum + (inv.spent() - prior_spent) + \
+                        spec["entry_notional"] > SESSION_NOTIONAL_CAP:
                     relation = "complete" if inv.residual != 0 else "stop"
             if relation == "sell" or relation == "stop":
                 report["stop_reason"] = ("l5_sell_is_noop" if relation == "sell"

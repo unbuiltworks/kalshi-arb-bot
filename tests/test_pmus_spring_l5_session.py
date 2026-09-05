@@ -28,12 +28,13 @@ class Fake:
         self.open_order: str | None = None
         self.posts: list[tuple[str, dict]] = []
         self.n = 0
+        self.positions: dict[str, dict] = {}   # slug -> venue position row
 
     def request(self, method, path, body=None, base=None):
         if path == "/v1/orders/open":
             return {"orders": []}
         if path == "/v1/portfolio/positions":
-            return {"positions": {}}
+            return {"positions": dict(self.positions)}
         if path == "/v1/account/balances":
             return {"balances": [{"currency": "USD",
                                   "buyingPower": {"value": "100"}}]}

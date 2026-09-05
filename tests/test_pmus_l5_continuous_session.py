@@ -609,3 +609,126 @@ def test_held_position_holds_the_campaign_instead_of_spinning(monkeypatch,
                             session_runner=fake_session)
     assert ran == ["a"]
     assert rep["status"] == "CAMPAIGN_HOLD:POSITION_HELD"
+
+
+# ---- OWNER 5552607804: resume the held market ----
+
+def _ledger_with_fill(tmp_path, slug="held", side="OUTCOME_SIDE_YES",
+                      px="0.43", qty="0.02"):
+    rows = [
+        {"kind": "submitted", "stage": "spring_open_1", "slug": slug,
+         "order_id": "F1", "side": side, "price": px, "qty": qty},
+        {"kind": "submitted", "stage": "spring_open_2", "slug": slug,
+         "order_id": "F2", "side": side, "price": px, "qty": qty},
+        {"kind": "order_terminal", "slug": slug, "order_id": "F1",
+         "filled_qty": "0", "price": px},
+        {"kind": "order_terminal", "slug": slug, "order_id": "F2",
+         "filled_qty": qty, "price": px},           # the real fill
+    ]
+    (tmp_path / "ledger.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows))
+
+
+def test_held_inventory_is_rebuilt_from_the_ledger(monkeypatch, tmp_path):
+    monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
+    _ledger_with_fill(tmp_path)
+    inv = base.held_inventory_from_ledger("held")
+    assert inv.snapshot()["up"] == "0.02" and inv.snapshot()["dn"] == "0"
+    assert inv.avg_up() == base.D("0.43")
+    assert inv.last_rel == "open" and inv.unit == base.D("0.02")
+    assert inv.behavioral_residual() == 1.0
+    assert base.held_inventory_from_ledger("other").snapshot()["up"] == "0"
+
+
+def test_resume_continues_the_held_market_with_real_inventory(monkeypatch,
+                                                              tmp_path):
+    """The engine recognises 'I already own +0.02 YES here', rebuilds
+    that inventory, asks the model in the post-fill state and acts on its
+    answer (EXTEND here); the cap counts only NEW spend."""
+    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")
+    seen = []
+
+    def fake_proposal(model, base_state, last_rel, last_size, residual,
+                      clone_avg_cost=None):
+        seen.append((base_state, last_rel, residual))
+        return {"recommended_relation": "extend", "persist_extend_p": 0.7,
+                "switch_complete_p": 0.3, "next_reevaluation_s": 2.0,
+                "relation_ranked": [{"relation": "extend", "p": 0.7}],
+                "state_n": 20, "off_distribution": False}
+    monkeypatch.setattr(pv2, "proposal", fake_proposal)
+    monkeypatch.setenv(base.MAX_ACTIONS_ENV, "1")
+    fake = Fake(bid="0.4300", ask="0.4350")
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    rep = base.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                           wall=lambda: 1000.0, slug="held", gate_ok=True,
+                           resume=True)
+    assert rep["status"] == "SPRING_RESIDUAL_HOLD", rep
+    assert rep["resumed_inventory"]["up"] == "0.02"
+    assert seen[0][1] == "open" and seen[0][2] == 1.0
+    assert seen[0][0].endswith("imb1-10")            # not 'flat'
+    assert rep["decisions"][0]["acted"] == "extend"
+    assert rep["orders"][0]["relation"] == "extend"
+    assert rep["orders"][0]["side"] == "YES"          # same side
+    assert rep["inventory"]["up"] == "0.04"
+    # the resumed 0.0086 is already in the durable cap; not double counted
+    assert rep["spring_gates"]["prior_cumulative_notional"] == "0.0086"
+
+
+def test_resume_refuses_when_ledger_and_venue_disagree(monkeypatch,
+                                                       tmp_path):
+    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")
+    fake = Fake()
+    fake.positions["held"] = {"netPositionDecimal": "0.05"}
+    rep = base.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                           wall=lambda: 1000.0, slug="held", gate_ok=True,
+                           resume=True)
+    assert rep["status"] == "SPRING_SAFE_REFUSAL"
+    assert rep["reason"].startswith("inventory_mismatch")
+    assert not any(p == "/v1/orders" for p, _ in fake.posts)
+
+
+def test_resume_still_refuses_a_position_in_another_market(monkeypatch,
+                                                           tmp_path):
+    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")
+    fake = Fake()
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    fake.positions["elsewhere"] = {"netPositionDecimal": "0.01"}
+    rep = base.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                           wall=lambda: 1000.0, slug="held", gate_ok=True,
+                           resume=True)
+    assert rep["status"] == "PREFLIGHT_FAILED"
+    assert rep["reason"].startswith("nonzero_positions_elsewhere:elsewhere")
+
+
+def test_campaign_resumes_the_held_market_and_starts_no_other(monkeypatch,
+                                                              tmp_path):
+    from tests.test_pmus_spring_l5_session import Fake
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    st = _status([_row("fresh-candidate", touch="9000")])
+    monkeypatch.setattr(entry, "load_status_document",
+                        lambda path=None: (st, "status_url:test"))
+    fake = Fake()
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    ran = []
+
+    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s,
+                     **kw):
+        ran.append((slug, kw.get("resume")))
+        return {"status": "SPRING_RESIDUAL_HOLD", "slug": slug,
+                "inventory": {"up": "0.02", "dn": "0"},
+                "actions": []}
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 8, itertools.repeat(1000.0))
+    rep = cont.run_campaign(fake, clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=500.0, session_runner=fake_session)
+    assert ran and all(s == "held" and r is True for s, r in ran)
+    assert rep["status"].startswith("CAMPAIGN_RESUMING")
+    assert not any(s == "fresh-candidate" for s, _ in ran)

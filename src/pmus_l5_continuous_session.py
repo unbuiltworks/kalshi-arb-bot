@@ -181,6 +181,25 @@ def select_candidate(now: Optional[float] = None,
     return {"chosen": chosen, "source": source, **ranking}
 
 
+RESUME_REEVAL_S = 30.0          # between resume sessions on a held market
+MULTI_HELD = "MULTIPLE_POSITIONS"
+
+
+def held_market(t) -> Optional[str]:
+    """OWNER 5552607804: the market the account already holds inventory
+    in, from the venue's own positions (authoritative, not the ledger).
+    None when flat; MULTI_HELD when more than one market is held, which
+    the one-market campaign never continues into."""
+    if t is None:
+        return None
+    block = base.micro.account_block_reason(t)
+    if not block or not block.startswith("nonzero_positions:"):
+        return None
+    slugs = [p.split("=", 1)[0] for p in block.split(":", 1)[1].split(",")
+             if p]
+    return slugs[0] if len(slugs) == 1 else MULTI_HELD
+
+
 def _has_inventory(report: Mapping[str, Any]) -> bool:
     inv = report.get("inventory") or {}
     try:
@@ -224,14 +243,56 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         if reason:
             return {**report, "status": "DURABLE_STATE_REQUIRED",
                     "reason": reason}
+        # the real transport only when the real session runs; a scripted
+        # session runner (tests) gets whatever it was handed
+        if t is None and session_runner is base.run_session:
+            t = base.Transport()
     start = clock()
     stop_at = start + campaign_s
     cooldown: dict[str, float] = {}
     sessions_on: dict[str, int] = {}
     status = "CAMPAIGN_NO_CANDIDATE"
+    resumes = 0
     while clock() < stop_at and len(report["sessions"]) < \
-            MAX_SESSIONS_PER_CAMPAIGN:
+            MAX_SESSIONS_PER_CAMPAIGN + resumes:
         now = wall()
+        if armed:
+            # OWNER 5552607804: a market we already hold is CONTINUED
+            # (EXTEND / COMPLEMENT / HOLD from the model on the real
+            # inventory) and no other market is started while it exists.
+            held = held_market(t)
+            if held == MULTI_HELD:
+                status = f"CAMPAIGN_STOP:{MULTI_HELD}"
+                break
+            if held:
+                _log("resume_start", slug=held)
+                rep = dict(session_runner(
+                    t, clock=clock, sleep=sleep, wall=wall, slug=held,
+                    gate_ok=True,
+                    deadline_s=min(SESSION_DEADLINE_S, stop_at - clock()),
+                    resume=True) or {})
+                rep["resumed"] = True
+                report["sessions"].append(rep)
+                resumes += 1
+                _log("session_end", slug=held, resumed=True,
+                     status=rep.get("status"), reason=rep.get("reason"),
+                     stop_reason=rep.get("stop_reason"),
+                     resumed_inventory=rep.get("resumed_inventory"),
+                     inventory=rep.get("inventory"),
+                     spring_gates=rep.get("spring_gates"),
+                     filled_actions=len(rep.get("actions") or []),
+                     submitted=len(rep.get("orders") or []),
+                     orders=(rep.get("orders") or [])[-8:],
+                     decisions=(rep.get("decisions") or [])[-8:],
+                     pair_economics=rep.get("pair_economics"))
+                if rep.get("status") in ("DAILY_LOSS_STOP", "HALT",
+                                         "STATE_NOT_DURABLE",
+                                         "NO_CREDENTIALS", "DISARMED"):
+                    status = f"CAMPAIGN_STOP:{rep.get('status')}"
+                    break
+                status = f"CAMPAIGN_RESUMING:{rep.get('status')}"
+                sleep(RESUME_REEVAL_S)
+                continue
         sel = select_candidate(now, model, cooldown)
         report["selections"] += 1
         chosen = sel["chosen"]
