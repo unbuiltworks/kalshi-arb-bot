@@ -837,7 +837,20 @@ def run_session(t: Optional[Transport] = None,
                 relation, refusal = "hold", (
                     f"residual_cap:{abs(inv.behavioral_residual())}"
                     f">={MAX_RESIDUAL_UNITS}")
-            # model probability and rank for EVERY decision (item 4)
+            # OWNER 5553674206 #2/#3/#4: SHADOW fields only -- the seeded
+            # draw from this same distribution, L5's size and taker share
+            # for this state; nothing here is acted on
+            shadow = fid.shadow_fields(
+                fid_art, slug=slug,
+                decision_idx=len(report.get("decisions") or []),
+                model_sha=str(model.get("_sha256_16") or ""),
+                base_state=skey, relation=prop["recommended_relation"],
+                relation_ranked=prop.get("relation_ranked"), tte_s=tte_s)
+            sampled = (shadow.get("stochastic") or {}).get("sampled")
+            # model probability and rank for EVERY decision (item 4);
+            # OWNER 5553997094 #4: state, executed safe action, shadow
+            # action with probability/rank, L5 target size/aggressiveness,
+            # planned size, inventory before, refusal if different
             report.setdefault("decisions", []).append(
                 {"state": skey, "last_rel": inv.last_rel,
                  "v2_recommended": prop["recommended_relation"],
@@ -848,17 +861,13 @@ def run_session(t: Optional[Transport] = None,
                  "switch_complete_p": prop["switch_complete_p"],
                  "acted": relation,
                  "refusal": refusal,
-                 # OWNER 5553674206 #2/#3/#4: SHADOW fields only -- the
-                 # seeded draw from this same distribution, L5's size and
-                 # taker share for this state; nothing here is acted on
-                 "shadow": fid.shadow_fields(
-                     fid_art, slug=slug,
-                     decision_idx=len(report.get("decisions") or []),
-                     model_sha=str(model.get("_sha256_16") or ""),
-                     base_state=skey,
-                     relation=prop["recommended_relation"],
-                     relation_ranked=prop.get("relation_ranked"),
-                     tte_s=tte_s)})
+                 "inventory_before": inv.snapshot(),
+                 "planned_safe_size": {
+                     "contracts": str(spec["qty"]),
+                     "usd": str(spec["entry_notional"])},
+                 "shadow": shadow,
+                 "shadow_differs_from_executed": bool(
+                     sampled is not None and sampled != relation)})
             if relation == "hold":
                 sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                 actions += 1

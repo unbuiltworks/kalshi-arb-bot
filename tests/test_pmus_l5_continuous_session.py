@@ -1283,3 +1283,39 @@ def test_sigterm_still_propagates_through_the_guard(monkeypatch, tmp_path):
         cont.run_campaign(Fake(), clock=lambda: 0.0, sleep=lambda s: None,
                           wall=lambda: 1005.0, campaign_s=500.0,
                           session_runner=lambda *a, **k: {})
+
+
+def test_first_read_after_an_outage_is_reported_and_resweeps_open_orders(
+        monkeypatch, tmp_path):
+    """OWNER 5553997094 #2: the first successful account read after a
+    venue outage is logged as a recovery and open orders are reconciled
+    again before anything can be submitted."""
+    from tests.test_pmus_spring_l5_session import Fake
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    monkeypatch.setattr(entry, "load_status_document",
+                        lambda path=None: (_status([_row("x", touch="0.1")]),
+                                           "status_url:test"))
+    calls = {"n": 0}
+
+    def flaky_held(t):
+        calls["n"] += 1
+        if calls["n"] <= 3:
+            raise q1.Halt("GET_RETRIES_EXHAUSTED:/v1/orders/open:HTTP Error 500")
+        return None
+    monkeypatch.setattr(cont, "held_market", flaky_held)
+    sweeps = []
+    real_sweep = cont.sweep_orphan_orders
+    monkeypatch.setattr(cont, "sweep_orphan_orders",
+                        lambda t: sweeps.append(1) or real_sweep(t))
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 14, itertools.repeat(1000.0))
+    rep = cont.run_campaign(Fake(), clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=500.0, session_runner=lambda *a, **k: {})
+    assert len(sweeps) == 2                     # boot + recovery
+    assert len(rep["recoveries"]) == 1
+    rec = rep["recoveries"][0]
+    assert rec["errors"] == 3 and rec["held"] is None
+    assert rec["sweep"]["foreign"] == [] and rec["outage_s"] >= 0
+    assert rep["status"] == "CAMPAIGN_NO_CANDIDATE"

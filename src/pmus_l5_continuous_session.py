@@ -575,6 +575,23 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 # (EXTEND / COMPLEMENT / HOLD from the model on the real
                 # inventory) and no other market is started while it exists.
                 held = held_market(t)
+                if iteration_errors:
+                    # OWNER 5553997094 #2: the first successful account read
+                    # after an outage is REPORTED, and open orders are
+                    # reconciled again BEFORE any submission -- the boot
+                    # sweep may itself have failed inside the outage.
+                    outage_s = round(clock() - iteration_errors[0], 1)
+                    n_err = len(iteration_errors)
+                    iteration_errors.clear()
+                    sweep = sweep_orphan_orders(t)
+                    report.setdefault("recoveries", []).append(
+                        {"outage_s": outage_s, "errors": n_err,
+                         "held": held, "sweep": sweep})
+                    _log("venue_recovered", outage_s=outage_s,
+                         error_count=n_err, held=held, sweep=sweep)
+                    if sweep["foreign"]:
+                        status = "CAMPAIGN_STOP:FOREIGN_OPEN_ORDERS"
+                        break
                 if held == MULTI_HELD:
                     status = f"CAMPAIGN_STOP:{MULTI_HELD}"
                     break

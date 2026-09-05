@@ -580,3 +580,28 @@ def test_unwritable_state_dir_fails_closed(monkeypatch, tmp_path):
     monkeypatch.setenv(spring.STATE_DURABLE_ENV, "1")
     reason = spring.state_dir_block_reason()
     assert reason and reason.startswith("state_dir_not_writable")
+
+
+def test_every_decision_carries_the_owner_required_fields(monkeypatch,
+                                                          tmp_path):
+    """OWNER 5553997094 #4: state, executed safe action, shadow action
+    with probability/rank, L5 target size/aggressiveness, planned size,
+    inventory before, and whether the shadow draw differed."""
+    from tests.test_pmus_l5_continuous_session import (_armed_session_env,
+                                                        _open_proposal)
+    _armed_session_env(monkeypatch, tmp_path)
+    _open_proposal(monkeypatch)
+    monkeypatch.setenv(spring.MAX_ACTIONS_ENV, "1")
+    rep = spring.run_session(Fake(), clock=_ticking(), sleep=lambda s: None,
+                           wall=lambda: 1000.0, slug="mkt-x", gate_ok=True)
+    d = rep["decisions"][0]
+    assert d["acted"] == "open" and d["inventory_before"]["up"] == "0"
+    assert d["planned_safe_size"]["contracts"] == "0.02"
+    sh = d["shadow"]
+    assert sh["stochastic"]["sampled"] == "open"
+    assert sh["stochastic"]["rank"] == 1 and sh["stochastic"]["p"] == 1.0
+    assert "l5_target_size" in sh and "l5_target_aggressiveness" in sh
+    assert d["shadow_differs_from_executed"] is False
+    o = rep["orders"][0]
+    assert o["executed_safe_size"]["contracts"] == "0.02"
+    assert "l5_target_size" in o
