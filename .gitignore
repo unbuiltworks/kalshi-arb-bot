@@ -19,4 +19,4 @@ data/l5/raw/activity_gap.jsonl
 # 80MB+ (past GitHub's 50MB warning) and a growing file costs a full new
 # blob on every snapshot commit. Track the gzipped tape instead (~9.5x
 # smaller); the raw file stays on disk for the running collector.
-data/policy_d_port/tape_20260904T120857Z.jsonl
+data/policy_d_port/tape_*.jsonl
