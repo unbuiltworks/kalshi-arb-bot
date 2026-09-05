@@ -317,6 +317,15 @@ def place_limit_buy(t: Transport, slug: str, outcome_side: str,
         raise Halt(f"PREVIEW_REJECTED:{stage}")
     if po.get("marketSlug") not in (None, slug):
         raise Halt(f"PREVIEW_MARKET_MISMATCH:{stage}")
+    # Evidence line (no secrets: an order preview carries prices, sizes and
+    # the venue's own derived numbers). NO-side opens are venue-REJECTED
+    # with no reason field; the venue's reading of our price/qty in its
+    # preview is the only first-hand evidence of the semantics it applies.
+    print("PMUS_MICRO_PREVIEW " + json.dumps(
+        {"stage": stage, "slug": slug, "side": outcome_side,
+         "price": str(price), "qty": str(qty), "post_only": bool(post_only),
+         "preview": q1._scalar_fields(po, 400)},
+        separators=(",", ":"), default=str), flush=True)
 
     fresh = q1.outcome_bbo(t, slug, outcome_side)
     if post_only and price >= fresh["ask"]:

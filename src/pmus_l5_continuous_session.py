@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from decimal import Decimal as D
 from typing import Any, Mapping, Optional
 
 from src import pmus_spring_l5_probe_entry as entry
@@ -55,6 +56,14 @@ MAX_SESSIONS_PER_CAMPAIGN = 48  # bounded reselection, not a runaway
 MAX_SESSIONS_PER_SLUG = 3       # attempt cap per market (x6 orders each)
 RESUME_HEARTBEAT_S = 120.0      # re-evaluate a held market at least this often
 RESUME_BOOK_POLL_S = 5.0        # ...and sooner when the book actually moves
+# OWNER 5553189142: the scaling rung is THROUGHPUT first. A campaign may
+# work up to this many FILLED markets sequentially (each after the prior
+# is flat/settled, concurrency 1), then stops at the ADVANCE GATE with a
+# reconciliation report. Per-market money caps are unchanged, so the
+# worst case for the rung is RUNG_MARKETS x SESSION_NOTIONAL_CAP of
+# filled OPEN/EXTEND notional, inside the daily-loss stop.
+RUNG_MARKETS_ENV = "PMUS_SPRING_RUNG_MARKETS"
+DEFAULT_RUNG_MARKETS = 3
 SPORTS_TTE_DEFAULT_S = base.SPORTS_TTE_DEFAULT_S
 LABEL_SHADOW = "SHADOW/THEORETICAL; DISARMED; no venue network"
 
@@ -63,6 +72,21 @@ def _log(kind: str, **fields: Any) -> None:
     print("PMUS_L5_CAMPAIGN " + json.dumps({"kind": kind, **fields},
                                            separators=(",", ":"),
                                            default=str), flush=True)
+
+
+def _new_fills(rep: Mapping[str, Any]) -> int:
+    """Fills that happened IN this session: reported orders with a positive
+    filled quantity. `rep["actions"]` is the inventory's whole fill history
+    (a resumed market re-carries every earlier fill), so counting it once
+    per cycle inflated the funnel's `filled` (90 for 6 real fills)."""
+    n = 0
+    for o in (rep.get("orders") or []):
+        try:
+            if D(str(o.get("filled_qty") or "0")) > 0:
+                n += 1
+        except Exception:
+            continue
+    return n
 
 
 def _model_view(model: Optional[Mapping[str, Any]], bid: Any) -> dict:
@@ -477,6 +501,46 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     resumes = 0
     last_settle_audit = float("-inf")
     settled_here: set = set()
+    rung_markets = max(1, int(os.getenv(RUNG_MARKETS_ENV,
+                                        str(DEFAULT_RUNG_MARKETS))))
+    filled_markets: set = set()          # markets with a fill this campaign
+    report["rung"] = {
+        "markets_allowed": rung_markets,
+        "per_market_cap_usd": str(base.SESSION_NOTIONAL_CAP),
+        "worst_case_usd": str(base.SESSION_NOTIONAL_CAP * rung_markets),
+        "daily_loss_stop_usd": str(base.q1.DAILY_LOSS_STOP),
+        "concurrency": 1,
+    }
+
+    def _rung_gate() -> Optional[str]:
+        """After the rung's markets are all flat/settled: stop at the
+        ADVANCE GATE with what the next rung decision needs."""
+        if len(filled_markets) < rung_markets:
+            return None
+        if any(s not in settled_here for s in filled_markets):
+            return None                       # something still held
+        clean = {
+            "orphan_cancels": len((report.get("orphan_sweep") or {})
+                                  .get("cancelled") or []),
+            "unresolved_reconcile": sum(
+                int((s.get("reconcile") or {}).get("unresolved") or 0)
+                for s in report["sessions"]),
+            "inventory_mismatches": sum(
+                1 for s in report["sessions"]
+                if str(s.get("reason") or "").startswith("inventory_mismatch")),
+            "halts": sum(1 for s in report["sessions"]
+                         if s.get("status") == "HALT"),
+            "settlements": len(report.get("settlements") or []),
+            "realized_usd": _sum_realized(report),
+        }
+        clean["all_clean"] = (clean["orphan_cancels"] == 0
+                              and clean["unresolved_reconcile"] == 0
+                              and clean["inventory_mismatches"] == 0
+                              and clean["halts"] == 0)
+        report["advance_gate"] = {"filled_markets": sorted(filled_markets),
+                                  **clean}
+        _log("advance_gate", **report["advance_gate"])
+        return "CAMPAIGN_RUNG_COMPLETE"
     # OWNER 5552841170 #4: throughput funnel, accumulated for the campaign
     # and printed per selection cycle
     funnel: dict[str, Any] = {"cycles": 0, "universe_rows": 0,
@@ -514,6 +578,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     _log("settlement", slug=slug, **audit)
                     if audit.get("settled"):
                         settled_here.add(slug)
+                        filled_markets.add(slug)
+                        cooldown[slug] = float("inf")   # never re-enter
                     report.setdefault("settlements", []).append(
                         {"slug": slug, **audit})
                     if audit.get("status") == "REALIZED":
@@ -522,6 +588,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                              resolution=audit.get("resolution"))
                         report["realized_pnl"] = _sum_realized(report)
             if held:
+                filled_markets.add(held)
                 _log("resume_start", slug=held)
                 rep = dict(session_runner(
                     t, clock=clock, sleep=sleep, wall=wall, slug=held,
@@ -538,7 +605,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                      inventory=rep.get("inventory"),
                      spring_gates=rep.get("spring_gates"),
                      reconcile=rep.get("reconcile"),
-                     filled_actions=len(rep.get("actions") or []),
+                     filled_actions=_new_fills(rep),
                      submitted=len(rep.get("orders") or []),
                      orders=(rep.get("orders") or [])[-8:],
                      decisions=(rep.get("decisions") or [])[-8:],
@@ -549,7 +616,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     status = f"CAMPAIGN_STOP:{rep.get('status')}"
                     break
                 funnel["submitted"] += len(rep.get("orders") or [])
-                funnel["filled"] += len(rep.get("actions") or [])
+                funnel["filled"] += _new_fills(rep)
                 if _market_gone(rep):
                     # no book / venue says not open: the held market may
                     # have RESOLVED. Ask the venue's own activities for
@@ -559,6 +626,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     if audit.get("status") in ("REALIZED", "SETTLED",
                                                "SETTLED_WITH_BUSTED_TRADE_REVIEW"):
                         settled_here.add(held)
+                        cooldown[held] = float("inf")   # never re-enter
                         report.setdefault("settlements", []).append(
                             {"slug": held, **audit})
                         if audit.get("status") == "REALIZED":
@@ -568,6 +636,10 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                         # OWNER 5552841170 #3: flat again -> straight back
                         # to full-sports selection, no redeploy
                         status = f"CAMPAIGN_SETTLED:{audit.get('status')}"
+                        gate = _rung_gate()
+                        if gate:
+                            status = gate
+                            break
                         continue
                 status = f"CAMPAIGN_RESUMING:{rep.get('status')}"
                 woke = await_state_change(t, held, clock, sleep)
@@ -606,7 +678,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         rep = dict(rep or {})
         funnel["sessions"] += 1
         funnel["submitted"] += len(rep.get("orders") or [])
-        funnel["filled"] += len(rep.get("actions") or [])
+        funnel["filled"] += _new_fills(rep)
         rep["selected"] = {k: chosen.get(k) for k in
                            ("rank", "state", "state_n", "p_buy",
                             "relation_ranked", "bid", "ask",
@@ -616,7 +688,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
              reason=rep.get("reason"), stop_reason=rep.get("stop_reason"),
              inventory=rep.get("inventory"),
              spring_gates=rep.get("spring_gates"),
-             filled_actions=len(rep.get("actions") or []),
+             filled_actions=_new_fills(rep),
              submitted=len(rep.get("orders") or []),
              orders=(rep.get("orders") or [])[-8:],
              decisions=(rep.get("decisions") or [])[-8:],
@@ -635,9 +707,13 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             status = "CAMPAIGN_HOLD:POSITION_HELD"
             break
         if _has_inventory(rep):
-            # one market at a time; residual holds to settlement
+            # one market at a time; the held market is continued by the
+            # resume path above (OWNER 5552607804) until flat/settled
+            filled_markets.add(chosen["slug"])
             status = f"CAMPAIGN_HOLD:{rep.get('status')}"
-            break
+            if t is None:                 # no venue view: nothing to resume
+                break
+            continue
         sessions_on[chosen["slug"]] = sessions_on.get(chosen["slug"], 0) + 1
         if rep.get("stop_reason") == "spend_cap_reached" or \
                 sessions_on[chosen["slug"]] >= MAX_SESSIONS_PER_SLUG:
