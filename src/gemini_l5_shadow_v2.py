@@ -60,6 +60,23 @@ MIN_REEVAL_S = 2.0
 ADVERSE_HORIZON_S = 30.0
 POLICIES = ("modal", "stochastic")
 MODES = ("strict", "optimistic")
+# OWNER 5554553793 B: execution shells shadowed in parallel. The first is
+# the live PMUS shell; the others vary ONLY the rest/cancel discipline
+# (the identified transfer blocker). Fills stay strict; zero orders.
+SHELLS = {
+    "touch_cancel_30s": {"rest_max_s": 30.0, "cancel_on_touch_move": True,
+                         "reprice": False, "label": "live PMUS shell"},
+    "rest_60s": {"rest_max_s": 60.0, "cancel_on_touch_move": False,
+                 "reprice": False, "label": "bounded rest, no cancel"},
+    "rest_120s": {"rest_max_s": 120.0, "cancel_on_touch_move": False,
+                  "reprice": False, "label": "bounded rest, no cancel"},
+    "rest_180s": {"rest_max_s": 180.0, "cancel_on_touch_move": False,
+                  "reprice": False, "label": "vendored FIRST_WAIT rest"},
+    "reprice_180s": {"rest_max_s": 180.0, "cancel_on_touch_move": True,
+                     "reprice": True,
+                     "label": "cancel on touch move, re-join the new touch, "
+                              "180s total"},
+}
 LABELS = ("THEORETICAL Gemini shadow/replay; zero orders; fills assumed "
           "from public prints (queue position unobservable); settlement "
           "by mid proxy; nothing realized; nothing armed")
@@ -111,8 +128,11 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
                   model: Mapping[str, Any], art: Optional[Mapping[str, Any]],
                   policy: str, mode: str,
                   adapter: Optional[GeminiAdapter] = None,
-                  max_actions: int = MAX_ACTIONS) -> dict:
+                  max_actions: int = MAX_ACTIONS,
+                  shell: Optional[Mapping[str, Any]] = None) -> dict:
     adapter = adapter or GeminiAdapter()
+    shell = dict(shell or SHELLS["touch_cancel_30s"])
+    rest_max = float(shell.get("rest_max_s", REST_MAX_S))
     event = tb.event_of_symbol(symbol)
     expiry = tb.ticker_expiry_epoch(event)
     if expiry is None:
@@ -134,6 +154,7 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
     entry_book = adapter.normalize(entry, expiry=expiry)
     out: dict = {"symbol": symbol, "event": event, "policy": policy,
                  "fill_mode": mode, "entry_t": t,
+                 "shell": shell.get("name") or "touch_cancel_30s",
                  "entry_tte_s": round(expiry - t, 1),
                  "entry_book": entry_book.as_dict() if entry_book else None}
     actions = 0
@@ -192,20 +213,44 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
                 t += MIN_REEVAL_S
                 actions += 1
                 continue
-            t_until = min(t + REST_MAX_S, stop_at)
-            moved = _touch_moved_at(bbo_rows, adapter, side_yes, px, t,
-                                    t_until, expiry)
-            if moved is not None:
-                t_until = min(t_until, moved)
-            f = tb.first_fill(prints, "YES" if side_yes else "NO", px,
-                              ONE - px, t, t_until, mode)
+            t_until = min(t + rest_max, stop_at)
+            moved = None
+            requotes = 0
+            t_cur, px_cur = t, px
+            f = None
+            while True:
+                if shell.get("cancel_on_touch_move"):
+                    moved = _touch_moved_at(bbo_rows, adapter, side_yes,
+                                            px_cur, t_cur, t_until, expiry)
+                seg_until = min(t_until, moved) if moved is not None else t_until
+                f = tb.first_fill(prints, "YES" if side_yes else "NO", px_cur,
+                                  ONE - px_cur, t_cur, seg_until, mode)
+                if f is not None or moved is None or not shell.get("reprice"):
+                    break
+                # re-join the NEW touch (same side, same relation) within
+                # the same bounded rest; post-only still binds
+                nb = adapter.normalize(_book_at(bbo_rows, moved), expiry=expiry)
+                npx = nb.join_price(side_yes) if nb else None
+                if (npx is None or not adapter.entry_ok(npx)
+                        or nb.opposite_ask(side_yes) is None
+                        or npx >= nb.opposite_ask(side_yes)):
+                    break
+                requotes += 1
+                t_cur, px_cur, moved = moved, npx, None
+            if f is not None:
+                px = px_cur
             order = {"t": t, "relation": relation,
-                     "side": "YES" if side_yes else "NO", "px": str(px),
-                     "qty": str(UNIT), "rest_until": t_until,
+                     "side": "YES" if side_yes else "NO", "px": str(px_cur),
+                     "qty": str(UNIT), "rest_until": (min(t_until, moved)
+                                                      if moved is not None
+                                                      else t_until),
+                     "requotes": requotes,
                      "cancel_reason": ("touch_moved" if moved is not None
                                        and f is None else None),
                      "filled": f is not None,
                      "fill_t": f["t"] if f else None}
+            if f is None and moved is not None:
+                t_until = min(t_until, moved)
             orders.append(order)
             rec["orders_placed"] = 1
             if f:
@@ -238,7 +283,7 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
                 actions += 1
                 continue
             qty = min(inv.residual.copy_abs(), UNIT)
-            t_until = min(t + REST_MAX_S, stop_at)
+            t_until = min(t + rest_max, stop_at)
             f = tb.complement_fill(prints, "NO" if deficit_up else "YES",
                                    px, t, t_until, mode)
             orders.append({"t": t, "relation": "complete",
@@ -399,6 +444,19 @@ def replay(bbo_path: Path = BBO_PATH, prints_path: Path = PRINTS_PATH,
                                        "outcome_proxy", "pair_pnl_theoretical",
                                        "hold_pnl_theoretical")}
                 for r in rows if r.get("status") in ("MATCHED", "RESIDUAL_HOLD")][:12]
+    # OWNER 5554553793 B: the rest/cancel discipline shadowed across shells
+    # (strict fills only, both policy tracks)
+    shells: dict[str, Any] = {}
+    for name, sh in SHELLS.items():
+        for policy in POLICIES:
+            rows = [replay_window(s, bbo[s], prints[s], model=model, art=art,
+                                  policy=policy, mode="strict",
+                                  shell={**sh, "name": name}) for s in symbols]
+            shells[f"{name}:{policy}"] = {**summarize(rows),
+                                          "requotes": sum(
+                                              o.get("requotes", 0) for r in rows
+                                              for o in r.get("orders") or [])}
+            shells[f"{name}:{policy}"].pop("sample_windows", None)
     # shell sensitivity: the PMUS session bound (6 decisions) covers only
     # the first minute of a 5-minute window; show the ceiling when the
     # same shell may keep deciding for the whole window
@@ -420,6 +478,7 @@ def replay(bbo_path: Path = BBO_PATH, prints_path: Path = PRINTS_PATH,
                       "pair_target": "0.98", "min_edge_after_known_fees": "0.01",
                       "maker_only": True, "taker": "disabled"},
             "results": results,
+            "shells_strict": shells,
             "sensitivity": sens,
             "pmus_reference": pmus_reference()}
 

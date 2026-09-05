@@ -1527,7 +1527,7 @@ def test_outage_baseline_and_gate_survive_a_restart(monkeypatch, tmp_path):
                              sleep=lambda s: None, wall=lambda: 1005.0,
                              campaign_s=500.0, session_runner=fake_session)
     assert rep1["status"] == "CAMPAIGN_WAITING:VENUE_PRINTS" and not ran
-    saved = json.loads((tmp_path / "campaign_state.json").read_text())
+    saved = json.loads((tmp_path / "l5_campaign_state.json").read_text())
     assert saved["recovery_gate"]["pending"] is True
     assert saved["liveness_baseline"] == {"x": 100.0}
     assert saved["outage"]["first_error"] == "boot_without_public_prints" \
@@ -1548,7 +1548,7 @@ def test_outage_baseline_and_gate_survive_a_restart(monkeypatch, tmp_path):
                              campaign_s=500.0, session_runner=fake_session)
     assert rep3["outages"][0]["trades_resumed_by"] == {"markets_moved": ["x"]}
     assert ran == ["x"]
-    saved3 = json.loads((tmp_path / "campaign_state.json").read_text())
+    saved3 = json.loads((tmp_path / "l5_campaign_state.json").read_text())
     assert saved3["recovery_gate"] is None and saved3["outage"] is None
     assert saved3["burst"]["start_wall"] == 1005.0
 
@@ -1607,7 +1607,7 @@ def test_recovery_burst_milestones_are_not_double_counted_after_restart(
     assert [b["minutes"] for b in rep["recovery_bursts"]] == [60]
     assert rep["recovery_bursts"][0]["labels"].startswith("after a restart")
     assert rep["restored_state"]["filled_markets"] == ["m1"]
-    saved = json.loads((tmp_path / "campaign_state.json").read_text())
+    saved = json.loads((tmp_path / "l5_campaign_state.json").read_text())
     assert saved["burst"]["done"] == [30, 60]
 
 
@@ -1683,3 +1683,13 @@ def test_deterministic_recovery_simulation(monkeypatch, tmp_path):
     assert resumed and all(r == ("held", True) for r in resumed)
     # then the ambiguous account stops the campaign, fail closed
     assert rep["status"] == "CAMPAIGN_STOP:MULTIPLE_POSITIONS"
+
+
+def test_l5_campaign_state_file_does_not_collide_with_the_q1_file(monkeypatch,
+                                                                   tmp_path):
+    """LIVE 20:36Z: a truthy foreign campaign_state.json (the q1 risk
+    file) was read as restored L5 state and skipped the boot gate."""
+    monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
+    (tmp_path / "campaign_state.json").write_text('{"risk": "q1"}')
+    assert cont.load_campaign_state() == {}
+    assert cont.campaign_state_path().name == "l5_campaign_state.json"

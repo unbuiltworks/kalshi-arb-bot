@@ -11,7 +11,7 @@ durable mount `/state/pmus-spring`).
 |---|---|---|
 | ledger (submitted → filled → settled → realized) | `/state/pmus-spring/ledger.jsonl` | `test_held_inventory_is_rebuilt_from_the_ledger`, `test_resume_reconciles_an_unterminated_fill_before_rebuilding` |
 | held-market lock | venue positions (authoritative) + ledger | `test_campaign_resumes_the_held_market_and_starts_no_other`, `test_resume_refuses_when_ledger_and_venue_disagree` |
-| outage baseline (sharesTraded per liveness market) | `/state/pmus-spring/campaign_state.json` | `test_outage_baseline_and_gate_survive_a_restart` |
+| outage baseline (sharesTraded per liveness market) | `/state/pmus-spring/l5_campaign_state.json` | `test_outage_baseline_and_gate_survive_a_restart` |
 | recovery gate (pending / checks) | same file | same test (run 2 keeps waiting; run 3 resumes only past the ORIGINAL baseline) |
 | recovery-burst milestones already reported | same file (`burst.done`, wall-clock start) | `test_recovery_burst_milestones_are_not_double_counted_after_restart` |
 | R1 rung: filled and settled markets | same file | `test_rung_fills_survive_a_restart` (2 before restart + 1 after → `CAMPAIGN_RUNG_COMPLETE`) |

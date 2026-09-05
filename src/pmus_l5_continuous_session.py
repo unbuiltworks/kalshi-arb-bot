@@ -490,7 +490,7 @@ def status_has_trades() -> bool:
         return False
 
 
-CAMPAIGN_STATE_FILE = "campaign_state.json"
+CAMPAIGN_STATE_FILE = "l5_campaign_state.json"   # NOT the q1 campaign_state.json
 
 
 def campaign_state_path() -> Path:

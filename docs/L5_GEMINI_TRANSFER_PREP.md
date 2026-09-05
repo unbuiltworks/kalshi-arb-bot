@@ -145,3 +145,35 @@ PMUS), and because the tape is 4 days / 118 windows. What would move it:
 a realtime Gemini shadow run (`--live`) over ≥3 days showing strict
 two-sided fills ≥1/day at ≤0.99, and an owner decision on a Gemini-only
 money cap and rest rule. Until then: shadow only, DISARMED.
+
+
+## 8. Execution shells on the retained tape (OWNER 5554553793 B, strict fills only)
+
+Same policy, same caps; only the rest/cancel discipline varies. Retained
+tape, 118 entry-eligible windows, 4 days.
+
+| shell : policy | orders | first fills | campaign fill % | requotes | complement fills | matched | holds | net strict (theoretical) | adverse 30s % |
+|---|---|---|---|---|---|---|---|---|---|
+| touch_cancel_30s : modal | 503 | 8 | 5.1 | 0 | 0 | 0 | 6 | -0.67 | 75.0 |
+| touch_cancel_30s : stochastic | 504 | 6 | 5.1 | 0 | 1 | 1 | 5 | -0.37 | 66.7 |
+| rest_60s : modal | 251 | 31 | 18.6 | 0 | 0 | 0 | 22 | -1.95 | 67.7 |
+| rest_60s : stochastic | 270 | 27 | 18.6 | 0 | 3 | 3 | 20 | -1.81 | 66.7 |
+| rest_120s : modal | 170 | 34 | 18.6 | 0 | 0 | 0 | 22 | -2.06 | 73.5 |
+| rest_120s : stochastic | 186 | 28 | 18.6 | 0 | 8 | 8 | 15 | -1.64 | 75.0 |
+| rest_180s : modal | 153 | 42 | 24.6 | 0 | 0 | 0 | 29 | -3.48 | 71.4 |
+| rest_180s : stochastic | 173 | 37 | 24.6 | 0 | 11 | 11 | 19 | -4.21 | 73.0 |
+| reprice_180s : modal | 141 | 22 | 11.0 | 859 | 0 | 0 | 13 | -1.69 | 45.5 |
+| reprice_180s : stochastic | 141 | 17 | 11.0 | 847 | 4 | 4 | 10 | -0.98 | 47.1 |
+
+Reading: a longer bounded rest does what the blocker analysis predicted
+for FILLS (5% → 19–25% of campaigns get a first leg) but not for
+ECONOMICS: every shell that rests longer collects more one-sided holds
+that settle against it (adverse selection 66–75% at 30 s, strict net
+−$1.6 to −$4.2 vs −$0.4/−$0.7 for the live shell). Re-joining the new
+touch (`reprice_180s`) halves the adverse share (45–47%) at the cost of
+~850 requotes per 118 windows and still nets −$1.0 to −$1.7. The modal
+policy never completes a pair under any shell; the stochastic track
+completes 1–11. On this tape the blocker is not only timing: fills that
+arrive on a wide, fast Gemini touch are informed. The durable realtime
+service (`src/gemini_l5_shadow_service.py`, Railway `gemini-l5-shadow`,
+read-only) collects multi-day evidence for the same table.

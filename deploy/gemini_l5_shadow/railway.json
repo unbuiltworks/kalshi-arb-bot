@@ -1,0 +1,21 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/gemini_l5_shadow/Dockerfile",
+    "watchPatterns": [
+      "deploy/gemini_l5_shadow/**",
+      "src/gemini_l5_shadow_service.py",
+      "src/gemini_l5_shadow_v2.py",
+      "src/l5_venue_adapter.py",
+      "src/pmus_l5_persistence_v2.py",
+      "src/pmus_l5_fidelity_live.py",
+      "analysis/l5/l5_action_model_v2.json",
+      "analysis/l5/l5_fidelity_pass.json"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.gemini_l5_shadow_service",
+    "restartPolicyType": "ALWAYS"
+  }
+}
