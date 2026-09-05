@@ -397,8 +397,20 @@ def _await_order(t: Transport, oid: str, qty: D, until: float,
 
 def run_session(t: Optional[Transport] = None,
                 clock=time.monotonic, sleep=time.sleep,
-                wall=time.time) -> dict:
-    slug = os.getenv(SPRING_MARKET_ENV, "").strip()
+                wall=time.time, slug: Optional[str] = None,
+                gate_ok: bool = False,
+                deadline_s: Optional[float] = None) -> dict:
+    """One bounded sequential session on ONE market.
+
+    ``slug`` / ``gate_ok`` / ``deadline_s`` exist for the continuous
+    selector (OWNER 5552036210): it hands in the market whose fresh
+    AUTHENTICATED evidence just passed the strict guard, which IS the
+    gate evidence -- so the operator-pasted PMUS_SPRING_GATE_EVIDENCE is
+    not required on that path. The dual key is required on every path;
+    nothing here can arm.
+    """
+    slug = (slug if slug is not None
+            else os.getenv(SPRING_MARKET_ENV, "")).strip()
     report: dict[str, Any] = {
         "session": "pmus-spring-l5-v1", "slug": slug, "realized_pnl": None,
         "labels": ("SPRING discipline (ramp ef1da90a): maker-only, penny "
@@ -411,7 +423,7 @@ def run_session(t: Optional[Transport] = None,
                         "no network activity (q1/micro keys never arm this)"}
     if not q1.has_credentials():
         return {**report, "status": "NO_CREDENTIALS"}
-    if not gate_asserted(slug):
+    if not gate_ok and not gate_asserted(slug):
         return {**report, "status": "GATE_NOT_CLEARED"}
     sd_block = state_dir_block_reason()
     if sd_block:
@@ -425,7 +437,8 @@ def run_session(t: Optional[Transport] = None,
         return {**report, "status": "DAILY_LOSS_STOP"}
 
     t = t or Transport()
-    deadline_s = float(os.getenv(DEADLINE_ENV, "900"))
+    if deadline_s is None:
+        deadline_s = float(os.getenv(DEADLINE_ENV, "900"))
     max_actions = int(os.getenv(MAX_ACTIONS_ENV, "6"))   # probe-1 bound
     # (default 6 per issue #167 comment 5525966568)
     # (issue #167 comment 5520665580 item 8: max 5 incremental actions
@@ -474,12 +487,29 @@ def run_session(t: Optional[Transport] = None,
                                 residual=inv.behavioral_residual())
             relation = ("open" if inv.up + inv.dn == 0
                         else prop["recommended_relation"])
+            off = bool(prop.get("off_distribution"))
+            if off and inv.up + inv.dn > 0:
+                # OWNER 5552036210 item 4: the policy is distributional; a
+                # state the model never saw gets a LOGGED refusal and a
+                # hold, never a substituted deterministic rule. Nothing is
+                # flattened -- the residual holds to settlement.
+                relation = "hold"
+            # model probability and rank for EVERY decision (item 4)
             report.setdefault("decisions", []).append(
                 {"state": skey, "last_rel": inv.last_rel,
                  "v2_recommended": prop["recommended_relation"],
+                 "relation_ranked": prop.get("relation_ranked"),
+                 "state_n": prop.get("state_n"),
+                 "off_distribution": off,
                  "persist_extend_p": prop["persist_extend_p"],
                  "switch_complete_p": prop["switch_complete_p"],
-                 "acted": relation})
+                 "acted": relation,
+                 "refusal": ("off_distribution_hold" if relation == "hold"
+                             else None)})
+            if relation == "hold":
+                sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
+                actions += 1
+                continue
 
             if relation in ("open", "extend"):
                 # spend caps: session + durable cumulative, before sizing
@@ -490,8 +520,21 @@ def run_session(t: Optional[Transport] = None,
                 break
 
             if relation in ("open", "extend"):
-                side_up = inv.residual >= 0
+                if inv.residual == 0:
+                    # the frozen model predicts a RELATION, never a side;
+                    # the SHARED adapter (cheaper touch, ties -> YES) is
+                    # what the recorder advertises as probe_entry_action,
+                    # so the live open is the advertised open
+                    from src import pmus_sports_l5_decision as l5d
+                    side_up = l5d.open_side_yes(
+                        {"bid": bbo["bid"], "ask": bbo["ask"]})
+                    if side_up is None:
+                        break
+                else:
+                    side_up = inv.residual > 0     # extend the surplus side
                 px = bbo["bid"] if side_up else (q1.ONE - bbo["ask"])
+                px = (px / spec["tick"]).to_integral_value(
+                    rounding=ROUND_DOWN) * spec["tick"]
                 if not q1.entry_ok(bbo["bid"]) or \
                         not (SPRING_BAND_LO <= bbo["bid"] <= SPRING_BAND_HI):
                     break                       # band left us: stop extending

@@ -20,6 +20,9 @@ FROM python:3.11-slim
 WORKDIR /app
 RUN pip install --no-cache-dir "cryptography>=42"
 
+# continuous campaign (OWNER 5552036210): select -> sequential session ->
+# reselect. Inherits every guard below; DISARMED it is a shadow selector.
+COPY src/pmus_l5_continuous_session.py src/pmus_l5_continuous_session.py
 COPY src/pmus_spring_l5_probe_entry.py src/pmus_spring_l5_probe_entry.py
 COPY src/pmus_spring_l5_session.py src/pmus_spring_l5_session.py
 COPY src/pmus_micro_executor.py src/pmus_micro_executor.py
@@ -47,4 +50,6 @@ ENV PMUS_SERVICE_ROLE=spring-l5-probe \
 # Deployment guard delegates to the canonical session after safety checks.
 # Previous direct form retained here for structural provenance/tests:
 # exec python3 -m src.pmus_spring_l5_session
-CMD ["sh", "-c", "test \"$PMUS_SERVICE_ROLE\" = spring-l5-probe || { echo SERVICE_ROLE_MISMATCH; exit 64; }; exec python3 -m src.pmus_spring_l5_probe_entry"]
+# One-shot form retained for provenance/tests:
+# exec python3 -m src.pmus_spring_l5_probe_entry
+CMD ["sh", "-c", "test \"$PMUS_SERVICE_ROLE\" = spring-l5-probe || { echo SERVICE_ROLE_MISMATCH; exit 64; }; exec python3 -m src.pmus_l5_continuous_session"]

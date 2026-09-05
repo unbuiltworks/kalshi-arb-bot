@@ -249,11 +249,35 @@ def evidence_from_status_path(slug: str, path: Optional[str] = None,
     path = os.getenv(EVIDENCE_STATUS_PATH_ENV, "") if path is None else path
     if not str(path).strip():
         return None, "unset"
+    status, source = load_status_document(path)
+    if status is None:
+        return None, source
+    from src import pmus_spring_evidence_transfer as xfer
+    now = time.time() if now is None else now
+    ev = xfer.compose_evidence_from_recorder(status, slug, now)
+    if ev is None:
+        return None, f"slug_absent:{xfer.diagnose_missing_slug(status, slug)}"
+    return ev, source
+
+
+def load_status_document(path: Optional[str] = None) -> tuple:
+    """Fetch the recorder's status document from a file path or from the
+    recorder's read-only HTTP handoff. Returns ``(status, source)``;
+    ``status`` is None with the fail-closed reason in ``source``.
+
+    Shared by the one-shot guard and the continuous selector so both
+    read the same bytes the same way.
+    """
+    if path is None:
+        path = (os.getenv(EVIDENCE_STATUS_URL_ENV, "").strip()
+                or os.getenv(EVIDENCE_STATUS_PATH_ENV, ""))
+    path = str(path).strip()
+    if not path:
+        return None, "unset"
     try:
         from src import pmus_spring_evidence_transfer as xfer
     except ImportError as exc:      # image missing the composer
         return None, f"evidence_composer_unavailable:{exc.name}"
-    path = str(path).strip()
     is_url = path.startswith(("http://", "https://"))
     try:
         if is_url:
@@ -266,11 +290,7 @@ def evidence_from_status_path(slug: str, path: Optional[str] = None,
             status = xfer.load_recorder_status(Path(path))
     except (OSError, ValueError) as exc:     # URLError/HTTPError are OSError
         return None, f"status_unreadable:{type(exc).__name__}"
-    now = time.time() if now is None else now
-    ev = xfer.compose_evidence_from_recorder(status, slug, now)
-    if ev is None:
-        return None, f"slug_absent:{xfer.diagnose_missing_slug(status, slug)}"
-    return ev, f"{'status_url' if is_url else 'status_path'}:{path}"
+    return status, f"{'status_url' if is_url else 'status_path'}:{path}"
 
 
 def resolve_strict_evidence(slug: str,

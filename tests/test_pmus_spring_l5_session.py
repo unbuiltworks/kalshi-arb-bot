@@ -135,15 +135,17 @@ def test_open_extend_extend_complete_decimal_inventory(monkeypatch,
     acts = rep["actions"]
     assert [a["relation"] for a in acts] == ["open", "extend", "complete",
                                             "complete"]
-    assert [a["side"] for a in acts] == ["YES", "YES", "NO", "NO"]
+    # OPEN side from the SHARED adapter (cheaper touch): bid 0.5000 vs
+    # NO join 1-0.5050=0.4950 -> NO first, then extend NO, complete YES
+    assert [a["side"] for a in acts] == ["NO", "NO", "YES", "YES"]
     # exact Decimal inventory after every action
-    assert acts[0]["inventory_after"]["up"] == "0.02"
-    assert acts[1]["inventory_after"]["up"] == "0.04"
+    assert acts[0]["inventory_after"]["dn"] == "0.02"
+    assert acts[1]["inventory_after"]["dn"] == "0.04"
     a2 = acts[2]["inventory_after"]
-    assert (a2["dn"], a2["matched"], a2["residual"]) == \
-        ("0.02", "0.02", "0.02")
+    assert (a2["up"], a2["matched"], a2["residual"]) == \
+        ("0.02", "0.02", "-0.02")
     a3 = acts[3]["inventory_after"]
-    assert (a3["dn"], a3["matched"], a3["residual"]) == \
+    assert (a3["up"], a3["matched"], a3["residual"]) == \
         ("0.04", "0.04", "0.00")
     # spring pair economics: complement at 0.48 -> pair exactly the
     # 0.98 observation cap (OWNER DECISION 5533476555); the >=1c hard
