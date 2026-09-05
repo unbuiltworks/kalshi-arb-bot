@@ -1,0 +1,137 @@
+from decimal import Decimal as D
+
+from src import gemini_l5_shadow_v2 as gs
+from src.polymarket_l5 import transfer_backtest as tb
+
+SYM = "GEMI-BTC05M2609051200-UP"
+EXP = tb.ticker_expiry_epoch("BTC05M2609051200")
+T0 = EXP - 290.0                     # inside MIN_TTE..ENTRY_MAX_TTE
+
+
+def _bbo(t, bid="0.48", ask="0.50"):
+    return {"symbol": SYM, "t": t, "bid": bid, "bid_sz": "500",
+            "ask": ask, "ask_sz": "500"}
+
+
+def _p(t, typ, px):
+    return {"timestampms": int(t * 1000), "type": typ, "price": px, "amount": "1"}
+
+
+def _model(**full):
+    """Tiny v2-shaped model: full-state counts by key, marginal fallback."""
+    return {"_sha256_16": "test", "marginal": {"extend|q<5": 5, "complete|q<5": 5,
+                                                "open|q<5": 1},
+            "base": {}, "full": dict(full), "cadence_modal": {}}
+
+
+def test_strict_matched_pair_sequence_open_then_complete():
+    # after the first YES fill (residual 1 unit) the state's modal action
+    # is COMPLETE; the complement rests as a YES ask at 1-0.49=0.51
+    model = _model(**{"p45-55c|tte2-5m|imb1-10|open|q<5": {"complete|q<5": 10}})
+    bbo = [_bbo(T0 - 5), _bbo(T0 + 60), _bbo(T0 + 120)]
+    prints = [_p(T0 + 5, "sell", "0.47"), _p(T0 + 20, "buy", "0.52")]
+    r = gs.replay_window(SYM, bbo, prints, model=model, art=None,
+                         policy="modal", mode="strict")
+    assert r["status"] == "MATCHED"
+    assert [d["acted"] for d in r["decisions"][:2]] == ["open", "complete"]
+    assert [o["side"] for o in r["orders"]] == ["YES", "NO"]
+    assert r["orders"][1]["px"] == "0.49"
+    assert r["pair_cost_after_fees"] == "0.99" and r["fees_theoretical"] == "0.02"
+    assert r["pair_pnl_theoretical"] == "0.01"
+    assert all(d["venue"] == "GEMINI" for d in r["decisions"])
+    assert r["fills"][0]["adverse"] is False    # mid 0.49 > 0.48 join
+
+
+def test_strict_needs_a_print_through_price_optimistic_accepts_at_price():
+    model = _model()
+    bbo = [_bbo(T0 - 5), _bbo(T0 + 120)]
+    prints = [_p(T0 + 5, "sell", "0.48")]
+    strict = gs.replay_window(SYM, bbo, prints, model=model, art=None,
+                              policy="modal", mode="strict")
+    opt = gs.replay_window(SYM, bbo, prints, model=model, art=None,
+                           policy="modal", mode="optimistic")
+    assert strict["status"] == "NO_FILL" and strict["orders"]
+    assert opt["status"] == "RESIDUAL_HOLD"
+    assert opt["outcome_proxy"] == "AMBIGUOUS" and opt["hold_pnl_theoretical"] is None
+
+
+def test_touch_moved_cancels_resting_order_before_a_late_print():
+    model = _model()
+    bbo = [_bbo(T0 - 5), _bbo(T0 + 3, bid="0.47"), _bbo(T0 + 120, bid="0.47")]
+    prints = [_p(T0 + 10, "sell", "0.40")]
+    r = gs.replay_window(SYM, bbo, prints, model=model, art=None,
+                         policy="modal", mode="strict")
+    o = r["orders"][0]
+    assert o["filled"] is False and o["cancel_reason"] == "touch_moved"
+    assert o["rest_until"] == T0 + 3
+
+
+def test_residual_cap_holds_after_three_units_and_sell_is_noop():
+    key = "p45-55c|tte2-5m|imb1-10|%s|q<5"
+    model = _model(**{key % "open": {"extend|q<5": 10},
+                      key % "extend": {"extend|q<5": 10}})
+    bbo = [_bbo(T0 - 5), _bbo(T0 + 200)]
+    prints = [_p(T0 + 5, "sell", "0.47"), _p(T0 + 12, "sell", "0.47"),
+              _p(T0 + 20, "sell", "0.47"), _p(T0 + 40, "sell", "0.47")]
+    r = gs.replay_window(SYM, bbo, prints, model=model, art=None,
+                         policy="modal", mode="strict")
+    assert len(r["orders"]) == 3 and r["inventory"]["behavioral_residual"] == 3.0
+    capped = [d for d in r["decisions"] if str(d["refusal"]).startswith("residual_cap")]
+    assert capped and capped[0]["acted"] == "hold"
+    assert r["status"] == "RESIDUAL_HOLD"
+    # hold settles by the mid proxy only when it is unambiguous
+    bbo2 = bbo + [_bbo(EXP - 1, bid="0.85", ask="0.90")]
+    r2 = gs.replay_window(SYM, bbo2, prints, model=model, art=None,
+                          policy="modal", mode="strict")
+    assert r2["outcome_proxy"] == "UP" and D(r2["hold_pnl_theoretical"]) > 0
+
+
+def test_off_distribution_with_inventory_holds():
+    model = _model()                     # no full states -> backed off
+    bbo = [_bbo(T0 - 5), _bbo(T0 + 200)]
+    prints = [_p(T0 + 5, "sell", "0.47")]
+    r = gs.replay_window(SYM, bbo, prints, model=model, art=None,
+                         policy="modal", mode="strict")
+    assert r["decisions"][1]["refusal"] == "off_distribution_hold"
+    assert len(r["orders"]) == 1
+
+
+def test_summarize_counts_campaigns_fills_and_holds():
+    model = _model(**{"p45-55c|tte2-5m|imb1-10|open|q<5": {"complete|q<5": 10}})
+    bbo = [_bbo(T0 - 5), _bbo(T0 + 120)]
+    rows = [gs.replay_window(SYM, bbo, [_p(T0 + 5, "sell", "0.47"),
+                                        _p(T0 + 20, "buy", "0.52")],
+                             model=model, art=None, policy="modal", mode="strict"),
+            gs.replay_window(SYM, bbo, [], model=model, art=None,
+                             policy="modal", mode="strict"),
+            {"symbol": "x", "status": "NO_QUOTE_COVERAGE"}]
+    s = gs.summarize(rows)
+    assert s["windows_replayed"] == 3 and s["campaigns"] == 2
+    assert s["two_sided_fill_campaigns"] == 1 and s["one_sided_holds"] == 0
+    assert s["campaign_first_fill_rate"] == 50.0
+    assert s["net_theoretical_total"] == "0.01"
+
+
+def test_live_shadow_step_places_nothing_and_reports_executability():
+    from datetime import datetime, timezone
+    sym = gs.nearest_windows(datetime.fromtimestamp(T0, timezone.utc))[0]
+    raw = {"bids": [{"price": "0.48", "amount": "500"}],
+           "asks": [{"price": "0.50", "amount": "500"}]}
+    rec = gs.live_shadow_step(sym, raw, T0, model=_model(), art=None)
+    assert rec["status"] == "SHADOW_ONLY" and rec["orders_placed"] == 0
+    assert rec["would_side"] == "YES" and rec["would_price"] == "0.48"
+    assert rec["complement_bound"] == "0.49"
+    ex = rec["executability"]
+    assert ex["priceable_side"] and ex["in_band"] and ex["post_only_ok"]
+    assert ex["fee_safe_complement_exists"] and ex["tte_ok"]
+    assert "l5_target_size" in rec["shadow"]
+
+
+def test_run_live_counts_fetch_errors_and_never_orders(tmp_path):
+    clock = iter([0.0, 0.0, 100.0, 100.0]).__next__
+    def fetch(url):
+        raise RuntimeError("blocked")
+    rep = gs.run_live(1.0, fetch, out=tmp_path / "live.jsonl", poll_s=0,
+                      sleep=lambda s: None, clock=clock)
+    assert rep["fetch_errors"] == 2 and rep["orders_placed"] == 0
+    assert rep["executable_now"] == 0

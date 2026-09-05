@@ -1,0 +1,147 @@
+# L5 → Gemini transfer prep (OWNER 5554263833)
+
+Parallel lane. PMUS recovery/ramp is untouched and stays highest priority.
+Nothing in this lane places an order, touches the Gemini AWS supervisor,
+or creates a Railway service. Every P&L figure below is THEORETICAL.
+
+## 1. Transfer-gap matrix
+
+Canonical fields of the L5 state/action interface vs the two venues.
+Machine-readable copy: `analysis/l5/transfer_gap_matrix.json`.
+
+| field | L5 canonical | PMUS | Gemini | PMUS | Gemini |
+|---|---|---|---|---|---|
+| outcome labels | Up/Down | YES/NO on a team; no natural Up | single UP contract, DOWN = 1−UP | CONVENTION | MATCH |
+| price / tick | 0..1, fine grid | per-market tick (0.005 seen) | 0.01 grid, band 0.20..0.80 | MATCH | MISMATCH (coarser; floors the bound by ≤1c) |
+| quantity / size unit | shares, p50 ≈12 ($4.2) | penny contracts, unit = first fill | whole $1-payout contracts; min size not in retained evidence | CONVENTION | GAP (a q=1 unit costs $0.20–0.80; cannot fit the $0.05 PMUS cap) |
+| time to expiry | fixed 5 min; 27% of actions <5m TTE | no clock → always `tte>10m` | fixed expiry stamped in the ticker | MISMATCH | MATCH (Gemini is closer to L5 than PMUS here) |
+| inventory / matched / residual / pair cost | exact shares, signed residual | same arithmetic, behavioral units, cap 3 | same (`L5Inventory` shared) | MATCH | MATCH (hold duration ≤5 min vs hours) |
+| book / spread / depth | CLOB both sides | bbo, bid qty only; spread 0.005–0.05 | both sides with sizes; entry spread p50 0.11 | MISMATCH | MISMATCH (≈5× wider) |
+| flow / prints | print stream with side | sharesTraded delta + WS tape | /v1/trades with side; two-sided 49% of windows (MLB 82.5%) | MATCH | MATCH |
+| maker / taker | maker joins, taker share ↑ near expiry | post-only; taker disabled | maker-only vendored; taker fee not vendored | MATCH | GAP |
+| fees / rebates / rewards | no maker fee | taker 0.06p(1−p); rebate never counted | maker fee ceil-cent 0.0175p(1−p) COUNTED; rebates never counted | MATCH | MISMATCH (bound 2c/pair tighter) |
+| settlement | resolution | POSITION_RESOLUTION → `afterPosition.realized` | 60s RFR at expiry; replay uses a mid proxy | MATCH | MISMATCH (replay is theoretical) |
+| provenance | canonical sequence | probe log + recorder tape | collector bbo tape + public trades | MATCH | MATCH |
+| open-order authority / deadman | n/a | `/v1/orders/open` fail-closed; cancel-all deadman | must be its own (active orders + cancel) | MATCH | GAP (build per venue) |
+| concurrency / capital | many windows | one-market lock; $0.05/market; 3 markets | own lock; allocator cap 0 (DISARMED) | MATCH | CONVENTION |
+
+Semantic mismatches that the model never saw and that no adapter can hide:
+size unit (money), spread width, maker fee, and settlement-by-proxy in
+replay. TTE is the one axis where Gemini is more faithful than PMUS.
+
+## 2. Reuse vs new
+
+| piece | status | where |
+|---|---|---|
+| v2 policy (`proposal`, `v2_dist`, `relation_mass`) | REUSED unchanged | `src/pmus_l5_persistence_v2.py` |
+| shadow fields (seeded draw, L5 size, aggressiveness) | REUSED unchanged | `src/pmus_l5_fidelity_live.py` |
+| state key / buckets | REUSED unchanged | `src/polymarket_l5/action_model.py` |
+| Gemini mechanics (fees, complement, fills, expiry, tape loaders, outcome proxy) | REUSED (vendored @80f40c86) | `src/polymarket_l5/transfer_backtest.py` |
+| PMUS bounds (`complement_bound`, `entry_ok`, taker fee) | REUSED | `src/pmus_q1_executor.py` |
+| normalized book / inventory / decision record / adapters | NEW | `src/l5_venue_adapter.py` |
+| Gemini replay + realtime shadow (zero orders) | NEW | `src/gemini_l5_shadow_v2.py` → `analysis/l5/gemini_l5_shadow_v2.json` |
+| shared capital allocator (per-venue + total caps, no double reservation) | NEW, not wired | `src/l5_capital_allocator.py` |
+| Gemini execution / reconcile / deadman / ledger / health gate | NOT BUILT (gap; needs its own authority) | — |
+| DISARMED Gemini probe config | NEW, config only | `deploy/gemini_l5_probe/DISARMED.md` |
+
+The live PMUS session (`pmus_spring_l5_session.py`) was not modified; its
+`Inventory` and decision-record shape are mirrored in the adapter module so
+the two venues emit identical records.
+
+## 3. Shadow / replay under the PMUS shell
+
+Retained tape: 400 BTC-5m symbols with quotes and prints, 4 days
+(2026-08-30..09-02), 118 entry-eligible windows. Shell identical to the
+live PMUS engine: q=1 behavioral unit, maker join at the touch, post-only,
+rest ≤30s and cancelled when the touch moves, residual cap 3, off
+distribution → HOLD, complement ≤0.98 pair and ≥1c after the venue's
+known fees (Gemini maker fee counted), HOLD to settlement, 6 decisions
+per session. Strict = a print through our price; optimistic = at price
+(upper bound). Modal = what the live engine executes; stochastic = the
+seeded draw the live engine only logs.
+
+| metric | modal:strict | modal:optimistic | stochastic:strict | stochastic:optimistic |
+|---|---|---|---|---|
+| campaigns (entry-eligible windows, 4 days) | 118 | 118 | 118 | 118 |
+| decisions | 560 | 563 | 560 | 563 |
+| acted by relation | {'extend': 11, 'hold': 57, 'open': 492} | {'extend': 53, 'hold': 51, 'open': 459} | {'complete': 8, 'extend': 4, 'hold': 56, 'open': 492} | {'complete': 18, 'extend': 28, 'hold': 58, 'open': 459} |
+| refusals | {'entry_band_left': 55, 'residual_cap': 2} | {'entry_band_left': 49, 'residual_cap': 2} | {'entry_band_left': 54, 'off_distribution_hold': 2} | {'entry_band_left': 54, 'off_distribution_hold': 4} |
+| orders submitted (all maker, q=1) | 503 | 512 | 504 | 505 |
+| first-leg fills | 8 | 27 | 6 | 23 |
+| campaign first-fill rate % | 5.1 | 19.5 | 5.1 | 19.5 |
+| touch-moved cancels | 446 | 437 | 442 | 418 |
+| complement orders / fills | 0 / 0 | 0 / 0 | 8 / 1 | 18 / 2 |
+| two-sided (matched) campaigns | 0 | 0 | 1 | 2 |
+| one-sided holds | 6 | 23 | 5 | 21 |
+| median pair cost after fees | None | None | 0.99 | 0.99 |
+| pair P&L theoretical | 0 | 0 | 0.01 | 0.02 |
+| hold P&L theoretical (mid proxy) | -0.67 | 2.65 | -0.38 | 2.93 |
+| holds won / lost / ambiguous | 0 / 2 / 4 | 8 / 6 / 9 | 0 / 1 / 4 | 7 / 5 / 9 |
+| net theoretical | -0.67 | 2.65 | -0.37 | 2.95 |
+| adverse selection 30s after first fill | 75.0% adverse, mean -0.11 (n=8) | 48.1% adverse, mean -0.0115 (n=27) | 66.7% adverse, mean -0.0917 (n=6) | 39.1% adverse, mean 0.0087 (n=23) |
+| first-fill rest s p50 | 5.55 | 3.2 | 10.65 | 5.7 |
+| entry spread p50 | 0.11 | 0.11 | 0.11 | 0.11 |
+| window flow two-sided % | 49.2 | 49.2 | 49.2 | 49.2 |
+| capacity $/day matched at q=1 | 0.0 | 0.0 | 0.24 | 0.48 |
+Sensitivity (let the shell keep deciding for the whole window instead of
+6 decisions):
+
+| track | decisions | first fills | matched | holds | net theoretical | adverse % |
+|---|---|---|---|---|---|---|
+| modal:strict:max_actions=30 | 1079 | 13 | 0 | 10 | -0.99 | 61.5 |
+| stochastic:strict:max_actions=30 | 1063 | 11 | 2 | 8 | -0.3 | 54.5 |
+Reading:
+
+* **Action supply is there, fills are not.** 503 maker orders in 118
+  windows, but 446 (89%) were cancelled because the Gemini touch moved
+  within seconds, and only 8 (1.6%) filled strictly. The live PMUS
+  cancel-on-touch-move rule is the binding constraint on Gemini; the
+  vendored 180s-rest engine filled 30% of first legs on the same tape.
+* **The modal policy never completes.** After a first fill the v2 modal
+  relation is EXTEND (same behaviour seen live on PMUS), so modal tracks
+  produced 0 matched pairs; the stochastic draw completed 1–2 pairs at
+  0.99 after fees (+$0.01–0.02 theoretical).
+* **Holds lose under strict fills.** Strict holds: 0 won / 2–3 lost,
+  adverse selection 62–75% (mid moves −5 to −11c against the fill within
+  30s). Optimistic looks positive (+$2.65) only because at-price fills
+  are an upper bound; the frozen criteria read strict only.
+* **Comparable PMUS/Polymarket sports (retained strict, MLB):** first-leg
+  fill 51%, complement-given-fill 49%, two-sided flow 82.5%, pair cost
+  0.99 — same engine class, an order of magnitude more fills.
+
+## 4. Separation design (item 5)
+
+Per venue, never shared: execution worker, one-market execution lock,
+open-order authority and reconciliation (PMUS `/v1/orders/open`; Gemini
+active orders), cancel-all deadman, ledger (submitted → filled → settled
+→ realized from the venue's settlement rows only), venue health gate
+(HTTP 5xx / stale book / no prints → that venue's gate closes).
+
+Shared: the v2 policy + shadow fields, the normalized decision record,
+the dashboard, and the capital allocator (`l5_capital_allocator.py`):
+per-venue exposure cap, per-venue concurrency, per-venue and TOTAL
+daily-loss stops, one reservation per (venue, market). A venue outage
+closes only that venue's gate; the other keeps trading. Only the total
+daily-loss stop freezes both, by design.
+
+## 5. Simultaneous operation (item 7)
+
+Two independent workers (PMUS probe as today; a Gemini worker that does
+not exist yet) each run their own loop and ask the allocator before every
+OPEN/EXTEND; the allocator's snapshot is the shared dashboard row set.
+Default limits: PMUS R1 ($0.05 filled per market, 3 markets, $0.15 total,
+−$1.00 day) and GEMINI cap 0 / 0 markets (DISARMED) until the owner
+authorizes a Gemini probe with its own money cap.
+
+## 6. Recommendation
+
+**TRANSFER-UNPROVEN.** Under the exact PMUS shell the Gemini tape gives
+0 modal matched pairs, a 5% strict first-fill rate, 62–75% adverse
+selection on the fills that do happen, and negative strict net (−$0.37 to
+−$0.99). Nothing here supports a live probe. It is not TRANSFER-REJECTED
+because the constraint is the shell's rest/cancel discipline on a
+fast-moving touch, not the state interface (TTE transfers better than on
+PMUS), and because the tape is 4 days / 118 windows. What would move it:
+a realtime Gemini shadow run (`--live`) over ≥3 days showing strict
+two-sided fills ≥1/day at ≤0.99, and an owner decision on a Gemini-only
+money cap and rest rule. Until then: shadow only, DISARMED.
