@@ -394,18 +394,36 @@ If it prints no blockers other than `spring_dual_key_absent`, the path is
 clean and the only thing left is the operator key. Any other blocker is
 a real refusal — none of them are advisory.
 
-### Arming variables (operator-held, never set from a Claude session)
+### Handoff variables (staged DISARMED; arm nothing by themselves)
 
 ```
-PMUS_SPRING_EVIDENCE_STATUS_PATH=<recorder status document>
+PMUS_SPRING_EVIDENCE_STATUS_URL=http://${{pmus-ws-evidence-recorder.RAILWAY_PRIVATE_DOMAIN}}:8080/status
 PMUS_SPRING_MARKET_SLUG=<slug>            PMUS_SPRING_GATE_EVIDENCE=<same slug>
-PMUS_SPRING_REPEATED_COMPLETION=<same>    PMUS_SPRING_LIVE=YES
+```
+
+The probe and the recorder sit on different volumes, so the status
+document is read over Railway's private network: the recorder serves
+the SAME file it writes, read-only, GET-only, on `PMUS_WS_STATUS_PORT`
+(default 8080). `PMUS_SPRING_EVIDENCE_STATUS_PATH` still works for a
+shared mount. URL outranks path outranks the pasted
+`PMUS_SPRING_STRICT_EVIDENCE_JSON`; an unreachable or stale document
+fails closed (`status_unreadable` / `strict_evidence_stale`).
+
+A DISARMED boot prints `admission_preview` -- the source it read, the
+document's age, and what the strict guard would decide -- so the handoff
+is verified from the boot log before anyone holds the keys.
+
+### The dual key (operator-held, never set from a Claude session)
+
+```
+PMUS_SPRING_LIVE=YES
 PMUS_SPRING_SESSION_ID=<fresh id>         PMUS_SPRING_ARM=<same id>
 ```
 
-The slug stays operator-named on purpose. `PMUS_SPRING_MARKET_SLUG` and
-`PMUS_SPRING_GATE_EVIDENCE` are part of the arming key; letting the probe
-choose its own market would weaken arming, so it never does.
+`PMUS_SPRING_REPEATED_COMPLETION=<slug>` is optional and advisory since
+OWNER 5551236878. The slug stays operator-named on purpose: the probe
+never chooses its own market, and a slug the recorder does not carry
+fails closed at `slug_absent`.
 
 ### Evidence: two sources, two different jobs
 
