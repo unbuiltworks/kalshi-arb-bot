@@ -170,3 +170,18 @@ def test_uncovered_windows_keep_their_shell_and_policy_identity(tmp_path):
     assert recs and all(r["status"] == "NO_QUOTE_COVERAGE" for r in recs)
     assert len({(r["shell"], r["policy"]) for r in recs}) == len(gs.SHELLS) * len(gs.POLICIES)
     assert all(r["coverage"] == "partial" for r in recs)
+
+
+def test_records_carry_ex_ante_features_and_hypotheses_use_future_windows_only(tmp_path):
+    now0 = 1788638000.0
+    sym, exp, fetch = _scripted(now0)
+    t = {"v": exp - 295.0}
+    s = svc.ShadowService(fetch=fetch, clock=lambda: t["v"],
+                          sleep=lambda x: t.__setitem__("v", t["v"] + x),
+                          root=tmp_path)
+    s.run(until=exp + 40.0)
+    rec = [r for r in s.rows["rest_120s:modal"] if r["symbol"] == sym][0]
+    assert "spread" in rec["features"] and "trailing_two_sided_120s" in rec["features"]
+    hyp = s.rolling_report(t["v"])["hypotheses"]["two_sided_flow_120s"]
+    assert hyp["arm"] == "rest_120s:modal" and hyp["verdict"] == "INSUFFICIENT_SAMPLE"
+    assert hyp["windows_since_freeze"] == 0          # 2026-09-05 windows predate the freeze

@@ -228,3 +228,45 @@ two-sided flow (+$0.69, 26 windows); on reprice_180s the wide-spread
 hypotheses for a NEW pre-registration, not thresholds; the validation set
 is 27 windows and underpowered. The live shadow service keeps collecting
 the same features so the study can be re-run on out-of-sample days.
+
+## 11. Why modal never completes while the stochastic draw does (OWNER 5555437740)
+
+`src/gemini_l5_modal_decomposition.py` → `analysis/l5/gemini_modal_vs_stochastic.json`
+(retained tape, strict, shells reprice_180s and rest_120s, READ-ONLY).
+
+* In all 110 post-first-fill decisions (both shells, modal track) COMPLETE
+  is never the argmax: P(complete) p50 0.39–0.42 vs P(extend) p50 0.51–0.66.
+  Off-distribution decisions: 0 (rest_120s) / 1 (reprice). The states are
+  in-distribution; argmax over a 40/60 split simply never selects the
+  minority action, and the draw selects it ~40% of the time (sampled
+  COMPLETE 31/71 and 15/39 decisions) — which is exactly the historical
+  L5 rate in these imbalance states (base-state P(complete) 0.46–0.54 by
+  TTE bucket, n 89–1101).
+* State/adapter component: every lookup keys on `last_size=q<5` (our q=1
+  unit) while L5's own size in these states was mostly q5-15/q15-40; the
+  exact full-state keys are thin (n 2–16) so the mass is mostly the shrunk
+  base state. Across all visited base states and every size bucket,
+  COMPLETE is argmax in exactly one thin state
+  (`p75-90c|tte30-120s|imb1-10|open|q5-15`). So the zero-completion result
+  is not a size-bucket artifact either.
+* Execution component: after the first fill the modal EXTEND was itself
+  refused in 49/71 (rest_120s) and 18/39 (reprice) decisions
+  (`entry_band_left`: the extend join would leave 0.20–0.80 or cross), and
+  the residual cap held 10/9 more; so modal spends most post-fill
+  decisions HOLDing. When the draw chose COMPLETE, a fee-safe complement
+  price existed 18/21 (rest_120s) and 6/6 (reprice) times (`pair_target`
+  regime), i.e. completion is executable at the bound; it is the strict
+  fill that is rare.
+
+Verdict: zero modal completion is the expected arithmetic of executing a
+genuinely stochastic policy by argmax, not a state or adapter mismatch.
+This is the same mechanism observed live on PMUS (HOLD 100% at the cap
+while L5 completes 43–48%). No live policy is changed by this analysis;
+any change (e.g. the prebuilt cap-fallback, or sampling instead of
+argmax) stays an owner decision with OOS evidence.
+
+The two-sided-flow observation is pre-registered as a separate hypothesis
+(`analysis/l5/gemini_hypothesis_two_sided_flow.json`, frozen 23:17:44Z,
+arm rest_120s:modal, applies only to windows entered after the freeze,
+evaluated by the service in every rolling report under `hypotheses`,
+never mixed with the transfer-gate sample).

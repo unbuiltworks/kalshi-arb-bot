@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Optional
 
 from src import gemini_l5_shadow_v2 as gs
+from src import gemini_l5_regime_study as rstudy
 from src import pmus_l5_fidelity_live as fid
 from src import pmus_l5_persistence_v2 as pv2
 from src.polymarket_l5 import transfer_backtest as tb
@@ -230,6 +231,49 @@ class ShadowService:
                               for o in r.get("orders") or [])
         return out
 
+    HYPOTHESES = ("analysis/l5/gemini_hypothesis_two_sided_flow.json",)
+
+    def hypotheses_report(self) -> dict:
+        """Frozen hypotheses evaluated ONLY on windows whose entry is at or
+        after each file's freeze time; separate from the transfer gate."""
+        out = {}
+        for rel in self.HYPOTHESES:
+            path = Path(__file__).resolve().parents[1] / rel
+            try:
+                hyp = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:                         # noqa: BLE001
+                continue
+            since = datetime.fromisoformat(
+                hyp["applies_to_windows_with_entry_t_at_or_after_utc"]).timestamp()
+            rows = [r for r in self.rows.get(hyp["arm"]) or []
+                    if float(r.get("entry_t") or 0) >= since]
+            adm = [r for r in rows
+                   if rstudy.rule_admits(hyp["rule"], r.get("features") or {}) is True]
+            s = gs.summarize(adm) if adm else {}
+            succ, fail = hyp["success"], hyp["failure"]
+            net = float(s.get("net_theoretical_total") or 0) if adm else 0.0
+            adv = (s.get("adverse_selection_by_horizon") or {}).get("30", {}).get("pct_adverse")
+            days = len(s.get("distinct_days") or [])
+            enough = len(adm) >= succ["min_windows_admitted"] and days >= succ["min_days"]
+            if len(adm) >= fail["after_windows_admitted"] and net <= fail["net_after_fees_usd_at_or_below"]:
+                verdict = "FAIL"
+            elif not enough:
+                verdict = "INSUFFICIENT_SAMPLE"
+            elif (adv is not None and adv <= succ["max_adverse_selection_30s_pct"]
+                  and net >= succ["min_net_after_known_fees_usd"]
+                  and (s.get("first_leg_fills") or 0) >= succ["min_first_fills"]):
+                verdict = "SUPPORTED"
+            else:
+                verdict = "NOT_SUPPORTED"
+            out[hyp["rule"]["name"]] = {
+                "sha": hyp.get("_sha256_16"), "arm": hyp["arm"],
+                "windows_since_freeze": len(rows), "admitted": len(adm),
+                "days": days, "first_fills": s.get("first_leg_fills"),
+                "adverse_30s_pct": adv, "net_strict": str(net),
+                "verdict": verdict,
+                "labels": "separate sample from the transfer gate; THEORETICAL"}
+        return out
+
     def rolling_report(self, now: float) -> dict:
         windows = {"6h": 6 * 3600.0, "24h": 24 * 3600.0, "cumulative": None}
         out: dict = {"t": _utc(now), "labels": LABELS,
@@ -253,6 +297,7 @@ class ShadowService:
                             "one_sided_holds", "net_theoretical_total",
                             "matched_pairs_le_099")}
             out["by_window"][wname] = arms
+        out["hypotheses"] = self.hypotheses_report()
         if self.gate:
             prim = self.gate.get("primary_arm")
             out["transfer_gate"] = {
@@ -313,6 +358,11 @@ class ShadowService:
                     # returns carried no shell/policy and 9 uncovered-window
                     # records collapsed onto one identity)
                     rec["symbol"], rec["shell"], rec["policy"] = sym, name, policy
+                    try:      # ex-ante features (at/before the entry quote)
+                        rec["features"] = (rstudy.entry_features(tape.bbo, prints, r["entry_t"])
+                                           if r.get("entry_t") else {})
+                    except Exception:                 # noqa: BLE001
+                        rec["features"] = {}
                     rec["decisions_n"] = len(r.get("decisions") or [])
                     rec["coverage"] = ("full" if (tape.expiry or 0) - getattr(
                         tape, "opened_at", 0) >= tb.ENTRY_MAX_TTE_S else "partial")
