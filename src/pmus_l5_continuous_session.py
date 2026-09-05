@@ -230,7 +230,11 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         report["sessions"].append(rep)
         _log("session_end", slug=chosen["slug"], status=rep.get("status"),
              reason=rep.get("reason"), inventory=rep.get("inventory"),
-             actions=len(rep.get("actions") or []))
+             filled_actions=len(rep.get("actions") or []),
+             submitted=len(rep.get("orders") or []),
+             orders=(rep.get("orders") or [])[-8:],
+             decisions=(rep.get("decisions") or [])[-8:],
+             pair_economics=rep.get("pair_economics"))
         if rep.get("status") in ("DAILY_LOSS_STOP", "HALT",
                                  "STATE_NOT_DURABLE", "NO_CREDENTIALS",
                                  "DISARMED"):

@@ -549,6 +549,13 @@ def run_session(t: Optional[Transport] = None,
                     min(stop_at, clock() + max(
                         prop["next_reevaluation_s"], MIN_REEVAL_S)),
                     clock, sleep)
+                # every SUBMITTED order is reported, filled or not: the
+                # ladder is submitted -> filled -> settled -> realized
+                report.setdefault("orders", []).append(
+                    {"stage": f"spring_{relation}_{actions + 1}",
+                     "order_id": oid, "side": "YES" if side_up else "NO",
+                     "px": str(px), "qty": str(qty), "filled_qty": str(got),
+                     "outcome": "filled" if got > 0 else "no_fill_cancelled"})
                 if got > 0:
                     fill = micro._terminal_positive_fill(t, oid, qty) or \
                         {"price": px, "qty": got}
@@ -582,6 +589,11 @@ def run_session(t: Optional[Transport] = None,
                     min(stop_at, clock() + max(
                         prop["next_reevaluation_s"], MIN_REEVAL_S)),
                     clock, sleep)
+                report.setdefault("orders", []).append(
+                    {"stage": f"spring_complete_{actions + 1}",
+                     "order_id": oid, "side": "YES" if deficit_up else "NO",
+                     "px": str(px), "qty": str(qty), "filled_qty": str(got),
+                     "outcome": "filled" if got > 0 else "no_fill_cancelled"})
                 if got > 0:
                     fill = micro._terminal_positive_fill(t, oid, qty) or \
                         {"price": px, "qty": got}

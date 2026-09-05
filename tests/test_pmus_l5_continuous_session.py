@@ -335,6 +335,9 @@ def test_fill_updates_inventory_and_requeries_model_before_next_action(
     assert seen[1][1] == "open" and seen[2][1] == "extend"
     assert seen[1][0].endswith("imb1-10") and seen[0][0].endswith("flat")
     assert rep["inventory"]["residual"] == "0.00"
+    # every SUBMITTED order is reported with its authoritative outcome
+    assert [o["outcome"] for o in rep["orders"]] == ["filled"] * 4
+    assert rep["orders"][0]["order_id"] == "SPR1"
     # completion economics carried the two bounds; the open carried none
     assert rep["pair_economics"]["hard_bound_px"] is not None
     assert all(b["participateDontInitiate"] is True
