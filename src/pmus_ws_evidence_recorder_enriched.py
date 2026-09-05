@@ -28,7 +28,7 @@ _ORIGINAL_PLAN = pq.plan
 # candidates on the live tape — eligibility requires FRESH canonical
 # strict evidence AND authenticated source freshness, and expires fail
 # closed. Never promotes loose Q1 MATCHED; never touches admission.
-PURSUIT_SEATS_ENV = "PMUS_SPRING_PURSUIT_SEATS"   # default 3, clamped 0..4
+PURSUIT_SEATS_ENV = "PMUS_SPRING_PURSUIT_SEATS"   # default 0 (off), clamped 0..4
 PURSUIT_TTL_ENV = "PMUS_SPRING_PURSUIT_TTL_S"     # default 900s
 # Operator-named slugs to bring under AUTHENTICATED observation so a
 # corrected sports candidate can earn observed spring_watch evidence
@@ -120,7 +120,12 @@ def plan(targets, state, cap, cycle, prev=None, now=None, l5_infos=None):
     now = now or _time.time()
     p = _ORIGINAL_PLAN(targets, state, cap, cycle, prev, now=now,
                        l5_infos=l5_infos)
-    seats = max(0, min(4, int(os.getenv(PURSUIT_SEATS_ENV, "3"))))
+    # OWNER 5553166357: no category gets a hardcoded seat reserve that can
+    # starve others. The strict-match pursuit reserve (completion-evidence
+    # chasing, a bar removed from OPEN admission in 5551236878) was
+    # evicting live CFB warm seats for tennis. Default 0 = off; an
+    # operator can still set PMUS_SPRING_PURSUIT_SEATS explicitly.
+    seats = max(0, min(4, int(os.getenv(PURSUIT_SEATS_ENV, "0"))))
     ttl = float(os.getenv(PURSUIT_TTL_ENV, "900"))
     p["diagnostics"]["spring_ws_reserved"] = []
     p["diagnostics"]["spring_pinned"] = []

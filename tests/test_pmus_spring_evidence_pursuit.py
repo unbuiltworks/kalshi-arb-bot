@@ -11,6 +11,28 @@ import time
 from src import pmus_priority_queue as pq
 from src import pmus_spring_l5_session as spring
 from src import pmus_ws_evidence_recorder_enriched as enriched
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _pursuit_seats_on(monkeypatch):
+    """OWNER 5553166357 turned the reserve OFF by default (it starved live
+    CFB of warm seats). These regressions exercise the mechanism itself,
+    so they opt in explicitly; the default is asserted separately."""
+    monkeypatch.setenv(enriched.PURSUIT_SEATS_ENV, "3")
+
+
+def test_reserve_is_off_by_default_no_category_gets_hardcoded_seats(
+        monkeypatch):
+    monkeypatch.delenv(enriched.PURSUIT_SEATS_ENV, raising=False)
+    now = time.time()
+    state = _busy_state(12, now)
+    state["strict-1"] = _strict_candidate(now)
+    p = enriched.plan(_targets(state, extra=("strict-1",)), state, 8, 1,
+                      now=now)
+    assert p["diagnostics"]["spring_ws_reserved"] == []
+    assert "strict-1" not in p["subscribe"] or \
+        p["per_market"]["strict-1"]["tier"] != "warm"  # never by reserve
 
 
 def _busy_state(n, now, trades=40):
