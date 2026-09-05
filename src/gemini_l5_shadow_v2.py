@@ -58,6 +58,8 @@ MAX_ACTIONS = 6                    # PMUS_SPRING_MAX_ACTIONS default
 REST_MAX_S = 30.0                  # SPORTS_MAKER_REST_MAX_S
 MIN_REEVAL_S = 2.0
 ADVERSE_HORIZON_S = 30.0
+ADVERSE_HORIZONS_S = (5.0, 15.0, 30.0, 60.0)   # OWNER 5554553793 B item 4
+UNIT_CAPITAL_USD = D("0.80")                 # max cost of one q=1 unit
 POLICIES = ("modal", "stochastic")
 MODES = ("strict", "optimistic")
 # OWNER 5554553793 B: execution shells shadowed in parallel. The first is
@@ -117,6 +119,14 @@ def _touch_moved_at(rows: list, adapter: GeminiAdapter, side_yes: bool,
 
 def _pct(n: int, d: int) -> Optional[float]:
     return round(100.0 * n / d, 1) if d else None
+
+
+def _quartiles(xs: list) -> Optional[list]:
+    xs = sorted(float(x) for x in xs if x is not None)
+    if not xs:
+        return None
+    q = statistics.quantiles(xs, n=4) if len(xs) >= 2 else [xs[0]] * 3
+    return [round(v, 4) for v in q]
 
 
 def _median(xs: list) -> Optional[float]:
@@ -255,16 +265,18 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
             rec["orders_placed"] = 1
             if f:
                 inv.record(side_yes, px, UNIT, relation, f["t"])
-                later = _mid_at(bbo_rows, f["t"] + ADVERSE_HORIZON_S)
-                move = None
-                if later is not None:
-                    own_mid = later if side_yes else ONE - later
-                    move = float(own_mid - px)
+                moves: dict = {}
+                for h in ADVERSE_HORIZONS_S:
+                    later = _mid_at(bbo_rows, f["t"] + h)
+                    if later is not None:
+                        own_mid = later if side_yes else ONE - later
+                        moves[str(int(h))] = float(own_mid - px)
+                move = moves.get("30")
                 fills.append({"t": f["t"], "relation": relation,
                               "side": order["side"], "px": str(px),
                               "tte_s": round(expiry - f["t"], 1),
                               "rest_s": round(f["t"] - t, 1),
-                              "mid_move_30s": move,
+                              "mid_move_30s": move, "mid_moves": moves,
                               "adverse": (move < 0) if move is not None else None})
                 t = f["t"]
             else:
@@ -407,6 +419,34 @@ def summarize(rows: list[dict]) -> dict:
                                 len(adverse)),
             "mean_mid_move": (round(statistics.fmean(
                 f["mid_move_30s"] for f in adverse), 4) if adverse else None)},
+        "adverse_selection_by_horizon": {
+            h: {"n": len([f for f in first_fills
+                          if (f.get("mid_moves") or {}).get(h) is not None]),
+                "pct_adverse": _pct(
+                    sum(1 for f in first_fills
+                        if (f.get("mid_moves") or {}).get(h) is not None
+                        and f["mid_moves"][h] < 0),
+                    len([f for f in first_fills
+                         if (f.get("mid_moves") or {}).get(h) is not None])),
+                "mean_mid_move": (round(statistics.fmean(
+                    f["mid_moves"][h] for f in first_fills
+                    if (f.get("mid_moves") or {}).get(h) is not None), 4)
+                    if any((f.get("mid_moves") or {}).get(h) is not None
+                           for f in first_fills) else None)}
+            for h in ("5", "15", "30", "60")},
+        "pair_cost_after_fees_p25_p50_p75": _quartiles(
+            [r["pair_cost_after_fees"] for r in any_matched]),
+        "matched_pairs_le_099": sum(
+            1 for r in any_matched
+            if r.get("pair_cost_after_fees") is not None
+            and D(str(r["pair_cost_after_fees"])) <= D("0.99")),
+        "residual_duration_s_p50": _median(
+            [r["fills"][0]["tte_s"] for r in holds if r.get("fills")]),
+        "residual_outcomes": {"won": hold_won, "lost": hold_lost,
+                              "ambiguous": amb},
+        "capital_turn_per_day_estimate": round(float(sum(
+            D(r["pair_unit_cost"]) * D(r["inventory"]["matched"])
+            for r in any_matched)) / n_days / float(UNIT_CAPITAL_USD), 3),
         "first_fill_tte_s_p50": _median([f["tte_s"] for f in first_fills]),
         "first_fill_rest_s_p50": _median([f["rest_s"] for f in first_fills]),
         "entry_spread_p50": _median([b["spread"] for b in entry_books]),
@@ -499,6 +539,87 @@ def pmus_reference() -> dict:
             "strict": {k: (fam.get("strict") or {}).get(k) for k in keep},
             "optimistic": {k: (fam.get("optimistic") or {}).get(k) for k in keep},
             "labels": s.get("labeling")}
+
+
+# ------------------------- pre-registered transfer gate -------------------------
+
+GATE_PATH = ROOT / "analysis/l5/gemini_transfer_gate.json"
+
+
+def load_gate(path: Path = GATE_PATH) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _day(r: Mapping[str, Any]) -> str:
+    return datetime.fromtimestamp(float(r["entry_t"]), timezone.utc).strftime("%Y-%m-%d")
+
+
+def transfer_gate_verdict(rows: list, gate: Optional[Mapping[str, Any]] = None) -> dict:
+    """Evaluate ONE arm's strict rows against the frozen gate. Returns
+    PASS / FAIL / INSUFFICIENT_SAMPLE / REJECT with every criterion
+    named; thresholds come only from the frozen JSON."""
+    gate = gate or load_gate()
+    req = gate["requirements"]
+    rej = gate["reject"]
+    ent = [r for r in rows if r.get("status") in ("MATCHED", "RESIDUAL_HOLD", "NO_FILL")]
+    s = summarize(ent) if ent else None
+    days = sorted({_day(r) for r in ent})
+    matched_rows = [r for r in ent if D(r["inventory"]["matched"]) > 0]
+    matched_days = sorted({_day(r) for r in matched_rows})
+    net_by_day = {}
+    for r in ent:
+        d = _day(r)
+        v = D(r.get("pair_pnl_theoretical") or 0) + D(r.get("hold_pnl_theoretical") or 0)
+        net_by_day[d] = net_by_day.get(d, D("0")) + v
+    net = sum(net_by_day.values(), D("0"))
+    checks = {}
+    if s is None:
+        return {"verdict": "INSUFFICIENT_SAMPLE", "windows": 0, "days": 0,
+                "gate_sha": gate.get("_sha256_16"), "checks": {}}
+    checks["windows"] = (len(ent), req["min_windows"], len(ent) >= req["min_windows"])
+    checks["days"] = (len(days), req["min_days"], len(days) >= req["min_days"])
+    sample_ok = checks["windows"][2] and checks["days"][2]
+    checks["two_sided_completions"] = (len(matched_rows), req["min_two_sided_completions"],
+                                       len(matched_rows) >= req["min_two_sided_completions"])
+    checks["completion_days"] = (len(matched_days), req["min_completion_days"],
+                                 len(matched_days) >= req["min_completion_days"])
+    p = s.get("p_complement_given_first_fill")
+    checks["p_complement_given_first_fill_pct"] = (
+        p, req["min_p_complement_given_first_fill_pct"],
+        p is not None and p >= req["min_p_complement_given_first_fill_pct"])
+    le = s.get("matched_pairs_le_099") or 0
+    share = round(100.0 * le / len(matched_rows), 1) if matched_rows else None
+    checks["matched_le_099_share_pct"] = (share, req["min_matched_le_099_share_pct"],
+                                          share is not None and share >= req["min_matched_le_099_share_pct"])
+    checks["net_after_fees_usd"] = (str(net), req["min_net_after_known_fees_usd"],
+                                    net >= D(str(req["min_net_after_known_fees_usd"])))
+    pos_days = sum(1 for v in net_by_day.values() if v >= 0)
+    checks["non_negative_days"] = (pos_days, req["min_non_negative_days"],
+                                   pos_days >= req["min_non_negative_days"])
+    adv = (s.get("adverse_selection_by_horizon") or {}).get("30", {}).get("pct_adverse")
+    checks["adverse_30s_pct"] = (adv, req["max_adverse_selection_30s_pct"],
+                                 adv is not None and adv <= req["max_adverse_selection_30s_pct"])
+    hr = s.get("one_sided_hold_rate")
+    checks["one_sided_hold_rate_pct"] = (hr, req["max_one_sided_hold_rate_pct"],
+                                         hr is not None and hr <= req["max_one_sided_hold_rate_pct"])
+    reject = (len(ent) >= rej["after_windows"] and
+              (net <= D(str(rej["net_after_fees_usd_at_or_below"]))
+               or len(matched_rows) < rej["two_sided_completions_below"]))
+    if reject:
+        verdict = "REJECT"
+    elif not sample_ok:
+        verdict = "INSUFFICIENT_SAMPLE"
+    elif all(v[2] for v in checks.values()):
+        verdict = "PASS"
+    else:
+        verdict = "FAIL"
+    return {"verdict": verdict, "windows": len(ent), "days": len(days),
+            "gate_sha": gate.get("_sha256_16"), "gate_frozen_utc": gate.get("frozen_utc"),
+            "checks": {k: {"value": v[0], "threshold": v[1], "ok": bool(v[2])}
+                       for k, v in checks.items()},
+            "net_by_day": {k: str(v) for k, v in sorted(net_by_day.items())},
+            "labels": "THEORETICAL strict-fill evidence against the frozen gate; "
+                      "thresholds are read from the JSON and never tuned here"}
 
 
 # ------------------------- realtime shadow -------------------------

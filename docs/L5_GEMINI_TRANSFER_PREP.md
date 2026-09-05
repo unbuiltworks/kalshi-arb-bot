@@ -177,3 +177,30 @@ completes 1–11. On this tape the blocker is not only timing: fills that
 arrive on a wide, fast Gemini touch are informed. The durable realtime
 service (`src/gemini_l5_shadow_service.py`, Railway `gemini-l5-shadow`,
 read-only) collects multi-day evidence for the same table.
+
+## 9. Live shadow service and pre-registered gate (OWNER 5554728503)
+
+Railway service `gemini-l5-shadow` (own volume `/state/gemini-shadow`, no
+variables, no credentials, zero orders) runs `src/gemini_l5_shadow_service.py`:
+public book + prints for the current and next BTC-5m window every 3 s; on
+expiry the window tape is replayed through the same seeded v2 decisions
+under all five shells × modal/stochastic (paired by window), strict fills
+only; at-price/queue-unknown fills are recorded under a separate
+`optimistic_unknown` label and never enter a metric. Durable evidence:
+`tape.jsonl` (raw book+prints per window), `records.jsonl` (every
+hypothetical order/fill/decision), `summary.json`, `report.json`. Rolling
+reports every hour over 6h / 24h / cumulative: windows, actions, joins,
+strict first-leg fills, complement-given-fill, matched pairs ≤0.99,
+pair-cost quartiles, residual duration/outcome, adverse selection at
+5/15/30/60 s, fees, capital-turn estimate, and each arm's delta vs the live
+shell on identical windows.
+
+Pre-registered gate `analysis/l5/gemini_transfer_gate.json` (frozen before
+the service produced a record; sha in every verdict): primary arm
+`reprice_180s:modal`; PASS needs ≥300 windows over ≥5 days, ≥15 strict
+two-sided completions on ≥4 days, complement-given-fill ≥35%, ≥80% of
+matched pairs ≤0.99 after fees, net after known fees ≥0 with ≥3
+non-negative days, adverse selection at 30 s ≤50%, one-sided hold rate
+≤25%. REJECT after 300 windows if net ≤ −$1.00 or fewer than 5
+completions. Exploratory arms cannot pass on the sample that selected
+them. Thresholds are read from the file and never tuned in code.

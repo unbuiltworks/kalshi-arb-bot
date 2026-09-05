@@ -70,3 +70,40 @@ def test_image_has_no_credential_or_order_path():
         assert banned not in src
     docker = open("deploy/gemini_l5_shadow/Dockerfile").read()
     assert "pmus_spring_l5_session" not in docker and "PMUS_API" not in docker
+
+
+def test_rolling_report_pairs_arms_and_reads_the_frozen_gate(tmp_path):
+    now0 = 1788638000.0
+    sym, exp, fetch = _scripted(now0)
+    t = {"v": exp - 295.0}
+    s = svc.ShadowService(fetch=fetch, clock=lambda: t["v"],
+                          sleep=lambda x: t.__setitem__("v", t["v"] + x),
+                          root=tmp_path)
+    s.run(until=exp + 40.0)
+    rep = s.rolling_report(t["v"])
+    arms = rep["by_window"]["cumulative"]
+    assert "touch_cancel_30s:modal" in arms and "rest_60s:modal" in arms
+    assert arms["rest_60s:modal"]["vs_live_shell"]["first_leg_fills"] == "1"
+    assert "vs_live_shell" not in arms["touch_cancel_30s:modal"]
+    assert arms["rest_60s:modal"]["adverse_selection_by_horizon"]["30"]["n"] == 1
+    rec = [r for r in s.rows["rest_60s:modal"] if r["symbol"] == sym][0]
+    assert rec["optimistic_unknown"]["labels"].startswith("at-price")
+    g = rep["transfer_gate"]
+    assert g["primary_arm"] == "reprice_180s:modal"
+    assert g["verdict"]["verdict"] == "INSUFFICIENT_SAMPLE"
+    assert g["verdict"]["gate_sha"] == gs.load_gate()["_sha256_16"]
+
+
+def test_transfer_gate_thresholds_come_only_from_the_frozen_file():
+    gate = gs.load_gate()
+    assert gate["frozen_before_any_live_shadow_result"] is True
+    assert gate["requirements"]["min_windows"] == 300
+    # a synthetic arm that trips the reject rule
+    rows = [{"status": "RESIDUAL_HOLD", "entry_t": 1788638000.0 + i * 300,
+             "inventory": {"matched": "0", "up": "1", "dn": "0", "residual": "1"},
+             "pair_pnl_theoretical": None, "hold_pnl_theoretical": "-0.01",
+             "decisions": [], "orders": [], "fills": [], "flow": {"two_sided": False},
+             "pair_unit_cost": "None", "fees_theoretical": "0", "outcome_proxy": "DOWN",
+             "entry_book": None} for i in range(300)]
+    v = gs.transfer_gate_verdict(rows, gate)
+    assert v["verdict"] == "REJECT" and v["checks"]["net_after_fees_usd"]["ok"] is False

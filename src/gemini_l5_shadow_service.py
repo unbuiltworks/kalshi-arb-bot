@@ -24,6 +24,7 @@ import sys
 import time
 import urllib.request
 from datetime import datetime, timezone
+from decimal import Decimal as D
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional
 
@@ -37,6 +38,8 @@ STATE_ENV = "GEMINI_SHADOW_STATE_DIR"
 DEFAULT_STATE_DIR = "/state/gemini-shadow"
 POLL_S = 3.0
 STATUS_EVERY_S = 300.0
+REPORT_EVERY_S = 3600.0          # rolling 6h / 24h / cumulative reports
+LIVE_SHELL = "touch_cancel_30s"  # the arm every other arm is compared to
 SETTLE_GRACE_S = 20.0            # keep quoting the tape until after expiry
 MAX_TAPE_ROWS = 4000             # per symbol, in memory (~3.3h at 3s)
 CA_BUNDLE = "/root/.ccr/ca-bundle.crt"
@@ -115,7 +118,12 @@ class ShadowService:
         self.errors = 0
         self.fetches = 0
         self.last_status = 0.0
+        self.last_report = 0.0
         self.started_utc = _utc(self.clock())
+        try:
+            self.gate = gs.load_gate()
+        except Exception:                             # noqa: BLE001
+            self.gate = None
         self._reload_records()
 
     # ---- durable records ----
@@ -170,6 +178,70 @@ class ShadowService:
             self.last_status = now
             _log("status", **self.status())
             self._write_summary()
+        if now - self.last_report >= REPORT_EVERY_S:
+            self.last_report = now
+            rep = self.rolling_report(now)
+            _log("rolling_report", **rep)
+            try:
+                (self.root / "report.json").write_text(
+                    json.dumps(rep, indent=1, default=str, sort_keys=True))
+            except OSError:
+                pass
+        return out
+
+    # ---- rolling reports (OWNER 5554553793 B item 4) ----
+    REPORT_KEYS = ("campaigns", "decisions", "orders_submitted", "first_leg_fills",
+                   "campaign_first_fill_rate", "complement_orders", "complement_fills",
+                   "p_complement_given_first_fill", "two_sided_fill_campaigns",
+                   "matched_pairs_le_099", "pair_cost_after_fees_p25_p50_p75",
+                   "median_pair_cost_after_fees", "one_sided_holds",
+                   "one_sided_hold_rate", "residual_duration_s_p50",
+                   "residual_outcomes", "adverse_selection_by_horizon",
+                   "fees_theoretical_total", "pair_pnl_theoretical_total",
+                   "hold_pnl_theoretical_total", "net_theoretical_total",
+                   "capital_turn_per_day_estimate", "touch_moved_cancels",
+                   "window_flow_two_sided_pct", "entry_spread_p50", "distinct_days")
+
+    def _arm_summary(self, rows: list) -> dict:
+        s = gs.summarize(rows) if rows else {}
+        out = {k: s.get(k) for k in self.REPORT_KEYS}
+        out["optimistic_unknown_first_fills"] = sum(
+            int((r.get("optimistic_unknown") or {}).get("first_fills_at_price_only") or 0)
+            for r in rows)
+        out["requotes"] = sum(int(o.get("requotes") or 0) for r in rows
+                              for o in r.get("orders") or [])
+        return out
+
+    def rolling_report(self, now: float) -> dict:
+        windows = {"6h": 6 * 3600.0, "24h": 24 * 3600.0, "cumulative": None}
+        out: dict = {"t": _utc(now), "labels": LABELS,
+                     "paired_design": "every arm replays the SAME window tape with the "
+                                      "same seeded v2 decisions; deltas are vs the live "
+                                      f"shell {LIVE_SHELL} on identical windows",
+                     "by_window": {}}
+        for wname, span in windows.items():
+            arms = {}
+            for key, rows in sorted(self.rows.items()):
+                sel = [r for r in rows
+                       if span is None or float(r.get("entry_t") or 0) >= now - span]
+                arms[key] = self._arm_summary(sel)
+            for key, a in arms.items():
+                shell, policy = key.split(":")
+                base = arms.get(f"{LIVE_SHELL}:{policy}")
+                if base and shell != LIVE_SHELL:
+                    a["vs_live_shell"] = {
+                        k: _delta(a.get(k), base.get(k)) for k in (
+                            "first_leg_fills", "two_sided_fill_campaigns",
+                            "one_sided_holds", "net_theoretical_total",
+                            "matched_pairs_le_099")}
+            out["by_window"][wname] = arms
+        if self.gate:
+            prim = self.gate.get("primary_arm")
+            out["transfer_gate"] = {
+                "primary_arm": prim,
+                "verdict": gs.transfer_gate_verdict(self.rows.get(prim) or [], self.gate),
+                "exploratory": {k: gs.transfer_gate_verdict(self.rows.get(k) or [], self.gate)["verdict"]
+                                for k in self.gate.get("exploratory_arms") or []}}
         return out
 
     def _replay_expired(self, now: float) -> None:
@@ -187,6 +259,13 @@ class ShadowService:
                     r = gs.replay_window(sym, tape.bbo, prints, model=self.model,
                                          art=self.art, policy=policy,
                                          mode="strict", shell={**sh, "name": name})
+                    # at-price / queue-unknown fills: SEPARATE label, never
+                    # counted in any strict metric (OWNER 5554553793 B item 3)
+                    ro = gs.replay_window(sym, tape.bbo, prints, model=self.model,
+                                          art=self.art, policy=policy,
+                                          mode="optimistic", shell={**sh, "name": name})
+                    opt_first = [f for f in ro.get("fills") or [] if f["relation"] != "complete"]
+                    strict_first = [f for f in r.get("fills") or [] if f["relation"] != "complete"]
                     rec = {k: r.get(k) for k in (
                         "symbol", "status", "stop_reason", "policy", "shell",
                         "entry_t", "entry_tte_s", "entry_book", "orders",
@@ -201,6 +280,11 @@ class ShadowService:
                         for d in r.get("decisions") or []]
                     rec["decisions_n"] = len(r.get("decisions") or [])
                     rec["orders_placed"] = 0
+                    rec["optimistic_unknown"] = {
+                        "first_fills_at_price_only": max(0, len(opt_first) - len(strict_first)),
+                        "status_optimistic": ro.get("status"),
+                        "labels": "at-price/queue-unknown hypothetical fills; "
+                                  "NOT strict; excluded from every metric"}
                     rec["labels"] = LABELS
                     key = f"{name}:{policy}"
                     self.rows.setdefault(key, []).append(rec)
@@ -247,6 +331,13 @@ class ShadowService:
             self.poll_once()
             self.sleep(POLL_S)
         return self.status()
+
+
+def _delta(a: Any, b: Any) -> Optional[str]:
+    try:
+        return str(D(str(a)) - D(str(b)))
+    except Exception:                                 # noqa: BLE001
+        return None
 
 
 def _utc(ts: Optional[float]) -> Optional[str]:

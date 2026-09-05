@@ -17,6 +17,7 @@ COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
 COPY src/polymarket_l5/transfer_backtest.py src/polymarket_l5/transfer_backtest.py
 COPY analysis/l5/l5_action_model_v2.json analysis/l5/l5_action_model_v2.json
 COPY analysis/l5/l5_fidelity_pass.json analysis/l5/l5_fidelity_pass.json
+COPY analysis/l5/gemini_transfer_gate.json analysis/l5/gemini_transfer_gate.json
 RUN touch src/__init__.py
 ENV GEMINI_SHADOW_ROLE=gemini-l5-shadow \
     GEMINI_SHADOW_STATE_DIR=/state/gemini-shadow \
