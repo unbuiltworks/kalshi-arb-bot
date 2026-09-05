@@ -852,3 +852,38 @@ def test_unresolved_held_market_keeps_resuming_with_realized_null(
     assert rep["realized_pnl"] is None
     assert not (tmp_path / "ledger.jsonl").exists() or \
         "realized" not in (tmp_path / "ledger.jsonl").read_text()
+
+
+def test_flat_campaign_settles_markets_the_ledger_filled_in(monkeypatch,
+                                                            tmp_path):
+    """The venue drops a resolved market from positions, so the campaign
+    is flat again -- but the ledger remembers the fills. Those markets
+    are audited and their realized result recorded, once."""
+    from tests.test_pmus_spring_l5_session import Fake
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    _ledger_with_fill(tmp_path, slug="gone")
+    assert cont.unsettled_slugs() == ["gone"]
+    st = _status([_row("x", touch="0.1")])           # nothing admitted
+    monkeypatch.setattr(entry, "load_status_document",
+                        lambda path=None: (st, "status_url:test"))
+    from src import pmus_settlement_auditor as auditor
+    calls = []
+
+    def fake_audit(slug, t):
+        calls.append(slug)
+        return {"market": slug, "settled": True, "status": "REALIZED",
+                "settlement_key": "res-9", "realized_confirmed": True,
+                "realized_usd": "0.0152", "position_net": "0",
+                "resolution": {"side": "YES", "tradeId": "res-9"}}
+    monkeypatch.setattr(auditor, "audit_market", fake_audit)
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 12, itertools.repeat(1000.0))
+    rep = cont.run_campaign(Fake(), clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=500.0,
+                            session_runner=lambda *a, **k: {})
+    assert calls == ["gone"]                          # audited exactly once
+    assert rep["settlements"][0]["status"] == "REALIZED"
+    assert cont.unsettled_slugs() == []              # ledger now carries it
+    assert base.q1.base.realized_today() == base.D("0.0152")

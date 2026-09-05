@@ -231,6 +231,39 @@ def settle_held(t, slug: str) -> dict:
                 "error": f"{type(exc).__name__}:{str(exc)[:80]}"}
 
 
+SETTLE_AUDIT_EVERY_S = 60.0
+
+
+def unsettled_slugs() -> list:
+    """Markets this ledger has FILLED in that carry no `settled` row yet.
+    The venue drops a resolved market from positions, so a settled
+    position is invisible to held_market(); the ledger remembers it."""
+    path = base.q1.base.state_dir() / "ledger.jsonl"
+    if not path.exists():
+        return []
+    filled: dict[str, int] = {}
+    settled: set = set()
+    for line in path.read_text().splitlines():
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        if not isinstance(row, dict) or not row.get("slug"):
+            continue
+        slug, kind = str(row["slug"]), row.get("kind")
+        if kind == "filled" and str(row.get("stage", "")).startswith("spring_"):
+            filled[slug] = filled.get(slug, 0) + 1
+        elif kind == "order_terminal":
+            try:
+                if float(row.get("filled_qty") or 0) > 0:
+                    filled[slug] = filled.get(slug, 0) + 1
+            except (TypeError, ValueError):
+                pass
+        elif kind in ("settled", "realized"):
+            settled.add(slug)
+    return [s for s in filled if s not in settled]
+
+
 def _has_inventory(report: Mapping[str, Any]) -> bool:
     inv = report.get("inventory") or {}
     try:
@@ -284,6 +317,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     sessions_on: dict[str, int] = {}
     status = "CAMPAIGN_NO_CANDIDATE"
     resumes = 0
+    last_settle_audit = float("-inf")
     while clock() < stop_at and len(report["sessions"]) < \
             MAX_SESSIONS_PER_CAMPAIGN + resumes:
         now = wall()
@@ -295,6 +329,21 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             if held == MULTI_HELD:
                 status = f"CAMPAIGN_STOP:{MULTI_HELD}"
                 break
+            if not held and t is not None and \
+                    clock() - last_settle_audit >= SETTLE_AUDIT_EVERY_S:
+                # flat, but the ledger remembers fills the venue has since
+                # resolved out of positions: record their authoritative
+                # settlement (realized only from the venue's own number)
+                last_settle_audit = clock()
+                for slug in unsettled_slugs()[:5]:
+                    audit = settle_held(t, slug)
+                    _log("settlement", slug=slug, **audit)
+                    report.setdefault("settlements", []).append(
+                        {"slug": slug, **audit})
+                    if audit.get("status") == "REALIZED":
+                        _log("REALIZED", slug=slug,
+                             realized_usd=audit.get("realized_usd"),
+                             resolution=audit.get("resolution"))
             if held:
                 _log("resume_start", slug=held)
                 rep = dict(session_runner(
