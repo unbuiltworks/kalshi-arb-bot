@@ -42,9 +42,14 @@ def test_surplus_rotates_without_losing_event_floor():
     second, d1 = live.select_for_poll(universe, 64, cycle=1)
     assert len({r["event_slug"] for r in first}) == 50
     assert len({r["event_slug"] for r in second}) == 50
-    # The first 50 rows are the deterministic one-per-event floor; only the
-    # 14 surplus seats should rotate between discovery cycles.
+    # The one-per-event floor is stable WITHIN a dwell window; only the
+    # 14 surplus seats rotate cycle to cycle. The floor itself rotates
+    # across dwell windows so an event's runner-up is not permanently
+    # unseen -- see the sjst-emich case below.
     assert {r["slug"] for r in first[:50]} == {r["slug"] for r in second[:50]}
+    later, _ = live.select_for_poll(universe, 64,
+                                    cycle=live.COVERAGE_DWELL_CYCLES)
+    assert {r["slug"] for r in later[:50]} != {r["slug"] for r in first[:50]}
     assert {r["slug"] for r in first[50:]} != {r["slug"] for r in second[50:]}
     assert d0["rotation_cycle"] == 0
     assert d1["rotation_cycle"] == 1
@@ -501,3 +506,72 @@ def test_clearly_better_challenger_still_wins_the_seat(monkeypatch):
     strong = _mkt("aec-strong", True, 0.45, 0.49, vol=50000, liq=9000)
     pins = live.top_candidate_pins([weak, strong], None)
     assert pins == ["aec-strong"], pins
+
+
+# ---- seat allocation vs the execution gate (2026-09-05 CFB measurement) ----
+
+def _mk(slug, bid, ask, league="cfb", event="evt-a"):
+    return {"slug": slug, "league": league, "event_slug": event,
+            "market_meta": {"bestBidQuote": {"value": f"{bid:.4f}"},
+                            "bestAskQuote": {"value": f"{ask:.4f}"}}}
+
+
+def test_the_execution_band_is_not_widened_by_the_watch_band():
+    """The watch band decides what to POLL. The execution band decides
+    what may be TRADED and is owner-set; widening it here would be a
+    gate change wearing a selector's clothes."""
+    assert (live.EXEC_BAND_LO, live.EXEC_BAND_HI) == (0.35, 0.65)
+    assert live.WATCH_BAND_LO < live.EXEC_BAND_LO
+    assert live.WATCH_BAND_HI > live.EXEC_BAND_HI
+    assert live.NEAR_BAND_BONUS < live.IN_BAND_BONUS
+
+
+def test_a_market_just_outside_the_band_still_outranks_a_far_one():
+    """A live moneyline sampled at 0.73 spent 72.6% of the next eleven
+    minutes inside the band. One out-of-band snapshot must not cost it
+    its seat for the whole window."""
+    near = live._market_score(_mk("near", 0.72, 0.73))
+    far = live._market_score(_mk("far", 0.02, 0.03))
+    inband = live._market_score(_mk("in", 0.50, 0.51))
+    assert inband > near > far
+
+
+def test_tightest_spread_market_is_chosen_on_measurement_not_type():
+    """A prop with the narrowest spread must win over a moneyline with a
+    wider one -- the signal is the spread, never the slug."""
+    rows = [_mk("aec-evt-moneyline", 0.50, 0.53),
+            _mk("astatc-evt-some-prop", 0.40, 0.4050)]
+    assert live.tightest_spread_market(rows)["slug"] == "astatc-evt-some-prop"
+
+
+def test_tightest_spread_survives_a_missing_quote():
+    rows = [{"slug": "no-quote", "market_meta": {}},
+            _mk("quoted", 0.40, 0.41)]
+    assert live.tightest_spread_market(rows)["slug"] == "quoted"
+    assert live.tightest_spread_market(
+        [{"slug": "none", "market_meta": {}}]) is None
+
+
+def test_the_tightest_spread_market_gets_a_seat_even_when_it_scores_last():
+    """The score rewards a WIDE spread (good pair economics), so the
+    tight-spread market with the real flow can rank near-last. That is
+    how aec-cfb-sjst-emich -- 874k shares/hour, 72.6% band residency --
+    sat 93rd of 301 in its own event and was never polled once."""
+    rows = [_mk(f"asc-wide-{i}", 0.50, 0.52) for i in range(30)]
+    rows.append(_mk("aec-tight-liquid", 0.72, 0.7250))
+    reached = set()
+    for cycle in range(12):
+        sel, _ = live.select_for_poll(rows, 3, cycle, ())
+        reached.update(r["slug"] for r in sel)
+    assert "aec-tight-liquid" in reached
+
+
+def test_coverage_rotation_reaches_past_the_single_argmax():
+    """Always taking the argmax makes the runner-up permanently unseen,
+    so it never acquires the observed tape that would re-rank it."""
+    rows = [_mk(f"m{i}", 0.50, 0.52) for i in range(10)]
+    reached = set()
+    for cycle in range(8):
+        sel, _ = live.select_for_poll(rows, 1, cycle, ())
+        reached.update(r["slug"] for r in sel)
+    assert len(reached) > 1

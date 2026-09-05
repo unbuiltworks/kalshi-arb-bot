@@ -278,7 +278,22 @@ def update_auto_pins(report: Optional[Mapping[str, Any]]) -> list[str]:
 TWO_SIDED_BONUS = 25.0          # a pair needs both directions to exist
 IN_BAND_BONUS = 20.0            # 35-65 is where the strategy operates
 SPREAD_CLEARS_BOUND_BONUS = 15.0  # >=1c: a maker pair can reach <=0.99
-FAR_FROM_BAND_PENALTY = 15.0    # touch <=0.10 / >=0.90 cannot reach band
+FAR_FROM_BAND_PENALTY = 15.0
+# The EXECUTION band (OWNER DECISION 5533476555) gates what may be
+# traded and is never widened here. The WATCH band decides only what is
+# worth a poll -- a live market that is near the band now is the one
+# most likely to be inside it in a minute, and we cannot measure band
+# residency for a market we never sample.
+EXEC_BAND_LO, EXEC_BAND_HI = 0.35, 0.65
+WATCH_BAND_LO, WATCH_BAND_HI = 0.20, 0.80
+NEAR_BAND_BONUS = 14.0          # strictly below IN_BAND_BONUS (20.0)
+# How many of an event's top-scored markets share its coverage seat over
+# successive discovery cycles. 1 restores the old argmax-forever
+# behaviour; the point is that it must be > 1.
+COVERAGE_ROTATION_DEPTH = 6
+# Discovery cycles each coverage contender is held for. Must be long
+# enough to measure flow, or rotation just spreads starvation evenly.
+COVERAGE_DWELL_CYCLES = 5    # touch <=0.10 / >=0.90 cannot reach band
 UNKNOWN_EXPLORATION_BONUS = 12.0  # unmeasured != dead; go and look
 METADATA_UNKNOWN_BONUS = 3.0    # null volume/liquidity != zero
 OBSERVED_FLOW_WEIGHT = 35.0     # measured prints dominate served guesses
@@ -392,11 +407,70 @@ def _market_score(target: Mapping[str, Any],
     else:
         mid = bid
     if mid > 0:
-        if 0.35 <= mid <= 0.65:
+        if EXEC_BAND_LO <= mid <= EXEC_BAND_HI:
             score += IN_BAND_BONUS
+        elif WATCH_BAND_LO <= mid <= WATCH_BAND_HI:
+            # Near the band, and a live in-play market moves. Discovery
+            # sees ONE snapshot; a moneyline sampled at 0.73 in the
+            # fourth quarter of a four-point game spent 72.6% of the
+            # next eleven minutes inside 0.35-0.65 (measured, 2026-09-05
+            # 01:18Z, aec-cfb-sjst-emich). Treating that snapshot as
+            # disqualifying cost it its seat for the whole window, so
+            # nothing ever observed the one market that qualified.
+            #
+            # Seat allocation is an OBSERVATION decision; the execution
+            # gate is a SAFETY decision. Being generous about what to
+            # watch costs one poll. Being strict about what to trade is
+            # the property that matters, and it is untouched: the
+            # 0.35-0.65 execution band still gates every action.
+            score += NEAR_BAND_BONUS
         elif mid <= 0.10 or mid >= 0.90:
             score -= FAR_FROM_BAND_PENALTY
     return score
+
+
+def tightest_spread_market(rows: list) -> Optional[dict]:
+    """The market in an event with the narrowest quoted spread.
+
+    This is the only liquidity signal the venue serves at discovery. It
+    is deliberately TYPE-BLIND: it picks a moneyline in 27 of 43 live
+    events and a total or spread in the other 16, on measurement alone
+    (2026-09-05 01:40Z). Market type is not consulted.
+
+    It matters because the score REWARDS a wide spread -- good for pair
+    economics -- and a wide quoted spread on an untraded book is
+    indistinguishable from a wide one on a liquid book. The tightest
+    spread is where a market maker is actually competing, which is where
+    the flow is.
+    """
+    best = None
+    for r in rows:
+        meta = r.get("market_meta") or {}
+        bid = _number(meta.get("bestBidQuote"))
+        ask = _number(meta.get("bestAskQuote"))
+        if bid > 0 and ask > 0 and ask >= bid:
+            spread = ask - bid
+            if best is None or spread < best[0] - 1e-9:
+                best = (spread, r)
+    return None if best is None else best[1]
+
+
+def _coverage_contenders(rows: list) -> list:
+    """The markets that share an event's coverage seat across cycles.
+
+    The top scorers, plus the tightest-spread market -- which the score
+    alone can rank near-last, because it penalises exactly the narrow
+    spread that signals a contested book.
+    """
+    out = list(rows[:COVERAGE_ROTATION_DEPTH] or rows)
+    tight = tightest_spread_market(rows)
+    if tight is not None:
+        # FIRST, not last. It is the strongest liquidity signal the
+        # venue serves at discovery, and appending it would put it six
+        # dwell windows -- half an hour of a live game -- behind markets
+        # ranked above it only because their spread is wider.
+        out = [tight] + [r for r in out if r is not tight]
+    return out
 
 
 def live_targets(live_events: Iterable[Mapping[str, Any]],
@@ -456,12 +530,40 @@ def select_for_poll(targets: Iterable[Mapping[str, Any]], cap: int,
         chosen.add(slug)
         pin_rows.append({"slug": slug, "reason": reason})
 
-    # First pass: one best market per event.
+    # First pass: one market per event, ROTATED across the event's top
+    # contenders rather than always the argmax.
+    #
+    # The venue serves no volume field at discovery -- measured live
+    # 2026-09-05, every market's `volume24hr` and `liquidity` are absent
+    # -- so the score can only rank on quoted price and spread. A wide
+    # quoted spread on an untraded book looks identical to a wide spread
+    # on a liquid one, and the tight-spread market with real flow ranks
+    # BELOW it. Always taking the argmax then makes that permanent: the
+    # runner-up is never sampled, so it never acquires observed tape, so
+    # the observed-flow weights that would correct the ranking never get
+    # any input. Chicken and egg, and it cost us the whole slate --
+    # aec-cfb-sjst-emich (874k shares/hour, 72.6% band residency) sat
+    # 93rd of 301 in its own event and was never polled once.
+    #
+    # Rotating the coverage seat over the top contenders breaks it
+    # without preferring any market TYPE: every serious contender in a
+    # live event eventually gets observed, and observation then decides.
     for key in event_order:
         if len(selected) >= cap:
             break
-        row = groups[key][0]
+        contenders = _coverage_contenders(groups[key])
+        # DWELL: hold each contender for several discovery cycles. One
+        # cycle of exposure yields one observation, and one observation
+        # cannot measure flow -- volume-delta inference needs consecutive
+        # snapshots -- so a seat that rotates every cycle produces the
+        # `flow_unmeasured` verdict for everything it touches. Dwelling
+        # long enough to measure is what lets observation take over.
+        turn = max(0, int(cycle)) // COVERAGE_DWELL_CYCLES
+        row = contenders[turn % len(contenders)]
         slug = str(row.get("slug"))
+        if slug in chosen:                     # already pinned this cycle
+            row = groups[key][0]
+            slug = str(row.get("slug"))
         if slug and slug not in chosen:
             selected.append(row)
             chosen.add(slug)
