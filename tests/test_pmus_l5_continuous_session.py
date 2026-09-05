@@ -360,9 +360,11 @@ def test_spent_cap_market_is_not_reselected_this_campaign(monkeypatch,
         return {"status": "SPRING_NO_FILL", "slug": slug,
                 "stop_reason": "spend_cap_reached",
                 "inventory": {"up": "0", "dn": "0"}, "actions": []}
-    ticks = iter([0.0] + [1.0] * 40)
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 8, itertools.repeat(1000.0))
     rep = cont.run_campaign(clock=lambda: next(ticks), sleep=lambda s: None,
                             wall=lambda: 1005.0, campaign_s=500.0,
                             session_runner=fake_session)
     assert ran[:2] == ["a", "b"]
     assert "a" not in ran[1:]
+    assert rep["status"] == "CAMPAIGN_RESELECTING"
