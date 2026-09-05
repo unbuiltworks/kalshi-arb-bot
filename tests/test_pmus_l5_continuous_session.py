@@ -792,3 +792,63 @@ def test_held_inventory_counts_a_live_fill_once(monkeypatch, tmp_path):
     assert inv.spent() == base.D("0.43") * base.D("0.02") + \
         base.D("0.62") * base.D("0.01")
     assert inv.last_rel == "extend"
+
+
+# ---- settlement of the held market: venue-authoritative, never guessed ----
+
+def _held_fake():
+    from tests.test_pmus_spring_l5_session import Fake
+    fake = Fake()
+    fake.positions["held"] = {"netPositionDecimal": "0.03"}
+    return fake
+
+
+def _gone_session(t, clock, sleep, wall, slug, gate_ok, deadline_s, **kw):
+    return {"status": "SPRING_SKIP_NOT_QUALIFYING", "slug": slug,
+            "reason": "resume:bbo:Halt"}
+
+
+def test_resolved_held_market_is_settled_from_venue_activities(monkeypatch,
+                                                               tmp_path):
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    from src import pmus_settlement_auditor as auditor
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+        "market": slug, "settled": True, "status": "REALIZED",
+        "settlement_key": "res-1", "realized_confirmed": True,
+        "realized_usd": "0.0152", "position_net": "0",
+        "resolution": {"side": "YES", "tradeId": "res-1",
+                       "updateTime": "2026-09-05T15:16:00Z"}})
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 8, itertools.repeat(1000.0))
+    rep = cont.run_campaign(_held_fake(), clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=500.0, session_runner=_gone_session)
+    assert rep["status"] == "CAMPAIGN_SETTLED:REALIZED"
+    assert rep["realized_pnl"] == "0.0152"           # venue's number, verbatim
+    assert rep["settlement"]["ledger_rows_written"] == ["settled", "realized"]
+    rows = [json.loads(l) for l in
+            (tmp_path / "ledger.jsonl").read_text().splitlines()]
+    assert [r["kind"] for r in rows if r.get("slug") == "held"] == \
+        ["settled", "realized"]
+    assert base.q1.base.realized_today() == base.D("0.0152")
+
+
+def test_unresolved_held_market_keeps_resuming_with_realized_null(
+        monkeypatch, tmp_path):
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    from src import pmus_settlement_auditor as auditor
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+        "market": slug, "settled": False, "status": "PENDING_SETTLEMENT",
+        "realized_confirmed": False, "realized_usd": None,
+        "position_net": "0.03", "resolution": None})
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 6, itertools.repeat(1000.0))
+    rep = cont.run_campaign(_held_fake(), clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=500.0, session_runner=_gone_session)
+    assert rep["status"].startswith("CAMPAIGN_RESUMING")
+    assert rep["realized_pnl"] is None
+    assert not (tmp_path / "ledger.jsonl").exists() or \
+        "realized" not in (tmp_path / "ledger.jsonl").read_text()

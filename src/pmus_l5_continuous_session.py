@@ -200,6 +200,37 @@ def held_market(t) -> Optional[str]:
     return slugs[0] if len(slugs) == 1 else MULTI_HELD
 
 
+def _market_gone(rep: Mapping[str, Any]) -> bool:
+    """A resumed session that could not read a book or found the venue
+    reporting the market not open -- the signals a held market has
+    resolved (or is between points; the audit decides, never this)."""
+    reason = str(rep.get("reason") or "")
+    return (reason.startswith("resume:bbo")
+            or reason.startswith("live_market")
+            or reason.startswith("resume:metadata"))
+
+
+def settle_held(t, slug: str) -> dict:
+    """Authoritative settlement for a held market: the venue's
+    POSITION_RESOLUTION activity (read-only), recorded idempotently in
+    the durable ledger. Realized is written ONLY from the venue's own
+    afterPosition.realized; otherwise it stays unknown. Never raises."""
+    try:
+        from src import pmus_settlement_auditor as auditor
+        result = auditor.audit_market(slug, t)
+        written = auditor.append_authoritative_ledger(result)
+        return {"status": result.get("status"),
+                "settled": result.get("settled"),
+                "realized_confirmed": result.get("realized_confirmed"),
+                "realized_usd": result.get("realized_usd"),
+                "position_net": result.get("position_net"),
+                "resolution": result.get("resolution"),
+                "ledger_rows_written": written}
+    except Exception as exc:                       # noqa: BLE001
+        return {"status": "AUDIT_UNAVAILABLE",
+                "error": f"{type(exc).__name__}:{str(exc)[:80]}"}
+
+
 def _has_inventory(report: Mapping[str, Any]) -> bool:
     inv = report.get("inventory") or {}
     try:
@@ -291,6 +322,19 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                          "NO_CREDENTIALS", "DISARMED"):
                     status = f"CAMPAIGN_STOP:{rep.get('status')}"
                     break
+                if _market_gone(rep):
+                    # no book / venue says not open: the held market may
+                    # have RESOLVED. Ask the venue's own activities for
+                    # POSITION_RESOLUTION; realized only when it says so.
+                    audit = settle_held(t, held)
+                    _log("settlement", slug=held, **audit)
+                    if audit.get("status") in ("REALIZED", "SETTLED",
+                                               "SETTLED_WITH_BUSTED_TRADE_REVIEW"):
+                        report["settlement"] = audit
+                        if audit.get("status") == "REALIZED":
+                            report["realized_pnl"] = audit.get("realized_usd")
+                        status = f"CAMPAIGN_SETTLED:{audit.get('status')}"
+                        break
                 status = f"CAMPAIGN_RESUMING:{rep.get('status')}"
                 sleep(RESUME_REEVAL_S)
                 continue
