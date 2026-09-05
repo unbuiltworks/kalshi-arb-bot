@@ -663,6 +663,10 @@ def run_session(t: Optional[Transport] = None,
                 return {**report, "status": "SPRING_SKIP_NOT_QUALIFYING",
                         "reason": f"resume:{row['skip_reason']}",
                         "candidate_row": row}
+            # the fill may have been recorded by an earlier build as a
+            # bare submission: give every submission its authoritative
+            # terminal row FIRST, then rebuild inventory from the ledger
+            report["reconcile"] = reconcile_submissions(t, slug)
             inv = held_inventory_from_ledger(slug)
             venue_pos = q1._position_for_slug(t, slug)
             if inv.up + inv.dn == 0 or \
@@ -687,7 +691,8 @@ def run_session(t: Optional[Transport] = None,
                     "reason": live_block}
         # item 3: give every earlier submission its authoritative terminal
         # row before the cap is computed from FILLED notional
-        report["reconcile"] = reconcile_submissions(t, slug)
+        if "reconcile" not in report:          # resume reconciled earlier
+            report["reconcile"] = reconcile_submissions(t, slug)
         cum = spring_cumulative_notional(slug)
         # on a resume the durable cap already contains this session's
         # starting inventory; only NEW spend adds to it

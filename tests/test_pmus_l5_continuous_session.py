@@ -732,3 +732,35 @@ def test_campaign_resumes_the_held_market_and_starts_no_other(monkeypatch,
     assert ran and all(s == "held" and r is True for s, r in ran)
     assert rep["status"].startswith("CAMPAIGN_RESUMING")
     assert not any(s == "fresh-candidate" for s, _ in ran)
+
+
+def test_resume_reconciles_an_unterminated_fill_before_rebuilding(
+        monkeypatch, tmp_path):
+    """Today's live fill (CAASE550EMVF) was written by a build that
+    recorded only the submission. Resume must reconcile it against the
+    venue first, or the ledger says flat while the venue says +0.02 and
+    the position can never be continued."""
+    from tests.test_pmus_spring_l5_session import Fake, _ticking
+    _armed_session_env(monkeypatch, tmp_path)
+    (tmp_path / "ledger.jsonl").write_text(json.dumps(
+        {"kind": "submitted", "stage": "spring_open_3", "slug": "held",
+         "order_id": "LIVE3", "side": "OUTCOME_SIDE_YES",
+         "price": "0.43", "qty": "0.02"}) + "\n")
+    monkeypatch.setattr(pv2, "proposal", lambda *a, **k: {
+        "recommended_relation": "extend", "persist_extend_p": 0.7,
+        "switch_complete_p": 0.3, "next_reevaluation_s": 2.0,
+        "relation_ranked": [], "state_n": 20, "off_distribution": False})
+    monkeypatch.setenv(base.MAX_ACTIONS_ENV, "1")
+    fake = Fake(bid="0.4300", ask="0.4350")
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    fake.orders["LIVE3"] = {"state": "ORDER_STATE_FILLED",
+                            "cumQuantity": "0.02", "avgPx": "0.43",
+                            "marketSlug": "held"}
+    rep = base.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                           wall=lambda: 1000.0, slug="held", gate_ok=True,
+                           resume=True)
+    assert rep["status"] == "SPRING_RESIDUAL_HOLD", rep
+    assert rep["reconcile"]["reconciled"] == 1
+    assert rep["resumed_inventory"]["up"] == "0.02"
+    assert base.D(rep["resumed_inventory"]["avg_up"]) == base.D("0.43")
+    assert rep["inventory"]["up"] == "0.04"       # extend filled on top
