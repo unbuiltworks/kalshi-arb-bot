@@ -131,6 +131,19 @@ def _http_code(exc: Exception) -> Optional[int]:
     return code if isinstance(code, int) else None
 
 
+def _scalar_fields(obj: Mapping[str, Any], limit: int) -> str:
+    """Compact `k=v` list of an order record's scalar fields, bounded."""
+    parts = []
+    for k in sorted(obj):
+        v = obj.get(k)
+        if isinstance(v, (str, int, float, bool)) and v not in ("", None):
+            parts.append(f"{k}={v}")
+        elif isinstance(v, Mapping) and isinstance(v.get("value"), (str, int, float)):
+            parts.append(f"{k}={v.get('value')}")
+    out = ";".join(parts)
+    return out if len(out) <= limit else out[:limit] + "..."
+
+
 def _order_status(t: Transport, order_id: str) -> dict:
     """GET-only bounded retry. Never replays an order mutation."""
     last: Optional[Exception] = None
@@ -155,9 +168,14 @@ def _order_status(t: Transport, order_id: str) -> dict:
                     if order.get(key):
                         why = str(order.get(key))[:80]
                         break
+                if why is None:
+                    # The venue served NO reason field (live 16:36Z, six
+                    # NO-side opens): carry every scalar the order record
+                    # does carry, bounded, so the next rejection is
+                    # diagnosable from the log instead of guessed at.
+                    why = "fields=" + _scalar_fields(order, 200)
                 raise RejectedNoFill(
-                    f"ORDER_REJECTED_ZERO_FILL:{order_id}:{state}"
-                    + (f":{why}" if why else ""))
+                    f"ORDER_REJECTED_ZERO_FILL:{order_id}:{state}:{why}")
             return dict(order)
         except RejectedNoFill:
             raise

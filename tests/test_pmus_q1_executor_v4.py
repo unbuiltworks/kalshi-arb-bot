@@ -123,3 +123,48 @@ def test_first_fill_plus_failed_complement_is_residual_not_no_fill(monkeypatch, 
     assert result["first_cost"] == "0.710"
     assert result["residual"] == 1
     assert result["realized_pnl"] is None
+
+
+def test_rejection_without_reason_field_carries_the_record_scalars(monkeypatch):
+    """Live 16:36Z: six NO-side opens came back ORDER_STATE_REJECTED with
+    cumQuantity 0 and NO reason field. The message must then carry the
+    scalar fields the venue did serve (bounded), never a bare state."""
+    monkeypatch.setattr(e, "STATUS_RETRY_DELAYS", (0,))
+
+    class T:
+        def request(self, method, path, body=None, **kw):
+            assert method == "GET"
+            return {"order": {"id": "CAC1", "state": "ORDER_STATE_REJECTED",
+                              "cumQuantity": "0", "outcomeSide": "OUTCOME_SIDE_NO",
+                              "price": {"value": "0.42"}, "quantity": "0.01",
+                              "participateDontInitiate": True,
+                              "nested": {"deep": {"x": 1}}, "empty": ""}}
+
+    with pytest.raises(e.RejectedNoFill) as exc:
+        e._order_status(T(), "CAC1")
+    msg = str(exc.value)
+    assert msg.startswith("ORDER_REJECTED_ZERO_FILL:CAC1:ORDER_STATE_REJECTED:fields=")
+    for token in ("outcomeSide=OUTCOME_SIDE_NO", "price=0.42", "quantity=0.01",
+                  "participateDontInitiate=True"):
+        assert token in msg
+    assert "nested" not in msg and "empty" not in msg
+
+
+def test_rejection_with_reason_field_keeps_the_reason(monkeypatch):
+    monkeypatch.setattr(e, "STATUS_RETRY_DELAYS", (0,))
+
+    class T:
+        def request(self, method, path, body=None, **kw):
+            return {"order": {"state": "ORDER_STATE_REJECTED", "cumQuantity": "0",
+                              "rejectReason": "POST_ONLY_WOULD_CROSS"}}
+
+    with pytest.raises(e.RejectedNoFill) as exc:
+        e._order_status(T(), "CAC2")
+    assert str(exc.value) == \
+        "ORDER_REJECTED_ZERO_FILL:CAC2:ORDER_STATE_REJECTED:POST_ONLY_WOULD_CROSS"
+
+
+def test_scalar_fields_is_bounded():
+    big = {f"k{i:03d}": "v" * 20 for i in range(40)}
+    out = e._scalar_fields(big, 100)
+    assert len(out) <= 103 and out.endswith("...")
