@@ -410,9 +410,29 @@ def evidence_from_status(status: Mapping[str, Any], slug: str) -> Optional[dict]
 def run_session(t=None, clock=time.monotonic, sleep=time.sleep,
                 wall=time.time) -> dict:
     """Guard the canonical session; no network is touched before guards pass."""
-    if not base.armed():
-        return base.run_session(t=t, clock=clock, sleep=sleep, wall=wall)
     slug = os.getenv(base.SPRING_MARKET_ENV, "").strip()
+    if not base.armed():
+        report = base.run_session(t=t, clock=clock, sleep=sleep, wall=wall)
+        # DISARMED preview: report what the guard WOULD decide from the
+        # configured evidence source, so the handoff can be verified from
+        # the boot log before anyone holds the keys. Reads the recorder's
+        # status only (file or private-network GET); the venue, the
+        # credentials and the order path are never touched.
+        if isinstance(report, dict) and (
+                os.getenv(EVIDENCE_STATUS_URL_ENV, "").strip()
+                or os.getenv(EVIDENCE_STATUS_PATH_ENV, "").strip()):
+            now = wall()
+            evidence, source = resolve_strict_evidence(slug, now=now)
+            report["admission_preview"] = {
+                "evidence_source": source,
+                "evidence_age_s": evidence_age_s(evidence, now),
+                "strict_evidence_reason": strict_evidence_reason(
+                    slug, evidence, now=now),
+                "completion_evidence_reason":
+                    completion_evidence_reason(evidence),
+                "label": "SHADOW/THEORETICAL; DISARMED; no venue network",
+            }
+        return report
     evidence, source = resolve_strict_evidence(slug, now=wall())
     reason = strict_evidence_reason(slug, evidence, now=wall())
     if reason:

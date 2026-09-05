@@ -522,3 +522,37 @@ def test_the_url_outranks_the_path_which_outranks_the_paste(monkeypatch,
     monkeypatch.delenv(entry.EVIDENCE_STATUS_URL_ENV)
     _, source = entry.resolve_strict_evidence("mkt", now=1000.0)
     assert source.startswith("status_unreadable")
+
+
+def test_disarmed_boot_previews_admission_from_the_url(tmp_path,
+                                                       monkeypatch):
+    """The handoff must be verifiable from a DISARMED boot log: the
+    report says which source it read, how old it was, and what the guard
+    would decide -- while the dual key stays absent and nothing arms."""
+    now = 1000.0
+    srv, url = _serve(tmp_path, json.dumps(_recorder_status(t=now - 5)) + "\n")
+    for k in ("PMUS_SPRING_LIVE", "PMUS_SPRING_SESSION_ID",
+              "PMUS_SPRING_ARM"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv(entry.base.SPRING_MARKET_ENV, "mkt")
+    monkeypatch.setenv(entry.EVIDENCE_STATUS_URL_ENV, url)
+    try:
+        report = entry.run_session(wall=lambda: now)
+    finally:
+        srv.shutdown()
+    assert report["status"] == "DISARMED"
+    pv = report["admission_preview"]
+    assert pv["evidence_source"] == f"status_url:{url}"
+    assert pv["evidence_age_s"] == 5.0
+    assert pv["strict_evidence_reason"] is None
+    assert "DISARMED" in pv["label"]
+
+
+def test_disarmed_boot_without_a_source_has_no_preview(monkeypatch):
+    for k in ("PMUS_SPRING_LIVE", "PMUS_SPRING_SESSION_ID",
+              "PMUS_SPRING_ARM", entry.EVIDENCE_STATUS_URL_ENV,
+              entry.EVIDENCE_STATUS_PATH_ENV):
+        monkeypatch.delenv(k, raising=False)
+    report = entry.run_session(wall=lambda: 1000.0)
+    assert report["status"] == "DISARMED"
+    assert "admission_preview" not in report
