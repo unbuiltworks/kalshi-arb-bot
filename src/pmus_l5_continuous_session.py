@@ -63,10 +63,18 @@ RESUME_BOOK_POLL_S = 5.0        # ...and sooner when the book actually moves
 # worst case for the rung is RUNG_MARKETS x SESSION_NOTIONAL_CAP of
 # filled OPEN/EXTEND notional, inside the daily-loss stop.
 # A venue read error between sessions (HTTP 5xx on a GET) is waited out,
-# not fatal; sustained failure inside the window stops the campaign closed.
+# never fatal: the loop backs off 20s, then 60s once the outage is
+# sustained, and keeps polling until the campaign's own expiry. Waiting
+# IS the fail-closed state (no order can be placed while the account view
+# is unreadable); exiting would leave the held position without its
+# settlement audit and the campaign dead until an operator redeploy
+# (restart is NEVER). LIVE 17:40-18:2xZ: /v1/orders/open answered 500
+# for 40+ minutes while every public endpoint was healthy.
 ITERATION_ERROR_BACKOFF_S = 20.0
+ITERATION_ERROR_SLOW_BACKOFF_S = 60.0
+ITERATION_ERROR_SLOW_AFTER = 10      # consecutive errors before slowing
 ITERATION_ERROR_WINDOW_S = 1800.0
-MAX_ITERATION_ERRORS = 45            # ~15 min of continuous failure
+MAX_ITERATION_ERRORS = 10 ** 9       # no stop inside the campaign
 RUNG_MARKETS_ENV = "PMUS_SPRING_RUNG_MARKETS"
 DEFAULT_RUNG_MARKETS = 3
 SPORTS_TTE_DEFAULT_S = base.SPORTS_TTE_DEFAULT_S
@@ -666,6 +674,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             _log("funnel", **{k: v for k, v in funnel.items()})
             chosen = sel["chosen"]
             if chosen is None:
+                if status.startswith("CAMPAIGN_WAITING"):
+                    status = "CAMPAIGN_NO_CANDIDATE"   # venue back, no pick
                 sleep(SELECT_POLL_S)
                 continue
             if not armed:
@@ -751,7 +761,10 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             if len(iteration_errors) >= MAX_ITERATION_ERRORS:
                 status = "CAMPAIGN_STOP:VENUE_UNAVAILABLE"
                 break
-            sleep(ITERATION_ERROR_BACKOFF_S)
+            status = "CAMPAIGN_WAITING:VENUE_UNAVAILABLE"
+            sleep(ITERATION_ERROR_SLOW_BACKOFF_S
+                  if len(iteration_errors) > ITERATION_ERROR_SLOW_AFTER
+                  else ITERATION_ERROR_BACKOFF_S)
             continue
     return {**report, "status": status}
 

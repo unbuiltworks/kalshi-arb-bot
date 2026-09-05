@@ -17,8 +17,10 @@
       "src/pmus_status_report.py",
       "src/pmus_sports_l5_decision.py",
       "src/pmus_l5_persistence_v2.py",
+      "src/pmus_l5_fidelity_live.py",
       "src/polymarket_l5/**",
-      "analysis/l5/l5_action_model_v2.json"
+      "analysis/l5/l5_action_model_v2.json",
+      "analysis/l5/l5_fidelity_pass.json"
     ]
   },
   "deploy": {

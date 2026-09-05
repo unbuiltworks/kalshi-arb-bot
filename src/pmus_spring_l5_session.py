@@ -67,6 +67,7 @@ from typing import Any, Mapping, Optional
 
 from src import pmus_micro_executor as micro
 from src import pmus_l5_persistence_v2 as pv2
+from src import pmus_l5_fidelity_live as fid
 from src.polymarket_l5.action_model import state_key
 
 q1 = micro.q1
@@ -670,6 +671,8 @@ def run_session(t: Optional[Transport] = None,
 
     try:
         model = pv2.load_v2()
+        fid_art = fid.load()              # shadow fields only; None is fine
+        last_skey: dict = {}
         block = (resume_block_reason(t, slug) if resume
                  else micro.account_block_reason(t))
         if block:
@@ -752,7 +755,15 @@ def run_session(t: Optional[Transport] = None,
                  "px": str(px_), "qty": str(qty_), "filled_qty": str(got_),
                  "relation": relation_, "rest_s": rest_s,
                  "end_reason": end_reason,
-                 "outcome": "filled" if got_ > 0 else "no_fill_cancelled"})
+                 "outcome": "filled" if got_ > 0 else "no_fill_cancelled",
+                 # OWNER 5553674206 #3: the scale mismatch is MEASURED --
+                 # L5's historical size for this state/relation beside the
+                 # venue-minimum bounded size we actually executed
+                 "executed_safe_size": {
+                     "contracts": str(qty_),
+                     "usd": str((px_ * qty_).quantize(D("0.0001")))},
+                 "l5_target_size": fid.l5_target_size(
+                     fid_art, last_skey.get("k") or "", relation_)})
 
         def _still_wanted(side_up_: bool, px_: D, relation_: str,
                           skey_: str):
@@ -801,6 +812,9 @@ def run_session(t: Optional[Transport] = None,
             bbo = q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES")
             spec = micro.market_micro_spec(t, slug, bbo["bid"])
             skey = spring_state_key(inv, bbo["bid"], settlement_t, wall())
+            last_skey["k"] = skey
+            tte_s = (max(settlement_t - wall(), 0.0) if settlement_t
+                     else SPORTS_TTE_DEFAULT_S)
             # behavioral units, sign preserved — never int() a fractional
             # venue residual (issue #167 comment 5520710312)
             prop = pv2.proposal(model, skey, inv.last_rel or "open", "q<5",
@@ -833,7 +847,18 @@ def run_session(t: Optional[Transport] = None,
                  "persist_extend_p": prop["persist_extend_p"],
                  "switch_complete_p": prop["switch_complete_p"],
                  "acted": relation,
-                 "refusal": refusal})
+                 "refusal": refusal,
+                 # OWNER 5553674206 #2/#3/#4: SHADOW fields only -- the
+                 # seeded draw from this same distribution, L5's size and
+                 # taker share for this state; nothing here is acted on
+                 "shadow": fid.shadow_fields(
+                     fid_art, slug=slug,
+                     decision_idx=len(report.get("decisions") or []),
+                     model_sha=str(model.get("_sha256_16") or ""),
+                     base_state=skey,
+                     relation=prop["recommended_relation"],
+                     relation_ranked=prop.get("relation_ranked"),
+                     tte_s=tte_s)})
             if relation == "hold":
                 sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                 actions += 1

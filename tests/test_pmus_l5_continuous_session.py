@@ -1243,8 +1243,11 @@ def test_transient_venue_error_between_sessions_is_waited_out(monkeypatch,
     assert slept[:2] == [cont.ITERATION_ERROR_BACKOFF_S] * 2
 
 
-def test_sustained_venue_failure_stops_the_campaign_closed(monkeypatch,
-                                                           tmp_path):
+def test_sustained_venue_failure_waits_closed_until_campaign_expiry(
+        monkeypatch, tmp_path):
+    """Waiting is the fail-closed state: no selection, no order, the
+    backoff slows to 60s after 10 errors, and the campaign ends only at
+    its own expiry -- never as an exited process with a position held."""
     from tests.test_pmus_spring_l5_session import Fake
     _arm(monkeypatch, tmp_path)
     monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
@@ -1254,13 +1257,17 @@ def test_sustained_venue_failure_stops_the_campaign_closed(monkeypatch,
     def dead(t):
         raise q1.Halt("GET_RETRIES_EXHAUSTED:/v1/orders/open:HTTP Error 500")
     monkeypatch.setattr(cont, "held_market", dead)
+    slept = []
     import itertools
     ticks = itertools.chain([0.0] + [1.0] * 200, itertools.repeat(1000.0))
     rep = cont.run_campaign(Fake(), clock=lambda: next(ticks),
-                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            sleep=lambda s: slept.append(s),
+                            wall=lambda: 1005.0,
                             campaign_s=500.0, session_runner=lambda *a, **k: {})
-    assert rep["status"] == "CAMPAIGN_STOP:VENUE_UNAVAILABLE"
+    assert rep["status"] == "CAMPAIGN_WAITING:VENUE_UNAVAILABLE"
     assert rep["selections"] == 0                     # never traded through it
+    assert slept[:10] == [cont.ITERATION_ERROR_BACKOFF_S] * 10
+    assert slept[10:12] == [cont.ITERATION_ERROR_SLOW_BACKOFF_S] * 2
 
 
 def test_sigterm_still_propagates_through_the_guard(monkeypatch, tmp_path):
