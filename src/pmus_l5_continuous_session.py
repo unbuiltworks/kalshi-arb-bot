@@ -272,6 +272,14 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                  "DISARMED"):
             status = f"CAMPAIGN_STOP:{rep.get('status')}"
             break
+        if rep.get("status") == "PREFLIGHT_FAILED" and str(
+                rep.get("reason") or "").startswith("nonzero_positions"):
+            # the account already holds a residual (from an earlier
+            # session): one market at a time means the campaign holds
+            # too, rather than spending its session allowance on the
+            # same account-wide refusal every cycle
+            status = "CAMPAIGN_HOLD:POSITION_HELD"
+            break
         if _has_inventory(rep):
             # one market at a time; residual holds to settlement
             status = f"CAMPAIGN_HOLD:{rep.get('status')}"

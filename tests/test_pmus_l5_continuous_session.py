@@ -584,3 +584,28 @@ def test_attempts_per_slug_are_capped_separately_from_exposure(monkeypatch,
                       wall=wall, campaign_s=500.0,
                       session_runner=fake_session)
     assert ran.count("a") == cont.MAX_SESSIONS_PER_SLUG
+
+
+def test_held_position_holds_the_campaign_instead_of_spinning(monkeypatch,
+                                                              tmp_path):
+    """An account-wide residual from an earlier session refuses every new
+    market at preflight; the campaign holds at once (one market at a
+    time) rather than burning its session allowance on the same refusal."""
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    st = _status([_row("a", touch="900"), _row("b", touch="800")])
+    monkeypatch.setattr(entry, "load_status_document",
+                        lambda path=None: (st, "status_url:test"))
+    ran = []
+
+    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s):
+        ran.append(slug)
+        return {"status": "PREFLIGHT_FAILED", "slug": slug,
+                "reason": "nonzero_positions:held-mkt=0.0200"}
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 20, itertools.repeat(1000.0))
+    rep = cont.run_campaign(clock=lambda: next(ticks), sleep=lambda s: None,
+                            wall=lambda: 1005.0, campaign_s=500.0,
+                            session_runner=fake_session)
+    assert ran == ["a"]
+    assert rep["status"] == "CAMPAIGN_HOLD:POSITION_HELD"
