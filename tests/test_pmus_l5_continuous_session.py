@@ -832,7 +832,7 @@ def test_resolved_held_market_is_settled_from_venue_activities(monkeypatch,
     rows = [json.loads(l) for l in
             (tmp_path / "ledger.jsonl").read_text().splitlines()]
     assert [r["kind"] for r in rows if r.get("slug") == "held"] == \
-        ["settled", "realized"]
+        ["settled", "realized", "settlement_breakdown"]
     assert base.q1.base.realized_today() == base.D("0.0152")
 
 
@@ -1087,3 +1087,47 @@ def test_extend_stops_at_the_residual_cap_but_complete_may_continue(
     assert rep["orders"][0]["side"] == "NO"
     assert not any(b.get("action") == "ORDER_ACTION_SELL"
                    for p, b in fake.posts if p == "/v1/orders")
+
+
+def test_settlement_breakdown_separates_matched_from_residual(monkeypatch,
+                                                              tmp_path):
+    """FILLED -> SETTLED -> REALIZED with the cash decomposed: matched
+    pairs are arithmetic, the residual contribution is what the venue's
+    realized number leaves after them; fees are reported unreported,
+    never assumed."""
+    monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
+    rows = [
+        {"kind": "submitted", "stage": "spring_open_1", "slug": "m",
+         "order_id": "A", "side": "OUTCOME_SIDE_YES", "price": "0.43",
+         "qty": "0.02"},
+        {"kind": "filled", "stage": "spring_open_1", "slug": "m",
+         "order_id": "A", "side": "YES", "price": "0.43", "qty": "0.02"},
+        {"kind": "submitted", "stage": "spring_extend_2", "slug": "m",
+         "order_id": "B", "side": "OUTCOME_SIDE_YES", "price": "0.62",
+         "qty": "0.01"},
+        {"kind": "filled", "stage": "spring_extend_2", "slug": "m",
+         "order_id": "B", "side": "YES", "price": "0.62", "qty": "0.01"},
+        {"kind": "submitted", "stage": "spring_complete_3", "slug": "m",
+         "order_id": "C", "side": "OUTCOME_SIDE_NO", "price": "0.50",
+         "qty": "0.01"},
+        {"kind": "filled", "stage": "spring_complete_3", "slug": "m",
+         "order_id": "C", "side": "NO", "price": "0.50", "qty": "0.01"},
+    ]
+    (tmp_path / "ledger.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows))
+    audit = {"settled": True, "status": "REALIZED", "realized_usd": "0.0152",
+             "resolution": {"side": "POSITION_RESOLUTION_SIDE_LONG"},
+             "trade_summary": {"trades": [{"isAggressor": False}] * 3}}
+    b = cont.settlement_breakdown("m", audit)
+    D = base.D
+    assert b["bought_yes"] == "0.03" and b["bought_no"] == "0.01"
+    assert b["matched_pairs"] == "0.01" and b["directional_residual"] == "0.02"
+    # matched pair cost = avg_yes (0.4933..) + avg_no (0.50)
+    assert abs(D(b["matched_pair_cost"]) - D("0.9933")) < D("0.001")
+    assert D(b["matched_contribution_usd"]) == D("0.01") * (
+        D("1") - D(b["matched_pair_cost"]))
+    assert D(b["residual_contribution_usd"]) == D("0.0152") - D(
+        b["matched_contribution_usd"])
+    assert b["maker_fills"] == 3 and b["taker_fills"] == 0
+    assert b["fees_usd"] == "venue_unreported"
+    assert b["realized_usd_venue"] == "0.0152"

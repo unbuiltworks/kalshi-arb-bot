@@ -242,6 +242,54 @@ def _market_gone(rep: Mapping[str, Any]) -> bool:
             or reason.startswith("resume:metadata"))
 
 
+def settlement_breakdown(slug: str, audit: Mapping[str, Any]) -> dict:
+    """OWNER 5553037966 #1: what the settlement cash was made of.
+
+    From the durable ledger's authoritative fills: contracts bought on
+    each side, cost basis, MATCHED pairs (min of the two sides) and the
+    DIRECTIONAL residual. From the venue: the realized amount. The
+    matched contribution is arithmetic ($1 per matched pair less the
+    pair's cost); the residual contribution is what remains of the
+    venue's realized number. Fees: the venue's trade rows carry
+    `isAggressor`; every fill here is a maker fill and no fee field is
+    served, so fees are reported as venue-unreported, never assumed.
+    Everything here is labeled derived; only realized_usd is the venue's.
+    """
+    from decimal import Decimal
+    inv = base.held_inventory_from_ledger(slug)
+    up, dn = inv.up, inv.dn
+    matched = min(up, dn)
+    residual = up - dn
+    pair_cost = ((inv.avg_up() or Decimal("0")) + (inv.avg_dn() or Decimal("0"))
+                 if matched > 0 else None)
+    matched_contrib = (matched * (Decimal("1") - pair_cost)
+                       if pair_cost is not None else Decimal("0"))
+    realized = audit.get("realized_usd")
+    trades = (audit.get("trade_summary") or {}).get("trades") or []
+    out = {
+        "slug": slug,
+        "fills": len(inv.actions),
+        "bought_yes": str(up), "bought_no": str(dn),
+        "avg_yes": str(inv.avg_up()) if up else None,
+        "avg_no": str(inv.avg_dn()) if dn else None,
+        "cost_basis_usd": str(inv.spent()),
+        "matched_pairs": str(matched),
+        "matched_pair_cost": str(pair_cost) if pair_cost is not None else None,
+        "matched_contribution_usd": str(matched_contrib),
+        "directional_residual": str(residual),
+        "resolution_side": (audit.get("resolution") or {}).get("side"),
+        "realized_usd_venue": realized,
+        "residual_contribution_usd": (str(Decimal(str(realized)) - matched_contrib)
+                                      if realized is not None else None),
+        "maker_fills": sum(1 for tr in trades if tr.get("isAggressor") is False),
+        "taker_fills": sum(1 for tr in trades if tr.get("isAggressor") is True),
+        "fees_usd": "venue_unreported",
+        "labels": "DERIVED accounting from ledger fills; realized_usd_venue "
+                  "is the venue's own; nothing else is realized",
+    }
+    return out
+
+
 def settle_held(t, slug: str) -> dict:
     """Authoritative settlement for a held market: the venue's
     POSITION_RESOLUTION activity (read-only), recorded idempotently in
@@ -251,13 +299,19 @@ def settle_held(t, slug: str) -> dict:
         from src import pmus_settlement_auditor as auditor
         result = auditor.audit_market(slug, t)
         written = auditor.append_authoritative_ledger(result)
-        return {"status": result.get("status"),
-                "settled": result.get("settled"),
-                "realized_confirmed": result.get("realized_confirmed"),
-                "realized_usd": result.get("realized_usd"),
-                "position_net": result.get("position_net"),
-                "resolution": result.get("resolution"),
-                "ledger_rows_written": written}
+        out = {"status": result.get("status"),
+               "settled": result.get("settled"),
+               "realized_confirmed": result.get("realized_confirmed"),
+               "realized_usd": result.get("realized_usd"),
+               "position_net": result.get("position_net"),
+               "resolution": result.get("resolution"),
+               "ledger_rows_written": written}
+        if result.get("settled"):
+            out["breakdown"] = settlement_breakdown(slug, result)
+            if written:      # once, alongside the venue-confirmed rows
+                base.q1.ledger_append({"kind": "settlement_breakdown",
+                                       "spring": True, **out["breakdown"]})
+        return out
     except Exception as exc:                       # noqa: BLE001
         return {"status": "AUDIT_UNAVAILABLE",
                 "error": f"{type(exc).__name__}:{str(exc)[:80]}"}
