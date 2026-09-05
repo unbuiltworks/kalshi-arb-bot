@@ -470,6 +470,40 @@ def append(root: Path, row: Mapping[str, Any]) -> None:
         sink.write(json.dumps(row, separators=(",", ":"), default=str) + "\n")
 
 
+# The status document the spring probe's admission guard reads
+# (PMUS_SPRING_EVIDENCE_STATUS_PATH). The recorder has always PRINTED its
+# status; printing it only to logs meant the payload had to be copied by
+# hand into an env var inside its own 120s freshness bound. Persisting it
+# costs one small write per status tick and removes the copy.
+STATUS_DOC_NAME = "pmus_ws_status.jsonl"
+STATUS_DOC_KEEP = 64          # newest N documents; this is a handoff, not a tape
+
+
+def status_doc_path(root: Path) -> Path:
+    return root / "status" / STATUS_DOC_NAME
+
+
+def write_status_doc(root: Path, status: Mapping[str, Any]) -> None:
+    """Persist the newest status atomically, keeping a short tail.
+
+    Never raises: a handoff-file problem must not cost the connection or
+    the tape, exactly like the status print it accompanies.
+    """
+    try:
+        path = status_doc_path(root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(status, separators=(",", ":"), default=str)
+        prev: list = []
+        if path.exists():
+            prev = path.read_text(encoding="utf-8").splitlines()[
+                -(STATUS_DOC_KEEP - 1):]
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text("\n".join([*prev, line]) + "\n", encoding="utf-8")
+        tmp.replace(path)       # readers never see a half-written document
+    except Exception:
+        pass
+
+
 def heartbeat_file(root: Path, **fields: Any) -> None:
     tmp = root / "heartbeat.tmp"
     root.mkdir(parents=True, exist_ok=True)
@@ -825,12 +859,14 @@ async def run(minutes: Optional[float]) -> int:
                                     "l5_fast_realloc_error":
                                     str(exc)[:80]}
                         try:
+                            _status = build_status(
+                                mstate, True, msgs, len(slugs),
+                                discovery=discovery_diag,
+                                l5_alloc=l5_alloc)
                             print("PMUS_WS_STATUS " + json.dumps(
-                                build_status(mstate, True, msgs, len(slugs),
-                                             discovery=discovery_diag,
-                                             l5_alloc=l5_alloc),
-                                separators=(",", ":"), default=str),
+                                _status, separators=(",", ":"), default=str),
                                 flush=True)
+                            write_status_doc(root, _status)
                         except Exception as exc:
                             # a status bug must never cost the connection
                             # or the tape

@@ -79,3 +79,36 @@ def test_structurally_no_order_or_private_paths():
     # every outbound send passes through the guard
     sends = [l for l in src.splitlines() if "ws.send(" in l]
     assert sends and all("guard_outbound" in l for l in sends)
+
+
+# ---- the status document the probe reads at admission time ----
+
+def test_status_document_is_persisted_and_readable_by_the_guard(tmp_path):
+    """The recorder always printed its status; only to logs, so a human
+    had to copy it into an env var inside its own 120s freshness bound.
+    Persisted, the probe reads it directly."""
+    from src import pmus_spring_evidence_transfer as xfer
+    status = {"t": 1000.0, "spring_watch": [{"slug": "mkt", "bid": "0.50"}]}
+    rec.write_status_doc(tmp_path, status)
+    path = rec.status_doc_path(tmp_path)
+    assert path.exists()
+    assert xfer.load_recorder_status(path)["spring_watch"][0]["slug"] == "mkt"
+
+
+def test_the_newest_status_wins_and_the_tail_stays_bounded(tmp_path):
+    for i in range(rec.STATUS_DOC_KEEP + 20):
+        rec.write_status_doc(tmp_path, {"t": float(i)})
+    from src import pmus_spring_evidence_transfer as xfer
+    path = rec.status_doc_path(tmp_path)
+    lines = path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) <= rec.STATUS_DOC_KEEP
+    # the reader takes the LAST parseable object, so it must be the newest
+    assert xfer.load_recorder_status(path)["t"] == float(
+        rec.STATUS_DOC_KEEP + 19)
+
+
+def test_a_status_document_failure_never_raises(tmp_path):
+    """A handoff-file problem must not cost the connection or the tape."""
+    blocked = tmp_path / "afile"
+    blocked.write_text("not a directory", encoding="utf-8")
+    rec.write_status_doc(blocked, {"t": 1.0})     # must not raise

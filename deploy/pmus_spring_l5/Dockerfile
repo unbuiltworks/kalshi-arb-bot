@@ -23,6 +23,13 @@ COPY src/pmus_micro_executor.py src/pmus_micro_executor.py
 COPY src/pmus_q1_executor_v4.py src/pmus_q1_executor_v4.py
 COPY src/pmus_q1_executor.py src/pmus_q1_executor.py
 COPY src/pmus_l5_persistence_v2.py src/pmus_l5_persistence_v2.py
+# strict-evidence composer read at admission time
+# (PMUS_SPRING_EVIDENCE_STATUS_PATH) plus its closure. Read-only status
+# parsing; carries no order path and no credentials of its own.
+COPY src/pmus_spring_evidence_transfer.py src/pmus_spring_evidence_transfer.py
+COPY src/pmus_spring_shadow_replay.py src/pmus_spring_shadow_replay.py
+COPY src/pmus_status_report.py src/pmus_status_report.py
+COPY src/pmus_sports_l5_decision.py src/pmus_sports_l5_decision.py
 COPY src/polymarket_l5/__init__.py src/polymarket_l5/__init__.py
 COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
 COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py

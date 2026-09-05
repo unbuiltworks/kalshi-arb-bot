@@ -33,3 +33,36 @@ def test_image_does_not_start_other_workers():
     assert "pmus_sports_collector" not in cmd
     assert "pmus_q1_executor" not in cmd
     assert "gemini" not in cmd.lower()
+
+
+def test_image_ships_the_evidence_composer_it_now_imports():
+    """The admission guard imports the composer when a status path is
+    configured. An image without it would raise at admission rather than
+    refuse -- a crash is not a fail-closed refusal."""
+    docker = DOCKERFILE.read_text(encoding="utf-8")
+    for module in ("src/pmus_spring_evidence_transfer.py",
+                   "src/pmus_spring_shadow_replay.py",
+                   "src/pmus_status_report.py",
+                   "src/pmus_sports_l5_decision.py"):
+        assert f"COPY {module} {module}" in docker, module
+
+
+def test_a_missing_composer_refuses_rather_than_raising(monkeypatch):
+    """Belt and braces: even if the image loses the module, admission
+    must return a reason, not propagate ImportError."""
+    import builtins
+    from src import pmus_spring_l5_probe_entry as entry
+    real_import = builtins.__import__
+
+    def fake(name, globals=None, locals=None, fromlist=(), level=0):
+        # `from src import pmus_spring_evidence_transfer` imports "src"
+        # with the submodule in fromlist -- not the dotted name.
+        if name == "src" and "pmus_spring_evidence_transfer" in (fromlist or ()):
+            raise ImportError("no module",
+                              name="src.pmus_spring_evidence_transfer")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake)
+    ev, source = entry.evidence_from_status_path("mkt", "/tmp/whatever.jsonl")
+    assert ev is None
+    assert source.startswith("evidence_composer_unavailable")

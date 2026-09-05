@@ -166,7 +166,10 @@ def evidence_from_status_path(slug: str, path: Optional[str] = None,
     path = os.getenv(EVIDENCE_STATUS_PATH_ENV, "") if path is None else path
     if not str(path).strip():
         return None, "unset"
-    from src import pmus_spring_evidence_transfer as xfer
+    try:
+        from src import pmus_spring_evidence_transfer as xfer
+    except ImportError as exc:      # image missing the composer
+        return None, f"evidence_composer_unavailable:{exc.name}"
     try:
         status = xfer.load_recorder_status(Path(str(path)))
     except (OSError, ValueError) as exc:
