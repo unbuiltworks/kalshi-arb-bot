@@ -202,3 +202,11 @@ def test_rolling_report_carries_research_arm_and_action_scoring(tmp_path):
     assert ra["arm"] == "reprice_180s:stochastic" and ra["verdict"] == "INSUFFICIENT_SAMPLE"
     assert ra["windows_since_freeze"] == 0            # 2026-09-05 windows predate the freeze
     assert "reprice_180s:modal" in rep["action_scoring_untouched"]
+
+
+def test_restore_ignores_rows_without_identity(tmp_path):
+    (tmp_path / "records.jsonl").write_text(
+        json.dumps({"symbol": "GEMI-X", "status": "NO_QUOTE_COVERAGE"}) + "\n")
+    s = svc.ShadowService(fetch=lambda u: {}, clock=lambda: 0.0,
+                          sleep=lambda x: None, root=tmp_path)
+    assert s.rows == {} and "None:None" not in s.status()["per_shell"]

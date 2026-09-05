@@ -147,6 +147,9 @@ class ShadowService:
                 r = json.loads(line)
             except Exception:
                 continue
+            if not r.get("shell") or not r.get("policy") or not r.get("symbol"):
+                dupes += 1                       # pre-855034f4 rows without identity
+                continue
             key = f"{r.get('shell')}:{r.get('policy')}"
             ident = (r.get("symbol"), key)
             if ident in self.seen:
