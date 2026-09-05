@@ -62,6 +62,11 @@ RESUME_BOOK_POLL_S = 5.0        # ...and sooner when the book actually moves
 # reconciliation report. Per-market money caps are unchanged, so the
 # worst case for the rung is RUNG_MARKETS x SESSION_NOTIONAL_CAP of
 # filled OPEN/EXTEND notional, inside the daily-loss stop.
+# A venue read error between sessions (HTTP 5xx on a GET) is waited out,
+# not fatal; sustained failure inside the window stops the campaign closed.
+ITERATION_ERROR_BACKOFF_S = 20.0
+ITERATION_ERROR_WINDOW_S = 1800.0
+MAX_ITERATION_ERRORS = 45            # ~15 min of continuous failure
 RUNG_MARKETS_ENV = "PMUS_SPRING_RUNG_MARKETS"
 DEFAULT_RUNG_MARKETS = 3
 SPORTS_TTE_DEFAULT_S = base.SPORTS_TTE_DEFAULT_S
@@ -501,6 +506,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     resumes = 0
     last_settle_audit = float("-inf")
     settled_here: set = set()
+    iteration_errors: list = []          # clock() stamps of recent errors
     rung_markets = max(1, int(os.getenv(RUNG_MARKETS_ENV,
                                         str(DEFAULT_RUNG_MARKETS))))
     filled_markets: set = set()          # markets with a fill this campaign
@@ -554,177 +560,199 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
          per_market_cap=str(base.SESSION_NOTIONAL_CAP))
     while clock() < stop_at and len(report["sessions"]) < \
             MAX_SESSIONS_PER_CAMPAIGN + resumes:
-        now = wall()
-        if armed:
-            # OWNER 5552607804: a market we already hold is CONTINUED
-            # (EXTEND / COMPLEMENT / HOLD from the model on the real
-            # inventory) and no other market is started while it exists.
-            held = held_market(t)
-            if held == MULTI_HELD:
-                status = f"CAMPAIGN_STOP:{MULTI_HELD}"
-                break
-            if held in settled_here:
-                # the venue already confirmed this market's resolution;
-                # a lingering positions row is not inventory to act on
-                held = None
-            if not held and t is not None and \
-                    clock() - last_settle_audit >= SETTLE_AUDIT_EVERY_S:
-                # flat, but the ledger remembers fills the venue has since
-                # resolved out of positions: record their authoritative
-                # settlement (realized only from the venue's own number)
-                last_settle_audit = clock()
-                for slug in unsettled_slugs()[:5]:
-                    audit = settle_held(t, slug)
-                    _log("settlement", slug=slug, **audit)
-                    if audit.get("settled"):
-                        settled_here.add(slug)
-                        filled_markets.add(slug)
-                        cooldown[slug] = float("inf")   # never re-enter
-                    report.setdefault("settlements", []).append(
-                        {"slug": slug, **audit})
-                    if audit.get("status") == "REALIZED":
-                        _log("REALIZED", slug=slug,
-                             realized_usd=audit.get("realized_usd"),
-                             resolution=audit.get("resolution"))
-                        report["realized_pnl"] = _sum_realized(report)
-            if held:
-                filled_markets.add(held)
-                _log("resume_start", slug=held)
-                rep = dict(session_runner(
-                    t, clock=clock, sleep=sleep, wall=wall, slug=held,
-                    gate_ok=True,
-                    deadline_s=min(SESSION_DEADLINE_S, stop_at - clock()),
-                    resume=True) or {})
-                rep["resumed"] = True
-                report["sessions"].append(rep)
-                resumes += 1
-                _log("session_end", slug=held, resumed=True,
-                     status=rep.get("status"), reason=rep.get("reason"),
-                     stop_reason=rep.get("stop_reason"),
-                     resumed_inventory=rep.get("resumed_inventory"),
-                     inventory=rep.get("inventory"),
-                     spring_gates=rep.get("spring_gates"),
-                     reconcile=rep.get("reconcile"),
-                     filled_actions=_new_fills(rep),
-                     submitted=len(rep.get("orders") or []),
-                     orders=(rep.get("orders") or [])[-8:],
-                     decisions=(rep.get("decisions") or [])[-8:],
-                     pair_economics=rep.get("pair_economics"))
-                if rep.get("status") in ("DAILY_LOSS_STOP", "HALT",
-                                         "STATE_NOT_DURABLE",
-                                         "NO_CREDENTIALS", "DISARMED"):
-                    status = f"CAMPAIGN_STOP:{rep.get('status')}"
+        try:
+            now = wall()
+            if armed:
+                # OWNER 5552607804: a market we already hold is CONTINUED
+                # (EXTEND / COMPLEMENT / HOLD from the model on the real
+                # inventory) and no other market is started while it exists.
+                held = held_market(t)
+                if held == MULTI_HELD:
+                    status = f"CAMPAIGN_STOP:{MULTI_HELD}"
                     break
-                funnel["submitted"] += len(rep.get("orders") or [])
-                funnel["filled"] += _new_fills(rep)
-                if _market_gone(rep):
-                    # no book / venue says not open: the held market may
-                    # have RESOLVED. Ask the venue's own activities for
-                    # POSITION_RESOLUTION; realized only when it says so.
-                    audit = settle_held(t, held)
-                    _log("settlement", slug=held, **audit)
-                    if audit.get("status") in ("REALIZED", "SETTLED",
-                                               "SETTLED_WITH_BUSTED_TRADE_REVIEW"):
-                        settled_here.add(held)
-                        cooldown[held] = float("inf")   # never re-enter
+                if held in settled_here:
+                    # the venue already confirmed this market's resolution;
+                    # a lingering positions row is not inventory to act on
+                    held = None
+                if not held and t is not None and \
+                        clock() - last_settle_audit >= SETTLE_AUDIT_EVERY_S:
+                    # flat, but the ledger remembers fills the venue has since
+                    # resolved out of positions: record their authoritative
+                    # settlement (realized only from the venue's own number)
+                    last_settle_audit = clock()
+                    for slug in unsettled_slugs()[:5]:
+                        audit = settle_held(t, slug)
+                        _log("settlement", slug=slug, **audit)
+                        if audit.get("settled"):
+                            settled_here.add(slug)
+                            filled_markets.add(slug)
+                            cooldown[slug] = float("inf")   # never re-enter
                         report.setdefault("settlements", []).append(
-                            {"slug": held, **audit})
+                            {"slug": slug, **audit})
                         if audit.get("status") == "REALIZED":
-                            _log("REALIZED", slug=held,
-                                 realized_usd=audit.get("realized_usd"))
+                            _log("REALIZED", slug=slug,
+                                 realized_usd=audit.get("realized_usd"),
+                                 resolution=audit.get("resolution"))
                             report["realized_pnl"] = _sum_realized(report)
-                        # OWNER 5552841170 #3: flat again -> straight back
-                        # to full-sports selection, no redeploy
-                        status = f"CAMPAIGN_SETTLED:{audit.get('status')}"
-                        gate = _rung_gate()
-                        if gate:
-                            status = gate
-                            break
-                        continue
-                status = f"CAMPAIGN_RESUMING:{rep.get('status')}"
-                woke = await_state_change(t, held, clock, sleep)
-                _log("resume_wait", slug=held, **woke)
+                if held:
+                    filled_markets.add(held)
+                    _log("resume_start", slug=held)
+                    rep = dict(session_runner(
+                        t, clock=clock, sleep=sleep, wall=wall, slug=held,
+                        gate_ok=True,
+                        deadline_s=min(SESSION_DEADLINE_S, stop_at - clock()),
+                        resume=True) or {})
+                    rep["resumed"] = True
+                    report["sessions"].append(rep)
+                    resumes += 1
+                    _log("session_end", slug=held, resumed=True,
+                         status=rep.get("status"), reason=rep.get("reason"),
+                         stop_reason=rep.get("stop_reason"),
+                         resumed_inventory=rep.get("resumed_inventory"),
+                         inventory=rep.get("inventory"),
+                         spring_gates=rep.get("spring_gates"),
+                         reconcile=rep.get("reconcile"),
+                         filled_actions=_new_fills(rep),
+                         submitted=len(rep.get("orders") or []),
+                         orders=(rep.get("orders") or [])[-8:],
+                         decisions=(rep.get("decisions") or [])[-8:],
+                         pair_economics=rep.get("pair_economics"))
+                    if rep.get("status") in ("DAILY_LOSS_STOP", "HALT",
+                                             "STATE_NOT_DURABLE",
+                                             "NO_CREDENTIALS", "DISARMED"):
+                        status = f"CAMPAIGN_STOP:{rep.get('status')}"
+                        break
+                    funnel["submitted"] += len(rep.get("orders") or [])
+                    funnel["filled"] += _new_fills(rep)
+                    if _market_gone(rep):
+                        # no book / venue says not open: the held market may
+                        # have RESOLVED. Ask the venue's own activities for
+                        # POSITION_RESOLUTION; realized only when it says so.
+                        audit = settle_held(t, held)
+                        _log("settlement", slug=held, **audit)
+                        if audit.get("status") in ("REALIZED", "SETTLED",
+                                                   "SETTLED_WITH_BUSTED_TRADE_REVIEW"):
+                            settled_here.add(held)
+                            cooldown[held] = float("inf")   # never re-enter
+                            report.setdefault("settlements", []).append(
+                                {"slug": held, **audit})
+                            if audit.get("status") == "REALIZED":
+                                _log("REALIZED", slug=held,
+                                     realized_usd=audit.get("realized_usd"))
+                                report["realized_pnl"] = _sum_realized(report)
+                            # OWNER 5552841170 #3: flat again -> straight back
+                            # to full-sports selection, no redeploy
+                            status = f"CAMPAIGN_SETTLED:{audit.get('status')}"
+                            gate = _rung_gate()
+                            if gate:
+                                status = gate
+                                break
+                            continue
+                    status = f"CAMPAIGN_RESUMING:{rep.get('status')}"
+                    woke = await_state_change(t, held, clock, sleep)
+                    _log("resume_wait", slug=held, **woke)
+                    continue
+            sel = select_candidate(now, model, cooldown)
+            report["selections"] += 1
+            funnel["cycles"] += 1
+            funnel["universe_rows"] += len(sel["admitted"]) + len(sel["refused"])
+            funnel["in_distribution"] += sum(
+                1 for x in sel["admitted"] + sel["refused"]
+                if x.get("off_distribution") is False)
+            funnel["admitted"] += len(sel["admitted"])
+            for x in sel["refused"]:
+                key = str(x["reason"]).split(":")[0]
+                funnel["refusals"][key] = funnel["refusals"].get(key, 0) + 1
+            _log("funnel", **{k: v for k, v in funnel.items()})
+            chosen = sel["chosen"]
+            if chosen is None:
+                sleep(SELECT_POLL_S)
                 continue
-        sel = select_candidate(now, model, cooldown)
-        report["selections"] += 1
-        funnel["cycles"] += 1
-        funnel["universe_rows"] += len(sel["admitted"]) + len(sel["refused"])
-        funnel["in_distribution"] += sum(
-            1 for x in sel["admitted"] + sel["refused"]
-            if x.get("off_distribution") is False)
-        funnel["admitted"] += len(sel["admitted"])
-        for x in sel["refused"]:
-            key = str(x["reason"]).split(":")[0]
-            funnel["refusals"][key] = funnel["refusals"].get(key, 0) + 1
-        _log("funnel", **{k: v for k, v in funnel.items()})
-        chosen = sel["chosen"]
-        if chosen is None:
-            sleep(SELECT_POLL_S)
-            continue
-        if not armed:
-            report["last_shadow"] = {"chosen": chosen,
-                                     "label": LABEL_SHADOW}
-            status = "SHADOW_SELECTED"
-            sleep(SELECT_POLL_S)
-            continue
-        remaining = stop_at - clock()
-        _log("session_start", slug=chosen["slug"], rank=chosen["rank"],
-             state=chosen["state"], state_n=chosen["state_n"],
-             p_buy=chosen["p_buy"],
-             probe_entry_action=chosen.get("probe_entry_action"))
-        rep = session_runner(t, clock=clock, sleep=sleep, wall=wall,
-                             slug=chosen["slug"], gate_ok=True,
-                             deadline_s=min(SESSION_DEADLINE_S, remaining))
-        rep = dict(rep or {})
-        funnel["sessions"] += 1
-        funnel["submitted"] += len(rep.get("orders") or [])
-        funnel["filled"] += _new_fills(rep)
-        rep["selected"] = {k: chosen.get(k) for k in
-                           ("rank", "state", "state_n", "p_buy",
-                            "relation_ranked", "bid", "ask",
-                            "bid_touch_qty")}
-        report["sessions"].append(rep)
-        _log("session_end", slug=chosen["slug"], status=rep.get("status"),
-             reason=rep.get("reason"), stop_reason=rep.get("stop_reason"),
-             inventory=rep.get("inventory"),
-             spring_gates=rep.get("spring_gates"),
-             filled_actions=_new_fills(rep),
-             submitted=len(rep.get("orders") or []),
-             orders=(rep.get("orders") or [])[-8:],
-             decisions=(rep.get("decisions") or [])[-8:],
-             pair_economics=rep.get("pair_economics"))
-        if rep.get("status") in ("DAILY_LOSS_STOP", "HALT",
-                                 "STATE_NOT_DURABLE", "NO_CREDENTIALS",
-                                 "DISARMED"):
-            status = f"CAMPAIGN_STOP:{rep.get('status')}"
-            break
-        if rep.get("status") == "PREFLIGHT_FAILED" and str(
-                rep.get("reason") or "").startswith("nonzero_positions"):
-            # the account already holds a residual (from an earlier
-            # session): one market at a time means the campaign holds
-            # too, rather than spending its session allowance on the
-            # same account-wide refusal every cycle
-            status = "CAMPAIGN_HOLD:POSITION_HELD"
-            break
-        if _has_inventory(rep):
-            # one market at a time; the held market is continued by the
-            # resume path above (OWNER 5552607804) until flat/settled
-            filled_markets.add(chosen["slug"])
-            status = f"CAMPAIGN_HOLD:{rep.get('status')}"
-            if t is None:                 # no venue view: nothing to resume
+            if not armed:
+                report["last_shadow"] = {"chosen": chosen,
+                                         "label": LABEL_SHADOW}
+                status = "SHADOW_SELECTED"
+                sleep(SELECT_POLL_S)
+                continue
+            remaining = stop_at - clock()
+            _log("session_start", slug=chosen["slug"], rank=chosen["rank"],
+                 state=chosen["state"], state_n=chosen["state_n"],
+                 p_buy=chosen["p_buy"],
+                 probe_entry_action=chosen.get("probe_entry_action"))
+            rep = session_runner(t, clock=clock, sleep=sleep, wall=wall,
+                                 slug=chosen["slug"], gate_ok=True,
+                                 deadline_s=min(SESSION_DEADLINE_S, remaining))
+            rep = dict(rep or {})
+            funnel["sessions"] += 1
+            funnel["submitted"] += len(rep.get("orders") or [])
+            funnel["filled"] += _new_fills(rep)
+            rep["selected"] = {k: chosen.get(k) for k in
+                               ("rank", "state", "state_n", "p_buy",
+                                "relation_ranked", "bid", "ask",
+                                "bid_touch_qty")}
+            report["sessions"].append(rep)
+            _log("session_end", slug=chosen["slug"], status=rep.get("status"),
+                 reason=rep.get("reason"), stop_reason=rep.get("stop_reason"),
+                 inventory=rep.get("inventory"),
+                 spring_gates=rep.get("spring_gates"),
+                 filled_actions=_new_fills(rep),
+                 submitted=len(rep.get("orders") or []),
+                 orders=(rep.get("orders") or [])[-8:],
+                 decisions=(rep.get("decisions") or [])[-8:],
+                 pair_economics=rep.get("pair_economics"))
+            if rep.get("status") in ("DAILY_LOSS_STOP", "HALT",
+                                     "STATE_NOT_DURABLE", "NO_CREDENTIALS",
+                                     "DISARMED"):
+                status = f"CAMPAIGN_STOP:{rep.get('status')}"
                 break
+            if rep.get("status") == "PREFLIGHT_FAILED" and str(
+                    rep.get("reason") or "").startswith("nonzero_positions"):
+                # the account already holds a residual (from an earlier
+                # session): one market at a time means the campaign holds
+                # too, rather than spending its session allowance on the
+                # same account-wide refusal every cycle
+                status = "CAMPAIGN_HOLD:POSITION_HELD"
+                break
+            if _has_inventory(rep):
+                # one market at a time; the held market is continued by the
+                # resume path above (OWNER 5552607804) until flat/settled
+                filled_markets.add(chosen["slug"])
+                status = f"CAMPAIGN_HOLD:{rep.get('status')}"
+                if t is None:                 # no venue view: nothing to resume
+                    break
+                continue
+            sessions_on[chosen["slug"]] = sessions_on.get(chosen["slug"], 0) + 1
+            if rep.get("stop_reason") == "spend_cap_reached" or \
+                    sessions_on[chosen["slug"]] >= MAX_SESSIONS_PER_SLUG:
+                # the durable per-market cap is spent, or this slug has had
+                # its attempt allowance (OWNER 5552475548 item 3: attempts are
+                # capped separately from exposure so zero-fill cancellations
+                # can never become an infinite repost loop)
+                cooldown[chosen["slug"]] = float("inf")
+            else:
+                cooldown[chosen["slug"]] = wall() + RETRY_COOLDOWN_S
+            status = "CAMPAIGN_RESELECTING"
+        except Exception as exc:                   # noqa: BLE001
+            # LIVE 17:40:52Z: a venue HTTP 500 on the read-only open-orders
+            # poll escaped held_market() as a Halt and killed the campaign
+            # with a position held (restart is NEVER). A transient venue
+            # error between sessions is a logged wait, bounded in a window;
+            # only sustained failure stops the campaign, fail closed. Any
+            # order a session had resting was already cancelled by that
+            # session's own deadman before the exception reached here.
+            now_c = clock()
+            iteration_errors[:] = [e for e in iteration_errors
+                                   if now_c - e < ITERATION_ERROR_WINDOW_S]
+            iteration_errors.append(now_c)
+            _log("campaign_iteration_error",
+                 err=f"{type(exc).__name__}:{str(exc)[:160]}",
+                 errors_in_window=len(iteration_errors),
+                 max_in_window=MAX_ITERATION_ERRORS)
+            if len(iteration_errors) >= MAX_ITERATION_ERRORS:
+                status = "CAMPAIGN_STOP:VENUE_UNAVAILABLE"
+                break
+            sleep(ITERATION_ERROR_BACKOFF_S)
             continue
-        sessions_on[chosen["slug"]] = sessions_on.get(chosen["slug"], 0) + 1
-        if rep.get("stop_reason") == "spend_cap_reached" or \
-                sessions_on[chosen["slug"]] >= MAX_SESSIONS_PER_SLUG:
-            # the durable per-market cap is spent, or this slug has had
-            # its attempt allowance (OWNER 5552475548 item 3: attempts are
-            # capped separately from exposure so zero-fill cancellations
-            # can never become an infinite repost loop)
-            cooldown[chosen["slug"]] = float("inf")
-        else:
-            cooldown[chosen["slug"]] = wall() + RETRY_COOLDOWN_S
-        status = "CAMPAIGN_RESELECTING"
     return {**report, "status": status}
 
 
