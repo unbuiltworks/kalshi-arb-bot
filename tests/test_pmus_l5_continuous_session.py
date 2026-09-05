@@ -1131,3 +1131,79 @@ def test_settlement_breakdown_separates_matched_from_residual(monkeypatch,
     assert b["maker_fills"] == 3 and b["taker_fills"] == 0
     assert b["fees_usd"] == "venue_unreported"
     assert b["realized_usd_venue"] == "0.0152"
+
+
+# ---- OWNER 5553189142: the throughput rung and its advance gate ----
+
+def test_rung_works_three_sequential_markets_then_stops_at_the_gate(
+        monkeypatch, tmp_path):
+    """Up to N filled markets, each after the prior is settled,
+    concurrency 1, then CAMPAIGN_RUNG_COMPLETE with a reconciliation
+    report; worst case is N x the per-market cap."""
+    from tests.test_pmus_spring_l5_session import Fake
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setenv(cont.RUNG_MARKETS_ENV, "3")
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    fake = Fake()
+    order = iter(["m1", "m2", "m3"])
+    last_wall = {"v": 1005.0}
+    st = {"t": 1005.0, "spring_watch": [_row("m1", touch="900"),
+                                        _row("m2", touch="800"),
+                                        _row("m3", touch="700")]}
+
+    def load(path=None):
+        st["t"] = last_wall["v"]                # snapshot stays fresh
+        return st, "status_url:test"
+    monkeypatch.setattr(entry, "load_status_document", load)
+    from src import pmus_settlement_auditor as auditor
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+        "market": slug, "settled": True, "status": "REALIZED",
+        "settlement_key": f"res-{slug}", "realized_confirmed": True,
+        "realized_usd": "0.0100", "position_net": "0", "resolution": {}})
+
+    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s,
+                     **kw):
+        if kw.get("resume"):
+            return {"status": "SPRING_SKIP_NOT_QUALIFYING", "slug": slug,
+                    "reason": "resume:bbo:Halt"}
+        fake.positions[slug] = {"netPositionDecimal": "0.02"}
+        return {"status": "SPRING_RESIDUAL_HOLD", "slug": slug,
+                "inventory": {"up": "0.02", "dn": "0"},
+                "actions": [{"relation": "open"}], "reconcile": {"unresolved": 0}}
+    # settlement drops the position from the venue
+    real_settle = cont.settle_held
+
+    def settle(t, slug):
+        out = real_settle(t, slug)
+        fake.positions.pop(slug, None)
+        return out
+    monkeypatch.setattr(cont, "settle_held", settle)
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 600, itertools.repeat(1000.0))
+    walls = itertools.count(1005.0, 130.0)
+
+    def wall():
+        last_wall["v"] = next(walls)
+        return last_wall["v"]
+    rep = cont.run_campaign(fake, clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=wall,
+                            campaign_s=500.0, session_runner=fake_session)
+    assert rep["status"] == "CAMPAIGN_RUNG_COMPLETE", rep["status"]
+    assert rep["rung"]["markets_allowed"] == 3
+    assert rep["rung"]["worst_case_usd"] == "0.15"
+    assert rep["advance_gate"]["filled_markets"] == ["m1", "m2", "m3"]
+    assert rep["advance_gate"]["all_clean"] is True
+    assert rep["realized_pnl"] == "0.0300"
+
+
+def test_funnel_counts_only_fills_made_in_this_session():
+    """Live funnel read `filled: 90` for six real fills: a resumed market
+    re-carries its whole fill history in `actions` every cycle. Only the
+    session's own reported orders with a positive filled quantity count."""
+    rep = {"actions": [{}] * 6,
+           "orders": [{"filled_qty": "0.02"}, {"filled_qty": "0"},
+                      {"filled_qty": "0.01"}, {"filled_qty": None},
+                      {"filled_qty": "junk"}]}
+    assert cont._new_fills(rep) == 2
+    assert cont._new_fills({"actions": [{}] * 6}) == 0
+    assert cont._new_fills({}) == 0
