@@ -296,6 +296,59 @@ def unsettled_slugs() -> list:
     return [s for s in filled if s not in settled]
 
 
+def ledger_slugs() -> set:
+    """Every market this ledger has ever submitted to (attribution)."""
+    path = base.q1.base.state_dir() / "ledger.jsonl"
+    out: set = set()
+    if not path.exists():
+        return out
+    for line in path.read_text().splitlines():
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(row, dict) and row.get("kind") == "submitted" and \
+                row.get("slug"):
+            out.add(str(row["slug"]))
+    return out
+
+
+def sweep_orphan_orders(t) -> dict:
+    """A redeploy can kill the campaign while a maker order rests; the
+    session's deadman never runs and the order stays open on the venue,
+    refusing every later preflight with open_orders:N. Cancel (exact id)
+    every open order in a market THIS ledger submitted to; never touch an
+    order in a market it did not -- that is a stop, reported, not a
+    cancel. Cancelling is the safe direction; nothing here can place."""
+    out = {"seen": 0, "cancelled": [], "foreign": [], "errors": []}
+    try:
+        opened = base.q1.base._get_with_retry(t, "/v1/orders/open")
+    except Exception as exc:                       # noqa: BLE001
+        out["errors"].append(f"list:{type(exc).__name__}")
+        return out
+    orders = opened.get("orders") if isinstance(opened, Mapping) else None
+    ours = ledger_slugs()
+    for o in orders or []:
+        if not isinstance(o, Mapping):
+            continue
+        out["seen"] += 1
+        oid = str(o.get("id") or o.get("orderId") or "")
+        slug = str(o.get("marketSlug") or "")
+        if slug not in ours or not oid:
+            out["foreign"].append({"order_id": oid, "slug": slug})
+            continue
+        try:
+            ok = base.q1.cancel_exact(t, oid)
+            out["cancelled"].append({"order_id": oid, "slug": slug,
+                                     "confirmed": bool(ok)})
+            base.q1.ledger_append({"kind": "orphan_cancelled", "spring": True,
+                                   "slug": slug, "order_id": oid,
+                                   "confirmed": bool(ok)})
+        except Exception as exc:                   # noqa: BLE001
+            out["errors"].append(f"{oid}:{type(exc).__name__}")
+    return out
+
+
 def _sum_realized(report: Mapping[str, Any]) -> Optional[str]:
     """Campaign realized = the sum of VENUE-confirmed realized amounts
     over this campaign's settlements; None until the first one."""
@@ -354,6 +407,14 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         # session runner (tests) gets whatever it was handed
         if t is None and session_runner is base.run_session:
             t = base.Transport()
+        if t is not None:
+            sweep = sweep_orphan_orders(t)
+            _log("orphan_sweep", **sweep)
+            report["orphan_sweep"] = sweep
+            if sweep["foreign"]:
+                # an open order this strategy did not place: not ours to
+                # cancel, and not a state to trade into -- stop, report
+                return {**report, "status": "CAMPAIGN_STOP:FOREIGN_OPEN_ORDERS"}
     start = clock()
     stop_at = start + campaign_s
     cooldown: dict[str, float] = {}
@@ -537,8 +598,29 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     return {**report, "status": status}
 
 
+def _install_term_handler() -> None:
+    """Railway stops a replaced container with SIGTERM. Python's default
+    dies without running `finally`, so a resting maker order would stay
+    open on the venue. Turn SIGTERM into KeyboardInterrupt so the
+    session's deadman cancel runs on the way out."""
+    import signal
+
+    def _term(*_: Any) -> None:
+        raise KeyboardInterrupt("SIGTERM")
+    try:
+        signal.signal(signal.SIGTERM, _term)
+    except (ValueError, OSError):
+        pass
+
+
 def main() -> int:
-    report = run_campaign()
+    _install_term_handler()
+    try:
+        report = run_campaign()
+    except KeyboardInterrupt:
+        _log("campaign_interrupted", reason="SIGTERM_or_interrupt")
+        report = {"campaign": "pmus-l5-continuous-v1",
+                  "status": "CAMPAIGN_STOP:INTERRUPTED", "realized_pnl": None}
     print(json.dumps(report, indent=1, default=str), flush=True)
     if base.armed() and entry.durable_state_reason() is None:
         base.q1.ledger_append({"kind": "campaign_report", "spring": True,

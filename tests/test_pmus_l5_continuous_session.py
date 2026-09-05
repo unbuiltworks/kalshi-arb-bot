@@ -994,3 +994,58 @@ def test_funnel_counts_every_cycle_by_exact_reason(monkeypatch, tmp_path):
     assert f["admitted"] == 0 and f["submitted"] == 0 and f["filled"] == 0
     assert set(f["refusals"]) == {"strict_evidence_no_q1_touch_depth",
                                   "strict_evidence_market_active"}
+
+
+# ---- orphan open orders left by a redeploy mid-rest ----
+
+def _fake_with_open_orders(orders):
+    from tests.test_pmus_spring_l5_session import Fake
+    fake = Fake()
+    real = fake.request
+
+    def req(method, path, body=None, **kw):
+        if path == "/v1/orders/open":
+            live = [o for o in orders
+                    if fake.orders.get(o["id"], {}).get("state")
+                    not in ("ORDER_STATE_CANCELED",)]
+            return {"orders": live}
+        return real(method, path, body)
+    fake.request = req
+    for o in orders:
+        fake.orders[o["id"]] = {"state": "ORDER_STATE_OPEN", "cumQuantity": "0",
+                                "avgPx": "0.43", "marketSlug": o["marketSlug"]}
+    return fake
+
+
+def test_orphan_order_in_our_market_is_cancelled_at_campaign_start(
+        monkeypatch, tmp_path):
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    (tmp_path / "ledger.jsonl").write_text(json.dumps(
+        {"kind": "submitted", "stage": "spring_open_1", "slug": "ours",
+         "order_id": "ORPH", "price": "0.43", "qty": "0.02"}) + "\n")
+    fake = _fake_with_open_orders([{"id": "ORPH", "marketSlug": "ours"}])
+    st = _status([_row("x", touch="0.1")])
+    monkeypatch.setattr(entry, "load_status_document",
+                        lambda path=None: (st, "status_url:test"))
+    import itertools
+    ticks = itertools.chain([0.0, 1.0, 2.0], itertools.repeat(100.0))
+    rep = cont.run_campaign(fake, clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=50.0, session_runner=lambda *a, **k: {})
+    assert rep["orphan_sweep"]["cancelled"][0]["order_id"] == "ORPH"
+    assert rep["orphan_sweep"]["foreign"] == []
+    assert fake.orders["ORPH"]["state"] == "ORDER_STATE_CANCELED"
+    assert "orphan_cancelled" in (tmp_path / "ledger.jsonl").read_text()
+
+
+def test_open_order_in_a_market_we_never_touched_stops_the_campaign(
+        monkeypatch, tmp_path):
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    fake = _fake_with_open_orders([{"id": "X1", "marketSlug": "not-ours"}])
+    rep = cont.run_campaign(fake, clock=lambda: 0.0, sleep=lambda s: None,
+                            wall=lambda: 1005.0, campaign_s=50.0,
+                            session_runner=lambda *a, **k: {})
+    assert rep["status"] == "CAMPAIGN_STOP:FOREIGN_OPEN_ORDERS"
+    assert fake.orders["X1"]["state"] == "ORDER_STATE_OPEN"     # untouched
