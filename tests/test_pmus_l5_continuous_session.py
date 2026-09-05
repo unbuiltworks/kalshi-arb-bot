@@ -1207,3 +1207,72 @@ def test_funnel_counts_only_fills_made_in_this_session():
     assert cont._new_fills(rep) == 2
     assert cont._new_fills({"actions": [{}] * 6}) == 0
     assert cont._new_fills({}) == 0
+
+
+# ---- LIVE 17:40:52Z: a venue 500 between sessions must not kill the campaign ----
+
+def test_transient_venue_error_between_sessions_is_waited_out(monkeypatch,
+                                                              tmp_path):
+    """held_market() raised Halt(GET_RETRIES_EXHAUSTED:/v1/orders/open:
+    HTTP Error 500) and the process died with +0.06 YES held. A transient
+    venue read error is a logged, bounded wait; the campaign goes on."""
+    from tests.test_pmus_spring_l5_session import Fake
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    st = _status([_row("x", touch="0.1")])           # nothing admitted
+    monkeypatch.setattr(entry, "load_status_document",
+                        lambda path=None: (st, "status_url:test"))
+    calls = {"n": 0}
+
+    def flaky_held(t):
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise q1.Halt("GET_RETRIES_EXHAUSTED:/v1/orders/open:HTTP Error 500")
+        return None
+    monkeypatch.setattr(cont, "held_market", flaky_held)
+    slept = []
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 12, itertools.repeat(1000.0))
+    rep = cont.run_campaign(Fake(), clock=lambda: next(ticks),
+                            sleep=lambda s: slept.append(s),
+                            wall=lambda: 1005.0, campaign_s=500.0,
+                            session_runner=lambda *a, **k: {})
+    assert calls["n"] >= 3                            # survived both errors
+    assert rep["status"] == "CAMPAIGN_NO_CANDIDATE"   # ...and kept selecting
+    assert rep["selections"] >= 1
+    assert slept[:2] == [cont.ITERATION_ERROR_BACKOFF_S] * 2
+
+
+def test_sustained_venue_failure_stops_the_campaign_closed(monkeypatch,
+                                                           tmp_path):
+    from tests.test_pmus_spring_l5_session import Fake
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    monkeypatch.setattr(entry, "load_status_document",
+                        lambda path=None: (_status([]), "status_url:test"))
+
+    def dead(t):
+        raise q1.Halt("GET_RETRIES_EXHAUSTED:/v1/orders/open:HTTP Error 500")
+    monkeypatch.setattr(cont, "held_market", dead)
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 200, itertools.repeat(1000.0))
+    rep = cont.run_campaign(Fake(), clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=500.0, session_runner=lambda *a, **k: {})
+    assert rep["status"] == "CAMPAIGN_STOP:VENUE_UNAVAILABLE"
+    assert rep["selections"] == 0                     # never traded through it
+
+
+def test_sigterm_still_propagates_through_the_guard(monkeypatch, tmp_path):
+    from tests.test_pmus_spring_l5_session import Fake
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+
+    def term(t):
+        raise KeyboardInterrupt("SIGTERM")
+    monkeypatch.setattr(cont, "held_market", term)
+    import pytest
+    with pytest.raises(KeyboardInterrupt):
+        cont.run_campaign(Fake(), clock=lambda: 0.0, sleep=lambda s: None,
+                          wall=lambda: 1005.0, campaign_s=500.0,
+                          session_runner=lambda *a, **k: {})
