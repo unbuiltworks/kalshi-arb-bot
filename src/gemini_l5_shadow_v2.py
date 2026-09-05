@@ -567,6 +567,134 @@ def pmus_reference() -> dict:
             "labels": s.get("labeling")}
 
 
+# ------------------------- distributional action scoring -------------------------
+
+def action_scoring(rows: list) -> dict:
+    """OWNER 5555481658 item 3: relation-frequency distance and calibration
+    of an arm against the historical L5 conditional distribution, decision
+    by decision, on the rows given (the caller restricts to untouched
+    windows). Two views: SAMPLED/RECOMMENDED = the policy output before
+    the safety shell (pure policy fidelity); ACTED = what the shell let
+    through (executed fidelity; HOLD is not an L5 relation and is reported
+    with its refusal reasons). Post-fill states are compared separately."""
+    decs = [d for r in rows for d in (r.get("decisions") or [])
+            if d.get("p_complete") is not None]
+    if not decs:
+        return {"scored_decisions": 0}
+
+    def masses(d):
+        pc, pe = float(d.get("p_complete") or 0), float(d.get("p_extend") or 0)
+        po = max(0.0, 1.0 - pc - pe)
+        return {"complete": pc, "extend": pe, "open": po}
+
+    def freq(items, key):
+        c: dict = {}
+        for d in items:
+            v = d.get(key)
+            if v in ("complete", "extend", "open"):
+                c[v] = c.get(v, 0) + 1
+        n = sum(c.values()) or 1
+        return {k: round(c.get(k, 0) / n, 4) for k in ("complete", "extend", "open")}, sum(c.values())
+
+    def expected(items):
+        n = len(items) or 1
+        agg = {"complete": 0.0, "extend": 0.0, "open": 0.0}
+        for d in items:
+            for k, v in masses(d).items():
+                agg[k] += v
+        return {k: round(v / n, 4) for k, v in agg.items()}
+
+    def l1(a, b):
+        return round(sum(abs(a.get(k, 0) - b.get(k, 0)) for k in ("complete", "extend", "open")), 4)
+
+    exp_all = expected(decs)
+    samp, n_s = freq(decs, "sampled")
+    acted, n_a = freq(decs, "acted")
+    holds = [d for d in decs if d.get("acted") == "hold"]
+    post = [d for d in decs if abs(float(d.get("residual_units") or 0)) >= 1]
+    exp_post = expected(post) if post else None
+    samp_post, _ = freq(post, "sampled") if post else ({}, 0)
+    acted_post, _ = freq(post, "acted") if post else ({}, 0)
+    # calibration: decisions binned by P(complete) vs observed sampled COMPLETE
+    bins: dict = {}
+    for d in decs:
+        pc = float(d.get("p_complete") or 0)
+        b = f"{int(pc * 10) / 10:.1f}"
+        e = bins.setdefault(b, {"n": 0, "sampled_complete": 0, "acted_complete": 0})
+        e["n"] += 1
+        e["sampled_complete"] += int(d.get("sampled") == "complete")
+        e["acted_complete"] += int(d.get("acted") == "complete")
+    calib = {b: {"n": e["n"], "sampled_complete_rate": round(e["sampled_complete"] / e["n"], 3),
+                 "acted_complete_rate": round(e["acted_complete"] / e["n"], 3)}
+             for b, e in sorted(bins.items())}
+    refusals: dict = {}
+    for d in holds:
+        k = str(d.get("refusal")).split(":")[0]
+        refusals[k] = refusals.get(k, 0) + 1
+    return {
+        "scored_decisions": len(decs),
+        "expected_relation_freq_l5": exp_all,
+        "sampled_relation_freq": samp, "sampled_n": n_s,
+        "l1_sampled_vs_l5": l1(samp, exp_all),
+        "acted_relation_freq": acted, "acted_n": n_a,
+        "l1_acted_vs_l5": l1(acted, exp_all),
+        "hold_share_of_decisions": round(len(holds) / len(decs), 4),
+        "hold_refusals": refusals,
+        "post_fill": {
+            "decisions": len(post),
+            "expected_l5": exp_post, "sampled": samp_post, "acted": acted_post,
+            "complete_freq_gap_pp_sampled": (round(100 * (samp_post.get("complete", 0) - exp_post["complete"]), 1)
+                                             if post else None),
+            "complete_freq_gap_pp_acted": (round(100 * (acted_post.get("complete", 0) - exp_post["complete"]), 1)
+                                           if post else None),
+        },
+        "calibration_by_p_complete_bin": calib,
+        "off_distribution_rate_pct": round(100.0 * sum(1 for d in decs if d.get("off_distribution")) / len(decs), 2),
+        "labels": "distributional fidelity vs the frozen v2 conditional masses; THEORETICAL",
+    }
+
+
+def research_arm_verdict(rows: list, spec: Mapping[str, Any]) -> dict:
+    """Frozen stochastic OOS arm: summary + action scoring + verdict from
+    the spec file only."""
+    ent = [r for r in rows if r.get("status") in ("MATCHED", "RESIDUAL_HOLD", "NO_FILL")]
+    succ, fail = spec["success"], spec["fail"]
+    s = summarize(ent) if ent else {}
+    sc = action_scoring(ent)
+    days = len(s.get("distinct_days") or [])
+    matched = [r for r in ent if D(r["inventory"]["matched"]) > 0]
+    mdays = len({_day(r) for r in matched})
+    net = D(s.get("net_theoretical_total") or 0) if ent else D("0")
+    adv = (s.get("adverse_selection_by_horizon") or {}).get("30", {}).get("pct_adverse")
+    l1s = sc.get("l1_sampled_vs_l5")
+    gap = (sc.get("post_fill") or {}).get("complete_freq_gap_pp_sampled")
+    checks = {
+        "windows": (len(ent), succ["min_windows"], len(ent) >= succ["min_windows"]),
+        "days": (days, succ["min_days"], days >= succ["min_days"]),
+        "two_sided_completions": (len(matched), succ["min_two_sided_completions"], len(matched) >= succ["min_two_sided_completions"]),
+        "completion_days": (mdays, succ["min_completion_days"], mdays >= succ["min_completion_days"]),
+        "scored_decisions": (sc.get("scored_decisions", 0), succ["calibration"]["min_scored_decisions"], sc.get("scored_decisions", 0) >= succ["calibration"]["min_scored_decisions"]),
+        "l1_sampled_vs_l5": (l1s, succ["calibration"]["max_relation_l1_distance_sampled_vs_model"], l1s is not None and l1s <= succ["calibration"]["max_relation_l1_distance_sampled_vs_model"]),
+        "post_fill_complete_gap_pp": (gap, succ["calibration"]["max_post_fill_complete_freq_abs_gap_pp"], gap is not None and abs(gap) <= succ["calibration"]["max_post_fill_complete_freq_abs_gap_pp"]),
+        "net_after_fees_usd": (str(net), succ["min_net_after_known_fees_usd"], net >= D(str(succ["min_net_after_known_fees_usd"]))),
+        "adverse_30s_pct": (adv, succ["max_adverse_selection_30s_pct"], adv is not None and adv <= succ["max_adverse_selection_30s_pct"]),
+        "one_sided_hold_rate_pct": (s.get("one_sided_hold_rate"), succ["max_one_sided_hold_rate_pct"], s.get("one_sided_hold_rate") is not None and s["one_sided_hold_rate"] <= succ["max_one_sided_hold_rate_pct"]),
+        "off_distribution_rate_pct": (sc.get("off_distribution_rate_pct"), succ["max_off_distribution_rate_pct"], sc.get("off_distribution_rate_pct") is not None and sc["off_distribution_rate_pct"] <= succ["max_off_distribution_rate_pct"]),
+    }
+    sample_ok = checks["windows"][2] and checks["days"][2]
+    failed = len(ent) >= fail["after_windows"] and (
+        net <= D(str(fail["net_after_fees_usd_at_or_below"]))
+        or len(matched) < fail["two_sided_completions_below"]
+        or (l1s is not None and l1s > fail["relation_l1_distance_above"]))
+    verdict = ("FAIL" if failed else "INSUFFICIENT_SAMPLE" if not sample_ok
+               else "SUPPORTED" if all(v[2] for v in checks.values()) else "NOT_SUPPORTED")
+    return {"verdict": verdict, "spec_sha": spec.get("_sha256_16"),
+            "frozen_utc": spec.get("frozen_utc"), "windows": len(ent), "days": days,
+            "checks": {k: {"value": v[0], "threshold": v[1], "ok": bool(v[2])} for k, v in checks.items()},
+            "action_scoring": sc,
+            "labels": "predeclared stochastic OOS arm; THEORETICAL; thresholds only from the spec file"}
+
+
 # ------------------------- pre-registered transfer gate -------------------------
 
 GATE_PATH = ROOT / "analysis/l5/gemini_transfer_gate.json"

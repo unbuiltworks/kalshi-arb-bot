@@ -1,4 +1,5 @@
 from decimal import Decimal as D
+import json
 
 from src import gemini_l5_shadow_v2 as gs
 from src.polymarket_l5 import transfer_backtest as tb
@@ -151,3 +152,26 @@ def test_one_sided_book_rows_never_crash_the_replay():
     assert r["one_sided_book_waits"] >= 1
     assert r["outcome_proxy"] == "AMBIGUOUS"      # last TWO-SIDED mid 0.49
     assert gs._mid_at(bbo, EXP) == D("0.49")
+
+
+def test_action_scoring_measures_distance_and_post_fill_calibration():
+    decs = ([{"p_complete": 0.4, "p_extend": 0.6, "sampled": "complete", "acted": "complete",
+              "residual_units": 1.0, "off_distribution": False}] * 4 +
+            [{"p_complete": 0.4, "p_extend": 0.6, "sampled": "extend", "acted": "hold",
+              "refusal": "residual_cap:3", "residual_units": 1.0, "off_distribution": False}] * 6)
+    rows = [{"decisions": decs, "status": "RESIDUAL_HOLD"}]
+    sc = gs.action_scoring(rows)
+    assert sc["scored_decisions"] == 10
+    assert sc["expected_relation_freq_l5"]["complete"] == 0.4
+    assert sc["sampled_relation_freq"]["complete"] == 0.4 and sc["l1_sampled_vs_l5"] == 0.0
+    assert sc["acted_relation_freq"]["complete"] == 1.0          # only non-hold acts count
+    assert sc["hold_share_of_decisions"] == 0.6 and sc["hold_refusals"] == {"residual_cap": 6}
+    assert sc["post_fill"]["complete_freq_gap_pp_sampled"] == 0.0
+    assert sc["calibration_by_p_complete_bin"]["0.4"]["sampled_complete_rate"] == 0.4
+
+
+def test_research_arm_verdict_reads_only_the_frozen_spec():
+    spec = json.load(open("analysis/l5/gemini_research_arm_stochastic.json"))
+    assert spec["arm"] == "reprice_180s:stochastic" and spec["policy"]["cap_fallback"] == "NONE (not declared)"
+    v = gs.research_arm_verdict([], spec)
+    assert v["verdict"] == "INSUFFICIENT_SAMPLE" and v["spec_sha"] == spec["_sha256_16"]

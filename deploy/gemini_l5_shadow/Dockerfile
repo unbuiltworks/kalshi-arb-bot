@@ -20,6 +20,7 @@ COPY analysis/l5/l5_action_model_v2.json analysis/l5/l5_action_model_v2.json
 COPY analysis/l5/l5_fidelity_pass.json analysis/l5/l5_fidelity_pass.json
 COPY analysis/l5/gemini_transfer_gate.json analysis/l5/gemini_transfer_gate.json
 COPY analysis/l5/gemini_hypothesis_two_sided_flow.json analysis/l5/gemini_hypothesis_two_sided_flow.json
+COPY analysis/l5/gemini_research_arm_stochastic.json analysis/l5/gemini_research_arm_stochastic.json
 COPY analysis/l5/gemini_regime_candidates.json analysis/l5/gemini_regime_candidates.json
 RUN touch src/__init__.py
 ENV GEMINI_SHADOW_ROLE=gemini-l5-shadow \

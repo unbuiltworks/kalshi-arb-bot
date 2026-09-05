@@ -274,6 +274,43 @@ class ShadowService:
                 "labels": "separate sample from the transfer gate; THEORETICAL"}
         return out
 
+    RESEARCH_ARM = "analysis/l5/gemini_research_arm_stochastic.json"
+
+    def _spec(self, rel: str) -> Optional[dict]:
+        try:
+            return json.loads((Path(__file__).resolve().parents[1] / rel).read_text(encoding="utf-8"))
+        except Exception:                             # noqa: BLE001
+            return None
+
+    def research_arm_report(self) -> dict:
+        spec = self._spec(self.RESEARCH_ARM)
+        if not spec:
+            return {"available": False}
+        since = datetime.fromisoformat(spec["applies_to_windows_with_entry_t_at_or_after_utc"]).timestamp()
+        rows = [r for r in self.rows.get(spec["arm"]) or []
+                if float(r.get("entry_t") or 0) >= since]
+        return {"arm": spec["arm"], "windows_since_freeze": len(rows),
+                **gs.research_arm_verdict(rows, spec)}
+
+    def action_scoring_report(self) -> dict:
+        """Distributional fidelity for EVERY arm on windows entered after
+        the stochastic-arm freeze (untouched), modal vs stochastic."""
+        spec = self._spec(self.RESEARCH_ARM)
+        if not spec:
+            return {}
+        since = datetime.fromisoformat(spec["applies_to_windows_with_entry_t_at_or_after_utc"]).timestamp()
+        out = {}
+        for key, rows in sorted(self.rows.items()):
+            sel = [r for r in rows if float(r.get("entry_t") or 0) >= since
+                   and r.get("status") in ("MATCHED", "RESIDUAL_HOLD", "NO_FILL")]
+            sc = gs.action_scoring(sel)
+            out[key] = {k: sc.get(k) for k in ("scored_decisions", "expected_relation_freq_l5",
+                                               "sampled_relation_freq", "l1_sampled_vs_l5",
+                                               "acted_relation_freq", "l1_acted_vs_l5",
+                                               "hold_share_of_decisions", "hold_refusals",
+                                               "post_fill", "off_distribution_rate_pct")}
+        return out
+
     def rolling_report(self, now: float) -> dict:
         windows = {"6h": 6 * 3600.0, "24h": 24 * 3600.0, "cumulative": None}
         out: dict = {"t": _utc(now), "labels": LABELS,
@@ -298,6 +335,8 @@ class ShadowService:
                             "matched_pairs_le_099")}
             out["by_window"][wname] = arms
         out["hypotheses"] = self.hypotheses_report()
+        out["research_arm_stochastic"] = self.research_arm_report()
+        out["action_scoring_untouched"] = self.action_scoring_report()
         if self.gate:
             prim = self.gate.get("primary_arm")
             out["transfer_gate"] = {
@@ -350,9 +389,16 @@ class ShadowService:
                         "outcome_proxy", "pair_pnl_theoretical",
                         "hold_pnl_theoretical", "flow")}
                     rec["decisions"] = [
-                        {k: d.get(k) for k in ("t", "state", "acted", "refusal",
-                                               "v2_recommended", "state_n",
-                                               "shadow_differs_from_executed")}
+                        {**{k: d.get(k) for k in ("t", "state", "acted", "refusal",
+                                                  "v2_recommended", "state_n",
+                                                  "off_distribution",
+                                                  "shadow_differs_from_executed")},
+                         "p_complete": next((x["p"] for x in d.get("relation_ranked") or []
+                                             if x.get("relation") == "complete"), 0.0),
+                         "p_extend": next((x["p"] for x in d.get("relation_ranked") or []
+                                           if x.get("relation") == "extend"), 0.0),
+                         "sampled": ((d.get("shadow") or {}).get("stochastic") or {}).get("sampled"),
+                         "residual_units": (d.get("inventory_before") or {}).get("behavioral_residual")}
                         for d in r.get("decisions") or []]
                     # identity is always explicit (LIVE 22:30:30Z: early
                     # returns carried no shell/policy and 9 uncovered-window

@@ -270,3 +270,30 @@ The two-sided-flow observation is pre-registered as a separate hypothesis
 arm rest_120s:modal, applies only to windows entered after the freeze,
 evaluated by the service in every rolling report under `hypotheses`,
 never mixed with the transfer-gate sample).
+
+## 12. Predeclared stochastic OOS arm + distributional scoring (OWNER 5555481658)
+
+`analysis/l5/gemini_research_arm_stochastic.json` (frozen 2026-09-05T23:43:19Z,
+sha 40e28081226917a9): arm `reprice_180s:stochastic`; relation drawn by
+inverse CDF from the same v2 conditional masses the modal arm reads, with
+a persisted deterministic seed (sha256 of symbol | decision index | model
+sha bbb55bf90638d2bd), identical conditioning (band | TTE | behavioral
+imbalance, last_rel, last_size q<5, shared side convention, q=1,
+complement ≤0.98 / ≥1c after Gemini fees), identical safety filters, no
+cap-fallback. SUPPORTED needs ≥300 windows / ≥5 days, ≥15 strict
+two-sided completions on ≥4 days, ≥200 scored decisions with sampled
+relation-frequency L1 distance to L5 ≤0.10 and post-fill COMPLETE
+frequency within ±10 pp of the historical conditional, net after known
+fees ≥0 with ≥3 non-negative days, adverse at 30 s ≤50%, one-sided hold
+rate ≤30%, off-distribution rate ≤5%. FAIL after 300 windows on net ≤ −$1,
+<5 completions, or L1 >0.20. Evaluated only on windows entered after the
+freeze; separate from the primary gate and the flow hypothesis.
+
+Distributional action-by-action scoring (`gemini_l5_shadow_v2.action_scoring`)
+runs for every arm on untouched windows in each rolling report: expected
+relation frequencies under L5 (mean of the model masses over the arm's
+own decisions) vs SAMPLED (policy output) and ACTED (after the safety
+shell; HOLD reported with refusal reasons), L1 distances, post-fill
+COMPLETE/EXTEND frequency gaps in pp, calibration by P(complete) bin, and
+the off-distribution rate. Behavior and executable economics must both
+replicate before anything advances.

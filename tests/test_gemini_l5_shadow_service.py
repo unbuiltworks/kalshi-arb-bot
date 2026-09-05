@@ -185,3 +185,20 @@ def test_records_carry_ex_ante_features_and_hypotheses_use_future_windows_only(t
     hyp = s.rolling_report(t["v"])["hypotheses"]["two_sided_flow_120s"]
     assert hyp["arm"] == "rest_120s:modal" and hyp["verdict"] == "INSUFFICIENT_SAMPLE"
     assert hyp["windows_since_freeze"] == 0          # 2026-09-05 windows predate the freeze
+
+
+def test_rolling_report_carries_research_arm_and_action_scoring(tmp_path):
+    now0 = 1788638000.0
+    sym, exp, fetch = _scripted(now0)
+    t = {"v": exp - 295.0}
+    s = svc.ShadowService(fetch=fetch, clock=lambda: t["v"],
+                          sleep=lambda x: t.__setitem__("v", t["v"] + x),
+                          root=tmp_path)
+    s.run(until=exp + 40.0)
+    rec = [r for r in s.rows["reprice_180s:stochastic"] if r["symbol"] == sym][0]
+    assert "p_complete" in rec["decisions"][0] and "sampled" in rec["decisions"][0]
+    rep = s.rolling_report(t["v"])
+    ra = rep["research_arm_stochastic"]
+    assert ra["arm"] == "reprice_180s:stochastic" and ra["verdict"] == "INSUFFICIENT_SAMPLE"
+    assert ra["windows_since_freeze"] == 0            # 2026-09-05 windows predate the freeze
+    assert "reprice_180s:modal" in rep["action_scoring_untouched"]
