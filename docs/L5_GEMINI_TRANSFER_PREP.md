@@ -204,3 +204,27 @@ non-negative days, adverse selection at 30 s ≤50%, one-sided hold rate
 ≤25%. REJECT after 300 windows if net ≤ −$1.00 or fewer than 5
 completions. Exploratory arms cannot pass on the sample that selected
 them. Thresholds are read from the file and never tuned in code.
+
+## 10. Ex-ante regime study (OWNER 5555118026) — no regime found
+
+`src/gemini_l5_regime_study.py`, candidates frozen in
+`analysis/l5/gemini_regime_candidates.json` (sha df99f3aadb13b775) before
+any validation number was read; split by day (train 260830–260831 = 91
+windows, validation 260901–260902 = 27 windows); features strictly at or
+before the entry quote (spread, min depth, |mid move| 60/120 s, two-sided
+prints in the trailing 120 s, TTE); selection = best strict net on train
+with ≥10 admitted windows, then reported on validation. Result
+(`analysis/l5/gemini_regime_study.json`): for every shell the
+train-selected rule does NOT improve validation strict net above the
+unconditional baseline, and no rule reaches a non-negative validation net
+with fills (rest_120s: selected `two_sided_flow_120s`, validation 8
+windows / 3 fills / −$0.89; reprice_180s: selected `late_entry_tte_le_240`,
+validation 9 windows / 0 fills). Descriptive segments (train+validation,
+not a rule): on rest_120s the fills after a ≥6c pre-entry move are 92%
+adverse (net −$2.20 over 62 windows) versus 50% after a 3–6c move, and
+one-sided trailing flow fills are 82% adverse (−$2.75) versus 43% after
+two-sided flow (+$0.69, 26 windows); on reprice_180s the wide-spread
+(≥12c) fills are only 11% adverse but still net negative. These are
+hypotheses for a NEW pre-registration, not thresholds; the validation set
+is 27 windows and underpowered. The live shadow service keeps collecting
+the same features so the study can be re-run on out-of-sample days.

@@ -309,6 +309,10 @@ class ShadowService:
                                                "v2_recommended", "state_n",
                                                "shadow_differs_from_executed")}
                         for d in r.get("decisions") or []]
+                    # identity is always explicit (LIVE 22:30:30Z: early
+                    # returns carried no shell/policy and 9 uncovered-window
+                    # records collapsed onto one identity)
+                    rec["symbol"], rec["shell"], rec["policy"] = sym, name, policy
                     rec["decisions_n"] = len(r.get("decisions") or [])
                     rec["coverage"] = ("full" if (tape.expiry or 0) - getattr(
                         tape, "opened_at", 0) >= tb.ENTRY_MAX_TTE_S else "partial")

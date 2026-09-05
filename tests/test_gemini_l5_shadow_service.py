@@ -153,3 +153,20 @@ def test_restart_restores_records_once_and_never_replays_a_window_twice(tmp_path
     assert sum(len(v) for v in s3.rows.values()) == n1
     rec = s3.rows["rest_60s:modal"][0]
     assert rec["coverage"] in ("full", "partial")
+
+
+def test_uncovered_windows_keep_their_shell_and_policy_identity(tmp_path):
+    """LIVE 22:30:30Z restore dropped 9 'duplicates': NO_QUOTE_COVERAGE
+    records had shell/policy None. Every record carries its identity."""
+    now0 = 1788638000.0
+    sym, exp, fetch = _scripted(now0)
+    t = {"v": exp - 60.0}                        # start inside the entry window
+    s = svc.ShadowService(fetch=fetch, clock=lambda: t["v"],
+                          sleep=lambda x: t.__setitem__("v", t["v"] + x),
+                          root=tmp_path)
+    s.run(until=exp + 40.0)
+    recs = [json.loads(l) for l in (tmp_path / "records.jsonl").read_text().splitlines()
+            if json.loads(l)["symbol"] == sym]
+    assert recs and all(r["status"] == "NO_QUOTE_COVERAGE" for r in recs)
+    assert len({(r["shell"], r["policy"]) for r in recs}) == len(gs.SHELLS) * len(gs.POLICIES)
+    assert all(r["coverage"] == "partial" for r in recs)

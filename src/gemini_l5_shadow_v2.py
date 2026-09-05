@@ -162,7 +162,8 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
     event = tb.event_of_symbol(symbol)
     expiry = tb.ticker_expiry_epoch(event)
     if expiry is None:
-        return {"symbol": symbol, "status": "BAD_TICKER"}
+        return {"symbol": symbol, "status": "BAD_TICKER", "policy": policy,
+                "fill_mode": mode, "shell": shell.get("name") or "touch_cancel_30s"}
     stop_at = expiry - tb.STOP_BEFORE_EXPIRY_S
     entry = None
     for r in bbo_rows:
@@ -170,7 +171,9 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
             entry = r
             break
     if entry is None:
-        return {"symbol": symbol, "status": "NO_QUOTE_COVERAGE"}
+        return {"symbol": symbol, "status": "NO_QUOTE_COVERAGE", "policy": policy,
+                "fill_mode": mode, "shell": shell.get("name") or "touch_cancel_30s",
+                "entry_t": (bbo_rows[0]["t"] if bbo_rows else None)}
     t = entry["t"]
     inv = L5Inventory()
     decisions: list[dict] = []
