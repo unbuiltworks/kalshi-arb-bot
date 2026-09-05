@@ -42,7 +42,12 @@ class Fake:
                                    "bestAsk": {"value": self.ask}}}
         if path.startswith("/v1/market/slug/"):
             return {"market": {"minimumTradeQty": self.meta[0],
-                               "orderPriceMinTickSize": self.meta[1]}}
+                               "orderPriceMinTickSize": self.meta[1],
+                               # live open-state recheck (5552475548 #2)
+                               "active": True, "archived": False,
+                               "closed": False,
+                               "status": "MARKET_STATUS_OPEN",
+                               "endDate": "2099-01-01T00:00:00Z"}}
         if path == "/v1/order/preview":
             return {"order": dict(body["request"])}
         if path == "/v1/orders":

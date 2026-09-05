@@ -154,15 +154,14 @@ def strict_evidence_reason(slug: str, evidence: Optional[Mapping[str, Any]],
             return f"strict_evidence_no_q1_touch_depth:{depth}"
     except Exception:
         return f"strict_evidence_touch_depth_unreadable:{depth!r}"
-    # CADENCE -- an observation window with a hole in it is not a window.
-    gaps = evidence.get("collector_gaps")
-    if gaps is None:
-        return "strict_evidence_cadence_missing"
-    try:
-        if int(gaps) > 0:
-            return f"strict_evidence_cadence_gap:{gaps}"
-    except (TypeError, ValueError):
-        return f"strict_evidence_cadence_unreadable:{gaps!r}"
+    # CADENCE -- OWNER 5552475548 item 2: `collector_gaps` (the recorder's
+    # per-market authenticated-update age against 60s) is a QUALITY and
+    # ranking feature, not an OPEN veto. It refused 17-19 of 20 in-band
+    # rows because sports books go quiet between points, while the
+    # executor performs its own authoritative book + open-state recheck
+    # immediately before every submission. Snapshot freshness (below),
+    # two-sided book, touch depth, venue open state and in-distribution
+    # state all still fail closed.
     # MARKET-OPEN SAFETY, from the venue's own authoritative fields.
     # PMUS serves no "settlement_ts" for live sports, so none is invented
     # and none is waived: `/v1/market/slug/{slug}` carries `active`,

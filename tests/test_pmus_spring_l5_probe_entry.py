@@ -334,7 +334,6 @@ def test_every_open_safety_fact_is_required_not_optional():
     for field, expected in (
             ("both_sides_served", "strict_evidence_book_not_two_sided"),
             ("bid_touch_qty", "strict_evidence_touch_depth_missing"),
-            ("collector_gaps", "strict_evidence_cadence_missing"),
             ("market_state", "strict_evidence_market_state_missing"),
             ("probe_entry_action",
              "strict_evidence_probe_entry_action_missing")):
@@ -352,9 +351,12 @@ def test_liquidity_facts_block_on_bad_values_too():
     assert entry.strict_evidence_reason(
         "mkt", evidence(bid_touch_qty="0"), now=1001.0).startswith(
             "strict_evidence_no_q1_touch_depth")
+    # OWNER 5552475548 #2: recorder cadence is a ranking feature, not an
+    # OPEN veto -- the executor rechecks the live book/open state itself
     assert entry.strict_evidence_reason(
-        "mkt", evidence(collector_gaps=3), now=1001.0) == \
-        "strict_evidence_cadence_gap:3"
+        "mkt", evidence(collector_gaps=3), now=1001.0) is None
+    assert entry.strict_evidence_reason(
+        "mkt", evidence(collector_gaps=None), now=1001.0) is None
 
 
 def test_market_close_safety_uses_the_venue_authoritative_fields():

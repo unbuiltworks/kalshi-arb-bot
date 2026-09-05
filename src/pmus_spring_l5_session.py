@@ -240,27 +240,51 @@ def spring_cumulative_notional(slug: str) -> D:
     spring OPEN/EXTEND rows AND micro first-leg rows from the campaign
     ledger — completion legs are excluded, and an unparseable row counts
     as the full cap (fail closed)."""
+    # OWNER 5552475548 item 3: exposure is what FILLED, not what was
+    # submitted. A submission counts only until it has a terminal row
+    # (authoritative filled quantity, 0 included); a submission the venue
+    # never confirmed keeps counting at its full notional -- fail closed.
     total = D("0")
     path = q1.base.state_dir() / "ledger.jsonl"
     if not path.exists():
         return total
-    for line in path.read_text().splitlines():
+    submitted: dict[str, dict] = {}
+    terminal: dict[str, dict] = {}
+    for i, line in enumerate(path.read_text().splitlines()):
         try:
             row = json.loads(line)
         except Exception:
             continue
-        if not (isinstance(row, dict) and row.get("kind") == "submitted"
-                and row.get("slug") == slug):
+        if not (isinstance(row, dict) and row.get("slug") == slug):
             continue
+        kind = row.get("kind")
         stage = str(row.get("stage", ""))
-        if not (stage.startswith("spring_open")
-                or stage.startswith("spring_extend")
-                or stage == "micro_first_leg"):
+        if kind == "submitted" and (stage.startswith("spring_open")
+                                    or stage.startswith("spring_extend")
+                                    or stage == "micro_first_leg"):
+            # a submission without an order id can never be reconciled:
+            # it keeps its own key and counts in full, fail closed
+            submitted[str(row.get("order_id") or f"row{i}")] = row
+        elif kind == "order_terminal":
+            terminal[str(row.get("order_id"))] = row
+        elif kind == "filled" and stage == "micro_first_leg":
+            price, qty = micro._d(row.get("price")), micro._d(row.get("qty"))
+            if price is None or qty is None:
+                return SESSION_NOTIONAL_CAP
+            total += price * qty
+    for oid, row in submitted.items():
+        term = terminal.get(oid)
+        if term is None:                       # unknown outcome: full spend
+            price, qty = micro._d(row.get("price")), micro._d(row.get("qty"))
+            if price is None or qty is None:
+                return SESSION_NOTIONAL_CAP
+            total += price * qty
             continue
-        price, qty = micro._d(row.get("price")), micro._d(row.get("qty"))
-        if price is None or qty is None:
+        got = micro._d(term.get("filled_qty"))
+        price = micro._d(term.get("price")) or micro._d(row.get("price"))
+        if got is None or price is None:
             return SESSION_NOTIONAL_CAP
-        total += price * qty
+        total += price * got
     return total
 
 
@@ -375,24 +399,123 @@ def spring_complement_price(avg_cost: D, opp_ask: D, tick: D) -> \
     return px, {**info, "regime": regime, "chosen_px": str(px)}
 
 
+# OWNER 5552475548 item 1: on sports a post-only maker order may REST up
+# to this long. The L5 DECISION cadence is untouched -- the model still
+# chooses every action -- but the venue is not a 5-minute BTC book, and a
+# touch-joining quote cancelled after 2s never gets hit. While resting,
+# the order is re-checked every poll: it is cancelled early the moment
+# the book/state moves so that the chosen action is no longer the
+# current L5 action or would breach post-only. Maker only; no taker.
+SPORTS_MAKER_REST_MAX_S = 30.0
+
+
 def _await_order(t: Transport, oid: str, qty: D, until: float,
-                 clock, sleep) -> D:
-    """One outstanding order: wait, then cancel-and-harvest. Returns the
-    exact authoritative filled Decimal quantity (0 for none)."""
+                 clock, sleep, still_wanted=None) -> tuple:
+    """One outstanding order: rest until filled, until the deadline, or
+    until ``still_wanted()`` names a reason the action is no longer the
+    current L5 action; then cancel-and-harvest.
+
+    Returns ``(filled_qty, rest_s, end_reason)`` with the exact
+    authoritative filled Decimal quantity (0 for none) and the measured
+    rest time, so category fill hazard can be estimated later.
+    """
+    start = clock()
     fill = None
+    end_reason = "deadline"
     try:
-        fill = micro.wait_for_fill(t, oid, qty, until, clock, sleep)
+        while clock() < until:
+            fill = micro.authoritative_fill(q1._order_status(t, oid), qty)
+            if fill is not None:
+                end_reason = "filled"
+                break
+            if still_wanted is not None:
+                why = still_wanted()
+                if why:
+                    end_reason = f"repriced:{why}"
+                    break
+            sleep(q1.POLL_S)
     except RejectedNoFill:
-        return D("0")
+        return D("0"), round(clock() - start, 3), "rejected"
     if fill is None:
         try:
             q1.cancel_exact(t, oid)
         except RejectedNoFill:
-            return D("0")
+            return D("0"), round(clock() - start, 3), end_reason
         except Exception:
             pass
         fill = micro._terminal_positive_fill(t, oid, qty)
-    return D(str(fill["qty"])) if fill else D("0")
+        if fill is not None:
+            end_reason = "filled_on_cancel"
+    got = D(str(fill["qty"])) if fill else D("0")
+    return got, round(clock() - start, 3), end_reason
+
+
+def live_market_open_reason(t: Transport, slug: str,
+                            now: Optional[float] = None) -> Optional[str]:
+    """Execution-freshness rule (OWNER 5552475548 item 2): immediately
+    before the first submission, the venue's own market document is
+    re-read and the same fail-closed open-state check the guard applies
+    to recorder evidence is applied to the LIVE document."""
+    from src import pmus_spring_l5_probe_entry as entry   # lazy: cycle
+    try:
+        doc = t.request("GET", f"/v1/market/slug/{slug}")
+    except Exception as exc:                       # noqa: BLE001
+        return f"live_market_unreadable:{type(exc).__name__}"
+    market = doc.get("market") if isinstance(doc, Mapping) else None
+    if not isinstance(market, Mapping):
+        return "live_market_document_missing"
+    reason = entry.market_open_reason({"market_state": market}, now)
+    return None if reason is None else reason.replace("strict_evidence_",
+                                                        "live_", 1)
+
+
+def reconcile_submissions(t: Transport, slug: str, limit: int = 50) -> dict:
+    """OWNER 5552475548 item 3: every spring submission for this slug that
+    has no terminal row is reconciled against the venue's authoritative
+    order status and given one, so a cancelled zero-fill attempt from an
+    earlier build can no longer count as spend. An order still open is
+    cancelled first (it should not exist: the deadman ran). Anything the
+    venue cannot confirm stays unreconciled and keeps counting."""
+    path = q1.base.state_dir() / "ledger.jsonl"
+    if not path.exists():
+        return {"checked": 0, "reconciled": 0, "unresolved": 0}
+    submitted: dict[str, dict] = {}
+    terminal: set[str] = set()
+    for line in path.read_text().splitlines():
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        if not isinstance(row, dict) or row.get("slug") != slug:
+            continue
+        if row.get("kind") == "submitted" and \
+                str(row.get("stage", "")).startswith("spring_"):
+            submitted[str(row.get("order_id"))] = row
+        elif row.get("kind") == "order_terminal":
+            terminal.add(str(row.get("order_id")))
+    pending = [oid for oid in submitted if oid not in terminal][:limit]
+    out = {"checked": len(pending), "reconciled": 0, "unresolved": 0}
+    for oid in pending:
+        try:
+            order = q1._order_status(t, oid)
+            state = str(order.get("state") or order.get("status") or "").upper()
+            if not any(x in state for x in ("CANCEL", "EXPIRED", "REJECT",
+                                            "FILLED")):
+                q1.cancel_exact(t, oid)
+                order = q1._order_status(t, oid)
+            req = micro._d(submitted[oid].get("qty")) or D("0")
+            fill = micro.authoritative_fill(order, req, accept_partial=True) \
+                if req > 0 else None
+            q1.ledger_append({"kind": "order_terminal", "spring": True,
+                              "slug": slug, "order_id": oid,
+                              "filled_qty": str(fill["qty"]) if fill else "0",
+                              "price": (str(fill["price"]) if fill
+                                        else submitted[oid].get("price")),
+                              "source": "reconcile"})
+            out["reconciled"] += 1
+        except Exception:                          # noqa: BLE001
+            out["unresolved"] += 1                 # keeps counting as spend
+    return out
 
 
 def run_session(t: Optional[Transport] = None,
@@ -468,13 +591,88 @@ def run_session(t: Optional[Transport] = None,
         if skip:
             return {**report, "status": "SPRING_SKIP_NOT_QUALIFYING",
                     "reason": skip, "candidate_row": row}
+        # execution-freshness rule (OWNER 5552475548 item 2): the venue's
+        # LIVE market document, immediately before any submission
+        live_block = live_market_open_reason(t, slug, wall())
+        if live_block:
+            return {**report, "status": "SPRING_SAFE_REFUSAL",
+                    "reason": live_block}
+        # item 3: give every earlier submission its authoritative terminal
+        # row before the cap is computed from FILLED notional
+        report["reconcile"] = reconcile_submissions(t, slug)
         cum = spring_cumulative_notional(slug)
         report["spring_gates"] = {
             "band": f"{SPRING_BAND_LO}-{SPRING_BAND_HI}",
             "pair_target": str(SPRING_PAIR_TARGET),
             "session_notional_cap": str(SESSION_NOTIONAL_CAP),
             "prior_cumulative_notional": str(cum),
+            "cap_basis": "authoritative FILLED notional (partials included); "
+                         "unconfirmed submissions count in full",
+            "maker_rest_max_s": SPORTS_MAKER_REST_MAX_S,
         }
+
+        def _harvest(oid: str, stage: str, side_up_: bool, px_: D,
+                     qty_: D, relation_: str, got_: D, rest_s: float,
+                     end_reason: str) -> None:
+            """Report + durable rows for one submitted order: terminal
+            (always) and filled (when it filled)."""
+            q1.ledger_append({"kind": "order_terminal", "spring": True,
+                              "slug": slug, "order_id": oid,
+                              "filled_qty": str(got_), "price": str(px_),
+                              "rest_s": rest_s, "end_reason": end_reason})
+            if got_ > 0:
+                q1.ledger_append({"kind": "filled", "spring": True,
+                                  "stage": stage, "slug": slug,
+                                  "side": "YES" if side_up_ else "NO",
+                                  "price": str(px_), "qty": str(got_),
+                                  "order_id": oid})
+            report.setdefault("orders", []).append(
+                {"stage": stage, "order_id": oid,
+                 "side": "YES" if side_up_ else "NO",
+                 "px": str(px_), "qty": str(qty_), "filled_qty": str(got_),
+                 "relation": relation_, "rest_s": rest_s,
+                 "end_reason": end_reason,
+                 "outcome": "filled" if got_ > 0 else "no_fill_cancelled"})
+
+        def _still_wanted(side_up_: bool, px_: D, relation_: str,
+                          skey_: str):
+            """Why the resting order is no longer the current L5 action
+            (None = keep resting). Re-reads the live book each poll."""
+            def check() -> Optional[str]:
+                try:
+                    b = q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES")
+                except Exception as exc:              # noqa: BLE001
+                    return f"bbo_unreadable:{type(exc).__name__}"
+                if b.get("bid") is None or b.get("ask") is None:
+                    return "book_one_sided"
+                if relation_ in ("open", "extend") and not (
+                        q1.entry_ok(b["bid"])
+                        and SPRING_BAND_LO <= b["bid"] <= SPRING_BAND_HI):
+                    return f"band_left:{b['bid']}"
+                # our price must still be the touch on our side; a moved
+                # touch means L5 would re-quote, and a price at/through
+                # the opposite ask would breach post-only
+                if side_up_:
+                    touch, opp_ask = b["bid"], b["ask"]
+                else:
+                    touch, opp_ask = q1.ONE - b["ask"], q1.ONE - b["bid"]
+                touch = (D(str(touch)) / spec["tick"]).to_integral_value(
+                    rounding=ROUND_DOWN) * spec["tick"]
+                if px_ >= D(str(opp_ask)):
+                    return f"would_cross:{opp_ask}"
+                if relation_ in ("open", "extend") and touch != px_:
+                    return f"touch_moved:{touch}"
+                if inv.up + inv.dn > 0:
+                    k = spring_state_key(inv, b["bid"], settlement_t, wall())
+                    if k != skey_:
+                        p = pv2.proposal(model, k, inv.last_rel or "open",
+                                         "q<5",
+                                         residual=inv.behavioral_residual())
+                        if p["recommended_relation"] != relation_:
+                            return (f"l5_action_changed:"
+                                    f"{p['recommended_relation']}")
+                return None
+            return check
 
         actions = 0
         while actions < max_actions and not out_of_time():
@@ -553,18 +751,17 @@ def run_session(t: Optional[Transport] = None,
                     else "OUTCOME_SIDE_NO", px, qty,
                     f"spring_{relation}_{actions + 1}", post_only=True)
                 reached_order_stage = True
-                got = _await_order(
+                got, rest_s, end_reason = _await_order(
                     t, oid, qty,
                     min(stop_at, clock() + max(
-                        prop["next_reevaluation_s"], MIN_REEVAL_S)),
-                    clock, sleep)
+                        prop["next_reevaluation_s"], MIN_REEVAL_S,
+                        SPORTS_MAKER_REST_MAX_S)),
+                    clock, sleep,
+                    still_wanted=_still_wanted(side_up, px, relation, skey))
                 # every SUBMITTED order is reported, filled or not: the
                 # ladder is submitted -> filled -> settled -> realized
-                report.setdefault("orders", []).append(
-                    {"stage": f"spring_{relation}_{actions + 1}",
-                     "order_id": oid, "side": "YES" if side_up else "NO",
-                     "px": str(px), "qty": str(qty), "filled_qty": str(got),
-                     "outcome": "filled" if got > 0 else "no_fill_cancelled"})
+                _harvest(oid, f"spring_{relation}_{actions + 1}", side_up,
+                         px, qty, relation, got, rest_s, end_reason)
                 if got > 0:
                     fill = micro._terminal_positive_fill(t, oid, qty) or \
                         {"price": px, "qty": got}
@@ -593,16 +790,16 @@ def run_session(t: Optional[Transport] = None,
                     else "OUTCOME_SIDE_NO", px, qty,
                     f"spring_complete_{actions + 1}", post_only=True)
                 reached_order_stage = True
-                got = _await_order(
+                got, rest_s, end_reason = _await_order(
                     t, oid, qty,
                     min(stop_at, clock() + max(
-                        prop["next_reevaluation_s"], MIN_REEVAL_S)),
-                    clock, sleep)
-                report.setdefault("orders", []).append(
-                    {"stage": f"spring_complete_{actions + 1}",
-                     "order_id": oid, "side": "YES" if deficit_up else "NO",
-                     "px": str(px), "qty": str(qty), "filled_qty": str(got),
-                     "outcome": "filled" if got > 0 else "no_fill_cancelled"})
+                        prop["next_reevaluation_s"], MIN_REEVAL_S,
+                        SPORTS_MAKER_REST_MAX_S)),
+                    clock, sleep,
+                    still_wanted=_still_wanted(deficit_up, px, "complete",
+                                               skey))
+                _harvest(oid, f"spring_complete_{actions + 1}", deficit_up,
+                         px, qty, "complete", got, rest_s, end_reason)
                 if got > 0:
                     fill = micro._terminal_positive_fill(t, oid, qty) or \
                         {"price": px, "qty": got}

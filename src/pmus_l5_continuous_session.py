@@ -47,6 +47,7 @@ SELECT_POLL_S = 15.0            # recorder status cadence is ~20s
 SESSION_DEADLINE_S = 900.0      # per-market bound, as the one-shot probe
 RETRY_COOLDOWN_S = 120.0        # a market that just refused/no-filled waits
 MAX_SESSIONS_PER_CAMPAIGN = 8   # bounded reselection, not a runaway
+MAX_SESSIONS_PER_SLUG = 3       # attempt cap per market (x6 orders each)
 SPORTS_TTE_DEFAULT_S = base.SPORTS_TTE_DEFAULT_S
 LABEL_SHADOW = "SHADOW/THEORETICAL; DISARMED; no venue network"
 
@@ -114,12 +115,40 @@ def rank_candidates(status: Mapping[str, Any], now: float,
             return float(x.get("bid_touch_qty") or 0)
         except (TypeError, ValueError):
             return 0.0
+
+    def _gap(x: Mapping[str, Any]) -> int:
+        # OWNER 5552475548 item 2: recorder cadence is a QUALITY feature
+        # here (a clean feed ranks above a gappy one), never a veto
+        g = x.get("collector_gaps")
+        return 1 if g is None else int(bool(g))
     admitted.sort(key=lambda x: (x["off_distribution"], -x["state_n"],
-                                 -x["p_buy"], -_touch(x), x["slug"]))
+                                 -x["p_buy"], _gap(x), -_touch(x), x["slug"]))
+    # OWNER 5552475548 item 4: prioritise live CFB when its books are
+    # active, unless another market has MATERIALLY better L5-state fit and
+    # executable flow (twice the model evidence AND at least the depth).
+    cfb = [x for x in admitted if _is_cfb(x["slug"])]
+    if cfb and admitted[0] is not cfb[0]:
+        best, top_cfb = admitted[0], cfb[0]
+        materially_better = (
+            best["off_distribution"] is False
+            and best["state_n"] >= 2 * max(top_cfb["state_n"], 1)
+            and _touch(best) >= _touch(top_cfb))
+        if not materially_better:
+            admitted.remove(top_cfb)
+            admitted.insert(0, top_cfb)
     for i, x in enumerate(admitted, 1):
         x["rank"] = i
+        x["cfb"] = _is_cfb(x["slug"])
     return {"admitted": admitted, "refused": refused,
             "status_t": status.get("t")}
+
+
+CFB_LEAGUE_TOKENS = frozenset({"cfb", "ncaaf", "ncaafb"})
+
+
+def _is_cfb(slug: str) -> bool:
+    parts = str(slug).lower().split("-")
+    return len(parts) > 1 and parts[1] in CFB_LEAGUE_TOKENS
 
 
 def select_candidate(now: Optional[float] = None,
@@ -198,6 +227,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     start = clock()
     stop_at = start + campaign_s
     cooldown: dict[str, float] = {}
+    sessions_on: dict[str, int] = {}
     status = "CAMPAIGN_NO_CANDIDATE"
     while clock() < stop_at and len(report["sessions"]) < \
             MAX_SESSIONS_PER_CAMPAIGN:
@@ -246,9 +276,13 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             # one market at a time; residual holds to settlement
             status = f"CAMPAIGN_HOLD:{rep.get('status')}"
             break
-        if rep.get("stop_reason") == "spend_cap_reached":
-            # the durable per-market cap is spent for this slug; it will
-            # not change inside this campaign, so stop reselecting it
+        sessions_on[chosen["slug"]] = sessions_on.get(chosen["slug"], 0) + 1
+        if rep.get("stop_reason") == "spend_cap_reached" or \
+                sessions_on[chosen["slug"]] >= MAX_SESSIONS_PER_SLUG:
+            # the durable per-market cap is spent, or this slug has had
+            # its attempt allowance (OWNER 5552475548 item 3: attempts are
+            # capped separately from exposure so zero-fill cancellations
+            # can never become an infinite repost loop)
             cooldown[chosen["slug"]] = float("inf")
         else:
             cooldown[chosen["slug"]] = wall() + RETRY_COOLDOWN_S
