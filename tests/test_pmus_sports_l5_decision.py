@@ -113,8 +113,10 @@ def test_stale_1h_qualifier_is_never_currently_executable():
     assert row["window_status"] == "Q1_GATE_CLEARED"
     assert row["fresh_15m_status"] != "Q1_GATE_CLEARED"
     assert row["executable_now"] is False
-    assert row["stale_reason"] == ("stale_qualifier_not_executable:"
-                                   "1h_status_without_fresh_15m_confirmation")
+    # FRESHNESS is what refuses this, and it is the honest reason: the
+    # book really is ~40 minutes old. The old message blamed the missing
+    # 15m pair-completion status, which was the Q1 veto talking.
+    assert row["stale_reason"].startswith("book_stale:")
     assert row["next_action"]["decision"] == "no_action"   # book stale too
 
 
@@ -186,3 +188,105 @@ def test_decision_layer_errors_never_break_collector_heartbeat(
     assert rep["l5_sports_decisions"]["error"].startswith("RuntimeError")
     out = capsys.readouterr().out
     assert "PMUS_STATUS " in out                 # heartbeat survived
+
+
+# ---- OPEN admission (owner P0: pair economics are not an entry gate) ----
+
+def _fresh(**over):
+    row = {"observations": 40, "collector_gaps": 0, "q1_depth_support": True,
+           "ask_side_served_pct": 100.0, "status": "NOT_READY"}
+    row.update(over)
+    return row
+
+
+def _quote(**over):
+    plan = {"decision": "quote", "relation": "open", "side": "YES",
+            "target_price": "0.4500"}
+    plan.update(over)
+    return plan
+
+
+def test_open_admits_without_any_pair_completion_evidence():
+    """The core of the bug. A market that has never completed a pair --
+    status NOT_READY, zero matched slots -- must still admit a first
+    OPEN, because requiring past completions before a first entry is
+    circular: nothing completes if nothing may open."""
+    assert l5d.open_admission(_fresh(status="NOT_READY"), 3.0,
+                              _quote()) is None
+
+
+def test_q1_gate_cleared_is_not_required_and_not_consulted():
+    for status in ("NOT_READY", "SHADOW_CANDIDATE", "Q1_GATE_CLEARED"):
+        assert l5d.open_admission(_fresh(status=status), 3.0,
+                                  _quote()) is None
+
+
+def test_freshness_still_refuses():
+    r = l5d.open_admission(_fresh(), 10_000.0, _quote())
+    assert r and r.startswith("book_stale:")
+    assert l5d.open_admission(_fresh(), None, _quote()).startswith(
+        "book_stale:")
+
+
+def test_cadence_gaps_still_refuse():
+    assert l5d.open_admission(_fresh(collector_gaps=2), 3.0,
+                              _quote()) == "cadence_gap:2"
+
+
+def test_liquidity_still_refuses_a_book_we_cannot_rest_against():
+    assert l5d.open_admission(_fresh(q1_depth_support=False), 3.0,
+                              _quote()) == "no_q1_touch_depth"
+    assert l5d.open_admission(_fresh(ask_side_served_pct=0.0), 3.0,
+                              _quote()) == "one_sided_book"
+
+
+def test_an_unobserved_market_is_refused_not_assumed_good():
+    assert l5d.open_admission(_fresh(observations=0), 3.0,
+                              _quote()) == "no_observations_in_window"
+
+
+def test_off_distribution_state_still_refuses():
+    """Distribution and the model itself are the entry conditions that
+    remain -- an action v2 never took is not an L5 action."""
+    r = l5d.open_admission(
+        _fresh(), 3.0,
+        {"decision": "no_action", "reason": "v2_off_distribution"})
+    assert r == "model_no_open:v2_off_distribution"
+
+
+def test_the_model_declining_still_refuses():
+    r = l5d.open_admission(_fresh(), 3.0,
+                           {"decision": "no_action", "reason": "one_sided_book"})
+    assert r == "model_no_open:one_sided_book"
+
+
+def test_slate_ranking_no_longer_excludes_a_market_without_pair_evidence():
+    """The second veto: NOT_READY markets were dropped before any
+    decision row was built, so they could never be evaluated for OPEN."""
+    base = 1_000_000.0
+    obs = _qualifying_obs(base)
+    now = base + 26 * 35
+    out = l5d.slate_decisions({SLUG: obs}, now=now, model=_model())
+    assert out["candidates_evaluated"] >= 1
+
+
+def test_preflight_candidate_no_longer_requires_q1_gate_cleared():
+    base = 1_000_000.0
+    obs = _qualifying_obs(base)
+    now = base + 26 * 35
+    out = l5d.slate_decisions({SLUG: obs}, now=now, model=_model())
+    rows = out["rows"]
+    executable = [r for r in rows if r["executable_now"]]
+    if executable:
+        assert out["preflight_candidate"] is not None
+        assert out["preflight_candidate"]["slug"] == executable[0]["slug"]
+
+
+def test_completion_economics_are_untouched_by_this_change():
+    """The <=0.98 cap and the >=1c hard bound still price a COMPLETE --
+    they were only ever wrong as an ENTRY condition."""
+    inv = l5d.Inventory()
+    inv.record(True, l5d.D("0.24"))
+    px, econ = l5d.complement_target(inv.avg(True), l5d.D("0.80"))
+    assert px == l5d.D("0.74")                       # 0.98 cap, the tighter
+    assert econ["max_pair_cost"] == "0.98"

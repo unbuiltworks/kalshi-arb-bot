@@ -355,14 +355,9 @@ def decide_market(slug: str, obs: list, now: float,
                                   "no position)",
             }
 
-    fresh_ok = fresh.get("status") in ("Q1_GATE_CLEARED",)
-    executable_now = bool(fresh_ok and last_age is not None
-                          and last_age <= FRESH_BOOK_TTL_S
-                          and probe_action.get("decision") == "quote")
-    stale_reason = None
-    if hist.get("status") == "Q1_GATE_CLEARED" and not fresh_ok:
-        stale_reason = ("stale_qualifier_not_executable:"
-                        "1h_status_without_fresh_15m_confirmation")
+    open_block = open_admission(fresh, last_age, probe_action)
+    executable_now = open_block is None
+    stale_reason = open_block
     return {
         "slug": slug,
         "model_sha": model.get("_sha256_16"),
@@ -383,6 +378,49 @@ def decide_market(slug: str, obs: list, now: float,
     }
 
 
+def open_admission(fresh: Mapping[str, Any], last_age: Optional[float],
+                   probe_action: Mapping[str, Any]) -> Optional[str]:
+    """Why a market may NOT admit a first L5 OPEN. None means eligible.
+
+    OWNER P0: `Q1_GATE_CLEARED` required TWO completed pair round-trips
+    at <=0.99 economics inside the window before a market could be
+    entered at all. That is completion evidence being used as an entry
+    condition, and it is not L5 behaviour -- L5 OPENs on a state, holds
+    inventory, and completes later if the book allows. Requiring proof of
+    past completions before a first OPEN is circular: nothing can ever
+    complete if nothing may ever open.
+
+    What actually gates an OPEN, and all that gates it:
+
+      1. FRESHNESS   -- the book we would quote against is current
+      2. LIQUIDITY   -- a two-sided book with touch depth to rest against
+      3. DISTRIBUTION-- the frozen v2 model has stood in this state
+      4. THE MODEL   -- v2 recommends an action here, from flat
+
+    (3) and (4) are both carried by `probe_action`: it is `no_action`
+    with `v2_off_distribution` when the state was never visited, and a
+    `quote` only when the model actually recommends one.
+
+    Pair economics -- the <=0.98 observation cap, the >=1c hard bound,
+    repeated-completion evidence -- are deliberately ABSENT. They apply
+    to a completion, which is where a pair is formed and where they are
+    enforced unchanged in `plan_action`/`complement_target`.
+    """
+    if last_age is None or last_age > FRESH_BOOK_TTL_S:
+        return f"book_stale:{round(last_age or -1, 1)}s"
+    if not fresh.get("observations"):
+        return "no_observations_in_window"
+    if (fresh.get("collector_gaps") or 0) > 0:
+        return f"cadence_gap:{fresh.get('collector_gaps')}"
+    if not fresh.get("q1_depth_support"):
+        return "no_q1_touch_depth"
+    if not (fresh.get("ask_side_served_pct") or 0) > 0:
+        return "one_sided_book"
+    if probe_action.get("decision") != "quote":
+        return f"model_no_open:{probe_action.get('reason') or 'no_action'}"
+    return None
+
+
 def slate_decisions(by_slug: Mapping[str, list], now: Optional[float] = None,
                     model: Optional[Mapping[str, Any]] = None) -> dict:
     """Bounded decision emission for the status/heartbeat path."""
@@ -392,17 +430,21 @@ def slate_decisions(by_slug: Mapping[str, list], now: Optional[float] = None,
     for slug, obs in by_slug.items():
         a = st.analyze_market(obs, now, 900.0)
         h = st.analyze_market(obs, now, 3600.0)
+        # Status still ORDERS the queue -- a market with completion
+        # evidence is a better bet -- but it no longer EXCLUDES. Dropping
+        # NOT_READY here was the second Q1 veto: a market that has never
+        # completed a pair was never even evaluated for an OPEN.
         order = {"Q1_GATE_CLEARED": 0, "SHADOW_CANDIDATE": 1}
         f = order.get(a.get("status"), 2)
         g = order.get(h.get("status"), 2)
-        if f == 2 and g == 2:
-            continue
         ranked.append(((f, g, -(a.get("inferred_trades") or 0), slug), slug))
     ranked.sort()
     rows = [decide_market(s, by_slug[s], now, model)
             for _, s in ranked[:MAX_DECISION_ROWS]]
-    preflight = next((r for r in rows if r["executable_now"]
-                      and r["fresh_15m_status"] == "Q1_GATE_CLEARED"), None)
+    # The third Q1 veto: even an executable row was rejected unless it
+    # ALSO carried the pair-completion status. `executable_now` is the
+    # whole admission decision now.
+    preflight = next((r for r in rows if r["executable_now"]), None)
     return {
         "kind": "PMUS_SPORTS_L5_DECISION",
         "model_sha": model.get("_sha256_16"),
