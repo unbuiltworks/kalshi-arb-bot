@@ -811,6 +811,7 @@ def _gone_session(t, clock, sleep, wall, slug, gate_ok, deadline_s, **kw):
 def test_resolved_held_market_is_settled_from_venue_activities(monkeypatch,
                                                                tmp_path):
     _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(cont, "status_has_trades", lambda: True)
     monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
     from src import pmus_settlement_auditor as auditor
     monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
@@ -839,6 +840,7 @@ def test_resolved_held_market_is_settled_from_venue_activities(monkeypatch,
 def test_unresolved_held_market_keeps_resuming_with_realized_null(
         monkeypatch, tmp_path):
     _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(cont, "status_has_trades", lambda: True)
     monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
     from src import pmus_settlement_auditor as auditor
     monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
@@ -1333,10 +1335,16 @@ def test_recovery_gate_waits_for_public_prints_then_resumes_and_reports_burst(
     _arm(monkeypatch, tmp_path)
     monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
     tape = {"trades": 0}
+    tick = {"v": 0.0}
+    # the status doc ages with the wall (never from the future: the clock
+    # ticks between `now` and the status read); freshness is not the
+    # subject of this test
+    monkeypatch.setenv(entry.STRICT_EVIDENCE_MAX_AGE_ENV, "1000000")
     monkeypatch.setattr(
         entry, "load_status_document",
         lambda path=None: (_status([_row("x", touch="900",
-                                         trades_1h=tape["trades"])]),
+                                         trades_1h=tape["trades"])],
+                                   t=tick["v"] - 2000.0),
                            "status_url:test"))
     fake = Fake()
     shares = {"v": 100.0}
@@ -1371,11 +1379,15 @@ def test_recovery_gate_waits_for_public_prints_then_resumes_and_reports_burst(
                                "shadow_differs_from_executed": False}]}
     import itertools
     # each tick is 5 minutes of clock so the 30-minute milestone is reached
-    ticks = itertools.chain([0.0], (300.0 * i for i in range(1, 40)),
+    ticks = itertools.chain([0.0], (60.0 * i for i in range(1, 700)),
                             itertools.repeat(100000.0))
-    rep = cont.run_campaign(fake, clock=lambda: next(ticks),
-                            sleep=lambda s: None, wall=lambda: 1005.0,
-                            campaign_s=20000.0, session_runner=fake_session)
+
+    def clock():
+        tick["v"] = next(ticks)
+        return tick["v"]
+    rep = cont.run_campaign(fake, clock=clock,
+                            sleep=lambda s: None, wall=lambda: 1005.0 + tick["v"],
+                            campaign_s=40000.0, session_runner=fake_session)
     assert rep["outages"] and rep["outages"][0]["errors"] == 2
     o = rep["outages"][0]
     assert o["start_utc"] and o["account_recovered_utc"] and o["trades_resumed_utc"]
@@ -1467,3 +1479,207 @@ def test_capped_extend_falls_to_complete_only_when_the_flag_is_on(monkeypatch,
     assert rep["pair_economics"]["regime"] in ("spring_target", "hard_bound_only")
     assert not any(b.get("action") == "ORDER_ACTION_SELL"
                    for p, b in fake.posts if p == "/v1/orders")
+
+
+# ---- OWNER 5554553793 A: restart persistence, boot gate, recovery sim ----
+
+def _two_run_harness(monkeypatch, tmp_path, shares, tape):
+    from tests.test_pmus_spring_l5_session import Fake
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    monkeypatch.setattr(
+        entry, "load_status_document",
+        lambda path=None: (_status([_row("x", touch="900", trades_1h=25)]),
+                           "status_url:test"))
+    fake = Fake()
+    real = fake.request
+
+    def req(method, path, body=None, **kw):
+        out = real(method, path, body)
+        if path.endswith("/bbo"):
+            out["marketData"]["sharesTraded"] = str(shares["v"])
+        return out
+    fake.request = req
+    return fake
+
+
+def test_outage_baseline_and_gate_survive_a_restart(monkeypatch, tmp_path):
+    """Run 1 enters an outage (baseline sampled), the account recovers,
+    the gate is pending when the process dies. Run 2 (same durable
+    state dir) restores the baseline and the pending gate: no session
+    runs until prints move past the ORIGINAL baseline."""
+    shares, tape = {"v": 100.0}, {"trades": 0}
+    fake = _two_run_harness(monkeypatch, tmp_path, shares, tape)
+    calls = {"n": 0}
+
+    def flaky_held(t):
+        calls["n"] += 1
+        if calls["n"] in (2, 3):
+            raise q1.Halt("GET_RETRIES_EXHAUSTED:/v1/orders/open:HTTP Error 500")
+        return None
+    monkeypatch.setattr(cont, "held_market", flaky_held)
+    monkeypatch.setattr(cont, "status_has_trades", lambda: False)
+    ran = []
+    fake_session = lambda t, clock, sleep, wall, slug, **kw: ran.append(slug) or {}
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 60, itertools.repeat(1000.0))
+    rep1 = cont.run_campaign(fake, clock=lambda: next(ticks),
+                             sleep=lambda s: None, wall=lambda: 1005.0,
+                             campaign_s=500.0, session_runner=fake_session)
+    assert rep1["status"] == "CAMPAIGN_WAITING:VENUE_PRINTS" and not ran
+    saved = json.loads((tmp_path / "campaign_state.json").read_text())
+    assert saved["recovery_gate"]["pending"] is True
+    assert saved["liveness_baseline"] == {"x": 100.0}
+    assert saved["outage"]["first_error"] == "boot_without_public_prints" \
+        or saved["outage"]["first_error"].startswith("Halt")
+    # ---- restart: account healthy from the first read, tape still frozen
+    monkeypatch.setattr(cont, "held_market", lambda t: None)
+    ticks2 = itertools.chain([0.0] + [1.0] * 60, itertools.repeat(1000.0))
+    rep2 = cont.run_campaign(fake, clock=lambda: next(ticks2),
+                             sleep=lambda s: None, wall=lambda: 1005.0,
+                             campaign_s=500.0, session_runner=fake_session)
+    assert rep2["restored_state"]["recovery_gate"]["pending"] is True
+    assert rep2["status"] == "CAMPAIGN_WAITING:VENUE_PRINTS" and not ran
+    # ---- restart again: a print lands above the ORIGINAL baseline
+    shares["v"] = 100.5
+    ticks3 = itertools.chain([0.0] + [1.0] * 60, itertools.repeat(1000.0))
+    rep3 = cont.run_campaign(fake, clock=lambda: next(ticks3),
+                             sleep=lambda s: None, wall=lambda: 1005.0,
+                             campaign_s=500.0, session_runner=fake_session)
+    assert rep3["outages"][0]["trades_resumed_by"] == {"markets_moved": ["x"]}
+    assert ran == ["x"]
+    saved3 = json.loads((tmp_path / "campaign_state.json").read_text())
+    assert saved3["recovery_gate"] is None and saved3["outage"] is None
+    assert saved3["burst"]["start_wall"] == 1005.0
+
+
+def test_boot_without_public_prints_waits_before_any_session(monkeypatch,
+                                                              tmp_path):
+    """A fresh boot (no persisted state) while the recorder tape shows no
+    trades is treated as inside an outage: baseline sampled, gate
+    pending, no session -- until a print lands."""
+    shares, tape = {"v": 50.0}, {"trades": 0}
+    fake = _two_run_harness(monkeypatch, tmp_path, shares, tape)
+    monkeypatch.setattr(cont, "held_market", lambda t: None)
+    calls = {"n": 0}
+
+    def status_trades():
+        calls["n"] += 1
+        if calls["n"] == 4:
+            tape["trades"] = 3                    # tape moves on 4th check
+        return tape["trades"] > 0
+    monkeypatch.setattr(cont, "status_has_trades", status_trades)
+    ran = []
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 60, itertools.repeat(1000.0))
+    rep = cont.run_campaign(fake, clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=500.0,
+                            session_runner=lambda t, clock, sleep, wall, slug,
+                            **kw: ran.append(slug) or {})
+    o = rep["outages"][0]
+    assert o["first_error"] == "boot_without_public_prints"
+    assert o["trades_resumed_by"] == {"recorder_tape": True}
+    assert ran == ["x"]
+
+
+def test_recovery_burst_milestones_are_not_double_counted_after_restart(
+        monkeypatch, tmp_path):
+    shares, tape = {"v": 100.0}, {"trades": 5}
+    fake = _two_run_harness(monkeypatch, tmp_path, shares, tape)
+    monkeypatch.setattr(cont, "held_market", lambda t: None)
+    monkeypatch.setattr(cont, "status_has_trades", lambda: True)
+    # a burst already reported the 30-minute milestone before the restart
+    cont.save_campaign_state({
+        "saved_utc": "x", "rung": "R1", "filled_markets": ["m1"],
+        "settled_here": ["m1"], "outage": None, "liveness_baseline": {},
+        "recovery_gate": None,
+        "burst": {"start_wall": 1000.0, "funnel0": {}, "sessions0": 0,
+                  "settlements0": 0, "milestones": [30, 60, 120],
+                  "done": [30]}})
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 60, itertools.repeat(1000.0))
+    rep = cont.run_campaign(fake, clock=lambda: next(ticks),
+                            sleep=lambda s: None,
+                            wall=lambda: 1000.0 + 61 * 60,    # 61 min later
+                            campaign_s=500.0,
+                            session_runner=lambda *a, **k: {})
+    assert [b["minutes"] for b in rep["recovery_bursts"]] == [60]
+    assert rep["recovery_bursts"][0]["labels"].startswith("after a restart")
+    assert rep["restored_state"]["filled_markets"] == ["m1"]
+    saved = json.loads((tmp_path / "campaign_state.json").read_text())
+    assert saved["burst"]["done"] == [30, 60]
+
+
+def test_rung_fills_survive_a_restart(monkeypatch, tmp_path):
+    """Two markets filled and settled before the restart count toward
+    the 3-market R1 rung; the third completes it."""
+    shares, tape = {"v": 100.0}, {"trades": 5}
+    fake = _two_run_harness(monkeypatch, tmp_path, shares, tape)
+    monkeypatch.setattr(cont, "status_has_trades", lambda: True)
+    cont.save_campaign_state({
+        "saved_utc": "x", "rung": "R1", "filled_markets": ["m1", "m2"],
+        "settled_here": ["m1", "m2"], "outage": None,
+        "liveness_baseline": {}, "recovery_gate": None, "burst": None})
+    fake.positions["x"] = {"netPositionDecimal": "0.03"}
+    from src import pmus_settlement_auditor as auditor
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+        "market": slug, "settled": True, "status": "REALIZED",
+        "settlement_key": "r", "realized_confirmed": True,
+        "realized_usd": "0.01", "position_net": "0",
+        "resolution": {"side": "YES", "tradeId": "r", "updateTime": "t"}})
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 60, itertools.repeat(1000.0))
+    rep = cont.run_campaign(fake, clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=500.0, session_runner=_gone_session)
+    assert rep["status"] == "CAMPAIGN_RUNG_COMPLETE"
+    assert rep["advance_gate"]["filled_markets"] == ["m1", "m2", "x"]
+
+
+def test_deterministic_recovery_simulation(monkeypatch, tmp_path):
+    """OWNER 5554553793 A, end to end on one held market: account
+    endpoints recover before the tape -> no trade; tape advances ->
+    re-sweep/reconcile -> held-state decision (resume) -> campaign
+    resumes; then an ambiguous account (two markets held) -> fail closed."""
+    shares, tape = {"v": 100.0}, {"trades": 0}
+    fake = _two_run_harness(monkeypatch, tmp_path, shares, tape)
+    fake.positions["held"] = {"netPositionDecimal": "0.03"}
+    monkeypatch.setattr(cont, "status_has_trades", lambda: tape["trades"] > 0)
+    calls = {"n": 0}
+    real_held = cont.held_market
+
+    def flaky_held(t):
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise q1.Halt("GET_RETRIES_EXHAUSTED:/v1/orders/open:HTTP Error 500")
+        if calls["n"] == 5:
+            shares["v"] = 101.0                  # tape advances
+        if calls["n"] == 8:
+            fake.positions["other"] = {"netPositionDecimal": "0.02"}
+        return real_held(t)
+    monkeypatch.setattr(cont, "held_market", flaky_held)
+    sweeps = []
+    real_sweep = cont.sweep_orphan_orders
+    monkeypatch.setattr(cont, "sweep_orphan_orders",
+                        lambda t: sweeps.append(1) or real_sweep(t))
+    resumed = []
+
+    def session(t, clock, sleep, wall, slug, gate_ok, deadline_s, **kw):
+        resumed.append((slug, kw.get("resume")))
+        return {"status": "SPRING_RESIDUAL_HOLD", "slug": slug,
+                "inventory": {"up": "0.03", "dn": "0"}, "orders": [],
+                "decisions": [{"acted": "hold"}]}
+    import itertools
+    ticks = itertools.count(0.0, 0.05)        # ~10k calls inside the campaign
+    rep = cont.run_campaign(fake, clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=500.0, session_runner=session)
+    # account recovered at call 3 while the tape was frozen: no session
+    o = rep["outages"][0]
+    assert o["account_recovered_utc"]
+    assert "x" in o["trades_resumed_by"]["markets_moved"]
+    assert len(sweeps) == 2                       # boot + recovery re-sweep
+    assert resumed and all(r == ("held", True) for r in resumed)
+    # then the ambiguous account stops the campaign, fail closed
+    assert rep["status"] == "CAMPAIGN_STOP:MULTIPLE_POSITIONS"

@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from pathlib import Path
 from decimal import Decimal as D
 from typing import Any, Mapping, Optional
 
@@ -489,6 +490,39 @@ def status_has_trades() -> bool:
         return False
 
 
+CAMPAIGN_STATE_FILE = "campaign_state.json"
+
+
+def campaign_state_path() -> Path:
+    return base.q1.base.state_dir() / CAMPAIGN_STATE_FILE
+
+
+def load_campaign_state() -> dict:
+    """OWNER 5554553793 A: the outage baseline, the recovery gate, the
+    recovery-burst milestones already reported, and the rung's filled /
+    settled markets survive a restart or redeploy. Missing or unreadable
+    state reads as empty (fail closed: the boot gate below still runs)."""
+    try:
+        raw = json.loads(campaign_state_path().read_text(encoding="utf-8"))
+        return raw if isinstance(raw, dict) else {}
+    except Exception:                              # noqa: BLE001
+        return {}
+
+
+def save_campaign_state(state: Mapping[str, Any]) -> bool:
+    """Atomic write on the durable mount; never raises."""
+    try:
+        path = campaign_state_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(state, default=str, sort_keys=True),
+                       encoding="utf-8")
+        tmp.replace(path)
+        return True
+    except Exception:                              # noqa: BLE001
+        return False
+
+
 def burst_report(report: Mapping[str, Any], funnel: Mapping[str, Any],
                  burst: Mapping[str, Any], minutes: int) -> dict:
     """OWNER 5554127702 #5: what happened in the first N minutes after
@@ -634,6 +668,64 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     recovery_gate: Optional[dict] = None
     burst: Optional[dict] = None
     gate_logs = 0
+    # OWNER 5554553793 A: durable campaign state. A restart/redeploy in
+    # the middle of an outage keeps the print baseline, the pending gate,
+    # the rung's filled/settled markets and the burst milestones already
+    # reported (no double count). Burst timing is kept in WALL time so a
+    # restart cannot reset the 30/60/120-minute clock.
+    persisted = load_campaign_state() if armed and t is not None else {}
+    if persisted:
+        filled_markets |= set(persisted.get("filled_markets") or [])
+        settled_here |= set(persisted.get("settled_here") or [])
+        for s_ in settled_here:
+            cooldown[s_] = float("inf")
+        if persisted.get("outage"):
+            outage = dict(persisted["outage"])
+            outage["start_clock"] = clock() - float(
+                outage.get("elapsed_s") or 0.0)
+            liveness_baseline = dict(persisted.get("liveness_baseline") or {})
+            if persisted.get("recovery_gate"):
+                recovery_gate = dict(persisted["recovery_gate"])
+            else:
+                iteration_errors.append(outage["start_clock"])
+        if persisted.get("burst"):
+            burst = dict(persisted["burst"])
+            burst.update({"restarted": True, "funnel0": {}, "sessions0": 0,
+                          "settlements0": 0})
+        report["restored_state"] = {
+            k: persisted.get(k) for k in ("saved_utc", "outage",
+                                          "recovery_gate", "burst",
+                                          "filled_markets", "settled_here")}
+        _log("campaign_state_restored", **report["restored_state"])
+    elif armed and t is not None and not status_has_trades():
+        # BOOT GATE: no persisted outage but the recorder tape shows no
+        # trades in the hour -- treat the boot as inside an outage: sample
+        # the print baseline now and wait for prints before any session
+        # (account endpoints healthy before tape -> no trade).
+        liveness_baseline = liveness_sample(t, liveness_slugs())
+        outage = {"start_clock": clock(), "start_utc": _utc(wall),
+                  "first_error": "boot_without_public_prints",
+                  "account_recovered_utc": _utc(wall)}
+        recovery_gate = {"pending": True, "checks": 0, "boot": True}
+        _log("boot_gate_waiting", liveness_baseline=liveness_baseline)
+
+    def _persist() -> None:
+        if not (armed and t is not None):
+            return
+        snap = {
+            "saved_utc": _utc(wall), "rung": active_rung["id"],
+            "filled_markets": sorted(filled_markets),
+            "settled_here": sorted(settled_here),
+            "outage": ({**{k: v for k, v in outage.items()
+                           if k != "start_clock"},
+                        "elapsed_s": round(clock() - outage["start_clock"], 1)}
+                       if outage else None),
+            "liveness_baseline": liveness_baseline,
+            "recovery_gate": recovery_gate,
+            "burst": burst,
+        }
+        save_campaign_state(snap)
+    _persist()
 
     def _rung_gate() -> Optional[str]:
         """After the rung's markets are all flat/settled: stop at the
@@ -720,6 +812,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     # enough -- public prints must move again before any
                     # session runs; until then every iteration waits here
                     recovery_gate = {"pending": True, "checks": 0}
+                    _persist()
                 if recovery_gate and recovery_gate.get("pending"):
                     live = liveness_sample(t, list(liveness_baseline)
                                            or liveness_slugs())
@@ -737,12 +830,14 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                             else {"recorder_tape": True})
                         report.setdefault("outages", []).append(outage)
                         _log("venue_trading_resumed", **outage)
-                        burst = {"start_clock": clock(),
+                        burst = {"start_wall": float(wall()),
                                  "funnel0": json.loads(json.dumps(funnel)),
                                  "sessions0": len(report["sessions"]),
                                  "settlements0": len(report.get("settlements") or []),
                                  "milestones": [30, 60, 120], "done": []}
                         outage, liveness_baseline = None, {}
+                        recovery_gate = None
+                        _persist()
                     else:
                         gate_logs += 1
                         if gate_logs % 4 == 1:
@@ -751,18 +846,25 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                  baseline=liveness_baseline, now=live,
                                  recorder_tape=tape)
                         status = "CAMPAIGN_WAITING:VENUE_PRINTS"
+                        if recovery_gate["checks"] % 4 == 1:
+                            _persist()
                         sleep(SELECT_POLL_S)
                         continue
                 if burst:
-                    elapsed_min = (clock() - burst["start_clock"]) / 60.0
+                    elapsed_min = (float(wall()) - burst["start_wall"]) / 60.0
                     for m in burst["milestones"]:
                         if m not in burst["done"] and elapsed_min >= m:
                             burst["done"].append(m)
                             rb = burst_report(report, funnel, burst, m)
+                            if burst.get("restarted"):
+                                rb["labels"] = ("after a restart: deltas count "
+                                                "only this process's sessions")
                             report.setdefault("recovery_bursts", []).append(rb)
                             _log("recovery_burst", **rb)
+                            _persist()
                     if len(burst["done"]) == len(burst["milestones"]):
                         burst = None
+                        _persist()
                 if held == MULTI_HELD:
                     status = f"CAMPAIGN_STOP:{MULTI_HELD}"
                     break
@@ -783,6 +885,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                             settled_here.add(slug)
                             filled_markets.add(slug)
                             cooldown[slug] = float("inf")   # never re-enter
+                            _persist()
                         report.setdefault("settlements", []).append(
                             {"slug": slug, **audit})
                         if audit.get("status") == "REALIZED":
@@ -791,7 +894,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                  resolution=audit.get("resolution"))
                             report["realized_pnl"] = _sum_realized(report)
                 if held:
-                    filled_markets.add(held)
+                    if held not in filled_markets:
+                        filled_markets.add(held)
+                        _persist()
                     _log("resume_start", slug=held)
                     rep = dict(session_runner(
                         t, clock=clock, sleep=sleep, wall=wall, slug=held,
@@ -830,6 +935,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                                    "SETTLED_WITH_BUSTED_TRADE_REVIEW"):
                             settled_here.add(held)
                             cooldown[held] = float("inf")   # never re-enter
+                            _persist()
                             report.setdefault("settlements", []).append(
                                 {"slug": held, **audit})
                             if audit.get("status") == "REALIZED":
@@ -915,6 +1021,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 # one market at a time; the held market is continued by the
                 # resume path above (OWNER 5552607804) until flat/settled
                 filled_markets.add(chosen["slug"])
+                _persist()
                 status = f"CAMPAIGN_HOLD:{rep.get('status')}"
                 if t is None:                 # no venue view: nothing to resume
                     break
@@ -951,6 +1058,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     liveness_baseline = liveness_sample(t, liveness_slugs())
                 _log("venue_outage_start", **outage,
                      liveness_baseline=liveness_baseline)
+                _persist()
             _log("campaign_iteration_error",
                  err=f"{type(exc).__name__}:{str(exc)[:160]}",
                  errors_in_window=len(iteration_errors),
