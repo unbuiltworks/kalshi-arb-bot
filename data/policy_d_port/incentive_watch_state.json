@@ -9,28 +9,28 @@
    "upcoming": 0
   },
   "KXCOPPER15M": {
-   "active_now": 1,
-   "latest_end_date": "2026-09-05T04:00:00Z",
-   "programs_total": 618,
+   "active_now": 0,
+   "latest_end_date": "2026-09-07T04:00:00Z",
+   "programs_total": 642,
    "reward_values": [
     200000
    ],
    "types": [
     "liquidity"
    ],
-   "upcoming": 63
+   "upcoming": 24
   },
   "KXCRYPTOLEAD15M": {
    "active_now": 5,
-   "latest_end_date": "2026-09-05T04:00:00Z",
-   "programs_total": 5425,
+   "latest_end_date": "2026-09-06T04:00:00Z",
+   "programs_total": 5905,
    "reward_values": [
     200000
    ],
    "types": [
     "liquidity"
    ],
-   "upcoming": 315
+   "upcoming": 310
   },
   "KXETH15M": {
    "active_now": 0,
@@ -41,53 +41,53 @@
    "upcoming": 0
   },
   "KXGOLD15M": {
-   "active_now": 1,
-   "latest_end_date": "2026-09-05T04:00:00Z",
-   "programs_total": 1870,
+   "active_now": 0,
+   "latest_end_date": "2026-09-07T04:00:00Z",
+   "programs_total": 1706,
    "reward_values": [
     200000
    ],
    "types": [
     "liquidity"
    ],
-   "upcoming": 63
+   "upcoming": 24
   },
   "KXNATGAS15M": {
-   "active_now": 1,
-   "latest_end_date": "2026-09-05T04:00:00Z",
-   "programs_total": 618,
+   "active_now": 0,
+   "latest_end_date": "2026-09-07T04:00:00Z",
+   "programs_total": 642,
    "reward_values": [
     200000
    ],
    "types": [
     "liquidity"
    ],
-   "upcoming": 63
+   "upcoming": 24
   },
   "KXSILVER15M": {
-   "active_now": 1,
-   "latest_end_date": "2026-09-05T04:00:00Z",
-   "programs_total": 1870,
+   "active_now": 0,
+   "latest_end_date": "2026-09-07T04:00:00Z",
+   "programs_total": 1706,
    "reward_values": [
     200000
    ],
    "types": [
     "liquidity"
    ],
-   "upcoming": 63
+   "upcoming": 24
   },
   "KXWTI15M": {
-   "active_now": 1,
-   "latest_end_date": "2026-09-05T04:00:00Z",
-   "programs_total": 1870,
+   "active_now": 0,
+   "latest_end_date": "2026-09-07T04:00:00Z",
+   "programs_total": 1706,
    "reward_values": [
     200000
    ],
    "types": [
     "liquidity"
    ],
-   "upcoming": 63
+   "upcoming": 24
   }
  },
- "observed_at": "2026-09-04T12:09:53Z"
+ "observed_at": "2026-09-05T12:19:34Z"
 }
