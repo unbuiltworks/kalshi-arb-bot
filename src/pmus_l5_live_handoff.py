@@ -143,8 +143,18 @@ def event_similarity(obs: list, now: float,
         out["measurable"] = False
     else:
         out["measurable"] = True
+        # Report EVENTS and VOLUME together. The gate counts trade
+        # events, which is the right proxy for how often someone crosses
+        # and takes a resting order -- but a market can move thousands of
+        # shares in three lumps, and "thin_flow:3" alone reads as dead
+        # when it is merely lumpy. Naming only the number an operator
+        # would misread is how a tradeable market gets discarded.
+        out["inferred_trades"] = a.get("inferred_trades")
+        out["inferred_volume"] = a.get("inferred_volume")
         if (a.get("inferred_trades") or 0) < 10:
-            out["reasons"].append(f"thin_flow:{a.get('inferred_trades')}")
+            out["reasons"].append(
+                f"thin_flow:{a.get('inferred_trades')}events"
+                f"/{a.get('inferred_volume')}shares")
         if a.get("two_sided_inferred_flow") is not True:
             out["reasons"].append("one_directional_flow")
     if (a.get("collector_gaps") or 0) > 0:

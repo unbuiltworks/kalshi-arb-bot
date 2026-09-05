@@ -392,3 +392,36 @@ def test_the_session_report_states_the_residual_policy():
     rep = ho.session_report("evt", [], inv, D("0.009"))
     assert rep["residual_policy"] == "HOLD_TO_SETTLEMENT"
     assert rep["realized_pnl"] is None
+
+
+def test_thin_flow_names_the_volume_not_just_the_event_count():
+    """A market can move thousands of shares in three lumps. Reporting
+    only "thin_flow:3" reads as dead when it is merely lumpy, and that is
+    how a tradeable market gets discarded."""
+    rows = _tape(n=40, step=6.0)
+    obs = [r for r in rows if r["kind"] == "bbo_book"]
+    sim = ho.event_similarity(obs, T0 + 240)
+    assert sim["inferred_trades"] is not None
+    assert sim["inferred_volume"] is not None
+
+
+def test_a_lumpy_market_is_distinguishable_from_a_dead_one():
+    """Both fail the gate; only one of them ever traded, and the reason
+    string has to say which."""
+    dead = _tape(n=40, step=6.0)
+    for r in dead:
+        if r["kind"] == "bbo_book":
+            r["shares_traded_cum"] = "1000.00"      # never moves
+    lumpy = _tape(n=40, step=6.0)
+    for i, r in enumerate([x for x in lumpy if x["kind"] == "bbo_book"]):
+        # all the volume arrives in two bursts
+        r["shares_traded_cum"] = "1000.00" if i < 20 else "11000.00"
+    d = ho.event_similarity([r for r in dead if r["kind"] == "bbo_book"],
+                            T0 + 240)
+    l = ho.event_similarity([r for r in lumpy if r["kind"] == "bbo_book"],
+                            T0 + 240)
+    d_reason = next(r for r in d["reasons"] if r.startswith("thin_flow"))
+    l_reason = next(r for r in l["reasons"] if r.startswith("thin_flow"))
+    assert d_reason != l_reason
+    assert "0.0shares" in d_reason or "0shares" in d_reason
+    assert l["inferred_volume"] > 0
