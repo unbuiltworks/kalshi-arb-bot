@@ -353,3 +353,78 @@ report states the source:
 
 Supply the real value when you have it. An assumption that quietly
 becomes a fact is how a notional cap gets widened by accident.
+
+---
+
+## Probe #1: the one-shot spring L5 manifest
+
+Service `pmus-spring-l5-probe`, image `deploy/pmus_spring_l5/Dockerfile`,
+config `deploy/pmus_spring_l5/railway.json`. Volume `/state/pmus-spring`.
+
+`restartPolicyType` is **NEVER**, and that is load-bearing: probe #1 is
+ONE bounded session, and an auto-restart would silently turn a one-shot
+campaign into a repeating one against the same caps. The start command
+runs the **guard** (`src.pmus_spring_l5_probe_entry`), never the session
+directly — starting `pmus_spring_l5_session` would bypass the
+strict-evidence, provenance and durable-state checks entirely.
+
+### Residual policy (OWNER DECISION 5547834091)
+
+A bounded residual is **HELD to settlement and redeemed**, not flattened.
+This preserves L5's own measured behaviour ($2.18 of lifetime sells
+against 15,243 redeems) and supersedes rule R5 for this isolated
+replication probe only. There is deliberately no flatten path in the
+code, enforced by a test that scans the module as code rather than prose.
+
+A residual settling to zero is accounted honestly as **directional
+residual P&L**, reported separately from pair-locked cash and never
+netted into it. It adds no exposure: the residual is already bounded by
+the residual cap and the event notional cap, and a held binary cannot
+lose more than it cost — so the spend cap is the loss cap.
+
+### Before arming, always
+
+```
+python3 -m src.pmus_spring_probe_boundary \
+    --collector-root /state/pmus-sports \
+    --recorder-status /state/pmus-ws/status/pmus_ws_status.jsonl
+```
+
+If it prints no blockers other than `spring_dual_key_absent`, the path is
+clean and the only thing left is the operator key. Any other blocker is
+a real refusal — none of them are advisory.
+
+### Arming variables (operator-held, never set from a Claude session)
+
+```
+PMUS_SPRING_EVIDENCE_STATUS_PATH=<recorder status document>
+PMUS_SPRING_MARKET_SLUG=<slug>            PMUS_SPRING_GATE_EVIDENCE=<same slug>
+PMUS_SPRING_REPEATED_COMPLETION=<same>    PMUS_SPRING_LIVE=YES
+PMUS_SPRING_SESSION_ID=<fresh id>         PMUS_SPRING_ARM=<same id>
+```
+
+The slug stays operator-named on purpose. `PMUS_SPRING_MARKET_SLUG` and
+`PMUS_SPRING_GATE_EVIDENCE` are part of the arming key; letting the probe
+choose its own market would weaken arming, so it never does.
+
+### Evidence: two sources, two different jobs
+
+The **collector** nominates the candidate — it watches the whole slate,
+but it is keyless, so its trade direction is INFERRED from `lastTradePx`
+against the BBO and it can never carry authenticated provenance. The
+**recorder** authenticates it — it observes direction on the
+authenticated stream, which is the only provenance admission accepts.
+
+So a collector candidate alone can never admit a probe, however strong it
+looks. The chain is: collector nominates the slug → operator pins it on
+the recorder → recorder authenticates → probe reads that status document.
+
+### Envelope (unchanged)
+
+One event, maker-only, one outstanding order at a time, account-wide
+flat/open-order preflight, ≤$0.05 cumulative OPEN/EXTEND notional per
+market per session and across invocations via the durable ledger, max 6
+actions, residual and imbalance caps, daily-loss stop, exact-ID cancel
+plus market-scoped deadman, no auto-restart, ≤0.98 observation cap with
+the ≥1c-after-known-fees hard bound always in the completion `min()`,
+rebates never counted toward that bound.
