@@ -319,6 +319,10 @@ class ShadowService:
                 "shadow_unique_windows": len(entered),
                 "shadow_duplicates_dropped": int(getattr(self, "restore_duplicates_dropped", 0) or 0),
                 "shadow_not_entered_rows": len(rows) - len(entered),
+                # OWNER 5558646019 #2/#3: the frozen gate consumes ONLY
+                # decisions whose lookup version is proven (canonical v2);
+                # legacy rows are UNVERIFIABLE_LEGACY diagnostics
+                **self._lookup_split_report(rows),
                 # canonical frozen-gate count: unique ENTERED windows (the
                 # set the arm spec scores); `windows` below is the same
                 # set from research_arm_verdict, `windows_since_freeze`
@@ -327,6 +331,28 @@ class ShadowService:
                 "first_entry_utc": _utc(ts[0]) if ts else None,
                 "last_entry_utc": _utc(ts[-1]) if ts else None,
                 **gs.research_arm_verdict(rows, spec)}
+
+    def _lookup_split_report(self, rows: list) -> dict:
+        entered = [r for r in rows
+                   if r.get("status") in ("MATCHED", "RESIDUAL_HOLD", "NO_FILL")]
+        sp = gs.split_rows_by_lookup(entered)
+        gate = gs.action_scoring(sp["v2"]) if sp["v2"] else {"scored_decisions": 0}
+        diag = gs.action_scoring(sp["legacy"]) if sp["legacy"] else {"scored_decisions": 0}
+        keep = ("scored_decisions", "l1_sampled_vs_l5", "l1_acted_vs_l5",
+                "hold_share_of_decisions", "hold_refusals", "post_fill",
+                "off_distribution_rate_pct")
+        return {
+            "lookup_provenance": {**sp["provenance"], "code_sha": gs.CODE_SHA},
+            "action_scoring_corrected_gate": {
+                **{k: gate.get(k) for k in keep}, "lookup_version": gs.LOOKUP_VERSION,
+                "labels": "canonical lookup rows only; the ONLY values eligible for the "
+                          "clean frozen verdict"},
+            "action_scoring_v1_diagnostic": {
+                **{k: diag.get(k) for k in keep},
+                "labels": "UNVERIFIABLE_LEGACY (v1 keys); comparison only"},
+            "off_distribution_corrected_gate": gate.get("off_distribution_rate_pct"),
+            "off_distribution_v1_diagnostic": diag.get("off_distribution_rate_pct"),
+        }
 
     def action_scoring_report(self) -> dict:
         """Distributional fidelity for EVERY arm on windows entered after
@@ -472,7 +498,8 @@ class ShadowService:
                                      ("lookup_version", "state", "state_v1", "last_rel",
                                       "last_size_executed", "last_size_behavioral",
                                       "pre_fill", "off_distribution_v1", "lookup_tier",
-                                      "price_convention")}
+                                      "price_convention", "model_sha", "code_sha",
+                                      "state_inputs")}
                                     if d.get("lookup") else None)}
                         for d in r.get("decisions") or []]
                     # identity is always explicit (LIVE 22:30:30Z: early

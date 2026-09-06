@@ -96,13 +96,17 @@ def test_gate_passes_only_with_enough_agreeing_live_and_shadow_evidence():
     reports = [{"slug": "all", "decisions": decs, "orders": orders}]
     model = {"base": {"p45-55c|tte>10m|flat": {"open|q<5": 67},
                       "p45-55c|tte>10m|imb1-10": {"extend|q<5": 33}}}
+    scoring = {"scored_decisions": 400, "l1_sampled_vs_l5": 0.05,
+               "l1_acted_vs_l5": 0.15, "off_distribution_rate_pct": 2.0,
+               "post_fill": {"decisions": 80,
+                             "complete_freq_gap_pp_sampled": -3.0,
+                             "complete_freq_gap_pp_acted": -6.0}}
     rolling = {"research_arm_stochastic": {
         "arm": "reprice_180s:stochastic", "windows_since_freeze": 320,
-        "action_scoring": {"scored_decisions": 400, "l1_sampled_vs_l5": 0.05,
-                           "l1_acted_vs_l5": 0.15, "off_distribution_rate_pct": 2.0,
-                           "post_fill": {"decisions": 80,
-                                         "complete_freq_gap_pp_sampled": -3.0,
-                                         "complete_freq_gap_pp_acted": -6.0}}}}
+        "action_scoring": scoring,
+        # OWNER 5558646019 #3: the gate consumes only proven canonical rows
+        "lookup_provenance": {"v2_decisions": 400, "legacy_decisions": 0, "v2_windows": 320},
+        "action_scoring_corrected_gate": {**scoring, "lookup_version": 2}}}
     out = gate.evaluate(reports, rolling=rolling, model=model)
     v = out["verdict"]
     assert v["failing"] == [] and v["unmeasured"] == [], v

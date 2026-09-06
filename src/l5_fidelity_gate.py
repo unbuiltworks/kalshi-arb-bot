@@ -335,7 +335,18 @@ def score_shadow(rolling: Optional[Mapping[str, Any]], spec: Mapping[str, Any]) 
     if not rolling:
         return {"status": "UNMEASURED", "note": "no rolling report given"}
     ra = rolling.get("research_arm_stochastic") or {}
-    sc = ra.get("action_scoring") or {}
+    # OWNER 5558646019 #2/#3: the gate consumes ONLY rows whose lookup
+    # version is proven (the canonical v2 lookup). A report without lookup
+    # provenance cannot prove which lookup produced a row -> fail closed
+    # (UNMEASURED with the reason); the v1 numbers stay a diagnostic.
+    prov = ra.get("lookup_provenance")
+    gate_sc = ra.get("action_scoring_corrected_gate") or {}
+    if prov is None:
+        sc, lookup_status = {}, "UNPROVABLE_LOOKUP_VERSION: report carries no lookup_provenance"
+    elif int(gate_sc.get("scored_decisions") or 0) == 0:
+        sc, lookup_status = {}, "NO_CANONICAL_LOOKUP_ROWS_YET"
+    else:
+        sc, lookup_status = gate_sc, "OK:lookup_version_2"
     thr = spec["dimensions"]["action_distribution_relation"]["pass"]
     thr_p = spec["dimensions"]["post_fill_complete_gap"]["pass"]
     thr_o = spec["dimensions"]["off_distribution_rate"]["pass"]
@@ -366,6 +377,12 @@ def score_shadow(rolling: Optional[Mapping[str, Any]], spec: Mapping[str, Any]) 
         "shadow_duplicates_dropped": ra.get("shadow_duplicates_dropped"),
         "shadow_first_entry_utc": ra.get("first_entry_utc"),
         "shadow_last_entry_utc": ra.get("last_entry_utc"),
+        "lookup_status": lookup_status,
+        "lookup_provenance": prov,
+        "windows_entered_unique_v2": (prov or {}).get("v2_windows"),
+        "off_distribution_corrected_gate": ra.get("off_distribution_corrected_gate"),
+        "off_distribution_v1_diagnostic": ra.get("off_distribution_v1_diagnostic"),
+        "action_scoring_v1_diagnostic": ra.get("action_scoring_v1_diagnostic"),
         "action_distribution_relation": _dim(
             st(None if l1s is None else (l1s <= thr["l1_sampled_vs_l5_max"]
                                          and (l1a is None or l1a <= thr["l1_acted_vs_l5_max"]))),
@@ -784,7 +801,11 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
         "max_rows_per_seed": max(seeds.values()) if seeds else 0,
         "note": "rows sharing a seed replay the same draw (pre-f465fbc9 "
                 "decision_idx restart); reported, not excluded"}
-    dd["maintenance"] = {"windows_declared": len(mwin),
+    dd["maintenance"] = {"windows": [{k: w.get(k) for k in (
+                                          "id", "start_utc", "end_utc", "effective_end_utc",
+                                          "boundary", "overrun_s")}
+                                     for w in (maintenance or [])],
+                         "windows_declared": len(mwin),
                          "decisions_inside_maintenance": inside_m,
                          "intervals_excluded_maintenance": int(
                              live.get("intervals_excluded_maintenance") or 0),

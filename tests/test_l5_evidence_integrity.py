@@ -328,9 +328,11 @@ def test_declared_maintenance_window_is_a_planned_outage_not_evidence(tmp_path):
     assert plain["live"]["timing_cadence"]["n"] == 5
     assert marked["live"]["timing_cadence"]["n"] == 3         # 2 excluded
     m = marked["evidence_progress"]["accounting"]["maintenance"]
-    assert m == {"windows_declared": 1, "decisions_inside_maintenance": 1,
-                 "intervals_excluded_maintenance": 2,
-                 "class": m["class"]}
+    assert {k: m[k] for k in ("windows_declared", "decisions_inside_maintenance",
+                              "intervals_excluded_maintenance")} == \
+        {"windows_declared": 1, "decisions_inside_maintenance": 1,
+         "intervals_excluded_maintenance": 2}
+    assert m["windows"][0]["id"] == "pmus-2026-09-06-scheduled"
     # the exclusion never changes any other dimension or the decision count
     assert marked["live"]["scored_decisions"] == plain["live"]["scored_decisions"] == 6
     assert marked["live"]["action_distribution_relation"] == plain["live"]["action_distribution_relation"]
@@ -480,3 +482,81 @@ def test_cadence_references_and_complete_counterfactual_are_reported():
     assert val["order_episode_gap_reference"]["median"] == 3
     assert "complete" in val["order_episode_gap_reference"]["by_relation"]
     assert gate.load_cadence_reference(gate.Path("/nonexistent.json")) is None
+
+
+def test_overrun_provenance_and_the_actual_recovery_boundary():
+    """OWNER 5558646019 #1: after the declared end the outage is
+    scheduled_maintenance_overrun linked to the window; the effective
+    exclusion runs to the ACTUAL venue_recovered boundary (or is open);
+    intervals cannot bridge the declared window OR its overrun."""
+    from src import pmus_l5_continuous_session as cont
+    wins = cont.load_maintenance_windows()
+    o = {"start_utc": "2026-09-06T07:15:29+00:00", "first_error": "Halt:503"}
+    assert cont.classify_outage(o, now_utc="2026-09-06T09:00:00+00:00")["class"] == "scheduled_maintenance"
+    late = cont.classify_outage(o, now_utc="2026-09-06T10:20:00+00:00")
+    assert late["class"] == "scheduled_maintenance_overrun"
+    assert late["overrun_s"] == 1200.0 and late["recovery_boundary"].startswith("open")
+    assert late["maintenance"]["id"] == "pmus-2026-09-06-scheduled"
+    rec = cont.classify_outage({**o, "account_recovered_utc": "2026-09-06T10:45:00+00:00"},
+                               now_utc="2026-09-06T12:00:00+00:00")
+    assert rec["class"] == "scheduled_maintenance_overrun"
+    assert rec["overrun_s"] == 2700.0 and rec["recovery_boundary"] == "venue_recovered"
+    # effective window: open-ended while unrecovered, then the recovery instant
+    eff = cont.effective_maintenance_windows(wins, o, "2026-09-06T10:20:00+00:00", recoveries=[])
+    assert eff[0]["boundary"].startswith("open") and eff[0]["overrun_s"] == 1200.0
+    eff2 = cont.effective_maintenance_windows(
+        wins, None, "2026-09-06T12:00:00+00:00",
+        recoveries=[{"start_utc": "2026-09-06T07:15:29+00:00",
+                     "account_recovered_utc": "2026-09-06T10:45:00+00:00"}])
+    assert eff2[0]["boundary"] == "venue_recovered"
+    assert eff2[0]["effective_end_utc"] == "2026-09-06T10:45:00+00:00"
+    assert eff2[0]["overrun_s"] == 2700.0
+    # cadence: an interval bridging the OVERRUN (10:20 -> 10:40) is excluded
+    # under the effective window; one after recovery (10:50 -> 10:52) counts
+    rep = _report("s1", "m1", 1, t0="2026-09-06T10:20:0")
+    d2 = _report("s1", "m1", 1, t0="2026-09-06T10:40:0")["decisions"][0]; d2["decision_idx"] = 1
+    d3 = _report("s1", "m1", 1, t0="2026-09-06T10:50:0")["decisions"][0]; d3["decision_idx"] = 2
+    d4 = _report("s1", "m1", 1, t0="2026-09-06T10:52:0")["decisions"][0]; d4["decision_idx"] = 3
+    corpus = [{**rep, "decisions": rep["decisions"] + [d2, d3, d4], "orders": []}]
+    declared_only = gate.evaluate(corpus, maintenance=wins)
+    effective = gate.evaluate(corpus, maintenance=eff2)
+    assert declared_only["live"]["timing_cadence"]["n"] == 3      # 10:00 end: nothing excluded
+    assert effective["live"]["timing_cadence"]["n"] == 1          # 10:20->10:40, 10:40->10:50 excluded
+    assert effective["evidence_progress"]["accounting"]["maintenance"]["intervals_excluded_maintenance"] == 2
+    assert effective["evidence_progress"]["accounting"]["maintenance"]["windows"][0]["boundary"] == "venue_recovered"
+
+
+def test_shadow_gate_consumes_only_proven_canonical_lookup_rows():
+    """OWNER 5558646019 #2/#3: the frozen shadow dimensions come from
+    lookup_version=2 rows only; v1 is a diagnostic; a report that cannot
+    prove the lookup version fails closed."""
+    spec = gate.load_spec()
+    base = {"arm": "reprice_180s:stochastic", "windows_since_freeze": 130,
+            "windows_entered_unique": 124,
+            "action_scoring": {"scored_decisions": 240, "l1_sampled_vs_l5": 0.09,
+                               "l1_acted_vs_l5": 0.49, "off_distribution_rate_pct": 18.9}}
+    # no provenance -> fail closed
+    sh = gate.score_shadow({"research_arm_stochastic": base}, spec)
+    assert sh["lookup_status"].startswith("UNPROVABLE_LOOKUP_VERSION")
+    assert sh["action_distribution_relation"]["status"] == "UNMEASURED"
+    assert sh["off_distribution_rate"]["status"] == "UNMEASURED"
+    # provenance but no v2 rows yet -> not measured, v1 stays a diagnostic
+    r2 = {"research_arm_stochastic": {**base, "lookup_provenance": {"v2_decisions": 0, "legacy_decisions": 240, "v2_windows": 0},
+                                      "action_scoring_corrected_gate": {"scored_decisions": 0},
+                                      "off_distribution_v1_diagnostic": 18.9}}
+    sh2 = gate.score_shadow(r2, spec)
+    assert sh2["lookup_status"] == "NO_CANONICAL_LOOKUP_ROWS_YET"
+    assert sh2["off_distribution_v1_diagnostic"] == 18.9 and sh2["windows_entered_unique_v2"] == 0
+    assert sh2["off_distribution_rate"]["status"] == "UNMEASURED"
+    # v2 rows -> the corrected gate values are the ones scored
+    r3 = {"research_arm_stochastic": {**base, "lookup_provenance": {"v2_decisions": 60, "legacy_decisions": 240, "v2_windows": 20},
+                                      "action_scoring_corrected_gate": {"scored_decisions": 60, "l1_sampled_vs_l5": 0.07,
+                                                                        "l1_acted_vs_l5": 0.15, "off_distribution_rate_pct": 1.7,
+                                                                        "post_fill": {"decisions": 10, "complete_freq_gap_pp_sampled": -2.0,
+                                                                                      "complete_freq_gap_pp_acted": 3.0}},
+                                      "off_distribution_corrected_gate": 1.7, "off_distribution_v1_diagnostic": 18.9}}
+    sh3 = gate.score_shadow(r3, spec)
+    assert sh3["lookup_status"] == "OK:lookup_version_2"
+    assert sh3["off_distribution_rate"]["value"] == 1.7 and sh3["off_distribution_rate"]["status"] == "INSUFFICIENT"
+    assert sh3["action_distribution_relation"]["value"]["l1_sampled_vs_l5"] == 0.07
+    assert sh3["windows_since_freeze"] == 124 and sh3["windows_entered_unique_v2"] == 20

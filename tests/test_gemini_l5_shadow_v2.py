@@ -352,3 +352,17 @@ def test_row_level_before_after_under_the_canonical_lookup():
     assert rows["p<10c|tte2-5m|flat"]["price_input"]["cheaper_touch"] == 0.05
     assert rows["p45-55c|tte30-120s|imb1-10"]["last_size_behavioral"] == "q5-15"
     assert rows["p45-55c|tte30-120s|imb1-10"]["off_corrected"] is False
+
+
+def test_rows_split_by_proven_lookup_version():
+    v2 = {**_d("s", False, acted="open"), "lookup": {"lookup_version": 2}}
+    legacy = _d("s", True)
+    odd = {**_d("s", False), "lookup": {"lookup_version": 1}}
+    rows = [_row([v2, legacy, odd]), _row([v2], entry_t=1_788_700_300.0)]
+    sp = gs.split_rows_by_lookup(rows)
+    assert sp["provenance"]["v2_decisions"] == 2 and sp["provenance"]["legacy_decisions"] == 1
+    assert sp["provenance"]["unknown_decisions"] == 1 and sp["provenance"]["v2_windows"] == 2
+    assert all(d.get("lookup", {}).get("lookup_version") == 2
+               for r in sp["v2"] for d in r["decisions"])
+    assert sp["provenance"]["legacy_label"].startswith("UNVERIFIABLE_LEGACY")
+    assert len(gs.CODE_SHA) == 16

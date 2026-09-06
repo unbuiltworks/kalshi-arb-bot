@@ -54,6 +54,58 @@ LOOKUP_VERSION = 2
 EXECUTED_SIZE_BUCKET = "q<5"          # the safety-scaled unit's bucket (v1 input)
 
 
+def _code_sha() -> str:
+    """OWNER 5558646019 #3: the adapter/lookup code identity persisted per
+    scored decision (sha256 of this module + the venue adapter source)."""
+    import hashlib
+    h = hashlib.sha256()
+    for name in ("gemini_l5_shadow_v2.py", "l5_venue_adapter.py"):
+        try:
+            h.update((Path(__file__).resolve().parent / name).read_bytes())
+        except OSError:
+            h.update(name.encode())
+    return h.hexdigest()[:16]
+
+
+CODE_SHA = _code_sha()
+
+
+def split_rows_by_lookup(rows: list) -> dict:
+    """OWNER 5558646019 #2/#3: decisions split by PROVEN lookup version.
+    v2 = rows written with the canonical lookup (lookup_version 2);
+    legacy = rows without a lookup record (UNVERIFIABLE_LEGACY, v1 keys);
+    unknown = rows with a lookup record of another/no version. Each
+    bucket is returned as row copies carrying only its decisions, so the
+    existing scorers run unchanged on a provably homogeneous cohort."""
+    def _sub(pred):
+        out = []
+        for r in rows:
+            ds = [d for d in (r.get("decisions") or []) if pred(d)]
+            if ds:
+                out.append({**r, "decisions": ds})
+        return out
+
+    def ver(d):
+        lk = d.get("lookup")
+        if not isinstance(lk, Mapping):
+            return None
+        try:
+            return int(lk.get("lookup_version") or 0)
+        except (TypeError, ValueError):
+            return 0
+    v2 = _sub(lambda d: ver(d) == LOOKUP_VERSION)
+    legacy = _sub(lambda d: ver(d) is None)
+    unknown = _sub(lambda d: ver(d) not in (None, LOOKUP_VERSION))
+    count = lambda rs: sum(len(r["decisions"]) for r in rs)      # noqa: E731
+    return {"v2": v2, "legacy": legacy, "unknown": unknown,
+            "provenance": {"lookup_version_gate": LOOKUP_VERSION,
+                           "v2_decisions": count(v2), "legacy_decisions": count(legacy),
+                           "unknown_decisions": count(unknown),
+                           "v2_windows": len({(r.get("symbol"), r.get("entry_t")) for r in v2}),
+                           "legacy_label": "UNVERIFIABLE_LEGACY: v1 keys, no persisted "
+                                           "lookup; diagnostic only, never a verdict input"}}
+
+
 def behavioral_size_bucket(art: Optional[Mapping[str, Any]], base_state: str,
                            relation: str) -> str:
     """The model-scale size bucket of the action the clone BEHAVIORALLY
@@ -110,6 +162,13 @@ def proposal_v2(model: Mapping[str, Any], book: NormalizedBook,
                              "first-in-window transition; off = base state absent)")
     else:
         lk["lookup_tier"] = "full->base->marginal on the canonical key"
+    lk["model_sha"] = str(model.get("_sha256_16") or "")
+    lk["code_sha"] = CODE_SHA
+    lk["state_inputs"] = {"yes_bid": str(book.yes_bid), "yes_ask": str(book.yes_ask),
+                          "no_bid": str(book.no_bid), "tte_s": round(float(book.tte_s), 1),
+                          "residual_units": inv.behavioral_residual(),
+                          "last_px_outcome": (str(inv.last_px_outcome)
+                                              if inv.last_px_outcome is not None else None)}
     prop["lookup"] = lk
     return prop
 

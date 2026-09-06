@@ -34,7 +34,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from decimal import Decimal as D
 from typing import Any, Mapping, Optional
@@ -89,6 +89,7 @@ FIDELITY_EVAL_S = 600.0         # frozen L5 fidelity gate re-run cadence
 # networking), e.g. http://gemini-l5-shadow.railway.internal:8080/rolling
 SHADOW_REPORT_URL_ENV = "L5_SHADOW_REPORT_URL"
 _fidelity_last = {"t": 0.0}
+_outage_state: dict = {"outage": None}     # the campaign's live outage record
 
 
 def ledger_decision_count(slug: str) -> int:
@@ -186,8 +187,12 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
                         "other_rows_ignored": 0, "raw_decision_rows": 0,
                         "source": str(path)})
         model = pv2.load_v2()
+        now_iso = datetime.fromtimestamp(float(now), timezone.utc).isoformat()
         out = fgate.evaluate(ingest["reports"], rolling=rolling, model=model,
-                             ingest=ingest, maintenance=load_maintenance_windows())
+                             ingest=ingest,
+                             maintenance=effective_maintenance_windows(
+                                 load_maintenance_windows(), _outage_state["outage"],
+                                 now_iso))
         out["shadow_source"] = shadow_source
     except Exception as exc:                          # noqa: BLE001
         _log("fidelity_gate_error", err=f"{type(exc).__name__}:{str(exc)[:160]}")
@@ -208,6 +213,10 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
                        "value": v.get("value")}
                    for k, v in out["shadow"].items() if isinstance(v, Mapping)},
         "shadow_windows": out["shadow"].get("windows_since_freeze"),
+        "shadow_windows_v2": out["shadow"].get("windows_entered_unique_v2"),
+        "shadow_lookup_status": out["shadow"].get("lookup_status"),
+        "shadow_off_distribution_corrected_gate": out["shadow"].get("off_distribution_corrected_gate"),
+        "shadow_off_distribution_v1_diagnostic": out["shadow"].get("off_distribution_v1_diagnostic"),
         "shadow_source": out.get("shadow_source"),
         # OWNER 5558167805 #1/#2/#3/#7: cohort split, the shadow service's
         # off-distribution attribution + sampled->acted funnel (compact),
@@ -706,19 +715,114 @@ def maintenance_window_at(t_utc: Optional[str], windows: Optional[list] = None,
     return None
 
 
-def classify_outage(outage: Optional[dict], windows: Optional[list] = None) -> Optional[dict]:
+def _ts(iso: Optional[str]) -> Optional[float]:
+    if not iso:
+        return None
+    try:
+        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def classify_outage(outage: Optional[dict], windows: Optional[list] = None,
+                    now_utc: Optional[str] = None) -> Optional[dict]:
     """Tag an outage record with its class: `scheduled_maintenance` when
     its first error falls inside a declared window (planned venue outage,
-    excluded from fidelity/strategy diagnostics), else `unplanned`."""
+    excluded from fidelity/strategy diagnostics); OWNER 5558646019 #1:
+    `scheduled_maintenance_overrun` once the reference instant (the first
+    healthy account read when known, else `now_utc`) is past the declared
+    end -- still linked to the window and still excluded until the actual
+    `venue_recovered` boundary; else `unplanned`."""
     if not outage:
         return outage
     w = maintenance_window_at(outage.get("start_utc"), windows)
     outage = dict(outage)
-    outage["class"] = "scheduled_maintenance" if w else "unplanned"
-    outage["maintenance"] = ({k: w[k] for k in ("id", "venue", "start_utc",
-                                                "end_utc", "declared_by")}
-                             if w else None)
+    if not w:
+        outage["class"], outage["maintenance"] = "unplanned", None
+        return outage
+    recovered = outage.get("account_recovered_utc")
+    ref = _ts(recovered) if recovered else _ts(now_utc)
+    outage["maintenance"] = {k: w[k] for k in ("id", "venue", "start_utc",
+                                               "end_utc", "declared_by")}
+    outage["maintenance"]["declared_end_utc"] = w["end_utc"]
+    if ref is not None and ref > w["end"]:
+        outage["class"] = "scheduled_maintenance_overrun"
+        outage["overrun_s"] = round(ref - w["end"], 1)
+        outage["recovery_boundary"] = ("venue_recovered" if recovered
+                                       else "open (no healthy account read yet)")
+    else:
+        outage["class"] = "scheduled_maintenance"
     return outage
+
+
+RECOVERIES_FILE = "maintenance_recoveries.jsonl"
+
+
+def record_observed_recovery(outage: Mapping[str, Any]) -> None:
+    """Durable provenance of the ACTUAL recovery boundary of a planned
+    outage (OWNER 5558646019 #1): appended once when public prints resume;
+    read back by every later evaluator run so the overrun interval stays
+    excluded after the in-memory outage record is cleared."""
+    try:
+        path = base.q1.base.state_dir() / RECOVERIES_FILE
+        row = {k: outage.get(k) for k in ("start_utc", "first_error", "class",
+                                          "account_recovered_utc",
+                                          "trades_resumed_utc", "overrun_s")}
+        row["maintenance_id"] = (outage.get("maintenance") or {}).get("id")
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(row, default=str) + "\n")
+    except Exception:                                    # noqa: BLE001
+        pass
+
+
+def load_observed_recoveries() -> list:
+    try:
+        path = base.q1.base.state_dir() / RECOVERIES_FILE
+        if not path.exists():
+            return []
+        out = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return out
+    except Exception:                                    # noqa: BLE001
+        return []
+
+
+def effective_maintenance_windows(windows: list, outage: Optional[Mapping[str, Any]],
+                                  now_utc: Optional[str],
+                                  recoveries: Optional[list] = None) -> list:
+    """Declared windows extended to their ACTUAL recovery boundary: the
+    first healthy account read of an outage that started inside the window
+    (from the live outage record or the durable recoveries file), or
+    open-ended at `now_utc` while the venue has not recovered."""
+    recs = list(recoveries if recoveries is not None else load_observed_recoveries())
+    if outage:
+        recs.append(dict(outage))
+    out = []
+    for w in windows:
+        w2 = dict(w)
+        best = None
+        for r in recs:
+            st = _ts(r.get("start_utc"))
+            if st is None or not (w["start"] - 120.0 <= st <= w["end"]):
+                continue
+            rec_utc = r.get("account_recovered_utc")
+            ref = _ts(rec_utc) if rec_utc else _ts(now_utc)
+            if ref is not None and ref > w["end"] and (best is None or ref > best[0]):
+                best = (ref, rec_utc)
+        if best:
+            w2["end"] = best[0]
+            w2["effective_end_utc"] = best[1] or now_utc
+            w2["overrun_s"] = round(best[0] - w["end"], 1)
+            w2["boundary"] = ("venue_recovered" if best[1]
+                              else "open (no healthy account read yet)")
+        else:
+            w2["effective_end_utc"], w2["boundary"] = w["end_utc"], "declared_end"
+        out.append(w2)
+    return out
 
 
 def _utc(wall) -> str:
@@ -999,7 +1103,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             "saved_utc": _utc(wall), "rung": active_rung["id"],
             "filled_markets": sorted(filled_markets),
             "settled_here": sorted(settled_here),
-            "outage": ({**{k: v for k, v in classify_outage(outage).items()
+            "outage": ({**{k: v for k, v in classify_outage(
+                               outage, now_utc=_utc(wall)).items()
                            if k != "start_clock"},
                         "elapsed_s": round(clock() - outage["start_clock"], 1)}
                        if outage else None),
@@ -1008,6 +1113,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             "burst": burst,
         }
         save_campaign_state(snap)
+        _outage_state["outage"] = (classify_outage(outage, now_utc=_utc(wall))
+                                   if outage else None)
     _persist()
 
     def _rung_gate() -> Optional[str]:
@@ -1088,8 +1195,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                          "held": held, "sweep": sweep})
                     _log("venue_recovered", outage_s=outage_s,
                          error_count=n_err, held=held, sweep=sweep,
-                         outage_class=(classify_outage(outage) or {}).get("class"),
-                         maintenance=(classify_outage(outage) or {}).get("maintenance"))
+                         outage_class=(classify_outage(outage, now_utc=_utc(wall)) or {}).get("class"),
+                         maintenance=(classify_outage(outage, now_utc=_utc(wall)) or {}).get("maintenance"),
+                         recovery_boundary_utc=_utc(wall))
                     if sweep["foreign"]:
                         status = "CAMPAIGN_STOP:FOREIGN_OPEN_ORDERS"
                         break
@@ -1115,8 +1223,10 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     recovery_gate["checks"] += 1
                     if moved or tape:
                         recovery_gate["pending"] = False
-                        outage = classify_outage(outage)
+                        outage = classify_outage(outage, now_utc=_utc(wall))
                         outage["trades_resumed_utc"] = _utc(wall)
+                        if outage.get("maintenance"):
+                            record_observed_recovery(outage)
                         outage["trades_resumed_by"] = (
                             {"markets_moved": moved} if moved
                             else {"recorder_tape": True})
@@ -1381,7 +1491,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                  err=f"{type(exc).__name__}:{str(exc)[:160]}",
                  errors_in_window=len(iteration_errors),
                  max_in_window=MAX_ITERATION_ERRORS,
-                 outage_class=(outage or {}).get("class"))
+                 outage_class=(classify_outage(outage, now_utc=_utc(wall)) or {}).get("class"),
+                 overrun_s=(classify_outage(outage, now_utc=_utc(wall)) or {}).get("overrun_s"))
             if len(iteration_errors) >= MAX_ITERATION_ERRORS:
                 status = "CAMPAIGN_STOP:VENUE_UNAVAILABLE"
                 break
