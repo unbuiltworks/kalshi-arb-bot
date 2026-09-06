@@ -264,3 +264,91 @@ def test_sampled_to_acted_funnel_separates_policy_from_shell():
                  "held_by_reason": {"entry_band_left": 1, "residual_cap": 1}}
     assert f["acted_as_sampled_share"] == 0.5 and f["held_share"] == round(2 / 6, 4)
     assert f["held_by_reason"] == {"entry_band_left": 1, "residual_cap": 1}
+
+
+def _book2(bid, ask, tte=200):
+    from src import l5_venue_adapter as va
+    return va.GeminiAdapter().normalize(
+        {"symbol": "GEMI-BTC05M2608302330-UP",
+         "t": tb.ticker_expiry_epoch("BTC05M2608302330") - tte,
+         "bid": bid, "ask": ask})
+
+
+def test_behavioral_state_key_is_independent_of_the_safety_cap():
+    """OWNER 5558477213 A: changing ONLY the safety cap (the executable
+    unit size) cannot change the behavioral state key, the behavioral
+    last_size or the off-distribution classification."""
+    from src import l5_venue_adapter as va
+    model = {"_sha256_16": "t", "marginal": {"extend|q<5": 5, "complete|q<5": 5, "open|q<5": 1},
+             "base": {"p45-55c|tte2-5m|imb1-10": {"extend|q5-15": 4, "complete|q5-15": 3}},
+             "full": {"p45-55c|tte2-5m|imb1-10|open|q5-15": {"extend|q5-15": 3}},
+             "cadence_modal": {}}
+    art = {"size_policy": {"by_state_relation": {
+        "p45-55c|tte2-5m|flat|open": {"n": 50, "shares_p50": 10.0}}}}
+    book = _book2("0.48", "0.50")
+    keys = []
+    for unit in (D("0.02"), D("1"), D("25")):        # three different caps
+        inv = va.L5Inventory()
+        inv.record(True, D("0.48"), unit, "open")
+        inv.last_size_behavioral = gs.behavioral_size_bucket(art, "p45-55c|tte2-5m|flat", "open")
+        prop = gs.proposal_v2(model, book, inv)
+        lk = prop["lookup"]
+        keys.append((lk["state"], lk["last_size_behavioral"], prop["off_distribution"],
+                     lk["off_distribution_v1"]))
+    assert len(set(keys)) == 1
+    st, lsb, off2, off1 = keys[0]
+    assert st == "p45-55c|tte2-5m|imb1-10" and lsb == "q5-15"
+    assert off2 is False                                # canonical key |open|q5-15 exists
+    assert off1 is True                                 # v1 key |open|q<5 does not
+    assert gs.behavioral_size_bucket(None, "x", "open") == "q<5"
+
+
+def test_pre_fill_lookup_is_open_and_off_means_base_state_absent():
+    """OWNER 5558477213 B: the canonical history keys no first-in-window
+    transition, so pre-fill the faithful relation is OPEN and
+    off-distribution means the BASE state is absent; v1's flag is kept."""
+    from src import l5_venue_adapter as va
+    model = {"_sha256_16": "t", "marginal": {"extend|q<5": 5, "complete|q<5": 5, "open|q<5": 1},
+             "base": {"p<10c|tte2-5m|flat": {"open|q>40": 6, "open|q15-40": 3}},
+             "full": {"p<10c|tte2-5m|flat|complete|q>40": {"open|q>40": 6}},
+             "cadence_modal": {}}
+    inv = va.L5Inventory()
+    seen = gs.proposal_v2(model, _book2("0.05", "0.06"), inv)      # p<10c, base seen
+    assert seen["recommended_relation"] == "open"
+    assert seen["relation_ranked"] == [{"relation": "open", "p": 1.0}]
+    assert seen["off_distribution"] is False and seen["lookup"]["off_distribution_v1"] is True
+    assert seen["lookup"]["pre_fill"] and seen["lookup"]["lookup_tier"].startswith("pre_fill")
+    assert seen["state_n"] == 9
+    unseen = gs.proposal_v2(model, _book2("0.30", "0.31"), inv)     # p25-45c, base absent
+    assert unseen["off_distribution"] is True and unseen["recommended_relation"] == "open"
+
+
+def test_row_level_before_after_under_the_canonical_lookup():
+    model = {"base": {"p<10c|tte2-5m|flat": {"open|q>40": 6},
+                      "p45-55c|tte30-120s|imb1-10": {"extend|q<5": 5}},
+             "full": {"p45-55c|tte30-120s|imb1-10|open|q5-15": {"extend|q<5": 3}},
+             "marginal": {"open|q<5": 1}}
+    art = {"size_policy": {"by_state_relation": {
+        "p45-55c|tte30-120s|imb1-10|open": {"n": 50, "shares_p50": 10.0}}}}
+    legacy_pre = {**_d("p<10c|tte2-5m|flat", True, refusal="entry_band_left:0.05",
+                       residual=0.0, tte_s=200.0, yes_bid="0.05"), "yes_ask": "0.06",
+                  "last_rel": None}
+    legacy_post = _d("p45-55c|tte30-120s|imb1-10", True, refusal="off_distribution_hold",
+                     residual=1.0, tte_s=60.0)
+    legacy_post["last_rel"] = "open"
+    v2_row = {**_d("p25-45c|tte30-120s|flat", False, acted="open", residual=0.0),
+              "lookup": {"lookup_version": 2, "state": "p25-45c|tte30-120s|flat",
+                         "state_v1": "p55-75c|tte30-120s|flat", "off_distribution_v1": True,
+                         "lookup_tier": "pre_fill:first_action_is_open", "pre_fill": True}}
+    out = gs.off_distribution_attribution([_row([legacy_pre, legacy_post, v2_row])], model, art=art)
+    ba = out["before_after_canonical_lookup"]
+    assert ba["legacy_rows"] == 2 and ba["recorded_v2_rows"] == 0   # v2_row is not off
+    assert ba["off_v1_rows"] == 2 and ba["off_corrected_rows"] == 0
+    assert ba["rows_with_both_flags"] == 1
+    assert ba["off_v1_rate_pct_on_both"] == 100.0 and ba["off_v2_rate_pct_on_both"] == 0.0
+    rows = {r["state"]: r for r in out["off_distribution_rows"]}
+    assert rows["p<10c|tte2-5m|flat"]["state_corrected"] == "p<10c|tte2-5m|flat"
+    assert rows["p<10c|tte2-5m|flat"]["off_corrected"] is False
+    assert rows["p<10c|tte2-5m|flat"]["price_input"]["cheaper_touch"] == 0.05
+    assert rows["p45-55c|tte30-120s|imb1-10"]["last_size_behavioral"] == "q5-15"
+    assert rows["p45-55c|tte30-120s|imb1-10"]["off_corrected"] is False

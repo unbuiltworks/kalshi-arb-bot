@@ -131,6 +131,8 @@ class L5Inventory:
         self.cost_up = self.cost_dn = D("0")
         self.last_rel: Optional[str] = None
         self.last_px: Optional[D] = None
+        self.last_px_outcome: Optional[D] = None      # canonical convention
+        self.last_size_behavioral: Optional[str] = None  # model-scale bucket
         self.unit: Optional[D] = None
         self.actions: list[dict] = []
 
@@ -172,6 +174,10 @@ class L5Inventory:
             self.cost_dn += px * qty
         self.last_rel = relation
         self.last_px = px if side_up else (ONE - px)
+        # OWNER 5558477213 B: the canonical L5 history keys the price band
+        # by the price of the OUTCOME traded (a Down fill at 0.08 is
+        # p<10c), never mirrored to the YES scale; kept beside last_px
+        self.last_px_outcome = px
         self.actions.append({"t": t, "relation": relation,
                              "side": "YES" if side_up else "NO",
                              "px": str(px), "qty": str(qty),
@@ -195,6 +201,23 @@ def l5_state(book: NormalizedBook, inv: L5Inventory) -> str:
     """The model's base-state key: last own price (else market bid),
     venue TTE, behavioral residual -- identical on every venue."""
     px = inv.last_px if inv.last_px is not None else book.yes_bid
+    return state_key(float(px if px is not None else 0), book.tte_s,
+                     inv.behavioral_residual())
+
+
+def l5_state_v2(book: NormalizedBook, inv: L5Inventory) -> str:
+    """OWNER 5558477213 B: the base-state key under the CANONICAL price
+    convention. Post-fill: the price of the outcome last traded (never
+    mirrored to the YES scale -- the frozen model is not mirror-symmetric:
+    57 of 78 mirrored band pairs differ). Pre-fill: the cheaper touch, i.e.
+    the price of the outcome the shared open convention would buy.
+    Residual and TTE unchanged. `l5_state` (v1) is kept for before/after."""
+    if inv.last_px_outcome is not None:
+        px = inv.last_px_outcome
+    else:
+        y, n = book.yes_bid, book.no_bid
+        cands = [p for p in (y, n) if p is not None]
+        px = min(cands) if cands else None
     return state_key(float(px if px is not None else 0), book.tte_s,
                      inv.behavioral_residual())
 
@@ -370,4 +393,7 @@ def decision_record(*, venue: str, market_id: str, t: float, state: str,
             "shadow_differs_from_executed": bool(
                 sampled is not None and sampled != acted),
             "book": book.as_dict() if book else None,
+            # OWNER 5558477213 A/B: both state conventions, both last_size
+            # values and both off flags (v1 lookup vs canonical lookup)
+            "lookup": prop.get("lookup"),
             "orders_placed": 0}

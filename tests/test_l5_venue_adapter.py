@@ -92,3 +92,37 @@ def test_decision_record_carries_live_field_set_and_no_orders():
         assert k in rec
     assert rec["shadow_differs_from_executed"] is True
     assert rec["orders_placed"] == 0 and rec["venue"] == "GEMINI"
+
+
+def _gbook(bid, ask, tte=200):
+    return va.GeminiAdapter().normalize(
+        {"symbol": "GEMI-BTC05M2608302330-UP",
+         "t": tb.ticker_expiry_epoch("BTC05M2608302330") - tte,
+         "bid": bid, "ask": ask})
+
+
+def test_canonical_state_keys_by_outcome_price_never_mirrored():
+    """OWNER 5558477213 B: a NO fill at 0.08 is p<10c in the canonical
+    history (the frozen model is not mirror-symmetric); the v1 key mirrors
+    it to the YES scale (p>90c). Both are kept."""
+    inv = va.L5Inventory()
+    inv.record(False, D("0.08"), D("0.06"), "open")
+    book = _gbook("0.91", "0.93")
+    assert va.l5_state(book, inv).startswith("p>90c")          # v1 (mirrored)
+    assert va.l5_state_v2(book, inv).startswith("p<10c")       # canonical
+    assert inv.last_px == D("0.92") and inv.last_px_outcome == D("0.08")
+    # YES fills agree under both conventions
+    inv2 = va.L5Inventory()
+    inv2.record(True, D("0.47"), D("0.06"), "open")
+    assert va.l5_state(book, inv2) == va.l5_state_v2(book, inv2)
+
+
+def test_pre_fill_canonical_state_uses_the_cheaper_touch():
+    """Pre-fill the shared open convention buys the cheaper touch; the
+    canonical key prices that outcome (v1 priced the YES bid)."""
+    inv = va.L5Inventory()
+    hi = _gbook("0.92", "0.93")          # YES 0.92 / NO 0.07 -> buys NO at 0.07
+    assert va.l5_state(hi, inv).startswith("p>90c")
+    assert va.l5_state_v2(hi, inv).startswith("p<10c")
+    lo = _gbook("0.05", "0.06")          # YES 0.05 / NO 0.94 -> buys YES at 0.05
+    assert va.l5_state_v2(lo, inv).startswith("p<10c") and va.l5_state(lo, inv).startswith("p<10c")

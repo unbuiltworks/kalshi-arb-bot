@@ -205,6 +205,13 @@ class ShadowService:
             self.last_report = now
             rep = self.rolling_report(now)
             _log("rolling_report", **rep)
+            # OWNER 5558477213 B: the row-level counterfactual, on its own
+            # line so the (size-capped) report line never truncates it
+            attr = rep.get("off_distribution_attribution") or {}
+            if attr.get("off_distribution_rows") is not None:
+                _log("off_distribution_rows",
+                     before_after=attr.get("before_after_canonical_lookup"),
+                     rows=attr.get("off_distribution_rows"))
             try:
                 (self.root / "report.json").write_text(
                     json.dumps(rep, indent=1, default=str, sort_keys=True))
@@ -378,7 +385,7 @@ class ShadowService:
                        if float(r.get("entry_t") or 0) >= since
                        and r.get("status") in ("MATCHED", "RESIDUAL_HOLD", "NO_FILL")]
                 out["off_distribution_attribution"] = gs.off_distribution_attribution(
-                    sel, pv2.load_v2())
+                    sel, pv2.load_v2(), art=fid.load())
                 out["sampled_to_acted_funnel"] = gs.sampled_to_acted_funnel(sel)
         except Exception as exc:                        # noqa: BLE001
             out["off_distribution_attribution"] = {"status": "ERROR", "err": str(exc)[:160]}
@@ -459,7 +466,14 @@ class ShadowService:
                          "last_rel": d.get("last_rel"),
                          "tte_s": (d.get("book") or {}).get("tte_s"),
                          "yes_bid": (d.get("book") or {}).get("yes_bid"),
-                         "yes_ask": (d.get("book") or {}).get("yes_ask")}
+                         "yes_ask": (d.get("book") or {}).get("yes_ask"),
+                         # OWNER 5558477213 A/B: both lookups recorded
+                         "lookup": ({k: (d.get("lookup") or {}).get(k) for k in
+                                     ("lookup_version", "state", "state_v1", "last_rel",
+                                      "last_size_executed", "last_size_behavioral",
+                                      "pre_fill", "off_distribution_v1", "lookup_tier",
+                                      "price_convention")}
+                                    if d.get("lookup") else None)}
                         for d in r.get("decisions") or []]
                     # identity is always explicit (LIVE 22:30:30Z: early
                     # returns carried no shell/policy and 9 uncovered-window

@@ -43,9 +43,75 @@ from src import pmus_l5_fidelity_live as fid
 from src import pmus_l5_persistence_v2 as pv2
 from src.l5_venue_adapter import (GeminiAdapter, L5Inventory, NormalizedBook,
                                   MAX_RESIDUAL_UNITS, decision_record,
-                                  l5_state, open_side_yes)
+                                  l5_state, l5_state_v2, open_side_yes)
 from src.polymarket_l5 import transfer_backtest as tb
-from src.polymarket_l5.action_model import PRICE_BANDS
+from src.polymarket_l5.action_model import (PRICE_BANDS, SIZE_BUCKETS, _bucket,
+                                            state_key)
+
+
+# ---- OWNER 5558477213 A/B: canonical lookup (shadow / evaluation only) ----
+LOOKUP_VERSION = 2
+EXECUTED_SIZE_BUCKET = "q<5"          # the safety-scaled unit's bucket (v1 input)
+
+
+def behavioral_size_bucket(art: Optional[Mapping[str, Any]], base_state: str,
+                           relation: str) -> str:
+    """The model-scale size bucket of the action the clone BEHAVIORALLY
+    targets (L5's p50 for this state|relation), never the safety-scaled
+    executable size. Unavailable artifact -> the executed bucket."""
+    row = fid.l5_target_size(art, base_state, relation) if art else {}
+    p50 = row.get("shares_p50") if isinstance(row, Mapping) else None
+    try:
+        return _bucket(float(p50), SIZE_BUCKETS) if p50 is not None else EXECUTED_SIZE_BUCKET
+    except (TypeError, ValueError):
+        return EXECUTED_SIZE_BUCKET
+
+
+def lookup_inputs(book: NormalizedBook, inv: L5Inventory) -> dict:
+    """Both state conventions and both last_size values, so the frozen
+    model is looked up on the canonical key while the v1 key stays
+    recorded for the before/after."""
+    pre_fill = inv.total == 0
+    return {"lookup_version": LOOKUP_VERSION,
+            "state": l5_state_v2(book, inv), "state_v1": l5_state(book, inv),
+            "last_rel": inv.last_rel or "open",
+            "last_size_executed": EXECUTED_SIZE_BUCKET,
+            "last_size_behavioral": (inv.last_size_behavioral
+                                     if not pre_fill and inv.last_size_behavioral
+                                     else EXECUTED_SIZE_BUCKET),
+            "pre_fill": pre_fill,
+            "price_convention": ("outcome price of the last own fill"
+                                 if inv.last_px_outcome is not None
+                                 else "cheaper touch (outcome the open convention buys)")}
+
+
+def proposal_v2(model: Mapping[str, Any], book: NormalizedBook,
+                inv: L5Inventory) -> dict:
+    """The frozen v2 policy looked up on the canonical key (OWNER
+    5558477213 A/B). Pre-fill: the canonical history keys NO first-in-
+    window transition (every transition is (prev fill, next action)), so
+    the only faithful pre-fill relation is OPEN and off-distribution means
+    the BASE state is absent -- no state is added, the model is untouched.
+    The v1 lookup's off flag is recorded beside it for the before/after."""
+    lk = lookup_inputs(book, inv)
+    v1 = pv2.v2_dist(model, lk["state_v1"], lk["last_rel"], lk["last_size_executed"])
+    lk["off_distribution_v1"] = bool(v1["backed_off"])
+    lk["full_key_v1"] = v1["state"]
+    prop = pv2.proposal(model, lk["state"], lk["last_rel"], lk["last_size_behavioral"],
+                        residual=inv.behavioral_residual())
+    if lk["pre_fill"]:
+        base_seen = lk["state"] in ((model.get("base") or {}))
+        prop["recommended_relation"] = "open"
+        prop["relation_ranked"] = [{"relation": "open", "p": 1.0}]
+        prop["persist_extend_p"], prop["switch_complete_p"] = 0.0, 0.0
+        prop["off_distribution"] = not base_seen
+        prop["state_n"] = sum((model.get("base") or {}).get(lk["state"], {}).values())
+        lk["lookup_tier"] = ("pre_fill:first_action_is_open (canonical history keys no "
+                             "first-in-window transition; off = base state absent)")
+    else:
+        lk["lookup_tier"] = "full->base->marginal on the canonical key"
+    prop["lookup"] = lk
+    return prop
 
 ROOT = Path(__file__).resolve().parents[1]
 BBO_PATH = ROOT / "data/transfer_backtest/gemini_bbo_btc05m.jsonl.gz"
@@ -201,9 +267,8 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
             one_sided += 1
             t += MIN_REEVAL_S
             continue
-        state = l5_state(book, inv)
-        prop = pv2.proposal(model, state, inv.last_rel or "open", "q<5",
-                            residual=inv.behavioral_residual())
+        prop = proposal_v2(model, book, inv)
+        state = prop["lookup"]["state"]
         shadow = fid.shadow_fields(
             art, slug=symbol, decision_idx=len(decisions), model_sha=model_sha,
             base_state=state, relation=prop["recommended_relation"],
@@ -291,6 +356,7 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
             rec["orders_placed"] = 1
             if f:
                 inv.record(side_yes, px, UNIT, relation, f["t"])
+                inv.last_size_behavioral = behavioral_size_bucket(art, state, relation)
                 moves: dict = {}
                 for h in ADVERSE_HORIZONS_S:
                     later = _mid_at(bbo_rows, f["t"] + h)
@@ -332,6 +398,7 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
             rec["orders_placed"] = 1
             if f:
                 inv.record(deficit_up, px, qty, "complete", f["t"])
+                inv.last_size_behavioral = behavioral_size_bucket(art, state, "complete")
                 fills.append({"t": f["t"], "relation": "complete",
                               "side": "YES" if deficit_up else "NO",
                               "px": str(px), "tte_s": round(expiry - f["t"], 1),
@@ -663,8 +730,62 @@ def _state_parts(state: Any) -> tuple:
     return tuple((parts + [None, None, None])[:3])
 
 
+def corrected_lookup_for_row(d: Mapping[str, Any], model: Mapping[str, Any],
+                             art: Optional[Mapping[str, Any]]) -> dict:
+    """OWNER 5558477213 B: row-level counterfactual for ONE recorded
+    decision -- the state key the canonical lookup would use, and whether
+    the row stays off-distribution under it. Rows written with the v2
+    lookup carry both flags already; legacy rows are recomputed from the
+    persisted observation (cheaper touch pre-fill; behavioral last_size
+    post-fill; the post-fill price convention cannot be re-derived
+    without the own-fill outcome price and is marked unverified)."""
+    base = model.get("base") or {}
+    lk = d.get("lookup") or {}
+    if lk:
+        return {"source": "recorded_v2_lookup", "state_v1": lk.get("state_v1"),
+                "state_corrected": lk.get("state"),
+                "off_v1": lk.get("off_distribution_v1"),
+                "off_corrected": bool(d.get("off_distribution")),
+                "tier": lk.get("lookup_tier"), "last_size_behavioral": lk.get("last_size_behavioral")}
+    try:
+        residual = abs(float(d.get("residual_units") or 0))
+    except (TypeError, ValueError):
+        residual = 0.0
+    state = d.get("state")
+    out = {"source": "legacy_row_recomputed", "state_v1": state,
+           "off_v1": bool(d.get("off_distribution"))}
+    yb, ya, tte = d.get("yes_bid"), d.get("yes_ask"), d.get("tte_s")
+    if residual < 1:
+        try:
+            y, n = float(yb), 1.0 - float(ya)
+            px = min(y, n)
+            st2 = state_key(px, float(tte), 0.0)
+        except (TypeError, ValueError):
+            out.update({"state_corrected": None, "off_corrected": None,
+                        "tier": "pre_fill: observation missing (row predates persisted book)"})
+            return out
+        out.update({"state_corrected": st2, "off_corrected": st2 not in base,
+                    "tier": "pre_fill:first_action_is_open (off = base state absent)",
+                    "price_input": {"yes_bid": yb, "no_bid": round(n, 4), "cheaper_touch": px}})
+        return out
+    lr = d.get("last_rel") or "open"
+    lsb = behavioral_size_bucket(art, str(state), lr) if art else None
+    if lsb is None:
+        out.update({"state_corrected": state, "off_corrected": None,
+                    "tier": "post_fill: fidelity artifact unavailable"})
+        return out
+    v = pv2.v2_dist(model, str(state), lr, lsb)
+    out.update({"state_corrected": state, "off_corrected": bool(v["backed_off"]),
+                "last_size_behavioral": lsb,
+                "tier": "post_fill: behavioral last_size; price convention unverified "
+                        "(own-fill outcome price not persisted on legacy rows)"})
+    return out
+
+
 def off_distribution_attribution(rows: list, model: Optional[Mapping[str, Any]],
-                                 window_s: float = GEMINI_WINDOW_S) -> dict:
+                                 window_s: float = GEMINI_WINDOW_S,
+                                 art: Optional[Mapping[str, Any]] = None,
+                                 max_rows: int = 60) -> dict:
     """OWNER 5558167805 #2/#4: state-level attribution of every
     off-distribution shadow decision -- the exact frozen state key, which
     component is outside/absent relative to the frozen model's base
@@ -771,7 +892,42 @@ def off_distribution_attribution(rows: list, model: Optional[Mapping[str, Any]],
     band_off = [d for d in band_all if d.get("off_distribution")]
     band_states = {d.get("state") for d in band_all}
     off_states = set(by_state)
+    # OWNER 5558477213 B: row-level before/after under the canonical lookup
+    row_cf = []
+    ba = {"off_v1_rows": 0, "off_corrected_rows": 0, "unverifiable_rows": 0,
+          "recorded_v2_rows": 0, "legacy_rows": 0, "per_state": {}}
+    for d in off:
+        cf = corrected_lookup_for_row(d, model or {}, art)
+        ba["recorded_v2_rows" if cf["source"] == "recorded_v2_lookup" else "legacy_rows"] += 1
+        if cf.get("off_v1"):
+            ba["off_v1_rows"] += 1
+        if cf.get("off_corrected") is None:
+            ba["unverifiable_rows"] += 1
+        elif cf["off_corrected"]:
+            ba["off_corrected_rows"] += 1
+        ps = ba["per_state"].setdefault(str(d.get("state")), {"off_v1": 0, "off_corrected": 0,
+                                                              "unverifiable": 0})
+        ps["off_v1"] += 1 if cf.get("off_v1") else 0
+        if cf.get("off_corrected") is None:
+            ps["unverifiable"] += 1
+        elif cf["off_corrected"]:
+            ps["off_corrected"] += 1
+        if len(row_cf) < max_rows:
+            row_cf.append({"t": d.get("t"), "state": d.get("state"),
+                           "yes_bid": d.get("yes_bid"), "yes_ask": d.get("yes_ask"),
+                           "tte_s": d.get("tte_s"), "residual_units": d.get("residual_units"),
+                           "last_rel": d.get("last_rel"), "refusal": d.get("refusal"),
+                           "acted": d.get("acted"), "sampled": d.get("sampled"), **cf})
+    # rows carrying BOTH flags (written by the v2 lookup): the live before/after
+    both = [d for d in decs if (d.get("lookup") or {}).get("off_distribution_v1") is not None]
+    ba["rows_with_both_flags"] = len(both)
+    ba["off_v1_rate_pct_on_both"] = (round(100.0 * sum(
+        1 for d in both if d["lookup"]["off_distribution_v1"]) / len(both), 2) if both else None)
+    ba["off_v2_rate_pct_on_both"] = (round(100.0 * sum(
+        1 for d in both if d.get("off_distribution")) / len(both), 2) if both else None)
     return {
+        "before_after_canonical_lookup": ba,
+        "off_distribution_rows": row_cf,
         "scored_decisions": len(decs), "off_distribution_decisions": len(off),
         "off_distribution_rate_pct": round(100.0 * len(off) / len(decs), 2) if decs else None,
         "off_states": len(off_states),
@@ -971,9 +1127,8 @@ def live_shadow_step(sym: str, raw_book: Mapping[str, Any], now: float, *,
     if book is None:
         return {"venue": adapter.venue, "market_id": sym, "t": now,
                 "status": "NO_BOOK", "orders_placed": 0}
-    state = l5_state(book, inv)
-    prop = pv2.proposal(model, state, inv.last_rel or "open", "q<5",
-                        residual=inv.behavioral_residual())
+    prop = proposal_v2(model, book, inv)
+    state = prop["lookup"]["state"]
     shadow = fid.shadow_fields(
         art, slug=sym, decision_idx=len(inv.actions),
         model_sha=str(model.get("_sha256_16") or ""), base_state=state,
