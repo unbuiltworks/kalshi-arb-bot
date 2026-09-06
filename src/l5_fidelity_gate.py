@@ -685,9 +685,143 @@ def largest_mismatch(live: Mapping[str, Any], shadow: Mapping[str, Any]) -> dict
     return worst
 
 
+def layered_view(live: Mapping[str, Any], spec: Mapping[str, Any]) -> dict:
+    """OWNER (two layers, thresholds unchanged): the same frozen
+    dimensions read twice -- BEHAVIORAL = what the frozen model wanted to
+    do (the sampled draw) vs L5, EXECUTABLE = what reached the venue after
+    the safety / economic shell. A size, cadence or inventory failure that
+    the shell demonstrably causes shows up in the executable layer only;
+    the combined dimension statuses above are untouched."""
+    dims = spec["dimensions"]
+    rel = live.get("action_distribution_relation") or {}
+    pf = live.get("post_fill_complete_gap") or {}
+    off = live.get("off_distribution_rate") or {}
+    rv, pv = rel.get("value") or {}, pf.get("value") or {}
+    thr_r = dims["action_distribution_relation"]["pass"]
+    thr_p = dims["post_fill_complete_gap"]["pass"]
+    thr_o = dims["off_distribution_rate"]["pass"]
+
+    def st(ok: Optional[bool], n: int, need: int) -> str:
+        if ok is None:
+            return "UNMEASURED"
+        if not ok:
+            return "FAIL"
+        return "PASS" if n >= need else "INSUFFICIENT"
+    me = spec["minimum_evidence"]
+    l1s, l1a = _f(rv.get("l1_sampled_vs_l5")), _f(rv.get("l1_acted_vs_l5"))
+    gs_, ga_ = _f(pv.get("gap_pp_sampled")), _f(pv.get("gap_pp_acted"))
+    offv = _f(off.get("value"))
+    behavioral = {
+        "action_distribution_relation": _dim(
+            st(None if l1s is None else l1s <= thr_r["l1_sampled_vs_l5_max"],
+               int(rel.get("n") or 0), me["live_scored_decisions"]),
+            {"l1_sampled_vs_l5": l1s, "sampled": rv.get("sampled"),
+             "expected_l5": rv.get("expected_l5")},
+            {"l1_sampled_vs_l5_max": thr_r["l1_sampled_vs_l5_max"]}, int(rel.get("n") or 0)),
+        "post_fill_complete_gap": _dim(
+            st(None if gs_ is None else abs(gs_) <= thr_p["abs_gap_pp_max_sampled"],
+               int(pf.get("n") or 0), me["live_post_fill_decisions"]),
+            {"gap_pp_sampled": gs_, "sampled": pv.get("sampled"),
+             "expected_l5": pv.get("expected_l5")},
+            {"abs_gap_pp_max_sampled": thr_p["abs_gap_pp_max_sampled"]}, int(pf.get("n") or 0)),
+        "off_distribution_rate": _dim(
+            st(None if offv is None else offv <= thr_o["max_pct"],
+               int(off.get("n") or 0), me["live_scored_decisions"]),
+            offv, thr_o, int(off.get("n") or 0)),
+        "action_distribution_side": live.get("action_distribution_side"),
+        "labels": "what the frozen model wanted to do (sampled draw) vs L5; "
+                  "no safety / economic shell in this layer",
+    }
+    executable = {
+        "action_distribution_relation": _dim(
+            st(None if l1a is None else l1a <= thr_r["l1_acted_vs_l5_max"],
+               int(rel.get("n") or 0), me["live_scored_decisions"]),
+            {"l1_acted_vs_l5": l1a, "acted_incl_hold": rv.get("acted_incl_hold"),
+             "expected_l5": rv.get("expected_l5")},
+            {"l1_acted_vs_l5_max": thr_r["l1_acted_vs_l5_max"]}, int(rel.get("n") or 0)),
+        "post_fill_complete_gap": _dim(
+            st(None if ga_ is None else abs(ga_) <= thr_p["abs_gap_pp_max_acted"],
+               int(pf.get("n") or 0), me["live_post_fill_decisions"]),
+            {"gap_pp_acted": ga_, "acted_incl_hold": pv.get("acted_incl_hold"),
+             "expected_l5": pv.get("expected_l5")},
+            {"abs_gap_pp_max_acted": thr_p["abs_gap_pp_max_acted"]}, int(pf.get("n") or 0)),
+        **{k: live.get(k) for k in ("price_aggressiveness", "size", "timing_cadence",
+                                    "inventory_trajectory", "maker_taker")},
+        "labels": "what reached the venue after the safety / economic shell "
+                  "(size cap, rest, residual cap, fee-safe complement bound)",
+    }
+    return {"behavioral": behavioral, "executable": executable,
+            "rule": "same frozen thresholds; the combined dimension statuses are "
+                    "unchanged -- this is a second reading, not a relabel"}
+
+
+def score_pmus_shadow(report: Optional[Mapping[str, Any]],
+                      spec: Mapping[str, Any]) -> dict:
+    """The recorder's READ-ONLY multi-market L5 shadow (behavioral layer
+    over every observable live market). Reported beside the frozen
+    minimums with the same thresholds; it does NOT count toward the
+    frozen live or shadow minimums (that would be a spec change and is
+    the owner's decision)."""
+    if not report:
+        return {"status": "UNMEASURED", "note": "no pmus shadow report given"}
+    b = report.get("behavioral_layer") or {}
+    prov = report.get("lookup_provenance") or {}
+    n = int(b.get("scored_decisions") or 0)
+    thr = spec["dimensions"]["action_distribution_relation"]["pass"]
+    thr_p = spec["dimensions"]["post_fill_complete_gap"]["pass"]
+    thr_o = spec["dimensions"]["off_distribution_rate"]["pass"]
+    me = spec["minimum_evidence"]
+    ver = prov.get("lookup_version_gate")
+    if ver is not None and int(ver) != CANONICAL_LOOKUP_VERSION:
+        return {"status": "LOOKUP_VERSION_MISMATCH", "lookup_version_gate": ver,
+                "decisions": n}
+    l1s = _f(b.get("l1_sampled_vs_l5"))
+    post = b.get("post_fill") or {}
+    gap = _f(post.get("complete_freq_gap_pp_sampled"))
+    off = _f(b.get("off_distribution_rate_pct"))
+
+    def st(ok: Optional[bool], have: int, need: int) -> str:
+        if ok is None:
+            return "UNMEASURED"
+        if not ok:
+            return "FAIL"
+        return "PASS" if have >= need else "INSUFFICIENT"
+    return {
+        "status": "OK" if n else "NO_DECISIONS_YET",
+        "decisions": n,
+        "markets": report.get("markets_with_decisions"),
+        "markets_shadowed": report.get("markets_shadowed"),
+        "post_fill_decisions": int(post.get("decisions") or 0),
+        "theoretical_fills": report.get("theoretical_fills"),
+        "lookup_provenance": prov,
+        "funnel": report.get("funnel"),
+        "executable_layer": report.get("executable_layer"),
+        "action_distribution_relation": _dim(
+            st(None if l1s is None else l1s <= thr["l1_sampled_vs_l5_max"], n,
+               me["live_scored_decisions"]),
+            {"l1_sampled_vs_l5": l1s, "sampled": b.get("sampled_relation_freq"),
+             "expected_l5": b.get("expected_relation_freq_l5")},
+            {"l1_sampled_vs_l5_max": thr["l1_sampled_vs_l5_max"]}, n),
+        "post_fill_complete_gap": _dim(
+            st(None if gap is None else abs(gap) <= thr_p["abs_gap_pp_max_sampled"],
+               int(post.get("decisions") or 0), me["live_post_fill_decisions"]),
+            {"gap_pp_sampled": gap}, {"abs_gap_pp_max_sampled": thr_p["abs_gap_pp_max_sampled"]},
+            int(post.get("decisions") or 0)),
+        "off_distribution_rate": _dim(
+            st(None if off is None else off <= thr_o["max_pct"], n,
+               me["live_scored_decisions"]), off, thr_o, n),
+        "counts_toward_frozen_minimums": False,
+        "labels": "READ-ONLY multi-market shadow on the live venue: the frozen model's "
+                  "own draw acted in shadow, theoretical fills from public prints; "
+                  "same thresholds, reported beside the frozen minimums, never "
+                  "counted toward them (spec unchanged)",
+    }
+
+
 def evaluate(reports: Iterable[Mapping[str, Any]],
              rolling: Optional[Mapping[str, Any]] = None,
              spec: Optional[Mapping[str, Any]] = None,
+             pmus_shadow: Optional[Mapping[str, Any]] = None,
              model: Optional[Mapping[str, Any]] = None,
              ingest: Optional[Mapping[str, Any]] = None,
              maintenance: Optional[list] = None) -> dict:
@@ -868,6 +1002,8 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
             "divergence_classes_legacy": classes_legacy,
             "counterfactual_2s": counterfactual,
             "complete_price_counterfactual": complete_cf,
+            "layers": layered_view(live, spec),
+            "pmus_shadow": score_pmus_shadow(pmus_shadow, spec),
             "live": live, "live_legacy": live_legacy, "shadow": shadow}
 
 

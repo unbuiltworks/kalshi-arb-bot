@@ -512,6 +512,55 @@ def write_status_doc(root: Path, status: Mapping[str, Any]) -> None:
 STATUS_PORT_ENV = "PMUS_WS_STATUS_PORT"
 DEFAULT_STATUS_PORT = 8080
 STATUS_HTTP_PATHS = ("/status", "/status/pmus_ws_status.jsonl")
+# OWNER (maximize legitimate evidence turnover): the recorder runs the
+# read-only multi-market L5 shadow over EVERY subscribed market and serves
+# its report beside the status document. "0" disables the shadow.
+SHADOW_HTTP_PATH = "/l5_shadow"
+SHADOW_ENV = "PMUS_L5_MULTI_SHADOW"
+SHADOW_TICK_S = 1.0
+SHADOW_MARKET_STATE_OF = None     # enrichment may install a cache reader
+
+
+def shadow_report_path(root: Path) -> Path:
+    from src import pmus_l5_multi_shadow as ms
+    return root / "l5_shadow" / ms.REPORT_FILE
+
+
+def start_multi_shadow(root: Path):
+    """The multi-market shadow, or None when disabled / unavailable. A
+    shadow failure can never block the recorder."""
+    if os.getenv(SHADOW_ENV, "1").strip() == "0":
+        return None
+    try:
+        from src import pmus_l5_multi_shadow as ms
+        sh = ms.MultiShadow(root / "l5_shadow",
+                            market_state_of=SHADOW_MARKET_STATE_OF)
+        print("PMUS_L5_SHADOW " + json.dumps(
+            {"kind": "shadow_start", "restore": sh.restore, "model_sha": sh.model_sha,
+             "code_sha": ms.CODE_SHA, "lookup_version": ms.LOOKUP_VERSION,
+             "labels": ms.LABELS}, separators=(",", ":"), default=str), flush=True)
+        return sh
+    except Exception as exc:                          # noqa: BLE001
+        print("PMUS_L5_SHADOW " + json.dumps(
+            {"kind": "shadow_unavailable", "err": f"{type(exc).__name__}:{str(exc)[:120]}"}),
+            flush=True)
+        return None
+
+
+def shadow_compact(rep: Mapping[str, Any]) -> dict:
+    b, e = rep.get("behavioral_layer") or {}, rep.get("executable_layer") or {}
+    return {"kind": "shadow_report",
+            **{k: rep.get(k) for k in ("markets_shadowed", "markets_with_decisions",
+                                       "unique_decisions", "post_fill_decisions",
+                                       "theoretical_fills")},
+            "funnel": rep.get("funnel"),
+            "behavioral": {k: b.get(k) for k in ("scored_decisions", "l1_sampled_vs_l5",
+                                                 "off_distribution_rate_pct")},
+            "behavioral_post_fill": (b.get("post_fill") or {}).get("complete_freq_gap_pp_sampled"),
+            "executable": {k: e.get(k) for k in ("execution_eligible", "eligible_share",
+                                                 "refusals_by_reason")},
+            "complete_counterfactual": e.get("complete_counterfactual"),
+            "lookup_provenance": rep.get("lookup_provenance")}
 
 
 def status_port() -> int:
@@ -543,12 +592,19 @@ def serve_status_doc(root: Path, port: int):
             pass
 
         def do_GET(self) -> None:                     # noqa: N802
-            if self.path.split("?", 1)[0] not in STATUS_HTTP_PATHS:
+            path = self.path.split("?", 1)[0]
+            if path == SHADOW_HTTP_PATH:
+                # the read-only multi-market L5 shadow report (same
+                # handoff pattern as the status document)
+                src_path = shadow_report_path(root)
+            elif path in STATUS_HTTP_PATHS:
+                src_path = doc
+            else:
                 self.send_response(404)
                 self.end_headers()
                 return
             try:
-                body = doc.read_bytes()
+                body = src_path.read_bytes()
             except OSError:
                 self.send_response(503)
                 self.end_headers()
@@ -860,6 +916,8 @@ async def run(minutes: Optional[float]) -> int:
     l5_alloc: Optional[set] = None
     fast_realloc_count = 0
     serve_status_doc(root, status_port())
+    shadow = start_multi_shadow(root)
+    last_shadow_tick = 0.0
     while deadline is None or time.monotonic() < deadline:
         cap = int(os.getenv(MAX_MARKETS_ENV, "24"))
         targets = discover_universe()
@@ -917,6 +975,18 @@ async def run(minutes: Optional[float]) -> int:
                                   "msg": msg})
                     msgs += 1
                     apply_events(mstate, msg, time.time())
+                    if shadow is not None and \
+                            time.monotonic() - last_shadow_tick >= SHADOW_TICK_S:
+                        # every subscribed market, every cadence unit;
+                        # contained: a shadow error never costs the tape
+                        last_shadow_tick = time.monotonic()
+                        try:
+                            shadow.tick(mstate, time.time())
+                        except Exception as exc:      # noqa: BLE001
+                            print("PMUS_L5_SHADOW " + json.dumps(
+                                {"kind": "shadow_tick_error",
+                                 "err": f"{type(exc).__name__}:{str(exc)[:120]}"}),
+                                flush=True)
                     if msgs % 200 == 0:
                         heartbeat_file(root, messages=msgs,
                                        subscribed=len(slugs))
@@ -963,6 +1033,13 @@ async def run(minutes: Optional[float]) -> int:
                                                 str(exc)[:120],
                                                 "messages_received": msgs}),
                                   flush=True)
+                        if shadow is not None:
+                            rep = shadow.write_report(time.time())
+                            if rep:
+                                print("PMUS_L5_SHADOW " + json.dumps(
+                                    shadow_compact(rep) if "error" not in rep
+                                    else {"kind": "shadow_report_error", **rep},
+                                    separators=(",", ":"), default=str), flush=True)
                         last_status = time.monotonic()
         except Exception as exc:
             append(root, {"kind": "error",

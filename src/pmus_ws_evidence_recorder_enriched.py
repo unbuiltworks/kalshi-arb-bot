@@ -457,10 +457,19 @@ def allocate_l5(subscribed_slugs, state, targets=None, now=None,
         now=now, l5_infos=l5_infos)
 
 
+def cached_market_state(slug: str) -> Optional[dict]:
+    """The venue open-state already cached for spring watch (no network):
+    the multi-market shadow's execution-eligibility layer reads it to flag
+    closed/halted markets; absent stays absent."""
+    hit = _MARKET_STATE_CACHE.get(slug)
+    return hit[1] if hit else None
+
+
 def install() -> None:
     """Install read-only status/replay and compute-allocation enrichments."""
     base.ws_gate = ws_gate
     base.spring_watch = spring_watch
+    base.SHADOW_MARKET_STATE_OF = cached_market_state
     pq.allocate_l5 = allocate_l5
     pq.plan = plan
 

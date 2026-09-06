@@ -26,6 +26,13 @@ COPY src/pmus_status_report.py src/pmus_status_report.py
 COPY src/pmus_priority_queue.py src/pmus_priority_queue.py
 # L5 action-shadow emission (per-market l5_shadow on every status row)
 COPY src/pmus_l5_action_shadow.py src/pmus_l5_action_shadow.py
+# read-only multi-market L5 shadow: canonical lookup v3 shared with the
+# live probe and the Gemini shadow; no executor / order path is copied
+COPY src/pmus_l5_multi_shadow.py src/pmus_l5_multi_shadow.py
+COPY src/l5_venue_adapter.py src/l5_venue_adapter.py
+COPY src/l5_shadow_scoring.py src/l5_shadow_scoring.py
+COPY src/pmus_l5_fidelity_live.py src/pmus_l5_fidelity_live.py
+COPY analysis/l5/l5_fidelity_pass.json analysis/l5/l5_fidelity_pass.json
 COPY src/pmus_l5_persistence_v2.py src/pmus_l5_persistence_v2.py
 # the canonical planner: spring_watch rows now carry probe_entry_action,
 # computed with the SHARED planner so the recorder cannot drift from the

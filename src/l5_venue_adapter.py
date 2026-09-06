@@ -44,9 +44,29 @@ from dataclasses import dataclass, field
 from decimal import ROUND_DOWN, Decimal as D
 from typing import Any, Mapping, Optional, Protocol
 
-from src.polymarket_l5.action_model import state_key
-from src.polymarket_l5 import transfer_backtest as tb
-from src import pmus_q1_executor as q1
+from src.polymarket_l5.action_model import SIZE_BUCKETS, _bucket, state_key
+from src import pmus_l5_fidelity_live as fid
+from src import pmus_l5_persistence_v2 as pv2
+# executor / tape-builder code is imported LAZILY (below): the read-only
+# recorder image carries this adapter for the canonical state lookup and
+# must never import an order path
+
+
+def _q1():
+    from src import pmus_q1_executor as q1
+    return q1
+
+
+def _tb():
+    from src.polymarket_l5 import transfer_backtest as tb
+    return tb
+
+
+# venue-observed PMUS sports grid (orderPriceMinTickSize=0.01) used when a
+# raw row carries no tick; the executor's crypto constants are never
+# imported for a read-only normalisation
+PMUS_TICK_DEFAULT = D("0.01")
+PMUS_MIN_PRICE, PMUS_MAX_PRICE = D("0.01"), D("0.99")
 
 ONE = D("1")
 MAX_RESIDUAL_UNITS = 3            # shared planner bound (pmus_spring_l5_session)
@@ -290,19 +310,20 @@ class PMUSAdapter:
             venue=self.venue, market_id=str(raw.get("slug") or raw.get("market_id")),
             t=now, yes_bid=bid, yes_ask=ask,
             yes_bid_qty=_d(raw.get("bid_qty")), yes_ask_qty=_d(raw.get("ask_qty")),
-            tick=_d(raw.get("tick")) or q1.TICK, min_price=q1.MIN_PRICE,
-            max_price=q1.MAX_PRICE, tte_s=tte, last_px=_d(raw.get("last")),
+            tick=_d(raw.get("tick")) or PMUS_TICK_DEFAULT,
+            min_price=PMUS_MIN_PRICE, max_price=PMUS_MAX_PRICE,
+            tte_s=tte, last_px=_d(raw.get("last")),
             extra={"shares_traded": raw.get("shares_traded")})
 
     def maker_fee(self, px: D, qty: D) -> D:
         return D("0")                       # rebate exists; NEVER counted
 
     def taker_fee(self, px: D, qty: D) -> Optional[D]:
-        return q1.taker_fee(D(str(px))) * D(str(qty))
+        return _q1().taker_fee(D(str(px))) * D(str(qty))
 
     def complement_price(self, surplus_avg: D, opp_ask: D,
                          tick: D) -> tuple[Optional[D], dict]:
-        hard = q1.complement_bound(surplus_avg)
+        hard = _q1().complement_bound(surplus_avg)
         spring = PAIR_TARGET - D(str(surplus_avg))
         info = {"hard_bound_px": str(hard) if hard is not None else None,
                 "pair_target_px": str(spring)}
@@ -310,13 +331,13 @@ class PMUSAdapter:
             return None, {**info, "regime": "no_fee_safe_complement"}
         px = min(spring, D(str(hard)), D(str(opp_ask)) - tick)
         px = (px / tick).to_integral_value(rounding=ROUND_DOWN) * tick
-        if px < q1.MIN_PRICE or px > q1.MAX_PRICE or px <= 0:
+        if px < _q1().MIN_PRICE or px > _q1().MAX_PRICE or px <= 0:
             return None, {**info, "regime": "no_legal_maker_price"}
         return px, {**info, "regime": "pair_target" if px <= spring
                     else "hard_bound_only", "chosen_px": str(px)}
 
     def entry_ok(self, px: D) -> bool:
-        return q1.entry_ok(D(str(px)))
+        return _q1().entry_ok(D(str(px)))
 
     def settlement(self) -> dict:
         return {"authority": "venue POSITION_RESOLUTION activity / "
@@ -343,18 +364,18 @@ class GeminiAdapter:
         if bid is None and ask is None:
             return None
         if expiry is None:
-            expiry = tb.ticker_expiry_epoch(tb.event_of_symbol(sym))
+            expiry = _tb().ticker_expiry_epoch(_tb().event_of_symbol(sym))
         if expiry is None:
             return None
         return NormalizedBook(
             venue=self.venue, market_id=sym, t=t, yes_bid=bid, yes_ask=ask,
             yes_bid_qty=_d(raw.get("bid_sz")), yes_ask_qty=_d(raw.get("ask_sz")),
-            tick=tb.TICK, min_price=tb.MIN_PRICE, max_price=tb.MAX_PRICE,
+            tick=_tb().TICK, min_price=_tb().MIN_PRICE, max_price=_tb().MAX_PRICE,
             tte_s=max(expiry - t, 0.0), last_px=_d(raw.get("last")),
             extra={"expiry": expiry, "up_is_yes": True})
 
     def maker_fee(self, px: D, qty: D) -> D:
-        return tb.maker_fee(D(str(px)), D(str(qty)))
+        return _tb().maker_fee(D(str(px)), D(str(qty)))
 
     def taker_fee(self, px: D, qty: D) -> Optional[D]:
         return None                         # not vendored: GAP (unverified)
@@ -365,7 +386,7 @@ class GeminiAdapter:
         tightened by the shared pair<=0.98 target and strictly below the
         opposite ask, on the 0.01 grid."""
         avg = D(str(surplus_avg))
-        hard = tb.complement_price("YES", avg, tb.MIN_EDGE)   # symmetric
+        hard = _tb().complement_price("YES", avg, _tb().MIN_EDGE)   # symmetric
         spring = PAIR_TARGET - avg
         info = {"hard_bound_px": str(hard) if hard is not None else None,
                 "pair_target_px": str(spring)}
@@ -373,15 +394,15 @@ class GeminiAdapter:
             return None, {**info, "regime": "no_fee_safe_complement"}
         px = min(spring, hard, D(str(opp_ask)) - tick)
         px = (px / tick).to_integral_value(rounding=ROUND_DOWN) * tick
-        if px < tb.MIN_PRICE or px > tb.MAX_PRICE:
+        if px < _tb().MIN_PRICE or px > _tb().MAX_PRICE:
             return None, {**info, "regime": "no_legal_maker_price"}
-        if tb.pair_edge(avg, px) < tb.MIN_EDGE:
+        if _tb().pair_edge(avg, px) < _tb().MIN_EDGE:
             return None, {**info, "regime": "no_fee_safe_complement"}
         return px, {**info, "regime": "pair_target" if px <= spring
                     else "hard_bound_only", "chosen_px": str(px)}
 
     def entry_ok(self, px: D) -> bool:
-        return tb.MIN_PRICE <= D(str(px)) <= tb.MAX_PRICE
+        return _tb().MIN_PRICE <= D(str(px)) <= _tb().MAX_PRICE
 
     def settlement(self) -> dict:
         return {"authority": "venue settlement (60s rolling RFR, "
@@ -425,3 +446,104 @@ def decision_record(*, venue: str, market_id: str, t: float, state: str,
             # values and both off flags (v1 lookup vs canonical lookup)
             "lookup": prop.get("lookup"),
             "orders_placed": 0}
+
+
+# ---------------------------------------------------------------------------
+# Canonical lookup (lookup_version 3) -- the ONE code path both shadows and
+# the live session ask the frozen model through. Moved here from
+# gemini_l5_shadow_v2 (which re-exports it) so the read-only PMUS recorder
+# can run the same lookup without importing any Gemini tape or order code.
+# ---------------------------------------------------------------------------
+LOOKUP_VERSION = 3
+SUPERSEDED_LOOKUP_VERSIONS = {2: "superseded: behavioral last_size with a unit-based "
+                                 "imbalance (half translation); diagnostic only"}
+EXECUTED_SIZE_BUCKET = "q<5"          # the safety-scaled unit's bucket (v1 input)
+
+
+def behavioral_size_shares(art: Optional[Mapping[str, Any]], base_state: str,
+                           relation: str) -> Optional[float]:
+    """L5's p50 size (shares) for this state|relation, None when unknown."""
+    row = fid.l5_target_size(art, base_state, relation) if art else {}
+    p50 = row.get("shares_p50") if isinstance(row, Mapping) else None
+    try:
+        return float(p50) if p50 is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def record_behavioral_fill(inv: L5Inventory, art: Optional[Mapping[str, Any]],
+                           state_at_fill: str, relation: str, side_up: bool) -> None:
+    """After a fill: the model-scale size (bucket + shares) of the action
+    the clone behaviorally made, on the filled side."""
+    p50 = behavioral_size_shares(art, state_at_fill, relation)
+    bucket = (_bucket(p50, SIZE_BUCKETS) if p50 is not None else EXECUTED_SIZE_BUCKET)
+    inv.record_behavioral_shares(side_up, p50 if p50 is not None else 0.0, bucket)
+
+
+def behavioral_size_bucket(art: Optional[Mapping[str, Any]], base_state: str,
+                           relation: str) -> str:
+    """The model-scale size bucket of the action the clone BEHAVIORALLY
+    targets (L5's p50 for this state|relation), never the safety-scaled
+    executable size. Unavailable artifact -> the executed bucket."""
+    row = fid.l5_target_size(art, base_state, relation) if art else {}
+    p50 = row.get("shares_p50") if isinstance(row, Mapping) else None
+    try:
+        return _bucket(float(p50), SIZE_BUCKETS) if p50 is not None else EXECUTED_SIZE_BUCKET
+    except (TypeError, ValueError):
+        return EXECUTED_SIZE_BUCKET
+
+
+def lookup_inputs(book: NormalizedBook, inv: L5Inventory) -> dict:
+    """Both state conventions and both last_size values, so the frozen
+    model is looked up on the canonical key while the v1 key stays
+    recorded for the before/after."""
+    pre_fill = inv.total == 0
+    return {"lookup_version": LOOKUP_VERSION,
+            "state": l5_state_v2(book, inv), "state_v1": l5_state(book, inv),
+            "last_rel": inv.last_rel or "open",
+            "last_size_executed": EXECUTED_SIZE_BUCKET,
+            "last_size_behavioral": (inv.last_size_behavioral
+                                     if not pre_fill and inv.last_size_behavioral
+                                     else EXECUTED_SIZE_BUCKET),
+            "pre_fill": pre_fill,
+            "residual_units": inv.behavioral_residual(),
+            "residual_shares_behavioral": inv.behavioral_residual_shares(),
+            "price_convention": ("outcome price of the last own fill"
+                                 if inv.last_px_outcome is not None
+                                 else "cheaper touch (outcome the open convention buys)")}
+
+
+def proposal_v2(model: Mapping[str, Any], book: NormalizedBook,
+                inv: L5Inventory, code_sha: str = "") -> dict:
+    """The frozen v2 policy looked up on the canonical key (OWNER
+    5558477213 A/B). Pre-fill: the canonical history keys NO first-in-
+    window transition (every transition is (prev fill, next action)), so
+    the only faithful pre-fill relation is OPEN and off-distribution means
+    the BASE state is absent -- no state is added, the model is untouched.
+    The v1 lookup's off flag is recorded beside it for the before/after."""
+    lk = lookup_inputs(book, inv)
+    v1 = pv2.v2_dist(model, lk["state_v1"], lk["last_rel"], lk["last_size_executed"])
+    lk["off_distribution_v1"] = bool(v1["backed_off"])
+    lk["full_key_v1"] = v1["state"]
+    prop = pv2.proposal(model, lk["state"], lk["last_rel"], lk["last_size_behavioral"],
+                        residual=inv.behavioral_residual())
+    if lk["pre_fill"]:
+        base_seen = lk["state"] in ((model.get("base") or {}))
+        prop["recommended_relation"] = "open"
+        prop["relation_ranked"] = [{"relation": "open", "p": 1.0}]
+        prop["persist_extend_p"], prop["switch_complete_p"] = 0.0, 0.0
+        prop["off_distribution"] = not base_seen
+        prop["state_n"] = sum((model.get("base") or {}).get(lk["state"], {}).values())
+        lk["lookup_tier"] = ("pre_fill:first_action_is_open (canonical history keys no "
+                             "first-in-window transition; off = base state absent)")
+    else:
+        lk["lookup_tier"] = "full->base->marginal on the canonical key"
+    lk["model_sha"] = str(model.get("_sha256_16") or "")
+    lk["code_sha"] = code_sha
+    lk["state_inputs"] = {"yes_bid": str(book.yes_bid), "yes_ask": str(book.yes_ask),
+                          "no_bid": str(book.no_bid), "tte_s": round(float(book.tte_s), 1),
+                          "residual_units": inv.behavioral_residual(),
+                          "last_px_outcome": (str(inv.last_px_outcome)
+                                              if inv.last_px_outcome is not None else None)}
+    prop["lookup"] = lk
+    return prop

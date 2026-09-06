@@ -160,6 +160,40 @@ def _compact_shadow_diagnostics(rolling: Optional[Mapping[str, Any]]) -> Optiona
     }
 
 
+PMUS_SHADOW_URL_ENV = "L5_PMUS_SHADOW_URL"
+
+
+def pmus_shadow_url() -> str:
+    """The recorder's /l5_shadow report: explicit env, else derived from
+    the recorder status URL the probe already reads."""
+    explicit = os.getenv(PMUS_SHADOW_URL_ENV, "").strip()
+    if explicit:
+        return explicit
+    status_url = os.getenv(entry.EVIDENCE_STATUS_URL_ENV, "").strip()
+    if status_url.startswith("http") and "/status" in status_url:
+        return status_url.split("/status", 1)[0] + "/l5_shadow"
+    return ""
+
+
+def _compact_pmus_shadow(ps: Optional[Mapping[str, Any]],
+                         source: Mapping[str, Any]) -> Optional[dict]:
+    if not ps:
+        return {"source": dict(source)}
+    keep = ("status", "decisions", "markets", "markets_shadowed", "post_fill_decisions",
+            "theoretical_fills", "counts_toward_frozen_minimums")
+    dims = {k: {"status": v.get("status"), "n": v.get("n"), "value": v.get("value")}
+            for k, v in ps.items() if isinstance(v, Mapping) and "status" in v
+            and k not in ("executable_layer",)}
+    ex = ps.get("executable_layer") or {}
+    return {**{k: ps.get(k) for k in keep}, **dims,
+            "funnel": ps.get("funnel"),
+            "executable": {k: ex.get(k) for k in ("execution_eligible", "eligible_share",
+                                                  "refusals_by_reason",
+                                                  "complete_counterfactual")},
+            "lookup_provenance": ps.get("lookup_provenance"),
+            "source": dict(source)}
+
+
 def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
     """Run the frozen L5 fidelity gate over the ledger's session reports
     (items 8/9): progress toward EVERY minimum, the largest mismatch,
@@ -182,6 +216,17 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
             shadow_source["fetched_t"] = rolling.get("t")
         except Exception as exc:                      # noqa: BLE001
             shadow_source["error"] = f"{type(exc).__name__}:{str(exc)[:120]}"
+    # OWNER (maximize legitimate evidence turnover): the recorder's READ-ONLY
+    # multi-market L5 shadow report, served beside its status document
+    pmus_shadow, pmus_source = None, {"url": pmus_shadow_url()}
+    if pmus_source["url"]:
+        try:
+            import urllib.request
+            with urllib.request.urlopen(pmus_source["url"], timeout=8) as resp:
+                pmus_shadow = json.loads(resp.read().decode("utf-8"))
+            pmus_source["fetched_t"] = pmus_shadow.get("t")
+        except Exception as exc:                      # noqa: BLE001
+            pmus_source["error"] = f"{type(exc).__name__}:{str(exc)[:120]}"
     try:
         from src import l5_fidelity_gate as fgate
         path = base.q1.base.state_dir() / "ledger.jsonl"
@@ -195,7 +240,7 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
         model = pv2.load_v2()
         now_iso = datetime.fromtimestamp(float(now), timezone.utc).isoformat()
         out = fgate.evaluate(ingest["reports"], rolling=rolling, model=model,
-                             ingest=ingest,
+                             ingest=ingest, pmus_shadow=pmus_shadow,
                              maintenance=effective_maintenance_windows(
                                  load_maintenance_windows(), _outage_state["outage"],
                                  now_iso))
@@ -235,6 +280,14 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
                         if out.get("live_legacy") else None),
         "complete_price_counterfactual": out.get("complete_price_counterfactual"),
         "shadow_diagnostics": _compact_shadow_diagnostics(rolling),
+        # OWNER: two readings of the same frozen dimensions, and the
+        # recorder's read-only multi-market shadow beside the minimums
+        "layers": {layer: {k: {"status": v.get("status"), "n": v.get("n"),
+                               "value": v.get("value")}
+                           for k, v in (block or {}).items() if isinstance(v, Mapping)}
+                   for layer, block in (out.get("layers") or {}).items()
+                   if layer in ("behavioral", "executable")},
+        "pmus_shadow": _compact_pmus_shadow(out.get("pmus_shadow"), pmus_source),
     }
     _log("fidelity_gate", **compact)
     if out["evidence_progress"]["all_met"]:
