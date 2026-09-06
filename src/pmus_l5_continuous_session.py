@@ -661,6 +661,8 @@ def settle_held(t, slug: str) -> dict:
                                         if result.get("settled") else None),
                "position_net": result.get("position_net"),
                "available_position": result.get("available_position"),
+               "venue_qty_total": result.get("venue_qty_total"),
+               "ledger_qty_total": result.get("ledger_qty_total"),
                "activity_walk": result.get("activity_walk"),
                "trades": {**{k: (result.get("trade_summary") or {}).get(k)
                              for k in ("busted", "uncleared", "realized_pnl_rows",
