@@ -581,7 +581,7 @@ def load_complement_proof() -> dict:
         return {"proven": False, "reason": "unreadable"}
     if not isinstance(doc, dict):
         return {"proven": False, "reason": "malformed"}
-    return reconcile_complement_proof(doc)
+    return reconcile_later_acceptance(reconcile_complement_proof(doc))
 
 
 def save_complement_proof(proof: Mapping[str, Any]) -> None:
@@ -619,6 +619,60 @@ def revoke_complement_proof(slug: str, order: Mapping[str, Any],
 RETIRED_PROOF_REASON_PREFIX = "no_fee_safe_complement:"
 RETIRED_REVOCATION_PREFIX = "revoked:complete_rejected_at_fresh_non_crossing_price"
 LEGACY_FAIL_CLOSED_TICK = D("0.005")   # finest PMUS sports tick
+# end_reasons a COMPLETE order can only carry after the venue HELD it
+# (the deadline / reprice loops poll a resting order; a rejection raises
+# before either): venue acceptance of a post-only opposite-side order
+ACCEPTED_REST_ENDS = ("resting:", "deadline", "repriced:")
+# the on-disk record's own event time, whichever kind of write it was
+PROOF_TIME_KEYS = ("attempted_utc", "revoked_utc", "reconciled_utc",
+                   "proven_utc")
+
+
+def _utc_key(s: Any) -> Optional[datetime]:
+    try:
+        d = datetime.fromisoformat(str(s))
+    except (TypeError, ValueError):
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
+def proof_record_time(doc: Mapping[str, Any]) -> Optional[datetime]:
+    times = [t for t in (_utc_key(doc.get(k)) for k in PROOF_TIME_KEYS) if t]
+    return max(times) if times else None
+
+
+def reconcile_later_acceptance(doc: dict) -> dict:
+    """A current-rule not-proven record (probe rejected / revoked) is
+    superseded ONLY by a venue acceptance the ledger recorded strictly
+    later than the record's own event: the last venue event wins, as in
+    complement_proof_from_ledger, without ever letting an older acceptance
+    outrank a newer rejection. Persisted once with the superseded record
+    attached; no ledger evidence, or none later = the record stands."""
+    if doc.get("proven") is True:
+        return doc
+    when = proof_record_time(doc)
+    if when is None:
+        return doc
+    derived = complement_proof_from_ledger()
+    last = derived.get("last_event") or {}
+    if derived.get("proven") is not True:
+        return doc
+    t_last = _utc_key(last.get("t"))
+    if t_last is None or t_last <= when:
+        return doc
+    out: dict[str, Any] = {
+        "proven": True, "reason": None,
+        "reconciled_utc": datetime.now(timezone.utc).isoformat(),
+        "reconciled_from": "ledger",
+        "superseded_by": "later_venue_acceptance",
+        "slug": last.get("slug"), "order_id": last.get("order_id"),
+        "end_reason": last.get("end_reason"), "proven_utc": last.get("t"),
+        "superseded_record": dict(doc), "ledger_evidence": derived,
+        "labels": "the venue held/filled a post-only opposite-side order "
+                  "built by this code after the record's rejection; "
+                  "re-derived from the durable ledger; no cap/gate change"}
+    save_complement_proof(out)
+    return out
 
 
 def rejection_margin_ticks(order: Mapping[str, Any]) -> Optional[D]:
@@ -724,6 +778,20 @@ def complement_proof_from_ledger() -> dict:
             elif end.startswith("rejected"):
                 events.append({**ev, "proven": False,
                                "why": "probe_rejected"})
+        elif relation == "complete" and (filled or
+                                         end.startswith(ACCEPTED_REST_ENDS)):
+            # LIVE 16:33-16:40Z (mil-cin 9.5): the probe's own post-only
+            # NO was rejected one tick from the ask and wrote proven=false;
+            # the venue then held and FILLED three post-only NO completes
+            # built by this code on the same market -- exactly the
+            # acceptance the owner's rule (5556038561 #3) asks the venue to
+            # show -- but only the probe stage counted, and with the market
+            # matched out no held market remained to re-probe on, so NEW
+            # first legs stayed closed on a flat account with admitted
+            # candidates. A COMPLETE the venue held (rested to deadline /
+            # reprice, or observed resting) or filled is the same venue
+            # evidence as a held/filled probe.
+            events.append({**ev, "proven": True, "why": "complete_accepted"})
         elif relation == "complete" and end.startswith("rejected"):
             margin = rejection_margin_ticks(o)
             if margin is None or margin >= 2:
