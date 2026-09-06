@@ -922,6 +922,25 @@ def run_session(t: Optional[Transport] = None,
                  "l5_target_size": fid.l5_target_size(
                      fid_art, last_skey.get("k") or "", relation_)})
 
+        def _classify_rejection(side_up_: bool, px_: D) -> dict:
+            """Owner item 5 classes for a post-only rejection, from the
+            FRESH book: crossed = venue/execution adaptation (the book
+            moved through our price); not crossed = unexplained by this
+            code's acceptance model (implementation bug candidate)."""
+            try:
+                b = q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES" if side_up_
+                                   else "OUTCOME_SIDE_NO")
+                opp_ask = D(str(b["ask"]))
+            except Exception as exc:                  # noqa: BLE001
+                return {"class": f"unknown:bbo_unreadable:{type(exc).__name__}",
+                        "crossed": False, "opp_ask": None}
+            crossed = px_ >= opp_ask
+            return {"class": ("venue/execution adaptation:"
+                              "post_only_cross_after_book_move" if crossed
+                              else "implementation bug candidate:"
+                                   "rejected_at_non_crossing_price"),
+                    "crossed": crossed, "opp_ask": str(opp_ask)}
+
         def _still_wanted(side_up_: bool, px_: D, relation_: str,
                           skey_: str):
             """Why the resting order is no longer the current L5 action
@@ -1186,6 +1205,8 @@ def run_session(t: Optional[Transport] = None,
                     relation = "complete" if inv.residual != 0 else "stop"
                     report["decisions"][-1]["divergence"] = \
                         f"safety_adaptation:spend_cap->{relation}"
+                    report["decisions"][-1]["divergence_class"] = \
+                        divergence_class("safety_adaptation:spend_cap")
             if relation == "sell" or relation == "stop":
                 report["stop_reason"] = ("l5_sell_is_noop" if relation == "sell"
                                          else "spend_cap_reached")
@@ -1279,6 +1300,12 @@ def run_session(t: Optional[Transport] = None,
                 # ladder is submitted -> filled -> settled -> realized
                 _harvest(oid, f"spring_{relation}_{actions + 1}", side_up,
                          px, qty, relation, got, rest_s, end_reason)
+                if end_reason.startswith("rejected"):
+                    rej = _classify_rejection(side_up, px)
+                    report["orders"][-1]["rejection_class"] = rej["class"]
+                    report["orders"][-1]["fresh_opp_ask"] = rej["opp_ask"]
+                    if rej["crossed"]:
+                        sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                 if got > 0:
                     fill = micro._terminal_positive_fill(t, oid, qty) or \
                         {"price": px, "qty": got}
@@ -1318,14 +1345,27 @@ def run_session(t: Optional[Transport] = None,
                 _harvest(oid, f"spring_complete_{actions + 1}", deficit_up,
                          px, qty, "complete", got, rest_s, end_reason)
                 if end_reason.startswith("rejected"):
-                    # place_limit_buy checked the FRESH book right before
-                    # submit: a rejection here is the venue disagreeing
-                    # with this code's acceptance model -> fail closed
-                    revoke_complement_proof(
-                        slug, {"order_id": oid, "side": "YES" if deficit_up
-                               else "NO", "px": str(px), "qty": str(qty),
-                               "end_reason": end_reason},
-                        "complete_rejected_at_fresh_non_crossing_price")
+                    # LIVE 02:10:53-58Z: four NO completes at 0.625 were
+                    # rejected within 1 s each right after a fill AT that
+                    # price -- the book had moved through our price
+                    # between the bbo read and the submit (a genuine
+                    # post-only cross), not a venue rule this code does
+                    # not model. Classify by the FRESH book: crossed ->
+                    # venue/execution adaptation, wait for the next book
+                    # move; not crossed -> the proof is revoked.
+                    rej = _classify_rejection(deficit_up, px)
+                    report["orders"][-1]["rejection_class"] = rej["class"]
+                    report["orders"][-1]["fresh_opp_ask"] = rej["opp_ask"]
+                    if rej["crossed"]:
+                        sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
+                    else:
+                        revoke_complement_proof(
+                            slug, {"order_id": oid,
+                                   "side": "YES" if deficit_up else "NO",
+                                   "px": str(px), "qty": str(qty),
+                                   "end_reason": end_reason,
+                                   "fresh_opp_ask": rej["opp_ask"]},
+                            "complete_rejected_at_fresh_non_crossing_price")
                 if got > 0:
                     fill = micro._terminal_positive_fill(t, oid, qty) or \
                         {"price": px, "qty": got}

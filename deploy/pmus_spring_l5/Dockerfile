@@ -50,6 +50,8 @@ COPY src/polymarket_l5/__init__.py src/polymarket_l5/__init__.py
 COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
 COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
 COPY analysis/l5/l5_action_model_v2.json analysis/l5/l5_action_model_v2.json
+COPY src/l5_fidelity_gate.py src/l5_fidelity_gate.py
+COPY analysis/l5/l5_fidelity_gate.json analysis/l5/l5_fidelity_gate.json
 RUN touch src/__init__.py
 
 ENV PMUS_SERVICE_ROLE=spring-l5-probe \

@@ -15,7 +15,9 @@
       "analysis/l5/gemini_transfer_gate.json",
       "analysis/l5/gemini_hypothesis_two_sided_flow.json",
       "analysis/l5/gemini_research_arm_stochastic.json",
-      "src/gemini_l5_regime_study.py"
+      "src/gemini_l5_regime_study.py",
+      "src/l5_fidelity_gate.py",
+      "analysis/l5/l5_fidelity_gate.json"
     ]
   },
   "deploy": {

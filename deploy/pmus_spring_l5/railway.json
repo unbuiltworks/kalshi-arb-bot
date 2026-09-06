@@ -21,7 +21,9 @@
       "src/pmus_l5_ramp_ladder.py",
       "src/polymarket_l5/**",
       "analysis/l5/l5_action_model_v2.json",
-      "analysis/l5/l5_fidelity_pass.json"
+      "analysis/l5/l5_fidelity_pass.json",
+      "src/l5_fidelity_gate.py",
+      "analysis/l5/l5_fidelity_gate.json"
     ]
   },
   "deploy": {

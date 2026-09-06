@@ -763,10 +763,46 @@ def test_complement_rejection_revokes_the_proof(monkeypatch, tmp_path):
                              resume=True)
     assert rep["orders"][0]["relation"] == "complete"
     assert rep["orders"][0]["end_reason"].startswith("rejected")
+    assert rep["orders"][0]["rejection_class"].startswith(
+        "implementation bug candidate")
     proof = spring.load_complement_proof()
     assert proof["proven"] is False
     assert proof["reason"].startswith("revoked:complete_rejected")
     assert proof["revoked_order"]["order_id"] == "SPR1"
+
+
+def test_complement_rejected_after_book_moved_through_price_is_a_venue_adaptation(
+        monkeypatch, tmp_path):
+    """LIVE 02:10Z: rejections right after a fill at our price are the
+    book moving through it -- classified from the FRESH book, no proof
+    revocation, wait for the next move."""
+    from tests.test_pmus_l5_continuous_session import (_armed_session_env,
+                                                        _ledger_with_fill)
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")
+    _script_proposals(monkeypatch, ["complete"])
+    monkeypatch.setenv(spring.MAX_ACTIONS_ENV, "1")
+
+    class MovedThrough(Fake):
+        def request(self, method, path, body=None, base=None):
+            out = super().request(method, path, body, base)
+            if path == "/v1/orders":
+                self.orders[out["id"]]["state"] = "ORDER_STATE_REJECTED"
+                self.open_order = None
+                # NO complete at 0.55 <-> YES bid jumps to 0.45: NO ask
+                # is now 0.55 -> our price crossed
+                self.bid = "0.4500"
+            return out
+    fake = MovedThrough(bid="0.4300", ask="0.4350", fill_all=False)
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0, slug="held", gate_ok=True,
+                             resume=True)
+    o = rep["orders"][0]
+    assert o["end_reason"].startswith("rejected")
+    assert o["rejection_class"].startswith("venue/execution adaptation")
+    assert o["fresh_opp_ask"] == "0.5500"
+    assert spring.complement_acceptance_proven()          # NOT revoked
 
 
 def test_first_leg_refused_when_its_complement_preview_is_rejected(

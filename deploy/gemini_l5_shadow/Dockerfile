@@ -17,6 +17,8 @@ COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
 COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
 COPY src/polymarket_l5/transfer_backtest.py src/polymarket_l5/transfer_backtest.py
 COPY analysis/l5/l5_action_model_v2.json analysis/l5/l5_action_model_v2.json
+COPY src/l5_fidelity_gate.py src/l5_fidelity_gate.py
+COPY analysis/l5/l5_fidelity_gate.json analysis/l5/l5_fidelity_gate.json
 COPY analysis/l5/l5_fidelity_pass.json analysis/l5/l5_fidelity_pass.json
 COPY analysis/l5/gemini_transfer_gate.json analysis/l5/gemini_transfer_gate.json
 COPY analysis/l5/gemini_hypothesis_two_sided_flow.json analysis/l5/gemini_hypothesis_two_sided_flow.json
