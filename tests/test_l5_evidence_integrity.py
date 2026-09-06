@@ -294,3 +294,43 @@ def test_shadow_counters_expose_raw_unique_and_dropped():
     assert sh["shadow_raw_windows"] == 103 and sh["shadow_duplicates_dropped"] == 3
     prog = gate.evidence_progress({"scored_decisions": 0}, sh, spec)
     assert prog["minimums"]["shadow_windows"]["have"] == 92
+
+
+def test_declared_maintenance_window_is_a_planned_outage_not_evidence(tmp_path):
+    """OWNER 5557988072 #6: the declared window classifies the outage,
+    excludes any interval overlapping it from cadence evidence, and
+    reports (never counts) decisions time-stamped inside it."""
+    from src import pmus_l5_continuous_session as cont
+    wins = cont.load_maintenance_windows()
+    assert wins and wins[0]["id"] == "pmus-2026-09-06-scheduled"
+    assert wins[0]["venue"] == "polymarket_us"
+    # the live outage's first error (07:15:29Z) is inside; 06:00Z is not
+    o = cont.classify_outage({"start_utc": "2026-09-06T07:15:29.386001+00:00",
+                              "first_error": "Halt:GET_RETRIES_EXHAUSTED"})
+    assert o["class"] == "scheduled_maintenance"
+    assert o["maintenance"]["id"] == "pmus-2026-09-06-scheduled"
+    assert cont.classify_outage({"start_utc": "2026-09-06T06:00:00+00:00"})["class"] == "unplanned"
+    assert cont.classify_outage({"start_utc": "2026-09-06T10:00:01+00:00"})["class"] == "unplanned"
+    assert cont.classify_outage(None) is None
+    # cadence: a session straddling the window contributes no interval
+    # across it; decisions inside it are reported as an anomaly
+    rep = _report("s1", "m1", 3, t0="2026-09-06T07:10:0")      # 07:10:00..02
+    late = _report("s1", "m1", 2, t0="2026-09-06T10:05:0")     # after the window
+    for i, d in enumerate(late["decisions"]):
+        d["decision_idx"] = 10 + i
+    inside = _report("s1", "m1", 1, t0="2026-09-06T08:00:0")
+    inside["decisions"][0]["decision_idx"] = 20
+    corpus = [{**rep, "decisions": rep["decisions"] + inside["decisions"] + late["decisions"],
+               "orders": []}]
+    plain = gate.evaluate(corpus)
+    marked = gate.evaluate(corpus, maintenance=wins)
+    # without the declaration the straddling gaps would count as intervals
+    assert plain["live"]["timing_cadence"]["n"] == 5
+    assert marked["live"]["timing_cadence"]["n"] == 3         # 2 excluded
+    m = marked["evidence_progress"]["accounting"]["maintenance"]
+    assert m == {"windows_declared": 1, "decisions_inside_maintenance": 1,
+                 "intervals_excluded_maintenance": 2,
+                 "class": m["class"]}
+    # the exclusion never changes any other dimension or the decision count
+    assert marked["live"]["scored_decisions"] == plain["live"]["scored_decisions"] == 6
+    assert marked["live"]["action_distribution_relation"] == plain["live"]["action_distribution_relation"]

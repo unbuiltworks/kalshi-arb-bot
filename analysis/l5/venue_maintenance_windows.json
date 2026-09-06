@@ -1,0 +1,21 @@
+{
+  "purpose": "OWNER 5557988072 item 6 -- declared venue maintenance intervals. An outage whose first error falls inside a declared window is classified scheduled_maintenance (planned venue outage), never an L5 fidelity failure, a collector defect or strategy behaviour. Windows are declared from an owner statement or the venue's own notice; the campaign never infers one from errors.",
+  "rules": [
+    "declared windows are read-only inputs to diagnostics: no gate, cap, admission or policy change depends on them",
+    "the recovery sequence after a window is unchanged: account read healthy -> orphan-order reconcile before any mutation -> public prints resume vs the pre-outage baseline (or recorder tape) -> resume the bounded validation",
+    "timed-interval evidence is never formed across a window (intervals are only between consecutive unique decisions of one session); decisions time-stamped inside a window are reported as a provenance anomaly, never counted as cadence evidence",
+    "windows are appended, never edited after their end"
+  ],
+  "windows": [
+    {
+      "id": "pmus-2026-09-06-scheduled",
+      "venue": "polymarket_us",
+      "start_utc": "2026-09-06T07:15:00+00:00",
+      "end_utc": "2026-09-06T10:00:00+00:00",
+      "end_local": "2026-09-06 06:00 ET",
+      "declared_by": "owner comment 5557988072 (2026-09-06T08:19:33Z)",
+      "first_observed_error": "Halt:GET_RETRIES_EXHAUSTED:/v1/orders/open:HTTP Error 503: Service Unavailable at 2026-09-06T07:15:29Z",
+      "note": "start is the first observed 503; the owner declared maintenance until 06:00 ET. Prints after end_utc still have to pass the recovery gate before any session."
+    }
+  ]
+}

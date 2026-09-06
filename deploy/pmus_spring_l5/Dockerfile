@@ -52,6 +52,7 @@ COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py
 COPY analysis/l5/l5_action_model_v2.json analysis/l5/l5_action_model_v2.json
 COPY src/l5_fidelity_gate.py src/l5_fidelity_gate.py
 COPY analysis/l5/l5_fidelity_gate.json analysis/l5/l5_fidelity_gate.json
+COPY analysis/l5/venue_maintenance_windows.json analysis/l5/venue_maintenance_windows.json
 RUN touch src/__init__.py
 
 ENV PMUS_SERVICE_ROLE=spring-l5-probe \

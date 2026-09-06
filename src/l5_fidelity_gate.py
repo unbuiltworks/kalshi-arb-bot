@@ -118,7 +118,8 @@ def _dim(status: str, value: Any, threshold: Any, n: int, **extra: Any) -> dict:
 
 
 def score_live(decisions: list, orders: list, spec: Mapping[str, Any],
-               model: Optional[Mapping[str, Any]] = None) -> dict:
+               model: Optional[Mapping[str, Any]] = None,
+               maintenance: Optional[list] = None) -> dict:
     """Score the bounded live evidence, dimension by dimension."""
     dims = spec["dimensions"]
     me = spec["minimum_evidence"]
@@ -243,6 +244,11 @@ def score_live(decisions: list, orders: list, spec: Mapping[str, Any],
     # to the market as the grouping key
     thr = dims["timing_cadence"]["pass"]
     intervals, ratios_c = [], []
+    # OWNER 5557988072 #6: an interval that overlaps a declared venue
+    # maintenance window is a planned outage, never cadence evidence
+    mwin = [(float(w.get("start") or 0), float(w.get("end") or 0))
+            for w in (maintenance or []) if w.get("start") and w.get("end")]
+    excluded_m = 0
     by_slug: dict[str, list] = {}
     for d in decs:
         t = d.get("t_utc")
@@ -259,6 +265,11 @@ def score_live(decisions: list, orders: list, spec: Mapping[str, Any],
                 continue
             dt = (tb - ta).total_seconds()
             cad = _f(a.get("next_reevaluation_s"))
+            if mwin:
+                sa, sb = ta.timestamp(), tb.timestamp()
+                if any(sa <= e and sb >= s for s, e in mwin):
+                    excluded_m += 1
+                    continue
             if dt > 0:
                 intervals.append(dt)
                 if cad and cad > 0:
@@ -271,8 +282,10 @@ def score_live(decisions: list, orders: list, spec: Mapping[str, Any],
             else ("INSUFFICIENT" if ok else "FAIL")),
         {"median_interval_s": (round(statistics.median(intervals), 1)
                                if intervals else None),
-         "median_interval_over_model_cadence": ratio},
+         "median_interval_over_model_cadence": ratio,
+         "intervals_excluded_maintenance": excluded_m},
         thr, len(ratios_c))
+    out["intervals_excluded_maintenance"] = excluded_m
 
     # --- inventory trajectory
     thr = dims["inventory_trajectory"]["pass"]
@@ -516,6 +529,7 @@ def evidence_progress(live: Mapping[str, Any], shadow: Mapping[str, Any],
                 "second_pass_idempotent": bool(acct.get("second_pass_idempotent", True)),
                 "evidence_accounting_valid": not invalid,
                 "ingest": acct.get("ingest"),
+                "maintenance": acct.get("maintenance"),
                 "unique_decisions": have["live_scored_decisions"],
                 "per_market": live.get("decisions_by_market"),
                 "unique_states": live.get("unique_states"),
@@ -569,7 +583,8 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
              rolling: Optional[Mapping[str, Any]] = None,
              spec: Optional[Mapping[str, Any]] = None,
              model: Optional[Mapping[str, Any]] = None,
-             ingest: Optional[Mapping[str, Any]] = None) -> dict:
+             ingest: Optional[Mapping[str, Any]] = None,
+             maintenance: Optional[list] = None) -> dict:
     spec = spec or load_spec()
     reports = [r for r in reports
                if isinstance(r, Mapping) and r.get("kind") not in SUMMARY_KINDS]
@@ -619,7 +634,26 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
     else:
         counterfactual = {"n": 0}
     decs, orders = dd["decisions"], dd["orders"]
-    live = score_live(decs, orders, spec, model)
+    live = score_live(decs, orders, spec, model, maintenance=maintenance)
+    # OWNER 5557988072 #6: declared maintenance windows are diagnostics
+    # inputs only -- a decision time-stamped inside one is a provenance
+    # anomaly to report (the venue was down), never evidence to count
+    mwin = [(float(w.get("start") or 0), float(w.get("end") or 0))
+            for w in (maintenance or []) if w.get("start") and w.get("end")]
+    inside_m = 0
+    for d in decs:
+        try:
+            ts = datetime.fromisoformat(str(d.get("t_utc"))).timestamp()
+        except (ValueError, TypeError):
+            continue
+        if any(s <= ts <= e for s, e in mwin):
+            inside_m += 1
+    dd["maintenance"] = {"windows_declared": len(mwin),
+                         "decisions_inside_maintenance": inside_m,
+                         "intervals_excluded_maintenance": int(
+                             live.get("intervals_excluded_maintenance") or 0),
+                         "class": "planned venue outage; excluded from cadence "
+                                  "evidence, never an L5 fidelity failure"}
     shadow = score_shadow(rolling, spec)
     classes: dict = {}
     for d in decs:

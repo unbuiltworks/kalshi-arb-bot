@@ -1796,3 +1796,48 @@ def test_l5_campaign_state_file_does_not_collide_with_the_q1_file(monkeypatch,
     (tmp_path / "campaign_state.json").write_text('{"risk": "q1"}')
     assert cont.load_campaign_state() == {}
     assert cont.campaign_state_path().name == "l5_campaign_state.json"
+
+
+def test_outage_inside_a_declared_maintenance_window_is_classified(
+        monkeypatch, tmp_path, capsys):
+    """OWNER 5557988072 #6: an outage whose first error lands inside the
+    declared window is logged, persisted and restored as
+    scheduled_maintenance; the recovery sequence is unchanged."""
+    from datetime import datetime, timezone
+    shares, tape = {"v": 100.0}, {"trades": 0}
+    fake = _two_run_harness(monkeypatch, tmp_path, shares, tape)
+    calls = {"n": 0}
+
+    def flaky_held(t):
+        calls["n"] += 1
+        if calls["n"] in (2, 3):
+            raise q1.Halt("GET_RETRIES_EXHAUSTED:/v1/orders/open:HTTP Error 503")
+        return None
+    monkeypatch.setattr(cont, "held_market", flaky_held)
+    monkeypatch.setattr(cont, "status_has_trades", lambda: False)
+    inside = datetime(2026, 9, 6, 8, 0, tzinfo=timezone.utc).timestamp()
+    import itertools
+    ticks = itertools.chain([0.0] + [1.0] * 60, itertools.repeat(1000.0))
+    rep1 = cont.run_campaign(fake, clock=lambda: next(ticks),
+                             sleep=lambda s: None, wall=lambda: inside,
+                             campaign_s=500.0,
+                             session_runner=lambda *a, **k: {})
+    assert rep1["status"] == "CAMPAIGN_WAITING:VENUE_PRINTS"
+    out = capsys.readouterr().out
+    # the boot gate (no public prints in the hour) opens the outage record
+    # before the first 503 lands; the persisted record carries the class
+    errs = [json.loads(l.split(" ", 1)[1]) for l in out.splitlines()
+            if "campaign_iteration_error" in l]
+    assert errs and errs[-1]["outage_class"] == "scheduled_maintenance"
+    saved = json.loads((tmp_path / "l5_campaign_state.json").read_text())
+    assert saved["outage"]["class"] == "scheduled_maintenance"
+    assert saved["outage"]["maintenance"]["id"] == "pmus-2026-09-06-scheduled"
+    # restart inside the window: restored state carries the class
+    monkeypatch.setattr(cont, "held_market", lambda t: None)
+    ticks2 = itertools.chain([0.0] + [1.0] * 60, itertools.repeat(1000.0))
+    rep2 = cont.run_campaign(fake, clock=lambda: next(ticks2),
+                             sleep=lambda s: None, wall=lambda: inside,
+                             campaign_s=500.0,
+                             session_runner=lambda *a, **k: {})
+    assert rep2["restored_state"]["outage"]["class"] == "scheduled_maintenance"
+    assert rep2["status"] == "CAMPAIGN_WAITING:VENUE_PRINTS"

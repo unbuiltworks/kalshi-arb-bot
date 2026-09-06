@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 from decimal import Decimal as D
 from typing import Any, Mapping, Optional
@@ -158,7 +159,7 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
                         "source": str(path)})
         model = pv2.load_v2()
         out = fgate.evaluate(ingest["reports"], rolling=rolling, model=model,
-                             ingest=ingest)
+                             ingest=ingest, maintenance=load_maintenance_windows())
         out["shadow_source"] = shadow_source
     except Exception as exc:                          # noqa: BLE001
         _log("fidelity_gate_error", err=f"{type(exc).__name__}:{str(exc)[:160]}")
@@ -625,6 +626,62 @@ def sweep_orphan_orders(t) -> dict:
     return out
 
 
+MAINTENANCE_FILE = Path("analysis/l5/venue_maintenance_windows.json")
+
+
+def load_maintenance_windows(path: Path = MAINTENANCE_FILE) -> list:
+    """OWNER 5557988072 #6: declared venue maintenance intervals (read-only
+    diagnostics input; never a gate, cap or policy input)."""
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    out = []
+    for w in doc.get("windows") or []:
+        try:
+            s = datetime.fromisoformat(str(w["start_utc"]).replace("Z", "+00:00"))
+            e = datetime.fromisoformat(str(w["end_utc"]).replace("Z", "+00:00"))
+        except (KeyError, ValueError, TypeError):
+            continue
+        out.append({"id": w.get("id"), "venue": w.get("venue"),
+                    "start": s.timestamp(), "end": e.timestamp(),
+                    "start_utc": w.get("start_utc"), "end_utc": w.get("end_utc"),
+                    "declared_by": w.get("declared_by")})
+    return out
+
+
+def maintenance_window_at(t_utc: Optional[str], windows: Optional[list] = None,
+                          slack_s: float = 120.0) -> Optional[dict]:
+    """The declared window containing the instant `t_utc` (ISO), allowing
+    `slack_s` before its start for the first error to land slightly ahead
+    of the declared start. None = not inside any declared window."""
+    if not t_utc:
+        return None
+    try:
+        ts = datetime.fromisoformat(str(t_utc).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+    for w in (load_maintenance_windows() if windows is None else windows):
+        if w["start"] - slack_s <= ts <= w["end"]:
+            return w
+    return None
+
+
+def classify_outage(outage: Optional[dict], windows: Optional[list] = None) -> Optional[dict]:
+    """Tag an outage record with its class: `scheduled_maintenance` when
+    its first error falls inside a declared window (planned venue outage,
+    excluded from fidelity/strategy diagnostics), else `unplanned`."""
+    if not outage:
+        return outage
+    w = maintenance_window_at(outage.get("start_utc"), windows)
+    outage = dict(outage)
+    outage["class"] = "scheduled_maintenance" if w else "unplanned"
+    outage["maintenance"] = ({k: w[k] for k in ("id", "venue", "start_utc",
+                                                "end_utc", "declared_by")}
+                             if w else None)
+    return outage
+
+
 def _utc(wall) -> str:
     from datetime import datetime, timezone
     return datetime.fromtimestamp(float(wall()), tz=timezone.utc).isoformat()
@@ -886,9 +943,10 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         # the print baseline now and wait for prints before any session
         # (account endpoints healthy before tape -> no trade).
         liveness_baseline = liveness_sample(t, liveness_slugs())
-        outage = {"start_clock": clock(), "start_utc": _utc(wall),
-                  "first_error": "boot_without_public_prints",
-                  "account_recovered_utc": _utc(wall)}
+        outage = classify_outage(
+            {"start_clock": clock(), "start_utc": _utc(wall),
+             "first_error": "boot_without_public_prints",
+             "account_recovered_utc": _utc(wall)})
         recovery_gate = {"pending": True, "checks": 0, "boot": True}
         _log("boot_gate_waiting", liveness_baseline=liveness_baseline)
 
@@ -899,7 +957,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             "saved_utc": _utc(wall), "rung": active_rung["id"],
             "filled_markets": sorted(filled_markets),
             "settled_here": sorted(settled_here),
-            "outage": ({**{k: v for k, v in outage.items()
+            "outage": ({**{k: v for k, v in classify_outage(outage).items()
                            if k != "start_clock"},
                         "elapsed_s": round(clock() - outage["start_clock"], 1)}
                        if outage else None),
@@ -987,7 +1045,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                         {"outage_s": outage_s, "errors": n_err,
                          "held": held, "sweep": sweep})
                     _log("venue_recovered", outage_s=outage_s,
-                         error_count=n_err, held=held, sweep=sweep)
+                         error_count=n_err, held=held, sweep=sweep,
+                         outage_class=(classify_outage(outage) or {}).get("class"),
+                         maintenance=(classify_outage(outage) or {}).get("maintenance"))
                     if sweep["foreign"]:
                         status = "CAMPAIGN_STOP:FOREIGN_OPEN_ORDERS"
                         break
@@ -1013,6 +1073,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     recovery_gate["checks"] += 1
                     if moved or tape:
                         recovery_gate["pending"] = False
+                        outage = classify_outage(outage)
                         outage["trades_resumed_utc"] = _utc(wall)
                         outage["trades_resumed_by"] = (
                             {"markets_moved": moved} if moved
@@ -1264,8 +1325,11 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             if outage is None:
                 # postmortem timestamps + the public-print baseline the
                 # recovery gate compares against (read-only, may be empty)
-                outage = {"start_clock": now_c, "start_utc": _utc(wall),
-                          "first_error": f"{type(exc).__name__}:{str(exc)[:120]}"}
+                # OWNER 5557988072 #6: classified against the declared
+                # maintenance windows (planned venue outage vs unplanned)
+                outage = classify_outage(
+                    {"start_clock": now_c, "start_utc": _utc(wall),
+                     "first_error": f"{type(exc).__name__}:{str(exc)[:120]}"})
                 if t is not None:
                     liveness_baseline = liveness_sample(t, liveness_slugs())
                 _log("venue_outage_start", **outage,
@@ -1274,7 +1338,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             _log("campaign_iteration_error",
                  err=f"{type(exc).__name__}:{str(exc)[:160]}",
                  errors_in_window=len(iteration_errors),
-                 max_in_window=MAX_ITERATION_ERRORS)
+                 max_in_window=MAX_ITERATION_ERRORS,
+                 outage_class=(outage or {}).get("class"))
             if len(iteration_errors) >= MAX_ITERATION_ERRORS:
                 status = "CAMPAIGN_STOP:VENUE_UNAVAILABLE"
                 break
