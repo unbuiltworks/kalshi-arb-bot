@@ -355,14 +355,56 @@ def test_row_level_before_after_under_the_canonical_lookup():
 
 
 def test_rows_split_by_proven_lookup_version():
-    v2 = {**_d("s", False, acted="open"), "lookup": {"lookup_version": 2}}
+    v2 = {**_d("s", False, acted="open"), "lookup": {"lookup_version": gs.LOOKUP_VERSION}}
     legacy = _d("s", True)
     odd = {**_d("s", False), "lookup": {"lookup_version": 1}}
     rows = [_row([v2, legacy, odd]), _row([v2], entry_t=1_788_700_300.0)]
     sp = gs.split_rows_by_lookup(rows)
     assert sp["provenance"]["v2_decisions"] == 2 and sp["provenance"]["legacy_decisions"] == 1
     assert sp["provenance"]["unknown_decisions"] == 1 and sp["provenance"]["v2_windows"] == 2
-    assert all(d.get("lookup", {}).get("lookup_version") == 2
+    assert all(d.get("lookup", {}).get("lookup_version") == gs.LOOKUP_VERSION
                for r in sp["v2"] for d in r["decisions"])
     assert sp["provenance"]["legacy_label"].startswith("UNVERIFIABLE_LEGACY")
     assert len(gs.CODE_SHA) == 16
+
+
+def test_lookup_v3_keeps_imbalance_and_size_in_the_same_model_scale():
+    """The 400-window replay left 15 post-fill rows off under v2 on the
+    impossible key p25-45c|tte2-5m|imb1-10|open|q>40 (a q>40 open never
+    leaves imb1-10 in L5 history). With the residual in the same
+    behavioral shares as the size the key is p25-45c|tte2-5m|imb10-50|
+    open|q>40 (n 9) -> in-distribution; still independent of the cap."""
+    from src import l5_venue_adapter as va
+    model = {"_sha256_16": "t", "marginal": {"extend|q<5": 5, "complete|q<5": 5, "open|q<5": 1},
+             "base": {"p25-45c|tte2-5m|imb10-50": {"extend|q>40": 4, "complete|q>40": 5}},
+             "full": {"p25-45c|tte2-5m|imb10-50|open|q>40": {"extend|q>40": 9}},
+             "cadence_modal": {}}
+    art = {"size_policy": {"by_state_relation": {
+        "p25-45c|tte2-5m|flat|open": {"n": 21, "shares_p50": 43.47}}}}
+    keys = []
+    for unit in (D("0.02"), D("1"), D("25")):
+        inv = va.L5Inventory()
+        inv.record(True, D("0.30"), unit, "open")
+        gs.record_behavioral_fill(inv, art, "p25-45c|tte2-5m|flat", "open", True)
+        assert inv.behavioral_residual() == 1.0                # units (safety scale)
+        assert inv.behavioral_residual_shares() == 43.47      # model scale
+        prop = gs.proposal_v2(model, _book2("0.30", "0.31"), inv)
+        lk = prop["lookup"]
+        keys.append((lk["state"], lk["last_size_behavioral"], prop["off_distribution"],
+                     lk["residual_shares_behavioral"], lk["lookup_version"]))
+    assert len(set(keys)) == 1
+    st, lsb, off, shares, ver = keys[0]
+    assert st == "p25-45c|tte2-5m|imb10-50" and lsb == "q>40" and off is False
+    assert shares == 43.47 and ver == 3
+    # a NO complete of behavioral size 10 flattens the model-scale residual
+    inv = va.L5Inventory()
+    inv.record(True, D("0.30"), D("1"), "open")
+    gs.record_behavioral_fill(inv, art, "p25-45c|tte2-5m|flat", "open", True)
+    inv.record(False, D("0.70"), D("1"), "complete")
+    inv.record_behavioral_shares(False, 43.47, "q>40")
+    assert inv.behavioral_residual_shares() == 0.0
+    # superseded v2 rows are excluded from the gate and labelled
+    sp = gs.split_rows_by_lookup([_row([{**_d("s", False, acted="open"), "lookup": {"lookup_version": 2}},
+                                        {**_d("s", False, acted="open"), "lookup": {"lookup_version": 3}}])])
+    assert sp["provenance"]["v2_decisions"] == 1 and sp["provenance"]["unknown_decisions"] == 1
+    assert sp["provenance"]["superseded_versions"]["2"]["label"].startswith("superseded")

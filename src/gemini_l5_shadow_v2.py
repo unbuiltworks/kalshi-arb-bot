@@ -50,8 +50,34 @@ from src.polymarket_l5.action_model import (PRICE_BANDS, SIZE_BUCKETS, _bucket,
 
 
 # ---- OWNER 5558477213 A/B: canonical lookup (shadow / evaluation only) ----
-LOOKUP_VERSION = 2
+# v2 (10:14Z-): outcome-price key, pre-fill = OPEN, behavioral last_size.
+# v3: + the imbalance in the SAME model-scale shares as last_size (400-window
+# replay: v2 left 15 post-fill rows off on one impossible key
+# p25-45c|tte2-5m|imb1-10|open|q>40; shares-consistent -> 0 of 16).
+LOOKUP_VERSION = 3
+SUPERSEDED_LOOKUP_VERSIONS = {2: "superseded: behavioral last_size with a unit-based "
+                                 "imbalance (half translation); diagnostic only"}
 EXECUTED_SIZE_BUCKET = "q<5"          # the safety-scaled unit's bucket (v1 input)
+
+
+def behavioral_size_shares(art: Optional[Mapping[str, Any]], base_state: str,
+                           relation: str) -> Optional[float]:
+    """L5's p50 size (shares) for this state|relation, None when unknown."""
+    row = fid.l5_target_size(art, base_state, relation) if art else {}
+    p50 = row.get("shares_p50") if isinstance(row, Mapping) else None
+    try:
+        return float(p50) if p50 is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def record_behavioral_fill(inv: L5Inventory, art: Optional[Mapping[str, Any]],
+                           state_at_fill: str, relation: str, side_up: bool) -> None:
+    """After a fill: the model-scale size (bucket + shares) of the action
+    the clone behaviorally made, on the filled side."""
+    p50 = behavioral_size_shares(art, state_at_fill, relation)
+    bucket = (_bucket(p50, SIZE_BUCKETS) if p50 is not None else EXECUTED_SIZE_BUCKET)
+    inv.record_behavioral_shares(side_up, p50 if p50 is not None else 0.0, bucket)
 
 
 def _code_sha() -> str:
@@ -97,10 +123,18 @@ def split_rows_by_lookup(rows: list) -> dict:
     legacy = _sub(lambda d: ver(d) is None)
     unknown = _sub(lambda d: ver(d) not in (None, LOOKUP_VERSION))
     count = lambda rs: sum(len(r["decisions"]) for r in rs)      # noqa: E731
+    superseded: dict = {}
+    for r in unknown:
+        for d in r["decisions"]:
+            v = ver(d)
+            superseded[str(v)] = superseded.get(str(v), 0) + 1
     return {"v2": v2, "legacy": legacy, "unknown": unknown,
             "provenance": {"lookup_version_gate": LOOKUP_VERSION,
                            "v2_decisions": count(v2), "legacy_decisions": count(legacy),
                            "unknown_decisions": count(unknown),
+                           "superseded_versions": {v: {"decisions": n,
+                                                       "label": SUPERSEDED_LOOKUP_VERSIONS.get(int(v), "unknown version")}
+                                                   for v, n in superseded.items()},
                            "v2_windows": len({(r.get("symbol"), r.get("entry_t")) for r in v2}),
                            "legacy_label": "UNVERIFIABLE_LEGACY: v1 keys, no persisted "
                                            "lookup; diagnostic only, never a verdict input"}}
@@ -132,6 +166,8 @@ def lookup_inputs(book: NormalizedBook, inv: L5Inventory) -> dict:
                                      if not pre_fill and inv.last_size_behavioral
                                      else EXECUTED_SIZE_BUCKET),
             "pre_fill": pre_fill,
+            "residual_units": inv.behavioral_residual(),
+            "residual_shares_behavioral": inv.behavioral_residual_shares(),
             "price_convention": ("outcome price of the last own fill"
                                  if inv.last_px_outcome is not None
                                  else "cheaper touch (outcome the open convention buys)")}
@@ -415,7 +451,7 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
             rec["orders_placed"] = 1
             if f:
                 inv.record(side_yes, px, UNIT, relation, f["t"])
-                inv.last_size_behavioral = behavioral_size_bucket(art, state, relation)
+                record_behavioral_fill(inv, art, state, relation, side_yes)
                 moves: dict = {}
                 for h in ADVERSE_HORIZONS_S:
                     later = _mid_at(bbo_rows, f["t"] + h)
@@ -457,7 +493,7 @@ def replay_window(symbol: str, bbo_rows: list, prints: list, *,
             rec["orders_placed"] = 1
             if f:
                 inv.record(deficit_up, px, qty, "complete", f["t"])
-                inv.last_size_behavioral = behavioral_size_bucket(art, state, "complete")
+                record_behavioral_fill(inv, art, state, "complete", deficit_up)
                 fills.append({"t": f["t"], "relation": "complete",
                               "side": "YES" if deficit_up else "NO",
                               "px": str(px), "tte_s": round(expiry - f["t"], 1),

@@ -133,6 +133,12 @@ class L5Inventory:
         self.last_px: Optional[D] = None
         self.last_px_outcome: Optional[D] = None      # canonical convention
         self.last_size_behavioral: Optional[str] = None  # model-scale bucket
+        # OWNER 5558477213 A, completed: the model's imbalance is in SHARES
+        # and co-varies with size; the clone's behavioral residual is kept
+        # in model-scale shares (each fill = L5's target size for that
+        # state|relation) beside the unit-based one
+        self.up_shares_behavioral: float = 0.0
+        self.dn_shares_behavioral: float = 0.0
         self.unit: Optional[D] = None
         self.actions: list[dict] = []
 
@@ -156,6 +162,24 @@ class L5Inventory:
 
     def spent(self) -> D:
         return self.cost_up + self.cost_dn
+
+    def record_behavioral_shares(self, side_up: bool, shares: float,
+                                 size_bucket: Optional[str] = None) -> None:
+        """Model-scale accounting of ONE fill: L5's target size (shares)
+        for the state|relation the fill was made in, on the filled side."""
+        if side_up:
+            self.up_shares_behavioral += float(shares)
+        else:
+            self.dn_shares_behavioral += float(shares)
+        if size_bucket:
+            self.last_size_behavioral = size_bucket
+
+    def behavioral_residual_shares(self) -> Optional[float]:
+        """Signed model-scale residual in shares (None until a fill has been
+        recorded with its behavioral size)."""
+        if self.up_shares_behavioral == 0.0 and self.dn_shares_behavioral == 0.0:
+            return None
+        return self.up_shares_behavioral - self.dn_shares_behavioral
 
     def behavioral_residual(self) -> float:
         if not self.unit:
@@ -218,8 +242,12 @@ def l5_state_v2(book: NormalizedBook, inv: L5Inventory) -> str:
         y, n = book.yes_bid, book.no_bid
         cands = [p for p in (y, n) if p is not None]
         px = min(cands) if cands else None
-    return state_key(float(px if px is not None else 0), book.tte_s,
-                     inv.behavioral_residual())
+    # imbalance in model-scale SHARES when the fills carry their behavioral
+    # size (the model's imbalance and last_size buckets are both in shares
+    # and co-vary: a q>40 open never leaves an imb1-10 state in L5 history)
+    shares = inv.behavioral_residual_shares()
+    resid = shares if shares is not None else inv.behavioral_residual()
+    return state_key(float(px if px is not None else 0), book.tte_s, resid)
 
 
 def open_side_yes(book: NormalizedBook) -> Optional[bool]:
