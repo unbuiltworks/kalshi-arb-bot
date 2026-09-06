@@ -238,6 +238,136 @@ def published_programs(t: q1.Transport, our_slugs: list[str]) -> dict:
             "raw_head": json.dumps(resp, default=str)[:500]}
 
 
+MLB_SCAN_EVENT_PATHS = (
+    "/v1/events?live=true&active=true&closed=false&categories=sports&limit=500",
+    "/v1/events?active=true&closed=false&categories=sports&limit=500",
+    "/v1/events?active=true&closed=false&categories=sports&limit=500&offset=500",
+)
+MLB_ROW_LIMIT = 80
+
+
+def _positive(value: Any) -> bool:
+    try:
+        return value is not None and D(str(value)) > 0
+    except Exception:                                 # noqa: BLE001
+        return False
+
+
+def _is_mlb(slug: str, market: Mapping[str, Any], event: Mapping[str, Any]) -> bool:
+    s = slug.lower()
+    if "-mlb-" in s or s.startswith("mlb-"):
+        return True
+    for src in (market, event):
+        for k in ("sportsMarketType", "league", "sport", "subcategory", "title", "question"):
+            v = str(src.get(k) or "").lower()
+            if v.startswith("mlb") or "baseball" in v or " mlb " in f" {v} ":
+                return True
+    return False
+
+
+def mlb_program_scan(t: q1.Transport) -> dict:
+    """OWNER 5561482606: the FULL current MLB market universe (live and
+    pregame, from the venue's own events listing with embedded markets)
+    reconciled BY SLUG against the public program list, with the three
+    things kept apart per market: (a) live/open status, (b) maker-rebate
+    eligibility -- the venue's rebate is its published formula on
+    fee-charging markets, so the market's own feeCoefficient is recorded
+    as the eligibility evidence, (c) a liquidity-reward program period
+    (programId, status, pool, target, effective start, period,
+    createdAt). Everything is timestamped; nothing is concluded from a
+    category label. Read-only (GETs on the public gateway)."""
+    from datetime import datetime, timezone
+    scanned_at = datetime.now(timezone.utc).isoformat()
+    markets: dict[str, dict] = {}
+    errors: list[str] = []
+    events_seen = 0
+    for path in MLB_SCAN_EVENT_PATHS:
+        r = _get(t, path, base=q1.GATEWAY)
+        if not r["ok"]:
+            errors.append(f"{path}: {r['error']}")
+            continue
+        resp = r["response"]
+        evs = resp.get("events") if isinstance(resp, Mapping) else resp
+        for ev in (evs or []):
+            if not isinstance(ev, Mapping):
+                continue
+            events_seen += 1
+            live_ev = bool(ev.get("live"))
+            for m in (ev.get("markets") or []):
+                if not isinstance(m, Mapping):
+                    continue
+                slug = str(m.get("slug") or "")
+                if not slug or not _is_mlb(slug, m, ev):
+                    continue
+                row = markets.setdefault(slug, {
+                    "slug": slug, "event": ev.get("slug"),
+                    "live": live_ev or bool(m.get("live")),
+                    "status": m.get("status"), "active": m.get("active"),
+                    "closed": m.get("closed"),
+                    "game_start": m.get("gameStartTime") or ev.get("startTime"),
+                    "fee_coefficient": m.get("feeCoefficient"),
+                    "rebate_eligible_by_fee_coefficient": _positive(m.get("feeCoefficient")),
+                    "program_periods": [], "in_program_list": False})
+                row["live"] = row["live"] or live_ev
+    progs = _get(t, "/v1/incentives", base=q1.GATEWAY)
+    program_entries = 0
+    mlb_program_entries: list[dict] = []
+    if progs["ok"]:
+        resp = progs["response"]
+        entries = resp.get("programs") if isinstance(resp, Mapping) else resp
+        for p in (entries or []):
+            if not isinstance(p, Mapping):
+                continue
+            program_entries += 1
+            slug = str(p.get("marketSlug") or p.get("slug") or "")
+            periods = [{k: x.get(k) for k in ("programId", "programType", "status", "rewardPool",
+                                               "targetSize", "discountFactor", "period",
+                                               "start", "end", "createdAt")}
+                       for x in (p.get("timePeriods") or []) if isinstance(x, Mapping)]
+            if slug in markets:
+                markets[slug]["in_program_list"] = True
+                markets[slug]["program_periods"] = periods
+            if _is_mlb(slug, p, {}):
+                mlb_program_entries.append({"slug": slug, "instrumentState": p.get("instrumentState"),
+                                            "in_current_universe": slug in markets,
+                                            "periods": periods})
+    else:
+        errors.append(f"/v1/incentives: {progs['error']}")
+    rows = sorted(markets.values(), key=lambda r: (not r["live"], str(r["game_start"]), r["slug"]))
+    live = [r for r in rows if r["live"]]
+    rebate = [r for r in rows if r["rebate_eligible_by_fee_coefficient"]]
+    pooled = [r for r in rows if r["program_periods"]]
+    pooled_active = [r for r in pooled
+                     if any(str(x.get("status") or "").lower() == "active" for x in r["program_periods"])]
+    n = len(rows)
+    statement = (f"MLB markets present: {n} ({len(live)} live) at {scanned_at}; "
+                 f"{len(rebate)}/{n} carry a positive feeCoefficient (maker-rebate formula "
+                 f"applies to fee-charging markets; the rebate itself is credited per fill "
+                 f"and is $0.00 below 1.62 shares after cent rounding); "
+                 f"{len(pooled_active)}/{n} currently have an ACTIVE liquidity-reward "
+                 f"program period, {len(pooled)}/{n} any period; MLB entries in the "
+                 f"program list: {len(mlb_program_entries)} of {program_entries}")
+    return {"ok": not errors or bool(rows), "scanned_at": scanned_at, "errors": errors,
+            "events_seen": events_seen, "mlb_markets": n, "mlb_live": len(live),
+            "rebate_eligible_by_fee_coefficient": len(rebate),
+            "liquidity_pool_any_period": len(pooled),
+            "liquidity_pool_active_period": len(pooled_active),
+            "program_list_entries": program_entries,
+            "mlb_program_entries": mlb_program_entries[:MLB_ROW_LIMIT],
+            "statement": statement,
+            "discovery_gap": (
+                "MLB markets are present but NONE appears in the program list; the "
+                "August accrual ($0.22, MLB/NFL) proves MLB pools have existed, so "
+                "absence here is a program-lifecycle statement at this timestamp, "
+                "not 'MLB has none'"
+                if rows and not mlb_program_entries else None),
+            "markets": [{k: r[k] for k in ("slug", "live", "status", "game_start",
+                                            "fee_coefficient",
+                                            "rebate_eligible_by_fee_coefficient",
+                                            "in_program_list", "program_periods")}
+                        for r in rows[:MLB_ROW_LIMIT]]}
+
+
 def ledger_filled(our_fills: list[dict]) -> dict:
     """ESTIMATED: what the published maker rebate would be on this
     ledger's own fills, before and after the venue's cent rounding."""
@@ -278,7 +408,9 @@ def incentive_audit(t: q1.Transport) -> dict:
     for name, fn in (("earnings", lambda: earnings(t)),
                      ("activities", lambda: activity_credits(t)),
                      ("balances", lambda: balances(t)),
-                     ("programs", lambda: published_programs(t, slugs))):
+                     ("programs", lambda: published_programs(t, slugs)),
+                     # OWNER 5561482606: the full current MLB universe by slug
+                     ("mlb_scan", lambda: mlb_program_scan(t))):
         try:
             out[name] = fn()
         except Exception as exc:                      # noqa: BLE001
@@ -306,6 +438,7 @@ def incentive_audit(t: q1.Transport) -> dict:
         "trade_rows_carry_fee_or_rebate_fields": bool((out.get("trade_fields") or {}).get("fee_or_rebate_key_paths")),
         "published_programs_covering_our_markets": len((out.get("programs") or {}).get("our_markets_in_programs") or []),
         "rebate_at_our_executed_size_after_rounding": out["size_arithmetic"]["rebate_at_our_size"]["credited_after_rounding_usd"],
+        "mlb": (out.get("mlb_scan") or {}).get("statement"),
         "reading": ("only observed / venue-confirmed credits are realized; published programs and "
                     "formula estimates are labelled and never counted"),
     }

@@ -158,8 +158,12 @@ def market_micro_spec(t: Transport, slug: str, entry_price: D) -> dict[str, D]:
         raise Halt(f"MICRO_TICK_IMPLAUSIBLE:{tick}")
     if (D(str(entry_price)) / tick) % 1 != 0:
         raise Halt(f"MICRO_PRICE_OFF_TICK:{entry_price}/{tick}")
-    target = _positive_env(TARGET_NOTIONAL_ENV, DEFAULT_TARGET_NOTIONAL)
-    max_leg = _positive_env(MAX_LEG_NOTIONAL_ENV, DEFAULT_MAX_LEG_NOTIONAL)
+    # OWNER 5561465636: the per-action size follows the ACTIVE rung
+    # (R1/R2C = the micro $0.01/$0.02 defaults; R3L = $2.50/$3.25); the
+    # env override keeps its precedence for the disarmed shadow paths
+    from src import pmus_l5_ramp_ladder as ladder
+    target = _positive_env(TARGET_NOTIONAL_ENV, ladder.target_notional())
+    max_leg = _positive_env(MAX_LEG_NOTIONAL_ENV, ladder.max_leg_notional())
     qty = choose_micro_quantity(entry_price, minq, target, max_leg)
     return {
         "qty": qty,

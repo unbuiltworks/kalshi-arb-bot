@@ -204,8 +204,8 @@ def test_r1_campaign_state_without_a_rung_stays_on_r1(monkeypatch, tmp_path):
 def test_repo_approval_record_names_the_r2c_rung_after_the_r1_continuation():
     appr = cont.load_campaign_approvals()
     ids = [a["campaign_id"] for a in appr]
-    assert ids == ["R1-EVIDENCE-CONTINUATION-2026-09-06", "R2C-RUN-2026-09-06"]
-    r2c = appr[-1]
+    assert ids[:2] == ["R1-EVIDENCE-CONTINUATION-2026-09-06", "R2C-RUN-2026-09-06"]
+    r2c = appr[1]
     assert r2c["rung"] == "R2C" and r2c["stop_rule"] == "rung_markets"
     assert r2c["shell"] == R2C_LABEL == ld.shell_version(ld.rung("R2C"))
     # consumed in order: R2C is offered only once the R1 continuation is done
@@ -214,6 +214,8 @@ def test_repo_approval_record_names_the_r2c_rung_after_the_r1_continuation():
     assert cont.approved_continuation("R1-EVIDENCE-CONTINUATION-2026-09-06",
                                       ["R1-INITIAL"], appr)["campaign_id"] == \
         "R2C-RUN-2026-09-06"
-    assert cont.approved_continuation("R2C-RUN-2026-09-06",
-                                      ["R1-INITIAL", "R1-EVIDENCE-CONTINUATION-2026-09-06"],
-                                      appr) is None
+    # OWNER 5561465636: the L5-sized rung is queued behind R2C, never before
+    nxt = cont.approved_continuation("R2C-RUN-2026-09-06",
+                                     ["R1-INITIAL", "R1-EVIDENCE-CONTINUATION-2026-09-06"],
+                                     appr)
+    assert nxt is None or nxt["campaign_id"] == "R3L-RUN-2026-09-06"

@@ -1167,14 +1167,31 @@ def evidence_minimums_met() -> tuple:
     return met, view
 
 
-def continuation_preflight(t, filled: set, settled: set) -> dict:
+def deployment_identity() -> dict:
+    """The exact active deployment / commit, from the platform's own
+    environment (Railway injects both); never inferred from the repo."""
+    return {"commit": os.getenv("RAILWAY_GIT_COMMIT_SHA") or None,
+            "deployment_id": os.getenv("RAILWAY_DEPLOYMENT_ID") or None,
+            "service": os.getenv("RAILWAY_SERVICE_NAME") or None}
+
+
+def continuation_preflight(t, filled: set, settled: set,
+                           rung: Optional[Mapping[str, Any]] = None) -> dict:
     """OWNER preconditions for an evidence continuation, all from the
     venue / the durable ledger, none inferred: every filled market of the
     previous campaign settled with realized_confirmed (POSITION_RESOLUTION,
     idempotent re-audit), zero open orders (the orphan sweep sees none),
     positions flat, and the ledger carrying no filled-but-unsettled
-    market. Any failure blocks the start; the caller re-checks later."""
+    market. Any failure blocks the start; the caller re-checks later.
+
+    OWNER 5561465636 #2 (a SIZED rung, i.e. one stating a per-action
+    target): additionally fail closed unless the venue's buying power
+    covers the rung's whole per-campaign worst case, every settled
+    market's ledger quantity equals the venue's, and the exact active
+    deployment / commit is known; the cancel path is the orphan sweep
+    having run without error."""
     checks: dict[str, Any] = {}
+    sized = bool(rung and rung.get("target_notional_usd"))
     unsettled = sorted(set(filled) - set(settled))
     checks["all_filled_settled"] = {"ok": not unsettled, "filled": sorted(filled),
                                     "unsettled": unsettled}
@@ -1211,6 +1228,34 @@ def continuation_preflight(t, filled: set, settled: set) -> dict:
     ledger_unsettled = unsettled_slugs()
     checks["ledger_unsettled"] = {"ok": not ledger_unsettled,
                                   "unsettled": ledger_unsettled}
+    # OWNER 5561465636 #2: the sized-rung checks; recorded for every
+    # rung, blocking only for a sized one
+    mismatch = checks["venue_settled"]["ledger_vs_venue_qty_mismatch"]
+    checks["ledger_reconciled"] = {"ok": (not mismatch) or not sized,
+                                   "mismatch": mismatch, "blocking": sized}
+    checks["cancel_path"] = {"ok": (not sweep["errors"]) or not sized,
+                             "orphan_sweep_errors": sweep["errors"],
+                             "blocking": sized}
+    worst = ladder.worst_case(rung) if rung else None
+    need = D(str(worst["per_campaign_usd"])) if worst else D("0")
+    bal = incentives.balances(t) if t is not None else {"ok": False, "error": "no transport"}
+    power = None
+    try:
+        rows = ((bal.get("raw") or {}).get("balances") or []) if bal.get("ok") else []
+        if rows and rows[0].get("buyingPower") is not None:
+            power = D(str(rows[0]["buyingPower"]))
+    except Exception:                               # noqa: BLE001
+        power = None
+    checks["buying_power"] = {"ok": (power is not None and power >= need) or not sized,
+                              "buying_power_usd": (str(power) if power is not None else None),
+                              "required_per_campaign_worst_case_usd": str(need),
+                              "blocking": sized,
+                              "error": None if bal.get("ok") else bal.get("error")}
+    ident = deployment_identity()
+    checks["deployment_identity"] = {"ok": bool(ident["commit"] and ident["deployment_id"])
+                                     or not sized, **ident, "blocking": sized}
+    checks["rung"] = {"ok": True, "id": (rung or {}).get("id"), "sized": sized,
+                      "worst_case": worst}
     failed = [k for k, v in checks.items() if not v["ok"]]
     return {"ok": not failed, "failed": failed, "checks": checks}
 
@@ -1376,9 +1421,12 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                if stop_rule == STOP_RULE_RUNG else
                                f"{base.session_notional_cap()} per filled market, "
                                f"bounded by the daily-loss stop"),
-            "daily_loss_stop_usd": str(base.q1.DAILY_LOSS_STOP),
+            "daily_loss_stop_usd": str(base.daily_loss_stop()),
+            "per_action_target_usd": str(ladder.target_notional()),
+            "per_leg_max_usd": str(ladder.max_leg_notional()),
             "concurrency": 1,
             "ladder_rung": active_rung["id"],
+            "deployment": deployment_identity(),
             "max_actions_per_session": os.environ.get(base.MAX_ACTIONS_ENV),
             "previous_campaigns": [p.get("campaign_id") for p in previous_campaigns],
         }
@@ -1535,7 +1583,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         if not appr:
             status = gate
             return True
-        pre = continuation_preflight(t, filled_markets, settled_here)
+        pre = continuation_preflight(
+            t, filled_markets, settled_here,
+            rung=ladder.rung(str(appr["rung"])) if appr.get("rung") else None)
         if not pre["ok"]:
             if status != "CAMPAIGN_WAITING:CONTINUATION_PREFLIGHT":
                 _log("campaign_continuation_blocked", approval=appr["campaign_id"],

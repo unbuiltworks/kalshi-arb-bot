@@ -98,9 +98,43 @@ OWNER_RUNGS: tuple[dict, ...] = (
      "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,
      "lever": "caps", "promote": None,
      "derived_from": "R1 cohort 2026-09-06, 203 clean decisions / 9 markets"},
+    # OWNER 5561465636 (LIVE AUTHORIZATION, $110 account): the first
+    # L5-SIZED rung, derived from L5's own per-action distribution
+    # (analysis/l5/l5_canonical_sequence.csv.gz, 55,647 maker actions:
+    # shares p10/p25/p50 = 2 / 5 / 10.7, dollars p25/p50 = $0.94 / $3.73;
+    # window spend p25/p50 = $32 / $93; final |residual| p50 = 55 shares)
+    # and the venue's published maker-rebate arithmetic (0.0125 x C x
+    # p(1-p), rounded to the cent): the smallest per-action size that is
+    # inside L5's own size distribution (5 shares = L5's maker p25) AND
+    # produces a non-rounded rebate at every price in the 35-65 band
+    # (5 x 0.0125 x 0.2275..0.25 = $0.014-0.016 -> $0.01-0.02 per fill,
+    # vs $0.000062 -> $0.00 at the R1/R2C 0.02 shares). $2.50 target at
+    # the entry price (5.0 shares at 0.50, 5.55 at 0.45, 3.85 at 0.65),
+    # either leg <= $3.25. Per-market cap $7.50 = three first legs (23% of
+    # L5's p25 window spend, the honest bound), residual cap 6 units
+    # (~30 shares, 55% of L5's median final residual), 3 markets per
+    # campaign, 1 campaign per day, concurrency 1, 6 actions per session.
+    # Worst case $7.50 per market / $22.50 per campaign (20.5% of the
+    # $110 account; needs three consecutive markets to lose every first
+    # leg with no pair formed); the rung's own daily realized-loss stop
+    # is -$15.00 (13.6%), checked before every session, so the per-day
+    # bound is the stop plus at most the one in-flight market. Ends at
+    # CAMPAIGN_RUNG_COMPLETE for the owner: no automatic promotion and
+    # no automatic repeat.
+    {"id": "R3L", "name": "L5 size: $2.50 per action (~5 shares), $7.50 per market, "
+                          "residual 6 units, 3 markets (OWNER 5561465636)",
+     "per_market_cap_usd": "7.50", "residual_units": 6, "markets_per_campaign": 3,
+     "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,
+     "target_notional_usd": "2.50", "max_leg_notional_usd": "3.25",
+     "daily_loss_stop_usd": "-15.00", "lever": "size", "promote": None,
+     "derived_from": "L5 canonical maker actions (shares p25 = 5.0) + published "
+                     "rebate rounding (>= 1.62 shares for one cent at 0.45); "
+                     "R1/R2C cohorts 2026-09-06"},
 )
 ALL_RUNGS: tuple[dict, ...] = RUNGS + OWNER_RUNGS
 DEFAULT_RESIDUAL_UNITS = 3
+DEFAULT_TARGET_NOTIONAL = D("0.01")     # R1..R2C per-action target (micro)
+DEFAULT_MAX_LEG_NOTIONAL = D("0.02")    # R1..R2C either-leg bound (micro)
 
 
 def rung(rung_id: Optional[str] = None) -> dict:
@@ -133,9 +167,34 @@ def shell_version(r: Optional[Mapping[str, Any]] = None) -> str:
     """The safety-shell label written on every live decision row
     (OWNER 5560559108 #5); R1 renders exactly the label the cohort carries."""
     r = dict(r) if r is not None else active()
-    return (f"{r['id']}/cap{r['per_market_cap_usd']}"
-            f"/residual{int(r.get('residual_units') or DEFAULT_RESIDUAL_UNITS)}"
-            f"/conc{r['concurrency']}/maker-only/fee-safe0.98/rest30s")
+    label = (f"{r['id']}/cap{r['per_market_cap_usd']}"
+             f"/residual{int(r.get('residual_units') or DEFAULT_RESIDUAL_UNITS)}"
+             f"/conc{r['concurrency']}/maker-only/fee-safe0.98/rest30s")
+    if r.get("target_notional_usd"):
+        # OWNER 5561465636: a sized rung carries its per-action size in
+        # the label; the R1 / R2C labels are unchanged
+        label += f"/action{r['target_notional_usd']}"
+    return label
+
+
+def target_notional(r: Optional[Mapping[str, Any]] = None) -> D:
+    """Per-action maker target notional of the ACTIVE rung (OWNER
+    5561465636 size lever); rungs without one keep the micro default."""
+    r = dict(r) if r is not None else active()
+    return D(str(r.get("target_notional_usd") or DEFAULT_TARGET_NOTIONAL))
+
+
+def max_leg_notional(r: Optional[Mapping[str, Any]] = None) -> D:
+    r = dict(r) if r is not None else active()
+    return D(str(r.get("max_leg_notional_usd") or DEFAULT_MAX_LEG_NOTIONAL))
+
+
+def daily_loss_stop(r: Optional[Mapping[str, Any]] = None) -> D:
+    """The daily realized-loss stop the ACTIVE rung runs under: the
+    absolute -$1.00 unless the owner's rung states its own, scaled to
+    its worst case (OWNER 5560851070 / 5561465636)."""
+    r = dict(r) if r is not None else active()
+    return D(str(r.get("daily_loss_stop_usd") or DAILY_LOSS_STOP))
 
 
 def next_rung(rung_id: str) -> Optional[dict]:
@@ -149,12 +208,19 @@ def worst_case(r: Mapping[str, Any]) -> dict:
     per_campaign = cap * r["markets_per_campaign"]
     per_day_raw = per_campaign * r["campaigns_per_day"]
     concurrent = cap * r["concurrency"]
-    per_day = min(per_day_raw, -DAILY_LOSS_STOP)
-    return {"per_market_usd": str(cap), "per_campaign_usd": str(per_campaign),
-            "per_day_uncapped_usd": str(per_day_raw),
-            "per_day_bounded_by_daily_stop_usd": str(per_day),
-            "max_concurrent_open_exposure_usd": str(concurrent),
-            "daily_loss_stop_usd": str(DAILY_LOSS_STOP)}
+    stop = daily_loss_stop(r)
+    # the stop is checked before every session, so the one in-flight
+    # market can still lose its cap after the stop is reached
+    per_day = min(per_day_raw, -stop + cap)
+    out = {"per_market_usd": str(cap), "per_campaign_usd": str(per_campaign),
+           "per_day_uncapped_usd": str(per_day_raw),
+           "per_day_bounded_by_daily_stop_usd": str(per_day),
+           "max_concurrent_open_exposure_usd": str(concurrent),
+           "daily_loss_stop_usd": str(stop)}
+    if r.get("target_notional_usd"):
+        out["per_action_target_usd"] = str(r["target_notional_usd"])
+        out["per_leg_max_usd"] = str(r.get("max_leg_notional_usd"))
+    return out
 
 
 def ladder() -> list[dict]:

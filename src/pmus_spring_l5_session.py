@@ -556,6 +556,13 @@ def max_residual_units() -> int:
 def safety_shell_version() -> str:
     from src import pmus_l5_ramp_ladder as ladder
     return ladder.shell_version()
+
+
+def daily_loss_stop() -> D:
+    """The ACTIVE rung's daily realized-loss stop (R1/R2C: the absolute
+    -$1.00; OWNER 5561465636 R3L: -$15.00), from the ladder."""
+    from src import pmus_l5_ramp_ladder as ladder
+    return ladder.daily_loss_stop()
 # OWNER 5554106892: prebuilt, OFF by default ("1" enables): a capped
 # EXTEND falls to COMPLETE when COMPLETE carries at least this mass
 CAP_FALLBACK_ENV = "PMUS_SPRING_CAP_FALLBACK_COMPLETE"
@@ -1206,8 +1213,10 @@ def run_session(t: Optional[Transport] = None,
                 "attach an isolated Railway volume mounted at the spring "
                 "service's PMUS_Q1_STATE_DIR (/state/pmus-spring); do not "
                 "share the recorder volume"}
-    if q1.realized_today() <= q1.DAILY_LOSS_STOP:
-        return {**report, "status": "DAILY_LOSS_STOP"}
+    if q1.realized_today() <= daily_loss_stop():
+        return {**report, "status": "DAILY_LOSS_STOP",
+                "daily_loss_stop_usd": str(daily_loss_stop()),
+                "realized_today_usd": str(q1.realized_today())}
 
     t = t or Transport()
     if deadline_s is None:
