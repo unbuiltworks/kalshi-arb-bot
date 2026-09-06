@@ -1,1 +1,2 @@
 2026-09-05T14:16Z build dd3c5882+ (campaign spent-cap exclusion); service watch list updated to match railway.json
+2026-09-06T19:08Z build 73e1a89e+ (incentive audit per-market program reconciliation); Railway service watch list re-synced to the Dockerfile inputs (src/pmus_incentive_audit.py, ramp ladder, fidelity gate/live, l5 analysis json) after deployment 81523680 was SKIPPED
