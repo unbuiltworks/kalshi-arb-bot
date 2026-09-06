@@ -768,6 +768,21 @@ RECLASSIFIED_DIVERGENCES = {
 CAP_OVERRIDES = ("policy_flag:cap_fallback_complete", "safety_adaptation:spend_cap")
 
 
+def shell_residual_cap(d: Mapping[str, Any]) -> float:
+    """OWNER 5560851070: the residual cap a row was produced under, read
+    from its own safety-shell label (".../residual<N>/..."); rows without
+    a label are the R1 concurrency-1 era (cap 3). A fallback COMPLETE
+    below the row's OWN cap is the anomaly, never one below a later
+    rung's cap."""
+    lab = str(d.get("safety_shell_version") or "")
+    if "/residual" in lab:
+        try:
+            return float(lab.split("/residual", 1)[1].split("/", 1)[0])
+        except ValueError:
+            pass
+    return float(MAX_RESIDUAL_UNITS_SHELL)
+
+
 def feasibility_decomposition(decisions: list, spec: Mapping[str, Any]) -> dict:
     """OWNER 5559167134 #2/#3 (read-only): for every clean decision the
     canonical stochastic action (the seeded draw), the canonical
@@ -800,7 +815,7 @@ def feasibility_decomposition(decisions: list, spec: Mapping[str, Any]) -> dict:
             resid = 0.0
         forced: Optional[str] = None
         if over == "policy_flag:cap_fallback_complete":
-            forced = ("residual_cap" if resid >= MAX_RESIDUAL_UNITS_SHELL
+            forced = ("residual_cap" if resid >= shell_residual_cap(d)
                       else "ANOMALY:residual_cap_fallback_below_cap")
         elif over.startswith("safety_adaptation:spend_cap"):
             forced = "spend_cap"

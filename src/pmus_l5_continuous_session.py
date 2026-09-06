@@ -1320,11 +1320,24 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     # the THROUGHPUT levers are wired here (markets per campaign, actions
     # per session); the per-market cap and concurrency stay the session's
     # hard constants until the owner changes them by decision.
-    active_rung = ladder.rung()
+    active_rung = ladder.set_active(None)        # the env rung (default R1)
     rung_markets = max(1, int(os.getenv(
         RUNG_MARKETS_ENV, str(active_rung["markets_per_campaign"]))))
     os.environ.setdefault(base.MAX_ACTIONS_ENV,
                           str(active_rung["max_actions_per_session"]))
+
+    def _apply_rung(rung_id: Optional[str]) -> dict:
+        """OWNER 5560851070: the caps follow the campaign's rung -- from
+        durable state at boot, from the consumed approval at the gate.
+        Sets the ACTIVE rung for the session/executor cap readers and the
+        rung-level throughput levers; caps outside the ladder never
+        apply (unknown id -> the authorized rung)."""
+        nonlocal active_rung, rung_markets
+        active_rung = ladder.set_active(rung_id)
+        rung_markets = max(1, int(os.getenv(
+            RUNG_MARKETS_ENV, str(active_rung["markets_per_campaign"]))))
+        os.environ[base.MAX_ACTIONS_ENV] = str(active_rung["max_actions_per_session"])
+        return active_rung
     filled_markets: set = set()          # markets with a fill this campaign
     # OWNER evidence continuation: the campaign identity and its stop rule
     # are durable state; an approval is consumed at the advance gate
@@ -1339,10 +1352,12 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             "stop_rule": stop_rule,
             "markets_allowed": (rung_markets if stop_rule == STOP_RULE_RUNG
                                 else "until the frozen LIVE evidence minimums are met"),
-            "per_market_cap_usd": str(base.SESSION_NOTIONAL_CAP),
-            "worst_case_usd": (str(base.SESSION_NOTIONAL_CAP * rung_markets)
+            "per_market_cap_usd": str(base.session_notional_cap()),
+            "residual_cap_units": base.max_residual_units(),
+            "safety_shell_version": base.safety_shell_version(),
+            "worst_case_usd": (str(base.session_notional_cap() * rung_markets)
                                if stop_rule == STOP_RULE_RUNG else
-                               f"{base.SESSION_NOTIONAL_CAP} per filled market, "
+                               f"{base.session_notional_cap()} per filled market, "
                                f"bounded by the daily-loss stop"),
             "daily_loss_stop_usd": str(base.q1.DAILY_LOSS_STOP),
             "concurrency": 1,
@@ -1375,6 +1390,10 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         stop_rule = str(persisted.get("stop_rule") or STOP_RULE_RUNG)
         if stop_rule not in (STOP_RULE_RUNG, STOP_RULE_EVIDENCE):
             stop_rule = STOP_RULE_RUNG
+        if persisted.get("rung"):
+            # the campaign's own rung survives a restart: a held R1 market
+            # keeps R1 caps; a campaign started under an owner rung keeps it
+            _apply_rung(str(persisted["rung"]))
         previous_campaigns = [dict(p) for p in (persisted.get("previous_campaigns") or [])
                               if isinstance(p, Mapping)]
         for p in previous_campaigns:
@@ -1519,6 +1538,11 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         settled_here.clear()
         campaign_id = str(appr["campaign_id"])
         stop_rule = str(appr.get("stop_rule") or STOP_RULE_RUNG)
+        if appr.get("rung"):
+            # OWNER 5560851070: the approval names the rung the new
+            # campaign runs under (caps, residual units, markets); the
+            # shell label on every decision row changes with it
+            _apply_rung(str(appr["rung"]))
         stop_at = clock() + campaign_s
         sessions_base = len(report["sessions"])
         report["rung"] = _rung_report()

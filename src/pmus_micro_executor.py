@@ -45,7 +45,14 @@ TARGET_NOTIONAL_ENV = "PMUS_MICRO_TARGET_NOTIONAL"
 MAX_LEG_NOTIONAL_ENV = "PMUS_MICRO_MAX_LEG_NOTIONAL"
 DEFAULT_TARGET_NOTIONAL = D("0.01")
 DEFAULT_MAX_LEG_NOTIONAL = D("0.02")
-PER_MARKET_FIRST_LEG_CAP = D("0.05")
+PER_MARKET_FIRST_LEG_CAP = D("0.05")      # the R1 cap; the ACTIVE rung's cap is per_market_first_leg_cap()
+
+
+def per_market_first_leg_cap() -> D:
+    """The per-market cap of the ACTIVE ramp rung (R1 = $0.05; OWNER
+    5560851070 R2C = $0.15), set by the campaign, never by this module."""
+    from src import pmus_l5_ramp_ladder as ladder
+    return D(str(ladder.active()["per_market_cap_usd"]))
 
 # SPRING DISCIPLINE MODE (issue #167 comment 5520416913) — the measured
 # ramp analysis (ef1da90a) is this executor's operating policy, encoded
@@ -228,7 +235,7 @@ def cumulative_first_leg_notional(slug: str) -> D:
             continue
         price, qty = _d(row.get("price")), _d(row.get("qty"))
         if price is None or qty is None:
-            return PER_MARKET_FIRST_LEG_CAP
+            return per_market_first_leg_cap()
         total += price * qty
     return total
 
@@ -582,11 +589,12 @@ def run_campaign(t: Optional[Transport] = None,
         # G1: durable cumulative first-leg notional cap per market,
         # enforced across invocations from this executor's own ledger.
         cum = cumulative_first_leg_notional(slug)
-        if cum + spec["entry_notional"] > PER_MARKET_FIRST_LEG_CAP:
+        cap_now = per_market_first_leg_cap()
+        if cum + spec["entry_notional"] > cap_now:
             return {**report, "status": "MICRO_SKIP_MARKET_CAP",
                     "cumulative_first_leg_notional": str(cum),
                     "intended": str(spec["entry_notional"]),
-                    "cap": str(PER_MARKET_FIRST_LEG_CAP), "residual": "0"}
+                    "cap": str(cap_now), "residual": "0"}
         report.update({
             "qty": str(requested_qty),
             "minimum_trade_qty": str(spec["minimum_trade_qty"]),

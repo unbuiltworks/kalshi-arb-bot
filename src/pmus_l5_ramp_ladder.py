@@ -40,14 +40,14 @@ DAILY_LOSS_STOP = D("-1.00")
 # only ever form pairs and cannot add to the directional worst case)
 RUNGS: tuple[dict, ...] = (
     {"id": "R1", "name": "authorized: 3 sequential markets",
-     "per_market_cap_usd": "0.05", "markets_per_campaign": 3,
+     "per_market_cap_usd": "0.05", "residual_units": 3, "markets_per_campaign": 3,
      "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,
      "lever": "baseline", "promote": {"settled_markets_clean": 3,
                                       "fill_rate_min": 0.15,
                                       "shadow_mix_l1_max": 0.30,
                                       "adverse_selection_c_max": 5.0}},
     {"id": "R2", "name": "windows/day: 6 markets, 2 campaigns",
-     "per_market_cap_usd": "0.05", "markets_per_campaign": 6,
+     "per_market_cap_usd": "0.05", "residual_units": 3, "markets_per_campaign": 6,
      "campaigns_per_day": 2, "max_actions_per_session": 6, "concurrency": 1,
      "lever": "windows_per_day", "promote": {"settled_markets_clean": 8,
                                              "fill_rate_min": 0.20,
@@ -55,7 +55,7 @@ RUNGS: tuple[dict, ...] = (
                                              "matched_pairs_min": 1,
                                              "adverse_selection_c_max": 4.0}},
     {"id": "R3", "name": "actions/window: 12 actions per session",
-     "per_market_cap_usd": "0.05", "markets_per_campaign": 6,
+     "per_market_cap_usd": "0.05", "residual_units": 3, "markets_per_campaign": 6,
      "campaigns_per_day": 2, "max_actions_per_session": 12, "concurrency": 1,
      "lever": "actions_per_window", "promote": {"settled_markets_clean": 16,
                                                 "fill_rate_min": 0.20,
@@ -63,7 +63,7 @@ RUNGS: tuple[dict, ...] = (
                                                 "matched_pairs_min": 3,
                                                 "adverse_selection_c_max": 3.0}},
     {"id": "R4", "name": "size: $0.10 per market",
-     "per_market_cap_usd": "0.10", "markets_per_campaign": 6,
+     "per_market_cap_usd": "0.10", "residual_units": 3, "markets_per_campaign": 6,
      "campaigns_per_day": 2, "max_actions_per_session": 12, "concurrency": 1,
      "lever": "size", "promote": {"settled_markets_clean": 30,
                                   "fill_rate_min": 0.25,
@@ -71,18 +71,71 @@ RUNGS: tuple[dict, ...] = (
                                   "matched_pairs_min": 6,
                                   "adverse_selection_c_max": 3.0}},
     {"id": "R5", "name": "concurrency 2",
-     "per_market_cap_usd": "0.10", "markets_per_campaign": 6,
+     "per_market_cap_usd": "0.10", "residual_units": 3, "markets_per_campaign": 6,
      "campaigns_per_day": 2, "max_actions_per_session": 12, "concurrency": 2,
      "lever": "concurrency", "promote": None},   # top of the prebuilt ladder
 )
 
+# OWNER 5560851070 (REPLICATE -> PROVE FIDELITY (behavioral) -> RUN): the
+# smallest rung that lets materially more of the proven L5 policy reach
+# the venue, derived from the R1 cohort's 203 clean decisions rather than
+# picked: every one of the 36 residual-cap forcings fired at exactly 3
+# units while L5's own draw at that point was EXTEND 61% of the time and
+# 75% of L5's post-fill transitions sit above 5 units; the 16 spend-cap
+# forcings fired at $0.054-$0.112 of filled notional. Replaying the
+# cohort's measured draw masses and fill rates: residual cap 6 removes
+# ~92% of the residual-cap forcing (14.5% -> 1.2% of post-fill decisions),
+# a spend cap of $0.15 clears every observed spend forcing; releasing
+# both moves the cohort's acted L1 from 0.54 to ~0.05-0.08 and the acted
+# post-fill gap from 30 pp to ~4-5 pp. Only the two caps change: maker
+# only, fee-safe 0.98, HOLD-to-settlement, concurrency 1, 6 actions per
+# session, the deadman and the -$1.00 daily stop (>= the $0.90 per-campaign
+# worst case) are unchanged. Outside the L5-order ladder above; never
+# promoted to or from automatically.
+OWNER_RUNGS: tuple[dict, ...] = (
+    {"id": "R2C", "name": "caps: $0.15 per market, residual 6 units (OWNER 5560851070)",
+     "per_market_cap_usd": "0.15", "residual_units": 6, "markets_per_campaign": 6,
+     "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,
+     "lever": "caps", "promote": None,
+     "derived_from": "R1 cohort 2026-09-06, 203 clean decisions / 9 markets"},
+)
+ALL_RUNGS: tuple[dict, ...] = RUNGS + OWNER_RUNGS
+DEFAULT_RESIDUAL_UNITS = 3
+
 
 def rung(rung_id: Optional[str] = None) -> dict:
     rid = (rung_id or os.getenv(RUNG_ENV, "R1")).strip().upper()
-    for r in RUNGS:
+    for r in ALL_RUNGS:
         if r["id"] == rid:
             return dict(r)
     return dict(RUNGS[0])                 # unknown -> the authorized rung
+
+
+# The ACTIVE rung follows the campaign, not the process: the continuous
+# session sets it from its durable state at boot and from the owner
+# approval it consumes at the advance gate, so a held R1 market keeps R1
+# caps while the next campaign runs under its own rung. Unset = the env
+# rung (default R1).
+_ACTIVE: dict = {"id": None}
+
+
+def set_active(rung_id: Optional[str]) -> dict:
+    r = rung(rung_id) if rung_id else None
+    _ACTIVE["id"] = r["id"] if r else None
+    return active()
+
+
+def active() -> dict:
+    return rung(_ACTIVE["id"]) if _ACTIVE["id"] else rung()
+
+
+def shell_version(r: Optional[Mapping[str, Any]] = None) -> str:
+    """The safety-shell label written on every live decision row
+    (OWNER 5560559108 #5); R1 renders exactly the label the cohort carries."""
+    r = dict(r) if r is not None else active()
+    return (f"{r['id']}/cap{r['per_market_cap_usd']}"
+            f"/residual{int(r.get('residual_units') or DEFAULT_RESIDUAL_UNITS)}"
+            f"/conc{r['concurrency']}/maker-only/fee-safe0.98/rest30s")
 
 
 def next_rung(rung_id: str) -> Optional[dict]:
@@ -105,7 +158,7 @@ def worst_case(r: Mapping[str, Any]) -> dict:
 
 
 def ladder() -> list[dict]:
-    return [{**r, "worst_case": worst_case(r)} for r in RUNGS]
+    return [{**r, "worst_case": worst_case(r)} for r in ALL_RUNGS]
 
 
 def evaluate(rung_id: str, ev: Mapping[str, Any]) -> dict:

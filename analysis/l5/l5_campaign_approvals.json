@@ -16,6 +16,25 @@
         "clean preflight: no foreign open orders, no unresolved reconcile"
       ],
       "not": "not R2; not a risk-scale decision; campaigns_per_day for R1 is exceeded by this explicit owner approval only for the evidence continuation"
+    },
+    {
+      "campaign_id": "R2C-RUN-2026-09-06",
+      "approved_by": "owner",
+      "approved_utc": "2026-09-06T17:16:39Z",
+      "source": "#167 comment 5560851070: 'OWNER DECISION -- behavioral replication proof ACCEPTED. Advance to RUN. Build the smallest next rung that lets materially more of the already-proven L5 policy reach Polymarket ... Prefer changing spend cap + residual cap first ... Fresh rung/cohort/safety-shell label. Preserve R1 evidence immutable. Require account flat + zero open/foreign orders + prior campaign complete before first new first-leg ... No automatic promotion after this rung.'",
+      "rung": "R2C",
+      "rung_derivation": "from the R1 cohort (203 clean decisions / 9 markets): 36/36 residual-cap forcings at exactly 3 units with L5's own draw EXTEND 61% at that point and 75% of L5's post-fill transitions above 5 units; 16 spend-cap forcings at $0.054-$0.112 filled notional; replay of the cohort's measured draw masses and fill rates: residual 6 removes ~92% of residual forcing (14.5% -> 1.2% of post-fill decisions), $0.15 clears every observed spend forcing; releasing both moves acted L1 0.54 -> ~0.05-0.08 and the acted post-fill gap 30 pp -> ~4-5 pp",
+      "shell": "R2C/cap0.15/residual6/conc1/maker-only/fee-safe0.98/rest30s",
+      "stop_rule": "rung_markets",
+      "stop_rule_reading": "6 filled markets, one at a time, each held to settlement; worst case 6 x $0.15 = $0.90 per campaign, bounded by the unchanged -$1.00 daily realized-loss stop (>= the worst case); campaigns_per_day 1; no automatic promotion afterwards -- the campaign ends at CAMPAIGN_RUNG_COMPLETE for the owner",
+      "unchanged": "maker/post-only, fee-safe 0.98 completion bound, HOLD residual to settlement, concurrency 1, 6 actions per session, deadman/cancel, orphan sweep, settlement/realized accounting from the venue only, the frozen fidelity gate and its thresholds, the frozen L5 v2 policy and canonical lookup v3",
+      "preconditions": [
+        "previous campaign R1-EVIDENCE-CONTINUATION-2026-09-06 complete: every filled market venue-settled",
+        "zero open orders on the venue (orphan sweep sees none), no foreign orders",
+        "positions flat (venue positions and availablePositions show no market held)",
+        "clean preflight: no unresolved reconcile; ledger holds no unsettled market"
+      ],
+      "not": "not a profitability optimization; not a size/bankroll guess; R1 rows keep their own shell label and are never re-scored under this rung"
     }
   ]
 }

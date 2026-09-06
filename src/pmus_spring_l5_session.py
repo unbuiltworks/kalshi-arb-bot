@@ -375,20 +375,20 @@ def spring_cumulative_notional(slug: str) -> D:
         elif kind == "filled" and stage == "micro_first_leg":
             price, qty = micro._d(row.get("price")), micro._d(row.get("qty"))
             if price is None or qty is None:
-                return SESSION_NOTIONAL_CAP
+                return session_notional_cap()
             total += price * qty
     for oid, row in submitted.items():
         term = terminal.get(oid)
         if term is None:                       # unknown outcome: full spend
             price, qty = micro._d(row.get("price")), micro._d(row.get("qty"))
             if price is None or qty is None:
-                return SESSION_NOTIONAL_CAP
+                return session_notional_cap()
             total += price * qty
             continue
         got = micro._d(term.get("filled_qty"))
         price = micro._d(term.get("price")) or micro._d(row.get("price"))
         if got is None or price is None:
-            return SESSION_NOTIONAL_CAP
+            return session_notional_cap()
         total += price * got
     return total
 
@@ -538,6 +538,24 @@ MAX_RESIDUAL_UNITS = 3
 # (per-market cap, residual cap, concurrency, taker, fee-safe target, rest)
 # changes so the frozen evaluator can split cohorts by shell.
 SAFETY_SHELL_VERSION = "R1/cap0.05/residual3/conc1/maker-only/fee-safe0.98/rest30s"
+
+
+# OWNER 5560851070: the per-market spend cap, the residual cap and the
+# shell label follow the ACTIVE ramp rung (set by the campaign from its
+# durable state / the consumed owner approval); the constants above are
+# the R1 values and stay the defaults.
+def session_notional_cap() -> D:
+    return micro.per_market_first_leg_cap()
+
+
+def max_residual_units() -> int:
+    from src import pmus_l5_ramp_ladder as ladder
+    return int(ladder.active().get("residual_units") or MAX_RESIDUAL_UNITS)
+
+
+def safety_shell_version() -> str:
+    from src import pmus_l5_ramp_ladder as ladder
+    return ladder.shell_version()
 # OWNER 5554106892: prebuilt, OFF by default ("1" enables): a capped
 # EXTEND falls to COMPLETE when COMPLETE carries at least this mass
 CAP_FALLBACK_ENV = "PMUS_SPRING_CAP_FALLBACK_COMPLETE"
@@ -1275,7 +1293,9 @@ def run_session(t: Optional[Transport] = None,
         report["spring_gates"] = {
             "band": f"{SPRING_BAND_LO}-{SPRING_BAND_HI}",
             "pair_target": str(SPRING_PAIR_TARGET),
-            "session_notional_cap": str(SESSION_NOTIONAL_CAP),
+            "session_notional_cap": str(session_notional_cap()),
+            "residual_cap_units": max_residual_units(),
+            "safety_shell_version": safety_shell_version(),
             "prior_cumulative_notional": str(cum),
             "cap_basis": "authoritative FILLED notional (partials included); "
                          "unconfirmed submissions count in full",
@@ -1600,13 +1620,13 @@ def run_session(t: Optional[Transport] = None,
                 # flattened -- the residual holds to settlement.
                 relation, refusal = "hold", "off_distribution_hold"
             elif relation == "extend" and abs(
-                    inv.behavioral_residual()) >= MAX_RESIDUAL_UNITS:
+                    inv.behavioral_residual()) >= max_residual_units():
                 # bounded imbalance (same bound as the shared planner):
                 # no further same-side EXTEND past the residual cap; a
                 # COMPLETE is still allowed, and nothing is flattened
                 relation, refusal = "hold", (
                     f"residual_cap:{abs(inv.behavioral_residual())}"
-                    f">={MAX_RESIDUAL_UNITS}")
+                    f">={max_residual_units()}")
                 # OWNER 5554106892 (next behavioral mismatch, prebuilt,
                 # OFF by default): at the cap the modal policy HOLDs 100%
                 # of the time, while L5 in the same imb states COMPLETEs
@@ -1691,7 +1711,7 @@ def run_session(t: Optional[Transport] = None,
                  # OWNER 5560559108 #5: the safety shell this row was
                  # produced under, so the behavioral layer stays comparable
                  # across any later shell change (concurrency, caps)
-                 "safety_shell_version": SAFETY_SHELL_VERSION,
+                 "safety_shell_version": safety_shell_version(),
                  # OWNER 5558859447 #5: which lookup produced this row --
                  # both state keys, both last_size values, both off flags
                  "lookup": prop.get("lookup"),
@@ -1707,7 +1727,7 @@ def run_session(t: Optional[Transport] = None,
                       "reason": "residual adapter: one L5 size unit = one venue-minimum contract"},
                      {"step": "executable_contracts",
                       "value": str(spec["qty"]),
-                      "reason": f"owner size cap ${SESSION_NOTIONAL_CAP}/market + venue "
+                      "reason": f"owner size cap ${session_notional_cap()}/market + venue "
                                 "minimum; declared safety override, not L5 behavior"}]})
             if relation == "hold":
                 sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
@@ -1717,7 +1737,7 @@ def run_session(t: Optional[Transport] = None,
             if relation in ("open", "extend"):
                 # spend caps: session + durable cumulative, before sizing
                 if cum + (inv.spent() - prior_spent) + \
-                        spec["entry_notional"] > SESSION_NOTIONAL_CAP:
+                        spec["entry_notional"] > session_notional_cap():
                     relation = "complete" if inv.residual != 0 else "stop"
                     report["decisions"][-1]["divergence"] = \
                         f"safety_adaptation:spend_cap->{relation}"
