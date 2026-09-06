@@ -114,6 +114,43 @@ def _floor_tick(px: D, tick: D) -> D:
     return (px / tick).to_integral_value(rounding=ROUND_DOWN) * tick
 
 
+def _pct(xs: list, p: float) -> Optional[float]:
+    if not xs:
+        return None
+    return round(xs[min(len(xs) - 1, int(p * len(xs)))], 4)
+
+
+def pair_cost_economics(completes: list) -> dict:
+    """OWNER (5559842730 reply): MEASURE the L5-style completion economics,
+    do not remove the fee-safe rule. Per COMPLETE draw with inventory the
+    pair cost at L5's touch is deterministic (a matched pair pays $1.00
+    whichever side wins), so the excess over $1.00 is the cost L5 accepts
+    per pair when it completes above par -- reported as a distribution in
+    cents per pair, never netted against incentives we cannot observe."""
+    xs = sorted(float(d["pair_at_touch"]) for d in completes
+                if d.get("pair_at_touch") not in (None, ""))
+    gt1 = [x for x in xs if x > 1.0]
+    excess_c = sorted(round((x - 1.0) * 100, 2) for x in gt1)
+    return {
+        "complete_draws_with_inventory": len(xs),
+        "pair_at_touch": {"p25": _pct(xs, .25), "p50": _pct(xs, .5),
+                          "p75": _pct(xs, .75), "p90": _pct(xs, .9),
+                          "mean": round(sum(xs) / len(xs), 4) if xs else None},
+        "above_par": {
+            "n": len(gt1), "share": round(len(gt1) / len(xs), 4) if xs else None,
+            "excess_cents_per_pair": {"mean": round(sum(excess_c) / len(excess_c), 2) if excess_c else None,
+                                      "p50": _pct(excess_c, .5), "p90": _pct(excess_c, .9),
+                                      "max": excess_c[-1] if excess_c else None,
+                                      "sum": round(sum(excess_c), 2)},
+            "reading": "cents lost per matched pair if the clone completed at L5's "
+                       "touch instead of refusing / resting at the fee-safe bound; "
+                       "incentives (rewards, rebates) are NOT observable here and are "
+                       "not netted"},
+        "fee_safe_at_touch_share": (round(sum(1 for d in completes if d.get("fee_safe_at_touch")) / len(completes), 4)
+                                    if completes else None),
+    }
+
+
 def _masses(relation_ranked: Any) -> dict:
     out = {"complete": 0.0, "extend": 0.0, "open": 0.0}
     for r in relation_ranked or []:
@@ -557,6 +594,7 @@ class MultiShadow:
                     "pair_gt_1_share": round(len(gt1) / len(completes), 4) if completes else None,
                     "fee_safe_at_touch_share": (round(sum(1 for d in completes if d.get("fee_safe_at_touch")) / len(completes), 4)
                                                 if completes else None),
+                    "economics": pair_cost_economics(completes),
                     "reading": "how often the clone would diverge from L5 only because "
                                "L5 tolerated a pair cost above what the fee-safe rule allows"},
                 "labels": "what the live safety/economic shell would have let reach the "

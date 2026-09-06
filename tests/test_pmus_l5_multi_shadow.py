@@ -313,3 +313,20 @@ def test_restore_replays_pre_rule_rows_through_the_independence_rule(tmp_path):
     assert rep["unique_decisions"] == len(rows) + 2
     # a row written under the rule carries its signature
     assert base["independence"]["rule"] == ms.INDEPENDENCE_RULE and len(base["independence"]["sig"]) == 5
+
+
+def test_complete_counterfactual_reports_the_pair_cost_economics():
+    """OWNER: measure the >$1 L5-style completion, do not remove the rule."""
+    completes = [{"pair_at_touch": "0.96", "fee_safe_at_touch": True},
+                 {"pair_at_touch": "1.02", "fee_safe_at_touch": False},
+                 {"pair_at_touch": "1.10", "fee_safe_at_touch": False},
+                 {"pair_at_touch": None, "fee_safe_at_touch": None}]
+    eco = ms.pair_cost_economics(completes)
+    assert eco["complete_draws_with_inventory"] == 3
+    assert eco["pair_at_touch"]["p50"] == 1.02 and eco["pair_at_touch"]["mean"] == 1.0267
+    ab = eco["above_par"]
+    assert ab["n"] == 2 and ab["share"] == 0.6667
+    assert ab["excess_cents_per_pair"] == {"mean": 6.0, "p50": 10.0, "p90": 10.0,
+                                           "max": 10.0, "sum": 12.0}
+    assert eco["fee_safe_at_touch_share"] == 0.25
+    assert ms.pair_cost_economics([])["above_par"]["n"] == 0
