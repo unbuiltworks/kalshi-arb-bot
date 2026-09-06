@@ -296,10 +296,17 @@ class ShadowService:
         # (symbol, entry_t) identities (restore already keeps one copy
         # per identity) and the time range they span
         idents = {(r.get("symbol"), float(r.get("entry_t") or 0)) for r in rows}
+        entered = {(r.get("symbol"), float(r.get("entry_t") or 0)) for r in rows
+                   if r.get("status") in ("MATCHED", "RESIDUAL_HOLD", "NO_FILL")}
         ts = sorted(t for _, t in idents)
         return {"arm": spec["arm"], "windows_since_freeze": len(idents),
                 "window_rows": len(rows),
                 "unique_window_ids": len(idents),
+                # canonical frozen-gate count: unique ENTERED windows (the
+                # set the arm spec scores); `windows` below is the same
+                # set from research_arm_verdict, `windows_since_freeze`
+                # also holds NO_QUOTE_COVERAGE / REPLAY_ERROR rows
+                "windows_entered_unique": len(entered),
                 "first_entry_utc": _utc(ts[0]) if ts else None,
                 "last_entry_utc": _utc(ts[-1]) if ts else None,
                 **gs.research_arm_verdict(rows, spec)}
@@ -504,11 +511,69 @@ def _utc(ts: Optional[float]) -> Optional[str]:
     return datetime.fromtimestamp(float(ts), tz=timezone.utc).isoformat()
 
 
+REPORT_PORT_ENV = "L5_SHADOW_REPORT_PORT"       # default 8080, bind [::]
+
+
+def start_report_server(getter: Callable[[], Mapping[str, Any]],
+                        port: Optional[int] = None) -> Any:
+    """OWNER 5557209522 #5: publish the latest rolling report (read-only
+    JSON) over Railway private networking so the PMUS probe's frozen
+    evaluator can read the deduplicated stochastic OOS window evidence.
+    GET /rolling -> report JSON; GET /health -> ok. Daemon thread; any
+    failure here never touches the shadow loop."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):                              # noqa: N802
+            if self.path.split("?")[0] == "/health":
+                body = b'{"ok":true}'
+            elif self.path.split("?")[0] == "/rolling":
+                try:
+                    body = json.dumps(getter(), default=str).encode("utf-8")
+                except Exception as exc:              # noqa: BLE001
+                    body = json.dumps({"error": f"{type(exc).__name__}:"
+                                                f"{str(exc)[:160]}"}).encode()
+            else:
+                self.send_response(404)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a: Any) -> None:       # quiet
+            return
+
+    class V6Server(ThreadingHTTPServer):
+        import socket as _s
+        address_family = _s.AF_INET6
+        daemon_threads = True
+
+    port = int(port if port is not None else os.getenv(REPORT_PORT_ENV, "8080"))
+    try:
+        srv = V6Server(("::", port), Handler)
+    except OSError:
+        srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True,
+                     name="l5-shadow-report").start()
+    return srv
+
+
 def main() -> int:
     if os.getenv("GEMINI_SHADOW_ROLE", "gemini-l5-shadow") != "gemini-l5-shadow":
         print("SERVICE_ROLE_MISMATCH", flush=True)
         return 64
-    ShadowService().run()
+    svc = ShadowService()
+    try:
+        srv = start_report_server(lambda: svc.rolling_report(time.time()))
+        _log("report_server", port=srv.server_address[1],
+             paths=["/rolling", "/health"])
+    except Exception as exc:                          # noqa: BLE001
+        _log("report_server_error", err=f"{type(exc).__name__}:{str(exc)[:160]}")
+    svc.run()
     return 0
 
 

@@ -84,6 +84,9 @@ LABEL_SHADOW = "SHADOW/THEORETICAL; DISARMED; no venue network"
 
 
 FIDELITY_EVAL_S = 600.0         # frozen L5 fidelity gate re-run cadence
+# Gemini shadow service's published rolling report (Railway private
+# networking), e.g. http://gemini-l5-shadow.railway.internal:8080/rolling
+SHADOW_REPORT_URL_ENV = "L5_SHADOW_REPORT_URL"
 _fidelity_last = {"t": 0.0}
 
 
@@ -127,12 +130,27 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
     if not force and now - _fidelity_last["t"] < FIDELITY_EVAL_S:
         return None
     _fidelity_last["t"] = now
+    rolling, shadow_source = None, {"url": os.getenv(SHADOW_REPORT_URL_ENV, "").strip()}
+    if shadow_source["url"]:
+        # OWNER 5557209522 #5: the deduplicated stochastic OOS window
+        # evidence lives on the Gemini shadow service; it publishes its
+        # latest rolling report over Railway private networking and the
+        # frozen evaluator reads it here (never restored/pre-freeze rows:
+        # the service counts unique ENTERED windows since the freeze)
+        try:
+            import urllib.request
+            with urllib.request.urlopen(shadow_source["url"], timeout=8) as resp:
+                rolling = json.loads(resp.read().decode("utf-8"))
+            shadow_source["fetched_t"] = rolling.get("t")
+        except Exception as exc:                      # noqa: BLE001
+            shadow_source["error"] = f"{type(exc).__name__}:{str(exc)[:120]}"
     try:
         from src import l5_fidelity_gate as fgate
         path = base.q1.base.state_dir() / "ledger.jsonl"
         reports = fgate._read_reports(path) if path.exists() else []
         model = pv2.load_v2()
-        out = fgate.evaluate(reports, rolling=None, model=model)
+        out = fgate.evaluate(reports, rolling=rolling, model=model)
+        out["shadow_source"] = shadow_source
     except Exception as exc:                          # noqa: BLE001
         _log("fidelity_gate_error", err=f"{type(exc).__name__}:{str(exc)[:160]}")
         return None
@@ -148,8 +166,11 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
         "live": {k: {"status": v.get("status"), "n": v.get("n"),
                      "value": v.get("value")}
                  for k, v in out["live"].items() if isinstance(v, Mapping)},
-        "shadow_note": "shadow view is scored on the Gemini shadow "
-                       "service's rolling report (l5_fidelity_gate_shadow)",
+        "shadow": {k: {"status": v.get("status"), "n": v.get("n"),
+                       "value": v.get("value")}
+                   for k, v in out["shadow"].items() if isinstance(v, Mapping)},
+        "shadow_windows": out["shadow"].get("windows_since_freeze"),
+        "shadow_source": out.get("shadow_source"),
     }
     _log("fidelity_gate", **compact)
     if out["evidence_progress"]["all_met"]:

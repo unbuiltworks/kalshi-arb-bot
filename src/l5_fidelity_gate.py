@@ -326,7 +326,12 @@ def score_shadow(rolling: Optional[Mapping[str, Any]], spec: Mapping[str, Any]) 
     thr = spec["dimensions"]["action_distribution_relation"]["pass"]
     thr_p = spec["dimensions"]["post_fill_complete_gap"]["pass"]
     thr_o = spec["dimensions"]["off_distribution_rate"]["pass"]
-    windows = ra.get("windows_since_freeze") or ra.get("windows") or 0
+    # canonical count (OWNER 5557209522 #4): unique ENTERED windows since
+    # the freeze -- the same set the frozen arm spec scores; falls back to
+    # the older fields only when the service predates the provenance keys
+    windows = (ra.get("windows_entered_unique")
+               if ra.get("windows_entered_unique") is not None
+               else (ra.get("windows_since_freeze") or ra.get("windows") or 0))
     enough = int(windows) >= spec["minimum_evidence"]["shadow_windows"]
     l1s, l1a = _f(sc.get("l1_sampled_vs_l5")), _f(sc.get("l1_acted_vs_l5"))
     post = sc.get("post_fill") or {}

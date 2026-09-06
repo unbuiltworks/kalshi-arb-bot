@@ -125,3 +125,20 @@ def test_cli_reads_campaign_log_lines(tmp_path):
     p.write_text("PMUS_L5_CAMPAIGN " + json.dumps(rep) + "\nnoise\n")
     assert len(gate._read_reports(p)) == 1
     assert gate.main([str(p)]) == 0
+
+
+def test_shadow_windows_use_the_unique_entered_count_when_published():
+    spec = gate.load_spec()
+    rolling = {"research_arm_stochastic": {
+        "arm": "reprice_180s:stochastic", "windows_since_freeze": 70,
+        "windows_entered_unique": 67, "unique_window_ids": 70,
+        "action_scoring": {"scored_decisions": 141, "l1_sampled_vs_l5": 0.066,
+                           "l1_acted_vs_l5": 0.3, "off_distribution_rate_pct": 16.0,
+                           "post_fill": {"decisions": 20,
+                                         "complete_freq_gap_pp_sampled": -7.0,
+                                         "complete_freq_gap_pp_acted": 19.0}}}}
+    sh = gate.score_shadow(rolling, spec)
+    assert sh["windows_since_freeze"] == 67            # entered, unique
+    legacy = {"research_arm_stochastic": {"windows_since_freeze": 24,
+                                          "action_scoring": {}}}
+    assert gate.score_shadow(legacy, spec)["windows_since_freeze"] == 24
