@@ -76,6 +76,8 @@ def _arm(monkeypatch, tmp_path):
     monkeypatch.setenv(q1.base.SECRET_ENV, "s")
     monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
     monkeypatch.setattr(entry, "durable_state_reason", lambda *a, **k: None)
+    from tests.test_pmus_spring_l5_session import _complement_proven
+    _complement_proven(tmp_path)
 
 
 # ---- selection: every row gated, admitted rows ranked, refusals named ----
@@ -219,6 +221,29 @@ def test_no_candidate_keeps_polling_without_mutation(monkeypatch, tmp_path):
                             session_runner=lambda *a, **k: ran.append(k))
     assert ran == []
     assert rep["status"] == "CAMPAIGN_NO_CANDIDATE"
+
+
+def test_campaign_starts_no_fresh_session_until_complement_proven(
+        monkeypatch, tmp_path):
+    """OWNER 5556038561 #3: a candidate is selected, the campaign is
+    ARMED, but no opposite-side order has ever been venue-accepted -> no
+    first leg, no per-slug allowance spent, WAITING status with the
+    proof state logged."""
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    (tmp_path / base.COMPLEMENT_PROOF_FILE).unlink(missing_ok=True)
+    st = _status([_row("a", touch="900")])
+    monkeypatch.setattr(entry, "load_status_document",
+                        lambda path=None: (st, "status_url:test"))
+    ran = []
+    ticks = iter([0.0, 1.0, 2.0, 3.0, 100.0, 100.0])
+    rep = cont.run_campaign(clock=lambda: next(ticks), sleep=lambda s: None,
+                            wall=lambda: 1005.0, campaign_s=50.0,
+                            session_runner=lambda *a, **k: ran.append(k))
+    assert ran == []
+    assert rep["status"] == "CAMPAIGN_WAITING:COMPLEMENT_UNPROVEN"
+    assert rep["complement_gate"]["proven"] is False
+    assert rep["complement_gate"]["reason"] == "never_attempted"
     assert rep["selections"] >= 2
 
 
@@ -245,6 +270,7 @@ def test_base_session_logs_model_rank_and_holds_off_distribution(
     monkeypatch.setenv(q1.base.KEY_ENV, "k")
     monkeypatch.setenv(q1.base.SECRET_ENV, "s")
     monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
+    __import__("tests.test_pmus_spring_l5_session", fromlist=["x"])._complement_proven(tmp_path)
     monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
     seq = iter([False, True, True, True, True, True])
 
@@ -310,6 +336,7 @@ def test_fill_updates_inventory_and_requeries_model_before_next_action(
     monkeypatch.setenv(q1.base.KEY_ENV, "k")
     monkeypatch.setenv(q1.base.SECRET_ENV, "s")
     monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
+    __import__("tests.test_pmus_spring_l5_session", fromlist=["x"])._complement_proven(tmp_path)
     monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
     import itertools
     seen = []
@@ -382,6 +409,8 @@ def _armed_session_env(monkeypatch, tmp_path):
     monkeypatch.setenv(q1.base.SECRET_ENV, "s")
     monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
     monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    from tests.test_pmus_spring_l5_session import _complement_proven
+    _complement_proven(tmp_path)
 
 
 def _open_proposal(monkeypatch):

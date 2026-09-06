@@ -978,6 +978,20 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 status = "SHADOW_SELECTED"
                 sleep(SELECT_POLL_S)
                 continue
+            if not base.complement_acceptance_proven():
+                # OWNER 5556038561 #3: NEW first legs fail closed until
+                # the venue has accepted an opposite-side order built by
+                # this code (proven on the held market's resume path);
+                # gated HERE so the per-slug attempt allowance is not
+                # spent on the same account-wide refusal every cycle
+                proof = base.load_complement_proof()
+                if proof != report.get("complement_gate"):
+                    report["complement_gate"] = proof
+                    _log("complement_gate", chosen=chosen["slug"],
+                         proof=proof)
+                status = "CAMPAIGN_WAITING:COMPLEMENT_UNPROVEN"
+                sleep(SELECT_POLL_S)
+                continue
             remaining = stop_at - clock()
             _log("session_start", slug=chosen["slug"], rank=chosen["rank"],
                  state=chosen["state"], state_n=chosen["state_n"],

@@ -105,6 +105,18 @@ def _arm(monkeypatch, tmp_path, slug=SLUG):
     monkeypatch.setenv(q1.base.KEY_ENV, "k")
     monkeypatch.setenv(q1.base.SECRET_ENV, "s")
     monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
+    _complement_proven(tmp_path)
+
+
+def _complement_proven(tmp_path, proven=True):
+    """OWNER 5556038561 #3: a NEW first leg needs a durable venue proof
+    that an opposite-side order built by this code was accepted. The
+    armed fixtures carry one; the gate itself is tested separately."""
+    import json as _json
+    (tmp_path / spring.COMPLEMENT_PROOF_FILE).write_text(_json.dumps(
+        {"proven": proven, "slug": "fixture", "order_id": "FIX",
+         "end_reason": "resting:ORDER_STATE_OPEN",
+         "proven_utc": "2026-09-06T00:00:00+00:00"}))
 
 
 def _ticking():
@@ -606,3 +618,206 @@ def test_every_decision_carries_the_owner_required_fields(monkeypatch,
     o = rep["orders"][0]
     assert o["executed_safe_size"]["contracts"] == "0.02"
     assert "l5_target_size" in o
+    # OWNER 5556038561 #7: the divergence is NAMED per decision
+    assert d["divergence"] == "none"
+    assert d["size_divergence"] == "venue_minimum_vs_l5_target"
+    # OWNER 5556038561 #4: the first leg carried its complement preflight
+    pf = d["complement_preflight"]
+    first_side = o["side"]                                # cheaper touch
+    assert pf["side"].endswith("NO" if first_side == "YES" else "YES")
+    assert pf["preview_ok"] is True
+    assert D(pf["px"]) + D(o["px"]) <= D("0.98")          # fee-safe pair
+    expect_wire = (D("1") - D(str(pf["px"])) if pf["side"].endswith("NO")
+                   else D(str(pf["px"])))
+    assert D(pf["wire_px"]) == expect_wire
+
+
+# ---------------- OWNER 5556038561: complement acceptance gate ----------------
+
+def test_new_first_leg_fails_closed_until_complement_acceptance_proven(
+        monkeypatch, tmp_path):
+    from tests.test_pmus_l5_continuous_session import (_armed_session_env,
+                                                        _open_proposal)
+    _armed_session_env(monkeypatch, tmp_path)
+    _open_proposal(monkeypatch)
+    (tmp_path / spring.COMPLEMENT_PROOF_FILE).unlink()
+    fake = Fake()
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0, slug="mkt-x", gate_ok=True)
+    assert rep["status"] == "SPRING_SAFE_REFUSAL"
+    assert rep["reason"] == "complement_acceptance_unproven"
+    assert rep["complement_proof"]["reason"] == "never_attempted"
+    assert not any(p == "/v1/orders" for p, _ in fake.posts)
+    # a proof that says NOT proven (revoked) blocks the same way
+    _complement_proven(tmp_path, proven=False)
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0, slug="mkt-x", gate_ok=True)
+    assert rep["reason"] == "complement_acceptance_unproven"
+
+
+def test_resume_proves_complement_acceptance_with_a_resting_opposite_order(
+        monkeypatch, tmp_path):
+    """Held +0.02 YES @0.43 on a 0.43/0.435 book: the probe is the exact
+    fee-safe complement (NO 0.55 -> wire 0.45, venue-minimum 0.01,
+    post-only); the venue RESTS it -> proof saved with the evidence, the
+    order is cancelled, and a fresh first leg is allowed afterwards."""
+    from tests.test_pmus_l5_continuous_session import (_armed_session_env,
+                                                        _ledger_with_fill)
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")
+    (tmp_path / spring.COMPLEMENT_PROOF_FILE).unlink()
+
+    def hold_proposal(model, base_state, last_rel, last_size, residual,
+                      clone_avg_cost=None):
+        return {"recommended_relation": "extend", "persist_extend_p": 0.7,
+                "switch_complete_p": 0.3, "next_reevaluation_s": 2.0,
+                "relation_ranked": [{"relation": "extend", "p": 0.7}],
+                "state_n": 20, "off_distribution": False}
+    monkeypatch.setattr(pv2, "proposal", hold_proposal)
+    monkeypatch.setenv(spring.MAX_ACTIONS_ENV, "1")
+    fake = Fake(bid="0.4300", ask="0.4350", fill_all=False)
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0, slug="held", gate_ok=True,
+                             resume=True)
+    acc = rep["complement_acceptance"]
+    assert acc["proven"] is True, acc
+    assert acc["end_reason"] == "resting:ORDER_STATE_OPEN"
+    assert acc["submitted"] == {"side": "OUTCOME_SIDE_NO", "px": "0.55",
+                                "wire_px": "0.45", "qty": "0.01",
+                                "post_only": True}
+    probe = [b for p, b in fake.posts if p == "/v1/orders"][0]
+    assert probe["outcomeSide"] == "OUTCOME_SIDE_NO"
+    assert probe["price"]["value"] == "0.45" and probe["quantity"] == 0.01
+    assert probe["participateDontInitiate"] is True
+    assert fake.orders["SPR1"]["state"] == "ORDER_STATE_CANCELED"
+    # the probe is a SUBMITTED order in the ladder, unfilled
+    assert rep["orders"][0]["stage"] == "complement_acceptance"
+    assert rep["orders"][0]["outcome"] == "no_fill_cancelled"
+    assert rep["inventory"]["dn"] == "0"
+    assert spring.complement_acceptance_proven()
+    assert spring.load_complement_proof()["order_id"] == "SPR1"
+
+
+def test_resume_probe_rejection_keeps_first_legs_blocked(monkeypatch,
+                                                         tmp_path):
+    from tests.test_pmus_l5_continuous_session import (_armed_session_env,
+                                                        _ledger_with_fill)
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")
+    (tmp_path / spring.COMPLEMENT_PROOF_FILE).unlink()
+    _script_proposals(monkeypatch, ["extend"])
+    monkeypatch.setenv(spring.MAX_ACTIONS_ENV, "1")
+
+    class Rejecting(Fake):
+        def request(self, method, path, body=None, base=None):
+            out = super().request(method, path, body, base)
+            if path == "/v1/orders":
+                self.orders[out["id"]]["state"] = "ORDER_STATE_REJECTED"
+                self.open_order = None
+            return out
+    fake = Rejecting(bid="0.4300", ask="0.4350", fill_all=False)
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0, slug="held", gate_ok=True,
+                             resume=True)
+    acc = rep["complement_acceptance"]
+    assert acc["proven"] is False
+    assert acc["end_reason"].startswith("rejected:ORDER_REJECTED_ZERO_FILL")
+    assert not spring.complement_acceptance_proven()
+    assert spring.load_complement_proof()["reason"].startswith("rejected")
+    # bounded: the next resume inside the retry interval does NOT submit
+    # another probe order; after the interval it does
+    n_orders = sum(1 for p, _ in fake.posts if p == "/v1/orders")
+    rep2 = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                              wall=lambda: 1100.0, slug="held", gate_ok=True,
+                              resume=True)
+    assert "complement_acceptance" not in rep2
+    rep3 = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                              wall=lambda: 1000.0 + spring.COMPLEMENT_PROOF_RETRY_S,
+                              slug="held", gate_ok=True, resume=True)
+    assert rep3["complement_acceptance"]["proven"] is False
+    assert sum(1 for p, _ in fake.posts if p == "/v1/orders") >= n_orders + 1
+
+
+def test_complement_rejection_revokes_the_proof(monkeypatch, tmp_path):
+    from tests.test_pmus_l5_continuous_session import (_armed_session_env,
+                                                        _ledger_with_fill)
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")
+    _script_proposals(monkeypatch, ["complete"])
+    monkeypatch.setenv(spring.MAX_ACTIONS_ENV, "1")
+
+    class Rejecting(Fake):
+        def request(self, method, path, body=None, base=None):
+            out = super().request(method, path, body, base)
+            if path == "/v1/orders":
+                self.orders[out["id"]]["state"] = "ORDER_STATE_REJECTED"
+                self.open_order = None
+            return out
+    fake = Rejecting(bid="0.4300", ask="0.4350", fill_all=False)
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    assert spring.complement_acceptance_proven()            # fixture proof
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0, slug="held", gate_ok=True,
+                             resume=True)
+    assert rep["orders"][0]["relation"] == "complete"
+    assert rep["orders"][0]["end_reason"].startswith("rejected")
+    proof = spring.load_complement_proof()
+    assert proof["proven"] is False
+    assert proof["reason"].startswith("revoked:complete_rejected")
+    assert proof["revoked_order"]["order_id"] == "SPR1"
+
+
+def test_first_leg_refused_when_its_complement_preview_is_rejected(
+        monkeypatch, tmp_path):
+    from tests.test_pmus_l5_continuous_session import (_armed_session_env,
+                                                        _open_proposal)
+    _armed_session_env(monkeypatch, tmp_path)
+    _open_proposal(monkeypatch)
+    monkeypatch.setenv(spring.MAX_ACTIONS_ENV, "1")
+
+    class NoPreview(Fake):
+        # the complement preflight is the FIRST preview of the session
+        # (it precedes the first leg's own preview); refuse exactly it
+        previews = 0
+
+        def request(self, method, path, body=None, base=None):
+            if path == "/v1/order/preview":
+                self.previews += 1
+                if self.previews == 1:
+                    return {"error": "complement preview refused"}
+            return super().request(method, path, body, base)
+    fake = NoPreview()
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0, slug="mkt-x", gate_ok=True)
+    assert rep["stop_reason"] == "complement_preview_rejected"
+    assert rep["decisions"][0]["divergence"] == \
+        "safety_adaptation:complement_preview_rejected"
+    assert not any(p == "/v1/orders" for p, _ in fake.posts)
+
+
+def test_divergence_reason_separates_safety_from_behavior():
+    dr = spring.divergence_reason
+    assert dr("residual_cap:3.0>=3", "extend", "hold", "complete") == \
+        "safety_adaptation:residual_cap"
+    assert dr("off_distribution_hold", "extend", "hold", None) == \
+        "safety_adaptation:off_distribution_hold"
+    assert dr("residual_cap:fallback_complete:p=0.336", "extend",
+              "complete", "extend") == "policy_flag:cap_fallback_complete"
+    assert dr(None, "extend", "extend", "complete") == \
+        "behavioral:modal_argmax_vs_stochastic_draw"
+    assert dr(None, "extend", "extend", "extend") == "none"
+    assert dr(None, "open", "open", None) == "none"
+
+
+def test_complement_plan_prices_the_opposite_side_fee_safe_and_maps_wire():
+    plan = spring.complement_plan(True, D("0.36"),
+                                  {"bid": "0.35", "ask": "0.355"}, D("0.01"))
+    assert plan["side"] == "OUTCOME_SIDE_NO"
+    assert plan["px"] == D("0.62") and plan["wire_px"] == "0.38"
+    assert plan["opp_ask"] == "0.65"                     # 1 - yes bid
+    plan = spring.complement_plan(False, D("0.60"),
+                                  {"bid": "0.39", "ask": "0.40"}, D("0.01"))
+    assert plan["side"] == "OUTCOME_SIDE_YES"
+    assert plan["px"] == D("0.38") and plan["wire_px"] == "0.38"

@@ -417,6 +417,102 @@ MAX_RESIDUAL_UNITS = 3
 CAP_FALLBACK_ENV = "PMUS_SPRING_CAP_FALLBACK_COMPLETE"
 CAP_FALLBACK_MIN_P = 0.20
 
+# OWNER 5556038561 #3/#4: the first leg filled while every complement /
+# extend was venue-rejected (LIVE 2026-09-06 00:57-01:20Z), which turns a
+# pair-seeking strategy into stranded directional exposure. Until the
+# venue has ACCEPTED (rested) a post-only opposite-side order built by
+# this code, NEW first legs fail closed; a held residual is still managed
+# under the existing bounded rules. The proof is durable (state dir),
+# carries the venue evidence, and is REVOKED by any later complement
+# rejection at a price the fresh book said was non-crossing.
+COMPLEMENT_PROOF_FILE = "complement_acceptance.json"
+COMPLEMENT_PROOF_REST_MAX_S = 3.0     # rest-and-cancel bound for the probe
+COMPLEMENT_PROOF_RETRY_S = 600.0      # at most one probe order per 10 min
+RESTING_STATES = ("OPEN", "NEW", "PARTIALLY_FILLED", "PENDING_NEW",
+                  "PENDING_RISK")
+
+
+def complement_proof_path():
+    return q1.base.state_dir() / COMPLEMENT_PROOF_FILE
+
+
+def load_complement_proof() -> dict:
+    path = complement_proof_path()
+    if not path.exists():
+        return {"proven": False, "reason": "never_attempted"}
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"proven": False, "reason": "unreadable"}
+    return doc if isinstance(doc, dict) else {"proven": False,
+                                              "reason": "malformed"}
+
+
+def save_complement_proof(proof: Mapping[str, Any]) -> None:
+    path = complement_proof_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(dict(proof), indent=1, default=str),
+                   encoding="utf-8")
+    os.replace(tmp, path)
+    print("PMUS_COMPLEMENT_ACCEPTANCE " + json.dumps(
+        dict(proof), separators=(",", ":"), default=str), flush=True)
+
+
+def complement_acceptance_proven() -> bool:
+    return load_complement_proof().get("proven") is True
+
+
+def revoke_complement_proof(slug: str, order: Mapping[str, Any],
+                            why: str) -> None:
+    """A complement/extend rejection at a price the fresh book said was
+    non-crossing means the venue's acceptance rules are not what this
+    code proved; NEW first legs fail closed again until re-proven."""
+    prior = load_complement_proof()
+    save_complement_proof({
+        "proven": False, "reason": f"revoked:{why}", "slug": slug,
+        "revoked_utc": datetime.now(timezone.utc).isoformat(),
+        "revoked_order": dict(order), "prior_proof": prior})
+
+
+def divergence_reason(refusal: Optional[str], v2_relation: str,
+                      acted: str, sampled: Optional[str]) -> str:
+    """OWNER 5556038561 #7: WHY the safe executed action differs from the
+    L5 shadow, so a safety adaptation is never mistaken for a behavioral
+    mismatch. 'none' when the executed action IS the model's action and
+    the seeded draw agrees."""
+    if refusal:
+        if refusal.startswith("off_distribution"):
+            return "safety_adaptation:off_distribution_hold"
+        if refusal.startswith("residual_cap:fallback_complete"):
+            return "policy_flag:cap_fallback_complete"
+        if refusal.startswith("residual_cap"):
+            return "safety_adaptation:residual_cap"
+        return f"safety_adaptation:{refusal.split(':')[0]}"
+    if acted != v2_relation:
+        return f"safety_adaptation:{acted}_for_{v2_relation}"
+    if sampled is not None and sampled != acted:
+        return "behavioral:modal_argmax_vs_stochastic_draw"
+    return "none"
+
+
+def complement_plan(first_side_up: bool, first_px: D,
+                    yes_bbo: Mapping[str, Any], tick: D) -> dict:
+    """The exact opposite-side order a first leg at ``first_px`` would
+    need: side, fee-safe maker price (pair <= 0.98 and >= 1c after known
+    fees, strictly below the opposite ask) and the venue long-side wire
+    price. ``px`` is None when no legal fee-safe complement exists at the
+    current book -- that first leg would be a residual by construction."""
+    yb, ya = D(str(yes_bbo["bid"])), D(str(yes_bbo["ask"]))
+    if first_side_up:
+        side, opp_ask = "OUTCOME_SIDE_NO", q1.ONE - yb      # NO ask
+    else:
+        side, opp_ask = "OUTCOME_SIDE_YES", ya
+    px, econ = spring_complement_price(D(str(first_px)), opp_ask, tick)
+    return {"side": side, "px": px, "opp_ask": str(opp_ask),
+            "wire_px": (str(micro.venue_price(side, px))
+                        if px is not None else None), **econ}
+
 
 def _relation_mass(prop: Mapping[str, Any], relation: str) -> float:
     for r in prop.get("relation_ranked") or []:
@@ -724,6 +820,12 @@ def run_session(t: Optional[Transport] = None,
             if skip:
                 return {**report, "status": "SPRING_SKIP_NOT_QUALIFYING",
                         "reason": skip, "candidate_row": row}
+            if not complement_acceptance_proven():
+                # OWNER 5556038561 #3: no NEW first leg until the venue
+                # has accepted an opposite-side order built by this code
+                return {**report, "status": "SPRING_SAFE_REFUSAL",
+                        "reason": "complement_acceptance_unproven",
+                        "complement_proof": load_complement_proof()}
         # execution-freshness rule (OWNER 5552475548 item 2): the venue's
         # LIVE market document, immediately before any submission
         live_block = live_market_open_reason(t, slug, wall())
@@ -821,6 +923,106 @@ def run_session(t: Optional[Transport] = None,
                 return None
             return check
 
+        def _prove_complement_acceptance(bbo: Mapping[str, Any],
+                                         spec: Mapping[str, Any]) -> dict:
+            """OWNER 5556038561 #4/#5 (dry acceptance): on the HELD market
+            build the exact opposite-side order the residual needs (fee-
+            safe price, post-only, venue-minimum size), preview it, submit
+            it, and treat a RESTING venue state as the proof; cancel as
+            soon as the state is observed. A fill in that window is a
+            legitimate fee-safe complement and is accounted like any
+            other. Rejection = not proven, with the venue's evidence."""
+            deficit_up = inv.residual < 0
+            surplus_avg = inv.avg_dn() if deficit_up else inv.avg_up()
+            plan = complement_plan(not deficit_up, surplus_avg, bbo,
+                                   spec["tick"])
+            proof: dict[str, Any] = {
+                "proven": False, "slug": slug,
+                "attempted_utc": datetime.now(timezone.utc).isoformat(),
+                "attempted_epoch": wall(),
+                "residual": str(inv.residual), "plan": plan,
+                "book": {"yes_bid": str(bbo["bid"]),
+                         "yes_ask": str(bbo["ask"])}}
+            if plan["px"] is None:
+                proof["reason"] = f"no_fee_safe_complement:{plan['regime']}"
+                save_complement_proof(proof)
+                return proof
+            px = D(str(plan["px"]))
+            qty = min(inv.residual.copy_abs(),
+                      D(str(spec["minimum_trade_qty"])))
+            try:
+                oid = micro.place_limit_buy(t, slug, plan["side"], px, qty,
+                                            "complement_acceptance",
+                                            post_only=True)
+            except Halt as exc:
+                proof["reason"] = f"preview_or_preflight:{exc}"
+                save_complement_proof(proof)
+                return proof
+            proof["order_id"] = oid
+            proof["submitted"] = {"side": plan["side"], "px": str(px),
+                                  "wire_px": plan["wire_px"],
+                                  "qty": str(qty), "post_only": True}
+            start = clock()
+            got, end_reason, observed = D("0"), "rest_bound", None
+            try:
+                while clock() < start + COMPLEMENT_PROOF_REST_MAX_S:
+                    order = q1._order_status(t, oid)
+                    observed = str(order.get("state") or
+                                   order.get("status") or "").upper()
+                    fill = micro.authoritative_fill(order, qty)
+                    if fill is not None:
+                        got, end_reason = D(str(fill["qty"])), "filled"
+                        break
+                    if any(x in observed for x in RESTING_STATES):
+                        end_reason = f"resting:{observed}"
+                        break
+                    sleep(q1.POLL_S)
+            except RejectedNoFill as exc:
+                end_reason = f"rejected:{str(exc)[:160]}"
+            if got == 0 and not end_reason.startswith("rejected"):
+                try:
+                    q1.cancel_exact(t, oid)
+                except Exception:                     # noqa: BLE001
+                    pass
+                fill = micro._terminal_positive_fill(t, oid, qty)
+                if fill is not None:
+                    got, end_reason = D(str(fill["qty"])), "filled_on_cancel"
+            rest_s = round(clock() - start, 3)
+            _harvest(oid, "complement_acceptance", deficit_up, px, qty,
+                     "complete", got, rest_s, end_reason)
+            if got > 0:
+                fill = micro._terminal_positive_fill(t, oid, qty) or \
+                    {"price": px, "qty": got}
+                inv.record(deficit_up, D(str(fill["price"])), got,
+                           "complete")
+            proven = bool(got > 0 or end_reason.startswith("resting"))
+            proof.update({
+                "proven": proven, "observed_state": observed,
+                "end_reason": end_reason, "rest_s": rest_s,
+                "filled_qty": str(got),
+                "proven_utc": (datetime.now(timezone.utc).isoformat()
+                               if proven else None),
+                "labels": "venue accepted a post-only opposite-side order at "
+                          "the long-side price convention; no cap/gate "
+                          "change; a fill here is a fee-safe complement"})
+            if not proven:
+                proof["reason"] = end_reason
+            save_complement_proof(proof)
+            return proof
+
+        if resume and inv.residual != 0 and \
+                not complement_acceptance_proven() and \
+                wall() - float(load_complement_proof().get(
+                    "attempted_epoch") or 0) >= COMPLEMENT_PROOF_RETRY_S:
+            # bounded: one probe order per retry interval, not one per
+            # resume iteration (resumes run every 15-120 s on book moves)
+            bbo0 = q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES")
+            spec0 = micro.market_micro_spec(t, slug, bbo0["bid"])
+            report["complement_acceptance"] = _prove_complement_acceptance(
+                bbo0, spec0)
+            reached_order_stage = reached_order_stage or bool(
+                report["complement_acceptance"].get("order_id"))
+
         actions = 0
         while actions < max_actions and not out_of_time():
             bbo = q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES")
@@ -896,7 +1098,13 @@ def run_session(t: Optional[Transport] = None,
                      "usd": str(spec["entry_notional"])},
                  "shadow": shadow,
                  "shadow_differs_from_executed": bool(
-                     sampled is not None and sampled != relation)})
+                     sampled is not None and sampled != relation),
+                 # OWNER 5556038561 #7: safety adaptation vs behavioral
+                 # mismatch, named per decision
+                 "divergence": divergence_reason(
+                     refusal, prop["recommended_relation"], relation,
+                     sampled),
+                 "size_divergence": "venue_minimum_vs_l5_target"})
             if relation == "hold":
                 sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                 actions += 1
@@ -907,6 +1115,8 @@ def run_session(t: Optional[Transport] = None,
                 if cum + (inv.spent() - prior_spent) + \
                         spec["entry_notional"] > SESSION_NOTIONAL_CAP:
                     relation = "complete" if inv.residual != 0 else "stop"
+                    report["decisions"][-1]["divergence"] = \
+                        f"safety_adaptation:spend_cap->{relation}"
             if relation == "sell" or relation == "stop":
                 report["stop_reason"] = ("l5_sell_is_noop" if relation == "sell"
                                          else "spend_cap_reached")
@@ -944,6 +1154,46 @@ def run_session(t: Optional[Transport] = None,
                         f"q1_entry_ok={q1.entry_ok(bbo['bid'])}")
                     break
                 qty = spec["qty"]
+                if inv.up + inv.dn == 0:
+                    # OWNER 5556038561 #4: the opposite-side order this
+                    # first leg would need must be priceable (fee-safe,
+                    # non-crossing) and PREVIEW-accepted by the venue
+                    # before the first leg is allowed; otherwise the first
+                    # leg would be a residual by construction
+                    plan = complement_plan(side_up, px, bbo, spec["tick"])
+                    report["decisions"][-1]["complement_preflight"] = plan
+                    if plan["px"] is None:
+                        report["stop_reason"] = (
+                            f"complement_not_priceable:{plan['regime']}")
+                        report["decisions"][-1]["divergence"] = (
+                            "safety_adaptation:complement_not_priceable")
+                        break
+                    cbody = micro._body(slug, plan["side"],
+                                        D(str(plan["px"])), qty, True)
+                    try:
+                        prev = t.request("POST", "/v1/order/preview",
+                                         {"request": cbody})
+                        ok = isinstance(prev, Mapping) and isinstance(
+                            prev.get("order"), Mapping)
+                    except Exception as exc:              # noqa: BLE001
+                        prev, ok = {"error": f"{type(exc).__name__}:"
+                                             f"{str(exc)[:160]}"}, False
+                    plan["preview_ok"] = bool(ok)
+                    print("PMUS_COMPLEMENT_PREFLIGHT " + json.dumps(
+                        {"slug": slug, "first_leg": {
+                            "side": "YES" if side_up else "NO",
+                            "px": str(px), "qty": str(qty)},
+                         "complement": {k: plan.get(k) for k in
+                                        ("side", "px", "wire_px", "opp_ask",
+                                         "regime", "preview_ok")},
+                         "preview": (q1._scalar_fields(prev["order"], 300)
+                                     if ok else str(prev)[:300])},
+                        separators=(",", ":"), default=str), flush=True)
+                    if not ok:
+                        report["stop_reason"] = "complement_preview_rejected"
+                        report["decisions"][-1]["divergence"] = (
+                            "safety_adaptation:complement_preview_rejected")
+                        break
                 oid = micro.place_limit_buy(
                     t, slug, "OUTCOME_SIDE_YES" if side_up
                     else "OUTCOME_SIDE_NO", px, qty,
@@ -998,6 +1248,15 @@ def run_session(t: Optional[Transport] = None,
                                                skey))
                 _harvest(oid, f"spring_complete_{actions + 1}", deficit_up,
                          px, qty, "complete", got, rest_s, end_reason)
+                if end_reason.startswith("rejected"):
+                    # place_limit_buy checked the FRESH book right before
+                    # submit: a rejection here is the venue disagreeing
+                    # with this code's acceptance model -> fail closed
+                    revoke_complement_proof(
+                        slug, {"order_id": oid, "side": "YES" if deficit_up
+                               else "NO", "px": str(px), "qty": str(qty),
+                               "end_reason": end_reason},
+                        "complete_rejected_at_fresh_non_crossing_price")
                 if got > 0:
                     fill = micro._terminal_positive_fill(t, oid, qty) or \
                         {"price": px, "qty": got}

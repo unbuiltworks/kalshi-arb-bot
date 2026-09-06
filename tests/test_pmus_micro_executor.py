@@ -347,3 +347,64 @@ def test_intent_only_short_records_are_normalized_like_no_side():
     assert fill["price"] == D("0.39")
     assert m.is_no_order({"intent": "ORDER_INTENT_SELL_SHORT"})
     assert not m.is_no_order({"intent": "ORDER_INTENT_BUY_LONG"})
+
+
+class ConventionVenue:
+    """A venue that applies the documented rule literally: price.value is
+    the LONG side's price whatever the intent, and a post-only order that
+    would cross is REJECTED. Reproduces LIVE 2026-09-06 00:57Z: book YES
+    0.61/0.70, a NO open at the NO bid (0.30)."""
+
+    def __init__(self, yes_bid="0.61", yes_ask="0.70"):
+        self.yb, self.ya = D(yes_bid), D(yes_ask)
+        self.orders, self.posts, self.n = {}, [], 0
+
+    def request(self, method, path, body=None, base=None):
+        if path.endswith("/bbo"):
+            return {"marketData": {"bestBid": {"value": str(self.yb)},
+                                   "bestAsk": {"value": str(self.ya)}}}
+        if path == "/v1/order/preview":
+            return {"order": dict(body["request"])}   # preview never crosses
+        if path == "/v1/orders":
+            self.n += 1
+            oid = f"C{self.n}"
+            long_px = D(body["price"]["value"])
+            no_side = str(body.get("outcomeSide", "")).endswith("NO")
+            # a NO buy is a YES sell at long_px: it crosses at/below the
+            # YES bid; a YES buy crosses at/above the YES ask
+            crosses = (long_px <= self.yb) if no_side else (long_px >= self.ya)
+            state = "ORDER_STATE_REJECTED" if (
+                body.get("participateDontInitiate") and crosses) \
+                else "ORDER_STATE_OPEN"
+            self.orders[oid] = {"state": state, "cumQuantity": "0",
+                                "outcomeSide": body.get("outcomeSide"),
+                                "marketSlug": body["marketSlug"]}
+            self.posts.append(dict(body))
+            return {"id": oid}
+        if path.startswith("/v1/order/") and path.endswith("/cancel"):
+            self.orders[path.split("/")[3]]["state"] = "ORDER_STATE_CANCELED"
+            return {}
+        if path.startswith("/v1/order/"):
+            return {"order": dict(self.orders[path.split("/")[3]])}
+        raise AssertionError((method, path))
+
+
+def test_recovered_failure_no_open_rests_under_the_long_side_convention(
+        monkeypatch, tmp_path):
+    """Regression for the recovered failure (OWNER 5556038561 #4): NO at
+    the NO bid 0.30 on a 0.61/0.70 book. Priced in NO terms on the wire
+    (the old body) the venue reads a YES sell at 0.30 -> crosses the 0.61
+    bid -> post-only REJECTED. With the convention applied (wire 0.70) the
+    same order RESTS."""
+    monkeypatch.setenv(q1.base.STATE_ENV, str(tmp_path))
+    v = ConventionVenue()
+    oid = m.place_limit_buy(v, "mkt", "OUTCOME_SIDE_NO", D("0.30"),
+                            D("0.01"), "regress", post_only=True)
+    assert v.posts[-1]["price"]["value"] == "0.70"
+    assert v.orders[oid]["state"] == "ORDER_STATE_OPEN"
+    # the OLD wire body (NO terms) against the same venue is rejected
+    old_body = {**v.posts[-1], "price": {"value": "0.30", "currency": "USD"}}
+    v.request("POST", "/v1/orders", old_body)
+    assert v.orders["C2"]["state"] == "ORDER_STATE_REJECTED"
+    with pytest.raises(q1.RejectedNoFill):
+        q1._order_status(v, "C2")
