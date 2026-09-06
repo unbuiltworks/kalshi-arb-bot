@@ -7,6 +7,18 @@
 
 > If conversation context and this file disagree, re-establish current GitHub/AWS state first, then update this file from source-backed evidence. Do not silently revive superseded hypotheses.
 
+## 0. Phase order and anti-drift rule (OWNER 5556232035, 2026-09-06)
+
+**REPLICATE L5 → PROVE FIDELITY → RUN L5 → MEASURE REALIZED RESULTS → THEN OPTIMIZE PROFITABILITY.**
+
+* Phase 1 is **L5 replication**, not profitability optimization. The reference action is the reconstructed L5 sequential policy (side, price, size, timing, aggressiveness, inventory trajectory at the exact market state). It is never silently replaced by a generic pair/complement bot, arbitrage optimizer, sports heuristic, fill-rate optimizer or P&L optimizer.
+* Safety/execution constraints may override an L5-shadow action; the override and its reason are logged per decision (`divergence`, `refusal`), and the safe live action and the stochastic L5 action stay separately visible.
+* Candidate ranking and execution are not changed to maximize completed-pair probability/profit if that reduces L5 fidelity (ranking = L5-state fit; `pair_score` is a logged diagnostic only until Phase 2).
+* The complement wire-price fix (`be431842`) is execution correctness, not strategy.
+* **L5 fidelity gate** = `analysis/l5/l5_fidelity_gate.json` (frozen) evaluated by `src/l5_fidelity_gate.py`: action distribution (relation, side), post-fill COMPLETE gap, price/aggressiveness, size, timing/cadence, inventory trajectory, maker/taker, off-distribution rate; evidence = held-out historical + realtime shadow + bounded live; declared owner overrides (taker disabled, size cap, residual cap) are reported, never excused.
+* Label: **L5 replication in validation** until the gate is met, whatever the P&L; **L5 operational** once met; only then Phase 2 profitability adaptations, each measured against the L5 baseline.
+* Every report starts with **L5 fidelity status → execution status → accounting status → only then P&L.**
+
 ## 1. Core objective
 
 Reverse-engineer L5's sequential decision process and reproduce it only where executable conditions support positive realized expectancy.

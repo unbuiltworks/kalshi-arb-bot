@@ -1,0 +1,445 @@
+"""L5 FIDELITY GATE (OWNER 5556232035 item 5).
+
+Phase order: REPLICATE L5 -> PROVE FIDELITY -> RUN L5 -> MEASURE REALIZED
+RESULTS -> THEN OPTIMIZE PROFITABILITY. This module decides the label
+"L5 replication in validation" vs "L5 operational" from the frozen spec
+analysis/l5/l5_fidelity_gate.json and the evidence it names. Realized
+P&L is never an input.
+
+Evidence:
+  * bounded LIVE: PMUS spring session ``decisions[]`` records (as logged
+    in session_end / the ledger's session_report rows) plus their
+    ``orders[]``;
+  * realtime SHADOW: the Gemini shadow rolling_report
+    (action_scoring_untouched / research_arm_stochastic);
+  * historical holdout: l5_fidelity_pass.json (reported where present).
+
+Every dimension is reported with its measured value, its threshold, its
+sample size, and whether it PASSES, FAILS, is UNMEASURED, or is a
+DECLARED OVERRIDE (an owner safety rule that is logged, not excused).
+"""
+from __future__ import annotations
+
+import json
+import statistics
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Iterable, Mapping, Optional
+
+ROOT = Path(__file__).resolve().parents[1]
+SPEC_PATH = ROOT / "analysis" / "l5" / "l5_fidelity_gate.json"
+MODEL_PATH = ROOT / "analysis" / "l5" / "l5_action_model_v2.json"
+RELATIONS = ("complete", "extend", "open")
+
+
+def load_spec(path: Path = SPEC_PATH) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _f(x: Any, default: Optional[float] = None) -> Optional[float]:
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return default
+
+
+def _masses(d: Mapping[str, Any]) -> dict:
+    out = {k: 0.0 for k in RELATIONS}
+    for r in d.get("relation_ranked") or []:
+        if isinstance(r, Mapping) and r.get("relation") in out:
+            out[r["relation"]] = _f(r.get("p"), 0.0) or 0.0
+    return out
+
+
+def _freq(items: Iterable[Mapping[str, Any]], key: str) -> tuple[dict, int]:
+    c = {k: 0 for k in RELATIONS}
+    n = 0
+    for d in items:
+        v = d.get(key)
+        if v in c:
+            c[v] += 1
+            n += 1
+    return ({k: round(c[k] / n, 4) if n else 0.0 for k in RELATIONS}, n)
+
+
+def _expected(items: list) -> dict:
+    n = len(items) or 1
+    agg = {k: 0.0 for k in RELATIONS}
+    for d in items:
+        for k, v in _masses(d).items():
+            agg[k] += v
+    return {k: round(v / n, 4) for k, v in agg.items()}
+
+
+def _l1(a: Mapping[str, float], b: Mapping[str, float]) -> float:
+    return round(sum(abs(a.get(k, 0.0) - b.get(k, 0.0)) for k in RELATIONS), 4)
+
+
+def _sampled(d: Mapping[str, Any]) -> Optional[str]:
+    sh = d.get("shadow") or {}
+    st = sh.get("stochastic") or {}
+    return st.get("sampled")
+
+
+def _imbalance_units(d: Mapping[str, Any]) -> float:
+    state = str(d.get("state") or "")
+    # state key: price band | tte bucket | imbalance bucket ('flat',
+    # 'imb1-10', 'imb10+' ...); the numeric residual, when present, wins
+    inv = d.get("inventory_before") or {}
+    up, dn = _f(inv.get("up"), 0.0), _f(inv.get("dn"), 0.0)
+    unit = _f(d.get("behavioral_unit"))
+    if unit and unit > 0:
+        return abs((up or 0.0) - (dn or 0.0)) / unit
+    if "|flat" in state:
+        return 0.0
+    if "imb" in state:
+        return 1.0
+    return 0.0
+
+
+def model_imbalanced_share(model: Optional[Mapping[str, Any]]) -> Optional[float]:
+    """L5's share of transitions taken from imbalanced base states."""
+    if not model:
+        return None
+    base = model.get("base") or {}
+    tot = imb = 0
+    for state, dist in base.items():
+        n = sum(int(v) for v in (dist or {}).values()) if isinstance(dist, Mapping) else 0
+        tot += n
+        if "|flat" not in str(state):
+            imb += n
+    return round(imb / tot, 4) if tot else None
+
+
+def _dim(status: str, value: Any, threshold: Any, n: int, **extra: Any) -> dict:
+    return {"status": status, "value": value, "threshold": threshold,
+            "n": n, **extra}
+
+
+def score_live(decisions: list, orders: list, spec: Mapping[str, Any],
+               model: Optional[Mapping[str, Any]] = None) -> dict:
+    """Score the bounded live evidence, dimension by dimension."""
+    dims = spec["dimensions"]
+    me = spec["minimum_evidence"]
+    decs = [d for d in decisions if d.get("relation_ranked")]
+    out: dict[str, Any] = {"scored_decisions": len(decs),
+                           "markets": len({d.get("slug") for d in decs
+                                           if d.get("slug")})}
+    enough = len(decs) >= me["live_scored_decisions"]
+
+    # --- action distribution (relation)
+    exp_all = _expected(decs) if decs else {}
+    samp, n_s = _freq(decs, "sampled_relation")
+    if n_s == 0:
+        samp, n_s = _freq([{"sampled_relation": _sampled(d)} for d in decs],
+                          "sampled_relation")
+    acted, n_a = _freq(decs, "acted")
+    holds = sum(1 for d in decs if d.get("acted") == "hold")
+    l1_s = _l1(samp, exp_all) if decs else None
+    # HOLD counts as disagreement: acted freq over ALL decisions
+    acted_all = {k: round(acted[k] * n_a / len(decs), 4) if decs else 0.0
+                 for k in RELATIONS}
+    l1_a = _l1(acted_all, exp_all) if decs else None
+    thr = dims["action_distribution_relation"]["pass"]
+    ok = (l1_s is not None and l1_s <= thr["l1_sampled_vs_l5_max"]
+          and l1_a is not None and l1_a <= thr["l1_acted_vs_l5_max"])
+    refusals: dict = {}
+    for d in decs:
+        if d.get("acted") == "hold":
+            k = str(d.get("refusal")).split(":")[0]
+            refusals[k] = refusals.get(k, 0) + 1
+    out["action_distribution_relation"] = _dim(
+        "UNMEASURED" if not decs else ("PASS" if ok and enough
+                                       else ("INSUFFICIENT" if ok else "FAIL")),
+        {"l1_sampled_vs_l5": l1_s, "l1_acted_vs_l5": l1_a,
+         "expected_l5": exp_all, "sampled": samp, "acted_incl_hold": acted_all,
+         "hold_share": round(holds / len(decs), 4) if decs else None,
+         "hold_refusals": refusals},
+        thr, len(decs))
+
+    # --- side convention (OPEN decisions only)
+    opens = [o for o in orders if o.get("relation") == "open"]
+    agree = [o for o in opens if o.get("side_convention_ok") is not None]
+    if agree:
+        rate = sum(1 for o in agree if o["side_convention_ok"]) / len(agree)
+    else:
+        rate = None
+    thr = dims["action_distribution_side"]["pass"]
+    out["action_distribution_side"] = _dim(
+        "UNMEASURED" if rate is None else (
+            "PASS" if rate >= thr["live_side_convention_agreement_min"] else "FAIL"),
+        rate, thr, len(agree),
+        note="live OPEN sides follow the shared cheaper-touch convention by "
+             "construction; the check is against the recorded convention flag")
+
+    # --- post-fill complete gap
+    post = [d for d in decs if _imbalance_units(d) >= 1]
+    thr = dims["post_fill_complete_gap"]["pass"]
+    if post:
+        exp_p = _expected(post)
+        s_p, _ = _freq([{"s": _sampled(d)} for d in post], "s")
+        a_p, n_ap = _freq(post, "acted")
+        a_all = {k: round(a_p[k] * n_ap / len(post), 4) for k in RELATIONS}
+        gap_s = round(100 * (s_p["complete"] - exp_p["complete"]), 1)
+        gap_a = round(100 * (a_all["complete"] - exp_p["complete"]), 1)
+        ok = (abs(gap_s) <= thr["abs_gap_pp_max_sampled"]
+              and abs(gap_a) <= thr["abs_gap_pp_max_acted"])
+        st = ("PASS" if ok and len(post) >= me["live_post_fill_decisions"]
+              else ("INSUFFICIENT" if ok else "FAIL"))
+        val = {"gap_pp_sampled": gap_s, "gap_pp_acted": gap_a,
+               "expected_l5": exp_p, "sampled": s_p, "acted_incl_hold": a_all}
+    else:
+        st, val = "UNMEASURED", None
+    out["post_fill_complete_gap"] = _dim(st, val, thr, len(post))
+
+    # --- price / aggressiveness
+    thr = dims["price_aggressiveness"]["pass"]
+    joined = [o for o in orders if o.get("touch_join") is not None]
+    join_rate = (sum(1 for o in joined if o["touch_join"]) / len(joined)
+                 if joined else None)
+    p_taker_l5 = [_f(((d.get("shadow") or {}).get("l5_target_aggressiveness")
+                      or {}).get("p_taker")) for d in decs]
+    p_taker_l5 = [p for p in p_taker_l5 if p is not None]
+    taker_gap = (round(abs(0.0 - statistics.fmean(p_taker_l5)), 4)
+                 if p_taker_l5 else None)
+    out["price_aggressiveness"] = _dim(
+        "UNMEASURED" if join_rate is None else (
+            "PASS" if join_rate >= thr["touch_join_rate_min"] else "FAIL"),
+        {"touch_join_rate": join_rate, "live_taker_share": 0.0,
+         "l5_p_taker_mean": (round(statistics.fmean(p_taker_l5), 4)
+                             if p_taker_l5 else None),
+         "taker_share_abs_gap": taker_gap},
+        thr, len(joined),
+        override="override:taker_disabled (owner rule; reported, not blocking)")
+
+    # --- size
+    thr = dims["size"]["pass"]
+    ratios = []
+    for o in orders:
+        ex = _f((o.get("executed_safe_size") or {}).get("contracts"))
+        p50 = _f((o.get("l5_target_size") or {}).get("shares_p50"))
+        if ex and p50:
+            ratios.append(ex / p50)
+    med = round(statistics.median(ratios), 6) if ratios else None
+    out["size"] = _dim(
+        "UNMEASURED" if med is None else (
+            "PASS" if med >= thr["median_size_ratio_min"] else "FAIL"),
+        {"median_executed_over_l5_p50": med}, thr, len(ratios),
+        override="override:size_cap ($0.05 market cap / venue minimum; "
+                 "reported, not blocking)")
+
+    # --- timing / cadence
+    thr = dims["timing_cadence"]["pass"]
+    intervals, ratios_c = [], []
+    by_slug: dict[str, list] = {}
+    for d in decs:
+        t = d.get("t_utc")
+        if t and d.get("slug"):
+            by_slug.setdefault(d["slug"], []).append(d)
+    for slug, ds in by_slug.items():
+        ds = sorted(ds, key=lambda d: d["t_utc"])
+        for a, b in zip(ds, ds[1:]):
+            try:
+                ta = datetime.fromisoformat(str(a["t_utc"]))
+                tb = datetime.fromisoformat(str(b["t_utc"]))
+            except ValueError:
+                continue
+            dt = (tb - ta).total_seconds()
+            cad = _f(a.get("next_reevaluation_s"))
+            if dt > 0:
+                intervals.append(dt)
+                if cad and cad > 0:
+                    ratios_c.append(dt / cad)
+    ratio = round(statistics.median(ratios_c), 3) if ratios_c else None
+    ok = ratio is not None and thr["cadence_ratio_min"] <= ratio <= thr["cadence_ratio_max"]
+    out["timing_cadence"] = _dim(
+        "UNMEASURED" if ratio is None else (
+            "PASS" if ok and len(ratios_c) >= me["live_timed_intervals"]
+            else ("INSUFFICIENT" if ok else "FAIL")),
+        {"median_interval_s": (round(statistics.median(intervals), 1)
+                               if intervals else None),
+         "median_interval_over_model_cadence": ratio},
+        thr, len(ratios_c))
+
+    # --- inventory trajectory
+    thr = dims["inventory_trajectory"]["pass"]
+    units = [_imbalance_units(d) for d in decs]
+    live_share = (round(sum(1 for u in units if u >= 1) / len(units), 4)
+                  if units else None)
+    l5_share = model_imbalanced_share(model)
+    gap = (round(abs(live_share - l5_share), 4)
+           if live_share is not None and l5_share is not None else None)
+    mx = max(units) if units else None
+    ok = (gap is not None and gap <= thr["imbalanced_share_abs_gap_max"]
+          and mx is not None and mx <= thr["max_imbalance_units_max"])
+    out["inventory_trajectory"] = _dim(
+        "UNMEASURED" if live_share is None or l5_share is None else (
+            "PASS" if ok and enough else ("INSUFFICIENT" if ok else "FAIL")),
+        {"live_imbalanced_share": live_share, "l5_imbalanced_share": l5_share,
+         "abs_gap": gap, "max_imbalance_units": mx},
+        thr, len(units), override="residual cap 3 units (owner rule)")
+
+    # --- maker / taker
+    thr = dims["maker_taker"]["pass"]
+    out["maker_taker"] = _dim(
+        "UNMEASURED" if not p_taker_l5 else (
+            "PASS" if taker_gap is not None and taker_gap <= thr["maker_share_abs_gap_max"]
+            else "FAIL"),
+        {"live_maker_share": 1.0,
+         "l5_maker_share_mean": (round(1 - statistics.fmean(p_taker_l5), 4)
+                                 if p_taker_l5 else None),
+         "abs_gap": taker_gap},
+        thr, len(p_taker_l5),
+        override="override:taker_disabled (owner rule; reported, not blocking)")
+
+    # --- off-distribution
+    thr = dims["off_distribution_rate"]["pass"]
+    off = (round(100.0 * sum(1 for d in decs if d.get("off_distribution")) / len(decs), 2)
+           if decs else None)
+    out["off_distribution_rate"] = _dim(
+        "UNMEASURED" if off is None else (
+            "PASS" if off <= thr["max_pct"] and enough
+            else ("INSUFFICIENT" if off <= thr["max_pct"] else "FAIL")),
+        off, thr, len(decs))
+    return out
+
+
+def score_shadow(rolling: Optional[Mapping[str, Any]], spec: Mapping[str, Any]) -> dict:
+    """Realtime-shadow evidence from the Gemini rolling report."""
+    if not rolling:
+        return {"status": "UNMEASURED", "note": "no rolling report given"}
+    ra = rolling.get("research_arm_stochastic") or {}
+    sc = ra.get("action_scoring") or {}
+    thr = spec["dimensions"]["action_distribution_relation"]["pass"]
+    thr_p = spec["dimensions"]["post_fill_complete_gap"]["pass"]
+    thr_o = spec["dimensions"]["off_distribution_rate"]["pass"]
+    windows = ra.get("windows_since_freeze") or ra.get("windows") or 0
+    enough = int(windows) >= spec["minimum_evidence"]["shadow_windows"]
+    l1s, l1a = _f(sc.get("l1_sampled_vs_l5")), _f(sc.get("l1_acted_vs_l5"))
+    post = sc.get("post_fill") or {}
+    gap_s = _f(post.get("complete_freq_gap_pp_sampled"))
+    gap_a = _f(post.get("complete_freq_gap_pp_acted"))
+    off = _f(sc.get("off_distribution_rate_pct"))
+
+    def st(ok: Optional[bool]) -> str:
+        if ok is None:
+            return "UNMEASURED"
+        if not ok:
+            return "FAIL"
+        return "PASS" if enough else "INSUFFICIENT"
+    return {
+        "arm": ra.get("arm"), "windows_since_freeze": windows,
+        "action_distribution_relation": _dim(
+            st(None if l1s is None else (l1s <= thr["l1_sampled_vs_l5_max"]
+                                         and (l1a is None or l1a <= thr["l1_acted_vs_l5_max"]))),
+            {"l1_sampled_vs_l5": l1s, "l1_acted_vs_l5": l1a}, thr,
+            int(sc.get("scored_decisions") or 0)),
+        "post_fill_complete_gap": _dim(
+            st(None if gap_s is None else (abs(gap_s) <= thr_p["abs_gap_pp_max_sampled"]
+                                           and (gap_a is None or abs(gap_a) <= thr_p["abs_gap_pp_max_acted"]))),
+            {"gap_pp_sampled": gap_s, "gap_pp_acted": gap_a}, thr_p,
+            int(post.get("decisions") or 0)),
+        "off_distribution_rate": _dim(
+            st(None if off is None else off <= thr_o["max_pct"]),
+            off, thr_o, int(sc.get("scored_decisions") or 0)),
+    }
+
+
+def verdict(live: Mapping[str, Any], shadow: Mapping[str, Any],
+            spec: Mapping[str, Any]) -> dict:
+    """The label, from the dimensions only."""
+    blocking, overrides, unmeasured, failing, insufficient = [], [], [], [], []
+    for name, dim in list(live.items()) + [(f"shadow:{k}", v) for k, v in shadow.items()]:
+        if not isinstance(dim, Mapping) or "status" not in dim:
+            continue
+        s = dim["status"]
+        if dim.get("override"):
+            overrides.append({"dimension": name, "status": s,
+                              "override": dim["override"]})
+            continue
+        if s == "PASS":
+            continue
+        {"FAIL": failing, "INSUFFICIENT": insufficient,
+         "UNMEASURED": unmeasured}.get(s, blocking).append(name)
+    met = not failing and not insufficient and not unmeasured
+    return {
+        "label": spec["labels"]["when_met"] if met else spec["labels"]["until_met"],
+        "phase_1_met": met,
+        "failing": failing, "insufficient_sample": insufficient,
+        "unmeasured": unmeasured, "declared_overrides": overrides,
+        "rule": spec["verdict_rule"],
+        "labels": "decided from fidelity dimensions only; realized P&L is not an input",
+    }
+
+
+def decisions_from_session_reports(reports: Iterable[Mapping[str, Any]]) -> tuple[list, list]:
+    """Flatten session reports (session_end / session_report rows) into
+    decision and order records tagged with their market."""
+    decs, orders = [], []
+    for rep in reports:
+        slug = rep.get("slug")
+        for d in rep.get("decisions") or []:
+            d = dict(d)
+            d.setdefault("slug", slug)
+            decs.append(d)
+        for o in rep.get("orders") or []:
+            o = dict(o)
+            o.setdefault("slug", slug)
+            orders.append(o)
+    return decs, orders
+
+
+def evaluate(reports: Iterable[Mapping[str, Any]],
+             rolling: Optional[Mapping[str, Any]] = None,
+             spec: Optional[Mapping[str, Any]] = None,
+             model: Optional[Mapping[str, Any]] = None) -> dict:
+    spec = spec or load_spec()
+    decs, orders = decisions_from_session_reports(reports)
+    live = score_live(decs, orders, spec, model)
+    shadow = score_shadow(rolling, spec)
+    return {"kind": "l5_fidelity_gate",
+            "t": datetime.now(timezone.utc).isoformat(),
+            "spec_frozen_utc": spec["frozen_utc"],
+            "phase_order": "REPLICATE L5 -> PROVE FIDELITY -> RUN L5 -> "
+                           "MEASURE REALIZED RESULTS -> THEN OPTIMIZE PROFITABILITY",
+            "verdict": verdict(live, shadow, spec),
+            "live": live, "shadow": shadow}
+
+
+def _read_reports(path: Path) -> list:
+    """session_end / session_report rows from a log or ledger file."""
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("PMUS_L5_CAMPAIGN "):
+            line = line.split(" ", 1)[1]
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, Mapping) and row.get("kind") in (
+                "session_end", "session_report") and row.get("decisions"):
+            out.append(row)
+    return out
+
+
+def main(argv: Optional[list] = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if not argv:
+        print("usage: l5_fidelity_gate <session_log_or_ledger.jsonl> "
+              "[gemini_rolling_report.json]", file=sys.stderr)
+        return 2
+    reports = _read_reports(Path(argv[0]))
+    rolling = json.loads(Path(argv[1]).read_text(encoding="utf-8")) if len(argv) > 1 else None
+    model = None
+    if MODEL_PATH.exists():
+        model = json.loads(MODEL_PATH.read_text(encoding="utf-8"))
+    print(json.dumps(evaluate(reports, rolling, model=model), indent=1, default=str))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

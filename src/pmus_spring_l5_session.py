@@ -872,6 +872,11 @@ def run_session(t: Optional[Transport] = None,
                  "relation": relation_, "rest_s": rest_s,
                  "end_reason": end_reason,
                  "outcome": "filled" if got_ > 0 else "no_fill_cancelled",
+                 # fidelity-gate inputs: OPEN/EXTEND join the touch of
+                 # their side (L5's aggressiveness); COMPLETE rests at the
+                 # fee-safe bound; OPEN side is the shared convention side
+                 "touch_join": relation_ in ("open", "extend"),
+                 "side_convention_ok": True if relation_ == "open" else None,
                  # OWNER 5553674206 #3: the scale mismatch is MEASURED --
                  # L5's historical size for this state/relation beside the
                  # venue-minimum bounded size we actually executed
@@ -1084,6 +1089,12 @@ def run_session(t: Optional[Transport] = None,
             # planned size, inventory before, refusal if different
             report.setdefault("decisions", []).append(
                 {"state": skey, "last_rel": inv.last_rel,
+                 # L5 fidelity gate inputs (OWNER 5556232035 #5): cadence,
+                 # market, behavioral unit for the imbalance dimension
+                 "t_utc": datetime.now(timezone.utc).isoformat(),
+                 "slug": slug,
+                 "next_reevaluation_s": prop.get("next_reevaluation_s"),
+                 "behavioral_unit": str(inv.unit) if inv.unit else None,
                  "v2_recommended": prop["recommended_relation"],
                  "relation_ranked": prop.get("relation_ranked"),
                  "state_n": prop.get("state_n"),

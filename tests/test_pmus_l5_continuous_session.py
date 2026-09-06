@@ -120,10 +120,11 @@ def test_in_distribution_outranks_deeper_off_distribution():
     assert r["admitted"][1]["off_distribution"] is True
 
 
-def test_pair_prospects_outrank_first_leg_depth(monkeypatch):
-    """OWNER 5556038561 #6: same known state; the market with two-sided
-    prints, a sized opposite side and fee headroom ranks above the one
-    with only a deep bid, and every component is reported."""
+def test_pair_score_is_logged_but_never_orders_candidates(monkeypatch):
+    """OWNER 5556232035 #3 (anti-drift): pair prospects (5556038561 #6)
+    are REPORTED per row; the order stays L5-state fit (model evidence,
+    L5 buy mass, feed, depth). Same known state here -> depth decides,
+    not the higher pair_score."""
     now = 1005.0
     st = _status([
         _row("deepbid", touch="9000", trades_1h=10,
@@ -132,16 +133,15 @@ def test_pair_prospects_outrank_first_leg_depth(monkeypatch):
              bid_qty="300", ask_qty="250", bid="0.49", ask="0.51"),
     ])
     r = cont.rank_candidates(st, now, _model())
-    assert [x["slug"] for x in r["admitted"]] == ["pairable", "deepbid"], r
-    top, second = r["admitted"]
-    assert top["pair_score"] > second["pair_score"]
-    c = top["components"]
+    assert [x["slug"] for x in r["admitted"]] == ["deepbid", "pairable"], r
+    deep, pair = r["admitted"]
+    assert pair["pair_score"] > deep["pair_score"]          # logged only
+    c = pair["components"]
     assert c["two_sided_flow"] == 1.0 and c["flow"] == 0.8
     assert c["complement_availability"] == 1.0
-    assert top["pair_at_touch"] == 0.98 and c["fee_headroom"] == 1.0
-    assert second["components"]["depth"] < c["depth"]
-    assert second["components"]["fee_headroom"] < 1.0      # 0.50/0.51
-    assert 0 <= top["pair_score"] <= 1
+    assert pair["pair_at_touch"] == 0.98 and c["fee_headroom"] == 1.0
+    assert deep["components"]["fee_headroom"] < 1.0        # 0.50/0.51
+    assert 0 <= pair["pair_score"] <= 1
 
 
 def test_cooldown_excludes_a_market_that_just_refused():

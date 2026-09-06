@@ -237,13 +237,15 @@ def rank_candidates(status: Mapping[str, Any], now: float,
         # here (a clean feed ranks above a gappy one), never a veto
         g = x.get("collector_gaps")
         return 1 if g is None else int(bool(g))
-    # OWNER 5556038561 #6: a known state first, a clean feed first, then
-    # the measured pair prospects (two-sided flow, complement
-    # availability, fee headroom, depth, duration, model evidence); the
-    # old first-leg keys only break ties
-    admitted.sort(key=lambda x: (x["off_distribution"], _gap(x),
-                                 -x["pair_score"], -x["state_n"],
-                                 -x["p_buy"], -_touch(x), x["slug"]))
+    # OWNER 5556232035 #3 (anti-drift): ranking is L5-STATE FIT -- the
+    # market whose current state the reconstructed L5 policy knows best
+    # and would act in (model evidence, then L5's own buy mass), never a
+    # completed-pair / profit score. pair_score (OWNER 5556038561 #6) is
+    # LOGGED per row as a diagnostic only and does not order candidates
+    # until Phase 2 (profitability adaptations measured against the L5
+    # baseline).
+    admitted.sort(key=lambda x: (x["off_distribution"], -x["state_n"],
+                                 -x["p_buy"], _gap(x), -_touch(x), x["slug"]))
     # OWNER 5552475548 item 4: prioritise live CFB when its books are
     # active, unless another market has MATERIALLY better L5-state fit and
     # executable flow (twice the model evidence AND at least the depth).
