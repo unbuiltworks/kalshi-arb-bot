@@ -135,7 +135,9 @@ def test_restart_restores_inventory_and_never_double_counts(tmp_path):
     with (tmp_path / ms.DECISIONS_FILE).open("a") as f:
         f.write((tmp_path / ms.DECISIONS_FILE).read_text().splitlines()[0] + "\n")
     sh2 = ms.MultiShadow(tmp_path)
-    assert sh2.restore == {"decisions": 3, "duplicates_dropped": 1, "fills": 1, "markets": 2}
+    assert sh2.restore == {"decisions": 3, "duplicates_dropped": 1, "fills": 1,
+                           "superseded_unchanged_state": 0,
+                           "independence_rule": ms.INDEPENDENCE_RULE, "markets": 2}
     m = sh2.markets["mkt-a"]
     assert m.inv.snapshot() == sh.markets["mkt-a"].inv.snapshot()
     assert m.inv.up_shares_behavioral == 10.0 and m.idx == 2
@@ -267,3 +269,47 @@ def test_unchanged_observations_are_not_new_evidence(tmp_path):
     assert sh.markets["mkt-a"].idx == 2
     sh.tick(st, NOW + 22.0 + ms.REEVAL_MAX_S)          # rest unit elapsed
     assert sh.markets["mkt-a"].idx == 3
+
+
+def test_restore_replays_pre_rule_rows_through_the_independence_rule(tmp_path):
+    """Rows persisted by the 2 s evaluator before INDEPENDENCE_RULE 2 (an
+    unchanged book re-decided every 2 s) are kept on disk but never
+    counted as separate evidence: restore applies the same signature rule
+    the live path applies, so a restart cannot inflate the shadow."""
+    import json
+    sh = ms.MultiShadow(tmp_path)
+    sh.tick(_state(), NOW)
+    path = tmp_path / ms.DECISIONS_FILE
+    rows = [json.loads(x) for x in path.read_text().splitlines()]
+    base = next(r for r in rows if r["slug"] == "mkt-a")
+    # 4 pre-rule replays of the same observation, 2 s apart, no fill
+    with path.open("a") as f:
+        for i in range(1, 5):
+            r = dict(base)
+            r.pop("independence", None)
+            r["decision_id"] = f"prerule{i:02d}"
+            r["idx"] = base["idx"] + i
+            r["t"] = base["t"] + 2.0 * i
+            f.write(json.dumps(r) + "\n")
+        # a genuine change: the touch moved -> new evidence
+        r = dict(base); r.pop("independence", None)
+        r["decision_id"] = "moved"; r["idx"] = base["idx"] + 5; r["t"] = base["t"] + 10.0
+        r["book"] = {**base["book"], "yes_bid": "0.45"}
+        f.write(json.dumps(r) + "\n")
+        # the same observation again after the rest unit -> new evidence
+        r = dict(base); r.pop("independence", None)
+        r["decision_id"] = "rested"; r["idx"] = base["idx"] + 6
+        r["t"] = base["t"] + 10.0 + ms.REEVAL_MAX_S
+        r["book"] = {**base["book"], "yes_bid": "0.45"}
+        f.write(json.dumps(r) + "\n")
+    sh2 = ms.MultiShadow(tmp_path)
+    assert sh2.restore["superseded_unchanged_state"] == 4
+    assert sh2.restore["decisions"] == len(rows) + 2
+    assert sh2.funnel["losses"]["restore_superseded_unchanged_state"] == 4
+    assert sh2.markets["mkt-a"].idx == base["idx"] + 7        # ids never reused
+    assert "prerule01" in sh2.seen_ids                        # never re-appended
+    rep = sh2.report(NOW + 60)
+    assert rep["restore"]["independence_rule"] == ms.INDEPENDENCE_RULE
+    assert rep["unique_decisions"] == len(rows) + 2
+    # a row written under the rule carries its signature
+    assert base["independence"]["rule"] == ms.INDEPENDENCE_RULE and len(base["independence"]["sig"]) == 5

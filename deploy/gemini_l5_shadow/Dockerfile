@@ -8,6 +8,9 @@ WORKDIR /app
 COPY src/gemini_l5_shadow_service.py src/gemini_l5_shadow_service.py
 COPY src/gemini_l5_shadow_v2.py src/gemini_l5_shadow_v2.py
 COPY src/l5_venue_adapter.py src/l5_venue_adapter.py
+# venue-neutral scoring (40b96a91 moved action_scoring here; the image
+# crash-looped 12:36-13:5xZ on ModuleNotFoundError until this COPY)
+COPY src/l5_shadow_scoring.py src/l5_shadow_scoring.py
 COPY src/gemini_l5_regime_study.py src/gemini_l5_regime_study.py
 COPY src/pmus_l5_persistence_v2.py src/pmus_l5_persistence_v2.py
 COPY src/pmus_l5_fidelity_live.py src/pmus_l5_fidelity_live.py

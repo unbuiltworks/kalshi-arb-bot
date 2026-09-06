@@ -52,6 +52,29 @@ DECISIONS_FILE = "l5_shadow_decisions.jsonl"
 REPORT_FILE = "l5_shadow_report.json"
 REEVAL_MIN_S = 2.0          # frozen cadence behavioral unit (fill-arrival gap)
 REEVAL_MAX_S = 30.0
+# INDEPENDENCE rule version persisted on every decision row: 2 = a
+# market is re-decided only when (touch, state, last relation, inventory)
+# changed or REEVAL_MAX_S elapsed. Rows written before the rule (b73d6dd1,
+# 12:37-14:xxZ, one evaluation every 2 s on an unchanged book) are kept on
+# disk but replayed through the SAME rule at restore, so the reported
+# evidence is never inflated by repeated unchanged observations.
+INDEPENDENCE_RULE = 2
+
+
+def _row_sig(row: Mapping[str, Any]) -> Optional[tuple]:
+    """The independence signature of a persisted decision row: the
+    persisted one (rule >= 2) or, for pre-rule rows, the same tuple
+    rebuilt from the row's own book / state / lookup / inventory."""
+    ind = row.get("independence") or {}
+    if isinstance(ind.get("sig"), list) and len(ind["sig"]) == 5:
+        return tuple(str(x) for x in ind["sig"])
+    book, lk, inv = row.get("book") or {}, row.get("lookup") or {}, row.get("inventory_before") or {}
+    try:
+        total = D(str(inv.get("up") or "0")) + D(str(inv.get("dn") or "0"))
+        return (str(book.get("yes_bid")), str(book.get("yes_ask")), str(row.get("state")),
+                str(lk.get("last_rel")), str(total))
+    except Exception:                                 # noqa: BLE001
+        return None
 DEFAULT_SHARES = 10.0       # L5 p50 size when the artifact has no row
 FLOW_WINDOW_S = 3600.0
 # OWNER 5533476555 observation band -- EXECUTION eligibility only; the
@@ -159,9 +182,10 @@ class MultiShadow:
 
     def _restore(self) -> dict:
         path = self._path()
-        n, dup, fills = 0, 0, 0
+        n, dup, fills, superseded = 0, 0, 0, 0
         if not path.exists():
-            return {"decisions": 0, "duplicates_dropped": 0, "fills": 0}
+            return {"decisions": 0, "duplicates_dropped": 0, "fills": 0,
+                    "superseded_unchanged_state": 0}
         for line in path.read_text(encoding="utf-8").splitlines():
             try:
                 row = json.loads(line)
@@ -176,12 +200,24 @@ class MultiShadow:
                     dup += 1
                     continue
                 self.seen_ids.add(did)
-                m.decisions.append(self._compact(row))
                 m.idx = max(m.idx, int(row.get("idx") or 0) + 1)
+                sig = _row_sig(row)
+                try:
+                    t_row = float(row.get("t") or 0)
+                except (TypeError, ValueError):
+                    t_row = 0.0
+                # the independence rule, applied to what is on disk: an
+                # unchanged observation inside the rest unit is NOT a new
+                # decision, whichever code version wrote it
+                if m.prev and sig is not None and m.prev.get("sig") == sig and \
+                        t_row - float(m.prev.get("t") or 0) < REEVAL_MAX_S:
+                    superseded += 1
+                    continue
+                m.decisions.append(self._compact(row))
                 m.entry_t = m.entry_t or row.get("t")
                 m.prev = {"decision_id": did, "t": row.get("t"),
                           "mid": (row.get("book") or {}).get("mid"),
-                          "sampled": row.get("sampled")}
+                          "sampled": row.get("sampled"), "sig": sig}
                 n += 1
             elif row.get("kind") == "pmus_shadow_fill":
                 try:
@@ -198,7 +234,11 @@ class MultiShadow:
                     continue
         self.funnel["decisions"] = n
         self.funnel["fills"] = fills
+        if superseded:
+            self.funnel["losses"]["restore_superseded_unchanged_state"] = superseded
         return {"decisions": n, "duplicates_dropped": dup, "fills": fills,
+                "superseded_unchanged_state": superseded,
+                "independence_rule": INDEPENDENCE_RULE,
                 "markets": len(self.markets)}
 
     @staticmethod
@@ -315,7 +355,9 @@ class MultiShadow:
         # decision is re-decided only after the rest unit (REEVAL_MAX_S,
         # the live session's own re-decision on an unchanged book); a
         # book move or a fill re-opens the decision immediately.
-        sig = (str(bid), str(ask), lk["state"], m.inv.last_rel, str(m.inv.total))
+        # (same tuple _row_sig rebuilds from a persisted row: lookup last_rel,
+        # inventory total as up+dn)
+        sig = (str(bid), str(ask), str(lk["state"]), str(lk.get("last_rel")), str(m.inv.total))
         if m.prev and m.prev.get("sig") == sig and \
                 now - float(m.prev.get("t") or 0) < REEVAL_MAX_S:
             self._loss("unchanged_state_within_rest")
@@ -429,6 +471,7 @@ class MultiShadow:
                "next_reevaluation_s": max(REEVAL_MIN_S, min(REEVAL_MAX_S, float(
                    prop.get("next_reevaluation_s") or REEVAL_MIN_S))),
                "evolution_from_prev": evolution,
+               "independence": {"rule": INDEPENDENCE_RULE, "sig": list(sig)},
                "model_sha": self.model_sha, "code_sha": CODE_SHA,
                "lookup_version": LOOKUP_VERSION, "labels": LABELS}
         self._append(rec)

@@ -1107,9 +1107,19 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
                                   "evidence, never an L5 fidelity failure"}
     shadow = score_shadow(rolling, spec)
     classes: dict = {}
+    unclassified_samples: list = []
     for d in clean:
         c = d.get("divergence_class") or d.get("divergence") or "unclassified"
         classes[c] = classes.get(c, 0) + 1
+        if "unclassified" in c and len(unclassified_samples) < 5:
+            # name the persisted divergence so the class can be assigned
+            # from the ledger row, never guessed
+            unclassified_samples.append({"divergence": d.get("divergence"),
+                                         "refusal": d.get("refusal"),
+                                         "sampled": (d.get("shadow") or {}).get(
+                                             "stochastic", {}).get("sampled"),
+                                         "acted": d.get("acted"),
+                                         "decision_id": d.get("decision_id")})
     classes_legacy: dict = {}
     for d in legacy:
         c = d.get("divergence_class") or d.get("divergence") or "unclassified"
@@ -1129,6 +1139,7 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
             "evidence_progress": progress,
             "largest_mismatch": largest_mismatch(live, shadow),
             "divergence_classes": classes,
+            "divergence_unclassified_samples": unclassified_samples,
             "divergence_classes_legacy": classes_legacy,
             "counterfactual_2s": counterfactual,
             "complete_price_counterfactual": complete_cf,
