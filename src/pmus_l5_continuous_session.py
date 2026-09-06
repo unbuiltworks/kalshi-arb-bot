@@ -1244,7 +1244,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                               # counted too, so the admitted -> session
                               # drop is never anonymous
                               "not_started": {},
-                              "selection_skipped_position_held": 0}
+                              "selection_skipped_position_held": 0,
+                              "selection_skipped_rung_reached": 0}
     report["funnel"] = funnel
 
     def _not_started(reason: str) -> None:
@@ -1386,6 +1387,16 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                  realized_usd=audit.get("realized_usd"),
                                  resolution=audit.get("resolution"))
                             report["realized_pnl"] = _sum_realized(report)
+                    # LIVE 12:31Z: the ATP residual settled on THIS path
+                    # (periodic audit, market already out of positions)
+                    # and the rung gate was only consulted on the
+                    # market-gone path, so the campaign went straight to
+                    # selection and opened a 4th market on a 3-market rung.
+                    # The advance gate is checked after every settlement.
+                    gate = _rung_gate()
+                    if gate:
+                        status = gate
+                        break
                 if held:
                     if held not in filled_markets:
                         filled_markets.add(held)
@@ -1458,6 +1469,26 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     woke = await_state_change(t, held, clock, sleep)
                     _log("resume_wait", slug=held, **woke)
                     continue
+            if len(filled_markets) >= rung_markets:
+                # the rung's market allowance is spent (fills on
+                # markets_allowed distinct markets this campaign, restored
+                # across restarts): NO new market is ever selected; the
+                # filled markets are continued by the resume/settlement
+                # paths until the advance gate fires. LIVE 12:31Z: without
+                # this check a 4th market opened after the 3rd settled.
+                funnel["selection_skipped_rung_reached"] += 1
+                if status != "CAMPAIGN_WAITING:RUNG_MARKETS_REACHED":
+                    _log("rung_markets_reached",
+                         filled_markets=sorted(filled_markets),
+                         markets_allowed=rung_markets,
+                         unsettled=sorted(s for s in filled_markets
+                                          if s not in settled_here),
+                         waiting_for="settlement of every filled market -> "
+                                     "CAMPAIGN_RUNG_COMPLETE (owner decides "
+                                     "the next campaign / rung)")
+                status = "CAMPAIGN_WAITING:RUNG_MARKETS_REACHED"
+                sleep(SELECT_POLL_S)
+                continue
             sel = select_candidate(now, model, cooldown)
             report["selections"] += 1
             funnel["cycles"] += 1

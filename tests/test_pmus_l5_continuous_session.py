@@ -1884,3 +1884,58 @@ def test_compact_shadow_diagnostics_from_rolling_report():
     assert len(c["off_top_states"]) == 6 and c["off_top_states"][0]["state"] == "s0"
     assert c["funnel"]["held_by_reason"] == {"entry_band_left": 90}
     assert "per_sampled_relation" not in c["funnel"]
+
+
+def test_rung_allowance_spent_blocks_selection_and_settles_to_the_gate(monkeypatch, tmp_path):
+    """LIVE 12:31Z: the 3rd market settled on the periodic audit path
+    (already out of positions) and the campaign opened a 4th market. With
+    the allowance spent, no selection runs (reason-coded), the remaining
+    market is settled by the audit, and the advance gate fires."""
+    shares, tape = {"v": 100.0}, {"trades": 5}
+    fake = _two_run_harness(monkeypatch, tmp_path, shares, tape)
+    monkeypatch.setattr(cont, "status_has_trades", lambda: True)
+    cont.save_campaign_state({
+        "saved_utc": "x", "rung": "R1", "filled_markets": ["m1", "m2", "m3"],
+        "settled_here": ["m1", "m2"], "outage": None,
+        "liveness_baseline": {}, "recovery_gate": None, "burst": None})
+    from src import pmus_settlement_auditor as auditor
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+        "market": slug, "settled": True, "status": "REALIZED",
+        "settlement_key": "r", "realized_confirmed": True,
+        "realized_usd": "-0.01", "position_net": "0",
+        "resolution": {"side": "YES", "tradeId": "r", "updateTime": "t"}})
+    monkeypatch.setattr(cont, "unsettled_slugs", lambda: ["m3"])
+    started = []
+
+    def session(t, clock, sleep, wall, slug, gate_ok, deadline_s, **kw):
+        started.append(slug)
+        return {"status": "SPRING_NO_FILL", "slug": slug, "orders": [],
+                "decisions": [], "inventory": {"up": "0", "dn": "0"}}
+    import itertools
+    # (A) m3 not yet resolved: the campaign waits, reason-coded, and
+    # never selects a 4th market
+    pending = {"settled": False, "status": "PENDING_SETTLEMENT",
+               "realized_confirmed": False, "position_net": "0"}
+    monkeypatch.setattr(auditor, "audit_market",
+                        lambda slug, t: {"market": slug, **pending})
+    ticks = itertools.chain([0.0] + [1.0] * 40, itertools.repeat(1000.0))
+    rep = cont.run_campaign(fake, clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=500.0, session_runner=session)
+    assert started == []                          # never a 4th market
+    assert rep["funnel"]["selection_skipped_rung_reached"] >= 1
+    assert rep["funnel"]["sessions"] == 0
+    assert rep["status"] != "CAMPAIGN_RUNG_COMPLETE"
+    # (B) m3 resolves on the periodic audit path: the advance gate fires
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+        "market": slug, "settled": True, "status": "REALIZED",
+        "settlement_key": "r", "realized_confirmed": True,
+        "realized_usd": "-0.01", "position_net": "0",
+        "resolution": {"side": "YES", "tradeId": "r", "updateTime": "t"}})
+    ticks = itertools.chain([0.0] + [1.0] * 40, itertools.repeat(1000.0))
+    rep = cont.run_campaign(fake, clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=500.0, session_runner=session)
+    assert started == []
+    assert rep["status"] == "CAMPAIGN_RUNG_COMPLETE"
+    assert rep["advance_gate"]["filled_markets"] == ["m1", "m2", "m3"]
