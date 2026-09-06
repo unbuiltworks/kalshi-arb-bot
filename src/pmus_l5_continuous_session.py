@@ -664,10 +664,38 @@ def settle_held(t, slug: str) -> dict:
             if written:      # once, alongside the venue-confirmed rows
                 base.q1.ledger_append({"kind": "settlement_breakdown",
                                        "spring": True, **out["breakdown"]})
+        elif result.get("status") == "PENDING_SETTLEMENT":
+            # OWNER P0 5560183912: a PENDING market is diagnosed against the
+            # venue's PUBLIC status (read-only, throttled) so a stale
+            # detector is seen from evidence, never guessed
+            out["public"] = _pending_diagnostic(slug, t, auditor)
         return out
     except Exception as exc:                       # noqa: BLE001
         return {"status": "AUDIT_UNAVAILABLE",
                 "error": f"{type(exc).__name__}:{str(exc)[:80]}"}
+
+
+PENDING_DIAGNOSTIC_EVERY_S = 600.0
+_pending_diag_last: dict[str, float] = {}
+
+
+def _pending_diagnostic(slug: str, t, auditor) -> Optional[dict]:
+    """Public market view on every audit; the full account-shape
+    diagnostic at most every PENDING_DIAGNOSTIC_EVERY_S per market."""
+    try:
+        public = auditor.public_market_view(slug, t)
+    except Exception as exc:                       # noqa: BLE001
+        return {"error": f"{type(exc).__name__}:{str(exc)[:80]}"}
+    now = time.monotonic()
+    if public.get("public_resolved") and \
+            now - _pending_diag_last.get(slug, float("-inf")) >= PENDING_DIAGNOSTIC_EVERY_S:
+        _pending_diag_last[slug] = now
+        try:
+            _log("settlement_diagnostic", **auditor.diagnose_pending(slug, t))
+        except Exception as exc:                   # noqa: BLE001
+            _log("settlement_diagnostic", slug=slug,
+                 error=f"{type(exc).__name__}:{str(exc)[:80]}")
+    return public
 
 
 SETTLE_AUDIT_EVERY_S = 60.0

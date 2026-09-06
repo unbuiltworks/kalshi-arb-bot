@@ -220,3 +220,140 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# ---------------------------------------------------------------------------
+# OWNER P0 5560183912 (LIVE 15:19Z): aec-cs2-fokus-nemi was PENDING_SETTLEMENT
+# for 2.5 h while the venue's PUBLIC book already said MARKET_STATE_EXPIRED /
+# MARKET_STATUS_RESOLVED with settlementPx 0.0000 set at 13:28:53Z. The audit
+# above proves settlement ONLY from the account's POSITION_RESOLUTION
+# activity. This READ-ONLY diagnostic shows both views side by side -- the
+# public market status and the exact shape of the account's activities /
+# positions responses (top-level keys, counts, types, every row that names
+# the slug, and a few query variants) -- so the detector defect, if any, is
+# fixed from evidence. No mutation, no settlement forced, no P&L inferred.
+PUBLIC_RESOLVED_STATES = ("MARKET_STATE_EXPIRED", "MARKET_STATE_RESOLVED",
+                          "MARKET_STATE_SETTLED")
+PUBLIC_RESOLVED_STATUSES = ("MARKET_STATUS_RESOLVED", "MARKET_STATUS_SETTLED")
+ACTIVITY_QUERY_VARIANTS = ("?limit=500", "?pageSize=500", "?page_size=500",
+                           "?marketSlug={slug}", "?market_slug={slug}",
+                           "?type=ACTIVITY_TYPE_POSITION_RESOLUTION",
+                           "?types=ACTIVITY_TYPE_POSITION_RESOLUTION")
+
+
+def _mentions(obj: Any, slug: str) -> bool:
+    try:
+        return slug in json.dumps(obj, default=str)
+    except Exception:                              # noqa: BLE001
+        return False
+
+
+def _row_time(row: Mapping[str, Any]) -> Any:
+    for k in ("createTime", "updateTime", "time", "timestamp", "createdAt"):
+        if k in row:
+            return row.get(k)
+    for v in row.values():
+        if isinstance(v, Mapping):
+            for k in ("createTime", "updateTime", "time", "timestamp"):
+                if k in v:
+                    return v.get(k)
+    return None
+
+
+def public_market_view(slug: str, t: Optional[q1.Transport] = None) -> dict:
+    """The venue's PUBLIC status of a market (gateway, keyless): book state
+    + settlement price/time + market status. Read-only; errors reported."""
+    t = t or q1.Transport()
+    out: dict[str, Any] = {"market": slug}
+    try:
+        book = t.request("GET", f"/v1/markets/{quote(slug)}/book", base=q1.base.GATEWAY)
+        md = book.get("marketData") if isinstance(book, Mapping) else None
+        md = md if isinstance(md, Mapping) else {}
+        st = md.get("stats") if isinstance(md.get("stats"), Mapping) else {}
+        px = _amount(st.get("settlementPx"))
+        out.update({"state": md.get("state"),
+                    "settlement_px": str(px) if px is not None else None,
+                    "settlement_set_time": st.get("settlementSetTime"),
+                    "settlement_method": st.get("settlementPriceCalculationMethod"),
+                    "last_trade_set_time": st.get("lastTradeSetTime")})
+    except Exception as exc:                       # noqa: BLE001
+        out["book_error"] = f"{type(exc).__name__}:{getattr(exc, 'code', '')}"
+    try:
+        mk = t.request("GET", f"/v1/markets?slug={quote(slug)}", base=q1.base.GATEWAY)
+        rows = mk.get("markets") if isinstance(mk, Mapping) else None
+        m = next((r for r in (rows or []) if isinstance(r, Mapping)
+                  and r.get("slug") == slug), {})
+        out.update({"status": m.get("status"), "closed": m.get("closed"),
+                    "active": m.get("active"), "updated_at": m.get("updatedAt")})
+    except Exception as exc:                       # noqa: BLE001
+        out["market_error"] = f"{type(exc).__name__}:{getattr(exc, 'code', '')}"
+    out["public_resolved"] = bool(
+        (out.get("state") in PUBLIC_RESOLVED_STATES
+         or out.get("status") in PUBLIC_RESOLVED_STATUSES)
+        and out.get("settlement_px") is not None)
+    return out
+
+
+def diagnose_pending(slug: str, t: Optional[q1.Transport] = None) -> dict:
+    """READ-ONLY: why is this market still PENDING? Public view + the exact
+    shape of the account's activities and positions responses."""
+    t = t or q1.Transport()
+    out: dict[str, Any] = {"market": slug, "public": public_market_view(slug, t)}
+    try:
+        resp = t.request("GET", "/v1/portfolio/activities")
+        rows = resp.get("activities") if isinstance(resp, Mapping) else None
+        rows = [r for r in (rows or []) if isinstance(r, Mapping)]
+        types: dict[str, int] = {}
+        for r in rows:
+            k = str(r.get("type"))
+            types[k] = types.get(k, 0) + 1
+        for_slug = [{"type": r.get("type"), "time": _row_time(r),
+                     "payload_keys": sorted(k for k in r.keys() if k != "type")}
+                    for r in rows if _mentions(r, slug)]
+        out["activities"] = {
+            "top_level_keys": sorted(resp.keys()) if isinstance(resp, Mapping) else None,
+            "rows": len(rows), "types": types,
+            "row_keys": sorted(rows[0].keys()) if rows else None,
+            "first_time": _row_time(rows[0]) if rows else None,
+            "last_time": _row_time(rows[-1]) if rows else None,
+            "for_slug": for_slug[:12], "for_slug_n": len(for_slug),
+            "resolution_rows_any_market": types.get("ACTIVITY_TYPE_POSITION_RESOLUTION", 0),
+        }
+    except Exception as exc:                       # noqa: BLE001
+        out["activities"] = {"error": f"{type(exc).__name__}:{getattr(exc, 'code', '')}"}
+    variants: dict[str, Any] = {}
+    for q in ACTIVITY_QUERY_VARIANTS:
+        qq = q.format(slug=quote(slug))
+        try:
+            r = t.request("GET", "/v1/portfolio/activities" + qq)
+            rows2 = r.get("activities") if isinstance(r, Mapping) else None
+            rows2 = [x for x in (rows2 or []) if isinstance(x, Mapping)]
+            variants[qq] = {
+                "rows": len(rows2),
+                "keys": sorted(r.keys()) if isinstance(r, Mapping) else None,
+                "slug_rows": sum(1 for x in rows2 if _mentions(x, slug)),
+                "resolution_rows": sum(1 for x in rows2
+                                       if x.get("type") == "ACTIVITY_TYPE_POSITION_RESOLUTION"),
+                "slug_resolution_rows": sum(
+                    1 for x in rows2 if x.get("type") == "ACTIVITY_TYPE_POSITION_RESOLUTION"
+                    and _mentions(x, slug))}
+        except Exception as exc:                   # noqa: BLE001
+            variants[qq] = f"{type(exc).__name__}:{getattr(exc, 'code', '')}"
+    out["activity_query_variants"] = variants
+    try:
+        resp = t.request("GET", "/v1/portfolio/positions")
+        rows = resp.get("positions") if isinstance(resp, Mapping) else None
+        if isinstance(rows, Mapping):
+            n, row = len(rows), rows.get(slug)
+        else:
+            rows = [r for r in (rows or []) if isinstance(r, Mapping)]
+            n = len(rows)
+            row = next((r for r in rows if r.get("marketSlug") == slug), None)
+        out["positions"] = {
+            "top_level_keys": sorted(resp.keys()) if isinstance(resp, Mapping) else None,
+            "rows": n, "slug_row": row,
+            "slugs": sorted(str(r.get("marketSlug")) for r in rows)[:20]
+            if isinstance(rows, list) else sorted(rows.keys())[:20]}
+    except Exception as exc:                       # noqa: BLE001
+        out["positions"] = {"error": f"{type(exc).__name__}:{getattr(exc, 'code', '')}"}
+    return out
