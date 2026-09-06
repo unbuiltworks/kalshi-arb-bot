@@ -334,3 +334,23 @@ def test_declared_maintenance_window_is_a_planned_outage_not_evidence(tmp_path):
     # the exclusion never changes any other dimension or the decision count
     assert marked["live"]["scored_decisions"] == plain["live"]["scored_decisions"] == 6
     assert marked["live"]["action_distribution_relation"] == plain["live"]["action_distribution_relation"]
+
+
+def test_shared_seeds_are_reported_never_excluded():
+    """Provenance-unique rows that replay one seed (pre-f465fbc9 idx
+    restart) are counted as seed repeats; the rows still count as
+    decisions and no dimension is relabeled."""
+    a = _report("s1", "m1", 6)
+    b = _report("s2", "m1", 6, t0="2026-09-06T02:10:0")
+    for rep in (a, b):
+        for i, d in enumerate(rep["decisions"]):
+            d["shadow"]["stochastic"]["seed"] = f"seed-{i}"     # idx restarted
+    out = gate.evaluate([a, b])
+    sp = out["evidence_progress"]["accounting"]["seed_provenance"]
+    assert sp["decisions_with_seed"] == 12 and sp["distinct_seeds"] == 6
+    assert sp["seed_repeat_rows"] == 6 and sp["max_rows_per_seed"] == 2
+    assert out["live"]["scored_decisions"] == 12
+    for i, d in enumerate(b["decisions"]):
+        d["shadow"]["stochastic"]["seed"] = f"seed-{6 + i}"     # offset fixed
+    sp2 = gate.evaluate([a, b])["evidence_progress"]["accounting"]["seed_provenance"]
+    assert sp2["seed_repeat_rows"] == 0 and sp2["distinct_seeds"] == 12

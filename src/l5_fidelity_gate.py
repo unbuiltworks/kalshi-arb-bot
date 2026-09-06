@@ -530,6 +530,7 @@ def evidence_progress(live: Mapping[str, Any], shadow: Mapping[str, Any],
                 "evidence_accounting_valid": not invalid,
                 "ingest": acct.get("ingest"),
                 "maintenance": acct.get("maintenance"),
+                "seed_provenance": acct.get("seed_provenance"),
                 "unique_decisions": have["live_scored_decisions"],
                 "per_market": live.get("decisions_by_market"),
                 "unique_states": live.get("unique_states"),
@@ -648,6 +649,23 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
             continue
         if any(s <= ts <= e for s, e in mwin):
             inside_m += 1
+    # OWNER 5556815940 / 5557786528: rows are provenance-unique, but the
+    # seeded draw before f465fbc9 restarted decision_idx per resumed
+    # session, so several unique decisions share ONE seed -- their sampled
+    # relations are not independent draws. Reported, never excluded or
+    # relabeled; the owner decides what such rows count for.
+    seeds: dict = {}
+    for d in decs:
+        s = ((d.get("shadow") or {}).get("stochastic") or {}).get("seed")
+        if s:
+            seeds[s] = seeds.get(s, 0) + 1
+    dd["seed_provenance"] = {
+        "decisions_with_seed": sum(seeds.values()),
+        "distinct_seeds": len(seeds),
+        "seed_repeat_rows": sum(n - 1 for n in seeds.values() if n > 1),
+        "max_rows_per_seed": max(seeds.values()) if seeds else 0,
+        "note": "rows sharing a seed replay the same draw (pre-f465fbc9 "
+                "decision_idx restart); reported, not excluded"}
     dd["maintenance"] = {"windows_declared": len(mwin),
                          "decisions_inside_maintenance": inside_m,
                          "intervals_excluded_maintenance": int(
