@@ -421,6 +421,10 @@ CAP_FALLBACK_MIN_P = 0.20
 # conditional distribution). Neither changes the model, the gates or
 # the caps; the choice is recorded on every decision (action_selection).
 ACTION_SELECTION_ENV = "PMUS_SPRING_ACTION_SELECTION"
+# OWNER 5556751941 #1: read-only 2 s cadence counterfactual while an
+# order rests (synthetic decisions, logged separately, never acted on)
+CF_2S_CADENCE_S = 2.0
+CF_2S_MAX = 300                          # per session
 
 # OWNER 5556038561 #3/#4: the first leg filled while every complement /
 # extend was venue-rejected (LIVE 2026-09-06 00:57-01:20Z), which turns a
@@ -969,7 +973,17 @@ def run_session(t: Optional[Transport] = None,
         def _still_wanted(side_up_: bool, px_: D, relation_: str,
                           skey_: str):
             """Why the resting order is no longer the current L5 action
-            (None = keep resting). Re-reads the live book each poll."""
+            (None = keep resting). Re-reads the live book each poll.
+
+            Also hosts the READ-ONLY 2 s cadence counterfactual (OWNER
+            5556751941 #1): every ~2 s of wall time while an order rests,
+            the frozen model is asked what L5 would do at the CURRENT
+            state and the seeded draw is logged as a SYNTHETIC decision
+            (report["counterfactual_2s"]). Nothing is acted on and these
+            never count as live evidence."""
+            track: dict[str, Any] = {"last_cf": 0.0, "min_opp_ask": None,
+                                     "max_touch": None, "polls": 0}
+
             def check() -> Optional[str]:
                 try:
                     b = q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES")
@@ -977,6 +991,33 @@ def run_session(t: Optional[Transport] = None,
                     return f"bbo_unreadable:{type(exc).__name__}"
                 if b.get("bid") is None or b.get("ask") is None:
                     return "book_one_sided"
+                track["polls"] += 1
+                now_w = wall()
+                if now_w - track["last_cf"] >= CF_2S_CADENCE_S and \
+                        len(report.get("counterfactual_2s") or []) < CF_2S_MAX:
+                    track["last_cf"] = now_w
+                    try:
+                        k2 = spring_state_key(inv, b["bid"], settlement_t, now_w)
+                        p2 = pv2.proposal(model, k2, inv.last_rel or "open",
+                                          "q<5",
+                                          residual=inv.behavioral_residual())
+                        idx2 = len(report.get("counterfactual_2s") or [])
+                        d2 = fid.sample_relation(
+                            p2.get("relation_ranked"),
+                            fid.seed_material(f"{slug}|cf2s", idx2, model_sha))
+                        report.setdefault("counterfactual_2s", []).append({
+                            "t_utc": datetime.now(timezone.utc).isoformat(),
+                            "state": k2, "v2_recommended": p2["recommended_relation"],
+                            "relation_ranked": p2.get("relation_ranked"),
+                            "sampled": d2.get("sampled"), "seed": d2.get("seed"),
+                            "off_distribution": bool(p2.get("off_distribution")),
+                            "live_order": {"relation": relation_, "px": str(px_),
+                                           "side": "YES" if side_up_ else "NO"},
+                            "book": {"yes_bid": str(b["bid"]), "yes_ask": str(b["ask"])},
+                            "labels": "SYNTHETIC 2s-cadence counterfactual; "
+                                      "not acted on; not live evidence"})
+                    except Exception:                 # noqa: BLE001
+                        pass
                 if relation_ in ("open", "extend") and not q1.entry_ok(
                         b["bid"]):
                     return f"price_bound_left:{b['bid']}"
@@ -992,6 +1033,14 @@ def run_session(t: Optional[Transport] = None,
                     touch, opp_ask = q1.ONE - b["ask"], q1.ONE - b["bid"]
                 touch = (D(str(touch)) / spec["tick"]).to_integral_value(
                     rounding=ROUND_DOWN) * spec["tick"]
+                # observable book path while resting (COMPLETE target-
+                # price counterfactual, OWNER 5556751941 #2): how close the
+                # opposite ask came to L5's touch price, and the best touch
+                oa = D(str(opp_ask))
+                track["min_opp_ask"] = (str(oa) if track["min_opp_ask"] is None
+                                        else str(min(oa, D(track["min_opp_ask"]))))
+                track["max_touch"] = (str(touch) if track["max_touch"] is None
+                                      else str(max(touch, D(track["max_touch"]))))
                 if px_ >= D(str(opp_ask)):
                     return f"would_cross:{opp_ask}"
                 if relation_ in ("open", "extend") and touch != px_:
@@ -1006,6 +1055,7 @@ def run_session(t: Optional[Transport] = None,
                             return (f"l5_action_changed:"
                                     f"{p['recommended_relation']}")
                 return None
+            check.track = track                       # type: ignore[attr-defined]
             return check
 
         def _prove_complement_acceptance(bbo: Mapping[str, Any],
@@ -1272,6 +1322,17 @@ def run_session(t: Optional[Transport] = None,
                     if side_up is None:
                         report["stop_reason"] = "no_priceable_side"
                         break
+                    # OWNER 5556751941 #3: side-mapping telemetry on every
+                    # live OPEN -- the convention input, its output and
+                    # the executed side, so the gate's side dimension is
+                    # measured from records, not assumed
+                    report["decisions"][-1]["open_side"] = {
+                        "yes_bid": str(bbo["bid"]), "yes_ask": str(bbo["ask"]),
+                        "yes_touch": str(bbo["bid"]),
+                        "no_touch": str(q1.ONE - D(str(bbo["ask"]))),
+                        "convention": "cheaper touch; ties -> YES",
+                        "convention_side": "YES" if side_up else "NO",
+                        "executed_side": "YES" if side_up else "NO"}
                 else:
                     side_up = inv.residual > 0     # extend the surplus side
                 px = bbo["bid"] if side_up else (q1.ONE - bbo["ask"])
@@ -1372,6 +1433,26 @@ def run_session(t: Optional[Transport] = None,
                 px, econ = spring_complement_price(
                     surplus_avg, opp["ask"], spec["tick"])
                 report["pair_economics"] = econ
+                # OWNER 5556751941 #2: L5's own target for a COMPLETE is
+                # the touch of the deficit side (join the bid); the live
+                # order uses the fee-safe bound instead. Record both, the
+                # pair each implies, and whether the touch price would be
+                # fee-safe -- read-only; the actual order is unchanged.
+                l5_touch = (D(str(opp["bid"])) / spec["tick"]).to_integral_value(
+                    rounding=ROUND_DOWN) * spec["tick"]
+                hard = q1.complement_bound(surplus_avg)
+                pair_at_touch = D(str(surplus_avg)) + l5_touch
+                report["decisions"][-1]["counterfactual_l5_price"] = {
+                    "l5_touch_px": str(l5_touch), "executed_px": str(px),
+                    "delta_ticks": str((l5_touch - px) / spec["tick"]) if px is not None else None,
+                    "pair_at_touch": str(pair_at_touch),
+                    "fee_safe_at_touch": bool(
+                        hard is not None and l5_touch <= D(str(hard))
+                        and pair_at_touch <= SPRING_PAIR_TARGET),
+                    "would_cross_at_touch": bool(l5_touch >= D(str(opp["ask"]))),
+                    "class": ("no_difference" if px is not None and l5_touch == px
+                              else "safety_override:fee_safe_complement_bound"),
+                    "labels": "READ-ONLY counterfactual; live order unchanged"}
                 if px is None:
                     sleep(MIN_REEVAL_S)
                     actions += 1
@@ -1382,16 +1463,23 @@ def run_session(t: Optional[Transport] = None,
                     else "OUTCOME_SIDE_NO", px, qty,
                     f"spring_complete_{actions + 1}", post_only=True)
                 reached_order_stage = True
+                sw = _still_wanted(deficit_up, px, "complete", skey)
                 got, rest_s, end_reason = _await_order(
                     t, oid, qty,
                     min(stop_at, clock() + max(
                         prop["next_reevaluation_s"], MIN_REEVAL_S,
                         SPORTS_MAKER_REST_MAX_S)),
-                    clock, sleep,
-                    still_wanted=_still_wanted(deficit_up, px, "complete",
-                                               skey))
+                    clock, sleep, still_wanted=sw)
                 _harvest(oid, f"spring_complete_{actions + 1}", deficit_up,
                          px, qty, "complete", got, rest_s, end_reason)
+                report["orders"][-1]["rest_book"] = dict(sw.track)
+                report["orders"][-1]["l5_touch_px"] = str(l5_touch)
+                # honest observable only: did the opposite ask ever reach
+                # L5's touch price while we rested (a resting bid there
+                # COULD have traded; no fill is claimed)
+                mo = sw.track.get("min_opp_ask")
+                report["orders"][-1]["l5_touch_reached_by_opposite_ask"] = (
+                    bool(D(mo) <= l5_touch) if mo is not None else None)
                 if end_reason.startswith("rejected"):
                     # LIVE 02:10:53-58Z: four NO completes at 0.625 were
                     # rejected within 1 s each right after a fill AT that

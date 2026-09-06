@@ -119,6 +119,8 @@ def record_session_report(rep: Mapping[str, Any], slug: str,
         "resumed": bool(resumed), "status": rep.get("status"),
         "decisions": rep.get("decisions") or [],
         "orders": rep.get("orders") or [],
+        # SYNTHETIC 2 s cadence counterfactual (never live evidence)
+        "counterfactual_2s": rep.get("counterfactual_2s") or [],
         "inventory": rep.get("inventory")})
 
 

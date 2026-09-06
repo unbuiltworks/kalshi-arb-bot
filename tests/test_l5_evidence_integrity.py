@@ -124,3 +124,65 @@ def test_campaign_passes_the_ledger_decision_count_as_the_seed_offset(monkeypatc
     assert cont.ledger_decision_count("m1") == 12
     assert cont.ledger_decision_count("m2") == 2
     assert cont.ledger_decision_count("m3") == 0
+
+
+def test_read_only_counterfactuals_and_side_telemetry_are_recorded(monkeypatch, tmp_path):
+    """OWNER 5556751941 #1/#2/#3: 2 s cadence counterfactual, COMPLETE
+    L5 target-price counterfactual and OPEN side-mapping telemetry are
+    recorded read-only; live orders are unchanged."""
+    from tests.test_pmus_l5_continuous_session import (_armed_session_env,
+                                                        _ledger_with_fill,
+                                                        _open_proposal)
+    from tests.test_pmus_spring_l5_session import Fake, _ticking, _script_proposals
+    from src import pmus_spring_l5_session as spring
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")
+    _script_proposals(monkeypatch, ["complete"])
+    monkeypatch.setenv(spring.MAX_ACTIONS_ENV, "1")
+    fake = Fake(bid="0.4300", ask="0.4350", fill_all=False)
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    w = {"t": 1000.0}
+
+    def wall():
+        w["t"] += 0.7
+        return w["t"]
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=wall, slug="held", gate_ok=True, resume=True)
+    d = rep["decisions"][0]
+    cf = d["counterfactual_l5_price"]
+    # NO complete: L5 would join the NO touch (1 - yes ask = 0.565); the
+    # live order used the fee-safe bound 0.55
+    assert cf["l5_touch_px"] == "0.565" and cf["executed_px"] == "0.55"
+    assert cf["class"] == "safety_override:fee_safe_complement_bound"
+    assert cf["labels"].startswith("READ-ONLY")
+    o = rep["orders"][0]
+    assert o["px"] == "0.55"                          # live order unchanged
+    assert o["l5_touch_px"] == "0.565"
+    assert o["rest_book"]["polls"] >= 1 and o["rest_book"]["min_opp_ask"] == "0.5700"
+    assert o["l5_touch_reached_by_opposite_ask"] is False
+    cf2 = rep["counterfactual_2s"]
+    assert cf2 and all(c["labels"].startswith("SYNTHETIC") for c in cf2)
+    assert cf2[0]["v2_recommended"] == "complete"      # scripted fixture has no masses
+    # the evaluator scores them SEPARATELY and never as live decisions
+    out = gate.evaluate([{"slug": "held", "session_id": rep["session_id"],
+                          "decisions": rep["decisions"], "orders": rep["orders"],
+                          "counterfactual_2s": cf2}])
+    assert out["counterfactual_2s"]["n"] == len(cf2)
+    assert out["live"]["scored_decisions"] == 0          # scripted fixture: no masses -> not scoreable
+    # OPEN side telemetry on a fresh session
+    _open_proposal(monkeypatch)
+    fake2 = Fake(bid="0.5000", ask="0.5050")
+    rep2 = spring.run_session(fake2, clock=_ticking(), sleep=lambda s: None,
+                              wall=lambda: 1000.0, slug="mkt-x", gate_ok=True)
+    side = rep2["decisions"][0]["open_side"]
+    assert side["convention_side"] == side["executed_side"] == rep2["orders"][0]["side"]
+    assert side["no_touch"] == "0.4950" and side["yes_touch"] == "0.5000"
+    assert side["convention_side"] == "NO"            # cheaper touch
+
+
+def test_open_side_convention_is_deterministic():
+    from decimal import Decimal as D
+    from src import pmus_sports_l5_decision as l5d
+    assert l5d.open_side_yes({"bid": D("0.30"), "ask": D("0.305")}) is True    # YES 0.30 < NO 0.695
+    assert l5d.open_side_yes({"bid": D("0.60"), "ask": D("0.605")}) is False   # NO 0.395 < YES 0.60
+    assert l5d.open_side_yes({"bid": D("0.50"), "ask": D("0.50")}) is True     # tie -> YES

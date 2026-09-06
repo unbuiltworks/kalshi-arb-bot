@@ -557,8 +557,31 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
              spec: Optional[Mapping[str, Any]] = None,
              model: Optional[Mapping[str, Any]] = None) -> dict:
     spec = spec or load_spec()
+    reports = list(reports)
     raw_d, raw_o = decisions_from_session_reports(reports)
     dd = dedupe(raw_d, raw_o)
+    # SYNTHETIC 2 s cadence counterfactual (OWNER 5556751941 #1): scored
+    # separately, never merged into live evidence; deduped by seed
+    cf_seen: set = set()
+    cf = []
+    for rep in reports:
+        for c in rep.get("counterfactual_2s") or []:
+            key = c.get("seed") or (c.get("t_utc"), c.get("state"))
+            if key in cf_seen:
+                continue
+            cf_seen.add(key)
+            cf.append(c)
+    if cf:
+        exp_cf = _expected(cf)
+        samp_cf, _ = _freq([{"s": c.get("sampled")} for c in cf], "s")
+        counterfactual = {"n": len(cf), "expected_l5": exp_cf,
+                          "sampled": samp_cf,
+                          "l1_sampled_vs_l5": _l1(samp_cf, exp_cf),
+                          "off_distribution_pct": round(
+                              100.0 * sum(1 for c in cf if c.get("off_distribution")) / len(cf), 2),
+                          "labels": "SYNTHETIC 2s-cadence counterfactual; NOT live evidence"}
+    else:
+        counterfactual = {"n": 0}
     decs, orders = dd["decisions"], dd["orders"]
     live = score_live(decs, orders, spec, model)
     shadow = score_shadow(rolling, spec)
@@ -581,6 +604,7 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
             "evidence_progress": progress,
             "largest_mismatch": largest_mismatch(live, shadow),
             "divergence_classes": classes,
+            "counterfactual_2s": counterfactual,
             "live": live, "shadow": shadow}
 
 
