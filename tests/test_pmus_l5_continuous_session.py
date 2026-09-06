@@ -195,7 +195,7 @@ def test_stale_candidate_reselects_instead_of_terminating(monkeypatch,
     monkeypatch.setattr(entry, "load_status_document", fake_load)
     ran = []
 
-    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s):
+    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s, **kw):
         ran.append((slug, gate_ok, deadline_s))
         return {"status": "SPRING_NO_FILL", "slug": slug,
                 "inventory": {"up": "0", "dn": "0"}, "actions": []}
@@ -218,7 +218,7 @@ def test_inventory_holds_the_campaign_to_one_market(monkeypatch, tmp_path):
                         lambda path=None: (st, "status_url:test"))
     ran = []
 
-    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s):
+    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s, **kw):
         ran.append(slug)
         return {"status": "SPRING_RESIDUAL_HOLD", "slug": slug,
                 "inventory": {"up": "0.01", "dn": "0"},
@@ -258,10 +258,11 @@ def test_sessions_are_recorded_and_the_fidelity_gate_runs_automatically(
                         lambda path=None: (st, "status_url:test"))
     cont._fidelity_last["t"] = 0.0
 
-    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s):
+    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s, **kw):
         return {"status": "SPRING_NO_FILL", "slug": slug,
                 "inventory": {"up": "0", "dn": "0"}, "actions": [],
                 "decisions": [{"slug": slug, "state": "p45-55c|tte>10m|flat",
+                               "t_utc": "2026-09-06T02:00:00+00:00",
                                "relation_ranked": [{"relation": "open", "p": 1.0}],
                                "acted": "open", "divergence": "none",
                                "divergence_class": "no disagreement",
@@ -447,7 +448,7 @@ def test_spent_cap_market_is_not_reselected_this_campaign(monkeypatch,
                         lambda path=None: (st, "status_url:test"))
     ran = []
 
-    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s):
+    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s, **kw):
         ran.append(slug)
         return {"status": "SPRING_NO_FILL", "slug": slug,
                 "stop_reason": "spend_cap_reached",
@@ -668,7 +669,7 @@ def test_attempts_per_slug_are_capped_separately_from_exposure(monkeypatch,
                                    t=last_wall["v"]), "status_url:test"))
     ran = []
 
-    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s):
+    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s, **kw):
         ran.append(slug)
         return {"status": "SPRING_NO_FILL", "slug": slug,
                 "inventory": {"up": "0", "dn": "0"}, "actions": []}
@@ -691,7 +692,7 @@ def test_held_position_holds_the_campaign_instead_of_spinning(monkeypatch,
                         lambda path=None: (st, "status_url:test"))
     ran = []
 
-    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s):
+    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s, **kw):
         ran.append(slug)
         return {"status": "PREFLIGHT_FAILED", "slug": slug,
                 "reason": "nonzero_positions:held-mkt=0.0200"}

@@ -87,6 +87,23 @@ FIDELITY_EVAL_S = 600.0         # frozen L5 fidelity gate re-run cadence
 _fidelity_last = {"t": 0.0}
 
 
+def ledger_decision_count(slug: str) -> int:
+    """Decisions already persisted for this market (session_report rows):
+    the seed offset for the next session on it (OWNER 5556815940)."""
+    path = base.q1.base.state_dir() / "ledger.jsonl"
+    if not path.exists():
+        return 0
+    n = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("kind") == "session_report" and row.get("slug") == slug:
+            n += len(row.get("decisions") or [])
+    return n
+
+
 def record_session_report(rep: Mapping[str, Any], slug: str,
                           resumed: bool) -> None:
     """Durable per-session fidelity evidence (OWNER Phase 1 item 8):
@@ -94,6 +111,8 @@ def record_session_report(rep: Mapping[str, Any], slug: str,
     frozen gate can be re-run across restarts."""
     base.q1.ledger_append({
         "kind": "session_report", "spring": True, "slug": slug,
+        "session_id": rep.get("session_id"),
+        "decision_seed_offset": rep.get("decision_seed_offset"),
         "resumed": bool(resumed), "status": rep.get("status"),
         "decisions": rep.get("decisions") or [],
         "orders": rep.get("orders") or [],
@@ -1036,7 +1055,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                         t, clock=clock, sleep=sleep, wall=wall, slug=held,
                         gate_ok=True,
                         deadline_s=min(SESSION_DEADLINE_S, stop_at - clock()),
-                        resume=True) or {})
+                        resume=True,
+                        decision_seed_offset=ledger_decision_count(held)) or {})
                     rep["resumed"] = True
                     report["sessions"].append(rep)
                     resumes += 1
@@ -1136,7 +1156,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                  probe_entry_action=chosen.get("probe_entry_action"))
             rep = session_runner(t, clock=clock, sleep=sleep, wall=wall,
                                  slug=chosen["slug"], gate_ok=True,
-                                 deadline_s=min(SESSION_DEADLINE_S, remaining))
+                                 deadline_s=min(SESSION_DEADLINE_S, remaining),
+                                 decision_seed_offset=ledger_decision_count(
+                                     chosen["slug"]))
             rep = dict(rep or {})
             funnel["sessions"] += 1
             funnel["submitted"] += len(rep.get("orders") or [])

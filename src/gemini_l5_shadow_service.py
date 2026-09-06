@@ -292,7 +292,16 @@ class ShadowService:
         since = datetime.fromisoformat(spec["applies_to_windows_with_entry_t_at_or_after_utc"]).timestamp()
         rows = [r for r in self.rows.get(spec["arm"]) or []
                 if float(r.get("entry_t") or 0) >= since]
-        return {"arm": spec["arm"], "windows_since_freeze": len(rows),
+        # OWNER 5556815940 #7: provenance of the window count -- unique
+        # (symbol, entry_t) identities (restore already keeps one copy
+        # per identity) and the time range they span
+        idents = {(r.get("symbol"), float(r.get("entry_t") or 0)) for r in rows}
+        ts = sorted(t for _, t in idents)
+        return {"arm": spec["arm"], "windows_since_freeze": len(idents),
+                "window_rows": len(rows),
+                "unique_window_ids": len(idents),
+                "first_entry_utc": _utc(ts[0]) if ts else None,
+                "last_entry_utc": _utc(ts[-1]) if ts else None,
                 **gs.research_arm_verdict(rows, spec)}
 
     def action_scoring_report(self) -> dict:

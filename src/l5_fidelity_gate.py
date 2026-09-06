@@ -123,9 +123,17 @@ def score_live(decisions: list, orders: list, spec: Mapping[str, Any],
     dims = spec["dimensions"]
     me = spec["minimum_evidence"]
     decs = [d for d in decisions if d.get("relation_ranked")]
+    by_market: dict = {}
+    for d in decs:
+        by_market[str(d.get("slug"))] = by_market.get(str(d.get("slug")), 0) + 1
+    ts = sorted(str(d["t_utc"]) for d in decs if d.get("t_utc"))
     out: dict[str, Any] = {"scored_decisions": len(decs),
                            "markets": len({d.get("slug") for d in decs
-                                           if d.get("slug")})}
+                                           if d.get("slug")}),
+                           "decisions_by_market": by_market,
+                           "unique_states": len({d.get("state") for d in decs}),
+                           "first_t_utc": ts[0] if ts else None,
+                           "last_t_utc": ts[-1] if ts else None}
     enough = len(decs) >= me["live_scored_decisions"]
 
     # --- action distribution (relation)
@@ -229,14 +237,18 @@ def score_live(decisions: list, orders: list, spec: Mapping[str, Any],
         override="override:size_cap ($0.05 market cap / venue minimum; "
                  "reported, not blocking)")
 
-    # --- timing / cadence
+    # --- timing / cadence: intervals only between CONSECUTIVE unique
+    # decisions of the same session (OWNER 5556815940 #6) -- never across
+    # session or duplicate boundaries; sessions without an id fall back
+    # to the market as the grouping key
     thr = dims["timing_cadence"]["pass"]
     intervals, ratios_c = [], []
     by_slug: dict[str, list] = {}
     for d in decs:
         t = d.get("t_utc")
         if t and d.get("slug"):
-            by_slug.setdefault(d["slug"], []).append(d)
+            key = d.get("session_id") or d["slug"]
+            by_slug.setdefault(key, []).append(d)
     for slug, ds in by_slug.items():
         ds = sorted(ds, key=lambda d: d["t_utc"])
         for a, b in zip(ds, ds[1:]):
@@ -373,15 +385,75 @@ def verdict(live: Mapping[str, Any], shadow: Mapping[str, Any],
     }
 
 
+def decision_identity(d: Mapping[str, Any]) -> Optional[str]:
+    """Stable identity of ONE live decision from immutable provenance
+    (OWNER 5556815940 #2): the persisted decision_id when present, else a
+    deterministic hash of session_id | slug | decision_idx | t_utc | state
+    | acted. Never evaluator-run time. None = provenance missing (no
+    t_utc and no decision_id): such a row is reported, never counted."""
+    if d.get("decision_id"):
+        return str(d["decision_id"])
+    if not d.get("t_utc"):
+        return None
+    import hashlib
+    raw = "|".join(str(d.get(k) or "") for k in (
+        "session_id", "slug", "decision_idx", "t_utc", "state", "acted"))
+    return hashlib.sha256(raw.encode()).hexdigest()[:24]
+
+
+def order_identity(o: Mapping[str, Any]) -> Optional[str]:
+    oid = o.get("order_id")
+    return f"order:{oid}" if oid else None
+
+
+def dedupe(decs: list, orders: list) -> dict:
+    """Idempotent evidence set (OWNER 5556815940 #3): re-reading the same
+    session/ledger rows N times yields exactly the one-copy set."""
+    seen: set = set()
+    uniq_d, dup_d, missing = [], 0, 0
+    for d in decs:
+        ident = decision_identity(d)
+        if ident is None:
+            missing += 1
+            continue
+        if ident in seen:
+            dup_d += 1
+            continue
+        seen.add(ident)
+        d = dict(d)
+        d["decision_id"] = ident
+        uniq_d.append(d)
+    seen_o: set = set()
+    uniq_o, dup_o = [], 0
+    for o in orders:
+        ident = order_identity(o)
+        if ident is None:
+            uniq_o.append(o)               # no venue id: cannot dedupe, keep
+            continue
+        if ident in seen_o:
+            dup_o += 1
+            continue
+        seen_o.add(ident)
+        uniq_o.append(o)
+    return {"decisions": uniq_d, "orders": uniq_o,
+            "duplicates_dropped": dup_d + dup_o,
+            "decision_duplicates_dropped": dup_d,
+            "order_duplicates_dropped": dup_o,
+            "provenance_missing": missing}
+
+
 def decisions_from_session_reports(reports: Iterable[Mapping[str, Any]]) -> tuple[list, list]:
     """Flatten session reports (session_end / session_report rows) into
-    decision and order records tagged with their market."""
+    decision and order records tagged with their market and session."""
     decs, orders = [], []
     for rep in reports:
         slug = rep.get("slug")
+        sid = rep.get("session_id")
         for d in rep.get("decisions") or []:
             d = dict(d)
             d.setdefault("slug", slug)
+            if sid and not d.get("session_id"):
+                d["session_id"] = sid
             decs.append(d)
         for o in rep.get("orders") or []:
             o = dict(o)
@@ -391,9 +463,14 @@ def decisions_from_session_reports(reports: Iterable[Mapping[str, Any]]) -> tupl
 
 
 def evidence_progress(live: Mapping[str, Any], shadow: Mapping[str, Any],
-                      spec: Mapping[str, Any]) -> dict:
-    """Progress toward EVERY minimum, not just the decision count."""
+                      spec: Mapping[str, Any],
+                      accounting: Optional[Mapping[str, Any]] = None) -> dict:
+    """Progress toward EVERY minimum from UNIQUE evidence (OWNER 5556815940
+    #1/#4): counts are deduped by decision identity; the live minimums are
+    EVIDENCE_ACCOUNTING_INVALID whenever provenance is missing on any
+    counted row, and no verdict is emitted from an invalid count."""
     me = spec["minimum_evidence"]
+    acct = dict(accounting or {})
     have = {
         "live_scored_decisions": int(live.get("scored_decisions") or 0),
         "live_markets": int(live.get("markets") or 0),
@@ -401,10 +478,33 @@ def evidence_progress(live: Mapping[str, Any], shadow: Mapping[str, Any],
         "live_timed_intervals": int((live.get("timing_cadence") or {}).get("n") or 0),
         "shadow_windows": int(shadow.get("windows_since_freeze") or 0),
     }
-    rows = {k: {"have": have[k], "need": me[k],
-                "pct": round(100.0 * min(have[k], me[k]) / me[k], 1),
-                "met": have[k] >= me[k]} for k in me}
-    return {"minimums": rows, "all_met": all(r["met"] for r in rows.values())}
+    invalid = bool(acct.get("provenance_missing")) or acct.get("status") == "EVIDENCE_ACCOUNTING_INVALID"
+    rows = {}
+    for k in me:
+        row = {"have": have[k], "need": me[k],
+               "pct": round(100.0 * min(have[k], me[k]) / me[k], 1),
+               "met": have[k] >= me[k]}
+        if invalid and k.startswith("live_"):
+            row["status"] = "EVIDENCE_ACCOUNTING_INVALID"
+            row["met"] = False
+        rows[k] = row
+    return {"minimums": rows,
+            "all_met": all(r["met"] for r in rows.values()) and not invalid,
+            "accounting": {
+                "method": "dedupe by decision_id (persisted) or sha256(session_id|slug|"
+                          "decision_idx|t_utc|state|acted); orders by venue order_id",
+                "status": "EVIDENCE_ACCOUNTING_INVALID" if invalid else "OK",
+                **{k: acct.get(k, 0) for k in ("duplicates_dropped",
+                                               "decision_duplicates_dropped",
+                                               "order_duplicates_dropped",
+                                               "provenance_missing")},
+                "unique_decisions": have["live_scored_decisions"],
+                "per_market": live.get("decisions_by_market"),
+                "unique_states": live.get("unique_states"),
+                "first_t_utc": live.get("first_t_utc"),
+                "last_t_utc": live.get("last_t_utc"),
+                "side_convention_opens": int((live.get("action_distribution_side") or {}).get("n") or 0),
+            }}
 
 
 def largest_mismatch(live: Mapping[str, Any], shadow: Mapping[str, Any]) -> dict:
@@ -452,20 +552,28 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
              spec: Optional[Mapping[str, Any]] = None,
              model: Optional[Mapping[str, Any]] = None) -> dict:
     spec = spec or load_spec()
-    decs, orders = decisions_from_session_reports(reports)
+    raw_d, raw_o = decisions_from_session_reports(reports)
+    dd = dedupe(raw_d, raw_o)
+    decs, orders = dd["decisions"], dd["orders"]
     live = score_live(decs, orders, spec, model)
     shadow = score_shadow(rolling, spec)
     classes: dict = {}
     for d in decs:
         c = d.get("divergence_class") or d.get("divergence") or "unclassified"
         classes[c] = classes.get(c, 0) + 1
+    progress = evidence_progress(live, shadow, spec, dd)
+    v = verdict(live, shadow, spec)
+    if progress["accounting"]["status"] != "OK":
+        # OWNER 5556815940 #1: never a verdict from an invalid count
+        v = {**v, "label": spec["labels"]["until_met"], "phase_1_met": False,
+             "blocked_by": "EVIDENCE_ACCOUNTING_INVALID"}
     return {"kind": "l5_fidelity_gate",
             "t": datetime.now(timezone.utc).isoformat(),
             "spec_frozen_utc": spec["frozen_utc"],
             "phase_order": "REPLICATE L5 -> PROVE FIDELITY -> RUN L5 -> "
                            "MEASURE REALIZED RESULTS -> THEN OPTIMIZE PROFITABILITY",
-            "verdict": verdict(live, shadow, spec),
-            "evidence_progress": evidence_progress(live, shadow, spec),
+            "verdict": v,
+            "evidence_progress": progress,
             "largest_mismatch": largest_mismatch(live, shadow),
             "divergence_classes": classes,
             "live": live, "shadow": shadow}

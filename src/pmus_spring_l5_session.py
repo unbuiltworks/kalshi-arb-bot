@@ -758,8 +758,19 @@ def run_session(t: Optional[Transport] = None,
                 wall=time.time, slug: Optional[str] = None,
                 gate_ok: bool = False,
                 deadline_s: Optional[float] = None,
-                resume: bool = False) -> dict:
+                resume: bool = False,
+                decision_seed_offset: int = 0) -> dict:
     """One bounded sequential session on ONE market.
+
+    ``decision_seed_offset`` (OWNER 5556815940 / Phase 1 replication bug):
+    the seeded draw is sha256(slug|decision_idx|model_sha). With the
+    index restarting at 0 on every resumed session, EVERY session on a
+    held market replayed the same 6 draws (LIVE 02:32-04:00Z: 40
+    sessions, byte-identical 4 complete / 2 extend), so the executed
+    frequency could never converge on the masses. The campaign passes
+    the number of decisions already persisted for this market; the
+    global index is recorded on every decision and the draw stays
+    replayable from the records.
 
     ``slug`` / ``gate_ok`` / ``deadline_s`` exist for the continuous
     selector (OWNER 5552036210): it hands in the market whose fresh
@@ -770,8 +781,12 @@ def run_session(t: Optional[Transport] = None,
     """
     slug = (slug if slug is not None
             else os.getenv(SPRING_MARKET_ENV, "")).strip()
+    import uuid
+    session_id = uuid.uuid4().hex[:16]
     report: dict[str, Any] = {
         "session": "pmus-spring-l5-v1", "slug": slug, "realized_pnl": None,
+        "session_id": session_id,
+        "decision_seed_offset": int(decision_seed_offset or 0),
         "labels": ("SPRING discipline (ramp ef1da90a): maker-only, penny "
                    "actions, pre-rebate economics; submitted->filled->"
                    "settled->realized; rebates never counted"),
@@ -934,12 +949,22 @@ def run_session(t: Optional[Transport] = None,
             except Exception as exc:                  # noqa: BLE001
                 return {"class": f"unknown:bbo_unreadable:{type(exc).__name__}",
                         "crossed": False, "opp_ask": None}
-            crossed = px_ >= opp_ask
+            # LIVE 03:22:56Z: YES 0.225 rejected while the REST book read
+            # ask 0.230 one second later, during a collapse from 0.30 to
+            # 0.05 -- a REST snapshot lags a fast book by more than a
+            # tick. Within ONE tick of the fresh ask the rejection is
+            # a cross (ambiguous under lag); only a margin of >= 2 ticks
+            # is evidence against this code's acceptance model.
+            margin = (opp_ask - px_) / D(str(spec["tick"]))
+            crossed = margin <= 1
             return {"class": ("venue/execution adaptation:"
-                              "post_only_cross_after_book_move" if crossed
-                              else "implementation bug candidate:"
+                              "post_only_cross_after_book_move" if px_ >= opp_ask
+                              else "venue/execution adaptation:"
+                                   "post_only_cross_within_1_tick_of_lagging_ask"
+                              if crossed else "implementation bug candidate:"
                                    "rejected_at_non_crossing_price"),
-                    "crossed": crossed, "opp_ask": str(opp_ask)}
+                    "crossed": crossed, "opp_ask": str(opp_ask),
+                    "margin_ticks": str(margin)}
 
         def _still_wanted(side_up_: bool, px_: D, relation_: str,
                           skey_: str):
@@ -1004,9 +1029,20 @@ def run_session(t: Optional[Transport] = None,
                 "book": {"yes_bid": str(bbo["bid"]),
                          "yes_ask": str(bbo["ask"])}}
             if plan["px"] is None:
-                proof["reason"] = f"no_fee_safe_complement:{plan['regime']}"
-                save_complement_proof(proof)
-                return proof
+                # LIVE 03:23-03:54Z: with the YES book at 0.05-0.18 no
+                # fee-safe complement existed and the probe wrote
+                # proven=false four times, which kept NEW first legs
+                # closed for hours. "No legal price at this book" is not
+                # venue evidence about acceptance: log it, keep the prior
+                # proof state untouched, and do not consume the retry
+                # interval (attempted_epoch stays as it was).
+                prior = load_complement_proof()
+                print("PMUS_COMPLEMENT_ACCEPTANCE " + json.dumps(
+                    {"skipped": f"no_fee_safe_complement:{plan['regime']}",
+                     "slug": slug, "plan": plan, "book": proof["book"],
+                     "prior_proven": prior.get("proven")},
+                    separators=(",", ":"), default=str), flush=True)
+                return {**prior, "skipped": f"no_fee_safe_complement:{plan['regime']}"}
             px = D(str(plan["px"]))
             qty = min(inv.residual.copy_abs(),
                       D(str(spec["minimum_trade_qty"])))
@@ -1104,11 +1140,18 @@ def run_session(t: Optional[Transport] = None,
             # (seed = sha256(slug|idx|model_sha); replayable). Every
             # safety gate below applies to the drawn relation unchanged.
             selection = os.getenv(ACTION_SELECTION_ENV, "modal").strip().lower()
-            decision_idx = len(report.get("decisions") or [])
+            # GLOBAL per-market index (persisted decisions before this
+            # session + local index): the seed never repeats across resumes
+            decision_idx = int(decision_seed_offset or 0) + len(
+                report.get("decisions") or [])
+            model_sha = str(model.get("_sha256_16") or "")
             draw = fid.sample_relation(
                 prop.get("relation_ranked"),
-                fid.seed_material(slug, decision_idx,
-                                  str(model.get("_sha256_16") or "")))
+                fid.seed_material(slug, decision_idx, model_sha))
+            import hashlib as _hl
+            decision_id = _hl.sha256(
+                f"{session_id}|{slug}|{decision_idx}|{model_sha}".encode()
+            ).hexdigest()[:24]
             if inv.up + inv.dn == 0:
                 relation = "open"
             elif selection == "stochastic" and draw.get("sampled"):
@@ -1151,7 +1194,7 @@ def run_session(t: Optional[Transport] = None,
             # for this state; nothing here is acted on
             shadow = fid.shadow_fields(
                 fid_art, slug=slug,
-                decision_idx=len(report.get("decisions") or []),
+                decision_idx=decision_idx,
                 model_sha=str(model.get("_sha256_16") or ""),
                 base_state=skey, relation=prop["recommended_relation"],
                 relation_ranked=prop.get("relation_ranked"), tte_s=tte_s)
@@ -1166,6 +1209,11 @@ def run_session(t: Optional[Transport] = None,
                  # market, behavioral unit for the imbalance dimension
                  "t_utc": datetime.now(timezone.utc).isoformat(),
                  "slug": slug,
+                 # immutable provenance for the fidelity evaluator's
+                 # dedupe (OWNER 5556815940 #2)
+                 "session_id": session_id,
+                 "decision_idx": decision_idx,
+                 "decision_id": decision_id,
                  "action_selection": selection,
                  "next_reevaluation_s": prop.get("next_reevaluation_s"),
                  "behavioral_unit": str(inv.unit) if inv.unit else None,
