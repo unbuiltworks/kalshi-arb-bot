@@ -124,3 +124,65 @@ def test_settle_held_attaches_the_public_view_and_throttles_the_diagnostic(monke
     out2 = cont.settle_held(t, SLUG)                 # inside the throttle window
     assert out2["public"]["public_resolved"] is True
     assert len(logged) == 1
+
+
+def _cs2_trade(i, realized="0.01", state="TRADE_STATE_CLEARED"):
+    return {"type": "ACTIVITY_TYPE_TRADE", "createTime": f"2026-09-06T12:3{i}:00Z",
+            "trade": {"marketSlug": SLUG, "id": f"t{i}", "state": state,
+                      "price": "0.36", "qtyDecimal": "0.02", "isAggressor": False,
+                      "realizedPnl": realized, "side": "BUY", "outcome": "YES"}}
+
+
+class FlatT(FakeT):
+    """cs2 after resolution: public RESOLVED, no position anywhere, every
+    trade CLEARED with the venue's realizedPnl, no POSITION_RESOLUTION."""
+    def __init__(self, trades=None, positions=None):
+        super().__init__()
+        self.trades = trades if trades is not None else [_cs2_trade(i) for i in range(4)]
+        self.positions = positions or []
+        self.PAGES = {None: {"activities": self.trades, "eof": True, "nextCursor": ""}}
+
+    def request(self, method, path, body=None, base=None, **kw):
+        if path.startswith("/v1/portfolio/positions"):
+            self.calls.append((method, path, base))
+            return {"positions": self.positions, "availablePositions": [], "eof": True}
+        return super().request(method, path, body=body, base=base, **kw)
+
+
+def test_flat_account_in_a_publicly_resolved_market_is_settled_from_venue_numbers():
+    auditor._cursor_param["name"] = None
+    res = auditor.audit_market(SLUG, FlatT())
+    assert res["settled"] is True and res["status"] == "REALIZED"
+    assert res["settled_by"] == "venue_market_resolved_account_flat"
+    assert res["realized_confirmed"] is True and res["realized_usd"] == "0.04"
+    assert res["realized_source"].startswith("trade_activities_realizedPnl")
+    assert res["resolution"]["public_settlement_px"] == "0.0000"
+    assert res["settlement_key"] == "flat_at_resolution:2026-09-06T13:28:53Z"
+    assert res["trade_summary"]["trades"][0]["side_fields"] == {"side": "BUY", "outcome": "YES"}
+
+
+def test_flat_at_resolution_never_fires_with_a_position_an_uncleared_trade_or_an_open_market():
+    auditor._cursor_param["name"] = None
+    # a position row anywhere -> still pending (the venue will resolve it)
+    res = auditor.audit_market(SLUG, FlatT(positions=[{"marketSlug": SLUG, "netPosition": "-0.04"}]))
+    assert res["status"] == "PENDING_SETTLEMENT" and res["settled"] is False
+    # an uncleared trade -> pending
+    trades = [_cs2_trade(i) for i in range(3)] + [_cs2_trade(3, state="TRADE_STATE_PENDING")]
+    assert auditor.audit_market(SLUG, FlatT(trades=trades))["status"] == "PENDING_SETTLEMENT"
+    # a trade without the venue's realizedPnl -> settled, realized unconfirmed
+    trades = [_cs2_trade(i) for i in range(3)] + [_cs2_trade(3, realized=None)]
+    res = auditor.audit_market(SLUG, FlatT(trades=trades))
+    assert res["settled"] is True and res["status"] == "SETTLED_REALIZED_UNCONFIRMED"
+    assert res["realized_confirmed"] is False and res["realized_usd"] is None
+    # the public market not resolved -> pending
+    t = FlatT()
+    real = t.request
+
+    def open_market(method, path, body=None, base=None, **kw):
+        if path.startswith(f"/v1/markets/{SLUG}/book"):
+            return {"marketData": {"state": "MARKET_STATE_OPEN", "stats": {}}}
+        if path.startswith("/v1/markets?slug="):
+            return {"markets": [{"slug": SLUG, "status": "MARKET_STATUS_OPEN"}]}
+        return real(method, path, body=body, base=base, **kw)
+    t.request = open_market
+    assert auditor.audit_market(SLUG, t)["status"] == "PENDING_SETTLEMENT"

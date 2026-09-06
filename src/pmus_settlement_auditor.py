@@ -212,8 +212,66 @@ def _trade_summary(rows: list[dict], slug: str) -> dict:
             "realizedPnl": str(_amount(tr.get("realizedPnl")))
             if _amount(tr.get("realizedPnl")) is not None else None,
             "createTime": tr.get("createTime"),
+            # LIVE 15:33Z: the venue's own side/outcome fields, whichever
+            # it uses, so the account's net can be rebuilt from ITS trades
+            "side_fields": {k: tr.get(k) for k in TRADE_SIDE_KEYS if k in tr},
         })
-    return {"trades": out, "busted": busted, "uncleared": uncleared}
+    realized = [_amount(tr.get("realizedPnl")) for tr in
+                (r.get("trade") for r in rows if isinstance(r, Mapping))
+                if isinstance(tr, Mapping) and tr.get("marketSlug") == slug]
+    return {"trades": out, "busted": busted, "uncleared": uncleared,
+            "realized_pnl_rows": sum(1 for x in realized if x is not None),
+            "realized_pnl_sum": str(sum(x for x in realized if x is not None))
+            if any(x is not None for x in realized) else None}
+
+
+TRADE_SIDE_KEYS = ("side", "outcome", "marketSide", "marketSideId", "direction",
+                   "action", "outcomeId", "position", "positionSide", "orderSide")
+
+
+def flat_at_resolution(public: Mapping[str, Any], pos: Any, avail: Any,
+                       trade_info: Mapping[str, Any]) -> Optional[dict]:
+    """LIVE 15:33Z (OWNER P0 5560183912): the venue emits a
+    POSITION_RESOLUTION only for a position it still carries at
+    resolution. aec-cs2-fokus-nemi resolved publicly at 13:28:53Z
+    (settlementPx 0.0000) while the account had no row under `positions`
+    or `availablePositions` and no activity of any kind after its last
+    fill -- flat, nothing to resolve, nothing to claim. That state is
+    SETTLED for this account when ALL of: the public market is resolved
+    with a settlement price, no position row anywhere, every trade in the
+    market CLEARED (none busted/uncleared). Realized is taken ONLY from the
+    venue's own per-trade realizedPnl (never inferred); when any trade
+    lacks it the settlement is recorded with realized unconfirmed."""
+    if not public.get("public_resolved"):
+        return None
+    if pos is not None or avail is not None:
+        return None
+    trades = trade_info.get("trades") or []
+    if not trades or trade_info.get("busted") or trade_info.get("uncleared"):
+        return None
+    confirmed = trade_info.get("realized_pnl_rows") == len(trades) and \
+        trade_info.get("realized_pnl_sum") is not None
+    return {
+        "settled": True,
+        "status": "REALIZED" if confirmed else "SETTLED_REALIZED_UNCONFIRMED",
+        "settlement_key": f"flat_at_resolution:{public.get('settlement_set_time') or public.get('updated_at')}",
+        "settled_by": "venue_market_resolved_account_flat",
+        "resolution": {
+            "side": None,
+            "public_settlement_px": public.get("settlement_px"),
+            "public_settlement_set_time": public.get("settlement_set_time"),
+            "public_status": public.get("status"), "public_state": public.get("state"),
+            "beforeNet": "0", "afterNet": "0",
+            "source": "public market resolution + account flat (no positions / "
+                      "availablePositions row, all trades CLEARED); the venue "
+                      "emitted no POSITION_RESOLUTION because it carried no position",
+        },
+        "realized_confirmed": bool(confirmed),
+        "realized_usd": trade_info.get("realized_pnl_sum") if confirmed else None,
+        "realized_source": "trade_activities_realizedPnl (venue's own per-trade number)"
+        if confirmed else "unconfirmed: a trade lacks the venue's realizedPnl",
+        "trades_cleared": len(trades),
+    }
 
 
 def audit_market(slug: str, t: Optional[q1.Transport] = None) -> dict:
@@ -247,7 +305,13 @@ def audit_market(slug: str, t: Optional[q1.Transport] = None) -> dict:
         "resolution": None,
     }
     if resolution is None:
-        result["status"] = "PENDING_SETTLEMENT"
+        public = public_market_view(slug, t)
+        result["public"] = public
+        flat = flat_at_resolution(public, pos, avail, trade_info)
+        if flat is None:
+            result["status"] = "PENDING_SETTLEMENT"
+            return result
+        result.update(flat)
         return result
 
     before = resolution.get("beforePosition")
