@@ -347,6 +347,12 @@ def score_shadow(rolling: Optional[Mapping[str, Any]], spec: Mapping[str, Any]) 
         return "PASS" if enough else "INSUFFICIENT"
     return {
         "arm": ra.get("arm"), "windows_since_freeze": windows,
+        # OWNER 5557786528 #6: raw / unique / dropped, only unique is wired
+        "shadow_raw_windows": ra.get("shadow_raw_windows", ra.get("window_rows")),
+        "shadow_unique_windows": ra.get("shadow_unique_windows", windows),
+        "shadow_duplicates_dropped": ra.get("shadow_duplicates_dropped"),
+        "shadow_first_entry_utc": ra.get("first_entry_utc"),
+        "shadow_last_entry_utc": ra.get("last_entry_utc"),
         "action_distribution_relation": _dim(
             st(None if l1s is None else (l1s <= thr["l1_sampled_vs_l5_max"]
                                          and (l1a is None or l1a <= thr["l1_acted_vs_l5_max"]))),
@@ -503,6 +509,13 @@ def evidence_progress(live: Mapping[str, Any], shadow: Mapping[str, Any],
                                                "decision_duplicates_dropped",
                                                "order_duplicates_dropped",
                                                "provenance_missing")},
+                # OWNER 5557786528 #3 visible counters (canonical names)
+                "raw_decision_rows": int(acct.get("raw_decision_rows") or 0),
+                "identity_missing_rows": int(acct.get("provenance_missing") or 0),
+                "summary_rows_ignored": int((acct.get("ingest") or {}).get("summary_rows_ignored") or 0),
+                "second_pass_idempotent": bool(acct.get("second_pass_idempotent", True)),
+                "evidence_accounting_valid": not invalid,
+                "ingest": acct.get("ingest"),
                 "unique_decisions": have["live_scored_decisions"],
                 "per_market": live.get("decisions_by_market"),
                 "unique_states": live.get("unique_states"),
@@ -555,11 +568,34 @@ def largest_mismatch(live: Mapping[str, Any], shadow: Mapping[str, Any]) -> dict
 def evaluate(reports: Iterable[Mapping[str, Any]],
              rolling: Optional[Mapping[str, Any]] = None,
              spec: Optional[Mapping[str, Any]] = None,
-             model: Optional[Mapping[str, Any]] = None) -> dict:
+             model: Optional[Mapping[str, Any]] = None,
+             ingest: Optional[Mapping[str, Any]] = None) -> dict:
     spec = spec or load_spec()
-    reports = list(reports)
+    reports = [r for r in reports
+               if isinstance(r, Mapping) and r.get("kind") not in SUMMARY_KINDS]
     raw_d, raw_o = decisions_from_session_reports(reports)
     dd = dedupe(raw_d, raw_o)
+    # OWNER 5557786528 #4: fail closed when the same raw corpus does not
+    # reproduce the same unique set on a second pass (non-idempotent
+    # identity) -- the counters below then carry evidence_accounting_valid
+    # = false and no verdict is emitted
+    second = dedupe(raw_d, raw_o)
+    second_pass_ok = (len(second["decisions"]) == len(dd["decisions"])
+                      and [d["decision_id"] for d in second["decisions"]]
+                      == [d["decision_id"] for d in dd["decisions"]]
+                      and len(second["orders"]) == len(dd["orders"]))
+    dd["raw_decision_rows"] = len(raw_d)
+    dd["raw_order_rows"] = len(raw_o)
+    dd["second_pass_idempotent"] = second_pass_ok
+    if ingest:
+        dd["ingest"] = {k: ingest.get(k) for k in (
+            "rows_total", "summary_rows_ignored", "other_rows_ignored",
+            "raw_decision_rows", "source") if k in ingest}
+        if ingest.get("raw_decision_rows") not in (None, len(raw_d)):
+            second_pass_ok = False            # ingest and flatten disagree
+            dd["second_pass_idempotent"] = False
+    if not second_pass_ok:
+        dd["status"] = "EVIDENCE_ACCOUNTING_INVALID"
     # SYNTHETIC 2 s cadence counterfactual (OWNER 5556751941 #1): scored
     # separately, never merged into live evidence; deduped by seed
     cf_seen: set = set()
@@ -608,9 +644,22 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
             "live": live, "shadow": shadow}
 
 
-def _read_reports(path: Path) -> list:
-    """session_end / session_report rows from a log or ledger file."""
-    out = []
+RAW_EVIDENCE_KINDS = ("session_end", "session_report")
+# OWNER 5557786528 #2: periodic fidelity / L5_FIDELITY summaries are
+# SNAPSHOTS of the evidence, never evidence rows; they are rejected by
+# kind BEFORE aggregation and the rejection is counted.
+SUMMARY_KINDS = ("fidelity_gate", "fidelity_verdict", "fidelity_gate_error",
+                 "l5_fidelity_gate", "L5_FIDELITY", "l5_fidelity",
+                 "fidelity_summary", "campaign_summary", "funnel",
+                 "campaign_state", "advance_gate")
+
+
+def read_reports_accounted(path: Path) -> dict:
+    """Raw session_end / session_report rows from a log or ledger file
+    with the ingest accounting the evidence boundary needs: how many rows
+    were read, how many were summary snapshots (ignored by kind), how many
+    raw decision rows the accepted reports carry."""
+    reports, rows_total, summary_ignored, other_ignored = [], 0, 0, 0
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line:
@@ -621,10 +670,28 @@ def _read_reports(path: Path) -> list:
             row = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if isinstance(row, Mapping) and row.get("kind") in (
-                "session_end", "session_report") and row.get("decisions"):
-            out.append(row)
-    return out
+        rows_total += 1
+        if not isinstance(row, Mapping):
+            other_ignored += 1
+            continue
+        kind = row.get("kind")
+        if kind in SUMMARY_KINDS or str(kind or "").lower().startswith("fidelity"):
+            summary_ignored += 1              # snapshot, never evidence
+            continue
+        if kind in RAW_EVIDENCE_KINDS and row.get("decisions"):
+            reports.append(row)
+        else:
+            other_ignored += 1
+    return {"reports": reports, "rows_total": rows_total,
+            "summary_rows_ignored": summary_ignored,
+            "other_rows_ignored": other_ignored,
+            "raw_decision_rows": sum(len(r.get("decisions") or []) for r in reports),
+            "source": str(path)}
+
+
+def _read_reports(path: Path) -> list:
+    """session_end / session_report rows from a log or ledger file."""
+    return read_reports_accounted(path)["reports"]
 
 
 def main(argv: Optional[list] = None) -> int:

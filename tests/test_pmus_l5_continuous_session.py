@@ -279,10 +279,19 @@ def test_sessions_are_recorded_and_the_fidelity_gate_runs_automatically(
     line = [l for l in out.splitlines() if '"kind": "fidelity_gate"' in l
             or '"kind":"fidelity_gate"' in l]
     assert line, out[-2000:]
+    # OWNER 5557786528 #7: the boot-time reconstruction runs BEFORE any
+    # session (venue may be unavailable) from the raw ledger only ...
+    boot = json.loads(line[0].split(" ", 1)[1])
+    assert boot["evidence_progress"]["minimums"]["live_scored_decisions"]["have"] == 0
+    assert boot["evidence_progress"]["accounting"]["evidence_accounting_valid"] is True
+    # ... and the forced post-session pass counts the new decision once
     j = json.loads(line[-1].split(" ", 1)[1])
     assert j["label"] == "L5 replication in validation"
     prog = j["evidence_progress"]["minimums"]
     assert prog["live_scored_decisions"]["have"] == 1
+    acct = j["evidence_progress"]["accounting"]
+    assert acct["raw_decision_rows"] == 1 and acct["summary_rows_ignored"] == 0
+    assert acct["ingest"]["rows_total"] >= 1
     assert prog["live_scored_decisions"]["need"] == 200
     assert prog["shadow_windows"]["have"] == 0
     assert j["divergence_classes"] == {"no disagreement": 1}

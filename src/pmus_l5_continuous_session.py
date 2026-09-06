@@ -149,9 +149,16 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
     try:
         from src import l5_fidelity_gate as fgate
         path = base.q1.base.state_dir() / "ledger.jsonl"
-        reports = fgate._read_reports(path) if path.exists() else []
+        # OWNER 5557786528 #2: raw session rows only; summary snapshots
+        # (this very fidelity_gate line included) are rejected by kind and
+        # the rejection is counted in the accounting block
+        ingest = (fgate.read_reports_accounted(path) if path.exists()
+                  else {"reports": [], "rows_total": 0, "summary_rows_ignored": 0,
+                        "other_rows_ignored": 0, "raw_decision_rows": 0,
+                        "source": str(path)})
         model = pv2.load_v2()
-        out = fgate.evaluate(reports, rolling=rolling, model=model)
+        out = fgate.evaluate(ingest["reports"], rolling=rolling, model=model,
+                             ingest=ingest)
         out["shadow_source"] = shadow_source
     except Exception as exc:                          # noqa: BLE001
         _log("fidelity_gate_error", err=f"{type(exc).__name__}:{str(exc)[:160]}")
@@ -952,10 +959,16 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     _log("ramp_ladder", active=active_rung["id"],
          rungs=[{"id": r["id"], "lever": r["lever"],
                  "worst_case": r["worst_case"]} for r in report["ramp_ladder"]])
+    # OWNER 5557786528 #7: reconstruct the evidence from the immutable raw
+    # ledger at boot (read-only) so the corrected UNIQUE minimums are
+    # published even while the venue is unavailable; re-run on the frozen
+    # cadence below and forced after every session that adds evidence
+    fidelity_eval(wall(), force=True)
     while clock() < stop_at and len(report["sessions"]) < \
             MAX_SESSIONS_PER_CAMPAIGN + resumes:
         try:
             now = wall()
+            fidelity_eval(now)
             if armed:
                 # OWNER 5552607804: a market we already hold is CONTINUED
                 # (EXTEND / COMPLEMENT / HOLD from the model on the real
@@ -1097,7 +1110,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                          pair_economics=rep.get("pair_economics"))
                     if rep.get("decisions"):
                         record_session_report(rep, held, True)
-                        fidelity_eval(wall())
+                        fidelity_eval(wall(), force=True)
                     if rep.get("status") in ("DAILY_LOSS_STOP", "HALT",
                                              "STATE_NOT_DURABLE",
                                              "NO_CREDENTIALS", "DISARMED"):
@@ -1202,7 +1215,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                  pair_economics=rep.get("pair_economics"))
             if rep.get("decisions"):
                 record_session_report(rep, chosen["slug"], False)
-                fidelity_eval(wall())
+                fidelity_eval(wall(), force=True)
             if rep.get("status") in ("DAILY_LOSS_STOP", "HALT",
                                      "STATE_NOT_DURABLE", "NO_CREDENTIALS",
                                      "DISARMED"):

@@ -157,6 +157,7 @@ class ShadowService:
                 continue
             self.seen.add(ident)
             self.rows.setdefault(key, []).append(r)
+        self.restore_duplicates_dropped = dupes
         _log("records_restored", windows=sum(len(v) for v in self.rows.values()),
              symbols=len({i[0] for i in self.seen}), duplicates_dropped=dupes)
 
@@ -302,6 +303,15 @@ class ShadowService:
         return {"arm": spec["arm"], "windows_since_freeze": len(idents),
                 "window_rows": len(rows),
                 "unique_window_ids": len(idents),
+                # OWNER 5557786528 #6: raw rows read for the frozen arm,
+                # unique canonical (symbol, entry_t, frozen policy) windows
+                # that were ENTERED, and everything dropped between them
+                # (restore-time duplicate/identity-less rows + rows that
+                # were never entered: coverage / replay-error)
+                "shadow_raw_windows": len(rows) + int(getattr(self, "restore_duplicates_dropped", 0) or 0),
+                "shadow_unique_windows": len(entered),
+                "shadow_duplicates_dropped": int(getattr(self, "restore_duplicates_dropped", 0) or 0),
+                "shadow_not_entered_rows": len(rows) - len(entered),
                 # canonical frozen-gate count: unique ENTERED windows (the
                 # set the arm spec scores); `windows` below is the same
                 # set from research_arm_verdict, `windows_since_freeze`

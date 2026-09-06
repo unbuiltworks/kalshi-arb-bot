@@ -186,3 +186,111 @@ def test_open_side_convention_is_deterministic():
     assert l5d.open_side_yes({"bid": D("0.30"), "ask": D("0.305")}) is True    # YES 0.30 < NO 0.695
     assert l5d.open_side_yes({"bid": D("0.60"), "ask": D("0.605")}) is False   # NO 0.395 < YES 0.60
     assert l5d.open_side_yes({"bid": D("0.50"), "ask": D("0.50")}) is True     # tie -> YES
+
+
+def test_summary_snapshots_are_rejected_by_kind_and_counted(tmp_path):
+    """OWNER 5557786528 #2/#3/#5: periodic fidelity summaries are
+    snapshots, never evidence rows -- even when they carry a `decisions`
+    key -- and the rejection is visible in the accounting block."""
+    rep = _report("s1", "m1", 4)
+    snap = {"kind": "fidelity_gate", "label": "L5 replication in validation",
+            "decisions": rep["decisions"],                     # a snapshot echo
+            "evidence_progress": {"minimums": {"live_scored_decisions": {"have": 240}}}}
+    snap2 = {"kind": "L5_FIDELITY", "decisions": rep["decisions"]}
+    p = tmp_path / "ledger.jsonl"
+    p.write_text(json.dumps(rep) + "\n" + json.dumps(snap) + "\n"
+                 + json.dumps({"kind": "funnel", "submitted": 3}) + "\n"
+                 + "PMUS_L5_CAMPAIGN " + json.dumps(snap2) + "\n"
+                 + json.dumps(rep) + "\n")
+    ing = gate.read_reports_accounted(p)
+    assert len(ing["reports"]) == 2 and ing["rows_total"] == 5
+    assert ing["summary_rows_ignored"] == 3 and ing["other_rows_ignored"] == 0
+    assert ing["raw_decision_rows"] == 8
+    out = gate.evaluate(ing["reports"], ingest=ing)
+    acct = out["evidence_progress"]["accounting"]
+    assert acct["raw_decision_rows"] == 8 and acct["unique_decisions"] == 4
+    assert acct["duplicates_dropped"] == 4 + 4          # decisions + orders
+    assert acct["identity_missing_rows"] == 0
+    assert acct["summary_rows_ignored"] == 3
+    assert acct["second_pass_idempotent"] is True
+    assert acct["evidence_accounting_valid"] is True
+    # evaluate() itself refuses summary kinds even when handed directly
+    assert gate.evaluate([rep, snap, snap2])["live"]["scored_decisions"] == 4
+
+
+def _verdict_inputs(out):
+    keep = {k: out[k] for k in ("live", "evidence_progress", "divergence_classes",
+                                "counterfactual_2s", "largest_mismatch")}
+    keep["evidence_progress"] = {k: v for k, v in keep["evidence_progress"].items()}
+    keep["evidence_progress"]["accounting"] = {
+        k: v for k, v in keep["evidence_progress"]["accounting"].items()
+        if k not in ("duplicates_dropped", "decision_duplicates_dropped",
+                     "order_duplicates_dropped", "raw_decision_rows", "ingest")}
+    keep["verdict"] = {k: v for k, v in out["verdict"].items()}
+    return json.dumps(keep, sort_keys=True, default=str)
+
+
+def test_same_corpus_once_twice_and_in_overlapping_chunks_is_byte_identical():
+    """OWNER 5557786528 #5 acceptance: a second evaluator pass over an
+    unchanged corpus cannot advance any minimum by even one count."""
+    a = _report("s1", "m1", 6)
+    b = _report("s2", "m1", 6, t0="2026-09-06T02:10:0")
+    c = _report("s3", "m2", 4, t0="2026-09-06T02:20:0")
+    corpus = [a, b, c]
+    once = gate.evaluate(corpus)
+    twice = gate.evaluate(corpus + copy.deepcopy(corpus))
+    chunks = gate.evaluate([a, b] + [b, c] + [a, c] + corpus)
+    snapshot = gate.evaluate(corpus + [{"kind": "fidelity_gate",
+                                        "decisions": a["decisions"]}])
+    ref = _verdict_inputs(once)
+    for other in (twice, chunks, snapshot):
+        assert _verdict_inputs(other) == ref
+        mins = other["evidence_progress"]["minimums"]
+        assert mins["live_scored_decisions"]["have"] == 16
+        assert mins["live_timed_intervals"]["have"] == 13
+        assert mins["live_markets"]["have"] == 2
+    assert twice["evidence_progress"]["accounting"]["decision_duplicates_dropped"] == 16
+
+
+def test_non_idempotent_identity_fails_closed(monkeypatch):
+    """OWNER 5557786528 #4: if the second pass does not reproduce the
+    first, evidence_accounting_valid=false and no verdict is emitted."""
+    rep = _report("s1", "m1", 5)
+    calls = {"n": 0}
+    real = gate.dedupe
+
+    def flaky(decs, orders):
+        calls["n"] += 1
+        out = real(decs, orders)
+        if calls["n"] == 2:
+            out["decisions"] = out["decisions"][:-1]
+        return out
+    monkeypatch.setattr(gate, "dedupe", flaky)
+    out = gate.evaluate([rep])
+    acct = out["evidence_progress"]["accounting"]
+    assert acct["second_pass_idempotent"] is False
+    assert acct["evidence_accounting_valid"] is False
+    assert acct["status"] == "EVIDENCE_ACCOUNTING_INVALID"
+    assert out["verdict"]["blocked_by"] == "EVIDENCE_ACCOUNTING_INVALID"
+    # ingest that disagrees with the flattened raw rows also fails closed
+    out2 = gate.evaluate([rep], ingest={"raw_decision_rows": 99, "rows_total": 1,
+                                        "summary_rows_ignored": 0})
+    assert out2["evidence_progress"]["accounting"]["evidence_accounting_valid"] is False
+
+
+def test_shadow_counters_expose_raw_unique_and_dropped():
+    spec = gate.load_spec()
+    rolling = {"research_arm_stochastic": {
+        "arm": "reprice_180s:stochastic", "windows_since_freeze": 100,
+        "window_rows": 100, "unique_window_ids": 100,
+        "windows_entered_unique": 92, "shadow_raw_windows": 103,
+        "shadow_unique_windows": 92, "shadow_duplicates_dropped": 3,
+        "first_entry_utc": "2026-09-06T02:11:00+00:00",
+        "last_entry_utc": "2026-09-06T07:28:00+00:00",
+        "action_scoring": {"scored_decisions": 141, "l1_sampled_vs_l5": 0.118,
+                           "l1_acted_vs_l5": 0.489, "off_distribution_rate_pct": 16.0}}}
+    sh = gate.score_shadow(rolling, spec)
+    assert sh["windows_since_freeze"] == 92 == sh["shadow_unique_windows"]
+    assert sh["shadow_raw_windows"] == 103 and sh["shadow_duplicates_dropped"] == 3
+    prog = gate.evidence_progress({"scored_decisions": 0}, sh, spec)
+    assert prog["minimums"]["shadow_windows"]["have"] == 92
