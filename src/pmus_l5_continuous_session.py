@@ -662,9 +662,10 @@ def settle_held(t, slug: str) -> dict:
                "position_net": result.get("position_net"),
                "available_position": result.get("available_position"),
                "activity_walk": result.get("activity_walk"),
-               "trades": {k: (result.get("trade_summary") or {}).get(k)
-                          for k in ("busted", "uncleared", "realized_pnl_rows",
-                                    "realized_pnl_sum")},
+               "trades": {**{k: (result.get("trade_summary") or {}).get(k)
+                             for k in ("busted", "uncleared", "realized_pnl_rows",
+                                       "realized_pnl_sum")},
+                          **_trade_shape((result.get("trade_summary") or {}).get("trades") or [])},
                "resolution": result.get("resolution"),
                "ledger_rows_written": written}
         if result.get("settled"):
@@ -681,6 +682,22 @@ def settle_held(t, slug: str) -> dict:
     except Exception as exc:                       # noqa: BLE001
         return {"status": "AUDIT_UNAVAILABLE",
                 "error": f"{type(exc).__name__}:{str(exc)[:80]}"}
+
+
+def _trade_shape(trades: list) -> dict:
+    """LIVE 15:41Z: the venue's trade rows for the market -- state
+    histogram, the field names, side/outcome fields and qty per row -- so
+    the clearing state that blocks settlement is read, not guessed."""
+    states: dict[str, int] = {}
+    for tr in trades:
+        s = str(tr.get("state"))
+        states[s] = states.get(s, 0) + 1
+    return {"n": len(trades), "states": states,
+            "keys": trades[0].get("keys") if trades else None,
+            "rows": [{"t": tr.get("createTime"), "px": tr.get("price"),
+                      "qty": tr.get("qty"), "state": tr.get("state"),
+                      "aggr": tr.get("isAggressor"), "rpnl": tr.get("realizedPnl"),
+                      **(tr.get("side_fields") or {})} for tr in trades[:16]]}
 
 
 PENDING_DIAGNOSTIC_EVERY_S = 600.0

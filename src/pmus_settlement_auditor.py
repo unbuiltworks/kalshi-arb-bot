@@ -215,6 +215,7 @@ def _trade_summary(rows: list[dict], slug: str) -> dict:
             # LIVE 15:33Z: the venue's own side/outcome fields, whichever
             # it uses, so the account's net can be rebuilt from ITS trades
             "side_fields": {k: tr.get(k) for k in TRADE_SIDE_KEYS if k in tr},
+            "keys": sorted(tr.keys()),
         })
     realized = [_amount(tr.get("realizedPnl")) for tr in
                 (r.get("trade") for r in rows if isinstance(r, Mapping))
