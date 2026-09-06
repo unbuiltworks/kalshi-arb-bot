@@ -46,10 +46,17 @@ def _routes(earnings_rows=None, credit_rows=(), programs=None, earnings_err=Fals
          (q1.API, "/v1/account/balances"): {"balances": [{"buyingPower": {"value": "49.5"},
                                                           "pendingRebates": {"value": "0.00"}}]},
          (q1.GATEWAY, "/v1/incentives"): {"programs": programs if programs is not None else [
-             {"id": "us_open_womens_20260901", "category": "tennis", "pool": 2500,
-              "period": "live", "targetSize": 200, "maxSpread": 0.05,
-              "marketSlugs": ["aqc-tennis-x", "m1"]},
-             {"id": "cfb_live", "category": "cfb", "pool": 1200, "marketSlugs": ["cfb-1"]}]}}
+             {"marketSlug": "aqc-tennis-x", "category": "", "instrumentState": "INSTRUMENT_STATE_OPEN",
+              "timePeriods": [{"programId": "us_open_womens_20260901", "programType": "liquidityProgram",
+                               "rewardPool": 2500, "status": "active", "discountFactor": 0.9,
+                               "targetSize": 10000, "period": "live", "start": "2026-09-06T00:00:00Z"}]},
+             {"marketSlug": "m1", "category": "",
+              "timePeriods": [{"programId": "us_open_womens_20260901", "programType": "liquidityProgram",
+                               "rewardPool": 2500, "status": "ended", "discountFactor": 0.9,
+                               "targetSize": 10000, "period": "live", "start": "2026-09-05T00:00:00Z"}]},
+             {"marketSlug": "cfb-1", "category": "",
+              "timePeriods": [{"programId": "cfb_live", "programType": "liquidityProgram",
+                               "rewardPool": 1200, "status": "active", "targetSize": 5000}]}]}}
     if earnings_err:
         r[(q1.API, "/v1/incentives/earnings")] = RuntimeError("HTTP 404 not found")
     else:
@@ -91,9 +98,15 @@ def test_audit_reads_every_venue_source_and_labels_observed_vs_published(monkeyp
     assert tf["sample_row"]["id"] == "tr1"
     assert out["balances"]["ok"] and any("pendingRebates" in p for p in out["balances"]["fee_or_rebate_key_paths"])
     p = out["programs"]
-    assert p["ok"] and p["programs"] == 2
-    assert p["our_markets_in_programs"][0]["id"] == "us_open_womens_20260901"
-    assert p["our_markets_in_programs"][0]["our_markets"] == ["m1"]
+    assert p["ok"] and p["programs"] == 3 and p["markets_with_active_period"] == 2
+    assert p["our_markets_in_programs"][0]["market"] == "m1"
+    assert p["our_markets_in_programs"][0]["periods"][0]["programId"] == "us_open_womens_20260901"
+    assert p["our_markets_in_programs"][0]["periods"][0]["status"] == "ended"
+    prog = {b["program_id"]: b for b in p["by_program"]}
+    assert prog["us_open_womens_20260901"]["markets"] == 2
+    assert prog["us_open_womens_20260901"]["markets_active"] == 1
+    assert prog["us_open_womens_20260901"]["target_size"] == 10000
+    assert prog["cfb_live"]["reward_pool"] == 1200
     est = out["estimated_rebate_on_our_fills"]
     assert est["fills"] == 2 and est["rebate_after_per_fill_rounding_usd"] == "0.00"
     assert "ESTIMATED" in est["labels"]

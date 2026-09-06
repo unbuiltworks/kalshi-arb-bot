@@ -197,26 +197,44 @@ def published_programs(t: q1.Transport, our_slugs: list[str]) -> dict:
     progs = resp.get("programs") if isinstance(resp, Mapping) else resp
     progs = [p for p in (progs or []) if isinstance(p, Mapping)]
     ours = set(our_slugs)
+    # LIVE 18:36Z: the venue lists ONE ENTRY PER MARKET -- marketSlug,
+    # instrumentState, category and timePeriods[{programId, programType,
+    # rewardPool, status, discountFactor, targetSize, period, start}] --
+    # so programs are aggregated from the periods and reconciled by slug
     matched: list[dict] = []
-    summary: list[dict] = []
+    by_program: dict = {}
+    markets_active = 0
     for p in progs:
-        slugs: set = set()
-        for key in ("marketSlugs", "markets", "slugs"):
-            v = p.get(key)
-            if isinstance(v, list):
-                for x in v:
-                    slugs.add(x if isinstance(x, str) else str((x or {}).get("slug") or (x or {}).get("marketSlug") or ""))
-        row = {k: p.get(k) for k in ("id", "programId", "name", "type", "category",
-                                     "pool", "poolUsd", "rewardPool", "status", "period",
-                                     "startTime", "endTime", "targetSize", "maxSpread",
-                                     "discountFactor") if k in p}
-        row["market_count"] = len(slugs)
-        summary.append(row)
-        hit = sorted(slugs & ours)
-        if hit:
-            matched.append({**row, "our_markets": hit})
-    return {"ok": True, "programs": len(progs), "keys_of_first": sorted(progs[0].keys()) if progs else None,
-            "summary": summary[:40], "our_markets_in_programs": matched,
+        slug = str(p.get("marketSlug") or p.get("slug") or "")
+        periods = [x for x in (p.get("timePeriods") or []) if isinstance(x, Mapping)]
+        active = [x for x in periods if str(x.get("status") or "").lower() == "active"]
+        if active:
+            markets_active += 1
+        for x in periods:
+            pid = str(x.get("programId") or x.get("id") or "?")
+            b = by_program.setdefault(pid, {
+                "program_id": pid, "program_type": x.get("programType"),
+                "reward_pool": x.get("rewardPool"), "target_size": x.get("targetSize"),
+                "discount_factor": x.get("discountFactor"), "period": x.get("period"),
+                "start": x.get("start"), "markets": 0, "markets_active": 0,
+                "categories": Counter()})
+            b["markets"] += 1
+            b["markets_active"] += 1 if str(x.get("status") or "").lower() == "active" else 0
+            b["categories"][str(p.get("category") or slug.split("-")[0])] += 1
+        if slug in ours and periods:
+            matched.append({"market": slug, "periods": [
+                {k: x.get(k) for k in ("programId", "programType", "rewardPool", "status",
+                                        "targetSize", "discountFactor", "period", "start")}
+                for x in periods]})
+    summary = []
+    for b in by_program.values():
+        b["categories"] = dict(b["categories"])
+        summary.append(b)
+    summary.sort(key=lambda b: (-(b["markets_active"]), str(b["program_id"])))
+    return {"ok": True, "programs": len(progs), "markets_listed": len(progs),
+            "markets_with_active_period": markets_active,
+            "keys_of_first": sorted(progs[0].keys()) if progs else None,
+            "by_program": summary[:40], "our_markets_in_programs": matched,
             "raw_head": json.dumps(resp, default=str)[:500]}
 
 
