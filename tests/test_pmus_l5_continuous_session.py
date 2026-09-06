@@ -1850,3 +1850,26 @@ def test_outage_inside_a_declared_maintenance_window_is_classified(
     assert rep2["status"] == "CAMPAIGN_WAITING:VENUE_PRINTS"
     saved2 = json.loads((tmp_path / "l5_campaign_state.json").read_text())
     assert saved2["outage"]["class"] == "scheduled_maintenance"
+
+
+def test_compact_shadow_diagnostics_from_rolling_report():
+    """OWNER 5558167805 #2-#4: the shadow service's attribution/funnel are
+    compacted into the probe's fidelity_gate line; absent -> None."""
+    assert cont._compact_shadow_diagnostics(None) is None
+    assert cont._compact_shadow_diagnostics({"research_arm_stochastic": {}}) is None
+    rolling = {"off_distribution_attribution": {
+                   "scored_decisions": 224, "off_distribution_decisions": 37,
+                   "off_distribution_rate_pct": 16.52, "off_states": 4,
+                   "causes": {"(b) genuinely unseen transfer state: full_combination": 30,
+                              "(a) adapter/translation defect: TTE bucket impossible for the window length": 7},
+                   "cross_tab": {"entry_band_left_decisions": 100},
+                   "by_state": {f"s{i}": {"n": 10 - i, "cause": "(b)", "absent_components": ["x"],
+                                          "refusals": {}, "post_fill": 1} for i in range(8)}},
+               "sampled_to_acted_funnel": {"scored_decisions": 224, "held_share": 0.52,
+                                           "acted_as_sampled_share": 0.4,
+                                           "held_by_reason": {"entry_band_left": 90}}}
+    c = cont._compact_shadow_diagnostics(rolling)
+    assert c["off_distribution"]["off_distribution_decisions"] == 37
+    assert len(c["off_top_states"]) == 6 and c["off_top_states"][0]["state"] == "s0"
+    assert c["funnel"]["held_by_reason"] == {"entry_band_left": 90}
+    assert "per_sampled_relation" not in c["funnel"]

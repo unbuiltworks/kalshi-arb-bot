@@ -125,6 +125,34 @@ def record_session_report(rep: Mapping[str, Any], slug: str,
         "inventory": rep.get("inventory")})
 
 
+def _compact_shadow_diagnostics(rolling: Optional[Mapping[str, Any]]) -> Optional[dict]:
+    """The shadow service's read-only diagnostics, compacted for the log:
+    off-distribution causes / cross-tab / top states and the
+    sampled -> acted funnel (OWNER 5558167805 #2-#4)."""
+    if not rolling:
+        return None
+    attr = rolling.get("off_distribution_attribution") or {}
+    fun = rolling.get("sampled_to_acted_funnel") or {}
+    if not attr and not fun:
+        return None
+    top = list((attr.get("by_state") or {}).items())[:6]
+    return {
+        "off_distribution": {
+            k: attr.get(k) for k in ("scored_decisions", "off_distribution_decisions",
+                                     "off_distribution_rate_pct", "off_states",
+                                     "causes", "cross_tab", "status", "err")
+            if attr.get(k) is not None},
+        "off_top_states": [{"state": s, "n": e.get("n"), "cause": e.get("cause"),
+                            "absent": e.get("absent_components"),
+                            "refusals": e.get("refusals"), "post_fill": e.get("post_fill")}
+                           for s, e in top],
+        "funnel": {k: fun.get(k) for k in ("scored_decisions", "acted_as_sampled_share",
+                                           "held_share", "converted_share",
+                                           "held_by_reason", "per_sampled_relation")
+                   if fun.get(k) is not None},
+    }
+
+
 def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
     """Run the frozen L5 fidelity gate over the ledger's session reports
     (items 8/9): progress toward EVERY minimum, the largest mismatch,
@@ -181,6 +209,17 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
                    for k, v in out["shadow"].items() if isinstance(v, Mapping)},
         "shadow_windows": out["shadow"].get("windows_since_freeze"),
         "shadow_source": out.get("shadow_source"),
+        # OWNER 5558167805 #1/#2/#3/#7: cohort split, the shadow service's
+        # off-distribution attribution + sampled->acted funnel (compact),
+        # and the post-fix COMPLETE price sample
+        "cohort": (out["live"] or {}).get("cohort"),
+        "live_legacy": ({k: {"status": v.get("status"), "n": v.get("n"),
+                             "value": v.get("value")}
+                         for k, v in (out.get("live_legacy") or {}).items()
+                         if isinstance(v, Mapping)}
+                        if out.get("live_legacy") else None),
+        "complete_price_counterfactual": out.get("complete_price_counterfactual"),
+        "shadow_diagnostics": _compact_shadow_diagnostics(rolling),
     }
     _log("fidelity_gate", **compact)
     if out["evidence_progress"]["all_met"]:
