@@ -63,3 +63,23 @@ Deterministic end-to-end simulation: `test_deterministic_recovery_simulation`.
 
 Cap-fallback COMPLETE stays off, taker disabled, per-market cap $0.05,
 concurrency 1, rung R1. No strategy or risk change is in this pass.
+
+## Recovery checklist — live evidence 2026-09-06 00:28Z (OWNER 5555609705 item 4, READ-ONLY)
+
+| check | evidence | result |
+|---|---|---|
+| recorder health | build 39dc163a, connected, auth ok, 128 seats, 29.5k messages; `trades_1h` 0–13 on watched rows; last authenticated book update ~5850 s old (venue quiet, not a recorder fault) | PASS (venue not live) |
+| supervisor (probe) health | build 44d63132 (commit 92d8e8f4), ARMED, flat, selecting every ~20 s (143 cycles by 00:28Z), no error lines since 22:48Z | PASS |
+| durable state | ledger rows `settled` + `realized` written at 23:51:29Z; campaign state file persists filled/settled markets (tested restart paths) | PASS |
+| kill/arm state | dual key present (mode ARMED at boot); restart policy NEVER; nothing can arm from code | PASS |
+| credentials / account reads | positions, open orders, activities and settlement audit all succeeded after 22:48Z | PASS |
+| open-order sweep path | boot sweep 0 seen; post-recovery re-sweep 0 seen; foreign order → stop | PASS |
+| full sports-universe discovery | 128 rows per selection cycle from the recorder status (≤10 s old, `evidence_age_s` 2.7–9.2) | PASS |
+| fresh-decision requirement | every cycle re-reads the status doc; strict gates (`thin_flow`, `market_closed`, band, in-distribution) refused all 128 rows since settlement — 0 admitted | PASS (no candidate while the venue is quiet) |
+| caps | q = venue-minimum unit; $0.05 filled per market; R1 = 3 markets ($0.15); −$1.00 daily stop; residual cap 3; concurrency 1 (boot `rung` line) | PASS |
+| complement retry / deadman | session `finally` cancel-all; SIGTERM → deadman; rest ≤30 s re-checked every poll (tests) | PASS |
+| CFB residual settlement | venue POSITION_RESOLUTION 23:50:51Z, side LONG, beforeNet 0.0600 → afterNet 0; `afterPosition.realized` **$0.0000**; ledger rows written once | SETTLED / REALIZED $0.00 (venue) |
+| cashflow reconciliation | a LONG resolution of 0.06 YES bought at $0.0292 would imply either +$0.0308 (won) or −$0.0292 (lost); the venue reports realized 0.0000 — consistent with a void/refund-at-cost, not yet confirmed by a cash row | OPEN (needs the venue's cash activity row; no action, no order) |
+| campaign horizon | campaign_s 21600 from 20:41Z → the process exits at ~02:41Z with restart NEVER; a redeploy (boot gate + persisted state) restarts the lane safely | WATCH (redeploy at expiry if the venue is still quiet) |
+
+No engineering work remains for the R1 path itself; the two open items are venue-side (cash row for the $0.00 realized) and operational (campaign expiry).

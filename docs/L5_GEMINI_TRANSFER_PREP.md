@@ -297,3 +297,17 @@ shell; HOLD reported with refusal reasons), L1 distances, post-fill
 COMPLETE/EXTEND frequency gaps in pp, calibration by P(complete) bin, and
 the off-distribution rate. Behavior and executable economics must both
 replicate before anything advances.
+
+## 13. Untouched 15m partition counterfactual (OWNER 5555609705 item 3)
+
+`src/gemini_l5_counterfactual_15m.py` → `analysis/l5/gemini_counterfactual_15m.json`
+(+ per-row provenance `gemini_counterfactual_15m_rows.jsonl`). The 15m
+tape is the only historical partition untouched by every v2 shell/arm/
+threshold/hypothesis choice; it is also a print TAIL (29 symbols with
+quotes and prints, 235 prints). Result: 0–2 strict first fills per arm,
+0 completions, 0–1 holds; fidelity on 40–78 scored decisions: sampled
+relation L1 to L5 0.11–0.21, acted L1 0.33–0.66 (the shell's HOLDs). The
+partition is too thin to estimate whether sampling improves completion
+or economics; it is reported, not used. No other clean historical
+partition exists (the 5m tape chose the shells and the primary arm); the
+live post-freeze windows are the only valid OOS sample.
