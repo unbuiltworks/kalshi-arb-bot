@@ -197,7 +197,9 @@ def test_off_distribution_attribution_names_component_and_cause():
     band and post-fill; nothing added or smoothed."""
     model = {"base": {"p25-45c|tte30-120s|flat": {"open|q<5": 5},
                       "p25-45c|tte2-5m|imb1-10": {"extend|q<5": 5},
-                      "p45-55c|tte30-120s|imb1-10": {"extend|q<5": 5}}}
+                      "p45-55c|tte30-120s|imb1-10": {"extend|q<5": 5}},
+             "full": {"p45-55c|tte30-120s|imb1-10|extend|q5-15": {"complete|q<5": 3},
+                      "p45-55c|tte30-120s|imb1-10|open|q5-15": {"extend|q<5": 3}}}
     rows = [_row([
         _d("p25-45c|tte>10m|imb1-10", True, refusal="off_distribution_hold"),        # (a) impossible TTE
         _d("p25-45c|tte30-120s|imb1-10", True, refusal="entry_band_left:0.19"),       # (b) pair unseen
@@ -221,6 +223,20 @@ def test_off_distribution_attribution_names_component_and_cause():
     assert bs["p<10c|tte30-120s|imb1-10"]["absent_components"] == ["price_band"]
     assert bs["p45-55c|tte30-120s|imb1-10"]["n"] == 2
     assert sum(1 for c in out["causes"] if c.startswith("(c)")) == 1
+    # post-fill, base seen, clone key |extend|q<5 absent while |extend|q5-15
+    # exists -> the size-cap override leaked into last_size
+    assert any(c.startswith("(a) translation: the size-cap")
+               for c in bs["p45-55c|tte30-120s|imb1-10"]["causes"])
+    assert sum(bs["p45-55c|tte30-120s|imb1-10"]["causes"].values()) == 2
+    # pre-fill in a base state seen only via post-completion flat states
+    pre = gs.off_distribution_attribution([_row([
+        {**_d("p25-45c|tte30-120s|flat", True, residual=0.0, refusal="entry_band_left:0.19"),
+         "last_rel": None}])],
+        {"base": {"p25-45c|tte30-120s|flat": {"open|q<5": 5}},
+         "full": {"p25-45c|tte30-120s|flat|complete|q5-15": {"open|q<5": 5}}})
+    e = pre["by_state"]["p25-45c|tte30-120s|flat"]
+    assert e["cause"].startswith("(b) unseen transfer state: L5 never OPENED")
+    assert e["absent_components"] == ["pre-fill open in price_band+tte"]
     assert out["cross_tab"] == {"entry_band_left_decisions": 3,
                                 "entry_band_left_and_off_distribution": 2,
                                 "off_states_also_entry_band_states": 1,

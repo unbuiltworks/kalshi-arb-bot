@@ -725,17 +725,41 @@ def off_distribution_attribution(rows: list, model: Optional[Mapping[str, Any]],
         elif not state or d.get("yes_bid") in ("None", ""):
             cause = "(d) coverage/data: no state or no book observation"
         elif base_seen:
-            cause = "(b) genuinely thin transfer state: base state seen, full key (last_rel|size) backed off"
+            # the base state exists; the FULL key (state|last_rel|last_size)
+            # the clone looked up does not. Name which component: the
+            # clone keys a pre-fill decision as |open|q<5 (the builder's
+            # convention for a window's first action) and every post-fill
+            # decision with last_size q<5 (its behavioral unit)
+            full = (model or {}).get("full") or {}
+            lr = d.get("last_rel") or "open"
+            same_rel_other_size = [k for k in full
+                                   if k.startswith(f"{state}|{lr}|")]
+            if residual < 1 and lr == "open":
+                cause = ("(b) unseen transfer state: L5 never OPENED a window pre-fill "
+                         "in this price band|TTE (the base state exists only from "
+                         "post-completion flat states)")
+                absent = ["pre-fill open in price_band+tte"]
+            elif same_rel_other_size:
+                cause = ("(a) translation: the size-cap override fixes last_size at "
+                         "q<5; L5's key at this state|last_rel exists only with other "
+                         f"size buckets ({', '.join(sorted(k.split('|')[-1] for k in same_rel_other_size))})")
+                absent = ["last_size (q<5 vs L5 buckets)"]
+            else:
+                cause = ("(b) genuinely thin transfer state: base state seen, no full "
+                         f"key with last_rel={lr}")
+                absent = [f"last_rel={lr}"]
         else:
             cause = "(b) genuinely unseen transfer state: " + "+".join(absent)
         e = by_state.setdefault(str(state), {
             "n": 0, "state_n": d.get("state_n"), "base_state_seen": base_seen,
-            "absent_components": absent, "cause": cause,
+            "absent_components": absent, "cause": cause, "causes": {},
             "refusals": {}, "post_fill": 0, "acted": {},
             "observation": {"tte_s_example": tte_s, "yes_bid_example": d.get("yes_bid"),
                             "residual_units_example": d.get("residual_units"),
                             "last_rel_example": d.get("last_rel")}})
         e["n"] += 1
+        e["causes"][cause] = e["causes"].get(cause, 0) + 1
+        e["cause"] = max(e["causes"], key=e["causes"].get)      # majority cause
         k = str(d.get("refusal")).split(":")[0] if d.get("refusal") else "none"
         e["refusals"][k] = e["refusals"].get(k, 0) + 1
         e["acted"][str(d.get("acted"))] = e["acted"].get(str(d.get("acted")), 0) + 1
