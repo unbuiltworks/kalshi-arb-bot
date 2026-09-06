@@ -202,7 +202,11 @@ def _trade_summary(rows: list[dict], slug: str) -> dict:
         state = str(tr.get("state") or "")
         if "BUSTED" in state:
             busted = True
-        if state and "CLEARED" not in state and "BUSTED" not in state:
+        # LIVE 15:46Z: every trade this account ever made reads
+        # TRADE_STATE_NEW (the venue's normal, final state; no CLEARED
+        # transition is exposed). Only a state that says it is pending /
+        # rejected / cancelled is uncleared.
+        if state and state not in TRADE_FINAL_STATES and "BUSTED" not in state:
             uncleared = True
         out.append({
             "id": tr.get("id"), "state": state,
@@ -216,6 +220,10 @@ def _trade_summary(rows: list[dict], slug: str) -> dict:
             # it uses, so the account's net can be rebuilt from ITS trades
             "side_fields": {k: tr.get(k) for k in TRADE_SIDE_KEYS if k in tr},
             "keys": sorted(tr.keys()),
+            # LIVE 15:46Z: the side lives inside the execution objects
+            "passive": tr.get("passiveExecution") if isinstance(tr.get("passiveExecution"), Mapping) else None,
+            "aggressor": tr.get("aggressorExecution") if isinstance(tr.get("aggressorExecution"), Mapping) else None,
+            "cost": str(_amount(tr.get("cost"))) if _amount(tr.get("cost")) is not None else None,
         })
     realized = [_amount(tr.get("realizedPnl")) for tr in
                 (r.get("trade") for r in rows if isinstance(r, Mapping))
@@ -228,6 +236,54 @@ def _trade_summary(rows: list[dict], slug: str) -> dict:
 
 TRADE_SIDE_KEYS = ("side", "outcome", "marketSide", "marketSideId", "direction",
                    "action", "outcomeId", "position", "positionSide", "orderSide")
+TRADE_FINAL_STATES = ("TRADE_STATE_NEW", "TRADE_STATE_CLEARED", "TRADE_STATE_SETTLED",
+                      "TRADE_STATE_FILLED", "TRADE_STATE_COMPLETE")
+
+
+def venue_qty_total(trade_info: Mapping[str, Any]) -> Optional[str]:
+    """Shares the venue says this account traded in the market."""
+    total, n = D("0"), 0
+    for tr in trade_info.get("trades") or []:
+        q = _amount(tr.get("qty"))
+        if q is not None:
+            total += q
+            n += 1
+    return str(total) if n else None
+
+
+def ledger_qty_total(slug: str) -> Optional[str]:
+    """Shares this ledger recorded as filled in the market (filled rows;
+    order_terminal rows only when no filled row carries the order)."""
+    path = q1.state_dir() / "ledger.jsonl"
+    if not path.exists():
+        return None
+    filled_orders: set = set()
+    total, n = D("0"), 0
+    terminal: list = []
+    for line in path.read_text().splitlines():
+        try:
+            r = json.loads(line)
+        except Exception:
+            continue
+        if not isinstance(r, Mapping) or r.get("slug") != slug:
+            continue
+        if r.get("kind") == "filled":
+            q = _amount(r.get("qty"))
+            if q is not None:
+                total += q
+                n += 1
+                if r.get("order_id"):
+                    filled_orders.add(str(r["order_id"]))
+        elif r.get("kind") == "order_terminal":
+            terminal.append(r)
+    for r in terminal:
+        if str(r.get("order_id")) in filled_orders:
+            continue
+        q = _amount(r.get("filled_qty"))
+        if q is not None and q > 0:
+            total += q
+            n += 1
+    return str(total) if n else None
 
 
 def flat_at_resolution(public: Mapping[str, Any], pos: Any, avail: Any,
@@ -296,6 +352,11 @@ def audit_market(slug: str, t: Optional[q1.Transport] = None) -> dict:
                                                "oldest_time", "newest_time")},
         "activity_rows": len(walk["rows"]),
         "available_position": avail,
+        # LIVE 15:46Z: venue vs ledger fill reconciliation (cs2: venue 0.24
+        # shares, ledger 0.20 -- the two fills that flattened the pair
+        # landed with no session attached and were never booked)
+        "venue_qty_total": venue_qty_total(trade_info),
+        "ledger_qty_total": ledger_qty_total(slug),
         "position_net": str(net) if net is not None else None,
         "position_expired": bool(pos.get("expired")) if isinstance(pos, Mapping)
         and pos.get("expired") is not None else None,

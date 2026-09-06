@@ -186,3 +186,25 @@ def test_flat_at_resolution_never_fires_with_a_position_an_uncleared_trade_or_an
         return real(method, path, body=body, base=base, **kw)
     t.request = open_market
     assert auditor.audit_market(SLUG, t)["status"] == "PENDING_SETTLEMENT"
+
+
+def test_new_state_trades_without_realized_settle_flat_with_realized_unconfirmed():
+    """LIVE 15:46Z: every trade reads TRADE_STATE_NEW and carries no realized
+    field; a flat account in a resolved market is SETTLED with realized
+    unconfirmed (never fabricated), and the venue-vs-ledger share totals
+    are reported."""
+    auditor._cursor_param["name"] = None
+    trades = []
+    for i in range(4):
+        tr = _cs2_trade(i, state="TRADE_STATE_NEW")
+        del tr["trade"]["realizedPnl"]
+        tr["trade"]["passiveExecution"] = {"orderId": f"o{i}", "side": "BUY"}
+        tr["trade"]["cost"] = "0.0072"
+        trades.append(tr)
+    res = auditor.audit_market(SLUG, FlatT(trades=trades))
+    assert res["settled"] is True and res["status"] == "SETTLED_REALIZED_UNCONFIRMED"
+    assert res["realized_confirmed"] is False and res["realized_usd"] is None
+    assert res["trade_summary"]["uncleared"] is False
+    assert res["trade_summary"]["trades"][0]["passive"] == {"orderId": "o0", "side": "BUY"}
+    assert res["venue_qty_total"] == "0.08" and res["ledger_qty_total"] is None
+    assert auditor.venue_qty_total(res["trade_summary"]) == "0.08"

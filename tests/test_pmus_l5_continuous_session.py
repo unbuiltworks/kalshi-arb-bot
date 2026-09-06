@@ -2007,7 +2007,8 @@ def test_owner_approved_evidence_continuation_starts_only_after_flat_preflight(
     assert rep["continuations"][0]["campaign_id"] == "R1-EVIDENCE-CONTINUATION-TEST"
     pre = rep["continuations"][0]["preflight"]
     assert pre["ok"] and pre["failed"] == []
-    assert set(pre["checks"]["realized_confirmed"]["markets"]) == {"m1", "m2", "m3"}
+    assert set(pre["checks"]["venue_settled"]["markets"]) == {"m1", "m2", "m3"}
+    assert pre["checks"]["venue_settled"]["realized_unconfirmed"] == []
     assert pre["checks"]["open_orders"]["ok"] and pre["checks"]["positions_flat"]["ok"]
     assert "x" in started                            # a market of the new campaign
     assert rep["rung"]["campaign_id"] == "R1-EVIDENCE-CONTINUATION-TEST"

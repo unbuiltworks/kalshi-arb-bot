@@ -1113,11 +1113,27 @@ def continuation_preflight(t, filled: set, settled: set) -> dict:
     for slug in sorted(filled):
         audit = settle_held(t, slug)
         real[slug] = {"status": audit.get("status"),
+                      "settled": bool(audit.get("settled")),
+                      "settled_by": audit.get("settled_by"),
                       "realized_confirmed": bool(audit.get("realized_confirmed")),
-                      "realized_usd": audit.get("realized_usd")}
-    checks["realized_confirmed"] = {
-        "ok": bool(real) and all(v["realized_confirmed"] for v in real.values()),
-        "markets": real}
+                      "realized_usd": audit.get("realized_usd"),
+                      "venue_qty_total": audit.get("venue_qty_total"),
+                      "ledger_qty_total": audit.get("ledger_qty_total")}
+    # LIVE 15:46Z (OWNER P0 5560183912): the venue confirms settlement
+    # either by a POSITION_RESOLUTION activity or by having carried no
+    # position at a public resolution; for the latter it publishes NO
+    # realized number (the trades carry none), so realized stays
+    # unconfirmed and is REPORTED, never blocking: no position, no order,
+    # no unsettled market is the exposure safety, and it is unchanged.
+    checks["venue_settled"] = {
+        "ok": bool(real) and all(v["settled"] for v in real.values()),
+        "markets": real,
+        "realized_unconfirmed": sorted(s for s, v in real.items()
+                                       if not v["realized_confirmed"]),
+        "ledger_vs_venue_qty_mismatch": sorted(
+            s for s, v in real.items()
+            if v["venue_qty_total"] is not None and v["ledger_qty_total"] is not None
+            and D(str(v["venue_qty_total"])) != D(str(v["ledger_qty_total"])))}
     sweep = sweep_orphan_orders(t)
     checks["open_orders"] = {"ok": sweep["seen"] == 0 and not sweep["errors"]
                              and not sweep["foreign"], "sweep": sweep}
