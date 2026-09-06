@@ -1832,7 +1832,13 @@ def test_outage_inside_a_declared_maintenance_window_is_classified(
     saved = json.loads((tmp_path / "l5_campaign_state.json").read_text())
     assert saved["outage"]["class"] == "scheduled_maintenance"
     assert saved["outage"]["maintenance"]["id"] == "pmus-2026-09-06-scheduled"
-    # restart inside the window: restored state carries the class
+    # restart inside the window: restored state carries the class -- also
+    # when the state was saved by an older build WITHOUT a class (the live
+    # 08:30Z build restored a pre-classification record: outage_class null)
+    legacy = dict(saved)
+    legacy["outage"] = {k: v for k, v in saved["outage"].items()
+                        if k not in ("class", "maintenance")}
+    (tmp_path / "l5_campaign_state.json").write_text(json.dumps(legacy))
     monkeypatch.setattr(cont, "held_market", lambda t: None)
     ticks2 = itertools.chain([0.0] + [1.0] * 60, itertools.repeat(1000.0))
     rep2 = cont.run_campaign(fake, clock=lambda: next(ticks2),
@@ -1841,3 +1847,5 @@ def test_outage_inside_a_declared_maintenance_window_is_classified(
                              session_runner=lambda *a, **k: {})
     assert rep2["restored_state"]["outage"]["class"] == "scheduled_maintenance"
     assert rep2["status"] == "CAMPAIGN_WAITING:VENUE_PRINTS"
+    saved2 = json.loads((tmp_path / "l5_campaign_state.json").read_text())
+    assert saved2["outage"]["class"] == "scheduled_maintenance"

@@ -920,7 +920,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         for s_ in settled_here:
             cooldown[s_] = float("inf")
         if persisted.get("outage"):
-            outage = dict(persisted["outage"])
+            # re-classified on restore: state saved by an older build (or
+            # before a window was declared) carries no class
+            outage = classify_outage(dict(persisted["outage"]))
             outage["start_clock"] = clock() - float(
                 outage.get("elapsed_s") or 0.0)
             liveness_baseline = dict(persisted.get("liveness_baseline") or {})
@@ -933,9 +935,10 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             burst.update({"restarted": True, "funnel0": {}, "sessions0": 0,
                           "settlements0": 0})
         report["restored_state"] = {
-            k: persisted.get(k) for k in ("saved_utc", "outage",
-                                          "recovery_gate", "burst",
-                                          "filled_markets", "settled_here")}
+            k: (classify_outage(persisted.get(k)) if k == "outage"
+                else persisted.get(k))
+            for k in ("saved_utc", "outage", "recovery_gate", "burst",
+                      "filled_markets", "settled_here")}
         _log("campaign_state_restored", **report["restored_state"])
     elif armed and t is not None and not status_has_trades():
         # BOOT GATE: no persisted outage but the recorder tape shows no
