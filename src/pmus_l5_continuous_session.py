@@ -147,6 +147,12 @@ def _compact_shadow_diagnostics(rolling: Optional[Mapping[str, Any]]) -> Optiona
                             "absent": e.get("absent_components"),
                             "refusals": e.get("refusals"), "post_fill": e.get("post_fill")}
                            for s, e in top],
+        # canonical-lookup rows only (the only ones that reach the gate)
+        "off_states_v2": [{"state": s, **{k: e.get(k) for k in (
+                               "n", "tier", "state_v1", "refusals", "post_fill",
+                               "last_rel", "last_size_behavioral", "inputs_example")}}
+                          for s, e in list((attr.get("by_state_v2") or {}).items())[:8]],
+        "before_after": attr.get("before_after_canonical_lookup"),
         "funnel": {k: fun.get(k) for k in ("scored_decisions", "acted_as_sampled_share",
                                            "held_share", "converted_share",
                                            "held_by_reason", "per_sampled_relation")
@@ -691,9 +697,23 @@ def load_maintenance_windows(path: Path = MAINTENANCE_FILE) -> list:
             e = datetime.fromisoformat(str(w["end_utc"]).replace("Z", "+00:00"))
         except (KeyError, ValueError, TypeError):
             continue
+        # OWNER 5558646019 #1: a venue may extend its own maintenance; every
+        # revision is kept with its provenance, the effective declared end
+        # is the latest one, the original end_utc is never edited
+        revised_end, revised_by = None, None
+        for rev in w.get("revisions") or []:
+            try:
+                r = datetime.fromisoformat(str(rev["end_utc_revised"]).replace("Z", "+00:00"))
+            except (KeyError, ValueError, TypeError):
+                continue
+            if revised_end is None or r > revised_end:
+                revised_end, revised_by = r, rev.get("revised_by")
+        eff = max(e, revised_end) if revised_end else e
         out.append({"id": w.get("id"), "venue": w.get("venue"),
-                    "start": s.timestamp(), "end": e.timestamp(),
+                    "start": s.timestamp(), "end": eff.timestamp(),
                     "start_utc": w.get("start_utc"), "end_utc": w.get("end_utc"),
+                    "end_utc_revised": (revised_end.isoformat() if revised_end else None),
+                    "revised_by": revised_by,
                     "declared_by": w.get("declared_by")})
     return out
 
@@ -742,9 +762,10 @@ def classify_outage(outage: Optional[dict], windows: Optional[list] = None,
         return outage
     recovered = outage.get("account_recovered_utc")
     ref = _ts(recovered) if recovered else _ts(now_utc)
-    outage["maintenance"] = {k: w[k] for k in ("id", "venue", "start_utc",
-                                               "end_utc", "declared_by")}
-    outage["maintenance"]["declared_end_utc"] = w["end_utc"]
+    outage["maintenance"] = {k: w.get(k) for k in ("id", "venue", "start_utc",
+                                                   "end_utc", "declared_by",
+                                                   "end_utc_revised", "revised_by")}
+    outage["maintenance"]["declared_end_utc"] = w.get("end_utc_revised") or w["end_utc"]
     if ref is not None and ref > w["end"]:
         outage["class"] = "scheduled_maintenance_overrun"
         outage["overrun_s"] = round(ref - w["end"], 1)

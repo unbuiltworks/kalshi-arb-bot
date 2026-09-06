@@ -984,9 +984,30 @@ def off_distribution_attribution(rows: list, model: Optional[Mapping[str, Any]],
         1 for d in both if d["lookup"]["off_distribution_v1"]) / len(both), 2) if both else None)
     ba["off_v2_rate_pct_on_both"] = (round(100.0 * sum(
         1 for d in both if d.get("off_distribution")) / len(both), 2) if both else None)
+    # OWNER 5558646019 #3: the corrected-lookup rows get their own state
+    # table -- these are the only off rows that can reach the gate
+    by_state_v2: dict = {}
+    for d in off:
+        lk = d.get("lookup") or {}
+        if int(lk.get("lookup_version") or 0) != LOOKUP_VERSION:
+            continue
+        e = by_state_v2.setdefault(str(d.get("state")), {
+            "n": 0, "tier": lk.get("lookup_tier"), "state_v1": lk.get("state_v1"),
+            "refusals": {}, "post_fill": 0, "last_size_behavioral": lk.get("last_size_behavioral"),
+            "last_rel": lk.get("last_rel"),
+            "inputs_example": lk.get("state_inputs")})
+        e["n"] += 1
+        k = str(d.get("refusal")).split(":")[0] if d.get("refusal") else "none"
+        e["refusals"][k] = e["refusals"].get(k, 0) + 1
+        try:
+            if abs(float(d.get("residual_units") or 0)) >= 1:
+                e["post_fill"] += 1
+        except (TypeError, ValueError):
+            pass
     return {
         "before_after_canonical_lookup": ba,
         "off_distribution_rows": row_cf,
+        "by_state_v2": dict(sorted(by_state_v2.items(), key=lambda kv: -kv[1]["n"])),
         "scored_decisions": len(decs), "off_distribution_decisions": len(off),
         "off_distribution_rate_pct": round(100.0 * len(off) / len(decs), 2) if decs else None,
         "off_states": len(off_states),

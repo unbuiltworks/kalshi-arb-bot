@@ -310,12 +310,12 @@ def test_declared_maintenance_window_is_a_planned_outage_not_evidence(tmp_path):
     assert o["class"] == "scheduled_maintenance"
     assert o["maintenance"]["id"] == "pmus-2026-09-06-scheduled"
     assert cont.classify_outage({"start_utc": "2026-09-06T06:00:00+00:00"})["class"] == "unplanned"
-    assert cont.classify_outage({"start_utc": "2026-09-06T10:00:01+00:00"})["class"] == "unplanned"
+    assert cont.classify_outage({"start_utc": "2026-09-06T11:15:01+00:00"})["class"] == "unplanned"
     assert cont.classify_outage(None) is None
     # cadence: a session straddling the window contributes no interval
     # across it; decisions inside it are reported as an anomaly
     rep = _report("s1", "m1", 3, t0="2026-09-06T07:10:0")      # 07:10:00..02
-    late = _report("s1", "m1", 2, t0="2026-09-06T10:05:0")     # after the window
+    late = _report("s1", "m1", 2, t0="2026-09-06T11:20:0")     # after the (revised) window
     for i, d in enumerate(late["decisions"]):
         d["decision_idx"] = 10 + i
     inside = _report("s1", "m1", 1, t0="2026-09-06T08:00:0")
@@ -492,36 +492,36 @@ def test_overrun_provenance_and_the_actual_recovery_boundary():
     from src import pmus_l5_continuous_session as cont
     wins = cont.load_maintenance_windows()
     o = {"start_utc": "2026-09-06T07:15:29+00:00", "first_error": "Halt:503"}
-    assert cont.classify_outage(o, now_utc="2026-09-06T09:00:00+00:00")["class"] == "scheduled_maintenance"
-    late = cont.classify_outage(o, now_utc="2026-09-06T10:20:00+00:00")
+    assert cont.classify_outage(o, now_utc="2026-09-06T10:52:00+00:00")["class"] == "scheduled_maintenance"
+    late = cont.classify_outage(o, now_utc="2026-09-06T11:35:00+00:00")
     assert late["class"] == "scheduled_maintenance_overrun"
     assert late["overrun_s"] == 1200.0 and late["recovery_boundary"].startswith("open")
     assert late["maintenance"]["id"] == "pmus-2026-09-06-scheduled"
-    rec = cont.classify_outage({**o, "account_recovered_utc": "2026-09-06T10:45:00+00:00"},
-                               now_utc="2026-09-06T12:00:00+00:00")
+    rec = cont.classify_outage({**o, "account_recovered_utc": "2026-09-06T12:00:00+00:00"},
+                               now_utc="2026-09-06T13:00:00+00:00")
     assert rec["class"] == "scheduled_maintenance_overrun"
     assert rec["overrun_s"] == 2700.0 and rec["recovery_boundary"] == "venue_recovered"
     # effective window: open-ended while unrecovered, then the recovery instant
-    eff = cont.effective_maintenance_windows(wins, o, "2026-09-06T10:20:00+00:00", recoveries=[])
+    eff = cont.effective_maintenance_windows(wins, o, "2026-09-06T11:35:00+00:00", recoveries=[])
     assert eff[0]["boundary"].startswith("open") and eff[0]["overrun_s"] == 1200.0
     eff2 = cont.effective_maintenance_windows(
         wins, None, "2026-09-06T12:00:00+00:00",
         recoveries=[{"start_utc": "2026-09-06T07:15:29+00:00",
-                     "account_recovered_utc": "2026-09-06T10:45:00+00:00"}])
+                     "account_recovered_utc": "2026-09-06T12:00:00+00:00"}])
     assert eff2[0]["boundary"] == "venue_recovered"
-    assert eff2[0]["effective_end_utc"] == "2026-09-06T10:45:00+00:00"
+    assert eff2[0]["effective_end_utc"] == "2026-09-06T12:00:00+00:00"
     assert eff2[0]["overrun_s"] == 2700.0
     # cadence: an interval bridging the OVERRUN (10:20 -> 10:40) is excluded
     # under the effective window; one after recovery (10:50 -> 10:52) counts
-    rep = _report("s1", "m1", 1, t0="2026-09-06T10:20:0")
-    d2 = _report("s1", "m1", 1, t0="2026-09-06T10:40:0")["decisions"][0]; d2["decision_idx"] = 1
-    d3 = _report("s1", "m1", 1, t0="2026-09-06T10:50:0")["decisions"][0]; d3["decision_idx"] = 2
-    d4 = _report("s1", "m1", 1, t0="2026-09-06T10:52:0")["decisions"][0]; d4["decision_idx"] = 3
+    rep = _report("s1", "m1", 1, t0="2026-09-06T11:35:0")
+    d2 = _report("s1", "m1", 1, t0="2026-09-06T11:55:0")["decisions"][0]; d2["decision_idx"] = 1
+    d3 = _report("s1", "m1", 1, t0="2026-09-06T12:05:0")["decisions"][0]; d3["decision_idx"] = 2
+    d4 = _report("s1", "m1", 1, t0="2026-09-06T12:07:0")["decisions"][0]; d4["decision_idx"] = 3
     corpus = [{**rep, "decisions": rep["decisions"] + [d2, d3, d4], "orders": []}]
     declared_only = gate.evaluate(corpus, maintenance=wins)
     effective = gate.evaluate(corpus, maintenance=eff2)
-    assert declared_only["live"]["timing_cadence"]["n"] == 3      # 10:00 end: nothing excluded
-    assert effective["live"]["timing_cadence"]["n"] == 1          # 10:20->10:40, 10:40->10:50 excluded
+    assert declared_only["live"]["timing_cadence"]["n"] == 3      # 11:15 end: nothing excluded
+    assert effective["live"]["timing_cadence"]["n"] == 1          # 11:35->11:55, 11:55->12:05 excluded
     assert effective["evidence_progress"]["accounting"]["maintenance"]["intervals_excluded_maintenance"] == 2
     assert effective["evidence_progress"]["accounting"]["maintenance"]["windows"][0]["boundary"] == "venue_recovered"
 
@@ -560,3 +560,19 @@ def test_shadow_gate_consumes_only_proven_canonical_lookup_rows():
     assert sh3["off_distribution_rate"]["value"] == 1.7 and sh3["off_distribution_rate"]["status"] == "INSUFFICIENT"
     assert sh3["action_distribution_relation"]["value"]["l1_sampled_vs_l5"] == 0.07
     assert sh3["windows_since_freeze"] == 124 and sh3["windows_entered_unique_v2"] == 20
+
+
+def test_revised_maintenance_end_is_kept_with_provenance():
+    """The venue extended its own maintenance (7:15 ET): the original
+    end_utc is untouched, the latest revision is the declared end the
+    overrun is measured against, and the class inside it is scheduled."""
+    from src import pmus_l5_continuous_session as cont
+    w = cont.load_maintenance_windows()[0]
+    assert w["end_utc"] == "2026-09-06T10:00:00+00:00"
+    assert w["end_utc_revised"] == "2026-09-06T11:15:00+00:00"
+    assert w["revised_by"].startswith("user statement")
+    o = {"start_utc": "2026-09-06T07:15:29+00:00"}
+    assert cont.classify_outage(o, now_utc="2026-09-06T10:52:00+00:00")["class"] == "scheduled_maintenance"
+    late = cont.classify_outage(o, now_utc="2026-09-06T11:30:00+00:00")
+    assert late["class"] == "scheduled_maintenance_overrun" and late["overrun_s"] == 900.0
+    assert late["maintenance"]["declared_end_utc"] == "2026-09-06T11:15:00+00:00"

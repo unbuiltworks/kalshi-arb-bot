@@ -15,7 +15,15 @@
       "end_local": "2026-09-06 06:00 ET",
       "declared_by": "owner comment 5557988072 (2026-09-06T08:19:33Z)",
       "first_observed_error": "Halt:GET_RETRIES_EXHAUSTED:/v1/orders/open:HTTP Error 503: Service Unavailable at 2026-09-06T07:15:29Z",
-      "note": "start is the first observed 503; the owner declared maintenance until 06:00 ET. Prints after end_utc still have to pass the recovery gate before any session."
+      "note": "start is the first observed 503; the owner declared maintenance until 06:00 ET. Prints after end_utc still have to pass the recovery gate before any session.",
+      "revisions": [
+        {
+          "end_utc_revised": "2026-09-06T11:15:00+00:00",
+          "end_local": "2026-09-06 07:15 ET",
+          "revised_by": "user statement 2026-09-06T11:00Z (Polymarket down until 7:15 am)",
+          "note": "the venue extended its own maintenance; the original end_utc is kept, the overrun is measured against the latest revised end, and the actual boundary stays the first healthy account read (venue_recovered 2026-09-06T10:52:18Z, prints gate still waiting)"
+        }
+      ]
     }
   ]
 }
