@@ -126,6 +126,74 @@ def _model_view(model: Optional[Mapping[str, Any]], bid: Any) -> dict:
                                 for r, p in ranked]}
 
 
+def _f(x: Any, default: float = 0.0) -> float:
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return default
+
+
+PAIR_SCORE_WEIGHTS = {
+    # OWNER 5556038561 #6: rank for CLEAN COMPLETED PAIRS, not first-leg
+    # fill rate. Every component is a measured recorder/model fact.
+    "two_sided_flow": 2.0,        # prints on BOTH sides in the hour
+    "flow": 2.0,                  # trades_1h, saturating at 50
+    "complement_availability": 2.0,  # opposite side displayed & sized
+    "fee_headroom": 1.5,          # pair at the touches vs the 0.98 target
+    "on_distribution": 2.0,       # model evidence for the OPEN state
+    "depth": 1.0,                 # min(displayed bid, ask) size, sat. 100
+    "residual_duration": 0.5,     # hours to the market's endDate (coarse)
+    "feed_quality": 0.5,          # recorder cadence gaps
+}
+
+
+def pair_score(row: Mapping[str, Any], mv: Mapping[str, Any],
+               now: float) -> dict:
+    """0..1 composite for the ranking (higher = better pair prospects),
+    with every component reported so the selection log shows WHY."""
+    bid, ask = _f(row.get("bid")), _f(row.get("ask"))
+    bq = _f(row.get("bid_qty"), _f(row.get("bid_touch_qty")))
+    aq = row.get("ask_qty")
+    aq = _f(aq) if aq is not None else None
+    depth = min(bq, aq) if aq is not None else bq
+    pair_at_touch = (bid + (1.0 - ask)) if (bid and ask) else None
+    if pair_at_touch is None:
+        headroom = 0.0
+    else:
+        headroom = (1.0 if pair_at_touch <= 0.98
+                    else max(0.0, 1.0 - (pair_at_touch - 0.98) / 0.02))
+    end = (row.get("market_state") or {}).get("endDate")
+    hours = None
+    if end:
+        try:
+            from datetime import datetime, timezone
+            dt = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
+            hours = max(0.0, (dt.timestamp() - now) / 3600.0)
+        except (ValueError, TypeError):
+            hours = None
+    comp = {
+        "two_sided_flow": 1.0 if row.get("two_sided_trades") else 0.0,
+        "flow": min(_f(row.get("trades_1h")), 50.0) / 50.0,
+        "complement_availability": (1.0 if (ask and (aq is None or aq > 0))
+                                    else 0.0),
+        "fee_headroom": headroom,
+        "on_distribution": (0.0 if mv.get("off_distribution")
+                            else min(_f(mv.get("state_n")), 300.0) / 300.0),
+        "depth": min(depth, 100.0) / 100.0,
+        "residual_duration": (0.5 if hours is None
+                              else max(0.0, 1.0 - hours / 24.0)),
+        "feed_quality": (1.0 if row.get("collector_gaps") in (0, None, False)
+                         else 0.5),
+    }
+    total_w = sum(PAIR_SCORE_WEIGHTS.values())
+    score = sum(PAIR_SCORE_WEIGHTS[k] * v for k, v in comp.items()) / total_w
+    return {"pair_score": round(score, 4),
+            "pair_at_touch": (round(pair_at_touch, 4)
+                              if pair_at_touch is not None else None),
+            "hours_to_end": (round(hours, 2) if hours is not None else None),
+            "components": {k: round(v, 3) for k, v in comp.items()}}
+
+
 def rank_candidates(status: Mapping[str, Any], now: float,
                     model: Optional[Mapping[str, Any]] = None,
                     exclude: Optional[Mapping[str, float]] = None) -> dict:
@@ -147,7 +215,9 @@ def rank_candidates(status: Mapping[str, Any], now: float,
                 "collector_gaps": row.get("collector_gaps"),
                 "market_status": (row.get("market_state") or {}).get("status"),
                 "probe_entry_action": row.get("probe_entry_action"),
-                **mv}
+                "trades_1h": row.get("trades_1h"),
+                "two_sided_trades": row.get("two_sided_trades"),
+                **mv, **pair_score(row, mv, now)}
         until = exclude.get(slug)
         if reason is None and until is not None and now < until:
             reason = f"cooldown_until:{round(until - now, 1)}s"
@@ -167,8 +237,13 @@ def rank_candidates(status: Mapping[str, Any], now: float,
         # here (a clean feed ranks above a gappy one), never a veto
         g = x.get("collector_gaps")
         return 1 if g is None else int(bool(g))
-    admitted.sort(key=lambda x: (x["off_distribution"], -x["state_n"],
-                                 -x["p_buy"], _gap(x), -_touch(x), x["slug"]))
+    # OWNER 5556038561 #6: a known state first, a clean feed first, then
+    # the measured pair prospects (two-sided flow, complement
+    # availability, fee headroom, depth, duration, model evidence); the
+    # old first-leg keys only break ties
+    admitted.sort(key=lambda x: (x["off_distribution"], _gap(x),
+                                 -x["pair_score"], -x["state_n"],
+                                 -x["p_buy"], -_touch(x), x["slug"]))
     # OWNER 5552475548 item 4: prioritise live CFB when its books are
     # active, unless another market has MATERIALLY better L5-state fit and
     # executable flow (twice the model evidence AND at least the depth).
@@ -219,7 +294,9 @@ def select_candidate(now: Optional[float] = None,
                                           "bid_touch_qty", "state",
                                           "state_n", "p_buy",
                                           "relation_ranked",
-                                          "probe_entry_action")}
+                                          "probe_entry_action",
+                                          "pair_score", "pair_at_touch",
+                                          "hours_to_end", "components")}
                    for x in ranking["admitted"]],
          refused=[{"slug": x["slug"], "bid": x["bid"],
                    "reason": x["reason"], "state_n": x["state_n"]}
