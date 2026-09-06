@@ -10,8 +10,15 @@ def test_dead_no_pool_is_idle():
     assert d.state == "IDLE" and not d.quotes and d.cancel_all
 
 
-def test_dead_reward_pool_quotes_q10_when_safe():
+def test_10_dollar_canary_does_not_burn_budget_on_q10_subsidy():
     d = decide(PairInventory(), _book(), 0.0, 200.0, in_reward_pool=True)
+    assert d.state == "IDLE" and not d.quotes
+    assert d.reason == "SUBSIDY_DISABLED_OR_UNSAFE"
+
+
+def test_dead_reward_pool_quotes_q10_only_with_separate_larger_budget():
+    d = decide(PairInventory(), _book(), 0.0, 200.0, in_reward_pool=True,
+               max_spend=20.0, max_worst_loss=5.0)
     assert d.state == "SUBSIDY"
     assert sorted(q.side for q in d.quotes) == ["no", "yes"]
     assert all(q.size == 10 for q in d.quotes)
@@ -20,24 +27,61 @@ def test_dead_reward_pool_quotes_q10_when_safe():
 
 def test_subsidy_skips_if_q10_breaks_loss_cap():
     b = _book(yb=0.94, ya=0.95, nb=0.05, na=0.06)
-    d = decide(PairInventory(), b, 0.0, 200.0, in_reward_pool=True, max_worst_loss=5.0)
+    d = decide(PairInventory(), b, 0.0, 200.0, in_reward_pool=True,
+               max_spend=20.0, max_worst_loss=5.0)
     assert d.state == "IDLE" and not d.quotes
-    assert d.reason == "SUBSIDY_UNSAFE_OR_UNQUALIFIED"
+    assert d.reason == "SUBSIDY_DISABLED_OR_UNSAFE"
+
+
+def test_progressive_new_entry_sizes_warm_hot_very_hot():
+    warm = decide(PairInventory(), _book(), 25.0, 200.0)
+    hot = decide(PairInventory(), _book(), 250.0, 200.0)
+    burst = decide(PairInventory(), _book(), 700.0, 200.0)
+    assert warm.state == "WARM" and all(q.size == 1 for q in warm.quotes)
+    assert hot.state == "HOT" and all(q.size == 2 for q in hot.quotes)
+    assert burst.state == "VERY_HOT" and all(q.size == 3 for q in burst.quotes)
 
 
 def test_hot_flat_joins_bids():
     d = decide(PairInventory(), _book(), 250.0, 200.0)
     assert d.state == "HOT"
     assert {q.side: q.price for q in d.quotes} == {"yes": 0.47, "no": 0.50}
+    assert all(q.size == 2 for q in d.quotes)
+
+
+def test_progressive_sizing_tapers_as_window_budget_is_used():
+    mid = PairInventory()
+    mid.apply_fill("yes", 5, 0.40); mid.apply_fill("no", 5, 0.40)  # $4 spent
+    d_mid = decide(mid, _book(), 700.0, 200.0)
+    assert d_mid.state == "VERY_HOT" and all(q.size == 2 for q in d_mid.quotes)
+
+    late = PairInventory()
+    late.apply_fill("yes", 8, 0.45); late.apply_fill("no", 8, 0.45)  # $7.20 spent
+    d_late = decide(late, _book(), 700.0, 200.0)
+    assert d_late.state == "VERY_HOT" and all(q.size == 1 for q in d_late.quotes)
+
+
+def test_new_entry_reserves_budget_for_opposite_leg():
+    inv = PairInventory()
+    inv.apply_fill("yes", 9, 0.49); inv.apply_fill("no", 9, 0.50)  # $8.91 spent
+    d = decide(inv, _book(), 700.0, 200.0)
+    assert all(q.size == 1 for q in d.quotes)
+    # No policy may propose q2/q3 when less than $2 of pair budget remains.
+    assert inv.spend + max(q.size for q in d.quotes) <= 10.0 + 1e-9
+
+
+def test_no_new_inventory_in_final_60_seconds_when_flat():
+    d = decide(PairInventory(), _book(), 700.0, 55.0)
+    assert d.state == "ENTRY_STOP" and not d.quotes and d.cancel_all
 
 
 def test_inventory_quotes_missing_side_only_and_completes_example():
-    inv = PairInventory(); inv.apply_fill("yes", 5, 0.47)
+    inv = PairInventory(); inv.apply_fill("yes", 2, 0.47)
     d = decide(inv, _book(yb=0.47, ya=0.50, nb=0.48, na=0.52), 250.0, 200.0)
     assert len(d.quotes) == 1
     q = d.quotes[0]
     assert q.side == "no" and q.reason == "LEAN_COMPLETE_PORTFOLIO"
-    assert q.price == 0.51 and q.size == 5
+    assert q.price == 0.51 and q.size == 2
     probe = inv.clone(); probe.apply_fill(q.side, q.size, q.price)
     assert abs(probe.residual) < 1e-9
     assert probe.avg_pair_cost() <= 1.0
@@ -50,7 +94,7 @@ def test_portfolio_ceiling_catches_old_pair_plus_expensive_new_fill():
     inv.apply_fill("yes", 5, 0.40); inv.apply_fill("no", 5, 0.60)
     inv.apply_fill("yes", 5, 0.90)
     b = _book(yb=0.90, ya=0.92, nb=0.30, na=0.32)
-    d = decide(inv, b, 250.0, 200.0)
+    d = decide(inv, b, 250.0, 200.0, max_spend=20.0, max_worst_loss=10.0)
     assert len(d.quotes) == 1
     q = d.quotes[0]
     assert q.side == "no" and q.price == 0.10
@@ -60,28 +104,28 @@ def test_portfolio_ceiling_catches_old_pair_plus_expensive_new_fill():
 
 
 def test_dead_with_inventory_manages_missing_side_not_subsidy():
-    inv = PairInventory(); inv.apply_fill("yes", 3, 0.45)
+    inv = PairInventory(); inv.apply_fill("yes", 2, 0.45)
     d = decide(inv, _book(nb=0.48, na=0.52), 0.0, 200.0, in_reward_pool=True)
     assert d.state == "INVENTORY_MANAGE"
     assert len(d.quotes) == 1 and d.quotes[0].side == "no"
 
 
 def test_rescue_only_zone_and_bounded_premium():
-    inv = PairInventory(); inv.apply_fill("yes", 5, 0.47)
+    inv = PairInventory(); inv.apply_fill("yes", 2, 0.47)
     assert decide(inv, _book(), 0.0, 200.0).rescue is None
     assert decide(inv, _book(na=0.55), 0.0, 45.0).rescue is not None
     assert decide(inv, _book(na=0.60), 0.0, 45.0).rescue is None
 
 
 def test_expiry_stop_allows_rescue_but_no_maker_quotes():
-    inv = PairInventory(); inv.apply_fill("yes", 5, 0.47)
+    inv = PairInventory(); inv.apply_fill("yes", 2, 0.47)
     d = decide(inv, _book(na=0.54), 500.0, 20.0)
     assert d.state == "EXPIRY_STOP" and not d.quotes and d.cancel_all
     assert d.rescue is not None
 
 
-def test_flat_hot_quote_respects_one_sided_loss_cap():
-    d = decide(PairInventory(), _book(), 250.0, 200.0, max_worst_loss=1.0)
+def test_flat_hot_quote_respects_two_dollar_one_sided_loss_cap():
+    d = decide(PairInventory(), _book(), 700.0, 200.0)
     for q in d.quotes:
         p = PairInventory(); p.apply_fill(q.side, q.size, q.price)
-        assert p.worst_settlement_loss() <= 1.0 + 1e-9
+        assert p.worst_settlement_loss() <= 2.0 + 1e-9
