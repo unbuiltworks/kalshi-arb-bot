@@ -25,7 +25,8 @@
       "src/l5_fidelity_gate.py",
       "analysis/l5/l5_fidelity_gate.json",
       "analysis/l5/venue_maintenance_windows.json",
-      "analysis/l5/l5_cadence_behavioral_unit.json"
+      "analysis/l5/l5_cadence_behavioral_unit.json",
+      "analysis/l5/l5_campaign_approvals.json"
     ]
   },
   "deploy": {

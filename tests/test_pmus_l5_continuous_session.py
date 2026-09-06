@@ -5,6 +5,7 @@ with inventory. DISARMED it is a shadow selector with no venue network."""
 from __future__ import annotations
 
 import json
+import pytest
 
 from src import pmus_l5_continuous_session as cont
 from src import pmus_spring_l5_probe_entry as entry
@@ -1939,3 +1940,125 @@ def test_rung_allowance_spent_blocks_selection_and_settles_to_the_gate(monkeypat
     assert started == []
     assert rep["status"] == "CAMPAIGN_RUNG_COMPLETE"
     assert rep["advance_gate"]["filled_markets"] == ["m1", "m2", "m3"]
+
+
+def test_owner_approved_evidence_continuation_starts_only_after_flat_preflight(
+        monkeypatch, tmp_path):
+    """OWNER (after 5559915772): a fresh R1 EVIDENCE continuation starts
+    from a repo approval only at the previous campaign's advance gate,
+    after the preflight (every filled market settled with venue-confirmed
+    realized, zero open orders, positions flat, ledger clean); its stop
+    rule is the frozen LIVE evidence minimums; the approval is consumed
+    once (a restart never re-runs it); every per-market control is the
+    session's own constant and is not touched here."""
+    shares, tape = {"v": 100.0}, {"trades": 5}
+    fake = _two_run_harness(monkeypatch, tmp_path, shares, tape)
+    monkeypatch.setattr(cont, "status_has_trades", lambda: True)
+    approvals = tmp_path / "approvals.json"
+    approvals.write_text(json.dumps({"approvals": [{
+        "campaign_id": "R1-EVIDENCE-CONTINUATION-TEST", "approved_by": "owner",
+        "rung": "R1", "stop_rule": "frozen_evidence_minimums"}]}))
+    monkeypatch.setattr(cont, "CAMPAIGN_APPROVALS_FILE", approvals)
+    cont.save_campaign_state({
+        "saved_utc": "x", "rung": "R1", "filled_markets": ["m1", "m2", "m3"],
+        "settled_here": ["m1", "m2"], "outage": None,
+        "liveness_baseline": {}, "recovery_gate": None, "burst": None})
+    from src import pmus_settlement_auditor as auditor
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+        "market": slug, "settled": True, "status": "REALIZED",
+        "settlement_key": "r", "realized_confirmed": True,
+        "realized_usd": "-0.01", "position_net": "0",
+        "resolution": {"side": "YES", "tradeId": "r", "updateTime": "t"}})
+    ledger_unsettled = ["m3"]
+    monkeypatch.setattr(cont, "unsettled_slugs", lambda: list(ledger_unsettled))
+    monkeypatch.setattr(cont, "sweep_orphan_orders", lambda t: {
+        "seen": 0, "cancelled": [], "foreign": [], "errors": []})
+    monkeypatch.setattr(cont, "held_market", lambda t: None)
+    not_met = {k: {"have": 94 if k == "live_scored_decisions" else 2,
+                   "need": 200, "met": False} for k in cont.EVIDENCE_MINIMUM_KEYS}
+
+    def fake_gate(now, force=False):
+        cont._fidelity_last["minimums"] = dict(not_met)
+        return None
+    monkeypatch.setattr(cont, "fidelity_eval", fake_gate)
+    started = []
+
+    def session(t, clock, sleep, wall, slug, gate_ok, deadline_s, **kw):
+        started.append(slug)
+        ledger_unsettled.clear()
+        return {"status": "SPRING_NO_FILL", "slug": slug, "orders": [],
+                "decisions": [], "inventory": {"up": "0", "dn": "0"}}
+    import itertools
+    # the ledger's unsettled m3 clears when the audit settles it
+    real_settle = cont.settle_held
+
+    def settle(t, slug):
+        out = real_settle(t, slug)
+        if slug in ledger_unsettled:
+            ledger_unsettled.remove(slug)
+        return out
+    monkeypatch.setattr(cont, "settle_held", settle)
+    ticks = itertools.chain([0.0] + [1.0] * 60, itertools.repeat(1000.0))
+    rep = cont.run_campaign(fake, clock=lambda: next(ticks),
+                            sleep=lambda s: None, wall=lambda: 1005.0,
+                            campaign_s=500.0, session_runner=session)
+    # (A) m3 settled on the audit path -> advance gate -> approval ->
+    # preflight OK -> the continuation selects a NEW market
+    assert rep["continuations"][0]["campaign_id"] == "R1-EVIDENCE-CONTINUATION-TEST"
+    pre = rep["continuations"][0]["preflight"]
+    assert pre["ok"] and pre["failed"] == []
+    assert set(pre["checks"]["realized_confirmed"]["markets"]) == {"m1", "m2", "m3"}
+    assert pre["checks"]["open_orders"]["ok"] and pre["checks"]["positions_flat"]["ok"]
+    assert "x" in started                            # a market of the new campaign
+    assert rep["rung"]["campaign_id"] == "R1-EVIDENCE-CONTINUATION-TEST"
+    assert rep["rung"]["stop_rule"] == "frozen_evidence_minimums"
+    assert rep["rung"]["per_market_cap_usd"] == str(cont.base.SESSION_NOTIONAL_CAP)
+    assert rep["rung"]["concurrency"] == 1
+    assert rep["rung"]["previous_campaigns"] == ["R1-INITIAL"]
+    assert rep["advance_gate"]["filled_markets"] == ["m1", "m2", "m3"]
+    saved = json.loads((tmp_path / "l5_campaign_state.json").read_text())
+    assert saved["campaign_id"] == "R1-EVIDENCE-CONTINUATION-TEST"
+    assert saved["stop_rule"] == "frozen_evidence_minimums"
+    assert saved["previous_campaigns"][0]["filled_markets"] == ["m1", "m2", "m3"]
+    assert saved["filled_markets"] == []
+    # (B) restart with every LIVE minimum met: no selection (reason-coded,
+    # evidence stop rule), the gate fires, and the consumed approval is
+    # never re-run
+    met = {k: {**v, "met": True} for k, v in not_met.items()}
+    cont._fidelity_last["minimums"] = met
+    monkeypatch.setattr(cont, "fidelity_eval", lambda now, force=False: None)
+    started2 = []
+    ticks = itertools.chain([0.0] + [1.0] * 40, itertools.repeat(1000.0))
+    rep2 = cont.run_campaign(fake, clock=lambda: next(ticks),
+                             sleep=lambda s: None, wall=lambda: 1005.0,
+                             campaign_s=500.0,
+                             session_runner=lambda *a, **k: started2.append(k.get("slug")) or {})
+    assert started2 == []
+    assert rep2["status"] == "CAMPAIGN_RUNG_COMPLETE"
+    assert rep2["rung"]["campaign_id"] == "R1-EVIDENCE-CONTINUATION-TEST"
+    assert "continuations" not in rep2
+    # (C) preflight failure blocks the start: a market still held
+    cont.save_campaign_state({
+        "saved_utc": "x", "rung": "R1", "filled_markets": ["m1", "m2", "m3"],
+        "settled_here": ["m1", "m2", "m3"], "outage": None,
+        "liveness_baseline": {}, "recovery_gate": None, "burst": None})
+    monkeypatch.setattr(cont, "held_market", lambda t: None)
+    monkeypatch.setattr(cont, "sweep_orphan_orders", lambda t: {
+        "seen": 1, "cancelled": [{"order_id": "o"}], "foreign": [], "errors": []})
+    cont._fidelity_last["minimums"] = dict(not_met)
+    started3 = []
+    ticks = itertools.chain([0.0] + [1.0] * 40, itertools.repeat(1000.0))
+    rep3 = cont.run_campaign(fake, clock=lambda: next(ticks),
+                             sleep=lambda s: None, wall=lambda: 1005.0,
+                             campaign_s=500.0,
+                             session_runner=lambda *a, **k: started3.append(k.get("slug")) or {})
+    assert started3 == []
+    assert rep3["status"] == "CAMPAIGN_WAITING:CONTINUATION_PREFLIGHT"
+    assert "continuations" not in rep3
+
+
+@pytest.fixture(autouse=True)
+def _no_repo_campaign_approvals(monkeypatch, tmp_path):
+    """The repo's real owner approvals never leak into a test campaign; a
+    test that wants an approval points CAMPAIGN_APPROVALS_FILE at its own."""
+    monkeypatch.setattr(cont, "CAMPAIGN_APPROVALS_FILE", tmp_path / "no_approvals.json")

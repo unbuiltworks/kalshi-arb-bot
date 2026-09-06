@@ -54,6 +54,8 @@ COPY src/l5_fidelity_gate.py src/l5_fidelity_gate.py
 COPY analysis/l5/l5_fidelity_gate.json analysis/l5/l5_fidelity_gate.json
 COPY analysis/l5/venue_maintenance_windows.json analysis/l5/venue_maintenance_windows.json
 COPY analysis/l5/l5_cadence_behavioral_unit.json analysis/l5/l5_cadence_behavioral_unit.json
+# OWNER campaign approvals (evidence continuation): read at the advance gate
+COPY analysis/l5/l5_campaign_approvals.json analysis/l5/l5_campaign_approvals.json
 RUN touch src/__init__.py
 
 ENV PMUS_SERVICE_ROLE=spring-l5-probe \

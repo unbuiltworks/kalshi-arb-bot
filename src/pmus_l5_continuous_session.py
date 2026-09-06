@@ -80,6 +80,20 @@ ITERATION_ERROR_WINDOW_S = 1800.0
 MAX_ITERATION_ERRORS = 10 ** 9       # no stop inside the campaign
 RUNG_MARKETS_ENV = "PMUS_SPRING_RUNG_MARKETS"
 DEFAULT_RUNG_MARKETS = 3
+# OWNER (2026-09-06 ~14:45Z, after 5559915772): a fresh R1 EVIDENCE
+# continuation after the previous campaign is complete and the account is
+# verified flat. Approvals live in the repo (never in an env var); a
+# campaign starts from an approval only at the advance gate of the
+# previous campaign, after the continuation preflight. Stop rules:
+#   rung_markets            -- the rung's markets_per_campaign allowance
+#   frozen_evidence_minimums -- selection stops when the frozen gate says
+#                              every LIVE minimum is met (200 / 5 / 50 / 50)
+CAMPAIGN_APPROVALS_FILE = Path("analysis/l5/l5_campaign_approvals.json")
+STOP_RULE_RUNG = "rung_markets"
+STOP_RULE_EVIDENCE = "frozen_evidence_minimums"
+INITIAL_CAMPAIGN_ID = "R1-INITIAL"
+EVIDENCE_MINIMUM_KEYS = ("live_scored_decisions", "live_markets",
+                         "live_post_fill_decisions", "live_timed_intervals")
 SPORTS_TTE_DEFAULT_S = base.SPORTS_TTE_DEFAULT_S
 LABEL_SHADOW = "SHADOW/THEORETICAL; DISARMED; no venue network"
 
@@ -245,6 +259,11 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
                                  load_maintenance_windows(), _outage_state["outage"],
                                  now_iso))
         out["shadow_source"] = shadow_source
+        # the frozen gate's own reading of the LIVE minimums: the stop
+        # rule of an evidence-continuation campaign reads it from here
+        _fidelity_last["minimums"] = dict(
+            (out.get("evidence_progress") or {}).get("minimums") or {})
+        _fidelity_last["minimums_t"] = now
     except Exception as exc:                          # noqa: BLE001
         _log("fidelity_gate_error", err=f"{type(exc).__name__}:{str(exc)[:160]}")
         return None
@@ -989,6 +1008,75 @@ def save_campaign_state(state: Mapping[str, Any]) -> bool:
         return False
 
 
+def load_campaign_approvals(path: Optional[Path] = None) -> list:
+    """OWNER campaign approvals from the repo file; unreadable = none."""
+    try:
+        raw = json.loads((path or CAMPAIGN_APPROVALS_FILE).read_text(encoding="utf-8"))
+        return [dict(a) for a in (raw.get("approvals") or [])
+                if isinstance(a, Mapping) and a.get("campaign_id")]
+    except Exception:                              # noqa: BLE001
+        return []
+
+
+def approved_continuation(current_id: str, previous_ids: list,
+                          approvals: Optional[list] = None) -> Optional[dict]:
+    """The first owner approval this durable state has not run yet, if
+    any. An approval is consumed by running it (its id is persisted as
+    the campaign id and later in previous_campaigns), so a redeploy can
+    never re-run one."""
+    done = {current_id, *previous_ids}
+    for a in (load_campaign_approvals() if approvals is None else approvals):
+        if a["campaign_id"] in done:
+            continue
+        if a.get("stop_rule") not in (STOP_RULE_RUNG, STOP_RULE_EVIDENCE):
+            continue
+        return dict(a)
+    return None
+
+
+def evidence_minimums_met() -> tuple:
+    """(met, view) from the frozen gate's latest evidence_progress: every
+    LIVE minimum met. No gate reading yet = not met (fail closed)."""
+    mins = _fidelity_last.get("minimums") or {}
+    view = {k: {kk: (mins.get(k) or {}).get(kk) for kk in ("have", "need", "met")}
+            for k in EVIDENCE_MINIMUM_KEYS}
+    met = bool(mins) and all(bool((mins.get(k) or {}).get("met"))
+                             for k in EVIDENCE_MINIMUM_KEYS)
+    return met, view
+
+
+def continuation_preflight(t, filled: set, settled: set) -> dict:
+    """OWNER preconditions for an evidence continuation, all from the
+    venue / the durable ledger, none inferred: every filled market of the
+    previous campaign settled with realized_confirmed (POSITION_RESOLUTION,
+    idempotent re-audit), zero open orders (the orphan sweep sees none),
+    positions flat, and the ledger carrying no filled-but-unsettled
+    market. Any failure blocks the start; the caller re-checks later."""
+    checks: dict[str, Any] = {}
+    unsettled = sorted(set(filled) - set(settled))
+    checks["all_filled_settled"] = {"ok": not unsettled, "filled": sorted(filled),
+                                    "unsettled": unsettled}
+    real: dict[str, Any] = {}
+    for slug in sorted(filled):
+        audit = settle_held(t, slug)
+        real[slug] = {"status": audit.get("status"),
+                      "realized_confirmed": bool(audit.get("realized_confirmed")),
+                      "realized_usd": audit.get("realized_usd")}
+    checks["realized_confirmed"] = {
+        "ok": bool(real) and all(v["realized_confirmed"] for v in real.values()),
+        "markets": real}
+    sweep = sweep_orphan_orders(t)
+    checks["open_orders"] = {"ok": sweep["seen"] == 0 and not sweep["errors"]
+                             and not sweep["foreign"], "sweep": sweep}
+    held = held_market(t)
+    checks["positions_flat"] = {"ok": held is None, "held": held}
+    ledger_unsettled = unsettled_slugs()
+    checks["ledger_unsettled"] = {"ok": not ledger_unsettled,
+                                  "unsettled": ledger_unsettled}
+    failed = [k for k, v in checks.items() if not v["ok"]]
+    return {"ok": not failed, "failed": failed, "checks": checks}
+
+
 def burst_report(report: Mapping[str, Any], funnel: Mapping[str, Any],
                  burst: Mapping[str, Any], minutes: int) -> dict:
     """OWNER 5554127702 #5: what happened in the first N minutes after
@@ -1116,15 +1204,31 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     os.environ.setdefault(base.MAX_ACTIONS_ENV,
                           str(active_rung["max_actions_per_session"]))
     filled_markets: set = set()          # markets with a fill this campaign
-    report["rung"] = {
-        "markets_allowed": rung_markets,
-        "per_market_cap_usd": str(base.SESSION_NOTIONAL_CAP),
-        "worst_case_usd": str(base.SESSION_NOTIONAL_CAP * rung_markets),
-        "daily_loss_stop_usd": str(base.q1.DAILY_LOSS_STOP),
-        "concurrency": 1,
-        "ladder_rung": active_rung["id"],
-        "max_actions_per_session": os.environ.get(base.MAX_ACTIONS_ENV),
-    }
+    # OWNER evidence continuation: the campaign identity and its stop rule
+    # are durable state; an approval is consumed at the advance gate
+    campaign_id = INITIAL_CAMPAIGN_ID
+    stop_rule = STOP_RULE_RUNG
+    previous_campaigns: list = []
+    sessions_base = 0                    # sessions before this campaign began
+
+    def _rung_report() -> dict:
+        return {
+            "campaign_id": campaign_id,
+            "stop_rule": stop_rule,
+            "markets_allowed": (rung_markets if stop_rule == STOP_RULE_RUNG
+                                else "until the frozen LIVE evidence minimums are met"),
+            "per_market_cap_usd": str(base.SESSION_NOTIONAL_CAP),
+            "worst_case_usd": (str(base.SESSION_NOTIONAL_CAP * rung_markets)
+                               if stop_rule == STOP_RULE_RUNG else
+                               f"{base.SESSION_NOTIONAL_CAP} per filled market, "
+                               f"bounded by the daily-loss stop"),
+            "daily_loss_stop_usd": str(base.q1.DAILY_LOSS_STOP),
+            "concurrency": 1,
+            "ladder_rung": active_rung["id"],
+            "max_actions_per_session": os.environ.get(base.MAX_ACTIONS_ENV),
+            "previous_campaigns": [p.get("campaign_id") for p in previous_campaigns],
+        }
+    report["rung"] = _rung_report()
     report["ramp_ladder"] = ladder.ladder()
     # OWNER 5554127702 #1/#5: outage bookkeeping for the postmortem, the
     # recovery gate (account reads healthy AND public prints moving), and
@@ -1145,6 +1249,17 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         settled_here |= set(persisted.get("settled_here") or [])
         for s_ in settled_here:
             cooldown[s_] = float("inf")
+        campaign_id = str(persisted.get("campaign_id") or INITIAL_CAMPAIGN_ID)
+        stop_rule = str(persisted.get("stop_rule") or STOP_RULE_RUNG)
+        if stop_rule not in (STOP_RULE_RUNG, STOP_RULE_EVIDENCE):
+            stop_rule = STOP_RULE_RUNG
+        previous_campaigns = [dict(p) for p in (persisted.get("previous_campaigns") or [])
+                              if isinstance(p, Mapping)]
+        for p in previous_campaigns:
+            # a market of an earlier campaign is never re-entered
+            for s_ in (p.get("filled_markets") or []) + (p.get("settled_here") or []):
+                cooldown[str(s_)] = float("inf")
+        report["rung"] = _rung_report()
         if persisted.get("outage"):
             # re-classified on restore: state saved by an older build (or
             # before a window was declared) carries no class
@@ -1184,6 +1299,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             return
         snap = {
             "saved_utc": _utc(wall), "rung": active_rung["id"],
+            "campaign_id": campaign_id, "stop_rule": stop_rule,
+            "previous_campaigns": previous_campaigns,
             "filled_markets": sorted(filled_markets),
             "settled_here": sorted(settled_here),
             "outage": ({**{k: v for k, v in classify_outage(
@@ -1200,10 +1317,19 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                    if outage else None)
     _persist()
 
+    def _allowance_spent() -> bool:
+        """rung_markets: fills on markets_allowed distinct markets this
+        campaign. frozen_evidence_minimums: the frozen gate's latest
+        reading says every LIVE minimum is met (fail closed until it has
+        read once)."""
+        if stop_rule == STOP_RULE_EVIDENCE:
+            return evidence_minimums_met()[0]
+        return len(filled_markets) >= rung_markets
+
     def _rung_gate() -> Optional[str]:
         """After the rung's markets are all flat/settled: stop at the
         ADVANCE GATE with what the next rung decision needs."""
-        if len(filled_markets) < rung_markets:
+        if not _allowance_spent():
             return None
         if any(s not in settled_here for s in filled_markets):
             return None                       # something still held
@@ -1234,6 +1360,59 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             active_rung["id"], ladder.evidence_from_campaign(report))
         _log("ramp_evaluation", **report["ramp_evaluation"])
         return "CAMPAIGN_RUNG_COMPLETE"
+
+    def _after_gate(gate: str) -> bool:
+        """The advance gate fired. Without an unconsumed owner approval the
+        campaign ends here (True = break). With one, run the continuation
+        preflight: on failure wait (re-checked on the next audit, never a
+        start); on success archive the completed campaign, consume the
+        approval, and continue selecting under its stop rule."""
+        nonlocal status, campaign_id, stop_rule, previous_campaigns
+        nonlocal stop_at, sessions_base
+        if gate != "CAMPAIGN_RUNG_COMPLETE":
+            status = gate
+            return True
+        appr = approved_continuation(campaign_id,
+                                     [p.get("campaign_id") for p in previous_campaigns])
+        if not appr:
+            status = gate
+            return True
+        pre = continuation_preflight(t, filled_markets, settled_here)
+        if not pre["ok"]:
+            if status != "CAMPAIGN_WAITING:CONTINUATION_PREFLIGHT":
+                _log("campaign_continuation_blocked", approval=appr["campaign_id"],
+                     failed=pre["failed"], checks=pre["checks"])
+            status = "CAMPAIGN_WAITING:CONTINUATION_PREFLIGHT"
+            return False
+        previous_campaigns.append({
+            "campaign_id": campaign_id, "stop_rule": stop_rule,
+            "filled_markets": sorted(filled_markets),
+            "settled_here": sorted(settled_here),
+            "realized_usd": _sum_realized(report),
+            "advance_gate": report.get("advance_gate"),
+            "ended_utc": _utc(wall)})
+        for s_ in filled_markets | settled_here:
+            cooldown[s_] = float("inf")
+        filled_markets.clear()
+        settled_here.clear()
+        campaign_id = str(appr["campaign_id"])
+        stop_rule = str(appr.get("stop_rule") or STOP_RULE_RUNG)
+        stop_at = clock() + campaign_s
+        sessions_base = len(report["sessions"])
+        report["rung"] = _rung_report()
+        report.setdefault("continuations", []).append(
+            {"campaign_id": campaign_id, "approval": appr, "preflight": pre,
+             "started_utc": _utc(wall)})
+        _persist()
+        fidelity_eval(wall(), force=True)
+        met, mins = evidence_minimums_met()
+        _log("campaign_continuation_start", campaign_id=campaign_id,
+             stop_rule=stop_rule, approval=appr, preflight=pre,
+             rung=report["rung"], evidence_minimums=mins,
+             evidence_minimums_met=met,
+             previous_campaign=previous_campaigns[-1])
+        status = f"CAMPAIGN_CONTINUATION:{campaign_id}"
+        return False
     # OWNER 5552841170 #4: throughput funnel, accumulated for the campaign
     # and printed per selection cycle
     funnel: dict[str, Any] = {"cycles": 0, "universe_rows": 0,
@@ -1267,7 +1446,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     # published even while the venue is unavailable; re-run on the frozen
     # cadence below and forced after every session that adds evidence
     fidelity_eval(wall(), force=True)
-    while clock() < stop_at and len(report["sessions"]) < \
+    while clock() < stop_at and len(report["sessions"]) - sessions_base < \
             MAX_SESSIONS_PER_CAMPAIGN + resumes:
         try:
             now = wall()
@@ -1398,8 +1577,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     # selection and opened a 4th market on a 3-market rung.
                     # The advance gate is checked after every settlement.
                     gate = _rung_gate()
-                    if gate:
-                        status = gate
+                    if gate and _after_gate(gate):
                         break
                 if held:
                     if held not in filled_markets:
@@ -1465,26 +1643,34 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                             # to full-sports selection, no redeploy
                             status = f"CAMPAIGN_SETTLED:{audit.get('status')}"
                             gate = _rung_gate()
-                            if gate:
-                                status = gate
+                            if gate and _after_gate(gate):
                                 break
                             continue
                     status = f"CAMPAIGN_RESUMING:{rep.get('status')}"
                     woke = await_state_change(t, held, clock, sleep)
                     _log("resume_wait", slug=held, **woke)
                     continue
-            if len(filled_markets) >= rung_markets:
-                # the rung's market allowance is spent (fills on
-                # markets_allowed distinct markets this campaign, restored
-                # across restarts): NO new market is ever selected; the
-                # filled markets are continued by the resume/settlement
-                # paths until the advance gate fires. LIVE 12:31Z: without
-                # this check a 4th market opened after the 3rd settled.
+            if _allowance_spent():
+                # the campaign's allowance is spent (rung: fills on
+                # markets_allowed distinct markets, restored across
+                # restarts; evidence continuation: the frozen gate says
+                # every LIVE minimum is met): NO new market is ever
+                # selected; the filled markets are continued by the
+                # resume/settlement paths until the advance gate fires.
+                # LIVE 12:31Z: without this check a 4th market opened
+                # after the 3rd settled.
                 funnel["selection_skipped_rung_reached"] += 1
+                if status == "CAMPAIGN_WAITING:CONTINUATION_PREFLIGHT":
+                    # an approved continuation is blocked by its preflight;
+                    # the audit path re-checks it, the status says why
+                    sleep(SELECT_POLL_S)
+                    continue
                 if status != "CAMPAIGN_WAITING:RUNG_MARKETS_REACHED":
                     _log("rung_markets_reached",
+                         campaign_id=campaign_id, stop_rule=stop_rule,
                          filled_markets=sorted(filled_markets),
-                         markets_allowed=rung_markets,
+                         markets_allowed=report["rung"]["markets_allowed"],
+                         evidence_minimums=evidence_minimums_met()[1],
                          unsettled=sorted(s for s in filled_markets
                                           if s not in settled_here),
                          waiting_for="settlement of every filled market -> "

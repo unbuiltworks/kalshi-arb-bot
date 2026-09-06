@@ -1,0 +1,21 @@
+{
+  "labels": "OWNER campaign approvals for the live PMUS spring probe. A campaign starts ONLY from an entry here whose campaign_id the durable campaign state has not run yet, after the previous campaign is complete and the continuation preflight (every filled market settled with venue-confirmed realized, zero open orders, positions flat) passes. Nothing here changes a per-market cap, the residual cap, concurrency, maker/post-only, the fee-safe completion rule, the deadman, the daily-loss stop or the frozen fidelity gate.",
+  "approvals": [
+    {
+      "campaign_id": "R1-EVIDENCE-CONTINUATION-2026-09-06",
+      "approved_by": "owner",
+      "approved_utc": "2026-09-06T14:45:00Z",
+      "source": "owner direction in chat after #167 comment 5559915772: 'continue Phase-1 evidence collection with a fresh R1 campaign after the current cs2 position has settled and the account is verified flat. This is an R1 evidence continuation, not R2 and not a risk-scale decision.'",
+      "rung": "R1",
+      "stop_rule": "frozen_evidence_minimums",
+      "stop_rule_reading": "selection stops when the frozen gate reports every LIVE minimum met (live_scored_decisions >= 200, live_markets >= 5, live_post_fill_decisions >= 50, live_timed_intervals >= 50); not before 5 markets merely because 200 decisions arrived first; never manufactured. The daily-loss stop, per-market cap, residual cap, concurrency 1, maker/post-only, fee-safe completion and deadman are the existing R1 controls and bound the campaign.",
+      "preconditions": [
+        "previous campaign complete: every filled market settled (venue POSITION_RESOLUTION) with realized_confirmed",
+        "zero open orders on the venue (orphan sweep sees none)",
+        "positions flat (venue positions show no market held)",
+        "clean preflight: no foreign open orders, no unresolved reconcile"
+      ],
+      "not": "not R2; not a risk-scale decision; campaigns_per_day for R1 is exceeded by this explicit owner approval only for the evidence continuation"
+    }
+  ]
+}
