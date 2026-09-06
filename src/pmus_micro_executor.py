@@ -176,14 +176,23 @@ def market_micro_spec(t: Transport, slug: str, entry_price: D) -> dict[str, D]:
     }
 
 
-def account_block_reason(t: Transport) -> Optional[str]:
+def account_block_reason(t: Transport,
+                         allow_slugs: Any = ()) -> Optional[str]:
     """Global authoritative account reconciliation immediately before live.
 
     Uses only the audited bounded GET retry helper. Any open order anywhere or
     any non-zero Decimal position anywhere blocks a new MICRO first leg.
     Keeping this helper local avoids a runtime dependency on the long-running
     supervisor module in the isolated one-shot stage.
+
+    ``allow_slugs`` (OWNER live decision 2026-09-06: concurrency 2) is the
+    EXPLICIT set of markets the caller already owns and is tracking under a
+    rung whose concurrency is above one. A non-zero position in one of those
+    never blocks a sibling market's first leg; a position in ANY other market,
+    an unparseable position, and an open order ANYWHERE still block. Empty
+    (the default) is the original one-market lock, unchanged.
     """
+    allowed = {str(s) for s in (allow_slugs or ())}
     opened = q1.base._get_with_retry(t, "/v1/orders/open")
     orders = opened.get("orders") if isinstance(opened, Mapping) else None
     if isinstance(orders, list) and orders:
@@ -210,7 +219,7 @@ def account_block_reason(t: Transport) -> Optional[str]:
         value = _d(raw)
         if value is None:
             return "position_unparseable"
-        if value != 0:
+        if value != 0 and str(slug) not in allowed:
             nonzero.append((str(slug), str(value)))
     if nonzero:
         return "nonzero_positions:" + ",".join(

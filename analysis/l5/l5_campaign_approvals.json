@@ -37,6 +37,25 @@
       "not": "not a profitability optimization; not a size/bankroll guess; R1 rows keep their own shell label and are never re-scored under this rung"
     },
     {
+      "campaign_id": "R2C2-RUN-2026-09-06",
+      "approved_by": "owner",
+      "approved_utc": "2026-09-06T21:55:00Z",
+      "source": "owner live decision in chat, 2026-09-06 ~21:50Z: 'I want this working for at least an hour' -> presented the measured cause (concurrency 1 + HOLD-to-settlement + multi-hour sports markets = 97 minutes idle on one held market) with three levers; owner chose 'Also raise concurrency to 2' (short-horizon selection AND concurrency 2). This supersedes 'keep concurrency 1' in #167 comment 5561465636 #4 for the caps rung only.",
+      "rung": "R2C2",
+      "rung_derivation": "R2C's caps exactly, concurrency 2. From the R2C cohort: the campaign held tsc-cfb-txs-pvam-2026-09-06-total-57pt5 from 19:51:52Z to 21:28Z (97 min) with no order placed, then held asc-mlb-tb-tex from 21:39Z; 3 of 6 markets filled in the first 2 hours. L5's canonical windows settled every 5-15 minutes, so hold-to-settlement never gated its throughput; multi-hour sports markets make it a throughput ceiling.",
+      "shell": "R2C2/cap0.15/residual6/conc2/maker-only/fee-safe0.98/rest30s",
+      "stop_rule": "rung_markets",
+      "stop_rule_reading": "6 filled markets, up to 2 open at once, each held to settlement; worst case still 6 x $0.15 = $0.90 per campaign, bounded by the unchanged -$1.00 daily realized-loss stop; the only figure that moves is CONCURRENT open exposure, $0.15 -> $0.30",
+      "unchanged": "per-market cap $0.15, residual cap 6, 6 markets per campaign, 6 actions per session, maker/post-only, fee-safe 0.98 completion bound, HOLD residual to settlement, deadman/cancel, orphan sweep, ONE session at a time and ONE outstanding order (the campaign works held markets round-robin, never in parallel), settlement/realized accounting from the venue only, the frozen fidelity gate and its thresholds, the frozen L5 v2 policy and canonical lookup v3",
+      "preconditions": [
+        "previous campaign R2C-RUN-2026-09-06 complete: every filled market venue-settled",
+        "zero open orders on the venue (orphan sweep sees none), no foreign orders",
+        "positions flat (venue positions and availablePositions show no market held)",
+        "clean preflight: no unresolved reconcile; ledger holds no unsettled market"
+      ],
+      "not": "not a size change; not a cap change; not a relaxation of fee-safe 0.98 or of hold-to-settlement; R1/R2C rows keep their own shell labels and are never re-scored under this rung"
+    },
+    {
       "campaign_id": "R3L-RUN-2026-09-06",
       "approved_by": "owner",
       "approved_utc": "2026-09-06T19:05:29Z",

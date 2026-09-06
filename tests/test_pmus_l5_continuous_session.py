@@ -649,23 +649,24 @@ def test_live_open_state_is_rechecked_before_submission(monkeypatch,
     assert not any(p == "/v1/orders" for p, _ in fake.posts)
 
 
-def test_cfb_is_preferred_unless_another_market_is_materially_better():
+def test_cfb_no_longer_overrides_the_ranking_order():
+    """OWNER live decision 2026-09-06 (uptime): the CFB-first override of
+    5552475548 item 4 is retired -- preferring the longest-settling league
+    under HOLD-to-settlement is what idled the campaign for 97 minutes.
+    CFB now competes on the ordinary L5-state-fit / yield order, and the
+    per-row `cfb` flag is still reported."""
     now = 1005.0
     cfb = _row("atc-cfb-osu-tex-2026-09-05-osu", touch="500")
     st = _status([_row("aec-atp-a-b-2026-09-05", touch="600"), cfb])
     r = cont.rank_candidates(st, now, _model())
-    assert r["admitted"][0]["slug"].startswith("atc-cfb")
-    assert r["admitted"][0]["cfb"] is True
-    # materially better: twice the model evidence AND at least the depth
-    from src.polymarket_l5.action_model import state_key
-    k = state_key(0.40, 1e9, 0.0)             # the model's own bucket name
-    big = _model()
-    big["full"][f"{k}|open|q<5"] = {"open|q<5": 80}
-    big["base"][k] = {"open|q<5": 80}
-    st2 = _status([_row("aec-atp-a-b-2026-09-05", bid="0.40", ask="0.41",
-                        touch="900"), cfb])
-    r2 = cont.rank_candidates(st2, now, big)
-    assert r2["admitted"][0]["slug"].startswith("aec-atp")
+    # equal model evidence, so the deeper touch wins: the tennis market
+    assert r["admitted"][0]["slug"].startswith("aec-atp")
+    assert [x["cfb"] for x in r["admitted"]] == [False, True]
+    # and CFB still wins when IT is the better-ranked market
+    st2 = _status([_row("aec-atp-a-b-2026-09-05", touch="100"),
+                   _row("atc-cfb-osu-tex-2026-09-05-osu", touch="900")])
+    r2 = cont.rank_candidates(st2, now, _model())
+    assert r2["admitted"][0]["slug"].startswith("atc-cfb")
 
 
 def test_attempts_per_slug_are_capped_separately_from_exposure(monkeypatch,
@@ -2104,7 +2105,6 @@ def test_cfb_priority_yields_to_a_higher_measured_evidence_yield():
     cfb = _row("atc-cfb-osu-tex-2026-09-05-osu", touch="500")
     other = _row("aec-atp-a-b-2026-09-05", touch="600")
     st = _status([other, cfb])
-    assert cont.rank_candidates(st, now, _model())["admitted"][0]["cfb"] is True
     y = {"aec-atp-a-b-2026-09-05": {"legit_decisions_per_h": 12.0, "in_distribution": 12,
                                     "decisions": 15, "eligible": 2, "post_fill": 3},
          "atc-cfb-osu-tex-2026-09-05-osu": {"legit_decisions_per_h": 3.0, "in_distribution": 3,

@@ -563,6 +563,28 @@ def daily_loss_stop() -> D:
     -$1.00; OWNER 5561465636 R3L: -$15.00), from the ladder."""
     from src import pmus_l5_ramp_ladder as ladder
     return ladder.daily_loss_stop()
+
+
+# OWNER live decision 2026-09-06 (uptime): under a rung whose concurrency
+# is above one the campaign may hold more than one market at a time. The
+# campaign -- never this module and never the executor -- declares the
+# markets it OWNS here before running a session; a position in one of
+# them does not block a sibling market's first leg. Everything else is
+# unchanged: an open order ANYWHERE still blocks, a position in a market
+# the campaign does not own still blocks, one outstanding order per
+# session, maker/post-only, fee-safe 0.98, HOLD to settlement. Empty (the
+# default, and every concurrency-1 rung) is the original one-market lock.
+_CONCURRENT_OWNED: set = set()
+
+
+def set_concurrent_owned(slugs=()) -> frozenset:
+    global _CONCURRENT_OWNED
+    _CONCURRENT_OWNED = {str(s) for s in (slugs or ())}
+    return frozenset(_CONCURRENT_OWNED)
+
+
+def concurrent_owned() -> frozenset:
+    return frozenset(_CONCURRENT_OWNED)
 # OWNER 5554106892: prebuilt, OFF by default ("1" enables): a capped
 # EXTEND falls to COMPLETE when COMPLETE carries at least this mass
 CAP_FALLBACK_ENV = "PMUS_SPRING_CAP_FALLBACK_COMPLETE"
@@ -1073,8 +1095,16 @@ def held_inventory_from_ledger(slug: str) -> Inventory:
 def resume_block_reason(t: Transport, slug: str) -> Optional[str]:
     """Account preflight for RESUMING a held market: any open order
     anywhere and any position in ANY OTHER market still block (one
-    market at a time); a position in this market is the point."""
-    block = micro.account_block_reason(t)
+    market at a time); a position in this market is the point.
+
+    Under a concurrency>1 rung the campaign's OWN other held markets are
+    declared in set_concurrent_owned() and do not block either; anything
+    else still does."""
+    owned = concurrent_owned()
+    # concurrency 1 (every rung but the owner's concurrency rung) calls the
+    # lock exactly as before, with no extra argument
+    block = (micro.account_block_reason(t, allow_slugs=owned) if owned
+             else micro.account_block_reason(t))
     if block is None or not block.startswith("nonzero_positions:"):
         return block
     others = [p for p in block.split(":", 1)[1].split(",")
@@ -1242,8 +1272,10 @@ def run_session(t: Optional[Transport] = None,
         model = pv2.load_v2()
         fid_art = fid.load()              # shadow fields only; None is fine
         last_skey: dict = {}
+        _owned = concurrent_owned()
         block = (resume_block_reason(t, slug) if resume
-                 else micro.account_block_reason(t))
+                 else (micro.account_block_reason(t, allow_slugs=_owned)
+                       if _owned else micro.account_block_reason(t)))
         if block:
             return {**report, "status": "PREFLIGHT_FAILED", "reason": block}
         row = dict(micro.micro_eligible(t, slug))

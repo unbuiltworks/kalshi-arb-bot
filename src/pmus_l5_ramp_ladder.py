@@ -98,6 +98,26 @@ OWNER_RUNGS: tuple[dict, ...] = (
      "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,
      "lever": "caps", "promote": None,
      "derived_from": "R1 cohort 2026-09-06, 203 clean decisions / 9 markets"},
+    # OWNER live decision 2026-09-06 (uptime): R2C's caps EXACTLY, with
+    # concurrency 2. Measured cause: under concurrency 1 the campaign is
+    # idle whenever one market is held to settlement -- 19:51Z to 21:28Z
+    # (97 min) on one college-football total, then held again minutes
+    # later. L5's own engine never had this problem because its windows
+    # settled every 5-15 minutes; multi-hour sports markets make the
+    # hold-to-settlement rule a throughput ceiling, not a risk control.
+    # Nothing about the money limits changes except the number of markets
+    # that may be OPEN at once: same $0.15 per market, same residual 6,
+    # same 6 markets per campaign, same -$1.00 daily stop; worst case per
+    # campaign is unchanged at $0.90 and only the CONCURRENT exposure
+    # moves, $0.15 -> $0.30. One session at a time, one outstanding
+    # order, maker-only, fee-safe 0.98 and HOLD-to-settlement are all
+    # untouched: the campaign works its held markets round-robin.
+    {"id": "R2C2", "name": "R2C caps, concurrency 2 (OWNER live 2026-09-06)",
+     "per_market_cap_usd": "0.15", "residual_units": 6, "markets_per_campaign": 6,
+     "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 2,
+     "lever": "concurrency", "promote": None,
+     "derived_from": "R2C cohort 2026-09-06: 97 minutes idle on one held "
+                     "market, 3 of 6 markets filled in 2 hours"},
     # OWNER 5561465636 (LIVE AUTHORIZATION, $110 account): the first
     # L5-SIZED rung, derived from L5's own per-action distribution
     # (analysis/l5/l5_canonical_sequence.csv.gz, 55,647 maker actions:

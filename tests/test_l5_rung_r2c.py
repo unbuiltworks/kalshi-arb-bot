@@ -214,8 +214,9 @@ def test_repo_approval_record_names_the_r2c_rung_after_the_r1_continuation():
     assert cont.approved_continuation("R1-EVIDENCE-CONTINUATION-2026-09-06",
                                       ["R1-INITIAL"], appr)["campaign_id"] == \
         "R2C-RUN-2026-09-06"
-    # OWNER 5561465636: the L5-sized rung is queued behind R2C, never before
+    # the later owner rungs are queued BEHIND R2C, never before it
     nxt = cont.approved_continuation("R2C-RUN-2026-09-06",
                                      ["R1-INITIAL", "R1-EVIDENCE-CONTINUATION-2026-09-06"],
                                      appr)
-    assert nxt is None or nxt["campaign_id"] == "R3L-RUN-2026-09-06"
+    assert nxt is None or nxt["campaign_id"] in ("R2C2-RUN-2026-09-06",
+                                                 "R3L-RUN-2026-09-06")

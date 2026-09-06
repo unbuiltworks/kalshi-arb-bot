@@ -528,21 +528,15 @@ def rank_candidates(status: Mapping[str, Any], now: float,
     admitted.sort(key=lambda x: (x["off_distribution"], -x["yield_rate"],
                                  -x["state_n"], -x["p_buy"], _gap(x),
                                  -_touch(x), x["slug"]))
-    # OWNER 5552475548 item 4: prioritise live CFB when its books are
-    # active, unless another market has MATERIALLY better L5-state fit and
-    # executable flow (twice the model evidence AND at least the depth) --
-    # or, since 5560404270, a strictly higher measured evidence yield.
-    cfb = [x for x in admitted if _is_cfb(x["slug"])]
-    if cfb and admitted[0] is not cfb[0]:
-        best, top_cfb = admitted[0], cfb[0]
-        materially_better = (
-            best["off_distribution"] is False
-            and ((best["state_n"] >= 2 * max(top_cfb["state_n"], 1)
-                  and _touch(best) >= _touch(top_cfb))
-                 or best["yield_rate"] > top_cfb["yield_rate"]))
-        if not materially_better:
-            admitted.remove(top_cfb)
-            admitted.insert(0, top_cfb)
+    # OWNER 5552475548 item 4 prioritised live CFB while the goal was
+    # evidence yield. OWNER live decision 2026-09-06 (uptime) RETIRES that
+    # override: under HOLD-to-settlement a college-football game is the
+    # longest-settling market on the board, and preferring it is what put
+    # the campaign into a 97-minute idle hold on
+    # tsc-cfb-txs-pvam-2026-09-06-total-57pt5 (19:51Z-21:28Z). Ranking is
+    # now purely the L5-state fit / measured-yield order above; CFB still
+    # competes on that order like any other league and the `cfb` flag is
+    # still reported per row.
     for i, x in enumerate(admitted, 1):
         x["rank"] = i
         x["cfb"] = _is_cfb(x["slug"])
@@ -620,6 +614,27 @@ def await_state_change(t, slug: str, clock, sleep,
                     "waited_s": round(clock() - start, 1)}
     return {"reason": "heartbeat", "book": first,
             "waited_s": round(clock() - start, 1)}
+
+
+def held_markets(t) -> list:
+    """Every market the account holds inventory in, from the venue's own
+    positions (authoritative, not the ledger). OWNER live decision
+    2026-09-06 (uptime): a rung whose concurrency is above one may hold
+    more than one at a time; the campaign works them round-robin, one
+    session at a time, and stops if the venue ever shows more positions
+    than the rung allows."""
+    one = held_market(t)          # same authority, same failure semantics
+    if one is None:
+        return []
+    if one != MULTI_HELD:
+        return [one]
+    if t is None:
+        return []
+    block = base.micro.account_block_reason(t)
+    if not block or not block.startswith("nonzero_positions:"):
+        return []
+    return sorted({p.split("=", 1)[0] for p in block.split(":", 1)[1].split(",")
+                   if p})
 
 
 def held_market(t) -> Optional[str]:
@@ -1523,6 +1538,19 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                    if outage else None)
     _persist()
 
+    # OWNER live decision 2026-09-06 (uptime): round-robin cursor over the
+    # markets held at once under a concurrency>1 rung, and the alternation
+    # that keeps a held market worked while capacity is free for another
+    _hold_rr = {"i": 0}
+
+    held_all: list = []          # markets held right now; [] while disarmed
+
+    def _next_held(slugs: list) -> Optional[str]:
+        if not slugs:
+            return None
+        _hold_rr["i"] = (_hold_rr["i"] + 1) % len(slugs)
+        return slugs[_hold_rr["i"]]
+
     def _allowance_spent() -> bool:
         """rung_markets: fills on markets_allowed distinct markets this
         campaign. frozen_evidence_minimums: the frozen gate's latest
@@ -1667,8 +1695,28 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             if armed:
                 # OWNER 5552607804: a market we already hold is CONTINUED
                 # (EXTEND / COMPLEMENT / HOLD from the model on the real
-                # inventory) and no other market is started while it exists.
-                held = held_market(t)
+                # inventory). Under a concurrency-1 rung no other market is
+                # started while it exists; OWNER live decision 2026-09-06
+                # (uptime) allows the rung's concurrency to be higher, in
+                # which case the campaign holds up to that many markets and
+                # works them ONE SESSION AT A TIME, round-robin -- never two
+                # sessions at once, never two outstanding orders.
+                nonlocal_held = [s for s in held_markets(t)
+                                 if s not in settled_here]
+                held_all[:] = nonlocal_held
+                concurrency = max(1, int(active_rung.get("concurrency") or 1))
+                # the sibling positions the session layer must not treat as
+                # a foreign block; empty under every concurrency-1 rung
+                base.set_concurrent_owned(held_all if concurrency > 1 else ())
+                capacity = (len(held_all) < concurrency
+                            and not _allowance_spent())
+                # with capacity free, alternate: one iteration looks for a
+                # new market, the next works a held one, so neither starves
+                open_cycle = capacity and (_hold_rr["i"] % 2 == 0)
+                if capacity:
+                    _hold_rr["i"] += 1
+                held = None if (open_cycle or not held_all) \
+                    else _next_held(held_all)
                 if iteration_errors:
                     # OWNER 5553997094 #2: the first successful account read
                     # after an outage is REPORTED, and open orders are
@@ -1755,13 +1803,13 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     if len(burst["done"]) == len(burst["milestones"]):
                         burst = None
                         _persist()
-                if held == MULTI_HELD:
+                if len(held_all) > concurrency:
+                    # more open positions than the rung authorises: the
+                    # campaign never trades into that, whatever the cause
                     status = f"CAMPAIGN_STOP:{MULTI_HELD}"
+                    _log("concurrency_breach", held=held_all,
+                         concurrency=concurrency, rung=active_rung["id"])
                     break
-                if held in settled_here:
-                    # the venue already confirmed this market's resolution;
-                    # a lingering positions row is not inventory to act on
-                    held = None
                 if t is not None and clock() - last_incentive_audit >= INCENTIVE_AUDIT_EVERY_S:
                     last_incentive_audit = clock()
                     report["incentive_audit"] = run_incentive_audit(t, _log)
@@ -1895,7 +1943,11 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 status = "CAMPAIGN_WAITING:RUNG_MARKETS_REACHED"
                 sleep(SELECT_POLL_S)
                 continue
-            sel = select_candidate(now, model, cooldown)
+            # never "select" a market the account already holds: it is
+            # continued by the resume path, not opened again
+            sel = select_candidate(
+                now, model,
+                {**cooldown, **{s: float("inf") for s in held_all}})
             report["selections"] += 1
             funnel["cycles"] += 1
             funnel["universe_rows"] += len(sel["admitted"]) + len(sel["refused"])
