@@ -169,11 +169,30 @@ def _order_status(t: Transport, order_id: str) -> dict:
                         why = str(order.get(key))[:80]
                         break
                 if why is None:
+                    # any key that LOOKS like a reason, whatever its name
+                    for key in sorted(order):
+                        lk = key.lower()
+                        if any(tok in lk for tok in ("reason", "reject", "error",
+                                                     "text", "message", "code",
+                                                     "status")) and lk != "status":
+                            val = order.get(key)
+                            if isinstance(val, (str, int, float)) and str(val):
+                                why = f"{key}={str(val)[:80]}"
+                                break
+                if why is None:
                     # The venue served NO reason field (live 16:36Z, six
                     # NO-side opens): carry every scalar the order record
                     # does carry, bounded, so the next rejection is
                     # diagnosable from the log instead of guessed at.
                     why = "fields=" + _scalar_fields(order, 200)
+                # LIVE 01:13Z: the session log truncates end_reason, so
+                # the full (bounded) reject record goes to its own line;
+                # no secrets: an order record carries prices/sizes/states
+                print("PMUS_ORDER_REJECTED " + json.dumps(
+                    {"order_id": order_id, "state": state, "why": why,
+                     "keys": sorted(order)[:60],
+                     "fields": _scalar_fields(order, 1500)}, default=str),
+                    flush=True)
                 raise RejectedNoFill(
                     f"ORDER_REJECTED_ZERO_FILL:{order_id}:{state}:{why}")
             return dict(order)

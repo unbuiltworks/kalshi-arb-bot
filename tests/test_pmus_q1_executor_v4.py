@@ -168,3 +168,22 @@ def test_scalar_fields_is_bounded():
     big = {f"k{i:03d}": "v" * 20 for i in range(40)}
     out = e._scalar_fields(big, 100)
     assert len(out) <= 103 and out.endswith("...")
+
+
+def test_rejected_order_logs_full_record_and_reason_like_keys(capsys):
+    from src import pmus_q1_executor_v4 as v4
+
+    class T:
+        def request(self, method, path, body=None, **kw):
+            return {"order": {"id": "X1", "state": "ORDER_STATE_REJECTED",
+                              "cumQuantity": "0", "action": "ORDER_ACTION_BUY",
+                              "orderRejectCode": "POST_ONLY_WOULD_CROSS",
+                              "price": {"value": "0.36"}}}
+    try:
+        v4._order_status(T(), "X1")
+        assert False, "expected RejectedNoFill"
+    except v4.RejectedNoFill as exc:
+        assert "orderRejectCode=POST_ONLY_WOULD_CROSS" in str(exc)
+    out = capsys.readouterr().out
+    assert "PMUS_ORDER_REJECTED" in out and "orderRejectCode" in out
+    assert "price=0.36" in out
