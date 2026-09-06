@@ -497,7 +497,8 @@ class ShadowService:
                          "lookup": ({k: (d.get("lookup") or {}).get(k) for k in
                                      ("lookup_version", "state", "state_v1", "last_rel",
                                       "last_size_executed", "last_size_behavioral",
-                                      "pre_fill", "off_distribution_v1", "lookup_tier",
+                                      "pre_fill", "off_distribution_v1", "full_key_v1",
+                                      "residual_shares_behavioral", "lookup_tier",
                                       "price_convention", "model_sha", "code_sha",
                                       "state_inputs")}
                                     if d.get("lookup") else None)}

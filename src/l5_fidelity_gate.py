@@ -341,12 +341,18 @@ def score_shadow(rolling: Optional[Mapping[str, Any]], spec: Mapping[str, Any]) 
     # (UNMEASURED with the reason); the v1 numbers stay a diagnostic.
     prov = ra.get("lookup_provenance")
     gate_sc = ra.get("action_scoring_corrected_gate") or {}
+    # the service and this evaluator must agree on WHICH lookup version is
+    # canonical; a service gating on another version proves nothing here
+    svc_ver = (prov or {}).get("lookup_version_gate")
     if prov is None:
         sc, lookup_status = {}, "UNPROVABLE_LOOKUP_VERSION: report carries no lookup_provenance"
+    elif svc_ver is not None and int(svc_ver) != CANONICAL_LOOKUP_VERSION:
+        sc, lookup_status = {}, (f"LOOKUP_VERSION_MISMATCH: service gates lookup_version "
+                                 f"{svc_ver}, evaluator requires {CANONICAL_LOOKUP_VERSION}")
     elif int(gate_sc.get("scored_decisions") or 0) == 0:
         sc, lookup_status = {}, "NO_CANONICAL_LOOKUP_ROWS_YET"
     else:
-        sc, lookup_status = gate_sc, "OK:lookup_version_2"
+        sc, lookup_status = gate_sc, f"OK:lookup_version_{CANONICAL_LOOKUP_VERSION}"
     thr = spec["dimensions"]["action_distribution_relation"]["pass"]
     thr_p = spec["dimensions"]["post_fill_complete_gap"]["pass"]
     thr_o = spec["dimensions"]["off_distribution_rate"]["pass"]
@@ -623,6 +629,8 @@ def evidence_progress(live: Mapping[str, Any], shadow: Mapping[str, Any],
                 "summary_rows_ignored": int((acct.get("ingest") or {}).get("summary_rows_ignored") or 0),
                 "second_pass_idempotent": bool(acct.get("second_pass_idempotent", True)),
                 "acted_without_order_rows": int(acct.get("acted_without_order_rows") or 0),
+                "acted_without_order_rows_clean": int(acct.get("acted_without_order_rows_clean") or 0),
+                "acted_without_order_rows_legacy": int(acct.get("acted_without_order_rows_legacy") or 0),
                 "cohort": acct.get("cohort"),
                 "evidence_accounting_valid": not invalid,
                 "ingest": acct.get("ingest"),
@@ -705,14 +713,25 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
     # record misreported as executed (implementation defect, fixed at the
     # source); counted here per report from provenance so the acted view
     # of pre-fix rows is never mistaken for executed evidence
-    no_op = 0
+    # OWNER 5558859447 #8: the counter is also split by cohort -- a
+    # session report whose decisions are all clean rows is a clean
+    # session -- so the clean cohort's value (which must be 0) is read
+    # directly rather than inferred from the corpus-wide number
+    no_op, no_op_clean, no_op_legacy = 0, 0, 0
     for rep in reports:
-        n_acted = sum(1 for d in (rep.get("decisions") or [])
+        decs = [d for d in (rep.get("decisions") or []) if isinstance(d, Mapping)]
+        n_acted = sum(1 for d in decs
                       if d.get("acted") in ("open", "extend", "complete"))
         n_orders = len(rep.get("orders") or [])
         if n_acted > n_orders:
             no_op += n_acted - n_orders
+            if decs and all(is_clean_row(d) for d in decs):
+                no_op_clean += n_acted - n_orders
+            else:
+                no_op_legacy += n_acted - n_orders
     dd["acted_without_order_rows"] = no_op
+    dd["acted_without_order_rows_clean"] = no_op_clean
+    dd["acted_without_order_rows_legacy"] = no_op_legacy
     dd["second_pass_idempotent"] = second_pass_ok
     if ingest:
         dd["ingest"] = {k: ingest.get(k) for k in (

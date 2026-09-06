@@ -430,6 +430,23 @@ def test_acted_without_order_rows_is_counted_from_provenance():
     out = gate.evaluate([rep, rep2])
     assert out["evidence_progress"]["accounting"]["acted_without_order_rows"] == 4
     assert out["live"]["scored_decisions"] == 11      # still counted as decisions
+    # OWNER 5558859447 #8: split by cohort so the clean cohort's counter
+    # (which must be 0) is read directly. The fixture rows are clean
+    # (schema 2, lookup 3), so the 4 land on the clean side ...
+    acct = out["evidence_progress"]["accounting"]
+    assert acct["acted_without_order_rows_clean"] == 4
+    assert acct["acted_without_order_rows_legacy"] == 0
+    # ... and a legacy session (no lookup record, pre-fix schema) with the
+    # same defect lands on the legacy side only
+    rep3 = _report("s3", "m1", 3, t0="2026-09-06T02:20:0")
+    for d in rep3["decisions"]:
+        for k in ("evidence_schema", "lookup", "attempted", "size_transformations"):
+            d.pop(k, None)
+    rep3["orders"] = rep3["orders"][:2]
+    acct3 = gate.evaluate([rep, rep2, rep3])["evidence_progress"]["accounting"]
+    assert acct3["acted_without_order_rows"] == 5
+    assert acct3["acted_without_order_rows_clean"] == 4
+    assert acct3["acted_without_order_rows_legacy"] == 1
 
 
 def test_legacy_rows_are_scored_separately_and_never_count_toward_minimums():
@@ -559,7 +576,7 @@ def test_shadow_gate_consumes_only_proven_canonical_lookup_rows():
                                                                                       "complete_freq_gap_pp_acted": 3.0}},
                                       "off_distribution_corrected_gate": 1.7, "off_distribution_v1_diagnostic": 18.9}}
     sh3 = gate.score_shadow(r3, spec)
-    assert sh3["lookup_status"] == "OK:lookup_version_2"
+    assert sh3["lookup_status"] == "OK:lookup_version_3"
     assert sh3["off_distribution_rate"]["value"] == 1.7 and sh3["off_distribution_rate"]["status"] == "INSUFFICIENT"
     assert sh3["action_distribution_relation"]["value"]["l1_sampled_vs_l5"] == 0.07
     assert sh3["windows_since_freeze"] == 124 and sh3["windows_entered_unique_v2"] == 20
