@@ -60,6 +60,7 @@ class Fake:
             cum = body["quantity"] if self.fill_all else 0
             self.orders[oid] = {"state": state, "cumQuantity": str(cum),
                                 "avgPx": body["price"]["value"],
+                                "outcomeSide": body.get("outcomeSide"),
                                 "marketSlug": body["marketSlug"]}
             self.posts.append((path, dict(body)))
             if not self.fill_all:

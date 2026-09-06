@@ -293,6 +293,11 @@ def authoritative_fill(order: Mapping[str, Any]) -> Optional[dict]:
         if v is not None:
             try:
                 px = D(str(v))
+                # venue serves the long-side price; a NO order's fill is
+                # 1 - avgPx in NO terms (docs.polymarket.us, Create Order)
+                if (str(order.get("outcomeSide") or "").upper().endswith("NO")
+                        or "SHORT" in str(order.get("intent") or "").upper()):
+                    px = ONE - px
             except Exception:
                 continue
             if px > 0:
@@ -322,8 +327,12 @@ def would_cross(outcome_side: str, price: D, bbo: Mapping[str, Any]) -> bool:
 def place_limit_buy(t: Transport, slug: str, outcome_side: str,
                     price: D, stage: str, sleep=time.sleep) -> str:
     """Preview-first, fresh-BBO-guarded, post-only, durable-intent, q=1."""
+    # venue convention: price.value is the long-side price; a NO order at
+    # NO price X is sent as 1 - X (docs.polymarket.us, Create Order)
+    wire_px = (ONE - D(str(price))) if str(outcome_side).upper().endswith("NO") \
+        else D(str(price))
     body = {"marketSlug": slug, "type": "ORDER_TYPE_LIMIT",
-            "price": {"value": str(price)}, "quantity": QTY,
+            "price": {"value": str(wire_px)}, "quantity": QTY,
             "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
             "participateDontInitiate": True,      # post-only maker
             "outcomeSide": outcome_side,

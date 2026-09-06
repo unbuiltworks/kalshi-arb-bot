@@ -223,6 +223,9 @@ def authoritative_fill(order: Mapping[str, Any]) -> Optional[dict]:
     for key in ("avgPx", "avgPrice", "averagePrice", "avgExecutionPrice"):
         px = _d(order.get(key))
         if px is not None and px > 0:
+            if (str(order.get("outcomeSide") or "").upper().endswith("NO")
+                    or "SHORT" in str(order.get("intent") or "").upper()):
+                px = D("1") - px           # venue long-side -> NO terms
             return {"price": px, "qty": filled or D(str(QTY))}
     raise Halt("AMBIGUOUS_FILL_PRICE")
 
@@ -232,7 +235,10 @@ def _body(slug: str, outcome_side: str, price: D,
     return {
         "marketSlug": slug,
         "type": "ORDER_TYPE_LIMIT",
-        "price": {"value": str(price), "currency": "USD"},
+        # venue convention: price.value is the long-side price; NO at X -> 1-X
+        "price": {"value": str((D("1") - D(str(price)))
+                               if str(outcome_side).upper().endswith("NO")
+                               else D(str(price))), "currency": "USD"},
         "quantity": QTY,
         "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
         "participateDontInitiate": bool(post_only),

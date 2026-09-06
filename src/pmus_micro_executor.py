@@ -260,6 +260,31 @@ def micro_eligible(t: Transport, slug: str) -> dict:
             "skip_reason": None}
 
 
+def venue_price(outcome_side: str, price: D) -> D:
+    """Outcome-terms price -> the venue's long-side (YES) price.value."""
+    px = D(str(price))
+    if str(outcome_side).upper().endswith("NO"):
+        return q1.ONE - px
+    return px
+
+
+def is_no_order(order: Mapping[str, Any]) -> bool:
+    """The venue's Order record carries both outcomeSide and intent
+    (docs: 'includes both intent and outcomeSide+action'); either marks
+    a NO-side order (SHORT intents are the NO side)."""
+    if str(order.get("outcomeSide") or "").upper().endswith("NO"):
+        return True
+    return "SHORT" in str(order.get("intent") or "").upper()
+
+
+def outcome_price(order: Mapping[str, Any], venue_px: D) -> D:
+    """Venue long-side price on an order record -> the order's own
+    outcome terms (a NO order's avgPx/price is served as 1 - NO price)."""
+    if is_no_order(order):
+        return q1.ONE - D(str(venue_px))
+    return D(str(venue_px))
+
+
 def _body(slug: str, outcome_side: str, price: D, qty: D,
           post_only: bool) -> dict[str, Any]:
     qty = D(str(qty))
@@ -268,7 +293,15 @@ def _body(slug: str, outcome_side: str, price: D, qty: D,
     return {
         "marketSlug": slug,
         "type": "ORDER_TYPE_LIMIT",
-        "price": {"value": str(D(str(price))), "currency": "USD"},
+        # VENUE CONVENTION (docs.polymarket.us, Create Order): "price.value
+        # always represents the long side's price, regardless of which
+        # order intent you use ... To trade the NO side at any price X,
+        # set price.value = 1.00 - X." LIVE 2026-09-05/06: every NO-side
+        # post-only order priced in NO terms (24/24) was rejected because
+        # the venue read it as NO at 1-X, which crosses. Internally every
+        # price stays in the outcome's own terms; only the wire value maps.
+        "price": {"value": str(venue_price(outcome_side, price)),
+                  "currency": "USD"},
         # PMUS documents quantity as number<double> when minimumTradeQty < 1.
         "quantity": float(qty),
         "tif": "TIME_IN_FORCE_GOOD_TILL_CANCEL",
@@ -301,7 +334,9 @@ def authoritative_fill(order: Mapping[str, Any], requested_qty: D,
     for key in ("avgPx", "avgPrice", "averagePrice", "avgExecutionPrice"):
         px = _d(order.get(key))
         if px is not None and px > 0:
-            return {"price": px, "qty": filled,
+            # the venue serves the long-side price; hand back the price in
+            # this order's own outcome terms (NO fills at 1 - avgPx)
+            return {"price": outcome_price(order, px), "qty": filled,
                     "partial": bool(filled < requested)}
     raise Halt("AMBIGUOUS_FILL_PRICE")
 

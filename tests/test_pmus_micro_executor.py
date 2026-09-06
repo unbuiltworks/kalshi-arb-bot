@@ -315,3 +315,35 @@ def test_campaign_reads_isolated_market_and_gate_envs(monkeypatch, tmp_path):
     monkeypatch.setenv(q1.GATE_ENV, "aec-x")
     rep2 = m.run_campaign(object())
     assert rep2["status"] == "GATE_NOT_CLEARED"
+
+
+def test_no_side_orders_use_the_venue_long_side_price_convention():
+    """docs.polymarket.us: 'To trade the NO side at any price X, set
+    price.value = 1.00 - X.' LIVE: 24/24 NO post-only orders priced in NO
+    terms were rejected as crossing."""
+    from decimal import Decimal as D
+    from src import pmus_micro_executor as micro
+    body = micro._body("m", "OUTCOME_SIDE_NO", D("0.39"), D("0.01"), True)
+    assert body["price"]["value"] == "0.61" and body["outcomeSide"] == "OUTCOME_SIDE_NO"
+    body_y = micro._body("m", "OUTCOME_SIDE_YES", D("0.39"), D("0.01"), True)
+    assert body_y["price"]["value"] == "0.39"
+    # the fill record comes back in long-side terms; we hand back NO terms
+    fill = micro.authoritative_fill({"cumQuantity": "0.01", "avgPx": "0.61",
+                                     "outcomeSide": "OUTCOME_SIDE_NO"}, D("0.01"))
+    assert fill["price"] == D("0.39")
+    fill_y = micro.authoritative_fill({"cumQuantity": "0.01", "avgPx": "0.61",
+                                       "outcomeSide": "OUTCOME_SIDE_YES"}, D("0.01"))
+    assert fill_y["price"] == D("0.61")
+    assert micro.venue_price("OUTCOME_SIDE_NO", D("0.4")) == D("0.6")
+
+
+def test_intent_only_short_records_are_normalized_like_no_side():
+    # the venue Order carries both fields; a record with only intent set
+    # still maps back to NO terms
+    fill = m.authoritative_fill(
+        {"state": "ORDER_STATE_FILLED", "cumQuantity": "0.0200",
+         "avgPx": {"value": "0.61"}, "intent": "ORDER_INTENT_BUY_SHORT"},
+        D("0.02"))
+    assert fill["price"] == D("0.39")
+    assert m.is_no_order({"intent": "ORDER_INTENT_SELL_SHORT"})
+    assert not m.is_no_order({"intent": "ORDER_INTENT_BUY_LONG"})

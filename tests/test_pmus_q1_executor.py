@@ -202,7 +202,8 @@ def test_happy_path_q1_lifecycle(env, tmp_path):
         if comp_polls["n"] >= 2:
             return {"order": {"status": "ORDER_STATUS_FILLED",
                               "filledQuantity": "1",
-                              "avgPx": {"value": "0.5400"}}}
+                              "outcomeSide": "OUTCOME_SIDE_NO",
+                              "avgPx": {"value": "0.4600"}}}   # long-side px
         return {"order": {"status": "ORDER_STATUS_OPEN",
                           "filledQuantity": "0"}}
     script["POST /v1/orders"] = orders_post
@@ -224,7 +225,8 @@ def test_happy_path_q1_lifecycle(env, tmp_path):
         assert body["action"] == "ORDER_ACTION_BUY"
     assert creates[0]["outcomeSide"] == "OUTCOME_SIDE_YES"
     assert creates[1]["outcomeSide"] == "OUTCOME_SIDE_NO"
-    assert D(creates[1]["price"]["value"]) == D("0.540")
+    # NO complement at NO 0.540 is sent as the venue's long-side price 0.460
+    assert D(creates[1]["price"]["value"]) == D("0.460")
     # previews happened BEFORE each create
     idx = [i for i, (m, p, _) in enumerate(t.calls)
            if p in ("/v1/order/preview", "/v1/orders") and m == "POST"]
