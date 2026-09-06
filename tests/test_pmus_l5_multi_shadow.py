@@ -330,3 +330,20 @@ def test_complete_counterfactual_reports_the_pair_cost_economics():
                                            "max": 10.0, "sum": 12.0}
     assert eco["fee_safe_at_touch_share"] == 0.25
     assert ms.pair_cost_economics([])["above_par"]["n"] == 0
+
+
+def test_report_carries_per_market_evidence_yield_for_scheduling(tmp_path):
+    sh = ms.MultiShadow(tmp_path)
+    st = _state()
+    sh.tick(st, NOW)
+    st["mkt-a"]["trades"].append({"t": NOW + 1, "px": "0.44", "qty": "4", "dir": "sell"})
+    sh.tick(st, NOW + 1.5)
+    y = sh.report(NOW + 10)["market_yield"]
+    assert y["window_s"] == ms.YIELD_WINDOW_S
+    rows = {r["slug"]: r for r in y["markets"]}
+    assert rows["mkt-a"]["decisions"] == 2 and rows["mkt-a"]["in_distribution"] == 2
+    assert rows["mkt-a"]["post_fill"] == 1 and rows["mkt-a"]["eligible"] == 2
+    assert rows["mkt-a"]["legit_decisions_per_h"] == 2.0
+    assert rows["mkt-c"]["eligible"] == 0
+    # a market with only old decisions drops out of the window
+    assert sh.market_yield(NOW + ms.YIELD_WINDOW_S + 100) == []

@@ -33,6 +33,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 from datetime import datetime, timezone
 from decimal import ROUND_DOWN, Decimal as D
 from pathlib import Path
@@ -59,6 +60,8 @@ REEVAL_MAX_S = 30.0
 # disk but replayed through the SAME rule at restore, so the reported
 # evidence is never inflated by repeated unchanged observations.
 INDEPENDENCE_RULE = 2
+YIELD_WINDOW_S = 3600.0      # evidence-yield window for candidate scheduling
+YIELD_TOP = 200
 
 
 def _row_sig(row: Mapping[str, Any]) -> Optional[tuple]:
@@ -549,6 +552,35 @@ class MultiShadow:
         return {"decisions_made": made, "markets": len(self.markets)}
 
     # ------------------------------------------------------------- report
+    def market_yield(self, now: float, window_s: float = YIELD_WINDOW_S,
+                     top: int = YIELD_TOP) -> list:
+        """OWNER 5560404270 #4: per-market EVIDENCE YIELD from the read-only
+        shadow -- how many independent decisions the frozen policy took in
+        this market over the window, how many on states it knows
+        (in-distribution) and how many the execution shell would have
+        allowed. Candidate SCHEDULING input only; the behavioral model and
+        every safety adaptation stay where they are."""
+        out = []
+        for m in self.markets.values():
+            recent = [d for d in m.decisions
+                      if d.get("t") is not None and now - float(d["t"]) <= window_s]
+            if not recent:
+                continue
+            in_dist = sum(1 for d in recent if not d.get("off_distribution"))
+            out.append({
+                "slug": m.slug,
+                "decisions": len(recent),
+                "in_distribution": in_dist,
+                "eligible": sum(1 for d in recent if d.get("executable_eligible")),
+                "post_fill": sum(1 for d in recent
+                                 if abs(float(d.get("residual_units") or 0)) >= 1),
+                "last_t": max(float(d["t"]) for d in recent),
+                "state": recent[-1].get("state"),
+                "legit_decisions_per_h": round(in_dist * 3600.0 / window_s, 2),
+            })
+        out.sort(key=lambda r: (-r["in_distribution"], -r["decisions"], r["slug"]))
+        return out[:top]
+
     def report(self, now: Optional[float] = None) -> dict:
         now = now or 0.0
         rows = [m.row() for m in self.markets.values() if m.decisions]
@@ -600,6 +632,11 @@ class MultiShadow:
                 "labels": "what the live safety/economic shell would have let reach the "
                           "venue; R1 size 0.01 contracts; nothing placed"},
             "sampled_to_acted": sa,
+            "market_yield": {"window_s": YIELD_WINDOW_S,
+                             "labels": "candidate scheduling input (OWNER 5560404270 #4): "
+                                       "independent shadow decisions per market over the "
+                                       "window; never a strategy or admission change",
+                             "markets": self.market_yield(now or time.time())},
         }
 
     def write_report(self, now: Optional[float] = None) -> Optional[dict]:

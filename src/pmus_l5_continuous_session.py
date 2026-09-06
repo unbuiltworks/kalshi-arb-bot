@@ -429,13 +429,45 @@ def pair_score(row: Mapping[str, Any], mv: Mapping[str, Any],
             "components": {k: round(v, 3) for k, v in comp.items()}}
 
 
+YIELD_CACHE_S = 60.0
+_yield_cache: dict = {"t": 0.0, "by_slug": {}, "source": None}
+
+
+def pmus_shadow_yield(now: Optional[float] = None) -> dict:
+    """OWNER 5560404270 #4: the recorder shadow's per-market evidence
+    yield (independent in-distribution decisions over the last hour),
+    read from /l5_shadow at most every YIELD_CACHE_S. Empty when the
+    report is unreachable -- ranking then falls back to state fit."""
+    now = time.time() if now is None else now
+    if now - _yield_cache["t"] < YIELD_CACHE_S:
+        return _yield_cache["by_slug"]
+    _yield_cache["t"] = now
+    url = pmus_shadow_url()
+    by_slug: dict = {}
+    if url:
+        try:
+            import urllib.request
+            with urllib.request.urlopen(url, timeout=8) as resp:
+                rep = json.loads(resp.read().decode("utf-8"))
+            for r in ((rep.get("market_yield") or {}).get("markets") or []):
+                if isinstance(r, Mapping) and r.get("slug"):
+                    by_slug[str(r["slug"])] = dict(r)
+            _yield_cache["source"] = {"url": url, "t": rep.get("t"), "markets": len(by_slug)}
+        except Exception as exc:                      # noqa: BLE001
+            _yield_cache["source"] = {"url": url, "error": f"{type(exc).__name__}:{str(exc)[:80]}"}
+    _yield_cache["by_slug"] = by_slug
+    return by_slug
+
+
 def rank_candidates(status: Mapping[str, Any], now: float,
                     model: Optional[Mapping[str, Any]] = None,
-                    exclude: Optional[Mapping[str, float]] = None) -> dict:
+                    exclude: Optional[Mapping[str, float]] = None,
+                    yield_by_slug: Optional[Mapping[str, Any]] = None) -> dict:
     """Every spring_watch row through the strict guard; admitted rows
     ranked. Returns {"admitted": [...], "refused": [...]}."""
     from src import pmus_spring_evidence_transfer as xfer
     exclude = exclude or {}
+    yield_by_slug = yield_by_slug or {}
     admitted, refused = [], []
     for row in status.get("spring_watch") or []:
         if not isinstance(row, Mapping) or not row.get("slug"):
@@ -453,6 +485,12 @@ def rank_candidates(status: Mapping[str, Any], now: float,
                 "trades_1h": row.get("trades_1h"),
                 "two_sided_trades": row.get("two_sided_trades"),
                 **mv, **pair_score(row, mv, now)}
+        y = yield_by_slug.get(slug) or {}
+        item["evidence_yield"] = ({k: y.get(k) for k in ("decisions", "in_distribution",
+                                                         "eligible", "post_fill",
+                                                         "legit_decisions_per_h")}
+                                  if y else None)
+        item["yield_rate"] = float(y.get("legit_decisions_per_h") or 0.0) if y else 0.0
         until = exclude.get(slug)
         if reason is None and until is not None and now < until:
             reason = f"cooldown_until:{round(until - now, 1)}s"
@@ -479,18 +517,27 @@ def rank_candidates(status: Mapping[str, Any], now: float,
     # LOGGED per row as a diagnostic only and does not order candidates
     # until Phase 2 (profitability adaptations measured against the L5
     # baseline).
-    admitted.sort(key=lambda x: (x["off_distribution"], -x["state_n"],
-                                 -x["p_buy"], _gap(x), -_touch(x), x["slug"]))
+    # OWNER 5560404270 #2/#4 (accelerate time-to-proof): among IN-
+    # DISTRIBUTION candidates the highest measured evidence yield (the
+    # recorder shadow's independent in-distribution decisions per hour in
+    # that market) goes first -- candidate scheduling, not strategy: the
+    # admission guard, the model and every safety adaptation are untouched,
+    # and without yield data the order is the L5-state-fit order below.
+    admitted.sort(key=lambda x: (x["off_distribution"], -x["yield_rate"],
+                                 -x["state_n"], -x["p_buy"], _gap(x),
+                                 -_touch(x), x["slug"]))
     # OWNER 5552475548 item 4: prioritise live CFB when its books are
     # active, unless another market has MATERIALLY better L5-state fit and
-    # executable flow (twice the model evidence AND at least the depth).
+    # executable flow (twice the model evidence AND at least the depth) --
+    # or, since 5560404270, a strictly higher measured evidence yield.
     cfb = [x for x in admitted if _is_cfb(x["slug"])]
     if cfb and admitted[0] is not cfb[0]:
         best, top_cfb = admitted[0], cfb[0]
         materially_better = (
             best["off_distribution"] is False
-            and best["state_n"] >= 2 * max(top_cfb["state_n"], 1)
-            and _touch(best) >= _touch(top_cfb))
+            and ((best["state_n"] >= 2 * max(top_cfb["state_n"], 1)
+                  and _touch(best) >= _touch(top_cfb))
+                 or best["yield_rate"] > top_cfb["yield_rate"]))
         if not materially_better:
             admitted.remove(top_cfb)
             admitted.insert(0, top_cfb)
@@ -520,20 +567,23 @@ def select_candidate(now: Optional[float] = None,
         _log("status_unavailable", source=source)
         return {"chosen": None, "source": source, "admitted": [],
                 "refused": []}
-    ranking = rank_candidates(status, now, model, exclude)
+    ranking = rank_candidates(status, now, model, exclude,
+                              yield_by_slug=pmus_shadow_yield(now))
     chosen = ranking["admitted"][0] if ranking["admitted"] else None
     _log("selection", source=source, status_t=ranking["status_t"],
          evidence_age_s=(round(now - entry._epoch(ranking["status_t"]), 3)
                          if entry._epoch(ranking["status_t"]) else None),
          n_rows=len(ranking["admitted"]) + len(ranking["refused"]),
          chosen=(chosen["slug"] if chosen else None),
+         yield_source=_yield_cache.get("source"),
          admitted=[{k: x.get(k) for k in ("rank", "slug", "bid", "ask",
                                           "bid_touch_qty", "state",
                                           "state_n", "p_buy",
                                           "relation_ranked",
                                           "probe_entry_action",
                                           "pair_score", "pair_at_touch",
-                                          "hours_to_end", "components")}
+                                          "hours_to_end", "components",
+                                          "evidence_yield", "yield_rate")}
                    for x in ranking["admitted"]],
          refused=[{"slug": x["slug"], "bid": x["bid"],
                    "reason": x["reason"], "state_n": x["state_n"]}

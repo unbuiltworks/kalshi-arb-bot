@@ -2063,3 +2063,84 @@ def _no_repo_campaign_approvals(monkeypatch, tmp_path):
     """The repo's real owner approvals never leak into a test campaign; a
     test that wants an approval points CAMPAIGN_APPROVALS_FILE at its own."""
     monkeypatch.setattr(cont, "CAMPAIGN_APPROVALS_FILE", tmp_path / "no_approvals.json")
+
+
+def test_evidence_yield_orders_in_distribution_candidates_and_never_admits_more():
+    """OWNER 5560404270 #2/#4: among admitted in-distribution candidates
+    the recorder shadow's measured yield goes first; without yield data
+    the L5-state-fit order stands; an off-distribution market never
+    outranks an in-distribution one however high its yield; the admission
+    guard is untouched (same admitted / refused sets)."""
+    now = 1005.0
+    rows = [_row("aec-atp-a-b-2026-09-05", touch="900"),
+            _row("aec-atp-c-d-2026-09-05", touch="600"),
+            _row("aec-atp-e-f-2026-09-05", touch="300")]
+    st = _status(rows)
+    base_r = cont.rank_candidates(st, now, _model())
+    assert [x["slug"] for x in base_r["admitted"]][:1] == ["aec-atp-a-b-2026-09-05"]
+    y = {"aec-atp-e-f-2026-09-05": {"decisions": 40, "in_distribution": 30,
+                                    "eligible": 4, "post_fill": 10, "legit_decisions_per_h": 30.0},
+         "aec-atp-c-d-2026-09-05": {"decisions": 12, "in_distribution": 9,
+                                    "eligible": 1, "post_fill": 2, "legit_decisions_per_h": 9.0}}
+    r = cont.rank_candidates(st, now, _model(), yield_by_slug=y)
+    assert [x["slug"] for x in r["admitted"]] == [
+        "aec-atp-e-f-2026-09-05", "aec-atp-c-d-2026-09-05", "aec-atp-a-b-2026-09-05"]
+    assert r["admitted"][0]["evidence_yield"]["in_distribution"] == 30
+    assert r["admitted"][0]["yield_rate"] == 30.0 and r["admitted"][2]["evidence_yield"] is None
+    assert {x["slug"] for x in r["admitted"]} == {x["slug"] for x in base_r["admitted"]}
+    assert len(r["refused"]) == len(base_r["refused"])
+    # an off-distribution market with huge yield stays behind
+    off = _row("aec-atp-g-h-2026-09-05", bid="0.05", ask="0.06", touch="900")
+    y["aec-atp-g-h-2026-09-05"] = {"decisions": 500, "in_distribution": 400,
+                                   "eligible": 50, "post_fill": 100, "legit_decisions_per_h": 400.0}
+    r2 = cont.rank_candidates(_status(rows + [off]), now, _model(), yield_by_slug=y)
+    adm = [x["slug"] for x in r2["admitted"]]
+    if "aec-atp-g-h-2026-09-05" in adm:
+        assert adm.index("aec-atp-g-h-2026-09-05") == len(adm) - 1
+
+
+def test_cfb_priority_yields_to_a_higher_measured_evidence_yield():
+    now = 1005.0
+    cfb = _row("atc-cfb-osu-tex-2026-09-05-osu", touch="500")
+    other = _row("aec-atp-a-b-2026-09-05", touch="600")
+    st = _status([other, cfb])
+    assert cont.rank_candidates(st, now, _model())["admitted"][0]["cfb"] is True
+    y = {"aec-atp-a-b-2026-09-05": {"legit_decisions_per_h": 12.0, "in_distribution": 12,
+                                    "decisions": 15, "eligible": 2, "post_fill": 3},
+         "atc-cfb-osu-tex-2026-09-05-osu": {"legit_decisions_per_h": 3.0, "in_distribution": 3,
+                                            "decisions": 4, "eligible": 0, "post_fill": 0}}
+    r = cont.rank_candidates(st, now, _model(), yield_by_slug=y)
+    assert r["admitted"][0]["slug"] == "aec-atp-a-b-2026-09-05"
+
+
+def test_shadow_yield_fetch_is_cached_and_empty_when_unreachable(monkeypatch):
+    cont._yield_cache.update({"t": 0.0, "by_slug": {}, "source": None})
+    monkeypatch.setattr(cont, "pmus_shadow_url", lambda: "http://recorder.internal/l5_shadow")
+    calls = []
+
+    class Resp:
+        def __init__(self, body):
+            self.body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return self.body
+    import urllib.request
+
+    def fake_open(url, timeout=8):
+        calls.append(url)
+        return Resp(json.dumps({"t": "x", "market_yield": {"markets": [
+            {"slug": "m1", "legit_decisions_per_h": 5.0, "in_distribution": 5,
+             "decisions": 6, "eligible": 1, "post_fill": 0}]}}).encode())
+    monkeypatch.setattr(urllib.request, "urlopen", fake_open)
+    assert cont.pmus_shadow_yield(1000.0)["m1"]["legit_decisions_per_h"] == 5.0
+    assert cont.pmus_shadow_yield(1030.0) and len(calls) == 1      # cached
+    monkeypatch.setattr(urllib.request, "urlopen",
+                        lambda url, timeout=8: (_ for _ in ()).throw(OSError("refused")))
+    assert cont.pmus_shadow_yield(2000.0) == {}
+    assert cont._yield_cache["source"]["error"].startswith("OSError")
