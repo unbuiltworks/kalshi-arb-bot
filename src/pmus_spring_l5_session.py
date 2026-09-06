@@ -376,6 +376,23 @@ def rank_spring_candidates(t: Transport,
     return sorted(out, key=_rank)
 
 
+def mark_noop(dec: dict, reason: str, divergence: Optional[str] = None) -> dict:
+    """OWNER 5558072959 #1 (LIVE 02:29-04:03Z: 160 of 240 decisions recorded
+    as acted produced NO order -- unpriceable complements, band exits and
+    spend-cap stops were logged as executed actions). A decision that
+    submits nothing is recorded as HOLD with the named refusal; the
+    relation the policy drew/attempted is kept in `attempted`."""
+    if dec.get("acted") not in ("hold", None):
+        dec["attempted"] = dec.get("acted")
+    dec["acted"] = "hold"
+    dec["refusal"] = reason
+    dv = divergence or f"safety_adaptation:{reason}"
+    if str(dec.get("divergence") or "none").startswith("none"):
+        dec["divergence"] = dv
+        dec["divergence_class"] = divergence_class(dv)
+    return dec
+
+
 def spring_complement_price(avg_cost: D, opp_ask: D, tick: D) -> \
         tuple[Optional[D], dict]:
     """Maker-only completion price on the deficit side: the tighter of the
@@ -1290,7 +1307,21 @@ def run_session(t: Optional[Transport] = None,
                  "divergence_class": divergence_class(divergence_reason(
                      refusal, prop["recommended_relation"], relation,
                      sampled)),
-                 "size_divergence": "venue_minimum_vs_l5_target"})
+                 "size_divergence": "venue_minimum_vs_l5_target",
+                 # OWNER 5558072959 #4: the behavioral size target and
+                 # every transformation down to the executable size, so
+                 # the size-cap override is never scored as L5 behavior
+                 "size_transformations": [
+                     {"step": "l5_target_p50_shares",
+                      "value": (shadow.get("l5_target_size") or {}).get("shares_p50"),
+                      "source": "frozen fidelity artifact (state|relation)"},
+                     {"step": "behavioral_unit_contracts",
+                      "value": str(inv.unit) if inv.unit else None,
+                      "reason": "residual adapter: one L5 size unit = one venue-minimum contract"},
+                     {"step": "executable_contracts",
+                      "value": str(spec["qty"]),
+                      "reason": f"owner size cap ${SESSION_NOTIONAL_CAP}/market + venue "
+                                "minimum; declared safety override, not L5 behavior"}]})
             if relation == "hold":
                 sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                 actions += 1
@@ -1305,9 +1336,18 @@ def run_session(t: Optional[Transport] = None,
                         f"safety_adaptation:spend_cap->{relation}"
                     report["decisions"][-1]["divergence_class"] = \
                         divergence_class("safety_adaptation:spend_cap")
+                    # the EXECUTED relation is what the record says was
+                    # acted; the draw the cap overrode is kept beside it
+                    report["decisions"][-1]["acted_draw"] = \
+                        report["decisions"][-1]["acted"]
+                    report["decisions"][-1]["acted"] = (
+                        "hold" if relation == "stop" else relation)
             if relation == "sell" or relation == "stop":
                 report["stop_reason"] = ("l5_sell_is_noop" if relation == "sell"
                                          else "spend_cap_reached")
+                mark_noop(report["decisions"][-1], report["stop_reason"],
+                          "safety_adaptation:spend_cap" if relation == "stop"
+                          else "venue_execution_adaptation:l5_sell_is_noop")
                 break
 
             if relation in ("open", "extend"):
@@ -1321,6 +1361,8 @@ def run_session(t: Optional[Transport] = None,
                         {"bid": bbo["bid"], "ask": bbo["ask"]})
                     if side_up is None:
                         report["stop_reason"] = "no_priceable_side"
+                        mark_noop(report["decisions"][-1], "no_priceable_side",
+                                  "venue_execution_adaptation:no_priceable_side")
                         break
                     # OWNER 5556751941 #3: side-mapping telemetry on every
                     # live OPEN -- the convention input, its output and
@@ -1351,6 +1393,8 @@ def run_session(t: Optional[Transport] = None,
                     report["stop_reason"] = (
                         f"entry_band_left:bid={bbo['bid']}:"
                         f"q1_entry_ok={q1.entry_ok(bbo['bid'])}")
+                    mark_noop(report["decisions"][-1], report["stop_reason"],
+                              "safety_adaptation:entry_band_left")
                     break
                 qty = spec["qty"]
                 if inv.up + inv.dn == 0:
@@ -1366,6 +1410,7 @@ def run_session(t: Optional[Transport] = None,
                             f"complement_not_priceable:{plan['regime']}")
                         report["decisions"][-1]["divergence"] = (
                             "safety_adaptation:complement_not_priceable")
+                        mark_noop(report["decisions"][-1], report["stop_reason"])
                         break
                     cbody = micro._body(slug, plan["side"],
                                         D(str(plan["px"])), qty, True)
@@ -1392,6 +1437,7 @@ def run_session(t: Optional[Transport] = None,
                         report["stop_reason"] = "complement_preview_rejected"
                         report["decisions"][-1]["divergence"] = (
                             "safety_adaptation:complement_preview_rejected")
+                        mark_noop(report["decisions"][-1], report["stop_reason"])
                         break
                 oid = micro.place_limit_buy(
                     t, slug, "OUTCOME_SIDE_YES" if side_up
@@ -1421,6 +1467,8 @@ def run_session(t: Optional[Transport] = None,
                     inv.record(side_up, D(str(fill["price"])), got, relation)
             else:                               # complete: deficit side only
                 if inv.residual == 0:
+                    mark_noop(report["decisions"][-1], "complete_without_residual",
+                              "implementation_bug_candidate:complete_without_residual")
                     break
                 deficit_up = inv.residual < 0
                 avg = inv.avg_dn() if deficit_up else inv.avg_up()
@@ -1454,6 +1502,12 @@ def run_session(t: Optional[Transport] = None,
                               else "safety_override:fee_safe_complement_bound"),
                     "labels": "READ-ONLY counterfactual; live order unchanged"}
                 if px is None:
+                    # LIVE 02:29-04:03Z: 108 COMPLETE decisions with no
+                    # fee-safe / legal maker price were recorded as acted
+                    # -- they are HOLDs with the pricing regime named
+                    mark_noop(report["decisions"][-1],
+                              f"complement_not_priceable:{econ.get('regime')}",
+                              "safety_adaptation:fee_safe_complement_bound")
                     sleep(MIN_REEVAL_S)
                     actions += 1
                     continue

@@ -527,6 +527,7 @@ def evidence_progress(live: Mapping[str, Any], shadow: Mapping[str, Any],
                 "identity_missing_rows": int(acct.get("provenance_missing") or 0),
                 "summary_rows_ignored": int((acct.get("ingest") or {}).get("summary_rows_ignored") or 0),
                 "second_pass_idempotent": bool(acct.get("second_pass_idempotent", True)),
+                "acted_without_order_rows": int(acct.get("acted_without_order_rows") or 0),
                 "evidence_accounting_valid": not invalid,
                 "ingest": acct.get("ingest"),
                 "maintenance": acct.get("maintenance"),
@@ -602,6 +603,20 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
                       and len(second["orders"]) == len(dd["orders"]))
     dd["raw_decision_rows"] = len(raw_d)
     dd["raw_order_rows"] = len(raw_o)
+    # OWNER 5558072959 #1 (disagreement attribution, LIVE 02:29-04:03Z):
+    # a decision recorded as acted (open/extend/complete) without a
+    # matching submitted order in the same session report was a no-op the
+    # record misreported as executed (implementation defect, fixed at the
+    # source); counted here per report from provenance so the acted view
+    # of pre-fix rows is never mistaken for executed evidence
+    no_op = 0
+    for rep in reports:
+        n_acted = sum(1 for d in (rep.get("decisions") or [])
+                      if d.get("acted") in ("open", "extend", "complete"))
+        n_orders = len(rep.get("orders") or [])
+        if n_acted > n_orders:
+            no_op += n_acted - n_orders
+    dd["acted_without_order_rows"] = no_op
     dd["second_pass_idempotent"] = second_pass_ok
     if ingest:
         dd["ingest"] = {k: ingest.get(k) for k in (

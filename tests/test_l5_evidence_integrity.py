@@ -354,3 +354,77 @@ def test_shared_seeds_are_reported_never_excluded():
         d["shadow"]["stochastic"]["seed"] = f"seed-{6 + i}"     # offset fixed
     sp2 = gate.evaluate([a, b])["evidence_progress"]["accounting"]["seed_provenance"]
     assert sp2["seed_repeat_rows"] == 0 and sp2["distinct_seeds"] == 12
+
+
+def test_noop_complete_without_fee_safe_price_is_a_hold_not_an_action(monkeypatch, tmp_path):
+    """OWNER 5558072959 #1 (LIVE 02:29-04:03Z): 108 COMPLETE decisions with
+    no fee-safe complement price were recorded as acted. They are HOLDs
+    with the pricing regime named; the attempted relation is kept."""
+    from tests.test_pmus_l5_continuous_session import (_armed_session_env,
+                                                        _ledger_with_fill)
+    from tests.test_pmus_spring_l5_session import Fake, _ticking, _script_proposals
+    from src import pmus_spring_l5_session as spring
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held", px="0.97")      # surplus YES @0.97
+    _script_proposals(monkeypatch, ["complete"])
+    monkeypatch.setenv(spring.MAX_ACTIONS_ENV, "1")
+    fake = Fake(bid="0.9700", ask="0.9750", fill_all=False)
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0, slug="held", gate_ok=True, resume=True)
+    d = rep["decisions"][0]
+    assert d["acted"] == "hold" and d["attempted"] == "complete"
+    assert d["refusal"].startswith("complement_not_priceable:")
+    assert d["divergence"] == "safety_adaptation:fee_safe_complement_bound"
+    assert d["divergence_class"] == "safety-cap override"
+    assert not rep.get("orders")
+    assert [s["step"] for s in d["size_transformations"]] == [
+        "l5_target_p50_shares", "behavioral_unit_contracts", "executable_contracts"]
+    # the evaluator's executed view sees a HOLD, not a complete
+    out = gate.evaluate([{"slug": "held", "session_id": rep["session_id"],
+                          "decisions": rep["decisions"], "orders": rep.get("orders") or []}])
+    assert out["evidence_progress"]["accounting"]["acted_without_order_rows"] == 0
+
+
+def test_extend_stopped_by_the_entry_band_is_a_hold(monkeypatch, tmp_path):
+    from tests.test_pmus_l5_continuous_session import (_armed_session_env,
+                                                        _ledger_with_fill)
+    from tests.test_pmus_spring_l5_session import Fake, _ticking, _script_proposals
+    from src import pmus_spring_l5_session as spring
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")                 # surplus YES @0.43
+    _script_proposals(monkeypatch, ["extend"])
+    monkeypatch.setenv(spring.MAX_ACTIONS_ENV, "1")
+    fake = Fake(bid="0.1500", ask="0.1550", fill_all=False)  # below MIN_PRICE 0.20
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0, slug="held", gate_ok=True, resume=True)
+    d = rep["decisions"][0]
+    assert d["acted"] == "hold" and d["attempted"] == "extend"
+    assert d["refusal"].startswith("entry_band_left:bid=0.1500")
+    assert d["divergence_class"] == "safety-cap override"
+    assert not rep.get("orders") and rep["stop_reason"].startswith("entry_band_left")
+
+
+def test_mark_noop_keeps_an_existing_divergence_and_names_the_draw():
+    from src.pmus_spring_l5_session import mark_noop
+    d = {"acted": "extend", "divergence": "safety_adaptation:spend_cap->stop",
+         "divergence_class": "safety-cap override", "refusal": None}
+    out = mark_noop(d, "spend_cap_reached")
+    assert out["acted"] == "hold" and out["attempted"] == "extend"
+    assert out["divergence"] == "safety_adaptation:spend_cap->stop"     # untouched
+    assert out["refusal"] == "spend_cap_reached"
+    d2 = mark_noop({"acted": "complete", "divergence": "none"}, "x", "venue_execution_adaptation:x")
+    assert d2["divergence"] == "venue_execution_adaptation:x"
+
+
+def test_acted_without_order_rows_is_counted_from_provenance():
+    """Pre-fix rows: acted decisions with no submitted order in the same
+    session report are counted so their acted view is never mistaken for
+    executed evidence."""
+    rep = _report("s1", "m1", 6)                      # 6 acted extends, 6 orders
+    rep2 = _report("s2", "m1", 5, t0="2026-09-06T02:10:0")
+    rep2["orders"] = rep2["orders"][:1]               # 5 acted, 1 order
+    out = gate.evaluate([rep, rep2])
+    assert out["evidence_progress"]["accounting"]["acted_without_order_rows"] == 4
+    assert out["live"]["scored_decisions"] == 11      # still counted as decisions
