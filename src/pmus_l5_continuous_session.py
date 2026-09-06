@@ -274,6 +274,7 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
         "largest_mismatch": out["largest_mismatch"],
         "divergence_classes": out["divergence_classes"],
         "divergence_unclassified_samples": out.get("divergence_unclassified_samples"),
+        "safety_shell_versions": out.get("safety_shell_versions"),
         "failing": out["verdict"]["failing"],
         "insufficient_sample": out["verdict"]["insufficient_sample"],
         "unmeasured": out["verdict"]["unmeasured"],

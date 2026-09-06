@@ -105,3 +105,17 @@ def test_unclassified_ledger_row_is_classed_from_its_own_divergence_string():
     # the reclassified row is no longer listed, the unknown one is
     samples = out["divergence_unclassified_samples"]
     assert [s["divergence"] for s in samples] == [None, "something:new"]
+
+
+def test_gate_splits_clean_rows_by_safety_shell_version():
+    """OWNER 5560559108 #5: evidence is labelled by the safety shell it was
+    produced under; pre-label rows fall into the R1 concurrency-1 bucket."""
+    import copy
+    from tests.test_l5_evidence_integrity import _report
+    rep = _report("s1", "m1", 4)
+    rep["decisions"][0]["safety_shell_version"] = "R1/cap0.05/residual3/conc1/maker-only/fee-safe0.98/rest30s"
+    rep["decisions"][1]["safety_shell_version"] = "R1/cap0.05/residual3/conc1/maker-only/fee-safe0.98/rest30s"
+    out = gate.evaluate([copy.deepcopy(rep)])
+    assert out["safety_shell_versions"] == {
+        "R1/cap0.05/residual3/conc1/maker-only/fee-safe0.98/rest30s": 2,
+        "unlabelled(R1 concurrency-1 era)": 2}

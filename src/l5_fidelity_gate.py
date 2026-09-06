@@ -1118,6 +1118,12 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
     classes: dict = {}
     unclassified_samples: list = []
     reclassified = 0
+    # OWNER 5560559108 #5: rows by safety-shell version (pre-label rows
+    # were all produced under the R1 concurrency-1 shell)
+    shell_versions: dict = {}
+    for d in clean:
+        sv = str(d.get("safety_shell_version") or "unlabelled(R1 concurrency-1 era)")
+        shell_versions[sv] = shell_versions.get(sv, 0) + 1
     for d in clean:
         c = d.get("divergence_class") or d.get("divergence") or "unclassified"
         if "unclassified" in c and d.get("divergence") in RECLASSIFIED_DIVERGENCES:
@@ -1156,6 +1162,7 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
             "divergence_classes": classes,
             "divergence_unclassified_samples": unclassified_samples,
             "divergence_reclassified_from_ledger": reclassified,
+            "safety_shell_versions": shell_versions,
             "divergence_classes_legacy": classes_legacy,
             "counterfactual_2s": counterfactual,
             "complete_price_counterfactual": complete_cf,

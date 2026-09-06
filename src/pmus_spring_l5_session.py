@@ -533,6 +533,11 @@ SPORTS_MAKER_REST_MAX_S = 30.0
 # (pmus_sports_l5_decision.MAX_RESIDUAL_UNITS); EXTEND stops here,
 # COMPLETE does not
 MAX_RESIDUAL_UNITS = 3
+# OWNER 5560559108 #5: every live decision row is labelled with the safety
+# shell it was produced under. Bump this string whenever a shell parameter
+# (per-market cap, residual cap, concurrency, taker, fee-safe target, rest)
+# changes so the frozen evaluator can split cohorts by shell.
+SAFETY_SHELL_VERSION = "R1/cap0.05/residual3/conc1/maker-only/fee-safe0.98/rest30s"
 # OWNER 5554106892: prebuilt, OFF by default ("1" enables): a capped
 # EXTEND falls to COMPLETE when COMPLETE carries at least this mass
 CAP_FALLBACK_ENV = "PMUS_SPRING_CAP_FALLBACK_COMPLETE"
@@ -1615,6 +1620,10 @@ def run_session(t: Optional[Transport] = None,
                  # frozen evaluator scores this cohort separately from the
                  # pre-fix rows and never combines them)
                  "evidence_schema": 2,
+                 # OWNER 5560559108 #5: the safety shell this row was
+                 # produced under, so the behavioral layer stays comparable
+                 # across any later shell change (concurrency, caps)
+                 "safety_shell_version": SAFETY_SHELL_VERSION,
                  # OWNER 5558859447 #5: which lookup produced this row --
                  # both state keys, both last_size values, both off flags
                  "lookup": prop.get("lookup"),
