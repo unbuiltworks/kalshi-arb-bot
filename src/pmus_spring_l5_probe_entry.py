@@ -96,7 +96,12 @@ def market_open_reason(evidence: Mapping[str, Any],
         if got is None:
             return f"strict_evidence_market_{field}_missing"
         if bool(got) is not want:
-            return f"strict_evidence_market_{field}:{got!r}"
+            # LIVE 11:14Z post-maintenance: the venue reported Sunday games
+            # closed=True with status MARKET_STATUS_HALTED; name the venue
+            # status beside the flag so a halt is never read as a stale cache
+            st = state.get("status")
+            return (f"strict_evidence_market_{field}:{got!r}"
+                    + (f"(status={st})" if field == "closed" and st else ""))
     status = str(state.get("status") or "")
     if not status:
         return "strict_evidence_market_status_missing"

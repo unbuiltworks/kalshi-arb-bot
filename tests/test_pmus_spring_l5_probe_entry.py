@@ -369,7 +369,14 @@ def test_market_close_safety_uses_the_venue_authoritative_fields():
                                       "status": "MARKET_STATUS_RESOLVED",
                                       "endDate": "2026-09-16T09:30:00Z"})
     assert entry.strict_evidence_reason("mkt", resolved, now=1001.0) == \
-        "strict_evidence_market_closed:True"
+        "strict_evidence_market_closed:True(status=MARKET_STATUS_RESOLVED)"
+    # LIVE 11:14Z: a post-maintenance venue halt names its status too
+    halted = evidence(market_state={"active": True, "archived": False,
+                                    "closed": True,
+                                    "status": "MARKET_STATUS_HALTED",
+                                    "endDate": "2026-09-20T17:40:00Z"})
+    assert entry.strict_evidence_reason("mkt", halted, now=1001.0) == \
+        "strict_evidence_market_closed:True(status=MARKET_STATUS_HALTED)"
     inactive = evidence(market_state={"active": False, "archived": False,
                                       "closed": False,
                                       "status": "MARKET_STATUS_OPEN",
