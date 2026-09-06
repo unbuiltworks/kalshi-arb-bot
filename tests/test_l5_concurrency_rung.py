@@ -45,6 +45,18 @@ def test_r2c2_is_r2c_caps_with_concurrency_two():
     assert ladder.rung("R3L")["concurrency"] == 1
 
 
+def test_every_rung_label_states_its_own_concurrency():
+    """LIVE 23:32Z: the campaign's rung report carried a hardcoded
+    concurrency 1 while running R2C2/conc2. The label, the rung and the
+    worst case must all quote the SAME number for every rung."""
+    import re
+    for r in ladder.ladder():
+        label_conc = int(re.search(r"/conc(\d+)/", ladder.shell_version(r)).group(1))
+        assert label_conc == r["concurrency"], r["id"]
+        cap, conc = D(str(r["per_market_cap_usd"])), r["concurrency"]
+        assert r["worst_case"]["max_concurrent_open_exposure_usd"] == str(cap * conc)
+
+
 def test_owned_siblings_stop_blocking_only_when_the_campaign_declares_them():
     t = T()
     try:

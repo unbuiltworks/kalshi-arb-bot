@@ -1439,7 +1439,10 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             "daily_loss_stop_usd": str(base.daily_loss_stop()),
             "per_action_target_usd": str(ladder.target_notional()),
             "per_leg_max_usd": str(ladder.max_leg_notional()),
-            "concurrency": 1,
+            # the rung's own value, never a literal: the loop enforces
+            # active_rung["concurrency"], so the evidence record must say
+            # the same number (LIVE 23:32Z: this read 1 under R2C2/conc2)
+            "concurrency": int(active_rung.get("concurrency") or 1),
             "ladder_rung": active_rung["id"],
             "deployment": deployment_identity(),
             "max_actions_per_session": os.environ.get(base.MAX_ACTIONS_ENV),
