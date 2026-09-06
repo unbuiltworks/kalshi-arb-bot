@@ -247,6 +247,46 @@ def test_no_candidate_keeps_polling_without_mutation(monkeypatch, tmp_path):
     assert rep["status"] == "CAMPAIGN_NO_CANDIDATE"
 
 
+def test_sessions_are_recorded_and_the_fidelity_gate_runs_automatically(
+        monkeypatch, tmp_path, capsys):
+    """Phase 1 items 8/9: every session's decisions go to the ledger and
+    the frozen gate is re-run with progress toward every minimum."""
+    _arm(monkeypatch, tmp_path)
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
+    st = _status([_row("a", touch="900")])
+    monkeypatch.setattr(entry, "load_status_document",
+                        lambda path=None: (st, "status_url:test"))
+    cont._fidelity_last["t"] = 0.0
+
+    def fake_session(t, clock, sleep, wall, slug, gate_ok, deadline_s):
+        return {"status": "SPRING_NO_FILL", "slug": slug,
+                "inventory": {"up": "0", "dn": "0"}, "actions": [],
+                "decisions": [{"slug": slug, "state": "p45-55c|tte>10m|flat",
+                               "relation_ranked": [{"relation": "open", "p": 1.0}],
+                               "acted": "open", "divergence": "none",
+                               "divergence_class": "no disagreement",
+                               "shadow": {"stochastic": {"sampled": "open"}}}],
+                "orders": []}
+    ticks = iter([0.0, 0.0, 10.0, 10.0, 10.0, 1000.0, 1000.0, 1000.0])
+    cont.run_campaign(clock=lambda: next(ticks), sleep=lambda s: None,
+                      wall=lambda: 1005.0, campaign_s=500.0,
+                      session_runner=fake_session)
+    rows = [json.loads(l) for l in (tmp_path / "ledger.jsonl").read_text().splitlines()]
+    reps = [r for r in rows if r.get("kind") == "session_report"]
+    assert reps and reps[0]["slug"] == "a" and reps[0]["decisions"]
+    out = capsys.readouterr().out
+    line = [l for l in out.splitlines() if '"kind": "fidelity_gate"' in l
+            or '"kind":"fidelity_gate"' in l]
+    assert line, out[-2000:]
+    j = json.loads(line[-1].split(" ", 1)[1])
+    assert j["label"] == "L5 replication in validation"
+    prog = j["evidence_progress"]["minimums"]
+    assert prog["live_scored_decisions"]["have"] == 1
+    assert prog["live_scored_decisions"]["need"] == 200
+    assert prog["shadow_windows"]["have"] == 0
+    assert j["divergence_classes"] == {"no disagreement": 1}
+
+
 def test_campaign_starts_no_fresh_session_until_complement_proven(
         monkeypatch, tmp_path):
     """OWNER 5556038561 #3: a candidate is selected, the campaign is

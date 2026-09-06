@@ -416,6 +416,11 @@ MAX_RESIDUAL_UNITS = 3
 # EXTEND falls to COMPLETE when COMPLETE carries at least this mass
 CAP_FALLBACK_ENV = "PMUS_SPRING_CAP_FALLBACK_COMPLETE"
 CAP_FALLBACK_MIN_P = 0.20
+# OWNER 5556232035 (Phase 1): "modal" (argmax, default) or "stochastic"
+# (execute the seeded draw from the frozen v2 masses -- L5's own
+# conditional distribution). Neither changes the model, the gates or
+# the caps; the choice is recorded on every decision (action_selection).
+ACTION_SELECTION_ENV = "PMUS_SPRING_ACTION_SELECTION"
 
 # OWNER 5556038561 #3/#4: the first leg filled while every complement /
 # extend was venue-rejected (LIVE 2026-09-06 00:57-01:20Z), which turns a
@@ -489,11 +494,42 @@ def divergence_reason(refusal: Optional[str], v2_relation: str,
         if refusal.startswith("residual_cap"):
             return "safety_adaptation:residual_cap"
         return f"safety_adaptation:{refusal.split(':')[0]}"
+    if sampled is not None and acted == sampled and acted != v2_relation:
+        return "none:stochastic_draw_executed"      # L5's own distribution
     if acted != v2_relation:
         return f"safety_adaptation:{acted}_for_{v2_relation}"
     if sampled is not None and sampled != acted:
         return "behavioral:modal_argmax_vs_stochastic_draw"
     return "none"
+
+
+# OWNER Phase 1 directive (2026-09-06, item 5): every stochastic-vs-
+# executed disagreement is classified into exactly one of five classes:
+# implementation bug / venue-execution adaptation / safety-cap override /
+# model deficiency / genuinely off-distribution state.
+DIVERGENCE_CLASSES = {
+    "safety_adaptation:residual_cap": "safety-cap override",
+    "safety_adaptation:spend_cap": "safety-cap override",
+    "policy_flag:cap_fallback_complete": "safety-cap override (L5-consistent fallback)",
+    "safety_adaptation:off_distribution_hold": "genuinely off-distribution state",
+    "safety_adaptation:complement_not_priceable": "venue/execution adaptation",
+    "safety_adaptation:complement_preview_rejected": "venue/execution adaptation",
+    "safety_adaptation:complement_acceptance_unproven": "venue/execution adaptation",
+    "behavioral:modal_argmax_vs_stochastic_draw": "model deficiency (argmax execution of a stochastic policy)",
+    "none": "no disagreement",
+    "none:stochastic_draw_executed": "no disagreement",
+}
+
+
+def divergence_class(divergence: str) -> str:
+    if divergence in DIVERGENCE_CLASSES:
+        return DIVERGENCE_CLASSES[divergence]
+    head = divergence.split("->")[0]
+    if head in DIVERGENCE_CLASSES:
+        return DIVERGENCE_CLASSES[head]
+    if divergence.startswith("safety_adaptation:"):
+        return "safety-cap override"
+    return "implementation bug (unclassified divergence -- investigate)"
 
 
 def complement_plan(first_side_up: bool, first_px: D,
@@ -1040,8 +1076,26 @@ def run_session(t: Optional[Transport] = None,
             # venue residual (issue #167 comment 5520710312)
             prop = pv2.proposal(model, skey, inv.last_rel or "open", "q<5",
                                 residual=inv.behavioral_residual())
-            relation = ("open" if inv.up + inv.dn == 0
-                        else prop["recommended_relation"])
+            # OWNER 5556232035 / Phase 1 largest mismatch: L5's policy is
+            # a CONDITIONAL DISTRIBUTION over relations; executing its
+            # argmax ("modal") can never match L5's action frequencies
+            # (live acted L1 0.97 vs sampled 0.08 on 144 decisions).
+            # PMUS_SPRING_ACTION_SELECTION=stochastic executes the SAME
+            # seeded inverse-CDF draw that the shadow log already carries
+            # (seed = sha256(slug|idx|model_sha); replayable). Every
+            # safety gate below applies to the drawn relation unchanged.
+            selection = os.getenv(ACTION_SELECTION_ENV, "modal").strip().lower()
+            decision_idx = len(report.get("decisions") or [])
+            draw = fid.sample_relation(
+                prop.get("relation_ranked"),
+                fid.seed_material(slug, decision_idx,
+                                  str(model.get("_sha256_16") or "")))
+            if inv.up + inv.dn == 0:
+                relation = "open"
+            elif selection == "stochastic" and draw.get("sampled"):
+                relation = str(draw["sampled"])
+            else:
+                relation = prop["recommended_relation"]
             off = bool(prop.get("off_distribution"))
             refusal = None
             if off and inv.up + inv.dn > 0:
@@ -1093,6 +1147,7 @@ def run_session(t: Optional[Transport] = None,
                  # market, behavioral unit for the imbalance dimension
                  "t_utc": datetime.now(timezone.utc).isoformat(),
                  "slug": slug,
+                 "action_selection": selection,
                  "next_reevaluation_s": prop.get("next_reevaluation_s"),
                  "behavioral_unit": str(inv.unit) if inv.unit else None,
                  "v2_recommended": prop["recommended_relation"],
@@ -1115,6 +1170,9 @@ def run_session(t: Optional[Transport] = None,
                  "divergence": divergence_reason(
                      refusal, prop["recommended_relation"], relation,
                      sampled),
+                 "divergence_class": divergence_class(divergence_reason(
+                     refusal, prop["recommended_relation"], relation,
+                     sampled)),
                  "size_divergence": "venue_minimum_vs_l5_target"})
             if relation == "hold":
                 sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))

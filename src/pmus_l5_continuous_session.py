@@ -83,6 +83,61 @@ SPORTS_TTE_DEFAULT_S = base.SPORTS_TTE_DEFAULT_S
 LABEL_SHADOW = "SHADOW/THEORETICAL; DISARMED; no venue network"
 
 
+FIDELITY_EVAL_S = 600.0         # frozen L5 fidelity gate re-run cadence
+_fidelity_last = {"t": 0.0}
+
+
+def record_session_report(rep: Mapping[str, Any], slug: str,
+                          resumed: bool) -> None:
+    """Durable per-session fidelity evidence (OWNER Phase 1 item 8):
+    every decision and order of every session goes to the ledger so the
+    frozen gate can be re-run across restarts."""
+    base.q1.ledger_append({
+        "kind": "session_report", "spring": True, "slug": slug,
+        "resumed": bool(resumed), "status": rep.get("status"),
+        "decisions": rep.get("decisions") or [],
+        "orders": rep.get("orders") or [],
+        "inventory": rep.get("inventory")})
+
+
+def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
+    """Run the frozen L5 fidelity gate over the ledger's session reports
+    (items 8/9): progress toward EVERY minimum, the largest mismatch,
+    the divergence classes, and the full verdict the moment every
+    minimum is met. Logged as PMUS_L5_CAMPAIGN kind=fidelity_gate."""
+    if not force and now - _fidelity_last["t"] < FIDELITY_EVAL_S:
+        return None
+    _fidelity_last["t"] = now
+    try:
+        from src import l5_fidelity_gate as fgate
+        path = base.q1.base.state_dir() / "ledger.jsonl"
+        reports = fgate._read_reports(path) if path.exists() else []
+        model = pv2.load_v2()
+        out = fgate.evaluate(reports, rolling=None, model=model)
+    except Exception as exc:                          # noqa: BLE001
+        _log("fidelity_gate_error", err=f"{type(exc).__name__}:{str(exc)[:160]}")
+        return None
+    compact = {
+        "label": out["verdict"]["label"],
+        "phase_1_met": out["verdict"]["phase_1_met"],
+        "evidence_progress": out["evidence_progress"],
+        "largest_mismatch": out["largest_mismatch"],
+        "divergence_classes": out["divergence_classes"],
+        "failing": out["verdict"]["failing"],
+        "insufficient_sample": out["verdict"]["insufficient_sample"],
+        "unmeasured": out["verdict"]["unmeasured"],
+        "live": {k: {"status": v.get("status"), "n": v.get("n"),
+                     "value": v.get("value")}
+                 for k, v in out["live"].items() if isinstance(v, Mapping)},
+        "shadow_note": "shadow view is scored on the Gemini shadow "
+                       "service's rolling report (l5_fidelity_gate_shadow)",
+    }
+    _log("fidelity_gate", **compact)
+    if out["evidence_progress"]["all_met"]:
+        _log("fidelity_verdict", **out["verdict"])
+    return out
+
+
 def _log(kind: str, **fields: Any) -> None:
     print("PMUS_L5_CAMPAIGN " + json.dumps({"kind": kind, **fields},
                                            separators=(",", ":"),
@@ -997,6 +1052,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                          orders=(rep.get("orders") or [])[-8:],
                          decisions=(rep.get("decisions") or [])[-8:],
                          pair_economics=rep.get("pair_economics"))
+                    if rep.get("decisions"):
+                        record_session_report(rep, held, True)
+                        fidelity_eval(wall())
                     if rep.get("status") in ("DAILY_LOSS_STOP", "HALT",
                                              "STATE_NOT_DURABLE",
                                              "NO_CREDENTIALS", "DISARMED"):
@@ -1097,6 +1155,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                  orders=(rep.get("orders") or [])[-8:],
                  decisions=(rep.get("decisions") or [])[-8:],
                  pair_economics=rep.get("pair_economics"))
+            if rep.get("decisions"):
+                record_session_report(rep, chosen["slug"], False)
+                fidelity_eval(wall())
             if rep.get("status") in ("DAILY_LOSS_STOP", "HALT",
                                      "STATE_NOT_DURABLE", "NO_CREDENTIALS",
                                      "DISARMED"):

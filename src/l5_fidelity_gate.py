@@ -390,6 +390,63 @@ def decisions_from_session_reports(reports: Iterable[Mapping[str, Any]]) -> tupl
     return decs, orders
 
 
+def evidence_progress(live: Mapping[str, Any], shadow: Mapping[str, Any],
+                      spec: Mapping[str, Any]) -> dict:
+    """Progress toward EVERY minimum, not just the decision count."""
+    me = spec["minimum_evidence"]
+    have = {
+        "live_scored_decisions": int(live.get("scored_decisions") or 0),
+        "live_markets": int(live.get("markets") or 0),
+        "live_post_fill_decisions": int((live.get("post_fill_complete_gap") or {}).get("n") or 0),
+        "live_timed_intervals": int((live.get("timing_cadence") or {}).get("n") or 0),
+        "shadow_windows": int(shadow.get("windows_since_freeze") or 0),
+    }
+    rows = {k: {"have": have[k], "need": me[k],
+                "pct": round(100.0 * min(have[k], me[k]) / me[k], 1),
+                "met": have[k] >= me[k]} for k in me}
+    return {"minimums": rows, "all_met": all(r["met"] for r in rows.values())}
+
+
+def largest_mismatch(live: Mapping[str, Any], shadow: Mapping[str, Any]) -> dict:
+    """The failing dimension with the biggest normalized excess over its
+    threshold; the report leads with it."""
+    worst = {"dimension": None, "excess": 0.0}
+
+    def consider(name, value, thr):
+        if value is None or thr in (None, 0):
+            return
+        ex = (float(value) - float(thr)) / float(thr)
+        if ex > worst["excess"]:
+            worst.update({"dimension": name, "value": value,
+                          "threshold": thr, "excess": round(ex, 3)})
+    rel = live.get("action_distribution_relation") or {}
+    if isinstance(rel.get("value"), Mapping):
+        consider("live:action_distribution_relation(acted)",
+                 rel["value"].get("l1_acted_vs_l5"),
+                 (rel.get("threshold") or {}).get("l1_acted_vs_l5_max"))
+        consider("live:action_distribution_relation(sampled)",
+                 rel["value"].get("l1_sampled_vs_l5"),
+                 (rel.get("threshold") or {}).get("l1_sampled_vs_l5_max"))
+    pf = live.get("post_fill_complete_gap") or {}
+    if isinstance(pf.get("value"), Mapping):
+        g = pf["value"].get("gap_pp_acted")
+        consider("live:post_fill_complete_gap(acted)",
+                 abs(g) if g is not None else None,
+                 (pf.get("threshold") or {}).get("abs_gap_pp_max_acted"))
+    off = live.get("off_distribution_rate") or {}
+    consider("live:off_distribution_rate", off.get("value"),
+             (off.get("threshold") or {}).get("max_pct"))
+    srel = shadow.get("action_distribution_relation") or {}
+    if isinstance(srel.get("value"), Mapping):
+        consider("shadow:action_distribution_relation(acted)",
+                 srel["value"].get("l1_acted_vs_l5"),
+                 (srel.get("threshold") or {}).get("l1_acted_vs_l5_max"))
+    soff = shadow.get("off_distribution_rate") or {}
+    consider("shadow:off_distribution_rate", soff.get("value"),
+             (soff.get("threshold") or {}).get("max_pct"))
+    return worst
+
+
 def evaluate(reports: Iterable[Mapping[str, Any]],
              rolling: Optional[Mapping[str, Any]] = None,
              spec: Optional[Mapping[str, Any]] = None,
@@ -398,12 +455,19 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
     decs, orders = decisions_from_session_reports(reports)
     live = score_live(decs, orders, spec, model)
     shadow = score_shadow(rolling, spec)
+    classes: dict = {}
+    for d in decs:
+        c = d.get("divergence_class") or d.get("divergence") or "unclassified"
+        classes[c] = classes.get(c, 0) + 1
     return {"kind": "l5_fidelity_gate",
             "t": datetime.now(timezone.utc).isoformat(),
             "spec_frozen_utc": spec["frozen_utc"],
             "phase_order": "REPLICATE L5 -> PROVE FIDELITY -> RUN L5 -> "
                            "MEASURE REALIZED RESULTS -> THEN OPTIMIZE PROFITABILITY",
             "verdict": verdict(live, shadow, spec),
+            "evidence_progress": evidence_progress(live, shadow, spec),
+            "largest_mismatch": largest_mismatch(live, shadow),
+            "divergence_classes": classes,
             "live": live, "shadow": shadow}
 
 

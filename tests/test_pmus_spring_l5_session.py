@@ -811,6 +811,66 @@ def test_divergence_reason_separates_safety_from_behavior():
     assert dr(None, "open", "open", None) == "none"
 
 
+def test_stochastic_selection_executes_the_seeded_draw(monkeypatch, tmp_path):
+    """Phase 1 largest mismatch: with PMUS_SPRING_ACTION_SELECTION=
+    stochastic the executed relation IS the seeded draw the shadow log
+    carries (same seed, same masses); modal stays the default."""
+    from tests.test_pmus_l5_continuous_session import (_armed_session_env,
+                                                        _ledger_with_fill)
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")
+    monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: {
+        **_tiny_model(), "_sha256_16": "abcdef0123456789"})
+
+    def prop(model, base_state, last_rel, last_size, residual,
+             clone_avg_cost=None):
+        return {"recommended_relation": "extend", "persist_extend_p": 0.55,
+                "switch_complete_p": 0.45, "next_reevaluation_s": 2.0,
+                "relation_ranked": [{"relation": "extend", "p": 0.55},
+                                    {"relation": "complete", "p": 0.45}],
+                "state_n": 40, "off_distribution": False}
+    monkeypatch.setattr(pv2, "proposal", prop)
+    monkeypatch.setenv(spring.MAX_ACTIONS_ENV, "4")
+    monkeypatch.setenv(spring.ACTION_SELECTION_ENV, "stochastic")
+    fake = Fake(bid="0.4300", ask="0.4350", fill_all=False)
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0, slug="held", gate_ok=True,
+                             resume=True)
+    decs = rep["decisions"]
+    assert decs and all(d["action_selection"] == "stochastic" for d in decs)
+    for d in decs:
+        assert d["acted"] == d["shadow"]["stochastic"]["sampled"]
+        assert d["shadow_differs_from_executed"] is False
+        assert d["divergence"] in ("none", "none:stochastic_draw_executed")
+        assert d["divergence_class"] == "no disagreement"
+    # the draw is seeded per (slug, idx, model sha): both relations occur
+    assert {d["acted"] for d in decs} <= {"extend", "complete"}
+    # default (modal) still executes the argmax
+    monkeypatch.delenv(spring.ACTION_SELECTION_ENV)
+    fake2 = Fake(bid="0.4300", ask="0.4350", fill_all=False)
+    fake2.positions["held"] = {"netPositionDecimal": "0.02"}
+    rep2 = spring.run_session(fake2, clock=_ticking(), sleep=lambda s: None,
+                              wall=lambda: 1000.0, slug="held", gate_ok=True,
+                              resume=True)
+    assert all(d["acted"] == "extend" and d["action_selection"] == "modal"
+               for d in rep2["decisions"])
+
+
+def test_divergence_class_covers_the_five_owner_classes():
+    dc = spring.divergence_class
+    assert dc("safety_adaptation:residual_cap") == "safety-cap override"
+    assert dc("safety_adaptation:spend_cap->complete") == "safety-cap override"
+    assert dc("safety_adaptation:off_distribution_hold") == \
+        "genuinely off-distribution state"
+    assert dc("safety_adaptation:complement_preview_rejected") == \
+        "venue/execution adaptation"
+    assert dc("behavioral:modal_argmax_vs_stochastic_draw").startswith(
+        "model deficiency")
+    assert dc("none") == "no disagreement"
+    assert dc("weird:thing").startswith("implementation bug")
+
+
 def test_complement_plan_prices_the_opposite_side_fee_safe_and_maps_wire():
     plan = spring.complement_plan(True, D("0.36"),
                                   {"bid": "0.35", "ask": "0.355"}, D("0.01"))

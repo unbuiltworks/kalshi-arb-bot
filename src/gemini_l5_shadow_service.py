@@ -340,6 +340,16 @@ class ShadowService:
         out["hypotheses"] = self.hypotheses_report()
         out["research_arm_stochastic"] = self.research_arm_report()
         out["action_scoring_untouched"] = self.action_scoring_report()
+        # OWNER 5556232035 #5: the frozen L5 fidelity gate's SHADOW view,
+        # scored automatically on every rolling report (untouched
+        # stochastic arm; thresholds from the frozen spec only)
+        try:
+            from src import l5_fidelity_gate as fgate
+            out["l5_fidelity_gate_shadow"] = fgate.score_shadow(
+                out, fgate.load_spec())
+        except Exception as exc:                        # noqa: BLE001
+            out["l5_fidelity_gate_shadow"] = {"status": "ERROR",
+                                              "err": str(exc)[:160]}
         if self.gate:
             prim = self.gate.get("primary_arm")
             out["transfer_gate"] = {
