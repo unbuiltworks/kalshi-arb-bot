@@ -1182,8 +1182,20 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     funnel: dict[str, Any] = {"cycles": 0, "universe_rows": 0,
                               "in_distribution": 0, "admitted": 0,
                               "sessions": 0, "submitted": 0, "filled": 0,
-                              "refusals": {}}
+                              "refusals": {},
+                              # OWNER (admitted -> session is P0): every
+                              # cycle that admitted a market and started
+                              # no session is counted by REASON CODE, and
+                              # every resume iteration that skipped
+                              # selection because a market is held is
+                              # counted too, so the admitted -> session
+                              # drop is never anonymous
+                              "not_started": {},
+                              "selection_skipped_position_held": 0}
     report["funnel"] = funnel
+
+    def _not_started(reason: str) -> None:
+        funnel["not_started"][reason] = funnel["not_started"].get(reason, 0) + 1
     _log("campaign_start", mode=report["mode"], campaign_s=campaign_s,
          campaign_expires_at=wall() + campaign_s,
          max_sessions=MAX_SESSIONS_PER_CAMPAIGN,
@@ -1325,7 +1337,14 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     if held not in filled_markets:
                         filled_markets.add(held)
                         _persist()
-                    _log("resume_start", slug=held)
+                    funnel["selection_skipped_position_held"] += 1
+                    _log("resume_start", slug=held,
+                         selection_skipped="CAMPAIGN_HOLD:POSITION_HELD "
+                                           "(one market at a time; residual "
+                                           "held to settlement)",
+                         funnel={k: funnel[k] for k in
+                                 ("admitted", "sessions", "not_started",
+                                  "selection_skipped_position_held")})
                     rep = dict(session_runner(
                         t, clock=clock, sleep=sleep, wall=wall, slug=held,
                         gate_ok=True,
@@ -1400,17 +1419,23 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             _log("funnel", **{k: v for k, v in funnel.items()})
             chosen = sel["chosen"]
             if chosen is None:
+                if sel["admitted"]:
+                    _not_started("admitted_but_no_choice")
+                else:
+                    _not_started("no_candidate")
                 if status.startswith("CAMPAIGN_WAITING"):
                     status = "CAMPAIGN_NO_CANDIDATE"   # venue back, no pick
                 sleep(SELECT_POLL_S)
                 continue
             if not armed:
+                _not_started("not_armed:shadow_only")
                 report["last_shadow"] = {"chosen": chosen,
                                          "label": LABEL_SHADOW}
                 status = "SHADOW_SELECTED"
                 sleep(SELECT_POLL_S)
                 continue
             if not base.complement_acceptance_proven():
+                _not_started("complement_acceptance_unproven")
                 # OWNER 5556038561 #3: NEW first legs fail closed until
                 # the venue has accepted an opposite-side order built by
                 # this code (proven on the held market's resume path);

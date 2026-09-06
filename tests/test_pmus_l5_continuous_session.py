@@ -320,6 +320,10 @@ def test_campaign_starts_no_fresh_session_until_complement_proven(
     assert rep["complement_gate"]["proven"] is False
     assert rep["complement_gate"]["reason"] == "never_attempted"
     assert rep["selections"] >= 2
+    # the admitted -> session drop is reason-coded in the funnel
+    assert rep["funnel"]["admitted"] >= 2 and rep["funnel"]["sessions"] == 0
+    assert rep["funnel"]["not_started"] == {
+        "complement_acceptance_unproven": rep["selections"]}
 
 
 def test_armed_campaign_fails_closed_without_durable_state(monkeypatch,
@@ -1788,6 +1792,10 @@ def test_deterministic_recovery_simulation(monkeypatch, tmp_path):
     assert "x" in o["trades_resumed_by"]["markets_moved"]
     assert len(sweeps) == 2                       # boot + recovery re-sweep
     assert resumed and all(r == ("held", True) for r in resumed)
+    # every resume iteration that skipped selection because a market is
+    # held is counted (the admitted -> session drop is never anonymous)
+    assert rep["funnel"]["selection_skipped_position_held"] == len(resumed)
+    assert rep["funnel"]["not_started"] == {}
     # then the ambiguous account stops the campaign, fail closed
     assert rep["status"] == "CAMPAIGN_STOP:MULTIPLE_POSITIONS"
 
