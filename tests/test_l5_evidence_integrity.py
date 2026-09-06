@@ -576,3 +576,16 @@ def test_revised_maintenance_end_is_kept_with_provenance():
     late = cont.classify_outage(o, now_utc="2026-09-06T11:30:00+00:00")
     assert late["class"] == "scheduled_maintenance_overrun" and late["overrun_s"] == 900.0
     assert late["maintenance"]["declared_end_utc"] == "2026-09-06T11:15:00+00:00"
+
+
+def test_reclassification_inside_a_revised_window_drops_stale_overrun_fields():
+    """LIVE 11:07Z: after the venue's end moved to 11:15Z a record first
+    classified as overrun (vs 10:00Z) was re-classified scheduled_maintenance
+    but still carried overrun_s=3138.9 from the earlier pass."""
+    from src import pmus_l5_continuous_session as cont
+    stale = {"start_utc": "2026-09-06T07:15:29+00:00", "class": "scheduled_maintenance_overrun",
+             "overrun_s": 3138.9, "recovery_boundary": "open (no healthy account read yet)",
+             "account_recovered_utc": "2026-09-06T10:52:18+00:00"}
+    o = cont.classify_outage(stale, now_utc="2026-09-06T11:07:00+00:00")
+    assert o["class"] == "scheduled_maintenance" and "overrun_s" not in o
+    assert o["recovery_boundary"] == "venue_recovered"

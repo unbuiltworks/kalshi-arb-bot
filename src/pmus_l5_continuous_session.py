@@ -773,6 +773,11 @@ def classify_outage(outage: Optional[dict], windows: Optional[list] = None,
                                        else "open (no healthy account read yet)")
     else:
         outage["class"] = "scheduled_maintenance"
+        # a revised (later) declared end can move a record back inside the
+        # window: never carry stale overrun fields from an earlier pass
+        outage.pop("overrun_s", None)
+        outage["recovery_boundary"] = ("venue_recovered" if recovered
+                                       else "inside declared window")
     return outage
 
 
