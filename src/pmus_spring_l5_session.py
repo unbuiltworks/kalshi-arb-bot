@@ -810,6 +810,8 @@ DIVERGENCE_CLASSES = {
     "safety_adaptation:complement_preview_rejected": "venue/execution adaptation",
     "safety_adaptation:complement_acceptance_unproven": "venue/execution adaptation",
     "behavioral:modal_argmax_vs_stochastic_draw": "model deficiency (argmax execution of a stochastic policy)",
+    "venue_execution_adaptation:complete_below_unit_granularity":
+        "venue/execution adaptation (shares-scale imbalance below one venue unit)",
     "none": "no disagreement",
     "none:stochastic_draw_executed": "no disagreement",
 }
@@ -1579,6 +1581,16 @@ def run_session(t: Optional[Transport] = None,
                  "switch_complete_p": prop["switch_complete_p"],
                  "acted": relation,
                  "refusal": refusal,
+                 # OWNER 5559167134 #3: the per-decision counterfactual --
+                 # the action the clone would take with NO safety cap
+                 # (the seeded draw when a cap converted it), and which
+                 # cap bound; the spend-cap conversion below updates it
+                 "would_act_without_safety_cap": (
+                     sampled if str(refusal or "").startswith("residual_cap")
+                     and sampled else relation),
+                 "cap_binding": (["residual_cap"]
+                                 if str(refusal or "").startswith("residual_cap")
+                                 else []),
                  "inventory_before": inv.snapshot(),
                  "planned_safe_size": {
                      "contracts": str(spec["qty"]),
@@ -1634,6 +1646,10 @@ def run_session(t: Optional[Transport] = None,
                     # acted; the draw the cap overrode is kept beside it
                     report["decisions"][-1]["acted_draw"] = \
                         report["decisions"][-1]["acted"]
+                    report["decisions"][-1]["would_act_without_safety_cap"] = \
+                        report["decisions"][-1]["acted"]
+                    report["decisions"][-1]["cap_binding"] = \
+                        report["decisions"][-1].get("cap_binding", []) + ["spend_cap"]
                     report["decisions"][-1]["acted"] = (
                         "hold" if relation == "stop" else relation)
             if relation == "sell" or relation == "stop":
@@ -1765,8 +1781,15 @@ def run_session(t: Optional[Transport] = None,
                     record_behavioral_fill(inv, fid_art, skey, relation, side_up)
             else:                               # complete: deficit side only
                 if inv.residual == 0:
+                    # LIVE 12:35:33Z (cs2 fokus-nemi): the canonical state
+                    # is keyed in behavioral SHARES (v3) and read imb1-10
+                    # (-1.38 shares) while the executable inventory in
+                    # venue units was exactly flat; the model's COMPLETE
+                    # has nothing below one venue unit to complete. A
+                    # HOLD is the only faithful executable action: size
+                    # granularity of the venue unit, not a defect.
                     mark_noop(report["decisions"][-1], "complete_without_residual",
-                              "implementation_bug_candidate:complete_without_residual")
+                              "venue_execution_adaptation:complete_below_unit_granularity")
                     break
                 deficit_up = inv.residual < 0
                 avg = inv.avg_dn() if deficit_up else inv.avg_up()

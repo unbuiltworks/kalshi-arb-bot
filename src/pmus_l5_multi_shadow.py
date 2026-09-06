@@ -310,6 +310,16 @@ class MultiShadow:
             return None
         self.funnel["canonical_state_valid"] += 1
         lk = prop["lookup"]
+        # INDEPENDENCE: an unchanged observation is not new evidence. The
+        # same touch, state, last relation and inventory as the previous
+        # decision is re-decided only after the rest unit (REEVAL_MAX_S,
+        # the live session's own re-decision on an unchanged book); a
+        # book move or a fill re-opens the decision immediately.
+        sig = (str(bid), str(ask), lk["state"], m.inv.last_rel, str(m.inv.total))
+        if m.prev and m.prev.get("sig") == sig and \
+                now - float(m.prev.get("t") or 0) < REEVAL_MAX_S:
+            self._loss("unchanged_state_within_rest")
+            return None
         off = bool(prop.get("off_distribution"))
         if not off:
             self.funnel["in_distribution"] += 1
@@ -425,7 +435,8 @@ class MultiShadow:
         self.seen_ids.add(did)
         m.decisions.append(self._compact(rec))
         m.entry_t = m.entry_t or now
-        m.prev = {"decision_id": did, "t": now, "mid": str(mid), "sampled": rel}
+        m.prev = {"decision_id": did, "t": now, "mid": str(mid), "sampled": rel,
+                  "sig": sig}
         m.idx += 1
         self.funnel["decisions"] += 1
         if side_up is not None and px_l5 is not None:

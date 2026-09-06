@@ -755,6 +755,136 @@ def layered_view(live: Mapping[str, Any], spec: Mapping[str, Any]) -> dict:
                     "unchanged -- this is a second reading, not a relabel"}
 
 
+MAX_RESIDUAL_UNITS_SHELL = 3          # == pmus_spring_l5_session.MAX_RESIDUAL_UNITS
+CAP_OVERRIDES = ("policy_flag:cap_fallback_complete", "safety_adaptation:spend_cap")
+
+
+def feasibility_decomposition(decisions: list, spec: Mapping[str, Any]) -> dict:
+    """OWNER 5559167134 #2/#3 (read-only): for every clean decision the
+    canonical stochastic action (the seeded draw), the canonical
+    executable action before the safety shell (identical: the canonical
+    lookup already makes pre-fill = OPEN), the action actually taken and
+    the exact override; relation L1 and post-fill COMPLETE gap for (a)
+    sampled, (b) canonical-before-shell, (c) acted; and the BEST acted
+    fidelity achievable by replaying the same states under the current
+    rules ($0.05 cap, residual cap 3, taker off, fee-safe complement):
+    a cap-forced conversion cannot be undone under those rules, every
+    other decision could have followed its draw. If that best value
+    cannot meet the frozen acted threshold the result is
+    GATE_FEASIBILITY_CONFLICT with the binding rules named -- the gate
+    and the caps are untouched. Cap-fallback attribution: a fallback
+    COMPLETE whose recorded residual was below the cap is an ANOMALY
+    (implementation defect candidate), never a safety override."""
+    thr = spec["dimensions"]["action_distribution_relation"]["pass"]
+    thr_p = spec["dimensions"]["post_fill_complete_gap"]["pass"]
+    rows: list[dict] = []
+    for d in decisions:
+        sh = (d.get("shadow") or {}).get("stochastic") or {}
+        sampled = sh.get("sampled") or d.get("sampled")
+        acted = d.get("acted")
+        over = str(d.get("divergence") or "")
+        lk = d.get("lookup") or {}
+        try:
+            resid = abs(float(lk.get("residual_units") if lk.get("residual_units") is not None
+                              else d.get("residual_units") or 0))
+        except (TypeError, ValueError):
+            resid = 0.0
+        forced: Optional[str] = None
+        if over == "policy_flag:cap_fallback_complete":
+            forced = ("residual_cap" if resid >= MAX_RESIDUAL_UNITS_SHELL
+                      else "ANOMALY:residual_cap_fallback_below_cap")
+        elif over.startswith("safety_adaptation:spend_cap"):
+            forced = "spend_cap"
+        elif acted == "hold" and d.get("refusal"):
+            forced = f"hold:{str(d['refusal']).split(':')[0]}"
+        would = d.get("would_act_without_safety_cap") or (
+            sampled if (forced and not forced.startswith("hold")) else acted)
+        rows.append({"sampled": sampled, "canonical_before_shell": sampled,
+                     "acted": acted, "override": over or None, "forced_by": forced,
+                     "would_act_without_safety_cap": would,
+                     "best_under_current_shell": (acted if forced else (sampled or acted)),
+                     "post_fill": resid >= 1,
+                     "masses": _masses_of(d)})
+    if not rows:
+        return {"status": "UNMEASURED", "decisions": 0}
+
+    def freq(key, items):
+        c = {"complete": 0, "extend": 0, "open": 0}
+        for r in items:
+            v = r.get(key)
+            if v in c:
+                c[v] += 1
+        n = sum(c.values()) or 1
+        return {k: round(v / n, 4) for k, v in c.items()}
+
+    def expected(items):
+        agg = {"complete": 0.0, "extend": 0.0, "open": 0.0}
+        for r in items:
+            for k, v in r["masses"].items():
+                agg[k] += v
+        n = len(items) or 1
+        return {k: round(v / n, 4) for k, v in agg.items()}
+
+    def l1(a, b):
+        return round(sum(abs(a.get(k, 0) - b.get(k, 0)) for k in a), 4)
+    exp_all = expected(rows)
+    post = [r for r in rows if r["post_fill"]]
+    exp_post = expected(post) if post else None
+    layers = {}
+    for name, key in (("sampled", "sampled"), ("canonical_before_shell", "canonical_before_shell"),
+                      ("acted", "acted"), ("best_achievable_under_current_shell",
+                                          "best_under_current_shell")):
+        f_all = freq(key, rows)
+        gap = (round(100 * (freq(key, post)["complete"] - exp_post["complete"]), 1)
+               if post else None)
+        layers[name] = {"relation_freq": f_all, "l1_vs_l5": l1(f_all, exp_all),
+                        "post_fill_complete_gap_pp": gap}
+    forced_counts: dict = {}
+    for r in rows:
+        if r["forced_by"]:
+            forced_counts[r["forced_by"]] = forced_counts.get(r["forced_by"], 0) + 1
+    anomalies = [r for r in rows if str(r["forced_by"] or "").startswith("ANOMALY")]
+    best = layers["best_achievable_under_current_shell"]
+    conflict = (best["l1_vs_l5"] > thr["l1_acted_vs_l5_max"]
+                or (best["post_fill_complete_gap_pp"] is not None
+                    and abs(best["post_fill_complete_gap_pp"]) > thr_p["abs_gap_pp_max_acted"]))
+    binding = sorted(k for k in forced_counts if not k.startswith("ANOMALY"))
+    return {
+        "status": ("GATE_FEASIBILITY_CONFLICT" if conflict
+                   else "FEASIBLE_UNDER_CURRENT_SHELL"),
+        "decisions": len(rows), "post_fill_decisions": len(post),
+        "expected_l5": exp_all, "expected_l5_post_fill": exp_post,
+        "layers": layers,
+        "frozen_acted_thresholds": {"l1_acted_vs_l5_max": thr["l1_acted_vs_l5_max"],
+                                    "abs_gap_pp_max_acted": thr_p["abs_gap_pp_max_acted"]},
+        "forced_by_rule": forced_counts,
+        "binding_rules": binding,
+        "cap_fallback_attribution": {
+            "fallback_completes": sum(1 for r in rows
+                                      if r["override"] == "policy_flag:cap_fallback_complete"),
+            "at_residual_cap": forced_counts.get("residual_cap", 0),
+            "anomalies_below_cap": len(anomalies),
+            "verdict": ("ALL_CAP_FORCED" if not anomalies else "IMPLEMENTATION_DEFECT_CANDIDATE")},
+        "reading": ("best_achievable = the same states replayed under the current caps: "
+                    "cap-forced conversions kept, every other decision follows its own "
+                    "draw; a conflict means the frozen ACTED thresholds are unreachable "
+                    "under the current safety shell -- gate and caps untouched, not a "
+                    "model deficiency"),
+    }
+
+
+def _masses_of(d: Mapping[str, Any]) -> dict:
+    out = {"complete": 0.0, "extend": 0.0, "open": 0.0}
+    rr = d.get("relation_ranked") or []
+    if rr:
+        for r in rr:
+            if isinstance(r, Mapping) and r.get("relation") in out:
+                out[str(r["relation"])] = float(r.get("p") or 0.0)
+        return out
+    pc, pe = float(d.get("p_complete") or 0), float(d.get("p_extend") or 0)
+    return {"complete": pc, "extend": pe, "open": max(0.0, 1 - pc - pe)}
+
+
 def score_pmus_shadow(report: Optional[Mapping[str, Any]],
                       spec: Mapping[str, Any]) -> dict:
     """The recorder's READ-ONLY multi-market L5 shadow (behavioral layer
@@ -1003,6 +1133,7 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
             "counterfactual_2s": counterfactual,
             "complete_price_counterfactual": complete_cf,
             "layers": layered_view(live, spec),
+            "feasibility": feasibility_decomposition(clean, spec),
             "pmus_shadow": score_pmus_shadow(pmus_shadow, spec),
             "live": live, "live_legacy": live_legacy, "shadow": shadow}
 

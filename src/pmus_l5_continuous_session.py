@@ -288,6 +288,9 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
                    for layer, block in (out.get("layers") or {}).items()
                    if layer in ("behavioral", "executable")},
         "pmus_shadow": _compact_pmus_shadow(out.get("pmus_shadow"), pmus_source),
+        # OWNER 5559167134 #2/#3: frozen-gate feasibility under the CURRENT
+        # safety shell + cap-fallback attribution (read-only)
+        "feasibility": out.get("feasibility"),
     }
     _log("fidelity_gate", **compact)
     if out["evidence_progress"]["all_met"]:

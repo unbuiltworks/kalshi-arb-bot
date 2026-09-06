@@ -248,3 +248,22 @@ def test_shadow_can_be_disabled_and_never_blocks_the_recorder(tmp_path, monkeypa
     monkeypatch.setenv(rec.SHADOW_ENV, "1")
     sh = rec.start_multi_shadow(tmp_path)
     assert sh is not None and sh.restore["decisions"] == 0
+
+
+def test_unchanged_observations_are_not_new_evidence(tmp_path):
+    """INDEPENDENCE: the same touch/state/inventory is re-decided only
+    after the rest unit; a book move re-opens the decision at once."""
+    sh = ms.MultiShadow(tmp_path)
+    st = _state()
+    sh.tick(st, NOW)
+    for dt in (2.5, 5.0, 10.0, 20.0):
+        sh.tick(st, NOW + dt)
+    assert sh.markets["mkt-a"].idx == 1
+    assert sh.funnel["losses"]["unchanged_state_within_rest"] >= 1
+    st["mkt-a"]["bid"] = "0.45"                        # touch moved
+    sh.tick(st, NOW + 22.0)
+    assert sh.markets["mkt-a"].idx == 2
+    sh.tick(st, NOW + 24.0)
+    assert sh.markets["mkt-a"].idx == 2
+    sh.tick(st, NOW + 22.0 + ms.REEVAL_MAX_S)          # rest unit elapsed
+    assert sh.markets["mkt-a"].idx == 3
