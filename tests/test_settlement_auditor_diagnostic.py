@@ -10,6 +10,24 @@ SLUG = "aec-cs2-fokus-nemi-2026-09-06"
 
 
 class FakeT:
+    """Newest-first pages of 20 with eof/nextCursor (the LIVE 15:26Z shape);
+    the cursor is accepted only as ?cursor=; any other query -> 401."""
+    PAGES = {
+        None: {"activities": [{"type": "ACTIVITY_TYPE_TRADE", "createTime": "2026-09-06T12:56:12Z",
+                               "trade": {"marketSlug": SLUG, "price": "0.55"}}],
+               "eof": False, "nextCursor": "c1"},
+        "c1": {"activities": [{"type": "ACTIVITY_TYPE_POSITION_RESOLUTION",
+                               "createTime": "2026-09-06T12:31:00Z",
+                               "positionResolution": {"marketSlug": "aec-atp-facmen-hugdel-2026-09-06",
+                                                      "afterPosition": {"realized": "-0.0139"}}},
+                              {"type": "ACTIVITY_TYPE_TRADE", "createTime": "2026-09-06T12:30:00Z",
+                               "trade": {"marketSlug": "other"}}],
+               "eof": False, "nextCursor": "c2"},
+        "c2": {"activities": [{"type": "ACTIVITY_TYPE_TRADE", "createTime": "2026-09-06T11:00:00Z",
+                               "trade": {"marketSlug": "old"}}],
+               "eof": True, "nextCursor": ""},
+    }
+
     def __init__(self):
         self.calls = []
 
@@ -27,21 +45,16 @@ class FakeT:
                                  "closed": True, "active": True,
                                  "updatedAt": "2026-09-06T15:21:54Z"}]}
         if path.startswith("/v1/portfolio/activities"):
-            if "limit=500" in path:
-                return {"activities": [
-                    {"type": "ACTIVITY_TYPE_TRADE", "createTime": "t1",
-                     "trade": {"marketSlug": "other"}},
-                    {"type": "ACTIVITY_TYPE_POSITION_RESOLUTION", "createTime": "t2",
-                     "positionResolution": {"marketSlug": SLUG, "afterPosition": {"realized": "0.01"}}}],
-                    "nextPageToken": "abc"}
-            if "type=" in path or "types=" in path or "marketSlug" in path or "market_slug" in path \
-                    or "pageSize" in path or "page_size" in path:
-                raise OSError("HTTP Error 400")
-            return {"activities": [{"type": "ACTIVITY_TYPE_TRADE", "createTime": "t1",
-                                    "trade": {"marketSlug": SLUG, "price": "0.36"}}],
-                    "nextPageToken": "abc"}
+            if "?" not in path:
+                return self.PAGES[None]
+            q = path.split("?", 1)[1]
+            if not q.startswith("cursor="):
+                raise OSError("HTTP Error 401")
+            return self.PAGES[q.split("=", 1)[1]]
         if path.startswith("/v1/portfolio/positions"):
-            return {"positions": [{"marketSlug": "other", "netPosition": "1"}]}
+            return {"positions": [], "availablePositions": [
+                {"marketSlug": SLUG, "netPosition": "-0.04", "claimable": True}],
+                "eof": True, "nextCursor": ""}
         raise AssertionError(path)
 
 
@@ -54,18 +67,45 @@ def test_public_market_view_reads_resolution_from_the_gateway():
     assert all(b == "https://gateway.polymarket.us" for _, _, b in t.calls)
 
 
-def test_diagnose_pending_reports_response_shapes_and_query_variants():
+def test_diagnose_pending_walks_the_cursor_and_reads_available_positions():
     t = FakeT()
+    auditor._cursor_param["name"] = None
     d = auditor.diagnose_pending(SLUG, t)
     a = d["activities"]
-    assert a["top_level_keys"] == ["activities", "nextPageToken"]
-    assert a["rows"] == 1 and a["types"] == {"ACTIVITY_TYPE_TRADE": 1}
-    assert a["for_slug_n"] == 1 and a["for_slug"][0]["type"] == "ACTIVITY_TYPE_TRADE"
-    v = d["activity_query_variants"]
-    assert v["?limit=500"]["rows"] == 2 and v["?limit=500"]["slug_resolution_rows"] == 1
-    assert v["?type=ACTIVITY_TYPE_POSITION_RESOLUTION"].startswith("OSError")
-    assert d["positions"]["slug_row"] is None and d["positions"]["rows"] == 1
+    assert a["top_level_keys"] == ["activities", "eof", "nextCursor"] and a["rows"] == 1
+    w = d["activity_walk"]
+    assert w["pages"] == 3 and w["ended"] == "eof" and w["cursor_param"] == "cursor"
+    assert w["rows"] == 4 and w["types"]["ACTIVITY_TYPE_POSITION_RESOLUTION"] == 1
+    assert w["slug_resolution_rows"] == []          # no resolution for cs2 anywhere
+    assert w["oldest_time"] == "2026-09-06T11:00:00Z"
+    p = d["positions"]
+    assert p["rows"] == 0 and p["available_rows"] == 1
+    assert p["available_slug_row"]["netPosition"] == "-0.04"
     assert d["public"]["public_resolved"] is True
+    # the cursor parameter name is learned once and reused
+    assert auditor._cursor_param["name"] == "cursor"
+
+
+def test_activity_walk_stops_at_the_market_first_fill_and_audit_sees_older_resolutions():
+    t = FakeT()
+    auditor._cursor_param["name"] = None
+    w = auditor.activity_pages(t, since="2026-09-06T12:45:00Z")
+    assert w["pages"] == 2 and w["ended"] == "older_than_since"
+    # a resolution 20+ activities back is found by the audit (the single
+    # page reader could not see it)
+    res = auditor.audit_market("aec-atp-facmen-hugdel-2026-09-06", t)
+    assert res["status"] == "REALIZED" and res["realized_usd"] == "-0.0139"
+    assert res["activity_walk"]["pages"] >= 2
+    # cs2: no resolution anywhere, position only under availablePositions
+    res2 = auditor.audit_market(SLUG, t)
+    assert res2["status"] == "PENDING_SETTLEMENT" and res2["position_net"] == "0"
+    assert res2["available_position"]["netPosition"] == "-0.04"
+
+
+def test_signature_covers_the_path_without_its_query_string():
+    from src import pmus_q1_executor as q1base
+    assert q1base.sign_path("/v1/portfolio/activities?cursor=abc") == "/v1/portfolio/activities"
+    assert q1base.sign_path("/v1/orders") == "/v1/orders"
 
 
 def test_settle_held_attaches_the_public_view_and_throttles_the_diagnostic(monkeypatch):
@@ -80,7 +120,7 @@ def test_settle_held_attaches_the_public_view_and_throttles_the_diagnostic(monke
     assert out["status"] == "PENDING_SETTLEMENT"
     assert out["public"]["public_resolved"] is True and out["public"]["settlement_px"] == "0.0000"
     assert [k for k, _ in logged] == ["settlement_diagnostic"]
-    assert logged[0][1]["activities"]["rows"] == 1
+    assert logged[0][1]["activity_walk"]["rows"] == 4
     out2 = cont.settle_held(t, SLUG)                 # inside the throttle window
     assert out2["public"]["public_resolved"] is True
     assert len(logged) == 1

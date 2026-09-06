@@ -107,6 +107,14 @@ def gate_asserted(slug: str) -> bool:
     return bool(slug) and os.getenv(GATE_ENV, "").strip() == slug
 
 
+def sign_path(path: str) -> str:
+    """The path the signature covers: the URL path WITHOUT its query string.
+    LIVE 15:26Z (OWNER P0 5560183912): every authenticated GET carrying a
+    query string (?limit / ?cursor / ?marketSlug ...) answered 401 while
+    signed over path+query; no mutation path ever carries a query."""
+    return path.split("?", 1)[0]
+
+
 def signed_headers(method: str, path: str,
                    now_ms: Optional[int] = None) -> dict:
     from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -114,7 +122,7 @@ def signed_headers(method: str, path: str,
     seed = base64.b64decode(os.environ[SECRET_ENV].strip())[:32]
     key = ed25519.Ed25519PrivateKey.from_private_bytes(seed)
     sig = base64.b64encode(
-        key.sign(f"{ts}{method}{path}".encode())).decode()
+        key.sign(f"{ts}{method}{sign_path(path)}".encode())).decode()
     return {"X-PM-Access-Key": os.environ[KEY_ENV].strip(),
             "X-PM-Timestamp": ts, "X-PM-Signature": sig,
             "Content-Type": "application/json"}

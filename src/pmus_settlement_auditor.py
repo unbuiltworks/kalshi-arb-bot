@@ -35,12 +35,105 @@ def _amount(value: Any) -> Optional[D]:
         return None
 
 
-def _activities(t: q1.Transport, slug: str, typ: str) -> list[dict]:
+# LIVE 15:26Z (OWNER P0 5560183912): /v1/portfolio/activities is ONE page
+# of 20 rows, newest first, with top-level `eof` and `nextCursor`. A single
+# unpaginated read therefore stops seeing a market's POSITION_RESOLUTION
+# as soon as 20 newer activities exist. The reader now follows the cursor
+# (parameter name discovered read-only, first success cached) until eof,
+# no cursor, the page is older than `since` (the market's first fill), or
+# ACTIVITY_MAX_PAGES.
+ACTIVITY_MAX_PAGES = 25
+CURSOR_PARAM_CANDIDATES = ("cursor", "nextCursor", "pageToken", "page_token",
+                           "next_cursor")
+_cursor_param: dict[str, Optional[str]] = {"name": None}
+
+
+def _row_time_iso(row: Mapping[str, Any]) -> Optional[str]:
+    for k in ("createTime", "updateTime", "time", "timestamp", "createdAt"):
+        if row.get(k):
+            return str(row.get(k))
+    for v in row.values():
+        if isinstance(v, Mapping):
+            for k in ("createTime", "updateTime", "time", "timestamp"):
+                if v.get(k):
+                    return str(v.get(k))
+    return None
+
+
+def activity_pages(t: q1.Transport, since: Optional[str] = None,
+                   max_pages: int = ACTIVITY_MAX_PAGES) -> dict:
+    """Every activity row reachable through the cursor, newest first.
+    Returns rows plus how the walk ended (read-only GETs only)."""
+    rows: list[dict] = []
     resp = t.request("GET", "/v1/portfolio/activities")
-    rows = resp.get("activities") if isinstance(resp, Mapping) else None
+    pages, ended, cursor_param = 1, "single_page", _cursor_param["name"]
+    while True:
+        page = resp.get("activities") if isinstance(resp, Mapping) else None
+        page = [r for r in (page or []) if isinstance(r, Mapping)]
+        rows.extend(dict(r) for r in page)
+        eof = bool(resp.get("eof")) if isinstance(resp, Mapping) else True
+        cursor = resp.get("nextCursor") if isinstance(resp, Mapping) else None
+        oldest = _row_time_iso(page[-1]) if page else None
+        if eof or not cursor or not page:
+            ended = "eof" if eof else ("no_cursor" if not cursor else "empty_page")
+            break
+        if since and oldest and oldest < since:
+            ended = "older_than_since"
+            break
+        if pages >= max_pages:
+            ended = "max_pages"
+            break
+        nxt = None
+        names = ([cursor_param] if cursor_param else []) + \
+            [n for n in CURSOR_PARAM_CANDIDATES if n != cursor_param]
+        for name in names:
+            try:
+                cand = t.request("GET", f"/v1/portfolio/activities?{name}={quote(str(cursor))}")
+            except Exception:                      # noqa: BLE001
+                continue
+            if isinstance(cand, Mapping) and isinstance(cand.get("activities"), list):
+                nxt, cursor_param = cand, name
+                _cursor_param["name"] = name
+                break
+        if nxt is None:
+            ended = "cursor_param_unknown"
+            break
+        resp = nxt
+        pages += 1
+    return {"rows": rows, "pages": pages, "ended": ended,
+            "cursor_param": cursor_param,
+            "oldest_time": _row_time_iso(rows[-1]) if rows else None,
+            "newest_time": _row_time_iso(rows[0]) if rows else None}
+
+
+def first_fill_time(slug: str) -> Optional[str]:
+    """ISO time of this ledger's first fill in the market (the `since`
+    bound for the activity walk); None when unknown."""
+    path = q1.state_dir() / "ledger.jsonl"
+    if not path.exists():
+        return None
+    best: Optional[str] = None
+    for line in path.read_text().splitlines():
+        try:
+            r = json.loads(line)
+        except Exception:
+            continue
+        if not isinstance(r, Mapping) or r.get("slug") != slug:
+            continue
+        kind = r.get("kind")
+        filled = kind == "filled" or (kind == "order_terminal" and
+                                      float(r.get("filled_qty") or 0) > 0)
+        if filled and r.get("t") and (best is None or str(r["t"]) < best):
+            best = str(r["t"])
+    return best
+
+
+def _activities(t: q1.Transport, slug: str, typ: str,
+                since: Optional[str] = None) -> list[dict]:
+    walk = activity_pages(t, since=since)
     out: list[dict] = []
-    for row in (rows or []):
-        if not isinstance(row, Mapping) or row.get("type") != typ:
+    for row in walk["rows"]:
+        if row.get("type") != typ:
             continue
         if typ == "ACTIVITY_TYPE_POSITION_RESOLUTION":
             payload = row.get("positionResolution")
@@ -52,16 +145,30 @@ def _activities(t: q1.Transport, slug: str, typ: str) -> list[dict]:
             out.append(dict(row))
     return out
 
-def _position(t: q1.Transport, slug: str) -> Optional[dict]:
-    resp = t.request("GET", "/v1/portfolio/positions")
-    rows = resp.get("positions") if isinstance(resp, Mapping) else None
+
+def _rows_of(resp: Any, key: str) -> list:
+    rows = resp.get(key) if isinstance(resp, Mapping) else None
     if isinstance(rows, Mapping):
-        p = rows.get(slug)
-        return dict(p) if isinstance(p, Mapping) else None
-    if isinstance(rows, list):
-        for p in rows:
-            if isinstance(p, Mapping) and p.get("marketSlug") == slug:
-                return dict(p)
+        return [{"marketSlug": k, **v} for k, v in rows.items() if isinstance(v, Mapping)]
+    return [r for r in (rows or []) if isinstance(r, Mapping)]
+
+
+def _position(t: q1.Transport, slug: str) -> Optional[dict]:
+    """The account's row for the market from `positions`; LIVE 15:26Z the
+    response also carries `availablePositions`, read separately by
+    _available_position (never treated as a held position here)."""
+    resp = t.request("GET", "/v1/portfolio/positions")
+    for p in _rows_of(resp, "positions"):
+        if p.get("marketSlug") == slug:
+            return dict(p)
+    return None
+
+
+def _available_position(t: q1.Transport, slug: str) -> Optional[dict]:
+    resp = t.request("GET", "/v1/portfolio/positions")
+    for p in _rows_of(resp, "availablePositions"):
+        if p.get("marketSlug") == slug:
+            return dict(p)
     return None
 
 
@@ -111,15 +218,25 @@ def _trade_summary(rows: list[dict], slug: str) -> dict:
 
 def audit_market(slug: str, t: Optional[q1.Transport] = None) -> dict:
     t = t or q1.Transport()
-    resolutions = _activities(t, slug, "ACTIVITY_TYPE_POSITION_RESOLUTION")
-    trades = _activities(t, slug, "ACTIVITY_TYPE_TRADE")
+    since = first_fill_time(slug)
+    walk = activity_pages(t, since=since)
+    resolutions = [r for r in walk["rows"]
+                   if r.get("type") == "ACTIVITY_TYPE_POSITION_RESOLUTION"]
+    trades = [r for r in walk["rows"] if r.get("type") == "ACTIVITY_TYPE_TRADE"
+              and isinstance(r.get("trade"), Mapping)
+              and r["trade"].get("marketSlug") == slug]
     resolution = _resolution_for(resolutions, slug)
     pos = _position(t, slug)
     net = _net_position(pos)
     trade_info = _trade_summary(trades, slug)
+    avail = _available_position(t, slug)
 
     result: dict[str, Any] = {
         "market": slug,
+        "activity_walk": {k: walk[k] for k in ("pages", "ended", "cursor_param",
+                                               "oldest_time", "newest_time")},
+        "activity_rows": len(walk["rows"]),
+        "available_position": avail,
         "position_net": str(net) if net is not None else None,
         "position_expired": bool(pos.get("expired")) if isinstance(pos, Mapping)
         and pos.get("expired") is not None else None,
@@ -235,7 +352,7 @@ if __name__ == "__main__":
 PUBLIC_RESOLVED_STATES = ("MARKET_STATE_EXPIRED", "MARKET_STATE_RESOLVED",
                           "MARKET_STATE_SETTLED")
 PUBLIC_RESOLVED_STATUSES = ("MARKET_STATUS_RESOLVED", "MARKET_STATUS_SETTLED")
-ACTIVITY_QUERY_VARIANTS = ("?limit=500", "?pageSize=500", "?page_size=500",
+ACTIVITY_QUERY_VARIANTS = ("?limit=500", "?pageSize=500", "?page_size=500",  # (retired: every query 401 under path+query signing)
                            "?marketSlug={slug}", "?market_slug={slug}",
                            "?type=ACTIVITY_TYPE_POSITION_RESOLUTION",
                            "?types=ACTIVITY_TYPE_POSITION_RESOLUTION")
@@ -321,39 +438,45 @@ def diagnose_pending(slug: str, t: Optional[q1.Transport] = None) -> dict:
         }
     except Exception as exc:                       # noqa: BLE001
         out["activities"] = {"error": f"{type(exc).__name__}:{getattr(exc, 'code', '')}"}
-    variants: dict[str, Any] = {}
-    for q in ACTIVITY_QUERY_VARIANTS:
-        qq = q.format(slug=quote(slug))
-        try:
-            r = t.request("GET", "/v1/portfolio/activities" + qq)
-            rows2 = r.get("activities") if isinstance(r, Mapping) else None
-            rows2 = [x for x in (rows2 or []) if isinstance(x, Mapping)]
-            variants[qq] = {
-                "rows": len(rows2),
-                "keys": sorted(r.keys()) if isinstance(r, Mapping) else None,
-                "slug_rows": sum(1 for x in rows2 if _mentions(x, slug)),
-                "resolution_rows": sum(1 for x in rows2
-                                       if x.get("type") == "ACTIVITY_TYPE_POSITION_RESOLUTION"),
-                "slug_resolution_rows": sum(
-                    1 for x in rows2 if x.get("type") == "ACTIVITY_TYPE_POSITION_RESOLUTION"
-                    and _mentions(x, slug))}
-        except Exception as exc:                   # noqa: BLE001
-            variants[qq] = f"{type(exc).__name__}:{getattr(exc, 'code', '')}"
-    out["activity_query_variants"] = variants
+    # the cursor walk (path-only signing): how far back the account's
+    # activities reach and whether a resolution for the slug is anywhere
+    try:
+        walk = activity_pages(t, since=None, max_pages=ACTIVITY_MAX_PAGES)
+        rows = walk["rows"]
+        types: dict[str, int] = {}
+        for r in rows:
+            k = str(r.get("type"))
+            types[k] = types.get(k, 0) + 1
+        out["activity_walk"] = {
+            **{k: walk[k] for k in ("pages", "ended", "cursor_param", "oldest_time", "newest_time")},
+            "rows": len(rows), "types": types,
+            "slug_rows": sum(1 for r in rows if _mentions(r, slug)),
+            "slug_resolution_rows": [
+                {"time": _row_time(r), "payload": r.get("positionResolution")}
+                for r in rows if r.get("type") == "ACTIVITY_TYPE_POSITION_RESOLUTION"
+                and _mentions(r, slug)][:3],
+            "non_trade_rows_for_slug": [
+                {"type": r.get("type"), "time": _row_time(r)}
+                for r in rows if _mentions(r, slug) and r.get("type") != "ACTIVITY_TYPE_TRADE"][:6],
+        }
+    except Exception as exc:                       # noqa: BLE001
+        out["activity_walk"] = {"error": f"{type(exc).__name__}:{getattr(exc, 'code', '')}"}
     try:
         resp = t.request("GET", "/v1/portfolio/positions")
-        rows = resp.get("positions") if isinstance(resp, Mapping) else None
-        if isinstance(rows, Mapping):
-            n, row = len(rows), rows.get(slug)
-        else:
-            rows = [r for r in (rows or []) if isinstance(r, Mapping)]
-            n = len(rows)
-            row = next((r for r in rows if r.get("marketSlug") == slug), None)
+        pos_rows = _rows_of(resp, "positions")
+        avail_rows = _rows_of(resp, "availablePositions")
         out["positions"] = {
             "top_level_keys": sorted(resp.keys()) if isinstance(resp, Mapping) else None,
-            "rows": n, "slug_row": row,
-            "slugs": sorted(str(r.get("marketSlug")) for r in rows)[:20]
-            if isinstance(rows, list) else sorted(rows.keys())[:20]}
+            "eof": resp.get("eof") if isinstance(resp, Mapping) else None,
+            "next_cursor": bool(resp.get("nextCursor")) if isinstance(resp, Mapping) else None,
+            "rows": len(pos_rows),
+            "slug_row": next((r for r in pos_rows if r.get("marketSlug") == slug), None),
+            "slugs": sorted(str(r.get("marketSlug")) for r in pos_rows)[:20],
+            "available_rows": len(avail_rows),
+            "available_slug_row": next((r for r in avail_rows if r.get("marketSlug") == slug), None),
+            "available_slugs": sorted(str(r.get("marketSlug")) for r in avail_rows)[:20],
+            "available_row_keys": sorted(avail_rows[0].keys()) if avail_rows else None,
+        }
     except Exception as exc:                       # noqa: BLE001
         out["positions"] = {"error": f"{type(exc).__name__}:{getattr(exc, 'code', '')}"}
     return out
