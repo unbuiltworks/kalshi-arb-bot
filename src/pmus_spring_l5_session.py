@@ -574,8 +574,9 @@ def load_complement_proof() -> dict:
         doc = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {"proven": False, "reason": "unreadable"}
-    return doc if isinstance(doc, dict) else {"proven": False,
-                                              "reason": "malformed"}
+    if not isinstance(doc, dict):
+        return {"proven": False, "reason": "malformed"}
+    return reconcile_complement_proof(doc)
 
 
 def save_complement_proof(proof: Mapping[str, Any]) -> None:
@@ -603,6 +604,174 @@ def revoke_complement_proof(slug: str, order: Mapping[str, Any],
         "proven": False, "reason": f"revoked:{why}", "slug": slug,
         "revoked_utc": datetime.now(timezone.utc).isoformat(),
         "revoked_order": dict(order), "prior_proof": prior})
+
+
+# Proof records the CURRENT acceptance rule never writes (f465fbc9, OWNER
+# 5556815940): "no legal price at this book" is not venue evidence, and a
+# post-only rejection within ONE tick of the lagging fresh ask is a cross,
+# not a revocation. A record of either class on disk was written by an
+# earlier build under the retired rule.
+RETIRED_PROOF_REASON_PREFIX = "no_fee_safe_complement:"
+RETIRED_REVOCATION_PREFIX = "revoked:complete_rejected_at_fresh_non_crossing_price"
+LEGACY_FAIL_CLOSED_TICK = D("0.005")   # finest PMUS sports tick
+
+
+def rejection_margin_ticks(order: Mapping[str, Any]) -> Optional[D]:
+    """Ticks between a rejected post-only price and the FRESH opposite
+    ask (the _classify_rejection margin). Rows written before the margin
+    was recorded are measured at the finest sports tick: the fail-closed
+    reading, since a coarser real tick can only make the margin smaller
+    (fewer revocations). None = no fresh ask was recorded."""
+    rec = order.get("rejection_margin_ticks")
+    if rec is not None:
+        try:
+            return D(str(rec))
+        except Exception:                             # noqa: BLE001
+            return None
+    ask, px = order.get("fresh_opp_ask"), order.get("px")
+    if ask is None or px is None:
+        return None
+    try:
+        tick = D(str(order.get("tick") or LEGACY_FAIL_CLOSED_TICK))
+        return (D(str(ask)) - D(str(px))) / tick
+    except Exception:                                 # noqa: BLE001
+        return None
+
+
+def retired_rule_write(proof: Mapping[str, Any]) -> Optional[str]:
+    """Why an on-disk proof record could only have been written by a
+    build running the retired acceptance rule (None = a current-rule
+    record, taken as is)."""
+    reason = str(proof.get("reason") or "")
+    if reason.startswith(RETIRED_PROOF_REASON_PREFIX):
+        return "no_legal_price_write_retired_by_f465fbc9"
+    if reason.startswith(RETIRED_REVOCATION_PREFIX):
+        margin = rejection_margin_ticks(proof.get("revoked_order") or {})
+        if margin is not None and margin <= 1:
+            return "one_tick_revocation_retired_by_f465fbc9"
+    return None
+
+
+def complement_proof_from_ledger() -> dict:
+    """The complement-acceptance proof re-derived from the durable ledger
+    under the CURRENT rule: the last venue event wins, in ledger order.
+    FOR: a complement_acceptance probe order the venue held RESTING or
+    filled. AGAINST: a complement_acceptance probe the venue rejected, or
+    a COMPLETE order rejected >= 2 ticks from the fresh opposite ask (or
+    with no fresh ask recorded -- fail closed). proven=None when the
+    ledger holds no such event."""
+    # One order = one venue event, joined across the row kinds that
+    # recorded it: `submitted` (stage, since Sep 3) + `order_terminal`
+    # (end_reason, since Sep 5 15:01Z) for every order; the session_report
+    # order row (fresh ask, margin, tick -- since 02:19Z) refines it when
+    # present. The 01:47Z/02:11Z resting probes predate session_report
+    # rows and exist only as submitted + order_terminal.
+    path = q1.base.state_dir() / "ledger.jsonl"
+    orders: dict[str, dict] = {}
+    if path.exists():
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines()):
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            kind = row.get("kind")
+            if kind == "submitted" and row.get("order_id"):
+                o = orders.setdefault(str(row["order_id"]), {})
+                o.update({"order_id": str(row["order_id"]), "t": row.get("t"),
+                          "slug": row.get("slug"), "stage": row.get("stage"),
+                          "px": row.get("price")})
+            elif kind == "order_terminal" and row.get("order_id"):
+                o = orders.setdefault(str(row["order_id"]), {})
+                o.update({"order_id": str(row["order_id"]), "i": i,
+                          "t": row.get("t"), "slug": row.get("slug"),
+                          "end_reason": row.get("end_reason"),
+                          "filled_qty": row.get("filled_qty"),
+                          "px": o.get("px") or row.get("price")})
+            elif kind == "session_report":
+                for r in row.get("orders") or []:
+                    if not isinstance(r, dict) or not r.get("order_id"):
+                        continue
+                    o = orders.setdefault(str(r["order_id"]), {})
+                    o.update({k: v for k, v in r.items() if v is not None})
+                    o.setdefault("i", i)
+                    o.update({"t": o.get("t") or row.get("t"),
+                              "slug": o.get("slug") or row.get("slug"),
+                              "session_id": row.get("session_id")})
+    events: list[dict] = []
+    for o in sorted((o for o in orders.values() if "i" in o),
+                    key=lambda o: o["i"]):
+        stage = str(o.get("stage") or "")
+        end = str(o.get("end_reason") or "")
+        relation = o.get("relation") or (
+            "complete" if stage.startswith("spring_complete") else None)
+        ev = {k: o.get(k) for k in ("t", "slug", "session_id", "order_id",
+                                    "stage", "px")}
+        ev["end_reason"] = end
+        try:
+            filled = D(str(o.get("filled_qty") or "0")) > 0
+        except Exception:                             # noqa: BLE001
+            filled = False
+        if stage == "complement_acceptance":
+            if filled or end.startswith("resting:"):
+                events.append({**ev, "proven": True})
+            elif end.startswith("rejected"):
+                events.append({**ev, "proven": False,
+                               "why": "probe_rejected"})
+        elif relation == "complete" and end.startswith("rejected"):
+            margin = rejection_margin_ticks(o)
+            if margin is None or margin >= 2:
+                events.append({**ev, "proven": False,
+                               "why": "complete_rejected_at_fresh_"
+                                      "non_crossing_price",
+                               "margin_ticks": (str(margin)
+                                                if margin is not None
+                                                else None),
+                               "fresh_opp_ask": o.get("fresh_opp_ask")})
+    if not events:
+        return {"proven": None, "events": 0, "last_event": None}
+    last = events[-1]
+    return {"proven": bool(last["proven"]), "events": len(events),
+            "last_event": last,
+            "last_proven_event": next((e for e in reversed(events)
+                                       if e["proven"]), None)}
+
+
+def reconcile_complement_proof(doc: dict) -> dict:
+    """LIVE 11:26Z: the campaign sat in CAMPAIGN_WAITING:COMPLEMENT_UNPROVEN
+    with four admitted markets because the proof file still carried the
+    03:54Z "no_legal_maker_price" write -- a record f465fbc9 stopped
+    persisting, left on disk by the build before it -- while the proof
+    can only be re-proven on a HELD market's resume path and nothing was
+    held. A record the current rule never writes is re-derived from the
+    durable venue evidence (the ledger) under the current rule, persisted
+    once with the superseded record attached, and printed. No evidence in
+    the ledger = still not proven (fail closed)."""
+    why = retired_rule_write(doc)
+    if why is None:
+        return doc
+    derived = complement_proof_from_ledger()
+    out: dict[str, Any] = {
+        "reconciled_utc": datetime.now(timezone.utc).isoformat(),
+        "reconciled_from": "ledger", "retired_rule_write": why,
+        "superseded_record": dict(doc), "ledger_evidence": derived}
+    if derived.get("proven") is None:
+        out.update({"proven": False, "reason": f"no_ledger_evidence:{why}"})
+    else:
+        last = derived["last_event"]
+        out.update({"proven": derived["proven"], "slug": last.get("slug"),
+                    "order_id": last.get("order_id"),
+                    "end_reason": last.get("end_reason"),
+                    "proven_utc": (last.get("t") if derived["proven"]
+                                   else None),
+                    "reason": (None if derived["proven"]
+                               else f"ledger:{last.get('why')}"),
+                    "labels": "re-derived from the durable ledger under "
+                              "the current acceptance rule; no cap/gate "
+                              "change"})
+    save_complement_proof(out)
+    return out
 
 
 def divergence_reason(refusal: Optional[str], v2_relation: str,
@@ -1584,6 +1753,9 @@ def run_session(t: Optional[Transport] = None,
                     rej = _classify_rejection(side_up, px)
                     report["orders"][-1]["rejection_class"] = rej["class"]
                     report["orders"][-1]["fresh_opp_ask"] = rej["opp_ask"]
+                    report["orders"][-1]["rejection_margin_ticks"] = \
+                        rej.get("margin_ticks")
+                    report["orders"][-1]["tick"] = str(spec["tick"])
                     if rej["crossed"]:
                         sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                 if got > 0:
@@ -1672,6 +1844,9 @@ def run_session(t: Optional[Transport] = None,
                     rej = _classify_rejection(deficit_up, px)
                     report["orders"][-1]["rejection_class"] = rej["class"]
                     report["orders"][-1]["fresh_opp_ask"] = rej["opp_ask"]
+                    report["orders"][-1]["rejection_margin_ticks"] = \
+                        rej.get("margin_ticks")
+                    report["orders"][-1]["tick"] = str(spec["tick"])
                     if rej["crossed"]:
                         sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                     else:
