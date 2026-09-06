@@ -812,6 +812,10 @@ DIVERGENCE_CLASSES = {
     "behavioral:modal_argmax_vs_stochastic_draw": "model deficiency (argmax execution of a stochastic policy)",
     "venue_execution_adaptation:complete_below_unit_granularity":
         "venue/execution adaptation (shares-scale imbalance below one venue unit)",
+    # the same row as written by the pre-fd1eafd4 path (ledger row
+    # ab06a5a293e589d893cb1b33); kept so a rebuild classifies it identically
+    "implementation_bug_candidate:complete_without_residual":
+        "venue/execution adaptation (shares-scale imbalance below one venue unit)",
     "none": "no disagreement",
     "none:stochastic_draw_executed": "no disagreement",
 }

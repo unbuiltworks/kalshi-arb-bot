@@ -755,7 +755,16 @@ def layered_view(live: Mapping[str, Any], spec: Mapping[str, Any]) -> dict:
                     "unchanged -- this is a second reading, not a relabel"}
 
 
-MAX_RESIDUAL_UNITS_SHELL = 3          # == pmus_spring_l5_session.MAX_RESIDUAL_UNITS
+MAX_RESIDUAL_UNITS_SHELL = 3
+# Persisted divergence strings whose writer labelled them before the class
+# existed (LIVE 14:14Z gate: decision ab06a5a293e589d893cb1b33, a COMPLETE
+# draw with the shares-scale imbalance below one venue unit -> hold). The
+# class is read from the ledger's own divergence string; the row is
+# untouched.
+RECLASSIFIED_DIVERGENCES = {
+    "implementation_bug_candidate:complete_without_residual":
+        "venue/execution adaptation (shares-scale imbalance below one venue unit)",
+}          # == pmus_spring_l5_session.MAX_RESIDUAL_UNITS
 CAP_OVERRIDES = ("policy_flag:cap_fallback_complete", "safety_adaptation:spend_cap")
 
 
@@ -1108,8 +1117,14 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
     shadow = score_shadow(rolling, spec)
     classes: dict = {}
     unclassified_samples: list = []
+    reclassified = 0
     for d in clean:
         c = d.get("divergence_class") or d.get("divergence") or "unclassified"
+        if "unclassified" in c and d.get("divergence") in RECLASSIFIED_DIVERGENCES:
+            # the class is assigned from the persisted divergence string of
+            # the ledger row (a superseded writer's label), never guessed
+            c = RECLASSIFIED_DIVERGENCES[d["divergence"]]
+            reclassified += 1
         classes[c] = classes.get(c, 0) + 1
         if "unclassified" in c and len(unclassified_samples) < 5:
             # name the persisted divergence so the class can be assigned
@@ -1140,6 +1155,7 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
             "largest_mismatch": largest_mismatch(live, shadow),
             "divergence_classes": classes,
             "divergence_unclassified_samples": unclassified_samples,
+            "divergence_reclassified_from_ledger": reclassified,
             "divergence_classes_legacy": classes_legacy,
             "counterfactual_2s": counterfactual,
             "complete_price_counterfactual": complete_cf,

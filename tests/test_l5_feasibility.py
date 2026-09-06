@@ -81,3 +81,27 @@ def test_evaluate_carries_the_feasibility_block():
                                             "GATE_FEASIBILITY_CONFLICT")
     assert out["feasibility"]["decisions"] == 6
     assert out["evidence_progress"]["minimums"]["live_scored_decisions"]["need"] == 200
+
+
+def test_unclassified_ledger_row_is_classed_from_its_own_divergence_string():
+    """LIVE 14:14Z: one clean row carried the superseded writer's label
+    implementation_bug_candidate:complete_without_residual and the class
+    'unclassified'. The gate names the row and assigns the class from the
+    persisted divergence string -- never a guess, never a row rewrite."""
+    import copy
+    from tests.test_l5_evidence_integrity import _report
+    rep = _report("s1", "m1", 3)
+    rep["decisions"][1]["divergence"] = "implementation_bug_candidate:complete_without_residual"
+    rep["decisions"][1]["divergence_class"] = "implementation bug (unclassified divergence -- investigate)"
+    rep["decisions"][1]["refusal"] = "complete_without_residual"
+    rep["decisions"][2]["divergence"] = "something:new"
+    rep["decisions"][2]["divergence_class"] = "implementation bug (unclassified divergence -- investigate)"
+    out = gate.evaluate([copy.deepcopy(rep)])
+    cls = out["divergence_classes"]
+    assert cls["venue/execution adaptation (shares-scale imbalance below one venue unit)"] == 1
+    assert cls["implementation bug (unclassified divergence -- investigate)"] == 1
+    assert out["divergence_reclassified_from_ledger"] == 1
+    # the synthetic row 0 has no divergence at all (also "unclassified");
+    # the reclassified row is no longer listed, the unknown one is
+    samples = out["divergence_unclassified_samples"]
+    assert [s["divergence"] for s in samples] == [None, "something:new"]
