@@ -263,7 +263,7 @@ def test_sessions_are_recorded_and_the_fidelity_gate_runs_automatically(
                 "inventory": {"up": "0", "dn": "0"}, "actions": [],
                 "decisions": [{"slug": slug, "state": "p45-55c|tte>10m|flat",
                                "t_utc": "2026-09-06T02:00:00+00:00",
-                               "evidence_schema": 2,
+                               "evidence_schema": 2, "lookup": {"lookup_version": 3},
                                "relation_ranked": [{"relation": "open", "p": 1.0}],
                                "acted": "open", "divergence": "none",
                                "divergence_class": "no disagreement",
@@ -436,7 +436,9 @@ def test_fill_updates_inventory_and_requeries_model_before_next_action(
     # moment (NO opened first: cheaper touch, so the residual is negative)
     assert [s[2] for s in seen[:4]] == [0.0, -1.0, -2.0, -1.0]
     assert seen[1][1] == "open" and seen[2][1] == "extend"
-    assert seen[1][0].endswith("imb1-10") and seen[0][0].endswith("flat")
+    # canonical lookup v3: the post-fill imbalance is in model-scale shares
+    # (L5's p50 for the fill's state|relation), never the unit bucket
+    assert not seen[1][0].endswith("|flat") and seen[0][0].endswith("flat")
     assert rep["inventory"]["residual"] == "0.00"
     # every SUBMITTED order is reported with its authoritative outcome
     assert [o["outcome"] for o in rep["orders"]] == ["filled"] * 4
@@ -771,7 +773,8 @@ def test_resume_continues_the_held_market_with_real_inventory(monkeypatch,
     assert rep["status"] == "SPRING_RESIDUAL_HOLD", rep
     assert rep["resumed_inventory"]["up"] == "0.02"
     assert seen[0][1] == "open" and seen[0][2] == 1.0
-    assert seen[0][0].endswith("imb1-10")            # not 'flat'
+    # canonical lookup v3: imbalance in model-scale shares, never 'flat'
+    assert not seen[0][0].endswith("|flat")
     assert rep["decisions"][0]["acted"] == "extend"
     assert rep["orders"][0]["relation"] == "extend"
     assert rep["orders"][0]["side"] == "YES"          # same side

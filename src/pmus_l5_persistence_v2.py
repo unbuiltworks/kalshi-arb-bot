@@ -43,6 +43,12 @@ ARTIFACT = (Path(__file__).resolve().parents[1]
 ALPHA = 10.0
 GAP_SECONDS = {"gap<2s": 2.0, "gap2-10": 10.0, "gap10-30": 30.0,
                "gap>30": 60.0}
+# OWNER 5558477213 A/B + 5558859447 #5: the canonical state lookup shared
+# by the Gemini shadow and the live probe -- outcome-price key (never
+# mirrored to the YES scale), pre-fill = OPEN with off-distribution meaning
+# the BASE state is absent, behavioral last_size AND a model-scale
+# imbalance in the same shares. Rows record which version produced them.
+CANONICAL_LOOKUP_VERSION = 3
 
 _cache: Optional[dict] = None
 

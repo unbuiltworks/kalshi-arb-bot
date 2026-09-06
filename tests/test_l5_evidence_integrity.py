@@ -452,10 +452,13 @@ def test_legacy_rows_are_scored_separately_and_never_count_toward_minimums():
     assert out["divergence_classes_legacy"]
     # a corpus of only clean rows has no legacy view
     assert gate.evaluate([clean])["live_legacy"] is None
-    # a row carrying the post-fix fields is clean even without the marker
+    # a row carrying the post-fix fields is clean even without the marker,
+    # but only when the canonical lookup produced it
     row = dict(clean["decisions"][0]); row.pop("evidence_schema")
     assert gate.is_clean_row({**row, "attempted": "complete"})
     assert not gate.is_clean_row(row)
+    v2 = dict(clean["decisions"][0]); v2["lookup"] = {"lookup_version": 2}
+    assert not gate.is_clean_row(v2)                  # superseded lookup
 
 
 def test_cadence_references_and_complete_counterfactual_are_reported():

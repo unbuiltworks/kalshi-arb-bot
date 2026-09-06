@@ -333,7 +333,9 @@ def test_sequence_uses_behavioral_states_at_penny_sizing(monkeypatch,
     assert rep["status"] == "SPRING_MATCHED", rep
     states = [d["state"] for d in rep["decisions"]]
     assert states[0].endswith("flat")             # before any fill
-    assert all(s.endswith("imb1-10") for s in states[1:3])  # 1-2 units
+    # canonical lookup v3: after fills the imbalance is L5's model-scale
+    # shares for the action made (never the penny unit), never 'flat'
+    assert all(not s.endswith("|flat") for s in states[1:3])
     assert "flat" not in states[1] and "flat" not in states[2]
 
 

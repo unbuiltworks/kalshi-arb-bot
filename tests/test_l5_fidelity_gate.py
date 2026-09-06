@@ -13,7 +13,7 @@ def _dec(slug, state, rec, acted, sampled, refusal=None, t="2026-09-06T02:00:00+
               "open": [{"relation": "open", "p": 0.9}, {"relation": "extend", "p": 0.1}],
               "complete": [{"relation": "complete", "p": 0.7}, {"relation": "extend", "p": 0.3}]}[rec]
     return {"slug": slug, "state": state, "v2_recommended": rec,
-            "evidence_schema": 2,
+            "evidence_schema": 2, "lookup": {"lookup_version": 3},
             "relation_ranked": ranked, "acted": acted, "refusal": refusal,
             "off_distribution": off, "t_utc": t, "next_reevaluation_s": 2.0,
             "behavioral_unit": unit,

@@ -426,19 +426,30 @@ def verdict(live: Mapping[str, Any], shadow: Mapping[str, Any],
     }
 
 
-CLEAN_ROW_RULE = ("evidence_schema >= 2, or a row carrying the post-mark_noop "
-                  "fields (attempted / size_transformations)")
+CANONICAL_LOOKUP_VERSION = 3          # == pmus_l5_persistence_v2.CANONICAL_LOOKUP_VERSION
+CLEAN_ROW_RULE = ("evidence_schema >= 2 (or the post-mark_noop fields attempted / "
+                  "size_transformations) AND lookup.lookup_version == "
+                  f"{CANONICAL_LOOKUP_VERSION} (canonical state lookup); anything "
+                  "else is LEGACY / UNVERIFIABLE")
 CADENCE_REF_PATH = Path("analysis/l5/l5_cadence_behavioral_unit.json")
 
 
 def is_clean_row(d: Mapping[str, Any]) -> bool:
-    """Post-mark_noop evidence row (OWNER 5558167805 #1)."""
+    """Post-mark_noop evidence row written by the canonical lookup (OWNER
+    5558167805 #1, 5558646019 #3: the gate must prove which lookup
+    produced a row)."""
+    post_fix = False
     try:
-        if int(d.get("evidence_schema") or 0) >= 2:
-            return True
+        post_fix = int(d.get("evidence_schema") or 0) >= 2
     except (TypeError, ValueError):
         pass
-    return "size_transformations" in d or "attempted" in d
+    post_fix = post_fix or "size_transformations" in d or "attempted" in d
+    lk = d.get("lookup")
+    try:
+        ver = int((lk or {}).get("lookup_version") or 0) if isinstance(lk, Mapping) else 0
+    except (TypeError, ValueError):
+        ver = 0
+    return post_fix and ver == CANONICAL_LOOKUP_VERSION
 
 
 def load_cadence_reference(path: Path = CADENCE_REF_PATH) -> Optional[dict]:

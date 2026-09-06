@@ -171,6 +171,14 @@ class Inventory:
         self.cost_up = self.cost_dn = D("0")
         self.last_rel: Optional[str] = None
         self.last_px: Optional[D] = None
+        # OWNER 5558859447 #5: canonical state inputs beside the v1 ones --
+        # the outcome price of the last own fill (never mirrored) and the
+        # model-scale (behavioral shares) inventory, so the state key is
+        # independent of the safety-scaled executable size
+        self.last_px_outcome: Optional[D] = None
+        self.last_size_behavioral: Optional[str] = None
+        self.up_shares_behavioral: float = 0.0
+        self.dn_shares_behavioral: float = 0.0
         self.unit: Optional[D] = None          # first fill = 1 behavioral unit
         self.actions: list[dict] = []
 
@@ -209,12 +217,29 @@ class Inventory:
             self.cost_dn += px * qty
         self.last_rel = relation
         self.last_px = px if side_up else (q1.ONE - px)
+        self.last_px_outcome = px
         self.actions.append({
             "t": datetime.now(timezone.utc).isoformat(),
             "relation": relation, "side": "YES" if side_up else "NO",
             "px": str(px), "qty": str(qty), "notional": str(px * qty),
             "inventory_after": self.snapshot(),
         })
+
+    def record_behavioral_shares(self, side_up: bool, shares: float,
+                                 size_bucket: Optional[str] = None) -> None:
+        """Model-scale accounting of ONE fill: L5's target size (shares)
+        for the state|relation the fill was made in, on the filled side."""
+        if side_up:
+            self.up_shares_behavioral += float(shares)
+        else:
+            self.dn_shares_behavioral += float(shares)
+        if size_bucket:
+            self.last_size_behavioral = size_bucket
+
+    def behavioral_residual_shares(self) -> Optional[float]:
+        if self.up_shares_behavioral == 0.0 and self.dn_shares_behavioral == 0.0:
+            return None
+        return self.up_shares_behavioral - self.dn_shares_behavioral
 
     def snapshot(self) -> dict:
         return {"up": str(self.up), "dn": str(self.dn),
@@ -225,14 +250,93 @@ class Inventory:
                 "spent": str(self.spent())}
 
 
-def spring_state_key(inv: Inventory, market_px: D,
-                     settlement_t: Optional[float], now: float) -> str:
+def spring_state_key_v1(inv: Inventory, market_px: D,
+                        settlement_t: Optional[float], now: float) -> str:
+    """The pre-canonical key (YES-scale last price, unit residual), kept
+    on every record for the before/after; never a lookup input now."""
     tte = (max(settlement_t - now, 0.0) if settlement_t
            else SPORTS_TTE_DEFAULT_S)
     px = inv.last_px if inv.last_px is not None else market_px
-    # behavioral action-unit residual, NOT raw penny contracts — a 0.01
-    # first fill must not read as 'flat' (issue #167 comment 5520710312)
     return state_key(float(px), tte, inv.behavioral_residual())
+
+
+def spring_state_key(inv: Inventory, market_px: D,
+                     settlement_t: Optional[float], now: float,
+                     ask: Optional[D] = None) -> str:
+    """Canonical base-state key (OWNER 5558859447 #5, same rule as the
+    Gemini shadow's lookup v3): post-fill the OUTCOME price of the last own
+    fill (the frozen model is not mirror-symmetric); pre-fill the cheaper
+    touch (the outcome the shared open convention buys); the imbalance in
+    the same behavioral shares as last_size once fills carry their
+    behavioral size, else the unit residual."""
+    tte = (max(settlement_t - now, 0.0) if settlement_t
+           else SPORTS_TTE_DEFAULT_S)
+    if inv.last_px_outcome is not None:
+        px = inv.last_px_outcome
+    elif ask is not None:
+        px = min(D(str(market_px)), q1.ONE - D(str(ask)))
+    else:
+        px = market_px
+    shares = inv.behavioral_residual_shares()
+    resid = shares if shares is not None else inv.behavioral_residual()
+    return state_key(float(px), tte, resid)
+
+
+def record_behavioral_fill(inv: Inventory, fid_art: Optional[Mapping[str, Any]],
+                           base_state: str, relation: str, side_up: bool) -> None:
+    """After a fill: the model-scale size (bucket + shares) the clone
+    behaviorally made -- L5's p50 for this state|relation -- on the filled
+    side. Unknown -> the executed bucket, zero shares (unit residual)."""
+    from src.polymarket_l5.action_model import SIZE_BUCKETS, _bucket
+    row = fid.l5_target_size(fid_art, base_state, relation) if fid_art else {}
+    p50 = row.get("shares_p50") if isinstance(row, Mapping) else None
+    try:
+        p50 = float(p50) if p50 is not None else None
+    except (TypeError, ValueError):
+        p50 = None
+    inv.record_behavioral_shares(side_up, p50 or 0.0,
+                                 _bucket(p50, SIZE_BUCKETS) if p50 is not None else "q<5")
+
+
+def spring_proposal(model: Mapping[str, Any], inv: Inventory, skey: str,
+                    skey_v1: str) -> dict:
+    """The frozen v2 policy looked up on the canonical key, with the v1
+    lookup's off flag recorded beside it (OWNER 5558859447 #5): pre-fill
+    the canonical history keys no first-in-window transition, so the only
+    faithful relation is OPEN and off-distribution means the BASE state is
+    absent; post-fill the behavioral last_size (never the executed q<5)."""
+    pre_fill = (inv.up + inv.dn) == 0
+    last_rel = inv.last_rel or "open"
+    last_size_b = (inv.last_size_behavioral if not pre_fill and inv.last_size_behavioral
+                   else "q<5")
+    v1 = pv2.v2_dist(model, skey_v1, last_rel, "q<5")
+    prop = pv2.proposal(model, skey, last_rel, last_size_b,
+                        residual=inv.behavioral_residual())
+    base = model.get("base") or {}
+    if pre_fill:
+        prop["recommended_relation"] = "open"
+        prop["relation_ranked"] = [{"relation": "open", "p": 1.0}]
+        prop["persist_extend_p"], prop["switch_complete_p"] = 0.0, 0.0
+        prop["off_distribution"] = skey not in base
+        prop["state_n"] = sum((base.get(skey) or {}).values())
+        tier = ("pre_fill:first_action_is_open (canonical history keys no "
+                "first-in-window transition; off = base state absent)")
+    else:
+        tier = "full->base->marginal on the canonical key"
+    prop["lookup"] = {
+        "lookup_version": pv2.CANONICAL_LOOKUP_VERSION,
+        "state": skey, "state_v1": skey_v1, "last_rel": last_rel,
+        "last_size_executed": "q<5", "last_size_behavioral": last_size_b,
+        "pre_fill": pre_fill, "off_distribution_v1": bool(v1["backed_off"]),
+        "full_key_v1": v1["state"], "lookup_tier": tier,
+        "residual_units": inv.behavioral_residual(),
+        "residual_shares_behavioral": inv.behavioral_residual_shares(),
+        "price_convention": ("outcome price of the last own fill"
+                             if inv.last_px_outcome is not None
+                             else "cheaper touch (outcome the open convention buys)"),
+        "model_sha": str(model.get("_sha256_16") or ""),
+    }
+    return prop
 
 
 def spring_cumulative_notional(slug: str) -> D:
@@ -680,8 +784,16 @@ def held_inventory_from_ledger(slug: str) -> Inventory:
                        != "OUTCOME_SIDE_NO", px, got,
                        sub_stage.split("_")[1] if "_" in sub_stage
                        else "open"))
+    art = fid.load()
     for _, side_up, px, qty, rel in sorted(events, key=lambda e: e[0]):
+        # the state the fill was made in is not persisted on legacy ledger
+        # rows: rebuild it from the fill's own outcome price, the sports
+        # default TTE and the model-scale residual BEFORE the fill
+        before = inv.behavioral_residual_shares()
+        base_state = state_key(float(px), SPORTS_TTE_DEFAULT_S,
+                               before if before is not None else inv.behavioral_residual())
         inv.record(side_up, px, qty, rel)
+        record_behavioral_fill(inv, art, base_state, rel, side_up)
     return inv
 
 
@@ -1014,10 +1126,11 @@ def run_session(t: Optional[Transport] = None,
                         len(report.get("counterfactual_2s") or []) < CF_2S_MAX:
                     track["last_cf"] = now_w
                     try:
-                        k2 = spring_state_key(inv, b["bid"], settlement_t, now_w)
-                        p2 = pv2.proposal(model, k2, inv.last_rel or "open",
-                                          "q<5",
-                                          residual=inv.behavioral_residual())
+                        k2 = spring_state_key(inv, b["bid"], settlement_t, now_w,
+                                              ask=b.get("ask"))
+                        p2 = spring_proposal(
+                            model, inv, k2,
+                            spring_state_key_v1(inv, b["bid"], settlement_t, now_w))
                         idx2 = len(report.get("counterfactual_2s") or [])
                         d2 = fid.sample_relation(
                             p2.get("relation_ranked"),
@@ -1063,11 +1176,12 @@ def run_session(t: Optional[Transport] = None,
                 if relation_ in ("open", "extend") and touch != px_:
                     return f"touch_moved:{touch}"
                 if inv.up + inv.dn > 0:
-                    k = spring_state_key(inv, b["bid"], settlement_t, wall())
+                    k = spring_state_key(inv, b["bid"], settlement_t, wall(),
+                                         ask=b.get("ask"))
                     if k != skey_:
-                        p = pv2.proposal(model, k, inv.last_rel or "open",
-                                         "q<5",
-                                         residual=inv.behavioral_residual())
+                        p = spring_proposal(
+                            model, inv, k,
+                            spring_state_key_v1(inv, b["bid"], settlement_t, wall()))
                         if p["recommended_relation"] != relation_:
                             return (f"l5_action_changed:"
                                     f"{p['recommended_relation']}")
@@ -1158,6 +1272,8 @@ def run_session(t: Optional[Transport] = None,
                     {"price": px, "qty": got}
                 inv.record(deficit_up, D(str(fill["price"])), got,
                            "complete")
+                record_behavioral_fill(inv, fid_art, last_skey.get("k") or "",
+                                       "complete", deficit_up)
             proven = bool(got > 0 or end_reason.startswith("resting"))
             proof.update({
                 "proven": proven, "observed_state": observed,
@@ -1190,14 +1306,16 @@ def run_session(t: Optional[Transport] = None,
         while actions < max_actions and not out_of_time():
             bbo = q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES")
             spec = micro.market_micro_spec(t, slug, bbo["bid"])
-            skey = spring_state_key(inv, bbo["bid"], settlement_t, wall())
+            skey = spring_state_key(inv, bbo["bid"], settlement_t, wall(),
+                                    ask=bbo.get("ask"))
+            skey_v1 = spring_state_key_v1(inv, bbo["bid"], settlement_t, wall())
             last_skey["k"] = skey
             tte_s = (max(settlement_t - wall(), 0.0) if settlement_t
                      else SPORTS_TTE_DEFAULT_S)
             # behavioral units, sign preserved — never int() a fractional
-            # venue residual (issue #167 comment 5520710312)
-            prop = pv2.proposal(model, skey, inv.last_rel or "open", "q<5",
-                                residual=inv.behavioral_residual())
+            # venue residual (issue #167 comment 5520710312); canonical
+            # lookup v3 with the v1 key recorded beside it (OWNER 5558859447 #5)
+            prop = spring_proposal(model, inv, skey, skey_v1)
             # OWNER 5556232035 / Phase 1 largest mismatch: L5's policy is
             # a CONDITIONAL DISTRIBUTION over relations; executing its
             # argmax ("modal") can never match L5's action frequencies
@@ -1312,6 +1430,9 @@ def run_session(t: Optional[Transport] = None,
                  # frozen evaluator scores this cohort separately from the
                  # pre-fix rows and never combines them)
                  "evidence_schema": 2,
+                 # OWNER 5558859447 #5: which lookup produced this row --
+                 # both state keys, both last_size values, both off flags
+                 "lookup": prop.get("lookup"),
                  # OWNER 5558072959 #4: the behavioral size target and
                  # every transformation down to the executable size, so
                  # the size-cap override is never scored as L5 behavior
@@ -1469,6 +1590,7 @@ def run_session(t: Optional[Transport] = None,
                     fill = micro._terminal_positive_fill(t, oid, qty) or \
                         {"price": px, "qty": got}
                     inv.record(side_up, D(str(fill["price"])), got, relation)
+                    record_behavioral_fill(inv, fid_art, skey, relation, side_up)
             else:                               # complete: deficit side only
                 if inv.residual == 0:
                     mark_noop(report["decisions"][-1], "complete_without_residual",
@@ -1565,6 +1687,7 @@ def run_session(t: Optional[Transport] = None,
                         {"price": px, "qty": got}
                     inv.record(deficit_up, D(str(fill["price"])), got,
                                "complete")
+                    record_behavioral_fill(inv, fid_art, skey, "complete", deficit_up)
             actions += 1
 
         status = ("SPRING_MATCHED" if inv.matched > 0 and inv.residual == 0
