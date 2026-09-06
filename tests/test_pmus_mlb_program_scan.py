@@ -83,7 +83,17 @@ def test_scan_keeps_live_rebate_and_pool_apart_per_market_and_reconciles_by_slug
         "aec-mlb-nyy-bos-2026-09-06", "aec-mlb-atl-mil-2026-08-23"]
     assert out["mlb_program_entries"][1]["in_current_universe"] is False
     assert out["program_list_entries"] == 3
-    assert out["statement"].startswith("MLB markets present: 4 (2 live) at ")
+    assert out["statement"].startswith("MLB markets present: 4 (2 live) across 2 games (1 live) at ")
+    # one summary row per GAME, main markets first within the per-market list
+    assert out["mlb_games"] == 2 and out["mlb_games_live"] == 1
+    g = {x["event"]: x for x in out["games"]}
+    assert g["mlb-mil-cin-2026-09-06"]["live"] is True and g["mlb-mil-cin-2026-09-06"]["markets"] == 2
+    assert g["mlb-mil-cin-2026-09-06"]["main_markets"] == 2 and g["mlb-mil-cin-2026-09-06"]["pool_any_period"] == 0
+    assert g["mlb-nyy-bos-2026-09-06"]["main_markets"] == 1 and g["mlb-nyy-bos-2026-09-06"]["rebate_eligible"] == 1
+    assert g["mlb-nyy-bos-2026-09-06"]["pool_active_period"] == 1
+    assert [r["slug"] for r in out["markets"]][:2] == ["aec-mlb-mil-cin-2026-09-06",
+                                                      "tsc-mlb-mil-cin-2026-09-06-9pt5"]
+    assert [r["slug"] for r in out["markets"]][-1] == "astatc-mlb-nyy-bos-2026-09-06-k-cole-gte6"
     assert "3/4 carry a positive feeCoefficient" in out["statement"]
     assert "1/4 currently have an ACTIVE liquidity-reward program period" in out["statement"]
     assert out["discovery_gap"] is None
@@ -96,6 +106,21 @@ def test_scan_flags_a_discovery_gap_instead_of_concluding_absence():
     assert out["mlb_program_entries"] == []
     assert "August accrual" in out["discovery_gap"] and "not 'MLB has none'" in out["discovery_gap"]
     assert "0/4 currently have an ACTIVE" in out["statement"]
+
+
+def test_earnings_rows_without_program_id_are_keyed_by_program_type(monkeypatch, tmp_path):
+    monkeypatch.setenv(q1.STATE_ENV, str(tmp_path))
+    routes = _routes()
+    routes[(q1.API, "/v1/portfolio/activities")] = {"activities": [], "eof": True}
+    routes[(q1.API, "/v1/account/balances")] = {"balances": [{"buyingPower": {"value": "110"}}]}
+    routes[(q1.API, "/v1/incentives/earnings")] = {"rewards": [
+        {"reward": 0.14, "programType": "liquidityProgram", "marketSlug": "tsc-nfl-sea-ten-2026-08-23-4q-3pt5",
+         "date": "2026-08-23", "status": "SKIPPED"},
+        {"reward": 0.04, "programType": "liquidityProgram", "marketSlug": "astatc-mlb-atl-mil-2026-08-23-tb-ronacu-gte3",
+         "date": "2026-08-23", "status": "SKIPPED"}]}
+    out = ia.incentive_audit(FakeT(routes))
+    assert out["earnings"]["rows"] == 2 and out["earnings"]["total_usd"] == "0.18"
+    assert out["earnings"]["by_program"] == {"liquidityProgram": 2}
 
 
 def test_scan_survives_a_failing_events_page_and_reports_it():

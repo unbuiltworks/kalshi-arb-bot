@@ -123,7 +123,10 @@ def earnings(t: q1.Transport) -> dict:
             if amt is not None:
                 total += amt
                 n_amount += 1
-            prog = str(row.get("programId") or row.get("program") or row.get("type") or "?")
+            # LIVE 19:08Z: the earnings rows carry programType + marketSlug
+            # but no programId, so the type is the key when the id is absent
+            prog = str(row.get("programId") or row.get("program") or row.get("type")
+                       or row.get("programType") or "?")
             by_prog[prog] += 1
         out.update({"rows": len(rows), "rows_with_amount": n_amount,
                     "total_usd": str(total) if n_amount else None,
@@ -333,14 +336,41 @@ def mlb_program_scan(t: q1.Transport) -> dict:
                                             "periods": periods})
     else:
         errors.append(f"/v1/incentives: {progs['error']}")
-    rows = sorted(markets.values(), key=lambda r: (not r["live"], str(r["game_start"]), r["slug"]))
+    # LIVE 19:31Z: 6,704 MLB markets, 3,818 live -- player props (astatc-)
+    # swamp a slug-sorted list, so main markets (moneyline aec-, totals
+    # tsc-, spreads asc-) come first and every GAME gets one summary row
+    def _main(r: dict) -> int:
+        s = r["slug"]
+        return 0 if s.startswith("aec-") else 1 if s.startswith("tsc-") else \
+            2 if s.startswith("asc-") else 3
+    rows = sorted(markets.values(),
+                  key=lambda r: (not r["live"], _main(r), str(r["game_start"]), r["slug"]))
+    games: dict[str, dict] = {}
+    for r in rows:
+        g = games.setdefault(str(r["event"]), {
+            "event": r["event"], "live": False, "game_start": r["game_start"],
+            "markets": 0, "main_markets": 0, "rebate_eligible": 0,
+            "pool_any_period": 0, "pool_active_period": 0, "main_slugs": []})
+        g["live"] = g["live"] or bool(r["live"])
+        g["markets"] += 1
+        if _main(r) < 3:
+            g["main_markets"] += 1
+            if len(g["main_slugs"]) < 3:
+                g["main_slugs"].append(r["slug"])
+        g["rebate_eligible"] += 1 if r["rebate_eligible_by_fee_coefficient"] else 0
+        g["pool_any_period"] += 1 if r["program_periods"] else 0
+        g["pool_active_period"] += 1 if any(
+            str(x.get("status") or "").lower() == "active" for x in r["program_periods"]) else 0
+    game_rows = sorted(games.values(), key=lambda g: (not g["live"], str(g["game_start"]), str(g["event"])))
     live = [r for r in rows if r["live"]]
     rebate = [r for r in rows if r["rebate_eligible_by_fee_coefficient"]]
     pooled = [r for r in rows if r["program_periods"]]
     pooled_active = [r for r in pooled
                      if any(str(x.get("status") or "").lower() == "active" for x in r["program_periods"])]
     n = len(rows)
-    statement = (f"MLB markets present: {n} ({len(live)} live) at {scanned_at}; "
+    live_games = [g for g in game_rows if g["live"]]
+    statement = (f"MLB markets present: {n} ({len(live)} live) across {len(game_rows)} games "
+                 f"({len(live_games)} live) at {scanned_at}; "
                  f"{len(rebate)}/{n} carry a positive feeCoefficient (maker-rebate formula "
                  f"applies to fee-charging markets; the rebate itself is credited per fill "
                  f"and is $0.00 below 1.62 shares after cent rounding); "
@@ -349,6 +379,8 @@ def mlb_program_scan(t: q1.Transport) -> dict:
                  f"program list: {len(mlb_program_entries)} of {program_entries}")
     return {"ok": not errors or bool(rows), "scanned_at": scanned_at, "errors": errors,
             "events_seen": events_seen, "mlb_markets": n, "mlb_live": len(live),
+            "mlb_games": len(game_rows), "mlb_games_live": len(live_games),
+            "games": game_rows[:MLB_ROW_LIMIT],
             "rebate_eligible_by_fee_coefficient": len(rebate),
             "liquidity_pool_any_period": len(pooled),
             "liquidity_pool_active_period": len(pooled_active),
