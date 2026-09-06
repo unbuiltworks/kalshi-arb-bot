@@ -409,6 +409,71 @@ def verdict(live: Mapping[str, Any], shadow: Mapping[str, Any],
     }
 
 
+CLEAN_ROW_RULE = ("evidence_schema >= 2, or a row carrying the post-mark_noop "
+                  "fields (attempted / size_transformations)")
+CADENCE_REF_PATH = Path("analysis/l5/l5_cadence_behavioral_unit.json")
+
+
+def is_clean_row(d: Mapping[str, Any]) -> bool:
+    """Post-mark_noop evidence row (OWNER 5558167805 #1)."""
+    try:
+        if int(d.get("evidence_schema") or 0) >= 2:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return "size_transformations" in d or "attempted" in d
+
+
+def load_cadence_reference(path: Path = CADENCE_REF_PATH) -> Optional[dict]:
+    """Both historical L5 cadence units, persisted as diagnostics (OWNER
+    5558167805 #6): the fill-arrival gap (the frozen model's unit) and the
+    order-episode gap (fresh decisions, same-price partial fills collapsed)."""
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    fill = doc.get("trade_to_trade_gap_s") or {}
+    epi = doc.get("order_episode_start_to_start_gap_s") or {}
+    by_rel = doc.get("order_episode_gap_by_relation_s") or {}
+    return {"fill_gap_reference": {
+                "unit": "consecutive L5 fills in one window (public activity)",
+                **{k: fill.get(k) for k in ("n", "median", "p75", "p90", "buckets")}},
+            "order_episode_gap_reference": {
+                "unit": "consecutive L5 order episodes (same outcome/side/price "
+                        "fills collapsed) start-to-start",
+                **{k: epi.get(k) for k in ("n", "median", "p75", "p90", "buckets")},
+                "by_relation": {r: {k: v.get(k) for k in ("n", "median", "p75", "p90")}
+                                for r, v in by_rel.items() if isinstance(v, dict)}}}
+
+
+def summarize_complete_counterfactual(decs: list, orders: list) -> dict:
+    """OWNER 5558167805 #7: the post-fix COMPLETE sample -- L5 touch vs the
+    executed fee-safe price, reported separately; no price optimization."""
+    rows = [d.get("counterfactual_l5_price") for d in decs
+            if isinstance(d.get("counterfactual_l5_price"), Mapping)]
+    if not rows:
+        return {"n": 0}
+    deltas = [float(r["delta_ticks"]) for r in rows if r.get("delta_ticks") not in (None, "None")]
+    classes: dict = {}
+    for r in rows:
+        c = r.get("class") or "unclassified"
+        classes[c] = classes.get(c, 0) + 1
+    reached = [o.get("l5_touch_reached_by_opposite_ask") for o in orders
+               if o.get("relation") == "complete"
+               and o.get("l5_touch_reached_by_opposite_ask") is not None]
+    return {"n": len(rows), "classes": classes,
+            "median_delta_ticks_touch_minus_executed": (
+                round(statistics.median(deltas), 2) if deltas else None),
+            "fee_safe_at_touch_share": round(
+                sum(1 for r in rows if r.get("fee_safe_at_touch")) / len(rows), 4),
+            "would_cross_at_touch_share": round(
+                sum(1 for r in rows if r.get("would_cross_at_touch")) / len(rows), 4),
+            "orders_where_opposite_ask_reached_l5_touch": (
+                {"n": len(reached), "share": round(sum(1 for x in reached if x) / len(reached), 4)}
+                if reached else None),
+            "labels": "READ-ONLY counterfactual on the clean cohort; live orders unchanged"}
+
+
 def decision_identity(d: Mapping[str, Any]) -> Optional[str]:
     """Stable identity of ONE live decision from immutable provenance
     (OWNER 5556815940 #2): the persisted decision_id when present, else a
@@ -482,6 +547,8 @@ def decisions_from_session_reports(reports: Iterable[Mapping[str, Any]]) -> tupl
         for o in rep.get("orders") or []:
             o = dict(o)
             o.setdefault("slug", slug)
+            if sid and not o.get("session_id"):
+                o["session_id"] = sid
             orders.append(o)
     return decs, orders
 
@@ -528,6 +595,7 @@ def evidence_progress(live: Mapping[str, Any], shadow: Mapping[str, Any],
                 "summary_rows_ignored": int((acct.get("ingest") or {}).get("summary_rows_ignored") or 0),
                 "second_pass_idempotent": bool(acct.get("second_pass_idempotent", True)),
                 "acted_without_order_rows": int(acct.get("acted_without_order_rows") or 0),
+                "cohort": acct.get("cohort"),
                 "evidence_accounting_valid": not invalid,
                 "ingest": acct.get("ingest"),
                 "maintenance": acct.get("maintenance"),
@@ -650,7 +718,42 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
     else:
         counterfactual = {"n": 0}
     decs, orders = dd["decisions"], dd["orders"]
-    live = score_live(decs, orders, spec, model, maintenance=maintenance)
+    # OWNER 5558167805 #1: rows written before mark_noop (no-op decisions
+    # recorded as executed actions) form a separate LEGACY cohort. Every
+    # minimum and verdict input comes from the CLEAN cohort only; the
+    # legacy view is reported beside it and never combined with it.
+    clean = [d for d in decs if is_clean_row(d)]
+    legacy = [d for d in decs if not is_clean_row(d)]
+    clean_sids = {d.get("session_id") for d in clean}
+    if legacy:
+        orders_clean = [o for o in orders if o.get("session_id") in clean_sids]
+        orders_legacy = [o for o in orders if o.get("session_id") not in clean_sids]
+    else:
+        orders_clean, orders_legacy = orders, []
+    live = score_live(clean, orders_clean, spec, model, maintenance=maintenance)
+    live["cohort"] = {"rule": CLEAN_ROW_RULE, "clean_decisions": len(clean),
+                      "legacy_decisions": len(legacy),
+                      "clean_orders": len(orders_clean),
+                      "legacy_orders": len(orders_legacy)}
+    dd["cohort"] = live["cohort"]
+    live_legacy = (score_live(legacy, orders_legacy, spec, model,
+                              maintenance=maintenance) if legacy else None)
+    if live_legacy is not None:
+        live_legacy["labels"] = ("LEGACY pre-mark_noop rows: acted view overstates "
+                                 "execution; reported, never a verdict input")
+    # OWNER 5558167805 #6: both cadence references persisted as diagnostics
+    # beside the frozen dimension (fill-arrival gap = the frozen unit;
+    # order-episode gap = the fresh-decision unit); no spec change
+    ref = load_cadence_reference()
+    if ref and isinstance(live.get("timing_cadence"), dict):
+        val = live["timing_cadence"].get("value") or {}
+        if isinstance(val, dict):
+            val["fill_gap_reference"] = ref.get("fill_gap_reference")
+            val["order_episode_gap_reference"] = ref.get("order_episode_gap_reference")
+            live["timing_cadence"]["value"] = val
+    # OWNER 5558167805 #7: the first post-fix COMPLETE price sample,
+    # summarized separately (read-only counterfactual fields)
+    complete_cf = summarize_complete_counterfactual(clean, orders_clean)
     # OWNER 5557988072 #6: declared maintenance windows are diagnostics
     # inputs only -- a decision time-stamped inside one is a provenance
     # anomaly to report (the venue was down), never evidence to count
@@ -689,9 +792,13 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
                                   "evidence, never an L5 fidelity failure"}
     shadow = score_shadow(rolling, spec)
     classes: dict = {}
-    for d in decs:
+    for d in clean:
         c = d.get("divergence_class") or d.get("divergence") or "unclassified"
         classes[c] = classes.get(c, 0) + 1
+    classes_legacy: dict = {}
+    for d in legacy:
+        c = d.get("divergence_class") or d.get("divergence") or "unclassified"
+        classes_legacy[c] = classes_legacy.get(c, 0) + 1
     progress = evidence_progress(live, shadow, spec, dd)
     v = verdict(live, shadow, spec)
     if progress["accounting"]["status"] != "OK":
@@ -707,8 +814,10 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
             "evidence_progress": progress,
             "largest_mismatch": largest_mismatch(live, shadow),
             "divergence_classes": classes,
+            "divergence_classes_legacy": classes_legacy,
             "counterfactual_2s": counterfactual,
-            "live": live, "shadow": shadow}
+            "complete_price_counterfactual": complete_cf,
+            "live": live, "live_legacy": live_legacy, "shadow": shadow}
 
 
 RAW_EVIDENCE_KINDS = ("session_end", "session_report")

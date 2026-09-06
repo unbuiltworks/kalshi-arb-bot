@@ -428,3 +428,55 @@ def test_acted_without_order_rows_is_counted_from_provenance():
     out = gate.evaluate([rep, rep2])
     assert out["evidence_progress"]["accounting"]["acted_without_order_rows"] == 4
     assert out["live"]["scored_decisions"] == 11      # still counted as decisions
+
+
+def test_legacy_rows_are_scored_separately_and_never_count_toward_minimums():
+    """OWNER 5558167805 #1: pre-mark_noop rows are a LEGACY cohort;
+    minimums and verdict inputs come from the clean cohort only."""
+    clean = _report("s1", "m1", 6)
+    legacy = _report("s0", "m1", 6, t0="2026-09-06T01:00:0")
+    for d in legacy["decisions"]:
+        d.pop("evidence_schema", None)           # written before the fix
+    legacy["orders"] = [{**o, "order_id": f"L-{i}"} for i, o in enumerate(legacy["orders"])]
+    out = gate.evaluate([legacy, clean])
+    assert out["live"]["scored_decisions"] == 6
+    assert out["live"]["cohort"] == {"rule": gate.CLEAN_ROW_RULE, "clean_decisions": 6,
+                                     "legacy_decisions": 6, "clean_orders": 6,
+                                     "legacy_orders": 6}
+    assert out["evidence_progress"]["minimums"]["live_scored_decisions"]["have"] == 6
+    assert out["evidence_progress"]["accounting"]["cohort"]["legacy_decisions"] == 6
+    assert out["live_legacy"]["scored_decisions"] == 6
+    assert out["live_legacy"]["labels"].startswith("LEGACY")
+    assert out["divergence_classes_legacy"]
+    # a corpus of only clean rows has no legacy view
+    assert gate.evaluate([clean])["live_legacy"] is None
+    # a row carrying the post-fix fields is clean even without the marker
+    row = dict(clean["decisions"][0]); row.pop("evidence_schema")
+    assert gate.is_clean_row({**row, "attempted": "complete"})
+    assert not gate.is_clean_row(row)
+
+
+def test_cadence_references_and_complete_counterfactual_are_reported():
+    """OWNER 5558167805 #6/#7: both L5 cadence units persisted as
+    diagnostics beside the frozen dimension; the post-fix COMPLETE price
+    sample summarized separately."""
+    rep = _report("s1", "m1", 4)
+    for i, d in enumerate(rep["decisions"]):
+        d["acted"] = "complete"
+        d["counterfactual_l5_price"] = {
+            "l5_touch_px": "0.565", "executed_px": "0.55", "delta_ticks": "3",
+            "fee_safe_at_touch": i % 2 == 0, "would_cross_at_touch": False,
+            "class": "safety_override:fee_safe_complement_bound"}
+    rep["orders"] = [{**_order("complete"), "order_id": f"C{i}",
+                      "l5_touch_reached_by_opposite_ask": i == 0} for i in range(4)]
+    out = gate.evaluate([rep])
+    cf = out["complete_price_counterfactual"]
+    assert cf["n"] == 4 and cf["median_delta_ticks_touch_minus_executed"] == 3.0
+    assert cf["fee_safe_at_touch_share"] == 0.5 and cf["would_cross_at_touch_share"] == 0.0
+    assert cf["orders_where_opposite_ask_reached_l5_touch"] == {"n": 4, "share": 0.25}
+    assert cf["classes"] == {"safety_override:fee_safe_complement_bound": 4}
+    val = out["live"]["timing_cadence"]["value"]
+    assert val["fill_gap_reference"]["median"] == 2.0
+    assert val["order_episode_gap_reference"]["median"] == 3
+    assert "complete" in val["order_episode_gap_reference"]["by_relation"]
+    assert gate.load_cadence_reference(gate.Path("/nonexistent.json")) is None

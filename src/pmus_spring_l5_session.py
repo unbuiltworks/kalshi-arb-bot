@@ -1308,6 +1308,10 @@ def run_session(t: Optional[Transport] = None,
                      refusal, prop["recommended_relation"], relation,
                      sampled)),
                  "size_divergence": "venue_minimum_vs_l5_target",
+                 # OWNER 5558167805 #1: post-mark_noop evidence row (the
+                 # frozen evaluator scores this cohort separately from the
+                 # pre-fix rows and never combines them)
+                 "evidence_schema": 2,
                  # OWNER 5558072959 #4: the behavioral size target and
                  # every transformation down to the executable size, so
                  # the size-cap override is never scored as L5 behavior

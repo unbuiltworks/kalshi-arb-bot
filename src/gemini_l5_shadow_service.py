@@ -366,6 +366,22 @@ class ShadowService:
         out["hypotheses"] = self.hypotheses_report()
         out["research_arm_stochastic"] = self.research_arm_report()
         out["action_scoring_untouched"] = self.action_scoring_report()
+        # OWNER 5558167805 #2-#4: off-distribution attribution and the
+        # sampled -> acted funnel on the untouched stochastic arm since
+        # the freeze (read-only diagnosis)
+        try:
+            spec = self._spec(self.RESEARCH_ARM)
+            if spec:
+                since = datetime.fromisoformat(
+                    spec["applies_to_windows_with_entry_t_at_or_after_utc"]).timestamp()
+                sel = [r for r in self.rows.get(spec["arm"]) or []
+                       if float(r.get("entry_t") or 0) >= since
+                       and r.get("status") in ("MATCHED", "RESIDUAL_HOLD", "NO_FILL")]
+                out["off_distribution_attribution"] = gs.off_distribution_attribution(
+                    sel, pv2.load_v2())
+                out["sampled_to_acted_funnel"] = gs.sampled_to_acted_funnel(sel)
+        except Exception as exc:                        # noqa: BLE001
+            out["off_distribution_attribution"] = {"status": "ERROR", "err": str(exc)[:160]}
         # OWNER 5556232035 #5: the frozen L5 fidelity gate's SHADOW view,
         # scored automatically on every rolling report (untouched
         # stochastic arm; thresholds from the frozen spec only)
@@ -437,7 +453,13 @@ class ShadowService:
                          "p_extend": next((x["p"] for x in d.get("relation_ranked") or []
                                            if x.get("relation") == "extend"), 0.0),
                          "sampled": ((d.get("shadow") or {}).get("stochastic") or {}).get("sampled"),
-                         "residual_units": (d.get("inventory_before") or {}).get("behavioral_residual")}
+                         "residual_units": (d.get("inventory_before") or {}).get("behavioral_residual"),
+                         # OWNER 5558167805 #2: the market observation that
+                         # produced the state, persisted per decision
+                         "last_rel": d.get("last_rel"),
+                         "tte_s": (d.get("book") or {}).get("tte_s"),
+                         "yes_bid": (d.get("book") or {}).get("yes_bid"),
+                         "yes_ask": (d.get("book") or {}).get("yes_ask")}
                         for d in r.get("decisions") or []]
                     # identity is always explicit (LIVE 22:30:30Z: early
                     # returns carried no shell/policy and 9 uncovered-window

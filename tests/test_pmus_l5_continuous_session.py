@@ -263,6 +263,7 @@ def test_sessions_are_recorded_and_the_fidelity_gate_runs_automatically(
                 "inventory": {"up": "0", "dn": "0"}, "actions": [],
                 "decisions": [{"slug": slug, "state": "p45-55c|tte>10m|flat",
                                "t_utc": "2026-09-06T02:00:00+00:00",
+                               "evidence_schema": 2,
                                "relation_ranked": [{"relation": "open", "p": 1.0}],
                                "acted": "open", "divergence": "none",
                                "divergence_class": "no disagreement",

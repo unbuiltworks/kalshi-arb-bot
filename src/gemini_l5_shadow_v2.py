@@ -45,6 +45,7 @@ from src.l5_venue_adapter import (GeminiAdapter, L5Inventory, NormalizedBook,
                                   MAX_RESIDUAL_UNITS, decision_record,
                                   l5_state, open_side_yes)
 from src.polymarket_l5 import transfer_backtest as tb
+from src.polymarket_l5.action_model import PRICE_BANDS
 
 ROOT = Path(__file__).resolve().parents[1]
 BBO_PATH = ROOT / "data/transfer_backtest/gemini_bbo_btc05m.jsonl.gz"
@@ -652,6 +653,153 @@ def action_scoring(rows: list) -> dict:
         "off_distribution_rate_pct": round(100.0 * sum(1 for d in decs if d.get("off_distribution")) / len(decs), 2),
         "labels": "distributional fidelity vs the frozen v2 conditional masses; THEORETICAL",
     }
+
+
+GEMINI_WINDOW_S = 300.0
+
+
+def _state_parts(state: Any) -> tuple:
+    parts = str(state or "").split("|")
+    return tuple((parts + [None, None, None])[:3])
+
+
+def off_distribution_attribution(rows: list, model: Optional[Mapping[str, Any]],
+                                 window_s: float = GEMINI_WINDOW_S) -> dict:
+    """OWNER 5558167805 #2/#4: state-level attribution of every
+    off-distribution shadow decision -- the exact frozen state key, which
+    component is outside/absent relative to the frozen model's base
+    states, the market observation that produced it, and the cause class:
+      (a) adapter/translation defect, (b) genuinely unseen transfer state,
+      (c) missing/incorrect inventory/fill state, (d) coverage/data.
+    Read-only: no state is added, no threshold smoothed."""
+    base = (model or {}).get("base") or {}
+    seen_p, seen_t, seen_i = set(), set(), set()
+    seen_pt, seen_pi, seen_ti = set(), set(), set()
+    for k in base:
+        p, t, i = _state_parts(k)
+        seen_p.add(p); seen_t.add(t); seen_i.add(i)
+        seen_pt.add((p, t)); seen_pi.add((p, i)); seen_ti.add((t, i))
+    decs = [d for r in rows for d in (r.get("decisions") or [])
+            if d.get("p_complete") is not None]
+    off = [d for d in decs if d.get("off_distribution")]
+    by_state: dict = {}
+    causes: dict = {}
+    for d in off:
+        state = d.get("state")
+        p, t, i = _state_parts(state)
+        base_seen = state in base
+        absent: list = []
+        if not base_seen:
+            if p not in seen_p:
+                absent.append("price_band")
+            if t not in seen_t:
+                absent.append("tte")
+            if i not in seen_i:
+                absent.append("imbalance")
+            if not absent:
+                for name, ok in (("price_band+tte", (p, t) in seen_pt),
+                                 ("price_band+imbalance", (p, i) in seen_pi),
+                                 ("tte+imbalance", (t, i) in seen_ti)):
+                    if not ok:
+                        absent.append(name)
+                if not absent:
+                    absent.append("full_combination")
+        try:
+            residual = abs(float(d.get("residual_units") or 0))
+        except (TypeError, ValueError):
+            residual = 0.0
+        tte_s = d.get("tte_s")
+        try:
+            tte_s = None if tte_s is None else float(tte_s)
+        except (TypeError, ValueError):
+            tte_s = None
+        if t == "tte>10m" or (t == "tte5-10m" and window_s <= 300.0) or \
+                (tte_s is not None and (tte_s < 0 or tte_s > window_s)):
+            cause = "(a) adapter/translation defect: TTE bucket impossible for the window length"
+        elif p not in {b for _, b in PRICE_BANDS}:
+            cause = "(a) adapter/translation defect: price band outside the model's band set"
+        elif i != "flat" and residual < 1:
+            cause = "(c) inventory/fill state: imbalance bucket without a behavioral residual"
+        elif i == "flat" and residual >= 1:
+            cause = "(c) inventory/fill state: residual held but imbalance bucket flat"
+        elif not state or d.get("yes_bid") in ("None", ""):
+            cause = "(d) coverage/data: no state or no book observation"
+        elif base_seen:
+            cause = "(b) genuinely thin transfer state: base state seen, full key (last_rel|size) backed off"
+        else:
+            cause = "(b) genuinely unseen transfer state: " + "+".join(absent)
+        e = by_state.setdefault(str(state), {
+            "n": 0, "state_n": d.get("state_n"), "base_state_seen": base_seen,
+            "absent_components": absent, "cause": cause,
+            "refusals": {}, "post_fill": 0, "acted": {},
+            "observation": {"tte_s_example": tte_s, "yes_bid_example": d.get("yes_bid"),
+                            "residual_units_example": d.get("residual_units"),
+                            "last_rel_example": d.get("last_rel")}})
+        e["n"] += 1
+        k = str(d.get("refusal")).split(":")[0] if d.get("refusal") else "none"
+        e["refusals"][k] = e["refusals"].get(k, 0) + 1
+        e["acted"][str(d.get("acted"))] = e["acted"].get(str(d.get("acted")), 0) + 1
+        if residual >= 1:
+            e["post_fill"] += 1
+        causes[cause] = causes.get(cause, 0) + 1
+    # cross-tab with the entry band and post-fill (OWNER item 4)
+    band_all = [d for d in decs if str(d.get("refusal") or "").startswith("entry_band_left")]
+    band_off = [d for d in band_all if d.get("off_distribution")]
+    band_states = {d.get("state") for d in band_all}
+    off_states = set(by_state)
+    return {
+        "scored_decisions": len(decs), "off_distribution_decisions": len(off),
+        "off_distribution_rate_pct": round(100.0 * len(off) / len(decs), 2) if decs else None,
+        "off_states": len(off_states),
+        "by_state": dict(sorted(by_state.items(), key=lambda kv: -kv[1]["n"])),
+        "causes": causes,
+        "cross_tab": {
+            "entry_band_left_decisions": len(band_all),
+            "entry_band_left_and_off_distribution": len(band_off),
+            "off_states_also_entry_band_states": len(off_states & band_states),
+            "off_decisions_post_fill": sum(e["post_fill"] for e in by_state.values()),
+            "off_decisions_pre_fill": len(off) - sum(e["post_fill"] for e in by_state.values()),
+        },
+        "labels": "READ-ONLY diagnosis; no state added, no threshold smoothed, "
+                  "frozen population unchanged",
+    }
+
+
+def sampled_to_acted_funnel(rows: list) -> dict:
+    """OWNER 5558167805 #3: the sampled -> attempted -> acted -> hold funnel
+    by refusal reason, per sampled relation, so policy fidelity (the draw)
+    is separated from execution-shell adaptation (what the shell let
+    through)."""
+    decs = [d for r in rows for d in (r.get("decisions") or [])
+            if d.get("p_complete") is not None]
+    per: dict = {}
+    for d in decs:
+        s = d.get("sampled") or d.get("v2_recommended") or "unknown"
+        a = d.get("acted")
+        e = per.setdefault(s, {"sampled_n": 0, "acted_as_sampled": 0,
+                               "converted_to": {}, "held_by_reason": {}})
+        e["sampled_n"] += 1
+        if a == s:
+            e["acted_as_sampled"] += 1
+        elif a == "hold":
+            k = str(d.get("refusal")).split(":")[0] if d.get("refusal") else "unnamed"
+            e["held_by_reason"][k] = e["held_by_reason"].get(k, 0) + 1
+        else:
+            e["converted_to"][str(a)] = e["converted_to"].get(str(a), 0) + 1
+    n = len(decs) or 1
+    held = sum(sum(e["held_by_reason"].values()) for e in per.values())
+    conv = sum(sum(e["converted_to"].values()) for e in per.values())
+    same = sum(e["acted_as_sampled"] for e in per.values())
+    reasons: dict = {}
+    for e in per.values():
+        for k, v in e["held_by_reason"].items():
+            reasons[k] = reasons.get(k, 0) + v
+    return {"scored_decisions": len(decs), "per_sampled_relation": per,
+            "acted_as_sampled_share": round(same / n, 4),
+            "held_share": round(held / n, 4), "converted_share": round(conv / n, 4),
+            "held_by_reason": reasons,
+            "reading": ("the draw is the policy; hold/conversion shares are the "
+                        "execution shell's suppression of that draw, by reason")}
 
 
 def research_arm_verdict(rows: list, spec: Mapping[str, Any]) -> dict:

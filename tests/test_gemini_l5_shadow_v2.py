@@ -175,3 +175,76 @@ def test_research_arm_verdict_reads_only_the_frozen_spec():
     assert spec["arm"] == "reprice_180s:stochastic" and spec["policy"]["cap_fallback"] == "NONE (not declared)"
     v = gs.research_arm_verdict([], spec)
     assert v["verdict"] == "INSUFFICIENT_SAMPLE" and v["spec_sha"] == spec["_sha256_16"]
+
+
+def _row(decs, status="NO_FILL", entry_t=1_788_700_000.0):
+    return {"status": status, "entry_t": entry_t, "symbol": "GEMI-X",
+            "shell": "reprice_180s", "policy": "stochastic", "decisions": decs}
+
+
+def _d(state, off, refusal=None, acted="hold", sampled="extend", residual=1.0,
+       tte_s=120.0, yes_bid="0.45"):
+    return {"state": state, "off_distribution": off, "refusal": refusal,
+            "acted": acted, "sampled": sampled, "v2_recommended": "extend",
+            "p_complete": 0.4, "p_extend": 0.6, "state_n": 3 if off else 40,
+            "residual_units": residual, "tte_s": tte_s, "yes_bid": yes_bid,
+            "last_rel": "extend"}
+
+
+def test_off_distribution_attribution_names_component_and_cause():
+    """OWNER 5558167805 #2/#4: state key, absent component, observation and
+    cause class per off-distribution decision; cross-tab with the entry
+    band and post-fill; nothing added or smoothed."""
+    model = {"base": {"p25-45c|tte30-120s|flat": {"open|q<5": 5},
+                      "p25-45c|tte2-5m|imb1-10": {"extend|q<5": 5},
+                      "p45-55c|tte30-120s|imb1-10": {"extend|q<5": 5}}}
+    rows = [_row([
+        _d("p25-45c|tte>10m|imb1-10", True, refusal="off_distribution_hold"),        # (a) impossible TTE
+        _d("p25-45c|tte30-120s|imb1-10", True, refusal="entry_band_left:0.19"),       # (b) pair unseen
+        _d("p25-45c|tte30-120s|imb1-10", True, refusal="entry_band_left:0.18"),
+        _d("p<10c|tte30-120s|imb1-10", True, refusal="off_distribution_hold",
+           yes_bid="0.05"),                                                       # (b) price band unseen
+        _d("p45-55c|tte30-120s|imb1-10", True, residual=0.0,
+           refusal="off_distribution_hold"),                                      # (c) imbalance w/o residual
+        _d("p45-55c|tte30-120s|imb1-10", True, refusal="off_distribution_hold"),  # (b) thin full key
+        _d("p25-45c|tte2-5m|imb1-10", False, acted="extend"),
+        _d("p25-45c|tte2-5m|imb1-10", False, acted="hold", refusal="entry_band_left:0.20"),
+    ])]
+    out = gs.off_distribution_attribution(rows, model)
+    assert out["scored_decisions"] == 8 and out["off_distribution_decisions"] == 6
+    assert out["off_distribution_rate_pct"] == 75.0
+    bs = out["by_state"]
+    assert bs["p25-45c|tte>10m|imb1-10"]["cause"].startswith("(a) adapter")
+    assert bs["p25-45c|tte30-120s|imb1-10"]["absent_components"] == ["full_combination"]
+    assert bs["p25-45c|tte30-120s|imb1-10"]["cause"].startswith("(b) genuinely unseen")
+    assert bs["p25-45c|tte30-120s|imb1-10"]["refusals"] == {"entry_band_left": 2}
+    assert bs["p<10c|tte30-120s|imb1-10"]["absent_components"] == ["price_band"]
+    assert bs["p45-55c|tte30-120s|imb1-10"]["n"] == 2
+    assert sum(1 for c in out["causes"] if c.startswith("(c)")) == 1
+    assert out["cross_tab"] == {"entry_band_left_decisions": 3,
+                                "entry_band_left_and_off_distribution": 2,
+                                "off_states_also_entry_band_states": 1,
+                                "off_decisions_post_fill": 5,
+                                "off_decisions_pre_fill": 1}
+    assert bs["p25-45c|tte30-120s|imb1-10"]["observation"]["yes_bid_example"] == "0.45"
+    # no decisions -> empty, never an error
+    assert gs.off_distribution_attribution([], model)["off_distribution_decisions"] == 0
+
+
+def test_sampled_to_acted_funnel_separates_policy_from_shell():
+    rows = [_row([
+        _d("s", False, acted="extend", sampled="extend"),
+        _d("s", False, acted="extend", sampled="extend"),
+        _d("s", False, acted="hold", sampled="extend", refusal="entry_band_left:0.19"),
+        _d("s", False, acted="hold", sampled="extend", refusal="residual_cap:3>=3"),
+        _d("s", False, acted="complete", sampled="complete"),
+        _d("s", False, acted="complete", sampled="extend"),
+    ])]
+    f = gs.sampled_to_acted_funnel(rows)
+    assert f["scored_decisions"] == 6
+    e = f["per_sampled_relation"]["extend"]
+    assert e == {"sampled_n": 5, "acted_as_sampled": 2,
+                 "converted_to": {"complete": 1},
+                 "held_by_reason": {"entry_band_left": 1, "residual_cap": 1}}
+    assert f["acted_as_sampled_share"] == 0.5 and f["held_share"] == round(2 / 6, 4)
+    assert f["held_by_reason"] == {"entry_band_left": 1, "residual_cap": 1}
