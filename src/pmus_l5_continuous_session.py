@@ -40,6 +40,7 @@ from decimal import Decimal as D
 from typing import Any, Mapping, Optional
 
 from src import pmus_spring_l5_probe_entry as entry
+from src import pmus_incentive_audit as incentives
 from src import pmus_spring_l5_session as base
 from src import pmus_l5_persistence_v2 as pv2
 from src import pmus_l5_ramp_ladder as ladder
@@ -777,6 +778,21 @@ def _pending_diagnostic(slug: str, t, auditor) -> Optional[dict]:
 
 
 SETTLE_AUDIT_EVERY_S = 60.0
+# OWNER 5561142758 #2: the account's own incentive economics, read-only,
+# at boot and every 6 h (earnings endpoint, activity credits, trade fee
+# fields, balances, published programs vs our markets)
+INCENTIVE_AUDIT_EVERY_S = 6 * 3600.0
+
+
+def run_incentive_audit(t, log) -> Optional[dict]:
+    if t is None:
+        return None
+    try:
+        out = incentives.incentive_audit(t)
+    except Exception as exc:                          # noqa: BLE001
+        out = {"ok": False, "error": str(exc)[:200]}
+    log("incentive_audit", **out)
+    return out
 
 
 def unsettled_slugs() -> list:
@@ -1313,6 +1329,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     status = "CAMPAIGN_NO_CANDIDATE"
     resumes = 0
     last_settle_audit = float("-inf")
+    last_incentive_audit = float("-inf")
     settled_here: set = set()
     iteration_errors: list = []          # clock() stamps of recent errors
     # OWNER 5554127702 #4: the prebuilt ladder names the active rung
@@ -1695,6 +1712,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     # the venue already confirmed this market's resolution;
                     # a lingering positions row is not inventory to act on
                     held = None
+                if t is not None and clock() - last_incentive_audit >= INCENTIVE_AUDIT_EVERY_S:
+                    last_incentive_audit = clock()
+                    report["incentive_audit"] = run_incentive_audit(t, _log)
                 if not held and t is not None and \
                         clock() - last_settle_audit >= SETTLE_AUDIT_EVERY_S:
                     # flat, but the ledger remembers fills the venue has since

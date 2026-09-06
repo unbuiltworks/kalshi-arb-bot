@@ -26,6 +26,9 @@ COPY src/pmus_l5_continuous_session.py src/pmus_l5_continuous_session.py
 # read-only settlement audit (venue POSITION_RESOLUTION activities) so the
 # campaign can record the authoritative realized result of a held market
 COPY src/pmus_settlement_auditor.py src/pmus_settlement_auditor.py
+# read-only incentive economics audit (OWNER 5561142758): earnings endpoint,
+# activity credits, trade fee fields, balances, published programs
+COPY src/pmus_incentive_audit.py src/pmus_incentive_audit.py
 COPY src/pmus_spring_l5_probe_entry.py src/pmus_spring_l5_probe_entry.py
 COPY src/pmus_spring_l5_session.py src/pmus_spring_l5_session.py
 COPY src/pmus_micro_executor.py src/pmus_micro_executor.py
