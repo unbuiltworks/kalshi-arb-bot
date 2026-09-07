@@ -321,6 +321,60 @@ def _relation_stats(decs: Sequence[dict]) -> dict:
     }
 
 
+def par_band_opportunities(decs: Sequence[dict], orders: Sequence[dict],
+                           pairing: Mapping[str, dict]) -> dict:
+    """OWNER 5569709706 #5: is the 0.98 -> 1.00 ceiling causal or merely
+    available? Every COMPLETE decision whose L5 touch pair was above 0.98
+    and at or below 1.00 (legal only under R4), or above 1.00 and priced
+    DOWN to par by the ceiling: what was submitted, whether it filled, how
+    long it rested, and the outcome."""
+    by_dec = {id(d): [] for d in decs}
+    dec_by_idx = {int(_f(d.get("decision_idx"), -1)): d for d in decs}
+    for o in orders:
+        d = pairing.get(o.get("order_id"))
+        if d is not None:
+            by_dec.setdefault(id(d), []).append(o)
+    rows = []
+    for d in decs:
+        cf = d.get("counterfactual_l5_price") or {}
+        if not cf or d.get("acted") != "complete":
+            continue
+        touch_pair = _d(cf.get("pair_at_touch"))
+        if touch_pair is None or touch_pair <= OLD_BOUND:
+            continue
+        band = "0.98-1.00" if touch_pair <= PAR else "above_par_priced_to_par"
+        for o in by_dec.get(id(d), []) or [None]:
+            rows.append({
+                "decision_idx": d.get("decision_idx"), "t_utc": d.get("t_utc"),
+                "state": d.get("state"), "band": band,
+                "l5_touch_pair": str(touch_pair),
+                "unlocked_by_rung_bound": cf.get("unlocked_by_rung_bound"),
+                "submitted": o is not None,
+                "order_id": (o or {}).get("order_id"), "px": (o or {}).get("px"),
+                "qty": (o or {}).get("qty"), "filled_qty": (o or {}).get("filled_qty"),
+                "rest_s": (o or {}).get("rest_s"),
+                "end_reason": str((o or {}).get("end_reason") or "").split(":")[0] or None,
+                "filled": _f((o or {}).get("filled_qty")) > 0,
+            })
+    filled = [r for r in rows if r["filled"]]
+    return {
+        "opportunities": len(rows),
+        "in_band_0_98_1_00": sum(1 for r in rows if r["band"] == "0.98-1.00"),
+        "above_par_priced_to_par": sum(1 for r in rows if r["band"] != "0.98-1.00"),
+        "submitted": sum(1 for r in rows if r["submitted"]),
+        "filled": len(filled),
+        "filled_in_band": sum(1 for r in filled if r["band"] == "0.98-1.00"),
+        "unfilled_by_end_reason": dict(Counter(r["end_reason"] for r in rows
+                                               if r["submitted"] and not r["filled"]).most_common()),
+        "rest_s_unfilled": _dist([_f(r["rest_s"]) for r in rows if r["submitted"] and not r["filled"]], 1),
+        "rest_s_filled": _dist([_f(r["rest_s"]) for r in filled], 1),
+        "rows": rows,
+        "reading": "'causal' needs a fill that the 0.98 bound would have forbidden; "
+                   "'available' is an opportunity that was submitted and rested "
+                   "without filling",
+    }
+
+
 def market_report(slug: str, h: Mapping[str, Any]) -> dict:
     decs = [d for d in h["decisions"] if d.get("slug") == slug]
     orders = [o for o in h["orders"] if o.get("slug") == slug]
@@ -365,6 +419,7 @@ def market_report(slug: str, h: Mapping[str, Any]) -> dict:
                 1 for c in comp_cf if str(c.get("class") or "").startswith("safety_override")),
         },
         "completions_filled": comps,
+        "par_band": par_band_opportunities(decs, orders, pairing),
         "completions_summary": {
             "filled": len(comps),
             "unlocked_by_rung_bound": sum(1 for c in comps if c.get("unlocked_by_rung_bound")),
@@ -424,6 +479,9 @@ def campaign_report(h: Mapping[str, Any]) -> dict:
         },
         "realized_usd_venue_sum": round(sum(realized), 4) if realized else None,
         "derived_matched_contribution_sum": round(sum(derived), 4) if derived else None,
+        "par_band": {k: sum(m["par_band"][k] for m in per.values())
+                     for k in ("opportunities", "in_band_0_98_1_00", "above_par_priced_to_par",
+                               "submitted", "filled", "filled_in_band")},
         "per_market": per,
         "labels": "sampled = the stochastic draw from the frozen L5 distribution; "
                   "acted = what the engine executed after caps/venue; expected = "

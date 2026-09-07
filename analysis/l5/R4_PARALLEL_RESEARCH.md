@@ -122,3 +122,46 @@ the incentive audits). Size executed / L5 p50: ~0.46-0.54. Decision
 cadence p50 10-30 s.
 
 Rerun after market 3: `python3 -m src.l5_r4_action_comparison --logs <dumps>`.
+
+The `par_band` block (OWNER 5569709706 #5) tracks every COMPLETE decision
+whose L5 touch pair was above 0.98: in band (0.98-1.00, legal only under
+R4) or above par and priced DOWN to par by the ceiling. Markets 1-2: 17
+opportunities, all submitted (6 in band, 11 priced down to par), 1 filled
+(in band, decision 63, rested 2.9 s); the 16 unfilled rested to their 30 s
+deadline (p50 31.5 s), one was a post-only reject. So far the widened
+ceiling is "available" 16 times and "causal" once.
+
+## 5. Residual-cap tradeoff curve (`src/l5_cap_tradeoff_curve.py`, OWNER 5569709706 #6)
+
+Same refusal rule as R4 (exposure-increasing fills above the cap refused,
+exposure-reducing always allowed), cap in action units, each L5 window
+settled at its actual outcome; incentive dollars ESTIMATED at the
+published maker rate with per-fill cent rounding (the estimator gives
+$0.15 on our R4 fills against $0.14 venue-credited).
+
+L5's 2,216 windows:
+
+| cap (action units) | actions kept | relation-mix L1 vs uncapped | pair $ | rebate $ (est) | residual P&L | total | peak unmatched p50 / p90 / max | income per $ of peak residual |
+|---|---|---|---|---|---|---|---|---|
+| uncapped | 100% | 0 | 21,442 | 3,072 | -18,703 | +5,811 | 43.8 / 180.8 / 465 | 0.160 |
+| 1 (= R4) | 31.0% | 0.498 | 3,882 | 431 | -981 | +3,331 | 6.0 / 26.0 / 77 | 0.186 |
+| 1.5 | 39.6% | 0.450 | 4,084 | 641 | -1,161 | +3,564 | 8.7 / 34.5 / 82 | 0.153 |
+| 2 | 46.4% | 0.399 | 4,809 | 866 | -1,235 | +4,440 | 12.9 / 47.1 / 107 | 0.125 |
+| 3 | 57.6% | 0.342 | 5,561 | 1,283 | -1,087 | +5,757 | 16.8 / 65.7 / 157 | 0.114 |
+| 4 | 65.6% | 0.297 | 6,415 | 1,606 | -1,345 | +6,676 | 20.8 / 81.5 / 223 | 0.110 |
+
+Reading. The one-unit cap has the best income per dollar of peak residual
+(0.186) and the smallest worst case, at the price of keeping 31% of L5's
+actions and a relation mix 0.50 (L1) away from L5's. Total dollars rise
+monotonically with the cap and pass the uncapped total at 4 units,
+because the residual loss falls far faster than the pair income does.
+"Appropriately translated from L5" and "best risk-adjusted" are therefore
+different answers: 1 unit is the risk-adjusted optimum on this history, 3
+units keeps ~58% of L5's actions at ~uncapped total with a third of the
+peak exposure. Nothing here is applied; the owner chooses after market 3.
+
+Our own fills (R3L + R4, 5 markets, cap = k x $2.50): uncapped pair
++5.51, rebate est +0.43, residual -5.32 (wisc-nd -6.29, market 1 +0.97),
+total +0.62, worst peak $7.49; at 1 unit kept 68%, total +1.89, worst
+$2.50; 1.5 units +1.12; 2 units +0.85; 3 units and above = uncapped. Five
+markets with one pure loser: a shape, not a curve.
