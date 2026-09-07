@@ -1,17 +1,30 @@
 # R4 action-by-action comparison
 
-Markets: 2 (2 settled) | decisions 144 | submitted 45 | filled 9
+Markets: 3 (2 settled) | decisions 217 | submitted 64 | filled 10
 
 ## Campaign
 
-- sampled relation: {'complete': 0.3681, 'extend': 0.3819, 'open': 0.25}
-- acted (excl. hold): {'complete': 0.7111, 'extend': 0.0222, 'open': 0.2667}
-- expected L5: {'open': 0.2278, 'extend': 0.3964, 'complete': 0.3758}
-- L1 sampled vs L5: 0.0444 | acted vs L5: 0.7484
-- hold share 0.6875; holds by refusal: {'unmatched_usd_cap': 44, 'off_distribution_hold': 24, 'complement_not_priceable': 21, 'entry_band_left': 8, 'complete_without_residual': 1, 'spend_cap_reached': 1}
-- cap refusals: 44 | off-distribution decisions: 24
+- sampled relation: {'complete': 0.3272, 'extend': 0.5023, 'open': 0.1705}
+- acted (excl. hold): {'complete': 0.7812, 'extend': 0.0156, 'open': 0.2031}
+- expected L5: {'open': 0.1558, 'extend': 0.4864, 'complete': 0.3578}
+- L1 sampled vs L5: 0.0612 | acted vs L5: 0.9415
+- hold share 0.7051; holds by refusal: {'unmatched_usd_cap': 62, 'entry_band_left': 44, 'off_distribution_hold': 24, 'complement_not_priceable': 21, 'complete_without_residual': 1, 'spend_cap_reached': 1}
+- cap refusals: 62 | off-distribution decisions: 24
 - completions filled 5: unlocked by the 1.00 bound 1; over par on the engine basis 0, on open lots 1, marginal lots over par 1
-- venue realized sum: 1.9955 | derived matched-pair sum: 1.0361
+- venue realized sum: -1.9912 | derived matched-pair sum: 0.0082
+
+## aec-atp-petbru-alecan-2026-09-07
+
+- decisions 73 idx [0, 72]; states {'p25-45c|tte>10m|imb10-50': 72, 'p25-45c|tte>10m|flat': 1}
+- sampled {'complete': 0.2466, 'extend': 0.7397, 'open': 0.0137} | acted excl. hold {'complete': 0.9474, 'open': 0.0526} | expected L5 {'open': 0.0137, 'extend': 0.664, 'complete': 0.3223}
+- L1 sampled vs L5 0.1514 | acted vs L5 1.328
+- hold share 0.7397; holds by refusal {'entry_band_left': 36, 'unmatched_usd_cap': 18}; off-distribution 0
+- orders 19 submitted / 1 filled (all maker); unfilled by reason {'deadline': 18}
+- fills: open YES 5.24@0.38 (idx 0)
+- complement decisions: {'with_counterfactual': 18, 'within_old_bound_0_98': 0, 'unlocked_by_rung_bound': 1, 'priced_down_to_par_from_above': 17}
+- completions: {'filled': 0, 'unlocked_by_rung_bound': 0, 'engine_over_par': 0, 'open_lots_over_par': 0, 'marginal_lots_over_par': 0}
+- size executed/L5 p50: {'n': 73, 'mean': 0.4086, 'p50': 0.382, 'p90': 0.5, 'max': 0.524}; cadence s: {'n': 72, 'mean': 42.0, 'p50': 31.4, 'p90': 61.7, 'max': 152.2}
+- economics: settled True (REALIZED, position_resolution_activity); venue realized -1.9912; derived {'bought_yes': '5.24', 'bought_no': '0', 'avg_yes': '0.38', 'avg_no': None, 'cost_basis_usd': '1.9912', 'matched_pairs': '0', 'matched_pair_cost': None, 'matched_contribution_usd': '0', 'directional_residual': '5.24', 'residual_contribution_usd': '-1.9912', 'fees_usd': 'venue_unreported'}
 
 ## aec-atpcq-aleher-tundur-2026-09-07
 
@@ -27,7 +40,7 @@ Markets: 2 (2 settled) | decisions 144 | submitted 45 | filled 9
   - spring_complete_1 NO 0.11@0.50: engine 0.97, open-lots 0.97, marginal 0.11x0.47->0.97; unlocked_by_rung_bound False
   - spring_complete_5 NO 3.24@0.22: engine 0.6997982708933717579250720461, open-lots 0.71, marginal 3.24x0.49->0.71; unlocked_by_rung_bound False
 - size executed/L5 p50: {'n': 79, 'mean': 0.4648, 'p50': 0.462, 'p90': 0.52, 'max': 0.555}; cadence s: {'n': 78, 'mean': 37.1, 'p50': 10.1, 'p90': 31.2, 'max': 1803.3}
-- economics: settled True (REALIZED, position_resolution_activity); venue realized 1.9955; derived {'bought_yes': '10.41', 'bought_no': '8.55', 'avg_yes': '0.4797982708933717579250720461', 'avg_no': '0.3999766081871345029239766082', 'cost_basis_usd': '8.4145', 'matched_pairs': '8.55', 'matched_pair_cost': '0.8797748790805062608490486543', 'matched_contribution_usd': '1.027924783861671469740634006', 'directional_residual': '1.86', 'residual_contribution_usd': '0.967575216138328530259365994', 'fees_usd': 'venue_unreported'}
+- economics: settled False (None, None); venue realized None; derived {'bought_yes': None, 'bought_no': None, 'avg_yes': None, 'avg_no': None, 'cost_basis_usd': None, 'matched_pairs': None, 'matched_pair_cost': None, 'matched_contribution_usd': None, 'directional_residual': None, 'residual_contribution_usd': None, 'fees_usd': None}
 
 ## aec-atpcq-norgom-ollwal-2026-09-07
 

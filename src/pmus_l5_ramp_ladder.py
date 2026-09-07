@@ -201,6 +201,59 @@ OWNER_RUNGS: tuple[dict, ...] = (
                      "residual envelope 2,216 windows (peak unmatched / spend "
                      "0.108-0.137 at material size); measured maker rebate "
                      "0.808% of filled dollars"},
+    # OWNER PROGRAM STATEMENT (chat 2026-09-07 17:55Z, recorded as #167
+    # 5574156328): "L5 is the strategy. ... If L5 says OPEN, we open. If
+    # he says EXTEND, our goal is to extend. If he says COMPLETE at 1.02,
+    # our replication target is 1.02 -- not an arbitrary 1.00 ... Any
+    # safety override gets recorded explicitly as our deviation from L5.
+    # We still need a hard catastrophic-loss shell around the ~$111
+    # account, but inside that shell I want maximum L5 fidelity."
+    # R5F = the FIDELITY rung, built from the restriction audit
+    # (analysis/l5/l5_restriction_audit.json, 427 R4/R3L decisions):
+    #   REMOVED  pair_cost_ceiling   -> complement_pricing "l5_touch": a
+    #            COMPLETE is priced at L5's touch (join the deficit-side
+    #            bid), above par included; the pair it implies is
+    #            REPORTED, never gated. Par is no longer a ceiling.
+    #   REMOVED  unmatched_usd_cap   -> None: an EXTEND is refused only by
+    #            the per-market spend cap and the residual-units bound.
+    #   REMOVED  maker_rest_30s      -> rest_policy "model": the order
+    #            rests for the model's own next_reevaluation_s (floor 5 s),
+    #            cancelled early when the action stops being L5's action.
+    #   KEPT     concurrency_1 (initially): OWNER 5574408755 "Preserve
+    #            one-market-at-a-time initially unless L5 concurrency
+    #            evidence supports otherwise"; the L5 study
+    #            (L5_CONCURRENCY_AND_SWITCHING.md) found
+    #            max_markets_open_within_one_lane == 1 in every mode, so
+    #            concurrency 1 IS L5's distribution; >1 would be N tracks
+    #            following turnover, a later rung on that evidence.
+    #   REMOVED  cohort_3_markets    -> markets_per_campaign None: the
+    #            campaign is CONTINUOUS, bounded by the daily stop and the
+    #            horizon, not by a market count.
+    #   KEPT     action_size $2.50 / leg $3.25 (bankroll), per-market cap
+    #            $7.50, the frozen strict evidence gate, maker-only
+    #            (post-only), the off-distribution hold, daily stop -$15.
+    # The shell: max simultaneous dollars $7.50 (one market, the spend
+    # cap; all of it can be unmatched), preflight $7.50 x 3 = $22.50 of
+    # buying power, daily realized-loss stop -$15.00 (+ one in-flight cap
+    # = $22.50 worst day) -- ~20% of the $111.14 balance. Every remaining
+    # restriction that binds on a decision is written on that decision as
+    # the deviation from L5.
+    {"id": "R5F", "name": "L5 FIDELITY: complete at L5's touch, no unmatched "
+                          "dollar cap, model rest, one market at a time, "
+                          "continuous (OWNER PROGRAM 5574156328 / 5574408755)",
+     "per_market_cap_usd": "7.50", "residual_units": 6, "markets_per_campaign": None,
+     "max_unmatched_usd": None, "pair_cost_max": None,
+     "complement_pricing": "l5_touch", "rest_policy": "model", "rest_floor_s": "5",
+     "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,
+     "max_sessions_per_campaign": 10080,
+     "target_notional_usd": "2.50", "max_leg_notional_usd": "3.25",
+     "daily_loss_stop_usd": "-15.00", "lever": "fidelity", "promote": None,
+     "derived_from": "R4 (3 markets, $2.50 unmatched cap, par ceiling) + the "
+                     "L5 restriction audit: 4 restrictions removed (pair "
+                     "ceiling, unmatched cap, 30 s rest, 3-market cohort), "
+                     "concurrency 1 kept on L5's own one-lane evidence, 2 "
+                     "staged (observation_band, maker_only), 3 kept "
+                     "(action_size, off_distribution_hold, strict_evidence_gate)"},
 )
 ALL_RUNGS: tuple[dict, ...] = RUNGS + OWNER_RUNGS
 # fail closed at import: rung() returns the FIRST id match, so a duplicate id
@@ -243,7 +296,15 @@ def shell_version(r: Optional[Mapping[str, Any]] = None) -> str:
     """The safety-shell label written on every live decision row
     (OWNER 5560559108 #5); R1 renders exactly the label the cohort carries."""
     r = dict(r) if r is not None else active()
-    if r.get("max_unmatched_usd"):
+    if complement_pricing(r) == "l5_touch":
+        # OWNER PROGRAM 5574156328: the fidelity rung names every lever it
+        # removed so the frozen evaluator splits this cohort from R4
+        rest = (f"rest-model{rest_floor_s(r)}s" if rest_policy(r) == "model"
+                else "rest30s")
+        label = (f"{r['id']}/cap{r['per_market_cap_usd']}"
+                 f"/unmatched-none/complete-l5touch"
+                 f"/conc{r['concurrency']}/maker-only/{rest}")
+    elif r.get("max_unmatched_usd"):
         # OWNER 5567269295: a dollar-residual rung names BOTH levers it
         # changed -- the unmatched cap and the completion ceiling -- so the
         # frozen evaluator splits this cohort from every fee-safe0.98 one
@@ -280,6 +341,44 @@ def pair_cost_max(r: Optional[Mapping[str, Any]] = None) -> D:
     return min(v, D("1.00"))
 
 
+# OWNER PROGRAM 5574156328 (R5F): the fidelity levers. Each reads None /
+# the R4 default for every rung that does not state it, so R1..R4 run
+# exactly as before.
+def complement_pricing(r: Optional[Mapping[str, Any]] = None) -> str:
+    """How a COMPLETE is priced: "fee_safe" (R1..R4: the tighter of the
+    rung ceiling and the >=1c bound) or "l5_touch" (R5F: L5's own target,
+    the deficit-side touch, above par included; the implied pair is
+    reported, not gated)."""
+    r = dict(r) if r is not None else active()
+    return str(r.get("complement_pricing") or "fee_safe")
+
+
+def rest_policy(r: Optional[Mapping[str, Any]] = None) -> str:
+    """"fixed30" (R1..R4: a maker order rests up to 30 s) or "model"
+    (R5F: it rests for the model's own next_reevaluation_s, floored)."""
+    r = dict(r) if r is not None else active()
+    return str(r.get("rest_policy") or "fixed30")
+
+
+def rest_floor_s(r: Optional[Mapping[str, Any]] = None) -> D:
+    r = dict(r) if r is not None else active()
+    return D(str(r.get("rest_floor_s") or "5"))
+
+
+def markets_per_campaign(r: Optional[Mapping[str, Any]] = None) -> Optional[int]:
+    """The rung's market allowance per campaign; None = CONTINUOUS (R5F:
+    bounded by the daily stop and the horizon, not a market count)."""
+    r = dict(r) if r is not None else active()
+    v = r.get("markets_per_campaign")
+    return int(v) if v is not None else None
+
+
+def max_sessions_per_campaign(r: Optional[Mapping[str, Any]] = None,
+                              default: int = 48) -> int:
+    r = dict(r) if r is not None else active()
+    return int(r.get("max_sessions_per_campaign") or default)
+
+
 def target_notional(r: Optional[Mapping[str, Any]] = None) -> D:
     """Per-action maker target notional of the ACTIVE rung (OWNER
     5561465636 size lever); rungs without one keep the micro default."""
@@ -308,18 +407,36 @@ def next_rung(rung_id: str) -> Optional[dict]:
 
 def worst_case(r: Mapping[str, Any]) -> dict:
     cap = D(str(r["per_market_cap_usd"]))
-    per_campaign = cap * r["markets_per_campaign"]
-    per_day_raw = per_campaign * r["campaigns_per_day"]
+    markets = markets_per_campaign(r)
     concurrent = cap * r["concurrency"]
     stop = daily_loss_stop(r)
-    # the stop is checked before every session, so the one in-flight
-    # market can still lose its cap after the stop is reached
-    per_day = min(per_day_raw, -stop + cap)
+    if markets is None:
+        # OWNER PROGRAM 5574156328 (R5F): a CONTINUOUS campaign has no
+        # market count; capital DEPLOYED at once is bounded by the
+        # concurrency, and the preflight demands three turns of it (the
+        # in-flight markets plus the next cohort while they settle).
+        # Dollars at risk per day are bounded by the daily stop.
+        per_campaign = concurrent * 3
+        per_day_raw = None
+        per_day = -stop + cap
+    else:
+        per_campaign = cap * markets
+        per_day_raw = per_campaign * r["campaigns_per_day"]
+        # the stop is checked before every session, so the one in-flight
+        # market can still lose its cap after the stop is reached
+        per_day = min(per_day_raw, -stop + cap)
     out = {"per_market_usd": str(cap), "per_campaign_usd": str(per_campaign),
-           "per_day_uncapped_usd": str(per_day_raw),
+           "per_day_uncapped_usd": (str(per_day_raw) if per_day_raw is not None
+                                    else "continuous: bounded by the daily stop"),
            "per_day_bounded_by_daily_stop_usd": str(per_day),
            "max_concurrent_open_exposure_usd": str(concurrent),
            "daily_loss_stop_usd": str(stop)}
+    if markets is None:
+        out["cohort"] = "continuous"
+        out["preflight_basis"] = "per-market cap x concurrency x 3"
+        out["max_at_risk_per_market_usd"] = str(cap)
+        out["complement_pricing"] = complement_pricing(r)
+        out["pair_cost_max"] = None
     if r.get("target_notional_usd"):
         out["per_action_target_usd"] = str(r["target_notional_usd"])
         out["per_leg_max_usd"] = str(r.get("max_leg_notional_usd"))
@@ -330,7 +447,7 @@ def worst_case(r: Mapping[str, Any]) -> dict:
         # happens -- so both are reported and never conflated
         at_risk = D(str(r["max_unmatched_usd"]))
         out["max_at_risk_per_market_usd"] = str(at_risk)
-        out["per_campaign_at_risk_usd"] = str(at_risk * r["markets_per_campaign"])
+        out["per_campaign_at_risk_usd"] = str(at_risk * (markets or 1))
         out["pair_cost_max"] = str(pair_cost_max(r))
     return out
 

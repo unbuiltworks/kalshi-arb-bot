@@ -328,6 +328,63 @@ def _log(kind: str, **fields: Any) -> None:
 
 READ_HALT_MARK = "GET_RETRIES_EXHAUSTED"
 
+# OWNER 5573574441: a probe-side alarm when selection keeps finding NO
+# admissible candidate while the universe is non-empty (live events are
+# being scored and every one is refused / none chosen). The recorder's
+# stream alarm covers a dead feed; this covers a live feed the probe
+# cannot use, which otherwise looks like a quiet campaign for hours.
+# Fires once per window, on stdout as PMUS_SPRING_ALARM and in the
+# campaign log; never changes a gate or a limit.
+NO_CANDIDATE_ALARM_ENV = "PMUS_SPRING_NO_CANDIDATE_ALARM_SECONDS"
+DEFAULT_NO_CANDIDATE_ALARM_S = 1800.0
+
+
+class NoCandidateAlarm:
+    def __init__(self, window_s: Optional[float] = None) -> None:
+        self.window_s = float(window_s if window_s is not None else os.getenv(
+            NO_CANDIDATE_ALARM_ENV, str(DEFAULT_NO_CANDIDATE_ALARM_S)))
+        self.since: Optional[float] = None       # first no-candidate cycle
+        self.last_alarm: Optional[float] = None
+        self.cycles = 0
+        self.rows_seen = 0
+        self.refusals: dict = {}
+
+    def note(self, now: float, chosen: Optional[str], n_rows: int,
+             refusals: Mapping[str, int]) -> Optional[dict]:
+        """Record one selection cycle; return the alarm row when due."""
+        if chosen is not None or n_rows <= 0:
+            # a pick, or an empty universe (no live events -- not this
+            # alarm's case; the stream alarm / status cover that)
+            self.since, self.last_alarm, self.cycles = None, None, 0
+            self.rows_seen, self.refusals = 0, {}
+            return None
+        if self.since is None:
+            self.since = now
+        self.cycles += 1
+        self.rows_seen = max(self.rows_seen, int(n_rows))
+        for k, v in dict(refusals).items():
+            self.refusals[k] = self.refusals.get(k, 0) + int(v)
+        if now - self.since < self.window_s:
+            return None
+        if self.last_alarm is not None and now - self.last_alarm < self.window_s:
+            return None
+        self.last_alarm = now
+        top = sorted(self.refusals.items(), key=lambda kv: -kv[1])[:5]
+        return {"kind": "no_candidate", "since_utc": datetime.fromtimestamp(
+                    self.since, timezone.utc).isoformat(),
+                "no_candidate_s": round(now - self.since, 1),
+                "window_s": self.window_s, "cycles": self.cycles,
+                "max_universe_rows": self.rows_seen,
+                "top_refusals": dict(top),
+                "note": "live events scored, none admissible; gates unchanged"}
+
+
+def _emit_alarm(row: Mapping[str, Any]) -> None:
+    print("PMUS_SPRING_ALARM " + json.dumps(dict(row), separators=(",", ":"),
+                                            default=str), flush=True)
+    _log("no_candidate_alarm", **{k: v for k, v in row.items() if k != "kind"},
+         alarm=row.get("kind"))
+
 
 def _read_halt(rep: Mapping[str, Any]) -> bool:
     """A session that HALTed because a READ-ONLY GET ran out of retries
@@ -1493,8 +1550,20 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     # per session); the per-market cap and concurrency stay the session's
     # hard constants until the owner changes them by decision.
     active_rung = ladder.set_active(None)        # the env rung (default R1)
-    rung_markets = max(1, int(os.getenv(
-        RUNG_MARKETS_ENV, str(active_rung["markets_per_campaign"]))))
+
+    def _rung_markets_of(r: dict) -> Optional[int]:
+        """The campaign's market allowance: the env override, else the
+        rung's markets_per_campaign. OWNER PROGRAM 5574156328 (R5F): None
+        = CONTINUOUS -- the campaign never stops at a market count, only
+        at the daily stop / the horizon (env "none", "continuous" or "0"
+        reads the same way)."""
+        raw = os.getenv(RUNG_MARKETS_ENV)
+        if raw is not None:
+            if raw.strip().lower() in ("none", "continuous", "0", ""):
+                return None
+            return max(1, int(raw))
+        return ladder.markets_per_campaign(r)
+    rung_markets = _rung_markets_of(active_rung)
     os.environ.setdefault(base.MAX_ACTIONS_ENV,
                           str(active_rung["max_actions_per_session"]))
 
@@ -1506,11 +1575,11 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         apply (unknown id -> the authorized rung)."""
         nonlocal active_rung, rung_markets
         active_rung = ladder.set_active(rung_id)
-        rung_markets = max(1, int(os.getenv(
-            RUNG_MARKETS_ENV, str(active_rung["markets_per_campaign"]))))
+        rung_markets = _rung_markets_of(active_rung)
         os.environ[base.MAX_ACTIONS_ENV] = str(active_rung["max_actions_per_session"])
         return active_rung
     filled_markets: set = set()          # markets with a fill this campaign
+    no_candidate_alarm = NoCandidateAlarm()   # OWNER 5573574441
     # OWNER evidence continuation: the campaign identity and its stop rule
     # are durable state; an approval is consumed at the advance gate
     campaign_id = INITIAL_CAMPAIGN_ID
@@ -1522,7 +1591,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         return {
             "campaign_id": campaign_id,
             "stop_rule": stop_rule,
-            "markets_allowed": (rung_markets if stop_rule == STOP_RULE_RUNG
+            "markets_allowed": ((rung_markets if rung_markets is not None else
+                                 "continuous (daily stop / horizon)")
+                                if stop_rule == STOP_RULE_RUNG
                                 else "until the frozen LIVE evidence minimums are met"),
             "per_market_cap_usd": str(base.session_notional_cap()),
             "residual_cap_units": base.max_residual_units(),
@@ -1532,10 +1603,17 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             "pair_cost_max": str(base.pair_cost_max()),
             "safety_shell_version": base.safety_shell_version(),
             "worst_case_usd": (str(base.session_notional_cap() * rung_markets)
-                               if stop_rule == STOP_RULE_RUNG else
-                               f"{base.session_notional_cap()} per filled market, "
-                               f"bounded by the daily-loss stop"),
+                               if stop_rule == STOP_RULE_RUNG and rung_markets is not None
+                               else f"{base.session_notional_cap()} per filled market, "
+                                    f"bounded by the daily-loss stop"),
             "daily_loss_stop_usd": str(base.daily_loss_stop()),
+            # OWNER PROGRAM 5574156328 (R5F): the fidelity levers, from the
+            # rung, never literals
+            "complement_pricing": ladder.complement_pricing(),
+            "rest_policy": ladder.rest_policy(),
+            "maker_rest_max_s": base.maker_rest_max_s(),
+            "max_sessions_per_campaign": ladder.max_sessions_per_campaign(
+                default=MAX_SESSIONS_PER_CAMPAIGN),
             "per_action_target_usd": str(ladder.target_notional()),
             "per_leg_max_usd": str(ladder.max_leg_notional()),
             # the rung's own value, never a literal: the loop enforces
@@ -1660,6 +1738,11 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         read once)."""
         if stop_rule == STOP_RULE_EVIDENCE:
             return evidence_minimums_met()[0]
+        if rung_markets is None:
+            # OWNER PROGRAM 5574156328 (R5F): a continuous campaign has no
+            # market allowance to spend; it ends at the daily stop, the
+            # horizon or the owner's hand, never at a market count
+            return False
         return len(filled_markets) >= rung_markets
 
     def _rung_gate() -> Optional[str]:
@@ -1778,7 +1861,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         funnel["not_started"][reason] = funnel["not_started"].get(reason, 0) + 1
     _log("campaign_start", mode=report["mode"], campaign_s=campaign_s,
          campaign_expires_at=wall() + campaign_s,
-         max_sessions=MAX_SESSIONS_PER_CAMPAIGN,
+         max_sessions=ladder.max_sessions_per_campaign(
+             default=MAX_SESSIONS_PER_CAMPAIGN),
          per_market_cap=str(base.SESSION_NOTIONAL_CAP),
          rung=report["rung"])
     _log("ramp_ladder", active=active_rung["id"],
@@ -1789,8 +1873,10 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     # published even while the venue is unavailable; re-run on the frozen
     # cadence below and forced after every session that adds evidence
     fidelity_eval(wall(), force=True)
+    # the session bound follows the ACTIVE rung (R5F: continuous, 10,080 =
+    # one per minute for the 7-day horizon); the R1..R4 default is 48
     while clock() < stop_at and len(report["sessions"]) - sessions_base < \
-            MAX_SESSIONS_PER_CAMPAIGN + resumes:
+            ladder.max_sessions_per_campaign(default=MAX_SESSIONS_PER_CAMPAIGN) + resumes:
         try:
             now = wall()
             fidelity_eval(now)
@@ -2089,6 +2175,16 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 funnel["refusals"][key] = funnel["refusals"].get(key, 0) + 1
             _log("funnel", **{k: v for k, v in funnel.items()})
             chosen = sel["chosen"]
+            cycle_refusals: dict = {}
+            for x in sel["refused"]:
+                key = str(x["reason"]).split(":")[0]
+                cycle_refusals[key] = cycle_refusals.get(key, 0) + 1
+            alarm_row = no_candidate_alarm.note(
+                now, chosen["slug"] if chosen else None,
+                len(sel["admitted"]) + len(sel["refused"]), cycle_refusals)
+            if alarm_row:
+                _emit_alarm(alarm_row)
+                report["alarms"] = list(report.get("alarms") or []) + [alarm_row]
             if chosen is None:
                 if sel["admitted"]:
                     _not_started("admitted_but_no_choice")
@@ -2229,6 +2325,20 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                   if len(iteration_errors) > ITERATION_ERROR_SLOW_AFTER
                   else ITERATION_ERROR_BACKOFF_S)
             continue
+    if clock() >= stop_at and not str(status).startswith("CAMPAIGN_STOP"):
+        # LIVE 2026-09-07 14:48Z: the R4 campaign ended at its wall-clock
+        # horizon (campaign_s) with nothing resting and the last cycle's
+        # status as the only trace; restart is NEVER, so the lane was
+        # silently down. A horizon exit is now named in the log and the
+        # report (the status keeps the last cycle's value; the process
+        # still exits 0 and a redeploy resumes the persisted rung state).
+        report["exit_reason"] = {
+            "reason": "HORIZON", "campaign_s": campaign_s,
+            "last_status": status, "ended_utc": _utc(wall),
+            "sessions_this_campaign": len(report["sessions"]) - sessions_base,
+            "resume": "redeploy resumes the persisted rung state; "
+                      "no approval is re-run"}
+        _log("campaign_horizon_reached", **report["exit_reason"])
     return {**report, "status": status}
 
 

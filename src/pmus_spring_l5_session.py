@@ -514,7 +514,8 @@ def mark_noop(dec: dict, reason: str, divergence: Optional[str] = None) -> dict:
     return dec
 
 
-def spring_complement_price(avg_cost: D, opp_ask: D, tick: D) -> \
+def spring_complement_price(avg_cost: D, opp_ask: D, tick: D,
+                            touch: Optional[D] = None) -> \
         tuple[Optional[D], dict]:
     """Maker-only completion price on the deficit side: the tighter of the
     spring pair target (observation cap, pair <= 0.98 per OWNER DECISION
@@ -523,6 +524,33 @@ def spring_complement_price(avg_cost: D, opp_ask: D, tick: D) -> \
     participates in the min(), so the widened observation cap can never
     admit a pair with <1c net edge. The caller's report shows which
     regime was executable."""
+    if complement_pricing() == "l5_touch" and touch is not None:
+        # OWNER PROGRAM 5574156328 (R5F): "If he says COMPLETE at 1.02,
+        # our replication target is 1.02 -- not an arbitrary 1.00". The
+        # COMPLETE is priced at L5's own target -- the deficit-side touch
+        # -- with NO pair ceiling: the pair it implies (above par included)
+        # is reported on the decision, never gated. The only bounds left
+        # are the venue's: legal price range and post-only (strictly below
+        # the opposite ask, so a touch that already crosses is trimmed by
+        # one tick and labelled as the execution adaptation it is).
+        px = (D(str(touch)) / tick).to_integral_value(rounding=ROUND_DOWN) * tick
+        trimmed = px >= D(str(opp_ask))
+        if trimmed:
+            px = D(str(opp_ask)) - tick
+            px = (px / tick).to_integral_value(rounding=ROUND_DOWN) * tick
+        pair = D(str(avg_cost)) + px
+        hard = q1.complement_bound(avg_cost)
+        info = {"regime": "l5_touch", "l5_touch_px": str(touch),
+                "pair_cost_max": None, "observation_cap": str(SPRING_PAIR_TARGET),
+                "pair_at_touch": str(D(str(avg_cost)) + D(str(touch))),
+                "pair_at_chosen": str(pair), "above_par": bool(pair > q1.ONE),
+                "fee_safe": bool(hard is not None and px <= D(str(hard))),
+                "hard_bound_px": str(hard) if hard is not None else None,
+                "post_only_trim": bool(trimmed),
+                "labels": "L5 fidelity: touch pricing, pair reported not gated"}
+        if px < q1.MIN_PRICE or px > q1.MAX_PRICE or px <= 0:
+            return None, {**info, "regime": "no_legal_maker_price"}
+        return px, {**info, "chosen_px": str(px)}
     # OWNER 5567269295 (R4): the completion ceiling follows the ACTIVE rung.
     # R1..R3L keep 0.98 with the >=1c hard bound exactly as before. A rung
     # stating pair_cost_max 1.00 lets a COMPLETE -- and only a COMPLETE,
@@ -593,6 +621,31 @@ def pair_cost_max() -> D:
     otherwise; never above 1.00)."""
     from src import pmus_l5_ramp_ladder as ladder
     return ladder.pair_cost_max()
+
+
+def complement_pricing() -> str:
+    """OWNER PROGRAM 5574156328 (R5F): "fee_safe" (R1..R4) or "l5_touch"
+    (a COMPLETE priced at L5's own touch, pair reported not gated)."""
+    from src import pmus_l5_ramp_ladder as ladder
+    return ladder.complement_pricing()
+
+
+def rest_policy() -> str:
+    from src import pmus_l5_ramp_ladder as ladder
+    return ladder.rest_policy()
+
+
+def maker_rest_max_s() -> float:
+    """How long a post-only maker order may REST before the session
+    cancels it: R1..R4 the fixed 30 s (SPORTS_MAKER_REST_MAX_S); under
+    rest_policy "model" (R5F) the model's own next_reevaluation_s drives
+    the rest and this is only its floor (rest_floor_s), so the order is
+    cancelled the moment L5 would re-decide rather than 30 s later. The
+    early-cancel checks (still_wanted / post-only) are unchanged."""
+    from src import pmus_l5_ramp_ladder as ladder
+    if ladder.rest_policy() == "model":
+        return float(ladder.rest_floor_s())
+    return SPORTS_MAKER_REST_MAX_S
 
 
 def unmatched_usd(inv: "Inventory") -> D:
@@ -1420,7 +1473,11 @@ def run_session(t: Optional[Transport] = None,
             "prior_cumulative_notional": str(cum),
             "cap_basis": "authoritative FILLED notional (partials included); "
                          "unconfirmed submissions count in full",
-            "maker_rest_max_s": SPORTS_MAKER_REST_MAX_S,
+            "maker_rest_max_s": maker_rest_max_s(),
+            # OWNER PROGRAM 5574156328 (R5F): the fidelity levers, from the
+            # rung, so every session row says which regime priced/rested it
+            "rest_policy": rest_policy(),
+            "complement_pricing": complement_pricing(),
         }
 
         def _harvest(oid: str, stage: str, side_up_: bool, px_: D,
@@ -2006,7 +2063,7 @@ def run_session(t: Optional[Transport] = None,
                     t, oid, qty,
                     min(stop_at, clock() + max(
                         prop["next_reevaluation_s"], MIN_REEVAL_S,
-                        SPORTS_MAKER_REST_MAX_S)),
+                        maker_rest_max_s())),
                     clock, sleep,
                     still_wanted=_still_wanted(side_up, px, relation, skey))
                 # every SUBMITTED order is reported, filled or not: the
@@ -2047,16 +2104,22 @@ def run_session(t: Optional[Transport] = None,
                 opp = q1.outcome_bbo(
                     t, slug,
                     "OUTCOME_SIDE_YES" if deficit_up else "OUTCOME_SIDE_NO")
-                px, econ = spring_complement_price(
-                    surplus_avg, opp["ask"], spec["tick"])
-                report["pair_economics"] = econ
                 # OWNER 5556751941 #2: L5's own target for a COMPLETE is
-                # the touch of the deficit side (join the bid); the live
-                # order uses the fee-safe bound instead. Record both, the
-                # pair each implies, and whether the touch price would be
-                # fee-safe -- read-only; the actual order is unchanged.
+                # the touch of the deficit side (join the bid). R1..R4: the
+                # live order uses the fee-safe bound instead and the touch
+                # is a READ-ONLY counterfactual. OWNER PROGRAM 5574156328
+                # (R5F, complement_pricing "l5_touch"): the touch IS the
+                # order price ("our replication target is 1.02 -- not an
+                # arbitrary 1.00"); the pair it implies is reported, and
+                # any remaining difference (a post-only trim) is labelled
+                # as the execution adaptation it is.
                 l5_touch = (D(str(opp["bid"])) / spec["tick"]).to_integral_value(
                     rounding=ROUND_DOWN) * spec["tick"]
+                at_touch_regime = complement_pricing() == "l5_touch"
+                px, econ = spring_complement_price(
+                    surplus_avg, opp["ask"], spec["tick"],
+                    touch=l5_touch if at_touch_regime else None)
+                report["pair_economics"] = econ
                 hard = q1.complement_bound(surplus_avg)
                 pair_at_touch = D(str(surplus_avg)) + l5_touch
                 report["decisions"][-1]["counterfactual_l5_price"] = {
@@ -2069,22 +2132,36 @@ def run_session(t: Optional[Transport] = None,
                     # OWNER 5567269295 report line: "complement opportunities
                     # blocked/allowed by old vs new bound", per decision
                     "within_old_bound_0_98": bool(pair_at_touch <= SPRING_PAIR_TARGET),
-                    "within_rung_bound": bool(pair_at_touch <= pair_cost_max()),
-                    "rung_pair_cost_max": str(pair_cost_max()),
+                    "within_rung_bound": (True if at_touch_regime
+                                          else bool(pair_at_touch <= pair_cost_max())),
+                    "rung_pair_cost_max": (None if at_touch_regime
+                                           else str(pair_cost_max())),
                     "unlocked_by_rung_bound": bool(
                         SPRING_PAIR_TARGET < pair_at_touch <= pair_cost_max()),
                     "unmatched_usd_before": str(unmatched_usd(inv)),
                     "would_cross_at_touch": bool(l5_touch >= D(str(opp["ask"]))),
+                    "complement_pricing": complement_pricing(),
+                    "l5_consistent_above_par": bool(at_touch_regime
+                                                    and pair_at_touch > q1.ONE),
                     "class": ("no_difference" if px is not None and l5_touch == px
-                              else "safety_override:fee_safe_complement_bound"),
-                    "labels": "READ-ONLY counterfactual; live order unchanged"}
+                              else ("execution_adaptation:post_only_below_ask"
+                                    if at_touch_regime and px is not None
+                                    else "safety_override:fee_safe_complement_bound")),
+                    "labels": ("LIVE price = L5 touch (R5F); pair reported, not gated"
+                               if at_touch_regime else
+                               "READ-ONLY counterfactual; live order unchanged")}
                 if px is None:
                     # LIVE 02:29-04:03Z: 108 COMPLETE decisions with no
                     # fee-safe / legal maker price were recorded as acted
                     # -- they are HOLDs with the pricing regime named
                     mark_noop(report["decisions"][-1],
                               f"complement_not_priceable:{econ.get('regime')}",
-                              "safety_adaptation:fee_safe_complement_bound")
+                              # under l5_touch pricing the only way to be
+                              # unpriceable is the venue's legal range /
+                              # post-only, never a safety bound of ours
+                              ("venue_execution_adaptation:no_legal_maker_price"
+                               if at_touch_regime else
+                               "safety_adaptation:fee_safe_complement_bound"))
                     sleep(MIN_REEVAL_S)
                     actions += 1
                     continue
@@ -2099,7 +2176,7 @@ def run_session(t: Optional[Transport] = None,
                     t, oid, qty,
                     min(stop_at, clock() + max(
                         prop["next_reevaluation_s"], MIN_REEVAL_S,
-                        SPORTS_MAKER_REST_MAX_S)),
+                        maker_rest_max_s())),
                     clock, sleep, still_wanted=sw)
                 _harvest(oid, f"spring_complete_{actions + 1}", deficit_up,
                          px, qty, "complete", got, rest_s, end_reason)
