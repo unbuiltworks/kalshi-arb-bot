@@ -1852,9 +1852,12 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                         _persist()
                     funnel["selection_skipped_position_held"] += 1
                     _log("resume_start", slug=held,
-                         selection_skipped="CAMPAIGN_HOLD:POSITION_HELD "
-                                           "(one market at a time; residual "
-                                           "held to settlement)",
+                         held=list(held_all), concurrency=concurrency,
+                         selection_skipped=(
+                             "CAMPAIGN_HOLD:POSITION_HELD "
+                             f"({len(held_all)}/{concurrency} markets held, "
+                             "worked one session at a time; residual held "
+                             "to settlement)"),
                          funnel={k: funnel[k] for k in
                                  ("admitted", "sessions", "not_started",
                                   "selection_skipped_position_held")})
