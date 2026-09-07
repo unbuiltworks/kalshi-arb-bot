@@ -45,8 +45,13 @@ def test_r2c2_is_r2c_caps_with_concurrency_two():
     # concurrent exposure is the ONE figure that rises versus R2C
     assert wc["max_concurrent_open_exposure_usd"] == "0.30"
     assert wc["daily_loss_stop_usd"] == "-1.00"
-    # OWNER live 2026-09-07: the sized rung runs concurrency 2 as well
-    assert ladder.rung("R3L")["concurrency"] == 2
+    # OWNER DECISION 5564173746: the SIZED rung is back to concurrency 1
+    assert ladder.rung("R3L")["concurrency"] == 1
+    assert ladder.shell_version(ladder.rung("R3L")) == (
+        "R3L/cap7.50/residual6/conc1/maker-only/fee-safe0.98/rest30s/action2.50")
+    assert ladder.worst_case(ladder.rung("R3L"))["max_concurrent_open_exposure_usd"] == "7.50"
+    # and the campaign worst case is untouched by that reversal
+    assert ladder.worst_case(ladder.rung("R3L"))["per_campaign_usd"] == "22.50"
 
 
 def test_every_rung_label_states_its_own_concurrency():
@@ -120,3 +125,22 @@ def test_the_caps_that_bound_money_do_not_move_with_concurrency():
             assert ladder.target_notional() == D("0.01")   # size unchanged
     finally:
         ladder.set_active(None)
+
+
+def test_tightening_concurrency_drains_our_own_inventory_but_halts_on_a_foreign_one():
+    """OWNER DECISION 5564173746 cut R3L to concurrency 1 while markets
+    were open. Halting there would strand real inventory and delay the
+    running campaign, which the decision explicitly forbids; a position
+    the campaign never opened is still a hard stop."""
+    ours = ["mkt-a", "mkt-b"]
+    filled = {"mkt-a", "mkt-b"}
+    # within the cap: nothing to do
+    assert cont.over_concurrency_action(["mkt-a"], filled, 1) is None
+    assert cont.over_concurrency_action(ours, filled, 2) is None
+    # over the cap, but every held market is one we opened -> drain
+    assert cont.over_concurrency_action(ours, filled, 1) == "drain"
+    # a market the campaign never filled -> genuine breach, halt
+    assert cont.over_concurrency_action(ours + ["someone-else"], filled, 1) == "halt"
+    assert cont.over_concurrency_action(["someone-else"], set(), 0) == "halt"
+    # draining never depends on ordering or on the set type
+    assert cont.over_concurrency_action(["mkt-b", "mkt-a"], list(filled), 1) == "drain"

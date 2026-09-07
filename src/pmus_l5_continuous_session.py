@@ -616,6 +616,19 @@ def await_state_change(t, slug: str, clock, sleep,
             "waited_s": round(clock() - start, 1)}
 
 
+def over_concurrency_action(held: list, filled, concurrency: int) -> Optional[str]:
+    """What to do when the venue shows more open markets than the rung
+    allows. None = within the cap. "halt" = at least one held market is
+    NOT one this campaign opened, which is a genuine breach and stops
+    everything. "drain" = they are all ours and the rung simply tightened
+    under open inventory (OWNER DECISION 5564173746 cut R3L to
+    concurrency 1 mid-campaign); halting there would strand real money,
+    so the campaign holds each to settlement and opens nothing new."""
+    if len(held) <= concurrency:
+        return None
+    return "halt" if [s for s in held if s not in set(filled)] else "drain"
+
+
 def held_markets(t) -> list:
     """Every market the account holds inventory in, from the venue's own
     positions (authoritative, not the ledger). OWNER live decision
@@ -1812,12 +1825,30 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                         burst = None
                         _persist()
                 if len(held_all) > concurrency:
-                    # more open positions than the rung authorises: the
-                    # campaign never trades into that, whatever the cause
-                    status = f"CAMPAIGN_STOP:{MULTI_HELD}"
-                    _log("concurrency_breach", held=held_all,
-                         concurrency=concurrency, rung=active_rung["id"])
-                    break
+                    # More open positions than the rung authorises. A
+                    # position the campaign did NOT open is a genuine
+                    # breach and stops everything. Positions it DID open
+                    # are simply over the cap because the rung tightened
+                    # under them (OWNER DECISION 5564173746 cut R3L back
+                    # to concurrency 1 mid-campaign): halting there would
+                    # strand real inventory and delay the running
+                    # campaign, so they are DRAINED instead -- held to
+                    # settlement under the unchanged rules, with no new
+                    # market opened, because `capacity` is already False.
+                    foreign = [s for s in held_all if s not in filled_markets]
+                    if over_concurrency_action(held_all, filled_markets,
+                                               concurrency) == "halt":
+                        status = f"CAMPAIGN_STOP:{MULTI_HELD}"
+                        _log("concurrency_breach", held=held_all, foreign=foreign,
+                             concurrency=concurrency, rung=active_rung["id"])
+                        break
+                    if status != "CAMPAIGN_DRAIN:OVER_CONCURRENCY":
+                        _log("concurrency_drain", held=held_all,
+                             concurrency=concurrency, rung=active_rung["id"],
+                             reading="rung tightened under open inventory; "
+                                     "holding every market to settlement and "
+                                     "opening none")
+                    status = "CAMPAIGN_DRAIN:OVER_CONCURRENCY"
                 if t is not None and clock() - last_incentive_audit >= INCENTIVE_AUDIT_EVERY_S:
                     last_incentive_audit = clock()
                     report["incentive_audit"] = run_incentive_audit(t, _log)

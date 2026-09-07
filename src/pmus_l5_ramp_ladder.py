@@ -149,13 +149,15 @@ OWNER_RUNGS: tuple[dict, ...] = (
     {"id": "R3L", "name": "L5 size: $2.50 per action (~5 shares), $7.50 per market, "
                           "residual 6 units, 3 markets (OWNER 5561465636)",
      "per_market_cap_usd": "7.50", "residual_units": 6, "markets_per_campaign": 3,
-     # OWNER live 2026-09-07: concurrency 2 AT SIZE. The campaign worst
-     # case is unchanged at $22.50 because it is set by the market count
-     # (3 x $7.50), not by concurrency; only SIMULTANEOUS exposure rises,
-     # $7.50 -> $15.00 (13.6% of the $110 account). This supersedes "keep
-     # concurrency 1" in #167 5561465636 #4, which was written before the
-     # 97-minute idle showed what hold-to-settlement costs at concurrency 1.
-     "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 2,
+     # OWNER DECISION 5564173746 (2026-09-07T02:23:51Z): "Keep execution
+     # concurrency = 1 for R2C/R3L." One market at a time, its full L5
+     # inventory sequence run to terminal, then rotate to the next best.
+     # This REVERSES the concurrency 2 I applied at 01:00Z on the earlier
+     # chat decision: replicating L5 comes first, and concurrency >1 is to
+     # be proposed only when L5's OWN history supports it, the bankroll
+     # supports it, and R3L has shown clean sized fills -- never to
+     # manufacture throughput. Max concurrent exposure returns to $7.50.
+     "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,
      "target_notional_usd": "2.50", "max_leg_notional_usd": "3.25",
      "daily_loss_stop_usd": "-15.00", "lever": "size", "promote": None,
      "derived_from": "L5 canonical maker actions (shares p25 = 5.0) + published "
