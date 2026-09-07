@@ -97,9 +97,15 @@ def test_rank_gates_every_row_and_names_each_refusal():
         _row("shallow", touch="20"),
     ])
     r = cont.rank_candidates(st, now, _model())
-    # OWNER 5552475548 #2: a recorder cadence gap ranks LAST among equals
-    # but no longer vetoes a fresh in-distribution state
-    assert [x["slug"] for x in r["admitted"]] == ["deep", "shallow", "stale"]
+    # OWNER 5552475548 #2: a recorder cadence gap never vetoes a fresh
+    # in-distribution state, and still ranks LAST among equals -- but since
+    # OWNER 5566810119 #3 made pair_score the ordering key, "equals" means
+    # equal pair_score, where _gap is still the tiebreaker. A gappy feed with
+    # a deeper two-sided book now outranks a clean but shallow one, because
+    # depth is transfer-relevant and the gap costs only its own weight.
+    assert [x["slug"] for x in r["admitted"]] == ["deep", "stale", "shallow"]
+    assert r["admitted"][1]["components"]["feed_quality"] == 0.5
+    assert r["admitted"][2]["components"]["feed_quality"] == 1.0
     assert r["admitted"][0]["rank"] == 1
     # model probability and rank travel with every admitted candidate
     assert r["admitted"][0]["state_n"] == 35
@@ -121,11 +127,13 @@ def test_in_distribution_outranks_deeper_off_distribution():
     assert r["admitted"][1]["off_distribution"] is True
 
 
-def test_pair_score_is_logged_but_never_orders_candidates(monkeypatch):
-    """OWNER 5556232035 #3 (anti-drift): pair prospects (5556038561 #6)
-    are REPORTED per row; the order stays L5-state fit (model evidence,
-    L5 buy mass, feed, depth). Same known state here -> depth decides,
-    not the higher pair_score."""
+def test_pair_score_now_orders_candidates_for_l5_transfer_suitability(monkeypatch):
+    """OWNER 5566810119 #3 REPLACES the earlier "logged but never orders"
+    rule (OWNER 5556232035 #3): rank the sports universe for L5-transfer
+    suitability on executable two-sided flow, on-distribution state,
+    spread/depth, incentive eligibility and real settlement proximity --
+    which is pair_score's component set. Here the market whose two sides
+    actually pair beats the one with a deep bid and no complement."""
     now = 1005.0
     st = _status([
         _row("deepbid", touch="9000", trades_1h=10,
@@ -134,15 +142,18 @@ def test_pair_score_is_logged_but_never_orders_candidates(monkeypatch):
              bid_qty="300", ask_qty="250", bid="0.49", ask="0.51"),
     ])
     r = cont.rank_candidates(st, now, _model())
-    assert [x["slug"] for x in r["admitted"]] == ["deepbid", "pairable"], r
-    deep, pair = r["admitted"]
-    assert pair["pair_score"] > deep["pair_score"]          # logged only
+    assert [x["slug"] for x in r["admitted"]] == ["pairable", "deepbid"], r
+    pair, deep = r["admitted"]
+    assert pair["pair_score"] > deep["pair_score"]
     c = pair["components"]
     assert c["two_sided_flow"] == 1.0 and c["flow"] == 0.8
     assert c["complement_availability"] == 1.0
     assert pair["pair_at_touch"] == 0.98 and c["fee_headroom"] == 1.0
     assert deep["components"]["fee_headroom"] < 1.0        # 0.50/0.51
     assert 0 <= pair["pair_score"] <= 1
+    # unknown incentive eligibility scores NEUTRAL -- absent venue data is
+    # never read as ineligible
+    assert c["rebate_eligible"] == 0.5 and pair["rebate_eligible"] is None
 
 
 def test_cooldown_excludes_a_market_that_just_refused():

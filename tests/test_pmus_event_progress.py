@@ -55,7 +55,14 @@ def test_progress_table_maps_every_market_of_a_live_event():
     assert a["hours_since_event_start"] > 3
     assert "NOT a settlement time" in a["labels"]
     assert tbl["m1"]["game_proximity"] is None
-    assert tbl["asc-cfb-a-pos"] is tbl["tsc-cfb-a-total"]   # one event, shared
+    # both markets of one event carry that event's position
+    assert (tbl["asc-cfb-a-pos"]["event_slug"]
+            == tbl["tsc-cfb-a-total"]["event_slug"] == "cfb-a")
+    assert (tbl["asc-cfb-a-pos"]["game_proximity"]
+            == tbl["tsc-cfb-a-total"]["game_proximity"] == 0.85)
+    # incentive eligibility rides along per MARKET, from the venue's own
+    # feeCoefficient on the same rows -- no extra request
+    assert a["fee_coefficient"] is None and a["rebate_eligible"] is False
 
 
 @pytest.mark.real_event_progress
@@ -107,9 +114,12 @@ def test_pair_score_prefers_game_position_over_the_plus_14d_expiry():
     assert bare["horizon_basis"] == "none" and bare["game_proximity"] is None
 
 
-def test_game_progress_is_reported_but_does_not_reorder_candidates(monkeypatch):
-    """Anti-drift (OWNER 5556232035 #3): the order stays L5-state fit. The
-    market deep in its game must NOT jump the queue just because it is."""
+def test_settlement_proximity_ranks_but_never_beats_on_distribution(monkeypatch):
+    """OWNER 5566810119 #3 made settlement proximity part of the ordering.
+    The invariant that survives it (OWNER 5556232035 #3 anti-drift): a
+    market the reconstructed L5 policy knows well still outranks one deep in
+    its game but thin on model evidence -- proximity is a factor, never a
+    directional view and never an override."""
     from src import pmus_spring_l5_probe_entry as entry
     monkeypatch.setattr(entry, "strict_evidence_reason",
                         lambda slug, ev, now=None: None)

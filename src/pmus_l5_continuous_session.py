@@ -379,8 +379,12 @@ PAIR_SCORE_WEIGHTS = {
     "fee_headroom": 1.5,          # pair at the touches vs the 0.98 target
     "on_distribution": 2.0,       # model evidence for the OPEN state
     "depth": 1.0,                 # min(displayed bid, ask) size, sat. 100
-    "residual_duration": 0.5,     # hours to the market's endDate (coarse)
+    "residual_duration": 0.5,     # settlement proximity (see pair_score)
     "feed_quality": 0.5,          # recorder cadence gaps
+    # OWNER 5566810119 #3: incentive eligibility is one of the five factors
+    # the ranker must weigh. Measured on R3L: $0.2800 credited on $34.6402
+    # of filled notional, payable only where feeCoefficient > 0.
+    "rebate_eligible": 1.0,
 }
 
 
@@ -438,6 +442,10 @@ def pair_score(row: Mapping[str, Any], mv: Mapping[str, Any],
         "residual_duration": residual_duration,
         "feed_quality": (1.0 if row.get("collector_gaps") in (0, None, False)
                          else 0.5),
+        # unknown eligibility scores neutral: absence of the venue's
+        # feeCoefficient is missing data, never a claim of ineligibility
+        "rebate_eligible": (0.5 if (progress or {}).get("rebate_eligible") is None
+                            else (1.0 if progress["rebate_eligible"] else 0.0)),
     }
     total_w = sum(PAIR_SCORE_WEIGHTS.values())
     score = sum(PAIR_SCORE_WEIGHTS[k] * v for k, v in comp.items()) / total_w
@@ -446,6 +454,7 @@ def pair_score(row: Mapping[str, Any], mv: Mapping[str, Any],
                               if pair_at_touch is not None else None),
             "hours_to_end": (round(hours, 2) if hours is not None else None),
             "horizon_basis": horizon_basis,
+            "rebate_eligible": (progress or {}).get("rebate_eligible"),
             "game_proximity": prox,
             "game_period": (progress or {}).get("period"),
             "game_clock": (progress or {}).get("clock"),
@@ -545,22 +554,28 @@ def rank_candidates(status: Mapping[str, Any], now: float,
         # here (a clean feed ranks above a gappy one), never a veto
         g = x.get("collector_gaps")
         return 1 if g is None else int(bool(g))
-    # OWNER 5556232035 #3 (anti-drift): ranking is L5-STATE FIT -- the
-    # market whose current state the reconstructed L5 policy knows best
-    # and would act in (model evidence, then L5's own buy mass), never a
-    # completed-pair / profit score. pair_score (OWNER 5556038561 #6) is
-    # LOGGED per row as a diagnostic only and does not order candidates
-    # until Phase 2 (profitability adaptations measured against the L5
-    # baseline).
-    # OWNER 5560404270 #2/#4 (accelerate time-to-proof): among IN-
-    # DISTRIBUTION candidates the highest measured evidence yield (the
-    # recorder shadow's independent in-distribution decisions per hour in
-    # that market) goes first -- candidate scheduling, not strategy: the
-    # admission guard, the model and every safety adaptation are untouched,
-    # and without yield data the order is the L5-state-fit order below.
-    admitted.sort(key=lambda x: (x["off_distribution"], -x["yield_rate"],
-                                 -x["state_n"], -x["p_buy"], _gap(x),
-                                 -_touch(x), x["slug"]))
+    # OWNER 5566810119 #3: "Fix ranking horizon blindness ... Rank the broad
+    # sports universe for L5-transfer suitability using executable two-sided
+    # flow + on-distribution state + spread/depth + rebate/incentive
+    # eligibility + actual game/settlement proximity." That is exactly
+    # pair_score's component set once residual_duration reads the venue's
+    # served game position instead of the dead +14d contract expiry, so
+    # pair_score now ORDERS candidates rather than only being logged.
+    #
+    # This supersedes, for R4 onward and on the owner's own instruction,
+    # "pair_score is LOGGED ... and does not order candidates" (OWNER
+    # 5556232035 #3) and the yield-first ordering of OWNER 5560404270 #2/#4,
+    # whose purpose -- reach the frozen evidence minimums -- is met (752
+    # clean scored decisions across 27 markets, every minimum at 100%).
+    # Evidence yield stays as the tiebreaker directly beneath it.
+    #
+    # What does NOT change: off_distribution is still the FIRST key, so a
+    # market the reconstructed L5 policy does not know can never outrank one
+    # it does, whatever its score; there is no directional or sports view
+    # anywhere in this ordering; and execution stays one market at a time.
+    admitted.sort(key=lambda x: (x["off_distribution"], -x["pair_score"],
+                                 -x["yield_rate"], -x["state_n"], -x["p_buy"],
+                                 _gap(x), -_touch(x), x["slug"]))
     # OWNER 5552475548 item 4 prioritised live CFB while the goal was
     # evidence yield. OWNER live decision 2026-09-06 (uptime) RETIRES that
     # override: under HOLD-to-settlement a college-football game is the

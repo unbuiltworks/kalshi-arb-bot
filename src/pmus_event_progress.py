@@ -188,9 +188,19 @@ def progress_table(rows, now: Optional[float] = None) -> dict:
             "labels": "venue-served game position; NOT a settlement time",
         }
         for m in (e.get("markets") or []):
-            slug = m.get("slug") if isinstance(m, Mapping) else None
-            if slug:
-                out[str(slug)] = entry
+            if not isinstance(m, Mapping) or not m.get("slug"):
+                continue
+            fee = m.get("feeCoefficient")
+            try:
+                eligible = fee is not None and float(fee) > 0
+            except (TypeError, ValueError):
+                eligible = False
+            # incentive eligibility comes free with this read: the venue
+            # embeds feeCoefficient on the same market rows, and a positive
+            # coefficient is what makes the maker rebate payable at all
+            # (measured: $0.2800 credited on $34.6402 of R3L fills).
+            out[str(m["slug"])] = dict(entry, fee_coefficient=fee,
+                                       rebate_eligible=eligible)
     return out
 
 
