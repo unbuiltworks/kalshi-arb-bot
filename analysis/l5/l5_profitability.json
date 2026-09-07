@@ -1218,10 +1218,10 @@
     "rank": 2
    },
    {
-    "executable": "size is a rung parameter (owner); patience study first",
-    "l5": "action unit p50 $8.47 (p25 $4.25); L5 patience not yet measured from public fills (OWNER 5569709706 #2 pending)",
-    "mismatch": "action size and resting patience",
-    "ours": "$2.50 per action (0.46-0.54 of L5 p50), 30 s rest deadline; live cadence p50 10.1, 30.1 s",
+    "executable": "a touch-following reprice inside the rest window (the repriced:touch_moved path exists); size is a rung parameter (owner); the 30 s deadline is a frozen rung parameter",
+    "l5": "action unit p50 $8.47 (p25 $4.25); L5 is a fast repricer, not a long rester: 75.1% of its price clusters are one print, a same-level follow-on arrives p50 1 s / p90 7 s later, only 1.8% of follow-ons come after 30 s, and its next print at a different level comes after p50 6 s (83.5% inside 30 s) with a 2 c median step (l5_patience_study.json)",
+    "mismatch": "action size and reprice cadence",
+    "ours": "$2.50 per action (0.46-0.54 of L5 p50); one price held for the 30 s deadline, 23 of 45 orders cancelled untouched, 3 reprices; live decision cadence p50 10.1, 30.1 s",
     "rank": 3
    }
   ]

@@ -7,7 +7,7 @@ Owner mandate #167 5569845340. `realized expectancy = matched-pair economics + v
 * **Positive realized expectancy is not established.** Across every market this account has settled (25 markets, 10 with a venue-realized number) the net is $0.5222 on $54.07 filled: pair contribution +$5.5644, venue-credited rebates +$0.42, residual losses $-5.4813, fees $0.00, liquidity rewards $0.00 (none credited). At size (R3L + R4, 5 markets, $53.26 filled) the net is $0.6135: mean $0.1227 per market with standard error $1.6824. One market (wisc-nd, $-6.29 residual) dominates; the sign of the mean is not determined.
 * **Break-even (observed):** pairs are profitable before incentives below 1.00; at exactly 1.00 only the observed rebate (0.00789 per filled dollar, $0.42 credited on $53.26) makes them positive; above 1.0080 nothing observed pays. R4 stays hard-capped at 1.00.
 
-* **Largest executable mismatch:** the $2.50 residual cap refuses L5's EXTENDs (44 of 54 live EXTEND draws refused (81.5%) live). Second: idle time between markets. Third: action size / patience (patience not yet measured).
+* **Largest executable mismatch:** the $2.50 residual cap refuses L5's EXTENDs (44 of 54 live EXTEND draws refused (81.5%) live). Second: idle time between markets. Third: action size and reprice cadence (L5 reprices within seconds; we hold one price for the 30 s deadline).
 
 * **Gates:** 6 of 7 proposed profitability gates met; G1 (realized net >= 0 over >= 5 at-size markets with a sign on the mean) is NOT met. No rung is promoted.
 
@@ -87,7 +87,7 @@ at $2.50 per action the per-market spend cap ($7.50) is 3 units; 1 unit maximize
 
 2. **time between markets (capital idle).** L5: BTC-15m: p50 15s after settlement, 77% within 60 s, never before settlement; BTC-5m: p50 60s after settlement, 50% within 60 s, never before settlement; ETH-15m: p50 463s after settlement, 15% within 60 s, never before settlement; ETH-5m: p50 168s after settlement, 24% within 60 s, never before settlement. Ours: R4 market 2 selected ~58 min after market 1's first fill; after market 2 settled (09:46Z) no candidate admitted for > 2 h (pool 80 rows: 73 resolved 09-06 markets, 7 thin-flow) while 257 in-distribution live markets existed on the public gateway. Executable lever: recorder coverage / pool refresh (no rung parameter); universe pre-rank exists read-only.
 
-3. **action size and resting patience.** L5: action unit p50 $8.47 (p25 $4.25); L5 patience not yet measured from public fills (OWNER 5569709706 #2 pending). Ours: $2.50 per action (0.46-0.54 of L5 p50), 30 s rest deadline; live cadence p50 10.1, 30.1 s. Executable lever: size is a rung parameter (owner); patience study first.
+3. **action size and reprice cadence.** L5: action unit p50 $8.47 (p25 $4.25); L5 is a fast repricer, not a long rester: 75.1% of its price clusters are one print, a same-level follow-on arrives p50 1 s / p90 7 s later, only 1.8% of follow-ons come after 30 s, and its next print at a different level comes after p50 6 s (83.5% inside 30 s) with a 2 c median step (l5_patience_study.json). Ours: $2.50 per action (0.46-0.54 of L5 p50); one price held for the 30 s deadline, 23 of 45 orders cancelled untouched, 3 reprices; live decision cadence p50 10.1, 30.1 s. Executable lever: a touch-following reprice inside the rest window (the repriced:touch_moved path exists); size is a rung parameter (owner); the 30 s deadline is a frozen rung parameter.
 
 ## F. Observed break-even table (pair cost 0.95 -> 1.01)
 

@@ -215,15 +215,33 @@ def turnover_mechanics(concurrency: Mapping[str, Any], cap_study: Mapping[str, A
                  "(09:46Z) no candidate admitted for > 2 h (pool 80 rows: 73 resolved 09-06 markets, "
                  "7 thin-flow) while 257 in-distribution live markets existed on the public gateway",
          "executable": "recorder coverage / pool refresh (no rung parameter); universe pre-rank exists read-only"},
-        {"rank": 3, "mismatch": "action size and resting patience",
-         "l5": "action unit p50 $%.2f (p25 $%.2f); L5 patience not yet measured from public fills (OWNER 5569709706 #2 pending)" % (
-             cap_study["overall"]["action_unit_usd"]["p50"], cap_study["overall"]["action_unit_usd"]["p25"]),
-         "ours": "$2.50 per action (0.46-0.54 of L5 p50), 30 s rest deadline; live cadence p50 %s s" % (
+        {"rank": 3, "mismatch": "action size and reprice cadence",
+         "l5": "action unit p50 $%.2f (p25 $%.2f); L5 is a fast repricer, not a long rester: %s%% of its price clusters are one print, "
+               "a same-level follow-on arrives p50 %s s / p90 %s s later, only %s%% of follow-ons come after 30 s, and its next print at a "
+               "different level comes after p50 %s s (%s%% inside 30 s) with a %s c median step (l5_patience_study.json)" % (
+             cap_study["overall"]["action_unit_usd"]["p50"], cap_study["overall"]["action_unit_usd"]["p25"],
+             *_patience_numbers()),
+         "ours": "$2.50 per action (0.46-0.54 of L5 p50); one price held for the 30 s deadline, 23 of 45 orders cancelled untouched, "
+                 "3 reprices; live decision cadence p50 %s s" % (
              ", ".join(str((c or {}).get("p50")) for c in cadence.values())),
-         "executable": "size is a rung parameter (owner); patience study first"},
+         "executable": "a touch-following reprice inside the rest window (the repriced:touch_moved path exists); size is a rung "
+                       "parameter (owner); the 30 s deadline is a frozen rung parameter"},
     ]
     return {"l5_by_lane": l5, "live_cadence_s": cadence, "top_execution_mismatches": mismatches,
             "labels": "L5 numbers from the canonical history; ours from the R4 log rows"}
+
+
+def _patience_numbers() -> tuple:
+    """Headline numbers from the patience study, if it has been run."""
+    p = os.path.join(A, "l5_patience_study.json")
+    try:
+        o = _load(p)["l5"]["overall"]
+        gap, rp, late = o["same_level_follow_on_gap_s"], o["time_to_reprice_s"], o["same_level_follow_on_after_our_deadline"]
+        return (round(100 * (o["single_print_clusters_share"] or 0), 1), gap.get("p50"), gap.get("p90"),
+                round(100 * (late["share_of_follow_on_prints"] or 0), 1), rp.get("p50"),
+                round(100 * (o["reprices_within_our_deadline_share"] or 0), 1), o["reprice_abs_step_cents"].get("p50"))
+    except (OSError, KeyError, ValueError):
+        return ("?",) * 7
 
 
 def _curve_total(curve: Mapping[str, Any], cap: str) -> D:
@@ -409,7 +427,7 @@ def render_md(o: Mapping[str, Any]) -> str:
                 at["markets"], at["turnover_usd"], at["net_usd"], at["mean_net_per_market"], at["se_net_per_market"]))
     L.append("* **Break-even (observed):** pairs are profitable before incentives below 1.00; at exactly 1.00 only the observed rebate (%.5f per filled dollar, $%.2f credited on $%.2f) makes them positive; above %.4f nothing observed pays. R4 stays hard-capped at 1.00.\n"
              % (f["observed_rebate"]["rate_per_filled_usd"] or 0, f["observed_rebate"]["credited_usd"], f["observed_rebate"]["filled_usd"], f["break_even_pair_cost_after_observed_rebate"] or 0))
-    L.append("* **Largest executable mismatch:** the $2.50 residual cap refuses L5's EXTENDs (%s live). Second: idle time between markets. Third: action size / patience (patience not yet measured).\n" % e["top_execution_mismatches"][0]["ours"].split(";")[0])
+    L.append("* **Largest executable mismatch:** the $2.50 residual cap refuses L5's EXTENDs (%s live). Second: idle time between markets. Third: action size and reprice cadence (L5 reprices within seconds; we hold one price for the 30 s deadline).\n" % e["top_execution_mismatches"][0]["ours"].split(";")[0])
     L.append("* **Gates:** %d of %d proposed profitability gates met; G1 (realized net >= 0 over >= 5 at-size markets with a sign on the mean) is %s. No rung is promoted.\n"
              % (sum(1 for x in h["gates"] if x["met"]), len(h["gates"]), "met" if h["gates"][0]["met"] else "NOT met"))
 
