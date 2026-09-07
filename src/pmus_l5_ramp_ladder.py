@@ -62,7 +62,10 @@ RUNGS: tuple[dict, ...] = (
                                                 "shadow_mix_l1_max": 0.20,
                                                 "matched_pairs_min": 3,
                                                 "adverse_selection_c_max": 3.0}},
-    {"id": "R4", "name": "size: $0.10 per market",
+    # was "R4"; renamed when the owner approved the REAL R4 (5567269295) so
+    # the two can never share an id. This prebuilt rung never ran and is
+    # reachable only through the inert automatic ladder (next_rung/evaluate).
+    {"id": "R4-AUTO", "name": "size: $0.10 per market (prebuilt, never run)",
      "per_market_cap_usd": "0.10", "residual_units": 3, "markets_per_campaign": 6,
      "campaigns_per_day": 2, "max_actions_per_session": 12, "concurrency": 1,
      "lever": "size", "promote": {"settled_markets_clean": 30,
@@ -163,8 +166,48 @@ OWNER_RUNGS: tuple[dict, ...] = (
      "derived_from": "L5 canonical maker actions (shares p25 = 5.0) + published "
                      "rebate rounding (>= 1.62 shares for one cent at 0.45); "
                      "R1/R2C cohorts 2026-09-06"},
+    # OWNER DECISION 5567269295 (2026-09-07T07:53:37Z): "APPROVE R4, with one
+    # accounting/economic guardrail." Built around the demonstrated transfer
+    # mismatch -- residual DURATION in sports -- and nothing else:
+    #   * size UNCHANGED from R3L ($2.50 per action, either leg <= $3.25,
+    #     $7.50 per market, 3 markets, concurrency 1, -$15.00 daily stop);
+    #   * the residual cap becomes DOLLARS: at most $2.50 of UNMATCHED
+    #     exposure per market (unmatched shares x their own average cost,
+    #     the amount lost if that side expires worthless). Anchored to L5's
+    #     own envelope (analysis/l5/l5_residual_risk.json): at material size
+    #     L5 held peak unmatched to 10.8-13.7% of deployed capital, which at
+    #     our $7.50 cap is $1.03 -- below one action -- so one action is the
+    #     tightest implementable cap. The unit cap (6) is kept as the
+    #     behavioral EXTEND bound; the dollar cap binds first;
+    #   * the completion bound rises 0.98 -> 1.00 for COMPLETE (deficit-side)
+    #     orders only: the MEASURED R3L rebate ($0.2800 on $34.6402 filled,
+    #     0.808%) pays for a pair up to ~1.003, and the owner's guardrail is
+    #     that 1.00 is a HARD ceiling -- "do not operationally spend rebate
+    #     beyond par" until R4's own credited rebates are in hand. The ">=1c
+    #     after known fees" rule still governs OPEN/EXTEND; par is permitted
+    #     only where it REDUCES unmatched exposure.
+    # Campaign worst case in dollars AT RISK: 3 x $2.50 = $7.50 (6.9% of the
+    # $108.9985 balance at approval); capital DEPLOYED is still bounded by
+    # 3 x $7.50 = $22.50 and the sized-rung preflight keeps requiring it.
+    # Ends at CAMPAIGN_RUNG_COMPLETE; "No automatic R5 promotion."
+    {"id": "R4", "name": "L5 size, residual in DOLLARS: $2.50 unmatched cap, "
+                         "completion to par (OWNER 5567269295)",
+     "per_market_cap_usd": "7.50", "residual_units": 6, "markets_per_campaign": 3,
+     "max_unmatched_usd": "2.50", "pair_cost_max": "1.00",
+     "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,
+     "target_notional_usd": "2.50", "max_leg_notional_usd": "3.25",
+     "daily_loss_stop_usd": "-15.00", "lever": "residual_duration", "promote": None,
+     "derived_from": "R3L (19 fills, -$1.5302 net, reconciled to the cent); L5 "
+                     "residual envelope 2,216 windows (peak unmatched / spend "
+                     "0.108-0.137 at material size); measured maker rebate "
+                     "0.808% of filled dollars"},
 )
 ALL_RUNGS: tuple[dict, ...] = RUNGS + OWNER_RUNGS
+# fail closed at import: rung() returns the FIRST id match, so a duplicate id
+# would silently run one rung's money limits under another rung's name
+assert len({r["id"] for r in ALL_RUNGS}) == len(ALL_RUNGS), \
+    "duplicate rung id in the ramp ladder"
+DEFAULT_PAIR_COST_MAX = D("0.98")      # the fee-safe observation cap, R1..R3L
 DEFAULT_RESIDUAL_UNITS = 3
 DEFAULT_TARGET_NOTIONAL = D("0.01")     # R1..R2C per-action target (micro)
 DEFAULT_MAX_LEG_NOTIONAL = D("0.02")    # R1..R2C either-leg bound (micro)
@@ -200,14 +243,41 @@ def shell_version(r: Optional[Mapping[str, Any]] = None) -> str:
     """The safety-shell label written on every live decision row
     (OWNER 5560559108 #5); R1 renders exactly the label the cohort carries."""
     r = dict(r) if r is not None else active()
-    label = (f"{r['id']}/cap{r['per_market_cap_usd']}"
-             f"/residual{int(r.get('residual_units') or DEFAULT_RESIDUAL_UNITS)}"
-             f"/conc{r['concurrency']}/maker-only/fee-safe0.98/rest30s")
+    if r.get("max_unmatched_usd"):
+        # OWNER 5567269295: a dollar-residual rung names BOTH levers it
+        # changed -- the unmatched cap and the completion ceiling -- so the
+        # frozen evaluator splits this cohort from every fee-safe0.98 one
+        label = (f"{r['id']}/cap{r['per_market_cap_usd']}"
+                 f"/unmatched{r['max_unmatched_usd']}"
+                 f"/complete{r.get('pair_cost_max') or DEFAULT_PAIR_COST_MAX}"
+                 f"/conc{r['concurrency']}/maker-only/rest30s")
+    else:
+        label = (f"{r['id']}/cap{r['per_market_cap_usd']}"
+                 f"/residual{int(r.get('residual_units') or DEFAULT_RESIDUAL_UNITS)}"
+                 f"/conc{r['concurrency']}/maker-only/fee-safe0.98/rest30s")
     if r.get("target_notional_usd"):
         # OWNER 5561465636: a sized rung carries its per-action size in
         # the label; the R1 / R2C labels are unchanged
         label += f"/action{r['target_notional_usd']}"
     return label
+
+
+def max_unmatched_usd(r: Optional[Mapping[str, Any]] = None) -> Optional[D]:
+    """The ACTIVE rung's cap on UNMATCHED dollars per market (OWNER
+    5567269295), or None for a rung that caps residual in units only."""
+    r = dict(r) if r is not None else active()
+    v = r.get("max_unmatched_usd")
+    return D(str(v)) if v else None
+
+
+def pair_cost_max(r: Optional[Mapping[str, Any]] = None) -> D:
+    """The ACTIVE rung's HARD ceiling on a completed pair's cost: 0.98
+    (fee-safe observation cap) unless the owner's rung states its own.
+    Never read above 1.00 -- par is the owner's guardrail, whatever a
+    rung says."""
+    r = dict(r) if r is not None else active()
+    v = D(str(r.get("pair_cost_max") or DEFAULT_PAIR_COST_MAX))
+    return min(v, D("1.00"))
 
 
 def target_notional(r: Optional[Mapping[str, Any]] = None) -> D:
@@ -253,6 +323,15 @@ def worst_case(r: Mapping[str, Any]) -> dict:
     if r.get("target_notional_usd"):
         out["per_action_target_usd"] = str(r["target_notional_usd"])
         out["per_leg_max_usd"] = str(r.get("max_leg_notional_usd"))
+    if r.get("max_unmatched_usd"):
+        # OWNER 5567269295: capital DEPLOYED (per_market / per_campaign
+        # above) is still bounded by the spend cap; the dollars actually AT
+        # RISK are the unmatched ones -- a matched pair pays $1 whatever
+        # happens -- so both are reported and never conflated
+        at_risk = D(str(r["max_unmatched_usd"]))
+        out["max_at_risk_per_market_usd"] = str(at_risk)
+        out["per_campaign_at_risk_usd"] = str(at_risk * r["markets_per_campaign"])
+        out["pair_cost_max"] = str(pair_cost_max(r))
     return out
 
 

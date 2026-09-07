@@ -34,8 +34,9 @@ def test_r2c_rung_is_defined_outside_the_l5_order_ladder_with_explicit_worst_cas
     assert wc["R2C"]["per_day_bounded_by_daily_stop_usd"] == "0.90"
     assert wc["R2C"]["max_concurrent_open_exposure_usd"] == "0.15"
     assert D(wc["R2C"]["per_campaign_usd"]) <= -ld.DAILY_LOSS_STOP
-    # the L5-order ladder and its promotion chain are untouched
-    assert [x["id"] for x in ld.RUNGS] == ["R1", "R2", "R3", "R4", "R5"]
+    # the L5-order ladder and its promotion chain are untouched (the
+    # prebuilt size rung is "R4-AUTO" since the owner's R4, 5567269295)
+    assert [x["id"] for x in ld.RUNGS] == ["R1", "R2", "R3", "R4-AUTO", "R5"]
     assert ld.next_rung("R1")["id"] == "R2" and ld.next_rung("R5") is None
     assert all(x["residual_units"] == 3 for x in ld.RUNGS)
     # the default rung is still R1 and the label is the cohort's label

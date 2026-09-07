@@ -29,7 +29,7 @@ def test_r3l_is_the_owner_rung_with_the_derived_numbers():
     assert wc["per_day_bounded_by_daily_stop_usd"] == "22.50"   # stop + one in-flight market
     assert wc["max_concurrent_open_exposure_usd"] == "7.50"
     assert wc["per_action_target_usd"] == "2.50" and wc["per_leg_max_usd"] == "3.25"
-    assert [x["id"] for x in ladder.ladder()][-3:] == ["R2C", "R2C2", "R3L"]
+    assert [x["id"] for x in ladder.ladder()][-4:] == ["R2C", "R2C2", "R3L", "R4"]
 
 
 def test_r1_and_r2c_labels_stops_and_sizes_are_unchanged():
@@ -140,9 +140,9 @@ def test_sized_rung_preflight_fails_closed_on_power_identity_and_reconcile(monke
 def test_r3l_approval_is_queued_behind_r2c_and_consumed_in_order():
     approvals = cont.load_campaign_approvals()
     ids = [a["campaign_id"] for a in approvals]
-    assert ids[-3:] == ["R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06",
-                        "R3L-RUN-2026-09-06"]
-    r3l = approvals[-1]
+    assert ids[-4:] == ["R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06",
+                        "R3L-RUN-2026-09-06", "R4-RUN-2026-09-07"]
+    r3l = approvals[-2]
     assert r3l["rung"] == "R3L" and r3l["stop_rule"] == "rung_markets"
     assert r3l["shell"] == ladder.shell_version(ladder.rung("R3L"))
     assert "5561465636" in r3l["source"]
@@ -157,8 +157,14 @@ def test_r3l_approval_is_queued_behind_r2c_and_consumed_in_order():
                                       ["R1-INITIAL", "R1-EVIDENCE-CONTINUATION-2026-09-06",
                                        "R2C-RUN-2026-09-06"]
                                       )["campaign_id"] == "R3L-RUN-2026-09-06"
+    # OWNER 5567269295: R4 is queued behind R3L and consumed only once R3L
+    # is the completed campaign; after R4 there is nothing (no auto R5)
     assert cont.approved_continuation("R3L-RUN-2026-09-06",
                                       ["R1-INITIAL", "R1-EVIDENCE-CONTINUATION-2026-09-06",
                                        "R2C-RUN-2026-09-06",
-                                       "R2C2-RUN-2026-09-06"]) is None
+                                       "R2C2-RUN-2026-09-06"])["campaign_id"] == "R4-RUN-2026-09-07"
+    assert cont.approved_continuation("R4-RUN-2026-09-07",
+                                      ["R1-INITIAL", "R1-EVIDENCE-CONTINUATION-2026-09-06",
+                                       "R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06",
+                                       "R3L-RUN-2026-09-06"]) is None
     json.dumps(approvals)   # serialisable, as the campaign logs it

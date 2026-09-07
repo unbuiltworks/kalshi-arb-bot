@@ -1500,6 +1500,10 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                 else "until the frozen LIVE evidence minimums are met"),
             "per_market_cap_usd": str(base.session_notional_cap()),
             "residual_cap_units": base.max_residual_units(),
+            # OWNER 5567269295: the R4 levers, from the rung, never literals
+            "max_unmatched_usd": (str(base.max_unmatched_usd())
+                                  if base.max_unmatched_usd() is not None else None),
+            "pair_cost_max": str(base.pair_cost_max()),
             "safety_shell_version": base.safety_shell_version(),
             "worst_case_usd": (str(base.session_notional_cap() * rung_markets)
                                if stop_rule == STOP_RULE_RUNG else

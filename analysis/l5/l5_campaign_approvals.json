@@ -76,6 +76,30 @@
         "clean preflight: no unresolved reconcile; ledger holds no unsettled market"
       ],
       "not": "not all $110 at risk; not a bankroll deployment; no automatic promotion after wins; R1/R2C rows keep their own shell labels"
+    },
+    {
+      "campaign_id": "R4-RUN-2026-09-07",
+      "approved_by": "owner",
+      "approved_utc": "2026-09-07T07:53:37Z",
+      "source": "#167 comment 5567269295: 'OWNER DECISION -- APPROVE R4, with one accounting/economic guardrail. The 5567227181 analysis is accepted ... Authorize R4 as proposed: per-action sizing unchanged from R3L: max $2.50 / ~5 shares as executable; per-market unmatched-dollar-at-risk cap: $2.50; completion bound: 1.00 max pair cost (from 0.98); concurrency 1; maker-only; broad sports scan + pair_score ranking; deadman/reconciliation unchanged; daily realized-loss stop remains -$15; max 3 markets / $7.50 campaign worst-case as proposed; fresh R4 rung/cohort/approval identity; preserve R3L immutable. Guardrail: ... do not operationally spend rebate beyond par yet. Keep the hard live pair-cost ceiling at 1.00 for R4 even if the estimated rebate breakeven is ~1.003.'",
+      "rung": "R4",
+      "rung_derivation": "R3L (19 fills, 19/19 maker, net balance change -$1.5302 reconciled to the cent as -6.2855 venue realized + 1.0825 + 3.3928 derived pair cash + 0.2800 venue-credited rebates) reproduced L5's own economic structure: pairs and incentives positive, residual negative. L5 residual envelope (analysis/l5/l5_residual_risk.json, 2,216 windows): unmatched exposure in every window, held to settlement in 98.96%, win rate 0.4993, residual P&L -$19,963 -- a coin flip that loses; at material size peak unmatched was 10.8-13.7% of deployed capital, which at our $7.50 cap is $1.03, below one action, so one action ($2.50) is the tightest implementable dollar cap. The live selection that chose the losing R3L market carried pair_at_touch 0.99, above the 0.98 bound, and every later decision logged complement_not_priceable; the measured maker rebate (0.808% of filled dollars, $0.0033/share) pays for a pair up to ~1.003, so par is the evidence-backed ceiling and the owner's guardrail makes it HARD.",
+      "shell": "R4/cap7.50/unmatched2.50/complete1.00/conc1/maker-only/rest30s/action2.50",
+      "stop_rule": "rung_markets",
+      "stop_rule_reading": "3 filled markets, ONE AT A TIME, each held to settlement; dollars AT RISK are the unmatched ones (a matched pair pays $1 whatever happens): at most $2.50 per market, so the campaign worst case is 3 x $2.50 = $7.50 (6.9% of the $108.9985 balance at approval); capital DEPLOYED stays bounded by the unchanged $7.50 per-market spend cap (3 x $7.50 = $22.50, still required as buying power by the sized-rung preflight); the -$15.00 daily realized-loss stop is unchanged; campaigns_per_day 1; ends at CAMPAIGN_RUNG_COMPLETE for the owner -- 'No automatic R5 promotion. At 3 settled markets, stop and report.'",
+      "changed": "exactly two levers: (1) the residual cap becomes DOLLARS -- an OPEN/EXTEND that would leave more than $2.50 unmatched is refused before submission under its own name (unmatched_usd_cap), classified separately from residual_cap/spend_cap so the owner can see whether it blocked L5-consistent actions; an order that reduces unmatched exposure is never refused; (2) the completion ceiling rises 0.98 -> 1.00 for COMPLETE (deficit-side) orders only, as a HARD ceiling -- never above par, rebate never spent beyond par -- while the >=1c-after-known-fees rule still governs OPEN/EXTEND",
+      "unchanged": "$2.50 per action (~5 shares), either leg <= $3.25, $7.50 per-market spend cap, 6 behavioral residual units as the EXTEND bound (the dollar cap binds first), 3 markets, concurrency 1, maker/post-only, ONE session at a time and ONE outstanding order, HOLD residual to settlement, 6 actions per session, deadman/cancel, orphan sweep, settlement/realized accounting from the venue only, rebates counted only when venue-credited, the frozen fidelity gate and its thresholds, the frozen L5 v2 policy and canonical lookup v3; the 0.35-0.65 / <=0.98 OBSERVATION cap for admission is untouched",
+      "preconditions": [
+        "previous campaign R3L-RUN-2026-09-06 complete: every filled market venue-settled",
+        "zero open orders on the venue (orphan sweep sees none, no errors), no foreign orders",
+        "positions flat (venue positions and availablePositions show no market held)",
+        "ledger reconciled: every settled market's ledger quantity equals the venue's",
+        "buying power on the venue >= $22.50 (the per-campaign deployed worst case)",
+        "exact active deployment and commit known from the platform environment",
+        "clean preflight: no unresolved reconcile; ledger holds no unsettled market"
+      ],
+      "report_per_market": "sampled vs acted action, fills, pair cost, unmatched-dollar path, complement opportunities blocked/allowed by old vs new bound, rebates credited, residual settlement P&L, pair contribution, fees, venue-confirmed balance delta",
+      "not": "not a size change; not a concurrency change; not a relaxation past par; R3L rows keep their own shell label and are never re-scored under this rung; no automatic R5"
     }
   ]
 }

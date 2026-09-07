@@ -247,7 +247,10 @@ class Inventory:
                 "residual": str(self.residual),
                 "avg_up": str(self.avg_up()) if self.up else None,
                 "avg_dn": str(self.avg_dn()) if self.dn else None,
-                "spent": str(self.spent())}
+                "spent": str(self.spent()),
+                # OWNER 5567269295: the unmatched-DOLLAR path, on every
+                # inventory snapshot, so the R4 report can show it per decision
+                "unmatched_usd": str(unmatched_usd(self))}
 
 
 def spring_state_key_v1(inv: Inventory, market_px: D,
@@ -506,9 +509,20 @@ def spring_complement_price(avg_cost: D, opp_ask: D, tick: D) -> \
     participates in the min(), so the widened observation cap can never
     admit a pair with <1c net edge. The caller's report shows which
     regime was executable."""
-    hard = q1.complement_bound(avg_cost)
-    spring = SPRING_PAIR_TARGET - D(str(avg_cost))
-    info = {"spring_pair_target": str(SPRING_PAIR_TARGET),
+    # OWNER 5567269295 (R4): the completion ceiling follows the ACTIVE rung.
+    # R1..R3L keep 0.98 with the >=1c hard bound exactly as before. A rung
+    # stating pair_cost_max 1.00 lets a COMPLETE -- and only a COMPLETE,
+    # this function prices nothing else -- go to par: the measured R3L
+    # rebate (0.808% of filled dollars) pays for a pair up to ~1.003, and
+    # par is the owner's HARD ceiling ("do not operationally spend rebate
+    # beyond par"). pair_cost_max() itself never returns above 1.00.
+    ceiling = pair_cost_max()
+    hard = q1.complement_bound(
+        avg_cost, min_edge=min(q1.MIN_EDGE, q1.ONE - ceiling))
+    spring = ceiling - D(str(avg_cost))
+    info = {"spring_pair_target": str(ceiling),
+            "pair_cost_max": str(ceiling),
+            "observation_cap": str(SPRING_PAIR_TARGET),
             "spring_bound_px": str(spring),
             "hard_bound_px": str(hard) if hard is not None else None}
     if hard is None:
@@ -551,6 +565,49 @@ def session_notional_cap() -> D:
 def max_residual_units() -> int:
     from src import pmus_l5_ramp_ladder as ladder
     return int(ladder.active().get("residual_units") or MAX_RESIDUAL_UNITS)
+
+
+def max_unmatched_usd() -> Optional[D]:
+    """OWNER 5567269295: the ACTIVE rung's cap on UNMATCHED dollars per
+    market, None for a units-only rung."""
+    from src import pmus_l5_ramp_ladder as ladder
+    return ladder.max_unmatched_usd()
+
+
+def pair_cost_max() -> D:
+    """The ACTIVE rung's hard completion ceiling (0.98 unless the rung says
+    otherwise; never above 1.00)."""
+    from src import pmus_l5_ramp_ladder as ladder
+    return ladder.pair_cost_max()
+
+
+def unmatched_usd(inv: "Inventory") -> D:
+    """Dollars NOT protected by a matched pair: unmatched shares x their own
+    average cost -- exactly what is lost if that side expires worthless.
+    (R3L wisc-nd: 19.27 x 0.3262 = $6.2855, the realized loss to the cent.)
+    A matched pair pays $1 whatever happens and carries none."""
+    if inv.residual > 0:
+        return (inv.residual * (inv.avg_up() or D(0))).quantize(D("0.0001"))
+    if inv.residual < 0:
+        return (-inv.residual * (inv.avg_dn() or D(0))).quantize(D("0.0001"))
+    return D("0.0000")
+
+
+def unmatched_usd_after(inv: "Inventory", side_up: bool, px: D, qty: D) -> D:
+    """What unmatched_usd would read if an order of ``qty`` at outcome cost
+    ``px`` on ``side_up`` filled in full. Pure arithmetic on the exact
+    inventory; nothing is recorded."""
+    up, dn = inv.up, inv.dn
+    cost_up, cost_dn = inv.cost_up, inv.cost_dn
+    if side_up:
+        up, cost_up = up + qty, cost_up + px * qty
+    else:
+        dn, cost_dn = dn + qty, cost_dn + px * qty
+    if up > dn:
+        return ((up - dn) * (cost_up / up)).quantize(D("0.0001"))
+    if dn > up:
+        return ((dn - up) * (cost_dn / dn)).quantize(D("0.0001"))
+    return D("0.0000")
 
 
 def safety_shell_version() -> str:
@@ -907,6 +964,9 @@ def divergence_reason(refusal: Optional[str], v2_relation: str,
             return "policy_flag:cap_fallback_complete"
         if refusal.startswith("residual_cap"):
             return "safety_adaptation:residual_cap"
+        if refusal.startswith("unmatched_usd_cap"):
+            # OWNER 5567269295: the R4 dollar cap, classified on its own
+            return "safety_adaptation:unmatched_usd_cap"
         return f"safety_adaptation:{refusal.split(':')[0]}"
     if sampled is not None and acted == sampled and acted != v2_relation:
         return "none:stochastic_draw_executed"      # L5's own distribution
@@ -923,6 +983,7 @@ def divergence_reason(refusal: Optional[str], v2_relation: str,
 # model deficiency / genuinely off-distribution state.
 DIVERGENCE_CLASSES = {
     "safety_adaptation:residual_cap": "safety-cap override",
+    "safety_adaptation:unmatched_usd_cap": "safety-cap override (R4 dollar residual cap)",
     "safety_adaptation:spend_cap": "safety-cap override",
     "policy_flag:cap_fallback_complete": "safety-cap override (L5-consistent fallback)",
     "safety_adaptation:off_distribution_hold": "genuinely off-distribution state",
@@ -1333,9 +1394,14 @@ def run_session(t: Optional[Transport] = None,
         prior_spent = inv.spent()
         report["spring_gates"] = {
             "band": f"{SPRING_BAND_LO}-{SPRING_BAND_HI}",
-            "pair_target": str(SPRING_PAIR_TARGET),
+            # the LIVE completion ceiling (rung) and the observation cap
+            # (admission), named separately since R4 split them
+            "pair_target": str(pair_cost_max()),
+            "observation_cap": str(SPRING_PAIR_TARGET),
             "session_notional_cap": str(session_notional_cap()),
             "residual_cap_units": max_residual_units(),
+            "max_unmatched_usd": (str(max_unmatched_usd())
+                                  if max_unmatched_usd() is not None else None),
             "safety_shell_version": safety_shell_version(),
             "prior_cumulative_notional": str(cum),
             "cap_basis": "authoritative FILLED notional (partials included); "
@@ -1849,6 +1915,32 @@ def run_session(t: Optional[Transport] = None,
                               "safety_adaptation:entry_band_left")
                     break
                 qty = spec["qty"]
+                # OWNER 5567269295 (R4): the residual cap in DOLLARS. An
+                # order that would leave more than the rung's unmatched
+                # cap standing is refused BEFORE submission; an order that
+                # reduces unmatched exposure is never refused (a COMPLETE
+                # is priced in its own branch below and this cannot touch
+                # it). Classified under its own name so a refusal here is
+                # never folded into residual_cap / spend_cap when the
+                # owner asks whether the $2.50 cap blocked L5-consistent
+                # actions.
+                cap_usd = max_unmatched_usd()
+                if cap_usd is not None:
+                    before = unmatched_usd(inv)
+                    after = unmatched_usd_after(inv, side_up, px, qty)
+                    dec = report["decisions"][-1]
+                    dec["unmatched_usd_before"] = str(before)
+                    dec["unmatched_usd_after_if_filled"] = str(after)
+                    dec["max_unmatched_usd"] = str(cap_usd)
+                    if after > before and after > cap_usd:
+                        dec["would_act_without_safety_cap"] = relation
+                        dec["cap_binding"] = list(dec.get("cap_binding") or []) + \
+                            ["unmatched_usd_cap"]
+                        mark_noop(dec, f"unmatched_usd_cap:{after}>{cap_usd}",
+                                  "safety_adaptation:unmatched_usd_cap")
+                        sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
+                        actions += 1
+                        continue
                 if inv.up + inv.dn == 0:
                     # OWNER 5556038561 #4: the opposite-side order this
                     # first leg would need must be priceable (fee-safe,
@@ -1960,6 +2052,14 @@ def run_session(t: Optional[Transport] = None,
                     "fee_safe_at_touch": bool(
                         hard is not None and l5_touch <= D(str(hard))
                         and pair_at_touch <= SPRING_PAIR_TARGET),
+                    # OWNER 5567269295 report line: "complement opportunities
+                    # blocked/allowed by old vs new bound", per decision
+                    "within_old_bound_0_98": bool(pair_at_touch <= SPRING_PAIR_TARGET),
+                    "within_rung_bound": bool(pair_at_touch <= pair_cost_max()),
+                    "rung_pair_cost_max": str(pair_cost_max()),
+                    "unlocked_by_rung_bound": bool(
+                        SPRING_PAIR_TARGET < pair_at_touch <= pair_cost_max()),
+                    "unmatched_usd_before": str(unmatched_usd(inv)),
                     "would_cross_at_touch": bool(l5_touch >= D(str(opp["ask"]))),
                     "class": ("no_difference" if px is not None and l5_touch == px
                               else "safety_override:fee_safe_complement_bound"),

@@ -20,11 +20,13 @@ def test_worst_cases_are_explicit_and_bounded_by_the_daily_stop():
     assert wc["R1"]["per_campaign_usd"] == "0.15"
     assert wc["R2"]["per_campaign_usd"] == "0.30" and wc["R2"]["per_day_uncapped_usd"] == "0.60"
     assert wc["R3"]["per_campaign_usd"] == "0.30"
-    assert wc["R4"]["per_campaign_usd"] == "0.60"
-    assert wc["R4"]["per_day_uncapped_usd"] == "1.20"
+    # the prebuilt $0.10 rung is "R4-AUTO" since the owner's R4 (5567269295)
+    # took the "R4" id; it never ran and is reachable only by the auto ladder
+    assert wc["R4-AUTO"]["per_campaign_usd"] == "0.60"
+    assert wc["R4-AUTO"]["per_day_uncapped_usd"] == "1.20"
     # the stop is checked before every session, so the bound is the stop
     # plus the one in-flight market's cap (OWNER 5561465636 honest bound)
-    assert wc["R4"]["per_day_bounded_by_daily_stop_usd"] == "1.10"
+    assert wc["R4-AUTO"]["per_day_bounded_by_daily_stop_usd"] == "1.10"
     assert wc["R1"]["per_day_bounded_by_daily_stop_usd"] == "0.15"
     assert wc["R2C"]["per_day_bounded_by_daily_stop_usd"] == "0.90"
     assert wc["R5"]["max_concurrent_open_exposure_usd"] == "0.20"
