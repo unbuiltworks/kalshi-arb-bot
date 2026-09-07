@@ -238,6 +238,12 @@ class StaleRefuse(RuntimeError):
 TRANSIENT_CODES = {404, 429, 500, 502, 503, 504}
 GET_RETRY_MAX = 5
 GET_RETRY_SLEEP_S = 1.0
+# LIVE 2026-09-07T08:21:02Z: five retries one second apart is 5 s of
+# patience, and a venue 429 on /v1/orders/open outlasted it (the gateway's
+# rate budget recovers on the order of a minute: the same read cleared 70 s
+# later at 08:07). Doubling: 1+2+4+8+16 = 31 s before GET_RETRIES_EXHAUSTED.
+# Read-only GETs only; a mutation is still never retried.
+GET_RETRY_BACKOFF = 2.0
 
 
 def _get_with_retry(t: Transport, path: str, base: str = API,
@@ -254,7 +260,7 @@ def _get_with_retry(t: Transport, path: str, base: str = API,
             if code not in TRANSIENT_CODES:
                 raise
             last = exc
-            sleep(GET_RETRY_SLEEP_S)
+            sleep(GET_RETRY_SLEEP_S * (GET_RETRY_BACKOFF ** attempt))
     raise Halt(f"GET_RETRIES_EXHAUSTED:{path}:{last}")
 
 

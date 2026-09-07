@@ -326,6 +326,23 @@ def _log(kind: str, **fields: Any) -> None:
                                            default=str), flush=True)
 
 
+READ_HALT_MARK = "GET_RETRIES_EXHAUSTED"
+
+
+def _read_halt(rep: Mapping[str, Any]) -> bool:
+    """A session that HALTed because a READ-ONLY GET ran out of retries
+    before it submitted anything (LIVE 08:21:02Z: 429 on /v1/orders/open in
+    the resume preflight; 0 orders, no inventory rebuilt). That is the same
+    venue read failure held_market() raises between sessions, not a trading
+    halt, and gets the same bounded wait -- never a stopped process with a
+    position held (restart is NEVER). A halt after an order was submitted,
+    or with a fill in the session, still stops the campaign."""
+    return (rep.get("status") == "HALT"
+            and READ_HALT_MARK in str(rep.get("reason") or "")
+            and not (rep.get("orders") or [])
+            and _new_fills(rep) == 0)
+
+
 def _new_fills(rep: Mapping[str, Any]) -> int:
     """Fills that happened IN this session: reported orders with a positive
     filled quantity. `rep["actions"]` is the inventory's whole fill history
@@ -866,6 +883,14 @@ SETTLE_AUDIT_EVERY_S = 60.0
 # $0.00 -- and a 6 h cadence would have missed tonight's fills entirely.
 # Read-only GETs; it touches no cap, gate or order path.
 INCENTIVE_AUDIT_EVERY_S = 3600.0
+# LIVE 2026-09-07T08:20:23Z: the first hourly audit ran AT BOOT, so its
+# program-list walk landed in the same seconds as the restore, the orphan
+# sweep and the resume preflight -- the moment of the most authenticated
+# reads -- and the preflight's /v1/orders/open answered 429 until the
+# transport gave up (08:06:14 and again 08:21:02, the second one a HALT
+# that stopped the campaign with a leg held). The first audit now waits
+# this long after boot; the hourly cadence is unchanged.
+INCENTIVE_AUDIT_BOOT_DELAY_S = 600.0
 
 
 def run_incentive_audit(t, log) -> Optional[dict]:
@@ -1458,7 +1483,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     status = "CAMPAIGN_NO_CANDIDATE"
     resumes = 0
     last_settle_audit = float("-inf")
-    last_incentive_audit = float("-inf")
+    last_incentive_audit = (start - INCENTIVE_AUDIT_EVERY_S
+                            + INCENTIVE_AUDIT_BOOT_DELAY_S)
     settled_here: set = set()
     iteration_errors: list = []          # clock() stamps of recent errors
     # OWNER 5554127702 #4: the prebuilt ladder names the active rung
@@ -1976,6 +2002,12 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     if rep.get("decisions"):
                         record_session_report(rep, held, True)
                         fidelity_eval(wall(), force=True)
+                    if _read_halt(rep):
+                        _log("session_read_halt", slug=held, resumed=True,
+                             reason=rep.get("reason"),
+                             treatment="venue read failure before any order:"
+                                       " bounded wait, campaign continues")
+                        raise base.q1.base.Halt(str(rep.get("reason")))
                     if rep.get("status") in ("DAILY_LOSS_STOP", "HALT",
                                              "STATE_NOT_DURABLE",
                                              "NO_CREDENTIALS", "DISARMED"):
@@ -2119,6 +2151,12 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             if rep.get("decisions"):
                 record_session_report(rep, chosen["slug"], False)
                 fidelity_eval(wall(), force=True)
+            if _read_halt(rep):
+                _log("session_read_halt", slug=chosen["slug"], resumed=False,
+                     reason=rep.get("reason"),
+                     treatment="venue read failure before any order:"
+                               " bounded wait, campaign continues")
+                raise base.q1.base.Halt(str(rep.get("reason")))
             if rep.get("status") in ("DAILY_LOSS_STOP", "HALT",
                                      "STATE_NOT_DURABLE", "NO_CREDENTIALS",
                                      "DISARMED"):

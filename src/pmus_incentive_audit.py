@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections import Counter
 from decimal import Decimal as D, ROUND_HALF_EVEN
 from typing import Any, Mapping, Optional
@@ -273,9 +274,17 @@ PROGRAM_LIST_PATH = "/v1/incentives"
 # -- so a bounded walk is a SAMPLE. That is why truncation is reported and
 # why a truncated walk can never support an absence claim.
 PROGRAM_LIST_MAX_PAGES = int(os.getenv("PMUS_PROGRAM_LIST_MAX_PAGES", "200"))
+# LIVE 2026-09-07T08:20:23-08:21:02Z: two back-to-back 200-page walks of
+# this list (published_programs and mlb_program_scan each walked it) fired
+# ~400 GETs in ~35 s at the gateway, and the authenticated preflight read
+# that followed (/v1/orders/open) answered 429 until the transport's
+# retries ran out -- a HALT that stopped the campaign with a leg held.
+# The walk is now paced, and one audit walks the list ONCE.
+PROGRAM_LIST_PAGE_PAUSE_S = float(os.getenv("PMUS_PROGRAM_LIST_PAGE_PAUSE_S", "0.3"))
 
 
-def program_list(t: q1.Transport, max_pages: Optional[int] = None) -> dict:
+def program_list(t: q1.Transport, max_pages: Optional[int] = None,
+                 sleep=time.sleep) -> dict:
     """The WHOLE published program list, not page one.
 
     OWNER 5561482606: "do not equate 'MLB games exist' with 'no MLB
@@ -300,7 +309,9 @@ def program_list(t: q1.Transport, max_pages: Optional[int] = None) -> dict:
 
     Bounded and fail-visible: a page error stops the walk and is returned
     with everything gathered so far, and `exhausted` says whether the end
-    was actually reached.
+    was actually reached. Paced: PROGRAM_LIST_PAGE_PAUSE_S between pages, so
+    the walk never spends the gateway's rate budget that the trading
+    session's own reads need right after it.
     """
     cap = PROGRAM_LIST_MAX_PAGES if max_pages is None else max_pages
     entries: list[dict] = []
@@ -340,6 +351,8 @@ def program_list(t: q1.Transport, max_pages: Optional[int] = None) -> dict:
         token = (resp.get("nextPageToken") if isinstance(resp, Mapping) else None)
         if not token or not rows:
             break
+        if pages < cap and PROGRAM_LIST_PAGE_PAUSE_S > 0:
+            sleep(PROGRAM_LIST_PAGE_PAUSE_S)
     exhausted = error is None and not token
     return {
         "ok": bool(entries) or error is None,
@@ -361,10 +374,12 @@ def program_list(t: q1.Transport, max_pages: Optional[int] = None) -> dict:
     }
 
 
-def published_programs(t: q1.Transport, our_slugs: list[str]) -> dict:
+def published_programs(t: q1.Transport, our_slugs: list[str],
+                       census: Optional[dict] = None) -> dict:
     """PUBLISHED (not observed): the venue's incentive programs and which
-    of this ledger's filled markets they cover."""
-    census = program_list(t)
+    of this ledger's filled markets they cover. `census` is a program_list()
+    result the caller already walked, so one audit walks the list ONCE."""
+    census = program_list(t) if census is None else census
     if census["error"] and census["pages"] == 0:
         return {"ok": False, "error": census["error"]}
     progs = [{"marketSlug": e["slug"], "instrumentState": e["instrumentState"],
@@ -443,7 +458,7 @@ def _is_mlb(slug: str, market: Mapping[str, Any], event: Mapping[str, Any]) -> b
     return False
 
 
-def mlb_program_scan(t: q1.Transport) -> dict:
+def mlb_program_scan(t: q1.Transport, census: Optional[dict] = None) -> dict:
     """OWNER 5561482606: the FULL current MLB market universe (live and
     pregame, from the venue's own events listing with embedded markets)
     reconciled BY SLUG against the public program list, with the three
@@ -489,7 +504,7 @@ def mlb_program_scan(t: q1.Transport) -> dict:
                 row["live"] = row["live"] or live_ev
     # the WHOLE list, walked page by page: "0 of 100" was a statement about
     # page one, and the owner asked for a census, not a snapshot
-    census = program_list(t)
+    census = program_list(t) if census is None else census
     program_entries = census["rows"]
     mlb_program_entries: list[dict] = []
     for e in census["entries"]:
@@ -621,12 +636,24 @@ def incentive_audit(t: q1.Transport) -> dict:
     fills = our_fills_from_ledger()
     slugs = sorted({f["slug"] for f in fills if f.get("slug")})
     out: dict = {"our_filled_markets": slugs, "our_fills": len(fills)}
+    # ONE paced walk of the program list per audit, shared by the two
+    # consumers below (each used to walk it on its own: ~400 GETs back to
+    # back, which is what starved the 08:21Z preflight read of rate budget)
+    try:
+        census: Optional[dict] = program_list(t)
+    except Exception as exc:                          # noqa: BLE001
+        census = {"ok": False, "error": str(exc)[:200], "pages": 0,
+                  "rows": 0, "entries": [], "exhausted": False,
+                  "truncated_at_page_cap": False, "page_cap": 0,
+                  "by_league": {}, "programs": [], "period_statuses": {},
+                  "limits": []}
+    out["program_list_walks"] = 1
     for name, fn in (("earnings", lambda: earnings(t)),
                      ("activities", lambda: activity_credits(t)),
                      ("balances", lambda: balances(t)),
-                     ("programs", lambda: published_programs(t, slugs)),
+                     ("programs", lambda: published_programs(t, slugs, census)),
                      # OWNER 5561482606: the full current MLB universe by slug
-                     ("mlb_scan", lambda: mlb_program_scan(t))):
+                     ("mlb_scan", lambda: mlb_program_scan(t, census))):
         try:
             out[name] = fn()
         except Exception as exc:                      # noqa: BLE001
