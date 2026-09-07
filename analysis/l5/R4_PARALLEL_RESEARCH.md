@@ -244,3 +244,25 @@ markets were absent from the pool. Verdict: not "no L5 opportunity"; the
 strict-evidence gate could not admit what the recorder was not serving.
 Capacity foregone at R4's own pace: ~2.4 markets, ~$22 of turnover
 (ESTIMATE, not P&L). Full table: `L5_OPPORTUNITY_UTILIZATION.md`.
+
+## 9. Capital recycling (`src/l5_capital_recycling.py`, OWNER 5570456323)
+
+Capital is released at the complement for the matched part (the venue
+nets pairs to cash) and at settlement for the residual. FIFO lots.
+
+| | L5 (2,216 windows, $728k deployed) | ours (R3L + R4, 5 markets, $53.26) |
+|---|---|---|
+| deployed $ released at the complement | 88.4% (BTC-15m 96%, BTC-5m 65%, ETH-5m 37%) | 87.9% |
+| first fill -> first complement p50 / p90 | 54 s / 166 s (27% of windows never complete) | 269 s / 1,295 s (1 of 5 never: wisc-nd) |
+| first fill -> settlement p50 | 261 s | 4,402 s |
+| hours per deployed dollar p50 | 0.019 | 0.114 (wisc-nd 1.21) |
+| turnover per capital-hour | 85.6 | 4.8 |
+
+Reading. The complement step is L5-like (a few minutes to the first
+complement, ~88% of dollars released at the complement in both). The
+recycling gap is market duration: L5's windows settle in ~4 minutes; our
+sports markets settle ~1.2 h after the first fill and the residual plus the
+flat-account settlement wait sits until then, so a deployed dollar is tied
+up 6x longer. Turnover per capital-hour is the number to move; it moves
+with market selection (shorter horizons), rotation after going flat, and
+repetitions -- not with the pairing step.
