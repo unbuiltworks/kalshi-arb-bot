@@ -327,10 +327,16 @@ def _market_row(slug: str, s: Mapping[str, Any], now: float,
         # persist the latest slot verdicts so the priority planner's
         # completion-probability component scores on real evidence
         s["_slot_counts"] = gate.get("slot_counts_theoretical")
+    from src import pmus_priority_queue as pq
+    last_t = pq.last_authenticated_t(s)
     return {"slug": slug, "bid": s.get("bid"), "bid_qty": s.get("bid_qty"),
             "ask": s.get("ask"), "ask_qty": s.get("ask_qty"),
             "both_sides_served": s.get("both_sides_served", False),
             "book_updates": s.get("book_updates", 0),
+            # age of the last authenticated update, from the recorder's own
+            # bounded history (the enrichment layer may overwrite it)
+            "last_authenticated_update_age_s": (round(now - last_t, 1)
+                                                if last_t is not None else None),
             **gate,
             # expensive per-market L5 state only for the allocated top
             # candidates (issue #167 comment 5521210994 funnel step 4)
@@ -339,6 +345,11 @@ def _market_row(slug: str, s: Mapping[str, Any], now: float,
 
 
 SPRING_WATCH_LIMIT = int(os.getenv("PMUS_SPRING_WATCH_LIMIT", "10"))
+
+
+def pq_stale_env() -> str:
+    from src import pmus_priority_queue as pq
+    return pq.STALE_S_ENV
 SPRING_WATCH_LO = 0.35   # OWNER DECISION 5533476555: observation 35-65
 SPRING_WATCH_HI = 0.65
 
@@ -355,6 +366,7 @@ def spring_watch(rows: Mapping[str, Mapping[str, Any]],
     depth. Advisory visibility only: NOT an execution admission; the
     canonical spring gate + micro_eligible stay authoritative."""
     picked = []
+    stale_s = float(os.getenv(pq_stale_env(), "900"))
     for slug, r in rows.items():
         try:
             b = float(r.get("bid"))
@@ -363,6 +375,15 @@ def spring_watch(rows: Mapping[str, Mapping[str, Any]],
         if not (SPRING_WATCH_LO <= b <= SPRING_WATCH_HI):
             continue
         if not r.get("both_sides_served"):
+            continue
+        # a frozen book (resolved market, or a dead feed) is not a spring
+        # candidate: the selector would only refuse it as market_closed
+        # (issue #167 comment 5571181823)
+        try:
+            age = float(r.get("last_authenticated_update_age_s"))
+        except (TypeError, ValueError):
+            age = None
+        if age is not None and age > stale_s:
             continue
         try:
             depth = min(float(r.get("bid_qty") or 0),

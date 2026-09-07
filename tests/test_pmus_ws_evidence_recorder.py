@@ -112,3 +112,24 @@ def test_a_status_document_failure_never_raises(tmp_path):
     blocked = tmp_path / "afile"
     blocked.write_text("not a directory", encoding="utf-8")
     rec.write_status_doc(blocked, {"t": 1.0})     # must not raise
+
+
+def test_spring_watch_skips_frozen_books_and_market_rows_carry_the_age():
+    """issue #167 comment 5571181823: a resolved market's frozen book sat
+    in the spring_watch pool for hours; the selector could only refuse it
+    as market_closed. Rows carry the last authenticated update age and
+    spring_watch drops rows older than PMUS_WS_STALE_S."""
+    import time
+    now = time.time()
+    live = {"bid": "0.45", "ask": "0.47", "bid_qty": "20", "ask_qty": "20",
+            "both_sides_served": True, "book_updates": 30, "trades": [],
+            "bbo_history": [{"t": now - 5, "bid": "0.45", "ask": "0.47"}]}
+    frozen = {"bid": "0.45", "ask": "0.47", "bid_qty": "20", "ask_qty": "20",
+              "both_sides_served": True, "book_updates": 5000, "trades": [],
+              "bbo_history": [{"t": now - 60000, "bid": "0.45", "ask": "0.47"}]}
+    rows = {"live-mkt": rec._market_row("live-mkt", live, now, l5=False),
+            "frozen-mkt": rec._market_row("frozen-mkt", frozen, now, l5=False)}
+    assert rows["live-mkt"]["last_authenticated_update_age_s"] < 60
+    assert rows["frozen-mkt"]["last_authenticated_update_age_s"] > 50000
+    picked = [r["slug"] for r in rec.spring_watch(rows)]
+    assert picked == ["live-mkt"]

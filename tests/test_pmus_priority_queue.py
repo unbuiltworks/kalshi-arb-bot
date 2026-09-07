@@ -266,3 +266,56 @@ def test_l5_allocation_zero_means_no_allocation(monkeypatch):
     assert len(p["subscribe"]) == 40                     # coverage unchanged
     monkeypatch.setenv(pq.L5_ALLOC_ENV, "50")
     assert len(pq.plan(targets, state, 40, 0, {})["l5_allocated"]) == 20
+
+
+def test_stale_observed_markets_are_evicted_from_hot_and_warm_seats():
+    """issue #167 comment 5571181823: yesterday's resolved games kept
+    their HOT seats through a lifetime book count; a market whose
+    authenticated stream has been silent longer than PMUS_WS_STALE_S
+    cannot hold or win HOT/WARM, and its book_rate is a recent-window
+    rate, so today's live markets get the seats."""
+    now = time.time()
+    targets = _targets(60)
+    state = _mstate({f"m-{i:03d}": 40 - i // 2 for i in range(30)}, now)
+    # the ten highest-activity markets went silent 5 hours ago (frozen books)
+    for i in range(10):
+        s = state[f"m-{i:03d}"]
+        s["trades"] = [dict(t, t=now - 18000) for t in s["trades"]]
+        s["bbo_history"] = [{"t": now - 18000 - k} for k in range(300)]
+    # the rest are live: fresh history
+    for i in range(10, 30):
+        state[f"m-{i:03d}"]["bbo_history"] = [{"t": now - k} for k in range(40)]
+    prev = {f"m-{i:03d}": {"tier": "hot", "since": 0} for i in range(10)}   # they sat HOT
+    p = pq.plan(targets, state, 40, 5, prev)
+    stale = {f"m-{i:03d}" for i in range(10)}
+    for slug in stale:
+        assert p["per_market"][slug]["stale"] is True
+        assert p["per_market"][slug]["tier"] in ("cold", "idle")
+    assert p["diagnostics"]["stale_evicted"] == 10
+    # every live observed market is seated, and HOT is full
+    live = {f"m-{i:03d}" for i in range(10, 30)}
+    assert live <= set(p["subscribe"])
+    assert p["diagnostics"]["hot"] == 24
+    # a frozen book scores 0 on book_rate even with a large lifetime count
+    frozen = pq.score_market(state["m-000"], now)
+    assert frozen["components"]["book_rate"] == 0.0
+    assert pq.is_stale(state["m-000"], now) and not pq.is_stale(state["m-020"], now)
+    assert pq.is_stale(None, now) is False                    # never observed is not stale
+
+
+def test_stale_markets_recover_through_cold_sampling_when_they_wake():
+    now = time.time()
+    targets = _targets(20)
+    state = _mstate({f"m-{i:03d}": 5 for i in range(20)}, now)
+    for i in range(20):
+        s = state[f"m-{i:03d}"]
+        s["bbo_history"] = [{"t": now - 18000}]                          # all silent
+        s["trades"] = [dict(x, t=now - 18000) for x in s["trades"]]
+    p = pq.plan(targets, state, 8, 0, {})
+    assert p["diagnostics"]["stale_evicted"] == 20
+    assert len(p["subscribe"]) >= 1                                    # COLD still samples
+    # one wakes up with fresh authenticated updates -> seated HOT next cycle
+    state["m-007"]["bbo_history"] = [{"t": now - k} for k in range(30)]
+    p2 = pq.plan(targets, state, 8, 1, p["state"])
+    assert p2["per_market"]["m-007"]["stale"] is False
+    assert p2["per_market"]["m-007"]["tier"] == "hot"

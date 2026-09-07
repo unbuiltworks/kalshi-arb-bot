@@ -43,6 +43,40 @@ MIN_HOLD_ENV = "PMUS_WS_MIN_HOLD_CYCLES"   # default 3
 COOLDOWN_ENV = "PMUS_WS_PROMOTE_COOLDOWN"  # default 2 cycles after demote
 WAKE_TRADES_ENV = "PMUS_WS_WAKE_TRADES"    # default 3 new trades
 L5_ALLOC_ENV = "PMUS_WS_L5_ALLOC"          # default 10 (bounded 0..20; 0 = no L5 allocation, OWNER 5554106892)
+STALE_S_ENV = "PMUS_WS_STALE_S"            # default 900 s: an OBSERVED market whose authenticated
+                                           # book/trade stream has been silent this long is STALE
+BOOK_RATE_WINDOW_S = 600.0                 # recent-window book activity (issue #167 5571181823)
+
+
+def last_authenticated_t(s: Optional[Mapping[str, Any]]) -> Optional[float]:
+    """Time of the last authenticated book update or trade for a market,
+    from the bounded bbo_history / trades the recorder keeps; None when
+    the market was never observed."""
+    if not s:
+        return None
+    ts = []
+    hist = s.get("bbo_history") or []
+    if hist and isinstance(hist[-1], Mapping) and hist[-1].get("t") is not None:
+        ts.append(float(hist[-1]["t"]))
+    trades = s.get("trades") or []
+    if trades and isinstance(trades[-1], Mapping) and trades[-1].get("t") is not None:
+        ts.append(float(trades[-1]["t"]))
+    return max(ts) if ts else None
+
+
+def is_stale(s: Optional[Mapping[str, Any]], now: float,
+             stale_s: Optional[float] = None) -> bool:
+    """An observed market with no authenticated update for stale_s. A
+    resolved/settled market's book freezes, so this is how the planner
+    evicts yesterday's games without a venue status call (issue #167
+    comment 5571181823: HOT pinned 39 of 46 top markets from the previous
+    day, median silence 17.5 h). Never-observed markets are not stale."""
+    if stale_s is None:
+        stale_s = float(os.getenv(STALE_S_ENV, "900"))
+    t = last_authenticated_t(s)
+    if t is None:
+        return False
+    return (now - t) > stale_s
 
 
 def _clamp01(x: float) -> float:
@@ -122,7 +156,15 @@ def score_market(s: Optional[Mapping[str, Any]], now: float,
         trades = [t for t in s.get("trades", [])
                   if now - t.get("t", 0) <= 600]
         comp["trade_rate"] = _clamp01(len(trades) / 50.0)
-        comp["book_rate"] = _clamp01(float(s.get("book_updates", 0)) / 500.0)
+        hist = s.get("bbo_history") or []
+        if hist:
+            # recent-window rate: a frozen (resolved) book scores 0 here
+            # instead of carrying its lifetime count forever
+            recent = sum(1 for h in hist if isinstance(h, Mapping)
+                         and now - float(h.get("t") or 0) <= BOOK_RATE_WINDOW_S)
+            comp["book_rate"] = _clamp01(recent / 50.0)
+        else:
+            comp["book_rate"] = _clamp01(float(s.get("book_updates", 0)) / 500.0)
         comp["two_sided"] = 1.0 if s.get("both_sides_served") else 0.0
         try:
             bq, aq = float(s.get("bid_qty")), float(s.get("ask_qty"))
@@ -226,13 +268,19 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
                 tuple(old_sig) != sig and any(v is not None for v in sig):
             wakes.add(slug)
 
+    stale_s = float(os.getenv(STALE_S_ENV, "900"))
+    stale = {slug for slug in slugs if is_stale(state.get(slug), now, stale_s)}
+    # a stale market cannot hold or win a HOT/WARM seat: it ranks below
+    # every live-or-unobserved market and is only re-sampled by COLD
+    # (oldest-first), which is how a wrongly flagged one recovers
     ranked = sorted(slugs, key=lambda x: (
+        x in stale,
         -(scored[x]["score"] if scored[x]["score"] is not None else -1.0),
         x))
     rank_of = {slug: i + 1 for i, slug in enumerate(ranked)}
 
     prev_hot = {s for s, p in prev.items()
-                if p.get("tier") == "hot" and s in scored}
+                if p.get("tier") == "hot" and s in scored and s not in stale}
     # Phase 1 — hysteresis: sitting hot members RETAIN their seat while
     # inside min_hold, and afterwards while still ranked within hot_n +
     # a demote margin. Retention has seat priority over new promotions
@@ -250,7 +298,7 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
     for slug in ranked:
         if len(hot) >= hot_n:
             break
-        if slug in hot:
+        if slug in hot or slug in stale:
             continue
         in_cd = cycle - int((prev.get(slug) or {})
                             .get("demoted_at", -10**9)) < cooldown
@@ -259,9 +307,10 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
 
     rest = [s for s in ranked if s not in hot]
     warm = []
-    if rest and warm_n:
-        start = (cycle * warm_n) % len(rest)
-        warm = (rest + rest)[start:start + min(warm_n, len(rest))]
+    fresh_rest = [s for s in rest if s not in stale]
+    if fresh_rest and warm_n:
+        start = (cycle * warm_n) % len(fresh_rest)
+        warm = (fresh_rest + fresh_rest)[start:start + min(warm_n, len(fresh_rest))]
     cold_universe = [s for s in rest if s not in warm]
     cold_universe.sort(key=lambda x: (
         int((prev.get(x) or {}).get("last_obs", -1)), x))   # oldest first
@@ -310,6 +359,8 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
         "hot": len(hot), "warm": len(warm), "cold_sampled": len(cold),
         "universe": len(slugs), "subscribed": len(subscribe),
         "wake_promotions": sorted(wakes),
+        "stale_evicted": len(stale),
+        "stale_s": stale_s,
         "l5_state_allocated": len(l5_allocated),
         "coverage_age_median": ages_sorted[len(ages) // 2] if ages else 0,
         "coverage_age_p95": ages_sorted[int(0.95 * (len(ages) - 1))]
@@ -322,6 +373,7 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
                "missing": scored[slug]["missing"],
                "rank": rank_of[slug],
                "tier": new_prev[slug]["tier"],
+               "stale": slug in stale,
                "time_in_tier": cycle - int(new_prev[slug].get("since",
                                                               cycle)),
                "last_observed_age": cycle - int(new_prev[slug]
