@@ -1,19 +1,19 @@
 {
  "all": {
-  "capital_hours_first_fill_bound": 95.518,
+  "capital_hours_first_fill_bound": 97.714,
   "fees_usd": 0.0,
   "liquidity_rewards_usd": 0.0,
-  "markets": 25,
-  "markets_with_venue_realized": 10,
-  "matched_share_of_bought": 0.8289,
-  "net_per_capital_hour": 0.00547,
-  "net_per_turnover": 0.00966,
-  "net_usd": 0.5222,
+  "markets": 26,
+  "markets_with_venue_realized": 11,
+  "matched_share_of_bought": 0.7959,
+  "net_per_capital_hour": -0.01503,
+  "net_per_turnover": -0.0262,
+  "net_usd": -1.469,
   "pair_contribution_usd": 5.5644,
-  "rebate_per_filled_usd": 0.00777,
+  "rebate_per_filled_usd": 0.00749,
   "rebates_credited_usd": 0.42,
-  "residual_contribution_usd": -5.4813,
-  "turnover_usd": 54.0669
+  "residual_contribution_usd": -7.4725,
+  "turnover_usd": 56.0581
  },
  "by_category": {
   "baseball": {
@@ -81,20 +81,20 @@
    "turnover_usd": 0.1632
   },
   "tennis": {
-   "capital_hours_first_fill_bound": 14.376,
+   "capital_hours_first_fill_bound": 16.572,
    "fees_usd": 0.0,
    "liquidity_rewards_usd": 0.0,
-   "markets": 8,
-   "markets_with_venue_realized": 3,
-   "matched_share_of_bought": 0.9495,
-   "net_per_capital_hour": 0.1456,
-   "net_per_turnover": 0.1113,
-   "net_usd": 2.0932,
+   "markets": 9,
+   "markets_with_venue_realized": 4,
+   "matched_share_of_bought": 0.8391,
+   "net_per_capital_hour": 0.00615,
+   "net_per_turnover": 0.0049,
+   "net_usd": 0.102,
    "pair_contribution_usd": 1.0478,
-   "rebate_per_filled_usd": 0.00744,
+   "rebate_per_filled_usd": 0.00673,
    "rebates_credited_usd": 0.14,
-   "residual_contribution_usd": 0.9054,
-   "turnover_usd": 18.8068
+   "residual_contribution_usd": -1.0858,
+   "turnover_usd": 20.798
   }
  },
  "by_cohort": {
@@ -163,20 +163,20 @@
    "turnover_usd": 34.6402
   },
   "R4": {
-   "capital_hours_first_fill_bound": 14.351,
+   "capital_hours_first_fill_bound": 16.547,
    "fees_usd": 0.0,
    "liquidity_rewards_usd": 0.0,
-   "markets": 2,
-   "markets_with_venue_realized": 1,
-   "matched_share_of_bought": 0.9528,
-   "net_per_capital_hour": 0.14938,
-   "net_per_turnover": 0.11515,
-   "net_usd": 2.1437,
+   "markets": 3,
+   "markets_with_venue_realized": 2,
+   "matched_share_of_bought": 0.8409,
+   "net_per_capital_hour": 0.00922,
+   "net_per_turnover": 0.0074,
+   "net_usd": 0.1525,
    "pair_contribution_usd": 1.0361,
-   "rebate_per_filled_usd": 0.00752,
+   "rebate_per_filled_usd": 0.00679,
    "rebates_credited_usd": 0.14,
-   "residual_contribution_usd": 0.9676,
-   "turnover_usd": 18.6163
+   "residual_contribution_usd": -1.0236,
+   "turnover_usd": 20.6075
   }
  },
  "by_price_band": {
@@ -197,20 +197,20 @@
    "turnover_usd": 0.0
   },
   "p0.35-0.45": {
-   "capital_hours_first_fill_bound": 38.533,
+   "capital_hours_first_fill_bound": 40.729,
    "fees_usd": 0.0,
    "liquidity_rewards_usd": 0.0,
-   "markets": 8,
-   "markets_with_venue_realized": 4,
-   "matched_share_of_bought": 0.9601,
-   "net_per_capital_hour": 0.1427,
-   "net_per_turnover": 0.25503,
-   "net_usd": 5.4988,
+   "markets": 9,
+   "markets_with_venue_realized": 5,
+   "matched_share_of_bought": 0.8724,
+   "net_per_capital_hour": 0.08612,
+   "net_per_turnover": 0.14893,
+   "net_usd": 3.5076,
    "pair_contribution_usd": 4.4442,
-   "rebate_per_filled_usd": 0.00788,
+   "rebate_per_filled_usd": 0.00722,
    "rebates_credited_usd": 0.17,
-   "residual_contribution_usd": 0.8846,
-   "turnover_usd": 21.5612
+   "residual_contribution_usd": -1.1066,
+   "turnover_usd": 23.5524
   },
   "p0.45-0.55": {
    "capital_hours_first_fill_bound": 49.213,
@@ -247,20 +247,20 @@
  },
  "by_shape": {
   "match_winner": {
-   "capital_hours_first_fill_bound": 14.704,
+   "capital_hours_first_fill_bound": 16.9,
    "fees_usd": 0.0,
    "liquidity_rewards_usd": 0.0,
-   "markets": 13,
-   "markets_with_venue_realized": 5,
-   "matched_share_of_bought": 0.9474,
-   "net_per_capital_hour": 0.14245,
-   "net_per_turnover": 0.10952,
-   "net_usd": 2.0946,
+   "markets": 14,
+   "markets_with_venue_realized": 6,
+   "matched_share_of_bought": 0.839,
+   "net_per_capital_hour": 0.00612,
+   "net_per_turnover": 0.0049,
+   "net_usd": 0.1034,
    "pair_contribution_usd": 1.0717,
-   "rebate_per_filled_usd": 0.00732,
+   "rebate_per_filled_usd": 0.00663,
    "rebates_credited_usd": 0.14,
-   "residual_contribution_usd": 0.8638,
-   "turnover_usd": 19.1245
+   "residual_contribution_usd": -1.1274,
+   "turnover_usd": 21.1157
   },
   "spread": {
    "capital_hours_first_fill_bound": 49.648,
@@ -318,12 +318,12 @@
    "R2C2-RUN-2026-09-06": "2026-09-06T23:32:22.750608772Z",
    "R3L-RUN-2026-09-06": "2026-09-07T01:21:25.891390053Z"
   },
-  "markets": 25,
+  "markets": 26,
   "venue_realized_only": [
    "aec-mlb-wsh-lad-2026-09-05",
    "asc-cfb-ntx-ind-2026-09-05-pos-39pt5"
   ],
-  "with_settlement_breakdown": 23
+  "with_settlement_breakdown": 24
  },
  "equation": "realized expectancy = matched-pair economics + venue-credited maker rebates + venue-credited liquidity rewards - residual losses - fees",
  "labels": "venue realized only where the venue emitted POSITION_RESOLUTION; on a flat account the market's net is the DERIVED matched-pair contribution (labelled); rebates are the venue's own credits; liquidity rewards 0 unless credited; fees 0.00 charged; capital-hours as defined in the module",
@@ -1626,6 +1626,58 @@
    "settlement_status": "SETTLED_REALIZED_UNCONFIRMED",
    "shape": "match_winner",
    "slug": "aec-atpcq-norgom-ollwal-2026-09-07",
+   "taker_prints": 0
+  },
+  {
+   "avg_entry_price": 0.38,
+   "bought_shares": 5.24,
+   "breakdown_source": "settlement_row",
+   "capital_hours_fill_weighted": 2.109,
+   "capital_hours_first_fill_bound": 2.196,
+   "category": "tennis",
+   "cohort": "R4",
+   "cohort_source": "session_decisions",
+   "fees_usd": 0.0,
+   "filled_usd_turnover": 1.9912,
+   "first_fill_utc": "2026-09-07T17:43:08.331184484Z",
+   "labels": {
+    "FILLED": "prints from the venue",
+    "REALIZED": "venue",
+    "SETTLED": "REALIZED",
+    "SUBMITTED": "see r4/r3l order records"
+   },
+   "league": "atp",
+   "liquidity_rewards_credited_usd": 0.0,
+   "maker_prints": 1,
+   "matched_pairs": 0.0,
+   "matched_share_of_bought": 0.0,
+   "matched_usd": 0.0,
+   "net_basis": "venue_realized",
+   "net_per_capital_hour": -0.90665,
+   "net_per_turnover": -1.0,
+   "net_usd": -1.9912,
+   "pair_contribution_bp_of_turnover": 0.0,
+   "pair_contribution_usd": 0.0,
+   "pair_cost": null,
+   "peak_unmatched_usd": 1.9912,
+   "price_band": "p0.35-0.45",
+   "prints": 1,
+   "realized_usd_venue": -1.9912,
+   "rebate_credited_usd": 0.0,
+   "rebate_per_filled_usd": 0.0,
+   "rebate_per_share": 0.0,
+   "rebate_prints_credited": null,
+   "residual_contribution_usd": -1.9912,
+   "residual_duration_h": 1.103,
+   "residual_shares": 5.24,
+   "residual_usd_at_settlement": 1.9912,
+   "resolution_side": "POSITION_RESOLUTION_SIDE_SHORT",
+   "resolution_time_source": "position_resolution",
+   "resolution_utc": "2026-09-07T18:49:19Z",
+   "settled_by": "position_resolution_activity",
+   "settlement_status": "REALIZED",
+   "shape": "match_winner",
+   "slug": "aec-atp-petbru-alecan-2026-09-07",
    "taker_prints": 0
   }
  ],

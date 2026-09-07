@@ -1,13 +1,13 @@
 {
  "campaign_window": {
-  "hours": 4.577,
+  "hours": 10.671,
   "t0": "2026-09-07T08:09:54Z",
-  "t1": "2026-09-07T12:17:10Z"
+  "t1": "2026-09-07T11:37:18Z"
  },
  "capacity_foregone_in_bottleneck_hours": {
   "labels": "capacity foregone, not P&L; the sign of the per-market net is not established",
-  "markets_at_r4_pace_ESTIMATE": 3.25,
-  "turnover_usd_ESTIMATE": 30.28
+  "markets_at_r4_pace_ESTIMATE": 9.94,
+  "turnover_usd_ESTIMATE": 68.3
  },
  "examined_not_acted": [
   {
@@ -36,10 +36,10 @@
    "tte>10m": 56
   },
   "labels": "ESTIMATES; not realized; L5 priors from its own history, ours from settled markets",
-  "our_at_size_net_per_turnover": 0.01152,
-  "our_r4_capital_hours_per_market": 7.176,
-  "our_r4_net_per_turnover": 0.11515,
-  "our_r4_turnover_per_market_usd": 9.308
+  "our_at_size_net_per_turnover": -0.02494,
+  "our_r4_capital_hours_per_market": 5.516,
+  "our_r4_net_per_turnover": 0.0074,
+  "our_r4_turnover_per_market_usd": 6.869
  },
  "funnel_last": {
   "admitted": 5,
@@ -63,11 +63,10 @@
   "universe_rows": 39840
  },
  "hours_by_kind": {
-  "ACTIVE": 1.07,
+  "ACTIVE": 1.864,
   "FLAT_WAIT": 0.36,
-  "IDLE": 2.554,
-  "STOPPED": 0.456,
-  "STRANDED": 0.137
+  "IDLE": 8.031,
+  "STRANDED": 0.416
  },
  "intervals": [
   {
@@ -79,19 +78,6 @@
    "t0": "2026-09-07T08:09:54Z",
    "t1": "2026-09-07T08:55:33Z",
    "verdict": "in market"
-  },
-  {
-   "gate": "CAMPAIGN_STOP:HALT after a venue 429 on a read-only preflight GET (fixed in 43777804)",
-   "hours": 0.456,
-   "kind": "STOPPED",
-   "pool": {
-    "nearest_before": null,
-    "samples_in_interval": 0
-   },
-   "slug": null,
-   "t0": "2026-09-07T08:21:02Z",
-   "t1": "2026-09-07T08:48:24Z",
-   "verdict": "process down (bounded in 43777804); not a selection question"
   },
   {
    "gate": "HOLD residual to settlement (owner rule); residual held until the venue resolved",
@@ -223,7 +209,7 @@
   },
   {
    "gate": "recorder pool composition (strict_evidence_market_closed / strict_evidence_thin_flow on every row) -> CAMPAIGN_NO_CANDIDATE",
-   "hours": 2.508,
+   "hours": 7.985,
    "kind": "IDLE",
    "pool": {
     "admitted_total": 0,
@@ -260,18 +246,16 @@
     "last": {
      "admitted": 0,
      "chosen": null,
-     "closed": 78,
-     "live_events": 54,
-     "markets_with_progress": 140,
+     "closed": 75,
+     "live_events": 49,
+     "markets_with_progress": 139,
      "n_rows": 80,
      "other": 0,
-     "reasons": {
-      "strict_evidence_market_closed": 78,
-      "strict_evidence_thin_flow": 2
-     },
-     "t": "2026-09-07T11:36:00.685913+00:00",
-     "thin_flow": 2,
+     "t": "2026-09-07T12:16:22.711239+00:00",
+     "thin_flow": 5,
      "thin_flow_slugs": [
+      "aec-atp-gabpir-kilfel-2026-09-07",
+      "aec-atp-margen-chrlan-2026-09-07",
       "astatc-atp-alezve-lucdar-2026-09-07-es-3-0",
       "astatc-wta-igaswi-qinzhe-2026-09-06-es-2-0"
      ]
@@ -284,12 +268,13 @@
      80,
      80
     ],
-    "samples_in_interval": 40,
+    "samples_in_interval": 41,
     "thin_flow_range": [
      2,
      9
     ],
     "thin_flow_slugs_seen": [
+     "aec-atp-gabpir-kilfel-2026-09-07",
      "aec-atp-linxia-kaiuch-2026-09-06",
      "aec-atp-margen-chrlan-2026-09-07",
      "aec-atp-yoswat-marsha-2026-09-06",
@@ -307,8 +292,47 @@
    },
    "slug": null,
    "t0": "2026-09-07T09:46:40Z",
-   "t1": "2026-09-07T12:17:10Z",
-   "verdict": "selection/coverage bottleneck: the recorder pool (80 rows) held 78 resolved markets and 2 thin-flow ones, nothing live and evidenced, while the public gateway showed 257 in-distribution live markets (95 executable on public features, 14 of them live). The strict-evidence gate could not admit what the recorder was not serving."
+   "t1": "2026-09-07T17:45:46Z",
+   "verdict": "selection/coverage bottleneck: the recorder pool (80 rows) held 75 resolved markets and 5 thin-flow ones, nothing live and evidenced, while the public gateway showed 257 in-distribution live markets (95 executable on public features, 14 of them live). The strict-evidence gate could not admit what the recorder was not serving."
+  },
+  {
+   "gate": null,
+   "hours": 0.794,
+   "kind": "ACTIVE",
+   "pool": null,
+   "slug": "aec-atp-petbru-alecan-2026-09-07",
+   "t0": "2026-09-07T17:45:46Z",
+   "t1": "2026-09-07T18:33:26Z",
+   "verdict": "in market"
+  },
+  {
+   "gate": "HOLD residual to settlement (owner rule); residual held until the venue resolved",
+   "hours": 0.279,
+   "kind": "STRANDED",
+   "pool": {
+    "nearest_before": {
+     "admitted": 0,
+     "chosen": null,
+     "closed": 75,
+     "live_events": 49,
+     "markets_with_progress": 139,
+     "n_rows": 80,
+     "other": 0,
+     "t": "2026-09-07T12:16:22.711239+00:00",
+     "thin_flow": 5,
+     "thin_flow_slugs": [
+      "aec-atp-gabpir-kilfel-2026-09-07",
+      "aec-atp-margen-chrlan-2026-09-07",
+      "astatc-atp-alezve-lucdar-2026-09-07-es-3-0",
+      "astatc-wta-igaswi-qinzhe-2026-09-06-es-2-0"
+     ]
+    },
+    "samples_in_interval": 0
+   },
+   "slug": "aec-atp-petbru-alecan-2026-09-07",
+   "t0": "2026-09-07T18:33:26Z",
+   "t1": "2026-09-07T18:50:09Z",
+   "verdict": "residual held by design; rotation blocked by concurrency 1, an owner parameter"
   }
  ],
  "labels": "read-only; the gate names are the probe's own; the public-universe view is one snapshot (2026-09-07T11:09:22Z) applied to the intervals around it; nothing here admits a market, changes the recorder, the selector, a cap or a rung",
@@ -337,13 +361,25 @@
     "SPRING_MATCHED": 1,
     "SPRING_RESIDUAL_HOLD": 10
    }
+  },
+  {
+   "first_session": "2026-09-07T17:45:46Z",
+   "flat_from": null,
+   "last_acting_session": "2026-09-07T18:33:26Z",
+   "sessions": 48,
+   "settled": "2026-09-07T18:50:09Z",
+   "slug": "aec-atp-petbru-alecan-2026-09-07",
+   "statuses": {
+    "SPRING_RESIDUAL_HOLD": 40,
+    "SPRING_SKIP_NOT_QUALIFYING": 8
+   }
   }
  ],
  "opportunity_utilization": {
-  "active_share": 0.2338,
+  "active_share": 0.1747,
   "definition": "active hours / campaign hours; bottleneck = idle while the public universe held executable on-distribution live markets the recorder pool did not serve",
-  "idle_bottleneck_hours": 2.508,
-  "idle_bottleneck_share": 0.548
+  "idle_bottleneck_hours": 7.985,
+  "idle_bottleneck_share": 0.7483
  },
  "owner_direction": "#167 5570474405 (opportunity_utilization); 5570456323",
  "universe_at_snapshot": {

@@ -47,4 +47,6 @@ def test_canonical_history_reads_l5_as_a_fast_repricer_not_a_long_rester():
     assert o["reprices_within_our_deadline_share"] > 0.8
     assert "NOT rest length" in out["comparison"]["reading"]
     ours = out["ours"]
-    assert ours["orders"] == 45 and ours["filled"] == 9 and ours["deadline_cancels"] == 23
+    # R4 complete (3 markets settled 2026-09-07 18:49Z): 64 orders, 10 fills,
+    # 41 deadline cancels -- market 3 added 19 orders / 1 fill / 18 deadlines
+    assert ours["orders"] == 64 and ours["filled"] == 10 and ours["deadline_cancels"] == 41

@@ -34,8 +34,12 @@ def test_never_completed_market_releases_everything_at_settlement():
 
 def test_our_at_size_markets_reconcile_with_the_scoreboard_turnover():
     ours = cr.our_recycling()
-    assert ours["overall"]["markets"] == 5
-    assert abs(ours["overall"]["deployed_usd"] - 53.26) < 0.05
+    # R4 market 3 (aec-atp-petbru-alecan, settled SHORT 2026-09-07 18:49Z,
+    # 5.24 YES @0.38 = $1.99 deployed, never complemented) is the sixth
+    # at-size market in the scoreboard
+    assert ours["overall"]["markets"] == 6
+    assert abs(ours["overall"]["deployed_usd"] - 55.25) < 0.05
+    assert "aec-atp-petbru-alecan-2026-09-07" in ours["per_market"]
     wisc = ours["per_market"]["asc-cfb-wisc-nd-2026-09-06-pos-10pt5"]
     assert wisc["released_at_complement_share"] == 0.0 and wisc["hours_per_deployed_dollar"] > 1.0
 

@@ -181,8 +181,8 @@
  "labels": "capital released at the complement for the matched part (venue nets pairs to cash) and at settlement for the residual; L5 settlement = last print time + its seconds_to_settlement; ours from the scoreboard's resolution time; our R4 fill times are the session row times (a first-fill-to-complement of 0 s means both filled inside one ~30 s session); read-only",
  "ours": {
   "overall": {
-   "capital_hours_total": 12.25,
-   "deployed_usd": 53.26,
+   "capital_hours_total": 14.35,
+   "deployed_usd": 55.25,
    "first_fill_to_first_complement_s": {
     "mean": 438.766,
     "n": 4,
@@ -193,8 +193,8 @@
     "p90": 1295.0
    },
    "first_fill_to_settlement_s": {
-    "mean": 5661.77,
-    "n": 5,
+    "mean": 5353.569,
+    "n": 6,
     "p10": 2391.873,
     "p25": 3154.976,
     "p50": 4402.0,
@@ -202,19 +202,33 @@
     "p90": 9771.0
    },
    "hours_per_deployed_dollar": {
-    "mean": 0.328,
-    "n": 5,
+    "mean": 0.45,
+    "n": 6,
     "p10": 0.049,
     "p25": 0.06,
-    "p50": 0.114,
-    "p75": 0.206,
+    "p50": 0.206,
+    "p75": 1.059,
     "p90": 1.212
    },
-   "markets": 5,
-   "released_at_complement_share": 0.8649,
-   "turnover_per_capital_hour_aggregate": 4.349
+   "markets": 6,
+   "released_at_complement_share": 0.8337,
+   "turnover_per_capital_hour_aggregate": 3.849
   },
   "per_market": {
+   "aec-atp-petbru-alecan-2026-09-07": {
+    "capital_hours": 2.1087711009633807,
+    "cohort": "R4",
+    "deployed_usd": 1.9912,
+    "first_fill_to_first_complement_s": null,
+    "first_fill_to_settlement_s": 3812.56326007843,
+    "hours_per_deployed_dollar": 1.0590453500217862,
+    "lots": 1,
+    "released_at_complement_share": 0.0,
+    "released_at_complement_usd": 0.0,
+    "released_at_settlement_usd": 1.9912,
+    "settlement_utc": "2026-09-07T18:49:19Z",
+    "turnover_per_capital_hour": 0.9442466273794871
+   },
    "aec-atpcq-aleher-tundur-2026-09-07": {
     "capital_hours": 1.7350821491912927,
     "cohort": "R4",
@@ -288,5 +302,5 @@
   }
  },
  "owner_direction": "#167 5570456323 (capital recycling)",
- "reading": "L5 releases 88% of deployed dollars at the complement, first complement p50 54 s after the first fill (p90 166 s), and its capital sits 0.019 h per deployed dollar (p50) because its windows settle in minutes (first fill to settlement p50 261 s). Ours: 86% released at the complement, first complement p50 269.0 s (p90 1295.0 s) -- the complement step itself is L5-like -- but 0.114 h per deployed dollar (p50) because sports markets settle hours later (first fill to settlement p50 4402.0 s) and the residual, plus the flat-account wait, sits until then. Recycling is bounded by market duration and the settlement wait, not by the pairing step."
+ "reading": "L5 releases 88% of deployed dollars at the complement, first complement p50 54 s after the first fill (p90 166 s), and its capital sits 0.019 h per deployed dollar (p50) because its windows settle in minutes (first fill to settlement p50 261 s). Ours: 83% released at the complement, first complement p50 269.0 s (p90 1295.0 s) -- the complement step itself is L5-like -- but 0.206 h per deployed dollar (p50) because sports markets settle hours later (first fill to settlement p50 4402.0 s) and the residual, plus the flat-account wait, sits until then. Recycling is bounded by market duration and the settlement wait, not by the pairing step."
 }

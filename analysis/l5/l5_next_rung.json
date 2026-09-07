@@ -13,36 +13,36 @@
   ],
   "second": "touch-following reprice inside the 30 s rest window (execution layer)",
   "single_change_to_test_after_r4": "environment selection + rotation: serve the live universe to the selector (recorder pool refresh) and rotate when the account is flat instead of waiting for settlement",
-  "why": "it is the only lever that raises L5 sequences per bankroll-dollar-hour without changing what an L5 sequence is; its expected dollar effect is the per-market mean (0.1227, s.e. 1.6824) times ~3.72 extra markets per R4-length window, so its sign is the sign of the mean -- which more sequences are also the fastest way to establish; downside per extra market is the existing $2.50 cap."
+  "why": "it is the only lever that raises L5 sequences per bankroll-dollar-hour without changing what an L5 sequence is; its expected dollar effect is the per-market mean (-0.2296, s.e. 1.4181) times ~10.41 extra markets per R4-length window, so its sign is the sign of the mean -- which more sequences are also the fastest way to establish; downside per extra market is the existing $2.50 cap."
  },
  "baseline": {
-  "at_size_markets": 5,
+  "at_size_markets": 6,
   "l5_turnover_per_capital_hour": 85.62,
   "labels": "R4 window from opportunity_utilization; per-market mean/s.e. from the 5 at-size settled markets (venue numbers, derived on flat accounts, labelled)",
-  "mean_net_per_market": 0.1227,
-  "our_turnover_per_capital_hour": 4.349,
-  "r4_active_share": 0.2338,
-  "r4_idle_bottleneck_hours": 2.508,
-  "r4_markets_per_hour_when_active": 1.869,
-  "r4_net_per_bankroll_dollar_hour": 0.004297,
-  "r4_net_usd": 2.1437,
-  "r4_window_hours": 4.577,
-  "se_net_per_market": 1.6824
+  "mean_net_per_market": -0.2296,
+  "our_turnover_per_capital_hour": 3.849,
+  "r4_active_share": 0.1747,
+  "r4_idle_bottleneck_hours": 7.985,
+  "r4_markets_per_hour_when_active": 1.073,
+  "r4_net_per_bankroll_dollar_hour": 0.000131,
+  "r4_net_usd": 0.1525,
+  "r4_window_hours": 10.671,
+  "se_net_per_market": 1.4181
  },
  "invariant": "L5 DECIDES -> EXECUTE WELL -> RECYCLE WHEN L5 COMPLETES -> MEASURE TOTAL ECONOMICS -> SCALE WHAT WORKS",
  "labels": "read-only; ESTIMATES; no rung is launched by this file",
  "levers": [
   {
    "changes": "environment / rotation only; no model, cap, size, ceiling or concurrency change",
-   "downside_usd_per_window": -9.29,
+   "downside_usd_per_window": -26.02,
    "evidence": "opportunity_utilization: 2.51 h of the 4.58 h R4 window idle with 95 executable on-distribution markets on the public gateway and a recorder pool of resolved markets; 0.36 h flat-account wait; L5 re-enters within 60 s of settlement 77% of the time",
-   "expected_delta_per_bankroll_dollar_hour_ESTIMATE": 0.000914,
-   "expected_delta_usd_per_window_ESTIMATE": 0.456,
-   "expected_extra_markets_per_r4_window_ESTIMATE": 3.72,
+   "expected_delta_per_bankroll_dollar_hour_ESTIMATE": -0.002054,
+   "expected_delta_usd_per_window_ESTIMATE": -2.39,
+   "expected_extra_markets_per_r4_window_ESTIMATE": 10.41,
    "lever": "environment selection + rotation: serve the live universe to the selector (recorder pool refresh) and rotate when the account is flat instead of waiting for settlement",
    "preserves_l5": true,
-   "reading": "multiplies the number of L5 sequences per hour by ~2.9x without touching how any sequence is decided; it also multiplies the sample, which is what the sign of the per-market mean needs",
-   "uncertainty_1se_usd_per_window": 6.254,
+   "reading": "multiplies the number of L5 sequences per hour by ~6.2x without touching how any sequence is decided; it also multiplies the sample, which is what the sign of the per-market mean needs",
+   "uncertainty_1se_usd_per_window": 14.759,
    "worst_case_bound": "each extra market bounded by the $2.50 unmatched cap and the $7.50 spend cap; daily stop -$15 unchanged"
   },
   {
@@ -59,7 +59,7 @@
    "changes": "a safety bound (owner parameter)",
    "downside_usd_per_market": -3.75,
    "evidence": "curve: on L5's history +7% total dollars, income per dollar of peak residual 0.153 vs 0.186; actions kept 39.6% vs 31.0%; live: 44 of 54 EXTEND draws refused at 1 unit",
-   "expected_delta_per_bankroll_dollar_hour_ESTIMATE": 0.000301,
+   "expected_delta_per_bankroll_dollar_hour_ESTIMATE": 9e-06,
    "lever": "residual cap $2.50 -> $3.75 (1.5 action units)",
    "preserves_l5": "improves EXTEND fidelity; still a translation",
    "reading": "buys fidelity, not expectancy, on this history"
@@ -68,7 +68,7 @@
    "changes": "size (owner parameter); the cap falls to 0.5 units",
    "downside_usd_per_market": -2.5,
    "evidence": "ramp: L5's early day-median action was $3.25; its mature 10-13 share median came later",
-   "expected_delta_per_bankroll_dollar_hour_ESTIMATE": 0.004297,
+   "expected_delta_per_bankroll_dollar_hour_ESTIMATE": 0.000131,
    "lever": "action size $2.50 -> $5.00 (10 shares), cap held at $2.50",
    "preserves_l5": "worsens EXTEND fidelity unless the cap moves with it",
    "uncertainty": "doubles the standard error with the mean; refuses more EXTENDs (fidelity falls below 31%)"
@@ -77,7 +77,7 @@
    "changes": "capital at risk x2",
    "downside_usd": -5.0,
    "evidence": "L5 never ran two windows of a lane at once",
-   "expected_delta_per_bankroll_dollar_hour_ESTIMATE": 0.000492,
+   "expected_delta_per_bankroll_dollar_hour_ESTIMATE": -0.000395,
    "lever": "concurrency 1 -> 2",
    "preserves_l5": false,
    "reading": "last, by the owner's order"

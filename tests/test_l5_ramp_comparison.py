@@ -19,10 +19,12 @@ def test_l5_days_and_aggregates():
 def test_ours_by_cohort_and_reproducibility():
     us = rc.ours()
     assert set(us) >= {"R3L", "R4"}
-    assert us["R4"]["markets"] == 2 and us["R4"]["maker_taker_mix"].startswith("100% maker")
-    assert abs(sum(us["R4"]["turnover_by_calendar_day_usd"].values()) - 18.6163) < 0.01
+    # R4 complete: 3 markets (market 3 aec-atp-petbru-alecan added $1.9912 of
+    # turnover on 2026-09-07)
+    assert us["R4"]["markets"] == 3 and us["R4"]["maker_taker_mix"].startswith("100% maker")
+    assert abs(sum(us["R4"]["turnover_by_calendar_day_usd"].values()) - 20.61) < 0.01
     out = rc.study()
     r = out["reproducibility"]
-    assert abs(r["our_at_size_calendar_day_usd"] - 53.26) < 0.05
+    assert abs(r["our_at_size_calendar_day_usd"] - 55.25) < 0.05
     assert r["calendar_day_ratio_ours_at_size_over_l5_early"] < 0.2
     assert len(r["not_reproducible_yet"]) == 3

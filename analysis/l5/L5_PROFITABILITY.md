@@ -6,16 +6,16 @@ Owner mandate #167 5569845340. `realized expectancy = matched-pair economics + v
 
 ## Verdict first
 
-* **Positive realized expectancy is not established.** Across every market this account has settled (25 markets, 10 with a venue-realized number) the net is $0.5222 on $54.07 filled: pair contribution +$5.5644, venue-credited rebates +$0.42, residual losses $-5.4813, fees $0.00, liquidity rewards $0.00 (none credited). At size (R3L + R4, 5 markets, $53.26 filled) the net is $0.6135: mean $0.1227 per market with standard error $1.6824. One market (wisc-nd, $-6.29 residual) dominates; the sign of the mean is not determined.
-* **Break-even (observed):** pairs are profitable before incentives below 1.00; at exactly 1.00 only the observed rebate (0.00789 per filled dollar, $0.42 credited on $53.26) makes them positive; above 1.0080 nothing observed pays. R4 stays hard-capped at 1.00.
+* **Positive realized expectancy is not established.** Across every market this account has settled (26 markets, 11 with a venue-realized number) the net is $-1.4690 on $56.06 filled: pair contribution +$5.5644, venue-credited rebates +$0.42, residual losses $-7.4725, fees $0.00, liquidity rewards $0.00 (none credited). At size (R3L + R4, 6 markets, $55.25 filled) the net is $-1.3777: mean $-0.2296 per market with standard error $1.4181. One market (wisc-nd, $-6.29 residual) dominates; the sign of the mean is not determined.
+* **Break-even (observed):** pairs are profitable before incentives below 1.00; at exactly 1.00 only the observed rebate (0.00760 per filled dollar, $0.42 credited on $55.25) makes them positive; above 1.0077 nothing observed pays. R4 stays hard-capped at 1.00.
 
 * **Largest executable mismatch:** the $2.50 residual cap refuses L5's EXTENDs (44 of 54 live EXTEND draws refused (81.5%) live). Second: idle time between markets. Third: action size and reprice cadence (L5 reprices within seconds; we hold one price for the 30 s deadline).
 
-* **Gates:** 6 of 7 proposed profitability gates met; G1 (realized net >= 0 over >= 5 at-size markets with a sign on the mean) is NOT met. No rung is promoted.
+* **Gates:** 5 of 7 proposed profitability gates met; G1 (realized net >= 0 over >= 5 at-size markets with a sign on the mean) is NOT met. No rung is promoted.
 
 ## A. Economic scoreboard (every R1 -> R4 market)
 
-Coverage: 25 markets; 23 with the probe's settlement breakdown row; aec-mlb-wsh-lad-2026-09-05, asc-cfb-ntx-ind-2026-09-05-pos-39pt5 carry only the venue's realized number (their breakdown rows predate the log retention window; turnover unknown, not zero).
+Coverage: 26 markets; 24 with the probe's settlement breakdown row; aec-mlb-wsh-lad-2026-09-05, asc-cfb-ntx-ind-2026-09-05-pos-39pt5 carry only the venue's realized number (their breakdown rows predate the log retention window; turnover unknown, not zero).
 
 | cohort | markets | venue-realized | filled $ | pair $ | rebates $ (credited) | residual $ | net $ | net / filled $ | capital-hours (bound) | net / capital-hour | matched share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -23,19 +23,19 @@ Coverage: 25 markets; 23 with the probe's settlement breakdown row; aec-mlb-wsh-
 | R2C | 6 | 2 | 0.2118 | 0.0132 | 0.0 | -0.035 | -0.0218 | -0.10293 | 0.206 | -0.10583 | 0.7917 |
 | R2C2 | 3 | 2 | 0.158 | 0.0082 | 0.0 | -0.0662 | -0.058 | -0.36709 | 0.156 | -0.37179 | 0.5 |
 | R3L | 3 | 1 | 34.6402 | 4.4753 | 0.28 | -6.2855 | -1.5302 | -0.04417 | 80.411 | -0.01903 | 0.7731 |
-| R4 | 2 | 1 | 18.6163 | 1.0361 | 0.14 | 0.9676 | 2.1437 | 0.11515 | 14.351 | 0.14938 | 0.9528 |
+| R4 | 3 | 2 | 20.6075 | 1.0361 | 0.14 | -1.0236 | 0.1525 | 0.0074 | 16.547 | 0.00922 | 0.8409 |
 
 Per-market rows (all terms, both capital-hour definitions, price band, shape, league, cohort provenance) are in `l5_economic_scoreboard.json`. Net basis is the venue's realized number where the venue emitted a POSITION_RESOLUTION, else the DERIVED matched contribution on a flat account, labelled per row. Rebates are the venue's own per-print credits (25 prints, $0.42, all in R3L/R4; earlier prints were below the one-cent floor). R4 market-level: aleher-tundur venue +1.9955 (pair +1.0279, residual +0.9676 on the LONG side, rebate 0.06); norgom-ollwal flat, derived +0.0082, rebate 0.08.
 
 ## B. Profitable operating envelope (fail closed)
 
-regimes ranked by net per filled dollar; a regime is RANKABLE only with >= 5 at-size markets and >= $10 turnover, otherwise INSUFFICIENT and not ranked; se_net_per_market is the standard error of the per-market net (n-1). At-size markets: 5. 20 markets at $0.05-$0.50 per market: prints below the venue's rebate floor, turnover $0.81, net $-0.0913 -- shape evidence only, not economics at size
+regimes ranked by net per filled dollar; a regime is RANKABLE only with >= 5 at-size markets and >= $10 turnover, otherwise INSUFFICIENT and not ranked; se_net_per_market is the standard error of the per-market net (n-1). At-size markets: 6. 20 markets at $0.05-$0.50 per market: prints below the venue's rebate floor, turnover $0.81, net $-0.0913 -- shape evidence only, not economics at size
 
 **by cohort**
 
 | cohort | markets | filled $ | net $ | net / filled $ | mean net / market | s.e. | worst market | status |
 |---|---|---|---|---|---|---|---|---|
-| R4 | 2 | 18.6163 | 2.1437 | 0.11515 | 1.0718 | 0.9836 | 0.0882 | INSUFFICIENT |
+| R4 | 3 | 20.6075 | 0.1525 | 0.0074 | 0.0508 | 1.1683 | -1.9912 | INSUFFICIENT |
 | R1 | 11 | 0.4406 | -0.0115 | -0.0261 | -0.001 | 0.0053 | -0.048 | INSUFFICIENT |
 | R3L | 3 | 34.6402 | -1.5302 | -0.04417 | -0.5101 | 2.9345 | -6.2255 | INSUFFICIENT |
 | R2C | 6 | 0.2118 | -0.0218 | -0.10293 | -0.0036 | 0.0038 | -0.0174 | INSUFFICIENT |
@@ -46,21 +46,21 @@ regimes ranked by net per filled dollar; a regime is RANKABLE only with >= 5 at-
 | shape | markets | filled $ | net $ | net / filled $ | mean net / market | s.e. | worst market | status |
 |---|---|---|---|---|---|---|---|---|
 | total | 1 | 12.8972 | 3.5028 | 0.27159 | 3.5028 |  | 3.5028 | INSUFFICIENT |
-| match_winner | 2 | 18.6163 | 2.1437 | 0.11515 | 1.0718 | 0.9836 | 0.0882 | INSUFFICIENT |
+| match_winner | 3 | 20.6075 | 0.1525 | 0.0074 | 0.0508 | 1.1683 | -1.9912 | INSUFFICIENT |
 | spread | 2 | 21.743 | -5.033 | -0.23148 | -2.5165 | 3.709 | -6.2255 | INSUFFICIENT |
 
 **by category**
 
 | category | markets | filled $ | net $ | net / filled $ | mean net / market | s.e. | worst market | status |
 |---|---|---|---|---|---|---|---|---|
-| tennis | 2 | 18.6163 | 2.1437 | 0.11515 | 1.0718 | 0.9836 | 0.0882 | INSUFFICIENT |
+| tennis | 3 | 20.6075 | 0.1525 | 0.0074 | 0.0508 | 1.1683 | -1.9912 | INSUFFICIENT |
 | football | 3 | 34.6402 | -1.5302 | -0.04417 | -0.5101 | 2.9345 | -6.2255 | INSUFFICIENT |
 
 **by price_band**
 
 | price_band | markets | filled $ | net $ | net / filled $ | mean net / market | s.e. | worst market | status |
 |---|---|---|---|---|---|---|---|---|
-| p0.35-0.45 | 2 | 21.3117 | 5.5583 | 0.26081 | 2.7792 | 0.7237 | 2.0555 | INSUFFICIENT |
+| p0.35-0.45 | 3 | 23.3029 | 3.5671 | 0.15308 | 1.189 | 1.6441 | -1.9912 | INSUFFICIENT |
 | p0.45-0.55 | 2 | 25.6593 | 1.2807 | 0.04991 | 0.6403 | 0.5521 | 0.0882 | INSUFFICIENT |
 | p<0.35 | 1 | 6.2855 | -6.2255 | -0.99045 | -6.2255 |  | -6.2255 | INSUFFICIENT |
 
@@ -85,29 +85,29 @@ at $2.50 per action the per-market spend cap ($7.50) is 3 units; 1 unit maximize
 
 ## E. Turnover mechanics: L5 vs ours
 
-1. **residual cap refuses L5's EXTENDs.** L5: EXTEND is 49.4% of L5 actions; a 1-action-unit cap refuses 98.4% of them; L5 keeps a residual of median 3.5 units peak. Ours: 44 of 54 live EXTEND draws refused (81.5%); acted extend share 0.022 vs L5 0.396. Executable lever: a cap in action units > 1 or a smaller action; both are rung parameters, owner's call.
+1. **residual cap refuses L5's EXTENDs.** L5: EXTEND is 49.4% of L5 actions; a 1-action-unit cap refuses 98.4% of them; L5 keeps a residual of median 3.5 units peak. Ours: 44 of 54 live EXTEND draws refused (81.5%); acted extend share 0.016 vs L5 0.486. Executable lever: a cap in action units > 1 or a smaller action; both are rung parameters, owner's call.
 
 2. **time between markets (capital idle).** L5: BTC-15m: p50 15s after settlement, 77% within 60 s, never before settlement; BTC-5m: p50 60s after settlement, 50% within 60 s, never before settlement; ETH-15m: p50 463s after settlement, 15% within 60 s, never before settlement; ETH-5m: p50 168s after settlement, 24% within 60 s, never before settlement. Ours: R4 market 2 selected ~58 min after market 1's first fill; after market 2 settled (09:46Z) no candidate admitted for > 2 h (pool 80 rows: 73 resolved 09-06 markets, 7 thin-flow) while 257 in-distribution live markets existed on the public gateway. Executable lever: recorder coverage / pool refresh (no rung parameter); universe pre-rank exists read-only.
 
-3. **action size and reprice cadence.** L5: action unit p50 $8.47 (p25 $4.25); L5 is a fast repricer, not a long rester: 75.1% of its price clusters are one print, a same-level follow-on arrives p50 1 s / p90 7 s later, only 1.8% of follow-ons come after 30 s, and its next print at a different level comes after p50 6 s (83.5% inside 30 s) with a 2 c median step (l5_patience_study.json). Ours: $2.50 per action (0.46-0.54 of L5 p50); one price held for the 30 s deadline, 23 of 45 orders cancelled untouched, 3 reprices; live decision cadence p50 10.1, 30.1 s. Executable lever: a touch-following reprice inside the rest window (the repriced:touch_moved path exists); size is a rung parameter (owner); the 30 s deadline is a frozen rung parameter.
+3. **action size and reprice cadence.** L5: action unit p50 $8.47 (p25 $4.25); L5 is a fast repricer, not a long rester: 75.1% of its price clusters are one print, a same-level follow-on arrives p50 1 s / p90 7 s later, only 1.8% of follow-ons come after 30 s, and its next print at a different level comes after p50 6 s (83.5% inside 30 s) with a 2 c median step (l5_patience_study.json). Ours: $2.50 per action (0.46-0.54 of L5 p50); one price held for the 30 s deadline, 23 of 45 orders cancelled untouched, 3 reprices; live decision cadence p50 31.4, 10.1, 30.1 s. Executable lever: a touch-following reprice inside the rest window (the repriced:touch_moved path exists); size is a rung parameter (owner); the 30 s deadline is a frozen rung parameter.
 
 ## F. Observed break-even table (pair cost 0.95 -> 1.01)
 
 | pair cost | pair $ / pair | observed rebate $ / pair | published-rate rebate at 5 sh @0.50 | net after observed rebate | class | executable under R4 |
 |---|---|---|---|---|---|---|
-| 0.95 | 0.05 | 0.0075 | 0.008 | 0.0575 | profitable before incentives | yes |
-| 0.96 | 0.04 | 0.00757 | 0.008 | 0.04757 | profitable before incentives | yes |
-| 0.97 | 0.03 | 0.00765 | 0.008 | 0.03765 | profitable before incentives | yes |
-| 0.98 | 0.02 | 0.00773 | 0.008 | 0.02773 | profitable before incentives | yes |
-| 0.99 | 0.01 | 0.00781 | 0.008 | 0.01781 | profitable before incentives | yes |
-| 1.0 | 0.0 | 0.00789 | 0.008 | 0.00789 | profitable only after the observed maker rebate | yes |
-| 1.01 | -0.01 | 0.00797 | 0.008 | -0.00203 | negative after the observed rebate; would need unproven liquidity rewards of 0.002 per pair -- NOT EXECUTABLE | NO (above the 1.00 ceiling) |
+| 0.95 | 0.05 | 0.00722 | 0.008 | 0.05722 | profitable before incentives | yes |
+| 0.96 | 0.04 | 0.0073 | 0.008 | 0.0473 | profitable before incentives | yes |
+| 0.97 | 0.03 | 0.00737 | 0.008 | 0.03737 | profitable before incentives | yes |
+| 0.98 | 0.02 | 0.00745 | 0.008 | 0.02745 | profitable before incentives | yes |
+| 0.99 | 0.01 | 0.00752 | 0.008 | 0.01752 | profitable before incentives | yes |
+| 1.0 | 0.0 | 0.0076 | 0.008 | 0.0076 | profitable only after the observed maker rebate | yes |
+| 1.01 | -0.01 | 0.00768 | 0.008 | -0.00232 | negative after the observed rebate; would need unproven liquidity rewards of 0.0023 per pair -- NOT EXECUTABLE | NO (above the 1.00 ceiling) |
 
 pair contribution = 1 - pair cost per matched pair (cash, netted at match); rebate = venue-credited dollars per filled dollar x pair cost; liquidity rewards zero (none credited); fees zero (venue charged 0.00); R4 stays hard-capped at 1.00 -- the 1.01 row is informational, not authorized. Observed average matched pair costs by market: asc-cfb-lou-miss 0.9346 (16.54 pairs); tsc-cfb-lou-miss 0.7917 (16.29 pairs); aec-atpcq-aleher-tundur 0.8798 (8.55 pairs); aec-atpcq-norgom-ollwal 0.9992 (10.21 pairs).
 
 ## G. Smallest next rung
 
-ESTIMATE from 5 at-size markets with one $6.29 loser; the standard error is the point: at-size mean net per market $0.1227, s.e. $1.6824, net per filled dollar 0.01152 (R4 alone 0.11515, R3L alone -0.04417).
+ESTIMATE from 5 at-size markets with one $6.29 loser; the standard error is the point: at-size mean net per market $-0.2296, s.e. $1.4181, net per filled dollar -0.02494 (R4 alone 0.0074, R3L alone -0.04417).
 
 * **repetitions at frozen R4 parameters (3 more markets)** (moves a risk parameter: no). adds sample without moving any bound; smallest rung that can raise expected dollars only if the per-market mean is positive, which 5 markets cannot establish. Worst case: -7.5.
 
@@ -119,31 +119,31 @@ ESTIMATE from 5 at-size markets with one $6.29 loser; the standard error is the 
 
 * **concurrency 1 -> 2** (moves a risk parameter: yes). no change in per-market expectancy; doubles capital at risk and capital-hours; L5 never ran two markets of one lane at once (0 of 2,201 transitions) -- last lever by the owner's order. Worst case: -5.0.
 
-none is established: the at-size mean net per market is 0.1227 +/- 1.6824 on 5 markets; the only lever that raises expected dollars without a sign on the mean is more repetitions, and it is the only one that moves no bound. Nothing is promoted here.
+none is established: the at-size mean net per market is -0.2296 +/- 1.4181 on 6 markets; the only lever that raises expected dollars without a sign on the mean is more repetitions, and it is the only one that moves no bound. Nothing is promoted here.
 
 ## H. Profitability gates (proposed)
 
 | gate | have | status |
 |---|---|---|
-| G1 realized net >= 0 over >= 5 at-size markets AND the per-market mean exceeds its standard error (a sign on the mean), venue numbers only | {"markets": 5, "net_usd": 0.6135, "mean_net_per_market": 0.1227, "se": 1.6824} | NOT met |
-| G2 pair + credited rebate income >= residual losses over the rung | {"pair_plus_rebate": 5.9314, "residual": -5.3179} | met |
-| G3 credited rebate per filled dollar >= 0.006 and every credit reconciled to the venue balance | {"rate": 0.00789, "balance_reconciliation": "exact 108.9985 -> 109.194 -> 111.1422"} | met |
-| G4 matched share of bought shares >= 0.75 per rung | {"at_size": 0.9528, "r3l": 0.7731} | met |
-| G5 no market's residual loss exceeds the per-market cap ($2.50 under R4) | {"worst_at_size_market_net": -6.2255, "r4_worst": 0.0882} | met |
+| G1 realized net >= 0 over >= 5 at-size markets AND the per-market mean exceeds its standard error (a sign on the mean), venue numbers only | {"markets": 6, "net_usd": -1.3777, "mean_net_per_market": -0.2296, "se": 1.4181} | NOT met |
+| G2 pair + credited rebate income >= residual losses over the rung | {"pair_plus_rebate": 5.9314, "residual": -7.3091} | NOT met |
+| G3 credited rebate per filled dollar >= 0.006 and every credit reconciled to the venue balance | {"rate": 0.0076, "balance_reconciliation": "exact 108.9985 -> 109.194 -> 111.1422"} | met |
+| G4 matched share of bought shares >= 0.75 per rung | {"at_size": 0.8409, "r3l": 0.7731} | met |
+| G5 no market's residual loss exceeds the per-market cap ($2.50 under R4) | {"worst_at_size_market_net": -6.2255, "r4_worst": -1.9912} | met |
 | G6 zero legging, zero accounting mismatches, zero taker prints in the rung; campaign stops reported | {"taker_prints": 0, "legging": 0, "accounting_mismatches": 0, "campaign_stops": "R4: 1 (08:21Z venue 429 on a read-only preflight GET with a leg held; root-caused and bounded in 43777804)"} | met |
-| G7 the rung's daily stop (-$15) never touched | {"r4_net": 2.1437} | met |
+| G7 the rung's daily stop (-$15) never touched | {"r4_net": 0.1525} | met |
 
 proposed gates for any promotion; G1 stays NOT met until the at-size per-market mean is positive by more than its standard error; the owner decides, nothing is promoted by this file
 
 ## I. Capacity model (conditional)
 
-CONDITIONAL -- the owner's precondition (positive realized expectancy measured) is NOT met on 5 at-size markets; this is the model's structure with observed inputs, not a plan. Inputs: {"r4_turnover_per_market": 9.308, "r4_capital_hours_per_market_first_fill_bound": 7.175, "market_hours_per_market_ESTIMATE": 0.77, "universe_in_distribution_markets_at_11_09Z": 257, "universe_two_sided_in_band": 100, "bankroll_usd": 109.0}
+CONDITIONAL -- the owner's precondition (positive realized expectancy measured) is NOT met on 5 at-size markets; this is the model's structure with observed inputs, not a plan. Inputs: {"r4_turnover_per_market": 6.869, "r4_capital_hours_per_market_first_fill_bound": 5.516, "market_hours_per_market_ESTIMATE": 0.8, "universe_in_distribution_markets_at_11_09Z": 257, "universe_two_sided_in_band": 100, "bankroll_usd": 109.0}
 
 | $ / day | markets / day at R4 size | or size x at 3 markets / day | sequential hours needed | feasible in 24 h | worst-case residual / day | expected net at R4 ratio (EST) | expected net at all-at-size ratio (EST) |
 |---|---|---|---|---|---|---|---|
-| 25 | 2.7 | 0.9 | 2.1 | True | 6.71 | 2.88 | 0.29 |
-| 100 | 10.7 | 3.6 | 8.3 | True | 26.86 | 11.52 | 1.15 |
-| 480 | 51.6 | 17.2 | 39.8 | False | 128.92 | 55.27 | 5.53 |
+| 25 | 3.6 | 1.2 | 2.9 | True | 9.1 | 0.18 | -0.62 |
+| 100 | 14.6 | 4.9 | 11.7 | True | 36.39 | 0.74 | -2.49 |
+| 480 | 69.9 | 23.3 | 56.1 | False | 174.69 | 3.55 | -11.97 |
 
 ## J. opportunity_utilization, capital recycling, early ramp, next rung (OWNER 5570456323 / 5570474405)
 

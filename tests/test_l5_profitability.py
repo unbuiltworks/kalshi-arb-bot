@@ -37,15 +37,16 @@ def test_break_even_table_has_seven_rows_and_the_four_classes_in_order():
     assert all(r["liquidity_rewards_per_pair"] == 0.0 for r in rows)
 
 
-def test_operating_envelope_fails_closed_on_five_markets():
+def test_operating_envelope_fails_closed_on_six_markets():
+    # six at-size markets once R4 market 3 settled (2026-09-07 18:49Z)
     env = pf.operating_envelope(_sb())
-    assert env["at_size_markets"] == 5
+    assert env["at_size_markets"] == 6
     assert env["rankable_regimes"] == []
     for key, table in env["regimes"].items():
         for v in table.values():
             assert v["status"].startswith("INSUFFICIENT")
     at = env["all_at_size"]
-    assert at["markets"] == 5 and at["se_net_per_market"] > abs(at["mean_net_per_market"])
+    assert at["markets"] == 6 and at["se_net_per_market"] > abs(at["mean_net_per_market"])
 
 
 def test_gates_do_not_pass_g1_without_a_sign_on_the_mean():
@@ -54,7 +55,7 @@ def test_gates_do_not_pass_g1_without_a_sign_on_the_mean():
     h = pf.profitability_gates(sb, env)
     g1 = h["gates"][0]
     assert g1["met"] is False and h["all_met"] is False
-    assert g1["have"]["markets"] == 5
+    assert g1["have"]["markets"] == 6
 
 
 def test_levers_promote_nothing_and_carry_worst_cases():
