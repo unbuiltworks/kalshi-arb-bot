@@ -49,6 +49,11 @@ COPY src/pmus_spring_evidence_transfer.py src/pmus_spring_evidence_transfer.py
 COPY src/pmus_spring_shadow_replay.py src/pmus_spring_shadow_replay.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
 COPY src/pmus_sports_l5_decision.py src/pmus_sports_l5_decision.py
+# venue-served GAME POSITION (period/clock/score) for the live sports slate.
+# One bounded keyless GET, cached; REPORTED per candidate and fed to the
+# diagnostic pair_score only -- the candidate ORDER stays L5-state fit
+# (OWNER 5556232035 #3). Carries no credentials and no order path.
+COPY src/pmus_event_progress.py src/pmus_event_progress.py
 COPY src/polymarket_l5/__init__.py src/polymarket_l5/__init__.py
 COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
 COPY src/polymarket_l5/action_model.py src/polymarket_l5/action_model.py

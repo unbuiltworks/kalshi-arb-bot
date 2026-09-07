@@ -385,7 +385,7 @@ PAIR_SCORE_WEIGHTS = {
 
 
 def pair_score(row: Mapping[str, Any], mv: Mapping[str, Any],
-               now: float) -> dict:
+               now: float, progress: Optional[Mapping[str, Any]] = None) -> dict:
     """0..1 composite for the ranking (higher = better pair prospects),
     with every component reported so the selection log shows WHY."""
     bid, ask = _f(row.get("bid")), _f(row.get("ask"))
@@ -408,6 +408,24 @@ def pair_score(row: Mapping[str, Any], mv: Mapping[str, Any],
             hours = max(0.0, (dt.timestamp() - now) / 3600.0)
         except (ValueError, TypeError):
             hours = None
+    # residual_duration wants "how soon does this position resolve". endDate
+    # cannot answer it: measured live 2026-09-07T02:47Z, all three CFB
+    # markets the campaign traded served gameStartTime 2026-09-06T23:30Z and
+    # endDate 2026-09-20T23:30Z -- a fixed +14d CONTRACT EXPIRY, identical
+    # across markets, which fed through 1-hours/24 is 0.0 for every live
+    # sports market. The component was a constant. The venue's own live-event
+    # feed serves game position (period/clock/score), so prefer it and keep
+    # endDate only as the fallback it always was.
+    prox = (progress or {}).get("game_proximity")
+    if prox is not None:
+        residual_duration = max(0.0, min(1.0, float(prox)))
+        horizon_basis = (progress or {}).get("proximity_basis")
+    elif hours is not None:
+        residual_duration = max(0.0, 1.0 - hours / 24.0)
+        horizon_basis = "market_endDate"
+    else:
+        residual_duration = 0.5
+        horizon_basis = "none"
     comp = {
         "two_sided_flow": 1.0 if row.get("two_sided_trades") else 0.0,
         "flow": min(_f(row.get("trades_1h")), 50.0) / 50.0,
@@ -417,8 +435,7 @@ def pair_score(row: Mapping[str, Any], mv: Mapping[str, Any],
         "on_distribution": (0.0 if mv.get("off_distribution")
                             else min(_f(mv.get("state_n")), 300.0) / 300.0),
         "depth": min(depth, 100.0) / 100.0,
-        "residual_duration": (0.5 if hours is None
-                              else max(0.0, 1.0 - hours / 24.0)),
+        "residual_duration": residual_duration,
         "feed_quality": (1.0 if row.get("collector_gaps") in (0, None, False)
                          else 0.5),
     }
@@ -428,6 +445,10 @@ def pair_score(row: Mapping[str, Any], mv: Mapping[str, Any],
             "pair_at_touch": (round(pair_at_touch, 4)
                               if pair_at_touch is not None else None),
             "hours_to_end": (round(hours, 2) if hours is not None else None),
+            "horizon_basis": horizon_basis,
+            "game_proximity": prox,
+            "game_period": (progress or {}).get("period"),
+            "game_clock": (progress or {}).get("clock"),
             "components": {k: round(v, 3) for k, v in comp.items()}}
 
 
@@ -470,6 +491,17 @@ def rank_candidates(status: Mapping[str, Any], now: float,
     from src import pmus_spring_evidence_transfer as xfer
     exclude = exclude or {}
     yield_by_slug = yield_by_slug or {}
+    # Venue-served game position for every live sports market, one bounded
+    # cached GET. REPORTED and fed to the (diagnostic) pair_score only: the
+    # candidate ORDER below is unchanged L5-state fit per OWNER 5556232035
+    # #3, and ordering by settlement proximity is a selection change that is
+    # the owner's to make, not one to slip in here.
+    try:
+        from src import pmus_event_progress as prog
+        progress_by_slug, progress_diag = prog.table(now=now)
+    except Exception as exc:                     # pragma: no cover
+        progress_by_slug, progress_diag = {}, {
+            "error": f"{type(exc).__name__}:{str(exc)[:80]}"}
     admitted, refused = [], []
     for row in status.get("spring_watch") or []:
         if not isinstance(row, Mapping) or not row.get("slug"):
@@ -486,7 +518,8 @@ def rank_candidates(status: Mapping[str, Any], now: float,
                 "probe_entry_action": row.get("probe_entry_action"),
                 "trades_1h": row.get("trades_1h"),
                 "two_sided_trades": row.get("two_sided_trades"),
-                **mv, **pair_score(row, mv, now)}
+                **mv, **pair_score(row, mv, now,
+                                   progress_by_slug.get(slug))}
         y = yield_by_slug.get(slug) or {}
         item["evidence_yield"] = ({k: y.get(k) for k in ("decisions", "in_distribution",
                                                          "eligible", "post_fill",
@@ -541,7 +574,7 @@ def rank_candidates(status: Mapping[str, Any], now: float,
         x["rank"] = i
         x["cfb"] = _is_cfb(x["slug"])
     return {"admitted": admitted, "refused": refused,
-            "status_t": status.get("t")}
+            "status_t": status.get("t"), "progress_diag": progress_diag}
 
 
 CFB_LEAGUE_TOKENS = frozenset({"cfb", "ncaaf", "ncaafb"})
@@ -571,6 +604,7 @@ def select_candidate(now: Optional[float] = None,
                          if entry._epoch(ranking["status_t"]) else None),
          n_rows=len(ranking["admitted"]) + len(ranking["refused"]),
          chosen=(chosen["slug"] if chosen else None),
+         game_progress=ranking.get("progress_diag"),
          yield_source=_yield_cache.get("source"),
          admitted=[{k: x.get(k) for k in ("rank", "slug", "bid", "ask",
                                           "bid_touch_qty", "state",
@@ -578,7 +612,9 @@ def select_candidate(now: Optional[float] = None,
                                           "relation_ranked",
                                           "probe_entry_action",
                                           "pair_score", "pair_at_touch",
-                                          "hours_to_end", "components",
+                                          "hours_to_end", "horizon_basis",
+                                          "game_proximity", "game_period",
+                                          "game_clock", "components",
                                           "evidence_yield", "yield_rate")}
                    for x in ranking["admitted"]],
          refused=[{"slug": x["slug"], "bid": x["bid"],
