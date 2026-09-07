@@ -1,0 +1,268 @@
+{
+ "rows": [
+  {
+   "id": "CB9XPCSEJQDQ",
+   "market": "tsc-cfb-lou-miss-2026-09-06-total-41pt5",
+   "qty": "3.1300",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0100",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9X0W1CPQDQ",
+   "market": "tsc-cfb-lou-miss-2026-09-06-total-41pt5",
+   "qty": "3.2800",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0100",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9WQKWDWQDQ",
+   "market": "tsc-cfb-lou-miss-2026-09-06-total-41pt5",
+   "qty": "3.2000",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0100",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9PARVBGQDQ",
+   "market": "asc-cfb-wisc-nd-2026-09-06-pos-10pt5",
+   "qty": "4.6400",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0100",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9P0RKPRQDQ",
+   "market": "asc-cfb-wisc-nd-2026-09-06-pos-10pt5",
+   "qty": "4.3300",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0100",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9NGEZ8RQDQ",
+   "market": "asc-cfb-wisc-nd-2026-09-06-pos-10pt5",
+   "qty": "5.1500",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9NEF96RQDQ",
+   "market": "asc-cfb-wisc-nd-2026-09-06-pos-10pt5",
+   "qty": "5.1500",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9JA91JAQDQ",
+   "market": "asc-cfb-lou-miss-2026-09-06-pos-6pt5",
+   "qty": "3.9000",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0100",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9H4G140QDQ",
+   "market": "tsc-cfb-lou-miss-2026-09-06-total-41pt5",
+   "qty": "5.6800",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9GV821TQDQ",
+   "market": "tsc-cfb-lou-miss-2026-09-06-total-41pt5",
+   "qty": "5.4300",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9G7F8BWQDQ",
+   "market": "asc-cfb-lou-miss-2026-09-06-pos-6pt5",
+   "qty": "5.6800",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9G5Z25WQDQ",
+   "market": "asc-cfb-lou-miss-2026-09-06-pos-6pt5",
+   "qty": "5.6800",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9FXVJ40QDQ",
+   "market": "asc-cfb-lou-miss-2026-09-06-pos-6pt5",
+   "qty": "5.3100",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9FR2PA2QDQ",
+   "market": "asc-cfb-lou-miss-2026-09-06-pos-6pt5",
+   "qty": "5.5500",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9F5ESXGQDQ",
+   "market": "tsc-cfb-lou-miss-2026-09-06-total-41pt5",
+   "qty": "5.4300",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB9F2SKD0QDQ",
+   "market": "tsc-cfb-lou-miss-2026-09-06-total-41pt5",
+   "qty": "5.4300",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CB95VJX54QDQ",
+   "market": "asc-cfb-lou-miss-2026-09-06-pos-6pt5",
+   "qty": "5.5500",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CBFJTHFQAQDQ",
+   "market": "aec-atpcq-aleher-tundur-2026-09-07",
+   "qty": "2.5200",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0100",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CBF0Z3D0MQDQ",
+   "market": "aec-atpcq-aleher-tundur-2026-09-07",
+   "qty": "3.7200",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0100",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CBF04N2SPQDQ",
+   "market": "aec-atpcq-aleher-tundur-2026-09-07",
+   "qty": "5.2000",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CBEZJSPYPQDQ",
+   "market": "aec-atpcq-aleher-tundur-2026-09-07",
+   "qty": "5.3100",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CBG2KBE5WQDQ",
+   "market": "aec-atpcq-norgom-ollwal-2026-09-07",
+   "qty": "5.0100",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CBFY2ZTCCQDQ",
+   "market": "aec-atpcq-norgom-ollwal-2026-09-07",
+   "qty": "4.9000",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CBFTQXA8TQDQ",
+   "market": "aec-atpcq-norgom-ollwal-2026-09-07",
+   "qty": "5.0000",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  },
+  {
+   "id": "CBFT62W06QDQ",
+   "market": "aec-atpcq-norgom-ollwal-2026-09-07",
+   "qty": "5.3100",
+   "our_side": "passiveExecution",
+   "our_commission": "-0.0200",
+   "credited_to_us": true,
+   "at_or_above_floor": true
+  }
+ ],
+ "by_market": {
+  "tsc-cfb-lou-miss-2026-09-06-total-41pt5": {
+   "prints": 7,
+   "qty": 31.58,
+   "credited_usd": 0.11000000000000001
+  },
+  "asc-cfb-wisc-nd-2026-09-06-pos-10pt5": {
+   "prints": 4,
+   "qty": 19.27,
+   "credited_usd": 0.06
+  },
+  "asc-cfb-lou-miss-2026-09-06-pos-6pt5": {
+   "prints": 6,
+   "qty": 31.67,
+   "credited_usd": 0.11000000000000001
+  },
+  "aec-atpcq-aleher-tundur-2026-09-07": {
+   "prints": 4,
+   "qty": 16.75,
+   "credited_usd": 0.06
+  },
+  "aec-atpcq-norgom-ollwal-2026-09-07": {
+   "prints": 4,
+   "qty": 20.22,
+   "credited_usd": 0.08
+  }
+ },
+ "audits": [
+  "2026-09-06T19:31:54.515359470Z",
+  "2026-09-07T02:09:06.924027864Z",
+  "2026-09-07T02:26:11.332749843Z",
+  "2026-09-07T02:32:34.511037062Z",
+  "2026-09-07T02:32:34.511037062Z",
+  "2026-09-07T07:09:52.264162563Z",
+  "2026-09-07T08:06:04.657687296Z",
+  "2026-09-07T08:06:04.657687296Z",
+  "2026-09-07T09:01:44.373547378Z",
+  "2026-09-07T10:01:46.691111173Z"
+ ]
+}

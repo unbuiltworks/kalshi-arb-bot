@@ -1,0 +1,1684 @@
+{
+ "A_scoreboard": {
+  "all": {
+   "capital_hours_first_fill_bound": 95.518,
+   "fees_usd": 0.0,
+   "liquidity_rewards_usd": 0.0,
+   "markets": 25,
+   "markets_with_venue_realized": 10,
+   "matched_share_of_bought": 0.8289,
+   "net_per_capital_hour": 0.00547,
+   "net_per_turnover": 0.00966,
+   "net_usd": 0.5222,
+   "pair_contribution_usd": 5.5644,
+   "rebate_per_filled_usd": 0.00777,
+   "rebates_credited_usd": 0.42,
+   "residual_contribution_usd": -5.4813,
+   "turnover_usd": 54.0669
+  },
+  "by_cohort": {
+   "R1": {
+    "capital_hours_first_fill_bound": 0.394,
+    "fees_usd": 0.0,
+    "liquidity_rewards_usd": 0.0,
+    "markets": 11,
+    "markets_with_venue_realized": 4,
+    "matched_share_of_bought": 0.8454,
+    "net_per_capital_hour": -0.02919,
+    "net_per_turnover": -0.0261,
+    "net_usd": -0.0115,
+    "pair_contribution_usd": 0.0316,
+    "rebate_per_filled_usd": 0.0,
+    "rebates_credited_usd": 0.0,
+    "residual_contribution_usd": -0.0622,
+    "turnover_usd": 0.4406
+   },
+   "R2C": {
+    "capital_hours_first_fill_bound": 0.206,
+    "fees_usd": 0.0,
+    "liquidity_rewards_usd": 0.0,
+    "markets": 6,
+    "markets_with_venue_realized": 2,
+    "matched_share_of_bought": 0.7917,
+    "net_per_capital_hour": -0.10583,
+    "net_per_turnover": -0.10293,
+    "net_usd": -0.0218,
+    "pair_contribution_usd": 0.0132,
+    "rebate_per_filled_usd": 0.0,
+    "rebates_credited_usd": 0.0,
+    "residual_contribution_usd": -0.035,
+    "turnover_usd": 0.2118
+   },
+   "R2C2": {
+    "capital_hours_first_fill_bound": 0.156,
+    "fees_usd": 0.0,
+    "liquidity_rewards_usd": 0.0,
+    "markets": 3,
+    "markets_with_venue_realized": 2,
+    "matched_share_of_bought": 0.5,
+    "net_per_capital_hour": -0.37179,
+    "net_per_turnover": -0.36709,
+    "net_usd": -0.058,
+    "pair_contribution_usd": 0.0082,
+    "rebate_per_filled_usd": 0.0,
+    "rebates_credited_usd": 0.0,
+    "residual_contribution_usd": -0.0662,
+    "turnover_usd": 0.158
+   },
+   "R3L": {
+    "capital_hours_first_fill_bound": 80.411,
+    "fees_usd": 0.0,
+    "liquidity_rewards_usd": 0.0,
+    "markets": 3,
+    "markets_with_venue_realized": 1,
+    "matched_share_of_bought": 0.7731,
+    "net_per_capital_hour": -0.01903,
+    "net_per_turnover": -0.04417,
+    "net_usd": -1.5302,
+    "pair_contribution_usd": 4.4753,
+    "rebate_per_filled_usd": 0.00808,
+    "rebates_credited_usd": 0.28,
+    "residual_contribution_usd": -6.2855,
+    "turnover_usd": 34.6402
+   },
+   "R4": {
+    "capital_hours_first_fill_bound": 14.351,
+    "fees_usd": 0.0,
+    "liquidity_rewards_usd": 0.0,
+    "markets": 2,
+    "markets_with_venue_realized": 1,
+    "matched_share_of_bought": 0.9528,
+    "net_per_capital_hour": 0.14938,
+    "net_per_turnover": 0.11515,
+    "net_usd": 2.1437,
+    "pair_contribution_usd": 1.0361,
+    "rebate_per_filled_usd": 0.00752,
+    "rebates_credited_usd": 0.14,
+    "residual_contribution_usd": 0.9676,
+    "turnover_usd": 18.6163
+   }
+  },
+  "coverage": {
+   "campaign_starts_seen": {
+    "R1-EVIDENCE-CONTINUATION-2026-09-06": "2026-09-06T15:52:18.443317734Z",
+    "R2C-RUN-2026-09-06": "2026-09-06T19:31:11.623585366Z",
+    "R2C2-RUN-2026-09-06": "2026-09-06T23:32:22.750608772Z",
+    "R3L-RUN-2026-09-06": "2026-09-07T01:21:25.891390053Z"
+   },
+   "markets": 25,
+   "venue_realized_only": [
+    "aec-mlb-wsh-lad-2026-09-05",
+    "asc-cfb-ntx-ind-2026-09-05-pos-39pt5"
+   ],
+   "with_settlement_breakdown": 23
+  },
+  "path": "analysis/l5/l5_economic_scoreboard.json"
+ },
+ "B_operating_envelope": {
+  "all_at_size": {
+   "markets": 5,
+   "mean_net_per_market": 0.1227,
+   "net_per_capital_hour": 0.00647,
+   "net_per_turnover": 0.01152,
+   "net_usd": 0.6135,
+   "pair_usd": 5.5114,
+   "rebate_usd": 0.42,
+   "residual_usd": -5.3179,
+   "se_net_per_market": 1.6824,
+   "status": "RANKABLE",
+   "turnover_usd": 53.2565,
+   "venue_realized_markets": 2,
+   "worst_market_net": -6.2255
+  },
+  "all_markets": {
+   "markets": 25,
+   "mean_net_per_market": 0.0209,
+   "net_per_capital_hour": 0.00547,
+   "net_per_turnover": 0.00966,
+   "net_usd": 0.5222,
+   "pair_usd": 5.5644,
+   "rebate_usd": 0.42,
+   "residual_usd": -5.4813,
+   "se_net_per_market": 0.3073,
+   "status": "RANKABLE",
+   "turnover_usd": 54.0669,
+   "venue_realized_markets": 10,
+   "worst_market_net": -6.2255
+  },
+  "at_size_markets": 5,
+  "labels": "regimes ranked by net per filled dollar; a regime is RANKABLE only with >= 5 at-size markets and >= $10 turnover, otherwise INSUFFICIENT and not ranked; se_net_per_market is the standard error of the per-market net (n-1)",
+  "micro_cohorts_note": "20 markets at $0.05-$0.50 per market: prints below the venue's rebate floor, turnover $0.81, net $-0.0913 -- shape evidence only, not economics at size",
+  "rankable_regimes": [],
+  "regimes": {
+   "category": {
+    "football": {
+     "markets": 3,
+     "mean_net_per_market": -0.5101,
+     "net_per_capital_hour": -0.01903,
+     "net_per_turnover": -0.04417,
+     "net_usd": -1.5302,
+     "pair_usd": 4.4753,
+     "rebate_usd": 0.28,
+     "residual_usd": -6.2855,
+     "se_net_per_market": 2.9345,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 34.6402,
+     "venue_realized_markets": 1,
+     "worst_market_net": -6.2255
+    },
+    "tennis": {
+     "markets": 2,
+     "mean_net_per_market": 1.0718,
+     "net_per_capital_hour": 0.14938,
+     "net_per_turnover": 0.11515,
+     "net_usd": 2.1437,
+     "pair_usd": 1.0361,
+     "rebate_usd": 0.14,
+     "residual_usd": 0.9676,
+     "se_net_per_market": 0.9836,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 18.6163,
+     "venue_realized_markets": 1,
+     "worst_market_net": 0.0882
+    }
+   },
+   "cohort": {
+    "R1": {
+     "markets": 11,
+     "mean_net_per_market": -0.001,
+     "net_per_capital_hour": -0.02919,
+     "net_per_turnover": -0.0261,
+     "net_usd": -0.0115,
+     "pair_usd": 0.0316,
+     "rebate_usd": 0.0,
+     "residual_usd": -0.0622,
+     "se_net_per_market": 0.0053,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 0.4406,
+     "venue_realized_markets": 4,
+     "worst_market_net": -0.048
+    },
+    "R2C": {
+     "markets": 6,
+     "mean_net_per_market": -0.0036,
+     "net_per_capital_hour": -0.10583,
+     "net_per_turnover": -0.10293,
+     "net_usd": -0.0218,
+     "pair_usd": 0.0132,
+     "rebate_usd": 0.0,
+     "residual_usd": -0.035,
+     "se_net_per_market": 0.0038,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 0.2118,
+     "venue_realized_markets": 2,
+     "worst_market_net": -0.0174
+    },
+    "R2C2": {
+     "markets": 3,
+     "mean_net_per_market": -0.0193,
+     "net_per_capital_hour": -0.37179,
+     "net_per_turnover": -0.36709,
+     "net_usd": -0.058,
+     "pair_usd": 0.0082,
+     "rebate_usd": 0.0,
+     "residual_usd": -0.0662,
+     "se_net_per_market": 0.0146,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 0.158,
+     "venue_realized_markets": 2,
+     "worst_market_net": -0.0416
+    },
+    "R3L": {
+     "markets": 3,
+     "mean_net_per_market": -0.5101,
+     "net_per_capital_hour": -0.01903,
+     "net_per_turnover": -0.04417,
+     "net_usd": -1.5302,
+     "pair_usd": 4.4753,
+     "rebate_usd": 0.28,
+     "residual_usd": -6.2855,
+     "se_net_per_market": 2.9345,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 34.6402,
+     "venue_realized_markets": 1,
+     "worst_market_net": -6.2255
+    },
+    "R4": {
+     "markets": 2,
+     "mean_net_per_market": 1.0718,
+     "net_per_capital_hour": 0.14938,
+     "net_per_turnover": 0.11515,
+     "net_usd": 2.1437,
+     "pair_usd": 1.0361,
+     "rebate_usd": 0.14,
+     "residual_usd": 0.9676,
+     "se_net_per_market": 0.9836,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 18.6163,
+     "venue_realized_markets": 1,
+     "worst_market_net": 0.0882
+    }
+   },
+   "league": {
+    "atpcq": {
+     "markets": 2,
+     "mean_net_per_market": 1.0718,
+     "net_per_capital_hour": 0.14938,
+     "net_per_turnover": 0.11515,
+     "net_usd": 2.1437,
+     "pair_usd": 1.0361,
+     "rebate_usd": 0.14,
+     "residual_usd": 0.9676,
+     "se_net_per_market": 0.9836,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 18.6163,
+     "venue_realized_markets": 1,
+     "worst_market_net": 0.0882
+    },
+    "cfb": {
+     "markets": 3,
+     "mean_net_per_market": -0.5101,
+     "net_per_capital_hour": -0.01903,
+     "net_per_turnover": -0.04417,
+     "net_usd": -1.5302,
+     "pair_usd": 4.4753,
+     "rebate_usd": 0.28,
+     "residual_usd": -6.2855,
+     "se_net_per_market": 2.9345,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 34.6402,
+     "venue_realized_markets": 1,
+     "worst_market_net": -6.2255
+    }
+   },
+   "price_band": {
+    "p0.35-0.45": {
+     "markets": 2,
+     "mean_net_per_market": 2.7792,
+     "net_per_capital_hour": 0.14498,
+     "net_per_turnover": 0.26081,
+     "net_usd": 5.5583,
+     "pair_usd": 4.4207,
+     "rebate_usd": 0.17,
+     "residual_usd": 0.9676,
+     "se_net_per_market": 0.7237,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 21.3117,
+     "venue_realized_markets": 1,
+     "worst_market_net": 2.0555
+    },
+    "p0.45-0.55": {
+     "markets": 2,
+     "mean_net_per_market": 0.6403,
+     "net_per_capital_hour": 0.02628,
+     "net_per_turnover": 0.04991,
+     "net_usd": 1.2807,
+     "pair_usd": 1.0907,
+     "rebate_usd": 0.19,
+     "residual_usd": 0.0,
+     "se_net_per_market": 0.5521,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 25.6593,
+     "venue_realized_markets": 0,
+     "worst_market_net": 0.0882
+    },
+    "p<0.35": {
+     "markets": 1,
+     "mean_net_per_market": -6.2255,
+     "net_per_capital_hour": -0.81019,
+     "net_per_turnover": -0.99045,
+     "net_usd": -6.2255,
+     "pair_usd": 0.0,
+     "rebate_usd": 0.06,
+     "residual_usd": -6.2855,
+     "se_net_per_market": null,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 6.2855,
+     "venue_realized_markets": 1,
+     "worst_market_net": -6.2255
+    }
+   },
+   "resolution_side": {
+    "None": {
+     "markets": 3,
+     "mean_net_per_market": 1.5945,
+     "net_per_capital_hour": 0.06016,
+     "net_per_turnover": 0.12406,
+     "net_usd": 4.7835,
+     "pair_usd": 4.4835,
+     "rebate_usd": 0.3,
+     "residual_usd": 0.0,
+     "se_net_per_market": 1.006,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 38.5565,
+     "venue_realized_markets": 0,
+     "worst_market_net": 0.0882
+    },
+    "POSITION_RESOLUTION_SIDE_LONG": {
+     "markets": 1,
+     "mean_net_per_market": 2.0555,
+     "net_per_capital_hour": 0.2716,
+     "net_per_turnover": 0.24428,
+     "net_usd": 2.0555,
+     "pair_usd": 1.0279,
+     "rebate_usd": 0.06,
+     "residual_usd": 0.9676,
+     "se_net_per_market": null,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 8.4145,
+     "venue_realized_markets": 1,
+     "worst_market_net": 2.0555
+    },
+    "POSITION_RESOLUTION_SIDE_SHORT": {
+     "markets": 1,
+     "mean_net_per_market": -6.2255,
+     "net_per_capital_hour": -0.81019,
+     "net_per_turnover": -0.99045,
+     "net_usd": -6.2255,
+     "pair_usd": 0.0,
+     "rebate_usd": 0.06,
+     "residual_usd": -6.2855,
+     "se_net_per_market": null,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 6.2855,
+     "venue_realized_markets": 1,
+     "worst_market_net": -6.2255
+    }
+   },
+   "shape": {
+    "match_winner": {
+     "markets": 2,
+     "mean_net_per_market": 1.0718,
+     "net_per_capital_hour": 0.14938,
+     "net_per_turnover": 0.11515,
+     "net_usd": 2.1437,
+     "pair_usd": 1.0361,
+     "rebate_usd": 0.14,
+     "residual_usd": 0.9676,
+     "se_net_per_market": 0.9836,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 18.6163,
+     "venue_realized_markets": 1,
+     "worst_market_net": 0.0882
+    },
+    "spread": {
+     "markets": 2,
+     "mean_net_per_market": -2.5165,
+     "net_per_capital_hour": -0.10139,
+     "net_per_turnover": -0.23148,
+     "net_usd": -5.033,
+     "pair_usd": 1.0825,
+     "rebate_usd": 0.17,
+     "residual_usd": -6.2855,
+     "se_net_per_market": 3.709,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 21.743,
+     "venue_realized_markets": 1,
+     "worst_market_net": -6.2255
+    },
+    "total": {
+     "markets": 1,
+     "mean_net_per_market": 3.5028,
+     "net_per_capital_hour": 0.11384,
+     "net_per_turnover": 0.27159,
+     "net_usd": 3.5028,
+     "pair_usd": 3.3928,
+     "rebate_usd": 0.11,
+     "residual_usd": 0.0,
+     "se_net_per_market": null,
+     "status": "INSUFFICIENT (fail closed: < 5 markets or < $10 turnover)",
+     "turnover_usd": 12.8972,
+     "venue_realized_markets": 0,
+     "worst_market_net": 3.5028
+    }
+   }
+  }
+ },
+ "C_selector": {
+  "labels": "no selector change is made here",
+  "status": "not a directional model; the campaign's own pair_score + frozen model view rank L5-process suitability; the read-only universe pre-rank (pmus_universe_rank.json) found 17 of the top-25 in-distribution live markets absent from the probe's pool; R4 keeps one active market"
+ },
+ "D_residual_cap_curves": {
+  "bounded_for_bankroll": {
+   "bankroll_usd": 109.0,
+   "cap_units_whose_worst_case_market_stays_under_7_50": [
+    "1.0_units",
+    "1.5_units",
+    "2.0_units",
+    "3.0_units"
+   ],
+   "reading": "at $2.50 per action the per-market spend cap ($7.50) is 3 units; 1 unit maximizes income per dollar of peak residual (0.186), 3 units keeps ~58% of L5's actions at ~99% of the uncapped total with a third of the peak"
+  },
+  "l5_curve": [
+   {
+    "cap": "uncapped",
+    "fidelity_kept_share": 1.0,
+    "fills": 71982,
+    "income_per_dollar_of_peak_residual": 0.1604,
+    "kept": 71982,
+    "labels": "pair_pnl derived from fills; rebate ESTIMATED at the published rate; residual settled at the actual outcome; nothing realized",
+    "matched_qty": "648021.61",
+    "pair_pnl_usd": "21442.28",
+    "peak_unmatched_usd": {
+     "max": 464.96,
+     "mean": 68.99,
+     "n": 2216,
+     "p10": 6.75,
+     "p25": 18.54,
+     "p50": 43.75,
+     "p75": 99.65,
+     "p90": 180.82,
+     "p95": 217.65,
+     "p99": 279.78
+    },
+    "rebate_est_usd": "3071.80",
+    "refused": 0,
+    "relation_mix_kept": {
+     "complete": 0.4721,
+     "extend": 0.4942,
+     "open": 0.0337
+    },
+    "relation_mix_l1_vs_uncapped": 0.0,
+    "residual_loss_usd": {
+     "max": -0.03,
+     "mean": -37.94,
+     "n": 1098,
+     "p10": -104.9,
+     "p25": -48.85,
+     "p50": -16.18,
+     "p75": -4.12,
+     "p90": -1.0,
+     "p95": -0.61,
+     "p99": -0.11
+    },
+    "residual_pnl_per_window_usd": {
+     "max": 528.84,
+     "mean": -8.44,
+     "n": 2216,
+     "p10": -58.53,
+     "p25": -16.01,
+     "p50": 0.0,
+     "p75": 10.97,
+     "p90": 29.83,
+     "p95": 47.56,
+     "p99": 101.69
+    },
+    "residual_pnl_usd": "-18702.71",
+    "spent_usd": "724712.72",
+    "total_pnl_usd": "5811.37",
+    "worst_case_peak_unmatched_usd": 464.96
+   },
+   {
+    "cap": "1.0_units",
+    "fidelity_kept_share": 0.3101,
+    "fills": 71982,
+    "income_per_dollar_of_peak_residual": 0.1859,
+    "kept": 22325,
+    "labels": "pair_pnl derived from fills; rebate ESTIMATED at the published rate; residual settled at the actual outcome; nothing realized",
+    "matched_qty": "92039.97",
+    "pair_pnl_usd": "3881.89",
+    "peak_unmatched_usd": {
+     "max": 76.8,
+     "mean": 10.47,
+     "n": 2216,
+     "p10": 1.56,
+     "p25": 3.35,
+     "p50": 6.0,
+     "p75": 14.42,
+     "p90": 26.0,
+     "p95": 34.0,
+     "p99": 45.0
+    },
+    "rebate_est_usd": "430.66",
+    "refused": 49657,
+    "relation_mix_kept": {
+     "complete": 0.5368,
+     "extend": 0.3527,
+     "open": 0.1105
+    },
+    "relation_mix_l1_vs_uncapped": 0.4981,
+    "residual_loss_usd": {
+     "max": -0.0,
+     "mean": -4.55,
+     "n": 1333,
+     "p10": -10.82,
+     "p25": -5.7,
+     "p50": -2.96,
+     "p75": -1.27,
+     "p90": -0.54,
+     "p95": -0.27,
+     "p99": -0.05
+    },
+    "residual_pnl_per_window_usd": {
+     "max": 209.11,
+     "mean": -0.44,
+     "n": 2216,
+     "p10": -7.97,
+     "p25": -3.61,
+     "p50": -0.95,
+     "p75": 1.68,
+     "p90": 7.5,
+     "p95": 12.68,
+     "p99": 26.03
+    },
+    "residual_pnl_usd": "-981.40",
+    "spent_usd": "104201.15",
+    "total_pnl_usd": "3331.15",
+    "worst_case_peak_unmatched_usd": 76.8
+   },
+   {
+    "cap": "1.5_units",
+    "fidelity_kept_share": 0.3957,
+    "fills": 71982,
+    "income_per_dollar_of_peak_residual": 0.1529,
+    "kept": 28480,
+    "labels": "pair_pnl derived from fills; rebate ESTIMATED at the published rate; residual settled at the actual outcome; nothing realized",
+    "matched_qty": "137521.80",
+    "pair_pnl_usd": "4084.43",
+    "peak_unmatched_usd": {
+     "max": 82.3,
+     "mean": 13.95,
+     "n": 2216,
+     "p10": 2.2,
+     "p25": 4.6,
+     "p50": 8.68,
+     "p75": 20.07,
+     "p90": 34.5,
+     "p95": 41.96,
+     "p99": 53.47
+    },
+    "rebate_est_usd": "641.17",
+    "refused": 43502,
+    "relation_mix_kept": {
+     "complete": 0.5292,
+     "extend": 0.3828,
+     "open": 0.088
+    },
+    "relation_mix_l1_vs_uncapped": 0.4502,
+    "residual_loss_usd": {
+     "max": -0.0,
+     "mean": -5.88,
+     "n": 1296,
+     "p10": -13.46,
+     "p25": -7.64,
+     "p50": -4.09,
+     "p75": -1.61,
+     "p90": -0.73,
+     "p95": -0.44,
+     "p99": -0.06
+    },
+    "residual_pnl_per_window_usd": {
+     "max": 268.21,
+     "mean": -0.52,
+     "n": 2216,
+     "p10": -10.32,
+     "p25": -4.82,
+     "p50": -1.0,
+     "p75": 2.45,
+     "p90": 9.74,
+     "p95": 15.5,
+     "p99": 30.64
+    },
+    "residual_pnl_usd": "-1161.11",
+    "spent_usd": "154738.03",
+    "total_pnl_usd": "3564.49",
+    "worst_case_peak_unmatched_usd": 82.3
+   },
+   {
+    "cap": "2.0_units",
+    "fidelity_kept_share": 0.4637,
+    "fills": 71982,
+    "income_per_dollar_of_peak_residual": 0.1253,
+    "kept": 33375,
+    "labels": "pair_pnl derived from fills; rebate ESTIMATED at the published rate; residual settled at the actual outcome; nothing realized",
+    "matched_qty": "183893.99",
+    "pair_pnl_usd": "4808.88",
+    "peak_unmatched_usd": {
+     "max": 106.95,
+     "mean": 20.44,
+     "n": 2216,
+     "p10": 3.76,
+     "p25": 6.98,
+     "p50": 12.9,
+     "p75": 29.1,
+     "p90": 47.13,
+     "p95": 59.63,
+     "p99": 85.0
+    },
+    "rebate_est_usd": "866.00",
+    "refused": 38607,
+    "relation_mix_kept": {
+     "complete": 0.5188,
+     "extend": 0.4066,
+     "open": 0.0746
+    },
+    "relation_mix_l1_vs_uncapped": 0.3988,
+    "residual_loss_usd": {
+     "max": -0.02,
+     "mean": -8.18,
+     "n": 1262,
+     "p10": -18.33,
+     "p25": -10.75,
+     "p50": -5.66,
+     "p75": -2.44,
+     "p90": -0.89,
+     "p95": -0.5,
+     "p99": -0.1
+    },
+    "residual_pnl_per_window_usd": {
+     "max": 71.07,
+     "mean": -0.56,
+     "n": 2216,
+     "p10": -13.37,
+     "p25": -6.51,
+     "p50": -1.0,
+     "p75": 4.0,
+     "p90": 13.55,
+     "p95": 22.5,
+     "p99": 41.12
+    },
+    "residual_pnl_usd": "-1235.37",
+    "spent_usd": "210248.94",
+    "total_pnl_usd": "4439.51",
+    "worst_case_peak_unmatched_usd": 106.95
+   },
+   {
+    "cap": "3.0_units",
+    "fidelity_kept_share": 0.5764,
+    "fills": 71982,
+    "income_per_dollar_of_peak_residual": 0.1142,
+    "kept": 41488,
+    "labels": "pair_pnl derived from fills; rebate ESTIMATED at the published rate; residual settled at the actual outcome; nothing realized",
+    "matched_qty": "274784.50",
+    "pair_pnl_usd": "5561.27",
+    "peak_unmatched_usd": {
+     "max": 156.97,
+     "mean": 27.04,
+     "n": 2216,
+     "p10": 4.5,
+     "p25": 9.03,
+     "p50": 16.81,
+     "p75": 38.0,
+     "p90": 65.74,
+     "p95": 85.0,
+     "p99": 111.21
+    },
+    "rebate_est_usd": "1282.86",
+    "refused": 30494,
+    "relation_mix_kept": {
+     "complete": 0.5154,
+     "extend": 0.4254,
+     "open": 0.0592
+    },
+    "relation_mix_l1_vs_uncapped": 0.3421,
+    "residual_loss_usd": {
+     "max": -0.0,
+     "mean": -10.71,
+     "n": 1222,
+     "p10": -25.0,
+     "p25": -13.77,
+     "p50": -7.32,
+     "p75": -3.07,
+     "p90": -0.95,
+     "p95": -0.55,
+     "p99": -0.11
+    },
+    "residual_pnl_per_window_usd": {
+     "max": 265.41,
+     "mean": -0.49,
+     "n": 2216,
+     "p10": -17.4,
+     "p25": -8.22,
+     "p50": -0.9,
+     "p75": 6.15,
+     "p90": 17.88,
+     "p95": 27.97,
+     "p99": 50.63
+    },
+    "residual_pnl_usd": "-1087.48",
+    "spent_usd": "310818.27",
+    "total_pnl_usd": "5756.65",
+    "worst_case_peak_unmatched_usd": 156.97
+   },
+   {
+    "cap": "4.0_units",
+    "fidelity_kept_share": 0.6561,
+    "fills": 71982,
+    "income_per_dollar_of_peak_residual": 0.1097,
+    "kept": 47225,
+    "labels": "pair_pnl derived from fills; rebate ESTIMATED at the published rate; residual settled at the actual outcome; nothing realized",
+    "matched_qty": "345555.23",
+    "pair_pnl_usd": "6414.54",
+    "peak_unmatched_usd": {
+     "max": 223.25,
+     "mean": 32.99,
+     "n": 2216,
+     "p10": 4.75,
+     "p25": 10.72,
+     "p50": 20.83,
+     "p75": 45.06,
+     "p90": 81.48,
+     "p95": 102.3,
+     "p99": 143.64
+    },
+    "rebate_est_usd": "1605.91",
+    "refused": 24757,
+    "relation_mix_kept": {
+     "complete": 0.5068,
+     "extend": 0.4416,
+     "open": 0.0516
+    },
+    "relation_mix_l1_vs_uncapped": 0.297,
+    "residual_loss_usd": {
+     "max": -0.03,
+     "mean": -12.93,
+     "n": 1202,
+     "p10": -30.36,
+     "p25": -16.92,
+     "p50": -8.45,
+     "p75": -3.1,
+     "p90": -0.95,
+     "p95": -0.56,
+     "p99": -0.1
+    },
+    "residual_pnl_per_window_usd": {
+     "max": 265.41,
+     "mean": -0.61,
+     "n": 2216,
+     "p10": -20.62,
+     "p25": -9.5,
+     "p50": -0.8,
+     "p75": 7.33,
+     "p90": 21.3,
+     "p95": 33.14,
+     "p99": 60.8
+    },
+    "residual_pnl_usd": "-1344.80",
+    "spent_usd": "390414.92",
+    "total_pnl_usd": "6675.65",
+    "worst_case_peak_unmatched_usd": 223.25
+   }
+  ],
+  "our_curve": [
+   {
+    "cap": "uncapped",
+    "cap_usd": null,
+    "fidelity_kept_share": 1.0,
+    "fills": 28,
+    "income_per_dollar_of_peak_residual": 0.2502,
+    "kept": 28,
+    "labels": "pair_pnl derived from fills; rebate ESTIMATED at the published rate; residual settled at the actual outcome; nothing realized",
+    "matched_qty": "51.59",
+    "pair_pnl_usd": "5.51",
+    "peak_unmatched_usd": {
+     "max": 7.49,
+     "mean": 4.75,
+     "n": 5,
+     "p10": 2.5,
+     "p25": 2.5,
+     "p50": 4.98,
+     "p75": 6.29,
+     "p90": 7.49,
+     "p95": 7.49,
+     "p99": 7.49
+    },
+    "rebate_est_usd": "0.43",
+    "refused": 0,
+    "relation_mix_kept": {
+     "complete": 0.5,
+     "extend": 0.25,
+     "open": 0.25
+    },
+    "relation_mix_l1_vs_uncapped": 0.0,
+    "residual_loss_usd": {
+     "max": -6.29,
+     "mean": -6.29,
+     "n": 1,
+     "p10": -6.29,
+     "p25": -6.29,
+     "p50": -6.29,
+     "p75": -6.29,
+     "p90": -6.29,
+     "p95": -6.29,
+     "p99": -6.29
+    },
+    "residual_pnl_per_window_usd": {
+     "max": 0.97,
+     "mean": -1.06,
+     "n": 5,
+     "p10": -6.29,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 0.97,
+     "p95": 0.97,
+     "p99": 0.97
+    },
+    "residual_pnl_usd": "-5.32",
+    "spent_usd": "53.26",
+    "total_pnl_usd": "0.62",
+    "worst_case_peak_unmatched_usd": 7.49
+   },
+   {
+    "cap": "1.0_units",
+    "cap_usd": "2.500",
+    "fidelity_kept_share": 0.6786,
+    "fills": 28,
+    "income_per_dollar_of_peak_residual": 0.2376,
+    "kept": 19,
+    "labels": "pair_pnl derived from fills; rebate ESTIMATED at the published rate; residual settled at the actual outcome; nothing realized",
+    "matched_qty": "35.05",
+    "pair_pnl_usd": "2.52",
+    "peak_unmatched_usd": {
+     "max": 2.5,
+     "mean": 2.38,
+     "n": 5,
+     "p10": 1.91,
+     "p25": 2.5,
+     "p50": 2.5,
+     "p75": 2.5,
+     "p90": 2.5,
+     "p95": 2.5,
+     "p99": 2.5
+    },
+    "rebate_est_usd": "0.31",
+    "refused": 9,
+    "relation_mix_kept": {
+     "complete": 0.4211,
+     "extend": 0.2105,
+     "open": 0.3684
+    },
+    "relation_mix_l1_vs_uncapped": 0.5075,
+    "residual_loss_usd": {
+     "max": -1.91,
+     "mean": -1.91,
+     "n": 1,
+     "p10": -1.91,
+     "p25": -1.91,
+     "p50": -1.91,
+     "p75": -1.91,
+     "p90": -1.91,
+     "p95": -1.91,
+     "p99": -1.91
+    },
+    "residual_pnl_per_window_usd": {
+     "max": 0.97,
+     "mean": -0.19,
+     "n": 5,
+     "p10": -1.91,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 0.97,
+     "p95": 0.97,
+     "p99": 0.97
+    },
+    "residual_pnl_usd": "-0.94",
+    "spent_usd": "39.11",
+    "total_pnl_usd": "1.89",
+    "worst_case_peak_unmatched_usd": 2.5
+   },
+   {
+    "cap": "1.5_units",
+    "cap_usd": "3.750",
+    "fidelity_kept_share": 0.8214,
+    "fills": 28,
+    "income_per_dollar_of_peak_residual": 0.2196,
+    "kept": 23,
+    "labels": "pair_pnl derived from fills; rebate ESTIMATED at the published rate; residual settled at the actual outcome; nothing realized",
+    "matched_qty": "35.05",
+    "pair_pnl_usd": "2.80",
+    "peak_unmatched_usd": {
+     "max": 3.6,
+     "mean": 2.86,
+     "n": 5,
+     "p10": 2.5,
+     "p25": 2.5,
+     "p50": 2.74,
+     "p75": 2.99,
+     "p90": 3.6,
+     "p95": 3.6,
+     "p99": 3.6
+    },
+    "rebate_est_usd": "0.34",
+    "refused": 5,
+    "relation_mix_kept": {
+     "complete": 0.3478,
+     "extend": 0.3478,
+     "open": 0.3043
+    },
+    "relation_mix_l1_vs_uncapped": 0.2329,
+    "residual_loss_usd": {
+     "max": -2.99,
+     "mean": -2.99,
+     "n": 1,
+     "p10": -2.99,
+     "p25": -2.99,
+     "p50": -2.99,
+     "p75": -2.99,
+     "p90": -2.99,
+     "p95": -2.99,
+     "p99": -2.99
+    },
+    "residual_pnl_per_window_usd": {
+     "max": 0.97,
+     "mean": -0.4,
+     "n": 5,
+     "p10": -2.99,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 0.97,
+     "p95": 0.97,
+     "p99": 0.97
+    },
+    "residual_pnl_usd": "-2.02",
+    "spent_usd": "42.46",
+    "total_pnl_usd": "1.12",
+    "worst_case_peak_unmatched_usd": 3.6
+   },
+   {
+    "cap": "2.0_units",
+    "cap_usd": "5.000",
+    "fidelity_kept_share": 0.9286,
+    "fills": 28,
+    "income_per_dollar_of_peak_residual": 0.2407,
+    "kept": 26,
+    "labels": "pair_pnl derived from fills; rebate ESTIMATED at the published rate; residual settled at the actual outcome; nothing realized",
+    "matched_qty": "46.16",
+    "pair_pnl_usd": "4.38",
+    "peak_unmatched_usd": {
+     "max": 5.0,
+     "mean": 3.97,
+     "n": 5,
+     "p10": 2.5,
+     "p25": 2.5,
+     "p50": 4.89,
+     "p75": 4.98,
+     "p90": 5.0,
+     "p95": 5.0,
+     "p99": 5.0
+    },
+    "rebate_est_usd": "0.40",
+    "refused": 2,
+    "relation_mix_kept": {
+     "complete": 0.5,
+     "extend": 0.2308,
+     "open": 0.2692
+    },
+    "relation_mix_l1_vs_uncapped": 0.1099,
+    "residual_loss_usd": {
+     "max": -4.89,
+     "mean": -4.89,
+     "n": 1,
+     "p10": -4.89,
+     "p25": -4.89,
+     "p50": -4.89,
+     "p75": -4.89,
+     "p90": -4.89,
+     "p95": -4.89,
+     "p99": -4.89
+    },
+    "residual_pnl_per_window_usd": {
+     "max": 0.97,
+     "mean": -0.79,
+     "n": 5,
+     "p10": -4.89,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 0.97,
+     "p95": 0.97,
+     "p99": 0.97
+    },
+    "residual_pnl_usd": "-3.93",
+    "spent_usd": "49.37",
+    "total_pnl_usd": "0.85",
+    "worst_case_peak_unmatched_usd": 5.0
+   },
+   {
+    "cap": "3.0_units",
+    "cap_usd": "7.500",
+    "fidelity_kept_share": 1.0,
+    "fills": 28,
+    "income_per_dollar_of_peak_residual": 0.2502,
+    "kept": 28,
+    "labels": "pair_pnl derived from fills; rebate ESTIMATED at the published rate; residual settled at the actual outcome; nothing realized",
+    "matched_qty": "51.59",
+    "pair_pnl_usd": "5.51",
+    "peak_unmatched_usd": {
+     "max": 7.49,
+     "mean": 4.75,
+     "n": 5,
+     "p10": 2.5,
+     "p25": 2.5,
+     "p50": 4.98,
+     "p75": 6.29,
+     "p90": 7.49,
+     "p95": 7.49,
+     "p99": 7.49
+    },
+    "rebate_est_usd": "0.43",
+    "refused": 0,
+    "relation_mix_kept": {
+     "complete": 0.5,
+     "extend": 0.25,
+     "open": 0.25
+    },
+    "relation_mix_l1_vs_uncapped": 0.0,
+    "residual_loss_usd": {
+     "max": -6.29,
+     "mean": -6.29,
+     "n": 1,
+     "p10": -6.29,
+     "p25": -6.29,
+     "p50": -6.29,
+     "p75": -6.29,
+     "p90": -6.29,
+     "p95": -6.29,
+     "p99": -6.29
+    },
+    "residual_pnl_per_window_usd": {
+     "max": 0.97,
+     "mean": -1.06,
+     "n": 5,
+     "p10": -6.29,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 0.97,
+     "p95": 0.97,
+     "p99": 0.97
+    },
+    "residual_pnl_usd": "-5.32",
+    "spent_usd": "53.26",
+    "total_pnl_usd": "0.62",
+    "worst_case_peak_unmatched_usd": 7.49
+   },
+   {
+    "cap": "4.0_units",
+    "cap_usd": "10.000",
+    "fidelity_kept_share": 1.0,
+    "fills": 28,
+    "income_per_dollar_of_peak_residual": 0.2502,
+    "kept": 28,
+    "labels": "pair_pnl derived from fills; rebate ESTIMATED at the published rate; residual settled at the actual outcome; nothing realized",
+    "matched_qty": "51.59",
+    "pair_pnl_usd": "5.51",
+    "peak_unmatched_usd": {
+     "max": 7.49,
+     "mean": 4.75,
+     "n": 5,
+     "p10": 2.5,
+     "p25": 2.5,
+     "p50": 4.98,
+     "p75": 6.29,
+     "p90": 7.49,
+     "p95": 7.49,
+     "p99": 7.49
+    },
+    "rebate_est_usd": "0.43",
+    "refused": 0,
+    "relation_mix_kept": {
+     "complete": 0.5,
+     "extend": 0.25,
+     "open": 0.25
+    },
+    "relation_mix_l1_vs_uncapped": 0.0,
+    "residual_loss_usd": {
+     "max": -6.29,
+     "mean": -6.29,
+     "n": 1,
+     "p10": -6.29,
+     "p25": -6.29,
+     "p50": -6.29,
+     "p75": -6.29,
+     "p90": -6.29,
+     "p95": -6.29,
+     "p99": -6.29
+    },
+    "residual_pnl_per_window_usd": {
+     "max": 0.97,
+     "mean": -1.06,
+     "n": 5,
+     "p10": -6.29,
+     "p25": 0.0,
+     "p50": 0.0,
+     "p75": 0.0,
+     "p90": 0.97,
+     "p95": 0.97,
+     "p99": 0.97
+    },
+    "residual_pnl_usd": "-5.32",
+    "spent_usd": "53.26",
+    "total_pnl_usd": "0.62",
+    "worst_case_peak_unmatched_usd": 7.49
+   }
+  ],
+  "path": "analysis/l5/l5_cap_tradeoff_curve.json"
+ },
+ "E_turnover_mechanics": {
+  "l5_by_lane": {
+   "BTC-15m": {
+    "entered_next_before_settled": 0,
+    "flat_share_of_covered_days": 0.7674,
+    "p50_wait_after_settlement_s": 15,
+    "within_60s": 0.7698
+   },
+   "BTC-5m": {
+    "entered_next_before_settled": 0,
+    "flat_share_of_covered_days": 0.4865,
+    "p50_wait_after_settlement_s": 60,
+    "within_60s": 0.5005
+   },
+   "ETH-15m": {
+    "entered_next_before_settled": 0,
+    "flat_share_of_covered_days": 0.9061,
+    "p50_wait_after_settlement_s": 463,
+    "within_60s": 0.1481
+   },
+   "ETH-5m": {
+    "entered_next_before_settled": 0,
+    "flat_share_of_covered_days": 0.6282,
+    "p50_wait_after_settlement_s": 168,
+    "within_60s": 0.2393
+   }
+  },
+  "labels": "L5 numbers from the canonical history; ours from the R4 log rows",
+  "live_cadence_s": {
+   "aec-atpcq-aleher-tundur-2026-09-07": {
+    "max": 1803.3,
+    "mean": 37.1,
+    "n": 78,
+    "p50": 10.1,
+    "p90": 31.2
+   },
+   "aec-atpcq-norgom-ollwal-2026-09-07": {
+    "max": 61.4,
+    "mean": 20.0,
+    "n": 64,
+    "p50": 30.1,
+    "p90": 32.9
+   }
+  },
+  "top_execution_mismatches": [
+   {
+    "economics": "on L5's history the 1-unit cap keeps 31% of actions and 57% of the uncapped total (3331.15 of 5811.37) at 14% of the peak residual",
+    "executable": "a cap in action units > 1 or a smaller action; both are rung parameters, owner's call",
+    "l5": "EXTEND is 49.4% of L5 actions; a 1-action-unit cap refuses 98.4% of them; L5 keeps a residual of median 3.5 units peak",
+    "mismatch": "residual cap refuses L5's EXTENDs",
+    "ours": "44 of 54 live EXTEND draws refused (81.5%); acted extend share 0.022 vs L5 0.396",
+    "rank": 1
+   },
+   {
+    "executable": "recorder coverage / pool refresh (no rung parameter); universe pre-rank exists read-only",
+    "l5": "BTC-15m: p50 15s after settlement, 77% within 60 s, never before settlement; BTC-5m: p50 60s after settlement, 50% within 60 s, never before settlement; ETH-15m: p50 463s after settlement, 15% within 60 s, never before settlement; ETH-5m: p50 168s after settlement, 24% within 60 s, never before settlement",
+    "mismatch": "time between markets (capital idle)",
+    "ours": "R4 market 2 selected ~58 min after market 1's first fill; after market 2 settled (09:46Z) no candidate admitted for > 2 h (pool 80 rows: 73 resolved 09-06 markets, 7 thin-flow) while 257 in-distribution live markets existed on the public gateway",
+    "rank": 2
+   },
+   {
+    "executable": "size is a rung parameter (owner); patience study first",
+    "l5": "action unit p50 $8.47 (p25 $4.25); L5 patience not yet measured from public fills (OWNER 5569709706 #2 pending)",
+    "mismatch": "action size and resting patience",
+    "ours": "$2.50 per action (0.46-0.54 of L5 p50), 30 s rest deadline; live cadence p50 10.1, 30.1 s",
+    "rank": 3
+   }
+  ]
+ },
+ "F_break_even": {
+  "break_even_pair_cost_after_observed_rebate": 1.008,
+  "break_even_pair_cost_before_incentives": 1.0,
+  "labels": "pair contribution = 1 - pair cost per matched pair (cash, netted at match); rebate = venue-credited dollars per filled dollar x pair cost; liquidity rewards zero (none credited); fees zero (venue charged 0.00); R4 stays hard-capped at 1.00 -- the 1.01 row is informational, not authorized",
+  "observed_average_pair_costs_by_market": [
+   {
+    "avg_matched_pair_cost": 0.9725,
+    "cohort": "R1",
+    "matched_pairs": 0.01,
+    "net_basis": "venue_realized",
+    "net_usd": -0.0139,
+    "pair_contribution_usd": 0.000275,
+    "rebate_credited_usd": 0.0,
+    "slug": "aec-atp-facmen-hugdel-2026-09-06"
+   },
+   {
+    "avg_matched_pair_cost": 0.8833,
+    "cohort": "R1",
+    "matched_pairs": 0.12,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 0.014,
+    "pair_contribution_usd": 0.014,
+    "rebate_credited_usd": 0.0,
+    "slug": "aec-cs2-fokus-nemi-2026-09-06"
+   },
+   {
+    "avg_matched_pair_cost": 0.98,
+    "cohort": "R1",
+    "matched_pairs": 0.02,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 0.0004,
+    "pair_contribution_usd": 0.0004,
+    "rebate_credited_usd": 0.0,
+    "slug": "aec-itfme-maxhou-karben-2026-09-06"
+   },
+   {
+    "avg_matched_pair_cost": 0.94,
+    "cohort": "R1",
+    "matched_pairs": 0.08,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 0.0048,
+    "pair_contribution_usd": 0.0048,
+    "rebate_credited_usd": 0.0,
+    "slug": "aec-cs2-misa-mouzn-2026-09-06"
+   },
+   {
+    "avg_matched_pair_cost": 0.9133,
+    "cohort": "R1",
+    "matched_pairs": 0.06,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 0.0052,
+    "pair_contribution_usd": 0.0052,
+    "rebate_credited_usd": 0.0,
+    "slug": "aec-setkamecz-burvol-gasdav-2026-09-06"
+   },
+   {
+    "avg_matched_pair_cost": 0.925,
+    "cohort": "R1",
+    "matched_pairs": 0.04,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 0.003,
+    "pair_contribution_usd": 0.003,
+    "rebate_credited_usd": 0.0,
+    "slug": "aec-setkameua-salvas-tremyk-2026-09-06"
+   },
+   {
+    "avg_matched_pair_cost": 0.88,
+    "cohort": "R1",
+    "matched_pairs": 0.02,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 0.0024,
+    "pair_contribution_usd": 0.0024,
+    "rebate_credited_usd": 0.0,
+    "slug": "atc-lal-mal-lev-2026-09-06-draw"
+   },
+   {
+    "avg_matched_pair_cost": 0.975,
+    "cohort": "R1",
+    "matched_pairs": 0.06,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 0.0015,
+    "pair_contribution_usd": 0.0015,
+    "rebate_credited_usd": 0.0,
+    "slug": "tsc-mlb-mil-cin-2026-09-06-9pt5"
+   },
+   {
+    "avg_matched_pair_cost": 0.98,
+    "cohort": "R2C",
+    "matched_pairs": 0.01,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 0.0002,
+    "pair_contribution_usd": 0.0002,
+    "rebate_credited_usd": 0.0,
+    "slug": "tsc-mlb-atl-phi-2026-09-06-9pt5"
+   },
+   {
+    "avg_matched_pair_cost": 0.949,
+    "cohort": "R2C",
+    "matched_pairs": 0.1,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 0.0051,
+    "pair_contribution_usd": 0.0051,
+    "rebate_credited_usd": 0.0,
+    "slug": "aec-mlb-det-cle-2026-09-06"
+   },
+   {
+    "avg_matched_pair_cost": 0.8988,
+    "cohort": "R2C",
+    "matched_pairs": 0.02,
+    "net_basis": "venue_realized",
+    "net_usd": -0.0174,
+    "pair_contribution_usd": 0.002025,
+    "rebate_credited_usd": 0.0,
+    "slug": "tsc-cfb-txs-pvam-2026-09-06-total-57pt5"
+   },
+   {
+    "avg_matched_pair_cost": 0.885,
+    "cohort": "R2C",
+    "matched_pairs": 0.02,
+    "net_basis": "venue_realized",
+    "net_usd": -0.0133,
+    "pair_contribution_usd": 0.0023,
+    "rebate_credited_usd": 0.0,
+    "slug": "asc-mlb-tb-tex-2026-09-06-pos-2pt5"
+   },
+   {
+    "avg_matched_pair_cost": 0.72,
+    "cohort": "R2C",
+    "matched_pairs": 0.01,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 0.0028,
+    "pair_contribution_usd": 0.0028,
+    "rebate_credited_usd": 0.0,
+    "slug": "aec-setkameua-pitser-kimdmy-2026-09-06"
+   },
+   {
+    "avg_matched_pair_cost": 0.9733,
+    "cohort": "R2C",
+    "matched_pairs": 0.03,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 0.0008,
+    "pair_contribution_usd": 0.0008,
+    "rebate_credited_usd": 0.0,
+    "slug": "atc-bra-bot-pal-2026-09-06-pal"
+   },
+   {
+    "avg_matched_pair_cost": 0.918,
+    "cohort": "R2C2",
+    "matched_pairs": 0.1,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 0.0082,
+    "pair_contribution_usd": 0.0082,
+    "rebate_credited_usd": 0.0,
+    "slug": "atc-lmx-caz-san-2026-09-06-caz"
+   },
+   {
+    "avg_matched_pair_cost": 0.9346,
+    "cohort": "R3L",
+    "matched_pairs": 16.54,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 1.1925,
+    "pair_contribution_usd": 1.0825,
+    "rebate_credited_usd": 0.11,
+    "slug": "asc-cfb-lou-miss-2026-09-06-pos-6pt5"
+   },
+   {
+    "avg_matched_pair_cost": 0.7917,
+    "cohort": "R3L",
+    "matched_pairs": 16.29,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 3.5028,
+    "pair_contribution_usd": 3.3928,
+    "rebate_credited_usd": 0.11,
+    "slug": "tsc-cfb-lou-miss-2026-09-06-total-41pt5"
+   },
+   {
+    "avg_matched_pair_cost": 0.8798,
+    "cohort": "R4",
+    "matched_pairs": 8.55,
+    "net_basis": "venue_realized",
+    "net_usd": 2.0555,
+    "pair_contribution_usd": 1.0279247838616714,
+    "rebate_credited_usd": 0.06,
+    "slug": "aec-atpcq-aleher-tundur-2026-09-07"
+   },
+   {
+    "avg_matched_pair_cost": 0.9992,
+    "cohort": "R4",
+    "matched_pairs": 10.21,
+    "net_basis": "derived_matched_pairs_flat_account",
+    "net_usd": 0.0882,
+    "pair_contribution_usd": 0.0082,
+    "rebate_credited_usd": 0.08,
+    "slug": "aec-atpcq-norgom-ollwal-2026-09-07"
+   }
+  ],
+  "observed_rebate": {
+   "credited_per_share": 0.00338,
+   "credited_usd": 0.42,
+   "filled_usd": 53.2565,
+   "labels": "venue-credited only; earlier cohorts (< 1.62 shares per print) were credited 0.00",
+   "markets": 5,
+   "rate_per_filled_usd": 0.00789
+  },
+  "r4_hard_ceiling": 1.0,
+  "table": [
+   {
+    "class": "profitable before incentives",
+    "executable_under_r4": true,
+    "liquidity_rewards_per_pair": 0.0,
+    "net_after_observed_rebate": 0.0575,
+    "net_before_incentives": 0.05,
+    "pair_contribution_per_pair": 0.05,
+    "pair_cost": 0.95,
+    "rebate_observed_per_pair": 0.0075,
+    "rebate_published_rate_5sh_at_0_50_per_pair": 0.008
+   },
+   {
+    "class": "profitable before incentives",
+    "executable_under_r4": true,
+    "liquidity_rewards_per_pair": 0.0,
+    "net_after_observed_rebate": 0.04757,
+    "net_before_incentives": 0.04,
+    "pair_contribution_per_pair": 0.04,
+    "pair_cost": 0.96,
+    "rebate_observed_per_pair": 0.00757,
+    "rebate_published_rate_5sh_at_0_50_per_pair": 0.008
+   },
+   {
+    "class": "profitable before incentives",
+    "executable_under_r4": true,
+    "liquidity_rewards_per_pair": 0.0,
+    "net_after_observed_rebate": 0.03765,
+    "net_before_incentives": 0.03,
+    "pair_contribution_per_pair": 0.03,
+    "pair_cost": 0.97,
+    "rebate_observed_per_pair": 0.00765,
+    "rebate_published_rate_5sh_at_0_50_per_pair": 0.008
+   },
+   {
+    "class": "profitable before incentives",
+    "executable_under_r4": true,
+    "liquidity_rewards_per_pair": 0.0,
+    "net_after_observed_rebate": 0.02773,
+    "net_before_incentives": 0.02,
+    "pair_contribution_per_pair": 0.02,
+    "pair_cost": 0.98,
+    "rebate_observed_per_pair": 0.00773,
+    "rebate_published_rate_5sh_at_0_50_per_pair": 0.008
+   },
+   {
+    "class": "profitable before incentives",
+    "executable_under_r4": true,
+    "liquidity_rewards_per_pair": 0.0,
+    "net_after_observed_rebate": 0.01781,
+    "net_before_incentives": 0.01,
+    "pair_contribution_per_pair": 0.01,
+    "pair_cost": 0.99,
+    "rebate_observed_per_pair": 0.00781,
+    "rebate_published_rate_5sh_at_0_50_per_pair": 0.008
+   },
+   {
+    "class": "profitable only after the observed maker rebate",
+    "executable_under_r4": true,
+    "liquidity_rewards_per_pair": 0.0,
+    "net_after_observed_rebate": 0.00789,
+    "net_before_incentives": 0.0,
+    "pair_contribution_per_pair": 0.0,
+    "pair_cost": 1.0,
+    "rebate_observed_per_pair": 0.00789,
+    "rebate_published_rate_5sh_at_0_50_per_pair": 0.008
+   },
+   {
+    "class": "negative after the observed rebate; would need unproven liquidity rewards of 0.002 per pair -- NOT EXECUTABLE",
+    "executable_under_r4": false,
+    "liquidity_rewards_per_pair": 0.0,
+    "net_after_observed_rebate": -0.00203,
+    "net_before_incentives": -0.01,
+    "pair_contribution_per_pair": -0.01,
+    "pair_cost": 1.01,
+    "rebate_observed_per_pair": 0.00797,
+    "rebate_published_rate_5sh_at_0_50_per_pair": 0.008
+   }
+  ]
+ },
+ "G_levers": {
+  "basis": {
+   "at_size_markets": 5,
+   "labels": "ESTIMATE from 5 at-size markets with one $6.29 loser; the standard error is the point",
+   "mean_net_per_market": 0.1227,
+   "net_per_turnover_at_size": 0.01152,
+   "r3l_net_per_turnover": -0.04417,
+   "r4_net_per_turnover": 0.11515,
+   "se_net_per_market": 1.6824,
+   "turnover_per_market": 10.651
+  },
+  "labels": "levers evaluated independently; expected values are ESTIMATES from the scoreboard and L5's history; no automatic promotion",
+  "levers": [
+   {
+    "changes_risk_parameter": false,
+    "expected_range_1se": [
+     -4.68,
+     5.42
+    ],
+    "expected_realized_usd": 0.37,
+    "lever": "repetitions at frozen R4 parameters (3 more markets)",
+    "reading": "adds sample without moving any bound; smallest rung that can raise expected dollars only if the per-market mean is positive, which 5 markets cannot establish",
+    "worst_case_usd": -7.5
+   },
+   {
+    "changes_risk_parameter": true,
+    "expected_realized_usd_per_market": 0.245,
+    "lever": "action size $2.50 -> $5.00 (10 shares, toward L5 p50 $8.47), cap unchanged $2.50",
+    "reading": "doubles turnover and rebate dollars per market; with the cap held at $2.50 the cap falls to 0.5 action units and refuses an even larger share of EXTENDs (the L5 refusal share rises above the 98.4% measured at 1 unit); the relation mix moves further from L5",
+    "worst_case_usd_per_market": -2.5
+   },
+   {
+    "changes_risk_parameter": true,
+    "l5_history_total_vs_1_unit": 0.07,
+    "l5_income_per_peak_residual_1_5_units": 0.1529,
+    "l5_income_per_peak_residual_1_unit": 0.1859,
+    "lever": "residual cap $2.50 -> $3.75 (1.5 action units), size unchanged",
+    "reading": "on L5's history +7% total dollars for +50% worst case and a lower income-per-residual ratio; our own fills: total +1.12 vs +1.89 at 1 unit (five markets)",
+    "worst_case_usd_per_market": -3.75
+   },
+   {
+    "changes_risk_parameter": true,
+    "l5_history_total_vs_1_unit": 0.333,
+    "l5_income_per_peak_residual_2_units": 0.1253,
+    "lever": "residual cap -> $5.00 (2 units)",
+    "reading": "+33% total on L5's history, income per residual dollar 0.125 vs 0.186",
+    "worst_case_usd_per_market": -5.0
+   },
+   {
+    "changes_risk_parameter": true,
+    "expected_realized_usd_per_market": 0.1227,
+    "lever": "concurrency 1 -> 2",
+    "reading": "no change in per-market expectancy; doubles capital at risk and capital-hours; L5 never ran two markets of one lane at once (0 of 2,201 transitions) -- last lever by the owner's order",
+    "worst_case_usd": -5.0
+   }
+  ],
+  "smallest_rung_that_raises_expected_dollars": "none is established: the at-size mean net per market is 0.1227 +/- 1.6824 on 5 markets; the only lever that raises expected dollars without a sign on the mean is more repetitions, and it is the only one that moves no bound. Nothing is promoted here."
+ },
+ "H_gates": {
+  "all_met": false,
+  "gates": [
+   {
+    "gate": "G1 realized net >= 0 over >= 5 at-size markets AND the per-market mean exceeds its standard error (a sign on the mean), venue numbers only",
+    "have": {
+     "markets": 5,
+     "mean_net_per_market": 0.1227,
+     "net_usd": 0.6135,
+     "se": 1.6824
+    },
+    "met": false
+   },
+   {
+    "gate": "G2 pair + credited rebate income >= residual losses over the rung",
+    "have": {
+     "pair_plus_rebate": 5.9314,
+     "residual": -5.3179
+    },
+    "met": true
+   },
+   {
+    "gate": "G3 credited rebate per filled dollar >= 0.006 and every credit reconciled to the venue balance",
+    "have": {
+     "balance_reconciliation": "exact 108.9985 -> 109.194 -> 111.1422",
+     "rate": 0.00789
+    },
+    "met": true
+   },
+   {
+    "gate": "G4 matched share of bought shares >= 0.75 per rung",
+    "have": {
+     "at_size": 0.9528,
+     "r3l": 0.7731
+    },
+    "met": true
+   },
+   {
+    "gate": "G5 no market's residual loss exceeds the per-market cap ($2.50 under R4)",
+    "have": {
+     "r4_worst": 0.0882,
+     "worst_at_size_market_net": -6.2255
+    },
+    "met": true
+   },
+   {
+    "gate": "G6 zero legging, zero accounting mismatches, zero taker prints in the rung; campaign stops reported",
+    "have": {
+     "accounting_mismatches": 0,
+     "campaign_stops": "R4: 1 (08:21Z venue 429 on a read-only preflight GET with a leg held; root-caused and bounded in 43777804)",
+     "legging": 0,
+     "taker_prints": 0
+    },
+    "met": true
+   },
+   {
+    "gate": "G7 the rung's daily stop (-$15) never touched",
+    "have": {
+     "r4_net": 2.1437
+    },
+    "met": true
+   }
+  ],
+  "labels": "proposed gates for any promotion; G1 stays NOT met until the at-size per-market mean is positive by more than its standard error; the owner decides, nothing is promoted by this file"
+ },
+ "I_capacity": {
+  "inputs": {
+   "bankroll_usd": 109.0,
+   "market_hours_per_market_ESTIMATE": 0.77,
+   "r4_capital_hours_per_market_first_fill_bound": 7.175,
+   "r4_turnover_per_market": 9.308,
+   "universe_in_distribution_markets_at_11_09Z": 257,
+   "universe_two_sided_in_band": 100
+  },
+  "labels": "sequential capacity = markets per day x market-hours; anything beyond it needs size (toward L5's ~$8.47 action) or concurrency, in the owner's order",
+  "rows": [
+   {
+    "daily_deployed_usd": 25,
+    "expected_net_at_all_at_size_ratio_ESTIMATE": 0.29,
+    "expected_net_at_r4_ratio_ESTIMATE": 2.88,
+    "feasible_sequentially_in_24h": true,
+    "markets_per_day_at_r4_size": 2.7,
+    "or_size_multiple_at_3_markets_per_day": 0.9,
+    "sequential_hours_needed_at_r4_pace": 2.1,
+    "worst_case_residual_per_day_at_r4_cap": 6.71
+   },
+   {
+    "daily_deployed_usd": 100,
+    "expected_net_at_all_at_size_ratio_ESTIMATE": 1.15,
+    "expected_net_at_r4_ratio_ESTIMATE": 11.52,
+    "feasible_sequentially_in_24h": true,
+    "markets_per_day_at_r4_size": 10.7,
+    "or_size_multiple_at_3_markets_per_day": 3.6,
+    "sequential_hours_needed_at_r4_pace": 8.3,
+    "worst_case_residual_per_day_at_r4_cap": 26.86
+   },
+   {
+    "daily_deployed_usd": 480,
+    "expected_net_at_all_at_size_ratio_ESTIMATE": 5.53,
+    "expected_net_at_r4_ratio_ESTIMATE": 55.27,
+    "feasible_sequentially_in_24h": false,
+    "markets_per_day_at_r4_size": 51.6,
+    "or_size_multiple_at_3_markets_per_day": 17.2,
+    "sequential_hours_needed_at_r4_pace": 39.8,
+    "worst_case_residual_per_day_at_r4_cap": 128.92
+   }
+  ],
+  "status": "CONDITIONAL -- the owner's precondition (positive realized expectancy measured) is NOT met on 5 at-size markets; this is the model's structure with observed inputs, not a plan"
+ },
+ "equation": "realized expectancy = matched-pair economics + venue-credited maker rebates + venue-credited liquidity rewards - residual losses - fees",
+ "labels": "nothing here mutates the live R4 parameters, authorizes a rung, or relabels a bound; ESTIMATE marks every expected value; venue numbers only where the venue emitted one",
+ "owner_direction": "#167 5569845340 (profitability mandate); 5569709706 (parallel L5 work); R4 approval 5567269295"
+}
