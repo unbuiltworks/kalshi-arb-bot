@@ -313,9 +313,51 @@ def test_stale_markets_recover_through_cold_sampling_when_they_wake():
         s["trades"] = [dict(x, t=now - 18000) for x in s["trades"]]
     p = pq.plan(targets, state, 8, 0, {})
     assert p["diagnostics"]["stale_evicted"] == 20
-    assert len(p["subscribe"]) >= 1                                    # COLD still samples
-    # one wakes up with fresh authenticated updates -> seated HOT next cycle
+    assert p["subscribe"] == []                       # nothing fresh, nothing live: no seat is spent
+    # the venue lists m-007's event as live again -> COLD re-samples it
+    targets[7]["event_state"] = {"live": True}
+    p1 = pq.plan(targets, state, 8, 1, p["state"])
+    assert p1["per_market"]["m-007"]["tier"] == "cold"
+    # fresh authenticated updates arrive -> seated HOT next cycle
     state["m-007"]["bbo_history"] = [{"t": now - k} for k in range(30)]
-    p2 = pq.plan(targets, state, 8, 1, p["state"])
+    p2 = pq.plan(targets, state, 8, 2, p1["state"])
     assert p2["per_market"]["m-007"]["stale"] is False
     assert p2["per_market"]["m-007"]["tier"] == "hot"
+
+
+def test_stale_resolved_markets_leave_every_tier_but_a_discovered_live_one_keeps_cold(monkeypatch):
+    """OWNER GO 5571884826: evict resolved/closed markets from HOT/WARM/COLD;
+    a market the venue still lists as LIVE whose stream went quiet is a feed
+    question and keeps COLD eligibility so it is re-sampled."""
+    now = time.time()
+    targets = _targets(30)
+    targets[5]["event_state"] = {"live": True}                 # m-005: venue says live
+    state = _mstate({f"m-{i:03d}": 5 for i in range(30)}, now)
+    for i in range(30):
+        s = state[f"m-{i:03d}"]
+        s["bbo_history"] = [{"t": now - 18000}]
+        s["trades"] = [dict(x, t=now - 18000) for x in s["trades"]]
+    p = pq.plan(targets, state, 8, 0, {})
+    d = p["diagnostics"]
+    assert d["stale_evicted"] == 29 and d["stale_but_discovered_live"] == 1
+    tiers = {slug: p["per_market"][slug]["tier"] for slug in p["per_market"]}
+    assert tiers["m-005"] == "cold"
+    assert all(t == "idle" for slug, t in tiers.items() if slug != "m-005")
+    assert p["subscribe"] == ["m-005"] and d["fresh_live_subscribed"] == 0
+
+
+def test_fresh_live_market_displaces_a_stale_resolved_hot_member():
+    now = time.time()
+    targets = _targets(4)
+    state = _mstate({"m-000": 30, "m-001": 2}, now)
+    state["m-000"]["bbo_history"] = [{"t": now - 20000}]          # resolved yesterday, huge history
+    state["m-000"]["trades"] = [dict(x, t=now - 20000) for x in state["m-000"]["trades"]]
+    state["m-000"]["book_updates"] = 9000
+    state["m-001"]["bbo_history"] = [{"t": now - k} for k in range(20)]
+    prev = {"m-000": {"tier": "hot", "since": 0}}
+    p = pq.plan(targets, state, 2, 4, prev)
+    assert p["per_market"]["m-001"]["tier"] == "hot"
+    assert p["per_market"]["m-000"]["tier"] == "idle" and p["per_market"]["m-000"]["stale"] is True
+    # stale-score decay: the frozen book's recent-window book_rate is 0 despite 9000 lifetime updates
+    assert pq.score_market(state["m-000"], now)["components"]["book_rate"] == 0.0
+    assert pq.score_market(state["m-001"], now)["components"]["book_rate"] > 0.0

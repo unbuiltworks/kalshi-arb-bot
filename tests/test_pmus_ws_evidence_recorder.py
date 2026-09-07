@@ -133,3 +133,33 @@ def test_spring_watch_skips_frozen_books_and_market_rows_carry_the_age():
     assert rows["frozen-mkt"]["last_authenticated_update_age_s"] > 50000
     picked = [r["slug"] for r in rec.spring_watch(rows)]
     assert picked == ["live-mkt"]
+
+
+def test_status_serves_only_fresh_rows_and_raises_the_pool_alarm(monkeypatch):
+    """OWNER GO 5571884826: stale markets leave top/eligible/spring_watch,
+    and when live events exist but no fresh candidate is served for
+    POOL_ALARM_S the status carries an alarm with the exact reason."""
+    import time
+    now = time.time()
+    frozen = {"bid": "0.45", "ask": "0.47", "bid_qty": "20", "ask_qty": "20",
+              "both_sides_served": True, "book_updates": 5000,
+              "trades": [{"t": now - 60000, "px": "0.45", "dir": "buy"}] * 9,
+              "bbo_history": [{"t": now - 60000, "bid": "0.45", "ask": "0.47"}]}
+    state = {"frozen-a": dict(frozen), "frozen-b": dict(frozen)}
+    rec._POOL_EMPTY_SINCE["t"] = None
+    disc = {"v1_live_events": 41, "fresh_live_subscribed": 0}
+    st = rec.build_status(state, True, 10, 2, now=now, discovery=disc)
+    assert st["top_markets"] == [] and st["eligible_markets"] == [] and st["spring_watch"] == []
+    assert st["stale_markets"] == 2 and st["fresh_markets"] == 0
+    a = st["pool_alarm"]
+    assert a["live_events"] == 41 and a["alarm"] is False and a["pool_empty_for_s"] == 0.0
+    assert a["reason"].startswith("no fresh authenticated market")
+    st2 = rec.build_status(state, True, 10, 2, now=now + rec.POOL_ALARM_S + 1, discovery=disc)
+    assert st2["pool_alarm"]["alarm"] is True
+    # a fresh live row clears it
+    state["live-c"] = {"bid": "0.50", "ask": "0.52", "bid_qty": "10", "ask_qty": "10",
+                       "both_sides_served": True, "book_updates": 3, "trades": [],
+                       "bbo_history": [{"t": now + rec.POOL_ALARM_S, "bid": "0.50", "ask": "0.52"}]}
+    st3 = rec.build_status(state, True, 10, 3, now=now + rec.POOL_ALARM_S + 2,
+                           discovery={"v1_live_events": 41, "fresh_live_subscribed": 1})
+    assert st3["pool_alarm"]["alarm"] is False and st3["spring_watch"][0]["slug"] == "live-c"

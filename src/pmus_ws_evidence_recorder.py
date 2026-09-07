@@ -350,6 +350,40 @@ SPRING_WATCH_LIMIT = int(os.getenv("PMUS_SPRING_WATCH_LIMIT", "10"))
 def pq_stale_env() -> str:
     from src import pmus_priority_queue as pq
     return pq.STALE_S_ENV
+
+
+POOL_ALARM_S = float(os.getenv("PMUS_WS_POOL_ALARM_S", "600"))
+_POOL_EMPTY_SINCE: dict = {"t": None}
+
+
+def pool_alarm(discovery: Mapping[str, Any], fresh_rows: Mapping[str, Any],
+               watch: list, now: float) -> dict:
+    """24/7 requirement (issue #167 comment 5571884826): when the venue
+    lists live events but the served candidate pool is stale or empty
+    for longer than POOL_ALARM_S, say so with the exact reason instead of
+    idling silently. Pure bookkeeping; never changes admission."""
+    live_events = int(discovery.get("v1_live_events") or discovery.get("live_events") or 0)
+    fresh_live = int(discovery.get("fresh_live_subscribed") or len(fresh_rows))
+    empty = (live_events > 0) and (fresh_live == 0 or not watch)
+    since = _POOL_EMPTY_SINCE["t"]
+    if empty and since is None:
+        _POOL_EMPTY_SINCE["t"] = now
+        since = now
+    if not empty:
+        _POOL_EMPTY_SINCE["t"] = None
+    dur = (now - since) if (empty and since is not None) else 0.0
+    reason = None
+    if empty:
+        reason = ("no fresh authenticated market in the subscription set" if fresh_live == 0
+                  else "no fresh two-sided market inside the 0.35-0.65 spring band")
+    out = {"live_events": live_events, "fresh_subscribed": fresh_live,
+           "spring_watch_rows": len(watch), "pool_empty_for_s": round(dur, 1),
+           "alarm": bool(empty and dur >= POOL_ALARM_S), "reason": reason,
+           "labels": "alarm = live events exist but no fresh candidate served for >= POOL_ALARM_S; logging only"}
+    if out["alarm"]:
+        print("PMUS_WS_ALARM " + json.dumps({"kind": "pool_stale_or_empty", **out},
+                                             separators=(",", ":"), default=str), flush=True)
+    return out
 SPRING_WATCH_LO = 0.35   # OWNER DECISION 5533476555: observation 35-65
 SPRING_WATCH_HI = 0.65
 
@@ -420,11 +454,17 @@ def build_status(state: Mapping[str, Any], connected: bool, msgs: int,
     rows = {slug: _market_row(slug, s, now,
                               l5=(l5_alloc is None or slug in l5_alloc))
             for slug, s in state.items()}
-    tops = sorted(state.items(),
+    stale_s = float(os.getenv(pq_stale_env(), "900"))
+    def _fresh(slug: str) -> bool:
+        age = rows[slug].get("last_authenticated_update_age_s")
+        return age is None or float(age) <= stale_s
+    fresh_rows = {slug: r for slug, r in rows.items() if _fresh(slug)}
+    tops = sorted(((slug, state[slug]) for slug in fresh_rows),
                   key=lambda kv: -len(kv[1].get("trades", [])))[:5]
     eligible = sorted(
-        (r for r in rows.values() if r.get("gate_status") == "Q1_GATE_CLEARED"),
+        (r for r in fresh_rows.values() if r.get("gate_status") == "Q1_GATE_CLEARED"),
         key=lambda r: (-int(r.get("trades_1h") or 0), str(r.get("slug"))))
+    alarm = pool_alarm(discovery or {}, fresh_rows, spring_watch(fresh_rows, l5_alloc), now)
     status = {
         "t": datetime.now(timezone.utc).isoformat(),
         "conn": "connected" if connected else "reconnecting",
@@ -435,7 +475,10 @@ def build_status(state: Mapping[str, Any], connected: bool, msgs: int,
         "top_markets": [rows[slug] for slug, _ in tops],
         "eligible_markets": eligible,
         "eligible_total": len(eligible),
-        "spring_watch": spring_watch(rows, l5_alloc),
+        "fresh_markets": len(fresh_rows),
+        "stale_markets": len(rows) - len(fresh_rows),
+        "pool_alarm": alarm,
+        "spring_watch": spring_watch(fresh_rows, l5_alloc),
     }
     if discovery:
         status["discovery"] = dict(discovery)

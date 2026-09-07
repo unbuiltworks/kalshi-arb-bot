@@ -269,7 +269,12 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
             wakes.add(slug)
 
     stale_s = float(os.getenv(STALE_S_ENV, "900"))
+    # a discovered-LIVE event whose stream went quiet is a feed question,
+    # not a resolved market: it keeps COLD eligibility so it is re-sampled
+    discovered_live = {slug for slug, t in target_by_slug.items()
+                       if ((t.get("event_state") or {}).get("live") is True)}
     stale = {slug for slug in slugs if is_stale(state.get(slug), now, stale_s)}
+    evicted = stale - discovered_live
     # a stale market cannot hold or win a HOT/WARM seat: it ranks below
     # every live-or-unobserved market and is only re-sampled by COLD
     # (oldest-first), which is how a wrongly flagged one recovers
@@ -311,7 +316,7 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
     if fresh_rest and warm_n:
         start = (cycle * warm_n) % len(fresh_rest)
         warm = (fresh_rest + fresh_rest)[start:start + min(warm_n, len(fresh_rest))]
-    cold_universe = [s for s in rest if s not in warm]
+    cold_universe = [s for s in rest if s not in warm and s not in evicted]
     cold_universe.sort(key=lambda x: (
         int((prev.get(x) or {}).get("last_obs", -1)), x))   # oldest first
     cold = cold_universe[:cold_slots]
@@ -359,8 +364,10 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
         "hot": len(hot), "warm": len(warm), "cold_sampled": len(cold),
         "universe": len(slugs), "subscribed": len(subscribe),
         "wake_promotions": sorted(wakes),
-        "stale_evicted": len(stale),
+        "stale_evicted": len(evicted),
+        "stale_but_discovered_live": len(stale & discovered_live),
         "stale_s": stale_s,
+        "fresh_live_subscribed": sum(1 for x in subscribe if x not in stale),
         "l5_state_allocated": len(l5_allocated),
         "coverage_age_median": ages_sorted[len(ages) // 2] if ages else 0,
         "coverage_age_p95": ages_sorted[int(0.95 * (len(ages) - 1))]
