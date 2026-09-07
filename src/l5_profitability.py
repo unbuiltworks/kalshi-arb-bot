@@ -376,7 +376,10 @@ def assemble(paths: Optional[Mapping[str, str]] = None) -> dict:
     sb, curve, cs, conc, cmp_, uni = (_load(p[k]) for k in ("scoreboard", "curve", "cap_study", "concurrency", "comparison", "universe"))
     env = operating_envelope(sb)
     out = {
-        "owner_direction": "#167 5569845340 (profitability mandate); 5569709706 (parallel L5 work); R4 approval 5567269295",
+        "owner_direction": "#167 5569845340 (profitability mandate); 5569709706 (parallel L5 work); R4 approval 5567269295; 5570456323 / 5570474405 (invariant)",
+        "invariant": "L5 DECIDES -> EXECUTE WELL -> RECYCLE WHEN L5 COMPLETES -> MEASURE TOTAL ECONOMICS -> SCALE WHAT WORKS "
+                     "(pairing is an outcome of an L5 COMPLETE decision, never a substitute for an L5 OPEN or EXTEND; every safety "
+                     "override classified separately; profitability judged across the full L5 sequence; see L5_INVARIANT.md)",
         "equation": sb["equation"],
         "A_scoreboard": {"path": p["scoreboard"], "all": sb["all"], "by_cohort": sb["by_cohort"], "coverage": sb["coverage"]},
         "B_operating_envelope": env,
@@ -414,6 +417,7 @@ def render_md(o: Mapping[str, Any]) -> str:
     e = o["E_turnover_mechanics"]
     L = []
     L.append("# L5 profitability (canonical report)\n")
+    L.append("**Invariant (OWNER 5570474405):** " + o["invariant"] + "\n")
     L.append("Owner mandate #167 5569845340. `realized expectancy = matched-pair economics + venue-credited maker rebates + venue-credited liquidity rewards - residual losses - fees`. "
              "Every number below is filled/settled/venue-credited evidence or L5's own canonical history. "
              "Nothing here changes a live R4 parameter, authorizes a rung, or relabels a bound. "
@@ -486,6 +490,10 @@ def render_md(o: Mapping[str, Any]) -> str:
     L.append(i["status"] + ". Inputs: " + json.dumps(i["inputs"]) + "\n")
     rows = [[r["daily_deployed_usd"], r["markets_per_day_at_r4_size"], r["or_size_multiple_at_3_markets_per_day"], r["sequential_hours_needed_at_r4_pace"], r["feasible_sequentially_in_24h"], r["worst_case_residual_per_day_at_r4_cap"], r["expected_net_at_r4_ratio_ESTIMATE"], r["expected_net_at_all_at_size_ratio_ESTIMATE"]] for r in i["rows"]]
     L.append(_md_table(["$ / day", "markets / day at R4 size", "or size x at 3 markets / day", "sequential hours needed", "feasible in 24 h", "worst-case residual / day", "expected net at R4 ratio (EST)", "expected net at all-at-size ratio (EST)"], rows) + "\n")
+    L.append("## J. opportunity_utilization, capital recycling, early ramp, next rung (OWNER 5570456323 / 5570474405)\n")
+    L.append("Companion reports on this branch: `L5_OPPORTUNITY_UTILIZATION.md` (active 23% of the R4 window; 2.51 h idle is a recorder-coverage bottleneck, 0.36 h a flat-account settlement wait), "
+             "`l5_capital_recycling.json` (88% of deployed dollars released at the complement in both L5 and ours; L5 turns 85.6 dollars per capital-hour, we turn 4.8, because of market duration and the settlement wait), "
+             "`L5_RAMP_COMPARISON.md` (L5's first week $1,113/day at a $3.25 action; ours $53 on 2026-09-07 at $2.50), and `L5_NEXT_RUNG.md` (levers in the owner's units; the single change to test after R4 is environment selection + rotation, everything else frozen; nothing promoted).\n")
     L.append("Rerun: `python3 -m src.l5_economic_scoreboard --logs <dumps>` then `python3 -m src.l5_profitability`.\n")
     return "\n".join(L)
 

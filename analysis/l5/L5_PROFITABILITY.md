@@ -1,5 +1,7 @@
 # L5 profitability (canonical report)
 
+**Invariant (OWNER 5570474405):** L5 DECIDES -> EXECUTE WELL -> RECYCLE WHEN L5 COMPLETES -> MEASURE TOTAL ECONOMICS -> SCALE WHAT WORKS (pairing is an outcome of an L5 COMPLETE decision, never a substitute for an L5 OPEN or EXTEND; every safety override classified separately; profitability judged across the full L5 sequence; see L5_INVARIANT.md)
+
 Owner mandate #167 5569845340. `realized expectancy = matched-pair economics + venue-credited maker rebates + venue-credited liquidity rewards - residual losses - fees`. Every number below is filled/settled/venue-credited evidence or L5's own canonical history. Nothing here changes a live R4 parameter, authorizes a rung, or relabels a bound. Machine-readable: `l5_profitability.json`, `l5_economic_scoreboard.json`, `l5_cap_tradeoff_curve.json`.
 
 ## Verdict first
@@ -142,5 +144,9 @@ CONDITIONAL -- the owner's precondition (positive realized expectancy measured) 
 | 25 | 2.7 | 0.9 | 2.1 | True | 6.71 | 2.88 | 0.29 |
 | 100 | 10.7 | 3.6 | 8.3 | True | 26.86 | 11.52 | 1.15 |
 | 480 | 51.6 | 17.2 | 39.8 | False | 128.92 | 55.27 | 5.53 |
+
+## J. opportunity_utilization, capital recycling, early ramp, next rung (OWNER 5570456323 / 5570474405)
+
+Companion reports on this branch: `L5_OPPORTUNITY_UTILIZATION.md` (active 23% of the R4 window; 2.51 h idle is a recorder-coverage bottleneck, 0.36 h a flat-account settlement wait), `l5_capital_recycling.json` (88% of deployed dollars released at the complement in both L5 and ours; L5 turns 85.6 dollars per capital-hour, we turn 4.8, because of market duration and the settlement wait), `L5_RAMP_COMPARISON.md` (L5's first week $1,113/day at a $3.25 action; ours $53 on 2026-09-07 at $2.50), and `L5_NEXT_RUNG.md` (levers in the owner's units; the single change to test after R4 is environment selection + rotation, everything else frozen; nothing promoted).
 
 Rerun: `python3 -m src.l5_economic_scoreboard --logs <dumps>` then `python3 -m src.l5_profitability`.

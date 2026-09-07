@@ -1679,6 +1679,7 @@
   "status": "CONDITIONAL -- the owner's precondition (positive realized expectancy measured) is NOT met on 5 at-size markets; this is the model's structure with observed inputs, not a plan"
  },
  "equation": "realized expectancy = matched-pair economics + venue-credited maker rebates + venue-credited liquidity rewards - residual losses - fees",
+ "invariant": "L5 DECIDES -> EXECUTE WELL -> RECYCLE WHEN L5 COMPLETES -> MEASURE TOTAL ECONOMICS -> SCALE WHAT WORKS (pairing is an outcome of an L5 COMPLETE decision, never a substitute for an L5 OPEN or EXTEND; every safety override classified separately; profitability judged across the full L5 sequence; see L5_INVARIANT.md)",
  "labels": "nothing here mutates the live R4 parameters, authorizes a rung, or relabels a bound; ESTIMATE marks every expected value; venue numbers only where the venue emitted one",
- "owner_direction": "#167 5569845340 (profitability mandate); 5569709706 (parallel L5 work); R4 approval 5567269295"
+ "owner_direction": "#167 5569845340 (profitability mandate); 5569709706 (parallel L5 work); R4 approval 5567269295; 5570456323 / 5570474405 (invariant)"
 }
