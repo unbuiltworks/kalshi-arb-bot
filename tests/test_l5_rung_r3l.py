@@ -140,9 +140,10 @@ def test_sized_rung_preflight_fails_closed_on_power_identity_and_reconcile(monke
 def test_r3l_approval_is_queued_behind_r2c_and_consumed_in_order():
     approvals = cont.load_campaign_approvals()
     ids = [a["campaign_id"] for a in approvals]
-    assert ids[-4:] == ["R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06",
-                        "R3L-RUN-2026-09-06", "R4-RUN-2026-09-07"]
-    r3l = approvals[-2]
+    assert ids[-5:] == ["R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06",
+                        "R3L-RUN-2026-09-06", "R4-RUN-2026-09-07",
+                        "R5F-RUN-2026-09-07"]
+    r3l = approvals[-3]
     assert r3l["rung"] == "R3L" and r3l["stop_rule"] == "rung_markets"
     assert r3l["shell"] == ladder.shell_version(ladder.rung("R3L"))
     assert "5561465636" in r3l["source"]
@@ -163,8 +164,14 @@ def test_r3l_approval_is_queued_behind_r2c_and_consumed_in_order():
                                       ["R1-INITIAL", "R1-EVIDENCE-CONTINUATION-2026-09-06",
                                        "R2C-RUN-2026-09-06",
                                        "R2C2-RUN-2026-09-06"])["campaign_id"] == "R4-RUN-2026-09-07"
+    # OWNER 5574762432: R5F is queued behind R4 (consumed live 2026-09-07
+    # 19:21:39Z); after R5F there is nothing (no automatic promotion)
     assert cont.approved_continuation("R4-RUN-2026-09-07",
                                       ["R1-INITIAL", "R1-EVIDENCE-CONTINUATION-2026-09-06",
                                        "R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06",
-                                       "R3L-RUN-2026-09-06"]) is None
+                                       "R3L-RUN-2026-09-06"])["campaign_id"] == "R5F-RUN-2026-09-07"
+    assert cont.approved_continuation("R5F-RUN-2026-09-07",
+                                      ["R1-INITIAL", "R1-EVIDENCE-CONTINUATION-2026-09-06",
+                                       "R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06",
+                                       "R3L-RUN-2026-09-06", "R4-RUN-2026-09-07"]) is None
     json.dumps(approvals)   # serialisable, as the campaign logs it

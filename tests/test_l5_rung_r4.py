@@ -152,7 +152,7 @@ def test_the_dollar_cap_is_classified_on_its_own_never_as_residual_or_spend_cap(
 
 def test_r4_approval_is_queued_behind_r3l_and_carries_the_guardrail():
     approvals = cont.load_campaign_approvals()
-    r4 = approvals[-1]
+    r4 = approvals[-2]                 # R5F (OWNER 5574762432) follows it
     assert r4["campaign_id"] == "R4-RUN-2026-09-07" and r4["rung"] == "R4"
     assert r4["shell"] == ladder.shell_version(ladder.rung("R4"))
     assert "5567269295" in r4["source"]
