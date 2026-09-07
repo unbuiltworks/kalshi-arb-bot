@@ -165,3 +165,33 @@ Our own fills (R3L + R4, 5 markets, cap = k x $2.50): uncapped pair
 total +0.62, worst peak $7.49; at 1 unit kept 68%, total +1.89, worst
 $2.50; 1.5 units +1.12; 2 units +0.85; 3 units and above = uncapped. Five
 markets with one pure loser: a shape, not a curve.
+
+## 6. L5 patience and repricing vs our 30 s rest (`src/l5_patience_study.py`, OWNER 5569709706 #2)
+
+Public prints only (orders are invisible): a "cluster" is consecutive
+same-side BUY prints at one cent level, its duration a LOWER bound on time
+at that level; a "reprice" is the next same-side print at a different
+level. Ours from the R4 order records.
+
+| | L5 (2,216 windows, 71,982 prints) | ours (R4, 45 orders) |
+|---|---|---|
+| clusters that are a single print | 75.1% | -- |
+| follow-on print at the same level, gap after previous p50 / p90 | 1 s / 7 s | -- |
+| follow-on prints arriving > 30 s after the previous | 1.8% (3.3% of follow-on $) | -- |
+| next print at a different level after p50 / p75 / p90 | 6 s / 20 s / 47 s | our reprice path fired 3 times |
+| reprices inside 30 s | 83.5% | -- |
+| reprice step (abs) p50 / p90 | 2 c / 13 c; 22,151 paid more, 23,187 paid less | +1, +1, +2 c |
+| orders: filled / deadline-cancelled / post-only rejected | -- | 9 / 23 / 10 |
+| time to fill p50 / max | -- | 11.7 s / 24.5 s |
+
+By lane: BTC-15m follow-on gap p90 7 s, reprice p50 6 s, 1.7% late;
+BTC-5m p90 36 s, reprice p50 25 s, 11.3% late; ETH-5m p90 30 s, 9.0% late;
+ETH-15m reprice p50 45 s (27 windows).
+
+Reading. The mismatch is NOT rest length: L5 rarely sits 30 s at one
+price. It is reprice cadence -- L5's price moves within seconds of the
+touch moving, while we hold one price for the full deadline, cancel
+untouched (23 of 45 orders) and re-decide on the next cycle. The
+executable lever is a touch-following reprice inside the rest window (the
+`repriced:touch_moved` path exists); the 30 s deadline itself is a frozen
+rung parameter (rest30s). Reported, not changed.
