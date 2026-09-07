@@ -1,0 +1,2507 @@
+{
+ "owner_decision": "#167 5564173746",
+ "provenance": {
+  "source_file": "analysis/l5/l5_canonical_sequence.csv.gz",
+  "source_meta": "analysis/l5/l5_canonical_sequence.meta.json",
+  "content_sha256_16": "3b98847233684612",
+  "meta_rows": 71984,
+  "rows_read": 71984,
+  "upstream_sources": [
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_window_sequences.csv",
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_windows_summary.csv",
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_all_trades.csv",
+   "/home/user/kalshi-arb-bot/data/l5/raw/trades_takeronly.jsonl"
+  ],
+  "maker_taker_counts": {
+   "unknown": 5269,
+   "maker": 55647,
+   "taker": 11068
+  },
+  "limits": [
+   "derived from EXECUTED TRADES on the public activity feed: a fill is not a quote",
+   "concurrency here is FILL concurrency, a lower bound on quoting concurrency",
+   "'unknown' maker_taker is outside takerOnly coverage and is never treated as maker"
+  ]
+ },
+ "coverage": {
+  "distinct_trading_days": 22,
+  "first_day": "2026-03-19",
+  "last_day": "2026-08-31",
+  "gaps_over_one_day": [
+   {
+    "after": "2026-03-19",
+    "before": "2026-03-25",
+    "days": 6
+   },
+   {
+    "after": "2026-03-28",
+    "before": "2026-03-30",
+    "days": 2
+   },
+   {
+    "after": "2026-04-02",
+    "before": "2026-04-06",
+    "days": 4
+   },
+   {
+    "after": "2026-04-06",
+    "before": "2026-04-09",
+    "days": 3
+   },
+   {
+    "after": "2026-04-10",
+    "before": "2026-04-13",
+    "days": 3
+   },
+   {
+    "after": "2026-04-15",
+    "before": "2026-04-17",
+    "days": 2
+   },
+   {
+    "after": "2026-04-17",
+    "before": "2026-04-20",
+    "days": 3
+   },
+   {
+    "after": "2026-04-21",
+    "before": "2026-08-28",
+    "days": 129
+   }
+  ],
+  "note": "a gap is absence of harvested data, not proof of absence of trading"
+ },
+ "overall": {
+  "episodes": 2216,
+  "actions": 71984,
+  "span_utc": [
+   1773914977,
+   1788217879
+  ],
+  "concurrency": {
+   "trading": {
+    "label": "first fill -> last fill (actively worked)",
+    "intervals": 2216,
+    "zero_length_intervals": 321,
+    "active_seconds": 380890,
+    "max_simultaneous": 4,
+    "mean_simultaneous_time_weighted": 1.4437,
+    "median_simultaneous_time_weighted": 1,
+    "share_of_active_time_at_level": {
+     "1": 0.640384,
+     "2": 0.277686,
+     "3": 0.079763,
+     "4": 0.002166
+    },
+    "share_at_1": 0.640384,
+    "share_at_2_or_more": 0.359615,
+    "share_at_3_or_more": 0.081929,
+    "seconds_at_level": {
+     "1": 243916,
+     "2": 105768,
+     "3": 30381,
+     "4": 825
+    }
+   },
+   "capital": {
+    "label": "first fill -> settlement (money committed)",
+    "intervals": 2216,
+    "zero_length_intervals": 0,
+    "active_seconds": 455180,
+    "max_simultaneous": 4,
+    "mean_simultaneous_time_weighted": 1.7765,
+    "median_simultaneous_time_weighted": 2,
+    "share_of_active_time_at_level": {
+     "1": 0.492071,
+     "2": 0.252524,
+     "3": 0.242254,
+     "4": 0.013151
+    },
+    "share_at_1": 0.492071,
+    "share_at_2_or_more": 0.507929,
+    "share_at_3_or_more": 0.255405,
+    "seconds_at_level": {
+     "1": 223981,
+     "2": 114944,
+     "3": 110269,
+     "4": 5986
+    }
+   },
+   "residual_books": {
+    "label": "episodes ending with open inventory",
+    "intervals": 2193,
+    "zero_length_intervals": 0,
+    "active_seconds": 455180,
+    "max_simultaneous": 4,
+    "mean_simultaneous_time_weighted": 1.7659,
+    "median_simultaneous_time_weighted": 2,
+    "share_of_active_time_at_level": {
+     "1": 0.498414,
+     "2": 0.249791,
+     "3": 0.239277,
+     "4": 0.012518
+    },
+    "share_at_1": 0.498414,
+    "share_at_2_or_more": 0.501586,
+    "share_at_3_or_more": 0.251795,
+    "seconds_at_level": {
+     "1": 226868,
+     "2": 113700,
+     "3": 108914,
+     "4": 5698
+    }
+   }
+  },
+  "shape": {
+   "episodes": 2216,
+   "actions_per_episode": {
+    "n": 2216,
+    "mean": 32.4838,
+    "p10": 1,
+    "p25": 3,
+    "p50": 6,
+    "p75": 12,
+    "p90": 139,
+    "max": 461
+   },
+   "dwell_seconds": {
+    "n": 2216,
+    "mean": 248.1476,
+    "p10": 0,
+    "p25": 50,
+    "p50": 153,
+    "p75": 260,
+    "p90": 790,
+    "max": 888
+   },
+   "gross_dollars_per_episode": {
+    "n": 2216,
+    "mean": 328.7474,
+    "p10": 8.62992,
+    "p25": 31.999999,
+    "p50": 92.91511,
+    "p75": 194.88173,
+    "p90": 1305.090076,
+    "max": 4848.554624
+   },
+   "single_action_episodes": 273,
+   "episodes_completing_inventory": 23,
+   "share_completing_inventory": 0.010379,
+   "abs_final_residual": {
+    "n": 2216,
+    "mean": 101.4889,
+    "p10": 7.94,
+    "p25": 22.4,
+    "p50": 55.0,
+    "p75": 125.326075,
+    "p90": 238.541904,
+    "max": 1168.43298
+   }
+  },
+  "switching": {
+   "actions": 71984,
+   "episodes": 2216,
+   "runs": 10974,
+   "switches": 10973,
+   "switches_leaving_open_inventory": 8679,
+   "switches_leaving_nothing_to_return_to": 2294,
+   "share_of_switches_leaving_open_inventory": 0.790941,
+   "episodes_revisited_after_leaving": 1608,
+   "share_of_episodes_revisited": 0.725632,
+   "visits_per_episode": {
+    "mean": 4.9522,
+    "p50": 3.0,
+    "max": 36
+   },
+   "actions_per_run": {
+    "mean": 6.5595,
+    "p50": 2.0,
+    "p90": 17,
+    "max": 170
+   },
+   "seconds_between_runs": {
+    "p50": 3,
+    "p90": 24
+   },
+   "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+  },
+  "lane_concurrency": {
+   "trading": {
+    "label": "simultaneous product LANES (trading)",
+    "intervals": 2216,
+    "zero_length_intervals": 321,
+    "active_seconds": 380890,
+    "max_simultaneous": 4,
+    "mean_simultaneous_time_weighted": 1.4437,
+    "median_simultaneous_time_weighted": 1,
+    "share_of_active_time_at_level": {
+     "1": 0.640384,
+     "2": 0.277686,
+     "3": 0.079763,
+     "4": 0.002166
+    },
+    "share_at_1": 0.640384,
+    "share_at_2_or_more": 0.359615,
+    "share_at_3_or_more": 0.081929,
+    "seconds_at_level": {
+     "1": 243916,
+     "2": 105768,
+     "3": 30381,
+     "4": 825
+    },
+    "lanes": [
+     "BTC-15m",
+     "BTC-5m",
+     "ETH-15m",
+     "ETH-5m"
+    ],
+    "max_markets_open_within_one_lane": 1
+   },
+   "capital": {
+    "label": "simultaneous product LANES (capital)",
+    "intervals": 2216,
+    "zero_length_intervals": 0,
+    "active_seconds": 455180,
+    "max_simultaneous": 4,
+    "mean_simultaneous_time_weighted": 1.7765,
+    "median_simultaneous_time_weighted": 2,
+    "share_of_active_time_at_level": {
+     "1": 0.492071,
+     "2": 0.252524,
+     "3": 0.242254,
+     "4": 0.013151
+    },
+    "share_at_1": 0.492071,
+    "share_at_2_or_more": 0.507929,
+    "share_at_3_or_more": 0.255405,
+    "seconds_at_level": {
+     "1": 223981,
+     "2": 114944,
+     "3": 110269,
+     "4": 5986
+    },
+    "lanes": [
+     "BTC-15m",
+     "BTC-5m",
+     "ETH-15m",
+     "ETH-5m"
+    ],
+    "max_markets_open_within_one_lane": 1
+   }
+  },
+  "overlap_composition": {
+   "trading": {
+    "mode": "trading",
+    "pairwise_overlap_seconds": 201861,
+    "same_lane_seconds": 0,
+    "cross_lane_seconds": 201861,
+    "same_lane_share": 0.0,
+    "by_lane_pair_seconds": {
+     "BTC-15m + BTC-5m": 115872,
+     "BTC-15m + ETH-5m": 38809,
+     "BTC-5m + ETH-5m": 33426,
+     "BTC-15m + ETH-15m": 8208,
+     "BTC-5m + ETH-15m": 4002,
+     "ETH-15m + ETH-5m": 1544
+    }
+   },
+   "capital": {
+    "mode": "capital",
+    "pairwise_overlap_seconds": 481667,
+    "same_lane_seconds": 0,
+    "cross_lane_seconds": 481667,
+    "same_lane_share": 0.0,
+    "by_lane_pair_seconds": {
+     "BTC-15m + BTC-5m": 209517,
+     "BTC-15m + ETH-5m": 121816,
+     "BTC-5m + ETH-5m": 115219,
+     "BTC-15m + ETH-15m": 16221,
+     "BTC-5m + ETH-15m": 12709,
+     "ETH-15m + ETH-5m": 6185
+    }
+   }
+  },
+  "spray_5m": {
+   "bucket_seconds": 300,
+   "buckets_with_activity": 1514,
+   "distinct_markets_per_bucket": {
+    "mean": 2.0865,
+    "p50": 2,
+    "p75": 3,
+    "p90": 3,
+    "p99": 4,
+    "max": 4
+   },
+   "share_of_buckets_with_one_market": 0.36856,
+   "share_of_buckets_with_2_or_more": 0.63144,
+   "histogram": {
+    "1": 558,
+    "2": 302,
+    "3": 619,
+    "4": 35
+   }
+  },
+  "spray_15m": {
+   "bucket_seconds": 900,
+   "buckets_with_activity": 549,
+   "distinct_markets_per_bucket": {
+    "mean": 4.0565,
+    "p50": 5,
+    "p75": 6,
+    "p90": 7,
+    "p99": 8,
+    "max": 8
+   },
+   "share_of_buckets_with_one_market": 0.387978,
+   "share_of_buckets_with_2_or_more": 0.612022,
+   "histogram": {
+    "1": 213,
+    "2": 7,
+    "3": 3,
+    "4": 14,
+    "5": 66,
+    "6": 127,
+    "7": 109,
+    "8": 10
+   }
+  },
+  "spray_1h": {
+   "bucket_seconds": 3600,
+   "buckets_with_activity": 173,
+   "distinct_markets_per_bucket": {
+    "mean": 12.8382,
+    "p50": 4,
+    "p75": 24,
+    "p90": 26,
+    "p99": 28,
+    "max": 30
+   },
+   "share_of_buckets_with_one_market": 0.132948,
+   "share_of_buckets_with_2_or_more": 0.867052,
+   "histogram": {
+    "1": 23,
+    "2": 18,
+    "3": 23,
+    "4": 23,
+    "6": 1,
+    "7": 1,
+    "10": 1,
+    "13": 1,
+    "14": 1,
+    "17": 1,
+    "18": 2,
+    "19": 2,
+    "20": 2,
+    "21": 8,
+    "22": 4,
+    "23": 11,
+    "24": 14,
+    "25": 10,
+    "26": 12,
+    "27": 9,
+    "28": 5,
+    "30": 1
+   }
+  }
+ },
+ "by_era": {
+  "2026-03": {
+   "episodes": 88,
+   "actions": 1931,
+   "gross_dollars": 7791.39,
+   "span_days": 12.44,
+   "episodes_per_active_day": 7.07,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 88,
+     "zero_length_intervals": 11,
+     "active_seconds": 44958,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 44958
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 88,
+     "zero_length_intervals": 0,
+     "active_seconds": 63968,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 63968
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 88,
+     "zero_length_intervals": 0,
+     "active_seconds": 63968,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 63968
+     }
+    }
+   },
+   "shape": {
+    "episodes": 88,
+    "actions_per_episode": {
+     "n": 88,
+     "mean": 21.9432,
+     "p10": 1,
+     "p25": 9,
+     "p50": 21,
+     "p75": 33,
+     "p90": 44,
+     "max": 61
+    },
+    "dwell_seconds": {
+     "n": 88,
+     "mean": 510.8864,
+     "p10": 0,
+     "p25": 302,
+     "p50": 588,
+     "p75": 746,
+     "p90": 846,
+     "max": 886
+    },
+    "gross_dollars_per_episode": {
+     "n": 88,
+     "mean": 88.5386,
+     "p10": 3.0,
+     "p25": 38.699997,
+     "p50": 76.75,
+     "p75": 135.979998,
+     "p90": 182.994495,
+     "max": 249.434895
+    },
+    "single_action_episodes": 11,
+    "episodes_completing_inventory": 0,
+    "share_completing_inventory": 0.0,
+    "abs_final_residual": {
+     "n": 88,
+     "mean": 34.722,
+     "p10": 2.74,
+     "p25": 10.019232,
+     "p50": 25.0,
+     "p75": 46.582817,
+     "p90": 72.727256,
+     "max": 197.54496
+    }
+   },
+   "switching": {
+    "actions": 1931,
+    "episodes": 88,
+    "runs": 88,
+    "switches": 87,
+    "switches_leaving_open_inventory": 0,
+    "switches_leaving_nothing_to_return_to": 87,
+    "share_of_switches_leaving_open_inventory": 0.0,
+    "episodes_revisited_after_leaving": 0,
+    "share_of_episodes_revisited": 0.0,
+    "visits_per_episode": {
+     "mean": 1.0,
+     "p50": 1.0,
+     "max": 1
+    },
+    "actions_per_run": {
+     "mean": 21.9432,
+     "p50": 21.0,
+     "p90": 44,
+     "max": 61
+    },
+    "seconds_between_runs": {
+     "p50": 384,
+     "p90": 10770
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  },
+  "2026-04": {
+   "episodes": 128,
+   "actions": 3338,
+   "gross_dollars": 22189.4,
+   "span_days": 19.95,
+   "episodes_per_active_day": 6.42,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 128,
+     "zero_length_intervals": 4,
+     "active_seconds": 73330,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 73330
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 128,
+     "zero_length_intervals": 0,
+     "active_seconds": 101689,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 101689
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 128,
+     "zero_length_intervals": 0,
+     "active_seconds": 101689,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 101689
+     }
+    }
+   },
+   "shape": {
+    "episodes": 128,
+    "actions_per_episode": {
+     "n": 128,
+     "mean": 26.0781,
+     "p10": 5,
+     "p25": 12,
+     "p50": 19,
+     "p75": 31,
+     "p90": 60,
+     "max": 142
+    },
+    "dwell_seconds": {
+     "n": 128,
+     "mean": 572.8906,
+     "p10": 132,
+     "p25": 410,
+     "p50": 636,
+     "p75": 800,
+     "p90": 860,
+     "max": 888
+    },
+    "gross_dollars_per_episode": {
+     "n": 128,
+     "mean": 173.3547,
+     "p10": 26.6,
+     "p25": 58.2,
+     "p50": 111.62,
+     "p75": 207.391598,
+     "p90": 446.080834,
+     "max": 986.011409
+    },
+    "single_action_episodes": 4,
+    "episodes_completing_inventory": 0,
+    "share_completing_inventory": 0.0,
+    "abs_final_residual": {
+     "n": 128,
+     "mean": 38.6429,
+     "p10": 4.245286,
+     "p25": 11.410021,
+     "p50": 28.256409,
+     "p75": 50.44,
+     "p90": 103.137715,
+     "max": 167.558403
+    }
+   },
+   "switching": {
+    "actions": 3338,
+    "episodes": 128,
+    "runs": 128,
+    "switches": 127,
+    "switches_leaving_open_inventory": 0,
+    "switches_leaving_nothing_to_return_to": 127,
+    "share_of_switches_leaving_open_inventory": 0.0,
+    "episodes_revisited_after_leaving": 0,
+    "share_of_episodes_revisited": 0.0,
+    "visits_per_episode": {
+     "mean": 1.0,
+     "p50": 1.0,
+     "max": 1
+    },
+    "actions_per_run": {
+     "mean": 26.0781,
+     "p50": 19.0,
+     "p90": 60,
+     "max": 142
+    },
+    "seconds_between_runs": {
+     "p50": 294,
+     "p90": 11232
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  },
+  "2026-08": {
+   "episodes": 2000,
+   "actions": 66715,
+   "gross_dollars": 698523.45,
+   "span_days": 3.64,
+   "episodes_per_active_day": 549.0,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 2000,
+     "zero_length_intervals": 306,
+     "active_seconds": 262602,
+     "max_simultaneous": 4,
+     "mean_simultaneous_time_weighted": 1.6436,
+     "median_simultaneous_time_weighted": 2,
+     "share_of_active_time_at_level": {
+      "1": 0.478397,
+      "2": 0.402769,
+      "3": 0.115692,
+      "4": 0.003142
+     },
+     "share_at_1": 0.478397,
+     "share_at_2_or_more": 0.521603,
+     "share_at_3_or_more": 0.118834,
+     "seconds_at_level": {
+      "1": 125628,
+      "2": 105768,
+      "3": 30381,
+      "4": 825
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 2000,
+     "zero_length_intervals": 0,
+     "active_seconds": 289523,
+     "max_simultaneous": 4,
+     "mean_simultaneous_time_weighted": 2.2208,
+     "median_simultaneous_time_weighted": 2,
+     "share_of_active_time_at_level": {
+      "1": 0.201449,
+      "2": 0.397012,
+      "3": 0.380864,
+      "4": 0.020675
+     },
+     "share_at_1": 0.201449,
+     "share_at_2_or_more": 0.798551,
+     "share_at_3_or_more": 0.401539,
+     "seconds_at_level": {
+      "1": 58324,
+      "2": 114944,
+      "3": 110269,
+      "4": 5986
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 1977,
+     "zero_length_intervals": 0,
+     "active_seconds": 289523,
+     "max_simultaneous": 4,
+     "mean_simultaneous_time_weighted": 2.2041,
+     "median_simultaneous_time_weighted": 2,
+     "share_of_active_time_at_level": {
+      "1": 0.21142,
+      "2": 0.392715,
+      "3": 0.376184,
+      "4": 0.019681
+     },
+     "share_at_1": 0.21142,
+     "share_at_2_or_more": 0.78858,
+     "share_at_3_or_more": 0.395865,
+     "seconds_at_level": {
+      "1": 61211,
+      "2": 113700,
+      "3": 108914,
+      "4": 5698
+     }
+    }
+   },
+   "shape": {
+    "episodes": 2000,
+    "actions_per_episode": {
+     "n": 2000,
+     "mean": 33.3575,
+     "p10": 1,
+     "p25": 2,
+     "p50": 5,
+     "p75": 10,
+     "p90": 155,
+     "max": 461
+    },
+    "dwell_seconds": {
+     "n": 2000,
+     "mean": 215.8035,
+     "p10": 0,
+     "p25": 42,
+     "p50": 140,
+     "p75": 234,
+     "p90": 760,
+     "max": 882
+    },
+    "gross_dollars_per_episode": {
+     "n": 2000,
+     "mean": 349.2617,
+     "p10": 8.23076,
+     "p25": 30.37194,
+     "p50": 91.3528,
+     "p75": 200.877397,
+     "p90": 1393.720515,
+     "max": 4848.554624
+    },
+    "single_action_episodes": 258,
+    "episodes_completing_inventory": 23,
+    "share_completing_inventory": 0.0115,
+    "abs_final_residual": {
+     "n": 2000,
+     "mean": 108.4488,
+     "p10": 9.587504,
+     "p25": 25.88,
+     "p50": 60.82,
+     "p75": 133.25,
+     "p90": 251.655624,
+     "max": 1168.43298
+    }
+   },
+   "switching": {
+    "actions": 66715,
+    "episodes": 2000,
+    "runs": 10758,
+    "switches": 10757,
+    "switches_leaving_open_inventory": 8679,
+    "switches_leaving_nothing_to_return_to": 2078,
+    "share_of_switches_leaving_open_inventory": 0.806823,
+    "episodes_revisited_after_leaving": 1608,
+    "share_of_episodes_revisited": 0.804,
+    "visits_per_episode": {
+     "mean": 5.379,
+     "p50": 3.0,
+     "max": 36
+    },
+    "actions_per_run": {
+     "mean": 6.2014,
+     "p50": 2.0,
+     "p90": 16,
+     "max": 170
+    },
+    "seconds_between_runs": {
+     "p50": 3,
+     "p90": 21
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  }
+ },
+ "by_week": {
+  "2026-W11 (2026-03-16)": {
+   "episodes": 3,
+   "actions": 5,
+   "gross_dollars": 4.23,
+   "span_days": 0.03,
+   "episodes_per_active_day": 3.0,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 3,
+     "zero_length_intervals": 1,
+     "active_seconds": 140,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 140
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 3,
+     "zero_length_intervals": 0,
+     "active_seconds": 392,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 392
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 3,
+     "zero_length_intervals": 0,
+     "active_seconds": 392,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 392
+     }
+    }
+   },
+   "shape": {
+    "episodes": 3,
+    "actions_per_episode": {
+     "n": 3,
+     "mean": 1.6667,
+     "p10": 1,
+     "p25": 1,
+     "p50": 2,
+     "p75": 2,
+     "p90": 2,
+     "max": 2
+    },
+    "dwell_seconds": {
+     "n": 3,
+     "mean": 46.6667,
+     "p10": 0,
+     "p25": 0,
+     "p50": 24,
+     "p75": 116,
+     "p90": 116,
+     "max": 116
+    },
+    "gross_dollars_per_episode": {
+     "n": 3,
+     "mean": 1.4087,
+     "p10": 0.05,
+     "p25": 0.05,
+     "p50": 2.078,
+     "p75": 2.097996,
+     "p90": 2.097996,
+     "max": 2.097996
+    },
+    "single_action_episodes": 1,
+    "episodes_completing_inventory": 0,
+    "share_completing_inventory": 0.0,
+    "abs_final_residual": {
+     "n": 3,
+     "mean": 1.679,
+     "p10": 0.014563,
+     "p25": 0.014563,
+     "p50": 0.0225,
+     "p75": 5.0,
+     "p90": 5.0,
+     "max": 5.0
+    }
+   },
+   "switching": {
+    "actions": 5,
+    "episodes": 3,
+    "runs": 3,
+    "switches": 2,
+    "switches_leaving_open_inventory": 0,
+    "switches_leaving_nothing_to_return_to": 2,
+    "share_of_switches_leaving_open_inventory": 0.0,
+    "episodes_revisited_after_leaving": 0,
+    "share_of_episodes_revisited": 0.0,
+    "visits_per_episode": {
+     "mean": 1.0,
+     "p50": 1,
+     "max": 1
+    },
+    "actions_per_run": {
+     "mean": 1.6667,
+     "p50": 2,
+     "p90": 2,
+     "max": 2
+    },
+    "seconds_between_runs": {
+     "p50": 1401.0,
+     "p90": 2190
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  },
+  "2026-W12 (2026-03-23)": {
+   "episodes": 55,
+   "actions": 1281,
+   "gross_dollars": 4737.1,
+   "span_days": 3.26,
+   "episodes_per_active_day": 16.85,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 55,
+     "zero_length_intervals": 8,
+     "active_seconds": 28566,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 28566
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 55,
+     "zero_length_intervals": 0,
+     "active_seconds": 40635,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 40635
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 55,
+     "zero_length_intervals": 0,
+     "active_seconds": 40635,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 40635
+     }
+    }
+   },
+   "shape": {
+    "episodes": 55,
+    "actions_per_episode": {
+     "n": 55,
+     "mean": 23.2909,
+     "p10": 1,
+     "p25": 9,
+     "p50": 21,
+     "p75": 38,
+     "p90": 50,
+     "max": 61
+    },
+    "dwell_seconds": {
+     "n": 55,
+     "mean": 519.3818,
+     "p10": 0,
+     "p25": 302,
+     "p50": 588,
+     "p75": 746,
+     "p90": 838,
+     "max": 858
+    },
+    "gross_dollars_per_episode": {
+     "n": 55,
+     "mean": 86.1292,
+     "p10": 3.0,
+     "p25": 31.8,
+     "p50": 75.903998,
+     "p75": 138.495598,
+     "p90": 182.994495,
+     "max": 249.434895
+    },
+    "single_action_episodes": 8,
+    "episodes_completing_inventory": 0,
+    "share_completing_inventory": 0.0,
+    "abs_final_residual": {
+     "n": 55,
+     "mean": 39.6335,
+     "p10": 2.74,
+     "p25": 10.0,
+     "p50": 27.950802,
+     "p75": 55.457757,
+     "p90": 100.018557,
+     "max": 197.54496
+    }
+   },
+   "switching": {
+    "actions": 1281,
+    "episodes": 55,
+    "runs": 55,
+    "switches": 54,
+    "switches_leaving_open_inventory": 0,
+    "switches_leaving_nothing_to_return_to": 54,
+    "share_of_switches_leaving_open_inventory": 0.0,
+    "episodes_revisited_after_leaving": 0,
+    "share_of_episodes_revisited": 0.0,
+    "visits_per_episode": {
+     "mean": 1.0,
+     "p50": 1,
+     "max": 1
+    },
+    "actions_per_run": {
+     "mean": 23.2909,
+     "p50": 21,
+     "p90": 50,
+     "max": 61
+    },
+    "seconds_between_runs": {
+     "p50": 329.0,
+     "p90": 9354
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  },
+  "2026-W13 (2026-03-30)": {
+   "episodes": 43,
+   "actions": 880,
+   "gross_dollars": 4200.04,
+   "span_days": 3.15,
+   "episodes_per_active_day": 13.65,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 43,
+     "zero_length_intervals": 2,
+     "active_seconds": 22844,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 22844
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 43,
+     "zero_length_intervals": 0,
+     "active_seconds": 32668,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 32668
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 43,
+     "zero_length_intervals": 0,
+     "active_seconds": 32668,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 32668
+     }
+    }
+   },
+   "shape": {
+    "episodes": 43,
+    "actions_per_episode": {
+     "n": 43,
+     "mean": 20.4651,
+     "p10": 5,
+     "p25": 13,
+     "p50": 19,
+     "p75": 29,
+     "p90": 32,
+     "max": 45
+    },
+    "dwell_seconds": {
+     "n": 43,
+     "mean": 531.2558,
+     "p10": 86,
+     "p25": 326,
+     "p50": 586,
+     "p75": 778,
+     "p90": 866,
+     "max": 886
+    },
+    "gross_dollars_per_episode": {
+     "n": 43,
+     "mean": 97.6754,
+     "p10": 28.999999,
+     "p25": 63.289998,
+     "p50": 95.4564,
+     "p75": 135.019998,
+     "p90": 164.179498,
+     "max": 223.589995
+    },
+    "single_action_episodes": 2,
+    "episodes_completing_inventory": 0,
+    "share_completing_inventory": 0.0,
+    "abs_final_residual": {
+     "n": 43,
+     "mean": 26.0897,
+     "p10": 7.869731,
+     "p25": 11.988407,
+     "p50": 22.550852,
+     "p75": 40.0,
+     "p90": 47.64286,
+     "max": 88.932843
+    }
+   },
+   "switching": {
+    "actions": 880,
+    "episodes": 43,
+    "runs": 43,
+    "switches": 42,
+    "switches_leaving_open_inventory": 0,
+    "switches_leaving_nothing_to_return_to": 42,
+    "share_of_switches_leaving_open_inventory": 0.0,
+    "episodes_revisited_after_leaving": 0,
+    "share_of_episodes_revisited": 0.0,
+    "visits_per_episode": {
+     "mean": 1.0,
+     "p50": 1,
+     "max": 1
+    },
+    "actions_per_run": {
+     "mean": 20.4651,
+     "p50": 19,
+     "p90": 32,
+     "max": 45
+    },
+    "seconds_between_runs": {
+     "p50": 344.0,
+     "p90": 4536
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  },
+  "2026-W14 (2026-04-06)": {
+   "episodes": 30,
+   "actions": 446,
+   "gross_dollars": 2009.81,
+   "span_days": 3.94,
+   "episodes_per_active_day": 7.61,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 30,
+     "zero_length_intervals": 0,
+     "active_seconds": 16116,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 16116
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 30,
+     "zero_length_intervals": 0,
+     "active_seconds": 24318,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 24318
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 30,
+     "zero_length_intervals": 0,
+     "active_seconds": 24318,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 24318
+     }
+    }
+   },
+   "shape": {
+    "episodes": 30,
+    "actions_per_episode": {
+     "n": 30,
+     "mean": 14.8667,
+     "p10": 4,
+     "p25": 7,
+     "p50": 15,
+     "p75": 21,
+     "p90": 25,
+     "max": 33
+    },
+    "dwell_seconds": {
+     "n": 30,
+     "mean": 537.2,
+     "p10": 132,
+     "p25": 376,
+     "p50": 552,
+     "p75": 772,
+     "p90": 874,
+     "max": 888
+    },
+    "gross_dollars_per_episode": {
+     "n": 30,
+     "mean": 66.9938,
+     "p10": 21.2964,
+     "p25": 34.9947,
+     "p50": 61.9342,
+     "p75": 94.948298,
+     "p90": 120.799997,
+     "max": 189.129584
+    },
+    "single_action_episodes": 0,
+    "episodes_completing_inventory": 0,
+    "share_completing_inventory": 0.0,
+    "abs_final_residual": {
+     "n": 30,
+     "mean": 25.1174,
+     "p10": 4.334925,
+     "p25": 11.832278,
+     "p50": 23.89,
+     "p75": 40.0,
+     "p90": 50.44,
+     "max": 58.77415
+    }
+   },
+   "switching": {
+    "actions": 446,
+    "episodes": 30,
+    "runs": 30,
+    "switches": 29,
+    "switches_leaving_open_inventory": 0,
+    "switches_leaving_nothing_to_return_to": 29,
+    "share_of_switches_leaving_open_inventory": 0.0,
+    "episodes_revisited_after_leaving": 0,
+    "share_of_episodes_revisited": 0.0,
+    "visits_per_episode": {
+     "mean": 1.0,
+     "p50": 1.0,
+     "max": 1
+    },
+    "actions_per_run": {
+     "mean": 14.8667,
+     "p50": 14.5,
+     "p90": 25,
+     "max": 33
+    },
+    "seconds_between_runs": {
+     "p50": 320,
+     "p90": 11232
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  },
+  "2026-W15 (2026-04-13)": {
+   "episodes": 55,
+   "actions": 1000,
+   "gross_dollars": 7316.2,
+   "span_days": 4.48,
+   "episodes_per_active_day": 12.26,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 55,
+     "zero_length_intervals": 4,
+     "active_seconds": 29548,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 29548
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 55,
+     "zero_length_intervals": 0,
+     "active_seconds": 42322,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 42322
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 55,
+     "zero_length_intervals": 0,
+     "active_seconds": 42322,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 42322
+     }
+    }
+   },
+   "shape": {
+    "episodes": 55,
+    "actions_per_episode": {
+     "n": 55,
+     "mean": 18.1818,
+     "p10": 4,
+     "p25": 9,
+     "p50": 18,
+     "p75": 23,
+     "p90": 32,
+     "max": 46
+    },
+    "dwell_seconds": {
+     "n": 55,
+     "mean": 537.2364,
+     "p10": 86,
+     "p25": 364,
+     "p50": 584,
+     "p75": 752,
+     "p90": 856,
+     "max": 882
+    },
+    "gross_dollars_per_episode": {
+     "n": 55,
+     "mean": 133.0219,
+     "p10": 19.7279,
+     "p25": 58.2,
+     "p50": 112.6049,
+     "p75": 180.0457,
+     "p90": 251.428198,
+     "max": 418.479487
+    },
+    "single_action_episodes": 4,
+    "episodes_completing_inventory": 0,
+    "share_completing_inventory": 0.0,
+    "abs_final_residual": {
+     "n": 55,
+     "mean": 39.5025,
+     "p10": 3.455695,
+     "p25": 6.48,
+     "p50": 28.033981,
+     "p75": 55.56,
+     "p90": 107.7,
+     "max": 149.635131
+    }
+   },
+   "switching": {
+    "actions": 1000,
+    "episodes": 55,
+    "runs": 55,
+    "switches": 54,
+    "switches_leaving_open_inventory": 0,
+    "switches_leaving_nothing_to_return_to": 54,
+    "share_of_switches_leaving_open_inventory": 0.0,
+    "episodes_revisited_after_leaving": 0,
+    "share_of_episodes_revisited": 0.0,
+    "visits_per_episode": {
+     "mean": 1.0,
+     "p50": 1,
+     "max": 1
+    },
+    "actions_per_run": {
+     "mean": 18.1818,
+     "p50": 18,
+     "p90": 32,
+     "max": 46
+    },
+    "seconds_between_runs": {
+     "p50": 374.0,
+     "p90": 10040
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  },
+  "2026-W16 (2026-04-20)": {
+   "episodes": 30,
+   "actions": 1657,
+   "gross_dollars": 11713.4,
+   "span_days": 0.81,
+   "episodes_per_active_day": 30.0,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 30,
+     "zero_length_intervals": 0,
+     "active_seconds": 21074,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 21074
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 30,
+     "zero_length_intervals": 0,
+     "active_seconds": 25322,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 25322
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 30,
+     "zero_length_intervals": 0,
+     "active_seconds": 25322,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 25322
+     }
+    }
+   },
+   "shape": {
+    "episodes": 30,
+    "actions_per_episode": {
+     "n": 30,
+     "mean": 55.2333,
+     "p10": 17,
+     "p25": 29,
+     "p50": 56,
+     "p75": 70,
+     "p90": 105,
+     "max": 142
+    },
+    "dwell_seconds": {
+     "n": 30,
+     "mean": 702.4667,
+     "p10": 484,
+     "p25": 636,
+     "p50": 796,
+     "p75": 836,
+     "p90": 872,
+     "max": 878
+    },
+    "gross_dollars_per_episode": {
+     "n": 30,
+     "mean": 390.4468,
+     "p10": 113.855022,
+     "p25": 205.163485,
+     "p50": 412.164483,
+     "p75": 488.349617,
+     "p90": 750.641332,
+     "max": 986.011409
+    },
+    "single_action_episodes": 0,
+    "episodes_completing_inventory": 0,
+    "share_completing_inventory": 0.0,
+    "abs_final_residual": {
+     "n": 30,
+     "mean": 58.9644,
+     "p10": 11.334796,
+     "p25": 17.71886,
+     "p50": 50.012619,
+     "p75": 93.213808,
+     "p90": 151.39995,
+     "max": 167.558403
+    }
+   },
+   "switching": {
+    "actions": 1657,
+    "episodes": 30,
+    "runs": 30,
+    "switches": 29,
+    "switches_leaving_open_inventory": 0,
+    "switches_leaving_nothing_to_return_to": 29,
+    "share_of_switches_leaving_open_inventory": 0.0,
+    "episodes_revisited_after_leaving": 0,
+    "share_of_episodes_revisited": 0.0,
+    "visits_per_episode": {
+     "mean": 1.0,
+     "p50": 1.0,
+     "max": 1
+    },
+    "actions_per_run": {
+     "mean": 55.2333,
+     "p50": 54.5,
+     "p90": 105,
+     "max": 142
+    },
+    "seconds_between_runs": {
+     "p50": 140,
+     "p90": 472
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  },
+  "2026-W34 (2026-08-24)": {
+   "episodes": 1526,
+   "actions": 51811,
+   "gross_dollars": 548901.45,
+   "span_days": 2.68,
+   "episodes_per_active_day": 570.35,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 1526,
+     "zero_length_intervals": 235,
+     "active_seconds": 203977,
+     "max_simultaneous": 4,
+     "mean_simultaneous_time_weighted": 1.6196,
+     "median_simultaneous_time_weighted": 2,
+     "share_of_active_time_at_level": {
+      "1": 0.490207,
+      "2": 0.400501,
+      "3": 0.108733,
+      "4": 0.000559
+     },
+     "share_at_1": 0.490207,
+     "share_at_2_or_more": 0.509793,
+     "share_at_3_or_more": 0.109292,
+     "seconds_at_level": {
+      "1": 99991,
+      "2": 81693,
+      "3": 22179,
+      "4": 114
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 1526,
+     "zero_length_intervals": 0,
+     "active_seconds": 224108,
+     "max_simultaneous": 4,
+     "mean_simultaneous_time_weighted": 2.1819,
+     "median_simultaneous_time_weighted": 2,
+     "share_of_active_time_at_level": {
+      "1": 0.211603,
+      "2": 0.403926,
+      "3": 0.375453,
+      "4": 0.009018
+     },
+     "share_at_1": 0.211603,
+     "share_at_2_or_more": 0.788397,
+     "share_at_3_or_more": 0.384471,
+     "seconds_at_level": {
+      "1": 47422,
+      "2": 90523,
+      "3": 84142,
+      "4": 2021
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 1510,
+     "zero_length_intervals": 0,
+     "active_seconds": 224108,
+     "max_simultaneous": 4,
+     "mean_simultaneous_time_weighted": 2.1674,
+     "median_simultaneous_time_weighted": 2,
+     "share_of_active_time_at_level": {
+      "1": 0.220724,
+      "2": 0.399727,
+      "3": 0.371013,
+      "4": 0.008536
+     },
+     "share_at_1": 0.220724,
+     "share_at_2_or_more": 0.779276,
+     "share_at_3_or_more": 0.379549,
+     "seconds_at_level": {
+      "1": 49466,
+      "2": 89582,
+      "3": 83147,
+      "4": 1913
+     }
+    }
+   },
+   "shape": {
+    "episodes": 1526,
+    "actions_per_episode": {
+     "n": 1526,
+     "mean": 33.9522,
+     "p10": 1,
+     "p25": 3,
+     "p50": 5,
+     "p75": 10,
+     "p90": 158,
+     "max": 461
+    },
+    "dwell_seconds": {
+     "n": 1526,
+     "mean": 216.4941,
+     "p10": 0,
+     "p25": 41,
+     "p50": 141,
+     "p75": 234,
+     "p90": 774,
+     "max": 882
+    },
+    "gross_dollars_per_episode": {
+     "n": 1526,
+     "mean": 359.6995,
+     "p10": 8.112,
+     "p25": 34.16035,
+     "p50": 98.414528,
+     "p75": 204.6452,
+     "p90": 1484.025141,
+     "max": 4848.554624
+    },
+    "single_action_episodes": 192,
+    "episodes_completing_inventory": 16,
+    "share_completing_inventory": 0.010485,
+    "abs_final_residual": {
+     "n": 1526,
+     "mean": 111.1202,
+     "p10": 9.587504,
+     "p25": 26.04,
+     "p50": 64.73685,
+     "p75": 137.15,
+     "p90": 253.148255,
+     "max": 1168.43298
+    }
+   },
+   "switching": {
+    "actions": 51811,
+    "episodes": 1526,
+    "runs": 8273,
+    "switches": 8272,
+    "switches_leaving_open_inventory": 6692,
+    "switches_leaving_nothing_to_return_to": 1580,
+    "share_of_switches_leaving_open_inventory": 0.808994,
+    "episodes_revisited_after_leaving": 1229,
+    "share_of_episodes_revisited": 0.805374,
+    "visits_per_episode": {
+     "mean": 5.4214,
+     "p50": 3.0,
+     "max": 36
+    },
+    "actions_per_run": {
+     "mean": 6.2627,
+     "p50": 2,
+     "p90": 16,
+     "max": 170
+    },
+    "seconds_between_runs": {
+     "p50": 3.0,
+     "p90": 21
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  },
+  "2026-W35 (2026-08-31)": {
+   "episodes": 474,
+   "actions": 14904,
+   "gross_dollars": 149622.0,
+   "span_days": 0.97,
+   "episodes_per_active_day": 474.0,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 474,
+     "zero_length_intervals": 71,
+     "active_seconds": 58625,
+     "max_simultaneous": 4,
+     "mean_simultaneous_time_weighted": 1.7269,
+     "median_simultaneous_time_weighted": 2,
+     "share_of_active_time_at_level": {
+      "1": 0.437305,
+      "2": 0.410661,
+      "3": 0.139906,
+      "4": 0.012128
+     },
+     "share_at_1": 0.437305,
+     "share_at_2_or_more": 0.562695,
+     "share_at_3_or_more": 0.152034,
+     "seconds_at_level": {
+      "1": 25637,
+      "2": 24075,
+      "3": 8202,
+      "4": 711
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 474,
+     "zero_length_intervals": 0,
+     "active_seconds": 65415,
+     "max_simultaneous": 4,
+     "mean_simultaneous_time_weighted": 2.354,
+     "median_simultaneous_time_weighted": 2,
+     "share_of_active_time_at_level": {
+      "1": 0.166659,
+      "2": 0.373324,
+      "3": 0.399404,
+      "4": 0.060613
+     },
+     "share_at_1": 0.166659,
+     "share_at_2_or_more": 0.833341,
+     "share_at_3_or_more": 0.460017,
+     "seconds_at_level": {
+      "1": 10902,
+      "2": 24421,
+      "3": 26127,
+      "4": 3965
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 467,
+     "zero_length_intervals": 0,
+     "active_seconds": 65415,
+     "max_simultaneous": 4,
+     "mean_simultaneous_time_weighted": 2.3301,
+     "median_simultaneous_time_weighted": 2,
+     "share_of_active_time_at_level": {
+      "1": 0.179546,
+      "2": 0.368692,
+      "3": 0.3939,
+      "4": 0.057861
+     },
+     "share_at_1": 0.179546,
+     "share_at_2_or_more": 0.820453,
+     "share_at_3_or_more": 0.451761,
+     "seconds_at_level": {
+      "1": 11745,
+      "2": 24118,
+      "3": 25767,
+      "4": 3785
+     }
+    }
+   },
+   "shape": {
+    "episodes": 474,
+    "actions_per_episode": {
+     "n": 474,
+     "mean": 31.443,
+     "p10": 1,
+     "p25": 2,
+     "p50": 5,
+     "p75": 9,
+     "p90": 144,
+     "max": 387
+    },
+    "dwell_seconds": {
+     "n": 474,
+     "mean": 213.5802,
+     "p10": 0,
+     "p25": 47,
+     "p50": 135,
+     "p75": 229,
+     "p90": 720,
+     "max": 879
+    },
+    "gross_dollars_per_episode": {
+     "n": 474,
+     "mean": 315.6582,
+     "p10": 8.88369,
+     "p25": 24.03208,
+     "p50": 65.1536,
+     "p75": 184.819077,
+     "p90": 1248.112284,
+     "max": 4150.617302
+    },
+    "single_action_episodes": 66,
+    "episodes_completing_inventory": 7,
+    "share_completing_inventory": 0.014768,
+    "abs_final_residual": {
+     "n": 474,
+     "mean": 99.8485,
+     "p10": 9.37,
+     "p25": 25.0,
+     "p50": 52.95,
+     "p75": 117.24,
+     "p90": 237.714529,
+     "max": 888.395636
+    }
+   },
+   "switching": {
+    "actions": 14904,
+    "episodes": 474,
+    "runs": 2485,
+    "switches": 2484,
+    "switches_leaving_open_inventory": 1987,
+    "switches_leaving_nothing_to_return_to": 497,
+    "share_of_switches_leaving_open_inventory": 0.799919,
+    "episodes_revisited_after_leaving": 379,
+    "share_of_episodes_revisited": 0.799578,
+    "visits_per_episode": {
+     "mean": 5.2426,
+     "p50": 3.5,
+     "max": 28
+    },
+    "actions_per_run": {
+     "mean": 5.9976,
+     "p50": 2,
+     "p90": 16,
+     "max": 132
+    },
+    "seconds_between_runs": {
+     "p50": 3.0,
+     "p90": 21
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  }
+ },
+ "by_lane": {
+  "BTC-15m": {
+   "episodes": 527,
+   "actions": 63569,
+   "gross_dollars": 573704.72,
+   "span_days": 165.51,
+   "episodes_per_active_day": 3.18,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 527,
+     "zero_length_intervals": 15,
+     "active_seconds": 355656,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 355656
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 527,
+     "zero_length_intervals": 0,
+     "active_seconds": 442071,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 442071
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 527,
+     "zero_length_intervals": 0,
+     "active_seconds": 442071,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 442071
+     }
+    }
+   },
+   "shape": {
+    "episodes": 527,
+    "actions_per_episode": {
+     "n": 527,
+     "mean": 120.6243,
+     "p10": 9,
+     "p25": 25,
+     "p50": 122,
+     "p75": 187,
+     "p90": 258,
+     "max": 461
+    },
+    "dwell_seconds": {
+     "n": 527,
+     "mean": 674.8691,
+     "p10": 326,
+     "p25": 607,
+     "p50": 756,
+     "p75": 832,
+     "p90": 859,
+     "max": 888
+    },
+    "gross_dollars_per_episode": {
+     "n": 527,
+     "mean": 1088.6238,
+     "p10": 49.1,
+     "p25": 129.504298,
+     "p50": 989.861134,
+     "p75": 1777.058965,
+     "p90": 2408.325445,
+     "max": 4848.554624
+    },
+    "single_action_episodes": 15,
+    "episodes_completing_inventory": 0,
+    "share_completing_inventory": 0.0,
+    "abs_final_residual": {
+     "n": 527,
+     "mean": 197.715,
+     "p10": 9.477194,
+     "p25": 29.0,
+     "p50": 109.89,
+     "p75": 300.802431,
+     "p90": 522.478234,
+     "max": 1168.43298
+    }
+   },
+   "switching": {
+    "actions": 63569,
+    "episodes": 527,
+    "runs": 527,
+    "switches": 526,
+    "switches_leaving_open_inventory": 0,
+    "switches_leaving_nothing_to_return_to": 526,
+    "share_of_switches_leaving_open_inventory": 0.0,
+    "episodes_revisited_after_leaving": 0,
+    "share_of_episodes_revisited": 0.0,
+    "visits_per_episode": {
+     "mean": 1.0,
+     "p50": 1,
+     "max": 1
+    },
+    "actions_per_run": {
+     "mean": 120.6243,
+     "p50": 122,
+     "p90": 258,
+     "max": 461
+    },
+    "seconds_between_runs": {
+     "p50": 147.0,
+     "p90": 1913
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  },
+  "BTC-5m": {
+   "episodes": 957,
+   "actions": 6229,
+   "gross_dollars": 129039.63,
+   "span_days": 165.54,
+   "episodes_per_active_day": 5.78,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 957,
+     "zero_length_intervals": 58,
+     "active_seconds": 138902,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 138902
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 957,
+     "zero_length_intervals": 0,
+     "active_seconds": 221836,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 221836
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 938,
+     "zero_length_intervals": 0,
+     "active_seconds": 217592,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 217592
+     }
+    }
+   },
+   "shape": {
+    "episodes": 957,
+    "actions_per_episode": {
+     "n": 957,
+     "mean": 6.5089,
+     "p10": 2,
+     "p25": 4,
+     "p50": 6,
+     "p75": 9,
+     "p90": 12,
+     "max": 21
+    },
+    "dwell_seconds": {
+     "n": 957,
+     "mean": 145.1432,
+     "p10": 27,
+     "p25": 89,
+     "p50": 150,
+     "p75": 207,
+     "p90": 244,
+     "max": 296
+    },
+    "gross_dollars_per_episode": {
+     "n": 957,
+     "mean": 134.8376,
+     "p10": 31.36484,
+     "p25": 68.306499,
+     "p50": 126.6157,
+     "p75": 184.365758,
+     "p90": 249.33102,
+     "max": 453.238725
+    },
+    "single_action_episodes": 47,
+    "episodes_completing_inventory": 19,
+    "share_completing_inventory": 0.019854,
+    "abs_final_residual": {
+     "n": 957,
+     "mean": 96.3711,
+     "p10": 15.101125,
+     "p25": 39.6,
+     "p50": 81.235291,
+     "p75": 134.27,
+     "p90": 195.595727,
+     "max": 535.414136
+    }
+   },
+   "switching": {
+    "actions": 6229,
+    "episodes": 957,
+    "runs": 957,
+    "switches": 956,
+    "switches_leaving_open_inventory": 0,
+    "switches_leaving_nothing_to_return_to": 956,
+    "share_of_switches_leaving_open_inventory": 0.0,
+    "episodes_revisited_after_leaving": 0,
+    "share_of_episodes_revisited": 0.0,
+    "visits_per_episode": {
+     "mean": 1.0,
+     "p50": 1,
+     "max": 1
+    },
+    "actions_per_run": {
+     "mean": 6.5089,
+     "p50": 6,
+     "p90": 12,
+     "max": 21
+    },
+    "seconds_between_runs": {
+     "p50": 145.0,
+     "p90": 299
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  },
+  "ETH-15m": {
+   "episodes": 29,
+   "actions": 117,
+   "gross_dollars": 1041.76,
+   "span_days": 3.1,
+   "episodes_per_active_day": 9.37,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 29,
+     "zero_length_intervals": 5,
+     "active_seconds": 8639,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 8639
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 29,
+     "zero_length_intervals": 0,
+     "active_seconds": 16225,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 16225
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 29,
+     "zero_length_intervals": 0,
+     "active_seconds": 16225,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 16225
+     }
+    }
+   },
+   "shape": {
+    "episodes": 29,
+    "actions_per_episode": {
+     "n": 29,
+     "mean": 4.0345,
+     "p10": 1,
+     "p25": 2,
+     "p50": 3,
+     "p75": 6,
+     "p90": 8,
+     "max": 10
+    },
+    "dwell_seconds": {
+     "n": 29,
+     "mean": 297.8966,
+     "p10": 0,
+     "p25": 60,
+     "p50": 209,
+     "p75": 547,
+     "p90": 754,
+     "max": 792
+    },
+    "gross_dollars_per_episode": {
+     "n": 29,
+     "mean": 35.9227,
+     "p10": 3.81605,
+     "p25": 13.68826,
+     "p50": 34.10852,
+     "p75": 50.1978,
+     "p90": 64.98219,
+     "max": 106.96262
+    },
+    "single_action_episodes": 5,
+    "episodes_completing_inventory": 0,
+    "share_completing_inventory": 0.0,
+    "abs_final_residual": {
+     "n": 29,
+     "mean": 26.4154,
+     "p10": 2.0,
+     "p25": 10.57,
+     "p50": 19.76,
+     "p75": 40.0,
+     "p90": 53.02475,
+     "max": 60.527986
+    }
+   },
+   "switching": {
+    "actions": 117,
+    "episodes": 29,
+    "runs": 29,
+    "switches": 28,
+    "switches_leaving_open_inventory": 0,
+    "switches_leaving_nothing_to_return_to": 28,
+    "share_of_switches_leaving_open_inventory": 0.0,
+    "episodes_revisited_after_leaving": 0,
+    "share_of_episodes_revisited": 0.0,
+    "visits_per_episode": {
+     "mean": 1.0,
+     "p50": 1,
+     "max": 1
+    },
+    "actions_per_run": {
+     "mean": 4.0345,
+     "p50": 3,
+     "p90": 8,
+     "max": 10
+    },
+    "seconds_between_runs": {
+     "p50": 607.0,
+     "p90": 2583
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  },
+  "ETH-5m": {
+   "episodes": 703,
+   "actions": 2069,
+   "gross_dollars": 24718.14,
+   "span_days": 3.64,
+   "episodes_per_active_day": 193.08,
+   "concurrency": {
+    "trading": {
+     "label": "first fill -> last fill (actively worked)",
+     "intervals": 703,
+     "zero_length_intervals": 243,
+     "active_seconds": 46698,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 46698
+     }
+    },
+    "capital": {
+     "label": "first fill -> settlement (money committed)",
+     "intervals": 703,
+     "zero_length_intervals": 0,
+     "active_seconds": 128488,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 128488
+     }
+    },
+    "residual_books": {
+     "label": "episodes ending with open inventory",
+     "intervals": 699,
+     "zero_length_intervals": 0,
+     "active_seconds": 127914,
+     "max_simultaneous": 1,
+     "mean_simultaneous_time_weighted": 1.0,
+     "median_simultaneous_time_weighted": 1,
+     "share_of_active_time_at_level": {
+      "1": 1.0
+     },
+     "share_at_1": 1.0,
+     "share_at_2_or_more": 0,
+     "share_at_3_or_more": 0,
+     "seconds_at_level": {
+      "1": 127914
+     }
+    }
+   },
+   "shape": {
+    "episodes": 703,
+    "actions_per_episode": {
+     "n": 703,
+     "mean": 2.9431,
+     "p10": 1,
+     "p25": 1,
+     "p50": 2,
+     "p75": 4,
+     "p90": 6,
+     "max": 14
+    },
+    "dwell_seconds": {
+     "n": 703,
+     "mean": 66.4267,
+     "p10": 0,
+     "p25": 0,
+     "p50": 33,
+     "p75": 125,
+     "p90": 191,
+     "max": 282
+    },
+    "gross_dollars_per_episode": {
+     "n": 703,
+     "mean": 35.1609,
+     "p10": 3.07166,
+     "p25": 8.73781,
+     "p50": 25.39958,
+     "p75": 49.86403,
+     "p90": 85.2876,
+     "max": 247.145707
+    },
+    "single_action_episodes": 206,
+    "episodes_completing_inventory": 4,
+    "share_completing_inventory": 0.00569,
+    "abs_final_residual": {
+     "n": 703,
+     "mean": 39.4175,
+     "p10": 5.0,
+     "p25": 11.98,
+     "p50": 30.0,
+     "p75": 52.66,
+     "p90": 96.52,
+     "max": 217.841895
+    }
+   },
+   "switching": {
+    "actions": 2069,
+    "episodes": 703,
+    "runs": 703,
+    "switches": 702,
+    "switches_leaving_open_inventory": 0,
+    "switches_leaving_nothing_to_return_to": 702,
+    "share_of_switches_leaving_open_inventory": 0.0,
+    "episodes_revisited_after_leaving": 0,
+    "share_of_episodes_revisited": 0.0,
+    "visits_per_episode": {
+     "mean": 1.0,
+     "p50": 1,
+     "max": 1
+    },
+    "actions_per_run": {
+     "mean": 2.9431,
+     "p50": 2,
+     "p90": 6,
+     "max": 14
+    },
+    "seconds_between_runs": {
+     "p50": 290.0,
+     "p90": 695
+    },
+    "note": "ties inside one second are ordered by window_id, so run counts are a lower bound on interleaving at sub-second resolution"
+   }
+  }
+ }
+}
