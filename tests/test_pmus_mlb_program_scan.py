@@ -104,7 +104,13 @@ def test_scan_flags_a_discovery_gap_instead_of_concluding_absence():
     out = ia.mlb_program_scan(FakeT(_routes(programs={"programs": PROGRAMS["programs"][:1]})))
     assert out["mlb_markets"] == 4 and out["liquidity_pool_any_period"] == 0
     assert out["mlb_program_entries"] == []
-    assert "August accrual" in out["discovery_gap"] and "not 'MLB has none'" in out["discovery_gap"]
+    assert "August accrual" in out["discovery_gap"]
+    assert "never 'MLB has none'" in out["discovery_gap"]
+    # the reason absence cannot mean "never": the list only ever returns
+    # ACTIVE periods, so a finished MLB program is invisible to it by design
+    assert "ACTIVE-ONLY" in out["discovery_gap"]
+    assert out["program_list_census"]["exhausted"] is True
+    assert any("ACTIVE-ONLY" in x for x in out["program_list_census"]["limits"])
     assert "0/4 currently have an ACTIVE" in out["statement"]
 
 
@@ -140,3 +146,65 @@ def test_audit_carries_the_mlb_statement_in_its_verdict(monkeypatch, tmp_path):
     out = ia.incentive_audit(FakeT(routes))
     assert out["mlb_scan"]["mlb_markets"] == 4
     assert out["verdict"]["mlb"].startswith("MLB markets present: 4 (2 live)")
+
+
+def test_program_list_walks_every_page_and_says_it_is_an_active_only_view():
+    """OWNER 5561482606: a census, not a snapshot. The venue serves a fixed
+    100 rows per page behind nextPageToken, so the previous single read
+    reported 'MLB entries in the program list: 0 of 100' -- a fact about one
+    page. It is also ACTIVE-ONLY, which is why absence can never mean
+    'never had one'."""
+    from src import pmus_incentive_audit as ia
+    from src import pmus_q1_executor as q1
+
+    pages = {
+        "/v1/incentives": {"programs": [
+            {"marketSlug": "astatc-atp-a-b", "timePeriods": [
+                {"programId": "us_open", "status": "active", "rewardPool": 400}]}],
+            "nextPageToken": "t2"},
+        "/v1/incentives?pageToken=t2": {"programs": [
+            {"marketSlug": "astatc-wta-c-d", "timePeriods": [
+                {"programId": "us_open", "status": "active", "rewardPool": 400}]}],
+            "nextPageToken": "t3"},
+        "/v1/incentives?pageToken=t3": {"programs": [
+            {"marketSlug": "tsc-mlb-stl-sf-7pt5", "timePeriods": [
+                {"programId": "mlb_live", "status": "active", "rewardPool": 900}]}]},
+    }
+
+    class T:
+        def __init__(self):
+            self.paths = []
+
+        def request(self, method, path, body=None, base=q1.API):
+            self.paths.append(path)
+            return pages[path]
+
+    t = T()
+    out = ia.program_list(t)
+    assert out["pages"] == 3 and out["rows"] == 3 and out["exhausted"] is True
+    assert out["truncated_at_page_cap"] is False and out["error"] is None
+    assert t.paths == list(pages)
+    # the MLB row lives on page THREE: a single-page read would have missed it
+    assert out["by_league"] == {"atp": 1, "wta": 1, "mlb": 1}
+    assert out["period_statuses"] == {"active": 3}
+    assert {p["program_id"] for p in out["programs"]} == {"us_open", "mlb_live"}
+    assert out["programs"][0]["market_rows"] == 2          # us_open, most rows
+    assert any("ACTIVE-ONLY" in x for x in out["limits"])
+    assert any("never" in x.lower() for x in out["limits"])
+
+    # a mid-walk failure is visible, not silent: keep what was gathered and
+    # say the walk did NOT reach the end
+    class Broken(T):
+        def request(self, method, path, body=None, base=q1.API):
+            if path.endswith("t2"):
+                raise RuntimeError("HTTP 503")
+            return super().request(method, path, body=body, base=base)
+
+    bad = ia.program_list(Broken())
+    assert bad["pages"] == 1 and bad["rows"] == 1
+    assert bad["exhausted"] is False and "503" in bad["error"]
+
+    # a page cap short of the end is reported as truncation, never as a census
+    capped = ia.program_list(T(), max_pages=2)
+    assert capped["pages"] == 2 and capped["exhausted"] is False
+    assert capped["truncated_at_page_cap"] is True and capped["by_league"].get("mlb") is None

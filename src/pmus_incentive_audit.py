@@ -26,6 +26,7 @@ only observed, venue-confirmed credits may ever be called realized.
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter
 from decimal import Decimal as D, ROUND_HALF_EVEN
 from typing import Any, Mapping, Optional
@@ -265,15 +266,109 @@ def balances(t: q1.Transport) -> dict:
             "fee_or_rebate_key_paths": _scan_keys(resp)}
 
 
+PROGRAM_LIST_PATH = "/v1/incentives"
+# 200 pages = 20,000 rows ~= 50 s of bounded GETs, run hourly. Measured
+# 2026-09-07T07:3xZ the live list had not exhausted by 1,000 pages /
+# 100,000 rows -- every one of them ATP or WTA across four US-Open programs
+# -- so a bounded walk is a SAMPLE. That is why truncation is reported and
+# why a truncated walk can never support an absence claim.
+PROGRAM_LIST_MAX_PAGES = int(os.getenv("PMUS_PROGRAM_LIST_MAX_PAGES", "200"))
+
+
+def program_list(t: q1.Transport, max_pages: Optional[int] = None) -> dict:
+    """The WHOLE published program list, not page one.
+
+    OWNER 5561482606: "do not equate 'MLB games exist' with 'no MLB
+    incentive program,' and do not state 'MLB has none' from a
+    partial/current program snapshot."
+
+    Two limits of this endpoint, both measured against the live gateway at
+    2026-09-07T07:2xZ, and both of which a single-page read hides:
+
+    1. PAGINATION. It serves a fixed 100 rows per page behind a
+       nextPageToken and ignores limit / pageSize (all return 100). The
+       previous single `_get` is exactly what produced the reading "MLB
+       entries in the program list: 0 of 100" -- a statement about one
+       page, not about the venue. Walked properly it runs to tens of
+       thousands of rows.
+    2. ACTIVE-ONLY. Every timePeriod it returns carries status "active",
+       and none of ?status=ended, ?status=expired, ?includeInactive=true
+       or ?active=false changes the response at all. So absence of a
+       league from this list means "no program running right now". It can
+       never mean "this league never had one", and this function reports
+       that limitation inline so no caller can read it the other way.
+
+    Bounded and fail-visible: a page error stops the walk and is returned
+    with everything gathered so far, and `exhausted` says whether the end
+    was actually reached.
+    """
+    cap = PROGRAM_LIST_MAX_PAGES if max_pages is None else max_pages
+    entries: list[dict] = []
+    by_league: Counter = Counter()
+    statuses: Counter = Counter()
+    by_program: dict = {}
+    token, pages, error = None, 0, None
+    while pages < cap:
+        path = PROGRAM_LIST_PATH + (f"?pageToken={token}" if token else "")
+        r = _get(t, path, base=q1.GATEWAY)
+        if not r["ok"]:
+            error = r["error"]
+            break
+        resp = r["response"]
+        rows = resp.get("programs") if isinstance(resp, Mapping) else resp
+        rows = [x for x in (rows or []) if isinstance(x, Mapping)]
+        pages += 1
+        for p in rows:
+            slug = str(p.get("marketSlug") or p.get("slug") or "")
+            parts = slug.split("-")
+            league = parts[1] if len(parts) > 1 else "?"
+            by_league[league] += 1
+            periods = [x for x in (p.get("timePeriods") or []) if isinstance(x, Mapping)]
+            for x in periods:
+                statuses[str(x.get("status") or "?").lower()] += 1
+                pid = str(x.get("programId") or x.get("id") or "?")
+                b = by_program.setdefault(pid, {
+                    "program_id": pid, "program_type": x.get("programType"),
+                    "reward_pool": x.get("rewardPool"), "period": x.get("period"),
+                    "start": x.get("start"), "end": x.get("end"),
+                    "market_rows": 0, "leagues": Counter()})
+                b["market_rows"] += 1
+                b["leagues"][league] += 1
+            entries.append({"slug": slug, "league": league,
+                            "instrumentState": p.get("instrumentState"),
+                            "periods": periods})
+        token = (resp.get("nextPageToken") if isinstance(resp, Mapping) else None)
+        if not token or not rows:
+            break
+    exhausted = error is None and not token
+    return {
+        "ok": bool(entries) or error is None,
+        "error": error, "pages": pages, "rows": len(entries),
+        "exhausted": exhausted, "truncated_at_page_cap": pages >= cap and not exhausted,
+        "page_cap": cap,
+        "by_league": dict(by_league.most_common()),
+        "period_statuses": dict(statuses),
+        "programs": [{**b, "leagues": dict(b["leagues"])}
+                     for b in sorted(by_program.values(),
+                                     key=lambda x: -x["market_rows"])],
+        "entries": entries,
+        "limits": [
+            "fixed 100 rows per page; limit/pageSize are ignored by the venue",
+            "ACTIVE-ONLY view: every period returned has status 'active' and no "
+            "status/includeInactive parameter surfaces ended or expired ones",
+            "absence of a league means 'no program running now', NEVER 'never had one'",
+        ],
+    }
+
+
 def published_programs(t: q1.Transport, our_slugs: list[str]) -> dict:
     """PUBLISHED (not observed): the venue's incentive programs and which
     of this ledger's filled markets they cover."""
-    r = _get(t, "/v1/incentives", base=q1.GATEWAY)
-    if not r["ok"]:
-        return {"ok": False, "error": r["error"]}
-    resp = r["response"]
-    progs = resp.get("programs") if isinstance(resp, Mapping) else resp
-    progs = [p for p in (progs or []) if isinstance(p, Mapping)]
+    census = program_list(t)
+    if census["error"] and census["pages"] == 0:
+        return {"ok": False, "error": census["error"]}
+    progs = [{"marketSlug": e["slug"], "instrumentState": e["instrumentState"],
+              "timePeriods": e["periods"]} for e in census["entries"]]
     ours = set(our_slugs)
     # LIVE 18:36Z: the venue lists ONE ENTRY PER MARKET -- marketSlug,
     # instrumentState, category and timePeriods[{programId, programType,
@@ -313,7 +408,12 @@ def published_programs(t: q1.Transport, our_slugs: list[str]) -> dict:
             "markets_with_active_period": markets_active,
             "keys_of_first": sorted(progs[0].keys()) if progs else None,
             "by_program": summary[:40], "our_markets_in_programs": matched,
-            "raw_head": json.dumps(resp, default=str)[:500]}
+            # the list is PAGINATED and ACTIVE-ONLY; carry both so no reader
+            # mistakes one page, or one moment, for the venue's whole history
+            "census": {k: census[k] for k in
+                       ("pages", "rows", "exhausted", "truncated_at_page_cap",
+                        "by_league", "period_statuses", "limits", "error")},
+            "raw_head": json.dumps(progs[:2], default=str)[:500]}
 
 
 MLB_SCAN_EVENT_PATHS = (
@@ -387,30 +487,26 @@ def mlb_program_scan(t: q1.Transport) -> dict:
                     "rebate_eligible_by_fee_coefficient": _positive(m.get("feeCoefficient")),
                     "program_periods": [], "in_program_list": False})
                 row["live"] = row["live"] or live_ev
-    progs = _get(t, "/v1/incentives", base=q1.GATEWAY)
-    program_entries = 0
+    # the WHOLE list, walked page by page: "0 of 100" was a statement about
+    # page one, and the owner asked for a census, not a snapshot
+    census = program_list(t)
+    program_entries = census["rows"]
     mlb_program_entries: list[dict] = []
-    if progs["ok"]:
-        resp = progs["response"]
-        entries = resp.get("programs") if isinstance(resp, Mapping) else resp
-        for p in (entries or []):
-            if not isinstance(p, Mapping):
-                continue
-            program_entries += 1
-            slug = str(p.get("marketSlug") or p.get("slug") or "")
-            periods = [{k: x.get(k) for k in ("programId", "programType", "status", "rewardPool",
-                                               "targetSize", "discountFactor", "period",
-                                               "start", "end", "createdAt")}
-                       for x in (p.get("timePeriods") or []) if isinstance(x, Mapping)]
-            if slug in markets:
-                markets[slug]["in_program_list"] = True
-                markets[slug]["program_periods"] = periods
-            if _is_mlb(slug, p, {}):
-                mlb_program_entries.append({"slug": slug, "instrumentState": p.get("instrumentState"),
-                                            "in_current_universe": slug in markets,
-                                            "periods": periods})
-    else:
-        errors.append(f"/v1/incentives: {progs['error']}")
+    for e in census["entries"]:
+        slug = e["slug"]
+        periods = [{k: x.get(k) for k in ("programId", "programType", "status", "rewardPool",
+                                          "targetSize", "discountFactor", "period",
+                                          "start", "end", "createdAt")}
+                   for x in e["periods"]]
+        if slug in markets:
+            markets[slug]["in_program_list"] = True
+            markets[slug]["program_periods"] = periods
+        if _is_mlb(slug, {"instrumentState": e.get("instrumentState")}, {}):
+            mlb_program_entries.append({"slug": slug, "instrumentState": e.get("instrumentState"),
+                                        "in_current_universe": slug in markets,
+                                        "periods": periods})
+    if census["error"]:
+        errors.append(f"/v1/incentives: {census['error']}")
     # LIVE 19:31Z: 6,704 MLB markets, 3,818 live -- player props (astatc-)
     # swamp a slug-sorted list, so main markets (moneyline aec-, totals
     # tsc-, spreads asc-) come first and every GAME gets one summary row
@@ -444,6 +540,8 @@ def mlb_program_scan(t: q1.Transport) -> dict:
                      if any(str(x.get("status") or "").lower() == "active" for x in r["program_periods"])]
     n = len(rows)
     live_games = [g for g in game_rows if g["live"]]
+    walk_reach = ("exhausted" if census["exhausted"] else
+                  "TRUNCATED -- a sample, which cannot support an absence claim")
     statement = (f"MLB markets present: {n} ({len(live)} live) across {len(game_rows)} games "
                  f"({len(live_games)} live) at {scanned_at}; "
                  f"{len(rebate)}/{n} carry a positive feeCoefficient (maker-rebate formula "
@@ -451,7 +549,10 @@ def mlb_program_scan(t: q1.Transport) -> dict:
                  f"and is $0.00 below 1.62 shares after cent rounding); "
                  f"{len(pooled_active)}/{n} currently have an ACTIVE liquidity-reward "
                  f"program period, {len(pooled)}/{n} any period; MLB entries in the "
-                 f"program list: {len(mlb_program_entries)} of {program_entries}")
+                 f"program list: {len(mlb_program_entries)} of {program_entries} "
+                 f"({census['pages']} pages walked, {walk_reach}; and the list is "
+                 f"an ACTIVE-ONLY view, so it is what is running now and says "
+                 f"nothing about what has run before)")
     return {"ok": not errors or bool(rows), "scanned_at": scanned_at, "errors": errors,
             "events_seen": events_seen, "mlb_markets": n, "mlb_live": len(live),
             "mlb_games": len(game_rows), "mlb_games_live": len(live_games),
@@ -460,13 +561,21 @@ def mlb_program_scan(t: q1.Transport) -> dict:
             "liquidity_pool_any_period": len(pooled),
             "liquidity_pool_active_period": len(pooled_active),
             "program_list_entries": program_entries,
+            "program_list_census": {k: census[k] for k in
+                                    ("pages", "rows", "exhausted",
+                                     "truncated_at_page_cap", "by_league",
+                                     "period_statuses", "limits", "error")},
+            "program_list_programs": census["programs"][:MLB_ROW_LIMIT],
             "mlb_program_entries": mlb_program_entries[:MLB_ROW_LIMIT],
             "statement": statement,
             "discovery_gap": (
-                "MLB markets are present but NONE appears in the program list; the "
-                "August accrual ($0.22, MLB/NFL) proves MLB pools have existed, so "
-                "absence here is a program-lifecycle statement at this timestamp, "
-                "not 'MLB has none'"
+                "MLB markets are present but NONE appears in the program list. The "
+                "August accrual ($0.22, MLB/NFL) proves MLB pools HAVE existed, and "
+                "the list is an ACTIVE-ONLY view (every period it returns has status "
+                "'active'; no status/includeInactive parameter surfaces ended ones), "
+                "so it is structurally incapable of showing a finished MLB program. "
+                "This is a program-lifecycle statement at this timestamp, never "
+                "'MLB has none'"
                 if rows and not mlb_program_entries else None),
             "markets": [{k: r[k] for k in ("slug", "live", "status", "game_start",
                                             "fee_coefficient",
