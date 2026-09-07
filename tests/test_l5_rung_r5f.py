@@ -173,11 +173,20 @@ def test_sized_preflight_for_r5f_requires_the_continuous_shell(monkeypatch):
         == ["buying_power"]
 
 
-def test_r5f_is_not_approved_until_the_owner_names_the_run():
-    """No campaign approval row for R5F exists yet: the rung is built, the
-    approval is the owner's (program statement 'Then run it' at
-    settlement / rung-id confirmation), never written by the code."""
+def test_r5f_approval_is_the_owners_and_follows_r4_exactly_once():
+    """OWNER 5574762432 (2026-09-07T19:11:25Z): 'APPROVE R5F, campaign id
+    R5F-RUN-2026-09-07'. The row quotes the owner, carries the staged
+    shell label verbatim, is consumed once after R4, and never re-runs."""
     rows = cont.load_campaign_approvals()
-    assert all(a.get("rung") != "R5F" for a in rows)
+    r5 = [a for a in rows if a.get("rung") == "R5F"]
+    assert len(r5) == 1 and r5[0]["campaign_id"] == "R5F-RUN-2026-09-07"
+    assert r5[0]["approved_by"] == "owner" and "5574762432" in r5[0]["source"]
+    assert r5[0]["shell"] == ladder.shell_version(ladder.rung("R5F"))
+    assert r5[0]["stop_rule"] == cont.STOP_RULE_RUNG
+    prev = [a["campaign_id"] for a in rows if a["campaign_id"] != "R5F-RUN-2026-09-07"]
+    nxt = cont.approved_continuation("R4-RUN-2026-09-07", prev)
+    assert nxt is not None and nxt["campaign_id"] == "R5F-RUN-2026-09-07"
+    # consumed = never offered again
+    assert cont.approved_continuation("R5F-RUN-2026-09-07", prev) is None
     assert cont.approved_continuation("R4-RUN-2026-09-07",
-                                      [a["campaign_id"] for a in rows]) is None
+                                      prev + ["R5F-RUN-2026-09-07"]) is None
