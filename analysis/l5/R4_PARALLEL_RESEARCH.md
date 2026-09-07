@@ -226,3 +226,21 @@ within one action, i.e. <0.5u here) is the best slice: +0.032 per $ on
 move-up >=3 c slices are positive through their residual (the side that
 had just risen went on to win more often in BTC windows) -- a directional
 effect, not a completion effect, and not a rule.
+
+## 8. opportunity_utilization (`src/l5_opportunity_utilization.py`, OWNER 5570474405)
+
+R4 window 08:09Z -> 12:17Z (4.58 h): ACTIVE 1.07 h (23%), STOPPED 0.46 h
+(the 429 halt, bounded), STRANDED 0.14 h (residual held to settlement, by
+rule), FLAT_WAIT 0.36 h (market 2 flat at 09:25Z but the campaign waits for
+settlement before selecting -- an implementation gate; L5 re-enters within
+60 s of settlement 77% of the time), IDLE 2.55 h of which 2.51 h is a
+selection/coverage bottleneck: the recorder pool held 80 rows, 71-78 of
+them resolved 09-06 markets and the rest thin-flow, nothing live and
+evidenced, while the probe itself saw 47-59 live events with 105-140
+markets in progress and the public gateway (11:09Z) showed 257
+in-distribution live markets, 95 executable on public features (14 live,
+14 rebate-eligible at price). 24 of the top-25 in-distribution live
+markets were absent from the pool. Verdict: not "no L5 opportunity"; the
+strict-evidence gate could not admit what the recorder was not serving.
+Capacity foregone at R4's own pace: ~2.4 markets, ~$22 of turnover
+(ESTIMATE, not P&L). Full table: `L5_OPPORTUNITY_UTILIZATION.md`.
