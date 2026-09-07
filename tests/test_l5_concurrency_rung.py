@@ -32,13 +32,17 @@ class T:
 def test_r2c2_is_r2c_caps_with_concurrency_two():
     r = ladder.rung("R2C2")
     assert r["per_market_cap_usd"] == "0.15" and r["residual_units"] == 6
-    assert r["markets_per_campaign"] == 6 and r["concurrency"] == 2
+    assert r["markets_per_campaign"] == 3 and r["concurrency"] == 2
     assert r["max_actions_per_session"] == 6 and r["promote"] is None
     assert ladder.shell_version(r) == (
         "R2C2/cap0.15/residual6/conc2/maker-only/fee-safe0.98/rest30s")
     wc = ladder.worst_case(r)
-    # only CONCURRENT exposure moves; the campaign worst case is unchanged
-    assert wc["per_campaign_usd"] == ladder.worst_case(ladder.rung("R2C"))["per_campaign_usd"]
+    # the per-market cap is R2C's; shortening to 3 markets (OWNER live
+    # 2026-09-07) HALVES the campaign worst case rather than raising it
+    assert wc["per_market_usd"] == ladder.worst_case(ladder.rung("R2C"))["per_market_usd"]
+    assert wc["per_campaign_usd"] == "0.45"
+    assert D(wc["per_campaign_usd"]) < D(ladder.worst_case(ladder.rung("R2C"))["per_campaign_usd"])
+    # concurrent exposure is the ONE figure that rises versus R2C
     assert wc["max_concurrent_open_exposure_usd"] == "0.30"
     assert wc["daily_loss_stop_usd"] == "-1.00"
     # the sized rung is untouched and still concurrency 1

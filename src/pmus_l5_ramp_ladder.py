@@ -112,8 +112,14 @@ OWNER_RUNGS: tuple[dict, ...] = (
     # moves, $0.15 -> $0.30. One session at a time, one outstanding
     # order, maker-only, fee-safe 0.98 and HOLD-to-settlement are all
     # untouched: the campaign works its held markets round-robin.
+    # OWNER live 2026-09-07 ("keep going, let's go live"): shortened from 6
+    # markets to 3. The shell is already PROVEN in production -- 23:59-00:22Z
+    # the campaign held two markets and worked them round-robin, one session
+    # at a time, with no concurrency_breach -- so the remaining three markets
+    # would only delay the owner-approved SIZED rung behind it. Strictly less
+    # exposure: worst case per campaign $0.90 -> $0.45.
     {"id": "R2C2", "name": "R2C caps, concurrency 2 (OWNER live 2026-09-06)",
-     "per_market_cap_usd": "0.15", "residual_units": 6, "markets_per_campaign": 6,
+     "per_market_cap_usd": "0.15", "residual_units": 6, "markets_per_campaign": 3,
      "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 2,
      "lever": "concurrency", "promote": None,
      "derived_from": "R2C cohort 2026-09-06: 97 minutes idle on one held "
