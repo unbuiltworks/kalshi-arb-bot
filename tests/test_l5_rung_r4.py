@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from decimal import Decimal as D
 
+import pytest
+
 from src import pmus_l5_continuous_session as cont
 from src import pmus_l5_ramp_ladder as ladder
 from src import pmus_q1_executor as q1
@@ -192,3 +194,39 @@ def test_r4_rebate_arithmetic_supports_par_and_no_further():
         per_share = q1.maker_rebate(D(p))
         assert D("0.0020") <= per_share <= D("0.0032")
     assert ladder.pair_cost_max(ladder.rung("R4")) == D("1.00")
+
+
+def test_behavioral_ledger_resets_when_a_pair_completes_so_a_second_open_is_not_flat():
+    """LIVE 2026-09-07T08:13Z (R4 first market): open YES 5.31, complete NO
+    5.20, complete NO 0.11 (book flat), open YES 5.10. The behavioral ledger
+    netted the two OPEN targets against the two COMPLETE targets and read
+    -0.27 -- "flat" with an open standing -- a key L5 never produced, so the
+    engine fail-closed HELD $2.447 unmatched for every decision instead of
+    attempting the complement. A completed pair must close the sequence."""
+    from src import pmus_sports_l5_decision as l5d
+    inv = base.Inventory()
+    # fill 1: OPEN YES 5.31 @0.47, L5 target p50 10 shares
+    inv.record(True, D("0.47"), D("5.31"), "open")
+    inv.record_behavioral_shares(True, 10.0, "q5-15")
+    assert inv.behavioral_residual_shares() == 10.0
+    # fill 2: COMPLETE NO 5.20 @0.51, target 11.18
+    inv.record(False, D("0.51"), D("5.20"), "complete")
+    inv.record_behavioral_shares(False, 11.18, "q5-15")
+    assert inv.residual == D("0.11")                       # still not flat
+    assert inv.behavioral_residual_shares() == pytest.approx(-1.18)
+    # fill 3: COMPLETE NO 0.11 @0.50 -> the EXECUTABLE book is flat
+    inv.record(False, D("0.50"), D("0.11"), "complete")
+    inv.record_behavioral_shares(False, 10.03, "q5-15")
+    assert inv.residual == D("0")
+    assert inv.behavioral_residual_shares() is None          # sequence closed
+    # fill 4: a fresh OPEN YES 5.10 @0.49 reads as +10 behavioral shares,
+    # exactly as the first open did -- not as -0.27 "flat"
+    inv.record(True, D("0.49"), D("5.10"), "open")
+    inv.record_behavioral_shares(True, 10.0, "q5-15")
+    assert inv.behavioral_residual_shares() == 10.0
+    key = l5d.state_key(0.49, base.SPORTS_TTE_DEFAULT_S, inv.behavioral_residual_shares())
+    assert "imb" in key and not key.endswith("flat")
+    # and the venue-truth unmatched dollars are what the cap sees: 5.10
+    # unmatched shares at the YES side's BLENDED average (10.41 shares for
+    # $4.9947 = 0.4798), $2.4470 -- the exact figure the live log carried
+    assert base.unmatched_usd(inv) == D("2.4470")

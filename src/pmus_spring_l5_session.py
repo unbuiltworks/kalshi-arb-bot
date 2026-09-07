@@ -235,6 +235,20 @@ class Inventory:
             self.dn_shares_behavioral += float(shares)
         if size_bucket:
             self.last_size_behavioral = size_bucket
+        # LIVE 2026-09-07T08:13-08:15Z (R4, aec-atpcq-aleher-tundur): after a
+        # completed pair the behavioral ledger kept NETTING across it -- two
+        # OPEN targets (+10, +10) against two COMPLETE targets (+11.18,
+        # +10.03) read -0.27, i.e. "flat", while the venue book held 5.10
+        # YES ($2.447) unmatched. "flat" after an open is a key L5's history
+        # never contains, so every decision fell to off_distribution_hold and
+        # the leg R4 exists to complete sat untouched. A matched pair closes
+        # a behavioral sequence: when the EXECUTABLE book is flat the next
+        # open starts a fresh one, exactly as it does in a new window. This
+        # is an accounting fix in the adapter; the frozen model, lookup and
+        # gate are untouched, and it applies identically on resume replay.
+        if self.up == self.dn:
+            self.up_shares_behavioral = 0.0
+            self.dn_shares_behavioral = 0.0
 
     def behavioral_residual_shares(self) -> Optional[float]:
         if self.up_shares_behavioral == 0.0 and self.dn_shares_behavioral == 0.0:
