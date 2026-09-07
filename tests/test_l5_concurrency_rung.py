@@ -45,8 +45,8 @@ def test_r2c2_is_r2c_caps_with_concurrency_two():
     # concurrent exposure is the ONE figure that rises versus R2C
     assert wc["max_concurrent_open_exposure_usd"] == "0.30"
     assert wc["daily_loss_stop_usd"] == "-1.00"
-    # the sized rung is untouched and still concurrency 1
-    assert ladder.rung("R3L")["concurrency"] == 1
+    # OWNER live 2026-09-07: the sized rung runs concurrency 2 as well
+    assert ladder.rung("R3L")["concurrency"] == 2
 
 
 def test_every_rung_label_states_its_own_concurrency():

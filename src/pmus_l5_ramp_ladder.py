@@ -107,8 +107,7 @@ OWNER_RUNGS: tuple[dict, ...] = (
     # hold-to-settlement rule a throughput ceiling, not a risk control.
     # Nothing about the money limits changes except the number of markets
     # that may be OPEN at once: same $0.15 per market, same residual 6,
-    # same 6 markets per campaign, same -$1.00 daily stop; worst case per
-    # campaign is unchanged at $0.90 and only the CONCURRENT exposure
+    # same -$1.00 daily stop; only the CONCURRENT exposure
     # moves, $0.15 -> $0.30. One session at a time, one outstanding
     # order, maker-only, fee-safe 0.98 and HOLD-to-settlement are all
     # untouched: the campaign works its held markets round-robin.
@@ -150,7 +149,13 @@ OWNER_RUNGS: tuple[dict, ...] = (
     {"id": "R3L", "name": "L5 size: $2.50 per action (~5 shares), $7.50 per market, "
                           "residual 6 units, 3 markets (OWNER 5561465636)",
      "per_market_cap_usd": "7.50", "residual_units": 6, "markets_per_campaign": 3,
-     "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 1,
+     # OWNER live 2026-09-07: concurrency 2 AT SIZE. The campaign worst
+     # case is unchanged at $22.50 because it is set by the market count
+     # (3 x $7.50), not by concurrency; only SIMULTANEOUS exposure rises,
+     # $7.50 -> $15.00 (13.6% of the $110 account). This supersedes "keep
+     # concurrency 1" in #167 5561465636 #4, which was written before the
+     # 97-minute idle showed what hold-to-settlement costs at concurrency 1.
+     "campaigns_per_day": 1, "max_actions_per_session": 6, "concurrency": 2,
      "target_notional_usd": "2.50", "max_leg_notional_usd": "3.25",
      "daily_loss_stop_usd": "-15.00", "lever": "size", "promote": None,
      "derived_from": "L5 canonical maker actions (shares p25 = 5.0) + published "

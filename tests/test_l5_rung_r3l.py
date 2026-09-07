@@ -17,16 +17,17 @@ def test_r3l_is_the_owner_rung_with_the_derived_numbers():
     r = ladder.rung("R3L")
     assert r["per_market_cap_usd"] == "7.50" and r["residual_units"] == 6
     assert r["markets_per_campaign"] == 3 and r["campaigns_per_day"] == 1
-    assert r["concurrency"] == 1 and r["max_actions_per_session"] == 6
+    # OWNER live 2026-09-07: concurrency 2 at size
+    assert r["concurrency"] == 2 and r["max_actions_per_session"] == 6
     assert r["target_notional_usd"] == "2.50" and r["max_leg_notional_usd"] == "3.25"
     assert r["daily_loss_stop_usd"] == "-15.00" and r["promote"] is None
     assert ladder.shell_version(r) == (
-        "R3L/cap7.50/residual6/conc1/maker-only/fee-safe0.98/rest30s/action2.50")
+        "R3L/cap7.50/residual6/conc2/maker-only/fee-safe0.98/rest30s/action2.50")
     wc = ladder.worst_case(r)
     assert wc["per_market_usd"] == "7.50" and wc["per_campaign_usd"] == "22.50"
     assert wc["daily_loss_stop_usd"] == "-15.00"
     assert wc["per_day_bounded_by_daily_stop_usd"] == "22.50"   # stop + one in-flight market
-    assert wc["max_concurrent_open_exposure_usd"] == "7.50"
+    assert wc["max_concurrent_open_exposure_usd"] == "15.00"
     assert wc["per_action_target_usd"] == "2.50" and wc["per_leg_max_usd"] == "3.25"
     assert [x["id"] for x in ladder.ladder()][-3:] == ["R2C", "R2C2", "R3L"]
 
