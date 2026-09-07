@@ -80,6 +80,19 @@ DISCOVERY_DIAG: dict = {}
 
 SUB_MARKET_DATA = 1
 SUB_TRADE = 3
+# LIVE 2026-09-07 ~09:35Z: the authenticated stream went from ~1,000
+# frames/min to ~1 frame per connection while the venue kept trading
+# (keyless gateway BBO moved, our socket book froze). The stream is now
+# accounted frame by frame and kept alive per the venue's own guidance
+# (docs api-reference/websocket/overview: keep-alive, reconnect when
+# heartbeats stop, limit subscriptions). Read-only; never evidence.
+SUB_CHUNK_ENV = "PMUS_WS_SUB_CHUNK"            # slugs per subscribe frame
+DEFAULT_SUB_CHUNK = 32
+IDLE_HEARTBEAT_S = float(os.getenv("PMUS_WS_IDLE_HEARTBEAT_S", "20"))
+STARVED_S = float(os.getenv("PMUS_WS_STARVED_S", "120"))
+STARVED_RECONNECT_MAX = int(os.getenv("PMUS_WS_STARVED_RECONNECT_MAX", "5"))
+STREAM_ALARM_S = float(os.getenv("PMUS_WS_STREAM_ALARM_S", "300"))
+FRAME_LOG_FIRST = 3                            # frames echoed per connection
 OUTBOUND_FRAME_KEYS = frozenset({"subscribe", "unsubscribe", "heartbeat"})
 STATUS_EVERY_ENV = "PMUS_WS_STATUS_EVERY_SECONDS"
 DEFAULT_STATUS_EVERY_S = 60.0
@@ -384,6 +397,172 @@ def pool_alarm(discovery: Mapping[str, Any], fresh_rows: Mapping[str, Any],
         print("PMUS_WS_ALARM " + json.dumps({"kind": "pool_stale_or_empty", **out},
                                              separators=(",", ":"), default=str), flush=True)
     return out
+def live_events_of(discovery: Optional[Mapping[str, Any]]) -> int:
+    d = discovery or {}
+    return int(d.get("v1_live_events") or d.get("live_events") or 0)
+
+
+def classify_frame(msg: Any) -> str:
+    """heartbeat / error / trade / book / ack / other for one received
+    frame (market data only; nothing here is ever sent)."""
+    if isinstance(msg, Mapping):
+        if "heartbeat" in msg:
+            return "heartbeat"
+        if "error" in msg:
+            return "error"
+    events: list = []
+    _walk_market_events(msg, events)
+    if any(e.get("kind") == "trade" for e in events):
+        return "trade"
+    if any(e.get("kind") == "book" for e in events):
+        return "book"
+    if isinstance(msg, Mapping) and "request_id" in msg:
+        return "ack"
+    return "other"
+
+
+class StreamHealth:
+    """Frame accounting that survives reconnects (pure; clock injected):
+    per-connection counts plus a 300 s window of frame kinds so a starved
+    socket is visible across the 300 s rediscovery cadence."""
+    KINDS = ("book", "trade", "heartbeat", "ack", "error", "other")
+
+    def __init__(self, now: float):
+        self.recent: list = []
+        self.last_book_t: Optional[float] = None
+        self.last_frame_t: Optional[float] = None
+        self.new_session(now)
+
+    def new_session(self, now: float) -> None:
+        self.session_start = now
+        self.counts = {k: 0 for k in self.KINDS}
+
+    def note(self, kind: str, now: float) -> None:
+        self.counts[kind if kind in self.counts else "other"] += 1
+        self.recent.append((now, kind))
+        self.last_frame_t = now
+        if kind in ("book", "trade"):
+            self.last_book_t = now
+        cut = now - 300.0
+        while self.recent and self.recent[0][0] < cut:
+            self.recent.pop(0)
+        del self.recent[:-5000]
+
+    def snapshot(self, now: float) -> dict:
+        r60 = [k for t, k in self.recent if t >= now - 60.0]
+        r300 = [k for t, k in self.recent if t >= now - 300.0]
+        return {"conn_age_s": round(now - self.session_start, 1),
+                "frames_60s": len(r60),
+                "books_300s": sum(1 for k in r300 if k == "book"),
+                "trades_300s": sum(1 for k in r300 if k == "trade"),
+                "last_book_age_s": (None if self.last_book_t is None
+                                    else round(now - self.last_book_t, 1)),
+                "last_frame_age_s": (None if self.last_frame_t is None
+                                     else round(now - self.last_frame_t, 1)),
+                "counts": dict(self.counts)}
+
+
+def should_reconnect_starved(health: StreamHealth, live_events: int,
+                             now: float, starved_reconnects: int) -> bool:
+    """Reconnect (fresh subscriptions) when live events exist but no
+    book/trade frame arrived for STARVED_S; bounded to
+    STARVED_RECONNECT_MAX consecutive attempts, then the normal cadence."""
+    if live_events <= 0 or starved_reconnects >= STARVED_RECONNECT_MAX:
+        return False
+    ref = health.last_book_t if health.last_book_t is not None \
+        else health.session_start
+    return (now - ref) >= STARVED_S
+
+
+_STREAM_STARVED_SINCE: dict = {"t": None, "last_alarm": None}
+
+
+def stream_alarm(snapshot: Mapping[str, Any], live_events: int,
+                 subscribed: int, now: float) -> dict:
+    """24/7 requirement: live events exist, seats are subscribed, and the
+    authenticated socket delivered no market-data frame for
+    STREAM_ALARM_S -> PMUS_WS_ALARM stream_starved (at most once per
+    window). Logging only; never changes admission."""
+    books = int(snapshot.get("books_300s") or 0) + \
+        int(snapshot.get("trades_300s") or 0)
+    starved = live_events > 0 and subscribed > 0 and books == 0
+    st = _STREAM_STARVED_SINCE
+    if starved and st["t"] is None:
+        st["t"] = now
+    if not starved:
+        st["t"] = None
+        st["last_alarm"] = None
+    dur = (now - st["t"]) if (starved and st["t"] is not None) else 0.0
+    alarm = bool(starved and dur >= STREAM_ALARM_S)
+    out = {"live_events": live_events, "subscribed": subscribed,
+           "market_data_frames_300s": books,
+           "starved_for_s": round(dur, 1), "alarm": alarm,
+           "reason": ("no book/trade frame on the authenticated stream "
+                      "while live events exist") if starved else None,
+           "labels": "alarm = live events exist but the socket delivered "
+                     "no market-data frame for >= STREAM_ALARM_S; "
+                     "logging only"}
+    if alarm and (st["last_alarm"] is None
+                  or now - st["last_alarm"] >= STREAM_ALARM_S):
+        st["last_alarm"] = now
+        print("PMUS_WS_ALARM " + json.dumps({"kind": "stream_starved", **out},
+                                             separators=(",", ":"),
+                                             default=str), flush=True)
+    return out
+
+
+def _gw_value(v: Any) -> Optional[str]:
+    if isinstance(v, Mapping):
+        v = v.get("value")
+    return None if v is None else str(v)
+
+
+def gateway_xcheck(slugs: list, state: Mapping[str, Any], http_get_json,
+                   now: float, limit: int = 3) -> list[dict]:
+    """DIAGNOSTIC ONLY: the keyless public gateway BBO for a few served
+    slugs next to our authenticated socket book, so a frozen socket is
+    provable in the log. Never written into market state or evidence."""
+    out = []
+    for slug in list(slugs)[:limit]:
+        row: dict = {"slug": slug}
+        try:
+            md = (http_get_json(f"/v1/markets/{slug}/bbo") or {}).get(
+                "marketData") or {}
+            row.update({
+                "gateway_bid": _gw_value(md.get("bestBid")),
+                "gateway_ask": _gw_value(md.get("bestAsk")),
+                "gateway_last_trade_px": _gw_value(md.get("lastTradePx")),
+                "gateway_shares_traded": md.get("sharesTraded"),
+                "gateway_sample_ts": (md.get("lastPriceSample") or {}).get("ts"),
+                "gateway_state": md.get("state")})
+        except Exception as exc:                       # noqa: BLE001
+            row["gateway_error"] = f"{type(exc).__name__}:{str(exc)[:80]}"
+        s = state.get(slug) or {}
+        hist = s.get("bbo_history") or []
+        row.update({
+            "ws_bid": None if s.get("bid") is None else str(s.get("bid")),
+            "ws_ask": None if s.get("ask") is None else str(s.get("ask")),
+            "ws_book_updates": s.get("book_updates"),
+            "ws_trades_total": len(s.get("trades") or []),
+            "ws_last_update_age_s": (round(now - float(hist[-1]["t"]), 1)
+                                     if hist else None)})
+        try:
+            if "gateway_error" in row:
+                raise ValueError("gateway unavailable")
+            gb, ga = row.get("gateway_bid"), row.get("gateway_ask")
+            row["book_diverged"] = bool(
+                gb is not None and row["ws_bid"] is not None
+                and (float(gb) != float(row["ws_bid"])
+                     or (ga is not None and row["ws_ask"] is not None
+                         and float(ga) != float(row["ws_ask"]))))
+        except (TypeError, ValueError):
+            row["book_diverged"] = None
+        row["labels"] = ("DIAGNOSTIC ONLY: keyless gateway vs authenticated "
+                         "socket; never evidence")
+        out.append(row)
+    return out
+
+
 SPRING_WATCH_LO = 0.35   # OWNER DECISION 5533476555: observation 35-65
 SPRING_WATCH_HI = 0.65
 
@@ -447,7 +626,8 @@ def spring_watch(rows: Mapping[str, Mapping[str, Any]],
 def build_status(state: Mapping[str, Any], connected: bool, msgs: int,
                  subscribed: int, now: Optional[float] = None,
                  discovery: Optional[Mapping[str, Any]] = None,
-                 l5_alloc: Optional[set] = None) -> dict:
+                 l5_alloc: Optional[set] = None,
+                 stream_health: Optional[Mapping[str, Any]] = None) -> dict:
     now = now or time.time()
     # Gate every tracked market once per cycle: a Q1_GATE_CLEARED market
     # outside the five-row display must still be visible to the supervisor.
@@ -480,6 +660,10 @@ def build_status(state: Mapping[str, Any], connected: bool, msgs: int,
         "pool_alarm": alarm,
         "spring_watch": spring_watch(fresh_rows, l5_alloc),
     }
+    if stream_health is not None:
+        status["stream_health"] = dict(stream_health)
+        status["stream_alarm"] = stream_alarm(
+            stream_health, live_events_of(discovery), subscribed, now)
     if discovery:
         status["discovery"] = dict(discovery)
     return status
@@ -503,11 +687,23 @@ def auth_headers(key_id: str, secret_b64: str,
             "X-PM-Signature": sig}
 
 
-def subscribe_frames(slugs: list[str]) -> list[dict]:
-    return [{"subscribe": {"request_id": f"{kind}-{uuid.uuid4().hex[:10]}",
-                           "subscription_type": st,
-                           "market_slugs": sorted(slugs)}}
-            for kind, st in (("mkt", SUB_MARKET_DATA), ("trd", SUB_TRADE))]
+def subscribe_frames(slugs: list[str],
+                     chunk: Optional[int] = None) -> list[dict]:
+    """One subscribe frame per subscription type per chunk of slugs.
+    chunk None / <= 0 keeps the original single frame per type."""
+    ordered = sorted(slugs)
+    if not chunk or chunk <= 0 or len(ordered) <= chunk:
+        parts = [ordered]
+    else:
+        parts = [ordered[i:i + chunk] for i in range(0, len(ordered), chunk)]
+    out = []
+    for kind, st in (("mkt", SUB_MARKET_DATA), ("trd", SUB_TRADE)):
+        for ci, part in enumerate(parts):
+            out.append({"subscribe": {
+                "request_id": f"{kind}{ci}-{uuid.uuid4().hex[:10]}",
+                "subscription_type": st,
+                "market_slugs": list(part)}})
+    return out
 
 
 def guard_outbound(frame: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -982,6 +1178,8 @@ async def run(minutes: Optional[float]) -> int:
     serve_status_doc(root, status_port())
     shadow = start_multi_shadow(root)
     last_shadow_tick = 0.0
+    health = StreamHealth(time.time())
+    starved_reconnects = 0
     while deadline is None or time.monotonic() < deadline:
         cap = int(os.getenv(MAX_MARKETS_ENV, "24"))
         targets = discover_universe()
@@ -1016,9 +1214,20 @@ async def run(minutes: Optional[float]) -> int:
                     WS_URL, additional_headers=headers,
                     max_size=8 * 1024 * 1024) as ws:
                 backoff = 1.0
-                for frame in subscribe_frames(slugs):
+                chunk = int(os.getenv(SUB_CHUNK_ENV, str(DEFAULT_SUB_CHUNK)))
+                frames = subscribe_frames(slugs, chunk)
+                for frame in frames:
                     await ws.send(json.dumps(guard_outbound(frame)))
                 session_start = time.monotonic()
+                health.new_session(time.time())
+                session_reason = "rediscover"
+                last_hb_sent = time.monotonic()
+                frames_logged = 0
+                print("PMUS_WS_CONN " + json.dumps(
+                    {"kind": "connect", "subscribed": len(slugs),
+                     "subscribe_frames": len(frames), "chunk": chunk,
+                     "starved_reconnects": starved_reconnects},
+                    separators=(",", ":")), flush=True)
                 while deadline is None or time.monotonic() < deadline:
                     if time.monotonic() - session_start > rediscover_s:
                         break                     # reconnect w/ fresh targets
@@ -1027,6 +1236,16 @@ async def run(minutes: Optional[float]) -> int:
                     except asyncio.TimeoutError:
                         heartbeat_file(root, messages=msgs,
                                        subscribed=len(slugs))
+                        if time.monotonic() - last_hb_sent >= IDLE_HEARTBEAT_S:
+                            # keep-alive on an idle socket (venue guidance)
+                            await ws.send(json.dumps(guard_outbound({"heartbeat": {}})))
+                            last_hb_sent = time.monotonic()
+                        if should_reconnect_starved(
+                                health, live_events_of(discovery_diag),
+                                time.time(), starved_reconnects):
+                            starved_reconnects += 1
+                            session_reason = "starved"
+                            break                 # fresh subscriptions
                         continue
                     try:
                         msg = json.loads(raw)
@@ -1034,6 +1253,17 @@ async def run(minutes: Optional[float]) -> int:
                         msg = {"raw": str(raw)[:2000]}
                     if isinstance(msg, dict) and "heartbeat" in msg:
                         await ws.send(json.dumps(guard_outbound({"heartbeat": {}})))
+                        last_hb_sent = time.monotonic()
+                    kind = classify_frame(msg)
+                    health.note(kind, time.time())
+                    if kind in ("book", "trade"):
+                        starved_reconnects = 0
+                    if frames_logged < FRAME_LOG_FIRST or kind == "error":
+                        frames_logged += 1
+                        print("PMUS_WS_FRAME " + json.dumps(
+                            {"kind": kind, "n": msgs + 1,
+                             "frame": json.dumps(msg, default=str)[:600]},
+                            separators=(",", ":")), flush=True)
                     append(root, {"kind": "ws",
                                   "t": datetime.now(timezone.utc).isoformat(),
                                   "msg": msg})
@@ -1084,11 +1314,30 @@ async def run(minutes: Optional[float]) -> int:
                             _status = build_status(
                                 mstate, True, msgs, len(slugs),
                                 discovery=discovery_diag,
-                                l5_alloc=l5_alloc)
+                                l5_alloc=l5_alloc,
+                                stream_health={
+                                    **health.snapshot(time.time()),
+                                    "starved_reconnects": starved_reconnects})
                             print("PMUS_WS_STATUS " + json.dumps(
                                 _status, separators=(",", ":"), default=str),
                                 flush=True)
                             write_status_doc(root, _status)
+                            try:
+                                from src import pmus_sports_collector as col
+                                xs = gateway_xcheck(
+                                    [r["slug"] for r in
+                                     (_status.get("spring_watch") or [])]
+                                    or [r["slug"] for r in
+                                        (_status.get("top_markets") or [])],
+                                    mstate, col.http_get_json, time.time())
+                                if xs:
+                                    print("PMUS_WS_XCHECK " + json.dumps(
+                                        {"t": _status["t"], "rows": xs},
+                                        separators=(",", ":"), default=str),
+                                        flush=True)
+                            except Exception as exc:      # noqa: BLE001
+                                print("PMUS_WS_XCHECK " + json.dumps(
+                                    {"error": str(exc)[:120]}), flush=True)
                         except Exception as exc:
                             # a status bug must never cost the connection
                             # or the tape
@@ -1105,6 +1354,12 @@ async def run(minutes: Optional[float]) -> int:
                                     else {"kind": "shadow_report_error", **rep},
                                     separators=(",", ":"), default=str), flush=True)
                         last_status = time.monotonic()
+                print("PMUS_WS_CONN " + json.dumps(
+                    {"kind": "disconnect", "reason": session_reason,
+                     "duration_s": round(time.monotonic() - session_start, 1),
+                     "counts": health.counts,
+                     "starved_reconnects": starved_reconnects},
+                    separators=(",", ":"), default=str), flush=True)
         except Exception as exc:
             append(root, {"kind": "error",
                           "t": datetime.now(timezone.utc).isoformat(),

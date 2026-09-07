@@ -163,3 +163,138 @@ def test_status_serves_only_fresh_rows_and_raises_the_pool_alarm(monkeypatch):
     st3 = rec.build_status(state, True, 10, 3, now=now + rec.POOL_ALARM_S + 2,
                            discovery={"v1_live_events": 41, "fresh_live_subscribed": 1})
     assert st3["pool_alarm"]["alarm"] is False and st3["spring_watch"][0]["slug"] == "live-c"
+
+
+# --- LIVE 2026-09-07: starved authenticated stream (frame accounting) ---
+
+def test_subscribe_frames_chunk_and_cover_every_slug():
+    slugs = [f"m-{i:03d}" for i in range(70)]
+    frames = rec.subscribe_frames(slugs, chunk=32)
+    assert len(frames) == 6                      # 3 chunks x 2 types
+    types = sorted(f["subscribe"]["subscription_type"] for f in frames)
+    assert types == [1, 1, 1, 3, 3, 3]
+    ids = [f["subscribe"]["request_id"] for f in frames]
+    assert len(set(ids)) == 6
+    for st in (1, 3):
+        got = sorted(sum((f["subscribe"]["market_slugs"] for f in frames
+                          if f["subscribe"]["subscription_type"] == st), []))
+        assert got == sorted(slugs)
+    assert all(len(f["subscribe"]["market_slugs"]) <= 32 for f in frames)
+    for f in frames:
+        rec.guard_outbound(f)
+    # chunk None keeps the original single frame per type
+    assert len(rec.subscribe_frames(slugs, None)) == 2
+    assert len(rec.subscribe_frames(slugs[:10], chunk=32)) == 2
+
+
+def test_classify_frame_names_every_kind():
+    assert rec.classify_frame({"heartbeat": {}}) == "heartbeat"
+    assert rec.classify_frame({"request_id": "mkt0-x", "error": "bad"}) == "error"
+    assert rec.classify_frame({"request_id": "mkt0-x",
+                               "market_data_subscription_snapshot": {"eof": True}}) == "ack"
+    book = {"market_data": {"marketSlug": "m-1", "bids": [{"px": {"value": "0.45"}, "qty": "1"}],
+                            "offers": [{"px": {"value": "0.47"}, "qty": "1"}]}}
+    assert rec.classify_frame(book) == "book"
+    trade = {"trade": {"marketSlug": "m-1", "price": {"value": "0.46"}, "qty": "2",
+                       "tradeTime": "2026-09-07T17:00:00Z"}}
+    assert rec.classify_frame(trade) == "trade"
+    assert rec.classify_frame({"unknown": 1}) == "other"
+    assert rec.classify_frame([]) == "other"
+
+
+def test_stream_health_spans_reconnects_and_drives_a_bounded_starvation_reconnect(monkeypatch):
+    monkeypatch.setattr(rec, "STARVED_S", 120.0)
+    monkeypatch.setattr(rec, "STARVED_RECONNECT_MAX", 2)
+    h = rec.StreamHealth(1000.0)
+    h.note("ack", 1001.0)
+    h.note("book", 1002.0)
+    h.note("trade", 1003.0)
+    snap = h.snapshot(1010.0)
+    assert snap["frames_60s"] == 3 and snap["books_300s"] == 1 and snap["trades_300s"] == 1
+    assert snap["last_book_age_s"] == 7.0 and snap["counts"]["ack"] == 1
+    # no book for 120 s while live events exist -> reconnect; not without live events
+    assert rec.should_reconnect_starved(h, 40, 1122.0, 0) is False   # 119 s since trade
+    assert rec.should_reconnect_starved(h, 40, 1123.5, 0) is True
+    assert rec.should_reconnect_starved(h, 0, 1200.0, 0) is False
+    assert rec.should_reconnect_starved(h, 40, 1200.0, 2) is False   # bounded
+    # a new session keeps the window (books_300s spans connections)
+    h.new_session(1200.0)
+    assert h.counts["book"] == 0
+    assert h.snapshot(1250.0)["books_300s"] == 1
+    assert h.snapshot(1350.0)["books_300s"] == 0
+    # a session with no frame at all is measured from its start
+    h2 = rec.StreamHealth(2000.0)
+    assert rec.should_reconnect_starved(h2, 5, 2100.0, 0) is False
+    assert rec.should_reconnect_starved(h2, 5, 2121.0, 0) is True
+
+
+def test_stream_alarm_fires_once_per_window_and_clears_on_market_data(capsys, monkeypatch):
+    monkeypatch.setattr(rec, "STREAM_ALARM_S", 300.0)
+    rec._STREAM_STARVED_SINCE.update({"t": None, "last_alarm": None})
+    dead = {"books_300s": 0, "trades_300s": 0}
+    a = rec.stream_alarm(dead, live_events=53, subscribed=128, now=1000.0)
+    assert a["alarm"] is False and a["starved_for_s"] == 0.0
+    assert a["reason"].startswith("no book/trade frame")
+    a = rec.stream_alarm(dead, 53, 128, now=1301.0)
+    assert a["alarm"] is True
+    a = rec.stream_alarm(dead, 53, 128, now=1400.0)
+    assert a["alarm"] is True                    # still alarmed, not re-printed
+    out = capsys.readouterr().out
+    assert out.count("PMUS_WS_ALARM") == 1 and "stream_starved" in out
+    # a book frame clears it; no live events never alarms
+    a = rec.stream_alarm({"books_300s": 1, "trades_300s": 0}, 53, 128, now=1500.0)
+    assert a["alarm"] is False and a["reason"] is None
+    a = rec.stream_alarm(dead, 0, 128, now=2000.0)
+    assert a["alarm"] is False
+    rec._STREAM_STARVED_SINCE.update({"t": None, "last_alarm": None})
+
+
+def test_gateway_xcheck_shows_a_frozen_socket_book_and_never_touches_state():
+    now = 1000.0
+    state = {"cs2": {"bid": "0.6000", "ask": "0.6100", "book_updates": 1, "trades": [],
+                     "bbo_history": [{"t": now - 259.0, "bid": "0.6000", "ask": "0.6100"}]}}
+    calls = []
+    def http_get_json(path):
+        calls.append(path)
+        return {"marketData": {"marketSlug": "cs2",
+                               "bestBid": {"value": "0.7000", "currency": "USD"},
+                               "bestAsk": {"value": "0.7100", "currency": "USD"},
+                               "lastTradePx": {"value": "0.7000", "currency": "USD"},
+                               "sharesTraded": "8122.0600",
+                               "lastPriceSample": {"ts": "2026-09-07T17:21:19Z"},
+                               "state": "MARKET_STATE_OPEN"}}
+    before = json.dumps(state, sort_keys=True)
+    rows = rec.gateway_xcheck(["cs2", "missing"], state, http_get_json, now, limit=3)
+    assert calls == ["/v1/markets/cs2/bbo", "/v1/markets/missing/bbo"]
+    r = rows[0]
+    assert r["gateway_bid"] == "0.7000" and r["gateway_ask"] == "0.7100"
+    assert r["gateway_last_trade_px"] == "0.7000" and r["gateway_shares_traded"] == "8122.0600"
+    assert r["ws_bid"] == "0.6000" and r["ws_book_updates"] == 1
+    assert r["ws_last_update_age_s"] == 259.0 and r["book_diverged"] is True
+    assert "never evidence" in r["labels"]
+    assert rows[1]["ws_bid"] is None and rows[1]["book_diverged"] is False
+    assert json.dumps(state, sort_keys=True) == before
+    # a gateway failure is a field, never an exception
+    def boom(path):
+        raise OSError("timed out")
+    rows = rec.gateway_xcheck(["cs2"], state, boom, now)
+    assert rows[0]["gateway_error"].startswith("OSError") and rows[0]["book_diverged"] is None
+
+
+def test_status_carries_stream_health_and_the_stream_alarm(monkeypatch):
+    import time
+    now = time.time()
+    rec._STREAM_STARVED_SINCE.update({"t": None, "last_alarm": None})
+    state = {"live-c": {"bid": "0.50", "ask": "0.52", "bid_qty": "10", "ask_qty": "10",
+                        "both_sides_served": True, "book_updates": 3, "trades": [],
+                        "bbo_history": [{"t": now - 5, "bid": "0.50", "ask": "0.52"}]}}
+    disc = {"v1_live_events": 53, "fresh_live_subscribed": 128}
+    sh = {"books_300s": 0, "trades_300s": 0, "frames_60s": 0, "starved_reconnects": 1}
+    st = rec.build_status(state, True, 90, 128, now=now, discovery=disc, stream_health=sh)
+    assert st["stream_health"]["starved_reconnects"] == 1
+    assert st["stream_alarm"]["live_events"] == 53 and st["stream_alarm"]["alarm"] is False
+    st2 = rec.build_status(state, True, 90, 128, now=now + rec.STREAM_ALARM_S + 1,
+                           discovery=disc, stream_health=sh)
+    assert st2["stream_alarm"]["alarm"] is True
+    assert "stream_health" not in rec.build_status(state, True, 90, 128, now=now, discovery=disc)
+    rec._STREAM_STARVED_SINCE.update({"t": None, "last_alarm": None})
