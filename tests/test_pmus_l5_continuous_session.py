@@ -257,6 +257,11 @@ def test_no_candidate_keeps_polling_without_mutation(monkeypatch, tmp_path):
                             session_runner=lambda *a, **k: ran.append(k))
     assert ran == []
     assert rep["status"] == "CAMPAIGN_NO_CANDIDATE"
+    # LIVE 2026-09-07 14:48Z: a horizon exit is named, not inherited
+    assert rep["exit_reason"]["reason"] == "HORIZON"
+    assert rep["exit_reason"]["campaign_s"] == 50.0
+    assert rep["exit_reason"]["last_status"] == "CAMPAIGN_NO_CANDIDATE"
+    assert rep["exit_reason"]["sessions_this_campaign"] == 0
 
 
 def test_sessions_are_recorded_and_the_fidelity_gate_runs_automatically(

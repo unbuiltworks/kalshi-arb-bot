@@ -2229,6 +2229,20 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                   if len(iteration_errors) > ITERATION_ERROR_SLOW_AFTER
                   else ITERATION_ERROR_BACKOFF_S)
             continue
+    if clock() >= stop_at and not str(status).startswith("CAMPAIGN_STOP"):
+        # LIVE 2026-09-07 14:48Z: the R4 campaign ended at its wall-clock
+        # horizon (campaign_s) with nothing resting and the last cycle's
+        # status as the only trace; restart is NEVER, so the lane was
+        # silently down. A horizon exit is now named in the log and the
+        # report (the status keeps the last cycle's value; the process
+        # still exits 0 and a redeploy resumes the persisted rung state).
+        report["exit_reason"] = {
+            "reason": "HORIZON", "campaign_s": campaign_s,
+            "last_status": status, "ended_utc": _utc(wall),
+            "sessions_this_campaign": len(report["sessions"]) - sessions_base,
+            "resume": "redeploy resumes the persisted rung state; "
+                      "no approval is re-run"}
+        _log("campaign_horizon_reached", **report["exit_reason"])
     return {**report, "status": status}
 
 
