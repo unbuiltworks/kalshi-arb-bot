@@ -195,3 +195,34 @@ untouched (23 of 45 orders) and re-decide on the next cycle. The
 executable lever is a touch-following reprice inside the rest window (the
 `repriced:touch_moved` path exists); the 30 s deadline itself is a frozen
 rung parameter (rest30s). Reported, not changed.
+
+## 7. Which EXTENDs are productive (`src/l5_extend_productivity.py`, OWNER 5569709706 #1 / 5569845340 D)
+
+Every L5 BUY print is a FIFO lot; complements match it, the unmatched
+part settles at the actual outcome. Per lot: productive share (matched /
+qty), pair cost achieved, time to complement, residual P&L, net per dollar.
+
+| relation | lots | $ | completed $ share | never completed | pair $ | residual $ | net / $ |
+|---|---|---|---|---|---|---|---|
+| open | 2,425 | 38,624 | 71.8% | 26.5% | +303 | +735 | +0.0269 |
+| extend | 35,576 | 344,283 | 79.9% | 20.9% | +5,730 | -4,468 | +0.0037 |
+| complete | 33,981 | 345,595 | 98.8% | 0% | +6,949 | -18 | +0.0201 |
+
+EXTENDs conditioned on the state at the print (net per extended $; n):
+imbalance before <0.5 units +0.037 (1,852), 0.5-1u +0.028, 1-2u +0.027,
+2-4u +0.016, >=4u -0.006 (24,595 lots, 69% of extend dollars); time to
+settlement <60 s +0.041 (20% completed), 1-3 min -0.008 (57% completed,
+43% never), 3-10 min +0.007 (88%), >10 min +0.000 (99%); same-side run 1
++0.008, 2 +0.013, 3-4 +0.005, >=5 -0.016; band p>=0.65 +0.012, p0.55-0.65
+-0.020, others ~0. Time to complement p50 18 s at <0.5u vs 55 s at >=4u.
+
+Reading. In aggregate L5's EXTENDs pay (+5,730 of pairs against -4,468 of
+residual) but at a seventh of an OPEN's rate, and the gradient is the
+imbalance: an extend on a small residual completes faster and nets more;
+an extend on a residual already four actions deep is where the residual
+losses live. The slice R4's cap can admit (unmatched before + one action
+within one action, i.e. <0.5u here) is the best slice: +0.032 per $ on
+3,678 lots below one unit, 63% completed. Caveat: the pair-proxy >1.00 and
+move-up >=3 c slices are positive through their residual (the side that
+had just risen went on to win more often in BTC windows) -- a directional
+effect, not a completion effect, and not a rule.

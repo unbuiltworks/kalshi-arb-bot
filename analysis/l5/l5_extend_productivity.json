@@ -1,0 +1,1506 @@
+{
+ "by_relation": {
+  "complete": {
+   "fully_completed_share": 0.9848,
+   "lots": 33981,
+   "net_per_usd": 0.0201,
+   "net_usd": 6930.98,
+   "never_completed_share": 0.0,
+   "pair_cost_when_completed": {
+    "mean": 0.9801,
+    "n": 33981,
+    "p10": 0.83,
+    "p25": 0.92,
+    "p50": 0.98,
+    "p75": 1.0382,
+    "p90": 1.1305
+   },
+   "pair_pnl_usd": 6949.16,
+   "productive_share_of_usd": 0.9883,
+   "residual_pnl_usd": -18.18,
+   "residual_usd_left": 3975.68,
+   "time_to_complement_s": {
+    "mean": 0.0,
+    "n": 33981,
+    "p10": 0,
+    "p25": 0,
+    "p50": 0,
+    "p75": 0,
+    "p90": 0
+   },
+   "usd": 345595.16
+  },
+  "extend": {
+   "fully_completed_share": 0.7678,
+   "lots": 35576,
+   "net_per_usd": 0.0037,
+   "net_usd": 1261.92,
+   "never_completed_share": 0.209,
+   "pair_cost_when_completed": {
+    "mean": 0.9878,
+    "n": 28142,
+    "p10": 0.83,
+    "p25": 0.9228,
+    "p50": 0.99,
+    "p75": 1.05,
+    "p90": 1.15
+   },
+   "pair_pnl_usd": 5730.19,
+   "productive_share_of_usd": 0.7986,
+   "residual_pnl_usd": -4468.27,
+   "residual_usd_left": 68516.88,
+   "time_to_complement_s": {
+    "mean": 65.2522,
+    "n": 28142,
+    "p10": 7,
+    "p25": 18,
+    "p50": 46,
+    "p75": 90,
+    "p90": 150
+   },
+   "usd": 344282.9
+  },
+  "open": {
+   "fully_completed_share": 0.6701,
+   "lots": 2425,
+   "net_per_usd": 0.0269,
+   "net_usd": 1037.71,
+   "never_completed_share": 0.2652,
+   "pair_cost_when_completed": {
+    "mean": 0.9956,
+    "n": 1783,
+    "p10": 0.74,
+    "p25": 0.88,
+    "p50": 0.99,
+    "p75": 1.0923,
+    "p90": 1.29
+   },
+   "pair_pnl_usd": 302.73,
+   "productive_share_of_usd": 0.7176,
+   "residual_pnl_usd": 734.98,
+   "residual_usd_left": 10689.6,
+   "time_to_complement_s": {
+    "mean": 70.7801,
+    "n": 1783,
+    "p10": 7,
+    "p25": 19,
+    "p50": 51,
+    "p75": 104,
+    "p90": 163
+   },
+   "usd": 38624.02
+  }
+ },
+ "extend_below_one_unit_imbalance": {
+  "fully_completed_share": 0.6824,
+  "lots": 3678,
+  "net_per_usd": 0.0319,
+  "net_usd": 1137.93,
+  "never_completed_share": 0.2403,
+  "pair_cost_when_completed": {
+   "mean": 0.9942,
+   "n": 2794,
+   "p10": 0.8524,
+   "p25": 0.95,
+   "p50": 0.99,
+   "p75": 1.0391,
+   "p90": 1.133
+  },
+  "pair_pnl_usd": 398.51,
+  "productive_share_of_usd": 0.6267,
+  "residual_pnl_usd": 739.42,
+  "residual_usd_left": 13073.56,
+  "time_to_complement_s": {
+   "mean": 35.8783,
+   "n": 2794,
+   "p10": 2,
+   "p25": 7,
+   "p50": 20,
+   "p75": 46,
+   "p90": 89
+  },
+  "usd": 35626.14
+ },
+ "extend_best_and_worst_conditions_min200": {
+  "best": [
+   {
+    "condition": "tte=tte<60s",
+    "fully_completed_share": 0.1865,
+    "lots": 2274,
+    "net_per_usd": 0.0407,
+    "net_usd": 764.2,
+    "never_completed_share": 0.7696,
+    "pair_cost_when_completed": {
+     "mean": 0.9359,
+     "n": 524,
+     "p10": 0.6203,
+     "p25": 0.8703,
+     "p50": 0.97,
+     "p75": 1.04,
+     "p90": 1.16
+    },
+    "pair_pnl_usd": 644.71,
+    "productive_share_of_usd": 0.1981,
+    "residual_pnl_usd": 119.48,
+    "residual_usd_left": 14863.71,
+    "time_to_complement_s": {
+     "mean": 15.166,
+     "n": 524,
+     "p10": 2,
+     "p25": 6,
+     "p50": 13,
+     "p75": 23,
+     "p90": 31
+    },
+    "usd": 18789.02
+   },
+   {
+    "condition": "imbalance=imb<0.5u",
+    "fully_completed_share": 0.7284,
+    "lots": 1852,
+    "net_per_usd": 0.0367,
+    "net_usd": 596.56,
+    "never_completed_share": 0.2025,
+    "pair_cost_when_completed": {
+     "mean": 0.9891,
+     "n": 1477,
+     "p10": 0.86,
+     "p25": 0.9514,
+     "p50": 0.99,
+     "p75": 1.03,
+     "p90": 1.11
+    },
+    "pair_pnl_usd": 392.1,
+    "productive_share_of_usd": 0.7055,
+    "residual_pnl_usd": 204.47,
+    "residual_usd_left": 4697.9,
+    "time_to_complement_s": {
+     "mean": 32.1225,
+     "n": 1477,
+     "p10": 2,
+     "p25": 6,
+     "p50": 18,
+     "p75": 40,
+     "p90": 82
+    },
+    "usd": 16234.03
+   },
+   {
+    "condition": "imbalance=imb0.5-1u",
+    "fully_completed_share": 0.6358,
+    "lots": 1826,
+    "net_per_usd": 0.0279,
+    "net_usd": 541.37,
+    "never_completed_share": 0.2788,
+    "pair_cost_when_completed": {
+     "mean": 1.0,
+     "n": 1317,
+     "p10": 0.84,
+     "p25": 0.9477,
+     "p50": 0.99,
+     "p75": 1.04,
+     "p90": 1.16
+    },
+    "pair_pnl_usd": 6.42,
+    "productive_share_of_usd": 0.5607,
+    "residual_pnl_usd": 534.95,
+    "residual_usd_left": 8375.66,
+    "time_to_complement_s": {
+     "mean": 40.0904,
+     "n": 1317,
+     "p10": 3,
+     "p25": 8,
+     "p50": 23,
+     "p75": 54,
+     "p90": 97
+    },
+    "usd": 19392.11
+   },
+   {
+    "condition": "imbalance=imb1-2u",
+    "fully_completed_share": 0.6828,
+    "lots": 3124,
+    "net_per_usd": 0.0271,
+    "net_usd": 850.37,
+    "never_completed_share": 0.2702,
+    "pair_cost_when_completed": {
+     "mean": 0.9931,
+     "n": 2280,
+     "p10": 0.83,
+     "p25": 0.9428,
+     "p50": 0.99,
+     "p75": 1.0417,
+     "p90": 1.1384
+    },
+    "pair_pnl_usd": 217.35,
+    "productive_share_of_usd": 0.589,
+    "residual_pnl_usd": 633.02,
+    "residual_usd_left": 12709.23,
+    "time_to_complement_s": {
+     "mean": 48.8211,
+     "n": 2280,
+     "p10": 4,
+     "p25": 11,
+     "p50": 28,
+     "p75": 63,
+     "p90": 114
+    },
+    "usd": 31395.39
+   },
+   {
+    "condition": "pair=pair>1.00",
+    "fully_completed_share": 0.7889,
+    "lots": 6602,
+    "net_per_usd": 0.019,
+    "net_usd": 1828.66,
+    "never_completed_share": 0.184,
+    "pair_cost_when_completed": {
+     "mean": 0.9891,
+     "n": 5387,
+     "p10": 0.816,
+     "p25": 0.91,
+     "p50": 0.98,
+     "p75": 1.0571,
+     "p90": 1.1842
+    },
+    "pair_pnl_usd": 1222.93,
+    "productive_share_of_usd": 0.7651,
+    "residual_pnl_usd": 605.73,
+    "residual_usd_left": 22346.51,
+    "time_to_complement_s": {
+     "mean": 57.8307,
+     "n": 5387,
+     "p10": 6,
+     "p25": 16,
+     "p50": 39,
+     "p75": 78,
+     "p90": 136
+    },
+    "usd": 96017.62
+   },
+   {
+    "condition": "imbalance=imb2-4u",
+    "fully_completed_share": 0.7164,
+    "lots": 4179,
+    "net_per_usd": 0.0157,
+    "net_usd": 604.68,
+    "never_completed_share": 0.2491,
+    "pair_cost_when_completed": {
+     "mean": 0.987,
+     "n": 3138,
+     "p10": 0.84,
+     "p25": 0.9338,
+     "p50": 0.99,
+     "p75": 1.04,
+     "p90": 1.11
+    },
+    "pair_pnl_usd": 694.71,
+    "productive_share_of_usd": 0.6308,
+    "residual_pnl_usd": -90.03,
+    "residual_usd_left": 14025.44,
+    "time_to_complement_s": {
+     "mean": 52.123,
+     "n": 3138,
+     "p10": 4,
+     "p25": 12,
+     "p50": 32,
+     "p75": 66,
+     "p90": 118
+    },
+    "usd": 38549.1
+   }
+  ],
+  "worst": [
+   {
+    "condition": "imbalance=imb>=4u",
+    "fully_completed_share": 0.8001,
+    "lots": 24595,
+    "net_per_usd": -0.0056,
+    "net_usd": -1331.06,
+    "never_completed_share": 0.1897,
+    "pair_cost_when_completed": {
+     "mean": 0.9864,
+     "n": 19930,
+     "p10": 0.83,
+     "p25": 0.92,
+     "p50": 0.9854,
+     "p75": 1.06,
+     "p90": 1.1564
+    },
+    "pair_pnl_usd": 4419.62,
+    "productive_share_of_usd": 0.8789,
+    "residual_pnl_usd": -5750.68,
+    "residual_usd_left": 28708.65,
+    "time_to_complement_s": {
+     "mean": 73.3171,
+     "n": 19930,
+     "p10": 11,
+     "p25": 25,
+     "p50": 55,
+     "p75": 101,
+     "p90": 161
+    },
+    "usd": 238712.27
+   },
+   {
+    "condition": "tte=tte1-3m",
+    "fully_completed_share": 0.5104,
+    "lots": 6993,
+    "net_per_usd": -0.0078,
+    "net_usd": -630.99,
+    "never_completed_share": 0.4349,
+    "pair_cost_when_completed": {
+     "mean": 0.9824,
+     "n": 3952,
+     "p10": 0.7596,
+     "p25": 0.9,
+     "p50": 0.9891,
+     "p75": 1.0598,
+     "p90": 1.2
+    },
+    "pair_pnl_usd": 1567.9,
+    "productive_share_of_usd": 0.5697,
+    "residual_pnl_usd": -2198.89,
+    "residual_usd_left": 34312.01,
+    "time_to_complement_s": {
+     "mean": 31.0175,
+     "n": 3952,
+     "p10": 4,
+     "p25": 11,
+     "p50": 24,
+     "p75": 45,
+     "p90": 66
+    },
+    "usd": 80756.53
+   },
+   {
+    "condition": "pair=pair0.95-0.98",
+    "fully_completed_share": 0.7868,
+    "lots": 5778,
+    "net_per_usd": -0.0096,
+    "net_usd": -378.29,
+    "never_completed_share": 0.1989,
+    "pair_cost_when_completed": {
+     "mean": 0.9866,
+     "n": 4629,
+     "p10": 0.8511,
+     "p25": 0.93,
+     "p50": 0.99,
+     "p75": 1.0493,
+     "p90": 1.12
+    },
+    "pair_pnl_usd": 981.9,
+    "productive_share_of_usd": 0.8921,
+    "residual_pnl_usd": -1360.19,
+    "residual_usd_left": 4205.77,
+    "time_to_complement_s": {
+     "mean": 66.051,
+     "n": 4629,
+     "p10": 8,
+     "p25": 21,
+     "p50": 48,
+     "p75": 93,
+     "p90": 150
+    },
+    "usd": 39232.33
+   },
+   {
+    "condition": "pair=pair<0.95",
+    "fully_completed_share": 0.752,
+    "lots": 9429,
+    "net_per_usd": -0.012,
+    "net_usd": -666.45,
+    "never_completed_share": 0.2249,
+    "pair_cost_when_completed": {
+     "mean": 0.9812,
+     "n": 7308,
+     "p10": 0.8,
+     "p25": 0.9102,
+     "p50": 0.99,
+     "p75": 1.06,
+     "p90": 1.15
+    },
+    "pair_pnl_usd": 2034.89,
+    "productive_share_of_usd": 0.8415,
+    "residual_pnl_usd": -2701.34,
+    "residual_usd_left": 8664.89,
+    "time_to_complement_s": {
+     "mean": 68.5239,
+     "n": 7308,
+     "p10": 8,
+     "p25": 22,
+     "p50": 51,
+     "p75": 94,
+     "p90": 153
+    },
+    "usd": 55707.47
+   },
+   {
+    "condition": "run=run>=5",
+    "fully_completed_share": 0.7646,
+    "lots": 11775,
+    "net_per_usd": -0.0163,
+    "net_usd": -1169.99,
+    "never_completed_share": 0.2228,
+    "pair_cost_when_completed": {
+     "mean": 0.986,
+     "n": 9152,
+     "p10": 0.82,
+     "p25": 0.9252,
+     "p50": 0.9938,
+     "p75": 1.0545,
+     "p90": 1.14
+    },
+    "pair_pnl_usd": 1575.73,
+    "productive_share_of_usd": 0.8414,
+    "residual_pnl_usd": -2745.72,
+    "residual_usd_left": 11298.63,
+    "time_to_complement_s": {
+     "mean": 71.3338,
+     "n": 9152,
+     "p10": 9,
+     "p25": 23,
+     "p50": 52,
+     "p75": 98,
+     "p90": 160
+    },
+    "usd": 71849.78
+   },
+   {
+    "condition": "band=p0.55-0.65",
+    "fully_completed_share": 0.9135,
+    "lots": 3803,
+    "net_per_usd": -0.02,
+    "net_usd": -1017.17,
+    "never_completed_share": 0.0671,
+    "pair_cost_when_completed": {
+     "mean": 0.9993,
+     "n": 3548,
+     "p10": 0.81,
+     "p25": 0.9,
+     "p50": 0.9838,
+     "p75": 1.08,
+     "p90": 1.2234
+    },
+    "pair_pnl_usd": -344.88,
+    "productive_share_of_usd": 0.9027,
+    "residual_pnl_usd": -672.29,
+    "residual_usd_left": 4840.8,
+    "time_to_complement_s": {
+     "mean": 62.4273,
+     "n": 3548,
+     "p10": 8,
+     "p25": 18,
+     "p50": 44,
+     "p75": 90,
+     "p90": 146
+    },
+    "usd": 50847.22
+   }
+  ]
+ },
+ "extend_by_lane": {
+  "BTC-15m": {
+   "fully_completed_share": 0.8244,
+   "lots": 31931,
+   "net_per_usd": -0.0024,
+   "net_usd": -646.07,
+   "never_completed_share": 0.1635,
+   "pair_cost_when_completed": {
+    "mean": 0.9872,
+    "n": 26710,
+    "p10": 0.84,
+    "p25": 0.9298,
+    "p50": 0.99,
+    "p75": 1.05,
+    "p90": 1.14
+   },
+   "pair_pnl_usd": 5269.85,
+   "productive_share_of_usd": 0.919,
+   "residual_pnl_usd": -5915.92,
+   "residual_usd_left": 21973.98,
+   "time_to_complement_s": {
+    "mean": 65.3563,
+    "n": 26710,
+    "p10": 7,
+    "p25": 18,
+    "p50": 45,
+    "p75": 90,
+    "p90": 150
+   },
+   "usd": 271773.95
+  },
+  "BTC-5m": {
+   "fully_completed_share": 0.3096,
+   "lots": 2762,
+   "net_per_usd": 0.0282,
+   "net_usd": 1728.0,
+   "never_completed_share": 0.5619,
+   "pair_cost_when_completed": {
+    "mean": 0.9901,
+    "n": 1210,
+    "p10": 0.66,
+    "p25": 0.8222,
+    "p50": 0.96,
+    "p75": 1.1516,
+    "p90": 1.3918
+   },
+   "pair_pnl_usd": 482.55,
+   "productive_share_of_usd": 0.3807,
+   "residual_pnl_usd": 1245.45,
+   "residual_usd_left": 37408.41,
+   "time_to_complement_s": {
+    "mean": 61.7702,
+    "n": 1210,
+    "p10": 13,
+    "p25": 24,
+    "p50": 48,
+    "p75": 88,
+    "p90": 133
+   },
+   "usd": 61383.86
+  },
+  "ETH-15m": {
+   "fully_completed_share": 0.2909,
+   "lots": 55,
+   "net_per_usd": 0.0505,
+   "net_usd": 29.69,
+   "never_completed_share": 0.6,
+   "pair_cost_when_completed": {
+    "mean": 1.0632,
+    "n": 22,
+    "p10": 0.6876,
+    "p25": 0.89,
+    "p50": 1.1211,
+    "p75": 1.3098,
+    "p90": 1.3858
+   },
+   "pair_pnl_usd": -12.67,
+   "productive_share_of_usd": 0.2704,
+   "residual_pnl_usd": 42.36,
+   "residual_usd_left": 423.74,
+   "time_to_complement_s": {
+    "mean": 151.3182,
+    "n": 22,
+    "p10": 18,
+    "p25": 28,
+    "p50": 79,
+    "p75": 198,
+    "p90": 320
+   },
+   "usd": 587.5
+  },
+  "ETH-5m": {
+   "fully_completed_share": 0.1473,
+   "lots": 828,
+   "net_per_usd": 0.0143,
+   "net_usd": 150.29,
+   "never_completed_share": 0.7585,
+   "pair_cost_when_completed": {
+    "mean": 1.052,
+    "n": 200,
+    "p10": 0.66,
+    "p25": 0.8,
+    "p50": 1.0,
+    "p75": 1.34,
+    "p90": 1.46
+   },
+   "pair_pnl_usd": -9.54,
+   "productive_share_of_usd": 0.1572,
+   "residual_pnl_usd": 159.84,
+   "residual_usd_left": 8710.77,
+   "time_to_complement_s": {
+    "mean": 62.955,
+    "n": 200,
+    "p10": 12,
+    "p25": 21,
+    "p50": 48,
+    "p75": 99,
+    "p90": 130
+   },
+   "usd": 10537.58
+  }
+ },
+ "extend_conditioned": {
+  "band": {
+   "p0.35-0.45": {
+    "fully_completed_share": 0.8847,
+    "lots": 2524,
+    "net_per_usd": -0.0027,
+    "net_usd": -50.17,
+    "never_completed_share": 0.0927,
+    "pair_cost_when_completed": {
+     "mean": 0.9891,
+     "n": 2290,
+     "p10": 0.7505,
+     "p25": 0.91,
+     "p50": 0.9959,
+     "p75": 1.09,
+     "p90": 1.2
+    },
+    "pair_pnl_usd": 365.3,
+    "productive_share_of_usd": 0.8755,
+    "residual_pnl_usd": -415.47,
+    "residual_usd_left": 2244.77,
+    "time_to_complement_s": {
+     "mean": 68.3568,
+     "n": 2290,
+     "p10": 6,
+     "p25": 17,
+     "p50": 42,
+     "p75": 93,
+     "p90": 156
+    },
+    "usd": 18528.14
+   },
+   "p0.45-0.55": {
+    "fully_completed_share": 0.8993,
+    "lots": 3119,
+    "net_per_usd": 0.0008,
+    "net_usd": 26.1,
+    "never_completed_share": 0.0824,
+    "pair_cost_when_completed": {
+     "mean": 0.9837,
+     "n": 2862,
+     "p10": 0.75,
+     "p25": 0.9041,
+     "p50": 0.99,
+     "p75": 1.08,
+     "p90": 1.19
+    },
+    "pair_pnl_usd": 853.13,
+    "productive_share_of_usd": 0.8906,
+    "residual_pnl_usd": -827.03,
+    "residual_usd_left": 3510.79,
+    "time_to_complement_s": {
+     "mean": 65.9018,
+     "n": 2862,
+     "p10": 7,
+     "p25": 18,
+     "p50": 46,
+     "p75": 92,
+     "p90": 147
+    },
+    "usd": 32826.47
+   },
+   "p0.55-0.65": {
+    "fully_completed_share": 0.9135,
+    "lots": 3803,
+    "net_per_usd": -0.02,
+    "net_usd": -1017.17,
+    "never_completed_share": 0.0671,
+    "pair_cost_when_completed": {
+     "mean": 0.9993,
+     "n": 3548,
+     "p10": 0.81,
+     "p25": 0.9,
+     "p50": 0.9838,
+     "p75": 1.08,
+     "p90": 1.2234
+    },
+    "pair_pnl_usd": -344.88,
+    "productive_share_of_usd": 0.9027,
+    "residual_pnl_usd": -672.29,
+    "residual_usd_left": 4840.8,
+    "time_to_complement_s": {
+     "mean": 62.4273,
+     "n": 3548,
+     "p10": 8,
+     "p25": 18,
+     "p50": 44,
+     "p75": 90,
+     "p90": 146
+    },
+    "usd": 50847.22
+   },
+   "p<0.35": {
+    "fully_completed_share": 0.6681,
+    "lots": 15661,
+    "net_per_usd": -0.0013,
+    "net_usd": -50.67,
+    "never_completed_share": 0.31,
+    "pair_cost_when_completed": {
+     "mean": 0.9762,
+     "n": 10806,
+     "p10": 0.8239,
+     "p25": 0.94,
+     "p50": 1.0,
+     "p75": 1.05,
+     "p90": 1.1008
+    },
+    "pair_pnl_usd": 4829.33,
+    "productive_share_of_usd": 0.7606,
+    "residual_pnl_usd": -4880.0,
+    "residual_usd_left": 9274.76,
+    "time_to_complement_s": {
+     "mean": 65.6525,
+     "n": 10806,
+     "p10": 7,
+     "p25": 20,
+     "p50": 48,
+     "p75": 89,
+     "p90": 150
+    },
+    "usd": 39541.1
+   },
+   "p>=0.65": {
+    "fully_completed_share": 0.7967,
+    "lots": 10469,
+    "net_per_usd": 0.0116,
+    "net_usd": 2353.83,
+    "never_completed_share": 0.1751,
+    "pair_cost_when_completed": {
+     "mean": 0.9986,
+     "n": 8636,
+     "p10": 0.87,
+     "p25": 0.9242,
+     "p50": 0.973,
+     "p75": 1.0297,
+     "p90": 1.1647
+    },
+    "pair_pnl_usd": 27.31,
+    "productive_share_of_usd": 0.7579,
+    "residual_pnl_usd": 2326.52,
+    "residual_usd_left": 48645.76,
+    "time_to_complement_s": {
+     "mean": 64.8734,
+     "n": 8636,
+     "p10": 6,
+     "p25": 18,
+     "p50": 45,
+     "p75": 92,
+     "p90": 150
+    },
+    "usd": 202539.97
+   }
+  },
+  "imbalance": {
+   "imb0.5-1u": {
+    "fully_completed_share": 0.6358,
+    "lots": 1826,
+    "net_per_usd": 0.0279,
+    "net_usd": 541.37,
+    "never_completed_share": 0.2788,
+    "pair_cost_when_completed": {
+     "mean": 1.0,
+     "n": 1317,
+     "p10": 0.84,
+     "p25": 0.9477,
+     "p50": 0.99,
+     "p75": 1.04,
+     "p90": 1.16
+    },
+    "pair_pnl_usd": 6.42,
+    "productive_share_of_usd": 0.5607,
+    "residual_pnl_usd": 534.95,
+    "residual_usd_left": 8375.66,
+    "time_to_complement_s": {
+     "mean": 40.0904,
+     "n": 1317,
+     "p10": 3,
+     "p25": 8,
+     "p50": 23,
+     "p75": 54,
+     "p90": 97
+    },
+    "usd": 19392.11
+   },
+   "imb1-2u": {
+    "fully_completed_share": 0.6828,
+    "lots": 3124,
+    "net_per_usd": 0.0271,
+    "net_usd": 850.37,
+    "never_completed_share": 0.2702,
+    "pair_cost_when_completed": {
+     "mean": 0.9931,
+     "n": 2280,
+     "p10": 0.83,
+     "p25": 0.9428,
+     "p50": 0.99,
+     "p75": 1.0417,
+     "p90": 1.1384
+    },
+    "pair_pnl_usd": 217.35,
+    "productive_share_of_usd": 0.589,
+    "residual_pnl_usd": 633.02,
+    "residual_usd_left": 12709.23,
+    "time_to_complement_s": {
+     "mean": 48.8211,
+     "n": 2280,
+     "p10": 4,
+     "p25": 11,
+     "p50": 28,
+     "p75": 63,
+     "p90": 114
+    },
+    "usd": 31395.39
+   },
+   "imb2-4u": {
+    "fully_completed_share": 0.7164,
+    "lots": 4179,
+    "net_per_usd": 0.0157,
+    "net_usd": 604.68,
+    "never_completed_share": 0.2491,
+    "pair_cost_when_completed": {
+     "mean": 0.987,
+     "n": 3138,
+     "p10": 0.84,
+     "p25": 0.9338,
+     "p50": 0.99,
+     "p75": 1.04,
+     "p90": 1.11
+    },
+    "pair_pnl_usd": 694.71,
+    "productive_share_of_usd": 0.6308,
+    "residual_pnl_usd": -90.03,
+    "residual_usd_left": 14025.44,
+    "time_to_complement_s": {
+     "mean": 52.123,
+     "n": 3138,
+     "p10": 4,
+     "p25": 12,
+     "p50": 32,
+     "p75": 66,
+     "p90": 118
+    },
+    "usd": 38549.1
+   },
+   "imb<0.5u": {
+    "fully_completed_share": 0.7284,
+    "lots": 1852,
+    "net_per_usd": 0.0367,
+    "net_usd": 596.56,
+    "never_completed_share": 0.2025,
+    "pair_cost_when_completed": {
+     "mean": 0.9891,
+     "n": 1477,
+     "p10": 0.86,
+     "p25": 0.9514,
+     "p50": 0.99,
+     "p75": 1.03,
+     "p90": 1.11
+    },
+    "pair_pnl_usd": 392.1,
+    "productive_share_of_usd": 0.7055,
+    "residual_pnl_usd": 204.47,
+    "residual_usd_left": 4697.9,
+    "time_to_complement_s": {
+     "mean": 32.1225,
+     "n": 1477,
+     "p10": 2,
+     "p25": 6,
+     "p50": 18,
+     "p75": 40,
+     "p90": 82
+    },
+    "usd": 16234.03
+   },
+   "imb>=4u": {
+    "fully_completed_share": 0.8001,
+    "lots": 24595,
+    "net_per_usd": -0.0056,
+    "net_usd": -1331.06,
+    "never_completed_share": 0.1897,
+    "pair_cost_when_completed": {
+     "mean": 0.9864,
+     "n": 19930,
+     "p10": 0.83,
+     "p25": 0.92,
+     "p50": 0.9854,
+     "p75": 1.06,
+     "p90": 1.1564
+    },
+    "pair_pnl_usd": 4419.62,
+    "productive_share_of_usd": 0.8789,
+    "residual_pnl_usd": -5750.68,
+    "residual_usd_left": 28708.65,
+    "time_to_complement_s": {
+     "mean": 73.3171,
+     "n": 19930,
+     "p10": 11,
+     "p25": 25,
+     "p50": 55,
+     "p75": 101,
+     "p90": 161
+    },
+    "usd": 238712.27
+   }
+  },
+  "move": {
+   "move_down1-2c": {
+    "fully_completed_share": 0.7598,
+    "lots": 6786,
+    "net_per_usd": -0.0039,
+    "net_usd": -220.26,
+    "never_completed_share": 0.2207,
+    "pair_cost_when_completed": {
+     "mean": 0.9875,
+     "n": 5288,
+     "p10": 0.841,
+     "p25": 0.93,
+     "p50": 0.9896,
+     "p75": 1.0439,
+     "p90": 1.14
+    },
+    "pair_pnl_usd": 1330.03,
+    "productive_share_of_usd": 0.8522,
+    "residual_pnl_usd": -1550.29,
+    "residual_usd_left": 8261.18,
+    "time_to_complement_s": {
+     "mean": 65.9211,
+     "n": 5288,
+     "p10": 7,
+     "p25": 19,
+     "p50": 48,
+     "p75": 91,
+     "p90": 153
+    },
+    "usd": 56536.44
+   },
+   "move_down>=3c": {
+    "fully_completed_share": 0.712,
+    "lots": 5503,
+    "net_per_usd": 0.015,
+    "net_usd": 728.91,
+    "never_completed_share": 0.25,
+    "pair_cost_when_completed": {
+     "mean": 0.979,
+     "n": 4127,
+     "p10": 0.78,
+     "p25": 0.9,
+     "p50": 0.9885,
+     "p75": 1.0622,
+     "p90": 1.1661
+    },
+    "pair_pnl_usd": 1568.51,
+    "productive_share_of_usd": 0.751,
+    "residual_pnl_usd": -839.6,
+    "residual_usd_left": 11801.94,
+    "time_to_complement_s": {
+     "mean": 68.3215,
+     "n": 4127,
+     "p10": 8,
+     "p25": 20,
+     "p50": 47,
+     "p75": 94,
+     "p90": 154
+    },
+    "usd": 48500.49
+   },
+   "move_flat": {
+    "fully_completed_share": 0.796,
+    "lots": 11967,
+    "net_per_usd": 0.0044,
+    "net_usd": 298.75,
+    "never_completed_share": 0.1927,
+    "pair_cost_when_completed": {
+     "mean": 0.9868,
+     "n": 9661,
+     "p10": 0.8457,
+     "p25": 0.93,
+     "p50": 0.99,
+     "p75": 1.05,
+     "p90": 1.13
+    },
+    "pair_pnl_usd": 1597.35,
+    "productive_share_of_usd": 0.8501,
+    "residual_pnl_usd": -1298.6,
+    "residual_usd_left": 10058.12,
+    "time_to_complement_s": {
+     "mean": 66.6031,
+     "n": 9661,
+     "p10": 8,
+     "p25": 21,
+     "p50": 49,
+     "p75": 93,
+     "p90": 150
+    },
+    "usd": 67687.94
+   },
+   "move_up1-2c": {
+    "fully_completed_share": 0.8069,
+    "lots": 6469,
+    "net_per_usd": -0.005,
+    "net_usd": -473.35,
+    "never_completed_share": 0.171,
+    "pair_cost_when_completed": {
+     "mean": 0.992,
+     "n": 5363,
+     "p10": 0.84,
+     "p25": 0.93,
+     "p50": 0.99,
+     "p75": 1.05,
+     "p90": 1.1531
+    },
+    "pair_pnl_usd": 1073.07,
+    "productive_share_of_usd": 0.8566,
+    "residual_pnl_usd": -1546.43,
+    "residual_usd_left": 13440.68,
+    "time_to_complement_s": {
+     "mean": 60.5726,
+     "n": 5363,
+     "p10": 5,
+     "p25": 15,
+     "p50": 41,
+     "p75": 84,
+     "p90": 144
+    },
+    "usd": 94495.11
+   },
+   "move_up>=3c": {
+    "fully_completed_share": 0.7207,
+    "lots": 4851,
+    "net_per_usd": 0.012,
+    "net_usd": 927.87,
+    "never_completed_share": 0.2367,
+    "pair_cost_when_completed": {
+     "mean": 0.9947,
+     "n": 3703,
+     "p10": 0.82,
+     "p25": 0.91,
+     "p50": 0.98,
+     "p75": 1.06,
+     "p90": 1.2094
+    },
+    "pair_pnl_usd": 161.22,
+    "productive_share_of_usd": 0.6729,
+    "residual_pnl_usd": 766.64,
+    "residual_usd_left": 24954.96,
+    "time_to_complement_s": {
+     "mean": 64.1291,
+     "n": 3703,
+     "p10": 7,
+     "p25": 17,
+     "p50": 42,
+     "p75": 88,
+     "p90": 147
+    },
+    "usd": 77062.92
+   }
+  },
+  "pair": {
+   "pair0.95-0.98": {
+    "fully_completed_share": 0.7868,
+    "lots": 5778,
+    "net_per_usd": -0.0096,
+    "net_usd": -378.29,
+    "never_completed_share": 0.1989,
+    "pair_cost_when_completed": {
+     "mean": 0.9866,
+     "n": 4629,
+     "p10": 0.8511,
+     "p25": 0.93,
+     "p50": 0.99,
+     "p75": 1.0493,
+     "p90": 1.12
+    },
+    "pair_pnl_usd": 981.9,
+    "productive_share_of_usd": 0.8921,
+    "residual_pnl_usd": -1360.19,
+    "residual_usd_left": 4205.77,
+    "time_to_complement_s": {
+     "mean": 66.051,
+     "n": 4629,
+     "p10": 8,
+     "p25": 21,
+     "p50": 48,
+     "p75": 93,
+     "p90": 150
+    },
+    "usd": 39232.33
+   },
+   "pair0.98-1.00": {
+    "fully_completed_share": 0.8079,
+    "lots": 10643,
+    "net_per_usd": 0.0003,
+    "net_usd": 31.02,
+    "never_completed_share": 0.1802,
+    "pair_cost_when_completed": {
+     "mean": 0.9874,
+     "n": 8725,
+     "p10": 0.87,
+     "p25": 0.94,
+     "p50": 0.9887,
+     "p75": 1.0344,
+     "p90": 1.1127
+    },
+    "pair_pnl_usd": 2037.16,
+    "productive_share_of_usd": 0.8892,
+    "residual_pnl_usd": -2006.13,
+    "residual_usd_left": 11638.89,
+    "time_to_complement_s": {
+     "mean": 59.6712,
+     "n": 8725,
+     "p10": 6,
+     "p25": 15,
+     "p50": 40,
+     "p75": 82,
+     "p90": 138
+    },
+    "usd": 105449.43
+   },
+   "pair<0.95": {
+    "fully_completed_share": 0.752,
+    "lots": 9429,
+    "net_per_usd": -0.012,
+    "net_usd": -666.45,
+    "never_completed_share": 0.2249,
+    "pair_cost_when_completed": {
+     "mean": 0.9812,
+     "n": 7308,
+     "p10": 0.8,
+     "p25": 0.9102,
+     "p50": 0.99,
+     "p75": 1.06,
+     "p90": 1.15
+    },
+    "pair_pnl_usd": 2034.89,
+    "productive_share_of_usd": 0.8415,
+    "residual_pnl_usd": -2701.34,
+    "residual_usd_left": 8664.89,
+    "time_to_complement_s": {
+     "mean": 68.5239,
+     "n": 7308,
+     "p10": 8,
+     "p25": 22,
+     "p50": 51,
+     "p75": 94,
+     "p90": 153
+    },
+    "usd": 55707.47
+   },
+   "pair>1.00": {
+    "fully_completed_share": 0.7889,
+    "lots": 6602,
+    "net_per_usd": 0.019,
+    "net_usd": 1828.66,
+    "never_completed_share": 0.184,
+    "pair_cost_when_completed": {
+     "mean": 0.9891,
+     "n": 5387,
+     "p10": 0.816,
+     "p25": 0.91,
+     "p50": 0.98,
+     "p75": 1.0571,
+     "p90": 1.1842
+    },
+    "pair_pnl_usd": 1222.93,
+    "productive_share_of_usd": 0.7651,
+    "residual_pnl_usd": 605.73,
+    "residual_usd_left": 22346.51,
+    "time_to_complement_s": {
+     "mean": 57.8307,
+     "n": 5387,
+     "p10": 6,
+     "p25": 16,
+     "p50": 39,
+     "p75": 78,
+     "p90": 136
+    },
+    "usd": 96017.62
+   },
+   "pair_unknown": {
+    "fully_completed_share": 0.5992,
+    "lots": 3124,
+    "net_per_usd": 0.0093,
+    "net_usd": 446.98,
+    "never_completed_share": 0.33,
+    "pair_cost_when_completed": {
+     "mean": 1.0118,
+     "n": 2093,
+     "p10": 0.77,
+     "p25": 0.9,
+     "p50": 0.9958,
+     "p75": 1.12,
+     "p90": 1.2769
+    },
+    "pair_pnl_usd": -546.68,
+    "productive_share_of_usd": 0.5396,
+    "residual_pnl_usd": 993.66,
+    "residual_usd_left": 21660.81,
+    "time_to_complement_s": {
+     "mean": 94.429,
+     "n": 2093,
+     "p10": 12,
+     "p25": 33,
+     "p50": 72,
+     "p75": 130,
+     "p90": 190
+    },
+    "usd": 47876.05
+   }
+  },
+  "run": {
+   "run1": {
+    "fully_completed_share": 0.8085,
+    "lots": 8594,
+    "net_per_usd": 0.0077,
+    "net_usd": 754.18,
+    "never_completed_share": 0.1699,
+    "pair_cost_when_completed": {
+     "mean": 0.9857,
+     "n": 7134,
+     "p10": 0.85,
+     "p25": 0.9284,
+     "p50": 0.9811,
+     "p75": 1.04,
+     "p90": 1.1373
+    },
+    "pair_pnl_usd": 1944.59,
+    "productive_share_of_usd": 0.8551,
+    "residual_pnl_usd": -1190.41,
+    "residual_usd_left": 13995.98,
+    "time_to_complement_s": {
+     "mean": 58.7271,
+     "n": 7134,
+     "p10": 6,
+     "p25": 15,
+     "p50": 39,
+     "p75": 81,
+     "p90": 136
+    },
+    "usd": 97556.3
+   },
+   "run2": {
+    "fully_completed_share": 0.7515,
+    "lots": 7234,
+    "net_per_usd": 0.0133,
+    "net_usd": 1229.3,
+    "never_completed_share": 0.21,
+    "pair_cost_when_completed": {
+     "mean": 0.9902,
+     "n": 5715,
+     "p10": 0.822,
+     "p25": 0.92,
+     "p50": 0.9852,
+     "p75": 1.05,
+     "p90": 1.17
+    },
+    "pair_pnl_usd": 1353.82,
+    "productive_share_of_usd": 0.7724,
+    "residual_pnl_usd": -124.53,
+    "residual_usd_left": 20664.88,
+    "time_to_complement_s": {
+     "mean": 62.9204,
+     "n": 5715,
+     "p10": 6,
+     "p25": 18,
+     "p50": 44,
+     "p75": 88,
+     "p90": 145
+    },
+    "usd": 92115.77
+   },
+   "run3-4": {
+    "fully_completed_share": 0.7436,
+    "lots": 7973,
+    "net_per_usd": 0.0054,
+    "net_usd": 448.43,
+    "never_completed_share": 0.2298,
+    "pair_cost_when_completed": {
+     "mean": 0.9907,
+     "n": 6141,
+     "p10": 0.83,
+     "p25": 0.92,
+     "p50": 0.99,
+     "p75": 1.0538,
+     "p90": 1.16
+    },
+    "pair_pnl_usd": 856.04,
+    "productive_share_of_usd": 0.724,
+    "residual_pnl_usd": -407.61,
+    "residual_usd_left": 22557.39,
+    "time_to_complement_s": {
+     "mean": 65.9391,
+     "n": 6141,
+     "p10": 7,
+     "p25": 19,
+     "p50": 46,
+     "p75": 92,
+     "p90": 151
+    },
+    "usd": 82761.05
+   },
+   "run>=5": {
+    "fully_completed_share": 0.7646,
+    "lots": 11775,
+    "net_per_usd": -0.0163,
+    "net_usd": -1169.99,
+    "never_completed_share": 0.2228,
+    "pair_cost_when_completed": {
+     "mean": 0.986,
+     "n": 9152,
+     "p10": 0.82,
+     "p25": 0.9252,
+     "p50": 0.9938,
+     "p75": 1.0545,
+     "p90": 1.14
+    },
+    "pair_pnl_usd": 1575.73,
+    "productive_share_of_usd": 0.8414,
+    "residual_pnl_usd": -2745.72,
+    "residual_usd_left": 11298.63,
+    "time_to_complement_s": {
+     "mean": 71.3338,
+     "n": 9152,
+     "p10": 9,
+     "p25": 23,
+     "p50": 52,
+     "p75": 98,
+     "p90": 160
+    },
+    "usd": 71849.78
+   }
+  },
+  "tte": {
+   "tte1-3m": {
+    "fully_completed_share": 0.5104,
+    "lots": 6993,
+    "net_per_usd": -0.0078,
+    "net_usd": -630.99,
+    "never_completed_share": 0.4349,
+    "pair_cost_when_completed": {
+     "mean": 0.9824,
+     "n": 3952,
+     "p10": 0.7596,
+     "p25": 0.9,
+     "p50": 0.9891,
+     "p75": 1.0598,
+     "p90": 1.2
+    },
+    "pair_pnl_usd": 1567.9,
+    "productive_share_of_usd": 0.5697,
+    "residual_pnl_usd": -2198.89,
+    "residual_usd_left": 34312.01,
+    "time_to_complement_s": {
+     "mean": 31.0175,
+     "n": 3952,
+     "p10": 4,
+     "p25": 11,
+     "p50": 24,
+     "p75": 45,
+     "p90": 66
+    },
+    "usd": 80756.53
+   },
+   "tte3-10m": {
+    "fully_completed_share": 0.8359,
+    "lots": 17281,
+    "net_per_usd": 0.0074,
+    "net_usd": 1119.06,
+    "never_completed_share": 0.1458,
+    "pair_cost_when_completed": {
+     "mean": 0.9862,
+     "n": 14761,
+     "p10": 0.83,
+     "p25": 0.9244,
+     "p50": 0.99,
+     "p75": 1.05,
+     "p90": 1.14
+    },
+    "pair_pnl_usd": 3374.8,
+    "productive_share_of_usd": 0.8766,
+    "residual_pnl_usd": -2255.75,
+    "residual_usd_left": 18372.34,
+    "time_to_complement_s": {
+     "mean": 68.5706,
+     "n": 14761,
+     "p10": 8,
+     "p25": 22,
+     "p50": 52,
+     "p75": 96,
+     "p90": 152
+    },
+    "usd": 150340.37
+   },
+   "tte<60s": {
+    "fully_completed_share": 0.1865,
+    "lots": 2274,
+    "net_per_usd": 0.0407,
+    "net_usd": 764.2,
+    "never_completed_share": 0.7696,
+    "pair_cost_when_completed": {
+     "mean": 0.9359,
+     "n": 524,
+     "p10": 0.6203,
+     "p25": 0.8703,
+     "p50": 0.97,
+     "p75": 1.04,
+     "p90": 1.16
+    },
+    "pair_pnl_usd": 644.71,
+    "productive_share_of_usd": 0.1981,
+    "residual_pnl_usd": 119.48,
+    "residual_usd_left": 14863.71,
+    "time_to_complement_s": {
+     "mean": 15.166,
+     "n": 524,
+     "p10": 2,
+     "p25": 6,
+     "p50": 13,
+     "p75": 23,
+     "p90": 31
+    },
+    "usd": 18789.02
+   },
+   "tte>10m": {
+    "fully_completed_share": 0.9833,
+    "lots": 9028,
+    "net_per_usd": 0.0001,
+    "net_usd": 9.65,
+    "never_completed_share": 0.0136,
+    "pair_cost_when_completed": {
+     "mean": 0.9959,
+     "n": 8905,
+     "p10": 0.8601,
+     "p25": 0.93,
+     "p50": 0.99,
+     "p75": 1.0506,
+     "p90": 1.15
+    },
+    "pair_pnl_usd": 142.77,
+    "productive_share_of_usd": 0.9897,
+    "residual_pnl_usd": -133.12,
+    "residual_usd_left": 968.82,
+    "time_to_complement_s": {
+     "mean": 77.8922,
+     "n": 8905,
+     "p10": 9,
+     "p25": 24,
+     "p50": 56,
+     "p75": 108,
+     "p90": 174
+    },
+    "usd": 94396.98
+   }
+  }
+ },
+ "labels": "L5's own prints, FIFO lot matching, residual settled at the actual outcome; pair_proxy = extend price + last opposite-side print (public proxy for pair-at-touch); productive share = matched qty / lot qty; nothing here is realized or ours",
+ "lots": 71982,
+ "owner_direction": "#167 5569709706 item 1; 5569845340 D",
+ "provenance": {
+  "content_sha256_16": "3b98847233684612",
+  "limits": [
+   "derived from EXECUTED TRADES on the public activity feed: a fill is not a quote",
+   "concurrency here is FILL concurrency, a lower bound on quoting concurrency",
+   "'unknown' maker_taker is outside takerOnly coverage and is never treated as maker"
+  ],
+  "maker_taker_counts": {
+   "maker": 55647,
+   "taker": 11068,
+   "unknown": 5269
+  },
+  "meta_rows": 71984,
+  "rows_read": 71984,
+  "source_file": "analysis/l5/l5_canonical_sequence.csv.gz",
+  "source_meta": "analysis/l5/l5_canonical_sequence.meta.json",
+  "upstream_sources": [
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_window_sequences.csv",
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_windows_summary.csv",
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_all_trades.csv",
+   "/home/user/kalshi-arb-bot/data/l5/raw/trades_takeronly.jsonl"
+  ]
+ },
+ "reading": "EXTEND lots: 35576, $344282.9; 79.9% of extended dollars were eventually completed (opens: 71.8%), 20.9% of extend lots never completed; net 0.0037 per extended dollar (pair +5730.19, residual -4468.27) against 0.0269 for opens. By imbalance before the extend: best imb<0.5u (0.0367 per $, 1852 lots), worst imb>=4u (-0.0056 per $, 24595 lots). Extends drawn with less than one action unit unmatched -- the only ones R4's cap could admit -- net 0.0319 per $ on 3678 lots with 62.7% completed. By time to settlement: tte1-3m -0.0078 per $ (57% completed, n 6993); tte3-10m 0.0074 per $ (88% completed, n 17281); tte<60s 0.0407 per $ (20% completed, n 2274); tte>10m 0.0001 per $ (99% completed, n 9028). By pair proxy: pair0.95-0.98 -0.0096 per $ (89% completed, n 5778); pair0.98-1.00 0.0003 per $ (89% completed, n 10643); pair<0.95 -0.012 per $ (84% completed, n 9429); pair>1.00 0.019 per $ (77% completed, n 6602); pair_unknown 0.0093 per $ (54% completed, n 3124). Caveats: the pair-proxy > 1.00 and move-up >= 3 c slices are positive through their RESIDUAL, i.e. the side that had just risen went on to win more often in this history -- a directional effect of BTC windows, not a completion effect, and not a rule to trade on; the completion effect proper is the imbalance gradient (small imbalance -> higher net per $, shorter time to complement). R4's cap admits an extend only when the unmatched notional before it plus one action stays within one action, which on this history is the imb<0.5u slice.",
+ "windows": 2216
+}
