@@ -2160,3 +2160,26 @@ def test_shadow_yield_fetch_is_cached_and_empty_when_unreachable(monkeypatch):
                         lambda url, timeout=8: (_ for _ in ()).throw(OSError("refused")))
     assert cont.pmus_shadow_yield(2000.0) == {}
     assert cont._yield_cache["source"]["error"].startswith("OSError")
+
+
+def test_no_candidate_alarm_fires_once_per_window_only_while_live_rows_are_refused(capsys):
+    """OWNER 5573574441: a live universe the probe cannot use for a whole
+    window is alarmed once per window; an empty universe or a pick resets
+    it; gates are untouched (the alarm carries the refusal mix only)."""
+    a = cont.NoCandidateAlarm(window_s=100.0)
+    assert a.note(0.0, None, 12, {"band": 10, "stale": 2}) is None
+    assert a.note(50.0, None, 12, {"band": 12}) is None
+    row = a.note(100.0, None, 9, {"band": 9})
+    assert row and row["kind"] == "no_candidate" and row["cycles"] == 3
+    assert row["max_universe_rows"] == 12 and row["top_refusals"]["band"] == 31
+    assert row["no_candidate_s"] == 100.0
+    # not again inside the window, again after it
+    assert a.note(150.0, None, 9, {"band": 9}) is None
+    assert a.note(200.0, None, 9, {"band": 9})["cycles"] == 5
+    # a pick resets everything
+    assert a.note(210.0, "some-slug", 9, {}) is None and a.since is None
+    # an EMPTY universe is not this alarm's case (no live events)
+    assert a.note(300.0, None, 0, {}) is None and a.since is None
+    cont._emit_alarm({"kind": "no_candidate", "cycles": 1})
+    out = capsys.readouterr().out
+    assert "PMUS_SPRING_ALARM " in out and '"kind":"no_candidate_alarm"' in out

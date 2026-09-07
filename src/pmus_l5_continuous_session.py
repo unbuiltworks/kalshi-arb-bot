@@ -328,6 +328,63 @@ def _log(kind: str, **fields: Any) -> None:
 
 READ_HALT_MARK = "GET_RETRIES_EXHAUSTED"
 
+# OWNER 5573574441: a probe-side alarm when selection keeps finding NO
+# admissible candidate while the universe is non-empty (live events are
+# being scored and every one is refused / none chosen). The recorder's
+# stream alarm covers a dead feed; this covers a live feed the probe
+# cannot use, which otherwise looks like a quiet campaign for hours.
+# Fires once per window, on stdout as PMUS_SPRING_ALARM and in the
+# campaign log; never changes a gate or a limit.
+NO_CANDIDATE_ALARM_ENV = "PMUS_SPRING_NO_CANDIDATE_ALARM_SECONDS"
+DEFAULT_NO_CANDIDATE_ALARM_S = 1800.0
+
+
+class NoCandidateAlarm:
+    def __init__(self, window_s: Optional[float] = None) -> None:
+        self.window_s = float(window_s if window_s is not None else os.getenv(
+            NO_CANDIDATE_ALARM_ENV, str(DEFAULT_NO_CANDIDATE_ALARM_S)))
+        self.since: Optional[float] = None       # first no-candidate cycle
+        self.last_alarm: Optional[float] = None
+        self.cycles = 0
+        self.rows_seen = 0
+        self.refusals: dict = {}
+
+    def note(self, now: float, chosen: Optional[str], n_rows: int,
+             refusals: Mapping[str, int]) -> Optional[dict]:
+        """Record one selection cycle; return the alarm row when due."""
+        if chosen is not None or n_rows <= 0:
+            # a pick, or an empty universe (no live events -- not this
+            # alarm's case; the stream alarm / status cover that)
+            self.since, self.last_alarm, self.cycles = None, None, 0
+            self.rows_seen, self.refusals = 0, {}
+            return None
+        if self.since is None:
+            self.since = now
+        self.cycles += 1
+        self.rows_seen = max(self.rows_seen, int(n_rows))
+        for k, v in dict(refusals).items():
+            self.refusals[k] = self.refusals.get(k, 0) + int(v)
+        if now - self.since < self.window_s:
+            return None
+        if self.last_alarm is not None and now - self.last_alarm < self.window_s:
+            return None
+        self.last_alarm = now
+        top = sorted(self.refusals.items(), key=lambda kv: -kv[1])[:5]
+        return {"kind": "no_candidate", "since_utc": datetime.fromtimestamp(
+                    self.since, timezone.utc).isoformat(),
+                "no_candidate_s": round(now - self.since, 1),
+                "window_s": self.window_s, "cycles": self.cycles,
+                "max_universe_rows": self.rows_seen,
+                "top_refusals": dict(top),
+                "note": "live events scored, none admissible; gates unchanged"}
+
+
+def _emit_alarm(row: Mapping[str, Any]) -> None:
+    print("PMUS_SPRING_ALARM " + json.dumps(dict(row), separators=(",", ":"),
+                                            default=str), flush=True)
+    _log("no_candidate_alarm", **{k: v for k, v in row.items() if k != "kind"},
+         alarm=row.get("kind"))
+
 
 def _read_halt(rep: Mapping[str, Any]) -> bool:
     """A session that HALTed because a READ-ONLY GET ran out of retries
@@ -1511,6 +1568,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         os.environ[base.MAX_ACTIONS_ENV] = str(active_rung["max_actions_per_session"])
         return active_rung
     filled_markets: set = set()          # markets with a fill this campaign
+    no_candidate_alarm = NoCandidateAlarm()   # OWNER 5573574441
     # OWNER evidence continuation: the campaign identity and its stop rule
     # are durable state; an approval is consumed at the advance gate
     campaign_id = INITIAL_CAMPAIGN_ID
@@ -2089,6 +2147,16 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 funnel["refusals"][key] = funnel["refusals"].get(key, 0) + 1
             _log("funnel", **{k: v for k, v in funnel.items()})
             chosen = sel["chosen"]
+            cycle_refusals: dict = {}
+            for x in sel["refused"]:
+                key = str(x["reason"]).split(":")[0]
+                cycle_refusals[key] = cycle_refusals.get(key, 0) + 1
+            alarm_row = no_candidate_alarm.note(
+                now, chosen["slug"] if chosen else None,
+                len(sel["admitted"]) + len(sel["refused"]), cycle_refusals)
+            if alarm_row:
+                _emit_alarm(alarm_row)
+                report["alarms"] = list(report.get("alarms") or []) + [alarm_row]
             if chosen is None:
                 if sel["admitted"]:
                     _not_started("admitted_but_no_choice")
