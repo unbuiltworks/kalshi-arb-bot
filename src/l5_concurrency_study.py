@@ -350,6 +350,84 @@ def coverage(eps: Sequence[dict]) -> dict:
     }
 
 
+def idle_gaps(eps: Sequence[dict]) -> dict:
+    """OWNER chat 2026-09-07: what 'the next market starts immediately after
+    settlement' looks like in L5's own history. Per lane, the gap from one
+    episode's SETTLEMENT to the first fill of the next episode L5 entered,
+    and the share of wall-clock time L5 held no inventory at all.
+
+    Two gaps are reported and kept apart:
+      settlement_to_next_first_fill -- positive when L5 waited after a
+          market resolved; NEGATIVE when it had already entered the next
+          market before this one settled (overlap, the R5-style case).
+      last_fill_to_next_first_fill  -- the trading pause between markets.
+    Gaps over one day straddle harvest holes (coverage()) and are excluded
+    from the distributions but counted."""
+    by_lane: Dict[str, List[dict]] = defaultdict(list)
+    for e in eps:
+        by_lane[_lane(e)].append(e)
+    out: dict = {}
+    for lane, es in sorted(by_lane.items()):
+        es = sorted(es, key=lambda e: e["t_first"])
+        settle_gaps, fill_gaps, negative, holes = [], [], 0, 0
+        for a, b in zip(es, es[1:]):
+            g = b["t_first"] - a["t_settlement"]
+            f = b["t_first"] - a["t_last"]
+            if f > 86400:
+                holes += 1
+                continue
+            settle_gaps.append(g)
+            fill_gaps.append(f)
+            if g < 0:
+                negative += 1
+        pos = [g for g in settle_gaps if g >= 0]
+        out[lane] = {
+            "episodes": len(es),
+            "transitions": len(settle_gaps),
+            "transitions_across_a_harvest_hole_excluded": holes,
+            "entered_next_before_this_settled": negative,
+            "share_entered_before_settlement": (
+                round(negative / len(settle_gaps), 4) if settle_gaps else None),
+            "settlement_to_next_first_fill_s_when_waited": _dist(pos),
+            "last_fill_to_next_first_fill_s": _dist(fill_gaps),
+            "share_next_entered_within_60s_of_settlement": (
+                round(sum(1 for g in settle_gaps if g <= 60) / len(settle_gaps), 4)
+                if settle_gaps else None),
+            "share_next_entered_within_300s_of_settlement": (
+                round(sum(1 for g in settle_gaps if g <= 300) / len(settle_gaps), 4)
+                if settle_gaps else None),
+        }
+    return out
+
+
+def flat_time_share(eps: Sequence[dict]) -> dict:
+    """Share of the harvested span in which L5 held NO inventory anywhere
+    (capital reading: first fill -> settlement), overall and per lane,
+    computed on the covered days only so harvest holes do not count as
+    idleness."""
+    def _share(es: Sequence[dict]) -> Optional[dict]:
+        if not es:
+            return None
+        ivs = sorted((e["t_first"], e["t_settlement"]) for e in es)
+        covered = _sweep(ivs)
+        busy = sum(covered.values())
+        # span = union of covered days (whole days L5 traded), not the raw
+        # calendar span, so a week of missing harvest is not 'flat'
+        import datetime as _dt
+        days = {_dt.datetime.utcfromtimestamp(e["t_first"]).date() for e in es}
+        span = len(days) * 86400
+        return {"busy_s": busy, "covered_days": len(days),
+                "flat_share_of_covered_days": round(max(0.0, 1.0 - busy / span), 4) if span else None,
+                "busy_share_of_covered_days": round(min(1.0, busy / span), 4) if span else None}
+    by_lane: Dict[str, List[dict]] = defaultdict(list)
+    for e in eps:
+        by_lane[_lane(e)].append(e)
+    return {"overall": _share(list(eps)),
+            "by_lane": {k: _share(v) for k, v in sorted(by_lane.items())},
+            "note": "capital reading (first fill -> settlement); a day counts as "
+                    "covered when L5 has at least one episode on it"}
+
+
 def _week(e: dict) -> str:
     import datetime as _dt
     d = _dt.datetime.utcfromtimestamp(e["t_first"])
@@ -390,6 +468,9 @@ def study(rows: Optional[Sequence[dict]] = None, path: str = CANONICAL_PATH) -> 
             "spray_5m": spray(rows, 300),
             "spray_15m": spray(rows, 900),
             "spray_1h": spray(rows, 3600),
+            # OWNER chat 2026-09-07: turnover between markets, per lane
+            "idle_gaps": idle_gaps(eps),
+            "flat_time": flat_time_share(eps),
         },
         "by_era": by_cohort(rows, eps, _era),
         "by_week": by_cohort(rows, eps, _week),
