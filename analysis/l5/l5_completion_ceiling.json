@@ -1,0 +1,4231 @@
+{
+ "owner_direction": "#167 comment 5574408755 item 2 (completion ceiling from actual L5 behaviour)",
+ "scope": "WHAT L5 DID only. Pair costs are pre-rebate, pre-fee acquisition costs of a $1.00-paying pair, > 1.00 mass intact. What PMUS economics can support is a separate study; see economic_overlay_attachment_points.",
+ "labels": {
+  "relation": "polymarket_l5.action_model._relation on the canonical residual BEFORE the fill: flat < 1 share -> open; surplus side -> extend; deficit side -> complete",
+  "state": "polymarket_l5.action_model.state_key: band(LAST OBSERVED fill price) | tte bucket at the complete | |residual shares| bucket -- identical to live keys",
+  "own_band": "band of the COMPLETE fill's own price (not part of the live key)",
+  "engine_avg": "complete price + average cost (cum spend/cum qty) of the surplus side before the fill",
+  "marginal_lifo": "complete price + qty-weighted price of the most recent surplus lot(s) consumed, LIFO, matched part only",
+  "window_realized": "window's matched-pair unit cost at settlement (wavg_up + wavg_down, final canonical row), per complete",
+  "completed_usd": "complete price x matched qty (the part of the fill that formed pairs); dollar shares use this",
+  "pairs_pct": "share of completed CONTRACTS (pairs) above the threshold; dollars scale with price, contracts do not",
+  "usd": "full fill dollars, including any overshoot beyond the surplus",
+  "inv_usd_before": "|residual shares| x average cost of the surplus side = unmatched dollars before the complete",
+  "preceding": "relation of the previous BUY in the window; extend streak length counted in fills",
+  "pct_above": "share strictly above the threshold after rounding the pair cost to 6 dp (0.41+0.59 is 1.00, not above)",
+  "percentiles": "p-values are fill-count percentiles; usd_p50/usd_p90 are completed-dollar-weighted"
+ },
+ "provenance": {
+  "source_file": "analysis/l5/l5_canonical_sequence.csv.gz",
+  "source_meta": "analysis/l5/l5_canonical_sequence.meta.json",
+  "content_sha256_16": "3b98847233684612",
+  "meta_rows": 71984,
+  "rows_read": 71984,
+  "upstream_sources": [
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_window_sequences.csv",
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_windows_summary.csv",
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_all_trades.csv",
+   "/home/user/kalshi-arb-bot/data/l5/raw/trades_takeronly.jsonl"
+  ],
+  "maker_taker_counts": {
+   "unknown": 5269,
+   "maker": 55647,
+   "taker": 11068
+  },
+  "limits": [
+   "derived from EXECUTED TRADES on the public activity feed: a fill is not a quote",
+   "concurrency here is FILL concurrency, a lower bound on quoting concurrency",
+   "'unknown' maker_taker is outside takerOnly coverage and is never treated as maker"
+  ]
+ },
+ "counts": {
+  "fills": 71984,
+  "windows": 2216,
+  "relations_live_rule": {
+   "open": 2864,
+   "sell": 2,
+   "extend": 35353,
+   "complete": 33765
+  },
+  "completes": 33765,
+  "completes_pre_regime": 44,
+  "completes_with_overshoot": 3431,
+  "overshoot_usd": 29271.03,
+  "complete_fill_usd": 343486.96,
+  "complete_completed_usd": 312856.78,
+  "span_utc": [
+   "2026-03-19T10:09:37Z",
+   "2026-08-31T23:11:19Z"
+  ]
+ },
+ "overall": {
+  "engine_avg": {
+   "n": 33765,
+   "usd": 312856.78,
+   "pairs": 647920.4,
+   "mean": 0.9818,
+   "usd_wmean": 1.0995,
+   "pair_wmean": 1.0049,
+   "p10": 0.7668,
+   "p25": 0.8624,
+   "p50": 0.9697,
+   "p75": 1.1004,
+   "p90": 1.2204,
+   "p99": 1.4347,
+   "max": 1.8324,
+   "usd_p50": 1.104,
+   "usd_p90": 1.3092,
+   "above": {
+    "1.00": {
+     "fills_pct": 42.7,
+     "usd_pct": 73.15,
+     "pairs_pct": 49.56
+    },
+    "1.01": {
+     "fills_pct": 40.81,
+     "usd_pct": 71.31,
+     "pairs_pct": 47.75
+    },
+    "1.02": {
+     "fills_pct": 38.92,
+     "usd_pct": 69.35,
+     "pairs_pct": 45.91
+    },
+    "1.03": {
+     "fills_pct": 37.21,
+     "usd_pct": 67.48,
+     "pairs_pct": 44.25
+    },
+    "1.05": {
+     "fills_pct": 33.59,
+     "usd_pct": 63.03,
+     "pairs_pct": 40.4
+    }
+   }
+  },
+  "marginal_lifo": {
+   "n": 33765,
+   "usd": 312856.78,
+   "pairs": 647920.4,
+   "mean": 0.9775,
+   "usd_wmean": 1.0174,
+   "pair_wmean": 0.9845,
+   "p10": 0.86,
+   "p25": 0.94,
+   "p50": 0.9823,
+   "p75": 1.01,
+   "p90": 1.08,
+   "p99": 1.38,
+   "max": 1.92,
+   "usd_p50": 0.9973,
+   "usd_p90": 1.1506,
+   "above": {
+    "1.00": {
+     "fills_pct": 28.68,
+     "usd_pct": 42.75,
+     "pairs_pct": 33.37
+    },
+    "1.01": {
+     "fills_pct": 23.45,
+     "usd_pct": 35.76,
+     "pairs_pct": 27.61
+    },
+    "1.02": {
+     "fills_pct": 20.03,
+     "usd_pct": 31.12,
+     "pairs_pct": 23.74
+    },
+    "1.03": {
+     "fills_pct": 17.45,
+     "usd_pct": 27.48,
+     "pairs_pct": 20.73
+    },
+    "1.05": {
+     "fills_pct": 13.54,
+     "usd_pct": 22.27,
+     "pairs_pct": 16.55
+    }
+   }
+  },
+  "window_realized": {
+   "n": 33765,
+   "usd": 312856.78,
+   "pairs": 647920.4,
+   "mean": 0.9688,
+   "usd_wmean": 0.9817,
+   "pair_wmean": 0.9708,
+   "p10": 0.9141,
+   "p25": 0.9418,
+   "p50": 0.9659,
+   "p75": 0.9885,
+   "p90": 1.0168,
+   "p99": 1.2524,
+   "max": 1.7788,
+   "usd_p50": 0.9687,
+   "usd_p90": 1.038,
+   "above": {
+    "1.00": {
+     "fills_pct": 17.35,
+     "usd_pct": 24.02,
+     "pairs_pct": 19.74
+    },
+    "1.01": {
+     "fills_pct": 13.59,
+     "usd_pct": 19.43,
+     "pairs_pct": 15.7
+    },
+    "1.02": {
+     "fills_pct": 9.08,
+     "usd_pct": 14.3,
+     "pairs_pct": 11.08
+    },
+    "1.03": {
+     "fills_pct": 7.65,
+     "usd_pct": 12.46,
+     "pairs_pct": 9.47
+    },
+    "1.05": {
+     "fills_pct": 4.71,
+     "usd_pct": 8.19,
+     "pairs_pct": 6.17
+    }
+   }
+  }
+ },
+ "overall_window_realized_per_window": {
+  "n": 1610,
+  "usd": 629108.75,
+  "pairs": 648021.6,
+  "mean": 0.9916,
+  "usd_wmean": 0.9776,
+  "pair_wmean": 0.9708,
+  "p10": 0.7812,
+  "p25": 0.9008,
+  "p50": 0.9704,
+  "p75": 1.0648,
+  "p90": 1.2442,
+  "p99": 1.5269,
+  "max": 1.7788,
+  "usd_p50": 0.9685,
+  "usd_p90": 1.0337,
+  "above": {
+   "1.00": {
+    "fills_pct": 38.82,
+    "usd_pct": 21.7,
+    "pairs_pct": 19.74
+   },
+   "1.01": {
+    "fills_pct": 36.21,
+    "usd_pct": 17.52,
+    "pairs_pct": 15.7
+   },
+   "1.02": {
+    "fills_pct": 33.54,
+    "usd_pct": 12.69,
+    "pairs_pct": 11.08
+   },
+   "1.03": {
+    "fills_pct": 31.68,
+    "usd_pct": 11.0,
+    "pairs_pct": 9.47
+   },
+   "1.05": {
+    "fills_pct": 27.08,
+    "usd_pct": 7.47,
+    "pairs_pct": 6.17
+   }
+  }
+ },
+ "by_imbalance_bucket": {
+  "imb1-10": {
+   "n": 1707,
+   "usd": 3795.97,
+   "engine_avg": {
+    "mean": 0.9734,
+    "p50": 0.9642,
+    "p90": 1.2123,
+    "gt100_fills_pct": 39.19,
+    "gt100_pairs_pct": 39.68,
+    "gt100_usd_pct": 58.37,
+    "gt102_usd_pct": 52.96
+   },
+   "marginal_lifo": {
+    "mean": 0.9757,
+    "p50": 0.98,
+    "p90": 1.1258,
+    "gt100_fills_pct": 30.81,
+    "gt100_pairs_pct": 32.71,
+    "gt100_usd_pct": 43.83,
+    "gt102_usd_pct": 34.99
+   },
+   "window_realized": {
+    "mean": 0.971,
+    "p50": 0.9624,
+    "p90": 1.04,
+    "gt100_fills_pct": 20.04,
+    "gt100_pairs_pct": 21.21,
+    "gt100_usd_pct": 24.9,
+    "gt102_usd_pct": 17.52
+   }
+  },
+  "imb10-50": {
+   "n": 6833,
+   "usd": 48326.23,
+   "engine_avg": {
+    "mean": 0.9708,
+    "p50": 0.9633,
+    "p90": 1.1897,
+    "gt100_fills_pct": 39.27,
+    "gt100_pairs_pct": 44.34,
+    "gt100_usd_pct": 64.34,
+    "gt102_usd_pct": 58.96
+   },
+   "marginal_lifo": {
+    "mean": 0.9758,
+    "p50": 0.98,
+    "p90": 1.11,
+    "gt100_fills_pct": 30.92,
+    "gt100_pairs_pct": 34.9,
+    "gt100_usd_pct": 46.21,
+    "gt102_usd_pct": 37.11
+   },
+   "window_realized": {
+    "mean": 0.9698,
+    "p50": 0.9646,
+    "p90": 1.0359,
+    "gt100_fills_pct": 19.67,
+    "gt100_pairs_pct": 20.82,
+    "gt100_usd_pct": 24.92,
+    "gt102_usd_pct": 16.99
+   }
+  },
+  "imb>50": {
+   "n": 25225,
+   "usd": 260734.59,
+   "engine_avg": {
+    "mean": 0.9854,
+    "p50": 0.9721,
+    "p90": 1.2265,
+    "gt100_fills_pct": 43.87,
+    "gt100_pairs_pct": 50.69,
+    "gt100_usd_pct": 75.0,
+    "gt102_usd_pct": 71.51
+   },
+   "marginal_lifo": {
+    "mean": 0.978,
+    "p50": 0.9855,
+    "p90": 1.07,
+    "gt100_fills_pct": 27.93,
+    "gt100_pairs_pct": 33.1,
+    "gt100_usd_pct": 42.09,
+    "gt102_usd_pct": 29.96
+   },
+   "window_realized": {
+    "mean": 0.9683,
+    "p50": 0.9664,
+    "p90": 1.0149,
+    "gt100_fills_pct": 16.54,
+    "gt100_pairs_pct": 19.51,
+    "gt100_usd_pct": 23.84,
+    "gt102_usd_pct": 13.76
+   }
+  }
+ },
+ "by_tte_bucket": {
+  "tte<30s": {
+   "n": 382,
+   "usd": 4752.05,
+   "engine_avg": {
+    "mean": 1.0097,
+    "p50": 1.0156,
+    "p90": 1.4017,
+    "gt100_fills_pct": 51.57,
+    "gt100_pairs_pct": 48.57,
+    "gt100_usd_pct": 83.61,
+    "gt102_usd_pct": 81.24
+   },
+   "marginal_lifo": {
+    "mean": 0.924,
+    "p50": 0.97,
+    "p90": 1.135,
+    "gt100_fills_pct": 33.77,
+    "gt100_pairs_pct": 29.97,
+    "gt100_usd_pct": 49.03,
+    "gt102_usd_pct": 33.18
+   },
+   "window_realized": {
+    "mean": 0.963,
+    "p50": 0.9659,
+    "p90": 1.1163,
+    "gt100_fills_pct": 26.7,
+    "gt100_pairs_pct": 29.76,
+    "gt100_usd_pct": 32.96,
+    "gt102_usd_pct": 26.64
+   }
+  },
+  "tte30-120s": {
+   "n": 4784,
+   "usd": 56519.07,
+   "engine_avg": {
+    "mean": 0.9804,
+    "p50": 0.9665,
+    "p90": 1.335,
+    "gt100_fills_pct": 45.99,
+    "gt100_pairs_pct": 49.54,
+    "gt100_usd_pct": 80.18,
+    "gt102_usd_pct": 78.22
+   },
+   "marginal_lifo": {
+    "mean": 0.9665,
+    "p50": 0.98,
+    "p90": 1.179,
+    "gt100_fills_pct": 33.17,
+    "gt100_pairs_pct": 35.15,
+    "gt100_usd_pct": 51.21,
+    "gt102_usd_pct": 41.6
+   },
+   "window_realized": {
+    "mean": 0.9733,
+    "p50": 0.9659,
+    "p90": 1.0964,
+    "gt100_fills_pct": 23.72,
+    "gt100_pairs_pct": 25.62,
+    "gt100_usd_pct": 33.56,
+    "gt102_usd_pct": 26.91
+   }
+  },
+  "tte2-5m": {
+   "n": 8191,
+   "usd": 91320.03,
+   "engine_avg": {
+    "mean": 0.9984,
+    "p50": 0.9992,
+    "p90": 1.2698,
+    "gt100_fills_pct": 49.96,
+    "gt100_pairs_pct": 53.87,
+    "gt100_usd_pct": 78.87,
+    "gt102_usd_pct": 76.57
+   },
+   "marginal_lifo": {
+    "mean": 0.9794,
+    "p50": 0.9876,
+    "p90": 1.09,
+    "gt100_fills_pct": 29.58,
+    "gt100_pairs_pct": 33.05,
+    "gt100_usd_pct": 40.7,
+    "gt102_usd_pct": 29.16
+   },
+   "window_realized": {
+    "mean": 0.9729,
+    "p50": 0.968,
+    "p90": 1.0243,
+    "gt100_fills_pct": 18.45,
+    "gt100_pairs_pct": 20.58,
+    "gt100_usd_pct": 24.42,
+    "gt102_usd_pct": 16.81
+   }
+  },
+  "tte5-10m": {
+   "n": 11456,
+   "usd": 95087.74,
+   "engine_avg": {
+    "mean": 0.9712,
+    "p50": 0.9516,
+    "p90": 1.1838,
+    "gt100_fills_pct": 40.08,
+    "gt100_pairs_pct": 49.84,
+    "gt100_usd_pct": 72.94,
+    "gt102_usd_pct": 69.21
+   },
+   "marginal_lifo": {
+    "mean": 0.9733,
+    "p50": 0.98,
+    "p90": 1.06,
+    "gt100_fills_pct": 25.27,
+    "gt100_pairs_pct": 31.55,
+    "gt100_usd_pct": 39.51,
+    "gt102_usd_pct": 26.62
+   },
+   "window_realized": {
+    "mean": 0.9656,
+    "p50": 0.9657,
+    "p90": 1.0131,
+    "gt100_fills_pct": 15.14,
+    "gt100_pairs_pct": 17.06,
+    "gt100_usd_pct": 20.94,
+    "gt102_usd_pct": 8.74
+   }
+  },
+  "tte>10m": {
+   "n": 8952,
+   "usd": 65177.89,
+   "engine_avg": {
+    "mean": 0.9799,
+    "p50": 0.9734,
+    "p90": 1.1205,
+    "gt100_fills_pct": 37.29,
+    "gt100_pairs_pct": 44.0,
+    "gt100_usd_pct": 58.6,
+    "gt102_usd_pct": 50.86
+   },
+   "marginal_lifo": {
+    "mean": 0.9892,
+    "p50": 0.99,
+    "p90": 1.07,
+    "gt100_fills_pct": 29.6,
+    "gt100_pairs_pct": 35.1,
+    "gt100_usd_pct": 42.55,
+    "gt102_usd_pct": 31.22
+   },
+   "window_realized": {
+    "mean": 0.9669,
+    "p50": 0.9659,
+    "p90": 1.0117,
+    "gt100_fills_pct": 15.38,
+    "gt100_pairs_pct": 17.03,
+    "gt100_usd_pct": 19.03,
+    "gt102_usd_pct": 7.07
+   }
+  }
+ },
+ "by_last_price_band_state": {
+  "p<10c": {
+   "n": 3198,
+   "usd": 36671.15,
+   "engine_avg": {
+    "mean": 0.952,
+    "p50": 0.8713,
+    "p90": 1.2906,
+    "gt100_fills_pct": 39.18,
+    "gt100_pairs_pct": 50.05,
+    "gt100_usd_pct": 90.79,
+    "gt102_usd_pct": 89.85
+   },
+   "marginal_lifo": {
+    "mean": 0.9279,
+    "p50": 0.98,
+    "p90": 1.0003,
+    "gt100_fills_pct": 10.41,
+    "gt100_pairs_pct": 14.16,
+    "gt100_usd_pct": 21.96,
+    "gt102_usd_pct": 8.27
+   },
+   "window_realized": {
+    "mean": 0.9634,
+    "p50": 0.9679,
+    "p90": 1.0134,
+    "gt100_fills_pct": 14.92,
+    "gt100_pairs_pct": 17.92,
+    "gt100_usd_pct": 24.44,
+    "gt102_usd_pct": 15.01
+   }
+  },
+  "p10-25c": {
+   "n": 7074,
+   "usd": 46608.41,
+   "engine_avg": {
+    "mean": 0.9174,
+    "p50": 0.8847,
+    "p90": 1.1714,
+    "gt100_fills_pct": 25.66,
+    "gt100_pairs_pct": 36.03,
+    "gt100_usd_pct": 70.3,
+    "gt102_usd_pct": 68.39
+   },
+   "marginal_lifo": {
+    "mean": 0.9379,
+    "p50": 0.97,
+    "p90": 1.02,
+    "gt100_fills_pct": 16.79,
+    "gt100_pairs_pct": 21.6,
+    "gt100_usd_pct": 32.01,
+    "gt102_usd_pct": 19.25
+   },
+   "window_realized": {
+    "mean": 0.9614,
+    "p50": 0.9633,
+    "p90": 1.002,
+    "gt100_fills_pct": 11.72,
+    "gt100_pairs_pct": 14.13,
+    "gt100_usd_pct": 21.01,
+    "gt102_usd_pct": 13.59
+   }
+  },
+  "p25-45c": {
+   "n": 7047,
+   "usd": 54300.16,
+   "engine_avg": {
+    "mean": 0.966,
+    "p50": 0.9624,
+    "p90": 1.1333,
+    "gt100_fills_pct": 35.45,
+    "gt100_pairs_pct": 42.71,
+    "gt100_usd_pct": 54.72,
+    "gt102_usd_pct": 47.99
+   },
+   "marginal_lifo": {
+    "mean": 0.9688,
+    "p50": 0.98,
+    "p90": 1.0643,
+    "gt100_fills_pct": 28.86,
+    "gt100_pairs_pct": 34.57,
+    "gt100_usd_pct": 39.79,
+    "gt102_usd_pct": 28.45
+   },
+   "window_realized": {
+    "mean": 0.9652,
+    "p50": 0.9653,
+    "p90": 1.0134,
+    "gt100_fills_pct": 15.71,
+    "gt100_pairs_pct": 17.46,
+    "gt100_usd_pct": 20.05,
+    "gt102_usd_pct": 10.89
+   }
+  },
+  "p45-55c": {
+   "n": 3465,
+   "usd": 33176.55,
+   "engine_avg": {
+    "mean": 1.0168,
+    "p50": 1.0125,
+    "p90": 1.1518,
+    "gt100_fills_pct": 55.09,
+    "gt100_pairs_pct": 59.79,
+    "gt100_usd_pct": 63.39,
+    "gt102_usd_pct": 55.49
+   },
+   "marginal_lifo": {
+    "mean": 1.0005,
+    "p50": 0.9913,
+    "p90": 1.12,
+    "gt100_fills_pct": 41.41,
+    "gt100_pairs_pct": 46.81,
+    "gt100_usd_pct": 50.83,
+    "gt102_usd_pct": 40.71
+   },
+   "window_realized": {
+    "mean": 0.9718,
+    "p50": 0.9659,
+    "p90": 1.019,
+    "gt100_fills_pct": 21.21,
+    "gt100_pairs_pct": 23.37,
+    "gt100_usd_pct": 25.32,
+    "gt102_usd_pct": 12.59
+   }
+  },
+  "p55-75c": {
+   "n": 6520,
+   "usd": 63517.76,
+   "engine_avg": {
+    "mean": 1.0198,
+    "p50": 1.0068,
+    "p90": 1.2271,
+    "gt100_fills_pct": 51.98,
+    "gt100_pairs_pct": 53.89,
+    "gt100_usd_pct": 66.12,
+    "gt102_usd_pct": 61.18
+   },
+   "marginal_lifo": {
+    "mean": 1.0116,
+    "p50": 0.99,
+    "p90": 1.19,
+    "gt100_fills_pct": 39.92,
+    "gt100_pairs_pct": 43.13,
+    "gt100_usd_pct": 51.36,
+    "gt102_usd_pct": 43.52
+   },
+   "window_realized": {
+    "mean": 0.9718,
+    "p50": 0.9659,
+    "p90": 1.0215,
+    "gt100_fills_pct": 20.35,
+    "gt100_pairs_pct": 22.19,
+    "gt100_usd_pct": 25.01,
+    "gt102_usd_pct": 14.37
+   }
+  },
+  "p75-90c": {
+   "n": 4304,
+   "usd": 45504.61,
+   "engine_avg": {
+    "mean": 1.0116,
+    "p50": 1.0144,
+    "p90": 1.2572,
+    "gt100_fills_pct": 51.79,
+    "gt100_pairs_pct": 54.59,
+    "gt100_usd_pct": 83.77,
+    "gt102_usd_pct": 81.42
+   },
+   "marginal_lifo": {
+    "mean": 1.0023,
+    "p50": 0.99,
+    "p90": 1.0903,
+    "gt100_fills_pct": 29.81,
+    "gt100_pairs_pct": 34.5,
+    "gt100_usd_pct": 46.3,
+    "gt102_usd_pct": 34.72
+   },
+   "window_realized": {
+    "mean": 0.975,
+    "p50": 0.9679,
+    "p90": 1.0243,
+    "gt100_fills_pct": 19.17,
+    "gt100_pairs_pct": 21.19,
+    "gt100_usd_pct": 25.06,
+    "gt102_usd_pct": 14.99
+   }
+  },
+  "p>90c": {
+   "n": 2157,
+   "usd": 33078.13,
+   "engine_avg": {
+    "mean": 1.059,
+    "p50": 1.1203,
+    "p90": 1.3437,
+    "gt100_fills_pct": 61.43,
+    "gt100_pairs_pct": 60.93,
+    "gt100_usd_pct": 96.54,
+    "gt102_usd_pct": 96.0
+   },
+   "marginal_lifo": {
+    "mean": 1.0194,
+    "p50": 0.99,
+    "p90": 1.1,
+    "gt100_fills_pct": 37.46,
+    "gt100_pairs_pct": 38.79,
+    "gt100_usd_pct": 56.25,
+    "gt102_usd_pct": 39.2
+   },
+   "window_realized": {
+    "mean": 0.9858,
+    "p50": 0.9732,
+    "p90": 1.04,
+    "gt100_fills_pct": 25.92,
+    "gt100_pairs_pct": 25.96,
+    "gt100_usd_pct": 29.68,
+    "gt102_usd_pct": 20.75
+   }
+  }
+ },
+ "by_own_price_band": {
+  "p<10c": {
+   "n": 3145,
+   "usd": 3313.34,
+   "engine_avg": {
+    "mean": 0.7739,
+    "p50": 0.7992,
+    "p90": 0.8957,
+    "gt100_fills_pct": 0.29,
+    "gt100_pairs_pct": 0.37,
+    "gt100_usd_pct": 0.54,
+    "gt102_usd_pct": 0.28
+   },
+   "marginal_lifo": {
+    "mean": 0.896,
+    "p50": 0.96,
+    "p90": 0.9923,
+    "gt100_fills_pct": 4.29,
+    "gt100_pairs_pct": 4.37,
+    "gt100_usd_pct": 6.12,
+    "gt102_usd_pct": 1.34
+   },
+   "window_realized": {
+    "mean": 0.9498,
+    "p50": 0.9631,
+    "p90": 1.01,
+    "gt100_fills_pct": 12.37,
+    "gt100_pairs_pct": 12.91,
+    "gt100_usd_pct": 12.33,
+    "gt102_usd_pct": 6.85
+   }
+  },
+  "p10-25c": {
+   "n": 7367,
+   "usd": 18825.46,
+   "engine_avg": {
+    "mean": 0.8356,
+    "p50": 0.8529,
+    "p90": 0.946,
+    "gt100_fills_pct": 2.17,
+    "gt100_pairs_pct": 2.89,
+    "gt100_usd_pct": 3.3,
+    "gt102_usd_pct": 1.9
+   },
+   "marginal_lifo": {
+    "mean": 0.9285,
+    "p50": 0.9662,
+    "p90": 1.005,
+    "gt100_fills_pct": 10.6,
+    "gt100_pairs_pct": 12.04,
+    "gt100_usd_pct": 12.51,
+    "gt102_usd_pct": 6.25
+   },
+   "window_realized": {
+    "mean": 0.958,
+    "p50": 0.9631,
+    "p90": 0.9963,
+    "gt100_fills_pct": 8.63,
+    "gt100_pairs_pct": 9.63,
+    "gt100_usd_pct": 9.84,
+    "gt102_usd_pct": 5.02
+   }
+  },
+  "p25-45c": {
+   "n": 7703,
+   "usd": 44693.64,
+   "engine_avg": {
+    "mean": 0.9258,
+    "p50": 0.9383,
+    "p90": 1.0406,
+    "gt100_fills_pct": 19.86,
+    "gt100_pairs_pct": 23.67,
+    "gt100_usd_pct": 26.1,
+    "gt102_usd_pct": 19.82
+   },
+   "marginal_lifo": {
+    "mean": 0.9646,
+    "p50": 0.98,
+    "p90": 1.046,
+    "gt100_fills_pct": 24.28,
+    "gt100_pairs_pct": 27.61,
+    "gt100_usd_pct": 28.59,
+    "gt102_usd_pct": 18.32
+   },
+   "window_realized": {
+    "mean": 0.9638,
+    "p50": 0.9653,
+    "p90": 1.01,
+    "gt100_fills_pct": 13.93,
+    "gt100_pairs_pct": 15.16,
+    "gt100_usd_pct": 15.31,
+    "gt102_usd_pct": 7.04
+   }
+  },
+  "p45-55c": {
+   "n": 3335,
+   "usd": 31475.32,
+   "engine_avg": {
+    "mean": 1.0176,
+    "p50": 1.0132,
+    "p90": 1.1301,
+    "gt100_fills_pct": 55.68,
+    "gt100_pairs_pct": 60.28,
+    "gt100_usd_pct": 60.52,
+    "gt102_usd_pct": 51.95
+   },
+   "marginal_lifo": {
+    "mean": 1.0049,
+    "p50": 1.0,
+    "p90": 1.1166,
+    "gt100_fills_pct": 43.33,
+    "gt100_pairs_pct": 48.72,
+    "gt100_usd_pct": 48.87,
+    "gt102_usd_pct": 38.36
+   },
+   "window_realized": {
+    "mean": 0.9718,
+    "p50": 0.9654,
+    "p90": 1.019,
+    "gt100_fills_pct": 20.57,
+    "gt100_pairs_pct": 22.2,
+    "gt100_usd_pct": 22.32,
+    "gt102_usd_pct": 10.38
+   }
+  },
+  "p55-75c": {
+   "n": 5468,
+   "usd": 70521.21,
+   "engine_avg": {
+    "mean": 1.0955,
+    "p50": 1.0851,
+    "p90": 1.2596,
+    "gt100_fills_pct": 79.15,
+    "gt100_pairs_pct": 80.59,
+    "gt100_usd_pct": 81.06,
+    "gt102_usd_pct": 75.04
+   },
+   "marginal_lifo": {
+    "mean": 1.0268,
+    "p50": 1.0,
+    "p90": 1.21,
+    "gt100_fills_pct": 47.93,
+    "gt100_pairs_pct": 51.85,
+    "gt100_usd_pct": 51.48,
+    "gt102_usd_pct": 42.88
+   },
+   "window_realized": {
+    "mean": 0.9747,
+    "p50": 0.9663,
+    "p90": 1.0216,
+    "gt100_fills_pct": 22.59,
+    "gt100_pairs_pct": 24.01,
+    "gt100_usd_pct": 23.69,
+    "gt102_usd_pct": 11.9
+   }
+  },
+  "p75-90c": {
+   "n": 4075,
+   "usd": 75115.52,
+   "engine_avg": {
+    "mean": 1.1674,
+    "p50": 1.145,
+    "p90": 1.3419,
+    "gt100_fills_pct": 95.36,
+    "gt100_pairs_pct": 95.92,
+    "gt100_usd_pct": 96.07,
+    "gt102_usd_pct": 94.08
+   },
+   "marginal_lifo": {
+    "mean": 1.0248,
+    "p50": 0.9922,
+    "p90": 1.14,
+    "gt100_fills_pct": 40.17,
+    "gt100_pairs_pct": 45.57,
+    "gt100_usd_pct": 45.61,
+    "gt102_usd_pct": 32.83
+   },
+   "window_realized": {
+    "mean": 0.9843,
+    "p50": 0.9685,
+    "p90": 1.0384,
+    "gt100_fills_pct": 25.13,
+    "gt100_pairs_pct": 26.85,
+    "gt100_usd_pct": 26.92,
+    "gt102_usd_pct": 17.19
+   }
+  },
+  "p>90c": {
+   "n": 2672,
+   "usd": 68912.3,
+   "engine_avg": {
+    "mean": 1.2311,
+    "p50": 1.2095,
+    "p90": 1.4012,
+    "gt100_fills_pct": 99.1,
+    "gt100_pairs_pct": 98.92,
+    "gt100_usd_pct": 98.94,
+    "gt102_usd_pct": 98.37
+   },
+   "marginal_lifo": {
+    "mean": 1.0383,
+    "p50": 1.0,
+    "p90": 1.1271,
+    "gt100_fills_pct": 44.72,
+    "gt100_pairs_pct": 47.07,
+    "gt100_usd_pct": 47.09,
+    "gt102_usd_pct": 30.47
+   },
+   "window_realized": {
+    "mean": 0.9951,
+    "p50": 0.9752,
+    "p90": 1.0593,
+    "gt100_fills_pct": 30.54,
+    "gt100_pairs_pct": 32.17,
+    "gt100_usd_pct": 32.06,
+    "gt102_usd_pct": 23.01
+   }
+  }
+ },
+ "by_state": {
+  "p10-25c|tte2-5m|imb1-10": {
+   "n": 81,
+   "usd": 174.3,
+   "engine_avg": {
+    "mean": 0.9067,
+    "p50": 0.8727,
+    "p90": 1.1671,
+    "gt100_fills_pct": 29.63,
+    "gt100_pairs_pct": 31.87,
+    "gt100_usd_pct": 62.76,
+    "gt102_usd_pct": 61.99
+   },
+   "marginal_lifo": {
+    "mean": 0.8956,
+    "p50": 0.95,
+    "p90": 1.0357,
+    "gt100_fills_pct": 19.75,
+    "gt100_pairs_pct": 24.42,
+    "gt100_usd_pct": 40.46,
+    "gt102_usd_pct": 39.93
+   },
+   "window_realized": {
+    "mean": 0.9425,
+    "p50": 0.9549,
+    "p90": 0.9893,
+    "gt100_fills_pct": 7.41,
+    "gt100_pairs_pct": 11.1,
+    "gt100_usd_pct": 13.4,
+    "gt102_usd_pct": 9.81
+   }
+  },
+  "p10-25c|tte2-5m|imb10-50": {
+   "n": 322,
+   "usd": 2006.65,
+   "engine_avg": {
+    "mean": 0.8973,
+    "p50": 0.8594,
+    "p90": 1.1897,
+    "gt100_fills_pct": 28.88,
+    "gt100_pairs_pct": 37.37,
+    "gt100_usd_pct": 69.33,
+    "gt102_usd_pct": 68.11
+   },
+   "marginal_lifo": {
+    "mean": 0.9069,
+    "p50": 0.95,
+    "p90": 1.04,
+    "gt100_fills_pct": 18.94,
+    "gt100_pairs_pct": 21.22,
+    "gt100_usd_pct": 34.64,
+    "gt102_usd_pct": 30.94
+   },
+   "window_realized": {
+    "mean": 0.9606,
+    "p50": 0.9636,
+    "p90": 1.0149,
+    "gt100_fills_pct": 12.73,
+    "gt100_pairs_pct": 14.9,
+    "gt100_usd_pct": 22.72,
+    "gt102_usd_pct": 18.81
+   }
+  },
+  "p10-25c|tte2-5m|imb>50": {
+   "n": 1293,
+   "usd": 11491.61,
+   "engine_avg": {
+    "mean": 0.9248,
+    "p50": 0.8747,
+    "p90": 1.2292,
+    "gt100_fills_pct": 35.81,
+    "gt100_pairs_pct": 40.16,
+    "gt100_usd_pct": 74.34,
+    "gt102_usd_pct": 72.14
+   },
+   "marginal_lifo": {
+    "mean": 0.9475,
+    "p50": 0.9793,
+    "p90": 1.0216,
+    "gt100_fills_pct": 19.03,
+    "gt100_pairs_pct": 24.18,
+    "gt100_usd_pct": 31.6,
+    "gt102_usd_pct": 17.96
+   },
+   "window_realized": {
+    "mean": 0.9639,
+    "p50": 0.9664,
+    "p90": 1.0054,
+    "gt100_fills_pct": 13.07,
+    "gt100_pairs_pct": 15.94,
+    "gt100_usd_pct": 24.72,
+    "gt102_usd_pct": 16.58
+   }
+  },
+  "p10-25c|tte30-120s|imb1-10": {
+   "n": 43,
+   "usd": 78.4,
+   "engine_avg": {
+    "mean": 0.8972,
+    "p50": 0.8602,
+    "p90": 1.2184,
+    "gt100_fills_pct": 30.23,
+    "gt100_pairs_pct": 27.85,
+    "gt100_usd_pct": 57.87,
+    "gt102_usd_pct": 57.87
+   },
+   "marginal_lifo": {
+    "mean": 0.9037,
+    "p50": 0.93,
+    "p90": 1.05,
+    "gt100_fills_pct": 25.58,
+    "gt100_pairs_pct": 23.09,
+    "gt100_usd_pct": 39.08,
+    "gt102_usd_pct": 33.81
+   },
+   "window_realized": {
+    "mean": 0.9415,
+    "p50": 0.9592,
+    "p90": 1.0289,
+    "gt100_fills_pct": 16.28,
+    "gt100_pairs_pct": 16.84,
+    "gt100_usd_pct": 28.44,
+    "gt102_usd_pct": 27.43
+   }
+  },
+  "p10-25c|tte30-120s|imb10-50": {
+   "n": 159,
+   "usd": 1284.29,
+   "engine_avg": {
+    "mean": 0.9476,
+    "p50": 0.9248,
+    "p90": 1.2818,
+    "gt100_fills_pct": 41.51,
+    "gt100_pairs_pct": 38.16,
+    "gt100_usd_pct": 68.43,
+    "gt102_usd_pct": 62.68
+   },
+   "marginal_lifo": {
+    "mean": 0.9049,
+    "p50": 0.95,
+    "p90": 1.08,
+    "gt100_fills_pct": 33.96,
+    "gt100_pairs_pct": 30.37,
+    "gt100_usd_pct": 50.08,
+    "gt102_usd_pct": 39.87
+   },
+   "window_realized": {
+    "mean": 0.9473,
+    "p50": 0.9592,
+    "p90": 1.0566,
+    "gt100_fills_pct": 20.75,
+    "gt100_pairs_pct": 18.13,
+    "gt100_usd_pct": 24.56,
+    "gt102_usd_pct": 22.8
+   }
+  },
+  "p10-25c|tte30-120s|imb>50": {
+   "n": 594,
+   "usd": 6301.6,
+   "engine_avg": {
+    "mean": 0.9039,
+    "p50": 0.8503,
+    "p90": 1.28,
+    "gt100_fills_pct": 34.34,
+    "gt100_pairs_pct": 42.63,
+    "gt100_usd_pct": 75.72,
+    "gt102_usd_pct": 74.21
+   },
+   "marginal_lifo": {
+    "mean": 0.8894,
+    "p50": 0.95,
+    "p90": 1.05,
+    "gt100_fills_pct": 23.4,
+    "gt100_pairs_pct": 28.87,
+    "gt100_usd_pct": 45.65,
+    "gt102_usd_pct": 37.64
+   },
+   "window_realized": {
+    "mean": 0.9567,
+    "p50": 0.9592,
+    "p90": 1.0269,
+    "gt100_fills_pct": 16.84,
+    "gt100_pairs_pct": 20.71,
+    "gt100_usd_pct": 31.39,
+    "gt102_usd_pct": 28.24
+   }
+  },
+  "p10-25c|tte5-10m|imb1-10": {
+   "n": 118,
+   "usd": 132.54,
+   "engine_avg": {
+    "mean": 0.8811,
+    "p50": 0.8536,
+    "p90": 1.0625,
+    "gt100_fills_pct": 15.25,
+    "gt100_pairs_pct": 16.29,
+    "gt100_usd_pct": 42.55,
+    "gt102_usd_pct": 40.47
+   },
+   "marginal_lifo": {
+    "mean": 0.9018,
+    "p50": 0.93,
+    "p90": 0.99,
+    "gt100_fills_pct": 7.63,
+    "gt100_pairs_pct": 10.48,
+    "gt100_usd_pct": 20.14,
+    "gt102_usd_pct": 9.73
+   },
+   "window_realized": {
+    "mean": 0.9509,
+    "p50": 0.9584,
+    "p90": 0.9987,
+    "gt100_fills_pct": 10.17,
+    "gt100_pairs_pct": 7.14,
+    "gt100_usd_pct": 8.45,
+    "gt102_usd_pct": 6.03
+   }
+  },
+  "p10-25c|tte5-10m|imb10-50": {
+   "n": 512,
+   "usd": 2206.79,
+   "engine_avg": {
+    "mean": 0.9033,
+    "p50": 0.8741,
+    "p90": 1.1168,
+    "gt100_fills_pct": 20.51,
+    "gt100_pairs_pct": 28.27,
+    "gt100_usd_pct": 61.52,
+    "gt102_usd_pct": 57.43
+   },
+   "marginal_lifo": {
+    "mean": 0.9272,
+    "p50": 0.95,
+    "p90": 1.0112,
+    "gt100_fills_pct": 12.7,
+    "gt100_pairs_pct": 13.61,
+    "gt100_usd_pct": 24.69,
+    "gt102_usd_pct": 15.82
+   },
+   "window_realized": {
+    "mean": 0.9598,
+    "p50": 0.9608,
+    "p90": 1.0003,
+    "gt100_fills_pct": 12.7,
+    "gt100_pairs_pct": 10.41,
+    "gt100_usd_pct": 16.11,
+    "gt102_usd_pct": 5.78
+   }
+  },
+  "p10-25c|tte5-10m|imb>50": {
+   "n": 2496,
+   "usd": 15185.58,
+   "engine_avg": {
+    "mean": 0.9193,
+    "p50": 0.8849,
+    "p90": 1.15,
+    "gt100_fills_pct": 22.32,
+    "gt100_pairs_pct": 34.48,
+    "gt100_usd_pct": 69.84,
+    "gt102_usd_pct": 68.3
+   },
+   "marginal_lifo": {
+    "mean": 0.9448,
+    "p50": 0.97,
+    "p90": 1.01,
+    "gt100_fills_pct": 14.58,
+    "gt100_pairs_pct": 20.05,
+    "gt100_usd_pct": 28.11,
+    "gt102_usd_pct": 11.82
+   },
+   "window_realized": {
+    "mean": 0.9622,
+    "p50": 0.9633,
+    "p90": 0.9982,
+    "gt100_fills_pct": 9.54,
+    "gt100_pairs_pct": 10.99,
+    "gt100_usd_pct": 15.56,
+    "gt102_usd_pct": 6.28
+   }
+  },
+  "p10-25c|tte<30s|imb10-50": {
+   "n": 21,
+   "usd": 195.96,
+   "engine_avg": {
+    "mean": 0.9969,
+    "p50": 1.0379,
+    "p90": 1.3621,
+    "gt100_fills_pct": 57.14,
+    "gt100_pairs_pct": 44.56,
+    "gt100_usd_pct": 74.66,
+    "gt102_usd_pct": 74.66
+   },
+   "marginal_lifo": {
+    "mean": 0.9126,
+    "p50": 0.9528,
+    "p90": 1.08,
+    "gt100_fills_pct": 47.62,
+    "gt100_pairs_pct": 32.64,
+    "gt100_usd_pct": 55.0,
+    "gt102_usd_pct": 41.86
+   },
+   "window_realized": {
+    "mean": 0.9485,
+    "p50": 0.9697,
+    "p90": 1.0862,
+    "gt100_fills_pct": 38.1,
+    "gt100_pairs_pct": 32.28,
+    "gt100_usd_pct": 53.75,
+    "gt102_usd_pct": 44.16
+   }
+  },
+  "p10-25c|tte<30s|imb>50": {
+   "n": 24,
+   "usd": 386.64,
+   "engine_avg": {
+    "mean": 0.9754,
+    "p50": 0.9192,
+    "p90": 1.4099,
+    "gt100_fills_pct": 45.83,
+    "gt100_pairs_pct": 57.37,
+    "gt100_usd_pct": 88.78,
+    "gt102_usd_pct": 88.78
+   },
+   "marginal_lifo": {
+    "mean": 0.8534,
+    "p50": 0.9072,
+    "p90": 1.0822,
+    "gt100_fills_pct": 33.33,
+    "gt100_pairs_pct": 30.95,
+    "gt100_usd_pct": 49.45,
+    "gt102_usd_pct": 34.49
+   },
+   "window_realized": {
+    "mean": 0.925,
+    "p50": 0.9271,
+    "p90": 1.0739,
+    "gt100_fills_pct": 20.83,
+    "gt100_pairs_pct": 40.49,
+    "gt100_usd_pct": 46.45,
+    "gt102_usd_pct": 46.45
+   }
+  },
+  "p10-25c|tte>10m|imb1-10": {
+   "n": 44,
+   "usd": 71.7,
+   "engine_avg": {
+    "mean": 0.938,
+    "p50": 0.9067,
+    "p90": 1.1342,
+    "gt100_fills_pct": 29.55,
+    "gt100_pairs_pct": 31.67,
+    "gt100_usd_pct": 61.53,
+    "gt102_usd_pct": 61.53
+   },
+   "marginal_lifo": {
+    "mean": 0.9359,
+    "p50": 0.94,
+    "p90": 1.01,
+    "gt100_fills_pct": 15.91,
+    "gt100_pairs_pct": 17.93,
+    "gt100_usd_pct": 27.41,
+    "gt102_usd_pct": 9.85
+   },
+   "window_realized": {
+    "mean": 0.968,
+    "p50": 0.9759,
+    "p90": 1.0114,
+    "gt100_fills_pct": 18.18,
+    "gt100_pairs_pct": 20.78,
+    "gt100_usd_pct": 14.12,
+    "gt102_usd_pct": 6.07
+   }
+  },
+  "p10-25c|tte>10m|imb10-50": {
+   "n": 233,
+   "usd": 1106.09,
+   "engine_avg": {
+    "mean": 0.9314,
+    "p50": 0.9043,
+    "p90": 1.1015,
+    "gt100_fills_pct": 20.6,
+    "gt100_pairs_pct": 37.6,
+    "gt100_usd_pct": 66.33,
+    "gt102_usd_pct": 63.94
+   },
+   "marginal_lifo": {
+    "mean": 0.9562,
+    "p50": 0.97,
+    "p90": 1.01,
+    "gt100_fills_pct": 12.45,
+    "gt100_pairs_pct": 17.33,
+    "gt100_usd_pct": 26.14,
+    "gt102_usd_pct": 12.06
+   },
+   "window_realized": {
+    "mean": 0.9587,
+    "p50": 0.9558,
+    "p90": 0.9874,
+    "gt100_fills_pct": 6.01,
+    "gt100_pairs_pct": 7.7,
+    "gt100_usd_pct": 8.21,
+    "gt102_usd_pct": 5.05
+   }
+  },
+  "p10-25c|tte>10m|imb>50": {
+   "n": 1123,
+   "usd": 5944.57,
+   "engine_avg": {
+    "mean": 0.9161,
+    "p50": 0.899,
+    "p90": 1.0846,
+    "gt100_fills_pct": 16.03,
+    "gt100_pairs_pct": 29.21,
+    "gt100_usd_pct": 62.31,
+    "gt102_usd_pct": 60.85
+   },
+   "marginal_lifo": {
+    "mean": 0.9625,
+    "p50": 0.97,
+    "p90": 1.01,
+    "gt100_fills_pct": 14.6,
+    "gt100_pairs_pct": 16.89,
+    "gt100_usd_pct": 25.25,
+    "gt102_usd_pct": 12.94
+   },
+   "window_realized": {
+    "mean": 0.9665,
+    "p50": 0.9659,
+    "p90": 1.0003,
+    "gt100_fills_pct": 10.6,
+    "gt100_pairs_pct": 13.26,
+    "gt100_usd_pct": 17.21,
+    "gt102_usd_pct": 8.71
+   }
+  },
+  "p25-45c|tte2-5m|imb1-10": {
+   "n": 73,
+   "usd": 167.25,
+   "engine_avg": {
+    "mean": 0.9441,
+    "p50": 0.922,
+    "p90": 1.1545,
+    "gt100_fills_pct": 34.25,
+    "gt100_pairs_pct": 31.83,
+    "gt100_usd_pct": 43.28,
+    "gt102_usd_pct": 25.38
+   },
+   "marginal_lifo": {
+    "mean": 0.9299,
+    "p50": 0.97,
+    "p90": 1.07,
+    "gt100_fills_pct": 34.25,
+    "gt100_pairs_pct": 32.75,
+    "gt100_usd_pct": 41.16,
+    "gt102_usd_pct": 20.31
+   },
+   "window_realized": {
+    "mean": 0.973,
+    "p50": 0.9637,
+    "p90": 1.04,
+    "gt100_fills_pct": 24.66,
+    "gt100_pairs_pct": 25.06,
+    "gt100_usd_pct": 25.2,
+    "gt102_usd_pct": 22.45
+   }
+  },
+  "p25-45c|tte2-5m|imb10-50": {
+   "n": 267,
+   "usd": 2095.43,
+   "engine_avg": {
+    "mean": 0.9706,
+    "p50": 0.9638,
+    "p90": 1.1458,
+    "gt100_fills_pct": 40.07,
+    "gt100_pairs_pct": 42.07,
+    "gt100_usd_pct": 51.87,
+    "gt102_usd_pct": 44.35
+   },
+   "marginal_lifo": {
+    "mean": 0.9569,
+    "p50": 0.98,
+    "p90": 1.08,
+    "gt100_fills_pct": 29.96,
+    "gt100_pairs_pct": 34.06,
+    "gt100_usd_pct": 39.91,
+    "gt102_usd_pct": 30.89
+   },
+   "window_realized": {
+    "mean": 0.9659,
+    "p50": 0.9659,
+    "p90": 1.0461,
+    "gt100_fills_pct": 23.6,
+    "gt100_pairs_pct": 26.57,
+    "gt100_usd_pct": 30.06,
+    "gt102_usd_pct": 21.61
+   }
+  },
+  "p25-45c|tte2-5m|imb>50": {
+   "n": 847,
+   "usd": 9638.38,
+   "engine_avg": {
+    "mean": 0.9596,
+    "p50": 0.9537,
+    "p90": 1.1987,
+    "gt100_fills_pct": 38.72,
+    "gt100_pairs_pct": 45.07,
+    "gt100_usd_pct": 58.21,
+    "gt102_usd_pct": 54.44
+   },
+   "marginal_lifo": {
+    "mean": 0.9801,
+    "p50": 0.99,
+    "p90": 1.11,
+    "gt100_fills_pct": 35.89,
+    "gt100_pairs_pct": 40.74,
+    "gt100_usd_pct": 46.39,
+    "gt102_usd_pct": 37.98
+   },
+   "window_realized": {
+    "mean": 0.969,
+    "p50": 0.9665,
+    "p90": 1.0136,
+    "gt100_fills_pct": 18.42,
+    "gt100_pairs_pct": 21.24,
+    "gt100_usd_pct": 24.96,
+    "gt102_usd_pct": 16.7
+   }
+  },
+  "p25-45c|tte30-120s|imb1-10": {
+   "n": 33,
+   "usd": 78.4,
+   "engine_avg": {
+    "mean": 1.0006,
+    "p50": 1.0147,
+    "p90": 1.1702,
+    "gt100_fills_pct": 57.58,
+    "gt100_pairs_pct": 51.89,
+    "gt100_usd_pct": 64.55,
+    "gt102_usd_pct": 53.05
+   },
+   "marginal_lifo": {
+    "mean": 0.9078,
+    "p50": 0.9577,
+    "p90": 1.09,
+    "gt100_fills_pct": 33.33,
+    "gt100_pairs_pct": 32.06,
+    "gt100_usd_pct": 44.79,
+    "gt102_usd_pct": 44.79
+   },
+   "window_realized": {
+    "mean": 0.9231,
+    "p50": 0.9462,
+    "p90": 0.9938,
+    "gt100_fills_pct": 12.12,
+    "gt100_pairs_pct": 12.03,
+    "gt100_usd_pct": 16.97,
+    "gt102_usd_pct": 16.97
+   }
+  },
+  "p25-45c|tte30-120s|imb10-50": {
+   "n": 130,
+   "usd": 1257.19,
+   "engine_avg": {
+    "mean": 0.9832,
+    "p50": 0.9856,
+    "p90": 1.3445,
+    "gt100_fills_pct": 49.23,
+    "gt100_pairs_pct": 53.96,
+    "gt100_usd_pct": 66.4,
+    "gt102_usd_pct": 62.83
+   },
+   "marginal_lifo": {
+    "mean": 0.9531,
+    "p50": 0.99,
+    "p90": 1.2004,
+    "gt100_fills_pct": 48.46,
+    "gt100_pairs_pct": 51.95,
+    "gt100_usd_pct": 64.98,
+    "gt102_usd_pct": 57.29
+   },
+   "window_realized": {
+    "mean": 0.9704,
+    "p50": 0.9624,
+    "p90": 1.1773,
+    "gt100_fills_pct": 30.77,
+    "gt100_pairs_pct": 34.9,
+    "gt100_usd_pct": 40.22,
+    "gt102_usd_pct": 36.61
+   }
+  },
+  "p25-45c|tte30-120s|imb>50": {
+   "n": 461,
+   "usd": 4521.44,
+   "engine_avg": {
+    "mean": 0.9127,
+    "p50": 0.9259,
+    "p90": 1.1935,
+    "gt100_fills_pct": 31.67,
+    "gt100_pairs_pct": 42.04,
+    "gt100_usd_pct": 56.65,
+    "gt102_usd_pct": 53.32
+   },
+   "marginal_lifo": {
+    "mean": 0.9516,
+    "p50": 0.97,
+    "p90": 1.1504,
+    "gt100_fills_pct": 34.49,
+    "gt100_pairs_pct": 38.23,
+    "gt100_usd_pct": 48.73,
+    "gt102_usd_pct": 41.87
+   },
+   "window_realized": {
+    "mean": 0.9599,
+    "p50": 0.9594,
+    "p90": 1.0566,
+    "gt100_fills_pct": 16.92,
+    "gt100_pairs_pct": 19.08,
+    "gt100_usd_pct": 26.43,
+    "gt102_usd_pct": 24.07
+   }
+  },
+  "p25-45c|tte5-10m|imb1-10": {
+   "n": 125,
+   "usd": 254.22,
+   "engine_avg": {
+    "mean": 0.9398,
+    "p50": 0.9335,
+    "p90": 1.0797,
+    "gt100_fills_pct": 28.8,
+    "gt100_pairs_pct": 27.47,
+    "gt100_usd_pct": 38.44,
+    "gt102_usd_pct": 29.13
+   },
+   "marginal_lifo": {
+    "mean": 0.9373,
+    "p50": 0.96,
+    "p90": 1.02,
+    "gt100_fills_pct": 16.0,
+    "gt100_pairs_pct": 16.17,
+    "gt100_usd_pct": 20.21,
+    "gt102_usd_pct": 9.23
+   },
+   "window_realized": {
+    "mean": 0.9499,
+    "p50": 0.9545,
+    "p90": 1.0054,
+    "gt100_fills_pct": 11.2,
+    "gt100_pairs_pct": 14.16,
+    "gt100_usd_pct": 15.57,
+    "gt102_usd_pct": 6.78
+   }
+  },
+  "p25-45c|tte5-10m|imb10-50": {
+   "n": 507,
+   "usd": 2833.85,
+   "engine_avg": {
+    "mean": 0.9483,
+    "p50": 0.9417,
+    "p90": 1.1115,
+    "gt100_fills_pct": 28.99,
+    "gt100_pairs_pct": 33.95,
+    "gt100_usd_pct": 44.98,
+    "gt102_usd_pct": 40.17
+   },
+   "marginal_lifo": {
+    "mean": 0.9545,
+    "p50": 0.9703,
+    "p90": 1.05,
+    "gt100_fills_pct": 21.89,
+    "gt100_pairs_pct": 28.35,
+    "gt100_usd_pct": 33.6,
+    "gt102_usd_pct": 24.35
+   },
+   "window_realized": {
+    "mean": 0.9575,
+    "p50": 0.9592,
+    "p90": 1.013,
+    "gt100_fills_pct": 14.2,
+    "gt100_pairs_pct": 15.56,
+    "gt100_usd_pct": 15.52,
+    "gt102_usd_pct": 5.45
+   }
+  },
+  "p25-45c|tte5-10m|imb>50": {
+   "n": 1753,
+   "usd": 14235.81,
+   "engine_avg": {
+    "mean": 0.9801,
+    "p50": 0.9705,
+    "p90": 1.1527,
+    "gt100_fills_pct": 40.67,
+    "gt100_pairs_pct": 47.34,
+    "gt100_usd_pct": 59.3,
+    "gt102_usd_pct": 52.04
+   },
+   "marginal_lifo": {
+    "mean": 0.9749,
+    "p50": 0.9863,
+    "p90": 1.06,
+    "gt100_fills_pct": 30.86,
+    "gt100_pairs_pct": 35.29,
+    "gt100_usd_pct": 38.62,
+    "gt102_usd_pct": 23.89
+   },
+   "window_realized": {
+    "mean": 0.9662,
+    "p50": 0.9663,
+    "p90": 1.0105,
+    "gt100_fills_pct": 15.12,
+    "gt100_pairs_pct": 16.02,
+    "gt100_usd_pct": 17.84,
+    "gt102_usd_pct": 6.26
+   }
+  },
+  "p25-45c|tte<30s|imb>50": {
+   "n": 35,
+   "usd": 312.01,
+   "engine_avg": {
+    "mean": 0.8917,
+    "p50": 0.7889,
+    "p90": 1.2657,
+    "gt100_fills_pct": 17.14,
+    "gt100_pairs_pct": 23.86,
+    "gt100_usd_pct": 45.4,
+    "gt102_usd_pct": 45.4
+   },
+   "marginal_lifo": {
+    "mean": 0.8213,
+    "p50": 0.7497,
+    "p90": 1.11,
+    "gt100_fills_pct": 20.0,
+    "gt100_pairs_pct": 31.83,
+    "gt100_usd_pct": 49.92,
+    "gt102_usd_pct": 49.92
+   },
+   "window_realized": {
+    "mean": 1.0094,
+    "p50": 0.9963,
+    "p90": 1.1193,
+    "gt100_fills_pct": 20.0,
+    "gt100_pairs_pct": 36.35,
+    "gt100_usd_pct": 55.27,
+    "gt102_usd_pct": 55.27
+   }
+  },
+  "p25-45c|tte>10m|imb1-10": {
+   "n": 178,
+   "usd": 359.69,
+   "engine_avg": {
+    "mean": 0.9702,
+    "p50": 0.9713,
+    "p90": 1.1112,
+    "gt100_fills_pct": 32.58,
+    "gt100_pairs_pct": 34.13,
+    "gt100_usd_pct": 44.55,
+    "gt102_usd_pct": 39.38
+   },
+   "marginal_lifo": {
+    "mean": 0.9601,
+    "p50": 0.98,
+    "p90": 1.02,
+    "gt100_fills_pct": 17.98,
+    "gt100_pairs_pct": 19.02,
+    "gt100_usd_pct": 21.38,
+    "gt102_usd_pct": 11.46
+   },
+   "window_realized": {
+    "mean": 0.9651,
+    "p50": 0.9653,
+    "p90": 1.01,
+    "gt100_fills_pct": 11.8,
+    "gt100_pairs_pct": 13.89,
+    "gt100_usd_pct": 17.24,
+    "gt102_usd_pct": 10.75
+   }
+  },
+  "p25-45c|tte>10m|imb10-50": {
+   "n": 703,
+   "usd": 4283.16,
+   "engine_avg": {
+    "mean": 0.9628,
+    "p50": 0.9601,
+    "p90": 1.0867,
+    "gt100_fills_pct": 29.73,
+    "gt100_pairs_pct": 33.23,
+    "gt100_usd_pct": 44.4,
+    "gt102_usd_pct": 35.43
+   },
+   "marginal_lifo": {
+    "mean": 0.958,
+    "p50": 0.97,
+    "p90": 1.03,
+    "gt100_fills_pct": 20.34,
+    "gt100_pairs_pct": 23.74,
+    "gt100_usd_pct": 28.28,
+    "gt102_usd_pct": 17.75
+   },
+   "window_realized": {
+    "mean": 0.9636,
+    "p50": 0.9633,
+    "p90": 1.0143,
+    "gt100_fills_pct": 15.36,
+    "gt100_pairs_pct": 14.38,
+    "gt100_usd_pct": 15.74,
+    "gt102_usd_pct": 7.59
+   }
+  },
+  "p25-45c|tte>10m|imb>50": {
+   "n": 1919,
+   "usd": 14175.72,
+   "engine_avg": {
+    "mean": 0.9762,
+    "p50": 0.9688,
+    "p90": 1.0936,
+    "gt100_fills_pct": 33.04,
+    "gt100_pairs_pct": 41.48,
+    "gt100_usd_pct": 52.47,
+    "gt102_usd_pct": 43.38
+   },
+   "marginal_lifo": {
+    "mean": 0.9813,
+    "p50": 0.9842,
+    "p90": 1.05,
+    "gt100_fills_pct": 27.72,
+    "gt100_pairs_pct": 32.78,
+    "gt100_usd_pct": 36.66,
+    "gt102_usd_pct": 23.68
+   },
+   "window_realized": {
+    "mean": 0.9671,
+    "p50": 0.9672,
+    "p90": 1.002,
+    "gt100_fills_pct": 13.5,
+    "gt100_pairs_pct": 14.53,
+    "gt100_usd_pct": 15.21,
+    "gt102_usd_pct": 4.54
+   }
+  },
+  "p45-55c|tte2-5m|imb1-10": {
+   "n": 41,
+   "usd": 123.47,
+   "engine_avg": {
+    "mean": 1.0546,
+    "p50": 1.0184,
+    "p90": 1.2475,
+    "gt100_fills_pct": 60.98,
+    "gt100_pairs_pct": 58.7,
+    "gt100_usd_pct": 64.1,
+    "gt102_usd_pct": 54.31
+   },
+   "marginal_lifo": {
+    "mean": 1.0585,
+    "p50": 1.03,
+    "p90": 1.23,
+    "gt100_fills_pct": 60.98,
+    "gt100_pairs_pct": 65.8,
+    "gt100_usd_pct": 71.48,
+    "gt102_usd_pct": 63.41
+   },
+   "window_realized": {
+    "mean": 1.0042,
+    "p50": 0.969,
+    "p90": 1.1927,
+    "gt100_fills_pct": 39.02,
+    "gt100_pairs_pct": 41.23,
+    "gt100_usd_pct": 44.3,
+    "gt102_usd_pct": 36.15
+   }
+  },
+  "p45-55c|tte2-5m|imb10-50": {
+   "n": 123,
+   "usd": 939.85,
+   "engine_avg": {
+    "mean": 1.0261,
+    "p50": 1.0275,
+    "p90": 1.2055,
+    "gt100_fills_pct": 56.1,
+    "gt100_pairs_pct": 57.6,
+    "gt100_usd_pct": 66.51,
+    "gt102_usd_pct": 61.12
+   },
+   "marginal_lifo": {
+    "mean": 1.0172,
+    "p50": 1.0075,
+    "p90": 1.25,
+    "gt100_fills_pct": 51.22,
+    "gt100_pairs_pct": 55.33,
+    "gt100_usd_pct": 63.94,
+    "gt102_usd_pct": 51.85
+   },
+   "window_realized": {
+    "mean": 1.0015,
+    "p50": 0.9715,
+    "p90": 1.2392,
+    "gt100_fills_pct": 32.52,
+    "gt100_pairs_pct": 35.94,
+    "gt100_usd_pct": 40.9,
+    "gt102_usd_pct": 34.78
+   }
+  },
+  "p45-55c|tte2-5m|imb>50": {
+   "n": 358,
+   "usd": 4528.85,
+   "engine_avg": {
+    "mean": 1.0285,
+    "p50": 1.0489,
+    "p90": 1.1843,
+    "gt100_fills_pct": 63.41,
+    "gt100_pairs_pct": 66.21,
+    "gt100_usd_pct": 72.75,
+    "gt102_usd_pct": 68.06
+   },
+   "marginal_lifo": {
+    "mean": 0.997,
+    "p50": 0.99,
+    "p90": 1.15,
+    "gt100_fills_pct": 43.02,
+    "gt100_pairs_pct": 47.74,
+    "gt100_usd_pct": 54.74,
+    "gt102_usd_pct": 43.75
+   },
+   "window_realized": {
+    "mean": 0.9873,
+    "p50": 0.9808,
+    "p90": 1.0702,
+    "gt100_fills_pct": 21.79,
+    "gt100_pairs_pct": 27.38,
+    "gt100_usd_pct": 32.07,
+    "gt102_usd_pct": 24.52
+   }
+  },
+  "p45-55c|tte30-120s|imb1-10": {
+   "n": 23,
+   "usd": 56.39,
+   "engine_avg": {
+    "mean": 0.9093,
+    "p50": 0.9019,
+    "p90": 1.1622,
+    "gt100_fills_pct": 30.43,
+    "gt100_pairs_pct": 36.02,
+    "gt100_usd_pct": 49.21,
+    "gt102_usd_pct": 49.21
+   },
+   "marginal_lifo": {
+    "mean": 0.9071,
+    "p50": 0.95,
+    "p90": 1.14,
+    "gt100_fills_pct": 26.09,
+    "gt100_pairs_pct": 28.02,
+    "gt100_usd_pct": 40.7,
+    "gt102_usd_pct": 33.42
+   },
+   "window_realized": {
+    "mean": 0.9119,
+    "p50": 0.9353,
+    "p90": 0.9714,
+    "gt100_fills_pct": 8.7,
+    "gt100_pairs_pct": 10.45,
+    "gt100_usd_pct": 13.55,
+    "gt102_usd_pct": 13.55
+   }
+  },
+  "p45-55c|tte30-120s|imb10-50": {
+   "n": 76,
+   "usd": 685.78,
+   "engine_avg": {
+    "mean": 1.0212,
+    "p50": 1.024,
+    "p90": 1.3031,
+    "gt100_fills_pct": 55.26,
+    "gt100_pairs_pct": 66.67,
+    "gt100_usd_pct": 75.22,
+    "gt102_usd_pct": 72.04
+   },
+   "marginal_lifo": {
+    "mean": 1.0206,
+    "p50": 1.02,
+    "p90": 1.3,
+    "gt100_fills_pct": 55.26,
+    "gt100_pairs_pct": 67.24,
+    "gt100_usd_pct": 76.07,
+    "gt102_usd_pct": 70.24
+   },
+   "window_realized": {
+    "mean": 1.0023,
+    "p50": 0.9687,
+    "p90": 1.2202,
+    "gt100_fills_pct": 34.21,
+    "gt100_pairs_pct": 41.68,
+    "gt100_usd_pct": 49.52,
+    "gt102_usd_pct": 42.99
+   }
+  },
+  "p45-55c|tte30-120s|imb>50": {
+   "n": 229,
+   "usd": 3213.04,
+   "engine_avg": {
+    "mean": 1.0179,
+    "p50": 1.0132,
+    "p90": 1.2562,
+    "gt100_fills_pct": 53.28,
+    "gt100_pairs_pct": 55.21,
+    "gt100_usd_pct": 64.37,
+    "gt102_usd_pct": 62.25
+   },
+   "marginal_lifo": {
+    "mean": 0.9876,
+    "p50": 0.986,
+    "p90": 1.22,
+    "gt100_fills_pct": 37.55,
+    "gt100_pairs_pct": 43.73,
+    "gt100_usd_pct": 53.74,
+    "gt102_usd_pct": 47.21
+   },
+   "window_realized": {
+    "mean": 0.9633,
+    "p50": 0.9594,
+    "p90": 1.0907,
+    "gt100_fills_pct": 19.21,
+    "gt100_pairs_pct": 24.15,
+    "gt100_usd_pct": 29.91,
+    "gt102_usd_pct": 25.35
+   }
+  },
+  "p45-55c|tte5-10m|imb1-10": {
+   "n": 62,
+   "usd": 149.48,
+   "engine_avg": {
+    "mean": 0.9669,
+    "p50": 0.9753,
+    "p90": 1.0744,
+    "gt100_fills_pct": 29.03,
+    "gt100_pairs_pct": 30.62,
+    "gt100_usd_pct": 31.77,
+    "gt102_usd_pct": 24.67
+   },
+   "marginal_lifo": {
+    "mean": 0.9763,
+    "p50": 0.98,
+    "p90": 1.04,
+    "gt100_fills_pct": 25.81,
+    "gt100_pairs_pct": 31.0,
+    "gt100_usd_pct": 33.51,
+    "gt102_usd_pct": 24.77
+   },
+   "window_realized": {
+    "mean": 0.9745,
+    "p50": 0.969,
+    "p90": 1.02,
+    "gt100_fills_pct": 29.03,
+    "gt100_pairs_pct": 29.47,
+    "gt100_usd_pct": 28.83,
+    "gt102_usd_pct": 5.29
+   }
+  },
+  "p45-55c|tte5-10m|imb10-50": {
+   "n": 199,
+   "usd": 1403.14,
+   "engine_avg": {
+    "mean": 0.9784,
+    "p50": 0.9785,
+    "p90": 1.0989,
+    "gt100_fills_pct": 39.7,
+    "gt100_pairs_pct": 42.96,
+    "gt100_usd_pct": 45.4,
+    "gt102_usd_pct": 37.59
+   },
+   "marginal_lifo": {
+    "mean": 0.9792,
+    "p50": 0.99,
+    "p90": 1.09,
+    "gt100_fills_pct": 38.69,
+    "gt100_pairs_pct": 40.47,
+    "gt100_usd_pct": 43.13,
+    "gt102_usd_pct": 30.92
+   },
+   "window_realized": {
+    "mean": 0.9671,
+    "p50": 0.9624,
+    "p90": 1.019,
+    "gt100_fills_pct": 27.14,
+    "gt100_pairs_pct": 23.33,
+    "gt100_usd_pct": 23.54,
+    "gt102_usd_pct": 6.43
+   }
+  },
+  "p45-55c|tte5-10m|imb>50": {
+   "n": 733,
+   "usd": 8325.45,
+   "engine_avg": {
+    "mean": 1.0372,
+    "p50": 1.0402,
+    "p90": 1.176,
+    "gt100_fills_pct": 65.21,
+    "gt100_pairs_pct": 69.47,
+    "gt100_usd_pct": 71.13,
+    "gt102_usd_pct": 64.68
+   },
+   "marginal_lifo": {
+    "mean": 1.0109,
+    "p50": 1.0,
+    "p90": 1.14,
+    "gt100_fills_pct": 44.88,
+    "gt100_pairs_pct": 51.11,
+    "gt100_usd_pct": 53.09,
+    "gt102_usd_pct": 43.64
+   },
+   "window_realized": {
+    "mean": 0.9707,
+    "p50": 0.9685,
+    "p90": 1.0154,
+    "gt100_fills_pct": 20.74,
+    "gt100_pairs_pct": 22.25,
+    "gt100_usd_pct": 22.89,
+    "gt102_usd_pct": 6.03
+   }
+  },
+  "p45-55c|tte>10m|imb1-10": {
+   "n": 128,
+   "usd": 318.14,
+   "engine_avg": {
+    "mean": 0.9849,
+    "p50": 0.986,
+    "p90": 1.0664,
+    "gt100_fills_pct": 38.28,
+    "gt100_pairs_pct": 37.57,
+    "gt100_usd_pct": 39.83,
+    "gt102_usd_pct": 31.69
+   },
+   "marginal_lifo": {
+    "mean": 0.9862,
+    "p50": 0.99,
+    "p90": 1.06,
+    "gt100_fills_pct": 36.72,
+    "gt100_pairs_pct": 36.38,
+    "gt100_usd_pct": 39.22,
+    "gt102_usd_pct": 31.89
+   },
+   "window_realized": {
+    "mean": 0.9714,
+    "p50": 0.9605,
+    "p90": 1.0337,
+    "gt100_fills_pct": 20.31,
+    "gt100_pairs_pct": 21.82,
+    "gt100_usd_pct": 20.67,
+    "gt102_usd_pct": 11.01
+   }
+  },
+  "p45-55c|tte>10m|imb10-50": {
+   "n": 498,
+   "usd": 3693.75,
+   "engine_avg": {
+    "mean": 0.9988,
+    "p50": 0.99,
+    "p90": 1.0854,
+    "gt100_fills_pct": 41.37,
+    "gt100_pairs_pct": 41.28,
+    "gt100_usd_pct": 43.91,
+    "gt102_usd_pct": 33.77
+   },
+   "marginal_lifo": {
+    "mean": 0.9955,
+    "p50": 0.99,
+    "p90": 1.08,
+    "gt100_fills_pct": 34.74,
+    "gt100_pairs_pct": 36.4,
+    "gt100_usd_pct": 38.94,
+    "gt102_usd_pct": 30.96
+   },
+   "window_realized": {
+    "mean": 0.9699,
+    "p50": 0.9607,
+    "p90": 1.019,
+    "gt100_fills_pct": 19.28,
+    "gt100_pairs_pct": 15.74,
+    "gt100_usd_pct": 16.14,
+    "gt102_usd_pct": 7.71
+   }
+  },
+  "p45-55c|tte>10m|imb>50": {
+   "n": 976,
+   "usd": 9611.44,
+   "engine_avg": {
+    "mean": 1.0216,
+    "p50": 1.0141,
+    "p90": 1.118,
+    "gt100_fills_pct": 59.32,
+    "gt100_pairs_pct": 60.81,
+    "gt100_usd_pct": 62.29,
+    "gt102_usd_pct": 49.8
+   },
+   "marginal_lifo": {
+    "mean": 1.005,
+    "p50": 0.9951,
+    "p90": 1.0993,
+    "gt100_fills_pct": 42.32,
+    "gt100_pairs_pct": 47.16,
+    "gt100_usd_pct": 49.2,
+    "gt102_usd_pct": 37.05
+   },
+   "window_realized": {
+    "mean": 0.9647,
+    "p50": 0.9608,
+    "p90": 1.0105,
+    "gt100_fills_pct": 18.44,
+    "gt100_pairs_pct": 22.48,
+    "gt100_usd_pct": 23.02,
+    "gt102_usd_pct": 6.36
+   }
+  },
+  "p55-75c|tte2-5m|imb1-10": {
+   "n": 77,
+   "usd": 224.15,
+   "engine_avg": {
+    "mean": 1.0367,
+    "p50": 1.0168,
+    "p90": 1.3068,
+    "gt100_fills_pct": 51.95,
+    "gt100_pairs_pct": 49.05,
+    "gt100_usd_pct": 57.91,
+    "gt102_usd_pct": 57.09
+   },
+   "marginal_lifo": {
+    "mean": 1.045,
+    "p50": 1.02,
+    "p90": 1.27,
+    "gt100_fills_pct": 53.25,
+    "gt100_pairs_pct": 52.62,
+    "gt100_usd_pct": 61.16,
+    "gt102_usd_pct": 57.83
+   },
+   "window_realized": {
+    "mean": 0.9873,
+    "p50": 0.9687,
+    "p90": 1.1437,
+    "gt100_fills_pct": 27.27,
+    "gt100_pairs_pct": 28.88,
+    "gt100_usd_pct": 31.77,
+    "gt102_usd_pct": 28.46
+   }
+  },
+  "p55-75c|tte2-5m|imb10-50": {
+   "n": 349,
+   "usd": 2876.69,
+   "engine_avg": {
+    "mean": 1.0427,
+    "p50": 1.0299,
+    "p90": 1.3237,
+    "gt100_fills_pct": 55.87,
+    "gt100_pairs_pct": 60.98,
+    "gt100_usd_pct": 71.1,
+    "gt102_usd_pct": 67.19
+   },
+   "marginal_lifo": {
+    "mean": 1.0392,
+    "p50": 1.01,
+    "p90": 1.31,
+    "gt100_fills_pct": 51.86,
+    "gt100_pairs_pct": 51.44,
+    "gt100_usd_pct": 59.59,
+    "gt102_usd_pct": 52.6
+   },
+   "window_realized": {
+    "mean": 1.0001,
+    "p50": 0.9744,
+    "p90": 1.1762,
+    "gt100_fills_pct": 32.95,
+    "gt100_pairs_pct": 35.3,
+    "gt100_usd_pct": 38.38,
+    "gt102_usd_pct": 31.52
+   }
+  },
+  "p55-75c|tte2-5m|imb>50": {
+   "n": 1081,
+   "usd": 13180.86,
+   "engine_avg": {
+    "mean": 1.0291,
+    "p50": 1.0408,
+    "p90": 1.2492,
+    "gt100_fills_pct": 57.17,
+    "gt100_pairs_pct": 54.81,
+    "gt100_usd_pct": 66.79,
+    "gt102_usd_pct": 64.43
+   },
+   "marginal_lifo": {
+    "mean": 0.9992,
+    "p50": 0.99,
+    "p90": 1.17,
+    "gt100_fills_pct": 40.06,
+    "gt100_pairs_pct": 43.44,
+    "gt100_usd_pct": 51.89,
+    "gt102_usd_pct": 43.69
+   },
+   "window_realized": {
+    "mean": 0.9774,
+    "p50": 0.9663,
+    "p90": 1.0408,
+    "gt100_fills_pct": 24.61,
+    "gt100_pairs_pct": 28.4,
+    "gt100_usd_pct": 30.13,
+    "gt102_usd_pct": 20.42
+   }
+  },
+  "p55-75c|tte30-120s|imb1-10": {
+   "n": 49,
+   "usd": 128.8,
+   "engine_avg": {
+    "mean": 1.048,
+    "p50": 1.0849,
+    "p90": 1.4159,
+    "gt100_fills_pct": 53.06,
+    "gt100_pairs_pct": 53.53,
+    "gt100_usd_pct": 71.03,
+    "gt102_usd_pct": 67.07
+   },
+   "marginal_lifo": {
+    "mean": 1.0526,
+    "p50": 1.01,
+    "p90": 1.4,
+    "gt100_fills_pct": 53.06,
+    "gt100_pairs_pct": 55.94,
+    "gt100_usd_pct": 72.23,
+    "gt102_usd_pct": 62.61
+   },
+   "window_realized": {
+    "mean": 1.0059,
+    "p50": 0.9659,
+    "p90": 1.3392,
+    "gt100_fills_pct": 34.69,
+    "gt100_pairs_pct": 31.32,
+    "gt100_usd_pct": 39.68,
+    "gt102_usd_pct": 35.02
+   }
+  },
+  "p55-75c|tte30-120s|imb10-50": {
+   "n": 191,
+   "usd": 1594.02,
+   "engine_avg": {
+    "mean": 1.0041,
+    "p50": 0.9672,
+    "p90": 1.395,
+    "gt100_fills_pct": 45.03,
+    "gt100_pairs_pct": 46.46,
+    "gt100_usd_pct": 66.68,
+    "gt102_usd_pct": 65.55
+   },
+   "marginal_lifo": {
+    "mean": 1.0175,
+    "p50": 0.991,
+    "p90": 1.4,
+    "gt100_fills_pct": 46.07,
+    "gt100_pairs_pct": 50.47,
+    "gt100_usd_pct": 70.32,
+    "gt102_usd_pct": 67.39
+   },
+   "window_realized": {
+    "mean": 0.989,
+    "p50": 0.9537,
+    "p90": 1.2542,
+    "gt100_fills_pct": 33.51,
+    "gt100_pairs_pct": 36.62,
+    "gt100_usd_pct": 47.64,
+    "gt102_usd_pct": 43.0
+   }
+  },
+  "p55-75c|tte30-120s|imb>50": {
+   "n": 502,
+   "usd": 6749.13,
+   "engine_avg": {
+    "mean": 1.0239,
+    "p50": 1.0188,
+    "p90": 1.3367,
+    "gt100_fills_pct": 54.38,
+    "gt100_pairs_pct": 53.71,
+    "gt100_usd_pct": 73.65,
+    "gt102_usd_pct": 69.01
+   },
+   "marginal_lifo": {
+    "mean": 1.0348,
+    "p50": 1.0,
+    "p90": 1.3109,
+    "gt100_fills_pct": 48.01,
+    "gt100_pairs_pct": 46.91,
+    "gt100_usd_pct": 63.41,
+    "gt102_usd_pct": 58.98
+   },
+   "window_realized": {
+    "mean": 0.9879,
+    "p50": 0.9618,
+    "p90": 1.1921,
+    "gt100_fills_pct": 28.49,
+    "gt100_pairs_pct": 28.88,
+    "gt100_usd_pct": 40.54,
+    "gt102_usd_pct": 32.73
+   }
+  },
+  "p55-75c|tte5-10m|imb1-10": {
+   "n": 86,
+   "usd": 204.48,
+   "engine_avg": {
+    "mean": 1.021,
+    "p50": 0.9998,
+    "p90": 1.2498,
+    "gt100_fills_pct": 48.84,
+    "gt100_pairs_pct": 48.96,
+    "gt100_usd_pct": 58.11,
+    "gt102_usd_pct": 52.48
+   },
+   "marginal_lifo": {
+    "mean": 1.0003,
+    "p50": 0.99,
+    "p90": 1.13,
+    "gt100_fills_pct": 40.7,
+    "gt100_pairs_pct": 43.08,
+    "gt100_usd_pct": 48.75,
+    "gt102_usd_pct": 37.55
+   },
+   "window_realized": {
+    "mean": 0.967,
+    "p50": 0.9677,
+    "p90": 1.02,
+    "gt100_fills_pct": 16.28,
+    "gt100_pairs_pct": 14.72,
+    "gt100_usd_pct": 15.14,
+    "gt102_usd_pct": 9.67
+   }
+  },
+  "p55-75c|tte5-10m|imb10-50": {
+   "n": 395,
+   "usd": 3060.81,
+   "engine_avg": {
+    "mean": 0.9946,
+    "p50": 0.9797,
+    "p90": 1.1699,
+    "gt100_fills_pct": 44.05,
+    "gt100_pairs_pct": 47.37,
+    "gt100_usd_pct": 56.68,
+    "gt102_usd_pct": 49.43
+   },
+   "marginal_lifo": {
+    "mean": 1.0032,
+    "p50": 0.99,
+    "p90": 1.1251,
+    "gt100_fills_pct": 40.25,
+    "gt100_pairs_pct": 41.08,
+    "gt100_usd_pct": 46.25,
+    "gt102_usd_pct": 37.87
+   },
+   "window_realized": {
+    "mean": 0.9611,
+    "p50": 0.9556,
+    "p90": 1.0117,
+    "gt100_fills_pct": 13.16,
+    "gt100_pairs_pct": 11.43,
+    "gt100_usd_pct": 11.81,
+    "gt102_usd_pct": 4.96
+   }
+  },
+  "p55-75c|tte5-10m|imb>50": {
+   "n": 1453,
+   "usd": 16168.21,
+   "engine_avg": {
+    "mean": 1.0301,
+    "p50": 1.0312,
+    "p90": 1.2204,
+    "gt100_fills_pct": 58.09,
+    "gt100_pairs_pct": 60.22,
+    "gt100_usd_pct": 69.92,
+    "gt102_usd_pct": 65.36
+   },
+   "marginal_lifo": {
+    "mean": 1.0066,
+    "p50": 0.99,
+    "p90": 1.15,
+    "gt100_fills_pct": 35.86,
+    "gt100_pairs_pct": 40.32,
+    "gt100_usd_pct": 44.71,
+    "gt102_usd_pct": 36.64
+   },
+   "window_realized": {
+    "mean": 0.9624,
+    "p50": 0.9633,
+    "p90": 1.0081,
+    "gt100_fills_pct": 15.0,
+    "gt100_pairs_pct": 16.84,
+    "gt100_usd_pct": 17.47,
+    "gt102_usd_pct": 4.72
+   }
+  },
+  "p55-75c|tte>10m|imb1-10": {
+   "n": 140,
+   "usd": 314.14,
+   "engine_avg": {
+    "mean": 1.0126,
+    "p50": 0.992,
+    "p90": 1.1582,
+    "gt100_fills_pct": 45.71,
+    "gt100_pairs_pct": 45.79,
+    "gt100_usd_pct": 55.59,
+    "gt102_usd_pct": 50.87
+   },
+   "marginal_lifo": {
+    "mean": 1.0221,
+    "p50": 0.99,
+    "p90": 1.18,
+    "gt100_fills_pct": 40.71,
+    "gt100_pairs_pct": 38.27,
+    "gt100_usd_pct": 46.09,
+    "gt102_usd_pct": 36.89
+   },
+   "window_realized": {
+    "mean": 0.9715,
+    "p50": 0.9679,
+    "p90": 1.02,
+    "gt100_fills_pct": 20.0,
+    "gt100_pairs_pct": 19.31,
+    "gt100_usd_pct": 19.15,
+    "gt102_usd_pct": 7.15
+   }
+  },
+  "p55-75c|tte>10m|imb10-50": {
+   "n": 585,
+   "usd": 4510.48,
+   "engine_avg": {
+    "mean": 1.0213,
+    "p50": 1.01,
+    "p90": 1.1645,
+    "gt100_fills_pct": 53.85,
+    "gt100_pairs_pct": 57.19,
+    "gt100_usd_pct": 67.24,
+    "gt102_usd_pct": 57.43
+   },
+   "marginal_lifo": {
+    "mean": 1.0225,
+    "p50": 1.0,
+    "p90": 1.1703,
+    "gt100_fills_pct": 45.64,
+    "gt100_pairs_pct": 51.28,
+    "gt100_usd_pct": 59.59,
+    "gt102_usd_pct": 50.88
+   },
+   "window_realized": {
+    "mean": 0.968,
+    "p50": 0.9654,
+    "p90": 1.0149,
+    "gt100_fills_pct": 17.09,
+    "gt100_pairs_pct": 16.38,
+    "gt100_usd_pct": 17.44,
+    "gt102_usd_pct": 7.6
+   }
+  },
+  "p55-75c|tte>10m|imb>50": {
+   "n": 1572,
+   "usd": 14209.54,
+   "engine_avg": {
+    "mean": 1.0072,
+    "p50": 0.9901,
+    "p90": 1.1622,
+    "gt100_fills_pct": 44.27,
+    "gt100_pairs_pct": 47.05,
+    "gt100_usd_pct": 58.49,
+    "gt102_usd_pct": 51.79
+   },
+   "marginal_lifo": {
+    "mean": 1.0076,
+    "p50": 0.99,
+    "p90": 1.12,
+    "gt100_fills_pct": 34.48,
+    "gt100_pairs_pct": 40.04,
+    "gt100_usd_pct": 47.15,
+    "gt102_usd_pct": 37.92
+   },
+   "window_realized": {
+    "mean": 0.9665,
+    "p50": 0.9675,
+    "p90": 1.0114,
+    "gt100_fills_pct": 17.62,
+    "gt100_pairs_pct": 18.54,
+    "gt100_usd_pct": 20.92,
+    "gt102_usd_pct": 7.54
+   }
+  },
+  "p75-90c|tte2-5m|imb1-10": {
+   "n": 55,
+   "usd": 142.55,
+   "engine_avg": {
+    "mean": 0.9925,
+    "p50": 0.9684,
+    "p90": 1.372,
+    "gt100_fills_pct": 47.27,
+    "gt100_pairs_pct": 56.37,
+    "gt100_usd_pct": 81.86,
+    "gt102_usd_pct": 81.67
+   },
+   "marginal_lifo": {
+    "mean": 1.0583,
+    "p50": 1.0,
+    "p90": 1.37,
+    "gt100_fills_pct": 45.45,
+    "gt100_pairs_pct": 56.31,
+    "gt100_usd_pct": 68.87,
+    "gt102_usd_pct": 57.83
+   },
+   "window_realized": {
+    "mean": 1.0127,
+    "p50": 0.9584,
+    "p90": 1.2051,
+    "gt100_fills_pct": 27.27,
+    "gt100_pairs_pct": 27.66,
+    "gt100_usd_pct": 30.97,
+    "gt102_usd_pct": 30.67
+   }
+  },
+  "p75-90c|tte2-5m|imb10-50": {
+   "n": 188,
+   "usd": 1619.12,
+   "engine_avg": {
+    "mean": 1.015,
+    "p50": 0.9937,
+    "p90": 1.3128,
+    "gt100_fills_pct": 50.0,
+    "gt100_pairs_pct": 51.62,
+    "gt100_usd_pct": 77.45,
+    "gt102_usd_pct": 73.98
+   },
+   "marginal_lifo": {
+    "mean": 1.0219,
+    "p50": 0.99,
+    "p90": 1.2424,
+    "gt100_fills_pct": 35.64,
+    "gt100_pairs_pct": 38.51,
+    "gt100_usd_pct": 52.76,
+    "gt102_usd_pct": 41.85
+   },
+   "window_realized": {
+    "mean": 0.9861,
+    "p50": 0.9664,
+    "p90": 1.112,
+    "gt100_fills_pct": 21.81,
+    "gt100_pairs_pct": 26.44,
+    "gt100_usd_pct": 28.29,
+    "gt102_usd_pct": 26.09
+   }
+  },
+  "p75-90c|tte2-5m|imb>50": {
+   "n": 1119,
+   "usd": 13593.52,
+   "engine_avg": {
+    "mean": 1.0359,
+    "p50": 1.0587,
+    "p90": 1.2768,
+    "gt100_fills_pct": 59.96,
+    "gt100_pairs_pct": 56.97,
+    "gt100_usd_pct": 85.62,
+    "gt102_usd_pct": 83.61
+   },
+   "marginal_lifo": {
+    "mean": 0.9924,
+    "p50": 0.9828,
+    "p90": 1.0554,
+    "gt100_fills_pct": 26.09,
+    "gt100_pairs_pct": 30.9,
+    "gt100_usd_pct": 38.91,
+    "gt102_usd_pct": 28.21
+   },
+   "window_realized": {
+    "mean": 0.968,
+    "p50": 0.9679,
+    "p90": 1.0136,
+    "gt100_fills_pct": 16.0,
+    "gt100_pairs_pct": 16.81,
+    "gt100_usd_pct": 20.01,
+    "gt102_usd_pct": 11.02
+   }
+  },
+  "p75-90c|tte30-120s|imb1-10": {
+   "n": 51,
+   "usd": 127.93,
+   "engine_avg": {
+    "mean": 1.1059,
+    "p50": 1.0203,
+    "p90": 1.5308,
+    "gt100_fills_pct": 54.9,
+    "gt100_pairs_pct": 46.67,
+    "gt100_usd_pct": 72.59,
+    "gt102_usd_pct": 64.67
+   },
+   "marginal_lifo": {
+    "mean": 1.0978,
+    "p50": 1.0,
+    "p90": 1.52,
+    "gt100_fills_pct": 47.06,
+    "gt100_pairs_pct": 42.62,
+    "gt100_usd_pct": 57.25,
+    "gt102_usd_pct": 56.5
+   },
+   "window_realized": {
+    "mean": 1.0566,
+    "p50": 0.9873,
+    "p90": 1.4115,
+    "gt100_fills_pct": 45.1,
+    "gt100_pairs_pct": 41.87,
+    "gt100_usd_pct": 46.83,
+    "gt102_usd_pct": 40.08
+   }
+  },
+  "p75-90c|tte30-120s|imb10-50": {
+   "n": 139,
+   "usd": 1219.95,
+   "engine_avg": {
+    "mean": 0.9962,
+    "p50": 0.9812,
+    "p90": 1.3566,
+    "gt100_fills_pct": 48.2,
+    "gt100_pairs_pct": 48.7,
+    "gt100_usd_pct": 78.58,
+    "gt102_usd_pct": 74.24
+   },
+   "marginal_lifo": {
+    "mean": 1.0435,
+    "p50": 0.99,
+    "p90": 1.36,
+    "gt100_fills_pct": 43.17,
+    "gt100_pairs_pct": 44.41,
+    "gt100_usd_pct": 64.58,
+    "gt102_usd_pct": 63.38
+   },
+   "window_realized": {
+    "mean": 1.0111,
+    "p50": 0.9745,
+    "p90": 1.2301,
+    "gt100_fills_pct": 38.85,
+    "gt100_pairs_pct": 44.45,
+    "gt100_usd_pct": 60.17,
+    "gt102_usd_pct": 48.63
+   }
+  },
+  "p75-90c|tte30-120s|imb>50": {
+   "n": 441,
+   "usd": 6383.75,
+   "engine_avg": {
+    "mean": 1.0317,
+    "p50": 1.0498,
+    "p90": 1.3616,
+    "gt100_fills_pct": 54.42,
+    "gt100_pairs_pct": 54.01,
+    "gt100_usd_pct": 86.35,
+    "gt102_usd_pct": 85.38
+   },
+   "marginal_lifo": {
+    "mean": 1.0209,
+    "p50": 0.99,
+    "p90": 1.24,
+    "gt100_fills_pct": 40.36,
+    "gt100_pairs_pct": 38.78,
+    "gt100_usd_pct": 56.3,
+    "gt102_usd_pct": 48.75
+   },
+   "window_realized": {
+    "mean": 0.9955,
+    "p50": 0.9717,
+    "p90": 1.1494,
+    "gt100_fills_pct": 29.25,
+    "gt100_pairs_pct": 29.02,
+    "gt100_usd_pct": 35.73,
+    "gt102_usd_pct": 28.99
+   }
+  },
+  "p75-90c|tte5-10m|imb1-10": {
+   "n": 43,
+   "usd": 119.56,
+   "engine_avg": {
+    "mean": 1.0151,
+    "p50": 1.0573,
+    "p90": 1.1496,
+    "gt100_fills_pct": 62.79,
+    "gt100_pairs_pct": 66.53,
+    "gt100_usd_pct": 86.43,
+    "gt102_usd_pct": 84.13
+   },
+   "marginal_lifo": {
+    "mean": 1.0079,
+    "p50": 0.99,
+    "p90": 1.07,
+    "gt100_fills_pct": 44.19,
+    "gt100_pairs_pct": 53.23,
+    "gt100_usd_pct": 61.19,
+    "gt102_usd_pct": 40.39
+   },
+   "window_realized": {
+    "mean": 0.9657,
+    "p50": 0.9665,
+    "p90": 0.9886,
+    "gt100_fills_pct": 9.3,
+    "gt100_pairs_pct": 11.67,
+    "gt100_usd_pct": 10.86,
+    "gt102_usd_pct": 0.0
+   }
+  },
+  "p75-90c|tte5-10m|imb10-50": {
+   "n": 223,
+   "usd": 1646.24,
+   "engine_avg": {
+    "mean": 0.9978,
+    "p50": 1.0,
+    "p90": 1.2217,
+    "gt100_fills_pct": 49.78,
+    "gt100_pairs_pct": 53.64,
+    "gt100_usd_pct": 81.63,
+    "gt102_usd_pct": 78.3
+   },
+   "marginal_lifo": {
+    "mean": 1.0112,
+    "p50": 0.99,
+    "p90": 1.09,
+    "gt100_fills_pct": 32.74,
+    "gt100_pairs_pct": 36.27,
+    "gt100_usd_pct": 49.45,
+    "gt102_usd_pct": 37.55
+   },
+   "window_realized": {
+    "mean": 0.9702,
+    "p50": 0.9649,
+    "p90": 1.01,
+    "gt100_fills_pct": 16.14,
+    "gt100_pairs_pct": 16.17,
+    "gt100_usd_pct": 18.81,
+    "gt102_usd_pct": 9.06
+   }
+  },
+  "p75-90c|tte5-10m|imb>50": {
+   "n": 1247,
+   "usd": 14142.26,
+   "engine_avg": {
+    "mean": 1.0104,
+    "p50": 1.0249,
+    "p90": 1.2205,
+    "gt100_fills_pct": 53.65,
+    "gt100_pairs_pct": 61.16,
+    "gt100_usd_pct": 86.17,
+    "gt102_usd_pct": 84.02
+   },
+   "marginal_lifo": {
+    "mean": 0.9879,
+    "p50": 0.99,
+    "p90": 1.05,
+    "gt100_fills_pct": 24.14,
+    "gt100_pairs_pct": 32.76,
+    "gt100_usd_pct": 42.11,
+    "gt102_usd_pct": 27.71
+   },
+   "window_realized": {
+    "mean": 0.9656,
+    "p50": 0.9631,
+    "p90": 1.0134,
+    "gt100_fills_pct": 16.28,
+    "gt100_pairs_pct": 18.8,
+    "gt100_usd_pct": 22.4,
+    "gt102_usd_pct": 10.14
+   }
+  },
+  "p75-90c|tte<30s|imb>50": {
+   "n": 36,
+   "usd": 442.19,
+   "engine_avg": {
+    "mean": 0.9818,
+    "p50": 0.8994,
+    "p90": 1.3448,
+    "gt100_fills_pct": 50.0,
+    "gt100_pairs_pct": 36.32,
+    "gt100_usd_pct": 85.93,
+    "gt102_usd_pct": 80.7
+   },
+   "marginal_lifo": {
+    "mean": 0.9638,
+    "p50": 0.9496,
+    "p90": 1.1505,
+    "gt100_fills_pct": 27.78,
+    "gt100_pairs_pct": 18.74,
+    "gt100_usd_pct": 46.43,
+    "gt102_usd_pct": 38.36
+   },
+   "window_realized": {
+    "mean": 0.993,
+    "p50": 0.9677,
+    "p90": 1.2051,
+    "gt100_fills_pct": 27.78,
+    "gt100_pairs_pct": 32.32,
+    "gt100_usd_pct": 27.48,
+    "gt102_usd_pct": 27.48
+   }
+  },
+  "p75-90c|tte>10m|imb1-10": {
+   "n": 33,
+   "usd": 99.51,
+   "engine_avg": {
+    "mean": 1.0314,
+    "p50": 1.044,
+    "p90": 1.1464,
+    "gt100_fills_pct": 69.7,
+    "gt100_pairs_pct": 68.99,
+    "gt100_usd_pct": 83.23,
+    "gt102_usd_pct": 64.19
+   },
+   "marginal_lifo": {
+    "mean": 1.0294,
+    "p50": 1.0,
+    "p90": 1.1,
+    "gt100_fills_pct": 45.45,
+    "gt100_pairs_pct": 45.6,
+    "gt100_usd_pct": 53.34,
+    "gt102_usd_pct": 39.69
+   },
+   "window_realized": {
+    "mean": 0.956,
+    "p50": 0.9558,
+    "p90": 1.0011,
+    "gt100_fills_pct": 15.15,
+    "gt100_pairs_pct": 10.48,
+    "gt100_usd_pct": 11.53,
+    "gt102_usd_pct": 0.0
+   }
+  },
+  "p75-90c|tte>10m|imb10-50": {
+   "n": 112,
+   "usd": 1005.55,
+   "engine_avg": {
+    "mean": 1.0095,
+    "p50": 1.0,
+    "p90": 1.1769,
+    "gt100_fills_pct": 50.0,
+    "gt100_pairs_pct": 61.27,
+    "gt100_usd_pct": 82.19,
+    "gt102_usd_pct": 79.81
+   },
+   "marginal_lifo": {
+    "mean": 1.0316,
+    "p50": 0.99,
+    "p90": 1.15,
+    "gt100_fills_pct": 40.18,
+    "gt100_pairs_pct": 52.12,
+    "gt100_usd_pct": 65.57,
+    "gt102_usd_pct": 53.39
+   },
+   "window_realized": {
+    "mean": 0.9686,
+    "p50": 0.9675,
+    "p90": 1.02,
+    "gt100_fills_pct": 16.96,
+    "gt100_pairs_pct": 19.29,
+    "gt100_usd_pct": 21.7,
+    "gt102_usd_pct": 11.2
+   }
+  },
+  "p75-90c|tte>10m|imb>50": {
+   "n": 592,
+   "usd": 4817.21,
+   "engine_avg": {
+    "mean": 0.9563,
+    "p50": 0.9226,
+    "p90": 1.1542,
+    "gt100_fills_pct": 31.42,
+    "gt100_pairs_pct": 38.97,
+    "gt100_usd_pct": 72.74,
+    "gt102_usd_pct": 68.92
+   },
+   "marginal_lifo": {
+    "mean": 1.0006,
+    "p50": 0.99,
+    "p90": 1.05,
+    "gt100_fills_pct": 27.7,
+    "gt100_pairs_pct": 35.14,
+    "gt100_usd_pct": 52.33,
+    "gt102_usd_pct": 37.91
+   },
+   "window_realized": {
+    "mean": 0.9725,
+    "p50": 0.9752,
+    "p90": 1.0179,
+    "gt100_fills_pct": 16.89,
+    "gt100_pairs_pct": 20.11,
+    "gt100_usd_pct": 25.56,
+    "gt102_usd_pct": 10.62
+   }
+  },
+  "p<10c|tte2-5m|imb1-10": {
+   "n": 46,
+   "usd": 46.08,
+   "engine_avg": {
+    "mean": 0.8666,
+    "p50": 0.8017,
+    "p90": 1.2223,
+    "gt100_fills_pct": 19.57,
+    "gt100_pairs_pct": 21.1,
+    "gt100_usd_pct": 76.9,
+    "gt102_usd_pct": 76.9
+   },
+   "marginal_lifo": {
+    "mean": 0.9267,
+    "p50": 0.97,
+    "p90": 1.0,
+    "gt100_fills_pct": 6.52,
+    "gt100_pairs_pct": 9.21,
+    "gt100_usd_pct": 28.81,
+    "gt102_usd_pct": 0.87
+   },
+   "window_realized": {
+    "mean": 0.9662,
+    "p50": 0.9624,
+    "p90": 1.0134,
+    "gt100_fills_pct": 17.39,
+    "gt100_pairs_pct": 12.57,
+    "gt100_usd_pct": 12.5,
+    "gt102_usd_pct": 11.18
+   }
+  },
+  "p<10c|tte2-5m|imb10-50": {
+   "n": 168,
+   "usd": 968.78,
+   "engine_avg": {
+    "mean": 0.8716,
+    "p50": 0.8161,
+    "p90": 1.1436,
+    "gt100_fills_pct": 20.24,
+    "gt100_pairs_pct": 29.27,
+    "gt100_usd_pct": 78.66,
+    "gt102_usd_pct": 73.82
+   },
+   "marginal_lifo": {
+    "mean": 0.9167,
+    "p50": 0.97,
+    "p90": 1.0,
+    "gt100_fills_pct": 6.55,
+    "gt100_pairs_pct": 7.74,
+    "gt100_usd_pct": 13.31,
+    "gt102_usd_pct": 5.11
+   },
+   "window_realized": {
+    "mean": 0.961,
+    "p50": 0.9624,
+    "p90": 0.9987,
+    "gt100_fills_pct": 10.12,
+    "gt100_pairs_pct": 11.7,
+    "gt100_usd_pct": 16.1,
+    "gt102_usd_pct": 14.64
+   }
+  },
+  "p<10c|tte2-5m|imb>50": {
+   "n": 875,
+   "usd": 13048.31,
+   "engine_avg": {
+    "mean": 1.0231,
+    "p50": 1.1034,
+    "p90": 1.3242,
+    "gt100_fills_pct": 54.17,
+    "gt100_pairs_pct": 63.38,
+    "gt100_usd_pct": 94.7,
+    "gt102_usd_pct": 93.71
+   },
+   "marginal_lifo": {
+    "mean": 0.9573,
+    "p50": 0.98,
+    "p90": 1.0001,
+    "gt100_fills_pct": 10.4,
+    "gt100_pairs_pct": 12.92,
+    "gt100_usd_pct": 16.35,
+    "gt102_usd_pct": 4.99
+   },
+   "window_realized": {
+    "mean": 0.9661,
+    "p50": 0.9677,
+    "p90": 1.0058,
+    "gt100_fills_pct": 12.0,
+    "gt100_pairs_pct": 15.16,
+    "gt100_usd_pct": 19.4,
+    "gt102_usd_pct": 11.58
+   }
+  },
+  "p<10c|tte30-120s|imb1-10": {
+   "n": 35,
+   "usd": 45.91,
+   "engine_avg": {
+    "mean": 0.838,
+    "p50": 0.7933,
+    "p90": 1.2214,
+    "gt100_fills_pct": 20.0,
+    "gt100_pairs_pct": 13.52,
+    "gt100_usd_pct": 37.01,
+    "gt102_usd_pct": 37.01
+   },
+   "marginal_lifo": {
+    "mean": 0.8389,
+    "p50": 0.89,
+    "p90": 0.99,
+    "gt100_fills_pct": 5.71,
+    "gt100_pairs_pct": 5.04,
+    "gt100_usd_pct": 2.49,
+    "gt102_usd_pct": 2.49
+   },
+   "window_realized": {
+    "mean": 0.9263,
+    "p50": 0.9485,
+    "p90": 1.04,
+    "gt100_fills_pct": 20.0,
+    "gt100_pairs_pct": 22.53,
+    "gt100_usd_pct": 30.15,
+    "gt102_usd_pct": 28.48
+   }
+  },
+  "p<10c|tte30-120s|imb10-50": {
+   "n": 188,
+   "usd": 1393.67,
+   "engine_avg": {
+    "mean": 0.8619,
+    "p50": 0.8,
+    "p90": 1.2964,
+    "gt100_fills_pct": 28.72,
+    "gt100_pairs_pct": 34.93,
+    "gt100_usd_pct": 75.66,
+    "gt102_usd_pct": 74.58
+   },
+   "marginal_lifo": {
+    "mean": 0.8563,
+    "p50": 0.9367,
+    "p90": 1.0184,
+    "gt100_fills_pct": 13.3,
+    "gt100_pairs_pct": 18.2,
+    "gt100_usd_pct": 37.94,
+    "gt102_usd_pct": 22.83
+   },
+   "window_realized": {
+    "mean": 0.9373,
+    "p50": 0.9542,
+    "p90": 1.0134,
+    "gt100_fills_pct": 15.43,
+    "gt100_pairs_pct": 16.55,
+    "gt100_usd_pct": 28.99,
+    "gt102_usd_pct": 17.87
+   }
+  },
+  "p<10c|tte30-120s|imb>50": {
+   "n": 752,
+   "usd": 11406.14,
+   "engine_avg": {
+    "mean": 0.9649,
+    "p50": 0.9085,
+    "p90": 1.3614,
+    "gt100_fills_pct": 45.21,
+    "gt100_pairs_pct": 50.52,
+    "gt100_usd_pct": 90.04,
+    "gt102_usd_pct": 89.52
+   },
+   "marginal_lifo": {
+    "mean": 0.9071,
+    "p50": 0.976,
+    "p90": 1.01,
+    "gt100_fills_pct": 14.23,
+    "gt100_pairs_pct": 17.92,
+    "gt100_usd_pct": 29.61,
+    "gt102_usd_pct": 13.22
+   },
+   "window_realized": {
+    "mean": 0.9628,
+    "p50": 0.9663,
+    "p90": 1.0149,
+    "gt100_fills_pct": 17.29,
+    "gt100_pairs_pct": 19.34,
+    "gt100_usd_pct": 26.6,
+    "gt102_usd_pct": 18.07
+   }
+  },
+  "p<10c|tte5-10m|imb1-10": {
+   "n": 22,
+   "usd": 25.79,
+   "engine_avg": {
+    "mean": 0.8712,
+    "p50": 0.8012,
+    "p90": 1.1371,
+    "gt100_fills_pct": 18.18,
+    "gt100_pairs_pct": 17.26,
+    "gt100_usd_pct": 75.02,
+    "gt102_usd_pct": 75.02
+   },
+   "marginal_lifo": {
+    "mean": 0.9035,
+    "p50": 0.94,
+    "p90": 0.99,
+    "gt100_fills_pct": 0.0,
+    "gt100_pairs_pct": 0.0,
+    "gt100_usd_pct": 0.0,
+    "gt102_usd_pct": 0.0
+   },
+   "window_realized": {
+    "mean": 0.9666,
+    "p50": 0.958,
+    "p90": 0.9987,
+    "gt100_fills_pct": 9.09,
+    "gt100_pairs_pct": 12.03,
+    "gt100_usd_pct": 2.2,
+    "gt102_usd_pct": 1.06
+   }
+  },
+  "p<10c|tte5-10m|imb10-50": {
+   "n": 144,
+   "usd": 642.69,
+   "engine_avg": {
+    "mean": 0.8827,
+    "p50": 0.8462,
+    "p90": 1.1636,
+    "gt100_fills_pct": 20.83,
+    "gt100_pairs_pct": 29.76,
+    "gt100_usd_pct": 85.96,
+    "gt102_usd_pct": 83.09
+   },
+   "marginal_lifo": {
+    "mean": 0.9234,
+    "p50": 0.97,
+    "p90": 0.99,
+    "gt100_fills_pct": 4.86,
+    "gt100_pairs_pct": 6.03,
+    "gt100_usd_pct": 3.29,
+    "gt102_usd_pct": 2.4
+   },
+   "window_realized": {
+    "mean": 0.9745,
+    "p50": 0.9636,
+    "p90": 1.0243,
+    "gt100_fills_pct": 19.44,
+    "gt100_pairs_pct": 17.87,
+    "gt100_usd_pct": 24.42,
+    "gt102_usd_pct": 15.93
+   }
+  },
+  "p<10c|tte5-10m|imb>50": {
+   "n": 809,
+   "usd": 7156.51,
+   "engine_avg": {
+    "mean": 0.9234,
+    "p50": 0.8657,
+    "p90": 1.1966,
+    "gt100_fills_pct": 30.04,
+    "gt100_pairs_pct": 44.3,
+    "gt100_usd_pct": 92.11,
+    "gt102_usd_pct": 91.76
+   },
+   "marginal_lifo": {
+    "mean": 0.9464,
+    "p50": 0.98,
+    "p90": 1.0,
+    "gt100_fills_pct": 7.91,
+    "gt100_pairs_pct": 12.28,
+    "gt100_usd_pct": 18.73,
+    "gt102_usd_pct": 4.61
+   },
+   "window_realized": {
+    "mean": 0.972,
+    "p50": 0.9687,
+    "p90": 1.0168,
+    "gt100_fills_pct": 15.45,
+    "gt100_pairs_pct": 20.38,
+    "gt100_usd_pct": 29.83,
+    "gt102_usd_pct": 16.75
+   }
+  },
+  "p<10c|tte<30s|imb>50": {
+   "n": 59,
+   "usd": 1409.33,
+   "engine_avg": {
+    "mean": 1.0891,
+    "p50": 1.2222,
+    "p90": 1.4063,
+    "gt100_fills_pct": 66.1,
+    "gt100_pairs_pct": 56.42,
+    "gt100_usd_pct": 88.7,
+    "gt102_usd_pct": 85.29
+   },
+   "marginal_lifo": {
+    "mean": 0.8699,
+    "p50": 0.9763,
+    "p90": 1.0023,
+    "gt100_fills_pct": 15.25,
+    "gt100_pairs_pct": 13.27,
+    "gt100_usd_pct": 21.45,
+    "gt102_usd_pct": 5.1
+   },
+   "window_realized": {
+    "mean": 0.9202,
+    "p50": 0.9537,
+    "p90": 1.0186,
+    "gt100_fills_pct": 20.34,
+    "gt100_pairs_pct": 19.7,
+    "gt100_usd_pct": 25.17,
+    "gt102_usd_pct": 11.38
+   }
+  },
+  "p<10c|tte>10m|imb>50": {
+   "n": 60,
+   "usd": 258.04,
+   "engine_avg": {
+    "mean": 0.8839,
+    "p50": 0.8782,
+    "p90": 0.9229,
+    "gt100_fills_pct": 10.0,
+    "gt100_pairs_pct": 19.75,
+    "gt100_usd_pct": 73.23,
+    "gt102_usd_pct": 73.23
+   },
+   "marginal_lifo": {
+    "mean": 0.9473,
+    "p50": 0.98,
+    "p90": 1.0,
+    "gt100_fills_pct": 8.33,
+    "gt100_pairs_pct": 8.4,
+    "gt100_usd_pct": 21.62,
+    "gt102_usd_pct": 0.0
+   },
+   "window_realized": {
+    "mean": 0.9714,
+    "p50": 0.9684,
+    "p90": 1.0126,
+    "gt100_fills_pct": 13.33,
+    "gt100_pairs_pct": 26.72,
+    "gt100_usd_pct": 39.85,
+    "gt102_usd_pct": 0.0
+   }
+  },
+  "p>90c|tte2-5m|imb1-10": {
+   "n": 26,
+   "usd": 73.56,
+   "engine_avg": {
+    "mean": 1.0536,
+    "p50": 1.0468,
+    "p90": 1.3384,
+    "gt100_fills_pct": 53.85,
+    "gt100_pairs_pct": 57.22,
+    "gt100_usd_pct": 96.36,
+    "gt102_usd_pct": 96.36
+   },
+   "marginal_lifo": {
+    "mean": 1.0876,
+    "p50": 1.0,
+    "p90": 1.4,
+    "gt100_fills_pct": 46.15,
+    "gt100_pairs_pct": 44.17,
+    "gt100_usd_pct": 66.6,
+    "gt102_usd_pct": 65.92
+   },
+   "window_realized": {
+    "mean": 1.0433,
+    "p50": 0.9789,
+    "p90": 1.2575,
+    "gt100_fills_pct": 38.46,
+    "gt100_pairs_pct": 42.56,
+    "gt100_usd_pct": 71.63,
+    "gt102_usd_pct": 71.63
+   }
+  },
+  "p>90c|tte2-5m|imb10-50": {
+   "n": 120,
+   "usd": 1295.46,
+   "engine_avg": {
+    "mean": 1.0655,
+    "p50": 1.1005,
+    "p90": 1.2955,
+    "gt100_fills_pct": 65.0,
+    "gt100_pairs_pct": 62.49,
+    "gt100_usd_pct": 97.05,
+    "gt102_usd_pct": 97.01
+   },
+   "marginal_lifo": {
+    "mean": 1.0411,
+    "p50": 1.0,
+    "p90": 1.22,
+    "gt100_fills_pct": 45.83,
+    "gt100_pairs_pct": 45.47,
+    "gt100_usd_pct": 66.18,
+    "gt102_usd_pct": 44.52
+   },
+   "window_realized": {
+    "mean": 1.0014,
+    "p50": 0.9779,
+    "p90": 1.0554,
+    "gt100_fills_pct": 28.33,
+    "gt100_pairs_pct": 24.09,
+    "gt100_usd_pct": 26.39,
+    "gt102_usd_pct": 17.51
+   }
+  },
+  "p>90c|tte2-5m|imb>50": {
+   "n": 682,
+   "usd": 13085.14,
+   "engine_avg": {
+    "mean": 1.0899,
+    "p50": 1.1329,
+    "p90": 1.3367,
+    "gt100_fills_pct": 70.09,
+    "gt100_pairs_pct": 67.91,
+    "gt100_usd_pct": 97.34,
+    "gt102_usd_pct": 96.93
+   },
+   "marginal_lifo": {
+    "mean": 1.0005,
+    "p50": 0.99,
+    "p90": 1.05,
+    "gt100_fills_pct": 34.9,
+    "gt100_pairs_pct": 35.77,
+    "gt100_usd_pct": 46.66,
+    "gt102_usd_pct": 27.96
+   },
+   "window_realized": {
+    "mean": 0.9754,
+    "p50": 0.969,
+    "p90": 1.0215,
+    "gt100_fills_pct": 16.57,
+    "gt100_pairs_pct": 16.89,
+    "gt100_usd_pct": 19.53,
+    "gt102_usd_pct": 14.57
+   }
+  },
+  "p>90c|tte30-120s|imb1-10": {
+   "n": 28,
+   "usd": 74.26,
+   "engine_avg": {
+    "mean": 1.0811,
+    "p50": 1.0885,
+    "p90": 1.3215,
+    "gt100_fills_pct": 64.29,
+    "gt100_pairs_pct": 62.75,
+    "gt100_usd_pct": 95.02,
+    "gt102_usd_pct": 94.77
+   },
+   "marginal_lifo": {
+    "mean": 1.086,
+    "p50": 1.01,
+    "p90": 1.25,
+    "gt100_fills_pct": 53.57,
+    "gt100_pairs_pct": 54.04,
+    "gt100_usd_pct": 65.07,
+    "gt102_usd_pct": 64.81
+   },
+   "window_realized": {
+    "mean": 1.0181,
+    "p50": 0.9938,
+    "p90": 1.0809,
+    "gt100_fills_pct": 46.43,
+    "gt100_pairs_pct": 51.82,
+    "gt100_usd_pct": 57.56,
+    "gt102_usd_pct": 41.01
+   }
+  },
+  "p>90c|tte30-120s|imb10-50": {
+   "n": 109,
+   "usd": 949.65,
+   "engine_avg": {
+    "mean": 1.0115,
+    "p50": 1.0139,
+    "p90": 1.3457,
+    "gt100_fills_pct": 51.38,
+    "gt100_pairs_pct": 47.46,
+    "gt100_usd_pct": 92.37,
+    "gt102_usd_pct": 89.5
+   },
+   "marginal_lifo": {
+    "mean": 1.0467,
+    "p50": 0.99,
+    "p90": 1.242,
+    "gt100_fills_pct": 35.78,
+    "gt100_pairs_pct": 36.67,
+    "gt100_usd_pct": 56.3,
+    "gt102_usd_pct": 47.69
+   },
+   "window_realized": {
+    "mean": 1.0046,
+    "p50": 0.9807,
+    "p90": 1.1027,
+    "gt100_fills_pct": 38.53,
+    "gt100_pairs_pct": 41.86,
+    "gt100_usd_pct": 52.34,
+    "gt102_usd_pct": 34.72
+   }
+  },
+  "p>90c|tte30-120s|imb>50": {
+   "n": 551,
+   "usd": 8969.33,
+   "engine_avg": {
+    "mean": 1.064,
+    "p50": 1.1203,
+    "p90": 1.3964,
+    "gt100_fills_pct": 58.44,
+    "gt100_pairs_pct": 53.25,
+    "gt100_usd_pct": 95.71,
+    "gt102_usd_pct": 94.82
+   },
+   "marginal_lifo": {
+    "mean": 1.0195,
+    "p50": 0.99,
+    "p90": 1.12,
+    "gt100_fills_pct": 38.29,
+    "gt100_pairs_pct": 38.56,
+    "gt100_usd_pct": 62.75,
+    "gt102_usd_pct": 50.32
+   },
+   "window_realized": {
+    "mean": 0.9829,
+    "p50": 0.971,
+    "p90": 1.0751,
+    "gt100_fills_pct": 27.22,
+    "gt100_pairs_pct": 29.29,
+    "gt100_usd_pct": 33.6,
+    "gt102_usd_pct": 25.82
+   }
+  },
+  "p>90c|tte5-10m|imb10-50": {
+   "n": 75,
+   "usd": 735.56,
+   "engine_avg": {
+    "mean": 1.0255,
+    "p50": 1.099,
+    "p90": 1.2528,
+    "gt100_fills_pct": 58.67,
+    "gt100_pairs_pct": 68.23,
+    "gt100_usd_pct": 97.57,
+    "gt102_usd_pct": 97.57
+   },
+   "marginal_lifo": {
+    "mean": 1.0441,
+    "p50": 0.9942,
+    "p90": 1.1684,
+    "gt100_fills_pct": 40.0,
+    "gt100_pairs_pct": 42.66,
+    "gt100_usd_pct": 57.36,
+    "gt102_usd_pct": 52.2
+   },
+   "window_realized": {
+    "mean": 1.0023,
+    "p50": 0.9819,
+    "p90": 1.1189,
+    "gt100_fills_pct": 40.0,
+    "gt100_pairs_pct": 33.42,
+    "gt100_usd_pct": 30.43,
+    "gt102_usd_pct": 23.13
+   }
+  },
+  "p>90c|tte5-10m|imb>50": {
+   "n": 438,
+   "usd": 6388.43,
+   "engine_avg": {
+    "mean": 1.0116,
+    "p50": 1.0633,
+    "p90": 1.2391,
+    "gt100_fills_pct": 54.79,
+    "gt100_pairs_pct": 63.4,
+    "gt100_usd_pct": 96.7,
+    "gt102_usd_pct": 96.7
+   },
+   "marginal_lifo": {
+    "mean": 1.0142,
+    "p50": 0.99,
+    "p90": 1.0706,
+    "gt100_fills_pct": 33.11,
+    "gt100_pairs_pct": 39.8,
+    "gt100_usd_pct": 58.52,
+    "gt102_usd_pct": 37.9
+   },
+   "window_realized": {
+    "mean": 0.9844,
+    "p50": 0.9789,
+    "p90": 1.0384,
+    "gt100_fills_pct": 28.77,
+    "gt100_pairs_pct": 30.91,
+    "gt100_usd_pct": 41.21,
+    "gt102_usd_pct": 24.28
+   }
+  },
+  "p>90c|tte<30s|imb>50": {
+   "n": 55,
+   "usd": 1038.07,
+   "engine_avg": {
+    "mean": 1.2297,
+    "p50": 1.2892,
+    "p90": 1.4317,
+    "gt100_fills_pct": 80.0,
+    "gt100_pairs_pct": 67.4,
+    "gt100_usd_pct": 98.61,
+    "gt102_usd_pct": 96.76
+   },
+   "marginal_lifo": {
+    "mean": 1.0645,
+    "p50": 1.01,
+    "p90": 1.1375,
+    "gt100_fills_pct": 60.0,
+    "gt100_pairs_pct": 54.9,
+    "gt100_usd_pct": 79.86,
+    "gt102_usd_pct": 49.42
+   },
+   "window_realized": {
+    "mean": 1.0084,
+    "p50": 0.9914,
+    "p90": 1.0412,
+    "gt100_fills_pct": 32.73,
+    "gt100_pairs_pct": 36.13,
+    "gt100_usd_pct": 22.64,
+    "gt102_usd_pct": 17.31
+   }
+  },
+  "p>90c|tte>10m|imb>50": {
+   "n": 37,
+   "usd": 248.43,
+   "engine_avg": {
+    "mean": 0.9346,
+    "p50": 0.8824,
+    "p90": 1.1548,
+    "gt100_fills_pct": 24.32,
+    "gt100_pairs_pct": 31.5,
+    "gt100_usd_pct": 83.87,
+    "gt102_usd_pct": 83.87
+   },
+   "marginal_lifo": {
+    "mean": 1.0045,
+    "p50": 0.9952,
+    "p90": 1.0414,
+    "gt100_fills_pct": 27.03,
+    "gt100_pairs_pct": 38.25,
+    "gt100_usd_pct": 85.31,
+    "gt102_usd_pct": 80.64
+   },
+   "window_realized": {
+    "mean": 0.9728,
+    "p50": 0.9789,
+    "p90": 1.0126,
+    "gt100_fills_pct": 18.92,
+    "gt100_pairs_pct": 24.94,
+    "gt100_usd_pct": 39.02,
+    "gt102_usd_pct": 0.0
+   }
+  },
+  "other(<20)": {
+   "n": 187,
+   "usd": 1188.95,
+   "engine_avg": {
+    "mean": 0.9548,
+    "p50": 0.9311,
+    "p90": 1.3412,
+    "gt100_fills_pct": 45.99,
+    "gt100_pairs_pct": 44.14,
+    "gt100_usd_pct": 75.8,
+    "gt102_usd_pct": 73.92
+   },
+   "marginal_lifo": {
+    "mean": 0.945,
+    "p50": 0.98,
+    "p90": 1.18,
+    "gt100_fills_pct": 35.29,
+    "gt100_pairs_pct": 36.39,
+    "gt100_usd_pct": 58.38,
+    "gt102_usd_pct": 47.16
+   },
+   "window_realized": {
+    "mean": 0.9616,
+    "p50": 0.9578,
+    "p90": 1.1074,
+    "gt100_fills_pct": 26.74,
+    "gt100_pairs_pct": 27.64,
+    "gt100_usd_pct": 38.73,
+    "gt102_usd_pct": 35.35
+   }
+  }
+ },
+ "by_lane": {
+  "BTC-15m": {
+   "n": 30831,
+   "usd": 273202.85,
+   "engine_avg": {
+    "mean": 0.9783,
+    "p50": 0.968,
+    "p90": 1.2041,
+    "gt100_fills_pct": 42.0,
+    "gt100_pairs_pct": 50.1,
+    "gt100_usd_pct": 72.73,
+    "gt102_usd_pct": 68.86
+   },
+   "marginal_lifo": {
+    "mean": 0.975,
+    "p50": 0.982,
+    "p90": 1.06,
+    "gt100_fills_pct": 27.08,
+    "gt100_pairs_pct": 31.95,
+    "gt100_usd_pct": 39.36,
+    "gt102_usd_pct": 26.81
+   },
+   "window_realized": {
+    "mean": 0.9651,
+    "p50": 0.9659,
+    "p90": 1.0114,
+    "gt100_fills_pct": 14.5,
+    "gt100_pairs_pct": 15.5,
+    "gt100_usd_pct": 18.19,
+    "gt102_usd_pct": 7.71
+   }
+  },
+  "BTC-5m": {
+   "n": 2385,
+   "usd": 35532.45,
+   "engine_avg": {
+    "mean": 1.0089,
+    "p50": 0.9875,
+    "p90": 1.3547,
+    "gt100_fills_pct": 48.3,
+    "gt100_pairs_pct": 45.59,
+    "gt100_usd_pct": 76.34,
+    "gt102_usd_pct": 72.81
+   },
+   "marginal_lifo": {
+    "mean": 0.9926,
+    "p50": 0.98,
+    "p90": 1.304,
+    "gt100_fills_pct": 43.31,
+    "gt100_pairs_pct": 41.1,
+    "gt100_usd_pct": 65.48,
+    "gt102_usd_pct": 59.94
+   },
+   "window_realized": {
+    "mean": 0.9968,
+    "p50": 0.9838,
+    "p90": 1.2327,
+    "gt100_fills_pct": 45.2,
+    "gt100_pairs_pct": 44.53,
+    "gt100_usd_pct": 63.44,
+    "gt102_usd_pct": 58.72
+   }
+  },
+  "ETH-15m": {
+   "n": 31,
+   "usd": 178.11,
+   "engine_avg": {
+    "mean": 1.1272,
+    "p50": 1.1702,
+    "p90": 1.431,
+    "gt100_fills_pct": 67.74,
+    "gt100_pairs_pct": 67.37,
+    "gt100_usd_pct": 90.89,
+    "gt102_usd_pct": 90.89
+   },
+   "marginal_lifo": {
+    "mean": 1.104,
+    "p50": 1.1277,
+    "p90": 1.4703,
+    "gt100_fills_pct": 61.29,
+    "gt100_pairs_pct": 60.82,
+    "gt100_usd_pct": 85.76,
+    "gt102_usd_pct": 85.76
+   },
+   "window_realized": {
+    "mean": 1.1245,
+    "p50": 1.1132,
+    "p90": 1.2861,
+    "gt100_fills_pct": 67.74,
+    "gt100_pairs_pct": 71.0,
+    "gt100_usd_pct": 79.54,
+    "gt102_usd_pct": 79.54
+   }
+  },
+  "ETH-5m": {
+   "n": 518,
+   "usd": 3943.38,
+   "engine_avg": {
+    "mean": 1.0596,
+    "p50": 1.0488,
+    "p90": 1.4351,
+    "gt100_fills_pct": 57.14,
+    "gt100_pairs_pct": 51.4,
+    "gt100_usd_pct": 72.64,
+    "gt102_usd_pct": 71.04
+   },
+   "marginal_lifo": {
+    "mean": 1.0472,
+    "p50": 1.03,
+    "p90": 1.41,
+    "gt100_fills_pct": 54.63,
+    "gt100_pairs_pct": 49.26,
+    "gt100_usd_pct": 70.65,
+    "gt102_usd_pct": 67.74
+   },
+   "window_realized": {
+    "mean": 1.0472,
+    "p50": 1.0364,
+    "p90": 1.3815,
+    "gt100_fills_pct": 55.6,
+    "gt100_pairs_pct": 51.9,
+    "gt100_usd_pct": 70.07,
+    "gt102_usd_pct": 68.22
+   }
+  }
+ },
+ "by_month": {
+  "2026-03": {
+   "n": 819,
+   "usd": 3232.89,
+   "engine_avg": {
+    "mean": 0.9814,
+    "p50": 0.972,
+    "p90": 1.1949,
+    "gt100_fills_pct": 38.71,
+    "gt100_pairs_pct": 39.7,
+    "gt100_usd_pct": 52.99,
+    "gt102_usd_pct": 46.48
+   },
+   "marginal_lifo": {
+    "mean": 0.9676,
+    "p50": 0.97,
+    "p90": 1.1022,
+    "gt100_fills_pct": 30.4,
+    "gt100_pairs_pct": 31.9,
+    "gt100_usd_pct": 40.67,
+    "gt102_usd_pct": 34.12
+   },
+   "window_realized": {
+    "mean": 0.9698,
+    "p50": 0.9649,
+    "p90": 1.0696,
+    "gt100_fills_pct": 29.3,
+    "gt100_pairs_pct": 30.48,
+    "gt100_usd_pct": 36.57,
+    "gt102_usd_pct": 26.11
+   }
+  },
+  "2026-04": {
+   "n": 1714,
+   "usd": 10299.27,
+   "engine_avg": {
+    "mean": 0.9719,
+    "p50": 0.97,
+    "p90": 1.21,
+    "gt100_fills_pct": 42.53,
+    "gt100_pairs_pct": 44.99,
+    "gt100_usd_pct": 63.71,
+    "gt102_usd_pct": 58.8
+   },
+   "marginal_lifo": {
+    "mean": 0.9705,
+    "p50": 0.98,
+    "p90": 1.1,
+    "gt100_fills_pct": 35.41,
+    "gt100_pairs_pct": 34.92,
+    "gt100_usd_pct": 41.7,
+    "gt102_usd_pct": 32.45
+   },
+   "window_realized": {
+    "mean": 0.9623,
+    "p50": 0.9525,
+    "p90": 1.0566,
+    "gt100_fills_pct": 25.32,
+    "gt100_pairs_pct": 23.1,
+    "gt100_usd_pct": 26.62,
+    "gt102_usd_pct": 18.81
+   }
+  },
+  "2026-08": {
+   "n": 31232,
+   "usd": 299324.63,
+   "engine_avg": {
+    "mean": 0.9824,
+    "p50": 0.9694,
+    "p90": 1.2213,
+    "gt100_fills_pct": 42.82,
+    "gt100_pairs_pct": 49.81,
+    "gt100_usd_pct": 73.69,
+    "gt102_usd_pct": 69.96
+   },
+   "marginal_lifo": {
+    "mean": 0.9781,
+    "p50": 0.9834,
+    "p90": 1.08,
+    "gt100_fills_pct": 28.27,
+    "gt100_pairs_pct": 33.34,
+    "gt100_usd_pct": 42.81,
+    "gt102_usd_pct": 31.04
+   },
+   "window_realized": {
+    "mean": 0.9691,
+    "p50": 0.9664,
+    "p90": 1.0154,
+    "gt100_fills_pct": 16.6,
+    "gt100_pairs_pct": 19.51,
+    "gt100_usd_pct": 23.8,
+    "gt102_usd_pct": 14.02
+   }
+  }
+ },
+ "by_inventory_usd_before": {
+  "inv<$5": {
+   "n": 1982,
+   "usd": 8529.78,
+   "engine_avg": {
+    "mean": 0.9791,
+    "p50": 0.9827,
+    "p90": 1.1944,
+    "gt100_fills_pct": 44.6,
+    "gt100_pairs_pct": 47.29,
+    "gt100_usd_pct": 58.93,
+    "gt102_usd_pct": 51.4
+   },
+   "marginal_lifo": {
+    "mean": 0.9718,
+    "p50": 0.98,
+    "p90": 1.11,
+    "gt100_fills_pct": 31.18,
+    "gt100_pairs_pct": 31.94,
+    "gt100_usd_pct": 37.45,
+    "gt102_usd_pct": 27.19
+   },
+   "window_realized": {
+    "mean": 0.9669,
+    "p50": 0.9624,
+    "p90": 1.0394,
+    "gt100_fills_pct": 20.69,
+    "gt100_pairs_pct": 21.6,
+    "gt100_usd_pct": 23.28,
+    "gt102_usd_pct": 14.87
+   }
+  },
+  "inv$5-25": {
+   "n": 6878,
+   "usd": 65265.33,
+   "engine_avg": {
+    "mean": 0.9848,
+    "p50": 0.985,
+    "p90": 1.1936,
+    "gt100_fills_pct": 45.58,
+    "gt100_pairs_pct": 53.88,
+    "gt100_usd_pct": 70.93,
+    "gt102_usd_pct": 66.16
+   },
+   "marginal_lifo": {
+    "mean": 0.9756,
+    "p50": 0.98,
+    "p90": 1.1064,
+    "gt100_fills_pct": 32.2,
+    "gt100_pairs_pct": 37.16,
+    "gt100_usd_pct": 45.19,
+    "gt102_usd_pct": 34.18
+   },
+   "window_realized": {
+    "mean": 0.968,
+    "p50": 0.9631,
+    "p90": 1.0357,
+    "gt100_fills_pct": 19.47,
+    "gt100_pairs_pct": 21.12,
+    "gt100_usd_pct": 24.45,
+    "gt102_usd_pct": 16.57
+   }
+  },
+  "inv$25-100": {
+   "n": 14232,
+   "usd": 151887.53,
+   "engine_avg": {
+    "mean": 0.9812,
+    "p50": 0.9709,
+    "p90": 1.2118,
+    "gt100_fills_pct": 43.56,
+    "gt100_pairs_pct": 50.47,
+    "gt100_usd_pct": 74.23,
+    "gt102_usd_pct": 70.41
+   },
+   "marginal_lifo": {
+    "mean": 0.9785,
+    "p50": 0.98,
+    "p90": 1.09,
+    "gt100_fills_pct": 28.57,
+    "gt100_pairs_pct": 33.83,
+    "gt100_usd_pct": 44.0,
+    "gt102_usd_pct": 33.03
+   },
+   "window_realized": {
+    "mean": 0.9697,
+    "p50": 0.9659,
+    "p90": 1.0179,
+    "gt100_fills_pct": 17.83,
+    "gt100_pairs_pct": 21.04,
+    "gt100_usd_pct": 24.8,
+    "gt102_usd_pct": 14.68
+   }
+  },
+  "inv$100-500": {
+   "n": 10673,
+   "usd": 87174.15,
+   "engine_avg": {
+    "mean": 0.9813,
+    "p50": 0.9518,
+    "p90": 1.2457,
+    "gt100_fills_pct": 39.34,
+    "gt100_pairs_pct": 46.04,
+    "gt100_usd_pct": 74.33,
+    "gt102_usd_pct": 71.63
+   },
+   "marginal_lifo": {
+    "mean": 0.9784,
+    "p50": 0.9884,
+    "p90": 1.05,
+    "gt100_fills_pct": 26.09,
+    "gt100_pairs_pct": 30.76,
+    "gt100_usd_pct": 39.25,
+    "gt102_usd_pct": 25.89
+   },
+   "window_realized": {
+    "mean": 0.9683,
+    "p50": 0.968,
+    "p90": 1.0081,
+    "gt100_fills_pct": 14.74,
+    "gt100_pairs_pct": 16.96,
+    "gt100_usd_pct": 22.42,
+    "gt102_usd_pct": 11.89
+   }
+  }
+ },
+ "by_preceding_relation": {
+  "after_open": {
+   "n": 890,
+   "usd": 9518.66,
+   "engine_avg": {
+    "mean": 1.0097,
+    "p50": 0.99,
+    "p90": 1.285,
+    "gt100_fills_pct": 44.49,
+    "gt100_pairs_pct": 46.35,
+    "gt100_usd_pct": 64.74,
+    "gt102_usd_pct": 58.79
+   },
+   "marginal_lifo": {
+    "mean": 1.0003,
+    "p50": 0.99,
+    "p90": 1.26,
+    "gt100_fills_pct": 39.55,
+    "gt100_pairs_pct": 42.27,
+    "gt100_usd_pct": 59.35,
+    "gt102_usd_pct": 53.05
+   },
+   "window_realized": {
+    "mean": 0.9929,
+    "p50": 0.9704,
+    "p90": 1.2301,
+    "gt100_fills_pct": 38.88,
+    "gt100_pairs_pct": 41.74,
+    "gt100_usd_pct": 53.46,
+    "gt102_usd_pct": 47.61
+   }
+  },
+  "after_extend_x1": {
+   "n": 4416,
+   "usd": 46105.07,
+   "engine_avg": {
+    "mean": 0.9894,
+    "p50": 0.9767,
+    "p90": 1.235,
+    "gt100_fills_pct": 44.63,
+    "gt100_pairs_pct": 48.0,
+    "gt100_usd_pct": 73.03,
+    "gt102_usd_pct": 69.46
+   },
+   "marginal_lifo": {
+    "mean": 0.9859,
+    "p50": 0.99,
+    "p90": 1.07,
+    "gt100_fills_pct": 26.4,
+    "gt100_pairs_pct": 29.65,
+    "gt100_usd_pct": 39.1,
+    "gt102_usd_pct": 28.92
+   },
+   "window_realized": {
+    "mean": 0.9723,
+    "p50": 0.9664,
+    "p90": 1.0337,
+    "gt100_fills_pct": 20.18,
+    "gt100_pairs_pct": 22.81,
+    "gt100_usd_pct": 28.21,
+    "gt102_usd_pct": 19.33
+   }
+  },
+  "after_extend_x2-3": {
+   "n": 3661,
+   "usd": 41434.12,
+   "engine_avg": {
+    "mean": 1.0027,
+    "p50": 0.9911,
+    "p90": 1.2441,
+    "gt100_fills_pct": 48.13,
+    "gt100_pairs_pct": 50.55,
+    "gt100_usd_pct": 74.89,
+    "gt102_usd_pct": 70.94
+   },
+   "marginal_lifo": {
+    "mean": 0.9893,
+    "p50": 0.99,
+    "p90": 1.05,
+    "gt100_fills_pct": 27.4,
+    "gt100_pairs_pct": 29.7,
+    "gt100_usd_pct": 37.24,
+    "gt102_usd_pct": 23.57
+   },
+   "window_realized": {
+    "mean": 0.9706,
+    "p50": 0.9675,
+    "p90": 1.0231,
+    "gt100_fills_pct": 19.31,
+    "gt100_pairs_pct": 21.27,
+    "gt100_usd_pct": 25.39,
+    "gt102_usd_pct": 15.51
+   }
+  },
+  "after_extend_x4+": {
+   "n": 2724,
+   "usd": 39013.7,
+   "engine_avg": {
+    "mean": 1.0507,
+    "p50": 1.057,
+    "p90": 1.2691,
+    "gt100_fills_pct": 62.89,
+    "gt100_pairs_pct": 66.71,
+    "gt100_usd_pct": 84.75,
+    "gt102_usd_pct": 81.82
+   },
+   "marginal_lifo": {
+    "mean": 0.9867,
+    "p50": 0.99,
+    "p90": 1.04,
+    "gt100_fills_pct": 25.66,
+    "gt100_pairs_pct": 28.89,
+    "gt100_usd_pct": 30.75,
+    "gt102_usd_pct": 14.69
+   },
+   "window_realized": {
+    "mean": 0.9673,
+    "p50": 0.9659,
+    "p90": 1.0156,
+    "gt100_fills_pct": 17.77,
+    "gt100_pairs_pct": 18.6,
+    "gt100_usd_pct": 19.31,
+    "gt102_usd_pct": 10.38
+   }
+  },
+  "after_complete": {
+   "n": 22074,
+   "usd": 176785.24,
+   "engine_avg": {
+    "mean": 0.9672,
+    "p50": 0.9535,
+    "p90": 1.1992,
+    "gt100_fills_pct": 38.85,
+    "gt100_pairs_pct": 46.89,
+    "gt100_usd_pct": 70.67,
+    "gt102_usd_pct": 66.76
+   },
+   "marginal_lifo": {
+    "mean": 0.9718,
+    "p50": 0.98,
+    "p90": 1.09,
+    "gt100_fills_pct": 29.28,
+    "gt100_pairs_pct": 35.49,
+    "gt100_usd_pct": 46.74,
+    "gt102_usd_pct": 35.91
+   },
+   "window_realized": {
+    "mean": 0.9669,
+    "p50": 0.9659,
+    "p90": 1.0134,
+    "gt100_fills_pct": 15.54,
+    "gt100_pairs_pct": 17.64,
+    "gt100_usd_pct": 22.06,
+    "gt102_usd_pct": 11.78
+   }
+  }
+ },
+ "completion_vs_hold": {
+  "ALL": {
+   "windows": 2216,
+   "any_complete_pct": 72.61,
+   "both_sides_pct": 72.65,
+   "one_sided_pct": 27.35,
+   "held_residual_ge_1share_pct": 97.92,
+   "flat_at_settlement_pct": 2.08,
+   "median_completes_per_window": 2,
+   "bought_usd": 728502.07,
+   "matched_pair_usd_pct_of_bought": 86.36,
+   "residual_usd_at_settlement_p50": 25.28,
+   "residual_usd_at_settlement_p90": 118.64,
+   "residual_usd_at_settlement_total": 99385.41
+  },
+  "BTC-15m": {
+   "windows": 527,
+   "any_complete_pct": 96.02,
+   "both_sides_pct": 96.02,
+   "one_sided_pct": 3.98,
+   "held_residual_ge_1share_pct": 98.86,
+   "flat_at_settlement_pct": 1.14,
+   "median_completes_per_window": 52,
+   "bought_usd": 573704.72,
+   "matched_pair_usd_pct_of_bought": 93.68,
+   "residual_usd_at_settlement_p50": 43.57,
+   "residual_usd_at_settlement_p90": 189.01,
+   "residual_usd_at_settlement_total": 36243.11
+  },
+  "BTC-5m": {
+   "windows": 957,
+   "any_complete_pct": 83.07,
+   "both_sides_pct": 83.07,
+   "one_sided_pct": 16.93,
+   "held_residual_ge_1share_pct": 96.97,
+   "flat_at_settlement_pct": 3.03,
+   "median_completes_per_window": 2,
+   "bought_usd": 129037.45,
+   "matched_pair_usd_pct_of_bought": 63.65,
+   "residual_usd_at_settlement_p50": 33.05,
+   "residual_usd_at_settlement_p90": 121.09,
+   "residual_usd_at_settlement_total": 46899.65
+  },
+  "ETH-15m": {
+   "windows": 29,
+   "any_complete_pct": 41.38,
+   "both_sides_pct": 44.83,
+   "one_sided_pct": 55.17,
+   "held_residual_ge_1share_pct": 93.1,
+   "flat_at_settlement_pct": 6.9,
+   "median_completes_per_window": 0,
+   "bought_usd": 1041.76,
+   "matched_pair_usd_pct_of_bought": 43.12,
+   "residual_usd_at_settlement_p50": 21.83,
+   "residual_usd_at_settlement_p90": 38.98,
+   "residual_usd_at_settlement_total": 591.81
+  },
+  "ETH-5m": {
+   "windows": 703,
+   "any_complete_pct": 42.11,
+   "both_sides_pct": 42.11,
+   "one_sided_pct": 57.89,
+   "held_residual_ge_1share_pct": 98.72,
+   "flat_at_settlement_pct": 1.28,
+   "median_completes_per_window": 0,
+   "bought_usd": 24718.14,
+   "matched_pair_usd_pct_of_bought": 36.68,
+   "residual_usd_at_settlement_p50": 14.58,
+   "residual_usd_at_settlement_p90": 54.61,
+   "residual_usd_at_settlement_total": 15650.84
+  }
+ },
+ "matched_pairs_by_month": {
+  "2026-03": {
+   "windows": 88,
+   "matched_pairs": 6517.9,
+   "usd_wavg_pair_cost_window_basis": 0.9705,
+   "usd_wavg_pair_cost_lot_lifo_basis": 0.9686,
+   "completes": 819,
+   "usd_wavg_engine_pair_at_complete": 1.0451
+  },
+  "2026-04": {
+   "windows": 128,
+   "matched_pairs": 20915.4,
+   "usd_wavg_pair_cost_window_basis": 0.9601,
+   "usd_wavg_pair_cost_lot_lifo_basis": 0.9694,
+   "completes": 1714,
+   "usd_wavg_engine_pair_at_complete": 1.0595
+  },
+  "2026-08": {
+   "windows": 2000,
+   "matched_pairs": 620588.3,
+   "usd_wavg_pair_cost_window_basis": 0.9712,
+   "usd_wavg_pair_cost_lot_lifo_basis": 0.9852,
+   "completes": 31232,
+   "usd_wavg_engine_pair_at_complete": 1.1014
+  },
+  "ALL": {
+   "windows": 2216,
+   "matched_pairs": 648021.6,
+   "usd_wavg_pair_cost_window_basis": 0.9708,
+   "usd_wavg_pair_cost_lot_lifo_basis": 0.9845,
+   "completes": 33765
+  }
+ },
+ "economic_overlay_attachment_points": {
+  "note": "NAMED ONLY, not computed here. The overlay converts an observed pair cost into supported/unsupported at PMUS.",
+  "inputs": [
+   "maker rebate per filled dollar on PMUS, per leg (complete leg and the surplus leg it matches), from the venue schedule in force at the fill time",
+   "taker fee / maker fee per filled dollar (if any) per leg",
+   "tick rounding of the complement price (floor to tick, as complement_target does) and the resulting fixed-point pair cost",
+   "settlement payout per pair (1.00) and any settlement/redemption cost",
+   "minimum-edge parameter currently in hard_pair_bound (1.00 - MIN_EDGE) and PAIR_OBSERVATION_CAP",
+   "capital lock time (complete timestamp to settlement) if a carry cost is to be charged"
+  ],
+  "attach_to": "each COMPLETE record's engine_avg (the basis the engine prices through); the comparison is supported_ceiling = 1.00 + rebates - fees - min_edge (per pair dollar) against this study's observed distribution by state",
+  "code_point": "src/pmus_sports_l5_decision.py: hard_pair_bound / complement_target"
+ },
+ "limitations": [
+  "fills only: a COMPLETE here is a filled deficit-side buy, not the quote L5 posted; the ceiling is the distribution of filled completes, resting completes that never filled are invisible",
+  "state price band is the previous fill's price (the live model's market-price proxy), not the book at the fill; it can be the opposite side's price",
+  "engine_avg uses the canonical average-cost basis (cum spend / cum qty), which includes every earlier lot on the surplus side, matched or not; marginal_lifo is the alternative reading",
+  "window_realized is an average-cost allocation at settlement, not a per-fill fact; it is the number the ledger locks",
+  "maker/taker is known only inside takerOnly coverage (Aug 28-31); pair costs are not conditioned on it",
+  "3431 completes exceed the surplus (overshoot); pair costs there cover the matched part and dollar shares use completed_usd",
+  "two lifetime SELL rows are applied to the lot ledger LIFO and otherwise ignored",
+  "pair costs exclude rebates and fees by construction (owner: separate the two questions)",
+  "the canonical file has no fills between 2026-04 and 2026-08 (Mar 1931 / Apr 3338 / Aug 66715 rows); 'by month' is three eras and the August cohort dominates every pooled number"
+ ]
+}
