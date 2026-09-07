@@ -195,36 +195,58 @@ def credited_on_fills(rows: list[dict]) -> dict:
     Trades are ours by construction (the account's own activity walk)."""
     trades = [r.get("trade") for r in rows
               if isinstance(r, Mapping) and isinstance(r.get("trade"), Mapping)]
-    total = D("0")
+    credited = D("0")        # venue paid US (negative commission = rebate)
+    charged = D("0")         # venue took FROM US
+    counterparty = D("0")    # the OTHER side's commission; never ours
     n_floor = 0
-    nonzero: list[dict] = []
+    n_credited = 0
+    rows_out: list[dict] = []
     for tr in trades:
         qty = _d_or_none(tr.get("qtyDecimal")) or _d_or_none(tr.get("qty"))
         at_floor = qty is not None and abs(qty) >= REBATE_FLOOR_SHARES
         n_floor += 1 if at_floor else 0
-        got = D("0")
-        for ex_key in ("passiveExecution", "aggressorExecution"):
-            ex = tr.get(ex_key)
-            if not isinstance(ex, Mapping):
-                continue
-            v = _d_or_none((ex.get("commissionNotionalCollected") or {}).get("value")
-                           if isinstance(ex.get("commissionNotionalCollected"), Mapping)
-                           else ex.get("commissionNotionalCollected"))
-            if v is not None:
-                got += v
-        total += got
-        if got != 0:
-            nonzero.append({"id": tr.get("id"), "market": tr.get("marketSlug"),
-                            "qty": str(qty), "commission_notional": str(got),
-                            "at_or_above_floor": at_floor})
+        # LIVE 02:09Z: the trade row carries BOTH sides. `isAggressor` says
+        # which one is US -- summing both conflates our maker rebate with
+        # the taker's fee and inverts the sign of the answer.
+        ours_key = "aggressorExecution" if tr.get("isAggressor") else "passiveExecution"
+        theirs_key = "passiveExecution" if tr.get("isAggressor") else "aggressorExecution"
+        ours = _commission(tr.get(ours_key))
+        theirs = _commission(tr.get(theirs_key))
+        counterparty += theirs
+        if ours < 0:
+            credited += -ours
+            n_credited += 1
+        else:
+            charged += ours
+        if ours != 0:
+            rows_out.append({"id": tr.get("id"), "market": tr.get("marketSlug"),
+                             "qty": str(qty), "our_side": ours_key,
+                             "our_commission": str(ours),
+                             "credited_to_us": ours < 0,
+                             "at_or_above_floor": at_floor})
     return {"trades": len(trades),
             "trades_at_or_above_rebate_floor": n_floor,
             "rebate_floor_shares": str(REBATE_FLOOR_SHARES),
-            "commission_notional_total_usd": str(total),
-            "trades_with_nonzero_commission": nonzero[:20],
-            "labels": ("OBSERVED: the venue's own commissionNotional on our fills, "
-                       "signed as served. Zero here means the venue credited "
-                       "nothing on these fills, whatever the published formula says.")}
+            "our_fills_with_a_credit": n_credited,
+            "credited_to_us_usd": str(credited),
+            "charged_to_us_usd": str(charged),
+            "net_to_us_usd": str(credited - charged),
+            "counterparty_side_usd_not_ours": str(counterparty),
+            "our_rows": rows_out[:20],
+            "labels": ("OBSERVED, OUR SIDE ONLY: the venue's own "
+                       "commissionNotionalCollected on whichever execution is "
+                       "ours per `isAggressor`. NEGATIVE on the venue = credited "
+                       "to us (the maker rebate), so it is reported here as a "
+                       "positive credited_to_us_usd. counterparty_side_usd is "
+                       "the OTHER trader's fee and is never our income.")}
+
+
+def _commission(ex: Any) -> D:
+    if not isinstance(ex, Mapping):
+        return D("0")
+    raw = ex.get("commissionNotionalCollected")
+    v = _d_or_none(raw.get("value") if isinstance(raw, Mapping) else raw)
+    return v if v is not None else D("0")
 
 
 def _d_or_none(v: Any) -> Optional[D]:
@@ -528,9 +550,13 @@ def incentive_audit(t: q1.Transport) -> dict:
         "published_programs_covering_our_markets": len((out.get("programs") or {}).get("our_markets_in_programs") or []),
         "rebate_at_our_executed_size_after_rounding": out["size_arithmetic"]["rebate_at_our_size"]["credited_after_rounding_usd"],
         "mlb": (out.get("mlb_scan") or {}).get("statement"),
-        # the verdict line for the sized rung: what the venue actually paid
+        # the verdict line for the sized rung: what the venue actually paid US
         "venue_credited_on_our_fills_usd": (out.get("credited_on_fills") or {}).get(
-            "commission_notional_total_usd"),
+            "credited_to_us_usd"),
+        "venue_charged_us_on_our_fills_usd": (out.get("credited_on_fills") or {}).get(
+            "charged_to_us_usd"),
+        "our_fills_with_a_credit": (out.get("credited_on_fills") or {}).get(
+            "our_fills_with_a_credit"),
         "our_fills_at_or_above_rebate_floor": (out.get("credited_on_fills") or {}).get(
             "trades_at_or_above_rebate_floor"),
         "reading": ("only observed / venue-confirmed credits are realized; published programs and "

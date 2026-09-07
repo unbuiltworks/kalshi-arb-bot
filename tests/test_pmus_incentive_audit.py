@@ -156,29 +156,35 @@ def test_campaign_hook_is_contained_and_logs_once(monkeypatch):
     assert len(logged) == 2
 
 
-def test_credited_on_fills_reports_what_the_venue_actually_paid():
-    """LIVE 2026-09-07 (R3L): fills now clear the 1.62-share rounding
-    floor, so 'did the venue credit anything' is answerable. The sum is
-    the venue's own signed number; nothing is called a rebate on the
-    strength of the published formula alone."""
-    def _tr(tid, qty, passive="0.0000", aggressor="0.0000"):
+def test_credited_on_fills_counts_only_our_side_of_the_trade():
+    """LIVE 02:09Z: the trade row carries BOTH executions. The venue serves
+    the MAKER rebate as a NEGATIVE commission on our side and the taker's
+    fee as a positive one on theirs; summing both inverted the answer and
+    reported the counterparty's fee as our income."""
+    def _tr(tid, qty, ours_val, theirs_val, is_aggressor=False):
+        our_key = "aggressorExecution" if is_aggressor else "passiveExecution"
+        their_key = "passiveExecution" if is_aggressor else "aggressorExecution"
         return {"trade": {"id": tid, "marketSlug": "m1", "qtyDecimal": qty,
-                          "passiveExecution": {"commissionNotionalCollected": {"value": passive}},
-                          "aggressorExecution": {"commissionNotionalCollected": {"value": aggressor}}}}
-    out = ia.credited_on_fills([_tr("a", "0.0200"), _tr("b", "5.1500"),
-                                _tr("c", "4.3300", passive="-0.0200")])
-    assert out["trades"] == 3
-    # only the two sized fills clear the floor; the 0.02-share one does not
-    assert out["trades_at_or_above_rebate_floor"] == 2
-    assert out["rebate_floor_shares"] == "1.62"
-    assert D(out["commission_notional_total_usd"]) == D("-0.02")
-    assert len(out["trades_with_nonzero_commission"]) == 1
-    assert out["trades_with_nonzero_commission"][0]["id"] == "c"
-    assert out["trades_with_nonzero_commission"][0]["at_or_above_floor"] is True
-    # an all-zero book reports zero rather than inferring the formula
-    zero = ia.credited_on_fills([_tr("a", "5.0000"), _tr("b", "5.0000")])
-    assert D(zero["commission_notional_total_usd"]) == 0
-    assert zero["trades_with_nonzero_commission"] == []
+                          "isAggressor": is_aggressor,
+                          our_key: {"commissionNotionalCollected": {"value": ours_val}},
+                          their_key: {"commissionNotionalCollected": {"value": theirs_val}}}}
+    # the real shape: we are the maker, credited -0.01; the taker pays +0.06
+    out = ia.credited_on_fills([_tr("a", "4.6400", "-0.0100", "0.0600"),
+                                _tr("b", "5.1500", "-0.0100", "0.0700"),
+                                _tr("c", "0.0200", "0.0000", "0.0000")])
+    assert out["trades"] == 3 and out["trades_at_or_above_rebate_floor"] == 2
+    assert D(out["credited_to_us_usd"]) == D("0.02")      # OUR rebate, not $0.15
+    assert D(out["charged_to_us_usd"]) == 0
+    assert D(out["net_to_us_usd"]) == D("0.02")
+    assert D(out["counterparty_side_usd_not_ours"]) == D("0.13")
+    assert out["our_fills_with_a_credit"] == 2
+    assert [r["our_side"] for r in out["our_rows"]] == ["passiveExecution"] * 2
+    assert all(r["credited_to_us"] for r in out["our_rows"])
+    # when WE are the aggressor the fee is ours and is a charge, not a credit
+    taker = ia.credited_on_fills([_tr("d", "5.0000", "0.0600", "-0.0100", True)])
+    assert D(taker["charged_to_us_usd"]) == D("0.06")
+    assert D(taker["credited_to_us_usd"]) == 0
+    assert D(taker["net_to_us_usd"]) == D("-0.06")
 
 
 def test_audit_verdict_carries_the_credited_number(monkeypatch, tmp_path):
@@ -186,4 +192,5 @@ def test_audit_verdict_carries_the_credited_number(monkeypatch, tmp_path):
     out = ia.incentive_audit(FakeT(_routes()))
     assert out["credited_on_fills"]["trades"] == 1
     assert D(out["verdict"]["venue_credited_on_our_fills_usd"]) == 0
+    assert D(out["verdict"]["venue_charged_us_on_our_fills_usd"]) == 0
     assert out["verdict"]["our_fills_at_or_above_rebate_floor"] == 0
