@@ -1,19 +1,19 @@
 # R4 fidelity decomposition: L5 decisions vs executed, and what the $2.50 unmatched cap suppressed
 
-Shell: `R4/` rows only. Markets 3 (2 settled) | decisions 174 (deduped) | campaign rows 211, truncated 0 | active session time 2942.7s
+Shell: `R4/` rows only. Markets 3 (3 settled) | decisions 217 (deduped) | campaign rows 316, truncated 0 | active session time 4270.7s
 
 Labels: **realized** = venue number only; **derived** = arithmetic on ledger / venue rows; **counterfactual** = did not happen, fill-assumed, fee-free; **PENDING** = not settled.
 
 ## Verdict
 
-The $2.50 unmatched-dollar cap overrode 54 of 174 R4 decisions (31%), every one of them an L5 EXTEND, i.e. 54 of the 80 extends L5 sampled (68%); by market -- aec-atp-petbru-alecan: 10/30 decisions, 10/25 sampled extends, 302s of 901s live; aec-atpcq-aleher-tundur: 9/79 decisions, 9/18 sampled extends, 270s of 876s live; aec-atpcq-norgom-ollwal: 35/65 decisions, 35/37 sampled extends, 282s of 1166s live. It withheld 124.6736 USD of orders across 17 consecutive runs (39.9943 USD counting one order per run), 283.86 YES / 0.00 NO contracts never built, and held the engine in cap-refusal for 855s of 2943s of live session time (29%). On the 2 settled market(s), had every refused order filled and been held to the venue's actual settlement the extra inventory would have made -62.5205 USD (-21.2231 USD on the one-fill-per-run reading) (the paying side of aec-atpcq-norgom-ollwal is read from the venue's public settlement price and is unconfirmed; had the opposite side paid the held figure would be 82.7595 USD all-fill / 29.1269 USD per run); paired instead at the complement touch L5 later saw it would have made 10.0029 USD (3.6831 USD per run). Those are counterfactual, fill-assumed, fee-free numbers, not realized ones; aec-atp-petbru-alecan is still open, so its settlement counterfactual is PENDING. L5's OPEN and COMPLETE decisions were never touched by this cap; its EXTEND leg was mostly suppressed, so the R4 sequence is L5's opens and completes with L5's extends largely removed.
+The $2.50 unmatched-dollar cap overrode 62 of 217 R4 decisions (29%), every one of them an L5 EXTEND, i.e. 62 of the 109 extends L5 sampled (57%); by market -- aec-atp-petbru-alecan: 18/73 decisions, 18/54 sampled extends, 564s of 2229s live; aec-atpcq-aleher-tundur: 9/79 decisions, 9/18 sampled extends, 270s of 876s live; aec-atpcq-norgom-ollwal: 35/65 decisions, 35/37 sampled extends, 282s of 1166s live. It withheld 134.7185 USD of orders across 21 consecutive runs (44.8006 USD counting one order per run), 319.87 YES / 0.00 NO contracts never built, and held the engine in cap-refusal for 1116s of 4271s of live session time (26%). On the 3 settled market(s), had every refused order filled and been held to the venue's actual settlement the extra inventory would have made -90.7785 USD (-29.7706 USD on the one-fill-per-run reading) (the paying side of aec-atpcq-norgom-ollwal is read from the venue's public settlement price and is unconfirmed; had the opposite side paid the held figure would be 141.2115 USD all-fill / 48.6094 USD per run); paired instead at the complement touch L5 later saw it would have made 11.6480 USD (4.4149 USD per run). Those are counterfactual, fill-assumed, fee-free numbers, not realized ones; L5's OPEN and COMPLETE decisions were never touched by this cap; its EXTEND leg was mostly suppressed, so the R4 sequence is L5's opens and completes with L5's extends largely removed.
 
 ## Campaign: L5 relation (sampled) x executed outcome
 
 | L5 sampled | acted:complete | acted:extend | acted:open | hold:complement_not_priceable | hold:complete_without_residual | hold:entry_band_left | hold:off_distribution_hold | hold:spend_cap_reached | hold:unmatched_usd_cap | n |
 |---|---|---|---|---|---|---|---|---|---|---|
-| complete | 35 | 0 | 0 | 21 | 1 | 0 | 0 | 0 | 0 | 57 |
-| extend | 1 | 1 | 0 | 0 | 0 | 23 | 1 | 0 | 54 | 80 |
+| complete | 49 | 0 | 0 | 21 | 1 | 0 | 0 | 0 | 0 | 71 |
+| extend | 1 | 1 | 0 | 0 | 0 | 44 | 1 | 0 | 62 | 109 |
 | open | 0 | 0 | 13 | 0 | 0 | 0 | 23 | 1 | 0 | 37 |
 
 ## Campaign: L5 v2_recommended x executed outcome
@@ -21,83 +21,108 @@ The $2.50 unmatched-dollar cap overrode 54 of 174 R4 decisions (31%), every one 
 | L5 v2 | acted:complete | acted:extend | acted:open | hold:complement_not_priceable | hold:complete_without_residual | hold:entry_band_left | hold:off_distribution_hold | hold:spend_cap_reached | hold:unmatched_usd_cap | n |
 |---|---|---|---|---|---|---|---|---|---|---|
 | complete | 7 | 0 | 0 | 21 | 1 | 8 | 0 | 0 | 0 | 37 |
-| extend | 29 | 1 | 0 | 0 | 0 | 15 | 0 | 0 | 54 | 99 |
+| extend | 43 | 1 | 0 | 0 | 0 | 36 | 0 | 0 | 62 | 142 |
 | open | 0 | 0 | 13 | 0 | 0 | 0 | 24 | 1 | 0 | 38 |
 
 ## Campaign: refusals in proportion
 
 | refusal | decisions | share | runs | strict s | inclusive s | share of live time | USD refused (all) | USD refused (1/run) | unmatched increment (all) | YES / NO contracts (all) | YES / NO (1/run) |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| unmatched_usd_cap | 54 | 31.0% | 17 | 596.7 | 854.7 | 29.0% | 124.6736 | 39.9943 | 126.9738 | 283.86 / 0.00 | 90.65 / 0.00 |
-| off_distribution_hold | 24 | 13.8% | 1 | 305.1 | 315.1 | 10.7% | 59.9495 | 2.4966 | 0.0000 | 116.47 / 0.00 | 4.38 / 0.00 |
-| complement_not_priceable | 21 | 12.1% | 6 | 47.5 | 59.5 | 2.0% | 52.3397 | 14.9550 | 0.0000 | 0.00 / 56.98 | 0.00 / 16.35 |
-| entry_band_left | 23 | 13.2% | 10 | 534.5 | 666.5 | 22.7% | 25.8175 | 16.7759 | 0.0000 | 76.27 / 0.00 | 31.05 / 0.00 |
-| spend_cap_reached | 1 | 0.6% | 1 | 0.0 | 30.0 | 1.0% | 2.4957 | 2.4957 | 0.0000 | 0.00 / 0.00 | 0.00 / 0.00 |
-| complete_without_residual | 1 | 0.6% | 1 | 0.0 | 30.0 | 1.0% | 2.4990 | 2.4990 | 0.0000 | 0.00 / 0.00 | 0.00 / 0.00 |
+| unmatched_usd_cap | 62 | 28.6% | 21 | 738.4 | 1116.4 | 26.1% | 134.7185 | 44.8006 | 137.0187 | 319.87 / 0.00 | 108.44 / 0.00 |
+| off_distribution_hold | 24 | 11.1% | 1 | 305.1 | 315.1 | 7.4% | 59.9495 | 2.4966 | 0.0000 | 116.47 / 0.00 | 4.38 / 0.00 |
+| complement_not_priceable | 21 | 9.7% | 6 | 47.5 | 59.5 | 1.4% | 52.3397 | 14.9550 | 0.0000 | 0.00 / 56.98 | 0.00 / 16.35 |
+| entry_band_left | 44 | 20.3% | 17 | 1182.3 | 1524.3 | 35.7% | 34.8087 | 19.8248 | 0.0000 | 153.44 / 0.00 | 56.82 / 0.00 |
+| spend_cap_reached | 1 | 0.5% | 1 | 0.0 | 30.0 | 0.7% | 2.4957 | 2.4957 | 0.0000 | 0.00 / 0.00 | 0.00 / 0.00 |
+| complete_without_residual | 1 | 0.5% | 1 | 0.0 | 30.0 | 0.7% | 2.4990 | 2.4990 | 0.0000 | 0.00 / 0.00 | 0.00 / 0.00 |
 
 USD / contracts for a refusal are the planned safe size of the order it withheld. For `off_distribution_hold` L5 itself had no action (would_act = hold), so that row is a venue-side hold, not a suppressed L5 intention; `complement_not_priceable` and `entry_band_left` are price/band refusals of an L5 action, also not the dollar cap.
 
-Cap vs L5 EXTEND: sampled 54/80 (67.5%); v2_recommended 54/99 (54.5%).
+Cap vs L5 EXTEND: sampled 62/109 (56.9%); v2_recommended 62/142 (43.7%).
 
 ## Campaign: counterfactual settlement economics of the cap refusals (settled markets only)
 
-Settled: aec-atpcq-aleher-tundur-2026-09-07, aec-atpcq-norgom-ollwal-2026-09-07; PENDING: aec-atp-petbru-alecan-2026-09-07
+Settled: aec-atp-petbru-alecan-2026-09-07, aec-atpcq-aleher-tundur-2026-09-07, aec-atpcq-norgom-ollwal-2026-09-07; PENDING: none
 
 | reading | orders | held to venue settlement (USD) | held if the opposite side had paid (USD) | paired at later L5 touch (USD) |
 |---|---|---|---|---|
-| all_refusals_fill | 44 | -62.5205 | 82.7595 | 10.0029 |
-| first_of_each_run_fills | 15 | -21.2231 | 29.1269 | 3.6831 |
+| all_refusals_fill | 62 | -90.7785 | 141.2115 | 11.6480 |
+| first_of_each_run_fills | 21 | -29.7706 | 48.6094 | 4.4149 |
 
 Paying side UNCONFIRMED (read from the venue's public settlement price, no position-resolution row): aec-atpcq-norgom-ollwal-2026-09-07
 
-Realized (venue): {'aec-atpcq-aleher-tundur-2026-09-07': '1.9955'} -> sum 1.9955
+Realized (venue): {'aec-atp-petbru-alecan-2026-09-07': '-1.9912', 'aec-atpcq-aleher-tundur-2026-09-07': '1.9955'} -> sum 0.0043
 
 ## aec-atp-petbru-alecan-2026-09-07
 
-- decisions 30 idx [0, 62]; missing from dumps: [[12, 44]] (33)
-- outcomes {'hold:entry_band_left': 15, 'hold:unmatched_usd_cap': 10, 'acted:complete': 4, 'acted:open': 1}
-- faithful share: sampled relation executed 0.1667, v2 executed 0.0333
-- live: 17 sessions, active 900.6s, wall 2606.3s (2026-09-07T17:42:56.527116Z -> 2026-09-07T18:26:22.781202Z)
-- orders 5 submitted / 1 filled: open YES 5.24@0.38
+- decisions 73 idx [0, 72]; missing from dumps: none (0)
+- outcomes {'hold:entry_band_left': 36, 'hold:unmatched_usd_cap': 18, 'acted:complete': 18, 'acted:open': 1}
+- faithful share: sampled relation executed 0.2603, v2 executed 0.0137
+- live: 40 sessions, active 2228.6s, wall 3057.5s (2026-09-07T17:42:56.527116Z -> 2026-09-07T18:33:54.074610Z)
+- orders 19 submitted / 1 filled: open YES 5.24@0.38
 - final ledger inventory: {'up': '5.24', 'dn': '0', 'matched': '0', 'residual': '5.24', 'avg_up': '0.38', 'avg_dn': None, 'spent': '1.9912', 'unmatched_usd': '1.9912'}
-- settlement: PENDING; status None; paying side None (PENDING); venue realized None
+- settlement: settled; status REALIZED; paying side NO (derived: venue realized_usd reproduced by ledger payout NO x 1.00 - cost_basis); venue realized -1.9912
 
 ### L5 sampled x outcome
 
 | L5 sampled | acted:complete | acted:open | hold:entry_band_left | hold:unmatched_usd_cap | n |
 |---|---|---|---|---|---|
-| complete | 4 | 0 | 0 | 0 | 4 |
-| extend | 0 | 0 | 15 | 10 | 25 |
+| complete | 18 | 0 | 0 | 0 | 18 |
+| extend | 0 | 0 | 36 | 18 | 54 |
 | open | 0 | 1 | 0 | 0 | 1 |
 
 ### L5 v2_recommended x outcome
 
 | L5 v2 | acted:complete | acted:open | hold:entry_band_left | hold:unmatched_usd_cap | n |
 |---|---|---|---|---|---|
-| extend | 4 | 0 | 15 | 10 | 29 |
+| extend | 18 | 0 | 36 | 18 | 72 |
 | open | 0 | 1 | 0 | 0 | 1 |
 
 ### unmatched_usd_cap overrides
 
-- 10 refusals (33.3% of decisions), all L5 {'extend': 10}; sampled extends suppressed 10/25, v2 extends 10/29
-- unmatched USD at refusal: before 1.9912-1.9912, after-if-filled 3.7412-3.9824 vs cap 2.50
-- dollars refused: 18.2131 USD (qty x px, all) / 3.7412 (1 per run); unmatched increment 18.2131 (all) / 3.7412 (1 per run)
-- inventory not built: YES 50.70 / NO 0.00 (all); YES 10.24 / NO 0.00 (1 per run)
-- time: 2 runs (lengths [6, 4]), strict 241.9s, inclusive 301.9s = 33.5% of active session time
+- 18 refusals (24.7% of decisions), all L5 {'extend': 18}; sampled extends suppressed 18/54, v2 extends 18/72
+- unmatched USD at refusal: before 1.9912-1.9912, after-if-filled 2.8543-3.9824 vs cap 2.50
+- dollars refused: 28.2580 USD (qty x px, all) / 8.5475 (1 per run); unmatched increment 28.2580 (all) / 8.5475 (1 per run)
+- inventory not built: YES 86.71 / NO 0.00 (all); YES 28.03 / NO 0.00 (1 per run)
+- time: 6 runs (lengths [6, 4, 3, 1, 1, 3]), strict 383.6s, inclusive 563.6s = 25.3% of active session time
 
 | run idx | first | last | strict s | inclusive s |
 |---|---|---|---|---|
 | 1-6 | 17:43:10 | 17:45:41 | 151.7 | 181.7 |
 | 8-11 | 17:46:43 | 17:48:13 | 90.2 | 120.2 |
+| 13-15 | 17:51:17 | 17:52:17 | 60.1 | 90.1 |
+| 29-29 | 18:05:45 | 18:05:45 | 0.0 | 30.0 |
+| 31-31 | 18:06:48 | 18:06:48 | 0.0 | 30.0 |
+| 33-35 | 18:07:50 | 18:09:12 | 81.6 | 111.6 |
 
-Counterfactual settlement economics: **PENDING**
-market still open; the pair-completion branch is outcome-independent but is withheld with the settlement branch until the venue settles
+Counterfactual settlement economics: **COUNTERFACTUAL**
+paying side NO; all refusals fill: held -28.2580 USD (opposite side paid: 58.4520), paired at later touch 1.6451 USD (18/18 rows had a later touch); first of each run fills: held -8.5475 USD (opposite: 19.4825), paired 0.7318 USD
+
+| idx | side | qty | px | held to settlement | later touch (idx) | pair | paired P&L |
+|---|---|---|---|---|---|---|---|
+| 1 | YES | 5.24 | 0.38 | -1.9912 | 0.64 (7) | 1.0200 | -0.1048 |
+| 2 | YES | 5.24 | 0.38 | -1.9912 | 0.64 (7) | 1.0200 | -0.1048 |
+| 3 | YES | 5.15 | 0.37 | -1.9055 | 0.64 (7) | 1.0100 | -0.0515 |
+| 4 | YES | 5.07 | 0.36 | -1.8252 | 0.64 (7) | 1.0000 | 0.0000 |
+| 5 | YES | 5.00 | 0.35 | -1.7500 | 0.64 (7) | 0.9900 | 0.0500 |
+| 6 | YES | 5.00 | 0.35 | -1.7500 | 0.64 (7) | 0.9900 | 0.0500 |
+| 8 | YES | 5.00 | 0.35 | -1.7500 | 0.64 (12) | 0.9900 | 0.0500 |
+| 9 | YES | 5.00 | 0.35 | -1.7500 | 0.64 (12) | 0.9900 | 0.0500 |
+| 10 | YES | 5.00 | 0.35 | -1.7500 | 0.64 (12) | 0.9900 | 0.0500 |
+| 11 | YES | 5.00 | 0.35 | -1.7500 | 0.64 (12) | 0.9900 | 0.0500 |
+| 13 | YES | 4.77 | 0.32 | -1.5264 | 0.61 (16) | 0.9300 | 0.3339 |
+| 14 | YES | 4.57 | 0.29 | -1.3253 | 0.61 (16) | 0.9000 | 0.4570 |
+| 15 | YES | 4.92 | 0.34 | -1.6728 | 0.61 (16) | 0.9500 | 0.2460 |
+| 29 | YES | 4.27 | 0.24 | -1.0248 | 0.69 (30) | 0.9300 | 0.2989 |
+| 31 | YES | 4.64 | 0.30 | -1.3920 | 0.72 (32) | 1.0200 | -0.0928 |
+| 33 | YES | 4.11 | 0.21 | -0.8631 | 0.73 (36) | 0.9400 | 0.2466 |
+| 34 | YES | 4.57 | 0.29 | -1.3253 | 0.73 (36) | 1.0200 | -0.0914 |
+| 35 | YES | 4.16 | 0.22 | -0.9152 | 0.73 (36) | 0.9500 | 0.2080 |
 
 ### other refusals
 
 | refusal | decisions | share | runs | strict s | inclusive s | share of live time | USD withheld (all) | YES / NO (all) | L5 sampled at refusal |
 |---|---|---|---|---|---|---|---|---|---|
-| entry_band_left | 15 | 50.0% | 4 | 482.1 | 602.1 | 66.9% | 5.8790 | 54.58 / 0.00 | {'extend': 15} |
+| entry_band_left | 36 | 49.3% | 11 | 1129.9 | 1459.9 | 65.5% | 14.8702 | 131.75 / 0.00 | {'extend': 36} |
 
 ## aec-atpcq-aleher-tundur-2026-09-07
 
@@ -260,7 +285,7 @@ paying side NO (UNCONFIRMED); all refusals fill: held -83.9877 USD (opposite sid
 
 ## Inputs and limitations
 
-- files read: 21; campaign rows 211, parsed 211, truncated (json failed, regex-scanned, not merged) 0
-- coverage gaps: aec-atp-petbru-alecan-2026-09-07: [[12, 44]]; aec-atpcq-aleher-tundur-2026-09-07: none; aec-atpcq-norgom-ollwal-2026-09-07: none
+- files read: 23; campaign rows 316, parsed 316, truncated (json failed, regex-scanned, not merged) 0
+- coverage gaps: aec-atp-petbru-alecan-2026-09-07: none; aec-atpcq-aleher-tundur-2026-09-07: none; aec-atpcq-norgom-ollwal-2026-09-07: none
 - refused orders are reconstructed from planned_safe_size (px = usd / contracts) and the residual side; consecutive refusals re-attempt one L5 intention, hence the two fill readings
 - nothing here changes the engine; realized money is the venue's number only

@@ -29,52 +29,53 @@
    "mcp-Railway-get-logs-1788783446524.txt",
    "mcp-Railway-get-logs-1788803387320.txt",
    "mcp-Railway-get-logs-1788805705137.txt",
+   "mcp-Railway-get-logs-1788807132169.txt",
+   "mcp-Railway-get-logs-1788807133580.txt",
    "supplement_market1_settlement.json",
    "supplement_selection_samples.json"
   ],
   "coverage": {
-   "files": 21,
+   "files": 23,
    "files_unreadable": [],
-   "campaign_rows": 211,
-   "parsed_rows": 211,
+   "campaign_rows": 316,
+   "parsed_rows": 316,
    "truncated_rows": 0,
    "truncated": [],
    "kinds": {
-    "session_end": 64,
+    "session_end": 112,
+    "fidelity_verdict": 49,
     "funnel": 39,
     "resume_start": 38,
     "selection": 38,
+    "settlement": 12,
     "fidelity_gate": 7,
-    "fidelity_verdict": 6,
-    "incentive_audit": 5,
+    "incentive_audit": 6,
     "selection_sample": 4,
-    "settlement": 3,
     "campaign_state_restored": 2,
     "resume_wait": 2,
     "orphan_sweep": 1,
     "campaign_start": 1,
-    "ramp_ladder": 1
+    "ramp_ladder": 1,
+    "session_start": 1,
+    "REALIZED": 1,
+    "advance_gate": 1,
+    "ramp_evaluation": 1
    }
   },
-  "decisions_deduped": 174,
-  "orders_deduped": 50,
-  "sessions": 46,
+  "decisions_deduped": 217,
+  "orders_deduped": 64,
+  "sessions": 69,
   "markets_with_no_r4_decisions_skipped": "session_end rows whose decisions carry no R4 shell label are dropped by the harvester",
   "per_market_coverage": {
    "aec-atp-petbru-alecan-2026-09-07": {
-    "present": 30,
+    "present": 73,
     "range": [
      0,
-     62
+     72
     ],
-    "missing_ranges": [
-     [
-      12,
-      44
-     ]
-    ],
-    "missing_n": 33,
-    "note": "decision indices absent from every dump read: log coverage gap, not a parsing failure"
+    "missing_ranges": [],
+    "missing_n": 0,
+    "note": null
    },
    "aec-atpcq-aleher-tundur-2026-09-07": {
     "present": 79,
@@ -104,15 +105,16 @@
   "aec-atpcq-norgom-ollwal-2026-09-07"
  ],
  "markets_settled": [
+  "aec-atp-petbru-alecan-2026-09-07",
   "aec-atpcq-aleher-tundur-2026-09-07",
   "aec-atpcq-norgom-ollwal-2026-09-07"
  ],
- "decisions": 174,
+ "decisions": 217,
  "outcomes": {
-  "hold:unmatched_usd_cap": 54,
-  "acted:complete": 36,
+  "hold:unmatched_usd_cap": 62,
+  "acted:complete": 50,
+  "hold:entry_band_left": 44,
   "hold:off_distribution_hold": 24,
-  "hold:entry_band_left": 23,
   "hold:complement_not_priceable": 21,
   "acted:open": 13,
   "hold:complete_without_residual": 1,
@@ -122,16 +124,16 @@
  "confusion_sampled_x_outcome": {
   "rows": {
    "complete": {
-    "acted:complete": 35,
+    "acted:complete": 49,
     "hold:complement_not_priceable": 21,
     "hold:complete_without_residual": 1
    },
    "extend": {
     "acted:complete": 1,
     "acted:extend": 1,
-    "hold:entry_band_left": 23,
+    "hold:entry_band_left": 44,
     "hold:off_distribution_hold": 1,
-    "hold:unmatched_usd_cap": 54
+    "hold:unmatched_usd_cap": 62
    },
    "open": {
     "acted:open": 13,
@@ -150,7 +152,7 @@
    "hold:spend_cap_reached",
    "hold:unmatched_usd_cap"
   ],
-  "n": 174
+  "n": 217
  },
  "confusion_v2_recommended_x_outcome": {
   "rows": {
@@ -161,10 +163,10 @@
     "hold:entry_band_left": 8
    },
    "extend": {
-    "acted:complete": 29,
+    "acted:complete": 43,
     "acted:extend": 1,
-    "hold:entry_band_left": 15,
-    "hold:unmatched_usd_cap": 54
+    "hold:entry_band_left": 36,
+    "hold:unmatched_usd_cap": 62
    },
    "open": {
     "acted:open": 13,
@@ -183,83 +185,82 @@
    "hold:spend_cap_reached",
    "hold:unmatched_usd_cap"
   ],
-  "n": 174
+  "n": 217
  },
  "cap": {
-  "decisions": 54,
-  "share_of_decisions": 0.3103,
-  "runs": 17,
+  "decisions": 62,
+  "share_of_decisions": 0.2857,
+  "runs": 21,
   "time": {
-   "strict_s": 596.7,
-   "inclusive_s": 854.7,
-   "share_of_active_session_time_inclusive": 0.2904
+   "strict_s": 738.4,
+   "inclusive_s": 1116.4,
+   "share_of_active_session_time_inclusive": 0.2614
   },
   "dollars_and_inventory": {
    "all_refusals_fill": {
-    "orders": 54,
-    "usd_qty_x_px": "124.6736",
-    "unmatched_increment_usd": "126.9738",
+    "orders": 62,
+    "usd_qty_x_px": "134.7185",
+    "unmatched_increment_usd": "137.0187",
     "contracts_by_side": {
-     "YES": "283.86",
+     "YES": "319.87",
      "NO": "0.00"
     }
    },
    "first_of_each_run_fills": {
-    "orders": 17,
-    "usd_qty_x_px": "39.9943",
-    "unmatched_increment_usd": "40.9337",
+    "orders": 21,
+    "usd_qty_x_px": "44.8006",
+    "unmatched_increment_usd": "45.7400",
     "contracts_by_side": {
-     "YES": "90.65",
+     "YES": "108.44",
      "NO": "0.00"
     }
    }
   },
   "share_of_l5_extend_decisions_suppressed": {
    "sampled_extend": {
-    "n_extend": 80,
-    "suppressed": 54,
-    "share": 0.675
+    "n_extend": 109,
+    "suppressed": 62,
+    "share": 0.5688
    },
    "v2_recommended_extend": {
-    "n_extend": 99,
-    "suppressed": 54,
-    "share": 0.5455
+    "n_extend": 142,
+    "suppressed": 62,
+    "share": 0.4366
    }
   },
   "counterfactual": {
    "settled_markets": [
+    "aec-atp-petbru-alecan-2026-09-07",
     "aec-atpcq-aleher-tundur-2026-09-07",
     "aec-atpcq-norgom-ollwal-2026-09-07"
    ],
-   "pending_markets": [
-    "aec-atp-petbru-alecan-2026-09-07"
-   ],
+   "pending_markets": [],
    "paying_side_unconfirmed_markets": [
     "aec-atpcq-norgom-ollwal-2026-09-07"
    ],
    "all_refusals_fill": {
-    "orders": 44,
-    "held_to_settlement_pnl_usd": "-62.5205",
-    "held_if_opposite_side_paid_usd": "82.7595",
-    "paired_at_later_touch_pnl_usd": "10.0029"
+    "orders": 62,
+    "held_to_settlement_pnl_usd": "-90.7785",
+    "held_if_opposite_side_paid_usd": "141.2115",
+    "paired_at_later_touch_pnl_usd": "11.6480"
    },
    "first_of_each_run_fills": {
-    "orders": 15,
-    "held_to_settlement_pnl_usd": "-21.2231",
-    "held_if_opposite_side_paid_usd": "29.1269",
-    "paired_at_later_touch_pnl_usd": "3.6831"
+    "orders": 21,
+    "held_to_settlement_pnl_usd": "-29.7706",
+    "held_if_opposite_side_paid_usd": "48.6094",
+    "paired_at_later_touch_pnl_usd": "4.4149"
    }
   }
  },
  "other_refusals": {
   "off_distribution_hold": {
    "decisions": 24,
-   "share_of_decisions": 0.1379,
+   "share_of_decisions": 0.1106,
    "runs": 1,
    "time": {
     "strict_s": 305.1,
     "inclusive_s": 315.1,
-    "share_of_active_session_time_inclusive": 0.1071
+    "share_of_active_session_time_inclusive": 0.0738
    },
    "dollars_and_inventory": {
     "all_refusals_fill": {
@@ -284,12 +285,12 @@
   },
   "complement_not_priceable": {
    "decisions": 21,
-   "share_of_decisions": 0.1207,
+   "share_of_decisions": 0.0968,
    "runs": 6,
    "time": {
     "strict_s": 47.5,
     "inclusive_s": 59.5,
-    "share_of_active_session_time_inclusive": 0.0202
+    "share_of_active_session_time_inclusive": 0.0139
    },
    "dollars_and_inventory": {
     "all_refusals_fill": {
@@ -313,30 +314,30 @@
    }
   },
   "entry_band_left": {
-   "decisions": 23,
-   "share_of_decisions": 0.1322,
-   "runs": 10,
+   "decisions": 44,
+   "share_of_decisions": 0.2028,
+   "runs": 17,
    "time": {
-    "strict_s": 534.5,
-    "inclusive_s": 666.5,
-    "share_of_active_session_time_inclusive": 0.2265
+    "strict_s": 1182.3,
+    "inclusive_s": 1524.3,
+    "share_of_active_session_time_inclusive": 0.3569
    },
    "dollars_and_inventory": {
     "all_refusals_fill": {
-     "orders": 23,
-     "usd_qty_x_px": "25.8175",
+     "orders": 44,
+     "usd_qty_x_px": "34.8087",
      "unmatched_increment_usd": "0.0000",
      "contracts_by_side": {
-      "YES": "76.27",
+      "YES": "153.44",
       "NO": "0.00"
      }
     },
     "first_of_each_run_fills": {
-     "orders": 10,
-     "usd_qty_x_px": "16.7759",
+     "orders": 17,
+     "usd_qty_x_px": "19.8248",
      "unmatched_increment_usd": "0.0000",
      "contracts_by_side": {
-      "YES": "31.05",
+      "YES": "56.82",
       "NO": "0.00"
      }
     }
@@ -344,12 +345,12 @@
   },
   "spend_cap_reached": {
    "decisions": 1,
-   "share_of_decisions": 0.0057,
+   "share_of_decisions": 0.0046,
    "runs": 1,
    "time": {
     "strict_s": 0.0,
     "inclusive_s": 30.0,
-    "share_of_active_session_time_inclusive": 0.0102
+    "share_of_active_session_time_inclusive": 0.007
    },
    "dollars_and_inventory": {
     "all_refusals_fill": {
@@ -374,12 +375,12 @@
   },
   "complete_without_residual": {
    "decisions": 1,
-   "share_of_decisions": 0.0057,
+   "share_of_decisions": 0.0046,
    "runs": 1,
    "time": {
     "strict_s": 0.0,
     "inclusive_s": 30.0,
-    "share_of_active_session_time_inclusive": 0.0102
+    "share_of_active_session_time_inclusive": 0.007
    },
    "dollars_and_inventory": {
     "all_refusals_fill": {
@@ -403,49 +404,45 @@
    }
   }
  },
- "active_session_time_s": 2942.7,
+ "active_session_time_s": 4270.7,
  "realized_usd_venue": {
+  "aec-atp-petbru-alecan-2026-09-07": "-1.9912",
   "aec-atpcq-aleher-tundur-2026-09-07": "1.9955"
  },
- "realized_usd_venue_sum": "1.9955",
+ "realized_usd_venue_sum": "0.0043",
  "per_market": {
   "aec-atp-petbru-alecan-2026-09-07": {
    "slug": "aec-atp-petbru-alecan-2026-09-07",
    "coverage": {
-    "present": 30,
+    "present": 73,
     "range": [
      0,
-     62
+     72
     ],
-    "missing_ranges": [
-     [
-      12,
-      44
-     ]
-    ],
-    "missing_n": 33,
-    "note": "decision indices absent from every dump read: log coverage gap, not a parsing failure"
+    "missing_ranges": [],
+    "missing_n": 0,
+    "note": null
    },
-   "decisions": 30,
+   "decisions": 73,
    "acted": {
-    "hold": 25,
-    "complete": 4,
+    "hold": 54,
+    "complete": 18,
     "open": 1
    },
    "outcomes": {
-    "hold:entry_band_left": 15,
-    "hold:unmatched_usd_cap": 10,
-    "acted:complete": 4,
+    "hold:entry_band_left": 36,
+    "hold:unmatched_usd_cap": 18,
+    "acted:complete": 18,
     "acted:open": 1
    },
    "confusion_sampled_x_outcome": {
     "rows": {
      "complete": {
-      "acted:complete": 4
+      "acted:complete": 18
      },
      "extend": {
-      "hold:entry_band_left": 15,
-      "hold:unmatched_usd_cap": 10
+      "hold:entry_band_left": 36,
+      "hold:unmatched_usd_cap": 18
      },
      "open": {
       "acted:open": 1
@@ -457,14 +454,14 @@
      "hold:entry_band_left",
      "hold:unmatched_usd_cap"
     ],
-    "n": 30
+    "n": 73
    },
    "confusion_v2_recommended_x_outcome": {
     "rows": {
      "extend": {
-      "acted:complete": 4,
-      "hold:entry_band_left": 15,
-      "hold:unmatched_usd_cap": 10
+      "acted:complete": 18,
+      "hold:entry_band_left": 36,
+      "hold:unmatched_usd_cap": 18
      },
      "open": {
       "acted:open": 1
@@ -476,16 +473,16 @@
      "hold:entry_band_left",
      "hold:unmatched_usd_cap"
     ],
-    "n": 30
+    "n": 73
    },
    "confusion_would_act_x_outcome": {
     "rows": {
      "complete": {
-      "acted:complete": 4
+      "acted:complete": 18
      },
      "extend": {
-      "hold:entry_band_left": 15,
-      "hold:unmatched_usd_cap": 10
+      "hold:entry_band_left": 36,
+      "hold:unmatched_usd_cap": 18
      },
      "open": {
       "acted:open": 1
@@ -497,22 +494,22 @@
      "hold:entry_band_left",
      "hold:unmatched_usd_cap"
     ],
-    "n": 30
+    "n": 73
    },
    "faithful_share": {
-    "sampled_relation_executed": 0.1667,
-    "v2_relation_executed": 0.0333,
+    "sampled_relation_executed": 0.2603,
+    "v2_relation_executed": 0.0137,
     "note": "share of decisions where the executed relation equals L5's; a hold never counts"
    },
    "session_time": {
-    "sessions": 17,
-    "active_s": 900.6,
-    "wall_s": 2606.3,
+    "sessions": 40,
+    "active_s": 2228.6,
+    "wall_s": 3057.5,
     "first_decision_utc": "2026-09-07T17:42:56.527116Z",
-    "last_session_end_utc": "2026-09-07T18:26:22.781202Z"
+    "last_session_end_utc": "2026-09-07T18:33:54.074610Z"
    },
    "orders": {
-    "submitted": 5,
+    "submitted": 19,
     "filled": 1,
     "fills": [
      {
@@ -535,37 +532,53 @@
     "unmatched_usd": "1.9912"
    },
    "settlement": {
-    "side": null,
-    "basis": "PENDING",
-    "settled": false,
-    "status": null,
-    "settled_by": null,
-    "derived_breakdown": null
+    "side": "NO",
+    "basis": "derived: venue realized_usd reproduced by ledger payout NO x 1.00 - cost_basis",
+    "settled": true,
+    "realized_usd_venue": "-1.9912",
+    "resolution_side_field": "POSITION_RESOLUTION_SIDE_SHORT",
+    "status": "REALIZED",
+    "settled_by": "position_resolution_activity",
+    "derived_breakdown": {
+     "bought_yes": "5.24",
+     "bought_no": "0",
+     "matched_pairs": "0",
+     "matched_pair_cost": null,
+     "matched_contribution_usd": "0",
+     "directional_residual": "5.24",
+     "residual_contribution_usd": "-1.9912",
+     "cost_basis_usd": "1.9912",
+     "fees_usd": "venue_unreported"
+    }
    },
    "refusals": {
     "unmatched_usd_cap": {
-     "decisions": 10,
-     "share_of_decisions": 0.3333,
+     "decisions": 18,
+     "share_of_decisions": 0.2466,
      "l5_relation_at_refusal": {
       "sampled": {
-       "extend": 10
+       "extend": 18
       },
       "v2_recommended": {
-       "extend": 10
+       "extend": 18
       },
       "would_act_without_safety_cap": {
-       "extend": 10
+       "extend": 18
       }
      },
-     "runs": 2,
+     "runs": 6,
      "run_lengths": [
       6,
-      4
+      4,
+      3,
+      1,
+      1,
+      3
      ],
      "time": {
-      "strict_s": 241.9,
-      "inclusive_s": 301.9,
-      "share_of_active_session_time_inclusive": 0.3352,
+      "strict_s": 383.6,
+      "inclusive_s": 563.6,
+      "share_of_active_session_time_inclusive": 0.2529,
       "per_run": [
        {
         "decision_idx": [
@@ -586,52 +599,438 @@
         "t_last": "2026-09-07T17:48:13.605484+00:00",
         "strict_s": 90.2,
         "inclusive_s": 120.2
+       },
+       {
+        "decision_idx": [
+         13,
+         15
+        ],
+        "t_first": "2026-09-07T17:51:17.710725+00:00",
+        "t_last": "2026-09-07T17:52:17.840544+00:00",
+        "strict_s": 60.1,
+        "inclusive_s": 90.1
+       },
+       {
+        "decision_idx": [
+         29,
+         29
+        ],
+        "t_first": "2026-09-07T18:05:45.873669+00:00",
+        "t_last": "2026-09-07T18:05:45.873669+00:00",
+        "strict_s": 0.0,
+        "inclusive_s": 30.0
+       },
+       {
+        "decision_idx": [
+         31,
+         31
+        ],
+        "t_first": "2026-09-07T18:06:48.432011+00:00",
+        "t_last": "2026-09-07T18:06:48.432011+00:00",
+        "strict_s": 0.0,
+        "inclusive_s": 30.0
+       },
+       {
+        "decision_idx": [
+         33,
+         35
+        ],
+        "t_first": "2026-09-07T18:07:50.546630+00:00",
+        "t_last": "2026-09-07T18:09:12.170221+00:00",
+        "strict_s": 81.6,
+        "inclusive_s": 111.6
        }
       ]
      },
      "dollars_and_inventory": {
       "all_refusals_fill": {
-       "orders": 10,
-       "usd_qty_x_px": "18.2131",
-       "unmatched_increment_usd": "18.2131",
+       "orders": 18,
+       "usd_qty_x_px": "28.2580",
+       "unmatched_increment_usd": "28.2580",
        "contracts_by_side": {
-        "YES": "50.70",
+        "YES": "86.71",
         "NO": "0.00"
        }
       },
       "first_of_each_run_fills": {
-       "orders": 2,
-       "usd_qty_x_px": "3.7412",
-       "unmatched_increment_usd": "3.7412",
+       "orders": 6,
+       "usd_qty_x_px": "8.5475",
+       "unmatched_increment_usd": "8.5475",
        "contracts_by_side": {
-        "YES": "10.24",
+        "YES": "28.03",
         "NO": "0.00"
        }
       }
      },
      "share_of_l5_extend_decisions_suppressed": {
       "sampled_extend": {
-       "n_extend": 25,
-       "suppressed": 10,
-       "share": 0.4
+       "n_extend": 54,
+       "suppressed": 18,
+       "share": 0.3333
       },
       "v2_recommended_extend": {
-       "n_extend": 29,
-       "suppressed": 10,
-       "share": 0.3448
+       "n_extend": 72,
+       "suppressed": 18,
+       "share": 0.25
       }
      },
      "unmatched_usd_at_refusal": {
       "before_min": "1.9912",
       "before_max": "1.9912",
-      "after_if_filled_min": "3.7412",
+      "after_if_filled_min": "2.8543",
       "after_if_filled_max": "3.9824",
       "cap": "2.50"
      },
      "counterfactual": {
-      "status": "PENDING",
-      "label": "market not settled; settlement counterfactual withheld",
-      "note": "market still open; the pair-completion branch is outcome-independent but is withheld with the settlement branch until the venue settles"
+      "status": "COUNTERFACTUAL",
+      "label": "did not happen: a refused order treated as filled at its own maker price and (i) held to the venue's actual settlement or (ii) paired at the complement touch L5 later saw; queue position, depth and the $7.50 spend cap are NOT modelled; never inferred from a mark",
+      "paying_side": "NO",
+      "paying_side_basis": "derived: venue realized_usd reproduced by ledger payout NO x 1.00 - cost_basis",
+      "paying_side_unconfirmed": false,
+      "assumptions": {
+       "held_to_settlement": "each refused order fills in full at its own maker price (usd / contracts of planned_safe_size) and is held to settlement; the paying side is the one derived from the venue rows; no fees (venue_unreported)",
+       "paired_at_later_touch": "the refused extend fills as above and is then completed in full at the complement touch price recorded in the next later counterfactual_l5_price row (L5's touch, not the engine's fee-safe bound); outcome-independent"
+      },
+      "all_refusals_fill": {
+       "orders": 18,
+       "held_to_settlement_pnl_usd": "-28.2580",
+       "held_if_opposite_side_paid_usd": "58.4520",
+       "paired_at_later_touch_pnl_usd": "1.6451",
+       "paired_rows_with_a_later_touch": 18
+      },
+      "first_of_each_run_fills": {
+       "orders": 6,
+       "held_to_settlement_pnl_usd": "-8.5475",
+       "held_if_opposite_side_paid_usd": "19.4825",
+       "paired_at_later_touch_pnl_usd": "0.7318",
+       "paired_rows_with_a_later_touch": 6
+      },
+      "rows": [
+       {
+        "decision_idx": 1,
+        "side": "YES",
+        "qty": "5.24",
+        "px": "0.38",
+        "held_to_settlement_pnl_usd": "-1.9912",
+        "held_if_opposite_side_paid_usd": "3.2488",
+        "later_complement_touch": {
+         "decision_idx": 7,
+         "t_utc": "2026-09-07T17:46:11.940866+00:00",
+         "l5_touch_px": "0.64",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "1.0200",
+        "paired_at_later_touch_pnl_usd": "-0.1048"
+       },
+       {
+        "decision_idx": 2,
+        "side": "YES",
+        "qty": "5.24",
+        "px": "0.38",
+        "held_to_settlement_pnl_usd": "-1.9912",
+        "held_if_opposite_side_paid_usd": "3.2488",
+        "later_complement_touch": {
+         "decision_idx": 7,
+         "t_utc": "2026-09-07T17:46:11.940866+00:00",
+         "l5_touch_px": "0.64",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "1.0200",
+        "paired_at_later_touch_pnl_usd": "-0.1048"
+       },
+       {
+        "decision_idx": 3,
+        "side": "YES",
+        "qty": "5.15",
+        "px": "0.37",
+        "held_to_settlement_pnl_usd": "-1.9055",
+        "held_if_opposite_side_paid_usd": "3.2445",
+        "later_complement_touch": {
+         "decision_idx": 7,
+         "t_utc": "2026-09-07T17:46:11.940866+00:00",
+         "l5_touch_px": "0.64",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "1.0100",
+        "paired_at_later_touch_pnl_usd": "-0.0515"
+       },
+       {
+        "decision_idx": 4,
+        "side": "YES",
+        "qty": "5.07",
+        "px": "0.36",
+        "held_to_settlement_pnl_usd": "-1.8252",
+        "held_if_opposite_side_paid_usd": "3.2448",
+        "later_complement_touch": {
+         "decision_idx": 7,
+         "t_utc": "2026-09-07T17:46:11.940866+00:00",
+         "l5_touch_px": "0.64",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "1.0000",
+        "paired_at_later_touch_pnl_usd": "0.0000"
+       },
+       {
+        "decision_idx": 5,
+        "side": "YES",
+        "qty": "5.00",
+        "px": "0.35",
+        "held_to_settlement_pnl_usd": "-1.7500",
+        "held_if_opposite_side_paid_usd": "3.2500",
+        "later_complement_touch": {
+         "decision_idx": 7,
+         "t_utc": "2026-09-07T17:46:11.940866+00:00",
+         "l5_touch_px": "0.64",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "0.9900",
+        "paired_at_later_touch_pnl_usd": "0.0500"
+       },
+       {
+        "decision_idx": 6,
+        "side": "YES",
+        "qty": "5.00",
+        "px": "0.35",
+        "held_to_settlement_pnl_usd": "-1.7500",
+        "held_if_opposite_side_paid_usd": "3.2500",
+        "later_complement_touch": {
+         "decision_idx": 7,
+         "t_utc": "2026-09-07T17:46:11.940866+00:00",
+         "l5_touch_px": "0.64",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "0.9900",
+        "paired_at_later_touch_pnl_usd": "0.0500"
+       },
+       {
+        "decision_idx": 8,
+        "side": "YES",
+        "qty": "5.00",
+        "px": "0.35",
+        "held_to_settlement_pnl_usd": "-1.7500",
+        "held_if_opposite_side_paid_usd": "3.2500",
+        "later_complement_touch": {
+         "decision_idx": 12,
+         "t_utc": "2026-09-07T17:50:45.766478+00:00",
+         "l5_touch_px": "0.64",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "0.9900",
+        "paired_at_later_touch_pnl_usd": "0.0500"
+       },
+       {
+        "decision_idx": 9,
+        "side": "YES",
+        "qty": "5.00",
+        "px": "0.35",
+        "held_to_settlement_pnl_usd": "-1.7500",
+        "held_if_opposite_side_paid_usd": "3.2500",
+        "later_complement_touch": {
+         "decision_idx": 12,
+         "t_utc": "2026-09-07T17:50:45.766478+00:00",
+         "l5_touch_px": "0.64",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "0.9900",
+        "paired_at_later_touch_pnl_usd": "0.0500"
+       },
+       {
+        "decision_idx": 10,
+        "side": "YES",
+        "qty": "5.00",
+        "px": "0.35",
+        "held_to_settlement_pnl_usd": "-1.7500",
+        "held_if_opposite_side_paid_usd": "3.2500",
+        "later_complement_touch": {
+         "decision_idx": 12,
+         "t_utc": "2026-09-07T17:50:45.766478+00:00",
+         "l5_touch_px": "0.64",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "0.9900",
+        "paired_at_later_touch_pnl_usd": "0.0500"
+       },
+       {
+        "decision_idx": 11,
+        "side": "YES",
+        "qty": "5.00",
+        "px": "0.35",
+        "held_to_settlement_pnl_usd": "-1.7500",
+        "held_if_opposite_side_paid_usd": "3.2500",
+        "later_complement_touch": {
+         "decision_idx": 12,
+         "t_utc": "2026-09-07T17:50:45.766478+00:00",
+         "l5_touch_px": "0.64",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "0.9900",
+        "paired_at_later_touch_pnl_usd": "0.0500"
+       },
+       {
+        "decision_idx": 13,
+        "side": "YES",
+        "qty": "4.77",
+        "px": "0.32",
+        "held_to_settlement_pnl_usd": "-1.5264",
+        "held_if_opposite_side_paid_usd": "3.2436",
+        "later_complement_touch": {
+         "decision_idx": 16,
+         "t_utc": "2026-09-07T17:52:47.923243+00:00",
+         "l5_touch_px": "0.61",
+         "executed_px": "0.61",
+         "acted": "complete",
+         "class": "no_difference"
+        },
+        "pair_at_later_touch": "0.9300",
+        "paired_at_later_touch_pnl_usd": "0.3339"
+       },
+       {
+        "decision_idx": 14,
+        "side": "YES",
+        "qty": "4.57",
+        "px": "0.29",
+        "held_to_settlement_pnl_usd": "-1.3253",
+        "held_if_opposite_side_paid_usd": "3.2447",
+        "later_complement_touch": {
+         "decision_idx": 16,
+         "t_utc": "2026-09-07T17:52:47.923243+00:00",
+         "l5_touch_px": "0.61",
+         "executed_px": "0.61",
+         "acted": "complete",
+         "class": "no_difference"
+        },
+        "pair_at_later_touch": "0.9000",
+        "paired_at_later_touch_pnl_usd": "0.4570"
+       },
+       {
+        "decision_idx": 15,
+        "side": "YES",
+        "qty": "4.92",
+        "px": "0.34",
+        "held_to_settlement_pnl_usd": "-1.6728",
+        "held_if_opposite_side_paid_usd": "3.2472",
+        "later_complement_touch": {
+         "decision_idx": 16,
+         "t_utc": "2026-09-07T17:52:47.923243+00:00",
+         "l5_touch_px": "0.61",
+         "executed_px": "0.61",
+         "acted": "complete",
+         "class": "no_difference"
+        },
+        "pair_at_later_touch": "0.9500",
+        "paired_at_later_touch_pnl_usd": "0.2460"
+       },
+       {
+        "decision_idx": 29,
+        "side": "YES",
+        "qty": "4.27",
+        "px": "0.24",
+        "held_to_settlement_pnl_usd": "-1.0248",
+        "held_if_opposite_side_paid_usd": "3.2452",
+        "later_complement_touch": {
+         "decision_idx": 30,
+         "t_utc": "2026-09-07T18:06:16.056794+00:00",
+         "l5_touch_px": "0.69",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "0.9300",
+        "paired_at_later_touch_pnl_usd": "0.2989"
+       },
+       {
+        "decision_idx": 31,
+        "side": "YES",
+        "qty": "4.64",
+        "px": "0.30",
+        "held_to_settlement_pnl_usd": "-1.3920",
+        "held_if_opposite_side_paid_usd": "3.2480",
+        "later_complement_touch": {
+         "decision_idx": 32,
+         "t_utc": "2026-09-07T18:07:18.511518+00:00",
+         "l5_touch_px": "0.72",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "1.0200",
+        "paired_at_later_touch_pnl_usd": "-0.0928"
+       },
+       {
+        "decision_idx": 33,
+        "side": "YES",
+        "qty": "4.11",
+        "px": "0.21",
+        "held_to_settlement_pnl_usd": "-0.8631",
+        "held_if_opposite_side_paid_usd": "3.2469",
+        "later_complement_touch": {
+         "decision_idx": 36,
+         "t_utc": "2026-09-07T18:09:42.241653+00:00",
+         "l5_touch_px": "0.73",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "0.9400",
+        "paired_at_later_touch_pnl_usd": "0.2466"
+       },
+       {
+        "decision_idx": 34,
+        "side": "YES",
+        "qty": "4.57",
+        "px": "0.29",
+        "held_to_settlement_pnl_usd": "-1.3253",
+        "held_if_opposite_side_paid_usd": "3.2447",
+        "later_complement_touch": {
+         "decision_idx": 36,
+         "t_utc": "2026-09-07T18:09:42.241653+00:00",
+         "l5_touch_px": "0.73",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "1.0200",
+        "paired_at_later_touch_pnl_usd": "-0.0914"
+       },
+       {
+        "decision_idx": 35,
+        "side": "YES",
+        "qty": "4.16",
+        "px": "0.22",
+        "held_to_settlement_pnl_usd": "-0.9152",
+        "held_if_opposite_side_paid_usd": "3.2448",
+        "later_complement_touch": {
+         "decision_idx": 36,
+         "t_utc": "2026-09-07T18:09:42.241653+00:00",
+         "l5_touch_px": "0.73",
+         "executed_px": "0.62",
+         "acted": "complete",
+         "class": "safety_override:fee_safe_complement_bound"
+        },
+        "pair_at_later_touch": "0.9500",
+        "paired_at_later_touch_pnl_usd": "0.2080"
+       }
+      ]
      },
      "refusals": [
       {
@@ -773,44 +1172,203 @@
        "unmatched_before": "1.9912",
        "unmatched_after_if_filled": "3.7412",
        "refusal": "unmatched_usd_cap:3.7412>2.50"
+      },
+      {
+       "decision_idx": 13,
+       "t_utc": "2026-09-07T17:51:17.710725+00:00",
+       "state": "p25-45c|tte>10m|imb10-50",
+       "sampled": "extend",
+       "v2_recommended": "extend",
+       "side": "YES",
+       "qty": "4.77",
+       "px": "0.32",
+       "usd": "1.5264",
+       "unmatched_before": "1.9912",
+       "unmatched_after_if_filled": "3.5176",
+       "refusal": "unmatched_usd_cap:3.5176>2.50"
+      },
+      {
+       "decision_idx": 14,
+       "t_utc": "2026-09-07T17:51:47.774956+00:00",
+       "state": "p25-45c|tte>10m|imb10-50",
+       "sampled": "extend",
+       "v2_recommended": "extend",
+       "side": "YES",
+       "qty": "4.57",
+       "px": "0.29",
+       "usd": "1.3253",
+       "unmatched_before": "1.9912",
+       "unmatched_after_if_filled": "3.3165",
+       "refusal": "unmatched_usd_cap:3.3165>2.50"
+      },
+      {
+       "decision_idx": 15,
+       "t_utc": "2026-09-07T17:52:17.840544+00:00",
+       "state": "p25-45c|tte>10m|imb10-50",
+       "sampled": "extend",
+       "v2_recommended": "extend",
+       "side": "YES",
+       "qty": "4.92",
+       "px": "0.34",
+       "usd": "1.6728",
+       "unmatched_before": "1.9912",
+       "unmatched_after_if_filled": "3.6640",
+       "refusal": "unmatched_usd_cap:3.6640>2.50"
+      },
+      {
+       "decision_idx": 29,
+       "t_utc": "2026-09-07T18:05:45.873669+00:00",
+       "state": "p25-45c|tte>10m|imb10-50",
+       "sampled": "extend",
+       "v2_recommended": "extend",
+       "side": "YES",
+       "qty": "4.27",
+       "px": "0.24",
+       "usd": "1.0248",
+       "unmatched_before": "1.9912",
+       "unmatched_after_if_filled": "3.0160",
+       "refusal": "unmatched_usd_cap:3.0160>2.50"
+      },
+      {
+       "decision_idx": 31,
+       "t_utc": "2026-09-07T18:06:48.432011+00:00",
+       "state": "p25-45c|tte>10m|imb10-50",
+       "sampled": "extend",
+       "v2_recommended": "extend",
+       "side": "YES",
+       "qty": "4.64",
+       "px": "0.30",
+       "usd": "1.3920",
+       "unmatched_before": "1.9912",
+       "unmatched_after_if_filled": "3.3832",
+       "refusal": "unmatched_usd_cap:3.3832>2.50"
+      },
+      {
+       "decision_idx": 33,
+       "t_utc": "2026-09-07T18:07:50.546630+00:00",
+       "state": "p25-45c|tte>10m|imb10-50",
+       "sampled": "extend",
+       "v2_recommended": "extend",
+       "side": "YES",
+       "qty": "4.11",
+       "px": "0.21",
+       "usd": "0.8631",
+       "unmatched_before": "1.9912",
+       "unmatched_after_if_filled": "2.8543",
+       "refusal": "unmatched_usd_cap:2.8543>2.50"
+      },
+      {
+       "decision_idx": 34,
+       "t_utc": "2026-09-07T18:08:20.618094+00:00",
+       "state": "p25-45c|tte>10m|imb10-50",
+       "sampled": "extend",
+       "v2_recommended": "extend",
+       "side": "YES",
+       "qty": "4.57",
+       "px": "0.29",
+       "usd": "1.3253",
+       "unmatched_before": "1.9912",
+       "unmatched_after_if_filled": "3.3165",
+       "refusal": "unmatched_usd_cap:3.3165>2.50"
+      },
+      {
+       "decision_idx": 35,
+       "t_utc": "2026-09-07T18:09:12.170221+00:00",
+       "state": "p25-45c|tte>10m|imb10-50",
+       "sampled": "extend",
+       "v2_recommended": "extend",
+       "side": "YES",
+       "qty": "4.16",
+       "px": "0.22",
+       "usd": "0.9152",
+       "unmatched_before": "1.9912",
+       "unmatched_after_if_filled": "2.9064",
+       "refusal": "unmatched_usd_cap:2.9064>2.50"
       }
      ]
     },
     "entry_band_left": {
-     "decisions": 15,
-     "share_of_decisions": 0.5,
+     "decisions": 36,
+     "share_of_decisions": 0.4932,
      "l5_relation_at_refusal": {
       "sampled": {
-       "extend": 15
+       "extend": 36
       },
       "v2_recommended": {
-       "extend": 15
+       "extend": 36
       },
       "would_act_without_safety_cap": {
-       "extend": 15
+       "extend": 36
       }
      },
-     "runs": 4,
+     "runs": 11,
      "run_lengths": [
-      7,
+      3,
       4,
       1,
-      3
+      2,
+      11,
+      4,
+      1,
+      3,
+      3,
+      2,
+      2
      ],
      "time": {
-      "strict_s": 482.1,
-      "inclusive_s": 602.1,
-      "share_of_active_session_time_inclusive": 0.6686,
+      "strict_s": 1129.9,
+      "inclusive_s": 1459.9,
+      "share_of_active_session_time_inclusive": 0.6551,
       "per_run": [
        {
         "decision_idx": [
-         45,
+         19,
+         21
+        ],
+        "t_first": "2026-09-07T17:54:36.447917+00:00",
+        "t_last": "2026-09-07T17:56:04.615093+00:00",
+        "strict_s": 88.2,
+        "inclusive_s": 118.2
+       },
+       {
+        "decision_idx": [
+         23,
+         26
+        ],
+        "t_first": "2026-09-07T17:57:07.637998+00:00",
+        "t_last": "2026-09-07T18:01:38.431632+00:00",
+        "strict_s": 270.8,
+        "inclusive_s": 300.8
+       },
+       {
+        "decision_idx": [
+         28,
+         28
+        ],
+        "t_first": "2026-09-07T18:03:37.476467+00:00",
+        "t_last": "2026-09-07T18:03:37.476467+00:00",
+        "strict_s": 0.0,
+        "inclusive_s": 30.0
+       },
+       {
+        "decision_idx": [
+         38,
+         39
+        ],
+        "t_first": "2026-09-07T18:10:45.457999+00:00",
+        "t_last": "2026-09-07T18:11:42.244411+00:00",
+        "strict_s": 56.8,
+        "inclusive_s": 86.8
+       },
+       {
+        "decision_idx": [
+         41,
          51
         ],
-        "t_first": "2026-09-07T18:14:45.637802+00:00",
+        "t_first": "2026-09-07T18:12:44.735839+00:00",
         "t_last": "2026-09-07T18:19:49.747381+00:00",
-        "strict_s": 304.1,
-        "inclusive_s": 334.1
+        "strict_s": 425.0,
+        "inclusive_s": 455.0
        },
        {
         "decision_idx": [
@@ -841,25 +1399,55 @@
         "t_last": "2026-09-07T18:25:52.781202+00:00",
         "strict_s": 58.2,
         "inclusive_s": 88.2
+       },
+       {
+        "decision_idx": [
+         64,
+         66
+        ],
+        "t_first": "2026-09-07T18:28:26.553237+00:00",
+        "t_last": "2026-09-07T18:29:24.419295+00:00",
+        "strict_s": 57.9,
+        "inclusive_s": 87.9
+       },
+       {
+        "decision_idx": [
+         68,
+         69
+        ],
+        "t_first": "2026-09-07T18:30:57.659936+00:00",
+        "t_last": "2026-09-07T18:31:24.284807+00:00",
+        "strict_s": 26.6,
+        "inclusive_s": 56.6
+       },
+       {
+        "decision_idx": [
+         71,
+         72
+        ],
+        "t_first": "2026-09-07T18:32:57.506916+00:00",
+        "t_last": "2026-09-07T18:33:24.074610+00:00",
+        "strict_s": 26.6,
+        "inclusive_s": 56.6
        }
       ]
      },
      "dollars_and_inventory": {
       "all_refusals_fill": {
-       "orders": 15,
-       "usd_qty_x_px": "5.8790",
+       "orders": 36,
+       "usd_qty_x_px": "14.8702",
        "unmatched_increment_usd": "0.0000",
        "contracts_by_side": {
-        "YES": "54.58",
+        "YES": "131.75",
         "NO": "0.00"
        }
       },
       "first_of_each_run_fills": {
-       "orders": 4,
-       "usd_qty_x_px": "1.8204",
+       "orders": 11,
+       "usd_qty_x_px": "4.8693",
        "unmatched_increment_usd": "0.0000",
        "contracts_by_side": {
-        "YES": "14.81",
+        "YES": "40.58",
         "NO": "0.00"
        }
       }
@@ -1102,6 +1690,616 @@
       "usd": "1.7500"
      },
      "divergence": "safety_adaptation:unmatched_usd_cap"
+    },
+    {
+     "idx": 12,
+     "t_utc": "2026-09-07T17:50:45.766478+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "5",
+      "usd": "1.7500"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 13,
+     "t_utc": "2026-09-07T17:51:17.710725+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "unmatched_usd_cap",
+     "cap_binding": [
+      "unmatched_usd_cap"
+     ],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": "3.5176",
+     "planned": {
+      "contracts": "4.77",
+      "usd": "1.526400"
+     },
+     "divergence": "safety_adaptation:unmatched_usd_cap"
+    },
+    {
+     "idx": 14,
+     "t_utc": "2026-09-07T17:51:47.774956+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "unmatched_usd_cap",
+     "cap_binding": [
+      "unmatched_usd_cap"
+     ],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": "3.3165",
+     "planned": {
+      "contracts": "4.57",
+      "usd": "1.325300"
+     },
+     "divergence": "safety_adaptation:unmatched_usd_cap"
+    },
+    {
+     "idx": 15,
+     "t_utc": "2026-09-07T17:52:17.840544+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "unmatched_usd_cap",
+     "cap_binding": [
+      "unmatched_usd_cap"
+     ],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": "3.6640",
+     "planned": {
+      "contracts": "4.92",
+      "usd": "1.672800"
+     },
+     "divergence": "safety_adaptation:unmatched_usd_cap"
+    },
+    {
+     "idx": 16,
+     "t_utc": "2026-09-07T17:52:47.923243+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "5.24",
+      "usd": "1.991200"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 17,
+     "t_utc": "2026-09-07T17:53:19.667005+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "4.92",
+      "usd": "1.672800"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 18,
+     "t_utc": "2026-09-07T17:54:04.404967+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "4.16",
+      "usd": "0.915200"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 19,
+     "t_utc": "2026-09-07T17:54:36.447917+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.91",
+      "usd": "0.664700"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 20,
+     "t_utc": "2026-09-07T17:55:33.158912+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.82",
+      "usd": "0.573000"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 21,
+     "t_utc": "2026-09-07T17:56:04.615093+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.96",
+      "usd": "0.712800"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 22,
+     "t_utc": "2026-09-07T17:56:36.027434+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.82",
+      "usd": "0.573000"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 23,
+     "t_utc": "2026-09-07T17:57:07.637998+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.77",
+      "usd": "0.527800"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 24,
+     "t_utc": "2026-09-07T17:57:34.127629+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.82",
+      "usd": "0.573000"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 25,
+     "t_utc": "2026-09-07T17:59:36.081342+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.82",
+      "usd": "0.573000"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 26,
+     "t_utc": "2026-09-07T18:01:38.431632+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.82",
+      "usd": "0.573000"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 27,
+     "t_utc": "2026-09-07T18:03:05.336823+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.91",
+      "usd": "0.664700"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 28,
+     "t_utc": "2026-09-07T18:03:37.476467+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.96",
+      "usd": "0.712800"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 29,
+     "t_utc": "2026-09-07T18:05:45.873669+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "unmatched_usd_cap",
+     "cap_binding": [
+      "unmatched_usd_cap"
+     ],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": "3.0160",
+     "planned": {
+      "contracts": "4.27",
+      "usd": "1.024800"
+     },
+     "divergence": "safety_adaptation:unmatched_usd_cap"
+    },
+    {
+     "idx": 30,
+     "t_utc": "2026-09-07T18:06:16.056794+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "4.64",
+      "usd": "1.392000"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 31,
+     "t_utc": "2026-09-07T18:06:48.432011+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "unmatched_usd_cap",
+     "cap_binding": [
+      "unmatched_usd_cap"
+     ],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": "3.3832",
+     "planned": {
+      "contracts": "4.64",
+      "usd": "1.392000"
+     },
+     "divergence": "safety_adaptation:unmatched_usd_cap"
+    },
+    {
+     "idx": 32,
+     "t_utc": "2026-09-07T18:07:18.511518+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "4.39",
+      "usd": "1.141400"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 33,
+     "t_utc": "2026-09-07T18:07:50.546630+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "unmatched_usd_cap",
+     "cap_binding": [
+      "unmatched_usd_cap"
+     ],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": "2.8543",
+     "planned": {
+      "contracts": "4.11",
+      "usd": "0.863100"
+     },
+     "divergence": "safety_adaptation:unmatched_usd_cap"
+    },
+    {
+     "idx": 34,
+     "t_utc": "2026-09-07T18:08:20.618094+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "unmatched_usd_cap",
+     "cap_binding": [
+      "unmatched_usd_cap"
+     ],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": "3.3165",
+     "planned": {
+      "contracts": "4.57",
+      "usd": "1.325300"
+     },
+     "divergence": "safety_adaptation:unmatched_usd_cap"
+    },
+    {
+     "idx": 35,
+     "t_utc": "2026-09-07T18:09:12.170221+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "unmatched_usd_cap",
+     "cap_binding": [
+      "unmatched_usd_cap"
+     ],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": "2.9064",
+     "planned": {
+      "contracts": "4.16",
+      "usd": "0.915200"
+     },
+     "divergence": "safety_adaptation:unmatched_usd_cap"
+    },
+    {
+     "idx": 36,
+     "t_utc": "2026-09-07T18:09:42.241653+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "4.22",
+      "usd": "0.970600"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 37,
+     "t_utc": "2026-09-07T18:10:13.650645+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.91",
+      "usd": "0.664700"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 38,
+     "t_utc": "2026-09-07T18:10:45.457999+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.82",
+      "usd": "0.573000"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 39,
+     "t_utc": "2026-09-07T18:11:42.244411+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.69",
+      "usd": "0.442800"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 40,
+     "t_utc": "2026-09-07T18:12:13.670702+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.77",
+      "usd": "0.527800"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 41,
+     "t_utc": "2026-09-07T18:12:44.735839+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.77",
+      "usd": "0.527800"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 42,
+     "t_utc": "2026-09-07T18:13:16.310534+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.65",
+      "usd": "0.401500"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 43,
+     "t_utc": "2026-09-07T18:13:42.710151+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.73",
+      "usd": "0.484900"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 44,
+     "t_utc": "2026-09-07T18:14:14.157816+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.61",
+      "usd": "0.361000"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
     },
     {
      "idx": 45,
@@ -1424,6 +2622,186 @@
      "planned": {
       "contracts": "3.91",
       "usd": "0.664700"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 63,
+     "t_utc": "2026-09-07T18:27:54.726685+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.77",
+      "usd": "0.527800"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 64,
+     "t_utc": "2026-09-07T18:28:26.553237+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.61",
+      "usd": "0.361000"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 65,
+     "t_utc": "2026-09-07T18:28:52.984270+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.53",
+      "usd": "0.282400"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 66,
+     "t_utc": "2026-09-07T18:29:24.419295+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.49",
+      "usd": "0.244300"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 67,
+     "t_utc": "2026-09-07T18:30:26.113662+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.42",
+      "usd": "0.171000"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 68,
+     "t_utc": "2026-09-07T18:30:57.659936+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.35",
+      "usd": "0.100500"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 69,
+     "t_utc": "2026-09-07T18:31:24.284807+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.38",
+      "usd": "0.135200"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 70,
+     "t_utc": "2026-09-07T18:32:25.903979+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "complete",
+     "v2": "extend",
+     "would_act": "complete",
+     "acted": "complete",
+     "refusal": null,
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.31",
+      "usd": "0.066200"
+     },
+     "divergence": "none:stochastic_draw_executed"
+    },
+    {
+     "idx": 71,
+     "t_utc": "2026-09-07T18:32:57.506916+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.31",
+      "usd": "0.066200"
+     },
+     "divergence": "safety_adaptation:entry_band_left"
+    },
+    {
+     "idx": 72,
+     "t_utc": "2026-09-07T18:33:24.074610+00:00",
+     "state": "p25-45c|tte>10m|imb10-50",
+     "sampled": "extend",
+     "v2": "extend",
+     "would_act": "extend",
+     "acted": "hold",
+     "refusal": "entry_band_left",
+     "cap_binding": [],
+     "unmatched_before": "1.9912",
+     "unmatched_after_if_filled": null,
+     "planned": {
+      "contracts": "3.35",
+      "usd": "0.100500"
      },
      "divergence": "safety_adaptation:entry_band_left"
     }
@@ -6641,5 +8019,5 @@
    ]
   }
  },
- "verdict": "The $2.50 unmatched-dollar cap overrode 54 of 174 R4 decisions (31%), every one of them an L5 EXTEND, i.e. 54 of the 80 extends L5 sampled (68%); by market -- aec-atp-petbru-alecan: 10/30 decisions, 10/25 sampled extends, 302s of 901s live; aec-atpcq-aleher-tundur: 9/79 decisions, 9/18 sampled extends, 270s of 876s live; aec-atpcq-norgom-ollwal: 35/65 decisions, 35/37 sampled extends, 282s of 1166s live. It withheld 124.6736 USD of orders across 17 consecutive runs (39.9943 USD counting one order per run), 283.86 YES / 0.00 NO contracts never built, and held the engine in cap-refusal for 855s of 2943s of live session time (29%). On the 2 settled market(s), had every refused order filled and been held to the venue's actual settlement the extra inventory would have made -62.5205 USD (-21.2231 USD on the one-fill-per-run reading) (the paying side of aec-atpcq-norgom-ollwal is read from the venue's public settlement price and is unconfirmed; had the opposite side paid the held figure would be 82.7595 USD all-fill / 29.1269 USD per run); paired instead at the complement touch L5 later saw it would have made 10.0029 USD (3.6831 USD per run). Those are counterfactual, fill-assumed, fee-free numbers, not realized ones; aec-atp-petbru-alecan is still open, so its settlement counterfactual is PENDING. L5's OPEN and COMPLETE decisions were never touched by this cap; its EXTEND leg was mostly suppressed, so the R4 sequence is L5's opens and completes with L5's extends largely removed."
+ "verdict": "The $2.50 unmatched-dollar cap overrode 62 of 217 R4 decisions (29%), every one of them an L5 EXTEND, i.e. 62 of the 109 extends L5 sampled (57%); by market -- aec-atp-petbru-alecan: 18/73 decisions, 18/54 sampled extends, 564s of 2229s live; aec-atpcq-aleher-tundur: 9/79 decisions, 9/18 sampled extends, 270s of 876s live; aec-atpcq-norgom-ollwal: 35/65 decisions, 35/37 sampled extends, 282s of 1166s live. It withheld 134.7185 USD of orders across 21 consecutive runs (44.8006 USD counting one order per run), 319.87 YES / 0.00 NO contracts never built, and held the engine in cap-refusal for 1116s of 4271s of live session time (26%). On the 3 settled market(s), had every refused order filled and been held to the venue's actual settlement the extra inventory would have made -90.7785 USD (-29.7706 USD on the one-fill-per-run reading) (the paying side of aec-atpcq-norgom-ollwal is read from the venue's public settlement price and is unconfirmed; had the opposite side paid the held figure would be 141.2115 USD all-fill / 48.6094 USD per run); paired instead at the complement touch L5 later saw it would have made 11.6480 USD (4.4149 USD per run). Those are counterfactual, fill-assumed, fee-free numbers, not realized ones; L5's OPEN and COMPLETE decisions were never touched by this cap; its EXTEND leg was mostly suppressed, so the R4 sequence is L5's opens and completes with L5's extends largely removed."
 }
