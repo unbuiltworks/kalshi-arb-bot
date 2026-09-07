@@ -1493,8 +1493,20 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     # per session); the per-market cap and concurrency stay the session's
     # hard constants until the owner changes them by decision.
     active_rung = ladder.set_active(None)        # the env rung (default R1)
-    rung_markets = max(1, int(os.getenv(
-        RUNG_MARKETS_ENV, str(active_rung["markets_per_campaign"]))))
+
+    def _rung_markets_of(r: dict) -> Optional[int]:
+        """The campaign's market allowance: the env override, else the
+        rung's markets_per_campaign. OWNER PROGRAM 5574156328 (R5F): None
+        = CONTINUOUS -- the campaign never stops at a market count, only
+        at the daily stop / the horizon (env "none", "continuous" or "0"
+        reads the same way)."""
+        raw = os.getenv(RUNG_MARKETS_ENV)
+        if raw is not None:
+            if raw.strip().lower() in ("none", "continuous", "0", ""):
+                return None
+            return max(1, int(raw))
+        return ladder.markets_per_campaign(r)
+    rung_markets = _rung_markets_of(active_rung)
     os.environ.setdefault(base.MAX_ACTIONS_ENV,
                           str(active_rung["max_actions_per_session"]))
 
@@ -1506,8 +1518,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         apply (unknown id -> the authorized rung)."""
         nonlocal active_rung, rung_markets
         active_rung = ladder.set_active(rung_id)
-        rung_markets = max(1, int(os.getenv(
-            RUNG_MARKETS_ENV, str(active_rung["markets_per_campaign"]))))
+        rung_markets = _rung_markets_of(active_rung)
         os.environ[base.MAX_ACTIONS_ENV] = str(active_rung["max_actions_per_session"])
         return active_rung
     filled_markets: set = set()          # markets with a fill this campaign
@@ -1522,7 +1533,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         return {
             "campaign_id": campaign_id,
             "stop_rule": stop_rule,
-            "markets_allowed": (rung_markets if stop_rule == STOP_RULE_RUNG
+            "markets_allowed": ((rung_markets if rung_markets is not None else
+                                 "continuous (daily stop / horizon)")
+                                if stop_rule == STOP_RULE_RUNG
                                 else "until the frozen LIVE evidence minimums are met"),
             "per_market_cap_usd": str(base.session_notional_cap()),
             "residual_cap_units": base.max_residual_units(),
@@ -1532,10 +1545,17 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
             "pair_cost_max": str(base.pair_cost_max()),
             "safety_shell_version": base.safety_shell_version(),
             "worst_case_usd": (str(base.session_notional_cap() * rung_markets)
-                               if stop_rule == STOP_RULE_RUNG else
-                               f"{base.session_notional_cap()} per filled market, "
-                               f"bounded by the daily-loss stop"),
+                               if stop_rule == STOP_RULE_RUNG and rung_markets is not None
+                               else f"{base.session_notional_cap()} per filled market, "
+                                    f"bounded by the daily-loss stop"),
             "daily_loss_stop_usd": str(base.daily_loss_stop()),
+            # OWNER PROGRAM 5574156328 (R5F): the fidelity levers, from the
+            # rung, never literals
+            "complement_pricing": ladder.complement_pricing(),
+            "rest_policy": ladder.rest_policy(),
+            "maker_rest_max_s": base.maker_rest_max_s(),
+            "max_sessions_per_campaign": ladder.max_sessions_per_campaign(
+                default=MAX_SESSIONS_PER_CAMPAIGN),
             "per_action_target_usd": str(ladder.target_notional()),
             "per_leg_max_usd": str(ladder.max_leg_notional()),
             # the rung's own value, never a literal: the loop enforces
@@ -1660,6 +1680,11 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         read once)."""
         if stop_rule == STOP_RULE_EVIDENCE:
             return evidence_minimums_met()[0]
+        if rung_markets is None:
+            # OWNER PROGRAM 5574156328 (R5F): a continuous campaign has no
+            # market allowance to spend; it ends at the daily stop, the
+            # horizon or the owner's hand, never at a market count
+            return False
         return len(filled_markets) >= rung_markets
 
     def _rung_gate() -> Optional[str]:
@@ -1778,7 +1803,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         funnel["not_started"][reason] = funnel["not_started"].get(reason, 0) + 1
     _log("campaign_start", mode=report["mode"], campaign_s=campaign_s,
          campaign_expires_at=wall() + campaign_s,
-         max_sessions=MAX_SESSIONS_PER_CAMPAIGN,
+         max_sessions=ladder.max_sessions_per_campaign(
+             default=MAX_SESSIONS_PER_CAMPAIGN),
          per_market_cap=str(base.SESSION_NOTIONAL_CAP),
          rung=report["rung"])
     _log("ramp_ladder", active=active_rung["id"],
@@ -1789,8 +1815,10 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     # published even while the venue is unavailable; re-run on the frozen
     # cadence below and forced after every session that adds evidence
     fidelity_eval(wall(), force=True)
+    # the session bound follows the ACTIVE rung (R5F: continuous, 10,080 =
+    # one per minute for the 7-day horizon); the R1..R4 default is 48
     while clock() < stop_at and len(report["sessions"]) - sessions_base < \
-            MAX_SESSIONS_PER_CAMPAIGN + resumes:
+            ladder.max_sessions_per_campaign(default=MAX_SESSIONS_PER_CAMPAIGN) + resumes:
         try:
             now = wall()
             fidelity_eval(now)

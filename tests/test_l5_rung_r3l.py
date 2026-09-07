@@ -29,7 +29,7 @@ def test_r3l_is_the_owner_rung_with_the_derived_numbers():
     assert wc["per_day_bounded_by_daily_stop_usd"] == "22.50"   # stop + one in-flight market
     assert wc["max_concurrent_open_exposure_usd"] == "7.50"
     assert wc["per_action_target_usd"] == "2.50" and wc["per_leg_max_usd"] == "3.25"
-    assert [x["id"] for x in ladder.ladder()][-4:] == ["R2C", "R2C2", "R3L", "R4"]
+    assert [x["id"] for x in ladder.ladder()][-5:] == ["R2C", "R2C2", "R3L", "R4", "R5F"]
 
 
 def test_r1_and_r2c_labels_stops_and_sizes_are_unchanged():
