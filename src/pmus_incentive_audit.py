@@ -181,6 +181,59 @@ def trade_fee_fields(rows: list[dict]) -> dict:
             if trades and isinstance(trades[0].get("passiveExecution"), Mapping) else None}
 
 
+REBATE_FLOOR_SHARES = D("1.62")     # >= this credits >= $0.01 at p=0.45
+
+
+def credited_on_fills(rows: list[dict]) -> dict:
+    """LIVE 2026-09-07 (R3L): the one number the whole incentive question
+    turns on -- what the venue ACTUALLY credited on our own fills, split
+    by whether the fill cleared the cent-rounding floor.
+
+    Every `commissionNotional*` value on both executions is summed with
+    its sign exactly as served; no sign convention is assumed and nothing
+    here is called a rebate unless the venue's own number is non-zero.
+    Trades are ours by construction (the account's own activity walk)."""
+    trades = [r.get("trade") for r in rows
+              if isinstance(r, Mapping) and isinstance(r.get("trade"), Mapping)]
+    total = D("0")
+    n_floor = 0
+    nonzero: list[dict] = []
+    for tr in trades:
+        qty = _d_or_none(tr.get("qtyDecimal")) or _d_or_none(tr.get("qty"))
+        at_floor = qty is not None and abs(qty) >= REBATE_FLOOR_SHARES
+        n_floor += 1 if at_floor else 0
+        got = D("0")
+        for ex_key in ("passiveExecution", "aggressorExecution"):
+            ex = tr.get(ex_key)
+            if not isinstance(ex, Mapping):
+                continue
+            v = _d_or_none((ex.get("commissionNotionalCollected") or {}).get("value")
+                           if isinstance(ex.get("commissionNotionalCollected"), Mapping)
+                           else ex.get("commissionNotionalCollected"))
+            if v is not None:
+                got += v
+        total += got
+        if got != 0:
+            nonzero.append({"id": tr.get("id"), "market": tr.get("marketSlug"),
+                            "qty": str(qty), "commission_notional": str(got),
+                            "at_or_above_floor": at_floor})
+    return {"trades": len(trades),
+            "trades_at_or_above_rebate_floor": n_floor,
+            "rebate_floor_shares": str(REBATE_FLOOR_SHARES),
+            "commission_notional_total_usd": str(total),
+            "trades_with_nonzero_commission": nonzero[:20],
+            "labels": ("OBSERVED: the venue's own commissionNotional on our fills, "
+                       "signed as served. Zero here means the venue credited "
+                       "nothing on these fills, whatever the published formula says.")}
+
+
+def _d_or_none(v: Any) -> Optional[D]:
+    try:
+        return None if v is None else D(str(v))
+    except Exception:                                 # noqa: BLE001
+        return None
+
+
 def balances(t: q1.Transport) -> dict:
     r = _get(t, "/v1/account/balances")
     if not r["ok"]:
@@ -452,6 +505,10 @@ def incentive_audit(t: q1.Transport) -> dict:
         out["trade_fields"] = trade_fee_fields(rows)
     except Exception as exc:                          # noqa: BLE001
         out["trade_fields"] = {"ok": False, "error": str(exc)[:200]}
+    try:
+        out["credited_on_fills"] = credited_on_fills(rows)
+    except Exception as exc:                          # noqa: BLE001
+        out["credited_on_fills"] = {"ok": False, "error": str(exc)[:200]}
     out["estimated_rebate_on_our_fills"] = ledger_filled(fills)
     typical = D("0.45")
     out["size_arithmetic"] = {
@@ -471,6 +528,11 @@ def incentive_audit(t: q1.Transport) -> dict:
         "published_programs_covering_our_markets": len((out.get("programs") or {}).get("our_markets_in_programs") or []),
         "rebate_at_our_executed_size_after_rounding": out["size_arithmetic"]["rebate_at_our_size"]["credited_after_rounding_usd"],
         "mlb": (out.get("mlb_scan") or {}).get("statement"),
+        # the verdict line for the sized rung: what the venue actually paid
+        "venue_credited_on_our_fills_usd": (out.get("credited_on_fills") or {}).get(
+            "commission_notional_total_usd"),
+        "our_fills_at_or_above_rebate_floor": (out.get("credited_on_fills") or {}).get(
+            "trades_at_or_above_rebate_floor"),
         "reading": ("only observed / venue-confirmed credits are realized; published programs and "
                     "formula estimates are labelled and never counted"),
     }

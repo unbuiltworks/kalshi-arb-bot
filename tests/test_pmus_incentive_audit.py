@@ -154,3 +154,36 @@ def test_campaign_hook_is_contained_and_logs_once(monkeypatch):
     assert out["ok"] is False and "venue down" in out["error"]
     assert cont.run_incentive_audit(None, lambda kind, **kw: logged.append((kind, kw))) is None
     assert len(logged) == 2
+
+
+def test_credited_on_fills_reports_what_the_venue_actually_paid():
+    """LIVE 2026-09-07 (R3L): fills now clear the 1.62-share rounding
+    floor, so 'did the venue credit anything' is answerable. The sum is
+    the venue's own signed number; nothing is called a rebate on the
+    strength of the published formula alone."""
+    def _tr(tid, qty, passive="0.0000", aggressor="0.0000"):
+        return {"trade": {"id": tid, "marketSlug": "m1", "qtyDecimal": qty,
+                          "passiveExecution": {"commissionNotionalCollected": {"value": passive}},
+                          "aggressorExecution": {"commissionNotionalCollected": {"value": aggressor}}}}
+    out = ia.credited_on_fills([_tr("a", "0.0200"), _tr("b", "5.1500"),
+                                _tr("c", "4.3300", passive="-0.0200")])
+    assert out["trades"] == 3
+    # only the two sized fills clear the floor; the 0.02-share one does not
+    assert out["trades_at_or_above_rebate_floor"] == 2
+    assert out["rebate_floor_shares"] == "1.62"
+    assert D(out["commission_notional_total_usd"]) == D("-0.02")
+    assert len(out["trades_with_nonzero_commission"]) == 1
+    assert out["trades_with_nonzero_commission"][0]["id"] == "c"
+    assert out["trades_with_nonzero_commission"][0]["at_or_above_floor"] is True
+    # an all-zero book reports zero rather than inferring the formula
+    zero = ia.credited_on_fills([_tr("a", "5.0000"), _tr("b", "5.0000")])
+    assert D(zero["commission_notional_total_usd"]) == 0
+    assert zero["trades_with_nonzero_commission"] == []
+
+
+def test_audit_verdict_carries_the_credited_number(monkeypatch, tmp_path):
+    _ledger(tmp_path, monkeypatch)
+    out = ia.incentive_audit(FakeT(_routes()))
+    assert out["credited_on_fills"]["trades"] == 1
+    assert D(out["verdict"]["venue_credited_on_our_fills_usd"]) == 0
+    assert out["verdict"]["our_fills_at_or_above_rebate_floor"] == 0

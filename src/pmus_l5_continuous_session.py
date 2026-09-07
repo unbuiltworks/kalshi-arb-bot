@@ -794,9 +794,14 @@ def _pending_diagnostic(slug: str, t, auditor) -> Optional[dict]:
 
 SETTLE_AUDIT_EVERY_S = 60.0
 # OWNER 5561142758 #2: the account's own incentive economics, read-only,
-# at boot and every 6 h (earnings endpoint, activity credits, trade fee
-# fields, balances, published programs vs our markets)
-INCENTIVE_AUDIT_EVERY_S = 6 * 3600.0
+# at boot and on this cadence (earnings endpoint, activity credits, trade
+# fee fields, balances, published programs vs our markets).
+# LIVE 2026-09-07: hourly, not 6-hourly. R3L is the first rung whose fills
+# clear the 1.62-share rounding floor, so whether the venue credits a
+# maker rebate is now an answerable question rather than a foregone
+# $0.00 -- and a 6 h cadence would have missed tonight's fills entirely.
+# Read-only GETs; it touches no cap, gate or order path.
+INCENTIVE_AUDIT_EVERY_S = 3600.0
 
 
 def run_incentive_audit(t, log) -> Optional[dict]:
