@@ -298,3 +298,23 @@ def test_status_carries_stream_health_and_the_stream_alarm(monkeypatch):
     assert st2["stream_alarm"]["alarm"] is True
     assert "stream_health" not in rec.build_status(state, True, 90, 128, now=now, discovery=disc)
     rec._STREAM_STARVED_SINCE.update({"t": None, "last_alarm": None})
+
+
+def test_snapshot_state_never_aliases_the_live_lists_and_health_tracks_processing_time():
+    live = {"m": {"bid": "0.45", "trades": [{"t": 1.0}], "bbo_history": [{"t": 1.0}],
+                  "book_updates": 1}}
+    snap = rec.snapshot_state(live)
+    live["m"]["trades"].append({"t": 2.0})
+    live["m"]["bbo_history"].append({"t": 2.0})
+    live["m"]["book_updates"] = 2
+    assert len(snap["m"]["trades"]) == 1 and len(snap["m"]["bbo_history"]) == 1
+    assert snap["m"]["book_updates"] == 1
+    h = rec.StreamHealth(0.0)
+    h.note_proc(0.2)
+    h.note_proc(1.5)
+    s = h.snapshot(10.0)
+    assert s["max_frame_proc_s"] == 1.5 and s["sum_frame_proc_s"] == 1.7
+    h.new_session(20.0)
+    assert h.snapshot(21.0)["max_frame_proc_s"] == 0.0
+    r = rec.rss_gb()
+    assert r is None or (isinstance(r, float) and r >= 0.0)

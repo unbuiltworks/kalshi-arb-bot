@@ -397,6 +397,24 @@ def pool_alarm(discovery: Mapping[str, Any], fresh_rows: Mapping[str, Any],
         print("PMUS_WS_ALARM " + json.dumps({"kind": "pool_stale_or_empty", **out},
                                              separators=(",", ":"), default=str), flush=True)
     return out
+def snapshot_state(state: Mapping[str, Any]) -> dict:
+    """A copy of the per-market state safe to hand to a worker thread:
+    the reader keeps mutating the live dicts and lists; the copy never
+    aliases them (entries themselves are append-only records)."""
+    return {slug: {**s, "trades": list(s.get("trades") or []),
+                   "bbo_history": list(s.get("bbo_history") or [])}
+            for slug, s in list(state.items())}
+
+
+def rss_gb() -> Optional[float]:
+    try:
+        import resource
+        kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return round(kb / (1024.0 * 1024.0), 3)
+    except Exception:                                  # noqa: BLE001
+        return None
+
+
 def live_events_of(discovery: Optional[Mapping[str, Any]]) -> int:
     d = discovery or {}
     return int(d.get("v1_live_events") or d.get("live_events") or 0)
@@ -436,6 +454,15 @@ class StreamHealth:
     def new_session(self, now: float) -> None:
         self.session_start = now
         self.counts = {k: 0 for k in self.KINDS}
+        self.max_proc_s = 0.0
+        self.sum_proc_s = 0.0
+
+    def note_proc(self, seconds: float) -> None:
+        """Wall time the reader spent OFF ws.recv() handling one frame:
+        LIVE 2026-09-07 the in-process shadow report and the status build
+        held the reader for ~90 s per tick, which starved the socket."""
+        self.max_proc_s = max(self.max_proc_s, seconds)
+        self.sum_proc_s += seconds
 
     def note(self, kind: str, now: float) -> None:
         self.counts[kind if kind in self.counts else "other"] += 1
@@ -459,6 +486,8 @@ class StreamHealth:
                                     else round(now - self.last_book_t, 1)),
                 "last_frame_age_s": (None if self.last_frame_t is None
                                      else round(now - self.last_frame_t, 1)),
+                "max_frame_proc_s": round(getattr(self, "max_proc_s", 0.0), 3),
+                "sum_frame_proc_s": round(getattr(self, "sum_proc_s", 0.0), 3),
                 "counts": dict(self.counts)}
 
 
@@ -1180,6 +1209,104 @@ async def run(minutes: Optional[float]) -> int:
     last_shadow_tick = 0.0
     health = StreamHealth(time.time())
     starved_reconnects = 0
+    import concurrent.futures
+    loop = asyncio.get_running_loop()
+    worker = concurrent.futures.ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix="pmus-side")
+    side_busy = {"status": False, "tick": False}
+    side_state = {"slugs": [], "discovery": {}, "l5_alloc": None}
+
+    def _status_job(snap: dict, connected: bool, msgs_now: int,
+                    n_slugs: int, disc: dict, alloc: Optional[set],
+                    sh: dict) -> None:
+        """Runs on the worker thread over a snapshot: the reader never
+        waits for the status build, the report or the gateway check."""
+        try:
+            try:
+                st = build_status(snap, connected, msgs_now, n_slugs,
+                                  discovery=disc, l5_alloc=alloc,
+                                  stream_health=sh)
+                print("PMUS_WS_STATUS " + json.dumps(
+                    st, separators=(",", ":"), default=str), flush=True)
+                write_status_doc(root, st)
+                try:
+                    from src import pmus_sports_collector as col
+                    xs = gateway_xcheck(
+                        [r["slug"] for r in (st.get("spring_watch") or [])]
+                        or [r["slug"] for r in (st.get("top_markets") or [])],
+                        snap, col.http_get_json, time.time())
+                    if xs:
+                        print("PMUS_WS_XCHECK " + json.dumps(
+                            {"t": st["t"], "rows": xs},
+                            separators=(",", ":"), default=str), flush=True)
+                except Exception as exc:              # noqa: BLE001
+                    print("PMUS_WS_XCHECK " + json.dumps(
+                        {"error": str(exc)[:120]}), flush=True)
+            except Exception as exc:                  # noqa: BLE001
+                # a status bug must never cost the connection or the tape
+                print("PMUS_WS_STATUS " + json.dumps(
+                    {"status_error": str(exc)[:120],
+                     "messages_received": msgs_now}), flush=True)
+            if shadow is not None:
+                try:
+                    rep = shadow.write_report(time.time())
+                    if rep:
+                        print("PMUS_L5_SHADOW " + json.dumps(
+                            shadow_compact(rep) if "error" not in rep
+                            else {"kind": "shadow_report_error", **rep},
+                            separators=(",", ":"), default=str), flush=True)
+                except Exception as exc:              # noqa: BLE001
+                    print("PMUS_L5_SHADOW " + json.dumps(
+                        {"kind": "shadow_report_error",
+                         "err": f"{type(exc).__name__}:{str(exc)[:120]}"}),
+                        flush=True)
+        finally:
+            side_busy["status"] = False
+
+    def schedule_status(connected: bool) -> bool:
+        """Due and not already running -> snapshot on the reader thread
+        (milliseconds) and hand the work to the worker. Called after a
+        frame AND on a silent socket so a starved stream still reports
+        and alarms."""
+        nonlocal last_status
+        if status_every <= 0 or side_busy["status"] or \
+                time.monotonic() - last_status < status_every:
+            return False
+        last_status = time.monotonic()
+        side_busy["status"] = True
+        snap = snapshot_state(mstate)
+        sh = {**health.snapshot(time.time()),
+              "starved_reconnects": starved_reconnects,
+              "rss_gb": rss_gb(),
+              "shadow_enabled": shadow is not None}
+        loop.run_in_executor(
+            worker, _status_job, snap, connected, msgs,
+            len(side_state["slugs"]), dict(side_state["discovery"]),
+            side_state["l5_alloc"], sh)
+        return True
+
+    def schedule_shadow_tick() -> None:
+        nonlocal last_shadow_tick
+        if shadow is None or side_busy["tick"] or \
+                time.monotonic() - last_shadow_tick < SHADOW_TICK_S:
+            return
+        last_shadow_tick = time.monotonic()
+        side_busy["tick"] = True
+        snap = snapshot_state(mstate)
+        now = time.time()
+
+        def _tick() -> None:
+            try:
+                shadow.tick(snap, now)
+            except Exception as exc:                  # noqa: BLE001
+                print("PMUS_L5_SHADOW " + json.dumps(
+                    {"kind": "shadow_tick_error",
+                     "err": f"{type(exc).__name__}:{str(exc)[:120]}"}),
+                    flush=True)
+            finally:
+                side_busy["tick"] = False
+        loop.run_in_executor(worker, _tick)
+
     while deadline is None or time.monotonic() < deadline:
         cap = int(os.getenv(MAX_MARKETS_ENV, "24"))
         targets = discover_universe()
@@ -1201,6 +1328,8 @@ async def run(minutes: Optional[float]) -> int:
                           "diagnostics": p["diagnostics"],
                           "per_market": p["per_market"]})
         cycle += 1
+        side_state.update({"slugs": list(slugs), "discovery": dict(discovery_diag),
+                           "l5_alloc": l5_alloc})
         append(root, {"kind": "recorder_start",
                       "t": datetime.now(timezone.utc).isoformat(),
                       "subscribed": slugs, "read_only": True,
@@ -1240,6 +1369,7 @@ async def run(minutes: Optional[float]) -> int:
                             # keep-alive on an idle socket (venue guidance)
                             await ws.send(json.dumps(guard_outbound({"heartbeat": {}})))
                             last_hb_sent = time.monotonic()
+                        schedule_status(True)
                         if should_reconnect_starved(
                                 health, live_events_of(discovery_diag),
                                 time.time(), starved_reconnects):
@@ -1268,23 +1398,13 @@ async def run(minutes: Optional[float]) -> int:
                                   "t": datetime.now(timezone.utc).isoformat(),
                                   "msg": msg})
                     msgs += 1
+                    proc_t0 = time.monotonic()
                     apply_events(mstate, msg, time.time())
-                    if shadow is not None and \
-                            time.monotonic() - last_shadow_tick >= SHADOW_TICK_S:
-                        # every subscribed market, every cadence unit;
-                        # contained: a shadow error never costs the tape
-                        last_shadow_tick = time.monotonic()
-                        try:
-                            shadow.tick(mstate, time.time())
-                        except Exception as exc:      # noqa: BLE001
-                            print("PMUS_L5_SHADOW " + json.dumps(
-                                {"kind": "shadow_tick_error",
-                                 "err": f"{type(exc).__name__}:{str(exc)[:120]}"}),
-                                flush=True)
+                    schedule_shadow_tick()
                     if msgs % 200 == 0:
                         heartbeat_file(root, messages=msgs,
                                        subscribed=len(slugs))
-                    if status_every > 0 and \
+                    if status_every > 0 and not side_busy["status"] and \
                             time.monotonic() - last_status >= status_every:
                         # fast intra-cycle L5 allocation (issue #167
                         # comment 5524827113): re-rank the CURRENT
@@ -1310,52 +1430,23 @@ async def run(minutes: Optional[float]) -> int:
                                     **discovery_diag,
                                     "l5_fast_realloc_error":
                                     str(exc)[:80]}
-                        try:
-                            _status = build_status(
-                                mstate, True, msgs, len(slugs),
-                                discovery=discovery_diag,
-                                l5_alloc=l5_alloc,
-                                stream_health={
-                                    **health.snapshot(time.time()),
-                                    "starved_reconnects": starved_reconnects})
-                            print("PMUS_WS_STATUS " + json.dumps(
-                                _status, separators=(",", ":"), default=str),
-                                flush=True)
-                            write_status_doc(root, _status)
-                            try:
-                                from src import pmus_sports_collector as col
-                                xs = gateway_xcheck(
-                                    [r["slug"] for r in
-                                     (_status.get("spring_watch") or [])]
-                                    or [r["slug"] for r in
-                                        (_status.get("top_markets") or [])],
-                                    mstate, col.http_get_json, time.time())
-                                if xs:
-                                    print("PMUS_WS_XCHECK " + json.dumps(
-                                        {"t": _status["t"], "rows": xs},
-                                        separators=(",", ":"), default=str),
-                                        flush=True)
-                            except Exception as exc:      # noqa: BLE001
-                                print("PMUS_WS_XCHECK " + json.dumps(
-                                    {"error": str(exc)[:120]}), flush=True)
-                        except Exception as exc:
-                            # a status bug must never cost the connection
-                            # or the tape
-                            print("PMUS_WS_STATUS "
-                                  + json.dumps({"status_error":
-                                                str(exc)[:120],
-                                                "messages_received": msgs}),
-                                  flush=True)
-                        if shadow is not None:
-                            rep = shadow.write_report(time.time())
-                            if rep:
-                                print("PMUS_L5_SHADOW " + json.dumps(
-                                    shadow_compact(rep) if "error" not in rep
-                                    else {"kind": "shadow_report_error", **rep},
-                                    separators=(",", ":"), default=str), flush=True)
-                        last_status = time.monotonic()
+                            side_state.update({"discovery": dict(discovery_diag),
+                                               "l5_alloc": l5_alloc})
+                        schedule_status(True)
+                    health.note_proc(time.monotonic() - proc_t0)
+                # venue guidance: release subscriptions explicitly before
+                # the socket closes so a key never accumulates orphaned
+                # subscriptions across the reconnect cadence
+                unsubscribed = 0
+                for frame in frames:
+                    try:
+                        await ws.send(json.dumps(guard_outbound({"unsubscribe": {"request_id": frame["subscribe"]["request_id"]}})))
+                        unsubscribed += 1
+                    except Exception:                 # noqa: BLE001
+                        break
                 print("PMUS_WS_CONN " + json.dumps(
                     {"kind": "disconnect", "reason": session_reason,
+                     "unsubscribed": unsubscribed,
                      "duration_s": round(time.monotonic() - session_start, 1),
                      "counts": health.counts,
                      "starved_reconnects": starved_reconnects},
