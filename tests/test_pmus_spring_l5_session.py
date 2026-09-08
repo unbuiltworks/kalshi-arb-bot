@@ -848,6 +848,61 @@ def test_rejection_row_carries_the_venue_market_status(monkeypatch, tmp_path):
     assert spring.load_complement_proof()["proven"] is False
 
 
+def test_rejection_row_carries_the_authenticated_recorder_book(monkeypatch, tmp_path):
+    """R5F 2026-09-08 01:09Z: NO completes at 0.71 filled twice on
+    malden-stoole and were then rejected four times while the public
+    gateway BBO read the opposite ask at 0.73 (two ticks of room) and the
+    venue reported MARKET_STATUS_OPEN. The rejection row now carries the
+    recorder's AUTHENTICATED top of book beside the public one, and says
+    so on the class when the two disagree. Read-only: the crossed
+    decision and the proof revocation still follow the gateway book."""
+    from tests.test_pmus_l5_continuous_session import (_armed_session_env,
+                                                        _ledger_with_fill)
+    from src import pmus_spring_l5_probe_entry as entry
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")
+    _script_proposals(monkeypatch, ["complete"])
+    monkeypatch.setenv(spring.MAX_ACTIONS_ENV, "1")
+    # the authenticated book is TIGHTER than the public one: a NO buy at
+    # 0.55 does not cross the public NO ask (1 - 0.43 = 0.57) but does
+    # cross the authenticated NO ask (1 - 0.45 = 0.55)
+    monkeypatch.setattr(entry, "load_status_document", lambda path=None: (
+        {"t": "2026-09-08T01:09:49Z",
+         "spring_watch": [{"slug": "held", "bid": "0.4500", "ask": "0.4550",
+                           "last_authenticated_update_age_s": 0.4,
+                           "both_sides_served": True}]}, "status_url:test"))
+
+    class Rejecting(Fake):
+        def request(self, method, path, body=None, base=None):
+            out = super().request(method, path, body, base)
+            if path == "/v1/orders":
+                self.orders[out["id"]]["state"] = "ORDER_STATE_REJECTED"
+                self.open_order = None
+            return out
+    fake = Rejecting(bid="0.4300", ask="0.4350", fill_all=False)
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0, slug="held", gate_ok=True,
+                             resume=True)
+    o = rep["orders"][0]
+    assert o["end_reason"].startswith("rejected")
+    book = o["recorder_book"]
+    assert book["yes_bid"] == "0.4500" and book["authenticated_age_s"] == 0.4
+    assert book["opp_ask_authenticated"] == "0.5500"
+    assert book["disagrees_with_gateway"] is True
+    assert o["rejection_class"].endswith(";authenticated_book_crossed")
+    # a status document that cannot be read never blocks or raises
+    monkeypatch.setattr(entry, "load_status_document",
+                        lambda path=None: (_ for _ in ()).throw(RuntimeError("no status")))
+    rep2 = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                              wall=lambda: 1000.0, slug="held", gate_ok=True,
+                              resume=True)
+    rejected = [x for x in rep2["orders"] if x.get("rejection_class")]
+    assert rejected, rep2["orders"]
+    assert rejected[0]["recorder_book"]["unreadable"].startswith("RuntimeError")
+    assert ";authenticated_book_crossed" not in rejected[0]["rejection_class"]
+
+
 def test_first_leg_refused_when_its_complement_preview_is_rejected(
         monkeypatch, tmp_path):
     from tests.test_pmus_l5_continuous_session import (_armed_session_env,

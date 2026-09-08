@@ -1541,6 +1541,57 @@ def run_session(t: Optional[Transport] = None,
                 return {"status": None,
                         "unreadable": f"{type(exc).__name__}:{str(exc)[:80]}"}
 
+        def _recorder_book(slug_: str, side_up_: bool) -> dict:
+            """The AUTHENTICATED top of book the recorder holds for this
+            market, beside the public gateway BBO the order was priced
+            from (issue #167, R5F 2026-09-08 01:09Z).
+
+            LIVE EVIDENCE: NO completes at 0.71 on malden-stoole filled
+            twice and were then rejected four times while BOTH the
+            pre-submit guard and the post-rejection re-read of
+            `/v1/markets/{slug}/bbo` reported the opposite ask at 0.73 --
+            two ticks of room -- and the venue reported the market
+            MARKET_STATUS_OPEN. Neither a halt nor a stale public read
+            explains that. The remaining candidate is that the public
+            gateway BBO is not the book the matching engine post-only
+            checks against; the recorder's authenticated stream is, and
+            it is already available to this process. Read-only, fail
+            soft, never blocking: a book we cannot read is reported as
+            unreadable and nothing downstream changes."""
+            from src import pmus_spring_l5_probe_entry as entry   # lazy: cycle
+            try:
+                status, source = entry.load_status_document(None)
+            except Exception as exc:                  # noqa: BLE001
+                return {"unreadable": f"{type(exc).__name__}:{str(exc)[:80]}"}
+            if not isinstance(status, Mapping):
+                return {"unreadable": "status_document_unavailable"}
+            row = None
+            for key in ("spring_watch", "top_markets"):
+                for r in (status.get(key) or []):
+                    if isinstance(r, Mapping) and r.get("slug") == slug_:
+                        row = r
+                        break
+                if row is not None:
+                    break
+            if row is None:
+                return {"unreadable": "slug_not_in_status_document",
+                        "source": source, "status_utc": status.get("t")}
+            # the recorder quotes YES; express the side we were pricing
+            yes_bid, yes_ask = row.get("bid"), row.get("ask")
+            out = {"source": source, "status_utc": status.get("t"),
+                   "yes_bid": yes_bid, "yes_ask": yes_ask,
+                   "authenticated_age_s": row.get(
+                       "last_authenticated_update_age_s"),
+                   "both_sides_served": row.get("both_sides_served")}
+            try:
+                if side_up_:
+                    out["opp_ask_authenticated"] = str(D(str(yes_ask)))
+                else:
+                    out["opp_ask_authenticated"] = str(q1.ONE - D(str(yes_bid)))
+            except Exception:                          # noqa: BLE001
+                out["opp_ask_authenticated"] = None
+            return out
+
         def _classify_rejection(side_up_: bool, px_: D) -> dict:
             """Owner item 5 classes for a post-only rejection, from the
             FRESH book: crossed = venue/execution adaptation (the book
@@ -1578,8 +1629,21 @@ def run_session(t: Optional[Transport] = None,
             status = _venue_market_status(slug)
             if status.get("status") not in (None, "MARKET_STATUS_OPEN"):
                 klass += f";venue_market_status={status.get('status')}"
+            # the authenticated book beside the public one the order was
+            # priced from; when they disagree the class says so, because
+            # that disagreement IS the finding
+            book = _recorder_book(slug, side_up_)
+            auth = book.get("opp_ask_authenticated")
+            if auth is not None and not crossed:
+                try:
+                    if px_ >= D(str(auth)):
+                        klass += ";authenticated_book_crossed"
+                        book["disagrees_with_gateway"] = True
+                except Exception:                      # noqa: BLE001
+                    pass
             return {"class": klass, "crossed": crossed, "opp_ask": str(opp_ask),
-                    "margin_ticks": str(margin), "venue_market": status}
+                    "margin_ticks": str(margin), "venue_market": status,
+                    "recorder_book": book}
 
         def _still_wanted(side_up_: bool, px_: D, relation_: str,
                           skey_: str):
@@ -2114,6 +2178,7 @@ def run_session(t: Optional[Transport] = None,
                         rej.get("margin_ticks")
                     report["orders"][-1]["tick"] = str(spec["tick"])
                     report["orders"][-1]["venue_market"] = rej.get("venue_market")
+                    report["orders"][-1]["recorder_book"] = rej.get("recorder_book")
                     if rej["crossed"]:
                         sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                 if got > 0:
@@ -2241,6 +2306,7 @@ def run_session(t: Optional[Transport] = None,
                         rej.get("margin_ticks")
                     report["orders"][-1]["tick"] = str(spec["tick"])
                     report["orders"][-1]["venue_market"] = rej.get("venue_market")
+                    report["orders"][-1]["recorder_book"] = rej.get("recorder_book")
                     if rej["crossed"]:
                         sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                     else:
