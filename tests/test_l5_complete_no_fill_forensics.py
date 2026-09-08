@@ -149,14 +149,20 @@ def test_placement_is_faithful_so_the_defect_is_not_the_opening_price():
 _LIVE = "src/pmus_spring_l5_session.py"
 
 
-def test_the_requote_condition_really_does_exclude_complete():
-    """The claim rests on one line of the LIVE path, so read that line.
+def test_the_requote_condition_still_excludes_complete_by_default():
+    """The claim rests on the LIVE path's effective behaviour, so read it.
 
-    If someone later adds "complete" to the tuple, this test fails and the
-    forensics prose stops being true -- which is exactly when it should."""
+    The condition is now `relation_ in requote_relations()`, which returns
+    ("open", "extend") unless an owner arms PMUS_SPRING_COMPLETE_REQUOTE. The
+    forensics prose below describes a tape produced with COMPLETE excluded,
+    and it stays true for as long as that is the DEFAULT. If the default ever
+    flips this test fails, which is exactly when the prose stops being true."""
+    from src import pmus_spring_l5_session as ses
     src = open(_LIVE).read()
-    assert 'if relation_ in ("open", "extend") and touch != px_:' in src
+    assert "if relation_ in requote_relations() and touch != px_:" in src
     assert 'return f"touch_moved:{touch}"' in src
+    assert ses.DEFAULT_COMPLETE_REQUOTE is False
+    assert ses.requote_relations() == ("open", "extend")
 
 
 def test_the_crossing_guard_runs_ahead_of_the_touch_check_for_all_relations():

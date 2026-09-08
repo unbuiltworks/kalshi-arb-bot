@@ -1,0 +1,116 @@
+"""COMPLETE re-quote ships DARK, and the default must stay proven.
+
+L5_COMPLETION_EXTENSION_GATE_v1 is frozen and accumulating forward evidence.
+A second change to the completion surface, live at the same time, would make
+neither attributable. So this change exists in the binary and does nothing
+until an owner arms it, and these tests pin exactly that -- including that
+the OPEN/EXTEND behaviour is byte-for-byte unchanged either way.
+"""
+from __future__ import annotations
+
+import re
+
+import pytest
+
+from src import pmus_spring_l5_session as ses
+
+_SRC = open(ses.__file__).read()
+
+
+# ------------------------------------------------------------- the default
+def test_the_flag_is_off_by_default():
+    assert ses.DEFAULT_COMPLETE_REQUOTE is False
+
+
+def test_with_no_env_set_complete_cannot_requote(monkeypatch):
+    monkeypatch.delenv(ses.COMPLETE_REQUOTE_ENV, raising=False)
+    assert ses.complete_requote_enabled() is False
+    assert ses.requote_relations() == ("open", "extend")
+
+
+@pytest.mark.parametrize("raw", ["1", "true", "TRUE", "yes", "on", " on "])
+def test_explicit_arming_values_turn_it_on(monkeypatch, raw):
+    monkeypatch.setenv(ses.COMPLETE_REQUOTE_ENV, raw)
+    assert ses.complete_requote_enabled() is True
+    assert ses.requote_relations() == ("open", "extend", "complete")
+
+
+@pytest.mark.parametrize("raw", ["0", "false", "no", "off", "", "maybe", "2"])
+def test_anything_else_leaves_it_off(monkeypatch, raw):
+    """Fail closed: an unrecognised value must not arm live money."""
+    monkeypatch.setenv(ses.COMPLETE_REQUOTE_ENV, raw)
+    assert ses.complete_requote_enabled() is False
+    assert "complete" not in ses.requote_relations()
+
+
+def test_the_flag_is_read_at_call_time_not_at_import(monkeypatch):
+    """An import that happened before the env was set must not pin it."""
+    monkeypatch.delenv(ses.COMPLETE_REQUOTE_ENV, raising=False)
+    assert ses.requote_relations() == ("open", "extend")
+    monkeypatch.setenv(ses.COMPLETE_REQUOTE_ENV, "1")
+    assert ses.requote_relations() == ("open", "extend", "complete")
+    monkeypatch.delenv(ses.COMPLETE_REQUOTE_ENV)
+    assert ses.requote_relations() == ("open", "extend")
+
+
+# ------------------------------------------------- open/extend are untouched
+def test_open_and_extend_requote_in_both_states(monkeypatch):
+    for raw, expect in (("1", True), ("0", False)):
+        monkeypatch.setenv(ses.COMPLETE_REQUOTE_ENV, raw)
+        rel = ses.requote_relations()
+        assert "open" in rel and "extend" in rel
+        assert ("complete" in rel) is expect
+
+
+def test_there_is_exactly_one_requote_condition_and_it_uses_the_helper():
+    """No second copy of the tuple can drift away from the helper."""
+    assert _SRC.count('return f"touch_moved:{touch}"') == 1
+    assert _SRC.count("if relation_ in requote_relations() and touch != px_:") == 1
+    # the old hard-coded tuple must be gone from the condition
+    assert 'if relation_ in ("open", "extend") and touch != px_:' not in _SRC
+
+
+# ------------------------------------------------------ the guards it keeps
+def test_the_crossing_guard_still_precedes_the_touch_check():
+    cross = _SRC.index('return f"would_cross:{opp_ask}"')
+    touch = _SRC.index('return f"touch_moved:{touch}"')
+    assert cross < touch
+    guard = _SRC[_SRC.index("if px_ >= D(str(opp_ask)):"):cross]
+    assert "relation_" not in guard          # applies to every relation
+
+
+def test_the_rejection_breaker_is_untouched():
+    assert ses.COMPLETE_REJECT_STREAK_MAX == 3
+    assert _SRC.count("if complete_reject_streak >= COMPLETE_REJECT_STREAK_MAX:") == 1
+    # the streak still advances only on venue rejections
+    assert _SRC.count('if end_reason.startswith("rejected"):') >= 1
+
+
+def test_no_money_or_risk_limit_moved():
+    """Every surface the owner named as preserved, checked by value."""
+    assert ses.SPRING_BAND_LO == __import__("decimal").Decimal("0.35")
+    assert ses.SPRING_BAND_HI == __import__("decimal").Decimal("0.65")
+    assert ses.DEFAULT_MAX_COMPLETE_ACTIONS == 12
+    for surface in ("unmatched_usd", "post_only", "maker"):
+        assert surface in _SRC
+
+
+def test_the_change_adds_no_new_price_source():
+    """The re-quote price is the touch the model returned, never a markup."""
+    # the touch is computed once, from the book, and reused
+    assert _SRC.count('return f"touch_moved:{touch}"') == 1
+    # no arithmetic that would pay beyond the touch
+    for markup in ("touch + spec", "touch + D(", "touch + tick", "px_ + tick"):
+        assert markup not in _SRC, markup
+
+
+# -------------------------------------------------- why it ships dark at all
+def test_the_reason_for_the_default_is_written_where_it_is_set():
+    block = _SRC[_SRC.index("COMPLETE_REQUOTE_ENV"): _SRC.index(
+        "def complete_requote_enabled")]
+    head = _SRC[_SRC.index("COMPLETE_REJECT_STREAK_MAX = 3"):
+                _SRC.index("def complete_requote_enabled")]
+    assert "L5_COMPLETION_EXTENSION_GATE_v1" in head
+    assert "DEFAULT OFF" in head
+    assert "0 of 868" in head
+    assert "fidelity, not a new strategy" in head

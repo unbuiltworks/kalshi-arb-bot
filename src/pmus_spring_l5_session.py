@@ -123,6 +123,38 @@ DEFAULT_MAX_COMPLETE_ACTIONS = 12
 # for orders that RESTED and did not fill; three consecutive refusals end
 # the loop rather than retrying into them.
 COMPLETE_REJECT_STREAK_MAX = 3
+# COMPLETE re-quote on a moved touch. The mechanism below already cancels and
+# re-quotes when L5's touch moves off a resting order, and COMPLETE has always
+# been excluded from it: 36 OPEN and 35 EXTEND orders exited via
+# repriced:touch_moved in the R5F tape against 0 of 868 COMPLETEs. Following
+# L5's own price when it moves is fidelity, not a new strategy -- the re-quote
+# posts at the touch the model returns and never a tick beyond it.
+#
+# DEFAULT OFF. L5_COMPLETION_EXTENSION_GATE_v1 is frozen and accumulating, and
+# a second change to the same surface would make neither attributable. This
+# ships dark and is enabled only by an explicit owner decision, per arm.
+COMPLETE_REQUOTE_ENV = "PMUS_SPRING_COMPLETE_REQUOTE"
+DEFAULT_COMPLETE_REQUOTE = False
+
+
+def complete_requote_enabled() -> bool:
+    """Is the COMPLETE touch_moved re-quote armed for this process?
+
+    Read at call time rather than at import so a test can flip it without
+    reloading the module, and so the live default cannot be captured by an
+    import that happened before the environment was set."""
+    raw = os.environ.get(COMPLETE_REQUOTE_ENV)
+    if raw is None:
+        return DEFAULT_COMPLETE_REQUOTE
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def requote_relations() -> tuple:
+    """Which relations may re-quote when the touch moves.
+
+    OPEN and EXTEND always; COMPLETE only when explicitly armed."""
+    return (("open", "extend", "complete") if complete_requote_enabled()
+            else ("open", "extend"))
 STATE_DURABLE_ENV = "PMUS_SPRING_STATE_DURABLE"    # operator override "1"
 
 # Spring gates — measured, from analysis/l5/l5_ramp_analysis.json
@@ -2187,7 +2219,7 @@ def _run_session_body(t: Optional[Transport] = None,
                                       else str(max(touch, D(track["max_touch"]))))
                 if px_ >= D(str(opp_ask)):
                     return f"would_cross:{opp_ask}"
-                if relation_ in ("open", "extend") and touch != px_:
+                if relation_ in requote_relations() and touch != px_:
                     return f"touch_moved:{touch}"
                 if inv.up + inv.dn > 0:
                     k = spring_state_key(inv, b["bid"], settlement_t, wall(),
