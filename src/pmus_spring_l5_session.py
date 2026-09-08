@@ -1516,6 +1516,31 @@ def run_session(t: Optional[Transport] = None,
                  "l5_target_size": fid.l5_target_size(
                      fid_art, last_skey.get("k") or "", relation_)})
 
+        def _venue_market_status(slug_: str) -> dict:
+            """The venue's own market flags at rejection time (read-only;
+            never raises; a failed read is reported as unreadable)."""
+            try:
+                resp = t.request("GET", f"/v1/market/slug/{slug_}",
+                                 base=q1.GATEWAY)
+                m = resp.get("market") if isinstance(resp, Mapping) else None
+                if not isinstance(m, Mapping):
+                    return {"status": None, "unreadable": "market_unparseable"}
+                out = {"status": m.get("status"), "active": m.get("active"),
+                       "closed": m.get("closed"), "archived": m.get("archived"),
+                       "ep3Status": m.get("ep3Status")}
+                # any other status-like field the venue serves (halts,
+                # suspensions) is carried verbatim, never interpreted
+                for k, v in m.items():
+                    lk = str(k).lower()
+                    if k not in out and isinstance(v, (str, bool, int)) and (
+                            "status" in lk or "halt" in lk or "suspend" in lk
+                            or "trading" in lk or "paused" in lk):
+                        out[str(k)] = v
+                return out
+            except Exception as exc:                  # noqa: BLE001
+                return {"status": None,
+                        "unreadable": f"{type(exc).__name__}:{str(exc)[:80]}"}
+
         def _classify_rejection(side_up_: bool, px_: D) -> dict:
             """Owner item 5 classes for a post-only rejection, from the
             FRESH book: crossed = venue/execution adaptation (the book
@@ -1536,14 +1561,25 @@ def run_session(t: Optional[Transport] = None,
             # is evidence against this code's acceptance model.
             margin = (opp_ask - px_) / D(str(spec["tick"]))
             crossed = margin <= 1
-            return {"class": ("venue/execution adaptation:"
-                              "post_only_cross_after_book_move" if px_ >= opp_ask
-                              else "venue/execution adaptation:"
-                                   "post_only_cross_within_1_tick_of_lagging_ask"
-                              if crossed else "implementation bug candidate:"
-                                   "rejected_at_non_crossing_price"),
-                    "crossed": crossed, "opp_ask": str(opp_ask),
-                    "margin_ticks": str(margin)}
+            klass = ("venue/execution adaptation:"
+                     "post_only_cross_after_book_move" if px_ >= opp_ask
+                     else "venue/execution adaptation:"
+                          "post_only_cross_within_1_tick_of_lagging_ask"
+                     if crossed else "implementation bug candidate:"
+                          "rejected_at_non_crossing_price")
+            # R5F 2026-09-07 (issue #167 comment 5577507821): 36 of 72
+            # classified rejections sat 2-12 ticks away from the fresh
+            # REST ask, in bursts of identical orders seconds apart, with
+            # no venue reason. The venue has been seen serving
+            # MARKET_STATUS_HALTED (in-play / maintenance) while the BBO
+            # still reads. Read the venue's own market status at rejection
+            # time so the next such burst is named. OBSERVABILITY ONLY:
+            # `crossed` (and everything that consumes it) is unchanged.
+            status = _venue_market_status(slug)
+            if status.get("status") not in (None, "MARKET_STATUS_OPEN"):
+                klass += f";venue_market_status={status.get('status')}"
+            return {"class": klass, "crossed": crossed, "opp_ask": str(opp_ask),
+                    "margin_ticks": str(margin), "venue_market": status}
 
         def _still_wanted(side_up_: bool, px_: D, relation_: str,
                           skey_: str):
@@ -2077,6 +2113,7 @@ def run_session(t: Optional[Transport] = None,
                     report["orders"][-1]["rejection_margin_ticks"] = \
                         rej.get("margin_ticks")
                     report["orders"][-1]["tick"] = str(spec["tick"])
+                    report["orders"][-1]["venue_market"] = rej.get("venue_market")
                     if rej["crossed"]:
                         sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                 if got > 0:
@@ -2203,6 +2240,7 @@ def run_session(t: Optional[Transport] = None,
                     report["orders"][-1]["rejection_margin_ticks"] = \
                         rej.get("margin_ticks")
                     report["orders"][-1]["tick"] = str(spec["tick"])
+                    report["orders"][-1]["venue_market"] = rej.get("venue_market")
                     if rej["crossed"]:
                         sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                     else:

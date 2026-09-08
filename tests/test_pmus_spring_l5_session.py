@@ -807,6 +807,47 @@ def test_complement_rejected_after_book_moved_through_price_is_a_venue_adaptatio
     assert spring.complement_acceptance_proven()          # NOT revoked
 
 
+def test_rejection_row_carries_the_venue_market_status(monkeypatch, tmp_path):
+    """R5F 2026-09-07 (5577507821): 36 rejections sat 2-12 ticks off the
+    fresh ask with no venue reason. The classifier now reads the venue's
+    own market flags at rejection time and names a non-OPEN status on
+    the class -- observability only: the crossed/not-crossed decision
+    and the proof revocation are unchanged."""
+    from tests.test_pmus_l5_continuous_session import (_armed_session_env,
+                                                        _ledger_with_fill)
+    _armed_session_env(monkeypatch, tmp_path)
+    _ledger_with_fill(tmp_path, slug="held")
+    _script_proposals(monkeypatch, ["complete"])
+    monkeypatch.setenv(spring.MAX_ACTIONS_ENV, "1")
+
+    class Halted(Fake):
+        def request(self, method, path, body=None, base=None):
+            out = super().request(method, path, body, base)
+            if path == "/v1/orders":
+                self.orders[out["id"]]["state"] = "ORDER_STATE_REJECTED"
+                self.open_order = None
+                self.halted = True
+            if path.startswith("/v1/market/slug/") and getattr(self, "halted", False):
+                out["market"]["status"] = "MARKET_STATUS_HALTED"
+                out["market"]["tradingHalted"] = True
+            return out
+    fake = Halted(bid="0.4300", ask="0.4350", fill_all=False)
+    fake.positions["held"] = {"netPositionDecimal": "0.02"}
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0, slug="held", gate_ok=True,
+                             resume=True)
+    o = rep["orders"][0]
+    assert o["end_reason"].startswith("rejected")
+    assert o["rejection_class"].startswith("implementation bug candidate")
+    assert o["rejection_class"].endswith(";venue_market_status=MARKET_STATUS_HALTED")
+    assert o["venue_market"]["status"] == "MARKET_STATUS_HALTED"
+    assert o["venue_market"]["tradingHalted"] is True      # carried verbatim
+    assert o["venue_market"]["closed"] is False
+    # the consumer of `crossed` is unchanged: a non-crossing rejection
+    # still revokes the proof exactly as before
+    assert spring.load_complement_proof()["proven"] is False
+
+
 def test_first_leg_refused_when_its_complement_preview_is_rejected(
         monkeypatch, tmp_path):
     from tests.test_pmus_l5_continuous_session import (_armed_session_env,
