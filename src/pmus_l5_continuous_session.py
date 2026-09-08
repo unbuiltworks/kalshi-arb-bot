@@ -1888,7 +1888,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 _log("heartbeat", campaign_id=campaign_id,
                      uptime_s=round(now - _hb["boot"], 1),
                      sessions=len(report["sessions"]),
-                     held=len(held_all), status=status, rss_mb=_rss_mb(),
+                     held=len(held_all), status=status,
+                     rss_mb=_rss_now_mb(), rss_peak_mb=_rss_peak_mb(),
                      evidence=("this line is the liveness signal: a missing "
                                "heartbeat means the process is gone, which "
                                "quiet logs alone can never tell you"))
@@ -2093,6 +2094,11 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                          inventory=rep.get("inventory"),
                          spring_gates=rep.get("spring_gates"),
                          reconcile=rep.get("reconcile"),
+                         # OWNER 5584807147 item 3: the venue-vs-ledger proof
+                         # has to be readable in the log, not only persisted
+                         # in the session report nobody can grep
+                         flat_verified=rep.get("flat_verified"),
+                         fill_reconciliation=rep.get("fill_reconciliation"),
                          filled_actions=_new_fills(rep),
                          submitted=len(rep.get("orders") or []),
                          orders=(rep.get("orders") or [])[-8:],
@@ -2252,6 +2258,8 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                  reason=rep.get("reason"), stop_reason=rep.get("stop_reason"),
                  inventory=rep.get("inventory"),
                  spring_gates=rep.get("spring_gates"),
+                 flat_verified=rep.get("flat_verified"),
+                 fill_reconciliation=rep.get("fill_reconciliation"),
                  filled_actions=_new_fills(rep),
                  submitted=len(rep.get("orders") or []),
                  orders=(rep.get("orders") or [])[-8:],
@@ -2411,12 +2419,25 @@ SUPERVISOR_BACKOFF_S = (5.0, 15.0, 30.0, 60.0, 120.0)
 HEARTBEAT_S = 300.0
 
 
-def _rss_mb() -> Optional[float]:
+def _rss_peak_mb() -> Optional[float]:
+    """The process high-water mark. NOT current memory: ru_maxrss is a peak
+    and reporting it as live RSS overstates it (the first heartbeat read
+    1056.6 while the platform measured 278 MB)."""
     try:
         import resource
-        rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         # Linux reports kilobytes
-        return round(rss / 1024.0, 1)
+        return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0, 1)
+    except Exception:                                   # noqa: BLE001
+        return None
+
+
+def _rss_now_mb() -> Optional[float]:
+    """Current resident set, read from /proc. None where /proc is absent
+    rather than a guess."""
+    try:
+        with open("/proc/self/statm", "r", encoding="ascii") as fh:
+            pages = int(fh.read().split()[1])
+        return round(pages * os.sysconf("SC_PAGE_SIZE") / (1024.0 ** 2), 1)
     except Exception:                                   # noqa: BLE001
         return None
 

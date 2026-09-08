@@ -128,8 +128,33 @@ def test_the_heartbeat_is_positive_liveness_evidence():
     process can only make while it is running."""
     from src import pmus_l5_continuous_session as m
     assert m.HEARTBEAT_S > 0
-    rss = m._rss_mb()
-    assert rss is None or rss > 0
+    for fn in (m._rss_now_mb, m._rss_peak_mb):
+        v = fn()
+        assert v is None or v > 0
+
+
+def test_current_memory_is_not_reported_as_the_peak():
+    """LIVE: the first heartbeat reported rss_mb 1056.6 while the platform
+    measured 278 MB, because ru_maxrss is a high-water mark. Current and
+    peak are now separate fields, and current can never exceed peak."""
+    from src import pmus_l5_continuous_session as m
+    now, peak = m._rss_now_mb(), m._rss_peak_mb()
+    if now is not None and peak is not None:
+        assert now <= peak + 1.0, (now, peak)
+    import inspect
+    src = inspect.getsource(m.run_campaign)
+    assert "rss_mb=_rss_now_mb()" in src and "rss_peak_mb=_rss_peak_mb()" in src
+
+
+def test_the_reconciliation_proof_reaches_the_log():
+    """OWNER 5584807147 item 3 asks for the venue-vs-ledger proof. It was
+    being computed and persisted but never emitted, so it could not be
+    read: both session_end rows now carry it."""
+    import inspect
+    from src import pmus_l5_continuous_session as m
+    src = inspect.getsource(m.run_campaign)
+    assert src.count("fill_reconciliation=rep.get(\"fill_reconciliation\")") == 2
+    assert src.count("flat_verified=rep.get(\"flat_verified\")") == 2
 
 
 def test_the_heartbeat_never_consumes_the_campaign_clock():
