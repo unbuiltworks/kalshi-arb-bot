@@ -10,10 +10,12 @@ from src import l5_r5f_cohort as coh
 
 
 def _settlement(slug, ts, *, status, confirmed, realized, residual,
-                matched="10.00", pair_cost="0.95", contribution="0.5000"):
+                matched="10.00", pair_cost="0.95", contribution="0.5000",
+                venue_qty="20.00", ledger_qty="20.00"):
     body = {
         "kind": "settlement", "slug": slug, "status": status,
         "settled": status != "PENDING_SETTLEMENT",
+        "venue_qty_total": venue_qty, "ledger_qty_total": ledger_qty,
         "realized_confirmed": confirmed, "realized_usd": realized,
         "breakdown": {
             "slug": slug, "fills": 4, "matched_pairs": matched,
@@ -167,3 +169,51 @@ def test_unreadable_and_irrelevant_rows_never_crash_the_build(tmp_path):
     p_bad = tmp_path / "missing.txt"
     res = coh.build([_dump(tmp_path, rows), str(p_bad)])
     assert [m["slug"] for m in res["markets"]] == ["m"]
+
+
+def test_zero_residual_is_refused_the_locked_value_when_the_fills_do_not_add_up(
+        tmp_path):
+    """aec-setkameua-vervas-kohboh-2026-09-08, live: the ledger read
+    residual 0.00 and would have locked +0.3318, but it had recorded 9.48
+    of the venue's 13.82 traded units and the position was 4.34 long at
+    resolution -- the venue's own realized was -1.5778. Zero residual in
+    the LEDGER only locks a value if the ledger saw every fill."""
+    rows = [
+        _settlement("missed_a_fill", "2026-09-07T20:00:00Z",
+                    status="SETTLED_REALIZED_UNCONFIRMED", confirmed=False,
+                    realized=None, residual="0.00", contribution="0.3318",
+                    venue_qty="13.8200", ledger_qty="9.48"),
+        _settlement("complete", "2026-09-07T20:10:00Z",
+                    status="SETTLED_REALIZED_UNCONFIRMED", confirmed=False,
+                    realized=None, residual="0.00", contribution="0.2164",
+                    venue_qty="21.6400", ledger_qty="21.64"),
+    ]
+    res = coh.build([_dump(tmp_path, rows)])
+    by = {m["slug"]: m for m in res["markets"]}
+    # nothing is claimed on the market whose fills do not reconcile
+    assert by["missed_a_fill"]["class"] == coh.INDETERMINATE
+    assert by["missed_a_fill"]["value_usd"] is None
+    assert "may not have been flat" in by["missed_a_fill"]["value_basis"]
+    # and the market that does reconcile is still locked
+    assert by["complete"]["class"] == coh.LOCKED_ZERO_RESIDUAL
+    assert by["complete"]["value_usd"] == "0.2164"
+    assert res["derived_locked_pre_fee_usd"] == "0.2164"
+    rec = res["fill_ledger_reconciliation"]
+    assert rec["checked"] == 2 and rec["reconciles"] == 1
+    assert [m["slug"] for m in rec["does_not_reconcile"]] == ["missed_a_fill"]
+    assert rec["does_not_reconcile"][0]["qty_delta"] == "4.3400"
+
+
+def test_a_row_without_a_venue_quantity_is_unknown_not_agreeing(tmp_path):
+    """Absent evidence must not be read as confirming evidence: with no
+    venue quantity there is nothing to reconcile against, so the locked
+    value is refused rather than granted by default."""
+    rows = [_settlement("no_venue_qty", "2026-09-07T20:00:00Z",
+                        status="SETTLED_REALIZED_UNCONFIRMED", confirmed=False,
+                        realized=None, residual="0.00", contribution="0.4000",
+                        venue_qty=None, ledger_qty="10.00")]
+    res = coh.build([_dump(tmp_path, rows)])
+    row = res["markets"][0]
+    assert row["qty_reconciliation"]["reconciles"] is None
+    assert row["class"] == coh.INDETERMINATE and row["value_usd"] is None
+    assert res["fill_ledger_reconciliation"]["no_venue_quantity"] == ["no_venue_qty"]

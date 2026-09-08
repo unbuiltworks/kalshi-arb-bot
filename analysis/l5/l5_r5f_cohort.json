@@ -4,30 +4,30 @@
   "cohort_since_utc": "2026-09-07T19:21:39Z",
   "labels": "Venue-confirmed realized comes from the venue only. Locked figures are DERIVED from venue-confirmed fills and are exact ONLY because a zero-residual market pays 1.00 per matched pair regardless of the result; they are PRE-FEE (the venue reports fees_usd as venue_unreported) and exclude separately credited maker rebates. Confirmed and derived are never summed into a single 'realized'.",
   "counts": {
-    "settled_markets_in_cohort": 15,
-    "venue_confirmed": 4,
+    "settled_markets_in_cohort": 16,
+    "venue_confirmed": 5,
     "locked_zero_residual": 11,
     "indeterminate": 0,
     "pending": 0,
     "markets_before_cohort": 20
   },
-  "venue_confirmed_realized_usd": "-9.2384",
+  "venue_confirmed_realized_usd": "-10.8162",
   "derived_locked_pre_fee_usd": "7.9417",
   "combined_indicative_usd": {
-    "value": "-1.2967",
+    "value": "-2.8745",
     "warning": "INDICATIVE ONLY -- mixes venue-confirmed realized with derived pre-fee figures. It is not a realized number and must never be reported as one."
   },
   "pairing_split": {
     "paired_to_zero": {
-      "markets": 11,
-      "sum_usd": "7.9417",
-      "negative_markets": 0,
+      "markets": 12,
+      "sum_usd": "6.3639",
+      "negative_markets": 1,
       "per_market": {
-        "n": 11,
-        "mean": 0.722,
+        "n": 12,
+        "mean": 0.5303,
         "ci95": [
-          0.2015,
-          1.4983
+          -0.0963,
+          1.3267
         ]
       }
     },
@@ -47,12 +47,30 @@
     "reading": "the split is descriptive, not causal: markets that pair to zero and markets that strand residual are not randomly assigned"
   },
   "expectancy_venue_confirmed_only": {
-    "n": 4,
-    "mean": -2.3096,
+    "n": 5,
+    "mean": -2.1632,
     "ci95": [
-      -3.4996,
-      -1.0909
+      -3.1647,
+      -1.1618
     ]
+  },
+  "fill_ledger_reconciliation": {
+    "question": "did our fill ledger see every fill the venue did? the locked derivation is only sound where it did",
+    "checked": 16,
+    "reconciles": 15,
+    "does_not_reconcile": [
+      {
+        "slug": "aec-setkameua-vervas-kohboh-2026-09-08",
+        "venue_qty_total": "13.8200",
+        "ledger_qty_total": "9.48",
+        "qty_delta": "4.3400",
+        "reconciles": false,
+        "class": "VENUE_CONFIRMED",
+        "value_usd": "-1.5778"
+      }
+    ],
+    "no_venue_quantity": [],
+    "reading": "a market whose quantities disagree is refused the locked value: the ledger's zero residual may be a missed fill rather than a flat book"
   },
   "fees_and_incentives": {
     "fees_usd": "venue_unreported on every settlement row; every derived figure here is PRE-FEE",
@@ -75,6 +93,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": "-3.8778",
+      "qty_reconciliation": {
+        "venue_qty_total": "18.5700",
+        "ledger_qty_total": "18.57",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "-3.8778",
       "value_basis": "venue_confirmed_realized",
       "paired_to_zero": false
@@ -95,6 +119,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": "-3.1213",
+      "qty_reconciliation": {
+        "venue_qty_total": "9.6200",
+        "ledger_qty_total": "9.62",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "-3.1213",
       "value_basis": "venue_confirmed_realized",
       "paired_to_zero": false
@@ -115,6 +145,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "21.6400",
+        "ledger_qty_total": "21.64",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.2164",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -135,6 +171,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "27.2800",
+        "ledger_qty_total": "27.28",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "1.5970",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -155,6 +197,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "16.6400",
+        "ledger_qty_total": "16.64",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0013",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -175,6 +223,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "33.4000",
+        "ledger_qty_total": "33.4",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.2780",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -195,6 +249,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "19.1600",
+        "ledger_qty_total": "19.16",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0425",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -215,6 +275,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": "-1.8252",
+      "qty_reconciliation": {
+        "venue_qty_total": "5.0700",
+        "ledger_qty_total": "5.07",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "-1.8252",
       "value_basis": "venue_confirmed_realized",
       "paired_to_zero": false
@@ -235,6 +301,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "17.4000",
+        "ledger_qty_total": "17.4",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.4140",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -255,6 +327,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "8.4600",
+        "ledger_qty_total": "8.46",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0212",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -275,6 +353,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "31.6800",
+        "ledger_qty_total": "31.68",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.4624",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -295,6 +379,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": "-0.4141",
+      "qty_reconciliation": {
+        "venue_qty_total": "42.5600",
+        "ledger_qty_total": "42.56",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "-0.4141",
       "value_basis": "venue_confirmed_realized",
       "paired_to_zero": false
@@ -315,6 +405,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "22.3200",
+        "ledger_qty_total": "22.32",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.3566",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -335,6 +431,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "27.2200",
+        "ledger_qty_total": "27.22",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.3746",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -355,8 +457,40 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "28.6400",
+        "ledger_qty_total": "28.64",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "4.1777",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
+      "paired_to_zero": true
+    },
+    {
+      "slug": "aec-setkameua-vervas-kohboh-2026-09-08",
+      "settled_utc": "2026-09-08T06:06:18.364414688Z",
+      "class": "VENUE_CONFIRMED",
+      "status": "REALIZED",
+      "fills": 3,
+      "matched_pairs": "4.74",
+      "matched_pair_cost": "0.930000",
+      "matched_contribution_usd": "0.3318",
+      "directional_residual_units": "0.00",
+      "residual_contribution_usd": "-1.9096",
+      "cost_basis_usd": "4.4082",
+      "maker_fills": 4,
+      "taker_fills": 0,
+      "fees_usd": "venue_unreported",
+      "realized_usd_venue": "-1.5778",
+      "qty_reconciliation": {
+        "venue_qty_total": "13.8200",
+        "ledger_qty_total": "9.48",
+        "qty_delta": "4.3400",
+        "reconciles": false
+      },
+      "value_usd": "-1.5778",
+      "value_basis": "venue_confirmed_realized",
       "paired_to_zero": true
     }
   ],
@@ -377,6 +511,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": "-0.0480",
+      "qty_reconciliation": {
+        "venue_qty_total": null,
+        "ledger_qty_total": null,
+        "qty_delta": null,
+        "reconciles": null
+      },
       "value_usd": "-0.0480",
       "value_basis": "venue_confirmed_realized",
       "paired_to_zero": false
@@ -397,6 +537,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "0.0400",
+        "ledger_qty_total": "0.04",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0004",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -417,6 +563,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "0.1600",
+        "ledger_qty_total": "0.16",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0048",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -437,6 +589,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "0.1200",
+        "ledger_qty_total": "0.12",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0052",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -457,6 +615,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "0.0800",
+        "ledger_qty_total": "0.08",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0030",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -477,6 +641,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "0.0400",
+        "ledger_qty_total": "0.04",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0024",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -497,6 +667,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "0.1200",
+        "ledger_qty_total": "0.12",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0015",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -517,6 +693,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "0.0200",
+        "ledger_qty_total": "0.02",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0002",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -537,6 +719,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "0.2000",
+        "ledger_qty_total": "0.20",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0051",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -557,6 +745,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": "-0.0174",
+      "qty_reconciliation": {
+        "venue_qty_total": "0.1000",
+        "ledger_qty_total": "0.10",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "-0.0174",
       "value_basis": "venue_confirmed_realized",
       "paired_to_zero": false
@@ -577,6 +771,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": "-0.0133",
+      "qty_reconciliation": {
+        "venue_qty_total": "0.0800",
+        "ledger_qty_total": "0.08",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "-0.0133",
       "value_basis": "venue_confirmed_realized",
       "paired_to_zero": false
@@ -597,6 +797,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "0.0200",
+        "ledger_qty_total": "0.02",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0028",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -617,6 +823,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "0.0600",
+        "ledger_qty_total": "0.06",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0008",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -637,6 +849,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": "-0.0416",
+      "qty_reconciliation": {
+        "venue_qty_total": "0.1200",
+        "ledger_qty_total": "0.12",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "-0.0416",
       "value_basis": "venue_confirmed_realized",
       "paired_to_zero": false
@@ -657,6 +875,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "0.2000",
+        "ledger_qty_total": "0.20",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0082",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -677,6 +901,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": "-6.2855",
+      "qty_reconciliation": {
+        "venue_qty_total": "19.2700",
+        "ledger_qty_total": "19.27",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "-6.2855",
       "value_basis": "venue_confirmed_realized",
       "paired_to_zero": false
@@ -697,6 +927,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "33.0800",
+        "ledger_qty_total": "33.08",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "1.0825",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -717,6 +953,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "32.5800",
+        "ledger_qty_total": "32.58",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "3.3928",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -737,6 +979,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": null,
+      "qty_reconciliation": {
+        "venue_qty_total": "20.4200",
+        "ledger_qty_total": "20.42",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "0.0082",
       "value_basis": "derived_locked_pre_fee: zero residual, so matched_pairs x (1.00 - pair_cost) regardless of the result",
       "paired_to_zero": true
@@ -757,6 +1005,12 @@
       "taker_fills": 0,
       "fees_usd": "venue_unreported",
       "realized_usd_venue": "-1.9912",
+      "qty_reconciliation": {
+        "venue_qty_total": "5.2400",
+        "ledger_qty_total": "5.24",
+        "qty_delta": "0.0000",
+        "reconciles": true
+      },
       "value_usd": "-1.9912",
       "value_basis": "venue_confirmed_realized",
       "paired_to_zero": false

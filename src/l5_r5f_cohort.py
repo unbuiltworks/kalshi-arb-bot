@@ -32,10 +32,25 @@ row, so these figures are PRE-FEE; and maker rebates are credited
 separately and are not included here. A locked figure is not a realized
 figure and is never summed into one.
 
+The locked derivation rests on ONE assumption, and it is checked here
+rather than assumed: that our fill ledger saw every fill. It is the
+LEDGER's residual that reads zero, and a fill the ledger missed makes a
+directional position look flat. That is not hypothetical --
+aec-setkameua-vervas-kohboh-2026-09-08 settled with ledger residual 0.00
+and a locked value of +0.3318 while the venue's own realized was -1.5778,
+because the ledger recorded 9.48 of the venue's 13.82 traded units (one
+4.34-unit partial fill, 05:57:10.97Z, between two that were recorded) and
+the position was 4.34 units LONG at resolution, not flat. So every row
+carries the venue's `venue_qty_total` against the ledger's
+`ledger_qty_total`, and a market whose quantities do not reconcile is
+refused the locked value and reported INDETERMINATE.
+
 Classification, in decreasing order of authority:
   VENUE_CONFIRMED          venue supplied realized_usd (realized_confirmed)
-  LOCKED_ZERO_RESIDUAL     settled, residual == 0 -> value is determined
-  INDETERMINATE            settled, residual != 0, venue gave no number
+  LOCKED_ZERO_RESIDUAL     settled, residual == 0, AND the venue's traded
+                           quantity reconciles with the ledger's
+  INDETERMINATE            settled and unvaluable: residual != 0 with no
+                           venue number, or quantities that do not reconcile
   PENDING                  not settled yet
 
 Usage:
@@ -114,6 +129,31 @@ def latest_by_slug(rows: Iterable[tuple]) -> dict:
     return out
 
 
+# a ledger that missed a fill can report zero residual on a market that
+# is not flat, so the locked derivation is allowed only within this much
+# of the venue's own traded quantity (a hair for decimal presentation,
+# not a tolerance for a missing fill -- the observed miss was 31.4%).
+QTY_RECONCILE_TOL = D("0.0001")
+
+
+def qty_reconciliation(obj: Mapping[str, Any]) -> dict:
+    """The venue's traded quantity against the ledger's. `reconciles` is
+    None when the row carries no venue quantity to check against: unknown
+    is not the same as agreeing, and the caller must not treat it as
+    agreement."""
+    venue = _d(obj.get("venue_qty_total"))
+    ledger = _d(obj.get("ledger_qty_total"))
+    out = {"venue_qty_total": obj.get("venue_qty_total"),
+           "ledger_qty_total": obj.get("ledger_qty_total"),
+           "qty_delta": None, "reconciles": None}
+    if venue is None or ledger is None:
+        return out
+    delta = venue - ledger
+    out["qty_delta"] = str(delta)
+    out["reconciles"] = bool(abs(delta) <= QTY_RECONCILE_TOL)
+    return out
+
+
 def classify(obj: Mapping[str, Any]) -> str:
     if obj.get("realized_confirmed") and obj.get("realized_usd") is not None:
         return VENUE_CONFIRMED
@@ -121,7 +161,10 @@ def classify(obj: Mapping[str, Any]) -> str:
         return PENDING
     resid = _d((obj.get("breakdown") or {}).get("directional_residual"))
     if resid is not None and resid == 0:
-        return LOCKED_ZERO_RESIDUAL
+        # zero residual is the LEDGER's reading; it only locks the value
+        # if the ledger saw every fill the venue did
+        if qty_reconciliation(obj)["reconciles"] is True:
+            return LOCKED_ZERO_RESIDUAL
     return INDETERMINATE
 
 
@@ -148,6 +191,7 @@ def market_row(ts: str, obj: Mapping[str, Any]) -> dict:
         "taker_fills": b.get("taker_fills"),
         "fees_usd": b.get("fees_usd"),
         "realized_usd_venue": str(venue) if venue is not None else None,
+        "qty_reconciliation": qty_reconciliation(obj),
     }
     # the single number this market contributes, and where it came from
     if kind == VENUE_CONFIRMED:
@@ -160,9 +204,17 @@ def market_row(ts: str, obj: Mapping[str, Any]) -> dict:
                               "of the result")
     else:
         row["value_usd"] = None
-        row["value_basis"] = ("none: settled with residual but the venue "
-                              "published no realizedPnl"
-                              if kind == INDETERMINATE else "none: not settled")
+        if kind != INDETERMINATE:
+            row["value_basis"] = "none: not settled"
+        elif (resid_units is not None and resid_units == 0
+              and row["qty_reconciliation"]["reconciles"] is not True):
+            row["value_basis"] = (
+                "none: the ledger reads zero residual but its traded "
+                "quantity does not reconcile with the venue's, so the "
+                "market may not have been flat and nothing is locked")
+        else:
+            row["value_basis"] = ("none: settled with residual but the venue "
+                                  "published no realizedPnl")
     row["paired_to_zero"] = bool(resid_units is not None and resid_units == 0)
     return row
 
@@ -256,6 +308,25 @@ def build(paths: Iterable[str], since_utc: str = R5F_START_UTC) -> dict:
         "expectancy_venue_confirmed_only": _bootstrap_mean_ci(
             [_d(r["value_usd"]) for r in cohort
              if r["class"] == VENUE_CONFIRMED and r["value_usd"] is not None]),
+        "fill_ledger_reconciliation": {
+            "question": ("did our fill ledger see every fill the venue "
+                         "did? the locked derivation is only sound where "
+                         "it did"),
+            "checked": sum(1 for r in cohort
+                           if r["qty_reconciliation"]["reconciles"] is not None),
+            "reconciles": sum(1 for r in cohort
+                              if r["qty_reconciliation"]["reconciles"] is True),
+            "does_not_reconcile": [
+                {"slug": r["slug"], **r["qty_reconciliation"],
+                 "class": r["class"], "value_usd": r["value_usd"]}
+                for r in cohort
+                if r["qty_reconciliation"]["reconciles"] is False],
+            "no_venue_quantity": [r["slug"] for r in cohort
+                                  if r["qty_reconciliation"]["reconciles"] is None],
+            "reading": ("a market whose quantities disagree is refused the "
+                        "locked value: the ledger's zero residual may be a "
+                        "missed fill rather than a flat book"),
+        },
         "fees_and_incentives": {
             "fees_usd": ("venue_unreported on every settlement row; every "
                          "derived figure here is PRE-FEE"),
@@ -308,6 +379,19 @@ def render_markdown(res: Mapping[str, Any]) -> str:
             f"| {r['settled_utc'][11:19]} | {r['slug']} | {r['class']} | "
             f"{r['matched_pairs']} | {r['matched_pair_cost']} | "
             f"{r['directional_residual_units']} | {r['value_usd']} |")
+    rec = res["fill_ledger_reconciliation"]
+    lines += ["", "## Fill-ledger reconciliation", "",
+              f"_{rec['question']}_", "",
+              f"- venue quantity checked against the ledger on "
+              f"{rec['checked']} markets; {rec['reconciles']} reconcile",
+              f"- markets that do NOT reconcile: "
+              f"{len(rec['does_not_reconcile'])}"]
+    for m in rec["does_not_reconcile"]:
+        lines.append(
+            f"  - `{m['slug']}` venue {m['venue_qty_total']} vs ledger "
+            f"{m['ledger_qty_total']} (delta {m['qty_delta']}) — "
+            f"{m['class']}, value {m['value_usd']}")
+    lines += ["", f"_{rec['reading']}._"]
     lines += ["", "## Fees and incentives", "",
               f"- {res['fees_and_incentives']['fees_usd']}",
               f"- {res['fees_and_incentives']['rebates']}",
