@@ -257,3 +257,25 @@ def test_a_missing_or_unreadable_log_is_skipped_not_fatal(tmp_path):
 def test_the_ab_reads_the_harvested_rows_when_the_volume_is_unreachable():
     src = Path("src/l5_state_translation.py").read_text(encoding="utf-8")
     assert "_progress_rows" in src and "progress_from_logs" in src
+
+
+def test_the_boot_row_says_which_build_is_producing_it():
+    """l5-shadow-loop ran the pre-emit build for 40 minutes on 2026-09-08 and
+    looked perfectly healthy doing it: Railway matches watch patterns against
+    the HEAD commit's diff, and the change had landed in an intermediate
+    commit of the same push, so the service was skipped. A build identity on
+    the boot row turns "running older code than you think" from invisible
+    into a one-line check."""
+    sha = ptape.code_sha16()
+    assert len(sha) == 16 and sha != "unreadable"
+    host = Path("src/l5_shadow_loop.py").read_text(encoding="utf-8")
+    boot = host.split("PMUS_PROGRESS_BOOT")[1][:400]
+    assert "code_sha" in boot and "emits_rows" in boot
+
+
+def test_the_standalone_boot_row_carries_it_too(capsys, monkeypatch, tmp_path):
+    monkeypatch.setenv("PMUS_PROGRESS_TAPE_DIR", str(tmp_path))
+    monkeypatch.setattr(ptape, "seed_last_from_tape", lambda *a, **k: {})
+    ptape.main(["--once", "--tick-s", "1e9"])
+    out = capsys.readouterr().out
+    assert "PMUS_PROGRESS_BOOT" in out and "code_sha" in out

@@ -1007,7 +1007,9 @@ class ShadowLoop:
             self._progress_obs = obs
             self.out("PMUS_PROGRESS_BOOT " + json.dumps(
                 {"tick_s": obs.tick_s, "seeded_slugs": len(obs.last),
-                 "read_only": True, "host": "l5-shadow-loop"}, sort_keys=True))
+                 "read_only": True, "host": "l5-shadow-loop",
+                 "code_sha": ptape.code_sha16(), "emits_rows": True},
+                sort_keys=True))
         if obs is False:
             return
         try:

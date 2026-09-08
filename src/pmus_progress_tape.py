@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import hashlib
 import json
 import os
 import sys
@@ -70,6 +71,22 @@ STALE_TABLE_S = 1800.0
 
 LABELS = ("venue-served game position, observed continuously and "
           "independently of campaign selection; NOT a settlement time")
+
+
+def code_sha16() -> str:
+    """Hash of THIS module's own source, printed on every boot row.
+
+    Found the hard way on 2026-09-08: l5-shadow-loop kept running the build
+    from before the log emission was added, because Railway evaluates watch
+    patterns against the HEAD commit's diff and the change had landed in an
+    intermediate commit of the same push. The service looked healthy and was
+    silently producing the old output. A build identity on the boot row makes
+    "running older code than you think" visible instead of invisible."""
+    try:
+        return hashlib.sha256(
+            open(__file__, "rb").read()).hexdigest()[:16]
+    except OSError:
+        return "unreadable"
 
 
 def _f(v: Any) -> Optional[float]:
@@ -426,6 +443,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         {"tape_dir": str(tape_dir()), "tick_s": obs.tick_s,
          "keepalive_s": KEEPALIVE_S, "budget": TAPE_BUDGET_BYTES,
          "seeded_slugs": len(obs.last), "read_only": True,
+         "code_sha": code_sha16(), "emits_rows": True,
          "labels": LABELS}, sort_keys=True), flush=True)
     while True:
         row = obs.maybe_tick()
