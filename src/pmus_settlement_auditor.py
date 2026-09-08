@@ -331,6 +331,28 @@ def flat_at_resolution(public: Mapping[str, Any], pos: Any, avail: Any,
     }
 
 
+def traded_qty_for_slug(slug: str, t: Optional[q1.Transport] = None
+                        ) -> Optional[str]:
+    """Shares the venue says this account has traded in ONE market, from the
+    venue's own trade activities. Used by the live session to reconcile its
+    fill ledger against the venue while the market is still open (OWNER GO
+    5584132560 item 2); the audit path uses the same walk at settlement, so
+    both ask the venue the same question.
+
+    None means the venue could not be asked, which the caller must treat as
+    "unknown", never as "nothing traded"."""
+    try:
+        t = t or q1.Transport()
+        walk = activity_pages(t, since=first_fill_time(slug))
+        trades = [r for r in walk["rows"]
+                  if r.get("type") == "ACTIVITY_TYPE_TRADE"
+                  and isinstance(r.get("trade"), Mapping)
+                  and r["trade"].get("marketSlug") == slug]
+        return venue_qty_total(_trade_summary(trades, slug))
+    except Exception:                                   # noqa: BLE001
+        return None
+
+
 def audit_market(slug: str, t: Optional[q1.Transport] = None) -> dict:
     t = t or q1.Transport()
     since = first_fill_time(slug)

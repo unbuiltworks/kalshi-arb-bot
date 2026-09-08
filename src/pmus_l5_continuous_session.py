@@ -37,7 +37,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from decimal import Decimal as D
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 
 from src import pmus_spring_l5_probe_entry as entry
 from src import pmus_incentive_audit as incentives
@@ -1875,10 +1875,23 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     fidelity_eval(wall(), force=True)
     # the session bound follows the ACTIVE rung (R5F: continuous, 10,080 =
     # one per minute for the 7-day horizon); the R1..R4 default is 48
+    _hb = {"t": 0.0, "boot": wall()}
     while clock() < stop_at and len(report["sessions"]) - sessions_base < \
             ladder.max_sessions_per_campaign(default=MAX_SESSIONS_PER_CAMPAIGN) + resumes:
         try:
             now = wall()
+            if now - _hb["t"] >= HEARTBEAT_S:
+                # the heartbeat reads only values this cycle already has --
+                # it must never consume the campaign clock, or observing
+                # the loop would change it
+                _hb["t"] = now
+                _log("heartbeat", campaign_id=campaign_id,
+                     uptime_s=round(now - _hb["boot"], 1),
+                     sessions=len(report["sessions"]),
+                     held=len(held_all), status=status, rss_mb=_rss_mb(),
+                     evidence=("this line is the liveness signal: a missing "
+                               "heartbeat means the process is gone, which "
+                               "quiet logs alone can never tell you"))
             fidelity_eval(now)
             if armed:
                 # OWNER 5552607804: a market we already hold is CONTINUED
@@ -2357,18 +2370,160 @@ def _install_term_handler() -> None:
         pass
 
 
-def main() -> int:
-    _install_term_handler()
+# ---------------------------------------------------------------------------
+# OWNER GO 5584132560 items 1 and 3: a clean end must not leave the lane
+# down, and it must not destroy the evidence of why it ended.
+# ---------------------------------------------------------------------------
+
+# A campaign that ends for one of these reasons has NOT been told to stop:
+# the object ended, the shell still permits operating, and leaving the lane
+# down until a human notices is the outage we are fixing. Anything not
+# listed here -- a loss stop, a halt, an un-durable state, missing
+# credentials, foreign open orders, and every owner decision point such as
+# CAMPAIGN_RUNG_COMPLETE or a CAMPAIGN_WAITING approval gate -- is NOT
+# auto-restarted. Restarting through an approval gate would consume an
+# approval the owner has not given.
+RECOVERABLE_PREFIXES = ("CAMPAIGN_SETTLED", "CAMPAIGN_RESUMING")
+RECOVERABLE_EXACT = ("CAMPAIGN_HORIZON",)
+
+SUPERVISOR_MAX_RESTARTS_ENV = "PMUS_SPRING_MAX_RESTARTS_PER_HOUR"
+DEFAULT_MAX_RESTARTS_PER_HOUR = 12
+SUPERVISOR_BACKOFF_S = (5.0, 15.0, 30.0, 60.0, 120.0)
+
+# Liveness is POSITIVE evidence that the process is running, not the
+# absence of log lines. The 06:30-10:40 outage looked exactly like a quiet
+# market from the logs alone; a missing heartbeat cannot.
+HEARTBEAT_S = 300.0
+
+
+def _rss_mb() -> Optional[float]:
     try:
-        report = run_campaign()
+        import resource
+        rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # Linux reports kilobytes
+        return round(rss / 1024.0, 1)
+    except Exception:                                   # noqa: BLE001
+        return None
+
+
+def is_recoverable(status: str) -> bool:
+    s = str(status or "")
+    return s.startswith(RECOVERABLE_PREFIXES) or s in RECOVERABLE_EXACT
+
+
+def compact_end_row(report: Mapping[str, Any], *, restart: str) -> dict:
+    """ONE structured line that survives Railway's rate limit, carrying the
+    terminal cause the full report used to bury under 100k pretty-printed
+    lines (the 06:30Z exit dropped 117,262 messages, its own `status`
+    among them). The full report is persisted durably; this is what the
+    log has to keep."""
+    sessions = report.get("sessions") or []
+    settlements = report.get("settlements") or []
+    exit_reason = report.get("exit_reason") or {}
+    recon = [s.get("fill_reconciliation") for s in sessions
+             if isinstance(s, Mapping) and s.get("fill_reconciliation")]
+    return {
+        "kind": "campaign_end",
+        "status": report.get("status"),
+        "reason": exit_reason.get("reason") or report.get("reason"),
+        "campaign_id": report.get("campaign_id"),
+        "sessions": len(sessions),
+        "filled_markets": len(report.get("filled_markets") or []),
+        "settled": len(settlements),
+        "pending": sum(1 for s in settlements
+                       if str((s or {}).get("status") or "").startswith("PENDING")),
+        "realized_pnl": report.get("realized_pnl"),
+        "realized_confirmed_by_venue": bool(report.get("realized_pnl")),
+        "daily_stop": report.get("daily_stop_state"),
+        "fill_reconciliation": {
+            "sessions_with_audit": len(recon),
+            "may_assert_flat_all": all(bool(r.get("may_assert_flat"))
+                                       for r in recon) if recon else None,
+            "recovered_qty": [r.get("recovered_qty") for r in recon
+                              if r.get("recovered_qty") not in (None, "0")],
+            "contradictions": sum(len(r.get("contradictions") or [])
+                                  for r in recon),
+        },
+        "next": restart,
+        "full_report": "persisted to the durable ledger, not to stdout",
+    }
+
+
+def _persist_full_report(report: Mapping[str, Any]) -> Optional[str]:
+    """The whole document, durably, exactly once. Printing it is what
+    destroyed the terminal evidence; the ledger keeps it instead."""
+    try:
+        if base.armed() and entry.durable_state_reason() is None:
+            base.q1.ledger_append({"kind": "campaign_report", "spring": True,
+                                   **report})
+            return "ledger"
+    except Exception as exc:                            # noqa: BLE001
+        _log("campaign_report_persist_failed",
+             err=f"{type(exc).__name__}:{str(exc)[:80]}")
+    return None
+
+
+def _run_once() -> dict:
+    try:
+        return run_campaign()
     except KeyboardInterrupt:
         _log("campaign_interrupted", reason="SIGTERM_or_interrupt")
-        report = {"campaign": "pmus-l5-continuous-v1",
-                  "status": "CAMPAIGN_STOP:INTERRUPTED", "realized_pnl": None}
-    print(json.dumps(report, indent=1, default=str), flush=True)
-    if base.armed() and entry.durable_state_reason() is None:
-        base.q1.ledger_append({"kind": "campaign_report", "spring": True,
-                               **report})
+        return {"campaign": "pmus-l5-continuous-v1",
+                "status": "CAMPAIGN_STOP:INTERRUPTED", "realized_pnl": None}
+
+
+def main(argv: Optional[Sequence[str]] = None,
+         *, sleep=time.sleep, clock=time.time) -> int:
+    """Supervise the campaign IN THIS PROCESS. One process means a restart
+    can never race a still-running one into duplicate orders, and the
+    durable campaign state is simply still there.
+
+    The loop refuses to spin: the same recoverable status twice in a row
+    with no new settlement between them is treated as stuck and fails
+    closed, and restarts are capped per hour."""
+    _install_term_handler()
+    max_restarts = int(os.getenv(SUPERVISOR_MAX_RESTARTS_ENV,
+                                 str(DEFAULT_MAX_RESTARTS_PER_HOUR)))
+    started = clock()
+    restarts = 0
+    last_status = None
+    last_settled = -1
+    report: dict = {}
+    while True:
+        report = _run_once()
+        status = str(report.get("status", ""))
+        settled = len(report.get("settlements") or [])
+        _persist_full_report(report)
+
+        if not is_recoverable(status):
+            _log("campaign_end", **compact_end_row(
+                report, restart="none: this status is an owner decision or a "
+                                "stop, and is never auto-restarted"))
+            break
+        if restarts >= max_restarts and (clock() - started) < 3600:
+            _log("campaign_end", **compact_end_row(
+                report, restart=f"none: {max_restarts} restarts in the last "
+                                f"hour, failing closed rather than spinning"))
+            _log("PMUS_SPRING_ALARM", alarm="restart_budget_exhausted",
+                 restarts=restarts, status=status)
+            break
+        if status == last_status and settled == last_settled:
+            _log("campaign_end", **compact_end_row(
+                report, restart="none: the same status repeated with no new "
+                                "settlement, so restarting would spin"))
+            _log("PMUS_SPRING_ALARM", alarm="campaign_stuck", status=status)
+            break
+
+        wait = SUPERVISOR_BACKOFF_S[min(restarts, len(SUPERVISOR_BACKOFF_S) - 1)]
+        _log("campaign_end", **compact_end_row(
+            report, restart=f"same process, in {wait}s (restart "
+                            f"{restarts + 1} of {max_restarts} this hour)"))
+        last_status, last_settled = status, settled
+        restarts += 1
+        if (clock() - started) >= 3600:
+            started, restarts = clock(), 1
+        sleep(wait)
+
     safe_prefix = ("SHADOW_", "CAMPAIGN_")
     ok = str(report.get("status", "")).startswith(safe_prefix) or \
         report.get("status") in ("NO_CREDENTIALS", "DURABLE_STATE_REQUIRED")

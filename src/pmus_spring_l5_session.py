@@ -66,6 +66,7 @@ from decimal import ROUND_DOWN, Decimal as D
 from typing import Any, Mapping, Optional
 
 from src import pmus_micro_executor as micro
+from src import pmus_fill_ledger as fl
 from src import pmus_l5_persistence_v2 as pv2
 from src import pmus_l5_fidelity_live as fid
 from src.polymarket_l5.action_model import state_key
@@ -1125,7 +1126,7 @@ def _relation_mass(prop: Mapping[str, Any], relation: str) -> float:
 
 
 def _await_order(t: Transport, oid: str, qty: D, until: float,
-                 clock, sleep, still_wanted=None) -> tuple:
+                 clock, sleep, still_wanted=None, ledger=None) -> tuple:
     """One outstanding order: rest until filled, until the deadline, or
     until ``still_wanted()`` names a reason the action is no longer the
     current L5 action; then cancel-and-harvest.
@@ -1133,13 +1134,27 @@ def _await_order(t: Transport, oid: str, qty: D, until: float,
     Returns ``(filled_qty, rest_s, end_reason)`` with the exact
     authoritative filled Decimal quantity (0 for none) and the measured
     rest time, so category fill hazard can be estimated later.
+
+    LIVE 2026-09-08 (vervas-kohboh, OWNER GO 5584132560 item 2): this used
+    to ask for a cancel, discard the answer, read the order's status ONCE
+    and never look again. Order CC1E3Y7TPQ45 was never confirmed cancelled,
+    stayed live on the venue and filled 4.34 units 5.7 s later, invisible
+    to the ledger for good; the market then read flat while it was 4.34
+    long. So the cancel's verdict is now honoured, an unconfirmed cancel is
+    re-read after a settle delay, and the order stays OPEN in ``ledger``
+    until the VENUE reports a terminal state.
     """
     start = clock()
     fill = None
     end_reason = "deadline"
+    if ledger is not None:
+        ledger.track(oid, meta={"requested_qty": str(qty)})
     try:
         while clock() < until:
-            fill = micro.authoritative_fill(q1._order_status(t, oid), qty)
+            status = q1._order_status(t, oid)
+            if ledger is not None:
+                ledger.ingest(oid, status)
+            fill = micro.authoritative_fill(status, qty)
             if fill is not None:
                 end_reason = "filled"
                 break
@@ -1154,17 +1169,77 @@ def _await_order(t: Transport, oid: str, qty: D, until: float,
         # rejection pattern is only diagnosable if the reason is logged
         return D("0"), round(clock() - start, 3), f"rejected:{str(exc)[:120]}"
     if fill is None:
+        cancelled = False
         try:
-            q1.cancel_exact(t, oid)
+            cancelled = bool(q1.cancel_exact(t, oid))
         except RejectedNoFill:
             return D("0"), round(clock() - start, 3), end_reason
         except Exception:
-            pass
+            cancelled = False
         fill = micro._terminal_positive_fill(t, oid, qty)
-        if fill is not None:
+        if not cancelled:
+            # the venue did not confirm the cancel, so the order may still
+            # be live and may still be filling. Wait out the race and read
+            # again; the larger cumulative quantity is the true one.
+            sleep(fl.CANCEL_SETTLE_S)
+            again = micro._terminal_positive_fill(t, oid, qty)
+            if again is not None and (fill is None or
+                                      D(str(again["qty"])) > D(str(fill["qty"]))):
+                fill = again
+                end_reason = "filled_in_cancel_race"
+            elif fill is None:
+                end_reason = "unconfirmed_cancel"
+        if fill is not None and end_reason == "deadline":
             end_reason = "filled_on_cancel"
+    if ledger is not None:
+        try:
+            ledger.ingest(oid, q1._order_status(t, oid))
+            ledger.close_if_terminal(oid, q1._order_status(t, oid))
+        except Exception:                               # noqa: BLE001
+            pass                    # unreadable stays OPEN, never "finished"
     got = D(str(fill["qty"])) if fill else D("0")
     return got, round(clock() - start, 3), end_reason
+
+
+def _reconcile_fills(t: Transport, slug: str, ledger, inv: Inventory) -> dict:
+    """Re-read every order the venue has not declared terminal, book any
+    quantity they gained after we stopped waiting, and compare the venue's
+    own traded quantity for this market with our ledger's.
+
+    Returns the audit row plus `may_assert_flat`: whether any calculation
+    that ASSUMES flatness, a zero residual or a locked value is allowed to
+    proceed. It is False on disagreement AND on missing venue evidence --
+    unknown is not agreement."""
+    audit: dict = {"reconciled": None, "recovered_qty": "0",
+                   "venue_vs_ledger": fl.venue_vs_ledger(None, None),
+                   "may_assert_flat": False}
+    if t is None or not slug:
+        audit["why"] = "no transport or slug; nothing can be proven"
+        return audit
+    try:
+        audit["reconciled"] = ledger.reconcile(
+            lambda oid: q1._order_status(t, oid))
+        audit["recovered_qty"] = audit["reconciled"]["recovered_qty"]
+    except Exception as exc:                            # noqa: BLE001
+        audit["reconcile_error"] = f"{type(exc).__name__}:{str(exc)[:80]}"
+    try:
+        from src import pmus_settlement_auditor as settle_audit
+        venue_qty = settle_audit.traded_qty_for_slug(slug, t)
+    except Exception:                                   # noqa: BLE001
+        venue_qty = None
+    audit["venue_vs_ledger"] = fl.venue_vs_ledger(venue_qty, inv.up + inv.dn)
+    audit["may_assert_flat"] = fl.may_assert_flat(audit["venue_vs_ledger"])
+    if audit["reconciled"] and (audit["reconciled"]["still_open"]
+                                or audit["reconciled"]["unreadable"]):
+        # an order the venue has not closed can still fill; nothing that
+        # assumes a settled book may proceed while one is outstanding
+        audit["may_assert_flat"] = False
+        audit["open_orders_block_flat_claim"] = True
+    if getattr(ledger, "contradictions", None):
+        audit["may_assert_flat"] = False
+        audit["contradictions"] = ledger.contradictions
+    audit["provenance"] = getattr(ledger, "provenance", [])[-16:]
+    return audit
 
 
 def held_inventory_from_ledger(slug: str) -> Inventory:
@@ -1467,6 +1542,11 @@ def run_session(t: Optional[Transport] = None,
         if live_block:
             return {**report, "status": "SPRING_SAFE_REFUSAL",
                     "reason": live_block}
+        # OWNER GO 5584132560 item 2: one idempotent, order-keyed fill
+        # ledger for this session. Every order we submit is tracked in it
+        # and stays OPEN until the VENUE reports a terminal state, so a
+        # fill that lands after we stop waiting is still booked.
+        fill_ledger = fl.FillLedger()
         # item 3: give every earlier submission its authoritative terminal
         # row before the cap is computed from FILLED notional
         if "reconcile" not in report:          # resume reconciled earlier
@@ -2181,7 +2261,8 @@ def run_session(t: Optional[Transport] = None,
                         prop["next_reevaluation_s"], MIN_REEVAL_S,
                         maker_rest_max_s())),
                     clock, sleep,
-                    still_wanted=_still_wanted(side_up, px, relation, skey))
+                    still_wanted=_still_wanted(side_up, px, relation, skey),
+                    ledger=fill_ledger)
                 # every SUBMITTED order is reported, filled or not: the
                 # ladder is submitted -> filled -> settled -> realized
                 _harvest(oid, f"spring_{relation}_{actions + 1}", side_up,
@@ -2296,7 +2377,7 @@ def run_session(t: Optional[Transport] = None,
                     min(stop_at, clock() + max(
                         prop["next_reevaluation_s"], MIN_REEVAL_S,
                         maker_rest_max_s())),
-                    clock, sleep, still_wanted=sw)
+                    clock, sleep, still_wanted=sw, ledger=fill_ledger)
                 _harvest(oid, f"spring_complete_{actions + 1}", deficit_up,
                          px, qty, "complete", got, rest_s, end_reason)
                 report["orders"][-1]["rest_book"] = dict(sw.track)
@@ -2342,9 +2423,38 @@ def run_session(t: Optional[Transport] = None,
                     record_behavioral_fill(inv, fid_art, skey, "complete", deficit_up)
             actions += 1
 
+        # OWNER GO 5584132560 item 2: before this session claims anything
+        # about what it holds, re-read every order the venue has not
+        # declared terminal and book whatever they gained after we stopped
+        # waiting. This is the read that would have caught the 4.34 units
+        # on vervas-kohboh.
+        report["fill_reconciliation"] = _reconcile_fills(
+            t, slug, fill_ledger, inv)
         status = ("SPRING_MATCHED" if inv.matched > 0 and inv.residual == 0
                   else ("SPRING_RESIDUAL_HOLD" if inv.up + inv.dn > 0
                         else "SPRING_NO_FILL"))
+        # The status describes OUR ledger and keeps its existing meaning --
+        # strict-evidence admission counts these strings, so changing them
+        # would change behaviour, which this fix may not do. What changes
+        # is that the report now says whether the VENUE confirmed it.
+        # `flat_verified` is False both when the venue disagrees and when
+        # it could not be asked, and every downstream calculation that
+        # assumes flatness or a locked value must read it before claiming
+        # one. Nothing valued vervas-kohboh at +0.3318 would have passed
+        # this flag.
+        recon = report["fill_reconciliation"]
+        report["flat_verified"] = bool(recon["may_assert_flat"])
+        if recon["venue_vs_ledger"].get("agrees") is False:
+            # the venue traded a quantity our ledger does not hold: a risk
+            # event, not a rounding note. The resume guard already refuses
+            # to add exposure on a market whose inventory cannot be
+            # reconstructed exactly; this makes the cause loud.
+            q1.ledger_append({"kind": "alarm", "spring": True, "slug": slug,
+                              "alarm": "venue_ledger_quantity_mismatch",
+                              **recon["venue_vs_ledger"]})
+            print("PMUS_SPRING_ALARM " + json.dumps(
+                {"alarm": "venue_ledger_quantity_mismatch", "slug": slug,
+                 **recon["venue_vs_ledger"]}), flush=True)
         pair = (str(inv.avg_up() + inv.avg_dn())
                 if inv.matched > 0 and inv.up and inv.dn else None)
         return {**report, "status": status, "actions": inv.actions,
