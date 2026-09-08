@@ -29,6 +29,11 @@ COPY src/pmus_settlement_auditor.py src/pmus_settlement_auditor.py
 # read-only incentive economics audit (OWNER 5561142758): earnings endpoint,
 # activity credits, trade fee fields, balances, published programs
 COPY src/pmus_incentive_audit.py src/pmus_incentive_audit.py
+# the reward-status split the audit reports with (OWNER 5588925913): a
+# SKIPPED or PENDING reward is an accrual, never credited income. The audit
+# imports this, so it MUST be in the image -- the import is also guarded so
+# a missing file degrades the audit instead of halting the lane.
+COPY src/l5_realized_bridge.py src/l5_realized_bridge.py
 COPY src/pmus_spring_l5_probe_entry.py src/pmus_spring_l5_probe_entry.py
 COPY src/pmus_spring_l5_session.py src/pmus_spring_l5_session.py
 COPY src/pmus_micro_executor.py src/pmus_micro_executor.py

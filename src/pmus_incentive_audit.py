@@ -130,7 +130,27 @@ def earnings(t: q1.Transport) -> dict:
             prog = str(row.get("programId") or row.get("program") or row.get("type")
                        or row.get("programType") or "?")
             by_prog[prog] += 1
+        # A REWARD ROW IS NOT MONEY UNTIL THE VENUE SAYS IT PAID. Summing
+        # every row into one total_usd reported $0.93 of "earnings" while
+        # every row observed was SKIPPED or PENDING -- an accrual quoted as
+        # income. The status split is emitted so the headline can never be
+        # read as credited again, and the bridge consumes THIS, not total.
+        # guarded: an audit that cannot split statuses must degrade to
+        # "unknown", never halt the lane it is only observing
+        try:
+            from src import l5_realized_bridge as bridge
+            status_split = bridge.rewards_by_status(rows)
+        except Exception as exc:                       # noqa: BLE001
+            status_split = {"credited_usd": None,
+                            "accrued_but_not_credited_usd": None,
+                            "by_status": {"UNAVAILABLE": repr(exc)[:120]}}
         out.update({"rows": len(rows), "rows_with_amount": n_amount,
+                    "total_usd_all_statuses": str(total) if n_amount else None,
+                    "credited_usd": status_split["credited_usd"],
+                    "accrued_not_credited_usd":
+                        status_split["accrued_but_not_credited_usd"],
+                    "by_status": status_split["by_status"],
+                    "rows_detail": [dict(r) for r in rows[:50]],
                     "total_usd": str(total) if n_amount else None,
                     "by_program": dict(by_prog),
                     "sample": json.loads(json.dumps(rows[0], default=str)) if rows else None,

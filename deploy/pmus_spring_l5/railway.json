@@ -8,6 +8,7 @@
       "src/pmus_l5_continuous_session.py",
       "src/pmus_settlement_auditor.py",
       "src/pmus_incentive_audit.py",
+      "src/l5_realized_bridge.py",
       "src/pmus_spring_l5_probe_entry.py",
       "src/pmus_spring_l5_session.py",
       "src/pmus_spring_evidence_transfer.py",
