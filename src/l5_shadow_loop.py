@@ -817,7 +817,67 @@ class ShadowLoop:
             {"utc": proposal["utc"], "path": str(path), "verdict": verdict,
              "promotion": "REQUIRES_OWNER_DECISION", "proposed_lookup_version": version,
              "train": len(train), "holdout": len(hold)}))
+        self.out("L5_SHADOW_PROPOSAL_SUMMARY " + json.dumps(
+            self.proposal_summary(proposal, built["deltas"], train, hold, frozen_s, cand_s),
+            default=str))
         return path
+
+    def proposal_summary(self, proposal: Mapping[str, Any], deltas: List[Dict[str, Any]],
+                         train: List[Dict[str, Any]], hold: List[Dict[str, Any]],
+                         frozen_s: Mapping[str, Any], cand_s: Mapping[str, Any]) -> Dict[str, Any]:
+        """One owner-readable stdout summary of a written proposal (OWNER
+        5577286614 item 4). Built only from objects the proposal already
+        holds -- no full-history object, the top-10 deltas carry <= 16
+        action probabilities each."""
+        def _dist(counts: Mapping[str, int]) -> Dict[str, float]:
+            tot = float(sum(counts.values()) or 1)
+            return {a: round(c / tot, 4) for a, c in sorted(counts.items(), key=lambda kv: -kv[1])}
+
+        def _span(rows: List[Dict[str, Any]]) -> Optional[List[str]]:
+            if not rows:
+                return None
+            lo = hi = rows[0]["ts"]
+            for d in rows:
+                lo, hi = min(lo, d["ts"]), max(hi, d["ts"])
+            return [_utc(lo), _utc(hi)]
+
+        def _view(s: Mapping[str, Any]) -> Dict[str, Any]:
+            beh = s.get("behavioral") or {}
+            return {"relation_agreement": s.get("relation_agreement"),
+                    "exact_agreement": s.get("exact_agreement"),
+                    "mean_prob_of_observed_action": s.get("mean_prob_of_observed_action"),
+                    "relation_l1_observed_vs_expected": beh.get("l1_sampled_vs_l5"),
+                    "post_fill_complete_gap_pp": (beh.get("post_fill") or {}).get("complete_freq_gap_pp_sampled"),
+                    "off_distribution_pct": s.get("off_distribution_pct")}
+        top = []
+        for r in deltas[:10]:
+            key = r["full_key"]
+            frozen_c = (self.model.get("full") or {}).get(key) or {}
+            cand_c = dict(frozen_c)
+            for a, c in r["added"].items():
+                cand_c[a] = cand_c.get(a, 0) + c
+            top.append({"key": key, "n": {"frozen": r["frozen_n"], "candidate": r["candidate_n"],
+                                          "added": sum(r["added"].values())},
+                        "frozen_dist": _dist(frozen_c), "candidate_dist": _dist(cand_c),
+                        "frozen_relation": pv2.relation_mass(_dist(frozen_c)) if frozen_c else {},
+                        "candidate_relation": pv2.relation_mass(_dist(cand_c)),
+                        "modal_changed": r["modal_changed"], "state_new": r["state_new"]})
+        ev = proposal.get("evidence") or {}
+        val = proposal.get("validation") or {}
+        return {
+            "utc": proposal.get("utc"), "proposed_lookup_version": proposal.get("proposed_lookup_version"),
+            "verdict": val.get("verdict"), "promotion": "REQUIRES_OWNER_DECISION",
+            "frozen_model_sha": self.model_sha, "lookup_version": CANONICAL_LOOKUP_VERSION,
+            "candidate_sha": (proposal.get("candidate_artifact") or {}).get("sha256_16"),
+            "train": len(train), "holdout": len(hold),
+            "train_span_utc": _span(train), "holdout_span_utc": _span(hold),
+            "holdout_cut_utc": ev.get("holdout_cut_utc"), "holdout_rule": ev.get("holdout_rule"),
+            "window_floor_utc": ev.get("window_floor_utc"),
+            "frozen_on_holdout": _view(frozen_s), "candidate_on_holdout": _view(cand_s),
+            "states_touched": ev.get("states_touched"), "modal_action_changes": ev.get("modal_action_changes"),
+            "top_lookup_key_deltas": top,
+            "path": self.last_proposal_path,
+        }
 
     def maybe_propose(self, m: Mapping[str, Any], alarms: List[Dict[str, Any]],
                       force: bool = False) -> Optional[Path]:

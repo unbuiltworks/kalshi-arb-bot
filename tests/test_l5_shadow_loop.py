@@ -180,6 +180,49 @@ def test_proposal_never_touches_frozen_paths(tmp_path):
                             model=tiny_model(), out=lambda s: None)
 
 
+def test_proposal_prints_owner_summary_line(tmp_path):
+    """OWNER 5577286614 item 4: one L5_SHADOW_PROPOSAL_SUMMARY {json} stdout
+    line per written proposal -- version, cohort sizes + cut, frozen vs
+    candidate holdout numbers, top-10 lookup-key deltas, and the promotion
+    label REQUIRES_OWNER_DECISION; built without any full-history object."""
+    lines = []
+    loop = loop_mod.ShadowLoop(cfg(), tmp_path / "state", dry_run=True,
+                               now_fn=lambda: float(START + 400), model=pv2.load_v2(),
+                               out=lines.append)
+    # two windows so the 0.7 quantile cut leaves rows on both sides
+    rows = three_fill_window() + [raw(START + 900 + i * 10, o, 2, slug=f"btc-updown-5m-{START + 600}")
+                                  for i, o in enumerate(("Up", "Up", "Down", "Down"))]
+    loop.absorb(rows)
+    path = loop.build_proposal(loop.metrics(), reason="test")
+    summ = [l for l in lines if l.startswith("L5_SHADOW_PROPOSAL_SUMMARY ")]
+    assert len(summ) == 1
+    s = json.loads(summ[0][len("L5_SHADOW_PROPOSAL_SUMMARY "):])
+    prop = json.loads(path.read_text())
+    assert s["promotion"] == "REQUIRES_OWNER_DECISION"
+    assert s["proposed_lookup_version"] == loop_mod.CANONICAL_LOOKUP_VERSION + 1
+    assert s["verdict"] == prop["validation"]["verdict"]
+    assert s["train"] == prop["evidence"]["train_transitions"]
+    assert s["holdout"] == prop["evidence"]["holdout_transitions"]
+    assert s["train"] + s["holdout"] == len(loop.rows) and s["holdout"] >= 1
+    assert s["holdout_cut_utc"] == prop["evidence"]["holdout_cut_utc"]
+    assert s["train_span_utc"][1] < s["holdout_span_utc"][0] or s["train_span_utc"][1] <= s["holdout_cut_utc"]
+    assert s["candidate_sha"] == prop["candidate_artifact"]["sha256_16"]
+    assert s["frozen_model_sha"] == "bbb55bf90638d2bd" and s["lookup_version"] == 3
+    for view in (s["frozen_on_holdout"], s["candidate_on_holdout"]):
+        assert set(view) >= {"relation_agreement", "mean_prob_of_observed_action",
+                             "relation_l1_observed_vs_expected", "off_distribution_pct"}
+    assert s["frozen_on_holdout"]["relation_agreement"] == prop["validation"]["frozen_on_holdout"]["relation_agreement"]
+    top = s["top_lookup_key_deltas"]
+    assert 1 <= len(top) <= 10
+    for t in top:
+        assert set(t) >= {"key", "n", "frozen_dist", "candidate_dist"}
+        assert set(t["n"]) == {"frozen", "candidate", "added"}
+        assert t["n"]["candidate"] == t["n"]["frozen"] + t["n"]["added"]
+        assert abs(sum(t["candidate_dist"].values()) - 1.0) < 1e-6
+        assert len(t["candidate_dist"]) <= 16
+    assert s["path"] == str(path)
+
+
 def test_dry_run_completes_without_network(tmp_path, capsys):
     rc = loop_mod.main(["--dry-run", "--state-dir", str(tmp_path / "dry"),
                         "--fixture-rows", "120"])
