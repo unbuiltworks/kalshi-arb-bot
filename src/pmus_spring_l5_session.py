@@ -880,7 +880,32 @@ FLAT_PROBE_STAGE = "complement_acceptance_flat"
 # diagnostic can never become load on the recorder's status endpoint.
 CONTROL_BOOK_MAX_PER_SESSION = 24
 CONTROL_BOOK_MIN_GAP_S = 5.0
+# ORDINARY-COMPLETE BOOK CAPTURE (owner P1, 2026-09-08). The authenticated
+# book reached only 1.1% of accepted COMPLETEs, because it was attached to
+# rejections and to the bounded #93 control group and nothing else. Without
+# it "our price was above par" cannot be separated from "the far side was
+# empty", which is the confound sitting under the strongest finding in the
+# fill-predictor study.
+#
+# WHY THIS CANNOT MOVE ORDER LATENCY OR LIVE BEHAVIOUR:
+#   * it runs in _harvest, AFTER the order has resolved, so nothing sits in
+#     front of a submission;
+#   * it reads the recorder's status document only. Unlike the #93 control
+#     path it makes NO venue call, so it consumes no rate-limit budget;
+#   * the read is already bounded by STATUS_FETCH_TIMEOUT_S and fails soft;
+#   * one failure trips a per-session breaker, so a hung recorder costs one
+#     timeout for the whole session rather than one per completion;
+#   * it only ever writes diagnostic fields onto a row that has already been
+#     reported, and never returns a value any decision reads.
+COMPLETE_BOOK_MAX_PER_SESSION = 8
+COMPLETE_BOOK_MIN_GAP_S = 2.0
+# PER-PROCESS by accident until 2026-09-08: this dict is module-level, so
+# CONTROL_BOOK_MAX_PER_SESSION capped the whole PROCESS at 24 snapshots
+# rather than 24 per session, which is why the control group stalled at
+# 72 rows across three deployments. run_session() now resets it, which is
+# what its name and its docstring always claimed.
 _control_state = {"n": 0, "last": 0.0}
+_complete_book_state = {"n": 0, "last": 0.0, "broken": False}
 
 # OWNER GO (#167, narrow, OPEN only): construct the first leg's touch from
 # the book the MATCHING ENGINE uses, not from a gateway BBO that disagrees
@@ -1669,6 +1694,13 @@ def run_session(*args: Any, **kwargs: Any) -> dict:
     most likely to leave an order in an ambiguous state were the ones that
     skipped the check. Reconciliation now happens here, outside the body,
     where no return path can bypass it."""
+    # Diagnostic budgets are PER SESSION, which is what their names say.
+    # Leaving them module-global capped the whole process instead: the #93
+    # control group stopped at 24 snapshots per deployment and stalled at
+    # 72 rows. Resetting here, at the one boundary every path crosses,
+    # cannot change any decision -- these counters gate diagnostics only.
+    _control_state.update({"n": 0, "last": 0.0})
+    _complete_book_state.update({"n": 0, "last": 0.0, "broken": False})
     report = _run_session_body(*args, **kwargs)
     ledger = report.pop("_fill_ledger", None)
     inv = report.pop("_inventory_obj", None)
@@ -1917,6 +1949,15 @@ def _run_session_body(t: Optional[Transport] = None,
                     _control_book(side_up_, px_, report["orders"][-1])
                 except Exception:                      # noqa: BLE001
                     pass
+                # OWNER P1: the authenticated book on ORDINARY completes, so
+                # pair-at-touch economics can be told apart from an empty far
+                # side. Status-document read only -- no venue call, no
+                # rate-limit budget -- and post-hoc like the control above.
+                if relation_ == "complete":
+                    try:
+                        _complete_book(side_up_, report["orders"][-1])
+                    except Exception:                  # noqa: BLE001
+                        pass
 
         def _venue_market_status(slug_: str) -> dict:
             """The venue's own market flags at rejection time (read-only;
@@ -2061,6 +2102,39 @@ def _run_session_body(t: Optional[Transport] = None,
             except Exception as exc:                   # noqa: BLE001
                 info["why"] = f"error_failed_open:{type(exc).__name__}"
                 return info
+
+        def _complete_book(side_up_: bool, row: dict) -> None:
+            """The authenticated book on an ORDINARY completion observation.
+
+            NOT the #93 control group and never pooled with it: control rows
+            carry acceptance_control and a fresh venue BBO, these carry
+            book_capture="complete_observation" and no venue call at all.
+            Three populations now exist -- rejection, #93 control, ordinary
+            complete -- and each is labelled so none can be silently merged.
+
+            Cheap and interruptible by construction: a status-document read
+            with an existing timeout, bounded per session, and a breaker that
+            gives up for the rest of the session on the FIRST failure, so an
+            unreachable recorder costs one timeout rather than one per
+            completion. It writes diagnostics onto an already-resolved row
+            and returns nothing any decision reads."""
+            if _complete_book_state["broken"]:
+                return
+            if row.get("recorder_book") is not None:
+                return                      # control or rejection got there
+            if _complete_book_state["n"] >= COMPLETE_BOOK_MAX_PER_SESSION:
+                return
+            now_ = time.monotonic()
+            if now_ - _complete_book_state["last"] < COMPLETE_BOOK_MIN_GAP_S:
+                return
+            _complete_book_state["last"] = now_
+            _complete_book_state["n"] += 1
+            book = _recorder_book(slug, side_up_)
+            if book.get("unreadable"):
+                # one failure is enough: stop paying the timeout this session
+                _complete_book_state["broken"] = True
+            row["book_capture"] = "complete_observation"
+            row["recorder_book"] = book
 
         def _control_book(side_up_: bool, px_: D, row: dict) -> None:
             """The CONTROL GROUP for #93: the same authenticated book and
