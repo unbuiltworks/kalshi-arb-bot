@@ -1,0 +1,360 @@
+{
+ "already_implemented": {
+  "conclusion": "the principle is already the behaviour; what was missing is this measurement",
+  "high_mobility_when_flat": "it takes admitted[0] with no memory of the previous pick, so there is no loyalty to hold on to",
+  "narrow_capital_when_holding": "CAMPAIGN_HOLD:POSITION_HELD suppresses selection while inventory is open",
+  "wide_scan": "select_candidate ranks the full admitted universe every cycle"
+ },
+ "inputs": {
+  "held_cycles": 0,
+  "markets": 52,
+  "selection_cycles": 201
+ },
+ "m1_flat_time_with_eligible_candidate": {
+  "cycles_flat_with_candidate_and_no_choice": 0,
+  "cycles_skipped_position_held": 0,
+  "flat_cycles_observed": 201,
+  "idle_s": 0.0,
+  "idle_share_of_selection_span": 0.0,
+  "reading": "idle here means the selector had an admitted candidate and still opened nothing. Cycles skipped for a held position are NARROW CAPITAL working as designed and are reported separately, never as idle",
+  "selection_span_s": 245488.0,
+  "worst_gaps": []
+ },
+ "m1b_chose_but_never_started": {
+  "by_reason": {
+   "complement_acceptance_unproven": 4,
+   "no_candidate": 578
+  },
+  "campaign_runs": 15,
+  "cycles_chose_but_never_started": 582,
+  "cycles_observed": 685,
+  "reading": "selection succeeded and no session opened. complement_acceptance_unproven here is infrastructure idleness, not market conditions; no_candidate is the market genuinely offering nothing",
+  "share": 0.8496
+ },
+ "m2_capital_lockup": {
+  "markets_closed": 19,
+  "markets_with_inventory": 28,
+  "max_locked_s": 2700.2,
+  "median_locked_s_closed": 69.8,
+  "per_market": [
+   {
+    "category": "aec/atp",
+    "closed": true,
+    "locked_s": 2700.2,
+    "slug": "aec-atp-pedmar-frafor-2026-09-08",
+    "spent_usd": "17.876800"
+   },
+   {
+    "category": "asc/cfb",
+    "closed": true,
+    "locked_s": 1667.0,
+    "slug": "asc-cfb-smu-flst-2026-09-07-neg-13pt5",
+    "spent_usd": "18.704600"
+   },
+   {
+    "category": "aec/setkamemd",
+    "closed": false,
+    "locked_s": 919.6,
+    "slug": "aec-setkamemd-scovla-otgand-2026-09-07",
+    "spent_usd": "1.8252"
+   },
+   {
+    "category": "atc/ekst",
+    "closed": true,
+    "locked_s": 703.1,
+    "slug": "atc-ekst-psz-plo-2026-09-07-draw",
+    "spent_usd": "0"
+   },
+   {
+    "category": "tsc/mlb",
+    "closed": false,
+    "locked_s": 649.3,
+    "slug": "tsc-mlb-laa-bos-2026-09-07-7pt5",
+    "spent_usd": "3.12130"
+   },
+   {
+    "category": "asc/cfb",
+    "closed": true,
+    "locked_s": 548.0,
+    "slug": "asc-cfb-smu-flst-2026-09-07-neg-3pt5",
+    "spent_usd": "15.593700"
+   },
+   {
+    "category": "aec/setkamemd",
+    "closed": true,
+    "locked_s": 438.6,
+    "slug": "aec-setkamemd-ghifio-butdum-2026-09-08",
+    "spent_usd": "10.142300"
+   },
+   {
+    "category": "atc/sea",
+    "closed": true,
+    "locked_s": 397.9,
+    "slug": "atc-sea-udi-laz-2026-09-07-udi",
+    "spent_usd": "8.318700"
+   },
+   {
+    "category": "aec/setkamecz",
+    "closed": false,
+    "locked_s": 334.6,
+    "slug": "aec-setkamecz-tomvoj-ticjir-2026-09-07",
+    "spent_usd": "7.9878"
+   },
+   {
+    "category": "aec/setkameua",
+    "closed": true,
+    "locked_s": 310.8,
+    "slug": "aec-setkameua-naiole-khaser-2026-09-07",
+    "spent_usd": "0"
+   },
+   {
+    "category": "aec/setkameua",
+    "closed": false,
+    "locked_s": 308.7,
+    "slug": "aec-setkameua-malden-stoole-2026-09-08",
+    "spent_usd": "19.3141"
+   },
+   {
+    "category": "asc/cfb",
+    "closed": false,
+    "locked_s": 281.3,
+    "slug": "asc-cfb-smu-flst-2026-09-07-neg-6pt5",
+    "spent_usd": "6.676600"
+   },
+   {
+    "category": "aec/atp",
+    "closed": true,
+    "locked_s": 224.2,
+    "slug": "aec-atp-nikizq-santav-2026-09-08",
+    "spent_usd": "14.176900"
+   },
+   {
+    "category": "aec/atp",
+    "closed": false,
+    "locked_s": 132.4,
+    "slug": "aec-atp-tiaper-martru-2026-09-08",
+    "spent_usd": "4.70100"
+   },
+   {
+    "category": "aec/wta",
+    "closed": true,
+    "locked_s": 95.5,
+    "slug": "aec-wta-elepri-aneolm-2026-09-07",
+    "spent_usd": "16.900800"
+   },
+   {
+    "category": "aec/atp",
+    "closed": false,
+    "locked_s": 75.1,
+    "slug": "aec-atp-grilom-filpel-2026-09-07",
+    "spent_usd": "2.352"
+   },
+   {
+    "category": "aec/wta",
+    "closed": true,
+    "locked_s": 69.8,
+    "slug": "aec-wta-anatik-darsem-2026-09-07",
+    "spent_usd": "8.28600"
+   },
+   {
+    "category": "aec/atp",
+    "closed": false,
+    "locked_s": 65.1,
+    "slug": "aec-atp-valabo-juamar-2026-09-08",
+    "spent_usd": "4.0390"
+   },
+   {
+    "category": "aec/atp",
+    "closed": true,
+    "locked_s": 41.9,
+    "slug": "aec-atp-karkha-leatie-2026-09-07",
+    "spent_usd": "0"
+   },
+   {
+    "category": "aec/setkameua",
+    "closed": false,
+    "locked_s": 41.0,
+    "slug": "aec-setkameua-zhyole-strole-2026-09-08",
+    "spent_usd": "1.692000"
+   }
+  ],
+  "why_null": null
+ },
+ "m3_switches": {
+  "distinct_categories_chosen": 21,
+  "distinct_markets_chosen": 57,
+  "markets_that_took_inventory": 20,
+  "selection_cycles_with_a_choice": 93,
+  "switch_rate_while_flat": 0.8261,
+  "switches_while_flat": 76,
+  "switches_while_holding": 0,
+  "switches_while_holding_basis": "structural: selection does not run while a position is held (CAMPAIGN_HOLD:POSITION_HELD), so a switch cannot occur. This is asserted from the code path, not inferred from its absence in a sample"
+ },
+ "m4_open_to_complete": {
+  "completion_probability": 0.6122,
+  "median_open_to_complete_s": 29.0,
+  "p90_open_to_complete_s": 548.0,
+  "sequences_completed": 30,
+  "sequences_started": 49,
+  "why_null": null
+ },
+ "m5_economics": {
+  "by_category": {
+   "aec/atp": {
+    "credited_rebates_usd": 0.0,
+    "markets": 11,
+    "realized_usd_venue": 0.0,
+    "settled": 0,
+    "unconfirmed": 3
+   },
+   "aec/cfb": {
+    "credited_rebates_usd": 0.0,
+    "markets": 1,
+    "realized_usd_venue": 0.0,
+    "settled": 0,
+    "unconfirmed": 0
+   },
+   "aec/cs2": {
+    "credited_rebates_usd": 0.0,
+    "markets": 2,
+    "realized_usd_venue": 0.0,
+    "settled": 0,
+    "unconfirmed": 0
+   },
+   "aec/itfwo": {
+    "credited_rebates_usd": 0.0,
+    "markets": 2,
+    "realized_usd_venue": 0.0,
+    "settled": 0,
+    "unconfirmed": 0
+   },
+   "aec/mlb": {
+    "credited_rebates_usd": 0.0,
+    "markets": 1,
+    "realized_usd_venue": 0.0,
+    "settled": 0,
+    "unconfirmed": 1
+   },
+   "aec/setkamecz": {
+    "credited_rebates_usd": 0.0,
+    "markets": 1,
+    "realized_usd_venue": -3.8778,
+    "settled": 1,
+    "unconfirmed": 0
+   },
+   "aec/setkamemd": {
+    "credited_rebates_usd": 0.0,
+    "markets": 5,
+    "realized_usd_venue": -1.8252,
+    "settled": 1,
+    "unconfirmed": 2
+   },
+   "aec/setkameua": {
+    "credited_rebates_usd": 0.0,
+    "markets": 11,
+    "realized_usd_venue": -3.6839,
+    "settled": 3,
+    "unconfirmed": 2
+   },
+   "aec/wta": {
+    "credited_rebates_usd": 0.0,
+    "markets": 3,
+    "realized_usd_venue": 0.0,
+    "settled": 0,
+    "unconfirmed": 1
+   },
+   "asc/cfb": {
+    "credited_rebates_usd": 0.0,
+    "markets": 6,
+    "realized_usd_venue": 0.0,
+    "settled": 0,
+    "unconfirmed": 0
+   },
+   "atc/arg2": {
+    "credited_rebates_usd": 0.0,
+    "markets": 1,
+    "realized_usd_venue": 0.0,
+    "settled": 0,
+    "unconfirmed": 0
+   },
+   "atc/ekst": {
+    "credited_rebates_usd": 0.0,
+    "markets": 1,
+    "realized_usd_venue": 0.0,
+    "settled": 0,
+    "unconfirmed": 1
+   },
+   "atc/lpa": {
+    "credited_rebates_usd": 0.0,
+    "markets": 1,
+    "realized_usd_venue": 0.0,
+    "settled": 0,
+    "unconfirmed": 0
+   },
+   "atc/sea": {
+    "credited_rebates_usd": 0.0,
+    "markets": 1,
+    "realized_usd_venue": 0.0,
+    "settled": 0,
+    "unconfirmed": 1
+   },
+   "tsc/cfb": {
+    "credited_rebates_usd": 0.0,
+    "markets": 1,
+    "realized_usd_venue": 0.0,
+    "settled": 0,
+    "unconfirmed": 0
+   },
+   "tsc/mlb": {
+    "credited_rebates_usd": 0.0,
+    "markets": 3,
+    "realized_usd_venue": -3.1213,
+    "settled": 1,
+    "unconfirmed": 0
+   },
+   "tsc/sea": {
+    "credited_rebates_usd": 0.0,
+    "markets": 1,
+    "realized_usd_venue": 0.0,
+    "settled": 0,
+    "unconfirmed": 0
+   }
+  },
+  "incentives": {
+   "basis": "credited/confirmed only, read from the incentive audit. Never modelled, never projected, never netted into trading edge",
+   "credited_rebates_usd": null
+  },
+  "labels": "DERIVED from campaign logs; settled dollars come from the settlement auditor's venue rows only",
+  "realized_usd_venue_total": -12.5082,
+  "settled_markets_venue_confirmed": 6
+ },
+ "m6_opportunity_scores": {
+  "component_medians_at_entry": {
+   "complement_availability": 1.0,
+   "depth": 1.0,
+   "fee_headroom": 1.0,
+   "feed_quality": 1.0,
+   "flow": 1.0,
+   "on_distribution": 0.017,
+   "rebate_eligible": 1.0,
+   "residual_duration": 0.45,
+   "two_sided_flow": 1.0
+  },
+  "entries_scored": 93,
+  "median_entry_pair_score": 0.7477,
+  "median_rank1_minus_rank2": 0.022,
+  "reading": "a small rank1-rank2 gap means the second-best market was nearly as good, which is the case where a second concurrent slot would earn its keep; a large gap means the slot is already on the only good opportunity"
+ },
+ "m7_occupied_slot_cost": {
+  "capital_locked_market_seconds": 10004.1,
+  "cycles_with_selection_suppressed_by_hold": 0,
+  "usd_opportunity_cost": null,
+  "why_null": "a pair_score is not a dollar. The conversion needs the realized-per-opportunity-score relationship, which needs the settled cohort minimums in L5_CONCURRENCY_SCALING_GATE_v1 (sha b86fe09178ea78a2). Reporting an unbacked dollar figure here would be exactly the kind of modelled number the owner excluded"
+ },
+ "m8_incentives": {
+  "note": "reported inside m5_economics.incentives, credited only and never netted into trading edge"
+ },
+ "owner_ref": "#167 comment 5586921649",
+ "principle": "WIDE SCAN, NARROW CAPITAL, HIGH MOBILITY",
+ "read_only": "measurement only. This module changes no allocation rule, no cap, no gate and no live decision"
+}
