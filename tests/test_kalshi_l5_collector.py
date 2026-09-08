@@ -191,3 +191,48 @@ def test_a_collector_that_sees_nothing_says_so(monkeypatch, tmp_path, capsys):
     out = capsys.readouterr().out
     assert "stale_data:no_open_markets" in out
     assert "looks" in out and "quiet market" in out
+
+
+def test_the_shadow_input_is_bounded_in_events_not_in_parts(tmp_path, monkeypatch):
+    """"the newest four hourly parts" scales with how many markets are live,
+    so it is not a memory bound. RSS climbed 28.2 -> 39.0 MB over the first
+    61 cycles on 4-6 of the 14 certified series; the cap has to be on what
+    the analyser holds."""
+    monkeypatch.setenv(kc.STATE_DIR_ENV, str(tmp_path))
+    d = kc.tape_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    for hour in ("20260908_10", "20260908_11"):
+        with open(d / f"kalshi_l5_{hour}.jsonl", "wt", encoding="utf-8") as fh:
+            for i in range(50):
+                fh.write(json.dumps({"venue": "kalshi", "market": "KXBTC15M-A",
+                                     "kind": "bbo", "t": float(i),
+                                     "hour": hour}) + "\n")
+
+    full = kc.bounded_tape(kc.tape_parts(), max_events=1000)
+    assert len(full["KXBTC15M-A"]) == 100
+
+    capped = kc.bounded_tape(kc.tape_parts(), max_events=10)
+    rows = capped["KXBTC15M-A"]
+    assert len(rows) == 10
+    # what survives is the NEWEST evidence: an analyser hunting completion
+    # paths inside 15-minute windows must never drop the recent tape first
+    assert {r["hour"] for r in rows} == {"20260908_11"}
+    assert [r["t"] for r in rows] == sorted(r["t"] for r in rows)
+
+
+def test_bounded_tape_spills_into_the_older_part_only_with_budget_left(tmp_path,
+                                                                      monkeypatch):
+    monkeypatch.setenv(kc.STATE_DIR_ENV, str(tmp_path))
+    kc.tape_dir().mkdir(parents=True, exist_ok=True)
+    for hour, n in (("20260908_10", 30), ("20260908_11", 20)):
+        with open(kc.tape_dir() / f"kalshi_l5_{hour}.jsonl", "wt",
+                  encoding="utf-8") as fh:
+            for i in range(n):
+                fh.write(json.dumps({"venue": "kalshi", "market": "M",
+                                     "kind": "bbo", "t": float(i),
+                                     "hour": hour}) + "\n")
+    rows = kc.bounded_tape(kc.tape_parts(), max_events=25)["M"]
+    assert len(rows) == 25
+    hours = [r["hour"] for r in rows]
+    assert hours[:5] == ["20260908_10"] * 5      # oldest kept are the spill
+    assert hours[5:] == ["20260908_11"] * 20     # newest part kept whole

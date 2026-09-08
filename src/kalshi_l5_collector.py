@@ -37,6 +37,7 @@ same day:
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import os
 import time
@@ -45,7 +46,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
-from src.kalshi_l5_shadow import CERTIFIED_SERIES, load_tape, shadow_status
+from src.kalshi_l5_shadow import CERTIFIED_SERIES, shadow_status
 
 API = "https://api.elections.kalshi.com/trade-api/v2"
 UA = "l5-transfer-research/1.0 (read-only; public endpoints only)"
@@ -340,6 +341,55 @@ def collect_once(seen: Optional[Dict[str, float]] = None,
                               for m in markets})}
 
 
+SHADOW_MAX_PARTS = 4
+SHADOW_MAX_EVENTS = int(os.environ.get("KALSHI_L5_SHADOW_MAX_EVENTS", "60000"))
+
+
+def bounded_tape(parts: Sequence[Path],
+                 max_events: int = SHADOW_MAX_EVENTS) -> Dict[str, list]:
+    """load_tape's dict, but hard-capped in EVENTS rather than in parts.
+
+    "The newest four hourly parts" is not a memory bound: a part's size
+    scales with how many markets are live, and only 6 of the 14 certified
+    fifteen-minute series were open when this lane started. Measured RSS
+    climbed 28.2 -> 39.0 MB over the first 61 cycles on 4-6 markets, which
+    extrapolates badly. The cap is on events because that is what the
+    analyser actually holds.
+
+    Newest part first and, within a part, the TAIL -- an analyser looking
+    for completion paths inside 15-minute windows needs the most recent
+    tape, so what gets dropped under pressure must be the oldest evidence,
+    never the newest. Chronological order is restored before returning."""
+    chunks: List[list] = []
+    budget = max(0, int(max_events))
+    for path in reversed(list(parts)[-SHADOW_MAX_PARTS:]):
+        if budget <= 0:
+            break
+        d: collections.deque = collections.deque(maxlen=budget)
+        try:
+            with open(path, "rt", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        e = json.loads(line)
+                    except ValueError:
+                        continue
+                    if e.get("venue") != "kalshi" or not e.get("market"):
+                        continue
+                    d.append(e)
+        except OSError:
+            continue
+        chunks.append(list(d))
+        budget -= len(d)
+    by_market: Dict[str, list] = {}
+    for chunk in reversed(chunks):
+        for e in chunk:
+            by_market.setdefault(str(e["market"]), []).append(e)
+    return by_market
+
+
 def run_shadow() -> Optional[dict]:
     """The EXISTING analyser over the rolling tape. Nothing about the L5
     policy is reimplemented here."""
@@ -347,7 +397,7 @@ def run_shadow() -> Optional[dict]:
     if not parts:
         return None
     try:
-        return shadow_status(load_tape(parts[-4:]))
+        return shadow_status(bounded_tape(parts))
     except Exception as exc:                            # noqa: BLE001
         print("KALSHI_L5_ALARM " + json.dumps(
             {"alarm": "shadow_failed",
