@@ -89,6 +89,40 @@ SPRING_STRICT_ENV = "PMUS_SPRING_REPEATED_COMPLETION"
 DEADLINE_ENV = "PMUS_SPRING_DEADLINE_SECONDS"      # default 900
 SETTLEMENT_ENV = "PMUS_SPRING_SETTLEMENT_TS"       # optional epoch seconds
 MAX_ACTIONS_ENV = "PMUS_SPRING_MAX_ACTIONS"        # default 6
+# OWNER GO #167 5589583477: COMPLETE may be worked past the opening budget.
+#
+# THE MEASUREMENT. The working loop already existed -- every iteration
+# re-reads the book, recomputes the state key, re-asks the model and
+# reprices. What did not exist was enough iterations: COMPLETE competed
+# with OPEN and EXTEND for ONE budget of 6, so a session that opens at
+# action 1 has five completion attempts. L5's FAST completions use a median
+# of 7 distinct prices, his median completion takes 53.5 s, and only 34.8%
+# of his completions land inside our old horizon. Live: 78 of 145
+# order-placing sessions used exactly 6 actions and exited with no stop
+# reason at all -- the budget, not a cap and not the clock.
+#
+# ONE COUNTER, ONE LIMIT. The first implementation used a second counter
+# and a disjunctive loop condition; it produced an unbounded loop, a reject
+# breaker that never fired, and a completion budget that was not enforced.
+# `actions` still increments on every iteration and the LIMIT moves instead
+# -- bounded by construction, with no interaction to get wrong.
+#
+# NOT A RISK INCREASE. A COMPLETE reduces unmatched exposure, and the
+# unmatched-dollar cap never refuses an order that does. Per-action size,
+# the per-market spend cap, concurrency 1, maker-only and the daily stop
+# are untouched, so more completion attempts can only convert residual into
+# pairs -- which is where the measured losses are.
+MAX_COMPLETE_ACTIONS_ENV = "PMUS_SPRING_MAX_COMPLETE_ACTIONS"
+# 12 extra attempts at the model-driven rest covers L5's p90 completion
+# (166 s) and stays inside the 900 s session deadline.
+DEFAULT_MAX_COMPLETE_ACTIONS = 12
+# A REJECTED complete is not what the extended budget bought. #93's
+# unexplained non-crossing rejections concentrate on COMPLETE, and a
+# rejected complete at a non-crossing price is what REVOKES the complement
+# proof -- the deadlock that took the lane down at 13:09 today. Patience is
+# for orders that RESTED and did not fill; three consecutive refusals end
+# the loop rather than retrying into them.
+COMPLETE_REJECT_STREAK_MAX = 3
 STATE_DURABLE_ENV = "PMUS_SPRING_STATE_DURABLE"    # operator override "1"
 
 # Spring gates — measured, from analysis/l5/l5_ramp_analysis.json
@@ -1685,6 +1719,8 @@ def _run_session_body(t: Optional[Transport] = None,
     if deadline_s is None:
         deadline_s = float(os.getenv(DEADLINE_ENV, "900"))
     max_actions = int(os.getenv(MAX_ACTIONS_ENV, "6"))   # probe-1 bound
+    max_complete_actions = int(os.getenv(
+        MAX_COMPLETE_ACTIONS_ENV, str(DEFAULT_MAX_COMPLETE_ACTIONS)))
     # (default 6 per issue #167 comment 5525966568)
     # (issue #167 comment 5520665580 item 8: max 5 incremental actions
     # OR the $0.05 cumulative cap, whichever hits first)
@@ -1788,6 +1824,10 @@ def _run_session_body(t: Optional[Transport] = None,
             "cap_basis": "authoritative FILLED notional (partials included); "
                          "unconfirmed submissions count in full",
             "maker_rest_max_s": maker_rest_max_s(),
+            # OWNER GO 5589583477: how much completion work this session was
+            # allowed, so a change in patience is visible in the evidence
+            "max_actions_open_extend": max_actions,
+            "max_actions_complete_extension": max_complete_actions,
             # OWNER PROGRAM 5574156328 (R5F): the fidelity levers, from the
             # rung, so every session row says which regime priced/rested it
             "rest_policy": rest_policy(),
@@ -2277,7 +2317,24 @@ def _run_session_body(t: Optional[Transport] = None,
                 report["complement_acceptance"].get("order_id"))
 
         actions = 0
-        while actions < max_actions and not out_of_time():
+        complete_actions = 0          # REPORTING only, never control flow
+        complete_reject_streak = 0
+
+        def action_budget() -> int:
+            """One monotonic counter, one limit, and the LIMIT moves.
+
+            While a residual is open the session may keep working it into a
+            pair past the opening budget. `actions` counts every iteration,
+            so this is bounded by construction however the relations fall."""
+            return (max_actions + max_complete_actions if inv.residual != 0
+                    else max_actions)
+
+        while actions < action_budget() and not out_of_time():
+            if complete_reject_streak >= COMPLETE_REJECT_STREAK_MAX:
+                report["stop_reason"] = (
+                    f"complete_rejections_consecutive:"
+                    f"{complete_reject_streak}")
+                break
             bbo = q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES")
             spec = micro.market_micro_spec(t, slug, bbo["bid"])
             skey = spring_state_key(inv, bbo["bid"], settlement_t, wall(),
@@ -2435,6 +2492,16 @@ def _run_session_body(t: Optional[Transport] = None,
                       "value": str(spec["qty"]),
                       "reason": f"owner size cap ${session_notional_cap()}/market + venue "
                                 "minimum; declared safety override, not L5 behavior"}]})
+            # The extension is for COMPLETING a residual, never for opening
+            # or extending on it. Past the original budget only a complete
+            # may act; anything else ends the session here, exactly as the
+            # old single-budget condition did.
+            if actions >= max_actions and relation != "complete":
+                if complete_actions:
+                    report["stop_reason"] = (
+                        f"opening_budget_spent:{actions}/{max_actions}"
+                        f":extension_is_completion_only_not_{relation}")
+                break
             if relation == "hold":
                 sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                 actions += 1
@@ -2732,6 +2799,15 @@ def _run_session_body(t: Optional[Transport] = None,
                 mo = sw.track.get("min_opp_ask")
                 report["orders"][-1]["l5_touch_reached_by_opposite_ask"] = (
                     bool(D(mo) <= l5_touch) if mo is not None else None)
+                # Patience is for orders that RESTED. A rested-and-unfilled
+                # complete clears the streak; a refusal advances it, and the
+                # loop head ends the session at three.
+                if end_reason.startswith("rejected"):
+                    complete_reject_streak += 1
+                    report["orders"][-1]["complete_reject_streak"] = \
+                        complete_reject_streak
+                else:
+                    complete_reject_streak = 0
                 if end_reason.startswith("rejected"):
                     # LIVE 02:10:53-58Z: four NO completes at 0.625 were
                     # rejected within 1 s each right after a fill AT that
@@ -2766,6 +2842,8 @@ def _run_session_body(t: Optional[Transport] = None,
                                "complete")
                     record_behavioral_fill(inv, fid_art, skey, "complete", deficit_up)
             actions += 1
+            if relation == "complete":
+                complete_actions += 1
 
         # OWNER GO 5584132560 item 2: before this session claims anything
         # about what it holds, re-read every order the venue has not
