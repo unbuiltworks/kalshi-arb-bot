@@ -25,6 +25,26 @@ L5-CONSISTENT action means repricing to where L5 was, not paying up to get
 filled. The distinction is the whole difference between cloning L5 and
 inventing a fill-chaser.
 
+AND THE MECHANISM FOR IT ALREADY EXISTS. The live session already cancels
+and re-quotes when L5's touch moves away from a resting order -- but the
+condition reads
+
+    if relation_ in ("open", "extend") and touch != px_:
+        return f"touch_moved:{touch}"
+
+so COMPLETE is excluded from it. The exclusion is visible in the tape: 36
+OPEN orders and 35 EXTEND orders exited via repriced:touch_moved, against
+0 of 868 COMPLETEs. So the finding below is not "we never built a working
+loop" -- it is that a working loop was built, proven live, and switched off
+for the one relation where residual is at stake. The crossing objection is
+also already handled: `if px_ >= opp_ask: return "would_cross"` fires ahead
+of the touch check and applies to every relation.
+
+WHAT THAT DOES NOT ESTABLISH. EXTEND dies at the deadline 28.5% of the time
+and COMPLETE 64.9%, but that gap is confounded by relation and cannot be
+read as the effect of repricing. The mechanism gap is a fact; its effect
+size is not established here.
+
 WHAT THESE NUMBERS ARE NOT. Stated here rather than in a footnote because
 every figure below inherits them:
 
@@ -178,8 +198,10 @@ def report(paths: Iterable[Any]) -> dict:
             "ask reached that new touch -- "
             f"{unfilled['reprice_opportunity_upper_bound_share']:.1%} of all "
             "unfilled completes had an L5-CONSISTENT reprice available that "
-            "the book would have met. We never made it: we post once and sit "
-            "to the deadline. Placement is not the defect -- we price AT L5's "
+            "the book would have met. We never made it, because the "
+            "touch_moved re-quote is gated to OPEN and EXTEND: 0 of 868 "
+            "COMPLETEs ever exited that way, against 36 OPEN and 35 EXTEND. "
+            "Placement is not the defect -- we price AT L5's "
             f"touch in {unfilled['placed_at_l5_touch_share']:.1%} of them."),
         "markets_with_the_most_missed_reprices": dict(by_slug.most_common(8)),
         "upper_bound_not_an_estimate": (
@@ -193,6 +215,13 @@ def report(paths: Iterable[Any]) -> dict:
             "BEHAVIORAL-FIDELITY FIX, not a new strategy: L5's touch moved "
             "and our clone did not follow it. Following L5's own price is "
             "cloning him; paying up to get filled would not be."),
+        "the_mechanism_already_exists": (
+            "the live session re-quotes on touch_moved for OPEN and EXTEND "
+            "and excludes COMPLETE by one condition. 36 OPEN and 35 EXTEND "
+            "orders exited that way; 0 of 868 COMPLETEs did. The crossing "
+            "guard (px >= opp_ask -> would_cross) already runs ahead of it "
+            "for every relation. EXTEND's lower deadline share (28.5% vs "
+            "64.9%) is confounded by relation and is NOT an effect size."),
     }
 
 

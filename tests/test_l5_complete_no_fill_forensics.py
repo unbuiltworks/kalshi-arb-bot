@@ -143,3 +143,50 @@ def test_the_reprice_bound_is_a_subset_of_the_reprices_that_existed():
 def test_placement_is_faithful_so_the_defect_is_not_the_opening_price():
     rep = nf.report(_paths)
     assert rep["unfilled"]["placed_at_l5_touch_share"] > 0.6
+
+
+# ------------------------------------- the mechanism gap, read from the source
+_LIVE = "src/pmus_spring_l5_session.py"
+
+
+def test_the_requote_condition_really_does_exclude_complete():
+    """The claim rests on one line of the LIVE path, so read that line.
+
+    If someone later adds "complete" to the tuple, this test fails and the
+    forensics prose stops being true -- which is exactly when it should."""
+    src = open(_LIVE).read()
+    assert 'if relation_ in ("open", "extend") and touch != px_:' in src
+    assert 'return f"touch_moved:{touch}"' in src
+
+
+def test_the_crossing_guard_runs_ahead_of_the_touch_check_for_all_relations():
+    """Why 'repricing could cross' is not an objection to the proposal."""
+    src = open(_LIVE).read()
+    cross = src.index('return f"would_cross:{opp_ask}"')
+    touch = src.index('return f"touch_moved:{touch}"')
+    assert cross < touch, "the crossing guard must precede the touch check"
+    # and it is not gated on relation
+    guard = src[src.index('if px_ >= D(str(opp_ask)):'):cross]
+    assert "relation_" not in guard
+
+
+def test_the_forensics_states_the_gap_without_claiming_an_effect_size():
+    rep = nf.report(_paths) if _have_logs else None
+    if rep is None:
+        pytest.skip("harvested logs not present")
+    m = rep["the_mechanism_already_exists"]
+    assert "0 of 868" in m and "36 OPEN" in m
+    assert "confounded by relation" in m
+    assert "NOT an effect size" in m
+
+
+@pytest.mark.skipif(not _have_logs, reason="harvested logs not present")
+def test_no_complete_ever_exited_by_reprice_in_the_tape():
+    from src import l5_completion_economics as ce
+    orders = ce.all_orders(_paths)
+    by = {"open": 0, "extend": 0, "complete": 0}
+    for o in orders:
+        if str(o.get("end_reason") or "").startswith("repriced:touch_moved"):
+            by[o.get("relation")] = by.get(o.get("relation"), 0) + 1
+    assert by["complete"] == 0
+    assert by["open"] > 0 and by["extend"] > 0

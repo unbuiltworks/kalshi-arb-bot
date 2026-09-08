@@ -172,3 +172,23 @@ def test_it_does_not_import_the_live_path_or_the_frozen_experiment():
 def test_ranks_are_unique_and_ordered():
     ranks = [o["rank"] for o in ir.OPPORTUNITIES]
     assert ranks == sorted(ranks) == list(range(1, len(ranks) + 1))
+
+
+def test_the_top_proposal_is_a_one_condition_change_not_a_new_loop():
+    """It was mis-scoped once as 'build a working loop'; it is not."""
+    top = ir.OPPORTUNITIES[0]
+    change = top["bounded_test"]["change"]
+    assert "already live" in change and "already proven" in change
+    assert "Nothing new is built" in change
+    assert any("0 of 868 COMPLETEs" in e for e in top["evidence"])
+
+
+def test_the_top_proposal_refuses_to_present_the_extend_gap_as_an_effect_size():
+    e = ir.OPPORTUNITIES[0]["expected_improvement"]
+    assert "NOT AN EFFECT SIZE" in e
+    assert "confounded by relation" in e
+
+
+def test_the_top_proposal_names_the_queue_cost_the_upper_bound_ignores():
+    t = ir.OPPORTUNITIES[0]["bounded_test"]["new_bound_required"]
+    assert "queue position" in t

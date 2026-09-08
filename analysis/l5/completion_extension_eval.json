@@ -4,37 +4,33 @@
   "verdict": "NOT_YET_ENOUGH_EVIDENCE",
   "unmet_sample_minimums": {
     "forward_hours_on_the_extension": {
-      "have": 0.3,
+      "have": 1.332,
       "need": 48
     },
-    "sessions_that_opened_a_residual": {
-      "have": 8,
-      "need": 40
-    },
     "sessions_where_the_extension_fired": {
-      "have": 1,
+      "have": 5,
       "need": 25
     },
     "settled_venue_confirmed_markets": {
-      "have": 0,
+      "have": 5,
       "need": 15
     }
   },
   "measured": {
-    "sessions": 9,
-    "sessions_that_opened_a_residual": 8,
-    "sessions_where_the_extension_fired": 1,
+    "sessions": 215,
+    "sessions_that_opened_a_residual": 174,
+    "sessions_where_the_extension_fired": 5,
     "window": {
-      "pairing_rate": 0.5,
-      "complete_orders": 21,
-      "complete_rejected": 8,
-      "complete_filled": 6
+      "pairing_rate": 0.3435,
+      "complete_orders": 316,
+      "complete_rejected": 67,
+      "complete_filled": 94
     },
     "treated_only": {
-      "pairing_rate": 0.0,
-      "complete_orders": 5,
-      "complete_rejected": 1,
-      "complete_filled": 1
+      "pairing_rate": 0.2,
+      "complete_orders": 26,
+      "complete_rejected": 4,
+      "complete_filled": 4
     },
     "attribution_note": "A rate over the post-deploy WINDOW is not a rate of the CHANGE. Sessions that never passed the opening budget are controls; the two are reported separately and never pooled."
   },

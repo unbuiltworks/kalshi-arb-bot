@@ -19,6 +19,8 @@ One percentage point of leg completion is worth **$0.06769 per dollar-hour** (~*
 
 **Evidence**
 
+- THE MECHANISM ALREADY EXISTS AND IS SWITCHED OFF FOR COMPLETE. The live session re-quotes when L5's touch moves, under `if relation_ in ("open", "extend") and touch != px_`. In the tape 36 OPEN and 35 EXTEND orders exited via repriced:touch_moved and 0 of 868 COMPLETEs did.
+- The crossing objection is already handled by an existing guard: `px >= opp_ask -> would_cross` runs ahead of the touch check for every relation.
 - 404 accepted-but-unfilled COMPLETEs carry a rest book. In 164 (40.6%) L5's touch moved above where we sat, and in 96 of those the opposite ask reached that new touch.
 - 27 of the 35 markets with an unfilled COMPLETE (77%) had at least one such moment.
 - Placement is not the defect: we price AT L5's touch in 70.3% of unfilled completes.
@@ -27,16 +29,16 @@ One percentage point of leg completion is worth **$0.06769 per dollar-hour** (~*
 
 *Source: src/l5_complete_no_fill_forensics.py, src/l5_completion_behavior.py*
 
-**Expected improvement.** UPPER BOUND, not a forecast: 23.8% of unfilled completes had an L5-consistent reprice the book would have met. Conversion is unknown -- reaching a price is not filling it, and repricing to the touch can cross, which post-only refuses. At 3 points of completion this is +$0.20/dollar-hour and +$5.02/day; 1.10 points clears break-even.
+**Expected improvement.** UPPER BOUND, not a forecast: 23.8% of unfilled completes had an L5-consistent reprice the book would have met. Conversion is unknown -- reaching a price is not filling it, and a re-quote loses queue position. At 3 points of completion this is +$0.20/dollar-hour and +$5.02/day; 1.10 points clears break-even. NOT AN EFFECT SIZE: EXTEND (which reprices) dies at the deadline 28.5% of the time against COMPLETE's 64.9%, but that gap is confounded by relation and must not be read as what the change would deliver.
 
 **Blocked by.** the COMPLETE extension is live under a frozen gate that needs 48 forward hours and 25 firings. Two changes to the same surface at once would make neither attributable. This waits for that verdict.
 
 **Bounded test**
 
-- change — while a COMPLETE rests, re-read the book on the existing poll, re-ask the model, and if it still says COMPLETE at a different price, cancel and repost at THAT price
+- change — add "complete" to the relation tuple on the existing touch_moved re-quote condition -- one condition on a code path that is already live and already proven on OPEN and EXTEND. Nothing new is built.
 - explicitly NOT — no price the model did not return; no crossing; no widening of any cap
 - unchanged — ~$2.50 per action, $7.50 per market, concurrency 1, maker-only / post-only, daily loss stop, the frozen model sha
-- new bound required — a per-session cap on reprices, and the existing consecutive-rejection breaker must cover reprices too -- more orders on the #93 surface is the risk this carries
+- new bound required — a per-session cap on reprices, and the existing consecutive-rejection breaker must cover reprices too -- more orders on the #93 surface is the risk this carries, and #93 concentrates on COMPLETE. Repricing also surrenders queue position, which is a real cost the upper bound ignores: 2% of unfilled completes had the ask reach our price and still did not fill.
 - sample before reading — pre-register it the way the completion extension was: forward hours, sessions where it fired, settled venue-confirmed markets
 - what would make it fail — reprices become rejections (the #93 surface), or completion rises while pair profit per matched pair falls -- the capacity curve's half-profit sensitivity moves break-even from 84.5% to above 93%, so a cheaper fill that costs price is not a win
 - rollback — revert; it restores prior behaviour and costs nothing

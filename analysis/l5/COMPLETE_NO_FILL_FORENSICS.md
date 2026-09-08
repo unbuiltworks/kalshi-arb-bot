@@ -1,32 +1,32 @@
 # Accepted-but-unfilled COMPLETEs
 
-750 complete orders — filled 108, no_fill_cancelled 507, rejected 135 (634 carry a rest book)
+868 complete orders — filled 125, no_fill_cancelled 581, rejected 162 (749 carry a rest book)
 
 ## Distance from touch
 
 | | unfilled | filled |
 |---|---|---|
-| orders | 404 | 105 |
+| orders | 475 | 122 |
 | closest book gap, min (ticks) | 0 | 0 |
 | closest book gap, p25 (ticks) | 1 | 1 |
-| closest book gap, median (ticks) | 3.0 | 1.0 |
-| closest book gap, p75 (ticks) | 8 | 2 |
+| closest book gap, median (ticks) | 2 | 1 |
+| closest book gap, p75 (ticks) | 7 | 2 |
 | closest book gap, max (ticks) | 48 | 13 |
-| share one tick away | 0.3837 | 0.5 |
-| share the ask reached our price | 0.0198 | 0.1078 |
-| median rest (s) | 30.67 | 7.91 |
-| placed at L5's touch | 0.703 | 0.819 |
+| share one tick away | 0.4274 | 0.5299 |
+| share the ask reached our price | 0.0168 | 0.094 |
+| median rest (s) | 6.99 | 7.71 |
+| placed at L5's touch | 0.7474 | 0.8443 |
 
-Filled completes rest a median of 1.0 tick(s) from the best opposite ask; unfilled ones rest a median of 3.0 ticks away, p75 8 and as far as 48. Distance from touch, not rest time, is what separates them: median rest 7.91s filled against 30.67s unfilled is the deadline, not a cause.
+Filled completes rest a median of 1 tick(s) from the best opposite ask; unfilled ones rest a median of 2 ticks away, p75 7 and as far as 48. Distance from touch, not rest time, is what separates them: median rest 7.71s filled against 6.99s unfilled is the deadline, not a cause.
 
 ## Was a later L5-consistent action available?
 
 | | unfilled | filled |
 |---|---|---|
-| L5's touch moved above our price | 164 (40.6%) | 14 |
-| ...and the book reached that touch | 96 (23.8%) | 6 |
+| L5's touch moved above our price | 176 (37.0%) | 15 |
+| ...and the book reached that touch | 106 (22.3%) | 7 |
 
-**In 164 of 404 (40.6%) unfilled completes L5's OWN touch moved above where we were sitting, and in 96 of those the opposite ask reached that new touch -- 23.8% of all unfilled completes had an L5-CONSISTENT reprice available that the book would have met. We never made it: we post once and sit to the deadline. Placement is not the defect -- we price AT L5's touch in 70.3% of them.**
+**In 176 of 475 (37.0%) unfilled completes L5's OWN touch moved above where we were sitting, and in 106 of those the opposite ask reached that new touch -- 22.3% of all unfilled completes had an L5-CONSISTENT reprice available that the book would have met. We never made it, because the touch_moved re-quote is gated to OPEN and EXTEND: 0 of 868 COMPLETEs ever exited that way, against 36 OPEN and 35 EXTEND. Placement is not the defect -- we price AT L5's touch in 74.7% of them.**
 
 Markets where the most reprices were missed:
 
@@ -36,8 +36,8 @@ Markets where the most reprices were missed:
 - `aec-cs2-misa-mouzn-2026-09-06` — 9
 - `asc-cfb-smu-flst-2026-09-07-neg-3pt5` — 5
 - `tsc-cfb-txs-pvam-2026-09-06-total-57pt5` — 4
-- `aec-mlb-min-cws-2026-09-06` — 3
-- `asc-cfb-smu-flst-2026-09-07-neg-13pt5` — 3
+- `aec-wta-martre-jenrug-2026-09-08` — 3
+- `aec-atp-vilgau-pavlag-2026-09-08` — 3
 
 ## This is an upper bound, not an estimate
 

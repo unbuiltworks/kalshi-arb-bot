@@ -89,6 +89,14 @@ OPPORTUNITIES: List[Dict[str, Any]] = [
             "strategy, and this proposal is explicitly not that: the new "
             "price is whatever the model says, never a tick more."),
         "evidence": [
+            "THE MECHANISM ALREADY EXISTS AND IS SWITCHED OFF FOR COMPLETE. "
+            "The live session re-quotes when L5's touch moves, under "
+            "`if relation_ in (\"open\", \"extend\") and touch != px_`. In "
+            "the tape 36 OPEN and 35 EXTEND orders exited via "
+            "repriced:touch_moved and 0 of 868 COMPLETEs did.",
+            "The crossing objection is already handled by an existing guard: "
+            "`px >= opp_ask -> would_cross` runs ahead of the touch check for "
+            "every relation.",
             "404 accepted-but-unfilled COMPLETEs carry a rest book. In 164 "
             "(40.6%) L5's touch moved above where we sat, and in 96 of those "
             "the opposite ask reached that new touch.",
@@ -106,15 +114,19 @@ OPPORTUNITIES: List[Dict[str, Any]] = [
         "expected_improvement": (
             "UPPER BOUND, not a forecast: 23.8% of unfilled completes had an "
             "L5-consistent reprice the book would have met. Conversion is "
-            "unknown -- reaching a price is not filling it, and repricing to "
-            "the touch can cross, which post-only refuses. At 3 points of "
-            "completion this is +$0.20/dollar-hour and +$5.02/day; 1.10 "
-            "points clears break-even."),
+            "unknown -- reaching a price is not filling it, and a re-quote "
+            "loses queue position. At 3 points of completion this is "
+            "+$0.20/dollar-hour and +$5.02/day; 1.10 points clears "
+            "break-even. NOT AN EFFECT SIZE: EXTEND (which reprices) dies at "
+            "the deadline 28.5% of the time against COMPLETE's 64.9%, but "
+            "that gap is confounded by relation and must not be read as what "
+            "the change would deliver."),
         "bounded_test": {
             "change": (
-                "while a COMPLETE rests, re-read the book on the existing "
-                "poll, re-ask the model, and if it still says COMPLETE at a "
-                "different price, cancel and repost at THAT price"),
+                "add \"complete\" to the relation tuple on the existing "
+                "touch_moved re-quote condition -- one condition on a code "
+                "path that is already live and already proven on OPEN and "
+                "EXTEND. Nothing new is built."),
             "explicitly_not": (
                 "no price the model did not return; no crossing; no widening "
                 "of any cap"),
@@ -124,7 +136,11 @@ OPPORTUNITIES: List[Dict[str, Any]] = [
             "new_bound_required": (
                 "a per-session cap on reprices, and the existing consecutive-"
                 "rejection breaker must cover reprices too -- more orders on "
-                "the #93 surface is the risk this carries"),
+                "the #93 surface is the risk this carries, and #93 "
+                "concentrates on COMPLETE. Repricing also surrenders queue "
+                "position, which is a real cost the upper bound ignores: 2% "
+                "of unfilled completes had the ask reach our price and still "
+                "did not fill."),
             "sample_before_reading": (
                 "pre-register it the way the completion extension was: "
                 "forward hours, sessions where it fired, settled "
