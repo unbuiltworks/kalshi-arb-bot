@@ -113,3 +113,62 @@ def test_the_pre_filter_is_not_spacing_sensitive(tmp_path):
     p.write_text(_j.dumps({"deploymentId": "d",
                            "deploy": [{"message": spaced}]}))
     assert ev.measure([str(p)])["sessions"] == 1
+
+
+# ---------------------------------------------- the dedupe key that collided
+def _srow(slug, status, oids, stop=None):
+    r = {"kind": "session_end", "slug": slug, "session_id": None,
+         "status": status,
+         "orders": [{"order_id": o, "stage": "spring_complete_1",
+                     "relation": "complete", "px": "0.5", "qty": "1",
+                     "filled_qty": "0", "end_reason": "deadline"}
+                    for o in oids]}
+    if stop is not None:
+        r["stop_reason"] = stop
+    return r
+
+
+def test_two_different_sessions_are_not_collapsed_into_one(tmp_path):
+    """session_id is None on every emitted row, so a field key collides.
+
+    (slug, session_id, len(orders), status) degenerates to
+    (slug, len(orders), status). On the R5F tape that merged 53 keys whose
+    rows carried DIFFERENT order sets and destroyed 151 distinct sessions,
+    undercounting every session-level figure this module reports."""
+    p = _logs(tmp_path, [_srow("m", "SPRING_RESIDUAL_HOLD", ["A1"]),
+                         _srow("m", "SPRING_RESIDUAL_HOLD", ["B1"])])
+    got = ev._sessions(p)
+    assert len(got) == 2
+    assert {o["order_id"] for s in got for o in s["orders"]} == {"A1", "B1"}
+
+
+def test_a_byte_identical_re_emission_is_still_collapsed(tmp_path):
+    """One session seen in two overlapping log windows is one session."""
+    r = _srow("m", "SPRING_MATCHED", ["A1"])
+    p = _logs(tmp_path, [r, r, r])
+    assert len(ev._sessions(p)) == 1
+
+
+def test_zero_order_sessions_differing_in_stop_reason_are_kept_apart(tmp_path):
+    p = _logs(tmp_path, [_srow("m", "SPRING_RESIDUAL_HOLD", [],
+                               stop="spend_cap_reached"),
+                         _srow("m", "SPRING_RESIDUAL_HOLD", [],
+                               stop="entry_band_left")])
+    assert len(ev._sessions(p)) == 2
+
+
+def test_session_derived_orders_reconcile_with_the_order_denominator(tmp_path):
+    """The proof the fix is right: both readers must see the same orders.
+
+    all_orders dedupes by (order_id, stage) and was always correct; _sessions
+    dropped 559 complete orders before the fix."""
+    import os
+    from src import l5_completion_economics as ce
+    logs = "../r5f_logs"
+    if not os.path.isdir(logs):
+        pytest.skip("harvested logs not present")
+    paths = [os.path.join(logs, f) for f in sorted(os.listdir(logs))]
+    from_sessions = {o.get("order_id") for s in ev._sessions(paths)
+                     for o in (s.get("orders") or [])}
+    from_orders = {o.get("order_id") for o in ce.all_orders(paths)}
+    assert from_sessions == from_orders

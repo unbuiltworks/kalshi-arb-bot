@@ -21,6 +21,7 @@ sessions where the extension actually fired, and they are never pooled.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -48,8 +49,21 @@ def _sessions(paths: Iterable[Any]) -> List[dict]:
             for rec in ce._objects(msg, "PMUS_L5_CAMPAIGN "):
                 if rec.get("kind") != "session_end":
                     continue
-                key = (rec.get("slug"), rec.get("session_id"),
-                       len(rec.get("orders") or []), str(rec.get("status")))
+                # CONTENT HASH, not a field key. session_id is None on
+                # every session_end row the emitter produces (890 of 890 in
+                # the R5F tape), so a key of
+                # (slug, session_id, len(orders), status) degenerates to
+                # (slug, len(orders), status) and merges DIFFERENT sessions:
+                # 53 such keys collapsed rows carrying different order sets
+                # and destroyed 151 distinct sessions, which undercounted
+                # every session-level figure this module reports.
+                #
+                # A re-emission of one session in two overlapping log windows
+                # is byte-identical, so hashing the canonical row collapses
+                # exactly the duplicates and nothing else.
+                key = hashlib.sha256(
+                    json.dumps(rec, sort_keys=True, default=str).encode()
+                ).hexdigest()
                 if key in seen:
                     continue
                 seen.add(key)

@@ -4,11 +4,11 @@
   "verdict": "NOT_YET_ENOUGH_EVIDENCE",
   "unmet_sample_minimums": {
     "forward_hours_on_the_extension": {
-      "have": 1.332,
+      "have": 2.0,
       "need": 48
     },
     "sessions_where_the_extension_fired": {
-      "have": 5,
+      "have": 6,
       "need": 25
     },
     "settled_venue_confirmed_markets": {
@@ -17,18 +17,18 @@
     }
   },
   "measured": {
-    "sessions": 215,
-    "sessions_that_opened_a_residual": 174,
-    "sessions_where_the_extension_fired": 5,
+    "sessions": 216,
+    "sessions_that_opened_a_residual": 175,
+    "sessions_where_the_extension_fired": 6,
     "window": {
-      "pairing_rate": 0.3435,
-      "complete_orders": 316,
+      "pairing_rate": 0.3409,
+      "complete_orders": 322,
       "complete_rejected": 67,
       "complete_filled": 94
     },
     "treated_only": {
-      "pairing_rate": 0.2,
-      "complete_orders": 26,
+      "pairing_rate": 0.1667,
+      "complete_orders": 32,
       "complete_rejected": 4,
       "complete_filled": 4
     },

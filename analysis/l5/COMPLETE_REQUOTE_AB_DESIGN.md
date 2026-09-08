@@ -53,6 +53,7 @@ New bounds this change requires:
 - `max_complete_requotes_per_session` = 4
 - `requotes_charge_the_action_budget` = True
 - `rejection_breaker_covers_requotes` = True
+- `and_the_gemini_cap_argument` = our Gemini shadow's touch_cancel_30s shell issued 2465 cancels for a 4.2% first-leg fill rate. Uncapped re-quoting degenerates into cancel-churn that never rests long enough to be hit, which is why the cap is 4 per session and not unbounded.
 
 > a rejected complete at a non-crossing price revokes the complement proof, which is the deadlock that took the lane down at 13:09 on 2026-09-08. Re-quoting must not buy fills by spending proofs.
 
