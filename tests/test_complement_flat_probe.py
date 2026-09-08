@@ -249,3 +249,44 @@ def test_what_counts_as_proof_is_identical_on_both_paths():
         "\ndef revoke_complement_proof")[0]
     criterion = 'proven = bool(got > 0 or end_reason.startswith("resting"))'
     assert criterion in held and criterion in flat
+
+
+def test_a_filled_probe_never_falls_through_into_an_open():
+    """LIVE, 16:44:07Z 2026-09-08. The flat probe joined the bid at 0.6900
+    on aec-setkameua-beldmy-dobvol and was LIFTED for 0.01 -- proof
+    restored, and a real position created in the same breath. The campaign
+    fell straight through into session_start on that same market, whose
+    OPEN preflight requires a flat account, and got
+    `PREFLIGHT_FAILED nonzero_positions:...=0.0100` one second later.
+
+    A post-only order that joins the bid can always be lifted, so this is
+    the ordinary case, not a freak one. The gate itself is untouched: what
+    changes is that a probe which leaves inventory stands down for the
+    cycle instead of opening a session that cannot pass preflight."""
+    import inspect
+    from src import pmus_l5_continuous_session as cs
+    src = inspect.getsource(cs.run_campaign)
+    i = src.index('kind="complement_flat_probe"') if \
+        'kind="complement_flat_probe"' in src else src.index("complement_flat_probe")
+    after = src[i:i + 2200]
+    # the fill is detected, named, and stops this cycle
+    assert 'D(str(probe.get("filled_qty") or 0)) > 0' in after
+    assert "complement_probe_left_residual" in after
+    assert 'status = "CAMPAIGN_HOLD:POSITION_HELD"' in after
+    # and it is still not an L5 action
+    assert "l5_action=False" in after
+
+
+def test_the_probe_residual_is_never_promoted_into_an_l5_leg():
+    """The owner's Option A says the probe is not an L5 trade. A filled
+    probe must not become the opening leg of a sequence by the back door:
+    nothing in the stand-down path records a behavioral fill, adds the
+    slug to filled_markets, or touches inventory."""
+    import inspect
+    from src import pmus_l5_continuous_session as cs
+    src = inspect.getsource(cs.run_campaign)
+    i = src.index("complement_probe_left_residual")
+    block = src[i - 900:i + 900]
+    for forbidden in ("record_behavioral_fill", "filled_markets.add",
+                      "inv.record", "spring_proposal", "session_runner"):
+        assert forbidden not in block, forbidden

@@ -2342,6 +2342,27 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                          order_id=probe.get("order_id"),
                          filled_qty=probe.get("filled_qty"),
                          l5_action=False)
+                    if D(str(probe.get("filled_qty") or 0)) > 0:
+                        # The probe is post-only and JOINS THE BID, so it can
+                        # be lifted -- at 16:44:07Z on 2026-09-08 it was, for
+                        # 0.01 on aec-setkameua-beldmy-dobvol. That is a real
+                        # position, and a fresh OPEN preflight requires a flat
+                        # account, so falling through here starts a session
+                        # that is GUARANTEED to fail preflight on the very
+                        # market the probe just unblocked. Stand down for this
+                        # cycle instead and let the residual settle under the
+                        # ordinary HOLD policy. The fill is NOT promoted into
+                        # an L5 opening leg: it keeps relation=None and
+                        # l5_action=False in the ledger and stays that way.
+                        _not_started("complement_probe_left_residual")
+                        _log("complement_probe_residual",
+                             chosen=chosen["slug"],
+                             filled_qty=probe.get("filled_qty"),
+                             treatment="held to settlement as a non-L5 "
+                                       "residual; no OPEN attempted on it",
+                             l5_action=False)
+                        status = "CAMPAIGN_HOLD:POSITION_HELD"
+                        break
             if not base.complement_acceptance_proven():
                 _not_started("complement_acceptance_unproven")
                 # OWNER 5556038561 #3: NEW first legs fail closed until
@@ -2523,6 +2544,14 @@ RECOVERABLE_EXACT = (
     # back by itself. Every preflight and admission gate still runs, and
     # still fails closed, on each attempt
     "CAMPAIGN_STOP:VENUE_UNAVAILABLE",
+    # an account-wide flat lock held by a residual is the most ordinary
+    # state this lane has: the residual settles by itself, and the resume
+    # path exists precisely to continue it. Ending the PROCESS here leaves
+    # the lane down until a human notices. The anti-spin guard still fails
+    # closed WITH AN ALARM when this status repeats immediately with no new
+    # settlement, so a residual that never clears is reported rather than
+    # looped on -- which is the behaviour a stuck 0.01 probe fill needs.
+    "CAMPAIGN_HOLD:POSITION_HELD",
 )
 
 # A campaign that ends almost immediately is spinning; one that ran for a
@@ -2656,12 +2685,12 @@ def main(argv: Optional[Sequence[str]] = None,
         _persist_full_report(report)
 
         if not is_recoverable(status):
-            _log("campaign_end", **compact_end_row(
+            _log(**compact_end_row(
                 report, restart="none: this status is an owner decision or a "
                                 "stop, and is never auto-restarted"))
             break
         if restarts >= max_restarts and (clock() - started) < 3600:
-            _log("campaign_end", **compact_end_row(
+            _log(**compact_end_row(
                 report, restart=f"none: {max_restarts} restarts in the last "
                                 f"hour, failing closed rather than spinning"))
             _log("PMUS_SPRING_ALARM", alarm="restart_budget_exhausted",
@@ -2669,7 +2698,7 @@ def main(argv: Optional[Sequence[str]] = None,
             break
         if status == last_status and settled == last_settled and \
                 ran_s < MIN_HEALTHY_RUN_S:
-            _log("campaign_end", **compact_end_row(
+            _log(**compact_end_row(
                 report, restart=(f"none: the same status repeated after "
                                  f"{round(ran_s, 1)}s with no new settlement, "
                                  f"so restarting would spin")))
@@ -2677,7 +2706,7 @@ def main(argv: Optional[Sequence[str]] = None,
             break
 
         wait = SUPERVISOR_BACKOFF_S[min(restarts, len(SUPERVISOR_BACKOFF_S) - 1)]
-        _log("campaign_end", **compact_end_row(
+        _log(**compact_end_row(
             report, restart=f"same process, in {wait}s (restart "
                             f"{restarts + 1} of {max_restarts} this hour)"))
         last_status, last_settled = status, settled

@@ -21,7 +21,16 @@ def _drive(monkeypatch, reports, **kw):
     monkeypatch.setattr(cs, "_run_once", lambda: next(seq))
     monkeypatch.setattr(cs, "_persist_full_report", lambda r: "ledger")
     monkeypatch.setattr(cs, "_install_term_handler", lambda: None)
-    monkeypatch.setattr(cs, "_log", lambda ev, **f: logged.append((ev, f)))
+    # NOTE THE SIGNATURE. The real _log is `_log(kind, **fields)`, and this
+    # double must match it EXACTLY or it will accept calls the real one
+    # rejects. It used to be `lambda ev, **f`, which happily swallowed
+    # `_log("campaign_end", **{"kind": "campaign_end", ...})` -- the call
+    # that crashed R5F at 16:44:09Z on 2026-09-08 with "TypeError: _log()
+    # got multiple values for argument 'kind'". A test double whose
+    # signature is looser than the thing it doubles cannot catch a
+    # signature bug, and this one did not.
+    monkeypatch.setattr(cs, "_log",
+                        lambda kind, **f: logged.append((kind, f)))
     rc = cs.main(sleep=lambda *_a: None, **kw)
     return rc, logged
 
@@ -199,3 +208,61 @@ def test_an_instant_repeat_is_still_treated_as_spinning(monkeypatch):
                         clock=lambda: float(next(ticks)))
     alarms = [f for ev, f in logged if ev == "PMUS_SPRING_ALARM"]
     assert alarms and alarms[0]["alarm"] == "campaign_stuck"
+
+
+def test_campaign_end_survives_the_real_log_signature(monkeypatch, capsys):
+    """THE 16:44:09Z CRASH. Every campaign_end path called
+    `_log("campaign_end", **compact_end_row(...))`, and compact_end_row's
+    row already carries `kind`, so the real `_log(kind, **fields)` got two
+    values for `kind` and the process died with a TypeError -- at exactly
+    the moment the supervisor exists to restart the lane. R5F was down from
+    16:44:11Z with a CRASHED deployment and no auto-restart.
+
+    This drives main() through the REAL _log with stdout captured, so the
+    signature is actually exercised rather than doubled away."""
+    seq = iter([_settled(1), {"status": "CAMPAIGN_STOP:DAILY_LOSS_STOP",
+                              "sessions": [], "settlements": []}])
+    monkeypatch.setattr(cs, "_run_once", lambda: next(seq))
+    monkeypatch.setattr(cs, "_persist_full_report", lambda r: "ledger")
+    monkeypatch.setattr(cs, "_install_term_handler", lambda: None)
+    cs.main(sleep=lambda *_a: None)          # must not raise
+    import json
+    ends = [json.loads(ln.split(" ", 1)[1])
+            for ln in capsys.readouterr().out.splitlines()
+            if ln.startswith("PMUS_L5_CAMPAIGN ")]
+    ends = [r for r in ends if r.get("kind") == "campaign_end"]
+    assert len(ends) == 2
+    assert ends[0]["kind"] == "campaign_end"      # exactly one kind, correct
+    assert ends[0]["status"] == "CAMPAIGN_SETTLED:REALIZED"
+    assert "same process" in ends[0]["next"]
+
+
+def test_a_held_residual_restarts_the_lane_instead_of_ending_it(monkeypatch):
+    """CAMPAIGN_HOLD:POSITION_HELD is the account-wide flat lock held by a
+    residual that settles by itself. Treating it as terminal left the lane
+    down; it is recoverable, and the anti-spin guard still catches a
+    residual that never clears."""
+    held = {"status": "CAMPAIGN_HOLD:POSITION_HELD", "sessions": [],
+            "settlements": []}
+    assert cs.is_recoverable("CAMPAIGN_HOLD:POSITION_HELD")
+    ticks = itertools.count(0, 200)
+    rc, logged = _drive(monkeypatch, [held, _settled(1),
+                                      {"status": "CAMPAIGN_STOP:HALT",
+                                       "sessions": [], "settlements": []}],
+                        clock=lambda: float(next(ticks)))
+    ends = [f for ev, f in logged if ev == "campaign_end"]
+    assert "same process" in ends[0]["next"]     # the lane came back
+
+
+def test_a_residual_that_never_clears_alarms_rather_than_looping(monkeypatch):
+    """The other half of the same decision: recoverable must not mean
+    infinite. A stuck 0.01 probe fill repeats instantly, so the spin guard
+    fires and the operator is told, rather than the lane grinding."""
+    held = {"status": "CAMPAIGN_HOLD:POSITION_HELD", "sessions": [],
+            "settlements": []}
+    ticks = itertools.count(0, 1)
+    rc, logged = _drive(monkeypatch, [held, held, held],
+                        clock=lambda: float(next(ticks)))
+    alarms = [f for ev, f in logged if ev == "PMUS_SPRING_ALARM"]
+    assert alarms and alarms[0]["alarm"] == "campaign_stuck"
+    assert alarms[0]["status"] == "CAMPAIGN_HOLD:POSITION_HELD"
