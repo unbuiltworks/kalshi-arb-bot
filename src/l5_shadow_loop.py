@@ -975,8 +975,49 @@ class ShadowLoop:
                 return 0
             deadline = time.monotonic() + interval
             while not self.stop and time.monotonic() < deadline:
+                self._progress_tick()
                 time.sleep(min(1.0, max(0.0, deadline - time.monotonic())))
         return 0
+
+    # -- sports event-progress observation, riding this process's spare time --
+    #
+    # A separate concern from L5 drift and kept separate in code: it writes
+    # its own tape, keeps its own cadence and cannot raise into the L5 cycle.
+    # It lives here rather than in the probe because a gateway read per
+    # decision would put latency on the live order path, and rather than in a
+    # new service because this one is already the isolated shadow process.
+    def _progress_tick(self) -> None:
+        if self.dry_run:
+            return                      # --dry-run makes no network call
+        obs = getattr(self, "_progress_obs", None)
+        if obs is None:
+            try:
+                from src import pmus_progress_tape as ptape
+                # keep the tape on the same durable volume as the rest of
+                # this service's state unless it was pointed somewhere else
+                os.environ.setdefault("PMUS_PROGRESS_TAPE_DIR",
+                                      str(self.state_dir / "progress"))
+                obs = ptape.Observer()
+            except Exception as exc:              # noqa: BLE001
+                self.out("L5_SHADOW_ALARM " + json.dumps(
+                    {"alarm": "progress_observer_unavailable",
+                     "error": repr(exc)[:200]}))
+                self._progress_obs = False
+                return
+            self._progress_obs = obs
+            self.out("PMUS_PROGRESS_BOOT " + json.dumps(
+                {"tick_s": obs.tick_s, "seeded_slugs": len(obs.last),
+                 "read_only": True, "host": "l5-shadow-loop"}, sort_keys=True))
+        if obs is False:
+            return
+        try:
+            row = obs.maybe_tick()
+        except Exception as exc:                  # noqa: BLE001
+            self.out("PMUS_PROGRESS_ALARM " + json.dumps(
+                {"alarm": "tick_failed", "error": repr(exc)[:200]}))
+            return
+        if row is not None and (row["rows"] or row.get("diag_error")):
+            self.out("PMUS_PROGRESS " + json.dumps(row, sort_keys=True))
 
 
 # --- dry-run fixture: first rows of the canonical sequence, read locally ------

@@ -5,7 +5,7 @@
   "_credentials": "NONE. This service holds no trading credentials, no exchange key, no wallet key and no PMUS_SPRING_* / KALSHI_* / POLYMARKET_* secret. Its only network use is the public, keyless L5 activity endpoint the existing collector (src/polymarket_l5/ops.py SOURCES) already reads. If that collector ever requires a key, the ONLY thing to add here is the env var NAME it documents (none today) -- never a value in this file.",
   "_volume": "Mount a dedicated volume at /data/l5_shadow (L5_SHADOW_STATE_DIR). Do NOT reuse /state/pmus-ws (recorder), /state/pmus-sports (collector) or /state/pmus-spring (probe). Everything the loop writes (collector cursor + day files under ops/, heartbeat.json, alarms/, proposals/, tally_latest.json, notes.jsonl, failures/) lives on this volume only.",
   "_pin": "Set the service variable RAILWAY_DOCKERFILE_PATH=/deploy/l5_shadow/Dockerfile on this service (deploy/RAILWAY_ISOLATION.md pattern) so a branch push can never cross-build it with another service.",
-  "_watch_note": "watchPatterns deliberately EXCLUDE src/polymarket_l5/** and every src/pmus_*.py: a change there redeploys the live probe/recorder, and this research service must never be a reason to touch them. It rebuilds only when its own loop, the drift/scoring helpers or this deploy dir change.",
+  "_watch_note": "watchPatterns name src/pmus_progress_tape.py and src/pmus_event_progress.py EXPLICITLY -- the two files this service now reads for the sports event-progress tape -- but still exclude src/polymarket_l5/** and every OTHER src/pmus_*.py: a change there redeploys the live probe/recorder, and this research service must never be a reason to touch them. It rebuilds only when its own loop, the drift/scoring helpers or this deploy dir change.",
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "deploy/l5_shadow/Dockerfile",
@@ -14,7 +14,9 @@
       "src/l5_shadow_state.py",
       "deploy/l5_shadow/**",
       "src/l5_model_drift_check.py",
-      "src/l5_shadow_scoring.py"
+      "src/l5_shadow_scoring.py",
+      "src/pmus_progress_tape.py",
+      "src/pmus_event_progress.py"
     ]
   },
   "deploy": {

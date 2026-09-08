@@ -325,6 +325,19 @@ def paired_rows(rep: Mapping[str, Any], frac_map: Mapping[str, Any],
     from src.l5_sports_clock_study import selection_progress, latest_at, iso_epoch
 
     prog = selection_progress(rep.get("_selections") or [])
+    # The selector is not the only witness of the game clock any more. Under
+    # concurrency 1 a held market stops selection entirely, which is exactly
+    # when we generate the most decisions, so the shadow progress tape --
+    # written continuously and independently of selection -- is merged in
+    # where it exists. Union, not replacement: the selector's older rows are
+    # real observations and are not discarded.
+    try:
+        from src import pmus_progress_tape as ptape
+        tape = ptape.load_progress()
+    except Exception:                                # noqa: BLE001
+        tape = {}
+    if tape:
+        prog = ptape.merge_progress(prog, tape)
     ours = invt.attach_ratio(invt.live_decision_rows(rep))
     ratio_by = {(r["sequence"], r.get("idx")): r for r in ours}
 

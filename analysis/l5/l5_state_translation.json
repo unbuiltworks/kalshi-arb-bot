@@ -1,24 +1,55 @@
 {
  "forward_ab": {
-  "A": null,
-  "B": null,
-  "forward_decisions": 0,
+  "A": {
+   "decisions": 165,
+   "median_state_n": 66,
+   "off_distribution": 0,
+   "off_distribution_rate": 0.0,
+   "relation_distance_to_l5": 0.2393,
+   "relation_mix": {
+    "complete": 0.3703,
+    "extend": 0.3812,
+    "open": 0.2485
+   },
+   "unkeyable": 0,
+   "unkeyable_rate": 0.0
+  },
+  "B": {
+   "decisions": 165,
+   "median_state_n": 0,
+   "off_distribution": 148,
+   "off_distribution_rate": 0.897,
+   "relation_distance_to_l5": 0.579,
+   "relation_mix": {
+    "complete": 0.222,
+    "extend": 0.1898,
+    "open": 0.5882
+   },
+   "unkeyable": 148,
+   "unkeyable_rate": 0.897
+  },
+  "forward_decisions": 165,
   "forward_since_utc": "2026-09-08T11:07:49+00:00",
-  "gate_checks": null,
+  "gate_checks": {
+   "off_distribution_rate": false,
+   "relation_distribution_distance": false,
+   "state_support": false,
+   "unkeyable_under_ceiling": false
+  },
   "gate_id": "L5_STATE_TRANSLATION_v1_PROMOTION_GATE",
   "gate_sha256_16": "6a474b81b397c2bb",
   "promotion": "REQUIRES_OWNER_DECISION -- this module never promotes and never edits the live key",
   "sample_minimums_have": {
-   "distinct_leagues": 0,
-   "distinct_markets": 0,
-   "forward_decisions_with_event_progress": 0,
-   "forward_fills": 0
+   "distinct_leagues": 5,
+   "distinct_markets": 8,
+   "forward_decisions_with_event_progress": 17,
+   "forward_fills": 160
   },
   "sample_minimums_met": {
-   "distinct_leagues": false,
+   "distinct_leagues": true,
    "distinct_markets": false,
    "forward_decisions_with_event_progress": false,
-   "forward_fills": false
+   "forward_fills": true
   },
   "sample_minimums_required": {
    "distinct_leagues": 4,
@@ -30,44 +61,44 @@
  },
  "historical_ab": {
   "A": {
-   "decisions": 665,
-   "median_state_n": 234,
+   "decisions": 836,
+   "median_state_n": 83,
    "off_distribution": 0,
    "off_distribution_rate": 0.0,
-   "relation_distance_to_l5": 0.4584,
+   "relation_distance_to_l5": 0.4154,
    "relation_mix": {
-    "complete": 0.2538,
-    "extend": 0.2785,
-    "open": 0.4677
+    "complete": 0.2768,
+    "extend": 0.2986,
+    "open": 0.4246
    },
    "unkeyable": 0,
    "unkeyable_rate": 0.0
   },
   "B": {
-   "decisions": 665,
-   "median_state_n": 83,
-   "off_distribution": 111,
-   "off_distribution_rate": 0.1669,
-   "relation_distance_to_l5": 0.415,
+   "decisions": 836,
+   "median_state_n": 31,
+   "off_distribution": 283,
+   "off_distribution_rate": 0.3385,
+   "relation_distance_to_l5": 0.4121,
    "relation_mix": {
-    "complete": 0.2918,
-    "extend": 0.284,
-    "open": 0.4242
+    "complete": 0.293,
+    "extend": 0.2857,
+    "open": 0.4213
    },
-   "unkeyable": 111,
-   "unkeyable_rate": 0.1669
+   "unkeyable": 283,
+   "unkeyable_rate": 0.3385
   },
-  "event_progress_coverage": 0.9263,
+  "event_progress_coverage": 0.7644,
   "live_tte_occupancy": {
-   "tte>10m": 665
+   "tte>10m": 836
   },
-  "n_rows": 665,
+  "n_rows": 836,
   "status": "DESCRIPTIVE_ONLY",
   "translated_tte_occupancy": {
-   "<unkeyable>": 49,
-   "tte2-5m": 23,
-   "tte30-120s": 125,
-   "tte5-10m": 299,
+   "<unkeyable>": 197,
+   "tte2-5m": 29,
+   "tte30-120s": 130,
+   "tte5-10m": 311,
    "tte>10m": 169
   },
   "why": "these decisions were already observed and analysed. They show what the translation DOES; they cannot promote it, and the pre-registered gate requires decisions observed after the gate was frozen",
@@ -887,6 +918,41 @@
      "sha256_16": "a81a883a60e4b240"
     },
     {
+     "bytes": 216029,
+     "file": "mcp-Railway-get-logs-1788865975656.txt",
+     "sha256_16": "7888160925af3055"
+    },
+    {
+     "bytes": 124579,
+     "file": "mcp-Railway-get-logs-1788867568485.txt",
+     "sha256_16": "9e1066210953fbc0"
+    },
+    {
+     "bytes": 98138,
+     "file": "mcp-Railway-get-logs-1788868990085.txt",
+     "sha256_16": "80a68c0889772337"
+    },
+    {
+     "bytes": 118109,
+     "file": "mcp-Railway-get-logs-1788869191268.txt",
+     "sha256_16": "0bf423cb40fac233"
+    },
+    {
+     "bytes": 54200,
+     "file": "mcp-Railway-get-logs-1788870767476.txt",
+     "sha256_16": "c550113c0a52633a"
+    },
+    {
+     "bytes": 315288,
+     "file": "mcp-Railway-get-logs-1788871461129.txt",
+     "sha256_16": "463a31b11c376157"
+    },
+    {
+     "bytes": 605511,
+     "file": "mcp-Railway-get-logs-1788871863618.txt",
+     "sha256_16": "d6f129f61b1d0f61"
+    },
+    {
      "bytes": 91865,
      "file": "order_rejected_1920_2100.txt",
      "sha256_16": "492934ad7d63f20a"
@@ -972,8 +1038,8 @@
      "sha256_16": "5920846b9ba9ffeb"
     }
    ],
-   "input_set_sha256_16": "6634f1990e50df2b",
-   "n_files": 178
+   "input_set_sha256_16": "59fcbc3c5850db19",
+   "n_files": 185
   }
  },
  "inventory_translation": {

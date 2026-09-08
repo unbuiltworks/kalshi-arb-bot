@@ -22,28 +22,28 @@ Minimums: forward_decisions_with_event_progress 400, distinct_markets 40, distin
 
 _these decisions were already observed and analysed. They show what the translation DOES; they cannot promote it, and the pre-registered gate requires decisions observed after the gate was frozen._
 
-665 decisions, event-progress coverage 0.9263.
+836 decisions, event-progress coverage 0.7644.
 
 | | A (live mapping) | B (translated) |
 |---|---:|---:|
-| median state support | 234 | 83 |
-| off-distribution rate | 0.0 | 0.1669 |
-| unkeyable | 0.0 | 0.1669 |
-| relation distance to L5 | 0.4584 | 0.415 |
+| median state support | 83 | 31 |
+| off-distribution rate | 0.0 | 0.3385 |
+| unkeyable | 0.0 | 0.3385 |
+| relation distance to L5 | 0.4154 | 0.4121 |
 
-Time-bucket occupancy — live: {"tte>10m": 665}; translated: {"<unkeyable>": 49, "tte2-5m": 23, "tte30-120s": 125, "tte5-10m": 299, "tte>10m": 169}
+Time-bucket occupancy — live: {"tte>10m": 836}; translated: {"<unkeyable>": 197, "tte2-5m": 29, "tte30-120s": 130, "tte5-10m": 311, "tte>10m": 169}
 
 _not used in mapping B. Per the owner it remains a logged candidate feature; the evidence did not establish it as a superior clock._
 
 ## Forward cohort against the frozen gate
 
-Decisions logged after 2026-09-08T11:07:49+00:00: **0**. Verdict: **NOT_YET_ENOUGH_FORWARD_EVIDENCE**.
+Decisions logged after 2026-09-08T11:07:49+00:00: **165**. Verdict: **NOT_YET_ENOUGH_FORWARD_EVIDENCE**.
 
 | minimum | required | have | met |
 |---|---:|---:|---|
-| forward_decisions_with_event_progress | 400 | 0 | False |
-| distinct_markets | 40 | 0 | False |
-| distinct_leagues | 4 | 0 | False |
-| forward_fills | 60 | 0 | False |
+| forward_decisions_with_event_progress | 400 | 17 | False |
+| distinct_markets | 40 | 8 | False |
+| distinct_leagues | 4 | 5 | True |
+| forward_fills | 60 | 160 | True |
 
 _REQUIRES_OWNER_DECISION -- this module never promotes and never edits the live key._

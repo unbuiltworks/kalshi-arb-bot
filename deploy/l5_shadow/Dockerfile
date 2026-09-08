@@ -29,6 +29,11 @@ COPY src/pmus_l5_persistence_v2.py src/pmus_l5_persistence_v2.py
 COPY src/pmus_l5_fidelity_live.py src/pmus_l5_fidelity_live.py
 COPY src/pmus_sports_l5_decision.py src/pmus_sports_l5_decision.py
 COPY src/pmus_status_report.py src/pmus_status_report.py
+# the sports event-progress tape and the venue progress reader it wraps.
+# Imported lazily by the loop, so a missing COPY would fail at runtime
+# rather than at import: both are pinned here on purpose.
+COPY src/pmus_progress_tape.py src/pmus_progress_tape.py
+COPY src/pmus_event_progress.py src/pmus_event_progress.py
 # the existing collector + adapter + canonical row builder (never re-implemented)
 COPY src/polymarket_l5/__init__.py src/polymarket_l5/__init__.py
 COPY src/polymarket_l5/config.py src/polymarket_l5/config.py
