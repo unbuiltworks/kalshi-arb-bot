@@ -35,8 +35,16 @@ Environment (names only; never commit values):
                         pinned and the remainder rotates every discovery
                         cycle — nothing is silently excluded
   PMUS_WS_DISCOVERY_SECONDS  rediscovery interval (default 300)
-  PMUS_WS_HYDRATE_MAX_BYTES  restart hydration read bound per daily tape
-                        file (default 64MiB; 0 = unbounded)
+  PMUS_WS_HYDRATE_MAX_BYTES  restart hydration read bound over the tape
+                        parts of today + yesterday (default 64MiB total,
+                        newest first; 0 = unbounded)
+  PMUS_WS_RAW_MAX_BYTES  RAW TAPE BUDGET on the volume (default 12GiB).
+                        The tape is written in HOURLY parts; the oldest
+                        parts are deleted at boot and every discovery
+                        cycle until the raw directory fits the budget.
+                        LIVE 2026-09-08 00:40Z: the unbounded daily tape
+                        filled the 50GB volume (ENOSPC) and the recorder
+                        crash-looped, taking the probe's evidence with it.
 
 Fails closed with NO_CREDENTIALS (exit 2) when the two key envs are
 absent. Reconnects with exponential backoff (1..30s).
@@ -70,7 +78,10 @@ MAX_MARKETS_ENV = "PMUS_WS_MAX_MARKETS"
 DISCOVERY_ENV = "PMUS_WS_DISCOVERY_SECONDS"
 PREFIXES_ENV = "PMUS_WS_PREFIXES"          # default "" = ALL markets (props too)
 HYDRATE_BYTES_ENV = "PMUS_WS_HYDRATE_MAX_BYTES"
-DEFAULT_HYDRATE_BYTES = 64 * 1024 * 1024   # per daily tape file; 0 = unbounded
+DEFAULT_HYDRATE_BYTES = 64 * 1024 * 1024   # total over the newest parts; 0 = unbounded
+RAW_MAX_BYTES_ENV = "PMUS_WS_RAW_MAX_BYTES"
+DEFAULT_RAW_MAX_BYTES = 12 * 1024 ** 3      # raw tape budget on the volume
+TAPE_WRITE_ERRORS = {"n": 0, "last_alarm": 0.0}
 EXPAND_PAGES_ENV = "PMUS_WS_EXPAND_PAGES"  # 0 disables global enumeration
 PLANNER_ENV = "PMUS_WS_PLANNER"            # "priority" (default) | "rotation"
 
@@ -748,15 +759,95 @@ def root_dir() -> Path:
 
 
 def daily_path(root: Path, now: Optional[datetime] = None) -> Path:
+    """The tape part being written NOW: hourly parts since 2026-09-08
+    (`pmus_ws_YYYYMMDD_HH.jsonl`) so retention can drop whole old parts
+    without ever rewriting a file. The pre-existing daily files
+    (`pmus_ws_YYYYMMDD.jsonl`) stay readable and sweepable."""
     now = now or datetime.now(timezone.utc)
-    return root / "raw" / f"pmus_ws_{now:%Y%m%d}.jsonl"
+    return root / "raw" / f"pmus_ws_{now:%Y%m%d_%H}.jsonl"
+
+
+def tape_parts(root: Path) -> list:
+    """Every raw tape part, oldest first (daily file of a day sorts before
+    that day's hourly parts: '.' < '_')."""
+    raw = root / "raw"
+    if not raw.exists():
+        return []
+    return sorted(p for p in raw.glob("pmus_ws_*.jsonl") if p.is_file())
+
+
+def raw_max_bytes() -> int:
+    return int(os.getenv(RAW_MAX_BYTES_ENV, str(DEFAULT_RAW_MAX_BYTES)))
+
+
+def sweep_raw_tapes(root: Path, max_bytes: Optional[int] = None,
+                    now: Optional[datetime] = None) -> dict:
+    """Delete the OLDEST tape parts until the raw directory fits
+    `max_bytes`; the part being written now is never deleted. Returns an
+    audit row (deleted parts, bytes freed, bytes kept). Errors never
+    propagate: a sweep that cannot delete reports it and the write path
+    raises its own alarm."""
+    budget = raw_max_bytes() if max_bytes is None else int(max_bytes)
+    current = daily_path(root, now)
+    parts = tape_parts(root)
+    sizes = {}
+    for p in parts:
+        try:
+            sizes[p] = p.stat().st_size
+        except OSError:
+            sizes[p] = 0
+    total = sum(sizes.values())
+    deleted, freed, errors = [], 0, []
+    for p in parts:
+        if budget <= 0 or total <= budget:
+            break
+        if p == current:
+            continue
+        try:
+            p.unlink()
+            deleted.append(p.name)
+            freed += sizes[p]
+            total -= sizes[p]
+        except OSError as exc:
+            errors.append(f"{p.name}:{type(exc).__name__}")
+    return {"budget_bytes": budget, "parts_before": len(parts),
+            "deleted": deleted, "freed_bytes": freed, "kept_bytes": total,
+            "kept_parts": len(parts) - len(deleted), "errors": errors}
 
 
 def append(root: Path, row: Mapping[str, Any]) -> None:
+    """Append one tape row. Fail-SOFT: on a full volume (ENOSPC) the
+    sweep runs once and the write is retried; a second failure is
+    counted and alarmed (PMUS_WS_ALARM tape_write_failed, at most once a
+    minute) instead of crashing the recorder -- the probe reads the
+    status document, and a crash-looping recorder starves it."""
     path = daily_path(root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as sink:
-        sink.write(json.dumps(row, separators=(",", ":"), default=str) + "\n")
+    line = json.dumps(row, separators=(",", ":"), default=str) + "\n"
+    for attempt in (0, 1):
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as sink:
+                sink.write(line)
+            return
+        except OSError as exc:
+            if attempt == 0:
+                sw = sweep_raw_tapes(root)
+                if sw["deleted"]:
+                    print("PMUS_WS_STATUS " + json.dumps(
+                        {"raw_retention": {**sw, "trigger": "write_error",
+                                           "err": f"{type(exc).__name__}:{str(exc)[:80]}"}},
+                        separators=(",", ":"), default=str), flush=True)
+                continue
+            TAPE_WRITE_ERRORS["n"] += 1
+            now = time.time()
+            if now - TAPE_WRITE_ERRORS["last_alarm"] >= 60.0:
+                TAPE_WRITE_ERRORS["last_alarm"] = now
+                print("PMUS_WS_ALARM " + json.dumps(
+                    {"kind": "tape_write_failed", "errors": TAPE_WRITE_ERRORS["n"],
+                     "err": f"{type(exc).__name__}:{str(exc)[:120]}",
+                     "part": path.name,
+                     "labels": "tape row dropped; stream/status unaffected; logging only"},
+                    separators=(",", ":"), default=str), flush=True)
 
 
 # The status document the spring probe's admission guard reads
@@ -1123,23 +1214,36 @@ def discover_slugs() -> list[str]:
 
 def iter_recent_tape_rows(root: Path, now: Optional[float] = None,
                           max_bytes: int = 0):
-    """Yield (epoch_t, msg) from the persisted daily JSONL tape (today and
-    yesterday, in order), bounded to the last `max_bytes` per file.
-    Malformed lines are skipped — hydration can never crash startup."""
+    """Yield (epoch_t, msg) from the persisted tape parts of yesterday and
+    today, in order, bounded to the NEWEST `max_bytes` in total (the tail
+    of the newest parts). Malformed lines are skipped -- hydration can
+    never crash startup."""
     now_dt = datetime.fromtimestamp(now or time.time(), timezone.utc)
     from datetime import timedelta
-    for day in (now_dt - timedelta(days=1), now_dt):
-        path = daily_path(root, day)
-        if not path.exists():
+    days = {f"{d:%Y%m%d}" for d in (now_dt - timedelta(days=1), now_dt)}
+    parts = [p for p in tape_parts(root)
+             if p.name[len("pmus_ws_"):len("pmus_ws_") + 8] in days]
+    chunks = []                      # newest first, then reversed
+    budget = max_bytes if max_bytes else None
+    for path in reversed(parts):
+        if budget is not None and budget <= 0:
+            break
+        try:
+            with path.open("rb") as f:
+                f.seek(0, 2)
+                size = f.tell()
+                take = size if budget is None else min(size, budget)
+                f.seek(size - take)
+                data = f.read().decode("utf-8", errors="replace")
+        except OSError:
             continue
-        with path.open("rb") as f:
-            f.seek(0, 2)
-            size = f.tell()
-            f.seek(max(0, size - max_bytes) if max_bytes else 0)
-            data = f.read().decode("utf-8", errors="replace")
         lines = data.splitlines()
-        if max_bytes and size > max_bytes and lines:
+        if take < size and lines:
             lines = lines[1:]                     # drop the partial first line
+        chunks.append(lines)
+        if budget is not None:
+            budget -= take
+    for lines in reversed(chunks):
         for line in lines:
             try:
                 row = json.loads(line)
@@ -1191,6 +1295,15 @@ async def run(minutes: Optional[float]) -> int:
     # Restart hydration: rebuild gate evidence from the persisted tape so
     # a deploy does not cold-start MATCHED history to zero. Failure here
     # can never block startup.
+    # Retention FIRST: a full volume must be freed before the first write
+    # or the first hydration read (LIVE 2026-09-08 00:40Z ENOSPC crash loop)
+    try:
+        sweep = sweep_raw_tapes(root)
+    except Exception as exc:                      # noqa: BLE001
+        sweep = {"error": f"{type(exc).__name__}:{str(exc)[:120]}"}
+    print("PMUS_WS_STATUS " + json.dumps(
+        {"raw_retention": {**sweep, "trigger": "boot"}},
+        separators=(",", ":"), default=str), flush=True)
     try:
         hyd_bytes = int(os.getenv(HYDRATE_BYTES_ENV,
                                   str(DEFAULT_HYDRATE_BYTES)))
@@ -1309,6 +1422,16 @@ async def run(minutes: Optional[float]) -> int:
 
     while deadline is None or time.monotonic() < deadline:
         cap = int(os.getenv(MAX_MARKETS_ENV, "24"))
+        try:
+            sweep = sweep_raw_tapes(root)
+            if sweep["deleted"] or sweep["errors"]:
+                print("PMUS_WS_STATUS " + json.dumps(
+                    {"raw_retention": {**sweep, "trigger": "discovery"}},
+                    separators=(",", ":"), default=str), flush=True)
+        except Exception as exc:                  # noqa: BLE001
+            print("PMUS_WS_STATUS " + json.dumps(
+                {"raw_retention": {"error": f"{type(exc).__name__}:{str(exc)[:120]}"}}),
+                flush=True)
         targets = discover_universe()
         if os.getenv(PLANNER_ENV, "priority").strip() == "rotation":
             plan = subscription_plan(targets, mstate, cap, cycle)

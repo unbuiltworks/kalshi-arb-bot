@@ -58,8 +58,9 @@ def test_daily_rotation_and_heartbeat(tmp_path):
     from datetime import datetime, timezone
     d1 = datetime(2026, 9, 2, 23, 59, tzinfo=timezone.utc)
     d2 = datetime(2026, 9, 3, 0, 1, tzinfo=timezone.utc)
-    assert rec.daily_path(tmp_path, d1).name == "pmus_ws_20260902.jsonl"
-    assert rec.daily_path(tmp_path, d2).name == "pmus_ws_20260903.jsonl"
+    # LIVE 2026-09-08 00:40Z (ENOSPC): the tape is written in HOURLY parts
+    assert rec.daily_path(tmp_path, d1).name == "pmus_ws_20260902_23.jsonl"
+    assert rec.daily_path(tmp_path, d2).name == "pmus_ws_20260903_00.jsonl"
     rec.append(tmp_path, {"kind": "x"})
     rec.heartbeat_file(tmp_path, messages=5)
     hb = json.loads((tmp_path / "heartbeat.json").read_text())
@@ -318,3 +319,68 @@ def test_snapshot_state_never_aliases_the_live_lists_and_health_tracks_processin
     assert h.snapshot(21.0)["max_frame_proc_s"] == 0.0
     r = rec.rss_gb()
     assert r is None or (isinstance(r, float) and r >= 0.0)
+
+
+def test_raw_tape_retention_frees_the_volume_oldest_first(tmp_path, capsys):
+    """LIVE 2026-09-08 00:40Z: the unbounded daily tape filled the 50GB
+    volume; the recorder crash-looped on ENOSPC and the probe lost its
+    evidence source. The raw directory is now bounded: oldest parts go
+    first, the part being written is never deleted, and the reader still
+    hydrates across daily files + hourly parts (newest bytes first)."""
+    from datetime import datetime, timezone
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    now = datetime(2026, 9, 8, 1, 5, tzinfo=timezone.utc)
+    # legacy daily files + hourly parts, 100 bytes each
+    names = ["pmus_ws_20260905.jsonl", "pmus_ws_20260906.jsonl",
+             "pmus_ws_20260907.jsonl", "pmus_ws_20260908.jsonl",
+             "pmus_ws_20260908_00.jsonl", "pmus_ws_20260908_01.jsonl"]
+    for n in names:
+        (raw / n).write_bytes(b"x" * 100)
+    assert [p.name for p in rec.tape_parts(tmp_path)] == names
+    sw = rec.sweep_raw_tapes(tmp_path, max_bytes=250, now=now)
+    assert sw["deleted"] == names[:4]           # oldest first, until it fits
+    assert sw["freed_bytes"] == 400 and sw["kept_bytes"] == 200
+    assert sw["kept_parts"] == 2 and sw["errors"] == []
+    # the current part is never deleted, even when it alone exceeds the budget
+    sw = rec.sweep_raw_tapes(tmp_path, max_bytes=50, now=now)
+    assert sw["deleted"] == ["pmus_ws_20260908_00.jsonl"]
+    assert [p.name for p in rec.tape_parts(tmp_path)] == ["pmus_ws_20260908_01.jsonl"]
+    # budget 0 = unbounded (nothing deleted)
+    (raw / "pmus_ws_20260908_00.jsonl").write_bytes(b"y" * 100)
+    assert rec.sweep_raw_tapes(tmp_path, max_bytes=0, now=now)["deleted"] == []
+    # the default budget is the env / 12GiB constant
+    assert rec.raw_max_bytes() == rec.DEFAULT_RAW_MAX_BYTES == 12 * 1024 ** 3
+    # append goes to the hourly part of NOW and never raises on a bad root:
+    # a write error sweeps once, retries, then alarms instead of crashing
+    rec.append(tmp_path, {"kind": "x"})
+    assert rec.daily_path(tmp_path).exists()
+    blocked = tmp_path / "blocked"
+    blocked.write_text("not a directory")
+    before = rec.TAPE_WRITE_ERRORS["n"]
+    rec.TAPE_WRITE_ERRORS["last_alarm"] = 0.0
+    rec.append(blocked, {"kind": "x"})          # raw/ cannot be created
+    assert rec.TAPE_WRITE_ERRORS["n"] == before + 1
+    out = capsys.readouterr().out
+    assert "PMUS_WS_ALARM" in out and "tape_write_failed" in out
+
+
+def test_hydration_reads_across_daily_and_hourly_parts_newest_first(tmp_path):
+    from datetime import datetime, timezone
+    now = datetime(2026, 9, 8, 1, 5, tzinfo=timezone.utc).timestamp()
+    raw = tmp_path / "raw"
+    raw.mkdir()
+
+    def row(t, tag):
+        return json.dumps({"kind": "ws",
+                           "t": datetime.fromtimestamp(t, timezone.utc).isoformat(),
+                           "msg": {"tag": tag}})
+    (raw / "pmus_ws_20260906_23.jsonl").write_text(row(now - 90000, "old") + "\n")
+    (raw / "pmus_ws_20260907.jsonl").write_text(row(now - 3000, "daily") + "\n")
+    (raw / "pmus_ws_20260908_00.jsonl").write_text(row(now - 2000, "h00") + "\n")
+    (raw / "pmus_ws_20260908_01.jsonl").write_text(row(now - 100, "h01") + "\n")
+    tags = [m["tag"] for _, m in rec.iter_recent_tape_rows(tmp_path, now)]
+    assert tags == ["daily", "h00", "h01"]      # two days back is not read
+    # the byte bound takes the NEWEST bytes across parts
+    one = list(rec.iter_recent_tape_rows(tmp_path, now, max_bytes=90))
+    assert [m["tag"] for _, m in one] == ["h01"]
