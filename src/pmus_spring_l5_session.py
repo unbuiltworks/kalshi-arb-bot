@@ -787,6 +787,159 @@ def complement_acceptance_proven() -> bool:
     return load_complement_proof().get("proven") is True
 
 
+# OWNER GO 5586502825 (Option A). The proof is an ACCOUNT-WIDE boolean, but
+# until now it could only ever be re-established on a market we were already
+# HOLDING: _prove_complement_acceptance builds the opposite-side order the
+# RESIDUAL needs, and its first line is `deficit_up = inv.residual < 0`.
+#
+# That made the gate a one-way door. Measured live 2026-09-08: the proof was
+# revoked at 13:09:40Z on aec-setkameua-zhyole-strole (CC7NPY37MR3X, YES 0.64
+# against a fresh opposite ask of 0.67), the last residual then cleared, and
+# for the next 55 minutes every one of 181 campaign cycles selected a market
+# and died at complement_acceptance_unproven. Flat account -> no residual ->
+# no proof order can be constructed -> no first leg -> no residual. A gate
+# that fails closed with no path back to open is not a safety property, it is
+# an outage.
+#
+# The owner authorised the narrowest possible re-arm: when FLAT, the same
+# venue-minimum post-only probe may be built against the SELECTED market.
+# What counts as proof is UNCHANGED -- the venue itself must show the order
+# RESTING. Deliberately NOT changed: the L5 model, per-action sizing, the
+# $7.50 per-market cap, concurrency 1, maker-only, and the -$15.00 daily
+# stop. The probe is not an L5 decision and is never recorded as one.
+FLAT_PROBE_STAGE = "complement_acceptance_flat"
+FLAT_PROBE_LABEL = ("venue-acceptance evidence probe at the venue minimum; "
+                    "NOT an L5 decision, NOT counted as an L5 action, and "
+                    "never recorded in the behavioural fidelity artifact")
+
+
+def flat_probe_plan(bbo: Mapping[str, Any], tick: D) -> dict:
+    """Buy YES by JOINING THE BID, one venue-minimum lot, post-only.
+
+    Joining the bid is non-crossing by construction whenever bid < ask, so a
+    rejection here cannot be a cross and is unambiguous evidence about the
+    venue's acceptance rules -- which is the only question the proof asks.
+    It is also the price real maker orders use, so this tests the convention
+    that actually matters rather than a safely-distant one nobody trades at.
+
+    A locked or crossed book (bid >= ask) has no non-crossing join, so there
+    is no evidence to be had and the probe declines rather than guessing."""
+    bid, ask = bbo.get("bid"), bbo.get("ask")
+    if bid is None or ask is None:
+        return {"px": None, "why": "no_two_sided_book"}
+    bid, ask = D(str(bid)), D(str(ask))
+    if bid <= 0 or ask <= 0 or bid >= ask:
+        return {"px": None, "why": f"not_two_sided:{bid}/{ask}"}
+    if tick <= 0 or (bid / tick) % 1 != 0:
+        return {"px": None, "why": f"bid_off_tick:{bid}/{tick}"}
+    return {"px": bid, "side": "OUTCOME_SIDE_YES", "wire_px": str(bid),
+            "opp_ask": str(ask), "regime": "flat_join_bid",
+            "why": "joining the bid cannot cross"}
+
+
+def prove_complement_when_flat(t, slug: str, *, clock=time.monotonic,
+                               sleep=time.sleep, wall=time.time) -> dict:
+    """One venue-minimum post-only probe on `slug`, to re-arm the gate when
+    the account holds nothing. RESTING (or a fill) proves it; anything else
+    leaves the gate exactly as closed as it was.
+
+    Every failure mode writes evidence and returns; none raises into the
+    campaign loop, because a probe that can halt the lane is worse than a
+    lane that is merely blocked."""
+    prior = load_complement_proof()
+    proof: dict[str, Any] = {
+        "proven": False, "slug": slug, "stage": FLAT_PROBE_STAGE,
+        "attempted_utc": datetime.now(timezone.utc).isoformat(),
+        "attempted_epoch": wall(), "residual": "0",
+        "owner_ref": "#167 comment 5586502825 (Option A)"}
+
+    def _skip(why: str) -> dict:
+        # "no legal price at this book" is not venue evidence about
+        # acceptance: say so, keep the prior state, and do NOT consume the
+        # retry interval by writing attempted_epoch.
+        print("PMUS_COMPLEMENT_ACCEPTANCE " + json.dumps(
+            {"skipped": why, "stage": FLAT_PROBE_STAGE, "slug": slug,
+             "prior_proven": prior.get("proven")},
+            separators=(",", ":"), default=str), flush=True)
+        return {**prior, "skipped": why}
+
+    try:
+        bbo = q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES")
+        spec = micro.market_micro_spec(t, slug, bbo["bid"])
+    except Exception as exc:                          # noqa: BLE001
+        return _skip(f"book_or_spec_unreadable:{type(exc).__name__}")
+
+    plan = flat_probe_plan(bbo, D(str(spec["tick"])))
+    proof["plan"] = plan
+    proof["book"] = {"yes_bid": str(bbo["bid"]), "yes_ask": str(bbo["ask"])}
+    if plan["px"] is None:
+        return _skip(f"no_non_crossing_join:{plan['why']}")
+
+    px = D(str(plan["px"]))
+    qty = D(str(spec["minimum_trade_qty"]))
+    try:
+        oid = micro.place_limit_buy(t, slug, plan["side"], px, qty,
+                                    FLAT_PROBE_STAGE, post_only=True)
+    except Halt as exc:
+        proof["reason"] = f"preview_or_preflight:{exc}"
+        save_complement_proof(proof)
+        return proof
+    proof["order_id"] = oid
+    proof["submitted"] = {"side": plan["side"], "px": str(px),
+                          "wire_px": plan["wire_px"], "qty": str(qty),
+                          "post_only": True}
+
+    start = clock()
+    got, end_reason, observed = D("0"), "rest_bound", None
+    try:
+        while clock() < start + COMPLEMENT_PROOF_REST_MAX_S:
+            order = q1._order_status(t, oid)
+            observed = str(order.get("state") or order.get("status")
+                           or "").upper()
+            fill = micro.authoritative_fill(order, qty)
+            if fill is not None:
+                got, end_reason = D(str(fill["qty"])), "filled"
+                break
+            if any(x in observed for x in RESTING_STATES):
+                end_reason = f"resting:{observed}"
+                break
+            sleep(q1.POLL_S)
+    except RejectedNoFill as exc:
+        end_reason = f"rejected:{str(exc)[:160]}"
+    if got == 0 and not end_reason.startswith("rejected"):
+        try:
+            q1.cancel_exact(t, oid)
+        except Exception:                             # noqa: BLE001
+            pass
+        fill = micro._terminal_positive_fill(t, oid, qty)
+        if fill is not None:
+            got, end_reason = D(str(fill["qty"])), "filled_on_cancel"
+
+    proven = bool(got > 0 or end_reason.startswith("resting"))
+    proof.update({
+        "proven": proven, "observed_state": observed,
+        "end_reason": end_reason, "rest_s": round(clock() - start, 3),
+        "filled_qty": str(got),
+        "proven_utc": (datetime.now(timezone.utc).isoformat()
+                       if proven else None),
+        "labels": FLAT_PROBE_LABEL})
+    if not proven:
+        proof["reason"] = end_reason
+    # A fill leaves a real, venue-minimum position. It is small but it is
+    # NOT nothing, so it is written to the durable ledger with its probe
+    # provenance intact rather than quietly dropped -- the settlement
+    # auditor and the venue-vs-ledger reconciliation must both see it.
+    if got > 0:
+        q1.ledger_append({"kind": "order_filled", "spring": True,
+                          "slug": slug, "order_id": oid,
+                          "stage": FLAT_PROBE_STAGE, "side": plan["side"],
+                          "px": str(px), "qty": str(got),
+                          "relation": None, "l5_action": False,
+                          "labels": FLAT_PROBE_LABEL})
+    save_complement_proof(proof)
+    return proof
+
+
 def revoke_complement_proof(slug: str, order: Mapping[str, Any],
                             why: str) -> None:
     """A complement/extend rejection at a price the fresh book said was

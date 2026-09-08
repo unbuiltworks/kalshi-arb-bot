@@ -2221,6 +2221,28 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 sleep(SELECT_POLL_S)
                 continue
             if not base.complement_acceptance_proven():
+                # OWNER GO 5586502825 (Option A): the gate could only ever be
+                # re-armed from a HELD market's residual, so once the account
+                # went flat it stayed shut -- 181 cycles and 55 minutes with
+                # no order placed on 2026-09-08. When nothing is held, run the
+                # same venue-minimum post-only probe against the market just
+                # selected. Rate-limited to one probe order per
+                # COMPLEMENT_PROOF_RETRY_S exactly as the held-market path is,
+                # and what counts as proof is unchanged: the VENUE must show
+                # it resting. If it proves, fall through and start the normal
+                # L5 session on this cycle rather than waiting for the next.
+                last_try = float(base.load_complement_proof().get(
+                    "attempted_epoch") or 0)
+                if now - last_try >= base.COMPLEMENT_PROOF_RETRY_S:
+                    probe = base.prove_complement_when_flat(t, chosen["slug"])
+                    _log("complement_flat_probe", chosen=chosen["slug"],
+                         proven=bool(probe.get("proven")),
+                         end_reason=probe.get("end_reason"),
+                         skipped=probe.get("skipped"),
+                         order_id=probe.get("order_id"),
+                         filled_qty=probe.get("filled_qty"),
+                         l5_action=False)
+            if not base.complement_acceptance_proven():
                 _not_started("complement_acceptance_unproven")
                 # OWNER 5556038561 #3: NEW first legs fail closed until
                 # the venue has accepted an opposite-side order built by
