@@ -74,3 +74,32 @@ def test_unmet_minimums_win_over_everything_else():
                                                {"t": 10.0, "chosen": "b"}])
     assert out["verdict"] == "NOT_YET_ENOUGH_FORWARD_EVIDENCE"
     assert out["gate_sha256_16"] == gate.GATE_SHA16_AT_FREEZE
+
+
+def test_a_shadow_ranking_closes_the_hole_it_covers():
+    """OWNER GO 5588416241: a held cycle carrying a shadow ranking is no
+    longer unreconstructible."""
+    sel = [{"t": 0.0, "chosen": "a", "n_admitted": 3, "admitted": []}]
+    skipped = [{"t": 5.0, "reason": "CAMPAIGN_HOLD:POSITION_HELD"}] * 4
+    shadow = [{"t": 5.0, "n_admitted": 6, "acted": False}] * 3
+    m = cf.missing_evidence_for_higher_arms(sel, skipped, shadow)
+    assert m["held_cycles_with_a_shadow_ranking"] == 3
+    assert m["cycles_held_with_no_ranked_universe"] == 1
+    assert m["share_of_cycles_unreconstructible"] == 0.2
+
+
+def test_a_shadow_row_claiming_it_acted_is_never_counted_as_evidence():
+    """A ranking that acted is not a shadow ranking; counting it would let a
+    real decision masquerade as counterfactual evidence."""
+    shadow = [{"t": 1.0, "n_admitted": 5, "acted": True}]
+    m = cf.missing_evidence_for_higher_arms(
+        [], [{"t": 1.0, "reason": "HOLD"}], shadow)
+    assert m["shadow_rows_marked_acted"] == 1
+    assert m["held_cycles_with_a_shadow_ranking"] == 0
+    assert m["cycles_held_with_no_ranked_universe"] == 1
+
+
+def test_empty_shadow_evidence_still_leaves_the_arms_unverifiable():
+    m = cf.missing_evidence_for_higher_arms(
+        [], [{"t": 1.0, "reason": "HOLD"}], [])
+    assert cf.arm_unverifiable(2, m)["verdict"] == "UNVERIFIABLE"

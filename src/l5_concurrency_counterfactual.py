@@ -91,7 +91,8 @@ def arm_c1(rep: Mapping[str, Any], sel: Sequence[Mapping[str, Any]],
 
 
 def missing_evidence_for_higher_arms(sel: Sequence[Mapping[str, Any]],
-                                     skipped: Sequence[Mapping[str, Any]]
+                                     skipped: Sequence[Mapping[str, Any]],
+                                     shadow: Sequence[Mapping[str, Any]] = ()
                                      ) -> dict:
     """How much of the c>=2 counterfactual is simply not on the tape.
 
@@ -100,9 +101,21 @@ def missing_evidence_for_higher_arms(sel: Sequence[Mapping[str, Any]],
     number IS the size of the hole."""
     hold_cycles = len(skipped)
     ranked_cycles = sum(1 for r in sel if r.get("n_admitted"))
-    total = hold_cycles + ranked_cycles
+    # OWNER GO 5588416241: a held cycle that carries a shadow ranking is no
+    # longer a hole. An acted shadow row would be a contradiction in terms and
+    # is refused rather than counted.
+    shadow_ranked = sum(1 for r in shadow
+                        if r.get("n_admitted") and not r.get("acted"))
+    shadow_acted = sum(1 for r in shadow if r.get("acted"))
+    hold_cycles = max(0, hold_cycles - shadow_ranked)
+    total = hold_cycles + ranked_cycles + shadow_ranked
     return {
         "cycles_with_a_ranked_universe": ranked_cycles,
+        "held_cycles_with_a_shadow_ranking": shadow_ranked,
+        "shadow_rows_marked_acted": shadow_acted,
+        "shadow_rows_marked_acted_note": (
+            "must be 0; a shadow ranking that claims it acted is a "
+            "contradiction and is never counted as evidence"),
         "cycles_held_with_no_ranked_universe": hold_cycles,
         "share_of_cycles_unreconstructible": (round(hold_cycles / total, 4)
                                               if total else None),
@@ -187,7 +200,8 @@ def build_report(log_paths: Sequence[str]) -> dict:
     funnels = am.funnel_timeline(files)
 
     c1 = arm_c1(rep, sel, skipped, funnels)
-    missing = missing_evidence_for_higher_arms(sel, skipped)
+    shadow = am.shadow_selection_timeline(files)
+    missing = missing_evidence_for_higher_arms(sel, skipped, shadow)
     arms = {"c1": c1,
             "c2": arm_unverifiable(2, missing),
             "c3": arm_unverifiable(3, missing)}
@@ -231,6 +245,8 @@ def render_markdown(r: Mapping[str, Any]) -> str:
           "### Why c2 and c3 are UNVERIFIABLE rather than failing", "",
           f"- cycles with a ranked universe: "
           f"{m['cycles_with_a_ranked_universe']}",
+          f"- held cycles WITH a shadow ranking: "
+          f"{m.get('held_cycles_with_a_shadow_ranking')}",
           f"- cycles held with NO ranked universe: "
           f"**{m['cycles_held_with_no_ranked_universe']}**",
           f"- share of cycles unreconstructible: "

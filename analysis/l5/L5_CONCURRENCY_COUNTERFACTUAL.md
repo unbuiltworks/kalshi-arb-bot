@@ -32,6 +32,7 @@ Gate `L5_CONCURRENCY_SCALING_GATE_v1` sha `b86fe09178ea78a2`, frozen 2026-09-08T
 ### Why c2 and c3 are UNVERIFIABLE rather than failing
 
 - cycles with a ranked universe: 93
+- held cycles WITH a shadow ranking: 0
 - cycles held with NO ranked universe: **284**
 - share of cycles unreconstructible: 0.7533
 

@@ -65,6 +65,9 @@
  "missing_evidence": {
   "cycles_held_with_no_ranked_universe": 284,
   "cycles_with_a_ranked_universe": 93,
+  "held_cycles_with_a_shadow_ranking": 0,
+  "shadow_rows_marked_acted": 0,
+  "shadow_rows_marked_acted_note": "must be 0; a shadow ranking that claims it acted is a contradiction and is never counted as evidence",
   "share_of_cycles_unreconstructible": 0.7533,
   "what_would_fix_it": "rank the universe during holds too and log it WITHOUT acting on it -- a shadow selection row. That is a log-only change: no order path, no cap, no gate, no concurrency change. It makes the c>=2 arms reconstructible from real observed candidates instead of assumed ones. It needs an owner go because it touches the live campaign loop, even though it cannot trade.",
   "why": "run_campaign logs resume_start and calls the session runner directly when a market is held; select_candidate is never reached, so no admitted list, ranking or opportunity score exists for those cycles"

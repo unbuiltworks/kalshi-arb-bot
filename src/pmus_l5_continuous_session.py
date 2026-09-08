@@ -54,6 +54,16 @@ CAMPAIGN_SECONDS_ENV = "PMUS_SPRING_CAMPAIGN_SECONDS"
 # market, one market at a time, daily-loss stop, action/attempt caps.
 DEFAULT_CAMPAIGN_S = 6 * 3600.0
 SELECT_POLL_S = 15.0            # recorder status cadence is ~20s
+# OWNER GO 5588416241: log-only held-cycle ranking. While a market is held the
+# campaign takes the resume_start branch and never reaches select_candidate,
+# so 284 of 377 observed cycles (75.3%) carried no record of what a second
+# slot could have used -- which made c2/c3 permanently unreconstructible
+# rather than merely under-sampled. This ranks the same live universe and
+# LOGS it without acting.
+SHADOW_RANK_MIN_GAP_S = 20.0    # at most one shadow ranking per this gap
+SHADOW_RANK_SLOW_MS = 2000.0    # a ranking slower than this is "materially
+                                # delaying the live loop"
+SHADOW_RANK_SLOW_STRIKES = 3    # ... and this many disables the measurement
 SESSION_DEADLINE_S = 900.0      # per-market bound, as the one-shot probe
 RETRY_COOLDOWN_S = 120.0        # a market that just refused/no-filled waits
 MAX_SESSIONS_PER_CAMPAIGN = 48  # bounded reselection, not a runaway
@@ -563,6 +573,82 @@ def pmus_shadow_yield(now: Optional[float] = None) -> dict:
             _yield_cache["source"] = {"url": url, "error": f"{type(exc).__name__}:{str(exc)[:80]}"}
     _yield_cache["by_slug"] = by_slug
     return by_slug
+
+
+_SHADOW_RANK = {"next_at": 0.0, "slow": 0, "disabled": False}
+
+
+def shadow_rank_held_cycle(now: float, held_all, concurrency: int, model,
+                           log, path: Optional[str] = None,
+                           clock=time.monotonic) -> Optional[dict]:
+    """Rank the live universe during a HOLD and return the evidence row.
+
+    OWNER GO 5588416241, and every limit in it is enforced here rather than
+    promised: no order path, no session, no reservation, no inventory, no cap
+    or concurrency change, nothing that can touch the held market's L5
+    OPEN/EXTEND/COMPLETE sequence. It reads the same status document the
+    selector reads and ranks it; the caller logs the result and throws it
+    away.
+
+    Deliberately NOT select_candidate: that emits a `selection` row, which
+    would be indistinguishable from a real one and would corrupt the very
+    metrics this exists to feed. The row emitted here is `shadow_selection`
+    and carries acted=False.
+
+    "Do not carry stale rankings forward" is satisfied structurally -- a
+    fresh status document is read every time and the row carries its own
+    status_t and evidence_age_s, so a reader can always tell how old the
+    evidence under a ranking was.
+
+    OVERHEAD IS FAILED CLOSED ON THE MEASUREMENT, NEVER ON EXECUTION: a
+    ranking slower than SHADOW_RANK_SLOW_MS counts a strike, and
+    SHADOW_RANK_SLOW_STRIKES of them disable the instrumentation for the life
+    of the process. The recorder starved once already this month; an
+    evidence feature is never worth repeating that."""
+    if _SHADOW_RANK["disabled"] or now < _SHADOW_RANK["next_at"]:
+        return None
+    _SHADOW_RANK["next_at"] = now + SHADOW_RANK_MIN_GAP_S
+    t0 = clock()
+    try:
+        from src import pmus_spring_l5_probe_entry as entry
+        status, source = entry.load_status_document(path)
+        if status is None:
+            return None
+        ranking = rank_candidates(status, now, model, None,
+                                  yield_by_slug=pmus_shadow_yield(now))
+    except Exception as exc:                          # noqa: BLE001
+        log("shadow_selection_error", error=repr(exc)[:200])
+        return None
+    elapsed_ms = round((clock() - t0) * 1000.0, 1)
+    if elapsed_ms > SHADOW_RANK_SLOW_MS:
+        _SHADOW_RANK["slow"] += 1
+        if _SHADOW_RANK["slow"] >= SHADOW_RANK_SLOW_STRIKES:
+            _SHADOW_RANK["disabled"] = True
+            log("shadow_selection_disabled", elapsed_ms=elapsed_ms,
+                strikes=_SHADOW_RANK["slow"],
+                why=("the measurement was materially delaying the live loop; "
+                     "disabling the measurement, never the execution"))
+            return None
+    admitted = ranking.get("admitted") or []
+    return {
+        "kind": "shadow_selection",
+        "acted": False, "l5_action": False,
+        "held": list(held_all), "concurrency": concurrency,
+        "source": source, "status_t": ranking.get("status_t"),
+        "evidence_age_s": (round(now - entry._epoch(ranking["status_t"]), 3)
+                           if entry._epoch(ranking.get("status_t")) else None),
+        "n_admitted": len(admitted),
+        "n_refused": len(ranking.get("refused") or []),
+        "elapsed_ms": elapsed_ms,
+        "admitted": [{k: a.get(k) for k in
+                      ("rank", "slug", "bid", "ask", "state", "state_n",
+                       "pair_score", "pair_at_touch", "components",
+                       "game_proximity", "hours_to_end")}
+                     for a in admitted[:8]],
+        "labels": ("OWNER GO 5588416241: ranked but NOT acted on. Evidence "
+                   "for the concurrency counterfactual only; the held "
+                   "market's L5 sequence is untouched"),
+    }
 
 
 def rank_candidates(status: Mapping[str, Any], now: float,
@@ -2087,6 +2173,20 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     rep["resumed"] = True
                     report["sessions"].append(rep)
                     resumes += 1
+                    # OWNER GO 5588416241. Placed AFTER the session returns on
+                    # purpose: ranking before it would put a status fetch in
+                    # front of live order placement, and the approval was for
+                    # evidence, not for latency on the money path. The hold
+                    # persists across resume iterations, so sampling here is
+                    # still inside the window a second slot would have used.
+                    try:
+                        shadow = shadow_rank_held_cycle(
+                            wall(), held_all, concurrency, model, _log)
+                    except Exception as exc:          # noqa: BLE001
+                        shadow = None
+                        _log("shadow_selection_error", error=repr(exc)[:200])
+                    if shadow:
+                        _log(**shadow)
                     _log("session_end", slug=held, resumed=True,
                          status=rep.get("status"), reason=rep.get("reason"),
                          stop_reason=rep.get("stop_reason"),

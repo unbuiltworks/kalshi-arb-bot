@@ -164,6 +164,35 @@ def selection_timeline(files: Sequence[Any]) -> List[dict]:
     return rows
 
 
+def shadow_selection_timeline(files: Sequence[Any]) -> List[dict]:
+    """Held-cycle rankings (OWNER GO 5588416241): the universe a second slot
+    could have used, ranked but never acted on. Kept SEPARATE from the real
+    selection timeline -- a shadow row must never be counted as a decision the
+    campaign actually made."""
+    from src.l5_sports_clock_study import iso_epoch
+    out: List[dict] = []
+    seen: set = set()
+    for path in files:
+        for _dep, blob, row_ts in _message_rows(path):
+            if "shadow_selection" not in blob:
+                continue
+            for o in _iter_json_objects(blob, "PMUS_L5_CAMPAIGN "):
+                if o.get("kind") != "shadow_selection":
+                    continue
+                t = iso_epoch(o.get("log_ts")) or iso_epoch(row_ts)
+                if t is None or (round(t, 3), o.get("status_t")) in seen:
+                    continue
+                seen.add((round(t, 3), o.get("status_t")))
+                out.append({"t": t, "held": o.get("held") or [],
+                            "n_admitted": o.get("n_admitted") or 0,
+                            "admitted": o.get("admitted") or [],
+                            "evidence_age_s": _f(o.get("evidence_age_s")),
+                            "elapsed_ms": _f(o.get("elapsed_ms")),
+                            "acted": bool(o.get("acted"))})
+    out.sort(key=lambda r: r["t"])
+    return out
+
+
 def skipped_timeline(files: Sequence[Any]) -> List[dict]:
     """Cycles where selection did not run because a market was held. These
     are the NARROW CAPITAL intervals and they are not idle time."""
