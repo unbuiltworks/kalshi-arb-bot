@@ -1,0 +1,91 @@
+{
+ "arms": {
+  "c1": {
+   "arm": "c1",
+   "bankroll_dollar_hours": 32.354363,
+   "basis": "observed live arm; settled dollars are the settlement auditor's venue rows only",
+   "capital_locked_market_seconds": 10004.1,
+   "completed_per_bankroll_dollar_hour": 0.9272,
+   "completed_sequences": 30,
+   "completion_probability": 0.6122,
+   "cycles_skipped_position_held": 284,
+   "idle_cycles_with_candidate_and_no_choice": 0,
+   "median_open_to_complete_s": 29.0,
+   "observed": true,
+   "realized_usd_venue_total": -12.5082,
+   "sequences_started": 49,
+   "settled_markets_venue_confirmed": 6,
+   "venue_ledger_reconcilable": true
+  },
+  "c2": {
+   "arm": "c2",
+   "cycles_that_cannot_be_reconstructed": 284,
+   "observed": false,
+   "refused_to_estimate": "carrying forward a stale ranking or sampling the flat-cycle distribution would produce a number that looks like a counterfactual and is actually an assumption about the thing under test",
+   "verdict": "UNVERIFIABLE",
+   "why": "the cycles a second slot would have used are precisely the cycles with no recorded candidate universe"
+  },
+  "c3": {
+   "arm": "c3",
+   "cycles_that_cannot_be_reconstructed": 284,
+   "observed": false,
+   "refused_to_estimate": "carrying forward a stale ranking or sampling the flat-cycle distribution would produce a number that looks like a counterfactual and is actually an assumption about the thing under test",
+   "verdict": "UNVERIFIABLE",
+   "why": "the cycles a second slot would have used are precisely the cycles with no recorded candidate universe"
+  }
+ },
+ "gate": {
+  "enacts": "NOTHING. A PASS is a recommendation to the owner. Concurrency, per-market capital, the $7.50 cap and the -$15.00 daily stop change only on explicit owner approval.",
+  "gate_frozen_utc": "2026-09-08T14:47:00+00:00",
+  "gate_id": "L5_CONCURRENCY_SCALING_GATE_v1",
+  "gate_sha256_16": "b86fe09178ea78a2",
+  "sample_minimums_have": {
+   "completed_sequences_at_c1": 30,
+   "distinct_leagues": 21,
+   "distinct_markets": 57,
+   "forward_hours_of_tape": 68.19,
+   "settled_markets_with_venue_confirmed_realized": 6
+  },
+  "sample_minimums_met": {
+   "completed_sequences_at_c1": false,
+   "distinct_leagues": true,
+   "distinct_markets": true,
+   "forward_hours_of_tape": false,
+   "settled_markets_with_venue_confirmed_realized": false
+  },
+  "sample_minimums_required": {
+   "completed_sequences_at_c1": 40,
+   "distinct_leagues": 4,
+   "distinct_markets": 40,
+   "forward_hours_of_tape": 72,
+   "settled_markets_with_venue_confirmed_realized": 20
+  },
+  "verdict": "NOT_YET_ENOUGH_FORWARD_EVIDENCE"
+ },
+ "missing_evidence": {
+  "cycles_held_with_no_ranked_universe": 284,
+  "cycles_with_a_ranked_universe": 93,
+  "share_of_cycles_unreconstructible": 0.7533,
+  "what_would_fix_it": "rank the universe during holds too and log it WITHOUT acting on it -- a shadow selection row. That is a log-only change: no order path, no cap, no gate, no concurrency change. It makes the c>=2 arms reconstructible from real observed candidates instead of assumed ones. It needs an owner go because it touches the live campaign loop, even though it cannot trade.",
+  "why": "run_campaign logs resume_start and calls the session runner directly when a market is held; select_candidate is never reached, so no admitted list, ranking or opportunity score exists for those cycles"
+ },
+ "opportunity_context": {
+  "component_medians_at_entry": {
+   "complement_availability": 1.0,
+   "depth": 1.0,
+   "fee_headroom": 1.0,
+   "feed_quality": 1.0,
+   "flow": 1.0,
+   "on_distribution": 0.017,
+   "rebate_eligible": 1.0,
+   "residual_duration": 0.45,
+   "two_sided_flow": 1.0
+  },
+  "entries_scored": 93,
+  "median_entry_pair_score": 0.7477,
+  "median_rank1_minus_rank2": 0.022,
+  "reading": "a small rank1-rank2 gap means the second-best market was nearly as good, which is the case where a second concurrent slot would earn its keep; a large gap means the slot is already on the only good opportunity"
+ },
+ "owner_ref": "#167 comment 5586921649",
+ "read_only": "scores a frozen gate; enacts nothing. Concurrency, per-market capital and every cap are owner decisions"
+}

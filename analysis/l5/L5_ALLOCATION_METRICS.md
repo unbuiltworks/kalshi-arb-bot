@@ -14,8 +14,8 @@ _OWNER #167 comment 5586921649. measurement only. This module changes no allocat
 |---|---|---|
 | 1 | idle cycles with a candidate and no choice | 0 |
 | 1 | idle share of selection span | 0.0 |
-| 1b | cycles that chose a market and opened nothing | 582 |
-| 1b | by reason | {'no_candidate': 578, 'complement_acceptance_unproven': 4} |
+| 1b | cycles that chose a market and opened nothing | 589 |
+| 1b | by reason | {'no_candidate': 585, 'complement_acceptance_unproven': 4} |
 | 2 | markets that took inventory | 28 |
 | 2 | median lockup (closed), s | 69.8 |
 | 3 | switches while flat | 76 |

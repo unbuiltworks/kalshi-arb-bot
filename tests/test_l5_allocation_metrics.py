@@ -135,3 +135,37 @@ def test_the_module_changes_nothing_live():
     for forbidden in ("place_limit_buy", "run_campaign", "run_session",
                       "os.environ[", "save_complement_proof"):
         assert forbidden not in src, forbidden
+
+
+def test_rows_without_an_in_payload_clock_use_the_railway_timestamp(tmp_path):
+    """The bug this pins reported ZERO held cycles against a funnel showing
+    44. Harvested resume_start rows carry no log_ts, so requiring one dropped
+    every single skipped-cycle row -- and a metric that silently returns
+    nothing looks exactly like a metric that found nothing."""
+    p = tmp_path / "h.txt"
+    p.write_text(json.dumps({"deploymentId": "d", "deploy": [
+        {"timestamp": "2026-09-08T15:00:00.000000000Z",
+         "message": "PMUS_L5_CAMPAIGN " + json.dumps(
+             {"kind": "resume_start", "slug": "s1",
+              "selection_skipped": "CAMPAIGN_HOLD:POSITION_HELD (1/1)"})},
+        {"timestamp": "2026-09-08T15:00:20.000000000Z",
+         "message": "PMUS_L5_CAMPAIGN " + json.dumps(
+             {"kind": "selection", "chosen": "s2",
+              "admitted": [{"rank": 1, "slug": "s2", "pair_score": 0.8}]})},
+    ]}), encoding="utf-8")
+
+    skipped = am.skipped_timeline([p])
+    assert len(skipped) == 1
+    assert skipped[0]["reason"] == "CAMPAIGN_HOLD:POSITION_HELD"
+
+    sel = am.selection_timeline([p])
+    assert len(sel) == 1 and sel[0]["chosen"] == "s2"
+
+
+def test_a_row_with_no_clock_anywhere_is_dropped_not_guessed(tmp_path):
+    p = tmp_path / "h.txt"
+    p.write_text(json.dumps({"deploymentId": "d", "deploy": [
+        {"message": "PMUS_L5_CAMPAIGN " + json.dumps(
+            {"kind": "selection", "chosen": "s1", "admitted": []})},
+    ]}), encoding="utf-8")
+    assert am.selection_timeline([p]) == []

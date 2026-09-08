@@ -6,13 +6,13 @@
   "wide_scan": "select_candidate ranks the full admitted universe every cycle"
  },
  "inputs": {
-  "held_cycles": 0,
+  "held_cycles": 284,
   "markets": 52,
   "selection_cycles": 201
  },
  "m1_flat_time_with_eligible_candidate": {
   "cycles_flat_with_candidate_and_no_choice": 0,
-  "cycles_skipped_position_held": 0,
+  "cycles_skipped_position_held": 284,
   "flat_cycles_observed": 201,
   "idle_s": 0.0,
   "idle_share_of_selection_span": 0.0,
@@ -23,13 +23,131 @@
  "m1b_chose_but_never_started": {
   "by_reason": {
    "complement_acceptance_unproven": 4,
-   "no_candidate": 578
+   "no_candidate": 585
   },
-  "campaign_runs": 15,
-  "cycles_chose_but_never_started": 582,
-  "cycles_observed": 685,
+  "campaign_runs": 13,
+  "coverage_caveat": "aggregated across every deployment in the harvest, so it spans several days and several safety-shell eras -- read per_deployment, not the total, for any question about a particular build. A deployment with few funnel rows on disk is under-counted here: the 2026-09-08 complement deadlock ran 181 blocked cycles on deployment 0dcd75c6, of which this harvest holds 2 funnel rows, so it barely appears. Thin harvest coverage understates this metric and never overstates it",
+  "cycles_chose_but_never_started": 589,
+  "cycles_observed": 688,
+  "per_deployment": [
+   {
+    "by_reason": {
+     "no_candidate": 462
+    },
+    "cycles_first": 82,
+    "cycles_last": 544,
+    "cycles_observed": 462,
+    "deployment": "dac5e439",
+    "funnel_rows": 44
+   },
+   {
+    "by_reason": {
+     "no_candidate": 80
+    },
+    "cycles_first": 1,
+    "cycles_last": 92,
+    "cycles_observed": 91,
+    "deployment": "0d32c1a5",
+    "funnel_rows": 85
+   },
+   {
+    "by_reason": {
+     "no_candidate": 29
+    },
+    "cycles_first": 14,
+    "cycles_last": 73,
+    "cycles_observed": 59,
+    "deployment": "0d32c1a5",
+    "funnel_rows": 60
+   },
+   {
+    "by_reason": {
+     "no_candidate": 9
+    },
+    "cycles_first": 1,
+    "cycles_last": 25,
+    "cycles_observed": 24,
+    "deployment": "c6c55506",
+    "funnel_rows": 25
+   },
+   {
+    "by_reason": {},
+    "cycles_first": 11,
+    "cycles_last": 22,
+    "cycles_observed": 11,
+    "deployment": "47ccf5b5",
+    "funnel_rows": 12
+   },
+   {
+    "by_reason": {},
+    "cycles_first": 1,
+    "cycles_last": 10,
+    "cycles_observed": 9,
+    "deployment": "88674da1",
+    "funnel_rows": 10
+   },
+   {
+    "by_reason": {
+     "complement_acceptance_unproven": 4,
+     "no_candidate": 5
+    },
+    "cycles_first": 6,
+    "cycles_last": 15,
+    "cycles_observed": 9,
+    "deployment": "f601e4c4",
+    "funnel_rows": 10
+   },
+   {
+    "by_reason": {},
+    "cycles_first": 2,
+    "cycles_last": 8,
+    "cycles_observed": 6,
+    "deployment": "44d63132",
+    "funnel_rows": 7
+   },
+   {
+    "by_reason": {},
+    "cycles_first": 6,
+    "cycles_last": 12,
+    "cycles_observed": 6,
+    "deployment": "b6cb95cb",
+    "funnel_rows": 7
+   },
+   {
+    "by_reason": {},
+    "cycles_first": 53,
+    "cycles_last": 57,
+    "cycles_observed": 4,
+    "deployment": "41c26cec",
+    "funnel_rows": 5
+   },
+   {
+    "by_reason": {},
+    "cycles_first": 1,
+    "cycles_last": 5,
+    "cycles_observed": 4,
+    "deployment": "430638c7",
+    "funnel_rows": 5
+   },
+   {
+    "by_reason": {},
+    "cycles_first": 1,
+    "cycles_last": 3,
+    "cycles_observed": 2,
+    "deployment": "edc8a637",
+    "funnel_rows": 3
+   },
+   {
+    "by_reason": {},
+    "cycles_first": 1,
+    "cycles_last": 2,
+    "cycles_observed": 1,
+    "deployment": "0dcd75c6",
+    "funnel_rows": 2
+   }
+  ],
   "reading": "selection succeeded and no session opened. complement_acceptance_unproven here is infrastructure idleness, not market conditions; no_candidate is the market genuinely offering nothing",
-  "share": 0.8496
+  "share": 0.8561
  },
  "m2_capital_lockup": {
   "markets_closed": 19,
@@ -347,7 +465,7 @@
  },
  "m7_occupied_slot_cost": {
   "capital_locked_market_seconds": 10004.1,
-  "cycles_with_selection_suppressed_by_hold": 0,
+  "cycles_with_selection_suppressed_by_hold": 284,
   "usd_opportunity_cost": null,
   "why_null": "a pair_score is not a dollar. The conversion needs the realized-per-opportunity-score relationship, which needs the settled cohort minimums in L5_CONCURRENCY_SCALING_GATE_v1 (sha b86fe09178ea78a2). Reporting an unbacked dollar figure here would be exactly the kind of modelled number the owner excluded"
  },

@@ -60,7 +60,7 @@ _SEL = re.compile(r'PMUS_L5_CAMPAIGN\s+(\{.*?"kind":\s*"selection".*?\})\s*(?=PM
 
 
 def _messages(path: Any) -> List[str]:
-    return [m for _dep, m in _message_rows(path)]
+    return [m for _dep, m, _ts in _message_rows(path)]
 
 
 def _message_rows(path: Any) -> List[tuple]:
@@ -78,13 +78,13 @@ def _message_rows(path: Any) -> List[tuple]:
     try:
         doc = json.loads(blob)
     except ValueError:
-        return [(str(path), blob)]
+        return [(str(path), blob, None)]
     rows = doc.get("deploy") if isinstance(doc, Mapping) else None
     if not isinstance(rows, list):
-        return [(str(path), blob)]
+        return [(str(path), blob, None)]
     dep = str(doc.get("deploymentId") or path)
-    return [(dep, str(r.get("message") or "")) for r in rows
-            if isinstance(r, Mapping)]
+    return [(dep, str(r.get("message") or ""), r.get("timestamp"))
+            for r in rows if isinstance(r, Mapping)]
 
 
 def _iter_json_objects(blob: str, marker: str) -> List[dict]:
@@ -129,13 +129,18 @@ def selection_timeline(files: Sequence[Any]) -> List[dict]:
     rows: List[dict] = []
     seen: set = set()
     for path in files:
-        for blob in _messages(path):
+        for _dep, blob, row_ts in _message_rows(path):
             if "PMUS_L5_CAMPAIGN " not in blob:
                 continue
             for o in _iter_json_objects(blob, "PMUS_L5_CAMPAIGN "):
                 if o.get("kind") != "selection":
                     continue
-                t = iso_epoch(o.get("log_ts") or o.get("status_t"))
+                # harvested rows often carry no in-payload clock; the
+                # Railway row timestamp is the fallback. Without it every
+                # row is silently dropped, which is exactly how the first
+                # version reported 0 held cycles against a funnel showing 44
+                t = (iso_epoch(o.get("log_ts") or o.get("status_t"))
+                     or iso_epoch(row_ts))
                 if t is None:
                     continue
                 key = (round(t, 3), o.get("chosen"))
@@ -166,14 +171,15 @@ def skipped_timeline(files: Sequence[Any]) -> List[dict]:
     out: List[dict] = []
     seen: set = set()
     for path in files:
-        for blob in _messages(path):
+        for _dep, blob, row_ts in _message_rows(path):
             if "selection_skipped" not in blob:
                 continue
             for o in _iter_json_objects(blob, "PMUS_L5_CAMPAIGN "):
                 sk = o.get("selection_skipped")
                 if not sk:
                     continue
-                t = iso_epoch(o.get("log_ts") or o.get("t_utc"))
+                t = (iso_epoch(o.get("log_ts") or o.get("t_utc"))
+                     or iso_epoch(row_ts))
                 if t is None or (round(t, 3), sk) in seen:
                     continue
                 seen.add((round(t, 3), sk))
@@ -188,13 +194,13 @@ def funnel_timeline(files: Sequence[Any]) -> List[dict]:
     out: List[dict] = []
     seen: set = set()
     for path in files:
-        for dep, blob in _message_rows(path):
+        for dep, blob, row_ts in _message_rows(path):
             if '"funnel"' not in blob:
                 continue
             for o in _iter_json_objects(blob, "PMUS_L5_CAMPAIGN "):
                 if o.get("kind") != "funnel":
                     continue
-                t = iso_epoch(o.get("log_ts"))
+                t = iso_epoch(o.get("log_ts")) or iso_epoch(row_ts)
                 key = (dep, o.get("cycles"), o.get("sessions"),
                        o.get("submitted"))
                 if key in seen:
