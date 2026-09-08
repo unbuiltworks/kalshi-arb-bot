@@ -1,0 +1,1083 @@
+{
+ "bucket_occupancy": {
+  "distance_to_l5": {
+   "A_absolute_total_variation": 0.6997,
+   "B_normalized_total_variation": 0.3934,
+   "closed_by_normalization": 0.3063,
+   "reading": "total variation distance between our bucket occupancy and L5's, 0 = identical, 1 = disjoint. The difference is how much of the gap is pure representation; whatever remains is trajectory or shell, and no rescaling removes it"
+  },
+  "l5": {
+   "A_absolute": {
+    "n": 71984,
+    "share": {
+     "flat": 0.0398,
+     "imb1-10": 0.0497,
+     "imb10-50": 0.1942,
+     "imb>50": 0.7162
+    }
+   },
+   "B_normalized": {
+    "n": 71808,
+    "share": {
+     "flat": 0.0395,
+     "imb1-10": 0.0494,
+     "imb10-50": 0.1934,
+     "imb>50": 0.7176
+    }
+   },
+   "rows_without_scale": 176
+  },
+  "r5f": {
+   "A_absolute": {
+    "n": 665,
+    "share": {
+     "flat": 0.4677,
+     "imb1-10": 0.0857,
+     "imb10-50": 0.4301,
+     "imb>50": 0.0165
+    }
+   },
+   "B_normalized": {
+    "n": 596,
+    "share": {
+     "flat": 0.4329,
+     "imb1-10": 0.0436,
+     "imb10-50": 0.0587,
+     "imb>50": 0.4648
+    }
+   },
+   "rows_without_scale": 69
+  }
+ },
+ "denominators": {
+  "l5_flat_share_0_009_quoted_elsewhere": "the 0.9% in the sports-clock study is over the FROZEN MODEL's base transition counts, a different and smaller denominator (trained transitions, not raw fills). Both are correct for their own denominator and they are not interchangeable; every figure in this report uses the canonical-tape denominator",
+  "l5_flat_share_here": "measured over FILLS on the canonical per-trade tape"
+ },
+ "edges_spec": {
+  "caveat_ties": "quantile matching cannot split a tie: where the ratio distribution has atoms the reproduced shares are close, not exact, and the residual difference is reported rather than smoothed away",
+  "derived_from": "l5_canonical_sequence.csv.gz, L5 rows only",
+  "edges": [
+   0.00497293,
+   0.05141625,
+   0.29092375
+  ],
+  "id": "L5_INVENTORY_RATIO_EDGES_v1",
+  "l5_absolute_share": {
+   "flat": 0.0395,
+   "imb1-10": 0.0494,
+   "imb10-50": 0.1934,
+   "imb>50": 0.7176
+  },
+  "labels": [
+   "flat",
+   "imb1-10",
+   "imb10-50",
+   "imb>50"
+  ],
+  "n_l5_rows_used": 71808,
+  "rule": "edges are the quantiles of L5's own imbalance-ratio distribution at L5's own cumulative absolute-share bucket shares, so the translated buckets reproduce L5's bucket occupancy exactly on L5's tape",
+  "sha256_16": "244b7ab865c9dff4"
+ },
+ "inputs": {
+  "canonical_csv": "l5_canonical_sequence.csv.gz",
+  "live_logs": {
+   "files": [
+    {
+     "bytes": 64097,
+     "file": "continuation_0033.txt",
+     "sha256_16": "6211cba995da0dfb"
+    },
+    {
+     "bytes": 138344,
+     "file": "malden_stoole_0044_0109.txt",
+     "sha256_16": "937e39988db8bcc1"
+    },
+    {
+     "bytes": 167768,
+     "file": "mcp-Railway-get-logs-1788609896474.txt",
+     "sha256_16": "92803afda11c72fc"
+    },
+    {
+     "bytes": 87102,
+     "file": "mcp-Railway-get-logs-1788610039183.txt",
+     "sha256_16": "c452a4a1041af739"
+    },
+    {
+     "bytes": 96194,
+     "file": "mcp-Railway-get-logs-1788611064436.txt",
+     "sha256_16": "67f24e8d5215ea91"
+    },
+    {
+     "bytes": 202612,
+     "file": "mcp-Railway-get-logs-1788613590554.txt",
+     "sha256_16": "71c4086c18f0a29f"
+    },
+    {
+     "bytes": 132802,
+     "file": "mcp-Railway-get-logs-1788621834201.txt",
+     "sha256_16": "c47e9ae24bf70fd9"
+    },
+    {
+     "bytes": 123480,
+     "file": "mcp-Railway-get-logs-1788622918745.txt",
+     "sha256_16": "f1ea21416ebcab45"
+    },
+    {
+     "bytes": 165361,
+     "file": "mcp-Railway-get-logs-1788624808469.txt",
+     "sha256_16": "401eeeb421feb3b8"
+    },
+    {
+     "bytes": 55109,
+     "file": "mcp-Railway-get-logs-1788625933921.txt",
+     "sha256_16": "8bc84a335b8c7c8f"
+    },
+    {
+     "bytes": 180239,
+     "file": "mcp-Railway-get-logs-1788626028201.txt",
+     "sha256_16": "7db1a534263961b8"
+    },
+    {
+     "bytes": 86230,
+     "file": "mcp-Railway-get-logs-1788626354804.txt",
+     "sha256_16": "86ac6c55143116cf"
+    },
+    {
+     "bytes": 540260,
+     "file": "mcp-Railway-get-logs-1788632132754.txt",
+     "sha256_16": "83188dacecd002b5"
+    },
+    {
+     "bytes": 90368,
+     "file": "mcp-Railway-get-logs-1788634153318.txt",
+     "sha256_16": "372b471d5bd4a889"
+    },
+    {
+     "bytes": 180004,
+     "file": "mcp-Railway-get-logs-1788634482945.txt",
+     "sha256_16": "fd086c7384e0567b"
+    },
+    {
+     "bytes": 468432,
+     "file": "mcp-Railway-get-logs-1788634538594.txt",
+     "sha256_16": "d3d58e7bf3ddc8f3"
+    },
+    {
+     "bytes": 269876,
+     "file": "mcp-Railway-get-logs-1788639596463.txt",
+     "sha256_16": "2cba8260685784dc"
+    },
+    {
+     "bytes": 95960,
+     "file": "mcp-Railway-get-logs-1788645854681.txt",
+     "sha256_16": "f011981ee6daa5a7"
+    },
+    {
+     "bytes": 179987,
+     "file": "mcp-Railway-get-logs-1788645855037.txt",
+     "sha256_16": "f833074c10d8837f"
+    },
+    {
+     "bytes": 111530,
+     "file": "mcp-Railway-get-logs-1788649511799.txt",
+     "sha256_16": "5e3c27b1d6e4b192"
+    },
+    {
+     "bytes": 180007,
+     "file": "mcp-Railway-get-logs-1788649512484.txt",
+     "sha256_16": "bae63586eef70e6d"
+    },
+    {
+     "bytes": 180039,
+     "file": "mcp-Railway-get-logs-1788651856025.txt",
+     "sha256_16": "16cd696a62be94b0"
+    },
+    {
+     "bytes": 119675,
+     "file": "mcp-Railway-get-logs-1788654426104.txt",
+     "sha256_16": "ab8244b7b858262f"
+    },
+    {
+     "bytes": 179993,
+     "file": "mcp-Railway-get-logs-1788654427487.txt",
+     "sha256_16": "c3c7125496883449"
+    },
+    {
+     "bytes": 107163,
+     "file": "mcp-Railway-get-logs-1788654528574.txt",
+     "sha256_16": "8145ef380f40d95f"
+    },
+    {
+     "bytes": 180049,
+     "file": "mcp-Railway-get-logs-1788657179415.txt",
+     "sha256_16": "07cf22a76255cca9"
+    },
+    {
+     "bytes": 180041,
+     "file": "mcp-Railway-get-logs-1788657573719.txt",
+     "sha256_16": "717f166ee90c8f46"
+    },
+    {
+     "bytes": 160646,
+     "file": "mcp-Railway-get-logs-1788658119719.txt",
+     "sha256_16": "eb5ce30d2a7053da"
+    },
+    {
+     "bytes": 180089,
+     "file": "mcp-Railway-get-logs-1788659273684.txt",
+     "sha256_16": "5b86343a3a668424"
+    },
+    {
+     "bytes": 113089,
+     "file": "mcp-Railway-get-logs-1788659327421.txt",
+     "sha256_16": "265ea60a08efc81e"
+    },
+    {
+     "bytes": 214016,
+     "file": "mcp-Railway-get-logs-1788659366072.txt",
+     "sha256_16": "85afa80bc5f73c40"
+    },
+    {
+     "bytes": 431097,
+     "file": "mcp-Railway-get-logs-1788659367636.txt",
+     "sha256_16": "c017a7e803b51746"
+    },
+    {
+     "bytes": 54170,
+     "file": "mcp-Railway-get-logs-1788661455835.txt",
+     "sha256_16": "f242b2183f6a9417"
+    },
+    {
+     "bytes": 180149,
+     "file": "mcp-Railway-get-logs-1788661760425.txt",
+     "sha256_16": "ac6b5430bb595e9a"
+    },
+    {
+     "bytes": 115946,
+     "file": "mcp-Railway-get-logs-1788681765173.txt",
+     "sha256_16": "d296427622e2b5aa"
+    },
+    {
+     "bytes": 81028,
+     "file": "mcp-Railway-get-logs-1788681798504.txt",
+     "sha256_16": "968f77677f17e6b6"
+    },
+    {
+     "bytes": 179973,
+     "file": "mcp-Railway-get-logs-1788683801270.txt",
+     "sha256_16": "24144df9f92617df"
+    },
+    {
+     "bytes": 500737,
+     "file": "mcp-Railway-get-logs-1788684103701.txt",
+     "sha256_16": "e7b0e496bbf8f393"
+    },
+    {
+     "bytes": 50746,
+     "file": "mcp-Railway-get-logs-1788690466841.txt",
+     "sha256_16": "850632f4107f2074"
+    },
+    {
+     "bytes": 63866,
+     "file": "mcp-Railway-get-logs-1788693071871.txt",
+     "sha256_16": "5480038bd88831ab"
+    },
+    {
+     "bytes": 107041,
+     "file": "mcp-Railway-get-logs-1788693176038.txt",
+     "sha256_16": "2964ca430d66a2e1"
+    },
+    {
+     "bytes": 180025,
+     "file": "mcp-Railway-get-logs-1788693375339.txt",
+     "sha256_16": "4a885ce2450e4274"
+    },
+    {
+     "bytes": 133400,
+     "file": "mcp-Railway-get-logs-1788694339937.txt",
+     "sha256_16": "5241fb1e77bd6561"
+    },
+    {
+     "bytes": 95321,
+     "file": "mcp-Railway-get-logs-1788695755198.txt",
+     "sha256_16": "6263613dfb468819"
+    },
+    {
+     "bytes": 181191,
+     "file": "mcp-Railway-get-logs-1788696366950.txt",
+     "sha256_16": "cb4aca3d9497aa88"
+    },
+    {
+     "bytes": 53727,
+     "file": "mcp-Railway-get-logs-1788696754332.txt",
+     "sha256_16": "9a09a01cd2fcf194"
+    },
+    {
+     "bytes": 50360,
+     "file": "mcp-Railway-get-logs-1788698840117.txt",
+     "sha256_16": "b4e82ac60a7951e5"
+    },
+    {
+     "bytes": 98714,
+     "file": "mcp-Railway-get-logs-1788702678745.txt",
+     "sha256_16": "f7fe3fcd23e09b98"
+    },
+    {
+     "bytes": 133828,
+     "file": "mcp-Railway-get-logs-1788704253227.txt",
+     "sha256_16": "381185148442c867"
+    },
+    {
+     "bytes": 255426,
+     "file": "mcp-Railway-get-logs-1788704253942.txt",
+     "sha256_16": "29d56b4bb16bd6f8"
+    },
+    {
+     "bytes": 83887,
+     "file": "mcp-Railway-get-logs-1788710100503.txt",
+     "sha256_16": "18e56eb61381a3f0"
+    },
+    {
+     "bytes": 97582,
+     "file": "mcp-Railway-get-logs-1788710151125.txt",
+     "sha256_16": "c3f26d2ae202cdfd"
+    },
+    {
+     "bytes": 70152,
+     "file": "mcp-Railway-get-logs-1788711472040.txt",
+     "sha256_16": "6bc4b23f65641ce5"
+    },
+    {
+     "bytes": 60979,
+     "file": "mcp-Railway-get-logs-1788712072016.txt",
+     "sha256_16": "9d88cd556e98ba9f"
+    },
+    {
+     "bytes": 82685,
+     "file": "mcp-Railway-get-logs-1788713000543.txt",
+     "sha256_16": "26cf851580103270"
+    },
+    {
+     "bytes": 51876,
+     "file": "mcp-Railway-get-logs-1788713002591.txt",
+     "sha256_16": "9e1c87a4fe193f30"
+    },
+    {
+     "bytes": 99760,
+     "file": "mcp-Railway-get-logs-1788713005011.txt",
+     "sha256_16": "fc385be707a00deb"
+    },
+    {
+     "bytes": 79485,
+     "file": "mcp-Railway-get-logs-1788713075304.txt",
+     "sha256_16": "bc029afac7caf3d0"
+    },
+    {
+     "bytes": 153324,
+     "file": "mcp-Railway-get-logs-1788715219407.txt",
+     "sha256_16": "1d340cf1c1728c86"
+    },
+    {
+     "bytes": 97582,
+     "file": "mcp-Railway-get-logs-1788715227893.txt",
+     "sha256_16": "c3f26d2ae202cdfd"
+    },
+    {
+     "bytes": 220136,
+     "file": "mcp-Railway-get-logs-1788715248923.txt",
+     "sha256_16": "b8fce9c301db08bf"
+    },
+    {
+     "bytes": 77568,
+     "file": "mcp-Railway-get-logs-1788715252050.txt",
+     "sha256_16": "bc052d2840d74b23"
+    },
+    {
+     "bytes": 153805,
+     "file": "mcp-Railway-get-logs-1788715253405.txt",
+     "sha256_16": "cc9c55d5294102ad"
+    },
+    {
+     "bytes": 75166,
+     "file": "mcp-Railway-get-logs-1788721583603.txt",
+     "sha256_16": "fe6f781a0098979a"
+    },
+    {
+     "bytes": 89456,
+     "file": "mcp-Railway-get-logs-1788723277501.txt",
+     "sha256_16": "47612b815a0d9cfa"
+    },
+    {
+     "bytes": 173514,
+     "file": "mcp-Railway-get-logs-1788724358111.txt",
+     "sha256_16": "a00400ff9f07348c"
+    },
+    {
+     "bytes": 62105,
+     "file": "mcp-Railway-get-logs-1788746466711.txt",
+     "sha256_16": "e5b82f6f6d90eded"
+    },
+    {
+     "bytes": 63699,
+     "file": "mcp-Railway-get-logs-1788747719831.txt",
+     "sha256_16": "d9f98a40ab60da31"
+    },
+    {
+     "bytes": 79710,
+     "file": "mcp-Railway-get-logs-1788748009475.txt",
+     "sha256_16": "b4086171c53a0c4b"
+    },
+    {
+     "bytes": 71399,
+     "file": "mcp-Railway-get-logs-1788748433577.txt",
+     "sha256_16": "1d4f11f55104eedc"
+    },
+    {
+     "bytes": 57549,
+     "file": "mcp-Railway-get-logs-1788748960101.txt",
+     "sha256_16": "232c38fa08d3eef1"
+    },
+    {
+     "bytes": 57549,
+     "file": "mcp-Railway-get-logs-1788748978065.txt",
+     "sha256_16": "232c38fa08d3eef1"
+    },
+    {
+     "bytes": 77634,
+     "file": "mcp-Railway-get-logs-1788765027467.txt",
+     "sha256_16": "392b02dc8d9c5fae"
+    },
+    {
+     "bytes": 60074,
+     "file": "mcp-Railway-get-logs-1788765127879.txt",
+     "sha256_16": "f2775207fad00d41"
+    },
+    {
+     "bytes": 85167,
+     "file": "mcp-Railway-get-logs-1788768446577.txt",
+     "sha256_16": "74cb4bfa4578eaaa"
+    },
+    {
+     "bytes": 62453,
+     "file": "mcp-Railway-get-logs-1788768446915.txt",
+     "sha256_16": "df47596f954fef7e"
+    },
+    {
+     "bytes": 75283,
+     "file": "mcp-Railway-get-logs-1788771061668.txt",
+     "sha256_16": "743b35a8ae558aea"
+    },
+    {
+     "bytes": 64440,
+     "file": "mcp-Railway-get-logs-1788771682413.txt",
+     "sha256_16": "d3dd28115a650206"
+    },
+    {
+     "bytes": 72347,
+     "file": "mcp-Railway-get-logs-1788771708303.txt",
+     "sha256_16": "79ccb9a46b4c794a"
+    },
+    {
+     "bytes": 138876,
+     "file": "mcp-Railway-get-logs-1788771775075.txt",
+     "sha256_16": "acfb98e4b9e8bc07"
+    },
+    {
+     "bytes": 63045,
+     "file": "mcp-Railway-get-logs-1788773139371.txt",
+     "sha256_16": "19db07ab058cca4e"
+    },
+    {
+     "bytes": 89942,
+     "file": "mcp-Railway-get-logs-1788773145679.txt",
+     "sha256_16": "39d445fa838a1ad2"
+    },
+    {
+     "bytes": 180825,
+     "file": "mcp-Railway-get-logs-1788773187934.txt",
+     "sha256_16": "10db9c78b6618710"
+    },
+    {
+     "bytes": 139056,
+     "file": "mcp-Railway-get-logs-1788773190455.txt",
+     "sha256_16": "3cd0ceb7366441e7"
+    },
+    {
+     "bytes": 261075,
+     "file": "mcp-Railway-get-logs-1788774663880.txt",
+     "sha256_16": "fdd5dc8b53d8776c"
+    },
+    {
+     "bytes": 68737,
+     "file": "mcp-Railway-get-logs-1788776018173.txt",
+     "sha256_16": "5264a9f8dfbea954"
+    },
+    {
+     "bytes": 128119,
+     "file": "mcp-Railway-get-logs-1788779010426.txt",
+     "sha256_16": "4c94b92e890cc406"
+    },
+    {
+     "bytes": 53217,
+     "file": "mcp-Railway-get-logs-1788780459035.txt",
+     "sha256_16": "0e89bed173a98b30"
+    },
+    {
+     "bytes": 300816,
+     "file": "mcp-Railway-get-logs-1788780511574.txt",
+     "sha256_16": "f61b0ea986d7284c"
+    },
+    {
+     "bytes": 86833,
+     "file": "mcp-Railway-get-logs-1788780850509.txt",
+     "sha256_16": "32804b1727fb779f"
+    },
+    {
+     "bytes": 53769,
+     "file": "mcp-Railway-get-logs-1788780852373.txt",
+     "sha256_16": "7c0ce6d777462bc1"
+    },
+    {
+     "bytes": 159246,
+     "file": "mcp-Railway-get-logs-1788780854038.txt",
+     "sha256_16": "f1b32ea2a7f8b9b2"
+    },
+    {
+     "bytes": 65475,
+     "file": "mcp-Railway-get-logs-1788780855550.txt",
+     "sha256_16": "feda2e98d0c8ca1a"
+    },
+    {
+     "bytes": 250062,
+     "file": "mcp-Railway-get-logs-1788780858282.txt",
+     "sha256_16": "9e25785f3d216c66"
+    },
+    {
+     "bytes": 173245,
+     "file": "mcp-Railway-get-logs-1788780859175.txt",
+     "sha256_16": "239975a87e24c46c"
+    },
+    {
+     "bytes": 77753,
+     "file": "mcp-Railway-get-logs-1788780862420.txt",
+     "sha256_16": "cb13e84d5f184f6d"
+    },
+    {
+     "bytes": 292035,
+     "file": "mcp-Railway-get-logs-1788781054121.txt",
+     "sha256_16": "b08a91ff078f2535"
+    },
+    {
+     "bytes": 59093,
+     "file": "mcp-Railway-get-logs-1788781735512.txt",
+     "sha256_16": "ed0c0dd7e9ff9eba"
+    },
+    {
+     "bytes": 69060,
+     "file": "mcp-Railway-get-logs-1788783381176.txt",
+     "sha256_16": "17ab4b1e6b53be56"
+    },
+    {
+     "bytes": 51368,
+     "file": "mcp-Railway-get-logs-1788783446524.txt",
+     "sha256_16": "21be3d43c3334c6f"
+    },
+    {
+     "bytes": 69060,
+     "file": "mcp-Railway-get-logs-1788786322073.txt",
+     "sha256_16": "27fe7db7a244ddff"
+    },
+    {
+     "bytes": 179998,
+     "file": "mcp-Railway-get-logs-1788786673411.txt",
+     "sha256_16": "8f8d63cb6063f0a6"
+    },
+    {
+     "bytes": 258860,
+     "file": "mcp-Railway-get-logs-1788786676143.txt",
+     "sha256_16": "0c46311c6f10e5de"
+    },
+    {
+     "bytes": 253498,
+     "file": "mcp-Railway-get-logs-1788786779990.txt",
+     "sha256_16": "0df925e4a3179734"
+    },
+    {
+     "bytes": 69064,
+     "file": "mcp-Railway-get-logs-1788790264884.txt",
+     "sha256_16": "557e0460f7c2b01c"
+    },
+    {
+     "bytes": 180473,
+     "file": "mcp-Railway-get-logs-1788791830671.txt",
+     "sha256_16": "c6f5773cfbec42f0"
+    },
+    {
+     "bytes": 50142,
+     "file": "mcp-Railway-get-logs-1788792392113.txt",
+     "sha256_16": "c957b8138ea33127"
+    },
+    {
+     "bytes": 51869,
+     "file": "mcp-Railway-get-logs-1788792447041.txt",
+     "sha256_16": "4b1d54c7fa39491c"
+    },
+    {
+     "bytes": 180001,
+     "file": "mcp-Railway-get-logs-1788792451332.txt",
+     "sha256_16": "ccc02a449de5a167"
+    },
+    {
+     "bytes": 77480,
+     "file": "mcp-Railway-get-logs-1788793154811.txt",
+     "sha256_16": "a1763d1961048648"
+    },
+    {
+     "bytes": 80350,
+     "file": "mcp-Railway-get-logs-1788793198993.txt",
+     "sha256_16": "cefb0c20424cac75"
+    },
+    {
+     "bytes": 113769,
+     "file": "mcp-Railway-get-logs-1788800837143.txt",
+     "sha256_16": "5b30c134b027b6e3"
+    },
+    {
+     "bytes": 179997,
+     "file": "mcp-Railway-get-logs-1788801466026.txt",
+     "sha256_16": "8c6b0ca3053154a7"
+    },
+    {
+     "bytes": 179997,
+     "file": "mcp-Railway-get-logs-1788801468442.txt",
+     "sha256_16": "3dbb634435b199d3"
+    },
+    {
+     "bytes": 180498,
+     "file": "mcp-Railway-get-logs-1788801469894.txt",
+     "sha256_16": "2e7cdb169ebd8d3c"
+    },
+    {
+     "bytes": 180653,
+     "file": "mcp-Railway-get-logs-1788801515314.txt",
+     "sha256_16": "d39b9c48cb51ee9d"
+    },
+    {
+     "bytes": 180530,
+     "file": "mcp-Railway-get-logs-1788801517390.txt",
+     "sha256_16": "bd870fc8054f4880"
+    },
+    {
+     "bytes": 180165,
+     "file": "mcp-Railway-get-logs-1788801519756.txt",
+     "sha256_16": "51aa47e5fc024807"
+    },
+    {
+     "bytes": 180065,
+     "file": "mcp-Railway-get-logs-1788801521119.txt",
+     "sha256_16": "d2bd8998ad46dd4d"
+    },
+    {
+     "bytes": 180053,
+     "file": "mcp-Railway-get-logs-1788801523368.txt",
+     "sha256_16": "1898aa024957c1b0"
+    },
+    {
+     "bytes": 179997,
+     "file": "mcp-Railway-get-logs-1788801525512.txt",
+     "sha256_16": "8db5906a8288c4ab"
+    },
+    {
+     "bytes": 88926,
+     "file": "mcp-Railway-get-logs-1788803387320.txt",
+     "sha256_16": "5aeae608d1314f15"
+    },
+    {
+     "bytes": 84142,
+     "file": "mcp-Railway-get-logs-1788805705137.txt",
+     "sha256_16": "4490e51fb012717b"
+    },
+    {
+     "bytes": 630436,
+     "file": "mcp-Railway-get-logs-1788806255714.txt",
+     "sha256_16": "b4735d6e633aa662"
+    },
+    {
+     "bytes": 291576,
+     "file": "mcp-Railway-get-logs-1788807132169.txt",
+     "sha256_16": "09d34a742d65b581"
+    },
+    {
+     "bytes": 149100,
+     "file": "mcp-Railway-get-logs-1788807133580.txt",
+     "sha256_16": "3a9d472a88b708c4"
+    },
+    {
+     "bytes": 90782,
+     "file": "mcp-Railway-get-logs-1788807932130.txt",
+     "sha256_16": "9ce0417ddbc21a12"
+    },
+    {
+     "bytes": 71486,
+     "file": "mcp-Railway-get-logs-1788818271533.txt",
+     "sha256_16": "042e3bbc5707dda3"
+    },
+    {
+     "bytes": 180847,
+     "file": "mcp-Railway-get-logs-1788828197844.txt",
+     "sha256_16": "3176cad213a712d9"
+    },
+    {
+     "bytes": 233249,
+     "file": "mcp-Railway-get-logs-1788828199105.txt",
+     "sha256_16": "3a5defaaf32e6a22"
+    },
+    {
+     "bytes": 109000,
+     "file": "mcp-Railway-get-logs-1788828200301.txt",
+     "sha256_16": "40dcb3f7291933b9"
+    },
+    {
+     "bytes": 118569,
+     "file": "mcp-Railway-get-logs-1788828212216.txt",
+     "sha256_16": "023fb2f3758b5fe1"
+    },
+    {
+     "bytes": 229724,
+     "file": "mcp-Railway-get-logs-1788828215922.txt",
+     "sha256_16": "d8481411f0b1aa71"
+    },
+    {
+     "bytes": 245022,
+     "file": "mcp-Railway-get-logs-1788828218069.txt",
+     "sha256_16": "50e2d3a69d67f235"
+    },
+    {
+     "bytes": 163237,
+     "file": "mcp-Railway-get-logs-1788828223004.txt",
+     "sha256_16": "6d82446e1d9aa2aa"
+    },
+    {
+     "bytes": 69112,
+     "file": "mcp-Railway-get-logs-1788828229808.txt",
+     "sha256_16": "56e7482a062db684"
+    },
+    {
+     "bytes": 84573,
+     "file": "mcp-Railway-get-logs-1788828231221.txt",
+     "sha256_16": "05f663cc072de7b0"
+    },
+    {
+     "bytes": 223317,
+     "file": "mcp-Railway-get-logs-1788828233171.txt",
+     "sha256_16": "1b0c52a9c9e9eca6"
+    },
+    {
+     "bytes": 3957376,
+     "file": "mcp-Railway-get-logs-1788828235078.txt",
+     "sha256_16": "2b7471e3da657629"
+    },
+    {
+     "bytes": 295449,
+     "file": "mcp-Railway-get-logs-1788828235795.txt",
+     "sha256_16": "469b2f36d4cb7f32"
+    },
+    {
+     "bytes": 227414,
+     "file": "mcp-Railway-get-logs-1788828240706.txt",
+     "sha256_16": "773b9beeb909dab2"
+    },
+    {
+     "bytes": 81684,
+     "file": "mcp-Railway-get-logs-1788828265022.txt",
+     "sha256_16": "3f785722be13c48c"
+    },
+    {
+     "bytes": 69829,
+     "file": "mcp-Railway-get-logs-1788828545037.txt",
+     "sha256_16": "5920846b9ba9ffeb"
+    },
+    {
+     "bytes": 64097,
+     "file": "mcp-Railway-get-logs-1788828547060.txt",
+     "sha256_16": "6211cba995da0dfb"
+    },
+    {
+     "bytes": 91865,
+     "file": "mcp-Railway-get-logs-1788829388640.txt",
+     "sha256_16": "492934ad7d63f20a"
+    },
+    {
+     "bytes": 956155,
+     "file": "mcp-Railway-get-logs-1788829699956.txt",
+     "sha256_16": "276f5c3fa3365ee5"
+    },
+    {
+     "bytes": 138344,
+     "file": "mcp-Railway-get-logs-1788829963254.txt",
+     "sha256_16": "937e39988db8bcc1"
+    },
+    {
+     "bytes": 176313,
+     "file": "mcp-Railway-get-logs-1788830134365.txt",
+     "sha256_16": "26c28751c7871492"
+    },
+    {
+     "bytes": 281536,
+     "file": "mcp-Railway-get-logs-1788831346285.txt",
+     "sha256_16": "2cd1d45862800293"
+    },
+    {
+     "bytes": 77346,
+     "file": "mcp-Railway-get-logs-1788833342264.txt",
+     "sha256_16": "243ed628677f835d"
+    },
+    {
+     "bytes": 989185,
+     "file": "mcp-Railway-get-logs-1788833619810.txt",
+     "sha256_16": "750bcb4a2c475699"
+    },
+    {
+     "bytes": 388782,
+     "file": "mcp-Railway-get-logs-1788833740036.txt",
+     "sha256_16": "1e82396e1c08b76b"
+    },
+    {
+     "bytes": 1685781,
+     "file": "mcp-Railway-get-logs-1788833771235.txt",
+     "sha256_16": "a15d54d27ebab2b2"
+    },
+    {
+     "bytes": 1205176,
+     "file": "mcp-Railway-get-logs-1788833777659.txt",
+     "sha256_16": "6f5256b46fd2448e"
+    },
+    {
+     "bytes": 1250907,
+     "file": "mcp-Railway-get-logs-1788833786400.txt",
+     "sha256_16": "aaa074de20a085cc"
+    },
+    {
+     "bytes": 89075,
+     "file": "mcp-Railway-get-logs-1788834715167.txt",
+     "sha256_16": "cf6e2dec2e366486"
+    },
+    {
+     "bytes": 238196,
+     "file": "mcp-Railway-get-logs-1788837619833.txt",
+     "sha256_16": "bb0531150934c4f1"
+    },
+    {
+     "bytes": 64568,
+     "file": "mcp-Railway-get-logs-1788840371696.txt",
+     "sha256_16": "8ec1ac2922f35c6b"
+    },
+    {
+     "bytes": 63646,
+     "file": "mcp-Railway-get-logs-1788844907807.txt",
+     "sha256_16": "373beecb9b546a72"
+    },
+    {
+     "bytes": 191859,
+     "file": "mcp-Railway-get-logs-1788864228194.txt",
+     "sha256_16": "f0f1c020fea47887"
+    },
+    {
+     "bytes": 107988,
+     "file": "mcp-Railway-get-logs-1788864446622.txt",
+     "sha256_16": "a81a883a60e4b240"
+    },
+    {
+     "bytes": 91865,
+     "file": "order_rejected_1920_2100.txt",
+     "sha256_16": "492934ad7d63f20a"
+    },
+    {
+     "bytes": 295449,
+     "file": "preview_complement_1920_2100.txt",
+     "sha256_16": "469b2f36d4cb7f32"
+    },
+    {
+     "bytes": 77346,
+     "file": "recorder_book_rows_0145.txt",
+     "sha256_16": "243ed628677f835d"
+    },
+    {
+     "bytes": 89075,
+     "file": "recorder_book_rows_0209.txt",
+     "sha256_16": "cf6e2dec2e366486"
+    },
+    {
+     "bytes": 3957376,
+     "file": "selection_funnel_1920_2100.txt",
+     "sha256_16": "2b7471e3da657629"
+    },
+    {
+     "bytes": 227414,
+     "file": "selection_funnel_resumed_0030.txt",
+     "sha256_16": "773b9beeb909dab2"
+    },
+    {
+     "bytes": 81684,
+     "file": "session_end_1920_1940.txt",
+     "sha256_16": "3f785722be13c48c"
+    },
+    {
+     "bytes": 180847,
+     "file": "session_end_1940_1950.txt",
+     "sha256_16": "3176cad213a712d9"
+    },
+    {
+     "bytes": 233249,
+     "file": "session_end_1950_2000.txt",
+     "sha256_16": "3a5defaaf32e6a22"
+    },
+    {
+     "bytes": 109000,
+     "file": "session_end_2000_2010.txt",
+     "sha256_16": "40dcb3f7291933b9"
+    },
+    {
+     "bytes": 118569,
+     "file": "session_end_2010_2020.txt",
+     "sha256_16": "023fb2f3758b5fe1"
+    },
+    {
+     "bytes": 229724,
+     "file": "session_end_2020_2030.txt",
+     "sha256_16": "d8481411f0b1aa71"
+    },
+    {
+     "bytes": 163237,
+     "file": "session_end_2030_2040.txt",
+     "sha256_16": "6d82446e1d9aa2aa"
+    },
+    {
+     "bytes": 69112,
+     "file": "session_end_2040_2050.txt",
+     "sha256_16": "56e7482a062db684"
+    },
+    {
+     "bytes": 84573,
+     "file": "session_end_2050_2100.txt",
+     "sha256_16": "05f663cc072de7b0"
+    },
+    {
+     "bytes": 223317,
+     "file": "settlement_1920_0908.txt",
+     "sha256_16": "1b0c52a9c9e9eca6"
+    },
+    {
+     "bytes": 69829,
+     "file": "stop_2058.txt",
+     "sha256_16": "5920846b9ba9ffeb"
+    }
+   ],
+   "input_set_sha256_16": "6634f1990e50df2b",
+   "n_files": 178
+  }
+ },
+ "is_it_the_same_feature": {
+  "confusion_absolute_to_normalized": {
+   "flat": {
+    "flat": 2748,
+    "imb1-10": 83,
+    "imb10-50": 7,
+    "imb>50": 1
+   },
+   "imb1-10": {
+    "flat": 89,
+    "imb1-10": 2612,
+    "imb10-50": 819,
+    "imb>50": 30
+   },
+   "imb10-50": {
+    "flat": 2,
+    "imb1-10": 818,
+    "imb10-50": 10035,
+    "imb>50": 3035
+   },
+   "imb>50": {
+    "imb1-10": 37,
+    "imb10-50": 3029,
+    "imb>50": 48463
+   }
+  },
+  "n_rows": 71808,
+  "per_row_agreement": 0.8893,
+  "reading": "the marginal shares match by construction; only this per-row figure says whether the normalized feature is the same feature at another scale"
+ },
+ "not_claimed": [
+  "no promotion: this module measures, it does not change the live key",
+  "no capital increase is proposed to reach any bucket",
+  "the mini-window/local-regime clock is not used here at all",
+  "behaviour fidelity, not P&L, is the criterion this feeds"
+ ],
+ "owner_ref": "#167 comment 5583906276 item 3",
+ "question": "OWNER #167 5583906276 item 3: why is R5F flat on ~47% of decisions while L5 is flat on ~1%, how much of that is dollar scale versus a genuinely different inventory trajectory, and can a scale-normalized representation carry L5's meaning at $7.50?",
+ "reachability_under_the_shell": {
+  "computable": true,
+  "highest_reachable_bucket": "imb>50",
+  "l5_decisions_above_our_ceiling": 3054,
+  "l5_share_above_our_ceiling": 0.0425,
+  "max_reachable_ratio": 3.188776,
+  "observed_max_ratio": 4.236494,
+  "per_market_cap_usd": 7.5,
+  "r5f_median_capital_scale_usd": 2.352,
+  "reading": "the ceiling is the shell's, not the representation's. L5 decisions above it are unreachable at this capital whatever the state key says, and raising capital to reach them was explicitly ruled out"
+ },
+ "read_only": "no network, no venue, no orders; the frozen model, the frozen lookup and the live R5F shell are untouched by this module",
+ "same_unit_control": {
+  "fills_per_sequence": {
+   "l5": 32.48,
+   "r5f": 4.52
+  },
+  "l5_fills": {
+   "flat_share": 0.0337,
+   "n": 71984
+  },
+  "r5f_all_decisions": {
+   "flat_share": 0.4602,
+   "n": 665
+  },
+  "r5f_filled_decisions_only": {
+   "flat_share": 0.3158,
+   "n": 95
+  },
+  "reading": "a sequence's first fill is always flat, so the flat share is close to 1/(fills per sequence). The gap that survives the unit control is that arithmetic: L5 keeps filling inside one window, we get a couple of fills per market. That is an EXECUTION and market-selection difference, not a dollar-scale one, and no state-key change can manufacture fills we did not get"
+ },
+ "trajectory": {
+  "l5": {
+   "decisions": 71984,
+   "median_decisions_per_sequence": 6.0,
+   "median_flat_share": 0.2,
+   "median_max_ratio": 0.498322,
+   "median_sign_flips": 0.0,
+   "sequences": 2216
+  },
+  "r5f": {
+   "decisions": 665,
+   "median_decisions_per_sequence": 12.0,
+   "median_flat_share": 0.8195,
+   "median_max_ratio": 0.222621,
+   "median_sign_flips": 0.0,
+   "sequences": 38
+  }
+ },
+ "why_we_are_flat": {
+  "cause_share_of_flat": {
+   "empty_book_no_position_yet": 0.9035,
+   "matched_pair_book_flat": 0.0804,
+   "residual_below_one_share": 0.0161
+  },
+  "causes": {
+   "empty_book_no_position_yet": 281,
+   "matched_pair_book_flat": 25,
+   "residual_below_one_share": 5
+  },
+  "flat_share": 0.4677,
+  "n_decisions": 665,
+  "n_flat": 311,
+  "reading": "empty_book -> we simply had not traded yet; matched_pair_book_flat -> we HAD traded and paired back to flat, which is the shell recycling, not a scale artefact; residual_below_one_share -> we held real directional inventory that the absolute-share bucket calls flat, and THAT is the part a scale-normalized feature can fix"
+ }
+}
