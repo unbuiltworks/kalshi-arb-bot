@@ -1,0 +1,42 @@
+{
+  "gate": "L5_COMPLETION_EXTENSION_GATE_v1",
+  "gate_sha16": "fd6e31ddfbc42b40",
+  "verdict": "NOT_YET_ENOUGH_EVIDENCE",
+  "unmet_sample_minimums": {
+    "forward_hours_on_the_extension": {
+      "have": 0.3,
+      "need": 48
+    },
+    "sessions_that_opened_a_residual": {
+      "have": 8,
+      "need": 40
+    },
+    "sessions_where_the_extension_fired": {
+      "have": 1,
+      "need": 25
+    },
+    "settled_venue_confirmed_markets": {
+      "have": 0,
+      "need": 15
+    }
+  },
+  "measured": {
+    "sessions": 9,
+    "sessions_that_opened_a_residual": 8,
+    "sessions_where_the_extension_fired": 1,
+    "window": {
+      "pairing_rate": 0.5,
+      "complete_orders": 21,
+      "complete_rejected": 8,
+      "complete_filled": 6
+    },
+    "treated_only": {
+      "pairing_rate": 0.0,
+      "complete_orders": 5,
+      "complete_rejected": 1,
+      "complete_filled": 1
+    },
+    "attribution_note": "A rate over the post-deploy WINDOW is not a rate of the CHANGE. Sessions that never passed the opening budget are controls; the two are reported separately and never pooled."
+  },
+  "refusal": "Below the frozen sample minimums this reports counts and nothing else -- no provisional verdict, no direction of travel. An early read is the failure mode the gate exists to prevent, so it is structurally impossible here rather than merely discouraged."
+}
