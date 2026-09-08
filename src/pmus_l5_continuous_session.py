@@ -2384,7 +2384,22 @@ def _install_term_handler() -> None:
 # auto-restarted. Restarting through an approval gate would consume an
 # approval the owner has not given.
 RECOVERABLE_PREFIXES = ("CAMPAIGN_SETTLED", "CAMPAIGN_RESUMING")
-RECOVERABLE_EXACT = ("CAMPAIGN_HORIZON",)
+RECOVERABLE_EXACT = (
+    "CAMPAIGN_HORIZON",
+    # a quiet board is not a reason to end the lane: the campaign simply
+    # found nothing to work and should look again
+    "CAMPAIGN_NO_CANDIDATE",
+    # a venue outage is transient and is exactly the case that must come
+    # back by itself. Every preflight and admission gate still runs, and
+    # still fails closed, on each attempt
+    "CAMPAIGN_STOP:VENUE_UNAVAILABLE",
+)
+
+# A campaign that ends almost immediately is spinning; one that ran for a
+# while and ended the same way is just a quiet board. Only the first is
+# stopped, or a dead overnight slate would put the lane back down -- which
+# is the outage this whole change exists to prevent.
+MIN_HEALTHY_RUN_S = 120.0
 
 SUPERVISOR_MAX_RESTARTS_ENV = "PMUS_SPRING_MAX_RESTARTS_PER_HOUR"
 DEFAULT_MAX_RESTARTS_PER_HOUR = 12
@@ -2490,7 +2505,9 @@ def main(argv: Optional[Sequence[str]] = None,
     last_settled = -1
     report: dict = {}
     while True:
+        cycle_started = clock()
         report = _run_once()
+        ran_s = clock() - cycle_started
         status = str(report.get("status", ""))
         settled = len(report.get("settlements") or [])
         _persist_full_report(report)
@@ -2507,10 +2524,12 @@ def main(argv: Optional[Sequence[str]] = None,
             _log("PMUS_SPRING_ALARM", alarm="restart_budget_exhausted",
                  restarts=restarts, status=status)
             break
-        if status == last_status and settled == last_settled:
+        if status == last_status and settled == last_settled and \
+                ran_s < MIN_HEALTHY_RUN_S:
             _log("campaign_end", **compact_end_row(
-                report, restart="none: the same status repeated with no new "
-                                "settlement, so restarting would spin"))
+                report, restart=(f"none: the same status repeated after "
+                                 f"{round(ran_s, 1)}s with no new settlement, "
+                                 f"so restarting would spin")))
             _log("PMUS_SPRING_ALARM", alarm="campaign_stuck", status=status)
             break
 

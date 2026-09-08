@@ -141,3 +141,36 @@ def test_the_heartbeat_never_consumes_the_campaign_clock():
     start = src.index('_log("heartbeat"')
     body = src[src.index('if now - _hb["t"]'):src.index("fidelity_eval(now)", start)]
     assert "clock()" not in body, body
+
+
+def test_a_quiet_board_keeps_the_lane_up(monkeypatch):
+    """CAMPAIGN_NO_CANDIDATE after a long run is a dead slate, not a spin.
+    Stopping there would put the lane back down overnight, which is the
+    outage this change exists to prevent."""
+    assert cs.is_recoverable("CAMPAIGN_NO_CANDIDATE") is True
+    assert cs.is_recoverable("CAMPAIGN_STOP:VENUE_UNAVAILABLE") is True
+    quiet = {"status": "CAMPAIGN_NO_CANDIDATE", "sessions": [],
+             "settlements": []}
+    # each clock() call advances 200s, so every campaign "ran" past
+    # MIN_HEALTHY_RUN_S and the lane keeps coming back until the restart
+    # budget -- not the repeat check -- stops it
+    monkeypatch.setenv(cs.SUPERVISOR_MAX_RESTARTS_ENV, "3")
+    ticks = itertools.count(0, 200)
+    rc, logged = _drive(monkeypatch, [quiet] * 8,
+                        clock=lambda: float(next(ticks)))
+    ends = [f for ev, f in logged if ev == "campaign_end"]
+    alarms = [f for ev, f in logged if ev == "PMUS_SPRING_ALARM"]
+    assert sum(1 for e in ends if "same process" in e["next"]) == 3
+    assert alarms and alarms[0]["alarm"] == "restart_budget_exhausted"
+    assert not any(a["alarm"] == "campaign_stuck" for a in alarms)
+
+
+def test_an_instant_repeat_is_still_treated_as_spinning(monkeypatch):
+    quiet = {"status": "CAMPAIGN_NO_CANDIDATE", "sessions": [],
+             "settlements": []}
+    # each call advances 1s, so the campaign ends almost immediately
+    ticks = itertools.count(0, 1)
+    rc, logged = _drive(monkeypatch, [quiet, quiet, quiet],
+                        clock=lambda: float(next(ticks)))
+    alarms = [f for ev, f in logged if ev == "PMUS_SPRING_ALARM"]
+    assert alarms and alarms[0]["alarm"] == "campaign_stuck"
