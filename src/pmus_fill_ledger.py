@@ -162,6 +162,37 @@ class FillLedger:
     def open_orders(self) -> List[str]:
         return sorted(self._open)
 
+    def close_on_venue_rejection(self, order_id: str,
+                                 order: Optional[Mapping[str, Any]]) -> bool:
+        """A venue REJECTION is the venue's own terminal verdict, and it is
+        the one case where an order can be closed without a successful
+        re-read of a live record.
+
+        LIVE 2026-09-08 12:14Z: `_await_order` returned early on
+        RejectedNoFill without closing the order, so two post-only
+        rejections stayed tracked as open, their later re-read failed, and
+        `may_assert_flat` was pinned false on the market. Rejections are
+        common -- 3 of 30 lifecycles -- so a guard that can never clear
+        stops being a signal.
+
+        This does NOT weaken the guard. The order is closed only when the
+        venue's own record says REJECTED with a cumulative quantity of
+        zero. A record we cannot read, or one that shows any fill at all,
+        leaves the order OPEN exactly as before."""
+        if order is None:
+            return False
+        state = order_state(order)
+        if "REJECT" not in state:
+            return False
+        cum = cum_filled(order)
+        if cum is None or cum != self.booked(order_id):
+            # the venue calls it rejected but reports a quantity we have
+            # not booked, or none at all: that is a contradiction, not a
+            # clean terminal state
+            return False
+        self._open.pop(order_id, None)
+        return True
+
     # --------------------------------------------------------- reconcile
     def reconcile(self, read_order: Callable[[str], Mapping[str, Any]],
                   *, order_ids: Optional[List[str]] = None) -> dict:

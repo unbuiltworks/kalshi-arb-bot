@@ -127,3 +127,48 @@ def test_unknown_is_not_agreement():
     assert fl.may_assert_flat(fl.venue_vs_ledger("13.82", "9.48")) is False
     assert fl.may_assert_flat(fl.venue_vs_ledger(None, "9.48")) is False
     assert fl.may_assert_flat({}) is False
+
+
+def _rejected(cum="0", state="ORDER_STATE_REJECTED"):
+    return {"cumQuantity": str(cum), "state": state, "avgPx": "0.0000"}
+
+
+def test_a_venue_rejection_closes_the_order():
+    """LIVE 2026-09-08 12:14Z: CC6WEM7CCR42 and CC6WXBGXJR42 were rejected
+    with avgPx 0.0000 and cashOrderQty 0.00, but _await_order returned
+    without closing them, so they stayed 'open', their re-read failed, and
+    may_assert_flat was pinned false on the market. Rejections are common --
+    3 of 30 lifecycles -- and a guard that can never clear is not a guard."""
+    led = fl.FillLedger()
+    led.track("CC6WEM7CCR42")
+    assert led.close_on_venue_rejection("CC6WEM7CCR42", _rejected()) is True
+    assert led.open_orders() == []
+
+
+def test_an_unreadable_order_is_still_not_closed_by_a_rejection():
+    """The narrow point of the fix: the venue's OWN record must say
+    rejected. No record, no close."""
+    led = fl.FillLedger()
+    led.track("o")
+    assert led.close_on_venue_rejection("o", None) is False
+    assert led.open_orders() == ["o"]
+
+
+def test_a_rejection_that_reports_an_unbooked_quantity_stays_open():
+    """'Rejected' with a quantity we have not booked is a contradiction,
+    not a clean terminal state -- exactly the shape that would hide a fill
+    behind a rejection, which is how the original units were lost."""
+    led = fl.FillLedger()
+    led.track("o")
+    assert led.close_on_venue_rejection("o", _rejected(cum="4.34")) is False
+    assert led.open_orders() == ["o"]
+    # but a rejection reporting exactly what we already booked is clean
+    led.ingest("o", _order("4.34"))
+    assert led.close_on_venue_rejection("o", _rejected(cum="4.34")) is True
+
+
+def test_a_non_rejection_state_never_closes_this_way():
+    led = fl.FillLedger()
+    led.track("o")
+    assert led.close_on_venue_rejection("o", _order("0", "ORDER_STATE_OPEN")) is False
+    assert led.open_orders() == ["o"]

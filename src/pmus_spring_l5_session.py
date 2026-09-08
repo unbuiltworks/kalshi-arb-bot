@@ -1166,7 +1166,16 @@ def _await_order(t: Transport, oid: str, qty: D, until: float,
             sleep(q1.POLL_S)
     except RejectedNoFill as exc:
         # the venue's verdict, with whatever reason it attached: a NO-side
-        # rejection pattern is only diagnosable if the reason is logged
+        # rejection pattern is only diagnosable if the reason is logged.
+        # A rejection is also TERMINAL, so close the order here rather than
+        # leaving it tracked as open -- an order left open on every
+        # post-only rejection pins may_assert_flat false for the life of
+        # the market (LIVE 12:14Z, CC6WEM7CCR42 / CC6WXBGXJR42).
+        if ledger is not None:
+            try:
+                ledger.close_on_venue_rejection(oid, q1._order_status(t, oid))
+            except Exception:                           # noqa: BLE001
+                pass                # unreadable stays OPEN, never "closed"
         return D("0"), round(clock() - start, 3), f"rejected:{str(exc)[:120]}"
     if fill is None:
         cancelled = False
