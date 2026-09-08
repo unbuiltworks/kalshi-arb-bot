@@ -1,0 +1,1251 @@
+{
+ "historical_ab": {
+  "A": {
+   "decisions": 665,
+   "median_state_n": 234,
+   "off_distribution": 0,
+   "off_distribution_rate": 0.0,
+   "relation_distance_to_l5": 0.4584,
+   "relation_mix": {
+    "complete": 0.2538,
+    "extend": 0.2785,
+    "open": 0.4677
+   },
+   "unkeyable": 0,
+   "unkeyable_rate": 0.0
+  },
+  "B": {
+   "decisions": 665,
+   "median_state_n": 83,
+   "off_distribution": 111,
+   "off_distribution_rate": 0.1669,
+   "relation_distance_to_l5": 0.415,
+   "relation_mix": {
+    "complete": 0.2918,
+    "extend": 0.284,
+    "open": 0.4242
+   },
+   "unkeyable": 111,
+   "unkeyable_rate": 0.1669
+  },
+  "event_progress_coverage": 0.9263,
+  "live_tte_occupancy": {
+   "tte>10m": 665
+  },
+  "n_rows": 665,
+  "status": "DESCRIPTIVE_ONLY",
+  "translated_tte_occupancy": {
+   "<unkeyable>": 49,
+   "tte2-5m": 23,
+   "tte30-120s": 125,
+   "tte5-10m": 299,
+   "tte>10m": 169
+  },
+  "why": "these decisions were already observed and analysed. They show what the translation DOES; they cannot promote it, and the pre-registered gate requires decisions observed after the gate was frozen",
+  "would_meet_must_improve_if_this_were_forward": {
+   "off_distribution_rate": false,
+   "relation_distribution_distance": false,
+   "state_support": false
+  }
+ },
+ "inputs": {
+  "canonical_csv": "l5_canonical_sequence.csv.gz",
+  "live_logs": {
+   "files": [
+    {
+     "bytes": 64097,
+     "file": "continuation_0033.txt",
+     "sha256_16": "6211cba995da0dfb"
+    },
+    {
+     "bytes": 138344,
+     "file": "malden_stoole_0044_0109.txt",
+     "sha256_16": "937e39988db8bcc1"
+    },
+    {
+     "bytes": 167768,
+     "file": "mcp-Railway-get-logs-1788609896474.txt",
+     "sha256_16": "92803afda11c72fc"
+    },
+    {
+     "bytes": 87102,
+     "file": "mcp-Railway-get-logs-1788610039183.txt",
+     "sha256_16": "c452a4a1041af739"
+    },
+    {
+     "bytes": 96194,
+     "file": "mcp-Railway-get-logs-1788611064436.txt",
+     "sha256_16": "67f24e8d5215ea91"
+    },
+    {
+     "bytes": 202612,
+     "file": "mcp-Railway-get-logs-1788613590554.txt",
+     "sha256_16": "71c4086c18f0a29f"
+    },
+    {
+     "bytes": 132802,
+     "file": "mcp-Railway-get-logs-1788621834201.txt",
+     "sha256_16": "c47e9ae24bf70fd9"
+    },
+    {
+     "bytes": 123480,
+     "file": "mcp-Railway-get-logs-1788622918745.txt",
+     "sha256_16": "f1ea21416ebcab45"
+    },
+    {
+     "bytes": 165361,
+     "file": "mcp-Railway-get-logs-1788624808469.txt",
+     "sha256_16": "401eeeb421feb3b8"
+    },
+    {
+     "bytes": 55109,
+     "file": "mcp-Railway-get-logs-1788625933921.txt",
+     "sha256_16": "8bc84a335b8c7c8f"
+    },
+    {
+     "bytes": 180239,
+     "file": "mcp-Railway-get-logs-1788626028201.txt",
+     "sha256_16": "7db1a534263961b8"
+    },
+    {
+     "bytes": 86230,
+     "file": "mcp-Railway-get-logs-1788626354804.txt",
+     "sha256_16": "86ac6c55143116cf"
+    },
+    {
+     "bytes": 540260,
+     "file": "mcp-Railway-get-logs-1788632132754.txt",
+     "sha256_16": "83188dacecd002b5"
+    },
+    {
+     "bytes": 90368,
+     "file": "mcp-Railway-get-logs-1788634153318.txt",
+     "sha256_16": "372b471d5bd4a889"
+    },
+    {
+     "bytes": 180004,
+     "file": "mcp-Railway-get-logs-1788634482945.txt",
+     "sha256_16": "fd086c7384e0567b"
+    },
+    {
+     "bytes": 468432,
+     "file": "mcp-Railway-get-logs-1788634538594.txt",
+     "sha256_16": "d3d58e7bf3ddc8f3"
+    },
+    {
+     "bytes": 269876,
+     "file": "mcp-Railway-get-logs-1788639596463.txt",
+     "sha256_16": "2cba8260685784dc"
+    },
+    {
+     "bytes": 95960,
+     "file": "mcp-Railway-get-logs-1788645854681.txt",
+     "sha256_16": "f011981ee6daa5a7"
+    },
+    {
+     "bytes": 179987,
+     "file": "mcp-Railway-get-logs-1788645855037.txt",
+     "sha256_16": "f833074c10d8837f"
+    },
+    {
+     "bytes": 111530,
+     "file": "mcp-Railway-get-logs-1788649511799.txt",
+     "sha256_16": "5e3c27b1d6e4b192"
+    },
+    {
+     "bytes": 180007,
+     "file": "mcp-Railway-get-logs-1788649512484.txt",
+     "sha256_16": "bae63586eef70e6d"
+    },
+    {
+     "bytes": 180039,
+     "file": "mcp-Railway-get-logs-1788651856025.txt",
+     "sha256_16": "16cd696a62be94b0"
+    },
+    {
+     "bytes": 119675,
+     "file": "mcp-Railway-get-logs-1788654426104.txt",
+     "sha256_16": "ab8244b7b858262f"
+    },
+    {
+     "bytes": 179993,
+     "file": "mcp-Railway-get-logs-1788654427487.txt",
+     "sha256_16": "c3c7125496883449"
+    },
+    {
+     "bytes": 107163,
+     "file": "mcp-Railway-get-logs-1788654528574.txt",
+     "sha256_16": "8145ef380f40d95f"
+    },
+    {
+     "bytes": 180049,
+     "file": "mcp-Railway-get-logs-1788657179415.txt",
+     "sha256_16": "07cf22a76255cca9"
+    },
+    {
+     "bytes": 180041,
+     "file": "mcp-Railway-get-logs-1788657573719.txt",
+     "sha256_16": "717f166ee90c8f46"
+    },
+    {
+     "bytes": 160646,
+     "file": "mcp-Railway-get-logs-1788658119719.txt",
+     "sha256_16": "eb5ce30d2a7053da"
+    },
+    {
+     "bytes": 180089,
+     "file": "mcp-Railway-get-logs-1788659273684.txt",
+     "sha256_16": "5b86343a3a668424"
+    },
+    {
+     "bytes": 113089,
+     "file": "mcp-Railway-get-logs-1788659327421.txt",
+     "sha256_16": "265ea60a08efc81e"
+    },
+    {
+     "bytes": 214016,
+     "file": "mcp-Railway-get-logs-1788659366072.txt",
+     "sha256_16": "85afa80bc5f73c40"
+    },
+    {
+     "bytes": 431097,
+     "file": "mcp-Railway-get-logs-1788659367636.txt",
+     "sha256_16": "c017a7e803b51746"
+    },
+    {
+     "bytes": 54170,
+     "file": "mcp-Railway-get-logs-1788661455835.txt",
+     "sha256_16": "f242b2183f6a9417"
+    },
+    {
+     "bytes": 180149,
+     "file": "mcp-Railway-get-logs-1788661760425.txt",
+     "sha256_16": "ac6b5430bb595e9a"
+    },
+    {
+     "bytes": 115946,
+     "file": "mcp-Railway-get-logs-1788681765173.txt",
+     "sha256_16": "d296427622e2b5aa"
+    },
+    {
+     "bytes": 81028,
+     "file": "mcp-Railway-get-logs-1788681798504.txt",
+     "sha256_16": "968f77677f17e6b6"
+    },
+    {
+     "bytes": 179973,
+     "file": "mcp-Railway-get-logs-1788683801270.txt",
+     "sha256_16": "24144df9f92617df"
+    },
+    {
+     "bytes": 500737,
+     "file": "mcp-Railway-get-logs-1788684103701.txt",
+     "sha256_16": "e7b0e496bbf8f393"
+    },
+    {
+     "bytes": 50746,
+     "file": "mcp-Railway-get-logs-1788690466841.txt",
+     "sha256_16": "850632f4107f2074"
+    },
+    {
+     "bytes": 63866,
+     "file": "mcp-Railway-get-logs-1788693071871.txt",
+     "sha256_16": "5480038bd88831ab"
+    },
+    {
+     "bytes": 107041,
+     "file": "mcp-Railway-get-logs-1788693176038.txt",
+     "sha256_16": "2964ca430d66a2e1"
+    },
+    {
+     "bytes": 180025,
+     "file": "mcp-Railway-get-logs-1788693375339.txt",
+     "sha256_16": "4a885ce2450e4274"
+    },
+    {
+     "bytes": 133400,
+     "file": "mcp-Railway-get-logs-1788694339937.txt",
+     "sha256_16": "5241fb1e77bd6561"
+    },
+    {
+     "bytes": 95321,
+     "file": "mcp-Railway-get-logs-1788695755198.txt",
+     "sha256_16": "6263613dfb468819"
+    },
+    {
+     "bytes": 181191,
+     "file": "mcp-Railway-get-logs-1788696366950.txt",
+     "sha256_16": "cb4aca3d9497aa88"
+    },
+    {
+     "bytes": 53727,
+     "file": "mcp-Railway-get-logs-1788696754332.txt",
+     "sha256_16": "9a09a01cd2fcf194"
+    },
+    {
+     "bytes": 50360,
+     "file": "mcp-Railway-get-logs-1788698840117.txt",
+     "sha256_16": "b4e82ac60a7951e5"
+    },
+    {
+     "bytes": 98714,
+     "file": "mcp-Railway-get-logs-1788702678745.txt",
+     "sha256_16": "f7fe3fcd23e09b98"
+    },
+    {
+     "bytes": 133828,
+     "file": "mcp-Railway-get-logs-1788704253227.txt",
+     "sha256_16": "381185148442c867"
+    },
+    {
+     "bytes": 255426,
+     "file": "mcp-Railway-get-logs-1788704253942.txt",
+     "sha256_16": "29d56b4bb16bd6f8"
+    },
+    {
+     "bytes": 83887,
+     "file": "mcp-Railway-get-logs-1788710100503.txt",
+     "sha256_16": "18e56eb61381a3f0"
+    },
+    {
+     "bytes": 97582,
+     "file": "mcp-Railway-get-logs-1788710151125.txt",
+     "sha256_16": "c3f26d2ae202cdfd"
+    },
+    {
+     "bytes": 70152,
+     "file": "mcp-Railway-get-logs-1788711472040.txt",
+     "sha256_16": "6bc4b23f65641ce5"
+    },
+    {
+     "bytes": 60979,
+     "file": "mcp-Railway-get-logs-1788712072016.txt",
+     "sha256_16": "9d88cd556e98ba9f"
+    },
+    {
+     "bytes": 82685,
+     "file": "mcp-Railway-get-logs-1788713000543.txt",
+     "sha256_16": "26cf851580103270"
+    },
+    {
+     "bytes": 51876,
+     "file": "mcp-Railway-get-logs-1788713002591.txt",
+     "sha256_16": "9e1c87a4fe193f30"
+    },
+    {
+     "bytes": 99760,
+     "file": "mcp-Railway-get-logs-1788713005011.txt",
+     "sha256_16": "fc385be707a00deb"
+    },
+    {
+     "bytes": 79485,
+     "file": "mcp-Railway-get-logs-1788713075304.txt",
+     "sha256_16": "bc029afac7caf3d0"
+    },
+    {
+     "bytes": 153324,
+     "file": "mcp-Railway-get-logs-1788715219407.txt",
+     "sha256_16": "1d340cf1c1728c86"
+    },
+    {
+     "bytes": 97582,
+     "file": "mcp-Railway-get-logs-1788715227893.txt",
+     "sha256_16": "c3f26d2ae202cdfd"
+    },
+    {
+     "bytes": 220136,
+     "file": "mcp-Railway-get-logs-1788715248923.txt",
+     "sha256_16": "b8fce9c301db08bf"
+    },
+    {
+     "bytes": 77568,
+     "file": "mcp-Railway-get-logs-1788715252050.txt",
+     "sha256_16": "bc052d2840d74b23"
+    },
+    {
+     "bytes": 153805,
+     "file": "mcp-Railway-get-logs-1788715253405.txt",
+     "sha256_16": "cc9c55d5294102ad"
+    },
+    {
+     "bytes": 75166,
+     "file": "mcp-Railway-get-logs-1788721583603.txt",
+     "sha256_16": "fe6f781a0098979a"
+    },
+    {
+     "bytes": 89456,
+     "file": "mcp-Railway-get-logs-1788723277501.txt",
+     "sha256_16": "47612b815a0d9cfa"
+    },
+    {
+     "bytes": 173514,
+     "file": "mcp-Railway-get-logs-1788724358111.txt",
+     "sha256_16": "a00400ff9f07348c"
+    },
+    {
+     "bytes": 62105,
+     "file": "mcp-Railway-get-logs-1788746466711.txt",
+     "sha256_16": "e5b82f6f6d90eded"
+    },
+    {
+     "bytes": 63699,
+     "file": "mcp-Railway-get-logs-1788747719831.txt",
+     "sha256_16": "d9f98a40ab60da31"
+    },
+    {
+     "bytes": 79710,
+     "file": "mcp-Railway-get-logs-1788748009475.txt",
+     "sha256_16": "b4086171c53a0c4b"
+    },
+    {
+     "bytes": 71399,
+     "file": "mcp-Railway-get-logs-1788748433577.txt",
+     "sha256_16": "1d4f11f55104eedc"
+    },
+    {
+     "bytes": 57549,
+     "file": "mcp-Railway-get-logs-1788748960101.txt",
+     "sha256_16": "232c38fa08d3eef1"
+    },
+    {
+     "bytes": 57549,
+     "file": "mcp-Railway-get-logs-1788748978065.txt",
+     "sha256_16": "232c38fa08d3eef1"
+    },
+    {
+     "bytes": 77634,
+     "file": "mcp-Railway-get-logs-1788765027467.txt",
+     "sha256_16": "392b02dc8d9c5fae"
+    },
+    {
+     "bytes": 60074,
+     "file": "mcp-Railway-get-logs-1788765127879.txt",
+     "sha256_16": "f2775207fad00d41"
+    },
+    {
+     "bytes": 85167,
+     "file": "mcp-Railway-get-logs-1788768446577.txt",
+     "sha256_16": "74cb4bfa4578eaaa"
+    },
+    {
+     "bytes": 62453,
+     "file": "mcp-Railway-get-logs-1788768446915.txt",
+     "sha256_16": "df47596f954fef7e"
+    },
+    {
+     "bytes": 75283,
+     "file": "mcp-Railway-get-logs-1788771061668.txt",
+     "sha256_16": "743b35a8ae558aea"
+    },
+    {
+     "bytes": 64440,
+     "file": "mcp-Railway-get-logs-1788771682413.txt",
+     "sha256_16": "d3dd28115a650206"
+    },
+    {
+     "bytes": 72347,
+     "file": "mcp-Railway-get-logs-1788771708303.txt",
+     "sha256_16": "79ccb9a46b4c794a"
+    },
+    {
+     "bytes": 138876,
+     "file": "mcp-Railway-get-logs-1788771775075.txt",
+     "sha256_16": "acfb98e4b9e8bc07"
+    },
+    {
+     "bytes": 63045,
+     "file": "mcp-Railway-get-logs-1788773139371.txt",
+     "sha256_16": "19db07ab058cca4e"
+    },
+    {
+     "bytes": 89942,
+     "file": "mcp-Railway-get-logs-1788773145679.txt",
+     "sha256_16": "39d445fa838a1ad2"
+    },
+    {
+     "bytes": 180825,
+     "file": "mcp-Railway-get-logs-1788773187934.txt",
+     "sha256_16": "10db9c78b6618710"
+    },
+    {
+     "bytes": 139056,
+     "file": "mcp-Railway-get-logs-1788773190455.txt",
+     "sha256_16": "3cd0ceb7366441e7"
+    },
+    {
+     "bytes": 261075,
+     "file": "mcp-Railway-get-logs-1788774663880.txt",
+     "sha256_16": "fdd5dc8b53d8776c"
+    },
+    {
+     "bytes": 68737,
+     "file": "mcp-Railway-get-logs-1788776018173.txt",
+     "sha256_16": "5264a9f8dfbea954"
+    },
+    {
+     "bytes": 128119,
+     "file": "mcp-Railway-get-logs-1788779010426.txt",
+     "sha256_16": "4c94b92e890cc406"
+    },
+    {
+     "bytes": 53217,
+     "file": "mcp-Railway-get-logs-1788780459035.txt",
+     "sha256_16": "0e89bed173a98b30"
+    },
+    {
+     "bytes": 300816,
+     "file": "mcp-Railway-get-logs-1788780511574.txt",
+     "sha256_16": "f61b0ea986d7284c"
+    },
+    {
+     "bytes": 86833,
+     "file": "mcp-Railway-get-logs-1788780850509.txt",
+     "sha256_16": "32804b1727fb779f"
+    },
+    {
+     "bytes": 53769,
+     "file": "mcp-Railway-get-logs-1788780852373.txt",
+     "sha256_16": "7c0ce6d777462bc1"
+    },
+    {
+     "bytes": 159246,
+     "file": "mcp-Railway-get-logs-1788780854038.txt",
+     "sha256_16": "f1b32ea2a7f8b9b2"
+    },
+    {
+     "bytes": 65475,
+     "file": "mcp-Railway-get-logs-1788780855550.txt",
+     "sha256_16": "feda2e98d0c8ca1a"
+    },
+    {
+     "bytes": 250062,
+     "file": "mcp-Railway-get-logs-1788780858282.txt",
+     "sha256_16": "9e25785f3d216c66"
+    },
+    {
+     "bytes": 173245,
+     "file": "mcp-Railway-get-logs-1788780859175.txt",
+     "sha256_16": "239975a87e24c46c"
+    },
+    {
+     "bytes": 77753,
+     "file": "mcp-Railway-get-logs-1788780862420.txt",
+     "sha256_16": "cb13e84d5f184f6d"
+    },
+    {
+     "bytes": 292035,
+     "file": "mcp-Railway-get-logs-1788781054121.txt",
+     "sha256_16": "b08a91ff078f2535"
+    },
+    {
+     "bytes": 59093,
+     "file": "mcp-Railway-get-logs-1788781735512.txt",
+     "sha256_16": "ed0c0dd7e9ff9eba"
+    },
+    {
+     "bytes": 69060,
+     "file": "mcp-Railway-get-logs-1788783381176.txt",
+     "sha256_16": "17ab4b1e6b53be56"
+    },
+    {
+     "bytes": 51368,
+     "file": "mcp-Railway-get-logs-1788783446524.txt",
+     "sha256_16": "21be3d43c3334c6f"
+    },
+    {
+     "bytes": 69060,
+     "file": "mcp-Railway-get-logs-1788786322073.txt",
+     "sha256_16": "27fe7db7a244ddff"
+    },
+    {
+     "bytes": 179998,
+     "file": "mcp-Railway-get-logs-1788786673411.txt",
+     "sha256_16": "8f8d63cb6063f0a6"
+    },
+    {
+     "bytes": 258860,
+     "file": "mcp-Railway-get-logs-1788786676143.txt",
+     "sha256_16": "0c46311c6f10e5de"
+    },
+    {
+     "bytes": 253498,
+     "file": "mcp-Railway-get-logs-1788786779990.txt",
+     "sha256_16": "0df925e4a3179734"
+    },
+    {
+     "bytes": 69064,
+     "file": "mcp-Railway-get-logs-1788790264884.txt",
+     "sha256_16": "557e0460f7c2b01c"
+    },
+    {
+     "bytes": 180473,
+     "file": "mcp-Railway-get-logs-1788791830671.txt",
+     "sha256_16": "c6f5773cfbec42f0"
+    },
+    {
+     "bytes": 50142,
+     "file": "mcp-Railway-get-logs-1788792392113.txt",
+     "sha256_16": "c957b8138ea33127"
+    },
+    {
+     "bytes": 51869,
+     "file": "mcp-Railway-get-logs-1788792447041.txt",
+     "sha256_16": "4b1d54c7fa39491c"
+    },
+    {
+     "bytes": 180001,
+     "file": "mcp-Railway-get-logs-1788792451332.txt",
+     "sha256_16": "ccc02a449de5a167"
+    },
+    {
+     "bytes": 77480,
+     "file": "mcp-Railway-get-logs-1788793154811.txt",
+     "sha256_16": "a1763d1961048648"
+    },
+    {
+     "bytes": 80350,
+     "file": "mcp-Railway-get-logs-1788793198993.txt",
+     "sha256_16": "cefb0c20424cac75"
+    },
+    {
+     "bytes": 113769,
+     "file": "mcp-Railway-get-logs-1788800837143.txt",
+     "sha256_16": "5b30c134b027b6e3"
+    },
+    {
+     "bytes": 179997,
+     "file": "mcp-Railway-get-logs-1788801466026.txt",
+     "sha256_16": "8c6b0ca3053154a7"
+    },
+    {
+     "bytes": 179997,
+     "file": "mcp-Railway-get-logs-1788801468442.txt",
+     "sha256_16": "3dbb634435b199d3"
+    },
+    {
+     "bytes": 180498,
+     "file": "mcp-Railway-get-logs-1788801469894.txt",
+     "sha256_16": "2e7cdb169ebd8d3c"
+    },
+    {
+     "bytes": 180653,
+     "file": "mcp-Railway-get-logs-1788801515314.txt",
+     "sha256_16": "d39b9c48cb51ee9d"
+    },
+    {
+     "bytes": 180530,
+     "file": "mcp-Railway-get-logs-1788801517390.txt",
+     "sha256_16": "bd870fc8054f4880"
+    },
+    {
+     "bytes": 180165,
+     "file": "mcp-Railway-get-logs-1788801519756.txt",
+     "sha256_16": "51aa47e5fc024807"
+    },
+    {
+     "bytes": 180065,
+     "file": "mcp-Railway-get-logs-1788801521119.txt",
+     "sha256_16": "d2bd8998ad46dd4d"
+    },
+    {
+     "bytes": 180053,
+     "file": "mcp-Railway-get-logs-1788801523368.txt",
+     "sha256_16": "1898aa024957c1b0"
+    },
+    {
+     "bytes": 179997,
+     "file": "mcp-Railway-get-logs-1788801525512.txt",
+     "sha256_16": "8db5906a8288c4ab"
+    },
+    {
+     "bytes": 88926,
+     "file": "mcp-Railway-get-logs-1788803387320.txt",
+     "sha256_16": "5aeae608d1314f15"
+    },
+    {
+     "bytes": 84142,
+     "file": "mcp-Railway-get-logs-1788805705137.txt",
+     "sha256_16": "4490e51fb012717b"
+    },
+    {
+     "bytes": 630436,
+     "file": "mcp-Railway-get-logs-1788806255714.txt",
+     "sha256_16": "b4735d6e633aa662"
+    },
+    {
+     "bytes": 291576,
+     "file": "mcp-Railway-get-logs-1788807132169.txt",
+     "sha256_16": "09d34a742d65b581"
+    },
+    {
+     "bytes": 149100,
+     "file": "mcp-Railway-get-logs-1788807133580.txt",
+     "sha256_16": "3a9d472a88b708c4"
+    },
+    {
+     "bytes": 90782,
+     "file": "mcp-Railway-get-logs-1788807932130.txt",
+     "sha256_16": "9ce0417ddbc21a12"
+    },
+    {
+     "bytes": 71486,
+     "file": "mcp-Railway-get-logs-1788818271533.txt",
+     "sha256_16": "042e3bbc5707dda3"
+    },
+    {
+     "bytes": 180847,
+     "file": "mcp-Railway-get-logs-1788828197844.txt",
+     "sha256_16": "3176cad213a712d9"
+    },
+    {
+     "bytes": 233249,
+     "file": "mcp-Railway-get-logs-1788828199105.txt",
+     "sha256_16": "3a5defaaf32e6a22"
+    },
+    {
+     "bytes": 109000,
+     "file": "mcp-Railway-get-logs-1788828200301.txt",
+     "sha256_16": "40dcb3f7291933b9"
+    },
+    {
+     "bytes": 118569,
+     "file": "mcp-Railway-get-logs-1788828212216.txt",
+     "sha256_16": "023fb2f3758b5fe1"
+    },
+    {
+     "bytes": 229724,
+     "file": "mcp-Railway-get-logs-1788828215922.txt",
+     "sha256_16": "d8481411f0b1aa71"
+    },
+    {
+     "bytes": 245022,
+     "file": "mcp-Railway-get-logs-1788828218069.txt",
+     "sha256_16": "50e2d3a69d67f235"
+    },
+    {
+     "bytes": 163237,
+     "file": "mcp-Railway-get-logs-1788828223004.txt",
+     "sha256_16": "6d82446e1d9aa2aa"
+    },
+    {
+     "bytes": 69112,
+     "file": "mcp-Railway-get-logs-1788828229808.txt",
+     "sha256_16": "56e7482a062db684"
+    },
+    {
+     "bytes": 84573,
+     "file": "mcp-Railway-get-logs-1788828231221.txt",
+     "sha256_16": "05f663cc072de7b0"
+    },
+    {
+     "bytes": 223317,
+     "file": "mcp-Railway-get-logs-1788828233171.txt",
+     "sha256_16": "1b0c52a9c9e9eca6"
+    },
+    {
+     "bytes": 3957376,
+     "file": "mcp-Railway-get-logs-1788828235078.txt",
+     "sha256_16": "2b7471e3da657629"
+    },
+    {
+     "bytes": 295449,
+     "file": "mcp-Railway-get-logs-1788828235795.txt",
+     "sha256_16": "469b2f36d4cb7f32"
+    },
+    {
+     "bytes": 227414,
+     "file": "mcp-Railway-get-logs-1788828240706.txt",
+     "sha256_16": "773b9beeb909dab2"
+    },
+    {
+     "bytes": 81684,
+     "file": "mcp-Railway-get-logs-1788828265022.txt",
+     "sha256_16": "3f785722be13c48c"
+    },
+    {
+     "bytes": 69829,
+     "file": "mcp-Railway-get-logs-1788828545037.txt",
+     "sha256_16": "5920846b9ba9ffeb"
+    },
+    {
+     "bytes": 64097,
+     "file": "mcp-Railway-get-logs-1788828547060.txt",
+     "sha256_16": "6211cba995da0dfb"
+    },
+    {
+     "bytes": 91865,
+     "file": "mcp-Railway-get-logs-1788829388640.txt",
+     "sha256_16": "492934ad7d63f20a"
+    },
+    {
+     "bytes": 956155,
+     "file": "mcp-Railway-get-logs-1788829699956.txt",
+     "sha256_16": "276f5c3fa3365ee5"
+    },
+    {
+     "bytes": 138344,
+     "file": "mcp-Railway-get-logs-1788829963254.txt",
+     "sha256_16": "937e39988db8bcc1"
+    },
+    {
+     "bytes": 176313,
+     "file": "mcp-Railway-get-logs-1788830134365.txt",
+     "sha256_16": "26c28751c7871492"
+    },
+    {
+     "bytes": 281536,
+     "file": "mcp-Railway-get-logs-1788831346285.txt",
+     "sha256_16": "2cd1d45862800293"
+    },
+    {
+     "bytes": 77346,
+     "file": "mcp-Railway-get-logs-1788833342264.txt",
+     "sha256_16": "243ed628677f835d"
+    },
+    {
+     "bytes": 989185,
+     "file": "mcp-Railway-get-logs-1788833619810.txt",
+     "sha256_16": "750bcb4a2c475699"
+    },
+    {
+     "bytes": 388782,
+     "file": "mcp-Railway-get-logs-1788833740036.txt",
+     "sha256_16": "1e82396e1c08b76b"
+    },
+    {
+     "bytes": 1685781,
+     "file": "mcp-Railway-get-logs-1788833771235.txt",
+     "sha256_16": "a15d54d27ebab2b2"
+    },
+    {
+     "bytes": 1205176,
+     "file": "mcp-Railway-get-logs-1788833777659.txt",
+     "sha256_16": "6f5256b46fd2448e"
+    },
+    {
+     "bytes": 1250907,
+     "file": "mcp-Railway-get-logs-1788833786400.txt",
+     "sha256_16": "aaa074de20a085cc"
+    },
+    {
+     "bytes": 89075,
+     "file": "mcp-Railway-get-logs-1788834715167.txt",
+     "sha256_16": "cf6e2dec2e366486"
+    },
+    {
+     "bytes": 238196,
+     "file": "mcp-Railway-get-logs-1788837619833.txt",
+     "sha256_16": "bb0531150934c4f1"
+    },
+    {
+     "bytes": 64568,
+     "file": "mcp-Railway-get-logs-1788840371696.txt",
+     "sha256_16": "8ec1ac2922f35c6b"
+    },
+    {
+     "bytes": 63646,
+     "file": "mcp-Railway-get-logs-1788844907807.txt",
+     "sha256_16": "373beecb9b546a72"
+    },
+    {
+     "bytes": 191859,
+     "file": "mcp-Railway-get-logs-1788864228194.txt",
+     "sha256_16": "f0f1c020fea47887"
+    },
+    {
+     "bytes": 107988,
+     "file": "mcp-Railway-get-logs-1788864446622.txt",
+     "sha256_16": "a81a883a60e4b240"
+    },
+    {
+     "bytes": 91865,
+     "file": "order_rejected_1920_2100.txt",
+     "sha256_16": "492934ad7d63f20a"
+    },
+    {
+     "bytes": 295449,
+     "file": "preview_complement_1920_2100.txt",
+     "sha256_16": "469b2f36d4cb7f32"
+    },
+    {
+     "bytes": 77346,
+     "file": "recorder_book_rows_0145.txt",
+     "sha256_16": "243ed628677f835d"
+    },
+    {
+     "bytes": 89075,
+     "file": "recorder_book_rows_0209.txt",
+     "sha256_16": "cf6e2dec2e366486"
+    },
+    {
+     "bytes": 3957376,
+     "file": "selection_funnel_1920_2100.txt",
+     "sha256_16": "2b7471e3da657629"
+    },
+    {
+     "bytes": 227414,
+     "file": "selection_funnel_resumed_0030.txt",
+     "sha256_16": "773b9beeb909dab2"
+    },
+    {
+     "bytes": 81684,
+     "file": "session_end_1920_1940.txt",
+     "sha256_16": "3f785722be13c48c"
+    },
+    {
+     "bytes": 180847,
+     "file": "session_end_1940_1950.txt",
+     "sha256_16": "3176cad213a712d9"
+    },
+    {
+     "bytes": 233249,
+     "file": "session_end_1950_2000.txt",
+     "sha256_16": "3a5defaaf32e6a22"
+    },
+    {
+     "bytes": 109000,
+     "file": "session_end_2000_2010.txt",
+     "sha256_16": "40dcb3f7291933b9"
+    },
+    {
+     "bytes": 118569,
+     "file": "session_end_2010_2020.txt",
+     "sha256_16": "023fb2f3758b5fe1"
+    },
+    {
+     "bytes": 229724,
+     "file": "session_end_2020_2030.txt",
+     "sha256_16": "d8481411f0b1aa71"
+    },
+    {
+     "bytes": 163237,
+     "file": "session_end_2030_2040.txt",
+     "sha256_16": "6d82446e1d9aa2aa"
+    },
+    {
+     "bytes": 69112,
+     "file": "session_end_2040_2050.txt",
+     "sha256_16": "56e7482a062db684"
+    },
+    {
+     "bytes": 84573,
+     "file": "session_end_2050_2100.txt",
+     "sha256_16": "05f663cc072de7b0"
+    },
+    {
+     "bytes": 223317,
+     "file": "settlement_1920_0908.txt",
+     "sha256_16": "1b0c52a9c9e9eca6"
+    },
+    {
+     "bytes": 69829,
+     "file": "stop_2058.txt",
+     "sha256_16": "5920846b9ba9ffeb"
+    }
+   ],
+   "input_set_sha256_16": "6634f1990e50df2b",
+   "n_files": 178
+  }
+ },
+ "inventory_translation": {
+  "caveat_ties": "quantile matching cannot split a tie: where the ratio distribution has atoms the reproduced shares are close, not exact, and the residual difference is reported rather than smoothed away",
+  "derived_from": "l5_canonical_sequence.csv.gz, L5 rows only",
+  "edges": [
+   0.00497293,
+   0.05141625,
+   0.29092375
+  ],
+  "id": "L5_INVENTORY_RATIO_EDGES_v1",
+  "l5_absolute_share": {
+   "flat": 0.0395,
+   "imb1-10": 0.0494,
+   "imb10-50": 0.1934,
+   "imb>50": 0.7176
+  },
+  "labels": [
+   "flat",
+   "imb1-10",
+   "imb10-50",
+   "imb>50"
+  ],
+  "n_l5_rows_used": 71808,
+  "rule": "edges are the quantiles of L5's own imbalance-ratio distribution at L5's own cumulative absolute-share bucket shares, so the translated buckets reproduce L5's bucket occupancy exactly on L5's tape",
+  "sha256_16": "244b7ab865c9dff4"
+ },
+ "mini_window": "not used in mapping B. Per the owner it remains a logged candidate feature; the evidence did not establish it as a superior clock.",
+ "model_identity": {
+  "file": "l5_action_model_v2.json",
+  "n_states": 136,
+  "sha256_16": "bbb55bf90638d2bd"
+ },
+ "owner_ref": "#167 comment 5583906276",
+ "promotion_gate": {
+  "criterion": "behavioural fidelity only. Realized or counterfactual P&L is reported separately and is NOT an input to promotion, in either direction.",
+  "explicitly_not_a_criterion": [
+   "realized P&L",
+   "counterfactual P&L",
+   "fill rate",
+   "the mini-window / local-regime clock, which stays a logged candidate and is not part of mapping B"
+  ],
+  "frozen_before": "any forward paired-shadow observation is read. The historical comparison in this module is descriptive and explicitly cannot satisfy this gate.",
+  "id": "L5_STATE_TRANSLATION_v1_PROMOTION_GATE",
+  "must_improve": {
+   "off_distribution_rate": "B's off-distribution rate at least 5 percentage points below A's",
+   "relation_distribution_distance": "total variation between B's relation distribution and L5's canonical relation distribution at least 0.05 below A's, on the same decisions",
+   "state_support": "median state_n under B strictly greater than under A on the same decisions"
+  },
+  "must_not_worsen": {
+   "no_new_unknown": "decisions B cannot key at all (no event progress served) must stay below 25%, and are counted as failures of B, never dropped",
+   "off_distribution_ceiling": "B's off-distribution rate must not exceed A's under any split by league"
+  },
+  "owner_ref": "#167 comment 5583906276 item 5",
+  "rollback": {
+   "action": "revert to mapping A immediately, no approval needed to revert, and report the trigger",
+   "trigger": "if promoted and any of: off-distribution rate rises above the pre-promotion A baseline for 2 consecutive hours; a league's event-progress coverage falls below 50%; or the translated bucket becomes degenerate (one bucket >90% of decisions for 4 hours)"
+  },
+  "sample_minimums": {
+   "distinct_leagues": 4,
+   "distinct_markets": 40,
+   "forward_decisions_with_event_progress": 400,
+   "forward_fills": 60,
+   "note": "all four must be met on decisions observed AFTER this gate was frozen; in-sample decisions do not count toward any of them"
+  },
+  "sha256_16": "6a474b81b397c2bb"
+ },
+ "question": "OWNER #167 5583906276 items 1/2/4/5: what is the defensible L5-equivalent state for a sports decision, and does translating it change what the frozen model is asked?",
+ "read_only": "no network, no venue, no orders. The live key, the live shell, every cap, gate and band, the frozen model and the frozen lookup are untouched.",
+ "time_translation": {
+  "bins": 20,
+  "derived_from": "l5_canonical_sequence.csv.gz, L5 rows only",
+  "id": "L5_REMAINING_FRACTION_TO_TTE_v1",
+  "n_rows": 71984,
+  "n_used": 71975,
+  "not_a_claim": "a translated bucket is NOT a seconds-to-settlement claim about a sports market; it says 'as far through its event as L5 was at that point of its window'",
+  "per_bin": {
+   "0": {
+    "distribution": {
+     "tte30-120s": 743,
+     "tte<30s": 555
+    },
+    "modal_purity": 0.5724,
+    "modal_tte_bucket": "tte30-120s",
+    "n": 1298,
+    "remaining_fraction_from": 0.0,
+    "remaining_fraction_to": 0.05
+   },
+   "1": {
+    "distribution": {
+     "tte30-120s": 3806,
+     "tte<30s": 292
+    },
+    "modal_purity": 0.9287,
+    "modal_tte_bucket": "tte30-120s",
+    "n": 4098,
+    "remaining_fraction_from": 0.05,
+    "remaining_fraction_to": 0.1
+   },
+   "10": {
+    "distribution": {
+     "tte2-5m": 469,
+     "tte5-10m": 3329
+    },
+    "modal_purity": 0.8765,
+    "modal_tte_bucket": "tte5-10m",
+    "n": 3798,
+    "remaining_fraction_from": 0.5,
+    "remaining_fraction_to": 0.55
+   },
+   "11": {
+    "distribution": {
+     "tte2-5m": 416,
+     "tte5-10m": 3218
+    },
+    "modal_purity": 0.8855,
+    "modal_tte_bucket": "tte5-10m",
+    "n": 3634,
+    "remaining_fraction_from": 0.55,
+    "remaining_fraction_to": 0.6
+   },
+   "12": {
+    "distribution": {
+     "tte2-5m": 322,
+     "tte5-10m": 3383
+    },
+    "modal_purity": 0.9131,
+    "modal_tte_bucket": "tte5-10m",
+    "n": 3705,
+    "remaining_fraction_from": 0.6,
+    "remaining_fraction_to": 0.65
+   },
+   "13": {
+    "distribution": {
+     "tte2-5m": 363,
+     "tte5-10m": 1802,
+     "tte>10m": 1855
+    },
+    "modal_purity": 0.4614,
+    "modal_tte_bucket": "tte>10m",
+    "n": 4020,
+    "remaining_fraction_from": 0.65,
+    "remaining_fraction_to": 0.7
+   },
+   "14": {
+    "distribution": {
+     "tte2-5m": 307,
+     "tte>10m": 2759
+    },
+    "modal_purity": 0.8999,
+    "modal_tte_bucket": "tte>10m",
+    "n": 3066,
+    "remaining_fraction_from": 0.7,
+    "remaining_fraction_to": 0.75
+   },
+   "15": {
+    "distribution": {
+     "tte2-5m": 301,
+     "tte>10m": 3104
+    },
+    "modal_purity": 0.9116,
+    "modal_tte_bucket": "tte>10m",
+    "n": 3405,
+    "remaining_fraction_from": 0.75,
+    "remaining_fraction_to": 0.8
+   },
+   "16": {
+    "distribution": {
+     "tte2-5m": 232,
+     "tte>10m": 2632
+    },
+    "modal_purity": 0.919,
+    "modal_tte_bucket": "tte>10m",
+    "n": 2864,
+    "remaining_fraction_from": 0.8,
+    "remaining_fraction_to": 0.85
+   },
+   "17": {
+    "distribution": {
+     "tte2-5m": 209,
+     "tte>10m": 2869
+    },
+    "modal_purity": 0.9321,
+    "modal_tte_bucket": "tte>10m",
+    "n": 3078,
+    "remaining_fraction_from": 0.85,
+    "remaining_fraction_to": 0.9
+   },
+   "18": {
+    "distribution": {
+     "tte2-5m": 221,
+     "tte>10m": 2602
+    },
+    "modal_purity": 0.9217,
+    "modal_tte_bucket": "tte>10m",
+    "n": 2823,
+    "remaining_fraction_from": 0.9,
+    "remaining_fraction_to": 0.95
+   },
+   "19": {
+    "distribution": {
+     "tte2-5m": 518,
+     "tte>10m": 2808
+    },
+    "modal_purity": 0.8443,
+    "modal_tte_bucket": "tte>10m",
+    "n": 3326,
+    "remaining_fraction_from": 0.95,
+    "remaining_fraction_to": 1.0
+   },
+   "2": {
+    "distribution": {
+     "tte2-5m": 1036,
+     "tte30-120s": 3029
+    },
+    "modal_purity": 0.7451,
+    "modal_tte_bucket": "tte30-120s",
+    "n": 4065,
+    "remaining_fraction_from": 0.1,
+    "remaining_fraction_to": 0.15
+   },
+   "3": {
+    "distribution": {
+     "tte2-5m": 3624,
+     "tte30-120s": 749
+    },
+    "modal_purity": 0.8287,
+    "modal_tte_bucket": "tte2-5m",
+    "n": 4373,
+    "remaining_fraction_from": 0.15,
+    "remaining_fraction_to": 0.2
+   },
+   "4": {
+    "distribution": {
+     "tte2-5m": 3308,
+     "tte30-120s": 654
+    },
+    "modal_purity": 0.8349,
+    "modal_tte_bucket": "tte2-5m",
+    "n": 3962,
+    "remaining_fraction_from": 0.2,
+    "remaining_fraction_to": 0.25
+   },
+   "5": {
+    "distribution": {
+     "tte2-5m": 3560,
+     "tte30-120s": 615
+    },
+    "modal_purity": 0.8527,
+    "modal_tte_bucket": "tte2-5m",
+    "n": 4175,
+    "remaining_fraction_from": 0.25,
+    "remaining_fraction_to": 0.3
+   },
+   "6": {
+    "distribution": {
+     "tte2-5m": 3251,
+     "tte30-120s": 554,
+     "tte5-10m": 912
+    },
+    "modal_purity": 0.6892,
+    "modal_tte_bucket": "tte2-5m",
+    "n": 4717,
+    "remaining_fraction_from": 0.3,
+    "remaining_fraction_to": 0.35
+   },
+   "7": {
+    "distribution": {
+     "tte30-120s": 573,
+     "tte5-10m": 3169
+    },
+    "modal_purity": 0.8469,
+    "modal_tte_bucket": "tte5-10m",
+    "n": 3742,
+    "remaining_fraction_from": 0.35,
+    "remaining_fraction_to": 0.4
+   },
+   "8": {
+    "distribution": {
+     "tte2-5m": 474,
+     "tte5-10m": 3293
+    },
+    "modal_purity": 0.8742,
+    "modal_tte_bucket": "tte5-10m",
+    "n": 3767,
+    "remaining_fraction_from": 0.4,
+    "remaining_fraction_to": 0.45
+   },
+   "9": {
+    "distribution": {
+     "tte2-5m": 459,
+     "tte5-10m": 3600
+    },
+    "modal_purity": 0.8869,
+    "modal_tte_bucket": "tte5-10m",
+    "n": 4059,
+    "remaining_fraction_from": 0.45,
+    "remaining_fraction_to": 0.5
+   }
+  },
+  "rule": "pool L5's own trades by the fraction of their window still remaining and take the tte bucket L5 actually keyed there; sports progress is then read through L5's own clock",
+  "sha256_16": "5c4a26cd9c123ddb"
+ }
+}
