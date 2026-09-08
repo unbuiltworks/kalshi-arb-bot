@@ -1,4 +1,33 @@
 {
+ "forward_ab": {
+  "A": null,
+  "B": null,
+  "forward_decisions": 0,
+  "forward_since_utc": "2026-09-08T11:07:49+00:00",
+  "gate_checks": null,
+  "gate_id": "L5_STATE_TRANSLATION_v1_PROMOTION_GATE",
+  "gate_sha256_16": "6a474b81b397c2bb",
+  "promotion": "REQUIRES_OWNER_DECISION -- this module never promotes and never edits the live key",
+  "sample_minimums_have": {
+   "distinct_leagues": 0,
+   "distinct_markets": 0,
+   "forward_decisions_with_event_progress": 0,
+   "forward_fills": 0
+  },
+  "sample_minimums_met": {
+   "distinct_leagues": false,
+   "distinct_markets": false,
+   "forward_decisions_with_event_progress": false,
+   "forward_fills": false
+  },
+  "sample_minimums_required": {
+   "distinct_leagues": 4,
+   "distinct_markets": 40,
+   "forward_decisions_with_event_progress": 400,
+   "forward_fills": 60
+  },
+  "verdict": "NOT_YET_ENOUGH_FORWARD_EVIDENCE"
+ },
  "historical_ab": {
   "A": {
    "decisions": 665,

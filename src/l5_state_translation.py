@@ -208,6 +208,67 @@ PROMOTION_GATE: Dict[str, Any] = {
 PROMOTION_GATE["sha256_16"] = hashlib.sha256(
     json.dumps(PROMOTION_GATE, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
+# The instant the gate above was committed (335c476a). A decision counts
+# toward the gate only if the probe logged it AFTER this; everything earlier
+# is in-sample by definition and is scored separately. Moving this constant
+# forward would discard evidence, moving it back would admit in-sample
+# decisions -- either way it is an edit that shows up in the diff.
+GATE_FROZEN_UTC = "2026-09-08T11:07:49+00:00"
+
+
+def forward_ab(rows: Sequence[Mapping[str, Any]], model: Mapping[str, Any],
+               since_utc: str = GATE_FROZEN_UTC) -> dict:
+    """The only comparison that could ever promote mapping B: decisions the
+    probe logged AFTER the gate was frozen, scored against the gate exactly
+    as written. Returns a verdict; it never promotes anything itself."""
+    fwd = [r for r in rows if str(r.get("t_utc") or "") >= since_utc]
+    canonical = canonical_relation_distribution(model)
+    a = score_mapping(fwd, "A", canonical) if fwd else None
+    b = score_mapping(fwd, "B", canonical) if fwd else None
+    mins = PROMOTION_GATE["sample_minimums"]
+    with_prog = sum(1 for r in fwd if r.get("event_proximity") is not None)
+    markets = len({r["slug"] for r in fwd})
+    leagues = len({str(r["slug"]).split("-")[1] for r in fwd
+                   if str(r["slug"]).count("-") >= 1})
+    have = {
+        "forward_decisions_with_event_progress": with_prog,
+        "distinct_markets": markets,
+        "distinct_leagues": leagues,
+        "forward_fills": sum(1 for r in fwd if r.get("acted")
+                             and r.get("acted") != "hold"),
+    }
+    met = {k: have[k] >= mins[k] for k in have}
+    checks = None
+    if a and b:
+        checks = {
+            "state_support": (b["median_state_n"] or 0) > (a["median_state_n"] or 0),
+            "off_distribution_rate": (a["off_distribution_rate"]
+                                      - b["off_distribution_rate"]) >= 0.05,
+            "relation_distribution_distance": (a["relation_distance_to_l5"]
+                                               - b["relation_distance_to_l5"]) >= 0.05,
+            "unkeyable_under_ceiling": b["unkeyable_rate"] < 0.25,
+        }
+    if not all(met.values()):
+        verdict = "NOT_YET_ENOUGH_FORWARD_EVIDENCE"
+    elif checks and all(checks.values()):
+        verdict = "GATE_MET_AWAITING_OWNER_DECISION"
+    else:
+        verdict = "GATE_NOT_MET"
+    return {
+        "gate_id": PROMOTION_GATE["id"],
+        "gate_sha256_16": PROMOTION_GATE["sha256_16"],
+        "forward_since_utc": since_utc,
+        "forward_decisions": len(fwd),
+        "sample_minimums_required": {k: v for k, v in mins.items() if k != "note"},
+        "sample_minimums_have": have,
+        "sample_minimums_met": met,
+        "A": a, "B": b,
+        "gate_checks": checks,
+        "verdict": verdict,
+        "promotion": ("REQUIRES_OWNER_DECISION -- this module never promotes "
+                      "and never edits the live key"),
+    }
+
 
 # --------------------------------------------------------------------------
 # the frozen model, read only
@@ -394,6 +455,8 @@ def build_report(log_paths: Sequence[str], canonical_csv: str = CANONICAL,
         "inventory_translation": edges_spec,
         "promotion_gate": PROMOTION_GATE,
         "historical_ab": historical_ab(rep, frac_map, edges_spec["edges"], model),
+        "forward_ab": forward_ab(
+            paired_rows(rep, frac_map, edges_spec["edges"], model), model),
         "mini_window": ("not used in mapping B. Per the owner it remains a "
                         "logged candidate feature; the evidence did not "
                         "establish it as a superior clock."),
@@ -455,6 +518,19 @@ def render_markdown(res: Mapping[str, Any]) -> str:
         "",
         f"_{res['mini_window']}_",
         "",
+        "## Forward cohort against the frozen gate",
+        "",
+        f"Decisions logged after {res['forward_ab']['forward_since_utc']}: "
+        f"**{res['forward_ab']['forward_decisions']}**. Verdict: "
+        f"**{res['forward_ab']['verdict']}**.",
+        "",
+        "| minimum | required | have | met |", "|---|---:|---:|---|",
+    ] + [
+        f"| {k} | {res['forward_ab']['sample_minimums_required'][k]} | "
+        f"{v} | {res['forward_ab']['sample_minimums_met'][k]} |"
+        for k, v in res['forward_ab']['sample_minimums_have'].items()
+    ] + [
+        "", f"_{res['forward_ab']['promotion']}._", "",
     ]
     return "\n".join(L)
 

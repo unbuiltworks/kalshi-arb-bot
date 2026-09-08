@@ -34,3 +34,16 @@ _these decisions were already observed and analysed. They show what the translat
 Time-bucket occupancy — live: {"tte>10m": 665}; translated: {"<unkeyable>": 49, "tte2-5m": 23, "tte30-120s": 125, "tte5-10m": 299, "tte>10m": 169}
 
 _not used in mapping B. Per the owner it remains a logged candidate feature; the evidence did not establish it as a superior clock._
+
+## Forward cohort against the frozen gate
+
+Decisions logged after 2026-09-08T11:07:49+00:00: **0**. Verdict: **NOT_YET_ENOUGH_FORWARD_EVIDENCE**.
+
+| minimum | required | have | met |
+|---|---:|---:|---|
+| forward_decisions_with_event_progress | 400 | 0 | False |
+| distinct_markets | 40 | 0 | False |
+| distinct_leagues | 4 | 0 | False |
+| forward_fills | 60 | 0 | False |
+
+_REQUIRES_OWNER_DECISION -- this module never promotes and never edits the live key._

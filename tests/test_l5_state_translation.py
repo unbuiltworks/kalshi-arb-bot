@@ -135,3 +135,60 @@ def test_mapping_a_is_read_verbatim_from_the_log(tmp_path):
     assert rows[0]["A"]["state_n"] == 7
     # no event progress was served for this market, so B cannot key it
     assert rows[0]["key_b"] is None and rows[0]["B"]["unkeyable"] is True
+
+
+def _row(t_utc, slug, a_n, b_n, *, b_unkeyable=False, acted="open"):
+    """A row is coherent: a state with no support carries no relation
+    distribution, exactly as `lookup` returns it."""
+    return {"t_utc": t_utc, "slug": slug, "acted": acted,
+            "event_proximity": 0.5,
+            "A": {"state_n": a_n, "off_distribution": a_n == 0,
+                  "relation_p": {"open": 1.0} if a_n else {}},
+            "B": {"state_n": b_n, "off_distribution": b_unkeyable or b_n == 0,
+                  "relation_p": ({} if (b_unkeyable or not b_n)
+                                 else {"complete": 1.0}),
+                  **({"unkeyable": True} if b_unkeyable else {})}}
+
+
+# L5's own relation mix for these fixtures: `complete` is what L5 does
+MODEL_COMPLETE = {"base": {"p45-55c|tte2-5m|flat": {"complete|q<5": 10}}}
+
+
+def test_decisions_from_before_the_freeze_can_never_count_toward_the_gate():
+    """The whole point of pre-registering is that already-seen decisions
+    cannot promote the thing they were used to build."""
+    rows = [_row("2026-09-08T10:00:00+00:00", "aec-atp-a-b", 200, 50),
+            _row("2026-09-08T12:00:00+00:00", "aec-atp-a-b", 200, 50)]
+    out = st.forward_ab(rows, {"base": {}},
+                        since_utc="2026-09-08T11:07:49+00:00")
+    assert out["forward_decisions"] == 1
+    assert out["sample_minimums_have"]["distinct_markets"] == 1
+    assert out["verdict"] == "NOT_YET_ENOUGH_FORWARD_EVIDENCE"
+    assert out["gate_sha256_16"] == st.PROMOTION_GATE["sha256_16"]
+
+
+def test_the_gate_is_scored_as_written_and_still_only_recommends():
+    """Even a clean pass hands the decision to the owner; nothing here
+    promotes, and nothing here edits the live key."""
+    # A is off-distribution on these states and picks the wrong relation
+    # where it has any support at all; B keys a supported state and matches
+    # L5's own mix
+    rows = [_row(f"2026-09-08T12:00:0{i % 10}+00:00", f"aec-l{i % 5}-x-y{i}",
+                 0 if i % 10 else 10, 500) for i in range(500)]
+    out = st.forward_ab(rows, MODEL_COMPLETE,
+                        since_utc="2026-09-08T11:07:49+00:00")
+    assert all(out["sample_minimums_met"].values()), out["sample_minimums_have"]
+    assert out["gate_checks"]["state_support"] is True
+    assert out["gate_checks"]["unkeyable_under_ceiling"] is True
+    assert out["verdict"] == "GATE_MET_AWAITING_OWNER_DECISION"
+    assert "never promotes" in out["promotion"]
+
+
+def test_a_mapping_that_cannot_key_its_rows_fails_the_ceiling():
+    rows = [_row(f"2026-09-08T12:00:0{i % 10}+00:00", f"aec-l{i % 5}-x-y{i}",
+                 10, 0, b_unkeyable=(i % 2 == 0)) for i in range(500)]
+    out = st.forward_ab(rows, {"base": {}},
+                        since_utc="2026-09-08T11:07:49+00:00")
+    assert out["B"]["unkeyable_rate"] == 0.5
+    assert out["gate_checks"]["unkeyable_under_ceiling"] is False
+    assert out["verdict"] == "GATE_NOT_MET"
