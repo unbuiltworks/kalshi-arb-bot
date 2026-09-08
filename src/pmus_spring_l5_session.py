@@ -1408,7 +1408,36 @@ def reconcile_submissions(t: Transport, slug: str, limit: int = 50) -> dict:
     return out
 
 
-def run_session(t: Optional[Transport] = None,
+def run_session(*args: Any, **kwargs: Any) -> dict:
+    """Run a session, then reconcile its fills on EVERY exit path.
+
+    LIVE 2026-09-08 12:07Z: the reconciliation lived at the end of the
+    action loop, so a session that ended by refusal or halt -- exactly the
+    shape of the one that abandoned order CC1E3Y7TPQ45 -- returned with
+    `flat_verified: null` and never re-read its own orders. The sessions
+    most likely to leave an order in an ambiguous state were the ones that
+    skipped the check. Reconciliation now happens here, outside the body,
+    where no return path can bypass it."""
+    report = _run_session_body(*args, **kwargs)
+    ledger = report.pop("_fill_ledger", None)
+    inv = report.pop("_inventory_obj", None)
+    if ledger is None or inv is None:
+        return report                 # never reached the order stage
+    if report.get("fill_reconciliation") is not None:
+        return report                 # the normal path already did it
+    t = args[0] if args else kwargs.get("t")
+    recon = _reconcile_fills(t, report.get("slug") or "", ledger, inv)
+    report["fill_reconciliation"] = recon
+    report["flat_verified"] = bool(recon["may_assert_flat"])
+    if recon["venue_vs_ledger"].get("agrees") is False:
+        print("PMUS_SPRING_ALARM " + json.dumps(
+            {"alarm": "venue_ledger_quantity_mismatch",
+             "slug": report.get("slug"), "exit": report.get("status"),
+             **recon["venue_vs_ledger"]}), flush=True)
+    return report
+
+
+def _run_session_body(t: Optional[Transport] = None,
                 clock=time.monotonic, sleep=time.sleep,
                 wall=time.time, slug: Optional[str] = None,
                 gate_ok: bool = False,
@@ -1547,6 +1576,10 @@ def run_session(t: Optional[Transport] = None,
         # and stays OPEN until the VENUE reports a terminal state, so a
         # fill that lands after we stop waiting is still booked.
         fill_ledger = fl.FillLedger()
+        # the wrapper reconciles on every exit path, including refusals and
+        # halts, so it needs these regardless of how the body returns
+        report["_fill_ledger"] = fill_ledger
+        report["_inventory_obj"] = inv
         # item 3: give every earlier submission its authoritative terminal
         # row before the cap is computed from FILLED notional
         if "reconcile" not in report:          # resume reconciled earlier

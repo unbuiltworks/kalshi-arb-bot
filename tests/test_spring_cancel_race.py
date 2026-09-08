@@ -107,3 +107,61 @@ def test_a_full_fill_while_resting_is_unchanged(monkeypatch):
     assert got == D("4.54") and end == "filled"
     assert venue.cancels == 0
     assert led.booked("o") == D("4.54")
+
+
+def test_a_refused_or_halted_session_still_reconciles_its_fills(monkeypatch):
+    """LIVE 2026-09-08 12:07Z: the reconciliation sat at the end of the
+    action loop, so a session ending in SPRING_SAFE_REFUSAL returned
+    flat_verified null and never re-read its own orders -- and a refusal
+    mid-sequence is exactly the shape that abandoned CC1E3Y7TPQ45. Every
+    exit path must reconcile."""
+    calls = []
+
+    def _body(*_a, **_kw):
+        led = fl.FillLedger()
+        led.track("o")
+        return {"slug": "m", "status": "SPRING_SAFE_REFUSAL",
+                "reason": "POST_ONLY_STALE_REFUSE:spring_complete_1",
+                "_fill_ledger": led, "_inventory_obj": spring.Inventory()}
+
+    def _recon(_t, slug, ledger, inv):
+        calls.append(slug)
+        return {"reconciled": {"recovered_qty": "4.34"},
+                "venue_vs_ledger": {"agrees": True, "venue_qty": "4.34",
+                                    "ledger_qty": "4.34"},
+                "may_assert_flat": True}
+
+    monkeypatch.setattr(spring, "_run_session_body", _body)
+    monkeypatch.setattr(spring, "_reconcile_fills", _recon)
+    rep = spring.run_session(object())
+    assert calls == ["m"], "a refused session must still reconcile"
+    assert rep["flat_verified"] is True
+    assert rep["fill_reconciliation"]["reconciled"]["recovered_qty"] == "4.34"
+    # the private handles never leak into the reported session
+    assert "_fill_ledger" not in rep and "_inventory_obj" not in rep
+
+
+def test_a_session_that_never_ordered_has_nothing_to_reconcile(monkeypatch):
+    calls = []
+    monkeypatch.setattr(spring, "_run_session_body",
+                        lambda *a, **k: {"slug": "m",
+                                         "status": "SPRING_SKIP_NOT_QUALIFYING"})
+    monkeypatch.setattr(spring, "_reconcile_fills",
+                        lambda *a, **k: calls.append(1) or {})
+    rep = spring.run_session(object())
+    assert calls == [] and "fill_reconciliation" not in rep
+
+
+def test_a_mismatch_on_a_refusal_path_still_alarms(monkeypatch, capsys):
+    monkeypatch.setattr(spring, "_run_session_body",
+                        lambda *a, **k: {"slug": "m", "status": "HALT",
+                                         "_fill_ledger": fl.FillLedger(),
+                                         "_inventory_obj": spring.Inventory()})
+    monkeypatch.setattr(spring, "_reconcile_fills", lambda *a, **k: {
+        "venue_vs_ledger": {"agrees": False, "venue_qty": "13.8200",
+                            "ledger_qty": "9.48", "delta": "4.3400"},
+        "may_assert_flat": False})
+    rep = spring.run_session(object())
+    assert rep["flat_verified"] is False
+    out = capsys.readouterr().out
+    assert "venue_ledger_quantity_mismatch" in out and "13.8200" in out
