@@ -808,6 +808,13 @@ def complement_acceptance_proven() -> bool:
 # $7.50 per-market cap, concurrency 1, maker-only, and the -$15.00 daily
 # stop. The probe is not an L5 decision and is never recorded as one.
 FLAT_PROBE_STAGE = "complement_acceptance_flat"
+
+# #93 control group (OWNER 5588925913: compare ACCEPTED orders against
+# rejected ones). Post-hoc snapshots on accepted orders, bounded so the
+# diagnostic can never become load on the recorder's status endpoint.
+CONTROL_BOOK_MAX_PER_SESSION = 24
+CONTROL_BOOK_MIN_GAP_S = 5.0
+_control_state = {"n": 0, "last": 0.0}
 FLAT_PROBE_LABEL = ("venue-acceptance evidence probe at the venue minimum; "
                     "NOT an L5 decision, NOT counted as an L5 action, and "
                     "never recorded in the behavioural fidelity artifact")
@@ -1806,6 +1813,22 @@ def _run_session_body(t: Optional[Transport] = None,
                      "usd": str((px_ * qty_).quantize(D("0.0001")))},
                  "l5_target_size": fid.l5_target_size(
                      fid_art, last_skey.get("k") or "", relation_)})
+            # OWNER 5588925913: "compare accepted orders against rejected
+            # ones rather than studying only failures". Until now the
+            # authenticated book was attached ONLY on rejection, so #93 had
+            # a sample of failures and no control group -- every margin
+            # statistic was conditioned on the outcome being explained.
+            # The same snapshot is taken for orders the venue ACCEPTED.
+            #
+            # POST-HOC BY CONSTRUCTION: this runs after the order has
+            # already resolved, so it adds nothing to the path in front of
+            # a submission. Bounded per session and swallowed on any error,
+            # because a diagnostic must never be able to halt a session.
+            if not end_reason.startswith("rejected"):
+                try:
+                    _control_book(side_up_, px_, report["orders"][-1])
+                except Exception:                      # noqa: BLE001
+                    pass
 
         def _venue_market_status(slug_: str) -> dict:
             """The venue's own market flags at rejection time (read-only;
@@ -1882,6 +1905,36 @@ def _run_session_body(t: Optional[Transport] = None,
             except Exception:                          # noqa: BLE001
                 out["opp_ask_authenticated"] = None
             return out
+
+        def _control_book(side_up_: bool, px_: D, row: dict) -> None:
+            """The CONTROL GROUP for #93: the same authenticated book and
+            the same fresh opposite ask, on an order the venue accepted.
+
+            Without this every margin figure in the investigation is
+            conditioned on rejection, which cannot distinguish "the venue
+            rejects orders N ticks inside" from "our orders are usually
+            N ticks inside". Rows carry acceptance_control=True so the
+            two populations can never be silently pooled.
+
+            Bounded: at most CONTROL_BOOK_MAX_PER_SESSION snapshots and one
+            per CONTROL_BOOK_MIN_GAP_S, so a busy session cannot turn this
+            into a status-endpoint hammer."""
+            now_ = time.monotonic()
+            if _control_state["n"] >= CONTROL_BOOK_MAX_PER_SESSION:
+                return
+            if now_ - _control_state["last"] < CONTROL_BOOK_MIN_GAP_S:
+                return
+            _control_state["last"] = now_
+            _control_state["n"] += 1
+            row["acceptance_control"] = True
+            row["recorder_book"] = _recorder_book(slug, side_up_)
+            try:
+                b = q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES" if side_up_
+                                   else "OUTCOME_SIDE_NO")
+                row["fresh_opp_ask"] = str(D(str(b["ask"])))
+            except Exception as exc:                   # noqa: BLE001
+                row["fresh_opp_ask"] = None
+                row["control_bbo_error"] = f"{type(exc).__name__}"
 
         def _classify_rejection(side_up_: bool, px_: D) -> dict:
             """Owner item 5 classes for a post-only rejection, from the

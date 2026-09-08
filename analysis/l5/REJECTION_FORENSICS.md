@@ -19,6 +19,18 @@ Unexplained by stage: {'spring_extend': 10, 'spring_complete': 9, 'spring_open':
 Crossed by stage: {'spring_extend': 6, 'spring_open': 8, 'spring_complete': 1}  
 Unexplained by side: {'YES': 10, 'NO': 10} (an even split rules out the NO-side derived ask, `1 - yes_bid`, as the cause)
 
+## Accepted (control) vs rejected — the same book
+
+| population | orders | readable margin | min | median | max | <=1 tick |
+|---|---|---|---|---|---|---|
+| ACCEPTED | 0 | 0 | None | None | None | None |
+| REJECTED | 70 | 43 | -9.0 | 1.0 | 30.0 | 24 |
+
+Accepted by stage: {}  
+Rejected by stage: {'spring_complete': 43, 'spring_extend': 18, 'spring_open': 9}
+
+Accepted orders carry the authenticated book only from the commit that added _control_book; an empty control group means not enough forward evidence yet, NOT that accepted orders behave like rejected ones.
+
 Our ask vs the authenticated ask, in ticks: n=43, min=-27.0, max=12.0, mean=-1.395, nonzero=33
 
 ## Rejections the venue's own book does not explain

@@ -94,3 +94,47 @@ def test_it_reads_and_never_acts():
     for forbidden in ("place_limit_buy", "session_runner", "run_campaign(",
                       "os.environ[", "set_variables", "requests.post"):
         assert forbidden not in body, forbidden
+
+
+def test_the_control_group_is_never_pooled_with_rejections():
+    """OWNER 5588925913: compare ACCEPTED orders against rejected ones.
+    Every margin figure in this investigation is conditioned on rejection,
+    which cannot distinguish "the venue rejects orders N ticks inside"
+    from "our orders are usually N ticks inside"."""
+    acc = _order("0.38", "0.44", stage="spring_extend_1", oid="A1",
+                 reason="cancelled")
+    acc["acceptance_control"] = True
+    rej = _order("0.38", "0.39", stage="spring_extend_1", oid="R1")
+    rows = [rf.classify(acc), rf.classify(rej)]
+    assert rows[0]["acceptance_control"] is True
+    assert rows[0]["outcome"] != "REJECTED"
+    a = rf._margin_summary([rows[0]])
+    j = rf._margin_summary([rows[1]])
+    assert a["median_ticks"] == 6.0 and j["median_ticks"] == 1.0
+    assert a["orders"] == 1 and j["orders"] == 1
+
+
+def test_an_empty_control_group_is_not_evidence_of_similarity():
+    """Before the control instrumentation ships there are no accepted rows.
+    That must read as 'no evidence yet', never as 'accepted orders look the
+    same as rejected ones'."""
+    s = rf._margin_summary([])
+    assert s["orders"] == 0 and s["median_ticks"] is None
+    assert s["at_or_inside_1_tick"] is None
+
+
+def test_the_control_snapshot_cannot_delay_a_submission():
+    """It runs inside _harvest, which is only reached AFTER the order has
+    resolved -- so it adds nothing in front of a place_limit_buy -- and it
+    is bounded and swallowed so a diagnostic can never halt a session."""
+    import inspect
+    from src import pmus_spring_l5_session as s
+    src = inspect.getsource(s.run_spring_session) if hasattr(
+        s, "run_spring_session") else inspect.getsource(s)
+    i = src.index("_control_book(side_up_, px_")
+    before = src[max(0, i - 600):i]
+    assert "not end_reason.startswith(\"rejected\")" in before
+    assert "try:" in before
+    assert "except Exception" in src[i:i + 200]
+    assert s.CONTROL_BOOK_MAX_PER_SESSION > 0
+    assert s.CONTROL_BOOK_MIN_GAP_S > 0

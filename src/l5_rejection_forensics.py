@@ -153,6 +153,9 @@ def classify(order: Mapping[str, Any]) -> dict:
     row = {
         "order_id": order.get("order_id"), "slug": order.get("slug"),
         "stage": order.get("stage"), "side": order.get("side"),
+        # the CONTROL population: an order the venue accepted, carrying the
+        # same book. Never pooled with rejections -- that is the whole point
+        "acceptance_control": bool(order.get("acceptance_control")),
         "px": str(px) if px is not None else None,
         "qty": order.get("qty"), "outcome": outcome,
         "our_opp_ask": order.get("fresh_opp_ask") or order.get("opp_ask"),
@@ -199,6 +202,28 @@ def _observation(row: Mapping[str, Any]) -> tuple:
             row.get("authenticated_yes_ask"), row.get("authenticated_age_s"))
 
 
+def _margin_summary(rows: Iterable[Mapping[str, Any]]) -> dict:
+    """True margin distribution for one population, in ticks.
+
+    Reported per population and NEVER pooled: comparing accepted against
+    rejected is the only way to tell a venue rule from a property of how
+    we price."""
+    rows = list(rows)
+    m = sorted(r["true_margin_ticks"] for r in rows
+               if r.get("true_margin_ticks") is not None)
+    by_stage = Counter(str(r.get("stage")).rsplit("_", 1)[0] for r in rows)
+    n = len(m)
+    return {
+        "orders": len(rows), "with_a_readable_margin": n,
+        "min_ticks": m[0] if n else None,
+        "median_ticks": m[n // 2] if n else None,
+        "max_ticks": m[-1] if n else None,
+        "mean_ticks": (round(sum(m) / n, 3) if n else None),
+        "at_or_inside_1_tick": sum(1 for x in m if x <= 1) if n else None,
+        "by_stage": dict(by_stage),
+    }
+
+
 def report(paths: Iterable[Any]) -> dict:
     rows = [classify(o) for o in orders_with_books(paths)]
     rejections = [r for r in rows if r["outcome"] == "REJECTED"]
@@ -210,6 +235,7 @@ def report(paths: Iterable[Any]) -> dict:
                        if k.startswith("UNVERIFIABLE"))
     disagreements = [r["ask_disagreement_ticks"] for r in rows
                      if r.get("ask_disagreement_ticks") is not None]
+    accepted = [r for r in rows if r["outcome"] != "REJECTED"]
     crossed_rows = [r for r in rejections
                     if r["klass"] == "CROSSED_AUTHENTICATED"]
     by_stage = Counter(str(r["stage"]).rsplit("_", 1)[0] for r in survives)
@@ -230,6 +256,17 @@ def report(paths: Iterable[Any]) -> dict:
         "surviving_by_stage": dict(by_stage),
         "crossed_by_stage": dict(crossed_by_stage),
         "surviving_by_side": dict(Counter(r["side"] for r in survives)),
+        # THE CONTROL GROUP (OWNER 5588925913). Every margin figure above is
+        # conditioned on rejection; without accepted orders carrying the same
+        # book we cannot tell "the venue rejects orders N ticks inside" from
+        # "our orders are usually N ticks inside".
+        "accepted_control": _margin_summary(accepted),
+        "rejected_for_comparison": _margin_summary(rejections),
+        "control_note": (
+            "Accepted orders carry the authenticated book only from the "
+            "commit that added _control_book; an empty control group means "
+            "not enough forward evidence yet, NOT that accepted orders "
+            "behave like rejected ones."),
         "unverifiable": unverifiable,
         "unverifiable_share": (round(unverifiable / len(rejections), 4)
                                if rejections else None),
@@ -280,6 +317,22 @@ def render_markdown(rep: Mapping[str, Any]) -> str:
     lines.append(f"Unexplained by side: {rep['surviving_by_side']} "
                  "(an even split rules out the NO-side derived ask, "
                  "`1 - yes_bid`, as the cause)")
+    lines.append("")
+    a, j = rep["accepted_control"], rep["rejected_for_comparison"]
+    lines.append("## Accepted (control) vs rejected — the same book")
+    lines.append("")
+    lines.append("| population | orders | readable margin | min | median | "
+                 "max | <=1 tick |")
+    lines.append("|---|---|---|---|---|---|---|")
+    for name, s in (("ACCEPTED", a), ("REJECTED", j)):
+        lines.append(f"| {name} | {s['orders']} | {s['with_a_readable_margin']}"
+                     f" | {s['min_ticks']} | {s['median_ticks']} | "
+                     f"{s['max_ticks']} | {s['at_or_inside_1_tick']} |")
+    lines.append("")
+    lines.append(f"Accepted by stage: {a['by_stage']}  ")
+    lines.append(f"Rejected by stage: {j['by_stage']}")
+    lines.append("")
+    lines.append(rep["control_note"])
     lines.append("")
     d = rep["ask_disagreement_ticks"]
     lines.append(f"Our ask vs the authenticated ask, in ticks: n={d['n']}, "
