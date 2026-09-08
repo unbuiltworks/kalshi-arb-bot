@@ -199,3 +199,61 @@ def test_the_ab_merges_the_tape_without_changing_how_mapping_b_is_scored():
     assert (st.PROMOTION_GATE["sample_minimums"]
             ["forward_decisions_with_event_progress"] == 400)
     assert st.PROMOTION_GATE["sha256_16"] == "6a474b81b397c2bb"
+
+
+def test_only_usable_transitions_go_on_the_log_stream():
+    """The tape lives on a volume the analysis host cannot read, so the
+    transitions mapping B can use travel by log. Keepalives and unrecognised
+    proximity carry nothing to reconstruct and are left off."""
+    rows = [
+        {"reason": "moved", "t": NOW, "slug": "m1", "game_proximity": 0.2,
+         "period": "S1"},
+        {"reason": "keepalive", "t": NOW, "slug": "m2", "game_proximity": 0.45,
+         "period": "S2"},
+        {"reason": "moved", "t": NOW, "slug": "m3", "game_proximity": None,
+         "period": "MAP 2"},
+    ]
+    emit = ptape.emit_rows(rows)
+    assert emit == [[round(NOW, 1), "m1", 0.2, "S1"]]
+
+
+def test_the_log_emission_is_capped():
+    rows = [{"reason": "moved", "t": NOW, "slug": f"m{i}",
+             "game_proximity": 0.2, "period": "S1"} for i in range(100)]
+    assert len(ptape.emit_rows(rows, cap=40)) == 40
+
+
+def test_harvested_log_rows_rebuild_the_same_series_shape(tmp_path):
+    """Raw stdout and the JSON-escaped form a harvested Railway log file
+    carries must both reconstruct -- the harvest is the only path from the
+    shadow host to the analysis."""
+    raw = tmp_path / "raw.log"
+    raw.write_text(
+        "noise\n"
+        "PMUS_PROGRESS " + json.dumps(
+            {"kind": "progress_tick", "rows": 1,
+             "emit": [[NOW, "m1", 0.2, "S1"], [NOW + 60, "m1", 0.45, "S2"]]})
+        + "\nmore noise\n", encoding="utf-8")
+
+    escaped = tmp_path / "harvested.txt"
+    escaped.write_text(json.dumps({"deploy": [{"message":
+        "PMUS_PROGRESS " + json.dumps(
+            {"emit": [[NOW, "m2", 0.65, "S3"]]})}]}), encoding="utf-8")
+
+    series = ptape.progress_from_logs([raw, escaped])
+    assert [t for t, _ in series["m1"]] == [NOW, NOW + 60]
+    assert series["m1"][1][1]["proximity"] == 0.45
+    assert series["m2"][0][1]["proximity"] == 0.65
+    assert series["m1"][0][1]["source"] == "progress_tape_log"
+
+
+def test_a_missing_or_unreadable_log_is_skipped_not_fatal(tmp_path):
+    assert ptape.progress_from_logs([tmp_path / "nope.log"]) == {}
+    bad = tmp_path / "bad.log"
+    bad.write_text("PMUS_PROGRESS {truncated", encoding="utf-8")
+    assert ptape.progress_from_logs([bad]) == {}
+
+
+def test_the_ab_reads_the_harvested_rows_when_the_volume_is_unreachable():
+    src = Path("src/l5_state_translation.py").read_text(encoding="utf-8")
+    assert "_progress_rows" in src and "progress_from_logs" in src

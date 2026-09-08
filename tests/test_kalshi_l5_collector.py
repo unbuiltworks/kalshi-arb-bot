@@ -236,3 +236,18 @@ def test_bounded_tape_spills_into_the_older_part_only_with_budget_left(tmp_path,
     hours = [r["hour"] for r in rows]
     assert hours[:5] == ["20260908_10"] * 5      # oldest kept are the spill
     assert hours[5:] == ["20260908_11"] * 20     # newest part kept whole
+
+
+def test_whether_the_event_cap_is_binding_is_reported_not_inferred(monkeypatch):
+    """RSS climbing does not distinguish "the bound is too loose" from "the
+    tape has not filled to it yet". The compact line has to say."""
+    monkeypatch.setattr(kc, "tape_parts", lambda: ["p"])
+    monkeypatch.setattr(kc, "bounded_tape",
+                        lambda parts: {"M": [{"kind": "bbo"}] * 3})
+    monkeypatch.setattr(kc, "shadow_status", lambda by: {"markets": 1})
+    out = kc.run_shadow()
+    assert out["input_events"] == 3
+    assert out["input_events_cap"] == kc.SHADOW_MAX_EVENTS
+    compact = kc._compact_shadow(out)
+    assert compact["input_events"] == 3
+    assert compact["input_events_cap"] == kc.SHADOW_MAX_EVENTS

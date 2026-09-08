@@ -239,7 +239,75 @@ def tick(last: Dict[str, tuple], now: Optional[float] = None,
                                   if v.get("game_proximity") is not None),
             "rows": len(rows), **wrote,
             "moved": sum(1 for r in rows if r["reason"] == "moved"),
+            "emit": emit_rows(rows),
             "diag_error": (diag or {}).get("error")}
+
+
+EMIT_MAX = int(os.environ.get("PMUS_PROGRESS_EMIT_MAX", "40"))
+
+
+def emit_rows(rows: Sequence[Mapping[str, Any]],
+              cap: int = EMIT_MAX) -> List[list]:
+    """The tape is durable on the service's own volume, which the analysis
+    host cannot read. So the transitions that mapping B can actually use --
+    a MOVE with a recognised proximity -- also go out on the log stream,
+    where the existing harvest already reaches, as fixed-position tuples
+    [t, slug, proximity, period]. Positional and capped on purpose: the
+    probe's 06:30Z exit dropped 117,262 messages by printing a document.
+
+    Keepalives are deliberately not emitted -- the tick summary already
+    proves the observer was looking, and a keepalive carries no transition
+    to reconstruct."""
+    out: List[list] = []
+    for r in rows:
+        if len(out) >= cap:
+            break
+        if r.get("reason") != "moved" or r.get("game_proximity") is None:
+            continue
+        out.append([round(float(r["t"]), 1), r["slug"],
+                    r["game_proximity"], r.get("period")])
+    return out
+
+
+def progress_from_logs(paths: Sequence[Any]) -> Dict[str, list]:
+    """Reconstruct the series from harvested PMUS_PROGRESS log rows -- the
+    same shape load_progress and selection_progress return, so the A/B
+    cannot tell which witness a row came from."""
+    out: Dict[str, list] = collections.defaultdict(list)
+    for path in paths:
+        try:
+            blob = open(path, "rt", encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+        if "PMUS_PROGRESS " not in blob:
+            continue
+        for chunk in blob.split("PMUS_PROGRESS ")[1:]:
+            depth, end = 0, None
+            for i, ch in enumerate(chunk):
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            if end is None:
+                continue
+            try:
+                row = json.loads(chunk[:end].replace('\\"', '"'))
+            except ValueError:
+                continue
+            for e in (row.get("emit") or []):
+                if not isinstance(e, list) or len(e) < 3:
+                    continue
+                t, slug, prox = _f(e[0]), e[1], _f(e[2])
+                if t is None or not slug:
+                    continue
+                out[str(slug)].append((t, {
+                    "period": e[3] if len(e) > 3 else None,
+                    "proximity": prox, "basis": "progress_tape_log",
+                    "clock": None, "source": "progress_tape_log"}))
+    return {k: sorted(v, key=lambda x: x[0]) for k, v in out.items()}
 
 
 # --------------------------------------------------------------------------

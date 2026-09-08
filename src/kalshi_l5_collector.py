@@ -397,7 +397,15 @@ def run_shadow() -> Optional[dict]:
     if not parts:
         return None
     try:
-        return shadow_status(bounded_tape(parts))
+        by_market = bounded_tape(parts)
+        out = shadow_status(by_market)
+        if isinstance(out, dict):
+            # whether the cap is actually binding has to be readable, not
+            # inferred from an RSS trend: input_events at the cap means the
+            # bound engaged, below it means the tape is still filling
+            out["input_events"] = sum(len(v) for v in by_market.values())
+            out["input_events_cap"] = SHADOW_MAX_EVENTS
+        return out
     except Exception as exc:                            # noqa: BLE001
         print("KALSHI_L5_ALARM " + json.dumps(
             {"alarm": "shadow_failed",
@@ -419,6 +427,8 @@ def _compact_shadow(status: Mapping[str, Any]) -> dict:
                                        or [])[:8],
             "blockers": sorted({b for r in (status.get("rows") or [])
                                 for b in (r.get("blockers") or [])})[:8],
+            "input_events": status.get("input_events"),
+            "input_events_cap": status.get("input_events_cap"),
             "shadow_only": True, "order_entry": False, "realized_pnl": None}
 
 

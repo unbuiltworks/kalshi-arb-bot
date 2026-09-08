@@ -333,7 +333,12 @@ def paired_rows(rep: Mapping[str, Any], frac_map: Mapping[str, Any],
     # real observations and are not discarded.
     try:
         from src import pmus_progress_tape as ptape
-        tape = ptape.load_progress()
+        # two witnesses, same shape: the tape when this runs on the shadow
+        # host, and the harvested PMUS_PROGRESS log rows when it does not.
+        # The volume is not readable from the analysis host, so the log
+        # stream is what actually carries the series here.
+        tape = ptape.merge_progress(ptape.load_progress(),
+                                    rep.get("_progress_rows") or {})
     except Exception:                                # noqa: BLE001
         tape = {}
     if tape:
@@ -440,12 +445,21 @@ def historical_ab(rep: Mapping[str, Any], frac_map: Mapping[str, Any],
 # report
 # --------------------------------------------------------------------------
 
+def invt_progress_from_logs(files):
+    from src import pmus_progress_tape as ptape
+    return ptape.progress_from_logs(files)
+
+
 def build_report(log_paths: Sequence[str], canonical_csv: str = CANONICAL,
                  model_path: str = MODEL_V2) -> dict:
     from src.l5_sports_clock_study import build_ledger, input_manifest, expand_logs
 
     files = expand_logs(list(log_paths))
     rep = build_ledger(list(log_paths))
+    try:
+        rep["_progress_rows"] = invt_progress_from_logs(files)
+    except Exception:                                # noqa: BLE001
+        rep["_progress_rows"] = {}
     model = load_model(model_path)
     frac_map = l5_remaining_fraction_map(canonical_csv)
     l5_rows = invt.attach_ratio(invt.l5_decision_rows(canonical_csv))
