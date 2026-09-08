@@ -815,6 +815,22 @@ FLAT_PROBE_STAGE = "complement_acceptance_flat"
 CONTROL_BOOK_MAX_PER_SESSION = 24
 CONTROL_BOOK_MIN_GAP_S = 5.0
 _control_state = {"n": 0, "last": 0.0}
+
+# OWNER GO (#167, narrow, OPEN only): construct the first leg's touch from
+# the book the MATCHING ENGINE uses, not from a gateway BBO that disagrees
+# with it. Measured on 28 OPEN observations carrying both books: in 12
+# (43%) our gateway book said the price was inside while the authenticated
+# book showed it crossing. Accepted OPEN controls crossed 0 of 11; rejected
+# OPEN controls crossed 14 of 17.
+#
+# An authenticated book older than this cannot speak to a submission being
+# made now, so it is ignored rather than trusted -- the same bar the
+# forensics module convicts on.
+AUTH_TRIM_MAX_AGE_S = 10.0
+# The read sits in front of a submission, which is the one place this
+# codebase does not spend latency. Over budget, it fails OPEN (no trim)
+# rather than delaying the order.
+AUTH_TRIM_SLOW_MS = 750.0
 FLAT_PROBE_LABEL = ("venue-acceptance evidence probe at the venue minimum; "
                     "NOT an L5 decision, NOT counted as an L5 action, and "
                     "never recorded in the behavioural fidelity artifact")
@@ -1906,6 +1922,74 @@ def _run_session_body(t: Optional[Transport] = None,
                 out["opp_ask_authenticated"] = None
             return out
 
+        def _authenticated_trim(px_: D, side_up_: bool, gateway_opp_ask: Any,
+                                tick: D) -> dict:
+            """Trim a FIRST LEG that the authenticated book says would cross.
+
+            L5's rule is "join the touch". If the book we compute the touch
+            from disagrees with the book the matching engine uses, we
+            compute the WRONG touch and post-only refuses us -- 21.3% of
+            OPEN orders, and 12 of 28 priced where our book said inside and
+            the venue's said crossing. Reading the venue's own book makes
+            the touch correct; it is a fidelity fix, not a new rule.
+
+            STRICTLY ONE-DIRECTIONAL. The opposite ask used is the MINIMUM
+            of the two books, so the price can only ever move DOWN, and the
+            function asserts it. It is arithmetically incapable of making
+            us more aggressive, which is what makes it safe to run in front
+            of a submission at all.
+
+            FAILS OPEN, ALWAYS. An unreadable book, a stale one, a slow
+            read, a missing field or any exception leaves the price exactly
+            as L5 chose it. A first leg is never blocked by this -- the
+            worst case is the rejection we already get today."""
+            info: dict = {"applied": False, "px_in": str(px_)}
+            t0 = time.monotonic()
+            try:
+                book = _recorder_book(slug, side_up_)
+                info["elapsed_ms"] = round(
+                    (time.monotonic() - t0) * 1000.0, 1)
+                if book.get("unreadable"):
+                    info["why"] = f"unreadable:{book.get('unreadable')}"
+                    return info
+                if info["elapsed_ms"] > AUTH_TRIM_SLOW_MS:
+                    info["why"] = "slow_read:failed_open"
+                    return info
+                age = book.get("authenticated_age_s")
+                if age is None or float(age) > AUTH_TRIM_MAX_AGE_S:
+                    info["why"] = f"stale:{age}"
+                    return info
+                auth = book.get("opp_ask_authenticated")
+                if auth in (None, ""):
+                    info["why"] = "no_authenticated_opposite_ask"
+                    return info
+                auth_ask = D(str(auth))
+                gw = D(str(gateway_opp_ask))
+                safe = min(gw, auth_ask)
+                info.update({"gateway_opp_ask": str(gw),
+                             "authenticated_opp_ask": str(auth_ask),
+                             "safe_opp_ask": str(safe),
+                             "authenticated_age_s": age})
+                if px_ < safe:
+                    info["why"] = "already_non_crossing_on_both_books"
+                    return info
+                new = ((safe - tick) / tick).to_integral_value(
+                    rounding=ROUND_DOWN) * tick
+                if new <= 0 or new >= q1.ONE:
+                    info["why"] = f"trim_leaves_legal_range:{new}"
+                    return info
+                # the invariant that makes this safe, asserted not promised
+                if new > px_:
+                    info["why"] = "refused:would_raise_price"
+                    return info
+                info.update({"applied": True, "px_out": str(new),
+                             "why": "gateway book disagreed with the venue's;"
+                                    " touch recomputed from the venue's"})
+                return info
+            except Exception as exc:                   # noqa: BLE001
+                info["why"] = f"error_failed_open:{type(exc).__name__}"
+                return info
+
         def _control_book(side_up_: bool, px_: D, row: dict) -> None:
             """The CONTROL GROUP for #93: the same authenticated book and
             the same fresh opposite ask, on an order the venue accepted.
@@ -2413,6 +2497,18 @@ def _run_session_body(t: Optional[Transport] = None,
                 px = bbo["bid"] if side_up else (q1.ONE - bbo["ask"])
                 px = (px / spec["tick"]).to_integral_value(
                     rounding=ROUND_DOWN) * spec["tick"]
+                # OWNER GO, OPEN ONLY: recompute the touch from the book the
+                # matching engine actually uses when it disagrees with the
+                # gateway. EXTEND is deliberately excluded -- its rejections
+                # are still unexplained (#93) and the GO was narrow.
+                if relation == "open":
+                    _trim = _authenticated_trim(
+                        px, side_up,
+                        bbo["ask"] if side_up else (q1.ONE - D(str(bbo["bid"]))),
+                        spec["tick"])
+                    report["decisions"][-1]["authenticated_trim"] = _trim
+                    if _trim.get("applied"):
+                        px = D(str(_trim["px_out"]))
                 # OWNER 5552841170 #1: the 0.35-0.65 band is OPEN
                 # admission. A CONTINUATION (EXTEND on existing inventory)
                 # is governed by the model's in-distribution state at the
