@@ -1,0 +1,83 @@
+{
+  "complete_orders": 750,
+  "outcomes": {
+    "no_fill_cancelled": 507,
+    "filled": 108,
+    "rejected": 135
+  },
+  "with_rest_book": 634,
+  "unfilled": {
+    "orders": 404,
+    "closest_book_gap_ticks": {
+      "n": 404,
+      "min": 0,
+      "p25": 1,
+      "median": 3.0,
+      "p75": 8,
+      "max": 48,
+      "share_at_or_inside_our_price": 0.0198,
+      "share_one_tick_away": 0.3837
+    },
+    "book_gap_vs_l5_touch_ticks": {
+      "n": 404,
+      "min": -6,
+      "p25": 1,
+      "median": 1.0,
+      "p75": 3,
+      "max": 17,
+      "share_at_or_inside_our_price": 0.0792,
+      "share_one_tick_away": 0.5025
+    },
+    "median_rest_s": 30.67,
+    "placed_at_l5_touch": 284,
+    "placed_at_l5_touch_share": 0.703,
+    "l5_reprice_existed": 164,
+    "l5_reprice_existed_share": 0.4059,
+    "and_book_reached_that_touch": 96,
+    "reprice_opportunity_upper_bound_share": 0.2376
+  },
+  "filled_for_contrast": {
+    "orders": 105,
+    "closest_book_gap_ticks": {
+      "n": 102,
+      "min": 0,
+      "p25": 1,
+      "median": 1.0,
+      "p75": 2,
+      "max": 13,
+      "share_at_or_inside_our_price": 0.1078,
+      "share_one_tick_away": 0.5
+    },
+    "book_gap_vs_l5_touch_ticks": {
+      "n": 102,
+      "min": 0,
+      "p25": 1,
+      "median": 1.0,
+      "p75": 2,
+      "max": 10,
+      "share_at_or_inside_our_price": 0.1373,
+      "share_one_tick_away": 0.4412
+    },
+    "median_rest_s": 7.91,
+    "placed_at_l5_touch": 86,
+    "placed_at_l5_touch_share": 0.819,
+    "l5_reprice_existed": 14,
+    "l5_reprice_existed_share": 0.1333,
+    "and_book_reached_that_touch": 6,
+    "reprice_opportunity_upper_bound_share": 0.0571
+  },
+  "the_separation": "Filled completes rest a median of 1.0 tick(s) from the best opposite ask; unfilled ones rest a median of 3.0 ticks away, p75 8 and as far as 48. Distance from touch, not rest time, is what separates them: median rest 7.91s filled against 30.67s unfilled is the deadline, not a cause.",
+  "the_finding": "In 164 of 404 (40.6%) unfilled completes L5's OWN touch moved above where we were sitting, and in 96 of those the opposite ask reached that new touch -- 23.8% of all unfilled completes had an L5-CONSISTENT reprice available that the book would have met. We never made it: we post once and sit to the deadline. Placement is not the defect -- we price AT L5's touch in 70.3% of them.",
+  "markets_with_the_most_missed_reprices": {
+    "aec-atp-facmen-hugdel-2026-09-06": 21,
+    "aec-atp-petbru-alecan-2026-09-07": 14,
+    "aec-atpcq-norgom-ollwal-2026-09-07": 11,
+    "aec-cs2-misa-mouzn-2026-09-06": 9,
+    "asc-cfb-smu-flst-2026-09-07-neg-3pt5": 5,
+    "tsc-cfb-txs-pvam-2026-09-06-total-57pt5": 4,
+    "aec-mlb-min-cws-2026-09-06": 3,
+    "asc-cfb-smu-flst-2026-09-07-neg-13pt5": 3
+  },
+  "upper_bound_not_an_estimate": "rest_book is an AGGREGATE. min_opp_ask and max_touch are extrema over the same window and we cannot prove they coincided, so the count where both held is an UPPER BOUND on what repricing would have captured. Reaching a price is also not filling it -- we rest as maker and queue position decides -- and repricing to the touch can cross, which post-only refuses.",
+  "classification": "BEHAVIORAL-FIDELITY FIX, not a new strategy: L5's touch moved and our clone did not follow it. Following L5's own price is cloning him; paying up to get filled would not be."
+}
