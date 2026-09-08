@@ -224,6 +224,48 @@ def _margin_summary(rows: Iterable[Mapping[str, Any]]) -> dict:
     }
 
 
+def within_stage(rows: Iterable[Mapping[str, Any]]) -> dict:
+    """Accepted vs rejected MATCHED ON STAGE -- the only fair comparison.
+
+    Pooled, the control group is mostly OPEN and the rejections mostly
+    COMPLETE, so a pooled difference would measure the stage mix rather
+    than the venue's rule. Matched on stage the OPEN result is decisive:
+    accepted OPENs never cross (min +1 tick) and rejected OPENs mostly do
+    (median -2). EXTEND and COMPLETE have no accepted controls yet and say
+    so, rather than borrowing OPEN's answer."""
+    rows = list(rows)
+    out: dict = {}
+    for stage in sorted({str(r.get("stage")).rsplit("_", 1)[0] for r in rows}):
+        entry: dict = {}
+        for name, want_rejected in (("accepted", False), ("rejected", True)):
+            m = sorted(r["true_margin_ticks"] for r in rows
+                       if str(r.get("stage")).rsplit("_", 1)[0] == stage
+                       and (r["outcome"] == "REJECTED") == want_rejected
+                       and r.get("true_margin_ticks") is not None)
+            entry[name] = {
+                "n": len(m),
+                "min_ticks": m[0] if m else None,
+                "median_ticks": m[len(m) // 2] if m else None,
+                "max_ticks": m[-1] if m else None,
+                "crossing": sum(1 for x in m if x <= 0) if m else None,
+            }
+        a, j = entry["accepted"], entry["rejected"]
+        if a["n"] and j["n"]:
+            entry["verdict"] = (
+                "SEPARATED: accepted never cross and rejected mostly do, so "
+                "the venue's rule is consistent on this stage"
+                if a["min_ticks"] is not None and a["min_ticks"] > 0
+                and j["median_ticks"] is not None and j["median_ticks"] <= 0
+                else "OVERLAPPING: the two populations are not cleanly "
+                     "separated by crossing, so something else is at work")
+        else:
+            entry["verdict"] = ("NO_CONTROL_YET: no accepted order on this "
+                                "stage carries a book, so nothing can be "
+                                "concluded here")
+        out[stage] = entry
+    return out
+
+
 def report(paths: Iterable[Any]) -> dict:
     rows = [classify(o) for o in orders_with_books(paths)]
     rejections = [r for r in rows if r["outcome"] == "REJECTED"]
@@ -261,6 +303,10 @@ def report(paths: Iterable[Any]) -> dict:
         # book we cannot tell "the venue rejects orders N ticks inside" from
         # "our orders are usually N ticks inside".
         "accepted_control": _margin_summary(accepted),
+        # matched on stage: pooled, the control is mostly OPEN and the
+        # rejections mostly COMPLETE, so a pooled difference measures the
+        # stage mix rather than the venue's rule
+        "within_stage": within_stage(rows),
         "rejected_for_comparison": _margin_summary(rejections),
         "control_note": (
             "Accepted orders carry the authenticated book only from the "
@@ -333,6 +379,20 @@ def render_markdown(rep: Mapping[str, Any]) -> str:
     lines.append(f"Rejected by stage: {j['by_stage']}")
     lines.append("")
     lines.append(rep["control_note"])
+    lines.append("")
+    lines.append("## Matched on stage — the only fair comparison")
+    lines.append("")
+    lines.append("| stage | population | n | min | median | max | crossing |")
+    lines.append("|---|---|---|---|---|---|---|")
+    for stage, e in rep["within_stage"].items():
+        for name in ("accepted", "rejected"):
+            v = e[name]
+            lines.append(f"| {stage} | {name} | {v['n']} | {v['min_ticks']} | "
+                         f"{v['median_ticks']} | {v['max_ticks']} | "
+                         f"{v['crossing']} |")
+    lines.append("")
+    for stage, e in rep["within_stage"].items():
+        lines.append(f"- **{stage}** — {e['verdict']}")
     lines.append("")
     d = rep["ask_disagreement_ticks"]
     lines.append(f"Our ask vs the authenticated ask, in ticks: n={d['n']}, "

@@ -138,3 +138,30 @@ def test_the_control_snapshot_cannot_delay_a_submission():
     assert "except Exception" in src[i:i + 200]
     assert s.CONTROL_BOOK_MAX_PER_SESSION > 0
     assert s.CONTROL_BOOK_MIN_GAP_S > 0
+
+
+def test_within_stage_is_the_only_fair_comparison():
+    """Pooled, the control group is mostly OPEN and the rejections mostly
+    COMPLETE, so a pooled difference measures the stage mix, not the
+    venue's rule. LIVE on spring_open: accepted min +1.0, rejected median
+    -2.0 -- accepted never cross and rejected mostly do."""
+    acc = [_order("0.38", "0.40", stage="spring_open_1", oid=f"A{i}",
+                  reason="cancelled") for i in range(3)]
+    rej = [_order("0.42", "0.40", stage="spring_open_2", oid=f"R{i}")
+           for i in range(3)]
+    rows = [rf.classify(o) for o in acc + rej]
+    w = rf.within_stage(rows)["spring_open"]
+    assert w["accepted"]["min_ticks"] == 2.0
+    assert w["rejected"]["median_ticks"] == -2.0
+    assert w["accepted"]["crossing"] == 0 and w["rejected"]["crossing"] == 3
+    assert w["verdict"].startswith("SEPARATED")
+
+
+def test_a_stage_with_no_control_borrows_no_answer():
+    """EXTEND and COMPLETE have no accepted controls yet. They must not
+    inherit OPEN's verdict -- that is the whole reason this is per stage."""
+    rows = [rf.classify(_order("0.38", "0.39", stage="spring_complete_1",
+                               oid="R1"))]
+    w = rf.within_stage(rows)["spring_complete"]
+    assert w["accepted"]["n"] == 0
+    assert w["verdict"].startswith("NO_CONTROL_YET")

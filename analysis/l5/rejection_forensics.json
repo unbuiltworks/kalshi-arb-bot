@@ -1,58 +1,114 @@
 {
-  "orders_with_an_authenticated_book": 70,
-  "rejections": 70,
+  "orders_with_an_authenticated_book": 91,
+  "rejections": 78,
   "rejections_by_class": {
-    "UNVERIFIABLE_BOOK_UNREADABLE": 27,
-    "NON_CROSSING_AUTHENTICATED": 20,
-    "UNVERIFIABLE_BOOK_STALE": 8,
-    "CROSSED_AUTHENTICATED": 15
+    "NON_CROSSING_AUTHENTICATED": 21,
+    "UNVERIFIABLE_BOOK_STALE": 9,
+    "CROSSED_AUTHENTICATED": 21,
+    "UNVERIFIABLE_BOOK_UNREADABLE": 27
   },
-  "explained_by_crossing_the_authenticated_book": 15,
-  "survive_as_non_crossing": 20,
-  "distinct_observations_surviving": 13,
-  "distinct_observations_crossed": 7,
-  "distinct_markets_surviving": 10,
+  "explained_by_crossing_the_authenticated_book": 21,
+  "survive_as_non_crossing": 21,
+  "distinct_observations_surviving": 14,
+  "distinct_observations_crossed": 9,
+  "distinct_markets_surviving": 11,
   "surviving_by_stage": {
+    "spring_open": 2,
     "spring_extend": 10,
-    "spring_complete": 9,
-    "spring_open": 1
+    "spring_complete": 9
   },
   "crossed_by_stage": {
+    "spring_open": 14,
     "spring_extend": 6,
-    "spring_open": 8,
     "spring_complete": 1
   },
   "surviving_by_side": {
-    "YES": 10,
-    "NO": 10
+    "NO": 11,
+    "YES": 10
   },
   "accepted_control": {
-    "orders": 0,
-    "with_a_readable_margin": 0,
-    "min_ticks": null,
-    "median_ticks": null,
-    "max_ticks": null,
-    "mean_ticks": null,
-    "at_or_inside_1_tick": null,
-    "by_stage": {}
+    "orders": 13,
+    "with_a_readable_margin": 11,
+    "min_ticks": 1.0,
+    "median_ticks": 2.0,
+    "max_ticks": 8.0,
+    "mean_ticks": 3.0,
+    "at_or_inside_1_tick": 3,
+    "by_stage": {
+      "spring_complete": 2,
+      "spring_open": 11
+    }
+  },
+  "within_stage": {
+    "spring_complete": {
+      "accepted": {
+        "n": 0,
+        "min_ticks": null,
+        "median_ticks": null,
+        "max_ticks": null,
+        "crossing": null
+      },
+      "rejected": {
+        "n": 16,
+        "min_ticks": -9.0,
+        "median_ticks": 2.0,
+        "max_ticks": 30.0,
+        "crossing": 3
+      },
+      "verdict": "NO_CONTROL_YET: no accepted order on this stage carries a book, so nothing can be concluded here"
+    },
+    "spring_extend": {
+      "accepted": {
+        "n": 0,
+        "min_ticks": null,
+        "median_ticks": null,
+        "max_ticks": null,
+        "crossing": null
+      },
+      "rejected": {
+        "n": 18,
+        "min_ticks": -4.0,
+        "median_ticks": 1.0,
+        "max_ticks": 15.0,
+        "crossing": 6
+      },
+      "verdict": "NO_CONTROL_YET: no accepted order on this stage carries a book, so nothing can be concluded here"
+    },
+    "spring_open": {
+      "accepted": {
+        "n": 11,
+        "min_ticks": 1.0,
+        "median_ticks": 2.0,
+        "max_ticks": 8.0,
+        "crossing": 0
+      },
+      "rejected": {
+        "n": 17,
+        "min_ticks": -4.0,
+        "median_ticks": -2.0,
+        "max_ticks": 2.0,
+        "crossing": 14
+      },
+      "verdict": "SEPARATED: accepted never cross and rejected mostly do, so the venue's rule is consistent on this stage"
+    }
   },
   "rejected_for_comparison": {
-    "orders": 70,
-    "with_a_readable_margin": 43,
+    "orders": 78,
+    "with_a_readable_margin": 51,
     "min_ticks": -9.0,
     "median_ticks": 1.0,
     "max_ticks": 30.0,
-    "mean_ticks": 3.837,
-    "at_or_inside_1_tick": 24,
+    "mean_ticks": 3.078,
+    "at_or_inside_1_tick": 30,
     "by_stage": {
+      "spring_open": 17,
       "spring_complete": 43,
-      "spring_extend": 18,
-      "spring_open": 9
+      "spring_extend": 18
     }
   },
   "control_note": "Accepted orders carry the authenticated book only from the commit that added _control_book; an empty control group means not enough forward evidence yet, NOT that accepted orders behave like rejected ones.",
-  "unverifiable": 35,
-  "unverifiable_share": 0.5,
+  "unverifiable": 36,
+  "unverifiable_share": 0.4615,
   "surviving_rows": [
     {
       "order_id": "CC7P2E6AJR42",
@@ -255,6 +311,26 @@
       "klass": "NON_CROSSING_AUTHENTICATED"
     },
     {
+      "order_id": "CCBH9X9Q8R3W",
+      "slug": "aec-itfwo-arigee-joeste-2026-09-08",
+      "stage": "spring_open_4",
+      "side": "NO",
+      "acceptance_control": false,
+      "px": "0.46",
+      "qty": "4.80",
+      "outcome": "REJECTED",
+      "our_opp_ask": "0.4800",
+      "authenticated_opp_ask": "0.4800",
+      "authenticated_yes_bid": "0.5200",
+      "authenticated_yes_ask": "0.5300",
+      "authenticated_age_s": 2.2,
+      "book_unreadable": null,
+      "true_margin_ticks": 2.0,
+      "our_margin_ticks": 2.0,
+      "ask_disagreement_ticks": 0.0,
+      "klass": "NON_CROSSING_AUTHENTICATED"
+    },
+    {
       "order_id": "CBYDFP6SMQ3H",
       "slug": "asc-cfb-smu-flst-2026-09-07-neg-6pt5",
       "stage": "spring_complete_5",
@@ -433,34 +509,14 @@
       "our_margin_ticks": 1.0,
       "ask_disagreement_ticks": 0.0,
       "klass": "NON_CROSSING_AUTHENTICATED"
-    },
-    {
-      "order_id": "CC8RXG7YYR47",
-      "slug": "aec-atp-nikizq-santav-2026-09-08",
-      "stage": "spring_complete_6",
-      "side": "YES",
-      "acceptance_control": false,
-      "px": "0.69",
-      "qty": "3.62",
-      "outcome": "REJECTED",
-      "our_opp_ask": "0.7100",
-      "authenticated_opp_ask": "0.7000",
-      "authenticated_yes_bid": "0.6900",
-      "authenticated_yes_ask": "0.7000",
-      "authenticated_age_s": 2.7,
-      "book_unreadable": null,
-      "true_margin_ticks": 1.0,
-      "our_margin_ticks": 2.0,
-      "ask_disagreement_ticks": 1.0,
-      "klass": "NON_CROSSING_AUTHENTICATED"
     }
   ],
   "ask_disagreement_ticks": {
-    "n": 43,
+    "n": 62,
     "min": -27.0,
     "max": 12.0,
-    "mean": -1.395,
-    "nonzero": 33
+    "mean": -0.573,
+    "nonzero": 46
   },
   "note": "A rejection is only EXPLAINED when the venue's own book, read within 10s, shows our price at or through the opposite ask. Everything else is reported as it is; nothing is inferred."
 }
