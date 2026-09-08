@@ -35,6 +35,34 @@ the price the model already returned. Exposure per action, per market, the
 daily stop, concurrency, maker-only and post-only are all untouched, and the
 crossing guard already refuses a re-quote that would cross.
 
+THE ADVERSE CROSS-CHECK FROM OUR OWN GEMINI SHADOW, and what it does and
+does not imply. That shadow runs repricing shells side by side with resting
+ones on the same tape (828 campaigns, read at 2026-09-08T20:31Z):
+
+    rest_180s:modal          0 touch-moved cancels   first-leg fill 34.4%
+    reprice_180s:modal     609 touch-moved cancels   first-leg fill  7.1%
+    touch_cancel_30s:modal 2465 touch-moved cancels  first-leg fill  4.2%
+
+Repricing on a moved touch cuts first-leg fill rate roughly FIVE-FOLD,
+because every cancel surrenders queue position. That is a real, measured,
+venue-independent mechanism and it is the strongest argument against this
+proposal.
+
+IT DOES NOT SUBTRACT FROM THIS COUNTERFACTUAL, and the reason is specific.
+The replay only ever considers COMPLETEs that provably did NOT fill -- they
+ended at the deadline with zero filled quantity. Cancelling an order that
+got nothing cannot lose a fill it never had. The queue cost is already fully
+paid in the observed outcome. What the Gemini number does bound is the
+CONVERSION of the re-quoted order, which the ladder already varies.
+
+AND CONVERSION CHANGES MAGNITUDE, NOT SIGN. Haircutting conversion scales
+the locked term and the stranding term together, so the net keeps its sign
+at any conversion above zero. Only one number decides the sign: -3.2 cents
+locked per unit against -33.1 cents to strand it. The Gemini shells also
+show the same shape at the portfolio level -- the repricing arms lose LESS
+in total (-$5.83 against -$23.00) precisely because they carry less
+residual.
+
 WHAT THE OFFLINE EVIDENCE SAYS THIS SHOULD SHOW, so it can be wrong in
 public: about 15 additional completions across 15 markets, removing ~54
 residual units, at a locked pair P&L of -$1.71 -- that is, the pairs it makes
@@ -95,6 +123,11 @@ NEW_BOUNDS_REQUIRED = {
         "a rejected complete at a non-crossing price revokes the complement "
         "proof, which is the deadlock that took the lane down at 13:09 on "
         "2026-09-08. Re-quoting must not buy fills by spending proofs."),
+    "and_the_gemini_cap_argument": (
+        "our Gemini shadow's touch_cancel_30s shell issued 2465 cancels for a "
+        "4.2% first-leg fill rate. Uncapped re-quoting degenerates into "
+        "cancel-churn that never rests long enough to be hit, which is why "
+        "the cap is 4 per session and not unbounded."),
 }
 
 # ----------------------------------------------------- pre-registered read

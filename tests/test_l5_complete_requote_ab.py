@@ -135,3 +135,32 @@ def test_it_reads_and_never_acts():
 def test_it_states_what_the_offline_evidence_predicts_so_it_can_be_wrong():
     assert "LOSE about 3.2 cents a unit" in ab.__doc__
     assert "not to confirm the fill count" in ab.__doc__
+
+
+# ------------------------------------------------- the adverse cross-check
+def test_the_gemini_queue_cost_is_stated_as_the_strongest_counterargument():
+    d = ab.__doc__
+    assert "cuts first-leg fill rate roughly FIVE-FOLD" in d
+    assert "strongest argument against this" in d
+    for n in ("34.4%", "7.1%", "4.2%", "2465"):
+        assert n in d, n
+
+
+def test_why_the_queue_cost_does_not_subtract_from_this_counterfactual():
+    """Only provably-unfilled completes are replayed."""
+    d = ab.__doc__
+    assert "provably did NOT fill" in d
+    assert "cannot lose a fill it never had" in d
+
+
+def test_conversion_is_said_to_change_magnitude_not_sign():
+    # normalise the wrap: the claim must survive line breaks
+    d = " ".join(ab.__doc__.split())
+    assert "CONVERSION CHANGES MAGNITUDE, NOT SIGN" in d
+    assert "keeps its sign at any conversion above zero" in d
+    assert "-3.2 cents locked per unit against -33.1 cents to strand it" in d
+
+
+def test_the_requote_cap_is_justified_by_the_gemini_churn_number():
+    assert "2465 cancels" in ab.NEW_BOUNDS_REQUIRED["and_the_gemini_cap_argument"]
+    assert ab.NEW_BOUNDS_REQUIRED["max_complete_requotes_per_session"] == 4
