@@ -59,6 +59,10 @@ DEFAULT_SHADOW_EVERY = 15                  # cycles between shadow runs
 TAPE_MAX_BYTES_ENV = "KALSHI_L5_TAPE_MAX_BYTES"
 DEFAULT_TAPE_MAX_BYTES = 512 * 1024 ** 2   # bounded from the first commit
 HEARTBEAT_S = 300.0
+# A collector that is running but seeing nothing is indistinguishable from
+# a healthy quiet market unless it says so. These bound "nothing".
+STALE_MARKETS_S = 1800.0      # no open certified market discovered at all
+STALE_PRINTS_S = 2700.0       # no new public print on any market
 
 _HTTP_TIMEOUT_S = 20.0
 
@@ -280,6 +284,34 @@ def _rss_peak_mb() -> Optional[float]:
 # one cycle, and the loop
 # --------------------------------------------------------------------------
 
+def seed_seen_from_tape(parts: Optional[Sequence[Path]] = None
+                        ) -> Dict[str, float]:
+    """Newest print time per market already on the tape.
+
+    Without this a restart re-appends prints the tape already holds, and
+    the analyser would count the same fill evidence twice. Collection has
+    to be idempotent across restarts, not only within one process."""
+    seen: Dict[str, float] = {}
+    for path in (tape_parts() if parts is None else parts):
+        try:
+            with open(path, "rt", encoding="utf-8") as fh:
+                for line in fh:
+                    if '"print"' not in line:
+                        continue
+                    try:
+                        e = json.loads(line)
+                    except ValueError:
+                        continue
+                    if e.get("kind") != "print" or e.get("venue") != "kalshi":
+                        continue
+                    m, t = e.get("market"), _f(e.get("t"))
+                    if m and t is not None and t > seen.get(str(m), 0.0):
+                        seen[str(m)] = t
+        except OSError:
+            continue
+    return seen
+
+
 def collect_once(seen: Optional[Dict[str, float]] = None,
                  known_windows: Optional[set] = None) -> dict:
     """Discover, snapshot and record one pass. Returns an audit row; never
@@ -363,8 +395,14 @@ def main(argv: Optional[Sequence[str]] = None, *, sleep=time.sleep,
          "shadow_only": True, "order_entry": False}), flush=True)
     print("KALSHI_L5_COLLECTOR " + json.dumps(sweep_tape()), flush=True)
 
-    seen: Dict[str, float] = {}
+    # idempotent across restarts: never re-append a print the tape holds
+    seen: Dict[str, float] = seed_seen_from_tape()
     windows: set = set()
+    print("KALSHI_L5_COLLECTOR " + json.dumps(
+        {"kind": "resume", "markets_with_prior_prints": len(seen),
+         "note": ("newest print time per market restored from the tape, so "
+                  "a restart cannot double-count fill evidence")}), flush=True)
+    last_market = last_print = clock()
     every = max(1, int(os.getenv(SHADOW_EVERY_ENV, str(DEFAULT_SHADOW_EVERY))))
     hb = 0.0
     cycle = 0
@@ -382,11 +420,34 @@ def main(argv: Optional[Sequence[str]] = None, *, sleep=time.sleep,
             if swept["deleted"]:
                 print("KALSHI_L5_COLLECTOR " + json.dumps(swept), flush=True)
         now = clock()
+        if row.get("markets"):
+            last_market = now
+        if row.get("events", 0) > (1 if row.get("markets") else 0):
+            last_print = now
+        for label, since, limit in (("no_open_markets", last_market,
+                                     STALE_MARKETS_S),
+                                    ("no_new_prints", last_print,
+                                     STALE_PRINTS_S)):
+            if now - since >= limit:
+                print("KALSHI_L5_ALARM " + json.dumps(
+                    {"alarm": f"stale_data:{label}",
+                     "seconds": round(now - since, 1), "limit_s": limit,
+                     "note": ("a running collector that sees nothing looks "
+                              "exactly like a quiet market unless it says "
+                              "so")}), flush=True)
+                if label == "no_open_markets":
+                    last_market = now       # alarm once per stale period
+                else:
+                    last_print = now
         if now - hb >= HEARTBEAT_S:
             hb = now
             print("KALSHI_L5_COLLECTOR " + json.dumps(
                 {"kind": "heartbeat", "cycle": cycle,
                  "markets_seen": len(windows),
+                 "since_open_market_s": round(now - last_market, 1),
+                 "since_new_print_s": round(now - last_print, 1),
+                 "tape_bytes": sum((p.stat().st_size for p in tape_parts()
+                                    if p.exists()), 0),
                  "rss_mb": _rss_now_mb(), "rss_peak_mb": _rss_peak_mb(),
                  "evidence": ("positive liveness: a missing heartbeat means "
                               "the process is gone, which quiet logs alone "

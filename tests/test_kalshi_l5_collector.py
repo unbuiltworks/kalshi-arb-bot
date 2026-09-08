@@ -142,3 +142,52 @@ def test_the_shadow_summary_stays_one_readable_line():
     assert len(row["pair_costs_theoretical"]) == 8
     assert row["blockers"] == ["stale_book@1.0"]
     assert len(json.dumps(row)) < 900
+
+
+def test_a_restart_never_re_appends_prints_the_tape_already_holds(monkeypatch,
+                                                                  tmp_path):
+    """Collection must be idempotent across restarts, not only within one
+    process: re-appending prints would make the analyser count the same
+    fill evidence twice."""
+    monkeypatch.setenv(kc.STATE_DIR_ENV, str(tmp_path))
+    kc.append([
+        {"venue": "kalshi", "market": "A", "kind": "print", "t": 10.0,
+         "yes_price": 0.3},
+        {"venue": "kalshi", "market": "A", "kind": "print", "t": 25.0,
+         "yes_price": 0.31},
+        {"venue": "kalshi", "market": "B", "kind": "print", "t": 5.0,
+         "yes_price": 0.5},
+        {"venue": "kalshi", "market": "A", "kind": "bbo", "t": 99.0},
+    ])
+    assert kc.seed_seen_from_tape() == {"A": 25.0, "B": 5.0}
+    # a market with nothing on the tape simply has no floor
+    assert "C" not in kc.seed_seen_from_tape()
+
+
+def test_seeding_survives_an_unreadable_or_corrupt_tape(monkeypatch, tmp_path):
+    monkeypatch.setenv(kc.STATE_DIR_ENV, str(tmp_path))
+    d = tmp_path / "tape"
+    d.mkdir(parents=True)
+    (d / "kalshi_l5_20260908_09.jsonl").write_text(
+        '{"venue":"kalshi","market":"A","kind":"print","t":7.0}\n'
+        'not json at all {{{\n')
+    assert kc.seed_seen_from_tape() == {"A": 7.0}
+
+
+def test_a_collector_that_sees_nothing_says_so(monkeypatch, tmp_path, capsys):
+    """A running collector with an empty view is indistinguishable from a
+    healthy quiet market unless it alarms."""
+    monkeypatch.setenv(kc.STATE_DIR_ENV, str(tmp_path))
+    monkeypatch.setattr(kc, "seed_seen_from_tape", lambda *a, **k: {})
+    monkeypatch.setattr(kc, "collect_once",
+                        lambda *a, **k: {"kind": "kalshi_collect",
+                                         "markets": 0, "events": 0,
+                                         "written": 0})
+    # first tick arms the staleness clocks at boot; the loop's own read is
+    # already past the limit
+    ticks = iter([0.0, kc.STALE_MARKETS_S + 1.0])
+    kc.main(["--once"], sleep=lambda *_a: None,
+            clock=lambda: next(ticks))
+    out = capsys.readouterr().out
+    assert "stale_data:no_open_markets" in out
+    assert "looks" in out and "quiet market" in out
