@@ -122,9 +122,29 @@ def test_r5f_touch_pricing_keeps_only_the_venue_bounds():
     # a touch below the fee-safe bound is simply fee-safe and still the touch
     px, econ = base.spring_complement_price(D("0.38"), D("0.60"), tick, touch=D("0.50"))
     assert px == D("0.50") and econ["fee_safe"] is True and econ["above_par"] is False
-    # the venue's legal range is the only remaining refusal
+    # LIVE 2026-09-07 tomvoj-ticjir: L5's touch at 0.87-0.96 is a legal
+    # venue price and MUST be quoted (pair 1.20-1.29 reported, not gated);
+    # the executor's own 0.20-0.80 entry range never applies to a COMPLETE
+    for touch, ask in (("0.87", "0.88"), ("0.94", "0.95"), ("0.96", "0.97")):
+        px, econ = base.spring_complement_price(D("0.3307"), D(ask), tick, touch=D(touch))
+        assert px == D(touch) and econ["regime"] == "l5_touch"
+        assert econ["above_par"] is True and econ["fee_safe"] is False
+        assert econ["venue_price_range"] == "0.01..0.99"
     px, econ = base.spring_complement_price(D("0.05"), D("0.995"), tick, touch=D("0.99"))
-    assert px is None and econ["regime"] == "no_legal_maker_price"
+    assert px == D("0.99") and econ["above_par"] is True
+    # the venue's price range (one tick inside 0 and 1) is the only
+    # remaining refusal
+    px, econ = base.spring_complement_price(D("0.05"), D("1.00"), tick, touch=D("0.999"))
+    assert px == D("0.99")                               # floored to the tick, legal
+    px, econ = base.spring_complement_price(D("0.90"), D("0.02"), tick, touch=D("0.004"))
+    assert px is None and econ["regime"] == "outside_venue_price_range"
+    for rid in ("R3L", "R4"):
+        # R1..R4 pricing is untouched: the 0.20-0.80 range still applies there
+        ladder.set_active(rid)
+        px, econ = base.spring_complement_price(D("0.05"), D("0.995"), tick, touch=D("0.99"))
+        assert px is None and econ["regime"] in ("no_legal_maker_price",
+                                                 "no_fee_safe_complement")
+    ladder.set_active("R5F")
     # without a touch (an OPEN/EXTEND caller) the fee-safe pricer still runs
     px, econ = base.spring_complement_price(D("0.38"), D("0.66"), tick)
     assert px == D("0.60") and econ["regime"] == "spring_target"

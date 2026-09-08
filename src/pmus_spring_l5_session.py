@@ -548,9 +548,25 @@ def spring_complement_price(avg_cost: D, opp_ask: D, tick: D,
                 "hard_bound_px": str(hard) if hard is not None else None,
                 "post_only_trim": bool(trimmed),
                 "labels": "L5 fidelity: touch pricing, pair reported not gated"}
-        if px < q1.MIN_PRICE or px > q1.MAX_PRICE or px <= 0:
-            return None, {**info, "regime": "no_legal_maker_price"}
-        return px, {**info, "chosen_px": str(px)}
+        # LIVE 2026-09-07 19:59-20:00Z (aec-setkamecz-tomvoj-ticjir): L5's
+        # COMPLETE at touch 0.87 -> 0.96 was refused three times because
+        # this branch applied the executor's OWN entry range
+        # (q1.MIN_PRICE..MAX_PRICE = 0.20..0.80) as if it were the venue's,
+        # and the refusal was labelled a venue adaptation. Under l5_touch
+        # the only price bounds left are the VENUE'S: one tick above zero,
+        # one tick below one (a 1.00 contract cannot be bought below par
+        # by a maker). The residual was held instead and lost -3.42; the
+        # touch pair would have been 1.20-1.29. OWNER 5574762432: "above-par
+        # pair cost is reported/accounted, not behaviorally gated".
+        # OWNER 5577710815 approved removing this distortion: the
+        # catastrophic shell (per-market 7.50, action sizing, residual
+        # units, concurrency 1, maker-only, strict admission, deadman,
+        # -15.00 daily stop) is untouched, and NO other band replaces it.
+        if px < tick or px > q1.ONE - tick:
+            return None, {**info, "regime": "outside_venue_price_range",
+                          "venue_price_range": f"{tick}..{q1.ONE - tick}"}
+        return px, {**info, "chosen_px": str(px),
+                    "venue_price_range": f"{tick}..{q1.ONE - tick}"}
     # OWNER 5567269295 (R4): the completion ceiling follows the ACTIVE rung.
     # R1..R3L keep 0.98 with the >=1c hard bound exactly as before. A rung
     # stating pair_cost_max 1.00 lets a COMPLETE -- and only a COMPLETE,
@@ -2259,9 +2275,10 @@ def run_session(t: Optional[Transport] = None,
                     mark_noop(report["decisions"][-1],
                               f"complement_not_priceable:{econ.get('regime')}",
                               # under l5_touch pricing the only way to be
-                              # unpriceable is the venue's legal range /
-                              # post-only, never a safety bound of ours
-                              ("venue_execution_adaptation:no_legal_maker_price"
+                              # unpriceable is the venue's price range /
+                              # post-only, never a safety bound of ours;
+                              # the regime names which
+                              (f"venue_execution_adaptation:{econ.get('regime')}"
                                if at_touch_regime else
                                "safety_adaptation:fee_safe_complement_bound"))
                     sleep(MIN_REEVAL_S)
