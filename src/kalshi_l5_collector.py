@@ -48,6 +48,19 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from src.kalshi_l5_shadow import CERTIFIED_SERIES, shadow_status
 
+# OWNER GO 2026-09-08: observe the series that Kalshi is ACTUALLY paying for.
+# CERTIFIED_SERIES is deliberately NOT extended. It gates the economic
+# analyser because the quadratic maker schedule is established only for those
+# two; adding a series there would silently imply a fee model we have not
+# verified, and the analyser would then emit net economics built on it. These
+# series are COLLECTED and described with FEE-INDEPENDENT structure only
+# (spread, pair cost, depth, occupancy). Net-of-fee economics for them stay
+# unavailable until the schedule is established, exactly as for any
+# uncertified series.
+OBSERVATION_SERIES = ("KXCRYPTOLEAD15M", "KXGOLD15M", "KXWTI15M",
+                      "KXSILVER15M", "KXNATGAS15M", "KXCOPPER15M")
+COLLECT_SERIES = tuple(CERTIFIED_SERIES) + OBSERVATION_SERIES
+
 API = "https://api.elections.kalshi.com/trade-api/v2"
 UA = "l5-transfer-research/1.0 (read-only; public endpoints only)"
 
@@ -109,10 +122,11 @@ def _iso_epoch(s: Any) -> Optional[float]:
 # discovery and event shaping -- exactly the shape kalshi_l5_shadow reads
 # --------------------------------------------------------------------------
 
-def open_markets(series: Sequence[str] = CERTIFIED_SERIES) -> List[dict]:
-    """Open markets for the certified 15M series only. An uncertified
-    series is not collected: the analyser would refuse it anyway, and
-    collecting it would imply a fee schedule we have not established."""
+def open_markets(series: Sequence[str] = COLLECT_SERIES) -> List[dict]:
+    """Open markets for the certified series (control) and the
+    incentivized observation series. Collecting an uncertified series
+    implies NOTHING about its fee schedule: the analyser still refuses it,
+    and only fee-independent structure is reported for it."""
     out: List[dict] = []
     for ser in series:
         try:
@@ -341,8 +355,124 @@ def collect_once(seen: Optional[Dict[str, float]] = None,
                               for m in markets})}
 
 
+def incentive_state(series: Sequence[str] = OBSERVATION_SERIES,
+                   now: Optional[float] = None, pages: int = 25) -> dict:
+    """Current incentive-program state per series, from the public
+    endpoint. Read-only. period_reward UNITS ARE UNVERIFIED, so this
+    reports the raw integer and never converts it to dollars."""
+    now = time.time() if now is None else now
+    iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+    want = {s.upper() for s in series} | {s.upper() for s in CERTIFIED_SERIES}
+    out: Dict[str, Dict[str, Any]] = {}
+    cursor = None
+    for _ in range(max(1, pages)):
+        try:
+            resp = _get("/incentive_programs",
+                        {"limit": 200, "cursor": cursor})
+        except (urllib.error.URLError, OSError, ValueError):
+            break
+        rows = resp.get("incentive_programs") or []
+        for r in rows:
+            ser = str(r.get("market_ticker") or "").split("-", 1)[0].upper()
+            if ser not in want:
+                continue
+            b = out.setdefault(ser, {"active": 0, "upcoming": 0, "past": 0,
+                                     "period_reward_raw": {}, "types": {}})
+            st, en = str(r.get("start_date") or ""), str(r.get("end_date") or "")
+            if st <= iso <= en:
+                b["active"] += 1
+            elif st > iso:
+                b["upcoming"] += 1
+            else:
+                b["past"] += 1
+            pr = str(r.get("period_reward"))
+            b["period_reward_raw"][pr] = b["period_reward_raw"].get(pr, 0) + 1
+            ty = str(r.get("incentive_type"))
+            b["types"][ty] = b["types"].get(ty, 0) + 1
+        cursor = resp.get("next_cursor")
+        if not cursor or not rows:
+            break
+    for ser in want:
+        out.setdefault(ser, {"active": 0, "upcoming": 0, "past": 0,
+                             "period_reward_raw": {}, "types": {}})
+    return {"kind": "KALSHI_INCENTIVE_STATE", "observed_utc": iso,
+            "series": out,
+            "period_reward_units": "UNVERIFIED - raw integers, never converted",
+            "withdrawn_note": ("KXBTC15M/KXETH15M carried volume programs that "
+                               "ENDED 2026-05-12; a zero here is a withdrawn "
+                               "subsidy, not an absent one")}
+
+
+def _quotes(events: Iterable[Mapping[str, Any]]):
+    """(yes_bid, no_bid, yes_size, no_size) from each bbo event that has
+    BOTH sides. One-sided books cannot price a pair and are counted
+    separately rather than imputed."""
+    for e in events:
+        if e.get("kind") != "bbo":
+            continue
+        yb = (e.get("yes_bids") or [[None, None]])[0]
+        nb = (e.get("no_bids") or [[None, None]])[0]
+        if yb[0] is None or nb[0] is None:
+            yield None
+            continue
+        yield (float(yb[0]), float(nb[0]), float(yb[1] or 0.0),
+               float(nb[1] or 0.0))
+
+
+def structure_report(by_market: Mapping[str, list]) -> dict:
+    """FEE-INDEPENDENT execution structure per series, from the tape.
+
+    pair cost to BUY both sides = yes_ask + no_ask = 2 - yes_bid - no_bid,
+    because a resting NO bid IS the YES ask on this venue. The same
+    identity makes spread = pair_cost - 1, so both are read off the two
+    bids with no fee model and no assumed fill."""
+    ser: Dict[str, Dict[str, Any]] = {}
+    for market, events in by_market.items():
+        s = str(market).split("-", 1)[0].upper()
+        b = ser.setdefault(s, {"markets": set(), "two_sided": 0,
+                               "one_sided": 0, "pair_costs": [],
+                               "depths": []})
+        b["markets"].add(market)
+        for q in _quotes(events):
+            if q is None:
+                b["one_sided"] += 1
+                continue
+            yb, nb, ysz, nsz = q
+            b["two_sided"] += 1
+            b["pair_costs"].append(round(2.0 - yb - nb, 4))
+            b["depths"].append(min(ysz, nsz))
+    out = {}
+    for s, b in ser.items():
+        pc = sorted(b["pair_costs"])
+        n = len(pc)
+        dep = sorted(b["depths"])
+        out[s] = {
+            "markets": len(b["markets"]),
+            "two_sided_quotes": b["two_sided"],
+            "one_sided_quotes": b["one_sided"],
+            "pair_cost_median": pc[n // 2] if n else None,
+            "pair_cost_p10": pc[n // 10] if n >= 10 else None,
+            "pair_cost_min": pc[0] if n else None,
+            "frac_le_1_00": (round(sum(1 for x in pc if x <= 1.0) / n, 4)
+                             if n else None),
+            "frac_lt_1_00": (round(sum(1 for x in pc if x < 1.0) / n, 4)
+                             if n else None),
+            "spread_median": (round(pc[n // 2] - 1.0, 4) if n else None),
+            "two_sided_depth_median": (dep[len(dep) // 2] if dep else None),
+            "certified_for_net_economics": s in CERTIFIED_SERIES,
+        }
+    return {"kind": "KALSHI_L5_STRUCTURE", "series": out,
+            "labels": ("OBSERVED book structure, fee-independent. NOT a "
+                       "shadow P&L and NOT realized: no order was placed, "
+                       "no fill assumed, no fee model applied. Series with "
+                       "certified_for_net_economics false have NO "
+                       "established maker schedule here."),
+            "shadow_only": True, "order_entry": False, "realized_pnl": None}
+
+
 SHADOW_MAX_PARTS = 4
 SHADOW_MAX_EVENTS = int(os.environ.get("KALSHI_L5_SHADOW_MAX_EVENTS", "60000"))
+INCENTIVE_EVERY_N = 12   # incentive-program state is slow-moving; poll rarely
 
 
 def bounded_tape(parts: Sequence[Path],
@@ -446,7 +576,9 @@ def main(argv: Optional[Sequence[str]] = None, *, sleep=time.sleep,
     a = ap.parse_args(argv)
 
     print("KALSHI_L5_COLLECTOR " + json.dumps(
-        {"kind": "boot", "series": list(CERTIFIED_SERIES),
+        {"kind": "boot", "series": list(COLLECT_SERIES),
+         "certified_for_net_economics": list(CERTIFIED_SERIES),
+         "observation_only": list(OBSERVATION_SERIES),
          "state_dir": str(state_dir()), "interval_s": a.interval,
          "tape_budget_bytes": tape_budget(),
          "clock": ("literal TTE: these windows serve open_time/close_time "
@@ -476,6 +608,25 @@ def main(argv: Optional[Sequence[str]] = None, *, sleep=time.sleep,
             if status:
                 print("KALSHI_L5_SHADOW " + json.dumps(_compact_shadow(status)),
                       flush=True)
+            try:
+                parts = tape_parts()
+                if parts:
+                    print("KALSHI_L5_STRUCTURE " + json.dumps(
+                        structure_report(bounded_tape(parts))), flush=True)
+            except Exception as exc:                     # noqa: BLE001
+                print("KALSHI_L5_ALARM " + json.dumps(
+                    {"alarm": "structure_failed",
+                     "err": f"{type(exc).__name__}:{str(exc)[:120]}"}),
+                    flush=True)
+            if cycle % (every * INCENTIVE_EVERY_N) == 0:
+                try:
+                    print("KALSHI_INCENTIVE " + json.dumps(incentive_state()),
+                          flush=True)
+                except Exception as exc:                 # noqa: BLE001
+                    print("KALSHI_L5_ALARM " + json.dumps(
+                        {"alarm": "incentive_state_failed",
+                         "err": f"{type(exc).__name__}:{str(exc)[:120]}"}),
+                        flush=True)
             swept = sweep_tape()
             if swept["deleted"]:
                 print("KALSHI_L5_COLLECTOR " + json.dumps(swept), flush=True)

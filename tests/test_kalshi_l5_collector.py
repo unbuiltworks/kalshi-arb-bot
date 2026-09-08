@@ -58,10 +58,15 @@ def test_prints_are_deduped_ordered_and_never_guessed(monkeypatch):
     assert [e["trade_id"] for e in kc.print_events("T", since_t=cut)] == ["b", "c"]
 
 
-def test_only_certified_series_are_collected(monkeypatch):
-    """An uncertified series has no established fee schedule. The analyser
-    would refuse it, and collecting it would imply economics we have not
-    established."""
+def test_collection_covers_certified_plus_observation(monkeypatch):
+    """OWNER GO 2026-09-08 changed this invariant deliberately.
+
+    We now COLLECT the incentivized series too, because the series Kalshi
+    pays for are not the series we had evidence on. Collecting them implies
+    NOTHING about their fee schedule: CERTIFIED_SERIES is unchanged, the
+    analyser still refuses them, and only fee-independent structure is
+    reported for them. The two original series stay in the set as the
+    unincentivized control."""
     asked = []
 
     def _get(path, params=None):
@@ -70,8 +75,10 @@ def test_only_certified_series_are_collected(monkeypatch):
 
     monkeypatch.setattr(kc, "_get", _get)
     kc.open_markets()
-    assert asked == list(CERTIFIED_SERIES)
-    assert set(asked) == {"KXBTC15M", "KXETH15M"}
+    assert asked == list(kc.COLLECT_SERIES)
+    assert {"KXBTC15M", "KXETH15M"} <= set(asked)          # control preserved
+    assert "KXCRYPTOLEAD15M" in asked                       # where the money is
+    assert set(CERTIFIED_SERIES) == {"KXBTC15M", "KXETH15M"}  # NOT widened
 
 
 def test_the_tape_is_bounded_and_the_current_part_survives(monkeypatch, tmp_path):
@@ -251,3 +258,72 @@ def test_whether_the_event_cap_is_binding_is_reported_not_inferred(monkeypatch):
     compact = kc._compact_shadow(out)
     assert compact["input_events"] == 3
     assert compact["input_events_cap"] == kc.SHADOW_MAX_EVENTS
+
+
+# --- OWNER GO 2026-09-08: incentivized-series observation -------------------
+
+def test_observation_series_are_collected_but_not_certified():
+    """The whole point: collect where the money is, without implying a fee
+    schedule we have not established."""
+    from src import kalshi_l5_collector as C
+    assert "KXCRYPTOLEAD15M" in C.OBSERVATION_SERIES
+    assert set(C.CERTIFIED_SERIES) == {"KXBTC15M", "KXETH15M"}
+    assert not set(C.OBSERVATION_SERIES) & set(C.CERTIFIED_SERIES)
+    assert set(C.COLLECT_SERIES) == set(C.CERTIFIED_SERIES) | set(C.OBSERVATION_SERIES)
+
+
+def test_the_control_series_are_preserved():
+    from src import kalshi_l5_collector as C
+    for s in ("KXBTC15M", "KXETH15M"):
+        assert s in C.COLLECT_SERIES
+
+
+def test_uncertified_series_still_fail_closed_in_the_analyser():
+    from src.kalshi_l5_shadow import certification_blocker
+    b = certification_blocker("KXCRYPTOLEAD15M-26SEP100000-ETH",
+                              {"close_time": "2026-09-10T04:00:00Z"})
+    assert b is not None and "not_certified" in b
+
+
+def test_structure_report_is_fee_independent_and_not_pnl():
+    from src import kalshi_l5_collector as C
+    by = {"KXCRYPTOLEAD15M-X": [
+        {"kind": "bbo", "market": "KXCRYPTOLEAD15M-X",
+         "yes_bids": [[0.40, 100.0]], "no_bids": [[0.55, 50.0]]},
+        {"kind": "bbo", "market": "KXCRYPTOLEAD15M-X",
+         "yes_bids": [[0.48, 10.0]], "no_bids": [[0.52, 10.0]]},
+    ]}
+    rep = C.structure_report(by)
+    s = rep["series"]["KXCRYPTOLEAD15M"]
+    # pair cost = 2 - yes_bid - no_bid
+    assert s["pair_cost_min"] == 1.0
+    assert s["two_sided_quotes"] == 2
+    assert s["certified_for_net_economics"] is False
+    assert s["two_sided_depth_median"] in (10.0, 50.0)
+    assert rep["order_entry"] is False
+    assert rep["realized_pnl"] is None
+    assert "NOT realized" in rep["labels"]
+
+
+def test_one_sided_books_are_counted_not_imputed():
+    from src import kalshi_l5_collector as C
+    by = {"KXGOLD15M-Y": [{"kind": "bbo", "market": "KXGOLD15M-Y",
+                           "yes_bids": [[0.40, 100.0]]}]}
+    s = C.structure_report(by)["series"]["KXGOLD15M"]
+    assert s["one_sided_quotes"] == 1
+    assert s["two_sided_quotes"] == 0
+    assert s["pair_cost_median"] is None
+
+
+def test_incentive_state_never_converts_the_raw_reward():
+    from src import kalshi_l5_collector as C
+    import inspect
+    src = inspect.getsource(C.incentive_state)
+    assert "UNVERIFIED" in src
+    assert "period_reward_raw" in src
+
+
+def test_the_withdrawn_subsidy_is_recorded_not_read_as_absent():
+    from src import kalshi_l5_collector as C
+    import inspect
+    assert "2026-05-12" in inspect.getsource(C.incentive_state)
