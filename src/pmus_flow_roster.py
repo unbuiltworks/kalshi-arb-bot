@@ -73,6 +73,25 @@ SURVEY_CYCLES_PER_BATCH = MIN_SURVEY_SAMPLES + 1
 # ranking on flow up to ~5 minutes old, which is well inside the timescale
 # on which a live sports market changes character.
 DEFAULT_PIN_CYCLES = 55
+
+# SURVEY COST. A full pass costs one batch of survey_cycles_per_batch cycles
+# per batch, so it scales with the universe. Measured 2026-09-09: at 466
+# markets a pass is 16.2 min and the duty cycle 22.0%; the evening US slate
+# plus player props took the universe to 3,041, making a pass 105.8 min and
+# the duty cycle 4.2%. At 4.2% even a strong effect needs days.
+#
+# Surveying the WHOLE universe to rank it is not necessary. The flow selector
+# was measured to work as a FLOOR, not a ranking: between-population it lifts
+# opportunity 0.19% -> ~2.2%, but WITHIN the pinned roster high vs very-high
+# flow differ by only 1.10x. So finding twelve markets above the floor is
+# sufficient, and finding the twelve BEST is not worth 106 minutes.
+#
+# The survey therefore stops after MAX_SURVEY_BATCHES and pins from what it
+# measured. Coverage is preserved across passes by advancing a rotating
+# offset, so the whole universe is still swept -- just over several passes
+# instead of inside one. The offset moves by POSITION, never by outcome, so
+# no market is preferred for having scored well before.
+MAX_SURVEY_BATCHES = 20
 SHARES_PER_MIN_SCALE = 1000.0
 # Print FREQUENCY dominates share SIZE, and deliberately so. The window asks
 # whether the complement touch becomes reachable repeatedly inside 120 s,
@@ -194,6 +213,9 @@ class Roster:
         self.universe: List[str] = []
         self.phase = SURVEY
         self.batch_index = 0
+        # rotates by POSITION each pass so a bounded survey still sweeps the
+        # whole universe over time; never advanced by score
+        self.survey_offset = 0
         self.cycles_in_phase = 0
         self.passes = 0
         self.pins = 0
@@ -217,6 +239,17 @@ class Roster:
         self.batch_index = 0
         self.cycles_in_phase = 0
 
+    def survey_span(self) -> int:
+        """Batches this pass will actually survey before pinning."""
+        bs = batches(self.universe, self.roster_size)
+        return min(len(bs), MAX_SURVEY_BATCHES) if bs else 0
+
+    def _batch_at(self, idx: int) -> List[str]:
+        bs = batches(self.universe, self.roster_size)
+        if not bs:
+            return []
+        return bs[(self.survey_offset + idx) % len(bs)]
+
     def current(self) -> List[str]:
         """The slugs to poll this cycle."""
         if self.phase == PINNED:
@@ -224,7 +257,8 @@ class Roster:
         bs = batches(self.universe, self.roster_size)
         if not bs:
             return []
-        return bs[min(self.batch_index, len(bs) - 1)]
+        return self._batch_at(min(self.batch_index, self.survey_span() - 1)
+                              if self.survey_span() else 0)
 
     def eligible_for_window(self, slug: str) -> bool:
         """May a persistence window open on this market right now?
@@ -257,8 +291,13 @@ class Roster:
             return None
         self.cycles_in_phase = 0
         self.batch_index += 1
-        if self.batch_index < len(bs):
+        # bounded pass: pin from what we measured rather than sweeping a
+        # universe that has grown past the point where a full pass is useful
+        if self.batch_index < self.survey_span():
             return None
+        span = self.survey_span()
+        if len(bs):
+            self.survey_offset = (self.survey_offset + span) % len(bs)
         return self._pin(flows or {})
 
     def _pin(self, flows: Mapping[str, Mapping[str, Any]]

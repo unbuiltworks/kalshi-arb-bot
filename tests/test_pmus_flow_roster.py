@@ -337,3 +337,54 @@ class NonTrading(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# --- bounded survey pass (universe growth 466 -> 3041) --------------------
+def _roster(n):
+    r = fr.Roster()
+    r.set_universe([f"m{i}" for i in range(n)])
+    return r
+
+
+def test_survey_pass_is_bounded_so_duty_cycle_survives_a_big_universe():
+    """A full pass over 3,041 markets costs 105.8 min for a 4.6 min pin --
+    a 4.2% duty cycle. Bounded, it is 8.3 min for the same pin."""
+    big = _roster(3041)
+    assert len(fr.batches(big.universe, big.roster_size)) == 254
+    assert big.survey_span() == fr.MAX_SURVEY_BATCHES == 20
+    survey_s = big.survey_span() * fr.SURVEY_CYCLES_PER_BATCH * 5.0
+    pin_s = fr.DEFAULT_PIN_CYCLES * 5.0
+    assert pin_s / (survey_s + pin_s) > 0.30
+
+
+def test_a_small_universe_still_surveys_completely():
+    """The bound must not truncate a universe that fits inside it."""
+    small = _roster(60)                      # 5 batches, under the bound
+    assert small.survey_span() == len(fr.batches(small.universe,
+                                                 small.roster_size)) == 5
+
+
+def test_coverage_rotates_by_position_across_passes():
+    """Bounding the pass must not pin the survey to the same 240 markets
+    forever; the offset advances so the whole universe is swept over time."""
+    r = _roster(3041)
+    assert r.current()[0] == "m0"
+    for _ in range(r.survey_span() * fr.SURVEY_CYCLES_PER_BATCH):
+        r.advance({})
+    assert r.survey_offset == 20
+    assert r.current()[0] == "m240"          # a different slice, not m0
+
+
+def test_rotation_never_consults_flow_or_score():
+    """The offset must move by POSITION only. Advancing it on outcome would
+    let a market be preferred for having scored well before, which is the
+    hindsight the whole roster design exists to prevent."""
+    a, b = _roster(3041), _roster(3041)
+    rich = {f"m{i}": {"prints_per_min": 99.0, "shares_per_min": 9999.0,
+                      "intervals": 50, "two_sided_resolvable": True,
+                      "two_sided": True} for i in range(3041)}
+    for _ in range(a.survey_span() * fr.SURVEY_CYCLES_PER_BATCH):
+        a.advance({})                        # no flow at all
+    for _ in range(b.survey_span() * fr.SURVEY_CYCLES_PER_BATCH):
+        b.advance(rich)                      # abundant flow
+    assert a.survey_offset == b.survey_offset
