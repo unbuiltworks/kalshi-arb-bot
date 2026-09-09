@@ -663,6 +663,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         hb["roster_phase"] = roster.phase
         hb["roster_pins"] = roster.pins
         hb["universe"] = len(roster.universe)
+        # DUTY CYCLE, on the row rather than reconstructed after the fact.
+        # A survey pass costs one batch per survey_cycles_per_batch cycles, so
+        # it scales with the universe. On 2026-09-09 the universe went 466 ->
+        # 3,041 and the pass went 16.2 -> 105.8 min, dropping the duty cycle to
+        # 4.2%: the shadow looked perfectly healthy -- cycles rising, cadence
+        # 5.0s, read_only true -- while producing ZERO windows for 28 minutes.
+        # Nothing on the heartbeat said so. These three fields are what would
+        # have made that visible in one glance instead of one investigation.
+        try:
+            span = roster.survey_span()
+            survey_s = span * roster.survey_cycles_per_batch * a.poll_s
+            pin_s = roster.pin_cycles * a.poll_s
+            hb["survey_batches_this_pass"] = span
+            hb["survey_offset"] = roster.survey_offset
+            hb["duty_cycle_est"] = (round(pin_s / (survey_s + pin_s), 4)
+                                    if (survey_s + pin_s) else None)
+        except AttributeError:
+            pass
         print("PMUS_COMPLETION_SHADOW " + json.dumps(hb, default=str),
               flush=True)
         if a.once or (a.cycles and c >= a.cycles):

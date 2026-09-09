@@ -33,12 +33,14 @@ def test_underpowered_computes_no_lift_at_all():
     assert "lift" not in res          # not computed, not merely hidden
 
 
-def test_zero_band_opportunities_fails_and_never_passes():
-    """A band that never opens is inert, however large the sample."""
+def test_zero_band_opportunities_never_passes():
+    """A band that never opens is inert, however large the sample. Under the
+    owner's ladder this is now KILLED at the futility rule rather than merely
+    failed -- earlier, not weaker."""
     res = rr.evaluate([win(capped=500, only=0)])
     assert res["lift"] == 1.0
-    assert res["verdict"] == "FAIL"
-    assert res["r2_ci_clears_threshold"] is False
+    assert res["verdict"] == "KILL_FUTILE"
+    assert res["verdict"] != "PASS"
 
 
 def test_a_thin_sample_that_clears_the_point_bar_still_fails_on_its_interval():
@@ -74,7 +76,8 @@ def test_clearing_1_00_is_not_enough_because_nesting_makes_it_automatic():
     a guard written against 1.00 would be inert. Pin the real threshold."""
     res = rr.evaluate([win(capped=40, only=1)])
     assert res["lift_ci95"][0] > 1.0          # automatic, proves nothing
-    assert res["verdict"] == "FAIL"           # and it must still fail
+    assert res["verdict"] != "PASS"           # and it must still not pass
+    assert res["verdict"] == "KILL_FUTILE"    # upper bound cannot reach 1.20
 
 
 def test_a_real_effect_passes_all_three():
@@ -114,3 +117,37 @@ def test_rows_predating_the_instrument_are_dropped_and_counted():
 def test_every_result_carries_the_upper_bound_warning():
     for w in ([win(capped=5)], [win(capped=100, only=60)]):
         assert "not a fill" in rr.evaluate(w)["upper_bound_not_a_fill"]
+
+
+# --- owner execution ladder: two stopping rules --------------------------
+def test_futile_effect_is_killed_at_r1_not_pursued():
+    """CI upper already below the bar -> more data can only move further away."""
+    res = rr.evaluate([win(capped=60, only=2)])
+    assert res["lift_ci95"][1] < rr.MIN_LIFT
+    assert res["verdict"] == "KILL_FUTILE"
+    assert "rather than proven small over" in res["why"]
+
+
+def test_marginal_effect_is_killed_at_the_sample_bound():
+    """A 1.24 lift needs ~590 capped to certify. The ladder kills it at 150
+    rather than spending days proving a small effect exists."""
+    res = rr.evaluate([win(capped=200, only=48)])
+    assert res["lift"] == pytest.approx(1.24, abs=0.001)
+    assert res["verdict"] == "KILL_MARGINAL"
+    assert res["capped_opportunities"] >= rr.MAX_CAPPED_FOR_DECISION
+
+
+def test_a_strong_effect_still_passes_quickly_at_r1():
+    """The stopping rules must not cost us the fast PASS the ladder wants."""
+    res = rr.evaluate([win(capped=30, only=12)])       # lift 1.40
+    assert res["verdict"] == "PASS"
+
+
+def test_stopping_rules_only_ever_make_the_test_fail_faster():
+    """No PASS bar moved: a run that passes must still satisfy all three."""
+    res = rr.evaluate([win(capped=30, only=12)])
+    assert res["r2_point_met"] and res["r2_ci_clears_threshold"]
+    assert res["r3_met"]
+    assert rr.MIN_CAPPED_OPPORTUNITIES == 30
+    assert rr.MIN_LIFT == 1.20
+    assert rr.MIN_RESCUE_ONLY == 10

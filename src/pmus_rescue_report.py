@@ -39,6 +39,24 @@ from typing import Any, Dict, Iterable, List, Mapping
 MIN_CAPPED_OPPORTUNITIES = 30    # R1
 MIN_LIFT = 1.20                  # R2 point estimate
 MIN_RESCUE_ONLY = 10             # R3
+# OWNER EXECUTION LADDER: "Once we have ~30 capped opportunities, a strong
+# effect can pass. If the effect is obviously too small to plausibly close our
+# ~5.66-point completion gap, we kill it rather than spend days proving that
+# it is small."
+#
+# Two stopping rules, both of which only make the test FAIL FASTER. Neither
+# makes it easier to pass; every PASS bar above is unchanged.
+#
+# FUTILITY: if the CI's UPPER bound is already below MIN_LIFT, the effect
+# cannot reach the bar even at the optimistic end of what this sample supports.
+# Accumulating more can only narrow the interval further away from it.
+#
+# MARGINAL: certifying a lift of 1.24 needs ~590 capped opportunities, 1.30
+# needs ~110, and 1.40 needs ~30. So a run that reaches MAX_CAPPED_FOR_DECISION
+# without passing has, by construction, an effect too small to certify quickly
+# -- which is the definition of the marginal case the ladder kills. Spending
+# days to prove a 1.24 exists is exactly the loop this bound exists to break.
+MAX_CAPPED_FOR_DECISION = 150
 BAND = "(1.00, 1.03]"
 
 
@@ -91,6 +109,7 @@ def evaluate(windows: Iterable[Mapping[str, Any]]) -> dict:
         "prereg": "analysis/l5/PREREG_RESIDUAL_RESCUE_BAND.md",
         "band": BAND, **t,
         "r1_required_capped": MIN_CAPPED_OPPORTUNITIES,
+        "max_capped_for_decision": MAX_CAPPED_FOR_DECISION,
         "upper_bound_not_a_fill": (
             "a reachable price with a contemporaneous print is not a fill; "
             "queue position and depth are unmeasured. No count here converts "
@@ -134,6 +153,27 @@ def evaluate(windows: Iterable[Mapping[str, Any]]) -> dict:
                 "r2_ci_clears_threshold": lo > MIN_LIFT,
                 "r3_required_rescue_only": MIN_RESCUE_ONLY,
                 "r3_met": r >= MIN_RESCUE_ONLY})
+
+    # --- stopping rules, checked before the PASS bars ---------------------
+    if hi < MIN_LIFT:
+        out["verdict"] = "KILL_FUTILE"
+        out["why"] = (
+            f"the 95% CI upper bound {hi:.4f} is already below {MIN_LIFT}. "
+            "Even the optimistic end of this sample cannot reach the bar, and "
+            "more data can only narrow the interval further from it. Per the "
+            "owner's ladder this is killed now rather than proven small over "
+            "days.")
+        return out
+    if c >= MAX_CAPPED_FOR_DECISION and not (
+            lift >= MIN_LIFT and lo > MIN_LIFT and r >= MIN_RESCUE_ONLY):
+        out["verdict"] = "KILL_MARGINAL"
+        out["why"] = (
+            f"{c} capped opportunities without passing. A lift large enough "
+            f"to matter certifies by ~{MAX_CAPPED_FOR_DECISION} (1.40 needs "
+            "~30, 1.30 needs ~110); anything still uncertified here is too "
+            "small to plausibly close the 5.66-point completion gap. Killed "
+            "rather than pursued for days.")
+        return out
 
     if not out["r2_point_met"]:
         out["verdict"] = "FAIL"

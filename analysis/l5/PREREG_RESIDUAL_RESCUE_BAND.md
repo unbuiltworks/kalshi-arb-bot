@@ -153,3 +153,53 @@ band is not doing much — not that we should lower the bar to see it.
 **Nothing else moves.** R1 (30), MIN_LIFT (1.20), R3 (10), the band (1.00,
 1.03], maker-only, rescue-not-initiation, and the kill condition are all
 unchanged.
+
+---
+
+## 8. AMENDMENT — owner execution ladder, 2026-09-09 (still pre-data)
+
+Owner directive: *"We don't wait indefinitely for statistical perfection. Once
+we have ~30 capped opportunities, a strong effect can pass. If the effect is
+obviously too small to plausibly close our ~5.66-point completion gap, we kill
+it rather than spend days proving that it's small."*
+
+Made with **zero rescue-band rows in existence** — the previous read found the
+collector still surveying, so nothing has been measured.
+
+### Two stopping rules. Both only make the test FAIL FASTER.
+
+**KILL_FUTILE.** If the 95% CI *upper* bound is already below `MIN_LIFT`, the
+effect cannot reach the bar even at the optimistic end of what the sample
+supports, and more data only narrows the interval further from it. Killed at
+once.
+
+**KILL_MARGINAL.** If capped opportunities reach `MAX_CAPPED_FOR_DECISION =
+150` without passing, the effect is by construction too small to certify
+quickly: 1.40 certifies by ~30, 1.30 by ~110, but 1.24 would need ~590. That
+590-opportunity path is exactly the multi-day loop this bound exists to break.
+
+### No PASS bar moved
+
+R1 (30 capped), R2 (lift ≥ 1.20 **and** CI lower > 1.20), R3 (10 band-only)
+are all unchanged. A run can now END sooner; it cannot PASS more easily.
+
+Observed behaviour of the combined rules:
+
+| case | capped | lift | verdict |
+|---|---|---|---|
+| strong | 30 | 1.40 | **PASS** |
+| strong | 30 | 1.60 | **PASS** |
+| tiny | 30 | 1.07 | FAIL |
+| futile | 60 | 1.03 | **KILL_FUTILE** |
+| marginal | 200 | 1.24 | **KILL_MARGINAL** |
+
+Worst-case run length is now bounded at 150 capped opportunities instead of
+unbounded.
+
+### What the ladder also fixes, and it is the deeper point
+
+*"We stop trying to extract certainty from historical data that doesn't contain
+the answer."* We have no historical queue position and no complete historical
+print tape. No analysis reconstructs information that was never recorded. This
+test therefore exists to earn the right to a **micro live probe**, which is the
+only instrument that can answer the fill question — not to settle it offline.
