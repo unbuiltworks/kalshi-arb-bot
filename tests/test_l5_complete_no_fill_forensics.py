@@ -149,7 +149,7 @@ def test_placement_is_faithful_so_the_defect_is_not_the_opening_price():
 _LIVE = "src/pmus_spring_l5_session.py"
 
 
-def test_the_requote_condition_still_excludes_complete_by_default():
+def test_the_requote_condition_still_excludes_complete_by_default(monkeypatch):
     """The claim rests on the LIVE path's effective behaviour, so read it.
 
     The condition is now `relation_ in requote_relations()`, which returns
@@ -158,6 +158,7 @@ def test_the_requote_condition_still_excludes_complete_by_default():
     and it stays true for as long as that is the DEFAULT. If the default ever
     flips this test fails, which is exactly when the prose stops being true."""
     from src import pmus_spring_l5_session as ses
+    monkeypatch.delenv(ses.COMPLETE_REQUOTE_ENV, raising=False)
     src = open(_LIVE).read()
     assert "if relation_ in requote_relations() and touch != px_:" in src
     assert 'return f"touch_moved:{touch}"' in src

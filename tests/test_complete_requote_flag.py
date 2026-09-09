@@ -114,3 +114,50 @@ def test_the_reason_for_the_default_is_written_where_it_is_set():
     assert "DEFAULT OFF" in head
     assert "0 of 868" in head
     assert "fidelity, not a new strategy" in head
+
+
+# --- preflight for arming: every bound must still fire ------------------
+_LIVE_SRC = open("src/pmus_spring_l5_session.py").read()
+
+
+def _idx(needle):
+    i = _LIVE_SRC.find(needle)
+    assert i >= 0, f"missing from the live path: {needle}"
+    return i
+
+
+def test_post_only_would_cross_fires_BEFORE_the_reprice_and_for_every_relation():
+    """The one bound that arming could plausibly breach.
+
+    would_cross must be evaluated ahead of the touch_moved check, and must NOT
+    be gated on relation -- otherwise an armed COMPLETE could re-quote to a
+    price at or through the opposite ask and breach post-only."""
+    cross = _idx('return f"would_cross:{opp_ask}"')
+    requote = _idx('if relation_ in requote_relations() and touch != px_:')
+    assert cross < requote, "would_cross must precede the reprice check"
+    guard = _LIVE_SRC[_idx('if px_ >= D(str(opp_ask)):'):cross]
+    assert "relation" not in guard, "post-only guard must not be relation-gated"
+
+
+def test_the_reprice_posts_at_the_touch_and_never_beyond_it():
+    """Fidelity, not aggression: the re-quote posts at the model's touch."""
+    assert 'return f"touch_moved:{touch}"' in _LIVE_SRC
+    tick = _idx('touch = (D(str(touch)) / spec["tick"]).to_integral_value(')
+    assert tick < _idx('if relation_ in requote_relations() and touch != px_:')
+
+
+def test_arming_changes_exactly_one_tuple_and_no_other_bound():
+    """The complete live-path diff. Any other gate appearing or vanishing
+    between armed and unarmed states would make the change non-minimal."""
+    import os
+    from src import pmus_spring_l5_session as ses
+    for bound in ('price_bound_left', 'band_left', 'would_cross',
+                  'spend', 'residual', 'rest'):
+        assert bound in _LIVE_SRC, f"{bound} bound vanished from the live path"
+    os.environ.pop(ses.COMPLETE_REQUOTE_ENV, None)
+    off = ses.requote_relations()
+    os.environ[ses.COMPLETE_REQUOTE_ENV] = "1"
+    on = ses.requote_relations()
+    os.environ.pop(ses.COMPLETE_REQUOTE_ENV, None)
+    assert set(on) - set(off) == {"complete"}
+    assert set(off) - set(on) == set()

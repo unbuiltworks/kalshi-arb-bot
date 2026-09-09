@@ -114,6 +114,15 @@ def test_no_money_or_risk_limit_changed():
     assert ses.CONTROL_BOOK_MAX_PER_SESSION == 24
 
 
-def test_the_requote_gate_is_untouched_by_this_change():
+def test_the_requote_gate_is_untouched_by_this_change(monkeypatch):
+    """Pin the environment: this asserts the DEFAULT, so it must not read an
+    ambient PMUS_SPRING_COMPLETE_REQUOTE an operator happens to have set."""
+    monkeypatch.delenv(ses.COMPLETE_REQUOTE_ENV, raising=False)
     assert "if relation_ in requote_relations() and touch != px_:" in _SRC
     assert ses.requote_relations() == ("open", "extend")
+
+
+def test_arming_the_flag_adds_complete_and_nothing_else(monkeypatch):
+    """The whole live-path diff, stated as a test: one tuple member."""
+    monkeypatch.setenv(ses.COMPLETE_REQUOTE_ENV, "1")
+    assert ses.requote_relations() == ("open", "extend", "complete")
