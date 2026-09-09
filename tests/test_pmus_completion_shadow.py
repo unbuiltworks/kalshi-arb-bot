@@ -5,6 +5,7 @@ from bad, and the guarantee that this process cannot trade.
 """
 
 import ast
+import json
 from decimal import Decimal as D
 
 import pytest
@@ -357,3 +358,28 @@ def test_flow_keeps_accumulating_across_re_seeds():
     f = rows[-1]["flow"]
     assert f["two_sided"] is True, f     # prints on both sides were seen
     assert f["prints_seen"] >= 15
+
+
+def test_the_shadow_opens_and_closes_a_persistence_window(capsys):
+    """OWNER GO: the 30-60s interval must actually be watched end to end, and
+    a closed window must be emitted. Goes red if the wiring is dropped."""
+    inv, n = {}, {"i": 0}
+
+    def getter(p):
+        n["i"] += 1
+        return {"marketData": {"marketSlug": "m", "state": "MARKET_STATE_OPEN",
+                               "bestBid": {"value": "0.45"},
+                               "bestAsk": {"value": "0.47"},
+                               "lastTradePx": {"value": "0.45"},
+                               "sharesTraded": str(n["i"] * 10),
+                               "bidDepth": 1, "askDepth": 1}}
+    for i in range(7):
+        cycle(["m"], inv, getter=getter, now=float(i) * 25.0)   # 0..150s
+    out = capsys.readouterr().out
+    assert "PMUS_PERSISTENCE_WINDOW" in out, "no window was ever closed"
+    row = json.loads(out[out.index("PMUS_PERSISTENCE_WINDOW") + 24:]
+                     .splitlines()[0])
+    assert set(row["buckets"]) == {"a_0_30s", "b_30_60s", "c_60_120s"}
+    assert row["closed"] is True
+    # the interval we never operated in was actually observed
+    assert row["buckets"]["b_30_60s"]["observations"] > 0

@@ -8,5 +8,6 @@ ENV PYTHONUNBUFFERED=1
 RUN mkdir -p src analysis/l5
 COPY src/__init__.py src/__init__.py
 COPY src/pmus_completion_shadow.py src/pmus_completion_shadow.py
+COPY src/pmus_persistence_window.py src/pmus_persistence_window.py
 COPY src/pmus_sports_collector.py src/pmus_sports_collector.py
 CMD ["python3", "-m", "src.pmus_completion_shadow"]

@@ -309,6 +309,11 @@ def flow_summary(deltas: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
             "two_sided": ("at_bid" in sides and "at_ask" in sides)}
 
 
+def _pw():
+    from src import pmus_persistence_window as pw
+    return pw
+
+
 def state_dir() -> str:
     return os.getenv(STATE_ENV, DEFAULT_STATE)
 
@@ -391,6 +396,26 @@ def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, Any]],
             else:
                 st["side"], px = "NO", no_touch
             st["qty"], st["spend"] = HYPOTHETICAL_QTY, HYPOTHETICAL_QTY * px
+        # OWNER GO: watch the 30-60s interval we never operated in. The
+        # window is deliberately INDEPENDENT of the hypothetical inventory
+        # lifecycle: the surplus completes in a handful of tranches and
+        # re-seeds, and tying the window to that reset it every ~5 cycles so
+        # it never survived to 120s and the 30-60s bucket stayed empty.
+        if st.get("window") is None:
+            cside = "NO" if st["side"] == "YES" else "YES"
+            cpx = _pw().complement_price_now(book, cside)
+            if cpx is not None:
+                st["window"] = _pw().open_window(now, cpx, cside, slug)
+        w = st.get("window")
+        if w and not w.get("closed"):
+            d = st["flow"][-1] if st["flow"] else {}
+            st["window"] = _pw().observe(
+                w, book, now, bool(d.get("printed")),
+                d.get("shares") or D(0))
+            if st["window"].get("closed"):
+                print("PMUS_PERSISTENCE_WINDOW " + json.dumps(
+                    _pw().summarise(st["window"]), default=str), flush=True)
+                st["window"] = None
         row = propose(book, st["qty"], st["spend"], st["matched"],
                       st["matched_spend"], surplus_side=str(st["side"]))
         if row:
