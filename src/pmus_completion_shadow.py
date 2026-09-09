@@ -460,8 +460,21 @@ def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, Any]],
                 w, book, now, bool(d.get("printed")),
                 d.get("shares") or D(0))
             if st["window"].get("closed"):
+                summary = _pw().summarise(st["window"])
+                # PROVENANCE. The log carries windows from BOTH selection
+                # regimes -- the flow-blind slate ran until 14:54Z today --
+                # and aggregating across them would answer the persistence
+                # question partly on markets chosen by list order. The
+                # reader refuses to mix these, so the row has to say which
+                # regime produced it and on what pre-window score.
+                summary["selection"] = ("flow_ranked" if roster is not None
+                                        else "unranked")
+                if roster is not None:
+                    summary["roster_pin"] = roster.pins
+                    summary["pre_window_flow_score"] = \
+                        roster.pinned_scores.get(slug)
                 print("PMUS_PERSISTENCE_WINDOW " + json.dumps(
-                    _pw().summarise(st["window"]), default=str), flush=True)
+                    summary, default=str), flush=True)
                 st["window"] = None
         row = propose(book, st["qty"], st["spend"], st["matched"],
                       st["matched_spend"], surplus_side=str(st["side"]))

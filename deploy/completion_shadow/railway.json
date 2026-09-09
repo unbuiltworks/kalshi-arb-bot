@@ -13,6 +13,7 @@
     "src/pmus_completion_shadow.py",
     "src/pmus_persistence_window.py",
     "src/pmus_flow_roster.py",
+    "src/pmus_persistence_report.py",
     "src/pmus_sports_collector.py",
     "deploy/completion_shadow/**"
   ]
