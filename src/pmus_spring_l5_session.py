@@ -2614,6 +2614,65 @@ def _run_session_body(t: Optional[Transport] = None,
                 continue
 
             if relation in ("open", "extend"):
+                # OWNER GO (#167, reply to comment 5600883240): the entry band must
+                # not end a session that is holding inventory.
+                #
+                # OWNER 5552841170 #1 set this band as OPEN admission: the
+                # 0.35-0.65 window on a flat book, plus the venue's own legal
+                # maker range. That part is unchanged and still refuses the
+                # OPEN or EXTEND outright -- this is NOT permission to average
+                # further into a collapsing held side.
+                #
+                # What changed is the EXIT. The refusal used to `break`, which
+                # ends the whole session, so a market whose bid drifted out of
+                # range while we held an unmatched leg stopped being worked at
+                # all. Measured over the R5F campaign
+                # (analysis/l5/L5_COMPLETION_FORENSICS.md): the band fired 42
+                # times and 39 of those were while HOLDING unmatched
+                # inventory, and the three markets it ended for 6, 9 and 12
+                # consecutive cycles are the three largest stranded losses in
+                # the settled cohort (-8.83 of -9.24). The band was never
+                # adjudicating a COMPLETE directly; it was killing the session
+                # that would have completed.
+                #
+                # So a refusal on held inventory now converts to
+                # completion-only work, exactly as the spend cap below does,
+                # and only a refusal while FLAT still stops the session. The
+                # completion that follows remains bounded by the completion
+                # budget, the rejection streak breaker, the clock and every
+                # dollar cap; none of those move here.
+                in_band = SPRING_BAND_LO <= bbo["bid"] <= SPRING_BAND_HI
+                if not q1.entry_ok(bbo["bid"]) or \
+                        (inv.up + inv.dn == 0 and not in_band):
+                    relation = "complete" if inv.residual != 0 else "stop"
+                    dec = report["decisions"][-1]
+                    dec["divergence"] = \
+                        f"safety_adaptation:entry_band_left->{relation}"
+                    dec["divergence_class"] = \
+                        divergence_class("safety_adaptation:entry_band_left")
+                    dec["acted_draw"] = dec["acted"]
+                    dec["would_act_without_safety_cap"] = dec["acted"]
+                    dec["cap_binding"] = \
+                        dec.get("cap_binding", []) + ["entry_band_left"]
+                    dec["entry_band_left"] = {
+                        "bid": str(bbo["bid"]),
+                        "q1_entry_ok": q1.entry_ok(bbo["bid"]),
+                        "in_observation_band": in_band,
+                        "held_inventory": str(inv.up + inv.dn),
+                        "outcome": ("completion_only" if relation == "complete"
+                                    else "session_stopped_flat")}
+                    dec["acted"] = ("hold" if relation == "stop" else relation)
+                    if relation == "stop":
+                        # Named, because a zero-order session must be
+                        # distinguishable from an unfilled one in the log.
+                        report["stop_reason"] = (
+                            f"entry_band_left:bid={bbo['bid']}:"
+                            f"q1_entry_ok={q1.entry_ok(bbo['bid'])}")
+                        mark_noop(dec, report["stop_reason"],
+                                  "safety_adaptation:entry_band_left")
+                        break
+
+            if relation in ("open", "extend"):
                 # spend caps: session + durable cumulative, before sizing
                 if cum + (inv.spent() - prior_spent) + \
                         spec["entry_notional"] > session_notional_cap():
@@ -2682,22 +2741,6 @@ def _run_session_body(t: Optional[Transport] = None,
                     report["decisions"][-1]["authenticated_trim"] = _trim
                     if _trim.get("applied"):
                         px = D(str(_trim["px_out"]))
-                # OWNER 5552841170 #1: the 0.35-0.65 band is OPEN
-                # admission. A CONTINUATION (EXTEND on existing inventory)
-                # is governed by the model's in-distribution state at the
-                # CURRENT price -- an off-distribution state already HOLDs
-                # above -- plus the venue price bounds and every cap.
-                in_band = SPRING_BAND_LO <= bbo["bid"] <= SPRING_BAND_HI
-                if not q1.entry_ok(bbo["bid"]) or \
-                        (inv.up + inv.dn == 0 and not in_band):
-                    # Named, because a zero-order session must be
-                    # distinguishable from an unfilled one in the log.
-                    report["stop_reason"] = (
-                        f"entry_band_left:bid={bbo['bid']}:"
-                        f"q1_entry_ok={q1.entry_ok(bbo['bid'])}")
-                    mark_noop(report["decisions"][-1], report["stop_reason"],
-                              "safety_adaptation:entry_band_left")
-                    break
                 qty = spec["qty"]
                 # OWNER 5567269295 (R4): the residual cap in DOLLARS. An
                 # order that would leave more than the rung's unmatched

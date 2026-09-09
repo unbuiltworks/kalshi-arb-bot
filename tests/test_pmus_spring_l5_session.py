@@ -1015,3 +1015,136 @@ def test_complement_plan_prices_the_opposite_side_fee_safe_and_maps_wire():
                                   {"bid": "0.39", "ask": "0.40"}, D("0.01"))
     assert plan["side"] == "OUTCOME_SIDE_YES"
     assert plan["px"] == D("0.38") and plan["wire_px"] == "0.38"
+
+
+# ---- OWNER GO (#167, reply to 5600883240): the entry band must not end a
+# ---- session that is holding inventory. It still refuses the OPEN/EXTEND.
+
+class DriftingFake(Fake):
+    """A market whose bid collapses out of the band after the first order.
+
+    This reproduces the R5F failure: we act in band, the bid runs away, and
+    every later cycle meets the entry band. A flat market that is ALREADY
+    out of band never reaches the loop -- it is refused at admission as
+    SPRING_SKIP_NOT_QUALIFYING -- so the band's in-loop branches are only
+    reachable by drifting, which is what this fixture does.
+    """
+
+    def __init__(self, drift_after=1, drifted_bid="0.1000",
+                 drifted_ask="0.1050", **kw):
+        super().__init__(**kw)
+        self.drift_after = drift_after
+        self.drifted = (drifted_bid, drifted_ask)
+        self.posted = 0
+
+    def request(self, method, path, body=None, base=None):
+        out = super().request(method, path, body, base)
+        if path == "/v1/orders":
+            self.posted += 1
+            if self.posted >= self.drift_after:
+                self.bid, self.ask = self.drifted
+        return out
+
+
+def _entry_band_rows(rep):
+    return [d for d in rep.get("decisions", []) if d.get("entry_band_left")]
+
+
+def test_entry_band_on_held_inventory_no_longer_ends_the_session(
+        monkeypatch, tmp_path):
+    """The measured R5F defect: the band fired 42 times, 39 while HOLDING
+    unmatched inventory, and each one ended the session -- taking the
+    residual's completion work with it. The session must now survive."""
+    _arm(monkeypatch, tmp_path)
+    _script_proposals(monkeypatch, ["open", "extend", "extend", "complete"])
+    fake = DriftingFake(drift_after=1)
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0)
+    rows = _entry_band_rows(rep)
+    assert rows, "the band never fired; fixture does not reproduce the case"
+    assert rows[0]["entry_band_left"]["outcome"] == "completion_only"
+    assert not str(rep.get("stop_reason") or "").startswith("entry_band_left")
+    # it kept working the market instead of dying on the first refusal
+    assert len(rep["decisions"]) > 3
+
+
+def test_entry_band_still_refuses_the_first_side_action_it_fired_on(
+        monkeypatch, tmp_path):
+    """NOT permission to average into a collapsing held side: no OPEN or
+    EXTEND may be priced off an out-of-band bid."""
+    _arm(monkeypatch, tmp_path)
+    _script_proposals(monkeypatch, ["open", "extend", "extend", "complete"])
+    fake = DriftingFake(drift_after=1)
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0)
+    dec = _entry_band_rows(rep)[0]
+    assert dec["acted_draw"] == "extend"
+    assert dec["entry_band_left"]["outcome"] == "completion_only"
+    assert "entry_band_left" in dec["cap_binding"]
+    # the band routed it away from the first side; `acted` then reads what
+    # actually happened -- here `hold`, because the second gate
+    # (no_legal_maker_price) refused the completion the band routed to.
+    assert dec["acted"] not in ("open", "extend")
+    # exactly ONE first-side action ever priced: the in-band open
+    first_side = [a for a in rep["actions"]
+                  if a["relation"] in ("open", "extend")]
+    assert len(first_side) == 1 and first_side[0]["relation"] == "open"
+
+
+def test_entry_band_while_flat_still_stops_the_session(monkeypatch, tmp_path):
+    """Unchanged behaviour: with no inventory there is nothing to complete,
+    so the band still ends the session and names itself in the log."""
+    _arm(monkeypatch, tmp_path)
+    _script_proposals(monkeypatch, ["open", "open"])
+    # nothing fills, so the book drifts out of band while we are still flat
+    fake = DriftingFake(drift_after=1, fill_all=False)
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0)
+    assert str(rep.get("stop_reason") or "").startswith("entry_band_left")
+    rows = _entry_band_rows(rep)
+    assert rows[-1]["entry_band_left"]["outcome"] == "session_stopped_flat"
+    assert rows[-1]["entry_band_left"]["held_inventory"] == "0"
+
+
+def test_band_conversion_records_the_draw_it_overrode(monkeypatch, tmp_path):
+    """The executed relation is what the record says was acted; the draw the
+    band overrode is kept beside it, as the spend cap already does."""
+    _arm(monkeypatch, tmp_path)
+    _script_proposals(monkeypatch, ["open", "extend", "complete"])
+    fake = DriftingFake(drift_after=1)
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0)
+    dec = _entry_band_rows(rep)[0]
+    assert dec["would_act_without_safety_cap"] == dec["acted_draw"]
+    assert dec["entry_band_left"]["held_inventory"] != "0"
+    assert dec["entry_band_left"]["in_observation_band"] is False
+    assert dec["divergence_class"] == "safety-cap override"
+
+
+def test_surviving_the_band_does_not_by_itself_price_a_completion(
+        monkeypatch, tmp_path):
+    """The honest limit of this change, pinned so it cannot be forgotten.
+
+    Surviving the band is necessary but not always sufficient. How far the
+    bid ran decides whether the completion the session survives to attempt
+    is priceable at all: at a moderate drift the complement's own fee-safe
+    branch finds a legal price and the leg gets paired (see
+    tests/test_l5_evidence_integrity.py), but at the deep drift used here --
+    bid 0.10, so the complement sits above 0.80 -- a SECOND gate,
+    `complement_not_priceable:no_legal_maker_price`, refuses it.
+
+    That second gate is the staged price-band change (#167 task 91) and the
+    owner has NOT given it. So this change recovers the shallow-drift
+    strandings on its own and leaves the deep-drift ones for that separate
+    decision. If this test starts failing because completes are priced at
+    this depth, the decision was taken -- deliberately or not -- and must be
+    re-examined.
+    """
+    _arm(monkeypatch, tmp_path)
+    _script_proposals(monkeypatch, ["open", "extend", "complete", "complete"])
+    fake = DriftingFake(drift_after=1)
+    rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
+                             wall=lambda: 1000.0)
+    refusals = {d.get("refusal") for d in rep["decisions"]}
+    assert "complement_not_priceable:no_legal_maker_price" in refusals
+    assert not [a for a in rep["actions"] if a["relation"] == "complete"]

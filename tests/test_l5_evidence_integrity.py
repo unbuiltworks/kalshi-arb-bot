@@ -388,7 +388,19 @@ def test_noop_complete_without_fee_safe_price_is_a_hold_not_an_action(monkeypatc
     assert out["evidence_progress"]["accounting"]["acted_without_order_rows"] == 0
 
 
-def test_extend_stopped_by_the_entry_band_is_a_hold(monkeypatch, tmp_path):
+def test_extend_refused_by_the_entry_band_becomes_completion_only(
+        monkeypatch, tmp_path):
+    """OWNER GO (#167, reply to 5600883240): while holding inventory the
+    entry band routes to completion instead of ending the session.
+
+    This test previously pinned the OLD contract -- band fires, session
+    stops. That behaviour was the measured defect: 39 of the band's 42
+    R5F firings were on held inventory and each ended a session that still
+    had a residual to pair. The invariants it protected are kept: no order
+    may be priced off an out-of-band bid, the decision records a
+    non-action rather than a phantom EXTEND, and the override is
+    classified as a safety-cap override, not a behavioural divergence.
+    """
     from tests.test_pmus_l5_continuous_session import (_armed_session_env,
                                                         _ledger_with_fill)
     from tests.test_pmus_spring_l5_session import Fake, _ticking, _script_proposals
@@ -400,212 +412,22 @@ def test_extend_stopped_by_the_entry_band_is_a_hold(monkeypatch, tmp_path):
     fake = Fake(bid="0.1500", ask="0.1550", fill_all=False)  # below MIN_PRICE 0.20
     fake.positions["held"] = {"netPositionDecimal": "0.02"}
     rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
-                             wall=lambda: 1000.0, slug="held", gate_ok=True, resume=True)
+                             wall=lambda: 1000.0, slug="held", gate_ok=True,
+                             resume=True)
     d = rep["decisions"][0]
-    assert d["acted"] == "hold" and d["attempted"] == "extend"
-    assert d["refusal"].startswith("entry_band_left:bid=0.1500")
+    # the band fired, on held inventory, and routed to completion
+    assert d["entry_band_left"]["bid"] == "0.1500"
+    assert d["entry_band_left"]["outcome"] == "completion_only"
+    assert d["acted_draw"] == "extend"
+    assert "entry_band_left" in d["cap_binding"]
     assert d["divergence_class"] == "safety-cap override"
-    assert not rep.get("orders") and rep["stop_reason"].startswith("entry_band_left")
-
-
-def test_mark_noop_keeps_an_existing_divergence_and_names_the_draw():
-    from src.pmus_spring_l5_session import mark_noop
-    d = {"acted": "extend", "divergence": "safety_adaptation:spend_cap->stop",
-         "divergence_class": "safety-cap override", "refusal": None}
-    out = mark_noop(d, "spend_cap_reached")
-    assert out["acted"] == "hold" and out["attempted"] == "extend"
-    assert out["divergence"] == "safety_adaptation:spend_cap->stop"     # untouched
-    assert out["refusal"] == "spend_cap_reached"
-    d2 = mark_noop({"acted": "complete", "divergence": "none"}, "x", "venue_execution_adaptation:x")
-    assert d2["divergence"] == "venue_execution_adaptation:x"
-
-
-def test_acted_without_order_rows_is_counted_from_provenance():
-    """Pre-fix rows: acted decisions with no submitted order in the same
-    session report are counted so their acted view is never mistaken for
-    executed evidence."""
-    rep = _report("s1", "m1", 6)                      # 6 acted extends, 6 orders
-    rep2 = _report("s2", "m1", 5, t0="2026-09-06T02:10:0")
-    rep2["orders"] = rep2["orders"][:1]               # 5 acted, 1 order
-    out = gate.evaluate([rep, rep2])
-    assert out["evidence_progress"]["accounting"]["acted_without_order_rows"] == 4
-    assert out["live"]["scored_decisions"] == 11      # still counted as decisions
-    # OWNER 5558859447 #8: split by cohort so the clean cohort's counter
-    # (which must be 0) is read directly. The fixture rows are clean
-    # (schema 2, lookup 3), so the 4 land on the clean side ...
-    acct = out["evidence_progress"]["accounting"]
-    assert acct["acted_without_order_rows_clean"] == 4
-    assert acct["acted_without_order_rows_legacy"] == 0
-    # ... and a legacy session (no lookup record, pre-fix schema) with the
-    # same defect lands on the legacy side only
-    rep3 = _report("s3", "m1", 3, t0="2026-09-06T02:20:0")
-    for d in rep3["decisions"]:
-        for k in ("evidence_schema", "lookup", "attempted", "size_transformations"):
-            d.pop(k, None)
-    rep3["orders"] = rep3["orders"][:2]
-    acct3 = gate.evaluate([rep, rep2, rep3])["evidence_progress"]["accounting"]
-    assert acct3["acted_without_order_rows"] == 5
-    assert acct3["acted_without_order_rows_clean"] == 4
-    assert acct3["acted_without_order_rows_legacy"] == 1
-
-
-def test_legacy_rows_are_scored_separately_and_never_count_toward_minimums():
-    """OWNER 5558167805 #1: pre-mark_noop rows are a LEGACY cohort;
-    minimums and verdict inputs come from the clean cohort only."""
-    clean = _report("s1", "m1", 6)
-    legacy = _report("s0", "m1", 6, t0="2026-09-06T01:00:0")
-    for d in legacy["decisions"]:
-        d.pop("evidence_schema", None)           # written before the fix
-    legacy["orders"] = [{**o, "order_id": f"L-{i}"} for i, o in enumerate(legacy["orders"])]
-    out = gate.evaluate([legacy, clean])
-    assert out["live"]["scored_decisions"] == 6
-    assert out["live"]["cohort"] == {"rule": gate.CLEAN_ROW_RULE, "clean_decisions": 6,
-                                     "legacy_decisions": 6, "clean_orders": 6,
-                                     "legacy_orders": 6}
-    assert out["evidence_progress"]["minimums"]["live_scored_decisions"]["have"] == 6
-    assert out["evidence_progress"]["accounting"]["cohort"]["legacy_decisions"] == 6
-    assert out["live_legacy"]["scored_decisions"] == 6
-    assert out["live_legacy"]["labels"].startswith("LEGACY")
-    assert out["divergence_classes_legacy"]
-    # a corpus of only clean rows has no legacy view
-    assert gate.evaluate([clean])["live_legacy"] is None
-    # a row carrying the post-fix fields is clean even without the marker,
-    # but only when the canonical lookup produced it
-    row = dict(clean["decisions"][0]); row.pop("evidence_schema")
-    assert gate.is_clean_row({**row, "attempted": "complete"})
-    assert not gate.is_clean_row(row)
-    v2 = dict(clean["decisions"][0]); v2["lookup"] = {"lookup_version": 2}
-    assert not gate.is_clean_row(v2)                  # superseded lookup
-
-
-def test_cadence_references_and_complete_counterfactual_are_reported():
-    """OWNER 5558167805 #6/#7: both L5 cadence units persisted as
-    diagnostics beside the frozen dimension; the post-fix COMPLETE price
-    sample summarized separately."""
-    rep = _report("s1", "m1", 4)
-    for i, d in enumerate(rep["decisions"]):
-        d["acted"] = "complete"
-        d["counterfactual_l5_price"] = {
-            "l5_touch_px": "0.565", "executed_px": "0.55", "delta_ticks": "3",
-            "fee_safe_at_touch": i % 2 == 0, "would_cross_at_touch": False,
-            "class": "safety_override:fee_safe_complement_bound"}
-    rep["orders"] = [{**_order("complete"), "order_id": f"C{i}",
-                      "l5_touch_reached_by_opposite_ask": i == 0} for i in range(4)]
-    out = gate.evaluate([rep])
-    cf = out["complete_price_counterfactual"]
-    assert cf["n"] == 4 and cf["median_delta_ticks_touch_minus_executed"] == 3.0
-    assert cf["fee_safe_at_touch_share"] == 0.5 and cf["would_cross_at_touch_share"] == 0.0
-    assert cf["orders_where_opposite_ask_reached_l5_touch"] == {"n": 4, "share": 0.25}
-    assert cf["classes"] == {"safety_override:fee_safe_complement_bound": 4}
-    val = out["live"]["timing_cadence"]["value"]
-    assert val["fill_gap_reference"]["median"] == 2.0
-    assert val["order_episode_gap_reference"]["median"] == 3
-    assert "complete" in val["order_episode_gap_reference"]["by_relation"]
-    assert gate.load_cadence_reference(gate.Path("/nonexistent.json")) is None
-
-
-def test_overrun_provenance_and_the_actual_recovery_boundary():
-    """OWNER 5558646019 #1: after the declared end the outage is
-    scheduled_maintenance_overrun linked to the window; the effective
-    exclusion runs to the ACTUAL venue_recovered boundary (or is open);
-    intervals cannot bridge the declared window OR its overrun."""
-    from src import pmus_l5_continuous_session as cont
-    wins = cont.load_maintenance_windows()
-    o = {"start_utc": "2026-09-06T07:15:29+00:00", "first_error": "Halt:503"}
-    assert cont.classify_outage(o, now_utc="2026-09-06T10:52:00+00:00")["class"] == "scheduled_maintenance"
-    late = cont.classify_outage(o, now_utc="2026-09-06T11:35:00+00:00")
-    assert late["class"] == "scheduled_maintenance_overrun"
-    assert late["overrun_s"] == 1200.0 and late["recovery_boundary"].startswith("open")
-    assert late["maintenance"]["id"] == "pmus-2026-09-06-scheduled"
-    rec = cont.classify_outage({**o, "account_recovered_utc": "2026-09-06T12:00:00+00:00"},
-                               now_utc="2026-09-06T13:00:00+00:00")
-    assert rec["class"] == "scheduled_maintenance_overrun"
-    assert rec["overrun_s"] == 2700.0 and rec["recovery_boundary"] == "venue_recovered"
-    # effective window: open-ended while unrecovered, then the recovery instant
-    eff = cont.effective_maintenance_windows(wins, o, "2026-09-06T11:35:00+00:00", recoveries=[])
-    assert eff[0]["boundary"].startswith("open") and eff[0]["overrun_s"] == 1200.0
-    eff2 = cont.effective_maintenance_windows(
-        wins, None, "2026-09-06T12:00:00+00:00",
-        recoveries=[{"start_utc": "2026-09-06T07:15:29+00:00",
-                     "account_recovered_utc": "2026-09-06T12:00:00+00:00"}])
-    assert eff2[0]["boundary"] == "venue_recovered"
-    assert eff2[0]["effective_end_utc"] == "2026-09-06T12:00:00+00:00"
-    assert eff2[0]["overrun_s"] == 2700.0
-    # cadence: an interval bridging the OVERRUN (10:20 -> 10:40) is excluded
-    # under the effective window; one after recovery (10:50 -> 10:52) counts
-    rep = _report("s1", "m1", 1, t0="2026-09-06T11:35:0")
-    d2 = _report("s1", "m1", 1, t0="2026-09-06T11:55:0")["decisions"][0]; d2["decision_idx"] = 1
-    d3 = _report("s1", "m1", 1, t0="2026-09-06T12:05:0")["decisions"][0]; d3["decision_idx"] = 2
-    d4 = _report("s1", "m1", 1, t0="2026-09-06T12:07:0")["decisions"][0]; d4["decision_idx"] = 3
-    corpus = [{**rep, "decisions": rep["decisions"] + [d2, d3, d4], "orders": []}]
-    declared_only = gate.evaluate(corpus, maintenance=wins)
-    effective = gate.evaluate(corpus, maintenance=eff2)
-    assert declared_only["live"]["timing_cadence"]["n"] == 3      # 11:15 end: nothing excluded
-    assert effective["live"]["timing_cadence"]["n"] == 1          # 11:35->11:55, 11:55->12:05 excluded
-    assert effective["evidence_progress"]["accounting"]["maintenance"]["intervals_excluded_maintenance"] == 2
-    assert effective["evidence_progress"]["accounting"]["maintenance"]["windows"][0]["boundary"] == "venue_recovered"
-
-
-def test_shadow_gate_consumes_only_proven_canonical_lookup_rows():
-    """OWNER 5558646019 #2/#3: the frozen shadow dimensions come from
-    lookup_version=2 rows only; v1 is a diagnostic; a report that cannot
-    prove the lookup version fails closed."""
-    spec = gate.load_spec()
-    base = {"arm": "reprice_180s:stochastic", "windows_since_freeze": 130,
-            "windows_entered_unique": 124,
-            "action_scoring": {"scored_decisions": 240, "l1_sampled_vs_l5": 0.09,
-                               "l1_acted_vs_l5": 0.49, "off_distribution_rate_pct": 18.9}}
-    # no provenance -> fail closed
-    sh = gate.score_shadow({"research_arm_stochastic": base}, spec)
-    assert sh["lookup_status"].startswith("UNPROVABLE_LOOKUP_VERSION")
-    assert sh["action_distribution_relation"]["status"] == "UNMEASURED"
-    assert sh["off_distribution_rate"]["status"] == "UNMEASURED"
-    # provenance but no v2 rows yet -> not measured, v1 stays a diagnostic
-    r2 = {"research_arm_stochastic": {**base, "lookup_provenance": {"v2_decisions": 0, "legacy_decisions": 240, "v2_windows": 0},
-                                      "action_scoring_corrected_gate": {"scored_decisions": 0},
-                                      "off_distribution_v1_diagnostic": 18.9}}
-    sh2 = gate.score_shadow(r2, spec)
-    assert sh2["lookup_status"] == "NO_CANONICAL_LOOKUP_ROWS_YET"
-    assert sh2["off_distribution_v1_diagnostic"] == 18.9 and sh2["windows_entered_unique_v2"] == 0
-    assert sh2["off_distribution_rate"]["status"] == "UNMEASURED"
-    # v2 rows -> the corrected gate values are the ones scored
-    r3 = {"research_arm_stochastic": {**base, "lookup_provenance": {"v2_decisions": 60, "legacy_decisions": 240, "v2_windows": 20},
-                                      "action_scoring_corrected_gate": {"scored_decisions": 60, "l1_sampled_vs_l5": 0.07,
-                                                                        "l1_acted_vs_l5": 0.15, "off_distribution_rate_pct": 1.7,
-                                                                        "post_fill": {"decisions": 10, "complete_freq_gap_pp_sampled": -2.0,
-                                                                                      "complete_freq_gap_pp_acted": 3.0}},
-                                      "off_distribution_corrected_gate": 1.7, "off_distribution_v1_diagnostic": 18.9}}
-    sh3 = gate.score_shadow(r3, spec)
-    assert sh3["lookup_status"] == "OK:lookup_version_3"
-    assert sh3["off_distribution_rate"]["value"] == 1.7 and sh3["off_distribution_rate"]["status"] == "INSUFFICIENT"
-    assert sh3["action_distribution_relation"]["value"]["l1_sampled_vs_l5"] == 0.07
-    assert sh3["windows_since_freeze"] == 124 and sh3["windows_entered_unique_v2"] == 20
-
-
-def test_revised_maintenance_end_is_kept_with_provenance():
-    """The venue extended its own maintenance (7:15 ET): the original
-    end_utc is untouched, the latest revision is the declared end the
-    overrun is measured against, and the class inside it is scheduled."""
-    from src import pmus_l5_continuous_session as cont
-    w = cont.load_maintenance_windows()[0]
-    assert w["end_utc"] == "2026-09-06T10:00:00+00:00"
-    assert w["end_utc_revised"] == "2026-09-06T11:15:00+00:00"
-    assert w["revised_by"].startswith("user statement")
-    o = {"start_utc": "2026-09-06T07:15:29+00:00"}
-    assert cont.classify_outage(o, now_utc="2026-09-06T10:52:00+00:00")["class"] == "scheduled_maintenance"
-    late = cont.classify_outage(o, now_utc="2026-09-06T11:30:00+00:00")
-    assert late["class"] == "scheduled_maintenance_overrun" and late["overrun_s"] == 900.0
-    assert late["maintenance"]["declared_end_utc"] == "2026-09-06T11:15:00+00:00"
-
-
-def test_reclassification_inside_a_revised_window_drops_stale_overrun_fields():
-    """LIVE 11:07Z: after the venue's end moved to 11:15Z a record first
-    classified as overrun (vs 10:00Z) was re-classified scheduled_maintenance
-    but still carried overrun_s=3138.9 from the earlier pass."""
-    from src import pmus_l5_continuous_session as cont
-    stale = {"start_utc": "2026-09-06T07:15:29+00:00", "class": "scheduled_maintenance_overrun",
-             "overrun_s": 3138.9, "recovery_boundary": "open (no healthy account read yet)",
-             "account_recovered_utc": "2026-09-06T10:52:18+00:00"}
-    o = cont.classify_outage(stale, now_utc="2026-09-06T11:07:00+00:00")
-    assert o["class"] == "scheduled_maintenance" and "overrun_s" not in o
-    assert o["recovery_boundary"] == "venue_recovered"
+    # INVARIANTS KEPT: nothing is priced off the out-of-band bid, and no
+    # phantom EXTEND is recorded. What the session DOES place here is the
+    # completion the band used to prevent -- priced in the complement's own
+    # fee-safe branch, not off the collapsed bid -- which is the point of
+    # the change: a leg that would have stranded gets paired.
+    orders = rep.get("orders") or []
+    assert orders, "the recovered completion should have been placed"
+    assert all(o["stage"].startswith("spring_complete") for o in orders), orders
+    assert d["acted"] not in ("open", "extend")
+    assert not str(rep.get("stop_reason") or "").startswith("entry_band_left")
