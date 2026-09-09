@@ -113,3 +113,62 @@ def test_there_is_no_order_path():
     assert P.ORDER_ENTRY is False
     for forbidden in ("POST", "create_order", "place_order", "DELETE"):
         assert forbidden not in src, forbidden
+
+
+# ------------------------------------------------- the fetcher is GET-only
+def test_the_fetcher_has_no_order_path():
+    """Checks EXECUTABLE CODE, not prose. The first version of this grepped
+    the whole source and tripped on the docstring that describes the rule --
+    a test that cannot tell a prohibition from a violation is not a test."""
+    import ast
+    import inspect
+    from src import kalshi_account_preflight_fetch as F
+
+    tree = ast.parse(inspect.getsource(F))
+    calls = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            fn = node.func
+            if isinstance(fn, ast.Attribute):
+                calls.add(fn.attr)
+            elif isinstance(fn, ast.Name):
+                calls.add(fn.id)
+    for forbidden in ("post", "delete", "put", "patch", "create_order",
+                      "place_order", "cancel_order"):
+        assert forbidden not in calls, forbidden
+    # every HTTP verb it does use is a get
+    assert "get" in calls
+    assert F.READ_PATHS == ("/portfolio/balance", "/portfolio/fills",
+                            "/portfolio/settlements")
+
+
+def test_the_fetcher_order_path_check_would_catch_a_real_violation():
+    """Prove the AST check works, rather than trusting it."""
+    import ast
+    tree = ast.parse("async def f(c):\n    await c.post('/portfolio/orders')\n")
+    calls = {n.func.attr for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+    assert "post" in calls
+
+
+def test_the_fetcher_suppresses_exception_messages():
+    """A signing failure can echo key bytes in its message, so only the
+    exception TYPE may be reported."""
+    from src import kalshi_account_preflight_fetch as F
+    import inspect
+    src = inspect.getsource(F.main_async)
+    assert 'type(exc).__name__' in src
+    assert "the message is suppressed" in src
+
+
+def test_the_workflow_never_echoes_a_secret_value():
+    """The presence step prints booleans derived from -n tests, never the
+    variables themselves."""
+    from pathlib import Path
+    wf = Path(".github/workflows/kalshi-account-preflight.yml").read_text()
+    assert 'echo "$A"' not in wf and 'echo $A' not in wf
+    assert '-n "$A"' in wf                      # presence test only
+    assert "runs-on: ubuntu-latest" in wf       # not the AWS self-hosted box
+    # push-on-path is the only trigger; nothing schedules or auto-repeats it
+    assert "schedule:" not in wf
+    assert "branches: [feature/l5-transfer-backtest]" in wf

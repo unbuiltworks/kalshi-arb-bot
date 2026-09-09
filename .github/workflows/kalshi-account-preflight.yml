@@ -1,0 +1,61 @@
+name: Kalshi Account Preflight (READ-ONLY)
+
+# Runs the read-only account preflight where the repository secrets live.
+# GET requests only; there is no order path in the module it runs.
+#
+# Trigger is a push that touches THIS FILE on the research branch. For events
+# other than push, GitHub resolves workflows from the default branch, and
+# nothing here is allowed on the default branch -- so push-on-path is the one
+# trigger that works from a feature branch without touching main.
+on:
+  push:
+    branches: [feature/l5-transfer-backtest]
+    paths:
+      - .github/workflows/kalshi-account-preflight.yml
+      - src/kalshi_account_preflight_fetch.py
+      - src/kalshi_account_preflight_readonly.py
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install the two dependencies the client needs
+        run: pip install --quiet httpx cryptography
+
+      # Secret NAMES are unknown to this session -- they cannot be listed via
+      # the API by design. Several plausible names are mapped here; absent
+      # ones resolve to the empty string, and the presence report below says
+      # which arrived. No value is ever echoed.
+      - name: Report which credential names are populated
+        env:
+          A: ${{ secrets.KALSHI_API_KEY_ID }}
+          B: ${{ secrets.KALSHI_KEY_ID }}
+          C: ${{ secrets.KALSHI_ACCESS_KEY }}
+          D: ${{ secrets.KALSHI_PRIVATE_KEY_PEM }}
+          E: ${{ secrets.KALSHI_PRIVATE_KEY }}
+        run: |
+          echo "KALSHI_SECRET_PRESENCE {"\
+          "\"KALSHI_API_KEY_ID\":$([ -n "$A" ] && echo true || echo false),"\
+          "\"KALSHI_KEY_ID\":$([ -n "$B" ] && echo true || echo false),"\
+          "\"KALSHI_ACCESS_KEY\":$([ -n "$C" ] && echo true || echo false),"\
+          "\"KALSHI_PRIVATE_KEY_PEM\":$([ -n "$D" ] && echo true || echo false),"\
+          "\"KALSHI_PRIVATE_KEY\":$([ -n "$E" ] && echo true || echo false)}"
+
+      - name: Read-only preflight
+        env:
+          # first non-empty of each group wins
+          KALSHI_API_KEY_ID: ${{ secrets.KALSHI_API_KEY_ID || secrets.KALSHI_KEY_ID || secrets.KALSHI_ACCESS_KEY }}
+          KALSHI_PRIVATE_KEY_PEM: ${{ secrets.KALSHI_PRIVATE_KEY_PEM || secrets.KALSHI_PRIVATE_KEY }}
+          KALSHI_ENV: prod
+          KALSHI_EXPECTED_CASH_USD: '3419'
+        run: python -m src.kalshi_account_preflight_fetch
