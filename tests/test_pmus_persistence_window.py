@@ -9,9 +9,12 @@ from decimal import Decimal as D
 
 import pytest
 
-from src.pmus_persistence_window import (BUCKETS, WINDOW_S, bucket_of, cohort,
+from src.pmus_persistence_window import (BUCKETS,
+                                         MIN_OBSERVATIONS_PER_BUCKET,
+                                         MIN_OPPORTUNITIES_FOR_COMPARISON,
+                                         WINDOW_S, bucket_of, cohort,
                                          complement_price_now, observe,
-                                         open_window, summarise,
+                                         open_window, power_check, summarise,
                                          touch_reached)
 
 
@@ -257,3 +260,84 @@ def test_a_cohort_of_only_unresolvable_windows_refuses_to_answer():
     c = cohort([summarise(bad)])
     assert c["share_beyond_30s"] is None
     assert c["comparison"].startswith("UNRESOLVABLE")
+
+
+# --------------------------------------------------------------------------
+# The pre-registered power bar. OWNER: "If we still don't get enough, the
+# result is UNDERPOWERED, with the exact sample deficit -- not another forced
+# conclusion." A resolvable cohort can still be far too small to compare.
+# --------------------------------------------------------------------------
+
+def _bucket_totals(opps=(0, 0, 0), obs=(0, 0, 0)):
+    names = [n for _, _, n in BUCKETS]
+    return {n: {"observations": o, "opportunities": p, "prints": 0}
+            for n, p, o in zip(names, opps, obs)}
+
+
+def _resolvable_window(opps, obs):
+    """A closed window whose buckets all resolved, carrying given counts."""
+    names = [n for _, _, n in BUCKETS]
+    return {"slug": "s", "complement_side": "NO",
+            "complement_px_at_entry": "0.40", "unresolvable_buckets": [],
+            "buckets": {n: {"observations": o, "opportunities": p, "prints": p,
+                            "shares": "0", "best_complement_px": "0.40",
+                            "resolvable": True}
+                        for n, p, o in zip(names, opps, obs)}}
+
+
+def test_the_flow_blind_run_is_reported_underpowered():
+    """The real 2026-09-09 numbers: 4 opportunities in 2,136 observations.
+
+    Those buckets were arithmetically sound and every window resolved. The
+    sample was still far too small to say anything about persistence, and
+    without this bar it read as a comparison.
+    """
+    r = power_check(_bucket_totals(opps=(0, 2, 2), obs=(576, 552, 1008)))
+    assert r["powered"] is False
+    assert r["verdict"] == "UNDERPOWERED"
+    assert r["opportunities_observed"] == 4
+    assert r["opportunity_deficit"] == MIN_OPPORTUNITIES_FOR_COMPARISON - 4
+
+
+def test_the_deficit_is_exact_not_a_flag():
+    r = power_check(_bucket_totals(opps=(3, 4, 5), obs=(600, 600, 600)))
+    assert r["opportunity_deficit"] == MIN_OPPORTUNITIES_FOR_COMPARISON - 12
+    assert r["observation_deficit_by_bucket"] == {}
+
+
+def test_thin_observations_block_power_even_with_enough_opportunities():
+    r = power_check(_bucket_totals(opps=(40, 40, 40), obs=(600, 10, 600)))
+    assert r["powered"] is False
+    assert r["observation_deficit_by_bucket"] == {
+        "b_30_60s": MIN_OBSERVATIONS_PER_BUCKET - 10}
+
+
+def test_a_genuinely_powered_cohort_passes():
+    r = power_check(_bucket_totals(opps=(20, 10, 5), obs=(600, 600, 900)))
+    assert r["powered"] is True
+    assert r["verdict"] == "POWERED"
+    assert r["opportunity_deficit"] == 0
+
+
+def test_cohort_refuses_to_call_an_underpowered_result_a_comparison():
+    c = cohort([_resolvable_window(opps=(0, 1, 1), obs=(6, 6, 12))])
+    assert c["comparison"].startswith("UNDERPOWERED")
+    assert c["power"]["powered"] is False
+    assert c["power"]["opportunity_deficit"] > 0
+    # the share is still computable and still reported; it is simply not a
+    # finding until the power bar is met
+    assert c["windows"] == 1
+
+
+def test_a_powered_cohort_is_labelled_a_comparison():
+    wins = [_resolvable_window(opps=(20, 10, 5), obs=(600, 600, 900))]
+    c = cohort(wins)
+    assert c["comparison"] == "powered"
+    assert c["power"]["verdict"] == "POWERED"
+    assert c["share_beyond_30s"] == round(15 / 35, 4)
+
+
+def test_the_bars_are_pre_registered_constants():
+    """Frozen before the run. A bar tuned after seeing data is not a bar."""
+    assert MIN_OPPORTUNITIES_FOR_COMPARISON == 30
+    assert MIN_OBSERVATIONS_PER_BUCKET == 500

@@ -49,6 +49,14 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 MIN_SAMPLES_PER_BUCKET = 3
 
+# PRE-REGISTERED, before seeing any flow-ranked run. The owner: "not to wait
+# an arbitrary 15 minutes this time... If we still don't get enough, the
+# result is UNDERPOWERED, with the exact sample deficit -- not another forced
+# conclusion." These are the bars a 30s-vs-60s comparison must clear before
+# it is allowed to mean anything.
+MIN_OPPORTUNITIES_FOR_COMPARISON = 30
+MIN_OBSERVATIONS_PER_BUCKET = 500
+
 BUCKETS = ((0.0, 30.0, "a_0_30s"),
            (30.0, 60.0, "b_30_60s"),
            (60.0, 120.0, "c_60_120s"))
@@ -222,6 +230,35 @@ def summarise(win: Mapping[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def power_check(by_bucket: Mapping[str, Mapping[str, Any]]) -> Dict[str, Any]:
+    """Is this cohort large enough to compare 0-30s against 30-120s?
+
+    Decided against bars fixed BEFORE the run, and reported as a deficit
+    rather than a verdict when it fails. The 2026-09-09 flow-blind run
+    produced 4 opportunities across 2,136 observations; that is not evidence
+    that persistence does not help, it is an absence of evidence, and the
+    only honest output is the size of the shortfall.
+    """
+    a = by_bucket["a_0_30s"]
+    beyond = (by_bucket["b_30_60s"]["opportunities"]
+              + by_bucket["c_60_120s"]["opportunities"])
+    total = a["opportunities"] + beyond
+    thin = {k: MIN_OBSERVATIONS_PER_BUCKET - by_bucket[k]["observations"]
+            for k in by_bucket
+            if by_bucket[k]["observations"] < MIN_OBSERVATIONS_PER_BUCKET}
+    powered = total >= MIN_OPPORTUNITIES_FOR_COMPARISON and not thin
+    return {
+        "powered": powered,
+        "opportunities_observed": total,
+        "opportunities_required": MIN_OPPORTUNITIES_FOR_COMPARISON,
+        "opportunity_deficit": max(
+            0, MIN_OPPORTUNITIES_FOR_COMPARISON - total),
+        "observations_required_per_bucket": MIN_OBSERVATIONS_PER_BUCKET,
+        "observation_deficit_by_bucket": thin,
+        "verdict": "POWERED" if powered else "UNDERPOWERED",
+    }
+
+
 def cohort(summaries: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     """Aggregate closed windows into the <=30s vs >=30s comparison."""
     usable = [s for s in summaries if not s.get("unresolvable_buckets")]
@@ -235,9 +272,11 @@ def cohort(summaries: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
                 tot[name][k] += b[k]
     a = tot["a_0_30s"]["opportunities"]
     beyond = tot["b_30_60s"]["opportunities"] + tot["c_60_120s"]["opportunities"]
+    power = power_check(tot)
     if not usable:
         return {"windows": 0, "windows_dropped_unresolvable": dropped,
                 "by_bucket": tot, "share_beyond_30s": None,
+                "power": power,
                 "comparison": "UNRESOLVABLE: no window resolved every bucket",
                 "l5_median_complement_gap_s": L5_MEDIAN_COMPLEMENT_GAP_S,
                 "our_historical_max_rest_s": OUR_HISTORICAL_MAX_REST_S,
@@ -249,6 +288,12 @@ def cohort(summaries: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
         "opportunities_inside_our_old_deadline": a,
         "opportunities_we_never_waited_for": beyond,
         "share_beyond_30s": round(beyond / (a + beyond), 4) if (a + beyond) else None,
+        "power": power,
+        # A resolvable cohort can still be too small to compare. Say which.
+        "comparison": ("powered" if power["powered"] else
+                       "UNDERPOWERED: %d of %d opportunities" % (
+                           power["opportunities_observed"],
+                           power["opportunities_required"])),
         "l5_median_complement_gap_s": L5_MEDIAN_COMPLEMENT_GAP_S,
         "our_historical_max_rest_s": OUR_HISTORICAL_MAX_REST_S,
         "labels": LABELS,

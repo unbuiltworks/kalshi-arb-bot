@@ -80,6 +80,19 @@ DEFAULT_STATE = "/data/completion_shadow"
 DEFAULT_POLL_S = 5.0
 DEFAULT_MAX_MARKETS = 12
 BUDGET_RPS = 3.0
+# Rotation means a market goes unpolled for a whole pinned phase (~275 s) and
+# then gets read again. First-differencing across that gap is arithmetically
+# fine and measures the wrong thing: it is a several-minute average landing in
+# the same field as 5 s observations, and because flow_summary weights by
+# elapsed time one such interval outweighs every contemporaneous one. So an
+# over-long interval is a GAP, on the same principle as every other gap here
+# -- absence of sampling is not a measurement. At the 5 s poll this allows six
+# consecutive missed cycles before the tape is declared broken.
+MAX_FLOW_INTERVAL_S = 30.0
+# Ranking wants RECENT activity, not a market's whole history. Deep retention
+# would let a burst from three rotations ago pin a market that has since gone
+# quiet -- stale, though never look-ahead, since all of it precedes the pin.
+FLOW_HISTORY = 40
 
 ONE = D("1")
 PAR = D("1.00")
@@ -285,6 +298,8 @@ def flow_delta(prev: Optional[Mapping[str, Any]],
     dt = now - float(prev.get("t", now))
     if dt <= 0:
         return {"gap": True, "why": "non_positive_interval"}
+    if dt > MAX_FLOW_INTERVAL_S:
+        return {"gap": True, "why": "sampling_gap", "interval_s": round(dt, 3)}
     d = c - p
     return {"gap": False, "shares": d, "interval_s": round(dt, 3),
             "printed": d > 0, "shares_per_min": float(d) * 60.0 / dt,
@@ -299,19 +314,34 @@ def side_hint(sample: Mapping[str, Any]) -> Optional[str]:
     return "at_bid" if px <= b else ("at_ask" if px >= a else "inside")
 
 
+# Deciding two-sidedness needs a print on each side, so it cannot be decided
+# at all below two side-carrying prints. Measured 2026-09-09 on the first live
+# pin: every one of 18 scored markets came back two_sided false off 1 print in
+# 4 intervals -- not a fact about the venue, a term that structurally could
+# not vary, multiplying the whole ranking by the same constant. Same shape as
+# every other silent failure this campaign has found.
+MIN_PRINTS_TO_DECIDE_TWO_SIDED = 2
+
+
 def flow_summary(deltas: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     good = [d for d in deltas if not d.get("gap")]
     if not good:
         return {"intervals": 0, "gaps": len(deltas), "prints_seen": 0,
-                "shares_per_min": None, "two_sided": False}
+                "shares_per_min": None, "two_sided": False,
+                "two_sided_resolvable": False, "sided_prints": 0}
     obs = sum(d["interval_s"] for d in good)
     shares = sum((d["shares"] for d in good), D(0))
     printed = [d for d in good if d["printed"]]
-    sides = {d["side_hint"] for d in printed if d.get("side_hint")}
+    sided = [d for d in printed if d.get("side_hint")]
+    sides = {d["side_hint"] for d in sided}
     return {"intervals": len(good), "gaps": len(deltas) - len(good),
             "prints_seen": len(printed),
             "shares_per_min": round(float(shares) * 60.0 / obs, 4) if obs else None,
-            "two_sided": ("at_bid" in sides and "at_ask" in sides)}
+            "two_sided": ("at_bid" in sides and "at_ask" in sides),
+            # UNRESOLVED is not one-sided. A market with one print has not
+            # shown us a second side; it has not shown us anything.
+            "two_sided_resolvable": len(sided) >= MIN_PRINTS_TO_DECIDE_TWO_SIDED,
+            "sided_prints": len(sided)}
 
 
 def _pw():
@@ -339,8 +369,15 @@ def heartbeat(cycle: int, markets: int, rows: int, started: float,
     return hb
 
 
-def discover(limit: int, getter=None) -> List[str]:
-    """The venue's own live set, admitted on its `live` flag alone."""
+def discover(limit: Optional[int] = None, getter=None) -> List[str]:
+    """The venue's own live set, admitted on its `live` flag alone.
+
+    `limit=None` returns the WIDE universe. Taking the first N here was the
+    flow-blind selection: at a 5 s poll the rate budget affords 12 markets,
+    and cutting the venue's list at 12 handed the persistence experiment ten
+    county cricket matches. The cut now belongs to `pmus_flow_roster`, which
+    makes it on measured activity instead of list order.
+    """
     from src.pmus_sports_collector import fetch_live_events, live_event_targets
     getter = getter or http_get_json
     try:
@@ -351,12 +388,12 @@ def discover(limit: int, getter=None) -> List[str]:
     for t in live_event_targets(events):
         if t["slug"] not in out:
             out.append(t["slug"])
-    return out[:limit]
+    return out if limit is None else out[:limit]
 
 
 def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, Any]],
           getter=http_get_json, now: Optional[float] = None,
-          tranche: D = D("1")) -> List[Dict[str, Any]]:
+          tranche: D = D("1"), roster: Any = None) -> List[Dict[str, Any]]:
     """One pass. Inventory is SIMULATED: a market with no modelled surplus
     seeds one at the cheaper touch, so the completion decision has something
     to price. Nothing is bought."""
@@ -376,7 +413,7 @@ def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, Any]],
                                    "side": "YES", "flow": [], "prev": None,
                                    "tranches": 0})
         st["flow"].append(flow_delta(st.get("prev"), book, now))
-        st["flow"] = st["flow"][-2880:]     # ~24h at 30s, bounded
+        st["flow"] = st["flow"][-FLOW_HISTORY:]
         st["prev"] = dict(book, t=now)
         fs = flow_summary(st["flow"])
         if st["qty"] <= 0:
@@ -406,7 +443,12 @@ def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, Any]],
         # lifecycle: the surplus completes in a handful of tranches and
         # re-seeds, and tying the window to that reset it every ~5 cycles so
         # it never survived to 120s and the 30-60s bucket stayed empty.
-        if st.get("window") is None:
+        # ...and only on a market the roster PINNED on flow measured before
+        # this window opened. Without that gate the experiment observes
+        # whatever the venue happens to list first, which is how the 5 s run
+        # produced 4 opportunities in 2,136 observations.
+        may_observe = roster is None or roster.eligible_for_window(slug)
+        if st.get("window") is None and may_observe:
             cside = "NO" if st["side"] == "YES" else "YES"
             cpx = _pw().complement_price_now(book, cside)
             if cpx is not None:
@@ -447,19 +489,52 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     inv: Dict[str, Dict[str, D]] = {}
     total = 0
     from src.pmus_persistence_window import cadence_plan
+    from src.pmus_flow_roster import Roster, rotation_plan
+    roster = Roster(roster_size=a.max_markets)
     print(json.dumps({"kind": "shadow_start", "read_only": READ_ONLY,
                       "cadence_plan": cadence_plan(a.poll_s),
+                      "selection": "flow_ranked_rotation",
+                      "roster": roster.status(),
                       "places_orders": PLACES_ORDERS,
                       "requires_credentials": REQUIRES_CREDENTIALS,
                       "state_dir": state_dir(),
                       "observation_cap": str(OBSERVATION_CAP),
                       "labels": LABELS}), flush=True)
     c = 0
+    last_start = None
     while True:
         c += 1
+        cycle_started = time.time()
+        measured_cadence = (None if last_start is None
+                            else round(cycle_started - last_start, 3))
+        last_start = cycle_started
         try:
-            slugs = discover(a.max_markets)
-            rows = cycle(slugs, inv)
+            # Wide discovery happens once per survey pass, not once per
+            # cycle: the universe is the thing being ranked, and re-cutting
+            # it every poll would keep re-deciding the experiment's slate.
+            if roster.needs_universe():
+                roster.set_universe(discover())
+                # The real cost of one rotation, stated once the universe is
+                # actually known rather than assumed. The survey is the price
+                # of not being flow-blind and it is not small; the duty cycle
+                # belongs in the log, not in a reader's arithmetic.
+                print("PMUS_FLOW_ROSTER " + json.dumps(
+                    {"kind": "roster_universe",
+                     "plan": rotation_plan(len(roster.universe),
+                                           a.max_markets, a.poll_s,
+                                           roster.pin_cycles)}), flush=True)
+            slugs = roster.current()
+            rows = cycle(slugs, inv, roster=roster)
+            # Rank on flow measured BEFORE any pinned window opens. `advance`
+            # reads this only at the end of a survey pass and ignores it
+            # entirely while pinned, so a window can never feed its own
+            # selection.
+            transition = roster.advance(
+                {s: flow_summary((inv.get(s) or {}).get("flow") or [])
+                 for s in roster.universe})
+            if transition:
+                print("PMUS_FLOW_ROSTER " + json.dumps(transition,
+                                                       default=str), flush=True)
         except Exception as e:                       # never die on one cycle
             print(json.dumps({"kind": "cycle_error", "cycle": c,
                               "error": type(e).__name__}), flush=True)
@@ -468,11 +543,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for r in rows:
             print("PMUS_COMPLETION_SHADOW " + json.dumps(r, default=str),
                   flush=True)
-        print("PMUS_COMPLETION_SHADOW " + json.dumps(
-            heartbeat(c, len(slugs), total, started), default=str), flush=True)
+        hb = heartbeat(c, len(slugs), total, started)
+        # The cadence we ACTUALLY ran at, not the one we asked for.
+        hb["measured_cadence_s"] = measured_cadence
+        hb["roster_phase"] = roster.phase
+        hb["roster_pins"] = roster.pins
+        hb["universe"] = len(roster.universe)
+        print("PMUS_COMPLETION_SHADOW " + json.dumps(hb, default=str),
+              flush=True)
         if a.once or (a.cycles and c >= a.cycles):
             return 0
-        time.sleep(a.poll_s)
+        # Sleep the REMAINDER of the interval, not the whole of it. Sleeping
+        # poll_s after the work makes the true cadence poll_s + work, and the
+        # work is 12 sequential HTTP round trips. Measured on the first live
+        # rotation: a nominal 5 s poll ran at ~7.5 s, and every 30 s bucket
+        # got 4 observations where cadence_plan promised 6. Still resolvable,
+        # but the cadence the experiment is designed around has to be the
+        # cadence it runs at, or the plan is fiction. This also holds the
+        # request rate at the 2.4 rps the 12-market slate was derived from.
+        time.sleep(max(0.0, a.poll_s - (time.time() - cycle_started)))
 
 
 if __name__ == "__main__":

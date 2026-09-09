@@ -262,27 +262,27 @@ def _s(shares, t, last="0.50", bid="0.49", ask="0.51"):
 
 
 def test_flow_is_the_first_difference_not_the_lifetime_counter():
-    assert flow_delta(_s("500000", 0.0), _s("500000", 60.0), 60.0)["shares"] == 0
+    assert flow_delta(_s("500000", 0.0), _s("500000", 5.0), 5.0)["shares"] == 0
 
 
 def test_flow_gap_is_not_zero_flow():
     assert flow_delta(None, _s("1", 0.0), 0.0)["gap"] is True
-    assert flow_delta(_s("500", 0.0), _s("100", 60.0), 60.0)["why"] == \
+    assert flow_delta(_s("500", 0.0), _s("100", 5.0), 5.0)["why"] == \
         "counter_went_backwards"
 
 
 def test_flow_summary_excludes_gaps_from_the_rate():
     s = flow_summary([{"gap": True, "why": "x"},
-                      flow_delta(_s("0", 0.0), _s("60", 60.0), 60.0)])
+                      flow_delta(_s("0", 0.0), _s("5", 5.0), 5.0)])
     assert s["intervals"] == 1 and s["gaps"] == 1
     assert s["shares_per_min"] == pytest.approx(60.0)
 
 
 def test_two_sided_needs_both_a_bid_print_and_an_ask_print():
-    one = [flow_delta(_s("0", 0.0, last="0.49"), _s("5", 60.0, last="0.49"), 60.0)]
+    one = [flow_delta(_s("0", 0.0, last="0.49"), _s("5", 5.0, last="0.49"), 5.0)]
     assert flow_summary(one)["two_sided"] is False
-    both = one + [flow_delta(_s("5", 60.0, last="0.49"),
-                             _s("9", 120.0, last="0.51"), 120.0)]
+    both = one + [flow_delta(_s("5", 5.0, last="0.49"),
+                             _s("9", 10.0, last="0.51"), 10.0)]
     assert flow_summary(both)["two_sided"] is True
 
 
@@ -306,7 +306,7 @@ def test_every_completion_row_carries_the_flow_of_the_same_market():
                                "sharesTraded": str(n["i"] * 10),
                                "bidDepth": 1, "askDepth": 1}}
     cycle(["m"], inv, getter=getter, now=0.0)
-    rows = cycle(["m"], inv, getter=getter, now=60.0)
+    rows = cycle(["m"], inv, getter=getter, now=5.0)
     assert rows[0]["flow"]["intervals"] == 1
     assert rows[0]["flow"]["prints_seen"] == 1
     assert rows[0]["path_modelled"] is True
@@ -383,3 +383,149 @@ def test_the_shadow_opens_and_closes_a_persistence_window(capsys):
     assert row["closed"] is True
     # the interval we never operated in was actually observed
     assert row["buckets"]["b_30_60s"]["observations"] > 0
+
+
+# --------------------------------------------------------------------------
+# Flow-ranked selection. The cadence fix was right and the sample was still
+# worthless: 5 s polling of the first 12 markets the venue listed gave ten
+# county cricket matches and 4 opportunities in 2,136 observations. Selection,
+# not cadence, was binding.
+# --------------------------------------------------------------------------
+
+from src import pmus_completion_shadow as cs
+from src import pmus_flow_roster as _fr
+
+
+def _book_payload(bid="0.40", ask="0.42", shares="100", last="0.41"):
+    return {"marketData": {"marketSlug": "s", "state": "live",
+                           "bestBid": bid, "bestAsk": ask,
+                           "sharesTraded": shares, "lastTradePx": last}}
+
+
+def test_discover_returns_the_wide_universe_when_unlimited(monkeypatch):
+    """The cut belongs to the roster now, not to list order."""
+    slugs = ["m%02d" % i for i in range(60)]
+    monkeypatch.setattr(
+        "src.pmus_sports_collector.fetch_live_events",
+        lambda getter: ([{"slug": s} for s in slugs], {}))
+    monkeypatch.setattr(
+        "src.pmus_sports_collector.live_event_targets",
+        lambda events: [{"slug": e["slug"]} for e in events])
+    assert len(cs.discover()) == 60
+    assert len(cs.discover(12)) == 12
+
+
+def test_no_window_opens_on_a_market_the_roster_has_not_pinned():
+    """The gate the whole rotation exists to enforce."""
+    roster = _fr.Roster(roster_size=2)
+    roster.set_universe(["a", "b"])
+    assert roster.phase == _fr.SURVEY
+    inv = {}
+    n = 0.0
+    for _ in range(6):
+        n += 5.0
+        cs.cycle(["a"], inv, getter=lambda p: _book_payload(), now=n,
+                 roster=roster)
+    assert inv["a"].get("window") is None, \
+        "a survey-phase market must not be observed"
+
+
+def test_a_pinned_market_does_open_a_window():
+    roster = _fr.Roster(roster_size=2)
+    roster.set_universe(["a", "b"])
+    roster.phase = _fr.PINNED
+    roster.roster = ["a"]
+    roster.pinned_scores = {"a": 1.0}
+    inv = {}
+    cs.cycle(["a"], inv, getter=lambda p: _book_payload(), now=5.0,
+             roster=roster)
+    assert inv["a"].get("window") is not None
+
+
+def test_no_roster_preserves_the_previous_behaviour():
+    """Callers that pass no roster are unchanged; the gate is opt-in."""
+    inv = {}
+    cs.cycle(["a"], inv, getter=lambda p: _book_payload(), now=5.0)
+    assert inv["a"].get("window") is not None
+
+
+def test_the_shadow_never_polls_more_than_the_rate_budget_allows():
+    """12 is floor(BUDGET_RPS_headroom * poll_s) at 5 s, not a preference."""
+    roster = _fr.Roster(roster_size=cs.DEFAULT_MAX_MARKETS)
+    roster.set_universe(["m%02d" % i for i in range(60)])
+    for _ in range(120):
+        assert len(roster.current()) <= cs.DEFAULT_MAX_MARKETS
+        roster.advance({s: {"intervals": 8, "prints_seen": 4,
+                            "shares_per_min": 10.0, "two_sided": True}
+                        for s in roster.universe})
+
+
+def test_a_rotation_gap_is_a_gap_not_a_multi_minute_flow_interval():
+    """Rotation leaves a market unpolled for a whole pinned phase.
+
+    First-differencing across that is a several-minute average masquerading
+    as a 5 s observation, and flow_summary weights by elapsed time, so one
+    such interval would outweigh every contemporaneous one on the market.
+    """
+    prev = {"shares_traded": D("100"), "t": 0.0}
+    cur = {"shares_traded": D("500"), "bid": D("0.40"), "ask": D("0.42"),
+           "last_trade_px": D("0.41")}
+    d = cs.flow_delta(prev, cur, cs.MAX_FLOW_INTERVAL_S + 1.0)
+    assert d["gap"] is True
+    assert d["why"] == "sampling_gap"
+    assert "shares_per_min" not in d
+    # and an interval inside the bound is still a measurement
+    ok = cs.flow_delta(prev, cur, cs.MAX_FLOW_INTERVAL_S - 1.0)
+    assert ok["gap"] is False
+
+
+def test_a_gapped_rotation_interval_does_not_enter_the_flow_rate():
+    """The gap must be excluded from the rate, not folded in as zero."""
+    good = [cs.flow_delta({"shares_traded": D("0"), "t": 0.0},
+                          {"shares_traded": D("10"), "bid": D("0.40"),
+                           "ask": D("0.42"), "last_trade_px": D("0.41")}, 5.0)]
+    gapped = good + [{"gap": True, "why": "sampling_gap", "interval_s": 700.0}]
+    assert cs.flow_summary(good)["shares_per_min"] == \
+        cs.flow_summary(gapped)["shares_per_min"]
+    assert cs.flow_summary(gapped)["gaps"] == 1
+
+
+def test_flow_history_is_bounded_to_recent_activity():
+    inv = {}
+    n = 0.0
+    for _ in range(cs.FLOW_HISTORY + 25):
+        n += 5.0
+        cs.cycle(["a"], inv, getter=lambda p: _book_payload(shares=str(n)),
+                 now=n)
+    assert len(inv["a"]["flow"]) <= cs.FLOW_HISTORY
+
+
+def test_one_print_cannot_decide_two_sidedness():
+    """The defect the first live pin exposed, pinned at its source.
+
+    Deciding two-sidedness needs a print on each side, so one print decides
+    nothing. Reporting it as "not two-sided" gave all 18 scored markets the
+    same value and silently removed the term from the ranking.
+    """
+    one = [flow_delta(_s("0", 0.0, last="0.49"), _s("5", 5.0, last="0.49"), 5.0)]
+    s = flow_summary(one)
+    assert s["sided_prints"] == 1
+    assert s["two_sided_resolvable"] is False, \
+        "one print is not a decision about two-sidedness"
+    two = one + [flow_delta(_s("5", 5.0, last="0.49"),
+                            _s("9", 10.0, last="0.49"), 10.0)]
+    assert flow_summary(two)["two_sided_resolvable"] is True
+    assert flow_summary(two)["two_sided"] is False, \
+        "two prints on the SAME side decides it, and decides it one-sided"
+
+
+def test_prints_without_a_readable_side_do_not_count_toward_the_decision():
+    """A crossed or unreadable book yields no side hint; that is not evidence."""
+    d = flow_delta({"shares_traded": D("0"), "t": 0.0},
+                   {"shares_traded": D("5"), "bid": D("0.60"),
+                    "ask": D("0.40"), "last_trade_px": D("0.50")}, 5.0)
+    assert d["side_hint"] is None
+    s = flow_summary([d, d])
+    assert s["prints_seen"] == 2
+    assert s["sided_prints"] == 0
+    assert s["two_sided_resolvable"] is False
