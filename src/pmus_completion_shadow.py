@@ -660,6 +660,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         hb = heartbeat(c, len(slugs), total, started)
         # The cadence we ACTUALLY ran at, not the one we asked for.
         hb["measured_cadence_s"] = measured_cadence
+        # WHICH COMMIT IS ACTUALLY RUNNING. Railway marked two pushes SKIPPED
+        # that touched watched files (pmus_flow_roster.py 20:54Z,
+        # pmus_persistence_window.py 22:19Z); only changes to THIS file have
+        # reliably triggered a deploy. Both times the fix was committed and not
+        # running, and both times that was invisible from the logs -- the
+        # service looks healthy because it IS healthy, just executing older
+        # code. Stamping the commit on every heartbeat makes "is my fix live?"
+        # a one-line check instead of a deployment-list investigation.
+        hb["commit"] = os.getenv("RAILWAY_GIT_COMMIT_SHA", "")[:12] or None
         hb["roster_phase"] = roster.phase
         hb["roster_pins"] = roster.pins
         hb["universe"] = len(roster.universe)
