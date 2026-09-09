@@ -726,7 +726,15 @@ def main(argv: Optional[Sequence[str]] = None, *, sleep=time.sleep,
                     {"alarm": "structure_failed",
                      "err": f"{type(exc).__name__}:{str(exc)[:120]}"}),
                     flush=True)
-            if cycle % (every * INCENTIVE_EVERY_N) == 0:
+            # ALSO ON THE FIRST CYCLE, not only every 180th. The interval
+            # below is 3,600s, and under active development the service is
+            # redeployed more often than that -- the counter resets on every
+            # boot, so for three consecutive deploys this row never emitted
+            # once and could not be verified in production at all. A
+            # boot-time emission costs one extra public GET per deploy and
+            # makes the row observable whenever the service restarts, which
+            # is exactly what a health line should do.
+            if cycle == 1 or cycle % (every * INCENTIVE_EVERY_N) == 0:
                 try:
                     print("KALSHI_INCENTIVE " + json.dumps(incentive_state()),
                           flush=True)

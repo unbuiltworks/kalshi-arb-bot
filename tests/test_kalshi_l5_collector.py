@@ -409,3 +409,16 @@ def test_a_window_suffix_does_not_shatter_a_commodity_leg():
     })
     assert list(rep["legs"]) == ["KXGOLD15M"]
     assert rep["legs"]["KXGOLD15M"]["markets"] == 2
+
+
+def test_the_incentive_row_emits_at_boot_not_only_every_180th_cycle():
+    """Regression on an observability bug, not a logic bug. The interval is
+    3,600s; during active development the service redeployed more often than
+    that and the counter resets each boot, so the row never emitted once
+    across three deploys. Emitting on cycle 1 makes it verifiable whenever
+    the service restarts."""
+    from src import kalshi_l5_collector as C
+    import inspect
+    src = inspect.getsource(C.main)
+    assert "if cycle == 1 or cycle % (every * INCENTIVE_EVERY_N) == 0:" in src
+    assert "the counter resets on every" in src
