@@ -191,3 +191,35 @@ starts from the corrected deployment.
 
 A regression test now fails if the 30 s and 60 s lookbacks ever return the
 same value on a mid path that moved only outside the shorter window.
+
+---
+
+## 8. Observed limitation, 2026-09-09T17:15Z — the secondaries will mostly be blank
+
+**This is an observation, NOT a rule change.** No decision rule, threshold or
+metric is altered by it. It is recorded because a reader who sees empty
+secondary fields should know why rather than reconstruct it.
+
+The 0.9 span requirement from §7 makes the 60 s primary correct, and in doing
+so it makes both secondaries mostly unusable at our 5 s cadence:
+
+* **30 s lookback — structurally refused.** It needs 27 s of span, but samples
+  arrive 5 s apart with jitter, so the newest six fall in ~25 s and the
+  seventh lands just outside the 30 s filter. Observed on the first corrected
+  window: `"30": resolvable false, "history spans 25.0s of the 30s lookback"`
+  while the 60 s resolved at `span_s 55.001`.
+* **120 s lookback — rarely resolvable.** It needs 108 s of history, and only
+  one window opens per market per pin at ~55 s into a 275 s pinned phase, so
+  the history usually is not there.
+
+**Consequence, stated plainly:** if the primary FAILS we will have no
+descriptive colour from the secondaries about why. Under §3 and §4 that
+changes nothing — a primary failure kills the hypothesis outright and the
+secondaries were never permitted to rescue it — but the post-mortem will be
+thinner than it would otherwise have been.
+
+**Deliberately not fixed mid-experiment.** Changing the sampling design while
+the test is running is how you end up unable to say what you measured. Both
+this and the survey-cost reduction implied by the flow-selector-is-a-floor
+finding (466 markets now cost 975 s of survey for a 22% duty cycle) are
+deferred until this test resolves.
