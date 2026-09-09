@@ -173,6 +173,30 @@ def completion_economics(surplus_qty: D, surplus_spend: D, matched_qty: D,
     }
 
 
+def advance_path(st: Dict[str, Any], complement_px: D, tranche: D) -> None:
+    """Complete a tranche at the price the book is showing NOW.
+
+    This is the failure mode the entry pair cannot show. The 2026-09-09 run
+    did not lose on a bad first completion; it completed repeatedly as the
+    market moved, and the inventory-weighted average degraded to 1.0527
+    while each individual action still looked defensible.
+
+    No fill is invented: a tranche is only ever priced at a complement the
+    venue was actually quoting on that cycle, and the row is labelled
+    modelled throughout. Nothing here is realized P&L and it is never
+    reported as such.
+    """
+    take = min(tranche, st["qty"])
+    if take <= 0:
+        return
+    surplus_avg = st["spend"] / st["qty"]
+    st["matched"] += take
+    st["matched_spend"] += take * (surplus_avg + complement_px)
+    st["spend"] -= take * surplus_avg
+    st["qty"] -= take
+    st["tranches"] = int(st.get("tranches", 0)) + 1
+
+
 def classify(resulting: Optional[D]) -> str:
     """The owner's two cases, decided on the finished book, not the margin."""
     if resulting is None:
@@ -228,6 +252,60 @@ def propose(book: Mapping[str, Any], surplus_qty: D, surplus_spend: D,
 
 # ------------------------------ the loop ------------------------------
 
+def flow_delta(prev: Optional[Mapping[str, Any]],
+               cur: Mapping[str, Any], now: float) -> Dict[str, Any]:
+    """Contemporaneous flow from the SAME poll that prices the completion.
+
+    The two variables the admission rule needs -- does this market transact
+    on both sides, and what does completing in it cost -- have to be measured
+    on the same market at the same moment or they cannot be crossed. A
+    separate collector cannot guarantee that, and a local one is not durable:
+    the first flow collector ran as a background process in an ephemeral
+    container and died silently after 41 cycles while a `pgrep` that matched
+    its own command line reported it healthy. Same poll, same service, no
+    liveness claim that isn't a written row.
+
+    A gap is not zero flow and is never folded into a rate.
+    """
+    if prev is None:
+        return {"gap": True, "why": "first_sample"}
+    p, c = prev.get("shares_traded"), cur.get("shares_traded")
+    if p is None or c is None:
+        return {"gap": True, "why": "shares_traded_unreadable"}
+    if c < p:
+        return {"gap": True, "why": "counter_went_backwards"}
+    dt = now - float(prev.get("t", now))
+    if dt <= 0:
+        return {"gap": True, "why": "non_positive_interval"}
+    d = c - p
+    return {"gap": False, "shares": d, "interval_s": round(dt, 3),
+            "printed": d > 0, "shares_per_min": float(d) * 60.0 / dt,
+            "side_hint": side_hint(cur)}
+
+
+def side_hint(sample: Mapping[str, Any]) -> Optional[str]:
+    """Where the last print sat. INFERENCE -- the venue does not say."""
+    px, b, a = sample.get("last_trade_px"), sample.get("bid"), sample.get("ask")
+    if px is None or b is None or a is None or a < b:
+        return None
+    return "at_bid" if px <= b else ("at_ask" if px >= a else "inside")
+
+
+def flow_summary(deltas: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    good = [d for d in deltas if not d.get("gap")]
+    if not good:
+        return {"intervals": 0, "gaps": len(deltas), "prints_seen": 0,
+                "shares_per_min": None, "two_sided": False}
+    obs = sum(d["interval_s"] for d in good)
+    shares = sum((d["shares"] for d in good), D(0))
+    printed = [d for d in good if d["printed"]]
+    sides = {d["side_hint"] for d in printed if d.get("side_hint")}
+    return {"intervals": len(good), "gaps": len(deltas) - len(good),
+            "prints_seen": len(printed),
+            "shares_per_min": round(float(shares) * 60.0 / obs, 4) if obs else None,
+            "two_sided": ("at_bid" in sides and "at_ask" in sides)}
+
+
 def state_dir() -> str:
     return os.getenv(STATE_ENV, DEFAULT_STATE)
 
@@ -263,12 +341,14 @@ def discover(limit: int, getter=None) -> List[str]:
     return out[:limit]
 
 
-def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, D]],
-          getter=http_get_json) -> List[Dict[str, Any]]:
+def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, Any]],
+          getter=http_get_json, now: Optional[float] = None,
+          tranche: D = D("1")) -> List[Dict[str, Any]]:
     """One pass. Inventory is SIMULATED: a market with no modelled surplus
     seeds one at the cheaper touch, so the completion decision has something
     to price. Nothing is bought."""
     rows: List[Dict[str, Any]] = []
+    now = time.time() if now is None else now
     for slug in slugs:
         try:
             book = book_of(getter(BBO_PATH % slug))
@@ -280,7 +360,11 @@ def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, D]],
             continue
         st = inv.setdefault(slug, {"qty": D(0), "spend": D(0),
                                    "matched": D(0), "matched_spend": D(0),
-                                   "side": "YES"})
+                                   "side": "YES", "flow": [], "prev": None,
+                                   "tranches": 0})
+        st["flow"].append(flow_delta(st.get("prev"), book, now))
+        st["flow"] = st["flow"][-120:]
+        st["prev"] = dict(book, t=now)
         if st["qty"] <= 0 and st["matched"] <= 0:
             # seed a hypothetical first leg at the cheaper touch, and REMEMBER
             # which side it took -- the complement is priced off that
@@ -293,7 +377,13 @@ def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, D]],
         row = propose(book, st["qty"], st["spend"], st["matched"],
                       st["matched_spend"], surplus_side=str(st["side"]))
         if row:
+            row["flow"] = flow_summary(st["flow"])
+            row["tranches_completed"] = int(st.get("tranches", 0))
+            row["path_modelled"] = True
             rows.append(row)
+            cpx = _money(row["complement_px"])
+            if cpx is not None:
+                advance_path(st, cpx, tranche)
     return rows
 
 

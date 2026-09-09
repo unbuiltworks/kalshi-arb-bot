@@ -203,3 +203,109 @@ def test_the_dockerfile_copies_no_order_transport():
     bad = [l for l in copied if any(b in l.lower() for b in banned)]
     assert not bad, f"order transport copied into the image: {bad}"
     assert any("pmus_completion_shadow.py" in l for l in copied)
+
+
+# ---- the multi-completion PATH: the failure mode the entry pair cannot show
+
+from decimal import Decimal as _D
+
+from src.pmus_completion_shadow import (advance_path, flow_delta,
+                                        flow_summary, side_hint)
+
+
+def _st(qty="10", spend="4.0", side="YES"):
+    return {"qty": _D(qty), "spend": _D(spend), "matched": _D(0),
+            "matched_spend": _D(0), "side": side, "flow": [], "prev": None,
+            "tranches": 0}
+
+
+def test_repeated_completion_at_rising_prices_degrades_the_weighted_average():
+    """The 2026-09-09 mechanism, reproduced: every tranche can look sane
+    while the finished book lands above par."""
+    st = _st(qty="10", spend="4.0")             # surplus avg 0.40
+    for px in ("0.55", "0.62", "0.70", "0.78"):  # the market runs away
+        advance_path(st, _D(px), _D("2.5"))
+    assert st["qty"] == 0 and st["tranches"] == 4
+    weighted = st["matched_spend"] / st["matched"]
+    assert weighted > _D("1.00"), weighted
+    assert classify(weighted).startswith("bad_completion")
+
+
+def test_a_stable_book_completes_below_par_over_the_same_path():
+    st = _st(qty="10", spend="4.0")
+    for _ in range(4):
+        advance_path(st, _D("0.55"), _D("2.5"))
+    assert st["matched_spend"] / st["matched"] == _D("0.95")
+
+
+def test_a_tranche_never_exceeds_the_remaining_surplus():
+    st = _st(qty="2", spend="1.0")
+    advance_path(st, _D("0.5"), _D("99"))
+    assert st["qty"] == 0 and st["matched"] == _D(2)
+    advance_path(st, _D("0.5"), _D("5"))        # nothing left to pair
+    assert st["tranches"] == 1
+
+
+def test_surplus_average_is_preserved_as_the_surplus_is_drawn_down():
+    """Goes red if drawing down the surplus silently re-prices what remains."""
+    st = _st(qty="10", spend="4.0")
+    advance_path(st, _D("0.55"), _D("4"))
+    assert st["spend"] / st["qty"] == _D("0.40")
+
+
+# ---- flow measured on the SAME poll as the completion
+
+def _s(shares, t, last="0.50", bid="0.49", ask="0.51"):
+    return {"shares_traded": _D(shares), "last_trade_px": _D(last),
+            "bid": _D(bid), "ask": _D(ask), "t": t}
+
+
+def test_flow_is_the_first_difference_not_the_lifetime_counter():
+    assert flow_delta(_s("500000", 0.0), _s("500000", 60.0), 60.0)["shares"] == 0
+
+
+def test_flow_gap_is_not_zero_flow():
+    assert flow_delta(None, _s("1", 0.0), 0.0)["gap"] is True
+    assert flow_delta(_s("500", 0.0), _s("100", 60.0), 60.0)["why"] == \
+        "counter_went_backwards"
+
+
+def test_flow_summary_excludes_gaps_from_the_rate():
+    s = flow_summary([{"gap": True, "why": "x"},
+                      flow_delta(_s("0", 0.0), _s("60", 60.0), 60.0)])
+    assert s["intervals"] == 1 and s["gaps"] == 1
+    assert s["shares_per_min"] == pytest.approx(60.0)
+
+
+def test_two_sided_needs_both_a_bid_print_and_an_ask_print():
+    one = [flow_delta(_s("0", 0.0, last="0.49"), _s("5", 60.0, last="0.49"), 60.0)]
+    assert flow_summary(one)["two_sided"] is False
+    both = one + [flow_delta(_s("5", 60.0, last="0.49"),
+                             _s("9", 120.0, last="0.51"), 120.0)]
+    assert flow_summary(both)["two_sided"] is True
+
+
+def test_side_hint_refuses_a_crossed_book():
+    assert side_hint({"last_trade_px": _D("0.5"), "bid": _D("0.6"),
+                      "ask": _D("0.4")}) is None
+
+
+def test_every_completion_row_carries_the_flow_of_the_same_market():
+    """The join has to exist on the row, or the two variables can never be
+    crossed at the same instant on the same market."""
+    inv = {}
+    n = {"i": 0}
+
+    def getter(p):
+        n["i"] += 1
+        return {"marketData": {"marketSlug": "m", "state": "MARKET_STATE_OPEN",
+                               "bestBid": {"value": "0.45"},
+                               "bestAsk": {"value": "0.47"},
+                               "lastTradePx": {"value": "0.45"},
+                               "sharesTraded": str(n["i"] * 10),
+                               "bidDepth": 1, "askDepth": 1}}
+    cycle(["m"], inv, getter=getter, now=0.0)
+    rows = cycle(["m"], inv, getter=getter, now=60.0)
+    assert rows[0]["flow"]["intervals"] == 1
+    assert rows[0]["flow"]["prints_seen"] == 1
+    assert rows[0]["path_modelled"] is True
