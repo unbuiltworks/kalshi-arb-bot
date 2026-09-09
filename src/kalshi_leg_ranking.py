@@ -267,6 +267,31 @@ LEG_VERDICT = {
                   "is the part of it that stopped paying."),
 }
 
+STABILITY = {
+    "finding": ("THE COMMODITY LEGS HOLD THEIR PRICE; THE CRYPTO LEGS DO "
+                "NOT. Splitting a 2,234-snapshot / 81-minute window in half "
+                "and comparing median pair cost early vs late: gold, WTI, "
+                "copper, KXBTC15M and KXETH15M all moved 0.000, silver "
+                "-0.001, natgas +0.010 -- while every KXCRYPTOLEAD15M leg "
+                "moved 0.010 to 0.020, with SOL +0.020 and HYPE -0.020."),
+    "why_it_matters": ("a 15-minute market must be re-quoted about a "
+                       "hundred times a day. A leg whose pair cost wanders "
+                       "two cents between quotes prices differently every "
+                       "time you touch it, and the drag figure that ranked "
+                       "it is then a average over a moving target rather "
+                       "than a property you can plan against."),
+    "effect_on_the_verdict": ("it STRENGTHENS copper and natgas rather than "
+                              "changing the ordering. They were chosen on "
+                              "cost and competition; stability is a third "
+                              "axis they also win, and the legs they beat "
+                              "are the unstable ones."),
+    "caveat": ("81 minutes, all inside 00:16-01:37Z. This is NOT the "
+               "off-hours test: it does not cross the CME maintenance "
+               "break or reach Asian hours, and commodity 15m books could "
+               "behave differently there. Do not read it as a 24-hour "
+               "claim."),
+}
+
 PAYOUT_FLOOR_VERDICT = {
     "finding": ("UNDER THE FULL-BOOK DENOMINATOR, EVERY LEG PAYS ZERO. Our "
                 "$111 earns a gross of $0.0094 to $0.6407 per period across "

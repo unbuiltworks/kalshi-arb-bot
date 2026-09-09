@@ -3,28 +3,28 @@
  "unit_of_decision": "leg",
  "legs": [
   {
-   "leg": "KXBTC15M",
-   "observations": 98,
+   "leg": "KXETH15M",
+   "observations": 192,
    "pair_cost_median": "1.01",
    "pair_cost_p10": "1.001",
-   "pair_cost_p90": "1.01",
-   "yes_bid_median": "0.69",
+   "pair_cost_p90": "1.02",
+   "yes_bid_median": "0.39",
    "drag_per_dollar": "-0.009901",
-   "maker_fee_per_dollar_if_both_legs_fill": "0.007505",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.008455",
    "headline_reward_usd": null,
    "target_size": null,
    "reward_density_per_capital_dollar": null,
    "band_min_side_depth_median": {
-    "1": "2727.17",
-    "2": "4549.5599999999995",
-    "5": "9708.83",
-    "10": "16588.14"
+    "1": "60.71",
+    "2": "299.0",
+    "5": "1533.6699999999998",
+    "10": "3392.0400000000004"
    },
    "share_curve": {
-    "1": "0.0387",
-    "2": "0.0236",
-    "5": "0.0112",
-    "10": "0.0066"
+    "1": "0.6442",
+    "2": "0.2688",
+    "5": "0.0669",
+    "10": "0.0314"
    },
    "residual_economics": null,
    "credited_incentives_usd": "0.00",
@@ -32,26 +32,26 @@
   },
   {
    "leg": "KXWTI15M",
-   "observations": 101,
+   "observations": 196,
    "pair_cost_median": "1.01",
    "pair_cost_p10": "1.002",
    "pair_cost_p90": "1.02",
-   "yes_bid_median": "0.69",
+   "yes_bid_median": "0.6",
    "drag_per_dollar": "-0.009901",
-   "maker_fee_per_dollar_if_both_legs_fill": "0.007505",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.008455",
    "headline_reward_usd": "20",
    "target_size": "300.0",
    "reward_density_per_capital_dollar": "0.066007",
    "band_min_side_depth_median": {
-    "1": "216.0",
-    "2": "1970.0",
-    "5": "5027.2",
-    "10": "6465.64"
+    "1": "136.0",
+    "2": "1471.35",
+    "5": "5082.0",
+    "10": "6469.5"
    },
    "share_curve": {
-    "1": "0.3372",
-    "2": "0.0528",
-    "5": "0.0214",
+    "1": "0.4469",
+    "2": "0.0695",
+    "5": "0.0212",
     "10": "0.0167"
    },
    "residual_economics": null,
@@ -59,28 +59,28 @@
    "rank_by_measured_cost": 2
   },
   {
-   "leg": "KXETH15M",
-   "observations": 99,
+   "leg": "KXSILVER15M",
+   "observations": 197,
    "pair_cost_median": "1.01",
    "pair_cost_p10": "1.001",
-   "pair_cost_p90": "1.01",
-   "yes_bid_median": "0.56",
+   "pair_cost_p90": "1.02",
+   "yes_bid_median": "0.45",
    "drag_per_dollar": "-0.009901",
-   "maker_fee_per_dollar_if_both_legs_fill": "0.008697",
-   "headline_reward_usd": null,
-   "target_size": null,
-   "reward_density_per_capital_dollar": null,
+   "maker_fee_per_dollar_if_both_legs_fill": "0.008778",
+   "headline_reward_usd": "20",
+   "target_size": "300.0",
+   "reward_density_per_capital_dollar": "0.066007",
    "band_min_side_depth_median": {
-    "1": "74.49",
-    "2": "350.0",
-    "5": "1582.01",
-    "10": "3508.07"
+    "1": "456.29",
+    "2": "1852.4699999999998",
+    "5": "4291.7",
+    "10": "4700.5"
    },
    "share_curve": {
-    "1": "0.5960",
-    "2": "0.2390",
-    "5": "0.0650",
-    "10": "0.0304"
+    "1": "0.1941",
+    "2": "0.0560",
+    "5": "0.0250",
+    "10": "0.0228"
    },
    "residual_economics": null,
    "credited_incentives_usd": "0.00",
@@ -88,38 +88,10 @@
   },
   {
    "leg": "KXGOLD15M",
-   "observations": 101,
+   "observations": 195,
    "pair_cost_median": "1.01",
    "pair_cost_p10": "1.001",
    "pair_cost_p90": "1.01",
-   "yes_bid_median": "0.54",
-   "drag_per_dollar": "-0.009901",
-   "maker_fee_per_dollar_if_both_legs_fill": "0.008778",
-   "headline_reward_usd": "20",
-   "target_size": "300.0",
-   "reward_density_per_capital_dollar": "0.066007",
-   "band_min_side_depth_median": {
-    "1": "1392.64",
-    "2": "4424.0",
-    "5": "8643.36",
-    "10": "8920.66"
-   },
-   "share_curve": {
-    "1": "0.0731",
-    "2": "0.0242",
-    "5": "0.0126",
-    "10": "0.0122"
-   },
-   "residual_economics": null,
-   "credited_incentives_usd": "0.00",
-   "rank_by_measured_cost": 4
-  },
-  {
-   "leg": "KXSILVER15M",
-   "observations": 102,
-   "pair_cost_median": "1.01",
-   "pair_cost_p10": "1.001",
-   "pair_cost_p90": "1.02",
    "yes_bid_median": "0.53",
    "drag_per_dollar": "-0.009901",
    "maker_fee_per_dollar_if_both_legs_fill": "0.008798",
@@ -127,16 +99,44 @@
    "target_size": "300.0",
    "reward_density_per_capital_dollar": "0.066007",
    "band_min_side_depth_median": {
-    "1": "232.8",
-    "2": "1313.62",
-    "5": "4418.84",
-    "10": "4795.09"
+    "1": "1502.9",
+    "2": "4292.75",
+    "5": "8586.32",
+    "10": "9002.47"
    },
    "share_curve": {
-    "1": "0.3207",
-    "2": "0.0772",
-    "5": "0.0243",
-    "10": "0.0224"
+    "1": "0.0681",
+    "2": "0.0250",
+    "5": "0.0126",
+    "10": "0.0121"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 4
+  },
+  {
+   "leg": "KXBTC15M",
+   "observations": 191,
+   "pair_cost_median": "1.01",
+   "pair_cost_p10": "1.002",
+   "pair_cost_p90": "1.01",
+   "yes_bid_median": "0.48",
+   "drag_per_dollar": "-0.009901",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.008838",
+   "headline_reward_usd": null,
+   "target_size": null,
+   "reward_density_per_capital_dollar": null,
+   "band_min_side_depth_median": {
+    "1": "2515.06",
+    "2": "4075.05",
+    "5": "8461.38",
+    "10": "15535.199999999999"
+   },
+   "share_curve": {
+    "1": "0.0419",
+    "2": "0.0263",
+    "5": "0.0128",
+    "10": "0.0070"
    },
    "residual_economics": null,
    "credited_incentives_usd": "0.00",
@@ -144,27 +144,27 @@
   },
   {
    "leg": "KXNATGAS15M",
-   "observations": 97,
+   "observations": 178,
    "pair_cost_median": "1.02",
    "pair_cost_p10": "1.01",
-   "pair_cost_p90": "1.04",
-   "yes_bid_median": "0.18",
+   "pair_cost_p90": "1.05",
+   "yes_bid_median": "0.25",
    "drag_per_dollar": "-0.019608",
-   "maker_fee_per_dollar_if_both_legs_fill": "0.005500",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.006878",
    "headline_reward_usd": "20",
    "target_size": "300.0",
    "reward_density_per_capital_dollar": "0.065359",
    "band_min_side_depth_median": {
     "1": "0",
-    "2": "58.59",
-    "5": "145.0",
-    "10": "265.63"
+    "2": "57.0",
+    "5": "136.67000000000002",
+    "10": "246.0"
    },
    "share_curve": {
     "1": "1.0000",
-    "2": "0.6500",
-    "5": "0.4287",
-    "10": "0.2906"
+    "2": "0.6563",
+    "5": "0.4433",
+    "10": "0.3067"
    },
    "residual_economics": null,
    "credited_incentives_usd": "0.00",
@@ -172,26 +172,26 @@
   },
   {
    "leg": "KXCOPPER15M",
-   "observations": 99,
+   "observations": 185,
    "pair_cost_median": "1.02",
    "pair_cost_p10": "1.01",
    "pair_cost_p90": "1.03",
-   "yes_bid_median": "0.62",
+   "yes_bid_median": "0.37",
    "drag_per_dollar": "-0.019608",
-   "maker_fee_per_dollar_if_both_legs_fill": "0.008337",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.008418",
    "headline_reward_usd": "20",
    "target_size": "300.0",
    "reward_density_per_capital_dollar": "0.065359",
    "band_min_side_depth_median": {
     "1": "0",
-    "2": "76.0",
-    "5": "257.73",
+    "2": "77.0",
+    "5": "284.14",
     "10": "595.3499999999999"
    },
    "share_curve": {
     "1": "1.0000",
-    "2": "0.5888",
-    "5": "0.2969",
+    "2": "0.5856",
+    "5": "0.2769",
     "10": "0.1545"
    },
    "residual_economics": null,
@@ -199,56 +199,56 @@
    "rank_by_measured_cost": 7
   },
   {
-   "leg": "KXCRYPTOLEAD15M:SOL",
-   "observations": 99,
-   "pair_cost_median": "1.03",
-   "pair_cost_p10": "1.01",
-   "pair_cost_p90": "1.08",
-   "yes_bid_median": "0.06",
-   "drag_per_dollar": "-0.029126",
-   "maker_fee_per_dollar_if_both_legs_fill": "0.002505",
-   "headline_reward_usd": "20",
-   "target_size": "1000.0",
-   "reward_density_per_capital_dollar": "0.019417",
-   "band_min_side_depth_median": {
-    "1": "0",
-    "2": "0.01",
-    "5": "120.01",
-    "10": "561.01"
-   },
-   "share_curve": {
-    "1": "1.0000",
-    "2": "0.9999",
-    "5": "0.4731",
-    "10": "0.1611"
-   },
-   "residual_economics": null,
-   "credited_incentives_usd": "0.00",
-   "rank_by_measured_cost": 8
-  },
-  {
    "leg": "KXCRYPTOLEAD15M:XRP",
-   "observations": 93,
+   "observations": 180,
    "pair_cost_median": "1.04",
    "pair_cost_p10": "1.02",
    "pair_cost_p90": "1.11",
-   "yes_bid_median": "0.09",
+   "yes_bid_median": "0.05",
    "drag_per_dollar": "-0.038462",
-   "maker_fee_per_dollar_if_both_legs_fill": "0.003562",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.002375",
    "headline_reward_usd": "20",
    "target_size": "1000.0",
    "reward_density_per_capital_dollar": "0.019231",
    "band_min_side_depth_median": {
     "1": "0",
     "2": "0",
-    "5": "50.0",
-    "10": "1330.0"
+    "5": "120.0",
+    "10": "1244.0"
    },
    "share_curve": {
     "1": "1.0000",
     "2": "1.0000",
-    "5": "0.6810",
-    "10": "0.0743"
+    "5": "0.4707",
+    "10": "0.0790"
+   },
+   "residual_economics": null,
+   "credited_incentives_usd": "0.00",
+   "rank_by_measured_cost": 8
+  },
+  {
+   "leg": "KXCRYPTOLEAD15M:SOL",
+   "observations": 190,
+   "pair_cost_median": "1.04",
+   "pair_cost_p10": "1.02",
+   "pair_cost_p90": "1.09",
+   "yes_bid_median": "0.08",
+   "drag_per_dollar": "-0.038462",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.003271",
+   "headline_reward_usd": "20",
+   "target_size": "1000.0",
+   "reward_density_per_capital_dollar": "0.019231",
+   "band_min_side_depth_median": {
+    "1": "0",
+    "2": "0.01",
+    "5": "124.01",
+    "10": "531.01"
+   },
+   "share_curve": {
+    "1": "1.0000",
+    "2": "0.9999",
+    "5": "0.4626",
+    "10": "0.1674"
    },
    "residual_economics": null,
    "credited_incentives_usd": "0.00",
@@ -256,27 +256,27 @@
   },
   {
    "leg": "KXCRYPTOLEAD15M:ETH",
-   "observations": 97,
-   "pair_cost_median": "1.04",
+   "observations": 190,
+   "pair_cost_median": "1.05",
    "pair_cost_p10": "1.02",
-   "pair_cost_p90": "1.13",
+   "pair_cost_p90": "1.12",
    "yes_bid_median": "0.1",
-   "drag_per_dollar": "-0.038462",
-   "maker_fee_per_dollar_if_both_legs_fill": "0.003844",
+   "drag_per_dollar": "-0.047619",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.004021",
    "headline_reward_usd": "20",
    "target_size": "1000.0",
-   "reward_density_per_capital_dollar": "0.019231",
+   "reward_density_per_capital_dollar": "0.019048",
    "band_min_side_depth_median": {
     "1": "0",
     "2": "0",
-    "5": "4.42",
-    "10": "490.0"
+    "5": "48.0",
+    "10": "505.01"
    },
    "share_curve": {
     "1": "1.0000",
     "2": "1.0000",
-    "5": "0.9602",
-    "10": "0.1789"
+    "5": "0.6877",
+    "10": "0.1731"
    },
    "residual_economics": null,
    "credited_incentives_usd": "0.00",
@@ -284,27 +284,27 @@
   },
   {
    "leg": "KXCRYPTOLEAD15M:BTC",
-   "observations": 99,
-   "pair_cost_median": "1.06",
+   "observations": 189,
+   "pair_cost_median": "1.07",
    "pair_cost_p10": "1.02",
    "pair_cost_p90": "1.11",
-   "yes_bid_median": "0.1",
-   "drag_per_dollar": "-0.056604",
-   "maker_fee_per_dollar_if_both_legs_fill": "0.004191",
+   "yes_bid_median": "0.12",
+   "drag_per_dollar": "-0.065421",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.004892",
    "headline_reward_usd": "20",
    "target_size": "1000.0",
-   "reward_density_per_capital_dollar": "0.018868",
+   "reward_density_per_capital_dollar": "0.018692",
    "band_min_side_depth_median": {
     "1": "0",
     "2": "0",
-    "5": "10.0",
-    "10": "757.29"
+    "5": "26.0",
+    "10": "627.0"
    },
    "share_curve": {
     "1": "1.0000",
     "2": "1.0000",
-    "5": "0.9128",
-    "10": "0.1215"
+    "5": "0.7996",
+    "10": "0.1420"
    },
    "residual_economics": null,
    "credited_incentives_usd": "0.00",
@@ -312,27 +312,27 @@
   },
   {
    "leg": "KXCRYPTOLEAD15M:HYPE",
-   "observations": 97,
+   "observations": 186,
    "pair_cost_median": "1.09",
-   "pair_cost_p10": "1.04",
+   "pair_cost_p10": "1.02",
    "pair_cost_p90": "1.13",
-   "yes_bid_median": "0.31",
+   "yes_bid_median": "0.2",
    "drag_per_dollar": "-0.082569",
-   "maker_fee_per_dollar_if_both_legs_fill": "0.008736",
+   "maker_fee_per_dollar_if_both_legs_fill": "0.007044",
    "headline_reward_usd": "20",
    "target_size": "1000.0",
    "reward_density_per_capital_dollar": "0.018349",
    "band_min_side_depth_median": {
     "1": "0",
     "2": "0",
-    "5": "2.0",
-    "10": "463.0"
+    "5": "4.0",
+    "10": "503.0"
    },
    "share_curve": {
     "1": "1.0000",
     "2": "1.0000",
-    "5": "0.9807",
-    "10": "0.1803"
+    "5": "0.9622",
+    "10": "0.1684"
    },
    "residual_economics": null,
    "credited_incentives_usd": "0.00",
@@ -394,9 +394,6 @@
     "KXSILVER15M",
     "KXWTI15M"
    ],
-   "KXGOLD15M": [
-    "KXBTC15M"
-   ],
    "KXNATGAS15M": [
     "KXBTC15M",
     "KXETH15M",
@@ -415,12 +412,20 @@
   },
   "ordering_depends_on_the_unknown_rule": [
    [
+    "KXBTC15M",
+    "KXGOLD15M"
+   ],
+   [
     "KXCOPPER15M",
     "KXCRYPTOLEAD15M:BTC"
    ],
    [
     "KXCOPPER15M",
     "KXCRYPTOLEAD15M:XRP"
+   ],
+   [
+    "KXCRYPTOLEAD15M:BTC",
+    "KXCRYPTOLEAD15M:ETH"
    ],
    [
     "KXCRYPTOLEAD15M:BTC",
@@ -459,85 +464,85 @@
  },
  "frontier": [
   {
-   "leg": "KXBTC15M",
-   "cost_per_dollar": "0.017406",
-   "competing_depth": "4549.5599999999995",
+   "leg": "KXETH15M",
+   "cost_per_dollar": "0.018356",
+   "competing_depth": "299.0",
    "headline_reward_usd": null,
    "on_frontier": true
   },
   {
    "leg": "KXWTI15M",
-   "cost_per_dollar": "0.017406",
-   "competing_depth": "1970.0",
+   "cost_per_dollar": "0.018356",
+   "competing_depth": "1471.35",
    "headline_reward_usd": "20",
    "on_frontier": true
   },
   {
-   "leg": "KXETH15M",
-   "cost_per_dollar": "0.018598",
-   "competing_depth": "350.0",
-   "headline_reward_usd": null,
-   "on_frontier": true
-  },
-  {
-   "leg": "KXGOLD15M",
+   "leg": "KXSILVER15M",
    "cost_per_dollar": "0.018679",
-   "competing_depth": "4424.0",
+   "competing_depth": "1852.4699999999998",
    "headline_reward_usd": "20",
    "on_frontier": false
   },
   {
-   "leg": "KXSILVER15M",
+   "leg": "KXGOLD15M",
    "cost_per_dollar": "0.018699",
-   "competing_depth": "1313.62",
+   "competing_depth": "4292.75",
    "headline_reward_usd": "20",
+   "on_frontier": false
+  },
+  {
+   "leg": "KXBTC15M",
+   "cost_per_dollar": "0.018739",
+   "competing_depth": "4075.05",
+   "headline_reward_usd": null,
    "on_frontier": false
   },
   {
    "leg": "KXNATGAS15M",
-   "cost_per_dollar": "0.025108",
-   "competing_depth": "58.59",
+   "cost_per_dollar": "0.026486",
+   "competing_depth": "57.0",
    "headline_reward_usd": "20",
    "on_frontier": true
   },
   {
    "leg": "KXCOPPER15M",
-   "cost_per_dollar": "0.027945",
-   "competing_depth": "76.0",
+   "cost_per_dollar": "0.028026",
+   "competing_depth": "77.0",
    "headline_reward_usd": "20",
    "on_frontier": false
   },
   {
-   "leg": "KXCRYPTOLEAD15M:SOL",
-   "cost_per_dollar": "0.031631",
-   "competing_depth": "0.01",
-   "headline_reward_usd": "20",
-   "on_frontier": true
-  },
-  {
    "leg": "KXCRYPTOLEAD15M:XRP",
-   "cost_per_dollar": "0.042024",
+   "cost_per_dollar": "0.040837",
    "competing_depth": "0",
    "headline_reward_usd": "20",
    "on_frontier": true
   },
   {
+   "leg": "KXCRYPTOLEAD15M:SOL",
+   "cost_per_dollar": "0.041733",
+   "competing_depth": "0.01",
+   "headline_reward_usd": "20",
+   "on_frontier": false
+  },
+  {
    "leg": "KXCRYPTOLEAD15M:ETH",
-   "cost_per_dollar": "0.042306",
+   "cost_per_dollar": "0.051640",
    "competing_depth": "0",
    "headline_reward_usd": "20",
    "on_frontier": true
   },
   {
    "leg": "KXCRYPTOLEAD15M:BTC",
-   "cost_per_dollar": "0.060795",
+   "cost_per_dollar": "0.070313",
    "competing_depth": "0",
    "headline_reward_usd": "20",
    "on_frontier": true
   },
   {
    "leg": "KXCRYPTOLEAD15M:HYPE",
-   "cost_per_dollar": "0.091305",
+   "cost_per_dollar": "0.089613",
    "competing_depth": "0",
    "headline_reward_usd": "20",
    "on_frontier": true
@@ -565,22 +570,22 @@
      "forfeited_usd": "0"
     },
     "5": {
-     "share": "0.6810",
-     "gross_usd": "13.6196",
+     "share": "0.4707",
+     "gross_usd": "9.4148",
      "paid": true,
      "forfeited_usd": "0"
     },
     "10": {
-     "share": "0.0743",
-     "gross_usd": "1.4857",
+     "share": "0.0790",
+     "gross_usd": "1.5803",
      "paid": true,
      "forfeited_usd": "0"
     },
     "full": {
      "share": "0.0257",
-     "gross_usd": "0.5138",
+     "gross_usd": "0.5145",
      "paid": false,
-     "forfeited_usd": "0.5138"
+     "forfeited_usd": "0.5145"
     }
    },
    "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
@@ -601,22 +606,22 @@
      "forfeited_usd": "0"
     },
     "5": {
-     "share": "0.4731",
-     "gross_usd": "9.4625",
+     "share": "0.4626",
+     "gross_usd": "9.2511",
      "paid": true,
      "forfeited_usd": "0"
     },
     "10": {
-     "share": "0.1611",
-     "gross_usd": "3.2228",
+     "share": "0.1674",
+     "gross_usd": "3.3472",
      "paid": true,
      "forfeited_usd": "0"
     },
     "full": {
-     "share": "0.0296",
-     "gross_usd": "0.5923",
+     "share": "0.0311",
+     "gross_usd": "0.6222",
      "paid": false,
-     "forfeited_usd": "0.5923"
+     "forfeited_usd": "0.6222"
     }
    },
    "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
@@ -637,22 +642,22 @@
      "forfeited_usd": "0"
     },
     "5": {
-     "share": "0.9807",
-     "gross_usd": "19.6148",
+     "share": "0.9622",
+     "gross_usd": "19.2441",
      "paid": true,
      "forfeited_usd": "0"
     },
     "10": {
-     "share": "0.1803",
-     "gross_usd": "3.6058",
+     "share": "0.1684",
+     "gross_usd": "3.3674",
      "paid": true,
      "forfeited_usd": "0"
     },
     "full": {
-     "share": "0.0229",
-     "gross_usd": "0.4574",
+     "share": "0.0260",
+     "gross_usd": "0.5191",
      "paid": false,
-     "forfeited_usd": "0.4574"
+     "forfeited_usd": "0.5191"
     }
    },
    "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
@@ -673,22 +678,22 @@
      "forfeited_usd": "0"
     },
     "5": {
-     "share": "0.9602",
-     "gross_usd": "19.2047",
+     "share": "0.6877",
+     "gross_usd": "13.7546",
      "paid": true,
      "forfeited_usd": "0"
     },
     "10": {
-     "share": "0.1789",
-     "gross_usd": "3.5772",
+     "share": "0.1731",
+     "gross_usd": "3.4619",
      "paid": true,
      "forfeited_usd": "0"
     },
     "full": {
-     "share": "0.0284",
-     "gross_usd": "0.5681",
+     "share": "0.0277",
+     "gross_usd": "0.5544",
      "paid": false,
-     "forfeited_usd": "0.5681"
+     "forfeited_usd": "0.5544"
     }
    },
    "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
@@ -709,22 +714,22 @@
      "forfeited_usd": "0"
     },
     "5": {
-     "share": "0.9128",
-     "gross_usd": "18.2566",
+     "share": "0.7996",
+     "gross_usd": "15.9919",
      "paid": true,
      "forfeited_usd": "0"
     },
     "10": {
-     "share": "0.1215",
-     "gross_usd": "2.4296",
+     "share": "0.1420",
+     "gross_usd": "2.8393",
      "paid": true,
      "forfeited_usd": "0"
     },
     "full": {
      "share": "0.0241",
-     "gross_usd": "0.4822",
+     "gross_usd": "0.4816",
      "paid": false,
-     "forfeited_usd": "0.4822"
+     "forfeited_usd": "0.4816"
     }
    },
    "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
@@ -733,34 +738,34 @@
    "share_needed_for_any_payout": "0.0500",
    "by_denominator": {
     "1": {
-     "share": "0.0731",
-     "gross_usd": "1.4629",
+     "share": "0.0681",
+     "gross_usd": "1.3629",
      "paid": true,
      "forfeited_usd": "0"
     },
     "2": {
-     "share": "0.0242",
-     "gross_usd": "0.4848",
+     "share": "0.0250",
+     "gross_usd": "0.4992",
      "paid": false,
-     "forfeited_usd": "0.4848"
+     "forfeited_usd": "0.4992"
     },
     "5": {
      "share": "0.0126",
-     "gross_usd": "0.2511",
+     "gross_usd": "0.2528",
      "paid": false,
-     "forfeited_usd": "0.2511"
+     "forfeited_usd": "0.2528"
     },
     "10": {
-     "share": "0.0122",
-     "gross_usd": "0.2434",
+     "share": "0.0121",
+     "gross_usd": "0.2412",
      "paid": false,
-     "forfeited_usd": "0.2434"
+     "forfeited_usd": "0.2412"
     },
     "full": {
-     "share": "0.0005",
-     "gross_usd": "0.0094",
+     "share": "0.0004",
+     "gross_usd": "0.0089",
      "paid": false,
-     "forfeited_usd": "0.0094"
+     "forfeited_usd": "0.0089"
     }
    },
    "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
@@ -769,34 +774,34 @@
    "share_needed_for_any_payout": "0.0500",
    "by_denominator": {
     "1": {
-     "share": "0.3372",
-     "gross_usd": "6.7444",
+     "share": "0.4469",
+     "gross_usd": "8.9386",
      "paid": true,
      "forfeited_usd": "0"
     },
     "2": {
-     "share": "0.0528",
-     "gross_usd": "1.0568",
+     "share": "0.0695",
+     "gross_usd": "1.3901",
      "paid": true,
      "forfeited_usd": "0"
     },
     "5": {
-     "share": "0.0214",
-     "gross_usd": "0.4279",
+     "share": "0.0212",
+     "gross_usd": "0.4234",
      "paid": false,
-     "forfeited_usd": "0.4279"
+     "forfeited_usd": "0.4234"
     },
     "10": {
      "share": "0.0167",
-     "gross_usd": "0.3343",
+     "gross_usd": "0.3341",
      "paid": false,
-     "forfeited_usd": "0.3343"
+     "forfeited_usd": "0.3341"
     },
     "full": {
-     "share": "0.0010",
-     "gross_usd": "0.0202",
+     "share": "0.0011",
+     "gross_usd": "0.0211",
      "paid": false,
-     "forfeited_usd": "0.0202"
+     "forfeited_usd": "0.0211"
     }
    },
    "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
@@ -805,28 +810,28 @@
    "share_needed_for_any_payout": "0.0500",
    "by_denominator": {
     "1": {
-     "share": "0.3207",
-     "gross_usd": "6.4138",
+     "share": "0.1941",
+     "gross_usd": "3.8821",
      "paid": true,
      "forfeited_usd": "0"
     },
     "2": {
-     "share": "0.0772",
-     "gross_usd": "1.5441",
+     "share": "0.0560",
+     "gross_usd": "1.1201",
      "paid": true,
      "forfeited_usd": "0"
     },
     "5": {
-     "share": "0.0243",
-     "gross_usd": "0.4853",
+     "share": "0.0250",
+     "gross_usd": "0.4994",
      "paid": false,
-     "forfeited_usd": "0.4853"
+     "forfeited_usd": "0.4994"
     },
     "10": {
-     "share": "0.0224",
-     "gross_usd": "0.4481",
+     "share": "0.0228",
+     "gross_usd": "0.4569",
      "paid": false,
-     "forfeited_usd": "0.4481"
+     "forfeited_usd": "0.4569"
     },
     "full": {
      "share": "0.0012",
@@ -847,28 +852,28 @@
      "forfeited_usd": "0"
     },
     "2": {
-     "share": "0.6500",
-     "gross_usd": "13.0006",
+     "share": "0.6563",
+     "gross_usd": "13.1252",
      "paid": true,
      "forfeited_usd": "0"
     },
     "5": {
-     "share": "0.4287",
-     "gross_usd": "8.5747",
+     "share": "0.4433",
+     "gross_usd": "8.8657",
      "paid": true,
      "forfeited_usd": "0"
     },
     "10": {
-     "share": "0.2906",
-     "gross_usd": "5.8124",
+     "share": "0.3067",
+     "gross_usd": "6.1340",
      "paid": true,
      "forfeited_usd": "0"
     },
     "full": {
-     "share": "0.0105",
-     "gross_usd": "0.2094",
+     "share": "0.0103",
+     "gross_usd": "0.2067",
      "paid": false,
-     "forfeited_usd": "0.2094"
+     "forfeited_usd": "0.2067"
     }
    },
    "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
@@ -883,14 +888,14 @@
      "forfeited_usd": "0"
     },
     "2": {
-     "share": "0.5888",
-     "gross_usd": "11.7759",
+     "share": "0.5856",
+     "gross_usd": "11.7126",
      "paid": true,
      "forfeited_usd": "0"
     },
     "5": {
-     "share": "0.2969",
-     "gross_usd": "5.9377",
+     "share": "0.2769",
+     "gross_usd": "5.5386",
      "paid": true,
      "forfeited_usd": "0"
     },
@@ -901,10 +906,10 @@
      "forfeited_usd": "0"
     },
     "full": {
-     "share": "0.0096",
-     "gross_usd": "0.1929",
+     "share": "0.0102",
+     "gross_usd": "0.2037",
      "paid": false,
-     "forfeited_usd": "0.1929"
+     "forfeited_usd": "0.2037"
     }
    },
    "why_this_is_the_crux": "the readings disagree about whether we are paid at all, not about how much"
@@ -930,6 +935,12 @@
   ],
   "the_irony": "the two cheapest legs of all, KXBTC15M and KXETH15M at -1.75%/$ and -1.68%/$, pay NOTHING. Their programs were withdrawn on 2026-05-12. The best execution on the venue is the part of it that stopped paying."
  },
+ "stability": {
+  "finding": "THE COMMODITY LEGS HOLD THEIR PRICE; THE CRYPTO LEGS DO NOT. Splitting a 2,234-snapshot / 81-minute window in half and comparing median pair cost early vs late: gold, WTI, copper, KXBTC15M and KXETH15M all moved 0.000, silver -0.001, natgas +0.010 -- while every KXCRYPTOLEAD15M leg moved 0.010 to 0.020, with SOL +0.020 and HYPE -0.020.",
+  "why_it_matters": "a 15-minute market must be re-quoted about a hundred times a day. A leg whose pair cost wanders two cents between quotes prices differently every time you touch it, and the drag figure that ranked it is then a average over a moving target rather than a property you can plan against.",
+  "effect_on_the_verdict": "it STRENGTHENS copper and natgas rather than changing the ordering. They were chosen on cost and competition; stability is a third axis they also win, and the legs they beat are the unstable ones.",
+  "caveat": "81 minutes, all inside 00:16-01:37Z. This is NOT the off-hours test: it does not cross the CME maintenance break or reach Asian hours, and commodity 15m books could behave differently there. Do not read it as a 24-hour claim."
+ },
  "payout_floor_verdict": {
   "finding": "UNDER THE FULL-BOOK DENOMINATOR, EVERY LEG PAYS ZERO. Our $111 earns a gross of $0.0094 to $0.6407 per period across all ten incentivised legs -- every one of them under the $1.00 minimum, so every one is forfeited in full, not paid small.",
   "under_narrow_bands": "at a 2c band eight of ten legs clear the floor, and at 5c six do",
@@ -939,9 +950,9 @@
  },
  "p0_answer": "KXCOPPER15M and KXNATGAS15M are the legs that minimise trading drag while retaining meaningful reward density. But the ranking does not settle the venue: under the conservative denominator our capital is below the payout floor on every leg, and no public data closes that.",
  "tape": {
-  "rows": 1182,
+  "rows": 2269,
   "legs": 12,
-  "source": "read-only public GETs 2026-09-09T00:23-01:05Z",
+  "window": "2026-09-09T00:16-01:37Z",
   "cadence_s": 30
  }
 }

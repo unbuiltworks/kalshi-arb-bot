@@ -280,3 +280,25 @@ def test_the_cheapest_legs_are_the_ones_that_stopped_paying():
 def test_the_answer_does_not_claim_to_settle_the_venue():
     assert "does not settle the venue" in R.P0_LEG_ANSWER
     assert "below the payout floor on every leg" in R.P0_LEG_ANSWER
+
+
+# ------------------------------------------------------------- stability
+def test_stability_is_measured_early_vs_late_not_asserted():
+    f = R.STABILITY["finding"]
+    assert "2,234-snapshot" in f
+    assert "moved 0.000" in f
+    assert "SOL +0.020" in f and "HYPE -0.020" in f
+
+
+def test_stability_strengthens_rather_than_changes_the_verdict():
+    e = R.STABILITY["effect_on_the_verdict"]
+    assert "STRENGTHENS copper and natgas" in e
+    assert "rather than changing the ordering" in e
+
+
+def test_the_window_is_not_claimed_to_be_off_hours():
+    """81 minutes inside one evening is not a 24-hour claim."""
+    c = R.STABILITY["caveat"]
+    assert "NOT the off-hours test" in c
+    assert "CME maintenance break" in c
+    assert "Do not read it as a 24-hour claim" in c
