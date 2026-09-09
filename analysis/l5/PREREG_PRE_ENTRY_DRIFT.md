@@ -223,3 +223,56 @@ the test is running is how you end up unable to say what you measured. Both
 this and the survey-cost reduction implied by the flow-selector-is-a-floor
 finding (466 markets now cost 975 s of survey for a 22% duty cycle) are
 deferred until this test resolves.
+
+---
+
+## 9. RESULT — 2026-09-09 19:25Z — **FAIL. Hypothesis dead.**
+
+Recorded after the frozen analyser was run once, on the first read at which
+P1 was met. No threshold, lookback, split rule or bar was touched between §8
+and this section.
+
+### Sample
+
+Deployment `367d347b` (commit `9cd45815`), unbroken 16:56:14Z → 19:25Z
+(149 min). 86 window rows, **83 used**, 3 dropped for an unresolvable bucket,
+1827 observations, **35 distinct markets**. Span check before analysis: all 86
+rows at `span_s 55.001`, none near 30 s — the §7 defect did not recur.
+
+### The frozen test
+
+| | required | observed | |
+|---|---|---|---|
+| P1 opportunities | ≥ 30 | **31** | met |
+| P2 rate ratio (low ÷ high) | ≥ 1.50 | **0.813** | **failed** |
+| P3 low-drift share | ≥ 55% | **51.6%** | **failed** |
+
+Median `drift_abs` = **0.01** (one cent); 33 of 86 windows sat at exactly zero.
+
+* low drift: 48 windows, 1037 obs, 16 opportunities — **1.543%**
+* high drift: 35 windows, 790 obs, 15 opportunities — **1.899%**
+
+### What this does and does not say
+
+The point estimate is on the **wrong side of 1.0**: markets that were calm in
+the 60 s before entry offered *fewer* completion opportunities, not more. But
+this is a **null result, not evidence of an inverse effect** — z = −0.583, and
+the 95% CI on the ratio is **0.404 to 1.634**.
+
+**That CI contains 1.50.** So P1 = 30 opportunities was too weak a bar to
+separate the preregistered effect from no effect. That is a defect in the
+power bar I wrote, and the lesson belongs to the *next* prereg: size P1 from
+the effect the rule requires, not from what feels like enough rows.
+
+It is **not** a reason to keep this hypothesis alive. Under §3 and §4 the
+lever is dead, the owner's rule is explicit — *"If it doesn't predict the
+subsequent problem, we kill it immediately. No weeks of tweaking"* — and
+rescuing a 0.813 point estimate by appealing to its confidence interval is
+precisely the search this preregistration exists to prevent. Pre-entry drift
+is not a pre-order predictor of acceptable completion. Closed.
+
+### §8 checked against outcome
+
+30 s lookback refused on **86 of 86** windows, as predicted. 120 s resolved on
+42 of 86 — better than predicted, and irrelevant: secondaries were never
+permitted to rescue a failed primary, and they are not consulted here.
