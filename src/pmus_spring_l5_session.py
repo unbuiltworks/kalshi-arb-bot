@@ -123,6 +123,42 @@ DEFAULT_MAX_COMPLETE_ACTIONS = 12
 # for orders that RESTED and did not fill; three consecutive refusals end
 # the loop rather than retrying into them.
 COMPLETE_REJECT_STREAK_MAX = 3
+# OWNER probe stop conditions (2026-09-09), for the bounded COMPLETE-reprice
+# probe. The owner explicitly declined a 21.7% bar: "that's a historical
+# diagnostic, not a magical safety threshold." These are the agreed rules.
+#
+#   1. three consecutive COMPLETE rejections            -> halt (above)
+#   2. >35% rejected once there are >=10 submissions    -> halt
+#   3. an infrastructure/auth/schema/rate-limit class
+#      rejection seen TWICE                             -> immediate halt
+#
+# The existing hard loss/exposure gates stay authoritative regardless; these
+# only ever ADD a reason to stop.
+COMPLETE_REJECT_RATE_MIN_N = 10
+COMPLETE_REJECT_RATE_MAX = 0.35
+INFRA_REJECT_MAX = 2
+# Matched against the venue end_reason and our own rejection class, both
+# lowercased. Deliberately inclusive: a false halt costs one bounded probe, a
+# missed auth or rate-limit storm costs money and reputation with the venue.
+INFRA_REJECT_TOKENS = (
+    "unauthor", "unauthenticated", "forbidden", "invalid_api", "signature",
+    "rate_limit", "ratelimit", "too_many", "429",
+    "schema", "malformed", "invalid_request", "bad_request", "400",
+    "internal", "unavailable", "timeout", "5xx", "500", "502", "503",
+    "bbo_unreadable", "market_status_halted",
+)
+
+
+def is_infra_rejection(end_reason: Any, rejection_class: Any = None) -> bool:
+    """Is this rejection our plumbing or the venue's, rather than pricing?
+
+    A pricing rejection is information about the market. An auth, schema or
+    rate-limit rejection is a fault, and repeating it is how an account gets
+    throttled or banned -- so two of them end the probe outright rather than
+    being averaged into a rate.
+    """
+    blob = f"{end_reason or ''} {rejection_class or ''}".lower()
+    return any(tok in blob for tok in INFRA_REJECT_TOKENS)
 # COMPLETE re-quote on a moved touch. The mechanism below already cancels and
 # re-quotes when L5's touch moves off a resting order, and COMPLETE has always
 # been excluded from it: 36 OPEN and 35 EXTEND orders exited via
@@ -2425,6 +2461,10 @@ def _run_session_body(t: Optional[Transport] = None,
         actions = 0
         complete_actions = 0          # REPORTING only, never control flow
         complete_reject_streak = 0
+        # OWNER probe stop conditions 2 and 3
+        complete_submissions = 0
+        complete_rejections = 0
+        infra_rejections = 0
 
         def action_budget() -> int:
             """One monotonic counter, one limit, and the LIMIT moves.
@@ -2440,6 +2480,17 @@ def _run_session_body(t: Optional[Transport] = None,
                 report["stop_reason"] = (
                     f"complete_rejections_consecutive:"
                     f"{complete_reject_streak}")
+                break
+            if infra_rejections >= INFRA_REJECT_MAX:
+                report["stop_reason"] = (
+                    f"complete_infra_rejections:{infra_rejections}")
+                break
+            if (complete_submissions >= COMPLETE_REJECT_RATE_MIN_N
+                    and complete_rejections
+                    > COMPLETE_REJECT_RATE_MAX * complete_submissions):
+                report["stop_reason"] = (
+                    f"complete_reject_rate:{complete_rejections}"
+                    f"/{complete_submissions}")
                 break
             bbo = q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES")
             spec = micro.market_micro_spec(t, slug, bbo["bid"])
@@ -2951,10 +3002,19 @@ def _run_session_body(t: Optional[Transport] = None,
                 # Patience is for orders that RESTED. A rested-and-unfilled
                 # complete clears the streak; a refusal advances it, and the
                 # loop head ends the session at three.
+                complete_submissions += 1
                 if end_reason.startswith("rejected"):
                     complete_reject_streak += 1
+                    complete_rejections += 1
+                    if is_infra_rejection(
+                            end_reason,
+                            report["orders"][-1].get("rejection_class")):
+                        infra_rejections += 1
                     report["orders"][-1]["complete_reject_streak"] = \
                         complete_reject_streak
+                    report["orders"][-1]["complete_reject_rate"] = (
+                        f"{complete_rejections}/{complete_submissions}")
+                    report["orders"][-1]["infra_rejections"] = infra_rejections
                 else:
                     complete_reject_streak = 0
                 if end_reason.startswith("rejected"):

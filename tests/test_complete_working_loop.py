@@ -120,7 +120,17 @@ def test_the_price_is_recomputed_never_incremented():
 def test_the_model_is_re_asked_every_iteration():
     """cancel/confirm -> fresh state -> ask L5 again -> repost."""
     i = _SRC.index("while actions < action_budget()")
-    body = _SRC[i:i + 1600]
+    # A fixed window over the loop head, and it must clear the END of the
+    # model call, not its start. The owner's probe stop conditions added
+    # eleven lines to the loop head and pushed this past a 700-char slice,
+    # failing a test whose subject had not changed; a 1600 window then cut
+    # mid-token. Sized with headroom, and the guard below fails loudly with
+    # "widen it" rather than letting a future insertion silently weaken what
+    # this asserts.
+    body = _SRC[i:i + 2400]
+    assert "spring_proposal(" in body, (
+        "the window no longer reaches the model call; widen it rather than "
+        "weakening what it asserts")
     assert 'q1.outcome_bbo(t, slug, "OUTCOME_SIDE_YES")' in body
     assert "spring_state_key(inv" in body
     assert "spring_proposal(model, inv, skey, skey_v1)" in body
