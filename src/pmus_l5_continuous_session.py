@@ -330,8 +330,23 @@ def fidelity_eval(now: float, force: bool = False) -> Optional[dict]:
     return out
 
 
+# WHAT CODE IS THIS PROCESS ACTUALLY RUNNING. Four deployment surprises on
+# 2026-09-09: two pushes to watched files were marked SKIPPED and silently did
+# not deploy, and the probe was found still running a commit written BEFORE two
+# of the three approved rejection stop conditions existed. GitHub and Railway
+# both reported success. For a money-moving service that is not sufficient
+# evidence -- the process itself has to say what it is executing.
+#
+# Stamped in _log() rather than at boot so EVERY row carries it: the boot
+# report, each session_end, every rejection. A row can then never be attributed
+# to the wrong build.
+_COMMIT = (os.getenv("RAILWAY_GIT_COMMIT_SHA")
+           or os.getenv("GIT_COMMIT_SHA") or "")[:12] or None
+
+
 def _log(kind: str, **fields: Any) -> None:
-    print("PMUS_L5_CAMPAIGN " + json.dumps({"kind": kind, **fields},
+    print("PMUS_L5_CAMPAIGN " + json.dumps({"kind": kind, "commit": _COMMIT,
+                                            **fields},
                                            separators=(",", ":"),
                                            default=str), flush=True)
 

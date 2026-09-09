@@ -75,3 +75,49 @@ def test_rate_bar_needs_the_minimum_sample_first():
     n, rej = 10, 3                       # 30% of 10 -> keep going
     assert not (n >= ses.COMPLETE_REJECT_RATE_MIN_N
                 and rej > ses.COMPLETE_REJECT_RATE_MAX * n)
+
+
+# --- the process must say what code it is running -----------------------
+def test_every_campaign_row_carries_the_running_commit():
+    """Four deployment surprises in one evening, including the probe found
+    running a commit written BEFORE two of the three approved stop conditions
+    existed -- while GitHub and Railway both reported success. For a
+    money-moving service, "deployed" is not evidence; the process has to say.
+
+    Stamped in _log() so EVERY row carries it, not just boot: a rejection row
+    can then never be attributed to the wrong build."""
+    import json as _json
+    import os as _os
+    from src import pmus_l5_continuous_session as cs
+    src = open("src/pmus_l5_continuous_session.py").read()
+    assert '"commit": _COMMIT' in src, "the stamp must be inside _log()"
+    assert "RAILWAY_GIT_COMMIT_SHA" in src
+
+    _os.environ["RAILWAY_GIT_COMMIT_SHA"] = "deadbeefcafe1234"
+    import importlib
+    importlib.reload(cs)
+    try:
+        assert cs._COMMIT == "deadbeefcafe"          # truncated, not full
+        import io
+        import contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            cs._log("probe_boot", open_orders=0)
+        row = _json.loads(buf.getvalue().split(" ", 1)[1])
+        assert row["commit"] == "deadbeefcafe"
+        assert row["kind"] == "probe_boot"
+    finally:
+        _os.environ.pop("RAILWAY_GIT_COMMIT_SHA", None)
+        importlib.reload(cs)
+
+
+def test_an_unstamped_environment_reports_none_not_a_guess():
+    """Absent is UNKNOWN. A fabricated or defaulted SHA would be worse than
+    no SHA, because it would look like proof."""
+    import os as _os
+    import importlib
+    from src import pmus_l5_continuous_session as cs
+    _os.environ.pop("RAILWAY_GIT_COMMIT_SHA", None)
+    _os.environ.pop("GIT_COMMIT_SHA", None)
+    importlib.reload(cs)
+    assert cs._COMMIT is None
