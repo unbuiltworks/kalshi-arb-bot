@@ -161,3 +161,20 @@ def test_arming_changes_exactly_one_tuple_and_no_other_bound():
     os.environ.pop(ses.COMPLETE_REQUOTE_ENV, None)
     assert set(on) - set(off) == {"complete"}
     assert set(off) - set(on) == set()
+
+
+def test_the_boot_row_proves_the_flag_rather_than_leaving_it_inferred():
+    """OWNER: "the process itself must prove ... COMPLETE requote enabled".
+
+    An absent re-quote has two indistinguishable causes -- the flag was never
+    set, or no market moved its touch while we held a first leg. Only the boot
+    row separates them, so a campaign_start that does not carry the flag makes
+    a null result unattributable. Pin that it is READ from the live helper,
+    not restated as a literal that could drift from what the session uses."""
+    src = open(
+        __import__("src.pmus_l5_continuous_session", fromlist=["x"]).__file__
+    ).read()
+    start = src.index('_log("campaign_start"')
+    row = src[start:src.index(")", src.index("rung=report", start))]
+    assert "complete_requote=base.complete_requote_enabled()" in row
+    assert "requote_relations=list(base.requote_relations())" in row

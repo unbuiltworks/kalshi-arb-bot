@@ -1960,11 +1960,18 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
 
     def _not_started(reason: str) -> None:
         funnel["not_started"][reason] = funnel["not_started"].get(reason, 0) + 1
+    # OWNER: the process itself must prove the arm, not the operator's memory
+    # of which variables were set -- SHA, mode, rung, and the ONE behavioural
+    # flag this campaign exists to test. Without this line an absent COMPLETE
+    # re-quote is unattributable: a flag that never got set and a market that
+    # never moved its touch produce identical logs.
     _log("campaign_start", mode=report["mode"], campaign_s=campaign_s,
          campaign_expires_at=wall() + campaign_s,
          max_sessions=ladder.max_sessions_per_campaign(
              default=MAX_SESSIONS_PER_CAMPAIGN),
          per_market_cap=str(base.SESSION_NOTIONAL_CAP),
+         complete_requote=base.complete_requote_enabled(),
+         requote_relations=list(base.requote_relations()),
          rung=report["rung"])
     _log("ramp_ladder", active=active_rung["id"],
          rungs=[{"id": r["id"], "lever": r["lever"],
