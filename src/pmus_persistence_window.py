@@ -239,9 +239,17 @@ def observe(win: Mapping[str, Any], book: Mapping[str, Any], t: float,
 
 def summarise(win: Mapping[str, Any]) -> Dict[str, Any]:
     entry = D(str(win["complement_px_at_entry"]))
+    # summarise() PROJECTS a fixed field set. Fields added to the window but
+    # not added here are silently dropped from the emitted row -- which is
+    # exactly what happened to the rescue instrumentation: the code shipped,
+    # the counters incremented in memory, and every row came out without them,
+    # so the invariant check reported "0 violations" on 0 measured buckets.
+    # A vacuous pass. Anything added to the window must be added here too.
+    flp = win.get("first_leg_px")
     out: Dict[str, Any] = {"slug": win["slug"],
                            "complement_side": win["complement_side"],
                            "complement_px_at_entry": str(entry),
+                           "first_leg_px": str(flp) if flp is not None else None,
                            "closed": bool(win.get("closed")),
                            "buckets": {}}
     for _, _, name in BUCKETS:
@@ -263,6 +271,16 @@ def summarise(win: Mapping[str, Any]) -> Dict[str, Any]:
             # negative = the complement got CHEAPER than where we entered
             "deterioration_vs_entry": (str(best - entry)
                                        if best is not None else None),
+            # residual-rescue arms, paired at the same polls. Thin buckets
+            # suppress these on the SAME rule as `opportunities`: a bucket too
+            # thin to read as zero opportunity is equally too thin to read as
+            # zero rescue opportunity.
+            "capped_opportunities": (None if thin
+                                     else b.get("capped_opportunities", 0)),
+            "rescue_opportunities": (None if thin
+                                     else b.get("rescue_opportunities", 0)),
+            "rescue_only_opportunities": (
+                None if thin else b.get("rescue_only_opportunities", 0)),
         }
     bk = out["buckets"]
     unres = [k for k in bk if not bk[k]["resolvable"]]

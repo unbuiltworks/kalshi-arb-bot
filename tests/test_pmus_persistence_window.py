@@ -415,3 +415,58 @@ def test_the_bucket_rate_is_normalised_by_observations_not_a_raw_count():
     assert (per["a_0_30s"]["opportunity_rate_per_observation"]
             > per["c_60_120s"]["opportunity_rate_per_observation"]), \
         "the wider bucket's larger raw count must not read as a higher rate"
+
+
+# --- the projection must carry everything the window measures ------------
+from src import pmus_persistence_window as pw  # noqa: E402
+
+
+def _warm(first_leg="0.60", bid="0.585", ask="0.62", n=11):
+    w = pw.open_window(0.0, pw.complement_price_now({"bid": D(bid), "ask": D(ask)}, "NO"),
+                       "NO", "slug", first_leg_px=D(first_leg))
+    for i in range(1, n + 1):
+        w = pw.observe(w, {"bid": D(bid), "ask": D(ask)}, float(i), True, D("5"))
+    return pw.summarise(w)
+
+
+def test_summarise_emits_first_leg_px():
+    """summarise() PROJECTS a fixed field set. The rescue instrumentation
+    shipped, incremented correctly in memory, and was dropped here -- every
+    live row came out without it and the invariant check reported "0
+    violations" across 0 measured buckets. A vacuous pass."""
+    assert _warm()["first_leg_px"] == "0.60"
+
+
+def test_summarise_emits_all_three_rescue_counters():
+    b = _warm()["buckets"]["a_0_30s"]
+    for k in ("capped_opportunities", "rescue_opportunities",
+              "rescue_only_opportunities"):
+        assert k in b, f"{k} missing from the emitted row"
+        assert b[k] is not None
+
+
+def test_rescue_counters_are_suppressed_in_a_thin_bucket_like_opportunities():
+    """A bucket too thin to read as zero opportunity is equally too thin to
+    read as zero RESCUE opportunity; both must suppress on the same rule."""
+    b = _warm(n=1)["buckets"]["a_0_30s"]
+    assert b["resolvable"] is False
+    assert b["opportunities"] is None
+    assert b["capped_opportunities"] is None
+    assert b["rescue_opportunities"] is None
+
+
+def test_emitted_capped_matches_emitted_opportunities_on_a_live_shaped_window():
+    """The wiring invariant, asserted on the row we actually analyse.
+
+    In the live path complement_px_at_entry and 1.00 - first_leg_px are the
+    same number (side_ask and complement_price_now are complements on one
+    book), so these two counters must agree. If they ever diverge the paired
+    measurement is reading two different prices."""
+    book = {"bid": D("0.58"), "ask": D("0.62")}
+    first_leg = pw.side_ask(book, "YES")                 # 0.62
+    w = pw.open_window(0.0, pw.complement_price_now(book, "NO"), "NO", "s",
+                       first_leg_px=first_leg)
+    for i in range(1, 12):
+        w = pw.observe(w, book, float(i), True, D("5"))
+    b = pw.summarise(w)["buckets"]["a_0_30s"]
+    assert b["capped_opportunities"] == b["opportunities"]
