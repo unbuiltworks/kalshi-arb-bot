@@ -14,3 +14,11 @@ data/l5/normalized/
 
 # L5 backfill: ~300MB slim raw cache, regenerable via 'python -m src.polymarket_l5.backfill'
 data/l5/raw/activity_gap.jsonl
+
+# policy_d_port raw tapes: the JSONL for a multi-hour run is 80-90MB, past
+# GitHub's 50MB warning, and a growing file costs a full new blob on every
+# snapshot commit. Track the gzipped tape instead (~9.5x smaller); the raw
+# file stays on disk for the running collector. Same rule already in force
+# on claude/polymarket-l5-historical-analysis-2ih9ui (6524704b), where the
+# 2026-09-04 and 2026-09-05 tapes are committed in their .gz form.
+data/policy_d_port/tape_*.jsonl
