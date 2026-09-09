@@ -280,11 +280,35 @@ def drag_range() -> Dict[str, D]:
 NET_SHADOW_ECONOMICS = None
 
 NET_OPEN_TERMS = (
-    "fees: no maker schedule is certified for any of the six observation "
-    "series, so the fee term is unknown, not zero",
     "confirmed incentives: $0.00 credited, and estimated obtainable is "
     "refused above",
+    "residual economics: UNMEASURED here -- we hold no fills on this venue "
+    "-- and it is the term that actually sank PMUS",
 )
+
+FEE_TERM_CLOSED = (
+    "The fee term is NO LONGER OPEN. GET /series/{ticker} declares "
+    "fee_type and fee_multiplier, and all eight series return "
+    "quadratic / 1, identical to the certified KXBTC15M/KXETH15M pair. "
+    "See kalshi_leg_ranking.FEE_STATUS: venue-declared, not a paid "
+    "invoice. This closes one of the two terms this module listed as open "
+    "on 2026-09-09, and it was closed by reading the venue's own series "
+    "metadata rather than by assuming the schedule carried over.")
+
+SUPERSEDED_BY_LEG_ANALYSIS = (
+    "The per-series drag figures in link 5 are SUPERSEDED for decisions by "
+    "kalshi_leg_ranking, which reports per LEG. KXCRYPTOLEAD15M is one "
+    "series carrying five assets whose pair costs run 1.01 to 1.16; its "
+    "median describes none of them. This module's series view is kept for "
+    "the chain narrative only.")
+
+THE_TENSION_FOUND_AT_LEG_LEVEL = (
+    "Drag and reward share pull in OPPOSITE directions across legs. The "
+    "cheapest books carry the thickest near-mid competition -- they are "
+    "cheap because makers are already standing there -- while the legs "
+    "with almost no near-mid competition are wide. There is no single "
+    "best leg, only a frontier, and which end of it you want depends on "
+    "whether you are manufacturing pairs or providing liquidity.")
 
 P0_VERDICT = "UNDECIDED"
 
@@ -341,6 +365,8 @@ def chain() -> Dict[str, Any]:
         "5_drag_per_turnover_dollar": {k: str(v) for k, v
                                        in drag_range().items()},
         "6_net_shadow_economics": NET_SHADOW_ECONOMICS,
+        "6_fee_term_closed": FEE_TERM_CLOSED,
+        "superseded_by_leg_analysis": SUPERSEDED_BY_LEG_ANALYSIS,
         "credited_reward_usd": str(CREDITED_REWARD_USD),
         "verdict": P0_VERDICT,
         "shadow_only": SHADOW_ONLY,

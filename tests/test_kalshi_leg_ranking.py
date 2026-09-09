@@ -146,3 +146,128 @@ def test_a_leg_with_no_program_reports_none_not_zero():
     L = out["legs"][0]
     assert L["headline_reward_usd"] is None
     assert L["reward_density_per_capital_dollar"] is None
+
+
+# -------------------------------------------- rule-independent share result
+def _leg(name, d1, d2, d5, d10):
+    return {"leg": name, "band_min_side_depth_median":
+            {"1": str(d1), "2": str(d2), "5": str(d5), "10": str(d10)}}
+
+
+def test_dominance_holds_when_one_leg_is_thinner_at_every_band():
+    out = R.share_dominance([_leg("THIN", 1, 2, 3, 4),
+                             _leg("THICK", 10, 20, 30, 40)])
+    assert out["dominates"]["THIN"] == ["THICK"]
+    assert out["ordering_depends_on_the_unknown_rule"] == []
+
+
+def test_a_crossing_pair_is_reported_as_rule_dependent_not_ranked():
+    """If A is thinner near the mid but thicker further out, the venue's
+    unknown weighting genuinely decides. Say so rather than pick."""
+    out = R.share_dominance([_leg("NEAR", 1, 2, 500, 900),
+                             _leg("FAR", 10, 20, 30, 40)])
+    assert out["dominates"] == {}
+    assert out["ordering_depends_on_the_unknown_rule"] == [["FAR", "NEAR"]]
+
+
+def test_dominance_claims_ordering_only_never_magnitude():
+    out = R.share_dominance([_leg("A", 1, 2, 3, 4), _leg("B", 5, 6, 7, 8)])
+    assert "non-increasing proximity weighting" in out["basis"]
+    assert "a share MAGNITUDE" in out["what_this_does_not_give"]
+    assert "Only the ordering is" in out["what_this_does_not_give"]
+
+
+# ------------------------------------------------------------- the frontier
+def test_the_tension_between_drag_and_share_is_stated_not_averaged_away():
+    t = R.THE_TENSION
+    assert "OPPOSITE DIRECTIONS" in t
+    assert "cheap books are cheap precisely because" in t
+    assert "no leg that is simply 'best'" in t
+
+
+def test_frontier_keeps_the_two_axes_separate():
+    legs = [
+        {"leg": "CHEAP_CROWDED", "drag_per_dollar": "-0.005",
+         "maker_fee_per_dollar_if_both_legs_fill": "0.001",
+         "band_min_side_depth_median": {"1": "1790", "2": "4424",
+                                        "5": "8443", "10": "8760"},
+         "headline_reward_usd": "20"},
+        {"leg": "WIDE_EMPTY", "drag_per_dollar": "-0.080",
+         "maker_fee_per_dollar_if_both_legs_fill": "0.009",
+         "band_min_side_depth_median": {"1": "0", "2": "0",
+                                        "5": "0", "10": "457"},
+         "headline_reward_usd": "20"},
+    ]
+    f = R.frontier(legs)
+    # neither dominates the other, so both are on the frontier
+    assert all(p["on_frontier"] for p in f)
+    assert f[0]["leg"] == "CHEAP_CROWDED"          # sorted by cost
+
+
+def test_a_leg_beaten_on_both_axes_is_off_the_frontier():
+    legs = [
+        {"leg": "GOOD", "drag_per_dollar": "-0.005",
+         "maker_fee_per_dollar_if_both_legs_fill": "0.001",
+         "band_min_side_depth_median": {"1": "10", "2": "10",
+                                        "5": "10", "10": "10"}},
+        {"leg": "DOMINATED", "drag_per_dollar": "-0.080",
+         "maker_fee_per_dollar_if_both_legs_fill": "0.009",
+         "band_min_side_depth_median": {"1": "999", "2": "999",
+                                        "5": "999", "10": "999"}},
+    ]
+    f = {p["leg"]: p for p in R.frontier(legs)}
+    assert f["GOOD"]["on_frontier"] is True
+    assert f["DOMINATED"]["on_frontier"] is False
+
+
+# ------------------------------------------------------ the payout floor
+def test_the_floor_makes_the_denominator_binary_not_approximate():
+    out = R.payout_floor_test(D(20), D(111), D("1.02"),
+                              {"2": D("30.19"), "full": D("14804")})
+    assert out["share_needed_for_any_payout"] == "0.0500"
+    assert out["by_denominator"]["2"]["paid"] is True
+    assert out["by_denominator"]["full"]["paid"] is False
+    # forfeited in full, not paid small
+    assert D(out["by_denominator"]["full"]["forfeited_usd"]) > 0
+    assert D(out["by_denominator"]["full"]["gross_usd"]) < R.MIN_PAYOUT_USD
+
+
+def test_a_sub_floor_payout_is_forfeited_entirely_not_prorated():
+    out = R.payout_floor_test(D(20), D(111), D("1.01"), {"x": D("100000")})
+    d = out["by_denominator"]["x"]
+    assert d["paid"] is False
+    assert d["forfeited_usd"] == d["gross_usd"]
+
+
+def test_the_full_book_verdict_is_zero_on_every_leg():
+    v = R.PAYOUT_FLOOR_VERDICT
+    assert "EVERY LEG PAYS ZERO" in v["finding"]
+    assert "forfeited in full, not paid small" in v["finding"]
+    assert "BINARY" in v["consequence"]
+    assert "one credited payout on a funded account" in v["what_settles_it"]
+
+
+def test_the_floor_is_attributed_to_our_bankroll_not_the_venue():
+    assert "property of OUR bankroll" in R.PAYOUT_FLOOR_VERDICT["note_on_capital"]
+    assert R.MIN_PAYOUT_USD == D("1.00")
+    assert "sub-$1" in R.MIN_PAYOUT_SOURCE
+
+
+# ------------------------------------------------------- the leg verdict
+def test_the_answer_names_copper_and_natgas_with_its_reasoning():
+    v = R.LEG_VERDICT
+    assert v["best_drag_with_meaningful_reward_density"] == ("KXCOPPER15M",
+                                                             "KXNATGAS15M")
+    assert "MIDDLE of the cost table" in v["why"]
+    assert "TOP of the reward-density table" in v["why"]
+    assert "3.4x" in v["why"]
+
+
+def test_the_cheapest_legs_are_the_ones_that_stopped_paying():
+    assert "withdrawn on 2026-05-12" in R.LEG_VERDICT["the_irony"]
+    assert "stopped paying" in R.LEG_VERDICT["the_irony"]
+
+
+def test_the_answer_does_not_claim_to_settle_the_venue():
+    assert "does not settle the venue" in R.P0_LEG_ANSWER
+    assert "below the payout floor on every leg" in R.P0_LEG_ANSWER

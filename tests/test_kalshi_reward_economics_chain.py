@@ -105,8 +105,26 @@ def test_the_tight_legs_are_still_far_worse_than_l5s_own_drag():
 def test_net_is_open_because_two_named_terms_are_open():
     assert K.NET_SHADOW_ECONOMICS is None
     joined = " ".join(K.NET_OPEN_TERMS)
-    assert "no maker schedule is certified" in joined
     assert "$0.00 credited" in joined
+    assert "residual economics: UNMEASURED" in joined
+
+
+def test_the_fee_term_is_now_closed_by_venue_metadata():
+    """It was open when this module was written. It was closed by reading
+    the venue's series metadata, not by assuming the schedule carried."""
+    f = K.FEE_TERM_CLOSED
+    assert "NO LONGER OPEN" in f
+    assert "quadratic / 1" in f
+    assert "not a paid invoice" in f
+    assert "fees" not in " ".join(K.NET_OPEN_TERMS)
+
+
+def test_the_series_view_defers_to_the_leg_analysis():
+    s = K.SUPERSEDED_BY_LEG_ANALYSIS
+    assert "SUPERSEDED for decisions" in s
+    assert "1.01 to 1.16" in s
+    assert "median describes none of them" in s
+    assert "opposite" in K.THE_TENSION_FOUND_AT_LEG_LEVEL.lower()
 
 
 def test_undecided_names_an_experiment_that_costs_no_money():
