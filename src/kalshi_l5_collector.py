@@ -711,6 +711,26 @@ def main(argv: Optional[Sequence[str]] = None, *, sleep=time.sleep,
         row = collect_once(seen, windows)
         if row.get("error") or cycle % every == 1:
             print("KALSHI_L5_COLLECTOR " + json.dumps(row), flush=True)
+        # AT LOOP LEVEL, deliberately NOT inside the shadow gate below.
+        # The first version of this lived inside `cycle % every == 0`, where
+        # `cycle == 1` is unreachable (1 % 15 == 1), so it was dead code that
+        # shipped and emitted nothing -- and the test that "covered" it only
+        # grepped the source, so it passed on code that never ran.
+        #
+        # Why cycle 1 at all: the interval is 3,600s and under active
+        # development the service is redeployed more often than that. The
+        # counter resets on every boot, so across three consecutive deploys
+        # this row never emitted once and could not be verified in
+        # production. A health line nobody can observe is not a health line.
+        if cycle == 1 or cycle % (every * INCENTIVE_EVERY_N) == 0:
+            try:
+                print("KALSHI_INCENTIVE " + json.dumps(incentive_state()),
+                      flush=True)
+            except Exception as exc:                     # noqa: BLE001
+                print("KALSHI_L5_ALARM " + json.dumps(
+                    {"alarm": "incentive_state_failed",
+                     "err": f"{type(exc).__name__}:{str(exc)[:120]}"}),
+                    flush=True)
         if cycle % every == 0:
             status = run_shadow()
             if status:
@@ -726,23 +746,6 @@ def main(argv: Optional[Sequence[str]] = None, *, sleep=time.sleep,
                     {"alarm": "structure_failed",
                      "err": f"{type(exc).__name__}:{str(exc)[:120]}"}),
                     flush=True)
-            # ALSO ON THE FIRST CYCLE, not only every 180th. The interval
-            # below is 3,600s, and under active development the service is
-            # redeployed more often than that -- the counter resets on every
-            # boot, so for three consecutive deploys this row never emitted
-            # once and could not be verified in production at all. A
-            # boot-time emission costs one extra public GET per deploy and
-            # makes the row observable whenever the service restarts, which
-            # is exactly what a health line should do.
-            if cycle == 1 or cycle % (every * INCENTIVE_EVERY_N) == 0:
-                try:
-                    print("KALSHI_INCENTIVE " + json.dumps(incentive_state()),
-                          flush=True)
-                except Exception as exc:                 # noqa: BLE001
-                    print("KALSHI_L5_ALARM " + json.dumps(
-                        {"alarm": "incentive_state_failed",
-                         "err": f"{type(exc).__name__}:{str(exc)[:120]}"}),
-                        flush=True)
             swept = sweep_tape()
             if swept["deleted"]:
                 print("KALSHI_L5_COLLECTOR " + json.dumps(swept), flush=True)

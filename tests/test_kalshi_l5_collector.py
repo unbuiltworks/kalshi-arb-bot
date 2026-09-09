@@ -411,14 +411,51 @@ def test_a_window_suffix_does_not_shatter_a_commodity_leg():
     assert rep["legs"]["KXGOLD15M"]["markets"] == 2
 
 
-def test_the_incentive_row_emits_at_boot_not_only_every_180th_cycle():
-    """Regression on an observability bug, not a logic bug. The interval is
-    3,600s; during active development the service redeployed more often than
-    that and the counter resets each boot, so the row never emitted once
-    across three deploys. Emitting on cycle 1 makes it verifiable whenever
-    the service restarts."""
+def test_the_incentive_row_actually_emits_on_the_first_cycle(monkeypatch,
+                                                             capsys):
+    """BEHAVIOURAL, not a source grep. The first attempt at this fix put the
+    cycle==1 branch INSIDE `if cycle % every == 0`, where cycle==1 is
+    unreachable (1 % 15 == 1). It shipped, emitted nothing, and the test
+    that "covered" it only checked that the string was present in the
+    source -- so it passed on dead code. This test runs the loop."""
+    from src import kalshi_l5_collector as C
+
+    monkeypatch.setattr(C, "collect_once",
+                        lambda *a, **k: {"kind": "kalshi_collect",
+                                         "markets": 1, "events": 0})
+    monkeypatch.setattr(C, "incentive_state",
+                        lambda *a, **k: {"kind": "KALSHI_INCENTIVE_STATE",
+                                         "series": {}})
+    monkeypatch.setattr(C, "seed_seen_from_tape", lambda *a, **k: {})
+    monkeypatch.setattr(C, "sweep_tape", lambda *a, **k: {"deleted": []})
+    monkeypatch.setattr(C, "tape_parts", lambda *a, **k: [])
+    monkeypatch.setattr(C, "run_shadow", lambda *a, **k: None)
+
+    class Stop(Exception):
+        pass
+
+    calls = {"n": 0}
+
+    def fake_sleep(_s):
+        calls["n"] += 1
+        if calls["n"] >= 2:          # let exactly two cycles run
+            raise Stop
+
+    try:
+        C.main([], sleep=fake_sleep)
+    except Stop:
+        pass
+    out = capsys.readouterr().out
+    assert "KALSHI_INCENTIVE " in out, "no incentive row on the first cycles"
+    # exactly once across two cycles -- cycle 1 only, not every cycle
+    assert out.count("KALSHI_INCENTIVE ") == 1
+
+
+def test_the_incentive_emission_is_not_nested_in_the_shadow_gate():
+    """The bug was structural: correct condition, unreachable location."""
     from src import kalshi_l5_collector as C
     import inspect
     src = inspect.getsource(C.main)
-    assert "if cycle == 1 or cycle % (every * INCENTIVE_EVERY_N) == 0:" in src
-    assert "the counter resets on every" in src
+    inc = src.index("if cycle == 1 or cycle % (every * INCENTIVE_EVERY_N)")
+    gate = src.index("if cycle % every == 0:")
+    assert inc < gate, "incentive emission must precede the shadow gate"
