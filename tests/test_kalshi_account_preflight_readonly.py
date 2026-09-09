@@ -166,9 +166,25 @@ def test_the_workflow_never_echoes_a_secret_value():
     variables themselves."""
     from pathlib import Path
     wf = Path(".github/workflows/kalshi-account-preflight.yml").read_text()
-    assert 'echo "$A"' not in wf and 'echo $A' not in wf
-    assert '-n "$A"' in wf                      # presence test only
+    # presence is derived from -n, and no secret-bearing var is ever printed
+    assert '[ -n "$1" ]' in wf
+    for var in ("N1", "N2", "N4", "KALSHI_API_KEY_ID",
+                "KALSHI_PRIVATE_KEY_PEM"):
+        for form in (f'echo "${var}"', f'echo ${var}',
+                     f'printf "${var}"', f'cat ${var}'):
+            assert form not in wf, form
     assert "runs-on: ubuntu-latest" in wf       # not the AWS self-hosted box
     # push-on-path is the only trigger; nothing schedules or auto-repeats it
     assert "schedule:" not in wf
+    assert "workflow_dispatch" not in wf
     assert "branches: [feature/l5-transfer-backtest]" in wf
+
+
+def test_the_workflow_installs_what_settings_actually_imports():
+    """config/settings.py imports dotenv at module load. Omitting it made
+    the first run die with ModuleNotFoundError before touching the network."""
+    from pathlib import Path
+    wf = Path(".github/workflows/kalshi-account-preflight.yml").read_text()
+    assert "python-dotenv" in wf
+    # and a credential-free import check, whose traceback is safe to show
+    assert "Import check (no credentials in scope)" in wf
