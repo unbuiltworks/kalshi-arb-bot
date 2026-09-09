@@ -109,6 +109,112 @@ ACCOUNTING = (
     "a credited reward into a realised trading P&L, and never infer either "
     "from a mark.")
 
+# ============================================================ PREFLIGHT
+# Owner comment 5594247824: $3,419 confirmed on the Kalshi account, and a
+# request for the full preflight. Bankroll is no longer the blocker; the
+# reward-OBSERVATION path is, and it turned out to be weaker than assumed.
+
+PREFLIGHT = {
+    "candidate": "KXNATGAS15M (primary), KXCOPPER15M (fallback)",
+    "why_this_candidate": (
+        "ranks 1-5 of 300 active series on reward density in the complete "
+        "venue census (183,329 programs), at 0.2667 per capital dollar per "
+        "hour against a venue median of 0.00060; pair cost 1.02 measured "
+        "over ~97 snapshots each; and the thinnest near-mid competition of "
+        "any leg carrying a real pool (58.6 and 78.5 contracts within 2c)"),
+
+    "quote_construction": {
+        "side": "BUY both sides -- YES and NO -- simultaneously",
+        "type": "limit, post_only=true on BOTH legs",
+        "price": ("at the prevailing best bid on each side, NOT improving "
+                  "it. Improving the touch buys queue position we do not "
+                  "need and raises fill probability, which this probe wants "
+                  "LOW: a fill is a cost, the reward is earned by resting"),
+        "size": ("floor($30 notional / price) per side, so exposure is "
+                 "bounded in DOLLARS rather than contracts"),
+        "count_markets": 1,
+        "count_periods": 1,
+        "requote": "NEVER -- one placement, then observe",
+    },
+
+    "max_exposure": {
+        "capital_committed_usd": "<= 60.00 (two sides x $30)",
+        "worst_case_both_fill_usd": "-0.60 at pair cost 1.02",
+        "worst_case_one_side_fills_usd": (
+            "-30.00 absolute worst case, if the filled leg settles worthless "
+            "and the market moves fully against us inside 15 minutes. This "
+            "is the REAL risk and it is not the -$0.60 headline."),
+        "hard_loss_stop_usd": "1.50",
+        "stop_note": ("the stop cannot prevent the one-sided-fill case, "
+                      "because a 15-minute market can gap; it bounds "
+                      "DISCRETIONARY loss, not settlement risk. Sizing is "
+                      "the real control and that is why it is $30."),
+    },
+
+    "cancel_and_deadman": {
+        "cancel_at": "period end, unconditionally",
+        "deadman_seconds": 60,
+        "on_disconnect": "cancel both legs; do not re-place",
+        "on_one_side_filled": ("cancel the unfilled leg, HOLD the filled "
+                               "leg to settlement, do NOT chase a complete "
+                               "-- chasing is what produced the PMUS "
+                               "residual that cost -6.458%/$"),
+    },
+
+    # THE PART THAT CHANGED. See kalshi_account_preflight_readonly.
+    "reward_credit_observation_path": {
+        "method": ("BALANCE RESIDUE, because Kalshi exposes NO reward-ledger "
+                   "endpoint -- 31 plausible names return 404, and only "
+                   "balance/fills/settlements/orders/positions exist"),
+        "formula": ("credited_reward = balance_delta - realised_fill_cash "
+                    "- settlement_cash"),
+        "requires": ("an OTHERWISE IDLE account across the window. Any "
+                     "other Kalshi activity in the same period contaminates "
+                     "the only instrument available and voids the run."),
+        "snapshots": ("/portfolio/balance immediately BEFORE placement and "
+                      "again AFTER the market settles and the reward period "
+                      "closes; /portfolio/fills and /portfolio/settlements "
+                      "for the same window to subtract the explained cash"),
+        "timing_caveat": ("reward crediting lags: paid_out flips to true "
+                          "between 12h and 48h after a period ends, so the "
+                          "AFTER snapshot must be taken at least 48h later, "
+                          "not at settlement. A same-hour read showing $0.00 "
+                          "means NOTHING and must not be reported as a "
+                          "credited zero."),
+    },
+
+    "pass_fail": {
+        "PASS": ("a non-zero credited reward is observed as an unexplained "
+                 "balance residue. Share of score is then MEASURED for this "
+                 "leg and the chain's open link closes."),
+        "ALSO_PASS": ("a credited $0.00 confirmed at >=48h with the account "
+                      "idle. That proves the full-book denominator and "
+                      "closes Kalshi at this bankroll -- a real result."),
+        "FAIL_VOID": ("any other account activity in the window, or an "
+                      "AFTER snapshot taken before 48h. Void the run and "
+                      "repeat; do not interpret a contaminated residue."),
+        "FAIL_HARD": ("both legs fill and the realised pair cost exceeds "
+                      "1.05, indicating the book moved far worse than the "
+                      "~97-snapshot measurement predicted"),
+    },
+
+    "what_it_does_not_establish": (
+        "One period on one leg is one observation. It settles WHETHER we "
+        "are paid at all -- which is binary and currently unknown -- not "
+        "the rate, the variance, or the residual economics. Do not scale on "
+        "a single credited number."),
+}
+
+PREFLIGHT_BLOCKER = (
+    "NOT YET RUN. This session holds no Kalshi credentials, and the two "
+    "routes to them are closed by standing rules: reading Railway service "
+    "variables would pull secrets into the transcript, and the existing "
+    "authenticated transport runs on AWS where no work is authorised. The "
+    "owner must place read-only credentials somewhere this session can "
+    "reach, OR run src/kalshi_account_preflight_readonly.py where they "
+    "already live and paste back its non-secret output.")
+
+
 # ------------------------------------------------------- honest escalation
 NOT_YET_A_POSITIVE_EXPECTANCY_CLAIM = (
     "This package does NOT assert defensibly positive total expectancy, and "
