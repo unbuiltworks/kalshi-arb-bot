@@ -1060,6 +1060,18 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
     clean = [d for d in decs if is_clean_row(d)]
     legacy = [d for d in decs if not is_clean_row(d)]
     clean_sids = {d.get("session_id") for d in clean}
+    # The order/decision join is by session_id, but the session_end emitter
+    # writes session_id=None on EVERY order row (890 of 890 in the R5F tape;
+    # see l5_completion_extension_eval). Decisions DO carry real ids, so the
+    # membership test matches nothing and orders_clean silently comes back
+    # EMPTY -- order-derived evidence vanishes from the cohort that feeds the
+    # minimums rather than raising. It fails CLOSED (a verdict cannot be met
+    # on evidence that is not there), which is why it survived unnoticed, but
+    # a silently empty cohort is indistinguishable from a genuinely quiet one
+    # and that is exactly the confusion this gate exists to prevent.
+    orders_with_sid = sum(1 for o in orders if o.get("session_id") is not None)
+    join_broken = bool(orders) and orders_with_sid == 0 and bool(
+        [s for s in clean_sids if s is not None])
     if legacy:
         orders_clean = [o for o in orders if o.get("session_id") in clean_sids]
         orders_legacy = [o for o in orders if o.get("session_id") not in clean_sids]
@@ -1069,7 +1081,16 @@ def evaluate(reports: Iterable[Mapping[str, Any]],
     live["cohort"] = {"rule": CLEAN_ROW_RULE, "clean_decisions": len(clean),
                       "legacy_decisions": len(legacy),
                       "clean_orders": len(orders_clean),
-                      "legacy_orders": len(orders_legacy)}
+                      "legacy_orders": len(orders_legacy),
+                      "orders_carrying_session_id": orders_with_sid,
+                      "order_join_broken": join_broken,
+                      "order_join_note": (
+                          "orders carry session_id=None while decisions carry "
+                          "real ids, so the cohort join matches nothing and "
+                          "clean_orders is empty for a STRUCTURAL reason, not "
+                          "because the campaign was quiet. Order-derived "
+                          "minimums are UNMEASURED here, never satisfied."
+                          if join_broken else None)}
     dd["cohort"] = live["cohort"]
     live_legacy = (score_live(legacy, orders_legacy, spec, model,
                               maintenance=maintenance) if legacy else None)

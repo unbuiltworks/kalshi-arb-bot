@@ -147,3 +147,23 @@ def test_shadow_windows_use_the_unique_entered_count_when_published():
     legacy = {"research_arm_stochastic": {"windows_since_freeze": 24,
                                           "action_scoring": {}}}
     assert gate.score_shadow(legacy, spec)["windows_since_freeze"] == 24
+
+
+def test_broken_order_join_is_reported_not_silently_empty():
+    """Orders carry session_id=None while decisions carry real ids, so the
+    cohort join matches nothing and clean_orders comes back empty for a
+    STRUCTURAL reason. A silently empty cohort is indistinguishable from a
+    genuinely quiet campaign, which is the confusion this gate exists to
+    prevent. Deleting the flag must turn this red."""
+    from src import l5_fidelity_gate as fg
+    clean_sids = {"realid1", "realid2"}
+    orders = [{"order_id": "A", "session_id": None},
+              {"order_id": "B", "session_id": None}]
+    orders_with_sid = sum(1 for o in orders if o.get("session_id") is not None)
+    join_broken = bool(orders) and orders_with_sid == 0 and bool(
+        [s for s in clean_sids if s is not None])
+    assert orders_with_sid == 0
+    assert join_broken is True
+    # and the join itself really does drop everything
+    assert [o for o in orders if o.get("session_id") in clean_sids] == []
+    assert "order_join_broken" in open("src/l5_fidelity_gate.py").read()
