@@ -123,7 +123,10 @@ def book_of(payload: Mapping[str, Any]) -> Dict[str, Any]:
     return {"slug": md.get("marketSlug"), "state": md.get("state"),
             "bid": _money(md.get("bestBid")), "ask": _money(md.get("bestAsk")),
             "bid_depth": md.get("bidDepth"), "ask_depth": md.get("askDepth"),
-            "shares_traded": _money(md.get("sharesTraded"))}
+            "shares_traded": _money(md.get("sharesTraded")),
+            # side_hint needs this; without it two_sided is silently ALWAYS
+            # false and the whole flow classification is dead on arrival
+            "last_trade_px": _money(md.get("lastTradePx"))}
 
 
 # ------------------------------ the economics ------------------------------
@@ -363,9 +366,23 @@ def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, Any]],
                                    "side": "YES", "flow": [], "prev": None,
                                    "tranches": 0})
         st["flow"].append(flow_delta(st.get("prev"), book, now))
-        st["flow"] = st["flow"][-120:]
+        st["flow"] = st["flow"][-2880:]     # ~24h at 30s, bounded
         st["prev"] = dict(book, t=now)
-        if st["qty"] <= 0 and st["matched"] <= 0:
+        fs = flow_summary(st["flow"])
+        if st["qty"] <= 0:
+            # RE-SEED. The hypothetical book completes in a handful of
+            # tranches; without this the market stops being proposed on and
+            # therefore stops being watched, and flow never accumulates on
+            # the markets the study is about. Measured 2026-09-09: every
+            # market went silent after 5 rows, no row ever reached more than
+            # 4 flow intervals, and two-sidedness -- which needs both an
+            # at_bid and an at_ask print -- could not be classified at all.
+            # A null result from that window would have been an artifact of
+            # this loop, not a fact about the venue.
+            st["matched"], st["matched_spend"] = D(0), D(0)
+            st["sessions"] = int(st.get("sessions", 0)) + 1
+            st["tranches"] = 0
+        if st["qty"] <= 0:
             # seed a hypothetical first leg at the cheaper touch, and REMEMBER
             # which side it took -- the complement is priced off that
             no_touch = ONE - ask
@@ -377,8 +394,9 @@ def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, Any]],
         row = propose(book, st["qty"], st["spend"], st["matched"],
                       st["matched_spend"], surplus_side=str(st["side"]))
         if row:
-            row["flow"] = flow_summary(st["flow"])
+            row["flow"] = fs
             row["tranches_completed"] = int(st.get("tranches", 0))
+            row["sessions"] = int(st.get("sessions", 0))
             row["path_modelled"] = True
             rows.append(row)
             cpx = _money(row["complement_px"])

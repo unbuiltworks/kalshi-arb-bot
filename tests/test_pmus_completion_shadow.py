@@ -309,3 +309,51 @@ def test_every_completion_row_carries_the_flow_of_the_same_market():
     assert rows[0]["flow"]["intervals"] == 1
     assert rows[0]["flow"]["prints_seen"] == 1
     assert rows[0]["path_modelled"] is True
+
+
+def test_a_market_keeps_being_watched_after_its_book_completes():
+    """Measured 2026-09-09: every market emitted exactly 5 rows and went
+    silent once the hypothetical surplus was paired, so no row ever reached
+    more than 4 flow intervals and two-sidedness could never be classified.
+    A 'flow does not separate' result from that window would have been an
+    artifact of this loop. Goes red if observation ever stops at completion.
+    """
+    inv, n = {}, {"i": 0}
+
+    def getter(p):
+        n["i"] += 1
+        return {"marketData": {"marketSlug": "m", "state": "MARKET_STATE_OPEN",
+                               "bestBid": {"value": "0.45"},
+                               "bestAsk": {"value": "0.47"},
+                               "lastTradePx": {"value": "0.45"},
+                               "sharesTraded": str(n["i"] * 10),
+                               "bidDepth": 1, "askDepth": 1}}
+    rows = []
+    for i in range(20):
+        rows += cycle(["m"], inv, getter=getter, now=float(i) * 30.0)
+    assert len(rows) == 20, f"observation stopped after {len(rows)} rows"
+    assert rows[-1]["sessions"] >= 1, "the book never re-seeded"
+    assert rows[-1]["flow"]["intervals"] >= 15, rows[-1]["flow"]
+
+
+def test_flow_keeps_accumulating_across_re_seeds():
+    """Flow is a property of the MARKET, not of one hypothetical session, so
+    it must survive the re-seed that starts a new one."""
+    inv, n = {}, {"i": 0}
+    last = {"px": "0.45"}
+
+    def getter(p):
+        n["i"] += 1
+        last["px"] = "0.47" if n["i"] % 2 else "0.45"   # alternate the side
+        return {"marketData": {"marketSlug": "m", "state": "MARKET_STATE_OPEN",
+                               "bestBid": {"value": "0.45"},
+                               "bestAsk": {"value": "0.47"},
+                               "lastTradePx": {"value": last["px"]},
+                               "sharesTraded": str(n["i"] * 10),
+                               "bidDepth": 1, "askDepth": 1}}
+    rows = []
+    for i in range(20):
+        rows += cycle(["m"], inv, getter=getter, now=float(i) * 30.0)
+    f = rows[-1]["flow"]
+    assert f["two_sided"] is True, f     # prints on both sides were seen
+    assert f["prints_seen"] >= 15
