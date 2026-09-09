@@ -36,9 +36,15 @@ TRADING = "trading"
 MAKER_REBATE = "maker_rebate_credited"
 LIQUIDITY_REWARD = "liquidity_reward_credited"
 
-PLANNING_RULE = ("trading P&L + CREDITED maker rebates only; liquidity-program "
-                 "rewards enter at $0.00 until the account actually receives "
-                 "them (owner directive 2026-09-09)")
+PLANNING_RULE = ("settled trading + CREDITED maker rebate only; liquidity-"
+                 "program rewards enter at $0.00 for planning and entry "
+                 "decisions even when credited (owner directive 2026-09-09)")
+
+REALIZED_RULE = ("settled trading + CREDITED maker rebate + CONFIRMED CREDITED "
+                 "liquidity rewards. Cash the account actually received is "
+                 "realized money and is counted. Accrued, displayed or "
+                 "estimated rewards remain $0.00 here exactly as in planning "
+                 "(owner directive 2026-09-09)")
 
 
 class EstimatedRewardRefused(RuntimeError):
@@ -144,6 +150,40 @@ def planning_total(ledgers: Mapping[str, Any]) -> dict:
             "excluded_usd": lq.get("usd"),
             "excluded_why": "liquidity-program reward is excluded from planning "
                             "economics until the account actually receives it"}
+
+
+def realized_total(ledgers: Mapping[str, Any]) -> dict:
+    """Settled trading + credited maker rebate + CREDITED liquidity reward.
+
+    The difference from planning_total is deliberate and is the owner's
+    correction to a conservatism I over-applied. Planning must not lean on
+    reward income the account is not reliably receiving, so a credited reward
+    is excluded there. But once the venue has actually paid cash, that cash is
+    realized money -- and excluding it from realized accounting would
+    understate the very component that made L5 profitable (his incentives were
+    +$71,552 against -$2,829 of trading).
+
+    What does NOT change between the two: accrued, displayed and estimated
+    rewards are $0.00 in both. Only CREDITED cash moves.
+    """
+    L = ledgers.get("ledgers") if "ledgers" in ledgers else ledgers
+    base = planning_total(L)
+    lq = (L.get(LIQUIDITY_REWARD) or {})
+    q = _d(lq.get("usd"))
+    if not base.get("resolvable"):
+        return {"usd": None, "resolvable": False, "rule": REALIZED_RULE,
+                "why": base.get("why")}
+    if q is None:
+        return {"usd": None, "resolvable": False, "rule": REALIZED_RULE,
+                "why": "the liquidity-reward ledger has no credited figure, so "
+                       "the realized total is UNKNOWN rather than equal to the "
+                       "planning total; a missing credit is not a zero credit"}
+    return {"usd": str(_d(base["usd"]) + q), "resolvable": True,
+            "rule": REALIZED_RULE,
+            "planning_usd": base["usd"],
+            "liquidity_reward_credited_usd": str(q),
+            "excludes": "accrued / displayed / estimated rewards, which are "
+                        "$0.00 here exactly as in planning"}
 
 
 if __name__ == "__main__":                                   # pragma: no cover

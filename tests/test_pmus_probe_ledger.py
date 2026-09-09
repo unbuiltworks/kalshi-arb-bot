@@ -60,5 +60,45 @@ def test_an_accrued_rebate_may_not_stand_in_for_a_credited_one():
 
 def test_planning_rule_is_stated_on_every_total():
     for led in (L(), L(liquidity_reward_credited_usd="7.00")):
-        assert "until the account actually receives them" in \
-            pl.planning_total(led)["rule"]
+        rule = pl.planning_total(led)["rule"]
+        assert "CREDITED maker rebate only" in rule
+        assert "$0.00 for planning" in rule
+
+
+# --- planning vs realized: the owner's correction ------------------------
+def test_credited_reward_is_excluded_from_planning_but_counted_in_realized():
+    """The whole distinction. Planning must not lean on reward income we are
+    not reliably receiving; realized must not understate cash we WERE paid."""
+    led = L(liquidity_reward_credited_usd="50.00")
+    assert pl.planning_total(led)["usd"] == "9.72"
+    assert pl.realized_total(led)["usd"] == "59.72"
+
+
+def test_accrued_reward_is_zero_in_BOTH_totals():
+    """Only CREDITED cash moves. $115 earned-but-unpaid moves neither."""
+    led = L(liquidity_reward_credited_usd="0.00",
+            liquidity_reward_accrued_usd="115.00")
+    assert pl.planning_total(led)["usd"] == "9.72"
+    assert pl.realized_total(led)["usd"] == "9.72"
+
+
+def test_a_missing_credit_makes_realized_unknown_not_equal_to_planning():
+    """Silently falling back to the planning figure would report a realized
+    total that has never been reconciled against the venue."""
+    led = L(liquidity_reward_credited_usd=None)
+    r = pl.realized_total(led)
+    assert r["usd"] is None and r["resolvable"] is False
+    assert "not a zero credit" in r["why"]
+
+
+def test_unresolvable_trading_makes_realized_unresolvable_too():
+    led = L(residual_usd=None)
+    assert pl.realized_total(led)["resolvable"] is False
+
+
+def test_the_two_rules_are_stated_and_different():
+    led = L(liquidity_reward_credited_usd="1.00")
+    p, r = pl.planning_total(led), pl.realized_total(led)
+    assert p["rule"] != r["rule"]
+    assert "$0.00 for planning" in p["rule"]
+    assert "realized money and is counted" in r["rule"]
