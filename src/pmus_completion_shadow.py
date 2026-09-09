@@ -533,7 +533,12 @@ def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, Any]],
                 # taken, from samples that all PRECEDE it
                 drift = pre_entry_drift(st.get("mids") or [], now)
                 if drift["resolvable"]:
-                    st["window"] = _pw().open_window(now, cpx, cside, slug)
+                    # the first leg's own cost, from the same book, so the
+                    # pair cost of any later completion is measured against
+                    # what taking it would actually have cost
+                    flp = _pw().side_ask(book, str(st["side"]))
+                    st["window"] = _pw().open_window(now, cpx, cside, slug,
+                                                     first_leg_px=flp)
                     st["window"]["pre_entry_drift"] = drift
                 else:
                     # DEFER rather than open a window the experiment would

@@ -97,3 +97,59 @@ Nothing here is a fill. The shadow places no orders and holds no inventory.
 ships **default-OFF** and cannot be enabled by this document.
 
 Standard unchanged: **filled → settled → realized.**
+
+---
+
+## 7. AMENDMENT — 2026-09-09, before the shadow was deployed and before any
+## rescue-band observation existed
+
+Two corrections found while building the analyser. Both were made with **zero
+rows of rescue-band data in existence** — the instrument had just been written
+and nothing was deployed.
+
+### 7.1 R2's interval clause was vacuous as first written
+
+§3 required the lift's 95% CI lower bound to exceed **1.00**. That is
+meaningless here. The arms are **nested** — every capped opportunity is also a
+rescue opportunity — so
+
+```
+lift = 1 + rescue_only / capped
+```
+
+and its lower bound exceeds 1.00 whenever a **single** band-only opportunity
+exists. The clause could never fail.
+
+A mutation test caught it: deleting the clause left the suite green, which is
+what an inert guard looks like. It is the same defect class as the drift
+prereg's, one level up — a bar that cannot fail is no better than a bar too
+weak to separate.
+
+**Corrected:** the 95% CI lower bound must exceed **MIN_LIFT (1.20)** — the
+*decision threshold* — so a sample too thin to distinguish "meets the bar" from
+"falls short of it" FAILS instead of passing on a point estimate.
+
+### 7.2 The resulting power curve, stated so the timeline is not a surprise
+
+Capped opportunities needed before a given true lift can be certified:
+
+| true lift | capped opportunities required |
+|---|---|
+| 1.24 | ~590 |
+| 1.30 | ~110 |
+| **1.40** | **~30** |
+| 1.60 | ~30 |
+| 2.00 | ~30 |
+
+This is the correct shape — a large effect certifies quickly, a marginal one
+demands evidence — but it has a practical consequence worth naming in advance:
+at the ~1.6%/observation opportunity rate measured during the drift run,
+**30 capped opportunities is hours; 590 is days.**
+
+So a *strong* rescue effect will be decidable in one session. A *marginal* one
+will not be, and the honest reading of a long UNDERPOWERED run is that the
+band is not doing much — not that we should lower the bar to see it.
+
+**Nothing else moves.** R1 (30), MIN_LIFT (1.20), R3 (10), the band (1.00,
+1.03], maker-only, rescue-not-initiation, and the kill condition are all
+unchanged.

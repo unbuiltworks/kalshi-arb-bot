@@ -115,14 +115,39 @@ def bucket_of(elapsed_s: float) -> Optional[str]:
     return None
 
 
+# OWNER GO: the residual-rescue band. Our live rule caps a completed pair at
+# 1.00 (pair_cost_max never returns above it); early-era L5 completed above par
+# 25.9% of the time. These two prices are evaluated at the SAME polls so the
+# arms cannot differ by market selection. See PREREG_RESIDUAL_RESCUE_BAND.md.
+CAP_PAIR_COST = D("1.00")
+RESCUE_PAIR_COST = D("1.03")
+
+
+def rescue_prices(first_leg_px: Optional[D]) -> Dict[str, Optional[D]]:
+    """The best complement price each rule permits, given the first leg.
+
+    Fails closed: with no first-leg price there is no pair cost to bound, so
+    both are None and the poll contributes to neither arm rather than
+    defaulting into the permissive one.
+    """
+    if first_leg_px is None:
+        return {"cap": None, "rescue": None}
+    return {"cap": CAP_PAIR_COST - first_leg_px,
+            "rescue": RESCUE_PAIR_COST - first_leg_px}
+
+
 def open_window(t: float, complement_px: D, complement_side: str,
-                slug: str) -> Dict[str, Any]:
+                slug: str, first_leg_px: Optional[D] = None) -> Dict[str, Any]:
     """Start watching from the moment a hypothetical first leg is taken."""
     return {
         "slug": slug, "opened_t": t, "complement_side": complement_side,
         "complement_px_at_entry": complement_px,
+        "first_leg_px": first_leg_px,
         "buckets": {name: {"observations": 0, "opportunities": 0, "prints": 0,
-                           "shares": D(0), "best_complement_px": None}
+                           "shares": D(0), "best_complement_px": None,
+                           "capped_opportunities": 0,
+                           "rescue_opportunities": 0,
+                           "rescue_only_opportunities": 0}
                     for _, _, name in BUCKETS},
         "closed": False,
     }
@@ -142,6 +167,20 @@ def touch_reached(book: Mapping[str, Any], complement_side: str,
         return False
     opp_ask = (D(1) - bid) if complement_side == "NO" else ask
     return opp_ask <= our_px
+
+
+def side_ask(book: Mapping[str, Any], side: str) -> Optional[D]:
+    """What it costs to BUY `side` right now -- that side's ask.
+
+    Same convention touch_reached uses internally: on a YES-quoted book the
+    NO ask is 1 - yes_bid and the YES ask is quoted directly. The hypothetical
+    first leg is taken at this price, so the pair cost of any later completion
+    is measured from it.
+    """
+    bid, ask = book.get("bid"), book.get("ask")
+    if bid is None or ask is None:
+        return None
+    return (D(1) - bid) if side == "NO" else ask
 
 
 def complement_price_now(book: Mapping[str, Any],
@@ -177,6 +216,24 @@ def observe(win: Mapping[str, Any], book: Mapping[str, Any], t: float,
     if printed and touch_reached(book, str(win["complement_side"]),
                                  D(str(win["complement_px_at_entry"]))):
         b["opportunities"] += 1
+
+    # --- residual-rescue band, paired at this same poll -------------------
+    # Both arms are tested on the SAME book and the SAME print, so the only
+    # difference between them is the price the rule permits. Any increment is
+    # attributable to the band and not to which markets were sampled.
+    flp = win.get("first_leg_px")
+    rp = rescue_prices(D(str(flp)) if flp is not None else None)
+    if printed and rp["cap"] is not None:
+        side = str(win["complement_side"])
+        cap_hit = touch_reached(book, side, rp["cap"])
+        resc_hit = touch_reached(book, side, rp["rescue"])
+        if cap_hit:
+            b["capped_opportunities"] += 1
+        if resc_hit:
+            b["rescue_opportunities"] += 1
+        # strictly inside (1.00, 1.03]: reachable ONLY because of the band
+        if resc_hit and not cap_hit:
+            b["rescue_only_opportunities"] += 1
     return w
 
 
