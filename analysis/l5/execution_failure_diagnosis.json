@@ -1,0 +1,35 @@
+{
+ "prereg": "analysis/l5/PREREG_EXECUTION_QUEUE_FAILURE.md",
+ "orders": 33,
+ "counts": {
+  "E_insufficient_evidence": 5,
+  "A_quote_never_reached": 17,
+  "C_executor_ended_early": 5,
+  "D_venue_rejection": 6
+ },
+ "decided": 28,
+ "n1_required": 200,
+ "unknown_share": 0.1515,
+ "n3_ceiling": 0.4,
+ "sampling_cadence_s": {
+  "n": 26,
+  "median": 1.158,
+  "note": "B is a LOWER bound and A an UPPER bound at this cadence; crossings between polls are invisible"
+ },
+ "verdict": "UNDERPOWERED",
+ "deficit": 172,
+ "why": "N1 not met: 28 of 200 classified orders. Per the prereg an underpowered result reports the deficit and claims no dominance, so no dominance test was run.",
+ "population": {
+  "all_orders": 251,
+  "complements_after_first_fill": 33,
+  "excluded": {
+   "session_never_filled_a_first_leg": 28
+  },
+  "sessions_with_a_first_fill": 21
+ },
+ "rest_benchmark": {
+  "r50": 12.26,
+  "r75": 19.35,
+  "n": 13
+ }
+}
