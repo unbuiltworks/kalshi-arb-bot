@@ -355,11 +355,66 @@ def collect_once(seen: Optional[Dict[str, float]] = None,
                               for m in markets})}
 
 
+# --------------------------------------------------------- reward units
+# period_reward arrives as a bare integer. Its denomination is CENTI-CENTS
+# (1/10,000 of a dollar), from Kalshi's current Liquidity Incentive Program
+# documentation, supplied by the owner on 2026-09-08 with the worked
+# examples below. We keep the raw integer next to the conversion for as
+# long as this field exists, so a wrong unit is a one-line correction and
+# not an archaeology exercise across a month of tape.
+REWARD_UNIT = {
+    "units": "centi-cents",
+    "divisor": 10_000,
+    "source": ("Kalshi Liquidity Incentive Program documentation, relayed "
+               "by the owner 2026-09-08; worked examples 1,000,000=$100, "
+               "2,850,000=$285, 10,000,000=$1,000 all satisfy /10,000, and "
+               "the documented $1-$1,000 per market/day advertised range "
+               "brackets every value we have observed"),
+    "status": ("HEADLINE POOL ONLY. This is what the venue distributes "
+               "among ALL qualifying liquidity in the market, before any "
+               "share-of-score. It is not estimated obtainable reward and "
+               "it is not credited reward. Those are separate statuses and "
+               "this collector produces neither."),
+    "examples": {"1000000": 100.0, "2850000": 285.0, "10000000": 1000.0},
+}
+
+def _incentive_bucket() -> Dict[str, Any]:
+    """A FRESH bucket per series. This is a factory and not a module-level
+    template on purpose: a shallow copy of a template would share the four
+    nested histograms across every series, which silently reports one
+    venue-wide reward distribution as if it were each series' own."""
+    return {"active": 0, "upcoming": 0, "past": 0,
+            "period_reward_raw": {}, "headline_reward_dollars": {},
+            "target_size_raw": {}, "types": {}}
+
+
+def reward_dollars(period_reward: Any) -> Optional[float]:
+    """Headline pool in dollars for one reward period. None when the field
+    is absent or unparseable -- never 0.0, because a missing program and a
+    zero-funded one are different facts."""
+    if period_reward is None:
+        return None
+    try:
+        return int(period_reward) / REWARD_UNIT["divisor"]
+    except (TypeError, ValueError):
+        return None
+
+
 def incentive_state(series: Sequence[str] = OBSERVATION_SERIES,
                    now: Optional[float] = None, pages: int = 25) -> dict:
     """Current incentive-program state per series, from the public
-    endpoint. Read-only. period_reward UNITS ARE UNVERIFIED, so this
-    reports the raw integer and never converts it to dollars."""
+    endpoint. Read-only.
+
+    period_reward is denominated in CENTI-CENTS, per Kalshi's current
+    Liquidity Incentive Program documentation (see REWARD_UNIT below).
+    The raw integer is retained verbatim under period_reward_raw; the
+    dollar reading is reported ALONGSIDE it, never instead of it, so the
+    conversion stays auditable and reversible if the source is ever
+    contradicted.
+
+    A dollar figure here is the HEADLINE POOL for a market-day: what the
+    venue advertises it will distribute among all qualifying liquidity.
+    It is NOT our revenue and must never be read as one."""
     now = time.time() if now is None else now
     iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
     want = {s.upper() for s in series} | {s.upper() for s in CERTIFIED_SERIES}
@@ -376,8 +431,7 @@ def incentive_state(series: Sequence[str] = OBSERVATION_SERIES,
             ser = str(r.get("market_ticker") or "").split("-", 1)[0].upper()
             if ser not in want:
                 continue
-            b = out.setdefault(ser, {"active": 0, "upcoming": 0, "past": 0,
-                                     "period_reward_raw": {}, "types": {}})
+            b = out.setdefault(ser, _incentive_bucket())
             st, en = str(r.get("start_date") or ""), str(r.get("end_date") or "")
             if st <= iso <= en:
                 b["active"] += 1
@@ -387,17 +441,27 @@ def incentive_state(series: Sequence[str] = OBSERVATION_SERIES,
                 b["past"] += 1
             pr = str(r.get("period_reward"))
             b["period_reward_raw"][pr] = b["period_reward_raw"].get(pr, 0) + 1
+            usd = reward_dollars(r.get("period_reward"))
+            if usd is not None:
+                k = f"{usd:.4f}"
+                b["headline_reward_dollars"][k] = \
+                    b["headline_reward_dollars"].get(k, 0) + 1
+            ts = str(r.get("target_size_fp") if r.get("target_size_fp")
+                     is not None else r.get("target_size"))
+            b["target_size_raw"][ts] = b["target_size_raw"].get(ts, 0) + 1
             ty = str(r.get("incentive_type"))
             b["types"][ty] = b["types"].get(ty, 0) + 1
         cursor = resp.get("next_cursor")
         if not cursor or not rows:
             break
     for ser in want:
-        out.setdefault(ser, {"active": 0, "upcoming": 0, "past": 0,
-                             "period_reward_raw": {}, "types": {}})
+        out.setdefault(ser, _incentive_bucket())
     return {"kind": "KALSHI_INCENTIVE_STATE", "observed_utc": iso,
             "series": out,
-            "period_reward_units": "UNVERIFIED - raw integers, never converted",
+            "period_reward_units": REWARD_UNIT["units"],
+            "period_reward_divisor": REWARD_UNIT["divisor"],
+            "period_reward_source": REWARD_UNIT["source"],
+            "dollar_status": REWARD_UNIT["status"],
             "withdrawn_note": ("KXBTC15M/KXETH15M carried volume programs that "
                                "ENDED 2026-05-12; a zero here is a withdrawn "
                                "subsidy, not an absent one")}

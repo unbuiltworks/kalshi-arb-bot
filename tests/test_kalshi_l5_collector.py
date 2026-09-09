@@ -315,15 +315,66 @@ def test_one_sided_books_are_counted_not_imputed():
     assert s["pair_cost_median"] is None
 
 
-def test_incentive_state_never_converts_the_raw_reward():
+# The old invariant here was "never converts the raw reward", which held
+# only while the unit was unknown. The unit is now source-proven
+# (centi-cents, /10,000), so the invariant it is replaced by is the one
+# that still protects us: the raw integer survives the conversion, and the
+# dollar figure is labelled as a headline pool rather than as revenue.
+def test_the_raw_period_reward_survives_the_conversion():
     from src import kalshi_l5_collector as C
     import inspect
     src = inspect.getsource(C.incentive_state)
-    assert "UNVERIFIED" in src
     assert "period_reward_raw" in src
+    assert "headline_reward_dollars" in src
+
+
+def test_the_reward_unit_carries_its_source_and_its_worked_examples():
+    from src import kalshi_l5_collector as C
+    u = C.REWARD_UNIT
+    assert u["units"] == "centi-cents"
+    assert u["divisor"] == 10_000
+    assert "Kalshi Liquidity Incentive Program documentation" in u["source"]
+    for raw, usd in u["examples"].items():
+        assert C.reward_dollars(raw) == usd, raw
+
+
+def test_reward_dollars_converts_and_refuses_to_invent_a_zero():
+    from src import kalshi_l5_collector as C
+    assert C.reward_dollars(200_000) == 20.0
+    assert C.reward_dollars(10_000) == 1.0
+    # a missing program and a zero-funded one are different facts
+    assert C.reward_dollars(None) is None
+    assert C.reward_dollars("not a number") is None
+    assert C.reward_dollars(0) == 0.0
+
+
+def test_the_dollar_figure_is_labelled_headline_pool_not_revenue():
+    from src import kalshi_l5_collector as C
+    st = C.REWARD_UNIT["status"]
+    assert "HEADLINE POOL ONLY" in st
+    assert "not estimated obtainable reward" in st
+    assert "not credited reward" in st
 
 
 def test_the_withdrawn_subsidy_is_recorded_not_read_as_absent():
     from src import kalshi_l5_collector as C
     import inspect
     assert "2026-05-12" in inspect.getsource(C.incentive_state)
+
+
+def test_each_series_gets_its_own_reward_histograms():
+    """Regression. The first cut of this used a module-level template and
+    dict(), a shallow copy, so all four nested histograms were SHARED. Every
+    series then reported one venue-wide reward distribution as its own --
+    including KXBTC15M/KXETH15M, whose programs ended, which appeared to
+    carry an active $20 pool. Buckets must not alias."""
+    from src import kalshi_l5_collector as C
+    a, b = C._incentive_bucket(), C._incentive_bucket()
+    a["period_reward_raw"]["200000"] = 1
+    a["headline_reward_dollars"]["20.0000"] = 1
+    a["target_size_raw"]["1000.00"] = 1
+    a["types"]["liquidity"] = 1
+    assert b["period_reward_raw"] == {}
+    assert b["headline_reward_dollars"] == {}
+    assert b["target_size_raw"] == {}
+    assert b["types"] == {}
