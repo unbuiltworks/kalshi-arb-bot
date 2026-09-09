@@ -85,9 +85,15 @@ def test_opportunities_land_in_the_bucket_they_occurred_in():
     """Goes red if elapsed time stops reaching the bucketing -- the failure
     that made a 4-interval window look like a complete result."""
     w = win("0.58", "NO")
-    for t in (5.0, 40.0, 45.0, 90.0):
-        w = observe(w, book("0.45", "0.60"), t, True, D(1))
+    hit, miss = book("0.45", "0.60"), book("0.20", "0.90")
+    for t, b in ((5.0, hit), (12.0, miss), (20.0, miss)):        # 1 of 3 in a
+        w = observe(w, b, t, True, D(1))
+    for t, b in ((35.0, hit), (42.0, hit), (52.0, miss)):        # 2 of 3 in b
+        w = observe(w, b, t, True, D(1))
+    for t, b in ((70.0, hit), (85.0, miss), (100.0, miss)):      # 1 of 3 in c
+        w = observe(w, b, t, True, D(1))
     s = summarise(w)
+    assert s["unresolvable_buckets"] == []
     assert s["buckets"]["a_0_30s"]["opportunities"] == 1
     assert s["buckets"]["b_30_60s"]["opportunities"] == 2
     assert s["buckets"]["c_60_120s"]["opportunities"] == 1
@@ -124,10 +130,17 @@ def test_two_windows_with_identical_books_but_different_timing_differ():
     """If the output collapsed to a function of the book alone, these would
     be identical -- the shape that made pair cost exactly 1 - spread."""
     early, late = win("0.58", "NO"), win("0.58", "NO")
-    for t in (5.0, 10.0):
-        early = observe(early, book("0.45", "0.60"), t, True, D(1))
-    for t in (40.0, 70.0):
-        late = observe(late, book("0.45", "0.60"), t, True, D(1))
+    hit, miss = book("0.45", "0.60"), book("0.20", "0.90")
+    # identical books, identical sample COUNTS per bucket; only the timing of
+    # the reachable ones differs
+    for t, bk in ((5.0, hit), (12.0, hit), (20.0, miss),
+                  (35.0, miss), (42.0, miss), (52.0, miss),
+                  (70.0, miss), (85.0, miss), (100.0, miss)):
+        early = observe(early, bk, t, True, D(1))
+    for t, bk in ((5.0, miss), (12.0, miss), (20.0, miss),
+                  (35.0, hit), (42.0, miss), (52.0, miss),
+                  (70.0, hit), (85.0, miss), (100.0, miss)):
+        late = observe(late, bk, t, True, D(1))
     a, b = summarise(early), summarise(late)
     assert a["opportunities_we_never_waited_for"] == 0
     assert b["opportunities_we_never_waited_for"] == 2
@@ -147,10 +160,13 @@ def test_flow_is_accumulated_per_bucket():
 
 def test_cohort_totals_the_comparison_the_owner_asked_for():
     ws = []
+    hit, miss = book("0.45", "0.60"), book("0.20", "0.90")
     for _ in range(3):
         w = win("0.58", "NO")
-        w = observe(w, book("0.45", "0.60"), 10.0, True, D(1))
-        w = observe(w, book("0.45", "0.60"), 45.0, True, D(1))
+        for t, bk in ((5.0, hit), (12.0, miss), (20.0, miss),
+                      (35.0, hit), (42.0, miss), (52.0, miss),
+                      (70.0, miss), (85.0, miss), (100.0, miss)):
+            w = observe(w, bk, t, True, D(1))
         ws.append(summarise(w))
     c = cohort(ws)
     assert c["windows"] == 3
@@ -163,3 +179,81 @@ def test_cohort_totals_the_comparison_the_owner_asked_for():
 
 def test_an_empty_cohort_does_not_invent_a_share():
     assert cohort([])["share_beyond_30s"] is None
+
+
+# ---- OWNER-REQUIRED FAIL-CLOSED GUARD: cadence that cannot resolve a bucket
+# ---- must say UNRESOLVABLE, never quietly report zero.
+
+from src.pmus_persistence_window import (MIN_SAMPLES_PER_BUCKET, cadence_plan,
+                                         resolvable)
+
+
+def test_a_30s_poll_cannot_resolve_a_30s_bucket():
+    """The exact geometry that produced share_beyond_30s = 1.0 from a single
+    opening sample per window."""
+    assert resolvable(30.0, 0.0, 30.0) is False
+    plan = cadence_plan(30.0)
+    assert plan["all_resolvable"] is False
+    assert "a_0_30s" in plan["unresolvable"]
+
+
+def test_a_5s_poll_resolves_every_bucket():
+    plan = cadence_plan(5.0)
+    assert plan["all_resolvable"] is True and plan["unresolvable"] == []
+    assert plan["by_bucket"]["a_0_30s"]["expected_samples"] == 6.0
+
+
+def test_a_zero_or_negative_poll_is_never_resolvable():
+    assert resolvable(0.0, 0.0, 30.0) is False
+    assert resolvable(-5.0, 0.0, 30.0) is False
+
+
+def test_a_thin_bucket_reports_unresolvable_not_zero_opportunities():
+    """The heart of the guard: absence of samples must not read as absence of
+    opportunity."""
+    w = win("0.58", "NO")
+    w = observe(w, book("0.45", "0.60"), 10.0, True, D(1))   # ONE sample in a
+    for t in (35.0, 40.0, 45.0, 70.0, 80.0, 90.0):
+        w = observe(w, book("0.45", "0.60"), t, True, D(1))
+    s = summarise(w)
+    a = s["buckets"]["a_0_30s"]
+    assert a["resolvable"] is False
+    assert a["opportunities"] is None, "a thin bucket reported a count"
+    assert "cannot be read as zero" in a["unresolvable_reason"]
+    # and the comparison itself refuses
+    assert s["share_beyond_30s"] is None
+    assert s["comparison"].startswith("UNRESOLVABLE")
+    assert s["opportunities_inside_our_old_deadline"] is None
+
+
+def test_a_fully_sampled_window_still_reports_the_comparison():
+    w = win("0.58", "NO")
+    for t in (2.0, 8.0, 14.0, 20.0, 26.0):          # 5 in bucket a
+        w = observe(w, book("0.45", "0.60"), t, True, D(1))
+    for t in (32.0, 40.0, 50.0):                     # 3 in bucket b
+        w = observe(w, book("0.45", "0.60"), t, True, D(1))
+    for t in (65.0, 80.0, 100.0):                    # 3 in bucket c
+        w = observe(w, book("0.30", "0.70"), t, False, D(0))
+    s = summarise(w)
+    assert s["unresolvable_buckets"] == []
+    assert s["comparison"] == "resolvable"
+    assert s["opportunities_inside_our_old_deadline"] == 5
+    assert s["opportunities_we_never_waited_for"] == 3
+    assert s["share_beyond_30s"] == 0.375
+
+
+def test_cohort_drops_unresolvable_windows_and_says_how_many():
+    good = win("0.58", "NO")
+    for t in (2.0, 8.0, 14.0, 32.0, 40.0, 50.0, 65.0, 80.0, 100.0):
+        good = observe(good, book("0.45", "0.60"), t, True, D(1))
+    bad = observe(win("0.58", "NO"), book("0.45", "0.60"), 10.0, True, D(1))
+    c = cohort([summarise(good), summarise(bad)])
+    assert c["windows"] == 1
+    assert c["windows_dropped_unresolvable"] == 1
+
+
+def test_a_cohort_of_only_unresolvable_windows_refuses_to_answer():
+    bad = observe(win("0.58", "NO"), book("0.45", "0.60"), 10.0, True, D(1))
+    c = cohort([summarise(bad)])
+    assert c["share_beyond_30s"] is None
+    assert c["comparison"].startswith("UNRESOLVABLE")

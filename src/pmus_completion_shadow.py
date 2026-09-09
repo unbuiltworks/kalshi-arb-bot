@@ -72,8 +72,13 @@ CA_ENV = "PMUS_CA_BUNDLE"
 BBO_PATH = "/v1/markets/%s/bbo"
 STATE_ENV = "COMPLETION_SHADOW_STATE_DIR"
 DEFAULT_STATE = "/data/completion_shadow"
-DEFAULT_POLL_S = 30.0
-DEFAULT_MAX_MARKETS = 60
+# OWNER GO: 5 s so the 0-30 s bucket is resolvable. The market count falls
+# out of the rate budget, it is not a free choice: at BUDGET_RPS 3.0 with
+# ~0.5 rps overhead, one bbo call per market per cycle allows
+# floor(2.5 * 5) = 12 markets. Polling 60 markets every 5 s would be 12 rps
+# and we rate-limited ourselves once already this campaign.
+DEFAULT_POLL_S = 5.0
+DEFAULT_MAX_MARKETS = 12
 BUDGET_RPS = 3.0
 
 ONE = D("1")
@@ -441,7 +446,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     started = time.time()
     inv: Dict[str, Dict[str, D]] = {}
     total = 0
+    from src.pmus_persistence_window import cadence_plan
     print(json.dumps({"kind": "shadow_start", "read_only": READ_ONLY,
+                      "cadence_plan": cadence_plan(a.poll_s),
                       "places_orders": PLACES_ORDERS,
                       "requires_credentials": REQUIRES_CREDENTIALS,
                       "state_dir": state_dir(),
