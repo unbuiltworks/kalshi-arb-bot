@@ -14,7 +14,8 @@ from src.pmus_persistence_window import (BUCKETS,
                                          MIN_OPPORTUNITIES_FOR_COMPARISON,
                                          WINDOW_S, bucket_of, cohort,
                                          complement_price_now, observe,
-                                         open_window, power_check, summarise,
+                                         open_window, power_check, rate_analysis,
+                                         summarise,
                                          touch_reached)
 
 
@@ -341,3 +342,76 @@ def test_the_bars_are_pre_registered_constants():
     """Frozen before the run. A bar tuned after seeing data is not a bar."""
     assert MIN_OPPORTUNITIES_FOR_COMPARISON == 30
     assert MIN_OBSERVATIONS_PER_BUCKET == 500
+
+
+# --------------------------------------------------------------------------
+# share_beyond_30s is WIDTH-BIASED. Buckets b+c span 90 s against a's 30 s,
+# so a uniform arrival rate already produces ~0.75 with no persistence effect
+# at all. The first flow-ranked cohort measured 0.80 -- lift 1.067x, nothing.
+# --------------------------------------------------------------------------
+
+def test_a_uniform_arrival_rate_produces_a_high_share_and_no_lift():
+    """The null, constructed: identical per-observation rates everywhere."""
+    r = rate_analysis(_bucket_totals(opps=(10, 10, 20), obs=(300, 300, 600)))
+    assert r["share_beyond_30s"] == 0.75
+    assert r["share_beyond_30s_uniform_null"] == 0.75
+    assert r["lift_vs_uniform"] == 1.0, \
+        "a uniform process must show no persistence lift, whatever the share"
+
+
+def test_the_first_flow_ranked_cohort_is_barely_above_its_null():
+    """The real numbers, 2026-09-09T15:24Z. 0.80 looks like a finding."""
+    r = rate_analysis(_bucket_totals(opps=(3, 3, 9), obs=(270, 270, 540)))
+    assert r["share_beyond_30s"] == 0.8
+    assert r["share_beyond_30s_uniform_null"] == 0.75
+    assert r["lift_vs_uniform"] == pytest.approx(1.0667, abs=1e-4)
+    per = r["by_bucket"]
+    assert per["a_0_30s"]["opportunity_rate_per_observation"] == \
+        per["b_30_60s"]["opportunity_rate_per_observation"], \
+        "0-30s and 30-60s were equally productive per observation"
+
+
+def test_a_real_persistence_effect_shows_a_lift_above_one():
+    r = rate_analysis(_bucket_totals(opps=(1, 10, 20), obs=(300, 300, 600)))
+    assert r["lift_vs_uniform"] > 1.2
+    assert r["by_bucket"]["b_30_60s"]["opportunity_rate_per_observation"] > \
+        r["by_bucket"]["a_0_30s"]["opportunity_rate_per_observation"]
+
+
+def test_an_effect_concentrated_inside_30s_shows_a_lift_below_one():
+    r = rate_analysis(_bucket_totals(opps=(30, 2, 4), obs=(300, 300, 600)))
+    assert r["lift_vs_uniform"] < 1.0
+
+
+def test_the_share_never_travels_without_its_null():
+    """Anywhere cohort reports the share, the null must be alongside it."""
+    c = cohort([_resolvable_window(opps=(3, 3, 9), obs=(270, 270, 540))])
+    assert c["share_beyond_30s"] is not None
+    assert c["rates"]["share_beyond_30s_uniform_null"] is not None
+    assert c["rates"]["lift_vs_uniform"] is not None
+
+
+def test_rates_survive_a_cohort_with_no_usable_window():
+    bad = observe(win("0.58", "NO"), book("0.45", "0.60"), 10.0, True, D(1))
+    c = cohort([summarise(bad)])
+    assert c["rates"]["share_beyond_30s"] is None
+    assert c["rates"]["lift_vs_uniform"] is None
+
+
+def test_the_bucket_rate_is_normalised_by_observations_not_a_raw_count():
+    """Raw counts and rates can ORDER DIFFERENTLY, and the rate is the truth.
+
+    Bucket c is twice as wide as a, so it collects twice the observations and
+    its raw count flatters it for free. Here a sees 3 opportunities in 100
+    observations (3%) and c sees 4 in 400 (1%): the raw count says c is the
+    busier bucket, the rate says a is three times busier. Comparing raw
+    counts across unequal buckets is the same width bias that makes
+    share_beyond_30s read 0.75 on a uniform process.
+    """
+    r = rate_analysis(_bucket_totals(opps=(3, 1, 4), obs=(100, 100, 400)))
+    per = r["by_bucket"]
+    assert per["a_0_30s"]["opportunity_rate_per_observation"] == 0.03
+    assert per["c_60_120s"]["opportunity_rate_per_observation"] == 0.01
+    assert (per["a_0_30s"]["opportunity_rate_per_observation"]
+            > per["c_60_120s"]["opportunity_rate_per_observation"]), \
+        "the wider bucket's larger raw count must not read as a higher rate"

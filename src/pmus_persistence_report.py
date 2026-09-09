@@ -83,9 +83,10 @@ def provenance(parsed: Mapping[str, Any]) -> Dict[str, Any]:
         "windows_carrying_a_pre_window_score": len(scored),
         "min_pre_window_score": min(scored) if scored else None,
         "max_pre_window_score": max(scored) if scored else None,
-        # If this is 0 across every pin, the ranking was prints and shares
-        # only and the owner's third ranking input never participated.
-        "two_sidedness_decided_on_total": sum(decided) if decided else 0,
+        # None when no pin row was in the input at all -- "we did not read
+        # any pin" and "no pin ever decided it" are different statements and
+        # must not share a 0.
+        "two_sidedness_decided_on_total": (sum(decided) if pins else None),
     }
 
 

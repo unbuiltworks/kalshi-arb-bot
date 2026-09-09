@@ -259,6 +259,48 @@ def power_check(by_bucket: Mapping[str, Mapping[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def rate_analysis(by_bucket: Mapping[str, Mapping[str, Any]]) -> Dict[str, Any]:
+    """`share_beyond_30s` is width-biased. State its null next to it.
+
+    Bucket c spans 60-120 s, so "beyond 30 s" covers 90 seconds against
+    "inside"'s 30. Under a UNIFORM opportunity rate the share therefore comes
+    out at obs_beyond/obs_total ~ 0.75 with no persistence effect whatever,
+    and the first flow-ranked cohort measured 0.80 -- a lift of 1.067x, which
+    is nothing, off per-observation rates of 1.1111% in BOTH the 0-30 s and
+    30-60 s buckets. Reported bare, 0.80 reads as "persistence carries four
+    fifths of the opportunity" and would have gone into a staging decision.
+
+    Same shape as every other measurement failure in this campaign: a clean,
+    plausible, directionally-exciting number produced by geometry. So the
+    share never travels without the null it has to beat.
+    """
+    per: Dict[str, Any] = {}
+    for _, _, name in BUCKETS:
+        b = by_bucket[name]
+        obs, opp = b["observations"], b["opportunities"]
+        per[name] = {"observations": obs, "opportunities": opp,
+                     "opportunity_rate_per_observation": (
+                         round(opp / obs, 6) if obs else None)}
+    a, bb, c = (by_bucket[n] for _, _, n in BUCKETS)
+    obs_in, obs_beyond = a["observations"], bb["observations"] + c["observations"]
+    opp_in, opp_beyond = a["opportunities"], bb["opportunities"] + c["opportunities"]
+    total_obs, total_opp = obs_in + obs_beyond, opp_in + opp_beyond
+    share = (opp_beyond / total_opp) if total_opp else None
+    null = (obs_beyond / total_obs) if total_obs else None
+    return {
+        "by_bucket": per,
+        "share_beyond_30s": round(share, 4) if share is not None else None,
+        # what the share would be with NO persistence effect at all
+        "share_beyond_30s_uniform_null": round(null, 4) if null is not None else None,
+        "lift_vs_uniform": (round(share / null, 4)
+                            if (share is not None and null) else None),
+        "why_the_null": "buckets b+c span 90 s against a's 30 s, so a uniform "
+                        "arrival rate already produces share_beyond_30s ~ "
+                        "obs_beyond/obs_total; the share is only evidence of "
+                        "persistence to the extent it EXCEEDS this",
+    }
+
+
 def cohort(summaries: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     """Aggregate closed windows into the <=30s vs >=30s comparison."""
     usable = [s for s in summaries if not s.get("unresolvable_buckets")]
@@ -273,10 +315,11 @@ def cohort(summaries: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     a = tot["a_0_30s"]["opportunities"]
     beyond = tot["b_30_60s"]["opportunities"] + tot["c_60_120s"]["opportunities"]
     power = power_check(tot)
+    rates = rate_analysis(tot)
     if not usable:
         return {"windows": 0, "windows_dropped_unresolvable": dropped,
                 "by_bucket": tot, "share_beyond_30s": None,
-                "power": power,
+                "power": power, "rates": rates,
                 "comparison": "UNRESOLVABLE: no window resolved every bucket",
                 "l5_median_complement_gap_s": L5_MEDIAN_COMPLEMENT_GAP_S,
                 "our_historical_max_rest_s": OUR_HISTORICAL_MAX_REST_S,
@@ -289,6 +332,8 @@ def cohort(summaries: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
         "opportunities_we_never_waited_for": beyond,
         "share_beyond_30s": round(beyond / (a + beyond), 4) if (a + beyond) else None,
         "power": power,
+        # The share alone is width-biased; this carries its null.
+        "rates": rates,
         # A resolvable cohort can still be too small to compare. Say which.
         "comparison": ("powered" if power["powered"] else
                        "UNDERPOWERED: %d of %d opportunities" % (
