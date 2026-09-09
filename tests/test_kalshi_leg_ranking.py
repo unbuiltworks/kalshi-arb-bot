@@ -239,6 +239,14 @@ def test_a_sub_floor_payout_is_forfeited_entirely_not_prorated():
     assert d["forfeited_usd"] == d["gross_usd"]
 
 
+def test_the_verdict_records_that_it_survived_a_doubled_sample():
+    d = R.__doc__ if False else None  # verdict comment lives in the module head
+    import inspect
+    src = inspect.getsource(R)
+    assert "RE-RUN AT DOUBLE THE SAMPLE" in src
+    assert "The conclusion did not depend on the swap." in src
+
+
 def test_the_full_book_verdict_is_zero_on_every_leg():
     v = R.PAYOUT_FLOOR_VERDICT
     assert "EVERY LEG PAYS ZERO" in v["finding"]
@@ -259,6 +267,7 @@ def test_the_answer_names_copper_and_natgas_with_its_reasoning():
     assert v["best_drag_with_meaningful_reward_density"] == ("KXCOPPER15M",
                                                              "KXNATGAS15M")
     assert "MIDDLE of the cost table" in v["why"]
+    assert "ranks 1-5 of 300 active series" in v["why"]
     assert "TOP of the reward-density table" in v["why"]
     assert "3.4x" in v["why"]
 

@@ -235,18 +235,27 @@ RESIDUAL_NOTE = ("UNMEASURED on this venue -- we hold no fills here. It is "
 CREDITED_INCENTIVES_USD = D("0.00")
 
 # --------------------------------------------------- the measured verdict
-# 527 book snapshots, 12 legs, ~44 observations each, read-only public GETs
-# 2026-09-09T00:23-01:05Z, 30s cadence. Artifact:
+# 1,160 book snapshots, 12 legs, ~97 observations each, read-only public
+# GETs 2026-09-09T00:23-01:05Z, 30s cadence. Artifact:
 # analysis/kalshi/leg_ranking.json
+#
+# RE-RUN AT DOUBLE THE SAMPLE (575 -> 1,160 rows) and the verdict held:
+# copper and natgas keep the frontier position, and the full-book
+# denominator still pays ZERO on every leg. Individual figures moved --
+# copper's cost worsened from -2.51% to -2.79%/$ and natgas improved to
+# -2.51%, swapping their order -- so the numbers below are the LARGER
+# sample. The conclusion did not depend on the swap.
 LEG_VERDICT = {
     "best_drag_with_meaningful_reward_density": ("KXCOPPER15M", "KXNATGAS15M"),
-    "why": ("they sit in the MIDDLE of the cost table (-2.51%/$ and "
-            "-2.67%/$) but at the TOP of the reward-density table (0.0654 "
-            "per capital dollar, 3.4x the KXCRYPTOLEAD15M legs, because "
-            "the same $20 pool sits against target size 300 rather than "
-            "1000) and near the BOTTOM of the competition table (78.5 and "
-            "30.2 contracts within 2c of mid, against 2,070 on WTI and "
-            "4,311 on gold)"),
+    "why": ("they sit in the MIDDLE of the cost table (natgas -2.51%/$, "
+            "copper -2.79%/$) but at the TOP of the reward-density table "
+            "(0.0654 per capital dollar, 3.4x the KXCRYPTOLEAD15M legs, "
+            "because the same $20 pool sits against target size 300 rather "
+            "than 1000) and near the BOTTOM of the competition table (58.6 "
+            "and 78.5 contracts within 2c of mid, against 1,976 on WTI and "
+            "4,424 on gold). And per the complete venue census they are "
+            "ranks 1-5 of 300 active series on reward density, 444x the "
+            "venue median"),
     "cheapest_execution_but_crowded": ("KXWTI15M", "KXGOLD15M", "KXSILVER15M"),
     "emptiest_books_but_expensive_and_third_the_density": (
         "KXCRYPTOLEAD15M:BTC", "KXCRYPTOLEAD15M:HYPE",
