@@ -373,8 +373,12 @@ def test_the_shadow_opens_and_closes_a_persistence_window(capsys):
                                "lastTradePx": {"value": "0.45"},
                                "sharesTraded": str(n["i"] * 10),
                                "bidDepth": 1, "askDepth": 1}}
+    # warm the mid series first: a window will not open until pre-entry
+    # drift is measurable, so the fixture has to give it history
+    for i in range(13):
+        cycle(["m"], inv, getter=getter, now=float(i) * 5.0)    # 0..60s
     for i in range(7):
-        cycle(["m"], inv, getter=getter, now=float(i) * 25.0)   # 0..150s
+        cycle(["m"], inv, getter=getter, now=60.0 + float(i) * 25.0)
     out = capsys.readouterr().out
     assert "PMUS_PERSISTENCE_WINDOW" in out, "no window was ever closed"
     row = json.loads(out[out.index("PMUS_PERSISTENCE_WINDOW") + 24:]
@@ -400,6 +404,18 @@ def _book_payload(bid="0.40", ask="0.42", shares="100", last="0.41"):
     return {"marketData": {"marketSlug": "s", "state": "live",
                            "bestBid": bid, "bestAsk": ask,
                            "sharesTraded": shares, "lastTradePx": last}}
+
+
+
+def _warm(inv, slug="a", getter=None, start=0.0, step=5.0, n=13):
+    """Poll a market until it carries enough mid history to characterise
+    pre-entry drift. A window will not open before this -- deliberately."""
+    t = start
+    g = getter or (lambda p: _book_payload())
+    for _ in range(n):
+        t += step
+        cs.cycle([slug], inv, getter=g, now=t)
+    return t
 
 
 def test_discover_returns_the_wide_universe_when_unlimited(monkeypatch):
@@ -437,7 +453,8 @@ def test_a_pinned_market_does_open_a_window():
     roster.roster = ["a"]
     roster.pinned_scores = {"a": 1.0}
     inv = {}
-    cs.cycle(["a"], inv, getter=lambda p: _book_payload(), now=5.0,
+    t = _warm(inv)
+    cs.cycle(["a"], inv, getter=lambda p: _book_payload(), now=t + 5.0,
              roster=roster)
     assert inv["a"].get("window") is not None
 
@@ -445,7 +462,8 @@ def test_a_pinned_market_does_open_a_window():
 def test_no_roster_preserves_the_previous_behaviour():
     """Callers that pass no roster are unchanged; the gate is opt-in."""
     inv = {}
-    cs.cycle(["a"], inv, getter=lambda p: _book_payload(), now=5.0)
+    t = _warm(inv)
+    cs.cycle(["a"], inv, getter=lambda p: _book_payload(), now=t + 5.0)
     assert inv["a"].get("window") is not None
 
 
@@ -529,3 +547,123 @@ def test_prints_without_a_readable_side_do_not_count_toward_the_decision():
     assert s["prints_seen"] == 2
     assert s["sided_prints"] == 0
     assert s["two_sided_resolvable"] is False
+
+
+# --------------------------------------------------------------------------
+# Pre-entry drift. Definition frozen in analysis/l5/PREREG_PRE_ENTRY_DRIFT.md
+# BEFORE this field existed. These tests pin the frozen definition; changing
+# them to make a result look better is the failure they exist to prevent.
+# --------------------------------------------------------------------------
+
+def _mids(*pairs):
+    return [(t, D(str(m))) for t, m in pairs]
+
+
+def test_the_frozen_constants_are_the_preregistered_ones():
+    assert cs.DRIFT_LOOKBACK_S == 60.0
+    assert cs.MIN_DRIFT_SAMPLES == 6
+    assert cs.DRIFT_LOOKBACKS_S == (30.0, 60.0, 120.0)
+
+
+def test_drift_is_unsigned():
+    """Ex ante we cannot know which direction hurts; the loss is asymmetric."""
+    up = _mids(*[(i * 10.0, 0.40 + i * 0.01) for i in range(7)])
+    down = _mids(*[(i * 10.0, 0.40 - i * 0.01) for i in range(7)])
+    a = cs.drift_at(up, 60.0, 60.0)
+    b = cs.drift_at(down, 60.0, 60.0)
+    assert a["drift_abs"] == b["drift_abs"], "sign must not change the metric"
+    assert D(a["drift_abs"]) > 0
+
+
+def test_too_few_samples_is_unresolvable_not_zero_drift():
+    """A just-pinned market must not land in the calm half by construction."""
+    r = cs.drift_at(_mids((0.0, 0.5), (5.0, 0.5)), 60.0, 60.0)
+    assert r["resolvable"] is False
+    assert "drift_abs" not in r, "an unresolvable window must carry no value"
+    assert "need 6" in r["why"]
+
+
+def test_enough_samples_over_too_short_a_span_is_unresolvable():
+    """Six samples crammed into 10s cannot speak for a 60s lookback."""
+    r = cs.drift_at(_mids(*[(50.0 + i, 0.5) for i in range(7)]), 60.0, 60.0)
+    assert r["resolvable"] is False
+    assert "spans" in r["why"]
+
+
+def test_a_flat_market_resolves_to_zero_drift():
+    r = cs.drift_at(_mids(*[(i * 10.0, 0.5) for i in range(7)]), 60.0, 60.0)
+    assert r["resolvable"] is True
+    assert D(r["drift_abs"]) == 0
+    assert D(r["excursion"]) == 0
+
+
+def test_excursion_catches_chop_that_returns_to_its_start():
+    """drift_abs sees nothing; the secondary metric is what notices."""
+    chop = _mids((0.0, 0.50), (10.0, 0.60), (20.0, 0.40), (30.0, 0.55),
+                 (40.0, 0.45), (50.0, 0.50), (60.0, 0.50))
+    r = cs.drift_at(chop, 60.0, 60.0)
+    assert D(r["drift_abs"]) == 0, "start and end are the same"
+    assert D(r["excursion"]) == D("0.20"), "but the market moved 20 cents"
+
+
+def test_samples_outside_the_lookback_are_excluded():
+    old = _mids(*[(i * 10.0, 0.20) for i in range(7)])
+    recent = _mids(*[(100.0 + i * 10.0, 0.50) for i in range(7)])
+    r = cs.drift_at(old + recent, 160.0, 60.0)
+    assert r["resolvable"] is True
+    assert D(r["drift_abs"]) == 0, "the 0.20 era is outside the 60s lookback"
+
+
+def test_pre_entry_drift_reports_the_primary_and_both_secondaries():
+    mids = _mids(*[(i * 5.0, 0.40 + i * 0.002) for i in range(25)])
+    d = cs.pre_entry_drift(mids, 120.0)
+    assert d["primary_lookback_s"] == 60.0
+    assert set(d["by_lookback"]) == {"30", "60", "120"}
+    assert d["resolvable"] is True
+    assert d["drift_abs"] == d["by_lookback"]["60"]["drift_abs"], \
+        "the top-level value must be the PRIMARY lookback, not the best one"
+    assert d["prereg"].endswith("PREREG_PRE_ENTRY_DRIFT.md")
+
+
+def test_an_unresolvable_primary_says_why_at_the_top_level():
+    d = cs.pre_entry_drift(_mids((0.0, 0.5)), 60.0)
+    assert d["resolvable"] is False
+    assert d["drift_abs"] is None
+    assert d["why_unresolvable"]
+
+
+def test_a_window_is_deferred_until_its_drift_can_be_measured():
+    """A freshly pinned market has no history; do not open a window we would
+    only have to discard. Deferring changes no metric -- the prereg already
+    excludes unresolvable windows -- it just stops us paying for them."""
+    inv, n = {}, 0.0
+    for _ in range(3):
+        n += 5.0
+        cs.cycle(["a"], inv, getter=lambda p: _book_payload(), now=n)
+    assert inv["a"].get("window") is None, "too little history to characterise"
+    assert inv["a"]["drift_deferrals"] >= 1
+
+
+def test_the_window_carries_drift_measured_only_from_samples_before_it():
+    """No look-ahead: the series is pruned to `now` when the window opens."""
+    inv, n = {}, 0.0
+    px = 0.40
+    for _ in range(20):
+        n += 5.0
+        px += 0.001
+        cs.cycle(["a"], inv,
+                 getter=lambda p, v=px: _book_payload(bid="%.3f" % v,
+                                                      ask="%.3f" % (v + 0.02)),
+                 now=n)
+    w = inv["a"].get("window")
+    assert w is not None, "60s of history should allow a window to open"
+    d = w["pre_entry_drift"]
+    assert d["resolvable"] is True
+    assert d["by_lookback"]["60"]["span_s"] <= 60.0
+    assert D(d["drift_abs"]) > 0, "a drifting market must show drift"
+
+
+def test_a_crossed_book_yields_no_mid_and_no_drift_sample():
+    assert cs.mid_of({"bid": D("0.60"), "ask": D("0.40")}) is None
+    assert cs.mid_of({"bid": None, "ask": D("0.40")}) is None
+    assert cs.mid_of({"bid": D("0.40"), "ask": D("0.42")}) == D("0.41")

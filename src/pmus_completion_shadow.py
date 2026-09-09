@@ -89,6 +89,15 @@ BUDGET_RPS = 3.0
 # -- absence of sampling is not a measurement. At the 5 s poll this allows six
 # consecutive missed cycles before the tape is declared broken.
 MAX_FLOW_INTERVAL_S = 30.0
+# PRE-ENTRY DRIFT, frozen in analysis/l5/PREREG_PRE_ENTRY_DRIFT.md BEFORE this
+# field existed. Post-entry adverse movement collapses opportunity 4.25x
+# (0.6944% vs 2.9487%); the untested link is whether a market already drifting
+# BEFORE entry keeps drifting after it. These constants are the frozen
+# definition and must not be retuned to make a result look better.
+DRIFT_LOOKBACK_S = 60.0                 # PRIMARY
+DRIFT_LOOKBACKS_S = (30.0, 60.0, 120.0)  # 30/120 are SECONDARY, not decisive
+MIN_DRIFT_SAMPLES = 6
+MID_HISTORY_S = 180.0
 # Ranking wants RECENT activity, not a market's whole history. Deep retention
 # would let a burst from three rotations ago pin a market that has since gone
 # quiet -- stale, though never look-ahead, since all of it precedes the pin.
@@ -306,6 +315,62 @@ def flow_delta(prev: Optional[Mapping[str, Any]],
             "side_hint": side_hint(cur)}
 
 
+def mid_of(book: Mapping[str, Any]) -> Optional[D]:
+    b, a = book.get("bid"), book.get("ask")
+    if b is None or a is None or a < b:
+        return None
+    return (b + a) / D(2)
+
+
+def drift_at(mids: Sequence[Any], now: float, lookback: float,
+             min_samples: int = MIN_DRIFT_SAMPLES) -> Dict[str, Any]:
+    """Pre-entry movement over `lookback`, or an explicit refusal.
+
+    FAILS CLOSED. A market that has just been pinned has not been polled for
+    long enough to carry the history, and reporting that as zero drift would
+    put every freshly-pinned market in the calm half by construction -- the
+    same shape as every silent failure this campaign has found. Too little
+    history is `resolvable: false`, and the analysis excludes those windows
+    rather than counting them as still.
+    """
+    win = [(t, m) for t, m in mids if now - t <= lookback]
+    if len(win) < min_samples:
+        return {"resolvable": False, "samples": len(win),
+                "why": "only %d mid samples in %.0fs, need %d"
+                       % (len(win), lookback, min_samples)}
+    span = win[-1][0] - win[0][0]
+    if span < lookback * 0.5:
+        return {"resolvable": False, "samples": len(win),
+                "why": "history spans %.1fs of the %.0fs lookback"
+                       % (span, lookback)}
+    first, last = win[0][1], win[-1][1]
+    lo = min(m for _, m in win)
+    hi = max(m for _, m in win)
+    return {"resolvable": True, "samples": len(win),
+            "span_s": round(span, 3),
+            # PRIMARY: unsigned, because ex ante we cannot know which
+            # direction hurts and the loss function is asymmetric
+            "drift_abs": str(abs(last - first)),
+            # SECONDARY: chop that ends where it began
+            "excursion": str(hi - lo),
+            "mid_at_open": str(last), "mid_at_lookback": str(first)}
+
+
+def pre_entry_drift(mids: Sequence[Any], now: float) -> Dict[str, Any]:
+    """The frozen primary plus the two secondaries, labelled as such."""
+    out: Dict[str, Any] = {
+        "primary_lookback_s": DRIFT_LOOKBACK_S,
+        "by_lookback": {str(int(L)): drift_at(mids, now, L)
+                        for L in DRIFT_LOOKBACKS_S},
+        "prereg": "analysis/l5/PREREG_PRE_ENTRY_DRIFT.md",
+    }
+    p = out["by_lookback"][str(int(DRIFT_LOOKBACK_S))]
+    out["resolvable"] = bool(p.get("resolvable"))
+    out["drift_abs"] = p.get("drift_abs")
+    out["why_unresolvable"] = None if p.get("resolvable") else p.get("why")
+    return out
+
+
 def side_hint(sample: Mapping[str, Any]) -> Optional[str]:
     """Where the last print sat. INFERENCE -- the venue does not say."""
     px, b, a = sample.get("last_trade_px"), sample.get("bid"), sample.get("ask")
@@ -415,6 +480,12 @@ def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, Any]],
         st["flow"].append(flow_delta(st.get("prev"), book, now))
         st["flow"] = st["flow"][-FLOW_HISTORY:]
         st["prev"] = dict(book, t=now)
+        # the mid series the pre-entry drift is measured on, same poll
+        m = mid_of(book)
+        if m is not None:
+            st.setdefault("mids", []).append((now, m))
+        st["mids"] = [(t, x) for t, x in st.get("mids", [])
+                      if now - t <= MID_HISTORY_S]
         fs = flow_summary(st["flow"])
         if st["qty"] <= 0:
             # RE-SEED. The hypothetical book completes in a handful of
@@ -452,7 +523,24 @@ def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, Any]],
             cside = "NO" if st["side"] == "YES" else "YES"
             cpx = _pw().complement_price_now(book, cside)
             if cpx is not None:
-                st["window"] = _pw().open_window(now, cpx, cside, slug)
+                # measured at the instant the hypothetical first leg is
+                # taken, from samples that all PRECEDE it
+                drift = pre_entry_drift(st.get("mids") or [], now)
+                if drift["resolvable"]:
+                    st["window"] = _pw().open_window(now, cpx, cside, slug)
+                    st["window"]["pre_entry_drift"] = drift
+                else:
+                    # DEFER rather than open a window the experiment would
+                    # then have to discard. A freshly pinned market has no
+                    # mid history yet, so the first window on every market
+                    # would be unresolvable -- about half the sample thrown
+                    # away for nothing. Deferring changes no metric and no
+                    # decision rule (the prereg already excludes
+                    # unresolvable windows); it only stops us paying for
+                    # them. Every pinned market accumulates history at the
+                    # same rate, so waiting introduces no selection.
+                    st["drift_deferrals"] = int(
+                        st.get("drift_deferrals", 0)) + 1
         w = st.get("window")
         if w and not w.get("closed"):
             d = st["flow"][-1] if st["flow"] else {}
@@ -469,6 +557,8 @@ def cycle(slugs: Sequence[str], inv: Dict[str, Dict[str, Any]],
                 # regime produced it and on what pre-window score.
                 summary["selection"] = ("flow_ranked" if roster is not None
                                         else "unranked")
+                summary["pre_entry_drift"] = st["window"].get(
+                    "pre_entry_drift")
                 if roster is not None:
                     summary["roster_pin"] = roster.pins
                     summary["pre_window_flow_score"] = \
