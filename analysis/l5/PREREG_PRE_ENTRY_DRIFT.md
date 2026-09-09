@@ -58,7 +58,8 @@ never substituted for the primary if the primary fails:
 | `drift_abs` at L = 120 s | longer lookback |
 
 **Resolvability, fail closed.** Drift requires at least
-`MIN_DRIFT_SAMPLES = 6` mid samples spanning at least `0.5 * L` seconds. Below
+`MIN_DRIFT_SAMPLES = 6` mid samples spanning at least `0.9 * L` seconds
+(**amended 2026-09-09T16:55Z — see §7**). Below
 that the window reports `drift_resolvable: false` with a reason and is
 **excluded from the analysis** — never folded in as zero drift. A market that
 has just been pinned may not yet carry the history; "we could not measure it"
@@ -143,3 +144,50 @@ authorized by the owner, now that the persistence cohort has formally closed
 POWERED.
 
 **Standard unchanged: filled → settled → realized. Nothing here is a fill.**
+
+---
+
+## 7. AMENDMENT, 2026-09-09T16:55Z — span tolerance 0.5·L → 0.9·L
+
+**No outcome had been analysed when this was written.** The median split had
+not been run, no opportunity rate had been computed for either half, and no
+PASS/FAIL had been evaluated. Only the mechanics of the first ten emitted rows
+were inspected. This is a correction to a defective definition, not a
+threshold moved after seeing a result — and if it had come after an outcome it
+would not have been permissible.
+
+**The defect.** §2 defines the primary as
+`drift_abs = |mid(t_open) - mid(t_open - 60s)|`, and the original
+resolvability clause allowed a span of `0.5 * L`. A window opens the instant
+its drift becomes resolvable, so it always opened at exactly that boundary.
+Every one of the first live rows shows `span_s: 30.001` for the 60 s lookback,
+and the 30 s and 60 s figures are **identical on every row** — the same six or
+seven samples serving both. The stated 60-second primary was in fact a
+30-second measurement, and the two lookbacks could not disagree.
+
+A metric that cannot differ from its own secondary is not measuring what it
+claims to measure.
+
+**The correction.** `MIN_SPAN_FRACTION = 0.9`: the sample span must cover at
+least 90% of the lookback. The 60 s primary now requires ~54 s of history, so
+it measures roughly what §2 says it measures, and the 30 / 60 / 120 s figures
+become genuinely distinct quantities. `MID_HISTORY_S` rises 180 → 240 so the
+120 s secondary can resolve at all.
+
+**Cost.** A window now opens about 55 s into a pinned phase rather than 30 s,
+so each market yields marginally fewer windows per pin. Accepted: a smaller
+sample of the stated metric is worth more than a larger sample of a different
+one.
+
+**Nothing else changes.** The primary is still `drift_abs` at L = 60 s,
+unsigned. The split is still the observed median. P1 >= 30 opportunities,
+P2 >= 1.50 ratio, P3 >= 55% retention are all unchanged. The kill condition is
+unchanged.
+
+**Rows already emitted under the 0.5 tolerance are DISCARDED**, not merged:
+they carry a 30-second measurement under a 60-second label, and pooling them
+with corrected rows would silently average two different metrics. The analysis
+starts from the corrected deployment.
+
+A regression test now fails if the 30 s and 60 s lookbacks ever return the
+same value on a mid path that moved only outside the shorter window.

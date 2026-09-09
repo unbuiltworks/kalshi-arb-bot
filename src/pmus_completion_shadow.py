@@ -97,7 +97,13 @@ MAX_FLOW_INTERVAL_S = 30.0
 DRIFT_LOOKBACK_S = 60.0                 # PRIMARY
 DRIFT_LOOKBACKS_S = (30.0, 60.0, 120.0)  # 30/120 are SECONDARY, not decisive
 MIN_DRIFT_SAMPLES = 6
-MID_HISTORY_S = 180.0
+# The span must actually COVER the lookback. At the original 0.5 tolerance a
+# window opened the instant it became resolvable, which is exactly the 0.5 * L
+# boundary -- so the "60 s" primary was measured over 30 s on every row, and
+# the 30 s and 60 s lookbacks returned identical numbers. Caught on the first
+# live rows (span_s 30.001 on all of them), before any outcome was analysed.
+MIN_SPAN_FRACTION = 0.9
+MID_HISTORY_S = 240.0
 # Ranking wants RECENT activity, not a market's whole history. Deep retention
 # would let a burst from three rotations ago pin a market that has since gone
 # quiet -- stale, though never look-ahead, since all of it precedes the pin.
@@ -339,7 +345,7 @@ def drift_at(mids: Sequence[Any], now: float, lookback: float,
                 "why": "only %d mid samples in %.0fs, need %d"
                        % (len(win), lookback, min_samples)}
     span = win[-1][0] - win[0][0]
-    if span < lookback * 0.5:
+    if span < lookback * MIN_SPAN_FRACTION:
         return {"resolvable": False, "samples": len(win),
                 "why": "history spans %.1fs of the %.0fs lookback"
                        % (span, lookback)}

@@ -667,3 +667,33 @@ def test_a_crossed_book_yields_no_mid_and_no_drift_sample():
     assert cs.mid_of({"bid": D("0.60"), "ask": D("0.40")}) is None
     assert cs.mid_of({"bid": None, "ask": D("0.40")}) is None
     assert cs.mid_of({"bid": D("0.40"), "ask": D("0.42")}) == D("0.41")
+
+
+def test_the_lookbacks_are_actually_different_lookbacks():
+    """The regression that the first live rows exposed.
+
+    With the original span tolerance of 0.5 * L a window opened the moment it
+    became resolvable -- exactly the 0.5 boundary -- so the 60 s primary was
+    computed over 30 s of history and the 30 s and 60 s figures were the SAME
+    NUMBER on every row (span_s 30.001 throughout). A metric that cannot
+    differ from its own secondary is not measuring what it claims.
+
+    Here the mid is flat for the most recent 30 s and moved before that, so a
+    true 30 s lookback must see nothing and a true 60 s lookback must see the
+    move.
+    """
+    mids = _mids(*([(float(i) * 5.0, 0.30) for i in range(7)]        # 0-30s
+                   + [(30.0 + float(i) * 5.0, 0.50) for i in range(1, 13)]))
+    r30 = cs.drift_at(mids, 90.0, 30.0)
+    r60 = cs.drift_at(mids, 90.0, 60.0)
+    assert r30["resolvable"] and r60["resolvable"]
+    assert D(r30["drift_abs"]) == 0, "nothing moved in the last 30s"
+    assert D(r60["drift_abs"]) == D("0.20"), "but it moved 20c before that"
+    assert r30["drift_abs"] != r60["drift_abs"]
+
+
+def test_a_span_covering_only_half_the_lookback_is_refused():
+    """The exact shape that shipped: 30s of history read as a 60s lookback."""
+    mids = _mids(*[(60.0 + float(i) * 5.0, 0.40) for i in range(7)])
+    assert cs.drift_at(mids, 90.0, 60.0)["resolvable"] is False
+    assert cs.MIN_SPAN_FRACTION >= 0.9
