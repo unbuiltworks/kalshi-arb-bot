@@ -467,6 +467,23 @@ def incentive_state(series: Sequence[str] = OBSERVATION_SERIES,
                                "subsidy, not an absent one")}
 
 
+# ------------------------------------------------------------ leg identity
+# KXCRYPTOLEAD15M is ONE series carrying five assets whose books differ by an
+# order of magnitude in cost. A series median hides that BTC and HYPE are not
+# the same business, so the reporting unit is the LEG.
+ASSET_LEG_SERIES = ("KXCRYPTOLEAD15M",)
+
+
+def leg_key(ticker: str) -> str:
+    """The decision unit. Asset for a multi-asset series, series otherwise --
+    a commodity ticker's trailing segment is the 15-minute window, which is
+    not an identity and would shatter one leg into hundreds."""
+    ser = str(ticker).split("-", 1)[0].upper()
+    if ser in ASSET_LEG_SERIES:
+        return "{}:{}".format(ser, str(ticker).rsplit("-", 1)[-1].upper())
+    return ser
+
+
 def _quotes(events: Iterable[Mapping[str, Any]]):
     """(yes_bid, no_bid, yes_size, no_size) from each bbo event that has
     BOTH sides. One-sided books cannot price a pair and are counted
@@ -491,20 +508,28 @@ def structure_report(by_market: Mapping[str, list]) -> dict:
     identity makes spread = pair_cost - 1, so both are read off the two
     bids with no fee model and no assumed fill."""
     ser: Dict[str, Dict[str, Any]] = {}
+    leg: Dict[str, Dict[str, Any]] = {}
     for market, events in by_market.items():
         s = str(market).split("-", 1)[0].upper()
-        b = ser.setdefault(s, {"markets": set(), "two_sided": 0,
-                               "one_sided": 0, "pair_costs": [],
-                               "depths": []})
-        b["markets"].add(market)
+        k = leg_key(market)
+        buckets = [ser.setdefault(s, {"markets": set(), "two_sided": 0,
+                                      "one_sided": 0, "pair_costs": [],
+                                      "depths": []}),
+                   leg.setdefault(k, {"markets": set(), "two_sided": 0,
+                                      "one_sided": 0, "pair_costs": [],
+                                      "depths": []})]
+        for b in buckets:
+            b["markets"].add(market)
         for q in _quotes(events):
             if q is None:
-                b["one_sided"] += 1
+                for b in buckets:
+                    b["one_sided"] += 1
                 continue
             yb, nb, ysz, nsz = q
-            b["two_sided"] += 1
-            b["pair_costs"].append(round(2.0 - yb - nb, 4))
-            b["depths"].append(min(ysz, nsz))
+            for b in buckets:
+                b["two_sided"] += 1
+                b["pair_costs"].append(round(2.0 - yb - nb, 4))
+                b["depths"].append(min(ysz, nsz))
     out = {}
     for s, b in ser.items():
         pc = sorted(b["pair_costs"])
@@ -525,7 +550,26 @@ def structure_report(by_market: Mapping[str, list]) -> dict:
             "two_sided_depth_median": (dep[len(dep) // 2] if dep else None),
             "certified_for_net_economics": s in CERTIFIED_SERIES,
         }
-    return {"kind": "KALSHI_L5_STRUCTURE", "series": out,
+    legs = {}
+    for k, b in leg.items():
+        pc = sorted(b["pair_costs"])
+        n = len(pc)
+        dep = sorted(b["depths"])
+        legs[k] = {
+            "markets": len(b["markets"]),
+            "two_sided_quotes": b["two_sided"],
+            "one_sided_quotes": b["one_sided"],
+            "pair_cost_median": pc[n // 2] if n else None,
+            "pair_cost_p10": pc[n // 10] if n >= 10 else None,
+            "pair_cost_p90": pc[min(n - 1, (9 * n) // 10)] if n else None,
+            "spread_median": (round(pc[n // 2] - 1.0, 4) if n else None),
+            "two_sided_depth_median": (dep[len(dep) // 2] if dep else None),
+        }
+    return {"kind": "KALSHI_L5_STRUCTURE", "series": out, "legs": legs,
+            "leg_note": ("legs are the decision unit; the series roll-up is "
+                         "kept only for continuity with the earlier tape and "
+                         "MUST NOT be used to compare KXCRYPTOLEAD15M assets, "
+                         "whose books differ by an order of magnitude"),
             "labels": ("OBSERVED book structure, fee-independent. NOT a "
                        "shadow P&L and NOT realized: no order was placed, "
                        "no fill assumed, no fee model applied. Series with "

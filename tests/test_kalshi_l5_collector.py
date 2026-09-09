@@ -378,3 +378,34 @@ def test_each_series_gets_its_own_reward_histograms():
     assert b["headline_reward_dollars"] == {}
     assert b["target_size_raw"] == {}
     assert b["types"] == {}
+
+
+def test_structure_report_breaks_out_legs_not_just_series():
+    """KXCRYPTOLEAD15M's assets differ by an order of magnitude in cost, so
+    a series median is the wrong unit for a decision."""
+    from src import kalshi_l5_collector as C
+    def bbo(yb, nb, sz=100.0):
+        return {"kind": "bbo", "yes_bids": [[yb, sz]], "no_bids": [[nb, sz]]}
+    rep = C.structure_report({
+        "KXCRYPTOLEAD15M-26SEP082015-BTC": [bbo(0.50, 0.49)],   # pair 1.01
+        "KXCRYPTOLEAD15M-26SEP082015-HYPE": [bbo(0.50, 0.34)],  # pair 1.16
+    })
+    assert set(rep["legs"]) == {"KXCRYPTOLEAD15M:BTC", "KXCRYPTOLEAD15M:HYPE"}
+    assert rep["legs"]["KXCRYPTOLEAD15M:BTC"]["pair_cost_median"] == 1.01
+    assert rep["legs"]["KXCRYPTOLEAD15M:HYPE"]["pair_cost_median"] == 1.16
+    # the series roll-up still exists, and is explicitly labelled unfit for
+    # comparing those two
+    assert "KXCRYPTOLEAD15M" in rep["series"]
+    assert "MUST NOT be used to compare" in rep["leg_note"]
+
+
+def test_a_window_suffix_does_not_shatter_a_commodity_leg():
+    from src import kalshi_l5_collector as C
+    def bbo(yb, nb):
+        return {"kind": "bbo", "yes_bids": [[yb, 10.0]], "no_bids": [[nb, 10.0]]}
+    rep = C.structure_report({
+        "KXGOLD15M-26SEP082015-15": [bbo(0.50, 0.49)],
+        "KXGOLD15M-26SEP082030-15": [bbo(0.50, 0.49)],
+    })
+    assert list(rep["legs"]) == ["KXGOLD15M"]
+    assert rep["legs"]["KXGOLD15M"]["markets"] == 2
