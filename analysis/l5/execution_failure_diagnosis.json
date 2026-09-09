@@ -1,35 +1,76 @@
 {
  "prereg": "analysis/l5/PREREG_EXECUTION_QUEUE_FAILURE.md",
- "orders": 33,
+ "orders": 330,
  "counts": {
-  "E_insufficient_evidence": 5,
-  "A_quote_never_reached": 17,
-  "C_executor_ended_early": 5,
-  "D_venue_rejection": 6
+  "E_insufficient_evidence": 109,
+  "A_quote_never_reached": 162,
+  "C_executor_ended_early": 11,
+  "D_venue_rejection": 48
  },
- "decided": 28,
+ "decided": 221,
  "n1_required": 200,
- "unknown_share": 0.1515,
+ "unknown_share": 0.3303,
  "n3_ceiling": 0.4,
  "sampling_cadence_s": {
-  "n": 26,
-  "median": 1.158,
+  "n": 186,
+  "median": 1.144,
   "note": "B is a LOWER bound and A an UPPER bound at this cadence; crossings between polls are invisible"
  },
- "verdict": "UNDERPOWERED",
- "deficit": 172,
- "why": "N1 not met: 28 of 200 classified orders. Per the prereg an underpowered result reports the deficit and claims no dominance, so no dominance test was run.",
+ "shares": {
+  "A_quote_never_reached": 0.733,
+  "B_queue_or_liveness": 0.0,
+  "C_executor_ended_early": 0.0498,
+  "D_venue_rejection": 0.2172
+ },
+ "leader": {
+  "label": "A_quote_never_reached",
+  "k": 162,
+  "share": 0.733,
+  "wilson_95": [
+   0.6711,
+   0.787
+  ]
+ },
+ "runner_up": {
+  "label": "D_venue_rejection",
+  "k": 48,
+  "share": 0.2172
+ },
+ "verdict": "DOMINANT",
+ "dominant": "A_quote_never_reached",
+ "fix_implied": "complement pricing / aggressiveness",
+ "why": "A_quote_never_reached Wilson lower bound 0.6711 clears the runner-up point estimate 0.2172.",
+ "no_fill_counterfactual": "Per prereg 8.1 no category converts into recovered completions; recoverable_completions() raises.",
  "population": {
   "all_orders": 251,
-  "complements_after_first_fill": 33,
+  "complements_after_first_fill": 330,
   "excluded": {
-   "session_never_filled_a_first_leg": 28
+   "session_never_filled_a_first_leg": 0,
+   "complement_before_the_first_fill": 10
   },
-  "sessions_with_a_first_fill": 21
+  "sessions_with_a_first_fill": 114
  },
  "rest_benchmark": {
-  "r50": 12.26,
-  "r75": 19.35,
-  "n": 13
+  "r50": 11.633500000000002,
+  "r75": 18.151,
+  "n": 46
+ },
+ "coverage_limitation": "368 complete orders recoverable here against the prior complete_no_fill_forensics population of 868; this is a SUBSET and N1 is met within it",
+ "b_zero_verification": {
+  "gap_ticks_min_opp_ask_minus_px": {
+   "n": 186,
+   "min": 0.5,
+   "p25": 1,
+   "median": 4,
+   "p75": 11,
+   "max": 48
+  },
+  "within_one_tick": 63,
+  "all_completes_ignoring_population_filter": {
+   "n": 213,
+   "b_condition": 0
+  },
+  "prior_study_share_at_or_inside_our_price": 0.0168,
+  "reading": "B absent in THIS subset; the prior study's 8 cases lie in a larger log set no longer available"
  }
 }

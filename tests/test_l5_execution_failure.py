@@ -141,12 +141,14 @@ def test_bare_plurality_is_not_dominance():
 
 
 def test_a_real_majority_is_dominant_and_names_its_fix():
-    rows = ([{"label": ef.B_QUEUE, "cadence_s": 1.0}] * 180 +
+    """Uses C, not B: prereg 8.2 routes a B-dominant result to instrumentation
+    instead of a fix, and that path is covered separately below."""
+    rows = ([{"label": ef.C_EARLY, "cadence_s": 1.0}] * 180 +
             [{"label": ef.A_UNREACHED, "cadence_s": 1.0}] * 40)
     res = ef.evaluate(rows)
     assert res["verdict"] == "DOMINANT"
-    assert res["dominant"] == ef.B_QUEUE
-    assert res["fix_implied"] == "queue positioning"
+    assert res["dominant"] == ef.C_EARLY
+    assert res["fix_implied"] == "our deadline / re-quote rule"
 
 
 def test_wilson_lower_bound_is_below_the_point_estimate():
@@ -162,3 +164,49 @@ def test_runs_on_the_real_sequence_and_stays_honest():
     # underpowered against N1, so no dominance may be claimed
     assert res["verdict"] == "UNDERPOWERED"
     assert "dominant" not in res
+
+
+# --- prereg section 8: the UNOBSERVABLE rule -----------------------------
+def test_recoverable_completions_refuses_rather_than_estimating():
+    """Prereg 8.1. A caveated number gets quoted onward with the caveat
+    stripped; an exception cannot be."""
+    with pytest.raises(ef.FillAssumed) as e:
+        ef.recoverable_completions({"B_queue_or_liveness": 200})
+    assert "fill-assumed" in str(e.value)
+    assert "8.3" in str(e.value)
+
+
+def test_b_row_does_not_claim_a_trade_or_a_fill():
+    r = ef.classify(order(rest_book={"min_opp_ask": "0.49", "polls": 20}),
+                    r50=10.0)
+    assert r["label"] == ef.B_QUEUE
+    assert "NOT proof we would have filled" in r["why"]
+    assert set(r["unobservable"]) == {"queue_priority", "order_liveness",
+                                      "stale_or_async_snapshot"}
+
+
+def test_b_dominant_routes_to_instrumentation_not_a_queue_fix():
+    """Prereg 8.2: dominance is established, the CAUSE is not."""
+    rows = ([{"label": ef.B_QUEUE, "cadence_s": 1.0}] * 180 +
+            [{"label": ef.A_UNREACHED, "cadence_s": 1.0}] * 40)
+    res = ef.evaluate(rows)
+    assert res["verdict"] == "DOMINANT_BUT_UNOBSERVABLE"
+    assert "instrumentation" in res["unobservable"]
+    assert "INSTRUMENT FIRST" in res["fix_implied"]
+
+
+def test_a_dominant_stays_a_normal_dominant_verdict():
+    """Only B carries the ambiguity; A/C/D are decidable from what we logged."""
+    rows = ([{"label": ef.A_UNREACHED, "cadence_s": 1.0}] * 180 +
+            [{"label": ef.B_QUEUE, "cadence_s": 1.0}] * 40)
+    res = ef.evaluate(rows)
+    assert res["verdict"] == "DOMINANT"
+    assert res["fix_implied"] == "complement pricing / aggressiveness"
+
+
+def test_every_dominant_result_carries_the_no_counterfactual_warning():
+    rows = ([{"label": ef.C_EARLY, "cadence_s": 1.0}] * 180 +
+            [{"label": ef.A_UNREACHED, "cadence_s": 1.0}] * 40)
+    res = ef.evaluate(rows)
+    assert "no_fill_counterfactual" in res
+    assert "raises" in res["no_fill_counterfactual"]
