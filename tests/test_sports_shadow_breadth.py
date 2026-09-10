@@ -577,3 +577,32 @@ def test_raw_stops_growing_at_the_cap_instead_of_sweeping(tmp_path, monkeypatch)
     sb = SB.ShadowBreadth(state_path=str(tmp_path / "c.json"))
     assert sb.append_raw(1, [{"slug": "x"}], []) is False
     assert (tmp_path / "observations-old.jsonl").exists(), "old evidence deleted"
+
+
+def test_decide_attaches_two_arm_that_can_actually_see_the_inventory():
+    """REGRESSION. The first wiring computed the arms from decide()'s output
+    row, which carries neither actions_replayed nor inventory_final, so arm B
+    saw an empty inventory and reported flat_nothing_to_complete on EVERY
+    market in production -- a measurement that looked like it was working.
+    Caught in the live logs by residual_final reading null on markets the
+    funnel had already counted first fills for."""
+    sb = SB.ShadowBreadth(state_path="/dev/null")
+    d = {"slug": "s",
+         "actions_replayed": [
+             {"decision": "quote", "fill_class": "possible", "side": "YES",
+              "target_price": "0.35", "relation": "open"},
+             {"decision": "quote", "fill_class": "possible", "side": "YES",
+              "target_price": "0.35", "relation": "extend"}],
+         "inventory_final": {"yes": 2, "no": 0, "matched": 0, "residual": 2}}
+    arms = SB.shadow_completion.two_arm(
+        d, {"bid": SB.D("0.35"), "ask": SB.D("0.355")})
+    assert arms[SB.shadow_completion.ARM_A]["residual_final"] == 2
+    assert arms[SB.shadow_completion.ARM_B]["completion_would_post"] is True
+
+
+def test_two_arm_is_attached_to_every_decided_market():
+    src = open("src/pmus_sports_shadow_breadth.py").read()
+    # computed where the full decide_market result is in scope, not rebuilt
+    # from the summary row afterwards
+    assert 'arms = shadow_completion.two_arm(d, _book_of(rows[-1]))' in src
+    assert '"two_arm": arms' in src

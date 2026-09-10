@@ -547,8 +547,18 @@ class ShadowBreadth:
             fresh = classify_actions(
                 {"actions_replayed": self._new_actions(slug, d),
                  "executable_now": d.get("executable_now")})
+            # TWO ARMS, computed HERE because this is the only place the
+            # full decide_market result is in scope. The first wiring built
+            # them from the row below, which carries neither
+            # actions_replayed nor inventory_final -- so arm B saw an empty
+            # inventory and reported "flat_nothing_to_complete" on every
+            # market in production while looking like a working measurement.
+            # Caught in the live logs by residual_final reading null on
+            # markets the funnel had already counted first fills for.
+            arms = shadow_completion.two_arm(d, _book_of(rows[-1]))
             out.append({"slug": slug, "tier": tier,
-                        "window": summary, "new_this_cycle": fresh})
+                        "window": summary, "new_this_cycle": fresh,
+                        "two_arm": arms})
             if tier:
                 c = self.cohorts.setdefault(
                     tier, {"selection_cycles": 0, "markets": set()})
@@ -678,11 +688,8 @@ def run(cycles: Optional[int] = None) -> int:
             # frozen policy's own COMPLETE branch what it would post. See
             # src/pmus_shadow_completion.py for the measurement.
             by_slug = {r["slug"]: r for r in ranked}
-            rep["two_arm"] = [
-                {"slug": d.get("slug"),
-                 **shadow_completion.two_arm(
-                     d, _book_of(by_slug.get(d.get("slug"))))}
-                for d in decisions if d.get("slug") in by_slug]
+            rep["two_arm"] = [{"slug": d.get("slug"), **d["two_arm"]}
+                              for d in decisions if d.get("two_arm")]
             rep["raw_persisted"] = sb.append_raw(
                 n, [by_slug[k] for k in by_slug], decisions)
             print(PREFIX + json.dumps(rep, separators=(",", ":"), default=str),
