@@ -1145,6 +1145,70 @@ def sweep_orphan_orders(t) -> dict:
     return out
 
 
+SHUTDOWN_ENV = "PMUS_SPRING_SHUTDOWN"
+
+
+def shutdown_requested() -> bool:
+    return os.getenv(SHUTDOWN_ENV, "").strip().upper() in ("1", "YES", "TRUE")
+
+
+def safe_shutdown(t=None) -> dict:
+    """OWNER 2026-09-10: "We should not design a live autonomous system whose
+    safe shutdown procedure is 'Brett, open the app and cancel whatever is
+    left.'"
+
+    HALT -> cancel OUR outstanding orders -> VERIFY -> stop submitting ->
+    preserve held inventory -> disarm. It runs regardless of armed(), because
+    the whole failure it exists to fix is that sweep_orphan_orders lived
+    INSIDE the armed branch: disarming was the one transition that could
+    orphan an order, and the disarmed process that followed never swept.
+
+    This path can never place an order. Held inventory is PRESERVED to
+    settlement and never liquidated here -- a shutdown that dumps inventory
+    to look tidy is a worse outcome than the orphan it was cleaning up.
+
+    FAILS CLOSED. Verification is a FRESH read of /v1/orders/open, never the
+    sweep's own return: a cancel the venue did not honour looks identical to
+    one it did from the caller's side. A failed read, a sweep error, or one of
+    ours still resting all return SHUTDOWN_NOT_VERIFIED -- which is the answer
+    we report, rather than a reassuring guess that puts a human back in the
+    loop with a phone."""
+    out: dict[str, Any] = {
+        "verdict": "SHUTDOWN_NOT_VERIFIED",
+        "labels": ("cancel-only; cannot place; held inventory preserved to "
+                   "settlement; verification is a fresh venue read")}
+    if not base.q1.has_credentials():
+        return {**out, "reason": "no_credentials"}
+    if t is None:
+        t = base.Transport()
+    sweep = sweep_orphan_orders(t)
+    out["sweep"] = sweep
+    try:
+        opened = base.q1.base._get_with_retry(t, "/v1/orders/open")
+    except Exception as exc:                        # noqa: BLE001
+        return {**out, "reason": f"verify_read_failed:{type(exc).__name__}"}
+    rows = opened.get("orders") if isinstance(opened, Mapping) else None
+    ours = ledger_slugs()
+    still, foreign = [], []
+    for o in rows or []:
+        if not isinstance(o, Mapping):
+            continue
+        row = {"order_id": str(o.get("id") or o.get("orderId") or ""),
+               "slug": str(o.get("marketSlug") or "")}
+        (still if row["slug"] in ours else foreign).append(row)
+    out["still_open_ours"], out["foreign_open"] = still, foreign
+    try:
+        out["held_preserved"] = held_markets(t)
+    except Exception as exc:                        # noqa: BLE001
+        out["held_preserved"] = None
+        out["held_read_error"] = type(exc).__name__
+    if sweep["errors"]:
+        return {**out, "reason": "sweep_errors"}
+    if still:
+        return {**out, "reason": "ours_still_open"}
+    return {**out, "verdict": "SHUTDOWN_VERIFIED"}
+
+
 MAINTENANCE_FILE = Path("analysis/l5/venue_maintenance_windows.json")
 
 
@@ -1597,6 +1661,14 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         campaign_s = float(os.getenv(CAMPAIGN_SECONDS_ENV,
                                      str(DEFAULT_CAMPAIGN_S)))
     session_runner = session_runner or base.run_session
+    if shutdown_requested():
+        # before armed() is even consulted: shutdown is not a mode of
+        # trading, it is the absence of it
+        rep = safe_shutdown(t)
+        _log("safe_shutdown", **rep)
+        return {"campaign": "pmus-l5-continuous-v1", "mode": "SHUTDOWN",
+                "status": rep["verdict"], "shutdown": rep,
+                "realized_pnl": None, "sessions": [], "selections": 0}
     armed = base.armed()
     try:
         model = pv2.load_v2()
