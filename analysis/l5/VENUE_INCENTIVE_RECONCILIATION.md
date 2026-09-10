@@ -64,3 +64,44 @@ maximum evaluated at p=0.50. The match is coincidence.
 The measured PMUS relationship `credit = 0.0125 x qty x p x (1-p)`,
 validated print-by-print against 25 credits and 6 zeros, STANDS. It was
 not disproved by this reconciliation -- it was confirmed as PMUS.
+
+---
+
+## 2026-09-10 — two corrections recorded
+
+### 1. The "$0.02314/contract, 6.6x the published max" flag is RESOLVED
+It was a category error in our own arithmetic, not evidence of a richer
+historical program. L5's MAKER_REBATE credits are **daily pool distributions
+posted at 00:00 UTC**, so dividing a pool share by lifetime contracts yields a
+quantity with no program to compare against — and the blend spans three
+programs at three different scales. Our measured PMUS coefficient
+(0.0125 x qty x p x (1-p)) is a commission credited **on the fill**. The two
+are different kinds of quantity and must not be compared directly again.
+Full derivation: `L5_INCENTIVE_RECONSTRUCTION.md`.
+
+### 2. NO PREMATURE SUMMATION — not "never sum" (OWNER 2026-09-10)
+The three streams (matched-pair P&L | directional residual P&L | confirmed
+credited incentives) are reported separately so that a blended number cannot
+hide which one is carrying the result. That is a guard against summing EARLY,
+not a refusal to reconcile.
+
+The final reconciliation is required and is owed once a market is filled,
+settled AND credited:
+
+    realized net = matched-pair P&L
+                 + directional residual P&L
+                 + confirmed credited incentives
+                 - any other costs
+
+Preconditions before that sum may be computed for a market: the venue has
+confirmed realized (`realized_confirmed: true`), the incentive read is not
+`UNAVAILABLE`, and no leg is still open. Absent any of those the sum is not
+computed and is reported as unavailable rather than as a partial total — the
+same rule that keeps `directional_residual_pnl_usd` None on the four
+2026-09-10 markets whose realizedPnl the venue withheld.
+
+STATUS: not yet implemented. `settlement_breakdown` lives in
+`src/pmus_l5_continuous_session.py`, which is a watched deploy path — pushing
+it restarts the armed probe, and the owner's instruction is hands off while it
+produces sequences. Implement at the next restart, before the first settled
+cohort needs reconciling.
