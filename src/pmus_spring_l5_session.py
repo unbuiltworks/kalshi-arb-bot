@@ -831,6 +831,78 @@ def maker_rest_max_s() -> float:
     return SPORTS_MAKER_REST_MAX_S
 
 
+def guaranteed_settlement_floor(inv: "Inventory") -> D:
+    """min(up, dn) - total cash paid: what this market settles to in its
+    WORST branch. Exactly one side pays $1.00 per contract, so the poorer
+    side is the floor.
+
+    NOT mark-to-market. It reads no price, no book and no valuation model --
+    only contract counts and cash actually paid. That is why it can sit in a
+    risk stop without breaking "never infer P&L from mark".
+
+    LIVE 2026-09-10 on asc-mlb-chc-mil-2026-09-09-pos-2pt5: up 20.34, dn
+    16.06, spent 21.5939 -> min(20.34, 16.06) - 21.5939 = -5.53. That number
+    was knowable before settlement and invisible to every gate we had, because
+    the daily stop reads SETTLED realized only."""
+    return min(inv.up, inv.dn) - (inv.cost_up + inv.cost_dn)
+
+
+def floor_after_fill(inv: "Inventory", side_up: bool, px: D, qty: D) -> D:
+    """The floor this market would have if an order filled in full."""
+    up = inv.up + (D(str(qty)) if side_up else D("0"))
+    dn = inv.dn + (D("0") if side_up else D(str(qty)))
+    spent = inv.cost_up + inv.cost_dn + D(str(px)) * D(str(qty))
+    return min(up, dn) - spent
+
+
+def unsettled_floor_total(inventories) -> D:
+    """Sum of the NEGATIVE floors across currently held markets.
+
+    OWNER 2026-09-10: only negatives, so one favourable open position cannot
+    subsidise another market's guaranteed loss against the budget."""
+    total = D("0")
+    for inv in inventories:
+        total += min(D("0"), guaranteed_settlement_floor(inv))
+    return total
+
+
+def combined_loss(realized_today: D, inventories) -> D:
+    """realized_today + the negative unsettled floors.
+
+    NO DOUBLE COUNTING, and it falls out of the shape rather than needing
+    reconciliation: a market that settles leaves the HELD set and its result
+    enters realized_today in the same transition. Nothing is in both."""
+    return D(str(realized_today)) + unsettled_floor_total(inventories)
+
+
+def combined_budget_tripped(realized_today: D, inventories,
+                            budget: Optional[D] = None) -> bool:
+    """One budget for settled losses AND guaranteed-but-unsettled ones.
+
+    OWNER 2026-09-10: "I don't want settled losses and unsettled guaranteed
+    losses independently allowed to reach -$15 each." Boundary is INCLUSIVE:
+    at exactly the budget the stop HAS fired. A mutation to `<` is caught by
+    test_exactly_minus_fifteen_has_fired_not_one_cent_later."""
+    b = daily_loss_stop() if budget is None else D(str(budget))
+    return combined_loss(realized_today, inventories) <= b
+
+
+def reduces_risk_only(inv: "Inventory", side_up: bool, px: D, qty: D) -> bool:
+    """May this order run while the combined budget is tripped?
+
+    Only if it cannot lower this market's guaranteed floor. Computed
+    exactly -- floor_after vs floor_before -- rather than reasoned about by
+    case, so an overshoot that would push past parity and start burning cash
+    again is caught by arithmetic instead of by my confidence.
+
+    Under the <=1.00 completion ceiling a non-overshooting COMPLETE on the
+    deficient side always raises the floor by q(1-p) with p < 1, so the
+    permitted set is not empty: the lane can still work its way out of a
+    tripped budget by completing economically. It just cannot open more."""
+    return floor_after_fill(inv, side_up, px, qty) >= \
+        guaranteed_settlement_floor(inv)
+
+
 def unmatched_usd(inv: "Inventory") -> D:
     """Dollars NOT protected by a matched pair: unmatched shares x their own
     average cost -- exactly what is lost if that side expires worthless.
