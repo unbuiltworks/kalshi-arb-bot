@@ -1,0 +1,205 @@
+[
+ {
+  "slug": "aec-setkamecz-mulpat-holtom-2026-09-10",
+  "trade_rows": 11,
+  "credited_usd": "0.1000",
+  "modeled_usd": "0.10",
+  "match": true,
+  "fills_with_credit_venue": 9,
+  "fills_with_nonzero_model": 9,
+  "cost_basis_usd": "18.8307",
+  "matched_pairs": "19.87",
+  "matched_pair_cost": "0.9476950176144942123804730750",
+  "matched_contribution_usd": "1.039300000000000000000000000",
+  "directional_residual": "0.00",
+  "residual_contribution_usd": "None",
+  "realized_usd_venue": null,
+  "status": "SETTLED_REALIZED_UNCONFIRMED",
+  "maker_fills": 11,
+  "taker_fills": 0,
+  "per_fill": [
+   {
+    "qty": "0.9200",
+    "px": "0.4300",
+    "raw": "0.002819",
+    "cents": "0.00",
+    "aggressor": false
+   },
+   {
+    "qty": "3.0000",
+    "px": "0.4300",
+    "raw": "0.009191",
+    "cents": "0.01",
+    "aggressor": false
+   },
+   {
+    "qty": "4.7700",
+    "px": "0.4300",
+    "raw": "0.014614",
+    "cents": "0.01",
+    "aggressor": false
+   },
+   {
+    "qty": "4.3300",
+    "px": "0.3800",
+    "raw": "0.012752",
+    "cents": "0.01",
+    "aggressor": false
+   },
+   {
+    "qty": "2.5200",
+    "px": "0.3800",
+    "raw": "0.007421",
+    "cents": "0.01",
+    "aggressor": false
+   },
+   {
+    "qty": "2.7900",
+    "px": "0.3800",
+    "raw": "0.008217",
+    "cents": "0.01",
+    "aggressor": false
+   },
+   {
+    "qty": "1.5400",
+    "px": "0.3800",
+    "raw": "0.004535",
+    "cents": "0.00",
+    "aggressor": false
+   },
+   {
+    "qty": "4.7700",
+    "px": "0.3200",
+    "raw": "0.012974",
+    "cents": "0.01",
+    "aggressor": false
+   },
+   {
+    "qty": "4.7100",
+    "px": "0.3100",
+    "raw": "0.012593",
+    "cents": "0.01",
+    "aggressor": false
+   },
+   {
+    "qty": "4.7100",
+    "px": "0.3100",
+    "raw": "0.012593",
+    "cents": "0.01",
+    "aggressor": false
+   },
+   {
+    "qty": "5.6800",
+    "px": "0.4400",
+    "raw": "0.017494",
+    "cents": "0.02",
+    "aggressor": false
+   }
+  ]
+ },
+ {
+  "slug": "aec-cs2-ica-ff-2026-09-10",
+  "trade_rows": 6,
+  "credited_usd": "0.0400",
+  "modeled_usd": "0.04",
+  "match": true,
+  "fills_with_credit_venue": 4,
+  "fills_with_nonzero_model": 4,
+  "cost_basis_usd": "8.5228",
+  "matched_pairs": "4.62",
+  "matched_pair_cost": "0.98",
+  "matched_contribution_usd": "0.0924",
+  "directional_residual": "-9.08",
+  "residual_contribution_usd": "-3.9952",
+  "realized_usd_venue": "-3.9028",
+  "status": "REALIZED",
+  "maker_fills": 6,
+  "taker_fills": 0,
+  "per_fill": [
+   {
+    "qty": "4.6200",
+    "px": "0.5400",
+    "raw": "0.014345",
+    "cents": "0.01",
+    "aggressor": false
+   },
+   {
+    "qty": "4.6200",
+    "px": "0.5600",
+    "raw": "0.014230",
+    "cents": "0.01",
+    "aggressor": false
+   },
+   {
+    "qty": "2.5400",
+    "px": "0.5600",
+    "raw": "0.007823",
+    "cents": "0.01",
+    "aggressor": false
+   },
+   {
+    "qty": "1.0000",
+    "px": "0.5600",
+    "raw": "0.003080",
+    "cents": "0.00",
+    "aggressor": false
+   },
+   {
+    "qty": "1.0000",
+    "px": "0.5600",
+    "raw": "0.003080",
+    "cents": "0.00",
+    "aggressor": false
+   },
+   {
+    "qty": "4.5400",
+    "px": "0.5600",
+    "raw": "0.013983",
+    "cents": "0.01",
+    "aggressor": false
+   }
+  ]
+ },
+ {
+  "slug": "aec-setkamecz-krajan-svoluk-2026-09-10",
+  "trade_rows": 3,
+  "credited_usd": "0.0300",
+  "modeled_usd": "0.03",
+  "match": true,
+  "fills_with_credit_venue": 3,
+  "fills_with_nonzero_model": 3,
+  "cost_basis_usd": "3.6028",
+  "matched_pairs": "0",
+  "matched_pair_cost": "None",
+  "matched_contribution_usd": "0",
+  "directional_residual": "-11.24",
+  "residual_contribution_usd": "-3.6028",
+  "realized_usd_venue": "-3.6028",
+  "status": "REALIZED",
+  "maker_fills": 3,
+  "taker_fills": 0,
+  "per_fill": [
+   {
+    "qty": "3.8400",
+    "px": "0.6600",
+    "raw": "0.010771",
+    "cents": "0.01",
+    "aggressor": false
+   },
+   {
+    "qty": "3.6200",
+    "px": "0.7100",
+    "raw": "0.009317",
+    "cents": "0.01",
+    "aggressor": false
+   },
+   {
+    "qty": "3.7800",
+    "px": "0.6700",
+    "raw": "0.010447",
+    "cents": "0.01",
+    "aggressor": false
+   }
+  ]
+ }
+]
