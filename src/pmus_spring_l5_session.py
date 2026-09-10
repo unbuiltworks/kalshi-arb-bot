@@ -862,6 +862,47 @@ def guaranteed_settlement_floor(inv: "Inventory") -> D:
     return min(inv.up, inv.dn) - (inv.cost_up + inv.cost_dn)
 
 
+def matched_pair_cost_after(inv: "Inventory", side_up: bool,
+                            px: D, qty: D) -> Optional[D]:
+    """Average cost of the MATCHED inventory if this order filled: the two
+    sides' average prices summed. None when one side is still empty, because
+    there is no matched inventory to protect yet.
+
+    OWNER 2026-09-10: "Neither COMPLETE nor EXTEND is allowed to make the
+    total matched inventory cost more than $1 per pair."
+    """
+    up = inv.up + (D(str(qty)) if side_up else D("0"))
+    dn = inv.dn + (D("0") if side_up else D(str(qty)))
+    if up <= 0 or dn <= 0:
+        return None
+    cost_up = inv.cost_up + (D(str(px)) * D(str(qty)) if side_up else D("0"))
+    cost_dn = inv.cost_dn + (D("0") if side_up else D(str(px)) * D(str(qty)))
+    return (cost_up / up) + (cost_dn / dn)
+
+
+def pair_invariant_ok(inv: "Inventory", side_up: bool, px: D, qty: D) -> bool:
+    """May this order run without breaching the average matched-pair ceiling?
+
+    THE LOOPHOLE THIS CLOSES, found by simulation before it cost anything.
+    The <=1.00 ceiling on spring_complement_price gates the MARGINAL pair --
+    a_up at that instant plus the complement price. That does NOT bound the
+    AVERAGE, because a_up MOVES:
+
+        OPEN     10 @ 0.10  -> a_up 0.10
+        COMPLETE 10 @ 0.85  -> marginal pair 0.95, allowed
+        EXTEND   10 @ 0.95  -> a_up 0.525, average pair 1.375
+
+    Every order obeyed the marginal rule and the already-matched inventory
+    went above par retroactively: paid $19.00, UP wins +1.00, DN wins -9.00.
+    Same guaranteed-loss shape as MIL -2.5 by a different route -- not an
+    expensive complement, but an expensive EXTEND after a cheap complete.
+
+    Applies to EVERY relation, which is the point: protecting only the newest
+    trade is what let this through."""
+    after = matched_pair_cost_after(inv, side_up, px, qty)
+    return after is None or after <= completion_pair_ceiling()
+
+
 def floor_after_fill(inv: "Inventory", side_up: bool, px: D, qty: D) -> D:
     """The floor this market would have if an order filled in full."""
     up = inv.up + (D(str(qty)) if side_up else D("0"))
@@ -1524,6 +1565,8 @@ DIVERGENCE_CLASSES = {
     "safety_adaptation:unmatched_usd_cap": "safety-cap override (R4 dollar residual cap)",
     "safety_adaptation:combined_loss_stop":
         "safety-cap override (combined settled + unsettled loss budget)",
+    "safety_adaptation:matched_pair_ceiling":
+        "safety-cap override (average matched-pair cost ceiling)",
     "safety_adaptation:spend_cap": "safety-cap override",
     "policy_flag:cap_fallback_complete": "safety-cap override (L5-consistent fallback)",
     "safety_adaptation:off_distribution_hold": "genuinely off-distribution state",
@@ -2988,6 +3031,24 @@ def _run_session_body(t: Optional[Transport] = None,
                     if _trim.get("applied"):
                         px = D(str(_trim["px_out"]))
                 qty = spec["qty"]
+                # OWNER 2026-09-10: the average matched-pair ceiling. An
+                # EXTEND raises a_up under inventory that is ALREADY matched,
+                # so a marginal-only rule lets previously safe pairs drift
+                # above par. Refused before submission, never after.
+                if not pair_invariant_ok(inv, side_up, px, qty):
+                    _after = matched_pair_cost_after(inv, side_up, px, qty)
+                    report["stop_reason"] = (
+                        f"matched_pair_ceiling:{_after}>"
+                        f"{completion_pair_ceiling()}")
+                    dec["matched_pair_cost_if_filled"] = str(_after)
+                    dec["cap_binding"] = list(dec.get("cap_binding", [])) + \
+                        ["matched_pair_ceiling"]
+                    mark_noop(dec, report["stop_reason"],
+                              divergence_class(
+                                  "safety_adaptation:matched_pair_ceiling"))
+                    sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
+                    actions += 1
+                    continue
                 # OWNER 5567269295 (R4): the residual cap in DOLLARS. An
                 # order that would leave more than the rung's unmatched
                 # cap standing is refused BEFORE submission; an order that
