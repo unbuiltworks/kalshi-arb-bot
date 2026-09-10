@@ -215,7 +215,9 @@ def test_arming_is_isolated_from_q1_and_micro(monkeypatch, tmp_path):
 def test_out_of_band_market_skips_without_mutation(monkeypatch, tmp_path):
     _arm(monkeypatch, tmp_path)
     monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _tiny_model())
-    fake = Fake(bid="0.7000", ask="0.7050")
+    fake = Fake(bid="0.7800", ask="0.7850")   # past spring 0.25-0.75,
+    # still inside the untouched q1 envelope 0.20-0.80, so this keeps
+    # testing the SPRING band rather than tripping the outer gate
     rep = spring.run_session(fake, clock=_ticking(), sleep=lambda s: None,
                              wall=lambda: 0.0)
     assert rep["status"] == "SPRING_SKIP_NOT_QUALIFYING"
@@ -500,11 +502,16 @@ def test_missing_category_field_no_longer_fails_the_open():
 
 
 def test_owner_decision_observation_constants():
-    """OWNER DECISION 5533476555 item 1: observation regime is 35-65
-    open / <=0.98 completion; the live >=1c-after-fees bound is
-    q1.complement_bound and stays in every complement min()."""
+    """OWNER DECISION 5533476555 item 1, as amended by the OWNER GO of
+    2026-09-10: observation regime is 25-75 open / <=0.98 completion. The
+    band moved because L5's own pre-fill coverage was finally measured
+    against the frozen model -- 0.35-0.65 admitted one whole price band of
+    seven (18.5% of L5's pre-fill opens) and excluded the two richest. The
+    completion ceiling did NOT move, and neither did any money limit; the
+    live >=1c-after-fees bound is q1.complement_bound and stays in every
+    complement min()."""
     assert (spring.SPRING_BAND_LO, spring.SPRING_BAND_HI) == \
-        (D("0.35"), D("0.65"))
+        (D("0.25"), D("0.75"))
     assert spring.SPRING_PAIR_TARGET == D("0.98")
     # widened cap never admits <1c net: at avg 0.50 the chosen px obeys
     # the hard bound even if the observation cap were looser

@@ -194,7 +194,25 @@ def requote_relations() -> tuple:
 STATE_DURABLE_ENV = "PMUS_SPRING_STATE_DURABLE"    # operator override "1"
 
 # Spring gates — measured, from analysis/l5/l5_ramp_analysis.json
-SPRING_BAND_LO, SPRING_BAND_HI = D("0.35"), D("0.65")   # OWNER 5533476555
+# OWNER GO 2026-09-10 ("We need more trades"): 0.35-0.65 -> 0.25-0.75.
+# The old window was set by OWNER 5533476555 before we could measure L5's
+# own pre-fill coverage. Measured against the FROZEN model actually running
+# (analysis/l5/l5_action_model_v2.json, sha256[:16] bbb55bf90638d2bd, the
+# same model_sha stamped on every live decision row), L5 has pre-fill OPEN
+# policy in ALL SEVEN price bands, and 0.35-0.65 admitted exactly ONE of
+# them whole -- p45-55c, 119 observations, 18.5% of L5's 643 pre-fill opens.
+# We had restricted ourselves to the THIRD-richest band and excluded the two
+# richest: p25-45c (154) and p55-75c (143). 0.25-0.75 admits all three whole
+# -> 416/643 = 64.7%, and every band added is better supported than the one
+# we were already trading. Deliberately NOT 0.10-0.90 (90%): p<10c (29) and
+# p>90c (35) are thin, and the extremes are where pair economics and
+# residual risk diverge most. See analysis/l5/ENTRY_BAND_L5_COVERAGE.md.
+# This moves NO money limit: per-action $2.50, per-leg $3.25, per-market
+# $7.50, residual 6 units and the -$15.00 daily stop are untouched. Bands
+# whose band|TTE cell has no L5 policy (p25-45c and p55-75c below 30 s)
+# still fail closed on off_distribution_hold -- widening admission never
+# widens the distribution.
+SPRING_BAND_LO, SPRING_BAND_HI = D("0.25"), D("0.75")   # OWNER 5533476555 -> 2026-09-10
 SPRING_MIN_TRADES_1H = 10                # thin-flow floor (gate diagnosis)
 # OBSERVATION/target cap per OWNER DECISION 5533476555. Execution stays
 # fail-closed on q1.complement_bound (>=1c after known fees) — the

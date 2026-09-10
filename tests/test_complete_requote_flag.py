@@ -88,8 +88,8 @@ def test_the_rejection_breaker_is_untouched():
 
 def test_no_money_or_risk_limit_moved():
     """Every surface the owner named as preserved, checked by value."""
-    assert ses.SPRING_BAND_LO == __import__("decimal").Decimal("0.35")
-    assert ses.SPRING_BAND_HI == __import__("decimal").Decimal("0.65")
+    assert ses.SPRING_BAND_LO == __import__("decimal").Decimal("0.25")
+    assert ses.SPRING_BAND_HI == __import__("decimal").Decimal("0.75")
     assert ses.DEFAULT_MAX_COMPLETE_ACTIONS == 12
     for surface in ("unmatched_usd", "post_only", "maker"):
         assert surface in _SRC

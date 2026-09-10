@@ -1027,7 +1027,7 @@ def test_flat_campaign_settles_markets_the_ledger_filled_in(monkeypatch,
 def test_continuation_extend_is_not_blocked_by_the_open_band(monkeypatch,
                                                               tmp_path):
     """The 0.35-0.65 band is OPEN admission. A held position whose model
-    state at the CURRENT price (0.66) is in-distribution and says EXTEND
+    state at the CURRENT price (0.78) is in-distribution and says EXTEND
     extends; the band no longer freezes a valid continuation."""
     from tests.test_pmus_spring_l5_session import Fake, _ticking
     _armed_session_env(monkeypatch, tmp_path)
@@ -1037,14 +1037,14 @@ def test_continuation_extend_is_not_blocked_by_the_open_band(monkeypatch,
         "switch_complete_p": 0.3, "next_reevaluation_s": 2.0,
         "relation_ranked": [], "state_n": 16, "off_distribution": False})
     monkeypatch.setenv(base.MAX_ACTIONS_ENV, "1")
-    fake = Fake(bid="0.6600", ask="0.6700")
+    fake = Fake(bid="0.7800", ask="0.7900")
     fake.positions["held"] = {"netPositionDecimal": "0.02"}
     rep = base.run_session(fake, clock=_ticking(), sleep=lambda s: None,
                            wall=lambda: 1000.0, slug="held", gate_ok=True,
                            resume=True)
     assert rep.get("stop_reason") is None, rep
     assert rep["orders"][0]["relation"] == "extend"
-    assert base.D(rep["orders"][0]["px"]) == base.D("0.66")
+    assert base.D(rep["orders"][0]["px"]) == base.D("0.78")
     assert base.D(rep["inventory"]["up"]) > base.D("0.02")   # extended
 
 
@@ -1053,7 +1053,7 @@ def test_open_admission_band_still_applies_to_a_fresh_market(monkeypatch,
     from tests.test_pmus_spring_l5_session import Fake, _ticking
     _armed_session_env(monkeypatch, tmp_path)
     _open_proposal(monkeypatch)
-    fake = Fake(bid="0.6600", ask="0.6700")
+    fake = Fake(bid="0.7800", ask="0.7900")
     rep = base.run_session(fake, clock=_ticking(), sleep=lambda s: None,
                            wall=lambda: 1000.0, slug="fresh", gate_ok=True)
     assert rep["status"] == "SPRING_SKIP_NOT_QUALIFYING"

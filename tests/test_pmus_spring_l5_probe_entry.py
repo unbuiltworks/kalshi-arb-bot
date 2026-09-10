@@ -114,7 +114,7 @@ def test_missing_stale_and_wrong_slug_fail_closed():
 
 def test_current_spring_shape_is_part_of_evidence_gate():
     assert entry.strict_evidence_reason(
-        "mkt", evidence(bid="0.70"), now=1001.0).startswith(
+        "mkt", evidence(bid="0.78"), now=1001.0).startswith(
             "strict_evidence_outside_band:")
     assert entry.strict_evidence_reason(
         "mkt", evidence(trades_1h=9), now=1001.0) == \

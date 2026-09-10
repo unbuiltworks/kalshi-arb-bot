@@ -107,7 +107,7 @@ def test_the_control_group_still_owns_its_marker():
 # ------------------------------------------------ nothing else moved
 def test_no_money_or_risk_limit_changed():
     from decimal import Decimal as D
-    assert ses.SPRING_BAND_LO == D("0.35") and ses.SPRING_BAND_HI == D("0.65")
+    assert ses.SPRING_BAND_LO == D("0.25") and ses.SPRING_BAND_HI == D("0.75")
     assert ses.COMPLETE_REJECT_STREAK_MAX == 3
     assert ses.DEFAULT_MAX_COMPLETE_ACTIONS == 12
     assert ses.DEFAULT_COMPLETE_REQUOTE is False
