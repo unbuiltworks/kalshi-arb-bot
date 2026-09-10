@@ -43,10 +43,12 @@ import json
 import os
 import time
 import urllib.request
+from decimal import Decimal as D
 from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Mapping, Optional, Sequence
 
+from src import pmus_shadow_completion as shadow_completion
 from src import pmus_sports_opportunity_rank as rank_mod
 
 GATEWAY = os.getenv("PMUS_GATEWAY", "https://gateway.polymarket.us")
@@ -57,6 +59,20 @@ WATCH_SLOTS = int(os.getenv("PMUS_SHADOW_WATCH_SLOTS", "32"))
 CYCLE_S = float(os.getenv("PMUS_SHADOW_CYCLE_S", "45"))
 POLL_PAUSE_S = float(os.getenv("PMUS_SHADOW_POLL_PAUSE_S", "0.25"))
 OBS_KEEP = int(os.getenv("PMUS_SHADOW_OBS_KEEP", "240"))
+
+# RAW EVIDENCE. OWNER: "Don't just persist aggregate cohort counters. Persist
+# enough timestamped market observations and virtual decisions/fills to
+# recompute the funnel after we discover another analysis bug. We should
+# never again lose the underlying evidence because a derived field was
+# wrong." Twice now a derived field has been wrong -- spread read null on
+# every row, movement ran over a variable window -- and in both cases the
+# aggregates built on them were unrecoverable because the inputs were gone.
+# Counters are a summary of evidence; they are not the evidence.
+RAW_DIR = os.getenv("PMUS_SHADOW_RAW", "/data/pmus_shadow/raw")
+# Bounded. An unbounded tape is what filled the recorder's volume at 00:40Z
+# on 2026-09-08; a collector that dies of its own evidence collects nothing.
+RAW_MAX_BYTES = int(os.getenv("PMUS_SHADOW_RAW_MAX_BYTES",
+                              str(512 * 1024 * 1024)))
 # Flow is measured over a TRAILING WINDOW, not between consecutive polls.
 # Measured live 2026-09-10T18:5xZ: differencing adjacent ~45s polls made
 # eligibility flap 32 -> 5 -> 1, because most markets simply have no print
@@ -170,6 +186,27 @@ def shape_window(obs: Sequence[Mapping[str, Any]], now: float,
     return out
 
 
+NOTIONAL_CENTS_PER_USD = 100.0
+
+
+def _to_usd(cents: Optional[float]) -> Optional[float]:
+    return None if cents is None else cents / NOTIONAL_CENTS_PER_USD
+
+
+def _flow_cents(prev, cur, flow) -> Optional[float]:
+    """Trailing-window flow in CENTS of notional; the adjacent-poll
+    difference remains the fallback when the window is too short."""
+    if flow is not None:
+        return flow
+    if not prev:
+        return None
+    return rank_mod.flow_usd_per_min(
+        {"notional_traded": prev.get("notional_traded_cum"),
+         "transact_time": prev.get("transact_time")},
+        {"notional_traded": cur.get("notional_traded_cum"),
+         "transact_time": cur.get("transact_time")})
+
+
 def scored_row(slug: str, prev: Optional[Mapping[str, Any]],
                cur: Mapping[str, Any],
                history_shape: Optional[Mapping[str, Any]] = None,
@@ -183,11 +220,17 @@ def scored_row(slug: str, prev: Optional[Mapping[str, Any]],
         "bid_qty": cur.get("bid_qty"), "ask_qty": cur.get("ask_qty"),
         "maker_pair_cost": rank_mod.maker_pair_cost(cur.get("bid"),
                                                     cur.get("ask")),
-        "flow_usd_per_min": flow if flow is not None else (rank_mod.flow_usd_per_min(
-            {"notional_traded": prev.get("notional_traded_cum"),
-             "transact_time": prev.get("transact_time")},
-            {"notional_traded": cur.get("notional_traded_cum"),
-             "transact_time": cur.get("transact_time")}) if prev else None),
+        # NOTIONAL IS IN CENTS. Measured 2026-09-10 on
+        # aec-nfl-sf-lar-2026-09-10 across 8 independent volume intervals:
+        # d_notional/d_shares came to 35.13-35.40 while the book was
+        # 0.35/0.355 -- exactly 100x the price, on every interval. The
+        # venue prices notionalTraded 0-100, so the raw delta is CENTS of
+        # notional. Ranking was unaffected (a uniform factor is monotonic)
+        # but the REPORTED figure overstated dollar flow 100-fold: the top
+        # market reads ~$189k/min raw and is really ~$1.9k/min. A number
+        # labelled usd has to be usd, so both are carried explicitly.
+        "flow_cents_per_min": _flow_cents(prev, cur, flow),
+        "flow_usd_per_min": _to_usd(_flow_cents(prev, cur, flow)),
         "in_band_fraction": shape.get("in_band_fraction"),
         # SPREAD WAS NULL ON EVERY ROW EVER EMITTED. The cycle report read
         # r["spread"], and nothing in scored_row ever set that key, so a
@@ -206,6 +249,14 @@ def scored_row(slug: str, prev: Optional[Mapping[str, Any]],
         "shape_span_s": shape.get("span_s"),
         "shape_points": shape.get("points"),
     }
+
+
+def _book_of(row: Optional[Mapping[str, Any]]) -> Optional[dict]:
+    """A decision-shaped book from a ranked row, or None when it is not
+    two-sided. A one-sided book is not a book with a missing number."""
+    if not row or row.get("bid") is None or row.get("ask") is None:
+        return None
+    return {"bid": D(str(row["bid"])), "ask": D(str(row["ask"]))}
 
 
 def tier_of(index: int) -> Optional[str]:
@@ -349,6 +400,47 @@ class ShadowBreadth:
             self.cohorts[tier] = c
         self._counted = {tuple(k) for k in (doc.get("counted") or [])}
         self.cycles = int(doc.get("cycles") or 0)
+
+    # ---- raw evidence ---------------------------------------------------
+    def append_raw(self, cycle: int, rows, decisions,
+                   now: Optional[float] = None) -> bool:
+        """One JSONL record per cycle: the timestamped observations AND the
+        virtual decisions/fills behind that cycle's counters.
+
+        Written so the funnel can be RECOMPUTED later. Both halves are
+        needed: observations alone cannot reproduce what the policy chose,
+        and decisions alone cannot reproduce the book they were chosen
+        against. Best-effort -- a failed write must never stop the loop
+        observing, but it is REPORTED rather than swallowed, because a
+        silent failure here is exactly how the evidence goes missing again.
+        """
+        try:
+            os.makedirs(RAW_DIR, exist_ok=True)
+            day = time.strftime("%Y-%m-%d", time.gmtime(now or self._now()))
+            path = os.path.join(RAW_DIR, f"observations-{day}.jsonl")
+            if self._raw_over_budget():
+                return False
+            rec = {"cycle": cycle, "t": _utc(now or self._now()),
+                   "observations": list(rows or []),
+                   "decisions": list(decisions or [])}
+            with open(path, "a") as fh:
+                fh.write(json.dumps(rec, separators=(",", ":"),
+                                    default=str) + "\n")
+            return True
+        except Exception:                                   # noqa: BLE001
+            return False
+
+    def _raw_over_budget(self) -> bool:
+        """Refuse to grow past the cap rather than sweeping blindly: the
+        oldest raw day is the one most likely to be the out-of-sample
+        evidence, so it is kept and new writes stop instead."""
+        try:
+            total = 0
+            for name in os.listdir(RAW_DIR):
+                total += os.path.getsize(os.path.join(RAW_DIR, name))
+            return total >= RAW_MAX_BYTES
+        except Exception:                                   # noqa: BLE001
+            return False
 
     def _save_state(self) -> None:
         """Best effort: a failed write must not stop the loop observing."""
@@ -579,6 +671,20 @@ def run(cycles: Optional[int] = None) -> int:
             rep["markets"] = [d for d in decisions
                               if d.get("new_this_cycle", {}).get(
                                   "actions_replayed")]
+            # TWO ARMS, never summed. decide_market alone cannot complete
+            # once a market reaches residual_cap -- the model keeps
+            # proposing extend and plan_action keeps refusing it, so arm A's
+            # completion column is structurally zero. Arm B asks the same
+            # frozen policy's own COMPLETE branch what it would post. See
+            # src/pmus_shadow_completion.py for the measurement.
+            by_slug = {r["slug"]: r for r in ranked}
+            rep["two_arm"] = [
+                {"slug": d.get("slug"),
+                 **shadow_completion.two_arm(
+                     d, _book_of(by_slug.get(d.get("slug"))))}
+                for d in decisions if d.get("slug") in by_slug]
+            rep["raw_persisted"] = sb.append_raw(
+                n, [by_slug[k] for k in by_slug], decisions)
             print(PREFIX + json.dumps(rep, separators=(",", ":"), default=str),
                   flush=True)
             watch = sb.watch_set() or watch

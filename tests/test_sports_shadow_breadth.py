@@ -5,6 +5,7 @@ happily while counting nothing.
 """
 from __future__ import annotations
 
+import json
 import pytest
 
 from src import pmus_sports_shadow_breadth as SB
@@ -513,3 +514,66 @@ def test_cycle_row_no_longer_advertises_an_hour_it_does_not_measure():
                      if not ln.lstrip().startswith("#"))
     assert '"mid_stdev_1h"' not in code
     assert "mid_stdev_1h=" not in code
+
+
+# ---- raw evidence and flow units -----------------------------------------
+
+def test_flow_is_reported_in_dollars_and_cents_separately():
+    """notionalTraded is priced 0-100, so the raw delta is CENTS. Measured
+    on aec-nfl-sf-lar-2026-09-10: d_notional/d_shares was 35.13-35.40 on
+    every one of 8 volume intervals while the book was 0.35/0.355."""
+    row = SB.scored_row("s", None, _book_obs(100.0, 0.35, 0.355), {}, 18941.99)
+    assert row["flow_cents_per_min"] == pytest.approx(18941.99)
+    assert row["flow_usd_per_min"] == pytest.approx(189.4199)
+    assert row["flow_usd_per_min"] * SB.NOTIONAL_CENTS_PER_USD == \
+        pytest.approx(row["flow_cents_per_min"])
+
+
+def test_absent_flow_stays_none_in_both_units():
+    row = SB.scored_row("s", None, _book_obs(100.0, 0.35, 0.355), {}, None)
+    assert row["flow_usd_per_min"] is None
+    assert row["flow_cents_per_min"] is None
+
+
+def test_raw_persists_observations_AND_decisions(tmp_path, monkeypatch):
+    """Counters are a summary of evidence; they are not the evidence. Both
+    halves are needed: observations alone cannot reproduce what the policy
+    chose, decisions alone cannot reproduce the book it chose against."""
+    monkeypatch.setattr(SB, "RAW_DIR", str(tmp_path))
+    sb = SB.ShadowBreadth(state_path=str(tmp_path / "c.json"),
+                          now=lambda: 1757538000.0)
+    assert sb.append_raw(7, [{"slug": "x", "bid": 0.35, "ask": 0.355}],
+                         [{"slug": "x", "decision": "quote"}]) is True
+    files = list(tmp_path.glob("observations-*.jsonl"))
+    assert len(files) == 1
+    rec = json.loads(files[0].read_text().strip())
+    assert rec["cycle"] == 7
+    assert rec["observations"][0]["bid"] == 0.35
+    assert rec["decisions"][0]["decision"] == "quote"
+
+
+def test_raw_appends_rather_than_overwriting(tmp_path, monkeypatch):
+    monkeypatch.setattr(SB, "RAW_DIR", str(tmp_path))
+    sb = SB.ShadowBreadth(state_path=str(tmp_path / "c.json"),
+                          now=lambda: 1757538000.0)
+    for i in range(3):
+        sb.append_raw(i, [{"slug": "x"}], [])
+    lines = list(tmp_path.glob("observations-*.jsonl"))[0].read_text()
+    assert len([ln for ln in lines.splitlines() if ln.strip()]) == 3
+
+
+def test_raw_write_failure_never_stops_the_loop(tmp_path, monkeypatch):
+    monkeypatch.setattr(SB, "RAW_DIR", "/proc/nope/raw")
+    sb = SB.ShadowBreadth(state_path=str(tmp_path / "c.json"))
+    assert sb.append_raw(1, [{"slug": "x"}], []) is False
+
+
+def test_raw_stops_growing_at_the_cap_instead_of_sweeping(tmp_path, monkeypatch):
+    """The oldest raw day is the one most likely to be out-of-sample
+    evidence, so it is kept and new writes stop instead."""
+    monkeypatch.setattr(SB, "RAW_DIR", str(tmp_path))
+    monkeypatch.setattr(SB, "RAW_MAX_BYTES", 1)
+    (tmp_path / "observations-old.jsonl").write_text("x" * 50)
+    sb = SB.ShadowBreadth(state_path=str(tmp_path / "c.json"))
+    assert sb.append_raw(1, [{"slug": "x"}], []) is False
+    assert (tmp_path / "observations-old.jsonl").exists(), "old evidence deleted"
