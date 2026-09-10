@@ -1148,7 +1148,73 @@ def sweep_orphan_orders(t) -> dict:
 SHUTDOWN_IDLE_S = 300.0
 
 
-def shutdown_idle(sleep=time.sleep, report: Optional[Mapping[str, Any]] = None):
+def shutdown_settle_pass(t=None) -> dict:
+    """Reconcile pending settlements while HALTED, and re-price the budget.
+
+    OWNER 2026-09-10, after the UnboundLocalError halt: "Restore/reconcile the
+    17 pending settlements before calculating the current combined loss
+    budget." The settlement auditor lived in the campaign loop, which the
+    shutdown path deliberately never reaches -- so a halted probe accumulated
+    pending markets forever and the combined budget stayed frozen at whatever
+    tripped it. The budget would then refuse a lane on stale numbers.
+
+    READ-ONLY AND IT MUST STAY THAT WAY. settle_held() reads the venue's
+    POSITION_RESOLUTION activity and appends to OUR durable ledger. There is
+    no order transport on this path, and the shutdown reachability test walks
+    it. It never raises: a halted process that dies reporting is worse than
+    one that reports an error.
+
+    Realized is taken only from the venue's own afterPosition.realized, via
+    settle_held. Nothing here marks to market, and nothing here re-arms."""
+    out: dict[str, Any] = {
+        "pending_before": [], "settled_now": [], "still_pending": [],
+        "errors": [], "realized_today_usd": None,
+        "unsettled_floor_usd": None, "combined_loss_usd": None,
+        "combined_budget_usd": str(base.daily_loss_stop()),
+        "budget_permits_normal_operation": None,
+        "labels": "read-only; venue-confirmed realized only; no order path"}
+    if t is None:                       # no transport, no venue read
+        return {**out, "errors": ["no_transport"]}
+    try:
+        pending = unsettled_slugs()
+    except Exception as exc:            # noqa: BLE001
+        return {**out, "errors": [f"unsettled_slugs:{type(exc).__name__}"]}
+    out["pending_before"] = list(pending)
+    try:
+        if not base.q1.has_credentials():
+            return {**out, "errors": ["no_credentials"]}
+    except Exception as exc:            # noqa: BLE001
+        return {**out, "errors": [f"credentials:{type(exc).__name__}"]}
+    for slug in pending:
+        rep = settle_held(t, slug)      # read-only; never raises
+        if rep.get("settled"):
+            out["settled_now"].append(
+                {"slug": slug,
+                 "realized_confirmed": rep.get("realized_confirmed"),
+                 "realized_usd": rep.get("realized_usd"),
+                 "realized_source": rep.get("realized_source"),
+                 "breakdown": rep.get("breakdown")})
+        else:
+            out["still_pending"].append(
+                {"slug": slug, "status": rep.get("status")})
+        if rep.get("status") == "AUDIT_UNAVAILABLE":
+            out["errors"].append(f"{slug}:{rep.get('error')}")
+    # Re-price the budget from what is NOW known, not from what tripped it.
+    try:
+        realized = base.q1.realized_today()
+        invs = [base.held_inventory_from_ledger(s) for s in unsettled_slugs()]
+        out["realized_today_usd"] = str(realized)
+        out["unsettled_floor_usd"] = str(base.unsettled_floor_total(invs))
+        out["combined_loss_usd"] = str(base.combined_loss(realized, invs))
+        out["budget_permits_normal_operation"] = not base.combined_budget_tripped(
+            realized, invs)
+    except Exception as exc:            # noqa: BLE001
+        out["errors"].append(f"budget:{type(exc).__name__}")
+    return out
+
+
+def shutdown_idle(sleep=time.sleep, report: Optional[Mapping[str, Any]] = None,
+                  t=None):
     """Hold the halted state up. NEVER exit.
 
     LIVE 2026-09-10T00:57:19Z: the first shutdown ran, verified, and then the
@@ -1163,8 +1229,14 @@ def shutdown_idle(sleep=time.sleep, report: Optional[Mapping[str, Any]] = None):
     indistinguishable from a crash and gets 'helpfully' replaced."""
     verdict = str((report or {}).get("verdict") or "SHUTDOWN_UNKNOWN")
     while True:
+        # Read-only: drains pending settlements and re-prices the combined
+        # budget while halted. Without it the halted probe never learns that
+        # a market resolved, and the budget that refused a lane stays frozen
+        # at the number that tripped it. Skipped entirely when there is no
+        # transport, so this cannot reach the venue from a bare idle call.
         _log("shutdown_idle", verdict=verdict,
              held_preserved=(report or {}).get("held_preserved"),
+             settlement=shutdown_settle_pass(t),
              evidence=("halted and holding the container up on purpose: "
                        "exiting here would be read as a crash and roll the "
                        "service back to the previous, possibly ARMED, build"))
@@ -1690,9 +1762,19 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     if shutdown_requested():
         # before armed() is even consulted: shutdown is not a mode of
         # trading, it is the absence of it
+        if t is None:
+            # materialise it once so the idle loop can keep reconciling
+            # settlements read-only; safe_shutdown builds its own otherwise
+            # and drops it, leaving the halted process unable to see a
+            # market resolve.
+            try:
+                if base.q1.has_credentials():
+                    t = base.Transport()
+            except Exception:                      # noqa: BLE001
+                t = None
         rep = safe_shutdown(t)
         _log("safe_shutdown", **rep)
-        shutdown_idle(sleep, rep)          # never returns in production
+        shutdown_idle(sleep, rep, t)       # never returns in production
         return {"campaign": "pmus-l5-continuous-v1", "mode": "SHUTDOWN",
                 "status": rep["verdict"], "shutdown": rep,
                 "realized_pnl": None, "sessions": [], "selections": 0}
