@@ -1,6 +1,6 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
-  "_volume": "Mount a dedicated volume at /data/pmus_shadow (PMUS_SHADOW_STATE). Do NOT reuse /state/pmus-ws (recorder), /state/pmus-sports (collector), /state/pmus-spring (probe), /data/l5_shadow or /data/kalshi_l5. Cohort tallies, dedupe keys and the RAW observation/decision log (PMUS_SHADOW_RAW, /data/pmus_shadow/raw) live here ONLY. Without this mount the persistence in src/pmus_sports_shadow_breadth.py writes to container-local disk, which survives a process restart and NOT a redeploy -- i.e. not the event that actually erases the evidence.",
+  "_volume": "Mount a dedicated volume at /data/pmus_shadow (PMUS_SHADOW_STATE). Do NOT reuse /state/pmus-ws (recorder), /state/pmus-sports (collector), /state/pmus-spring (probe), /data/l5_shadow or /data/kalshi_l5. Cohort tallies, dedupe keys and the RAW observation/decision log (PMUS_SHADOW_RAW, /data/pmus_shadow/raw) and the execution-shadow proposal tracker (PMUS_EXEC_STATE, /data/pmus_shadow/execution_shadow.json) live here ONLY. The tracker MUST be durable: a complement posted at 22:52 is judged by trades minutes later, so in-memory tracking would resolve every open proposal to PENDING on each restart and silently reset the denominator. Without this mount the persistence in src/pmus_sports_shadow_breadth.py writes to container-local disk, which survives a process restart and NOT a redeploy -- i.e. not the event that actually erases the evidence.",
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "deploy/pmus_shadow_breadth/Dockerfile",
@@ -8,7 +8,8 @@
       "deploy/pmus_shadow_breadth/**",
       "src/pmus_sports_shadow_breadth.py",
       "src/pmus_sports_opportunity_rank.py",
-      "src/pmus_shadow_completion.py"
+      "src/pmus_shadow_completion.py",
+      "src/pmus_execution_shadow.py"
     ]
   },
   "deploy": {

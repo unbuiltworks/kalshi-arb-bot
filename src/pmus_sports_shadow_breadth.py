@@ -48,6 +48,7 @@ from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Mapping, Optional, Sequence
 
+from src import pmus_execution_shadow as exec_shadow
 from src import pmus_shadow_completion as shadow_completion
 from src import pmus_sports_opportunity_rank as rank_mod
 
@@ -374,6 +375,11 @@ class ShadowBreadth:
         self._counted: set = set()
         self.cycles = 0
         self._state_path = state_path or self.STATE_PATH
+        self._last_scored: dict[str, dict] = {}
+        try:
+            self.execution = exec_shadow.ExecutionShadow(now=now)
+        except Exception:                                       # noqa: BLE001
+            self.execution = None
         self._load_state()
 
     # ---- durability -----------------------------------------------------
@@ -505,7 +511,9 @@ class ShadowBreadth:
             spans = [_num(o.get("_poll_t")) for o in win]
             spans = [t for t in spans if t is not None]
             shape["span_s"] = (max(spans) - min(spans)) if len(spans) > 1 else 0.0
-            rows.append(scored_row(slug, prev, cur, shape, flow))
+            row = scored_row(slug, prev, cur, shape, flow)
+            self._last_scored[slug] = row
+            rows.append(row)
         return rows
 
     def ranked(self) -> list:
@@ -556,6 +564,23 @@ class ShadowBreadth:
             # Caught in the live logs by residual_final reading null on
             # markets the funnel had already counted first fills for.
             arms = shadow_completion.two_arm(d, _book_of(rows[-1]))
+            # EXECUTION SHADOW: every arm-B proposal is FOLLOWED FORWARD.
+            # `would_post` is a posted price, never a completion -- the
+            # tracker resolves it to WOULD_FILL / VIRTUAL_MATCHED / NO_FILL
+            # against the same validated fill rule.
+            armb = arms.get(shadow_completion.ARM_B) or {}
+            if armb.get("completion_would_post") and self.execution is not None:
+                snap = d.get("inventory_final") or {}
+                inv_b, _why = shadow_completion._inventory_from_actions(
+                    d.get("actions_replayed"), snap)
+                surplus = None
+                if inv_b is not None and inv_b.residual != 0:
+                    surplus = inv_b.avg(inv_b.residual > 0)
+                self.execution.record(
+                    slug, armb.get("plan") or {}, now,
+                    ranked_row=self._last_scored.get(slug),
+                    residual_before=snap.get("residual"),
+                    surplus_avg=surplus, tier=tier)
             out.append({"slug": slug, "tier": tier,
                         "window": summary, "new_this_cycle": fresh,
                         "two_arm": arms})
@@ -690,6 +715,17 @@ def run(cycles: Optional[int] = None) -> int:
             by_slug = {r["slug"]: r for r in ranked}
             rep["two_arm"] = [{"slug": d.get("slug"), **d["two_arm"]}
                               for d in decisions if d.get("two_arm")]
+            # Follow every open proposal forward against the tape, THEN
+            # report. Statuses stay explicit; would_post is never a
+            # completion.
+            if sb.execution is not None:
+                rep["execution"] = sb.execution.advance(
+                    {k: list(v) for k, v in sb.obs.items()})
+                rep["execution_summary"] = sb.execution.summary()
+                rep["execution_predictors"] = sb.execution.predictors_report()
+                rep["execution_cohorts"] = exec_shadow.by_cohort(
+                    list(sb.execution.proposals.values()))
+                rep["execution_persisted"] = sb.execution.save()
             rep["raw_persisted"] = sb.append_raw(
                 n, [by_slug[k] for k in by_slug], decisions)
             print(PREFIX + json.dumps(rep, separators=(",", ":"), default=str),

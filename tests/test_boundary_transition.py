@@ -315,3 +315,32 @@ def test_neither_state_ever_activates(tmp_path, monkeypatch):
         p = str(tmp_path / f"act-{id(cont)}.json")
         BT.attempt_transition(continuous=cont, path=p, run_tests=False)
         assert BT.is_active(p) is False
+
+
+# ---- the consumption side -------------------------------------------------
+
+def test_no_record_means_the_campaign_runs_unchanged(tmp_path):
+    a = BT.activation_for_campaign(str(tmp_path / "absent.json"))
+    assert a["active"] is False
+    assert a["ranked_selector"] is False and a["residual_quarantine"] is False
+    assert a["acquisition_slots"] == BT.rq.ACTIVE_ACQUISITION_SLOTS
+
+
+def test_an_unreadable_record_is_not_an_activation(tmp_path):
+    p = tmp_path / "act.json"
+    p.write_text("{corrupt")
+    assert BT.activation_for_campaign(str(p))["active"] is False
+
+
+def test_a_written_activation_names_exactly_what_it_turns_on(
+        tmp_path, monkeypatch):
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    BT.attempt_transition(continuous=FakeContinuous(), path=p)
+    a = BT.activation_for_campaign(p)
+    assert a["active"] is True
+    assert a["ranked_selector"] is True
+    assert a["residual_quarantine"] is True
+    assert a["acquisition_slots"] == 1
+    assert a["envelope"] == {k: str(v)
+                             for k, v in BT.pf.REQUIRED_ENVELOPE.items()}

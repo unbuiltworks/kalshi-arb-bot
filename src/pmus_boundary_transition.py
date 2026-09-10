@@ -213,6 +213,37 @@ def _row(transition: str, **kw) -> dict:
     return row
 
 
+def activation_for_campaign(path: Optional[str] = None) -> dict:
+    """What a running campaign should read to know it has been promoted.
+
+    THE CONSUMPTION SIDE OF THE AUTOMATIC PATH. The transition writes a
+    record; the campaign asks this on each cycle whether that record exists
+    and what it turns on. Kept here rather than inside the campaign so the
+    campaign's own module -- which is on the live probe's deploy watch path
+    -- does not have to change to gain the ability to read it: the probe
+    imports one function at the boundary, when it is flat and a restart
+    costs nothing.
+
+    Returns a plain, fully-defaulted answer. A missing or unreadable record
+    is NOT an activation, so a campaign that cannot read its own state keeps
+    running exactly as it does today.
+    """
+    doc = load_activation(path)
+    return {
+        "active": bool(doc),
+        "ranked_selector": bool(doc) and "ranked_selector" in (
+            doc.get("activates") or []),
+        "residual_quarantine": bool(doc) and "residual_quarantine" in (
+            doc.get("activates") or []),
+        "activated_at": doc.get("activated_at") if doc else None,
+        "envelope": doc.get("envelope") if doc else None,
+        "acquisition_slots": (doc.get("acquisition_slots") if doc
+                              else rq.ACTIVE_ACQUISITION_SLOTS),
+        "labels": ("a missing or unreadable record is NOT an activation; the "
+                   "campaign keeps running exactly as it does today"),
+    }
+
+
 # ------------------------------------------------------------- the runner
 PREFIX = "PMUS_BOUNDARY_TRANSITION "
 CYCLE_S = float(os.getenv("PMUS_BOUNDARY_CYCLE_S", "60"))
