@@ -10,3 +10,13 @@ ENV PYTHONUNBUFFERED=1
 CMD ["python3", "-m", "src.pmus_sports_shadow_breadth"]
 
 # deploy trigger: build from feature/l5-transfer-backtest
+#
+# WATCH PATHS LIVE IN THE RAILWAY SERVICE CONFIG, NOT IN railway.json.
+# Config-as-code is deprecated on this project, so adding a path to
+# railway.json's watchPatterns does NOT make the service watch it. 9912e9a8
+# touched ONLY src/pmus_execution_shadow.py and its tests, and the deployment
+# read SKIPPED -- leaving the running collector on the BROKEN touch logic
+# while the fix sat in the branch. Until the service config is updated, a
+# change confined to a module outside its real watch set must be paired with
+# a touch to a path it does watch (this file is under
+# deploy/pmus_shadow_breadth/**, which is watched).
