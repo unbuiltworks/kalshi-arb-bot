@@ -655,6 +655,26 @@ def spring_complement_price(avg_cost: D, opp_ask: D, tick: D,
         # the opposite ask, so a touch that already crosses is trimmed by
         # one tick and labelled as the execution adaptation it is).
         px = (D(str(touch)) / tick).to_integral_value(rounding=ROUND_DOWN) * tick
+        # OWNER 2026-09-10, superseding 5574762432's "reported, not gated".
+        # LIVE EVIDENCE: on asc-mlb-chc-mil-2026-09-09-pos-2pt5 the touch ran
+        # to 0.880 against a first leg averaging 0.3612 -- a completed pair at
+        # 1.2412. We paid ~24c to remove uncertainty from a claim whose paired
+        # payout is $1.00, and the position went from +1.94/-5.97 to
+        # -1.25/-5.53: losing in EVERY branch. Following the touch upward is
+        # only L5-faithful while it is economic; past par it is just paying to
+        # make a loss certain.
+        #
+        # So the re-quote follows the touch ONLY inside the ceiling. It does
+        # not refuse outright at the cap -- it posts at the best price the
+        # ceiling allows and stops chasing from there. If the market comes
+        # back the pair completes at <= the ceiling; if it never does, the
+        # residual is preserved to settlement, which is the bounded
+        # directional branch the owner chose over guaranteed loss.
+        ceiling = completion_pair_ceiling()
+        econ_max = D(str(ceiling)) - D(str(avg_cost))
+        capped = px > econ_max
+        if capped:
+            px = (econ_max / tick).to_integral_value(rounding=ROUND_DOWN) * tick
         trimmed = px >= D(str(opp_ask))
         if trimmed:
             px = D(str(opp_ask)) - tick
@@ -662,7 +682,10 @@ def spring_complement_price(avg_cost: D, opp_ask: D, tick: D,
         pair = D(str(avg_cost)) + px
         hard = q1.complement_bound(avg_cost)
         info = {"regime": "l5_touch", "l5_touch_px": str(touch),
-                "pair_cost_max": None, "observation_cap": str(SPRING_PAIR_TARGET),
+                "pair_cost_max": str(ceiling),
+                "capped_by_pair_ceiling": bool(capped),
+                "economic_max_px": str(econ_max),
+                "observation_cap": str(SPRING_PAIR_TARGET),
                 "pair_at_touch": str(D(str(avg_cost)) + D(str(touch))),
                 "pair_at_chosen": str(pair), "above_par": bool(pair > q1.ONE),
                 "fee_safe": bool(hard is not None and px <= D(str(hard))),
@@ -686,6 +709,13 @@ def spring_complement_price(avg_cost: D, opp_ask: D, tick: D,
         if px < tick or px > q1.ONE - tick:
             return None, {**info, "regime": "outside_venue_price_range",
                           "venue_price_range": f"{tick}..{q1.ONE - tick}"}
+        # belt and braces: whatever the trims did above, nothing leaves here
+        # implying a pair over the ceiling. A post-only trim can only lower
+        # the price, but an assertion that can never fire costs nothing and
+        # an unchecked one that can costs $21.59.
+        if D(str(avg_cost)) + px > D(str(ceiling)):
+            return None, {**info, "regime": "above_completion_pair_ceiling",
+                          "pair_at_chosen": str(D(str(avg_cost)) + px)}
         return px, {**info, "chosen_px": str(px),
                     "venue_price_range": f"{tick}..{q1.ONE - tick}"}
     # OWNER 5567269295 (R4): the completion ceiling follows the ACTIVE rung.
@@ -758,6 +788,22 @@ def pair_cost_max() -> D:
     otherwise; never above 1.00)."""
     from src import pmus_l5_ramp_ladder as ladder
     return ladder.pair_cost_max()
+
+
+COMPLETION_PAIR_CEILING = D("1.00")
+
+
+def completion_pair_ceiling() -> D:
+    """OWNER 2026-09-10: a HARD ceiling on the effective pair cost of a
+    COMPLETE. "Don't spend $1.24 to manufacture a $1.00 matched pair."
+
+    1.00 and not 1.02/1.03: the only completion subsidy we can prove is
+    $0.42 of credited maker rebate over 119.49 contracts = $0.0035/contract,
+    with $0.00 of credited liquidity rewards. That supports ~1.003 and no
+    more, so the 1.00-1.03 rescue band is retired for want of a payer, not
+    by preference. If credited rewards later establish different economics,
+    this gets recomputed from cash -- never from assumption."""
+    return COMPLETION_PAIR_CEILING
 
 
 def complement_pricing() -> str:

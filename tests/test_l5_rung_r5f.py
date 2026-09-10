@@ -97,10 +97,18 @@ def test_complete_is_priced_at_l5_touch_above_par_included_under_r5f():
     ladder.set_active("R5F")
     # surplus YES at 0.38 average; the deficit-side (NO) bid is 0.64, ask 0.66
     px, econ = base.spring_complement_price(D("0.38"), D("0.66"), tick, touch=D("0.64"))
-    assert px == D("0.64") and econ["regime"] == "l5_touch"
-    assert econ["pair_at_chosen"] == "1.02" and econ["above_par"] is True
-    assert econ["fee_safe"] is False and econ["pair_cost_max"] is None
-    assert econ["post_only_trim"] is False and econ["chosen_px"] == "0.64"
+    # SUPERSEDED 2026-09-10. This block used to assert px == 0.64 / pair 1.02 /
+    # pair_cost_max None, encoding OWNER 5574762432 "above-par pair cost is
+    # reported/accounted, not behaviorally gated". The live MIL -2.5 run
+    # retired that: touch 0.880 on a 0.3612 first leg completed a pair at
+    # 1.2412 and turned +1.94/-5.97 into -1.25/-5.53. OWNER 2026-09-10 chose
+    # the bounded-directional branch, so the touch is now FOLLOWED ONLY UP TO
+    # a 1.00 pair. 0.38 + 0.62 = 1.00 exactly.
+    assert px == D("0.62") and econ["regime"] == "l5_touch"
+    assert econ["pair_at_chosen"] == "1.00" and econ["above_par"] is False
+    assert econ["pair_cost_max"] == "1.00"
+    assert econ["capped_by_pair_ceiling"] is True
+    assert econ["l5_touch_px"] == "0.64", "L5's own target is still recorded"
     # the identical call under R4 is capped at par (0.62) as before
     ladder.set_active("R4")
     px4, econ4 = base.spring_complement_price(D("0.38"), D("0.66"), tick, touch=D("0.64"))
@@ -114,28 +122,37 @@ def test_complete_is_priced_at_l5_touch_above_par_included_under_r5f():
 def test_r5f_touch_pricing_keeps_only_the_venue_bounds():
     tick = D("0.01")
     ladder.set_active("R5F")
-    # a touch AT the opposite ask would cross: post-only trims it one tick
-    # and says so (an execution adaptation, not a safety override)
+    # a touch AT the opposite ask would cross, but the PAIR CEILING now binds
+    # FIRST (0.38 + 0.62 = 1.00), so the post-only trim never has to fire.
+    # Ordering matters: economics before microstructure. The cheaper price
+    # cannot cross, so gating on economics first can only ever be safer.
     px, econ = base.spring_complement_price(D("0.38"), D("0.64"), tick, touch=D("0.64"))
-    assert px == D("0.63") and econ["post_only_trim"] is True
+    assert px == D("0.62") and econ["capped_by_pair_ceiling"] is True
+    assert econ["post_only_trim"] is False
     assert econ["l5_touch_px"] == "0.64" and econ["pair_at_touch"] == "1.02"
     # a touch below the fee-safe bound is simply fee-safe and still the touch
     px, econ = base.spring_complement_price(D("0.38"), D("0.60"), tick, touch=D("0.50"))
     assert px == D("0.50") and econ["fee_safe"] is True and econ["above_par"] is False
-    # LIVE 2026-09-07 tomvoj-ticjir: L5's touch at 0.87-0.96 is a legal
-    # venue price and MUST be quoted (pair 1.20-1.29 reported, not gated);
-    # the executor's own 0.20-0.80 entry range never applies to a COMPLETE
+    # LIVE 2026-09-07 tomvoj-ticjir, RE-JUDGED. These touches (0.87-0.96 on a
+    # 0.3307 first leg, pairs 1.20-1.29) were the original argument FOR
+    # ungated touch pricing. MIL -2.5 showed what quoting them actually buys:
+    # a filled pair costing ~1.24 against a $1.00 payout. The executor's own
+    # 0.20-0.80 entry range still must not apply to a COMPLETE -- that fix
+    # stands -- but the ECONOMIC ceiling does, and it caps all three at
+    # 1.00 - 0.3307 = 0.6693 -> 0.66.
     for touch, ask in (("0.87", "0.88"), ("0.94", "0.95"), ("0.96", "0.97")):
         px, econ = base.spring_complement_price(D("0.3307"), D(ask), tick, touch=D(touch))
-        assert px == D(touch) and econ["regime"] == "l5_touch"
-        assert econ["above_par"] is True and econ["fee_safe"] is False
+        assert px == D("0.66") and econ["regime"] == "l5_touch"
+        assert econ["capped_by_pair_ceiling"] is True
+        assert D("0.3307") + px <= D("1.00")
         assert econ["venue_price_range"] == "0.01..0.99"
+    # a cheap first leg still reaches high touches: 0.05 + 0.95 = 1.00
     px, econ = base.spring_complement_price(D("0.05"), D("0.995"), tick, touch=D("0.99"))
-    assert px == D("0.99") and econ["above_par"] is True
+    assert px == D("0.95") and econ["above_par"] is False
     # the venue's price range (one tick inside 0 and 1) is the only
     # remaining refusal
     px, econ = base.spring_complement_price(D("0.05"), D("1.00"), tick, touch=D("0.999"))
-    assert px == D("0.99")                               # floored to the tick, legal
+    assert px == D("0.95")                # ceiling binds below the venue max
     px, econ = base.spring_complement_price(D("0.90"), D("0.02"), tick, touch=D("0.004"))
     assert px is None and econ["regime"] == "outside_venue_price_range"
     for rid in ("R3L", "R4"):
