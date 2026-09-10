@@ -192,3 +192,48 @@ def _row(transition: str, **kw) -> dict:
                       "a cap, ceiling, band, or concurrency")}
     row.update(kw)
     return row
+
+
+# ------------------------------------------------------------- the runner
+PREFIX = "PMUS_BOUNDARY_TRANSITION "
+CYCLE_S = float(os.getenv("PMUS_BOUNDARY_CYCLE_S", "60"))
+
+
+def run(cycles: Optional[int] = None, sleep=time.sleep) -> int:
+    """Poll for the clean boundary until it happens, then transition ONCE.
+
+    WHY THIS IS A SEPARATE PROCESS. The transition has to fire on a campaign
+    that is currently HOLDING, and wiring the detector into that campaign
+    would mean redeploying it mid-hold -- restarting the very process whose
+    position we are trying not to disturb, to install a feature that only
+    matters once the position is gone. So detection, the preflight, and the
+    activation record live out here, where they cost the live campaign
+    nothing and can watch it for as long as it takes.
+
+    It writes ONE durable record and stops transitioning. It does not cancel,
+    complete, settle, or reprice anything, and it holds no credentials for
+    doing so.
+    """
+    n = 0
+    while cycles is None or n < cycles:
+        n += 1
+        try:
+            row = attempt_transition()
+        except Exception as exc:                            # noqa: BLE001
+            row = _row(WAITING, note=f"cycle failed closed: {exc!r}")
+        row["cycle"] = n
+        print(PREFIX + json.dumps(row, separators=(",", ":"), default=str),
+              flush=True)
+        if row.get("transition") in (ACTIVATED, ALREADY):
+            # The decision is made and durable. Keep the process alive so the
+            # service does not read as CRASHED, but stop re-deciding.
+            while cycles is None or n < cycles:
+                n += 1
+                sleep(CYCLE_S)
+            return 0
+        sleep(CYCLE_S)
+    return 0
+
+
+if __name__ == "__main__":                                  # pragma: no cover
+    raise SystemExit(run())

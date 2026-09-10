@@ -178,3 +178,73 @@ def readiness(rows: Iterable[Mapping[str, Any]], min_days: int = 10) -> dict:
             set(dates_present(rows)) & set(DECISION_SAMPLE_DATES)),
         "protocol": protocol(),
     }
+
+
+# --------------------------------------------------- unattended continuation
+PREFIX = "L5_OOS "
+CYCLE_S = float(os.getenv("L5_OOS_CYCLE_S", "3600"))
+
+
+def harvest_and_report(fetch=None, path: str = CANONICAL,
+                       min_days: int = 10) -> dict:
+    """One unattended pass: append genuinely new rows, then report readiness.
+
+    OWNER: "Continue L5 September append/OOS automatically in parallel. Only
+    genuinely unseen dates. Do not reopen Sep1-10 rescue tuning."
+
+    THE SWEEP IS NOT RUN HERE, AND THAT IS DELIBERATE. This appends and
+    reports; it never fires the ceiling sweep on its own. The sweep is a
+    one-shot decision procedure on a pre-registered sample, and a loop that
+    re-runs it every hour as data trickles in IS threshold shopping with extra
+    steps -- each rerun another look at a moving sample until one crosses
+    alpha. So readiness is reported and the sweep waits for a deliberate call
+    on a sample that is complete.
+    """
+    doc = load_canonical(path)
+    rows = list(doc.get("rows") or doc.get("activity") or [])
+    before = len(rows)
+    added: list = []
+    error = None
+    if fetch is not None:
+        try:
+            added = list(fetch(latest_timestamp(rows)) or [])
+            rows = append_rows(rows, added)
+        except Exception as exc:                            # noqa: BLE001
+            error = repr(exc)
+
+    fresh = sorted(unseen_dates(rows))
+    ready = readiness(rows, min_days=min_days)
+    return {
+        "kind": "l5_oos_append",
+        "rows_before": before,
+        "rows_after": len(rows),
+        "rows_appended": len(rows) - before,
+        "fetch_error": error,
+        "unseen_days": fresh,
+        "unseen_day_count": len(fresh),
+        "readiness": ready,
+        "sweep_runnable": bool(ready.get("ready")),
+        "decision_sample_excluded": list(DECISION_SAMPLE_DATES),
+        "labels": ("append-only; seen dates are REFUSED not filtered; the "
+                   "ceiling sweep is NOT auto-run -- re-sweeping a growing "
+                   "sample every hour is threshold shopping"),
+    }
+
+
+def run(cycles: Optional[int] = None, fetch=None, sleep=None) -> int:
+    """Report every cycle so 'still n=0' is visible rather than inferred."""
+    import time as _t
+    sleep = sleep or _t.sleep
+    n = 0
+    while cycles is None or n < cycles:
+        n += 1
+        try:
+            row = harvest_and_report(fetch=fetch)
+        except Exception as exc:                            # noqa: BLE001
+            row = {"kind": "l5_oos_append", "error": repr(exc),
+                   "sweep_runnable": False}
+        row["cycle"] = n
+        print(PREFIX + json.dumps(row, separators=(",", ":"), default=str),
+              flush=True)
+        sleep(CYCLE_S)
+    return 0

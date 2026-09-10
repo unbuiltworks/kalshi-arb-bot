@@ -132,3 +132,52 @@ def test_the_canonical_dataset_today_has_zero_unseen_days():
     assert r["unseen_day_count"] == 0
     assert r["ready"] is False
     assert len(r["decision_sample_dates_present"]) == 10
+
+
+# ---- unattended continuation ---------------------------------------------
+
+def test_harvest_reports_zero_unseen_today_and_is_not_runnable():
+    out = A.harvest_and_report()
+    assert out["unseen_day_count"] == 0
+    assert out["sweep_runnable"] is False
+    assert set(out["decision_sample_excluded"]) == set(A.DECISION_SAMPLE_DATES)
+
+
+def test_the_loop_never_auto_runs_the_ceiling_sweep():
+    """Re-sweeping a growing sample every hour is threshold shopping with
+    extra steps. Readiness is reported; the sweep waits for a deliberate
+    call on a complete sample."""
+    import ast
+    tree = ast.parse(open("src/l5_oos_append.py").read())
+    fns = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+    run_body = next(n for n in ast.walk(tree)
+                    if isinstance(n, ast.FunctionDef) and n.name == "run")
+    called = {c.func.id for c in ast.walk(run_body)
+              if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)}
+    assert not any("sweep" in c for c in called), called
+    assert "harvest_and_report" in called
+
+
+def test_a_fetch_failure_is_reported_not_swallowed():
+    def boom(_since):
+        raise RuntimeError("venue down")
+    out = A.harvest_and_report(fetch=boom)
+    assert "venue down" in out["fetch_error"]
+    assert out["rows_appended"] == 0
+
+
+def test_a_fetch_returning_decision_sample_rows_is_refused():
+    """The one thing this module exists to make impossible."""
+    ts = datetime.datetime(2026, 9, 1, tzinfo=datetime.timezone.utc).timestamp()
+
+    def seen(_since):
+        return [{"timestamp": ts, "type": "TRADE", "slug": "x", "size": 1}]
+    with pytest.raises(A.SeenDateRefused):
+        A.assert_unseen(sorted(A.dates_present(seen(None))))
+
+
+def test_run_emits_a_row_every_cycle_so_still_zero_is_visible(capsys):
+    A.run(cycles=2, sleep=lambda s: None)
+    out = capsys.readouterr().out
+    assert out.count(A.PREFIX) == 2
+    assert '"sweep_runnable":false' in out.replace(" ", "")

@@ -214,3 +214,58 @@ def test_mutations_that_would_permit_a_bad_activation(
     assert BT.is_active(p) is expect_active, (
         "mutation did not change behaviour -- the guard under test is not "
         "the thing preventing activation")
+
+
+# ---- the runner -----------------------------------------------------------
+
+def test_runner_keeps_waiting_and_never_activates_without_a_boundary(
+        tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(BT, "attempt_transition",
+                        lambda **kw: BT._row(BT.WAITING))
+    BT.run(cycles=3, sleep=lambda s: None)
+    out = capsys.readouterr().out
+    assert out.count(BT.PREFIX) == 3
+    assert BT.ACTIVATED not in out
+
+
+def test_runner_stops_deciding_once_activated(tmp_path, monkeypatch, capsys):
+    """One durable record, then no more decisions -- the process stays alive
+    so the service does not read as CRASHED."""
+    calls = []
+
+    def once(**kw):
+        calls.append(1)
+        return BT._row(BT.ACTIVATED)
+
+    monkeypatch.setattr(BT, "attempt_transition", once)
+    BT.run(cycles=5, sleep=lambda s: None)
+    assert len(calls) == 1
+    assert capsys.readouterr().out.count(BT.PREFIX) == 1
+
+
+def test_runner_survives_an_exception_and_keeps_watching(monkeypatch, capsys):
+    def boom(**kw):
+        raise RuntimeError("venue down")
+    monkeypatch.setattr(BT, "attempt_transition", boom)
+    BT.run(cycles=2, sleep=lambda s: None)
+    out = capsys.readouterr().out
+    assert out.count(BT.WAITING) == 2
+    assert "failed closed" in out
+
+
+def test_supervisor_holds_no_order_path():
+    import ast
+    tree = ast.parse(open("src/pmus_boundary_transition.py").read())
+    calls = {n.func.attr for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+    for banned in ("submit", "place_order", "cancel_order", "cancel_all"):
+        assert banned not in calls
+
+
+def test_deploy_manifest_does_not_share_the_probe_watch_path():
+    import json as _json
+    mine = set(_json.load(open("deploy/pmus_boundary_transition/railway.json"))
+               ["build"]["watchPatterns"])
+    probe = set(_json.load(open("deploy/pmus_spring_l5/railway.json"))
+                ["build"]["watchPatterns"])
+    assert not (mine & probe)
