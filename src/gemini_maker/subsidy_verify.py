@@ -82,6 +82,20 @@ async def main_async(symbols: List[str]) -> int:
                           "note": "run on the host holding the Gemini env keys"}))
         return 2
     out: Dict[str, Any] = {
+        # OWNER 2026-09-10: every credit row must carry its venue and the
+        # timestamp it was read at. The 25-row PMUS sample was nearly
+        # re-attributed to Gemini precisely because neither was recorded, so
+        # this evidence declares both at the point of capture rather than
+        # having them inferred later from a filename.
+        "venue": "gemini",
+        "provenance": {
+            "venue": "gemini",
+            "source": "gemini private REST, authenticated read-only",
+            "captured_by": "src.gemini_maker.subsidy_verify",
+            "credentials": "GitHub Actions repo secrets; values never read, "
+                           "logged or persisted by this job",
+            "order_transport": "none -- this module imports no order path",
+        },
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "read_only": True,
         "probes": {},
