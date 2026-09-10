@@ -358,3 +358,27 @@ def test_watch_set_keeps_ineligible_markets_so_they_can_become_eligible():
     assert [r["slug"] for r in sb.ranked()] == ["busy"], "only busy is eligible"
     assert set(sb.watch_set()) == {"busy", "one_sided"}, \
         "the ineligible market must stay watched"
+
+
+def test_discovery_is_paced_because_it_shares_a_gateway_with_the_live_probe():
+    """An unpaced ~400-GET burst once drew 429s that halted the live campaign
+    with a leg held. A service that costs nothing must not be the thing that
+    stops the one that doesn't."""
+    pauses = []
+    pages = [{"markets": [{"slug": f"g{i}", "category": "sports",
+                           "sportsMarketTypeV2": "SPORTS_MARKET_TYPE_TOTAL"}
+                          for i in range(500)]} for _ in range(3)]
+    pages.append({"markets": []})
+
+    def get(path):
+        return pages.pop(0)
+
+    SB.discover_game_slugs(get, max_pages=6, sleep=pauses.append)
+    assert pauses, "discovery must pause between pages"
+    assert all(p >= 0.2 for p in pauses), pauses
+
+
+def test_the_first_page_is_not_delayed():
+    pauses = []
+    SB.discover_game_slugs(lambda p: {"markets": []}, sleep=pauses.append)
+    assert pauses == [], "no pause before the first request"

@@ -398,9 +398,20 @@ class ShadowBreadth:
         }
 
 
+DISCOVERY_PAGE_PAUSE_S = float(os.getenv("PMUS_SHADOW_DISCOVERY_PAUSE_S", "0.35"))
+
+
 def discover_game_slugs(get_json, max_pages: int = 80,
-                        page: int = 500) -> list:
+                        page: int = 500, sleep=time.sleep) -> list:
     """Live open GAME markets, futures excluded by TYPE.
+
+    PACED, and that is not politeness. This shares a gateway with the LIVE
+    probe: an unpaced burst of ~400 GETs in ~35s once drew 429s that starved
+    the campaign's authenticated preflight and halted it with a leg held
+    (pmus_incentive_audit.program_list carries the same note and the same
+    fix). An unpaced 80-page walk every discovery cycle is that pattern
+    again, from a service whose entire justification is that it costs
+    nothing.
 
     Bounded, and a short page ends the walk. A failure returns what was
     gathered -- discovery degrades, never dies, the same contract
@@ -408,6 +419,8 @@ def discover_game_slugs(get_json, max_pages: int = 80,
     """
     rows: list = []
     for p in range(max_pages):
+        if p and sleep:
+            sleep(DISCOVERY_PAGE_PAUSE_S)
         try:
             resp = get_json(f"/v1/markets?active=true&closed=false"
                             f"&limit={page}&offset={p * page}")
