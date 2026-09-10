@@ -8,3 +8,5 @@ COPY analysis/l5/l5_action_model_v2.json /app/analysis/l5/
 COPY analysis/l5/l5_fidelity_pass.json /app/analysis/l5/
 ENV PYTHONUNBUFFERED=1
 CMD ["python3", "-m", "src.pmus_sports_shadow_breadth"]
+
+# deploy trigger: build from feature/l5-transfer-backtest
