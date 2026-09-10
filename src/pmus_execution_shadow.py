@@ -190,9 +190,16 @@ def follow(prop: Mapping[str, Any], obs: Sequence[Mapping[str, Any]],
         trades = ST.infer_trades(list(obs or []))
 
         # did the market ever TOUCH the quote, whether or not it traded?
-        p["touched"] = _touched(later, side_yes, px)
+        touched_by_quote = _touched(later, side_yes, px)
 
         ev = DEC._fill_evidence(trades, t_post, side_yes, px, until)
+        # A FILL IMPLIES A TOUCH. Quotes are snapshots and trades happen
+        # between them, so a print can come through the price with no
+        # snapshot ever showing the opposite touch at it. Reading those two
+        # sources independently would let a filled proposal report
+        # touched=False, which is not a sampling nuance the summary should
+        # inherit -- a trade through the price IS the market reaching it.
+        p["touched"] = bool(touched_by_quote or ev is not None)
         if ev is None:
             # window still open -> PENDING; window closed -> a real NO_FILL
             p["status"] = PENDING if now < t_post + FOLLOW_S else NO_FILL
@@ -216,28 +223,52 @@ def follow(prop: Mapping[str, Any], obs: Sequence[Mapping[str, Any]],
         return p
 
 
+def fill_threshold(side_yes: bool, px: D) -> D:
+    """The price a trade must reach to fill this order, defined EXACTLY as
+    pmus_sports_l5_decision._fill_evidence defines it:
+
+        thresh = px          if side_yes   (a SELL at or below it fills us)
+        thresh = ONE - px    otherwise     (a BUY at or above it fills us)
+
+    Derived in one place because the first draft got it wrong in two: the
+    touch check read the BID and required it to RISE to px, when a resting
+    YES buy is reached by the ASK DESCENDING to px -- the opposite side and
+    the opposite inequality. It returned True on 10 of 10 live proposals
+    whose traded-through volume was 0.0, and "the market reached our price
+    and declined to trade" is a completely different conclusion from "the
+    market never came near it". Volume attribution had the matching error,
+    using px instead of ONE - px on the NO side.
+    """
+    return px if side_yes else (DEC.ONE - px)
+
+
 def _touched(later, side_yes: bool, px: D) -> bool:
-    """Did the opposite touch reach the resting price at any later poll?"""
+    """Did the OPPOSITE touch reach the price a fill would have to come from?"""
+    thresh = fill_threshold(side_yes, px)
     for o in later:
-        q = o.get("bid") if side_yes else o.get("ask")
+        # a YES buy is reached by the ask coming down; a NO buy (a YES sell
+        # at ONE-px) is reached by the bid coming up.
+        q = o.get("ask") if side_yes else o.get("bid")
         if q is None:
             continue
-        if side_yes and D(str(q)) >= px:
+        if side_yes and D(str(q)) <= thresh:
             return True
-        if not side_yes and D(str(q)) <= px:
+        if not side_yes and D(str(q)) >= thresh:
             return True
     return False
 
 
 def _volume_through(trades, t0: float, t1: float, side_yes: bool, px: D) -> float:
+    """Volume that printed through the SAME threshold the fill rule uses."""
+    thresh = fill_threshold(side_yes, px)
     total = 0.0
     for t in trades:
         tt = t.get("t")
         if tt is None or tt <= t0 or tt > t1:
             continue
-        if side_yes and t["dir_inferred"] == "sell" and t["px"] <= px:
+        if side_yes and t["dir_inferred"] == "sell" and t["px"] <= thresh:
             total += float(t.get("vol") or 0)
-        elif not side_yes and t["dir_inferred"] == "buy" and t["px"] >= px:
+        elif not side_yes and t["dir_inferred"] == "buy" and t["px"] >= thresh:
             total += float(t.get("vol") or 0)
     return round(total, 2)
 

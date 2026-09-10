@@ -102,8 +102,9 @@ def test_touched_is_recorded_even_when_nothing_traded():
     """A market that reached the quote and did not trade is a different fact
     from one that never came near it."""
     p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+    # ask descends to 0.55 <= our 0.59 buy, and NOTHING trades
     obs = _rows(T0, [(0, 0.35, 0.60, 100.0, 0.40),
-                     (60, 0.62, 0.65, 100.0, 0.40)])   # bid above px, no volume
+                     (60, 0.50, 0.55, 100.0, 0.40)])
     out = EX.follow(p, obs, now=T0 + 400)
     assert out["status"] == EX.NO_FILL
     assert out["touched"] is True
@@ -335,3 +336,59 @@ def test_a_market_that_closed_its_order_can_open_a_new_one(tmp_path):
         t.proposals[pid]["status"] = EX.NO_FILL
     assert t.record("s", PLAN, T0 + 400, None, -2, D("0.39")) is not None
     assert len(t.proposals) == 2
+
+
+# ---- touch and volume must agree with the fill rule -----------------------
+
+def test_the_threshold_is_the_fill_rules_own():
+    from src import pmus_sports_l5_decision as DEC2
+    assert EX.fill_threshold(True, D("0.59")) == D("0.59")
+    assert EX.fill_threshold(False, D("0.59")) == DEC2.ONE - D("0.59")
+
+
+def test_a_yes_buy_is_touched_by_the_ask_coming_down_not_the_bid_going_up():
+    """REGRESSION. The first draft read the BID and required it to RISE to
+    px. A resting YES buy is reached by the ASK DESCENDING. It reported
+    touched=True on 10 of 10 live proposals whose traded-through volume was
+    0.0 -- and 'the market reached our price and declined to trade' is a
+    completely different conclusion from 'the market never came near it'."""
+    px = D("0.59")
+    far = _rows(T0, [(0, 0.90, 0.95, 1.0, 0.92)])      # bid 0.90 >= 0.59
+    assert EX._touched(far, True, px) is False, (
+        "a high bid does not touch a resting YES buy")
+    near = _rows(T0, [(0, 0.50, 0.55, 1.0, 0.52)])     # ask 0.55 <= 0.59
+    assert EX._touched(near, True, px) is True
+
+
+def test_a_no_buy_is_touched_by_the_bid_coming_up():
+    px = D("0.59")                       # NO at 0.59 == YES sell at 0.41
+    near = _rows(T0, [(0, 0.45, 0.50, 1.0, 0.47)])     # bid 0.45 >= 0.41
+    assert EX._touched(near, False, px) is True
+    far = _rows(T0, [(0, 0.20, 0.25, 1.0, 0.22)])      # bid 0.20 < 0.41
+    assert EX._touched(far, False, px) is False
+
+
+def test_a_fill_always_implies_a_touch_even_between_snapshots():
+    """Quotes are snapshots and trades happen between them, so a print can
+    come through the price with no snapshot ever showing the touch. A filled
+    proposal must never report touched=False."""
+    obs = _rows(T0, [(0, 0.35, 0.60, 100.0, 0.40),
+                     (60, 0.55, 0.60, 140.0, 0.55)])   # ask 0.60 > 0.59
+    assert EX._touched(obs, True, D("0.59")) is False   # no snapshot touch
+    p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+    out = EX.follow(p, obs, now=T0 + 400)
+    assert out["status"] == EX.VIRTUAL_MATCHED
+    assert out["touched"] is True
+
+
+def test_no_side_volume_uses_one_minus_px():
+    """Volume attribution had the matching error, using px instead of
+    ONE - px on the NO side."""
+    trades = [{"t": T0 + 10, "px": D("0.45"), "vol": 5.0,
+               "dir_inferred": "buy"}]
+    # NO at 0.59 -> threshold 0.41; a buy at 0.45 >= 0.41 counts
+    assert EX._volume_through(trades, T0, T0 + 300, False, D("0.59")) == 5.0
+    # the wrong rule (>= 0.59) would have counted nothing
+    trades2 = [{"t": T0 + 10, "px": D("0.70"), "vol": 5.0,
+                "dir_inferred": "buy"}]
+    assert EX._volume_through(trades2, T0, T0 + 300, False, D("0.59")) == 5.0
