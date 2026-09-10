@@ -798,11 +798,23 @@ def completion_pair_ceiling() -> D:
     COMPLETE. "Don't spend $1.24 to manufacture a $1.00 matched pair."
 
     1.00 and not 1.02/1.03: the only completion subsidy we can prove is
-    $0.42 of credited maker rebate over 119.49 contracts = $0.0035/contract,
-    with $0.00 of credited liquidity rewards. That supports ~1.003 and no
-    more, so the 1.00-1.03 rescue band is retired for want of a payer, not
-    by preference. If credited rewards later establish different economics,
-    this gets recomputed from cash -- never from assumption."""
+    $0.42 of PMUS-credited maker rebate over 119.49 contracts =
+    $0.0035/contract, with $0.00 of credited liquidity rewards. That supports
+    ~1.003 and no more, so the 1.00-1.03 rescue band is retired for want of a
+    payer, not by preference.
+
+    VENUE MATTERS AND IS NOW EXPLICIT (2026-09-10). That sample is Polymarket
+    US -- 25 rows, all on PMUS slugs, tied to the R3L/R4 PMUS rungs. It is NOT
+    Gemini, which credits a separate "Predictions maker rebate" stream against
+    GEMI-* instruments AND charges makers a fee, so its gross is not its
+    income. Calibrating a PMUS ceiling on Gemini credits, or on a pooled set,
+    would be wrong for both venues while reading as a reasonable number. See
+    analysis/l5/VENUE_INCENTIVE_RECONCILIATION.md; src/l5_venue_credits.py
+    refuses a coefficient across venues.
+
+    If credited rewards later establish different economics, this gets
+    recomputed from cash -- never from assumption, and never from a venue's
+    published example table."""
     return COMPLETION_PAIR_CEILING
 
 

@@ -7,7 +7,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0100",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9XPCSEJQDQ"
   },
   {
    "id": "CB9X0W1CPQDQ",
@@ -16,7 +19,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0100",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9X0W1CPQDQ"
   },
   {
    "id": "CB9WQKWDWQDQ",
@@ -25,7 +31,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0100",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9WQKWDWQDQ"
   },
   {
    "id": "CB9PARVBGQDQ",
@@ -34,7 +43,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0100",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9PARVBGQDQ"
   },
   {
    "id": "CB9P0RKPRQDQ",
@@ -43,7 +55,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0100",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9P0RKPRQDQ"
   },
   {
    "id": "CB9NGEZ8RQDQ",
@@ -52,7 +67,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9NGEZ8RQDQ"
   },
   {
    "id": "CB9NEF96RQDQ",
@@ -61,7 +79,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9NEF96RQDQ"
   },
   {
    "id": "CB9JA91JAQDQ",
@@ -70,7 +91,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0100",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9JA91JAQDQ"
   },
   {
    "id": "CB9H4G140QDQ",
@@ -79,7 +103,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9H4G140QDQ"
   },
   {
    "id": "CB9GV821TQDQ",
@@ -88,7 +115,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9GV821TQDQ"
   },
   {
    "id": "CB9G7F8BWQDQ",
@@ -97,7 +127,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9G7F8BWQDQ"
   },
   {
    "id": "CB9G5Z25WQDQ",
@@ -106,7 +139,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9G5Z25WQDQ"
   },
   {
    "id": "CB9FXVJ40QDQ",
@@ -115,7 +151,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9FXVJ40QDQ"
   },
   {
    "id": "CB9FR2PA2QDQ",
@@ -124,7 +163,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9FR2PA2QDQ"
   },
   {
    "id": "CB9F5ESXGQDQ",
@@ -133,7 +175,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9F5ESXGQDQ"
   },
   {
    "id": "CB9F2SKD0QDQ",
@@ -142,7 +187,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB9F2SKD0QDQ"
   },
   {
    "id": "CB95VJX54QDQ",
@@ -151,7 +199,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CB95VJX54QDQ"
   },
   {
    "id": "CBFJTHFQAQDQ",
@@ -160,7 +211,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0100",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CBFJTHFQAQDQ"
   },
   {
    "id": "CBF0Z3D0MQDQ",
@@ -169,7 +223,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0100",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CBF0Z3D0MQDQ"
   },
   {
    "id": "CBF04N2SPQDQ",
@@ -178,7 +235,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CBF04N2SPQDQ"
   },
   {
    "id": "CBEZJSPYPQDQ",
@@ -187,7 +247,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CBEZJSPYPQDQ"
   },
   {
    "id": "CBG2KBE5WQDQ",
@@ -196,7 +259,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CBG2KBE5WQDQ"
   },
   {
    "id": "CBFY2ZTCCQDQ",
@@ -205,7 +271,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CBFY2ZTCCQDQ"
   },
   {
    "id": "CBFTQXA8TQDQ",
@@ -214,7 +283,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CBFTQXA8TQDQ"
   },
   {
    "id": "CBFT62W06QDQ",
@@ -223,7 +295,10 @@
    "our_side": "passiveExecution",
    "our_commission": "-0.0200",
    "credited_to_us": true,
-   "at_or_above_floor": true
+   "at_or_above_floor": true,
+   "venue": "polymarket_us",
+   "venue_evidence": "PMUS market slug + R3L/R4 spring-probe rung",
+   "raw_source_id": "CBFT62W06QDQ"
   }
  ],
  "by_market": {
@@ -264,5 +339,13 @@
   "2026-09-07T08:06:04.657687296Z",
   "2026-09-07T09:01:44.373547378Z",
   "2026-09-07T10:01:46.691111173Z"
- ]
+ ],
+ "schema": {
+  "venue_required": true,
+  "venues": [
+   "polymarket_us",
+   "gemini"
+  ],
+  "note": "venue was ADDED 2026-09-10 after a near-miss re-attribution. Classification evidence: all 25 rows carry PMUS slugs (aec-/asc-/tsc-) and the study's r3l_reference ties them to the R3L/R4 PMUS ladder rungs. No row mentions GEMI/gemini. Original ids preserved verbatim in raw_source_id."
+ }
 }

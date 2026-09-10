@@ -48,8 +48,9 @@ the touch **only inside** this ceiling; when the touch leaves it, we stop
 following and the residual is held to settlement.
 
 **What PAIR_CEILING should be, from credited cents and nothing else.** Total
-maker rebate credited to date: **$0.42 over 119.49 contracts = $0.0035 per
-contract**, ~0.8% of filled dollars, validated print-by-print against 25 credits
+maker rebate credited to date **on Polymarket US** (25 rows, all PMUS
+slugs, R3L/R4 rungs; venue now a required field): **$0.42 over 119.49
+contracts = $0.0035 per contract**, ~0.8% of filled dollars, validated print-by-print against 25 credits
 and 6 zeros. PMUS liquidity-program rewards credited: **$0.00**. So the
 economically defensible ceiling is
 
