@@ -447,3 +447,69 @@ def test_an_unwritable_state_path_does_not_stop_the_loop(monkeypatch):
                           state_path="/proc/cannot/write/here.json")
     rep = sb.report([], watched=0, eligible=0)
     assert rep["cycle"] == 1
+
+
+# ---- spread and movement: the two funnel predictors that read as null -----
+
+def _book_obs(poll_t, bid, ask):
+    return {"t": SB._utc(poll_t), "_poll_t": poll_t, "bid": bid, "ask": ask,
+            "shares_traded_cum": 0.0, "notional_traded_cum": 0.0,
+            "last_trade_px": None, "state": "MARKET_STATE_OPEN"}
+
+
+def test_scored_row_emits_a_real_spread():
+    """`spread` was read by the cycle report and set by nobody, so it was
+    None on every row ever emitted -- a predictor the funnel must test,
+    silently absent for the life of the service."""
+    row = SB.scored_row("s", None, _book_obs(100.0, 0.40, 0.45), {}, 1.0)
+    assert row["spread"] == pytest.approx(0.05)
+    # and it agrees with the pair identity: pair_cost = 1 - spread
+    assert row["maker_pair_cost"] == pytest.approx(1.0 - row["spread"])
+
+
+def test_spread_is_none_only_when_the_book_is_one_sided():
+    assert SB.scored_row("s", None, _book_obs(100.0, None, 0.45), {}, 1.0)["spread"] is None
+    assert SB.scored_row("s", None, _book_obs(100.0, 0.40, None), {}, 1.0)["spread"] is None
+
+
+def test_shape_window_is_fixed_not_the_whole_deque():
+    """The shape ran over the entire 3h deque while being reported as
+    `mid_stdev_1h`. Two markets watched for different lengths of time were
+    compared on different windows, which makes the ranking meaningless."""
+    now = 10_000.0
+    obs = [_book_obs(now - 7200.0, 0.10, 0.11),   # 2h old: outside a 1h window
+           _book_obs(now - 100.0, 0.40, 0.45),
+           _book_obs(now - 50.0, 0.41, 0.46)]
+    win = SB.shape_window(obs, now, window_s=3600.0)
+    assert len(win) == 2
+    assert all(now - o["_poll_t"] <= 3600.0 for o in win)
+
+
+def test_shape_window_drops_undated_rows_rather_than_assuming_recent():
+    now = 10_000.0
+    stale = {"bid": 0.4, "ask": 0.45}          # no _poll_t at all
+    assert SB.shape_window([stale], now, window_s=3600.0) == []
+
+
+def test_scored_row_reports_the_window_beside_the_statistic():
+    """A short window must be visible, not read as a calm market."""
+    row = SB.scored_row("s", None, _book_obs(100.0, 0.40, 0.45),
+                        {"mid_stdev": 0.0, "span_s": 12.0, "points": 2,
+                         "median_spread": 0.05}, 1.0)
+    assert row["mid_stdev"] == 0.0
+    assert row["shape_span_s"] == 12.0
+    assert row["shape_points"] == 2
+    assert row["median_spread"] == pytest.approx(0.05)
+    assert row["shape_window_s"] == SB.SHAPE_WINDOW_S
+    # the misleading name must not come back
+    assert "mid_stdev_1h" not in row
+
+
+def test_cycle_row_no_longer_advertises_an_hour_it_does_not_measure():
+    """The name may survive in a comment explaining the fix; it must not
+    survive as a field anyone reads or emits."""
+    src = open("src/pmus_sports_shadow_breadth.py").read()
+    code = "\n".join(ln for ln in src.splitlines()
+                     if not ln.lstrip().startswith("#"))
+    assert '"mid_stdev_1h"' not in code
+    assert "mid_stdev_1h=" not in code

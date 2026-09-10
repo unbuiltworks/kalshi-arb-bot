@@ -64,6 +64,16 @@ OBS_KEEP = int(os.getenv("PMUS_SHADOW_OBS_KEEP", "240"))
 # going quiet, and gating on it would have thrown away most of the
 # universe every cycle.
 FLOW_WINDOW_S = float(os.getenv("PMUS_SHADOW_FLOW_WINDOW_S", "300"))
+# The movement/band shape is computed over a FIXED trailing window so it
+# means the same thing in every market. It previously ran over the WHOLE
+# observation deque (OBS_KEEP=240 at CYCLE_S=45 -> up to 3h) while being
+# emitted as `mid_stdev_1h`, so the figure was neither an hour nor a
+# constant: a market watched since boot and one added ten minutes ago were
+# compared on windows of wildly different length, and every redeploy reset
+# every window to ~0. Movement is one of the three predictors the funnel
+# has to test, and a predictor measured over a variable window cannot be
+# ranked against itself.
+SHAPE_WINDOW_S = float(os.getenv("PMUS_SHADOW_SHAPE_WINDOW_S", "3600"))
 # Rank tiers stamped AT SELECTION. Compared against each other later.
 TIERS = ((0, 8, "T1_top8"), (8, 16, "T2_9_16"), (16, 32, "T3_17_32"))
 
@@ -141,6 +151,25 @@ def flow_over_window(obs: Sequence[Mapping[str, Any]],
          "transact_time": inside[-1].get("transact_time")})
 
 
+def shape_window(obs: Sequence[Mapping[str, Any]], now: float,
+                 window_s: float = SHAPE_WINDOW_S) -> list:
+    """Two-sided observations inside the trailing shape window, oldest first.
+
+    Rows without a parseable timestamp are DROPPED rather than assumed
+    recent: an undated observation admitted into a trailing window silently
+    widens it, which is the defect this function exists to remove.
+    """
+    out = []
+    for o in obs or []:
+        if o.get("bid") is None or o.get("ask") is None:
+            continue
+        ts = _num(o.get("_poll_t"))
+        if ts is None or (now - ts) > window_s:
+            continue
+        out.append(o)
+    return out
+
+
 def scored_row(slug: str, prev: Optional[Mapping[str, Any]],
                cur: Mapping[str, Any],
                history_shape: Optional[Mapping[str, Any]] = None,
@@ -160,7 +189,22 @@ def scored_row(slug: str, prev: Optional[Mapping[str, Any]],
             {"notional_traded": cur.get("notional_traded_cum"),
              "transact_time": cur.get("transact_time")}) if prev else None),
         "in_band_fraction": shape.get("in_band_fraction"),
-        "mid_stdev_1h": shape.get("mid_stdev"),
+        # SPREAD WAS NULL ON EVERY ROW EVER EMITTED. The cycle report read
+        # r["spread"], and nothing in scored_row ever set that key, so a
+        # field the funnel is required to test as a predictor was silently
+        # None for the life of the service -- while hour_shape was already
+        # computing median_spread and discarding it. The live spread is also
+        # exactly recoverable: maker_pair_cost = bid + (1-ask) = 1 - spread.
+        "spread": (None if cur.get("bid") is None or cur.get("ask") is None
+                   else _num(cur.get("ask")) - _num(cur.get("bid"))),
+        "median_spread": shape.get("median_spread"),
+        "mid_stdev": shape.get("mid_stdev"),
+        "mid_range": shape.get("mid_range"),
+        # The window is reported next to the statistic so a short one is
+        # visible instead of reading as a calm market.
+        "shape_window_s": SHAPE_WINDOW_S,
+        "shape_span_s": shape.get("span_s"),
+        "shape_points": shape.get("points"),
     }
 
 
@@ -362,10 +406,13 @@ class ShadowBreadth:
             cur = dq[-1]
             prev = dq[-2] if len(dq) > 1 else None
             flow = flow_over_window(list(dq), self._now())
-            shape = rank_mod.hour_shape(
+            win = shape_window(list(dq), self._now())
+            shape = dict(rank_mod.hour_shape(
                 [{"longPrice": o["ask"], "shortPrice": 1.0 - o["bid"]}
-                 for o in dq if o.get("bid") is not None
-                 and o.get("ask") is not None])
+                 for o in win]))
+            spans = [_num(o.get("_poll_t")) for o in win]
+            spans = [t for t in spans if t is not None]
+            shape["span_s"] = (max(spans) - min(spans)) if len(spans) > 1 else 0.0
             rows.append(scored_row(slug, prev, cur, shape, flow))
         return rows
 
@@ -520,7 +567,10 @@ def run(cycles: Optional[int] = None) -> int:
                            "flow_usd_per_min": r["flow_usd_per_min"],
                            "maker_pair_cost": r["maker_pair_cost"],
                            "spread": r.get("spread"),
-                           "mid_stdev_1h": r.get("mid_stdev_1h"),
+                           "median_spread": r.get("median_spread"),
+                           "mid_stdev": r.get("mid_stdev"),
+                           "mid_range": r.get("mid_range"),
+                           "shape_span_s": r.get("shape_span_s"),
                            "bid_qty": r.get("bid_qty"),
                            "ask_qty": r.get("ask_qty")}
                           for r in ranked[:5]]
