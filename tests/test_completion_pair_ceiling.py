@@ -90,3 +90,15 @@ def test_no_input_can_produce_a_pair_above_the_ceiling(avg, touch):
     px, info = _px(avg, touch)
     if px is not None:
         assert D(avg) + px <= ses.completion_pair_ceiling(), info
+
+
+def test_the_boot_row_proves_the_ceiling_like_it_proves_the_flag():
+    """The rung prints pair_cost_max 0.98 from the LADDER, which is not the
+    rule that binds. A preflight that reads only that row would confirm the
+    wrong number -- the same gap that made complete_requote unprovable."""
+    from src import pmus_l5_continuous_session as cont
+    src = open(cont.__file__).read()
+    i = src.index('_log("campaign_start"')
+    row = src[i:src.index("rung=report", i)]
+    assert "completion_pair_ceiling=str(base.completion_pair_ceiling())" in row
+    assert "combined_loss_budget_usd=str(base.daily_loss_stop())" in row

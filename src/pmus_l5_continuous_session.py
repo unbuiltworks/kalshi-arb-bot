@@ -2071,6 +2071,12 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
          per_market_cap=str(base.SESSION_NOTIONAL_CAP),
          complete_requote=base.complete_requote_enabled(),
          requote_relations=list(base.requote_relations()),
+         # OWNER 2026-09-10: the economic envelope must be provable from the
+         # boot row like the flag is. rung.pair_cost_max is the LADDER's value
+         # (0.98) and is NOT the rule that now binds; these two are.
+         completion_pair_ceiling=str(base.completion_pair_ceiling()),
+         matched_pair_ceiling=str(base.completion_pair_ceiling()),
+         combined_loss_budget_usd=str(base.daily_loss_stop()),
          rung=report["rung"])
     _log("ramp_ladder", active=active_rung["id"],
          rungs=[{"id": r["id"], "lever": r["lever"],
