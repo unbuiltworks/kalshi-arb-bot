@@ -831,6 +831,21 @@ def maker_rest_max_s() -> float:
     return SPORTS_MAKER_REST_MAX_S
 
 
+def held_slugs_now() -> list:
+    """Markets this ledger has filled into that carry no settled row yet.
+
+    The floor sums over THIS set, which is what makes the no-double-counting
+    transition structural: once a market settles it leaves here and its
+    result enters realized_today().
+
+    Imported lazily from the continuous layer -- that module imports THIS one
+    as `base`, so a module-level import would be circular. A local import
+    keeps the single implementation rather than forking a second copy of the
+    ledger scan that could drift from it."""
+    from src import pmus_l5_continuous_session as cont
+    return list(cont.unsettled_slugs())
+
+
 def guaranteed_settlement_floor(inv: "Inventory") -> D:
     """min(up, dn) - total cash paid: what this market settles to in its
     WORST branch. Exactly one side pays $1.00 per contract, so the poorer
@@ -1507,6 +1522,8 @@ def divergence_reason(refusal: Optional[str], v2_relation: str,
 DIVERGENCE_CLASSES = {
     "safety_adaptation:residual_cap": "safety-cap override",
     "safety_adaptation:unmatched_usd_cap": "safety-cap override (R4 dollar residual cap)",
+    "safety_adaptation:combined_loss_stop":
+        "safety-cap override (combined settled + unsettled loss budget)",
     "safety_adaptation:spend_cap": "safety-cap override",
     "policy_flag:cap_fallback_complete": "safety-cap override (L5-consistent fallback)",
     "safety_adaptation:off_distribution_hold": "genuinely off-distribution state",
@@ -1950,6 +1967,31 @@ def _run_session_body(t: Optional[Transport] = None,
         return {**report, "status": "DAILY_LOSS_STOP",
                 "daily_loss_stop_usd": str(daily_loss_stop()),
                 "realized_today_usd": str(q1.realized_today())}
+    # OWNER 2026-09-10: ONE budget for settled losses AND guaranteed-but-
+    # unsettled ones. The realized-only stop above could not see the MIL -2.5
+    # position at all -- its worst branch was already -5.53 and its BEST was
+    # -1.25, with nothing settled.
+    #
+    # Tripping is NOT abandonment. It switches the lane to RISK-REDUCTION-ONLY:
+    #   combined >  budget -> normal bounded L5 behaviour
+    #   combined <= budget -> no new OPEN/EXTEND; COMPLETE only where
+    #                         reduces_risk_only() holds AND the <=1.00 pair
+    #                         ceiling is satisfied; otherwise hold to
+    #                         settlement.
+    # No emergency taker flattening, no above-par rescue, no cap increase.
+    _held_invs = [held_inventory_from_ledger(sl) for sl in held_slugs_now()]
+    _combined = combined_loss(q1.realized_today(), _held_invs)
+    risk_reduction_only = combined_budget_tripped(q1.realized_today(),
+                                                  _held_invs)
+    report["combined_loss_usd"] = str(_combined)
+    report["combined_loss_budget_usd"] = str(daily_loss_stop())
+    report["risk_reduction_only"] = bool(risk_reduction_only)
+    if risk_reduction_only and not _held_invs:
+        # nothing held: there is no risk-reducing action available, so the
+        # only correct behaviour is to stop rather than open anything
+        return {**report, "status": "COMBINED_LOSS_STOP",
+                "reason": "combined budget tripped with no held inventory",
+                "combined_loss_usd": str(_combined)}
 
     t = t or Transport()
     if deadline_s is None:
@@ -2796,6 +2838,23 @@ def _run_session_body(t: Optional[Transport] = None,
                         f":extension_is_completion_only_not_{relation}")
                 break
             if relation == "hold":
+                sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
+                actions += 1
+                continue
+
+            if relation in ("open", "extend") and risk_reduction_only:
+                # OWNER 2026-09-10: the combined budget is tripped. No NEW
+                # exposure -- not an OPEN, not an EXTEND -- but the position is
+                # NOT abandoned: a COMPLETE that satisfies reduces_risk_only()
+                # and the <=1.00 ceiling still runs below. If neither is
+                # available the residual is held to settlement. There is no
+                # emergency taker flattening and no above-par rescue.
+                mark_noop(dec, f"combined_loss_stop:{_combined}<={daily_loss_stop()}",
+                          divergence_class("safety_adaptation:combined_loss_stop"))
+                dec["cap_binding"] = list(dec.get("cap_binding", [])) + \
+                    ["combined_loss_stop"]
+                dec["combined_loss_usd"] = str(_combined)
+                dec["risk_reduction_only"] = True
                 sleep(max(prop["next_reevaluation_s"], MIN_REEVAL_S))
                 actions += 1
                 continue

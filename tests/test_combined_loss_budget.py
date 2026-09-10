@@ -129,3 +129,52 @@ def test_the_live_pair_that_caused_this_would_not_have_been_permitted():
     the size that actually filled once parity is passed."""
     inv = _inv("20.34", "16.06", "7.3464", "14.2475")
     assert ses.reduces_risk_only(inv, False, D("0.880"), D("20")) is False
+
+
+# ===================== the gate, tied to the trade we actually paid for =====
+# OWNER 2026-09-10: "prove that a COMPLETE at the old 0.880 against 0.3612
+# first-leg economics is rejected, while a sufficiently cheap COMPLETE is
+# allowed." Real numbers, not synthetic fixtures.
+
+MIL_FIRST_LEG_AVG = D("0.3611823992133726647000983284")
+
+
+@pytest.fixture
+def l5_touch(monkeypatch):
+    """These assert the R5F touch-pricing path specifically; without the
+    regime set they silently take the fee_safe branch and test nothing."""
+    monkeypatch.setattr(ses, "complement_pricing", lambda: "l5_touch")
+
+
+def test_the_0880_complete_we_paid_for_is_now_refused_by_price(l5_touch):
+    """The order that removed our winning branch. 0.3612 + 0.880 = 1.2412."""
+    px, info = ses.spring_complement_price(
+        MIL_FIRST_LEG_AVG, D("0.999"), D("0.005"), touch=D("0.880"))
+    assert px is not None and px < D("0.880")
+    assert MIL_FIRST_LEG_AVG + px <= D("1.00")
+    assert info["capped_by_pair_ceiling"] is True
+    # and the pair it WOULD have made is still recorded, so the refusal is
+    # attributable rather than silent
+    assert info["pair_at_touch"].startswith("1.24")
+
+
+def test_a_cheap_enough_complete_on_the_same_position_is_allowed(l5_touch):
+    """Not a blanket ban on completing -- the economics decide."""
+    px, info = ses.spring_complement_price(
+        MIL_FIRST_LEG_AVG, D("0.999"), D("0.005"), touch=D("0.55"))
+    assert px == D("0.55"), "below the ceiling the touch is followed unchanged"
+    assert info["capped_by_pair_ceiling"] is False
+    assert MIL_FIRST_LEG_AVG + px < D("1.00")
+
+
+def test_both_rules_agree_on_the_live_position_price_and_floor(l5_touch):
+    """The two gates reinforce rather than fight: the 0.880 fill is refused on
+    price, and at the size that filled it also fails the floor test."""
+    inv = _inv("20.34", "12.43", "7.3464", "11.0511")     # state BEFORE the fill
+    # cheap completion: raises the floor AND is inside the ceiling
+    assert ses.reduces_risk_only(inv, False, D("0.55"), D("3.63")) is True
+    # the 0.880 chase: still floor-raising at that size (it was a hedge), but
+    # the PRICE gate refuses it -- which is exactly why we needed both
+    px, _ = ses.spring_complement_price(
+        MIL_FIRST_LEG_AVG, D("0.999"), D("0.005"), touch=D("0.880"))
+    assert px < D("0.880")

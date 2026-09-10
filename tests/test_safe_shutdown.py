@@ -216,3 +216,71 @@ def test_the_idle_call_sits_between_the_report_and_the_return():
     i_idle = src.index("shutdown_idle(")
     i_ret = src.index("'SHUTDOWN'")
     assert i_log < i_idle < i_ret
+
+
+# ============ the dangerous case, made literal (OWNER 2026-09-10) ============
+# NOT_VERIFIED means an order MAY still be resting. That is precisely when the
+# process must not die: a dead container is "repaired" by rolling back to the
+# previous deployment, which may be an ARMED one.
+
+def test_not_verified_stays_alive_inert_and_keeps_saying_so(monkeypatch, capsys):
+    monkeypatch.setenv(cont.SHUTDOWN_ENV, "1")
+    monkeypatch.setattr(cont, "safe_shutdown", lambda t=None: {
+        "verdict": "SHUTDOWN_NOT_VERIFIED", "reason": "ours_still_open",
+        "still_open_ours": [{"order_id": "o1", "slug": "m1"}],
+        "held_preserved": ["m1"]})
+
+    def _must_not_run(*a, **k):
+        raise AssertionError("a session ran while shut down")
+    monkeypatch.setattr(cont.base, "run_session", _must_not_run)
+    monkeypatch.setattr(cont.base, "armed",
+                        lambda: (_ for _ in ()).throw(
+                            AssertionError("armed() consulted while shut down")))
+
+    s, calls = _sleep_n(4)
+    with pytest.raises(_Stop):
+        cont.run_campaign(t=object(), campaign_s=0.0, sleep=s)
+
+    assert calls["n"] == 4, "must keep idling, not exit after reporting"
+    out = capsys.readouterr().out
+    # _log emits COMPACT json (no space after the colon); asserting the
+    # pretty form silently matched nothing and the test failed for the
+    # wrong reason
+    assert out.count('"kind":"shutdown_idle"') >= 3, \
+        "the heartbeat must keep identifying the shutdown state"
+    assert "SHUTDOWN_NOT_VERIFIED" in out
+
+
+def test_no_order_submission_function_is_reachable_from_the_shutdown_path():
+    """Reachability, not intention. Walk every function the shutdown branch
+    can call and assert none of them submits."""
+    import ast
+    tree = ast.parse(open(cont.__file__).read())
+    fns = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+    reachable, frontier = set(), ["safe_shutdown", "shutdown_idle"]
+    while frontier:
+        name = frontier.pop()
+        if name in reachable or name not in fns:
+            continue
+        reachable.add(name)
+        for call in ast.walk(fns[name]):
+            if isinstance(call, ast.Call):
+                f = call.func
+                frontier.append(f.id if isinstance(f, ast.Name)
+                                else getattr(f, "attr", ""))
+    banned = {"run_session", "place_order", "submit_order", "post_order",
+              "open_order", "extend", "complete"}
+    assert not (reachable & banned), reachable & banned
+    assert "sweep_orphan_orders" in reachable, "cancel must still be reachable"
+
+
+def test_a_healthy_process_cannot_be_restarted_back_into_an_armed_campaign():
+    """Belt two. run_campaign never returns, so main() never loops -- but if a
+    future refactor ever made it return, the supervisor must still refuse.
+    'The process is healthy' is not a reason to resume trading."""
+    assert cont.is_recoverable("SHUTDOWN_VERIFIED") is False
+    assert cont.is_recoverable("SHUTDOWN_NOT_VERIFIED") is False
+    for s in cont.RECOVERABLE_EXACT:
+        assert not str(s).startswith("SHUTDOWN")
+    assert not any(str(p).startswith("SHUTDOWN")
+                   for p in cont.RECOVERABLE_PREFIXES)

@@ -91,7 +91,37 @@ def test_the_loop_is_bounded_by_construction():
     """One monotonic counter against a moving limit. The first attempt used
     a second counter and a disjunctive condition and produced an UNBOUNDED
     loop -- a fixture emitted 100+ orders and the suite runtime tripled."""
-    assert len(re.findall(r"(?<![a-z_])actions \+= 1", _SRC)) == 4
+    # A hardcoded count of `actions += 1` was a PROXY for the real invariant
+    # and broke the moment a legitimate branch was added (the combined-loss
+    # stop, 2026-09-10). Assert the property instead: every `continue` inside
+    # the loop is preceded by an increment in its own statement list, so no
+    # path can spin without advancing the counter. That is what actually
+    # prevents the unbounded loop this test was written for.
+    import ast
+    tree = ast.parse(_SRC)
+    loops = [n for n in ast.walk(tree)
+             if isinstance(n, ast.While)
+             and "action_budget()" in ast.unparse(n.test)]
+    assert len(loops) == 1, "exactly one bounded action loop"
+    loop = loops[0]
+
+    def _is_inc(st):
+        return (isinstance(st, ast.AugAssign) and isinstance(st.op, ast.Add)
+                and isinstance(st.target, ast.Name)
+                and st.target.id == "actions")
+
+    def _check(stmts):
+        for i, st in enumerate(stmts):
+            if isinstance(st, ast.Continue):
+                assert any(_is_inc(prev) for prev in stmts[:i]), \
+                    f"a `continue` at line {st.lineno} can spin: no " \
+                    f"`actions += 1` before it in the same block"
+            for field in ("body", "orelse", "finalbody"):
+                inner = getattr(st, field, None)
+                if isinstance(inner, list):
+                    _check(inner)
+    _check(loop.body)
+    assert sum(1 for n in ast.walk(loop) if _is_inc(n)) >= 4
     assert "opening_actions" not in _SRC
     i = _SRC.index("def action_budget()")
     body = _SRC[i:i + 700]
