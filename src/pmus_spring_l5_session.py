@@ -793,6 +793,51 @@ def pair_cost_max() -> D:
 COMPLETION_PAIR_CEILING = D("1.00")
 
 
+def crash_fix_present() -> bool:
+    """Proof, read out of the DEPLOYED source, that 51e384fb's fix is here.
+
+    OWNER re-arm condition 1: "deployed commit provably contains the
+    51e384fb crash fix". A commit SHA cannot prove it -- every later commit
+    also "contains" it by ancestry, and the SHA in the boot row is only what
+    the builder claimed. What actually killed the campaign at 04:47:28Z was
+    a name read before it was bound, so the honest test is whether the
+    binding is in the source this process is RUNNING: the combined-loss gate
+    must assign `dec` before it annotates it.
+
+    False here means the running artifact is the crashing one, whatever the
+    deployment says. It fails closed rather than raising: the caller turns
+    it into a refusal to arm.
+
+    IT PARSES, IT DOES NOT GREP. The first version searched the file text for
+    the gate's condition -- and found THIS FUNCTION's own string literal
+    first, then found its own copies of the binding and the call in the right
+    order, and returned True. A self-check that reads its own quotes is a
+    tautology: it would have passed on the very build that died. Walking the
+    AST can only see real statements, so a literal cannot impersonate one."""
+    try:
+        import ast
+        with open(__file__) as fh:          # the artifact actually deployed
+            tree = ast.parse(fh.read())
+        want = "relation in ('open', 'extend') and risk_reduction_only"
+        gates = [n for n in ast.walk(tree)
+                 if isinstance(n, ast.If) and ast.unparse(n.test) == want]
+        if len(gates) != 1:
+            return False
+        bind = use = None
+        for idx, st in enumerate(gates[0].body):
+            if (bind is None and isinstance(st, ast.Assign)
+                    and any(isinstance(tg, ast.Name) and tg.id == "dec"
+                            for tg in st.targets)):
+                bind = idx
+            if use is None and any(
+                    isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+                    and c.func.id == "mark_noop" for c in ast.walk(st)):
+                use = idx
+        return bind is not None and use is not None and bind < use
+    except Exception:                                   # noqa: BLE001
+        return False
+
+
 def completion_pair_ceiling() -> D:
     """OWNER 2026-09-10: a HARD ceiling on the effective pair cost of a
     COMPLETE. "Don't spend $1.24 to manufacture a $1.00 matched pair."

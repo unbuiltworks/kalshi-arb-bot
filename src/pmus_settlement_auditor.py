@@ -353,6 +353,27 @@ def traded_qty_for_slug(slug: str, t: Optional[q1.Transport] = None
         return None
 
 
+def _credited_here(trades: list) -> dict:
+    """The venue's OWN credit on our side of this market's fills.
+
+    Never estimated: `credited_on_fills` sums commissionNotionalCollected on
+    whichever execution `isAggressor` says is ours. When the venue serves no
+    commission field the answer is 0.00 credited on 0 fills, which is a
+    measurement, and an unreachable helper is an ERROR, which is not."""
+    try:
+        from src import pmus_incentive_audit as incentives   # lazy: cycle
+        out = incentives.credited_on_fills(trades)
+        return {"credited_to_us_usd": out["credited_to_us_usd"],
+                "charged_to_us_usd": out["charged_to_us_usd"],
+                "net_to_us_usd": out["net_to_us_usd"],
+                "our_fills_with_a_credit": out["our_fills_with_a_credit"],
+                "source": "venue commissionNotionalCollected, our side only"}
+    except Exception as exc:                            # noqa: BLE001
+        return {"credited_to_us_usd": None, "charged_to_us_usd": None,
+                "net_to_us_usd": None, "our_fills_with_a_credit": None,
+                "source": f"UNAVAILABLE:{type(exc).__name__}"}
+
+
 def audit_market(slug: str, t: Optional[q1.Transport] = None) -> dict:
     t = t or q1.Transport()
     since = first_fill_time(slug)
@@ -383,6 +404,14 @@ def audit_market(slug: str, t: Optional[q1.Transport] = None) -> dict:
         "position_expired": bool(pos.get("expired")) if isinstance(pos, Mapping)
         and pos.get("expired") is not None else None,
         "trade_summary": trade_info,
+        # OWNER re-arm 2026-09-10: every session must preserve THREE separate
+        # economic outcomes -- matched-pair P&L | directional residual P&L |
+        # incentives/rebates. The first two are derived in
+        # settlement_breakdown; this is the third, and it is the venue's own
+        # commissionNotionalCollected on OUR side of this market's fills, not
+        # a modelled rebate. Lazily imported: pmus_incentive_audit imports
+        # this module.
+        "incentives": _credited_here(trades),
         "settled": False,
         "realized_confirmed": False,
         "realized_usd": None,

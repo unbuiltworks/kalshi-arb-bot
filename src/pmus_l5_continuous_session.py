@@ -943,6 +943,25 @@ def settlement_breakdown(slug: str, audit: Mapping[str, Any]) -> dict:
         "maker_fills": sum(1 for tr in trades if tr.get("isAggressor") is False),
         "taker_fills": sum(1 for tr in trades if tr.get("isAggressor") is True),
         "fees_usd": "venue_unreported",
+        # OWNER re-arm 2026-09-10: "every session [must] preserve three
+        # separate economic outcomes: matched-pair P&L | directional residual
+        # P&L | incentives/rebates". The first two are above and are DERIVED;
+        # this third is the venue's own credit and is never modelled. Kept
+        # separate on purpose -- summing them is what would hide whether the
+        # residual is structurally overwhelming the matched trading.
+        "incentives_usd": (audit.get("incentives") or {}).get("net_to_us_usd"),
+        "incentives": audit.get("incentives"),
+        "three_streams": {
+            "matched_pair_pnl_usd": str(matched_contrib),
+            "directional_residual_pnl_usd":
+                (str(Decimal(str(realized)) - matched_contrib)
+                 if realized is not None else None),
+            "incentives_usd": (audit.get("incentives") or {}).get("net_to_us_usd"),
+            "labels": ("kept separate, never summed into one number: the "
+                       "first is DERIVED arithmetic, the second is the "
+                       "venue's realized less that arithmetic, the third is "
+                       "the venue's own credit"),
+        },
         "labels": "DERIVED accounting from ledger fills; realized_usd_venue "
                   "is the venue's own; nothing else is realized",
     }
@@ -1146,6 +1165,137 @@ def sweep_orphan_orders(t) -> dict:
 
 
 SHUTDOWN_IDLE_S = 300.0
+
+# OWNER re-arm 2026-09-10: the nine conditions that must hold BEFORE the
+# first submission of the re-armed probe. Named here so the boot row and the
+# refusal both quote the same list.
+REARM_GATE_ENV = "PMUS_SPRING_REARM_GATE"
+
+
+def rearm_gate_enabled() -> bool:
+    """The re-arm gate ships DARK and an owner arms it, like every other
+    behavioural switch here.
+
+    IT CANNOT BE ALWAYS-ON. The nine conditions describe THIS re-arm -- R5F,
+    0.25-0.75, all three requote relations. A future campaign on another rung
+    is not wrong, and a gate that refused it would be a bug wearing a safety
+    label. Worse, an unconditional gate turned every existing armed test into
+    a process that idles forever instead of returning: the first full-suite
+    run after wiring it did not finish.
+
+    Unrecognised values leave it OFF: an arming switch must never be armed by
+    a typo."""
+    return os.getenv(REARM_GATE_ENV, "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+REARM_RUNG = "R5F"
+REARM_BAND = (base.D("0.25"), base.D("0.75"))
+REARM_REQUOTE_RELATIONS = ("open", "extend", "complete")
+REARM_PAIR_CEILING = base.D("1.00")
+REARM_REJECT_STREAK = 3
+
+
+def boot_assertions(t=None, sweep: Optional[Mapping[str, Any]] = None) -> dict:
+    """The owner's nine re-arm conditions, checked before any order.
+
+    "Clear PMUS_SPRING_SHUTDOWN and re-arm only after those boot assertions
+    pass." Each check is a fact this process can establish about ITSELF or
+    about the venue right now -- not a value copied from a deployment
+    dashboard or remembered from a previous run. Every one of them failed
+    silently at least once in this campaign's history, which is why they are
+    a gate and not a log line.
+
+    Returns {"ok": bool, "checks": [...]}. It never raises: an exception
+    inside a check is that check FAILING, because "we could not establish
+    it" and "it holds" must never collapse into the same answer."""
+    checks: list = []
+
+    def _check(name: str, fn, want=None) -> None:
+        try:
+            got = fn()
+            ok = bool(got) if want is None else (got == want)
+        except Exception as exc:                       # noqa: BLE001
+            got, ok = f"ERROR:{type(exc).__name__}", False
+        checks.append({"check": name, "ok": ok, "got": str(got),
+                       **({"want": str(want)} if want is not None else {})})
+
+    # 1. the running artifact contains the crash fix -- read from its source
+    _check("crash_fix_51e384fb", base.crash_fix_present, True)
+    # 2. fresh venue orphan sweep: zero open, and no foreign ambiguity
+    _check("orphan_sweep_clean",
+           lambda: (sweep is not None and not sweep.get("foreign")
+                    and not sweep.get("errors")
+                    and int(sweep.get("seen") or 0) == 0), True)
+    _check("no_open_orders_fresh_read",
+           lambda: _fresh_open_orders(t), {"ours": 0, "foreign": 0})
+    # 3. flat: nothing held at the venue
+    _check("flat_held_state", lambda: held_markets(t), [])
+    # 4. the combined budget is priced NOW and is strictly above the stop
+    _check("combined_loss_above_stop", lambda: _combined_now()[1], True)
+    # 5. rung and band
+    _check("rung", lambda: str(_active_rung_id()), REARM_RUNG)
+    _check("band", lambda: (base.SPRING_BAND_LO, base.SPRING_BAND_HI),
+           REARM_BAND)
+    # 6. dynamic COMPLETE armed for all three relations
+    _check("requote_relations", lambda: tuple(base.requote_relations()),
+           REARM_REQUOTE_RELATIONS)
+    # 7/8. the completion ceiling AND the whole-position invariant, both 1.00
+    _check("completion_pair_ceiling", base.completion_pair_ceiling,
+           REARM_PAIR_CEILING)
+    _check("matched_pair_invariant_enforced", _pair_invariant_enforced, True)
+    # 9. rejection / infra stops unchanged
+    _check("complete_reject_streak_max",
+           lambda: base.COMPLETE_REJECT_STREAK_MAX, REARM_REJECT_STREAK)
+    return {"ok": all(c["ok"] for c in checks), "checks": checks,
+            "labels": ("OWNER re-arm gate: every condition established by "
+                       "this process, from its own source or a fresh venue "
+                       "read; a check that cannot be established FAILS")}
+
+
+def _fresh_open_orders(t) -> dict:
+    """A fresh /v1/orders/open, split ours vs foreign -- never the sweep's
+    own return, for the same reason safe_shutdown refuses to trust it."""
+    if t is None:
+        raise RuntimeError("no_transport")
+    opened = base.q1.base._get_with_retry(t, "/v1/orders/open")
+    rows = opened.get("orders") if isinstance(opened, Mapping) else None
+    ours_slugs = ledger_slugs()
+    ours = foreign = 0
+    for o in rows or []:
+        if not isinstance(o, Mapping):
+            continue
+        if str(o.get("marketSlug") or "") in ours_slugs:
+            ours += 1
+        else:
+            foreign += 1
+    return {"ours": ours, "foreign": foreign}
+
+
+def _combined_now() -> tuple:
+    """(combined_loss, strictly_above_the_stop). The stop is INCLUSIVE, so
+    equality is already tripped and must not pass this gate."""
+    realized = base.q1.realized_today()
+    invs = [base.held_inventory_from_ledger(s) for s in unsettled_slugs()]
+    combined = base.combined_loss(realized, invs)
+    return combined, combined > base.daily_loss_stop()
+
+
+def _active_rung_id() -> str:
+    from src import pmus_l5_ramp_ladder as ladder
+    return str((ladder.active() or {}).get("id") or "")
+
+
+def _pair_invariant_enforced() -> bool:
+    """The whole-position ceiling is a GATE, not a helper that exists. It is
+    enforced only if the session refuses on it, so assert the refusal is
+    wired -- `pair_invariant_ok` called in the submit path, and the ceiling
+    it reads is the same 1.00."""
+    with open(base.__file__) as fh:
+        src = fh.read()
+    return ("if not pair_invariant_ok(inv, side_up, px, qty):" in src
+            and "matched_pair_ceiling" in src
+            and base.matched_pair_cost_after is not None)
 
 
 def shutdown_settle_pass(t=None) -> dict:
@@ -1815,6 +1965,26 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 # an open order this strategy did not place: not ours to
                 # cancel, and not a state to trade into -- stop, report
                 return {**report, "status": "CAMPAIGN_STOP:FOREIGN_OPEN_ORDERS"}
+            # OWNER re-arm 2026-09-10: the nine conditions, established by
+            # this process before the first submission. A failure HOLDS the
+            # container up rather than exiting -- exiting reads as a crash
+            # and the platform's repair is a rollback to the previous,
+            # possibly still-crashing, build.
+            boot = (boot_assertions(t, sweep) if rearm_gate_enabled()
+                    else {"ok": True, "checks": [],
+                          "labels": f"gate OFF ({REARM_GATE_ENV} unset)"})
+            _log("boot_assertions", **boot)
+            report["boot_assertions"] = boot
+            if not boot["ok"]:
+                failed = [c["check"] for c in boot["checks"] if not c["ok"]]
+                _log("rearm_refused", failed=failed,
+                     evidence=("a re-arm condition could not be established; "
+                               "refusing to submit and holding halted"))
+                shutdown_idle(sleep, {"verdict": "REARM_REFUSED",
+                                      "failed": failed,
+                                      "held_preserved": []}, t)
+                return {**report, "status": "CAMPAIGN_STOP:REARM_REFUSED",
+                        "failed_checks": failed}
     start = clock()
     stop_at = start + campaign_s
     cooldown: dict[str, float] = {}
