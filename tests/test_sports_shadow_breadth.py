@@ -385,3 +385,65 @@ def test_the_first_page_is_not_delayed():
     pauses = []
     SB.discover_game_slugs(lambda p: {"markets": []}, sleep=pauses.append)
     assert pauses == [], "no pause before the first request"
+
+
+# ------------------------------------------- cohort durability across restarts
+def test_cohorts_survive_a_restart(tmp_path, monkeypatch):
+    """THE REGRESSION. Cohorts lived only in memory until pushing 502fdf27 --
+    which touches pmus_sports_opportunity_rank.py, a WATCHED path for this
+    service -- redeployed it and silently reset every prospective tally. A
+    loop whose purpose is accumulating evidence across time cannot keep it
+    where a routine push erases it."""
+    from src import pmus_sports_l5_decision as dec
+    path = str(tmp_path / "cohorts.json")
+    acts = [dict(_act("open"), t=10.0, target_price="0.40")]
+    monkeypatch.setattr(dec, "decide_market", _Rec(acts))
+
+    first = SB.ShadowBreadth(get_json=lambda p: None, sleep=None,
+                             now=lambda: 1_789_000_000.0, state_path=path)
+    first.obs["m"] = __import__("collections").deque(
+        [SB.observation_row("m", _md(), 1.0)] * 2)
+    first.decide(["m"], {})
+    first.report([], watched=1, eligible=1)          # report() persists
+    assert SB.funnel(first.cohorts)["T1_top8"]["virtual_first_fills"] == 1
+
+    # a restart: brand-new object, same state file
+    second = SB.ShadowBreadth(get_json=lambda p: None, sleep=None,
+                              now=lambda: 1_789_000_000.0, state_path=path)
+    f = SB.funnel(second.cohorts)["T1_top8"]
+    assert f["virtual_first_fills"] == 1, "the tally must survive"
+    assert f["distinct_markets"] == 1
+    assert second.cycles == 1
+
+
+def test_a_restart_does_not_double_count_the_same_action(tmp_path, monkeypatch):
+    """Dedupe keys must survive too, or a restart re-counts the window."""
+    from src import pmus_sports_l5_decision as dec
+    path = str(tmp_path / "c.json")
+    acts = [dict(_act("open"), t=10.0, target_price="0.40")]
+    monkeypatch.setattr(dec, "decide_market", _Rec(acts))
+    a = SB.ShadowBreadth(get_json=lambda p: None, sleep=None,
+                         now=lambda: 1.0, state_path=path)
+    a.obs["m"] = __import__("collections").deque(
+        [SB.observation_row("m", _md(), 1.0)] * 2)
+    a.decide(["m"], {}); a.report([], 1, 1)
+    b = SB.ShadowBreadth(get_json=lambda p: None, sleep=None,
+                         now=lambda: 1.0, state_path=path)
+    b.obs["m"] = __import__("collections").deque(
+        [SB.observation_row("m", _md(), 1.0)] * 2)
+    b.decide(["m"], {})
+    assert SB.funnel(b.cohorts)["T1_top8"]["virtual_first_fills"] == 1
+
+
+def test_a_missing_state_file_starts_clean_rather_than_crashing(tmp_path):
+    sb = SB.ShadowBreadth(get_json=lambda p: None, sleep=None,
+                          state_path=str(tmp_path / "nope" / "x.json"))
+    assert sb.cohorts == {} and sb.cycles == 0
+
+
+def test_an_unwritable_state_path_does_not_stop_the_loop(monkeypatch):
+    """Observing matters more than persisting; a failed write is not fatal."""
+    sb = SB.ShadowBreadth(get_json=lambda p: None, sleep=None,
+                          state_path="/proc/cannot/write/here.json")
+    rep = sb.report([], watched=0, eligible=0)
+    assert rep["cycle"] == 1

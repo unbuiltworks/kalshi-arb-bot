@@ -257,8 +257,12 @@ def funnel(cohorts: Mapping[str, Mapping[str, Any]]) -> dict:
 class ShadowBreadth:
     """One cycle = discover -> rank -> poll -> N virtual L5s -> funnel."""
 
+    STATE_PATH = os.getenv("PMUS_SHADOW_STATE",
+                           "/data/pmus_shadow/cohorts.json")
+
     def __init__(self, get_json=None, sleep=time.sleep,
-                 slots: int = WATCH_SLOTS, now=time.time):
+                 slots: int = WATCH_SLOTS, now=time.time,
+                 state_path: Optional[str] = None):
         self._get = get_json or self._http
         self._sleep = sleep
         self._slots = slots
@@ -274,6 +278,54 @@ class ShadowBreadth:
         # error as counting a population twice, and just as invisible.
         self._counted: set = set()
         self.cycles = 0
+        self._state_path = state_path or self.STATE_PATH
+        self._load_state()
+
+    # ---- durability -----------------------------------------------------
+    # Cohorts lived ONLY in memory until 2026-09-10T21:32Z, when pushing
+    # 502fdf27 -- which touches pmus_sports_opportunity_rank.py, a WATCHED
+    # path for this service -- redeployed it and silently reset every
+    # prospective tally. A loop whose entire purpose is accumulating
+    # evidence across time cannot keep that evidence somewhere a routine
+    # push erases. (The commit message for 502fdf27 also claimed nothing
+    # restarted; that was wrong, and this is the fix rather than the
+    # apology.)
+    def _load_state(self) -> None:
+        try:
+            with open(self._state_path) as fh:
+                doc = json.load(fh)
+        except Exception:                                       # noqa: BLE001
+            return
+        for tier, c in (doc.get("cohorts") or {}).items():
+            c = dict(c)
+            for k in ("markets", "residual_opening_markets",
+                      "completing_markets"):
+                if k in c:
+                    c[k] = set(c[k])
+            self.cohorts[tier] = c
+        self._counted = {tuple(k) for k in (doc.get("counted") or [])}
+        self.cycles = int(doc.get("cycles") or 0)
+
+    def _save_state(self) -> None:
+        """Best effort: a failed write must not stop the loop observing."""
+        try:
+            os.makedirs(os.path.dirname(self._state_path), exist_ok=True)
+            out = {"cycles": self.cycles,
+                   "counted": [list(k) for k in self._counted],
+                   "cohorts": {}}
+            for tier, c in self.cohorts.items():
+                d = dict(c)
+                for k in ("markets", "residual_opening_markets",
+                          "completing_markets"):
+                    if k in d:
+                        d[k] = sorted(d[k])
+                out["cohorts"][tier] = d
+            tmp = self._state_path + ".tmp"
+            with open(tmp, "w") as fh:
+                json.dump(out, fh)
+            os.replace(tmp, self._state_path)
+        except Exception:                                       # noqa: BLE001
+            pass
 
     @staticmethod
     def _http(path: str) -> dict:
@@ -387,6 +439,7 @@ class ShadowBreadth:
     def report(self, decisions: Sequence[Mapping[str, Any]],
                watched: int, eligible: int) -> dict:
         self.cycles += 1
+        self._save_state()
         return {
             "kind": "shadow_breadth_cycle", "cycle": self.cycles,
             "at": _utc(self._now()),
@@ -465,8 +518,17 @@ def run(cycles: Optional[int] = None) -> int:
             rep = sb.report(decisions, watched=polled, eligible=len(ranked))
             rep["top"] = [{"slug": r["slug"],
                            "flow_usd_per_min": r["flow_usd_per_min"],
-                           "maker_pair_cost": r["maker_pair_cost"]}
+                           "maker_pair_cost": r["maker_pair_cost"],
+                           "spread": r.get("spread"),
+                           "mid_stdev_1h": r.get("mid_stdev_1h"),
+                           "bid_qty": r.get("bid_qty"),
+                           "ask_qty": r.get("ask_qty")}
                           for r in ranked[:5]]
+            # per-market rows for cohort analysis: aggregate tallies cannot
+            # answer time-to-completion or pair-cost-at-completion
+            rep["markets"] = [d for d in decisions
+                              if d.get("new_this_cycle", {}).get(
+                                  "actions_replayed")]
             print(PREFIX + json.dumps(rep, separators=(",", ":"), default=str),
                   flush=True)
             watch = sb.watch_set() or watch
