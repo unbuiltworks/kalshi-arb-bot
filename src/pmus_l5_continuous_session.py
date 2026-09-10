@@ -1145,6 +1145,32 @@ def sweep_orphan_orders(t) -> dict:
     return out
 
 
+SHUTDOWN_IDLE_S = 300.0
+
+
+def shutdown_idle(sleep=time.sleep, report: Optional[Mapping[str, Any]] = None):
+    """Hold the halted state up. NEVER exit.
+
+    LIVE 2026-09-10T00:57:19Z: the first shutdown ran, verified, and then the
+    process EXITED. To the platform a long-running service that exits is a
+    CRASH, and the platform's repair for a crash is to roll back to the
+    PREVIOUS deployment. That is the exact opposite of halting -- and had the
+    verdict been SHUTDOWN_NOT_VERIFIED it would have restored a build that may
+    be ARMED, turning a failed safety check into a resumption of trading.
+
+    So failing closed means STAYING UP in a halted state, not terminating.
+    A halted process that keeps saying it is halted is legible; a dead one is
+    indistinguishable from a crash and gets 'helpfully' replaced."""
+    verdict = str((report or {}).get("verdict") or "SHUTDOWN_UNKNOWN")
+    while True:
+        _log("shutdown_idle", verdict=verdict,
+             held_preserved=(report or {}).get("held_preserved"),
+             evidence=("halted and holding the container up on purpose: "
+                       "exiting here would be read as a crash and roll the "
+                       "service back to the previous, possibly ARMED, build"))
+        sleep(SHUTDOWN_IDLE_S)
+
+
 SHUTDOWN_ENV = "PMUS_SPRING_SHUTDOWN"
 
 
@@ -1666,6 +1692,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
         # trading, it is the absence of it
         rep = safe_shutdown(t)
         _log("safe_shutdown", **rep)
+        shutdown_idle(sleep, rep)          # never returns in production
         return {"campaign": "pmus-l5-continuous-v1", "mode": "SHUTDOWN",
                 "status": rep["verdict"], "shutdown": rep,
                 "realized_pnl": None, "sessions": [], "selections": 0}

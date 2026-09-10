@@ -28,6 +28,19 @@ class FakeQ1Base:
         return page
 
 
+class _Stop(Exception):
+    pass
+
+
+def _sleep_n(n):
+    calls = {"n": 0}
+    def _s(_secs):
+        calls["n"] += 1
+        if calls["n"] >= n:
+            raise _Stop
+    return _s, calls
+
+
 @pytest.fixture
 def wired(monkeypatch):
     def _wire(pages, *, ours=("m1",), sweep=None, held=("m1",)):
@@ -126,17 +139,23 @@ def test_held_inventory_is_preserved_and_reported_never_liquidated(wired):
 def test_shutdown_short_circuits_before_armed_is_consulted(monkeypatch):
     """It must not matter whether the process is armed: the orphan window is
     created BY disarming, so a shutdown that only works while armed fixes
-    nothing."""
+    nothing.
+
+    This test used to assert on run_campaign's RETURN value. Once the halted
+    state stopped exiting (LIVE 00:57:19Z), that premise died and the test
+    HUNG on the real 300s idle rather than failing -- a hang says nothing
+    about what broke. It now injects the sleep, which is the only way to
+    observe a loop that is supposed to be infinite."""
     monkeypatch.setenv(cont.SHUTDOWN_ENV, "1")
     seen = {}
     monkeypatch.setattr(cont, "safe_shutdown",
                         lambda t=None: {"verdict": "SHUTDOWN_VERIFIED"})
     monkeypatch.setattr(cont.base, "armed",
                         lambda: seen.setdefault("armed_consulted", True))
-    rep = cont.run_campaign(t=object(), campaign_s=0.0)
-    assert rep["mode"] == "SHUTDOWN"
-    assert rep["status"] == "SHUTDOWN_VERIFIED"
-    assert rep["sessions"] == []
+    s, calls = _sleep_n(2)
+    with pytest.raises(_Stop):
+        cont.run_campaign(t=object(), campaign_s=0.0, sleep=s)
+    assert calls["n"] == 2
     assert "armed_consulted" not in seen
 
 
@@ -146,3 +165,54 @@ def test_flag_is_off_by_default(monkeypatch):
     for on in ("1", "YES", "yes", "true"):
         monkeypatch.setenv(cont.SHUTDOWN_ENV, on)
         assert cont.shutdown_requested() is True
+
+
+# --------------------------------------------------- never exit while halted
+
+def test_shutdown_idle_never_returns_it_holds_the_container_up():
+    """LIVE 2026-09-10T00:57:19Z: the first shutdown verified and then EXITED.
+    The platform read the exit as a CRASH and rolled back to the PREVIOUS
+    deployment. Had the verdict been NOT_VERIFIED that rollback could have
+    restored an ARMED build -- a failed safety check resuming trading."""
+    s, calls = _sleep_n(3)
+    with pytest.raises(_Stop):
+        cont.shutdown_idle(sleep=s, report={"verdict": "SHUTDOWN_VERIFIED"})
+    assert calls["n"] == 3, "must keep looping, not return after one pass"
+
+
+def test_idle_holds_up_even_when_verification_FAILED(monkeypatch):
+    """The dangerous case. A NOT_VERIFIED shutdown must stay up loudest of
+    all -- it is the state where an orphan may still be resting."""
+    s, calls = _sleep_n(2)
+    with pytest.raises(_Stop):
+        cont.shutdown_idle(sleep=s,
+                           report={"verdict": "SHUTDOWN_NOT_VERIFIED",
+                                   "reason": "ours_still_open"})
+    assert calls["n"] == 2
+
+
+def test_run_campaign_idles_after_shutdown_and_never_falls_through(monkeypatch):
+    monkeypatch.setenv(cont.SHUTDOWN_ENV, "1")
+    monkeypatch.setattr(cont, "safe_shutdown",
+                        lambda t=None: {"verdict": "SHUTDOWN_NOT_VERIFIED"})
+    reached = {"armed": False}
+    monkeypatch.setattr(cont.base, "armed",
+                        lambda: reached.__setitem__("armed", True))
+    s, _ = _sleep_n(2)
+    with pytest.raises(_Stop):
+        cont.run_campaign(t=object(), campaign_s=0.0, sleep=s)
+    assert reached["armed"] is False, "must never reach the trading path"
+
+
+def test_the_idle_call_sits_between_the_report_and_the_return():
+    """Wiring, not decoration: a shutdown_idle defined but not called would
+    leave the exit-on-verify bug exactly where it was."""
+    import ast
+    tree = ast.parse(open(cont.__file__).read())
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "run_campaign")
+    src = ast.unparse(fn)
+    i_log = src.index("safe_shutdown")
+    i_idle = src.index("shutdown_idle(")
+    i_ret = src.index("'SHUTDOWN'")
+    assert i_log < i_idle < i_ret
