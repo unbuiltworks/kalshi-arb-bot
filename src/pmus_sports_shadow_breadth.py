@@ -1,0 +1,470 @@
+"""SHADOW BREADTH: many virtual L5s, one live campaign, zero extra dollars.
+
+OWNER 2026-09-10 (GO): "Run the new f9006faf selector continuously against
+the entire live sports/game universe. For every R5F-eligible market, maintain
+an independent virtual L5 state machine and record hypothetical
+OPEN/EXTEND/COMPLETE actions using the exact live policy and safety rules."
+
+THE PROBLEM THIS EXISTS TO SOLVE. Concurrency 1 is a MONEY constraint. It was
+silently also an OBSERVATION constraint: on 2026-09-10 the campaign worked 20
+markets in 93 minutes, then one county-cricket residual owned the single slot
+for 3h20m -- while sitting at 0.77/0.84, outside the 0.25-0.75 band, so the
+engine could not even work it. During that stall 32 markets were eligible and
+carrying $630k/minute. One residual = zero new experiments. Nothing about
+watching a market costs money, so nothing about watching should be serialised
+behind a position.
+
+WHAT IS REUSED, NOT REBUILT. The virtual L5 is
+pmus_sports_l5_decision.decide_market -- the SAME frozen sequential policy,
+the same persistence-v2 model, the same pair bound the live path uses. This
+module supplies breadth and ranking; it supplies no new policy and no new
+model. If the two ever disagree it is a bug here, not a variant there.
+
+WHAT IS NEW. Which markets get watched. The existing slate ordering ranks by
+the collector's own status buckets; this ranks by contemporaneous traded flow
+measured from `notionalTraded` deltas (see pmus_sports_opportunity_rank), over
+the full live GAME universe rather than the ~2,037 rows the campaign sees.
+
+PROSPECTIVE COHORTS, BECAUSE "UCL IS BETTER" IS NOT YET A RESULT. Every
+selected market is stamped with the rank tier it held AT SELECTION TIME, and
+outcomes are tallied per tier. The comparison is therefore decided by data
+gathered after the ranking, not by re-reading the ranking that produced it.
+Assigning a tier after seeing the outcome is the one thing that would make
+this whole loop worthless.
+
+READ-ONLY, STRUCTURALLY. No executor import, no credentials, no order path.
+A virtual "fill" is `fill_class: possible` exactly as decide_market labels it
+-- an upper bound inferred from later trades through the resting price, with
+queue position unproven. It is never called a fill.
+"""
+from __future__ import annotations
+
+import json
+import os
+import time
+import urllib.request
+from collections import deque
+from datetime import datetime, timezone
+from typing import Any, Mapping, Optional, Sequence
+
+from src import pmus_sports_opportunity_rank as rank_mod
+
+GATEWAY = os.getenv("PMUS_GATEWAY", "https://gateway.polymarket.us")
+PREFIX = "PMUS_SHADOW_BREADTH "
+
+# Bounded so a widening universe cannot turn into an unbounded request rate.
+WATCH_SLOTS = int(os.getenv("PMUS_SHADOW_WATCH_SLOTS", "32"))
+CYCLE_S = float(os.getenv("PMUS_SHADOW_CYCLE_S", "45"))
+POLL_PAUSE_S = float(os.getenv("PMUS_SHADOW_POLL_PAUSE_S", "0.25"))
+OBS_KEEP = int(os.getenv("PMUS_SHADOW_OBS_KEEP", "240"))
+# Flow is measured over a TRAILING WINDOW, not between consecutive polls.
+# Measured live 2026-09-10T18:5xZ: differencing adjacent ~45s polls made
+# eligibility flap 32 -> 5 -> 1, because most markets simply have no print
+# inside any given 45 seconds. That is a sampling artifact, not a market
+# going quiet, and gating on it would have thrown away most of the
+# universe every cycle.
+FLOW_WINDOW_S = float(os.getenv("PMUS_SHADOW_FLOW_WINDOW_S", "300"))
+# Rank tiers stamped AT SELECTION. Compared against each other later.
+TIERS = ((0, 8, "T1_top8"), (8, 16, "T2_9_16"), (16, 32, "T3_17_32"))
+
+LABELS = {
+    "order_entry": False,
+    "realized_pnl": None,
+    "fill_semantics": ("virtual fills are decide_market's `possible` class: "
+                       "an upper bound from later trades through the resting "
+                       "price, queue position unproven -- never a fill"),
+    "policy": "frozen live policy via pmus_sports_l5_decision.decide_market",
+    "cohorts": "rank tier stamped at SELECTION time, never after the outcome",
+}
+
+
+def _utc(ts: float) -> str:
+    return datetime.fromtimestamp(ts, timezone.utc).isoformat()
+
+
+def _num(x: Any) -> Optional[float]:
+    if isinstance(x, Mapping):
+        x = x.get("value")
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def observation_row(slug: str, market_data: Mapping[str, Any],
+                    now: float) -> dict:
+    """One collector-schema observation from a public book payload.
+
+    The schema is the one pmus_status_report already consumes (`t`, `bid`,
+    `ask`, `shares_traded_cum`, `last_trade_px`) so infer_trades and
+    decide_market read these rows unchanged.
+
+    `offers`, NOT `asks`. The venue serves sell depth under `offers`; reading
+    `asks` yields [] on every market and is indistinguishable from a genuinely
+    one-sided book (src/pmus_sports_offers_hotfix.py, OWNER 5534675078).
+    """
+    bids = market_data.get("bids") or []
+    offers = market_data.get("offers") or []
+    stats = market_data.get("stats") or {}
+    bid, bid_q = rank_mod.touch(bids)
+    ask, ask_q = rank_mod.touch(offers)
+    return {
+        "t": _utc(now), "slug": slug,
+        "bid": bid, "ask": ask, "bid_qty": bid_q, "ask_qty": ask_q,
+        "shares_traded_cum": _num(stats.get("sharesTraded")),
+        "notional_traded_cum": _num(stats.get("notionalTraded")),
+        "last_trade_px": _num(stats.get("lastTradePx")),
+        "state": market_data.get("state"),
+        "transact_time": market_data.get("transactTime"),
+        "_poll_t": now,
+    }
+
+
+def flow_over_window(obs: Sequence[Mapping[str, Any]],
+                     now: float, window_s: float = FLOW_WINDOW_S) -> Optional[float]:
+    """Traded notional per minute over the trailing window.
+
+    Uses the OLDEST observation still inside the window against the newest,
+    rather than the last two polls. A market that printed nothing in the last
+    45 seconds is usually just a market nobody traded in those 45 seconds;
+    differencing adjacent polls turns that into "ineligible" and empties the
+    watch list. Returns None when the span is too short to be a rate.
+    """
+    inside = [o for o in obs
+              if (o.get("_poll_t") or 0) >= now - window_s]
+    if len(inside) < 2:
+        return None
+    return rank_mod.flow_usd_per_min(
+        {"notional_traded": inside[0].get("notional_traded_cum"),
+         "transact_time": inside[0].get("transact_time")},
+        {"notional_traded": inside[-1].get("notional_traded_cum"),
+         "transact_time": inside[-1].get("transact_time")})
+
+
+def scored_row(slug: str, prev: Optional[Mapping[str, Any]],
+               cur: Mapping[str, Any],
+               history_shape: Optional[Mapping[str, Any]] = None,
+               flow: Optional[float] = None) -> dict:
+    """A ranking row for one market. `flow` is supplied by the caller from
+    the trailing window; `prev` remains the adjacent-poll fallback."""
+    shape = history_shape or {}
+    return {
+        "slug": slug, "state": cur.get("state"),
+        "bid": cur.get("bid"), "ask": cur.get("ask"),
+        "bid_qty": cur.get("bid_qty"), "ask_qty": cur.get("ask_qty"),
+        "maker_pair_cost": rank_mod.maker_pair_cost(cur.get("bid"),
+                                                    cur.get("ask")),
+        "flow_usd_per_min": flow if flow is not None else (rank_mod.flow_usd_per_min(
+            {"notional_traded": prev.get("notional_traded_cum"),
+             "transact_time": prev.get("transact_time")},
+            {"notional_traded": cur.get("notional_traded_cum"),
+             "transact_time": cur.get("transact_time")}) if prev else None),
+        "in_band_fraction": shape.get("in_band_fraction"),
+        "mid_stdev_1h": shape.get("mid_stdev"),
+    }
+
+
+def tier_of(index: int) -> Optional[str]:
+    for lo, hi, name in TIERS:
+        if lo <= index < hi:
+            return name
+    return None
+
+
+def classify_actions(decision: Mapping[str, Any]) -> dict:
+    """Collapse one decide_market result into the owner's funnel stages.
+
+    OWNER: "eligible -> selected -> virtual first-fill -> virtual <=$1
+    completion -> residual -> settlement". Every stage below is derived from
+    the frozen policy's own replayed actions; none is invented here.
+
+    ON THE "<=$1" QUALIFIER. The first version of this function filtered
+    completes on a `pair_cost` key. THAT KEY DOES NOT EXIST -- plan_action
+    emits `max_pair_cost` -- so the filter matched nothing and the completion
+    count would have read 0 forever, in a loop whose entire purpose is
+    counting completions. A silent always-zero is worse than a crash.
+
+    What the policy actually guarantees is stronger than the filter was:
+    complement_target prices every completion at the tightest of the >=1c
+    hard bound (0.99) and the 0.98 observation cap, so a completion above
+    $1.00 CANNOT be emitted. The count is therefore of completions, and
+    `max_pair_cost` is checked as an ASSERTION rather than a filter -- a
+    completion above 1.00 is recorded as a policy violation, not silently
+    dropped from the tally.
+    """
+    acts = decision.get("actions_replayed") or []
+    first_fill = extends = complete_le1 = 0
+    violations = []
+    for a in acts:
+        if a.get("decision") != "quote" or a.get("fill_class") != "possible":
+            continue
+        rel = str(a.get("relation") or "")
+        if rel == "open":
+            first_fill += 1
+        elif rel == "extend":
+            extends += 1
+        elif rel == "complete":
+            mpc = a.get("max_pair_cost")
+            try:
+                over = mpc is not None and float(mpc) > 1.0
+            except (TypeError, ValueError):
+                over = False
+            if over:
+                violations.append({"t": a.get("t"), "max_pair_cost": mpc})
+            else:
+                complete_le1 += 1
+    return {
+        "virtual_first_fills": first_fill,
+        "virtual_extends": extends,
+        "virtual_completions_le_1": complete_le1,
+        "virtual_residual_open": bool(first_fill + extends > complete_le1),
+        "pair_ceiling_violations": violations,
+        "actions_replayed": len(acts),
+        "executable_now": bool(decision.get("executable_now")),
+    }
+
+
+def funnel(cohorts: Mapping[str, Mapping[str, Any]]) -> dict:
+    """Per-tier funnel plus the owner's primary operational ratio.
+
+    'economic completions per residual dollar' needs a residual DOLLAR, and
+    shadow has no settled dollars. So the shadow analogue is reported under
+    its own name -- completions per residual-opening market -- and the dollar
+    ratio stays where dollars exist, in the settled live cohort. Reusing the
+    owner's phrase for a quantity with no dollars in it would be the kind of
+    relabelling that makes two different numbers look like one.
+    """
+    out = {}
+    for tier, c in cohorts.items():
+        resid_mkts = len(c.get("residual_opening_markets") or ())
+        out[tier] = {
+            # cycles are not markets: a market watched nine times is one
+            # market, and conflating the two inflates every rate below it
+            "selection_cycles": c.get("selection_cycles", 0),
+            "distinct_markets": len(c.get("markets") or ()),
+            "virtual_first_fills": c.get("virtual_first_fills", 0),
+            "virtual_extends": c.get("virtual_extends", 0),
+            "virtual_completions_le_1": c.get("virtual_completions_le_1", 0),
+            "residual_opening_markets": resid_mkts,
+            "completing_markets": len(c.get("completing_markets") or ()),
+            "completions_per_residual_market": (
+                round(c.get("virtual_completions_le_1", 0) / resid_mkts, 4)
+                if resid_mkts else None),
+        }
+    return out
+
+
+class ShadowBreadth:
+    """One cycle = discover -> rank -> poll -> N virtual L5s -> funnel."""
+
+    def __init__(self, get_json=None, sleep=time.sleep,
+                 slots: int = WATCH_SLOTS, now=time.time):
+        self._get = get_json or self._http
+        self._sleep = sleep
+        self._slots = slots
+        self._now = now
+        self.obs: dict[str, deque] = {}
+        self.cohorts: dict[str, dict] = {}
+        # Every virtual action already counted, keyed (slug, t, relation).
+        # decide_market REPLAYS ITS WHOLE WINDOW on every call, so the same
+        # virtual OPEN reappears in every cycle for as long as it stays
+        # inside the window. Measured live: nine cycles turned five markets
+        # into "29 first fills". Counting cumulative totals off a re-replayed
+        # window inflates every stage of the funnel -- the same class of
+        # error as counting a population twice, and just as invisible.
+        self._counted: set = set()
+        self.cycles = 0
+
+    @staticmethod
+    def _http(path: str) -> dict:
+        req = urllib.request.Request(GATEWAY + path)
+        with urllib.request.urlopen(req, timeout=25) as r:
+            return json.load(r)
+
+    def poll(self, slugs: Sequence[str]) -> int:
+        """Refresh observations for the watched set. A market that fails to
+        read is skipped, never zeroed -- an unreadable book is not a quiet
+        one."""
+        now = self._now()
+        ok = 0
+        for slug in slugs:
+            try:
+                md = (self._get(f"/v1/markets/{slug}/book") or {}).get("marketData")
+            except Exception:                                   # noqa: BLE001
+                continue
+            if not isinstance(md, Mapping):
+                continue
+            self.obs.setdefault(slug, deque(maxlen=OBS_KEEP)).append(
+                observation_row(slug, md, now))
+            ok += 1
+            if self._sleep:
+                self._sleep(POLL_PAUSE_S)
+        return ok
+
+    def scored(self) -> list:
+        """Every watched market scored, eligible or not."""
+        rows = []
+        for slug, dq in self.obs.items():
+            if not dq:
+                continue
+            cur = dq[-1]
+            prev = dq[-2] if len(dq) > 1 else None
+            flow = flow_over_window(list(dq), self._now())
+            shape = rank_mod.hour_shape(
+                [{"longPrice": o["ask"], "shortPrice": 1.0 - o["bid"]}
+                 for o in dq if o.get("bid") is not None
+                 and o.get("ask") is not None])
+            rows.append(scored_row(slug, prev, cur, shape, flow))
+        return rows
+
+    def ranked(self) -> list:
+        """Eligible watched markets, most contemporaneous flow first."""
+        return rank_mod.rank(self.scored())
+
+    def watch_set(self, slots: Optional[int] = None) -> list:
+        """Which markets to keep polling next cycle.
+
+        A SUPERSET of the eligible ones, ordered by flow. Retaining only the
+        currently-eligible markets collapsed the watch set from 32 to 5 in
+        one cycle live -- and a market that is briefly ineligible (a
+        one-sided moment, a quiet minute) would then never be polled again,
+        so it could never be observed BECOMING eligible. Eligibility is a
+        property of a moment; the watch set has to outlive the moment.
+        """
+        n = slots or self._slots
+        rows = self.scored()
+        rows.sort(key=lambda r: -(r.get("flow_usd_per_min") or -1.0))
+        return [r["slug"] for r in rows][:n]
+
+    def decide(self, slugs: Sequence[str], model: Mapping[str, Any]) -> list:
+        """Run the FROZEN live policy over each watched market."""
+        from src import pmus_sports_l5_decision as dec
+        now = self._now()
+        out = []
+        for idx, slug in enumerate(slugs):
+            rows = list(self.obs.get(slug) or ())
+            if len(rows) < 2:
+                continue
+            try:
+                d = dec.decide_market(slug, rows, now, model)
+            except Exception as exc:                            # noqa: BLE001
+                out.append({"slug": slug, "error":
+                            f"{type(exc).__name__}:{str(exc)[:90]}"})
+                continue
+            tier = tier_of(idx)
+            summary = classify_actions(d)
+            fresh = classify_actions(
+                {"actions_replayed": self._new_actions(slug, d),
+                 "executable_now": d.get("executable_now")})
+            out.append({"slug": slug, "tier": tier,
+                        "window": summary, "new_this_cycle": fresh})
+            if tier:
+                c = self.cohorts.setdefault(
+                    tier, {"selection_cycles": 0, "markets": set()})
+                c["selection_cycles"] += 1
+                c["markets"].add(slug)
+                # ONLY the actions not already counted in an earlier cycle.
+                for k in ("virtual_first_fills", "virtual_extends",
+                          "virtual_completions_le_1"):
+                    c[k] = c.get(k, 0) + fresh[k]
+                if fresh["virtual_first_fills"] or fresh["virtual_extends"]:
+                    c.setdefault("residual_opening_markets", set()).add(slug)
+                if fresh["virtual_completions_le_1"]:
+                    c.setdefault("completing_markets", set()).add(slug)
+        return out
+
+    def _new_actions(self, slug: str, decision: Mapping[str, Any]) -> list:
+        """The replayed actions this cycle has not already counted."""
+        fresh = []
+        for a in decision.get("actions_replayed") or []:
+            key = (slug, a.get("t"), a.get("relation"), a.get("target_price"))
+            if key in self._counted:
+                continue
+            self._counted.add(key)
+            fresh.append(a)
+        return fresh
+
+    def report(self, decisions: Sequence[Mapping[str, Any]],
+               watched: int, eligible: int) -> dict:
+        self.cycles += 1
+        return {
+            "kind": "shadow_breadth_cycle", "cycle": self.cycles,
+            "at": _utc(self._now()),
+            "watched": watched, "eligible": eligible,
+            "decided": len([d for d in decisions if "error" not in d]),
+            "errors": len([d for d in decisions if "error" in d]),
+            "funnel_by_tier": funnel(self.cohorts),
+            "labels": LABELS,
+        }
+
+
+def discover_game_slugs(get_json, max_pages: int = 80,
+                        page: int = 500) -> list:
+    """Live open GAME markets, futures excluded by TYPE.
+
+    Bounded, and a short page ends the walk. A failure returns what was
+    gathered -- discovery degrades, never dies, the same contract
+    pmus_sports_collector.enumerate_open_markets already keeps.
+    """
+    rows: list = []
+    for p in range(max_pages):
+        try:
+            resp = get_json(f"/v1/markets?active=true&closed=false"
+                            f"&limit={page}&offset={p * page}")
+        except Exception:                                       # noqa: BLE001
+            break
+        ms = (resp or {}).get("markets") if isinstance(resp, Mapping) else None
+        if not isinstance(ms, list) or not ms:
+            break
+        rows.extend(m for m in ms
+                    if isinstance(m, Mapping)
+                    and str(m.get("category")) == "sports"
+                    and rank_mod.is_game(m))
+        if len(ms) < page:
+            break
+    return [str(m.get("slug")) for m in rows if m.get("slug")]
+
+
+def run(cycles: Optional[int] = None) -> int:
+    """Continuous shadow breadth. Read-only; never submits anything.
+
+    Runs forever by default: a long-running service that EXITS reads as a
+    crash to the platform, whose repair is a rollback.
+    """
+    from src import pmus_l5_persistence_v2 as pv2
+    sb = ShadowBreadth()
+    model = pv2.load_v2()
+    watch: list = []
+    n = 0
+    while cycles is None or n < cycles:
+        n += 1
+        try:
+            if n == 1 or n % 20 == 0 or not watch:
+                universe = discover_game_slugs(sb._get)
+                sb.poll(universe[:max(WATCH_SLOTS * 8, 128)])
+                watch = [r["slug"] for r in sb.ranked()][:sb._slots]
+                if not watch:
+                    watch = universe[:sb._slots]
+            polled = sb.poll(watch)
+            ranked = sb.ranked()
+            order = [r["slug"] for r in ranked]
+            decisions = sb.decide(order, model)
+            rep = sb.report(decisions, watched=polled, eligible=len(ranked))
+            rep["top"] = [{"slug": r["slug"],
+                           "flow_usd_per_min": r["flow_usd_per_min"],
+                           "maker_pair_cost": r["maker_pair_cost"]}
+                          for r in ranked[:5]]
+            print(PREFIX + json.dumps(rep, separators=(",", ":"), default=str),
+                  flush=True)
+            watch = sb.watch_set() or watch
+        except Exception as exc:                                # noqa: BLE001
+            print(PREFIX + json.dumps(
+                {"kind": "cycle_error", "cycle": n,
+                 "error": f"{type(exc).__name__}:{str(exc)[:160]}"}),
+                flush=True)
+        time.sleep(CYCLE_S)
+    return 0
+
+
+if __name__ == "__main__":                                      # pragma: no cover
+    raise SystemExit(run())
