@@ -41,6 +41,7 @@ probe's deploy watch path.
 from __future__ import annotations
 
 import datetime
+import re
 import statistics as st
 from typing import Any, Mapping, Optional, Sequence
 
@@ -49,6 +50,25 @@ from typing import Any, Mapping, Optional, Sequence
 BAND_LO, BAND_HI = 0.25, 0.75
 MIN_BAND_FRACTION = 0.5
 PAIR_CEILING = 1.00
+
+# SETTLEMENT HORIZON, from the market's own dated slug.
+#
+# MEASURED 2026-09-10T21:0xZ over the 18 markets R5F worked that day: all 17
+# whose slug date was that day or the previous one had EXPIRED; the single
+# market still OPEN was dated 2026-09-08 -- a four-day County Championship
+# fixture, 69.5h old, and ALREADY ~48h old when the engine admitted it. It
+# then held the only acquisition slot for 5h20m while sitting outside the
+# entry band, so the engine could not even work the position it was guarding.
+#
+# The signal was available at admission time and nothing was reading it.
+#
+# CALIBRATION IS THIN AND SAYING SO IS PART OF THE GATE: n=18 with exactly
+# ONE positive case. 48h is chosen because the next-oldest market that
+# settled cleanly was 38h old at admission (aec-itfme-...-2026-09-09), so a
+# 24h rule would have refused a market that was fine. That is a 10-hour
+# margin on one observation -- enough to exclude multi-day formats, not
+# enough to call the threshold tuned.
+MAX_MARKET_AGE_H = 48.0
 
 
 def _f(x: Any) -> Optional[float]:
@@ -136,6 +156,42 @@ def hour_shape(history: Sequence[Mapping[str, Any]]) -> dict:
     }
 
 
+# The date is NOT always the last token. `aec-atp-a-b-2026-09-10` ends with
+# it, but `atc-ucl-fen-rom-2026-09-10-rom` and
+# `astatc-ucl-mnu-sab1-2026-09-10-cor-all-gt9pt5` carry an outcome suffix
+# after it. An end-anchored pattern parsed every one of those as UNDATED and
+# -- because undated is refused -- emptied the entire live UCL slate: 32 of
+# 32 eligible markets dropped. Search anywhere and take the LAST date found.
+_SLUG_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+
+
+def market_age_hours(slug: str, now: Optional[datetime.datetime] = None):
+    """Hours since the date in the slug, or None when there is no date.
+
+    None is NOT young. A slug carrying no date tells us nothing about the
+    format's length, and the eligibility gate treats that as a refusal --
+    the ranker has thousands of candidates and no reason to guess.
+    """
+    found = _SLUG_DATE.findall(str(slug or ""))
+    if not found:
+        return None
+    y, mo, d = found[-1]
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    when = datetime.datetime(int(y), int(mo), int(d),
+                             tzinfo=datetime.timezone.utc)
+    return (now - when).total_seconds() / 3600.0
+
+
+def within_settlement_horizon(slug: str, now=None,
+                              max_age_h: float = MAX_MARKET_AGE_H) -> bool:
+    """Refuse multi-day formats. A market dated in the FUTURE is a pre-game
+    listing and is fine -- age is negative, not old."""
+    age = market_age_hours(slug, now)
+    if age is None:
+        return False
+    return age <= max_age_h
+
+
 def is_game(market: Mapping[str, Any]) -> bool:
     """Actual games only. OWNER: "Prioritize actual games over futures."
     A future is excluded by TYPE, never by how far away its date is -- a
@@ -154,6 +210,10 @@ def eligibility(row: Mapping[str, Any]) -> dict:
              and row["maker_pair_cost"] <= PAIR_CEILING),
         "in_band": (row.get("in_band_fraction") or 0.0) >= MIN_BAND_FRACTION,
         "flow_observed": (row.get("flow_usd_per_min") or 0.0) > 0.0,
+        # a settlement horizon measured in DAYS can consume the whole live
+        # budget at one acquisition slot -- see MAX_MARKET_AGE_H
+        "within_settlement_horizon": within_settlement_horizon(
+            row.get("slug"), row.get("now")),
     }
     return {"eligible": all(checks.values()), "checks": checks,
             "failed": sorted(k for k, v in checks.items() if not v)}

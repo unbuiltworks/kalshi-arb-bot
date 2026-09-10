@@ -39,9 +39,15 @@ def _all_green(monkeypatch):
     monkeypatch.setattr(P, "quarantine_tests_green", lambda paths=None: True)
 
 
+import datetime as _dt  # noqa: E402
+
 CANDIDATE = {"state": "MARKET_STATE_OPEN", "bid": 0.40, "ask": 0.41,
              "maker_pair_cost": 0.99, "in_band_fraction": 1.0,
-             "flow_usd_per_min": 5000.0}
+             "flow_usd_per_min": 5000.0,
+             # a dated slug: the selector now gates on settlement horizon
+             "slug": "aec-nfl-sf-lar-2026-09-10",
+             "now": _dt.datetime(2026, 9, 10, 21, 0,
+                                 tzinfo=_dt.timezone.utc)}
 
 
 def test_a_fully_clean_preflight_passes(monkeypatch):

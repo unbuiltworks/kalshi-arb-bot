@@ -101,7 +101,11 @@ def test_futures_are_excluded_by_TYPE_not_by_date():
 def _row(**kw):
     base = {"state": "MARKET_STATE_OPEN", "bid": 0.40, "ask": 0.41,
             "maker_pair_cost": 0.99, "in_band_fraction": 1.0,
-            "flow_usd_per_min": 100.0}
+            "flow_usd_per_min": 100.0,
+            "slug": "aec-atp-a-b-2026-09-10",
+            "now": __import__("datetime").datetime(
+                2026, 9, 10, 21, 0,
+                tzinfo=__import__("datetime").timezone.utc)}
     base.update(kw)
     return base
 
@@ -134,19 +138,24 @@ def test_unmeasured_flow_is_not_eligible():
 
 # ------------------------------------------------------------------ ranking
 def test_rank_orders_by_contemporaneous_flow_and_drops_ineligible():
-    rows = [_row(slug="quiet", flow_usd_per_min=5.0),
-            _row(slug="busy", flow_usd_per_min=5000.0),
-            _row(slug="out_of_band", flow_usd_per_min=9e9, in_band_fraction=0.0)]
+    rows = [_row(slug=f"aec-x-quiet-2026-09-10", flow_usd_per_min=5.0),
+            _row(slug=f"aec-x-busy-2026-09-10", flow_usd_per_min=5000.0),
+            _row(slug=f"aec-x-oob-2026-09-10", flow_usd_per_min=9e9,
+                 in_band_fraction=0.0)]
     got = [r["slug"] for r in R.rank(rows)]
-    assert got == ["busy", "quiet"], "out_of_band is unenterable however busy"
+    assert got == [f"aec-x-busy-2026-09-10", f"aec-x-quiet-2026-09-10"], \
+        "out_of_band is unenterable however busy"
 
 
 def test_ranking_ignores_incentive_program_entirely():
     """OWNER: do not optimize for liquidity rewards. Carrying the flag must
     not move a market."""
-    a = _row(slug="a", flow_usd_per_min=10.0, incentive_program=True)
-    b = _row(slug="b", flow_usd_per_min=20.0, incentive_program=False)
-    assert [r["slug"] for r in R.rank([a, b])] == ["b", "a"]
+    a = _row(slug="aec-x-a-2026-09-10", flow_usd_per_min=10.0,
+             incentive_program=True)
+    b = _row(slug="aec-x-b-2026-09-10", flow_usd_per_min=20.0,
+             incentive_program=False)
+    assert [r["slug"] for r in R.rank([a, b])] == ["aec-x-b-2026-09-10",
+                                                   "aec-x-a-2026-09-10"]
 
 
 def test_ranking_does_not_reward_attempt_count():
@@ -155,3 +164,76 @@ def test_ranking_does_not_reward_attempt_count():
     src = inspect.getsource(R.rank)
     for token in ("session", "attempt", "count", "reward", "pool"):
         assert token not in src.split('"""')[2], f"{token} leaked into ordering"
+
+
+# ---------------------------------------- settlement horizon (the cricket gate)
+import datetime as _dt  # noqa: E402
+
+_NOW = _dt.datetime(2026, 9, 10, 21, 0, tzinfo=_dt.timezone.utc)
+
+
+def test_the_county_cricket_market_is_refused():
+    """THE CASE THIS GATE EXISTS FOR. aec-county-not-ham-2026-09-08 held the
+    only acquisition slot for 5h20m, outside the band, unworkable. It was
+    already ~48h old when the engine admitted it, and nothing was reading
+    that."""
+    assert R.market_age_hours("aec-county-not-ham-2026-09-08", _NOW) == 69.0
+    assert R.within_settlement_horizon(
+        "aec-county-not-ham-2026-09-08", _NOW) is False
+
+
+def test_every_market_that_settled_cleanly_is_still_admitted():
+    """The gate must not cost us the markets that were fine. All 17 of the
+    day's markets that EXPIRED pass, including the 45h-old one."""
+    for slug in ("aec-atp-enrval-stetra-2026-09-10",
+                 "aec-setkamecz-mulpat-holtom-2026-09-10",
+                 "aec-cs2-ica-ff-2026-09-10",
+                 "aec-itfme-dannun-andsou-2026-09-09"):
+        assert R.within_settlement_horizon(slug, _NOW) is True, slug
+
+
+def test_a_future_dated_market_is_pregame_not_old():
+    """Age is negative for a pre-game listing; negative is not old."""
+    assert R.market_age_hours("aec-nfl-chi-car-2026-09-13", _NOW) == -51.0
+    assert R.within_settlement_horizon("aec-nfl-chi-car-2026-09-13", _NOW)
+
+
+def test_an_undated_slug_is_refused_not_assumed_young():
+    """None is not young. A slug with no date says nothing about the format's
+    length, and the ranker has thousands of alternatives."""
+    assert R.market_age_hours("no-date-here", _NOW) is None
+    assert R.within_settlement_horizon("no-date-here", _NOW) is False
+
+
+def test_the_horizon_is_a_named_eligibility_gate():
+    row = _row(slug="aec-county-not-ham-2026-09-08", now=_NOW)
+    out = R.eligibility(row)
+    assert not out["eligible"]
+    assert out["failed"] == ["within_settlement_horizon"]
+
+
+def test_the_threshold_admits_38h_and_refuses_48h():
+    """The calibration margin, pinned: 24h would have refused a market that
+    settled fine at 38h; cricket was ~48h at admission. Thin, and the module
+    docstring says so."""
+    assert R.MAX_MARKET_AGE_H == 48.0
+    base = _dt.datetime(2026, 9, 10, 14, 0, tzinfo=_dt.timezone.utc)
+    assert R.within_settlement_horizon("x-2026-09-09", base) is True   # 38h
+    assert R.within_settlement_horizon("x-2026-09-08", base) is False  # 62h
+
+
+def test_a_date_followed_by_an_outcome_suffix_still_parses():
+    """THE REGRESSION. An end-anchored pattern parsed every UCL slug as
+    UNDATED -- and undated is refused -- which emptied the entire live slate:
+    32 of 32 eligible markets dropped."""
+    for slug in ("atc-ucl-fen-rom-2026-09-10-rom",
+                 "astatc-ucl-mnu-sab1-2026-09-10-cor-all-gt9pt5",
+                 "tsc-ucl-bay-bog-2026-09-10-fh-1pt5",
+                 "asc-ucl-bay-bog-2026-09-10-neg-2pt5"):
+        assert R.market_age_hours(slug, _NOW) == 21.0, slug
+        assert R.within_settlement_horizon(slug, _NOW) is True, slug
+
+
+def test_the_last_date_in_a_slug_wins():
+    """A slug carrying two dates: the market's own date is the later one."""
+    assert R.market_age_hours("x-2026-09-08-y-2026-09-10-z", _NOW) == 21.0

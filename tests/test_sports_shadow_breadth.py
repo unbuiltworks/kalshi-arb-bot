@@ -351,12 +351,15 @@ def test_watch_set_keeps_ineligible_markets_so_they_can_become_eligible():
             dq.append(row)
         return dq
 
-    sb.obs["busy"] = obs("busy", 6000)
-    sb.obs["one_sided"] = obs("one_sided", 6000, ask=None)
-    for r in sb.obs["one_sided"]:
+    # dated slugs: the ranker now gates on settlement horizon, and an
+    # undated placeholder is refused by design
+    busy, one_sided = "aec-x-busy-2026-09-10", "aec-x-onesided-2026-09-10"
+    sb.obs[busy] = obs(busy, 6000)
+    sb.obs[one_sided] = obs(one_sided, 6000, ask=None)
+    for r in sb.obs[one_sided]:
         r["ask"] = None
-    assert [r["slug"] for r in sb.ranked()] == ["busy"], "only busy is eligible"
-    assert set(sb.watch_set()) == {"busy", "one_sided"}, \
+    assert [r["slug"] for r in sb.ranked()] == [busy], "only busy is eligible"
+    assert set(sb.watch_set()) == {busy, one_sided}, \
         "the ineligible market must stay watched"
 
 
