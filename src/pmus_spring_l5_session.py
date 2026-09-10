@@ -2904,6 +2904,15 @@ def _run_session_body(t: Optional[Transport] = None,
                 # and the <=1.00 ceiling still runs below. If neither is
                 # available the residual is held to settlement. There is no
                 # emergency taker flattening and no above-par rescue.
+                #
+                # `dec` is bound BELOW this gate (the entry-band and spend-cap
+                # branches), so the first iteration to reach it raised
+                # UnboundLocalError and killed the live campaign at
+                # 2026-09-10T04:47:28Z -- dead 6h43m holding 14.97 unhedged
+                # YES. Bind it the way every other mark_noop site in this loop
+                # does. A `dec` surviving from the PREVIOUS iteration would
+                # have been worse than the crash: it annotates the wrong row.
+                dec = report["decisions"][-1]
                 mark_noop(dec, f"combined_loss_stop:{_combined}<={daily_loss_stop()}",
                           divergence_class("safety_adaptation:combined_loss_stop"))
                 dec["cap_binding"] = list(dec.get("cap_binding", [])) + \
