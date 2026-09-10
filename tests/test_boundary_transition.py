@@ -182,7 +182,7 @@ def test_transition_never_raises_on_any_input():
                {"continuous": FakeContinuous(boom="sweep")},
                {"continuous": None, "path": "/proc/nope/act.json"}):
         row = BT.attempt_transition(**kw, run_tests=False)
-        assert row["transition"] in (BT.WAITING, BT.REFUSED)
+        assert row["transition"] in (BT.WAITING, BT.UNDETERMINED, BT.REFUSED)
 
 
 # ---- mutation: each safety transition must be load-bearing ----------------
@@ -269,3 +269,49 @@ def test_deploy_manifest_does_not_share_the_probe_watch_path():
     probe = set(_json.load(open("deploy/pmus_spring_l5/railway.json"))
                 ["build"]["watchPatterns"])
     assert not (mine & probe)
+
+
+# ---- "not yet" is not "not asked" ----------------------------------------
+
+def test_an_unreachable_venue_is_undetermined_not_merely_waiting(tmp_path):
+    """Both refuse to activate, but they are different facts. Run from a
+    container without venue credentials every transport condition errors,
+    and a single WAITING state would print the identical row whether the
+    campaign held a residual or was flat and ready -- so an unattended
+    monitor would wait forever on a boundary already reached."""
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(boom="sweep"),
+                                path=p, run_tests=False)
+    assert row["transition"] == BT.UNDETERMINED
+    assert row["boundary"]["established"] is False
+    assert "no_resting_orders" in row["boundary"]["undetermined"]
+    assert "could not establish" in row["boundary"]["refused_because"]
+    assert BT.is_active(p) is False
+
+
+def test_a_genuinely_held_position_is_waiting_not_undetermined(tmp_path):
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(held=["x"]),
+                                path=p, run_tests=False)
+    assert row["transition"] == BT.WAITING
+    assert row["boundary"]["established"] is True
+    assert row["boundary"]["undetermined"] == []
+    assert "not clean" in row["boundary"]["refused_because"]
+
+
+def test_unknown_outranks_not_yet_when_both_are_present(tmp_path):
+    """A held position AND an unreadable sweep: we still cannot claim to have
+    read the campaign's state, so it reports UNDETERMINED."""
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(
+        continuous=FakeContinuous(held=["x"], boom="sweep"), path=p,
+        run_tests=False)
+    assert row["transition"] == BT.UNDETERMINED
+
+
+def test_neither_state_ever_activates(tmp_path, monkeypatch):
+    _ok_preflight(monkeypatch)
+    for cont in (FakeContinuous(boom="sweep"), FakeContinuous(held=["x"])):
+        p = str(tmp_path / f"act-{id(cont)}.json")
+        BT.attempt_transition(continuous=cont, path=p, run_tests=False)
+        assert BT.is_active(p) is False

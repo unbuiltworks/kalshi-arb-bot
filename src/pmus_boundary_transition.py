@@ -54,6 +54,15 @@ ACTIVATION_FILE = "boundary_activation.json"
 ACTIVATES = ("ranked_selector", "residual_quarantine")
 
 WAITING = "WAITING_FOR_CLEAN_BOUNDARY"
+# "The campaign is still holding" and "we could not ask the venue" BOTH
+# refuse to activate, but they are not the same fact and must not print the
+# same word. Run from a container without venue credentials, every condition
+# that needs transport errors, and a single WAITING state would report the
+# identical row whether the campaign held a residual or was flat and ready --
+# a monitor watching for the boundary would wait forever on a campaign that
+# had already reached it. Reported separately so an unattended reader can
+# tell "not yet" from "not asked".
+UNDETERMINED = "UNDETERMINED_CANNOT_ESTABLISH_BOUNDARY"
 REFUSED = "REFUSED_PREFLIGHT"
 ACTIVATED = "ACTIVATED"
 ALREADY = "ALREADY_ACTIVE"
@@ -106,7 +115,14 @@ def clean_boundary(continuous=None, t=None, sweep=None) -> dict:
 
     blockers = [k for k, v in conds.items()
                 if not k.endswith("_error") and v is False]
-    return {"clean": not blockers, "conditions": conds, "blockers": blockers}
+    # A condition that RAISED was not evaluated; it is unknown, not false.
+    unknown = sorted(k[:-len("_error")] for k in conds if k.endswith("_error"))
+    return {"clean": not blockers, "conditions": conds, "blockers": blockers,
+            "undetermined": unknown,
+            "established": not unknown,
+            "refused_because": ("could not establish: " + ", ".join(unknown))
+            if unknown else ("not clean: " + ", ".join(blockers))
+            if blockers else "clean"}
 
 
 def attempt_transition(t=None, continuous=None, session=None, sweep=None,
@@ -132,7 +148,10 @@ def attempt_transition(t=None, continuous=None, session=None, sweep=None,
     except Exception as exc:                                # noqa: BLE001
         return _row(WAITING, note=f"boundary check failed closed: {exc!r}")
     if not boundary["clean"]:
-        return _row(WAITING, boundary=boundary)
+        # Unknown outranks not-yet: if anything could not be established, say
+        # so, rather than reporting the campaign's state as though we read it.
+        state = WAITING if boundary.get("established") else UNDETERMINED
+        return _row(state, boundary=boundary)
 
     try:
         result = pf.preflight(t=t, sweep=sweep,
