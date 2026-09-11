@@ -1,0 +1,108 @@
+name: Deploy Gemini L5 Shadow to AWS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/l5-gemini-queue-shadow
+    paths:
+      - 'src/gemini_l5_shadow_service.py'
+      - 'src/gemini_l5_shadow_v2.py'
+      - 'src/gemini_l5_queue_shadow.py'
+      - 'src/l5_venue_adapter.py'
+      - 'src/l5_shadow_scoring.py'
+      - 'src/gemini_l5_regime_study.py'
+      - 'src/pmus_l5_persistence_v2.py'
+      - 'src/pmus_l5_fidelity_live.py'
+      - 'src/pmus_q1_executor.py'
+      - 'src/polymarket_l5/**'
+      - 'src/l5_fidelity_gate.py'
+      - 'analysis/l5/**'
+      - 'deploy/aws_gemini_l5/**'
+      - '.github/workflows/deploy-gemini-l5-aws.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: gemini-l5-aws
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_GEMINI_INSTANCE_ID: ${{ secrets.AWS_GEMINI_INSTANCE_ID }}
+      AWS_GEMINI_DEPLOY_BUCKET: ${{ secrets.AWS_GEMINI_DEPLOY_BUCKET }}
+      AWS_GEMINI_STATE_URI: ${{ secrets.AWS_GEMINI_STATE_URI }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail closed if AWS deployment is not configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in AWS_REGION AWS_ROLE_ARN AWS_GEMINI_INSTANCE_ID AWS_GEMINI_DEPLOY_BUCKET AWS_GEMINI_STATE_URI; do
+            if [[ -z "${!v:-}" ]]; then
+              echo "Missing required secret: $v" >&2
+              exit 1
+            fi
+          done
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Package exact commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=tar.gz -o gemini-l5-${GITHUB_SHA}.tar.gz HEAD
+          aws s3 cp gemini-l5-${GITHUB_SHA}.tar.gz \
+            s3://${AWS_GEMINI_DEPLOY_BUCKET}/gemini-l5/deploy/${GITHUB_SHA}.tar.gz \
+            --only-show-errors
+
+      - name: Deploy through SSM
+        id: ssm
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEY="gemini-l5/deploy/${GITHUB_SHA}.tar.gz"
+          PARAMS=$(jq -nc \
+            --arg bucket "$AWS_GEMINI_DEPLOY_BUCKET" \
+            --arg key "$KEY" \
+            --arg state "$AWS_GEMINI_STATE_URI" \
+            --arg sha "$GITHUB_SHA" \
+            '{commands:[
+              "set -euo pipefail",
+              "mkdir -p /opt/gemini-l5/releases /var/lib/gemini-l5",
+              ("aws s3 cp s3://"+$bucket+"/"+$key+" /tmp/gemini-l5.tar.gz --only-show-errors"),
+              ("rm -rf /opt/gemini-l5/releases/"+$sha),
+              ("mkdir -p /opt/gemini-l5/releases/"+$sha),
+              ("tar -xzf /tmp/gemini-l5.tar.gz -C /opt/gemini-l5/releases/"+$sha),
+              ("cd /opt/gemini-l5/releases/"+$sha+" && docker build -f deploy/aws_gemini_l5/Dockerfile -t gemini-l5-shadow-aws:"+$sha+" ."),
+              ("cd /opt/gemini-l5/releases/"+$sha+" && GEMINI_L5_IMAGE=gemini-l5-shadow-aws:"+$sha+" GEMINI_L5_STATE_DIR=/var/lib/gemini-l5 bash deploy/aws_gemini_l5/run.sh"),
+              ("printf %s " + ($state|@sh) + " > /etc/gemini-l5-s3-uri"),
+              ("docker inspect -f {{.Config.Image}} gemini-l5-shadow-aws | grep -F " + ("gemini-l5-shadow-aws:"+$sha|@sh))
+            ]}')
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_GEMINI_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters "$PARAMS" \
+            --query 'Command.CommandId' --output text)
+          echo "command_id=$CMD_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Verify serving commit and container health
+        shell: bash
+        run: |
+          set -euo pipefail
+          CMD_ID='${{ steps.ssm.outputs.command_id }}'
+          aws ssm wait command-executed \
+            --command-id "$CMD_ID" \
+            --instance-id "$AWS_GEMINI_INSTANCE_ID"
+          aws ssm get-command-invocation \
+            --command-id "$CMD_ID" \
+            --instance-id "$AWS_GEMINI_INSTANCE_ID" \
+            --query '{Status:Status,StdOut:StandardOutputContent,StdErr:StandardErrorContent}'
