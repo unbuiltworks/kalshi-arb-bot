@@ -62,3 +62,24 @@ claim and this file is where it becomes checkable.
   Unset the variable once the close has reported `CLOSED_FLAT`: leaving it
   set is harmless (a zero residual has no reducing side and refuses) but it
   is not meant to be a standing configuration.
+
+- **2026-09-11 — residual quarantine promotion.** Deploying the CI-green
+  boot-closure build. `92b39ca6` is the validated commit: GitHub Actions run
+  `34591355951` (pmus-collector-ci run 418) concluded SUCCESS at 10:55:34Z;
+  2,829 tests pass locally.
+
+  An empty commit cannot trigger a Railway build — Railway matches CHANGED
+  PATHS against the watch set, and an empty commit changes none. So strict
+  tree identity and a push-trigger are mutually exclusive, and this entry is
+  itself the trigger. The deployed commit differs from `92b39ca6` by exactly
+  this documentation block: every path under `src/`, `tests/`, the Dockerfile
+  and `railway.json` is byte-identical, which is the property that matters —
+  the image built is the image CI validated.
+
+  After the serving process is verified, `PMUS_RESIDUAL_QUARANTINE=1` is set
+  and nothing else. The existing gates then decide: `blocking_held()` requires
+  the cricket residual to be genuinely dormant (zero resting orders, venue
+  quantity reconciling against the ledger, real inventory, still in `held`,
+  still settlement-monitored), and `combined_loss_above_stop` separately
+  prices its full downside against the −$15.00 stop. Either it qualifies and
+  R5F re-arms, or the probe stays halted and names the assertion.
