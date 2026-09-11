@@ -30,24 +30,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: gemini-l5-aws
     env:
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
-      AWS_GEMINI_INSTANCE_ID: ${{ secrets.AWS_GEMINI_INSTANCE_ID }}
-      AWS_GEMINI_DEPLOY_BUCKET: ${{ secrets.AWS_GEMINI_DEPLOY_BUCKET }}
-      AWS_GEMINI_STATE_URI: ${{ secrets.AWS_GEMINI_STATE_URI }}
+      AWS_REGION: us-east-1
+      AWS_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-gemini-l5-deploy
+      AWS_GEMINI_INSTANCE_ID: i-0b90f0a309153f47e
+      AWS_GEMINI_DEPLOY_BUCKET: kalshi-arb-bot-deploy-3535
+      AWS_GEMINI_STATE_URI: s3://kalshi-arb-bot-deploy-3535/gemini-l5/state
     steps:
       - uses: actions/checkout@v4
-
-      - name: Fail closed if AWS deployment is not configured
-        shell: bash
-        run: |
-          set -euo pipefail
-          for v in AWS_REGION AWS_ROLE_ARN AWS_GEMINI_INSTANCE_ID AWS_GEMINI_DEPLOY_BUCKET AWS_GEMINI_STATE_URI; do
-            if [[ -z "${!v:-}" ]]; then
-              echo "Missing required secret: $v" >&2
-              exit 1
-            fi
-          done
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -85,7 +74,8 @@ jobs:
               ("cd /opt/gemini-l5/releases/"+$sha+" && docker build -f deploy/aws_gemini_l5/Dockerfile -t gemini-l5-shadow-aws:"+$sha+" ."),
               ("cd /opt/gemini-l5/releases/"+$sha+" && GEMINI_L5_IMAGE=gemini-l5-shadow-aws:"+$sha+" GEMINI_L5_STATE_DIR=/var/lib/gemini-l5 bash deploy/aws_gemini_l5/run.sh"),
               ("printf %s " + ($state|@sh) + " > /etc/gemini-l5-s3-uri"),
-              ("docker inspect -f {{.Config.Image}} gemini-l5-shadow-aws | grep -F " + ("gemini-l5-shadow-aws:"+$sha|@sh))
+              ("docker inspect -f {{.Config.Image}} gemini-l5-shadow-aws | grep -F " + ("gemini-l5-shadow-aws:"+$sha|@sh)),
+              "docker ps --filter name=gemini-l5-shadow-aws --filter status=running --format {{.Names}} | grep -Fx gemini-l5-shadow-aws"
             ]}')
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$AWS_GEMINI_INSTANCE_ID" \
