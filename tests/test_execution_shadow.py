@@ -516,29 +516,37 @@ def test_comparison_refuses_a_verdict_on_a_thin_sample():
                                "reached": ticks <= 0})
         return p
     out = EX.compare_to_history([_p(12.0) for _ in range(5)])
-    assert "too small" in out["verdict"]
+    assert "not decision-ready" in out["verdict"]
 
 
 def test_a_far_live_distribution_reads_as_a_reachability_bottleneck():
-    def _p(ticks):
+    """BOTH classes must clear MIN_CLASS before any verdict is offered, so the
+    fixture carries filled proposals too -- a bar that passes on 40 failures
+    and no successes is the shape this project has already been misled by."""
+    def _p(ticks, status=EX.NO_FILL):
         p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
-        p.update(status=EX.NO_FILL,
+        p.update(status=status,
                  reachability={"observations": 3, "min_gap_ticks": ticks,
-                               "reached": False})
+                               "reached": status == EX.VIRTUAL_MATCHED})
         return p
-    out = EX.compare_to_history([_p(12.0) for _ in range(40)])
+    props = ([_p(12.0) for _ in range(30)]
+             + [_p(12.0, EX.VIRTUAL_MATCHED) for _ in range(10)])
+    out = EX.compare_to_history(props)
     assert "reachability bottleneck" in out["verdict"]
     assert out["prospective"]["median"] == 12.0
+    assert out["filled_n"] == 10 and out["unfilled_n"] == 30
 
 
 def test_a_close_live_distribution_clears_reachability():
-    def _p(ticks):
+    def _p(ticks, status):
         p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
-        p.update(status=EX.VIRTUAL_MATCHED,
+        p.update(status=status,
                  reachability={"observations": 3, "min_gap_ticks": ticks,
                                "reached": True})
         return p
-    out = EX.compare_to_history([_p(0.0) for _ in range(40)])
+    props = ([_p(0.0, EX.VIRTUAL_MATCHED) for _ in range(20)]
+             + [_p(0.0, EX.NO_FILL) for _ in range(20)])
+    out = EX.compare_to_history(props)
     assert "not the constraint" in out["verdict"]
 
 
@@ -743,3 +751,136 @@ def test_buckets_group_by_a_state_field_and_flag_thin_groups():
 def test_buckets_exclude_unmeasured_proposals():
     out = EX.reachability_buckets([_unmeasured(EX.VIRTUAL_MATCHED)])
     assert out["groups"] == {}, "an unmeasured proposal has no gap to bucket"
+
+
+# ---- initial-distance bands ----------------------------------------------
+
+def _band_prop(initial, status=EX.NO_FILL, reached=False, latency=None,
+               later=False, risk=0.0, residual_after=None):
+    p = EX.open_proposal("aec-nfl-bal-ind-2026-09-13", PLAN, T0, None, -2,
+                         D("0.39"))
+    p.update(status=status, latency_s=latency, risk_returned=risk,
+             residual_after=residual_after,
+             reachability={"observations": 5, "reached": reached,
+                           "initial_gap_ticks": initial,
+                           "min_gap_ticks": initial,
+                           "initial_gap_cents": initial / 2.0,
+                           "min_gap_cents": initial / 2.0,
+                           "time_to_touch_s": 40.0 if reached else None,
+                           "max_favorable_excursion_cents": 0.0})
+    if later:
+        p["research"] = {"would_fill_later": True,
+                         "later_fill_latency_s": 900.0,
+                         "reachability": {"reached": True},
+                         "verdict": "SLOW_BUT_REACHABLE"}
+    return p
+
+
+def test_bands_use_the_owners_exact_edges():
+    assert [b[0] for b in EX.DISTANCE_BANDS] == ["0-1", "2", "3-4", "5-8", "gt8"]
+    for t, want in ((0.0, "0-1"), (1.0, "0-1"), (2.0, "2"), (3.0, "3-4"),
+                    (4.0, "3-4"), (5.0, "5-8"), (8.0, "5-8"), (9.0, "gt8")):
+        assert EX.distance_band(t) == want, t
+
+
+def test_bands_keep_the_frozen_and_research_horizons_separate():
+    ps = [_band_prop(1.0, EX.VIRTUAL_MATCHED, reached=True, latency=120.0,
+                     risk=1.0, residual_after=-1),
+          _band_prop(1.0, EX.NO_FILL, later=True)]
+    b = EX.distance_band_report(ps)["bands"]["0-1"]
+    assert b["n"] == 2
+    assert b["filled_le_300s"] == 1 and b["fill_rate_300s"] == 0.5
+    assert b["filled_le_1800s_research"] == 2
+    assert b["fill_rate_1800s_research"] == 1.0
+    assert b["risk_returned"] == 1.0
+    assert b["median_time_to_fill_s"] == 120.0
+
+
+def test_bands_report_residual_still_outstanding():
+    ps = [_band_prop(6.0, EX.NO_FILL)]          # residual_before -2, unfilled
+    b = EX.distance_band_report(ps)["bands"]["5-8"]
+    assert b["residual_outstanding_units"] == 2.0
+
+
+def test_bands_carry_state_and_flag_thin_bands():
+    b = EX.distance_band_report([_band_prop(3.0)])["bands"]["3-4"]
+    assert b["sports"] == ["nfl"] and b["market_types"] == ["moneyline"]
+    assert b["sufficient_sample"] is False
+
+
+def test_decision_ready_needs_both_classes_not_a_total():
+    """OWNER: do not wait for 30 total if one outcome class remains tiny."""
+    lopsided = ([_band_prop(3.0, EX.VIRTUAL_MATCHED, reached=True, latency=10.0)]
+                + [_band_prop(3.0) for _ in range(49)])
+    assert EX.distance_band_report(lopsided)["decision_ready"] is False
+    balanced = ([_band_prop(1.0, EX.VIRTUAL_MATCHED, reached=True, latency=10.0)
+                 for _ in range(10)] + [_band_prop(6.0) for _ in range(10)])
+    assert EX.distance_band_report(balanced)["decision_ready"] is True
+
+
+def test_compare_to_history_uses_the_contrast_bar_not_a_total():
+    many_losses = [_band_prop(4.0) for _ in range(40)]
+    out = EX.compare_to_history(many_losses)
+    assert "not decision-ready" in out["verdict"]
+    assert out["filled_n"] == 0 and out["unfilled_n"] == 40
+
+
+# ---- selector opportunity loss (shadow) ----------------------------------
+
+def _snap(slug, flow, gap, sport="nfl"):
+    return {"slug": slug, "flow_usd_per_min": flow, "initial_gap_ticks": gap,
+            "sport": sport, "market_type": "moneyline"}
+
+
+def test_opportunity_is_recorded_when_flow_leader_is_far_and_another_is_near():
+    e = EX.selector_opportunity([_snap("hi", 20000, 6.0),
+                                 _snap("near", 50, 1.0, sport="tennis")])
+    assert e["flow_ranked_choice"]["slug"] == "hi"
+    assert e["nearest_complement"]["slug"] == "near"
+    assert e["gap_difference_ticks"] == 5.0
+    assert e["flow_ratio"] == 400.0
+
+
+def test_no_observation_when_the_flow_leader_is_already_near():
+    assert EX.selector_opportunity([_snap("hi", 20000, 1.0),
+                                    _snap("other", 50, 0.5)]) is None
+
+
+def test_no_observation_when_the_alternative_is_not_near():
+    assert EX.selector_opportunity([_snap("hi", 20000, 6.0),
+                                    _snap("other", 50, 5.0)]) is None
+
+
+def test_absent_and_zero_loss_are_different_facts():
+    """An absent observation must not enter the rate as a zero."""
+    out = EX.opportunity_loss_report([])
+    assert out["n"] == 0 and out["sufficient_sample"] is False
+    assert "has not arisen" in out["note"]
+
+
+def test_opportunity_needs_a_measured_gap_on_both_sides():
+    assert EX.selector_opportunity([_snap("hi", 20000, None),
+                                    _snap("near", 50, 1.0)]) is None
+
+
+def test_opportunities_persist_and_stay_bounded(tmp_path):
+    t = EX.ExecutionShadow(path=str(tmp_path / "ex.json"), now=lambda: T0)
+    for _ in range(3):
+        t.observe_selector([_snap("hi", 20000, 6.0), _snap("near", 50, 1.0)])
+    assert t.save() is True
+    t2 = EX.ExecutionShadow(path=str(tmp_path / "ex.json"), now=lambda: T0)
+    assert len(t2.opportunities) == 3
+    assert EX.opportunity_loss_report(t2.opportunities)["n"] == 3
+
+
+def test_opportunity_module_changes_no_ranking():
+    src = open("src/pmus_execution_shadow.py").read()
+    import ast
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "selector_opportunity")
+    called = {c.func.id for c in ast.walk(fn)
+              if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)}
+    assert not (called & {"rank", "sort_by_rank", "select"})
+    assert "SHADOW ONLY" in EX.selector_opportunity(
+        [_snap("hi", 20000, 6.0), _snap("near", 50, 1.0)])["labels"]

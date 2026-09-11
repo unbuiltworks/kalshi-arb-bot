@@ -397,6 +397,8 @@ class ExecutionShadow:
         self._path = path or STATE_PATH
         self._now = now
         self.proposals: dict[str, dict] = {}
+        # Bounded: the counterfactual is a rate, not a tape.
+        self.opportunities: list = []
         self.load()
 
     def load(self) -> None:
@@ -405,6 +407,7 @@ class ExecutionShadow:
                 doc = json.load(fh)
             props = doc.get("proposals") or {}
             self.proposals = {k: dict(v) for k, v in props.items()}
+            self.opportunities = list(doc.get("opportunities") or [])[-2000:]
         except Exception:                                       # noqa: BLE001
             return
 
@@ -415,7 +418,9 @@ class ExecutionShadow:
                 os.makedirs(d, exist_ok=True)
             tmp = self._path + ".tmp"
             with open(tmp, "w") as fh:
-                json.dump({"proposals": self.proposals}, fh, default=str)
+                json.dump({"proposals": self.proposals,
+                           "opportunities": self.opportunities[-2000:]},
+                          fh, default=str)
             os.replace(tmp, self._path)
             return True
         except Exception:                                       # noqa: BLE001
@@ -492,6 +497,14 @@ class ExecutionShadow:
         for p in self.proposals.values():
             out[p.get("status")] = out.get(p.get("status"), 0) + 1
         return out
+
+    def observe_selector(self, snapshot) -> Optional[dict]:
+        """Record one counterfactual pair if the situation arose."""
+        e = selector_opportunity(snapshot)
+        if e is not None:
+            self.opportunities.append(e)
+            del self.opportunities[:-2000]
+        return e
 
     def summary(self) -> dict:
         return summarize(list(self.proposals.values()))
@@ -953,10 +966,20 @@ def compare_to_history(props: Sequence[Mapping[str, Any]],
                       "share_at_or_inside_our_price": round(
                           sum(1 for g in live if g <= 0) / len(live), 4)}
     f_med = (hist.get("filled") or {}).get("median")
+    # DECISION-READY IS ABOUT THE CONTRAST, NOT THE TOTAL. OWNER: "Do not wait
+    # for 30 total if one outcome class remains tiny. The comparison is
+    # decision-ready only when both successful and unsuccessful completion
+    # states have enough observations to support the contrast." A 30-total bar
+    # passes on 29 failures and 1 success, which is the shape that has misled
+    # this project twice tonight.
+    won = sum(1 for p in props if p.get("status") == VIRTUAL_MATCHED
+              and (p.get("reachability") or {}).get("min_gap_ticks") is not None)
+    lost = (live_stats or {}).get("n", 0) - won
     verdict = None
     if live_stats and f_med is not None:
-        if live_stats["n"] < 30:
-            verdict = f"sample too small to compare (n={live_stats['n']}, need 30)"
+        if won < MIN_CLASS or lost < MIN_CLASS:
+            verdict = (f"not decision-ready: filled={won}, unfilled={lost}, "
+                       f"need {MIN_CLASS} of each to support the contrast")
         elif live_stats["median"] > (hist.get("unfilled") or {}).get("p75", 1e9):
             verdict = ("live complements rest FARTHER than the p75 of our own "
                        "UNFILLED completes -- consistent with a reachability "
@@ -968,6 +991,7 @@ def compare_to_history(props: Sequence[Mapping[str, Any]],
             verdict = "live complements rest between the filled and unfilled medians"
     return {"kind": "execution_shadow_vs_history",
             "historical": hist, "prospective": live_stats, "verdict": verdict,
+            "filled_n": won, "unfilled_n": lost, "min_per_class": MIN_CLASS,
             "labels": ("same quantity on both sides: ticks from the best "
                        "opposite touch, closest reached. Nothing historical "
                        "is reconstructed or modelled.")}
@@ -1130,3 +1154,196 @@ def reachability_buckets(props: Sequence[Mapping[str, Any]],
                        "ticks is worse than one producing few that reach 1 "
                        "tick -- a proposal COUNT inverts that ranking. Each "
                        "group carries its own sufficient_sample.")}
+
+
+# --------------------------- initial-distance bands, the owner's exact edges
+DISTANCE_BANDS = (("0-1", 0.0, 1.0), ("2", 1.0, 2.0), ("3-4", 2.0, 4.0),
+                  ("5-8", 4.0, 8.0), ("gt8", 8.0, float("inf")))
+
+
+def distance_band(ticks: Optional[float]) -> Optional[str]:
+    """Which band an INITIAL complement distance falls in.
+
+    INITIAL, not minimum: the question is what the first-leg state COMMITTED
+    us to, before the market moved. The minimum reached is an outcome; the
+    initial gap is the decision input, and only the second can inform a
+    selector.
+    """
+    if ticks is None:
+        return None
+    for name, lo, hi in DISTANCE_BANDS:
+        if (ticks <= hi) if lo == 0.0 else (lo < ticks <= hi):
+            return name
+    return None
+
+
+def distance_band_report(props: Sequence[Mapping[str, Any]]) -> dict:
+    """Outcomes per initial-distance band, at both horizons.
+
+    OWNER: "For every measured first-leg state, bucket initial complement
+    distance... report touched/fill at 300s and at the 1800s research horizon,
+    median time to touch/fill, risk returned, residual still outstanding, and
+    flow/spread/movement/sport/market type."
+
+    The frozen 300s columns and the 1800s research columns are computed side
+    by side but never merged: a band whose complements are reached only after
+    900s is a different proposition from one reached inside the policy
+    horizon, and collapsing them would hide exactly that.
+    """
+    measured = [p for p in props
+                if p.get("status") in RESOLVED and cohort_of(p) == MEASURED]
+    bands: dict = {}
+    for p in measured:
+        b = distance_band((p.get("reachability") or {}).get("initial_gap_ticks"))
+        if b:
+            bands.setdefault(b, []).append(p)
+
+    def _med(xs):
+        xs = sorted(x for x in xs if x is not None)
+        return _pct(xs, 0.5)
+
+    out: dict = {}
+    for name, _lo, _hi in DISTANCE_BANDS:
+        ps = bands.get(name) or []
+        n = len(ps)
+        if not n:
+            out[name] = {"n": 0}
+            continue
+        r300 = [p for p in ps if (p.get("reachability") or {}).get("reached")]
+        f300 = [p for p in ps if p.get("status") == VIRTUAL_MATCHED]
+        res = [p.get("research") or {} for p in ps]
+        r1800 = [x for x in res
+                 if (x.get("reachability") or {}).get("reached")]
+        f1800 = len(f300) + sum(1 for x in res if x.get("would_fill_later"))
+        # residual still outstanding: a completed proposal returns part of it;
+        # an unfilled one leaves the whole first leg standing.
+        outstanding = sum(abs(float(p.get("residual_after")
+                                    if p.get("residual_after") is not None
+                                    else p.get("residual_before") or 0))
+                          for p in ps)
+        st = [p.get("state_at_post") or {} for p in ps]
+        out[name] = {
+            "n": n,
+            "touched_le_300s": len(r300),
+            "filled_le_300s": len(f300),
+            "touched_le_1800s_research": len(r1800),
+            "filled_le_1800s_research": f1800,
+            "fill_rate_300s": round(len(f300) / n, 4),
+            "fill_rate_1800s_research": round(f1800 / n, 4),
+            "median_time_to_touch_s": _med(
+                [(p.get("reachability") or {}).get("time_to_touch_s")
+                 for p in ps]),
+            "median_time_to_fill_s": _med([p.get("latency_s") for p in f300]),
+            "risk_returned": round(sum(float(p.get("risk_returned") or 0)
+                                       for p in f300), 4),
+            "residual_outstanding_units": round(outstanding, 4),
+            "median_flow_usd_per_min": _med([x.get("flow_usd_per_min")
+                                             for x in st]),
+            "median_spread": _med([x.get("spread") for x in st]),
+            "median_mid_stdev": _med([x.get("mid_stdev") for x in st]),
+            "sports": sorted({str(x.get("sport")) for x in st}),
+            "market_types": sorted({str(x.get("market_type")) for x in st}),
+            "sufficient_sample": n >= MIN_CLASS,
+        }
+    filled_total = sum(b.get("filled_le_300s", 0) for b in out.values())
+    unfilled_total = sum(b.get("n", 0) for b in out.values()) - filled_total
+    return {
+        "kind": "execution_shadow_distance_bands",
+        "bands": out,
+        "measured_total": len(measured),
+        "filled_total": filled_total, "unfilled_total": unfilled_total,
+        "decision_ready": (filled_total >= MIN_CLASS
+                           and unfilled_total >= MIN_CLASS),
+        "min_per_class": MIN_CLASS,
+        "labels": ("bands are INITIAL distance -- what the first-leg state "
+                   "committed us to before the market moved -- because the "
+                   "minimum reached is an outcome and only the input can "
+                   "inform a selector. Frozen 300s and 1800s research columns "
+                   "are never merged. decision_ready requires BOTH outcome "
+                   "classes to clear the floor, not a total."),
+    }
+
+
+# ------------------------------------------- selector opportunity loss (shadow)
+FAR_TICKS = float(os.getenv("PMUS_EXEC_FAR_TICKS", "4"))
+NEAR_TICKS = float(os.getenv("PMUS_EXEC_NEAR_TICKS", "2"))
+
+
+def selector_opportunity(snapshot: Sequence[Mapping[str, Any]]) -> Optional[dict]:
+    """What flow-ranking chose vs what was closest to completing.
+
+    OWNER: "when the top-flow market is 4-8 ticks from acceptable completion
+    but another eligible market is 0-2 ticks away, record what each frozen
+    R5F would have done. Shadow only -- do not change ranking yet."
+
+    `snapshot` is one row per eligible market at one instant:
+    {slug, flow_usd_per_min, initial_gap_ticks, sport, market_type}.
+
+    Returns None when the situation does not arise -- there is no top-flow
+    market, no gap measurement, or the flow leader is ALREADY near. An absent
+    observation and a zero-loss observation are different facts, and only the
+    second belongs in a rate.
+
+    NOTHING HERE RANKS OR SELECTS. It records a counterfactual pair so the
+    question "did flow-ranking cost us reachability?" can be answered from
+    evidence gathered before any ranking changed.
+    """
+    rows = [r for r in snapshot or []
+            if r.get("flow_usd_per_min") is not None
+            and r.get("initial_gap_ticks") is not None]
+    if len(rows) < 2:
+        return None
+    chosen = max(rows, key=lambda r: float(r["flow_usd_per_min"]))
+    nearest = min(rows, key=lambda r: float(r["initial_gap_ticks"]))
+    if chosen["slug"] == nearest["slug"]:
+        return None
+    c_gap = float(chosen["initial_gap_ticks"])
+    n_gap = float(nearest["initial_gap_ticks"])
+    if not (c_gap >= FAR_TICKS and n_gap <= NEAR_TICKS):
+        return None
+    return {
+        "kind": "selector_opportunity_loss",
+        "flow_ranked_choice": {"slug": chosen["slug"],
+                               "flow_usd_per_min": chosen["flow_usd_per_min"],
+                               "initial_gap_ticks": c_gap,
+                               "sport": chosen.get("sport"),
+                               "market_type": chosen.get("market_type")},
+        "nearest_complement": {"slug": nearest["slug"],
+                               "flow_usd_per_min": nearest["flow_usd_per_min"],
+                               "initial_gap_ticks": n_gap,
+                               "sport": nearest.get("sport"),
+                               "market_type": nearest.get("market_type")},
+        "gap_difference_ticks": round(c_gap - n_gap, 2),
+        "flow_ratio": (None if not float(nearest["flow_usd_per_min"]) else
+                       round(float(chosen["flow_usd_per_min"])
+                             / float(nearest["flow_usd_per_min"]), 2)),
+        "eligible_considered": len(rows),
+        "labels": ("SHADOW ONLY -- the ranker is unchanged. Frozen R5F takes "
+                   "the flow leader; this records the reachability it passed "
+                   "over, so the cost of that rule can be measured before it "
+                   "is altered."),
+    }
+
+
+def opportunity_loss_report(events: Sequence[Mapping[str, Any]]) -> dict:
+    """Aggregate the recorded counterfactual pairs."""
+    ev = [e for e in events or [] if e]
+    if not ev:
+        return {"kind": "execution_shadow_opportunity_loss", "n": 0,
+                "note": "situation has not arisen in any observed cycle",
+                "sufficient_sample": False}
+    diffs = sorted(float(e["gap_difference_ticks"]) for e in ev)
+    return {
+        "kind": "execution_shadow_opportunity_loss",
+        "n": len(ev),
+        "median_gap_difference_ticks": _pct(diffs, 0.5),
+        "p90_gap_difference_ticks": _pct(diffs, 0.9),
+        "max_gap_difference_ticks": diffs[-1],
+        "far_threshold_ticks": FAR_TICKS, "near_threshold_ticks": NEAR_TICKS,
+        "sports_passed_over": sorted({str(e["nearest_complement"].get("sport"))
+                                      for e in ev}),
+        "sufficient_sample": len(ev) >= MIN_CLASS,
+        "labels": ("how far the flow-ranked choice sat from completion versus "
+                   "the nearest eligible alternative, at the same instant. "
+                   "SHADOW ONLY; no ranking changed."),
+    }

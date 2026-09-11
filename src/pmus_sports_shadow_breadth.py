@@ -760,6 +760,22 @@ def run(cycles: Optional[int] = None) -> int:
                     exec_shadow.reachability_buckets(props, key="sport")
                 rep["execution_reach_buckets_by_type"] = \
                     exec_shadow.reachability_buckets(props, key="market_type")
+                rep["execution_distance_bands"] = \
+                    exec_shadow.distance_band_report(props)
+                # SELECTOR OPPORTUNITY LOSS, shadow only. One row per eligible
+                # market carrying a measured initial gap, at this instant.
+                gaps = {p["slug"]: (p.get("reachability") or {}).get(
+                    "initial_gap_ticks") for p in props}
+                snap = [{"slug": r["slug"],
+                         "flow_usd_per_min": r.get("flow_usd_per_min"),
+                         "initial_gap_ticks": gaps.get(r["slug"]),
+                         "sport": exec_shadow.sport_of(r["slug"]),
+                         "market_type": exec_shadow.market_type(r["slug"])}
+                        for r in ranked]
+                sb.execution.observe_selector(snap)
+                rep["execution_opportunity_loss"] = \
+                    exec_shadow.opportunity_loss_report(
+                        sb.execution.opportunities)
                 rep["execution_persisted"] = sb.execution.save()
             rep["raw_persisted"] = sb.append_raw(
                 n, [by_slug[k] for k in by_slug], decisions)
