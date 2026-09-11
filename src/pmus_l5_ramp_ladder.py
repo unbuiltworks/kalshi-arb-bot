@@ -254,6 +254,38 @@ OWNER_RUNGS: tuple[dict, ...] = (
                      "concurrency 1 kept on L5's own one-lane evidence, 2 "
                      "staged (observation_band, maker_only), 3 kept "
                      "(action_size, off_distribution_hold, strict_evidence_gate)"},
+    # OWNER DECISION 2026-09-11 ("go 3" + "Join the touch, hard cap <=1.00").
+    # R5F-T is R5F WITH ITS OWN APPROVAL HONOURED. The 2026-09-07 approval row
+    # reads "L5-touch COMPLETE pricing; above-par pair cost is
+    # reported/accounted, NOT behaviorally gated" -- and R5F shipped
+    # pair_cost_max: None, which falls through to DEFAULT_PAIR_COST_MAX 0.98.
+    # Measured consequence on 2382 live complement preflights: pair_cost_max
+    # read 0.98 on 2215 of them and the chosen price sat 2c below the opposing
+    # ask on 2258, which is behind the touch -- and complements behind the
+    # touch traded through 0.74% of the time against 47.6% at two ticks.
+    #
+    # This rung states the ceiling EXPLICITLY at par rather than inheriting a
+    # default. Par remains absolute: pair_cost_max() floors every rung at 1.00
+    # whatever it asks for, so this cannot buy a pair that settlement cannot
+    # return. Only the price lever moves; every other R5F lever is copied
+    # unchanged so a fill difference is attributable to price and nothing else.
+    #
+    # Sized as a CANARY, not a campaign: one market, one campaign, smaller
+    # notional, fewer actions. The measurements are the return here, not P&L.
+    {"id": "R5FT", "name": "R5F AT THE TOUCH: complement joins the best "
+                           "non-crossing maker price, pair capped at par "
+                           "(OWNER 2026-09-11 canary)",
+     "per_market_cap_usd": "3.00", "residual_units": 6,
+     "markets_per_campaign": 1,
+     "max_unmatched_usd": None, "pair_cost_max": "1.00",
+     "complement_pricing": "l5_touch", "rest_policy": "model", "rest_floor_s": "5",
+     "campaigns_per_day": 1, "max_actions_per_session": 4, "concurrency": 1,
+     "max_sessions_per_campaign": 10080,
+     "target_notional_usd": "1.00", "max_leg_notional_usd": "1.50",
+     "daily_loss_stop_usd": "-15.00", "lever": "price", "promote": None,
+     "derived_from": "R5F with pair_cost_max stated at par instead of "
+                     "inheriting 0.98, per the rung's own 2026-09-07 approval "
+                     "text; size reduced to a one-market canary"},
 )
 ALL_RUNGS: tuple[dict, ...] = RUNGS + OWNER_RUNGS
 # fail closed at import: rung() returns the FIRST id match, so a duplicate id

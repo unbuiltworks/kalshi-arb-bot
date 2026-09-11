@@ -29,7 +29,12 @@ def test_r3l_is_the_owner_rung_with_the_derived_numbers():
     assert wc["per_day_bounded_by_daily_stop_usd"] == "22.50"   # stop + one in-flight market
     assert wc["max_concurrent_open_exposure_usd"] == "7.50"
     assert wc["per_action_target_usd"] == "2.50" and wc["per_leg_max_usd"] == "3.25"
-    assert [x["id"] for x in ladder.ladder()][-5:] == ["R2C", "R2C2", "R3L", "R4", "R5F"]
+    # R5FT appended 2026-09-11 (the at-the-touch canary), so the window moves.
+    # Asserted as a TAIL rather than loosened to a membership check: the order
+    # is the promotion order, and a rung silently inserted mid-ladder would
+    # change what "the next rung" means.
+    assert [x["id"] for x in ladder.ladder()][-5:] == [
+        "R2C2", "R3L", "R4", "R5F", "R5FT"]
 
 
 def test_r1_and_r2c_labels_stops_and_sizes_are_unchanged():
