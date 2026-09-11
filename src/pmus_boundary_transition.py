@@ -36,6 +36,16 @@ one is trading with a position we did not know about.
 ONE-SHOT. Activation is a promotion of the engine's configuration, not a
 per-market gate. Once recorded it is not re-run, and a residual acquired
 afterwards does not un-promote the engine -- that is what quarantine is for.
+
+WHAT THIS RECORD IS NOT. OWNER: "A deployment request, SUCCESS build, or
+pushed commit alone is not activation proof." Neither is this record. Written
+by the transition process, it says the campaign reached a clean boundary and
+the seven assertions passed THERE -- it says nothing about which code the
+probe is running. Acquisition therefore does not key off `active`; it keys
+off `may_acquire`, which is true only when the record carries a proof from
+pmus_boundary_activation that ended at the SERVING process. Pass a `prove`
+callable to attempt_transition to produce one; without it the transition
+still records the boundary and acquisition stays shut.
 """
 from __future__ import annotations
 
@@ -44,6 +54,7 @@ import os
 import time
 from typing import Any, Mapping, Optional
 
+from src import pmus_boundary_activation as ba
 from src import pmus_boundary_preflight as pf
 from src import pmus_residual_quarantine as rq
 
@@ -64,6 +75,7 @@ WAITING = "WAITING_FOR_CLEAN_BOUNDARY"
 # tell "not yet" from "not asked".
 UNDETERMINED = "UNDETERMINED_CANNOT_ESTABLISH_BOUNDARY"
 REFUSED = "REFUSED_PREFLIGHT"
+REFUSED_PROOF = "REFUSED_ACTIVATION_UNPROVEN"
 ACTIVATED = "ACTIVATED"
 ALREADY = "ALREADY_ACTIVE"
 
@@ -128,7 +140,7 @@ def clean_boundary(continuous=None, t=None, sweep=None) -> dict:
 def attempt_transition(t=None, continuous=None, session=None, sweep=None,
                        ranked_candidate: Optional[Mapping[str, Any]] = None,
                        held_slugs=None, path: Optional[str] = None,
-                       run_tests: bool = True, now=None) -> dict:
+                       run_tests: bool = True, now=None, prove=None) -> dict:
     """Run the whole transition once. NEVER raises; never partially applies.
 
     The activation record is written only after the preflight returns ok on
@@ -168,9 +180,24 @@ def attempt_transition(t=None, continuous=None, session=None, sweep=None,
         return _row(REFUSED, boundary=boundary, preflight=result,
                     failed=result.get("failed"))
 
+    # Steps 4-7: the deploy, and the proof that the SERVING process is
+    # running it. Only a prover can produce this; it is refused, never
+    # assumed, and a chain that stops anywhere writes no record at all.
+    proof = None
+    if prove is not None:
+        proof, err = ba._call(prove, result)
+        if err is not None or not isinstance(proof, Mapping):
+            return _row(REFUSED_PROOF, boundary=boundary, preflight=result,
+                        proof={"state": ba.SERVING_ENVELOPE_UNKNOWN,
+                               "error": err or "prover returned no row"})
+        if not ba.may_acquire(proof.get("state")):
+            return _row(REFUSED_PROOF, boundary=boundary, preflight=result,
+                        proof=proof)
+
     record = {
         "active": True,
         "activated_at": now(),
+        "activation_proof": proof,
         "activates": list(ACTIVATES),
         "envelope": {k: str(v) for k, v in pf.REQUIRED_ENVELOPE.items()},
         "acquisition_slots": rq.ACTIVE_ACQUISITION_SLOTS,
@@ -229,8 +256,15 @@ def activation_for_campaign(path: Optional[str] = None) -> dict:
     running exactly as it does today.
     """
     doc = load_activation(path)
+    proof = (doc or {}).get("activation_proof")
+    proven = isinstance(proof, Mapping) and ba.may_acquire(proof.get("state"))
     return {
         "active": bool(doc),
+        # OWNER step 8. `active` is the boundary fact; this is the serving
+        # fact, and only this one opens acquisition.
+        "may_acquire": bool(doc) and proven,
+        "proof_state": (proof or {}).get("state") if isinstance(proof, Mapping)
+                       else None,
         "ranked_selector": bool(doc) and "ranked_selector" in (
             doc.get("activates") or []),
         "residual_quarantine": bool(doc) and "residual_quarantine" in (
@@ -240,7 +274,11 @@ def activation_for_campaign(path: Optional[str] = None) -> dict:
         "acquisition_slots": (doc.get("acquisition_slots") if doc
                               else rq.ACTIVE_ACQUISITION_SLOTS),
         "labels": ("a missing or unreadable record is NOT an activation; the "
-                   "campaign keeps running exactly as it does today"),
+                   "campaign keeps running exactly as it does today. "
+                   "`active` means the boundary was clean and the seven "
+                   "assertions passed; `may_acquire` additionally means the "
+                   "SERVING process was proven to run the approved revision. "
+                   "Acquisition keys off may_acquire and nothing else."),
     }
 
 

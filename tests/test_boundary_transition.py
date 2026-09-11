@@ -12,9 +12,11 @@ activation? The answer must be no.
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
+from src import pmus_boundary_activation as BA
 from src import pmus_boundary_transition as BT
 
 
@@ -344,3 +346,144 @@ def test_a_written_activation_names_exactly_what_it_turns_on(
     assert a["acquisition_slots"] == 1
     assert a["envelope"] == {k: str(v)
                              for k, v in BT.pf.REQUIRED_ENVELOPE.items()}
+
+
+# ---- the proof: a record is not a serving process -------------------------
+#
+# OWNER: "A deployment request, SUCCESS build, or pushed commit alone is not
+# activation proof." This record is written by the transition process and is
+# not proof either. Acquisition keys off may_acquire, never off active.
+
+def _proof(state=None):
+    state = state or BA.ACTIVATION_PROVEN
+    return lambda _preflight: {"state": state,
+                               "may_acquire": BA.may_acquire(state),
+                               "serving_sha": "abc1234"}
+
+
+def test_a_boundary_record_without_a_proof_never_permits_acquisition(
+        tmp_path, monkeypatch):
+    """The default path still activates the selector and quarantine -- and
+    acquisition stays shut, because nothing proved what the probe is running."""
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p)
+    assert row["transition"] == BT.ACTIVATED
+    a = BT.activation_for_campaign(p)
+    assert a["active"] is True
+    assert a["may_acquire"] is False
+    assert a["proof_state"] is None
+
+
+def test_a_proven_chain_is_the_only_thing_that_opens_acquisition(
+        tmp_path, monkeypatch):
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p,
+                                prove=_proof())
+    assert row["transition"] == BT.ACTIVATED
+    a = BT.activation_for_campaign(p)
+    assert a["active"] is True
+    assert a["may_acquire"] is True
+    assert a["proof_state"] == BA.ACTIVATION_PROVEN
+    assert json.loads(open(p).read())["activation_proof"]["serving_sha"] \
+        == "abc1234"
+
+
+@pytest.mark.parametrize("state", [
+    s for k, s in sorted(vars(BA).items())
+    if k.isupper() and isinstance(s, str) and k != "REQUIRED_COMPONENTS"
+    and s != BA.ACTIVATION_PROVEN])
+def test_every_unproven_chain_state_refuses_and_writes_no_record(
+        tmp_path, monkeypatch, state):
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p,
+                                prove=_proof(state))
+    assert row["transition"] == BT.REFUSED_PROOF, state
+    assert row["proof"]["state"] == state
+    assert not os.path.exists(p), "an unproven transition left a record"
+    assert BT.activation_for_campaign(p)["may_acquire"] is False
+
+
+def test_a_prover_that_raises_refuses_rather_than_activating(
+        tmp_path, monkeypatch):
+    """Fail closed in the direction that matters: 'could not prove' is not
+    'proved'."""
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+
+    def boom(_preflight):
+        raise RuntimeError("railway unreachable")
+
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p,
+                                prove=boom)
+    assert row["transition"] == BT.REFUSED_PROOF
+    assert "railway unreachable" in str(row["proof"]["error"])
+    assert not os.path.exists(p)
+
+
+@pytest.mark.parametrize("bad", [None, "PROVEN", {}, {"state": None},
+                                 {"may_acquire": True}, 0])
+def test_a_prover_returning_junk_is_never_read_as_proof(
+        tmp_path, monkeypatch, bad):
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    row = BT.attempt_transition(continuous=FakeContinuous(), path=p,
+                                prove=lambda _pf: bad)
+    assert row["transition"] == BT.REFUSED_PROOF, bad
+    assert not os.path.exists(p)
+
+
+def test_a_record_whose_proof_is_tampered_with_stops_permitting_acquisition(
+        tmp_path, monkeypatch):
+    """The stored proof is re-read through may_acquire on every cycle, so a
+    record edited to claim activation does not gain it."""
+    _ok_preflight(monkeypatch)
+    p = str(tmp_path / "act.json")
+    BT.attempt_transition(continuous=FakeContinuous(), path=p, prove=_proof())
+    assert BT.activation_for_campaign(p)["may_acquire"] is True
+    doc = json.loads(open(p).read())
+    for tamper in ({"may_acquire": True}, {"state": "ok", "may_acquire": True},
+                   "ACTIVATION_PROVEN", True):
+        doc["activation_proof"] = tamper
+        open(p, "w").write(json.dumps(doc))
+        assert BT.activation_for_campaign(p)["may_acquire"] is False, tamper
+
+
+def test_the_prover_sees_the_preflight_that_actually_passed(
+        tmp_path, monkeypatch):
+    """Step 4 deploys AFTER the seven assertions, and is handed their result
+    rather than re-deriving it."""
+    _ok_preflight(monkeypatch)
+    seen = []
+    BT.attempt_transition(continuous=FakeContinuous(),
+                          path=str(tmp_path / "act.json"),
+                          prove=lambda pf_row: seen.append(pf_row) or {
+                              "state": BA.ACTIVATION_PROVEN})
+    assert seen and seen[0]["kind"] == "boundary_preflight"
+    assert seen[0]["ok"] is True
+
+
+def test_no_prover_runs_before_the_boundary_is_clean(tmp_path, monkeypatch):
+    """Nothing deploys while the campaign still holds a position."""
+    _ok_preflight(monkeypatch)
+    calls = []
+    for cont in (FakeContinuous(held=["nfl-x"]),
+                 FakeContinuous(unsettled=["nfl-x"])):
+        row = BT.attempt_transition(
+            continuous=cont, path=str(tmp_path / "act.json"),
+            prove=lambda _pf: calls.append(1) or {
+                "state": BA.ACTIVATION_PROVEN})
+        assert row["transition"] != BT.ACTIVATED
+    assert calls == []
+
+
+def test_no_prover_runs_when_the_preflight_fails(tmp_path, monkeypatch):
+    _ok_preflight(monkeypatch, ok=False, failed=["settlements_current"])
+    calls = []
+    row = BT.attempt_transition(
+        continuous=FakeContinuous(), path=str(tmp_path / "act.json"),
+        prove=lambda _pf: calls.append(1) or {"state": BA.ACTIVATION_PROVEN})
+    assert row["transition"] == BT.REFUSED
+    assert calls == []
