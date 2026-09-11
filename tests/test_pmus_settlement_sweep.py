@@ -170,3 +170,39 @@ def test_the_start_command_is_the_sweep_by_explicit_owner_decision():
     assert rail["deploy"]["startCommand"] == "python3 -m src.pmus_settlement_sweep"
     assert rail["deploy"]["restartPolicyType"] == "NEVER", (
         "the sweep exits when done; ALWAYS would re-run it forever")
+
+
+# ------------------------------- a zero must carry its own evidence (LIVE)
+def test_the_sweep_reports_where_it_read_the_ledger_from():
+    """LIVE 17:05:02Z: the first sweep returned n=0 in 1.5 seconds and the row
+    could not distinguish "nothing is unsettled" from "the ledger was not
+    found". It meant the first, but establishing that took the Dockerfile's
+    ENV, the volume mount line and an hour-old risk_set row. A zero that
+    cannot be read as a measurement is not one."""
+    import contextlib, io, json
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        got = sw.sweep([], write_ledger=False, sleep=lambda s: None,
+                       audit=_audit)
+    start = json.loads([l for l in buf.getvalue().splitlines()
+                        if '"sweep_start"' in l][0].split(" ", 1)[1])
+    for field in ("state_dir", "ledger", "ledger_exists", "rows",
+                  "filled_markets", "settled_markets"):
+        assert field in start["ledger"], field
+    assert "ledger" in got
+
+
+def test_a_census_failure_does_not_stop_the_sweep():
+    import contextlib, io, json
+    orig = sw.ledger_census
+    sw.ledger_census = lambda: (_ for _ in ()).throw(OSError("no mount"))
+    try:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            sw.sweep(["a"], write_ledger=False, sleep=lambda s: None,
+                     audit=_audit)
+        start = json.loads([l for l in buf.getvalue().splitlines()
+                            if '"sweep_start"' in l][0].split(" ", 1)[1])
+        assert "census_error" in start["ledger"]
+    finally:
+        sw.ledger_census = orig

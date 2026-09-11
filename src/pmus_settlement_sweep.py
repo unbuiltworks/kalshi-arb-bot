@@ -63,6 +63,50 @@ def pending_slugs() -> list:
     return list(unsettled_slugs() or [])
 
 
+def ledger_census() -> dict:
+    """Where the ledger was read from and what was in it.
+
+    LIVE 2026-09-11T17:05:02Z. The first sweep returned n=0 in 1.5 seconds,
+    and that row could not tell anyone whether it meant "nothing is unsettled"
+    or "the ledger was not found". It meant the first -- but establishing that
+    took reading the Dockerfile's ENV, the volume mount line and an hour-old
+    risk_set row. A zero has to carry its own evidence or it is not a
+    measurement, which is the same lesson the risk-set audit taught at
+    12:03Z."""
+    from pathlib import Path
+    # via the AUDITOR's own resolver, not by importing an executor and not by
+    # re-deriving the path here. Both alternatives were wrong: importing
+    # pmus_q1_executor would put an order-placing module in this process's
+    # import graph and break the structural read-only guarantee its test
+    # enforces, and hardcoding PMUS_Q1_STATE_DIR would be a second definition
+    # free to drift from the one that actually wrote the rows.
+    d = Path(auditor.q1.state_dir())
+    path = d / "ledger.jsonl"
+    out = {"state_dir": str(d), "ledger": str(path),
+           "state_dir_exists": d.exists(), "ledger_exists": path.exists(),
+           "rows": 0, "filled_markets": 0, "settled_markets": 0}
+    if not path.exists():
+        return out
+    filled, settled = set(), set()
+    rows = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            row = json.loads(line)
+        except Exception:                               # noqa: BLE001
+            continue
+        if not isinstance(row, dict) or not row.get("slug"):
+            continue
+        rows += 1
+        slug, kind = str(row["slug"]), row.get("kind")
+        if kind == "filled" and str(row.get("stage", "")).startswith("spring_"):
+            filled.add(slug)
+        elif kind == "settled":
+            settled.add(slug)
+    out.update({"rows": rows, "filled_markets": len(filled),
+                "settled_markets": len(settled)})
+    return out
+
+
 def summarise(result: Mapping[str, Any]) -> dict:
     """The economics of one audited market, using the auditor's own labels.
 
@@ -128,7 +172,13 @@ def sweep(slugs: Optional[Iterable[str]] = None,
     """Audit each market once, in order, and return. No loop, no re-arm."""
     audit = audit or auditor.audit_market
     todo = list(slugs) if slugs is not None else pending_slugs()
+    census = {}
+    try:
+        census = ledger_census()
+    except Exception as exc:                            # noqa: BLE001
+        census = {"census_error": repr(exc)[:200]}
     _log("sweep_start", n=len(todo), write_ledger=write_ledger,
+         ledger=census, slugs=todo[:50],
          note="read-only: audits and ledger rows only, no order path")
     rows, errors = [], []
     for i, slug in enumerate(todo):
@@ -149,7 +199,7 @@ def sweep(slugs: Optional[Iterable[str]] = None,
             sleep(PACE_S)
     out = {"n_requested": len(todo), "n_audited": len(rows),
            "n_errors": len(errors), "markets": rows, "errors": errors,
-           "totals": totals(rows)}
+           "ledger": census, "totals": totals(rows)}
     _log("sweep_end", **{k: v for k, v in out.items()
                          if k not in ("markets", "errors")},
          next="none: this pass exits and never re-arms")
