@@ -83,3 +83,37 @@ claim and this file is where it becomes checkable.
   still settlement-monitored), and `combined_loss_above_stop` separately
   prices its full downside against the −$15.00 stop. Either it qualifies and
   R5F re-arms, or the probe stays halted and names the assertion.
+
+  **Outcome, 11:40Z.** Deployment `e48dcf90`, commit `383a69631848`.
+  `boot_assertions ok: true` — all eleven pass. The one line that changed:
+
+      quarantine OFF   flat_held_state ok=false got ['aec-county-not-ham-…']
+      quarantine ON    flat_held_state ok=true  got []
+
+  `combined_loss_above_stop` stayed `true` throughout; cricket's downside is
+  still charged. Campaign reports `mode: ARMED`.
+
+  **But it still does not acquire.** The very next row:
+
+      resume_start  selection_skipped: "CAMPAIGN_HOLD:POSITION_HELD
+                    (1/1 markets held, worked one session at a time)"
+                    funnel: {admitted: 0, selection_skipped_position_held: 1}
+
+  The BOOT gate is quarantine-aware; the RUNTIME acquisition path is not.
+  Three coupled places still count a quarantined market as occupying the
+  slot, all in the live order path:
+
+    1. `capacity = (len(held_all) < concurrency and not _allowance_spent())`
+       — cricket consumes the single acquisition slot.
+    2. `over_concurrency_action(held_all, filled_markets, concurrency)` —
+       freeing (1) alone would open a second market and then immediately trip
+       `CAMPAIGN_DRAIN:OVER_CONCURRENCY` on the next cycle.
+    3. `micro.account_block_reason` via `set_concurrent_owned`, which is
+       passed `()` under every concurrency-1 rung. A NEW open's preflight
+       requires an account-wide flat, so cricket blocks it as
+       `nonzero_positions` regardless of (1) and (2).
+
+  (3) is the sensitive one: it is the account-wide flat lock. Making
+  quarantine work end-to-end means teaching that lock to accept a declared
+  quarantined position — which is what quarantine is for, and is still a
+  change to a safety lock on the money path. Not attempted here.
