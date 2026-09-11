@@ -210,3 +210,46 @@ def test_the_ladder_is_carried_through_from_the_shadow_state():
     src = inspect.getsource(ex.state_at_post)
     assert '"book_levels": row.get("book_levels")' in src
     assert '"ask_touch_qty": row.get("ask_touch_qty")' in src
+
+
+# ------------------------------ the three defects the 18:26Z rows exposed
+def test_residual_units_falls_back_when_after_is_present_but_none():
+    """LIVE 18:26Z. `residual_after` EXISTS with value None on every NO_FILL
+    row, so dict.get(k, default) never fired its default and residual_units
+    shipped null -- on exactly the rows the gate needs it for. An absent key
+    and a present None are different facts."""
+    stranded = {**STRANDED, "residual_after": None, "residual_before": -3}
+    r = plog.lifecycle_row(stranded)
+    assert r["residual_units"] == -3, "the gate cannot score a null residual"
+    assert r["residual_side"] == "down"
+
+
+def test_first_price_is_read_from_the_key_that_is_actually_written():
+    """_first_leg_of writes "price"; the row read "px" and shipped null."""
+    r = plog.lifecycle_row({**STRANDED,
+                            "first_leg": {"side": "NO", "price": "0.39"}})
+    assert r["first_px"] == "0.39"
+
+
+def test_distance_to_touch_frames_the_side_it_is_buying():
+    """LIVE 18:26Z: a NO complement at 0.67 against a 0.305 YES bid reported
+    0.365 -- 36 cents -- when it sat two ticks behind the NO bid of
+    1 - yes_ask = 0.69."""
+    from src import pmus_execution_shadow as ex
+    row = {"bid": 0.305, "ask": 0.31, "slug": "aec-nfl-x-y-2026-09-13"}
+    no_side = ex.state_at_post(row, -3, "0.31", "0.67", side_yes=False)
+    assert no_side["distance_to_touch"] == -0.02, no_side["distance_to_touch"]
+    yes_side = ex.state_at_post(row, -3, "0.39", "0.29", side_yes=True)
+    assert yes_side["distance_to_touch"] == round(0.29 - 0.305, 4)
+
+
+def test_the_distance_BANDS_were_never_affected_by_that_bug():
+    """Load-bearing: the 2-tick finding keys off reachability's
+    initial_gap_ticks, which comes from gap_to_fill and frames the side
+    correctly. If that ever changes to read state_at_post, the bands inherit
+    the bug and today's headline result silently becomes wrong."""
+    import inspect
+    from src import pmus_execution_shadow as ex
+    band_src = inspect.getsource(ex.distance_band_report)
+    assert "initial_gap_ticks" in band_src
+    assert "distance_to_touch" not in band_src

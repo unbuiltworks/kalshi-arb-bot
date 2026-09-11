@@ -169,8 +169,30 @@ def proposal_id(slug: str, t_post: float, px) -> str:
     return f"{slug}|{round(float(t_post), 1)}|{px}"
 
 
+def _distance_to_touch(px, bid, ask, side_yes) -> Optional[float]:
+    """How far our BUY sits from the touch on the side we are buying.
+
+    A YES buy joins the YES bid. A NO buy joins the NO bid, which is
+    `1 - yes_ask` -- the venue quotes one side and the other is its
+    complement, and forgetting that is what produced a 36-cent distance on a
+    two-tick order."""
+    if px is None:
+        return None
+    try:
+        if side_yes:
+            touch = None if bid is None else float(bid)
+        else:
+            touch = None if ask is None else 1.0 - float(ask)
+        if touch is None:
+            return None
+        return round(float(px) - touch, 4)
+    except (TypeError, ValueError):
+        return None
+
+
 def state_at_post(row: Optional[Mapping[str, Any]],
-                  inv_residual, surplus_avg, complement_px) -> dict:
+                  inv_residual, surplus_avg, complement_px,
+                  side_yes: bool = True) -> dict:
     """Everything observable ABOUT THE MARKET at the moment of posting.
 
     Written once, on the WOULD_POST transition, so the predictor analysis is
@@ -210,8 +232,15 @@ def state_at_post(row: Optional[Mapping[str, Any]],
         "implied_pair_cost": (None if surplus_avg is None
                               or complement_px is None
                               else str(D(str(surplus_avg)) + D(str(complement_px)))),
-        "distance_to_touch": (None if complement_px is None or bid is None
-                              else round(float(complement_px) - float(bid), 4)),
+        # SIDE-AWARE. This compared the complement price to the YES bid
+        # regardless of side, so a NO complement at 0.67 against a 0.305 YES
+        # bid reported 0.365 -- 36 cents -- when it was two ticks behind the
+        # NO bid of 1 - yes_ask. Live at 18:26Z. The distance BANDS were never
+        # affected: they key off reachability.initial_gap_ticks, which comes
+        # from gap_to_fill and has always framed the side correctly. This
+        # field, and the predictor table built on it, were the wrong ones.
+        "distance_to_touch": _distance_to_touch(complement_px, bid, ask,
+                                                side_yes),
     }
 
 
@@ -246,7 +275,10 @@ def open_proposal(slug: str, plan: Mapping[str, Any], t_post: float,
         "max_pair_cost": plan.get("max_pair_cost"),
         "status": WOULD_POST,
         "state_at_post": state_at_post({**(ranked_row or {}), "slug": slug},
-                                       residual_before, surplus_avg, px),
+                                       residual_before, surplus_avg, px,
+                                       side_yes=bool(plan.get(
+                                           "_side_yes",
+                                           plan.get("side") == "YES"))),
         "surplus_avg": None if surplus_avg is None else str(surplus_avg),
         "residual_before": residual_before,
         # WHERE THE FIRST LEG CAME FROM. The complement price is derived from

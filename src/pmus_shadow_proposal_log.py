@@ -192,7 +192,9 @@ def lifecycle_row(prop: Mapping[str, Any],
 
         # ---- the first side, which the replay filled virtually
         "first_side": first.get("side"),
-        "first_px": first.get("px"),
+        # `price`, not `px`: _first_leg_of writes "price". Reading the wrong
+        # key shipped first_px null on every row in the 18:26Z cycle.
+        "first_px": first.get("price", first.get("px")),
         "first_t": first.get("t"),
 
         # ---- the complement, followed forward against the tape
@@ -209,7 +211,14 @@ def lifecycle_row(prop: Mapping[str, Any],
         # ---- what the gate needs: residual proxy and pair economics
         "residual_before": prop.get("residual_before"),
         "residual_after": prop.get("residual_after"),
-        "residual_units": prop.get("residual_after", prop.get("residual_before")),
+        # NOT dict.get(k, default): `residual_after` EXISTS with value None on
+        # every NO_FILL row, so the default never fires and residual_units
+        # shipped null -- on exactly the rows the gate needs it for. Live at
+        # 18:26Z. An absent key and a present None are different facts and
+        # this file has now been bitten by the difference.
+        "residual_units": (prop.get("residual_after")
+                           if prop.get("residual_after") is not None
+                           else prop.get("residual_before")),
         "residual_side": _residual_side(prop),
         "surplus_avg_cost": prop.get("surplus_avg"),
         "implied_pair_cost_at_post": s.get("implied_pair_cost"),
