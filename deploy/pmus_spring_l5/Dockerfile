@@ -23,6 +23,13 @@ RUN pip install --no-cache-dir "cryptography>=42"
 # continuous campaign (OWNER 5552036210): select -> sequential session ->
 # reselect. Inherits every guard below; DISARMED it is a shadow selector.
 COPY src/pmus_l5_continuous_session.py src/pmus_l5_continuous_session.py
+# One-shot migration close (OWNER 2026-09-11). Imported at module scope by
+# pmus_l5_continuous_session, so an image without these two files does not
+# degrade -- it fails to import and the probe never boots. That is the same
+# shape as the analysis/l5 file this image once omitted; a test binds these
+# COPY lines to the import.
+COPY src/pmus_migration_close.py src/pmus_migration_close.py
+COPY src/pmus_migration_close_live.py src/pmus_migration_close_live.py
 # read-only settlement audit (venue POSITION_RESOLUTION activities) so the
 # campaign can record the authoritative realized result of a held market
 COPY src/pmus_settlement_auditor.py src/pmus_settlement_auditor.py

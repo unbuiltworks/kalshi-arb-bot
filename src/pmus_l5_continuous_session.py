@@ -40,6 +40,7 @@ from decimal import Decimal as D
 from typing import Any, Mapping, Optional, Sequence
 
 from src import pmus_spring_l5_probe_entry as entry
+from src import pmus_migration_close_live as mclose
 from src import pmus_incentive_audit as incentives
 from src import pmus_spring_l5_session as base
 from src import pmus_l5_persistence_v2 as pv2
@@ -2022,6 +2023,27 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 # an open order this strategy did not place: not ours to
                 # cancel, and not a state to trade into -- stop, report
                 return {**report, "status": "CAMPAIGN_STOP:FOREIGN_OPEN_ORDERS"}
+            # OWNER 2026-09-11, one-shot migration close. It runs BEFORE the
+            # re-arm gate on purpose: the gate refuses to arm unless the
+            # account is flat, and a legacy residual is precisely what stops
+            # it being flat. Closing first lets one boot go
+            # residual -> flat -> armed instead of deadlocking on itself.
+            #
+            # Inert unless PMUS_MIGRATION_CLOSE_SLUG names a market, so the
+            # ordinary boot path is unchanged by its presence. Reduce-only and
+            # capped at abs(residual), so it cannot open, extend or overshoot
+            # -- the flatness gate is not bypassed here, it is satisfied.
+            try:
+                _mc_invs = [base.held_inventory_from_ledger(x)
+                            for x in unsettled_slugs()]
+                closed = mclose.maybe_run(
+                    t, base.held_inventory_from_ledger,
+                    base.combined_loss(base.q1.realized_today(), _mc_invs))
+                if closed is not None:
+                    report["migration_close"] = closed
+            except Exception as exc:                        # noqa: BLE001
+                _log("migration_close_error",
+                     err=f"{type(exc).__name__}:{str(exc)[:120]}")
             # OWNER re-arm 2026-09-10: the nine conditions, established by
             # this process before the first submission. A failure HOLDS the
             # container up rather than exiting -- exiting reads as a crash
