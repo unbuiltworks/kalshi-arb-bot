@@ -744,9 +744,21 @@ def reachability_report(props: Sequence[Mapping[str, Any]]) -> dict:
     resolved = [p for p in props if p.get("status") in RESOLVED]
     with_r = [p for p in resolved if (p.get("reachability") or {}).get(
         "observations")]
-    reached = [p for p in with_r if p["reachability"].get("reached")]
-    never = [p for p in with_r if not p["reachability"].get("reached")]
-    matched = [p for p in resolved if p.get("status") == VIRTUAL_MATCHED]
+    # A FILL IMPLIES REACH, exactly as it implies a touch. Reachability is
+    # sampled from quotes; a trade can come through the price between
+    # snapshots, so `reached` read from quotes alone can be False on a
+    # proposal that demonstrably filled.
+    reached = [p for p in with_r if p["reachability"].get("reached")
+               or p.get("status") == VIRTUAL_MATCHED]
+    never = [p for p in with_r if p not in reached]
+    # MATCHED MUST BE COUNTED WITHIN THE MEASURED SUBSET. Counting it over
+    # all `resolved` while `reached` counts only `with_r` produced
+    # reached_but_unfilled = 0 - 1 = -1 live at 00:45Z -- a negative count,
+    # which is the kind of impossibility that says the two numbers were not
+    # drawn from the same population. Proposals that resolved before the
+    # reachability measurement existed have no record and belong in neither.
+    matched = [p for p in with_r if p.get("status") == VIRTUAL_MATCHED]
+    matched_all = [p for p in resolved if p.get("status") == VIRTUAL_MATCHED]
 
     def _med(xs, key):
         vals = sorted(float(p["reachability"][key]) for p in xs
@@ -764,8 +776,10 @@ def reachability_report(props: Sequence[Mapping[str, Any]]) -> dict:
         "with_measurement": len(with_r),
         "reached_our_price": len(reached),
         "never_reached": len(never),
-        "filled": len(matched),
-        "reached_but_unfilled": len(reached) - len(matched),
+        "filled": len(matched_all),
+        "filled_with_measurement": len(matched),
+        "reached_but_unfilled": max(0, len(reached) - len(matched)),
+        "resolved_without_measurement": len(resolved) - len(with_r),
         "median_initial_gap_cents": _med(with_r, "initial_gap_cents"),
         "median_min_gap_cents": _med(with_r, "min_gap_cents"),
         "median_favorable_excursion_cents": _med(
@@ -774,6 +788,8 @@ def reachability_report(props: Sequence[Mapping[str, Any]]) -> dict:
             never, "initial_gap_cents"),
         "median_initial_gap_cents_reached": _med(reached, "initial_gap_cents"),
         "median_time_to_touch_s": _med(reached, "time_to_touch_s"),
+        # the bottleneck is judged ONLY on proposals that carry the
+        # measurement it is about.
         "bottleneck": _bottleneck(len(with_r), len(never), len(reached),
                                   len(matched)),
         "research_beyond_300s": {"n": len(research), "verdicts": verdicts,

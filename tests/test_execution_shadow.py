@@ -598,3 +598,38 @@ def test_the_loop_calls_record_with_exactly_the_signature_it_has():
     sig = inspect.signature(EX.ExecutionShadow.record)
     sig.bind(None, "slug", PLAN, T0, ranked_row=None, residual_before=-2,
              surplus_avg=D("0.39"), tier="T1_top8", first_leg={})
+
+
+def test_reached_but_unfilled_can_never_be_negative():
+    """LIVE at 00:45Z it read -1: `matched` was counted over all resolved
+    proposals while `reached` counted only those carrying a reachability
+    record, so the two were not drawn from the same population. A negative
+    count is the impossibility that gives that away."""
+    filled_no_measure = EX.open_proposal("a", PLAN, T0, None, -2, D("0.39"))
+    filled_no_measure["status"] = EX.VIRTUAL_MATCHED        # no reachability
+    never = EX.open_proposal("b", PLAN, T0, None, -2, D("0.39"))
+    never.update(status=EX.NO_FILL,
+                 reachability={"observations": 4, "reached": False,
+                               "min_gap_ticks": 4.0, "initial_gap_cents": 2.0,
+                               "min_gap_cents": 2.0,
+                               "max_favorable_excursion_cents": 0.0})
+    out = EX.reachability_report([filled_no_measure, never])
+    assert out["reached_but_unfilled"] >= 0
+    assert out["filled"] == 1
+    assert out["filled_with_measurement"] == 0
+    assert out["resolved_without_measurement"] == 1
+
+
+def test_a_matched_proposal_counts_as_reached_even_if_quotes_missed_it():
+    """A fill implies reach, exactly as it implies a touch: reachability is
+    sampled from quotes and a trade can come through between snapshots."""
+    p = EX.open_proposal("a", PLAN, T0, None, -2, D("0.39"))
+    p.update(status=EX.VIRTUAL_MATCHED,
+             reachability={"observations": 4, "reached": False,
+                           "min_gap_ticks": 1.0, "initial_gap_cents": 1.0,
+                           "min_gap_cents": 0.5,
+                           "max_favorable_excursion_cents": 0.5})
+    out = EX.reachability_report([p])
+    assert out["reached_our_price"] == 1
+    assert out["never_reached"] == 0
+    assert out["reached_but_unfilled"] == 0
