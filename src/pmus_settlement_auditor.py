@@ -212,6 +212,12 @@ def _trade_summary(rows: list[dict], slug: str) -> dict:
             "id": tr.get("id"), "state": state,
             "price": str(_amount(tr.get("price"))) if _amount(tr.get("price")) is not None else None,
             "qty": tr.get("qtyDecimal") or tr.get("qty"),
+            # The RAW fields, unresolved, so a quantity that does not
+            # reconcile can be diagnosed from evidence instead of guessed
+            # at. `qty` above collapses two fields into one and loses the
+            # shape the venue actually served.
+            "qty_decimal_raw": tr.get("qtyDecimal"),
+            "qty_raw": tr.get("qty"),
             "isAggressor": tr.get("isAggressor"),
             "realizedPnl": str(_amount(tr.get("realizedPnl")))
             if _amount(tr.get("realizedPnl")) is not None else None,
@@ -249,6 +255,96 @@ def venue_qty_total(trade_info: Mapping[str, Any]) -> Optional[str]:
             total += q
             n += 1
     return str(total) if n else None
+
+
+# Keys that mean a number is SCALED: a value carrying one of these is not
+# the number it appears to be. notionalTraded turned out to be priced in
+# cents after eight independent volume intervals said so, and every later
+# quantity read is checked for the same shape rather than trusted.
+SCALE_KEYS = ("exponent", "scale", "decimals", "precision", "multiplier",
+              "exp", "unit", "denom", "denominator")
+
+
+def qty_evidence(trade_info: Mapping[str, Any], limit: int = 12) -> dict:
+    """Per-trade quantity evidence, for when venue and ledger disagree.
+
+    Answers the question the totals cannot: is the gap a fill we missed, a
+    row counted twice, or a number in units we misread? It resolves nothing
+    and asserts nothing -- it reports what the venue actually served, so the
+    NEXT occurrence is diagnosable rather than arguable.
+    """
+    rows, scaled, dupes, disagree = [], [], [], []
+    seen: dict = {}
+    for tr in trade_info.get("trades") or []:
+        raw = tr.get("qty_raw")
+        dec = tr.get("qty_decimal_raw")
+        resolved = _amount(tr.get("qty"))
+        keys = sorted(raw.keys()) if isinstance(raw, Mapping) else None
+        scale = ([k for k in keys if k in SCALE_KEYS] if keys else [])
+        row = {"id": tr.get("id"), "state": tr.get("state"),
+               "createTime": tr.get("createTime"),
+               "isAggressor": tr.get("isAggressor"),
+               "qty_raw": raw, "qty_decimal_raw": dec,
+               "qty_raw_keys": keys, "scale_keys": scale,
+               "resolved": None if resolved is None else str(resolved)}
+        if scale:
+            # A scaled value read as if it were unscaled is off by a factor,
+            # which is exactly how a small position reads as a large one.
+            scaled.append(row)
+        if raw is not None and dec is not None:
+            a, b = _amount(raw), _amount(dec)
+            if a is not None and b is not None and a != b:
+                disagree.append({**row, "qty": str(a), "qtyDecimal": str(b)})
+        tid = tr.get("id")
+        if tid is not None:
+            seen[tid] = seen.get(tid, 0) + 1
+        rows.append(row)
+    dupes = [{"id": k, "times": v} for k, v in seen.items() if v > 1]
+    return {
+        "n_trades": len(rows),
+        "resolved_sum": str(sum(_amount(t.get("qty")) or D("0")
+                                for t in trade_info.get("trades") or [])),
+        "scaled_qty_rows": scaled[:limit],
+        "qty_vs_qtydecimal_disagreements": disagree[:limit],
+        "duplicate_trade_ids": dupes[:limit],
+        "trades": rows[:limit],
+        "truncated": len(rows) > limit,
+        "labels": ("evidence only: nothing here resolves the disagreement. "
+                   "A non-empty scaled_qty_rows means a quantity carries a "
+                   "scale key we are not applying; duplicate_trade_ids means "
+                   "a row was counted more than once; both empty with a real "
+                   "gap means the venue filled a quantity we never recorded."),
+    }
+
+
+def traded_qty_with_evidence(slug: str, t: Optional[q1.Transport] = None,
+                             limit: int = 12) -> dict:
+    """The venue's traded quantity AND the per-trade evidence behind it, in
+    ONE walk of the activity pages.
+
+    Separate calls would paginate the account's whole activity feed twice to
+    answer one question. `qty` is None when the venue could not be asked,
+    which the caller must treat as unknown, never as 'nothing traded'."""
+    try:
+        t = t or q1.Transport()
+        walk = activity_pages(t, since=first_fill_time(slug))
+        trades = [r for r in walk["rows"]
+                  if r.get("type") == "ACTIVITY_TYPE_TRADE"
+                  and isinstance(r.get("trade"), Mapping)
+                  and r["trade"].get("marketSlug") == slug]
+        info = _trade_summary(trades, slug)
+        return {"qty": venue_qty_total(info),
+                "evidence": qty_evidence(info, limit=limit)}
+    except Exception as exc:                            # noqa: BLE001
+        return {"qty": None, "evidence": None,
+                "error": f"{type(exc).__name__}:{str(exc)[:80]}"}
+
+
+def qty_evidence_for_slug(slug: str, t: Optional[q1.Transport] = None,
+                          limit: int = 12) -> Optional[dict]:
+    """qty_evidence for one market, read-only. None when the venue could not
+    be asked -- which is unknown, never 'nothing traded'."""
+    return traded_qty_with_evidence(slug, t, limit=limit)["evidence"]
 
 
 def ledger_qty_total(slug: str) -> Optional[str]:

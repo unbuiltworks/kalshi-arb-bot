@@ -1766,6 +1766,32 @@ def _await_order(t: Transport, oid: str, qty: D, until: float,
     return got, round(clock() - start, 3), end_reason
 
 
+def _qty_evidence_digest(recon: Mapping[str, Any]) -> dict:
+    """The three counts that separate the three explanations, small enough
+    to sit on an alarm line.
+
+    A quantity gap is one of: a number in units we misread (scaled_qty),
+    a row counted twice (duplicate_ids), or a fill the venue made and we
+    never recorded (both zero). The full rows stay in the audit; this is
+    the part a human reads at 2am."""
+    ev = recon.get("qty_evidence")
+    if not isinstance(ev, Mapping):
+        return {"available": False,
+                "why": "the venue could not be asked for its trades"}
+    return {"available": True,
+            "n_trades": ev.get("n_trades"),
+            "scaled_qty": len(ev.get("scaled_qty_rows") or []),
+            "qty_vs_qtydecimal": len(
+                ev.get("qty_vs_qtydecimal_disagreements") or []),
+            "duplicate_ids": len(ev.get("duplicate_trade_ids") or []),
+            "scale_keys": sorted({k for r in (ev.get("scaled_qty_rows") or [])
+                                  for k in (r.get("scale_keys") or [])}),
+            "reads": ("a scaled_qty or qty_vs_qtydecimal count above zero "
+                      "means we are misreading the venue's units; all three "
+                      "zero means the venue filled a quantity we never "
+                      "recorded, which is a position we did not know we had")}
+
+
 def _reconcile_fills(t: Transport, slug: str, ledger, inv: Inventory) -> dict:
     """Re-read every order the venue has not declared terminal, book any
     quantity they gained after we stopped waiting, and compare the venue's
@@ -1787,12 +1813,23 @@ def _reconcile_fills(t: Transport, slug: str, ledger, inv: Inventory) -> dict:
         audit["recovered_qty"] = audit["reconciled"]["recovered_qty"]
     except Exception as exc:                            # noqa: BLE001
         audit["reconcile_error"] = f"{type(exc).__name__}:{str(exc)[:80]}"
+    evidence = None
     try:
         from src import pmus_settlement_auditor as settle_audit
-        venue_qty = settle_audit.traded_qty_for_slug(slug, t)
+        got = settle_audit.traded_qty_with_evidence(slug, t)
+        venue_qty, evidence = got.get("qty"), got.get("evidence")
     except Exception:                                   # noqa: BLE001
         venue_qty = None
     audit["venue_vs_ledger"] = fl.venue_vs_ledger(venue_qty, inv.up + inv.dn)
+    if audit["venue_vs_ledger"].get("agrees") is False:
+        # LIVE 01:44Z 09-11, aec-county-not-ham-2026-09-08: venue 774.6200
+        # against ledger 45.01, a 729.61 gap on a measure that reconciled
+        # exactly on 15 of 16 settled markets. A gap that size is not a fill
+        # we could have made under a 7.50 session cap, so it is a reading
+        # question -- and the totals alone cannot answer it. Carry the
+        # per-trade evidence so the next occurrence is diagnosable instead
+        # of arguable. Nothing here changes a number or the flat verdict.
+        audit["qty_evidence"] = evidence
     audit["may_assert_flat"] = fl.may_assert_flat(audit["venue_vs_ledger"])
     if audit["reconciled"] and (audit["reconciled"]["still_open"]
                                 or audit["reconciled"]["unreadable"]):
@@ -2005,7 +2042,8 @@ def run_session(*args: Any, **kwargs: Any) -> dict:
         print("PMUS_SPRING_ALARM " + json.dumps(
             {"alarm": "venue_ledger_quantity_mismatch",
              "slug": report.get("slug"), "exit": report.get("status"),
-             **recon["venue_vs_ledger"]}), flush=True)
+             **recon["venue_vs_ledger"],
+             "qty_evidence": _qty_evidence_digest(recon)}), flush=True)
     return report
 
 
@@ -3407,7 +3445,8 @@ def _run_session_body(t: Optional[Transport] = None,
                               **recon["venue_vs_ledger"]})
             print("PMUS_SPRING_ALARM " + json.dumps(
                 {"alarm": "venue_ledger_quantity_mismatch", "slug": slug,
-                 **recon["venue_vs_ledger"]}), flush=True)
+                 **recon["venue_vs_ledger"],
+                 "qty_evidence": _qty_evidence_digest(recon)}), flush=True)
         pair = (str(inv.avg_up() + inv.avg_dn())
                 if inv.matched > 0 and inv.up and inv.dn else None)
         return {**report, "status": status, "actions": inv.actions,
