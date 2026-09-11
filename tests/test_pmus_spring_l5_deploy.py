@@ -91,18 +91,29 @@ def test_probe_never_starts_the_bare_session():
     selection and inherits the dual key, credential and durable-state
     checks; it is a shadow selector when disarmed.
 
-    WIDENED 2026-09-11, deliberately and by owner decision, from "must be the
-    campaign" to "must be one of two named entrypoints". The campaign stopped
-    itself on the daily loss stop and the owner asked for a READ-ONLY
-    settlement pass over the markets it left unaudited -- which is neither the
-    campaign nor the bare session. What the guard actually protects is
-    unchanged: the bare session must never be the start command, and anything
-    not on this list is refused, so a third entrypoint cannot appear quietly."""
-    allowed = {"python3 -m src.pmus_l5_continuous_session",   # trading
-               "python3 -m src.pmus_settlement_sweep"}        # read-only audit
+    WIDENED 2026-09-11 to allow a read-only settlement sweep, then NARROWED
+    AGAIN the same day when the owner said "go 3" and the sweep's work was
+    done. The list is back to the campaign alone: a sweep left as the start
+    command after arming would mean a money deploy silently ran an audit and
+    traded nothing, which is the mirror of the failure this latch exists for.
+
+    THE MARKET ALLOWANCE RIDES IN THE COMMAND, and that is load-bearing
+    rather than cosmetic. The durable state persists the R5F campaign, whose
+    markets_per_campaign is CONTINUOUS -- so a campaign that boots without
+    PMUS_SPRING_RUNG_MARKETS never reaches its advance gate, never consumes
+    the R5FT approval, and instead RESUMES R5F trading at the 0.98 ceiling
+    the owner is replacing. It is set as a Railway variable too, but that
+    write cannot be read back on this service (every config read returns the
+    same schema error), so the repo states it where a reviewer can see it and
+    a test can hold it."""
+    allowed = {"PMUS_SPRING_RUNG_MARKETS=1 python3 -m src.pmus_l5_continuous_session"}
     start = _manifest()["deploy"]["startCommand"]
     assert start in allowed, start
     assert "src.pmus_spring_l5_session" not in start
+    assert "src.pmus_settlement_sweep" not in start
+    assert start.startswith("PMUS_SPRING_RUNG_MARKETS=1 "), (
+        "without the allowance the campaign resumes R5F instead of reaching "
+        "the approval gate")
     # the IMAGE default stays the campaign: the start command overrides it,
     # and a sweep left as CMD would be the wrong thing to inherit later
     cmd = [l for l in DOCKERFILE.read_text().splitlines()

@@ -149,27 +149,37 @@ def test_the_sweep_is_packaged_in_the_probe_image():
     assert "src/pmus_settlement_sweep.py" in rail
 
 
-def test_the_start_command_is_the_sweep_by_explicit_owner_decision():
-    """The latch did its job. It asserted the CAMPAIGN until an owner decision
-    changed it; the owner chose "run it now, two-step" on 2026-09-11, so this
-    now asserts the sweep.
+def test_the_start_command_is_no_longer_the_sweep_by_explicit_owner_decision():
+    """The latch has now swung both ways, which is what a latch is for.
+
+    It asserted the CAMPAIGN until the owner chose "run it now, two-step" on
+    2026-09-11 and it became the SWEEP. The sweep ran at 17:05:02Z, reported
+    n_requested 0, and exited -- its work is done. The owner then said "go 3"
+    (the q=1 live canary) and raised it to $30, so this asserts the campaign
+    again. Each flip cost an explicit edit and an explicit owner quote; none
+    of them happened quietly, which was the whole point.
 
     Why the repo config carries it and not only the Railway API: the
     update-service write cannot be read back (every read of that service's
     config returns a schema error), and an update that silently failed would
-    mean the next build starts the TRADING CAMPAIGN -- the one outcome the
-    owner forbade. With both the service setting and railway.json naming the
-    sweep, a failed API write cannot relaunch trading.
+    leave the next build running the wrong entrypoint -- previously the
+    campaign when the owner forbade trading, now the sweep when he asked for
+    a live canary. Either way the repo is the readable half of the pair.
 
-    Restoring the campaign is likewise an owner decision and will flip this
-    test back."""
+    Leaving the sweep armed is no longer harmless: it would exit immediately
+    and the canary would never start, while the logs showed a SUCCESSFUL
+    deployment."""
     import json
     from pathlib import Path
     root = Path(__file__).resolve().parents[1]
     rail = json.loads((root / "deploy/pmus_spring_l5/railway.json").read_text())
-    assert rail["deploy"]["startCommand"] == "python3 -m src.pmus_settlement_sweep"
+    start = rail["deploy"]["startCommand"]
+    assert "src.pmus_settlement_sweep" not in start
+    assert start == ("PMUS_SPRING_RUNG_MARKETS=1 "
+                     "python3 -m src.pmus_l5_continuous_session")
     assert rail["deploy"]["restartPolicyType"] == "NEVER", (
-        "the sweep exits when done; ALWAYS would re-run it forever")
+        "a money-moving bounded session must fail closed and must NOT "
+        "relaunch itself after a crash or a completed campaign")
 
 
 # ------------------------------- a zero must carry its own evidence (LIVE)

@@ -247,3 +247,47 @@ unilaterally: OWNER decision 2026-09-11, on the specific state below.**
   the logs we inspected.
 
   Additive logging only. No cap, ceiling, budget, bound or gate changed.
+
+- **2026-09-11 — ARMING THE R5FT CANARY.** The start command goes back to
+  the trading campaign after the read-only settlement sweep, on the owner's
+  explicit "go 3" (a q=1 live canary at a relaxed target) and his choice of
+  "Join the touch, hard cap <=1.00". Approval row
+  `R5FT-CANARY-2026-09-11`, rung `R5FT`, shell
+  `R5FT/cap30.00/unmatched-none/complete-l5touch/conc1/maker-only/rest-model5s/action1.00`.
+
+  WHAT IS DIFFERENT FROM R5F, and it is two things, not one. Price: the
+  complement joins the best non-crossing maker price, with the pair ceiling
+  STATED at par instead of inheriting `DEFAULT_PAIR_COST_MAX = 0.98` — which
+  is what the rung's own 2026-09-07 approval text said all along ("above-par
+  pair cost is reported/accounted, not behaviorally gated"). Size: the owner
+  raised the per-market cap to $30.00 and the daily realized-loss stop to
+  -$30.00 on 2026-09-11, reversing his earlier "Keep the daily stop at -$15"
+  after being told the worst day becomes roughly $60 against a ~$109 balance.
+
+  THE START COMMAND CARRIES `PMUS_SPRING_RUNG_MARKETS=1`, and that is
+  load-bearing. Durable state persists the R5F campaign, whose
+  `markets_per_campaign` is CONTINUOUS, so a campaign booting without the
+  allowance never reaches its advance gate, never consumes the R5FT
+  approval, and RESUMES R5F trading at 0.98. The variable is set on the
+  service as well, but that write cannot be read back, so the repo states it
+  where a test can hold it.
+
+  WHAT THIS DEPLOY CANNOT DO. If `continuation_preflight` fails — any filled
+  market not venue-confirmed settled, any open or foreign order, a position
+  held, a ledger/venue quantity mismatch, buying power below the $30.00
+  worst case, or an unknown deployment identity — the campaign waits at
+  `CAMPAIGN_WAITING:CONTINUATION_PREFLIGHT` and never selects a market. If
+  the gate cannot fire at all it waits at
+  `CAMPAIGN_WAITING:RUNG_MARKETS_REACHED`. Both are silent, fail-closed
+  stalls: the canary not starting is a normal outcome of this deploy, and
+  is diagnosable from the preflight row rather than from an absence.
+
+  `restartPolicyType` stays NEVER: a money-moving bounded session must not
+  relaunch itself after a crash or a completed campaign.
+
+  ACCEPTANCE: clean boot; the `campaign_settled_seeded_from_ledger` row
+  names the markets the previous process failed to record; the advance gate
+  fires; the preflight row is emitted in full; and if it passes, the first
+  complement preflight shows `pair_cost_max` 1.00 and
+  `opp_ask - chosen_px` 0.00 rather than the 0.02 that put us three ticks
+  and ~200,000 shares back.
