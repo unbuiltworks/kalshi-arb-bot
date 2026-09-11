@@ -186,3 +186,100 @@ gap will be named rather than closed with a second parameter.
 
 **Committed before running.** Deviations must be recorded as deviations, with
 the reason, not silently applied.
+
+---
+
+# Amendment 1 — the primary feature is arithmetically dead (2026-09-11)
+
+**Recorded as a deviation under the closing rule of the original document,
+before the replacement feature was run against any label.**
+
+## What happened
+
+§4 named `chosen_px + opp_ask` as the implied pair cost at entry. Two things
+were wrong with it, and the first is my misreading:
+
+1. **`complement_preflight` describes the COMPLEMENT order, not our entry.**
+   `chosen_px` is the price we would pay for the *completing* leg —
+   `min(ceiling − avg_cost, hard_bound, opp_ask − tick)` — not the price we
+   paid to open. Summing it with `opp_ask` adds the complement's planned price
+   to the complement's ask and means nothing. Run that way it gave AUC 0.5117,
+   which I am recording here so it is on the record as an **artifact of a bad
+   feature, not a null result about entry quality**.
+
+2. **The correct version of the feature is a constant.** Using our actual entry
+   price, `entry_px + opp_ask`, over every filled OPEN in the evidence:
+
+```
+entry_px + opp_ask == 1.0000 exactly    2279 of 2371   96.1%
+touch_join                              2371 of 2371  100.0%
+regime = spring_target                  2371 of 2371  100.0%
+```
+
+This is an identity, not a measurement. On a binary book with YES bid `yb`
+and YES ask `ya`, the NO ask is `1 − yb`. We open as a maker **at our side's
+touch**, so our price *is* `yb`, and `yb + (1 − yb) = 1.0000` for every entry
+we will ever take. The 3.9% below par are entries filled behind a moved touch.
+
+This is the same class of error as §2 of the residual findings, where the
+guaranteed-floor metric was pre-registered as a discriminator and turned out to
+be arithmetically always-true. I registered a second one. It is recorded, not
+buried.
+
+## What the identity actually establishes — which is worth more than the feature was
+
+> **Completing immediately, at the complement's ask, always costs exactly
+> $1.00. There is no entry price at which instant completion is profitable.**
+
+Every cent of paired edge therefore has to come from the complement filling as
+a **maker, inside the spread**. Pairing with both legs maker costs
+`yb + (1 − ya) = 1 − (ya − yb) = 1 − spread`, so:
+
+```
+best achievable pair cost  =  1 − spread
+best achievable gross edge =  spread
+```
+
+That reframes the engine's economics: the entry price is not the lever, and
+neither is entry timing. **The spread is the entire gross edge**, and the
+completion leg must be filled passively to collect any of it. It also explains
+the measured 70.6% above-par completion share without appealing to bad
+judgement: once the book moves at all after our first fill, `1 − spread` is no
+longer attainable and the complement's ask — a guaranteed $1.00 pair — is all
+that is left.
+
+## The replacement primary feature
+
+> **Spread at selection**, `ask − bid`, from the `selection.admitted[]` row
+> that chose the market.
+
+Coverage, measured before any label was joined:
+
+```
+filled, labelled episodes                        95
+with the selection row that chose them           78   82.1%
+of those, carrying both bid and ask              78   82.1%
+also carrying bid_touch_qty (depth at the touch) 78
+spread: min 0.005   median 0.010   max 0.14
+```
+
+Secondary features, reported but not fitted: `bid_touch_qty` (queue
+competition at the touch), `p_buy`, `state_n`, category, side.
+
+## The rule form, restated — still one parameter
+
+> Refuse the entry when `spread < θ`.
+
+The direction is now the opposite of the original rule's (refuse *thin* books
+rather than *expensive* entries), which is a change of hypothesis and is why
+this is an amendment rather than a re-run.
+
+## What has NOT changed
+
+§2 population, unit and label; §3's ban on settlement outcome, resolution side
+and `realized_usd`; §6's exact counterfactual and its declared non-modelling of
+freed concurrency; §7's chronological 2/3–1/3 split with the holdout read once;
+§8's full bar, including the retention condition; §10's expectation that this
+sample supports one parameter and an interval and nothing more.
+
+**The holdout has not been read.**
