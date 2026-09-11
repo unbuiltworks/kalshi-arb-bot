@@ -11,6 +11,7 @@
       "src/pmus_migration_close.py",
       "src/pmus_migration_close_live.py",
       "src/pmus_settlement_auditor.py",
+      "src/pmus_settlement_sweep.py",
       "src/pmus_incentive_audit.py",
       "src/l5_realized_bridge.py",
       "src/pmus_spring_l5_probe_entry.py",

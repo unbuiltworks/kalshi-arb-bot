@@ -42,6 +42,10 @@ COPY src/pmus_migration_close_live.py src/pmus_migration_close_live.py
 # read-only settlement audit (venue POSITION_RESOLUTION activities) so the
 # campaign can record the authoritative realized result of a held market
 COPY src/pmus_settlement_auditor.py src/pmus_settlement_auditor.py
+# read-only batch pass over the ledger's unsettled set (owner 2026-09-11:
+# "no order path, no re-arm, no new risk"). Present in the image so the pass
+# can be run without a code change; it is NOT the start command.
+COPY src/pmus_settlement_sweep.py src/pmus_settlement_sweep.py
 # read-only incentive economics audit (OWNER 5561142758): earnings endpoint,
 # activity credits, trade fee fields, balances, published programs
 COPY src/pmus_incentive_audit.py src/pmus_incentive_audit.py
