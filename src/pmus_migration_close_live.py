@@ -47,28 +47,63 @@ def _val(x):
     return None if x is None else D(str(x))
 
 
-def read_bbo(t, slug: str) -> dict:
-    """Read the same proven BBO payload used by the live L5 shadow.
+def _touch_and_depth(levels, limit: Optional[D]):
+    """Return (best ask, size at or inside ``limit``).
 
-    `/v1/markets/{slug}/bbo` exposes marketData.bestBid/bestAsk plus
-    bidDepth/askDepth. The migration close previously switched to `/book`
-    and attempted to reconstruct the touch from an offers array; live that
-    path returned no usable touch while the BBO path continued serving the
-    market correctly. This is a plumbing correction only: no gate, cap,
-    sizing rule, loss budget, or execution policy changes here.
-
-    Depth is deliberately the venue-served depth associated with the touch.
-    If it is absent or insufficient the existing migration gate fails closed.
+    Unknown/empty depth is deliberately None rather than zero so the
+    migration gate fails closed when executable depth cannot be established.
     """
-    md = (q1._get_with_retry(t, f"/v1/markets/{slug}/bbo",
+    best, total = None, D("0")
+    if not levels:
+        return None, None
+    for lvl in levels:
+        px = _val(lvl.get("price"))
+        qty = _val(lvl.get("quantity") if lvl.get("quantity") is not None
+                   else lvl.get("size"))
+        if px is None or qty is None:
+            continue
+        best = px if best is None else min(best, px)
+        if limit is not None and px <= limit:
+            total += qty
+    return best, (None if best is None else total)
+
+
+def _level(price, depth):
+    """Normalize one BBO level into the same shape as /book levels."""
+    px, qty = _val(price), _val(depth)
+    if px is None or qty is None:
+        return None
+    return {"price": {"value": str(px)}, "quantity": {"value": str(qty)}}
+
+
+def read_book(t, slug: str) -> dict:
+    """Read executable levels, failing over to the proven BBO payload.
+
+    `/book` is retained as the richer first choice because, when populated,
+    it lets the loss-cap gate sum only depth at or inside the explicit limit.
+    LIVE 2026-09-11 it returned no usable offers for the migration market,
+    while the continuously running L5 shadow kept receiving `/bbo` fields.
+    Therefore an empty/unusable `/book` is not treated as a one-sided market:
+    we immediately read `/bbo` and normalize bestBid/bestAsk plus their served
+    depth into one level per side.
+
+    The fallback changes plumbing only. The explicit IOC limit, <=$0.50
+    incremental locked-loss cap, quantity cap, reconciliation checks, and
+    combined-loss stop remain unchanged and fail closed if BBO depth is absent.
+    """
+    md = (q1._get_with_retry(t, f"/v1/markets/{slug}/book",
                              base=q1.GATEWAY) or {}).get("marketData") or {}
-    return {
-        "bid": _val(md.get("bestBid")),
-        "ask": _val(md.get("bestAsk")),
-        "bid_depth": _val(md.get("bidDepth")),
-        "ask_depth": _val(md.get("askDepth")),
-        "state": md.get("state"),
-    }
+    offers, bids = md.get("offers") or [], md.get("bids") or []
+    if offers:
+        return {"offers": offers, "bids": bids, "source": "book"}
+
+    bbo = (q1._get_with_retry(t, f"/v1/markets/{slug}/bbo",
+                              base=q1.GATEWAY) or {}).get("marketData") or {}
+    offer = _level(bbo.get("bestAsk"), bbo.get("askDepth"))
+    bid = _level(bbo.get("bestBid"), bbo.get("bidDepth"))
+    return {"offers": [offer] if offer else [],
+            "bids": [bid] if bid else [], "source": "bbo",
+            "state": bbo.get("state")}
 
 
 def build_snapshot(t, slug: str, inv, combined_loss: D,
@@ -78,7 +113,7 @@ def build_snapshot(t, slug: str, inv, combined_loss: D,
     Order matters. The activity walk paginates the account's whole feed and
     took 31s at 02:43Z; with the quote stamped before it, the gate saw a
     31-second-old book and refused a snapshot it had itself made stale. The
-    slow read happens first now, and the BBO and its timestamp are taken
+    slow read happens first now, and the quote plus timestamp are taken
     together immediately before the gate runs.
 
     `open_orders` comes from the caller's fresh venue sweep -- the same read
@@ -95,15 +130,22 @@ def build_snapshot(t, slug: str, inv, combined_loss: D,
 
     ask = depth = None
     try:
-        bbo = read_bbo(t, slug)
+        book = read_book(t, slug)
         if residual < 0:
-            # excess DOWN/NO inventory -> buy YES at the YES ask
-            ask, depth = bbo.get("ask"), bbo.get("ask_depth")
+            # excess DOWN/NO inventory -> buy YES from YES offers
+            ask, depth = _touch_and_depth(book.get("offers") or [], limit)
         elif residual > 0:
-            # excess UP/YES inventory -> buy NO; NO ask = 1 - YES bid
-            bid = bbo.get("bid")
-            ask = None if bid is None else ONE - bid
-            depth = bbo.get("bid_depth")
+            # excess UP/YES inventory -> buy NO. A YES bid at p is a NO ask
+            # at 1-p with the same executable quantity.
+            no_offers = []
+            for lvl in book.get("bids") or []:
+                px = _val(lvl.get("price"))
+                qty = _val(lvl.get("quantity") if lvl.get("quantity") is not None
+                           else lvl.get("size"))
+                if px is not None and qty is not None:
+                    no_offers.append({"price": {"value": str(ONE - px)},
+                                      "quantity": {"value": str(qty)}})
+            ask, depth = _touch_and_depth(no_offers, limit)
     except Exception:                                       # noqa: BLE001
         ask = depth = None
     quote_ts = time.time()                          # stamped WITH the quote
