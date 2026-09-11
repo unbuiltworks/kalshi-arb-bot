@@ -41,6 +41,9 @@ from typing import Any, Mapping, Optional, Sequence
 
 from src import pmus_spring_l5_probe_entry as entry
 from src import pmus_migration_close_live as mclose
+from src import pmus_residual_quarantine as rq
+from src import pmus_settlement_auditor as sa
+from src import pmus_fill_ledger as fl
 from src import pmus_incentive_audit as incentives
 from src import pmus_spring_l5_session as base
 from src import pmus_l5_persistence_v2 as pv2
@@ -1197,6 +1200,59 @@ REARM_PAIR_CEILING = base.D("1.00")
 REARM_REJECT_STREAK = 3
 
 
+def blocking_held(t=None) -> list:
+    """Held markets that must stop the engine arming. Usually all of them.
+
+    THE DEFECT THIS CLOSES. Residual quarantine frees the runtime acquisition
+    slot, and by design a quarantined market stays in `held` right through to
+    settlement. But the re-arm gate asked for `held_markets(t) == []`, so on
+    every restart a quarantined residual refused to arm -- the engine stops,
+    and every maker fill and every credited rebate stops with it. Quarantine
+    was built for exactly the fixture that halted us tonight and could never
+    have helped, because nothing taught the BOOT gate about it.
+
+    MEASURED, 16 settled R5F markets: the 12 that paired to zero returned
+    +6.3639 (mean +0.53); the 4 that stranded a residual returned -9.2384
+    (mean -2.31, none positive). Residuals are where the money goes -- and
+    a residual that also halts acquisition costs the whole schedule on top.
+
+    OFF BY DEFAULT AND BYTE-IDENTICAL WHEN OFF: without
+    PMUS_RESIDUAL_QUARANTINE this returns held_markets(t) unchanged.
+
+    Nothing here forgives a dollar. A quarantined market stays in `held`, is
+    still settlement-monitored, and its full conservative downside is still
+    priced by `combined_loss_above_stop`, the very next assertion. This
+    changes WHEN we may acquire, never HOW MUCH we may lose."""
+    held = list(held_markets(t) or [])
+    if not held or not rq.quarantine_enabled():
+        return held
+    sweep = _fresh_open_orders(t)
+    ours = sweep.get("ours")
+    blocking: list = []
+    for slug in held:
+        try:
+            inv = base.held_inventory_from_ledger(slug)
+            got = sa.traded_qty_with_evidence(slug, t)
+            agrees = fl.venue_vs_ledger(
+                got.get("qty"), str(inv.up + inv.dn)).get("agrees")
+            elig = rq.eligibility({
+                "slug": slug,
+                # account-wide count: 0 open orders means 0 in this market.
+                # Anything else is unknown here, and unknown must block.
+                "resting_orders": 0 if ours == 0 else None,
+                "venue_confirmed": agrees is True,
+                "inventory": inv,
+                "in_held": True,             # it stays held, by construction
+                "settlement_monitored": slug in set(unsettled_slugs() or []),
+            })
+        except Exception:                                   # noqa: BLE001
+            blocking.append(slug)            # could not establish -> blocks
+            continue
+        if not elig["eligible"]:
+            blocking.append(slug)
+    return blocking
+
+
 def boot_assertions(t=None, sweep: Optional[Mapping[str, Any]] = None) -> dict:
     """The owner's nine re-arm conditions, checked before any order.
 
@@ -1230,8 +1286,12 @@ def boot_assertions(t=None, sweep: Optional[Mapping[str, Any]] = None) -> dict:
                     and int(sweep.get("seen") or 0) == 0), True)
     _check("no_open_orders_fresh_read",
            lambda: _fresh_open_orders(t), {"ours": 0, "foreign": 0})
-    # 3. flat: nothing held at the venue
-    _check("flat_held_state", lambda: held_markets(t), [])
+    # 3. flat: nothing held at the venue that BLOCKS arming. With quarantine
+    #    off (the default) that is literally nothing held, byte-identical to
+    #    the original check. With quarantine on, a dormant venue-confirmed
+    #    residual does not block -- which is the whole reason quarantine
+    #    exists, and check 4 below still charges its full downside.
+    _check("flat_held_state", lambda: blocking_held(t), [])
     # 4. the combined budget is priced NOW and is strictly above the stop
     _check("combined_loss_above_stop", lambda: _combined_now()[1], True)
     # 5. rung and band
