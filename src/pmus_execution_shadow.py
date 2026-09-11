@@ -422,7 +422,8 @@ class ExecutionShadow:
 
     def record(self, slug: str, plan: Mapping[str, Any], t_post: float,
                ranked_row=None, residual_before=None, surplus_avg=None,
-               tier=None) -> Optional[dict]:
+               tier=None, first_leg: Optional[Mapping[str, Any]] = None
+               ) -> Optional[dict]:
         """One resting complement per market, not one per replay.
 
         decide_market replays its whole window every cycle, so arm B
@@ -450,7 +451,7 @@ class ExecutionShadow:
             self.proposals[pid] = prev
             break
         p = open_proposal(slug, plan, t_post, ranked_row, residual_before,
-                          surplus_avg, tier)
+                          surplus_avg, tier, first_leg)
         if p["id"] in self.proposals:
             return None
         self.proposals[p["id"]] = p

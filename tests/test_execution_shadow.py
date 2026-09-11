@@ -574,3 +574,27 @@ def test_a_close_live_distribution_clears_reachability():
 def test_missing_historical_file_does_not_raise():
     out = EX.historical_benchmark("/nope/missing.json")
     assert out["filled"] is None and "error" in out
+
+
+def test_record_accepts_and_stores_first_leg_provenance(tmp_path):
+    """REGRESSION. open_proposal gained a first_leg parameter and record()
+    did not, so the loop's call raised TypeError on EVERY arm-B proposal --
+    which would have crash-looped the deployed collector. No unit test
+    exercised record() with the argument the caller actually passes; the live
+    run found it in seconds. Callers and callees must be tested together at
+    the seam, not only on either side of it."""
+    t = EX.ExecutionShadow(path=str(tmp_path / "ex.json"), now=lambda: T0)
+    p = t.record("s", PLAN, T0, None, -2, D("0.39"), tier="T1_top8",
+                 first_leg={"price": "0.39", "t": 10.0, "side": "NO"})
+    assert p is not None
+    assert p["first_leg"]["price"] == "0.39"
+    assert p["tier"] == "T1_top8"
+
+
+def test_the_loop_calls_record_with_exactly_the_signature_it_has():
+    """Bind the caller's keywords against the callee's signature so a
+    parameter added to one and not the other fails here, not in production."""
+    import inspect
+    sig = inspect.signature(EX.ExecutionShadow.record)
+    sig.bind(None, "slug", PLAN, T0, ranked_row=None, residual_before=-2,
+             surplus_avg=D("0.39"), tier="T1_top8", first_leg={})
