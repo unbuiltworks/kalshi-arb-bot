@@ -437,12 +437,50 @@ def max_leg_notional(r: Optional[Mapping[str, Any]] = None) -> D:
     return D(str(r.get("max_leg_notional_usd") or DEFAULT_MAX_LEG_NOTIONAL))
 
 
+# OWNER 2026-09-11, 21:52Z. The arming deploy booted, the re-arm gate read
+# combined_loss -15.1516 against R5F's -15.00 stop, and refused: "rearm
+# refused ... holding halted". Told the day had ALREADY breached the
+# original stop and offered stand down / apply -$30 account-wide now / stop
+# and deal with the residual first, he chose "Apply -$30 as the account-wide
+# stop now".
+#
+# WHY IT CANNOT BE A RUNG LEVER. The boot re-arm gate runs BEFORE any owner
+# approval is consumed, so it always reads the PREVIOUS campaign's rung --
+# R5F, -15.00. R5FT's own -30.00 never gets a chance to apply, because the
+# gate that would let the campaign reach its advance gate is the gate
+# refusing. A rung-level number cannot unblock a rung-level deadlock.
+#
+# WHAT THIS COSTS, stated rather than discovered later: it is ACCOUNT-WIDE,
+# so it overrides EVERY rung's own stop, including the -$1.00 that the R1/R2C
+# micro rungs carry. A rung's daily_loss_stop_usd is now its declared figure
+# and no longer its binding one. That is what "account-wide" means and it is
+# the price of one number instead of two; the confusion of two different
+# stops in play is exactly what produced this evening.
+#
+# CAPPED AT THE NUMBER HE NAMED. Anything beyond -30.00 is clamped back here
+# rather than honoured, so a later edit cannot widen the account's worst day
+# without another owner decision.
+ACCOUNT_DAILY_LOSS_STOP: Optional[D] = D("-30.00")
+ACCOUNT_DAILY_LOSS_STOP_LIMIT = D("-30.00")
+
+
 def daily_loss_stop(r: Optional[Mapping[str, Any]] = None) -> D:
-    """The daily realized-loss stop the ACTIVE rung runs under: the
-    absolute -$1.00 unless the owner's rung states its own, scaled to
-    its worst case (OWNER 5560851070 / 5561465636)."""
+    """The daily realized-loss stop in force: the OWNER'S ACCOUNT-WIDE stop
+    when one is set, otherwise the ACTIVE rung's own -- the absolute -$1.00
+    unless the rung states its own, scaled to its worst case (OWNER
+    5560851070 / 5561465636).
+
+    The account stop OVERRIDES the rung's, looser or tighter, because it is
+    the account's day it bounds and the re-arm gate reads it before any rung
+    decision has been made. It can never be looser than
+    ACCOUNT_DAILY_LOSS_STOP_LIMIT."""
     r = dict(r) if r is not None else active()
-    return D(str(r.get("daily_loss_stop_usd") or DAILY_LOSS_STOP))
+    rung_stop = D(str(r.get("daily_loss_stop_usd") or DAILY_LOSS_STOP))
+    if ACCOUNT_DAILY_LOSS_STOP is None:
+        return rung_stop
+    # max() of two negatives is the TIGHTER one: the clamp refuses to widen
+    # past what the owner authorised even if this constant is later edited
+    return max(ACCOUNT_DAILY_LOSS_STOP, ACCOUNT_DAILY_LOSS_STOP_LIMIT)
 
 
 def next_rung(rung_id: str) -> Optional[dict]:

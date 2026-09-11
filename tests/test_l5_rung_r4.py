@@ -32,7 +32,14 @@ def test_r4_is_the_owner_rung_with_exactly_two_levers_changed():
     assert wc["max_at_risk_per_market_usd"] == "2.50"
     assert wc["per_campaign_at_risk_usd"] == "7.50"
     assert wc["pair_cost_max"] == "1.00"
-    assert wc["daily_loss_stop_usd"] == "-15.00"
+    # OWNER 2026-09-11 set an ACCOUNT-WIDE stop of -30.00, so the stop IN
+    # FORCE is no longer R4's own. The rung's declared figure is unchanged
+    # (asserted above); what worst_case reports is what would actually halt
+    # the account, which is the honest number for a worst case -- and the
+    # visible cost of one account-wide stop instead of per-rung ones.
+    assert r["daily_loss_stop_usd"] == "-15.00", "R4's DECLARED stop"
+    assert wc["daily_loss_stop_usd"] == "-30.00", "the stop IN FORCE"
+    assert ladder.ACCOUNT_DAILY_LOSS_STOP == ladder.D("-30.00")
     assert wc["max_concurrent_open_exposure_usd"] == "7.50"
 
 
