@@ -6,6 +6,7 @@
     "watchPatterns": [
       "deploy/pmus_spring_l5/**",
       "src/pmus_l5_continuous_session.py",
+      "src/pmus_residual_quarantine.py",
       "src/pmus_migration_close.py",
       "src/pmus_migration_close_live.py",
       "src/pmus_settlement_auditor.py",
