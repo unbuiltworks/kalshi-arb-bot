@@ -972,3 +972,86 @@ def test_a_pair_where_the_flow_leader_wins_counts_against_the_hypothesis():
     passed["status"] = EX.NO_FILL
     r = EX.resolve_opportunities([e], [chosen, passed])[0]
     assert r["cost_of_the_rule"] == -1.0, "negative = the rule was right here"
+
+
+# -------------------------------------------------------------------------
+# LIVE 01:51Z, cycle 178: the deployed band report read
+#
+#     band "2":   touched_le_300s 0   filled_le_300s 4
+#     band "3-4": touched_le_300s 0   filled_le_300s 1
+#
+# A fill implies a touch. reachability_report applies that correction;
+# distance_band_report open-coded the unconditioned version, so one rule
+# written twice produced an impossible count -- the same shape, and the same
+# cause, as reached_but_unfilled reading -1.
+
+def _touch_prop(gap_ticks, *, status=EX.NO_FILL, reached=False,
+               later=False, research_reached=False):
+    return {
+        "status": status,
+        "schema": EX.SCHEMA,
+        "reachability": {"initial_gap_ticks": gap_ticks, "reached": reached,
+                         "observations": 3, "time_to_touch_s": 10.0},
+        "research": {"would_fill_later": later,
+                     "reachability": {"reached": research_reached}},
+        "state_at_post": {"flow_usd_per_min": 10.0, "spread": 0.01},
+        "residual_before": 1, "residual_after": 0,
+        "latency_s": 45.0, "risk_returned": 1.0,
+    }
+
+
+def test_a_fill_counts_as_a_touch_in_the_band_report():
+    """The exact deployed shape: filled, quotes never showed the touch."""
+    rep = EX.distance_band_report([
+        _touch_prop(2, status=EX.VIRTUAL_MATCHED, reached=False)
+        for _ in range(4)] + [_touch_prop(2) for _ in range(2)])
+    b = rep["bands"]["2"]
+    assert b["filled_le_300s"] == 4
+    assert b["touched_le_300s"] == 4, "a fill implies a touch"
+    assert b["touched_le_1800s_research"] >= b["filled_le_1800s_research"]
+
+
+def test_the_band_report_checks_its_own_impossibilities_at_emission():
+    rep = EX.distance_band_report(
+        [_touch_prop(2, status=EX.VIRTUAL_MATCHED) for _ in range(4)]
+        + [_touch_prop(6) for _ in range(3)])
+    assert rep["coherence"]["ok"] is True, rep["coherence"]["violations"]
+
+
+@pytest.mark.parametrize("bad,expect", [
+    ({"n": 6, "touched_le_300s": 0, "filled_le_300s": 4,
+      "touched_le_1800s_research": 6, "filled_le_1800s_research": 5},
+     "filled_le_300s"),
+    ({"n": 6, "touched_le_300s": 2, "filled_le_300s": 1,
+      "touched_le_1800s_research": 2, "filled_le_1800s_research": 4},
+     "filled_1800"),
+    ({"n": 6, "touched_le_300s": 5, "filled_le_300s": 1,
+      "touched_le_1800s_research": 2, "filled_le_1800s_research": 1},
+     "touched_300"),
+    ({"n": 2, "touched_le_300s": 5, "filled_le_300s": 1,
+      "touched_le_1800s_research": 5, "filled_le_1800s_research": 1},
+     "exceeds n"),
+])
+def test_band_coherence_names_each_impossibility(bad, expect):
+    got = EX.band_coherence({"2": bad})
+    assert got["ok"] is False
+    assert any(expect in v for v in got["violations"]), got["violations"]
+
+
+def test_band_coherence_ignores_empty_bands():
+    assert EX.band_coherence({"2": {"n": 0}, "gt8": None})["ok"] is True
+
+
+def test_the_reach_predicates_are_shared_by_both_reports():
+    """One rule, one definition: the defect was two copies disagreeing."""
+    filled = _touch_prop(2, status=EX.VIRTUAL_MATCHED, reached=False)
+    assert EX.reached_at_300s(filled) is True
+    assert EX.reached_in_research(filled) is True
+    unreached = _touch_prop(2)
+    assert EX.reached_at_300s(unreached) is False
+    # anything reached inside 300s is reached inside 1800s
+    assert EX.reached_in_research(_touch_prop(2, reached=True)) is True
+    rep = EX.reachability_report([filled])
+    assert rep["measured"]["reached_our_price"] == 1
+    assert rep["measured"]["reached_but_unfilled"] == 0
+    assert rep["coherence"]["ok"] is True

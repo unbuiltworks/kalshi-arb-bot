@@ -802,9 +802,7 @@ def reachability_report(props: Sequence[Mapping[str, Any]]) -> dict:
     # A FILL IMPLIES REACH. Reachability is sampled from quotes and a trade
     # can print through between snapshots, so quotes alone can say False on a
     # proposal that demonstrably filled.
-    reached = [p for p in measured
-               if p["reachability"].get("reached")
-               or p.get("status") == VIRTUAL_MATCHED]
+    reached = [p for p in measured if reached_at_300s(p)]
     never = [p for p in measured if p not in reached]
     filled_m = [p for p in measured if p.get("status") == VIRTUAL_MATCHED]
     filled_u = [p for p in unmeasured if p.get("status") == VIRTUAL_MATCHED]
@@ -1177,6 +1175,59 @@ def distance_band(ticks: Optional[float]) -> Optional[str]:
     return None
 
 
+def reached_at_300s(p: Mapping[str, Any]) -> bool:
+    """Did the market come to our price inside the frozen horizon?
+
+    A FILL IMPLIES REACH. Reachability is sampled from quotes and a trade can
+    print through between snapshots, so quotes alone say False on a proposal
+    that demonstrably filled. This predicate is shared rather than re-derived:
+    it lived inline in reachability_report, the band report open-coded the
+    unconditioned version, and the deployed bands read
+
+        band "2": touched_le_300s 0, filled_le_300s 4
+
+    which is impossible -- the same class of defect as reached_but_unfilled
+    reading -1, and from the same cause: one rule written twice.
+    """
+    return bool((p.get("reachability") or {}).get("reached")
+                or p.get("status") == VIRTUAL_MATCHED)
+
+
+def reached_in_research(p: Mapping[str, Any]) -> bool:
+    """The same question at the 1800s research horizon. Anything reached or
+    filled inside 300s is necessarily reached inside 1800s."""
+    r = p.get("research") or {}
+    return bool((r.get("reachability") or {}).get("reached")
+                or r.get("would_fill_later") or reached_at_300s(p))
+
+
+def band_coherence(bands: Mapping[str, Any]) -> dict:
+    """The band report's own impossibilities, checked where the row is built.
+
+    The contradiction that shipped was in a deployed row and in no unit test,
+    so the check belongs at emission, not only in the suite."""
+    v: list = []
+    for name, b in bands.items():
+        if not b or not b.get("n"):
+            continue
+        t3, f3 = b.get("touched_le_300s"), b.get("filled_le_300s")
+        t18, f18 = (b.get("touched_le_1800s_research"),
+                    b.get("filled_le_1800s_research"))
+        if f3 > t3:
+            v.append(f"{name}: filled_le_300s({f3}) > touched_le_300s({t3})")
+        if f18 > t18:
+            v.append(f"{name}: filled_1800({f18}) > touched_1800({t18})")
+        if t3 > t18:
+            v.append(f"{name}: touched_300({t3}) > touched_1800({t18})")
+        if f3 > f18:
+            v.append(f"{name}: filled_300({f3}) > filled_1800({f18})")
+        if t3 > b["n"] or t18 > b["n"]:
+            v.append(f"{name}: touched exceeds n({b['n']})")
+    return {"ok": not v, "violations": v,
+            "labels": ("a band cannot fill more complements than the market "
+                       "reached, nor reach more inside 300s than inside 1800s")}
+
+
 def distance_band_report(props: Sequence[Mapping[str, Any]]) -> dict:
     """Outcomes per initial-distance band, at both horizons.
 
@@ -1209,11 +1260,10 @@ def distance_band_report(props: Sequence[Mapping[str, Any]]) -> dict:
         if not n:
             out[name] = {"n": 0}
             continue
-        r300 = [p for p in ps if (p.get("reachability") or {}).get("reached")]
+        r300 = [p for p in ps if reached_at_300s(p)]
         f300 = [p for p in ps if p.get("status") == VIRTUAL_MATCHED]
         res = [p.get("research") or {} for p in ps]
-        r1800 = [x for x in res
-                 if (x.get("reachability") or {}).get("reached")]
+        r1800 = [p for p in ps if reached_in_research(p)]
         f1800 = len(f300) + sum(1 for x in res if x.get("would_fill_later"))
         # residual still outstanding: a completed proposal returns part of it;
         # an unfilled one leaves the whole first leg standing.
@@ -1250,6 +1300,7 @@ def distance_band_report(props: Sequence[Mapping[str, Any]]) -> dict:
     return {
         "kind": "execution_shadow_distance_bands",
         "bands": out,
+        "coherence": band_coherence(out),
         "measured_total": len(measured),
         "filled_total": filled_total, "unfilled_total": unfilled_total,
         "decision_ready": (filled_total >= MIN_CLASS
