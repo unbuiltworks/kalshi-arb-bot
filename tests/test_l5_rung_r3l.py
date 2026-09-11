@@ -145,10 +145,16 @@ def test_sized_rung_preflight_fails_closed_on_power_identity_and_reconcile(monke
 def test_r3l_approval_is_queued_behind_r2c_and_consumed_in_order():
     approvals = cont.load_campaign_approvals()
     ids = [a["campaign_id"] for a in approvals]
-    assert ids[-5:] == ["R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06",
-                        "R3L-RUN-2026-09-06", "R4-RUN-2026-09-07",
-                        "R5F-RUN-2026-09-07"]
-    r3l = approvals[-3]
+    # ORDER, not POSITION. This asserted a tail window, so every approval
+    # the owner added afterwards broke a test about R3L's place in the
+    # queue -- twice now. What the rung cares about is that R3L is queued
+    # behind R2C2 and ahead of R4, which is true wherever the tail ends.
+    assert [i for i in ids if i in
+            ("R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06", "R3L-RUN-2026-09-06",
+             "R4-RUN-2026-09-07", "R5F-RUN-2026-09-07")] == [
+        "R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06", "R3L-RUN-2026-09-06",
+        "R4-RUN-2026-09-07", "R5F-RUN-2026-09-07"]
+    r3l = next(a for a in approvals if a["campaign_id"] == "R3L-RUN-2026-09-06")
     assert r3l["rung"] == "R3L" and r3l["stop_rule"] == "rung_markets"
     assert r3l["shell"] == ladder.shell_version(ladder.rung("R3L"))
     assert "5561465636" in r3l["source"]
@@ -175,8 +181,13 @@ def test_r3l_approval_is_queued_behind_r2c_and_consumed_in_order():
                                       ["R1-INITIAL", "R1-EVIDENCE-CONTINUATION-2026-09-06",
                                        "R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06",
                                        "R3L-RUN-2026-09-06"])["campaign_id"] == "R5F-RUN-2026-09-07"
-    assert cont.approved_continuation("R5F-RUN-2026-09-07",
-                                      ["R1-INITIAL", "R1-EVIDENCE-CONTINUATION-2026-09-06",
-                                       "R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06",
-                                       "R3L-RUN-2026-09-06", "R4-RUN-2026-09-07"]) is None
+    # OWNER 2026-09-11 ("go 3"): the R5FT canary is queued behind R5F. It
+    # is the LAST row, so after it there is still nothing automatic.
+    after_r5f = ["R1-INITIAL", "R1-EVIDENCE-CONTINUATION-2026-09-06",
+                 "R2C-RUN-2026-09-06", "R2C2-RUN-2026-09-06",
+                 "R3L-RUN-2026-09-06", "R4-RUN-2026-09-07"]
+    assert cont.approved_continuation(
+        "R5F-RUN-2026-09-07", after_r5f)["campaign_id"] == "R5FT-CANARY-2026-09-11"
+    assert cont.approved_continuation(
+        "R5FT-CANARY-2026-09-11", after_r5f + ["R5F-RUN-2026-09-07"]) is None
     json.dumps(approvals)   # serialisable, as the campaign logs it
