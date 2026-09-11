@@ -165,3 +165,40 @@ claim and this file is where it becomes checkable.
   file — every path under `src/`, `tests/`, the probe Dockerfile and
   `railway.json` is byte-identical, which is the property that matters: the
   image built is the image CI validated.
+
+  **Outcome, 12:03–12:11Z. Deployment `6cfbd53c`, commit `319bd682ce92`.**
+  `boot_assertions ok: true`, all eleven, `mode: ARMED` — and this time the
+  new row fired:
+
+      quarantine_slot  quarantined ['aec-county-not-ham-2026-09-08']
+                       held        ['aec-county-not-ham-2026-09-08']
+                       acquiring   []
+
+  Four minutes later the campaign had opened, filled and PAIRED a different
+  market — the structural proof, from the venue's own numbers:
+
+      12:03:16  boot_assertions ok: true          (11/11)
+      12:03:20  quarantine_slot  acquiring []
+      12:04:07  session_end  aec-itfwo-kaycro-sofjoh-2026-09-11
+                status SPRING_MATCHED   filled_actions 2   submitted 5
+                spring_open_4     BUY YES 5.60 filled 5.6  CE4K0JQEETN3
+                spring_complete_5 BUY NO  5.6  filled 5.6  CE4K0S6A2TN5
+                inventory up 5.6 / dn 5.6 / matched 5.6 / RESIDUAL 0.0
+                avg_up 0.4200  avg_dn 0.5700  spent 5.5440
+                pair_at_chosen 0.9900  above_par false  fee_safe true
+                venue_vs_ledger venue 11.2000 ledger 11.2 delta 0.0000
+                                agrees true    flat_verified true
+      12:07:31  session_end  aec-cs2-wc-nem-2026-09-11        SPRING_NO_FILL
+      12:10:39  session_end  aec-itfme-rustiu-dmipop-…        SPRING_NO_FILL
+
+  Three new markets worked in seven minutes, where the same engine holding
+  the same residual opened nothing in 3h20m. No `concurrency_drain`, no
+  `concurrency_breach`, no `CAMPAIGN_DRAIN:OVER_CONCURRENCY`. Cricket stayed
+  in `held` and was still resumed between them, and its full downside stayed
+  charged against the −$15.00 stop throughout.
+
+  LABELLING. That pair is SUBMITTED → FILLED → PAIRED. It is **not**
+  realized: the market has not settled, no rebate has been credited, and
+  the +$0.056 implied by a 0.99 pair cost on 5.6 units is gross of fees and
+  of nothing else. Realized comes from the venue's settlement number or it
+  does not exist.
