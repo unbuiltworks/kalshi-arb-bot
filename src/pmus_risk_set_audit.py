@@ -107,12 +107,23 @@ def detect(prev_held: Iterable[str], held: Iterable[str],
 
 
 def changed(prev: Optional[Mapping[str, Any]], now: Mapping[str, Any]) -> bool:
-    """Emit the snapshot when the sets move, not on every cycle. The loop
-    turns every SELECT_POLL_S and an unchanging row every 15 s buries the
-    one row that matters."""
+    """Emit the snapshot when the sets move or the loss figure moves, not on
+    every cycle. The loop turns every SELECT_POLL_S and an unchanging row
+    every 15 s buries the one row that matters.
+
+    LOSS ADDED 2026-09-11, from the live gap it left. Keyed on the two sets
+    alone, the last row emitted read combined_loss -14.7013 against a -15.00
+    stop; the budget then crossed that stop and put the engine into
+    risk-reduction-only, and no risk_set row said so, because the sets had
+    not moved. The single most consequential number in the row was the one
+    change it could not report. It moves only on a fill or a settlement, so
+    this does not make the row chatty."""
     if not prev:
         return True
-    for k in ("risk_bearing", "scheduled"):
-        if list(prev.get(k) or ()) != list(now.get(k) or ()):
+    for k in ("risk_bearing", "scheduled", "combined_loss_usd"):
+        cur, was = now.get(k), prev.get(k)
+        if isinstance(cur, (list, tuple)) or isinstance(was, (list, tuple)):
+            cur, was = list(cur or ()), list(was or ())
+        if was != cur:
             return True
     return False

@@ -409,11 +409,24 @@ class NoCandidateAlarm:
                 "note": "live events scored, none admissible; gates unchanged"}
 
 
-def _emit_alarm(row: Mapping[str, Any]) -> None:
+def _emit_alarm(row: Mapping[str, Any],
+                kind: str = "no_candidate_alarm") -> None:
+    """Both channels for one alarm row: the human PMUS_SPRING_ALARM line and
+    the structured campaign row.
+
+    LIVE 2026-09-11T15:10:15Z. This took a row whose OWN key was `alarm` --
+    the risk-set detector's -- and passed it through `**row` while also
+    passing `alarm=` explicitly, so every risk-set alarm for 45 minutes died
+    as `TypeError: got multiple values for keyword argument 'alarm'`. The
+    stdout line above had already printed, which is the only reason the
+    transition was visible at all. So the label is now derived from whichever
+    key carries it and BOTH keys are stripped from the forwarded fields: a
+    row must never be able to collide with the wrapper that reports it."""
     print("PMUS_SPRING_ALARM " + json.dumps(dict(row), separators=(",", ":"),
                                             default=str), flush=True)
-    _log("no_candidate_alarm", **{k: v for k, v in row.items() if k != "kind"},
-         alarm=row.get("kind"))
+    label = row.get("kind") or row.get("alarm")
+    _log(kind, **{k: v for k, v in row.items() if k not in ("kind", "alarm")},
+         alarm=label)
 
 
 def _read_halt(rep: Mapping[str, Any]) -> bool:
@@ -2688,15 +2701,26 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                         daily_loss_stop_usd=str(base.daily_loss_stop()))
                     for _a in rsa.detect(_risk_prev["held"], held_all,
                                          _unsettled):
-                        _emit_alarm(_a)
-                        _log("risk_set_alarm", **_a)
+                        _emit_alarm(_a, "risk_set_alarm")
                     if rsa.changed(_risk_prev["snapshot"], _rs):
                         _log("risk_set", **_rs)
                     _risk_prev["snapshot"] = _rs
-                    _risk_prev["held"] = list(held_all)
                 except Exception as exc:                    # noqa: BLE001
                     # an audit that cannot run must never stop the campaign
                     _log("risk_set_error", error=repr(exc)[:200])
+                finally:
+                    # ALWAYS advance the baseline, even when the audit threw.
+                    # LIVE 15:10:15Z: the emission raised, this assignment
+                    # never ran, and ONE transition re-alarmed on every cycle
+                    # for 45 minutes while the snapshot stayed frozen at its
+                    # 14:59 values -- so the row that would have shown the
+                    # loss budget crossing its stop never appeared. A
+                    # watchdog that repeats forever is a broken watchdog.
+                    # The cost of advancing after a failure is one missed
+                    # EDGE; the standing condition it describes is still
+                    # visible every cycle in the snapshot's
+                    # `charged_not_scheduled`, which is level, not edge.
+                    _risk_prev["held"] = list(held_all)
                 # with capacity free, alternate: one iteration looks for a
                 # new market, the next works a held one, so neither starves
                 open_cycle = capacity and (_hold_rr["i"] % 2 == 0)

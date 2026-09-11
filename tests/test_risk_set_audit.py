@@ -134,8 +134,73 @@ def test_the_campaign_loop_emits_it_and_cannot_be_broken_by_it():
     from src import pmus_l5_continuous_session as C
     loop = inspect.getsource(C.run_campaign)
     assert "rsa.snapshot(" in loop and "rsa.detect(" in loop
-    assert '_log("risk_set"' in loop and '_log("risk_set_alarm"' in loop
+    assert '_log("risk_set"' in loop
+    assert '_emit_alarm(_a, "risk_set_alarm")' in loop
     assert '_log("risk_set_error"' in loop, "an audit must never halt the loop"
+
+
+# ------------------------------------------- the 15:10:15Z emission failure
+def test_an_alarm_row_carrying_its_own_alarm_key_does_not_raise():
+    """THE LIVE DEFECT. _emit_alarm forwarded **row while also passing
+    `alarm=`, so every row whose own key is `alarm` -- which is every row
+    this module produces -- died as TypeError. 45 minutes of live alarms
+    were lost to it. The detector was right; the wrapper reporting it was
+    not."""
+    import contextlib, io, json
+    from src import pmus_l5_continuous_session as C
+    a, = rsa.detect([CRICKET], [], [CRICKET])
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        C._emit_alarm(a, "risk_set_alarm")       # must not raise
+    rows = [ln for ln in buf.getvalue().splitlines() if ln.strip()]
+    # both channels, and the structured one carries the identity
+    assert [ln for ln in rows if ln.startswith("PMUS_SPRING_ALARM ")]
+    campaign = [ln for ln in rows if ln.startswith("PMUS_L5_CAMPAIGN ")]
+    assert len(campaign) == 1
+    row = json.loads(campaign[0].split(" ", 1)[1])
+    assert row["kind"] == "risk_set_alarm"
+    assert row["alarm"] == "held_absent_while_risk_bearing"
+    assert row["slug"] == CRICKET
+
+
+def test_the_original_no_candidate_caller_keeps_its_kind():
+    """The wrapper is shared. Fixing the collision must not silently
+    re-label the alarm that was already using it."""
+    import contextlib, io, json
+    from src import pmus_l5_continuous_session as C
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        C._emit_alarm({"kind": "no_candidate", "cycles": 3})
+    row = json.loads([ln for ln in buf.getvalue().splitlines()
+                      if ln.startswith("PMUS_L5_CAMPAIGN ")][0].split(" ", 1)[1])
+    assert row["kind"] == "no_candidate_alarm"
+    assert row["alarm"] == "no_candidate"
+    assert row["cycles"] == 3
+
+
+def test_the_held_baseline_advances_even_when_the_audit_throws():
+    """The second half of the live failure: the assignment sat AFTER the
+    emission, so one transition re-alarmed every cycle for 45 minutes and
+    the snapshot froze. The baseline now advances in a finally."""
+    import inspect
+    from src import pmus_l5_continuous_session as C
+    loop = inspect.getsource(C.run_campaign)
+    body = loop[loop.index("rsa.snapshot("):]
+    fin = body.index("finally:")
+    err = body.index('_log("risk_set_error"')
+    assert err < fin, "the failure path logs, then the baseline advances"
+    assert '_risk_prev["held"] = list(held_all)' in body[fin:fin + 900]
+
+
+def test_the_loss_figure_crossing_its_stop_emits_a_row():
+    """Keyed on the sets alone, combined_loss -14.7013 -> -15.1516 crossed
+    the daily stop with no row saying so."""
+    a = rsa.snapshot([CRICKET], [CRICKET], combined_loss_usd="-14.7013",
+                     daily_loss_stop_usd="-15.00")
+    b = rsa.snapshot([CRICKET], [CRICKET], combined_loss_usd="-15.1516",
+                     daily_loss_stop_usd="-15.00")
+    assert rsa.changed(a, b) is True
+    assert rsa.changed(b, b) is False
 
 
 def test_the_audit_is_packaged_in_the_probe_image():
