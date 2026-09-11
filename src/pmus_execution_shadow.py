@@ -226,6 +226,7 @@ def open_proposal(slug: str, plan: Mapping[str, Any], t_post: float,
     """Record a posted complement. This is a PROPOSAL, not a completion."""
     px = plan.get("target_price")
     return {
+        "schema": SCHEMA,
         "id": proposal_id(slug, t_post, px),
         "slug": slug, "tier": tier,
         "t_post": t_post,
@@ -581,6 +582,30 @@ def _pct(xs: Sequence[float], q: float):
     return round(xs[i], 4)
 
 
+# EVIDENCE WINDOW. Stamped on every proposal at creation. A proposal recorded
+# before the reachability measurement existed carries no gap series, and it
+# must never be counted in the same population as one that does -- that
+# mixture is what produced `reached_our_price: 0, filled: 1,
+# reached_but_unfilled: -1` in the deployed rows at 00:45Z: a single report
+# simultaneously implying a complement filled and that none was ever reached.
+SCHEMA = "reachability-v1"
+
+MEASURED = "measured"
+UNMEASURED = "unmeasured_legacy"
+
+
+def cohort_of(p: Mapping[str, Any]) -> str:
+    """Which evidence population a proposal belongs to.
+
+    Membership is decided by whether the proposal actually CARRIES the
+    measurement, not by when we think the code changed: a proposal stamped
+    with the current schema that never saw a two-sided book after posting is
+    still unmeasured for reachability purposes.
+    """
+    r = p.get("reachability") or {}
+    return MEASURED if r.get("observations") else UNMEASURED
+
+
 # Neither outcome class may be thinner than this before a split is readable.
 MIN_CLASS = int(os.getenv("PMUS_EXEC_MIN_CLASS", "10"))
 
@@ -739,42 +764,41 @@ def extend_research(prop: Mapping[str, Any], obs: Sequence[Mapping[str, Any]],
 
 
 def reachability_report(props: Sequence[Mapping[str, Any]]) -> dict:
-    """WHY completion succeeds or fails, not merely how often.
+    """WHY completion succeeds or fails, partitioned so it cannot contradict itself.
 
-    OWNER's distinction, which a completion percentage cannot express:
+    OWNER: "reconcile the VIRTUAL_MATCHED event with the current reachability
+    summary so one report can never simultaneously imply 'filled' and 'never
+    reached' without explicitly separating cohorts/deploy windows."
 
-      "People won't fill our maker order"   -- the market came and declined
-      vs
-      "Our economically acceptable order is too far away from the current
-       market to become executable"         -- it never came at all
+    That contradiction was real and shipped: at 00:45Z the deployed row read
+    reached_our_price 0, filled 1, reached_but_unfilled -1. The filled
+    proposal predated the reachability measurement, so it carried no gap
+    series -- `filled` was counted over every resolved proposal while
+    `reached` was counted only over measured ones. Two populations, one
+    subtraction.
 
-    The second is a consequence of where the FIRST LEG filled: the complement
-    is priced at (ceiling - surplus_avg), so a first leg at 39c forces a
-    complement at <=59c, and if the opposing side sits at 65c and never
-    travels, the order is unreachable by construction rather than unpopular.
+    Every rate below is now computed INSIDE a named cohort. The unmeasured
+    cohort reports its own counts and feeds NO reachability figure, and the
+    coherence block asserts the arithmetic that makes a self-contradicting
+    report impossible to emit.
     """
     resolved = [p for p in props if p.get("status") in RESOLVED]
-    with_r = [p for p in resolved if (p.get("reachability") or {}).get(
-        "observations")]
-    # A FILL IMPLIES REACH, exactly as it implies a touch. Reachability is
-    # sampled from quotes; a trade can come through the price between
-    # snapshots, so `reached` read from quotes alone can be False on a
+    measured = [p for p in resolved if cohort_of(p) == MEASURED]
+    unmeasured = [p for p in resolved if cohort_of(p) == UNMEASURED]
+
+    # A FILL IMPLIES REACH. Reachability is sampled from quotes and a trade
+    # can print through between snapshots, so quotes alone can say False on a
     # proposal that demonstrably filled.
-    reached = [p for p in with_r if p["reachability"].get("reached")
+    reached = [p for p in measured
+               if p["reachability"].get("reached")
                or p.get("status") == VIRTUAL_MATCHED]
-    never = [p for p in with_r if p not in reached]
-    # MATCHED MUST BE COUNTED WITHIN THE MEASURED SUBSET. Counting it over
-    # all `resolved` while `reached` counts only `with_r` produced
-    # reached_but_unfilled = 0 - 1 = -1 live at 00:45Z -- a negative count,
-    # which is the kind of impossibility that says the two numbers were not
-    # drawn from the same population. Proposals that resolved before the
-    # reachability measurement existed have no record and belong in neither.
-    matched = [p for p in with_r if p.get("status") == VIRTUAL_MATCHED]
-    matched_all = [p for p in resolved if p.get("status") == VIRTUAL_MATCHED]
+    never = [p for p in measured if p not in reached]
+    filled_m = [p for p in measured if p.get("status") == VIRTUAL_MATCHED]
+    filled_u = [p for p in unmeasured if p.get("status") == VIRTUAL_MATCHED]
 
     def _med(xs, key):
         vals = sorted(float(p["reachability"][key]) for p in xs
-                      if p["reachability"].get(key) is not None)
+                      if (p.get("reachability") or {}).get(key) is not None)
         return _pct(vals, 0.5)
 
     research = [p.get("research") for p in props if p.get("research")]
@@ -782,28 +806,33 @@ def reachability_report(props: Sequence[Mapping[str, Any]]) -> dict:
     for r in research:
         verdicts[r.get("verdict")] = verdicts.get(r.get("verdict"), 0) + 1
 
-    return {
+    out = {
         "kind": "execution_shadow_reachability",
-        "resolved": len(resolved),
-        "with_measurement": len(with_r),
-        "reached_our_price": len(reached),
-        "never_reached": len(never),
-        "filled": len(matched_all),
-        "filled_with_measurement": len(matched),
-        "reached_but_unfilled": max(0, len(reached) - len(matched)),
-        "resolved_without_measurement": len(resolved) - len(with_r),
-        "median_initial_gap_cents": _med(with_r, "initial_gap_cents"),
-        "median_min_gap_cents": _med(with_r, "min_gap_cents"),
-        "median_favorable_excursion_cents": _med(
-            with_r, "max_favorable_excursion_cents"),
-        "median_initial_gap_cents_never_reached": _med(
-            never, "initial_gap_cents"),
-        "median_initial_gap_cents_reached": _med(reached, "initial_gap_cents"),
-        "median_time_to_touch_s": _med(reached, "time_to_touch_s"),
-        # the bottleneck is judged ONLY on proposals that carry the
-        # measurement it is about.
-        "bottleneck": _bottleneck(len(with_r), len(never), len(reached),
-                                  len(matched)),
+        "resolved_total": len(resolved),
+        MEASURED: {
+            "resolved": len(measured),
+            "reached_our_price": len(reached),
+            "never_reached": len(never),
+            "filled": len(filled_m),
+            "reached_but_unfilled": len(reached) - len(filled_m),
+            "median_initial_gap_cents": _med(measured, "initial_gap_cents"),
+            "median_min_gap_cents": _med(measured, "min_gap_cents"),
+            "median_favorable_excursion_cents": _med(
+                measured, "max_favorable_excursion_cents"),
+            "median_initial_gap_cents_never_reached": _med(
+                never, "initial_gap_cents"),
+            "median_initial_gap_cents_reached": _med(
+                reached, "initial_gap_cents"),
+            "median_time_to_touch_s": _med(reached, "time_to_touch_s"),
+            "bottleneck": _bottleneck(len(measured), len(never), len(reached),
+                                      len(filled_m)),
+        },
+        UNMEASURED: {
+            "resolved": len(unmeasured), "filled": len(filled_u),
+            "note": ("no gap series -- recorded before the measurement "
+                     "existed, or never saw a two-sided book after posting. "
+                     "Feeds NO reachability figure above."),
+        },
         "research_beyond_300s": {"n": len(research), "verdicts": verdicts,
                                  "horizon_s": EXTENDED_FOLLOW_S,
                                  "note": ("RESEARCH ONLY -- no rate, cohort "
@@ -811,8 +840,35 @@ def reachability_report(props: Sequence[Mapping[str, Any]]) -> dict:
         "labels": ("gap is how far the OPPOSING touch must still travel for a "
                    "fill. never_reached means the complement was priced "
                    "outside the market's realised range, which is a different "
-                   "problem from an order the market declined to lift."),
+                   "problem from an order the market declined to lift. Rates "
+                   "are computed INSIDE a cohort and never across them."),
     }
+    out["coherence"] = _coherence(out, len(measured), len(reached),
+                                  len(never), len(filled_m))
+    return out
+
+
+def _coherence(out: Mapping[str, Any], n_measured: int, reached: int,
+               never: int, filled: int) -> dict:
+    """The arithmetic that makes a self-contradicting report unemittable.
+
+    Checked at emission rather than asserted in a test alone, because the
+    contradiction that shipped was in a deployed row, not in a unit test.
+    """
+    v = []
+    if filled > reached:
+        v.append(f"filled({filled}) > reached({reached}): a fill implies reach")
+    if reached + never != n_measured:
+        v.append(f"reached({reached}) + never({never}) != measured({n_measured})")
+    if out[MEASURED]["reached_but_unfilled"] < 0:
+        v.append("reached_but_unfilled is negative")
+    if n_measured == 0 and (reached or never or filled):
+        v.append("figures reported against an empty measured cohort")
+    return {"ok": not v, "violations": v,
+            "labels": ("a report that implies both 'filled' and 'never "
+                       "reached' inside ONE cohort is incoherent; across "
+                       "cohorts it is merely two different populations, "
+                       "which is why they are reported separately")}
 
 
 def _bottleneck(n, never, reached, matched) -> Optional[str]:
@@ -915,3 +971,162 @@ def compare_to_history(props: Sequence[Mapping[str, Any]],
             "labels": ("same quantity on both sides: ticks from the best "
                        "opposite touch, closest reached. Nothing historical "
                        "is reconstructed or modelled.")}
+
+
+# ------------------------------------------- completion-time distribution
+TIME_BUCKETS_S = (60, 120, 300, 600, 1800)
+
+
+def completion_time_report(props: Sequence[Mapping[str, Any]]) -> dict:
+    """Time-to-fill, frozen-horizon and research-horizon kept apart.
+
+    OWNER: "We now have one fill at 260s, close to the frozen 300s horizon."
+    That proximity is the point: a horizon that sits just above the only
+    observed fill cannot be assumed generous, and the buckets below are what
+    would show it.
+
+    THE HISTORICAL HALF IS NOT AVAILABLE AT THIS GRANULARITY and is not
+    invented. analysis/l5 carries `median_rest_s` (7.71s filled, 6.99s
+    unfilled) and NO per-order timing rows, so median/p75/p90 and the <=60 /
+    <=120 / <=300 / <=600 / <=1800 fractions cannot be computed for our own
+    historical completes. Worse, that median is not even the same quantity:
+    the earlier study found rest_s is determined by the OUTCOME -- a fill ends
+    the rest, no fill runs to the deadline -- so it measures the live engine's
+    cancel/re-quote deadline, not how long a resting complement takes to
+    trade. Our shadow rests 300s without re-quoting. Comparing 7.71s to 260.4s
+    would be comparing two different mechanisms.
+    """
+    resolved = [p for p in props if p.get("status") in RESOLVED]
+    filled = [p for p in resolved if p.get("status") == VIRTUAL_MATCHED
+              and p.get("latency_s") is not None]
+    lat = sorted(float(p["latency_s"]) for p in filled)
+
+    # research horizon: fills that arrived AFTER the frozen verdict
+    later = [p for p in props
+             if (p.get("research") or {}).get("would_fill_later")
+             and (p.get("research") or {}).get("later_fill_latency_s")
+             is not None]
+    lat_later = sorted(float(p["research"]["later_fill_latency_s"])
+                       for p in later)
+
+    n_res = len(resolved)
+    frozen_buckets = {
+        f"le_{b}s": (None if not n_res else
+                     round(sum(1 for x in lat if x <= b) / n_res, 4))
+        for b in TIME_BUCKETS_S if b <= FOLLOW_S}
+    research_buckets = {
+        f"le_{b}s": (None if not n_res else
+                     round((sum(1 for x in lat if x <= b)
+                            + sum(1 for x in lat_later if x <= b)) / n_res, 4))
+        for b in TIME_BUCKETS_S}
+
+    return {
+        "kind": "execution_shadow_completion_time",
+        "frozen_300s": {
+            "horizon_s": FOLLOW_S,
+            "resolved": n_res, "filled": len(lat),
+            "median_s": _pct(lat, 0.5), "p75_s": _pct(lat, 0.75),
+            "p90_s": _pct(lat, 0.9),
+            "max_s": lat[-1] if lat else None,
+            "fraction_filled_by": frozen_buckets,
+            "share_of_fills_in_final_fifth": (
+                None if not lat else
+                round(sum(1 for x in lat if x > 0.8 * FOLLOW_S) / len(lat), 4)),
+        },
+        "research_1800s": {
+            "horizon_s": EXTENDED_FOLLOW_S,
+            "additional_fills_after_frozen_verdict": len(lat_later),
+            "median_later_fill_s": _pct(lat_later, 0.5),
+            "fraction_filled_by": research_buckets,
+            "note": ("RESEARCH ONLY. These fills arrived after the frozen "
+                     "verdict was written and change none of it."),
+        },
+        "historical": {
+            "available": False,
+            "median_rest_s_filled": 7.71,
+            "median_rest_s_unfilled": 6.99,
+            "why_unavailable": (
+                "analysis/l5 carries no per-order timing rows, so the "
+                "percentiles and buckets cannot be computed. The medians that "
+                "DO exist measure rest-to-fill-or-deadline under the live "
+                "engine's cancel/re-quote behaviour, not time for a resting "
+                "complement to trade -- a different quantity from the "
+                "prospective figures above, and not comparable to them."),
+        },
+        "labels": ("a fill at 260.4s against a 300s horizon is near the edge; "
+                   "share_of_fills_in_final_fifth is the number that would "
+                   "show the horizon is binding."),
+    }
+
+
+# ----------------------------------- reachability as the predictor, by bucket
+TICK_BUCKETS = (0, 1, 2, 4, 8)
+
+
+def reachability_buckets(props: Sequence[Mapping[str, Any]],
+                         key: Optional[str] = None) -> dict:
+    """Did the acceptable complement get within 0/1/2/4/8 ticks, and how fast?
+
+    OWNER: "Reachability -- not proposal count -- is the key predictor."
+
+    So the unit here is the FIRST-LEG STATE: for each proposal, how close the
+    market came to the price that first leg forces, and how long it took. A
+    market that produces many proposals none of which come within 8 ticks is
+    worse than one producing few that reach 1 tick, and a count-based view
+    inverts that.
+
+    Grouped by any state-at-post field (sport, market_type, tier) so the
+    comparison the owner asked for -- reachability against flow, movement,
+    spread, sport and market type -- is read off the same table.
+    """
+    measured = [p for p in props
+                if p.get("status") in RESOLVED and cohort_of(p) == MEASURED]
+
+    def _group(p):
+        if key is None:
+            return "all"
+        if key == "tier":
+            return str(p.get("tier"))
+        return str((p.get("state_at_post") or {}).get(key))
+
+    groups: dict = {}
+    for p in measured:
+        groups.setdefault(_group(p), []).append(p)
+
+    out: dict = {}
+    for g, ps in sorted(groups.items()):
+        n = len(ps)
+        mins = [float(p["reachability"]["min_gap_ticks"]) for p in ps
+                if p["reachability"].get("min_gap_ticks") is not None]
+        row = {"n": n,
+               "within": {f"le_{b}_ticks":
+                          (None if not mins else
+                           round(sum(1 for m in mins if m <= b) / len(mins), 4))
+                          for b in TICK_BUCKETS},
+               "median_min_gap_ticks": _pct(sorted(mins), 0.5),
+               "p90_min_gap_ticks": _pct(sorted(mins), 0.9),
+               "median_time_to_touch_s": _pct(sorted(
+                   float(p["reachability"]["time_to_touch_s"]) for p in ps
+                   if p["reachability"].get("time_to_touch_s") is not None), 0.5),
+               "filled": sum(1 for p in ps
+                             if p.get("status") == VIRTUAL_MATCHED),
+               }
+        # the predictors the owner named, measured ON THE SAME ROWS so the
+        # comparison is against this group's reachability, not a global one.
+        for f in ("flow_usd_per_min", "spread", "mid_stdev", "mid_range"):
+            vals = sorted(float(p["state_at_post"][f]) for p in ps
+                          if isinstance((p.get("state_at_post") or {}).get(f),
+                                        (int, float)))
+            row[f"median_{f}"] = _pct(vals, 0.5)
+        row["sufficient_sample"] = n >= MIN_CLASS
+        out[g] = row
+
+    return {"kind": "execution_shadow_reachability_buckets",
+            "grouped_by": key or "all", "groups": out,
+            "tick_buckets": list(TICK_BUCKETS),
+            "labels": ("the unit is the FIRST-LEG STATE: how close the market "
+                       "came to the price that first leg forces. A group "
+                       "producing many proposals none of which come within 8 "
+                       "ticks is worse than one producing few that reach 1 "
+                       "tick -- a proposal COUNT inverts that ranking. Each "
+                       "group carries its own sufficient_sample.")}

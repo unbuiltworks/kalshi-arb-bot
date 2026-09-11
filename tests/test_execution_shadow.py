@@ -434,35 +434,6 @@ def test_reachability_reports_time_to_touch_when_the_market_arrives():
     assert r["min_gap_cents"] <= 0
 
 
-def test_reachability_report_names_the_bottleneck_only_with_a_sample():
-    def _never(i):
-        p = EX.open_proposal(f"m{i}", PLAN, T0, None, -2, D("0.39"))
-        p.update(status=EX.NO_FILL,
-                 reachability={"observations": 5, "reached": False,
-                               "initial_gap_cents": 6.0, "min_gap_cents": 4.0,
-                               "max_favorable_excursion_cents": 2.0,
-                               "time_to_touch_s": None})
-        return p
-    assert EX.reachability_report([_never(i) for i in range(5)])["bottleneck"] is None
-    out = EX.reachability_report([_never(i) for i in range(12)])
-    assert "REACHABILITY" in out["bottleneck"]
-    assert out["never_reached"] == 12
-
-
-def test_reached_but_unfilled_is_named_as_a_queue_problem():
-    def _reached(i, matched=False):
-        p = EX.open_proposal(f"m{i}", PLAN, T0, None, -2, D("0.39"))
-        p.update(status=EX.VIRTUAL_MATCHED if matched else EX.NO_FILL,
-                 reachability={"observations": 5, "reached": True,
-                               "initial_gap_cents": 1.0, "min_gap_cents": -1.0,
-                               "max_favorable_excursion_cents": 2.0,
-                               "time_to_touch_s": 40.0})
-        return p
-    out = EX.reachability_report([_reached(i) for i in range(12)])
-    assert "QUEUE" in out["bottleneck"]
-    assert out["reached_but_unfilled"] == 12
-
-
 def test_first_leg_provenance_is_recorded_on_the_proposal():
     p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"),
                          first_leg={"price": "0.39", "t": 10.0, "side": "NO"})
@@ -600,41 +571,6 @@ def test_the_loop_calls_record_with_exactly_the_signature_it_has():
              surplus_avg=D("0.39"), tier="T1_top8", first_leg={})
 
 
-def test_reached_but_unfilled_can_never_be_negative():
-    """LIVE at 00:45Z it read -1: `matched` was counted over all resolved
-    proposals while `reached` counted only those carrying a reachability
-    record, so the two were not drawn from the same population. A negative
-    count is the impossibility that gives that away."""
-    filled_no_measure = EX.open_proposal("a", PLAN, T0, None, -2, D("0.39"))
-    filled_no_measure["status"] = EX.VIRTUAL_MATCHED        # no reachability
-    never = EX.open_proposal("b", PLAN, T0, None, -2, D("0.39"))
-    never.update(status=EX.NO_FILL,
-                 reachability={"observations": 4, "reached": False,
-                               "min_gap_ticks": 4.0, "initial_gap_cents": 2.0,
-                               "min_gap_cents": 2.0,
-                               "max_favorable_excursion_cents": 0.0})
-    out = EX.reachability_report([filled_no_measure, never])
-    assert out["reached_but_unfilled"] >= 0
-    assert out["filled"] == 1
-    assert out["filled_with_measurement"] == 0
-    assert out["resolved_without_measurement"] == 1
-
-
-def test_a_matched_proposal_counts_as_reached_even_if_quotes_missed_it():
-    """A fill implies reach, exactly as it implies a touch: reachability is
-    sampled from quotes and a trade can come through between snapshots."""
-    p = EX.open_proposal("a", PLAN, T0, None, -2, D("0.39"))
-    p.update(status=EX.VIRTUAL_MATCHED,
-             reachability={"observations": 4, "reached": False,
-                           "min_gap_ticks": 1.0, "initial_gap_cents": 1.0,
-                           "min_gap_cents": 0.5,
-                           "max_favorable_excursion_cents": 0.5})
-    out = EX.reachability_report([p])
-    assert out["reached_our_price"] == 1
-    assert out["never_reached"] == 0
-    assert out["reached_but_unfilled"] == 0
-
-
 def test_sufficient_sample_requires_a_floor_on_the_SMALLER_class():
     """LIVE at 00:50Z: 50 resolved, 1 matched, 49 no-fill passed the old bar
     and reported a flow 'separation' of 3,573 usd/min -- a difference computed
@@ -660,3 +596,150 @@ def test_the_historical_benchmark_file_ships_in_the_image():
     docker = open("deploy/pmus_shadow_breadth/Dockerfile").read()
     assert "complete_no_fill_forensics.json" in docker
     assert EX.HISTORICAL_FORENSICS.endswith("complete_no_fill_forensics.json")
+
+
+# ---- the report cannot contradict itself ---------------------------------
+
+def _measured(status, reached=False, ticks=4.0):
+    p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+    p.update(status=status,
+             reachability={"observations": 4, "reached": reached,
+                           "min_gap_ticks": ticks, "initial_gap_cents": 2.0,
+                           "min_gap_cents": 2.0, "time_to_touch_s": None,
+                           "max_favorable_excursion_cents": 0.0})
+    return p
+
+
+def _unmeasured(status):
+    p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+    p["status"] = status                      # no reachability record
+    return p
+
+
+def test_the_exact_contradiction_that_shipped_cannot_be_emitted():
+    """DEPLOYED at 00:45Z: reached_our_price 0, filled 1,
+    reached_but_unfilled -1 -- one report implying a complement both filled
+    and was never reached. The filled proposal predated the measurement, so
+    `filled` counted every resolved proposal while `reached` counted only
+    measured ones."""
+    props = [_unmeasured(EX.VIRTUAL_MATCHED)] + \
+            [_measured(EX.NO_FILL) for _ in range(15)]
+    out = EX.reachability_report(props)
+    m, u = out[EX.MEASURED], out[EX.UNMEASURED]
+    assert m["filled"] == 0 and m["reached_our_price"] == 0
+    assert u["filled"] == 1 and u["resolved"] == 1
+    assert m["reached_but_unfilled"] == 0
+    assert out["coherence"]["ok"] is True
+
+
+def test_a_fill_inside_the_measured_cohort_counts_as_reached():
+    out = EX.reachability_report([_measured(EX.VIRTUAL_MATCHED, reached=False)])
+    m = out[EX.MEASURED]
+    assert m["reached_our_price"] == 1 and m["never_reached"] == 0
+    assert m["filled"] == 1 and m["reached_but_unfilled"] == 0
+    assert out["coherence"]["ok"] is True
+
+
+def test_coherence_flags_a_violation_rather_than_printing_it_silently():
+    """Checked at EMISSION, because the contradiction that shipped was in a
+    deployed row and not in any test."""
+    bad = _coh_probe = EX._coherence(
+        {EX.MEASURED: {"reached_but_unfilled": -1}}, 5, 0, 5, 1)
+    assert bad["ok"] is False
+    assert any("implies reach" in v for v in bad["violations"])
+    assert any("negative" in v for v in bad["violations"])
+
+
+def test_measured_and_unmeasured_partition_every_resolved_proposal():
+    props = [_measured(EX.NO_FILL), _unmeasured(EX.NO_FILL),
+             _measured(EX.VIRTUAL_MATCHED, reached=True),
+             _unmeasured(EX.VIRTUAL_MATCHED)]
+    out = EX.reachability_report(props)
+    assert (out[EX.MEASURED]["resolved"] + out[EX.UNMEASURED]["resolved"]
+            == out["resolved_total"] == 4)
+
+
+def test_the_unmeasured_cohort_feeds_no_reachability_figure():
+    many = [_unmeasured(EX.VIRTUAL_MATCHED) for _ in range(40)]
+    out = EX.reachability_report(many)
+    m = out[EX.MEASURED]
+    assert m["resolved"] == 0
+    assert m["bottleneck"] is None, "no bottleneck may be named from no measurement"
+    assert m["median_min_gap_cents"] is None
+    assert out["coherence"]["ok"] is True
+
+
+def test_bottleneck_is_named_only_from_measured_proposals():
+    out = EX.reachability_report([_measured(EX.NO_FILL) for _ in range(12)])
+    assert "REACHABILITY" in out[EX.MEASURED]["bottleneck"]
+    out2 = EX.reachability_report(
+        [_measured(EX.VIRTUAL_MATCHED, reached=True) for _ in range(3)]
+        + [_measured(EX.NO_FILL, reached=True) for _ in range(9)])
+    assert "QUEUE" in out2[EX.MEASURED]["bottleneck"]
+
+
+def test_every_proposal_is_stamped_with_its_evidence_window():
+    p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+    assert p["schema"] == EX.SCHEMA
+
+
+# ---- completion-time distribution ----------------------------------------
+
+def test_completion_time_keeps_the_frozen_and_research_horizons_apart():
+    p = _measured(EX.VIRTUAL_MATCHED, reached=True)
+    p["latency_s"] = 260.4
+    q = _measured(EX.NO_FILL)
+    q["research"] = {"would_fill_later": True, "later_fill_latency_s": 900.0,
+                     "verdict": "SLOW_BUT_REACHABLE"}
+    out = EX.completion_time_report([p, q])
+    f, r = out["frozen_300s"], out["research_1800s"]
+    assert f["filled"] == 1 and f["median_s"] == 260.4
+    assert f["fraction_filled_by"]["le_300s"] == 0.5
+    assert "le_600s" not in f["fraction_filled_by"], "frozen must not exceed 300s"
+    assert r["additional_fills_after_frozen_verdict"] == 1
+    assert r["fraction_filled_by"]["le_1800s"] == 1.0
+
+
+def test_a_fill_near_the_horizon_is_flagged_by_the_final_fifth_share():
+    p = _measured(EX.VIRTUAL_MATCHED, reached=True)
+    p["latency_s"] = 260.4                       # > 0.8 * 300
+    assert EX.completion_time_report([p])[
+        "frozen_300s"]["share_of_fills_in_final_fifth"] == 1.0
+
+
+def test_historical_time_buckets_are_declared_unavailable_not_fabricated():
+    h = EX.completion_time_report([])["historical"]
+    assert h["available"] is False
+    assert h["median_rest_s_filled"] == 7.71
+    assert "not comparable" in h["why_unavailable"]
+    assert "median_s" not in h and "p90_s" not in h
+
+
+# ---- reachability buckets -------------------------------------------------
+
+def test_buckets_report_how_close_the_market_came_per_first_leg_state():
+    close = [_measured(EX.NO_FILL, ticks=1.0) for _ in range(3)]
+    far = [_measured(EX.NO_FILL, ticks=20.0) for _ in range(2)]
+    g = EX.reachability_buckets(close + far)["groups"]["all"]
+    assert g["n"] == 5
+    assert g["within"]["le_1_ticks"] == 0.6
+    assert g["within"]["le_8_ticks"] == 0.6
+    assert g["median_min_gap_ticks"] == 1.0
+
+
+def test_buckets_group_by_a_state_field_and_flag_thin_groups():
+    p = EX.open_proposal("aec-nfl-bal-ind-2026-09-13", PLAN, T0, None, -2,
+                         D("0.39"))
+    p.update(status=EX.NO_FILL,
+             reachability={"observations": 4, "reached": False,
+                           "min_gap_ticks": 2.0, "initial_gap_cents": 1.0,
+                           "min_gap_cents": 1.0, "time_to_touch_s": None,
+                           "max_favorable_excursion_cents": 0.0})
+    out = EX.reachability_buckets([p], key="sport")["groups"]
+    assert "nfl" in out
+    assert out["nfl"]["sufficient_sample"] is False, "one row is not a group"
+
+
+def test_buckets_exclude_unmeasured_proposals():
+    out = EX.reachability_buckets([_unmeasured(EX.VIRTUAL_MATCHED)])
+    assert out["groups"] == {}, "an unmeasured proposal has no gap to bucket"

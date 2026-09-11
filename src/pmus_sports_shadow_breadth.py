@@ -754,6 +754,12 @@ def run(cycles: Optional[int] = None) -> int:
                     exec_shadow.reachability_report(props)
                 rep["execution_vs_history"] = \
                     exec_shadow.compare_to_history(props)
+                rep["execution_completion_time"] = \
+                    exec_shadow.completion_time_report(props)
+                rep["execution_reach_buckets_by_sport"] = \
+                    exec_shadow.reachability_buckets(props, key="sport")
+                rep["execution_reach_buckets_by_type"] = \
+                    exec_shadow.reachability_buckets(props, key="market_type")
                 rep["execution_persisted"] = sb.execution.save()
             rep["raw_persisted"] = sb.append_raw(
                 n, [by_slug[k] for k in by_slug], decisions)
