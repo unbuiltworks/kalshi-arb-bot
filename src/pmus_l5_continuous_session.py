@@ -2089,15 +2089,33 @@ def continuation_preflight(t, filled: set, settled: set,
                       "realized_confirmed": bool(audit.get("realized_confirmed")),
                       "realized_usd": audit.get("realized_usd"),
                       "venue_qty_total": audit.get("venue_qty_total"),
-                      "ledger_qty_total": audit.get("ledger_qty_total")}
+                      "ledger_qty_total": audit.get("ledger_qty_total"),
+                      # LIVE 22:45:07Z: all 93 markets came back
+                      # AUDIT_UNAVAILABLE with every other field null, and
+                      # the preflight row could not say WHY -- settle_held
+                      # puts the exception in `error` and this dict dropped
+                      # it. 93 identical undiagnosable failures is not 93
+                      # facts about markets, it is one fact about the read.
+                      "error": audit.get("error")}
     # LIVE 15:46Z (OWNER P0 5560183912): the venue confirms settlement
     # either by a POSITION_RESOLUTION activity or by having carried no
     # position at a public resolution; for the latter it publishes NO
     # realized number (the trades carry none), so realized stays
     # unconfirmed and is REPORTED, never blocking: no position, no order,
     # no unsettled market is the exposure safety, and it is unchanged.
+    # When EVERY market fails the same way, the venue read is broken, not the
+    # markets. Name that once instead of leaving it to be inferred from 93
+    # identical rows -- which is exactly what cost a deploy at 22:45:07Z.
+    _errs = sorted({str(v.get("error")) for v in real.values() if v.get("error")})
+    _unav = [s for s, v in real.items() if v.get("status") == "AUDIT_UNAVAILABLE"]
     checks["venue_settled"] = {
         "ok": bool(real) and all(v["settled"] for v in real.values()),
+        "audit_unavailable": len(_unav),
+        "audit_error_kinds": _errs[:5],
+        "uniform_failure": bool(real) and len(_unav) == len(real),
+        "diagnosis": ("every market failed the same read: this is a venue/"
+                      "transport fault, not a settlement fact"
+                      if real and len(_unav) == len(real) else None),
         "markets": real,
         "realized_unconfirmed": sorted(s for s, v in real.items()
                                        if not v["realized_confirmed"]),
