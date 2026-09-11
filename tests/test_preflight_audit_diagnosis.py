@@ -22,6 +22,7 @@ def _stub(monkeypatch):
         "seen": 0, "cancelled": [], "foreign": [], "errors": []})
     monkeypatch.setattr(cont, "held_market", lambda t: None)
     monkeypatch.setattr(cont, "unsettled_slugs", lambda: [])
+    monkeypatch.setattr(cont, "_preflight_sleep", lambda s: None)
 
 
 def _unavailable(t, slug):
@@ -89,3 +90,43 @@ def test_the_check_still_blocks_on_an_unavailable_audit(_stub, monkeypatch):
     pre = cont.continuation_preflight(None, {"a"}, {"a"})
     assert pre["ok"] is False
     assert "venue_settled" in pre["failed"]
+
+
+# ---------------------------------------------- the 429 that actually blocked
+def test_the_audits_are_paced_like_the_read_only_sweep(_stub, monkeypatch):
+    """LIVE 23:11:26Z: 93 unpaced authenticated walks -> HTTP 429 on every
+    one. The sweep has paced at 1.5s all along; this path had no pacing."""
+    from src import pmus_settlement_sweep as sweep
+    assert cont.PREFLIGHT_AUDIT_PACE_S == sweep.PACE_S
+    naps: list = []
+    monkeypatch.setattr(cont, "_preflight_sleep", naps.append)
+    monkeypatch.setattr(cont, "settle_held", _settled)
+    cont.continuation_preflight(None, {"a", "b", "c"}, set())
+    assert naps == [cont.PREFLIGHT_AUDIT_PACE_S] * 2, "n-1 pauses for n markets"
+
+
+def test_every_pass_re_audits_every_market(_stub, monkeypatch):
+    """No caching. A memo was tried and removed: it answered a later pass
+    with an earlier pass's ledger quantity, which would hide a ledger/venue
+    divergence that appeared after the first confirmation. The retry loop
+    can afford to re-read; the reconcile check cannot afford a stale one."""
+    calls: list = []
+    monkeypatch.setattr(cont, "settle_held",
+                        lambda t, s: (calls.append(s), _settled(t, s))[1])
+    cont.continuation_preflight(None, {"a", "b"}, set())
+    cont.continuation_preflight(None, {"a", "b"}, set())
+    assert sorted(calls) == ["a", "a", "b", "b"]
+
+
+def test_a_changed_ledger_quantity_is_seen_on_the_next_pass(_stub, monkeypatch):
+    """The exact case the memo broke."""
+    qty = {"v": "0.04"}
+    monkeypatch.setattr(cont, "settle_held", lambda t, s: {
+        "status": "REALIZED", "settled": True, "settled_by": "POSITION_RESOLUTION",
+        "realized_confirmed": True, "realized_usd": "0.01",
+        "venue_qty_total": "0.04", "ledger_qty_total": qty["v"]})
+    first = cont.continuation_preflight(None, {"m"}, {"m"})
+    assert first["checks"]["venue_settled"]["ledger_vs_venue_qty_mismatch"] == []
+    qty["v"] = "0.06"
+    second = cont.continuation_preflight(None, {"m"}, {"m"})
+    assert second["checks"]["venue_settled"]["ledger_vs_venue_qty_mismatch"] == ["m"]

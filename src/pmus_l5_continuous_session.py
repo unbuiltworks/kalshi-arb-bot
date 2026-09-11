@@ -2060,6 +2060,19 @@ def deployment_identity() -> dict:
             "service": os.getenv("RAILWAY_SERVICE_NAME") or None}
 
 
+# Pacing between the preflight's per-market venue audits. The read-only
+# sweep uses 1.5s; this path had none and took an HTTP 429 on all 93 markets
+# at 2026-09-11T23:11:26Z. Every market is re-audited on every pass, by
+# design: a preflight that re-reads is worth more than one that is fast.
+PREFLIGHT_AUDIT_PACE_S = 1.5
+
+
+def _preflight_sleep(seconds: float) -> None:
+    """Indirected so tests can run the loop without real time passing."""
+    import time as _t
+    _t.sleep(seconds)
+
+
 def continuation_preflight(t, filled: set, settled: set,
                            rung: Optional[Mapping[str, Any]] = None) -> dict:
     """OWNER preconditions for an evidence continuation, all from the
@@ -2081,7 +2094,28 @@ def continuation_preflight(t, filled: set, settled: set,
     checks["all_filled_settled"] = {"ok": not unsettled, "filled": sorted(filled),
                                     "unsettled": unsettled}
     real: dict[str, Any] = {}
-    for slug in sorted(filled):
+    # LIVE 23:11:26Z, the blocker this preflight actually had: all 93 markets
+    # returned HTTP 429 Too Many Requests. The loop fired 93 authenticated
+    # activity walks back to back with NO PACING, and the venue rate-limited
+    # us -- self-inflicted, and then repeated on every retry of the waiting
+    # loop, which kept the limiter hot and could never recover.
+    #
+    # The read-only settlement sweep already paces at PACE_S = 1.5 for
+    # exactly this reason (src/pmus_settlement_sweep.py); this path never
+    # learned it. Pacing is the whole fix: the 429 came from a BURST of 93
+    # calls, not from sustained volume, and one call per 1.5s is an ordinary
+    # rate the venue serves all day.
+    #
+    # I FIRST ALSO MEMOISED confirmed markets so retries would re-audit only
+    # what was unconfirmed, and removed it. A test that re-stubs the audit
+    # with a DIFFERENT ledger quantity to exercise ledger_reconciled caught
+    # the cache answering with the old one -- which in production means a
+    # ledger/venue divergence appearing after the first confirmation would
+    # never be seen again. A preflight that re-reads is worth more than a
+    # preflight that is fast, and the retry loop has time to spare.
+    for i, slug in enumerate(sorted(filled)):
+        if i:
+            _preflight_sleep(PREFLIGHT_AUDIT_PACE_S)
         audit = settle_held(t, slug)
         real[slug] = {"status": audit.get("status"),
                       "settled": bool(audit.get("settled")),
