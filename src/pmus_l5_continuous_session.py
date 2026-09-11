@@ -1129,6 +1129,26 @@ def unsettled_slugs() -> list:
     return [s for s in filled if s not in settled]
 
 
+def ledger_settled_backfill(filled, settled_here, unsettled) -> set:
+    """The campaign's filled markets that the LEDGER reports settled and
+    the process-local `settled_here` does not.
+
+    The advance gate holds a campaign open until every market it filled is
+    settled, and it read that from an in-process set. A market settled by
+    an earlier process -- a redeploy, or the read-only settlement sweep --
+    never enters that set, so the gate stalls on markets already settled
+    and no owner approval can be consumed. `unsettled_slugs()` is the
+    authoritative answer (filled with no `settled`/`realized` row), so a
+    filled market absent from it is settled.
+
+    Deliberately NOT a safety decision: the venue re-audit in
+    continuation_preflight still runs over every filled market and still
+    blocks the next campaign on the venue's own answer. This only decides
+    whether the gate is allowed to ask the question."""
+    unsettled = set(unsettled)
+    return {s for s in set(filled) if s not in unsettled} - set(settled_here)
+
+
 def ledger_slugs() -> set:
     """Every market this ledger has ever submitted to (attribution)."""
     path = base.q1.base.state_dir() / "ledger.jsonl"
@@ -2382,6 +2402,38 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     if persisted:
         filled_markets |= set(persisted.get("filled_markets") or [])
         settled_here |= set(persisted.get("settled_here") or [])
+        # OWNER 2026-09-11: the advance gate asks "is every filled market
+        # of this campaign settled?" and answered it from a PROCESS-LOCAL
+        # accumulator. A market settled by an EARLIER process -- or by the
+        # read-only sweep -- is absent from that set, so the gate stalls
+        # forever on markets the LEDGER already reports settled. Not
+        # hypothetical: the R5F state saved at 14:42:40Z carries 92 filled
+        # markets and 80 in settled_here while unsettled_slugs() is EMPTY,
+        # so the gate could never fire and no owner approval could ever be
+        # consumed.
+        #
+        # The ledger is the authoritative settlement record (its rows are
+        # written only by the settlement audit), so seed from it. This
+        # WEAKENS NOTHING: continuation_preflight still re-audits every
+        # filled market against the VENUE and blocks the next campaign
+        # unless the venue itself says settled. All this decides is
+        # whether the gate gets to ASK.
+        try:
+            _ledger_settled = ledger_settled_backfill(
+                filled_markets, settled_here, unsettled_slugs())
+            settled_here |= _ledger_settled
+        except Exception as exc:                       # noqa: BLE001
+            _ledger_settled = set()
+            _log("campaign_settled_seed_error", error=repr(exc)[:200])
+        if _ledger_settled:
+            _log("campaign_settled_seeded_from_ledger",
+                 added=sorted(_ledger_settled),
+                 persisted_settled_here=len(persisted.get("settled_here") or []),
+                 filled_markets=len(filled_markets),
+                 settled_here=len(settled_here),
+                 note="ledger-confirmed settlement the previous process did "
+                      "not record; the venue re-audit in "
+                      "continuation_preflight is unchanged and still blocking")
         for s_ in settled_here:
             cooldown[s_] = float("inf")
         campaign_id = str(persisted.get("campaign_id") or INITIAL_CAMPAIGN_ID)
