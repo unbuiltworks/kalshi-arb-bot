@@ -27,6 +27,11 @@ COPY src/pmus_l5_continuous_session.py src/pmus_l5_continuous_session.py
 # It ships dark unless PMUS_RESIDUAL_QUARANTINE is explicitly enabled, but the
 # module must still exist in the image or the probe cannot boot at all.
 COPY src/pmus_residual_quarantine.py src/pmus_residual_quarantine.py
+# Read-only risk-set audit (OWNER 2026-09-11): emits the risk-bearing set
+# beside the scheduled one and alarms on held->absent-while-still-charged.
+# Imported at module scope by the continuous session, so it must be in the
+# image or the probe cannot boot -- the 565b4cde shape.
+COPY src/pmus_risk_set_audit.py src/pmus_risk_set_audit.py
 # One-shot migration close (OWNER 2026-09-11). Imported at module scope by
 # pmus_l5_continuous_session, so an image without these two files does not
 # degrade -- it fails to import and the probe never boots. That is the same

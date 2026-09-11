@@ -42,6 +42,7 @@ from typing import Any, Mapping, Optional, Sequence
 from src import pmus_spring_l5_probe_entry as entry
 from src import pmus_migration_close_live as mclose
 from src import pmus_residual_quarantine as rq
+from src import pmus_risk_set_audit as rsa
 from src import pmus_settlement_auditor as sa
 from src import pmus_fill_ledger as fl
 from src import pmus_incentive_audit as incentives
@@ -2436,6 +2437,10 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     # slugs whose quarantine has already been announced, so the row appears
     # when the set CHANGES rather than on every one of the loop's cycles
     _quarantine_logged: set = set()
+    # previous risk-set snapshot and scheduled set, for the held->absent
+    # detector. Seeded empty: the first cycle establishes a baseline and
+    # cannot alarm, because "we have not looked yet" is not a transition.
+    _risk_prev: dict = {"snapshot": None, "held": []}
 
     def _next_held(slugs: list) -> Optional[str]:
         if not slugs:
@@ -2661,6 +2666,37 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                  "acquisition slot."))
                 base.set_concurrent_owned(slots["declared_owned"])
                 capacity = slots["capacity"]
+                # RISK-SET AUDIT (owner 2026-09-11), read-only. The running
+                # probe never emitted what it was CARRYING -- `unsettled`
+                # appears only in rung_markets_reached, which a continuous
+                # campaign never reaches, and in the shutdown_idle re-price,
+                # which needs a halt. So when cricket left `held` with no
+                # settlement row there was no row to diagnose it from. This
+                # emits the risk-bearing set beside the scheduled one, and
+                # alarms when a slug leaves the scheduler while still
+                # carried in the loss budget.
+                #
+                # Nothing here decides anything. Risk is priced over
+                # unsettled_slugs() at every call site, so a scheduler
+                # lifecycle bug cannot erase exposure; this makes the
+                # divergence legible rather than guarding against it.
+                try:
+                    _unsettled = unsettled_slugs() or []
+                    _rs = rsa.snapshot(
+                        _unsettled, held_all,
+                        combined_loss_usd=str(_combined_now()[0]),
+                        daily_loss_stop_usd=str(base.daily_loss_stop()))
+                    for _a in rsa.detect(_risk_prev["held"], held_all,
+                                         _unsettled):
+                        _emit_alarm(_a)
+                        _log("risk_set_alarm", **_a)
+                    if rsa.changed(_risk_prev["snapshot"], _rs):
+                        _log("risk_set", **_rs)
+                    _risk_prev["snapshot"] = _rs
+                    _risk_prev["held"] = list(held_all)
+                except Exception as exc:                    # noqa: BLE001
+                    # an audit that cannot run must never stop the campaign
+                    _log("risk_set_error", error=repr(exc)[:200])
                 # with capacity free, alternate: one iteration looks for a
                 # new market, the next works a held one, so neither starves
                 open_cycle = capacity and (_hold_rr["i"] % 2 == 0)
