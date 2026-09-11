@@ -125,6 +125,35 @@ def _num(x: Any) -> Optional[float]:
         return None
 
 
+# How many price levels a side keeps. Deep enough that a complement posted a
+# few ticks back can still count everything ahead of it; bounded because
+# unbounded retention is what cost the recorder its volume on 2026-09-08.
+LADDER_LEVELS = 25
+
+
+def _ladder(bids, offers) -> dict:
+    """Both sides as [{px, qty}], in the venue's own YES frame.
+
+    Kept in ONE frame on purpose. A NO order's queue lives on the offers
+    side at `1 - px`, and storing a pre-converted NO ladder alongside would
+    make two representations of one book that could disagree -- the same
+    shape as the distance_to_touch bug, which compared a NO price to a YES
+    bid."""
+    def side(levels):
+        out = []
+        for lvl in (levels or [])[:LADDER_LEVELS]:
+            if not isinstance(lvl, Mapping):
+                continue
+            px = lvl.get("px")
+            px = px.get("value") if isinstance(px, Mapping) else px
+            px, qty = rank_mod._f(px), rank_mod._f(lvl.get("qty"))
+            if px is not None and qty is not None:
+                out.append({"px": px, "qty": qty})
+        return out
+    return {"bids": side(bids), "offers": side(offers),
+            "frame": "YES prices; a NO order at p sits at 1-p on `offers`"}
+
+
 def observation_row(slug: str, market_data: Mapping[str, Any],
                     now: float) -> dict:
     """One collector-schema observation from a public book payload.
@@ -145,6 +174,18 @@ def observation_row(slug: str, market_data: Mapping[str, Any],
     return {
         "t": _utc(now), "slug": slug,
         "bid": bid, "ask": ask, "bid_qty": bid_q, "ask_qty": ask_q,
+        # THE LADDER, not just the touch. OWNER 2026-09-11, on a book showing
+        # ~211k at the 81c bid: "we have been asking why can't we fill while
+        # throwing away the exact data that tells us whether 50,000 or 250,000
+        # shares are standing in front of us." The venue serves every level and
+        # this function took levels[0] and dropped the rest -- so queue-ahead
+        # was never computable anywhere downstream.
+        #
+        # Bounded at LADDER_LEVELS per side rather than unbounded: the
+        # recorder filled a 50 GB volume with unbounded retention on 09-08,
+        # and queue-ahead only needs the levels BETTER than our price, which
+        # sit within a few ticks of the touch.
+        "book_levels": _ladder(bids, offers),
         "shares_traded_cum": _num(stats.get("sharesTraded")),
         "notional_traded_cum": _num(stats.get("notionalTraded")),
         "last_trade_px": _num(stats.get("lastTradePx")),
@@ -226,6 +267,7 @@ def scored_row(slug: str, prev: Optional[Mapping[str, Any]],
         "slug": slug, "state": cur.get("state"),
         "bid": cur.get("bid"), "ask": cur.get("ask"),
         "bid_qty": cur.get("bid_qty"), "ask_qty": cur.get("ask_qty"),
+        "book_levels": cur.get("book_levels"),
         "maker_pair_cost": rank_mod.maker_pair_cost(cur.get("bid"),
                                                     cur.get("ask")),
         # NOTIONAL IS IN CENTS. Measured 2026-09-10 on

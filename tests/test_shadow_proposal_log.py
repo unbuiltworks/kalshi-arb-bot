@@ -159,60 +159,6 @@ def test_the_shadow_still_has_no_order_path():
     for banned in ("place_limit", "submit", "cancel", "Transport", "request("):
         assert banned not in s, banned
 
-
-# ------------------------------------------- queue position (OWNER 2026-09-11)
-def test_queue_ahead_is_null_and_explained_when_the_ladder_is_missing():
-    """OWNER: "If we post at 79c while 211,000 shares are already bidding 81c,
-    nobody can reach us." The row must carry that quantity -- and when the
-    pipeline has discarded the ladder it must say NULL and say why, never
-    estimate it from top-of-book. A guess here answers the question with a
-    number we invented."""
-    r = plog.lifecycle_row(STRANDED)          # no book_levels in the fixture
-    assert r["queue_ahead_qty"] is None
-    assert r["levels_better_than_us"] is None
-    assert r["book_levels_available"] is False
-    assert "PIPELINE gap, not a venue limitation" in r["queue_note"]
-    assert "discards every level behind them" in r["queue_note"]
-
-
-def test_queue_ahead_is_computed_when_the_ladder_survives():
-    """The 211k-at-81c shape: we rest at 0.79 behind 211k at 0.81 and 40k at
-    0.80, with 5k already at our own price."""
-    prop = {**STRANDED, "px": "0.79", "state_at_post": {
-        **STRANDED["state_at_post"],
-        "book_levels": [{"px": "0.81", "qty": "211000"},
-                        {"px": "0.80", "qty": "39923"},
-                        {"px": "0.79", "qty": "5000"},
-                        {"px": "0.78", "qty": "1000"}]}}
-    r = plog.lifecycle_row(prop)
-    assert r["book_levels_available"] is True
-    assert r["queue_ahead_qty"] == 250923.0
-    assert r["levels_better_than_us"] == 2
-    assert r["size_at_our_price"] == 5000.0
-
-
-def test_at_the_touch_nothing_is_ahead_and_that_needs_no_ladder():
-    prop = {**STRANDED, "state_at_post": {
-        **STRANDED["state_at_post"], "distance_to_touch": 0.0,
-        "bid_touch_qty": 211000.0}}
-    r = plog.lifecycle_row(prop)
-    assert r["our_price_is_the_touch"] is True
-    assert r["queue_ahead_qty"] == 0.0
-    assert r["size_at_our_price"] == 211000.0
-    assert r["levels_better_than_us"] == 0
-
-
-def test_the_ladder_is_carried_through_from_the_shadow_state():
-    """The execution shadow must pass book_levels along, or the field above
-    can never populate however the collector changes."""
-    import inspect
-    from src import pmus_execution_shadow as ex
-    src = inspect.getsource(ex.state_at_post)
-    assert '"book_levels": row.get("book_levels")' in src
-    assert '"ask_touch_qty": row.get("ask_touch_qty")' in src
-
-
-# ------------------------------ the three defects the 18:26Z rows exposed
 def test_residual_units_falls_back_when_after_is_present_but_none():
     """LIVE 18:26Z. `residual_after` EXISTS with value None on every NO_FILL
     row, so dict.get(k, default) never fired its default and residual_units
@@ -253,3 +199,99 @@ def test_the_distance_BANDS_were_never_affected_by_that_bug():
     band_src = inspect.getsource(ex.distance_band_report)
     assert "initial_gap_ticks" in band_src
     assert "distance_to_touch" not in band_src
+
+
+# ================= queue position, measured (OWNER GO 2026-09-11) =========
+ZVEREV = {"bid": 0.81, "ask": 0.82, "slug": "aec-atp-zve-kha-2026-09-11",
+          "bid_qty": 211000.0, "ask_qty": 194000.0,
+          "book_levels": {"bids": [{"px": 0.81, "qty": 211000},
+                                   {"px": 0.80, "qty": 39923},
+                                   {"px": 0.79, "qty": 5000}],
+                          "offers": [{"px": 0.82, "qty": 194000},
+                                     {"px": 0.83, "qty": 1000}]}}
+
+
+def _prop(px, side_yes):
+    from src import pmus_execution_shadow as ex
+    st = ex.state_at_post(ZVEREV, -3, "0.19", px, side_yes=side_yes)
+    return {"id": "p", "slug": "s", "status": "NO_FILL", "side_yes": side_yes,
+            "px": px, "residual_before": -3, "residual_after": None,
+            "state_at_post": st, "first_leg": {}}
+
+
+def test_the_owners_arithmetic_reproduces_exactly():
+    """OWNER: "81c: 211,000 shares / 80c: 39,923 shares ... roughly 250,923
+    shares at superior prices stand ahead of us." A YES buy at 79c."""
+    r = plog.lifecycle_row(_prop("0.79", True))
+    assert r["queue_ahead_qty"] == 250923.0
+    assert r["levels_better_than_us"] == 2
+    assert r["size_at_our_price"] == 5000.0
+    assert r["ticks_from_touch"] == -4
+    assert r["touch_depth_our_side"] == 211000.0
+
+
+def test_a_no_order_queues_on_offers_and_is_beaten_by_LOWER_yes_asks():
+    """The half that is easy to get backwards: a NO buy at 0.17 sits at 0.83
+    in the YES frame, and the 0.82 offer is a BETTER NO price (0.18), so it
+    is ahead of us. Computing this against `bids` would produce a confident
+    number from the wrong half of the book."""
+    r = plog.lifecycle_row(_prop("0.17", False))
+    assert r["queue_ahead_qty"] == 194000.0
+    assert r["levels_better_than_us"] == 1
+    assert r["size_at_our_price"] == 1000.0
+    assert r["ticks_from_touch"] == -2, "1 - 0.82 = 0.18 is the NO touch"
+    assert r["touch_depth_our_side"] == 194000.0, "our side is the offers"
+
+
+def test_at_the_touch_nothing_is_ahead():
+    r = plog.lifecycle_row(_prop("0.81", True))
+    assert r["queue_ahead_qty"] == 0.0
+    assert r["levels_better_than_us"] == 0
+    assert r["size_at_our_price"] == 211000.0
+    assert r["our_price_is_the_touch"] is True
+
+
+def test_queue_is_null_when_the_ladder_is_absent_never_guessed():
+    bare = {**_prop("0.79", True)}
+    bare["state_at_post"] = {**bare["state_at_post"], "book_levels": None}
+    r = plog.lifecycle_row(bare)
+    assert r["queue_ahead_qty"] is None
+    assert r["book_levels_available"] is False
+
+
+# ------------------------------------------- the ladder is actually retained
+def test_the_observation_row_keeps_the_whole_ladder_not_just_the_touch():
+    from src import pmus_sports_shadow_breadth as SB
+    row = SB.observation_row("s", {"bids": ZVEREV["book_levels"]["bids"],
+                                   "offers": ZVEREV["book_levels"]["offers"],
+                                   "stats": {}}, 0)
+    assert row["bid"] == 0.81 and row["bid_qty"] == 211000.0
+    lv = row["book_levels"]
+    assert [l["qty"] for l in lv["bids"]] == [211000.0, 39923.0, 5000.0]
+    assert [l["qty"] for l in lv["offers"]] == [194000.0, 1000.0]
+    assert "YES prices" in lv["frame"]
+
+
+def test_the_ladder_is_bounded_because_unbounded_retention_cost_a_volume():
+    from src import pmus_sports_shadow_breadth as SB
+    deep = [{"px": 0.5 - i * 0.005, "qty": 10} for i in range(100)]
+    row = SB.observation_row("s", {"bids": deep, "offers": [], "stats": {}}, 0)
+    assert len(row["book_levels"]["bids"]) == SB.LADDER_LEVELS == 25
+
+
+def test_the_ranking_row_carries_the_ladder_through_to_the_proposal():
+    from src import pmus_sports_shadow_breadth as SB
+    cur = SB.observation_row("s", {"bids": ZVEREV["book_levels"]["bids"],
+                                   "offers": [], "stats": {}}, 0)
+    scored = SB.scored_row("s", None, cur)
+    assert scored["book_levels"] is cur["book_levels"]
+    assert scored["bid_qty"] == 211000.0
+
+
+def test_touch_depth_reaches_the_row_under_the_key_the_ranker_uses():
+    """18:26Z shipped null depth because state_at_post read `bid_touch_qty`
+    while the ranking row writes `bid_qty`."""
+    from src import pmus_execution_shadow as ex
+    st = ex.state_at_post({"bid_qty": 7.0, "ask_qty": 9.0, "bid": 0.5,
+                           "ask": 0.51, "slug": "x"}, 0, None, "0.5")
+    assert st["bid_touch_qty"] == 7.0 and st["ask_touch_qty"] == 9.0

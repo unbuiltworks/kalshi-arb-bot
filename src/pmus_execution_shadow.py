@@ -190,6 +190,13 @@ def _distance_to_touch(px, bid, ask, side_yes) -> Optional[float]:
         return None
 
 
+def _ticks_from_touch(px, bid, ask, side_yes) -> Optional[int]:
+    d = _distance_to_touch(px, bid, ask, side_yes)
+    if d is None:
+        return None
+    return int(round(d / float(TICK)))
+
+
 def state_at_post(row: Optional[Mapping[str, Any]],
                   inv_residual, surplus_avg, complement_px,
                   side_yes: bool = True) -> dict:
@@ -211,13 +218,12 @@ def state_at_post(row: Optional[Mapping[str, Any]],
         # DEPTH at the touch. Added 2026-09-11: the band x spread grid found
         # depth collapsing 82x as the spread widens, and the per-proposal row
         # cannot test whether thin books strand without carrying it.
-        "bid_touch_qty": row.get("bid_touch_qty"),
-        "ask_touch_qty": row.get("ask_touch_qty"),
-        # THE FULL LADDER when the pipeline retains it. The venue's book
-        # endpoint serves `bids`/`offers` arrays; the collector's normalizer
-        # currently keeps only level 0. Carried here so queue-ahead populates
-        # the moment that changes, with no further code edit.
-        "book_levels": row.get("book_levels"),
+        # `bid_qty`/`ask_qty` are the keys the ranking row actually uses;
+        # reading `bid_touch_qty` shipped null depth on every row in the
+        # 18:26Z cycle. The collector schema spells it the other way, so both
+        # are accepted rather than picking one and being wrong somewhere else.
+        "bid_touch_qty": row.get("bid_qty", row.get("bid_touch_qty")),
+        "ask_touch_qty": row.get("ask_qty", row.get("ask_touch_qty")),
         "shape_span_s": row.get("shape_span_s"),
         "mid": mid,
         "in_band": None if mid is None else (rank_mod.BAND_LO <= mid
@@ -241,6 +247,12 @@ def state_at_post(row: Optional[Mapping[str, Any]],
         # field, and the predictor table built on it, were the wrong ones.
         "distance_to_touch": _distance_to_touch(complement_px, bid, ask,
                                                 side_yes),
+        # IN TICKS, because the hypothesis is stated in ticks and a dollar
+        # figure has to be divided by the tick size to be read at all. Signed
+        # the same way as the dollar figure: negative is behind the touch.
+        "ticks_from_touch": _ticks_from_touch(complement_px, bid, ask,
+                                              side_yes),
+        "book_levels": row.get("book_levels"),
     }
 
 

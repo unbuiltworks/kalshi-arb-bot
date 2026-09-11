@@ -88,44 +88,59 @@ QUEUE_NOTE = (
 def queue_position(prop: Mapping[str, Any]) -> dict:
     """How much better-priced size sits between us and a trade.
 
-    OWNER 2026-09-11, on a book showing ~211k bid at 81c: "displayed depth !=
-    flow through our particular resting order. If we post at 79c while 211,000
-    shares are already bidding 81c, nobody can reach us until all that
-    better-priced demand disappears/trades."
+    OWNER 2026-09-11, on a book showing ~211k bid at 81c: "If we post at 79c
+    while 211,000 shares are already bidding 81c, nobody can reach us until
+    all that better-priced demand disappears/trades."
 
-    This is the quantity that would decide whether our non-fills are a
-    queue-priority problem rather than a liquidity one, so the row carries it
-    -- populated where the ladder survives, explicitly null and explained
-    where it does not. It is never estimated from top-of-book: a guess here
-    would answer the owner's question with a number we invented."""
-    s = dict(prop.get("state_at_post") or {})
-    levels = s.get("book_levels")
-    at_touch = s.get("distance_to_touch")
+    SIDE-AWARE, and that is the whole difficulty. The ladder is stored in the
+    venue's YES frame. A YES buy queues on `bids` and is beaten by HIGHER
+    prices. A NO buy at p occupies `1 - p` on `offers` and is beaten by LOWER
+    yes-prices, because a lower yes-ask is a higher NO bid. Getting this
+    backwards would produce a confident queue number computed against the
+    wrong half of the book -- the same failure as the distance_to_touch bug,
+    which compared a NO price to a YES bid.
+
+    Never estimated from top-of-book: a guess here would answer the owner's
+    sharpest question with a number we invented."""
+    st = dict(prop.get("state_at_post") or {})
+    levels = st.get("book_levels") or {}
+    bids = levels.get("bids") or []
+    offers = levels.get("offers") or []
+    side_yes = bool(prop.get("side_yes"))
+    ticks = st.get("ticks_from_touch")
     out = {
         "queue_ahead_qty": None,
         "size_at_our_price": None,
         "levels_better_than_us": None,
-        "book_levels_available": bool(levels),
-        "our_price_is_the_touch": (None if at_touch is None
-                                   else abs(float(at_touch)) < 1e-9),
+        "book_levels_available": bool(bids or offers),
+        "our_price_is_the_touch": (None if ticks is None else ticks == 0),
+        "touch_depth_our_side": (st.get("bid_touch_qty") if side_yes
+                                 else st.get("ask_touch_qty")),
+        "touch_depth_other_side": (st.get("ask_touch_qty") if side_yes
+                                   else st.get("bid_touch_qty")),
     }
-    if not levels:
-        # the one case answerable without the ladder
-        if out["our_price_is_the_touch"] and s.get("bid_touch_qty") is not None:
-            out["size_at_our_price"] = s.get("bid_touch_qty")
-            out["queue_ahead_qty"] = 0.0
-            out["levels_better_than_us"] = 0
+    if not (bids or offers):
         return out
     try:
         px = float(prop.get("px"))
         ahead, at, better = 0.0, None, 0
-        for lvl in levels:
-            lp, lq = float(lvl.get("px")), float(lvl.get("qty") or 0)
-            if lp > px:
-                ahead += lq
-                better += 1
-            elif lp == px:
-                at = (at or 0.0) + lq
+        if side_yes:
+            for lvl in bids:                      # beaten by HIGHER yes bids
+                lp, lq = float(lvl["px"]), float(lvl["qty"])
+                if lp > px:
+                    ahead += lq
+                    better += 1
+                elif lp == px:
+                    at = (at or 0.0) + lq
+        else:
+            ours = 1.0 - px                       # our seat in the YES frame
+            for lvl in offers:                    # beaten by LOWER yes asks
+                lp, lq = float(lvl["px"]), float(lvl["qty"])
+                if lp < ours - 1e-9:
+                    ahead += lq
+                    better += 1
+                elif abs(lp - ours) <= 1e-9:
+                    at = (at or 0.0) + lq
         out.update({"queue_ahead_qty": ahead, "size_at_our_price": at,
                     "levels_better_than_us": better})
     except Exception:                                   # noqa: BLE001
@@ -176,6 +191,7 @@ def lifecycle_row(prop: Mapping[str, Any],
 
         # ---- decision-time state: everything the rule may be defined on
         "distance_to_touch": s.get("distance_to_touch"),
+        "ticks_from_touch": s.get("ticks_from_touch"),
         "spread": s.get("spread"),
         "median_spread": s.get("median_spread"),
         "flow_usd_per_min": s.get("flow_usd_per_min"),
