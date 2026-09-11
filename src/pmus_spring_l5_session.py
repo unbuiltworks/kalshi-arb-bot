@@ -691,7 +691,15 @@ def spring_complement_price(avg_cost: D, opp_ask: D, tick: D,
                 "fee_safe": bool(hard is not None and px <= D(str(hard))),
                 "hard_bound_px": str(hard) if hard is not None else None,
                 "post_only_trim": bool(trimmed),
-                "labels": "L5 fidelity: touch pricing, pair reported not gated"}
+                # the label said "reported not gated" for a day after the
+                # 2026-09-10 cap above made it false. It is a gate: the
+                # re-quote follows the touch only inside the ceiling. A
+                # stale label on a safety field is a trap for whoever reads
+                # it next while deciding whether the ceiling is live.
+                "labels": ("L5 fidelity: touch pricing, GATED at "
+                           "completion_pair_ceiling -- the re-quote follows "
+                           "the touch only inside the ceiling, then stops "
+                           "chasing and preserves the residual")}
         # LIVE 2026-09-07 19:59-20:00Z (aec-setkamecz-tomvoj-ticjir): L5's
         # COMPLETE at touch 0.87 -> 0.96 was refused three times because
         # this branch applied the executor's OWN entry range
@@ -865,7 +873,13 @@ def completion_pair_ceiling() -> D:
 
 def complement_pricing() -> str:
     """OWNER PROGRAM 5574156328 (R5F): "fee_safe" (R1..R4) or "l5_touch"
-    (a COMPLETE priced at L5's own touch, pair reported not gated)."""
+    (a COMPLETE priced at L5's own touch).
+
+    "pair reported not gated" was true of l5_touch for one day and this
+    docstring kept saying it afterwards. Since 2026-09-10 the touch is
+    followed only INSIDE completion_pair_ceiling(); past the cap the
+    re-quote stops chasing and the residual is preserved. Reading this line
+    is what briefly persuaded me the live path had no completion ceiling."""
     from src import pmus_l5_ramp_ladder as ladder
     return ladder.complement_pricing()
 

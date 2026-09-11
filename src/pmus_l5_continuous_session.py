@@ -1422,12 +1422,25 @@ def _pair_invariant_enforced() -> bool:
     """The whole-position ceiling is a GATE, not a helper that exists. It is
     enforced only if the session refuses on it, so assert the refusal is
     wired -- `pair_invariant_ok` called in the submit path, and the ceiling
-    it reads is the same 1.00."""
+    it reads is the same 1.00.
+
+    BOTH PATHS, and it used to check only one. `pair_invariant_ok` lives
+    inside `if relation in ("open", "extend")`; a COMPLETE is priced in its
+    own branch and capped there against the same ceiling. This assertion
+    would have passed with the COMPLETE cap deleted -- and the COMPLETE is
+    precisely the leg that produced the measured 1.2412 pair on
+    asc-mlb-chc-mil-2026-09-09 before that cap existed. Ten markets settled
+    above par (to 1.085714) in the days before 2026-09-10, when both caps
+    landed. A gate that guards one of two doors is not a gate."""
     with open(base.__file__) as fh:
         src = fh.read()
-    return ("if not pair_invariant_ok(inv, side_up, px, qty):" in src
-            and "matched_pair_ceiling" in src
-            and base.matched_pair_cost_after is not None)
+    open_extend = ("if not pair_invariant_ok(inv, side_up, px, qty):" in src
+                   and "matched_pair_ceiling" in src
+                   and base.matched_pair_cost_after is not None)
+    complete = ("econ_max = D(str(ceiling)) - D(str(avg_cost))" in src
+                and "capped = px > econ_max" in src
+                and "ceiling = completion_pair_ceiling()" in src)
+    return open_extend and complete
 
 
 def pending_qty_reconciliation(slugs, t=None, limit: int = 8) -> list:
