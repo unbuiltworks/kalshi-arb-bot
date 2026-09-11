@@ -441,8 +441,10 @@ def test_open_orders_comes_from_the_callers_sweep(monkeypatch):
     from src import pmus_migration_close_live as L
     monkeypatch.setattr(L.sa, "traded_qty_with_evidence",
                         lambda s, t=None: {"qty": "45.0100"})
-    monkeypatch.setattr(L, "read_book", lambda t, s: {"offers": [
-        {"price": {"value": "0.85"}, "quantity": {"value": "40"}}]})
+    monkeypatch.setattr(L, "read_book", lambda t, s: {
+        "offers": [{"price": {"value": "0.85"}, "quantity": {"value": "40"}}],
+        "bids": [{"price": {"value": "0.83"}, "quantity": {"value": "40"}}],
+        "source": "book"})
 
     class _Inv:
         up, dn = D("16.67"), D("28.34")
@@ -473,7 +475,9 @@ def test_the_quote_is_stamped_with_the_quote_not_before_the_slow_read(
 
     def book(t, s):
         order.append("book")
-        return {"offers": [{"price": "0.85", "quantity": "40"}]}
+        return {"offers": [{"price": {"value": "0.85"},
+                            "quantity": {"value": "40"}}],
+                "bids": [], "source": "book"}
 
     monkeypatch.setattr(L.sa, "traded_qty_with_evidence", slow)
     monkeypatch.setattr(L, "read_book", book)
@@ -483,27 +487,101 @@ def test_the_quote_is_stamped_with_the_quote_not_before_the_slow_read(
     assert 0 <= (snap["quote_ts"] - snap["quote_ts"]) <= M.MAX_SNAPSHOT_AGE_S
 
 
-def test_depth_is_read_from_offers_on_the_book_endpoint(monkeypatch):
+def test_the_book_is_preferred_and_bbo_is_the_fallback(monkeypatch):
+    """OWNER 9d8c5ed1: /book first because it lets the gate sum only depth at
+    or inside the limit; /bbo when /book serves nothing, because live it
+    served nothing while the L5 shadow kept receiving bbo fields. An empty
+    /book is a failover, NOT a one-sided market."""
     from src import pmus_migration_close_live as L
     asked = []
 
-    def fake_get(t, path, base=None):
+    def with_book(t, path, base=None):
         asked.append(path)
         return {"marketData": {"offers": [
-            {"price": {"value": "0.85"}, "quantity": {"value": "20"}},
-            {"price": {"value": "0.86"}, "quantity": {"value": "15"}},
-            {"price": {"value": "0.90"}, "quantity": {"value": "99"}}]}}
+            {"price": {"value": "0.85"}, "quantity": {"value": "40"}}]}}
 
-    monkeypatch.setattr(L.q1, "_get_with_retry", fake_get)
-    offers = L.read_book(object(), SLUG)["offers"]
-    assert "/book" in asked[0] and "orderbook" not in asked[0]
-    ask, depth = L._touch_and_depth(offers, D("0.8600"))
+    monkeypatch.setattr(L.q1, "_get_with_retry", with_book)
+    got = L.read_book(object(), SLUG)
+    assert got["source"] == "book"
+    assert len(asked) == 1 and asked[0].endswith("/book")
+
+    asked.clear()
+
+    def empty_then_bbo(t, path, base=None):
+        asked.append(path)
+        if path.endswith("/book"):
+            return {"marketData": {"offers": [], "bids": []}}
+        return {"marketData": {"bestAsk": {"value": "0.85"},
+                               "askDepth": {"value": "40"},
+                               "bestBid": {"value": "0.83"},
+                               "bidDepth": {"value": "25"}}}
+
+    monkeypatch.setattr(L.q1, "_get_with_retry", empty_then_bbo)
+    got = L.read_book(object(), SLUG)
+    assert got["source"] == "bbo"
+    assert [a.split("/")[-1] for a in asked] == ["book", "bbo"]
+    ask, depth = L._touch_and_depth(got["offers"], D("0.8600"))
+    assert (ask, depth) == (D("0.85"), D("40"))
+
+
+def test_depth_inside_the_limit_is_what_counts():
+    from src import pmus_migration_close_live as L
+    levels = [{"price": {"value": "0.85"}, "quantity": {"value": "20"}},
+              {"price": {"value": "0.86"}, "quantity": {"value": "15"}},
+              {"price": {"value": "0.90"}, "quantity": {"value": "99"}}]
+    ask, depth = L._touch_and_depth(levels, D("0.8600"))
     assert ask == D("0.85")
     assert depth == D("35"), "only size at or inside the limit counts"
-
-
-def test_an_empty_book_yields_unknown_depth_not_zero():
-    from src import pmus_migration_close_live as L
     assert L._touch_and_depth([], D("0.85")) == (None, None)
-    g = _gate(ask=None, ask_depth=None)
+
+
+def test_the_side_decides_which_touch_and_depth_are_used(monkeypatch):
+    """A dn-heavy residual buys YES from the offers. An up-heavy residual
+    buys NO, and a YES bid at p is a NO ask at 1-p with the same executable
+    quantity. Reading the offers for both would size an up-heavy close
+    against the wrong side of the book entirely -- cricket is dn-heavy so it
+    would never have shown, and the next residual could be the other way."""
+    from src import pmus_migration_close_live as L
+    monkeypatch.setattr(L.sa, "traded_qty_with_evidence",
+                        lambda s, t=None: {"qty": "45.0100"})
+    monkeypatch.setattr(L, "read_book", lambda t, s: {
+        "offers": [{"price": {"value": "0.85"}, "quantity": {"value": "40"}}],
+        "bids": [{"price": {"value": "0.83"}, "quantity": {"value": "25"}}],
+        "source": "book"})
+
+    class _Inv:
+        def __init__(self, up, dn):
+            self.up, self.dn = D(up), D(dn)
+        def avg_dn(self): return AVG
+        def avg_up(self): return D("0.10")
+
+    dn_heavy = L.build_snapshot(object(), SLUG, _Inv("16.67", "28.34"),
+                                D("-0.5446"), open_orders=0)
+    assert (dn_heavy["ask"], dn_heavy["ask_depth"]) == ("0.85", "40")
+
+    up_heavy = L.build_snapshot(object(), SLUG, _Inv("28.34", "16.67"),
+                                D("-0.5446"), open_orders=0)
+    assert up_heavy["ask"] == "0.17", "NO ask = 1 - YES bid"
+    assert up_heavy["ask_depth"] == "25", "and the BID side's quantity"
+
+
+def test_an_unreadable_quote_yields_unknown_not_zero(monkeypatch):
+    from src import pmus_migration_close_live as L
+    monkeypatch.setattr(L.sa, "traded_qty_with_evidence",
+                        lambda s, t=None: {"qty": "45.0100"})
+
+    def boom(t, s):
+        raise RuntimeError("venue down")
+
+    monkeypatch.setattr(L, "read_book", boom)
+
+    class _Inv:
+        up, dn = D("16.67"), D("28.34")
+        def avg_dn(self): return AVG
+        def avg_up(self): return D("0.71")
+
+    snap = L.build_snapshot(object(), SLUG, _Inv(), D("-0.5446"),
+                            open_orders=0)
+    assert snap["ask"] is None and snap["ask_depth"] is None
+    g = M.preconditions(snap, slug=SLUG, now=snap["quote_ts"])
     assert "fresh_executable_quote_and_depth" in g["failed"]
