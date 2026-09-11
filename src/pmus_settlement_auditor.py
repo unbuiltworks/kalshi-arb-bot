@@ -247,13 +247,28 @@ TRADE_FINAL_STATES = ("TRADE_STATE_NEW", "TRADE_STATE_CLEARED", "TRADE_STATE_SET
 
 
 def venue_qty_total(trade_info: Mapping[str, Any]) -> Optional[str]:
-    """Shares the venue says this account traded in the market."""
+    """Shares the venue says this account traded in the market.
+
+    ONLY FROM qtyDecimal. MEASURED 02:16Z on aec-county-not-ham-2026-09-08:
+    12 of 13 trades serve a `qty` that DISAGREES with their own `qtyDecimal`
+    -- the two fields are not the same number in the same units. The old
+    `qtyDecimal or qty` fallback therefore summed whichever unit each row
+    happened to carry, and at 01:44Z that produced 774.6200 against a real
+    45.01: a 17x phantom position on a market capped at $7.50 a session.
+
+    So a trade without qtyDecimal makes the TOTAL unknown, not approximate.
+    Returning a number built from units we have proven differ is how a small
+    position reads as a large one, and every caller treats this total as
+    authoritative enough to block or permit a flatness claim. None is the
+    honest answer; venue_vs_ledger renders it as agrees=None, which every
+    caller already fails closed on."""
     total, n = D("0"), 0
     for tr in trade_info.get("trades") or []:
-        q = _amount(tr.get("qty"))
-        if q is not None:
-            total += q
-            n += 1
+        q = _amount(tr.get("qty_decimal_raw"))
+        if q is None:
+            return None                 # unknown units -> unknown total
+        total += q
+        n += 1
     return str(total) if n else None
 
 

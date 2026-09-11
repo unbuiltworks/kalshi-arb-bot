@@ -75,13 +75,17 @@ def test_qty_disagreeing_with_qtydecimal_is_reported_with_both_numbers():
     assert (row["qty"], row["qtyDecimal"]) == ("301", "3.01")
 
 
-def test_the_live_shape_is_reproduced_end_to_end():
-    """One trade with qtyDecimal and one scaled trade without it reproduce
-    the live signature: a small true position reading as a large one."""
+def test_the_live_shape_no_longer_produces_a_phantom_position():
+    """One trade with qtyDecimal and one without reproduce the 01:44Z
+    signature: a small true position reading as a large one.
+
+    This test used to assert 774.62 -- the number the old fallback summed,
+    and the reason a 45.01 position read as 774.62. The total is now
+    UNKNOWN, which is what a mix of units we cannot read honestly is."""
     info = _info(_tr("a", qty={"value": "4501", "exponent": -2},
                      qty_decimal="45.01"),
                  _tr("b", qty={"value": "729.61", "exponent": -2}))
-    assert S.venue_qty_total(info) == "774.62"      # the number we saw
+    assert S.venue_qty_total(info) is None
     ev = S.qty_evidence(info)
     assert len(ev["scaled_qty_rows"]) == 2
     assert ev["qty_vs_qtydecimal_disagreements"], "the a-row proves the scale"
@@ -187,3 +191,55 @@ def test_a_mismatch_still_refuses_to_assert_flat(monkeypatch):
     row = fl.venue_vs_ledger("774.6200", "45.01")
     assert row["agrees"] is False
     assert fl.may_assert_flat(row) is False
+
+
+# -------------------------------------------------------------------------
+# MEASURED 02:16Z, aec-county-not-ham-2026-09-08:
+#
+#   venue_qty_total 45.0100  ledger 45.01  agrees true
+#   n_trades 13   qty_vs_qtydecimal 12   scaled_qty 0   duplicate_ids 0
+#
+# Twelve of thirteen trades serve a `qty` that disagrees with their own
+# `qtyDecimal`. The fields are not the same number. The old
+# `qtyDecimal or qty` fallback summed whichever each row carried, and once
+# produced 774.6200 against a real 45.01.
+
+def test_the_total_comes_only_from_qtydecimal():
+    info = _info(_tr("a", qty="301", qty_decimal="3.01"),
+                 _tr("b", qty="4200", qty_decimal="42.00"))
+    assert S.venue_qty_total(info) == "45.01"
+
+
+def test_a_trade_without_qtydecimal_makes_the_total_unknown_not_wrong():
+    """This is the 774.62 shape. Unknown is the honest answer; a number
+    summed from units we have proven differ is not."""
+    info = _info(_tr("a", qty_decimal="45.01"),
+                 _tr("b", qty="729.61"))          # no qtyDecimal
+    assert S.venue_qty_total(info) is None
+
+    from src import pmus_fill_ledger as fl
+    row = fl.venue_vs_ledger(S.venue_qty_total(info), "45.01")
+    assert row["agrees"] is None, "unknown must not read as agreement"
+    assert fl.may_assert_flat(row) is False
+
+
+def test_the_evidence_still_reports_the_rows_the_total_refuses():
+    """Refusing to sum them must not hide them: the digest still counts the
+    disagreement that caused the refusal."""
+    info = _info(_tr("a", qty="301", qty_decimal="3.01"),
+                 _tr("b", qty="729.61"))
+    assert S.venue_qty_total(info) is None
+    ev = S.qty_evidence(info)
+    assert ev["n_trades"] == 2
+    assert len(ev["qty_vs_qtydecimal_disagreements"]) == 1
+
+
+def test_the_live_13_trade_shape_reconciles():
+    """All 13 carry qtyDecimal, so the total is real -- which is exactly what
+    the 02:16Z row reported."""
+    rows = [_tr(f"t{i}", qty=str(i * 100), qty_decimal="3.4623") for i in range(13)]
+    info = _info(*rows)
+    assert S.venue_qty_total(info) == "45.0099"     # 13 x 3.4623
+    ev = S.qty_evidence(info)
+    assert ev["n_trades"] == 13
+    assert ev["duplicate_trade_ids"] == []
