@@ -2126,9 +2126,24 @@ def burst_report(report: Mapping[str, Any], funnel: Mapping[str, Any],
     }
 
 
+_REALIZED_SCOPE = ("THIS PROCESS only, not the day: a redeploy restarts this "
+                   "accumulator. For a daily figure sum the venue-confirmed "
+                   "settlement rows across processes.")
+
+
 def _sum_realized(report: Mapping[str, Any]) -> Optional[str]:
-    """Campaign realized = the sum of VENUE-confirmed realized amounts
-    over this campaign's settlements; None until the first one."""
+    """VENUE-confirmed realized over THIS PROCESS's settlements only.
+
+    NOT a daily figure, and the difference cost an hour of accounting on
+    2026-09-11. campaign_end reported realized_pnl -6.1848 while the day's
+    venue-confirmed realized was -9.3736: this process booted at 14:57:23Z
+    and nickja had realized at 14:00:46Z under the previous one, so its
+    -3.1888 was outside the report this sums. A redeploy silently restarts
+    the accumulator, which means any restart makes this UNDER-state the day
+    -- and under-stating a loss is the dangerous direction.
+
+    The value is correct for what it is. `realized_scope` beside it in the
+    campaign_end row is what stops it being read as something else."""
     from decimal import Decimal
     vals = [s.get("realized_usd") for s in (report.get("settlements") or [])
             if s.get("status") == "REALIZED" and s.get("realized_usd")]
@@ -2876,6 +2891,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                  realized_usd=audit.get("realized_usd"),
                                  resolution=audit.get("resolution"))
                             report["realized_pnl"] = _sum_realized(report)
+                            report["realized_scope"] = _REALIZED_SCOPE
                     # LIVE 12:31Z: the ATP residual settled on THIS path
                     # (periodic audit, market already out of positions)
                     # and the rung gate was only consulted on the
@@ -2973,6 +2989,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                 _log("REALIZED", slug=held,
                                      realized_usd=audit.get("realized_usd"))
                                 report["realized_pnl"] = _sum_realized(report)
+                                report["realized_scope"] = _REALIZED_SCOPE
                             # OWNER 5552841170 #3: flat again -> straight back
                             # to full-sports selection, no redeploy
                             status = f"CAMPAIGN_SETTLED:{audit.get('status')}"

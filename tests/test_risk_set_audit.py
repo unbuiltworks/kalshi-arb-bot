@@ -212,3 +212,40 @@ def test_the_audit_is_packaged_in_the_probe_image():
     rail = (root / "deploy/pmus_spring_l5/railway.json").read_text()
     assert "COPY src/pmus_risk_set_audit.py" in docker
     assert "src/pmus_risk_set_audit.py" in rail
+
+
+# ------------------------------- the realized accumulator's scope (P0)
+def test_campaign_realized_is_labelled_as_per_process_not_per_day():
+    """LIVE 2026-09-11. campaign_end said realized_pnl -6.1848; the day's
+    venue-confirmed realized was -9.3736. Both were right: the process booted
+    at 14:57:23Z and nickja realized at 14:00:46Z under the previous one. A
+    redeploy restarts the accumulator, so the figure UNDER-states the day --
+    the dangerous direction for a loss. The scope label is what stops it
+    being read as a daily number."""
+    import inspect
+    from src import pmus_l5_continuous_session as C
+    assert "THIS PROCESS only" in C._REALIZED_SCOPE
+    doc = inspect.getdoc(C._sum_realized)
+    assert "NOT a daily figure" in doc
+    loop = inspect.getsource(C.run_campaign)
+    assert loop.count('report["realized_scope"] = _REALIZED_SCOPE') == 2, (
+        "every site that sets realized_pnl must also set its scope")
+
+
+def test_the_sum_counts_only_venue_confirmed_realized_rows():
+    from src import pmus_l5_continuous_session as C
+    report = {"settlements": [
+        {"status": "REALIZED", "realized_usd": "-4.4348"},
+        {"status": "REALIZED", "realized_usd": "-1.7500"},
+        # resolved, account flat, venue emitted no POSITION_RESOLUTION.
+        # DERIVED, never realized -- the owner's standing rule.
+        {"status": "SETTLED_REALIZED_UNCONFIRMED", "realized_usd": None},
+        {"status": "PENDING_SETTLEMENT", "realized_usd": None},
+    ]}
+    assert C._sum_realized(report) == "-6.1848"
+
+
+def test_no_realized_rows_is_none_and_never_zero():
+    """An absent measurement is not a measurement of zero."""
+    from src import pmus_l5_continuous_session as C
+    assert C._sum_realized({"settlements": []}) is None
