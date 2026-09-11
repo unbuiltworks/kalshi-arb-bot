@@ -101,7 +101,17 @@ def iter_settlement_rows(paths: Iterable[str]):
             doc = json.loads(Path(path).read_text())
         except Exception:                              # noqa: BLE001
             continue
-        for row in doc.get("deploy") or []:
+        # Log dumps come in two real shapes: {"deploy": [...]} from the
+        # Railway tool, and a bare list of rows from older captures. This
+        # read only the first and raised AttributeError on the second, so a
+        # run over a mixed directory died -- and a run that globbed only the
+        # dict-shaped ones silently scored a SUBSET of the evidence and
+        # reported it as the cohort. Found 2026-09-11 while cross-checking
+        # this module against the episode ledger.
+        rows = doc.get("deploy") if isinstance(doc, Mapping) else doc
+        for row in rows or []:
+            if not isinstance(row, Mapping):
+                continue
             msg = row.get("message") or ""
             # cheap pre-filter, then the parsed object decides -- the live
             # logs are compact JSON but nothing here may depend on spacing
