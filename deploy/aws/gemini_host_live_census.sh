@@ -2,8 +2,37 @@
 set -Eeuo pipefail
 : "${AWS_HOT_INSTANCE_ID:?AWS_HOT_INSTANCE_ID is required}"
 
-# AWS-side health reads first. These are diagnostic-only and deliberately tolerate
-# missing describe permissions so we can still attempt the read-only SSM census.
+# Minimal SSM execution probe first. This is read-only and isolates host/agent
+# health from Docker, users, repositories, and the larger census payload.
+echo SSM_MINIMAL_PROBE_BEGIN
+MIN_PARAMS=$(jq -nc '{commands:["printf \"SSM_MINIMAL_OK\\n\""]}')
+MIN_CID=$(aws ssm send-command \
+  --instance-ids "$AWS_HOT_INSTANCE_ID" \
+  --document-name AWS-RunShellScript \
+  --comment "ARB read-only minimal SSM probe" \
+  --parameters "$MIN_PARAMS" \
+  --timeout-seconds 30 \
+  --query 'Command.CommandId' \
+  --output text)
+for _ in $(seq 1 20); do
+  MIN_STATUS=$(aws ssm get-command-invocation --command-id "$MIN_CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+  case "$MIN_STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+  sleep 1
+done
+MIN_RESULT=$(aws ssm get-command-invocation \
+  --command-id "$MIN_CID" \
+  --instance-id "$AWS_HOT_INSTANCE_ID" \
+  --query '{Status:Status,StatusDetails:StatusDetails,ResponseCode:ResponseCode,PluginName:PluginName,ExecutionStart:ExecutionStartDateTime,ExecutionElapsed:ExecutionElapsedTime,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+  --output json)
+echo "$MIN_RESULT"
+echo SSM_MINIMAL_PROBE_END
+if [[ "$(jq -r '.Status' <<<"$MIN_RESULT")" != Success ]]; then
+  echo SSM_HOST_EXECUTION_UNHEALTHY
+  exit 1
+fi
+
+# AWS-side health reads. These are diagnostic-only and deliberately tolerate
+# missing describe permissions so the census can still proceed.
 echo AWS_CONTROL_PLANE_DIAGNOSTICS_BEGIN
 aws ec2 describe-instances \
   --instance-ids "$AWS_HOT_INSTANCE_ID" \
