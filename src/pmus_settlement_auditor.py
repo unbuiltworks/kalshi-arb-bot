@@ -65,7 +65,20 @@ def activity_pages(t: q1.Transport, since: Optional[str] = None,
     """Every activity row reachable through the cursor, newest first.
     Returns rows plus how the walk ended (read-only GETs only)."""
     rows: list[dict] = []
-    resp = t.request("GET", "/v1/portfolio/activities")
+    # LIVE 2026-09-11T23:44:08Z: this walk fires up to ACTIVITY_MAX_PAGES
+    # requests PER MARKET, and the preflight walks it once per filled market
+    # -- 93 markets x 25 pages is ~2,300 requests, which the venue answers
+    # with HTTP 429. q1._get_with_retry already backs off on 429 (it is in
+    # TRANSIENT_CODES); this module was calling t.request directly and so
+    # had no backoff at all.
+    #
+    # (Observation, deliberately NOT acted on here: /v1/portfolio/activities
+    # is ACCOUNT-scoped, so walking it once per market re-reads the same feed
+    # 93 times. Walking once and reusing it would remove the volume rather
+    # than absorb it. That is a real change to this module's shape and is not
+    # what tonight's blocker needs.)
+    walk_errors: list[str] = []
+    resp = q1.base._get_with_retry(t, "/v1/portfolio/activities")
     pages, ended, cursor_param = 1, "single_page", _cursor_param["name"]
     while True:
         page = resp.get("activities") if isinstance(resp, Mapping) else None
@@ -88,20 +101,34 @@ def activity_pages(t: q1.Transport, since: Optional[str] = None,
             [n for n in CURSOR_PARAM_CANDIDATES if n != cursor_param]
         for name in names:
             try:
-                cand = t.request("GET", f"/v1/portfolio/activities?{name}={quote(str(cursor))}")
-            except Exception:                      # noqa: BLE001
-                continue
+                cand = q1.base._get_with_retry(
+                    t, f"/v1/portfolio/activities?{name}={quote(str(cursor))}")
+            except Exception as exc:               # noqa: BLE001
+                # A FAILED REQUEST IS NOT A WRONG PARAMETER NAME. This used
+                # to `continue`, so a rate-limited page was indistinguishable
+                # from a bad cursor param and the walk ended SILENTLY with a
+                # partial row set -- and a partial walk that misses the
+                # POSITION_RESOLUTION row makes audit_market report
+                # PENDING_SETTLEMENT, i.e. an authoritative "not settled"
+                # derived from a read that never completed. Seven markets
+                # were reported that way at 23:44:08Z.
+                walk_errors.append(f"{type(exc).__name__}:{str(exc)[:80]}")
+                break
             if isinstance(cand, Mapping) and isinstance(cand.get("activities"), list):
                 nxt, cursor_param = cand, name
                 _cursor_param["name"] = name
                 break
         if nxt is None:
-            ended = "cursor_param_unknown"
+            ended = "error" if walk_errors else "cursor_param_unknown"
             break
         resp = nxt
         pages += 1
     return {"rows": rows, "pages": pages, "ended": ended,
             "cursor_param": cursor_param,
+            "errors": walk_errors,
+            # the walk stopped because a REQUEST failed, so the row set is
+            # incomplete and absence of a row proves nothing
+            "truncated_by_error": bool(walk_errors),
             "oldest_time": _row_time_iso(rows[-1]) if rows else None,
             "newest_time": _row_time_iso(rows[0]) if rows else None}
 
@@ -533,6 +560,13 @@ def audit_market(slug: str, t: Optional[q1.Transport] = None) -> dict:
         result["public"] = public
         flat = flat_at_resolution(public, pos, avail, trade_info)
         if flat is None:
+            if walk.get("truncated_by_error"):
+                # "we could not finish asking" is never "the answer was no".
+                # Raising puts this market at AUDIT_UNAVAILABLE with the
+                # reason attached, instead of a confident PENDING_SETTLEMENT
+                # built on a partial activity walk.
+                raise RuntimeError(
+                    "activity_walk_truncated:" + ";".join(walk["errors"])[:120])
             result["status"] = "PENDING_SETTLEMENT"
             return result
         result.update(flat)
