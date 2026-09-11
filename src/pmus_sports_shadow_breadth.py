@@ -50,6 +50,7 @@ from typing import Any, Mapping, Optional, Sequence
 
 from src import pmus_execution_shadow as exec_shadow
 from src import pmus_shadow_proposal_log as plog
+from src import pmus_multi_target_shadow as mtarm
 from src import pmus_shadow_completion as shadow_completion
 from src import pmus_sports_opportunity_rank as rank_mod
 
@@ -447,6 +448,13 @@ class ShadowBreadth:
         # de-duplicate offline, whereas persisting it risks a restart that
         # silently emits NOTHING -- the failure mode that is expensive.
         self.proposal_rows_seen: set = set()
+        # OWNER 2026-09-11: the same first-leg state priced at several pair
+        # targets at once, because our live policy pins the target at 0.98 and
+        # there is no natural variation to study. SEPARATE from self.execution
+        # on purpose: mixing these into its proposals would move every
+        # aggregate the policy arm reports, and those are frozen evidence.
+        self.target_arms = mtarm.MultiTargetArm()
+        self.target_rows_seen: set = set()
         try:
             self.execution = exec_shadow.ExecutionShadow(now=now)
         except Exception:                                       # noqa: BLE001
@@ -662,6 +670,14 @@ class ShadowBreadth:
                     ranked_row=self._last_scored.get(slug),
                     residual_before=snap.get("residual"),
                     surplus_avg=surplus, tier=tier, first_leg=first)
+                try:
+                    self.target_arms.record(
+                        slug=slug, plan=armb.get("plan") or {}, t_post=now,
+                        ranked_row=self._last_scored.get(slug),
+                        residual_before=snap.get("residual"),
+                        surplus_avg=surplus, tier=tier, first_leg=first)
+                except Exception:                       # noqa: BLE001
+                    pass        # an extra arm must never cost the policy arm
             out.append({"slug": slug, "tier": tier,
                         "window": summary, "new_this_cycle": fresh,
                         "two_arm": arms})
@@ -849,6 +865,11 @@ def run(cycles: Optional[int] = None) -> int:
                 try:
                     rep["proposal_rows_emitted"] = plog.emit_new(
                         props, sb.proposal_rows_seen)
+                    sb.target_arms.advance(
+                        {k: list(v) for k, v in sb.obs.items()}, sb._now())
+                    rep["target_arms"] = sb.target_arms.report()
+                    rep["target_arm_rows_emitted"] = mtarm.emit_new(
+                        sb.target_arms.arms.values(), sb.target_rows_seen)
                 except Exception as exc:                    # noqa: BLE001
                     # an emission that cannot run must never stop the shadow
                     rep["proposal_rows_error"] = repr(exc)[:200]
