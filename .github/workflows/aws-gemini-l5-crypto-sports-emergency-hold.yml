@@ -1,0 +1,50 @@
+name: AWS Gemini L5 Crypto + Sports emergency hold
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-l5-crypto-sports-emergency-hold.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  hold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Stop only new Gemini sequence and capture AWS state
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_CMD='set +e; echo L5_EMERGENCY_HOLD_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ); echo BEFORE_DOCKER; docker ps -a --format "{{.Names}}|{{.Status}}" | grep -E "arb-(kalshi-policy-d-v1-q1-canary|gemini-l5-(crypto|sports)-q1)" || true; echo BEFORE_PROCESSES; pgrep -af "run_(kalshi_policy_d_v1|gemini_l5_crypto_sports_q1_live)" || true; docker stop arb-gemini-l5-crypto-q1 arb-gemini-l5-sports-q1 >/dev/null 2>&1 || true; pkill -TERM -f "[r]un_gemini_l5_crypto_sports_q1_live.sh" || true; sleep 2; pkill -KILL -f "[r]un_gemini_l5_crypto_sports_q1_live.sh" || true; echo AFTER_DOCKER; docker ps -a --format "{{.Names}}|{{.Status}}" | grep -E "arb-(kalshi-policy-d-v1-q1-canary|gemini-l5-(crypto|sports)-q1)" || true; echo AFTER_PROCESSES; pgrep -af "run_(kalshi_policy_d_v1|gemini_l5_crypto_sports_q1_live)" || true; echo L5_EMERGENCY_HOLD_COMPLETE'
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
+          for i in $(seq 1 60); do
+            S=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$S" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 5
+          done
+          mkdir -p runtime
+          aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' > runtime/l5-emergency-hold.json
+          cat runtime/l5-emergency-hold.json
+          test "$(jq -r '.Status' runtime/l5-emergency-hold.json)" = "Success"
+          grep -q 'L5_EMERGENCY_HOLD_COMPLETE' <<<"$(jq -r '.Stdout' runtime/l5-emergency-hold.json)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: l5-emergency-hold
+          path: runtime/l5-emergency-hold.json
+          retention-days: 3

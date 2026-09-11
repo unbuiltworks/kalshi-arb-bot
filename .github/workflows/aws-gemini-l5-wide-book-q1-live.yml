@@ -1,0 +1,77 @@
+name: AWS Gemini L5 wide-book q1 live
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-l5-wide-book-q1-live.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  LIVE_BRANCH: feature/gemini-l5-wide-book-q1
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - name: Validate one-use wide-book approval
+        id: trig
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=deploy/aws/gemini-l5-wide-book-q1-live.trigger
+          PIN=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$FILE" | tr -d '[:space:]')
+          APP=$(awk -F= '$1=="APPROVAL_ID"{print $2}' "$FILE" | tr -d '[:space:]')
+          CLS=$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$FILE" | tr -d '[:space:]')
+          [[ "$PIN" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$APP" =~ ^[A-Za-z0-9_-]{6,80}$ ]]
+          test "$CLS" = "FRESH_USER_APPROVED_GEMINI_L5_WIDE_BOOK_Q1_LIVE"
+          echo "pinned=$PIN" >> "$GITHUB_OUTPUT"
+          echo "approval=$APP" >> "$GITHUB_OUTPUT"
+          echo "L5_WIDE_BOOK_TRIGGER_VALID commit=${PIN:0:12} approval=$APP"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Pin, preflight, and run one-use wide-book q1 through SSM
+        shell: bash
+        env:
+          PINNED_COMMIT: ${{ steps.trig.outputs.pinned }}
+          APPROVAL_ID: ${{ steps.trig.outputs.approval }}
+        run: |
+          set -euo pipefail
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin ${LIVE_BRANCH} >/dev/null; git cat-file -e \"${PINNED_COMMIT}^{commit}\"; git merge-base --is-ancestor ${PINNED_COMMIT} origin/${LIVE_BRANCH}; git show ${PINNED_COMMIT}:deploy/aws/run_gemini_l5_wide_book_q1_live.sh > /tmp/run_gemini_l5_wide_book_q1_live.sh; chmod 0700 /tmp/run_gemini_l5_wide_book_q1_live.sh; PINNED_COMMIT=${PINNED_COMMIT} ARB_GEMINI_L5_WIDE_BOOK_Q1_APPROVED=YES ARB_GEMINI_L5_WIDE_BOOK_Q1_APPROVAL_ID=${APPROVAL_ID} /tmp/run_gemini_l5_wide_book_q1_live.sh'"
+          PARAMS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --parameters "$PARAMS" --timeout-seconds 1100 --query 'Command.CommandId' --output text)
+          for i in $(seq 1 240); do
+            S=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$S" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 5
+          done
+          mkdir -p runtime
+          aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' > runtime/aws-gemini-l5-wide-book-q1-live.json
+          cat runtime/aws-gemini-l5-wide-book-q1-live.json
+          test "$(jq -r '.Status' runtime/aws-gemini-l5-wide-book-q1-live.json)" = "Success"
+          OUT=$(jq -r '.Stdout // ""' runtime/aws-gemini-l5-wide-book-q1-live.json)
+          grep -q 'L5_WIDE_BOOK_SAFETY_TESTS_OK' <<<"$OUT"
+          grep -q 'L5_WIDE_BOOK_ACCOUNT_PREFLIGHT_OK' <<<"$OUT"
+          grep -q 'L5_WIDE_BOOK_PUBLIC_READY' <<<"$OUT"
+          grep -q 'L5_WIDE_BOOK_LIVE_START' <<<"$OUT"
+          grep -q 'L5_WIDE_BOOK_TERMINAL exit=0' <<<"$OUT"
+          grep -q 'L5_WIDE_BOOK_SEQUENCE_COMPLETE' <<<"$OUT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aws-gemini-l5-wide-book-q1-live
+          path: runtime/aws-gemini-l5-wide-book-q1-live.json
+          retention-days: 7

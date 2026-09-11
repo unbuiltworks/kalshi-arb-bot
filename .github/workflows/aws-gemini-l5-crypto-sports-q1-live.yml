@@ -1,0 +1,122 @@
+name: AWS Gemini L5 Crypto + Sports q1 live canary
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/gemini-l5-crypto-sports-q1-live.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  LIVE_BRANCH: feature/gemini-l5-crypto-sports-live-q1
+  KALSHI_CONTAINER: arb-kalshi-policy-d-v1-q1-canary
+
+jobs:
+  live_canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+
+      - name: Validate one-use user approval
+        id: trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=deploy/aws/gemini-l5-crypto-sports-q1-live.trigger
+          test -f "$FILE"
+          PINNED_COMMIT=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$FILE" | tr -d '[:space:]')
+          APPROVAL_ID=$(awk -F= '$1=="APPROVAL_ID"{print $2}' "$FILE" | tr -d '[:space:]')
+          CLASSIFICATION=$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$FILE" | tr -d '[:space:]')
+          [[ "$PINNED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$APPROVAL_ID" =~ ^[A-Za-z0-9_-]{6,80}$ ]]
+          test "$CLASSIFICATION" = "FRESH_USER_APPROVED_GEMINI_L5_CRYPTO_SPORTS_Q1_LIVE_MECHANICS_CANARY"
+          echo "pinned_commit=$PINNED_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "approval_id=$APPROVAL_ID" >> "$GITHUB_OUTPUT"
+          echo "L5_CRYPTO_SPORTS_TRIGGER_VALID commit=${PINNED_COMMIT:0:12} approval_id=$APPROVAL_ID q=1"
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Wait for Kalshi Policy-D AWS live slot to release
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_CMD='set -eu; NAME=arb-kalshi-policy-d-v1-q1-canary; echo L5_WAIT_FOR_KALSHI_STARTED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ); for i in $(seq 1 900); do if ! docker inspect "$NAME" >/dev/null 2>&1; then echo L5_KALSHI_SLOT_FREE reason=container_missing; exit 0; fi; running=$(docker inspect -f "{{.State.Running}}" "$NAME"); echo L5_KALSHI_SLOT_SAMPLE n=$i at=$(date -u +%Y-%m-%dT%H:%M:%SZ) running=$running; if [ "$running" != "true" ]; then echo L5_KALSHI_SLOT_FREE reason=terminal; exit 0; fi; sleep 10; done; echo L5_KALSHI_SLOT_TIMEOUT; exit 3'
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "Wait for Kalshi Policy-D before Gemini crypto+sports q1" \
+            --parameters "$PARAMETERS" \
+            --timeout-seconds 9300 \
+            --query 'Command.CommandId' --output text)
+          for i in $(seq 1 950); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 10
+          done
+          mkdir -p runtime
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+            > runtime/aws-gemini-l5-crypto-sports-q1-wait.json
+          cat runtime/aws-gemini-l5-crypto-sports-q1-wait.json
+          test "$(jq -r '.Status' runtime/aws-gemini-l5-crypto-sports-q1-wait.json)" = "Success"
+          grep -q 'L5_KALSHI_SLOT_FREE' <<<"$(jq -r '.Stdout' runtime/aws-gemini-l5-crypto-sports-q1-wait.json)"
+
+      - name: Pin, preflight, and run serialized q1 Crypto then Sports through SSM
+        shell: bash
+        env:
+          PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
+          APPROVAL_ID: ${{ steps.trigger.outputs.approval_id }}
+        run: |
+          set -euo pipefail
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin ${LIVE_BRANCH} >/dev/null; git cat-file -e \"${PINNED_COMMIT}^{commit}\"; git merge-base --is-ancestor ${PINNED_COMMIT} origin/${LIVE_BRANCH}; git show ${PINNED_COMMIT}:deploy/aws/run_gemini_l5_crypto_sports_q1_live.sh > /tmp/run_gemini_l5_crypto_sports_q1_live.sh; chmod 0700 /tmp/run_gemini_l5_crypto_sports_q1_live.sh; PINNED_COMMIT=${PINNED_COMMIT} ARB_GEMINI_L5_CRYPTO_SPORTS_Q1_APPROVED=YES ARB_GEMINI_L5_CRYPTO_SPORTS_Q1_APPROVAL_ID=${APPROVAL_ID} /tmp/run_gemini_l5_crypto_sports_q1_live.sh'"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "ARB Gemini L5 Crypto+Sports q1 live ${PINNED_COMMIT:0:12}" \
+            --parameters "$PARAMETERS" \
+            --timeout-seconds 7200 \
+            --query 'Command.CommandId' --output text)
+          for i in $(seq 1 760); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 10
+          done
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+            > runtime/aws-gemini-l5-crypto-sports-q1-live.json
+          cat runtime/aws-gemini-l5-crypto-sports-q1-live.json
+          test "$(jq -r '.Status' runtime/aws-gemini-l5-crypto-sports-q1-live.json)" = "Success"
+          OUT=$(jq -r '.Stdout // ""' runtime/aws-gemini-l5-crypto-sports-q1-live.json)
+          grep -q 'L5_CRYPTO_SPORTS_Q1_SAFETY_TESTS_OK' <<<"$OUT"
+          grep -q 'L5_CRYPTO_SPORTS_Q1_PREFLIGHT_OK' <<<"$OUT"
+          grep -q 'L5_SPORTS_Q1_PREARM_READY' <<<"$OUT"
+          grep -q 'L5_CRYPTO_Q1_LIVE_START' <<<"$OUT"
+          grep -q 'L5_CRYPTO_Q1_TERMINAL' <<<"$OUT"
+          grep -q 'L5_BETWEEN_CAMPAIGNS_CLEAN_OK' <<<"$OUT"
+          grep -q 'L5_SPORTS_Q1_LIVE_START' <<<"$OUT"
+          grep -q 'L5_SPORTS_Q1_TERMINAL' <<<"$OUT"
+          grep -q 'L5_CRYPTO_SPORTS_Q1_SEQUENCE_COMPLETE' <<<"$OUT"
+
+      - name: Upload non-secret evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aws-gemini-l5-crypto-sports-q1-live
+          path: runtime/aws-gemini-l5-crypto-sports-q1-*.json
+          retention-days: 7

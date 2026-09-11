@@ -1,0 +1,102 @@
+name: AWS Gemini ETH5 forward capture inspect
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/gemini-eth5-forward-inspect.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - name: Read trigger
+        id: trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=deploy/aws/gemini-eth5-forward-inspect.trigger
+          RUN_ID=$(awk -F= '$1=="RUN_ID"{print $2}' "$FILE" | tr -d '[:space:]')
+          [[ "$RUN_ID" =~ ^[0-9A-Za-z._-]+$ ]]
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Inspect capture JSON compactly
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.trigger.outputs.run_id }}
+        run: |
+          set -Eeuo pipefail
+          REMOTE_SCRIPT=$(cat <<'EOF'
+          set -Eeuo pipefail
+          CAPTURE="/home/ssm-user/gemini-eth5-forward-shadow-state/${RUN_ID}/capture.jsonl"
+          test -f "$CAPTURE"
+          python3 - "$CAPTURE" <<'PY'
+          import collections, json, pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          errors=[]; controls=[]; per=collections.defaultdict(lambda: collections.Counter())
+          trades=[]; plans=[]
+          for i,line in enumerate(path.read_text().splitlines(),1):
+              try: row=json.loads(line)
+              except Exception: continue
+              typ=str(row.get('type') or 'UNKNOWN')
+              ticker=str(row.get('ticker') or '')
+              if ticker: per[ticker][typ]+=1
+              if typ=='REST_SEED_ERROR':
+                  errors.append({k:row.get(k) for k in ('observed_at','ticker','symbol','error_type','error')})
+              elif typ=='WS_CONTROL':
+                  msg=row.get('message') if isinstance(row.get('message'),dict) else {}
+                  if msg.get('status') or msg.get('error'):
+                      controls.append({'observed_at':row.get('observed_at'),'message':msg})
+              elif typ=='PUBLIC_TRADE':
+                  trades.append({k:row.get(k) for k in ('observed_at','ticker','symbol','price','quantity','buyer_maker','trade_id')})
+              elif typ=='SHADOW_PLAN' and len(plans)<12:
+                  plans.append({k:row.get(k) for k in ('observed_at','ticker','symbol','seconds_to_expiry','yes_bid','yes_ask')})
+          print(json.dumps({
+              'type':'ETH5_FORWARD_CAPTURE_INSPECT_V1',
+              'classification':'READ_ONLY_PUBLIC_TAPE_INSPECTION',
+              'order_entry':False,
+              'credentials_loaded':False,
+              'rest_seed_errors':errors,
+              'ws_error_controls':controls,
+              'public_trades':trades,
+              'per_ticker_type_counts':{k:dict(v) for k,v in sorted(per.items())},
+              'sample_plans':plans,
+          }, separators=(',',':')))
+          PY
+          EOF
+          )
+          REMOTE_SCRIPT=${REMOTE_SCRIPT//'${RUN_ID}'/$RUN_ID}
+          ENCODED=$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)
+          REMOTE_CMD="echo '$ENCODED' | base64 -d | sudo -u ssm-user bash"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "Inspect ETH5 forward capture ${RUN_ID}" \
+            --parameters "$PARAMETERS" \
+            --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 30); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || true)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success

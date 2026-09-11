@@ -1,0 +1,2 @@
+READ_ID=gemini-dynamic-rescue-1145-settlement-20260901-0753
+MODE=READ_ONLY_EXACT_RESIDUALS

@@ -1,0 +1,137 @@
+name: AWS PMUS micro-live read-only preflight
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/pmus-micro-preflight.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  micro-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+          fetch-depth: 1
+      - name: Verify trigger
+        shell: bash
+        run: grep -qx 'GO=READ_ONLY_MICRO_PREFLIGHT' deploy/aws/pmus-micro-preflight.trigger
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Read live candidates, penny-size support, and account state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE=$(cat <<'EOF'
+          set -Eeuo pipefail
+          CREDS=/home/ssm-user/l5-pmus-q1-credentials.env
+          test -f "$CREDS" && test "$(stat -c %a "$CREDS")" = 600
+          test "$(systemctl is-active l5-pmus-recorder.service)" = active
+          test "$(systemctl is-active l5-pmus-supervisor.service)" = active
+          grep -q '^Environment=PMUS_SUPERVISOR_LIVE=NO$' /etc/systemd/system/l5-pmus-supervisor.service
+          sudo -u ssm-user bash -lc '
+            set -Eeuo pipefail
+            set -a; . /home/ssm-user/l5-pmus-q1-credentials.env; set +a
+            export PYTHONPATH=/home/ssm-user/l5-pmus-engine
+            export PMUS_SUPERVISOR_ROOT=/home/ssm-user/l5-pmus-supervisor-state
+            export PMUS_SUPERVISOR_RECORDER_LOG=/home/ssm-user/l5-pmus-ws-state/recorder.log
+            /home/ssm-user/l5-pmus-engine-venv/bin/python - <<"PY"
+          import json
+          from decimal import Decimal as D, ROUND_DOWN
+          from src import pmus_aws_supervisor as s
+          from src import pmus_q1_executor_v4 as q1
+
+          TARGET=D("0.01")
+          HARD_MAX=D("0.02")
+          t=q1.Transport()
+          status=s.latest_recorder_status()
+          if not isinstance(status, dict):
+              raise SystemExit("NO_RECORDER_STATUS")
+          print("PMUS_MICRO_STATUS " + json.dumps({
+              "status_age_s": s.status_age_seconds(status),
+              "conn": status.get("conn"), "auth": status.get("auth"),
+              "discovery": status.get("discovery"),
+              "eligible_total": status.get("eligible_total")},
+              default=str,separators=(",",":")))
+
+          # Public market metadata comes first so authenticated REST rate limits
+          # can never hide whether the live slate supports penny-scale sizing.
+          rows=[]
+          for c in s.eligible_candidates(status):
+              slug=str(c.get("slug") or "")
+              if not slug: continue
+              row={"slug":slug,"bid":c.get("bid"),"ask":c.get("ask"),"score":c.get("score")}
+              try:
+                  resp=t.request("GET", f"/v1/market/slug/{slug}", base=q1.GATEWAY)
+                  m=resp.get("market") if isinstance(resp,dict) else None
+                  if not isinstance(m,dict): raise ValueError("market_unparseable")
+                  minq=D(str(m.get("minimumTradeQty")))
+                  tick=D(str(m.get("orderPriceMinTickSize")))
+                  bid=D(str(c.get("bid")))
+                  min_notional=minq*bid
+                  row.update({"minimumTradeQty":str(minq),"tick":str(tick),
+                              "sportsMarketTypeV2":m.get("sportsMarketTypeV2"),
+                              "minimum_order_notional":str(min_notional)})
+                  if minq <= 0 or bid <= 0:
+                      row.update({"micro_supported":False,"skip":"invalid_min_qty_or_bid"})
+                  elif min_notional > HARD_MAX:
+                      row.update({"micro_supported":False,"skip":"minimum_order_notional_gt_2c"})
+                  else:
+                      units=(TARGET/(bid*minq)).to_integral_value(rounding=ROUND_DOWN)
+                      qty=units*minq
+                      # If 1c cannot buy one minimum lot but the legal minimum is
+                      # <=2c, report the minimum as an explicit bounded fallback.
+                      if qty < minq:
+                          qty=minq
+                      notional=qty*bid
+                      if qty < minq or notional > HARD_MAX:
+                          row.update({"micro_supported":False,"skip":"rounding_failed_closed"})
+                      else:
+                          row.update({"micro_supported":True,"qty":str(qty),
+                                      "intended_notional":str(notional),
+                                      "at_or_below_1c":bool(notional<=TARGET),
+                                      "current_q1_tick_compatible":bool(tick==q1.TICK)})
+              except Exception as exc:
+                  row.update({"micro_supported":False,"skip":"metadata_error:"+type(exc).__name__})
+              rows.append(row)
+          print("PMUS_MICRO_CANDIDATES " + json.dumps(rows,default=str,separators=(",",":")))
+
+          # Account check remains mandatory for readiness, but failure is data,
+          # not a reason to lose the public micro-eligibility report.
+          account={"ready":False}
+          try:
+              block=s.account_block_reason(t)
+              account={"ready":block is None,"block_reason":block}
+          except Exception as exc:
+              account={"ready":False,"error":type(exc).__name__}
+          print("PMUS_MICRO_ACCOUNT " + json.dumps(account,separators=(",",":")))
+          print("PMUS_MICRO_PREFLIGHT_OK read_only=true permanent_supervisor_disarmed=true")
+          PY
+          '
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment 'L5 PMUS read-only penny-size preflight' --parameters "$PARAMS" --timeout-seconds 180 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          grep -q 'PMUS_MICRO_PREFLIGHT_OK' <<<"$(jq -r '.Stdout' <<<"$RESULT")"

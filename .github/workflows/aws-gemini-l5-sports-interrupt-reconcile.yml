@@ -1,0 +1,52 @@
+name: AWS Gemini L5 Sports interrupted q1 reconcile
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-l5-sports-interrupt-reconcile.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  CLEANUP_COMMIT: 86de57aeebd6769eba55ac601c40462197b11010
+  LIVE_BRANCH: feature/gemini-l5-crypto-sports-live-q1
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Cancel exact remaining canary maker and reconcile authoritative fills
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin ${LIVE_BRANCH} >/dev/null; git cat-file -e \"${CLEANUP_COMMIT}^{commit}\"; git show ${CLEANUP_COMMIT}:src/gemini_sports_l5_interrupt_cleanup.py > /tmp/gemini_sports_l5_interrupt_cleanup.py; ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; [ -f \"\$ENV_FILE\" ] || ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; STATE_DIR=/home/ssm-user/gemini-short-crypto-state; IMAGE=arb-gemini-l5-crypto-sports:q1-10ea65d31512; docker image inspect \"\$IMAGE\" >/dev/null; docker run --rm --network host --env-file \"\$ENV_FILE\" -e PYTHONUNBUFFERED=1 -e GEMINI_SHORT_CRYPTO_STATE_DIR=/state -v \"\$STATE_DIR:/state\" -v /tmp/gemini_sports_l5_interrupt_cleanup.py:/app/gemini_sports_l5_interrupt_cleanup.py:ro \"\$IMAGE\" python -u /app/gemini_sports_l5_interrupt_cleanup.py'"
+          PARAMS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --parameters "$PARAMS" --query 'Command.CommandId' --output text)
+          for i in $(seq 1 80); do
+            S=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$S" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 5
+          done
+          mkdir -p runtime
+          aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' > runtime/sports-interrupt-reconcile.json
+          cat runtime/sports-interrupt-reconcile.json
+          test "$(jq -r '.Status' runtime/sports-interrupt-reconcile.json)" = "Success"
+          grep -q 'SPORTS_INTERRUPT_RECONCILE' <<<"$(jq -r '.Stdout' runtime/sports-interrupt-reconcile.json)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sports-interrupt-reconcile
+          path: runtime/sports-interrupt-reconcile.json
+          retention-days: 7

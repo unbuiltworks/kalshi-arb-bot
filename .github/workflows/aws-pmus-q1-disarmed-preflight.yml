@@ -1,0 +1,102 @@
+name: AWS PMUS q1 disarmed preflight
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/pmus-q1-disarmed-preflight.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  PMUS_EXECUTOR_COMMIT: d3614aed26b88e791bfd0abdcfc9395e6aa92969
+  PMUS_EXECUTOR_BRANCH: feature/l5-transfer-backtest
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Stage isolated PMUS q1 executor and prove DISARMED
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE=$(cat <<'EOF'
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          STAGE=/home/ssm-user/l5-pmus-q1-stage
+          STATE=/home/ssm-user/l5-pmus-q1-state
+          COMMIT=d3614aed26b88e791bfd0abdcfc9395e6aa92969
+          BRANCH=feature/l5-transfer-backtest
+
+          echo PMUS_AWS_DISARMED_PREFLIGHT_BEGIN
+          test -d "$REPO/.git"
+          cd "$REPO"
+          git config --global --add safe.directory "$REPO" || true
+          git fetch origin "$BRANCH" >/dev/null
+          git cat-file -e "${COMMIT}^{commit}"
+          git merge-base --is-ancestor "$COMMIT" "origin/$BRANCH"
+          git show "$COMMIT:src/pmus_q1_executor.py" | grep -q 'PMUS q=1 one-campaign executor'
+
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE/src" "$STATE"
+          chmod 700 "$STAGE" "$STATE"
+          git show "$COMMIT:src/pmus_q1_executor.py" > "$STAGE/src/pmus_q1_executor.py"
+          touch "$STAGE/src/__init__.py"
+          chmod 600 "$STAGE/src/pmus_q1_executor.py" "$STAGE/src/__init__.py"
+
+          # Fail-closed proof: no live flag, session arm, market assertion, or
+          # credential may be inherited into this preflight process.
+          unset PMUS_Q1_LIVE PMUS_Q1_SESSION_ID PMUS_Q1_ARM
+          unset PMUS_Q1_MARKET_SLUG PMUS_Q1_GATE_EVIDENCE
+          unset PMUS_API_KEY_ID PMUS_API_SECRET_KEY
+          export PMUS_Q1_STATE_DIR="$STATE"
+
+          cd "$STAGE"
+          python3 -m src.pmus_q1_executor > /tmp/pmus-q1-disarmed.json
+          python3 - <<'PY'
+          import json
+          p='/tmp/pmus-q1-disarmed.json'
+          d=json.load(open(p))
+          assert d['status']=='DISARMED', d
+          assert d['qty']==1, d
+          assert d['realized_pnl'] is None, d
+          assert 'no network activity' in d.get('note',''), d
+          print('PMUS_Q1_AWS_DISARMED_PREFLIGHT_OK status=DISARMED qty=1 order_entry=false credentials_read=false')
+          PY
+          test ! -e "$STATE/campaign_state.json"
+          echo PMUS_AWS_DISARMED_PREFLIGHT_END
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "L5 PMUS q1 isolated DISARMED preflight" \
+            --parameters "$PARAMS" \
+            --timeout-seconds 120 \
+            --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation \
+            --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+            --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = "Success"
+          grep -q 'PMUS_Q1_AWS_DISARMED_PREFLIGHT_OK' <<<"$(jq -r '.Stdout' <<<"$RESULT")"

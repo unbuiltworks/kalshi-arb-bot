@@ -1,0 +1,50 @@
+name: AWS Gemini paired-maker live10 exposure
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/snapshot_gemini_paired_maker_account.sh
+      - .github/workflows/aws-gemini-paired-maker-live10-exposure.yml
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Authenticated read-only exposure snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin aws-migration-foundation >/dev/null; git show origin/aws-migration-foundation:deploy/aws/snapshot_gemini_paired_maker_account.sh > /tmp/snapshot_gemini_paired_maker_account.sh; chmod 0700 /tmp/snapshot_gemini_paired_maker_account.sh; /tmp/snapshot_gemini_paired_maker_account.sh'"
+          PARAMS=$(jq -nc --arg cmd "$CMD" '{commands:[$cmd]}')
+          ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB live10 exposure snapshot" --parameters "$PARAMS" --timeout-seconds 120 --query 'Command.CommandId' --output text)
+          for i in $(seq 1 60); do
+            S=$(aws ssm get-command-invocation --command-id "$ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$S" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          aws ssm get-command-invocation --command-id "$ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' > live10-exposure.json
+          cat live10-exposure.json
+          test "$(jq -r '.Status' live10-exposure.json)" = "Success"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aws-gemini-paired-maker-live10-exposure
+          path: live10-exposure.json
+          retention-days: 1

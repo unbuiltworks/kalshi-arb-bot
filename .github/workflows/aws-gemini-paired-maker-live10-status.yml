@@ -1,0 +1,50 @@
+name: AWS Gemini paired-maker live10 status
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - .github/workflows/aws-gemini-paired-maker-live10-status.yml
+      - deploy/aws/gemini-paired-maker-live10.status.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Read-only EC2 status
+        shell: bash
+        run: |
+          set -euo pipefail
+          CMD='set -euo pipefail; NAME=arb-gemini-paired-maker-live10; docker inspect "$NAME" --format "LIVE10 status={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}} image={{.Config.Image}} started={{.State.StartedAt}}"; echo LIVE10_LOGS_BEGIN; docker logs --tail 200 "$NAME" 2>&1 || true; echo LIVE10_LOGS_END; echo LIVE10_STATE_FILES; ls -1t /home/ssm-user/gemini-short-crypto-state/paired_maker_live10_*.json 2>/dev/null | head -3 | while read f; do echo FILE=$f; cat "$f"; echo; done'
+          PARAMS=$(jq -nc --arg cmd "$CMD" '{commands:[$cmd]}')
+          ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB paired-maker live10 status" --parameters "$PARAMS" --timeout-seconds 120 --query 'Command.CommandId' --output text)
+          for i in $(seq 1 60); do
+            S=$(aws ssm get-command-invocation --command-id "$ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$S" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          aws ssm get-command-invocation --command-id "$ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' > live10-status.json
+          cat live10-status.json
+          test "$(jq -r '.Status' live10-status.json)" = "Success"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aws-gemini-paired-maker-live10-status
+          path: live10-status.json
+          retention-days: 1

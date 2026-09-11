@@ -1,0 +1,15 @@
+name: AWS PMUS q1 live one-campaign probe (retired path)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retired:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo 'RETIRED_PMUS_Q1_LIVE_PATH_NO_ORDER_ENTRY'
+          exit 1

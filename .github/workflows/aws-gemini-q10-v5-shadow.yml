@@ -1,0 +1,68 @@
+name: AWS Gemini q10 V5 bounded-rescue shadow
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-q10-v5-shadow.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  FEATURE_BRANCH: feature/gemini-q10-production-executor
+  EXACT_TESTED_COMMIT: aaea282ed135b2f24a4a02a25ee67d0faf451f7d
+
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - name: Read trigger
+        id: trigger
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          FILE=deploy/aws/gemini-q10-v5-shadow.trigger
+          PINNED_COMMIT=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$FILE" | tr -d '[:space:]')
+          RUN_ID=$(awk -F= '$1=="RUN_ID"{print $2}' "$FILE" | tr -d '[:space:]')
+          CLASSIFICATION=$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$FILE" | tr -d '[:space:]')
+          test "$PINNED_COMMIT" = "$EXACT_TESTED_COMMIT"
+          test "$CLASSIFICATION" = "READ_ONLY_GEMINI_Q10_V5_BOUNDED_RESCUE_SHADOW"
+          [[ "$RUN_ID" =~ ^[A-Za-z0-9_-]+$ ]]
+          echo "pinned_commit=$PINNED_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Build and run exact V5 shadow on EC2
+        env:
+          PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
+          RUN_ID: ${{ steps.trigger.outputs.run_id }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SHORT_SHA="${PINNED_COMMIT:0:12}"
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -Eeuo pipefail; REPO=/home/ssm-user/kalshi-arb-bot; WORK=/opt/arb/gemini-q10-v5-shadow; OUT=/home/ssm-user/gemini-q10-v5-shadow/${RUN_ID}; git -C \"\$REPO\" config --global --add safe.directory \"\$REPO\" || true; git -C \"\$REPO\" fetch origin ${FEATURE_BRANCH}; git -C \"\$REPO\" cat-file -e \"${PINNED_COMMIT}^{commit}\"; git -C \"\$REPO\" merge-base --is-ancestor \"${PINNED_COMMIT}\" origin/${FEATURE_BRANCH}; git -C \"\$REPO\" worktree remove --force \"\$WORK\" >/dev/null 2>&1 || true; rm -rf \"\$WORK\"; git -C \"\$REPO\" worktree prune; git -C \"\$REPO\" worktree add --detach \"\$WORK\" \"${PINNED_COMMIT}\"; IMAGE=arb-gemini-q10-v5-shadow:${SHORT_SHA}; docker build -t \"\$IMAGE\" \"\$WORK\" >/dev/null; docker run --rm \"\$IMAGE\" python -m pytest -q tests/test_btc_spot_toxicity_guard.py tests/test_gemini_prediction_book_cache.py tests/test_gemini_q10_rescue_policy.py tests/test_gemini_q10_production_executor.py tests/test_gemini_q10_production_executor_v2.py tests/test_gemini_q10_production_executor_v5.py; if [ -f /opt/arb/secrets/gemini-short-crypto.env ]; then ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; else ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; fi; if [ -d /home/ssm-user/gemini-short-crypto-state ]; then BASE_STATE=/home/ssm-user/gemini-short-crypto-state; else BASE_STATE=/opt/arb/gemini-short-crypto-state; fi; test -f \"\$ENV_FILE\"; mkdir -p \"\$OUT\" /home/ssm-user/gemini-q10-v5-shadow-state; echo V5_DISARMED_PREFLIGHT_BEGIN; docker run --rm --network host --env-file \"\$ENV_FILE\" -e GEMINI_SHORT_CRYPTO_STATE_DIR=/base_state -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state -v \"\$BASE_STATE:/base_state\" -v /home/ssm-user/gemini-q10-v5-shadow-state:/prod_state \"\$IMAGE\" python -m src.gemini_q10_production_executor_v5; echo V5_DISARMED_PREFLIGHT_END; echo V5_EXACT_SHADOW_BEGIN; docker run --rm --network host --env-file \"\$ENV_FILE\" -e GEMINI_SHORT_CRYPTO_STATE_DIR=/base_state -e GEMINI_Q10_PRODUCTION_STATE_DIR=/prod_state -e GEMINI_Q10_V5_SHADOW_CANDIDATE_WAIT_SECONDS=180 -v \"\$BASE_STATE:/base_state\" -v /home/ssm-user/gemini-q10-v5-shadow-state:/prod_state \"\$IMAGE\" python -m src.gemini_q10_production_shadow_v5 | tee \"\$OUT/shadow.log\"; echo V5_EXACT_SHADOW_END; test -s \"\$OUT/shadow.log\"; grep -q GEMINI_Q10_V5_SHADOW= \"\$OUT/shadow.log\"; grep -q READ_ONLY_V5_SHADOW_NOT_REALIZED \"\$OUT/shadow.log\"'"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB Gemini q10 V5 shadow ${RUN_ID}" --parameters "$PARAMETERS" --timeout-seconds 800 --query 'Command.CommandId' --output text)
+          for i in $(seq 1 420); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          STDOUT=$(jq -r '.Stdout // ""' <<<"$RESULT")
+          grep -q 'V5_DISARMED_PREFLIGHT' <<<"$STDOUT"
+          grep -q 'GEMINI_Q10_V5_SHADOW=' <<<"$STDOUT"
+          grep -q 'READ_ONLY_V5_SHADOW_NOT_REALIZED' <<<"$STDOUT"

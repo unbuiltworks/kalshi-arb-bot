@@ -1,0 +1,185 @@
+name: AWS PMUS MICRO authenticated preflight GET ONLY
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/pmus-micro-auth-preflight.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  MICRO_REF: 94bd687bfedf23480cfaba50e9494801176d09a4
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Fresh account gate + market gate + micro sizing, GET only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE=$(cat <<'EOF'
+          set -Eeuo pipefail
+          APP=/home/ssm-user/l5-pmus-micro-stage
+          CREDS=/home/ssm-user/l5-pmus-q1-credentials.env
+          PROD_STATE=/home/ssm-user/l5-pmus-q1-state
+          RECLOG=/home/ssm-user/l5-pmus-ws-state/recorder.log
+          test -f "$APP/src/pmus_micro_executor.py"
+          test -f "$CREDS" && test "$(stat -c %a "$CREDS")" = 600
+          test "$(systemctl is-active l5-pmus-recorder.service)" = active
+          test "$(systemctl is-active l5-pmus-supervisor.service)" = active
+          grep -q '^Environment=PMUS_SUPERVISOR_LIVE=NO$' /etc/systemd/system/l5-pmus-supervisor.service
+          sudo -u ssm-user bash -lc '
+            set -Eeuo pipefail
+            set -a; . /home/ssm-user/l5-pmus-q1-credentials.env; set +a
+            export PYTHONPATH=/home/ssm-user/l5-pmus-micro-stage
+            export PMUS_Q1_LIVE=NO
+            export PMUS_MICRO_LIVE=NO
+            /home/ssm-user/l5-pmus-engine-venv/bin/python - <<"PY"
+          import json, subprocess, time
+          from datetime import datetime, timezone
+          from decimal import Decimal as D
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from src import pmus_micro_executor as m
+          from src import pmus_q1_executor_v4 as q
+
+          assert not m.micro_armed()
+          t=q.Transport()
+
+          def get(path, base=q.API):
+              last=None
+              for delay in (0.0, 0.25, 0.5, 1.0, 2.0):
+                  if delay: time.sleep(delay)
+                  try:
+                      return t.request("GET", path, base=base)
+                  except HTTPError as exc:
+                      last=exc
+                      if exc.code != 429 and not (500 <= exc.code <= 599):
+                          raise
+              raise last
+
+          # Fresh authoritative account state. No mutation method is called.
+          balances=get("/v1/account/balances")
+          opened=get("/v1/orders/open")
+          positions=get("/v1/portfolio/positions")
+          orders=(opened.get("orders") or []) if isinstance(opened,dict) else []
+          prow=positions.get("positions") if isinstance(positions,dict) else None
+          nonzero=[]
+          iterable=(prow.items() if isinstance(prow,dict) else
+                    ((str(x.get("marketSlug") or ""),x) for x in (prow or []) if isinstance(x,dict)))
+          for slug,p in iterable:
+              raw=p.get("netPositionDecimal")
+              if raw is None: raw=p.get("netPosition")
+              if raw is None: raw=p.get("quantity")
+              val=q._d(raw) or D("0")
+              if val != 0: nonzero.append({"slug":slug,"net":str(val)})
+          brows=balances.get("balances") if isinstance(balances,dict) else None
+          usd=None
+          for r in (brows or []):
+              if isinstance(r,dict) and str(r.get("currency","")).upper()=="USD":
+                  usd=r; break
+          buying=q._d((usd or {}).get("buyingPower"))
+
+          # Daily realized stop comes only from authoritative realized ledger rows.
+          realized=D("0"); today=datetime.now(timezone.utc).date().isoformat()
+          lp=Path("/home/ssm-user/l5-pmus-q1-state/ledger.jsonl")
+          if lp.exists():
+              for line in lp.open():
+                  try: row=json.loads(line)
+                  except Exception: continue
+                  if row.get("kind")=="realized" and str(row.get("t","")).startswith(today):
+                      try: realized += D(str(row.get("realized_usd")))
+                      except Exception: pass
+          account={"open_orders":len(orders),"nonzero_positions":nonzero,
+                   "buying_power":str(buying) if buying is not None else None,
+                   "realized_today_authoritative":str(realized)}
+          account["ready"]=(len(orders)==0 and not nonzero and buying is not None and
+                            buying >= q.MIN_BUYING_POWER and realized > q.DAILY_LOSS_STOP)
+
+          # Read only the tail of the durable recorder log; choose latest valid status.
+          raw=subprocess.check_output(["tail","-n","250","/home/ssm-user/l5-pmus-ws-state/recorder.log"], text=True)
+          statuses=[]
+          for line in raw.splitlines():
+              if "PMUS_WS_STATUS " not in line: continue
+              try: statuses.append(json.loads(line.split("PMUS_WS_STATUS ",1)[1]))
+              except Exception: pass
+          if not statuses: raise SystemExit("NO_RECORDER_STATUS")
+          st=statuses[-1]
+          ts=datetime.fromisoformat(str(st["t"]).replace("Z","+00:00"))
+          if ts.tzinfo is None: ts=ts.replace(tzinfo=timezone.utc)
+          age=(datetime.now(timezone.utc)-ts).total_seconds()
+          eligible=st.get("eligible_markets") or []
+          candidates=[]
+          for c in eligible:
+              if not isinstance(c,dict): continue
+              slots=c.get("slot_counts_theoretical") or {}
+              try:
+                  bid=D(str(c.get("bid"))); ask=D(str(c.get("ask")))
+                  bid_qty=D(str(c.get("bid_qty") or 0))
+              except Exception: continue
+              if c.get("gate_status") != "Q1_GATE_CLEARED": continue
+              if int(slots.get("MATCHED") or 0) < 2: continue
+              if not c.get("both_sides_served"): continue
+              if not (q.MIN_PRICE <= bid <= q.MAX_PRICE and ask >= bid): continue
+              try:
+                  # Re-read current public BBO and live metadata now, not from stale status.
+                  b=q.outcome_bbo(t, str(c.get("slug")), "OUTCOME_SIDE_YES")
+                  current_bid=b["bid"]; current_ask=b["ask"]
+                  if not (q.MIN_PRICE <= current_bid <= q.MAX_PRICE and current_ask >= current_bid):
+                      continue
+                  spec=m.market_micro_spec(t, str(c.get("slug")), current_bid)
+                  if bid_qty < spec["minimum_trade_qty"]: continue
+                  candidates.append({"slug":c.get("slug"),"status_bid":str(bid),
+                      "current_bid":str(current_bid),"current_ask":str(current_ask),
+                      "matched_slots":int(slots.get("MATCHED") or 0),
+                      "both_sides_served":True,"bid_qty":str(bid_qty),
+                      "minimum_trade_qty":str(spec["minimum_trade_qty"]),
+                      "tick":str(spec["tick"]),"qty":str(spec["qty"]),
+                      "entry_notional":str(spec["entry_notional"]),
+                      "worst_complement_notional":str(spec["worst_complement_notional"]),
+                      "max_leg_notional":str(spec["max_leg_notional"])})
+              except Exception as exc:
+                  continue
+          out={"mode":"AUTHENTICATED_GET_ONLY_PREFLIGHT","micro_ref":"94bd687bfedf23480cfaba50e9494801176d09a4",
+               "micro_armed":False,"recorder":{"conn":st.get("conn"),"auth":st.get("auth"),
+               "status_age_s":round(age,3),"eligible_total":st.get("eligible_total"),
+               "discovery":st.get("discovery")},"account":account,"micro_candidates":candidates,
+               "ready_for_one_shot":bool(account["ready"] and age <= 90 and
+               st.get("conn")=="connected" and st.get("auth")=="ok" and candidates),
+               "mutation_methods":[]}
+          print("PMUS_MICRO_AUTH_PREFLIGHT "+json.dumps(out,separators=(",",":"),default=str))
+          PY
+          '
+          test "$(systemctl is-active l5-pmus-recorder.service)" = active
+          test "$(systemctl is-active l5-pmus-supervisor.service)" = active
+          grep -q '^Environment=PMUS_SUPERVISOR_LIVE=NO$' /etc/systemd/system/l5-pmus-supervisor.service
+          echo PMUS_MICRO_AUTH_PREFLIGHT_OK get_only=true permanent_supervisor_disarmed=true
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment 'L5 PMUS MICRO authenticated GET-only preflight' --parameters "$PARAMS" --timeout-seconds 180 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          OUT=$(jq -r '.Stdout' <<<"$RESULT")
+          grep -q 'PMUS_MICRO_AUTH_PREFLIGHT_OK' <<<"$OUT"
+          grep -q '"mutation_methods":\[\]' <<<"$OUT"

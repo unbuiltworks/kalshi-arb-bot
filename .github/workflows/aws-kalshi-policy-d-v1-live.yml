@@ -1,0 +1,135 @@
+name: AWS Kalshi Policy-D V1 q1 live canary
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/kalshi-policy-d-v1-live.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  EXACT_TESTED_COMMIT: e80969196c7f71a7c646c10f9108d34afd7e56bb
+  LIVE_CONTAINER: arb-kalshi-policy-d-v1-q1-canary
+
+jobs:
+  live_canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+
+      - name: Validate one-use approval trigger
+        id: trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=deploy/aws/kalshi-policy-d-v1-live.trigger
+          test -f "$FILE"
+          PINNED_COMMIT=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$FILE" | tr -d '[:space:]')
+          APPROVAL_ID=$(awk -F= '$1=="APPROVAL_ID"{print $2}' "$FILE" | tr -d '[:space:]')
+          CLASSIFICATION=$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$FILE" | tr -d '[:space:]')
+          START_NOT_BEFORE_UTC=$(awk -F= '$1=="START_NOT_BEFORE_UTC"{print $2}' "$FILE" | tr -d '[:space:]')
+          MAX_WINDOWS=$(awk -F= '$1=="MAX_WINDOWS"{print $2}' "$FILE" | tr -d '[:space:]')
+          MAX_SESSION_SECONDS=$(awk -F= '$1=="MAX_SESSION_SECONDS"{print $2}' "$FILE" | tr -d '[:space:]')
+          [[ "$PINNED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$APPROVAL_ID" =~ ^[A-Za-z0-9_-]{6,80}$ ]]
+          test "$PINNED_COMMIT" = "$EXACT_TESTED_COMMIT"
+          test "$CLASSIFICATION" = "FRESH_USER_APPROVED_KALSHI_POLICY_D_V1_Q1_LIVE_CANARY"
+          [[ "$MAX_WINDOWS" =~ ^[1-4]$ ]]
+          [[ "$MAX_SESSION_SECONDS" =~ ^[0-9]+$ ]]
+          date -u -d "$START_NOT_BEFORE_UTC" +%s >/dev/null
+          echo "pinned_commit=$PINNED_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "approval_id=$APPROVAL_ID" >> "$GITHUB_OUTPUT"
+          echo "start_not_before_utc=$START_NOT_BEFORE_UTC" >> "$GITHUB_OUTPUT"
+          echo "max_windows=$MAX_WINDOWS" >> "$GITHUB_OUTPUT"
+          echo "max_session_seconds=$MAX_SESSION_SECONDS" >> "$GITHUB_OUTPUT"
+          echo "POLICY_D_TRIGGER_VALID commit=${PINNED_COMMIT:0:12} start=$START_NOT_BEFORE_UTC q=1 max_windows=$MAX_WINDOWS"
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Pin, test, preflight, and launch exact Policy-D release through SSM
+        shell: bash
+        env:
+          PINNED_COMMIT: ${{ steps.trigger.outputs.pinned_commit }}
+          APPROVAL_ID: ${{ steps.trigger.outputs.approval_id }}
+          START_NOT_BEFORE_UTC: ${{ steps.trigger.outputs.start_not_before_utc }}
+          MAX_WINDOWS: ${{ steps.trigger.outputs.max_windows }}
+          MAX_SESSION_SECONDS: ${{ steps.trigger.outputs.max_session_seconds }}
+        run: |
+          set -euo pipefail
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin aws-migration-foundation >/dev/null; git show origin/aws-migration-foundation:deploy/aws/run_kalshi_policy_d_v1.sh > /tmp/run_kalshi_policy_d_v1.sh; chmod 0700 /tmp/run_kalshi_policy_d_v1.sh; PINNED_COMMIT=${PINNED_COMMIT} ARB_KALSHI_POLICY_D_V1_APPROVED=YES ARB_KALSHI_POLICY_D_V1_APPROVAL_ID=${APPROVAL_ID} START_NOT_BEFORE_UTC=${START_NOT_BEFORE_UTC} MAX_WINDOWS=${MAX_WINDOWS} MAX_SESSION_SECONDS=${MAX_SESSION_SECONDS} /tmp/run_kalshi_policy_d_v1.sh'"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "ARB Kalshi Policy-D V1 q1 exact-release canary" \
+            --parameters "$PARAMETERS" \
+            --timeout-seconds 7800 \
+            --query 'Command.CommandId' --output text)
+          echo "launch_command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
+          for i in $(seq 1 800); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 10
+          done
+          mkdir -p runtime
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+            > runtime/aws-kalshi-policy-d-v1-launch.json
+          cat runtime/aws-kalshi-policy-d-v1-launch.json
+          test "$(jq -r '.Status' runtime/aws-kalshi-policy-d-v1-launch.json)" = "Success"
+          OUT=$(jq -r '.Stdout' runtime/aws-kalshi-policy-d-v1-launch.json)
+          grep -q 'POLICY_D_AWS_RELEASE_TESTS_OK' <<<"$OUT"
+          grep -q 'POLICY_D_AWS_DISARMED_PREFLIGHT_OK' <<<"$OUT"
+          grep -q 'POLICY_D_AWS_LIVE_DETACHED' <<<"$OUT"
+
+      - name: Read-only terminal monitor and evidence capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_CMD='set -eu; NAME=arb-kalshi-policy-d-v1-q1-canary; echo POLICY_D_MONITOR_STARTED_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ); for i in $(seq 1 600); do if ! docker inspect "$NAME" >/dev/null 2>&1; then echo POLICY_D_MONITOR_CONTAINER_MISSING; exit 2; fi; running=$(docker inspect -f "{{.State.Running}}" "$NAME"); echo POLICY_D_MONITOR_SAMPLE n=$i at=$(date -u +%Y-%m-%dT%H:%M:%SZ) running=$running; if [ "$running" != "true" ]; then break; fi; sleep 10; done; running=$(docker inspect -f "{{.State.Running}}" "$NAME"); status=$(docker inspect -f "{{.State.Status}}" "$NAME"); exit_code=$(docker inspect -f "{{.State.ExitCode}}" "$NAME"); echo POLICY_D_MONITOR_FINAL=$(docker inspect -f "status={{.State.Status}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}" "$NAME"); echo POLICY_D_MONITOR_LOGS_BEGIN; docker logs --tail 1200 "$NAME" 2>&1 || true; echo POLICY_D_MONITOR_LOGS_END; if [ "$running" != "false" ] || [ "$status" != "exited" ]; then echo POLICY_D_MONITOR_NOT_TERMINAL; exit 3; fi; if [ "$exit_code" != "0" ]; then echo POLICY_D_MONITOR_BAD_EXIT_CODE=$exit_code; exit 4; fi; echo POLICY_D_MONITOR_TERMINAL_OK'
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "ARB Kalshi Policy-D V1 q1 read-only terminal monitor" \
+            --parameters "$PARAMETERS" \
+            --timeout-seconds 6300 \
+            --query 'Command.CommandId' --output text)
+          for i in $(seq 1 650); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 10
+          done
+          mkdir -p runtime
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+            > runtime/aws-kalshi-policy-d-v1-monitor.json
+          cat runtime/aws-kalshi-policy-d-v1-monitor.json
+          test "$(jq -r '.Status' runtime/aws-kalshi-policy-d-v1-monitor.json)" = "Success"
+          grep -q 'POLICY_D_MONITOR_TERMINAL_OK' <<<"$(jq -r '.Stdout' runtime/aws-kalshi-policy-d-v1-monitor.json)"
+
+      - name: Upload non-secret evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aws-kalshi-policy-d-v1-q1-canary
+          path: runtime/aws-kalshi-policy-d-v1-*.json
+          retention-days: 7

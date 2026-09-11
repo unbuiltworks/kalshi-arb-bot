@@ -1,0 +1,88 @@
+name: L5 overlap closed-position check
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/l5-overlap-closed-positions.trigger
+
+permissions:
+  contents: read
+
+jobs:
+  overlap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - name: Compare old closed-position accounting on the 16 redeem-validated BTC15m windows
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, urllib.parse, urllib.request
+          from collections import defaultdict
+
+          USER='0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68'
+          IDS={
+          '0xbdc5559cccaea9a297fcbc9ae7d987b9360585d33e3c0dc1430eedf4666ce0bd',
+          '0x2dd122038f83232576641de403a27c195630f8c229ec86b41f55f2c18752b357',
+          '0x702607190c72dec1d3856010d781fde016ba7ee77ef77526685b5eb08afc8b8a',
+          '0xe07c8672226c0e5868f76ace7864f514ae2333b4287c66c81aca2db56894a73b',
+          '0xb9bca2bbd47e0b11fe4fd2442888d1828bbca152477ff871c878f7a04fc8a065',
+          '0x63c7e36764ebae6baa4afb440da3458ff8628ac5033a3fcefad45c459df25a18',
+          '0x34a1cdacdd0d6a5f1a546b7a4850d6d1b2759a4bf2768da94cff80464055e9b6',
+          '0xef8821cb4dc6a4c90b6aa5e62095e29e1102bf1644f565a3f91984efb91475ca',
+          '0xe76c9dae2ebc658c916e54130ee5af30ecebc6145c49c64263f1c257a3dfcf74',
+          '0x2356eac329f8acb3111c8fdef1560aa2e917ad8ddb018433a643959ba6129d36',
+          '0xf0b39b92f62f0ce32c3c8e334c0fce4ae9f864ede957854cc488e80b74f2cf34',
+          '0x3367ec718053e74d804c706a407000c64036237fe45514bf8e5047bf0b47df85',
+          '0x17e442397fe1e1eeb42b8dd6eb2059f43e3c8d6a6971e914b31e5f6c7f1d8fee',
+          '0xbc30f96686cb3c5fc60fc0697c0a91ddc7b63f27f0f449f634911f3bad404ab0',
+          '0xa08f52c65091685c96b5ffcaea2e7445c5abc3340264c87ea6540f8877391a47',
+          '0xebdce37ef8491320de11e5519aff003bb75b646e402db6a499cbfd33f540ff1e',
+          }
+          BASE='https://data-api.polymarket.com/closed-positions'
+          rows=[]
+          offset=0
+          while offset <= 5000:
+              params={'user':USER,'title':'Bitcoin Up or Down','limit':50,'offset':offset,'sortBy':'TIMESTAMP','sortDirection':'DESC'}
+              req=urllib.request.Request(BASE+'?'+urllib.parse.urlencode(params),headers={'User-Agent':'ARB-l5-overlap-readonly/1.0'})
+              with urllib.request.urlopen(req,timeout=20) as r:
+                  page=json.load(r)
+              if not isinstance(page,list): raise RuntimeError(type(page))
+              rows.extend(page)
+              if len(page)<50: break
+              offset += 50
+
+          by=defaultdict(list)
+          for r in rows:
+              cid=str(r.get('conditionId') or '')
+              if cid in IDS: by[cid].append(r)
+
+          out=[]
+          for cid in sorted(IDS):
+              rs=by.get(cid,[])
+              old_realized=sum(float(r.get('realizedPnl') or 0) for r in rs)
+              cash=sum(float(r.get('cashPnl') or 0) for r in rs)
+              out.append({
+                  'conditionId':cid,
+                  'rows':len(rs),
+                  'title':rs[0].get('title') if rs else None,
+                  'old_sum_realizedPnl':round(old_realized,6),
+                  'sum_cashPnl':round(cash,6),
+                  'outcomes':[{'outcome':r.get('outcome'),'size':r.get('size'),'totalBought':r.get('totalBought'),'realizedPnl':r.get('realizedPnl'),'cashPnl':r.get('cashPnl'),'curPrice':r.get('curPrice')} for r in rs],
+              })
+          result={
+              'classification':'READ_ONLY_L5_16_WINDOW_OVERLAP_OLD_METHOD',
+              'requested_windows':len(IDS),
+              'windows_found':sum(bool(x['rows']) for x in out),
+              'rows_found':sum(x['rows'] for x in out),
+              'old_sum_realizedPnl':round(sum(x['old_sum_realizedPnl'] for x in out),6),
+              'sum_cashPnl':round(sum(x['sum_cashPnl'] for x in out),6),
+              'windows':out,
+          }
+          print('L5_OVERLAP_OLD_METHOD='+json.dumps(result,separators=(',',':')))
+          PY

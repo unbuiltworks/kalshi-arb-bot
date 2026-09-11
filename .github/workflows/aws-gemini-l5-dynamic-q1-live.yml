@@ -1,0 +1,112 @@
+name: AWS Gemini L5 dynamic q1 live
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-l5-dynamic-q1-live.trigger
+      - deploy/aws/gemini-l5-dynamic-q1-stop.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  LIVE_BRANCH: feature/gemini-l5-dynamic-q1
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+          fetch-depth: 2
+      - name: Resolve and validate requested action
+        id: trig
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHANGED=$(git diff --name-only HEAD^ HEAD)
+          echo "$CHANGED"
+          if grep -qx 'deploy/aws/gemini-l5-dynamic-q1-stop.trigger' <<<"$CHANGED"; then
+            MODE=STOP
+            FILE=deploy/aws/gemini-l5-dynamic-q1-stop.trigger
+            EXPECTED=FRESH_USER_APPROVED_GEMINI_L5_DYNAMIC_Q1_EXACT_STOP
+          elif grep -qx 'deploy/aws/gemini-l5-dynamic-q1-live.trigger' <<<"$CHANGED"; then
+            MODE=LIVE
+            FILE=deploy/aws/gemini-l5-dynamic-q1-live.trigger
+            EXPECTED=FRESH_USER_APPROVED_GEMINI_L5_DYNAMIC_Q1_LIVE
+          else
+            echo 'no dynamic trigger changed in head commit' >&2
+            exit 1
+          fi
+          PIN=$(awk -F= '$1=="PINNED_COMMIT"{print $2}' "$FILE" | tr -d '[:space:]')
+          APP=$(awk -F= '$1=="APPROVAL_ID"{print $2}' "$FILE" | tr -d '[:space:]')
+          CLS=$(awk -F= '$1=="CLASSIFICATION"{print $2}' "$FILE" | tr -d '[:space:]')
+          [[ "$PIN" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$APP" =~ ^[A-Za-z0-9_-]{6,80}$ ]]
+          test "$CLS" = "$EXPECTED"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "pinned=$PIN" >> "$GITHUB_OUTPUT"
+          echo "approval=$APP" >> "$GITHUB_OUTPUT"
+          echo "L5_DYNAMIC_DISPATCH_VALID mode=$MODE commit=${PIN:0:12} approval=$APP"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Execute exact pinned action through SSM
+        shell: bash
+        env:
+          MODE: ${{ steps.trig.outputs.mode }}
+          PINNED_COMMIT: ${{ steps.trig.outputs.pinned }}
+          APPROVAL_ID: ${{ steps.trig.outputs.approval }}
+        run: |
+          set -euo pipefail
+          if [ "$MODE" = STOP ]; then
+            SCRIPT=deploy/aws/run_gemini_l5_dynamic_q1_stop.sh
+            TMP=/tmp/run_gemini_l5_dynamic_q1_stop.sh
+            EXEC="PINNED_COMMIT=${PINNED_COMMIT} ARB_GEMINI_L5_DYNAMIC_STOP_APPROVED=YES ARB_GEMINI_L5_DYNAMIC_STOP_APPROVAL_ID=${APPROVAL_ID} ${TMP}"
+            OUTFILE=runtime/aws-gemini-l5-dynamic-q1-stop.json
+            TIMEOUT=650
+          else
+            SCRIPT=deploy/aws/run_gemini_l5_dynamic_q1_live.sh
+            TMP=/tmp/run_gemini_l5_dynamic_q1_live.sh
+            EXEC="PINNED_COMMIT=${PINNED_COMMIT} ARB_GEMINI_L5_DYNAMIC_Q1_APPROVED=YES ARB_GEMINI_L5_DYNAMIC_Q1_APPROVAL_ID=${APPROVAL_ID} ${TMP}"
+            OUTFILE=runtime/aws-gemini-l5-dynamic-q1-live.json
+            TIMEOUT=900
+          fi
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -euo pipefail; cd /home/ssm-user/kalshi-arb-bot; git fetch origin ${LIVE_BRANCH} >/dev/null; git cat-file -e \"${PINNED_COMMIT}^{commit}\"; git merge-base --is-ancestor ${PINNED_COMMIT} origin/${LIVE_BRANCH}; git show ${PINNED_COMMIT}:${SCRIPT} > ${TMP}; chmod 0700 ${TMP}; ${EXEC}'"
+          PARAMS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --parameters "$PARAMS" --timeout-seconds "$TIMEOUT" --query 'Command.CommandId' --output text)
+          for i in $(seq 1 180); do
+            S=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$S" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 5
+          done
+          mkdir -p runtime
+          aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' > "$OUTFILE"
+          cat "$OUTFILE"
+          test "$(jq -r '.Status' "$OUTFILE")" = Success
+          OUT=$(jq -r '.Stdout // ""' "$OUTFILE")
+          if [ "$MODE" = STOP ]; then
+            grep -q 'L5_DYNAMIC_STOP_SAFETY_TESTS_OK' <<<"$OUT"
+            grep -q 'L5_DYNAMIC_STOP_UPGRADE_SAFE' <<<"$OUT"
+          else
+            grep -q 'L5_DYNAMIC_SAFETY_TESTS_OK' <<<"$OUT"
+            grep -q 'L5_DYNAMIC_DISARMED_OK' <<<"$OUT"
+            grep -q 'L5_DYNAMIC_ACCOUNT_PREFLIGHT_OK' <<<"$OUT"
+            grep -q 'L5_DYNAMIC_PUBLIC_READ_OK' <<<"$OUT"
+            grep -q 'L5_DYNAMIC_LIVE_START' <<<"$OUT"
+            grep -q 'L5_DYNAMIC_OWNER_RUNNING' <<<"$OUT"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aws-gemini-l5-dynamic-q1-${{ steps.trig.outputs.mode }}
+          path: runtime/aws-gemini-l5-dynamic-q1-*.json
+          retention-days: 7

@@ -1,0 +1,94 @@
+name: AWS PMUS q1 preview preflight v2
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/pmus-q1-preview-preflight-v2.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Pinned authenticated preview-only preflight
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          TR=deploy/aws/pmus-q1-preview-preflight-v2.trigger
+          SLUG=$(sed -n 's/^MARKET_SLUG=//p' "$TR" | head -1)
+          [[ "$SLUG" =~ ^[A-Za-z0-9._-]+$ ]] || { echo INVALID_SLUG; exit 2; }
+          EXPECTED_SHA=fcfd2d4723ab671c6f1110477d39365be70d9fc0dcf5842d36954dc0bbb7c465
+          REMOTE=$(cat <<EOF
+          set -Eeuo pipefail
+          STAGE=/home/ssm-user/l5-pmus-q1-stage
+          STATE=/home/ssm-user/l5-pmus-q1-state
+          CREDS=/home/ssm-user/l5-pmus-q1-credentials.env
+          VENV=/home/ssm-user/l5-pmus-q1-venv
+          test -f "\$CREDS" && test "\$(stat -c %a "\$CREDS")" = 600
+          test -f "\$STAGE/src/pmus_q1_executor.py"
+          ACTUAL=\$(sha256sum "\$STAGE/src/pmus_q1_executor.py" | cut -d' ' -f1)
+          test "\$ACTUAL" = "$EXPECTED_SHA" || { echo PMUS_Q1_STAGE_SHA_MISMATCH; exit 2; }
+          if [[ ! -x "\$VENV/bin/python" ]]; then python3 -m venv "\$VENV"; fi
+          if ! "\$VENV/bin/python" -c 'import cryptography' 2>/dev/null; then
+            "\$VENV/bin/pip" install --disable-pip-version-check --no-cache-dir 'cryptography>=42' >/dev/null
+          fi
+          set -a; . "\$CREDS"; set +a
+          export PMUS_Q1_STATE_DIR="\$STATE"
+          unset PMUS_Q1_LIVE PMUS_Q1_SESSION_ID PMUS_Q1_ARM PMUS_Q1_GATE_EVIDENCE
+          cd "\$STAGE"
+          "\$VENV/bin/python" - <<'PY'
+          import json
+          from decimal import Decimal as D
+          from src.pmus_q1_executor import Transport, preflight, entry_ok, API, GATEWAY
+          slug = "$SLUG"
+          t = Transport()
+          reason = preflight(t, slug)
+          if reason:
+              print(json.dumps({'status':'AUTH_PREFLIGHT_FAILED','slug':slug,'reason':reason,'order_entry':False},separators=(',',':')))
+              raise SystemExit(1)
+          bbo=(t.request('GET',f'/v1/markets/{slug}/bbo',base=GATEWAY).get('marketData') or {})
+          bid=(bbo.get('bestBid') or {}).get('value'); ask=(bbo.get('bestAsk') or {}).get('value')
+          if bid is None or ask is None or not entry_ok(D(str(bid))):
+              print(json.dumps({'status':'BBO_INELIGIBLE','slug':slug,'order_entry':False},separators=(',',':')))
+              raise SystemExit(1)
+          body={'marketSlug':slug,'type':'ORDER_TYPE_LIMIT','price':{'value':str(D(str(bid))),'currency':'USD'},'quantity':1,'tif':'TIME_IN_FORCE_GOOD_TILL_CANCEL','participateDontInitiate':True,'outcomeSide':'OUTCOME_SIDE_YES','action':'ORDER_ACTION_BUY','manualOrderIndicator':'MANUAL_ORDER_INDICATOR_AUTOMATIC'}
+          preview=t.request('POST','/v1/order/preview',{'request':body},base=API)
+          order=preview.get('order') if isinstance(preview,dict) else None
+          if not isinstance(order,dict) or order.get('marketSlug') not in (None,slug):
+              print(json.dumps({'status':'PREVIEW_FAILED','slug':slug,'order_entry':False},separators=(',',':')))
+              raise SystemExit(1)
+          print(json.dumps({'status':'PMUS_Q1_PREVIEW_PREFLIGHT_OK','slug':slug,'bid':str(bid),'ask':str(ask),'preview':True,'qty':1,'order_entry':False},separators=(',',':')))
+          PY
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | sudo -u ssm-user bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "L5 PMUS q1 preview-only $SLUG" --parameters "$PARAMS" --timeout-seconds 180 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          OUT=$(jq -r '.Stdout' <<<"$RESULT")
+          grep -q 'PMUS_Q1_PREVIEW_PREFLIGHT_OK' <<<"$OUT"
+          grep -q '"order_entry":false' <<<"$OUT"

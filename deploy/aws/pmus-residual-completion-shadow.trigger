@@ -1,0 +1,2 @@
+GO=READ_ONLY_RESIDUAL_SHADOW
+REQUEST_ID=det-min-persistence-stream-20260903-0353Z

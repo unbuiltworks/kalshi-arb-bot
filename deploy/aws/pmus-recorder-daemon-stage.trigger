@@ -1,0 +1,3 @@
+DEPLOY_ID=pmus-recorder-daemon-20260903-0106Z
+MODE=READ_ONLY
+REF=d3614aed26b88e791bfd0abdcfc9395e6aa92969

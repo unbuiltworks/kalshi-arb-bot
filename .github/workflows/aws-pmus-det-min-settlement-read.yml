@@ -1,0 +1,83 @@
+name: AWS PMUS DET-MIN settlement read
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/pmus-det-min-settlement-read.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  MARKET: aec-mlb-det-min-2026-09-02
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+          fetch-depth: 1
+      - name: Verify trigger
+        shell: bash
+        run: grep -qx 'GO=READ_ONLY_SETTLEMENT_AUDIT' deploy/aws/pmus-det-min-settlement-read.trigger
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Audit authoritative settlement and account state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE=$(cat <<'EOF'
+          set -Eeuo pipefail
+          CREDS=/home/ssm-user/l5-pmus-q1-credentials.env
+          test -f "$CREDS" && test "$(stat -c %a "$CREDS")" = 600
+          grep -q '^Environment=PMUS_SUPERVISOR_LIVE=NO$' /etc/systemd/system/l5-pmus-supervisor.service
+          sudo -u ssm-user bash -lc '
+            set -Eeuo pipefail
+            set -a; . /home/ssm-user/l5-pmus-q1-credentials.env; set +a
+            export PYTHONPATH=/home/ssm-user/l5-pmus-engine
+            /home/ssm-user/l5-pmus-engine-venv/bin/python - <<"PY"
+          import json
+          from src import pmus_q1_executor_v4 as q1
+          from src import pmus_settlement_auditor as audit
+          from src import pmus_aws_supervisor as sup
+          slug="aec-mlb-det-min-2026-09-02"
+          t=q1.Transport()
+          try:
+              public=t.request("GET", f"/v1/markets/{slug}/settlement", base=q1.GATEWAY)
+          except Exception as exc:
+              public={"error":type(exc).__name__}
+          print("PMUS_DET_MIN_PUBLIC_SETTLEMENT "+json.dumps(public,default=str,separators=(",",":")))
+          result=audit.audit_market(slug,t)
+          print("PMUS_DET_MIN_ACCOUNT_AUDIT "+json.dumps(result,default=str,separators=(",",":")))
+          try:
+              block=sup.account_block_reason(t)
+          except Exception as exc:
+              block="account_error:"+type(exc).__name__
+          print("PMUS_DET_MIN_ACCOUNT_BLOCK "+json.dumps({"block_reason":block},separators=(",",":")))
+          print("PMUS_DET_MIN_READ_OK mutation=false permanent_supervisor_disarmed=true")
+          PY
+          '
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment 'L5 PMUS DET MIN read-only settlement audit' --parameters "$PARAMS" --timeout-seconds 180 --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          grep -q 'PMUS_DET_MIN_READ_OK' <<<"$(jq -r '.Stdout' <<<"$RESULT")"

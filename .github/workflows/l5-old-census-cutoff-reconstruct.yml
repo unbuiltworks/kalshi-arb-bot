@@ -1,0 +1,85 @@
+name: L5 old census cutoff reconstruction
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/l5-old-census-cutoff.trigger
+
+permissions:
+  contents: read
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aws-migration-foundation
+      - name: Reconstruct the Aug 29 16:04:55Z closed-position universe
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, urllib.parse, urllib.request
+          from collections import defaultdict
+
+          USER='0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68'
+          CUTOFF=1788019495  # 2026-08-29T16:04:55Z, original 277-window run start
+          BASE='https://data-api.polymarket.com/closed-positions'
+          rows=[]
+          for title in ('Bitcoin Up or Down','Ethereum Up or Down'):
+              offset=0
+              while offset <= 5000:
+                  params={'user':USER,'title':title,'limit':50,'offset':offset,'sortBy':'TIMESTAMP','sortDirection':'DESC'}
+                  req=urllib.request.Request(BASE+'?'+urllib.parse.urlencode(params),headers={'User-Agent':'ARB-l5-cutoff-readonly/1.0'})
+                  with urllib.request.urlopen(req,timeout=20) as r:
+                      page=json.load(r)
+                  if not isinstance(page,list): raise RuntimeError(type(page))
+                  rows.extend(page)
+                  if len(page)<50: break
+                  offset += 50
+
+          dedup={}
+          for r in rows:
+              slug=str(r.get('eventSlug') or r.get('slug') or '').lower()
+              title=str(r.get('title') or '')
+              if '15m' not in slug and '15 min' not in title.lower() and '15-minute' not in title.lower():
+                  continue
+              ts=int(r.get('timestamp') or 0)
+              if ts > CUTOFF:
+                  continue
+              key=(r.get('conditionId'),r.get('asset') or r.get('outcome'))
+              dedup[key]=r
+
+          by=defaultdict(list)
+          for r in dedup.values():
+              cid=r.get('conditionId')
+              if cid: by[cid].append(r)
+
+          markets=[]
+          for cid,rs in by.items():
+              pnl=sum(float(r.get('realizedPnl') or 0) for r in rs)
+              markets.append({
+                'conditionId':cid,
+                'timestamp':max(int(r.get('timestamp') or 0) for r in rs),
+                'rows':len(rs),
+                'title':rs[0].get('title'),
+                'eventSlug':rs[0].get('eventSlug'),
+                'realizedPnl':round(pnl,6),
+              })
+          markets.sort(key=lambda x:x['timestamp'])
+          result={
+            'classification':'READ_ONLY_L5_OLD_277_CUTOFF_RECONSTRUCTION',
+            'cutoff':CUTOFF,
+            'market_count':len(markets),
+            'sum_realized_pnl':round(sum(m['realizedPnl'] for m in markets),6),
+            'positive_windows':sum(m['realizedPnl']>1e-9 for m in markets),
+            'negative_windows':sum(m['realizedPnl']<-1e-9 for m in markets),
+            'two_row_markets':sum(m['rows']==2 for m in markets),
+            'one_row_markets':sum(m['rows']==1 for m in markets),
+            'condition_ids':[m['conditionId'] for m in markets],
+          }
+          print('L5_OLD_CENSUS_CUTOFF='+json.dumps(result,separators=(',',':')))
+          PY

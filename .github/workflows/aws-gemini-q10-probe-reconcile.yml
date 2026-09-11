@@ -1,0 +1,38 @@
+name: AWS Gemini q10 probe reconcile
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/gemini-q10-probe-reconcile.trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Exact read-only q10 settlement reconciliation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          REMOTE_CMD="sudo -u ssm-user bash -lc 'set -Eeuo pipefail; REPO=/home/ssm-user/kalshi-arb-bot; git -C \"\$REPO\" fetch origin aws-migration-foundation >/dev/null; if [ -f /opt/arb/secrets/gemini-short-crypto.env ]; then ENV_FILE=/opt/arb/secrets/gemini-short-crypto.env; else ENV_FILE=/home/ssm-user/kalshi-arb-bot/.env; fi; IMAGE=arb-gemini-dynamic-complement:q1-32af5954c64e; git -C \"\$REPO\" show origin/aws-migration-foundation:deploy/aws/reconcile_gemini_q10_probe.py > /tmp/reconcile_gemini_q10_probe.py; docker run --rm --network host --env-file \"\$ENV_FILE\" -e PYTHONPATH=/app -v /tmp/reconcile_gemini_q10_probe.py:/tmp/reconcile.py:ro \"\$IMAGE\" python /tmp/reconcile.py'"
+          PARAMETERS=$(jq -nc --arg cmd "$REMOTE_CMD" '{commands:[$cmd]}')
+          COMMAND_ID=$(aws ssm send-command --instance-ids "$AWS_HOT_INSTANCE_ID" --document-name AWS-RunShellScript --comment "ARB exact q10 probe reconciliation" --parameters "$PARAMETERS" --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" || true
+          RESULT=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$AWS_HOT_INSTANCE_ID" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = Success
+          grep -q 'Q10_EXACT_RECONCILIATION=' <<<"$(jq -r '.Stdout // ""' <<<"$RESULT")"

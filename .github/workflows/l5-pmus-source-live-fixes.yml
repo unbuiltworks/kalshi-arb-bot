@@ -1,0 +1,147 @@
+name: L5 PMUS guarded live-schema source fixes
+
+on:
+  push:
+    branches: [aws-migration-foundation]
+    paths:
+      - deploy/aws/pmus-source-live-fixes.trigger
+
+permissions:
+  contents: write
+
+env:
+  EXPECTED_TRANSFER_HEAD: 647f40033ab9934fe0b2ee23467a8e597ca3f8c6
+
+jobs:
+  patch_test_push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/l5-transfer-backtest
+          fetch-depth: 0
+      - name: Verify reviewed head
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_TRANSFER_HEAD" || {
+            echo "TRANSFER_HEAD_MOVED; refusing stale patch"
+            exit 2
+          }
+      - name: Apply surgical live-schema fixes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('src/pmus_q1_executor_v4.py')
+          s=p.read_text()
+          pat=re.compile(r'(?P<i>^[ \t]*)raw = p\.get\("netPosition"\)\n(?P=i)if raw is None:\n(?P=i)    raw = p\.get\("quantity"\)', re.M)
+          def v4_repl(m):
+              i=m.group('i')
+              return (i+'raw = p.get("netPositionDecimal")\n'
+                      +i+'if raw is None:\n'
+                      +i+'    raw = p.get("netPosition")\n'
+                      +i+'if raw is None:\n'
+                      +i+'    raw = p.get("quantity")')
+          s,n=pat.subn(v4_repl,s)
+          if n != 2:
+              raise SystemExit(f'V4_POSITION_MARKER_COUNT={n}')
+          p.write_text(s)
+
+          p=Path('src/pmus_aws_supervisor.py')
+          s=p.read_text()
+          pat=re.compile(r'(?P<i>^[ \t]*)raw = row\.get\("netPosition"\)\n(?P=i)if raw is None:\n(?P=i)    raw = row\.get\("quantity"\)', re.M)
+          def sup_repl(m):
+              i=m.group('i')
+              return (i+'raw = row.get("netPositionDecimal")\n'
+                      +i+'if raw is None:\n'
+                      +i+'    raw = row.get("netPosition")\n'
+                      +i+'if raw is None:\n'
+                      +i+'    raw = row.get("quantity")')
+          s,n=pat.subn(sup_repl,s)
+          if n != 1:
+              raise SystemExit(f'SUP_POSITION_MARKER_COUNT={n}')
+          p.write_text(s)
+
+          p=Path('src/pmus_settlement_auditor.py')
+          s=p.read_text()
+          a=s.index('def _activities(')
+          b=s.index('\n\ndef _position', a)
+          repl='''def _activities(t: q1.Transport, slug: str, typ: str) -> list[dict]:
+              resp = t.request("GET", "/v1/portfolio/activities")
+              rows = resp.get("activities") if isinstance(resp, Mapping) else None
+              out: list[dict] = []
+              for row in (rows or []):
+                  if not isinstance(row, Mapping) or row.get("type") != typ:
+                      continue
+                  if typ == "ACTIVITY_TYPE_POSITION_RESOLUTION":
+                      payload = row.get("positionResolution")
+                  elif typ == "ACTIVITY_TYPE_TRADE":
+                      payload = row.get("trade")
+                  else:
+                      payload = None
+                  if isinstance(payload, Mapping) and payload.get("marketSlug") == slug:
+                      out.append(dict(row))
+              return out'''
+          p.write_text(s[:a]+repl+s[b:])
+          PY
+
+          cat > tests/test_pmus_live_schema_guards.py <<'PY'
+          from decimal import Decimal as D
+          from src import pmus_aws_supervisor as sup
+          from src import pmus_q1_executor_v4 as q1
+          from src import pmus_settlement_auditor as settle
+
+          class PositionOnlyDecimal:
+              def request(self, method, path, body=None, base=q1.API):
+                  if path == '/v1/orders/open': return {'orders': []}
+                  if path == '/v1/portfolio/positions':
+                      return {'positions': {'m': {'netPositionDecimal': '1.0000'}}}
+                  raise AssertionError((method,path))
+
+          def test_supervisor_blocks_net_position_decimal_only():
+              reason=sup.account_block_reason(PositionOnlyDecimal())
+              assert reason and reason.startswith('nonzero_positions:')
+              assert 'm=1.0000' in reason
+
+          def test_v4_reads_net_position_decimal_only():
+              assert q1._position_for_slug(PositionOnlyDecimal(), 'm') == D('1.0000')
+
+          class Activities:
+              def __init__(self): self.paths=[]
+              def request(self, method, path, body=None, base=q1.API):
+                  self.paths.append(path)
+                  assert path == '/v1/portfolio/activities'
+                  return {'activities': [
+                    {'type':'ACTIVITY_TYPE_TRADE','trade':{'marketSlug':'other'}},
+                    {'type':'ACTIVITY_TYPE_TRADE','trade':{'marketSlug':'m'}},
+                    {'type':'ACTIVITY_TYPE_POSITION_RESOLUTION','positionResolution':{'marketSlug':'m'}},
+                  ]}
+
+          def test_settlement_activity_auth_path_has_no_query_and_filters_locally():
+              t=Activities()
+              rows=settle._activities(t,'m','ACTIVITY_TYPE_TRADE')
+              assert len(rows)==1 and rows[0]['trade']['marketSlug']=='m'
+              assert t.paths == ['/v1/portfolio/activities']
+          PY
+      - name: Focused tests
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check -q pytest
+          python3 -m pytest -q \
+            tests/test_pmus_aws_supervisor.py \
+            tests/test_pmus_q1_executor_v4.py \
+            tests/test_pmus_live_schema_guards.py
+      - name: Commit and push reviewed fixes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name unbuiltworks
+          git config user.email unbuiltapp@gmail.com
+          git add src/pmus_q1_executor_v4.py src/pmus_aws_supervisor.py src/pmus_settlement_auditor.py tests/test_pmus_live_schema_guards.py
+          git commit -m 'pmus: fix live residual and settlement auth guards'
+          git push origin HEAD:feature/l5-transfer-backtest
