@@ -39,47 +39,76 @@ def _log(row: Mapping[str, Any]) -> None:
           flush=True)
 
 
-def _depth_at_or_below(t, slug: str, limit: D) -> Optional[D]:
-    """Executable YES size at or inside our limit.
-
-    PMUS serves sell depth under `offers`, NOT `asks` -- the parser bug this
-    project already fixed once. None means we could not establish depth,
-    which the gate treats as a failure, never as 'enough'."""
-    try:
-        book = q1._get_with_retry(
-            t, f"/v1/markets/{slug}/orderbook", base=q1.GATEWAY) or {}
-    except Exception:                                       # noqa: BLE001
-        return None
-    levels = ((book.get("orderbook") or book).get("offers") or [])
-    total = D("0")
-    for lvl in levels:
-        px = lvl.get("price")
-        px = D(str(px.get("value") if isinstance(px, Mapping) else px))
-        if px <= limit:
-            q = lvl.get("quantity") or lvl.get("size")
-            total += D(str(q.get("value") if isinstance(q, Mapping) else q))
-    return total
+def _val(x):
+    """The venue wraps numbers as {"value": ...} in some payloads and not in
+    others. Both shapes appear in the same book."""
+    if isinstance(x, Mapping):
+        x = x.get("value")
+    return None if x is None else D(str(x))
 
 
-def build_snapshot(t, slug: str, inv, combined_loss: D) -> dict:
-    """Everything the gate needs, read FRESH, now."""
-    bbo = q1.fresh_bbo(t, slug)
-    ask = bbo.get("ask")
-    got = sa.traded_qty_with_evidence(slug, t)
-    venue_qty = got.get("qty")          # qtyDecimal only, or None
-    sweep = {}
-    try:
-        sweep = q1.fresh_open_orders(t, slug) if hasattr(
-            q1, "fresh_open_orders") else {}
-    except Exception:                                       # noqa: BLE001
-        sweep = {}
-    open_orders = sweep.get("ours")
-    if open_orders is None and isinstance(sweep, Mapping) and not sweep:
-        open_orders = None              # unknown -> the gate fails closed
+def read_book(t, slug: str) -> dict:
+    """Touch and executable sell depth, from ONE payload.
+
+    `/v1/markets/{slug}/book` -> marketData.offers. LIVE 02:43Z this module
+    asked `/orderbook` for `orderbook.offers` and got nothing, so depth read
+    None and the gate refused on a book that was actually fine. The collector
+    has had the right endpoint since the offers-vs-asks fix; there was no
+    excuse for a second parser guessing at it.
+
+    `offers`, NOT `asks` -- reading `asks` yields [] on every market and is
+    indistinguishable from a genuinely one-sided book."""
+    md = (q1._get_with_retry(t, f"/v1/markets/{slug}/book",
+                             base=q1.GATEWAY) or {}).get("marketData") or {}
+    return {"offers": md.get("offers") or [], "bids": md.get("bids") or []}
+
+
+def _touch_and_depth(offers, limit: Optional[D]):
+    """(best ask, size at or inside `limit`). None depth means we could not
+    establish it, which the gate treats as failure, never as 'enough'."""
+    best, total = None, D("0")
+    if not offers:
+        return None, None
+    for lvl in offers:
+        px = _val(lvl.get("price"))
+        qty = _val(lvl.get("quantity") if lvl.get("quantity") is not None
+                   else lvl.get("size"))
+        if px is None or qty is None:
+            continue
+        best = px if best is None else min(best, px)
+        if limit is not None and px <= limit:
+            total += qty
+    return best, (None if best is None else total)
+
+
+def build_snapshot(t, slug: str, inv, combined_loss: D,
+                   open_orders=None) -> dict:
+    """Everything the gate needs, with the QUOTE read LAST.
+
+    Order matters. The activity walk paginates the account's whole feed and
+    took 31s at 02:43Z; with the quote stamped before it, the gate saw a
+    31-second-old book and refused a snapshot it had itself made stale. The
+    slow read happens first now, and the book and its timestamp are taken
+    immediately before the gate runs.
+
+    `open_orders` comes from the caller's fresh venue sweep -- the same read
+    boot_assertions uses. This module previously probed for a q1 function
+    that does not exist and recorded None, which failed closed on a book with
+    no orders at all."""
+    got = sa.traded_qty_with_evidence(slug, t)      # slow: do it FIRST
+    venue_qty = got.get("qty")                      # qtyDecimal only, or None
+
     residual = inv.up - inv.dn
     units = min(abs(residual), mc.MAX_UNITS)
     avg_excess = inv.avg_dn() if residual < 0 else inv.avg_up()
     limit = mc.max_price(units, avg_excess) if units > 0 else D("0")
+
+    ask = depth = None
+    try:
+        ask, depth = _touch_and_depth(read_book(t, slug)["offers"], limit)
+    except Exception:                                       # noqa: BLE001
+        ask = depth = None
+    quote_ts = time.time()                          # stamped WITH the quote
     return {
         "slug": slug,
         "qty_source": "qtyDecimal",     # venue_qty_total reads nothing else
@@ -87,11 +116,12 @@ def build_snapshot(t, slug: str, inv, combined_loss: D) -> dict:
         "ledger_qty": str(inv.up + inv.dn),
         "up": str(inv.up), "dn": str(inv.dn), "residual": str(residual),
         "open_orders": open_orders,
-        "quote_ts": time.time(),
-        "ask": ask,
-        "ask_depth": _depth_at_or_below(t, slug, limit),
+        "quote_ts": quote_ts,
+        "ask": None if ask is None else str(ask),
+        "ask_depth": None if depth is None else str(depth),
         "avg_excess_cost": str(avg_excess),
         "combined_loss_usd": str(combined_loss),
+        "max_price": str(limit),
     }
 
 
@@ -138,11 +168,20 @@ def fill_status(t, order_id: str) -> dict:
             "state": state}
 
 
-def maybe_run(t, inv_for, combined_loss) -> Optional[dict]:
+def maybe_run(t, inv_for, combined_loss, open_orders=None) -> Optional[dict]:
     """Run the close iff PMUS_MIGRATION_CLOSE_SLUG names a market.
 
     Returns None when not requested, so the ordinary boot path is untouched
-    by its presence."""
+    by its presence.
+
+    RE-ATTEMPTED, NOT RE-ORDERED. At 02:43Z the gate refused because the ask
+    had moved 0.85 -> 0.87, putting the locked loss at 0.6831 against a 0.50
+    cap. That is the bound doing its job -- and a close that is only ever
+    tried once, at boot, would then never happen at all, since the probe
+    halts and nothing tries again. So the caller may invoke this on its idle
+    cycle: each invocation re-runs the nine preconditions from fresh reads
+    and submits AT MOST one order, only when every one of them passes. The
+    price bound is never relaxed to make a refusal go away."""
     slug = (os.getenv(ENV_SLUG) or "").strip()
     if not slug:
         return None
@@ -167,7 +206,8 @@ def maybe_run(t, inv_for, combined_loss) -> Optional[dict]:
 
     return mc.run(
         slug=slug,
-        snapshot=lambda: build_snapshot(t, slug, inv_for(slug), combined_loss),
+        snapshot=lambda: build_snapshot(t, slug, inv_for(slug), combined_loss,
+                                        open_orders=open_orders),
         submit=lambda **kw: submit_marketable(t, **kw),
         fill_status=lambda oid: fill_status(t, oid),
         reconcile=_reconcile,

@@ -1445,10 +1445,40 @@ def shutdown_idle(sleep=time.sleep, report: Optional[Mapping[str, Any]] = None,
         _log("shutdown_idle", verdict=verdict,
              held_preserved=(report or {}).get("held_preserved"),
              settlement=shutdown_settle_pass(t),
+             migration_close=_idle_migration_close(t),
              evidence=("halted and holding the container up on purpose: "
                        "exiting here would be read as a crash and roll the "
                        "service back to the previous, possibly ARMED, build"))
         sleep(SHUTDOWN_IDLE_S)
+
+
+def _idle_migration_close(t):
+    """Re-attempt the authorised one-shot close on the halted probe's cycle.
+
+    At 02:43Z the boot attempt refused: the ask had moved 0.85 -> 0.87 and the
+    locked loss would have been 0.6831 against the owner's 0.50 cap. That is
+    the bound working. But a close attempted only at boot then never happens
+    at all -- the probe halts and nothing tries again, so the residual that is
+    blocking the boundary keeps blocking it until settlement.
+
+    So the GATE is retried, never the order: every cycle re-reads the venue
+    and re-runs all nine preconditions, and submits at most one order and only
+    when every one passes. The price bound is not relaxed to make a refusal go
+    away; the close simply waits for a book that satisfies it.
+
+    Returns None when no close is requested, so this is invisible unless
+    PMUS_MIGRATION_CLOSE_SLUG names a market."""
+    if t is None:
+        return None
+    try:
+        invs = [base.held_inventory_from_ledger(s) for s in unsettled_slugs()]
+        sweep = _fresh_open_orders(t)
+        return mclose.maybe_run(
+            t, base.held_inventory_from_ledger,
+            base.combined_loss(base.q1.realized_today(), invs),
+            open_orders=sweep.get("ours"))
+    except Exception as exc:                                # noqa: BLE001
+        return {"error": f"{type(exc).__name__}:{str(exc)[:120]}"}
 
 
 SHUTDOWN_ENV = "PMUS_SPRING_SHUTDOWN"
@@ -2038,7 +2068,11 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                             for x in unsettled_slugs()]
                 closed = mclose.maybe_run(
                     t, base.held_inventory_from_ledger,
-                    base.combined_loss(base.q1.realized_today(), _mc_invs))
+                    base.combined_loss(base.q1.realized_today(), _mc_invs),
+                    # the SAME fresh venue sweep boot_assertions uses; probing
+                    # for a q1 helper that does not exist recorded None and
+                    # failed closed on a book with no orders at all
+                    open_orders=sweep.get("ours"))
                 if closed is not None:
                     report["migration_close"] = closed
             except Exception as exc:                        # noqa: BLE001

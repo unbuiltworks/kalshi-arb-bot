@@ -407,3 +407,103 @@ def test_a_rejected_preview_never_reaches_the_orders_endpoint():
         L.submit_marketable(_T(), slug=SLUG, side="OUTCOME_SIDE_YES",
                             limit_price=D("0.85"), quantity=D("1"))
     assert "/v1/orders" not in paths
+
+
+# -------------------------------------------------------------------------
+# LIVE 02:43Z, the first real attempt. It refused, correctly on economics and
+# wrongly on two implementation details:
+#
+#   zero_existing_orders              got null
+#   fresh_executable_quote_and_depth  got age_s=31.167 ask=0.8700 depth=None
+#   incremental_locked_loss_within_cap got 0.6831 <= 0.50   <- the real one
+#
+# The ask had moved 0.85 -> 0.87. The bound held, and must keep holding.
+
+def test_the_live_0_87_ask_is_refused_on_the_loss_bound():
+    """The market moved. $0.68 > $0.50, so nothing is submitted -- and the
+    bound is never relaxed to make the refusal go away."""
+    g = _gate(ask="0.87")
+    assert g["ok"] is False
+    assert "incremental_locked_loss_within_cap" in g["failed"]
+    assert D(g["projected_locked_loss_usd"]) == D("0.6831")
+    assert D(g["max_price"]) == D("0.8543")
+
+
+def test_the_bound_admits_the_same_book_once_it_comes_back():
+    for ask, ok in (("0.8700", False), ("0.8600", False),
+                    ("0.8543", True), ("0.8500", True), ("0.8300", True)):
+        assert _gate(ask=ask)["ok"] is ok, ask
+
+
+def test_open_orders_comes_from_the_callers_sweep(monkeypatch):
+    """It probed for a q1 helper that does not exist, recorded None, and
+    failed closed on a book with no orders at all."""
+    from src import pmus_migration_close_live as L
+    monkeypatch.setattr(L.sa, "traded_qty_with_evidence",
+                        lambda s, t=None: {"qty": "45.0100"})
+    monkeypatch.setattr(L, "read_book", lambda t, s: {"offers": [
+        {"price": {"value": "0.85"}, "quantity": {"value": "40"}}]})
+
+    class _Inv:
+        up, dn = D("16.67"), D("28.34")
+        def avg_dn(self): return AVG
+        def avg_up(self): return D("0.71")
+
+    snap = L.build_snapshot(object(), SLUG, _Inv(), D("-0.5446"),
+                            open_orders=0)
+    assert snap["open_orders"] == 0
+    assert M.preconditions(snap, slug=SLUG, now=snap["quote_ts"])["ok"] is True
+
+
+def test_the_quote_is_stamped_with_the_quote_not_before_the_slow_read(
+        monkeypatch):
+    """The activity walk took 31s; with the quote stamped first the gate saw
+    a book it had itself made stale."""
+    from src import pmus_migration_close_live as L
+    order = []
+
+    class _Inv:
+        up, dn = D("16.67"), D("28.34")
+        def avg_dn(self): return AVG
+        def avg_up(self): return D("0.71")
+
+    def slow(s, t=None):
+        order.append("activity")
+        return {"qty": "45.0100"}
+
+    def book(t, s):
+        order.append("book")
+        return {"offers": [{"price": "0.85", "quantity": "40"}]}
+
+    monkeypatch.setattr(L.sa, "traded_qty_with_evidence", slow)
+    monkeypatch.setattr(L, "read_book", book)
+    snap = L.build_snapshot(object(), SLUG, _Inv(), D("-0.5446"),
+                            open_orders=0)
+    assert order == ["activity", "book"], "slow read must come first"
+    assert 0 <= (snap["quote_ts"] - snap["quote_ts"]) <= M.MAX_SNAPSHOT_AGE_S
+
+
+def test_depth_is_read_from_offers_on_the_book_endpoint(monkeypatch):
+    from src import pmus_migration_close_live as L
+    asked = []
+
+    def fake_get(t, path, base=None):
+        asked.append(path)
+        return {"marketData": {"offers": [
+            {"price": {"value": "0.85"}, "quantity": {"value": "20"}},
+            {"price": {"value": "0.86"}, "quantity": {"value": "15"}},
+            {"price": {"value": "0.90"}, "quantity": {"value": "99"}}]}}
+
+    monkeypatch.setattr(L.q1, "_get_with_retry", fake_get)
+    offers = L.read_book(object(), SLUG)["offers"]
+    assert "/book" in asked[0] and "orderbook" not in asked[0]
+    ask, depth = L._touch_and_depth(offers, D("0.8600"))
+    assert ask == D("0.85")
+    assert depth == D("35"), "only size at or inside the limit counts"
+
+
+def test_an_empty_book_yields_unknown_depth_not_zero():
+    from src import pmus_migration_close_live as L
+    assert L._touch_and_depth([], D("0.85")) == (None, None)
+    g = _gate(ask=None, ask_depth=None)
+    assert "fresh_executable_quote_and_depth" in g["failed"]
