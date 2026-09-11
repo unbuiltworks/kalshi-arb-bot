@@ -581,6 +581,9 @@ def _pct(xs: Sequence[float], q: float):
     return round(xs[i], 4)
 
 
+# Neither outcome class may be thinner than this before a split is readable.
+MIN_CLASS = int(os.getenv("PMUS_EXEC_MIN_CLASS", "10"))
+
 NUMERIC_PREDICTORS = ("flow_usd_per_min", "spread", "median_spread",
                       "mid_stdev", "mid_range", "mid", "band_position",
                       "distance_to_touch", "residual_before")
@@ -626,7 +629,16 @@ def predictors(props: Sequence[Mapping[str, Any]]) -> dict:
         "kind": "execution_shadow_predictors",
         "resolved": len(resolved), "matched": len(won), "no_fill": len(lost),
         "numeric": num, "categorical": cat,
-        "sufficient_sample": len(resolved) >= 30 and bool(won) and bool(lost),
+        # A MINIMUM ON THE SMALLER CLASS, not just the total. 50 resolved
+        # with 1 matched and 49 no-fill passed the old bar and reported a
+        # "separation" of 3,573 usd/min between a single matched proposal and
+        # 49 others -- a difference computed from one observation. Requiring
+        # both classes to clear a floor is what stops a median-of-one being
+        # read as a predictor.
+        "sufficient_sample": (len(resolved) >= 30 and len(won) >= MIN_CLASS
+                              and len(lost) >= MIN_CLASS),
+        "min_per_class": MIN_CLASS,
+        "matched_n": len(won), "no_fill_n": len(lost),
         "labels": (
             "state captured at POSTING time, before the outcome existed. "
             "Descriptive split only -- nothing here fits, ranks or selects, "

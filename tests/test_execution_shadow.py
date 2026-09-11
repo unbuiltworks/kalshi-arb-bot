@@ -633,3 +633,30 @@ def test_a_matched_proposal_counts_as_reached_even_if_quotes_missed_it():
     assert out["reached_our_price"] == 1
     assert out["never_reached"] == 0
     assert out["reached_but_unfilled"] == 0
+
+
+def test_sufficient_sample_requires_a_floor_on_the_SMALLER_class():
+    """LIVE at 00:50Z: 50 resolved, 1 matched, 49 no-fill passed the old bar
+    and reported a flow 'separation' of 3,573 usd/min -- a difference computed
+    from a single matched observation. A total is not a sample."""
+    def _p(status):
+        p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+        p["status"] = status
+        return p
+    lopsided = [_p(EX.VIRTUAL_MATCHED)] + [_p(EX.NO_FILL) for _ in range(49)]
+    out = EX.predictors(lopsided)
+    assert out["resolved"] == 50
+    assert out["sufficient_sample"] is False
+    assert out["matched_n"] == 1 and out["min_per_class"] == EX.MIN_CLASS
+
+    balanced = ([_p(EX.VIRTUAL_MATCHED) for _ in range(15)]
+                + [_p(EX.NO_FILL) for _ in range(20)])
+    assert EX.predictors(balanced)["sufficient_sample"] is True
+
+
+def test_the_historical_benchmark_file_ships_in_the_image():
+    """It returned FileNotFoundError in production while passing locally: the
+    Dockerfile copied two analysis files and not this one."""
+    docker = open("deploy/pmus_shadow_breadth/Dockerfile").read()
+    assert "complete_no_fill_forensics.json" in docker
+    assert EX.HISTORICAL_FORENSICS.endswith("complete_no_fill_forensics.json")

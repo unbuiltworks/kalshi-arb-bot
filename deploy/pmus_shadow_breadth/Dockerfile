@@ -6,6 +6,11 @@ WORKDIR /app
 COPY src/ /app/src/
 COPY analysis/l5/l5_action_model_v2.json /app/analysis/l5/
 COPY analysis/l5/l5_fidelity_pass.json /app/analysis/l5/
+# The historical complement-distance benchmark. Without this file in the
+# image, execution_vs_history returned FileNotFoundError in production while
+# passing locally -- the comparison the whole reachability question turns on,
+# silently unavailable on the only machine that matters.
+COPY analysis/l5/complete_no_fill_forensics.json /app/analysis/l5/
 ENV PYTHONUNBUFFERED=1
 CMD ["python3", "-m", "src.pmus_sports_shadow_breadth"]
 
