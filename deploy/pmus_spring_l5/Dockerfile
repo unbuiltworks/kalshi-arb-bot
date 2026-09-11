@@ -23,6 +23,10 @@ RUN pip install --no-cache-dir "cryptography>=42"
 # continuous campaign (OWNER 5552036210): select -> sequential session ->
 # reselect. Inherits every guard below; DISARMED it is a shadow selector.
 COPY src/pmus_l5_continuous_session.py src/pmus_l5_continuous_session.py
+# Residual quarantine is imported at module scope by the continuous session.
+# It ships dark unless PMUS_RESIDUAL_QUARANTINE is explicitly enabled, but the
+# module must still exist in the image or the probe cannot boot at all.
+COPY src/pmus_residual_quarantine.py src/pmus_residual_quarantine.py
 # One-shot migration close (OWNER 2026-09-11). Imported at module scope by
 # pmus_l5_continuous_session, so an image without these two files does not
 # degrade -- it fails to import and the probe never boots. That is the same
