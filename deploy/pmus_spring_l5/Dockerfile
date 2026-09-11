@@ -32,6 +32,11 @@ COPY src/pmus_residual_quarantine.py src/pmus_residual_quarantine.py
 # Imported at module scope by the continuous session, so it must be in the
 # image or the probe cannot boot -- the 565b4cde shape.
 COPY src/pmus_risk_set_audit.py src/pmus_risk_set_audit.py
+# The owner-approved TRANSITION stop (OWNER 2026-09-11). Imported by the
+# continuous session at the boot re-arm gate, so an image without it does not
+# degrade -- the probe fails to import and never boots. Same shape as the
+# analysis/l5 file this image once omitted.
+COPY src/pmus_transition_stop.py src/pmus_transition_stop.py
 # One-shot migration close (OWNER 2026-09-11). Imported at module scope by
 # pmus_l5_continuous_session, so an image without these two files does not
 # degrade -- it fails to import and the probe never boots. That is the same

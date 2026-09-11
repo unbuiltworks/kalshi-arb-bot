@@ -195,7 +195,13 @@ def test_the_budget_check_is_strict_because_the_stop_is_inclusive():
     lane that the session would immediately refuse to trade in."""
     import inspect
     src = inspect.getsource(cont._combined_now)
-    assert "combined > base.daily_loss_stop()" in src
+    # the PROPERTY, not the literal: the comparison must be strict, and the
+    # stop it compares against must still come from the ladder. The source
+    # gained an owner-approved transition branch on 2026-09-11, so pinning
+    # the old one-liner verbatim only tested that nobody had edited the file.
+    assert "combined > stop" in src, "strict, because the stop is inclusive"
+    assert ">= stop" not in src and ">= base.daily_loss_stop()" not in src
+    assert "base.daily_loss_stop()" in src, "the rung's stop is the default"
     assert ">=" not in src
 
 

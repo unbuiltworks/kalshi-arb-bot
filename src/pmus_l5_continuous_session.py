@@ -1438,13 +1438,53 @@ def _fresh_open_orders(t) -> dict:
     return {"ours": ours, "foreign": foreign}
 
 
+def boot_transition_stop() -> dict:
+    """The stop the BOOT RE-ARM PREFLIGHT prices the day against.
+
+    LIVE 2026-09-11T21:52:43Z: the gate refused at combined_loss -15.1516
+    vs R5F's -15.00 while the owner's approved successor R5FT carries
+    -30.00 -- but an approval is consumed at the ADVANCE gate, downstream
+    of the gate the old stop was blocking. This lets the preflight see the
+    approved transition's stop BEFORE consuming it, and only then.
+
+    Every refusal path returns the active rung's own stop, so no other
+    rung's number moves and nothing widens without the exact approval."""
+    from src import pmus_transition_stop as ts
+    active_id = _active_rung_id()
+    persisted = load_campaign_state() or {}
+    consumed = [str(persisted.get("campaign_id") or "")] + [
+        str(p.get("campaign_id") or "")
+        for p in (persisted.get("previous_campaigns") or [])
+        if isinstance(p, Mapping)]
+    appr = approved_continuation(
+        str(persisted.get("campaign_id") or INITIAL_CAMPAIGN_ID),
+        [c for c in consumed[1:] if c])
+    return ts.transition_stop(active_id, appr, consumed_ids=[c for c in consumed if c],
+                              deployment=deployment_identity())
+
+
 def _combined_now() -> tuple:
     """(combined_loss, strictly_above_the_stop). The stop is INCLUSIVE, so
-    equality is already tripped and must not pass this gate."""
+    equality is already tripped and must not pass this gate.
+
+    The stop is the ACTIVE rung's, except that the boot re-arm preflight
+    may price an owner-approved pending transition against the approved
+    rung's stop (OWNER 2026-09-11). Nothing else in the campaign reads it
+    that way: once the approval is consumed the active rung IS the
+    approved one, so this only covers the gap between the two gates."""
     realized = base.q1.realized_today()
     invs = [base.held_inventory_from_ledger(s) for s in unsettled_slugs()]
     combined = base.combined_loss(realized, invs)
-    return combined, combined > base.daily_loss_stop()
+    stop = base.daily_loss_stop()
+    try:
+        t_stop = boot_transition_stop()
+        if t_stop.get("source") == "approved_transition":
+            stop = D(str(t_stop["stop"]))
+            _log("boot_transition_stop", **t_stop)
+    except Exception as exc:                           # noqa: BLE001
+        # a transition we cannot establish is not a transition
+        _log("boot_transition_stop_error", error=repr(exc)[:200])
+    return combined, combined > stop
 
 
 def _active_rung_id() -> str:

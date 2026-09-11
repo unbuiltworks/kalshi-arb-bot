@@ -8,6 +8,7 @@
       "src/pmus_l5_continuous_session.py",
       "src/pmus_residual_quarantine.py",
       "src/pmus_risk_set_audit.py",
+      "src/pmus_transition_stop.py",
       "src/pmus_migration_close.py",
       "src/pmus_migration_close_live.py",
       "src/pmus_settlement_auditor.py",
