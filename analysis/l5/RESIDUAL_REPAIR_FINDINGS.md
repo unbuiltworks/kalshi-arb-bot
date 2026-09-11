@@ -235,3 +235,95 @@ recognises it as risk-reducing rather than risk-adding.
 spends money on, so it needs the pre-registered treatment: specified on
 TRAIN, read once on the holdout, ≤2 parameters, and shadow evaluation before
 any live change. The holdout remains unread.
+
+---
+
+# TRAIN result: the repairing-EXTEND rule is aimed at the wrong target
+
+**STOP. The holdout was not opened and remains sealed.**
+
+Owner's narrow question: *"Can a decision-time 'repairing EXTEND' classifier
+materially reduce residual formation below the current baseline without
+increasing worst-case loss or destroying paired economics?"*
+
+**No — and the reason is structural, so no amount of parameter fitting or
+holdout evidence would change it.**
+
+## The addressable set is small, and then it is empty
+
+TRAIN: 9 markets, 158 post-imbalance states (83 one-sided, 75 two-sided).
+
+```
+states where an EXTEND would have run absent a safety cap        25
+  (filtered on would_act_without_safety_cap, NOT on the modal
+   recommendation -- selection is stochastic and the mode is not
+   what would have run; the wrong filter gave 9 and 2 markets)
+  spend_cap -> complete                                          16
+  safety-cap override -> hold                                     9
+  spread across 6 of 9 markets
+
+of those 25:
+  one-sided, matched = min(up,dn) = 0                            13
+  two-sided, a pair exists to repair                             12   (4 markets)
+```
+
+On the **13 one-sided** states "repairing EXTEND" is undefined: there is no
+matched pair, so there is no pair cost to improve. An extend there is a pure
+directional add and the cap that blocked it was right.
+
+That leaves **12 states in 4 markets**, and they are repeated readings of the
+same inventories (`up=14.46 dn=4.11` three times, `up=7.14 dn=16.44` three
+times, and so on) — roughly **six distinct decision points in the whole
+TRAIN set**.
+
+## The decisive point: a repairing EXTEND makes the residual WORSE
+
+A repairing extend buys more of the **surplus** side. By construction that
+*increases* `abs(residual)`. The measured case that motivated the class,
+`aec-atp-nikizq-santav-2026-09-08`:
+
+```
+after session 1   up 3.78  dn 5      residual -1.22
+NO extends 4.31 + 3.90 ->  dn 13.21  residual -9.43   <- imbalance x7.7
+then YES completes      ->  13.21/13.21  residual 0
+```
+
+The extends pulled `avg_dn` 0.49 → 0.4226 and dug the **pair cost** out from
+1.15 to 1.0732. They also took the residual from −1.22 to −9.43. The market
+ended paired because the **completes** filled, not because the extends did.
+
+So the mechanism improves **pair cost** and worsens **residual size**. The
+owner's target is **residual incidence**. A repairing-EXTEND rule cannot
+serve it; it optimises a different quantity in the opposite direction.
+
+## The three requested numbers, honestly
+
+1. **Residual incidence under the counterfactual — not improvable by this
+   mechanism**, for the reason above. Two further obstacles, each sufficient
+   on its own: the residual cohort is 100% residual *by construction*, so
+   incidence is only measurable over the full 52-market settled population;
+   and turning a residual market into a paired one requires simulating the
+   remaining fill trajectory, which would rest on modelled fills.
+2. **Mean residual-market loss — at best improvable on 4 of 9 TRAIN markets
+   at ~6 distinct states**, and only where the subsequent completes fill.
+   Completes fill at 10.5%.
+3. **Paired economics sacrificed or improved — not applicable.** No rule is
+   proposed, so nothing is sacrificed and nothing is claimed.
+
+## Where the incidence lever actually is
+
+Not post-imbalance management — §1 of these findings already showed we never
+missed an available compliant complete (56 of 56 taken). The two candidates
+that remain:
+
+- **Entry.** 75% of post-imbalance completes were already ceiling-blocked;
+  the loss was locked when the first leg was taken at a price whose
+  complement could never clear $1.00.
+- **Completion fill rate.** 10.5% for completes against 35.5% for extends.
+  The completion leg is the one the pair strategy depends on.
+
+Both are about *whether a first leg should be taken and whether its
+complement can be filled* — not about what to do once stranded.
+
+**The holdout remains unread and available.** It was not spent on a rule the
+TRAIN evidence shows to be aimed at the wrong objective.
