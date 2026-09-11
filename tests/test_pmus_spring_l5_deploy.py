@@ -97,23 +97,44 @@ def test_probe_never_starts_the_bare_session():
     command after arming would mean a money deploy silently ran an audit and
     traded nothing, which is the mirror of the failure this latch exists for.
 
-    THE MARKET ALLOWANCE RIDES IN THE COMMAND, and that is load-bearing
-    rather than cosmetic. The durable state persists the R5F campaign, whose
-    markets_per_campaign is CONTINUOUS -- so a campaign that boots without
-    PMUS_SPRING_RUNG_MARKETS never reaches its advance gate, never consumes
-    the R5FT approval, and instead RESUMES R5F trading at the 0.98 ceiling
-    the owner is replacing. It is set as a Railway variable too, but that
-    write cannot be read back on this service (every config read returns the
-    same schema error), so the repo states it where a reviewer can see it and
-    a test can hold it."""
-    allowed = {"PMUS_SPRING_RUNG_MARKETS=1 python3 -m src.pmus_l5_continuous_session"}
+    THE START COMMAND CARRIES NO ENVIRONMENT PREFIX, and that is a rule
+    learned from a failed deploy rather than a style preference. The market
+    allowance was briefly written here as
+    "PMUS_SPRING_RUNG_MARKETS=1 python3 -m ...". Deployment eb3fc076 FAILED
+    at 2026-09-11T21:22:53Z with a clean build (37/37, image pushed) and a
+    mounted volume but NO "Starting Container" line at all: Railway did not
+    shell-interpret the prefix, so the container was never created. An
+    env-var prefix is a SHELL feature and a start command is not guaranteed
+    a shell. The allowance now lives in the Dockerfile ENV, which is tested
+    separately below."""
+    allowed = {"python3 -m src.pmus_l5_continuous_session"}
     start = _manifest()["deploy"]["startCommand"]
     assert start in allowed, start
     assert "src.pmus_spring_l5_session" not in start
     assert "src.pmus_settlement_sweep" not in start
-    assert start.startswith("PMUS_SPRING_RUNG_MARKETS=1 "), (
-        "without the allowance the campaign resumes R5F instead of reaching "
-        "the approval gate")
+    assert "=" not in start, (
+        "an env-var prefix is not shell-interpreted here and the container "
+        "silently fails to start; put the variable in the Dockerfile ENV")
+
+
+def test_the_image_carries_the_campaigns_market_allowance():
+    """PMUS_SPRING_RUNG_MARKETS=1 must be in the image.
+
+    Durable state persists the R5F campaign, whose markets_per_campaign is
+    CONTINUOUS. A campaign booting without an allowance never reaches its
+    advance gate, so it never consumes the owner's R5FT approval and instead
+    RESUMES R5F TRADING at the 0.98 ceiling R5FT exists to replace. That is
+    a money outcome, not a configuration detail.
+
+    It is set as a Railway service variable too, but that write cannot be
+    read back (every config read on this service returns the same schema
+    error), so a silently failed write would be invisible. The image is the
+    half a reviewer and a test can actually see."""
+    env = DOCKERFILE.read_text()
+    assert "PMUS_SPRING_RUNG_MARKETS=1" in env
+    # in the ENV block, not a comment: the line must be continued by a
+    # backslash like its neighbours
+    assert "    PMUS_SPRING_RUNG_MARKETS=1 \\\n" in env
     # the IMAGE default stays the campaign: the start command overrides it,
     # and a sweep left as CMD would be the wrong thing to inherit later
     cmd = [l for l in DOCKERFILE.read_text().splitlines()

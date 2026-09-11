@@ -175,8 +175,7 @@ def test_the_start_command_is_no_longer_the_sweep_by_explicit_owner_decision():
     rail = json.loads((root / "deploy/pmus_spring_l5/railway.json").read_text())
     start = rail["deploy"]["startCommand"]
     assert "src.pmus_settlement_sweep" not in start
-    assert start == ("PMUS_SPRING_RUNG_MARKETS=1 "
-                     "python3 -m src.pmus_l5_continuous_session")
+    assert start == "python3 -m src.pmus_l5_continuous_session"
     assert rail["deploy"]["restartPolicyType"] == "NEVER", (
         "a money-moving bounded session must fail closed and must NOT "
         "relaunch itself after a crash or a completed campaign")

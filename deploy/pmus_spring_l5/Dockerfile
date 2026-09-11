@@ -92,9 +92,31 @@ COPY analysis/l5/l5_cadence_behavioral_unit.json analysis/l5/l5_cadence_behavior
 COPY analysis/l5/l5_campaign_approvals.json analysis/l5/l5_campaign_approvals.json
 RUN touch src/__init__.py
 
+# PMUS_SPRING_RUNG_MARKETS=1 is the CAMPAIGN'S MARKET ALLOWANCE and it lives
+# here deliberately, after a failed deploy taught the lesson.
+#
+# WHY IT IS NEEDED AT ALL: durable state persists the R5F campaign, whose
+# markets_per_campaign is CONTINUOUS. A campaign booting without an allowance
+# never reaches its advance gate, so it never consumes the owner's R5FT
+# approval and instead RESUMES R5F TRADING at the 0.98 ceiling R5FT replaces.
+#
+# WHY NOT IN THE START COMMAND: it was, as
+# "PMUS_SPRING_RUNG_MARKETS=1 python3 -m src.pmus_l5_continuous_session", and
+# deployment eb3fc076 FAILED at 2026-09-11T21:22:53Z. The build was clean
+# (37/37, image pushed) and the volume mounted, but there is no "Starting
+# Container" line in the logs at all -- Railway did not shell-interpret the
+# env prefix, so the container was never created and Python never ran. An
+# env-var prefix is a SHELL feature; a start command is not guaranteed a
+# shell.
+#
+# WHY NOT ONLY THE RAILWAY VARIABLE: it is set there too, but that write
+# cannot be read back on this service (every config read returns the same
+# schema error), so a silently failed write would mean the next deploy
+# resumes R5F. Here it is in the repo, in the image, and under test.
 ENV PMUS_SERVICE_ROLE=spring-l5-probe \
     PMUS_Q1_STATE_DIR=/state/pmus-spring \
     PMUS_SPRING_MAX_ACTIONS=6 \
+    PMUS_SPRING_RUNG_MARKETS=1 \
     PYTHONUNBUFFERED=1
 
 # Deployment guard delegates to the canonical session after safety checks.

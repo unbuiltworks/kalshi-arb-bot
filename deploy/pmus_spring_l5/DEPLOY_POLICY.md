@@ -291,3 +291,34 @@ unilaterally: OWNER decision 2026-09-11, on the specific state below.**
   complement preflight shows `pair_cost_max` 1.00 and
   `opp_ask - chosen_px` 0.00 rather than the 0.02 that put us three ticks
   and ~200,000 shares back.
+
+- **2026-09-11 21:22Z — FAILED DEPLOY `eb3fc076`, and what it taught.** The
+  arming deploy above failed. The build was clean — 37/37 layers, image
+  pushed, `sha256:125456e8…` — and the volume mounted at 21:22:51Z, but
+  there is **no "Starting Container" line in the deploy log at all**. The
+  container was never created. Between mount and "Stopping Container" the
+  application produced no output whatsoever, which is the signature of a
+  start command that never execs rather than a process that started and
+  died.
+
+  CAUSE: the start command was
+  `PMUS_SPRING_RUNG_MARKETS=1 python3 -m src.pmus_l5_continuous_session`.
+  An env-var prefix is a **shell** feature, and a Railway start command is
+  not guaranteed a shell — it can be exec'd as argv, in which case
+  `PMUS_SPRING_RUNG_MARKETS=1` is read as the executable name and nothing
+  runs. The service's own `CMD` uses an explicit `["sh", "-c", ...]` form
+  for exactly this reason; overriding the start command dropped that shell.
+
+  FIX: the allowance moves to the Dockerfile `ENV`, where it is in the
+  repo, in the image, and under test, and cannot be mangled by start-command
+  parsing. The start command returns to the plain module form that every
+  previous probe deployment used successfully.
+
+  NOTE ON THE `PMUS_SERVICE_ROLE` GUARD: a start-command override also
+  replaces the `CMD`'s role check. That is not new here — every previous
+  probe start command, including the settlement sweep, did the same, and
+  the role is set by image `ENV` regardless. Recorded so it is not
+  mistaken for a regression introduced by this change.
+
+  NOTHING TRADED. A container that never started placed no orders, and the
+  ledger is untouched.

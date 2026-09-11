@@ -39,7 +39,7 @@
     ]
   },
   "deploy": {
-    "startCommand": "PMUS_SPRING_RUNG_MARKETS=1 python3 -m src.pmus_l5_continuous_session",
+    "startCommand": "python3 -m src.pmus_l5_continuous_session",
     "restartPolicyType": "NEVER"
   }
 }
