@@ -25,13 +25,25 @@ row. Those three are never read here, and a test walks this module's AST for
 field READS to keep it that way -- checking for the WORDS fails on the
 sentence you are reading.
 
-THE PRIMARY FEATURE, AND WHY IT IS READABLE
--------------------------------------------
-`complement_preflight` on an OPEN decision carries `chosen_px` (what we paid)
-and `opp_ask` (what the other side cost at that instant). Their sum is the
-pair cost implied at entry. It is on 91.7% of OPEN decisions, unlike
-`opp_ask_authenticated` at 1.1%, which the last fill study had to report
-UNAVAILABLE. Coverage is measured and reported rather than assumed.
+THE PRIMARY FEATURE IS THE SPREAD, AND AMENDMENT 1 SAYS WHY
+-----------------------------------------------------------
+The original pre-registration named implied pair cost at entry. It is dead by
+arithmetic: we open as a maker AT our side's touch, and on a binary book the
+complement's ask is `1 - our_bid`, so `entry_px + opp_ask == 1.0000` on 2279
+of 2371 filled opens -- an identity, not a measurement.
+
+What that identity establishes is larger than the feature was. Completing
+immediately, at the complement's ask, ALWAYS costs exactly $1.00. So every
+cent of paired edge must come from the complement filling as a MAKER inside
+the spread: both legs passive costs `1 - spread`, which makes
+
+    best achievable pair cost  =  1 - spread
+    best achievable gross edge =  spread
+
+the spread the entire gross edge. Hence the replacement feature, read from the
+`selection.admitted[]` row that chose the market -- where `bid`, `ask` and
+`bid_touch_qty` are recorded at selection time, on 78 of 95 filled labelled
+episodes (82.1%).
 """
 from __future__ import annotations
 
@@ -44,6 +56,10 @@ from typing import Any, Iterable, Mapping, Optional
 
 from src.l5_episode_ledger import iter_campaign_rows
 from src.l5_residual_reconstruction import pair_decisions_to_orders
+
+# The feature the study is fitted on. Named here so the sweep, the describe
+# and the threshold cannot silently disagree about what is being measured.
+FEATURE = "spread"
 
 # A fill is a fill whether or not it filled the whole order.
 FILLED = ("filled", "partial", "partially_filled")
@@ -61,6 +77,46 @@ def _is_filled(order: Optional[Mapping[str, Any]]) -> bool:
         return False
     q = _d(order.get("filled_qty"))
     return q is not None and q > 0
+
+
+def selections_by_market(paths: Iterable[str]) -> dict:
+    """The admitted row for each market the selector CHOSE, in time order.
+
+    Only the chosen market's own row is kept: the others are candidates it
+    passed over, and their books describe a market we did not trade."""
+    by: dict = {}
+    for ts, obj in iter_campaign_rows(paths):
+        if obj.get("kind") != "selection":
+            continue
+        chosen = obj.get("chosen")
+        if not chosen:
+            continue
+        for adm in obj.get("admitted") or []:
+            if isinstance(adm, Mapping) and adm.get("slug") == chosen:
+                by.setdefault(chosen, []).append((ts, adm))
+    for slug in by:
+        by[slug].sort(key=lambda p: p[0])
+    return by
+
+
+def selection_features(adm: Optional[Mapping[str, Any]]) -> dict:
+    """Book state at selection. `spread` is the whole gross edge available to
+    a two-sided maker, per Amendment 1."""
+    adm = adm or {}
+    bid, ask = _d(adm.get("bid")), _d(adm.get("ask"))
+    return {
+        "sel_bid": str(bid) if bid is not None else None,
+        "sel_ask": str(ask) if ask is not None else None,
+        "spread": (float(ask - bid)
+                   if bid is not None and ask is not None else None),
+        "best_pair_cost": (float(D("1") - (ask - bid))
+                           if bid is not None and ask is not None else None),
+        "bid_touch_qty": (float(_d(adm.get("bid_touch_qty")))
+                          if adm.get("bid_touch_qty") is not None else None),
+        "p_buy": adm.get("p_buy"),
+        "sel_state": adm.get("state"),
+        "sel_state_n": adm.get("state_n"),
+    }
 
 
 def sessions_by_market(paths: Iterable[str]) -> dict:
@@ -153,6 +209,7 @@ def category_of(slug: str) -> str:
 # ------------------------------------------------------------ the sample
 def build(paths: Iterable[str]) -> dict:
     by = sessions_by_market(paths)
+    sel = selections_by_market(paths)
     rows, no_fill, no_label = [], 0, 0
     for slug, sessions in by.items():
         row = entry_row(slug, sessions)
@@ -162,11 +219,13 @@ def build(paths: Iterable[str]) -> dict:
         if row["label"] is None:
             no_label += 1
             continue
+        picks = sel.get(slug) or []
+        row.update(selection_features(picks[0][1] if picks else None))
         rows.append(row)
     rows.sort(key=lambda r: str(r["first_fill_utc"]))
 
     opens = [r for r in rows if r["is_open"]]
-    with_pair = [r for r in opens if r["entry_pair"] is not None]
+    with_pair = [r for r in rows if r.get(FEATURE) is not None]
     return {
         "coverage": {
             "markets_with_sessions": len(by),
@@ -176,9 +235,12 @@ def build(paths: Iterable[str]) -> dict:
             "filled_episodes_labelled": len(rows),
             "of_which_first_fill_was_open": len(opens),
             "excluded_no_open": len(rows) - len(opens),
-            "with_entry_pair_computable": len(with_pair),
-            "entry_pair_coverage": (round(len(with_pair) / len(opens), 4)
-                                    if opens else None),
+            "with_spread_at_selection": len(with_pair),
+            "spread_coverage": (round(len(with_pair) / len(rows), 4)
+                                if rows else None),
+            "entry_pair_is_an_identity": (
+                "entry_px + opp_ask == 1.0000 on 2279/2371 filled opens, all "
+                "touch_join. Amendment 1: not a feature, an arithmetic fact."),
         },
         "rows": rows,
         "sample": with_pair,
@@ -201,7 +263,7 @@ def incidence(rows: list) -> Optional[float]:
     return round(sum(1 for r in rows if r["label"] == "STRANDED") / len(rows), 4)
 
 
-def describe(rows: list, field: str = "entry_pair") -> dict:
+def describe(rows: list, field: str = FEATURE) -> dict:
     """The feature's distribution, by label. No test statistic that assumes
     independence across decisions: these are one row per market already, so
     the unit IS independent, but n is small and the interval says so."""
@@ -226,8 +288,10 @@ def _summary(vals: list) -> dict:
         "min": round(vals[0], 4), "p25": round(_q(vals, .25), 4),
         "median": round(_q(vals, .50), 4), "p75": round(_q(vals, .75), 4),
         "max": round(vals[-1], 4),
-        "share_at_or_above_par": round(
-            sum(1 for v in vals if v >= 1.0) / n, 4),
+        # the spread IS the best attainable gross edge (Amendment 1), so the
+        # useful share is how often it cannot even cover a one-tick move
+        "share_at_or_below_1c": round(
+            sum(1 for v in vals if v <= 0.01) / n, 4),
     }
 
 
@@ -239,7 +303,7 @@ def _q(vals: list, q: float) -> float:
     return vals[lo] if lo == hi else vals[lo] + (vals[hi] - vals[lo]) * (i - lo)
 
 
-def auc(rows: list, field: str = "entry_pair") -> Optional[float]:
+def auc(rows: list, field: str = FEATURE) -> Optional[float]:
     """P(a stranded entry scores higher than a paired one), ties at half.
     0.5 is no separation, which is a pre-registered falsifier and not a
     disappointing result to be explained away."""
@@ -260,13 +324,17 @@ STRANDED_MEAN = D("-1.9120")    # measured, R5F settled cohort
 
 
 def apply_threshold(rows: list, theta: float) -> dict:
-    """Refuse the entry when entry_pair > θ. The retained set is what the
-    engine would have traded; the discarded set is what it would not.
+    """Refuse the entry when the spread is below θ. The retained set is what
+    the engine would have traded; the discarded set is what it would not.
+
+    Direction inverted by Amendment 1: the hypothesis is now that THIN books
+    strand, because the spread is the whole gross edge available to a
+    two-sided maker and a one-cent spread leaves nothing to pay for the risk.
 
     Both counts are reported because a filter that retains four episodes has
     not solved incidence, it has stopped trading -- pre-registration §8-2."""
-    keep = [r for r in rows if float(r["entry_pair"]) <= theta]
-    drop = [r for r in rows if float(r["entry_pair"]) > theta]
+    keep = [r for r in rows if float(r[FEATURE]) >= theta]
+    drop = [r for r in rows if float(r[FEATURE]) < theta]
     kept_paired = sum(1 for r in keep if r["label"] == "PAIRED")
     kept_stranded = len(keep) - kept_paired
     lost_paired = sum(1 for r in drop if r["label"] == "PAIRED")
@@ -297,7 +365,7 @@ def study(paths: Iterable[str], thetas: Optional[list] = None,
     built = build(paths)
     sample = built["sample"]
     sp = split(sample)
-    thetas = thetas or [round(0.90 + 0.01 * i, 2) for i in range(16)]
+    thetas = thetas or [0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.04, 0.05]
     res = {
         "question": ("of the episodes whose first leg filled, does the state "
                      "at entry separate paired from stranded?"),
@@ -307,8 +375,8 @@ def study(paths: Iterable[str], thetas: Optional[list] = None,
         "train": {
             "n": len(sp["train"]),
             "incidence": incidence(sp["train"]),
-            "entry_pair": describe(sp["train"]),
-            "auc_entry_pair": auc(sp["train"]),
+            "spread": describe(sp["train"]),
+            "auc_spread": auc(sp["train"]),
             "sweep": sweep(sp["train"], thetas),
         },
         "holdout": {"n": len(sp["holdout"]), "status": "SEALED"},
@@ -328,8 +396,8 @@ def study(paths: Iterable[str], thetas: Optional[list] = None,
             "n": len(sp["holdout"]),
             "status": "READ",
             "incidence": incidence(sp["holdout"]),
-            "entry_pair": describe(sp["holdout"]),
-            "auc_entry_pair": auc(sp["holdout"]),
+            "spread": describe(sp["holdout"]),
+            "auc_spread": auc(sp["holdout"]),
             "sweep": sweep(sp["holdout"], thetas),
         }
     return res
