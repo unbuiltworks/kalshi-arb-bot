@@ -1773,7 +1773,14 @@ def _qty_evidence_digest(recon: Mapping[str, Any]) -> dict:
     A quantity gap is one of: a number in units we misread (scaled_qty),
     a row counted twice (duplicate_ids), or a fill the venue made and we
     never recorded (both zero). The full rows stay in the audit; this is
-    the part a human reads at 2am."""
+    the part a human reads at 2am.
+
+    DEPLOYED EXPLICITLY 2026-09-11 to answer one operational question: the
+    cricket market aec-county-not-ham-2026-09-08 is the campaign's only held
+    position and its quantities do not reconcile, so its residual cannot be
+    sized for a migration close and the account cannot be declared flat. The
+    probe carries the venue credentials; nothing else can ask. Read-only --
+    it changes no price, size, gate or verdict."""
     ev = recon.get("qty_evidence")
     if not isinstance(ev, Mapping):
         return {"available": False,
