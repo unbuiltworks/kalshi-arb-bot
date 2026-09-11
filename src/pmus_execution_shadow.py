@@ -186,6 +186,16 @@ def state_at_post(row: Optional[Mapping[str, Any]],
         "median_spread": row.get("median_spread"),
         "mid_stdev": row.get("mid_stdev"),
         "mid_range": row.get("mid_range"),
+        # DEPTH at the touch. Added 2026-09-11: the band x spread grid found
+        # depth collapsing 82x as the spread widens, and the per-proposal row
+        # cannot test whether thin books strand without carrying it.
+        "bid_touch_qty": row.get("bid_touch_qty"),
+        "ask_touch_qty": row.get("ask_touch_qty"),
+        # THE FULL LADDER when the pipeline retains it. The venue's book
+        # endpoint serves `bids`/`offers` arrays; the collector's normalizer
+        # currently keeps only level 0. Carried here so queue-ahead populates
+        # the moment that changes, with no further code edit.
+        "book_levels": row.get("book_levels"),
         "shape_span_s": row.get("shape_span_s"),
         "mid": mid,
         "in_band": None if mid is None else (rank_mod.BAND_LO <= mid

@@ -9,7 +9,8 @@
       "src/pmus_sports_shadow_breadth.py",
       "src/pmus_sports_opportunity_rank.py",
       "src/pmus_shadow_completion.py",
-      "src/pmus_execution_shadow.py"
+      "src/pmus_execution_shadow.py",
+      "src/pmus_shadow_proposal_log.py"
     ]
   },
   "deploy": {

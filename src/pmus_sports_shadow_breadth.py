@@ -49,6 +49,7 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, Optional, Sequence
 
 from src import pmus_execution_shadow as exec_shadow
+from src import pmus_shadow_proposal_log as plog
 from src import pmus_shadow_completion as shadow_completion
 from src import pmus_sports_opportunity_rank as rank_mod
 
@@ -398,6 +399,12 @@ class ShadowBreadth:
         self.cycles = 0
         self._state_path = state_path or self.STATE_PATH
         self._last_scored: dict[str, dict] = {}
+        # Which (proposal id, status) pairs already have a durable row. Held
+        # per process rather than persisted: a restart re-emitting a row is
+        # harmless duplication that the id+status key makes trivial to
+        # de-duplicate offline, whereas persisting it risks a restart that
+        # silently emits NOTHING -- the failure mode that is expensive.
+        self.proposal_rows_seen: set = set()
         try:
             self.execution = exec_shadow.ExecutionShadow(now=now)
         except Exception:                                       # noqa: BLE001
@@ -789,6 +796,20 @@ def run(cycles: Optional[int] = None) -> int:
                 rep["execution_stratified_distance"] = \
                     exec_shadow.stratified_distance(props)
                 rep["execution_persisted"] = sb.execution.save()
+                # PER-PROPOSAL LIFECYCLE ROWS (owner 2026-09-11). The reports
+                # above are service-computed AGGREGATES and an aggregate
+                # cannot be re-cut; the pre-registered gate needs residual
+                # size, side, cost basis and the market's resolution joined on
+                # ONE row. This adds no measurement -- it flattens what the
+                # shadow already holds into something that survives the
+                # process. Emitted once per (id, status) transition, so a
+                # 70-second cycle cannot bury them in duplicates.
+                try:
+                    rep["proposal_rows_emitted"] = plog.emit_new(
+                        props, sb.proposal_rows_seen)
+                except Exception as exc:                    # noqa: BLE001
+                    # an emission that cannot run must never stop the shadow
+                    rep["proposal_rows_error"] = repr(exc)[:200]
             # ITEM 5: every raw state needed to REPLAY this later. The
             # derived reports above can all be recomputed from proposals +
             # observations + decisions; none of them is the evidence. Twice
