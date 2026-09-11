@@ -202,3 +202,48 @@ claim and this file is where it becomes checkable.
   the +$0.056 implied by a 0.99 pair cost on 5.6 units is gross of fees and
   of nothing else. Realized comes from the venue's settlement number or it
   does not exist.
+
+## The boundary standard, revised 2026-09-11
+
+The "When" section above says `held: []`. That was written when a restart
+holding inventory tripped `flat_held_state` and went to `REARM_REFUSED` —
+the 02:02Z entry below is exactly that. With residual quarantine live, a
+restart holding a DORMANT market boots and arms: proven at 12:03:16Z, all
+eleven assertions green with cricket held and quarantined.
+
+So the operative boundary is now:
+
+- no session actively working inventory (between sessions, not mid-order);
+- zero resting orders at the restart moment;
+- every held market expected to satisfy `rq.eligibility` — zero resting
+  orders, venue-confirmed quantity, real inventory, still settlement-
+  monitored — so `blocking_held()` returns `[]`.
+
+`held: []` remains the *safest* boundary and is preferred when available.
+It is no longer the only one, because a continuously acquiring campaign may
+not reach it for hours and that would mean never deploying observability.
+
+**This is a change to when a live money process restarts, so it was not made
+unilaterally: OWNER decision 2026-09-11, on the specific state below.**
+
+- **2026-09-11 — read-only risk-set audit.** CI-green `854e3b4d`
+  (pmus-collector-ci SUCCESS; 2,906 pass / 0 fail). Deployed at a boundary
+  where `held: 1` — `aec-cs2-rev-is-2026-09-11`, 5 units unmatched YES at
+  0.35 (~$1.75), static book 0.35/0.36, in `resume_wait` between sessions
+  for 25+ minutes with no session working it.
+
+  WHY THIS SHIPS. `aec-county-not-ham-2026-09-08` left `held` between
+  12:03:20Z and 13:18:11Z and its state could not be established from the
+  logs — not because the evidence was ambiguous but because there was none:
+  the running probe never emitted its risk set. `unsettled` appears only in
+  `rung_markets_reached`, which a continuous campaign never reaches, and in
+  the `shutdown_idle` re-price, which needs a halt.
+
+  ACCEPTANCE, narrow and owner-set: same risk limits, same R5F logic, no
+  order-path change, clean boot, then the first emitted row shows BOTH the
+  scheduler set and the ledger-backed `unsettled` risk set. If cricket is
+  still in `unsettled` it is still being charged; if it is absent, a terminal
+  ledger transition occurred even though the settlement row was missing from
+  the logs we inspected.
+
+  Additive logging only. No cap, ceiling, budget, bound or gate changed.
