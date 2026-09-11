@@ -2,6 +2,23 @@
 set -Eeuo pipefail
 : "${AWS_HOT_INSTANCE_ID:?AWS_HOT_INSTANCE_ID is required}"
 
+# AWS-side health reads first. These are diagnostic-only and deliberately tolerate
+# missing describe permissions so we can still attempt the read-only SSM census.
+echo AWS_CONTROL_PLANE_DIAGNOSTICS_BEGIN
+aws ec2 describe-instances \
+  --instance-ids "$AWS_HOT_INSTANCE_ID" \
+  --query 'Reservations[0].Instances[0].{InstanceId:InstanceId,State:State.Name,PrivateIp:PrivateIpAddress,LaunchTime:LaunchTime,IamProfile:IamInstanceProfile.Arn}' \
+  --output json 2>&1 || true
+aws ec2 describe-instance-status \
+  --instance-ids "$AWS_HOT_INSTANCE_ID" --include-all-instances \
+  --query 'InstanceStatuses[0].{InstanceState:InstanceState.Name,SystemStatus:SystemStatus.Status,InstanceStatus:InstanceStatus.Status}' \
+  --output json 2>&1 || true
+aws ssm describe-instance-information \
+  --filters "Key=InstanceIds,Values=$AWS_HOT_INSTANCE_ID" \
+  --query 'InstanceInformationList[0].{PingStatus:PingStatus,LastPingDateTime:LastPingDateTime,AgentVersion:AgentVersion,PlatformName:PlatformName,PlatformVersion:PlatformVersion,IPAddress:IPAddress,AssociationStatus:AssociationStatus}' \
+  --output json 2>&1 || true
+echo AWS_CONTROL_PLANE_DIAGNOSTICS_END
+
 REMOTE=$(cat <<'EOF'
 set -u
 echo AWS_HOST_CENSUS_BEGIN
@@ -75,7 +92,7 @@ done
 RESULT=$(aws ssm get-command-invocation \
   --command-id "$CID" \
   --instance-id "$AWS_HOT_INSTANCE_ID" \
-  --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+  --query '{Status:Status,StatusDetails:StatusDetails,ResponseCode:ResponseCode,PluginName:PluginName,ExecutionStart:ExecutionStartDateTime,ExecutionElapsed:ExecutionElapsedTime,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
   --output json)
 echo "$RESULT"
 test "$(jq -r '.Status' <<<"$RESULT")" = Success
