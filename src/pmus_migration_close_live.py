@@ -41,44 +41,34 @@ def _log(row: Mapping[str, Any]) -> None:
 
 def _val(x):
     """The venue wraps numbers as {"value": ...} in some payloads and not in
-    others. Both shapes appear in the same book."""
+    others. Both shapes appear in the same gateway responses."""
     if isinstance(x, Mapping):
         x = x.get("value")
     return None if x is None else D(str(x))
 
 
-def read_book(t, slug: str) -> dict:
-    """Touch and executable sell depth, from ONE payload.
+def read_bbo(t, slug: str) -> dict:
+    """Read the same proven BBO payload used by the live L5 shadow.
 
-    `/v1/markets/{slug}/book` -> marketData.offers. LIVE 02:43Z this module
-    asked `/orderbook` for `orderbook.offers` and got nothing, so depth read
-    None and the gate refused on a book that was actually fine. The collector
-    has had the right endpoint since the offers-vs-asks fix; there was no
-    excuse for a second parser guessing at it.
+    `/v1/markets/{slug}/bbo` exposes marketData.bestBid/bestAsk plus
+    bidDepth/askDepth. The migration close previously switched to `/book`
+    and attempted to reconstruct the touch from an offers array; live that
+    path returned no usable touch while the BBO path continued serving the
+    market correctly. This is a plumbing correction only: no gate, cap,
+    sizing rule, loss budget, or execution policy changes here.
 
-    `offers`, NOT `asks` -- reading `asks` yields [] on every market and is
-    indistinguishable from a genuinely one-sided book."""
-    md = (q1._get_with_retry(t, f"/v1/markets/{slug}/book",
+    Depth is deliberately the venue-served depth associated with the touch.
+    If it is absent or insufficient the existing migration gate fails closed.
+    """
+    md = (q1._get_with_retry(t, f"/v1/markets/{slug}/bbo",
                              base=q1.GATEWAY) or {}).get("marketData") or {}
-    return {"offers": md.get("offers") or [], "bids": md.get("bids") or []}
-
-
-def _touch_and_depth(offers, limit: Optional[D]):
-    """(best ask, size at or inside `limit`). None depth means we could not
-    establish it, which the gate treats as failure, never as 'enough'."""
-    best, total = None, D("0")
-    if not offers:
-        return None, None
-    for lvl in offers:
-        px = _val(lvl.get("price"))
-        qty = _val(lvl.get("quantity") if lvl.get("quantity") is not None
-                   else lvl.get("size"))
-        if px is None or qty is None:
-            continue
-        best = px if best is None else min(best, px)
-        if limit is not None and px <= limit:
-            total += qty
-    return best, (None if best is None else total)
+    return {
+        "bid": _val(md.get("bestBid")),
+        "ask": _val(md.get("bestAsk")),
+        "bid_depth": _val(md.get("bidDepth")),
+        "ask_depth": _val(md.get("askDepth")),
+        "state": md.get("state"),
+    }
 
 
 def build_snapshot(t, slug: str, inv, combined_loss: D,
@@ -88,8 +78,8 @@ def build_snapshot(t, slug: str, inv, combined_loss: D,
     Order matters. The activity walk paginates the account's whole feed and
     took 31s at 02:43Z; with the quote stamped before it, the gate saw a
     31-second-old book and refused a snapshot it had itself made stale. The
-    slow read happens first now, and the book and its timestamp are taken
-    immediately before the gate runs.
+    slow read happens first now, and the BBO and its timestamp are taken
+    together immediately before the gate runs.
 
     `open_orders` comes from the caller's fresh venue sweep -- the same read
     boot_assertions uses. This module previously probed for a q1 function
@@ -105,7 +95,15 @@ def build_snapshot(t, slug: str, inv, combined_loss: D,
 
     ask = depth = None
     try:
-        ask, depth = _touch_and_depth(read_book(t, slug)["offers"], limit)
+        bbo = read_bbo(t, slug)
+        if residual < 0:
+            # excess DOWN/NO inventory -> buy YES at the YES ask
+            ask, depth = bbo.get("ask"), bbo.get("ask_depth")
+        elif residual > 0:
+            # excess UP/YES inventory -> buy NO; NO ask = 1 - YES bid
+            bid = bbo.get("bid")
+            ask = None if bid is None else ONE - bid
+            depth = bbo.get("bid_depth")
     except Exception:                                       # noqa: BLE001
         ask = depth = None
     quote_ts = time.time()                          # stamped WITH the quote
