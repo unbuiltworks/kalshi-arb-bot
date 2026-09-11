@@ -155,3 +155,13 @@ claim and this file is where it becomes checkable.
   still see it; it is still worked for COMPLETE; it is never re-selected as a
   new first leg; no cap, ceiling, concurrency, residual bound or daily stop
   moved.
+
+  **Deploy trigger, 12:0xZ.** CI-green commit for the runtime half is
+  `6d097516` — GitHub Actions run `34596461473` (pmus-collector-ci run 421),
+  conclusion SUCCESS at 2026-09-11T11:59:31Z; 2,850 pass / 0 fail / 27
+  skipped locally. As before, an empty commit cannot trigger a Railway
+  build (Railway matches CHANGED PATHS), so this deploy-log entry is itself
+  the trigger, and against `6d097516` it changes exactly one documentation
+  file — every path under `src/`, `tests/`, the probe Dockerfile and
+  `railway.json` is byte-identical, which is the property that matters: the
+  image built is the image CI validated.
