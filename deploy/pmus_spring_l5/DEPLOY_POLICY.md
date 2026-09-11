@@ -117,3 +117,41 @@ claim and this file is where it becomes checkable.
   quarantine work end-to-end means teaching that lock to accept a declared
   quarantined position — which is what quarantine is for, and is still a
   change to a safety lock on the money path. Not attempted here.
+
+- **2026-09-11 — quarantine's runtime half.** The refusal above named the
+  condition; this is the condition fixed, not routed around.
+
+  Dormancy now has ONE definition, `dormant_held()`, read by both halves:
+  the BOOT gate through `blocking_held()` (unchanged behaviour) and the
+  RUNTIME scheduler directly. The slot arithmetic has one definition too,
+  `acquisition_state()` — a pure function, specifically so it can be tested,
+  because the three places that disagreed disagreed precisely by each
+  recomputing it inline inside a 900-line loop where nothing could reach it.
+
+  What changed, in the scheduler:
+
+    1. `capacity` counts ACQUIRING markets, not held ones.
+    2. The over-concurrency DRAIN counts acquiring markets. Without this,
+       freeing (1) opens a second market and the next cycle declares
+       `CAMPAIGN_DRAIN:OVER_CONCURRENCY` — quarantine would buy exactly one
+       market and re-deadlock. The BREACH branch is untouched and still
+       reads every held market: a position this campaign did not open halts
+       it, quarantine or not.
+    3. A market established as dormant is DECLARED to the account preflight
+       through `set_concurrent_owned` — the same audited `allow_slugs`
+       channel the concurrency>1 rung has always used. Nothing else about
+       the preflight changed, and `open_orders:N` still refuses a first leg
+       for ANY resting order in the account regardless of what is declared.
+
+  A short-lived cache on `dormant_held` was written and then removed. It
+  saved a handful of read GETs and bought a window in which `venue_confirmed`
+  could already be false while it still answered "dormant" — the 774.62
+  shape, on the money path, in the function whose whole job is establishing
+  that a position is safe to stop watching.
+
+  Still true, each with a test that fails if it is removed: quarantine OFF is
+  byte-identical to the pre-quarantine loop; a dormant market stays in
+  `held`, so combined_loss, settlement monitoring and the round-robin all
+  still see it; it is still worked for COMPLETE; it is never re-selected as a
+  new first leg; no cap, ceiling, concurrency, residual bound or daily stop
+  moved.

@@ -1200,35 +1200,46 @@ REARM_PAIR_CEILING = base.D("1.00")
 REARM_REJECT_STREAK = 3
 
 
-def blocking_held(t=None) -> list:
-    """Held markets that must stop the engine arming. Usually all of them.
+# DELIBERATELY NOT CACHED, and the reason is worth keeping. Eligibility asks
+# the venue a question per held market (an open-order read plus an activity
+# walk) and the selection loop turns every SELECT_POLL_S, so a short-lived
+# cache is the obvious optimisation -- it was written, and then removed.
+#
+# It saved a handful of read GETs. It bought, in exchange, a window in which
+# `venue_confirmed` could already be false while this still answered
+# "dormant" -- which is the 774.62 shape, on the money path, in the one
+# function whose job is establishing that a position is safe to stop
+# watching. Fail-closed beats fast here, and the saving was never the
+# bottleneck. If profiling ever says otherwise, the fix is to make the
+# eligibility read cheaper, not to remember a stale answer.
+def dormant_held(held, t=None) -> frozenset:
+    """Which of `held` residual quarantine has established as DORMANT.
 
-    THE DEFECT THIS CLOSES. Residual quarantine frees the runtime acquisition
-    slot, and by design a quarantined market stays in `held` right through to
-    settlement. But the re-arm gate asked for `held_markets(t) == []`, so on
-    every restart a quarantined residual refused to arm -- the engine stops,
-    and every maker fill and every credited rebate stops with it. Quarantine
-    was built for exactly the fixture that halted us tonight and could never
-    have helped, because nothing taught the BOOT gate about it.
+    THE ONE DEFINITION. Both halves of quarantine read it: the BOOT gate
+    (via blocking_held, deciding whether to arm) and the RUNTIME scheduler
+    (deciding whether the acquisition slot is free). This project has twice
+    paid for writing one rule in two places -- the 300 s fill band, and the
+    book reader -- so the rule lives here and the callers ask.
 
-    MEASURED, 16 settled R5F markets: the 12 that paired to zero returned
-    +6.3639 (mean +0.53); the 4 that stranded a residual returned -9.2384
-    (mean -2.31, none positive). Residuals are where the money goes -- and
-    a residual that also halts acquisition costs the whole schedule on top.
+    Dormant means every condition in rq.eligibility holds: zero resting
+    orders, inventory venue-confirmed against the ledger, real inventory
+    (flat is not dormant, it should simply leave), still in `held`, still
+    settlement-monitored. Anything that cannot be ESTABLISHED is not
+    dormant: "we could not check" and "it holds" must never collapse.
 
-    OFF BY DEFAULT AND BYTE-IDENTICAL WHEN OFF: without
-    PMUS_RESIDUAL_QUARANTINE this returns held_markets(t) unchanged.
+    OFF BY DEFAULT: without PMUS_RESIDUAL_QUARANTINE this is always empty,
+    and every caller is byte-identical to its pre-quarantine behaviour.
 
-    Nothing here forgives a dollar. A quarantined market stays in `held`, is
-    still settlement-monitored, and its full conservative downside is still
-    priced by `combined_loss_above_stop`, the very next assertion. This
-    changes WHEN we may acquire, never HOW MUCH we may lose."""
-    held = list(held_markets(t) or [])
+    Nothing here forgives a dollar. A dormant market stays in `held`, stays
+    settlement-monitored, and its full conservative downside is still priced
+    by combined_loss_above_stop. This changes WHEN we may acquire, never HOW
+    MUCH we may lose."""
+    held = list(held or [])
     if not held or not rq.quarantine_enabled():
-        return held
+        return frozenset()
     sweep = _fresh_open_orders(t)
     ours = sweep.get("ours")
-    blocking: list = []
+    dormant: set = set()
     for slug in held:
         try:
             inv = base.held_inventory_from_ledger(slug)
@@ -1246,11 +1257,71 @@ def blocking_held(t=None) -> list:
                 "settlement_monitored": slug in set(unsettled_slugs() or []),
             })
         except Exception:                                   # noqa: BLE001
-            blocking.append(slug)            # could not establish -> blocks
-            continue
-        if not elig["eligible"]:
-            blocking.append(slug)
-    return blocking
+            continue                     # could not establish -> not dormant
+        if elig["eligible"]:
+            dormant.add(slug)
+    return frozenset(dormant)
+
+
+def acquisition_state(held, dormant, concurrency: int,
+                      allowance_spent: bool) -> dict:
+    """Who occupies an ACQUISITION slot, given what is held and what is
+    dormant. A pure function, because the three places that disagreed about
+    this on 2026-09-11 disagreed precisely because each one recomputed it
+    inline inside a 900-line loop where nothing could test it.
+
+    `held` is untouched by every caller: settlement monitoring, combined_loss
+    and the round-robin all read it, and a dormant market stays in all three.
+    Quarantine frees a scheduling slot and frees nothing else.
+
+    With `dormant` empty -- always, unless PMUS_RESIDUAL_QUARANTINE is on --
+    every field below is what the loop computed before quarantine existed."""
+    held = list(held or [])
+    dormant = set(dormant or ())
+    acquiring = [s for s in held if s not in dormant]
+    return {
+        "acquiring": acquiring,
+        # one slot is one ACQUIRING market. Dormant markets are not acquiring.
+        "capacity": len(acquiring) < concurrency and not allowance_spent,
+        # the set the session layer must not treat as a foreign account
+        # block, declared through the SAME audited allow_slugs channel the
+        # concurrency>1 rung already uses. An open order anywhere still
+        # refuses regardless of what is declared here.
+        "declared_owned": (list(held) if concurrency > 1
+                           else sorted(dormant)),
+        # the rung-tightened drain. Counted over acquiring markets: without
+        # that, freeing the slot opens a second market and the very next
+        # cycle declares CAMPAIGN_DRAIN:OVER_CONCURRENCY, which stops opening
+        # again -- quarantine would buy exactly one market and re-deadlock.
+        # BREACH detection is deliberately NOT here; it stays over every held
+        # market, in the loop, where a foreign position halts unconditionally.
+        "drain": len(acquiring) > concurrency,
+        "quarantined": sorted(dormant),
+    }
+
+
+def blocking_held(t=None) -> list:
+    """Held markets that must stop the engine arming. Usually all of them.
+
+    THE DEFECT THIS CLOSES. Residual quarantine frees the runtime acquisition
+    slot, and by design a quarantined market stays in `held` right through to
+    settlement. But the re-arm gate asked for `held_markets(t) == []`, so on
+    every restart a quarantined residual refused to arm -- the engine stops,
+    and every maker fill and every credited rebate stops with it. Quarantine
+    was built for exactly the fixture that halted us tonight and could never
+    have helped, because nothing taught the BOOT gate about it.
+
+    MEASURED, 16 settled R5F markets: the 12 that paired to zero returned
+    +6.3639 (mean +0.53); the 4 that stranded a residual returned -9.2384
+    (mean -2.31, none positive). Residuals are where the money goes -- and
+    a residual that also halts acquisition costs the whole schedule on top.
+
+    OFF BY DEFAULT AND BYTE-IDENTICAL WHEN OFF: without
+    PMUS_RESIDUAL_QUARANTINE, dormant_held is empty and this returns
+    held_markets(t) unchanged."""
+    held = list(held_markets(t) or [])
+    dormant = dormant_held(held, t)
+    return [s for s in held if s not in dormant]
 
 
 def boot_assertions(t=None, sweep: Optional[Mapping[str, Any]] = None) -> dict:
@@ -2349,6 +2420,9 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     _hold_rr = {"i": 0}
 
     held_all: list = []          # markets held right now; [] while disarmed
+    # slugs whose quarantine has already been announced, so the row appears
+    # when the set CHANGES rather than on every one of the loop's cycles
+    _quarantine_logged: set = set()
 
     def _next_held(slugs: list) -> Optional[str]:
         if not slugs:
@@ -2545,11 +2619,35 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                                  if s not in settled_here]
                 held_all[:] = nonlocal_held
                 concurrency = max(1, int(active_rung.get("concurrency") or 1))
-                # the sibling positions the session layer must not treat as
-                # a foreign block; empty under every concurrency-1 rung
-                base.set_concurrent_owned(held_all if concurrency > 1 else ())
-                capacity = (len(held_all) < concurrency
-                            and not _allowance_spent())
+                # RUNTIME HALF OF RESIDUAL QUARANTINE. The boot gate already
+                # knew what dormant meant; the scheduler did not, so on
+                # 2026-09-11 the campaign armed and then sat at
+                # CAMPAIGN_HOLD:POSITION_HELD indefinitely -- quarantine
+                # freed the arm and nothing else. dormant_held is the same
+                # single definition the boot gate reads, and it is empty
+                # whenever quarantine is off, which leaves every line below
+                # identical to its pre-quarantine form.
+                dormant = dormant_held(held_all, t)
+                slots = acquisition_state(held_all, dormant, concurrency,
+                                          _allowance_spent())
+                acquiring = slots["acquiring"]
+                if set(dormant) != _quarantine_logged:
+                    _quarantine_logged.clear()
+                    _quarantine_logged.update(dormant)
+                    if dormant:
+                        _log("quarantine_slot", quarantined=sorted(dormant),
+                             held=list(held_all), acquiring=acquiring,
+                             concurrency=concurrency,
+                             evidence=(
+                                 "dormant: zero resting orders, inventory "
+                                 "venue-confirmed against the ledger, still "
+                                 "held and still settlement-monitored. Its "
+                                 "full min(up,dn)-spent downside stays in "
+                                 "combined_loss and it is still worked for "
+                                 "COMPLETE; it stops occupying the one "
+                                 "acquisition slot."))
+                base.set_concurrent_owned(slots["declared_owned"])
+                capacity = slots["capacity"]
                 # with capacity free, alternate: one iteration looks for a
                 # new market, the next works a held one, so neither starves
                 open_cycle = capacity and (_hold_rr["i"] % 2 == 0)
@@ -2655,19 +2753,32 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     # settlement under the unchanged rules, with no new
                     # market opened, because `capacity` is already False.
                     foreign = [s for s in held_all if s not in filled_markets]
+                    # BREACH detection stays over every held market. A
+                    # position this campaign did not open must halt whether
+                    # or not something else is quarantined, so held_all --
+                    # not `acquiring` -- is what is asked. (A foreign market
+                    # could not be dormant anyway: it has no ledger inventory
+                    # and is not settlement-monitored. Relying on that
+                    # implicitly is exactly how a safety branch rots.)
                     if over_concurrency_action(held_all, filled_markets,
                                                concurrency) == "halt":
                         status = f"CAMPAIGN_STOP:{MULTI_HELD}"
                         _log("concurrency_breach", held=held_all, foreign=foreign,
                              concurrency=concurrency, rung=active_rung["id"])
                         break
-                    if status != "CAMPAIGN_DRAIN:OVER_CONCURRENCY":
-                        _log("concurrency_drain", held=held_all,
-                             concurrency=concurrency, rung=active_rung["id"],
-                             reading="rung tightened under open inventory; "
-                                     "holding every market to settlement and "
-                                     "opening none")
-                    status = "CAMPAIGN_DRAIN:OVER_CONCURRENCY"
+                    # DRAIN is the rung-tightened case and is counted over
+                    # ACQUIRING markets (acquisition_state decides; see the
+                    # note there on why quarantine would otherwise buy
+                    # exactly one market and then re-deadlock).
+                    if slots["drain"]:
+                        if status != "CAMPAIGN_DRAIN:OVER_CONCURRENCY":
+                            _log("concurrency_drain", held=held_all,
+                                 acquiring=acquiring, concurrency=concurrency,
+                                 rung=active_rung["id"],
+                                 reading="rung tightened under open "
+                                         "inventory; holding every market to "
+                                         "settlement and opening none")
+                        status = "CAMPAIGN_DRAIN:OVER_CONCURRENCY"
                 if t is not None and clock() - last_incentive_audit >= INCENTIVE_AUDIT_EVERY_S:
                     last_incentive_audit = clock()
                     report["incentive_audit"] = run_incentive_audit(t, _log)
