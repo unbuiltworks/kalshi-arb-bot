@@ -81,10 +81,66 @@ def test_one_market_and_the_remaining_loss_budget_are_stated():
     r = _row()
     assert ladder.markets_per_campaign(ladder.rung("R5FT")) == 1
     assert "ONE MARKET" in r["stop_rule_reading"]
-    assert "-$15.00" in r["stop_rule_reading"]
-    assert ladder.daily_loss_stop(ladder.rung("R5FT")) == ladder.D("-15.00")
+    assert "-$30.00" in r["stop_rule_reading"]
+    assert ladder.daily_loss_stop(ladder.rung("R5FT")) == ladder.D("-30.00")
     assert "-$9.3736" in r["stop_rule_reading"]   # the day already spent
-    assert "$3.00" in r["stop_rule_reading"]
+    assert "$30.00" in r["stop_rule_reading"]
+    assert "$60.00" in r["stop_rule_reading"]     # the worst DAY, stated
+
+
+def test_the_raise_is_recorded_as_an_amendment_not_a_silent_edit():
+    """The row was written at $3.00 and raised before it ever started a
+    campaign. Amending an UNCONSUMED approval is legitimate; doing it
+    without saying so is not, so the row states when, why, and that
+    nothing had run under the earlier numbers."""
+    a = _row()["amended"]
+    assert "BEFORE EVER BEING CONSUMED" in a
+    assert "$3.00" in a and "$30" in a
+    assert "no order has been placed under it" in a
+    # and why it is an amendment rather than a second row
+    assert "would queue BEHIND this one" in a
+
+
+def test_the_owner_was_told_the_worst_case_before_he_answered():
+    """He raised both numbers against an option that stated the exposure
+    in terms. If that sentence ever leaves the row, the decision reads as
+    uninformed when it was not."""
+    src = _row()["source"]
+    assert "lets raise it to $30 or something" in src
+    assert "roughly $60, or ~55% of the bankroll" in src
+    assert "he answered anyway" in src
+
+
+def test_the_capital_raise_did_not_move_the_directional_cap():
+    """$30 of MATCHED inventory and 6 units of ONE-SIDED exposure are
+    different limits. The dollar cap governs capital, the unit cap
+    governs direction, and the owner raised only the first."""
+    r5ft = ladder.rung("R5FT")
+    assert ladder.D(str(r5ft["per_market_cap_usd"])) == ladder.D("30.00")
+    assert r5ft["residual_units"] == 6                  # unchanged
+    assert r5ft["concurrency"] == 1                     # unchanged
+    assert "residual_units" not in _row()["changed"]
+    assert "6 residual units" in _row()["unchanged"]
+
+
+def test_frequency_before_size_the_action_stayed_small():
+    """CLAUDE.md: 'Favor increasing frequency before size.' A 10x cap with
+    a 10x action would be a size raise wearing a capital raise's clothes,
+    so the action target and leg bound must NOT have scaled with it."""
+    r5ft = ladder.rung("R5FT")
+    assert ladder.D(str(r5ft["target_notional_usd"])) == ladder.D("1.00")
+    assert ladder.D(str(r5ft["max_leg_notional_usd"])) == ladder.D("1.50")
+    assert "ACTION SIZE IS NOT RAISED WITH THE CAP" in _row()["changed"]
+    assert "not a raise of the per-ACTION size" in _row()["not"]
+
+
+def test_r5f_keeps_its_own_caps_and_its_own_stop():
+    """The raise belongs to the canary alone. R5F is off, and if it ever
+    ran again it must not inherit $30 or -$30."""
+    r5f = ladder.rung("R5F")
+    assert ladder.D(str(r5f["per_market_cap_usd"])) == ladder.D("7.50")
+    assert ladder.daily_loss_stop(r5f) == ladder.D("-15.00")
+    assert ladder.pair_cost_max(r5f) == ladder.D("0.98")
 
 
 def test_the_preflight_is_not_waived_by_the_row():

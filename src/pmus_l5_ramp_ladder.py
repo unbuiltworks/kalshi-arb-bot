@@ -275,17 +275,31 @@ OWNER_RUNGS: tuple[dict, ...] = (
     {"id": "R5FT", "name": "R5F AT THE TOUCH: complement joins the best "
                            "non-crossing maker price, pair capped at par "
                            "(OWNER 2026-09-11 canary)",
-     "per_market_cap_usd": "3.00", "residual_units": 6,
+     # OWNER 2026-09-11 "lets raise it to $30 or something", answering BOTH
+     # to which number: the per-market cap 3.00 -> 30.00 AND the daily
+     # realized-loss stop -15.00 -> -30.00. Worst day is the stop plus one
+     # in-flight market = $60 against a ~$109 balance.
+     #
+     # THE ACTION SIZE IS DELIBERATELY NOT RAISED WITH THEM. CLAUDE.md:
+     # "Favor increasing frequency before size." $30 is therefore reached
+     # by MANY $1.00 maker actions accumulating against the per-market cap
+     # across sessions, not by one $10 swing. residual_units stays 6, so
+     # matched inventory may grow to the cap while ONE-SIDED exposure
+     # stays where the canary put it -- the dollar cap governs capital,
+     # the unit cap governs direction, and raising one does not raise the
+     # other.
+     "per_market_cap_usd": "30.00", "residual_units": 6,
      "markets_per_campaign": 1,
      "max_unmatched_usd": None, "pair_cost_max": "1.00",
      "complement_pricing": "l5_touch", "rest_policy": "model", "rest_floor_s": "5",
      "campaigns_per_day": 1, "max_actions_per_session": 4, "concurrency": 1,
      "max_sessions_per_campaign": 10080,
      "target_notional_usd": "1.00", "max_leg_notional_usd": "1.50",
-     "daily_loss_stop_usd": "-15.00", "lever": "price", "promote": None,
+     "daily_loss_stop_usd": "-30.00", "lever": "price", "promote": None,
      "derived_from": "R5F with pair_cost_max stated at par instead of "
                      "inheriting 0.98, per the rung's own 2026-09-07 approval "
-                     "text; size reduced to a one-market canary"},
+                     "text; one market, $1.00 actions, and the owner's "
+                     "2026-09-11 $30 capital/stop raise"},
 )
 ALL_RUNGS: tuple[dict, ...] = RUNGS + OWNER_RUNGS
 # fail closed at import: rung() returns the FIRST id match, so a duplicate id
