@@ -145,3 +145,86 @@ not aggregated with better-supported buckets.
 
 **Committed before running.** Deviations from this document must be recorded
 as deviations, with the reason, not silently applied.
+
+---
+
+# Amendment 1 — the repairing-EXTEND rule (2026-09-11)
+
+**Recorded before the rule was written or run. The holdout remains unread.**
+
+Owner: *"Build a decision-time metric for a 'repairing EXTEND'. A candidate
+EXTEND should only qualify if it improves the future inventory geometry
+without worsening the bounded downside."*
+
+## The target, computed before the rule exists
+
+From the corrected R5F cohort (full evidence):
+
+```
+paired to zero   36 markets   mean  +0.2851
+left residual    16 markets   mean  -1.9120
+residual incidence            16/52 = 30.8%
+one residual erases 6.7 paired markets
+
+break-even residual incidence, trading only        12.98%
+  + rebates at  7 credited fills/market ($0.094)   17.25%
+  + rebates at 10 credited fills/market ($0.134)   19.07%
+```
+
+**The rule must plausibly move residual incidence from ~31% to under ~17%.**
+A rule that improves per-market floor but leaves incidence near 31% has not
+solved the problem. Throughput is explicitly NOT a lever here: it scales
+both sides of the ratio and leaves break-even untouched.
+
+## Inputs — all decision-time, all already in §3
+
+The owner named seven: resulting residual size; new effective average on
+that side; achievable complement price; remaining time; fill probability;
+resulting worst-case loss; expected rebate on the maker fill.
+
+Each is computable at the state without hindsight:
+
+| component | decision-time source |
+|---|---|
+| resulting residual | `inventory_before` + candidate qty |
+| new average on that side | `avg_up`/`avg_dn` + candidate px, qty |
+| achievable complement price | `complement_preflight.opp_ask`, `l5_touch_px` |
+| remaining time | `state` TTE bucket, `t_utc` |
+| fill probability | measured base rate by relation (extend 35.5%, complete 10.5%) and distance from touch |
+| resulting worst-case loss | `min(up,dn) − spent` after the candidate fill |
+| expected rebate | `0.0125·qty·p·(1−p)`, banker's-rounded — **validated 7/7 against the venue 2026-09-11** |
+
+## The parameter budget is NOT waived
+
+§6 fixes **at most two free parameters**, and seven inputs do not license
+seven knobs. The inputs enter as *derived quantities*; only the thresholds
+are free. The rule form is fixed here, before fitting:
+
+> An EXTEND qualifies as REPAIRING iff
+> 1. it strictly lowers that side's average cost (a pure inequality, no
+>    parameter), **and**
+> 2. the resulting guaranteed floor worsens by no more than **θ₁**, **and**
+> 3. it is priced within **θ₂** ticks of the touch (the fill-probability
+>    proxy; joining the touch is what the measured 35.5% extend fill rate
+>    was earned at).
+
+Two parameters, θ₁ and θ₂, fitted on TRAIN only.
+
+Expected rebate is carried in the **reporting**, not the qualification: at
+$0.0134/fill it cannot justify an otherwise-bad extend, and letting it into
+the gate would be the "rebate makes a bad trade look profitable" failure
+`CLAUDE.md` forbids.
+
+## Additional bar, on top of §7
+
+7. **Residual incidence, not just per-market floor.** Report the counterfactual
+   incidence the rule implies. If it does not credibly move 31% toward 17%,
+   report that it does not, rather than presenting a floor improvement as a
+   solution to the incidence problem.
+
+## What has NOT changed
+
+The §6 split (9 train / 8 holdout, chronological, holdout read once), the
+mandatory sensitivity with the two positive-residual markets removed, the
+§7 bar, and the rule that clearing it earns **shadow evaluation only** and
+never a live change. R5F configuration is frozen per the owner.
