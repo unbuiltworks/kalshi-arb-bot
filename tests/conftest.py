@@ -51,3 +51,17 @@ def _no_completion_extension_by_default(monkeypatch):
     A default of 0 here means production's default of 12 is never reached
     by accident, and never exercised by accident either."""
     monkeypatch.setenv("PMUS_SPRING_MAX_COMPLETE_ACTIONS", "0")
+
+
+@pytest.fixture(autouse=True)
+def _migration_close_uses_ephemeral_test_state(monkeypatch, tmp_path, request):
+    """The migration adapter durably persists order intent before POST.
+
+    Production mounts /state/pmus-spring. GitHub-hosted runners deliberately
+    cannot create /state, so the two adapter-body tests must exercise the same
+    persistence path in an isolated writable directory instead of depending
+    on a root-owned path or on state leaked from another test. This fixture is
+    scoped by node id and never changes production defaults.
+    """
+    if "test_migration_close.py" in request.node.nodeid:
+        monkeypatch.setenv("PMUS_Q1_STATE_DIR", str(tmp_path / "pmus-q1"))
