@@ -1325,6 +1325,59 @@ def selector_opportunity(snapshot: Sequence[Mapping[str, Any]]) -> Optional[dict
     }
 
 
+def resolve_opportunities(events: Sequence[Mapping[str, Any]],
+                          props: Sequence[Mapping[str, Any]]) -> list:
+    """Attach what SUBSEQUENTLY happened to BOTH sides of each pair.
+
+    OWNER item 4: "how often are we currently choosing a >=4-tick flow leader
+    while a <=2-tick eligible alternative exists, and what happens
+    subsequently to both?"
+
+    The count alone cannot answer whether the rule costs anything. A pair
+    where the far flow leader completes anyway and the near alternative never
+    does is evidence FOR the current ranking. So each side is resolved from
+    the proposals actually tracked for those slugs, and a side with no
+    tracked proposal is left explicitly unresolved rather than assumed to
+    have failed -- "we did not follow it" and "it did not complete" are the
+    distinction this whole module exists to preserve.
+    """
+    by_slug: dict = {}
+    for p in props or []:
+        if p.get("status") in RESOLVED:
+            by_slug.setdefault(p["slug"], []).append(p)
+
+    def _outcome(slug):
+        ps = by_slug.get(slug)
+        if not ps:
+            return {"resolved": False, "note": "no tracked proposal"}
+        filled = [x for x in ps if x.get("status") == VIRTUAL_MATCHED]
+        return {"resolved": True, "proposals": len(ps),
+                "filled": len(filled),
+                "fill_rate": round(len(filled) / len(ps), 4),
+                "risk_returned": round(sum(float(x.get("risk_returned") or 0)
+                                           for x in filled), 4),
+                "median_time_to_fill_s": _pct(
+                    sorted(float(x["latency_s"]) for x in filled
+                           if x.get("latency_s") is not None), 0.5)}
+
+    out = []
+    for e in events or []:
+        if not e:
+            continue
+        row = dict(e)
+        row["chosen_outcome"] = _outcome(e["flow_ranked_choice"]["slug"])
+        row["passed_over_outcome"] = _outcome(e["nearest_complement"]["slug"])
+        c, n = row["chosen_outcome"], row["passed_over_outcome"]
+        if c.get("resolved") and n.get("resolved"):
+            row["cost_of_the_rule"] = round(
+                float(n.get("risk_returned") or 0)
+                - float(c.get("risk_returned") or 0), 4)
+        else:
+            row["cost_of_the_rule"] = None
+        out.append(row)
+    return out
+
+
 def opportunity_loss_report(events: Sequence[Mapping[str, Any]]) -> dict:
     """Aggregate the recorded counterfactual pairs."""
     ev = [e for e in events or [] if e]
@@ -1343,7 +1396,126 @@ def opportunity_loss_report(events: Sequence[Mapping[str, Any]]) -> dict:
         "sports_passed_over": sorted({str(e["nearest_complement"].get("sport"))
                                       for e in ev}),
         "sufficient_sample": len(ev) >= MIN_CLASS,
+        "both_sides_resolved": sum(
+            1 for e in ev if e.get("cost_of_the_rule") is not None),
+        "median_cost_of_the_rule": _pct(
+            sorted(float(e["cost_of_the_rule"]) for e in ev
+                   if e.get("cost_of_the_rule") is not None), 0.5),
+        "rule_cost_note": ("positive means the passed-over market returned "
+                           "more risk than the one flow-ranking chose. "
+                           "Computed ONLY where both sides resolved; a pair "
+                           "with an unfollowed side is excluded rather than "
+                           "scored as a loss."),
         "labels": ("how far the flow-ranked choice sat from completion versus "
                    "the nearest eligible alternative, at the same instant. "
                    "SHADOW ONLY; no ranking changed."),
+    }
+
+
+# ------------- does initial distance survive stratification? (owner item 3)
+STRATA = ("sport", "market_type", "flow_tercile", "spread_tercile",
+          "movement_tercile")
+
+
+def _tercile(vals: Sequence[float], v: Optional[float]) -> Optional[str]:
+    if v is None or len(vals) < 3:
+        return None
+    lo, hi = _pct(vals, 0.333), _pct(vals, 0.667)
+    if lo is None or hi is None:
+        return None
+    return "low" if v <= lo else ("high" if v > hi else "mid")
+
+
+def stratified_distance(props: Sequence[Mapping[str, Any]]) -> dict:
+    """Is initial distance still predictive INSIDE each stratum?
+
+    OWNER: "Measure whether initial distance remains predictive after
+    stratifying by flow, spread, movement, sport and market type."
+
+    THE POINT OF STRATIFYING. If close complements happen to occur in
+    high-flow markets, an aggregate "close fills better" could be flow
+    talking, not distance. The test is whether the near-vs-far contrast
+    survives WITHIN a stratum, where flow (or sport, or spread) is held
+    roughly fixed.
+
+    Reports the contrast per stratum level and REFUSES to summarise: no
+    pooled statistic, no "distance is/isn't predictive" verdict. A stratum
+    with one outcome class empty contributes nothing and says so, because a
+    fill rate of 1.0 from one observation is not evidence that survived
+    anything.
+    """
+    measured = [p for p in props
+                if p.get("status") in RESOLVED and cohort_of(p) == MEASURED
+                and (p.get("reachability") or {}).get("initial_gap_ticks")
+                is not None]
+    flows = sorted(float(p["state_at_post"]["flow_usd_per_min"]) for p in measured
+                   if isinstance((p.get("state_at_post") or {}).get(
+                       "flow_usd_per_min"), (int, float)))
+    spreads = sorted(float(p["state_at_post"]["spread"]) for p in measured
+                     if isinstance((p.get("state_at_post") or {}).get("spread"),
+                                   (int, float)))
+    moves = sorted(float(p["state_at_post"]["mid_stdev"]) for p in measured
+                   if isinstance((p.get("state_at_post") or {}).get("mid_stdev"),
+                                 (int, float)))
+
+    def _level(p, stratum):
+        st = p.get("state_at_post") or {}
+        if stratum == "sport":
+            return str(st.get("sport"))
+        if stratum == "market_type":
+            return str(st.get("market_type"))
+        if stratum == "flow_tercile":
+            return _tercile(flows, st.get("flow_usd_per_min"))
+        if stratum == "spread_tercile":
+            return _tercile(spreads, st.get("spread"))
+        return _tercile(moves, st.get("mid_stdev"))
+
+    out: dict = {}
+    for stratum in STRATA:
+        levels: dict = {}
+        for p in measured:
+            lv = _level(p, stratum)
+            if lv is None or lv == "None":
+                continue
+            levels.setdefault(lv, []).append(p)
+        rows = {}
+        for lv, ps in sorted(levels.items()):
+            near = [p for p in ps
+                    if float(p["reachability"]["initial_gap_ticks"]) <= NEAR_TICKS]
+            far = [p for p in ps
+                   if float(p["reachability"]["initial_gap_ticks"]) >= FAR_TICKS]
+            n_fill = sum(1 for p in near if p.get("status") == VIRTUAL_MATCHED)
+            f_fill = sum(1 for p in far if p.get("status") == VIRTUAL_MATCHED)
+            usable = (len(near) >= MIN_CLASS and len(far) >= MIN_CLASS)
+            rows[lv] = {
+                "n": len(ps),
+                "near_n": len(near), "near_filled": n_fill,
+                "near_fill_rate": (round(n_fill / len(near), 4) if near else None),
+                "far_n": len(far), "far_filled": f_fill,
+                "far_fill_rate": (round(f_fill / len(far), 4) if far else None),
+                "contrast": (None if not usable else
+                             round(n_fill / len(near) - f_fill / len(far), 4)),
+                "usable": usable,
+                "why_not": (None if usable else
+                            f"need {MIN_CLASS} near and {MIN_CLASS} far; "
+                            f"have {len(near)} and {len(far)}"),
+            }
+        out[stratum] = rows
+
+    usable_levels = sum(1 for s in out.values() for r in s.values()
+                        if r["usable"])
+    return {
+        "kind": "execution_shadow_stratified_distance",
+        "measured": len(measured),
+        "near_ticks": NEAR_TICKS, "far_ticks": FAR_TICKS,
+        "strata": out,
+        "usable_levels": usable_levels,
+        "any_stratum_decidable": usable_levels > 0,
+        "labels": ("the contrast is near_fill_rate - far_fill_rate INSIDE a "
+                   "stratum, so flow/sport/spread is held roughly fixed. If "
+                   "close complements merely cluster in high-flow markets, "
+                   "the aggregate is flow talking and the within-stratum "
+                   "contrast collapses. NOTHING is pooled and no verdict is "
+                   "offered: a level with one class empty contributes nothing "
+                   "and says why."),
     }

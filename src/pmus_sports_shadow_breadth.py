@@ -431,7 +431,8 @@ class ShadowBreadth:
 
     # ---- raw evidence ---------------------------------------------------
     def append_raw(self, cycle: int, rows, decisions,
-                   now: Optional[float] = None) -> bool:
+                   now: Optional[float] = None, proposals=None,
+                   opportunities=None) -> bool:
         """One JSONL record per cycle: the timestamped observations AND the
         virtual decisions/fills behind that cycle's counters.
 
@@ -451,6 +452,14 @@ class ShadowBreadth:
             rec = {"cycle": cycle, "t": _utc(now or self._now()),
                    "observations": list(rows or []),
                    "decisions": list(decisions or [])}
+            # Proposals carry state_at_post, reachability and research --
+            # everything the band, stratum and opportunity reports are
+            # derived from. Without them a future analysis bug is
+            # unrecoverable even though the books were saved.
+            if proposals is not None:
+                rec["proposals"] = list(proposals)
+            if opportunities is not None:
+                rec["opportunities"] = list(opportunities)
             with open(path, "a") as fh:
                 fh.write(json.dumps(rec, separators=(",", ":"),
                                     default=str) + "\n")
@@ -773,12 +782,24 @@ def run(cycles: Optional[int] = None) -> int:
                          "market_type": exec_shadow.market_type(r["slug"])}
                         for r in ranked]
                 sb.execution.observe_selector(snap)
+                resolved_ops = exec_shadow.resolve_opportunities(
+                    sb.execution.opportunities, props)
                 rep["execution_opportunity_loss"] = \
-                    exec_shadow.opportunity_loss_report(
-                        sb.execution.opportunities)
+                    exec_shadow.opportunity_loss_report(resolved_ops)
+                rep["execution_stratified_distance"] = \
+                    exec_shadow.stratified_distance(props)
                 rep["execution_persisted"] = sb.execution.save()
+            # ITEM 5: every raw state needed to REPLAY this later. The
+            # derived reports above can all be recomputed from proposals +
+            # observations + decisions; none of them is the evidence. Twice
+            # tonight a derived field was wrong and the aggregates built on it
+            # were only recoverable because the inputs survived.
             rep["raw_persisted"] = sb.append_raw(
-                n, [by_slug[k] for k in by_slug], decisions)
+                n, [by_slug[k] for k in by_slug], decisions,
+                proposals=(list(sb.execution.proposals.values())
+                           if sb.execution is not None else None),
+                opportunities=(sb.execution.opportunities
+                               if sb.execution is not None else None))
             print(PREFIX + json.dumps(rep, separators=(",", ":"), default=str),
                   flush=True)
             watch = sb.watch_set() or watch

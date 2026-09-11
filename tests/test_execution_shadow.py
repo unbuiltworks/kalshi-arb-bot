@@ -884,3 +884,91 @@ def test_opportunity_module_changes_no_ranking():
     assert not (called & {"rank", "sort_by_rank", "select"})
     assert "SHADOW ONLY" in EX.selector_opportunity(
         [_snap("hi", 20000, 6.0), _snap("near", 50, 1.0)])["labels"]
+
+
+# ---- stratified predictiveness (owner item 3) ----------------------------
+
+def _strat(gap, status, flow, sport="nfl", spread=0.005, move=0.0):
+    p = EX.open_proposal(f"aec-{sport}-a-b-2026-09-13", PLAN, T0, None, -2,
+                         D("0.39"))
+    p.update(status=status,
+             reachability={"observations": 5, "reached": status == EX.VIRTUAL_MATCHED,
+                           "initial_gap_ticks": gap, "min_gap_ticks": gap,
+                           "initial_gap_cents": gap / 2, "min_gap_cents": gap / 2,
+                           "time_to_touch_s": None,
+                           "max_favorable_excursion_cents": 0.0})
+    p["state_at_post"].update(flow_usd_per_min=flow, spread=spread,
+                              mid_stdev=move, sport=sport)
+    return p
+
+
+def test_a_stratum_with_one_class_empty_is_unusable_and_says_why():
+    ps = [_strat(1.0, EX.VIRTUAL_MATCHED, 100.0) for _ in range(12)]
+    row = EX.stratified_distance(ps)["strata"]["sport"]["nfl"]
+    assert row["usable"] is False
+    assert row["far_n"] == 0
+    assert "need 10 near and 10 far" in row["why_not"]
+    assert row["contrast"] is None
+
+
+def test_the_contrast_is_computed_inside_a_stratum():
+    near = [_strat(1.0, EX.VIRTUAL_MATCHED, 100.0) for _ in range(8)] + \
+           [_strat(1.0, EX.NO_FILL, 100.0) for _ in range(2)]
+    far = [_strat(6.0, EX.NO_FILL, 100.0) for _ in range(10)]
+    row = EX.stratified_distance(near + far)["strata"]["sport"]["nfl"]
+    assert row["usable"] is True
+    assert row["near_fill_rate"] == 0.8 and row["far_fill_rate"] == 0.0
+    assert row["contrast"] == 0.8
+
+
+def test_stratified_report_offers_no_pooled_verdict():
+    out = EX.stratified_distance([])
+    assert "verdict" not in out
+    assert out["any_stratum_decidable"] is False
+    assert "NOTHING is pooled" in out["labels"]
+
+
+def test_terciles_need_enough_values_to_exist():
+    assert EX._tercile([], 5.0) is None
+    assert EX._tercile([1.0, 2.0, 3.0], 1.0) == "low"
+
+
+# ---- both sides of the opportunity pair (owner item 4) -------------------
+
+def test_both_sides_of_the_pair_are_resolved_from_tracked_proposals():
+    e = EX.selector_opportunity([_snap("aec-nfl-a-b-2026-09-13", 20000, 6.0),
+                                 _snap("aec-tennis-c-d-2026-09-13", 50, 1.0)])
+    won = EX.open_proposal("aec-tennis-c-d-2026-09-13", PLAN, T0, None, -2,
+                           D("0.39"))
+    won.update(status=EX.VIRTUAL_MATCHED, risk_returned=1.0, latency_s=90.0)
+    lost = EX.open_proposal("aec-nfl-a-b-2026-09-13", PLAN, T0, None, -2,
+                            D("0.39"))
+    lost["status"] = EX.NO_FILL
+    r = EX.resolve_opportunities([e], [won, lost])[0]
+    assert r["passed_over_outcome"]["fill_rate"] == 1.0
+    assert r["chosen_outcome"]["fill_rate"] == 0.0
+    assert r["cost_of_the_rule"] == 1.0
+
+
+def test_an_unfollowed_side_is_unresolved_not_scored_as_a_loss():
+    """'We did not follow it' and 'it did not complete' are different."""
+    e = EX.selector_opportunity([_snap("hi", 20000, 6.0), _snap("near", 50, 1.0)])
+    r = EX.resolve_opportunities([e], [])[0]
+    assert r["chosen_outcome"]["resolved"] is False
+    assert r["cost_of_the_rule"] is None
+    rep = EX.opportunity_loss_report([r])
+    assert rep["both_sides_resolved"] == 0
+    assert rep["median_cost_of_the_rule"] is None
+
+
+def test_a_pair_where_the_flow_leader_wins_counts_against_the_hypothesis():
+    e = EX.selector_opportunity([_snap("aec-nfl-a-b-2026-09-13", 20000, 6.0),
+                                 _snap("aec-tennis-c-d-2026-09-13", 50, 1.0)])
+    chosen = EX.open_proposal("aec-nfl-a-b-2026-09-13", PLAN, T0, None, -2,
+                              D("0.39"))
+    chosen.update(status=EX.VIRTUAL_MATCHED, risk_returned=1.0, latency_s=50.0)
+    passed = EX.open_proposal("aec-tennis-c-d-2026-09-13", PLAN, T0, None, -2,
+                              D("0.39"))
+    passed["status"] = EX.NO_FILL
+    r = EX.resolve_opportunities([e], [chosen, passed])[0]
+    assert r["cost_of_the_rule"] == -1.0, "negative = the rule was right here"

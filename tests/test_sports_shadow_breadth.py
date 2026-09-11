@@ -614,3 +614,33 @@ def test_two_arm_is_attached_to_every_decided_market():
     # from the summary row afterwards
     assert 'arms = shadow_completion.two_arm(d, _book_of(rows[-1]))' in src
     assert '"two_arm": arms' in src
+
+
+def test_raw_log_carries_the_state_the_reports_are_derived_from(tmp_path,
+                                                                monkeypatch):
+    """ITEM 5. The band, stratum and opportunity reports are all DERIVED.
+    Persisting only observations would leave a future analysis bug
+    unrecoverable even though the books were saved."""
+    monkeypatch.setattr(SB, "RAW_DIR", str(tmp_path))
+    sb = SB.ShadowBreadth(state_path=str(tmp_path / "c.json"),
+                          now=lambda: 1757538000.0)
+    props = [{"slug": "x", "status": "NO_FILL",
+              "state_at_post": {"sport": "nfl"},
+              "reachability": {"initial_gap_ticks": 4.0}}]
+    ops = [{"kind": "selector_opportunity_loss", "gap_difference_ticks": 5.0}]
+    assert sb.append_raw(1, [{"slug": "x"}], [], proposals=props,
+                         opportunities=ops) is True
+    rec = json.loads(list(tmp_path.glob("observations-*.jsonl"))[0]
+                     .read_text().strip())
+    assert rec["proposals"][0]["reachability"]["initial_gap_ticks"] == 4.0
+    assert rec["opportunities"][0]["gap_difference_ticks"] == 5.0
+
+
+def test_raw_log_omits_the_keys_when_nothing_is_supplied(tmp_path, monkeypatch):
+    monkeypatch.setattr(SB, "RAW_DIR", str(tmp_path))
+    sb = SB.ShadowBreadth(state_path=str(tmp_path / "c.json"),
+                          now=lambda: 1757538000.0)
+    sb.append_raw(1, [{"slug": "x"}], [])
+    rec = json.loads(list(tmp_path.glob("observations-*.jsonl"))[0]
+                     .read_text().strip())
+    assert "proposals" not in rec and "opportunities" not in rec
