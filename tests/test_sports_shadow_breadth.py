@@ -118,7 +118,15 @@ def test_tiers_are_assigned_by_rank_position():
     assert SB.tier_of(7) == "T1_top8"
     assert SB.tier_of(8) == "T2_9_16"
     assert SB.tier_of(31) == "T3_17_32"
-    assert SB.tier_of(32) is None, "beyond the watched set is untiered"
+    # BREADTH CHANGE, deliberate: this previously asserted tier_of(32) is
+    # None -- "beyond the watched set is untiered" -- which was right when
+    # the watch set was 32. Observing every eligible market means a market
+    # can now rank 40th, and an untiered market is one whose outcomes no
+    # cohort counts. Ranks beyond 32 get their own tiers rather than
+    # vanishing from the comparison.
+    assert SB.tier_of(32) == "T4_33_64"
+    assert SB.tier_of(80) == "T5_65_plus"
+    assert SB.tier_of(-1) is None, "a rank below zero is not a rank"
 
 
 def test_funnel_reports_per_tier_and_never_divides_by_zero():

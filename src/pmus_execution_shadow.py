@@ -87,6 +87,83 @@ PAIR_CEILING = D("1.00")
 STATE_PATH = os.getenv("PMUS_EXEC_STATE",
                        "/data/pmus_shadow/execution_shadow.json")
 
+# The venue's price increment. Distances are reported in BOTH cents and ticks
+# because "6 cents away" and "12 ticks away" answer different questions.
+TICK = D(os.getenv("PMUS_EXEC_TICK", "0.005"))
+
+# RESEARCH ONLY, and deliberately separate. OWNER: "Do not assume 300 seconds
+# is the correct horizon... Keep the frozen R5F 300s result unchanged. We need
+# to know whether they are unreachable or merely slow." The 300s verdict is
+# written once and never revised; everything learned afterwards lands in a
+# `research` sub-object that no rate, cohort or metric reads.
+EXTENDED_FOLLOW_S = float(os.getenv("PMUS_EXEC_EXTENDED_S", "1800"))
+
+
+def gap_to_fill(o: Mapping[str, Any], side_yes: bool, px: D) -> Optional[D]:
+    """How far the OPPOSING touch still has to travel for a fill, in dollars.
+
+        > 0   the market has not reached our price -- UNREACHABLE so far
+        <= 0  the opposing touch is at or through it -- reachable now
+
+    This is the measurement the owner's example turns on: a complement at 59c
+    against an opposing side sitting at 65c is not "an order nobody will
+    fill", it is an order 6c away from being executable at all. The two have
+    completely different remedies, and a completion percentage cannot tell
+    them apart.
+
+    Frames follow the fill rule exactly. A YES buy fills on a SELL at or
+    below px, so the ASK must come down to it. A NO buy fills on a BUY at or
+    above ONE - px, so the BID must come up to it.
+    """
+    thresh = fill_threshold(side_yes, px)
+    q = o.get("ask") if side_yes else o.get("bid")
+    if q is None:
+        return None
+    return (D(str(q)) - thresh) if side_yes else (thresh - D(str(q)))
+
+
+def reachability(prop: Mapping[str, Any], obs: Sequence[Mapping[str, Any]],
+                 now: float, horizon_s: Optional[float] = None) -> dict:
+    """Why a complement completed or did not -- not merely whether it did."""
+    horizon_s = FOLLOW_S if horizon_s is None else horizon_s
+    try:
+        t_post = float(prop["t_post"])
+        px = D(str(prop["px"]))
+        side_yes = bool(prop["side_yes"])
+    except Exception:                                       # noqa: BLE001
+        return {}
+    until = t_post + horizon_s
+    series = []
+    for o in obs or []:
+        t = ST._ts(o)
+        if t is None or t <= t_post or t > until:
+            continue
+        g = gap_to_fill(o, side_yes, px)
+        if g is not None:
+            series.append((t, g))
+    if not series:
+        return {"observations": 0, "note": "no two-sided observation after post"}
+
+    initial = series[0][1]
+    min_gap = min(g for _, g in series)
+    touch_t = next((t for t, g in series if g <= 0), None)
+    return {
+        "observations": len(series),
+        "horizon_s": horizon_s,
+        "initial_gap_cents": float(initial * 100),
+        "initial_gap_ticks": float(initial / TICK),
+        "min_gap_cents": float(min_gap * 100),
+        "min_gap_ticks": float(min_gap / TICK),
+        # how far the opposing market travelled TOWARD us from where it
+        # started: the excursion that was favourable to completing.
+        "max_favorable_excursion_cents": float((initial - min_gap) * 100),
+        "reached": bool(min_gap <= 0),
+        "time_to_touch_s": None if touch_t is None else round(touch_t - t_post, 1),
+        "final_gap_cents": float(series[-1][1] * 100),
+        "labels": ("gap > 0 means the market never came to our price -- the "
+                   "complement was UNREACHABLE, not merely unfilled"),
+    }
+
 
 def proposal_id(slug: str, t_post: float, px) -> str:
     return f"{slug}|{round(float(t_post), 1)}|{px}"
@@ -144,7 +221,8 @@ def market_type(slug: Optional[str]) -> Optional[str]:
 
 def open_proposal(slug: str, plan: Mapping[str, Any], t_post: float,
                   ranked_row: Optional[Mapping[str, Any]],
-                  residual_before, surplus_avg, tier=None) -> dict:
+                  residual_before, surplus_avg, tier=None,
+                  first_leg: Optional[Mapping[str, Any]] = None) -> dict:
     """Record a posted complement. This is a PROPOSAL, not a completion."""
     px = plan.get("target_price")
     return {
@@ -160,6 +238,11 @@ def open_proposal(slug: str, plan: Mapping[str, Any], t_post: float,
                                        residual_before, surplus_avg, px),
         "surplus_avg": None if surplus_avg is None else str(surplus_avg),
         "residual_before": residual_before,
+        # WHERE THE FIRST LEG CAME FROM. The complement price is derived from
+        # it (max_pair - surplus_avg), so a complement that sits unreachable
+        # may be a consequence of where the first leg filled rather than of
+        # anything about the complement itself.
+        "first_leg": dict(first_leg or {}),
         # filled in as the market is followed
         "t_fill": None, "latency_s": None, "fillable_qty": None,
         "touched": None, "traded_through": None,
@@ -191,6 +274,8 @@ def follow(prop: Mapping[str, Any], obs: Sequence[Mapping[str, Any]],
 
         # did the market ever TOUCH the quote, whether or not it traded?
         touched_by_quote = _touched(later, side_yes, px)
+
+        p["reachability"] = reachability(p, obs, now)
 
         ev = DEC._fill_evidence(trades, t_post, side_yes, px, until)
         # A FILL IMPLIES A TOUCH. Quotes are snapshots and trades happen
@@ -374,19 +459,27 @@ class ExecutionShadow:
     def advance(self, obs_by_slug: Mapping[str, Sequence[Mapping[str, Any]]]
                 ) -> dict:
         now = self._now()
-        moved = 0
+        moved = researched = 0
         for pid, p in list(self.proposals.items()):
-            if p.get("status") in TERMINAL:
-                continue
             obs = obs_by_slug.get(p["slug"])
             if not obs:
+                continue
+            if p.get("status") in TERMINAL:
+                # The 300s verdict is FROZEN. Anything learned after it lands
+                # in `research` and is read by no rate, cohort or metric --
+                # that separation is what lets us ask whether a complement was
+                # unreachable or merely slow without contaminating the result.
+                after = extend_research(p, obs, now)
+                if after is not p:
+                    self.proposals[pid] = after
+                    researched += 1
                 continue
             after = follow(p, obs, now)
             if after.get("status") != p.get("status"):
                 moved += 1
             self.proposals[pid] = after
-        return {"advanced": moved, "open": self.open_count(),
-                "total": len(self.proposals)}
+        return {"advanced": moved, "research_updated": researched,
+                "open": self.open_count(), "total": len(self.proposals)}
 
     def open_count(self) -> int:
         return sum(1 for p in self.proposals.values()
@@ -586,3 +679,210 @@ def by_cohort(props: Sequence[Mapping[str, Any]], key: str = "tier") -> dict:
                        "complements nobody lifts is worse than one that posts "
                        "few and completes them. Check each cohort's "
                        "sufficient_sample before reading a difference.")}
+
+
+def extend_research(prop: Mapping[str, Any], obs: Sequence[Mapping[str, Any]],
+                    now: float) -> Mapping[str, Any]:
+    """Keep watching a RESOLVED proposal, without touching its verdict.
+
+    OWNER: "Continue observing unresolved virtual complements after 300s in a
+    separate research field if market data remains available. Keep the frozen
+    R5F 300s result unchanged. We need to know whether they are unreachable or
+    merely slow."
+
+    So this writes ONLY under `research`. A test asserts the 300s status,
+    pair cost, residual and risk figures are byte-identical before and after,
+    because a research field that can move the headline number is not a
+    research field.
+    """
+    try:
+        t_post = float(prop["t_post"])
+        if prop.get("status") == VIRTUAL_MATCHED:
+            return prop                      # already completed inside 300s
+        if now - t_post > EXTENDED_FOLLOW_S:
+            return prop                      # research horizon exhausted
+        px = D(str(prop["px"]))
+        side_yes = bool(prop["side_yes"])
+        trades = ST.infer_trades(list(obs or []))
+        ev = DEC._fill_evidence(trades, t_post, side_yes, px,
+                                min(t_post + EXTENDED_FOLLOW_S, now))
+        reach = reachability(prop, obs, now, horizon_s=EXTENDED_FOLLOW_S)
+        p = dict(prop)
+        p["research"] = {
+            "horizon_s": EXTENDED_FOLLOW_S,
+            "would_fill_later": ev is not None,
+            "later_fill_latency_s": (None if ev is None
+                                     else round(ev["t"] - t_post, 1)),
+            "reachability": reach,
+            "verdict": ("SLOW_BUT_REACHABLE" if ev is not None else
+                        "REACHED_BUT_UNFILLED" if reach.get("reached")
+                        else "UNREACHABLE_SO_FAR"),
+            "labels": ("RESEARCH ONLY. The frozen 300s status above is "
+                       "unchanged and no rate, cohort or metric reads this."),
+        }
+        return p
+    except Exception:                                       # noqa: BLE001
+        return prop
+
+
+def reachability_report(props: Sequence[Mapping[str, Any]]) -> dict:
+    """WHY completion succeeds or fails, not merely how often.
+
+    OWNER's distinction, which a completion percentage cannot express:
+
+      "People won't fill our maker order"   -- the market came and declined
+      vs
+      "Our economically acceptable order is too far away from the current
+       market to become executable"         -- it never came at all
+
+    The second is a consequence of where the FIRST LEG filled: the complement
+    is priced at (ceiling - surplus_avg), so a first leg at 39c forces a
+    complement at <=59c, and if the opposing side sits at 65c and never
+    travels, the order is unreachable by construction rather than unpopular.
+    """
+    resolved = [p for p in props if p.get("status") in RESOLVED]
+    with_r = [p for p in resolved if (p.get("reachability") or {}).get(
+        "observations")]
+    reached = [p for p in with_r if p["reachability"].get("reached")]
+    never = [p for p in with_r if not p["reachability"].get("reached")]
+    matched = [p for p in resolved if p.get("status") == VIRTUAL_MATCHED]
+
+    def _med(xs, key):
+        vals = sorted(float(p["reachability"][key]) for p in xs
+                      if p["reachability"].get(key) is not None)
+        return _pct(vals, 0.5)
+
+    research = [p.get("research") for p in props if p.get("research")]
+    verdicts: dict = {}
+    for r in research:
+        verdicts[r.get("verdict")] = verdicts.get(r.get("verdict"), 0) + 1
+
+    return {
+        "kind": "execution_shadow_reachability",
+        "resolved": len(resolved),
+        "with_measurement": len(with_r),
+        "reached_our_price": len(reached),
+        "never_reached": len(never),
+        "filled": len(matched),
+        "reached_but_unfilled": len(reached) - len(matched),
+        "median_initial_gap_cents": _med(with_r, "initial_gap_cents"),
+        "median_min_gap_cents": _med(with_r, "min_gap_cents"),
+        "median_favorable_excursion_cents": _med(
+            with_r, "max_favorable_excursion_cents"),
+        "median_initial_gap_cents_never_reached": _med(
+            never, "initial_gap_cents"),
+        "median_initial_gap_cents_reached": _med(reached, "initial_gap_cents"),
+        "median_time_to_touch_s": _med(reached, "time_to_touch_s"),
+        "bottleneck": _bottleneck(len(with_r), len(never), len(reached),
+                                  len(matched)),
+        "research_beyond_300s": {"n": len(research), "verdicts": verdicts,
+                                 "horizon_s": EXTENDED_FOLLOW_S,
+                                 "note": ("RESEARCH ONLY -- no rate, cohort "
+                                          "or metric above reads this")},
+        "labels": ("gap is how far the OPPOSING touch must still travel for a "
+                   "fill. never_reached means the complement was priced "
+                   "outside the market's realised range, which is a different "
+                   "problem from an order the market declined to lift."),
+    }
+
+
+def _bottleneck(n, never, reached, matched) -> Optional[str]:
+    """Name the constraint, or refuse to when the sample cannot support one."""
+    if n < 10:
+        return None
+    if never / n >= 0.7:
+        return ("REACHABILITY: most complements were never reached by the "
+                "market. Look at first-leg price, not at fill mechanics.")
+    if reached and matched / max(reached, 1) <= 0.3:
+        return ("QUEUE/LIQUIDITY: the market reached our price and mostly did "
+                "not trade through it.")
+    return "MIXED: neither reachability nor queue dominates at this sample."
+
+
+# ------------------------------- comparison against REAL R5F completions
+HISTORICAL_FORENSICS = os.path.join(
+    "analysis", "l5", "complete_no_fill_forensics.json")
+
+
+def historical_benchmark(path: str = HISTORICAL_FORENSICS) -> dict:
+    """Complement distance-at-rest on our OWN live completes, filled vs not.
+
+    OWNER: "We already have live tennis/esports completions. Reconstruct their
+    complement-distance-at-post if the raw evidence permits it... Don't
+    fabricate unavailable historical book state."
+
+    IT PERMITS IT, for the public rest book. `opp_ask_authenticated` is on 8
+    of 716 accepted completes (1.1%) and stays UNAVAILABLE -- that is the
+    stratum the earlier study refused, and it is still refused here. But the
+    REST BOOK gap was captured on 749 orders, and that is the quantity this
+    comparison needs.
+
+    Returns the measured distribution and nothing derived: no model, no fit,
+    no reconstruction of book state that was never recorded.
+    """
+    try:
+        with open(path) as fh:
+            doc = json.load(fh)
+        filled = (doc.get("filled_for_contrast") or {})
+        unfilled = (doc.get("unfilled") or {})
+        return {
+            "kind": "historical_complement_distance",
+            "source": path,
+            "filled": filled.get("closest_book_gap_ticks"),
+            "unfilled": unfilled.get("closest_book_gap_ticks"),
+            "filled_orders": filled.get("orders"),
+            "unfilled_orders": unfilled.get("orders"),
+            "unavailable": ("opp_ask_authenticated is on 8 of 716 accepted "
+                            "completes (1.1%) -- the authenticated book is "
+                            "NOT reconstructed and no figure here uses it"),
+            "labels": ("distance to the best OPPOSITE ask at rest, in ticks, "
+                       "from our own venue-confirmed completes. The closest "
+                       "gap reached -- the same quantity as min_gap_ticks in "
+                       "the prospective measurement."),
+        }
+    except Exception as exc:                                # noqa: BLE001
+        return {"kind": "historical_complement_distance",
+                "error": repr(exc), "filled": None, "unfilled": None}
+
+
+def compare_to_history(props: Sequence[Mapping[str, Any]],
+                       path: str = HISTORICAL_FORENSICS) -> dict:
+    """Prospective gap distribution beside the historical one.
+
+    The comparison the owner framed: if live complements rest far outside the
+    range where our own completes historically filled, the bottleneck is
+    REACHABILITY -- the economically acceptable price is not where the market
+    is -- rather than anything about queue or aggression.
+    """
+    hist = historical_benchmark(path)
+    live = sorted(float(p["reachability"]["min_gap_ticks"])
+                  for p in props
+                  if p.get("status") in RESOLVED
+                  and (p.get("reachability") or {}).get("min_gap_ticks")
+                  is not None)
+    live_stats = None
+    if live:
+        live_stats = {"n": len(live), "min": round(live[0], 2),
+                      "p25": _pct(live, 0.25), "median": _pct(live, 0.5),
+                      "p75": _pct(live, 0.75), "max": round(live[-1], 2),
+                      "share_at_or_inside_our_price": round(
+                          sum(1 for g in live if g <= 0) / len(live), 4)}
+    f_med = (hist.get("filled") or {}).get("median")
+    verdict = None
+    if live_stats and f_med is not None:
+        if live_stats["n"] < 30:
+            verdict = f"sample too small to compare (n={live_stats['n']}, need 30)"
+        elif live_stats["median"] > (hist.get("unfilled") or {}).get("p75", 1e9):
+            verdict = ("live complements rest FARTHER than the p75 of our own "
+                       "UNFILLED completes -- consistent with a reachability "
+                       "bottleneck, not a queue one")
+        elif live_stats["median"] <= f_med:
+            verdict = ("live complements rest as close as our own FILLED "
+                       "completes -- reachability is not the constraint")
+        else:
+            verdict = "live complements rest between the filled and unfilled medians"
+    return {"kind": "execution_shadow_vs_history",
+            "historical": hist, "prospective": live_stats, "verdict": verdict,
+            "labels": ("same quantity on both sides: ticks from the best "
+                       "opposite touch, closest reached. Nothing historical "
+                       "is reconstructed or modelled.")}

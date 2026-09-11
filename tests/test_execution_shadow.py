@@ -392,3 +392,185 @@ def test_no_side_volume_uses_one_minus_px():
     trades2 = [{"t": T0 + 10, "px": D("0.70"), "vol": 5.0,
                 "dir_inferred": "buy"}]
     assert EX._volume_through(trades2, T0, T0 + 300, False, D("0.59")) == 5.0
+
+
+# ---- reachability: WHY, not just whether ---------------------------------
+
+def test_the_owners_example_measures_six_cents_of_gap():
+    """First leg at 39c forces a complement at <=59c. If the opposing side
+    sits at 65c, the order is 6c from being executable at all -- which is a
+    different problem from an order the market declined to lift."""
+    g = EX.gap_to_fill({"bid": 0.60, "ask": 0.65}, True, D("0.59"))
+    assert g == D("0.06")
+    assert float(g / EX.TICK) == 12.0        # 12 ticks at a half-cent tick
+
+
+def test_gap_is_measured_in_the_fill_rules_frame_on_both_sides():
+    # NO buy at 0.59 == YES sell at 0.41; the BID must come UP to 0.41
+    assert EX.gap_to_fill({"bid": 0.35, "ask": 0.45}, False, D("0.59")) == D("0.06")
+    assert EX.gap_to_fill({"bid": 0.41, "ask": 0.45}, False, D("0.59")) == D("0")
+
+
+def test_reachability_records_initial_min_and_favorable_excursion():
+    p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+    obs = _rows(T0, [(30, 0.60, 0.65, 1.0, 0.62),     # gap 6c
+                     (60, 0.58, 0.62, 1.0, 0.60),     # gap 3c
+                     (90, 0.59, 0.64, 1.0, 0.61)])    # gap 5c
+    r = EX.reachability(p, obs, now=T0 + 300)
+    assert r["initial_gap_cents"] == pytest.approx(6.0)
+    assert r["min_gap_cents"] == pytest.approx(3.0)
+    assert r["max_favorable_excursion_cents"] == pytest.approx(3.0)
+    assert r["reached"] is False
+    assert r["time_to_touch_s"] is None
+
+
+def test_reachability_reports_time_to_touch_when_the_market_arrives():
+    p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+    obs = _rows(T0, [(30, 0.60, 0.65, 1.0, 0.62),
+                     (90, 0.54, 0.58, 1.0, 0.56)])    # ask 0.58 <= 0.59
+    r = EX.reachability(p, obs, now=T0 + 300)
+    assert r["reached"] is True
+    assert r["time_to_touch_s"] == 90.0
+    assert r["min_gap_cents"] <= 0
+
+
+def test_reachability_report_names_the_bottleneck_only_with_a_sample():
+    def _never(i):
+        p = EX.open_proposal(f"m{i}", PLAN, T0, None, -2, D("0.39"))
+        p.update(status=EX.NO_FILL,
+                 reachability={"observations": 5, "reached": False,
+                               "initial_gap_cents": 6.0, "min_gap_cents": 4.0,
+                               "max_favorable_excursion_cents": 2.0,
+                               "time_to_touch_s": None})
+        return p
+    assert EX.reachability_report([_never(i) for i in range(5)])["bottleneck"] is None
+    out = EX.reachability_report([_never(i) for i in range(12)])
+    assert "REACHABILITY" in out["bottleneck"]
+    assert out["never_reached"] == 12
+
+
+def test_reached_but_unfilled_is_named_as_a_queue_problem():
+    def _reached(i, matched=False):
+        p = EX.open_proposal(f"m{i}", PLAN, T0, None, -2, D("0.39"))
+        p.update(status=EX.VIRTUAL_MATCHED if matched else EX.NO_FILL,
+                 reachability={"observations": 5, "reached": True,
+                               "initial_gap_cents": 1.0, "min_gap_cents": -1.0,
+                               "max_favorable_excursion_cents": 2.0,
+                               "time_to_touch_s": 40.0})
+        return p
+    out = EX.reachability_report([_reached(i) for i in range(12)])
+    assert "QUEUE" in out["bottleneck"]
+    assert out["reached_but_unfilled"] == 12
+
+
+def test_first_leg_provenance_is_recorded_on_the_proposal():
+    p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"),
+                         first_leg={"price": "0.39", "t": 10.0, "side": "NO"})
+    assert p["first_leg"]["price"] == "0.39"
+
+
+# ---- the research horizon must never move the frozen verdict --------------
+
+def test_research_never_changes_the_300s_verdict():
+    """OWNER: keep the frozen R5F 300s result unchanged. A research field that
+    can move the headline number is not a research field."""
+    p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+    obs = _rows(T0, [(30, 0.60, 0.65, 1.0, 0.62), (200, 0.60, 0.65, 1.0, 0.62)])
+    resolved = EX.follow(p, obs, now=T0 + 400)
+    assert resolved["status"] == EX.NO_FILL
+    frozen = {k: resolved.get(k) for k in
+              ("status", "pair_cost", "residual_after", "risk_returned",
+               "latency_s", "fillable_qty", "traded_through")}
+
+    # last_trade_px must be <= bid to infer a SELL; inside the spread the
+    # direction resolves "unknown" and nothing fills.
+    later = obs + _rows(T0, [(600, 0.55, 0.58, 5.0, 0.55)])   # fills at 600s
+    after = EX.extend_research(resolved, later, now=T0 + 900)
+    assert {k: after.get(k) for k in frozen} == frozen
+    assert after["research"]["would_fill_later"] is True
+    assert after["research"]["verdict"] == "SLOW_BUT_REACHABLE"
+
+
+def test_research_distinguishes_unreachable_from_merely_slow():
+    p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+    obs = _rows(T0, [(30, 0.70, 0.75, 1.0, 0.72), (600, 0.70, 0.75, 1.0, 0.72)])
+    resolved = EX.follow(p, obs, now=T0 + 400)
+    after = EX.extend_research(resolved, obs, now=T0 + 900)
+    assert after["research"]["verdict"] == "UNREACHABLE_SO_FAR"
+
+
+def test_a_completed_proposal_is_not_researched_further():
+    p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+    obs = _rows(T0, [(0, 0.35, 0.60, 100.0, 0.40),
+                     (60, 0.55, 0.60, 140.0, 0.55)])
+    done = EX.follow(p, obs, now=T0 + 400)
+    assert done["status"] == EX.VIRTUAL_MATCHED
+    assert EX.extend_research(done, obs, now=T0 + 900) is done
+
+
+def test_research_stops_at_the_extended_horizon():
+    p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+    obs = _rows(T0, [(30, 0.70, 0.75, 1.0, 0.72)])
+    resolved = EX.follow(p, obs, now=T0 + 400)
+    far = EX.extend_research(resolved, obs, now=T0 + EX.EXTENDED_FOLLOW_S + 10)
+    assert "research" not in far
+
+
+def test_no_rate_or_cohort_reads_the_research_field():
+    src = open("src/pmus_execution_shadow.py").read()
+    import ast
+    tree = ast.parse(src)
+    for name in ("summarize", "by_cohort", "predictors"):
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == name)
+        consts = {n.value for n in ast.walk(fn) if isinstance(n, ast.Constant)}
+        assert "research" not in consts, f"{name} reads the research field"
+
+
+# ---- comparison against our own real completes ---------------------------
+
+def test_historical_benchmark_is_read_not_reconstructed():
+    h = EX.historical_benchmark()
+    assert h["filled"]["median"] == 1
+    assert h["unfilled"]["median"] == 2
+    assert h["unfilled"]["p75"] == 7
+    assert "authenticated" in h["unavailable"]
+
+
+def test_comparison_refuses_a_verdict_on_a_thin_sample():
+    def _p(ticks):
+        p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+        p.update(status=EX.NO_FILL,
+                 reachability={"observations": 3, "min_gap_ticks": ticks,
+                               "reached": ticks <= 0})
+        return p
+    out = EX.compare_to_history([_p(12.0) for _ in range(5)])
+    assert "too small" in out["verdict"]
+
+
+def test_a_far_live_distribution_reads_as_a_reachability_bottleneck():
+    def _p(ticks):
+        p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+        p.update(status=EX.NO_FILL,
+                 reachability={"observations": 3, "min_gap_ticks": ticks,
+                               "reached": False})
+        return p
+    out = EX.compare_to_history([_p(12.0) for _ in range(40)])
+    assert "reachability bottleneck" in out["verdict"]
+    assert out["prospective"]["median"] == 12.0
+
+
+def test_a_close_live_distribution_clears_reachability():
+    def _p(ticks):
+        p = EX.open_proposal("s", PLAN, T0, None, -2, D("0.39"))
+        p.update(status=EX.VIRTUAL_MATCHED,
+                 reachability={"observations": 3, "min_gap_ticks": ticks,
+                               "reached": True})
+        return p
+    out = EX.compare_to_history([_p(0.0) for _ in range(40)])
+    assert "not the constraint" in out["verdict"]
+
+
+def test_missing_historical_file_does_not_raise():
+    out = EX.historical_benchmark("/nope/missing.json")
+    assert out["filled"] is None and "error" in out

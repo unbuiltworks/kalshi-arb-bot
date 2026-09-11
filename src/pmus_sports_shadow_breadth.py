@@ -56,7 +56,12 @@ GATEWAY = os.getenv("PMUS_GATEWAY", "https://gateway.polymarket.us")
 PREFIX = "PMUS_SHADOW_BREADTH "
 
 # Bounded so a widening universe cannot turn into an unbounded request rate.
-WATCH_SLOTS = int(os.getenv("PMUS_SHADOW_WATCH_SLOTS", "32"))
+# BREADTH. OWNER: "Don't let Thursday-night NFL determine how long this takes.
+# Run the exact execution-quality shadow across every eligible live sports
+# market the selector can observe." Watching costs nothing but request budget,
+# and the bottleneck on reaching a decidable sample is the number of markets
+# carrying a residual at once -- not the policy, which is unchanged.
+WATCH_SLOTS = int(os.getenv("PMUS_SHADOW_WATCH_SLOTS", "96"))
 CYCLE_S = float(os.getenv("PMUS_SHADOW_CYCLE_S", "45"))
 POLL_PAUSE_S = float(os.getenv("PMUS_SHADOW_POLL_PAUSE_S", "0.25"))
 OBS_KEEP = int(os.getenv("PMUS_SHADOW_OBS_KEEP", "240"))
@@ -92,7 +97,8 @@ FLOW_WINDOW_S = float(os.getenv("PMUS_SHADOW_FLOW_WINDOW_S", "300"))
 # ranked against itself.
 SHAPE_WINDOW_S = float(os.getenv("PMUS_SHADOW_SHAPE_WINDOW_S", "3600"))
 # Rank tiers stamped AT SELECTION. Compared against each other later.
-TIERS = ((0, 8, "T1_top8"), (8, 16, "T2_9_16"), (16, 32, "T3_17_32"))
+TIERS = ((0, 8, "T1_top8"), (8, 16, "T2_9_16"), (16, 32, "T3_17_32"),
+         (32, 64, "T4_33_64"), (64, 10 ** 6, "T5_65_plus"))
 
 LABELS = {
     "order_entry": False,
@@ -250,6 +256,22 @@ def scored_row(slug: str, prev: Optional[Mapping[str, Any]],
         "shape_span_s": shape.get("span_s"),
         "shape_points": shape.get("points"),
     }
+
+
+def _first_leg_of(actions) -> dict:
+    """Price and time of the FIRST virtual fill behind this residual.
+
+    The complement price is derived from the first leg (ceiling minus the
+    surplus average), so a complement sitting unreachable may be a
+    consequence of WHERE THE FIRST LEG FILLED rather than anything about the
+    complement. Recording it is what makes that separable.
+    """
+    for a in actions or []:
+        if a.get("decision") == "quote" and a.get("fill_class") == "possible":
+            return {"price": a.get("target_price"), "t": a.get("t"),
+                    "side": a.get("side"), "relation": a.get("relation"),
+                    "fill_latency_s": a.get("fill_latency_s")}
+    return {}
 
 
 def _book_of(row: Optional[Mapping[str, Any]]) -> Optional[dict]:
@@ -576,11 +598,12 @@ class ShadowBreadth:
                 surplus = None
                 if inv_b is not None and inv_b.residual != 0:
                     surplus = inv_b.avg(inv_b.residual > 0)
+                first = _first_leg_of(d.get("actions_replayed"))
                 self.execution.record(
                     slug, armb.get("plan") or {}, now,
                     ranked_row=self._last_scored.get(slug),
                     residual_before=snap.get("residual"),
-                    surplus_avg=surplus, tier=tier)
+                    surplus_avg=surplus, tier=tier, first_leg=first)
             out.append({"slug": slug, "tier": tier,
                         "window": summary, "new_this_cycle": fresh,
                         "two_arm": arms})
@@ -723,8 +746,14 @@ def run(cycles: Optional[int] = None) -> int:
                     {k: list(v) for k, v in sb.obs.items()})
                 rep["execution_summary"] = sb.execution.summary()
                 rep["execution_predictors"] = sb.execution.predictors_report()
-                rep["execution_cohorts"] = exec_shadow.by_cohort(
-                    list(sb.execution.proposals.values()))
+                props = list(sb.execution.proposals.values())
+                rep["execution_cohorts"] = exec_shadow.by_cohort(props)
+                rep["execution_cohorts_by_sport"] = exec_shadow.by_cohort(
+                    props, key="sport")
+                rep["execution_reachability"] = \
+                    exec_shadow.reachability_report(props)
+                rep["execution_vs_history"] = \
+                    exec_shadow.compare_to_history(props)
                 rep["execution_persisted"] = sb.execution.save()
             rep["raw_persisted"] = sb.append_raw(
                 n, [by_slug[k] for k in by_slug], decisions)
