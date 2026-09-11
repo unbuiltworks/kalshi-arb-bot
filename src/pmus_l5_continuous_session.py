@@ -1298,6 +1298,55 @@ def _pair_invariant_enforced() -> bool:
             and base.matched_pair_cost_after is not None)
 
 
+def pending_qty_reconciliation(slugs, t=None, limit: int = 8) -> list:
+    """For each still-pending market, the venue's traded quantity against BOTH
+    ledger measures, with the per-trade evidence.
+
+    WHY BOTH. The settled-cohort check compares the venue's gross traded
+    quantity with the ledger's gross FILLED quantity and reconciled on 15 of
+    16 markets. The live session path compares the same venue number with
+    inv.up + inv.dn -- CURRENT HOLDINGS. For a buy-only probe those coincide,
+    so if they disagree here the disagreement itself is the finding, and
+    reporting only one of them is how we would miss it.
+
+    LIVE 01:44Z: aec-county-not-ham-2026-09-08 read venue 774.6200 against
+    45.01. That number gates may_assert_flat, so it blocks the flat boundary
+    and it blocks sizing the residual for a migration close. The alarm that
+    carries the evidence fires at session_end, and a halted probe never
+    reaches session_end -- so it runs HERE, on the read-only pass that a
+    halted probe does still run.
+
+    Read-only. No order path, no ledger write, and it never raises."""
+    from src import pmus_fill_ledger as fl
+    from src import pmus_settlement_auditor as sa
+    from src import pmus_spring_l5_session as sp
+    rows: list = []
+    for slug in list(slugs or [])[:limit]:
+        row: dict = {"slug": slug}
+        try:
+            got = sa.traded_qty_with_evidence(slug, t)
+            venue = got.get("qty")
+            row["venue_qty_total"] = venue
+            row["ledger_qty_filled_total"] = sa.ledger_qty_total(slug)
+            row["vs_ledger_filled"] = fl.venue_vs_ledger(
+                venue, row["ledger_qty_filled_total"])
+            try:
+                inv = sp.held_inventory_from_ledger(slug)
+                held = inv.up + inv.dn
+                row["ledger_qty_held"] = str(held)
+                row["vs_ledger_held"] = fl.venue_vs_ledger(venue, held)
+                row["residual"] = str(inv.up - inv.dn)
+            except Exception as exc:                    # noqa: BLE001
+                row["ledger_qty_held"] = None
+                row["held_error"] = f"{type(exc).__name__}:{str(exc)[:60]}"
+            row["qty_evidence"] = sp._qty_evidence_digest(
+                {"qty_evidence": got.get("evidence")})
+        except Exception as exc:                        # noqa: BLE001
+            row["error"] = f"{type(exc).__name__}:{str(exc)[:80]}"
+        rows.append(row)
+    return rows
+
+
 def shutdown_settle_pass(t=None) -> dict:
     """Reconcile pending settlements while HALTED, and re-price the budget.
 
@@ -1360,6 +1409,14 @@ def shutdown_settle_pass(t=None) -> dict:
             realized, invs)
     except Exception as exc:            # noqa: BLE001
         out["errors"].append(f"budget:{type(exc).__name__}")
+    # A market that will not reconcile cannot be declared flat and cannot have
+    # its residual sized, so a halted probe must keep asking rather than wait
+    # for a session_end it will never reach.
+    try:
+        out["qty_reconciliation"] = pending_qty_reconciliation(
+            [r["slug"] for r in out["still_pending"]], t)
+    except Exception as exc:            # noqa: BLE001
+        out["errors"].append(f"qty_reconciliation:{type(exc).__name__}")
     return out
 
 
