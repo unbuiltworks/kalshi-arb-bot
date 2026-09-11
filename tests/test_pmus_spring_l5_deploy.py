@@ -84,14 +84,27 @@ def test_probe_never_restarts_itself():
     assert _manifest()["deploy"]["restartPolicyType"] == "NEVER"
 
 
-def test_probe_manifest_starts_the_campaign_not_the_bare_session():
+def test_probe_never_starts_the_bare_session():
     """Starting the session directly would bypass the strict-evidence,
     provenance and durable-state guards entirely. The continuous campaign
     (OWNER 5552036210) runs every candidate through that same guard at
     selection and inherits the dual key, credential and durable-state
-    checks; it is a shadow selector when disarmed."""
-    assert _manifest()["deploy"]["startCommand"] == (
-        "python3 -m src.pmus_l5_continuous_session")
+    checks; it is a shadow selector when disarmed.
+
+    WIDENED 2026-09-11, deliberately and by owner decision, from "must be the
+    campaign" to "must be one of two named entrypoints". The campaign stopped
+    itself on the daily loss stop and the owner asked for a READ-ONLY
+    settlement pass over the markets it left unaudited -- which is neither the
+    campaign nor the bare session. What the guard actually protects is
+    unchanged: the bare session must never be the start command, and anything
+    not on this list is refused, so a third entrypoint cannot appear quietly."""
+    allowed = {"python3 -m src.pmus_l5_continuous_session",   # trading
+               "python3 -m src.pmus_settlement_sweep"}        # read-only audit
+    start = _manifest()["deploy"]["startCommand"]
+    assert start in allowed, start
+    assert "src.pmus_spring_l5_session" not in start
+    # the IMAGE default stays the campaign: the start command overrides it,
+    # and a sweep left as CMD would be the wrong thing to inherit later
     cmd = [l for l in DOCKERFILE.read_text().splitlines()
            if l.startswith("CMD ")][0]
     assert "src.pmus_l5_continuous_session" in cmd

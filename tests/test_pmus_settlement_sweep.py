@@ -149,12 +149,24 @@ def test_the_sweep_is_packaged_in_the_probe_image():
     assert "src/pmus_settlement_sweep.py" in rail
 
 
-def test_the_start_command_is_still_the_campaign_and_not_this():
-    """Packaging must not arm it. Changing what the service RUNS is an owner
-    decision, and this test fails loudly if a commit makes it silently."""
+def test_the_start_command_is_the_sweep_by_explicit_owner_decision():
+    """The latch did its job. It asserted the CAMPAIGN until an owner decision
+    changed it; the owner chose "run it now, two-step" on 2026-09-11, so this
+    now asserts the sweep.
+
+    Why the repo config carries it and not only the Railway API: the
+    update-service write cannot be read back (every read of that service's
+    config returns a schema error), and an update that silently failed would
+    mean the next build starts the TRADING CAMPAIGN -- the one outcome the
+    owner forbade. With both the service setting and railway.json naming the
+    sweep, a failed API write cannot relaunch trading.
+
+    Restoring the campaign is likewise an owner decision and will flip this
+    test back."""
     import json
     from pathlib import Path
     root = Path(__file__).resolve().parents[1]
     rail = json.loads((root / "deploy/pmus_spring_l5/railway.json").read_text())
-    assert (rail["deploy"]["startCommand"]
-            == "python3 -m src.pmus_l5_continuous_session")
+    assert rail["deploy"]["startCommand"] == "python3 -m src.pmus_settlement_sweep"
+    assert rail["deploy"]["restartPolicyType"] == "NEVER", (
+        "the sweep exits when done; ALWAYS would re-run it forever")
