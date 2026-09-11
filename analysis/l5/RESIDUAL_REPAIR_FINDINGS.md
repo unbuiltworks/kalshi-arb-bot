@@ -149,3 +149,89 @@ it is the opposite of what "minimize abs(residual)" would prescribe.
 Deviations from the pre-registration: §5's floor metric was non-discriminating
 (recorded in §2 above). The train/holdout split in §6 was **not used**,
 because no rule was fitted; the holdout remains unread and available.
+
+---
+
+# Addendum: the spend_cap EXTEND → COMPLETE conversion
+
+Owner's counterfactual: *"when an EXTEND draw is blocked by `spend_cap`,
+should the safe fallback really be COMPLETE, or should it be HOLD? We should
+answer that from the pre-registered historical states, not intuition."*
+
+**The evidence does not support switching to HOLD.** That is the opposite of
+what I expected, and of what I implied when I called the conversion
+"backwards".
+
+## The rule
+
+```python
+if relation in ("open", "extend"):
+    if cum + (inv.spent() - prior_spent) + spec["entry_notional"] \
+            > session_notional_cap():
+        relation = "complete" if inv.residual != 0 else "stop"
+```
+
+The check sits *inside* the open/extend branch, so the converted COMPLETE
+never faces that same arithmetic. It is bounded instead by the completion
+budget and the pair ceiling.
+
+## What the 56 conversions actually did
+
+```
+spend_cap -> COMPLETE          56
+  no_fill_cancelled            45
+  filled                       10        17.9%
+  unknown                       1
+```
+
+**For the 45 that did not fill, COMPLETE and HOLD are economically
+identical.** No fill means no inventory change and no floor change. The
+conversion costs an action from the six-action session budget and the single
+outstanding-order slot — and nothing else.
+
+**For the 10 that filled, every one improved the guaranteed floor**, by
++0.0352 to +9.7032. Nine of the ten were PARTIAL completions (filled quantity
+below the residual), so the engine chipped at the residual rather than
+flattening it.
+
+So on the pre-registered floor metric, HOLD would have been *identical* in
+82% of cases and *worse* in the other 18%.
+
+### One number that must not be misread
+
+The `pair_cost_after` figures above 1.00 in the per-state table price
+completing the **whole** residual at that price. Nine of the ten orders were
+partial, so those are not ceiling breaches and are not reported as any. I
+checked this rather than asserting it, because the same table read carelessly
+would have produced a second false alarm about the ceiling in one day.
+
+### And the floor metric is weak evidence, by its own arithmetic
+
+Section 2 of this document establishes that completing `q` at `p` always
+improves the floor by `q(1−p)`. So "all ten improved the floor" is guaranteed
+arithmetic, not a demonstration of judgement. It is enough to refuse the HOLD
+switch — HOLD cannot beat a guaranteed gain — but not enough to call the
+conversion good.
+
+## What survives as criticism
+
+1. **An 82% no-op rate** burns the one outstanding-order slot and an action
+   from a six-action budget, every time.
+2. **It diverges from L5**, whose distribution at these states favours
+   persist/extend roughly 2:1.
+3. **The price asymmetry is real**: median EXTEND price **0.36**, median
+   COMPLETE price **0.62**. When cash is the binding constraint, the rule
+   blocks the cheaper action and permits the one about 1.7× dearer.
+
+## The sharper question this reframes
+
+The problem may not be the **fallback**. It may be the **trigger**. If the
+constraint is cash, then blocking a 0.36 reparative EXTEND while permitting a
+0.62 COMPLETE is the wrong way round — but the remedy is not HOLD, it is
+possibly to let the cheaper reparative extend through under a rule that
+recognises it as risk-reducing rather than risk-adding.
+
+**That is a hypothesis, not a recommendation.** It changes what the engine
+spends money on, so it needs the pre-registered treatment: specified on
+TRAIN, read once on the holdout, ≤2 parameters, and shadow evaluation before
+any live change. The holdout remains unread.
