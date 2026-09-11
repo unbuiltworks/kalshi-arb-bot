@@ -1,0 +1,99 @@
+name: AWS sports K/P arb disarmed preflight
+
+on:
+  push:
+    branches:
+      - aws-migration-foundation
+    paths:
+      - deploy/aws/sports-kp-arb-disarmed-preflight.trigger
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_HOT_INSTANCE_ID: i-0b90f0a309153f47e
+  AWS_DEPLOY_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-ssm-deployer
+  SOURCE_BRANCH: aws-migration-foundation
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run isolated authenticated DISARMED arb preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE=$(cat <<'EOF'
+          set -Eeuo pipefail
+          REPO=/home/ssm-user/kalshi-arb-bot
+          STAGE=/home/ssm-user/sports-kp-arb-preflight
+          PMUS_CREDS=/home/ssm-user/l5-pmus-q1-credentials.env
+          KALSHI_CREDS=/opt/kalshi-arb-bot/.env.aws-live
+          BRANCH=aws-migration-foundation
+
+          echo SPORTS_KP_ARB_AWS_DISARMED_PREFLIGHT_BEGIN
+          PROTECTED_BEFORE=$(systemctl is-active kalshi-btc25-continuous 2>/dev/null || true)
+
+          test -d "$REPO/.git"
+          test -f "$PMUS_CREDS"
+          test -f "$KALSHI_CREDS"
+          cd "$REPO"
+          git config --global --add safe.directory "$REPO" || true
+          git fetch origin "$BRANCH" >/dev/null
+
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          chmod 700 "$STAGE"
+          git archive --format=tar "origin/$BRANCH" | tar -x -C "$STAGE"
+
+          set -a
+          source "$KALSHI_CREDS"
+          source "$PMUS_CREDS"
+          set +a
+
+          # The preflight is intentionally incapable of inheriting a live arm.
+          unset ENABLE_SPORTS_KP_LIVE
+          rm -f "$STAGE/.sports_kp_arm_once"
+          export PYTHONPATH="$STAGE"
+          cd "$STAGE"
+
+          python3 scripts/aws_sports_kp_disarmed_preflight.py | tee /tmp/sports-kp-arb-disarmed.json
+          grep -q 'DISARMED_READ_AUTH_OK' /tmp/sports-kp-arb-disarmed.json
+          grep -q '"order_entry": false' /tmp/sports-kp-arb-disarmed.json
+
+          PROTECTED_AFTER=$(systemctl is-active kalshi-btc25-continuous 2>/dev/null || true)
+          test "$PROTECTED_BEFORE" = "$PROTECTED_AFTER"
+          echo "PROTECTED_SERVICE_UNCHANGED state=${PROTECTED_AFTER:-unknown}"
+          echo SPORTS_KP_ARB_AWS_DISARMED_PREFLIGHT_END
+          EOF
+          )
+          ENC=$(printf '%s' "$REMOTE" | base64 -w0)
+          PARAMS=$(jq -nc --arg cmd "echo '$ENC' | base64 -d | bash" '{commands:[$cmd]}')
+          CID=$(aws ssm send-command \
+            --instance-ids "$AWS_HOT_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "Sports K/P arb authenticated DISARMED preflight" \
+            --parameters "$PARAMS" \
+            --timeout-seconds 180 \
+            --query 'Command.CommandId' --output text)
+          for _ in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 2
+          done
+          RESULT=$(aws ssm get-command-invocation \
+            --command-id "$CID" --instance-id "$AWS_HOT_INSTANCE_ID" \
+            --query '{Status:Status,StatusDetails:StatusDetails,ResponseCode:ResponseCode,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+            --output json)
+          echo "$RESULT"
+          test "$(jq -r '.Status' <<<"$RESULT")" = "Success"
+          grep -q 'SPORTS_KP_ARB_AWS_DISARMED_PREFLIGHT_END' <<<"$(jq -r '.Stdout' <<<"$RESULT")"
