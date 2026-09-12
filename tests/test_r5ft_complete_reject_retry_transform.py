@@ -30,7 +30,10 @@ def test_transform_applies_once_and_generated_session_compiles(tmp_path):
     assert text.count("_retry1") >= 2
     assert "post_only_cross_race" in text
     assert "pair_invariant_ok(\n                                    inv, deficit_up, retry_px, qty)" in text
-    assert "retry_px is not None and retry_px != px" in text
+    # One retry may use the same still-legal maker price; the stage suffix
+    # and non-recursive placement path are the bound, not a price-change gate.
+    assert "retry_px != px" not in text
+    assert "THIS SAME COMPLETE exactly once" in text
 
 
 def test_transform_fails_closed_if_applied_twice(tmp_path):
