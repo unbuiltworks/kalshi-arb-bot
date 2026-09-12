@@ -1,4 +1,5 @@
 name: Deploy Gemini L5 Shadow to AWS
+# Deployment trigger after SSM shell portability fix.
 
 on:
   workflow_dispatch:
