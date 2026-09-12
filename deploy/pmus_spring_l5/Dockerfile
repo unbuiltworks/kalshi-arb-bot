@@ -65,6 +65,13 @@ COPY src/pmus_incentive_audit.py src/pmus_incentive_audit.py
 COPY src/l5_realized_bridge.py src/l5_realized_bridge.py
 COPY src/pmus_spring_l5_probe_entry.py src/pmus_spring_l5_probe_entry.py
 COPY src/pmus_spring_l5_session.py src/pmus_spring_l5_session.py
+
+# R5FT execution fix is a strict build-time transform. Source mismatch fails
+# the image build; generated session code is then compiled before startup.
+COPY deploy/pmus_spring_l5/apply_complete_reject_retry.py deploy/pmus_spring_l5/apply_complete_reject_retry.py
+RUN python3 deploy/pmus_spring_l5/apply_complete_reject_retry.py \
+    && python3 -m py_compile src/pmus_spring_l5_session.py
+
 COPY src/pmus_micro_executor.py src/pmus_micro_executor.py
 COPY src/pmus_fill_ledger.py src/pmus_fill_ledger.py
 COPY src/pmus_q1_executor_v4.py src/pmus_q1_executor_v4.py
