@@ -1,0 +1,27 @@
+name: Test Gemini L5 Queue Shadow
+
+on:
+  push:
+    branches:
+      - feature/l5-gemini-queue-shadow
+    paths:
+      - 'src/gemini_l5_queue_shadow.py'
+      - 'src/gemini_l5_complement_cf.py'
+      - 'src/gemini_l5_queue_service.py'
+      - 'tests/test_gemini_l5_queue_shadow.py'
+      - '.github/workflows/test-gemini-l5-queue.yml'
+  workflow_dispatch:
+
+jobs:
+  queue-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pytest
+        run: python -m pip install --upgrade pip pytest
+      - name: Run isolated Gemini queue tests
+        run: python -m pytest -q tests/test_gemini_l5_queue_shadow.py
