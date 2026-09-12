@@ -7,12 +7,13 @@ set -euo pipefail
 mkdir -p "${GEMINI_L5_STATE_DIR}"
 
 # READ-ONLY research container. Intentionally do not pass Gemini API keys.
+# Keep the canonical service role value so the service's fail-closed guard passes.
 docker rm -f gemini-l5-shadow-aws >/dev/null 2>&1 || true
 
 docker run -d \
   --name gemini-l5-shadow-aws \
   --restart unless-stopped \
-  -e GEMINI_SHADOW_ROLE=gemini-l5-shadow-aws \
+  -e GEMINI_SHADOW_ROLE=gemini-l5-shadow \
   -e GEMINI_SHADOW_STATE_DIR=/state/gemini-shadow \
   -v "${GEMINI_L5_STATE_DIR}:/state/gemini-shadow" \
   "${GEMINI_L5_IMAGE}"
