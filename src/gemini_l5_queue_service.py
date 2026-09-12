@@ -27,6 +27,8 @@ from src.polymarket_l5 import transfer_backtest as tb
 
 DEPTH_LEVELS = 25
 QUEUE_BACK_LEVELS = 2
+# This file is a Railway watch target; changes here intentionally deploy only
+# the isolated read-only Gemini queue-shadow service.
 LABELS = (
     "READ-ONLY Gemini queue-aware shadow; zero orders; public depth/prints only; "
     "strict trade-through is hypothetical maker-fill evidence, not a venue fill; "
