@@ -1,5 +1,4 @@
 name: Deploy Gemini L5 Shadow to AWS
-# Deployment trigger after SSM shell portability fix.
 
 on:
   workflow_dispatch:
@@ -61,23 +60,37 @@ jobs:
           set -euo pipefail
           KEY="gemini-l5/deploy/${GITHUB_SHA}.tar.gz"
           URL=$(aws s3 presign "s3://${AWS_GEMINI_DEPLOY_BUCKET}/${KEY}" --expires-in 900)
-          PARAMS=$(jq -nc \
-            --arg url "$URL" \
-            --arg state "$AWS_GEMINI_STATE_URI" \
-            --arg sha "$GITHUB_SHA" \
-            '{commands:[
-              "set -eu",
-              "mkdir -p /opt/gemini-l5/releases /var/lib/gemini-l5",
-              ("curl -fsSL " + ($url|@sh) + " -o /tmp/gemini-l5.tar.gz"),
-              ("rm -rf /opt/gemini-l5/releases/"+$sha),
-              ("mkdir -p /opt/gemini-l5/releases/"+$sha),
-              ("tar -xzf /tmp/gemini-l5.tar.gz -C /opt/gemini-l5/releases/"+$sha),
-              ("cd /opt/gemini-l5/releases/"+$sha+" && docker build -f deploy/aws_gemini_l5/Dockerfile -t gemini-l5-shadow-aws:"+$sha+" ."),
-              ("cd /opt/gemini-l5/releases/"+$sha+" && GEMINI_L5_IMAGE=gemini-l5-shadow-aws:"+$sha+" GEMINI_L5_STATE_DIR=/var/lib/gemini-l5 bash deploy/aws_gemini_l5/run.sh"),
-              ("printf %s " + ($state|@sh) + " > /etc/gemini-l5-s3-uri"),
-              ("docker inspect -f {{.Config.Image}} gemini-l5-shadow-aws | grep -F " + ("gemini-l5-shadow-aws:"+$sha|@sh)),
-              "docker ps --filter name=gemini-l5-shadow-aws --filter status=running --format {{.Names}} | grep -Fx gemini-l5-shadow-aws"
-            ]}')
+          SCRIPT=$(cat <<EOF
+          set -euxo pipefail
+          echo STAGE=host-info
+          id
+          command -v bash
+          command -v curl
+          command -v docker
+          df -h /
+          echo STAGE=prepare
+          mkdir -p /opt/gemini-l5/releases /var/lib/gemini-l5
+          echo STAGE=download
+          curl -fsSL '${URL}' -o /tmp/gemini-l5.tar.gz
+          ls -lh /tmp/gemini-l5.tar.gz
+          echo STAGE=extract
+          rm -rf /opt/gemini-l5/releases/${GITHUB_SHA}
+          mkdir -p /opt/gemini-l5/releases/${GITHUB_SHA}
+          tar -xzf /tmp/gemini-l5.tar.gz -C /opt/gemini-l5/releases/${GITHUB_SHA}
+          echo STAGE=build
+          cd /opt/gemini-l5/releases/${GITHUB_SHA}
+          docker build -f deploy/aws_gemini_l5/Dockerfile -t gemini-l5-shadow-aws:${GITHUB_SHA} .
+          echo STAGE=run
+          GEMINI_L5_IMAGE=gemini-l5-shadow-aws:${GITHUB_SHA} GEMINI_L5_STATE_DIR=/var/lib/gemini-l5 bash deploy/aws_gemini_l5/run.sh
+          printf %s '${AWS_GEMINI_STATE_URI}' > /etc/gemini-l5-s3-uri
+          echo STAGE=verify
+          docker inspect -f '{{.Config.Image}}' gemini-l5-shadow-aws | grep -F 'gemini-l5-shadow-aws:${GITHUB_SHA}'
+          docker ps --filter name=gemini-l5-shadow-aws --filter status=running --format '{{.Names}}' | grep -Fx gemini-l5-shadow-aws
+          docker logs --tail 40 gemini-l5-shadow-aws || true
+          echo STAGE=complete
+          EOF
+          )
+          PARAMS=$(jq -nc --arg script "$SCRIPT" '{commands:[("bash -lc " + ($script|@sh))]}')
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$AWS_GEMINI_INSTANCE_ID" \
             --document-name AWS-RunShellScript \
@@ -90,16 +103,20 @@ jobs:
         run: |
           set -euo pipefail
           CMD_ID='${{ steps.ssm.outputs.command_id }}'
-          if ! aws ssm wait command-executed \
+          set +e
+          aws ssm wait command-executed \
             --command-id "$CMD_ID" \
-            --instance-id "$AWS_GEMINI_INSTANCE_ID"; then
-            aws ssm get-command-invocation \
-              --command-id "$CMD_ID" \
-              --instance-id "$AWS_GEMINI_INSTANCE_ID" \
-              --query '{Status:Status,StdOut:StandardOutputContent,StdErr:StandardErrorContent}' || true
-            exit 1
-          fi
+            --instance-id "$AWS_GEMINI_INSTANCE_ID"
+          WAIT_RC=$?
+          set -e
           aws ssm get-command-invocation \
             --command-id "$CMD_ID" \
             --instance-id "$AWS_GEMINI_INSTANCE_ID" \
-            --query '{Status:Status,StdOut:StandardOutputContent,StdErr:StandardErrorContent}'
+            --query '{Status:Status,ResponseCode:ResponseCode,StdOut:StandardOutputContent,StdErr:StandardErrorContent}' || true
+          if [ "$WAIT_RC" -ne 0 ]; then
+            aws ssm list-command-invocations \
+              --command-id "$CMD_ID" \
+              --instance-id "$AWS_GEMINI_INSTANCE_ID" \
+              --details || true
+            exit "$WAIT_RC"
+          fi
