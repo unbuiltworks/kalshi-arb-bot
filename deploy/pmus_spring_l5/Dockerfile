@@ -47,6 +47,10 @@ COPY src/pmus_migration_close_live.py src/pmus_migration_close_live.py
 # read-only settlement audit (venue POSITION_RESOLUTION activities) so the
 # campaign can record the authoritative realized result of a held market
 COPY src/pmus_settlement_auditor.py src/pmus_settlement_auditor.py
+# One-time local accounting correction for the two venue-confirmed settled
+# markets inflated by the bad venue-trade backfill. It is idempotent and
+# fail-closed; after convergence it is a no-op on every restart.
+COPY src/pmus_r5ft_ledger_repair.py src/pmus_r5ft_ledger_repair.py
 # read-only batch pass over the ledger's unsettled set (owner 2026-09-11:
 # "no order path, no re-arm, no new risk"). Present in the image so the pass
 # can be run without a code change; it is NOT the start command.
@@ -125,8 +129,10 @@ ENV PMUS_SERVICE_ROLE=spring-l5-probe \
     PYTHONUNBUFFERED=1
 
 # Deployment guard delegates to the canonical session after safety checks.
+# The repair touches local ledger state only, verifies exact convergence, and
+# becomes a no-op after success; only then may the live session boot.
 # Previous direct form retained here for structural provenance/tests:
 # exec python3 -m src.pmus_spring_l5_session
 # One-shot form retained for provenance/tests:
 # exec python3 -m src.pmus_spring_l5_probe_entry
-CMD ["sh", "-c", "test \"$PMUS_SERVICE_ROLE\" = spring-l5-probe || { echo SERVICE_ROLE_MISMATCH; exit 64; }; exec python3 -m src.pmus_l5_continuous_session"]
+CMD ["sh", "-c", "test \"$PMUS_SERVICE_ROLE\" = spring-l5-probe || { echo SERVICE_ROLE_MISMATCH; exit 64; }; python3 -m src.pmus_r5ft_ledger_repair && exec python3 -m src.pmus_l5_continuous_session"]
