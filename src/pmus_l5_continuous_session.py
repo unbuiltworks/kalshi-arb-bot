@@ -986,6 +986,17 @@ def settlement_breakdown(slug: str, audit: Mapping[str, Any]) -> dict:
     return out
 
 
+def _backfill_venue_fills(audit) -> dict:
+    """Indirection so tests can stub the repair; see the auditor."""
+    from src import pmus_settlement_auditor as auditor
+    return auditor.backfill_missing_venue_fills(audit)
+
+
+def _ledger_qty(slug: str):
+    from src import pmus_settlement_auditor as auditor
+    return auditor.ledger_qty_total(slug)
+
+
 def settle_held(t, slug: str, walk=None) -> dict:
     """Authoritative settlement for a held market: the venue's
     POSITION_RESOLUTION activity (read-only), recorded idempotently in
@@ -1012,6 +1023,10 @@ def settle_held(t, slug: str, walk=None) -> dict:
                                        "realized_pnl_sum")},
                           **_trade_shape((result.get("trade_summary") or {}).get("trades") or [])},
                "resolution": result.get("resolution"),
+               # carried verbatim so the caller can repair a ledger that
+               # under-records the venue (backfill_missing_venue_fills)
+               "market": slug,
+               "trade_summary": result.get("trade_summary"),
                "ledger_rows_written": written}
         if result.get("settled"):
             out["breakdown"] = settlement_breakdown(slug, result)
@@ -2152,7 +2167,25 @@ def continuation_preflight(t, filled: set, settled: set,
         if i:
             _preflight_sleep(PREFLIGHT_AUDIT_PACE_S)
         audit = settle_held(t, slug, walk=shared_walk)
+        # THE LEDGER IS THE ONE THAT IS WRONG. When the venue shows shares
+        # our file never booked on a SETTLED market, repair the file from
+        # the venue's own trade rows and re-read, so the reconcile check
+        # judges corrected numbers. It refuses to act the other way round
+        # (ledger > venue) and it refuses on an unsettled market; see
+        # backfill_missing_venue_fills.
+        fix = None
+        try:
+            fix = _backfill_venue_fills(audit)
+            if fix and fix.get("backfilled"):
+                audit = dict(audit)
+                audit["ledger_qty_total"] = _ledger_qty(slug)
+                _log("ledger_backfilled_from_venue", **fix,
+                     ledger_qty_after=audit["ledger_qty_total"],
+                     venue_qty=audit.get("venue_qty_total"))
+        except Exception as exc:                        # noqa: BLE001
+            fix = {"error": repr(exc)[:160]}
         real[slug] = {"status": audit.get("status"),
+                      "ledger_backfill": fix,
                       "settled": bool(audit.get("settled")),
                       "settled_by": audit.get("settled_by"),
                       "realized_confirmed": bool(audit.get("realized_confirmed")),

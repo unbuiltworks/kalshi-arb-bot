@@ -162,6 +162,97 @@ def activity_pages(t: q1.Transport, since: Optional[str] = None,
             "newest_time": _row_time_iso(rows[0]) if rows else None}
 
 
+BACKFILL_KIND = "filled"
+BACKFILL_SOURCE = "venue_trade_backfill"
+
+
+def ledger_trade_ids(slug: str) -> set:
+    """Venue trade ids this ledger has already booked for the market."""
+    path = q1.state_dir() / "ledger.jsonl"
+    seen: set = set()
+    if not path.exists():
+        return seen
+    for line in path.read_text().splitlines():
+        try:
+            r = json.loads(line)
+        except Exception:                               # noqa: BLE001
+            continue
+        if isinstance(r, Mapping) and r.get("slug") == slug and r.get("venue_trade_id"):
+            seen.add(str(r["venue_trade_id"]))
+    return seen
+
+
+def backfill_missing_venue_fills(audit: Mapping[str, Any]) -> dict:
+    """Book fills the VENUE executed that our ledger never recorded.
+
+    LIVE 2026-09-12T01:24:47Z, the last thing standing between the account
+    and its first R5FT order:
+
+        skaser-abaspa  venue 17.1800  ledger 16.20   (+0.98)
+        vervas-kohboh  venue 13.8200  ledger  9.48   (+4.34)
+
+    Both markets venue-confirmed SETTLED and REALIZED, account flat. The
+    venue executed shares that no session ever wrote down -- the same class
+    as the cs2 case at 15:46Z, where "the two fills that flattened the pair
+    landed with no session attached and were never booked".
+
+    THE FIX IS TO CORRECT THE LEDGER, NOT TO EXCUSE IT. The venue's own
+    trade activities are authoritative; our file is the one that is wrong.
+    Booking the missing rows makes the ledger MORE accurate and leaves the
+    reconcile check exactly as strict as it was.
+
+    THREE THINGS IT WILL NOT DO, each of them a way this could go wrong:
+
+      * NOT when the market is not venue-confirmed settled. An open market
+        may simply have fills in flight, and writing them here would race
+        the session that owns them.
+      * NOT when the LEDGER exceeds the VENUE. That direction says we
+        recorded a fill the venue does not show, which is a far more
+        serious problem than a missing row, and it must keep blocking.
+      * NOT twice. Each written row carries its venue trade id and rows
+        whose id is already present are skipped, so repeated preflight
+        passes converge instead of inflating.
+    """
+    slug = str(audit.get("market") or "")
+    out = {"market": slug, "backfilled": [], "qty": "0", "skipped": None}
+    if not audit.get("settled"):
+        out["skipped"] = "market is not venue-confirmed settled"
+        return out
+    venue = _amount(audit.get("venue_qty_total"))
+    ledger = _amount(audit.get("ledger_qty_total"))
+    if venue is None or ledger is None:
+        out["skipped"] = "venue or ledger quantity unknown"
+        return out
+    if venue <= ledger:
+        out["skipped"] = ("ledger meets or exceeds the venue; a ledger that "
+                          "exceeds the venue is never repaired here")
+        return out
+    already = ledger_trade_ids(slug)
+    written, total = [], D("0")
+    for tr in (audit.get("trade_summary") or {}).get("trades") or []:
+        tid = str(tr.get("id") or "")
+        qty = _amount(tr.get("qty_decimal_raw"))
+        if not tid or qty is None or tid in already:
+            continue
+        written.append(tid)
+        total += qty
+        q1.ledger_append({
+            "kind": BACKFILL_KIND, "stage": "venue_backfill", "slug": slug,
+            "qty": str(qty), "price": tr.get("price"),
+            "venue_trade_id": tid, "order_id": f"venue:{tid}",
+            "source": BACKFILL_SOURCE,
+            "venue_create_time": tr.get("createTime"),
+            "labels": "written from the venue's own trade activity because "
+                      "no session recorded this fill; not a live fill event",
+        })
+    out["backfilled"] = written
+    out["qty"] = str(total)
+    if not written:
+        out["skipped"] = ("venue exceeds ledger but every venue trade id is "
+                          "already booked -- the gap is not missing rows")
+    return out
+
+
 def first_fill_time(slug: str) -> Optional[str]:
     """ISO time of this ledger's first fill in the market (the `since`
     bound for the activity walk); None when unknown."""
