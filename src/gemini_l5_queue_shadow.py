@@ -159,12 +159,12 @@ def populated_price_arms(book: Mapping[str, Any], side_yes: bool,
 
     out = []
     for n, px in enumerate(side_prices):
-        q = queue_metrics(book, side_yes, px)
+        qm = queue_metrics(book, side_yes, px)
         out.append({
             "arm": "touch" if n == 0 else f"{n}_populated_level_back",
             "populated_levels_back": n,
             "price": str(px),
-            "queue": q.as_dict(),
+            "queue": qm.as_dict(),
         })
     return out
 
@@ -225,6 +225,143 @@ def movement(bbo_rows: Iterable[Mapping[str, Any]], now_s: float,
     return {"window_s": window_s, "observations": len(mids),
             "mid_move": str(mids[-1] - mids[0]),
             "mid_range": str(max(mids) - min(mids))}
+
+
+def _strict_fill(prints: Iterable[Mapping[str, Any]], side_yes: bool, price: D,
+                 start_s: float, end_s: float) -> Optional[dict]:
+    """Earliest strict trade-through after a hypothetical maker quote.
+
+    YES bid: a taker SELL print strictly below our bid.
+    NO bid p: a taker BUY print strictly above the equivalent YES ask 1-p.
+    The result remains hypothetical evidence, never a venue fill.
+    """
+    px = D(str(price))
+    for p in prints or []:
+        ts = int(p.get("timestampms") or 0) / 1000.0
+        if ts <= start_s or ts > end_s:
+            continue
+        pp = _d(p.get("price"))
+        typ = str(p.get("type") or "").lower()
+        if pp is None:
+            continue
+        hit = (side_yes and typ == "sell" and pp < px) or (
+            (not side_yes) and typ == "buy" and pp > ONE - px)
+        if hit:
+            return {"t": ts, "timestampms": int(p.get("timestampms") or 0),
+                    "print_price": str(pp), "print_type": typ,
+                    "quoted_price": str(px), "tid": p.get("tid")}
+    return None
+
+
+def _row_at_or_after(rows: Iterable[Mapping[str, Any]], t: float) -> Optional[Mapping[str, Any]]:
+    after = [r for r in rows or [] if float(r.get("t") or 0) >= t and r.get("depth")]
+    if after:
+        return min(after, key=lambda r: float(r.get("t") or 0))
+    before = [r for r in rows or [] if float(r.get("t") or 0) <= t and r.get("depth")]
+    return max(before, key=lambda r: float(r.get("t") or 0)) if before else None
+
+
+def evaluate_queue_window(symbol: str, bbo_rows: Iterable[Mapping[str, Any]],
+                          prints: Iterable[Mapping[str, Any]], expiry_s: float,
+                          tick: D, maker_fee_fn,
+                          min_edge_after_fees: D = D("0.01"),
+                          max_back: int = 2,
+                          entry_max_tte_s: float = 300.0,
+                          min_tte_s: float = 105.0,
+                          first_wait_s: float = 180.0,
+                          stop_before_expiry_s: float = 25.0) -> dict:
+    """Sequential same-tape test of queue position versus complementability.
+
+    At the first fully observed snapshot inside the canonical entry window we
+    quote YES and NO simultaneously at touch / 1 populated level back /
+    2 populated levels back. Strict trade-through determines which leg would
+    hypothetically fill first. Only then do we re-read the actual book and ask
+    whether a fee-safe complement at touch / 1-back / 2-back would strictly
+    trade through before the stop horizon.
+
+    This is deliberately not the legacy 0.98 complement rule and not a P&L
+    claim. It isolates the transfer question: does better queue position buy
+    enough two-sided completion to justify surrendering pair edge?
+    """
+    rows = sorted([r for r in bbo_rows or [] if r.get("depth")],
+                  key=lambda r: float(r.get("t") or 0))
+    ps = sorted(list(prints or []), key=lambda p: int(p.get("timestampms") or 0))
+    eligible = [r for r in rows
+                if min_tte_s <= expiry_s - float(r.get("t") or 0) <= entry_max_tte_s
+                and (r.get("queue_arms") or {}).get("YES")
+                and (r.get("queue_arms") or {}).get("NO")]
+    if not eligible:
+        return {"symbol": symbol, "status": "NO_QUEUE_ENTRY_COVERAGE",
+                "semantics": SEMANTICS}
+    entry = eligible[0]
+    entry_t = float(entry.get("t") or 0)
+    first_end = min(entry_t + first_wait_s, expiry_s - stop_before_expiry_s)
+    result = {"symbol": symbol, "status": "SCORED", "entry_t": entry_t,
+              "entry_tte_s": round(expiry_s - entry_t, 3),
+              "entry_spread": entry.get("spread_depth"), "arms": [],
+              "semantics": SEMANTICS}
+
+    yes_arms = (entry.get("queue_arms") or {}).get("YES") or []
+    no_arms = (entry.get("queue_arms") or {}).get("NO") or []
+    for back in range(max_back + 1):
+        if back >= len(yes_arms) or back >= len(no_arms):
+            continue
+        ya, na = yes_arms[back], no_arms[back]
+        yp, np = D(ya["price"]), D(na["price"])
+        initial_pair = pair_cost_after_known_maker_fees(yp, np, maker_fee_fn)
+        yf = _strict_fill(ps, True, yp, entry_t, first_end)
+        nf = _strict_fill(ps, False, np, entry_t, first_end)
+        fills = [("YES", yf), ("NO", nf)]
+        fills = [(s, f) for s, f in fills if f is not None]
+        arm = {"entry_arm": ya.get("arm"), "populated_levels_back": back,
+               "yes_price": str(yp), "no_price": str(np),
+               "initial_pair_cost_after_known_fees": str(initial_pair),
+               "initial_edge_after_known_fees": str(ONE - initial_pair),
+               "yes_queue": ya.get("queue"), "no_queue": na.get("queue"),
+               "first_fill": None, "complements": []}
+        if not fills:
+            arm["status"] = "NO_FIRST_FILL"
+            result["arms"].append(arm)
+            continue
+        fills.sort(key=lambda x: x[1]["t"])
+        first_side, ff = fills[0]
+        # If both sides strictly trade through at the identical print timestamp,
+        # count this only as an observed simultaneous strict-through event.
+        simultaneous = (len(fills) > 1 and fills[1][1]["t"] == ff["t"])
+        arm["first_fill"] = {"side": first_side, **ff}
+        arm["simultaneous_strict_through"] = simultaneous
+        if simultaneous:
+            arm["status"] = "SIMULTANEOUS_STRICT_THROUGH"
+            result["arms"].append(arm)
+            continue
+
+        comp_yes = first_side == "NO"
+        comp_row = _row_at_or_after(rows, ff["t"])
+        if comp_row is None:
+            arm["status"] = "NO_COMPLEMENT_BOOK"
+            result["arms"].append(arm)
+            continue
+        first_px = yp if first_side == "YES" else np
+        comp_book = comp_row.get("depth") or {}
+        cands = fee_safe_price_arms(comp_book, comp_yes, tick, first_px,
+                                    maker_fee_fn, min_edge_after_fees,
+                                    max_back=max_back)
+        comp_end = expiry_s - stop_before_expiry_s
+        for cand in cands:
+            cp = D(cand["price"])
+            cf = (_strict_fill(ps, comp_yes, cp, ff["t"], comp_end)
+                  if cand.get("fee_safe") else None)
+            arm["complements"].append({**cand,
+                "side": "YES" if comp_yes else "NO",
+                "quote_t": float(comp_row.get("t") or ff["t"]),
+                "strict_fill": cf,
+                "completed": cf is not None,
+                "completion_latency_s": (round(cf["t"] - ff["t"], 3)
+                                           if cf is not None else None)})
+        arm["status"] = ("COMPLEMENTED" if any(c["completed"] for c in arm["complements"])
+                         else "RESIDUAL")
+        result["arms"].append(arm)
+    return result
 
 
 SEMANTICS = {
