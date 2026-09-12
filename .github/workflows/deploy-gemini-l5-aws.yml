@@ -33,8 +33,8 @@ jobs:
       AWS_REGION: us-east-1
       AWS_ROLE_ARN: arn:aws:iam::318017571498:role/arb-github-gemini-l5-deploy
       AWS_GEMINI_INSTANCE_ID: i-0b90f0a309153f47e
-      AWS_GEMINI_DEPLOY_BUCKET: kalshi-arb-bot-deploy-3535
-      AWS_GEMINI_STATE_URI: s3://kalshi-arb-bot-deploy-3535/gemini-l5/state
+      AWS_GEMINI_DEPLOY_BUCKET: kalshi-arb-bot-deploy-318017571498
+      AWS_GEMINI_STATE_URI: s3://kalshi-arb-bot-deploy-318017571498/gemini-l5/state
     steps:
       - uses: actions/checkout@v4
 
@@ -59,15 +59,15 @@ jobs:
         run: |
           set -euo pipefail
           KEY="gemini-l5/deploy/${GITHUB_SHA}.tar.gz"
+          URL=$(aws s3 presign "s3://${AWS_GEMINI_DEPLOY_BUCKET}/${KEY}" --expires-in 900)
           PARAMS=$(jq -nc \
-            --arg bucket "$AWS_GEMINI_DEPLOY_BUCKET" \
-            --arg key "$KEY" \
+            --arg url "$URL" \
             --arg state "$AWS_GEMINI_STATE_URI" \
             --arg sha "$GITHUB_SHA" \
             '{commands:[
               "set -euo pipefail",
               "mkdir -p /opt/gemini-l5/releases /var/lib/gemini-l5",
-              ("aws s3 cp s3://"+$bucket+"/"+$key+" /tmp/gemini-l5.tar.gz --only-show-errors"),
+              ("curl -fsSL " + ($url|@sh) + " -o /tmp/gemini-l5.tar.gz"),
               ("rm -rf /opt/gemini-l5/releases/"+$sha),
               ("mkdir -p /opt/gemini-l5/releases/"+$sha),
               ("tar -xzf /tmp/gemini-l5.tar.gz -C /opt/gemini-l5/releases/"+$sha),
