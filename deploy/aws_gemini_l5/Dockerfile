@@ -27,7 +27,9 @@ COPY analysis/l5/gemini_research_arm_stochastic.json analysis/l5/gemini_research
 COPY analysis/l5/gemini_regime_candidates.json analysis/l5/gemini_regime_candidates.json
 
 RUN touch src/__init__.py
-ENV GEMINI_SHADOW_ROLE=gemini-l5-shadow-aws \
+# The service's fail-closed role guard accepts only gemini-l5-shadow.
+# AWS remains distinguished by container/image/state path, not by weakening the guard.
+ENV GEMINI_SHADOW_ROLE=gemini-l5-shadow \
     GEMINI_SHADOW_STATE_DIR=/state/gemini-shadow \
     PYTHONUNBUFFERED=1
 
