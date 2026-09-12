@@ -4,7 +4,7 @@ set -euo pipefail
 ACCOUNT_ID="318017571498"
 REGION="us-east-1"
 INSTANCE_ID="i-0b90f0a309153f47e"
-BUCKET="kalshi-arb-bot-deploy-3535"
+BUCKET="kalshi-arb-bot-deploy-318017571498"
 ROLE_NAME="arb-github-gemini-l5-deploy"
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
 OIDC_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
@@ -15,7 +15,18 @@ ACTUAL_ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
 [[ "$ACTUAL_ACCOUNT" == "$ACCOUNT_ID" ]] || { echo "Refusing: expected AWS account $ACCOUNT_ID, got $ACTUAL_ACCOUNT" >&2; exit 1; }
 aws configure set region "$REGION"
 
-aws s3api head-bucket --bucket "$BUCKET"
+# Dedicated private Gemini deployment/state bucket. The account-ID suffix keeps
+# the globally unique S3 name deterministic. Create it only if it does not yet
+# exist in this account.
+if ! aws s3api head-bucket --bucket "$BUCKET" >/dev/null 2>&1; then
+  echo "Creating private Gemini bucket $BUCKET..."
+  aws s3api create-bucket --bucket "$BUCKET" --region "$REGION" >/dev/null
+fi
+aws s3api put-public-access-block --bucket "$BUCKET" --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+aws s3api put-bucket-encryption --bucket "$BUCKET" --server-side-encryption-configuration \
+  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+aws s3api put-bucket-versioning --bucket "$BUCKET" --versioning-configuration Status=Enabled
 
 if ! aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$OIDC_ARN" >/dev/null 2>&1; then
   echo "Missing GitHub OIDC provider $OIDC_ARN; refusing to create a second provider automatically." >&2
