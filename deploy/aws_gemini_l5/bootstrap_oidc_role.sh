@@ -73,11 +73,17 @@ cat >/tmp/gemini-l5-policy.json <<JSON
     {
       "Sid": "GeminiDeployViaSsm",
       "Effect": "Allow",
-      "Action": ["ssm:SendCommand", "ssm:GetCommandInvocation", "ssm:ListCommandInvocations"],
+      "Action": ["ssm:SendCommand"],
       "Resource": [
         "arn:aws:ec2:${REGION}:${ACCOUNT_ID}:instance/${INSTANCE_ID}",
         "arn:aws:ssm:${REGION}::document/AWS-RunShellScript"
       ]
+    },
+    {
+      "Sid": "GeminiReadSsmCommandResults",
+      "Effect": "Allow",
+      "Action": ["ssm:GetCommandInvocation", "ssm:ListCommandInvocations"],
+      "Resource": "*"
     }
   ]
 }
