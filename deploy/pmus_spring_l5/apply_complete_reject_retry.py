@@ -1,14 +1,14 @@
 """Build-time hotfix for R5FT COMPLETE post-only rejection races.
 
-Applied only in the dedicated PMUS spring image.  It is intentionally a
+Applied only in the dedicated PMUS spring image. It is intentionally a
 strict source transform: if the expected rejection block is not present
 exactly once, the image build fails instead of silently shipping a partial
 patch.
 
-The retry is execution adaptation, not a new L5 decision.  After a COMPLETE
+The retry is execution adaptation, not a new L5 decision. After a COMPLETE
 was selected and the venue rejects it because the fresh book moved through
 (or to within one tick of) the submitted maker price, we refresh the deficit
-side book and retry that SAME COMPLETE once.  The fresh retry is still maker
+side book and retry that SAME COMPLETE once. The fresh retry is still maker
 only, still passes spring_complement_price(), still obeys the <= $1 matched
 pair invariant, still uses the existing session deadline/rejection breakers,
 and never retries a non-crossing or infrastructure rejection.
@@ -30,14 +30,12 @@ OLD = '''                    if rej["crossed"]:
 '''
 
 NEW = '''                    if rej["crossed"]:
-                        # R5FT 2026-09-12: a model-selected COMPLETE at YES
-                        # 0.63 was rejected post-only while the fresh ask was
-                        # 0.64 (one-tick race).  Resampling the L5 policy here
-                        # discarded the COMPLETE and immediately allowed an
-                        # EXTEND.  That is an execution artifact, not a new
-                        # behavioral observation.  Refresh the book and retry
-                        # THIS SAME COMPLETE exactly once; the retry is not a
-                        # new decision row and cannot recurse.
+                        # R5FT 2026-09-12: a model-selected COMPLETE was
+                        # rejected post-only during a one-tick book race.
+                        # Resampling here discards a valid behavioral choice
+                        # and can immediately re-open EXTEND risk. Refresh the
+                        # book and retry THIS SAME COMPLETE exactly once. The
+                        # retry is execution adaptation, not a new decision.
                         retry_parent = oid
                         retry_opp = q1.outcome_bbo(
                             t, slug,
@@ -56,11 +54,10 @@ NEW = '''                    if rej["crossed"]:
                             "fresh_px": str(retry_px) if retry_px is not None else None,
                             "pair_economics": retry_econ,
                             "reason": "post_only_cross_race"}
-                        # Do not churn an identical rejected quote.  A retry
-                        # exists only when the fresh book changes the legal
-                        # maker price and every original economic invariant
-                        # still passes.
-                        if (retry_px is not None and retry_px != px
+                        # Same price is intentionally allowed. A one-tick race
+                        # can reject a quote that is legal again on the fresh
+                        # book; the exactly-once bound prevents quote churn.
+                        if (retry_px is not None
                                 and not out_of_time()
                                 and pair_invariant_ok(
                                     inv, deficit_up, retry_px, qty)):
@@ -98,12 +95,12 @@ NEW = '''                    if rej["crossed"]:
                                     deficit_up, retry_px)
                                 retry_row["rejection_class"] = retry_rej["class"]
                                 retry_row["fresh_opp_ask"] = retry_rej["opp_ask"]
-                                retry_row["rejection_margin_ticks"] = \\
+                                retry_row["rejection_margin_ticks"] = \
                                     retry_rej.get("margin_ticks")
                                 retry_row["tick"] = str(spec["tick"])
-                                retry_row["venue_market"] = \\
+                                retry_row["venue_market"] = \
                                     retry_rej.get("venue_market")
-                                retry_row["recorder_book"] = \\
+                                retry_row["recorder_book"] = \
                                     retry_rej.get("recorder_book")
                                 if is_infra_rejection(
                                         retry_end, retry_rej["class"]):
@@ -118,13 +115,10 @@ NEW = '''                    if rej["crossed"]:
                                          "fresh_opp_ask": retry_rej["opp_ask"]},
                                         "complete_rejected_at_fresh_non_crossing_price")
                             else:
-                                # The venue accepted/rested the retry.  A
-                                # pricing-race rejection streak is therefore
-                                # broken even if the maker order did not fill.
                                 complete_reject_streak = 0
-                            retry_row["complete_reject_streak"] = \\
+                            retry_row["complete_reject_streak"] = \
                                 complete_reject_streak
-                            retry_row["complete_reject_rate"] = \\
+                            retry_row["complete_reject_rate"] = \
                                 f"{complete_rejections}/{complete_submissions}"
                             retry_row["infra_rejections"] = infra_rejections
                             if retry_got > 0:
@@ -137,8 +131,8 @@ NEW = '''                    if rej["crossed"]:
                                     retry_got, "complete")
                                 record_behavioral_fill(
                                     inv, fid_art, skey, "complete", deficit_up)
-                                # Prevent the original rejected order's
-                                # post-block fill accounting from running.
+                                # Prevent the rejected parent order's normal
+                                # post-block fill accounting from re-running.
                                 got = D("0")
                         else:
                             sleep(max(
