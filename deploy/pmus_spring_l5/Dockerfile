@@ -1,20 +1,9 @@
 # Dedicated PMUS SPRING-L5 bounded-probe image.
-#
-# DISARMED BY DEFAULT. The probe entry guard exits before credentials,
-# transport construction, or any network activity unless its isolated
-# PMUS_SPRING_* dual key, fresh AUTHENTICATED OPEN evidence (exact slug,
-# two-sided served book, q1 touch depth, observation cadence, venue
-# market-open safety, in-distribution canonical L5 OPEN recommendation --
-# NOT completion history, per OWNER 5551236878), and
-# durable state mount all pass. This image is intentionally separate from q1,
-# recorder, collector, and Gemini services.
 FROM python:3.11-slim
 
 WORKDIR /app
 RUN pip install --no-cache-dir "cryptography>=42"
 
-# continuous campaign (OWNER 5552036210): select -> sequential session ->
-# reselect. Inherits every guard below; DISARMED it is a shadow selector.
 COPY src/pmus_l5_continuous_session.py src/pmus_l5_continuous_session.py
 COPY src/pmus_residual_quarantine.py src/pmus_residual_quarantine.py
 COPY src/pmus_risk_set_audit.py src/pmus_risk_set_audit.py
@@ -28,12 +17,15 @@ COPY src/pmus_incentive_audit.py src/pmus_incentive_audit.py
 COPY src/l5_realized_bridge.py src/l5_realized_bridge.py
 COPY src/pmus_spring_l5_probe_entry.py src/pmus_spring_l5_probe_entry.py
 COPY src/pmus_spring_l5_session.py src/pmus_spring_l5_session.py
-# R5FT execution hotfix: a model-selected COMPLETE rejected only because
-# post-only raced a one-tick book move gets one fresh-book retry of the SAME
-# decision. Strict source transform; build fails if the target block drifted.
+
+# R5FT safety/execution fixes are strict build-time transforms. Either source
+# mismatch fails the image build; generated session code is then compiled.
+COPY deploy/pmus_spring_l5/apply_projected_residual_cap.py deploy/pmus_spring_l5/apply_projected_residual_cap.py
 COPY deploy/pmus_spring_l5/apply_complete_reject_retry.py deploy/pmus_spring_l5/apply_complete_reject_retry.py
-RUN python3 deploy/pmus_spring_l5/apply_complete_reject_retry.py \
+RUN python3 deploy/pmus_spring_l5/apply_projected_residual_cap.py \
+    && python3 deploy/pmus_spring_l5/apply_complete_reject_retry.py \
     && python3 -m py_compile src/pmus_spring_l5_session.py
+
 COPY src/pmus_micro_executor.py src/pmus_micro_executor.py
 COPY src/pmus_fill_ledger.py src/pmus_fill_ledger.py
 COPY src/pmus_q1_executor_v4.py src/pmus_q1_executor_v4.py
@@ -58,14 +50,10 @@ COPY analysis/l5/l5_cadence_behavioral_unit.json analysis/l5/l5_cadence_behavior
 COPY analysis/l5/l5_campaign_approvals.json analysis/l5/l5_campaign_approvals.json
 RUN touch src/__init__.py
 
-# The campaign allowance is embedded so a durable prior rung cannot silently
-# resume under a missing Railway env write.
 ENV PMUS_SERVICE_ROLE=spring-l5-probe \
     PMUS_Q1_STATE_DIR=/state/pmus-spring \
     PMUS_SPRING_MAX_ACTIONS=6 \
     PMUS_SPRING_RUNG_MARKETS=1 \
     PYTHONUNBUFFERED=1
 
-# Deployment guard delegates to the canonical continuous session after the
-# idempotent R5FT ledger repair. Realized remains settlement-authoritative.
 CMD ["sh", "-c", "test \"$PMUS_SERVICE_ROLE\" = spring-l5-probe || { echo SERVICE_ROLE_MISMATCH; exit 64; }; python3 -m src.pmus_r5ft_ledger_repair && exec python3 -m src.pmus_l5_continuous_session"]
