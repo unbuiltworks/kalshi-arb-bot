@@ -175,3 +175,37 @@ def test_a_failed_shared_walk_falls_back_instead_of_blocking(
     note = pre["checks"]["venue_settled"]["activity_walk"]
     assert note["shared_walk"] is False and "boom" in note["error"]
     assert pre["ok"] is True, "the fallback must not itself block"
+
+
+# --------------------------------------------- the walk must be deep enough
+def test_the_shared_walk_is_asked_for_the_deep_page_cap(_stub, monkeypatch):
+    """LIVE 00:39:48Z: the shared walk inherited ACTIVITY_MAX_PAGES = 25 and
+    stopped at 500 rows / 2026-09-08T03:11Z, short of the 2026-09-07T19:25Z
+    it was asked for. 25 was a cap on 93 SEPARATE walks; there is one now."""
+    from src import pmus_settlement_auditor as auditor
+    assert auditor.SHARED_ACTIVITY_MAX_PAGES > auditor.ACTIVITY_MAX_PAGES
+    caps: list = []
+    monkeypatch.setattr(auditor, "first_fill_time", lambda s: "2026-09-06T00:00:00Z")
+    monkeypatch.setattr(auditor, "activity_pages",
+                        lambda t, since=None, max_pages=None, **kw:
+                        (caps.append(max_pages), {"rows": [], "pages": 1})[1])
+    monkeypatch.setattr(cont, "settle_held", _settled)
+    cont.continuation_preflight(object(), {"a"}, set())
+    assert caps == [auditor.SHARED_ACTIVITY_MAX_PAGES]
+
+
+def test_a_market_the_walk_never_reached_is_named_not_counted_as_agreeing(
+        _stub, monkeypatch):
+    """venue_qty None used to drop the market silently out of the mismatch
+    filter. Unknown is the honest answer, and it has to be visible."""
+    monkeypatch.setattr(cont, "settle_held", lambda t, s, walk=None: {
+        "status": "REALIZED", "settled": True, "settled_by": "POSITION_RESOLUTION",
+        "realized_confirmed": True, "realized_usd": "-2.12",
+        "venue_qty_total": None,
+        "venue_qty_unknown_reason": "activity walk ended 'max_pages' at ...",
+        "ledger_qty_total": "16.20"})
+    pre = cont.continuation_preflight(None, {"m"}, {"m"})
+    vs = pre["checks"]["venue_settled"]
+    assert vs["venue_qty_unknown"] == ["m"]
+    assert vs["ledger_vs_venue_qty_mismatch"] == [], (
+        "a quantity we never read is not a divergence")

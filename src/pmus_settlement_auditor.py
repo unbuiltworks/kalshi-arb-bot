@@ -43,6 +43,28 @@ def _amount(value: Any) -> Optional[D]:
 # no cursor, the page is older than `since` (the market's first fill), or
 # ACTIVITY_MAX_PAGES.
 ACTIVITY_MAX_PAGES = 25
+
+# ONE shared walk may page far deeper than a per-market one.
+#
+# LIVE 2026-09-12T00:39:48Z: the shared walk was asked for since =
+# 2026-09-07T19:25:04Z, stopped at ACTIVITY_MAX_PAGES with 500 rows, and
+# only reached back to 2026-09-08T03:11Z. Twenty-one markets whose fills
+# predate that were reported PENDING_SETTLEMENT -- an authoritative "not
+# settled" from a feed that was never read that far back -- and two more
+# were reported as ledger/venue quantity divergences built on trade rows
+# the walk had not reached.
+#
+# 25 pages was a cap on 93 SEPARATE walks (~2,300 requests). There is one
+# walk now, and it stops the moment it passes `since`, so the cap only has
+# to be big enough to get there: ~1,500 rows covers the current six-day
+# ledger. 400 pages is headroom, still bounded, and still one walk.
+SHARED_ACTIVITY_MAX_PAGES = 400
+
+# A walk ENDED these ways because the feed (or the requested window) ran
+# out, so absence of a row is real evidence. Any other ending means the
+# walk stopped early and absence proves nothing.
+COMPLETE_ENDINGS = ("eof", "no_cursor", "empty_page", "older_than_since",
+                    "single_page")
 CURSOR_PARAM_CANDIDATES = ("cursor", "nextCursor", "pageToken", "page_token",
                            "next_cursor")
 _cursor_param: dict[str, Optional[str]] = {"name": None}
@@ -126,6 +148,13 @@ def activity_pages(t: q1.Transport, since: Optional[str] = None,
     return {"rows": rows, "pages": pages, "ended": ended,
             "cursor_param": cursor_param,
             "errors": walk_errors,
+            # the walk read the whole requested window, so "no row for this
+            # market" is a fact about the market and not about the read
+            "complete_to_since": ended in COMPLETE_ENDINGS,
+            "since": since,
+            # stopped on the PAGE CAP, not on reaching `since`: same class
+            # of incompleteness as truncated_by_error, different cause
+            "truncated_by_page_cap": ended == "max_pages",
             # the walk stopped because a REQUEST failed, so the row set is
             # incomplete and absence of a row proves nothing
             "truncated_by_error": bool(walk_errors),
@@ -512,6 +541,27 @@ def _credited_here(trades: list) -> dict:
                 "source": f"UNAVAILABLE:{type(exc).__name__}"}
 
 
+def walk_covers(walk: Mapping[str, Any], since: Optional[str]) -> bool:
+    """Did this walk actually read back as far as `since`?
+
+    A walk that stopped on the page cap, on a cursor failure, or on a
+    transport error holds only part of the feed, and absence of a row in a
+    partial feed is not evidence of anything. Older walks carry none of
+    these keys; they are treated as complete, which is what every existing
+    caller already assumed.
+    """
+    if walk.get("truncated_by_error"):
+        return False
+    if walk.get("complete_to_since", True):
+        return True
+    oldest = walk.get("oldest_time")
+    if not since:
+        # no first fill recorded: only a walk that reached the end of the
+        # feed can prove there is nothing for this market
+        return False
+    return bool(oldest) and str(oldest) <= str(since)
+
+
 def audit_market(slug: str, t: Optional[q1.Transport] = None,
                  walk: Optional[Mapping[str, Any]] = None) -> dict:
     """`walk` lets a CALLER auditing many markets fetch the activity feed
@@ -531,6 +581,7 @@ def audit_market(slug: str, t: Optional[q1.Transport] = None,
     t = t or q1.Transport()
     since = first_fill_time(slug)
     walk = dict(walk) if walk is not None else activity_pages(t, since=since)
+    covers = walk_covers(walk, since)
     resolutions = [r for r in walk["rows"]
                    if r.get("type") == "ACTIVITY_TYPE_POSITION_RESOLUTION"]
     trades = [r for r in walk["rows"] if r.get("type") == "ACTIVITY_TYPE_TRADE"
@@ -544,14 +595,23 @@ def audit_market(slug: str, t: Optional[q1.Transport] = None,
 
     result: dict[str, Any] = {
         "market": slug,
-        "activity_walk": {k: walk[k] for k in ("pages", "ended", "cursor_param",
-                                               "oldest_time", "newest_time")},
+        "activity_walk": {**{k: walk[k] for k in ("pages", "ended", "cursor_param",
+                                                  "oldest_time", "newest_time")},
+                          "covers_market": covers, "market_since": since},
         "activity_rows": len(walk["rows"]),
         "available_position": avail,
         # LIVE 15:46Z: venue vs ledger fill reconciliation (cs2: venue 0.24
         # shares, ledger 0.20 -- the two fills that flattened the pair
         # landed with no session attached and were never booked)
-        "venue_qty_total": venue_qty_total(trade_info),
+        # A walk that never reached this market's first fill cannot count
+        # its trades. LIVE 00:39:48Z reported two markets as ledger/venue
+        # divergences (6.16 vs 16.20, 13.82 vs 9.48) on exactly that basis.
+        # Unknown is the honest answer; a short count is a false divergence.
+        "venue_qty_total": venue_qty_total(trade_info) if covers else None,
+        "venue_qty_unknown_reason": None if covers else
+        f"activity walk ended {walk.get('ended')!r} at "
+        f"{walk.get('oldest_time')!r}, short of this market's first fill "
+        f"{since!r}",
         "ledger_qty_total": ledger_qty_total(slug),
         "position_net": str(net) if net is not None else None,
         "position_expired": bool(pos.get("expired")) if isinstance(pos, Mapping)
@@ -575,6 +635,17 @@ def audit_market(slug: str, t: Optional[q1.Transport] = None,
         result["public"] = public
         flat = flat_at_resolution(public, pos, avail, trade_info)
         if flat is None:
+            if not covers:
+                # THE SAME RULE AS truncated_by_error, A DIFFERENT CAUSE.
+                # LIVE 00:39:48Z: the shared walk stopped on the page cap at
+                # 2026-09-08T03:11Z and 21 markets with older fills were
+                # reported PENDING_SETTLEMENT -- "not settled" derived from a
+                # feed never read that far back. AUDIT_UNAVAILABLE with the
+                # reason is the honest answer; the cure is a deeper walk
+                # (SHARED_ACTIVITY_MAX_PAGES), not a confident verdict.
+                raise RuntimeError(
+                    f"activity_walk_short_of_since:ended={walk.get('ended')}"
+                    f";oldest={walk.get('oldest_time')};need={since}")
             if walk.get("truncated_by_error"):
                 # "we could not finish asking" is never "the answer was no".
                 # Raising puts this market at AUDIT_UNAVAILABLE with the

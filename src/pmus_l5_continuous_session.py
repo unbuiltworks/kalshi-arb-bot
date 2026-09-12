@@ -2125,12 +2125,23 @@ def continuation_preflight(t, filled: set, settled: set,
         from src import pmus_settlement_auditor as _auditor
         _sinces = [x for x in (_auditor.first_fill_time(s) for s in filled) if x]
         _since = min(_sinces) if _sinces else None
-        shared_walk = _auditor.activity_pages(t, since=_since) if t is not None else None
+        # DEEP, because it is the only walk. LIVE 00:39:48Z the default
+        # 25-page cap stopped it at 2026-09-08T03:11Z, short of the
+        # 2026-09-07T19:25Z it was asked for, and 21 markets whose fills
+        # predate that were reported PENDING_SETTLEMENT off a feed that had
+        # never been read that far back. It stops the moment it passes
+        # `since`, so the cap only bounds the pathological case.
+        shared_walk = _auditor.activity_pages(
+            t, since=_since,
+            max_pages=_auditor.SHARED_ACTIVITY_MAX_PAGES) if t is not None else None
         if shared_walk is not None:
             walk_note = {"shared_walk": True, "since": _since,
                          "pages": shared_walk.get("pages"),
                          "rows": len(shared_walk.get("rows") or []),
                          "ended": shared_walk.get("ended"),
+                         "oldest_time": shared_walk.get("oldest_time"),
+                         "complete_to_since": shared_walk.get("complete_to_since"),
+                         "truncated_by_page_cap": shared_walk.get("truncated_by_page_cap"),
                          "truncated_by_error": shared_walk.get("truncated_by_error"),
                          "errors": (shared_walk.get("errors") or [])[:3]}
     except Exception as exc:                            # noqa: BLE001
@@ -2147,6 +2158,7 @@ def continuation_preflight(t, filled: set, settled: set,
                       "realized_confirmed": bool(audit.get("realized_confirmed")),
                       "realized_usd": audit.get("realized_usd"),
                       "venue_qty_total": audit.get("venue_qty_total"),
+                      "venue_qty_unknown_reason": audit.get("venue_qty_unknown_reason"),
                       "ledger_qty_total": audit.get("ledger_qty_total"),
                       # LIVE 22:45:07Z: all 93 markets came back
                       # AUDIT_UNAVAILABLE with every other field null, and
@@ -2178,6 +2190,10 @@ def continuation_preflight(t, filled: set, settled: set,
         "markets": real,
         "realized_unconfirmed": sorted(s for s, v in real.items()
                                        if not v["realized_confirmed"]),
+        # named, not inferred: a market the walk never reached cannot be
+        # reconciled, and must not be silently counted as agreeing either
+        "venue_qty_unknown": sorted(s for s, v in real.items()
+                                    if v.get("venue_qty_unknown_reason")),
         "ledger_vs_venue_qty_mismatch": sorted(
             s for s, v in real.items()
             if v["venue_qty_total"] is not None and v["ledger_qty_total"] is not None
