@@ -1,13 +1,14 @@
 """Queue-aware READ-ONLY Gemini L5 shadow service.
 
 This is an isolated wrapper around the canonical Gemini shadow service. It
-changes only the public-data collection layer:
+changes only the public-data collection/evaluation layer:
 - fetches 25 bid/ask levels instead of top-of-book only
 - retains bounded depth on every BBO row
 - records touch / 1-populated-level-back / 2-populated-level-back queue arms
 - records 60s public-print flow and 60s mid movement
+- scores a sequential same-tape first-fill -> fee-safe complement matrix
 
-Replay/fill semantics remain the canonical strict trade-through shadow. No
+Replay/fill semantics remain strict trade-through shadow evidence. No
 credentials, order transport, or live execution path are added here.
 """
 from __future__ import annotations
@@ -27,8 +28,6 @@ from src.polymarket_l5 import transfer_backtest as tb
 
 DEPTH_LEVELS = 25
 QUEUE_BACK_LEVELS = 2
-# This file is a Railway watch target; changes here intentionally deploy only
-# the isolated read-only Gemini queue-shadow service.
 LABELS = (
     "READ-ONLY Gemini queue-aware shadow; zero orders; public depth/prints only; "
     "strict trade-through is hypothetical maker-fill evidence, not a venue fill; "
@@ -66,6 +65,98 @@ class QueueWindowTape(base.WindowTape):
 class QueueShadowService(base.ShadowService):
     """Canonical shadow with queue-aware collection; execution remains absent."""
 
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.queue_arm_records: list[dict] = []
+        self.queue_scored_symbols: set[str] = set()
+        p = self.root / "queue_arm_records.jsonl"
+        if p.exists():
+            for line in p.read_text(encoding="utf-8").splitlines():
+                try:
+                    rec = json.loads(line)
+                except Exception:
+                    continue
+                if rec.get("symbol") and rec["symbol"] not in self.queue_scored_symbols:
+                    self.queue_arm_records.append(rec)
+                    self.queue_scored_symbols.add(rec["symbol"])
+        base._log("queue_arm_records_restored", windows=len(self.queue_arm_records))
+
+    def _append_queue_arm_record(self, rec: Mapping[str, Any]) -> None:
+        self.queue_arm_records.append(dict(rec))
+        self.queue_scored_symbols.add(str(rec.get("symbol")))
+        try:
+            with (self.root / "queue_arm_records.jsonl").open("a", encoding="utf-8") as f:
+                f.write(json.dumps(rec, default=str) + "\n")
+        except OSError:
+            pass
+
+    def queue_arm_summary(self) -> dict:
+        out: dict[str, Any] = {"windows": len(self.queue_arm_records), "entry_arms": {}}
+        for back in range(QUEUE_BACK_LEVELS + 1):
+            key = "touch" if back == 0 else f"{back}_populated_level_back"
+            rows = []
+            for rec in self.queue_arm_records:
+                for arm in rec.get("arms") or []:
+                    if int(arm.get("populated_levels_back") or 0) == back:
+                        rows.append(arm)
+            first = [a for a in rows if a.get("first_fill")]
+            simultaneous = [a for a in rows if a.get("simultaneous_strict_through")]
+            complements: dict[str, Any] = {}
+            for cb in range(QUEUE_BACK_LEVELS + 1):
+                ckey = "touch" if cb == 0 else f"{cb}_populated_level_back"
+                cands = [c for a in first for c in a.get("complements") or []
+                         if int(c.get("populated_levels_back") or 0) == cb]
+                safe = [c for c in cands if c.get("fee_safe")]
+                done = [c for c in safe if c.get("completed")]
+                lats = sorted(float(c["completion_latency_s"]) for c in done
+                              if c.get("completion_latency_s") is not None)
+                complements[ckey] = {
+                    "fee_safe_opportunities": len(safe),
+                    "strict_completions": len(done),
+                    "completion_rate_pct": (round(100.0 * len(done) / len(safe), 1)
+                                            if safe else None),
+                    "completion_latency_s_p50": (lats[len(lats)//2] if lats else None),
+                }
+            out["entry_arms"][key] = {
+                "windows": len(rows),
+                "first_fill_windows": len(first),
+                "first_fill_rate_pct": (round(100.0 * len(first) / len(rows), 1)
+                                        if rows else None),
+                "simultaneous_strict_through": len(simultaneous),
+                "residual_windows": sum(1 for a in rows if a.get("status") == "RESIDUAL"),
+                "complemented_windows": sum(1 for a in rows if a.get("status") == "COMPLEMENTED"),
+                "complements": complements,
+            }
+        return out
+
+    def _replay_expired(self, now: float) -> None:
+        # Score queue-aware sequential complements BEFORE the canonical replay
+        # marks/deletes the tape. This produces an independent same-tape matrix;
+        # it does not alter canonical policy decisions or transfer-gate rows.
+        for sym, tape in list(self.tapes.items()):
+            if (sym in self.queue_scored_symbols or tape.replayed or tape.expiry is None
+                    or now < tape.expiry + base.SETTLE_GRACE_S):
+                continue
+            try:
+                rec = q.evaluate_queue_window(
+                    sym, tape.bbo, tape.sorted_prints(), tape.expiry,
+                    tb.TICK, tb.maker_fee, min_edge_after_fees=tb.MIN_EDGE,
+                    max_back=QUEUE_BACK_LEVELS,
+                    entry_max_tte_s=tb.ENTRY_MAX_TTE_S,
+                    min_tte_s=tb.MIN_TTE_S,
+                    first_wait_s=tb.FIRST_WAIT_S,
+                    stop_before_expiry_s=tb.STOP_BEFORE_EXPIRY_S)
+            except Exception as exc:
+                rec = {"symbol": sym, "status": "QUEUE_ARM_ERROR",
+                       "err": f"{type(exc).__name__}:{str(exc)[:160]}",
+                       "semantics": q.SEMANTICS}
+            rec["orders_placed"] = 0
+            rec["labels"] = LABELS
+            self._append_queue_arm_record(rec)
+            base._log("queue_arm_window", result=rec,
+                      cumulative=self.queue_arm_summary())
+        super()._replay_expired(now)
+
     def poll_once(self) -> dict:
         now = self.clock()
         out = {"books": 0, "prints": 0, "errors": 0}
@@ -99,7 +190,7 @@ class QueueShadowService(base.ShadowService):
                         tape.sorted_prints(), int(now * 1000), window_s=60)
                     row["movement_60s"] = q.movement(
                         tape.bbo, now, window_s=60)
-            except Exception as exc:  # venue/network/data; never place orders
+            except Exception as exc:
                 self.errors += 1
                 out["errors"] += 1
                 base._log("queue_fetch_error", symbol=sym,
@@ -116,6 +207,7 @@ class QueueShadowService(base.ShadowService):
             rep["queue_collection"] = {
                 "depth_levels": DEPTH_LEVELS,
                 "arms": ["touch", "1_populated_level_back", "2_populated_level_back"],
+                "sequential_queue_arm_summary": self.queue_arm_summary(),
                 "semantics": q.SEMANTICS,
                 "orders_placed": 0,
             }
@@ -132,6 +224,7 @@ class QueueShadowService(base.ShadowService):
         out["queue_collection"] = {
             "depth_levels": DEPTH_LEVELS,
             "arms": ["touch", "1_populated_level_back", "2_populated_level_back"],
+            "sequential_queue_arm_summary": self.queue_arm_summary(),
             "semantics": q.SEMANTICS,
             "orders_placed": 0,
         }
@@ -140,7 +233,6 @@ class QueueShadowService(base.ShadowService):
 
 
 def main() -> int:
-    # Preserve the existing fail-closed service role contract.
     if os.getenv("GEMINI_SHADOW_ROLE", "gemini-l5-shadow") != "gemini-l5-shadow":
         print("SERVICE_ROLE_MISMATCH", flush=True)
         return 64
