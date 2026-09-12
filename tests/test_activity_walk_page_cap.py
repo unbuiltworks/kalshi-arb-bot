@@ -156,3 +156,28 @@ def test_a_covering_walk_reports_the_real_quantity_and_the_real_divergence(
     assert got["venue_qty_unknown_reason"] is None
     assert D(got["venue_qty_total"]) != D(got["ledger_qty_total"]), (
         "this one IS a real ledger/venue divergence and must still be seen")
+
+
+# ------------------------------- the same rule on the LIVE reconciliation
+def test_the_live_fill_reconciliation_says_unknown_on_a_short_walk(monkeypatch):
+    """traded_qty_for_slug is what the session uses to reconcile its fill
+    ledger against the venue WHILE A MARKET IS OPEN. It was returning a
+    confident share count off a walk capped at ACTIVITY_MAX_PAGES without
+    checking the cap. A short walk can only UNDERCOUNT, so the venue would
+    silently look like it holds less than it does -- on the money path."""
+    monkeypatch.setattr(auditor, "first_fill_time", lambda slug: SINCE)
+    monkeypatch.setattr(auditor, "activity_pages",
+                        lambda t, since=None, **kw: _walk())
+    assert auditor.traded_qty_for_slug("m", t=object()) is None
+
+
+def test_the_live_fill_reconciliation_answers_when_the_walk_did_reach_back(
+        monkeypatch):
+    monkeypatch.setattr(auditor, "first_fill_time", lambda slug: SINCE)
+    monkeypatch.setattr(auditor, "activity_pages", lambda t, since=None, **kw: _walk(
+        ended="older_than_since", complete_to_since=True,
+        truncated_by_page_cap=False,
+        rows=[{"type": "ACTIVITY_TYPE_TRADE",
+               "trade": {"marketSlug": "m", "qtyDecimal": "4.00",
+                         "state": "TRADE_STATE_NEW"}}]))
+    assert auditor.traded_qty_for_slug("m", t=object()) == "4.00"

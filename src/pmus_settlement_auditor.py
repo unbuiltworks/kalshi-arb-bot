@@ -507,10 +507,22 @@ def traded_qty_for_slug(slug: str, t: Optional[q1.Transport] = None
     both ask the venue the same question.
 
     None means the venue could not be asked, which the caller must treat as
-    "unknown", never as "nothing traded"."""
+    "unknown", never as "nothing traded" -- and that now includes a walk
+    that did not reach back to this market's first fill.
+
+    THE LIVE PATH DESERVES THE SAME RULE AS THE AUDIT PATH. This is the
+    reconciliation the session runs against the venue WHILE A MARKET IS
+    OPEN, and it was returning a confident share count off a walk capped at
+    ACTIVITY_MAX_PAGES with no check that the cap had been hit. A short walk
+    can only UNDERCOUNT trades, so the failure mode is the worst one
+    available here: the venue looks like it holds less than it does,
+    silently, on the money path. Unknown is the honest answer."""
     try:
         t = t or q1.Transport()
-        walk = activity_pages(t, since=first_fill_time(slug))
+        since = first_fill_time(slug)
+        walk = activity_pages(t, since=since)
+        if not walk_covers(walk, since):
+            return None
         trades = [r for r in walk["rows"]
                   if r.get("type") == "ACTIVITY_TYPE_TRADE"
                   and isinstance(r.get("trade"), Mapping)
