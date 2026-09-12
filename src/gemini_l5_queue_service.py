@@ -25,6 +25,7 @@ from src.polymarket_l5 import transfer_backtest as tb
 
 DEPTH_LEVELS = 25
 QUEUE_BACK_LEVELS = 2
+POST_FILL_ATTRIBUTION_VERSION = 1
 LABELS = (
     "READ-ONLY Gemini queue-aware shadow; zero orders; public depth/prints only; "
     "complement counterfactuals are anchored to canonical L5 decisions; "
@@ -76,7 +77,8 @@ class QueueShadowService(base.ShadowService):
                 if sym and sym not in self.cf_scored_symbols:
                     self.cf_records.append(rec)
                     self.cf_scored_symbols.add(sym)
-        base._log("complement_cf_records_restored", windows=len(self.cf_records))
+        base._log("complement_cf_records_restored", windows=len(self.cf_records),
+                  post_fill_attribution_version=POST_FILL_ATTRIBUTION_VERSION)
 
     def _append_cf(self, rec: Mapping[str, Any]) -> None:
         self.cf_records.append(dict(rec))
@@ -104,6 +106,7 @@ class QueueShadowService(base.ShadowService):
                        "orders_placed": 0,
                        "labels": LABELS}
             rec["orders_placed"] = 0
+            rec["post_fill_attribution_version"] = POST_FILL_ATTRIBUTION_VERSION
             self._append_cf(rec)
             base._log("complement_cf_window", result=rec,
                       cumulative=ccf.summarize(self.cf_records))
@@ -157,6 +160,7 @@ class QueueShadowService(base.ShadowService):
             rep["queue_collection"] = {
                 "depth_levels": DEPTH_LEVELS,
                 "counterfactual": "canonical complement decision timestamps only",
+                "post_fill_attribution_version": POST_FILL_ATTRIBUTION_VERSION,
                 "complement_counterfactual_summary": ccf.summarize(self.cf_records),
                 "semantics": q.SEMANTICS,
                 "orders_placed": 0,
@@ -174,6 +178,7 @@ class QueueShadowService(base.ShadowService):
         out["queue_collection"] = {
             "depth_levels": DEPTH_LEVELS,
             "counterfactual": "canonical complement decision timestamps only",
+            "post_fill_attribution_version": POST_FILL_ATTRIBUTION_VERSION,
             "complement_counterfactual_summary": ccf.summarize(self.cf_records),
             "semantics": q.SEMANTICS,
             "orders_placed": 0,
