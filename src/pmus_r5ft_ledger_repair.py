@@ -1,10 +1,10 @@
 """One-time, fail-closed repair for the two R5FT preflight ledger overshoots.
 
 Production 2026-09-12: a buggy venue backfill appended every historical
-venue trade for two already-booked, venue-confirmed SETTLED markets.  This
-module does not invent fills or alter venue state.  It appends an explicit
+venue trade for two already-booked, venue-confirmed SETTLED markets. This
+module does not invent fills or alter venue state. It appends an explicit
 negative local accounting adjustment only when the current ledger is above
-the already-observed authoritative venue quantity.  Re-running is a no-op.
+the already-observed authoritative venue quantity. Re-running is a no-op.
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def main() -> None:
         if current < target:
             raise RuntimeError(f"{slug}: ledger {current} is below authoritative target {target}; refuse synthetic fill")
 
-        adjustment = target - current  # negative: removes only the local overcount
+        adjustment = target - current
         q1.ledger_append({
             "kind": "filled",
             "stage": "venue_reconciliation_adjustment",
