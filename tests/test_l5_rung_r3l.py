@@ -96,7 +96,7 @@ def _t(power="110.60", fail_balances=False):
 
 
 def test_sized_rung_preflight_fails_closed_on_power_identity_and_reconcile(monkeypatch):
-    monkeypatch.setattr(cont, "settle_held", lambda t, s: {
+    monkeypatch.setattr(cont, "settle_held", lambda t, s, walk=None: {
         "status": "REALIZED", "settled": True, "settled_by": "POSITION_RESOLUTION",
         "realized_confirmed": True, "realized_usd": "0.01",
         "venue_qty_total": "0.04", "ledger_qty_total": "0.04"})
@@ -125,14 +125,14 @@ def test_sized_rung_preflight_fails_closed_on_power_identity_and_reconcile(monke
     assert cont.continuation_preflight(_t(power="20"), {"m"}, {"m"}, rung=r3l)["failed"] == ["buying_power"]
     assert cont.continuation_preflight(_t(fail_balances=True), {"m"}, {"m"}, rung=r3l)["failed"] == ["buying_power"]
     # ledger != venue quantity -> blocked for the sized rung only
-    monkeypatch.setattr(cont, "settle_held", lambda t, s: {
+    monkeypatch.setattr(cont, "settle_held", lambda t, s, walk=None: {
         "status": "REALIZED", "settled": True, "settled_by": "POSITION_RESOLUTION",
         "realized_confirmed": True, "realized_usd": "0.01",
         "venue_qty_total": "0.04", "ledger_qty_total": "0.06"})
     assert cont.continuation_preflight(_t(), {"m"}, {"m"}, rung=r3l)["failed"] == ["ledger_reconciled"]
     assert cont.continuation_preflight(_t(), {"m"}, {"m"}, rung=ladder.rung("R2C"))["ok"]
     # cancel path: an orphan-sweep error blocks the sized rung
-    monkeypatch.setattr(cont, "settle_held", lambda t, s: {
+    monkeypatch.setattr(cont, "settle_held", lambda t, s, walk=None: {
         "status": "REALIZED", "settled": True, "settled_by": "POSITION_RESOLUTION",
         "realized_confirmed": True, "realized_usd": "0.01",
         "venue_qty_total": "0.04", "ledger_qty_total": "0.04"})

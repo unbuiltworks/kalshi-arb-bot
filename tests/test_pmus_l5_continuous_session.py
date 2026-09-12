@@ -943,7 +943,7 @@ def test_resolved_held_market_is_settled_from_venue_activities(monkeypatch,
     monkeypatch.setattr(cont, "status_has_trades", lambda: True)
     monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
     from src import pmus_settlement_auditor as auditor
-    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t, walk=None: {
         "market": slug, "settled": True, "status": "REALIZED",
         "settlement_key": "res-1", "realized_confirmed": True,
         "realized_usd": "0.0152", "position_net": "0",
@@ -972,7 +972,7 @@ def test_unresolved_held_market_keeps_resuming_with_realized_null(
     monkeypatch.setattr(cont, "status_has_trades", lambda: True)
     monkeypatch.setattr(pv2, "load_v2", lambda *a, **k: _model())
     from src import pmus_settlement_auditor as auditor
-    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t, walk=None: {
         "market": slug, "settled": False, "status": "PENDING_SETTLEMENT",
         "realized_confirmed": False, "realized_usd": None,
         "position_net": "0.03", "resolution": None})
@@ -1003,7 +1003,7 @@ def test_flat_campaign_settles_markets_the_ledger_filled_in(monkeypatch,
     from src import pmus_settlement_auditor as auditor
     calls = []
 
-    def fake_audit(slug, t):
+    def fake_audit(slug, t, walk=None):
         calls.append(slug)
         return {"market": slug, "settled": True, "status": "REALIZED",
                 "settlement_key": "res-9", "realized_confirmed": True,
@@ -1287,7 +1287,7 @@ def test_rung_works_three_sequential_markets_then_stops_at_the_gate(
         return st, "status_url:test"
     monkeypatch.setattr(entry, "load_status_document", load)
     from src import pmus_settlement_auditor as auditor
-    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t, walk=None: {
         "market": slug, "settled": True, "status": "REALIZED",
         "settlement_key": f"res-{slug}", "realized_confirmed": True,
         "realized_usd": "0.0100", "position_net": "0", "resolution": {}})
@@ -1304,7 +1304,7 @@ def test_rung_works_three_sequential_markets_then_stops_at_the_gate(
     # settlement drops the position from the venue
     real_settle = cont.settle_held
 
-    def settle(t, slug):
+    def settle(t, slug, walk=None):
         out = real_settle(t, slug)
         fake.positions.pop(slug, None)
         return out
@@ -1752,7 +1752,7 @@ def test_rung_fills_survive_a_restart(monkeypatch, tmp_path):
         "liveness_baseline": {}, "recovery_gate": None, "burst": None})
     fake.positions["x"] = {"netPositionDecimal": "0.03"}
     from src import pmus_settlement_auditor as auditor
-    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t, walk=None: {
         "market": slug, "settled": True, "status": "REALIZED",
         "settlement_key": "r", "realized_confirmed": True,
         "realized_usd": "0.01", "position_net": "0",
@@ -1917,7 +1917,7 @@ def test_rung_allowance_spent_blocks_selection_and_settles_to_the_gate(monkeypat
         "settled_here": ["m1", "m2"], "outage": None,
         "liveness_baseline": {}, "recovery_gate": None, "burst": None})
     from src import pmus_settlement_auditor as auditor
-    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t, walk=None: {
         "market": slug, "settled": True, "status": "REALIZED",
         "settlement_key": "r", "realized_confirmed": True,
         "realized_usd": "-0.01", "position_net": "0",
@@ -1934,8 +1934,7 @@ def test_rung_allowance_spent_blocks_selection_and_settles_to_the_gate(monkeypat
     # never selects a 4th market
     pending = {"settled": False, "status": "PENDING_SETTLEMENT",
                "realized_confirmed": False, "position_net": "0"}
-    monkeypatch.setattr(auditor, "audit_market",
-                        lambda slug, t: {"market": slug, **pending})
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t, walk=None: {"market": slug, **pending})
     ticks = itertools.chain([0.0] + [1.0] * 40, itertools.repeat(1000.0))
     rep = cont.run_campaign(fake, clock=lambda: next(ticks),
                             sleep=lambda s: None, wall=lambda: 1005.0,
@@ -1945,7 +1944,7 @@ def test_rung_allowance_spent_blocks_selection_and_settles_to_the_gate(monkeypat
     assert rep["funnel"]["sessions"] == 0
     assert rep["status"] != "CAMPAIGN_RUNG_COMPLETE"
     # (B) m3 resolves on the periodic audit path: the advance gate fires
-    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t, walk=None: {
         "market": slug, "settled": True, "status": "REALIZED",
         "settlement_key": "r", "realized_confirmed": True,
         "realized_usd": "-0.01", "position_net": "0",
@@ -1981,7 +1980,7 @@ def test_owner_approved_evidence_continuation_starts_only_after_flat_preflight(
         "settled_here": ["m1", "m2"], "outage": None,
         "liveness_baseline": {}, "recovery_gate": None, "burst": None})
     from src import pmus_settlement_auditor as auditor
-    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t, walk=None: {
         "market": slug, "settled": True, "status": "REALIZED",
         "settlement_key": "r", "realized_confirmed": True,
         "realized_usd": "-0.01", "position_net": "0",
@@ -2009,7 +2008,7 @@ def test_owner_approved_evidence_continuation_starts_only_after_flat_preflight(
     # the ledger's unsettled m3 clears when the audit settles it
     real_settle = cont.settle_held
 
-    def settle(t, slug):
+    def settle(t, slug, walk=None):
         out = real_settle(t, slug)
         if slug in ledger_unsettled:
             ledger_unsettled.remove(slug)

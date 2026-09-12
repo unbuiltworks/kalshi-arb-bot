@@ -986,14 +986,14 @@ def settlement_breakdown(slug: str, audit: Mapping[str, Any]) -> dict:
     return out
 
 
-def settle_held(t, slug: str) -> dict:
+def settle_held(t, slug: str, walk=None) -> dict:
     """Authoritative settlement for a held market: the venue's
     POSITION_RESOLUTION activity (read-only), recorded idempotently in
     the durable ledger. Realized is written ONLY from the venue's own
     afterPosition.realized; otherwise it stays unknown. Never raises."""
     try:
         from src import pmus_settlement_auditor as auditor
-        result = auditor.audit_market(slug, t)
+        result = auditor.audit_market(slug, t, walk=walk)
         written = auditor.append_authoritative_ledger(result)
         out = {"status": result.get("status"),
                "settled": result.get("settled"),
@@ -2113,10 +2113,34 @@ def continuation_preflight(t, filled: set, settled: set,
     # ledger/venue divergence appearing after the first confirmation would
     # never be seen again. A preflight that re-reads is worth more than a
     # preflight that is fast, and the retry loop has time to spare.
+    # ONE activity walk for the whole set. /v1/portfolio/activities is
+    # ACCOUNT-scoped, so auditing 93 markets was re-reading one feed 93
+    # times. Bounded by the EARLIEST first-fill across the set, so the
+    # snapshot reaches back at least as far as any single market's own
+    # `since`. A failure here is not fatal: `walk` stays None and each
+    # market falls back to fetching its own, exactly as before.
+    shared_walk = None
+    walk_note: dict = {}
+    try:
+        from src import pmus_settlement_auditor as _auditor
+        _sinces = [x for x in (_auditor.first_fill_time(s) for s in filled) if x]
+        _since = min(_sinces) if _sinces else None
+        shared_walk = _auditor.activity_pages(t, since=_since) if t is not None else None
+        if shared_walk is not None:
+            walk_note = {"shared_walk": True, "since": _since,
+                         "pages": shared_walk.get("pages"),
+                         "rows": len(shared_walk.get("rows") or []),
+                         "ended": shared_walk.get("ended"),
+                         "truncated_by_error": shared_walk.get("truncated_by_error"),
+                         "errors": (shared_walk.get("errors") or [])[:3]}
+    except Exception as exc:                            # noqa: BLE001
+        shared_walk = None
+        walk_note = {"shared_walk": False, "error": repr(exc)[:160],
+                     "fallback": "each market fetches its own walk"}
     for i, slug in enumerate(sorted(filled)):
         if i:
             _preflight_sleep(PREFLIGHT_AUDIT_PACE_S)
-        audit = settle_held(t, slug)
+        audit = settle_held(t, slug, walk=shared_walk)
         real[slug] = {"status": audit.get("status"),
                       "settled": bool(audit.get("settled")),
                       "settled_by": audit.get("settled_by"),
@@ -2144,6 +2168,7 @@ def continuation_preflight(t, filled: set, settled: set,
     _unav = [s for s, v in real.items() if v.get("status") == "AUDIT_UNAVAILABLE"]
     checks["venue_settled"] = {
         "ok": bool(real) and all(v["settled"] for v in real.values()),
+        "activity_walk": walk_note,
         "audit_unavailable": len(_unav),
         "audit_error_kinds": _errs[:5],
         "uniform_failure": bool(real) and len(_unav) == len(real),

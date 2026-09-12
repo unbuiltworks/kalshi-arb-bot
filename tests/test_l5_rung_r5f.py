@@ -191,7 +191,7 @@ def test_sized_preflight_for_r5f_requires_the_continuous_shell(monkeypatch):
     """The fail-closed buying-power check asks for the R5F deployed worst
     case ($22.50 = $7.50 x conc 1 x 3 turns); $111 passes, $20 fails."""
     from tests.test_l5_rung_r3l import _t
-    monkeypatch.setattr(cont, "settle_held", lambda t, s: {
+    monkeypatch.setattr(cont, "settle_held", lambda t, s, walk=None: {
         "status": "REALIZED", "settled": True, "settled_by": "POSITION_RESOLUTION",
         "realized_confirmed": True, "realized_usd": "0.01",
         "venue_qty_total": "0.04", "ledger_qty_total": "0.04"})

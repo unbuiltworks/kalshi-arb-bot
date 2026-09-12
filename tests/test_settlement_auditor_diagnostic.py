@@ -109,7 +109,7 @@ def test_signature_covers_the_path_without_its_query_string():
 
 
 def test_settle_held_attaches_the_public_view_and_throttles_the_diagnostic(monkeypatch):
-    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t, walk=None: {
         "market": slug, "settled": False, "status": "PENDING_SETTLEMENT",
         "realized_confirmed": False, "position_net": "0", "resolution": None})
     logged = []

@@ -512,10 +512,25 @@ def _credited_here(trades: list) -> dict:
                 "source": f"UNAVAILABLE:{type(exc).__name__}"}
 
 
-def audit_market(slug: str, t: Optional[q1.Transport] = None) -> dict:
+def audit_market(slug: str, t: Optional[q1.Transport] = None,
+                 walk: Optional[Mapping[str, Any]] = None) -> dict:
+    """`walk` lets a CALLER auditing many markets fetch the activity feed
+    ONCE and reuse it.
+
+    /v1/portfolio/activities is ACCOUNT-scoped: every market's walk re-reads
+    the same feed. The continuation preflight audits 93 markets, so it was
+    fetching one feed 93 times -- up to ~2,300 requests -- and the venue
+    answered with HTTP 429. Backoff alone could not win that: at 23:55:31Z
+    the preflight ground for 17+ minutes without finishing a single pass.
+    One walk serves every market; only the per-market position read stays
+    per-market.
+
+    A caller-supplied walk MUST cover each market it is used for. The
+    preflight bounds it by the EARLIEST first-fill across the whole set, so
+    it reaches back at least as far as any single market's own `since`."""
     t = t or q1.Transport()
     since = first_fill_time(slug)
-    walk = activity_pages(t, since=since)
+    walk = dict(walk) if walk is not None else activity_pages(t, since=since)
     resolutions = [r for r in walk["rows"]
                    if r.get("type") == "ACTIVITY_TYPE_POSITION_RESOLUTION"]
     trades = [r for r in walk["rows"] if r.get("type") == "ACTIVITY_TYPE_TRADE"

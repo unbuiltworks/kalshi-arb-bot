@@ -112,7 +112,7 @@ def test_campaign_applies_the_approved_rung_at_the_gate_and_restores_it(
         "filled_markets": ["m1", "m2", "m3"], "settled_here": ["m1", "m2"],
         "outage": None, "liveness_baseline": {}, "recovery_gate": None, "burst": None})
     from src import pmus_settlement_auditor as auditor
-    monkeypatch.setattr(auditor, "audit_market", lambda slug, t: {
+    monkeypatch.setattr(auditor, "audit_market", lambda slug, t, walk=None: {
         "market": slug, "settled": True, "status": "REALIZED",
         "settlement_key": "r", "realized_confirmed": True,
         "realized_usd": "-0.01", "position_net": "0",
@@ -139,7 +139,7 @@ def test_campaign_applies_the_approved_rung_at_the_gate_and_restores_it(
                 "decisions": [], "inventory": {"up": "0", "dn": "0"}}
     real_settle = cont.settle_held
 
-    def settle(t, slug):
+    def settle(t, slug, walk=None):
         out = real_settle(t, slug)
         if slug in ledger_unsettled:
             ledger_unsettled.remove(slug)

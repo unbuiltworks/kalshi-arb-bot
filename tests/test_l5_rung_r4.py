@@ -177,7 +177,7 @@ def test_sized_preflight_for_r4_still_requires_the_deployed_worst_case(monkeypat
     """Dollars at risk fell to $7.50, but $22.50 can still be DEPLOYED, and
     the fail-closed buying-power check keeps asking for the larger number."""
     from tests.test_l5_rung_r3l import _t
-    monkeypatch.setattr(cont, "settle_held", lambda t, s: {
+    monkeypatch.setattr(cont, "settle_held", lambda t, s, walk=None: {
         "status": "REALIZED", "settled": True, "settled_by": "POSITION_RESOLUTION",
         "realized_confirmed": True, "realized_usd": "0.01",
         "venue_qty_total": "0.04", "ledger_qty_total": "0.04"})

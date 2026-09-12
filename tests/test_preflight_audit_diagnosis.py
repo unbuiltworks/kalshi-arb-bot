@@ -25,12 +25,12 @@ def _stub(monkeypatch):
     monkeypatch.setattr(cont, "_preflight_sleep", lambda s: None)
 
 
-def _unavailable(t, slug):
+def _unavailable(t, slug, walk=None):
     return {"status": "AUDIT_UNAVAILABLE",
             "error": "HTTPError:403 Forbidden"}
 
 
-def _settled(t, slug):
+def _settled(t, slug, walk=None):
     return {"status": "REALIZED", "settled": True,
             "settled_by": "POSITION_RESOLUTION", "realized_confirmed": True,
             "realized_usd": "0.10", "venue_qty_total": "1",
@@ -62,7 +62,7 @@ def test_a_genuine_unsettled_market_is_not_called_a_transport_fault(
         _stub, monkeypatch):
     """The diagnosis must not fire when the venue answered and the answer was
     simply 'not settled' -- that IS a settlement fact and must still block."""
-    def mixed(t, slug):
+    def mixed(t, slug, walk=None):
         return _settled(t, slug) if slug == "a" else {
             "status": "PENDING", "settled": False}
     monkeypatch.setattr(cont, "settle_held", mixed)
@@ -112,7 +112,7 @@ def test_every_pass_re_audits_every_market(_stub, monkeypatch):
     can afford to re-read; the reconcile check cannot afford a stale one."""
     calls: list = []
     monkeypatch.setattr(cont, "settle_held",
-                        lambda t, s: (calls.append(s), _settled(t, s))[1])
+                        lambda t, s, walk=None: (calls.append(s), _settled(t, s))[1])
     cont.continuation_preflight(None, {"a", "b"}, set())
     cont.continuation_preflight(None, {"a", "b"}, set())
     assert sorted(calls) == ["a", "a", "b", "b"]
@@ -121,7 +121,7 @@ def test_every_pass_re_audits_every_market(_stub, monkeypatch):
 def test_a_changed_ledger_quantity_is_seen_on_the_next_pass(_stub, monkeypatch):
     """The exact case the memo broke."""
     qty = {"v": "0.04"}
-    monkeypatch.setattr(cont, "settle_held", lambda t, s: {
+    monkeypatch.setattr(cont, "settle_held", lambda t, s, walk=None: {
         "status": "REALIZED", "settled": True, "settled_by": "POSITION_RESOLUTION",
         "realized_confirmed": True, "realized_usd": "0.01",
         "venue_qty_total": "0.04", "ledger_qty_total": qty["v"]})
@@ -130,3 +130,48 @@ def test_a_changed_ledger_quantity_is_seen_on_the_next_pass(_stub, monkeypatch):
     qty["v"] = "0.06"
     second = cont.continuation_preflight(None, {"m"}, {"m"})
     assert second["checks"]["venue_settled"]["ledger_vs_venue_qty_mismatch"] == ["m"]
+
+
+# -------------------------------------------- one account feed, not 93 of them
+def test_the_preflight_fetches_one_activity_walk_and_shares_it(
+        _stub, monkeypatch):
+    """/v1/portfolio/activities is ACCOUNT-scoped. Auditing 93 markets was
+    re-reading one feed 93 times -- up to ~2,300 requests -- which the venue
+    answered with 429. Backoff could not win that: at 2026-09-11T23:55:31Z the
+    preflight ground for 17+ minutes without finishing one pass."""
+    from src import pmus_settlement_auditor as auditor
+    walks: list = []
+    monkeypatch.setattr(auditor, "first_fill_time",
+                        lambda s: {"a": "2026-09-08T00:00:00Z",
+                                   "b": "2026-09-06T00:00:00Z"}.get(s))
+    monkeypatch.setattr(auditor, "activity_pages",
+                        lambda t, since=None, **kw: (walks.append(since),
+                                                     {"rows": [], "pages": 1})[1])
+    seen: list = []
+    monkeypatch.setattr(cont, "settle_held",
+                        lambda t, s, walk=None: (seen.append(walk), _settled(t, s))[1])
+    pre = cont.continuation_preflight(object(), {"a", "b"}, set())
+    assert len(walks) == 1, "one walk for the whole set, not one per market"
+    # bounded by the EARLIEST first fill, so it covers every market's own since
+    assert walks[0] == "2026-09-06T00:00:00Z"
+    assert all(w == {"rows": [], "pages": 1} for w in seen)
+    assert pre["checks"]["venue_settled"]["activity_walk"]["shared_walk"] is True
+
+
+def test_a_failed_shared_walk_falls_back_instead_of_blocking(
+        _stub, monkeypatch):
+    """If the one walk fails, each market fetches its own exactly as before --
+    slower, but never a new way to fail closed on a transport problem."""
+    from src import pmus_settlement_auditor as auditor
+    monkeypatch.setattr(auditor, "first_fill_time", lambda s: None)
+    def _boom(t, since=None, **kw):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(auditor, "activity_pages", _boom)
+    seen: list = []
+    monkeypatch.setattr(cont, "settle_held",
+                        lambda t, s, walk=None: (seen.append(walk), _settled(t, s))[1])
+    pre = cont.continuation_preflight(object(), {"a"}, {"a"})
+    assert seen == [None], "None means 'fetch your own', the old behaviour"
+    note = pre["checks"]["venue_settled"]["activity_walk"]
+    assert note["shared_walk"] is False and "boom" in note["error"]
+    assert pre["ok"] is True, "the fallback must not itself block"
