@@ -1,0 +1,71 @@
+name: Deploy Gemini L5 Shadow Direct
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/l5-gemini-queue-shadow
+    paths:
+      - 'src/gemini_l5_shadow_service.py'
+      - 'src/gemini_l5_shadow_v2.py'
+      - 'src/gemini_l5_queue_shadow.py'
+      - 'src/l5_venue_adapter.py'
+      - 'src/l5_shadow_scoring.py'
+      - 'src/gemini_l5_regime_study.py'
+      - 'src/pmus_l5_persistence_v2.py'
+      - 'src/pmus_l5_fidelity_live.py'
+      - 'src/pmus_q1_executor.py'
+      - 'src/polymarket_l5/**'
+      - 'src/l5_fidelity_gate.py'
+      - 'analysis/l5/**'
+      - 'deploy/aws_gemini_l5/**'
+      - '.github/workflows/deploy-gemini-l5-selfhosted.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, kalshi-bot]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Verify host and build isolated read-only image
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "host=$(hostname)"
+          echo "sha=${GITHUB_SHA}"
+          command -v docker
+          docker version --format '{{.Server.Version}}'
+          sudo mkdir -p /var/lib/gemini-l5
+          sudo chown "$(id -u):$(id -g)" /var/lib/gemini-l5
+          docker build \
+            -f deploy/aws_gemini_l5/Dockerfile \
+            -t "gemini-l5-shadow-aws:${GITHUB_SHA}" .
+
+      - name: Start DISARMED Gemini shadow
+        shell: bash
+        run: |
+          set -euo pipefail
+          GEMINI_L5_IMAGE="gemini-l5-shadow-aws:${GITHUB_SHA}" \
+          GEMINI_L5_STATE_DIR=/var/lib/gemini-l5 \
+            bash deploy/aws_gemini_l5/run.sh
+
+      - name: Verify exact image, liveness, and public-data loop
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 15
+          test "$(docker inspect -f '{{.State.Running}}' gemini-l5-shadow-aws)" = "true"
+          test "$(docker inspect -f '{{.Config.Image}}' gemini-l5-shadow-aws)" = "gemini-l5-shadow-aws:${GITHUB_SHA}"
+          test "$(docker inspect -f '{{.RestartCount}}' gemini-l5-shadow-aws)" = "0"
+          docker logs --tail 120 gemini-l5-shadow-aws | tee /tmp/gemini-l5-shadow.log
+          grep -q 'GEMINI_L5_SHADOW' /tmp/gemini-l5-shadow.log
+          echo "container=running"
+          echo "image=gemini-l5-shadow-aws:${GITHUB_SHA}"
+          echo "state_dir=/var/lib/gemini-l5"
+          find /var/lib/gemini-l5 -maxdepth 1 -type f -printf '%f %s bytes\n' | sort || true
