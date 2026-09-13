@@ -168,6 +168,37 @@ BACKFILL_SOURCE = "venue_trade_backfill"
 # The single source tag the reconciler writes from now on.
 RECONCILE_SOURCE = "venue_qty_reconciliation"
 
+# A DISTINCT KIND, so a correction is never mistaken for an execution.
+# Organic execution and reconciliation must stay distinguishable in the
+# schema itself, not merely by a `source` field on a row that claims to be
+# a fill (OWNER 2026-09-13).
+#
+# CONSUMER AUDIT behind this choice -- every reader of the ledger was
+# checked before the kind was introduced:
+#
+#   ledger_qty_total            counts filled + RECONCILE_KIND  -> EFFECTIVE
+#                               quantity. MUST include the new kind, or the
+#                               reconciler recomputes the same adjustment
+#                               forever (never idempotent) and
+#                               pmus_r5ft_ledger_repair's convergence assert
+#                               raises at boot.
+#   ledger_qty_split            organic vs correction, the reconciler's basis
+#   inventory up/dn rebuild     pmus_l5_continuous_session:1134,
+#                               pmus_settlement_sweep:101,
+#                               pmus_spring_l5_session:513,1900 -- all gate on
+#                               kind=="filled" AND a stage prefix
+#                               ("spring_", "micro_first_leg"), so a
+#                               correction is already excluded. Correct: a
+#                               correction carries no side and cannot be
+#                               attributed to up or dn.
+#   pmus_incentive_audit:648    requires kind=="filled" AND a price, so a
+#                               correction is excluded. Correct: never a
+#                               rebate or fee event.
+#   first_fill_time             counted corrections until now; fixed below,
+#                               a correction is not a fill time.
+RECONCILE_KIND = "reconciliation_adjustment"
+RECONCILE_VERSION = "delta-to-venue/v1"
+
 # EVERY tag that means "this row is a local accounting correction, not a
 # fill a session or the venue executed". `organic` is the ledger MINUS all
 # of these, and the reconciler's target is stated against organic.
@@ -205,11 +236,21 @@ def ledger_qty_split(slug: str) -> dict:
             continue
         if not isinstance(r, Mapping) or r.get("slug") != slug:
             continue
-        if r.get("kind") == "filled":
+        kind = r.get("kind")
+        if kind == RECONCILE_KIND:
+            # the distinct correction kind: always a correction, never organic
+            q = _amount(r.get("qty"))
+            if q is not None:
+                correction += q
+                n += 1
+        elif kind == "filled":
             q = _amount(r.get("qty"))
             if q is None:
                 continue
             n += 1
+            # LEGACY correction rows wrote kind="filled" with a correction
+            # source. They stay corrections forever; reclassifying them as
+            # organic is how a reconciler re-inflates a ledger it fixed.
             if r.get("source") in CORRECTION_SOURCES:
                 correction += q
             else:
@@ -319,17 +360,31 @@ def backfill_missing_venue_fills(audit: Mapping[str, Any]) -> dict:
     if adjustment == 0:
         out["skipped"] = "ledger already reconciles to the venue"
         return out
-    out["adjustment"] = str(adjustment)
+    before = organic + prior
+    after = before + adjustment
+    out.update({"adjustment": str(adjustment), "before": str(before),
+                "after": str(after)})
     q1.ledger_append({
-        "kind": BACKFILL_KIND, "stage": "venue_reconciliation", "slug": slug,
-        "qty": str(adjustment), "source": RECONCILE_SOURCE,
-        "venue_qty_total": str(venue), "ledger_organic_qty": str(organic),
-        "corrections_before": str(prior),
+        # a DISTINCT kind: an execution and a correction must never be the
+        # same row type. See the RECONCILE_KIND consumer audit above.
+        "kind": RECONCILE_KIND,
+        "stage": "venue_reconciliation",
+        "slug": slug,
+        "qty": str(adjustment),                 # SIGNED
+        "before_qty": str(before),
+        "organic_qty": str(organic),
+        "existing_correction_qty": str(prior),
+        "venue_target_qty": str(venue),
+        "after_qty": str(after),
+        "source": RECONCILE_SOURCE,
+        "reconciliation_version": RECONCILE_VERSION,
+        "reason": "effective ledger quantity did not equal the authoritative "
+                  "venue quantity on a venue-confirmed settled market",
         "labels": "LOCAL ACCOUNTING CORRECTION ONLY: brings this ledger's "
-                  "share count to the venue's own for a venue-confirmed "
-                  "settled market. NEGATIVE when it undoes an earlier "
-                  "over-correction. Not an exchange fill, order, P&L event, "
-                  "fee or rebate, and never counted as trading activity.",
+                  "effective share count to the venue's own. NEGATIVE when "
+                  "it undoes an earlier over-correction. Not an exchange "
+                  "fill, order, P&L event, fee or rebate, carries no side, "
+                  "and is never counted as trading activity or inventory.",
     })
     return out
 
@@ -349,6 +404,11 @@ def first_fill_time(slug: str) -> Optional[str]:
         if not isinstance(r, Mapping) or r.get("slug") != slug:
             continue
         kind = r.get("kind")
+        # a reconciliation adjustment is not an execution and so has no
+        # fill time; counting it made a market whose only rows are
+        # corrections report the correction's own timestamp as its first fill
+        if kind == RECONCILE_KIND or r.get("source") in CORRECTION_SOURCES:
+            continue
         filled = kind == "filled" or (kind == "order_terminal" and
                                       float(r.get("filled_qty") or 0) > 0)
         if filled and r.get("t") and (best is None or str(r["t"]) < best):
@@ -606,7 +666,15 @@ def ledger_qty_total(slug: str) -> Optional[str]:
             continue
         if not isinstance(r, Mapping) or r.get("slug") != slug:
             continue
-        if r.get("kind") == "filled":
+        # EFFECTIVE quantity = organic + every correction, legacy or new.
+        # RECONCILE_KIND MUST be counted here: it is what makes the
+        # reconciler idempotent and what pmus_r5ft_ledger_repair asserts on.
+        if r.get("kind") == RECONCILE_KIND:
+            q = _amount(r.get("qty"))
+            if q is not None:
+                total += q
+                n += 1
+        elif r.get("kind") == "filled":
             q = _amount(r.get("qty"))
             if q is not None:
                 total += q

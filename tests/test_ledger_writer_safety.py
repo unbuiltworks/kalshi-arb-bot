@@ -193,7 +193,177 @@ def test_the_written_row_is_marked_so_it_is_never_a_trading_event(_ledger):
     row = json.loads((_ledger / "ledger.jsonl").read_text().splitlines()[-1])
     assert row["source"] == auditor.RECONCILE_SOURCE
     assert row["stage"] == "venue_reconciliation"
-    assert row["venue_qty_total"] == "13.8200"
-    assert row["ledger_organic_qty"] == "9.48"
+    assert row["venue_target_qty"] == "13.8200"
+    assert row["organic_qty"] == "9.48"
     assert "never counted as trading activity" in row["labels"]
     assert auditor.RECONCILE_SOURCE in auditor.CORRECTION_SOURCES
+
+
+# ===========================================================================
+# OWNER 2026-09-13: the canonical calculation, cases A-J, and the consumer
+# audit that had to happen before a distinct correction kind was introduced.
+# ===========================================================================
+def _reconcile(venue):
+    return auditor.backfill_missing_venue_fills(
+        _audit(venue_qty_total=str(venue)))
+
+
+def test_A_organic_equals_venue_writes_nothing(_ledger):
+    _seed(_ledger, [_session_fill("13.8200", "ord-1")])
+    out = _reconcile("13.8200")
+    assert out["adjustment"] == "0" and "already reconciles" in out["skipped"]
+    assert D(_total()) == D("13.8200")
+
+
+def test_B_organic_below_venue_writes_the_positive_delta_only(_ledger):
+    _seed(_ledger, [_session_fill("9.48", "ord-1")])
+    out = _reconcile("13.8200")
+    assert D(out["adjustment"]) == D("4.3400"), "the gap, not the venue total"
+    assert D(_total()) == D("13.8200")
+
+
+def test_C_effective_above_venue_writes_a_negative_delta(_ledger):
+    _seed(_ledger, [_session_fill("9.48", "ord-1"),
+                    {"kind": auditor.RECONCILE_KIND, "slug": SLUG,
+                     "qty": "13.8200", "source": auditor.RECONCILE_SOURCE}])
+    assert D(_total()) == D("23.3000")
+    out = _reconcile("13.8200")
+    assert D(out["adjustment"]) == D("-9.4800")
+    assert D(_total()) == D("13.8200")
+
+
+def test_D_running_twice_writes_nothing_the_second_time(_ledger):
+    _seed(_ledger, [_session_fill("9.48", "ord-1")])
+    _reconcile("13.8200")
+    rows_after_first = len((_ledger / "ledger.jsonl").read_text().splitlines())
+    out = _reconcile("13.8200")
+    assert out["adjustment"] == "0"
+    assert len((_ledger / "ledger.jsonl").read_text().splitlines()) == rows_after_first
+
+
+def test_E_live_rows_with_order_id_and_no_trade_id_never_double_count(_ledger):
+    """The exact production shape. Every live writer records order_id and no
+    venue_trade_id; trade-id matching therefore saw zero booked trades."""
+    _seed(_ledger, [_session_fill("4.74", "ord-1"), _session_fill("4.74", "ord-2")])
+    rows = [json.loads(x) for x in (_ledger / "ledger.jsonl").read_text().splitlines()]
+    assert all("venue_trade_id" not in r for r in rows)
+    _reconcile("13.8200")
+    assert D(_total()) == D("13.8200"), "not 23.3000"
+
+
+def test_F_historical_repair_present_and_effective_equals_venue_writes_zero(_ledger):
+    """Writer 5 already brought this market to target. The canonical
+    reconciler must add nothing."""
+    _seed(_ledger, [_session_fill("9.48", "ord-1"),
+                    {"kind": "filled", "slug": SLUG, "qty": "4.34",
+                     "source": R5FT_REPAIR_SOURCE,
+                     "order_id": f"reconcile:{SLUG}:20260912"}])
+    assert D(_total()) == D("13.8200")
+    out = _reconcile("13.8200")
+    assert out["adjustment"] == "0"
+    assert D(_total()) == D("13.8200")
+
+
+def test_G_historical_overshoot_self_heals_to_venue(_ledger):
+    _seed(_ledger, [_session_fill("9.48", "ord-1"),
+                    {"kind": "filled", "slug": SLUG, "qty": "13.8200",
+                     "source": auditor.BACKFILL_SOURCE}])
+    assert D(_total()) == D("23.3000")
+    _reconcile("13.8200")
+    assert D(_total()) == D("13.8200")
+
+
+def test_H_restart_after_correction_reconstructs_exactly(_ledger):
+    """Nothing is held in memory: a fresh read of the file reproduces the
+    same effective quantity and the same split."""
+    _seed(_ledger, [_session_fill("9.48", "ord-1")])
+    _reconcile("13.8200")
+    for _ in range(4):                       # 'restarts'
+        split = auditor.ledger_qty_split(SLUG)
+        assert D(split["organic"]) == D("9.48")
+        assert D(split["correction"]) == D("4.3400")
+        assert D(_total()) == D("13.8200")
+        assert _reconcile("13.8200")["adjustment"] == "0"
+
+
+def test_I_many_partial_fills_reach_the_target_exactly(_ledger):
+    _seed(_ledger, [_session_fill("2.50", f"ord-{i}") for i in range(4)])
+    assert D(_total()) == D("10.00")
+    _reconcile("13.8200")
+    assert D(_total()) == D("13.8200")
+
+
+def test_J_either_order_of_boot_repair_and_auditor_gives_one_answer(_ledger):
+    """Writer 5 runs at boot, the canonical reconciler runs in the preflight.
+    Whichever lands first, the effective quantity must be the venue's."""
+    # boot repair first, then reconciler
+    _seed(_ledger, [_session_fill("9.48", "ord-1"),
+                    {"kind": "filled", "slug": SLUG, "qty": "4.34",
+                     "source": R5FT_REPAIR_SOURCE}])
+    _reconcile("13.8200")
+    first_order = D(_total())
+
+    # fresh ledger: reconciler first, then a (no-op) boot-repair-shaped row
+    (_ledger / "ledger.jsonl").unlink()
+    _seed(_ledger, [_session_fill("9.48", "ord-1")])
+    _reconcile("13.8200")
+    second_order = D(_total())
+    assert first_order == second_order == D("13.8200")
+
+
+# ------------------------------------------------- the consumer audit
+def test_the_correction_kind_is_distinct_from_an_execution(_ledger):
+    _seed(_ledger, [_session_fill("9.48", "ord-1")])
+    _reconcile("13.8200")
+    row = json.loads((_ledger / "ledger.jsonl").read_text().splitlines()[-1])
+    assert row["kind"] == auditor.RECONCILE_KIND != "filled"
+    for field in ("before_qty", "organic_qty", "existing_correction_qty",
+                  "venue_target_qty", "after_qty", "source",
+                  "reconciliation_version", "reason", "t", "slug", "qty"):
+        assert field in row, field
+    assert D(row["before_qty"]) + D(row["qty"]) == D(row["after_qty"])
+    assert D(row["after_qty"]) == D(row["venue_target_qty"])
+
+
+def test_effective_quantity_counts_the_new_kind(_ledger):
+    """If ledger_qty_total ignored RECONCILE_KIND the reconciler would
+    recompute the same adjustment forever, and pmus_r5ft_ledger_repair's
+    convergence assert would raise at boot."""
+    _seed(_ledger, [_session_fill("9.48", "ord-1"),
+                    {"kind": auditor.RECONCILE_KIND, "slug": SLUG,
+                     "qty": "4.34", "source": auditor.RECONCILE_SOURCE}])
+    assert D(_total()) == D("13.82")
+
+
+def test_inventory_rebuild_ignores_corrections(_ledger):
+    """up/dn readers gate on kind=="filled" AND a stage prefix. A correction
+    carries no side and must never become directional inventory."""
+    _seed(_ledger, [_session_fill("9.48", "ord-1")])
+    _reconcile("13.8200")
+    rows = [json.loads(x) for x in (_ledger / "ledger.jsonl").read_text().splitlines()]
+    corr = [r for r in rows if r["kind"] == auditor.RECONCILE_KIND]
+    assert corr and all(not str(r.get("stage", "")).startswith("spring_")
+                        and r.get("stage") != "micro_first_leg" for r in corr)
+    assert all("side" not in r for r in corr)
+
+
+def test_incentive_audit_cannot_see_a_correction(_ledger):
+    """pmus_incentive_audit requires kind=="filled" AND a price. A correction
+    is neither a fill nor a fee/rebate event."""
+    _seed(_ledger, [_session_fill("9.48", "ord-1")])
+    _reconcile("13.8200")
+    rows = [json.loads(x) for x in (_ledger / "ledger.jsonl").read_text().splitlines()]
+    corr = [r for r in rows if r["kind"] == auditor.RECONCILE_KIND]
+    assert corr and all(r.get("kind") == "filled" and r.get("price")
+                        for r in corr) is False
+
+
+def test_first_fill_time_ignores_corrections(_ledger):
+    """A correction is not an execution and has no fill time."""
+    _seed(_ledger, [{"kind": auditor.RECONCILE_KIND, "slug": SLUG,
+                     "qty": "4.34", "source": auditor.RECONCILE_SOURCE,
+                     "t": "2026-09-13T00:00:00Z"}])
+    assert auditor.first_fill_time(SLUG) is None
+    _seed(_ledger, [dict(_session_fill("9.48", "ord-1"),
+                         t="2026-09-08T12:00:00Z")])
+    assert auditor.first_fill_time(SLUG) == "2026-09-08T12:00:00Z"
