@@ -8,6 +8,7 @@ COPY src/gemini_l5_shadow_v2.py src/gemini_l5_shadow_v2.py
 COPY src/gemini_l5_queue_shadow.py src/gemini_l5_queue_shadow.py
 COPY src/gemini_l5_queue_service.py src/gemini_l5_queue_service.py
 COPY src/gemini_l5_complement_cf.py src/gemini_l5_complement_cf.py
+COPY src/gemini_l5_inventory_cf.py src/gemini_l5_inventory_cf.py
 COPY src/l5_venue_adapter.py src/l5_venue_adapter.py
 COPY src/l5_shadow_scoring.py src/l5_shadow_scoring.py
 COPY src/gemini_l5_regime_study.py src/gemini_l5_regime_study.py
