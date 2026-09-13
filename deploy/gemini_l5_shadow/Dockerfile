@@ -1,6 +1,6 @@
 # Gemini L5 READ-ONLY shadow. Public endpoints only: no credentials,
 # no order path, no shared execution state. Queue-aware collection retains
-# 25-level depth while canonical replay remains strict/theoretical.
+# 25-level depth; continuous flat-reset inventory cycles remain theoretical.
 FROM python:3.11-slim
 WORKDIR /app
 COPY src/gemini_l5_shadow_service.py src/gemini_l5_shadow_service.py
