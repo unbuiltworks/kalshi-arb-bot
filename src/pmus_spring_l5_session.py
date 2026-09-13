@@ -69,6 +69,12 @@ from src import pmus_micro_executor as micro
 from src import pmus_fill_ledger as fl
 from src import pmus_l5_persistence_v2 as pv2
 from src import pmus_l5_fidelity_live as fid
+# SHADOW ONLY, and imported at module scope ON PURPOSE: the packaging check
+# derives the image's required set from boot-scope imports, so this binds the
+# COPY line to the import instead of relying on anyone remembering it. The
+# module is stdlib-only, has no submission path of any kind, and nothing in
+# the decision path reads a value back from it.
+from src import pmus_cross_shadow_live as xshadow
 from src.polymarket_l5.action_model import state_key
 
 q1 = micro.q1
@@ -2440,6 +2446,18 @@ def _run_session_body(t: Optional[Transport] = None,
                         _complete_book(side_up_, report["orders"][-1])
                     except Exception:                  # noqa: BLE001
                         pass
+                    # PROSPECTIVE CROSS SHADOW -- observational only, and
+                    # LAST so that even the instrumentation above cannot be
+                    # disturbed by it. It reads the book already attached to
+                    # this row, submits nothing, and returns nothing any
+                    # decision reads. Its own exception boundary: a shadow
+                    # that raises leaves the action, the order and the row
+                    # exactly as they already are.
+                    try:
+                        _cross_shadow(side_up_, px_, qty_,
+                                      report["orders"][-1])
+                    except Exception:                  # noqa: BLE001
+                        pass
 
         def _venue_market_status(slug_: str) -> dict:
             """The venue's own market flags at rejection time (read-only;
@@ -2488,13 +2506,22 @@ def _run_session_body(t: Optional[Transport] = None,
                 status, source = entry.load_status_document(None)
             except Exception as exc:                  # noqa: BLE001
                 return {"unreadable": f"{type(exc).__name__}:{str(exc)[:80]}"}
+            # WHEN THE PROBE RECEIVED IT. `authenticated_age_s` below is the
+            # recorder's age at ITS OWN status_utc; by the time the document
+            # reaches us the quote is older by the transport delay, and 56.2%
+            # of the pre-registered cross corpus stopped on quote age alone.
+            # Taken here, immediately after the read that already happened --
+            # no extra request, no extra load, no new polling.
+            receipt_utc = datetime.now(timezone.utc).isoformat()
             if not isinstance(status, Mapping):
                 return {"unreadable": "status_document_unavailable"}
             row = None
+            found_in = None
             for key in ("spring_watch", "top_markets"):
                 for r in (status.get(key) or []):
                     if isinstance(r, Mapping) and r.get("slug") == slug_:
                         row = r
+                        found_in = key
                         break
                 if row is not None:
                     break
@@ -2515,6 +2542,33 @@ def _run_session_body(t: Optional[Transport] = None,
                     out["opp_ask_authenticated"] = str(q1.ONE - D(str(yes_bid)))
             except Exception:                          # noqa: BLE001
                 out["opp_ask_authenticated"] = None
+            # PURELY ADDITIVE OBSERVATION (2026-09-13). This row ALREADY
+            # carries bid_qty/ask_qty -- the recorder computes, serves and
+            # logs them per market -- and this function has been discarding
+            # them, which is why 18.5% of the pre-registered cross corpus
+            # stopped at "observed depth not recorded" and why the whole
+            # experiment returned UNKNOWN. Keeping them costs no recorder
+            # request, no extra load and no new polling: the document is
+            # already in hand. An ALLOWLIST decides what is kept, so no
+            # arbitrary recorder payload can reach a logged or persisted row.
+            #
+            # NOTHING ABOVE THIS LINE CHANGED, and nothing here may: every
+            # existing key -- `authenticated_age_s` above all, which the
+            # execution gate in _authenticated_trim consumes -- keeps its
+            # exact prior value and meaning. The new age field is a SEPARATE
+            # observational field, never a replacement. Fail-soft: a capture
+            # that raises is recorded as unreadable and the book is returned
+            # exactly as it would have been.
+            try:
+                out["cross_shadow_observation"] = xshadow.observational_capture(
+                    row=row, book_source=found_in,
+                    status_utc=status.get("t"), probe_receipt_utc=receipt_utc,
+                    authenticated_age_s=out["authenticated_age_s"],
+                    buys_up=side_up_)
+            except Exception as exc:                   # noqa: BLE001
+                out["cross_shadow_observation"] = {
+                    "unreadable": f"{type(exc).__name__}:{str(exc)[:80]}",
+                    "would_submit": False}
             return out
 
         def _authenticated_trim(px_: D, side_up_: bool, gateway_opp_ask: Any,
@@ -2617,6 +2671,48 @@ def _run_session_body(t: Optional[Transport] = None,
                 _complete_book_state["broken"] = True
             row["book_capture"] = "complete_observation"
             row["recorder_book"] = book
+
+        def _cross_shadow(side_up_: bool, px_: D, qty_: D, row: dict) -> None:
+            """SHADOW ONLY: would a bounded <=0.97 taker COMPLETE have been
+            executable here, and net-positive after BOTH confirmed costs?
+
+            IT CANNOT TRADE. `xshadow` imports nothing from `src`, holds no
+            transport, no credentials and no client, and has no function that
+            submits, cancels, replaces or reprices anything; every row it
+            returns says `would_submit: false`. This wrapper passes it values
+            that have already been used and writes one diagnostic key onto a
+            row that has already been reported. It returns None, and no
+            decision, price, size, gate or ledger entry reads it.
+
+            NO NEW EVIDENCE IS FETCHED. It reads the book ALREADY attached to
+            this row by the rejection, #93 control or ordinary-complete
+            capture, so the recorder read count, COMPLETE_BOOK_MAX_PER_SESSION
+            and the min-gap throttles are all exactly what they were. When
+            those bounds meant no book was captured for this order, the answer
+            is UNKNOWN -- an older observation is never reused in its place,
+            which is the difference between measuring fill conversion and
+            manufacturing it.
+
+            `inv` is still PRE-FILL here (_harvest runs before inv.record), so
+            the surplus-side average is the one the completion was priced
+            against, and `px_` is the maker price whose rebate a cross would
+            forgo.
+            """
+            book = row.get("recorder_book")
+            obs = (book.get("cross_shadow_observation")
+                   if isinstance(book, Mapping) else None)
+            row["cross_shadow_live"] = xshadow.evaluate(
+                book=(obs if isinstance(obs, Mapping) else None),
+                buys_up=side_up_,
+                intended_qty=qty_,
+                maker_price=px_,
+                held_avg_cost=(inv.avg_dn() if side_up_ else inv.avg_up()),
+                held_residual=inv.residual,
+                model_relation="complete",
+                book_source=(obs.get("book_source")
+                             if isinstance(obs, Mapping) else None),
+                quote_age_s=(obs.get("age_at_probe_receipt_s")
+                             if isinstance(obs, Mapping) else None))
 
         def _control_book(side_up_: bool, px_: D, row: dict) -> None:
             """The CONTROL GROUP for #93: the same authenticated book and

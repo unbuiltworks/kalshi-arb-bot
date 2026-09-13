@@ -16,6 +16,7 @@
       "src/pmus_settlement_sweep.py",
       "src/pmus_incentive_audit.py",
       "src/l5_realized_bridge.py",
+      "src/pmus_cross_shadow_live.py",
       "src/pmus_spring_l5_probe_entry.py",
       "src/pmus_spring_l5_session.py",
       "src/pmus_spring_evidence_transfer.py",

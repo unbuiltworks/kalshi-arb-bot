@@ -63,6 +63,13 @@ COPY src/pmus_incentive_audit.py src/pmus_incentive_audit.py
 # imports this, so it MUST be in the image -- the import is also guarded so
 # a missing file degrades the audit instead of halting the lane.
 COPY src/l5_realized_bridge.py src/l5_realized_bridge.py
+# SHADOW-ONLY cross instrumentation, imported at module scope by the session
+# (2026-09-13). Stdlib only; no transport, no credentials, no submission path
+# of any kind. It is a boot-scope import, so an image without it does not
+# degrade -- the probe fails to import and never boots. That is deliberate:
+# the packaging test derives the required set from the imports, so this COPY
+# is bound to the import rather than to anyone remembering it.
+COPY src/pmus_cross_shadow_live.py src/pmus_cross_shadow_live.py
 COPY src/pmus_spring_l5_probe_entry.py src/pmus_spring_l5_probe_entry.py
 COPY src/pmus_spring_l5_session.py src/pmus_spring_l5_session.py
 
