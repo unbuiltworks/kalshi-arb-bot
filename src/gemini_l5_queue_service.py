@@ -2,9 +2,8 @@
 
 This isolated service keeps the canonical Gemini L5 behavioral replay intact
 while collecting 25 levels of public depth. At expiry it anchors execution
-counterfactuals to the canonical primary arm's ACTUAL complement-order decision
-timestamps and compares canonical target vs touch / populated levels / maximum
-fee-safe post-only price on the identical tape.
+counterfactuals to canonical decisions and also runs a larger-action-budget
+multi-fill inventory-path replay to test repeated accumulation/rebalancing.
 
 No credentials, order transport, or live execution path are present.
 """
@@ -18,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
 
 from src import gemini_l5_complement_cf as ccf
+from src import gemini_l5_inventory_cf as invcf
 from src import gemini_l5_queue_shadow as q
 from src import gemini_l5_shadow_service as base
 from src import gemini_l5_shadow_v2 as gs
@@ -25,10 +25,10 @@ from src.polymarket_l5 import transfer_backtest as tb
 
 DEPTH_LEVELS = 25
 QUEUE_BACK_LEVELS = 2
-POST_FILL_ATTRIBUTION_VERSION = 1
+POST_FILL_ATTRIBUTION_VERSION = 2
 LABELS = (
-    "READ-ONLY Gemini queue-aware shadow; zero orders; public depth/prints only; "
-    "complement counterfactuals are anchored to canonical L5 decisions; "
+    "READ-ONLY Gemini queue-aware + multi-fill inventory shadow; zero orders; "
+    "public depth/prints only; counterfactuals are anchored to canonical L5 state; "
     "strict trade-through is hypothetical maker-fill evidence, not a venue fill; "
     "all P&L remains THEORETICAL"
 )
@@ -60,56 +60,81 @@ class QueueWindowTape(base.WindowTape):
 
 
 class QueueShadowService(base.ShadowService):
-    """Canonical shadow plus queue-aware complement counterfactuals."""
+    """Canonical shadow plus queue/complement/multi-fill counterfactuals."""
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.cf_records: list[dict] = []
         self.cf_scored_symbols: set[str] = set()
-        p = self.root / "complement_cf_records.jsonl"
-        if p.exists():
-            for line in p.read_text(encoding="utf-8").splitlines():
-                try:
-                    rec = json.loads(line)
-                except Exception:
-                    continue
-                sym = rec.get("symbol")
-                if sym and sym not in self.cf_scored_symbols:
-                    self.cf_records.append(rec)
-                    self.cf_scored_symbols.add(sym)
-        base._log("complement_cf_records_restored", windows=len(self.cf_records),
+        self.inventory_records: list[dict] = []
+        self.inventory_scored_symbols: set[str] = set()
+        self._restore_records(self.root / "complement_cf_records.jsonl",
+                              self.cf_records, self.cf_scored_symbols)
+        self._restore_records(self.root / "inventory_cf_records.jsonl",
+                              self.inventory_records, self.inventory_scored_symbols)
+        base._log("counterfactual_records_restored",
+                  complement_windows=len(self.cf_records),
+                  inventory_windows=len(self.inventory_records),
                   post_fill_attribution_version=POST_FILL_ATTRIBUTION_VERSION)
 
-    def _append_cf(self, rec: Mapping[str, Any]) -> None:
-        self.cf_records.append(dict(rec))
-        self.cf_scored_symbols.add(str(rec.get("symbol")))
+    @staticmethod
+    def _restore_records(path, records: list[dict], symbols: set[str]) -> None:
+        if not path.exists():
+            return
+        for line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                rec = json.loads(line)
+            except Exception:
+                continue
+            sym = rec.get("symbol")
+            if sym and sym not in symbols:
+                records.append(rec)
+                symbols.add(sym)
+
+    def _append_record(self, filename: str, rec: Mapping[str, Any],
+                       records: list[dict], symbols: set[str]) -> None:
+        records.append(dict(rec))
+        symbols.add(str(rec.get("symbol")))
         try:
-            with (self.root / "complement_cf_records.jsonl").open("a", encoding="utf-8") as f:
+            with (self.root / filename).open("a", encoding="utf-8") as f:
                 f.write(json.dumps(rec, default=str) + "\n")
         except OSError:
             pass
 
     def _replay_expired(self, now: float) -> None:
-        # Counterfactual first, while the queue-enriched tape is still in memory.
-        # The canonical base replay then records the untouched primary/evaluator
-        # rows exactly as before.
+        # Counterfactuals first, while the queue-enriched tape is still in memory.
+        # Canonical base replay then records its untouched evaluator rows.
         for sym, tape in list(self.tapes.items()):
-            if (sym in self.cf_scored_symbols or tape.replayed or tape.expiry is None
-                    or now < tape.expiry + base.SETTLE_GRACE_S):
+            if tape.replayed or tape.expiry is None or now < tape.expiry + base.SETTLE_GRACE_S:
                 continue
-            try:
-                rec = ccf.evaluate(sym, tape.bbo, tape.sorted_prints(),
-                                   model=self.model, art=self.art)
-            except Exception as exc:
-                rec = {"symbol": sym, "status": "COMPLEMENT_CF_ERROR",
-                       "err": f"{type(exc).__name__}:{str(exc)[:180]}",
-                       "orders_placed": 0,
-                       "labels": LABELS}
-            rec["orders_placed"] = 0
-            rec["post_fill_attribution_version"] = POST_FILL_ATTRIBUTION_VERSION
-            self._append_cf(rec)
-            base._log("complement_cf_window", result=rec,
-                      cumulative=ccf.summarize(self.cf_records))
+            if sym not in self.cf_scored_symbols:
+                try:
+                    rec = ccf.evaluate(sym, tape.bbo, tape.sorted_prints(),
+                                       model=self.model, art=self.art)
+                except Exception as exc:
+                    rec = {"symbol": sym, "status": "COMPLEMENT_CF_ERROR",
+                           "err": f"{type(exc).__name__}:{str(exc)[:180]}",
+                           "orders_placed": 0, "labels": LABELS}
+                rec["orders_placed"] = 0
+                rec["post_fill_attribution_version"] = POST_FILL_ATTRIBUTION_VERSION
+                self._append_record("complement_cf_records.jsonl", rec,
+                                    self.cf_records, self.cf_scored_symbols)
+                base._log("complement_cf_window", result=rec,
+                          cumulative=ccf.summarize(self.cf_records))
+            if sym not in self.inventory_scored_symbols:
+                try:
+                    irec = invcf.evaluate(sym, tape.bbo, tape.sorted_prints(),
+                                          model=self.model, art=self.art)
+                except Exception as exc:
+                    irec = {"symbol": sym, "status": "INVENTORY_CF_ERROR",
+                            "err": f"{type(exc).__name__}:{str(exc)[:180]}",
+                            "orders_placed": 0, "labels": LABELS}
+                irec["orders_placed"] = 0
+                irec["post_fill_attribution_version"] = POST_FILL_ATTRIBUTION_VERSION
+                self._append_record("inventory_cf_records.jsonl", irec,
+                                    self.inventory_records, self.inventory_scored_symbols)
+                base._log("inventory_cf_window", result=irec,
+                          cumulative=invcf.summarize(self.inventory_records))
         super()._replay_expired(now)
 
     def poll_once(self) -> dict:
@@ -157,14 +182,7 @@ class QueueShadowService(base.ShadowService):
         if now - self.last_report >= base.REPORT_EVERY_S:
             self.last_report = now
             rep = self.rolling_report(now)
-            rep["queue_collection"] = {
-                "depth_levels": DEPTH_LEVELS,
-                "counterfactual": "canonical complement decision timestamps only",
-                "post_fill_attribution_version": POST_FILL_ATTRIBUTION_VERSION,
-                "complement_counterfactual_summary": ccf.summarize(self.cf_records),
-                "semantics": q.SEMANTICS,
-                "orders_placed": 0,
-            }
+            rep["queue_collection"] = self._research_summary()
             base._log("queue_rolling_report", **rep)
             try:
                 (self.root / "report.json").write_text(
@@ -173,16 +191,20 @@ class QueueShadowService(base.ShadowService):
                 pass
         return out
 
-    def status(self) -> dict:
-        out = super().status()
-        out["queue_collection"] = {
+    def _research_summary(self) -> dict:
+        return {
             "depth_levels": DEPTH_LEVELS,
-            "counterfactual": "canonical complement decision timestamps only",
+            "counterfactual": "canonical complement decisions + 64-action multi-fill inventory path",
             "post_fill_attribution_version": POST_FILL_ATTRIBUTION_VERSION,
             "complement_counterfactual_summary": ccf.summarize(self.cf_records),
+            "multi_fill_inventory_summary": invcf.summarize(self.inventory_records),
             "semantics": q.SEMANTICS,
             "orders_placed": 0,
         }
+
+    def status(self) -> dict:
+        out = super().status()
+        out["queue_collection"] = self._research_summary()
         out["labels"] = LABELS
         return out
 
