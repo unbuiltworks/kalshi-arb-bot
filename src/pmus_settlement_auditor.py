@@ -939,6 +939,12 @@ def audit_market(slug: str, t: Optional[q1.Transport] = None,
     return result
 
 
+# Every kind whose (kind, slug, settlement_key) makes a write idempotent. A
+# kind missing from here is written again on every pass, so a new kind must
+# be added here at the same time it is added to append_authoritative_ledger.
+IDEMPOTENT_KINDS = ("settled", "realized")
+
+
 def _existing_keys(path: Path) -> set[tuple[str, str, str]]:
     keys = set()
     if not path.exists():
@@ -948,7 +954,28 @@ def _existing_keys(path: Path) -> set[tuple[str, str, str]]:
             r = json.loads(line)
         except Exception:
             continue
-        if r.get("kind") in ("settled", "realized"):
+        if r.get("kind") in IDEMPOTENT_KINDS:
+            keys.add((str(r.get("kind")), str(r.get("slug")),
+                      str(r.get("settlement_key"))))
+    return keys
+
+
+# Every kind whose (kind, slug, settlement_key) makes a write idempotent. A
+# kind missing from here is written again on every pass, so a new kind must
+# be added here at the same time it is added to append_authoritative_ledger.
+IDEMPOTENT_KINDS = ("settled", "realized")
+
+
+def _existing_keys(path: Path) -> set[tuple[str, str, str]]:
+    keys = set()
+    if not path.exists():
+        return keys
+    for line in path.read_text().splitlines():
+        try:
+            r = json.loads(line)
+        except Exception:
+            continue
+        if r.get("kind") in IDEMPOTENT_KINDS:
             keys.add((str(r.get("kind")), str(r.get("slug")),
                       str(r.get("settlement_key"))))
     return keys

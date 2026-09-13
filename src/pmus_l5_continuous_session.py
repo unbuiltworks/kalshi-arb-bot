@@ -980,6 +980,42 @@ def settlement_breakdown(slug: str, audit: Mapping[str, Any]) -> dict:
                        "venue's realized less that arithmetic, the third is "
                        "the venue's own credit"),
         },
+        # OWNER P1, 2026-09-13: the fields that made this row a COMPLETE
+        # terminal reconciliation rather than an economics summary. Two live
+        # markets -- legacy cricket and aec-atp-jayfri-maxbas-2026-09-13 --
+        # resolved, left the scheduler's held set, and left a reader unable to
+        # say from the durable record alone WHAT established terminal, WHEN
+        # the venue said so, or which side won. Everything below is copied
+        # from venue evidence; nothing is inferred from a book, a clock, a
+        # count of empty quotes, or an outcomePrices array.
+        "settlement_status": audit.get("status"),
+        "settled_by": audit.get("settled_by"),
+        "settlement_key": audit.get("settlement_key"),
+        "residual_cost_basis": (str(inv.avg_up()) if residual > 0 else
+                                (str(inv.avg_dn()) if residual < 0 else None)),
+        "outcome_mapping": {
+            "resolution_side": (audit.get("resolution") or {}).get("side"),
+            "public_settlement_px": (audit.get("public") or {}).get("settlement_px"),
+            "public_status": (audit.get("public") or {}).get("status"),
+            "public_state": (audit.get("public") or {}).get("state"),
+        },
+        "venue_timestamps": {
+            "resolution_update_time":
+                (audit.get("resolution") or {}).get("updateTime"),
+            "public_settlement_set_time":
+                (audit.get("public") or {}).get("settlement_set_time"),
+        },
+        "provenance": {
+            "source": "venue market state + authenticated account evidence",
+            "position_net": audit.get("position_net"),
+            "available_position": audit.get("available_position"),
+            "venue_qty_total": audit.get("venue_qty_total"),
+            "ledger_qty_total": audit.get("ledger_qty_total"),
+            "realized_confirmed": bool(audit.get("realized_confirmed")),
+            "realized_source": audit.get("realized_source"),
+        },
+        "reconciliation_version": TERMINAL_RECONCILIATION_VERSION,
+        "reconciled_at": datetime.now(timezone.utc).isoformat(),
         "labels": "DERIVED accounting from ledger fills; realized_usd_venue "
                   "is the venue's own; nothing else is realized",
     }
@@ -1084,6 +1120,13 @@ def _pending_diagnostic(slug: str, t, auditor) -> Optional[dict]:
 
 
 SETTLE_AUDIT_EVERY_S = 60.0
+# P1: how many unsettled markets one sweep audits. The cursor moves by
+# this much each pass, so the whole set is covered rather than the same
+# five markets forever.
+SETTLE_AUDIT_BATCH = 5
+# P1: the settlement_breakdown row's schema version. Bumped when its fields
+# change so a reader can tell a complete terminal record from an older one.
+TERMINAL_RECONCILIATION_VERSION = "canonical-terminal/v1"
 # OWNER 5561142758 #2: the account's own incentive economics, read-only,
 # at boot and on this cadence (earnings endpoint, activity credits, trade
 # fee fields, balances, published programs vs our markets).
@@ -2575,6 +2618,7 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
     status = "CAMPAIGN_NO_CANDIDATE"
     resumes = 0
     last_settle_audit = float("-inf")
+    _settle_rr = {"i": 0}          # P1: rotate, never a fixed prefix
     last_incentive_audit = (start - INCENTIVE_AUDIT_EVERY_S
                             + INCENTIVE_AUDIT_BOOT_DELAY_S)
     settled_here: set = set()
@@ -3223,9 +3267,42 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                         clock() - last_settle_audit >= SETTLE_AUDIT_EVERY_S:
                     # flat, but the ledger remembers fills the venue has since
                     # resolved out of positions: record their authoritative
-                    # settlement (realized only from the venue's own number)
+                    # settlement (realized only from the venue's own number).
+                    #
+                    # OWNER P1, 2026-09-13 -- WHY THIS MISSED jayfri. It took
+                    # unsettled_slugs()[:5]: a FIXED PREFIX of a list in ledger
+                    # first-fill order. Markets 6..n were never audited at all
+                    # while markets 1..5 were re-audited every minute, so a
+                    # market's reconciliation latency depended on how early it
+                    # first filled rather than on whether it had resolved.
+                    # jayfri filled at 13:01, resolved, left held at 13:57 and
+                    # sat unaudited with its full downside still charged.
+                    #
+                    # So ROTATE across the whole unsettled set -- every market
+                    # is reached within ceil(n/BATCH) passes -- and take the
+                    # ones the risk set is charging but the scheduler is NOT
+                    # working first, which is the exact shape of a market that
+                    # resolved and left.
+                    #
+                    # The `not held` gate STAYS. The loop already alternates
+                    # (open_cycle), so `held` is None every other pass and the
+                    # sweep runs continuously anyway; dropping it only doubled
+                    # the same audits for no extra coverage.
                     last_settle_audit = clock()
-                    for slug in unsettled_slugs()[:5]:
+                    _uns = unsettled_slugs()
+                    _absent = [s for s in _uns if s not in set(held_all)]
+                    _rest = [s for s in _uns if s in set(held_all)]
+                    _order = _absent + _rest
+                    if _order:
+                        # modular indexing, never a doubled list: concatenating
+                        # and slicing audited the SAME market twice in one pass
+                        # whenever fewer markets were unsettled than the batch.
+                        _n = len(_order)
+                        _i = _settle_rr["i"] % _n
+                        _settle_rr["i"] += SETTLE_AUDIT_BATCH
+                        _order = [_order[(_i + _k) % _n]
+                                  for _k in range(min(SETTLE_AUDIT_BATCH, _n))]
+                    for slug in _order:
                         audit = settle_held(t, slug)
                         _log("settlement", slug=slug, **audit)
                         if audit.get("settled"):

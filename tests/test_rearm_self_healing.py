@@ -455,3 +455,100 @@ def test_no_risk_gate_moved(monkeypatch):
                      "requote_relations", "completion_pair_ceiling",
                      "matched_pair_invariant_enforced",
                      "complete_reject_streak_max"]
+
+
+# ===================================================================
+# P0.2 + P1 + P0.3 INTEGRATION. The owner's chain, end to end.
+#
+#   real held position -> restart -> the SAME boot assertions fail
+#   flat_held_state -> fail closed -> the settlement reconciler obtains
+#   authoritative terminal/account state -> shutdown_idle re-runs the SAME
+#   unchanged assertions -> flat -> PASS -> the campaign resumes.
+#
+# And the invariant that matters more than the chain: while authenticated
+# venue evidence still shows risk, rechecking refuses forever. TIME ALONE
+# MUST NEVER ARM.
+# ===================================================================
+
+def test_settlement_is_what_releases_the_gate_not_the_clock(monkeypatch):
+    """The drain stands in for the reconciler: until IT clears the position,
+    no number of cycles matters; the moment it does, the same gate passes."""
+    _gate_armed(monkeypatch)
+    _all_green(monkeypatch)
+    held = {"m": ["aec-atp-jayfri-maxbas-2026-09-13"]}
+    monkeypatch.setattr(cont, "held_markets", lambda t: list(held["m"]))
+    monkeypatch.setattr(cont, "_idle_migration_close", lambda t: None)
+
+    cycles = {"n": 0}
+
+    def _drain(t=None):
+        """Authoritative terminal state arrives on cycle 40, not before."""
+        cycles["n"] += 1
+        if cycles["n"] >= 40:
+            held["m"] = []
+            return {"terminal": "venue-confirmed"}
+        return {"terminal": None}
+    monkeypatch.setattr(cont, "shutdown_settle_pass", _drain)
+
+    s, calls = _sleep_n(200)
+    t = object()
+    out = cont.shutdown_idle(sleep=s, report={"verdict": "REARM_REFUSED"},
+                             t=t, recheck=cont.rearm_recheck(t))
+    assert out["ok"] is True
+    assert calls["n"] == 39, "released on the reconciler's cycle, not a timer"
+
+
+def test_a_reconciler_that_never_confirms_never_arms(monkeypatch):
+    """The negative half, made literal: the drain runs every cycle and the
+    venue keeps reporting the position. Two hundred refusals."""
+    _gate_armed(monkeypatch)
+    _all_green(monkeypatch, held=["aec-atp-jayfri-maxbas-2026-09-13"])
+    monkeypatch.setattr(cont, "_idle_migration_close", lambda t: None)
+    drained = {"n": 0}
+
+    def _drain(t=None):
+        drained["n"] += 1                      # it runs; it just finds nothing
+        return {"terminal": None}
+    monkeypatch.setattr(cont, "shutdown_settle_pass", _drain)
+    s, calls = _sleep_n(200)
+    t = object()
+    with pytest.raises(_Stop):
+        cont.shutdown_idle(sleep=s, report={"verdict": "REARM_REFUSED"},
+                           t=t, recheck=cont.rearm_recheck(t))
+    assert calls["n"] == 200 and drained["n"] == 200
+
+
+def test_the_terminal_record_does_not_touch_the_rearm_gate():
+    """P1 writes accounting; it must not be able to satisfy a safety check.
+    The gate reads authenticated positions, never a ledger row."""
+    import ast
+    src = open(cont.__file__).read()
+    fn = next(n for n in ast.walk(ast.parse(src))
+              if isinstance(n, ast.FunctionDef) and n.name == "boot_assertions")
+    body = ast.unparse(fn)
+    for name in ("settlement_breakdown", "settle_held", "unsettled_slugs",
+                 "reconciliation_version"):
+        assert name not in body, name
+
+
+def test_the_behavioral_adapter_does_not_touch_the_rearm_gate():
+    """P0.3 likewise: a behavioral residual is not evidence about the venue."""
+    import ast
+    src = open(cont.__file__).read()
+    fn = next(n for n in ast.walk(ast.parse(src))
+              if isinstance(n, ast.FunctionDef) and n.name == "boot_assertions")
+    body = ast.unparse(fn)
+    for name in ("behavioral_residual", "shares_per_contract",
+                 "BEHAVIORAL_FLAT"):
+        assert name not in body, name
+
+
+def test_all_three_fixes_leave_every_risk_bound_where_it_was():
+    from src import pmus_spring_l5_session as ses
+    assert cont.REARM_BAND == (D("0.25"), D("0.75"))
+    assert cont.REARM_PAIR_CEILING == D("1.00")
+    assert cont.REARM_REQUOTE_RELATIONS == ("open", "extend", "complete")
+    assert cont.SHUTDOWN_IDLE_S == 300.0
+    assert ses.completion_pair_ceiling() == D("1.00")
+    assert ses.COMPLETE_REJECT_STREAK_MAX == 3
+    assert (ses.SPRING_BAND_LO, ses.SPRING_BAND_HI) == (D("0.25"), D("0.75"))
