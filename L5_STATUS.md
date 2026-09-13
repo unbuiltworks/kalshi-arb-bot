@@ -341,3 +341,39 @@ new venues/categories plug in via the `ADAPTERS`/`SOURCES` registries.
    have received similar fills (queue competition) is untestable offline —
    and our Gemini C/L-series show venue flow, not mechanics, is the binding
    constraint for any clone.
+
+## 2026-09-13 — where the fidelity loss actually is (SHADOW; nothing deployed)
+
+Measured on the engine's own durable-ledger `fidelity_gate` rows
+(**n = 10,679** decisions, 21:23Z, commit `f7a3e22410a3`) and on every
+decision Railway retention still holds (**650**, 37 markets, 13:00–21:10Z).
+See `analysis/l5/streak_shadow/STREAK_SHADOW.md`.
+
+* `l1_sampled_vs_l5 = 0.0064` — **the model reproduces L5.**
+  `l1_acted_vs_l5 = 0.4675` — the divergence is entirely downstream of it.
+* That 0.4675 is two numbers: an **EXTEND deficit of 0.2494 (53.3%)** and a
+  **COMPLETE excess of 0.1995 (42.7%)**. We take 2,196 extends where L5's
+  distribution asks for 4,825.
+* Sampled → acted conversions never create an extend. On the 650-decision
+  slice, 77 of 650 (11.85%) convert, **97.4% of them through
+  `entry_band_left`** (an ENTRY-admission price band applied to decisions
+  that are usually not entries), 2.6% through the declared `residual_cap`.
+* Classified: **97.4% class B** (the venue would have taken it; our policy
+  refused), 2.6% class A (a declared owner risk bound). This is not a
+  licence to remove the band — the prior band study splits COMPLETE +7.69
+  against EXTEND −2.74 — but it names the largest single lever on fidelity.
+* Six of the eleven economic override categories never fire at all: pair
+  ceiling, fee-safe, post-only, stale evidence, settlement horizon,
+  order/rest limit.
+* **`frozen_key × side_streak` does NOT earn promotion.** Out of sample
+  (train pre-2026-08-31, 14,430 held-out transitions) it is +0.239%
+  log-loss and +0.17pp accuracy, with same-side calibration (ECE 0.19212 →
+  0.19564) and action-distribution L1 (0.0081 → 0.0089) both slightly
+  WORSE. Correction to the prior cycle: P2 scored streak against the
+  three-part key, but production serves `base|last_rel|last_size`, which is
+  worth 13.9% of log-loss over the three-part key on its own — most of the
+  streak signal was already in the live key. Built, tested, parked.
+* `src/pmus_ledger_export.py` — a safe offline ledger export (read-only,
+  allowlisted, bounded, fail-closed, no endpoint, no credentials, no
+  mutation) is designed and proven by 16 isolation regressions. **Not
+  deployed**; wiring it means a new image on a money-moving service.
