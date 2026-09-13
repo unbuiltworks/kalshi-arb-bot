@@ -450,5 +450,51 @@
       "slug": "atc-lg1-lmf-rcl-2026-09-13-draw",
       "outcome": "opened while mzp-ezt dormant"
     }
+  ],
+  "pre_fill_decisions": [
+    {
+      "idx": 0,
+      "t": "2026-09-13T16:42:51Z",
+      "slug": "atc-lg1-lmf-rcl-2026-09-13-draw",
+      "executable_residual": "0",
+      "behavioral_residual": null,
+      "state": "p45-55c|tte>10m|flat",
+      "acted": "open",
+      "pre_fill": true,
+      "planned_contracts": "2.17"
+    },
+    {
+      "idx": 1,
+      "t": "2026-09-13T16:42:56Z",
+      "slug": "atc-lg1-lmf-rcl-2026-09-13-draw",
+      "executable_residual": "0",
+      "behavioral_residual": null,
+      "state": "p45-55c|tte>10m|flat",
+      "acted": "open",
+      "pre_fill": true,
+      "planned_contracts": "2.17"
+    },
+    {
+      "idx": 2,
+      "t": "2026-09-13T16:42:58Z",
+      "slug": "atc-lg1-lmf-rcl-2026-09-13-draw",
+      "executable_residual": "0",
+      "behavioral_residual": null,
+      "state": "p45-55c|tte>10m|flat",
+      "acted": "open",
+      "pre_fill": true,
+      "planned_contracts": "2.17"
+    },
+    {
+      "idx": 3,
+      "t": "2026-09-13T16:43:02Z",
+      "slug": "atc-lg1-lmf-rcl-2026-09-13-draw",
+      "executable_residual": "0",
+      "behavioral_residual": null,
+      "state": "p45-55c|tte>10m|flat",
+      "acted": "open",
+      "pre_fill": true,
+      "planned_contracts": "2.17"
+    }
   ]
 }
