@@ -39,14 +39,52 @@ def _copied() -> set:
     return out
 
 
-def _entry_module() -> str:
-    """The module the CMD actually runs -- not a module we assume it runs."""
-    cmd = [l for l in DOCKERFILE.read_text(encoding="utf-8").splitlines()
-           if l.startswith("CMD ")]
-    assert cmd, "no CMD in the probe Dockerfile"
-    m = re.search(r"python3 -m (src\.[A-Za-z0-9_.]+)", cmd[-1])
-    assert m, f"could not read the entry module from: {cmd[-1]}"
-    return m.group(1)
+def _entry_modules(cmd_line: str = None) -> tuple:
+    """EVERY module the CMD actually runs -- not the first one we happen to
+    match, and not a module we assume it runs.
+
+    The production CMD chains entrypoints:
+
+        python3 -m src.pmus_r5ft_ledger_repair && exec python3 -m src.pmus_l5_continuous_session
+
+    A single re.search returned only `pmus_r5ft_ledger_repair`, so the
+    closure walked 4 modules and NEVER walked the session that actually
+    trades. The completeness check was therefore live and green while
+    checking almost nothing: a module dropped from the session's own import
+    closure would not have been caught, which is the exact failure this file
+    exists to prevent (565b4cde).
+
+    Every `python3 -m src.<mod>` occurrence is an entrypoint whose imports
+    must be present in the image, whatever shell plumbing (`&&`, `;`,
+    `exec`, a `sh -c` wrapper) sits around it. Order-preserving and
+    deduplicated; no module name is special-cased.
+    """
+    if cmd_line is None:
+        cmd = [l for l in DOCKERFILE.read_text(encoding="utf-8").splitlines()
+               if l.startswith("CMD ")]
+        assert cmd, "no CMD in the probe Dockerfile"
+        cmd_line = cmd[-1]
+    found = re.findall(r"python3 -m (src\.[A-Za-z0-9_.]+)", cmd_line)
+    assert found, f"could not read any entry module from: {cmd_line}"
+    seen, out = set(), []
+    for mod in found:
+        if mod not in seen:
+            seen.add(mod)
+            out.append(mod)
+    return tuple(out)
+
+
+def _entry_closure(cmd_line: str = None) -> set:
+    """The UNION of the import closures of every chained entrypoint.
+
+    Union, not concatenation: a module reachable from both entrypoints is
+    required once, and a module reachable from only the second is still
+    required.
+    """
+    union: set = set()
+    for mod in _entry_modules(cmd_line):
+        union |= _closure(mod)
+    return union
 
 
 _SCOPED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
@@ -111,7 +149,7 @@ def _closure(entry: str) -> set:
 def _missing_from(copied: set) -> list:
     """Boot-scope modules absent from a given copy set."""
     missing = []
-    for mod in sorted(_closure(_entry_module())):
+    for mod in sorted(_entry_closure()):
         candidates = {f"src/{mod.replace('.', '/')}.py",
                       f"src/{mod.replace('.', '/')}/__init__.py"}
         if candidates & copied:
@@ -131,16 +169,20 @@ def test_every_boot_scope_import_is_in_the_image():
         f"fail to import and never start: {missing}")
 
 
-def test_the_entry_module_is_read_from_the_cmd_not_assumed():
-    assert _entry_module() == "src.pmus_l5_continuous_session"
-    assert "src/pmus_l5_continuous_session.py" in _copied()
+def test_the_entry_modules_are_read_from_the_cmd_not_assumed():
+    """Every chained entrypoint, and each one present in the image."""
+    mods = _entry_modules()
+    assert "src.pmus_l5_continuous_session" in mods, (
+        "the module that actually trades must be an entrypoint the check walks")
+    for mod in mods:
+        assert f"src/{mod[4:].replace('.', '/')}.py" in _copied(), mod
 
 
 def test_the_closure_is_transitive_not_just_direct():
     """pmus_residual_quarantine is reached directly; the session's own
     dependencies are reached through it. A one-level check would miss the
     second kind."""
-    closure = _closure(_entry_module())
+    closure = _entry_closure()
     assert "pmus_residual_quarantine" in closure
     assert "pmus_spring_l5_session" in closure
     assert len(closure) > 10, "a one-level scan would be much smaller"
@@ -204,3 +246,94 @@ def test_runtime_only_imports_are_reported_not_silently_trusted():
     assert not unpackaged, (
         "imported at RUNTIME but absent from the image -- the probe boots and "
         f"then fails the moment this path executes: {unpackaged}")
+
+
+# ===========================================================================
+# OWNER 2026-09-13: the parser must understand the ACTUAL production start
+# command, including EVERY chained `python3 -m` entrypoint. A gate that walks
+# only pmus_r5ft_ledger_repair and ignores pmus_l5_continuous_session is not
+# a gate. These pin the parser itself, with synthetic commands so no real
+# module name is special-cased.
+# ===========================================================================
+SINGLE = 'CMD ["sh", "-c", "python3 -m src.alpha"]'
+CHAINED = ('CMD ["sh", "-c", "test x = y || exit 64; '
+           'python3 -m src.alpha && exec python3 -m src.beta"]')
+
+
+def test_A_a_single_entry_command_behaves_exactly_as_before():
+    assert _entry_modules(SINGLE) == ("src.alpha",)
+
+
+def test_B_a_chained_repair_and_exec_session_finds_both(): 
+    assert _entry_modules(CHAINED) == ("src.alpha", "src.beta")
+
+
+def test_B2_the_real_production_command_yields_both_entrypoints():
+    mods = _entry_modules()
+    assert len(mods) >= 2, f"production CMD chains entrypoints: {mods}"
+    assert "src.pmus_l5_continuous_session" in mods
+    assert "src.pmus_r5ft_ledger_repair" in mods
+
+
+def test_C_a_dependency_reachable_only_from_the_second_entry_is_required(tmp_path):
+    """The regression the old parser could not express: the session's own
+    closure. pmus_spring_l5_session is reachable ONLY through
+    pmus_l5_continuous_session, never through the repair module."""
+    repair_only = _closure("src.pmus_r5ft_ledger_repair")
+    assert "pmus_spring_l5_session" not in repair_only, (
+        "precondition: the first entrypoint does not reach it")
+    assert "pmus_spring_l5_session" in _entry_closure(), (
+        "the union must require it")
+
+
+def test_D_omitting_a_second_entry_dependency_makes_the_check_FAIL():
+    """The assertion must BITE, not merely pass today."""
+    only_second = sorted(_closure("src.pmus_l5_continuous_session")
+                         - _closure("src.pmus_r5ft_ledger_repair"))
+    assert only_second, "precondition: the second entry adds dependencies"
+    victim = only_second[0]
+    crippled = {c for c in _copied()
+                if c != f"src/{victim.replace('.', '/')}.py"}
+    assert victim in _missing_from(crippled), (
+        f"dropping {victim} -- reachable only from the second entrypoint -- "
+        "must be caught")
+
+
+def test_E_shared_dependencies_are_deduplicated():
+    a, b = _closure("src.pmus_r5ft_ledger_repair"), _closure("src.pmus_l5_continuous_session")
+    shared = a & b
+    assert shared, "precondition: the entrypoints share dependencies"
+    union = _entry_closure()
+    assert union == a | b
+    assert len(union) < len(a) + len(b), "a concatenation would over-count"
+
+
+def test_E2_a_repeated_entry_module_is_listed_once():
+    assert _entry_modules(
+        'CMD ["sh", "-c", "python3 -m src.alpha && python3 -m src.alpha"]'
+    ) == ("src.alpha",)
+
+
+@pytest.mark.parametrize("cmd", [
+    'CMD ["sh", "-c", "exec python3 -m src.alpha"]',
+    'CMD ["sh", "-c", "cd /app; python3 -m src.alpha"]',
+    'CMD ["sh", "-c", "guard || exit 64; python3 -m src.alpha && exec python3 -m src.beta"]',
+    'CMD ["sh", "-c", "sed -i s/a/b/ f.py && python3 -m src.alpha && exec python3 -m src.beta"]',
+])
+def test_F_shell_wrappers_and_exec_do_not_prevent_extraction(cmd):
+    mods = _entry_modules(cmd)
+    assert "src.alpha" in mods
+    assert mods[0] == "src.alpha", "order preserved"
+
+
+def test_G_the_production_command_passes_only_with_the_full_closure():
+    """Green now -- and provably for the right reason: every module in the
+    UNION is in the image, and removing any one of them fails."""
+    assert _missing_from(_copied()) == []
+    union = sorted(_entry_closure())
+    assert len(union) > 10
+    for mod in union[:5]:                       # bounded: proof it bites
+        crippled = {c for c in _copied()
+                    if c != f"src/{mod.replace('.', '/')}.py"}
+        if crippled != _copied():               # only if it was in the set
+            assert mod in _missing_from(crippled), mod
