@@ -145,6 +145,114 @@
       "note": "post-fill recompute: inventory and behavioural residual both advanced"
     },
     {
+      "idx": 35,
+      "t": "2026-09-13T16:41:45Z",
+      "executable_residual": "-9.60",
+      "behavioral_residual": -55.81395348837209,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb>50",
+      "acted": "extend",
+      "dist": {
+        "extend": 0.7714,
+        "complete": 0.2286,
+        "open": 0.0
+      },
+      "px": null,
+      "planned_contracts": "1.35",
+      "filled_qty": "0"
+    },
+    {
+      "idx": 36,
+      "t": "2026-09-13T16:41:53Z",
+      "executable_residual": "-9.60",
+      "behavioral_residual": -55.81395348837209,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb>50",
+      "acted": "complete",
+      "dist": {
+        "extend": 0.7714,
+        "complete": 0.2286,
+        "open": 0.0
+      },
+      "px": null,
+      "planned_contracts": "1.35",
+      "filled_qty": "0"
+    },
+    {
+      "idx": 37,
+      "t": "2026-09-13T16:41:56Z",
+      "executable_residual": "-9.60",
+      "behavioral_residual": -55.81395348837209,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb>50",
+      "acted": "extend",
+      "dist": {
+        "extend": 0.7714,
+        "complete": 0.2286,
+        "open": 0.0
+      },
+      "px": null,
+      "planned_contracts": "1.35",
+      "filled_qty": "0"
+    },
+    {
+      "idx": 38,
+      "t": "2026-09-13T16:42:04Z",
+      "executable_residual": "-9.60",
+      "behavioral_residual": -55.81395348837209,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb>50",
+      "acted": "extend",
+      "dist": {
+        "extend": 0.7714,
+        "complete": 0.2286,
+        "open": 0.0
+      },
+      "px": null,
+      "planned_contracts": "1.35",
+      "filled_qty": "0"
+    },
+    {
+      "idx": 39,
+      "t": "2026-09-13T16:42:08Z",
+      "executable_residual": "-9.60",
+      "behavioral_residual": -55.81395348837209,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb>50",
+      "acted": "complete",
+      "dist": {
+        "extend": 0.7714,
+        "complete": 0.2286,
+        "open": 0.0
+      },
+      "px": null,
+      "planned_contracts": "1.35",
+      "filled_qty": "0"
+    },
+    {
+      "idx": 40,
+      "t": "2026-09-13T16:42:11Z",
+      "executable_residual": "-9.60",
+      "behavioral_residual": -55.81395348837209,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb>50",
+      "acted": "extend",
+      "dist": {
+        "extend": 0.7714,
+        "complete": 0.2286,
+        "open": 0.0
+      },
+      "px": null,
+      "planned_contracts": "1.35",
+      "filled_qty": "0"
+    },
+    {
       "idx": 41,
       "t": "2026-09-13T16:43:35Z",
       "executable_residual": "-9.60",
@@ -267,12 +375,12 @@
     "correct_executable_inventory": "observed: venue 9.6000 == ledger 9.60, delta 0.0000",
     "correct_behavioral_inventory": "observed: -55.8140 = -9.60/1.72*10.0, exact",
     "EXTEND": "observed post-cutover, 4 submitted 1 filled",
-    "COMPLETE": "OBSERVED post-cutover at 16:43:50Z, decisions 43 and 44, submitted at YES 0.63 x1.42, no fill (ceiling-bound 7 ticks behind touch)",
+    "COMPLETE": "OBSERVED post-cutover: 4 COMPLETEs acted (decisions 36, 39, 43, 44), first at 16:41:53Z, none filled -- ceiling-bound 7 ticks behind the touch",
     "matched_residual_accounting": "residual only so far; matched 0",
     "authoritative_settlement": "NOT YET post-cutover",
     "realized_accounting": "NOT YET post-cutover",
     "self_healing_REARM": "NOT YET exercised (gate has not refused since cutover)",
-    "next_market_acquisition": "OBSERVED: aec-lol-lll-png-2026-09-13 opened 16:37:14 while mzp-ezt dormant, 4 orders, SPRING_NO_FILL"
+    "next_market_acquisition": "OBSERVED TWICE: aec-lol-lll-png 16:37:14Z and atc-lg1-lmf-rcl 16:42:51Z, both while mzp-ezt was held and dormant (acquisition_slots_in_use 0)"
   },
   "first_complete_on_corrected_engine": {
     "t": "2026-09-13T16:43:50Z",
@@ -301,7 +409,46 @@
     },
     "reading": "The ceiling did its job. L5's own touch price was 0.70, which would have put the pair at 1.0652 -- ABOVE PAR. The engine refused to chase, capped at the economic max 0.6348, and posted 0.63 where the pair is 0.9952. It then stopped chasing when the touch moved, preserving the residual rather than buying a loss.",
     "why_it_did_not_fill": "the book was 0.72/0.74 and we bid 0.63 -- 7 ticks behind L5's touch. Same completion asymmetry the 2026-09-13 forensic report measured; the ceiling is the binding constraint, not the execution.",
-    "labels": "SUBMITTED. Not filled, not matched, not settled, not realized."
+    "labels": "SUBMITTED. Not filled, not matched, not settled, not realized.",
+    "CORRECTION": "I first recorded the first COMPLETE as decision 43 at 16:43:50Z. Wrong -- decisions 35-40 were not in the log window I had read. The FIRST COMPLETE on the corrected engine is decision 36 at 16:41:53Z, and decision 39 at 16:42:08Z is the second. 43 and 44 are the third and fourth. Four COMPLETEs acted post-cutover, none filled."
   },
-  "session_stop_reason_observed": "opening_budget_spent:4/4:extension_is_completion_only_not_extend"
+  "session_stop_reason_observed": "opening_budget_spent:4/4:extension_is_completion_only_not_extend",
+  "complete_actions_post_cutover": {
+    "count": 4,
+    "decisions": [
+      36,
+      39,
+      43,
+      44
+    ],
+    "first": "2026-09-13T16:41:53Z",
+    "filled": 0,
+    "why_none_filled": "ceiling-bound. L5 touch 0.70 would put the pair at 1.0652 (above par); the engine capped at economic_max 0.6348 and posted 0.63 (pair 0.9952), 7 ticks behind the book."
+  },
+  "pre_fill_none_is_correct_not_a_false_flat": {
+    "observed_on": "atc-lg1-lmf-rcl-2026-09-13-draw, decisions 0-3, 16:42:51-16:43:02Z",
+    "inventory_before": {
+      "up": "0",
+      "dn": "0",
+      "residual": "0"
+    },
+    "behavioral_residual": null,
+    "residual_units": 0.0,
+    "pre_fill": true,
+    "state": "p45-55c|tte>10m|flat",
+    "verdict": "CORRECT. behavioral_residual_shares() returns None when up==0 and dn==0 -- no fill exists yet, so there is no behavioural quantity to report. `flat` here agrees with an executable residual that is genuinely 0. This is NOT a false-flat: the P0.3 requirement is no false-flat from MATERIAL executable residual, and 0 is not material.",
+    "note": "My first automated checker flagged these four rows because it treated None as disagreeing with 0. The checker was wrong, not the engine."
+  },
+  "autonomous_acquisitions_post_cutover": [
+    {
+      "t": "2026-09-13T16:37:14Z",
+      "slug": "aec-lol-lll-png-2026-09-13",
+      "outcome": "SPRING_NO_FILL, 4 submitted 0 filled"
+    },
+    {
+      "t": "2026-09-13T16:42:51Z",
+      "slug": "atc-lg1-lmf-rcl-2026-09-13-draw",
+      "outcome": "opened while mzp-ezt dormant"
+    }
+  ]
 }
