@@ -634,3 +634,40 @@ def test_prune_reports_what_it_did():
     d = rec.prune_state(st, keep=["keepme"], now=now, max_idle_s=60,
                         max_markets=1000)
     assert d["kept"] == 1 and d["evicted_idle"] == 5 and d["protected"] == 1
+
+
+def test_the_enriched_wrapper_mirrors_the_canonical_plan_signature():
+    """THE RECORDER DIED FOR WANT OF THIS TEST.
+
+    pmus_ws_evidence_recorder_enriched monkeypatches pq.plan with its own
+    wrapper. On 2026-09-13T18:12Z `protected` was added to the canonical
+    plan() and not to the wrapper; the recorder -- the probe's ONLY evidence
+    source -- crash-looped on `TypeError: plan() got an unexpected keyword
+    argument 'protected'` at the first discovery cycle after deploy. Every
+    argument the canonical planner grows must be mirrored, so this compares the
+    signatures directly rather than trusting anyone to remember."""
+    import inspect
+    from src import pmus_ws_evidence_recorder_enriched as enriched
+    canonical = set(inspect.signature(pq.plan).parameters)
+    wrapper = set(inspect.signature(enriched.plan).parameters)
+    assert not (canonical - wrapper), (
+        "enriched.plan is missing parameters the canonical pq.plan accepts: "
+        f"{sorted(canonical - wrapper)} -- the recorder will TypeError on the "
+        "first discovery cycle")
+
+
+def test_the_enriched_wrapper_actually_forwards_protected(monkeypatch):
+    """Mirroring the signature is not enough: it has to pass the value on, or
+    held markets silently lose their pin."""
+    from src import pmus_ws_evidence_recorder_enriched as enriched
+    seen = {}
+
+    def fake(targets, state, cap, cycle, prev, now=None, l5_infos=None,
+             protected=None):
+        seen["protected"] = protected
+        return {"subscribe": [], "state": {}, "l5_allocated": [],
+                "diagnostics": {}, "per_market": {}}
+
+    monkeypatch.setattr(enriched, "_ORIGINAL_PLAN", fake)
+    enriched.plan([], {}, 4, 0, {}, protected=["aec-held"])
+    assert seen["protected"] == ["aec-held"]

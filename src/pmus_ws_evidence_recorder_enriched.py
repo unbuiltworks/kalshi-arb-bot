@@ -108,8 +108,16 @@ def evidence_pursuit_candidates(state: Mapping[str, Any], now: float,
     return out
 
 
-def plan(targets, state, cap, cycle, prev=None, now=None, l5_infos=None):
+def plan(targets, state, cap, cycle, prev=None, now=None, l5_infos=None,
+         protected=None):
     """Canonical priority plan plus a bounded evidence-pursuit reserve.
+
+    `protected` is FORWARDED, not handled here. This wrapper monkeypatches
+    pq.plan (see the assignment at the bottom of this module), so any argument
+    the canonical planner grows must be mirrored in this signature or the
+    recorder dies at the first discovery cycle with a TypeError -- which is
+    exactly what happened on 2026-09-13T18:12Z when `protected` was added to
+    pq.plan and not here.
 
     The global cap is UNCHANGED: each reserved candidate replaces the
     lowest-ranked WARM seat only — hot seats and the COLD/starvation
@@ -119,7 +127,7 @@ def plan(targets, state, cap, cycle, prev=None, now=None, l5_infos=None):
     import time as _time
     now = now or _time.time()
     p = _ORIGINAL_PLAN(targets, state, cap, cycle, prev, now=now,
-                       l5_infos=l5_infos)
+                       l5_infos=l5_infos, protected=protected)
     # OWNER 5553166357: no category gets a hardcoded seat reserve that can
     # starve others. The strict-match pursuit reserve (completion-evidence
     # chasing, a bar removed from OPEN admission in 5551236878) was
