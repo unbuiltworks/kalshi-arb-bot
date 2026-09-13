@@ -4,6 +4,7 @@ guarantee, missingness discipline, L5-state allocation cap, and the
 deploy-isolation tripwire."""
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -361,3 +362,275 @@ def test_fresh_live_market_displaces_a_stale_resolved_hot_member():
     # stale-score decay: the frozen book's recent-window book_rate is 0 despite 9000 lifetime updates
     assert pq.score_market(state["m-000"], now)["components"]["book_rate"] == 0.0
     assert pq.score_market(state["m-001"], now)["components"]["book_rate"] > 0.0
+
+
+# ---------------------------------------------------------------------------
+# SEAT VALUE: market class, the three added score inputs, and the quota.
+#
+# Measured 2026-09-13: 76 of 80 seats were thin-flow-refused because the
+# qualified universe is 55% player props and 18% team-stat props against TWENTY
+# -ONE aec- moneylines venue-wide. These pin the fix.
+# ---------------------------------------------------------------------------
+
+def _t(slug, **kw):
+    base = {"slug": slug, "status": "MARKET_STATUS_OPEN", "bid": 0.5}
+    base.update(kw)
+    return base
+
+
+def test_market_class_from_the_venues_own_slug_prefixes():
+    assert pq.market_class(_t("aec-mlb-laa-wsh-2026-09-13")) == pq.CLASS_MONEYLINE
+    assert pq.market_class(_t("asc-nfl-chi-car-2026-09-13-1h-neg-2pt5")) == pq.CLASS_SPREAD
+    assert pq.market_class(_t("atc-mlb-x-2026-09-13")) == pq.CLASS_TOTAL
+    assert pq.market_class(_t("astatc-nfl-buf-hou-2026-09-13-pyd-josall-gte175")) == pq.CLASS_PROP
+    assert pq.market_class(_t("tsc-nfl-x-2026-09-13")) == pq.CLASS_PROP
+
+
+def test_astatc_is_not_mistaken_for_asc():
+    """`astatc-` starts with `as`, and a naive prefix order would class every
+    player prop as a spread -- which is exactly the class the quota protects."""
+    assert pq.market_class(_t("astatc-nfl-x-ryd-gte30")) == pq.CLASS_PROP
+
+
+def test_unknown_slug_shape_is_OTHER_not_PROP():
+    """Being unrecognised must not silently demote a market into the capped
+    class."""
+    assert pq.market_class(_t("weird-slug")) == pq.CLASS_OTHER
+    assert pq.market_class(None) == pq.CLASS_OTHER
+
+
+def test_market_type_fields_are_the_fallback_when_the_prefix_is_unknown():
+    assert pq.market_class(_t("x", sportsMarketType="football_player_pass_yds")) == pq.CLASS_PROP
+    assert pq.market_class(_t("x", marketType="spreads")) == pq.CLASS_SPREAD
+    assert pq.market_class(_t("x", marketType="totals")) == pq.CLASS_TOTAL
+    assert pq.market_class(_t("x", marketType="moneyline")) == pq.CLASS_MONEYLINE
+
+
+def test_band_fit_decays_outside_the_band_instead_of_cliffing():
+    assert pq.band_fit(0.25) == 1.0 and pq.band_fit(0.75) == 1.0
+    assert pq.band_fit(0.50) == 1.0
+    assert pq.band_fit(None) is None                  # unknown != bad
+    near, far = pq.band_fit(0.24), pq.band_fit(0.02)
+    assert 0.0 < far < near < 1.0, "0.24 and 0.02 must not rank identically"
+    assert pq.band_fit(1.0) == 0.0          # 1.0 is the extreme, not 0.99
+    assert pq.band_fit(0.99) < pq.band_fit(0.80)
+
+
+def test_the_three_missing_inputs_are_now_scored():
+    now = time.time()
+    sc = pq.score_market({"book_updates": 10, "bid": "0.50", "ask": "0.51"},
+                         now, target=_t("aec-x"))
+    assert sc["components"]["band_fit"] == 1.0
+    assert sc["components"]["settlement_ok"] == 1.0
+    assert sc["components"]["class_prior"] == pq.CLASS_PRIOR[pq.CLASS_MONEYLINE]
+
+
+def test_a_resolved_market_scores_settlement_zero():
+    sc = pq.score_market({"book_updates": 10}, time.time(),
+                         target=_t("aec-x", status="MARKET_STATUS_RESOLVED"))
+    assert sc["components"]["settlement_ok"] == 0.0
+
+
+def test_never_observed_with_no_target_still_scores_None():
+    """The planner depends on this: score None -> ranked last -> COLD picks it
+    up by age. A fabricated class prior would have destroyed it."""
+    sc = pq.score_market(None, time.time())
+    assert sc["score"] is None and sc["present"] == 0
+
+
+def _prop_flood(n_props=200, n_core=21, hot_trades=40):
+    """The measured shape: a huge prop tree against a scarce liquid core, with
+    the props carrying the BETTER observed flow so score alone prefers them."""
+    now = time.time()
+    targets, state = [], {}
+    for i in range(n_props):
+        s = f"astatc-nfl-x-{i:04d}"
+        targets.append(_t(s))
+        state[s] = {"book_updates": 200, "both_sides_served": True,
+                    "bid": "0.50", "ask": "0.51", "bid_qty": "50", "ask_qty": "50",
+                    "trades": [{"t": now - 1} for _ in range(hot_trades)]}
+    for i in range(n_core):
+        s = f"aec-mlb-x-{i:03d}"
+        targets.append(_t(s))
+        state[s] = {"book_updates": 20, "both_sides_served": True,
+                    "bid": "0.50", "ask": "0.53", "bid_qty": "5", "ask_qty": "5",
+                    "trades": [{"t": now - 1} for _ in range(2)]}
+    return targets, state, now
+
+
+def test_a_prop_tree_cannot_crowd_out_the_liquid_core(monkeypatch):
+    monkeypatch.delenv(pq.CORE_MIN_FRAC_ENV, raising=False)
+    targets, state, now = _prop_flood()
+    p = pq.plan(targets, state, 160, 0, {}, now=now)
+    hot = [s for s, st in p["state"].items() if st["tier"] == "hot"]
+    core = [s for s in hot if s.startswith("aec-")]
+    assert len(core) == 21, f"all 21 moneylines must be seated, got {len(core)}"
+
+
+def test_without_the_quota_the_props_would_have_won():
+    """Proves the quota is what did it, not the score: with the core reserve
+    and the prop ceiling both disabled, the better-flowing props take the
+    seats."""
+    import os
+    targets, state, now = _prop_flood()
+    os.environ[pq.CORE_MIN_FRAC_ENV] = "0.0"
+    os.environ[pq.PROP_MAX_FRAC_ENV] = "1.0"
+    try:
+        p = pq.plan(targets, state, 160, 0, {}, now=now)
+        hot = [s for s, st in p["state"].items() if st["tier"] == "hot"]
+        assert sum(1 for s in hot if s.startswith("aec-")) < 21
+    finally:
+        os.environ.pop(pq.CORE_MIN_FRAC_ENV, None)
+        os.environ.pop(pq.PROP_MAX_FRAC_ENV, None)
+
+
+def test_the_core_reserve_is_a_floor_not_a_ceiling(monkeypatch):
+    """The core pass must stop at the reserve. Filling every HOT seat with core
+    markets would starve the flow-ranked majority the score exists to pick."""
+    now = time.time()
+    targets, state = [], {}
+    for i in range(300):                      # plenty of core markets available
+        s = f"aec-x-{i:04d}"
+        targets.append(_t(s))
+        state[s] = {"book_updates": 10, "both_sides_served": True,
+                    "bid": "0.50", "ask": "0.51", "trades": []}
+    for i in range(300):
+        s = f"astatc-x-{i:04d}"
+        targets.append(_t(s))
+        state[s] = {"book_updates": 500, "both_sides_served": True,
+                    "bid": "0.50", "ask": "0.51", "bid_qty": "90", "ask_qty": "90",
+                    "trades": [{"t": now - 1} for _ in range(45)]}
+    p = pq.plan(targets, state, 100, 0, {}, now=now)
+    hot = [s for s, st in p["state"].items() if st["tier"] == "hot"]
+    assert any(s.startswith("astatc-") for s in hot), \
+        "core reserve became a ceiling and starved the flow-ranked majority"
+
+
+def test_props_are_capped_in_hot_but_never_excluded(monkeypatch):
+    targets, state, now = _prop_flood()
+    p = pq.plan(targets, state, 160, 0, {}, now=now)
+    tiers = {s: st["tier"] for s, st in p["state"].items()}
+    hot_props = [s for s, t in tiers.items() if t == "hot" and s.startswith("astatc-")]
+    hot_n = max(1, int(160 * float(os.getenv(pq.HOT_FRAC_ENV, "0.6"))))
+    assert hot_props, "props must not be excluded outright"
+    assert len(hot_props) <= int(round(hot_n * 0.50)) + 1
+    # and the rest remain reachable through the rotation, not dropped
+    assert any(t in ("warm", "cold") for s, t in tiers.items()
+               if s.startswith("astatc-") and s not in hot_props)
+
+
+def test_a_prop_that_starts_trading_still_wakes():
+    """The ceiling must not disable the wake path."""
+    now = time.time()
+    targets = [_t(f"astatc-x-{i}") for i in range(30)]
+    state = {f"astatc-x-{i}": {"trades": [], "book_updates": 1} for i in range(30)}
+    prev = {f"astatc-x-{i}": {"tier": "cold", "trades_seen": 0} for i in range(30)}
+    state["astatc-x-29"]["trades"] = [{"t": now - 1} for _ in range(9)]
+    p = pq.plan(targets, state, 4, 5, prev, now=now)
+    assert "astatc-x-29" in p["diagnostics"]["wake_promotions"]
+    assert "astatc-x-29" in p["subscribe"]
+
+
+# --- held markets are never evicted ---------------------------------------
+
+def test_a_held_market_keeps_its_seat_against_rank_quota_and_staleness():
+    """Losing observation on a market we hold risk in is the one eviction that
+    can actually hurt: the settlement auditor and residual accounting both read
+    that stream."""
+    now = time.time()
+    targets, state, _ = _prop_flood(n_props=200, n_core=21)
+    held = "aec-held-market-2026-09-13"
+    targets.append(_t(held))
+    state[held] = {"book_updates": 1, "trades": [],
+                   "bbo_history": [{"t": now - 99999}]}      # stale AND unranked
+    p = pq.plan(targets, state, 20, 0, {}, now=now, protected=[held])
+    assert held in p["subscribe"]
+    assert p["state"][held]["tier"] == "hot"
+
+
+def test_protection_is_still_bounded_by_the_cap():
+    now = time.time()
+    targets = [_t(f"aec-h-{i}") for i in range(50)]
+    state = {f"aec-h-{i}": {"book_updates": 1, "trades": []} for i in range(50)}
+    p = pq.plan(targets, state, 10, 0, {}, now=now,
+                protected=[f"aec-h-{i}" for i in range(50)])
+    assert len(p["subscribe"]) <= 10
+
+
+def test_protecting_an_undiscovered_slug_is_ignored_not_crashed():
+    now = time.time()
+    targets = [_t("aec-a")]
+    p = pq.plan(targets, {"aec-a": {"book_updates": 1}}, 5, 0, {}, now=now,
+                protected=["not-in-universe"])
+    assert "not-in-universe" not in p["subscribe"]
+
+
+# ---------------------------------------------------------------------------
+# IN-MEMORY STATE BOUND -- the memory analogue of the 2026-09-08 ENOSPC.
+#
+# mstate was never pruned: one entry per market EVER observed, each up to 2,000
+# bbo_history snapshots and 500 trades, fed continuously by COLD rotation over
+# an 11,201-market universe. Measured RSS 8.27 GB before this. The bound has to
+# exist BEFORE the seat cap doubles the fill rate.
+# ---------------------------------------------------------------------------
+
+def _obs(age_s, now):
+    return {"book_updates": 5, "trades": [{"t": now - age_s}],
+            "bbo_history": [{"t": now - age_s}]}
+
+
+def test_idle_markets_are_evicted_and_bounded():
+    now = time.time()
+    st = {f"m{i}": _obs(99999, now) for i in range(50)}
+    d = rec.prune_state(st, keep=[], now=now, max_idle_s=3600, max_markets=1000)
+    assert d["evicted_idle"] == 50 and st == {}
+
+
+def test_subscribed_and_protected_markets_are_never_evicted():
+    now = time.time()
+    st = {"held": _obs(99999, now), "sub": _obs(99999, now), "old": _obs(99999, now)}
+    rec.prune_state(st, keep=["held", "sub"], now=now, max_idle_s=60,
+                    max_markets=1)
+    assert set(st) == {"held", "sub"}, "a kept market must survive any bound"
+
+
+def test_a_market_with_live_evidence_is_not_evicted():
+    """Admission reads trades_1h off this state. Evicting a market whose
+    evidence is still inside that window would destroy the thing that makes it
+    admissible -- so the default idle bound is deliberately longer than 1 h."""
+    now = time.time()
+    st = {"fresh": _obs(600, now), "stale": _obs(99999, now)}
+    rec.prune_state(st, keep=[], now=now, max_idle_s=7200, max_markets=1000)
+    assert set(st) == {"fresh"}
+
+
+def test_default_idle_bound_is_longer_than_the_trades_1h_window():
+    now = time.time()
+    st = {"hour_old": _obs(3599, now)}
+    rec.prune_state(st, keep=[], now=now)          # env defaults
+    assert st, "default bound must not evict evidence trades_1h still needs"
+
+
+def test_over_cap_eviction_drops_the_oldest_idle_first():
+    now = time.time()
+    st = {f"m{i}": _obs(100 + i * 100, now) for i in range(10)}
+    rec.prune_state(st, keep=[], now=now, max_idle_s=10 ** 9, max_markets=3)
+    assert len(st) == 3
+    assert set(st) == {"m0", "m1", "m2"}, "newest-observed must be the survivors"
+
+
+def test_never_observed_entries_are_treated_as_maximally_idle():
+    """They carry no evidence to lose, so they go first."""
+    now = time.time()
+    st = {"never": {"book_updates": 0}, "recent": _obs(10, now)}
+    rec.prune_state(st, keep=[], now=now, max_idle_s=3600, max_markets=1000)
+    assert set(st) == {"recent"}
+
+
+def test_prune_reports_what_it_did():
+    now = time.time()
+    st = {f"m{i}": _obs(99999, now) for i in range(5)}
+    st["keepme"] = _obs(99999, now)
+    d = rec.prune_state(st, keep=["keepme"], now=now, max_idle_s=60,
+                        max_markets=1000)
+    assert d["kept"] == 1 and d["evicted_idle"] == 5 and d["protected"] == 1

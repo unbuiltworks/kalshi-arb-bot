@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional
 
 HOT_FRAC_ENV = "PMUS_WS_HOT_FRAC"          # default 0.6 of the cap
 COLD_SLOTS_ENV = "PMUS_WS_COLD_SLOTS"      # default max(2, cap//10)
@@ -43,9 +43,81 @@ MIN_HOLD_ENV = "PMUS_WS_MIN_HOLD_CYCLES"   # default 3
 COOLDOWN_ENV = "PMUS_WS_PROMOTE_COOLDOWN"  # default 2 cycles after demote
 WAKE_TRADES_ENV = "PMUS_WS_WAKE_TRADES"    # default 3 new trades
 L5_ALLOC_ENV = "PMUS_WS_L5_ALLOC"          # default 10 (bounded 0..20; 0 = no L5 allocation, OWNER 5554106892)
+CORE_MIN_FRAC_ENV = "PMUS_WS_CORE_MIN_FRAC"   # default 0.35 of HOT reserved for the liquid core
+PROP_MAX_FRAC_ENV = "PMUS_WS_PROP_MAX_FRAC"   # default 0.50 ceiling on HOT seats held by props
+BAND_LO, BAND_HI = 0.25, 0.75                 # mirrors SPRING_BAND_LO/HI
 STALE_S_ENV = "PMUS_WS_STALE_S"            # default 900 s: an OBSERVED market whose authenticated
                                            # book/trade stream has been silent this long is STALE
 BOOK_RATE_WINDOW_S = 600.0                 # recent-window book activity (issue #167 5571181823)
+
+
+# ---------------------------------------------------------------------------
+# MARKET CLASS -- the axis the seat allocation actually needed.
+#
+# The measured problem (funnel audit, 2026-09-13): 76 of 80 seats were refused
+# on thin flow, because the QUALIFIED universe is 55% astatc- player stat props
+# and 18% tsc- team stat props, while the liquid core -- aec- event moneylines --
+# is TWENTY-ONE markets across the whole live venue. Ranking by score alone
+# cannot fix that: 1,630 props each scoring respectably will still crowd out 21
+# moneylines, because the mean-of-components score has no notion of scarcity.
+# So class drives BOTH a score prior AND an explicit seat quota.
+#
+# PROPS ARE NEVER PERMANENTLY EXCLUDED. The cap is on HOT seats only; COLD's
+# oldest-first sampling still guarantees every discovered market a look, and a
+# prop that starts trading wakes through the same wake path as anything else.
+CLASS_MONEYLINE, CLASS_SPREAD = "moneyline", "spread"
+CLASS_TOTAL, CLASS_PROP, CLASS_OTHER = "total", "prop", "other"
+
+# PMUS slug prefixes, from the live venue: aec- event/moneyline, asc- spread,
+# atc- total, astatc- player stat prop, tsc- team stat prop.
+_CLASS_PREFIX = (("astatc-", CLASS_PROP), ("tsc-", CLASS_PROP),
+                 ("asc-", CLASS_SPREAD), ("atc-", CLASS_TOTAL),
+                 ("aec-", CLASS_MONEYLINE))
+
+# The liquid core: what a seat is most likely to turn into executable L5
+# evidence. Spreads and totals are MAIN LINES and belong here; player/team stat
+# props do not.
+CORE_CLASSES = frozenset({CLASS_MONEYLINE, CLASS_SPREAD, CLASS_TOTAL})
+
+CLASS_PRIOR = {CLASS_MONEYLINE: 1.0, CLASS_SPREAD: 0.7, CLASS_TOTAL: 0.6,
+               CLASS_OTHER: 0.5, CLASS_PROP: 0.25}
+
+
+def market_class(target: Optional[Mapping[str, Any]]) -> str:
+    """Class from the venue's own slug prefix, falling back to its market-type
+    fields. Unknown shapes land in OTHER (a mid prior), never in PROP -- being
+    unrecognised must not silently demote a market."""
+    if not target:
+        return CLASS_OTHER
+    slug = str(target.get("slug") or "").lower()
+    for pre, cls in _CLASS_PREFIX:
+        if slug.startswith(pre):
+            return cls
+    mt = str(target.get("sports_market_type") or target.get("sportsMarketType")
+             or target.get("market_type") or target.get("marketType") or "").lower()
+    if "player" in mt or "prop" in mt or "stat" in mt:
+        return CLASS_PROP
+    if "spread" in mt:
+        return CLASS_SPREAD
+    if "total" in mt or "over_under" in mt:
+        return CLASS_TOTAL
+    if "moneyline" in mt or mt in ("event", "winner"):
+        return CLASS_MONEYLINE
+    return CLASS_OTHER
+
+
+def band_fit(bid: Optional[float]) -> Optional[float]:
+    """1.0 inside the executable band, decaying outside it rather than a cliff.
+
+    A market at 0.24 is nearly admissible and a market at 0.02 is not, and a
+    hard 0/1 would rank those two identically. None (unknown price) stays None
+    so it is treated as missing, not as bad."""
+    if bid is None:
+        return None
+    if BAND_LO <= bid <= BAND_HI:
+        return 1.0
+    d = (BAND_LO - bid) if bid < BAND_LO else (bid - BAND_HI)
+    return _clamp01(1.0 - d / BAND_LO)
 
 
 def last_authenticated_t(s: Optional[Mapping[str, Any]]) -> Optional[float]:
@@ -103,7 +175,19 @@ def seed_components(target: Optional[Mapping[str, Any]]) -> dict:
     comp: dict[str, Optional[float]] = {
         "seed_spread_quality": None, "seed_activity": None,
         "seed_live_phase": None,
+        # OWNER seat-value directive: price band, settlement compatibility and
+        # market type were the three ranking inputs the scorer did not have.
+        "band_fit": None, "settlement_ok": None, "class_prior": None,
     }
+    # Only when a target is actually supplied: with no discovery row we do not
+    # KNOW the class, and defaulting to the OTHER prior would be a fabricated
+    # component -- it would also destroy the "never-observed scores None, ranks
+    # last, stays COLD-coverable" invariant the planner depends on.
+    if target is not None:
+        comp["class_prior"] = CLASS_PRIOR[market_class(target)]
+        status = str(target.get("status") or target.get("market_status") or "")
+        if status:
+            comp["settlement_ok"] = 1.0 if status.endswith("OPEN") else 0.0
     if not target:
         return comp
     meta = target.get("market_meta") or {}
@@ -148,7 +232,19 @@ def score_market(s: Optional[Mapping[str, Any]], now: float,
         "l5_suitability": None, "completion_prob": None,
         "seed_spread_quality": None, "seed_activity": None,
         "seed_live_phase": None,
+        # OWNER seat-value directive: price band, settlement compatibility and
+        # market type were the three ranking inputs the scorer did not have.
+        "band_fit": None, "settlement_ok": None, "class_prior": None,
     }
+    # Only when a target is actually supplied: with no discovery row we do not
+    # KNOW the class, and defaulting to the OTHER prior would be a fabricated
+    # component -- it would also destroy the "never-observed scores None, ranks
+    # last, stays COLD-coverable" invariant the planner depends on.
+    if target is not None:
+        comp["class_prior"] = CLASS_PRIOR[market_class(target)]
+        status = str(target.get("status") or target.get("market_status") or "")
+        if status:
+            comp["settlement_ok"] = 1.0 if status.endswith("OPEN") else 0.0
     observed = bool(s and (s.get("book_updates") or s.get("trades")))
     if not observed:
         comp.update(seed_components(target))
@@ -176,6 +272,10 @@ def score_market(s: Optional[Mapping[str, Any]], now: float,
             comp["spread_quality"] = _clamp01(1.0 - spread / 0.05)
         except (TypeError, ValueError):
             pass
+        try:
+            comp["band_fit"] = band_fit(float(s.get("bid")))
+        except (TypeError, ValueError):
+            pass
         counts = s.get("_slot_counts") or {}
         if isinstance(counts, Mapping):
             matched = int(counts.get("MATCHED") or 0)
@@ -183,6 +283,13 @@ def score_market(s: Optional[Mapping[str, Any]], now: float,
                         if isinstance(v, int))
             if total >= 4:
                 comp["completion_prob"] = _clamp01(matched / total)
+    if comp["band_fit"] is None and target is not None:
+        for k in ("bid", "best_bid", "bestBid"):
+            try:
+                comp["band_fit"] = band_fit(float(target.get(k)))
+                break
+            except (TypeError, ValueError):
+                continue
     if l5_info:
         if l5_info.get("off_distribution"):
             comp["l5_suitability"] = 0.0
@@ -224,9 +331,16 @@ def allocate_l5(subscribed_slugs, state: Mapping[str, Any],
 def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
          cap: int, cycle: int, prev: Optional[Mapping[str, Any]] = None,
          now: Optional[float] = None,
-         l5_infos: Optional[Mapping[str, Mapping[str, Any]]] = None) -> dict:
+         l5_infos: Optional[Mapping[str, Mapping[str, Any]]] = None,
+         protected: Optional[Iterable[str]] = None) -> dict:
     """One planning cycle. `prev` is the planner state returned by the
-    previous cycle (tier memory, hysteresis clocks, wake baselines)."""
+    previous cycle (tier memory, hysteresis clocks, wake baselines).
+
+    `protected` are slugs that MUST keep a seat -- the markets the executor is
+    actually holding risk in. Losing observation on a held market is the one
+    eviction that can hurt: the settlement auditor and the residual accounting
+    both read that market's stream, so it is pinned ahead of every ranking,
+    quota and staleness rule. It is bounded by `cap` like everything else."""
     now = now or time.time()
     prev = dict(prev or {})
     cap = max(1, int(cap))
@@ -284,6 +398,8 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
         x))
     rank_of = {slug: i + 1 for i, slug in enumerate(ranked)}
 
+    # Held markets are pinned FIRST, before retention, ranking or quota.
+    pinned = [x for x in dict.fromkeys(protected or ()) if x in target_by_slug][:cap]
     prev_hot = {s for s, p in prev.items()
                 if p.get("tier") == "hot" and s in scored and s not in stale}
     # Phase 1 — hysteresis: sitting hot members RETAIN their seat while
@@ -291,24 +407,66 @@ def plan(targets: list[Mapping[str, Any]], state: Mapping[str, Any],
     # a demote margin. Retention has seat priority over new promotions
     # so a transient score dip cannot thrash the subscription set.
     margin = max(2, hot_n // 4)
-    hot: list[str] = []
+    hot: list[str] = list(pinned)
     for slug in sorted(prev_hot, key=lambda x: rank_of[x]):
+        if slug in hot:
+            continue
         p = prev.get(slug) or {}
         held = cycle - int(p.get("since", cycle))
         if (held < min_hold or rank_of[slug] <= hot_n + margin) and \
                 len(hot) < hot_n:
             hot.append(slug)
-    # Phase 2 — fill remaining seats from the ranking; a freshly-demoted
-    # market waits out the cooldown unless it woke on sudden activity.
-    for slug in ranked:
-        if len(hot) >= hot_n:
-            break
-        if slug in hot or slug in stale:
-            continue
-        in_cd = cycle - int((prev.get(slug) or {})
-                            .get("demoted_at", -10**9)) < cooldown
-        if slug in wakes or not in_cd:
-            hot.append(slug)
+    # Phase 2 — fill remaining seats from the ranking, UNDER A CLASS QUOTA.
+    #
+    # Score alone cannot protect the liquid core. Measured 2026-09-13: the
+    # qualified universe is 55% player props and 18% team-stat props against 21
+    # aec- moneylines venue-wide, so 1,630 respectable-scoring props crowd out
+    # the twenty-one markets most likely to produce a real two-sided fill. The
+    # quota is two-sided:
+    #   CORE RESERVE — at least core_min HOT seats go to moneyline/spread/total,
+    #     bounded by how many such markets actually exist (never holds a seat
+    #     empty waiting for a core market that is not there);
+    #   PROP CEILING — props may hold at most prop_max HOT seats.
+    # Props are NOT excluded: COLD's oldest-first sampling still guarantees them
+    # a look, and the wake path still promotes one that starts trading.
+    cls_of = {slug: market_class(target_by_slug.get(slug)) for slug in slugs}
+    core_min = min(
+        int(round(hot_n * float(os.getenv(CORE_MIN_FRAC_ENV, "0.35")))),
+        sum(1 for x in ranked if cls_of[x] in CORE_CLASSES and x not in stale))
+    prop_max = int(round(hot_n * float(os.getenv(PROP_MAX_FRAC_ENV, "0.50"))))
+
+    def _n_core(seats): return sum(1 for x in seats if cls_of[x] in CORE_CLASSES)
+    def _n_prop(seats): return sum(1 for x in seats if cls_of[x] == CLASS_PROP)
+
+    def _fill(want_core_only: bool) -> None:
+        for slug in ranked:
+            if len(hot) >= hot_n:
+                return
+            # The core pass fills only up to the RESERVE, never the whole
+            # bench: the reserve is a floor for the scarce core, not a ceiling
+            # on everything else, and filling hot_n with core markets here
+            # would starve the flow-ranked majority the score exists to pick.
+            if want_core_only and _n_core(hot) >= core_min:
+                return
+            if slug in hot or slug in stale:
+                continue
+            is_core = cls_of[slug] in CORE_CLASSES
+            if want_core_only and not is_core:
+                continue
+            if not want_core_only:
+                # leave room for the core reserve that is still unmet
+                if not is_core and \
+                        hot_n - len(hot) <= max(0, core_min - _n_core(hot)):
+                    continue
+                if cls_of[slug] == CLASS_PROP and _n_prop(hot) >= prop_max:
+                    continue
+            in_cd = cycle - int((prev.get(slug) or {})
+                                .get("demoted_at", -10**9)) < cooldown
+            if slug in wakes or not in_cd:
+                hot.append(slug)
+
+    _fill(want_core_only=True)     # seat the scarce liquid core first
+    _fill(want_core_only=False)    # then everything else under the ceiling
 
     rest = [s for s in ranked if s not in hot]
     warm = []

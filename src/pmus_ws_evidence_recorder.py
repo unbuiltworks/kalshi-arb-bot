@@ -63,7 +63,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional
 
 WS_URL = "wss://api.polymarket.us/v1/ws/markets"
 WS_PATH = "/v1/ws/markets"
@@ -83,6 +83,16 @@ RAW_MAX_BYTES_ENV = "PMUS_WS_RAW_MAX_BYTES"
 DEFAULT_RAW_MAX_BYTES = 12 * 1024 ** 3      # raw tape budget on the volume
 TAPE_WRITE_ERRORS = {"n": 0, "last_alarm": 0.0}
 EXPAND_PAGES_ENV = "PMUS_WS_EXPAND_PAGES"  # 0 disables global enumeration
+# Slugs that must never lose a seat, comma-separated. The markets the executor
+# holds risk in: the settlement auditor and residual accounting both read those
+# streams, so eviction there is the one that can actually hurt.
+#
+# HONEST LIMIT: this is OPERATOR-SET, not derived. The recorder does not read
+# portfolio positions and deliberately does not start doing so here -- adding an
+# authenticated call to this service's hot path while doubling its subscription
+# load would be the wrong thing to change in the same step. `plan(protected=...)`
+# is implemented and tested; automatic wiring from live positions is NOT done.
+PROTECTED_ENV = "PMUS_WS_PROTECTED_SLUGS"
 PLANNER_ENV = "PMUS_WS_PLANNER"            # "priority" (default) | "rotation"
 
 # last discovery diagnostics (issue #167 comment 5520693117): merged into
@@ -1204,6 +1214,65 @@ def subscription_plan(targets: list[dict], state: Mapping[str, Any],
     }
 
 
+STATE_MAX_MARKETS_ENV = "PMUS_WS_STATE_MAX_MARKETS"   # default 1500
+STATE_MAX_IDLE_ENV = "PMUS_WS_STATE_MAX_IDLE_S"       # default 7200 s
+
+
+def prune_state(mstate: dict, keep: Iterable[str], now: Optional[float] = None,
+                max_idle_s: Optional[float] = None,
+                max_markets: Optional[int] = None) -> dict:
+    """Bound the IN-MEMORY market state, the way sweep_raw_tapes bounds disk.
+
+    WHY THIS EXISTS. `mstate` was never pruned: it kept one entry per market
+    EVER observed, each holding up to 2,000 bbo_history snapshots and 500
+    trades. COLD rotation samples the whole discovered universe by design
+    (11,201 live markets measured 2026-09-13), so the dict grows monotonically
+    for the life of the process. Measured RSS before this change: 8.27 GB. That
+    is the memory analogue of the 2026-09-08 ENOSPC, and raising the
+    subscription cap doubles the rate markets enter the dict -- so the bound has
+    to land BEFORE the cap does, not after.
+
+    WHAT IT WILL NOT DO. Admission reads trades_1h / two_sided_trades off this
+    state, so evicting a market throws away the evidence that makes it
+    admissible. Eviction is therefore deliberately conservative:
+      * never evicts anything in `keep` (currently subscribed + protected),
+        whatever its age;
+      * only evicts markets IDLE beyond max_idle_s (default 2 h -- comfortably
+        longer than the 1 h window trades_1h needs), so a market cannot lose
+        its evidence while that evidence is still live;
+      * only then, if still over max_markets, drops the oldest-idle first.
+    A never-observed entry has no authenticated timestamp and is treated as
+    maximally idle -- it carries no evidence to lose."""
+    now = time.time() if now is None else now
+    if max_idle_s is None:
+        max_idle_s = float(os.getenv(STATE_MAX_IDLE_ENV, "7200"))
+    if max_markets is None:
+        max_markets = int(os.getenv(STATE_MAX_MARKETS_ENV, "1500"))
+    keep = set(keep or ())
+    from src import pmus_priority_queue as _pq
+    ages: list[tuple[float, str]] = []
+    for slug, st in mstate.items():
+        if slug in keep:
+            continue
+        t = _pq.last_authenticated_t(st)
+        ages.append(((now - t) if t is not None else float("inf"), slug))
+    evicted_idle = [s for age, s in ages if age > max_idle_s]
+    for slug in evicted_idle:
+        mstate.pop(slug, None)
+    evicted_cap: list[str] = []
+    if len(mstate) > max_markets:
+        remaining = sorted(((age, s) for age, s in ages if s in mstate),
+                           reverse=True)
+        for _age, slug in remaining:
+            if len(mstate) <= max_markets:
+                break
+            mstate.pop(slug, None)
+            evicted_cap.append(slug)
+    return {"kept": len(mstate), "evicted_idle": len(evicted_idle),
+            "evicted_over_cap": len(evicted_cap), "protected": len(keep),
+            "max_idle_s": max_idle_s, "max_markets": max_markets}
+
+
 def discover_slugs() -> list[str]:
     """Back-compat single-shot discovery: full universe, cycle-0 plan."""
     cap = int(os.getenv(MAX_MARKETS_ENV, "24"))
@@ -1433,6 +1502,8 @@ async def run(minutes: Optional[float]) -> int:
                 {"raw_retention": {"error": f"{type(exc).__name__}:{str(exc)[:120]}"}}),
                 flush=True)
         targets = discover_universe()
+        protected_now = [x.strip() for x in
+                         os.getenv(PROTECTED_ENV, "").split(",") if x.strip()]
         if os.getenv(PLANNER_ENV, "priority").strip() == "rotation":
             plan = subscription_plan(targets, mstate, cap, cycle)
             slugs = plan["subscribe"]
@@ -1441,7 +1512,8 @@ async def run(minutes: Optional[float]) -> int:
         else:
             # HOT/WARM/COLD priority tiers (issue #167 comment 5521210994)
             from src import pmus_priority_queue as pq
-            p = pq.plan(targets, mstate, cap, cycle, plan_state)
+            p = pq.plan(targets, mstate, cap, cycle, plan_state,
+                        protected=protected_now)
             plan_state = p["state"]
             slugs = p["subscribe"]
             l5_alloc = set(p["l5_allocated"])
@@ -1451,6 +1523,18 @@ async def run(minutes: Optional[float]) -> int:
                           "diagnostics": p["diagnostics"],
                           "per_market": p["per_market"]})
         cycle += 1
+        # Bound memory the same way and at the same cadence as disk. Runs AFTER
+        # the plan so the newly-chosen seats are protected from their own sweep.
+        try:
+            pruned = prune_state(mstate, set(slugs) | set(protected_now))
+            if pruned["evicted_idle"] or pruned["evicted_over_cap"]:
+                print("PMUS_WS_STATUS " + json.dumps(
+                    {"state_prune": pruned}, separators=(",", ":"),
+                    default=str), flush=True)
+        except Exception as exc:                  # noqa: BLE001
+            print("PMUS_WS_STATUS " + json.dumps(
+                {"state_prune": {"error": f"{type(exc).__name__}:{str(exc)[:120]}"}}),
+                flush=True)
         side_state.update({"slugs": list(slugs), "discovery": dict(discovery_diag),
                            "l5_alloc": l5_alloc})
         append(root, {"kind": "recorder_start",
