@@ -395,3 +395,45 @@ unilaterally: OWNER decision 2026-09-11, on the specific state below.**
   selects a market. A canary that does not start is a normal outcome and is
   diagnosable from the preflight row. `restartPolicyType` stays ALWAYS for
   the read-only loop; money-moving sessions still fail closed.
+
+  **CORRECTION, same entry, written 16:40Z. PRODUCTION WAS NOT FLAT WHEN I
+  TRIGGERED THIS.** The entry above says "no position held" and "every
+  risk-bearing market venue-reconciled". That was true when I measured it and
+  stale when I acted on it.
+
+  I verified the risk set at **16:21:48Z** (empty) and the funnel at
+  **16:29:10Z** (`no_candidate`, `filled` static at 35), then triggered the
+  cutover at **16:33:43Z**. In that window `aec-cs2-mzp-ezt-2026-09-13`
+  filled **8.11 NO contracts for $3.0443**, and by 16:34:33Z the outgoing
+  process was reporting it as `SPRING_RESIDUAL_HOLD`, residual −8.11,
+  `unmatched_usd 3.0443`, four post-only extends all rejected
+  `post_only_cross_within_1_tick_of_lagging_ask`.
+
+  I asserted a precondition I had not re-read inside the action window. The
+  correct procedure is to re-read the risk set immediately before the
+  trigger, not four and twelve minutes before it.
+
+  WHAT MADE IT SAFE ANYWAY — the gates, not the operator:
+
+      16:36:34Z  orphan_sweep   seen 0, cancelled [], foreign []
+      16:36:49Z  boot_assertions ok: true  (11 of 11)
+                 no_open_orders_fresh_read {'ours': 0, 'foreign': 0}
+                 flat_held_state []        <- quarantine: mzp-ezt is DORMANT
+                 combined_loss_above_stop true
+                 rung R5FT, band 0.25-0.75, pair ceiling 1.00, streak 3
+      16:37:03Z  risk_set  n_risk_bearing 1  acquisition_slots_in_use 0
+                 total_unmatched_usd 3.0443  portfolio_worst_case_usd 3.0443
+                 daily_realized_pnl_usd 5.6734   combined_loss_usd 2.6291
+
+  Zero resting orders at the restart moment, so nothing was orphaned and
+  nothing was lost. `flat_held_state []` passed because residual quarantine
+  had established mzp-ezt dormant — which is the revised boundary standard
+  this file adopted on 2026-09-11, not the strict one I claimed to be using.
+  So the deploy met the standard that actually applies; my description of
+  which standard it met was wrong.
+
+  AND THE NEW OBSERVABILITY EARNED ITS PLACE IMMEDIATELY. `daily_realized_pnl_usd
+  5.6734` is the number I previously had to reconstruct by hunting for moments
+  when the risk set happened to be empty; it agrees with that reconstruction to
+  the cent. `acquisition_slots_in_use 0` beside `total_risk_bearing_markets 1`
+  is precisely the slots-are-not-exposure distinction, now unmissable in one row.
