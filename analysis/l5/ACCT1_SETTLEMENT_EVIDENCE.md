@@ -221,3 +221,91 @@ market, and every completion would become venue-confirmable.
 to obtain an accounting artifact, and jayfri cost $3.9506 today demonstrating
 what an uncompleted residual is worth when it goes the wrong way. Recorded so the
 idea is refused explicitly rather than discovered later.
+
+---
+
+# The four states, separated (OWNER 2026-09-13)
+
+Evidence now establishes that waiting for `trade.realizedPnl` is **invalid on
+this Polymarket path** — 15,422 rows, 103 markets, the key absent from every
+one. So the states below must be named separately rather than collapsed, and
+each one says exactly which authenticated venue evidence establishes it.
+
+**No venue field is manufactured anywhere below. Where the venue publishes
+nothing, the answer is "unavailable", not a number we computed.**
+
+## 1. MARKET RESOLVED
+
+*The event is decided.* Establishes nothing about our account.
+
+**Authenticated evidence:** the public market view — `status ==
+MARKET_STATUS_RESOLVED`, a `settlementPx`, and a `settlement_set_time`.
+
+**Never sufficient alone**, and never inferred from an empty book, elapsed
+time, a count of empty quotes, or an `outcomePrices` array.
+
+## 2. CONTRACT POSITION SETTLED / ACCOUNT FLAT
+
+*Our contracts have ceased to exist.* Establishes nothing about cash.
+
+**Authenticated evidence, either path:**
+
+- a `POSITION_RESOLUTION` activity row for the market, with
+  `afterPosition` net zero; **or**
+- state 1 AND no row for the market under `positions` AND none under
+  `availablePositions` AND every trade in the market non-busted and in a final
+  state (`flat_at_resolution`).
+
+The second path is the one that applies to a fully matched book, and it is
+sound: a netted-flat position is not carried into resolution, so the venue has
+nothing to resolve.
+
+## 3. ATTRIBUTABLE SETTLEMENT CASHFLOW CONFIRMED
+
+*The venue has told us what this market paid us.*
+
+**Authenticated evidence — exactly one source exists:**
+`positionResolution.afterPosition.realized`.
+
+It is emitted **iff the account carried a non-zero net position into
+resolution** (9 of 9 markets on 2026-09-13, no exception). For a fully matched
+book **this state is unreachable**, and no amount of waiting reaches it:
+
+- per-trade `realizedPnl` — **absent as a key** from 15,422 rows;
+- the other three activity types (`TRANSFER`, `ACCOUNT_DEPOSIT`,
+  `ACCOUNT_WITHDRAWAL`) are `accountBalanceChange` rows, not settlements;
+- `/v1/account/balances` is one account-wide scalar moved by every fill,
+  margin, incentive and other settlement at once — not attributable while more
+  than one market is in flight, and not sampled around settlement anyway.
+
+## 4. REALIZED P&L
+
+**Promotion to REALIZED requires state 3.** That is unchanged and not weakened.
+
+So for a fully matched market the honest terminal record is:
+**state 1 ✓, state 2 ✓, state 3 ✗, state 4 ✗** — settled, with realized
+**permanently unavailable** rather than pending.
+
+## The minimum correction, and what it is NOT
+
+The defect is **not** a missing status. It is that `flat_at_resolution` carries
+a promotion branch that can never fire:
+
+```python
+confirmed = trade_info.get("realized_pnl_rows") == len(trades) and \
+    trade_info.get("realized_pnl_sum") is not None
+```
+
+and that `SETTLED_REALIZED_UNCONFIRMED` names a **permanent** condition in the
+vocabulary of a temporary one, while `unsettled_slugs()` drops the slug on the
+`settled` row so it is never revisited.
+
+**Minimum correction:** record, on the terminal row, that state 3 is
+structurally unavailable for this shape — which of the two state-2 paths
+established settlement, and that no state-3 source exists — so the record is
+self-describing and a reader can tell "we are waiting" from "there is nothing
+to wait for". The DERIVED matched contribution stays beside it, still DERIVED.
+
+**The rename of the status string is a relabel and is an OWNER decision. Not
+taken here.** Implementation is deferred until it can be done without
+disrupting the live canary; the canary is the priority.

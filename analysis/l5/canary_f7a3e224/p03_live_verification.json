@@ -1,0 +1,307 @@
+{
+  "captured_at": "2026-09-13T16:45Z",
+  "market": "aec-cs2-mzp-ezt-2026-09-13",
+  "why_this_market_is_decisive": "It carried the SAME executable inventory (-8.11 contracts) across the cutover, so the pre- and post-cutover behavioural mapping can be compared with everything else held constant. This is a natural A/B, not a contrived one.",
+  "serving_commits": {
+    "pre": "8606c87fafb3",
+    "post": "f7a3e22410a3"
+  },
+  "the_comparison": {
+    "executable_residual_contracts": "-8.11",
+    "residual_units": "-4.715116279069767",
+    "pre_cutover": {
+      "behavioral_residual_shares": -50.0,
+      "state": "p25-45c|tte>10m|imb>50",
+      "state_n": 521,
+      "action_distribution": {
+        "extend": 0.7714,
+        "complete": 0.2286,
+        "open": 0.0
+      }
+    },
+    "post_cutover": {
+      "behavioral_residual_shares": -47.151162790697676,
+      "state": "p25-45c|tte>10m|imb10-50",
+      "state_n": 298,
+      "action_distribution": {
+        "extend": 0.6786,
+        "complete": 0.3214,
+        "open": 0.0
+      }
+    },
+    "arithmetic": "-8.11 / 1.72 = -4.7151 behavioural units; x 10.0 p50 shares = -47.1512. The old adapter credited +/-10 per FILL regardless of contracts and quantised to -50.0.",
+    "consequence": "2.85 shares of error crossed a bucket boundary. imb>50 -> imb10-50 changed the action distribution: COMPLETE probability 0.2286 -> 0.3214, a 40% relative increase. The corrected engine is materially more willing to complete this residual.",
+    "labels": "OBSERVED live on both commits. Not a replay, not a simulation."
+  },
+  "owner_success_requirements": {
+    "no_false_flat_from_material_executable_residual": {
+      "verdict": "MET",
+      "evidence": "executable residual -8.11 then -9.60; behavioural -47.1512 then -55.8140; state imb10-50 then imb>50. The bucket is never `flat` while executable residual is material.",
+      "decisions_checked": [
+        30,
+        31,
+        32,
+        33,
+        34
+      ]
+    },
+    "no_sign_inversion_from_fill_size_adaptation": {
+      "verdict": "MET",
+      "evidence": "executable residual negative (NO-side) on every decision; behavioural residual negative on every decision. A 1.49-contract fill moved executable -8.11 -> -9.60 and behavioural -47.1512 -> -55.8140: same direction, proportional, no inversion.",
+      "post_fill_check": "-9.60 / 1.72 * 10.0 = -55.81395348837209, exact to the logged value"
+    }
+  },
+  "per_decision": [
+    {
+      "idx": 30,
+      "t": "2026-09-13T16:38:14Z",
+      "executable_residual": "-8.11",
+      "behavioral_residual": -47.151162790697676,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb10-50",
+      "acted": "extend",
+      "dist": {
+        "extend": 0.6786,
+        "complete": 0.3214,
+        "open": 0.0
+      },
+      "px": "0.28",
+      "planned_contracts": "1.40",
+      "filled_qty": "0"
+    },
+    {
+      "idx": 31,
+      "t": "2026-09-13T16:38:46Z",
+      "executable_residual": "-8.11",
+      "behavioral_residual": -47.151162790697676,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb10-50",
+      "acted": "extend",
+      "dist": {
+        "extend": 0.6786,
+        "complete": 0.3214,
+        "open": 0.0
+      },
+      "px": "0.28",
+      "planned_contracts": "1.40",
+      "filled_qty": "0"
+    },
+    {
+      "idx": 32,
+      "t": "2026-09-13T16:39:19Z",
+      "executable_residual": "-8.11",
+      "behavioral_residual": -47.151162790697676,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb10-50",
+      "acted": "extend",
+      "dist": {
+        "extend": 0.6786,
+        "complete": 0.3214,
+        "open": 0.0
+      },
+      "px": "0.28",
+      "planned_contracts": "1.40",
+      "filled_qty": "0"
+    },
+    {
+      "idx": 33,
+      "t": "2026-09-13T16:39:24Z",
+      "executable_residual": "-8.11",
+      "behavioral_residual": -47.151162790697676,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb10-50",
+      "acted": "extend",
+      "dist": {
+        "extend": 0.6786,
+        "complete": 0.3214,
+        "open": 0.0
+      },
+      "px": "0.31",
+      "planned_contracts": "1.49",
+      "filled_qty": "1.49",
+      "note": "THE FILL. order CFHSWQKHYTN1, NO @ 0.31, filled_on_cancel after 32.0s rest"
+    },
+    {
+      "idx": 34,
+      "t": "2026-09-13T16:39:57Z",
+      "executable_residual": "-9.60",
+      "behavioral_residual": -55.81395348837209,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb>50",
+      "acted": "extend",
+      "dist": {
+        "extend": 0.7714,
+        "complete": 0.2286,
+        "open": 0.0
+      },
+      "px": null,
+      "planned_contracts": "1.47",
+      "filled_qty": null,
+      "note": "post-fill recompute: inventory and behavioural residual both advanced"
+    },
+    {
+      "idx": 41,
+      "t": "2026-09-13T16:43:35Z",
+      "executable_residual": "-9.60",
+      "behavioral_residual": -55.81395348837209,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb>50",
+      "acted": "extend",
+      "dist": {
+        "extend": 0.7714,
+        "complete": 0.2286,
+        "open": 0.0
+      },
+      "px": "0.28",
+      "planned_contracts": "1.42",
+      "filled_qty": "0"
+    },
+    {
+      "idx": 42,
+      "t": "2026-09-13T16:43:41Z",
+      "executable_residual": "-9.60",
+      "behavioral_residual": -55.81395348837209,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb>50",
+      "acted": "extend",
+      "dist": {
+        "extend": 0.7714,
+        "complete": 0.2286,
+        "open": 0.0
+      },
+      "px": "0.28",
+      "planned_contracts": "1.42",
+      "filled_qty": "0"
+    },
+    {
+      "idx": 43,
+      "t": "2026-09-13T16:43:50Z",
+      "executable_residual": "-9.60",
+      "behavioral_residual": -55.81395348837209,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb>50",
+      "acted": "complete",
+      "dist": {
+        "extend": 0.7714,
+        "complete": 0.2286,
+        "open": 0.0
+      },
+      "px": "0.63",
+      "planned_contracts": "1.42",
+      "filled_qty": "0",
+      "note": "FIRST COMPLETE ON THE CORRECTED ENGINE. stochastic draw u=0.176191 took the rank-2 complete branch."
+    },
+    {
+      "idx": 44,
+      "t": "2026-09-13T16:43:52Z",
+      "executable_residual": "-9.60",
+      "behavioral_residual": -55.81395348837209,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb>50",
+      "acted": "complete",
+      "dist": {
+        "extend": 0.7714,
+        "complete": 0.2286,
+        "open": 0.0
+      },
+      "px": "0.63",
+      "planned_contracts": "1.42",
+      "filled_qty": "0",
+      "note": "second COMPLETE, u=0.016504"
+    },
+    {
+      "idx": 45,
+      "t": "2026-09-13T16:43:55Z",
+      "executable_residual": "-9.60",
+      "behavioral_residual": -55.81395348837209,
+      "sign_agrees": true,
+      "zero_agrees": true,
+      "state": "p25-45c|tte>10m|imb>50",
+      "acted": "extend",
+      "dist": {
+        "extend": 0.7714,
+        "complete": 0.2286,
+        "open": 0.0
+      },
+      "px": null,
+      "planned_contracts": "1.42",
+      "filled_qty": null
+    }
+  ],
+  "fill_reconciliation_on_the_fill": {
+    "order_id": "CFHSWQKHYTN1",
+    "side": "NO",
+    "px": "0.31",
+    "qty": "1.49",
+    "filled_qty": "1.49",
+    "end_reason": "filled_on_cancel",
+    "rest_s": 32.001,
+    "venue_qty": "9.6000",
+    "ledger_qty": "9.60",
+    "delta": "0.0000",
+    "agrees": true,
+    "may_assert_flat": true,
+    "flat_verified": true,
+    "provenance": [
+      {
+        "order_id": "CFHSWQKHYTN1",
+        "venue_cum": "1.49",
+        "delta": "1.49",
+        "state": "ORDER_STATE_FILLED"
+      }
+    ],
+    "labels": "SUBMITTED -> FILLED. Not matched, not settled, not realized."
+  },
+  "autonomous_loop_progress": {
+    "OPEN": "observed pre-cutover (mzp-ezt first leg, 8.11 NO)",
+    "actual_fill": "observed POST-cutover: 1.49 contracts at 16:39:56",
+    "correct_executable_inventory": "observed: venue 9.6000 == ledger 9.60, delta 0.0000",
+    "correct_behavioral_inventory": "observed: -55.8140 = -9.60/1.72*10.0, exact",
+    "EXTEND": "observed post-cutover, 4 submitted 1 filled",
+    "COMPLETE": "OBSERVED post-cutover at 16:43:50Z, decisions 43 and 44, submitted at YES 0.63 x1.42, no fill (ceiling-bound 7 ticks behind touch)",
+    "matched_residual_accounting": "residual only so far; matched 0",
+    "authoritative_settlement": "NOT YET post-cutover",
+    "realized_accounting": "NOT YET post-cutover",
+    "self_healing_REARM": "NOT YET exercised (gate has not refused since cutover)",
+    "next_market_acquisition": "OBSERVED: aec-lol-lll-png-2026-09-13 opened 16:37:14 while mzp-ezt dormant, 4 orders, SPRING_NO_FILL"
+  },
+  "first_complete_on_corrected_engine": {
+    "t": "2026-09-13T16:43:50Z",
+    "orders": [
+      "CFHVKSAD6TN2",
+      "CFHVDQHQ6TN0"
+    ],
+    "side": "YES",
+    "px": "0.63",
+    "qty": "1.42",
+    "post_only": true,
+    "filled_qty": "0",
+    "end_reason": "repriced:touch_moved:0.70",
+    "pair_economics": {
+      "regime": "l5_touch",
+      "l5_touch_px": "0.70",
+      "pair_at_touch": "1.065229166666666666666666667",
+      "capped_by_pair_ceiling": true,
+      "economic_max_px": "0.6347708333333333333333333333",
+      "chosen_px": "0.63",
+      "pair_at_chosen": "0.9952291666666666666666666667",
+      "above_par": false,
+      "fee_safe": false,
+      "pair_cost_max": "1.00",
+      "hard_bound_px": "0.620"
+    },
+    "reading": "The ceiling did its job. L5's own touch price was 0.70, which would have put the pair at 1.0652 -- ABOVE PAR. The engine refused to chase, capped at the economic max 0.6348, and posted 0.63 where the pair is 0.9952. It then stopped chasing when the touch moved, preserving the residual rather than buying a loss.",
+    "why_it_did_not_fill": "the book was 0.72/0.74 and we bid 0.63 -- 7 ticks behind L5's touch. Same completion asymmetry the 2026-09-13 forensic report measured; the ceiling is the binding constraint, not the execution.",
+    "labels": "SUBMITTED. Not filled, not matched, not settled, not realized."
+  },
+  "session_stop_reason_observed": "opening_budget_spent:4/4:extension_is_completion_only_not_extend"
+}

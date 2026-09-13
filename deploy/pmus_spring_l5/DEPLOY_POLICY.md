@@ -39,6 +39,45 @@ At a clean boundary only: `held: []`, status no longer `SPRING_RESIDUAL_HOLD`,
 `flat_verified: true`, and the seven-check preflight green. That sequence is
 pre-approved and needs no further owner turn.
 
+## The action-window rule (MANDATORY, added 2026-09-13 after it was broken)
+
+**The authoritative risk/position/open-order read that authorizes a cutover
+MUST be taken inside the deployment action window. If the state changes
+between authorization and action: ABORT and RE-EVALUATE.**
+
+This is not advisory. It was broken on 2026-09-13 and the deploy log had to be
+corrected: a flat state measured at 16:21:48Z and a funnel read at 16:29:10Z
+were used to authorize a cutover at 16:33:43Z, and in that gap
+`aec-cs2-mzp-ezt-2026-09-13` filled 8.11 NO contracts for $3.0443. Nothing was
+lost, because `orphan_sweep` found zero resting orders and all eleven boot
+assertions passed — but that was the gates working, not the operator.
+
+The rule, concretely:
+
+1. **Read inside the window.** Positions, open orders and the risk set are read
+   at the moment of acting, not minutes before. Two GETs; there is no excuse
+   for a stale read.
+2. **The authorization expires.** `CUTOVER_MAX_AGE_S = 60.0`. Older is refused.
+3. **Re-read at the moment of action and compare.** Any change to `held`,
+   `open_orders_ours`, `open_orders_foreign`, `risk_bearing` or
+   `unmatched_usd` ABORTS. The reason the authorization was granted may no
+   longer exist.
+4. **Unreadable is never a pass.** A venue read that raises, or returns
+   something malformed, is a refusal carrying its reason.
+5. **Time can only invalidate, never authorize.** No waiting turns a refusal
+   into a pass — the same shape as the re-arm gate.
+
+`src/pmus_cutover_preflight.py` implements this and
+`tests/test_cutover_preflight.py` pins it, including the exact 715-second
+failure above. The module is read-only by construction: a test forbids every
+order and deploy verb from appearing in its source.
+
+**Which boundary applies is still a choice, and it must be STATED.**
+`require_flat=True` is the strict boundary (`held: []`). `require_flat=False`
+is the revised dormant-residual boundary adopted 2026-09-11 — permitted, but
+the residual it carries is reported either way, so the deploy log always shows
+what was held.
+
 ## Deploy log
 
 Each explicit probe deploy is recorded here, because "we deployed it" is a
