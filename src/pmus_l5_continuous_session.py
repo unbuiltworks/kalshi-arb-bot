@@ -3284,10 +3284,29 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                     # working first, which is the exact shape of a market that
                     # resolved and left.
                     #
-                    # The `not held` gate STAYS. The loop already alternates
-                    # (open_cycle), so `held` is None every other pass and the
-                    # sweep runs continuously anyway; dropping it only doubled
-                    # the same audits for no extra coverage.
+                    # The `not held` gate STAYS, but NOT for the reason the
+                    # P1 commit gave. That commit said "the loop already
+                    # alternates (open_cycle), so `held` is None every other
+                    # pass" -- and that is FALSE at this rung. The alternation
+                    # is `capacity and (i % 2 == 0)`, and capacity is
+                    # `len(acquiring) < concurrency`; at concurrency 1 with one
+                    # NON-dormant held market acquiring has one entry, capacity
+                    # is False, open_cycle is never True and this sweep NEVER
+                    # RUNS. Not less often -- never.
+                    #
+                    # WHAT ACTUALLY KEEPS IT ALIVE IS RESIDUAL QUARANTINE: a
+                    # held market that goes quiescent becomes dormant, leaves
+                    # `acquiring`, frees the slot, and capacity returns. LIVE
+                    # 2026-09-13, jayfri reconciled at 14:01:57Z while cov-bha
+                    # was still held, which at concurrency 1 is only possible
+                    # with cov-bha dormant.
+                    #
+                    # So timely settlement reconciliation at concurrency 1
+                    # DEPENDS ON PMUS_RESIDUAL_QUARANTINE being enabled.
+                    # Turning quarantine off looks like an acquisition-
+                    # scheduling change and would silently starve settlement
+                    # auditing whenever a position is held.
+                    # tests/test_settlement_sweep_liveness.py pins this.
                     last_settle_audit = clock()
                     _uns = unsettled_slugs()
                     _absent = [s for s in _uns if s not in set(held_all)]
