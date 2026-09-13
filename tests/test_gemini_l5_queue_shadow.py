@@ -1,5 +1,7 @@
 from decimal import Decimal as D
 
+from src import gemini_l5_shadow_service as base_shadow
+from src.gemini_l5_queue_service import QueueShadowService
 from src.gemini_l5_queue_shadow import (
     fee_safe_price_arms, movement, populated_price_arms, queue_metrics,
     recent_flow, retain_book,
@@ -23,6 +25,12 @@ def book():
 
 def zero_fee(px, qty):
     return D("0")
+
+
+def test_queue_service_preserves_base_canonical_append_record_signature():
+    # Regression: research persistence must not override ShadowService._append_record,
+    # because base _replay_expired calls self._append_record(rec).
+    assert QueueShadowService._append_record is base_shadow.ShadowService._append_record
 
 
 def test_retain_book_keeps_depth_not_just_touch():
