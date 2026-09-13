@@ -165,6 +165,71 @@ def activity_pages(t: q1.Transport, since: Optional[str] = None,
 BACKFILL_KIND = "filled"
 BACKFILL_SOURCE = "venue_trade_backfill"
 
+# The single source tag the reconciler writes from now on.
+RECONCILE_SOURCE = "venue_qty_reconciliation"
+
+# EVERY tag that means "this row is a local accounting correction, not a
+# fill a session or the venue executed". `organic` is the ledger MINUS all
+# of these, and the reconciler's target is stated against organic.
+#
+# Both historical tags MUST stay in this set. Treating an older correction
+# as organic is how a reconciler re-inflates a ledger it already fixed:
+#   venue_trade_backfill  -- the buggy per-trade backfill (writer 4)
+#   r5ft_ledger_reconci... -- the 2026-09-12 hardcoded two-slug repair
+#                             (src/pmus_r5ft_ledger_repair.py, writer 5)
+CORRECTION_SOURCES = frozenset((
+    BACKFILL_SOURCE,
+    RECONCILE_SOURCE,
+    "r5ft_ledger_reconciliation_adjustment_20260912",
+))
+
+
+def ledger_qty_split(slug: str) -> dict:
+    """The market's ledger quantity split into what SESSIONS booked and what
+    a previous accounting correction added.
+
+    The reconciler needs both: its target is stated against `organic`, and
+    it must be able to see and undo its own past adjustments instead of
+    stacking on top of them.
+    """
+    path = q1.state_dir() / "ledger.jsonl"
+    if not path.exists():
+        return {"organic": None, "correction": "0", "rows": 0}
+    organic, correction, n = D("0"), D("0"), 0
+    filled_orders: set = set()
+    terminal: list = []
+    for line in path.read_text().splitlines():
+        try:
+            r = json.loads(line)
+        except Exception:                               # noqa: BLE001
+            continue
+        if not isinstance(r, Mapping) or r.get("slug") != slug:
+            continue
+        if r.get("kind") == "filled":
+            q = _amount(r.get("qty"))
+            if q is None:
+                continue
+            n += 1
+            if r.get("source") in CORRECTION_SOURCES:
+                correction += q
+            else:
+                organic += q
+                if r.get("order_id"):
+                    filled_orders.add(str(r["order_id"]))
+        elif r.get("kind") == "order_terminal":
+            terminal.append(r)
+    # mirrors ledger_qty_total: a terminal row counts only when no filled
+    # row already carries its order
+    for r in terminal:
+        if str(r.get("order_id")) in filled_orders:
+            continue
+        q = _amount(r.get("filled_qty"))
+        if q is not None and q > 0:
+            organic += q
+            n += 1
+    return {"organic": str(organic) if n else None,
+            "correction": str(correction), "rows": n}
+
 
 def ledger_trade_ids(slug: str) -> set:
     """Venue trade ids this ledger has already booked for the market."""
@@ -183,73 +248,89 @@ def ledger_trade_ids(slug: str) -> set:
 
 
 def backfill_missing_venue_fills(audit: Mapping[str, Any]) -> dict:
-    """Book fills the VENUE executed that our ledger never recorded.
+    """Reconcile a SETTLED market's ledger share count to the venue's.
 
-    LIVE 2026-09-12T01:24:47Z, the last thing standing between the account
-    and its first R5FT order:
+    WHY THIS IS NOT TRADE MATCHING ANY MORE. The first version matched venue
+    trades against the ledger by venue trade id and booked the unmatched
+    ones. Rows written by a live SESSION (pmus_spring_l5_session,
+    pmus_micro_executor, pmus_q1_executor*) carry `order_id` and NEVER a
+    venue trade id, so ledger_trade_ids() returned the empty set, every
+    venue trade looked unbooked, and the whole venue quantity was appended
+    ON TOP of the quantity already recorded. Live at 2026-09-12T01:54:55Z:
 
-        skaser-abaspa  venue 17.1800  ledger 16.20   (+0.98)
-        vervas-kohboh  venue 13.8200  ledger  9.48   (+4.34)
+        skaser-abaspa  venue 17.1800  ledger 16.20 -> 33.3800
+        vervas-kohboh  venue 13.8200  ledger  9.48 -> 23.3000
 
-    Both markets venue-confirmed SETTLED and REALIZED, account flat. The
-    venue executed shares that no session ever wrote down -- the same class
-    as the cs2 case at 15:46Z, where "the two fills that flattened the pair
-    landed with no session attached and were never booked".
+    That is `ledger := organic + venue`, i.e. roughly double, and it is the
+    exact inflation this function existed to prevent. The idempotency test
+    that should have caught it seeded an EMPTY ledger, so it never met the
+    only case that occurs in production: rows already booked WITHOUT venue
+    trade ids.
 
-    THE FIX IS TO CORRECT THE LEDGER, NOT TO EXCUSE IT. The venue's own
-    trade activities are authoritative; our file is the one that is wrong.
-    Booking the missing rows makes the ledger MORE accurate and leaves the
-    reconcile check exactly as strict as it was.
+    SO STATE A TARGET AND CONVERGE ON IT:
 
-    THREE THINGS IT WILL NOT DO, each of them a way this could go wrong:
+        organic    = ledger total EXCLUDING every CORRECTION_SOURCES row
+        target     = venue - organic
+        adjustment = target - corrections_already_written
 
-      * NOT when the market is not venue-confirmed settled. An open market
-        may simply have fills in flight, and writing them here would race
-        the session that owns them.
-      * NOT when the LEDGER exceeds the VENUE. That direction says we
-        recorded a fill the venue does not show, which is a far more
-        serious problem than a missing row, and it must keep blocking.
-      * NOT twice. Each written row carries its venue trade id and rows
-        whose id is already present are skipped, so repeated preflight
-        passes converge instead of inflating.
+    One row per non-zero adjustment. A second pass computes 0 and writes
+    nothing, so it is idempotent by construction with no trade-id matching
+    to defeat. An adjustment MAY BE NEGATIVE, which is how an overshoot is
+    undone -- including one written by the older per-trade backfill or by
+    the 2026-09-12 hardcoded two-slug repair, both of which are in
+    CORRECTION_SOURCES precisely so this function can see and supersede
+    them instead of stacking on them.
+
+    THE REFUSALS STAND, and one is now measured differently:
+
+      * NOT on a market that is not venue-confirmed settled. An open market
+        may have fills in flight and this would race the session that owns
+        them.
+      * NOT when the SESSIONS' OWN fills exceed the venue. A fill we
+        recorded that the venue does not show is worse than a missing one
+        and must keep blocking. It is tested against `organic`, never the
+        visible total -- against the total this function could not repair
+        its own overshoot, which is the state it must be able to recover.
     """
     slug = str(audit.get("market") or "")
-    out = {"market": slug, "backfilled": [], "qty": "0", "skipped": None}
+    out = {"market": slug, "adjustment": "0", "organic": None,
+           "corrections_before": None, "venue": None, "skipped": None}
     if not audit.get("settled"):
         out["skipped"] = "market is not venue-confirmed settled"
         return out
     venue = _amount(audit.get("venue_qty_total"))
-    ledger = _amount(audit.get("ledger_qty_total"))
-    if venue is None or ledger is None:
-        out["skipped"] = "venue or ledger quantity unknown"
+    if venue is None:
+        out["skipped"] = "venue quantity unknown"
         return out
-    if venue <= ledger:
-        out["skipped"] = ("ledger meets or exceeds the venue; a ledger that "
-                          "exceeds the venue is never repaired here")
+    split = ledger_qty_split(slug)
+    organic = _amount(split["organic"])
+    if organic is None:
+        out["skipped"] = "this ledger has no rows for the market"
         return out
-    already = ledger_trade_ids(slug)
-    written, total = [], D("0")
-    for tr in (audit.get("trade_summary") or {}).get("trades") or []:
-        tid = str(tr.get("id") or "")
-        qty = _amount(tr.get("qty_decimal_raw"))
-        if not tid or qty is None or tid in already:
-            continue
-        written.append(tid)
-        total += qty
-        q1.ledger_append({
-            "kind": BACKFILL_KIND, "stage": "venue_backfill", "slug": slug,
-            "qty": str(qty), "price": tr.get("price"),
-            "venue_trade_id": tid, "order_id": f"venue:{tid}",
-            "source": BACKFILL_SOURCE,
-            "venue_create_time": tr.get("createTime"),
-            "labels": "written from the venue's own trade activity because "
-                      "no session recorded this fill; not a live fill event",
-        })
-    out["backfilled"] = written
-    out["qty"] = str(total)
-    if not written:
-        out["skipped"] = ("venue exceeds ledger but every venue trade id is "
-                          "already booked -- the gap is not missing rows")
+    prior = _amount(split["correction"]) or D("0")
+    out.update({"organic": str(organic), "corrections_before": str(prior),
+                "venue": str(venue)})
+    if organic > venue:
+        out["skipped"] = ("the sessions' own fills exceed the venue; a fill "
+                          "we recorded and the venue does not show is never "
+                          "repaired here")
+        return out
+    adjustment = (venue - organic) - prior
+    if adjustment == 0:
+        out["skipped"] = "ledger already reconciles to the venue"
+        return out
+    out["adjustment"] = str(adjustment)
+    q1.ledger_append({
+        "kind": BACKFILL_KIND, "stage": "venue_reconciliation", "slug": slug,
+        "qty": str(adjustment), "source": RECONCILE_SOURCE,
+        "venue_qty_total": str(venue), "ledger_organic_qty": str(organic),
+        "corrections_before": str(prior),
+        "labels": "LOCAL ACCOUNTING CORRECTION ONLY: brings this ledger's "
+                  "share count to the venue's own for a venue-confirmed "
+                  "settled market. NEGATIVE when it undoes an earlier "
+                  "over-correction. Not an exchange fill, order, P&L event, "
+                  "fee or rebate, and never counted as trading activity.",
+    })
     return out
 
 
