@@ -481,3 +481,51 @@ position production already held at the first retained decision.
 The carry-forward finding is not about the cap: the extra inventory never
 became matched. Complement reachability remains the binding problem — the
 same conclusion P0-B and P0-D reached, now from a third direction.
+
+## 2026-09-13 — complement reachability and L5's oscillation (SHADOW; nothing deployed)
+
+`analysis/l5/oscillation/OSCILLATION.md`. The premise that our inventory
+strands because the complement is unreachable is NOT supported.
+
+* **7 of 8 markets with a first fill had a reachable complement** (5
+  immediately, 2 later, 1 insufficient evidence, **0 never-reachable**). Min
+  observed pair cost 0.48–0.91; **every market reached a pair ≤0.97 within
+  0–122 seconds** and our own posted maker price was touched in 7 of 8. Two
+  markets still ended with zero opposite fills — including buf-hou
+  (realized −2.5896) whose complement was available at a pair of **0.515**.
+* **No admission signal exists to find.** R3 is empty, so every univariate
+  split has an empty "never" arm. A1 has nothing to separate at n=8.
+* **We already oscillate as much as he does.** Switches per fill: L5 p50
+  0.2857, ours 0.2500. Median run length 2.0 vs 1.5. **Matched fraction at
+  settlement: L5 p50 0.625, OURS p50 0.7502.** Zero-switch windows: L5 27%,
+  ours 33% (3/9) — indistinguishable at this n. Trajectory was never the
+  gap.
+* **L5's switch pair price (n=21,699): median 0.99, p75 1.1113, and 47.2%
+  ABOVE 1.00.** Window-level effective matched pair cost: median 0.9648,
+  **36.2% of his two-sided windows end above par**. Our target is 0.98 with
+  a hard 1.00 ceiling, so we refuse the top third to half of what he pays.
+  Maker/taker UNKNOWN for L5 and never inferred; economic price only.
+* **But at the decision moment the gap is half a cent.** Over 48
+  contemporaneous candidates (authenticated quote ≤5s): executable TAKER
+  pair p50 **0.9677** against our posted MAKER pair p50 **0.9627**. We forgo
+  ~0.5c to stay passive; COMPLETE fills 6.78%, EXTEND 14.07%.
+* **P2 mechanism: he alternates without waiting for price movement.**
+  Median **9 seconds** between side switches, median run length 2 fills, and
+  **58.0% of switches occur with the held side's own price having drifted
+  less than 1c across the entire preceding run** (median drift 0.00). Near
+  settlement he switches slightly LESS often (12s vs 9s), not more.
+* Method correction made during the work: the first version measured the
+  last-same-side vs first-opposite price gap and called it "price movement".
+  In a binary market the sides sum to ~1, so that gap tracks the price LEVEL,
+  not any temporal move. Replaced with the held side's drift over its own run.
+
+**What is eliminated now:** +1-tick maker (P0-B), EXTEND suppression, the
+held-inventory band, the residual cap, complement reachability, and market
+admission. **What stands:** at a pair price we already accept, we post
+passively and are not filled ~93% of the time, while L5 changes sides every
+nine seconds at the same or worse economic prices.
+
+No production change proposed. Any bounded crossing complement is an
+execution-policy change on a money-moving service and needs its own
+pre-registered shadow with fees resolved from source; fees remain UNKNOWN
+(not reported per fill).
