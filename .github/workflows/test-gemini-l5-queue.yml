@@ -7,8 +7,10 @@ on:
     paths:
       - 'src/gemini_l5_queue_shadow.py'
       - 'src/gemini_l5_complement_cf.py'
+      - 'src/gemini_l5_inventory_cf.py'
       - 'src/gemini_l5_queue_service.py'
       - 'tests/test_gemini_l5_queue_shadow.py'
+      - 'tests/test_gemini_l5_inventory_cf.py'
       - '.github/workflows/test-gemini-l5-queue.yml'
   workflow_dispatch:
 
@@ -23,5 +25,5 @@ jobs:
           python-version: '3.11'
       - name: Install pytest
         run: python -m pip install --upgrade pip pytest
-      - name: Run isolated Gemini queue tests
-        run: python -m pytest -q tests/test_gemini_l5_queue_shadow.py
+      - name: Run isolated Gemini queue and inventory tests
+        run: python -m pytest -q tests/test_gemini_l5_queue_shadow.py tests/test_gemini_l5_inventory_cf.py
