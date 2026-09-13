@@ -377,3 +377,58 @@ See `analysis/l5/streak_shadow/STREAK_SHADOW.md`.
   allowlisted, bounded, fail-closed, no endpoint, no credentials, no
   mutation) is designed and proven by 16 isolation regressions. **Not
   deployed**; wiring it means a new image on a money-moving service.
+
+## 2026-09-13 — the entry band and the held-inventory band (SHADOW; nothing deployed)
+
+`analysis/l5/band_semantics/BAND_SEMANTICS.md`. Corpus: the 75 `entry_band_left`
+firings in 650 live decisions, 13:00–21:10Z.
+
+* They are ALREADY two rules and it was never written down. With HELD
+  inventory only the LEGAL-PRICE band (0.20–0.80) can fire; FLAT is gated by
+  the observation band (0.25–0.75) as well. 74 of 75 firings are the HELD
+  case, so a rule justified as market ADMISSION is in practice adjudicating
+  whether to add to a position we already own.
+* The band never fires on a marginal price: bid above 0.80 in 70 cases,
+  below 0.20 in 5, **inside the legal band in 0**. And 67 of 75 are ONE
+  market (`aec-mlb-lad-mia-2026-09-13`).
+* **THE BAND IS NOT THE BINDING CONSTRAINT.** With it removed entirely,
+  lad-mia's 67 refused extends become **3 fills — 64 are stopped by the
+  RESIDUAL CAP** (R5FT `residual_units = 6`). FILL_ASSUMED and
+  TAPE_SUPPORTED give the same 3, so the ceiling is the risk bound, not the
+  fill rate and not the band.
+* Arms (band widened for HELD inventory only; entry unchanged in every arm;
+  every other gate re-checked against the SHADOW inventory): entry-only +6
+  fills / $2.21 capital / **+$1.5994** settlement delta; ±5c +1/+0.9945;
+  ±10c and ±15c +5/+1.5919; unrestricted = entry-only. Flat from ±10c up.
+* That +$1.5994 is **six** fills across **two** settled markets with
+  opposite signs (lad-mia +1.9938, sapole-salvas −0.3944) on $2.21 of
+  capital. Not an expectancy measurement. Matched-pair P&L delta is
+  **0.0000 by construction** — no completion may be imputed after a
+  counterfactual extend, so every arm buys pure directional residual.
+* **PROVENANCE of COMPLETE +7.6905 / EXTEND −2.7402** (R5F-RUN-2026-09-07):
+  they are NOT two halves of one study. +7.6905 is `no_legal_maker_price`
+  (20 refused COMPLETEs); −2.7402 is `entry_band_left` (33 refused EXTENDs).
+  Both FILL-ASSUMED, valued at the venue's actual resolution, per decision,
+  **incentives excluded**, residual settlement included, 9 of 53 rows
+  UNCONFIRMED. Heavy selection bias, acknowledged in the original: 15 of 20
+  COMPLETEs are one market, and the EXTEND refusals "mostly stopped buying a
+  side the venue then settled against". **Do not use −2.7402 as the argument
+  either way** — today's corpus is its mirror image and gives the opposite
+  sign for the same reason.
+* **VERDICT against the owner's rule: EVIDENCE INSUFFICIENT. Keep
+  collecting. No live band change.**
+
+### Durable export — the answer changed
+
+* **A second service CANNOT mount the volume read-only.** Railway: "A volume
+  can be attached to one service." No read-only attach, no shared mode; and
+  volume-backed services cannot run two deployments at once, so detaching
+  costs the probe downtime.
+* **But the Railway CLI exposes first-party volume file access**
+  (`railway volume files list|download`), verified present at CLI 5.54.1.
+  That reads the ledger through Railway's authenticated control plane with
+  **no probe change, no second writer, no second executor and no change of
+  ledger ownership**. It needs the CLI authenticated in the research
+  environment — a credential decision for the owner; no token has been
+  created. This is now preferred over the stdout exporter, which stays built
+  and tested (default OFF) as the fallback.

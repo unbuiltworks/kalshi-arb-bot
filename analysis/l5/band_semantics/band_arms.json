@@ -1,0 +1,2021 @@
+{
+ "arms": {
+  "CONTROL": {
+   "FILL_ASSUMED_upper_bound": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 67,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 67,
+      "settlement_pnl_delta": "0.0000",
+      "shadow_fills": 0,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 3,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 3,
+      "settlement_pnl_delta": "0.0000",
+      "shadow_fills": 0,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 4,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 0,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "0.0000",
+    "shadow_fills": 0,
+    "total_settlement_pnl_delta_usd": "0.0000",
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "TAPE_SUPPORTED": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 67,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 67,
+      "settlement_pnl_delta": "0.0000",
+      "shadow_fills": 0,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 3,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 3,
+      "settlement_pnl_delta": "0.0000",
+      "shadow_fills": 0,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 4,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 0,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "0.0000",
+    "shadow_fills": 0,
+    "total_settlement_pnl_delta_usd": "0.0000",
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "economics_decomposition": {
+    "confirmed_incentives": "NOT ATTRIBUTABLE: PMUS credits rewards at account level with an empty conditionId",
+    "directional_residual_pnl_delta_usd": {
+     "FILL_ASSUMED": "0.0000",
+     "TAPE_SUPPORTED": "0.0000"
+    },
+    "eventual_complete_fills": "unknown_not_observable_from_the_tape",
+    "eventual_complete_opportunities": "UNCHANGED -- the arms alter only whether an EXTEND is attempted",
+    "fees": "unknown_not_observable_from_the_tape",
+    "matched_inventory_produced": "0 contracts, same reason",
+    "matched_pair_pnl_delta": "0.0000 (by construction: no completion is imputed on top of a counterfactual fill)",
+    "net_realized": "the directional line only; nothing else in this table is a venue number",
+    "terminal_residual_frequency": "1.00 -- every counterfactual fill is still held at settlement"
+   }
+  },
+  "SHADOW_1_ENTRY_ONLY": {
+   "FILL_ASSUMED_upper_bound": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": "0.4767",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 64,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "1.8162",
+      "extra_contracts": "3.81",
+      "opportunities": 67,
+      "settlement_pnl_delta": "1.9938",
+      "shadow_fills": 3,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": "0.1167",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3944",
+      "extra_contracts": "3.38",
+      "opportunities": 3,
+      "settlement_pnl_delta": "-0.3944",
+      "shadow_fills": 3,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": "0.9800",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "3.9984",
+      "extra_contracts": "4.08",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 4,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "6.2090",
+    "shadow_fills": 10,
+    "total_settlement_pnl_delta_usd": "1.5994",
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "TAPE_SUPPORTED": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": "0.4767",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 64,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "1.8162",
+      "extra_contracts": "3.81",
+      "opportunities": 67,
+      "settlement_pnl_delta": "1.9938",
+      "shadow_fills": 3,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": "0.1167",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3944",
+      "extra_contracts": "3.38",
+      "opportunities": 3,
+      "settlement_pnl_delta": "-0.3944",
+      "shadow_fills": 3,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 0,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "2.2106",
+    "shadow_fills": 6,
+    "total_settlement_pnl_delta_usd": "1.5994",
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "economics_decomposition": {
+    "confirmed_incentives": "NOT ATTRIBUTABLE: PMUS credits rewards at account level with an empty conditionId",
+    "directional_residual_pnl_delta_usd": {
+     "FILL_ASSUMED": "1.5994",
+     "TAPE_SUPPORTED": "1.5994"
+    },
+    "eventual_complete_fills": "unknown_not_observable_from_the_tape",
+    "eventual_complete_opportunities": "UNCHANGED -- the arms alter only whether an EXTEND is attempted",
+    "fees": "unknown_not_observable_from_the_tape",
+    "matched_inventory_produced": "0 contracts, same reason",
+    "matched_pair_pnl_delta": "0.0000 (by construction: no completion is imputed on top of a counterfactual fill)",
+    "net_realized": "the directional line only; nothing else in this table is a venue number",
+    "terminal_residual_frequency": "1.00 -- every counterfactual fill is still held at settlement"
+   }
+  },
+  "SHADOW_2_BUF_10c": {
+   "FILL_ASSUMED_upper_bound": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": "0.1401",
+      "blocked_by_band": 25,
+      "blocked_by_residual_cap": 40,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3237",
+      "extra_contracts": "2.31",
+      "opportunities": 67,
+      "settlement_pnl_delta": "1.9863",
+      "shadow_fills": 2,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": "0.1167",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3944",
+      "extra_contracts": "3.38",
+      "opportunities": 3,
+      "settlement_pnl_delta": "-0.3944",
+      "shadow_fills": 3,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 4,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 0,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "0.7181",
+    "shadow_fills": 5,
+    "total_settlement_pnl_delta_usd": "1.5919",
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "TAPE_SUPPORTED": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": "0.1401",
+      "blocked_by_band": 25,
+      "blocked_by_residual_cap": 40,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3237",
+      "extra_contracts": "2.31",
+      "opportunities": 67,
+      "settlement_pnl_delta": "1.9863",
+      "shadow_fills": 2,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": "0.1167",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3944",
+      "extra_contracts": "3.38",
+      "opportunities": 3,
+      "settlement_pnl_delta": "-0.3944",
+      "shadow_fills": 3,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 4,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 0,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "0.7181",
+    "shadow_fills": 5,
+    "total_settlement_pnl_delta_usd": "1.5919",
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "economics_decomposition": {
+    "confirmed_incentives": "NOT ATTRIBUTABLE: PMUS credits rewards at account level with an empty conditionId",
+    "directional_residual_pnl_delta_usd": {
+     "FILL_ASSUMED": "1.5919",
+     "TAPE_SUPPORTED": "1.5919"
+    },
+    "eventual_complete_fills": "unknown_not_observable_from_the_tape",
+    "eventual_complete_opportunities": "UNCHANGED -- the arms alter only whether an EXTEND is attempted",
+    "fees": "unknown_not_observable_from_the_tape",
+    "matched_inventory_produced": "0 contracts, same reason",
+    "matched_pair_pnl_delta": "0.0000 (by construction: no completion is imputed on top of a counterfactual fill)",
+    "net_realized": "the directional line only; nothing else in this table is a venue number",
+    "terminal_residual_frequency": "1.00 -- every counterfactual fill is still held at settlement"
+   }
+  },
+  "SHADOW_2_BUF_15c": {
+   "FILL_ASSUMED_upper_bound": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": "0.1401",
+      "blocked_by_band": 2,
+      "blocked_by_residual_cap": 63,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3237",
+      "extra_contracts": "2.31",
+      "opportunities": 67,
+      "settlement_pnl_delta": "1.9863",
+      "shadow_fills": 2,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": "0.1167",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3944",
+      "extra_contracts": "3.38",
+      "opportunities": 3,
+      "settlement_pnl_delta": "-0.3944",
+      "shadow_fills": 3,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 4,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 0,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "0.7181",
+    "shadow_fills": 5,
+    "total_settlement_pnl_delta_usd": "1.5919",
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "TAPE_SUPPORTED": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": "0.1401",
+      "blocked_by_band": 2,
+      "blocked_by_residual_cap": 63,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3237",
+      "extra_contracts": "2.31",
+      "opportunities": 67,
+      "settlement_pnl_delta": "1.9863",
+      "shadow_fills": 2,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": "0.1167",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3944",
+      "extra_contracts": "3.38",
+      "opportunities": 3,
+      "settlement_pnl_delta": "-0.3944",
+      "shadow_fills": 3,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 4,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 0,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "0.7181",
+    "shadow_fills": 5,
+    "total_settlement_pnl_delta_usd": "1.5919",
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "economics_decomposition": {
+    "confirmed_incentives": "NOT ATTRIBUTABLE: PMUS credits rewards at account level with an empty conditionId",
+    "directional_residual_pnl_delta_usd": {
+     "FILL_ASSUMED": "1.5919",
+     "TAPE_SUPPORTED": "1.5919"
+    },
+    "eventual_complete_fills": "unknown_not_observable_from_the_tape",
+    "eventual_complete_opportunities": "UNCHANGED -- the arms alter only whether an EXTEND is attempted",
+    "fees": "unknown_not_observable_from_the_tape",
+    "matched_inventory_produced": "0 contracts, same reason",
+    "matched_pair_pnl_delta": "0.0000 (by construction: no completion is imputed on top of a counterfactual fill)",
+    "net_realized": "the directional line only; nothing else in this table is a venue number",
+    "terminal_residual_frequency": "1.00 -- every counterfactual fill is still held at settlement"
+   }
+  },
+  "SHADOW_2_BUF_5c": {
+   "FILL_ASSUMED_upper_bound": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": "0.1500",
+      "blocked_by_band": 63,
+      "blocked_by_residual_cap": 3,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.1755",
+      "extra_contracts": "1.17",
+      "opportunities": 67,
+      "settlement_pnl_delta": "0.9945",
+      "shadow_fills": 1,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 3,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 3,
+      "settlement_pnl_delta": "0.0000",
+      "shadow_fills": 0,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 4,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 0,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "0.1755",
+    "shadow_fills": 1,
+    "total_settlement_pnl_delta_usd": "0.9945",
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "TAPE_SUPPORTED": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": "0.1500",
+      "blocked_by_band": 63,
+      "blocked_by_residual_cap": 3,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.1755",
+      "extra_contracts": "1.17",
+      "opportunities": 67,
+      "settlement_pnl_delta": "0.9945",
+      "shadow_fills": 1,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 3,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 3,
+      "settlement_pnl_delta": "0.0000",
+      "shadow_fills": 0,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 4,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 0,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "0.1755",
+    "shadow_fills": 1,
+    "total_settlement_pnl_delta_usd": "0.9945",
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "economics_decomposition": {
+    "confirmed_incentives": "NOT ATTRIBUTABLE: PMUS credits rewards at account level with an empty conditionId",
+    "directional_residual_pnl_delta_usd": {
+     "FILL_ASSUMED": "0.9945",
+     "TAPE_SUPPORTED": "0.9945"
+    },
+    "eventual_complete_fills": "unknown_not_observable_from_the_tape",
+    "eventual_complete_opportunities": "UNCHANGED -- the arms alter only whether an EXTEND is attempted",
+    "fees": "unknown_not_observable_from_the_tape",
+    "matched_inventory_produced": "0 contracts, same reason",
+    "matched_pair_pnl_delta": "0.0000 (by construction: no completion is imputed on top of a counterfactual fill)",
+    "net_realized": "the directional line only; nothing else in this table is a venue number",
+    "terminal_residual_frequency": "1.00 -- every counterfactual fill is still held at settlement"
+   }
+  },
+  "SHADOW_2_UNRESTRICTED": {
+   "FILL_ASSUMED_upper_bound": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": "0.4767",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 64,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "1.8162",
+      "extra_contracts": "3.81",
+      "opportunities": 67,
+      "settlement_pnl_delta": "1.9938",
+      "shadow_fills": 3,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": "0.1167",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3944",
+      "extra_contracts": "3.38",
+      "opportunities": 3,
+      "settlement_pnl_delta": "-0.3944",
+      "shadow_fills": 3,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": "0.9800",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "3.9984",
+      "extra_contracts": "4.08",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 4,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "6.2090",
+    "shadow_fills": 10,
+    "total_settlement_pnl_delta_usd": "1.5994",
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "TAPE_SUPPORTED": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": "0.4767",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 64,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "1.8162",
+      "extra_contracts": "3.81",
+      "opportunities": 67,
+      "settlement_pnl_delta": "1.9938",
+      "shadow_fills": 3,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": "0.1167",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3944",
+      "extra_contracts": "3.38",
+      "opportunities": 3,
+      "settlement_pnl_delta": "-0.3944",
+      "shadow_fills": 3,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 0,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "2.2106",
+    "shadow_fills": 6,
+    "total_settlement_pnl_delta_usd": "1.5994",
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "economics_decomposition": {
+    "confirmed_incentives": "NOT ATTRIBUTABLE: PMUS credits rewards at account level with an empty conditionId",
+    "directional_residual_pnl_delta_usd": {
+     "FILL_ASSUMED": "1.5994",
+     "TAPE_SUPPORTED": "1.5994"
+    },
+    "eventual_complete_fills": "unknown_not_observable_from_the_tape",
+    "eventual_complete_opportunities": "UNCHANGED -- the arms alter only whether an EXTEND is attempted",
+    "fees": "unknown_not_observable_from_the_tape",
+    "matched_inventory_produced": "0 contracts, same reason",
+    "matched_pair_pnl_delta": "0.0000 (by construction: no completion is imputed on top of a counterfactual fill)",
+    "net_realized": "the directional line only; nothing else in this table is a venue number",
+    "terminal_residual_frequency": "1.00 -- every counterfactual fill is still held at settlement"
+   }
+  }
+ },
+ "bands": {
+  "entry_band_applies_when": "flat (up+dn == 0)",
+  "held_inventory_is_gated_only_by": "the legal-price band",
+  "legal_price_band": "0.20-0.80",
+  "observation_band_flat_only": "0.25-0.75"
+ },
+ "corpus": {
+  "band_firings": 75,
+  "bid_position": {
+   "above_legal_hi": 70,
+   "below_legal_lo": 5,
+   "inside_legal_band": 0
+  },
+  "by_concept": {
+   "ENTRY_BAND": 1,
+   "HELD_INVENTORY_BAND": 74
+  },
+  "by_market": {
+   "aec-mlb-lad-mia-2026-09-13": 67,
+   "aec-setkameua-buihen-kruvol-2026-09-13": 1,
+   "aec-setkameua-sapole-salvas-2026-09-13": 3,
+   "atc-epl-cov-bha-2026-09-13-bha": 4
+  },
+  "by_sampled_action": {
+   "extend": 70,
+   "open": 5
+  },
+  "decisions": 650,
+  "markets": 37
+ },
+ "labels": "SHADOW ONLY; nothing submitted, nothing repriced, production unchanged",
+ "observed_extend_fill_rates": {
+  "aec-atp-jayfri-maxbas-2026-09-13": {
+   "filled": 3,
+   "orders": 21,
+   "rate": 0.1429
+  },
+  "aec-cs2-mzp-ezt-2026-09-13": {
+   "filled": 2,
+   "orders": 40,
+   "rate": 0.05
+  },
+  "aec-mlb-lad-mia-2026-09-13": {
+   "filled": 6,
+   "orders": 16,
+   "rate": 0.375
+  },
+  "aec-mlb-sea-ath-2026-09-13": {
+   "filled": 0,
+   "orders": 5,
+   "rate": 0.0
+  },
+  "aec-nfl-buf-hou-2026-09-13": {
+   "filled": 3,
+   "orders": 21,
+   "rate": 0.1429
+  },
+  "aec-setkamecz-snimic-kruluk-2026-09-13": {
+   "filled": 0,
+   "orders": 1,
+   "rate": 0.0
+  },
+  "aec-setkameua-sapole-salvas-2026-09-13": {
+   "filled": 3,
+   "orders": 9,
+   "rate": 0.3333
+  },
+  "asc-lal-lev-fcb-2026-09-13-pos-2pt5": {
+   "filled": 2,
+   "orders": 12,
+   "rate": 0.1667
+  },
+  "atc-epl-cov-bha-2026-09-13-bha": {
+   "filled": 1,
+   "orders": 13,
+   "rate": 0.0769
+  }
+ },
+ "path_dependence": [
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "a2ed774fb53547343f7855f7",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.17",
+    "price_proxy": "0.1500",
+    "settlement_if_filled": "0.994500",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:36:10.108801+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "6c6d6a0e97e905774375a36c",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:37:33.048585+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "cb4b917b7dd9cd84262c8f27",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:37:39.876561+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "dc2c0ae74e6f5d5efa239e9f",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:37:42.999554+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "6c3afd816aa55fa2dff9a465",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:40:44.716471+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "6611f410b4fc1c39bf3197a0",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:40:48.879511+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "a56c4ecef26c765f1522a1b6",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:40:52.030698+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "a808aaba03b8c377ab7480a3",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:40:55.283922+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "be1797a84a72fa66e0ae83fa",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:51:58.083122+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "dae417bf8a0299488de9d1a0",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:52:01.006787+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "628403c47faaa62d45b2ecdd",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:52:04.071408+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "778c3bc615c5e4467409d798",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:55:09.575026+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "964d95dbeb91850bb49aacc4",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:58:14.152321+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "2a044b1e434d3085cdb0af88",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:58:17.259055+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "bd2fb00ce62edeb11f79ee9a",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:58:19.825016+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "8693a0ae7fb12960fa9d0eee",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:58:22.969193+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "80cc68a0764e9e0314543cbd",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1300",
+    "settlement_if_filled": "0.991800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:02:20.887492+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "9f25cd9fe72c879776cb6be8",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1250",
+    "settlement_if_filled": "0.997500",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:06:09.070813+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "99990437278e28704260cea6",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.14",
+    "price_proxy": "0.1250",
+    "settlement_if_filled": "0.997500",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:06:12.022687+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "044b88770c33b7c0fb87c731",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:07:22.692842+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "ecf5d09c99c989c56d4a6a28",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:07:25.183421+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "046ea08d1983bd7b9dbd6251",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:07:29.176564+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "adf0dfcb07df10e4ca7008bb",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:07:32.203592+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "cd36b74d28ba8ce7e8c46e27",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:10:46.399871+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "28d4549627bd7f5aebd51456",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:10:48.955048+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "e55a0148c9ddbb46afc65ca8",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:10:52.079239+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "b217f899e19988090a25dd46",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:10:54.788023+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "4560358e267a4aafb85b2b4f",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:14:13.957007+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "03e8dbe4f76b019da6a45691",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:14:17.004409+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "41a2d1b5c38c130c483d1500",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:14:20.229705+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "03c387f73fa3f7c12a213c1f",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:14:22.846448+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "8d4ff6f4cdfa63fda34b7d72",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:17:20.636342+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "2057baff9116d5b8b69353e7",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:17:24.827192+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "d387a57a9c1324a3324d161d",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:17:27.881635+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "54d19e52d565aeb70e3ad86f",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:17:30.906759+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "f21842bd236c07368004112a",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:20:29.402835+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "d59a3f56c7f9e08b9609c38f",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.15",
+    "price_proxy": "0.1350",
+    "settlement_if_filled": "0.994750",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:20:37.735341+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "00ebc314e6c04d3053754d73",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.12",
+    "price_proxy": "0.1100",
+    "settlement_if_filled": "0.996800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:23:38.504803+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "df642a380f9566d0a5f0ddda",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.12",
+    "price_proxy": "0.1100",
+    "settlement_if_filled": "0.996800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:23:43.801096+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "8992759f610f395d465de4f1",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.09",
+    "price_proxy": "0.0900",
+    "settlement_if_filled": "0.991900",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:25:35.649412+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "f3c8ca6232f85c6f0b87349d",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.09",
+    "price_proxy": "0.0900",
+    "settlement_if_filled": "0.991900",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:25:43.689725+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "9d1d1aa723b5ab7a892c9b26",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.09",
+    "price_proxy": "0.0900",
+    "settlement_if_filled": "0.991900",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:28:42.807561+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "7f209ff97951af5c8d532025",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.09",
+    "price_proxy": "0.0900",
+    "settlement_if_filled": "0.991900",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:28:46.978098+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "e237ede640dda74d622d7f7f",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.09",
+    "price_proxy": "0.0900",
+    "settlement_if_filled": "0.991900",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:28:53.826213+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "dae75a74d127d58b085a2aca",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.09",
+    "price_proxy": "0.0900",
+    "settlement_if_filled": "0.991900",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:32:15.238723+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "6c8e3a701aa96f56ea0f810a",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.09",
+    "price_proxy": "0.0900",
+    "settlement_if_filled": "0.991900",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:32:18.105978+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "3db84ea537a07184d573cfde",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.09",
+    "price_proxy": "0.0900",
+    "settlement_if_filled": "0.991900",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:32:23.895161+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "e2727dec582e4e924f7fd08d",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.09",
+    "price_proxy": "0.0900",
+    "settlement_if_filled": "0.991900",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:35:23.051647+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "cd37b5275b479c42cc854ede",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.09",
+    "price_proxy": "0.0900",
+    "settlement_if_filled": "0.991900",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:35:25.825150+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "4506a4629e49f8d550c609ed",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": false,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.09",
+    "price_proxy": "0.0900",
+    "settlement_if_filled": "0.991900",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T19:35:28.672685+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "45aa67f26cfcec408265d6dd",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.05",
+    "price_proxy": "0.0550",
+    "settlement_if_filled": "0.992250",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:28:36.906540+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "421d25c8b9303ab18b07f2de",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.05",
+    "price_proxy": "0.0550",
+    "settlement_if_filled": "0.992250",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:28:39.866334+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "fdaca4ae0b66817a09fb7d09",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.05",
+    "price_proxy": "0.0550",
+    "settlement_if_filled": "0.992250",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:28:45.637161+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "0daeb8e8066d4c883c3c4f14",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.06",
+    "price_proxy": "0.0650",
+    "settlement_if_filled": "0.991100",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:30:39.843786+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "6792e4854db89a892e5be39e",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.06",
+    "price_proxy": "0.0650",
+    "settlement_if_filled": "0.991100",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:30:42.912223+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "b734467f71bf92a3aea707fa",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.08",
+    "price_proxy": "0.0800",
+    "settlement_if_filled": "0.993600",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:30:46.574532+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "b27c0e5898c95069dd786f65",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.08",
+    "price_proxy": "0.0750",
+    "settlement_if_filled": "0.999000",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:32:05.580572+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "4caa0651ec407971fd280a41",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.08",
+    "price_proxy": "0.0750",
+    "settlement_if_filled": "0.999000",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:32:10.841183+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "b18c9033bb7ce88f46a30ff3",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.08",
+    "price_proxy": "0.0750",
+    "settlement_if_filled": "0.999000",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:32:13.670576+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "d9aa3eb3447521dda9e59581",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.08",
+    "price_proxy": "0.0750",
+    "settlement_if_filled": "0.999000",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:34:06.757517+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "97ac43dd7315b28e8472013e",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.08",
+    "price_proxy": "0.0750",
+    "settlement_if_filled": "0.999000",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:34:10.756514+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "7e8ac7df9c7d3ad4e48de0ad",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.08",
+    "price_proxy": "0.0750",
+    "settlement_if_filled": "0.999000",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:34:14.741546+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "3e3eefb606f8c68bee63b016",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.85",
+    "price_proxy": "0.8100",
+    "settlement_if_filled": "0.351500",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:37:49.859373+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "1eb60a86f8c1b04678a6fe80",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.85",
+    "price_proxy": "0.8100",
+    "settlement_if_filled": "0.351500",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:37:57.117909+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "b0d39e82b6a9320b3b756009",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.85",
+    "price_proxy": "0.8100",
+    "settlement_if_filled": "0.351500",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:38:03.971790+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "0a3a2cac49bf7befa4969c58",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.52",
+    "price_proxy": "0.9850",
+    "settlement_if_filled": "0.022800",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:41:20.023289+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "9f091ebf06891ff5b68fc147",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.50",
+    "price_proxy": "0.9950",
+    "settlement_if_filled": "0.007500",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T20:42:43.200774+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "bb733c1b0f38cc722dadf336",
+   "market": "aec-setkameua-sapole-salvas-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.12",
+    "price_proxy": "0.1100",
+    "settlement_if_filled": "-0.123200",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:47:35.465980+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "9e1c225cdd96cb54ec186ad9",
+   "market": "aec-setkameua-sapole-salvas-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.13",
+    "price_proxy": "0.1200",
+    "settlement_if_filled": "-0.135600",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:48:34.821392+00:00"
+  },
+  {
+   "actual": {
+    "action": "complete",
+    "filled": false,
+    "note": "the forced completion is joined to its order in live_rows; fills are counted there"
+   },
+   "decision_id": "9f2638da6acd8a390df6d291",
+   "market": "aec-setkameua-sapole-salvas-2026-09-13",
+   "shadow_extend": {
+    "OBSERVED_tape_supports_a_fill": true,
+    "UNKNOWN": "book and order behaviour AFTER a hypothetical fill; no completion is imputed on top of it",
+    "contracts": "1.13",
+    "price_proxy": "0.1200",
+    "settlement_if_filled": "-0.135600",
+    "side": "dn"
+   },
+   "t_utc": "2026-09-13T18:48:37.354028+00:00"
+  }
+ ],
+ "settlement_reconciliation": {
+  "aec-mlb-lad-mia-2026-09-13": {
+   "check_dn": "6.00340",
+   "check_up": "1.95340",
+   "derived_winner": "dn",
+   "final_dn": "10.13",
+   "final_up": "6.08",
+   "realized_usd": "6.0034",
+   "spent": "4.12660"
+  },
+  "aec-nfl-buf-hou-2026-09-13": {
+   "check_dn": "4.020350",
+   "check_up": "-2.589650",
+   "derived_winner": "up",
+   "final_dn": "6.61",
+   "final_up": "0",
+   "realized_usd": "-2.5896",
+   "spent": "2.589650"
+  },
+  "aec-setkameua-sapole-salvas-2026-09-13": {
+   "check_dn": "2.412100",
+   "check_up": "-1.077900",
+   "derived_winner": "up",
+   "final_dn": "6.28",
+   "final_up": "2.79",
+   "realized_usd": "-1.0779",
+   "spent": "3.867900"
+  }
+ }
+}
