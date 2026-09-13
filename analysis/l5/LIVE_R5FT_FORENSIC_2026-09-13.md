@@ -274,19 +274,109 @@ applied anywhere in this report and must not be until a venue credit is seen.
 
 ## I. Exact realized cashflow
 
-**$0.00.**
+**CORRECTED 2026-09-13T16:10Z.** The first version of this section said "$0.00"
+and said `aec-atp-jayfri-maxbas-2026-09-13` left the risk set with its realized
+number unestablished. Both were wrong: they were written from a log window that
+did not reach the rows. jayfri was reconciled at **14:01:57Z**.
 
-- `aec-atp-jayfri-maxbas-2026-09-13` — `MARKET_STATUS_RESOLVED`, `closed: true`,
-  `outcomes ["Jay Dylan Friend","Max Basing"]`, `outcomePrices ["0","1"]`; our
-  side was Jay Dylan Friend. Position left the authenticated held set with **no
-  settlement row**. The probe's own alarm fired at 13:57:17Z:
-  `held_absent_while_risk_bearing … terminal_settlement_recorded: false`.
-  Label: **resolved / not account-reconciled / not realized.**
-- `atc-epl-cov-bha-2026-09-13-bha` — `MARKET_STATUS_OPEN`.
-- `asc-lal-lev-fcb-2026-09-13-pos-2pt5` — `MARKET_STATUS_OPEN`.
-- `aec-setkamecz-snimic-kruluk-2026-09-13` — open.
+### I.1 Venue-confirmed realized, 2026-09-13
 
-No `POSITION_RESOLUTION` row exists for any market in this run.
+Every row below comes from a `POSITION_RESOLUTION` activity row
+(`settled_by: position_resolution_activity`) and wrote `['settled','realized']`
+to the ledger. These are the venue's own numbers.
+
+| t (Z)    | market                                   | realized $ | matched | residual |
+|----------|------------------------------------------|-----------:|--------:|---------:|
+| 02:12:38 | aec-setkameua-pohole-chaboh-2026-09-13   |   +1.4395 |       — |    +2.05 |
+| 12:39:34 | aec-itfwo-matjor-anagas-2026-09-13       |   −2.3438 |    2.22 |    −5.43 |
+| 12:57:00 | aec-setkameua-mytole-stemak-2026-09-13   |   −0.8793 |    1.89 |    −2.48 |
+| 14:01:57 | aec-atp-jayfri-maxbas-2026-09-13         |   −3.9506 |       0 |    +8.58 |
+| 14:59:26 | aec-setkamecz-snimic-kruluk-2026-09-13   |   +1.0340 |       0 |    −1.88 |
+| 15:21:02 | aec-itfme-jercon-robeld-2026-09-13       |   +1.0200 |       0 |    −2.00 |
+
+jayfri is the completion failure priced out: **0 matched pairs**, an 8.58-contract
+YES residual, cost basis $3.9506, and Jay Dylan Friend lost. Realized −$3.9506 is
+the **entire first-leg basis**. 0/10 COMPLETEs filled (section D).
+
+### I.2 The ledger reconciles exactly
+
+`combined_loss = realized_today + negative unsettled floors`. Whenever the risk
+set is empty the floor term is zero and the `risk_set` row prints `realized_today`
+directly:
+
+```
+12:08:05  risk_bearing []   combined +8.7551   <- realized_today at boot
+12:41:54  risk_bearing []   combined +6.4113   = 8.7551 - 2.3438  (matjor)
+12:58:06  risk_bearing []   combined +5.5320   = 6.4113 - 0.8793  (mytole)
+14:02:30  1 market, floor 0 combined +1.5814   = 5.5320 - 3.9506  (jayfri)
+15:21:17  1 market          combined +3.4734   = 1.5814 +1.0340 +1.0200 -0.1620
+```
+
+Every step is exact to the cent. `realized_today` = **+$3.6354**; the residual
+floor on `asc-lal-lev-fcb-2026-09-13-pos-2pt5` is **−$0.1620**; combined
+**+$3.4734** against a −$30.00 stop. The six markets above move it by −$5.1197
+from a +$8.7551 opening balance carried in from earlier deployments whose log
+rows have aged out of retention. **There is no accounting discrepancy** — the
+apparent one was an incomplete log census on my side, not a ledger fault.
+
+### I.3 The structural finding: the venue confirms our losses and not our wins
+
+Nine markets reached a terminal state today. The split is perfect and mechanical:
+
+| directional residual at resolution | n | venue emits POSITION_RESOLUTION | realized |
+|------------------------------------|---|--------------------------------|----------|
+| non-zero                           | 6 | yes                            | confirmed |
+| exactly 0.00 (fully matched)       | 4 | **no**                         | **never confirmed** |
+
+(9 distinct markets; cov-bha appears in the second row.) The venue emits a
+`POSITION_RESOLUTION` **iff the account carried a net position into resolution**.
+A perfectly matched YES+NO book nets to zero, the venue redeems it silently, and
+no `realizedPnl` is ever published for it — the auditor's own words on those rows:
+`"the venue emitted no POSITION_RESOLUTION because it carried no position"`.
+
+The four fully-matched markets:
+
+| market                                  | matched | pair cost | derived contribution |
+|-----------------------------------------|--------:|----------:|---------------------:|
+| aec-setkameua-tymole-solser-2026-09-13  |    2.04 |    0.9700 |             +0.0612 |
+| atc-epl-cov-bha-2026-09-13-bha          |    5.67 |    0.7636 |             +1.3404 |
+| aec-setkameua-tuzole-cherom-2026-09-13  |    1.72 |    0.9900 |             +0.0172 |
+| aec-atpcq-kensch-albcam-2026-09-13      |    1.92 |    0.9900 |             +0.0192 |
+| **total**                               |         |           |         **+1.4380** |
+
+**This is the wrong way round for the strategy.** The outcomes that represent the
+policy working — full completion, zero residual — are exactly the ones the venue
+will never confirm a number for. The outcomes that represent it failing — a
+stranded residual carried to resolution — are confirmed to the cent. As
+completion improves, a larger share of the economics becomes permanently
+venue-unconfirmable, and a ledger that reports only venue-confirmed realized will
+understate a successful engine while tracking an unsuccessful one perfectly.
+
+**No label is being changed here.** `+1.4380` is DERIVED and stays DERIVED. It is
+recorded only to state the problem precisely. It is worth noting that for a
+fully-matched book the payout is a venue *rule* rather than an estimate — matched
+pairs redeem at exactly $1.00 each whichever way the market resolves, so
+`matched_pairs x $1.00 - cost_basis` is arithmetically determined once
+`directional_residual == 0` and `position_net == 0` are both venue-confirmed. That
+is an argument for a **named third status** distinct from both "realized" and
+"unknown" — an OWNER decision, not mine, and not taken.
+
+Venue-credited incentives across the nine: **+$0.2100**
+(`commissionNotionalCollected`, our side only; four fills credited $0.02, others
+charged). Kept separate from both streams above, per the standing rule.
+
+### I.4 The observability gap this exposed
+
+`realized_today_usd` and `unsettled_floor_usd` are emitted **only on the shutdown
+path** (`shutdown_settle_pass`). On the deployed commit `8606c87f` a live operator
+sees `combined_loss_usd` as a single fused number and cannot decompose the
+daily-stop input without waiting for a shutdown. Reconstructing I.2 above required
+finding moments when the risk set happened to be empty.
+
+Candidate `4be41090` closes this: `risk_set` rows carry `daily_realized_pnl_usd`,
+`total_matched_capital_usd`, `total_unmatched_usd` and `portfolio_worst_case_usd`
+on every pass. That change was written for the concurrency-reporting requirement;
+this run is independent live evidence that it is also needed for the loss stop.
 
 ---
 
@@ -367,8 +457,14 @@ portfolio worst case now                       $4.9058
 
 fees                                           $0.00 (0 bps maker, observed)
 rebates / rewards actually credited            $0.00
-REALIZED NET                                   $0.00
+REALIZED NET (at first writing)                $0.00
 ```
+
+**Superseded by section I.1/I.2.** At the time section L was first written no
+market in the run had reconciled. Nine have since reached a terminal state;
+`realized_today` is **+$3.6354** and the run's own six settlements move it by
+**−$5.1197**. The sentence below still stands, and more firmly: a rate cannot be
+built from this.
 
 **Completion rate conditional on first-leg drift:**
 
@@ -387,8 +483,10 @@ not a basis for a rate.
 
 | id | defect | evidence | status |
 |---|---|---|---|
-| P0.3 | behavioural inventory mapping loses quantity, sign and zero | K: 46/138 sign, 34/138 false-flat | to implement |
-| P1 | resolved market leaves held with no terminal reconciliation | jayfri, legacy cricket | to implement |
-| P0.2 | refused REARM never re-checks | committed `8afe1997`, tested, undeployed | to integrate |
-| obs | acquisition-slot concurrency reported as exposure | G | to fix with P0.3 |
+| P0.3 | behavioural inventory mapping loses quantity, sign and zero | K: 46/138 sign, 34/138 false-flat | implemented `03e149a1`, **undeployed** |
+| P1 | resolved market reconciled on a fixed prefix, not a rotation | jayfri reconciled 14:01:57Z but only after the prefix reached it; legacy cricket | implemented `4be41090`, **undeployed** |
+| P0.2 | refused REARM never re-checks | committed `8afe1997`, tested, **undeployed** | integrated in `4be41090` |
+| obs | acquisition-slot concurrency reported as exposure | G | implemented `03e149a1`, **undeployed** |
+| obs-2 | `realized_today` / `unsettled_floor` split emitted only on the shutdown path, so the daily-stop input is opaque live | I.4 | implemented `4be41090`, **undeployed** |
+| **acct-1** | **the venue confirms realized only for markets that carried a residual; fully-matched completions are never confirmed** | **I.3, 9/9 markets** | **OPEN — needs an OWNER decision on a third status; no label changed** |
 
