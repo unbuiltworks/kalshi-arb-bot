@@ -5,6 +5,7 @@ happily while counting nothing.
 """
 from __future__ import annotations
 
+import datetime
 import json
 import pytest
 
@@ -361,8 +362,14 @@ def test_watch_set_keeps_ineligible_markets_so_they_can_become_eligible():
         return dq
 
     # dated slugs: the ranker now gates on settlement horizon, and an
-    # undated placeholder is refused by design
-    busy, one_sided = "aec-x-busy-2026-09-10", "aec-x-onesided-2026-09-10"
+    # undated placeholder is refused by design. The date is derived from
+    # TODAY and not hardcoded -- a literal 2026-09-10 passed when this was
+    # written and silently began failing three days later, when the slug
+    # aged past MAX_MARKET_AGE_H and the horizon gate (correctly) refused
+    # it. A test that expires on the wall clock reports a defect that is
+    # not there and hides one that is.
+    _today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    busy, one_sided = f"aec-x-busy-{_today}", f"aec-x-onesided-{_today}"
     sb.obs[busy] = obs(busy, 6000)
     sb.obs[one_sided] = obs(one_sided, 6000, ask=None)
     for r in sb.obs[one_sided]:
