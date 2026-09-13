@@ -91,8 +91,9 @@ class QueueShadowService(base.ShadowService):
                 records.append(rec)
                 symbols.add(sym)
 
-    def _append_record(self, filename: str, rec: Mapping[str, Any],
-                       records: list[dict], symbols: set[str]) -> None:
+    def _append_research_record(self, filename: str, rec: Mapping[str, Any],
+                                records: list[dict], symbols: set[str]) -> None:
+        """Persist research-only rows without overriding base canonical persistence."""
         records.append(dict(rec))
         symbols.add(str(rec.get("symbol")))
         try:
@@ -117,8 +118,8 @@ class QueueShadowService(base.ShadowService):
                            "orders_placed": 0, "labels": LABELS}
                 rec["orders_placed"] = 0
                 rec["post_fill_attribution_version"] = POST_FILL_ATTRIBUTION_VERSION
-                self._append_record("complement_cf_records.jsonl", rec,
-                                    self.cf_records, self.cf_scored_symbols)
+                self._append_research_record("complement_cf_records.jsonl", rec,
+                                             self.cf_records, self.cf_scored_symbols)
                 base._log("complement_cf_window", result=rec,
                           cumulative=ccf.summarize(self.cf_records))
             if sym not in self.inventory_scored_symbols:
@@ -131,8 +132,8 @@ class QueueShadowService(base.ShadowService):
                             "orders_placed": 0, "labels": LABELS}
                 irec["orders_placed"] = 0
                 irec["post_fill_attribution_version"] = POST_FILL_ATTRIBUTION_VERSION
-                self._append_record("inventory_cf_records.jsonl", irec,
-                                    self.inventory_records, self.inventory_scored_symbols)
+                self._append_research_record("inventory_cf_records.jsonl", irec,
+                                             self.inventory_records, self.inventory_scored_symbols)
                 base._log("inventory_cf_window", result=irec,
                           cumulative=invcf.summarize(self.inventory_records))
         super()._replay_expired(now)
