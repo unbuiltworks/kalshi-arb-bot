@@ -529,3 +529,55 @@ No production change proposed. Any bounded crossing complement is an
 execution-policy change on a money-moving service and needs its own
 pre-registered shadow with fees resolved from source; fees remain UNKNOWN
 (not reported per fill).
+
+## 2026-09-13 — bounded complement-cross shadow, PRE-REGISTERED then run
+
+Spec frozen at commit `135f5d79` (sha256 `7e31c447eaa1028c…`) BEFORE any
+analysis code existed. `analysis/l5/cross_shadow/`.
+
+* **ZERO supported crosses in all 16 cells** (.97/.98/.99/1.00 × T0/T10/T30/
+  T60) over 260 real COMPLETE decisions in 8 markets — **not because prices
+  failed, but because no row ever reached the price test.** First stop at
+  T0: **no authenticated quote age 146 (56.2%)**, **depth not recorded 48
+  (18.5%)**, **stale quote 65 (25.0%)** (5.1 s–826 s), malformed 1.
+  T10/T30/T60 are 100% UNKNOWN — no book observation exists 10–60 s later.
+* **The instrumentation gap is read-only and one line.** The recorder
+  already computes, serves AND logs `bid_qty`/`ask_qty` per market
+  (`pmus_ws_evidence_recorder.py:366`); the probe's `recorder_book` capture
+  drops both. **0 of 589 order rows carry depth.** After-the-fact recovery
+  from recorder logs is not viable: ~50–80 KB truncated status rows, ~1
+  observation per market per 75 s, against a 5-second requirement.
+* **FEES ARE NOW SOURCE-CONFIRMED** — docs.polymarket.us/fees fetched
+  2026-09-13, effective 12 AM ET 2026-07-01, exchange-wide: taker
+  `0.06·C·p·(1−p)` max $1.50; maker rebate `−0.0125·…` max −$0.31; reduced
+  taker tiers start at $250,000 prior-month volume (we are far below, base
+  rate applies); **"rounded to the nearest $0.01 using banker's rounding"**;
+  per-category differentiation NOT STATED. Promotion-gate condition 1 MET.
+* **The rounding bounds the question before any execution evidence.** All-in
+  cost of a cross (confirmed fee + forgone maker rebate) is **1.6–2.3c per
+  contract**. Break-even pair ≈ **0.977–0.988**, so **the .99 and 1.00 arms
+  can never be net-positive at any size we trade**; at our actual clip
+  (1.72 @ p≈0.5) only **.97** survives, and there a 0.97 pair nets $0.0116
+  on $0.0516 gross — **fees take 77% of the edge.** Needs no depth data.
+* **P5 adverse selection is NEGATIVE for crossing.** Over the 48 rows that
+  passed everything except depth (labelled DEPTH_UNKNOWN, never fills), the
+  complement got **cheaper** more often than dearer at every horizon inside
+  a minute: +10 s 12.5% cheaper / 0.0% dearer; **+30 s 50% cheaper, mean
+  −0.1028**; +60 s 50%/42.9%. Paying the ask bought a worse price than
+  waiting on this corpus. n = 48/20/14, concentrated in collapsing markets.
+* **P4 BUF-HOU**: 31 COMPLETE attempts, our maker price touched 11 times,
+  realized −$2.5896. **No policy in the matrix eliminates the residual** —
+  every attempt stops at a missing/stale quote or unrecorded depth before
+  any price test. Whether crossing would have fixed it is UNKNOWN.
+* **P6**: no claim is made that L5 crosses. With zero supported crosses the
+  shadow trajectory is identical to production's, so the comparison reports
+  UNKNOWN, not "no change".
+
+**PROMOTION GATE: 1 MET, 2 and 3 FAIL, 4–6 NOT MEASURABLE, 7 UNKNOWN, 8 not
+reached. → MAKER-ONLY STAYS.** No live bounded taker proposed. The $1.00
+pair ceiling was not moved.
+
+Carry-forward: any future version of this test should carry **.97** as its
+ceiling, not 1.00. And the blocker is **instrumentation, not economics or
+policy** — the fix is read-only but is still a change to a money-moving
+service, so it is named and not made.
