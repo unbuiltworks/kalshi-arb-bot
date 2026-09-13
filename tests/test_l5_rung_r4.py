@@ -211,7 +211,23 @@ def test_behavioral_ledger_resets_when_a_pair_completes_so_a_second_open_is_not_
     netted the two OPEN targets against the two COMPLETE targets and read
     -0.27 -- "flat" with an open standing -- a key L5 never produced, so the
     engine fail-closed HELD $2.447 unmatched for every decision instead of
-    attempting the complement. A completed pair must close the sequence."""
+    attempting the complement. A completed pair must close the sequence.
+
+    UPDATED BY P0.3 (owner 2026-09-13). The intent below is unchanged and
+    still asserted: a completed pair closes the sequence and the next open
+    reads as a fresh one. Three intermediate NUMBERS changed, because they
+    were the pre-P0.3 arithmetic this test happened to freeze:
+
+      * fill 2 read -1.18 shares while the executable book was +0.11 LONG.
+        That is the sign inversion P0.3 exists to eliminate -- _relation()
+        picks extend vs complete from that sign -- so it now reads +0.219.
+      * fill 3 left a balanced book and returned None; a balanced book now
+        answers 0.0, which is the same state said plainly.
+      * fill 4 credits 5.10/5.31 of the p50 (9.605) rather than the whole
+        10.0, because 5.10 contracts is 96% of this position's unit.
+
+    None of those weakens what the test guards; each makes the ledger agree
+    with the book it describes."""
     from src import pmus_sports_l5_decision as l5d
     inv = base.Inventory()
     # fill 1: OPEN YES 5.31 @0.47, L5 target p50 10 shares
@@ -222,17 +238,25 @@ def test_behavioral_ledger_resets_when_a_pair_completes_so_a_second_open_is_not_
     inv.record(False, D("0.51"), D("5.20"), "complete")
     inv.record_behavioral_shares(False, 11.18, "q5-15")
     assert inv.residual == D("0.11")                       # still not flat
-    assert inv.behavioral_residual_shares() == pytest.approx(-1.18)
+    # P0.3: +0.11 contracts LONG must never read as short. Pre-P0.3: -1.18.
+    r2 = inv.behavioral_residual_shares()
+    assert r2 > 0, f"book +0.11 long, behavioral {r2}"
+    assert r2 == pytest.approx(0.2192506, abs=1e-6)
     # fill 3: COMPLETE NO 0.11 @0.50 -> the EXECUTABLE book is flat
     inv.record(False, D("0.50"), D("0.11"), "complete")
     inv.record_behavioral_shares(False, 10.03, "q5-15")
     assert inv.residual == D("0")
-    assert inv.behavioral_residual_shares() is None          # sequence closed
+    # P0.3: a genuinely balanced book answers 0.0 (pre-P0.3: None). Both read
+    # as `flat` downstream; 0.0 says so without the caller having to guess.
+    assert inv.behavioral_residual_shares() == 0.0           # sequence closed
     # fill 4: a fresh OPEN YES 5.10 @0.49 reads as +10 behavioral shares,
     # exactly as the first open did -- not as -0.27 "flat"
     inv.record(True, D("0.49"), D("5.10"), "open")
     inv.record_behavioral_shares(True, 10.0, "q5-15")
-    assert inv.behavioral_residual_shares() == 10.0
+    # P0.3: 5.10 contracts is 96% of this position's 5.31-contract unit, so
+    # it credits 96% of the p50 (pre-P0.3: the whole 10.0). The point of the
+    # assertion -- a fresh open, not a netted "flat" -- is unchanged.
+    assert inv.behavioral_residual_shares() == pytest.approx(9.6045, abs=1e-4)
     key = l5d.state_key(0.49, base.SPORTS_TTE_DEFAULT_S, inv.behavioral_residual_shares())
     assert "imb" in key and not key.endswith("flat")
     # and the venue-truth unmatched dollars are what the cap sees: 5.10

@@ -42,12 +42,24 @@ from typing import Any, Iterable, Mapping, Optional
 
 def snapshot(unsettled: Iterable[str], held: Iterable[str],
              combined_loss_usd: Optional[str] = None,
-             daily_loss_stop_usd: Optional[str] = None) -> dict:
+             daily_loss_stop_usd: Optional[str] = None,
+             acquisition_slots_in_use: Optional[int] = None,
+             total_matched_capital_usd: Optional[str] = None,
+             total_unmatched_usd: Optional[str] = None,
+             portfolio_worst_case_usd: Optional[str] = None,
+             daily_realized_pnl_usd: Optional[str] = None) -> dict:
     """What the engine is carrying, against what it is scheduling.
 
     `unsettled` is the RISK-BEARING set (ledger, filled-and-not-settled).
     `held` is the SCHEDULER's set (venue positions the loop is working).
     They are different questions and this row is where that is legible.
+
+    OWNER 2026-09-13: and so is the third question this row kept letting a
+    reader conflate. On the live run `concurrency: 1` was reported beside two
+    held markets and read as one-market exposure; it is an ACQUISITION-SLOT
+    count and nothing else. Slots, risk-bearing markets and the dollars behind
+    them are now emitted side by side so no single number can stand in for the
+    others.
     """
     u, h = sorted(set(unsettled or ())), sorted(set(held or ()))
     charged_not_scheduled = sorted(set(u) - set(h))
@@ -64,11 +76,23 @@ def snapshot(unsettled: Iterable[str], held: Iterable[str],
         "scheduled_not_charged": scheduled_not_charged,
         "n_risk_bearing": len(u),
         "n_scheduled": len(h),
+        # THREE different counts, never one standing in for another:
+        # slots that may ACQUIRE, markets that BEAR RISK, and the dollars.
+        "acquisition_slots_in_use": acquisition_slots_in_use,
+        "total_risk_bearing_markets": len(u),
+        "total_matched_capital_usd": total_matched_capital_usd,
+        "total_unmatched_usd": total_unmatched_usd,
+        "portfolio_worst_case_usd": portfolio_worst_case_usd,
+        "daily_realized_pnl_usd": daily_realized_pnl_usd,
         "combined_loss_usd": combined_loss_usd,
         "daily_loss_stop_usd": daily_loss_stop_usd,
         "labels": ("risk is priced over `risk_bearing` (unsettled_slugs), "
                    "never over `scheduled` (held). A market leaves the risk "
-                   "set only on a venue-confirmed settlement row."),
+                   "set only on a venue-confirmed settlement row. "
+                   "acquisition_slots_in_use is how many markets may ACQUIRE "
+                   "and is NOT total exposure: read "
+                   "total_risk_bearing_markets and total_unmatched_usd for "
+                   "that."),
     }
 
 

@@ -3039,10 +3039,30 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 # divergence legible rather than guarding against it.
                 try:
                     _unsettled = unsettled_slugs() or []
+                    # OWNER 2026-09-13: the exposure the slot count is NOT.
+                    # Priced over the risk-bearing set, never the scheduled
+                    # one, so a quarantined or resolved-but-unaudited market
+                    # still shows its dollars.
+                    _m = _n = D("0")
+                    for _s in _unsettled:
+                        try:
+                            _iv = base.held_inventory_from_ledger(_s)
+                        except Exception:               # noqa: BLE001
+                            continue
+                        _au, _ad = _iv.avg_up(), _iv.avg_dn()
+                        if _iv.matched > 0 and _au is not None and _ad is not None:
+                            _m += _iv.matched * (_au + _ad)
+                        _n += base.unmatched_usd(_iv)
                     _rs = rsa.snapshot(
                         _unsettled, held_all,
                         combined_loss_usd=str(_combined_now()[0]),
-                        daily_loss_stop_usd=str(base.daily_loss_stop()))
+                        daily_loss_stop_usd=str(base.daily_loss_stop()),
+                        acquisition_slots_in_use=len(acquiring),
+                        total_matched_capital_usd=str(_m),
+                        total_unmatched_usd=str(_n),
+                        # every residual worthless, matched pairs still pay
+                        portfolio_worst_case_usd=str(_n),
+                        daily_realized_pnl_usd=str(base.q1.realized_today()))
                     for _a in rsa.detect(_risk_prev["held"], held_all,
                                          _unsettled):
                         _emit_alarm(_a, "risk_set_alarm")

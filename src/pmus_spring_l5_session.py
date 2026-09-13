@@ -222,6 +222,20 @@ SPRING_PAIR_TARGET = D("0.98")
 SESSION_NOTIONAL_CAP = micro.PER_MARKET_FIRST_LEG_CAP    # $0.05
 STOP_BEFORE_SETTLEMENT_S = 120.0
 SPORTS_TTE_DEFAULT_S = 1e9               # no settlement clock -> coarsest
+
+# OWNER P0.3, 2026-09-13: the two tolerances the behavioral residual's sign and
+# zero invariants are stated against.
+#
+# QTY: how close the EXECUTABLE book must be to balanced before the behavioral
+# ledger is allowed to read exactly zero. Venue quantities on this book are
+# decimal contracts (2.22, 1.81, 1.44, 1.00); anything at or under this is
+# indistinguishable from a rounded-out pair, and anything above it is a real
+# position that must never present as flat.
+BEHAVIORAL_FLAT_QTY_TOL = D("0.0001")
+# SHARES: the frozen model's own `flat` edge (action_model.IMBALANCE_BUCKETS
+# opens at 1.0). Named here so the false-flat guard is written against the
+# bucket boundary it exists to protect rather than a repeated literal.
+BEHAVIORAL_FLAT_SHARES = 1.0
 MIN_REEVAL_S = 2.0
 
 
@@ -301,6 +315,13 @@ class Inventory:
         self.up_shares_behavioral: float = 0.0
         self.dn_shares_behavioral: float = 0.0
         self.unit: Optional[D] = None          # first fill = 1 behavioral unit
+        # P0.3: how much was actually filled, and the running shares-per-
+        # contract the credited behavioral sizes imply. Both exist so the
+        # behavioral ledger can be scaled BY THE FILL and audited against
+        # the executable book rather than drifting away from it.
+        self.last_fill_qty: Optional[D] = None
+        self.shares_credited: float = 0.0
+        self.contracts_credited: D = D(0)
         self.actions: list[dict] = []
 
     @property
@@ -330,6 +351,10 @@ class Inventory:
     def record(self, side_up: bool, px: D, qty: D, relation: str) -> None:
         if self.unit is None and qty > 0:
             self.unit = qty
+        # P0.3: every call site records the executable fill and then the
+        # behavioral one, so the behavioral side can read the size that
+        # actually filled instead of assuming a whole unit did.
+        self.last_fill_qty = qty
         if side_up:
             self.up += qty
             self.cost_up += px * qty
@@ -347,13 +372,46 @@ class Inventory:
         })
 
     def record_behavioral_shares(self, side_up: bool, shares: float,
-                                 size_bucket: Optional[str] = None) -> None:
-        """Model-scale accounting of ONE fill: L5's target size (shares)
-        for the state|relation the fill was made in, on the filled side."""
-        if side_up:
-            self.up_shares_behavioral += float(shares)
+                                 size_bucket: Optional[str] = None,
+                                 qty: Optional[D] = None) -> None:
+        """Model-scale accounting of ONE fill, SCALED BY WHAT ACTUALLY FILLED.
+
+        OWNER P0.3, 2026-09-13. This used to add L5's whole p50 target for the
+        state|relation once per fill, no matter how many contracts filled. On
+        cov-bha that credited +/-10 shares for fills of 2.00, 2.27, 1.81 and
+        1.44 contracts; the four netted to EXACTLY 0.0 while the executable
+        book was 1.02 contracts long, the state key read `flat`, and the frozen
+        model answers `flat` with open at 0.9803. Thirty OPENs followed that
+        the same model, keyed faithfully at imb1-10, assigns probability ZERO.
+        Measured over 138 live decisions: sign wrong 33.3%, false-flat 24.6%,
+        bucket wrong 25.4%.
+
+        The conversion the owner specified, and the one used here:
+
+            actual_filled_contracts
+              / executable_contracts_for_one_behavioral_unit   (self.unit)
+              * L5_behavioral_shares_for_that_unit             (shares)
+
+        so a partial fill moves the behavioral ledger proportionally and a
+        double-size fill moves it twice. `shares` is still L5's OWN p50 for the
+        state and relation -- the frozen model's scale is untouched; only the
+        amount of it we credit changes.
+
+        Without a fill size (legacy callers, replay fixtures) it degrades to
+        the pre-P0.3 behaviour of crediting the whole unit. That is why the
+        sign and zero invariants live in behavioral_residual_shares() and not
+        here: an accumulator cannot promise them, a reader can."""
+        q = qty if qty is not None else self.last_fill_qty
+        if q is not None and self.unit:
+            delta = float(D(str(q)) / self.unit) * float(shares)
+            self.contracts_credited += D(str(q))
         else:
-            self.dn_shares_behavioral += float(shares)
+            delta = float(shares)
+        if side_up:
+            self.up_shares_behavioral += delta
+        else:
+            self.dn_shares_behavioral += delta
+        self.shares_credited += abs(delta)
         if size_bucket:
             self.last_size_behavioral = size_bucket
         # LIVE 2026-09-07T08:13-08:15Z (R4, aec-atpcq-aleher-tundur): after a
@@ -364,17 +422,68 @@ class Inventory:
         # never contains, so every decision fell to off_distribution_hold and
         # the leg R4 exists to complete sat untouched. A matched pair closes
         # a behavioral sequence: when the EXECUTABLE book is flat the next
-        # open starts a fresh one, exactly as it does in a new window. This
-        # is an accounting fix in the adapter; the frozen model, lookup and
-        # gate are untouched, and it applies identically on resume replay.
+        # open starts a fresh one, exactly as it does in a new window.
+        #
+        # MEASURED SUPPORT (2026-09-13, L5 canonical history): at EXACTLY zero
+        # residual L5 starts a fresh buy in 209/209 observations; at any
+        # residual in 0.1-1.0 it is ~50/50 extend/complete and fresh 0/363.
+        # Resetting on a genuinely balanced book is L5-faithful. Resetting on
+        # an unbalanced one -- which is what the netting bug did -- is not.
         if self.up == self.dn:
             self.up_shares_behavioral = 0.0
             self.dn_shares_behavioral = 0.0
+            self.shares_credited = 0.0
+            self.contracts_credited = D(0)
+
+    def shares_per_contract(self) -> Optional[float]:
+        """The behavioral shares one executable contract has been worth on
+        THIS position, averaged over its own fills. None before any."""
+        if self.contracts_credited <= 0 or self.shares_credited <= 0:
+            return None
+        return self.shares_credited / float(self.contracts_credited)
 
     def behavioral_residual_shares(self) -> Optional[float]:
+        """The residual the state key is keyed on -- and the place the sign
+        and zero invariants are ENFORCED rather than hoped for.
+
+        Three things must hold, and an accumulator of per-state p50s cannot
+        promise any of them on its own:
+
+          D. the sign must agree with the executable book whenever the book is
+             not balanced. lal-lev-fcb ran at book +0.28 contracts LONG while
+             the accumulator read -2.76 shares SHORT; _relation() reads that
+             sign to choose extend vs complete, so an inverted sign mislabels
+             the action itself.
+          E. zero is reserved for a genuinely balanced book, within an explicit
+             quantity tolerance -- never a coincidence of netting.
+          F. a material executable residual may not round into the `flat`
+             bucket, because `flat` is not a nearby state: p25-45c|tte>10m|flat
+             is 100% open (n=83) and imb1-10 is 0% open (n=366).
+
+        When the accumulator violates one, the faithfully scaled executable
+        residual is returned instead: the book is the authority on which way
+        and whether we are long, the accumulator only on L5's scale."""
+        if self.up == 0 and self.dn == 0:
+            return None                      # nothing has filled; unchanged
+        resid = self.residual
+        if abs(resid) <= BEHAVIORAL_FLAT_QTY_TOL:
+            # E. A balanced book reads zero even though the sequence reset
+            # cleared the accumulators -- the answer is a fact about the
+            # position, not a leftover of how it was accumulated.
+            return 0.0
         if self.up_shares_behavioral == 0.0 and self.dn_shares_behavioral == 0.0:
-            return None
-        return self.up_shares_behavioral - self.dn_shares_behavioral
+            return None                      # held, but no behavioral credit
+        raw = self.up_shares_behavioral - self.dn_shares_behavioral
+        scale = self.shares_per_contract()
+        if scale is None:
+            return raw
+        faithful = float(resid) * scale
+        inverted = (raw > 0) != (resid > 0)
+        false_flat = abs(raw) < BEHAVIORAL_FLAT_SHARES and \
+            abs(faithful) >= BEHAVIORAL_FLAT_SHARES
+        if raw == 0.0 or inverted or false_flat:
+            return faithful                  # D / F
+        return raw
 
     def snapshot(self) -> dict:
         return {"up": str(self.up), "dn": str(self.dn),
