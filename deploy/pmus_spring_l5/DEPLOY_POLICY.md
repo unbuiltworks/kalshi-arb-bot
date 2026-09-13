@@ -322,3 +322,76 @@ unilaterally: OWNER decision 2026-09-11, on the specific state below.**
 
   NOTHING TRADED. A container that never started placed no orders, and the
   ledger is untouched.
+
+- **2026-09-13 16:3xZ — BOUNDED CANARY CUTOVER, candidate `710d1bd7`.**
+  The corrected engine: P0.3 behavioural inventory fidelity, P1 rotating
+  terminal reconciliation, P0.2 self-healing REARM, and the risk-set
+  observability split. Previous serving commit `8606c87f`, deployment
+  `718ca492`. **Rollback SHA is `8606c87f`.**
+
+  THE BOUNDARY, measured rather than assumed:
+
+      16:21:28Z  asc-lal-lev-fcb-2026-09-13-pos-2pt5 REALIZED +$2.0380
+                 settled_by position_resolution_activity
+                 venue_qty 16.3400 == ledger_qty 16.34
+                 matched 7.07 @ pair 0.9125, residual 2.20 LONG
+      16:21:48Z  risk_set n_risk_bearing 0, n_scheduled 0
+                 combined_loss +5.6734 against the -30.00 stop
+      16:29:10Z  funnel not_started {no_candidate: 37}
+                 filled 35 static, selection_skipped_position_held 80 static
+      16:25:36Z  last session aec-cs2-mzp-ezt SPRING_NO_FILL,
+                 4 submitted, 0 filled, every order cancelled or repriced
+
+  So: no position held, no session working inventory, zero resting orders,
+  every risk-bearing market venue-reconciled, ten terminal markets recorded
+  today. This is `held: []` — the strictest boundary, not the revised one.
+
+  ONE EXECUTOR. `pmus-q1-executor` measured idle over two hours: CPU 0,
+  memory 0, network 0, 25 samples. `pmus-spring-l5-probe` is the only
+  money-moving process.
+
+  BUILDCHECK ON THE EXACT CANDIDATE SHA, isolated service, deployment
+  `7f92818f`:
+
+      CANDIDATE_IMPORTS_OK
+      REARM_RUNG=R5FT                      (the start-command sed applies)
+      SETTLE_AUDIT_BATCH=5
+      SHUTDOWN_IDLE_S=300.0                (unchanged)
+      TERMINAL_VER=canonical-terminal/v1
+      CAP1_NONDORMANT_SWEEP=False          (the dependency, in the image)
+      SENSITIVE_ENV_NAMES=PMUS_Q1_STATE_DIR,PMUS_SERVICE_ROLE,
+                          PMUS_SPRING_MAX_ACTIONS,PMUS_SPRING_RUNG_MARKETS
+      SHA=710d1bd71f67efa14a98dc31c246b1a9b6f53f51
+
+  No credentials reach the buildcheck: those four are non-secret config.
+  An earlier claim of mine that the count implied leaked credentials was
+  wrong and is corrected here — the regex matched the `PMUS_` prefix.
+
+  TESTS: 3184 pass. One pre-existing failure,
+  `test_sports_shadow_breadth::test_watch_set_keeps_ineligible_markets_so_they_can_become_eligible`,
+  date-sensitive and red at the baseline this branches from. Zero new
+  failures. NOT green overall, and said plainly.
+
+  DIFF `8606c87f..710d1bd7`: four modules, 631 insertions / 95 deletions,
+  plus one line in `railway.json` adding `pmus_r5ft_ledger_repair.py` to the
+  watch list (the Dockerfile already COPYs it at line 53; consistency only).
+  Grepped for every limit token: **no stop, cap, ceiling, band, size,
+  concurrency, residual bound, pair ceiling, taker or post-only rule
+  changed.** The only `daily_loss_stop_usd` hits are the reporting kwarg.
+
+  NOTHING IS RAISED. Same bankroll, same $30.00 per-market cap, same 6-unit
+  residual cap, same concurrency 1, same 1.00 pair ceiling, same maker-only,
+  same -$30.00 daily stop, same R5FT rung and safety shell.
+
+  MECHANISM. `create-deployment` creates a NEW service and is therefore not
+  usable here (no duplicate services). `redeploy` reuses the prior build AND
+  spec — measured today at 15:47Z, when it replayed the old start command.
+  A variable write triggers a genuinely fresh build from branch HEAD, which
+  is what `PMUS_FORCE_REDEPLOY_NONCE` exists for and what produced the
+  candidate buildcheck twice today.
+
+  WHAT THIS DEPLOY CANNOT DO, unchanged: if `boot_assertions` or
+  `continuation_preflight` fails, the campaign stops or waits and never
+  selects a market. A canary that does not start is a normal outcome and is
+  diagnosable from the preflight row. `restartPolicyType` stays ALWAYS for
+  the read-only loop; money-moving sessions still fail closed.
