@@ -1655,8 +1655,8 @@ def shutdown_settle_pass(t=None) -> dict:
 
 
 def shutdown_idle(sleep=time.sleep, report: Optional[Mapping[str, Any]] = None,
-                  t=None):
-    """Hold the halted state up. NEVER exit.
+                  t=None, recheck=None):
+    """Hold the halted state up. Never exit; return ONLY on a re-proved gate.
 
     LIVE 2026-09-10T00:57:19Z: the first shutdown ran, verified, and then the
     process EXITED. To the platform a long-running service that exits is a
@@ -1667,22 +1667,114 @@ def shutdown_idle(sleep=time.sleep, report: Optional[Mapping[str, Any]] = None,
 
     So failing closed means STAYING UP in a halted state, not terminating.
     A halted process that keeps saying it is halted is legible; a dead one is
-    indistinguishable from a crash and gets 'helpfully' replaced."""
+    indistinguishable from a crash and gets 'helpfully' replaced.
+
+    OWNER 2026-09-13, P0.2 -- THE OTHER HALF OF THAT BUG. Staying up is
+    correct; staying up FOREVER on a condition that has since stopped being
+    true is not. LIVE 2026-09-13: flat_held_state failed at 03:35:01Z on a
+    genuinely-open tennis position. That position settled at 05:42:59Z. The
+    gate was right at 03:35 and wrong from 05:43 onward, and nothing here ever
+    looked again -- this loop re-ran only the settlement drain and the
+    migration close, never the assertions -- so the executor sat refused for
+    hours over a position that no longer existed, waiting on a human restart.
+
+    `recheck` closes that, and it is deliberately the ONLY way out:
+
+      - it is the SAME unchanged gate, re-run against a FRESH venue read. No
+        second, softer set of conditions exists to drift away from the first.
+      - TIME IS NOT AN INPUT. Cycles do not accumulate credit; there is no
+        attempt count, no grace period, no eventual give-up-and-arm. A
+        thousand refusals and one refusal are the same state.
+      - anything short of an unambiguous pass -- an exception, a malformed
+        answer, no transport, no recheck at all -- is a REFUSAL, so the
+        pre-P0.2 behaviour (loop forever) is exactly what every abnormal
+        path still does.
+      - it runs AFTER the settlement drain in the same cycle, because the
+        drain is what makes a resolved position stop being held; checking
+        first would always read the previous cycle's world.
+
+    Returns the passing gate report when the account re-proves itself, so the
+    caller can resume the campaign in this same process -- no human restart,
+    and no second executor."""
     verdict = str((report or {}).get("verdict") or "SHUTDOWN_UNKNOWN")
+    refusals = 0
     while True:
         # Read-only: drains pending settlements and re-prices the combined
         # budget while halted. Without it the halted probe never learns that
         # a market resolved, and the budget that refused a lane stays frozen
         # at the number that tripped it. Skipped entirely when there is no
         # transport, so this cannot reach the venue from a bare idle call.
+        settlement = shutdown_settle_pass(t)
+        migration = _idle_migration_close(t)
+        gate = _rearm_recheck(recheck)
+        if gate is not None and not gate["ok"]:
+            refusals += 1
         _log("shutdown_idle", verdict=verdict,
              held_preserved=(report or {}).get("held_preserved"),
-             settlement=shutdown_settle_pass(t),
-             migration_close=_idle_migration_close(t),
+             settlement=settlement,
+             migration_close=migration,
+             rearm_recheck=gate,
+             refusals=refusals,
              evidence=("halted and holding the container up on purpose: "
                        "exiting here would be read as a crash and roll the "
                        "service back to the previous, possibly ARMED, build"))
+        if gate is not None and gate["ok"]:
+            _log("rearm_self_healed", verdict=verdict,
+                 refusals_before=refusals,
+                 checks=gate["checks"],
+                 evidence=("the SAME re-arm gate that refused now passes on a "
+                           "fresh venue read; resuming in this process"))
+            return gate
         sleep(SHUTDOWN_IDLE_S)
+
+
+def _rearm_recheck(recheck) -> Optional[dict]:
+    """Run a re-arm recheck and collapse every non-pass into a refusal.
+
+    "We could not establish it" and "it does not hold" must produce the same
+    answer here for the same reason boot_assertions collapses them: the only
+    safe reading of an unanswered question is no."""
+    if recheck is None:
+        return None
+    try:
+        out = recheck()
+    except Exception as exc:                                # noqa: BLE001
+        return {"ok": False, "checks": [],
+                "failed": [f"recheck_error:{type(exc).__name__}"],
+                "labels": "a recheck that raised is a refusal, never a pass"}
+    if not isinstance(out, Mapping) or "ok" not in out:
+        return {"ok": False, "checks": [], "failed": ["recheck_malformed"],
+                "labels": "a recheck that answered nothing is a refusal"}
+    checks = list(out.get("checks") or [])
+    return {"ok": bool(out.get("ok")), "checks": checks,
+            "failed": [str(c.get("check")) for c in checks
+                       if isinstance(c, Mapping) and not c.get("ok")],
+            "labels": out.get("labels")}
+
+
+def rearm_recheck(t):
+    """The re-arm gate as a callable, for shutdown_idle to re-run each cycle.
+
+    It calls the SAME sweep_orphan_orders -> boot_assertions(t, sweep) pair,
+    in the same order, that the boot path calls. Not a copy of the checks and
+    not a subset of them: a divergent "is it safe yet" predicate is how a gate
+    quietly stops meaning what its name says.
+
+    No transport and no armed gate both answer NO, so a recheck can never be
+    the thing that makes an unproved state look proved."""
+    def _run() -> dict:
+        if t is None:
+            return {"ok": False, "checks": [
+                {"check": "recheck_transport", "ok": False, "got": "None"}],
+                "labels": "no venue to establish anything against"}
+        if not rearm_gate_enabled():
+            return {"ok": False, "checks": [
+                {"check": "recheck_gate_enabled", "ok": False,
+                 "got": f"{REARM_GATE_ENV} unset"}],
+                "labels": "the gate that refused is no longer armed to re-prove"}
+        sweep = sweep_orphan_orders(t)
+        return boot_assertions(t, sweep)
+    return _run
 
 
 def _idle_migration_close(t):
@@ -2456,11 +2548,26 @@ def run_campaign(t=None, clock=time.monotonic, sleep=time.sleep,
                 _log("rearm_refused", failed=failed,
                      evidence=("a re-arm condition could not be established; "
                                "refusing to submit and holding halted"))
-                shutdown_idle(sleep, {"verdict": "REARM_REFUSED",
-                                      "failed": failed,
-                                      "held_preserved": []}, t)
-                return {**report, "status": "CAMPAIGN_STOP:REARM_REFUSED",
-                        "failed_checks": failed}
+                # OWNER 2026-09-13 P0.2: hold halted, and keep re-running THIS
+                # gate. It returns only when the same nine conditions pass on
+                # a fresh venue read -- the refusal below is still what any
+                # other exit from the idle loop means.
+                healed = shutdown_idle(sleep, {"verdict": "REARM_REFUSED",
+                                               "failed": failed,
+                                               "held_preserved": []}, t,
+                                       recheck=rearm_recheck(t))
+                if not (healed or {}).get("ok"):
+                    return {**report, "status": "CAMPAIGN_STOP:REARM_REFUSED",
+                            "failed_checks": failed}
+                # the refusal is KEPT: report["boot_assertions"] stays the
+                # gate that failed, and the pass that released it is recorded
+                # beside it. A self-heal that erased its own cause would make
+                # the next investigation start from nothing.
+                report["rearm_self_healed"] = {"first_failed": failed,
+                                               "checks": healed["checks"]}
+                _log("rearm_resumed", first_failed=failed,
+                     evidence=("the account re-proved every re-arm condition "
+                               "while halted; continuing in this process"))
     start = clock()
     stop_at = start + campaign_s
     cooldown: dict[str, float] = {}
