@@ -1,6 +1,7 @@
 from decimal import Decimal as D
 
-from src.gemini_l5_inventory_cf import _inventory_path, _ladder_prices
+from src import gemini_l5_inventory_cf as invcf
+from src.gemini_l5_inventory_cf import _continuous_cycles, _inventory_path, _ladder_prices
 
 
 def test_inventory_path_tracks_repeated_matching_and_residual_flip():
@@ -31,3 +32,33 @@ def test_ladder_prices_steps_inside_spread_to_max_safe():
 def test_ladder_does_not_invent_more_aggressive_price_when_max_safe_below_touch():
     arms = _ladder_prices(D("0.50"), D("0.47"))
     assert arms == [("touch", D("0.50")), ("max_fee_safe_post_only", D("0.47"))]
+
+
+def test_continuous_cycles_restart_after_flat_match_on_remaining_tape(monkeypatch):
+    calls = []
+    responses = [
+        {"status": "MATCHED", "stop_reason": "flat_complete",
+         "fills": [{"t": 20, "side": "YES", "px": "0.30", "qty": "1"},
+                   {"t": 30, "side": "NO", "px": "0.60", "qty": "1"}],
+         "inventory": {"matched": "1", "residual": "0"}},
+        {"status": "MATCHED", "stop_reason": "flat_complete",
+         "fills": [{"t": 50, "side": "NO", "px": "0.25", "qty": "1"},
+                   {"t": 60, "side": "YES", "px": "0.65", "qty": "1"}],
+         "inventory": {"matched": "1", "residual": "0"}},
+        {"status": "NO_FILL", "stop_reason": "end", "fills": [],
+         "inventory": {"matched": "0", "residual": "0"}},
+    ]
+
+    def fake_replay(symbol, rows, prints, **kwargs):
+        calls.append([r["t"] for r in rows])
+        return responses[len(calls) - 1]
+
+    monkeypatch.setattr(invcf.gs, "replay_window", fake_replay)
+    rows = [{"t": t} for t in (10, 20, 30, 40, 50, 60, 70)]
+    cycles = _continuous_cycles("GEMI-BTC05M2609131200-UP", rows, [], model={}, art=None)
+    assert len(cycles) == 3
+    assert calls[0][0] == 10
+    assert calls[1][0] == 40
+    assert calls[2][0] == 70
+    assert cycles[0]["cycle"] == 1
+    assert cycles[1]["cycle"] == 2
