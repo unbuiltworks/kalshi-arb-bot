@@ -432,3 +432,52 @@ firings in 650 live decisions, 13:00–21:10Z.
   environment — a credential decision for the owner; no token has been
   created. This is now preferred over the stdout exporter, which stays built
   and tested (default OFF) as the fallback.
+
+## 2026-09-13 — residual-cap shadow arms (SHADOW; live cap stays 6)
+
+`analysis/l5/residual_cap/RESIDUAL_CAP.md`. CONTROL (band=current, cap=6)
+reproduces production exactly: 0 extra fills, 0 production extends refused,
+settlement delta 0.0000. Each arm carries its OWN inventory, seeded from the
+position production already held at the first retained decision.
+
+* **matched contracts delta is 0.00 at EVERY arm.** Not one extra contract of
+  matched inventory at cap 8, 10, 12 or UNBOUNDED, in any settled market.
+  `matched = min(up, dn)`, so inventory added to the side already held cannot
+  become matched unless the opposite side later exceeds what that side held
+  at the time — and it never did.
+* **P3: ZERO class A at every cap.** 0/30 extra extends produced matched
+  inventory; all are B→C (opposite opportunity appeared, no supported fill,
+  settled directional) or D (unsettled). Against the owner's own test — "if
+  it simply increases C, reject it" — it increases C exclusively.
+* Marginal curve, entry-only band: 6→8 +2.9754, 8→10 +3.9681, 10→12 +2.9744
+  (≈ +$1.5–2.0 per unit) — **entirely directional residual P&L, and entirely
+  one market** (`aec-mlb-lad-mia`, whose held side won). The other settled
+  market is −0.3944 at every cap.
+* **Under CURRENT band semantics the cap changes nothing that settles.**
+  Raising it 6→UNBOUNDED frees exactly two decisions, both in an unsettled
+  market. The band is UPSTREAM of the cap: the cap only appears binding once
+  the held-inventory band is relaxed. They are not independent and not
+  interchangeable.
+* Tails: max terminal residual 8.58 → 34.60 contracts from cap 6 to
+  UNBOUNDED while the median market is untouched. Extra capacity is consumed
+  by the tail of a single market.
+* **P5 — is 6 units truncating L5?** In the states we actually occupy
+  (`imb10-50`, 62 of 75 band decisions) L5's own residual, normalised by HIS
+  per-window median clip, is p50 **2.3 units**, p90 4.4, with only
+  **2.4–2.8%** of his decisions at or above 6. Our cap is about his p95
+  there. He runs 12–16 units only in `imb>50`, which we reach in 4 of 75
+  decisions. **The difference is not the size of the residual but what
+  happens to it: L5's inventory is 62% matched at the median window; our
+  extra inventory was 0% matched at every cap.** He oscillates; we
+  accumulate.
+* **All five conditions for cap > 6 FAIL or are not reached. CAP REMAINS 6.**
+* Durable ledger: still no volume-file read in the authorized Railway MCP
+  surface, and `railway-agent` takes actions so it is not being pointed at
+  the probe's project for a research read. No token exists in this
+  environment and none was created. Required: a Railway read token for
+  project 50fb7357… as `RAILWAY_TOKEN` here. The stdout exporter stays
+  UNDEPLOYED per instruction.
+
+The carry-forward finding is not about the cap: the extra inventory never
+became matched. Complement reachability remains the binding problem — the
+same conclusion P0-B and P0-D reached, now from a third direction.
