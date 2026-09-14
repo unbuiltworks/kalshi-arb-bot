@@ -38,6 +38,13 @@ CLOB = "https://clob.polymarket.com/book?token_id={tid}"
 ACTIVITY = ("https://data-api.polymarket.com/activity"
             "?user={user}&limit=100&type=TRADE")
 UA = {"User-Agent": "l5-5m-coverage/1.0 (read-only research collector)"}
+# State capture is 1 Hz, but the FILL feed is not polled at 1 Hz: fills carry
+# their own timestamps, so a slower poll loses no information, while 86,400
+# requests/day to a public endpoint risks a rate-limit -- and a rate-limit
+# would present as exactly the "unread feed" condition this recorder now
+# reports, i.e. it would degrade collection silently. L5 runs ~5 fills/min, so
+# limit=100 at this cadence keeps ~20 minutes of overlap.
+FILL_POLL_S = 5.0
 
 
 def _get(url: str, timeout: float = 4.0) -> Optional[Any]:
@@ -112,6 +119,9 @@ def main(argv=None) -> int:
     digests: List[Dict[str, Any]] = []
     meta_cache: Dict[str, Any] = {}
     fill_pages: List[List[tuple]] = []
+    fills_cache: tuple = ([], False)
+    last_fill_poll = 0.0
+    consec_fail = 0
     last_report = 0.0
 
     while deadline is None or time.time() < deadline:
@@ -123,7 +133,11 @@ def main(argv=None) -> int:
                 st = R.window_start(now, k)
                 if now >= R.due_at(st) and (asset, st) not in open_w:
                     open_w[(asset, st)] = {"samples": [], "hist": []}
-        fills, fills_ok = l5_fills(fill_pages)
+        if now - last_fill_poll >= FILL_POLL_S or not fills_cache[1]:
+            fills_cache = l5_fills(fill_pages)
+            last_fill_poll = now
+            consec_fail = 0 if fills_cache[1] else consec_fail + 1
+        fills, fills_ok = fills_cache
         for (asset, st), w in list(open_w.items()):
             if now > st + R.WINDOW_S:
                 d = R.digest(asset, st, w["samples"])
@@ -154,7 +168,10 @@ def main(argv=None) -> int:
             with open(os.path.join(a.out_dir, f"{sl}.jsonl"), "a") as fh:
                 fh.write(json.dumps(s) + "\n")
         if now - last_report > 300:
-            print("L5_5M_COVERAGE " + json.dumps(R.run_digest(digests)), flush=True)
+            rd = R.run_digest(digests)
+            rd["fill_feed_consecutive_failures"] = consec_fail
+            rd["fill_poll_s"] = FILL_POLL_S
+            print("L5_5M_COVERAGE " + json.dumps(rd), flush=True)
             last_report = now
         time.sleep(max(0.0, R.SAMPLE_S - (time.time() - now)))
     print("L5_5M_COVERAGE " + json.dumps(R.run_digest(digests)), flush=True)

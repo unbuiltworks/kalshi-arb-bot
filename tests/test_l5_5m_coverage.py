@@ -114,9 +114,10 @@ def test_source_and_collection_clocks_are_kept_separate():
 
 def test_run_digest_reports_windows_and_first_last_timestamps():
     start = 1789420200
+    quiet = {"l5_fill": False, "buy_qty": 0, "sell_qty": 0}
     mk = lambda st, n: [R.sample(asset="btc", start=st, now=st - 120.0 + i,
                                  book={"up_bid": 0.48, "up_ask": 0.52}, inv={},
-                                 flow=None, history=[]) for i in range(n)]
+                                 flow=quiet, history=[]) for i in range(n)]
     ds = [R.digest("btc", start, mk(start, 420)),
           R.digest("btc", start + 300, mk(start + 300, 420)),
           R.digest("btc", start + 600, [])]          # a missed window
@@ -125,8 +126,18 @@ def test_run_digest_reports_windows_and_first_last_timestamps():
     assert rd["first_sample_utc"] == start - 120.0
     assert rd["last_sample_utc"] == start + 300 - 120.0 + 419
     assert rd["first_sample_lead_s_min"] == 120.0       # never negative
-    # no L5 action is the CONTINUE class, not a failure
+    # no L5 action is the CONTINUE class, not a failure -- but only when the
+    # feed was actually READ. An unread feed must not be counted as CONTINUE.
     assert rd["windows_with_no_l5_action"] == 2
+    assert rd["samples_with_unread_l5_feed"] == 0
+    blind = R.digest("btc", start, [R.sample(asset="btc", start=start,
+                                             now=start - 120.0 + i,
+                                             book={"up_bid": 0.48, "up_ask": 0.52},
+                                             inv={}, flow=None, history=[])
+                                    for i in range(10)])
+    rd2 = R.run_digest([blind])
+    assert rd2["samples_with_unread_l5_feed"] == 10
+    assert rd2["windows_with_no_l5_action"] == 0      # NOT counted as CONTINUE
 
 
 def test_the_recorder_has_no_order_path_and_no_credential_read():

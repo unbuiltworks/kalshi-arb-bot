@@ -265,7 +265,13 @@ def run_digest(digests: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         "coverage_min": cov[0],
         "max_gap_s": max(d["max_gap_s"] for d in done),
         "l5_fills": sum(d["l5_fills"] for d in done),
-        "windows_with_no_l5_action": sum(1 for d in done if not d["l5_fills"]),
+        # the signal that tells a quiet venue from a blocked feed. If this is
+        # non-zero the l5_fills count above is an UNDERCOUNT, not an observation.
+        "samples_with_unread_l5_feed": sum(d.get("samples_with_unread_l5_feed", 0)
+                                           for d in done),
+        "windows_with_no_l5_action": sum(
+            1 for d in done
+            if not d["l5_fills"] and not d.get("samples_with_unread_l5_feed")),
         "labels": ("windows_with_no_l5_action is not a failure: those are the "
                    "CONTINUE examples. A negative first_sample_lead_s IS a "
                    "failure -- capture opened after the window did."),
