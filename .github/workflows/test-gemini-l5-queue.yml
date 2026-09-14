@@ -13,6 +13,7 @@ on:
       - 'src/gemini_l5_short_crypto_queue_service.py'
       - 'src/gemini_l5_canary.py'
       - 'src/gemini_l5_canonical_backfill.py'
+      - 'src/gemini_l5_bottleneck_report.py'
       - 'tests/test_gemini_l5_queue_shadow.py'
       - 'tests/test_gemini_l5_inventory_cf.py'
       - 'tests/test_gemini_l5_short_crypto_universe.py'
@@ -37,6 +38,8 @@ jobs:
         env:
           GEMINI_BACKFILL_FETCH_15M: '1'
         run: python -m src.gemini_l5_canonical_backfill
+      - name: Decompose behavior, shell, and fill bottlenecks
+        run: python -m src.gemini_l5_bottleneck_report
       - name: Upload canonical backfill
         uses: actions/upload-artifact@v4
         with:
@@ -44,4 +47,5 @@ jobs:
           path: |
             analysis/l5/gemini_l5_canonical_backfill.json
             analysis/l5/gemini_l5_canonical_backfill_rows.jsonl
+            analysis/l5/gemini_l5_bottleneck_report.json
           retention-days: 14
