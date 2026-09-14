@@ -163,6 +163,11 @@ def section_d(w: dict) -> dict:
         "in_window_span_s": round(span, 2),
         "tte_first": ser[0][0] if ser else None,
         "tte_last": ser[-1][0] if ser else None,
+        # SPAN ALONE CAN HIDE A HOLE: first-to-last says nothing about what
+        # happened in between, and the historical tape's defect was measured
+        # as a median MAXIMUM GAP of 875.8 s. Both are reported.
+        "max_gap_s": (round(max((a[0] - b[0]) for a, b in zip(ser, ser[1:])), 2)
+                      if len(ser) >= 2 else None),
         "two_sided_pct": (round(100.0 * two / tot, 2) if tot else None),
         "one_sided_obs": int(w.get("one_sided_obs") or 0),
         "prints": len(w.get("print_rows") or []),
