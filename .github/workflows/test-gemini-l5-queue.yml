@@ -19,6 +19,7 @@ on:
       - 'src/gemini_l5_allstate_action_scan.py'
       - 'src/gemini_l5_residual_concentration.py'
       - 'src/gemini_l5_public_settlement_backfill.py'
+      - 'src/gemini_l5_public_settlement_shell_sweep.py'
       - 'src/gemini_l5_canary_readiness.py'
       - 'tests/test_gemini_l5_queue_shadow.py'
       - 'tests/test_gemini_l5_inventory_cf.py'
@@ -56,6 +57,8 @@ jobs:
         run: python -m src.gemini_l5_residual_concentration
       - name: Backfill residuals from public Gemini settlement
         run: python -m src.gemini_l5_public_settlement_backfill
+      - name: Compare shells using public Gemini settlement
+        run: python -m src.gemini_l5_public_settlement_shell_sweep
       - name: Evaluate q1 canary readiness
         run: python -m src.gemini_l5_canary_readiness
       - name: Upload canonical backfill
@@ -71,5 +74,6 @@ jobs:
             analysis/l5/gemini_l5_allstate_action_scan.json
             analysis/l5/gemini_l5_residual_concentration.json
             analysis/l5/gemini_l5_public_settlement_backfill.json
+            analysis/l5/gemini_l5_public_settlement_shell_sweep.json
             analysis/l5/gemini_l5_canary_readiness.json
           retention-days: 14
