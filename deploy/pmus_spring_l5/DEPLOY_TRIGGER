@@ -16,3 +16,21 @@
 # unchanged -30.00 daily stop.
 #
 # ROLLBACK: deployment fd496caf-1d11-4423-bf23-547618bf4699 serving 75edc4bd.
+
+# CUTOVER 2026-09-14T21:40Z -- OBSERVABILITY ONLY, no money-moving change.
+# Pre-deploy state read 2026-09-14T21:40:23Z: serving d108c54a, uptime 26,549s,
+# 187 sessions, held 0, CAMPAIGN_RESELECTING, no HALT. Flat was the trigger:
+# the owner waived the <60s state-age rule as impossible against a ~5.5 min
+# heartbeat cadence, and a flat observation replaces it.
+#
+# Diff vs d108c54a is +244/-0 across 5 files: the new stdlib-only module
+# src/l5_decision_observability.py, its COPY into the image, its watchPattern,
+# one import and one try/except-wrapped call in pmus_spring_l5_session.py, and
+# tests. ZERO deleted or modified lines in either production file.
+#
+# UNCHANGED: residual cap 6, pair ceiling, size, concurrency, maker-only,
+# timing, cancellation, daily stop, settlement behaviour, entry logic and
+# action selection. The decision dict gains exactly one key, "observability".
+#
+# ROLLBACK: deployment a3b6ec92-9cb1-45af-99c9-a1f202c0c3fe serving
+# d108c54a614afba0df05f97a25a9ca0be5bb891b.
