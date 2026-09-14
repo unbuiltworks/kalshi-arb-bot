@@ -12,6 +12,7 @@ on:
       - 'src/gemini_l5_short_crypto_universe.py'
       - 'src/gemini_l5_short_crypto_queue_service.py'
       - 'src/gemini_l5_canary.py'
+      - 'src/gemini_l5_canonical_backfill.py'
       - 'tests/test_gemini_l5_queue_shadow.py'
       - 'tests/test_gemini_l5_inventory_cf.py'
       - 'tests/test_gemini_l5_short_crypto_universe.py'
@@ -22,7 +23,7 @@ on:
 jobs:
   queue-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,3 +33,13 @@ jobs:
         run: python -m pip install --upgrade pip pytest
       - name: Run isolated Gemini queue, inventory, universe, and canary tests
         run: python -m pytest -q tests/test_gemini_l5_queue_shadow.py tests/test_gemini_l5_inventory_cf.py tests/test_gemini_l5_short_crypto_universe.py tests/test_gemini_l5_canary.py
+      - name: Run canonical 5m and 15m historical backfill
+        run: python -m src.gemini_l5_canonical_backfill
+      - name: Upload canonical backfill
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-l5-canonical-backfill
+          path: |
+            analysis/l5/gemini_l5_canonical_backfill.json
+            analysis/l5/gemini_l5_canonical_backfill_rows.jsonl
+          retention-days: 14
