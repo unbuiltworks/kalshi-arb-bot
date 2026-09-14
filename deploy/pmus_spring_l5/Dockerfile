@@ -70,6 +70,7 @@ COPY src/l5_realized_bridge.py src/l5_realized_bridge.py
 # the packaging test derives the required set from the imports, so this COPY
 # is bound to the import rather than to anyone remembering it.
 COPY src/pmus_cross_shadow_live.py src/pmus_cross_shadow_live.py
+COPY src/l5_decision_observability.py src/l5_decision_observability.py
 COPY src/pmus_spring_l5_probe_entry.py src/pmus_spring_l5_probe_entry.py
 COPY src/pmus_spring_l5_session.py src/pmus_spring_l5_session.py
 

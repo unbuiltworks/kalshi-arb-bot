@@ -2,6 +2,7 @@
 prevent is the one already in the record: econ_pair_cost present on 6 of 25
 production fills, leaving every pair-economics question unanswerable on the
 other 19."""
+from src import l5_decision_observability as obs
 from src.l5_decision_observability import observe, SCHEMA
 
 KEYS = ("schema", "inv_up", "inv_dn", "matched_qty", "residual_signed",
@@ -72,3 +73,44 @@ def test_unparseable_venue_values_do_not_raise_and_report_unknown():
     got = observe(inv_up="n/a", inv_dn=None, avg_up="", complement_price="x")
     assert got["pair_cost"] is None
     assert got["matched_qty"] == "0"
+
+
+def test_absent_settlement_clock_is_null_with_a_reason_not_a_sentinel():
+    """The live 2026-09-14 21:47 record published tte_s = 1000000000.0.
+
+    That is SPORTS_TTE_DEFAULT_S, the coarsest-bucket sentinel the DECISION
+    path needs in order to bucket a market with no settlement clock. Mirroring
+    it into an OBSERVATION makes an absent clock indistinguishable from a
+    measured 31.7 years. Absence is null with a reason.
+    """
+    r = obs.observe(inv_up=0, inv_dn="3.69", avg_dn="0.45", buys_up=True,
+                    yes_bid="0.55", yes_ask="0.56", tte_s=None)
+    assert r["tte_s"] is None
+    assert r["tte_s_reason"] == obs.R_NO_CLOCK
+    assert "1000000000" not in str(r["tte_s"])
+    # a real clock still reports, with no reason attached
+    r2 = obs.observe(inv_up=0, inv_dn="3.69", avg_dn="0.45", buys_up=True,
+                     tte_s=412.5)
+    assert r2["tte_s"] == 412.5 and r2["tte_s_reason"] is None
+
+
+def test_every_nullable_economic_field_has_a_reason_companion():
+    """No nullable economic component may be a bare null.
+
+    The live record carried book_implied_pair_cost: null with no companion,
+    which is the same ambiguity the module exists to remove.
+    """
+    r = obs.observe(inv_up=0, inv_dn=0)          # nothing held, nothing served
+    for field in ("tte_s", "held_avg_cost", "complement_price",
+                  "pair_cost", "book_implied_pair_cost"):
+        assert r[field] is None, field
+        why = r[f"{field}_reason"]
+        assert isinstance(why, str) and why.strip(), field
+
+
+def test_a_genuine_zero_is_still_a_zero():
+    """UNKNOWN is null; a real zero must survive as 0, not become null."""
+    r = obs.observe(inv_up=0, inv_dn="3.69", avg_dn="0.45", buys_up=True,
+                    yes_ask="0.56", tte_s=0.0)
+    assert r["matched_qty"] == "0"               # genuinely no matched pair
+    assert r["tte_s"] == 0.0 and r["tte_s_reason"] is None

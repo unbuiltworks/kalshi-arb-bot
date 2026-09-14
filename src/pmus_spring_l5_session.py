@@ -75,6 +75,7 @@ from src import pmus_l5_fidelity_live as fid
 # module is stdlib-only, has no submission path of any kind, and nothing in
 # the decision path reads a value back from it.
 from src import pmus_cross_shadow_live as xshadow
+from src import l5_decision_observability as obsv
 from src.polymarket_l5.action_model import state_key
 
 q1 = micro.q1
@@ -3118,8 +3119,32 @@ def _run_session_body(t: Optional[Transport] = None,
             # OWNER 5553997094 #4: state, executed safe action, shadow
             # action with probability/rank, L5 target size/aggressiveness,
             # planned size, inventory before, refusal if different
+            # OBSERVABILITY ONLY. Wrapped so a defect here can never affect a
+            # money-moving decision: on any exception the record carries the
+            # error and the session continues unchanged. It reads state that
+            # already exists and writes nothing back.
+            try:
+                _obs = obsv.observe(
+                    inv_up=inv.up, inv_dn=inv.dn,
+                    avg_up=(inv.cost_up / inv.up) if inv.up else None,
+                    avg_dn=(inv.cost_dn / inv.dn) if inv.dn else None,
+                    buys_up=(inv.dn > inv.up) if (inv.up != inv.dn) else None,
+                    spent=(inv.cost_up + inv.cost_dn),
+                    # NOT `tte_s`: that variable carries SPORTS_TTE_DEFAULT_S
+                    # (1e9) when the market has no settlement clock. The
+                    # decision path needs a number to bucket on; an
+                    # observation must not publish 1e9 as if it were a
+                    # measured 31.7 years. Absent clock -> null + reason.
+                    relation=relation,
+                    tte_s=(tte_s if settlement_t else None),
+                    yes_bid=bbo.get("bid"), yes_ask=bbo.get("ask"),
+                    action=relation, reason=refusal)
+            except Exception as _oe:          # never let observability trade
+                _obs = {"schema": obsv.SCHEMA, "error": type(_oe).__name__,
+                        "labels": "observability failed; decision unaffected"}
             report.setdefault("decisions", []).append(
                 {"state": skey, "last_rel": inv.last_rel,
+                 "observability": _obs,
                  # L5 fidelity gate inputs (OWNER 5556232035 #5): cadence,
                  # market, behavioral unit for the imbalance dimension
                  "t_utc": datetime.now(timezone.utc).isoformat(),
