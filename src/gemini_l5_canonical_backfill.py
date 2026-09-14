@@ -11,6 +11,9 @@ fill and can never be promoted to FILLED/SETTLED/REALIZED.
 from __future__ import annotations
 
 import json
+import os
+import time
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -24,6 +27,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data/transfer_backtest"
 OUT = ROOT / "analysis/l5/gemini_l5_canonical_backfill.json"
 ROWS_OUT = ROOT / "analysis/l5/gemini_l5_canonical_backfill_rows.jsonl"
+HYDRATE_15M_ENV = "GEMINI_BACKFILL_FETCH_15M"
+PUBLIC_TRADES = "https://api.gemini.com/v1/trades/{symbol}?limit_trades=500"
 
 PARTITIONS = {
     "5m": {
@@ -37,10 +42,37 @@ PARTITIONS = {
 }
 
 
+def _hydrate_public_prints(symbols: list[str], prints: dict[str, list]) -> dict[str, Any]:
+    """Fill missing historical print windows from Gemini's public GET API.
+
+    Research-only and deterministic with respect to settled public trade history.
+    Failures are counted and never converted into zero-trade evidence.
+    """
+    missing = [s for s in symbols if s not in prints]
+    fetched = errors = 0
+    for sym in missing:
+        try:
+            req = urllib.request.Request(PUBLIC_TRADES.format(symbol=sym),
+                                         headers={"User-Agent": "l5-research-backfill"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                rows = json.loads(resp.read().decode("utf-8"))
+            if not isinstance(rows, list):
+                raise ValueError("unexpected trades payload")
+            prints[sym] = sorted(rows, key=lambda x: x.get("timestampms", 0))
+            fetched += 1
+            time.sleep(0.05)
+        except Exception:
+            errors += 1
+    return {"requested": len(missing), "fetched": fetched, "errors": errors}
+
+
 def _run_partition(label: str, bbo_path: Path, prints_path: Path,
                    model: dict, art: dict) -> tuple[list[dict], dict[str, Any]]:
     bbo = tb.load_bbo(bbo_path)
-    prints = tb.load_prints(prints_path)
+    prints = dict(tb.load_prints(prints_path))
+    hydration = {"requested": 0, "fetched": 0, "errors": 0}
+    if label == "15m" and os.getenv(HYDRATE_15M_ENV, "").strip() == "1":
+        hydration = _hydrate_public_prints(sorted(bbo), prints)
     symbols = sorted(set(bbo) & set(prints))
     rows = [invcf.evaluate(s, bbo[s], prints[s], model=model, art=art)
             for s in symbols]
@@ -52,6 +84,7 @@ def _run_partition(label: str, bbo_path: Path, prints_path: Path,
         "symbols_replayed": len(symbols),
         "bbo_file": bbo_path.name,
         "prints_file": prints_path.name,
+        "public_print_hydration": hydration,
     })
     return rows, summary
 
@@ -92,8 +125,6 @@ def run() -> dict:
 
 def main() -> int:
     report = run()
-    # One machine-readable line makes CI logs immediately usable without
-    # downloading the artifact.
     print("GEMINI_L5_CANONICAL_BACKFILL " + json.dumps(report, sort_keys=True, default=str))
     return 0
 
