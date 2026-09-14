@@ -660,3 +660,62 @@ prize is bounded at $0.1563 — and whether those orders would have filled is
 NOT answerable from the tape we hold, because we cancelled them. The profit
 lever is the pair cost we enter at, i.e. position state. See
 `analysis/l5/complete_conversion/COMPLETE_CONVERSION.md`.
+
+## 2026-09-14 — CEILING_PINNED_PERSIST PARKED; P0 is now HABITAT, not execution
+
+**CEILING_PINNED_PERSIST is PARKED** at `ce3f0294`: not deployed, no live arm,
+imported by nothing in `src/` or `deploy/`. Un-parking requires BOTH halves of
+the owner's condition — economically attractive ceiling-pinned COMPLETEs AND
+evidence they are lost to premature cancellation — and neither holds today
+(marginal pair 0.9952, whole prize $0.1563; the complement reached our price in
+0 of 53 chains). See `analysis/l5/ceiling_pinned_persist/PARKED.md`.
+
+**P0 ECONOMIC-STATE TRAJECTORY DECOMPOSITION.** One walker
+(`src/l5_state_trajectory.py`), both venues, episodes aligned at first fill,
+no lookahead. The identity `pair − 1.00 = C_own_fills + B_market_move` holds at
+**2.22e-16** across both.
+
+**THE CENTRAL ANSWER IS YES.** Perfect maker COMPLETE conversion at existing
+prices (each imputed fill capped by the residual in front of it) takes PMUS
+from 44 fills to 74 and 12 switches to 35 — and still leaves:
+
+| | L5 | PMUS | PMUS perfect |
+|---|---:|---:|---:|
+| episodes | 2,216 | 9 | 9 |
+| informative states (computable gain) | 69,558 | 35 | 48 |
+| gain_per_unit exactly zero | 4.0% | 45.7% | **29.2%** |
+| sec between fills p50 | 2.0 | 116.9 (upper bound) | unchanged |
+
+**7.3× L5's degeneracy after perfect conversion.** Conversion changes whether a
+posted order fills, not how often we are in a position to post one.
+
+**THE DEGENERACY METRIC IS THE POINT.** `gain_per_unit` is the held side marked
+against its own running average, so a position built from ONE fill has a gain
+of exactly zero by arithmetic. PMUS's tight gain distribution centred on zero
+is a symptom of not cycling inventory, not of healthy positions. Any
+cross-venue comparison of gain or pair LEVELS is meaningless without it.
+
+**SURVIVORSHIP WARNING, recorded so it is not re-derived as an edge.** PMUS's
+realised pair p50 (0.96) looks better than L5's (0.997). It is not an
+advantage: n=9 pairs with a full decomposition against 13,048, and those 9 are
+the COMPLETEs that filled — our fills land at pair p50 0.949 and our no-fills
+at 0.9952. Classified UNKNOWN.
+
+**DECOMPOSITION.** Observed (exact): ΔC +0.0023, ΔB −0.1420, sum −0.1397. **C —
+what our own fills do to average cost — is statistically indistinguishable from
+L5's (SHARED_L5_BEHAVIOR).** Counterfactual (associational, non-additive): A
+reweighting to L5's price bands shifts +0.0178 but **51.6% of L5's mass falls
+in bands PMUS never visits**; D has n=1 and L5 has no shell at all; F is
+UNAVAILABLE (PMUS fills carry no per-fill TTE). G/remainder is habitat.
+
+**GEMINI CANNOT ANSWER THIS AND THE REASON IS COUNTABLE.** 5m: 118 campaigns,
+best arm **2 complement fills / 2 matched campaigns**, three of four arms ZERO.
+15m: 174 rows, **6 fills, zero matched inventory**. Gemini does NOT exhibit
+more L5-like distributions — it has essentially no pair formation. An
+availability finding, not a performance comparison. The exact per-fill schema
+and query the workstream must return is in §5 of
+`analysis/l5/state_trajectory/STATE_TRAJECTORY.md` (minimum to be usable: ≥30
+matched campaigns and ≥30 complement fills).
+
+**CONSEQUENCE: stop optimising PMUS COMPLETE execution.** The binding
+constraint is how often we are in an L5-like state at all.
