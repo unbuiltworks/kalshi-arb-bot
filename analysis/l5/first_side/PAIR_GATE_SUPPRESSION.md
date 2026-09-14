@@ -55,14 +55,50 @@ more generous proxy for the rejected cohort (those switches cluster near
 0.50, where `p(1−p)` peaks). **Both proxies agree: the rejected cohort is net
 negative even after crediting it two thirds of lifetime incentives.**
 
-## Verdict
+## Verdict — REVISED after resolving the threshold curve
 
-**≤0.96 is a genuine economic filter, not merely a transfer artefact.** It
-removes ~60% of L5's switches, and that 60% is the loss-making 60%. The
-interpretation that L5 "extracts a small trading edge plus substantial
-incentives over enormous turnover" is **not supported** in the form that would
-justify relaxing the gate: the high-turnover, high-pair-cost portion does not
-pay for itself even on a generous incentive split.
+My earlier conclusion, "≤0.96 is a genuine economic filter", was **directionally
+right but located the boundary in the wrong place.** Splitting at 0.96 lumps a
+near-break-even band together with a catastrophic one. The banded curve:
+
+| pair band | n | turnover | cash bp | incentive proxy | **combined bp** |
+|---|---|---|---|---|---|
+| ≤ 0.90 | 3,196 | $911,610 | **+553.6** | $8,331 | **+645.0** |
+| 0.90–0.96 | 2,062 | $1,434,441 | +78.7 | $13,486 | +172.8 |
+| 0.96–1.00 | 2,327 | $2,278,680 | +18.5 | $21,991 | **+115.0** |
+| 1.00–1.05 | 1,744 | $1,434,180 | −7.4 | $13,933 | **+89.7** |
+| **> 1.05** | 3,648 | $1,361,545 | **−460.4** | $12,425 | **−369.1** |
+
+**0.96 is not special.** It is a conservative point on a smooth monotone
+gradient. The value destruction is concentrated **above 1.05**, and the
+0.96–1.05 band is mildly positive on trading cash and clearly positive once a
+proxied incentive share is credited.
+
+**The principled boundary the evidence supports is ≤ 1.00** — you cannot pay
+more than $1.00 for a pair that redeems at exactly $1.00, so above par the
+matched leg is structurally negative — with the catastrophic zone beyond 1.05.
+
+**IT IS NOT SELECTION.** Holding realised series volatility fixed, the
+gradient persists and stays monotone in all three strata:
+
+| stratum | ≤0.96 | 0.96–1.00 | 1.00–1.05 | >1.05 |
+|---|---|---|---|---|
+| vol < 0.08 | +98.8 bp | +12.8 | −0.6 | −147.5 |
+| vol 0.08–0.15 | +162.5 bp | +49.8 | +19.2 | −255.5 |
+| vol ≥ 0.15 | +763.6 bp | −85.5 | −132.0 | −1096.6 |
+
+So the threshold is not merely picking markets that later went well.
+
+**Chronological OOS.** Selecting the threshold on TRAIN by total cash picks
+**≤1.05** (train +$44,852). On TEST: ≤0.96 → +329.1 bp (n=1,013) · ≤1.00 →
++120.1 bp · ≤1.05 → +85.8 bp. Tighter is better per dollar out-of-sample;
+looser admits more markets and more total cash. Both are positive.
+
+**RECOMMENDATION: do not relax the gate.** ≤0.96 costs return-per-dollar
+nothing — it is the best OOS rate of the three — and gives up volume we have
+no confirmed rebate schedule for. Relaxing toward 1.00 would be defensible on
+L5's economics but is NOT supported for us, because the incentive half of that
+band's return is a proxy on L5's venue, not a credited number on ours.
 
 **Caveats, stated rather than buried:**
 

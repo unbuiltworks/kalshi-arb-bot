@@ -166,3 +166,94 @@ that survives both splits.
   trajectory — are **UNAVAILABLE** in the public tape and are named as such,
   never imputed.
 * **Nothing is deployed and no production path changed.**
+
+---
+
+# P0/P1 follow-up: the calibrated surface, and where prediction stops
+
+## The frozen surface
+
+`P(DEAR | cohort, |price−0.50| bin, TTE bin)`, fitted on TRAIN only, each cell
+shrunk toward its cohort rate with a pseudo-count fixed in advance (k = 25).
+No monotonicity assumed; no settlement outcome used.
+
+| model | VALID acc | VALID log loss | TEST acc | TEST log loss |
+|---|---|---|---|---|
+| CHEAPER | 0.3881 | 8.4538 | 0.3501 | 8.9781 |
+| DEARER | 0.6119 | 5.3617 | 0.6499 | 4.8375 |
+| 50-50 | — * | 0.6931 | — * | 0.6931 |
+| COHORT_RATE | 0.5914 | 0.6755 | 0.6337 | 0.6453 |
+| **SURFACE** | **0.6169** | **0.6547** | **0.6510** | **0.6321** |
+
+\* a constant 0.5 scores the same *accuracy* as DEARER because `p ≥ 0.5`
+always predicts DEAR; only its log loss is meaningful.
+
+**SURFACE wins on both metrics**, and it is the only entry that is both
+better than chance and honestly calibrated:
+
+| predicted | n | mean pred | observed |
+|---|---|---|---|
+| 0.4–0.5 | 458 | 0.4597 | 0.4956 |
+| 0.5–0.6 | 704 | 0.5618 | 0.6264 |
+| 0.6–0.7 | 850 | 0.6433 | 0.6071 |
+| 0.7–0.8 | 1,281 | 0.7310 | 0.7291 |
+| 0.8–0.9 | 117 | 0.8305 | 0.8376 |
+
+But the gain is **modest**: 0.6321 against a 0.6931 coin-flip is ~9%. Most of
+L5's first-side choice remains unexplained by anything we can observe.
+
+## Per cohort (TEST)
+
+| cohort | n | P(DEAR) | DEARER acc | SURFACE acc | SURFACE ll |
+|---|---|---|---|---|---|
+| BTC5m | 1,555 | 0.6277 | 0.6277 | 0.6174 | 0.6548 |
+| ETH5m | 1,158 | 0.7038 | 0.7038 | 0.7038 | **0.5830** |
+| **BTC15m** | 519 | **0.5530** | 0.5530 | **0.5915** | 0.6795 |
+| ETH15m | 178 | 0.7753 | 0.7753 | 0.7753 | 0.6158 |
+
+BTC15m is the only cohort where the surface **beats** the flat rule on
+accuracy — and also the only one whose log loss barely improves on a coin
+flip.
+
+## BTC15m IS a different regime, for two compounding reasons
+
+| \|d\| | BTC5m P(DEAR) train/test | BTC15m P(DEAR) train/test |
+|---|---|---|
+| < 0.05 | 0.4724 / 0.5404 | 0.4428 / 0.4545 |
+| 0.05–0.15 | **0.6878** / 0.7101 | 0.5473 / 0.6441 |
+| 0.15–0.25 | **0.7027** / 0.6887 | 0.5347 / 0.7000 |
+| 0.25–0.35 | **0.7236** / 0.5616 | 0.5126 / n/a |
+| ≥ 0.35 | 0.5956 / 0.5318 | 0.5843 / n/a |
+
+1. **Its conditional preference is weaker everywhere** — BTC5m reaches
+   0.69–0.72 in the mid bands; BTC15m never exceeds 0.585 and mostly sits at
+   0.51–0.55.
+2. **Its mass sits where nobody has a preference.** 3,945 of 4,557 BTC15m
+   train markets are inside |d| < 0.15, the region where even BTC5m is at
+   chance. A longer horizon prices closer to 0.50.
+
+So BTC15m is not "DEARER failing" — it is a cohort that spends most of its
+life in the balanced state where L5 shows **no side preference at all**.
+
+## P1: where price stops explaining, nothing else takes over
+
+Tested in the three collapse regions on temporally valid variables only.
+**UNAVAILABLE and therefore not tested: spread, depth, order flow,
+intra-window trajectory, book updates, queue position.**
+
+**Balanced (|d| < 0.05)** — base 0.4566 train / 0.5089 test. Previous-window
+move: 0.42–0.47 train → 0.48–0.54 test. Volatility: 0.45–0.46 train →
+0.42–0.55 test. Neither ordering survives the split. The only stable signal is
+cohort (BTC15m 0.4428 → 0.4545, consistently below 0.5).
+
+**Extreme (|d| ≥ 0.35)** — base 0.5861 train → **0.4981 test**. Every bucket
+inverts across the split (previous-flat 0.6589 → 0.4828; TTE < 50% 0.5927 →
+0.4346). Nothing holds.
+
+**BTC15m** — base 0.4999 train → 0.5530 test; test cells for most buckets are
+single digits and cannot support a claim.
+
+**Conclusion: conditional on what we can observe, side choice in these regions
+is effectively stochastic.** No non-price variable improves out-of-sample
+prediction. The features that would plausibly separate the cases are exactly
+the ones the public tape does not carry, and they stay UNKNOWN.
