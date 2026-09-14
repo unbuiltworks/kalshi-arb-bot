@@ -79,3 +79,86 @@ def test_digest_surfaces_a_collection_defect_rather_than_hiding_it():
     assert d["two_sided_frac"] == 1.0
     empty = R.digest("btc", start, [])
     assert empty["coverage"] is None and "never opened" in empty["coverage_reason"]
+
+
+def test_identical_l5_fills_survive_dedup_but_overlap_does_not():
+    """L5 genuinely repeats identical fills, so dedup by identity destroys real
+    trades; summing overlapping pages double-counts them. Multiplicity is the
+    MAX in any single response."""
+    a, b = ("t1", 0.44, 10.0), ("t2", 0.45, 5.0)
+    # 'a' twice in one response is two real fills; the overlap must not make four
+    out = R.dedupe_fills([[a, a, b], [a, b, b]])
+    assert out.count(a) == 2 and out.count(b) == 2
+    assert R.dedupe_fills([[a], [a], [a]]).count(a) == 1      # pure overlap
+    assert R.dedupe_fills([[a, a, a]]).count(a) == 3          # genuinely three
+
+
+def test_source_and_collection_clocks_are_kept_separate():
+    rec = R.sample(asset="btc", start=1789420200, now=1789420100.0,
+                   book={"up_bid": 0.48, "up_ask": 0.52}, inv={}, flow=None,
+                   history=[], t_source=1789420097.5)
+    assert rec["t_collected"] == 1789420100.0
+    assert rec["t_source"] == 1789420097.5
+    assert abs(rec["source_age_s"] - 2.5) < 1e-9
+    # no venue clock is null WITH a reason, never silently the collection clock
+    rec2 = R.sample(asset="btc", start=1789420200, now=1789420100.0,
+                    book={"up_bid": 0.48, "up_ask": 0.52}, inv={}, flow=None,
+                    history=[])
+    assert rec2["t_source"] is None
+    assert rec2["t_source_reason"] == R.R_NO_SOURCE_TS
+    assert rec2["source_age_s"] is None
+
+
+def test_run_digest_reports_windows_and_first_last_timestamps():
+    start = 1789420200
+    mk = lambda st, n: [R.sample(asset="btc", start=st, now=st - 120.0 + i,
+                                 book={"up_bid": 0.48, "up_ask": 0.52}, inv={},
+                                 flow=None, history=[]) for i in range(n)]
+    ds = [R.digest("btc", start, mk(start, 420)),
+          R.digest("btc", start + 300, mk(start + 300, 420)),
+          R.digest("btc", start + 600, [])]          # a missed window
+    rd = R.run_digest(ds)
+    assert rd["windows_captured"] == 2 and rd["windows_missed"] == 1
+    assert rd["first_sample_utc"] == start - 120.0
+    assert rd["last_sample_utc"] == start + 300 - 120.0 + 419
+    assert rd["first_sample_lead_s_min"] == 120.0       # never negative
+    # no L5 action is the CONTINUE class, not a failure
+    assert rd["windows_with_no_l5_action"] == 2
+
+
+def test_the_recorder_has_no_order_path_and_no_credential_read():
+    """Structural, not a grep for the word 'order' in prose: the module may
+    only import stdlib and its own recorder, may never read an env var that
+    could be a credential, and may never call an HTTP verb other than GET."""
+    import ast
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[1]
+    for name in ("src/l5_5m_coverage/recorder.py", "src/l5_5m_coverage/run.py"):
+        tree = ast.parse((root / name).read_text())
+        mods = set()
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Import):
+                mods |= {al.name.split(".")[0] for al in n.names}
+            elif isinstance(n, ast.ImportFrom) and n.module:
+                mods.add(n.module.split(".")[0])
+        allowed = {"__future__", "argparse", "ast", "json", "os", "time",
+                   "typing", "urllib", "pathlib", "src"}
+        assert mods <= allowed, (name, mods - allowed)
+        # CALLED names, not prose: the docstrings legitimately contain the
+        # words "order" and "submits" while promising the opposite.
+        called = set()
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Call):
+                f = n.func
+                called.add(f.attr if isinstance(f, ast.Attribute)
+                           else getattr(f, "id", ""))
+        for verb in ("place_limit_buy", "place_order", "submit", "cancel",
+                     "sign", "post", "getenv"):
+            assert verb not in called, (name, verb)
+        src = (root / name).read_text()
+        assert "pmus_spring" not in src and "os.environ" not in src
+        # only GET reaches the network
+        for verb in ('method="POST"', 'method="DELETE"', 'method="PUT"'):
+            assert verb not in src
+        for cred in ("PRIVATE_KEY", "API_KEY", "SECRET", "PASSPHRASE"):
+            assert cred not in src, (name, cred)

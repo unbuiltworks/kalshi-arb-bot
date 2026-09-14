@@ -1,3 +1,9 @@
+> **SUPERSEDED, 2026-09-14.** The numbers below were scored only on windows
+> carrying a REDEEM row, which keeps only windows whose held side won: 11.6%
+> of BTC5m and 18.3% of ETH5m windows were silently dropped, and 99.5% of the
+> dropped ones are one-sided. Corrected frontier, fee split included, in
+> `analysis/l5/fees/FEE_RECONSTRUCTION.md`. Kept for provenance.
+
 # The residual / pair-cost frontier
 
 How much temporary directional inventory does an L5 5m cycle need to reach each

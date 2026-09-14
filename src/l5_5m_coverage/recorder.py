@@ -42,6 +42,7 @@ R_NO_BOOK = "book not two-sided: field not derivable"
 R_NO_DEPTH = "venue served no size at the touch"
 R_NO_HISTORY = "not enough prior samples at this lag yet"
 R_NO_HELD = "no inventory held: pair undefined before a first leg exists"
+R_NO_SOURCE_TS = "venue served no timestamp of its own on this payload"
 
 
 def window_start(now: float, k: int = 0) -> int:
@@ -138,7 +139,8 @@ def inventory_state(up: float, dn: float, cost_up: float, cost_dn: float,
 
 def sample(*, asset: str, start: int, now: float, book: Optional[Dict[str, Any]],
            inv: Dict[str, Any], flow: Optional[Dict[str, Any]],
-           history: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+           history: Sequence[Dict[str, Any]],
+           t_source: Optional[float] = None) -> Dict[str, Any]:
     """One complete market-state observation. L5 doing nothing is a valid
     and REQUIRED observation: it is the CONTINUE class."""
     bs = book_state(book)
@@ -152,7 +154,15 @@ def sample(*, asset: str, start: int, now: float, book: Optional[Dict[str, Any]]
         (1.0 - bs["up_bid"]) if bs["up_bid"] is not None else None)
     rec: Dict[str, Any] = {
         "schema": SCHEMA, "asset": asset, "slug": slug(asset, start),
-        "t": now, "window_start": start, "window_end": start + WINDOW_S,
+        # collection clock and venue clock are kept SEPARATE and never
+        # substituted for one another: the gap between them is the only way to
+        # tell a stale read from a quiet market.
+        "t": now,
+        "t_collected": now,
+        "t_source": t_source,
+        "t_source_reason": (None if t_source is not None else R_NO_SOURCE_TS),
+        "source_age_s": (now - t_source) if t_source is not None else None,
+        "window_start": start, "window_end": start + WINDOW_S,
         "tte_s": start + WINDOW_S - now,
         "pre_roll": now < start,
         "mid": mid,
@@ -190,6 +200,8 @@ def digest(asset: str, start: int, samples: List[Dict[str, Any]]) -> Dict[str, A
     return {
         "schema": SCHEMA, "asset": asset, "slug": slug(asset, start),
         "n_samples": len(samples),
+        "first_sample_utc": ts[0],
+        "last_sample_utc": ts[-1],
         "first_sample_lead_s": start - ts[0],      # >0 means we were early
         "last_sample_tte_s": start + WINDOW_S - ts[-1],
         "span_s": span,
@@ -198,4 +210,56 @@ def digest(asset: str, start: int, samples: List[Dict[str, Any]]) -> Dict[str, A
         "two_sided_frac": sum(1 for s in samples if s["two_sided"]) / len(samples),
         "l5_fills": sum(1 for s in samples if s["l5_acted"]),
         "pre_roll_samples": sum(1 for s in samples if s["pre_roll"]),
+    }
+
+
+def dedupe_fills(responses: Sequence[Sequence[Any]]) -> List[Any]:
+    """Multiset union across overlapping responses.
+
+    L5 genuinely repeats identical fills -- same price, same size, same second
+    -- so deduplicating by identity destroys real trades, and summing across
+    overlapping pages double-counts them. The canonical rule this program uses
+    everywhere: an item's multiplicity is the MAXIMUM seen in any SINGLE
+    response, never the sum across responses and never one.
+    """
+    best: Dict[Any, int] = {}
+    for resp in responses:
+        seen: Dict[Any, int] = {}
+        for item in resp:
+            seen[item] = seen.get(item, 0) + 1
+        for item, n in seen.items():
+            if n > best.get(item, 0):
+                best[item] = n
+    out: List[Any] = []
+    for item, n in best.items():
+        out.extend([item] * n)
+    return out
+
+
+def run_digest(digests: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Service-level coverage, so a gap is visible while it is happening."""
+    done = [d for d in digests if d.get("n_samples")]
+    if not done:
+        return {"schema": SCHEMA, "windows_captured": 0,
+                "first_sample_utc": None, "last_sample_utc": None,
+                "coverage_reason": "no window captured yet"}
+    leads = sorted(d["first_sample_lead_s"] for d in done)
+    cov = sorted(d["coverage"] for d in done)
+    return {
+        "schema": SCHEMA,
+        "windows_captured": len(done),
+        "windows_attempted": len(digests),
+        "windows_missed": len(digests) - len(done),
+        "first_sample_utc": min(d["first_sample_utc"] for d in done),
+        "last_sample_utc": max(d["last_sample_utc"] for d in done),
+        "first_sample_lead_s_p50": leads[len(leads) // 2],
+        "first_sample_lead_s_min": leads[0],
+        "coverage_p50": cov[len(cov) // 2],
+        "coverage_min": cov[0],
+        "max_gap_s": max(d["max_gap_s"] for d in done),
+        "l5_fills": sum(d["l5_fills"] for d in done),
+        "windows_with_no_l5_action": sum(1 for d in done if not d["l5_fills"]),
+        "labels": ("windows_with_no_l5_action is not a failure: those are the "
+                   "CONTINUE examples. A negative first_sample_lead_s IS a "
+                   "failure -- capture opened after the window did."),
     }

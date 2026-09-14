@@ -14,9 +14,19 @@ and the residual legs at each side's own average price is exact:
     residual_pnl = residual * [residual side won] - residual * avg(residual side)
     matched_pnl + residual_pnl == settlement - cost      (asserted in tests)
 
-FEES ARE NOT SEPARABLE from this tape: `usdcSize` is the cash that moved and
-carries no fee field. They are reported UNKNOWN rather than invented, so every
-net figure here is gross of any unobserved fee.
+FEES ARE SEPARABLE AFTER ALL, AND THIS CORRECTS THIS FILE'S OWN EARLIER CLAIM.
+`usdcSize` exceeds `price * size` on a BUY by exactly 0.07 * p * (1 - p) per
+share, or by nothing; the ratio is bimodal over 761,020 fills. Two consequences
+for this module:
+
+  * costs here have ALWAYS been fee-inclusive, because they sum `usdcSize`.
+    The net figures were never "gross of an unobserved fee" -- that sentence was
+    wrong, and the numbers it disclaimed were already right.
+  * `pair_cost` here is therefore an EFFECTIVE, fee-inclusive pair. It is NOT
+    the quoted pair the live ceiling compares against. A quoted 0.96 pair with
+    balanced legs is an effective 0.9949. Never compare the two.
+
+`fee_usd` is now reported per run over the fills the clone actually took.
 """
 from __future__ import annotations
 
@@ -97,6 +107,7 @@ def simulate(cycle: Dict[str, Any], cap: Optional[float],
         residual_pnl = resid * (1.0 if r_won else 0.0) - resid * (avg_r or 0.0)
     else:
         residual_pnl = 0.0
+    fee_usd = sum(u - px * q for (_t, px, _o, q, u) in s[:taken])
     # the minimum pair cost this cycle could still have reached after the stop
     future = _min_future_pair(s, taken, up, dn, cup, cdn)
     return {"cid": cycle["cid"], "cohort": cycle["cohort"], "t0": cycle["t0"],
@@ -109,7 +120,7 @@ def simulate(cycle: Dict[str, Any], cap: Optional[float],
             "capital_required": peak_cost, "cost": st["cost"],
             "settlement": settlement, "net": net,
             "matched_pnl": matched_pnl, "residual_pnl": residual_pnl,
-            "fees": None,                       # UNKNOWN: not in this tape
+            "fee_usd": fee_usd,     # over the fills THIS clone took, not L5's
             "min_future_pair": future, "trace": trace}
 
 
@@ -148,7 +159,7 @@ def summarise(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
         "cycles": n,
         "matched_pair_pnl": round(mp, 2),
         "directional_residual_pnl": round(rp, 2),
-        "fees": "UNKNOWN (not separable from this tape)",
+        "fee_usd": round(sum(r["fee_usd"] for r in runs), 2),
         "capital_required": round(sum(r["capital_required"] for r in runs), 2),
         "peak_capital_one_cycle": round(max((r["capital_required"] for r in runs),
                                             default=0.0), 2),
