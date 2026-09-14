@@ -24,6 +24,28 @@
           "note": "the venue extended its own maintenance; the original end_utc is kept, the overrun is measured against the latest revised end, and the actual boundary stays the first healthy account read (venue_recovered 2026-09-06T10:52:18Z, prints gate still waiting)"
         }
       ]
+    },
+    {
+      "id": "pmus-2026-09-14-scheduled",
+      "venue": "polymarket_us",
+      "start_utc": "2026-09-14T09:25:45+00:00",
+      "end_utc": "2026-09-14T12:00:00+00:00",
+      "end_local": "2026-09-14 08:00 ET",
+      "declared_by": "user statement 2026-09-14T10:45Z (Polymarket is down until 8 am)",
+      "first_observed_error": "Halt:GET_RETRIES_EXHAUSTED:/v1/orders/open:HTTP Error 503: Service Unavailable at 2026-09-14T09:25:45Z",
+      "first_observed_symptom": "2026-09-14T09:19:33Z -- six sessions from 09:19:33Z to 09:24:33Z each submitted 4 orders, filled 0, and ended flat_verified false with their order reconciliation 'unreadable'. The venue was already failing the authenticated read six minutes before the first hard error, so start_utc is the first HARD error and this is the first symptom; both are recorded rather than picking one.",
+      "note": "ET is the convention set by pmus-2026-09-06-scheduled, whose owner declarations were recorded in ET; 8 am ET is 12:00Z in September (EDT, UTC-4). THE CAMPAIGN CLASSIFIED THIS outage_class 'unplanned' because the venue's notice does not reach the channel the campaign reads -- the declaration is the owner's, exactly as the rules require, and the campaign never infers a window from errors. THE OUTAGE IS NOT VENUE-WIDE: the recorder's authenticated WebSocket market-data feed stayed healthy throughout (CPU 0.147, NETWORK_RX 0.336 GB at 10:41Z), so it is specific to REST /v1/orders/open.",
+      "open_at_window_start_UNKNOWN": {
+        "orders": 10,
+        "markets": [
+          "aec-setkameua-hubmak-kuzdmy-2026-09-14",
+          "aec-itfme-alemon-mardes-2026-09-14",
+          "aec-itfme-matvav-filcal-2026-09-14",
+          "aec-itfme-janwyg-artlab-2026-09-14"
+        ],
+        "state": "last observed still_open AND unreadable; whether they rested, filled, cancelled or were rejected across the window is UNKNOWN and must be established by the recovery sequence before any mutation"
+      },
+      "recovery_requirement": "unchanged from the rules above: account read healthy -> orphan-order reconcile BEFORE any mutation -> RECOVERY_FLAT only when authenticated venue state and durable ledger agree on zero open/orphan orders and zero unaccounted inventory. Any fill discovered inside the window is reconciled into the durable ledger first and routed through the existing held-position logic."
     }
   ]
 }

@@ -312,6 +312,28 @@ def test_declared_maintenance_window_is_a_planned_outage_not_evidence(tmp_path):
     assert cont.classify_outage({"start_utc": "2026-09-06T06:00:00+00:00"})["class"] == "unplanned"
     assert cont.classify_outage({"start_utc": "2026-09-06T11:15:01+00:00"})["class"] == "unplanned"
     assert cont.classify_outage(None) is None
+    # 2026-09-14 08:00 ET maintenance, declared from the owner's statement.
+    # ET is the convention the 09-06 window set; 08:00 ET is 12:00Z in EDT.
+    assert any(w["id"] == "pmus-2026-09-14-scheduled" for w in wins)
+    o14 = cont.classify_outage({"start_utc": "2026-09-14T09:25:45+00:00",
+                                "first_error": "Halt:GET_RETRIES_EXHAUSTED"})
+    assert o14["class"] == "scheduled_maintenance"
+    assert o14["maintenance"]["id"] == "pmus-2026-09-14-scheduled"
+    # the boundaries bind on both sides, INCLUDING the documented 120s of
+    # slack before the declared start (maintenance_window_at slack_s), which
+    # exists so a first error landing slightly ahead of the declaration still
+    # matches. 09:25:45 - 120s = 09:23:45.
+    assert cont.classify_outage(
+        {"start_utc": "2026-09-14T09:23:45+00:00"})["class"] \
+        == "scheduled_maintenance"
+    assert cont.classify_outage(
+        {"start_utc": "2026-09-14T09:23:44+00:00"})["class"] == "unplanned"
+    assert cont.classify_outage(
+        {"start_utc": "2026-09-14T12:00:01+00:00"})["class"] == "unplanned"
+    # and the 09:19:33Z first SYMPTOM is outside the slack, which is why the
+    # artifact records it separately from start_utc rather than moving start
+    assert cont.classify_outage(
+        {"start_utc": "2026-09-14T09:19:33+00:00"})["class"] == "unplanned"
     # cadence: a session straddling the window contributes no interval
     # across it; decisions inside it are reported as an anomaly
     rep = _report("s1", "m1", 3, t0="2026-09-06T07:10:0")      # 07:10:00..02
@@ -328,9 +350,15 @@ def test_declared_maintenance_window_is_a_planned_outage_not_evidence(tmp_path):
     assert plain["live"]["timing_cadence"]["n"] == 5
     assert marked["live"]["timing_cadence"]["n"] == 3         # 2 excluded
     m = marked["evidence_progress"]["accounting"]["maintenance"]
-    assert {k: m[k] for k in ("windows_declared", "decisions_inside_maintenance",
+    # windows_declared tracks the ARTIFACT, which the rules say is appended
+    # over time ("windows are appended, never edited after their end"), so it
+    # is asserted against the artifact rather than pinned to a literal that
+    # any legitimate new declaration would break. The load-bearing numbers --
+    # what the window EXCLUDES and what it REPORTS -- stay exact.
+    assert m["windows_declared"] == len(wins)
+    assert {k: m[k] for k in ("decisions_inside_maintenance",
                               "intervals_excluded_maintenance")} == \
-        {"windows_declared": 1, "decisions_inside_maintenance": 1,
+        {"decisions_inside_maintenance": 1,
          "intervals_excluded_maintenance": 2}
     assert m["windows"][0]["id"] == "pmus-2026-09-06-scheduled"
     # the exclusion never changes any other dimension or the decision count
