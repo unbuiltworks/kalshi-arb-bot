@@ -66,6 +66,57 @@ from src.l5_venue_adapter import (GeminiAdapter, L5Inventory, open_side_yes,
 
 ONE = D("1")
 UNIT = D("1")                    # q=1 behavioral unit, as live
+
+
+class Venue:
+    """Adapter + its own normalize signature, bundled.
+
+    PMUSAdapter.normalize(raw, now, settlement_t) and
+    GeminiAdapter.normalize(raw, now=None, expiry=None) differ, and neither
+    is changed to suit this module. The shim exists so ONE shadow runs on
+    BOTH venues -- if each venue had its own replay, every difference between
+    the cohorts would be partly an artefact of which replay measured it.
+    """
+
+    def __init__(self, adapter: Any, kind: str,
+                 settlement_clock: bool = True):
+        self.adapter, self.kind = adapter, kind
+        self.venue = getattr(adapter, "venue", kind)
+        # PMUS SPORTS HAVE NO SETTLEMENT CLOCK. PMUSAdapter falls back to
+        # SPORTS_TTE_DEFAULT_S (1e9, the coarsest TTE bucket) when no
+        # settlement_t is given, and that is what the LIVE engine does. The
+        # shadow must reproduce it rather than hand the policy a day-boundary
+        # TTE the live engine never sees -- a different TTE bucket is a
+        # different policy state, so that would be a behavioural change
+        # dressed as a data fix.
+        self.settlement_clock = settlement_clock
+
+    def book(self, raw: Mapping[str, Any], expiry: float):
+        if raw is None:
+            return None
+        if self.kind == "GEMINI":
+            return self.adapter.normalize(raw, expiry=expiry)
+        return self.adapter.normalize(
+            raw, raw.get("t"),
+            settlement_t=expiry if self.settlement_clock else None)
+
+    def __getattr__(self, name):
+        return getattr(self.adapter, name)
+
+
+def gemini_venue() -> "Venue":
+    return Venue(GeminiAdapter(), "GEMINI")
+
+
+def pmus_venue(settlement_clock: bool = True) -> "Venue":
+    from src.l5_venue_adapter import PMUSAdapter
+    return Venue(PMUSAdapter(), "PMUS", settlement_clock=settlement_clock)
+
+
+def pmus_sports_venue() -> "Venue":
+    """As the LIVE engine sees a sports market: no settlement clock, so the
+    TTE bucket is the coarsest one."""
+    return pmus_venue(settlement_clock=False)
 MIN_REEVAL_S = 1.0               # canonical L5 continues at a ~1 s cadence
 
 # The LIVE R5FT rung's residual cap. The l5_venue_adapter module default is
@@ -91,8 +142,14 @@ def book_rows(win: Mapping[str, Any]) -> List[dict]:
     exp = float(win["expiry_t"])
     out = []
     for o in win.get("series") or []:
-        out.append({"symbol": win["market"], "t": exp - float(o[0]),
-                    "bid": o[1], "ask": o[2], "bid_sz": o[3], "ask_sz": o[4]})
+        out.append({"symbol": win["market"], "slug": win["market"],
+                    "market_id": win["market"], "t": exp - float(o[0]),
+                    "bid": o[1], "ask": o[2],
+                    "bid_sz": o[3], "ask_sz": o[4],
+                    # PMUSAdapter reads *_qty; GeminiAdapter reads *_sz.
+                    # Both keys are supplied so neither adapter is modified.
+                    "bid_qty": o[3], "ask_qty": o[4],
+                    "tick": win.get("tick_size")})
     out.sort(key=lambda r: r["t"])
     return out
 
@@ -178,10 +235,11 @@ def first_fill(prints: List[dict], side_yes: bool, px: D, t_from: float,
 
 # ------------------------------------------------------------------ replay
 
-def _touch_px(adapter: GeminiAdapter, raw: Mapping[str, Any], expiry: float,
+def _touch_px(adapter: Any, raw: Mapping[str, Any], expiry: float,
               side_yes: bool) -> Tuple[Optional[D], Optional[D]]:
     """(join price, size displayed at that touch) or (None, None)."""
-    b = adapter.normalize(raw, expiry=expiry)
+    b = adapter.book(raw, expiry) if isinstance(adapter, Venue) \
+        else adapter.normalize(raw, expiry=expiry)
     if b is None or b.yes_bid is None or b.yes_ask is None:
         return None, None
     px = b.join_price(side_yes)
@@ -197,8 +255,8 @@ def _touch_px(adapter: GeminiAdapter, raw: Mapping[str, Any], expiry: float,
 def replay_window(win: Mapping[str, Any], *, model: Mapping[str, Any],
                   tier: str, residual_cap: int = LIVE_RESIDUAL_CAP_UNITS,
                   action_ceiling: int = RESEARCH_ACTION_CEILING,
-                  adapter: Optional[GeminiAdapter] = None) -> dict:
-    adapter = adapter or GeminiAdapter()
+                  adapter: Optional[Any] = None) -> dict:
+    adapter = adapter or gemini_venue()
     expiry = float(win["expiry_t"])
     rows = book_rows(win)
     prints = print_rows(win)
@@ -220,7 +278,8 @@ def replay_window(win: Mapping[str, Any], *, model: Mapping[str, Any],
         if raw is None:
             stop_reason = "no_book"
             break
-        book = adapter.normalize(raw, expiry=expiry)
+        book = (adapter.book(raw, expiry) if isinstance(adapter, Venue)
+                else adapter.normalize(raw, expiry=expiry))
         if book is None or book.yes_bid is None or book.yes_ask is None:
             one_sided_waits += 1
             t += MIN_REEVAL_S
@@ -355,7 +414,7 @@ def replay_window(win: Mapping[str, Any], *, model: Mapping[str, Any],
             "decisions_n": len(decisions)}
 
 
-def _next_touch_move(rows: List[dict], adapter: GeminiAdapter, expiry: float,
+def _next_touch_move(rows: List[dict], adapter: Any, expiry: float,
                      side_yes: bool, px: D, t_from: float,
                      t_until: float) -> Optional[float]:
     """First time in (t_from, t_until] at which our side's touch is no

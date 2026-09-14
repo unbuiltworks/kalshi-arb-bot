@@ -237,3 +237,107 @@ def test_universe_is_read_only_no_order_path():
     for forbidden in ("place_order", "new_order", "cancel_order",
                       "submit_order", "private_key", "api_secret"):
         assert forbidden not in src, forbidden
+
+
+# --------------------------------------------------------------- observer
+
+from src import l5_sports_observer as O                        # noqa: E402
+
+
+def test_subscribe_is_chunked_because_one_big_frame_is_refused():
+    """LIVE FAILURE: 70 symbols in one SUBSCRIBE is 140 params and the venue
+    closed the connection with 1009 'message too big', losing the whole
+    observation run. The 5m collector never hit this because it holds 4-6
+    windows; breadth is this module's entire purpose."""
+    syms = [f"GEMI-X{i}" for i in range(70)]
+    chunks = O.subscribe_chunks(syms)
+    assert len(chunks) == 5                       # 140 params / 30
+    flat = [p for c in chunks for p in c]
+    assert len(flat) == 140
+    assert all(len(c) <= O.SUBSCRIBE_CHUNK_PARAMS for c in chunks)
+    assert sum(1 for p in flat if p.endswith("@trade")) == 70
+    assert sum(1 for p in flat if p.endswith("@depth5@100ms")) == 70
+    # every symbol gets both streams, none dropped by the split
+    assert {p.split("@")[0] for p in flat} == set(syms)
+
+
+def test_subscribe_chunks_handle_a_single_symbol_and_none():
+    assert O.subscribe_chunks([]) == []
+    assert O.subscribe_chunks(["A"]) == [["A@trade", "A@depth5@100ms"]]
+
+
+def test_one_sided_book_is_not_an_observation():
+    """Same rule as the 5m canonicaliser: a one-sided book is not a state."""
+    assert O.observation(1.0, None, 0.5, 1.0, 1.0, 10.0, 0.01) is None
+    assert O.observation(1.0, 0.4, None, 1.0, 1.0, 10.0, 0.01) is None
+    row = O.observation(1.0, 0.4, 0.5, 30.0, 7.0, 10.0, 0.01)
+    assert row["price"] == 0.45 and row["spread_ticks"] == 10.0
+    assert row["depth_at_touch"] == 7.0          # binding side, not bid_sz
+
+
+def test_series_counts_one_sided_separately_from_observations():
+    s = O.MarketSeries("X", {})
+    s.add(O.observation(1.0, 0.4, 0.5, 1.0, 1.0, 10.0, 0.01))
+    s.add(O.observation(2.0, None, 0.5, 1.0, 1.0, 9.0, 0.01))
+    assert len(s.obs) == 1 and s.one_sided == 1
+
+
+def test_side_oscillation_counts_cheaper_touch_flips():
+    """open_side_yes picks the CHEAPER touch, so a flip of which side is
+    cheaper is exactly a flip of the side L5's rule would open."""
+    s = O.MarketSeries("X", {})
+    for t, bid, ask in ((1, 0.30, 0.40),      # YES 0.30 vs NO 0.60 -> YES
+                        (2, 0.70, 0.80),      # YES 0.70 vs NO 0.20 -> NO
+                        (3, 0.30, 0.40)):     # back to YES
+        s.add(O.observation(t, bid, ask, 1.0, 1.0, 10.0, 0.01))
+    assert s.side_oscillations() == 2
+
+
+def test_useful_transitions_measures_the_1_to_4_second_band():
+    """A market that moves twice a minute and one that moves every 2 s can
+    share a change RATE over a long enough window. The band is the point."""
+    s = O.MarketSeries("X", {})
+    px = [0.40, 0.41, 0.42, 0.43]
+    for i, p in enumerate(px):
+        s.add(O.observation(float(i * 2), p, p + 0.02, 1.0, 1.0, 10.0, 0.01))
+    ut = s.useful_transitions()
+    assert ut["price_changes"] == 3
+    assert ut["gaps_in_1_4s"] == 2 and ut["share_gaps_in_1_4s"] == 1.0
+    assert ut["gap_p50_s"] == 2.0
+
+
+def test_useful_transitions_rejects_gaps_outside_the_band():
+    s = O.MarketSeries("X", {})
+    for i, p in enumerate((0.40, 0.41, 0.42)):
+        s.add(O.observation(float(i * 30), p, p + 0.02, 1.0, 1.0, 10.0, 0.01))
+    assert s.useful_transitions()["share_gaps_in_1_4s"] == 0.0
+
+
+def test_band_coverage_is_share_inside_the_execution_band():
+    s = O.MarketSeries("X", {})
+    for bid in (0.10, 0.50, 0.60, 0.95):
+        s.add(O.observation(1.0, bid, bid + 0.02, 1.0, 1.0, 10.0, 0.01))
+    assert s.band_coverage() == 0.5
+
+
+def test_traded_shares_uses_the_cumulative_delta_not_the_level():
+    """PMUS publishes cumulative sharesTraded; the LEVEL is history, only the
+    DELTA across the session is flow we observed."""
+    s = O.MarketSeries("X", {})
+    s.note_cum_volume(1000.0)
+    s.note_cum_volume(1040.0)
+    assert s.traded_shares() == 40.0
+    assert O.MarketSeries("Y", {}).traded_shares() is None
+
+
+def test_pmus_cadence_is_derived_from_the_budget_not_wished_for():
+    assert O.pmus_cadence_s(59, 3.0) == 39.33
+    assert O.pmus_cadence_s(6, 3.0) == 4.0
+
+
+def test_observer_is_read_only():
+    import inspect
+    src = inspect.getsource(O)
+    for forbidden in ("place_order", "new_order", "cancel_order",
+                      "submit_order", "private_key", "api_secret"):
+        assert forbidden not in src, forbidden

@@ -213,11 +213,37 @@ def test_prints_map_buyer_is_maker_to_aggressor_direction():
     assert [p["t"] for p in ps] == [800.0, 900.0]        # chronological
 
 
-def test_book_rows_are_chronological_and_carry_adapter_keys():
+def test_book_rows_are_chronological_and_feed_both_adapters():
+    """PMUSAdapter reads *_qty/slug/tick and GeminiAdapter reads *_sz/symbol.
+    Every key both need is supplied so ONE shadow runs on BOTH venues and
+    neither adapter has to be modified to suit this module."""
     w = _win(series=[[299.0, 0.4, 0.6, 1.0, 2.0], [1.0, 0.4, 0.6, 1.0, 2.0]])
     rows = CI.book_rows(w)
     assert [r["t"] for r in rows] == [701.0, 999.0]
-    assert set(rows[0]) == {"symbol", "t", "bid", "ask", "bid_sz", "ask_sz"}
+    assert {"symbol", "t", "bid", "ask", "bid_sz", "ask_sz"} <= set(rows[0])
+    assert {"slug", "market_id", "bid_qty", "ask_qty", "tick"} <= set(rows[0])
+    assert rows[0]["bid_qty"] == rows[0]["bid_sz"] == 1.0
+    assert rows[0]["ask_qty"] == rows[0]["ask_sz"] == 2.0
+
+
+def test_one_shadow_runs_on_both_venues_through_the_venue_shim():
+    """The two adapters have DIFFERENT normalize signatures. If each venue
+    needed its own replay, every cross-venue difference would be partly an
+    artefact of which replay measured it."""
+    from src.l5_venue_adapter import GeminiAdapter, PMUSAdapter
+    g, p = CI.gemini_venue(), CI.pmus_venue()
+    assert isinstance(g.adapter, GeminiAdapter) and g.venue == "GEMINI"
+    assert isinstance(p.adapter, PMUSAdapter) and p.venue == "PMUS"
+    raw = {"symbol": "X", "slug": "X", "t": 700.0, "bid": 0.48, "ask": 0.52,
+           "bid_sz": 10.0, "ask_sz": 20.0, "bid_qty": 10.0, "ask_qty": 20.0,
+           "tick": 0.01}
+    for v in (g, p):
+        b = v.book(raw, 1000.0)
+        assert b is not None
+        assert b.yes_bid == D("0.48") and b.yes_ask == D("0.52")
+        assert b.tte_s == 300.0, (v.venue, b.tte_s)
+    # the shim forwards everything else to the real adapter, unchanged
+    assert p.entry_ok(D("0.50")) is True
 
 
 def test_research_ceiling_is_not_the_live_six_action_bound():
