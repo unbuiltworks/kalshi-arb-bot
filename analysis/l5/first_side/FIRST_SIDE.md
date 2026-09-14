@@ -104,3 +104,65 @@ thereafter** — it emerged rather than being constant.
   true decision almost certainly depends on the book and flow features the
   public tape **cannot supply**.
 * **NOT DONE:** no production, Gemini or PMUS path was changed.
+
+---
+
+# P0 follow-up: what separates a favourite-open from an underdog-open?
+
+Target: `y = 1` iff L5's first fill price > 0.50. Base rate **0.6015** (n =
+17,046). `dist_from_50` is `|up_price − 0.5|` — symmetric, carries no sign,
+so it is not circular with the label. Chronological 60/20/20; buckets
+measured on TRAIN and verified on TEST.
+
+## The discriminator is distance from 0.50, and it is an INVERTED U
+
+| \|price − 0.50\| | n train | P(DEAR) train | n test | P(DEAR) test |
+|---|---|---|---|---|
+| < 0.05 | 3,007 | **0.4566** | 676 | **0.5089** |
+| 0.05–0.15 | 3,563 | 0.6149 | 1,001 | **0.7433** |
+| 0.15–0.25 | 1,612 | 0.6706 | 694 | **0.7565** |
+| 0.25–0.35 | 1,011 | 0.6924 | 515 | 0.6641 |
+| ≥ 0.35 | 1,034 | 0.5861 | 524 | **0.4981** |
+
+**DEARER is a mid-band phenomenon, not a rule.** When the market is balanced
+(|d| < 0.05) L5 is a **coin flip** — he has no favourite preference at all.
+The preference peaks in the 0.05–0.35 band (0.61–0.76) and then **collapses
+back to chance at the extremes** (|d| ≥ 0.35 → 0.4981 out-of-sample).
+
+That shape holds in both splits and explains why a flat DEARER rule tops out
+near 66%: it is applying a mid-band tendency uniformly, including to the two
+regions where L5 shows no preference whatsoever.
+
+## Second discriminator: cohort
+
+| cohort | P(DEAR) train | P(DEAR) test |
+|---|---|---|
+| **BTC15m** | **0.4999** | 0.5530 |
+| BTC5m | 0.6432 | 0.6277 |
+| ETH5m | 0.6996 | 0.7038 |
+
+**BTC15m shows essentially NO dear preference (0.4999 in train).** This is the
+same cohort where DEARER scored weakest (0.5433 lifetime) and, separately, the
+cohort carrying nearly all of L5's trading profit. A single first-side rule
+cannot be right across cohorts.
+
+## Weaker signals
+
+Series volatility has a mild monotone effect (vol < 0.05 → 0.575/0.507;
+≥ 0.12 → 0.616/0.667). TTE fraction, |previous window move|, previous opening
+side and hour-of-day are all flat in the 0.56–0.68 range with no structure
+that survives both splits.
+
+## What this means
+
+* **Do not deploy DEARER.** It is a uniform rule fitted over a
+  non-uniform behaviour, and it is wrong in the two regions (balanced, and
+  extreme) where L5 is at chance.
+* The honest conditional statement is
+  `P(DEAR | 0.05 ≤ |d| ≤ 0.35, cohort ≠ BTC15m) ≈ 0.65–0.76`, and
+  `P(DEAR | |d| < 0.05 or |d| ≥ 0.35) ≈ 0.50`.
+* Even that is a *tendency*, not a decision rule. The features that would
+  actually separate the two cases — spread, depth, order flow, intra-window
+  trajectory — are **UNAVAILABLE** in the public tape and are named as such,
+  never imputed.
+* **Nothing is deployed and no production path changed.**

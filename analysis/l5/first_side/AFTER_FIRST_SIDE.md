@@ -44,9 +44,15 @@ first-switch pair is ~0.99 — above our own ≤0.96 spring target.
   Whichever way he starts, he crosses to the other side of 0.50 about 70% of
   the time.
 * Median eventual matched fraction **0.7226** — he ends up mostly paired.
-* `gain_per_unit` before the first switch is **negative at the median
-  (−0.06)**: he is buying into adverse movement, which is the opposite of
-  riding a direction.
+* **CORRECTION.** I previously read `gain_per_unit` (−0.06 median) as L5
+  "buying into adverse movement". That was wrong: `gain_per_unit` is
+  `switch_price − own_weighted_cost`, and in a binary market the complement
+  prices to ~`1 − own`, so the quantity is **mechanically negative for a dear
+  open and positive for a cheap open** (DEAR-first −0.2196, CHEAP-first
+  +0.1400). It measures the gap between the two sides, not P&L.
+  The right measure of "is he underwater when he switches" is the movement of
+  **his own side**, `price_move_before`, and its median is **+0.0000 in both
+  regimes** — he switches from a *flat* position, not a losing one.
 * He never sells (2 fills in 17,046 markets); exits are redemption only.
 
 So the first side is **where he begins assembling a pair**, not a directional
