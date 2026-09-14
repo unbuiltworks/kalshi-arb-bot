@@ -647,12 +647,6 @@ def shadow_rank_held_cycle(now: float, held_all, concurrency: int, model,
         status, source = entry.load_status_document(path)
         if status is None:
             return None
-        # Same re-stamp the live selector does: the shadow ranker must not
-        # report a negative evidence age for a document that arrived after
-        # `now` was taken. Measurement only -- this path never executes, and
-        # the narrow-approval test greps this body for the selector's NAME, so
-        # it is deliberately not written here.
-        now = time.time()
         ranking = rank_candidates(status, now, model, None,
                                   yield_by_slug=pmus_shadow_yield(now))
     except Exception as exc:                          # noqa: BLE001
@@ -804,25 +798,8 @@ def select_candidate(now: Optional[float] = None,
                      exclude: Optional[Mapping[str, float]] = None,
                      path: Optional[str] = None) -> dict:
     """One selection cycle: fetch, gate, rank, log. Read-only."""
-    caller_now = now
     now = time.time() if now is None else now
     status, source = entry.load_status_document(path)
-    # RE-STAMP `now` AFTER the fetch that produced the timestamp we compare it
-    # against. Measured live 2026-09-13T19:16Z: evidence_age_s -7.617 and three
-    # MLB moneylines refused `strict_evidence_from_future`. That was NOT host
-    # clock skew and NOT a market problem -- it was ordering. `now` was taken
-    # before load_status_document(), the recorder stamps status["t"] when it
-    # BUILDS the document, and the fetch of a ~180 KB status takes real time, so
-    # the comparison was `time_before_request - time_during_request`, which is
-    # negative by roughly the request latency. Freshness must be measured from
-    # the moment the evidence was actually in hand.
-    #
-    # The gate is untouched: genuinely stale evidence still refuses, genuinely
-    # future evidence still refuses, and a malformed timestamp still refuses.
-    # Only the reference instant is corrected. A caller-supplied `now` is
-    # honoured verbatim so tests and replays stay deterministic.
-    if caller_now is None:
-        now = time.time()
     if status is None:
         _log("status_unavailable", source=source)
         return {"chosen": None, "source": source, "admitted": [],

@@ -476,3 +476,95 @@ unilaterally: OWNER decision 2026-09-11, on the specific state below.**
   when the risk set happened to be empty; it agrees with that reconstruction to
   the cent. `acquisition_slots_in_use 0` beside `total_risk_bearing_markets 1`
   is precisely the slots-are-not-exposure distinction, now unmissable in one row.
+
+- **2026-09-13 23:5xZ — OBSERVATION-ONLY INSTRUMENTATION CUTOVER.** Previous
+  serving commit `f7a3e224`, deployment `86eb63ff`. **Rollback SHA is
+  `8606c87f`, deployment `718ca492`.**
+
+  WHAT SHIPS: the cross-shadow instrumentation only. `_recorder_book()` keeps
+  the `bid_qty`/`ask_qty` it was already receiving and discarding, records
+  `age_at_probe_receipt_s` beside (never instead of) `authenticated_age_s`, and
+  a post-hoc SHADOW-ONLY evaluator scores whether a bounded `<=0.97` taker
+  COMPLETE would have been executable and net-positive after the confirmed
+  taker fee AND the forgone maker rebate. `would_submit` is false on every
+  path; no submission capability exists in the module by construction. The
+  live `$1.00` pair ceiling does not move and maker-only stays.
+
+  **WHY THIS IS NOT SIMPLY `75c557fe`, AND THE ONE THING HELD BACK.** The
+  probe's watch set is a sentinel, so it never auto-deployed: production sat at
+  `f7a3e224` while TWENTY-ONE further commits landed on the branch. Deploying
+  branch HEAD would therefore have shipped far more than observation. Audited
+  file by file, the probe IMAGE surface of `f7a3e224..75c557fe` is exactly
+  three files — and one of them is not observational:
+
+      src/pmus_cross_shadow_live.py        +556  new, SHADOW ONLY
+      src/pmus_spring_l5_session.py         +96  observational, 0 deletions
+      src/pmus_l5_continuous_session.py     +23  CANDIDATE ADMISSION  <-- held
+
+  That third one is `392b5c0e`'s evidence-age re-stamp: `now` was sampled
+  BEFORE `load_status_document()`, so freshness was computed as
+  `time_before_request - time_during_request` and went negative by the fetch
+  latency — measured live at 19:16:39Z as
+  `strict_evidence_from_future:-7.617` on three MLB moneylines. It is a real
+  defect and a good fix. It is also a change to WHICH MARKETS ARE ADMITTED: a
+  market refused today would be admitted tomorrow. This cutover was authorised
+  as observation only, so it is **DEFERRED, NOT DISCARDED**, and
+  `src/pmus_l5_continuous_session.py` is reverted here to the exact content
+  `f7a3e224` is serving. Production is not losing the fix — production never
+  had it.
+
+  Re-landing is one command and is its own deploy decision at its own
+  boundary:
+
+      git show 392b5c0e -- src/pmus_l5_continuous_session.py | git apply
+
+  `tests/test_evidence_freshness_ordering.py` keeps every gate-level test
+  green and carries the caller-ordering test under `xfail(strict=True)`, so
+  the suite goes RED the moment the fix returns and the marker cannot be
+  silently left behind. The gate itself
+  (`pmus_spring_l5_probe_entry.strict_evidence_reason`) is byte-identical
+  across the whole range and is not touched by any of this.
+
+  IMAGE EQUIVALENCE, ASSERTED NOT CLAIMED. Every path the probe Dockerfile
+  COPYs was compared blob-for-blob against `f7a3e224`. All identical except
+  the two observational files above and the new shadow module. The model and
+  gate artifacts — `l5_action_model_v2.json`, `l5_fidelity_pass.json`,
+  `l5_fidelity_gate.json`, `venue_maintenance_windows.json`,
+  `l5_cadence_behavioral_unit.json`, `l5_campaign_approvals.json` — are
+  byte-identical, so THE MODEL IS UNCHANGED. `pmus_priority_queue.py` and the
+  recorder modules also changed on the branch but are NOT in this image and
+  cannot reach the probe. The start command's `REARM_RUNG` sed target is still
+  present, so the R5FT transform still applies.
+
+  NOTHING IS RAISED. A 36-point audit against `f7a3e224` reports
+  EXECUTION_SEMANTIC_DIFF = NONE and RISK_ENVELOPE_DIFF = NONE: residual cap
+  6, band 0.25-0.75, spring target 0.98, `$1.00` hard pair ceiling, streak 3,
+  complete actions 12, requote default off, COMPLETE_BOOK 8 / 2.0s, control
+  book 24 / 5.0s, trim 10.0s / 750ms, rest 30s, safety-shell string — all at
+  their serving values. Every `place_limit_buy` is still `post_only=True` and
+  `post_only=False` appears nowhere. The session module gains 96 lines and
+  loses ZERO.
+
+  MECHANISM: a variable write on `PMUS_FORCE_REDEPLOY_NONCE`, which forces a
+  genuinely fresh build from branch HEAD — `redeploy` replays the old build
+  and spec, and `create-deployment` would make a second service. The sentinel
+  watch set is NOT touched and `DEPLOY_TRIGGER` is NOT created.
+
+  BOUNDARY (the revised dormant-residual standard adopted 2026-09-11, stated
+  rather than assumed): one market held, `aec-mlb-sea-ath-2026-09-13`,
+  PENDING_SETTLEMENT with its residual held to settlement; campaign in
+  `CAMPAIGN_HOLD:POSITION_HELD`; last session `SPRING_SKIP_NOT_QUALIFYING`
+  with zero orders; `acquisition_slots_in_use 0`. The authoritative
+  position/open-order read that authorises the trigger is taken INSIDE the
+  action window per the rule above — `CUTOVER_MAX_AGE_S = 60.0` — and any
+  change to `held`, `open_orders_ours`, `open_orders_foreign`, `risk_bearing`
+  or `unmatched_usd` between authorisation and action aborts.
+
+  ONE EXECUTOR: `pmus-q1-executor` measured idle over three hours — CPU 0,
+  memory 0, network 0 across 181 samples. `pmus-spring-l5-probe` is the only
+  money-moving process.
+
+  The deployment id, build result and post-cutover verification are reported
+  by the session that triggers it; this entry is the authorisation record and
+  is deliberately the LAST commit before the trigger, so branch HEAD and the
+  deployed SHA are the same object.

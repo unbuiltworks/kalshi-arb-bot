@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from src import pmus_spring_l5_probe_entry as entry
 
 
@@ -99,6 +101,21 @@ def test_utc_and_z_suffix_round_trip_identically():
 
 # --- the caller: the reference instant is taken after the fetch ------------
 
+@pytest.mark.xfail(strict=True, reason=(
+    "DEFERRED FROM THE OBSERVATION-ONLY CUTOVER, not abandoned. The re-stamp "
+    "landed at 392b5c0e, but production (f7a3e224) never received it: the "
+    "probe's Railway watch set is a sentinel, so 21 research commits sat on "
+    "the branch unserved. The 2026-09-13 instrumentation cutover was "
+    "authorised as OBSERVATION ONLY, and this fix changes CANDIDATE "
+    "ADMISSION -- a market refused today as strict_evidence_from_future "
+    "would be admitted -- so it was excluded from that deploy and the "
+    "module was reverted to the serving content. The test BODY is unchanged "
+    "and is the acceptance criterion for re-landing.\n\n"
+    "TO RE-LAND (its own deploy decision, at its own boundary):\n"
+    "    git show 392b5c0e -- src/pmus_l5_continuous_session.py | git apply\n"
+    "then DELETE this marker. strict=True means the suite goes RED the "
+    "moment the fix returns, so nobody can re-land it and quietly leave a "
+    "stale xfail behind."))
 def test_select_candidate_restamps_now_after_the_status_fetch(monkeypatch):
     """The regression that would have caught the live defect: a slow fetch must
     not produce a negative evidence age."""
