@@ -148,3 +148,103 @@ drift and is not a complement relation either (`1 − 0.56 = 0.44`, not 0.42). O
 of the two sources is mislabelled. `pair_cost` inherits the session's book, so
 this does not affect the numbers above, but the two sources must not be pooled
 until it is resolved. Recorded as an open question; no conclusion asserted.
+
+---
+
+# Final verdict, re-verified on fresh reads 2026-09-14 ~21:57Z
+
+**PASS on all seven. NO ROLLBACK.** Serving stays `3ec9e1cd996c` on
+`e926e286-ebaa-4842-b101-d9567bdc5e9a`.
+
+| # | check | verdict |
+|---|---|---|
+| 1 | exact serving SHA | PASS — `3ec9e1cd996c` on every line; deployment created 21:41:55Z, 3 s after the push; predecessor `a3b6ec92` REMOVED; no sibling build |
+| 2 | boot assertions | PASS — `uptime_s 0.0, sessions 0, held 0, CAMPAIGN_NO_CANDIDATE` |
+| 3 | unchanged risk envelope | PASS — see below |
+| 4 | observability actually emitting | PASS — 11 records, one shape, all on `3ec9e1cd996c` |
+| 5 | supported economic fields populated | PASS — 11/11 on all nine |
+| 6 | unsupported fields null + reason | PASS with two gaps, neither substantive |
+| 7 | no behavioural/order-path change | PASS — proven, not asserted; see below |
+
+### 3 — risk envelope, off `campaign_start` on the serving process
+
+`residual_cap_units 6` · `pair_cost_max 1.00` · `completion_pair_ceiling 1.00` ·
+`matched_pair_ceiling 1.00` · `combined_loss_budget_usd −30.00` · `concurrency 1` ·
+`max_actions_per_session 4` · `per_market_cap_usd 30.00` ·
+`per_action_target_usd 1.00` · `per_leg_max_usd 1.50` · `maker_rest_max_s 5.0` ·
+`rest_policy model` · `complement_pricing l5_touch` ·
+`R5FT/cap30.00/unmatched-none/complete-l5touch/conc1/maker-only/rest-model5s/action1.00`.
+Identical to `d108c54a`. Cap 6 and the pair ceiling untouched.
+
+### 5 — populated on 11 of 11
+
+`matched_qty` · `residual_abs` · `residual_signed` · `imbalance` ·
+`held_avg_cost` (+reason naming the leg) · `complement_price` · `pair_cost` ·
+`yes_bid` · `yes_ask` · `spent` · `action` · `avg_dn` · `inv_up` · `inv_dn`.
+No fabricated zero anywhere: the only `"0"` values are `inv_up` and
+`matched_qty`, both true zeros, both distinguishable because `residual_signed`
+`"-3.69"` sits beside them.
+
+### 6 — the two gaps, and why neither is substantive
+
+* `tte_s = 1000000000.0` — `SPORTS_TTE_DEFAULT_S`, the coarsest-bucket sentinel
+  the **decision** path needs when a market has no settlement clock
+  (`session:231`, read at 512/527/679/2046/3045). Pre-existing and
+  load-bearing; inherited, not introduced. Not a zero, but an absent clock
+  published as a measurable-looking float.
+* `book_implied_pair_cost: null` with no `_reason` companion. Correct value,
+  missing label. (`avg_up: null` likewise, though `inv_up:"0"` beside it makes
+  that one self-explaining.)
+
+Both are instrumentation fidelity, not money path: no economic value is wrong,
+none is fabricated, nothing is lost. Rollback would remove the working record
+to fix a label. Fix prepared, 12 lines, **not deployed** — it touches a watched
+file and needs the same authorization the cutover had.
+
+The production null-path (`complement_price` → null + reason) has **not** fired
+in production yet, because the book was two-sided on all 11 records. It is
+covered by unit tests only, and that distinction is stated rather than papered
+over.
+
+### 7 — the order path, proven rather than asserted
+
+Pre-deploy (`d108c54a`, 20:30–21:45Z, 13 sessions / 67 orders) vs post-deploy
+(9 orders): same stages, same relations, same outcome classes, same
+`acceptance_control`, same rejection class, same shell, same caps
+`(6, 1.00, 30.00, 4, 5.0)`, `submitted` bounded by `max_actions` on both sides.
+
+**One difference straddled the deploy and had to be run down.** Rest time on
+`end_reason=deadline` was 5.84–8.72 s before and 31.88–33.68 s after — 4–5×, on
+the same end reason. Resolved to state, not code:
+
+* the deadline is `min(stop_at, clock() + max(next_reevaluation_s, MIN_REEVAL_S, maker_rest_max_s()))`;
+* `next_reevaluation_s` is a lookup in the frozen artifact's `cadence_modal` on
+  the full key `base|last_rel|last_size`;
+* the same base state `p25-45c|tte>10m|imb10-50` carried `last_rel=complete`
+  before and `last_rel=extend` after — different keys;
+* reproduced offline from the frozen artifact: `…|complete|q5-15 → gap<2s → 2.0 s`
+  and `…|extend|q5-15 → gap10-30 → 30.0 s`, matching the live 2.0 and 30.0 exactly;
+* the artifact is byte-identical at both commits — `sha256_16 bbb55bf90638d2bd`
+  at `d108c54a`, `3ec9e1cd` and HEAD, and that is the `model_sha` stamped on
+  live decisions on *both* sides, alongside the same `artifact_sha cbce16f4f1d173ff`.
+
+`last_rel` is session inventory state. The behavioural artifact did not change,
+and a +263/−0 additive diff could not have changed it.
+
+### A mistake made during this verification, recorded rather than quietly fixed
+
+Reproducing the cadence lookup, I called `pv2.build_artifact()` — which
+**writes** `analysis/l5/l5_action_model_v2.json`, a file copied into the probe
+image. It overwrote the frozen artifact in the working tree (sha drifted to
+`e5f852f668caad06`). Caught by the sha mismatch against the live `model_sha`,
+restored with `git checkout`, re-verified at `bbb55bf90638d2bd`. It was never
+committed, never pushed, and this branch does not deploy, so production was
+never exposed. The lesson is that `build_artifact()` defaults to writing the
+frozen path; a read-only reproduction must use `load_v2()`.
+
+### Operational state worth surfacing, unrelated to the deploy
+
+`risk_set` 21:46:18Z: `daily_realized_pnl_usd −27.3440`,
+`combined_loss_usd −29.0052` against `daily_loss_stop_usd −30.00`. The probe is
+**$0.99 from its daily stop**, with two risk-bearing markets and `$1.6612`
+unmatched. Accumulated over the day, not caused by the deploy.

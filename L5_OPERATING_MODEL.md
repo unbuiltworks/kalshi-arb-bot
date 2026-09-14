@@ -128,7 +128,46 @@ These behaviors all postdate the incentive era and must remain **locked** for ou
 3. **Concurrency was not part of the spring strategy.** Spring max concurrency was 1. Multi-market concurrency was added much later.
 4. **Spring maker/taker cannot be measured honestly.** Pre-Aug canonical rows lack maker/taker labels; do not proxy or infer them as fact.
 5. **Near-$1 pairs are incentive-era behavior.** Spring patience targeted materially cheaper pair completion (~0.95–0.96 range). Do not tolerate ~0.995 pair economics without source-confirmed incentive support.
-6. **Directional skill remains unsupported.** Residual-on-winner is approximately coin-flip across regimes.
+6. **Directional skill remains unsupported.** Residual-on-winner is approximately coin-flip across regimes. Strengthened 2026-09-14: in 5m the one-sided motifs are *significantly negative* per window (t = −2.63 BTC5m, −3.11 ETH5m) with p05 = −10,000 bp.
+7. **Fees ARE recoverable from the public tape; they were not missing.**
+   `usdcSize` exceeds `price × size` on a BUY by exactly `0.07 · p · (1 − p)`
+   per share or by nothing at all — bimodal at 0.00/0.07 over 761,020 fills.
+   `usdcSize` is the authoritative cash, and using it makes the
+   matched/residual decomposition reconcile to realized cash exactly. This does
+   **not** overturn item 4: the tape distinguishes fee-bearing from fee-free,
+   which is not the same as maker from taker, and that attribution stays
+   uninferred. Evidence: `analysis/l5/motifs/MOTIFS_5M.md`.
+8. **A missing REDEEM row is a loss, not missing data.** Redemption is complete
+   whenever it pays (`redeem_qty / winning-side qty` = 1.000 at p05/p50/p95, at
+   $1.00/share), so a long-settled window with no REDEEM row is one where the
+   held side lost. Dropping those windows keeps only winners and inflated the
+   one-sided 5m motifs from +723 to +3,194 bp/$. Only windows inside the 24 h
+   capture tail are genuinely indeterminate.
+
+
+## 4b. Regime architecture — RESEARCH LABELS, NOT PRODUCTION RULES
+
+The behavioral model is explicitly **not** one policy. Cohorts are carried as
+separate regimes so that evidence from one is never silently spent on another.
+Nothing in this section gates, sizes, admits or prices anything.
+
+| cohort | label | what it rests on |
+|---|---|---|
+| **BTC15m** | **continuous inventory-management candidate** | 98.9% market coverage, 13 s entry delay, 128 fills / 30 switches, 0.9067 matched, 88.6% of market life; switch signal OOS AUC 0.674 on n=446 with 196 switches; **15.4%** of fills fee-bearing |
+| **BTC5m / ETH5m** | **short-sequence candidate** | fills p50 7 and 5, windows p50 237–257 s; motif structure stable, switch signal underpowered (1 and 4 OOS switches); **100%** of fills fee-bearing |
+| **ETH15m** | **insufficient evidence** | 580 windows, 5 OOS switches; below the pre-fixed ≥40-row / ≥30-per-class threshold |
+
+Three rules follow, and they are about method, not money.
+
+1. **The BTC15m switch result is not a universal L5 switching rule.** It is
+   BTC15m-only. 1,484 of 1,652 observations are BTC15m; the aggregate must not
+   be read onto 5m. Where a cohort is underpowered the label is INSUFFICIENT
+   EVIDENCE, never a pooled number.
+2. **A 5m answer must come from 5m evidence.** See
+   `analysis/l5/motifs/MOTIFS_5M.md` and `src/l5_5m_coverage/recorder.py`.
+3. **The regimes differ at the venue, not just in the fit.** L5 pays the
+   `0.07·p·(1−p)` per-share fee on 100% of 5m fills and 15.4% of BTC15m fills.
+   That is a measured fee (§4.7), not a maker/taker attribution.
 
 ## 5. Persistence-v2 model
 
