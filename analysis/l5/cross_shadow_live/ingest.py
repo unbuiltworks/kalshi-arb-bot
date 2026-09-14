@@ -96,6 +96,43 @@ LEDGER_KINDS = ("settlement", "settled", "realized", "session_end",
                 "incentive", "incentives", "reward", "rewards",
                 "settlement_audit", "risk_set_alarm")
 
+# Railway splits a log message at a hard 80 KiB boundary, so a large
+# settlement row arrives as a head entry plus continuation entries. The old
+# `except Exception: continue` dropped every one of them WITHOUT A TRACE --
+# aec-atpcq-ozabar-evazhu settled at 19:28:43Z and stayed recorded as
+# PENDING_SETTLEMENT because its row was 81,920 bytes. A settlement we cannot
+# read must never look like a settlement that did not happen.
+SPLIT_BOUNDARY = 81920
+MAX_FRAGMENTS = 8
+
+
+def _parse_entry(entries, idx):
+    """Parse entry `idx`, rejoining continuation fragments if it was split.
+
+    Returns the decoded object, or None when it is not a payload line or
+    cannot be reassembled. Continuations are appended ONLY while the head
+    looks truncated, so an ordinary unparseable line is not silently glued
+    to its neighbour.
+    """
+    msg = entries[idx].get("message", "") or ""
+    if " " not in msg:
+        return None
+    body = msg.split(" ", 1)[1]
+    try:
+        return json.loads(body)
+    except ValueError:
+        pass
+    if len(msg) < SPLIT_BOUNDARY:
+        return None            # short line: genuinely malformed, not split
+    for j in range(idx + 1, min(idx + 1 + MAX_FRAGMENTS, len(entries))):
+        body += entries[j].get("message", "") or ""
+        try:
+            return json.loads(body)
+        except ValueError:
+            continue
+    return None
+
+
 def ingest_ledger(paths):
     """Venue-side facts, kept in a SEPARATE store from the shadow cohort.
 
@@ -104,6 +141,7 @@ def ingest_ledger(paths):
     ledgers precisely so a theoretical number can never be added to a real one.
     """
     rows = {}
+    unparsed = []
     if os.path.exists(LEDGER):
         for line in open(LEDGER):
             if line.strip():
@@ -115,11 +153,15 @@ def ingest_ledger(paths):
             doc = json.load(open(path))
         except Exception:
             continue
-        for entry in doc.get("deploy") or []:
+        entries = doc.get("deploy") or []
+        for idx, entry in enumerate(entries):
             ts, msg = entry.get("timestamp"), entry.get("message", "")
-            try:
-                j = json.loads(msg.split(" ", 1)[1])
-            except Exception:
+            j = _parse_entry(entries, idx)
+            if j is None:
+                # A SETTLEMENT WE CANNOT READ IS NOT A SETTLEMENT THAT DID NOT
+                # HAPPEN. Counted and reported; never silently skipped.
+                if "PMUS_L5_CAMPAIGN" in msg:
+                    unparsed.append(ts)
                 continue
             kind = str(j.get("kind") or "")
             if not any(k in kind for k in LEDGER_KINDS):
@@ -176,7 +218,7 @@ def ingest_ledger(paths):
     with open(LEDGER, "w") as fh:
         for k in sorted(rows):
             fh.write(json.dumps(rows[k], separators=(",", ":")) + "\n")
-    return before, len(rows)
+    return before, len(rows), unparsed
 
 
 if __name__ == "__main__":
@@ -184,6 +226,11 @@ if __name__ == "__main__":
         "/root/.claude/projects/-home-user-kalshi-arb-bot/*/tool-results/"
         "mcp-Railway-get-logs-*.txt"))
     b, a = ingest(paths)
-    lb, la = ingest_ledger(paths)
+    lb, la, unparsed = ingest_ledger(paths)
     print(f"cohort: {b} -> {a} observations (+{a-b}) from {len(paths)} dump(s)")
     print(f"ledger: {lb} -> {la} venue/outcome rows (+{la-lb})")
+    if unparsed:
+        # loud on purpose: an unreadable settlement must never be mistaken for
+        # a settlement that did not occur
+        print(f"  WARNING {len(unparsed)} PMUS payload line(s) unparseable even "
+              f"after rejoining split fragments; first at {unparsed[0]}")
