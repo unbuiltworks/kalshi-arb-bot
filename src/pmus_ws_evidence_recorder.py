@@ -873,6 +873,64 @@ def status_doc_path(root: Path) -> Path:
     return root / "status" / STATUS_DOC_NAME
 
 
+# ---------------------------------------------------------------------------
+# LIVE STATUS HANDOFF (infrastructure only; OFF unless explicitly enabled)
+#
+# THE MEASURED PROBLEM. The executor's own instrumentation says the book it
+# prices against is a median 6.35 s old at receipt (p90 11.14, p95 14.40,
+# max 20.16) while the recorder's WS state is only 0.20 s old. The gap is not
+# network, not serialisation and not ingestion: `/status` serves a FILE that
+# the main loop rewrites on a timer, so a reader gets a document up to one
+# whole interval stale. Measured from the probe's own rows, the modal gap
+# between consecutive status snapshots is EXACTLY 10 s (59 of 153 observed
+# gaps fall in 9-11 s, minimum 7.44 s), which reproduces the transport
+# distribution almost exactly as Uniform(0, 10) plus serving time. On the
+# median, TWO orders are priced from one identical snapshot, and up to six.
+#
+# THE FIX, AND WHY IT IS THE SMALL ONE. Keep the file exactly as it is -- it
+# is the durable tail and the fallback -- and additionally hold the newest
+# status line in memory, published by the SAME code path that writes the file.
+# `/status` then serves the in-memory line when it is present. Same
+# authenticated source, same payload bytes, same provenance; only the
+# staleness goes. It adds no disk I/O, where lowering the timer would have
+# multiplied a read-and-rewrite of the whole tail file by ten.
+#
+# SAFETY. The publisher only ever REBINDS a name to an already-serialised
+# immutable `bytes`; the HTTP thread only ever reads that name. There is no
+# shared mutable structure and no lock, so a reader can never block the WS
+# loop -- which is the same rule the file path already follows ("a handoff
+# failure must not cost the connection or the tape").
+LIVE_STATUS_ENV = "PMUS_WS_STATUS_LIVE"
+_LIVE_STATUS: dict[str, Any] = {"line": None, "utc": None, "n": 0}
+
+
+def live_status_enabled() -> bool:
+    """OFF unless explicitly turned on, so merging this changes nothing."""
+    return str(os.getenv(LIVE_STATUS_ENV, "")).strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+def publish_live_status(status: Mapping[str, Any]) -> None:
+    """Publish the newest status for the HTTP handler. Never raises."""
+    if not live_status_enabled():
+        return
+    try:
+        line = json.dumps(status, separators=(",", ":"), default=str)
+        _LIVE_STATUS["line"] = (line + "\n").encode("utf-8")
+        _LIVE_STATUS["utc"] = datetime.now(timezone.utc).isoformat()
+        _LIVE_STATUS["n"] = int(_LIVE_STATUS.get("n") or 0) + 1
+    except Exception:                                     # noqa: BLE001
+        pass
+
+
+def live_status_bytes() -> Optional[bytes]:
+    """The newest published status line, or None when unset/disabled."""
+    if not live_status_enabled():
+        return None
+    v = _LIVE_STATUS.get("line")
+    return v if isinstance(v, (bytes, bytearray)) else None
+
+
 def write_status_doc(root: Path, status: Mapping[str, Any]) -> None:
     """Persist the newest status atomically, keeping a short tail.
 
@@ -892,6 +950,9 @@ def write_status_doc(root: Path, status: Mapping[str, Any]) -> None:
         tmp.replace(path)       # readers never see a half-written document
     except Exception:
         pass
+    # published from the SAME payload the file receives, so the two can never
+    # disagree about what the recorder saw
+    publish_live_status(status)
 
 
 # Read-only status handoff over Railway's private network. The spring
@@ -993,12 +1054,18 @@ def serve_status_doc(root: Path, port: int):
                 self.send_response(404)
                 self.end_headers()
                 return
-            try:
-                body = src_path.read_bytes()
-            except OSError:
-                self.send_response(503)
-                self.end_headers()
-                return
+            body = None
+            if path in STATUS_HTTP_PATHS:
+                # newest-first: the in-memory line when published, else the
+                # file. The shadow report path is unaffected.
+                body = live_status_bytes()
+            if body is None:
+                try:
+                    body = src_path.read_bytes()
+                except OSError:
+                    self.send_response(503)
+                    self.end_headers()
+                    return
             self.send_response(200)
             self.send_header("Content-Type", "application/x-ndjson")
             self.send_header("Content-Length", str(len(body)))
