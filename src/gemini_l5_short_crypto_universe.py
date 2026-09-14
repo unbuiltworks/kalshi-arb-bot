@@ -1,15 +1,17 @@
 """Deterministic READ-ONLY Gemini short-duration crypto symbol universe.
 
-Keeps the existing BTC 5-minute research lane and adds BTC 15-minute windows
-using Gemini's documented short-duration ticker format. No venue actions live
-here; this module only generates public market symbols for collection.
+Collects BTC and ETH 5-minute/15-minute windows using Gemini's documented
+short-duration ticker format. ETH is included only after current public Gemini
+liquidity-reward event listings confirmed live ETH05M and ETH15M contract
+families on 2026-09-14. No venue actions live here; this module only generates
+public market symbols for collection.
 """
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
-SUPPORTED = (("BTC", 5), ("BTC", 15))
+SUPPORTED = (("BTC", 5), ("BTC", 15), ("ETH", 5), ("ETH", 15))
 
 
 def _next_boundary(now: datetime, minutes: int) -> datetime:
