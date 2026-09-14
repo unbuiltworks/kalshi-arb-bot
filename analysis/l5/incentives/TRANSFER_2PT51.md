@@ -152,3 +152,31 @@ own 50-row truncation, which hid $1.62 of PAID rewards and blocks per-market
 attribution. That is fixed and staged.
 
 No production risk change is proposed or made.
+
+---
+
+# Re-trace on request: is this Brett's $2.51, and is it already in Ledger C?
+
+**Yes to both, with one venue caveat stated rather than assumed.**
+
+| question | answer |
+|---|---|
+| already represented in Ledger C? | **Yes.** Ledger C's `LIQUIDITY REWARDS · PAID (credited) $7.04` is exactly $2.88 + $1.65 + **$2.51**, and the report's `latest audit` stamp is the same 2026-09-14T22:59:21.565847915Z capture the $2.51 came from. It is counted once, in the rewards stream only. |
+| reward/rebate distribution? | **A liquidity REWARD.** The venue's own `description` is `"liquidity reward payout"`. It is **not** a maker or taker rebate: on this venue those are `commissionNotionalCollected` netted into each fill (Ledger C's separate $9.14 / 737 fills line) and never move as a transfer. |
+| redemption? | **No.** Redemptions are `ACTIVITY_TYPE_POSITION_RESOLUTION` (90 rows in the same walk). This is `ACTIVITY_TYPE_TRANSFER`. |
+| unrelated transfer? | **No.** The only unrelated transfer on the account is `CAVGFQ5ZA00M` $10.00, the ISV goodwill credit for the 2026-09-05 outage, which is neither trading P&L nor an incentive and is netted into nothing. |
+| added to strategy P&L? | **No, and it will not be.** It sits under confirmed incentives. Ledger D is unchanged at −$25.0465 over 24 venue-confirmed settled markets. |
+
+**The venue caveat.** The transfer identified here is on **Polymarket US**. The
+request named "Polymarket", and those are different venues. This codebase holds
+exactly one Polymarket-family address, `0xb945945d…db68`, and that is **L5's**
+target wallet, not ours — there is no Polymarket (crypto) account of our own in
+the repo to check. So: a $2.51 on the crypto side cannot be checked from here
+and none is claimed to exist. If Brett's observation was on the crypto venue it
+is a different event and would need its own trace; if it was the US account, it
+is `CG78P5C0000Q` and it is fully accounted above.
+
+Nothing about this changes the all-in equation's status: the incentive terms are
+exact ($9.14 + $7.04 = $16.18) and the trading term still cannot be added at a
+matching scope until a settlement audit spans the same window, with the
+`trade.realizedPnl` double-count question resolved first.
