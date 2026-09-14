@@ -1,9 +1,9 @@
 """Public Gemini Predictions incentive audit for the L5 transfer.
 
-This is economics provenance, not a trading rule.  It records the current public
-maker-rebate schedule and liquidity-rewards configuration and computes what a
-q=1 diagnostic maker fill can actually count.  Estimated rewards are never
-booked as realized P&L.
+This is economics provenance, not a trading rule. It records the current public
+maker-rebate schedule, liquidity-rewards configuration, and the documented
+program-wide qualification constraints that matter for a q=1 L5 canary.
+Estimated rewards are never booked as realized P&L.
 
 No credentials and no order endpoints are used.
 """
@@ -21,9 +21,19 @@ BASE = "https://api.gemini.com"
 RATE_PATH = "/v1/prediction-markets/maker-rebate/rates?category=Crypto"
 LIQ_CFG_PATH = "/v1/prediction-markets/liquidity-rewards/config"
 LIQ_EVENTS_PATH = "/v1/prediction-markets/liquidity-rewards/events?category=Crypto&limit=100"
+LIQ_PROGRAM_DOC = "https://developer.gemini.com/prediction-markets/liquidity-rewards-program"
 TAKER_RATE = D("0.07")
 Q1 = D("1")
 REPRESENTATIVE_PRICES = (D("0.20"), D("0.40"), D("0.50"), D("0.60"), D("0.80"))
+
+# Gemini's current program-wide documented qualification rules. These are kept
+# explicit because the public config endpoint only exposes max spread and payout
+# threshold, not all eligibility conditions.
+DOC_MIN_SIZE_CONTRACTS = 10
+DOC_SIZE_CAP_CONTRACTS = 250
+DOC_TWO_SIDED_MULTIPLIER = D("1.5")
+DOC_UPTIME_THRESHOLD_PCT = D("50")
+DOC_POST_ONLY_EXCLUDED = True
 
 
 def _get(path: str) -> dict:
@@ -78,6 +88,8 @@ def run() -> dict:
     events = liq_events.get("events") or []
     short_crypto = [e for e in events if any(token in str(e.get("event_ticker") or "")
                                              for token in ("05M", "15M"))]
+    q1_size_eligible = Q1 >= D(DOC_MIN_SIZE_CONTRACTS)
+    q1_post_only_eligible = not DOC_POST_ONLY_EXCLUDED
     report = {
         "generated_utc": now.isoformat(),
         "status": "PUBLIC_INCENTIVE_AUDIT",
@@ -94,7 +106,16 @@ def run() -> dict:
         "liquidity_rewards": {
             "public_config_path": LIQ_CFG_PATH,
             "public_events_path": LIQ_EVENTS_PATH,
+            "program_doc": LIQ_PROGRAM_DOC,
             "config": liq_cfg,
+            "documented_qualification_rules": {
+                "minimum_size_contracts": DOC_MIN_SIZE_CONTRACTS,
+                "size_cap_contracts": DOC_SIZE_CAP_CONTRACTS,
+                "two_sided_multiplier": str(DOC_TWO_SIDED_MULTIPLIER),
+                "uptime_threshold_pct": str(DOC_UPTIME_THRESHOLD_PCT),
+                "post_only_orders_excluded": DOC_POST_ONLY_EXCLUDED,
+                "max_spread_cents_from_public_config": liq_cfg.get("max_spread_cents"),
+            },
             "crypto_events_returned": len(events),
             "short_duration_05m_15m_events_returned": len(short_crypto),
             "short_duration_events": [
@@ -105,7 +126,14 @@ def run() -> dict:
                 for e in short_crypto[:25]
             ],
             "q1_canary_reward_counted_in_gate_usd": "0.00",
-            "reason": "q=1 diagnostic does not assume uncertain daily pool share; only confirmed payouts may become realized economics",
+            "q1_canary_qualification": {
+                "qty": "1",
+                "maker_or_cancel_post_only": True,
+                "meets_minimum_size": bool(q1_size_eligible),
+                "post_only_order_eligible": bool(q1_post_only_eligible),
+                "qualifies_for_liquidity_rewards": bool(q1_size_eligible and q1_post_only_eligible),
+            },
+            "reason": "the q=1 makerOrCancel canary is below the documented 10-contract minimum and post-only orders are excluded; liquidity rewards therefore cannot rescue q=1 canary economics",
         },
         "accounting_policy": {
             "maker_rebate": "separate from matched pair/residual P&L; q1 gate counts zero",
