@@ -106,3 +106,317 @@ def test_collector_has_no_order_path():
     for forbidden in ("place_order", "new_order", "cancel_order",
                       "/v1/order", "createOrder", "submit_order"):
         assert forbidden not in src, forbidden
+
+
+# ---------------------------------------------------------------------------
+# WINDOW-CLOSE DIGEST
+#
+# THE DEFECT THESE PIN: the canonical trajectory rows are written to a Railway
+# volume that only the collector container can read. A window could complete
+# with perfect coverage and still be invisible to every analysis running
+# anywhere else -- which is exactly what blocked the first complete-window
+# report. The digest is the read path, so its arithmetic has to match the
+# offline scorers rather than merely look plausible.
+# ---------------------------------------------------------------------------
+import json
+
+
+def _series(n=300, t0=299.0, step=1.0, bid=0.48, ask=0.50, bs=500.0, asz=250.0):
+    return [(round(t0 - i * step, 2), bid, ask, bs, asz) for i in range(n)]
+
+
+def test_digest_refuses_a_window_it_cannot_characterise():
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    assert C._window_digest("X", meta, [], 0, 0) is None
+    assert C._window_digest("X", meta, _series(1), 0, 0) is None
+
+
+def test_digest_span_and_completeness_use_the_windows_own_clock():
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    d = C._window_digest("GEMI-BTC05M-UP", meta, _series(300), 7, 0)
+    assert d["obs"] == 300
+    assert d["tte_first"] == 299.0 and d["tte_last"] == 0.0
+    assert d["span_s"] == 299.0
+    assert d["complete"] is True          # >= 300 - 10
+    assert d["prints"] == 7
+    # 299 s of 1 Hz samples is ~60/min
+    assert 59.0 <= d["obs_per_min"] <= 61.0
+
+    short = C._window_digest("X", meta, _series(100, t0=299.0), 0, 0)
+    assert short["span_s"] == 99.0
+    assert short["complete"] is False
+
+
+def test_digest_is_order_independent():
+    """Observations arrive chronologically, but the digest must not depend on
+    that: a reordered buffer has to produce the identical summary."""
+    meta = {"asset": "ETH", "window_minutes": 5, "expiry_t": 1000.0}
+    ser = _series(50)
+    a = C._window_digest("X", meta, list(ser), 3, 1)
+    b = C._window_digest("X", meta, list(reversed(ser)), 3, 1)
+    assert a == b
+
+
+def test_two_sided_pct_counts_the_refused_samples_in_its_denominator():
+    """_canonical_bbo returns None for a one-sided book, so those samples
+    never reach the buffer. If they were dropped from the denominator too,
+    a window quoted one-sided 90% of the time would report 100% two-sided."""
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    d = C._window_digest("X", meta, _series(10), 0, 90)
+    assert d["obs"] == 10
+    assert d["one_sided_obs"] == 90
+    assert d["two_sided_pct"] == 10.0
+
+    clean = C._window_digest("X", meta, _series(10), 0, 0)
+    assert clean["two_sided_pct"] == 100.0
+
+
+def test_two_sided_matches_the_habitat_scorer_convention():
+    """habitat_expanded.py treats bid > 0 and ask > 0 as two-sided; a
+    zero-priced side present in the book is NOT a two-sided state."""
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    ser = _series(5) + [(10.0, 0.0, 0.50, 100.0, 100.0),
+                        (9.0, 0.0, 0.50, 100.0, 100.0)]
+    d = C._window_digest("X", meta, ser, 0, 0)
+    assert d["obs"] == 7
+    assert d["two_sided_pct"] == round(100.0 * 5 / 7, 2)
+
+
+def test_depth_p50_is_depth_at_touch_not_one_side():
+    """habitat_expanded.py uses min(bid_sz, ask_sz): the binding side for a
+    maker. Reporting bid_sz alone would overstate executable depth."""
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    d = C._window_digest("X", meta, _series(4, bs=500.0, asz=250.0), 0, 0)
+    assert d["depth_p50"] == 250.0
+
+
+def test_spread_p50_is_in_price_units():
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    d = C._window_digest("X", meta, _series(4, bid=0.48, ask=0.50), 0, 0)
+    assert d["spread_p50"] == 0.02
+
+
+def test_digest_lines_round_trip_the_whole_series_in_chunks():
+    """A 300-observation series exceeds what a single log line can carry, so
+    it is chunked. Reassembly must return every observation, in order, with
+    no loss and no duplication."""
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    ser = _series(300)
+    d = C._window_digest("GEMI-BTC05M2609141200-UP", meta, ser, 4, 0)
+    lines = C._digest_lines(d, ser)
+
+    head = [x for x in lines if x.startswith("GEMINI_WINDOW_CLOSE ")]
+    body = [x for x in lines if x.startswith("GEMINI_WINDOW_SERIES ")]
+    assert len(head) == 1
+    assert len(body) == 6            # 300 / 50
+
+    assert json.loads(head[0].split(" ", 1)[1])["obs"] == 300
+    rebuilt = []
+    for i, line in enumerate(body, start=1):
+        o = json.loads(line.split(" ", 1)[1])
+        assert o["market"] == d["market"]
+        assert o["part"] == i and o["parts"] == 6
+        rebuilt.extend(o["s"])
+    assert len(rebuilt) == 300
+    assert [x[0] for x in rebuilt] == sorted((x[0] for x in ser), reverse=True)
+
+
+def test_digest_lines_stay_under_the_log_transport_limit():
+    """Long log lines are truncated in transit; a truncated line is not
+    recoverable JSON, so the chunk size has to keep every line small."""
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    ser = _series(400, bid=0.4812, ask=0.5037, bs=123456.7, asz=98765.4)
+    d = C._window_digest("GEMI-BTC05M2609141200-UP", meta, ser, 40, 12)
+    for line in C._digest_lines(d, ser):
+        assert len(line) < 4000, (line[:120], len(line))
+
+
+def test_digest_tolerates_a_window_whose_metadata_was_lost():
+    d = C._window_digest("X", {}, _series(10), 0, 0)
+    assert d["asset"] is None and d["expiry_t"] is None
+    # a missing window_minutes must not crash completeness, it defaults to 5m
+    assert d["window_minutes"] is None
+    assert d["complete"] is False      # 9 s of span is not a complete window
+
+
+def test_digest_buffer_is_capped():
+    """A window that is never unsubscribed must not grow the buffer without
+    bound: the collector is meant to stay up 24/7."""
+    assert C.GEMINI_DIGEST_MAX_OBS >= 300        # a full 1 Hz 5m window fits
+    assert C.GEMINI_DIGEST_MAX_OBS <= 1000
+
+
+# ---------------------------------------------------------------------------
+# END-TO-END WIRING
+#
+# The digest arithmetic being right is worth nothing if the session never
+# calls it, or calls it with an empty buffer. This drives the real session
+# loop over a scripted websocket and asserts the lines actually come out.
+# ---------------------------------------------------------------------------
+import asyncio
+
+
+class _FakeWS:
+    """Scripted websocket. Each entry advances the collector's clock, so the
+    window lifecycle runs on the window's own time rather than wall time."""
+
+    def __init__(self, script, clock, stop):
+        self.script = list(script)
+        self.clock = clock
+        self.stop = stop
+        self.sent = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def send(self, payload):
+        self.sent.append(json.loads(payload))
+
+    async def recv(self):
+        if not self.script:
+            self.stop.set()
+            return "{}"
+        t, msg = self.script.pop(0)
+        self.clock[0] = t
+        return json.dumps(msg)
+
+
+class _MemSink:
+    def __init__(self):
+        self.rows = []
+
+    async def write(self, event):
+        self.rows.append(event)
+
+
+def _run_scripted_session(monkeypatch, script, expiry=1000.0, asset="BTC"):
+    clock = [script[0][0]]
+    stop = asyncio.Event()
+    ws = _FakeWS(script, clock, stop)
+    meta = {"asset": asset, "window_minutes": 5, "expiry_t": expiry,
+            "duration": 5}
+    sym = "GEMI-BTC05M2609141200-UP"
+
+    monkeypatch.setattr(C, "DISCOVER_SECONDS", 0.0)
+    monkeypatch.setattr(C, "GEMINI_BBO_RECORD_SECONDS", 0.0)
+    monkeypatch.setattr(C, "GEMINI_WS_SESSION_SECONDS", 1e9)
+    monkeypatch.setattr(C, "_now", lambda: clock[0])
+    monkeypatch.setattr(C.websockets, "connect", lambda *a, **k: ws)
+
+    async def _fake_discover(_http):
+        return {sym: dict(meta)}
+
+    monkeypatch.setattr(C, "_gemini_active_symbols", _fake_discover)
+
+    sink, canon = _MemSink(), _MemSink()
+    asyncio.run(C._gemini_ws_session(sink, stop, [sym], canon=canon, health={}))
+    return sym, ws, sink, canon
+
+
+def _depth(sym, bid, ask, bid_sz=500.0, ask_sz=250.0):
+    return {"s": sym, "bids": [[str(bid), str(bid_sz)]],
+            "asks": [[str(ask), str(ask_sz)]]}
+
+
+def test_session_emits_a_window_close_digest_when_the_window_drops(monkeypatch,
+                                                                   capsys):
+    sym = "GEMI-BTC05M2609141200-UP"
+    script = [(700.0 + i, _depth(sym, 0.48, 0.50)) for i in range(300)]
+    script.append((1040.0, {}))          # past expiry + RETAIN -> next pass drops
+    script.append((1041.0, {}))          # the pass that drops
+    _run_scripted_session(monkeypatch, script)
+
+    out = capsys.readouterr().out.splitlines()
+    head = [x for x in out if x.startswith("GEMINI_WINDOW_CLOSE ")]
+    body = [x for x in out if x.startswith("GEMINI_WINDOW_SERIES ")]
+    assert len(head) == 1, out[:4]
+
+    d = json.loads(head[0].split(" ", 1)[1])
+    assert d["market"] == sym and d["asset"] == "BTC"
+    assert d["obs"] == 300
+    assert d["tte_first"] == 300.0 and d["tte_last"] == 1.0
+    assert d["span_s"] == 299.0
+    assert d["complete"] is True
+    assert d["two_sided_pct"] == 100.0
+    assert d["spread_p50"] == 0.02 and d["depth_p50"] == 250.0
+
+    rebuilt = []
+    for line in body:
+        rebuilt.extend(json.loads(line.split(" ", 1)[1])["s"])
+    assert len(rebuilt) == 300
+
+
+def test_session_digest_excludes_out_of_window_observations(monkeypatch,
+                                                            capsys):
+    """The collector attaches 330 s BEFORE expiry so it never misses the open.
+    Those pre-open quotes are real, but they are NOT in-window state and must
+    not inflate coverage -- counting them is the exact bug that produced a
+    historical median of zero in-window seconds."""
+    sym = "GEMI-BTC05M2609141200-UP"
+    script = [(670.0 + i, _depth(sym, 0.48, 0.50)) for i in range(30)]   # tte 330..301
+    script += [(700.0 + i, _depth(sym, 0.48, 0.50)) for i in range(300)]  # tte 300..1
+    script += [(1040.0, {}), (1041.0, {})]
+    _run_scripted_session(monkeypatch, script)
+
+    out = capsys.readouterr().out.splitlines()
+    d = json.loads([x for x in out
+                    if x.startswith("GEMINI_WINDOW_CLOSE ")][0].split(" ", 1)[1])
+    assert d["obs"] == 300               # not 330
+    assert d["tte_first"] == 300.0
+
+
+def test_session_digest_counts_one_sided_books_it_could_not_canonicalise(
+        monkeypatch, capsys):
+    sym = "GEMI-BTC05M2609141200-UP"
+    script = [(700.0 + i, _depth(sym, 0.48, 0.50)) for i in range(10)]
+    script += [(710.0 + i, {"s": sym, "bids": [], "asks": [["0.50", "9"]]})
+               for i in range(10)]
+    script += [(1040.0, {}), (1041.0, {})]
+    _run_scripted_session(monkeypatch, script)
+
+    out = capsys.readouterr().out.splitlines()
+    d = json.loads([x for x in out
+                    if x.startswith("GEMINI_WINDOW_CLOSE ")][0].split(" ", 1)[1])
+    assert d["obs"] == 10
+    assert d["one_sided_obs"] == 10
+    assert d["two_sided_pct"] == 50.0
+
+
+def test_session_digest_counts_only_in_window_prints(monkeypatch, capsys):
+    """Prints are the scarce STRICT-fill evidence; a print outside the window
+    is not evidence about that window."""
+    sym = "GEMI-BTC05M2609141200-UP"
+
+    def _pr(px):
+        return {"s": sym, "p": str(px), "q": "5", "m": True, "t": 1, "E": 1}
+
+    script = [(680.0, _pr(0.49))]                                  # tte 320: outside
+    script += [(700.0 + i, _depth(sym, 0.48, 0.50)) for i in range(5)]
+    script += [(720.0, _pr(0.49)), (721.0, _pr(0.50))]             # in-window
+    script += [(1040.0, {}), (1041.0, {})]
+    _run_scripted_session(monkeypatch, script)
+
+    out = capsys.readouterr().out.splitlines()
+    d = json.loads([x for x in out
+                    if x.startswith("GEMINI_WINDOW_CLOSE ")][0].split(" ", 1)[1])
+    assert d["prints"] == 2
+
+
+def test_session_still_writes_canonical_rows_and_no_orders(monkeypatch, capsys):
+    """The digest is an ADDITIONAL read path. It must not displace the
+    canonical volume write, which stays the system of record."""
+    sym = "GEMI-BTC05M2609141200-UP"
+    script = [(700.0 + i, _depth(sym, 0.48, 0.50)) for i in range(5)]
+    script += [(1040.0, {}), (1041.0, {})]
+    _sym, ws, _sink, canon = _run_scripted_session(monkeypatch, script)
+
+    bbo = [r for r in canon.rows if r.get("kind") == "bbo"]
+    assert len(bbo) == 5
+    assert bbo[0]["tte_s"] == 300.0
+    assert all(r["expiry_source"] == "gemini_events_rest" for r in bbo)
+
+    methods = {m.get("method") for m in ws.sent}
+    assert methods == {"SUBSCRIBE", "UNSUBSCRIBE"}

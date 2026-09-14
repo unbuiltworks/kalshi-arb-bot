@@ -226,6 +226,84 @@ def _canonical_bbo(market: str, meta: Mapping[str, Any], t: float,
             "depth": {"bids": (bids or [])[:5], "asks": (asks or [])[:5]}}
 
 
+GEMINI_DIGEST_MAX_OBS = 400   # hard cap per window: a window that never
+                              # drops must not grow the buffer without bound
+GEMINI_DIGEST_CHUNK = 50      # observations per SERIES line; long log lines
+                              # are truncated by the log transport
+
+
+def _win_dur_s(meta: Mapping[str, Any]) -> float:
+    return 60.0 * float(meta.get("window_minutes") or 5)
+
+
+def _p50(xs: List[float]) -> Optional[float]:
+    if not xs:
+        return None
+    v = sorted(xs)
+    n = len(v)
+    return round(v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2.0, 6)
+
+
+def _window_digest(market: str, meta: Mapping[str, Any],
+                   series: List[Any], prints: int,
+                   one_sided: int) -> Optional[Dict[str, Any]]:
+    """Summarise ONE closed window from its in-window canonical observations.
+
+    WHY THIS EXISTS: the canonical trajectory rows land on a Railway volume
+    that only the collector container can read, so a window that completes
+    is otherwise invisible to any analysis running elsewhere. The digest is
+    the read path -- it carries exactly the fields the coverage/habitat
+    scorers need, computed with the SAME conventions as
+    analysis/l5/gemini_trajectory/habitat_expanded.py (two-sided means
+    bid > 0 and ask > 0; depth at touch is min(bid_sz, ask_sz)).
+
+    `one_sided` is the count of in-window samples whose book was NOT
+    two-sided, so two_sided_pct has an honest denominator rather than one
+    that silently drops what _canonical_bbo refused.
+    """
+    if len(series) < 2:
+        return None
+    ser = sorted(series, key=lambda o: -o[0])     # descending tte == chronological
+    tte = [o[0] for o in ser]
+    span = round(tte[0] - tte[-1], 2)
+    dur = _win_dur_s(meta)
+    two = sum(1 for o in ser if o[1] > 0 and o[2] > 0)
+    tot = len(ser) + int(one_sided)
+    depth = [min(o[3], o[4]) for o in ser
+             if o[3] is not None and o[4] is not None]
+    return {
+        "market": market, "asset": meta.get("asset"),
+        "expiry_t": meta.get("expiry_t"),
+        "window_minutes": meta.get("window_minutes"),
+        "obs": len(ser),
+        "tte_first": tte[0], "tte_last": tte[-1], "span_s": span,
+        "obs_per_min": (None if span <= 0
+                        else round(len(ser) / (span / 60.0), 2)),
+        "two_sided_pct": (None if not tot else round(100.0 * two / tot, 2)),
+        "one_sided_obs": int(one_sided),
+        "prints": int(prints),
+        "spread_p50": _p50([round(o[2] - o[1], 6) for o in ser]),
+        "depth_p50": _p50(depth),
+        # A COMPLETE window spans >= 290 s of its own 0..dur tte range.
+        "complete": bool(span >= dur - 10.0),
+    }
+
+
+def _digest_lines(digest: Mapping[str, Any], series: List[Any],
+                  chunk: int = GEMINI_DIGEST_CHUNK) -> List[str]:
+    """One summary line plus chunked series lines, reassemblable by
+    (market, part). Each observation is [tte, bid, ask, bid_sz, ask_sz]."""
+    out = ["GEMINI_WINDOW_CLOSE " + json.dumps(digest, separators=(",", ":"))]
+    ser = sorted(series, key=lambda o: -o[0])
+    parts = max(1, -(-len(ser) // max(1, chunk)))
+    for i in range(parts):
+        out.append("GEMINI_WINDOW_SERIES " + json.dumps(
+            {"market": digest["market"], "part": i + 1, "parts": parts,
+             "s": [list(o) for o in ser[i * chunk:(i + 1) * chunk]]},
+            separators=(",", ":")))
+    return out
+
+
 GEMINI_VOLUME_POLL_SECONDS = 20.0
 
 
@@ -337,6 +415,10 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
     known: Dict[str, Dict[str, Any]] = {}
     subscribed: Set[str] = set()
     last_top_write: Dict[str, float] = {}
+    # per-window digest buffers, cleared when the window is unsubscribed
+    closed: Dict[str, List[Any]] = {}
+    prints_by: Dict[str, int] = {}
+    one_sided_by: Dict[str, int] = {}
     last_discover = time.monotonic()
     last_health = 0.0
     session_deadline = time.monotonic() + GEMINI_WS_SESSION_SECONDS
@@ -403,6 +485,18 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                                 known.pop(x, None)   # bounded memory
                     except websockets.WebSocketException:
                         pass
+                    # A dropped window is a CLOSED window: emit its digest
+                    # now, while its metadata is still known, then release
+                    # the buffers.
+                    for x in drop:
+                        ser = closed.pop(x, None) or []
+                        d = _window_digest(x, known.get(x) or {}, ser,
+                                           prints_by.pop(x, 0),
+                                           one_sided_by.pop(x, 0))
+                        if d is None:
+                            continue
+                        for line in _digest_lines(d, ser):
+                            print(line, flush=True)
                     h["subscribed"] = len(subscribed)
                     h["known"] = len(known)
                     h["expected_active"] = sum(1 for m in known.values()
@@ -436,6 +530,10 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                     await sink.write(row)
                     h["prints"] = int(h.get("prints") or 0) + 1
                     h["last_print_t"] = now
+                    _pm = known.get(key) or {}
+                    _pe = _pm.get("expiry_t")
+                    if _pe is not None and 0.0 <= _pe - now <= _win_dur_s(_pm):
+                        prints_by[key] = prints_by.get(key, 0) + 1
                     if canon is not None:
                         meta = known.get(key, {})
                         exp = meta.get("expiry_t")
@@ -459,11 +557,25 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                         })
                         h["bbo"] = int(h.get("bbo") or 0) + 1
                         h["last_bbo_t"] = now
-                        if canon is not None:
-                            c = _canonical_bbo(key, known.get(key, {}), now,
-                                               msg.get("bids"), msg.get("asks"))
-                            if c is not None:
-                                await canon.write(c)
+                        _m = known.get(key) or {}
+                        c = _canonical_bbo(key, _m, now,
+                                           msg.get("bids"), msg.get("asks"))
+                        if c is not None and canon is not None:
+                            await canon.write(c)
+                        # Buffer for the window-close digest. A sample the
+                        # canonicaliser REFUSED (one-sided book) is still
+                        # counted, so two_sided_pct is not flattered by the
+                        # refusal.
+                        _e = _m.get("expiry_t")
+                        _tte = None if _e is None else _e - now
+                        if _tte is not None and 0.0 <= _tte <= _win_dur_s(_m):
+                            if c is None:
+                                one_sided_by[key] = one_sided_by.get(key, 0) + 1
+                            else:
+                                _b = closed.setdefault(key, [])
+                                if len(_b) < GEMINI_DIGEST_MAX_OBS:
+                                    _b.append((round(_tte, 2), c["bid"], c["ask"],
+                                               c["bid_sz"], c["ask_sz"]))
 
 
 async def run(out_dir: Path, hours: float, gemini_only: bool = False) -> None:
