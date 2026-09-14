@@ -230,6 +230,7 @@ GEMINI_DIGEST_MAX_OBS = 400   # hard cap per window: a window that never
                               # drops must not grow the buffer without bound
 GEMINI_DIGEST_CHUNK = 50      # observations per SERIES line; long log lines
                               # are truncated by the log transport
+GEMINI_DIGEST_MAX_PRINTS = 2000   # prints are scarce; the cap is a backstop
 
 
 def _win_dur_s(meta: Mapping[str, Any]) -> float:
@@ -245,7 +246,7 @@ def _p50(xs: List[float]) -> Optional[float]:
 
 
 def _window_digest(market: str, meta: Mapping[str, Any],
-                   series: List[Any], prints: int,
+                   series: List[Any], prints: Any,
                    one_sided: int) -> Optional[Dict[str, Any]]:
     """Summarise ONE closed window from its in-window canonical observations.
 
@@ -281,7 +282,7 @@ def _window_digest(market: str, meta: Mapping[str, Any],
                         else round(len(ser) / (span / 60.0), 2)),
         "two_sided_pct": (None if not tot else round(100.0 * two / tot, 2)),
         "one_sided_obs": int(one_sided),
-        "prints": int(prints),
+        "prints": (int(prints) if isinstance(prints, int) else len(prints)),
         "spread_p50": _p50([round(o[2] - o[1], 6) for o in ser]),
         "depth_p50": _p50(depth),
         # A COMPLETE window spans >= 290 s of its own 0..dur tte range.
@@ -290,9 +291,14 @@ def _window_digest(market: str, meta: Mapping[str, Any],
 
 
 def _digest_lines(digest: Mapping[str, Any], series: List[Any],
-                  chunk: int = GEMINI_DIGEST_CHUNK) -> List[str]:
-    """One summary line plus chunked series lines, reassemblable by
-    (market, part). Each observation is [tte, bid, ask, bid_sz, ask_sz]."""
+                  chunk: int = GEMINI_DIGEST_CHUNK,
+                  prints: Optional[List[Any]] = None) -> List[str]:
+    """One summary line, then chunked series lines, then chunked print lines,
+    all reassemblable by (market, part). An observation is
+    [tte, bid, ask, bid_sz, ask_sz]; a print is [tte, price, qty,
+    buyer_is_maker]. Prints ride separately because they are scarce and are
+    the only evidence that can support a STRICT fill claim -- a shadow run
+    against quotes alone cannot distinguish STRICT from OPTIMISTIC."""
     out = ["GEMINI_WINDOW_CLOSE " + json.dumps(digest, separators=(",", ":"))]
     ser = sorted(series, key=lambda o: -o[0])
     parts = max(1, -(-len(ser) // max(1, chunk)))
@@ -301,6 +307,14 @@ def _digest_lines(digest: Mapping[str, Any], series: List[Any],
             {"market": digest["market"], "part": i + 1, "parts": parts,
              "s": [list(o) for o in ser[i * chunk:(i + 1) * chunk]]},
             separators=(",", ":")))
+    prs = sorted(prints or [], key=lambda o: -o[0])
+    if prs:
+        pparts = max(1, -(-len(prs) // max(1, chunk)))
+        for i in range(pparts):
+            out.append("GEMINI_WINDOW_PRINTS " + json.dumps(
+                {"market": digest["market"], "part": i + 1, "parts": pparts,
+                 "p": [list(o) for o in prs[i * chunk:(i + 1) * chunk]]},
+                separators=(",", ":")))
     return out
 
 
@@ -417,7 +431,7 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
     last_top_write: Dict[str, float] = {}
     # per-window digest buffers, cleared when the window is unsubscribed
     closed: Dict[str, List[Any]] = {}
-    prints_by: Dict[str, int] = {}
+    prints_by: Dict[str, List[Any]] = {}
     one_sided_by: Dict[str, int] = {}
     last_discover = time.monotonic()
     last_health = 0.0
@@ -490,12 +504,12 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                     # the buffers.
                     for x in drop:
                         ser = closed.pop(x, None) or []
+                        prs = prints_by.pop(x, None) or []
                         d = _window_digest(x, known.get(x) or {}, ser,
-                                           prints_by.pop(x, 0),
-                                           one_sided_by.pop(x, 0))
+                                           prs, one_sided_by.pop(x, 0))
                         if d is None:
                             continue
-                        for line in _digest_lines(d, ser):
+                        for line in _digest_lines(d, ser, prints=prs):
                             print(line, flush=True)
                     h["subscribed"] = len(subscribed)
                     h["known"] = len(known)
@@ -533,7 +547,19 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                     _pm = known.get(key) or {}
                     _pe = _pm.get("expiry_t")
                     if _pe is not None and 0.0 <= _pe - now <= _win_dur_s(_pm):
-                        prints_by[key] = prints_by.get(key, 0) + 1
+                        # PRINTS ARE THE SCARCE EVIDENCE and the only thing
+                        # that can support a STRICT fill claim, so the digest
+                        # carries the ROWS, not merely a count. 22 prints
+                        # against 5242 quotes -- they cost nothing to ship.
+                        _pb = prints_by.setdefault(key, [])
+                        if len(_pb) < GEMINI_DIGEST_MAX_PRINTS:
+                            try:
+                                _pb.append((round(_pe - now, 2),
+                                            float(msg.get("p")),
+                                            float(msg.get("q")),
+                                            bool(msg.get("m"))))
+                            except (TypeError, ValueError):
+                                pass
                     if canon is not None:
                         meta = known.get(key, {})
                         exp = meta.get("expiry_t")

@@ -239,11 +239,47 @@ def test_digest_tolerates_a_window_whose_metadata_was_lost():
     assert d["complete"] is False      # 9 s of span is not a complete window
 
 
+def test_digest_carries_print_rows_not_only_a_count():
+    """A shadow run against quotes alone cannot tell STRICT from OPTIMISTIC:
+    the distinction IS the prints. Shipping only a count is the same class of
+    read-path gap as writing the rows to an unreadable volume."""
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    ser = _series(20)
+    prs = [(290.0, 0.49, 5.0, True), (120.0, 0.50, 2.0, False),
+           (17.0, 0.52, 9.0, True)]
+    d = C._window_digest("GEMI-BTC05M-UP", meta, ser, prs, 0)
+    assert d["prints"] == 3                    # count still derived
+
+    lines = C._digest_lines(d, ser, prints=prs)
+    pl = [x for x in lines if x.startswith("GEMINI_WINDOW_PRINTS ")]
+    assert len(pl) == 1
+    got = json.loads(pl[0].split(" ", 1)[1])
+    assert got["market"] == "GEMI-BTC05M-UP" and got["parts"] == 1
+    assert got["p"] == [[290.0, 0.49, 5.0, True],
+                        [120.0, 0.50, 2.0, False],
+                        [17.0, 0.52, 9.0, True]]
+
+
+def test_digest_emits_no_print_lines_when_the_window_had_none():
+    meta = {"asset": "ETH", "window_minutes": 5, "expiry_t": 1000.0}
+    lines = C._digest_lines(C._window_digest("X", meta, _series(5), [], 0),
+                            _series(5), prints=[])
+    assert not [x for x in lines if x.startswith("GEMINI_WINDOW_PRINTS ")]
+
+
+def test_digest_still_accepts_a_plain_print_count():
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    assert C._window_digest("X", meta, _series(5), 7, 0)["prints"] == 7
+
+
 def test_digest_buffer_is_capped():
     """A window that is never unsubscribed must not grow the buffer without
     bound: the collector is meant to stay up 24/7."""
     assert C.GEMINI_DIGEST_MAX_OBS >= 300        # a full 1 Hz 5m window fits
     assert C.GEMINI_DIGEST_MAX_OBS <= 1000
+    # the historical tape held 735 prints IN TOTAL; the cap is a backstop,
+    # never a sampler
+    assert C.GEMINI_DIGEST_MAX_PRINTS >= 1000
 
 
 # ---------------------------------------------------------------------------
@@ -403,6 +439,12 @@ def test_session_digest_counts_only_in_window_prints(monkeypatch, capsys):
     d = json.loads([x for x in out
                     if x.startswith("GEMINI_WINDOW_CLOSE ")][0].split(" ", 1)[1])
     assert d["prints"] == 2
+
+    pl = [x for x in out if x.startswith("GEMINI_WINDOW_PRINTS ")]
+    assert len(pl) == 1
+    rows = json.loads(pl[0].split(" ", 1)[1])["p"]
+    # tte 280 and 279, chronological; the tte-320 print is outside the window
+    assert rows == [[280.0, 0.49, 5.0, True], [279.0, 0.5, 5.0, True]]
 
 
 def test_session_still_writes_canonical_rows_and_no_orders(monkeypatch, capsys):
