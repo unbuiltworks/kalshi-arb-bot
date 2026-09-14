@@ -23,6 +23,7 @@ on:
       - 'src/gemini_l5_incentive_audit.py'
       - 'src/gemini_l5_residual_exit_cf.py'
       - 'src/gemini_l5_residual_exit_timing_sweep.py'
+      - 'src/gemini_l5_residual_exit_oos.py'
       - 'src/gemini_l5_canary_readiness.py'
       - 'tests/test_gemini_l5_queue_shadow.py'
       - 'tests/test_gemini_l5_inventory_cf.py'
@@ -68,6 +69,8 @@ jobs:
         run: python -m src.gemini_l5_residual_exit_cf
       - name: Sweep terminal residual exit timing
         run: python -m src.gemini_l5_residual_exit_timing_sweep
+      - name: Validate residual exit chronologically out of sample
+        run: python -m src.gemini_l5_residual_exit_oos
       - name: Evaluate q1 canary readiness
         run: python -m src.gemini_l5_canary_readiness
       - name: Upload canonical backfill
@@ -87,5 +90,6 @@ jobs:
             analysis/l5/gemini_l5_incentive_audit.json
             analysis/l5/gemini_l5_residual_exit_cf.json
             analysis/l5/gemini_l5_residual_exit_timing_sweep.json
+            analysis/l5/gemini_l5_residual_exit_oos.json
             analysis/l5/gemini_l5_canary_readiness.json
           retention-days: 14
