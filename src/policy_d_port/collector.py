@@ -248,7 +248,8 @@ def _p50(xs: List[float]) -> Optional[float]:
 def _window_digest(market: str, meta: Mapping[str, Any],
                    series: List[Any], prints: Any,
                    one_sided: int,
-                   any_tte: Optional[List[float]] = None
+                   any_tte: Optional[List[float]] = None,
+                   life: Optional[Mapping[str, Any]] = None
                    ) -> Optional[Dict[str, Any]]:
     """Summarise ONE closed window from its in-window canonical observations.
 
@@ -296,6 +297,56 @@ def _window_digest(market: str, meta: Mapping[str, Any],
         "tte_first_any": (any_tte[0] if any_tte else None),
         "tte_last_any": (any_tte[1] if any_tte else None),
         "span_any_s": (round(any_tte[0] - any_tte[1], 2) if any_tte else None),
+        **_lifecycle_fields(meta, life),
+    }
+
+
+def _lifecycle_fields(meta: Mapping[str, Any],
+                      life: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+    """The six subscribe-path timestamps and the four latencies between them.
+
+    A late first frame has several possible causes that the digest alone
+    cannot separate: the venue may not LIST the window until it opens, our
+    discovery tick may be late, the SUBSCRIBE may be slow to ack, or the
+    venue may be slow to send the first frame after acking. Each stage is
+    therefore timed separately, and every value is None when its stamp is
+    UNKNOWN -- never 0, which would read as "instant".
+
+    Sign convention: every latency is POSITIVE when the stage was on time
+    and NEGATIVE when it was late. `lat_discovery_to_due_s` is the lead we
+    had in hand: positive means the window was known BEFORE it was due to be
+    subscribed, negative means it was discovered too late for any lead.
+    """
+    l = dict(life or {})
+    exp = meta.get("expiry_t")
+    due = l.get("window_due_at")
+    if due is None and exp is not None:
+        due = exp - GEMINI_SUBSCRIBE_LEAD_S
+    disc = l.get("window_discovered_at")
+    req = l.get("subscription_requested_at")
+    ack = l.get("subscription_ack_at")
+    first = l.get("first_frame_at")
+
+    def d(a, b):
+        return None if (a is None or b is None) else round(a - b, 3)
+
+    return {
+        "window_discovered_at": disc,
+        "window_due_at": (None if due is None else round(due, 3)),
+        "subscription_requested_at": req,
+        "subscription_ack_at": ack,
+        "first_frame_at": first,
+        "expiry": exp,
+        "lat_discovery_to_due_s": d(due, disc),
+        "lat_due_to_subscribe_s": d(req, due),
+        "lat_subscribe_to_ack_s": d(ack, req),
+        "lat_ack_to_first_frame_s": d(first, ack),
+        # provenance: a window discovered on tick 0 of a ws session may be a
+        # session-recycle artifact rather than steady state. Both are kept so
+        # the two can be counted separately instead of averaged together.
+        "discovery_tick_index": l.get("discovery_tick_index"),
+        "session_age_at_discovery_s": l.get("session_age_at_discovery_s"),
+        "session_index": l.get("session_index"),
     }
 
 
@@ -379,6 +430,10 @@ async def gemini_task(sink: Sink, stop: asyncio.Event,
                       health: Optional[Dict[str, Any]] = None) -> None:
     known: Set[str] = set()
     h = health if health is not None else {}
+    # Window catalogue and per-window digest buffers OUTLIVE the ws session.
+    # Held here, a 600 s recycle no longer erases what we know about a window
+    # that is still open, and no longer silently discards its digest.
+    ws_state: Dict[str, Any] = {}
     async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "arb-laneD-readonly/1.0"}) as http:
         while not stop.is_set():
             try:
@@ -393,7 +448,8 @@ async def gemini_task(sink: Sink, stop: asyncio.Event,
                     # opens. It is recorded as such so no consumer can
                     # forward-fill across it as if the market were observed.
                     await _gemini_ws_session(sink, stop, list(symbols),
-                                             canon=canon, health=h)
+                                             canon=canon, health=h,
+                                             state=ws_state)
                     gap = {"t": _now(), "venue": "gemini", "kind": "connection",
                            "event": "ws_close", "reconnects": h.get("reconnects")}
                     await sink.write(gap)
@@ -423,31 +479,62 @@ GEMINI_WS_SESSION_SECONDS = 600.0  # hold one connection; subscribe rolled windo
 
 async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str],
                              canon: Optional[Sink] = None,
-                             health: Optional[Dict[str, Any]] = None) -> None:
+                             health: Optional[Dict[str, Any]] = None,
+                             state: Optional[Dict[str, Any]] = None) -> None:
     """One long-lived ws session for trades+depth.
 
     Reconnect churn every DISCOVER_SECONDS was dropping exactly the bursts we
     need to time (all big overnight windows had zero captured prints), so the
     session now persists GEMINI_WS_SESSION_SECONDS and re-discovers newly
     rolled windows in-place, subscribing them on the same connection.
+
+    `state` CARRIES ACROSS SESSIONS. It used to be session-local, which cost
+    us twice every recycle: the window catalogue had to be rebuilt from
+    scratch, and any window still open when the session ended lost its digest
+    buffers silently. GEMINI_WS_SESSION_SECONDS (600) is an exact multiple of
+    the 300 s window period, so those losses did not average out -- they
+    landed on the SAME phase of every window and removed one 5m window in two
+    outright.
+
+    `subscribed` is the one thing that must NOT carry: a new connection has
+    no subscriptions, so it is rebuilt each session and the roll below
+    re-SUBSCRIBEs every due window on the new socket.
     """
     # `known` holds every discovered window with its metadata; `subscribed`
     # holds only those inside their own trading interval. A window moves
     # known -> subscribed at expiry - LEAD and subscribed -> dropped at
     # expiry + RETAIN, so the connection is not spent on dead symbols.
-    known: Dict[str, Dict[str, Any]] = {}
+    st = state if state is not None else {}
+    known: Dict[str, Dict[str, Any]] = st.setdefault("known", {})
+    # NOT carried: a fresh socket has no subscriptions, so carrying this would
+    # make the roll believe every window was already subscribed and send
+    # nothing -- silent total data loss for the whole session.
     subscribed: Set[str] = set()
     last_top_write: Dict[str, float] = {}
     # per-window digest buffers, cleared when the window is unsubscribed
-    closed: Dict[str, List[Any]] = {}
-    prints_by: Dict[str, List[Any]] = {}
-    one_sided_by: Dict[str, int] = {}
+    closed: Dict[str, List[Any]] = st.setdefault("closed", {})
+    prints_by: Dict[str, List[Any]] = st.setdefault("prints_by", {})
+    one_sided_by: Dict[str, int] = st.setdefault("one_sided_by", {})
     # SPAN is measured over TWO-SIDED samples only, so a window that keeps
     # being sampled while the book sits one-sided looks identical to one where
     # collection stopped. Tracking the first/last tte of ANY in-window sample
     # separates those two causes, which is the whole FULL-window diagnosis.
-    any_tte: Dict[str, List[float]] = {}
-    last_discover = time.monotonic()
+    any_tte: Dict[str, List[float]] = st.setdefault("any_tte", {})
+    # per-window subscribe-path timestamps; popped with the other buffers
+    life: Dict[str, Dict[str, Any]] = st.setdefault("life", {})
+    # symbols whose SUBSCRIBE has been sent but not yet acked by the venue
+    pending_ack: Set[str] = set()
+    discovery_tick = 0
+    session_started = time.monotonic()
+    # Seeded one full interval in the PAST so the first discovery happens
+    # immediately. Seeding with monotonic() made the first DISCOVER_SECONDS of
+    # every session blind with an empty catalogue -- a window could come due
+    # while we still knew nothing about it. Note this must be relative to
+    # monotonic(), not the 0.0 that kalshi_task uses: kalshi_task compares
+    # against a wall-clock epoch, whereas monotonic() is time since boot and
+    # can legitimately be smaller than DISCOVER_SECONDS in a fresh container,
+    # which would leave the blind period exactly where it was.
+    last_discover = time.monotonic() - DISCOVER_SECONDS
     last_health = 0.0
     session_deadline = time.monotonic() + GEMINI_WS_SESSION_SECONDS
     h = health if health is not None else {}
@@ -475,6 +562,17 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                         for sym, meta in fresh.items():
                             if sym not in known:
                                 known[sym] = meta
+                                _e = meta.get("expiry_t")
+                                life[sym] = {
+                                    "window_discovered_at": round(_now(), 3),
+                                    "window_due_at": (
+                                        None if _e is None
+                                        else round(_e - GEMINI_SUBSCRIBE_LEAD_S, 3)),
+                                    "discovery_tick_index": discovery_tick,
+                                    "session_age_at_discovery_s": round(
+                                        time.monotonic() - session_started, 2),
+                                    "session_index": int(h.get("reconnects") or 0),
+                                }
                                 # window metadata is provenance: persist it the
                                 # moment it is learned, not at subscribe time
                                 await sink.write({"t": _now(), "venue": "gemini",
@@ -485,15 +583,33 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                                                        "market": sym, **meta})
                     except httpx.HTTPError:
                         pass
-                    # roll the subscription set on the window clock
-                    now_w = _now()
-                    add = [s for s, m in known.items()
-                           if s not in subscribed and _due(m, now_w)]
-                    drop = [s for s in subscribed
-                            if _expired(known.get(s, {}), now_w)]
+                    discovery_tick += 1
+
+                # THE ROLL RUNS EVERY ITERATION, NOT ON THE DISCOVERY TICK.
+                # It is pure local computation over a ~40-entry catalogue; the
+                # only thing that needed the 45 s tick was the REST call. While
+                # the two were fused, a window became due at expiry-330 and
+                # then waited for the next tick, so the lead we actually got
+                # was 330 minus up to a full DISCOVER_SECONDS -- and since the
+                # venue publishes windows ~890 s ahead, that wait was pure
+                # self-inflicted loss. Now due -> SUBSCRIBE within one recv
+                # timeout (<= 1 s), which keeps the intended 330 s lead.
+                now_w = _now()
+                add = [s for s, m in known.items()
+                       if s not in subscribed and _due(m, now_w)]
+                drop = [s for s in subscribed
+                        if _expired(known.get(s, {}), now_w)]
+                if add or drop:
                     try:
                         if add:
                             subscribed.update(add)
+                            _req = round(_now(), 3)
+                            for x in add:
+                                # setdefault: a re-SUBSCRIBE on a new socket
+                                # must not overwrite when we FIRST asked
+                                life.setdefault(x, {}).setdefault(
+                                    "subscription_requested_at", _req)
+                                pending_ack.add(x)
                             await ws.send(json.dumps({
                                 "id": "laneD-add", "method": "SUBSCRIBE",
                                 "params": [f"{x}@trade" for x in add]
@@ -511,6 +627,13 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                         for x in list(known):
                             if _expired(known[x], now_w - 3600):
                                 known.pop(x, None)   # bounded memory
+                                # `known` now outlives the session, so its
+                                # side-tables must be pruned with it
+                                life.pop(x, None)
+                                closed.pop(x, None)
+                                prints_by.pop(x, None)
+                                one_sided_by.pop(x, None)
+                                any_tte.pop(x, None)
                     except websockets.WebSocketException:
                         pass
                     # A dropped window is a CLOSED window: emit its digest
@@ -519,17 +642,21 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                     for x in drop:
                         ser = closed.pop(x, None) or []
                         prs = prints_by.pop(x, None) or []
+                        pending_ack.discard(x)
                         d = _window_digest(x, known.get(x) or {}, ser,
                                            prs, one_sided_by.pop(x, 0),
-                                           any_tte.pop(x, None))
+                                           any_tte.pop(x, None),
+                                           life.pop(x, None))
                         if d is None:
                             continue
                         for line in _digest_lines(d, ser, prints=prs):
                             print(line, flush=True)
-                    h["subscribed"] = len(subscribed)
-                    h["known"] = len(known)
-                    h["expected_active"] = sum(1 for m in known.values()
-                                               if _due(m, now_w))
+                # outside the add/drop guard: health must not report the
+                # catalogue as of the last roll, or a stall would look healthy
+                h["subscribed"] = len(subscribed)
+                h["known"] = len(known)
+                h["expected_active"] = sum(1 for m in known.values()
+                                           if _due(m, now_w))
                 if health is not None and _now() - last_health >= GEMINI_HEALTH_SECONDS:
                     last_health = _now()
                     await sink.write({"t": _now(), "venue": "gemini",
@@ -545,6 +672,24 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                 if not isinstance(msg, dict):
                     continue
                 symbol = str(msg.get("s") or msg.get("symbol") or "")
+                if not symbol and pending_ack and (
+                        "result" in msg or msg.get("id") == "laneD-add"):
+                    # The venue acks a SUBSCRIBE batch, not a symbol, so the
+                    # ack time is attributed to every symbol still awaiting
+                    # one. That is exact for a single outstanding batch and
+                    # an UPPER BOUND on ack latency when batches overlap.
+                    _ack = round(_now(), 3)
+                    for x in pending_ack:
+                        life.setdefault(x, {}).setdefault("subscription_ack_at", _ack)
+                    pending_ack.clear()
+                    continue
+                if symbol and symbol.upper() in subscribed:
+                    # guarded on `subscribed` so a straggler frame arriving
+                    # after the window was dropped cannot resurrect a
+                    # lifecycle entry that will never be freed
+                    _lf = life.setdefault(symbol.upper(), {})
+                    if "first_frame_at" not in _lf:
+                        _lf["first_frame_at"] = round(_now(), 3)
                 if "p" in msg and "q" in msg and "m" in msg:
                     # PRINTS ARE NEVER SAMPLED AWAY: they are the scarce
                     # evidence (735 in the entire historical tape) and the

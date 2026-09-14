@@ -328,7 +328,8 @@ class _MemSink:
         self.rows.append(event)
 
 
-def _run_scripted_session(monkeypatch, script, expiry=1000.0, asset="BTC"):
+def _run_scripted_session(monkeypatch, script, expiry=1000.0, asset="BTC",
+                          discover_seconds=0.0, state=None):
     clock = [script[0][0]]
     stop = asyncio.Event()
     ws = _FakeWS(script, clock, stop)
@@ -336,7 +337,7 @@ def _run_scripted_session(monkeypatch, script, expiry=1000.0, asset="BTC"):
             "duration": 5}
     sym = "GEMI-BTC05M2609141200-UP"
 
-    monkeypatch.setattr(C, "DISCOVER_SECONDS", 0.0)
+    monkeypatch.setattr(C, "DISCOVER_SECONDS", discover_seconds)
     monkeypatch.setattr(C, "GEMINI_BBO_RECORD_SECONDS", 0.0)
     monkeypatch.setattr(C, "GEMINI_WS_SESSION_SECONDS", 1e9)
     monkeypatch.setattr(C, "_now", lambda: clock[0])
@@ -348,7 +349,8 @@ def _run_scripted_session(monkeypatch, script, expiry=1000.0, asset="BTC"):
     monkeypatch.setattr(C, "_gemini_active_symbols", _fake_discover)
 
     sink, canon = _MemSink(), _MemSink()
-    asyncio.run(C._gemini_ws_session(sink, stop, [sym], canon=canon, health={}))
+    asyncio.run(C._gemini_ws_session(sink, stop, [sym], canon=canon, health={},
+                                     state=state))
     return sym, ws, sink, canon
 
 
@@ -484,3 +486,155 @@ def test_digest_any_span_absent_is_none_not_zero():
     meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
     d = C._window_digest("X", meta, _series(10), [], 0, None)
     assert d["tte_last_any"] is None and d["span_any_s"] is None
+
+
+def test_digest_carries_the_six_subscribe_path_timestamps():
+    """CAUSATION BEFORE FIX. A late first frame can come from the venue not
+    LISTING the window, from our discovery tick, from a slow SUBSCRIBE ack,
+    or from the venue's first frame. The digest must time each stage
+    separately or the cause cannot be attributed."""
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    life = {"window_discovered_at": 600.0,
+            "window_due_at": 670.0,
+            "subscription_requested_at": 672.0,
+            "subscription_ack_at": 672.4,
+            "first_frame_at": 673.0,
+            "discovery_tick_index": 3,
+            "session_age_at_discovery_s": 180.0,
+            "session_index": 7}
+    d = C._window_digest("X", meta, _series(10), [], 0, None, life)
+    assert d["window_discovered_at"] == 600.0
+    assert d["window_due_at"] == 670.0
+    assert d["subscription_requested_at"] == 672.0
+    assert d["subscription_ack_at"] == 672.4
+    assert d["first_frame_at"] == 673.0
+    assert d["expiry"] == 1000.0
+    # positive lead == the window was known BEFORE it was due to subscribe
+    assert d["lat_discovery_to_due_s"] == 70.0
+    assert d["lat_due_to_subscribe_s"] == 2.0
+    assert d["lat_subscribe_to_ack_s"] == 0.4
+    assert d["lat_ack_to_first_frame_s"] == 0.6
+
+
+def test_late_discovery_reports_a_negative_lead_not_a_missing_one():
+    """The suspected cause is discovery AFTER the window was already due.
+    That must read as a NEGATIVE lead, not as None -- None means UNKNOWN and
+    would hide exactly the defect we are hunting."""
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    life = {"window_discovered_at": 752.0, "window_due_at": 670.0}
+    d = C._window_digest("X", meta, _series(10), [], 0, None, life)
+    assert d["lat_discovery_to_due_s"] == -82.0
+
+
+def test_absent_lifecycle_reports_unknown_never_zero():
+    """A missing stamp is UNKNOWN. Reporting 0 would read as 'instant' and
+    would silently exonerate the stage that is actually late."""
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    d = C._window_digest("X", meta, _series(10), [], 0, None, None)
+    for k in ("window_discovered_at", "subscription_requested_at",
+              "subscription_ack_at", "first_frame_at",
+              "lat_discovery_to_due_s", "lat_due_to_subscribe_s",
+              "lat_subscribe_to_ack_s", "lat_ack_to_first_frame_s",
+              "discovery_tick_index", "session_index"):
+        assert d[k] is None, k
+    # due is DERIVABLE from expiry alone, so it is known even with no life
+    assert d["window_due_at"] == 1000.0 - C.GEMINI_SUBSCRIBE_LEAD_S
+    assert d["expiry"] == 1000.0
+
+
+def test_window_is_subscribed_at_its_due_time_not_at_the_next_discovery(
+        monkeypatch, capsys):
+    """THE ~82 s LATE-SUBSCRIBE DEFECT. The subscription roll used to live
+    INSIDE the DISCOVER_SECONDS branch, so a window that became due at
+    expiry-330 waited for the next REST tick -- up to a further 45 s, on a
+    tick grid that stayed phase-locked to the window clock because the 600 s
+    session period is an exact multiple of the 300 s window period. The
+    venue publishes windows ~890 s ahead, so every second of that wait was
+    self-inflicted.
+
+    Here discovery happens once and then never again (DISCOVER_SECONDS huge).
+    The window must still be SUBSCRIBEd the moment it comes due."""
+    sym = "GEMI-BTC05M2609141200-UP"
+    # expiry 1000 -> due at 670. Nothing is due for the first three passes.
+    script = [(500.0, {}), (600.0, {}), (669.0, {}),
+              (680.0, _depth(sym, 0.48, 0.50)), (681.0, {})]
+    _, ws, _, _ = _run_scripted_session(monkeypatch, script,
+                                        discover_seconds=1e9)
+    subs = [m for m in ws.sent if m.get("method") == "SUBSCRIBE"]
+    assert len(subs) == 1, ws.sent
+    assert f"{sym}@trade" in subs[0]["params"]
+
+
+def test_first_discovery_is_immediate_so_no_session_starts_blind(monkeypatch):
+    """`last_discover` was seeded with monotonic(), making the first
+    DISCOVER_SECONDS of EVERY session blind with an empty catalogue -- the
+    window could come due while we still knew nothing. kalshi_task has always
+    seeded 0.0; this makes the gemini session agree."""
+    sym = "GEMI-BTC05M2609141200-UP"
+    script = [(700.0, _depth(sym, 0.48, 0.50)), (701.0, {})]
+    # DISCOVER_SECONDS huge: if the first pass were not immediate, discovery
+    # would never run at all and nothing could ever be subscribed.
+    _, ws, sink, _ = _run_scripted_session(monkeypatch, script,
+                                           discover_seconds=1e9)
+    assert [m for m in ws.sent if m.get("method") == "SUBSCRIBE"]
+    assert [r for r in sink.rows if r.get("kind") == "window"]
+
+
+def test_state_survives_a_session_recycle_and_the_digest_is_not_lost(
+        monkeypatch, capsys):
+    """A 600 s session recycle used to destroy `known` and every per-window
+    digest buffer. Because 600 is an exact multiple of the 300 s window
+    period, the loss was phase-locked rather than averaged: one 5m window in
+    two produced NO digest at all. The carried state must preserve the
+    earlier session's observations and still emit ONE digest at drop."""
+    sym = "GEMI-BTC05M2609141200-UP"
+    state = {}
+
+    # session A: observes tte 300..201, then its script ends
+    first = [(700.0 + i, _depth(sym, 0.48, 0.50)) for i in range(100)]
+    _run_scripted_session(monkeypatch, first, state=state)
+    assert capsys.readouterr().out == ""          # window still open: no digest
+    assert sym in state["known"]
+    assert len(state["closed"][sym]) == 100
+
+    # session B: fresh socket, observes tte 200..1, then the window drops
+    second = [(800.0 + i, _depth(sym, 0.48, 0.50)) for i in range(200)]
+    second += [(1040.0, {}), (1041.0, {})]
+    _, ws2, _, _ = _run_scripted_session(monkeypatch, second, state=state)
+
+    # a NEW socket has no subscriptions, so it must re-SUBSCRIBE
+    assert [m for m in ws2.sent if m.get("method") == "SUBSCRIBE"], ws2.sent
+
+    out = capsys.readouterr().out.splitlines()
+    head = [x for x in out if x.startswith("GEMINI_WINDOW_CLOSE ")]
+    assert len(head) == 1, out[:4]
+    d = json.loads(head[0].split(" ", 1)[1])
+    # BOTH sessions' observations are in the one digest
+    assert d["obs"] == 300
+    assert d["tte_first"] == 300.0 and d["tte_last"] == 1.0
+    assert d["span_s"] == 299.0 and d["complete"] is True
+    # and the buffers are released once the digest is out
+    assert sym not in state["closed"] and sym not in state["any_tte"]
+
+
+def test_carried_lifecycle_keeps_the_first_subscribe_not_the_resubscribe(
+        monkeypatch, capsys):
+    """After a recycle the window is SUBSCRIBEd again on the new socket. The
+    digest must still report when we FIRST asked, or the re-subscribe would
+    disguise the original latency as small."""
+    sym = "GEMI-BTC05M2609141200-UP"
+    state = {}
+    _run_scripted_session(monkeypatch,
+                          [(700.0 + i, _depth(sym, 0.48, 0.50))
+                           for i in range(50)], state=state)
+    first_req = state["life"][sym]["subscription_requested_at"]
+    assert first_req == 700.0
+
+    second = [(800.0 + i, _depth(sym, 0.48, 0.50)) for i in range(200)]
+    second += [(1040.0, {}), (1041.0, {})]
+    _run_scripted_session(monkeypatch, second, state=state)
+    out = [x for x in capsys.readouterr().out.splitlines()
+           if x.startswith("GEMINI_WINDOW_CLOSE ")]
+    d = json.loads(out[0].split(" ", 1)[1])
+    assert d["subscription_requested_at"] == first_req
+    assert d["first_frame_at"] == 700.0
