@@ -171,8 +171,13 @@ def sample(*, asset: str, start: int, now: float, book: Optional[Dict[str, Any]]
                                               else R_NO_HISTORY),
         "flow_buy_qty": (flow or {}).get("buy_qty"),
         "flow_sell_qty": (flow or {}).get("sell_qty"),
-        "flow_reason": (None if flow else "no trade prints served for this interval"),
-        "l5_acted": bool((flow or {}).get("l5_fill")),
+        # a FAILED read and a QUIET venue are not the same observation, and
+        # collapsing them makes a broken collector look like an idle market.
+        "flow_reason": (None if flow else
+                        "L5 activity read failed: fills UNKNOWN for this sample"),
+        "l5_acted": (bool(flow.get("l5_fill")) if flow else None),
+        "l5_acted_reason": (None if flow else
+                            "cannot distinguish no-action from an unread feed"),
         "labels": ("OBSERVATION ONLY -- no order path, no decision, no state. "
                    "A window where L5 does nothing is recorded in full: those "
                    "are the CONTINUE examples a switch model cannot be fitted "
@@ -209,6 +214,8 @@ def digest(asset: str, start: int, samples: List[Dict[str, Any]]) -> Dict[str, A
         "coverage": (len(samples) * SAMPLE_S / (WINDOW_S + PRE_ROLL_S)),
         "two_sided_frac": sum(1 for s in samples if s["two_sided"]) / len(samples),
         "l5_fills": sum(1 for s in samples if s["l5_acted"]),
+        "samples_with_unread_l5_feed": sum(1 for s in samples
+                                           if s["l5_acted"] is None),
         "pre_roll_samples": sum(1 for s in samples if s["pre_roll"]),
     }
 

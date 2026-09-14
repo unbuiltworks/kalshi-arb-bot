@@ -15,8 +15,11 @@ def test_windows_are_enumerated_so_late_subscribe_cannot_recur():
 
 def test_a_window_where_l5_does_nothing_is_still_a_full_observation():
     rec = R.sample(asset="btc", start=1789420200, now=1789420100.0,
-                   book={"up_bid": 0.48, "up_ask": 0.52},
-                   inv={}, flow=None, history=[])
+                   book={"up_bid": 0.48, "up_ask": 0.52}, inv={},
+                   flow={"l5_fill": False, "buy_qty": 0, "sell_qty": 0},
+                   history=[])
+    # a READ feed showing nothing is a real CONTINUE observation; an UNREAD
+    # feed is not, and the two are deliberately different values here.
     assert rec["pre_roll"] is True and rec["l5_acted"] is False
     assert rec["two_sided"] is True and abs(rec["spread"] - 0.04) < 1e-9
     assert abs(rec["attainable_pair_cost"] - 0.96) < 1e-9
@@ -162,3 +165,29 @@ def test_the_recorder_has_no_order_path_and_no_credential_read():
             assert verb not in src
         for cred in ("PRIVATE_KEY", "API_KEY", "SECRET", "PASSPHRASE"):
             assert cred not in src, (name, cred)
+
+
+def test_the_recorder_polls_l5s_wallet_not_his_handle():
+    """The handle returns HTTP 400 and the fail-soft read turns that into a null
+    sample, so every window logs l5_fills 0 and a BROKEN READ is indistinguishable
+    from a quiet venue. Pin the address against the canonical config."""
+    from src.l5_5m_coverage import run as RUN
+    from src.polymarket_l5 import config
+    assert RUN.L5 == config.TARGET_ADDRESS
+    assert RUN.L5.startswith("0x") and len(RUN.L5) == 42
+    assert RUN.L5_HANDLE not in RUN.ACTIVITY.format(user=RUN.L5)
+
+
+def test_an_unread_l5_feed_is_not_reported_as_no_action():
+    quiet = R.sample(asset="btc", start=1789420200, now=1789420300.0,
+                     book={"up_bid": 0.48, "up_ask": 0.52}, inv={},
+                     flow={"l5_fill": False, "buy_qty": 0, "sell_qty": 0},
+                     history=[])
+    assert quiet["l5_acted"] is False and quiet["l5_acted_reason"] is None
+    broken = R.sample(asset="btc", start=1789420200, now=1789420300.0,
+                      book={"up_bid": 0.48, "up_ask": 0.52}, inv={},
+                      flow=None, history=[])
+    assert broken["l5_acted"] is None          # NOT False
+    assert "unread" in broken["l5_acted_reason"]
+    d = R.digest("btc", 1789420200, [quiet, broken])
+    assert d["l5_fills"] == 0 and d["samples_with_unread_l5_feed"] == 1

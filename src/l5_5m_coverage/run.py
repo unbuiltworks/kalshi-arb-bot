@@ -25,7 +25,14 @@ from typing import Any, Dict, List, Optional
 
 from src.l5_5m_coverage import recorder as R
 
-L5 = "l5zn1bwom8etsk"
+# data-api keys on the WALLET, not the handle: passing "l5zn1bwom8etsk" returns
+# HTTP 400 "required query param 'user' not provided", which the fail-soft read
+# swallowed into a null sample -- so every window logged l5_fills 0 and looked
+# like a quiet venue rather than a broken read. Kept as a literal so this module
+# stays stdlib-only; tests/test_l5_5m_coverage.py asserts it still equals
+# src/polymarket_l5/config.py TARGET_ADDRESS.
+L5_HANDLE = "l5zn1bwom8etsk"
+L5 = "0xb945945d5bcaf7b56834d4da8cdf8f8f94b2db68"
 GAMMA = "https://gamma-api.polymarket.com/markets?slug={slug}"
 CLOB = "https://clob.polymarket.com/book?token_id={tid}"
 ACTIVITY = ("https://data-api.polymarket.com/activity"
@@ -72,9 +79,16 @@ def book_for(slug: str, cache: Dict[str, Any]) -> tuple:
     }, (float(ts) / 1000.0 if ts else None))
 
 
-def l5_fills(seen: List[List[tuple]]) -> List[tuple]:
-    """L5's recent fills, multiset-union deduped across overlapping polls."""
+def l5_fills(seen: List[List[tuple]]) -> tuple:
+    """(fills, read_ok). L5's recent fills, multiset-union deduped.
+
+    read_ok is returned SEPARATELY because an empty list means two opposite
+    things -- a quiet venue, or a read that failed -- and collapsing them is
+    how a 400 on the wrong identifier went unnoticed for four windows.
+    """
     a = _get(ACTIVITY.format(user=L5))
+    if a is None:
+        return R.dedupe_fills(seen), False
     resp = []
     for r in (a or []):
         resp.append((str(r.get("conditionId")), int(r.get("timestamp") or 0),
@@ -83,7 +97,7 @@ def l5_fills(seen: List[List[tuple]]) -> List[tuple]:
                      float(r.get("usdcSize") or 0)))
     seen.append(resp)
     del seen[:-8]                       # keep a short overlap window
-    return R.dedupe_fills(seen)
+    return R.dedupe_fills(seen), True
 
 
 def main(argv=None) -> int:
@@ -109,7 +123,7 @@ def main(argv=None) -> int:
                 st = R.window_start(now, k)
                 if now >= R.due_at(st) and (asset, st) not in open_w:
                     open_w[(asset, st)] = {"samples": [], "hist": []}
-        fills = l5_fills(fill_pages)
+        fills, fills_ok = l5_fills(fill_pages)
         for (asset, st), w in list(open_w.items()):
             if now > st + R.WINDOW_S:
                 d = R.digest(asset, st, w["samples"])
@@ -128,9 +142,10 @@ def main(argv=None) -> int:
                 inv={"up": up, "dn": dn,
                      "cost_up": sum(f[6] for f in recent if f[3] == "Up" and f[2] == "BUY"),
                      "cost_dn": sum(f[6] for f in recent if f[3] != "Up" and f[2] == "BUY")},
-                flow={"l5_fill": bool([f for f in recent if now - 1 <= f[1] <= now]),
-                      "buy_qty": sum(f[5] for f in recent if f[2] == "BUY"),
-                      "sell_qty": sum(f[5] for f in recent if f[2] == "SELL")},
+                flow=({"l5_fill": bool([f for f in recent if now - 1 <= f[1] <= now]),
+                       "buy_qty": sum(f[5] for f in recent if f[2] == "BUY"),
+                       "sell_qty": sum(f[5] for f in recent if f[2] == "SELL")}
+                      if fills_ok else None),
                 history=w["hist"])
             w["samples"].append(s)
             w["hist"].append({"t": now, "mid": s["mid"],
