@@ -312,10 +312,20 @@ def _lifecycle_fields(meta: Mapping[str, Any],
     therefore timed separately, and every value is None when its stamp is
     UNKNOWN -- never 0, which would read as "instant".
 
-    Sign convention: every latency is POSITIVE when the stage was on time
-    and NEGATIVE when it was late. `lat_discovery_to_due_s` is the lead we
-    had in hand: positive means the window was known BEFORE it was due to be
-    subscribed, negative means it was discovered too late for any lead.
+    SIGN CONVENTION, WHICH IS NOT UNIFORM -- READ IT BEFORE USING THESE.
+    Only the first field is a lead; the other three are elapsed durations, so
+    a single "positive means good" rule would invert three of the four.
+
+      lat_discovery_to_due_s   = due - discovered.  A LEAD.
+                                 POSITIVE = known BEFORE it was due (good).
+                                 NEGATIVE = discovered too late for any lead,
+                                 e.g. the container did not yet exist.
+      lat_due_to_subscribe_s   = requested - due.   AN ELAPSED DELAY.
+                                 POSITIVE = subscribed AFTER it was due (LATE);
+                                 0 is the target. Negative would mean we
+                                 subscribed early, which _due forbids.
+      lat_subscribe_to_ack_s   = ack - requested.   ELAPSED; smaller is better.
+      lat_ack_to_first_frame_s = first_frame - ack. ELAPSED; smaller is better.
     """
     l = dict(life or {})
     exp = meta.get("expiry_t")

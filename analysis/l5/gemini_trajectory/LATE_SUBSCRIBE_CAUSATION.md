@@ -114,10 +114,19 @@ The digest now carries the six subscribe-path stamps — `window_discovered_at`,
 (`DISCOVERY -> DUE`, `DUE -> SUBSCRIBE`, `SUBSCRIBE -> ACK`,
 `ACK -> FIRST_FRAME`), plus `discovery_tick_index`,
 `session_age_at_discovery_s` and `session_index` so a session-recycle artefact
-is never averaged together with steady state. Every latency is positive when
-the stage was on time and negative when it was late; an absent stamp reports
-`None` (UNKNOWN), never `0`, which would read as "instant" and exonerate the
-stage that is actually late.
+is never averaged together with steady state. An absent stamp reports `None`
+(UNKNOWN), never `0`, which would read as "instant" and exonerate the stage
+that is actually late.
+
+**The sign convention is not uniform, and assuming it is will invert three of
+the four readings.** Only `lat_discovery_to_due_s` is a *lead* — positive means
+the window was known before it was due. The other three are *elapsed
+durations*: `lat_due_to_subscribe_s` is positive when we subscribed **late**
+(0 is the target), and the two venue-side latencies are simply smaller-is-
+better. A cold-start window makes the difference concrete:
+`lat_discovery_to_due_s -96.74` (no lead — the container did not yet exist)
+with `lat_due_to_subscribe_s +96.74` (subscribed 96.74 s late) describe the
+same event from the two different sides.
 
 **`tte_first_any` cannot verify this fix.** It is clamped to the window
 duration by construction (`0 <= tte <= _win_dur_s`), so for a 5m window it can

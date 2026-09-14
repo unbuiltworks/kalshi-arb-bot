@@ -638,3 +638,40 @@ def test_carried_lifecycle_keeps_the_first_subscribe_not_the_resubscribe(
     d = json.loads(out[0].split(" ", 1)[1])
     assert d["subscription_requested_at"] == first_req
     assert d["first_frame_at"] == 700.0
+
+
+def test_the_latency_sign_convention_is_not_uniform_and_is_pinned():
+    """THREE OF THE FOUR WOULD BE READ BACKWARDS under a single
+    "positive means on time" rule. `lat_discovery_to_due_s` is a LEAD;
+    `lat_due_to_subscribe_s` is an ELAPSED DELAY where positive means LATE.
+    This is the real cold-start observation from deployment 04b0b253, where
+    both describe the same 96.74 s from opposite sides."""
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1789408500.0}
+    life = {"window_discovered_at": 1789408266.739,
+            "window_due_at": 1789408170.0,
+            "subscription_requested_at": 1789408266.739,
+            "subscription_ack_at": 1789408266.746,
+            "first_frame_at": 1789408266.803}
+    d = C._window_digest("X", meta, _series(10), [], 0, None, life)
+    # no lead at all: the window was already past due when first discovered
+    assert d["lat_discovery_to_due_s"] == -96.739
+    # and the SAME 96.739 s, as a delay, is POSITIVE
+    assert d["lat_due_to_subscribe_s"] == 96.739
+    # venue-side stages are elapsed durations, smaller is better
+    assert d["lat_subscribe_to_ack_s"] == 0.007
+    assert d["lat_ack_to_first_frame_s"] == 0.057
+    # the unclamped first-frame lead, which tte_first_any cannot express
+    assert round(d["expiry"] - d["first_frame_at"], 2) == 233.20
+
+
+def test_on_time_subscribe_reports_zero_delay_not_a_negative_one():
+    """`_due` forbids subscribing before expiry-LEAD, so the best achievable
+    lat_due_to_subscribe_s is 0. A negative value would mean the roll had
+    bypassed the window clock."""
+    meta = {"asset": "BTC", "window_minutes": 5, "expiry_t": 1000.0}
+    life = {"window_discovered_at": 100.0, "window_due_at": 670.0,
+            "subscription_requested_at": 670.0, "first_frame_at": 670.1}
+    d = C._window_digest("X", meta, _series(10), [], 0, None, life)
+    assert d["lat_discovery_to_due_s"] == 570.0     # a real lead
+    assert d["lat_due_to_subscribe_s"] == 0.0       # on time
+    assert round(d["expiry"] - d["first_frame_at"], 2) == 329.90
