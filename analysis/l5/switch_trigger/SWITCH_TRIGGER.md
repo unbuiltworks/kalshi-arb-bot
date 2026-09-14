@@ -66,3 +66,43 @@ Consistent with the wider finding that L5 is a continuous two-sided market maker
 in BTC15m: if he is quoting both sides essentially all the time, "switch" is
 closer to routine alternation than to a discrete triggered decision, which is
 what a near-chance classifier on inventory features looks like.
+
+## Cohort stratification — the effect is BTC15m-only
+
+Pooling 1,484 BTC15m rows with 168 others would have manufactured confidence in
+cohorts that carry almost no switches. Power threshold fixed in advance: a
+cohort needs >= 40 test rows AND >= 30 of EACH class in test.
+
+| cohort | n | switches | test n | test switches | OOS AUC | verdict |
+|---|---|---|---|---|---|---|
+| **BTC15m** | 1,484 | 609 | 446 | 196 | **0.6739** | usable |
+| ETH15m | 100 | 27 | 30 | 5 | 0.60 | **INSUFFICIENT EVIDENCE** |
+| ETH5m | 53 | 17 | 16 | 4 | 0.3333 | **INSUFFICIENT EVIDENCE** |
+| BTC5m | 15 | 3 | 5 | 1 | 0.75 | **INSUFFICIENT EVIDENCE** |
+
+Isolated, BTC15m is **stronger** than the pooled figure (0.6739 vs 0.6264). The
+other three are not evidence in either direction — ETH5m even points the
+opposite way (AUC 0.3333), which is precisely why pooling is refused rather than
+reported as support.
+
+**The aggregate result must not be generalised to 5m.**
+
+## Pair-cost distribution — the economic magnitude behind the AUC
+
+| cohort | class | n | p25 | p50 | p75 | mean |
+|---|---|---|---|---|---|---|
+| **BTC15m** | SWITCH | 609 | 0.9154 | **0.9969** | 1.0711 | 1.0071 |
+| **BTC15m** | CONTINUE | 875 | 0.9826 | **1.0273** | 1.1220 | 1.0494 |
+| ETH15m | SWITCH | 27 | 0.9071 | 1.0560 | 1.3343 | 1.0800 |
+| ETH15m | CONTINUE | 73 | 0.9175 | 0.9708 | 1.0123 | 0.9934 |
+| ETH5m | SWITCH | 17 | 1.1257 | 1.2662 | 1.5962 | 1.2764 |
+| ETH5m | CONTINUE | 36 | 0.9425 | 0.9814 | 1.0939 | 1.0458 |
+
+In BTC15m the median pair on a switch is **0.9969** against **1.0273** on a
+continue — a gap of about **3 cents**. That is the whole economic content of an
+AUC of 0.67: a real but small tilt.
+
+**Both medians sit at or above par.** He is not switching in order to lock a
+cheap pair; he switches at roughly $1.00. That is what a continuous two-sided
+market maker looks like, and it is further reason to treat this as description
+of his behaviour rather than a production switching rule.
