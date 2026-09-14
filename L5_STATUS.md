@@ -719,3 +719,65 @@ matched campaigns and ≥30 complement fills).
 
 **CONSEQUENCE: stop optimising PMUS COMPLETE execution.** The binding
 constraint is how often we are in an L5-like state at all.
+
+## 2026-09-14 — L5 HABITAT SCORE, and the PMUS baseline
+
+**ef5ef135 accepted as the PMUS habitat verdict. COMPLETE microstructure work
+is FROZEN at current evidence.** PMUS remains bounded production + evidence
+collection and is **not disabled**. CEILING_PINNED_PERSIST stays parked. No
+admission, sizing, concurrency or production change is made on the score.
+
+**`src/l5_habitat_score.py`** answers one question — *how much does this market
+environment resemble the environments in which L5 actually generated his
+inventory cycles?* — from variables observable **before any strategy acts**.
+Settlement outcome, realized P&L, our fills and order state are on a
+`FORBIDDEN_INPUTS` list and the scorer **raises** if one reaches it.
+
+**THE THRESHOLDS ARE L5's.** Each calibrated feature is scored against the
+empirical distribution across his **1,893 canonical windows**; his median
+scores 0.5, his p90 scores 0.9. `derive_reference()` regenerates the table, and
+the reference and every candidate go through the **same** feature extractor.
+
+| feature | kind | L5 p10 | L5 p50 | L5 p90 |
+|---|---|---:|---:|---:|
+| price_changes_per_min | CAPACITY | 0.866 | 2.344 | 10.769 |
+| share_move_ge_1c / 2c / 5c | CAPACITY | .572/.407/.286 | 1.000/0.800/0.625 | 1.000 |
+| price_span | CAPACITY | 0.172 | 0.780 | 0.960 |
+| bands_visited | CAPACITY | 2 | 4 | 7 |
+| tte_p50_s | REGIME | 69 | 171 | 524 |
+
+**ONE-DIRECTIONAL BY CONSTRUCTION.** L5's tape records his FILLS, which
+lower-bound what his markets supplied. Below the reference is a **conclusive
+habitat deficit**; above it is **not** conclusive sufficiency. The score is a
+**ceiling on habitat adequacy, never an estimate**.
+
+**THREE KINDS OF NOT-KNOWING, NEVER IMPUTED FAVOURABLY.** UNKNOWN (candidate
+did not supply it, or supplied it saturated), UNCALIBRATED (L5's fills-only
+tape cannot produce a reference — spread, depth, book-update rate, queue,
+trade-through: reported, never scored), NOT_APPLICABLE. Missing features leave
+the denominator; `coverage_discounted_score` makes the loss visible. L5's
+demand side (fills/min, switches/min, switch_rate) is reported BESIDE the
+score, never inside it — and a book-update rate is not a substitute for trades.
+
+**PMUS BASELINE: habitat score p50 0.108, coverage 0.857, discounted p50
+0.0926**, over 14 markets (356 XCHECK rows, 18 seen, 4 skipped for <180 s).
+Best market 0.2537 against L5's median window of 0.5 by construction.
+
+**AND THE BIAS CHECK MAKES IT CONCLUSIVE.** Coarse sampling biases rate
+features DOWN but move-magnitude features UP. On the four UP-biased features —
+where the error runs in PMUS's own favour — PMUS's median scores are
+**share_move_ge_1c 0.0561, ge_2c 0.0491, ge_5c 0.0121, price_span 0.0991**:
+roughly L5's 1st–10th percentile. `price_changes_per_min` is flagged
+sampling-limited and is not needed for the finding.
+
+`ws_trades_total` is a deque length **capped at 500 and saturated in all 14
+markets**, so trades/min is UNKNOWN — never a floor read as a measurement.
+`tte_p50_s` is UNKNOWN in every market, which holds coverage at 0.857.
+
+This is independent support for ef5ef135, reached from market state **before**
+any strategy acts rather than from our own trajectories. It establishes nothing
+about profit, nothing about whether a better PMUS market exists (14 markets over
+~1 hour is a baseline, not a census), and nothing about Gemini, which is not
+scored because the workstream has returned no observation stream. The
+per-venue observation spec and the still-required per-fill schema are in
+`analysis/l5/habitat/HABITAT_SCORE.md` §7.
