@@ -64,3 +64,33 @@ def test_generic_entrypoint_refuses_under_a_managed_runtime():
     assert out.returncode == 0, out.stderr[-500:]
     assert "KALSHI_BOT_REFUSED" in out.stdout
     assert "private_key" not in out.stderr
+
+
+def test_src_main_also_refuses_under_a_managed_runtime():
+    """LIVE 2026-09-14T13:42Z: a Railway service created with no config was
+    auto-built and ran src/main.py directly -- run_bot() -> KalshiClient() ->
+    FileNotFoundError: private_key.pem. It did not trade only because no key
+    was present, and a missing key is not a safety control. The refusal that
+    guarded `python -m src` must guard this entrypoint too."""
+    import os
+    import subprocess
+    import sys
+    env = dict(os.environ)
+    env["RAILWAY_SERVICE_NAME"] = "x"
+    env.pop("KALSHI_ARB_BOT_SERVICE", None)
+    out = subprocess.run([sys.executable, "-c",
+                          "import src.main as m; m.main()"],
+                         cwd=ROOT, env=env, capture_output=True, text=True,
+                         timeout=60)
+    assert out.returncode == 0, out.stderr[-2000:]
+    assert "KALSHI_BOT_REFUSED" in out.stdout
+    assert "KalshiClient" not in out.stderr
+
+
+def test_src_main_still_runs_when_explicitly_opted_in():
+    """The refusal must be escapable exactly the way __main__'s is, or a
+    legitimate bot service could no longer start."""
+    import inspect
+    from src import main as m
+    src = inspect.getsource(m.main)
+    assert "refuse_reason" in src and "KALSHI_BOT_REFUSED" in src
