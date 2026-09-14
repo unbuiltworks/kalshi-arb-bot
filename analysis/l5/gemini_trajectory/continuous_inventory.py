@@ -354,6 +354,7 @@ def replay_window(win: Mapping[str, Any], *, model: Mapping[str, Any],
         venue_orders += 1
         local_requotes = 0
         f = None
+        seg_until = stop_at
         while True:
             nxt = _next_touch_move(rows, adapter, expiry, side_yes,
                                    px_cur, t_cur, stop_at)
@@ -392,7 +393,18 @@ def replay_window(win: Mapping[str, Any], *, model: Mapping[str, Any],
                           "rest_s": round(f["t"] - t, 2)})
             t = f["t"] + MIN_REEVAL_S
         else:
-            t = max(t_cur, t) + MIN_REEVAL_S
+            # THE ORDER IS STILL RESTING. Time advances to where the rest
+            # actually ENDED -- the touch move we could not re-join, or the
+            # end of the series -- not by one re-evaluation tick.
+            #
+            # DEFECT THIS FIXES, found by the numbers rather than by reading:
+            # advancing by MIN_REEVAL_S re-placed a NEW venue order every
+            # second against an order that was already resting unfilled. On a
+            # STATIC book (Gemini sports never moved in 8 minutes) that
+            # reported 243 intentions and 8,000 venue orders per window for
+            # what is really ONE order resting the whole time. It inflated
+            # exactly the cohorts that deserved the lowest counts.
+            t = max(seg_until, t + MIN_REEVAL_S)
 
     status = ("MATCHED" if inv.matched > 0 and inv.residual == 0 else
               "RESIDUAL_HOLD" if inv.total > 0 else "NO_FILL")

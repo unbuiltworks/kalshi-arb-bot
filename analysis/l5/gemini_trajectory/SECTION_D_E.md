@@ -57,13 +57,19 @@ Run on the three windows above and labelled NOT-COMPLETE.
 
 ### E1. The persistence change works
 
-Per window, median: **L5_BEHAVIORAL_ACTIONS 82, VENUE_ADMISSIBLE_ACTIONS 30,
-requotes 25, intentions 8.** The action ceiling never bound.
+> **CORRECTED 2026-09-14.** The counts first published here were inflated by a
+> replay defect: after an unfilled rest whose touch never moved, time advanced
+> by one re-evaluation tick, which re-placed a NEW venue order each second
+> against an order that was already resting. Fixed, pinned by a test, and
+> re-run. **The finding is unchanged — persistence works, fills are zero —
+> but the numbers below are the corrected ones.**
+
+Per window, median: **L5_BEHAVIORAL_ACTIONS 73, VENUE_ADMISSIBLE_ACTIONS 27,
+requotes 25, intentions 2.** The action ceiling never bound.
 
 The two counters are far apart, which is the whole point. BTC 14:55 produced
-**8 intentions but 62 venue orders and 54 requotes**, and **one single
-intention survived 190.44 s and 52 requotes**, walking its price from 0.21 to
-0.80 as the touch moved. Under the live shell, which reads a touch move as
+**3 intentions but 57 venue orders and 54 requotes** — one intention carried
+almost every one of those requotes, walking its price as the touch moved. Under the live shell, which reads a touch move as
 termination, that one intention would have been 53 separate terminated
 episodes -- and the live `MAX_ACTIONS=6` would have ended the session inside
 the first few seconds.

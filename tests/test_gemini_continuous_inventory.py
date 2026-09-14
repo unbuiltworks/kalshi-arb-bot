@@ -299,3 +299,38 @@ def test_summarize_never_mixes_tiers():
     assert set(out["tiers"]) == set(CI.TIERS)
     for tier in CI.TIERS:
         assert out["tiers"][tier]["windows"] == 0
+
+
+def test_a_resting_order_is_not_replaced_every_second_on_a_static_book():
+    """DEFECT: advancing by one re-evaluation tick after an unfilled rest
+    re-placed a NEW venue order each second against an order that was
+    already resting. On a static book -- Gemini sports did not move once in
+    8 minutes -- that reported 243 intentions and 8,000 venue orders for what
+    is ONE order resting the whole window, inflating exactly the cohorts that
+    deserved the lowest counts."""
+    from src import pmus_l5_persistence_v2 as pv2
+    model = pv2.load_v2()
+    # 300 s of a perfectly static two-sided book, no prints
+    ser = [[round(299.0 - i, 2), 0.48, 0.52, 500.0, 250.0] for i in range(300)]
+    r = CI.replay_window(_win(series=ser), model=model, tier="STRICT")
+    assert r["fills_n"] == 0
+    # ONE intention, ONE venue order, no requotes: the touch never moved
+    assert r["intentions_n"] == 1, r["intentions"]
+    assert r["VENUE_ADMISSIBLE_ACTIONS"] == 1
+    assert r["requotes"] == 0
+    assert r["intentions"][0]["filled"] is False
+
+
+def test_a_moving_touch_still_requotes_rather_than_resting_through_it():
+    """The fix must not turn persistence into 'never cancel': when the touch
+    DOES move the intention re-joins the new touch."""
+    from src import pmus_l5_persistence_v2 as pv2
+    model = pv2.load_v2()
+    ser = []
+    for i in range(120):
+        bid = 0.40 + 0.01 * (i % 8)
+        ser.append([round(299.0 - i, 2), round(bid, 2), round(bid + 0.10, 2),
+                    500.0, 250.0])
+    r = CI.replay_window(_win(series=ser), model=model, tier="STRICT")
+    assert r["requotes"] > 0
+    assert r["VENUE_ADMISSIBLE_ACTIONS"] > r["intentions_n"]

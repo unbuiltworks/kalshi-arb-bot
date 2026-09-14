@@ -177,6 +177,15 @@ def rank(observed: Mapping[str, Any], reference: Mapping[str, Any]) -> dict:
 
     return {
         "global_habitat_p50": gmed,
+        # PMUS WIDE and DEEP differ by more than 13x in sweep period. Pooling
+        # them would let a 27 s cadence borrow a 2 s cadence's transition
+        # statistics, so the observation pass is part of the cohort key.
+        "by_pass": group(lambda r: str(r.get("pass"))),
+        "by_venue_pass": group(
+            lambda r: "%s/%s" % (r.get("venue"), r.get("pass"))),
+        "by_venue_sport_pass": group(
+            lambda r: "%s/%s [%s]" % (r.get("venue"), r.get("sport"),
+                                      r.get("pass"))),
         "shrink_pseudo_markets": SHRINK_K,
         "min_markets_rankable": MIN_MARKETS_RANKABLE,
         "min_obs_per_market": MIN_OBS_PER_MARKET,
@@ -184,8 +193,16 @@ def rank(observed: Mapping[str, Any], reference: Mapping[str, Any]) -> dict:
             "missing_data": "coverage_discounted_score (frozen scorer)",
             "sample_size": f"shrinkage toward global median, k={SHRINK_K}",
         },
+        # A market scored on a handful of observations is noise, not a
+        # ranking. It is still listed, but SEPARATELY, so it cannot head the
+        # table on three quotes.
         "by_market": sorted(
-            [r for r in rows if r.get("usable")],
+            [r for r in rows if r.get("usable")
+             and r.get("observations", 0) >= MIN_OBS_PER_MARKET],
+            key=lambda r: -(r.get("coverage_discounted_score") or -1)),
+        "by_market_undersampled": sorted(
+            [r for r in rows if r.get("usable")
+             and r.get("observations", 0) < MIN_OBS_PER_MARKET],
             key=lambda r: -(r.get("coverage_discounted_score") or -1)),
         "unusable_markets": [r for r in rows if not r.get("usable")],
         "by_sport": group(lambda r: str(r.get("sport"))),
