@@ -581,3 +581,82 @@ Carry-forward: any future version of this test should carry **.97** as its
 ceiling, not 1.00. And the blocker is **instrumentation, not economics or
 policy** — the fix is read-only but is still a change to a money-moving
 service, so it is named and not made.
+
+## 2026-09-14 — L5_EXTEND_PRESERVE: **KILLED**. Recorder cap: **stays 1500**.
+
+Both verdicts accepted by the owner. Neither change is implemented.
+
+**L5_EXTEND_PRESERVE is KILLED.** Preserving a model-selected EXTEND instead of
+converting it to COMPLETE was already implemented twice — `SHADOW_1_ENTRY_ONLY`
+(`src/l5_band_semantics.py`) and `band=entry_only|cap=6` (9d6feb46) — and both,
+on both fill rules, produce **zero extra matched contracts**. Matched inventory
+per market is identical with and without the arm (3.44 / 6.08 / 2.79 / 4.67)
+while terminal residual grows 4.05→7.66, 3.49→6.87, 1.00→5.08. Its +$1.5994 is
+one baseball game (lad-mia +1.9938 against sapole-salvas −0.3944, one market
+unsettled). The residual cap of 6 refuses 64 of 67 opportunities in the
+dominant market, and the residual the arm does create meets a COMPLETE fill
+rate of 3.2% there. See `analysis/l5/extend_preserve/EXTEND_PRESERVE.md`.
+
+**`PMUS_WS_STATE_MAX_MARKETS` stays 1500.** The 7.1 GB container figure is not
+the Python heap: `rss_gb()` reports `ru_maxrss`, whose all-time peak moved
+0.603 → 0.652 GB over 6 h 16 m while the container grew 6.48 GB. The growth is
+page cache from a ~1.8 GB/h tape write against a 12 GB retention budget. A
+lower cap would save 299–569 MB of a figure that is 91% page cache while
+halving the residency of unseated markets — already 30.3 min against the 3600 s
+`trades_1h` needs. The proposed 3900 s `bbo_history` age bound was then
+**measured and declined**: the p50 seated market burns 2000 entries in 699 s,
+so the count bound is already tighter in 16 of 17 measured markets. Cold-market
+rates remain UNKNOWN. See `analysis/pmus/recorder_memory/`.
+
+## 2026-09-14 — P0 COMPLETE FILL CONVERSION: we cancel our own orders
+
+**SHADOW/FORENSIC ONLY; nothing deployed.** 260 COMPLETE attempts, 8 markets,
+16 fills (6.15%), corroborated by 190 post-cutover attempts with 5 fills.
+
+**THE MECHANISM.** The completion price is bounded by pair economics; in 47.4%
+of sessions the ceiling puts our price **below our own side's touch** by
+design. The `touch_moved` re-quote — armed for COMPLETE via
+`PMUS_SPRING_COMPLETE_REQUOTE` — then fires on `touch != px_`, which is true at
+the first poll and every poll after. The next attempt re-derives the same
+ceiling-bound price. Deterministic, not probabilistic:
+
+| rested orders | n | fills | rate | median rest | single-poll |
+|---|---:|---:|---:|---:|---:|
+| priced AT our touch | 76 | 15 | **19.7%** | 6.44 s | 4 |
+| priced BELOW our touch | 135 | 1 | **0.74%** | 2.01 s | **134** |
+
+**RANKED DECOMPOSITION.** M3 we cancelled early **122 (46.9%)**; M1 complement
+never reached 52 (20.0%); R0 rejected before resting 49 (18.8%); M6 market
+moved past us 9 (3.5%); M5 churn at an unchanged price/book 9 primary, 89
+co-occurring (75% of consecutive attempts re-post the identical price);
+M7 UNKNOWN 3. **M2 (queue) and M4 (size) are 0% and both are UNKNOWN, not
+absent** — the complement reached our price in **0 of 205** windows, so no
+queue race was ever observed, and there are **zero partial fills** in 260
+attempts, so no size pressure was ever observed. Queue placement and cancel
+behaviour are UNKNOWN on L5's side too: public fills cannot establish them.
+
+**AGAINST L5's PUBLIC FILLS** (77.3% maker; queue/cancels/quotes UNKNOWN):
+his maker opposite-side fill arrives at p50 **3 s**, p75 **7 s**. We cancel at
+p50 **2.01 s**, and 87.4% of our requote-cancels land inside our own 3.19 s
+median fill latency. He holds p50 **1** fill per price level and steps ~1 cent;
+we re-post the same price 75% of the time, in runs up to 23. Clip p50 17.0 vs
+our 1.39 (the learning-stage bound, not a defect).
+
+**THE SENSITIVITY DOES NOT SAY WHAT THE QUESTION ASSUMED.** A COMPLETE can only
+match inventory we already hold: total residual is **32.77 contracts**, so the
+benefit saturates at a ~20% fill rate and the maximum obtainable matched margin
+is **$0.1563** — against a settled residual loss of $1.3408 and an account
+settlement line of −$12.5082. **No fill-rate improvement turns it positive.**
+Covering the settled residual loss needs pair ≤ **0.9591**; the account line
+needs ≤ **0.6183**; we quote **0.9952** on the attempts that do not fill.
+**0 of 13 filled sessions were capped by the pair ceiling; 37 of 65 no-fill
+sessions were.** Conversion and economics fail together, for one reason.
+
+**HIGHEST-EVIDENCE CHANGE TO SHADOW-TEST NEXT:** suppress the `touch_moved`
+cancel for a COMPLETE pinned by the pair ceiling, where the re-quote provably
+cannot produce a different price. It changes no price, cap, band, size or
+concurrency. **It is a fidelity/conversion test, not a profit lever** — the
+prize is bounded at $0.1563 — and whether those orders would have filled is
+NOT answerable from the tape we hold, because we cancelled them. The profit
+lever is the pair cost we enter at, i.e. position state. See
+`analysis/l5/complete_conversion/COMPLETE_CONVERSION.md`.
