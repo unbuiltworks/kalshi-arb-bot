@@ -17,6 +17,7 @@ orders are sent and all P&L is theoretical.
 from __future__ import annotations
 
 import json
+import statistics
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -34,8 +35,34 @@ SHELLS = ("touch_cancel_30s", "rest_60s", "rest_120s", "rest_180s", "reprice_180
 POLICIES = ("modal", "stochastic")
 
 
-def _metrics(summary: dict) -> dict:
+def _d(v) -> float:
+    try:
+        return float(v or 0)
+    except Exception:
+        return 0.0
+
+
+def _p50(xs: list[float]):
+    return round(statistics.median(xs), 4) if xs else None
+
+
+def _metrics(summary: dict, rows: list[dict]) -> dict:
     g = summary["overall"]
+    fill_rows = [r for r in rows if int(r.get("fills") or 0) > 0]
+    matched_rows = [r for r in rows if int(r.get("matched_increments") or 0) > 0]
+    complete_fill_rows = [
+        r for r in rows
+        if any(o.get("relation") == "complete" and o.get("filled")
+               for o in (r.get("canonical_orders") or []))
+    ]
+    completed_cycle_rows = [r for r in rows if int(r.get("completed_cycles") or 0) > 0]
+    two_cycle_rows = [r for r in rows if int(r.get("completed_cycles") or 0) >= 2]
+    fill_terminal_resid = [abs(_d((r.get("final_inventory") or {}).get("residual")))
+                           for r in fill_rows]
+    matched_qty_total = sum(_d((r.get("final_inventory") or {}).get("matched"))
+                            for r in rows)
+    terminal_resid_abs_total = sum(abs(_d((r.get("final_inventory") or {}).get("residual")))
+                                   for r in rows)
     return {
         "windows": summary.get("windows"),
         "windows_with_fills": summary.get("windows_with_fills"),
@@ -47,6 +74,15 @@ def _metrics(summary: dict) -> dict:
         "complete_orders": g.get("complete_orders"),
         "complete_fills": g.get("complete_fills"),
         "complete_conversion_pct": g.get("complete_conversion_pct"),
+        "independent_complete_fill_windows": len(complete_fill_rows),
+        "windows_with_matched_increment": len(matched_rows),
+        "matched_increments_total": sum(int(r.get("matched_increments") or 0) for r in rows),
+        "windows_with_completed_cycle": len(completed_cycle_rows),
+        "windows_with_2plus_completed_cycles": len(two_cycle_rows),
+        "completed_cycles_total": sum(int(r.get("completed_cycles") or 0) for r in rows),
+        "matched_qty_total": round(matched_qty_total, 4),
+        "terminal_residual_abs_total": round(terminal_resid_abs_total, 4),
+        "terminal_residual_abs_p50_fill_windows": _p50(fill_terminal_resid),
         "matched_fraction_p50": g.get("matched_fraction_p50"),
         "terminal_residual_abs_p50": g.get("terminal_residual_abs_p50"),
         "pair_cost_after_known_fees_p50": g.get("pair_cost_after_known_fees_p50"),
@@ -76,7 +112,7 @@ def run() -> dict:
                 invcf.PRIMARY_SHELL = shell
                 rows = [invcf.evaluate(s, bbo[s], prints[s], model=model, art=art)
                         for s in symbols]
-                arms[shell] = _metrics(invcf.summarize(rows))
+                arms[shell] = _metrics(invcf.summarize(rows), rows)
             by_policy[policy] = arms
     finally:
         invcf.PRIMARY_SHELL = original_shell
