@@ -1,0 +1,18 @@
+# Sentinel watched by pmus-spring-l5-probe. Touching this file is the ONLY
+# thing that fires a probe deploy; a code push alone deploys nothing.
+#
+# 2026-09-14T14:13Z -- CUTOVER: matched-pair-ceiling HALT fix.
+#
+# WHY: live HALT 2026-09-14T13:26:52Z on aec-wta-ararus-samste-2026-09-14,
+#   UnboundLocalError: cannot access local variable 'dec'
+#   stop_reason matched_pair_ceiling:1.000326530612244897959183674>1.00
+# The refusal was CORRECT; the refusal path could not write its own
+# telemetry because `dec` is bound only in other branches. One-line fix,
+# +12/-0, no threshold/gate/size/cap/concurrency change.
+#
+# PRE-DEPLOY STATE READ 2026-09-14T14:13:41Z: serving 75edc4bd, held 1
+# (aec-wta-ararus-samste-2026-09-14), CAMPAIGN_RESUMING:SPRING_RESIDUAL_HOLD,
+# matched capital 2.4642, unmatched 3.1006, combined_loss -6.8957 against the
+# unchanged -30.00 daily stop.
+#
+# ROLLBACK: deployment fd496caf-1d11-4423-bf23-547618bf4699 serving 75edc4bd.
