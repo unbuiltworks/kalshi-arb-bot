@@ -23,7 +23,7 @@ import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Mapping, Optional, Set
 
 import httpx
 import websockets
@@ -38,7 +38,26 @@ GEMINI_WINDOW_RE = re.compile(r"^(BTC|ETH)(05|15)M(\d{10})$")
 DISCOVER_SECONDS = 45.0
 KALSHI_TRADES_POLL_SECONDS = 3.0
 KALSHI_BBO_POLL_SECONDS = 6.0
-GEMINI_BBO_RECORD_SECONDS = 5.0
+GEMINI_BBO_RECORD_SECONDS = 1.0   # ~1 Hz: resolves L5's 1-4 s behaviour
+
+# WINDOW-AWARE SUBSCRIPTION LIFECYCLE.
+#
+# THE DEFECT THIS FIXES, measured: across 756 canonicalised 5m windows the
+# tape carried a MEDIAN OF 170 two-sided observations per market and a MEDIAN
+# OF ZERO SECONDS inside the market's own 300 s window, with a median maximum
+# gap of 875.8 s. 69.3% of windows had no usable in-window quote at all.
+#
+# CAUSE, in two halves. The events feed returns windows as "active" long
+# before they open, and `subscribed` only ever GREW -- nothing was ever
+# unsubscribed. So each symbol was streamed from well before its open until
+# the process died, and almost every row is a pre-open or post-expiry
+# placeholder quote (a static 0.4800/0.5000 x 500).
+#
+# FIX: subscribe no later than expiry - LEAD, drop at expiry + RETAIN. The
+# connection then spends its bandwidth on windows that are actually trading.
+GEMINI_SUBSCRIBE_LEAD_S = 330.0    # >= 300 s window + margin
+GEMINI_RETAIN_AFTER_S = 30.0       # keep through settlement prints
+GEMINI_HEALTH_SECONDS = 30.0
 
 
 def _now() -> float:
@@ -154,13 +173,57 @@ async def _gemini_active_symbols(http: httpx.AsyncClient) -> Dict[str, Dict[str,
             symbol = str(contract.get("instrumentSymbol") or "")
             state = str(contract.get("marketState") or contract.get("status") or "").lower()
             if symbol.upper().endswith("-UP") and state in {"open", "active"}:
+                expiry = contract.get("expiryDate") or row.get("expiryDate")
                 symbols[symbol] = {
                     "event": ticker,
                     "asset": match.group(1),
                     "window_minutes": int(match.group(2)),
-                    "expiry": contract.get("expiryDate") or row.get("expiryDate"),
+                    "expiry": expiry,
+                    "expiry_t": _expiry_epoch(expiry),
                 }
     return symbols
+
+
+def _expiry_epoch(value: Any) -> Optional[float]:
+    """Expiry as epoch seconds, or None. Never raises."""
+    if value in (None, ""):
+        return None
+    try:
+        return datetime.fromisoformat(
+            str(value).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def _canonical_bbo(market: str, meta: Mapping[str, Any], t: float,
+                   bids: Any, asks: Any) -> Optional[Dict[str, Any]]:
+    """One canonical trajectory row. Returns None when the quote is not
+    two-sided -- a one-sided book is recorded raw but is not a state."""
+    def _top(levels):
+        if not isinstance(levels, list) or not levels:
+            return None, None
+        lv = levels[0]
+        if not isinstance(lv, (list, tuple)) or len(lv) < 2:
+            return None, None
+        try:
+            return float(lv[0]), float(lv[1])
+        except (TypeError, ValueError):
+            return None, None
+    bid, bid_sz = _top(bids)
+    ask, ask_sz = _top(asks)
+    if bid is None or ask is None:
+        return None
+    exp = meta.get("expiry_t")
+    return {"t": t, "kind": "bbo", "market": market,
+            "asset": meta.get("asset"),
+            "window_minutes": meta.get("window_minutes"),
+            "expiry_t": exp, "expiry_source": "gemini_events_rest",
+            "window_start_t": (None if exp is None
+                               else exp - 60.0 * (meta.get("window_minutes") or 5)),
+            "tte_s": (None if exp is None else exp - t),
+            "bid": bid, "ask": ask, "bid_sz": bid_sz, "ask_sz": ask_sz,
+            "spread": round(ask - bid, 6),
+            "depth": {"bids": (bids or [])[:5], "asks": (asks or [])[:5]}}
 
 
 GEMINI_VOLUME_POLL_SECONDS = 20.0
@@ -210,8 +273,11 @@ async def gemini_volume_task(sink: Sink, stop: asyncio.Event) -> None:
                 pass
 
 
-async def gemini_task(sink: Sink, stop: asyncio.Event) -> None:
+async def gemini_task(sink: Sink, stop: asyncio.Event,
+                      canon: Optional[Sink] = None,
+                      health: Optional[Dict[str, Any]] = None) -> None:
     known: Set[str] = set()
+    h = health if health is not None else {}
     async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "arb-laneD-readonly/1.0"}) as http:
         while not stop.is_set():
             try:
@@ -222,14 +288,29 @@ async def gemini_task(sink: Sink, stop: asyncio.Event) -> None:
                         await sink.write({"t": _now(), "venue": "gemini", "kind": "window",
                                           "market": symbol, **meta})
                 if symbols:
-                    await _gemini_ws_session(sink, stop, list(symbols))
+                    # A session END is a COLLECTION GAP until the next one
+                    # opens. It is recorded as such so no consumer can
+                    # forward-fill across it as if the market were observed.
+                    await _gemini_ws_session(sink, stop, list(symbols),
+                                             canon=canon, health=h)
+                    gap = {"t": _now(), "venue": "gemini", "kind": "connection",
+                           "event": "ws_close", "reconnects": h.get("reconnects")}
+                    await sink.write(gap)
+                    if canon is not None:
+                        await canon.write({"t": _now(), "kind": "gap",
+                                           "reason": "ws_session_end"})
                 else:
                     try:
                         await asyncio.wait_for(stop.wait(), timeout=10.0)
                     except asyncio.TimeoutError:
                         pass
             except Exception as exc:
-                await sink.write({"t": _now(), "venue": "gemini", "kind": "error", "error": type(exc).__name__})
+                h["errors"] = int(h.get("errors") or 0) + 1
+                await sink.write({"t": _now(), "venue": "gemini", "kind": "error",
+                                  "error": type(exc).__name__})
+                if canon is not None:
+                    await canon.write({"t": _now(), "kind": "gap",
+                                       "reason": f"error:{type(exc).__name__}"})
                 try:
                     await asyncio.wait_for(stop.wait(), timeout=2.0)
                 except asyncio.TimeoutError:
@@ -239,7 +320,9 @@ async def gemini_task(sink: Sink, stop: asyncio.Event) -> None:
 GEMINI_WS_SESSION_SECONDS = 600.0  # hold one connection; subscribe rolled windows live
 
 
-async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]) -> None:
+async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str],
+                             canon: Optional[Sink] = None,
+                             health: Optional[Dict[str, Any]] = None) -> None:
     """One long-lived ws session for trades+depth.
 
     Reconnect churn every DISCOVER_SECONDS was dropping exactly the bursts we
@@ -247,32 +330,87 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
     session now persists GEMINI_WS_SESSION_SECONDS and re-discovers newly
     rolled windows in-place, subscribing them on the same connection.
     """
-    subscribed = set(symbols)
+    # `known` holds every discovered window with its metadata; `subscribed`
+    # holds only those inside their own trading interval. A window moves
+    # known -> subscribed at expiry - LEAD and subscribed -> dropped at
+    # expiry + RETAIN, so the connection is not spent on dead symbols.
+    known: Dict[str, Dict[str, Any]] = {}
+    subscribed: Set[str] = set()
     last_top_write: Dict[str, float] = {}
     last_discover = time.monotonic()
+    last_health = 0.0
     session_deadline = time.monotonic() + GEMINI_WS_SESSION_SECONDS
+    h = health if health is not None else {}
+
+    def _due(meta: Mapping[str, Any], now: float) -> bool:
+        e = meta.get("expiry_t")
+        if e is None:
+            return False          # no expiry -> never eligible; UNKNOWN, not assumed
+        return (e - GEMINI_SUBSCRIBE_LEAD_S) <= now <= (e + GEMINI_RETAIN_AFTER_S)
+
+    def _expired(meta: Mapping[str, Any], now: float) -> bool:
+        e = meta.get("expiry_t")
+        return e is not None and now > e + GEMINI_RETAIN_AFTER_S
+
     async with websockets.connect(GEMINI_WS, open_timeout=5, ping_interval=15, ping_timeout=8, max_queue=5000) as ws:
-        streams = [f"{s}@trade" for s in subscribed] + [f"{s}@depth5@100ms" for s in subscribed]
-        await ws.send(json.dumps({"id": "laneD", "method": "SUBSCRIBE", "params": streams}))
+        h["reconnects"] = int(h.get("reconnects") or 0) + 1
+        await sink.write({"t": _now(), "venue": "gemini", "kind": "connection",
+                          "event": "ws_open", "reconnects": h["reconnects"]})
         async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "arb-laneD-readonly/1.0"}) as http:
             while not stop.is_set() and time.monotonic() < session_deadline:
                 if time.monotonic() - last_discover >= DISCOVER_SECONDS:
                     last_discover = time.monotonic()
                     try:
                         fresh = await _gemini_active_symbols(http)
-                        new = [s for s in fresh if s not in subscribed]
-                        if new:
-                            subscribed.update(new)
-                            for symbol in new:
+                        for sym, meta in fresh.items():
+                            if sym not in known:
+                                known[sym] = meta
+                                # window metadata is provenance: persist it the
+                                # moment it is learned, not at subscribe time
                                 await sink.write({"t": _now(), "venue": "gemini",
-                                                  "kind": "window", "market": symbol,
-                                                  **fresh[symbol]})
+                                                  "kind": "window", "market": sym,
+                                                  **meta})
+                                if canon is not None:
+                                    await canon.write({"t": _now(), "kind": "window",
+                                                       "market": sym, **meta})
+                    except httpx.HTTPError:
+                        pass
+                    # roll the subscription set on the window clock
+                    now_w = _now()
+                    add = [s for s, m in known.items()
+                           if s not in subscribed and _due(m, now_w)]
+                    drop = [s for s in subscribed
+                            if _expired(known.get(s, {}), now_w)]
+                    try:
+                        if add:
+                            subscribed.update(add)
                             await ws.send(json.dumps({
                                 "id": "laneD-add", "method": "SUBSCRIBE",
-                                "params": [f"{s}@trade" for s in new] + [f"{s}@depth5@100ms" for s in new],
-                            }))
-                    except (httpx.HTTPError, websockets.WebSocketException):
+                                "params": [f"{x}@trade" for x in add]
+                                          + [f"{x}@depth5@100ms" for x in add]}))
+                        if drop:
+                            for x in drop:
+                                subscribed.discard(x)
+                                last_top_write.pop(x, None)
+                            await ws.send(json.dumps({
+                                "id": "laneD-drop", "method": "UNSUBSCRIBE",
+                                "params": [f"{x}@trade" for x in drop]
+                                          + [f"{x}@depth5@100ms" for x in drop]}))
+                        for x in known:
+                            known[x].setdefault("_pruned", False)
+                        for x in list(known):
+                            if _expired(known[x], now_w - 3600):
+                                known.pop(x, None)   # bounded memory
+                    except websockets.WebSocketException:
                         pass
+                    h["subscribed"] = len(subscribed)
+                    h["known"] = len(known)
+                    h["expected_active"] = sum(1 for m in known.values()
+                                               if _due(m, now_w))
+                if health is not None and _now() - last_health >= GEMINI_HEALTH_SECONDS:
+                    last_health = _now()
+                    await sink.write({"t": _now(), "venue": "gemini",
+                                      "kind": "health", **h})
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
                 except asyncio.TimeoutError:
@@ -285,13 +423,30 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                     continue
                 symbol = str(msg.get("s") or msg.get("symbol") or "")
                 if "p" in msg and "q" in msg and "m" in msg:
-                    await sink.write({
-                        "t": _now(), "venue": "gemini", "kind": "print",
-                        "market": symbol.upper(),
-                        "event_ns": msg.get("E"), "trade_id": msg.get("t"),
-                        "price": msg.get("p"), "qty": msg.get("q"),
-                        "buyer_is_maker": bool(msg.get("m")),
-                    })
+                    # PRINTS ARE NEVER SAMPLED AWAY: they are the scarce
+                    # evidence (735 in the entire historical tape) and the
+                    # only thing that can support a STRICT fill claim.
+                    key = symbol.upper()
+                    now = _now()
+                    row = {"t": now, "venue": "gemini", "kind": "print",
+                           "market": key,
+                           "event_ns": msg.get("E"), "trade_id": msg.get("t"),
+                           "price": msg.get("p"), "qty": msg.get("q"),
+                           "buyer_is_maker": bool(msg.get("m"))}
+                    await sink.write(row)
+                    h["prints"] = int(h.get("prints") or 0) + 1
+                    h["last_print_t"] = now
+                    if canon is not None:
+                        meta = known.get(key, {})
+                        exp = meta.get("expiry_t")
+                        await canon.write({
+                            "t": now, "kind": "print", "market": key,
+                            "asset": meta.get("asset"),
+                            "expiry_t": exp,
+                            "tte_s": (None if exp is None else exp - now),
+                            "price": msg.get("p"), "qty": msg.get("q"),
+                            "buyer_is_maker": bool(msg.get("m")),
+                            "trade_id": msg.get("t")})
                 elif "bids" in msg and "asks" in msg:
                     now = _now()
                     key = symbol.upper()
@@ -299,34 +454,106 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                         last_top_write[key] = now
                         await sink.write({
                             "t": now, "venue": "gemini", "kind": "bbo", "market": key,
-                            "bids": (msg.get("bids") or [])[:2],
-                            "asks": (msg.get("asks") or [])[:2],
+                            "bids": (msg.get("bids") or [])[:5],
+                            "asks": (msg.get("asks") or [])[:5],
                         })
+                        h["bbo"] = int(h.get("bbo") or 0) + 1
+                        h["last_bbo_t"] = now
+                        if canon is not None:
+                            c = _canonical_bbo(key, known.get(key, {}), now,
+                                               msg.get("bids"), msg.get("asks"))
+                            if c is not None:
+                                await canon.write(c)
 
 
-async def run(out_dir: Path, hours: float) -> None:
+async def run(out_dir: Path, hours: float, gemini_only: bool = False) -> None:
+    """`hours <= 0` runs CONTINUOUSLY: the read-only collector is meant to be
+    up 24/7, and a bounded session is what produced a tape whose median
+    in-window coverage was zero seconds."""
     stop = asyncio.Event()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     sink = Sink(out_dir / f"tape_{stamp}.jsonl")
+    canon = Sink(out_dir / f"canonical_{stamp}.jsonl")
+    health: Dict[str, Any] = {"rows": 0, "reconnects": 0, "errors": 0}
     await sink.write({"t": _now(), "kind": "collector_start", "venue": "meta",
-                      "bounded_hours": hours, "kalshi_series": list(KALSHI_SERIES)})
-    tasks = [
-        asyncio.create_task(kalshi_task(sink, stop)),
-        asyncio.create_task(gemini_task(sink, stop)),
-        asyncio.create_task(gemini_volume_task(sink, stop)),
-    ]
+                      "bounded_hours": hours, "continuous": hours <= 0,
+                      "gemini_only": gemini_only,
+                      "read_only": True, "orders": "none: this process has no "
+                      "order path and no credentials",
+                      "kalshi_series": [] if gemini_only else list(KALSHI_SERIES)})
+    tasks = [asyncio.create_task(gemini_task(sink, stop, canon=canon,
+                                             health=health)),
+             asyncio.create_task(gemini_volume_task(sink, stop))]
+    if not gemini_only:
+        tasks.append(asyncio.create_task(kalshi_task(sink, stop)))
+    tasks.append(asyncio.create_task(_health_task(sink, stop, health, out_dir)))
     try:
-        await asyncio.sleep(hours * 3600)
+        if hours > 0:
+            await asyncio.sleep(hours * 3600)
+        else:
+            await stop.wait()
     finally:
         stop.set()
         await asyncio.gather(*tasks, return_exceptions=True)
         await sink.write({"t": _now(), "kind": "collector_end", "venue": "meta"})
         sink.close()
+        canon.close()
+
+
+async def _health_task(sink: Sink, stop: asyncio.Event,
+                       health: Dict[str, Any], out_dir: Path) -> None:
+    """Fail VISIBLY. A collector quietly gathering zero usable windows is the
+    failure mode this exists to make impossible to miss."""
+    import shutil
+    while not stop.is_set():
+        try:
+            du = shutil.disk_usage(str(out_dir))
+            now = _now()
+            line = {"t": now, "kind": "collector_health", "venue": "meta",
+                    "subscribed": health.get("subscribed"),
+                    "known_windows": health.get("known"),
+                    "expected_active": health.get("expected_active"),
+                    "bbo_rows": health.get("bbo"), "print_rows": health.get("prints"),
+                    "last_bbo_t": health.get("last_bbo_t"),
+                    "last_print_t": health.get("last_print_t"),
+                    "bbo_age_s": (None if not health.get("last_bbo_t")
+                                  else round(now - health["last_bbo_t"], 1)),
+                    "print_age_s": (None if not health.get("last_print_t")
+                                    else round(now - health["last_print_t"], 1)),
+                    "reconnects": health.get("reconnects"),
+                    "errors": health.get("errors"),
+                    "disk_free_gb": round(du.free / 1e9, 2),
+                    "disk_used_pct": round(du.used / du.total * 100, 1),
+                    "alarm": _health_alarm(health, now, du)}
+            print("GEMINI_COLLECTOR_HEALTH " + json.dumps(line), flush=True)
+            await sink.write(line)
+        except Exception:                                  # noqa: BLE001
+            pass
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=GEMINI_HEALTH_SECONDS)
+        except asyncio.TimeoutError:
+            pass
+
+
+def _health_alarm(health: Mapping[str, Any], now: float, du: Any) -> Optional[str]:
+    if health.get("expected_active") and not health.get("subscribed"):
+        return "ACTIVE_WINDOWS_BUT_NONE_SUBSCRIBED"
+    last = health.get("last_bbo_t")
+    if last and now - last > 120.0:
+        return "NO_BBO_FOR_120S"
+    if not last and (health.get("reconnects") or 0) > 2:
+        return "CONNECTED_BUT_NEVER_RECEIVED_A_QUOTE"
+    if du.free < 2e9:
+        return "DISK_BELOW_2GB"
+    return None
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Read-only Lane-2 tape collector")
-    parser.add_argument("--hours", type=float, default=5.0)
+    parser.add_argument("--hours", type=float, default=5.0,
+                        help="<= 0 runs continuously (24/7)")
+    parser.add_argument("--gemini-only", action="store_true",
+                        help="skip the Kalshi tasks; Gemini BTC/ETH 5m only")
     parser.add_argument("--out-dir", default="data/policy_d_port")
     parser.add_argument("--series", default="",
                         help="comma-separated Kalshi series override "
@@ -336,7 +563,8 @@ def main() -> None:
     if args.series:
         global KALSHI_SERIES
         KALSHI_SERIES = tuple(s.strip() for s in args.series.split(",") if s.strip())
-    asyncio.run(run(Path(args.out_dir), args.hours))
+    asyncio.run(run(Path(args.out_dir), args.hours,
+                    gemini_only=bool(args.gemini_only)))
 
 
 if __name__ == "__main__":
