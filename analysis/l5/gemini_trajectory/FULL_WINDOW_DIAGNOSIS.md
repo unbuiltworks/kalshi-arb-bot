@@ -37,21 +37,30 @@ Even a perfectly two-sided book could not have reached 290 s from a 247.88 s
 start. The start-side loss alone is fatal to FULL, independently of the
 one-sided tail.
 
-## Mechanism, and why no fix is being made yet
+## Mechanism — SUPERSEDED, see `LATE_SUBSCRIBE_CAUSATION.md`
 
-A window is subscribed only on a **discovery pass**, and `DISCOVER_SECONDS` is
-**45**. A window becomes due at `expiry − 330` and the window itself opens at
-`expiry − 300`, so the lead is sufficient *in principle*; the binding
-constraint is that subscription can only happen on the next 45 s tick. That
-bounds the expected loss near 45 s and we observe ~52 s.
+> **This section was wrong and is kept only for provenance.** It read: a
+> window is subscribed only on a discovery pass, `DISCOVER_SECONDS` is 45, so
+> the loss is bounded near 45 s and we observe ~52 s.
+>
+> That cannot be right, because **the loss is constant**: 330 − 247.88 = 82.12
+> and 330 − 247.65 = 82.35 on batches 600 s apart. A 45 s tick with arbitrary
+> phase produces a loss uniform on [0, 45); it cannot produce the same 82 s
+> twice. The paragraph also measured the loss against the *window open* at
+> `expiry − 300` rather than against our own due time at `expiry − 330`, which
+> understated it as ~52 s when it was ~82 s.
+>
+> The real cause is four compounding defects — a 45 s blind start per session,
+> the subscription roll being fused to the REST tick, session-local buffers,
+> and a 600 s session period that is an exact multiple of the 300 s window
+> period and so phase-locks the loss instead of averaging it out. The venue is
+> exonerated: it lists windows ~4,100 s ahead. Full evidence and the fix are in
+> `LATE_SUBSCRIBE_CAUSATION.md`.
 
-**Not changed yet, deliberately.** These are the first two windows on a build
-that restarted at 17:09:20, so a restart confounder cannot be separated from
-the steady-state cadence on n = 2. A real distribution is needed before
-touching a collector that is otherwise healthy (`subscribed 4 == expected 4`,
-`alarm: null`). The candidate fix — a shorter discovery tick, or subscribing
-the moment a known window becomes due rather than on the next tick — is
-identified but unverified.
+**Deliberately not changed at the time.** These were the first two windows on a
+build that restarted at 17:09:20, so a restart confounder could not be
+separated from steady-state cadence on n = 2. That caution was right; the
+mechanism attached to it was not.
 
 ## What does NOT change
 

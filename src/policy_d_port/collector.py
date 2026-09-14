@@ -591,9 +591,10 @@ async def _gemini_ws_session(sink: Sink, stop: asyncio.Event, symbols: List[str]
                 # the two were fused, a window became due at expiry-330 and
                 # then waited for the next tick, so the lead we actually got
                 # was 330 minus up to a full DISCOVER_SECONDS -- and since the
-                # venue publishes windows ~890 s ahead, that wait was pure
-                # self-inflicted loss. Now due -> SUBSCRIBE within one recv
-                # timeout (<= 1 s), which keeps the intended 330 s lead.
+                # venue lists windows ~4,100 s ahead (measured: 28 of 30 with
+                # more than our 330 s lead), that wait was pure self-inflicted
+                # loss. Now due -> SUBSCRIBE within one recv timeout (<= 1 s),
+                # which keeps the intended 330 s lead rather than replacing it.
                 now_w = _now()
                 add = [s for s, m in known.items()
                        if s not in subscribed and _due(m, now_w)]
