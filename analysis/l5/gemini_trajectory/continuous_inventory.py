@@ -252,10 +252,32 @@ def _touch_px(adapter: Any, raw: Mapping[str, Any], expiry: float,
     return px, (sz if sz is not None else D("0"))
 
 
+# Opening-side rules, for the A/B ONLY. "CANONICAL" is the unchanged
+# production behaviour (l5_venue_adapter.open_side_yes -- cheaper touch, ties
+# to YES) and is the default everywhere. "DEARER" exists solely to test the
+# canonical-history finding on identical observed states; it is NOT proposed,
+# implemented in production, or used by any default path.
+OPEN_SIDE_RULES = ("CANONICAL", "DEARER")
+
+
+def _open_side(rule: str, book: Any) -> Optional[bool]:
+    if rule == "CANONICAL":
+        return open_side_yes(book)
+    y, n = book.yes_bid, book.no_bid
+    if y is None and n is None:
+        return None
+    if n is None:
+        return True
+    if y is None:
+        return False
+    return y > n                       # the DEARER touch, ties to NO
+
+
 def replay_window(win: Mapping[str, Any], *, model: Mapping[str, Any],
                   tier: str, residual_cap: int = LIVE_RESIDUAL_CAP_UNITS,
                   action_ceiling: int = RESEARCH_ACTION_CEILING,
-                  adapter: Optional[Any] = None) -> dict:
+                  adapter: Optional[Any] = None,
+                  open_side_rule: str = "CANONICAL") -> dict:
     adapter = adapter or gemini_venue()
     expiry = float(win["expiry_t"])
     rows = book_rows(win)
@@ -315,7 +337,7 @@ def replay_window(win: Mapping[str, Any], *, model: Mapping[str, Any],
             continue
 
         if relation in ("open", "extend"):
-            side_yes = (open_side_yes(book) if inv.residual == 0
+            side_yes = (_open_side(open_side_rule, book) if inv.residual == 0
                         else inv.residual > 0)
             if side_yes is None:
                 dec["VENUE_ADMISSIBLE_ACTION"] = "refused:no_priceable_side"
@@ -411,6 +433,7 @@ def replay_window(win: Mapping[str, Any], *, model: Mapping[str, Any],
     return {"market": win.get("market"), "asset": win.get("asset"),
             "tier": tier, "status": status, "stop_reason": stop_reason,
             "residual_cap_units": residual_cap,
+            "open_side_rule": open_side_rule,
             "action_ceiling": action_ceiling,
             "action_ceiling_bound": behavioral >= action_ceiling,
             "L5_BEHAVIORAL_ACTIONS": behavioral,

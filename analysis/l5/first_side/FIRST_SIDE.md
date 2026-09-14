@@ -1,89 +1,106 @@
-# Does L5 open on the cheaper touch? PRE-REGISTERED TEST — REFUTED
+# L5's first side: CHEAPER refuted, DEARER is the best simple rule, no model earns adoption
 
-Evidence from **17,046 markets** of L5's own public fills. Nothing here
-changes the side-selection rule; no rule was retrofitted to the nine Gemini
-prints, and this test is entirely independent of them.
+Sequential, no outcome leakage, chronological out-of-sample. **Nothing here is
+implemented.** `cheaper touch` was not replaced with `dearer touch` in any
+production or Gemini path.
 
-## Pre-registration (fixed before any result was inspected)
+## Design
 
-**Hypothesis.** Our engine applies `open_side_yes = "open the cheaper touch,
-ties to YES"` **deterministically**. If L5 does the same, his first buy in a
-market must land on the cheaper outcome essentially always.
+**Target.** y = 1 iff L5's first buy in a market is on Up.
 
-**Statistic.** Share of markets whose FIRST buy filled **below $0.50**.
+**The move that makes it non-circular.** We observe only the price of the side
+he *chose*, so "chosen-side price" would encode the answer. In a binary market
+the two outcomes price to ~1.00, so the market's **Up** price is recoverable
+either way: `up_price = fill_price if he bought Up else 1 − fill_price`. That
+is a property of the market, identical under either choice, and every price
+feature is built from it. No feature is a function of the label.
 
-**Why the proxy is sound, and conservative.** In a binary market the YES touch
-is the fill price `p` and the NO touch is `1 − yes_ask ≤ 1 − p`. If `p > 0.50`
-then `1 − p < 0.50 < p`, so the complement is unambiguously the cheaper touch
-— a spread only widens that gap. A fill above 0.50 is therefore a purchase of
-the **dearer** touch, whatever the spread.
+**No outcome leakage.** Which side actually won the current window never
+enters a feature. Only the *previous* window's resolution is used, and only
+where it resolved strictly before the current first fill.
 
-**Decision rule, fixed in advance:** SUPPORTED ≥ 0.80 · PARTIAL 0.60–0.80 ·
-REFUTED ≤ 0.60. Verdict taken **out-of-sample**: markets split by first-buy
-time, earliest 70% in-sample, latest 30% out-of-sample.
+**UNAVAILABLE ≠ ZERO.** The public tape carries L5's fills, not the book. So
+`spread`, `depth_at_touch`, `order_flow_imbalance`, `intra_window_trajectory`,
+`book_updates` and `queue_position` are **NOT AVAILABLE historically** and are
+named as such rather than imputed as zero — a zero would be a measurement
+claim we cannot make.
 
-## Result
+**Class balance.** Up 8,300 (48.69%) / Down 8,746 (51.31%). Majority-class
+floor **0.5131**. Split chronologically 60/20/20: train 10,227, valid 3,409,
+test 3,410.
 
-| split | n | share of first buys below $0.50 |
+## Predictor leaderboard — chronological TEST, like-for-like (n = 3,041)
+
+| rule | accuracy | log loss |
 |---|---|---|
-| all | 17,046 | 0.3595 |
-| in-sample (earliest 70%) | 11,932 | 0.3681 |
-| **out-of-sample (latest 30%)** | 5,114 | **0.3395** |
+| **DEARER / FAVORITE** | **0.6600** | 4.6975 |
+| **MODEL** (logistic, 8 features) | 0.6409 | **0.6697** |
+| MOMENTUM | 0.5896 | 5.6698 |
+| DOWN | 0.5025 | 6.8737 |
+| UP | 0.4975 | 6.9418 |
+| RANDOM | 0.4972 | 1.0068 |
+| MEAN_REVERSION | 0.4104 | 8.1457 |
+| **CHEAPER / UNDERDOG** — *our production rule* | **0.3430** | 9.0771 |
 
-### VERDICT: **REFUTED** (OOS 0.3395, threshold ≤ 0.60)
+**CHEAPER is materially worse than a coin flip** (0.343 against a 0.513
+majority floor). Its complement DEARER is the informative statement.
 
-**L5 opens on the DEARER touch about 64% of the time.** Median first-buy price
-is **$0.540**. Our rule predicts the opposite, deterministically.
+## The smallest model does NOT earn adoption
 
-Distribution of the opening fill: p10 0.250 · p25 0.450 · **p50 0.540** ·
-p75 0.650 · p90 0.790. Only 28.3% of opens land below 0.35; **26.0% land at
-0.65 or above.**
+Test accuracy **0.6409 vs DEARER's 0.6600** — the 8-feature logistic is
+*worse* on accuracy while being far better calibrated (log loss 0.6697 vs
+4.6975; predicted 0.335→observed 0.345, 0.497→0.521, 0.662→0.625). Its
+dominant standardized coefficient is `up_price` at **+0.3632**, with every
+other feature an order of magnitude smaller:
 
-## Alternatives (reported; they do not move the verdict)
+| feature | coef |
+|---|---|
+| up_price | **+0.3632** |
+| prev_winner_up | −0.1304 |
+| prev_y_up | +0.1041 |
+| prev_move | +0.0306 |
+| is_eth | −0.0211 |
+| dist_from_50 | +0.0176 |
+| is_15m | +0.0102 |
+| tte_norm | −0.0000 |
 
-| variable | split | share below 0.50 |
-|---|---|---|
-| horizon | 15m (n=6,126) | 0.4107 (median 0.510) |
-| horizon | **5m (n=10,920)** | **0.3308** (median 0.580) |
-| asset | btc (n=13,635) | 0.3732 |
-| asset | **eth (n=3,411)** | **0.3046** |
-| TTE at open | late open (n=8,572) | 0.3650 |
-| TTE at open | early open (n=8,474) | 0.3539 |
+**The model rediscovers DEARER and adds nothing.** By the owner's own
+criterion — the smallest interpretable model that *materially improves* OOS —
+**no model qualifies.** The honest output is a calibrated probability, not a
+better rule.
 
-TTE does not discriminate. The skew toward the dearer side is **strongest
-exactly where we are trying to transfer: 5m windows (0.3308) and ETH
-(0.3046)**.
+## Cohort stability — DEARER holds in 4 of 4
 
-Outcome check, confirming prices are roughly calibrated rather than that L5
-has edge: the first-opened side went on to win **54.35%** of the time; cheap
-opens won 35.17%, dear opens 65.12% — close to what their prices imply.
+Test set:
 
-## Why this matters more than an execution-shell tweak
+| cohort | n | %Up | CHEAPER | **DEARER** | MODEL |
+|---|---|---|---|---|---|
+| BTC5m | 1,444 | 0.495 | 0.3636 | **0.6364** | 0.6267 |
+| ETH5m | 925 | 0.501 | 0.2865 | **0.7189** | 0.6897 |
+| BTC15m | 519 | 0.503 | 0.4220 | **0.5838** | 0.5742 |
+| ETH15m | 153 | 0.484 | 0.2222 | **0.7843** | 0.7059 |
 
-The Gemini 5m shadow produced **zero fills** in every tier while one intention
-successfully followed 54 requotes from 0.21 → 0.80. All nine observed prints
-were taker SELLS, and the cheaper-touch rule had put us on DOWN; **six of the
-nine would have interacted with an UP maker.** That was a single window and
-proved nothing on its own.
+Lifetime: BTC5m 0.6483 (n=8,089) · BTC15m **0.5433** (n=5,546) · ETH5m 0.6803
+(n=2,831) · ETH15m 0.7138 (n=580).
 
-This test says the same thing from 17,046 markets of independent evidence:
-**the cheaper-touch assumption is not L5's rule.** The clone has been
-systematically selecting the opposite side from the one L5 picks, which is a
-far larger error than any rest/cancel parameter.
+**It is not a single-cohort artifact** — but it is **weakest precisely in
+BTC15m (0.5433)**, the cohort that carries essentially all of L5's trading
+profit (+$19,176.71 of +$15,707.45 net). That tension is unresolved and is not
+argued away.
 
-## What is NOT claimed
+Over time (6 chronological blocks): 0.5157 · 0.6396 · 0.6213 · 0.6572 ·
+0.6448 · 0.6515. **The tendency is absent in the earliest block and stable
+thereafter** — it emerged rather than being constant.
 
-* **No replacement rule is proposed or implemented.** "Not the cheaper touch"
-  is not "the dearer touch" — the 64/36 split is a tendency, not a rule, and
-  the true predictor is still **UNKNOWN**.
-* Fill price is a proxy for the touch. It is sound in direction (above) but
-  does not recover the full book.
-* Variables the public tape cannot see — queue position, L5's cancels, his
-  resting orders — remain UNKNOWN and were not modelled.
-* Nothing is deployed and no live behaviour changed.
+## What is and is not established
 
-**Next step, pre-registered before it is run:** fit which of {recent price
-movement, recent flow direction, spread, depth, prior market's outcome, band,
-TTE, trajectory} predicts the opening side, train on the in-sample 70%, and
-report OOS accuracy against the 64% base rate. A candidate rule must beat that
-base rate out-of-sample to be worth anything.
+* **ESTABLISHED:** `cheaper touch` is refuted out-of-sample, in all four
+  cohorts, on 17,046 markets. Our clone has been systematically choosing the
+  opposite side from L5.
+* **ESTABLISHED:** a dearer-side tendency of ~0.66 OOS, stable across cohorts
+  and (after the first block) over time.
+* **NOT ESTABLISHED:** any *rule*. 34% of L5's opens are still on the cheaper
+  side; a deterministic dearer rule would be wrong a third of the time. The
+  true decision almost certainly depends on the book and flow features the
+  public tape **cannot supply**.
+* **NOT DONE:** no production, Gemini or PMUS path was changed.

@@ -12,15 +12,15 @@ Measured across L5's entire public history:
 
 | line | amount |
 |---|---|
-| acquisition cashflow (BUY, 760,815 fills) | **−$7,605,335.88** |
+| acquisition cashflow (BUY, 761,020 fills) | **−$7,608,076.50** |
 | trading sales (SELL, **2** fills) | +$2.18 |
 | settlement/redemption cashflow (15,729 redemptions) | **+$7,623,781.77** |
-| **= net trading cash** | **+$18,448.07** |
+| **= net trading cash** | **+$15,707.45** |
 | incentives (Ledger C — additive, never redemption) | +$71,551.74 |
-| **= grand total cash** | **+$89,999.81** |
+| **= grand total cash** | **+$87,259.19** |
 
-**Reading redemption gross as profit would overstate by $7,605,333.70** — a
-factor of 413. Net trading cash is +$18,448 on $7.6M of turnover: a 0.24%
+**Reading redemption gross as profit would overstate by $7,608,074.32** — a
+factor of 485. Net trading cash is +$15,707 on $7.6M of turnover: a 0.21%
 margin. **Incentives are ~80% of the grand total.** On this evidence L5's
 economics are an incentive business wrapped around a roughly break-even
 trading book, not a trading business.
@@ -116,22 +116,46 @@ assumed from PMUS's behaviour.
 `analysis/l5/l5_ledger.json` (2026-08-31) already carried these cashflows.
 This audit reads a **larger** cache (the gap file) and is a superset:
 
-| quantity | this audit | ledger (2026-08-31) |
+| quantity | AUTHORITATIVE | ledger (2026-08-31) | delta |
+|---|---|---|---|
+| buy_usdc | 7,608,076.50 | 7,423,850.29 | +184,226.21 |
+| sell_usdc | 2.18 | 2.18 | 0.00 |
+| redeem_usdc | 7,623,781.77 | 7,437,534.55 | +186,247.22 |
+| **net_trading_cash** | **+15,707.45** | **+13,686.44** | **+2,021.01** |
+| REDEEM rows | 15,729 | 15,243 | +486 |
+| TRADE rows | 761,022 | 742,964 | +18,058 |
+| markets | 17,046 | 16,501 | +545 |
+| income_total | 71,551.74 | 68,208.40 | +3,343.34 |
+| **grand_total_cash** | **+87,259.19** | **+81,894.84** | **+5,364.35** |
+
+### Every delta attributed
+
+| cause | effect | evidence |
 |---|---|---|
-| buy_usdc | 7,605,335.88 | 7,423,850.29 |
-| sell_usdc | 2.18 | 2.18 |
-| redeem_usdc | 7,623,781.77 | 7,437,534.55 |
-| net_trading_cash | **+18,448.07** | **+13,686.44** |
-| REDEEM rows | 15,729 | 15,243 |
-| markets | 17,046 | 16,501 |
-| income_total | 71,551.74 | 68,208.40 |
+| **additional history** (the gap cache covers 545 more markets, 18,058 more trades, 486 more redeems, 3 more income rows) | **+$2,021.01** trading, **+$3,343.34** incentives | counts above |
+| **deduplication rule** | **$0.00** — both now use the multiset union | MULTISET-all and the ledger agree on method |
+| **scope** | **$0.00** — `n_other_markets` is 0, so "updown-only" and "all markets" are the SAME SET | MULTISET-all == MULTISET-updown to the cent ($7,608,076.50) |
+| **redemption reconstruction** | **$0.00** — redemption cashflow is READ from `usdcSize`, never reconstructed | `usdcSize == size` on all 15,729 rows |
+| **incentive coverage** | **+$3,343.34** — 3 additional credited rows (110/73/20 vs 109/72/19) | counts above |
 
-Both agree on every conclusion that matters: redemption gross dwarfs net
-trading cash, trading cash is near zero, and incentives dominate the total.
-The existing ledger is **not** superseded or rewritten.
+`13,686.44 + 2,021.01 = 15,707.45` exactly. The old total is fully explained
+by additional history alone; **no methodological difference remains.** The
+existing ledger is not superseded or rewritten — it was correct for the data
+it had.
 
-**Deduplication is load-bearing and was a real defect caught here.** The two
-caches overlap: 3,149 TRADE rows appear in both files and ~4,359 repeat
-within them. Summing raw rows inflated acquisition by ~$65k and **flipped net
-trading cash from +$18,448 to −$46,825** — a sign error in the headline. Every
-row is now keyed on its full identity before being counted, pinned by a test.
+**Deduplication is load-bearing and BOTH wrong rules were caught here.**
+
+1. *No dedup at all*: the two caches overlap by 3,149 TRADE rows with ~4,359
+   more repeating within them. Summing raw rows inflated acquisition by ~$65k
+   and **flipped net trading cash negative** — a sign error in the headline.
+2. *A global unique set* (my first correction) was **also wrong, in the other
+   direction**. Within ONE cached response, two rows sharing every field are
+   two genuinely distinct fills — a maker order filling in equal parts at one
+   instant and price. A global set discarded **205 real fills**, understated
+   acquisition by **$2,740.62** and overstated net trading cash by exactly
+   that, which is where the earlier +$18,448.07 came from.
+
+The correct rule, and the one `src/polymarket_l5/ledger.py` already used, is a
+**multiset union**: the multiplicity kept for a key is the MAXIMUM seen in any
+single response — never the sum, never one. Both accounts now dedup
+identically, so they cannot diverge on method. Pinned by three tests.

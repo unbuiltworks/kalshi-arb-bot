@@ -56,17 +56,30 @@ LIFECYCLE = {
 
 
 def row_key(r: Mapping[str, Any]) -> tuple:
-    """Full identity of an activity row. Anything less collapses distinct
-    fills or lets a cross-file duplicate through."""
-    return (int(r.get("timestamp") or 0), str(r.get("type")),
-            str(r.get("conditionId")), str(r.get("transactionHash")),
-            str(r.get("outcome")), str(r.get("side")),
-            str(r.get("size")), str(r.get("usdcSize")))
+    """Identity of an activity row, matching src/polymarket_l5/ledger.py."""
+    return (str(r.get("type")), str(r.get("transactionHash")),
+            str(r.get("conditionId")), str(r.get("outcome")),
+            str(r.get("side")), str(r.get("size")), str(r.get("price")),
+            int(r.get("timestamp") or 0))
 
 
 def iter_activity(sources: Iterable = SOURCES) -> Iterable[dict]:
-    """Every activity row from the batched fetch caches, DEDUPED."""
-    seen = set()
+    """Every activity row, deduped by MULTISET UNION across cached responses.
+
+    THIS RULE IS LOAD-BEARING AND A GLOBAL SET IS WRONG. Within ONE cached
+    response, two rows sharing every field are two GENUINELY DISTINCT FILLS --
+    a maker order filling in equal parts at the same instant and price. Across
+    responses, the same key is the same fill harvested twice. So the
+    multiplicity kept for a key is the MAXIMUM seen in any single response,
+    never the sum and never one.
+
+    A plain global set drops those legitimate repeats: it discarded 205 real
+    fills, understated acquisition by $2,740.62 and overstated net trading
+    cash by the same amount. This matches the dedup in
+    src/polymarket_l5/ledger.py so the two accounts cannot diverge on method.
+    """
+    multiplicity: Dict[tuple, int] = {}
+    representative: Dict[tuple, dict] = {}
     for path, opener in sources:
         if not Path(path).exists():
             continue
@@ -78,12 +91,17 @@ def iter_activity(sources: Iterable = SOURCES) -> Iterable[dict]:
                     continue
                 if not isinstance(batch, dict):
                     continue
+                here: Dict[tuple, int] = {}
                 for r in (batch.get("payload") or []):
                     k = row_key(r)
-                    if k in seen:
-                        continue
-                    seen.add(k)
-                    yield r
+                    here[k] = here.get(k, 0) + 1
+                    representative.setdefault(k, r)
+                for k, c in here.items():
+                    if c > multiplicity.get(k, 0):
+                        multiplicity[k] = c
+    for k, c in multiplicity.items():
+        for _ in range(c):
+            yield representative[k]
 
 
 def window_of(r: Mapping[str, Any]) -> Optional[Tuple[str, str, int]]:

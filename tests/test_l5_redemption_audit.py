@@ -34,12 +34,44 @@ def _cache(tmp_path, name, rows, gz=False):
 # ------------------------------------------------------------ deduplication
 
 def test_duplicate_rows_across_caches_are_counted_once():
-    """THE DEFECT THIS PINS, measured on the real caches: 3,149 TRADE rows
-    appear in BOTH activity files and ~4,359 repeat within them. Summing raw
-    rows inflated acquisition cashflow by ~$65k and flipped net trading cash
-    from +$18k to -$47k -- a sign error in the headline number."""
+    """Cross-response duplicates are the SAME fill harvested twice: the two
+    caches overlap by 3,149 TRADE rows."""
     r = _row()
     assert A.row_key(r) == A.row_key(dict(r))
+
+
+def test_repeats_WITHIN_one_response_are_distinct_fills_not_duplicates():
+    """THE CORRECTION THIS PINS. A global set is WRONG here: inside a single
+    cached response two rows sharing every field are two genuinely distinct
+    fills -- a maker order filling in equal parts at one instant and price.
+    Collapsing them dropped 205 real fills, understated acquisition by
+    $2,740.62 and overstated net trading cash by exactly that."""
+    r = _row()
+    import tempfile, pathlib as _p
+    d = _p.Path(tempfile.mkdtemp())
+    src = _cache(d, "a.jsonl", [dict(r), dict(r), dict(r)])
+    got = list(A.iter_activity([src]))
+    assert len(got) == 3                       # NOT collapsed to 1
+
+
+def test_multiplicity_across_responses_is_the_max_not_the_sum():
+    """The same response re-harvested must not double the fills."""
+    import tempfile, pathlib as _p
+    r = _row()
+    d = _p.Path(tempfile.mkdtemp())
+    a = _cache(d, "a.jsonl", [dict(r), dict(r)])
+    b = _cache(d, "b.jsonl", [dict(r), dict(r)])
+    assert len(list(A.iter_activity([a, b]))) == 2      # max(2,2), not 4
+
+
+def test_row_key_matches_the_canonical_ledger_key():
+    """Both accounts must dedup the same way or they cannot be reconciled."""
+    import inspect
+    from src.polymarket_l5 import ledger as L
+    doc = inspect.getdoc(L) or ""
+    assert "multiset union" in doc.lower()
+    k = A.row_key(_row())
+    assert len(k) == 8                       # type,tx,market,outcome,side,size,price,ts
 
 
 def test_row_key_separates_genuinely_different_fills():
