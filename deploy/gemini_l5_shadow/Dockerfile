@@ -1,6 +1,7 @@
 # Gemini L5 READ-ONLY shadow. Public endpoints only: no credentials,
 # no order path, no shared execution state. Queue-aware collection retains
-# 25-level depth; continuous flat-reset inventory cycles remain theoretical.
+# 25-level depth and reports the canonical cross-venue L5 inventory/action
+# contract used to compare PMUS, Gemini 5m, and Gemini 15m.
 FROM python:3.11-slim
 WORKDIR /app
 COPY src/gemini_l5_shadow_service.py src/gemini_l5_shadow_service.py
