@@ -112,3 +112,70 @@ populated. And **none of the 203 incentive transaction hashes appears on any
 TRADE row** — the incentive is its own on-chain transfer. So no market, motif,
 horizon or asset can be tied to a credited amount without inferring it, which
 the public record does not support.
+
+## Experiment 1 — answered structurally, not statistically
+
+The primary question was whether the path into the price explains entry better
+than the absolute price. For L5's dominant cohort **neither does, because there
+is no entry decision to explain.**
+
+**Entry delay (L5's first fill minus the market's own start epoch):**
+
+| cohort | markets | p50 delay | % within 30s |
+|---|---|---|---|
+| **BTC15m** | 356 | **13 s** | **80.6** |
+| BTC5m | 705 | 130 s | 23.3 |
+| ETH5m | 374 | 193 s | 10.7 |
+| ETH15m | 153 | 588 s | 4.6 |
+
+**Market coverage over an 89.8-hour window:**
+
+| cohort | traded | on the grid | coverage |
+|---|---|---|---|
+| **BTC15m** | 356 | 360 | **98.9%** |
+| BTC5m | 705 | 1,078 | 65.4% |
+| ETH15m | 153 | 355 | 43.1% |
+| ETH5m | 374 | 1,062 | 35.2% |
+
+He takes **essentially every BTC15m market, 13 seconds after it opens.** No
+30/60/120 s pre-entry path exists at that point, so no path feature can explain
+the entry, and no entry rule needs fitting. Entry selection is real only in the
+minority cohorts, which are 5-7% of his fills.
+
+This is why the market-wide tapes could not deliver the originally-specified
+test: the endpoint returns newest-first, and for a market L5 enters at second 13
+the pre-entry window is 13 seconds long. The honest answer is the structural
+one, not a regression on a window that does not exist.
+
+## What L5 actually is
+
+Inside-market behaviour, recent window, BUY fills:
+
+| cohort | markets | fills p50 | switches p50 | matched frac | % of market life active | Up share |
+|---|---|---|---|---|---|---|
+| **BTC15m** | 356 | **128** | **30** | **0.9067** | **88.6%** | 0.4844 |
+| BTC5m | 455 | 3 | 1 | 0.2968 | 27.0% | 0.4831 |
+| ETH5m | 167 | 2 | 0 | 0.0 | 5.3% | 0.3902 |
+| ETH15m | 90 | 3 | 0 | 0.0 | 6.3% | 0.5000 |
+
+**L5 is a continuous two-sided market maker in BTC15m.** He joins ~every market
+at open, works it for ~89% of its life with ~128 fills and ~30 side switches,
+and finishes ~91% matched and side-balanced. The 5m cohorts are opportunistic
+dabbling by comparison.
+
+Set beside the incentive audit, the business is legible:
+
+* ~94 bp of turnover in confirmed incentives, **82% of total economics**
+* ~20.6 bp in trading cash
+* ~$0.098 of confirmed incentive per fill
+
+The "inventory cycle" this program has been reconstructing **is market making**,
+and the profit is predominantly the rebate on volume, not the pair economics.
+
+**This is the material finding for replication.** Our PMUS probe earns $0.0126
+of confirmed rebate per fill against L5's $0.098 — 7.8x lower — while
+reproducing the inventory mechanics faithfully. That gap, not side selection,
+not the pair gate, and not the residual cap, is what separates our realized
+economics from his.
+
+No production change is proposed on the strength of this.
