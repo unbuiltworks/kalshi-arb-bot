@@ -3366,6 +3366,18 @@ def _run_session_body(t: Optional[Transport] = None,
                 # so a marginal-only rule lets previously safe pairs drift
                 # above par. Refused before submission, never after.
                 if not pair_invariant_ok(inv, side_up, px, qty):
+                    # LIVE HALT 2026-09-14T13:26:52Z, aec-wta-ararus-samste:
+                    # UnboundLocalError: cannot access local variable 'dec'.
+                    # `dec` is bound only inside OTHER conditional branches
+                    # (the off-distribution and residual-cap paths), so a
+                    # first pass that reaches the ceiling refusal directly
+                    # read it before assignment and the exception escaped as
+                    # a HALT. The REFUSAL ITSELF WAS CORRECT -- pair
+                    # 1.000326530612244897959183674 > 1.00 must stop, and
+                    # still does. Binding the row the refusal annotates is
+                    # the whole fix; no threshold, order, size or gate
+                    # changes.
+                    dec = report["decisions"][-1]
                     _after = matched_pair_cost_after(inv, side_up, px, qty)
                     report["stop_reason"] = (
                         f"matched_pair_ceiling:{_after}>"
