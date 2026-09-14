@@ -202,3 +202,26 @@ def test_an_unread_l5_feed_is_not_reported_as_no_action():
     assert "unread" in broken["l5_acted_reason"]
     d = R.digest("btc", 1789420200, [quiet, broken])
     assert d["l5_fills"] == 0 and d["samples_with_unread_l5_feed"] == 1
+
+
+def test_incentive_audit_never_truncates_reward_rows_silently():
+    """A payout can only be attributed to its markets from the FULL reward
+    list. The 2026-09-14 $2.51 payout could not be attributed because
+    rows_detail was capped at 50 of 79 rows with no marker, so the missing
+    $1.62 of PAID rewards read as an absence rather than a cut."""
+    import ast
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parents[1]
+           / "src/pmus_incentive_audit.py").read_text()
+    # strip comments first: the fix's OWN comment quotes the old "rows[:50]",
+    # and a substring scan over prose is the same false positive that broke
+    # the recorder's no-order-path guard.
+    code = "\n".join(l.split("#", 1)[0] for l in src.splitlines())
+    assert "rows[:50]" not in code
+    assert "ROWS_DETAIL_MAX" in src
+    assert '"rows_detail_truncated"' in src and '"rows_detail_omitted"' in src
+    tree = ast.parse(src)
+    cap = next(n.value.value for n in ast.walk(tree)
+               if isinstance(n, ast.Assign)
+               and getattr(n.targets[0], "id", "") == "ROWS_DETAIL_MAX")
+    assert cap >= 1000, cap

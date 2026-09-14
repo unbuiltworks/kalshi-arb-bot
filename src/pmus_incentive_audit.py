@@ -46,6 +46,10 @@ FEE_WORDS = ("fee", "rebate", "commission", "reward", "incentive", "credit")
 TAKER_RATE = D("0.06")
 MAKER_REBATE_RATE = D("0.0125")
 CENT = D("0.01")
+# every reward row must reach the log: attribution of a payout to its markets
+# is impossible from a truncated list, and Railway splits at 80 KiB which the
+# cross-shadow ingest already reassembles.
+ROWS_DETAIL_MAX = 2000
 
 
 def _cents(x: D) -> D:
@@ -150,7 +154,16 @@ def earnings(t: q1.Transport) -> dict:
                     "accrued_not_credited_usd":
                         status_split["accrued_but_not_credited_usd"],
                     "by_status": status_split["by_status"],
-                    "rows_detail": [dict(r) for r in rows[:50]],
+                    # 2026-09-14: this was rows[:50] against 79 rows, so the
+                    # per-date PAID breakdown silently omitted $1.62 of $7.04
+                    # and the $2.51 payout could not be attributed to the
+                    # markets behind it. A truncation that does not announce
+                    # itself is indistinguishable from an absence -- the same
+                    # failure as a fabricated zero -- so the cap is raised and
+                    # any remaining cut is REPORTED.
+                    "rows_detail": [dict(r) for r in rows[:ROWS_DETAIL_MAX]],
+                    "rows_detail_truncated": len(rows) > ROWS_DETAIL_MAX,
+                    "rows_detail_omitted": max(0, len(rows) - ROWS_DETAIL_MAX),
                     "total_usd": str(total) if n_amount else None,
                     "by_program": dict(by_prog),
                     "sample": json.loads(json.dumps(rows[0], default=str)) if rows else None,
