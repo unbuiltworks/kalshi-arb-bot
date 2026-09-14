@@ -568,3 +568,82 @@ unilaterally: OWNER decision 2026-09-11, on the specific state below.**
   by the session that triggers it; this entry is the authorisation record and
   is deliberately the LAST commit before the trigger, so branch HEAD and the
   deployed SHA are the same object.
+
+  ---
+
+  **CORRECTION, same entry, written 2026-09-14 after the trigger. THE ACTION-
+  WINDOW RULE WAS VIOLATED. The paragraph above that says the authorising read
+  "is taken INSIDE the action window" is FALSE for this deployment. It is left
+  standing, uncorrected in place, because it is what was claimed; this block is
+  what happened.**
+
+      authorising read            2026-09-14T00:03:48Z
+      deployment created          2026-09-14T00:28:08Z
+      elapsed                     24m 20s  (1460 s)
+      CUTOVER_MAX_AGE_S              60.0 s
+      therefore                   the authorisation had EXPIRED ~24x over
+
+  AND THE STATE CHANGED IN THE GAP, which is independently an abort condition
+  under rule 3 of the action-window rule:
+
+      00:00:12Z   total_unmatched_usd  2.8806     <- the authorising reading
+      00:11:38Z   total_unmatched_usd  3.3702
+      00:13:39Z   total_unmatched_usd  3.7463
+      00:22:26Z   total_unmatched_usd  4.4577     <- last reading before action
+
+  `unmatched_usd` moved +$1.5771 as EXTENDs filled on
+  `aec-wta-cribuc-biaand-2026-09-13`. What did NOT change: `held`,
+  `risk_bearing`, `n_risk_bearing` (1), `acquisition_slots_in_use` (0),
+  `open_orders_ours`/`open_orders_foreign` (0/0). So one of the five watched
+  fields moved and four did not — and rule 3 says ANY of the five aborts.
+
+  CAUSE, not excuse: the Railway MCP transport disconnected during the
+  `set-variables` call and the write landed on reconnect. The operator did not
+  re-read before the write and did not notice the gap until reading the
+  deployment's own `createdAt` afterwards. A transport that stalls between
+  authorisation and action is exactly the case `CUTOVER_MAX_AGE_S` exists for,
+  and the correct behaviour was to re-read and re-authorise — or abort — rather
+  than let a queued write land unattended. THE CUTOVER WAS NOT COMPLIANT.
+
+  WHAT MADE IT SAFE ANYWAY — the gates, not the operator, for the second time
+  in two deploys:
+
+      00:29:58Z  orphan_sweep    seen 0, cancelled [], foreign [], errors []
+      00:30:15Z  boot_assertions ok: true  (11 of 11)
+                 no_open_orders_fresh_read {'ours': 0, 'foreign': 0}
+                 flat_held_state []      <- quarantine: cribuc-biaand DORMANT
+                 combined_loss_above_stop true
+                 rung R5FT, band 0.25-0.75, pair ceiling 1.00, streak 3
+      00:30:25Z  quarantine_slot quarantined ['aec-wta-cribuc-biaand-2026-09-13']
+                 held [same]  acquiring []  concurrency 1
+      00:30:31Z  risk_set  n_risk_bearing 1  acquisition_slots_in_use 0
+                 total_unmatched_usd 4.4577
+                 total_matched_capital_usd 1.690863865546218487394957983
+
+  Those last two figures are byte-identical to the final pre-cutover reading at
+  00:22:26Z, so the ledger crossed the restart with no drift. Zero resting
+  orders meant nothing was orphaned. None of that makes the procedure correct.
+
+  THE OUTCOME THIS ENTRY PROMISED TO RECORD. Deployment
+  `fd496caf-1d11-4423-bf23-547618bf4699`, build SUCCESS (00:28:08Z ->
+  00:29:56Z), serving commit `75edc4bd` — verified from the probe's OWN rows
+  (`"commit":"75edc4bdcbe3"`), not from the branch name. One executor;
+  `pmus-q1-executor` untouched and idle. Volume `/state/pmus-spring` intact. No
+  restart or crash loop: one boot, one sweep, no traceback. Rollback `8606c87f`
+  / `718ca492` unused and still available.
+
+  THE INSTRUMENTATION WORKED ON THE FIRST CYCLE. Within four minutes, 8 of 8
+  COMPLETE orders carried `cross_shadow_live`, four of them with an OBSERVED
+  executable depth — against 0 of 589 order rows before this change. Four rows
+  reached the PRICE TEST, which no row in the entire 260-decision pre-registered
+  corpus ever did. Every row reported `would_submit: false`, arms `["0.97"]`,
+  and `live_pair_ceiling_unchanged: "1.00"`. The depth mapping was confirmed
+  live against a real residual of -13.39 (holding DOWN -> COMPLETE buys UP ->
+  `ask_qty`). No taker order was placed; every order was post-only maker.
+
+  AND THE FIRST FINDING IS ABOUT THIS FILE'S OWN BLIND SPOT.
+  `authenticated_age_s` read 0.9 s while `age_at_probe_receipt_s` read 7.08 s
+  and 9.23 s — a `probe_transport_delta_s` of 6-12 s on the status fetch. Under
+  the old instrumentation those quotes looked contemporaneous. Nothing is
+  concluded from eight observations; it is recorded because it is the reason
+  the field was added.
